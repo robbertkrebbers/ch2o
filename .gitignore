@@ -1,0 +1,8 @@
+*.vo
+*.glob
+.sconsign.dblite
+deps
+old/*
+coqidescript
+\#*\#
+
