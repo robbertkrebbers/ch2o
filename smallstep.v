@@ -172,17 +172,6 @@ Tactic Notation "inv_csteps" hyp(H) "as" simple_intropattern(H2) :=
   inversion H' as H2; clear H'; subst.
 Tactic Notation "inv_csteps" hyp(H) := inv_csteps H as [].
 
-Instance cstep_red_dec S : Decision (red (⇨) S).
-Proof.
-  destruct S as [[] k s m].
-  * destruct s; try solve [left; solve_cnf]. admit. admit. admit.
-  * destruct k as [|[[]|]]; try solve [left; solve_cnf]. right; intros [??]. inv_cstep.
-  * destruct k as [|[[]|]]; try solve [left; solve_cnf]. right; intros [??]. inv_cstep.
-  * destruct (decide (l ∈ labels s)).
-      destruct s; try simplify_elem_of (left; solve_cnf). admit. admit. admit.
-     destruct k as [|[[]|]]; try solve [left; solve_cnf]. right; intros [??]. inv_cstep; simplify_stmt_elem_of.
-Qed.
-
 Lemma cstep_preserves_ctx_stmt S1 S2 :
   S1 ⇨ S2 → subst (SCtx S1) (SStmt S1) = subst (SCtx S2) (SStmt S2).
 Proof. intros. inv_cstep. Qed.
