@@ -105,30 +105,51 @@ Proof.
   destruct (m1 !! b), (m2 !! b); compute; intuition congruence.
 Qed.
 
-Lemma mem_disjoint_cancel_l m1 m2 m3 :
-  mem_disjoint (m1 ∪ m2) m3 → mem_disjoint m1 m3.
-Proof. intros H b. specialize (H b). rewrite mem_union_None_iff in H. tauto. Qed.
-Lemma mem_disjoint_cancel_r m1 m2 m3 :
-  mem_disjoint (m1 ∪ m2) m3 → mem_disjoint m2 m3.
-Proof. intros H b. specialize (H b). rewrite mem_union_None_iff in H. tauto. Qed.
-Lemma mem_disjoint_union m1 m2 m3 :
-  mem_disjoint m1 m3 → mem_disjoint m2 m3 → mem_disjoint (m1 ∪ m2) m3.
+Lemma mem_disjoint_union_l m1 m2 m3 :
+  mem_disjoint (m1 ∪ m2) m3 ↔ mem_disjoint m1 m3 ∧ mem_disjoint m2 m3.
 Proof.
-  intros H1 H2 b. specialize (H1 b). specialize (H2 b).
-  rewrite mem_union_None_iff. tauto.
+  unfold mem_disjoint.
+  setoid_rewrite mem_union_None_iff.
+  firstorder auto.
 Qed.
-Hint Resolve
-  mem_disjoint_cancel_l mem_disjoint_cancel_r
-  mem_disjoint_union : mem.
+Lemma mem_disjoint_union_r m1 m2 m3 :
+  mem_disjoint m1 (m2 ∪ m3) ↔ mem_disjoint m1 m2 ∧ mem_disjoint m1 m3.
+Proof.
+  unfold mem_disjoint.
+  setoid_rewrite mem_union_None_iff.
+  firstorder auto.
+Qed.
 
-Lemma mem_disjoint_insert m1 m2 b v :
-  m1!!b = None → mem_disjoint m1 m2 → mem_disjoint m1 (<[b:=v]> m2).
+Ltac solve_mem_disjoint := repeat
+  match goal with
+  | |- context [ mem_disjoint (_ ∪ _) _ ] => setoid_rewrite mem_disjoint_union_l
+  | |- context [ mem_disjoint _ (_ ∪ _) ] => setoid_rewrite mem_disjoint_union_r
+  | H : context [ mem_disjoint (_ ∪ _) _ ] |- _ => setoid_rewrite mem_disjoint_union_l in H
+  | H : context [ mem_disjoint _ (_ ∪ _) ] |- _ => setoid_rewrite mem_disjoint_union_r in H
+  end; intuition auto with mem.
+
+Lemma mem_disjoint_insert_r m1 m2 b v :
+  m1!!b = None → mem_disjoint m1 m2 → mem_disjoint m1 (<[b:=v]>m2).
 Proof.
   intros ? H b'. destruct (decide (b = b')); subst; auto.
   destruct (H b'); auto.
   right. now rewrite lookup_insert_ne.
 Qed.
-Hint Resolve mem_disjoint_insert : mem.
+Lemma mem_disjoint_insert_l m1 m2 b v :
+  m2!!b = None → mem_disjoint m1 m2 → mem_disjoint (<[b:=v]>m1) m2.
+Proof. symmetry. apply mem_disjoint_insert_r. easy. now symmetry. Qed.
+Hint Resolve mem_disjoint_insert_r mem_disjoint_insert_l : mem.
+
+Lemma mem_disjoint_delete_l m1 m2 b :
+  mem_disjoint m1 m2 → mem_disjoint (delete b m1) m2.
+Proof.
+  intros H b'. destruct (H b'); auto.
+  left. now apply lookup_delete_None.
+Qed.
+Lemma mem_disjoint_delete_r m1 m2 b :
+  mem_disjoint m1 m2 → mem_disjoint m1 (delete b m2).
+Proof. symmetry. apply mem_disjoint_delete_l. now symmetry. Qed.
+Hint Resolve mem_disjoint_delete_r mem_disjoint_delete_l : mem.
 
 Lemma mem_subseteq_union_l (m1 m2 : mem) :
   m1 ⊆ m1 ∪ m2.
@@ -167,7 +188,7 @@ Proof.
 Qed.
 
 Lemma mem_union_insert_l m1 m2 b v :
-  <[b:=v]>m1 ∪ m2 = <[b:=v]>(m1 ∪ m2).
+  <[b:=v]>(m1 ∪ m2) = <[b:=v]>m1 ∪ m2.
 Proof.
   apply finmap_eq. intros b'. apply option_eq. intros v'.
   destruct (decide (b = b')); subst.
@@ -176,18 +197,28 @@ Proof.
     mem_union_Some_iff by easy. intuition easy.
 Qed.
 Lemma mem_union_insert_r m1 m2 b v :
-  m1!!b = None → m1 ∪ <[b:=v]>m2 = <[b:=v]>(m1 ∪ m2).
+  m1!!b = None → <[b:=v]>(m1 ∪ m2) = m1 ∪ <[b:=v]>m2.
 Proof.
   intros. apply finmap_eq. intros b'. apply option_eq. intros v'.
+  rewrite mem_union_Some_iff.
   destruct (decide (b = b')); subst.
-   rewrite mem_union_Some_iff, !lookup_insert. intuition congruence.
-  rewrite mem_union_Some_iff, !lookup_insert_ne,
-    mem_union_Some_iff by easy. intuition easy.
+   rewrite !lookup_insert. intuition congruence.
+  rewrite !lookup_insert_ne, mem_union_Some_iff; intuition auto.
+Qed.
+
+Lemma mem_union_delete m1 m2 b :
+  delete b (m1 ∪ m2) = delete b m1 ∪ delete b m2.
+Proof.
+  intros. apply finmap_eq. intros b'. apply option_eq. intros v'.
+  rewrite mem_union_Some_iff.
+  destruct (decide (b = b')); subst.
+   rewrite !lookup_delete. intuition congruence.
+  rewrite !lookup_delete_ne, mem_union_Some_iff; intuition auto.
 Qed.
 
 Lemma mem_union_singleton_l m b v :
-  {{ (b,v) }} ∪ m = <[b:=v]>m.
-Proof. rewrite <-(left_id ∅ (∪) m) at 2. now rewrite <-mem_union_insert_l. Qed.
+  <[b:=v]>m = {{ (b,v) }} ∪ m.
+Proof. rewrite <-(left_id ∅ (∪) m) at 1. now rewrite mem_union_insert_l. Qed.
 Lemma mem_union_singleton_r m b v :
-  m!!b = None → m ∪ {{ (b,v) }} = <[b:=v]>m.
-Proof. intros. rewrite <-(right_id ∅ (∪) m) at 2. now rewrite <-mem_union_insert_r. Qed.
+  m!!b = None → <[b:=v]>m = m ∪ {{ (b,v) }}.
+Proof. intros. rewrite <-(right_id ∅ (∪) m) at 1. now rewrite mem_union_insert_r. Qed.

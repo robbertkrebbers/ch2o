@@ -141,6 +141,7 @@ Ltac solve_cnf :=
   | |- _ => solve [intuition eauto with cstep]
   | H : nf (⇨) _ |- _ => destruct H; solve_cnf
   | H : nf (⇨{_}) _ |- _ => destruct H; solve_cnf
+  | H : red (⇨{_}) ?S |- red (⇨{_}) ?S => now apply (red_subrel _ _ _ _ H)
   | |- red (⇨) ?S => is_var S; destruct S; simpl in *; subst; solve_cnf
   | |- red (⇨{_}) ?S => is_var S; destruct S; simpl in *; subst; solve_cnf
   | |- red (⇨) (State ?d _ _ _) => is_var d; destruct d; simpl in *; try contradiction; solve_cnf
@@ -170,6 +171,17 @@ Tactic Notation "inv_csteps" hyp(H) "as" simple_intropattern(H2) :=
   let H' := fresh in rename H into H';
   inversion H' as H2; clear H'; subst.
 Tactic Notation "inv_csteps" hyp(H) := inv_csteps H as [].
+
+Instance cstep_red_dec S : Decision (red (⇨) S).
+Proof.
+  destruct S as [[] k s m].
+  * destruct s; try solve [left; solve_cnf]. admit. admit. admit.
+  * destruct k as [|[[]|]]; try solve [left; solve_cnf]. right; intros [??]. inv_cstep.
+  * destruct k as [|[[]|]]; try solve [left; solve_cnf]. right; intros [??]. inv_cstep.
+  * destruct (decide (l ∈ labels s)).
+      destruct s; try simplify_elem_of (left; solve_cnf). admit. admit. admit.
+     destruct k as [|[[]|]]; try solve [left; solve_cnf]. right; intros [??]. inv_cstep; simplify_stmt_elem_of.
+Qed.
 
 Lemma cstep_preserves_ctx_stmt S1 S2 :
   S1 ⇨ S2 → subst (SCtx S1) (SStmt S1) = subst (SCtx S2) (SStmt S2).
@@ -230,22 +242,19 @@ Proof.
 Qed.
 
 Lemma cstep_subctx_cut l k n S1 S3 :
-  S1 ⇨{k}^n S3 → 
+    S1 ⇨{k}^n S3 → 
     suffix_of (l ++ k) (SCtx S1) → 
-    nf (⇨{k}) S3 → 
-  ∃ n' S2, 
-    S1 ⇨{l ++ k}* S2 
-    ∧ nf (⇨{l ++ k}) S2 
-    ∧ S2 ⇨{k}^n' S3 
-    ∧ n' ≤ n.
+  (S1 ⇨{l ++ k}* S3)
+   ∨
+  (∃ n' S2, S1 ⇨{l ++ k}* S2 ∧ nf (⇨{l ++ k}) S2 ∧ S2 ⇨{k}^n' S3 ∧ n' ≤ n).
 Proof.
-  intros p ??. induction p as [ S1 | n S1 S2 S3 [p1 ?] p2].
-   exists 0%nat S1. intuition eauto with trs.
-   now apply (nf_subrel (⇨{l ++ k}) (⇨{k}) _).
+  intros p ?. induction p as [ S1 | n S1 S2 S3 [p1 ?] p2].
+   now left.
   destruct (cstep_subctx_step_or_nf (l ++ k) S1 S2); auto.
-   destruct IHp2 as [n' [S2' ?]]; auto.
-   exists n' S2'. intuition eauto with trs. do_csteps.
-  exists (S n) S1. intuition eauto with trs. do_csteps.
+   destruct IHp2 as [? | [n' [S2' ?]]]; auto.
+    left. do_csteps.
+   right. exists n' S2'. intuition eauto with trs. do_csteps.
+  right. exists (S n) S1. intuition eauto with trs. do_csteps.
 Qed.
 
 Definition down (d : direction) (s : stmt) : Prop :=

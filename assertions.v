@@ -205,23 +205,19 @@ Lemma assert_sep_assoc_1 P Q R : ((P * Q) * R)%A ⊆ (P * (Q * R))%A.
 Proof.
   intros ?? [? [mR [? [? [[mP [mQ ?]] ?]]]]]. intuition. subst.
   exists mP (mQ ∪ mR). repeat split.
-     symmetry; apply mem_disjoint_union; symmetry. easy.
-     eapply mem_disjoint_cancel_l; eauto.
-    apply (associative _).
-   easy.
-  exists mQ mR. intuition.
-  eapply mem_disjoint_cancel_r; eauto.
+  * solve_mem_disjoint.
+  * apply (associative _).
+  * easy.
+  * exists mQ mR. solve_mem_disjoint. 
 Qed.
 Lemma assert_sep_assoc_2 P Q R : (P * (Q * R))%A ⊆ ((P * Q) * R)%A.
 Proof.
   intros ?? [mP [? [? [? [? [mQ [mR ?]]]]]]]. intuition. subst.
   exists (mP ∪ mQ) mR. repeat split.
-     apply mem_disjoint_union; auto.
-     symmetry; eapply mem_disjoint_cancel_r; symmetry; eauto.
-    now rewrite (associative _).
-   exists mP mQ. intuition.
-   symmetry; eapply mem_disjoint_cancel_l; symmetry; eauto.
-  easy.
+  * solve_mem_disjoint.
+  * now rewrite (associative _).
+  * exists mP mQ. solve_mem_disjoint.
+  * easy.
 Qed.
 Instance: Associative (≡) assert_sep.
 Proof. split. apply assert_sep_assoc_2. apply assert_sep_assoc_1. Qed.
@@ -255,10 +251,10 @@ Lemma assert_alloc (P : assert) (b : N) v (ρ : stack) m :
   is_free b m → P ρ m → (P↑ * (O ↦ -))%A (b :: ρ) (<[b:=v]> m).
 Proof.
   intros ??. exists m ({{ (b, v) }} : mem). repeat split.
-     now auto with mem.
-    now apply mem_union_singleton_r.
-   easy.
-  exists b v. intuition.
+  * now auto with mem.
+  * now rewrite mem_union_singleton_r.
+  * easy.
+  * exists b v. intuition.
 Qed.
 
 Lemma assert_free (P : assert) (b : N) (ρ : stack) m :
@@ -266,7 +262,7 @@ Lemma assert_free (P : assert) (b : N) (ρ : stack) m :
 Proof.
   intros [m1 [m2 [? [? [? H]]]]].
   destruct H as [a [v [? ?]]]. simplify_eqs.
-  rewrite mem_union_singleton_r.
+  rewrite <-mem_union_singleton_r.
    rewrite delete_insert.
     easy.
    eapply mem_disjoint_singleton_2; eauto.
@@ -275,20 +271,5 @@ Qed.
 
 Definition assert_subst (a : N) (v : N) (P : assert) := Assert $ λ ρ m, P ρ (<[a:=v]>m).
 Notation "<[ a := v ]>" := (assert_subst a v) : assert_scope.
-
-Lemma assert_assign P Q e1 e2 a v ρ m :
-  ⟦ e1 ⟧ ρ m = Some a →
-  ⟦ e2 ⟧ ρ m = Some v →
-  (P * ∃ a v, e1⇓a ∧ e2⇓v ∧ load a⇓- ∧ <[a:=v]>Q)%A ρ m → (P * Q)%A ρ (<[a:=v]>m).
-Proof.
-  intros ?? [m1 [m2 [? [? [? [a' [v' [? [? [[aa ?] ?]]]]]]]]]].
-  simplify_eqs. simplify_assert_expr.
-  exists m1 (<[a:=v]>m2). repeat split.
-     now eauto with mem.
-    apply mem_union_insert_r.
-    now eapply mem_disjoint_Some_r; eauto.
-   easy.
-  easy.
-Qed.
 
 Arguments assert_holds _ _ _ : simpl never.

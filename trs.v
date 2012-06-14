@@ -90,8 +90,10 @@ Hint Resolve rtc_once rtc_r tc_r : trs.
 Section subrel.
   Context {A} (R1 R2 : relation A) (Hsub : subrelation R1 R2).
 
+  Lemma red_subrel x : red R1 x → red R2 x.
+  Proof. intros [y ?]. exists y. now apply Hsub. Qed.
   Lemma nf_subrel x : nf R2 x → nf R1 x.
-  Proof. intros Hnf [y ?]. destruct Hnf. exists y. now apply Hsub. Qed.
+  Proof. intros H1 H2. destruct H1. now apply red_subrel. Qed.
 
   Global Instance rtc_subrel: subrelation (rtc R1) (rtc R2).
   Proof.

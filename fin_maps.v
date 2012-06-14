@@ -96,6 +96,19 @@ Section finmap.
   Proof. intros Hm ?. subst. rewrite lookup_delete in Hm. now apply None_not_is_Some in Hm. Qed.
   Lemma lookup_delete_ne (m : M A) i j : i ≠ j → delete i m !! j = m !! j.
   Proof. apply lookup_partial_alter_ne. Qed.
+  Lemma lookup_delete_None (m : M A) i j : m !! j = None → delete i m !! j = None.
+  Proof.
+    destruct (decide (i = j)).
+     subst. now rewrite lookup_delete.
+    now rewrite lookup_delete_ne.
+  Qed.
+  Lemma delete_lookup_None (m : M A) i : m !! i = None → delete i m = m.
+  Proof.
+    intros. apply finmap_eq. intros j. destruct (decide (i = j)).
+     subst. rewrite lookup_delete. congruence.
+    now apply lookup_delete_ne.
+  Qed.
+
   Lemma delete_empty i : delete i (∅ : M A) = ∅.
   Proof. rewrite <-(partial_alter_self ∅) at 2. now rewrite lookup_empty. Qed.
   Lemma delete_singleton i (x : A) : delete i {{ (i, x) }} = ∅.
