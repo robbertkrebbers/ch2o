@@ -129,6 +129,18 @@ Instance option_join: MJoin option := λ A x,
   end.
 Instance option_fmap: FMap option := @option_map.
 
+Ltac simplify_options := repeat
+  match goal with
+  | _ => progress simplify_eqs
+  | H : mbind (M:=option) ?f ?o = ?x |- _ =>
+    change (option_bind _ _ f o = x) in H;
+    destruct o; simpl in H; try discriminate
+  | H : context [ ?o = _ ] |- mbind (M:=option) ?f ?o = ?x =>
+    change (option_bind _ _ f o = x);
+    erewrite H by eauto;
+    simpl
+  end.
+
 Lemma option_fmap_is_Some {A B} (f : A → B) (x : option A) : is_Some x ↔ is_Some (f <$> x).
 Proof. destruct x; split; intros [??]; subst; compute; eauto; discriminate. Qed.
 Lemma option_fmap_is_None {A B} (f : A → B) (x : option A) : x = None ↔ f <$> x = None.
