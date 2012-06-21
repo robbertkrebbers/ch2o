@@ -122,6 +122,18 @@ Arguments left_id {_ _} _ _ {_} _.
 Arguments right_id {_ _} _ _ {_} _.
 Arguments associative {_ _} _ {_} _ _ _.
 
+(* Using idempotent_eq we can force Coq to not use the setoid mechanism *)
+Lemma idempotent_eq {A} (f : A → A → A) `{!Idempotent (=) f} x : f x x = x.
+Proof. auto. Qed.
+Lemma commutative_eq {A B} (f : B → B → A) `{!Commutative (=) f} x y : f x y = f y x.
+Proof. auto. Qed.
+Lemma left_id_eq {A} (i : A) (f : A → A → A) `{!LeftId (=) i f} x : f i x = x.
+Proof. auto. Qed.
+Lemma right_id_eq {A} (i : A) (f : A → A → A) `{!RightId (=) i f} x : f x i = x.
+Proof. auto. Qed.
+Lemma associative_eq {A} (f : A → A → A) `{!Associative (=) f} x y z : f x (f y z) = f (f x y) z.
+Proof. auto. Qed.
+
 (* Monadic operations *)
 Section monad_ops.
   Context (M : Type → Type).
