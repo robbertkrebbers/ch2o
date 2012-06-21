@@ -5,4 +5,6 @@ deps
 old/*
 coqidescript
 \#*\#
+*.pyc
+*~
 
