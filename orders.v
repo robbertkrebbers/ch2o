@@ -5,17 +5,24 @@ Section preorder.
 
   Global Instance preorder_equiv: Equiv A := λ X Y, X ⊆ Y ∧ Y ⊆ X.
   Instance preorder_equivalence: @Equivalence A (≡).
-  Proof. split. firstorder. firstorder. intros x y z; split; transitivity y; firstorder. Qed.
+  Proof.
+    split.
+    * firstorder.
+    * firstorder.
+    * intros x y z; split; transitivity y; firstorder.
+  Qed.
 
   Global Instance: Proper ((≡) ==> (≡) ==> iff) (⊆).
   Proof.
-    unfold equiv, preorder_equiv. intros x1 y1 ? x2 y2 ?. split; intro.
-     transitivity x1. tauto. transitivity x2; tauto.
-    transitivity y1. tauto. transitivity y2; tauto.
+    unfold equiv, preorder_equiv.
+    intros x1 y1 ? x2 y2 ?. split; intro.
+    * transitivity x1. tauto. transitivity x2; tauto.
+    * transitivity y1. tauto. transitivity y2; tauto.
   Qed.
 End preorder.
 
-Hint Extern 0 (@Equivalence _ (≡)) => class_apply preorder_equivalence : typeclass_instances.
+Hint Extern 0 (@Equivalence _ (≡)) =>
+  class_apply preorder_equivalence : typeclass_instances.
 
 Section bounded_join_sl.
   Context `{BoundedJoinSemiLattice A}.
@@ -40,7 +47,9 @@ Section bounded_join_sl.
   Proof. auto. Qed.
 
   Global Instance: Proper ((≡) ==> (≡) ==> (≡)) (∪).
-  Proof. unfold equiv, preorder_equiv. split; apply union_compat; simpl in *; tauto. Qed.
+  Proof.
+    unfold equiv, preorder_equiv. split; apply union_compat; simpl in *; tauto.
+  Qed.
   Global Instance: Idempotent (≡) (∪).
   Proof. split; eauto. Qed.
   Global Instance: LeftId (≡) ∅ (∪).
@@ -66,7 +75,8 @@ End bounded_join_sl.
 Section meet_sl.
   Context `{MeetSemiLattice A}.
 
-  Hint Resolve subseteq_intersection_l subseteq_intersection_r intersection_greatest.
+  Hint Resolve subseteq_intersection_l subseteq_intersection_r
+    intersection_greatest.
 
   Lemma intersection_compat_l x1 x2 y : x1 ⊆ x2 → x1 ∩ y ⊆ x2.
   Proof. intros. transitivity x1; auto. Qed.
@@ -84,7 +94,10 @@ Section meet_sl.
   Proof. auto. Qed.
 
   Global Instance: Proper ((≡) ==> (≡) ==> (≡)) (∩).
-  Proof. unfold equiv, preorder_equiv. split; apply intersection_compat; simpl in *; tauto. Qed.
+  Proof.
+    unfold equiv, preorder_equiv. split;
+      apply intersection_compat; simpl in *; tauto.
+  Qed.
   Global Instance: Idempotent (≡) (∩).
   Proof. split; eauto. Qed.
   Global Instance: Commutative (≡) (∩).

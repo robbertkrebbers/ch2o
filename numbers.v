@@ -1,6 +1,8 @@
 Require Export PArith NArith ZArith.
 Require Export base decidable fin_collections.
 
+Infix "≤" := le : nat_scope.
+
 Instance nat_eq_dec: ∀ x y : nat, Decision (x = y) := eq_nat_dec.
 Instance positive_eq_dec: ∀ x y : positive, Decision (x = y) := Pos.eq_dec.
 Notation "(~0)" := xO (only parsing) : positive_scope.
@@ -41,18 +43,19 @@ Lemma Nmax_max `{FinCollection N C} X x : x ∈ X → (x ≤ Nmax X)%N.
 Proof.
   change ((λ b X, x ∈ X → (x ≤ b)%N) (collection_fold N.max 0%N X) X).
   apply collection_fold_ind.
-    solve_proper.
-   simplify_elem_of.
-  simplify_elem_of. apply N.le_max_l. apply N.max_le_iff; auto.
+  * solve_proper.
+  * simplify_elem_of.
+  * simplify_elem_of. apply N.le_max_l. apply N.max_le_iff; auto.
 Qed.
 
 Instance Nfresh `{FinCollection N C} : Fresh N C := λ l, (1 + Nmax l)%N.
 Instance Nfresh_spec `{FinCollection N C} : FreshSpec N C.
 Proof.
   split.
-   intros. unfold fresh, Nfresh.
-   setoid_replace X with Y; esimplify_elem_of.
-  intros X E. assert (1 ≤ 0)%N as []; [| easy].
-  apply N.add_le_mono_r with (Nmax X).
-  now apply Nmax_max.
+  * intros. unfold fresh, Nfresh.
+    setoid_replace X with Y; [easy |].
+    now apply elem_of_equiv.
+  * intros X E. assert (1 ≤ 0)%N as []; [| easy].
+    apply N.add_le_mono_r with (Nmax X).
+    now apply Nmax_max.
 Qed.

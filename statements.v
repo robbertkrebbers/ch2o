@@ -1,17 +1,53 @@
 Require Export expressions.
 
+Class Subst A B C := subst: A → B → C.
+Arguments subst {_ _ _ _} !_ _ /.
+
+Instance list_subst `{Subst A B B} : Subst (list A) B B :=
+  fix go (l : list A) (b : B) : B :=
+  let _ : Subst _ _ _ := @go in
+  match l with
+  | [] => b
+  | a :: l => subst l (subst a b)
+  end.
+Lemma list_subst_app `{Subst A B B} (l1 l2 : list A) b :
+  subst (l1 ++ l2) b = subst l2 (subst l1 b).
+Proof. revert b. induction l1; simpl; auto. Qed.
+
 Definition label := N.
+Class Gotos A := gotos: ∀ `{Empty C} `{Union C} `{Singleton label C}, A → C.
+Arguments gotos {_ _ _ _ _ _} !_ /.
+Class Labels A := labels: ∀ `{Empty C} `{Union C} `{Singleton label C}, A → C.
+Arguments labels {_ _ _ _ _ _} !_ /.
+
+Instance list_gotos `{Gotos A} : Gotos (list A) :=
+  fix go `{Empty C} `{Union C} `{Singleton label C} (l : list A) : C :=
+  let _ : Gotos _ := @go in
+  match l with
+  | [] => ∅
+  | a :: l => gotos a ∪ gotos l
+  end.
+
+Instance list_labels `{Labels A} : Labels (list A) :=
+  fix go `{Empty C} `{Union C} `{Singleton label C} (l : list A) : C :=
+  let _ : Labels _ := @go in
+  match l with
+  | [] => ∅
+  | a :: l => labels a ∪ labels l
+  end.
 
 Inductive stmt : Type :=
   | SAssign : expr → expr → stmt
+  | SCall : option expr → N → list expr → stmt
   | SSkip : stmt
   | SGoto : label → stmt
-  | SReturn : expr → stmt
+  | SReturn : option expr → stmt
   | SBlock : stmt → stmt
   | SComp : stmt → stmt → stmt
   | SLabel : label → stmt → stmt
   | SLoop : stmt → stmt
   | SIf : expr → stmt → stmt → stmt.
+Notation fenv := (Nmap stmt).
 
 Instance stmt_eq_dec (s1 s2 : stmt) : Decision (s1 = s2).
 Proof. solve_decision. Defined.
@@ -27,39 +63,38 @@ Arguments SLoop _%S.
 Arguments SIf _ _%S _%S.
 
 Infix "::=" := SAssign (at level 60) : stmt_scope.
+Notation "'call' e" := (SCall e) (at level 9) : stmt_scope.
 Notation "'skip'" := SSkip : stmt_scope.
-Notation "'goto' l" := (SGoto l) (at level 10) : stmt_scope.
-Notation "'ret' e" := (SReturn e) (at level 10) : stmt_scope.
+Notation "'goto' l" := (SGoto l) (at level 9) : stmt_scope.
+Notation "'ret' e" := (SReturn e) (at level 9) : stmt_scope.
+Notation "'block' s" := (SBlock s) (at level 9) : stmt_scope.
 
 Infix ";;" := SComp (at level 80, right associativity) : stmt_scope.
 Infix ":;" := SLabel (at level 81) : stmt_scope.
-Notation "'loop' s" := (SLoop s) (at level 10) : stmt_scope.
+Notation "'loop' s" := (SLoop s) (at level 9) : stmt_scope.
 Notation "'IF' e 'then' s1 'else' s2" := (SIf e s1 s2) : stmt_scope.
-
-Class Gotos A := gotos: ∀ `{Empty C} `{Union C} `{Singleton label C}, A → C.
-Arguments gotos {A go C _ _ _} !_ / : rename.
-Class Labels A := labels: ∀ `{Empty C} `{Union C} `{Singleton label C}, A → C.
-Arguments labels {A go C _ _ _} !_ / : rename.
 
 Instance stmt_gotos: Gotos stmt :=
   fix go `{Empty C} `{Union C} `{Singleton label C} (s : stmt) : C :=
+  let _ : Gotos _ := @go in
   match s with
-  | SBlock s => gotos (go:=@go) s
-  | s1 ;; s2 => gotos (go:=@go) s1 ∪ gotos (go:=@go) s2
-  | _ :; s => gotos (go:=@go) s
-  | loop s => gotos (go:=@go) s
-  | (IF _ then s1 else s2) => gotos (go:=@go) s1 ∪ gotos (go:=@go) s2
-  | goto l => {{ l }}
+  | block s => gotos s
+  | s1 ;; s2 => gotos s1 ∪ gotos s2
+  | _ :; s => gotos s
+  | loop s => gotos s
+  | (IF _ then s1 else s2) => gotos s1 ∪ gotos s2
+  | goto l => {[ l ]}
   | _ => ∅
   end.
 Instance stmt_labels: Labels stmt :=
   fix go `{Empty C} `{Union C} `{Singleton label C} (s : stmt) : C :=
+  let _ : Labels _ := @go in
   match s with
-  | SBlock s => labels (go:=@go) s
-  | s1 ;; s2 => labels (go:=@go) s1 ∪ labels (go:=@go) s2
-  | l :; s => {{ l }} ∪ labels (go:=@go) s
-  | loop s => labels (go:=@go) s
-  | (IF _ then s1 else s2) => labels (go:=@go) s1 ∪ labels (go:=@go) s2
+  | block s => labels s
+  | s1 ;; s2 => labels s1 ∪ labels s2
+  | l :; s => {[ l ]} ∪ labels s
+  | loop s => labels s
+  | (IF _ then s1 else s2) => labels s1 ∪ labels s2
   | _ => ∅
   end.
 
@@ -79,11 +114,10 @@ Notation "s ;; □" := (CCompL s%S) (at level 80) : stmt_scope.
 Notation "□ ;; s" := (CCompR s%S) (at level 80) : stmt_scope.
 Notation "l :; □" := (CLabel l) (at level 81) : stmt_scope.
 Notation "'loop' □" := CLoop (at level 80) : stmt_scope.
-Notation "'IF' e 'then' □ 'else' s2" := (CIfL e s2) (at level 200, right associativity) : stmt_scope.
-Notation "'IF' e 'then' s1 'else' □" := (CIfR e s1) (at level 200, right associativity) : stmt_scope.
-
-Class Subst A B C := subst: A → B → C.
-Arguments subst {A B C go} !_ _ / : rename.
+Notation "'IF' e 'then' □ 'else' s2" := (CIfL e s2)
+  (at level 200, right associativity) : stmt_scope.
+Notation "'IF' e 'then' s1 'else' □" := (CIfR e s1)
+  (at level 200, right associativity) : stmt_scope.
 
 Instance sctx_item_subst: Subst sctx_item stmt stmt := λ E s,
   match E with
@@ -95,6 +129,8 @@ Instance sctx_item_subst: Subst sctx_item stmt stmt := λ E s,
   | (IF e then s1 else □) => IF e then s1 else s
   end.
 
+Instance: Injective (=) (=) SBlock.
+Proof. congruence. Qed.
 Instance: ∀ E : sctx_item, Injective (=) (=) (subst E).
 Proof. destruct E; repeat intro; simpl in *; simplify_eqs. Qed.
 
@@ -118,13 +154,14 @@ Instance sctx_item_labels: Labels sctx_item := λ _ _ _ _ E,
   match E with
   | s2 ;; □ => labels s2
   | □ ;; s1 => labels s1
-  | l :; □ => {{ l }}
+  | l :; □ => {[ l ]}
   | loop □ => ∅
   | (IF _ then □ else s2) => labels s2
   | (IF _ then s1 else □) => labels s1
   end.
 
-Lemma elem_of_sctx_item_gotos `{Collection label C} (l : label) (E : sctx_item) (s : stmt) :
+Lemma elem_of_sctx_item_gotos `{Collection label C} (l : label)
+    (E : sctx_item) (s : stmt) :
   l ∈ gotos (subst E s) ↔ l ∈ gotos E ∨ l ∈ gotos s.
 Proof. destruct E; simpl; simplify_elem_of. Qed.
 Lemma sctx_item_gotos_spec `{Collection label C} (E : sctx_item) (s : stmt) :
@@ -134,7 +171,8 @@ Proof.
   rewrite elem_of_union. now apply elem_of_sctx_item_gotos.
 Qed.
 
-Lemma elem_of_sctx_item_labels `{Collection label C} (l : label) (E : sctx_item) (s : stmt) :
+Lemma elem_of_sctx_item_labels `{Collection label C} (l : label)
+    (E : sctx_item) (s : stmt) :
   l ∈ labels (subst E s) ↔ l ∈ labels E ∨ l ∈ labels s.
 Proof. destruct E; simpl; simplify_elem_of. Qed.
 Lemma sctx_item_labels_spec `{Collection label C} (E : sctx_item) (s : stmt) :
@@ -146,17 +184,22 @@ Qed.
 
 Ltac split_stmt_elem_ofs := repeat
   match goal with
-  | H : context [ _ ∈ gotos (subst _ _) ] |- _ => setoid_rewrite elem_of_sctx_item_gotos in H
-  | H : context [ _ ∈ labels (subst _ _) ] |- _ => setoid_rewrite elem_of_sctx_item_labels in H
-  | |- context [ _ ∈ gotos (subst _ _) ] => setoid_rewrite elem_of_sctx_item_gotos
-  | |- context [ _ ∈ labels (subst _ _) ] => setoid_rewrite elem_of_sctx_item_labels
+  | H : context [ _ ∈ gotos (subst _ _) ] |- _ =>
+    setoid_rewrite elem_of_sctx_item_gotos in H
+  | H : context [ _ ∈ labels (subst _ _) ] |- _ =>
+    setoid_rewrite elem_of_sctx_item_labels in H
+  | |- context [ _ ∈ gotos (subst _ _) ] =>
+    setoid_rewrite elem_of_sctx_item_gotos
+  | |- context [ _ ∈ labels (subst _ _) ] =>
+    setoid_rewrite elem_of_sctx_item_labels
   end.
-
 Ltac simplify_stmt_elem_of := simpl in *; split_stmt_elem_ofs; simplify_elem_of.
 
 Inductive ctx_item : Type :=
   | CItem : sctx_item → ctx_item
-  | CBlock : N → ctx_item.
+  | CBlock : N → ctx_item
+  | CCall : option expr → N → list expr → ctx_item
+  | CParams : list N → ctx_item.
 Notation ctx := (list ctx_item).
 Bind Scope stmt_scope with ctx_item.
 
@@ -165,73 +208,11 @@ Proof. solve_decision. Defined.
 Instance ctx_eq_dec (k1 k2 : ctx) : Decision (k1 = k2).
 Proof. solve_decision. Defined.
 
-Instance ctx_item_subst: Subst ctx_item stmt stmt := λ E s,
-  match E with
-  | CItem E => subst E s
-  | CBlock _ => SBlock s
-  end.
-Instance ctx_subst: Subst ctx stmt stmt :=
-  fix go (k : ctx) (s : stmt) : stmt :=
-  match k with
-  | [] => s
-  | E :: k => subst (go:=@go) k (subst E s)
-  end.
-
-Instance ctx_gotos: Gotos ctx :=
-  fix go `{Empty C} `{Union C} `{Singleton label C} (k : ctx) : C :=
-  match k with
-  | [] => ∅
-  | CItem E :: k => gotos E ∪ gotos (go:=@go) k
-  | CBlock _ :: k => gotos (go:=@go) k
-  end%S.
-Instance ctx_labels: Labels ctx :=
-  fix go `{Empty C} `{Union C} `{Singleton label C} (k : ctx) : C :=
-  match k with
-  | [] => ∅
-  | CItem E :: k => labels E ∪ labels (go:=@go) k
-  | CBlock _ :: k => labels (go:=@go) k
-  end.
-
-Instance: ∀ k : ctx, Injective (=) (=) (subst k).
-Proof. induction k as [|[]]; repeat intro; simpl in *; simplify_eqs. Qed.
-
-Lemma elem_of_ctx_gotos `{Collection label C} (l : label) (E : ctx) (s : stmt) :
-  l ∈ gotos (subst E s) ↔ l ∈ gotos E ∨ l ∈ gotos s.
-Proof.
-  revert s; induction E as [|[]]; simpl.
-    simplify_elem_of.
-   intros. rewrite IHE, elem_of_sctx_item_gotos. simplify_elem_of.
-  intros. now rewrite IHE.
-Qed.
-Lemma ctx_gotos_spec `{Collection label C} (E : ctx) (s : stmt) :
-  gotos (subst E s) ≡ gotos E ∪ gotos s.
-Proof.
-  apply elem_of_equiv. intros.
-  rewrite elem_of_union. now apply elem_of_ctx_gotos.
-Qed.
-
-Lemma elem_of_ctx_labels `{Collection label C} (l : label) (E : ctx) (s : stmt) :
-  l ∈ labels (subst E s) ↔ l ∈ labels E ∨ l ∈ labels s.
-Proof.
-  revert s; induction E as [|[]]; simpl.
-    simplify_elem_of.
-   intros. rewrite IHE, elem_of_sctx_item_labels. simplify_elem_of.
-  intros. now rewrite IHE.
-Qed.
-Lemma ctx_labels_spec `{Collection label C} (E : ctx) (s : stmt) :
-  labels (subst E s) ≡ labels E ∪ labels s.
-Proof.
-  apply elem_of_equiv. intros.
-  rewrite elem_of_union. now apply elem_of_ctx_labels.
-Qed.
-
 Fixpoint get_stack (k : ctx) : stack :=
   match k with
   | [] => []
   | CItem _ :: k => get_stack k
   | CBlock b :: k => b :: get_stack k
+  | CCall _ _ _ :: _ => []
+  | CParams bs :: k => bs ++ get_stack k
   end.
-
-Lemma get_stack_app k1 k2 :
-  get_stack (k1 ++ k2) = get_stack k1 ++ get_stack k2.
-Proof. induction k1 as [|[]]; simpl; f_equal; auto. Qed.

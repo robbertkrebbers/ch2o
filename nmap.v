@@ -23,7 +23,7 @@ Global Instance Npartial_alter: PartialAlter N Nmap := λ A f i t,
   end.
 Global Instance Ndom {A} : Dom N (Nmap A) := λ A _ _ _ t,
   match t with
-  | Build_Nmap o t => option_case (λ _, {{ 0 }}) ∅ o ∪ (Pdom_raw Npos (`t))
+  | Build_Nmap o t => option_case (λ _, {[ 0 ]}) ∅ o ∪ (Pdom_raw Npos (`t))
   end.
 Global Instance Nmerge: Merge Nmap := λ A f t1 t2,
   match t1, t2 with
@@ -37,16 +37,20 @@ Global Instance Nfmap: FMap Nmap := λ A B f t,
 Global Instance: FinMap N Nmap.
 Proof.
   split.
-        intros ? [??] [??] H. f_equal.
-         now apply (H 0).
-        apply finmap_eq. intros i. now apply (H (Npos i)).
-       now intros ? [|?].
-      intros ? f [? t] [|i]. easy. now apply (lookup_partial_alter f t i).
-     intros ? f [? t] [|i] [|j]; try intuition congruence.
-     intros. apply (lookup_partial_alter_ne f t i j). congruence.
-    intros ??? [??] []. easy. apply lookup_fmap.
-   intros ?? ???????? [o t] n; unfold dom, lookup, Ndom, Nlookup; simpl.
-   rewrite elem_of_union, Plookup_raw_dom.
-   destruct o, n; esimplify_elem_of (simplify_is_Some; eauto).
-  intros ? f ? [o1 t1] [o2 t2] [|?]. easy. apply (merge_spec f t1 t2).
+  * intros ? [??] [??] H. f_equal.
+    + now apply (H 0).
+    + apply finmap_eq. intros i. now apply (H (Npos i)).
+  * now intros ? [|?].
+  * intros ? f [? t] [|i].
+    + easy.
+    + now apply (lookup_partial_alter f t i).
+  * intros ? f [? t] [|i] [|j]; try intuition congruence.
+    intros. apply (lookup_partial_alter_ne f t i j). congruence.
+  * intros ??? [??] []. easy. apply lookup_fmap.
+  * intros ?? ???????? [o t] n; unfold dom, lookup, Ndom, Nlookup; simpl.
+    rewrite elem_of_union, Plookup_raw_dom.
+    destruct o, n; esimplify_elem_of (simplify_is_Some; eauto).
+  * intros ? f ? [o1 t1] [o2 t2] [|?].
+    + easy.
+    + apply (merge_spec f t1 t2).
 Qed.

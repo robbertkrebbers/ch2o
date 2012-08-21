@@ -15,5 +15,6 @@ Arguments mjoin {M MJoin A} _.
 Arguments fmap {M FMap A B} _ _.
 
 Notation "m ≫= f" := (mbind f m) (at level 60, right associativity) : C_scope.
-Notation "x ← y ; z" := (y ≫= (λ x : _, z)) (at level 65, next at level 35, right associativity) : C_scope.
+Notation "x ← y ; z" := (y ≫= (λ x : _, z))
+  (at level 65, next at level 35, right associativity) : C_scope.
 Infix "<$>" := fmap (at level 65, right associativity, only parsing) : C_scope.

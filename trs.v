@@ -3,19 +3,29 @@ Require Export base.
 Definition red `(R : relation A) (x : A) := ∃ y, R x y.
 Definition nf `(R : relation A) (x : A) := ¬red R x.
 
+(* The reflexive transitive closure *)
 Inductive rtc `(R : relation A) : relation A :=
   | rtc_refl x : rtc R x x
   | rtc_l x y z : R x y → rtc R y z → rtc R x z.
+(* A reduction of exactly n steps *)
 Inductive nsteps `(R : relation A) : nat → relation A :=
   | nsteps_O x : nsteps R 0 x x
   | nsteps_l n x y z : R x y → nsteps R n y z → nsteps R (S n) x z.
+(* A reduction whose length is bounded by n *)
+Inductive bsteps `(R : relation A) : nat → relation A :=
+  | bsteps_refl n x : bsteps R n x x
+  | bsteps_l n x y z : R x y → bsteps R n y z → bsteps R (S n) x z.
+(* The transitive closure *)
 Inductive tc `(R : relation A) : relation A :=
   | tc_once x y : R x y → tc R x y
   | tc_l x y z : R x y → tc R y z → tc R x z.
-Hint Constructors rtc nsteps tc : trs.
+
+Hint Constructors rtc nsteps bsteps tc : trs.
 
 Arguments rtc_l {_ _ _ _ _} _ _.
 Arguments nsteps_l {_ _ _ _ _ _} _ _.
+Arguments bsteps_refl {_ _} _ _.
+Arguments bsteps_l {_ _ _ _ _ _} _ _.
 Arguments tc_once {_ _ _} _ _.
 Arguments tc_l {_ _ _ _ _} _ _.
 
@@ -55,9 +65,9 @@ Section rtc.
     (Prefl : ∀ x, P x x) (Pstep : ∀ x y z, rtc R x y → R y z → P x y → P x z) :
     ∀ y z, rtc R y z → P y z.
   Proof.
-    assert (∀ y z, rtc R y z → ∀ x, rtc R x y → P x y → P x z).
-     induction 1; eauto using rtc_r.
-    eauto using rtc_refl.
+    cut (∀ y z, rtc R y z → ∀ x, rtc R x y → P x y → P x z).
+    { eauto using rtc_refl. }
+    induction 1; eauto using rtc_r.
   Qed.
 
   Lemma rtc_inv_r {x z} : rtc R x z → x = z ∨ ∃ y, rtc R x y ∧ R y z.
@@ -74,6 +84,31 @@ Section rtc.
   Proof. induction 1; eauto with trs. Qed.
   Lemma rtc_nsteps {x y} : rtc R x y → ∃ n, nsteps R n x y.
   Proof. induction 1; firstorder eauto with trs. Qed.
+
+  Lemma bsteps_once {n x y} : R x y → bsteps R (S n) x y.
+  Proof. eauto with trs. Qed.
+  Lemma bsteps_plus_r {n m x y} :
+    bsteps R n x y → bsteps R (n + m) x y.
+  Proof. induction 1; simpl; eauto with trs. Qed.
+  Lemma bsteps_weaken {n m x y} :
+    n ≤ m → bsteps R n x y → bsteps R m x y.
+  Proof.
+    intros. rewrite (Minus.le_plus_minus n m); auto using bsteps_plus_r.
+  Qed.
+  Lemma bsteps_plus_l {n m x y} :
+    bsteps R n x y → bsteps R (m + n) x y.
+  Proof. apply bsteps_weaken. auto with arith. Qed.
+  Lemma bsteps_S {n x y} :  bsteps R n x y → bsteps R (S n) x y.
+  Proof. apply bsteps_weaken. auto with arith. Qed.
+  Lemma bsteps_trans {n m x y z} :
+    bsteps R n x y → bsteps R m y z → bsteps R (n + m) x z.
+  Proof. induction 1; simpl; eauto using bsteps_plus_l with trs. Qed.
+  Lemma bsteps_r {n x y z} : bsteps R n x y → R y z → bsteps R (S n) x z.
+  Proof. induction 1; eauto with trs. Qed.
+  Lemma bsteps_rtc {n x y} : bsteps R n x y → rtc R x y.
+  Proof. induction 1; eauto with trs. Qed.
+  Lemma rtc_bsteps {x y} : rtc R x y → ∃ n, bsteps R n x y.
+  Proof. induction 1. exists 0. auto with trs. firstorder eauto with trs. Qed.
 
   Global Instance tc_trans: Transitive (tc R).
   Proof. red; induction 1; eauto with trs. Qed.
@@ -96,14 +131,11 @@ Section subrel.
   Proof. intros H1 H2. destruct H1. now apply red_subrel. Qed.
 
   Global Instance rtc_subrel: subrelation (rtc R1) (rtc R2).
-  Proof.
-    induction 1; [easy |].
-    eapply rtc_l; [eapply Hsub|]; eauto.
-  Qed.
+  Proof. induction 1; [left|eright]; eauto; now apply Hsub. Qed.
+  Global Instance nsteps_subrel: subrelation (nsteps R1 n) (nsteps R2 n).
+  Proof. induction 1; [left|eright]; eauto; now apply Hsub. Qed.
+  Global Instance bsteps_subrel: subrelation (bsteps R1 n) (bsteps R2 n).
+  Proof. induction 1; [left|eright]; eauto; now apply Hsub. Qed.
   Global Instance tc_subrel: subrelation (tc R1) (tc R2).
-  Proof.
-    induction 1.
-     now apply tc_once, Hsub.
-    eapply tc_l; [eapply Hsub|]; eauto.
-  Qed.
+  Proof. induction 1; [left|eright]; eauto; now apply Hsub. Qed.
 End subrel.

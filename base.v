@@ -2,15 +2,14 @@ Global Generalizable All Variables.
 Global Set Automatic Coercions Import.
 Require Export Morphisms RelationClasses List Bool Utf8 Program Setoid NArith.
 
-Arguments existT {_ _} _ _.
-Arguments existT2 {_ _ _} _ _ _.
+Arguments id _ _/.
+Arguments compose _ _ _ _ _ _ /.
 
-Definition proj1_T2 {A} {P Q : A → Type} (x : sigT2 P Q) : A :=
-  match x with existT2 a _ _ => a end.
-Definition proj2_T2 {A} {P Q : A → Type} (x : sigT2 P Q) : P (proj1_T2 x) :=
-  match x with existT2 _ p _ => p end.
-Definition proj3_T2 {A} {P Q : A → Type} (x : sigT2 P Q) : Q (proj1_T2 x) :=
-  match x with existT2 _ _ q => q end.
+(* Change True and False into notations so we can overload them *)
+Notation "'True'" := True : type_scope.
+Notation "'False'" := False : type_scope.
+
+Arguments existT {_ _} _ _.
 
 (*  Common notations *)
 Delimit Scope C_scope with C.
@@ -28,7 +27,8 @@ Hint Extern 0 (?x = ?x) => reflexivity.
 Notation "(→)" := (λ x y, x → y) : C_scope.
 Notation "( T →)" := (λ y, T → y) : C_scope.
 Notation "(→ T )" := (λ y, y → T) : C_scope.
-Notation "t $ r" := (t r) (at level 65, right associativity, only parsing) : C_scope.
+Notation "t $ r" := (t r)
+  (at level 65, right associativity,only parsing) : C_scope.
 Infix "∘" := compose : C_scope.
 Notation "(∘)" := compose (only parsing) : C_scope.
 Notation "( f ∘)" := (compose f) (only parsing) : C_scope.
@@ -91,8 +91,9 @@ Notation "( ⊈ X )" := (λ Y, Y ⊈ X) (only parsing) : C_scope.
 Hint Extern 0 (?x ⊆ ?x) => reflexivity.
 
 Class Singleton A B := singleton: A → B.
-Notation "{{ x }}" := (singleton x) : C_scope.
-Notation "{{ x ; y ; .. ; z }}" := (union .. (union (singleton x) (singleton y)) .. (singleton z)) : C_scope.
+Notation "{[ x ]}" := (singleton x) : C_scope.
+Notation "{[ x ; y ; .. ; z ]}" :=
+  (union .. (union (singleton x) (singleton y)) .. (singleton z)) : C_scope.
 
 Class ElemOf A B := elem_of: A → B → Prop.
 Infix "∈" := elem_of (at level 70) : C_scope.
@@ -104,16 +105,26 @@ Notation "(∉)" := (λ x X, x ∉ X) (only parsing) : C_scope.
 Notation "( x ∉)" := (λ X, x ∉ X) (only parsing) : C_scope.
 Notation "(∉ X )" := (λ x, x ∉ X) (only parsing) : C_scope.
 
-Class UnionWith M := union_with: ∀ {A}, (A → A → A) → M A → M A → M A.
-Class IntersectWith M := intersect_with: ∀ {A}, (A → A → A) → M A → M A → M A.
+Class UnionWith M :=
+  union_with: ∀ {A}, (A → A → A) → M A → M A → M A.
+Class IntersectionWith M :=
+  intersection_with: ∀ {A}, (A → A → A) → M A → M A → M A.
+Class DifferenceWith M :=
+  difference_with: ∀ {A}, (A → A → option A) → M A → M A → M A.
 
 (* Common properties *)
-Class Injective {A B} R S (f : A → B) := injective: ∀ x y : A, S (f x) (f y) → R x y.
-Class Idempotent {A} R (f : A → A → A) := idempotent: ∀ x, R (f x x) x.
-Class Commutative {A B} R (f : B → B → A) := commutative: ∀ x y, R (f x y) (f y x).
-Class LeftId {A} R (i : A) (f : A → A → A) := left_id: ∀ x, R (f i x) x.
-Class RightId {A} R (i : A) (f : A → A → A) := right_id: ∀ x, R (f x i) x.
-Class Associative {A} R (f : A → A → A) := associative: ∀ x y z, R (f x (f y z)) (f (f x y) z).
+Class Injective {A B} R S (f : A → B) :=
+  injective: ∀ x y : A, S (f x) (f y) → R x y.
+Class Idempotent {A} R (f : A → A → A) :=
+  idempotent: ∀ x, R (f x x) x.
+Class Commutative {A B} R (f : B → B → A) :=
+  commutative: ∀ x y, R (f x y) (f y x).
+Class LeftId {A} R (i : A) (f : A → A → A) :=
+  left_id: ∀ x, R (f i x) x.
+Class RightId {A} R (i : A) (f : A → A → A) :=
+  right_id: ∀ x, R (f x i) x.
+Class Associative {A} R (f : A → A → A) :=
+  associative: ∀ x y z, R (f x (f y z)) (f (f x y) z).
 
 Arguments injective {_ _ _ _} _ {_} _ _ _.
 Arguments idempotent {_ _} _ {_} _.
@@ -123,15 +134,20 @@ Arguments right_id {_ _} _ _ {_} _.
 Arguments associative {_ _} _ {_} _ _ _.
 
 (* Using idempotent_eq we can force Coq to not use the setoid mechanism *)
-Lemma idempotent_eq {A} (f : A → A → A) `{!Idempotent (=) f} x : f x x = x.
+Lemma idempotent_eq {A} (f : A → A → A) `{!Idempotent (=) f} x :
+  f x x = x.
 Proof. auto. Qed.
-Lemma commutative_eq {A B} (f : B → B → A) `{!Commutative (=) f} x y : f x y = f y x.
+Lemma commutative_eq {A B} (f : B → B → A) `{!Commutative (=) f} x y :
+  f x y = f y x.
 Proof. auto. Qed.
-Lemma left_id_eq {A} (i : A) (f : A → A → A) `{!LeftId (=) i f} x : f i x = x.
+Lemma left_id_eq {A} (i : A) (f : A → A → A) `{!LeftId (=) i f} x :
+  f i x = x.
 Proof. auto. Qed.
-Lemma right_id_eq {A} (i : A) (f : A → A → A) `{!RightId (=) i f} x : f x i = x.
+Lemma right_id_eq {A} (i : A) (f : A → A → A) `{!RightId (=) i f} x :
+  f x i = x.
 Proof. auto. Qed.
-Lemma associative_eq {A} (f : A → A → A) `{!Associative (=) f} x y z : f x (f y z) = f (f x y) z.
+Lemma associative_eq {A} (f : A → A → A) `{!Associative (=) f} x y z :
+  f x (f y z) = f (f x y) z.
 Proof. auto. Qed.
 
 (* Monadic operations *)
@@ -150,7 +166,8 @@ Arguments mjoin {M MJoin A} _.
 Arguments fmap {M FMap A B} _ _.
 
 Notation "m ≫= f" := (mbind f m) (at level 60, right associativity) : C_scope.
-Notation "x ← y ; z" := (y ≫= (λ x : _, z)) (at level 65, next at level 35, right associativity) : C_scope.
+Notation "x ← y ; z" := (y ≫= (λ x : _, z))
+  (at level 65, next at level 35, right associativity) : C_scope.
 Infix "<$>" := fmap (at level 65, right associativity, only parsing) : C_scope.
 
 (* Ordered structures *)
@@ -159,7 +176,8 @@ Class BoundedPreOrder A `{Empty A} `{SubsetEq A} := {
   subseteq_empty x : ∅ ⊆ x
 }.
 
-(* Note: no equality to avoid the need for setoids. We define equality in a generic way. *)
+(* Note: no equality to avoid the need for setoids. We define setoid 
+equality in a generic way. *)
 Class BoundedJoinSemiLattice A `{Empty A} `{SubsetEq A} `{Union A} := {
   jsl_preorder :>> BoundedPreOrder A;
   subseteq_union_l x y : x ⊆ x ∪ y;
@@ -180,7 +198,7 @@ Class Map A C := map: (A → A) → (C → C).
 Class Collection A C `{ElemOf A C} `{Empty C} `{Union C} 
     `{Intersection C} `{Difference C} `{Singleton A C} `{Map A C} := {
   elem_of_empty (x : A) : x ∉ ∅;
-  elem_of_singleton (x y : A) : x ∈ {{ y }} ↔ x = y;
+  elem_of_singleton (x y : A) : x ∈ {[ y ]} ↔ x = y;
   elem_of_union X Y (x : A) : x ∈ X ∪ Y ↔ x ∈ X ∨ x ∈ Y;
   elem_of_intersection X Y (x : A) : x ∈ X ∩ Y ↔ x ∈ X ∧ x ∈ Y;
   elem_of_difference X Y (x : A) : x ∈ X ∖ Y ↔ x ∈ X ∧ x ∉ Y;
@@ -208,15 +226,31 @@ Notation "(!!)" := lookup (only parsing) : C_scope.
 Notation "( m !!)" := (λ i, lookup i m) (only parsing) : C_scope.
 Notation "(!! i )" := (lookup i) (only parsing) : C_scope.
 
-Class PartialAlter K M := partial_alter: ∀ {A}, (option A → option A) → K → M A → M A.
-Class Alter K M := alter: ∀ {A}, (A → A) → K → M A → M A.
-Class Dom K M := dom: ∀ C `{Empty C} `{Union C} `{Singleton K C}, M → C.
-Class Merge M := merge: ∀ {A}, (option A → option A → option A) → M A → M A → M A.
-Class Insert K M := insert: ∀ {A}, K → A → M A → M A.
-Notation "<[ k := a ]>" := (insert k a) (at level 5, right associativity) : C_scope.
-Class Delete K M := delete: K → M → M.
+Class PartialAlter K M :=
+  partial_alter: ∀ {A}, (option A → option A) → K → M A → M A.
+Class Alter K M :=
+  alter: ∀ {A}, (A → A) → K → M A → M A.
+Class Dom K M :=
+  dom: ∀ C `{Empty C} `{Union C} `{Singleton K C}, M → C.
+Class Merge M :=
+  merge: ∀ {A}, (option A → option A → option A) → M A → M A → M A.
+Class Insert K M :=
+  insert: ∀ {A}, K → A → M A → M A.
+Notation "<[ k := a ]>" := (insert k a) 
+  (at level 5, right associativity, format "<[ k := a ]>") : C_scope.
+Class Delete K M :=
+  delete: K → M → M.
+
+Definition insert_list `{Insert K M} {A} (l : list (K * A)) (m : M A) : M A :=
+  fold_right (λ p, <[ fst p := snd p ]>) m l.
+Definition delete_list `{Delete K M} (l : list K) (m : M) : M := 
+  fold_right delete m l.
 
 (* Misc *)
+Lemma symmetry_iff `(R : relation A) `{!Symmetric R} (x y : A) :
+  R x y ↔ R y x.
+Proof. intuition. Qed.
+
 Instance pointwise_reflexive {A} `{R : relation B} :
   Reflexive R → Reflexive (pointwise_relation A R) | 9.
 Proof. firstorder. Qed.
@@ -227,20 +261,26 @@ Instance pointwise_transitive {A} `{R : relation B} :
   Transitive R → Transitive (pointwise_relation A R) | 9.
 Proof. firstorder. Qed.
 
-Definition fst_map {A A' B} (f : A → A') (p : A * B) : A' * B := (f (fst p), snd p).
-Definition snd_map {A B B'} (f : B → B') (p : A * B) : A * B' := (fst p, f (snd p)).
-Definition prod_relation {A B} (R1 : relation A) (R2 : relation B) : relation (A * B) := λ x y,
-  R1 (fst x) (fst y) ∧ R2 (snd x) (snd y).
+Definition fst_map {A A' B} (f : A → A') (p : A * B) : A' * B :=
+  (f (fst p), snd p).
+Definition snd_map {A B B'} (f : B → B') (p : A * B) : A * B' :=
+  (fst p, f (snd p)).
+Definition prod_relation {A B} (R1 : relation A) (R2 : relation B) :
+  relation (A * B) := λ x y, R1 (fst x) (fst y) ∧ R2 (snd x) (snd y).
 
 Section prod_relation.
   Context `{R1 : relation A} `{R2 : relation B}.
-  Global Instance: Reflexive R1 → Reflexive R2 → Reflexive (prod_relation R1 R2).
+  Global Instance:
+    Reflexive R1 → Reflexive R2 → Reflexive (prod_relation R1 R2).
   Proof. firstorder eauto. Qed.
-  Global Instance: Symmetric R1 → Symmetric R2 → Symmetric (prod_relation R1 R2).
+  Global Instance:
+    Symmetric R1 → Symmetric R2 → Symmetric (prod_relation R1 R2).
   Proof. firstorder eauto. Qed.
-  Global Instance: Transitive R1 → Transitive R2 → Transitive (prod_relation R1 R2).
+  Global Instance:
+    Transitive R1 → Transitive R2 → Transitive (prod_relation R1 R2).
   Proof. firstorder eauto. Qed.
-  Global Instance: Equivalence R1 → Equivalence R2 → Equivalence (prod_relation R1 R2).
+  Global Instance:
+    Equivalence R1 → Equivalence R2 → Equivalence (prod_relation R1 R2).
   Proof. split; apply _. Qed.
   Global Instance: Proper (R1 ==> R2 ==> prod_relation R1 R2) pair.
   Proof. firstorder eauto. Qed.
@@ -250,11 +290,13 @@ Section prod_relation.
   Proof. firstorder eauto. Qed.
 End prod_relation.
 
-Definition lift_relation {A B} (R : relation A) (f : B → A) : relation B := λ x y, R (f x) (f y).
+Definition lift_relation {A B} (R : relation A)
+  (f : B → A) : relation B := λ x y, R (f x) (f y).
 Definition lift_relation_equivalence {A B} (R : relation A) (f : B → A) :
   Equivalence R → Equivalence (lift_relation R f).
 Proof. unfold lift_relation. firstorder. Qed.
-Hint Extern 0 (Equivalence (lift_relation _ _)) => eapply @lift_relation_equivalence : typeclass_instances.
+Hint Extern 0 (Equivalence (lift_relation _ _)) =>
+  eapply @lift_relation_equivalence : typeclass_instances.
 
 Instance: ∀ A B (x : B), Commutative (=) (λ _ _ : A, x).
 Proof. easy. Qed.
@@ -269,11 +311,14 @@ Proof. easy. Qed.
 Instance: ∀ A, Idempotent (=) (λ _ x : A, x).
 Proof. easy. Qed.
 
-Instance left_id_propholds {A} (R : relation A) i f : LeftId R i f → ∀ x, PropHolds (R (f i x) x).
+Instance left_id_propholds {A} (R : relation A) i f :
+  LeftId R i f → ∀ x, PropHolds (R (f i x) x).
 Proof. easy. Qed.
-Instance right_id_propholds {A} (R : relation A) i f : RightId R i f → ∀ x, PropHolds (R (f x i) x).
+Instance right_id_propholds {A} (R : relation A) i f :
+  RightId R i f → ∀ x, PropHolds (R (f x i) x).
 Proof. easy. Qed.
-Instance idem_propholds {A} (R : relation A) f : Idempotent R f → ∀ x, PropHolds (R (f x x) x).
+Instance idem_propholds {A} (R : relation A) f :
+  Idempotent R f → ∀ x, PropHolds (R (f x x) x).
 Proof. easy. Qed.
 
 Ltac simplify_eqs := repeat
@@ -283,7 +328,8 @@ Ltac simplify_eqs := repeat
   | H : _ ≠ _ |- _ => now destruct H
   | H : _ = _ → False |- _ => now destruct H
   | H : _ = _ |- _ => discriminate H
-  | H : _ = _ |-  ?G => change (id G); injection H; clear H; intros; unfold id at 1
+  | H : _ = _ |-  ?G =>
+    change (id G); injection H; clear H; intros; unfold id at 1
   | H : ?f _ = ?f _ |- _ => apply (injective f) in H
   | H : ?f _ ?x = ?f _ ?x |- _ => apply (injective (λ y, f y x)) in H
   end.
@@ -303,3 +349,51 @@ Tactic Notation "remember" constr(t) "as" "(" ident(x) "," ident(E) ")" :=
   match goal with
   | E' : x = _ |- _ => rename E' into E
   end.
+
+Ltac feed tac H :=
+  let H' := type of H in
+  match eval hnf in H' with
+  | ?T1 → ?T2 =>
+    let HT1 := fresh in assert T1 as HT1;
+    [| feed tac (H HT1); clear HT1 ]
+  | _ => tac H
+  end.
+Tactic Notation "feed" tactic(tac) constr(H) := feed tac H.
+
+Ltac efeed tac H :=
+  let H' := type of H in
+  match eval hnf in H' with
+  | ?T1 → ?T2 =>
+    let HT1 := fresh in assert T1 as HT1; [| efeed tac (H HT1); clear HT1 ]
+  | ?T1 → _ =>
+    let e := fresh in evar (e:T1);
+    let e' := eval unfold e in e in
+    clear e; efeed tac (H e')
+  | _ => tac H
+  end.
+Tactic Notation "efeed" tactic(tac) constr(H) := efeed tac H.
+
+Tactic Notation "feed" "pose" "proof" constr(H) "as" ident(H') :=
+  feed (fun H => pose proof H as H') H.
+Tactic Notation "feed" "pose" "proof" constr(H) :=
+  feed (fun H => pose proof H) H.
+
+Tactic Notation "efeed" "pose" "proof" constr(H) "as" ident(H') :=
+  efeed (fun H => pose proof H as H') H.
+Tactic Notation "efeed" "pose" "proof" constr(H) :=
+  efeed (fun H => pose proof H) H.
+
+Tactic Notation "feed" "specialize" ident(H) :=
+  feed (fun H => specialize H) H.
+Tactic Notation "efeed" "specialize" ident(H) :=
+  efeed (fun H => specialize H) H.
+
+Tactic Notation "feed" "inversion" constr(H) :=
+  feed (fun H => let H':=fresh in pose proof H as H'; inversion H') H.
+Tactic Notation "feed" "inversion" constr(H) "as" simple_intropattern(IP) :=
+  feed (fun H => let H':=fresh in pose proof H as H'; inversion H' as IP) H.
+
+Tactic Notation "feed" "destruct" constr(H) :=
+  feed (fun H => let H':=fresh in pose proof H as H'; destruct H') H.
+Tactic Notation "feed" "destruct" constr(H) "as" simple_intropattern(IP) :=
+  feed (fun H => let H':=fresh in pose proof H as H'; destruct H' as IP) H.

@@ -20,8 +20,8 @@ Definition denoteBinOpN (op : binop) : N → N → N :=
   end.
 
 Inductive expr : Type :=
-  | EVar :> nat → expr
-  | EVal :> N → expr
+  | EVar : nat → expr
+  | EVal : N → expr
   | ELoad : expr → expr
   | EBinOp : binop → expr → expr → expr.
 
@@ -30,17 +30,21 @@ Proof. solve_decision. Defined.
 
 Delimit Scope expr_scope with E.
 Bind Scope expr_scope with expr.
-Notation "'var' x" := (EVar x) (at level 10) : expr_scope.
-Notation "'val' v" := (EVal v) (at level 10) : expr_scope.
-Notation "'load' e" := (ELoad e) (at level 10) : expr_scope.
-Notation "e1 @{ op } e2" := (EBinOp op e1 e2) (at level 50, next at level 50) : expr_scope.
+Arguments ELoad _%expr_scope.
+Arguments EBinOp _ _%expr_scope _%expr_scope.
+
+Notation "'var' x" := (EVar x) (at level 9) : expr_scope.
+Notation "'val' v" := (EVal v) (at level 9) : expr_scope.
+Notation "'load' e" := (ELoad e) (at level 9) : expr_scope.
+Notation "e1 @{ op } e2" := (EBinOp op e1 e2)
+  (at level 50, next at level 50) : expr_scope.
 
 Infix "+" := (EBinOp PlusOp) : expr_scope.
 Infix "*" := (EBinOp MultOp) : expr_scope.
 Infix "≤" := (EBinOp LeOp) : expr_scope.
 Infix "=" := (EBinOp EqOp) : expr_scope.
 
-Notation stack := (list N).
+Notation stack := (list N) (only parsing).
 Reserved Notation "⟦ e ⟧" (at level 2, format "⟦  e  ⟧").
 
 Fixpoint expr_eval (e : expr) (ρ : stack) (m : mem) : option N :=
@@ -68,5 +72,6 @@ Lemma expr_eval_weaken_stack e ρ ρ' m v :
   ⟦ e ⟧ ρ m = Some v → ⟦ e ⟧ (ρ ++ ρ') m = Some v.
 Proof.
   revert v. induction e; simpl; intros; simplify_options;
-    try destruct val_true_false_dec; simplify_options; auto using list_lookup_weaken.
+    try destruct val_true_false_dec; simplify_options;
+    auto using list_lookup_weaken.
 Qed.
