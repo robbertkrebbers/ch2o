@@ -1,0 +1,20 @@
+PREREQUISITES
+-------------
+
+This version is known to compile with:
+
+ - Coq 8.4  
+ - SCons 2.0
+
+BUILDING INSTRUCTIONS
+---------------------
+
+Say "scons" to build the full library, or "scons some_module.vo" to just 
+build some_module.vo (and its dependencies).
+
+In addition to common Make options like -j N and -k, SCons supports some 
+useful options of its own, such as --debug=time, which displays the time 
+spent executing individual build commands.
+
+scons -c replaces Make clean
+
