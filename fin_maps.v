@@ -1,6 +1,25 @@
+(* Copyright (c) 2012, Robbert Krebbers. *)
+(* This file is distributed under the terms of the BSD license. *)
+(** Finite maps associate data to keys. This file defines an interface for
+finite maps and collects some theory on it. Most importantly, it proves useful
+induction principles for finite maps and implements the tactic [simplify_map]
+to simplify goals involving finite maps. *)
 Require Export prelude.
 
-Class FinMap K M `{∀ A, Empty (M A)} `{Lookup K M} `{FMap M} 
+(** * Axiomatization of finite maps *)
+(** We require Leibniz equality to be extensional on finite maps. This of
+course limits the class of finite map implementations, but since we are mainly
+interested in finite maps with numbers or paths as indexes, we do not consider
+this a serious limitation. The main application of finite maps is to implement
+the memory, where extensionality of Leibniz equality becomes very important for
+a convenient use in assertions of our axiomatic semantics. *)
+(** Finiteness is axiomatized by requiring each map to have a finite domain.
+Since we may have multiple implementations of finite sets, the [dom] function is
+parametrized by an implementation of finite sets over the map's key type. *)
+(** Finite map implementations are required to implement the [merge] function
+which enables us to give a generic implementation of [union_with],
+[intersection_with], and [difference_with]. *)
+Class FinMap K M `{∀ A, Empty (M A)} `{Lookup K M} `{FMap M}
     `{PartialAlter K M} `{∀ A, Dom K (M A)} `{Merge M} := {
   finmap_eq {A} (m1 m2 : M A) :
     (∀ i, m1 !! i = m2 !! i) → m1 = m2;
@@ -14,21 +33,26 @@ Class FinMap K M `{∀ A, Empty (M A)} `{Lookup K M} `{FMap M}
     (f <$> m) !! i = f <$> m !! i;
   elem_of_dom C {A} `{Collection K C} (m : M A) i :
     i ∈ dom C m ↔ is_Some (m !! i);
-  merge_spec {A} f `{!PropHolds (f None None = None)} 
+  merge_spec {A} f `{!PropHolds (f None None = None)}
     (m1 m2 : M A) i : merge f m1 m2 !! i = f (m1 !! i) (m2 !! i)
 }.
 
+(** * Derived operations *)
+(** All of the following functions are defined in a generic way for arbitrary
+finite map implementations. These generic implementations do not cause a
+significant enough performance loss to make including them in the finite map
+axiomatization worthwhile. *)
 Instance finmap_alter `{PartialAlter K M} : Alter K M := λ A f,
   partial_alter (fmap f).
 Instance finmap_insert `{PartialAlter K M} : Insert K M := λ A k x,
   partial_alter (λ _, Some x) k.
 Instance finmap_delete `{PartialAlter K M} {A} : Delete K (M A) :=
   partial_alter (λ _, None).
-Instance finmap_singleton `{PartialAlter K M} {A} 
+Instance finmap_singleton `{PartialAlter K M} {A}
   `{Empty (M A)} : Singleton (K * A) (M A) := λ p, <[fst p:=snd p]>∅.
 
-Definition list_to_map `{Insert K M} {A} `{Empty (M A)} (l : list (K * A)) : M A :=
-  insert_list l ∅.
+Definition list_to_map `{Insert K M} {A} `{Empty (M A)}
+  (l : list (K * A)) : M A := insert_list l ∅.
 
 Instance finmap_union `{Merge M} : UnionWith M := λ A f,
   merge (union_with f).
@@ -37,6 +61,7 @@ Instance finmap_intersection `{Merge M} : IntersectionWith M := λ A f,
 Instance finmap_difference `{Merge M} : DifferenceWith M := λ A f,
   merge (difference_with f).
 
+(** * General theorems *)
 Section finmap.
 Context `{FinMap K M} `{∀ i j : K, Decision (i = j)} {A : Type}.
 
@@ -64,12 +89,12 @@ Lemma dom_empty C `{Collection K C} : dom C (∅ : M A) ≡ ∅.
 Proof.
   split; intro.
   * rewrite (elem_of_dom C), lookup_empty. simplify_is_Some.
-  * simplify_elem_of.
+  * solve_elem_of.
 Qed.
 Lemma dom_empty_inv C `{Collection K C} (m : M A) : dom C m ≡ ∅ → m = ∅.
 Proof.
   intros E. apply finmap_empty. intros. apply (not_elem_of_dom C).
-  rewrite E. simplify_elem_of.
+  rewrite E. solve_elem_of.
 Qed.
 
 Lemma lookup_empty_not i : ¬is_Some ((∅ : M A) !! i).
@@ -198,10 +223,10 @@ Qed.
 Lemma delete_partial_alter (m : M A) i f :
   m !! i = None → delete i (partial_alter f i m) = m.
 Proof.
-  intros. unfold delete, finmap_delete. rewrite <-partial_alter_compose. 
+  intros. unfold delete, finmap_delete. rewrite <-partial_alter_compose.
   rapply partial_alter_self_alt. congruence.
 Qed.
-Lemma delete_partial_alter_dom C `{Collection K C} (m : M A) i f : 
+Lemma delete_partial_alter_dom C `{Collection K C} (m : M A) i f :
   i ∉ dom C m → delete i (partial_alter f i m) = m.
 Proof. rewrite (not_elem_of_dom C). apply delete_partial_alter. Qed.
 Lemma delete_insert (m : M A) i x : m !! i = None → delete i (<[i:=x]>m) = m.
@@ -226,6 +251,47 @@ Lemma not_elem_of_dom_delete C `{Collection K C} (m : M A) i :
   i ∉ dom C (delete i m).
 Proof. apply (not_elem_of_dom C), lookup_delete. Qed.
 
+(** * Induction principles *)
+(** We use the induction principle on finite collections to prove the
+following induction principle on finite maps. *)
+Lemma finmap_ind_alt C (P : M A → Prop) `{FinCollection K C} :
+  P ∅ →
+  (∀ i x m, i ∉ dom C m → P m → P (<[i:=x]>m)) →
+  ∀ m, P m.
+Proof.
+  intros Hemp Hinsert m.
+  apply (collection_ind (λ X, ∀ m, dom C m ≡ X → P m)) with (dom C m).
+  * solve_proper.
+  * clear m. intros m Hm. rewrite finmap_empty.
+    + easy.
+    + intros. rewrite <-(not_elem_of_dom C), Hm.
+      now solve_elem_of.
+  * clear m. intros i X Hi IH m Hdom.
+    assert (is_Some (m !! i)) as [x Hx].
+    { apply (elem_of_dom C).
+      rewrite Hdom. clear Hdom.
+      now solve_elem_of. }
+    rewrite <-(insert_delete m i x) by easy.
+    apply Hinsert.
+    { now apply (not_elem_of_dom_delete C). }
+    apply IH. apply elem_of_equiv. intros.
+    rewrite (elem_of_dom_delete C).
+    esolve_elem_of.
+  * easy.
+Qed.
+
+(** We use the [listset] implementation to prove an induction principle that
+does not mention the map's domain. *)
+Lemma finmap_ind (P : M A → Prop) :
+  P ∅ →
+  (∀ i x m, m !! i = None → P m → P (<[i:=x]>m)) →
+  ∀ m, P m.
+Proof.
+  setoid_rewrite <-(not_elem_of_dom (listset _)).
+  apply (finmap_ind_alt (listset _) P).
+Qed.
+
+(** * Deleting and inserting multiple elements *)
 Lemma lookup_delete_list (m : M A) is j :
   In j is → delete_list is m !! j = None.
 Proof.
@@ -256,30 +322,23 @@ Proof.
   intros. rewrite IHis, delete_insert_comm; tauto.
 Qed.
 
-Lemma finmap_ind C (P : M A → Prop) `{FinCollection K C} :
-  P ∅ → (∀ i x m, i ∉ dom C m → P m → P (<[i:=x]>m)) → ∀ m, P m.
+Lemma lookup_insert_list (m : M A) l1 l2 i x :
+  (∀y, ¬In (i,y) l1) → insert_list (l1 ++ (i,x) :: l2) m !! i = Some x.
 Proof.
-  intros Hemp Hinsert.
-  intros m. apply (collection_ind (λ X, ∀ m, dom C m ≡ X → P m)) with (dom C m).
-  * solve_proper.
-  * clear m. intros m Hm. rewrite finmap_empty.
-    + easy.
-    + intros. rewrite <-(not_elem_of_dom C), Hm.
-      now simplify_elem_of.
-  * clear m. intros i X Hi IH m Hdom.
-    assert (is_Some (m !! i)) as [x Hx].
-    { apply (elem_of_dom C).
-      rewrite Hdom. clear Hdom.
-      now simplify_elem_of. }
-    rewrite <-(insert_delete m i x) by easy.
-    apply Hinsert.
-    { now apply (not_elem_of_dom_delete C). }
-    apply IH. apply elem_of_equiv. intros.
-    rewrite (elem_of_dom_delete C). rewrite Hdom.
-    clear Hdom. simplify_elem_of.
-  * easy.
+  induction l1 as [|[j y] l1 IH]; simpl.
+  * intros. now rewrite lookup_insert.
+  * intros Hy. rewrite lookup_insert_ne; naive_solver.
 Qed.
 
+Lemma lookup_insert_list_not_in (m : M A) l i :
+  (∀y, ¬In (i,y) l) → insert_list l m !! i = m !! i.
+Proof.
+  induction l as [|[j y] l IH]; simpl.
+  * easy.
+  * intros Hy. rewrite lookup_insert_ne; naive_solver.
+Qed.
+
+(** * Properties of the merge operation *)
 Section merge.
   Context (f : option A → option A → option A).
 
@@ -314,22 +373,26 @@ Section merge.
   Proof. intros ???. apply merge_comm. intros. now apply (commutative f). Qed.
 
   Lemma merge_assoc m1 m2 m3 :
-    (∀ i, f (m1 !! i) (f (m2 !! i) (m3 !! i)) = f (f (m1 !! i) (m2 !! i)) (m3 !! i)) → 
+    (∀ i, f (m1 !! i) (f (m2 !! i) (m3 !! i)) =
+          f (f (m1 !! i) (m2 !! i)) (m3 !! i)) →
     merge f m1 (merge f m2 m3) = merge f (merge f m1 m2) m3.
   Proof. intros. apply finmap_eq. intros. now rewrite !(merge_spec f). Qed.
   Global Instance: Associative (=) f → Associative (=) (merge f).
   Proof. intros ????. apply merge_assoc. intros. now apply (associative f). Qed.
 End merge.
 
+(** * Properties of the union and intersection operation *)
 Section union_intersection.
   Context (f : A → A → A).
 
   Lemma finmap_union_merge m1 m2 i x y :
-    m1 !! i = Some x → m2 !! i = Some y → union_with f m1 m2 !! i = Some (f x y).
+    m1 !! i = Some x →
+    m2 !! i = Some y →
+    union_with f m1 m2 !! i = Some (f x y).
   Proof.
     intros Hx Hy. unfold union_with, finmap_union.
     now rewrite (merge_spec _), Hx, Hy.
-  Qed.   
+  Qed.
   Lemma finmap_union_l m1 m2 i x :
     m1 !! i = Some x → m2 !! i = None → union_with f m1 m2 !! i = Some x.
   Proof.
@@ -358,31 +421,15 @@ Section union_intersection.
   Global Instance:
     Idempotent (=) f → Idempotent (=) (union_with f : M A → M A → M A) := _.
 End union_intersection.
-
-Lemma lookup_insert_list (m : M A) l1 l2 i x :
-  (∀y, ¬In (i,y) l1) → insert_list (l1 ++ (i,x) :: l2) m !! i = Some x.
-Proof.
-  induction l1 as [|[j y] l1 IH]; simpl.
-   intros. now rewrite lookup_insert.
-  intros Hy. rewrite lookup_insert_ne. apply IH.
-   firstorder.
-  intro. apply (Hy y). left. congruence.
-Qed.
-
-Lemma lookup_insert_list_not_in (m : M A) l i :
-  (∀y, ¬In (i,y) l) → insert_list l m !! i = m !! i.
-Proof.
-  induction l as [|[j y] l IH]; simpl.
-   easy.
-  intros Hy. rewrite lookup_insert_ne.
-   firstorder.
-  intro. apply (Hy y). left. congruence.
-Qed.
 End finmap.
 
+(** * The finite map tactic *)
+(** The tactic [simplify_map by tac] simplifies finite map expressions
+occuring in the conclusion and assumptions. It uses [tac] to discharge generated
+inequalities. *)
 Tactic Notation "simplify_map" "by" tactic(T) := repeat
   match goal with
-  | _ => progress simplify_eqs
+  | _ => progress simplify_equality
   | H : context[ ∅ !! _ ] |- _ => rewrite lookup_empty in H
   | H : context[ (<[_:=_]>_) !! _ ] |- _ => rewrite lookup_insert in H
   | H : context[ (<[_:=_]>_) !! _ ] |- _ => rewrite lookup_insert_ne in H by T

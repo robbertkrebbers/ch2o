@@ -1,3 +1,12 @@
+(* Copyright (c) 2012, Robbert Krebbers. *)
+(* This file is distributed under the terms of the BSD license. *)
+(** This files implements an efficient implementation of finite maps whose keys
+range over Coq's data type of positive binary naturals [positive]. The
+implementation is based on Xavier Leroy's implementation of radix-2 search
+trees (uncompressed Patricia trees) and guarantees logarithmic-time operations.
+However, we extend Leroy's implementation by packing the trees into a Sigma
+type such that canonicity of representation is ensured. This is necesarry for
+Leibniz equality to become extensional. *)
 Require Import PArith.
 Require Export prelude fin_maps.
 
@@ -5,12 +14,18 @@ Local Open Scope positive_scope.
 Local Hint Extern 0 (@eq positive _ _) => congruence.
 Local Hint Extern 0 (¬@eq positive _ _) => congruence.
 
+(** Enable unfolding of the finite map operations in this file. *)
 Local Arguments lookup _ _ _ _ _ !_ /.
 Local Arguments partial_alter _ _ _ _ _ _ !_ /.
 Local Arguments fmap _ _ _ _ _ !_ /.
 Local Arguments merge _ _ _ _ !_ _ /.
 Local Arguments mbind _ _ _ _ _ !_/.
 
+(** * The tree data structure *)
+(** The data type [Pmap_raw] specifies radix-2 search trees. These trees do
+not ensure canonical representations of maps. For example the empty map can
+be represented as a binary tree of an arbitrary size that contains [None] at
+all nodes. *)
 Inductive Pmap_raw A :=
   | Pleaf: Pmap_raw A
   | Pnode: Pmap_raw A → option A → Pmap_raw A → Pmap_raw A.
@@ -21,6 +36,7 @@ Instance Pmap_raw_eq_dec `{∀ x y : A, Decision (x = y)} (x y : Pmap_raw A) :
   Decision (x = y).
 Proof. solve_decision. Defined.
 
+(** The following predicate describes non empty trees. *)
 Inductive Pmap_ne {A} : Pmap_raw A → Prop :=
   | Pmap_ne_val l x r : Pmap_ne (Pnode l (Some x) r)
   | Pmap_ne_l l r : Pmap_ne l → Pmap_ne (Pnode l None r)
@@ -36,6 +52,8 @@ Proof.
       inversion_clear 1; contradiction.
 Qed.
 
+(** The following predicate describes well well formed trees. A tree is well
+formed if it is empty or if all nodes at the bottom contain a value. *)
 Inductive Pmap_wf {A} : Pmap_raw A → Prop :=
   | Pmap_wf_leaf : Pmap_wf Pleaf
   | Pmap_wf_node l x r : Pmap_wf l → Pmap_wf r → Pmap_wf (Pnode l (Some x) r)
@@ -49,17 +67,19 @@ Proof.
   * intuition.
   * destruct IHl, IHr; try solve [left; intuition];
       right; inversion_clear 1; intuition.
-  * destruct IHl, IHr, (decide (Pmap_ne l)), (decide (Pmap_ne r)); 
+  * destruct IHl, IHr, (decide (Pmap_ne l)), (decide (Pmap_ne r));
       try solve [left; intuition]; right; inversion_clear 1; intuition.
 Qed.
 
+(** Now we restrict the data type of trees to those that are well formed. *)
 Definition Pmap A := @dsig (Pmap_raw A) Pmap_wf _.
 
+(** * Operations on the data structure *)
 Global Instance Pmap_dec `{∀ x y : A, Decision (x = y)} (t1 t2 : Pmap A) :
     Decision (t1 = t2) :=
   match Pmap_raw_eq_dec (`t1) (`t2) with
-  | left H => left (dsig_eq _ t1 t2 H)
-  | right H => right (H ∘ eq_ind _ (λ x, `t1 = `x) eq_refl _)
+  | left H => left (proj2 (dsig_eq _ t1 t2) H)
+  | right H => right (H ∘ proj1 (dsig_eq _ t1 t2))
   end.
 
 Instance Pempty_raw {A} : Empty (Pmap_raw A) := Pleaf.
@@ -152,13 +172,13 @@ Lemma Pnode_canon_wf `(l : Pmap_raw A) (o : option A) (r : Pmap_raw A) :
 Proof. intros H1 H2. destruct H1, o, H2; simpl; intuition. Qed.
 Local Hint Resolve Pnode_canon_wf.
 
-Lemma Pnode_canon_lookup_xH `(l : Pmap_raw A) (o : option A) (r : Pmap_raw A) :
+Lemma Pnode_canon_lookup_xH `(l : Pmap_raw A) o (r : Pmap_raw A) :
   Pnode_canon l o r !! 1 = o.
 Proof. now destruct l,o,r. Qed.
-Lemma Pnode_canon_lookup_xO `(l : Pmap_raw A) (o : option A) (r : Pmap_raw A) i :
+Lemma Pnode_canon_lookup_xO `(l : Pmap_raw A) o (r : Pmap_raw A) i :
   Pnode_canon l o r !! i~0 = l !! i.
 Proof. now destruct l,o,r. Qed.
-Lemma Pnode_canon_lookup_xI `(l : Pmap_raw A) (o : option A) (r : Pmap_raw A) i :
+Lemma Pnode_canon_lookup_xI `(l : Pmap_raw A) o (r : Pmap_raw A) i :
   Pnode_canon l o r !! i~1 = r !! i.
 Proof. now destruct l,o,r. Qed.
 Ltac Pnode_canon_rewrite := repeat (
@@ -222,11 +242,13 @@ Instance Pfmap_raw: FMap Pmap_raw :=
     Pnode (@fmap _ Pfmap_raw _ _ f l) (fmap f x) (@fmap _ Pfmap_raw _ _ f r)
   end.
 
-Lemma Pfmap_raw_ne `(f : A → B) (t : Pmap_raw A) : Pmap_ne t → Pmap_ne (fmap f t).
-Proof. induction 1; simpl; auto. Qed. 
+Lemma Pfmap_raw_ne `(f : A → B) (t : Pmap_raw A) :
+  Pmap_ne t → Pmap_ne (fmap f t).
+Proof. induction 1; simpl; auto. Qed.
 Local Hint Resolve Pfmap_raw_ne.
-Lemma Pfmap_raw_wf `(f : A → B) (t : Pmap_raw A) : Pmap_wf t → Pmap_wf (fmap f t).
-Proof. induction 1; simpl; intuition auto. Qed. 
+Lemma Pfmap_raw_wf `(f : A → B) (t : Pmap_raw A) :
+  Pmap_wf t → Pmap_wf (fmap f t).
+Proof. induction 1; simpl; intuition auto. Qed.
 
 Global Instance Pfmap: FMap Pmap := λ A B f t,
   dexist _ (Pfmap_raw_wf f _ (proj2_dsig t)).
@@ -235,6 +257,8 @@ Lemma Plookup_raw_fmap `(f : A → B) (t : Pmap_raw A) i :
   fmap f t !! i = fmap f (t !! i).
 Proof. revert i. induction t. easy. intros [?|?|]; simpl; auto. Qed.
 
+(** The [dom] function is rather inefficient, but since we do not intend to
+use it for computation it does not really matter to us. *)
 Section dom.
   Context `{Collection B D}.
 
@@ -249,22 +273,22 @@ Section dom.
     x ∈ Pdom_raw f t ↔ ∃ i, x = f i ∧ is_Some (t !! i).
   Proof.
     split.
-    * revert f. induction t as [|? IHl [?|] ? IHr]; esimplify_elem_of.
+    * revert f. induction t as [|? IHl [?|] ? IHr]; esolve_elem_of.
     * intros [i [? Hlookup]]; subst. revert f i Hlookup.
       induction t as [|? IHl [?|] ? IHr]; intros f [?|?|];
-        simplify_elem_of (now apply (IHl (f ∘ (~0))) 
+        solve_elem_of (now apply (IHl (f ∘ (~0)))
         || now apply (IHr (f ∘ (~1))) || simplify_is_Some).
   Qed.
 End dom.
 
-Global Instance Pdom {A} : Dom positive (Pmap A) := λ C _ _ _ t, Pdom_raw id (`t).
+Global Instance Pdom {A} : Dom positive (Pmap A) := λ C _ _ _ t,
+  Pdom_raw id (`t).
 
 Fixpoint Pmerge_aux `(f : option A → option B) (t : Pmap_raw A) : Pmap_raw B :=
   match t with
   | Pleaf => Pleaf
   | Pnode l o r => Pnode_canon (Pmerge_aux f l) (f o) (Pmerge_aux f r)
   end.
-Local Hint Constructors option_lift.
 
 Lemma Pmerge_aux_wf `(f : option A → option B) (t : Pmap_raw A) :
   Pmap_wf t → Pmap_wf (Pmerge_aux f t).
@@ -284,7 +308,8 @@ Global Instance Pmerge_raw: Merge Pmap_raw :=
   match t1, t2 with
   | Pleaf, t2 => Pmerge_aux (f None) t2
   | t1, Pleaf => Pmerge_aux (flip f None) t1
-  | Pnode l1 o1 r1, Pnode l2 o2 r2 => Pnode_canon (@merge _ Pmerge_raw _ f l1 l2)
+  | Pnode l1 o1 r1, Pnode l2 o2 r2 =>
+     Pnode_canon (@merge _ Pmerge_raw _ f l1 l2)
       (f o1 o2) (@merge _ Pmerge_raw _ f r1 r2)
   end.
 Local Arguments Pmerge_aux _ _ _ _ : simpl never.
@@ -293,7 +318,8 @@ Lemma Pmerge_wf {A} f (t1 t2 : Pmap_raw A) :
   Pmap_wf t1 → Pmap_wf t2 → Pmap_wf (merge f t1 t2).
 Proof. intros t1wf. revert t2. induction t1wf; destruct 1; simpl; auto. Qed.
 Global Instance Pmerge: Merge Pmap := λ A f t1 t2,
-  dexist (merge f (`t1) (`t2)) (Pmerge_wf _ _ _ (proj2_dsig t1) (proj2_dsig t2)).
+  dexist (merge f (`t1) (`t2))
+    (Pmerge_wf _ _ _ (proj2_dsig t1) (proj2_dsig t2)).
 
 Lemma Pmerge_raw_spec {A} f (Hf : f None None = None) (t1 t2 : Pmap_raw A) i :
   merge f t1 t2 !! i = f (t1 !! i) (t2 !! i).

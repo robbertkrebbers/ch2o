@@ -7,4 +7,10 @@ coqidescript
 \#*\#
 *.pyc
 *~
+*.cmi
+*.cmx
+*.o
+utils/coq2html
+utils/coq2html.ml
+doc/*.html
 

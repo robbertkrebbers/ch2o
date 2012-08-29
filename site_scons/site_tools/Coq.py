@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 import SCons.Defaults, SCons.Tool, SCons.Util, os
 
 def add_glob(target, source, env):
@@ -13,18 +12,23 @@ Coq = SCons.Builder.Builder(
   src_suffix = '.v',
   emitter = add_glob)
 
-def coqdoc_gen(source, target, env, for_signature):
-  for s in source:
-    base, _ = os.path.splitext(str(s))
-    env.Depends(target, env.File(base + '.glob'))
-  return [SCons.Defaults.Mkdir(target), 'coqdoc $COQDOCFLAGS -d $TARGET $COQFLAGS $SOURCES']
+def make_coqidescript(target, source, env):
+  open('coqidescript', 'w').write('#!/bin/sh\n' +
+    env['COQIDE'] + ' ' + env['COQFLAGS'] + ' $@ \n')
+  os.chmod('coqidescript', 0755)
+  return 0
 
-CoqDoc = SCons.Builder.Builder(generator = coqdoc_gen)
+CoqIdeScript = SCons.Builder.Builder(
+  action = make_coqidescript)
 
 def generate(env):
   env['COQC'] = 'coqc'
+  env['COQIDE'] = 'coqide'
   env['COQCMD'] = '$COQC $COQFLAGS -q $SOURCE'
-  env.Append(BUILDERS = {'Coq': Coq, 'CoqDoc': CoqDoc})
+  env.Append(BUILDERS = {
+    'Coq': Coq,
+    'CoqIdeScript' : CoqIdeScript
+  })
 
 def exists(env):
   return env.Detect('coqc')

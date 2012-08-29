@@ -1,3 +1,7 @@
+(* Copyright (c) 2012, Robbert Krebbers. *)
+(* This file is distributed under the terms of the BSD license. *)
+(** This files extends the implementation of finite over [positive] to finite
+maps whose keys range over Coq's data type of binary naturals [N]. *)
 Require Import pmap.
 Require Export prelude fin_maps.
 
@@ -8,8 +12,10 @@ Arguments Nmap_0 {_} _.
 Arguments Nmap_pos {_} _.
 Arguments Build_Nmap {_} _ _.
 
-Global Instance Pmap_dec `{∀ x y : A, Decision (x = y)} : ∀ x y : Nmap A, Decision (x = y).
+Global Instance Pmap_dec `{∀ x y : A, Decision (x = y)} :
+  ∀ x y : Nmap A, Decision (x = y).
 Proof. solve_decision. Defined.
+
 Global Instance Nempty {A} : Empty (Nmap A) := Build_Nmap None ∅.
 Global Instance Nlookup: Lookup N Nmap := λ A i t,
   match i with
@@ -49,7 +55,7 @@ Proof.
   * intros ??? [??] []. easy. apply lookup_fmap.
   * intros ?? ???????? [o t] n; unfold dom, lookup, Ndom, Nlookup; simpl.
     rewrite elem_of_union, Plookup_raw_dom.
-    destruct o, n; esimplify_elem_of (simplify_is_Some; eauto).
+    destruct o, n; esolve_elem_of (simplify_is_Some; eauto).
   * intros ? f ? [o1 t1] [o2 t2] [|?].
     + easy.
     + apply (merge_spec f t1 t2).

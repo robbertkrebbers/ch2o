@@ -1,4 +1,8 @@
-Require Import Permutation. 
+(* Copyright (c) 2012, Robbert Krebbers. *)
+(* This file is distributed under the terms of the BSD license. *)
+(** This file collects general purpose definitions and theorems on lists that
+are not in the Coq standard library. *)
+Require Import Permutation.
 Require Export base decidable option.
 
 Arguments cons {_} _ _.
@@ -15,6 +19,8 @@ Notation "(++)" := app (only parsing) : C_scope.
 Notation "( l ++)" := (app l) (only parsing) : C_scope.
 Notation "(++ k )" := (λ l, app l k) (only parsing) : C_scope.
 
+(** * General definitions *)
+(** Looking up elements and updating elements in a list. *)
 Global Instance list_lookup: Lookup nat list :=
   fix list_lookup A (i : nat) (l : list A) {struct l} : option A :=
   match l with
@@ -24,20 +30,6 @@ Global Instance list_lookup: Lookup nat list :=
     | 0 => Some x
     | S i => @lookup _ _ list_lookup _ i l
     end
-  end.
-
-(* The [simpl] tactic does not unfold [list_lookup] as it is wrapped into
-a type class. Therefore we use the following tactic. Bug: does not simplify
-under binders.
-*)
-Ltac simplify_list_lookup := repeat
-  match goal with
-  | |- context f [@nil ?A !! _] => let X := (context f [@None A]) in change X
-  | |- context f [(?x :: _) !! 0] => let X := (context f [Some x]) in change X
-  | |- context f [(_ :: ?l) !! S ?i] => let X := (context f [l !! i]) in change X
-  | H : context f [@nil ?A !! _] |- _ => let X := (context f [@None A]) in change X in H
-  | H : context f [(?x :: _) !! 0] |- _ => let X := (context f [Some x]) in change X in H
-  | H : context f [(_ :: ?l) !! S ?i] |- _  => let X := (context f [l !! i]) in change X in H
   end.
 
 Global Instance list_alter: Alter nat list :=
@@ -51,11 +43,37 @@ Global Instance list_alter: Alter nat list :=
     end
   end.
 
+(** The [simpl] tactic does not simplify [list_lookup] as it is wrapped into
+an operational type class and we cannot let it unfold on a per instance basis.
+Therefore we use the [simplify_list_lookup] tactic to perform these
+simplifications. Bug: it does not unfold under binders. *)
+Ltac simplify_list_lookup := repeat
+  match goal with
+  | |- context C [@nil ?A !! _] =>
+    let X := (context C [@None A]) in change X
+  | |- context C [(?x :: _) !! 0] =>
+    let X := (context C [Some x]) in change X
+  | |- context C [(_ :: ?l) !! S ?i] =>
+    let X := (context C [l !! i]) in change X
+  | H : context C [@nil ?A !! _] |- _ =>
+    let X := (context C [@None A]) in change X in H
+  | H : context C [(?x :: _) !! 0] |- _ =>
+    let X := (context C [Some x]) in change X in H
+  | H : context C [(_ :: ?l) !! S ?i] |- _  =>
+    let X := (context C [l !! i]) in change X in H
+  end.
+
+(** The function [option_list] converts an element of the option type into
+a list. *)
 Definition option_list {A} : option A → list A := option_rect _ (λ x, [x]) [].
+
+(** The predicate [prefix_of] holds if the first list is a prefix of the second.
+The predicate [suffix_of] holds if the first list is a suffix of the second. *)
 Definition prefix_of {A} (l1 l2 : list A) : Prop := ∃ k, l2 = l1 ++ k.
 Definition suffix_of {A} (l1 l2 : list A) : Prop := ∃ k, l2 = k ++ l1.
 
-Section list_properties.
+(** * General theorems *)
+Section general_properties.
 Context {A : Type}.
 
 Lemma list_eq (l1 l2 : list A) : (∀ i, l1 !! i = l2 !! i) → l1 = l2.
@@ -75,7 +93,7 @@ Proof. now destruct l. Qed.
 Lemma list_lookup_Some_In (l : list A) i x : l !! i = Some x → In x l.
 Proof.
   revert i. induction l; intros [|i] ?;
-    simplify_list_lookup; simplify_eqs; constructor (solve [eauto]).
+    simplify_list_lookup; simplify_equality; constructor (solve [eauto]).
 Qed.
 
 Lemma list_lookup_In_Some (l : list A) x : In x l → ∃ i, l !! i = Some x.
@@ -103,6 +121,11 @@ Lemma list_lookup_weaken (l l' : list A) i x :
   l !! i = Some x → (l ++ l') !! i = Some x.
 Proof. revert i. induction l. discriminate. now intros []. Qed.
 
+Lemma fold_right_permutation {B} (f : A → B → B) (b : B) :
+  (∀ a1 a2 b, f a1 (f a2 b) = f a2 (f a1 b)) →
+  Proper (Permutation ==> (=)) (fold_right f b).
+Proof. intro. induction 1; simpl; congruence. Qed.
+
 Lemma Forall_impl (P Q : A → Prop) l :
   Forall P l → (∀ x, P x → Q x) → Forall Q l.
 Proof. induction 1; auto. Qed.
@@ -116,8 +139,13 @@ Lemma Forall2_impl {B} (P Q : A → B → Prop) l1 l2 :
 Proof. induction 1; auto. Qed.
 
 Lemma Forall2_unique {B} (P : A → B → Prop) l k1 k2 :
-  Forall2 P l k1 → Forall2 P l k2 → (∀ x y1 y2, P x y1 → P x y2 → y1 = y2) → k1 = k2.
-Proof. intros H. revert k2. induction H; inversion_clear 1; intros; f_equal; eauto. Qed.
+  Forall2 P l k1 →
+  Forall2 P l k2 →
+  (∀ x y1 y2, P x y1 → P x y2 → y1 = y2) →
+  k1 = k2.
+Proof.
+  intros H. revert k2. induction H; inversion_clear 1; intros; f_equal; eauto.
+Qed.
 
 Lemma NoDup_singleton (x : A) : NoDup [x].
 Proof. constructor. easy. constructor. Qed.
@@ -199,6 +227,11 @@ Global Instance Exists_dec (P : A → Prop) {dec : ∀ x, Decision (P x)} :
       end
     end
   end.
+End general_properties.
+
+(** * Theorems on the prefix and suffix predicates *)
+Section prefix_postfix.
+Context {A : Type}.
 
 Global Instance: PreOrder (@prefix_of A).
 Proof.
@@ -273,10 +306,14 @@ Lemma suffix_of_cons x y (l1 l2 : list A) :
 Proof. intros ? [k E]. exists k. subst. now rewrite app_assoc. Qed.
 Lemma suffix_of_snoc_inv_1 x y (l1 l2 : list A) :
   suffix_of (l1 ++ [x]) (l2 ++ [y]) → x = y.
-Proof. rewrite suffix_prefix_rev, !rev_unit. now apply prefix_of_cons_inv_1. Qed.
+Proof.
+  rewrite suffix_prefix_rev, !rev_unit. now apply prefix_of_cons_inv_1.
+Qed.
 Lemma suffix_of_snoc_inv_2 x y (l1 l2 : list A) :
   suffix_of (l1 ++ [x]) (l2 ++ [y]) → suffix_of l1 l2.
-Proof. rewrite !suffix_prefix_rev, !rev_unit. now apply prefix_of_cons_inv_2. Qed.
+Proof.
+  rewrite !suffix_prefix_rev, !rev_unit. now apply prefix_of_cons_inv_2.
+Qed.
 
 Lemma suffix_of_cons_l (l1 l2 : list A) x :
   suffix_of (x :: l1) l2 → suffix_of l1 l2.
@@ -291,18 +328,18 @@ Lemma suffix_of_app_r (l1 l2 l3 : list A) :
   suffix_of l1 l2 → suffix_of l1 (l3 ++ l2).
 Proof. intros [k ?]. exists (l3 ++ k). subst. now rewrite app_assoc. Qed.
 
-Lemma suffix_of_cons_inv (l1 l2 : list A) x y : 
+Lemma suffix_of_cons_inv (l1 l2 : list A) x y :
   suffix_of (x :: l1) (y :: l2) → x :: l1 = y :: l2 ∨ suffix_of (x :: l1) l2.
 Proof.
   intros [[|? k] E].
    now left.
-  right. simplify_eqs. now apply suffix_of_app_r.
+  right. simplify_equality. now apply suffix_of_app_r.
 Qed.
 Lemma suffix_of_cons_not x (l : list A) : ¬suffix_of (x :: l) l.
 Proof.
   intros [k E]. change ([] ++ l = k ++ [x] ++ l) in E.
   rewrite app_assoc in E. apply app_inv_tail in E.
-  destruct k; simplify_eqs.
+  destruct k; simplify_equality.
 Qed.
 
 Global Program Instance suffix_of_dec `{∀ x y : A, Decision (x = y)} l1 l2 :
@@ -312,41 +349,54 @@ Global Program Instance suffix_of_dec `{∀ x y : A, Decision (x = y)} l1 l2 :
   | right Hpre => right _
   end.
 Next Obligation. apply suffix_prefix_rev. now rewrite !rev_alt. Qed.
-Next Obligation. 
-  intro. destruct Hpre. rewrite <-!rev_alt. 
+Next Obligation.
+  intro. destruct Hpre. rewrite <-!rev_alt.
   now apply suffix_prefix_rev.
 Qed.
-End list_properties.
+End prefix_postfix.
 
-Hint Resolve suffix_of_nil suffix_of_cons_r suffix_of_app_r : list.
-Hint Extern 0 (prefix_of _ _) => reflexivity : list.
-Hint Extern 0 (suffix_of _ _) => reflexivity: list.
-Hint Extern 0 (PropHolds (suffix_of _ _)) => red; auto with list : typeclass_instances.
-
+(** The [simplify_suffix_of] removes [suffix_of] assumptions that are
+tautologies, and simplifies [suffix_of] assumptions involving [(::)] and
+[(++)]. *)
 Ltac simplify_suffix_of := repeat
   match goal with
-  | H : suffix_of (_ :: _) _ |- _ => destruct (suffix_of_cons_not _ _ H)
-  | H : suffix_of (_ :: _) [] |- _ => destruct (suffix_of_nil_not _ _ H)
+  | H : suffix_of (_ :: _) _ |- _ =>
+    destruct (suffix_of_cons_not _ _ H)
+  | H : suffix_of (_ :: _) [] |- _ =>
+    destruct (suffix_of_nil_not _ _ H)
   | H : suffix_of (_ :: _) (_ :: _) |- _ =>
     destruct (suffix_of_cons_inv _ _ _ _ H); clear H
   | H : suffix_of ?x ?x |- _ => clear H
   | H : suffix_of ?x (_ :: ?x) |- _ => clear H
   | H : suffix_of ?x (_ ++ ?x) |- _ => clear H
-  | _ => progress simplify_eqs
+  | _ => progress simplify_equality
   end.
 
-(* Extremely dirty way to discrimate inconsistent suffix_of assumptions *)
-Ltac discriminate_suffix_of := solve [repeat
+(** The [solve_suffix_of] tries to solve goals involving [suffix_of]. It uses
+[simplify_suffix_of] to simplify assumptions, tries to solve [suffix_of]
+conclusions, and adds transitive consequences of assumptions to the context. 
+This tactic either fails or proves the goal. *)
+Ltac solve_suffix_of :=
+  let rec go :=
   match goal with
-  | _ => progress simplify_suffix_of
+  | _ => progress simplify_suffix_of; go
+  | |- suffix_of [] _ => apply suffix_of_nil
+  | |- suffix_of _ _ => reflexivity
+  | |- suffix_of _ _ => solve [auto]
+  | |- suffix_of _ (_ :: _) => apply suffix_of_cons_r; go
+  | |- suffix_of _ (_ ++ _) => apply suffix_of_app_r; go
+  | H : ¬suffix_of _ _ |- _ => destruct H; go
   | H1 : suffix_of ?x ?y, H2 : suffix_of ?y ?z |- _ =>
      match goal with
-     | _ : suffix_of x z |- _ => fail 2
+     | _ : suffix_of x z |- _ => fail 1
      | _ => assert (suffix_of x z) by (transitivity y; assumption);
-                 clear H1; clear H2 (* to avoid loops *)
+            clear H1; clear H2; go (**i clear to avoid loops *)
      end
-  end].
+  end in go.
+Hint Extern 0 (PropHolds (suffix_of _ _)) =>
+  unfold PropHolds; solve_suffix_of : typeclass_instances.
 
+(** * Monadic operations *)
 Global Instance list_ret: MRet list := λ A a, [a].
 Global Instance list_fmap: FMap list :=
   fix go A B (f : A → B) (l : list A) :=
@@ -354,7 +404,7 @@ Global Instance list_fmap: FMap list :=
   | [] => []
   | x :: l => f x :: @fmap _ go _ _ f l
   end.
-Global Instance list_join: MJoin list := 
+Global Instance list_join: MJoin list :=
   fix go A (l : list (list A)) : list A :=
   match l with
   | [] =>  []
@@ -362,10 +412,10 @@ Global Instance list_join: MJoin list :=
   end.
 Global Instance list_bind: MBind list := λ A B f l, mjoin (f <$> l).
 
-Local Arguments fmap _ _ _ _ _ !_ /.
-
 Section list_fmap.
   Context {A B : Type} (f : A → B).
+
+  Local Arguments fmap _ _ _ _ _ !_ /.
 
   Lemma fmap_length l : length (f <$> l) = length l.
   Proof. induction l; simpl; auto. Qed.
@@ -398,6 +448,9 @@ Lemma Forall_snd {A B} (l : list (A * B)) (P : B → Prop) :
   Forall (P ∘ snd) l ↔ Forall P (snd <$> l).
 Proof. induction l; split; inversion 1; subst; constructor; firstorder auto. Qed.
 
+(** * Indexed folds and maps *)
+(** We define stronger variants of map and fold that also take the index of the
+element into account. *)
 Definition imap_go {A B} (f : nat → A → B) : nat → list A → list B :=
   fix go (n : nat) (l : list A) :=
   match l with
@@ -406,22 +459,24 @@ Definition imap_go {A B} (f : nat → A → B) : nat → list A → list B :=
   end.
 Definition imap {A B} (f : nat → A → B) : list A → list B := imap_go f 0.
 
-Lemma fold_right_permutation `(f : A → B → B) (b : B) :
-  (∀ a1 a2 b, f a1 (f a2 b) = f a2 (f a1 b)) →
-  Proper (Permutation ==> (=)) (fold_right f b).
-Proof. intro. induction 1; simpl; congruence. Qed.
-
-Definition ifold_right {A B} (f : nat → B → A → A) (a : nat → A) : nat → list B → A :=
+Definition ifold_right {A B} (f : nat → B → A → A)
+    (a : nat → A) : nat → list B → A :=
   fix go (n : nat) (l : list B) : A :=
   match l with
   | nil => a n
   | b :: l => f n b (go (S n) l)
   end.
 
-Lemma ifold_right_app {A B} (f : nat → B → A → A) (a : nat → A) (l1 l2 : list B) n :
+Lemma ifold_right_app {A B} (f : nat → B → A → A) (a : nat → A)
+    (l1 l2 : list B) n :
   ifold_right f a n (l1 ++ l2) = ifold_right f (λ n, ifold_right f a n l2) n l1.
-Proof. revert n a. induction l1 as [| b l1 IH ]; intros; simpl; f_equal; auto. Qed.
+Proof.
+  revert n a. induction l1 as [| b l1 IH ]; intros; simpl; f_equal; auto.
+Qed.
 
+(** * Lists of the same length *)
+(** The [same_length] view allows convenient induction over two lists with the
+same length. *)
 Section same_length.
   Context {A B : Type}.
 
@@ -448,10 +503,15 @@ Section same_length.
   Qed.
 End same_length.
 
+(** * Zipping lists *)
+(** Since we prefer Haskell style naming, we rename the standard library's
+implementation [combine] into [zip] using a notation. *)
 Notation zip := combine.
 
 Section zip.
   Context {A B : Type}.
+
+  Local Arguments fmap _ _ _ _ _ !_ /.
 
   Lemma zip_fst_le (l1 : list A) (l2 : list B) :
     length l1 ≤ length l2 → fst <$> zip l1 l2 = l1.

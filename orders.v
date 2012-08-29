@@ -1,5 +1,12 @@
+(* Copyright (c) 2012, Robbert Krebbers. *)
+(* This file is distributed under the terms of the BSD license. *)
+(** This file collects common properties of pre-orders and semi lattices. This
+theory will mainly be used for the theory on collections and finite maps. *)
 Require Export base.
 
+(** * Pre-orders *)
+(** We extend a pre-order to a partial order by defining equality as
+[λ X Y, X ⊆ Y ∧ Y ⊆ X]. We prove that this indeed gives rise to a setoid. *)
 Section preorder.
   Context `{SubsetEq A} `{!PreOrder (⊆)}.
 
@@ -24,6 +31,8 @@ End preorder.
 Hint Extern 0 (@Equivalence _ (≡)) =>
   class_apply preorder_equivalence : typeclass_instances.
 
+(** * Join semi lattices *)
+(** General purpose theorems on join semi lattices. *)
 Section bounded_join_sl.
   Context `{BoundedJoinSemiLattice A}.
 
@@ -72,6 +81,8 @@ Section bounded_join_sl.
   Proof. split; eauto. Qed.
 End bounded_join_sl.
 
+(** * Meet semi lattices *)
+(** The dual of the above section, but now for meet semi lattices. *)
 Section meet_sl.
   Context `{MeetSemiLattice A}.
 

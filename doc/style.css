@@ -1,0 +1,98 @@
+body {
+  color: black;
+  background: white;
+  margin-left: 10%;
+  margin-right: 10%;
+}
+
+body, h1, h2, h3, a {
+  font-family: sans;
+}
+
+h1 { font-size: 22px; }
+h2 { font-size: 20px; }
+h3 { font-size: 18px; }
+
+p, td, th, li {
+  font-weight: normal;
+  font-size: 14px;
+  line-height: 18px;
+}
+a {
+  color: #416DFF;
+  text-decoration: none;
+}
+
+/**
+Classes:
+div.coq      encloses all generated body
+div.doc      contents of (** *) comments
+div.footer   footer
+div.togglescript   "Proof." line
+div.proofscript  contents of proof script
+span.docright contents of (**r *) comments
+span.bracket contents of [ ] within comments
+span.kwd     Coq keyword
+span.tactic  Coq tactic
+span.id      any other identifier
+*/
+div.coq {
+  margin-left: 30px;
+  font-size: 12px;
+  font-family: monospace;
+}
+div.coq div.doc, div.coq h2, div.coq h3 {
+  margin-left: -30px;
+  font-family: sans;
+}
+div.coq div.doc {
+  line-height: 18px;
+  font-size: 14px;
+  padding-bottom: 20px;
+}
+div.coq div.doc h2 {
+  font-size: 20px;
+}
+div.footer {
+  margin-top: 30px;
+  border-top: 1px solid black;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  font-size: 10px;
+  font-style: italic;
+}
+
+.proofscript {
+  display: none;
+}
+.toggleproof {
+  font-size: 10px;
+  text-decoration: underline;
+}
+.toggleproof:hover {
+  cursor: pointer;
+}
+.proofscript {
+  font-size: 0.8em;
+}
+
+.docright {
+  font-family: sans;
+  font-style: italic;
+  position: relative;
+  float: right;
+  width: 40%;
+}
+.docinline, .docinline .bracket, .docinline .kwd {
+  color: #008000;
+}
+.bracket, .bracket .kwd {
+  font-family: monospace;
+  color: #008000;
+}
+.kwd {
+  color: #cf1d1d;
+}
+span.id a {
+  font-family: monospace;
+}

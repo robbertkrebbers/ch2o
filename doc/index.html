@@ -1,0 +1,94 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>The CH₂O formalization</title>
+<meta name="description" content="The CH₂O formalization" />
+<link href="style.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="scripts.js"> </script>
+</head>
+
+<body>
+<h1>The CH<sub>2</sub>O formalization</h1>
+<p><em>By <a href="http://robbertkrebbers.nl">Robbert Krebbers</a>, Radboud University Nijmegen</em></p>
+
+<h2>About</h2>
+<p>The <a href="http://ch2o.cs.ru.nl"> CH<sub>2</sub>O project</a> aims at formalizing novel features of the <a href="http://www.open-std.org/jtc1/sc22/wg14/">ISO/ANSI C11 standard</a> of the C programming language. This Coq development includes an operational and axiomatic semantics for a fragment of a C-like language supporting:</p>
+<ul>
+<li>Non local control flow (<span class="bracket">return</span> and <span class="bracket">goto</span>).</li>
+<li>Block scoped variables and pointers to these.</li>
+<li>Mutual recursive function calls.</li>
+</ul>
+<p>
+The operational semantics is given by a small step reduction semantics using a zipper like data structure to accurately model allocation and deallocation of block scoped variables. For example, our semantics will correctly assign undefined behavior to:</p>
+<pre>
+  int f(void) {
+    int *p = 0;
+    l : if (p) return (*p);
+    { int j = 10; p = &j; goto l; }
+  }
+</pre>
+<p>
+The axiomatic semantics is defined semantically with respect to the operational semantics. We prove that it satisfies the standard rules of separation logic and novel rules for our specific features.</p>
+
+<h2>Goals</h2>
+<p>To get more closely to the actual C11 standard we intend to implement the following features in future versions:</p>
+<ul>
+<li>The C type system including structs, arrays, unions, and an abstract way of handling primitive data types (integers, floats).</li>
+<li>The non-aliasing restrictions introduced by C99 and C11 (effective types in particular).</li>
+<li>Expressions with side effects and sequence points, and a separation logic to reason about these.</li>
+<li>A simple verification condition generator inside Coq allowing us to verify simple programs.</li>
+<li>An embedding of the <a href="http://compcert.inria.fr">CompCert</a> semantics into our semantics.</li>
+</ul>
+
+<h2>Download</h2>
+<p>The most recent version of the source code of this development can be downloaded <a href="http://github.com/robbertkrebbers/ch2o">here</a>.</p>
+
+<h2>Table of contents</h2>
+
+<h3>Prelude</h3>
+
+<ul>
+<li><a href="base.html">base</a>: interfaces, notations, and general theorems.</li>
+<li><a href="tactics.html">tactics</a>: general purpose tactics. </li>
+<li><a href="decidable.html">decidable</a>: theorems on decidable structures. </li>
+<li><a href="orders.html">orders</a>: theorems on ordered structures. </li>
+<li><a href="option.html">option</a>: miscellaneous definitions and theorems on the option data type. </li>
+<li><a href="list.html">list</a>:  miscellaneous definitions and theorems on lists. </li>
+<li><a href="collections.html">collections</a>: definitions, theorems, and tactics for collections.</li>
+<li><a href="fin_collections.html">fin_collections</a>: theorems on finite collections.</li>
+<li><a href="subset.html">subset</a>: non computable implementation of subsets.</li>
+<li><a href="listset.html">listset</a>: finite set implementation using unordered lists.</li>
+<li><a href="numbers.html">numbers</a>: miscellaneous facts on <span class="bracket">nat</span>, <span class="bracket">N</span> and <span class="bracket">Z</span>.</li>
+<li><a href="prelude.html">prelude</a>: exports all of the above.</li>
+</ul>
+
+<h3>Miscellaneous</h3>
+<ul>
+<li><a href="ars.html">ars</a>: theorems and definitions on abstract rewriting systems.</li>
+</ul>
+
+<h3>Finite maps</h3>
+<ul>
+<li><a href="fin_maps.html">fin_maps</a>: an interface and theorems for finite maps.</li>
+<li><a href="pmap.html">pmap</a>: finite map indexed by <span class="bracket">positive</span>.</li>
+<li><a href="nmap.html">nmap</a>: finite map indexed by <span class="bracket">N</span>.</li>
+</ul>
+
+<h3>Operational semantics</h3>
+<ul>
+<li><a href="memory.html">memory</a>: the memory model.</li>
+<li><a href="expressions.html">expressions</a>: expressions and their semantics.</li>
+<li><a href="statements.html">statements</a>:  statements and program contexts.</li>
+<li><a href="state.html">state</a>: the execution state.</li>
+<li><a href="smallstep.html">smallstep</a>: the small step operational semantics.</li>
+</ul>
+
+<h3>Axiomatic semantics</h3>
+<ul>
+<li><a href="assertions.html">assertions</a>:assertions of the axiomatic semantics.</li>
+<li><a href="axiomatic.html">axiomatic</a>: axiomatic semantics using separation logic.</li>
+</ul>
+</body>
+</html>

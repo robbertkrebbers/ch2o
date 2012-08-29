@@ -1,10 +1,14 @@
+(* Copyright (c) 2012, Robbert Krebbers. *)
+(* This file is distributed under the terms of the BSD license. *)
 Require Export
-  base 
+  base
+  tactics
   decidable
   orders
-  collections
-  fin_collections
   option
   list
+  collections
+  fin_collections
+  listset
   subset
   numbers.

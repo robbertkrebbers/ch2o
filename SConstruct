@@ -1,30 +1,30 @@
+# Copyright (c) 2012, Robbert Krebbers.
+# This file is distributed under the terms of the BSD license.
+
 import os, glob, string
 
-nodes = ['./']
-dirs = []
-vs = []
-
 env = DefaultEnvironment(ENV = os.environ, tools=['default', 'Coq'])
+vs = glob.glob('./*.v')
+Rs = '-R . ""'
 
-while nodes:
-  node = nodes.pop()
-  if node.endswith('.v') and not node.endswith('_old.v'):
-    vs += [File(node)]
-  if os.path.isdir(node):
-    dirs += [node]
-    nodes += glob.glob(node + '/*')
-
-includes = ' '.join(map(lambda x: '-I ' + x, dirs[1:]))
-Rs = '-R . CH2O'
-coqcmd = 'coqc ${str(SOURCE)[:-2]} ' + Rs
-
-env['COQFLAGS'] = Rs
-
-for node in vs: env.Coq(node, COQCMD=coqcmd)
-
-os.system('coqdep ' + ' '.join(map(str, vs)) + ' ' + includes + ' ' + Rs + ' > deps')
+os.system('coqdep ' + ' '.join(map(str, vs)) + ' ' + Rs + ' > deps')
 ParseDepends('deps')
 
-open('coqidescript', 'w').write('#!/bin/sh\ncoqide ' + Rs + ' $@ \n')
-os.chmod('coqidescript', 0755)
+for v in vs:
+  env.Coq(v, COQFLAGS=Rs)
+  h = 'doc/' + os.path.splitext(v)[0] + '.html'
+  vo = os.path.splitext(v)[0] + '.vo'
+  g = os.path.splitext(v)[0] + '.glob'
+  env.Command(h, ['utils/coq2html', v, g],
+    'utils/coq2html -o ' + h + ' ' + g + ' ' + v)
+
+env.Command('./utils/coq2html.ml', 'utils/coq2html.mll',
+  'ocamllex -q $SOURCE -o $TARGET')
+t = env.Command('utils/coq2html', 'utils/coq2html.ml',
+  'ocamlopt -o $TARGET str.cmxa $SOURCE')
+Clean(t, 'utils/coq2html.o')
+Clean(t, 'utils/coq2html.cmi')
+Clean(t, 'utils/coq2html.cmx')
+
+env.CoqIdeScript('coqidescript', [], COQFLAGS=Rs)
 

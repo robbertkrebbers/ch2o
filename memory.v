@@ -1,11 +1,99 @@
-Require Export nmap list.
-Open Scope N_scope.
+(* Copyright (c) 2012, Robbert Krebbers. *)
+(* This file is distributed under the terms of the BSD license. *)
+(** This file defines values, the memory and some operations on it. The
+definitions of values and memory are still rather simple in this version of the
+development: the memory is a finite map from naturals to values, and a value is
+either a pointer to a memory cell or an unbounded integer. Although the memory
+is just a finite map, we will define many operations directly on the memory
+rather than generalizing them to finite maps. We do this as we expect these
+operations to become much more specific to the memory in future versions of the
+development. The most important operations in the union of two memories, which
+plays an important role in our separatic logic. *)
+(** Furthermore, this file defines a hint database [mem] that contains useful
+facts on the memory, and defines some tactics to simplify goals involving
+propositions on the memory. *)
+Require Export nmap.
 
-Notation mem := (Nmap N) (only parsing).
+(** * Values *)
+(** We define indexes into the memory as binary naturals and use the [Nmap]
+implementation to obtain efficient finite maps with these indexes as keys. *)
+Definition index := N.
+Definition indexmap := Nmap.
 
-(* Disjoint *)
+Instance index_dec: ∀ i1 i2 : index, Decision (i1 = i2) := decide_rel (=).
+Instance indexmap_empty {A} : Empty (indexmap A) := @empty (Nmap A) _.
+Instance indexmap_lookup: Lookup index indexmap := @lookup _ Nmap _.
+Instance indexmap_partial_alter: PartialAlter index indexmap :=
+  @partial_alter _ Nmap _.
+Instance indexmap_dom {A} : Dom index (indexmap A) := @dom _ (Nmap A) _.
+Instance indexmap_merge: Merge indexmap := @merge Nmap _.
+Instance indexmap_fmap: FMap indexmap := @fmap Nmap _.
+Instance: FinMap index indexmap := _.
+
+(** A value is inductively defined to be either an unbounded integer, a pointer
+to an index into the memory, or the NULL pointer. *)
+Inductive value :=
+  | VInt : Z → value
+  | VPtr : option index → value.
+
+Instance value_eq_dec (v1 v2 : value) : Decision (v1 = v2).
+Proof. solve_decision. Defined.
+
+(** We define better readable notations for values in the scope
+[value_scope]. *)
+Delimit Scope value_scope with V.
+Bind Scope value_scope with value.
+Notation "'int' x" := (VInt x) (at level 10) : value_scope.
+Notation "'ptr' b" := (VPtr (Some b)) (at level 10) : value_scope.
+Notation "'null'" := (VPtr None) : value_scope.
+
+(** Truth and falsehood of values is defined in the C-like way. *)
+Definition val_true (v : value) : Prop :=
+  match v with
+  | int x => (x ≠ 0)%Z
+  | ptr b => True
+  | null => False
+  end%V.
+Definition val_false (v : value) : Prop :=
+  match v with
+  | int x => (x = 0)%Z
+  | ptr b => False
+  | null => True
+  end%V.
+
+Definition val_true_false_dec v : { val_false v } + { val_true v } :=
+  match v with
+  | int x => decide (x = 0%Z)
+  | ptr b => right I
+  | null => left I
+  end%V.
+
+(** * Definition of the memory *)
+(** The memory is defined as follows. *)
+Notation mem := (indexmap value).
+
+(** * Disjoint memories *)
+(** Two memories are disjoint if they do not have any overlapping cells. *)
 Definition mem_disjoint (m1 m2 : mem) := ∀ b, m1 !! b = None ∨ m2 !! b = None.
 
+(** Since the memory is finite, we are able to obtain a witness if two memories
+are not disjoint. *)
+Lemma not_mem_disjoint m1 m2 :
+  ¬mem_disjoint m1 m2 ↔ ∃ b, is_Some (m1 !! b) ∧ is_Some (m2 !! b).
+Proof.
+  split.
+  * intros H.
+    destruct (choose (dom _ m1 ∩ dom _ m2)) as [b Hb].
+    + intros Hdom. destruct H. intros b.
+      rewrite <-!(not_elem_of_dom _), <-not_elem_of_intersection.
+      rewrite Hdom. now apply not_elem_of_empty.
+    + exists b. rewrite <-!(elem_of_dom _).
+      solve_elem_of.
+  * intros [b [[??] [??]]] H.
+    specialize (H b). intuition congruence.
+Qed.
+
+(** Some other properties on disjointness. *)
 Instance: Symmetric mem_disjoint.
 Proof. intros ?? H b. destruct (H b); intuition. Qed.
 Lemma mem_disjoint_empty_l m : mem_disjoint ∅ m.
@@ -32,16 +120,21 @@ Lemma mem_disjoint_singleton_r m b v :
   mem_disjoint m {[(b, v)]} ↔ m !! b = None.
 Proof. now rewrite (symmetry_iff mem_disjoint), mem_disjoint_singleton_l. Qed.
 
-(* Union *)
+(** * The union operation *)
+(** The union of two memories only has a meaningful definition for memories
+that are disjoint. However, as working with partial functions is inconvenient
+in Coq, we define the union as a total function. In case both memories
+have a value at the same index, we take the value of the first memory. *)
 Instance mem_union: Union mem := union_with (λ x _ , x).
 
-Lemma mem_union_Some m1 m2 i x : 
-  (m1 ∪ m2) !! i = Some x ↔ m1 !! i = Some x ∨ (m1 !! i = None ∧ m2 !! i = Some x).
+Lemma mem_union_Some m1 m2 i x :
+  (m1 ∪ m2) !! i = Some x ↔
+    m1 !! i = Some x ∨ (m1 !! i = None ∧ m2 !! i = Some x).
 Proof.
   unfold union, mem_union, union_with, finmap_union. rewrite (merge_spec _).
   destruct (m1 !! i), (m2 !! i); compute; try intuition congruence.
 Qed.
-Lemma mem_union_None m1 m2 b : 
+Lemma mem_union_None m1 m2 b :
   (m1 ∪ m2) !! b = None ↔ m1 !! b = None ∧ m2 !! b = None.
 Proof. apply finmap_union_None. Qed.
 
@@ -55,7 +148,7 @@ Proof. rewrite mem_union_Some. intuition congruence. Qed.
 Lemma mem_union_Some_inv_l m1 m2 b x :
   (m1 ∪ m2) !! b = Some x → m2 !! b = None → m1 !! b = Some x.
 Proof. rewrite mem_union_Some. intuition congruence. Qed.
-Lemma mem_union_Some_inv_r m1 m2 b x : 
+Lemma mem_union_Some_inv_r m1 m2 b x :
   (m1 ∪ m2) !! b = Some x → m1 !! b = None → m2 !! b = Some x.
 Proof. rewrite mem_union_Some. intuition congruence. Qed.
 
@@ -71,7 +164,7 @@ Proof. rewrite mem_union_None. intuition. Qed.
 
 Hint Resolve
   mem_union_Some_l mem_union_Some_r
-  mem_union_Some_inv_l mem_union_Some_inv_r 
+  mem_union_Some_inv_l mem_union_Some_inv_r
   mem_union_None_None : mem.
 
 Instance: LeftId (=) ∅ ((∪) : mem → mem → mem) := _.
@@ -123,7 +216,7 @@ Lemma mem_union_cancel_l m1 m2 m3 :
   m1 = m2.
 Proof.
   revert m1 m2 m3.
-  cut (∀ m1 m2 m3 b v, 
+  cut (∀ m1 m2 m3 b v,
     mem_disjoint m1 m3 → m1 ∪ m3 = m2 ∪ m3 →
     m1 !! b = Some v → m2 !! b = Some v).
   { intros help ??????. apply finmap_eq. intros i.
@@ -165,7 +258,9 @@ Proof. rewrite <-(left_id ∅ (∪) m) at 1. now rewrite mem_union_insert_l. Qed
 Lemma mem_union_singleton_r m b v :
   m !! b = None →
   <[b:=v]>m = m ∪ {[(b,v)]}.
-Proof. intros. rewrite <-(right_id ∅ (∪) m) at 1. now rewrite mem_union_insert_r. Qed.
+Proof.
+  intros. rewrite <-(right_id ∅ (∪) m) at 1. now rewrite mem_union_insert_r.
+Qed.
 
 Lemma mem_insert_list_union l m :
   insert_list l m = list_to_map l ∪ m.
@@ -185,13 +280,13 @@ Qed.
 Hint Resolve mem_subseteq_insert : mem.
 
 Lemma mem_disjoint_insert_l m1 m2 b v :
-  mem_disjoint (<[b:=v]>m1) m2 ↔ m2 !! b = None ∧ mem_disjoint m1 m2. 
+  mem_disjoint (<[b:=v]>m1) m2 ↔ m2 !! b = None ∧ mem_disjoint m1 m2.
 Proof.
   rewrite mem_union_singleton_l.
   now rewrite mem_disjoint_union_l, mem_disjoint_singleton_l.
 Qed.
 Lemma mem_disjoint_insert_r m1 m2 b v :
-  mem_disjoint m1 (<[b:=v]>m2) ↔ m1 !! b = None ∧ mem_disjoint m1 m2. 
+  mem_disjoint m1 (<[b:=v]>m2) ↔ m1 !! b = None ∧ mem_disjoint m1 m2.
 Proof.
   rewrite mem_union_singleton_l.
   now rewrite mem_disjoint_union_r, mem_disjoint_singleton_r.
@@ -257,14 +352,21 @@ Proof.
   intro. now rewrite (symmetry_iff mem_disjoint), mem_disjoint_list_to_map_zip_l.
 Qed.
 
+(** The tactic [simplify_mem_disjoint] simplifies occurences of [mem_disjoint]
+in the conclusion and assumptions that involve the union, insert, or singleton
+operation. *)
 Ltac simplify_mem_disjoint := repeat
   match goal with
-  | H : mem_disjoint (_ ∪ _) _ |- _ => apply mem_disjoint_union_l in H; destruct H
-  | H : mem_disjoint _ (_ ∪ _) |- _ => apply mem_disjoint_union_r in H; destruct H
+  | H : mem_disjoint (_ ∪ _) _ |- _ =>
+    apply mem_disjoint_union_l in H; destruct H
+  | H : mem_disjoint _ (_ ∪ _) |- _ =>
+    apply mem_disjoint_union_r in H; destruct H
   | H : mem_disjoint {[ _ ]} _ |- _ => apply mem_disjoint_singleton_l in H
   | H : mem_disjoint _ {[ _ ]} |- _ =>  apply mem_disjoint_singleton_r in H
-  | H : mem_disjoint (<[_:=_]>_) _ |- _ => apply mem_disjoint_insert_l in H; destruct H
-  | H : mem_disjoint _ (<[_:=_]>_) |- _ => apply mem_disjoint_insert_r in H; destruct H
+  | H : mem_disjoint (<[_:=_]>_) _ |- _ =>
+    apply mem_disjoint_insert_l in H; destruct H
+  | H : mem_disjoint _ (<[_:=_]>_) |- _ =>
+    apply mem_disjoint_insert_r in H; destruct H
   | |- mem_disjoint (_ ∪ _) _ => apply mem_disjoint_union_l; split
   | |- mem_disjoint _ (_ ∪ _) => apply mem_disjoint_union_r; split
   | |- mem_disjoint {[ _ ]} _ => apply mem_disjoint_singleton_l
@@ -273,8 +375,9 @@ Ltac simplify_mem_disjoint := repeat
   | |- mem_disjoint _ (<[_:=_]>_) => apply mem_disjoint_insert_r; split
   end; try solve [intuition auto with mem].
 
-(* Free blocks *)
-Definition is_free (m : mem) (b : N) : Prop := m !! b = None.
+(** * Free indexes in a memory *)
+(** A memory index is free if it contains no contents. *)
+Definition is_free (m : mem) (b : index) : Prop := m !! b = None.
 
 Lemma is_free_lookup_None m b :
   is_free m b → m !! b = None.
@@ -290,7 +393,7 @@ Lemma is_free_lookup_Some m b v :
   is_free m b → ¬(m !! b = Some v).
 Proof. unfold is_free. congruence. Qed.
 
-Lemma is_free_dom `{Collection N C} m b :
+Lemma is_free_dom `{Collection index C} m b :
   b ∉ dom C m ↔ is_free m b.
 Proof. apply (not_elem_of_dom _). Qed.
 
@@ -311,18 +414,20 @@ Lemma is_free_insert_1 b b' v m :
 Proof. rewrite is_free_insert. auto. Qed.
 Hint Resolve is_free_insert_1 : mem.
 
-Inductive is_free_list (m : mem) : list N → Prop :=
+(** We lift the notion of free indexes to lists of indexes. *)
+Inductive is_free_list (m : mem) : list index → Prop :=
   | is_free_nil :
      is_free_list m []
   | is_free_cons b bs :
      ¬In b bs → is_free m b → is_free_list m bs → is_free_list m (b :: bs).
 
+(** We prove that the inductive definition [is_free_list m bs] is equivalent
+to all [bs] being free, and the list [bs] containing no duplicates. *)
 Lemma is_free_list_nodup m bs : is_free_list m bs → NoDup bs.
 Proof. induction 1; now constructor. Qed.
 Lemma is_free_list_free m bs : is_free_list m bs → Forall (is_free m) bs.
 Proof. induction 1; firstorder. Qed.
 Hint Resolve is_free_list_nodup is_free_list_free : mem.
-
 Lemma is_free_list_make m bs :
   NoDup bs → Forall (is_free m) bs → is_free_list m bs.
 Proof. induction 1; inversion 1; constructor; auto. Qed.
@@ -336,26 +441,30 @@ Lemma is_free_insert_list m b l :
 Proof. induction l; simpl; intuition auto with mem. Qed.
 Hint Resolve is_free_insert_list : mem.
 
-Definition is_writable (m : mem) (b : N) : Prop := is_Some (m !! b).
+(** A memory cell is writable if it contains contents. In future versions this
+notion will also take permissions into account. *)
+Definition is_writable (m : mem) (b : index) : Prop := is_Some (m !! b).
 
-Definition fresh_block (m : mem) : N := fresh (dom (listset N) m).
-Definition fresh_blocks (m : mem) (n : nat) : list N :=
-  fresh_list n (dom (listset N) m).
+(** The following definitions allow to generate fresh memory indexes, or lists
+of fresh memory indexes. *)
+Definition fresh_index (m : mem) : index := fresh (dom (listset index) m).
+Definition fresh_indexes (m : mem) (n : nat) : list index :=
+  fresh_list n (dom (listset index) m).
 
-Lemma is_free_fresh_block m : is_free m (fresh_block m).
-Proof. unfold fresh_block. apply is_free_dom, is_fresh. Qed.
-Hint Resolve is_free_fresh_block : mem.
+Lemma is_free_fresh_index m : is_free m (fresh_index m).
+Proof. unfold fresh_index. apply is_free_dom, is_fresh. Qed.
+Hint Resolve is_free_fresh_index : mem.
 
-Lemma fresh_blocks_length m n : length (fresh_blocks m n) = n.
+Lemma fresh_indexes_length m n : length (fresh_indexes m n) = n.
 Proof. apply fresh_list_length. Qed.
-Lemma is_free_list_fresh_blocks n m : is_free_list m (fresh_blocks m n).
+Lemma is_free_list_fresh_indexes n m : is_free_list m (fresh_indexes m n).
 Proof.
   apply is_free_list_make.
   * apply fresh_list_nodup.
   * apply Forall_forall. intro.
     rewrite <-is_free_dom. apply fresh_list_is_fresh.
 Qed.
-Hint Resolve is_free_list_fresh_blocks : mem.
+Hint Resolve is_free_list_fresh_indexes : mem.
 
 Lemma is_free_list_union m1 m2 bs :
   is_free_list (m1 ∪ m2) bs ↔ is_free_list m1 bs ∧ is_free_list m2 bs.
@@ -369,6 +478,8 @@ Proof.
       constructor; rewrite ?is_free_union; intuition auto.
 Qed.
 
+(** The tactic [simplify_is_free] simplifies occurences of [is_free] in the
+conclusion and assumptions that involve the union or insert operation. *)
 Ltac simplify_is_free := repeat
   match goal with
   | H : is_free (_ ∪ _) _ |- _ => apply is_free_union in H; destruct H
@@ -379,10 +490,12 @@ Ltac simplify_is_free := repeat
   | |- is_free_list (_ ∪ _) _ => apply is_free_list_union; split
   end; try solve [intuition auto with mem].
 
-(* Difference *)
+(** * The difference operation *)
+(** The difference operation removes all values from the first memory whose
+index contains a value in the second memory as well. *)
 Instance mem_difference: Difference mem := difference_with (λ _ _ , None).
 
-Lemma mem_difference_Some m1 m2 i x : 
+Lemma mem_difference_Some m1 m2 i x :
   (m1 ∖ m2) !! i = Some x ↔ m1 !! i = Some x ∧ m2 !! i = None.
 Proof.
   unfold difference, mem_difference, difference_with, finmap_difference.
@@ -408,8 +521,11 @@ Proof.
   destruct (m1 !! b), (m2 !! b); intuition congruence.
 Qed.
 
-(* Alloc parameters *)
-Inductive alloc_params (m : mem) : list N → list N → mem → Prop :=
+(** * Allocation of parameters *)
+(** We define allocation of the parameters of a function inductively and prove
+that it is equivalent to an alternative formulation that will be used for the
+soundness proof of the axiomatic semantics. *)
+Inductive alloc_params (m : mem) : list index → list value → mem → Prop :=
   | alloc_params_nil : alloc_params m [] [] m
   | alloc_params_cons b bs v vs m2 :
      is_free m2 b →
