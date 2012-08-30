@@ -38,11 +38,11 @@ Notation "(≠ x )" := (λ y, y ≠ x) (only parsing) : C_scope.
 
 Hint Extern 0 (?x = ?x) => reflexivity.
 
-Notation "(→)" := (λ x y, x → y) : C_scope.
-Notation "( T →)" := (λ y, T → y) : C_scope.
-Notation "(→ T )" := (λ y, y → T) : C_scope.
+Notation "(→)" := (λ x y, x → y) (only parsing) : C_scope.
+Notation "( T →)" := (λ y, T → y) (only parsing) : C_scope.
+Notation "(→ T )" := (λ y, y → T) (only parsing) : C_scope.
 Notation "t $ r" := (t r)
-  (at level 65, right associativity,only parsing) : C_scope.
+  (at level 65, right associativity, only parsing) : C_scope.
 Infix "∘" := compose : C_scope.
 Notation "(∘)" := compose (only parsing) : C_scope.
 Notation "( f ∘)" := (compose f) (only parsing) : C_scope.
