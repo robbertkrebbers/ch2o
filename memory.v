@@ -25,7 +25,7 @@ Instance indexmap_empty {A} : Empty (indexmap A) := @empty (Nmap A) _.
 Instance indexmap_lookup: Lookup index indexmap := @lookup _ Nmap _.
 Instance indexmap_partial_alter: PartialAlter index indexmap :=
   @partial_alter _ Nmap _.
-Instance indexmap_dom {A} : Dom index (indexmap A) := @dom _ (Nmap A) _.
+Instance indexmap_dom : Dom index indexmap := @dom _ Nmap _.
 Instance indexmap_merge: Merge indexmap := @merge Nmap _.
 Instance indexmap_fmap: FMap indexmap := @fmap Nmap _.
 Instance: FinMap index indexmap := _.

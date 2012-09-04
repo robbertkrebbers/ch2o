@@ -27,7 +27,7 @@ Global Instance Npartial_alter: PartialAlter N Nmap := λ A f i t,
   | N0, Build_Nmap o t => Build_Nmap (f o) t
   | Npos p, Build_Nmap o t => Build_Nmap o (partial_alter f p t)
   end.
-Global Instance Ndom {A} : Dom N (Nmap A) := λ A _ _ _ t,
+Global Instance Ndom: Dom N Nmap := λ C _ _ _ _ t,
   match t with
   | Build_Nmap o t => option_case (λ _, {[ 0 ]}) ∅ o ∪ (Pdom_raw Npos (`t))
   end.

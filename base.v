@@ -161,10 +161,11 @@ Notation "( x ∉)" := (λ X, x ∉ X) (only parsing) : C_scope.
 Notation "(∉ X )" := (λ x, x ∉ X) (only parsing) : C_scope.
 
 (** ** Operations on maps *)
-(** In this file we will only define operational type classes for the
-operations on maps. In the file [fin_maps] we will axiomatize finite maps.
+(** In this section we define operational type classes for the operations
+on maps. In the file [fin_maps] we will axiomatize finite maps.
 The function lookup [m !! k] should yield the element at key [k] in [m]. *)
-Class Lookup K M := lookup: ∀ {A}, K → M A → option A.
+Class Lookup (K : Type) (M : Type → Type) :=
+  lookup: ∀ {A}, K → M A → option A.
 Instance: Params (@lookup) 4.
 
 Notation "m !! i" := (lookup i m) (at level 20) : C_scope.
@@ -174,43 +175,43 @@ Notation "(!! i )" := (lookup i) (only parsing) : C_scope.
 
 (** The function insert [<[k:=a]>m] should update the element at key [k] with
 value [a] in [m]. *)
-Class Insert K M :=
+Class Insert (K : Type) (M : Type → Type) :=
   insert: ∀ {A}, K → A → M A → M A.
 Instance: Params (@insert) 4.
 Notation "<[ k := a ]>" := (insert k a)
   (at level 5, right associativity, format "<[ k := a ]>") : C_scope.
 
-(** The function delete [delete k m] should deletes the value at key [k] in
-[m]. *)
-Class Delete K M :=
-  delete: K → M → M.
-Instance: Params (@delete) 3.
+(** The function delete [delete k m] should delete the value at key [k] in
+[m]. If the key [k] is not a member of [m], the original map should be
+returned. *)
+Class Delete (K : Type) (M : Type → Type) :=
+  delete: ∀ {A}, K → M A → M A.
+Instance: Params (@delete) 4.
 
 (** The function [alter f k m] should update the value at key [k] using the
-function [f], which is called with the original value at key [k]. When [k] is
-not a member of [m], the original map should be returned. *)
-Class Alter K M :=
+function [f], which is called with the original value. *)
+Class Alter (K : Type) (M : Type → Type) :=
   alter: ∀ {A}, (A → A) → K → M A → M A.
 Instance: Params (@alter) 4.
 
 (** The function [alter f k m] should update the value at key [k] using the
-function [f], which is called with the original value at key [k] or [None] if
-[k] is not a member of [m]. The value at [k] should be deleted if [f] yields
-[None]. *)
-Class PartialAlter K M :=
+function [f], which is called with the original value at key [k] or [None]
+if [k] is not a member of [m]. The value at [k] should be deleted if [f] 
+yields [None]. *)
+Class PartialAlter (K : Type) (M : Type → Type) :=
   partial_alter: ∀ {A}, (option A → option A) → K → M A → M A.
 Instance: Params (@partial_alter) 4.
 
 (** The function [dom C m] should yield the domain of [m]. That is a finite
 collection of type [C] that contains the keys that are a member of [m]. *)
-Class Dom K M :=
-  dom: ∀ C `{Empty C} `{Union C} `{Singleton K C}, M → C.
-Instance: Params (@dom) 7.
+Class Dom (K : Type) (M : Type → Type) :=
+  dom: ∀ {A} C `{Empty C} `{Union C} `{Singleton K C}, M A → C.
+Instance: Params (@dom) 8.
 
 (** The function [merge f m1 m2] should merge the maps [m1] and [m2] by
 constructing a new map whose value at key [k] is [f (m1 !! k) (m2 !! k)]
 provided that [k] is a member of either [m1] or [m2].*)
-Class Merge M :=
+Class Merge (M : Type → Type) :=
   merge: ∀ {A}, (option A → option A → option A) → M A → M A → M A.
 Instance: Params (@merge) 3.
 
@@ -218,22 +219,22 @@ Instance: Params (@merge) 3.
 Definition insert_list `{Insert K M} {A} (l : list (K * A)) (m : M A) : M A :=
   fold_right (λ p, <[ fst p := snd p ]>) m l.
 Instance: Params (@insert_list) 4.
-Definition delete_list `{Delete K M} (l : list K) (m : M) : M :=
+Definition delete_list `{Delete K M} {A} (l : list K) (m : M A) : M A :=
   fold_right delete m l.
-Instance: Params (@delete_list) 3.
+Instance: Params (@delete_list) 4.
 
 (** The function [union_with f m1 m2] should yield the union of [m1] and [m2]
 using the function [f] to combine values of members that are in both [m1] and
 [m2]. *)
-Class UnionWith M :=
+Class UnionWith (M : Type → Type) :=
   union_with: ∀ {A}, (A → A → A) → M A → M A → M A.
 Instance: Params (@union_with) 3.
 
 (** Similarly for the intersection and difference. *)
-Class IntersectionWith M :=
+Class IntersectionWith (M : Type → Type) :=
   intersection_with: ∀ {A}, (A → A → A) → M A → M A → M A.
 Instance: Params (@intersection_with) 3.
-Class DifferenceWith M :=
+Class DifferenceWith (M : Type → Type) :=
   difference_with: ∀ {A}, (A → A → option A) → M A → M A → M A.
 Instance: Params (@difference_with) 3.
 

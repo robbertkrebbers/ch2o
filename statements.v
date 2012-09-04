@@ -44,12 +44,12 @@ Proof. revert b. induction l1; simpl; auto. Qed.
 Definition funname := N.
 Definition funmap := Nmap.
 
-Instance funname_dec: ∀ i1 i2 : funname, Decision (i1 = i2) := decide_rel (=).
+Instance funname_eq_dec: ∀ i1 i2 : funname, Decision (i1 = i2) := decide_rel (=).
 Instance funmap_empty {A} : Empty (funmap A) := @empty (Nmap A) _.
 Instance funmap_lookup: Lookup funname funmap := @lookup _ Nmap _.
 Instance funmap_partial_alter: PartialAlter funname funmap :=
   @partial_alter _ Nmap _.
-Instance funmap_dom {A} : Dom funname (funmap A) := @dom _ (Nmap A) _.
+Instance funmap_dom : Dom funname funmap := @dom _ Nmap _.
 Instance funmap_merge: Merge funmap := @merge Nmap _.
 Instance funmap_fmap: FMap funmap := @fmap Nmap _.
 Instance: FinMap funname funmap := _.

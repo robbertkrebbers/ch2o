@@ -8,11 +8,11 @@ Require Export prelude.
 
 (** * Axiomatization of finite maps *)
 (** We require Leibniz equality to be extensional on finite maps. This of
-course limits the class of finite map implementations, but since we are mainly
-interested in finite maps with numbers or paths as indexes, we do not consider
-this a serious limitation. The main application of finite maps is to implement
-the memory, where extensionality of Leibniz equality becomes very important for
-a convenient use in assertions of our axiomatic semantics. *)
+course limits the space of finite map implementations, but since we are mainly
+interested in finite maps with numbers as indexes, we do not consider this to
+be a serious limitation. The main application of finite maps is to implement
+the memory, where extensionality of Leibniz equality is very important for a
+convenient use in the assertions of our axiomatic semantics. *)
 (** Finiteness is axiomatized by requiring each map to have a finite domain.
 Since we may have multiple implementations of finite sets, the [dom] function is
 parametrized by an implementation of finite sets over the map's key type. *)
@@ -20,7 +20,7 @@ parametrized by an implementation of finite sets over the map's key type. *)
 which enables us to give a generic implementation of [union_with],
 [intersection_with], and [difference_with]. *)
 Class FinMap K M `{∀ A, Empty (M A)} `{Lookup K M} `{FMap M}
-    `{PartialAlter K M} `{∀ A, Dom K (M A)} `{Merge M} := {
+    `{PartialAlter K M} `{Dom K M} `{Merge M} := {
   finmap_eq {A} (m1 m2 : M A) :
     (∀ i, m1 !! i = m2 !! i) → m1 = m2;
   lookup_empty {A} i :
@@ -46,7 +46,7 @@ Instance finmap_alter `{PartialAlter K M} : Alter K M := λ A f,
   partial_alter (fmap f).
 Instance finmap_insert `{PartialAlter K M} : Insert K M := λ A k x,
   partial_alter (λ _, Some x) k.
-Instance finmap_delete `{PartialAlter K M} {A} : Delete K (M A) :=
+Instance finmap_delete `{PartialAlter K M} : Delete K M := λ A,
   partial_alter (λ _, None).
 Instance finmap_singleton `{PartialAlter K M} {A}
   `{Empty (M A)} : Singleton (K * A) (M A) := λ p, <[fst p:=snd p]>∅.

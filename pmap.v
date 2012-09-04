@@ -281,7 +281,7 @@ Section dom.
   Qed.
 End dom.
 
-Global Instance Pdom {A} : Dom positive (Pmap A) := λ C _ _ _ t,
+Global Instance Pdom : Dom positive Pmap := λ C _ _ _ _ t,
   Pdom_raw id (`t).
 
 Fixpoint Pmerge_aux `(f : option A → option B) (t : Pmap_raw A) : Pmap_raw B :=
