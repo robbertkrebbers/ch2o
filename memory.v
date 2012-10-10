@@ -73,13 +73,10 @@ Definition val_true_false_dec v : { val_false v } + { val_true v } :=
 Notation mem := (indexmap value).
 
 (** * Disjoint memories *)
-(** Two memories are disjoint if they do not have any overlapping cells. *)
-Definition mem_disjoint (m1 m2 : mem) := ∀ b, m1 !! b = None ∨ m2 !! b = None.
-
 (** Since the memory is finite, we are able to obtain a witness if two memories
 are not disjoint. *)
-Lemma not_mem_disjoint m1 m2 :
-  ¬mem_disjoint m1 m2 ↔ ∃ b, is_Some (m1 !! b) ∧ is_Some (m2 !! b).
+Lemma not_mem_disjoint (m1 m2 : mem) :
+  ¬m1 ⊥ m2 ↔ ∃ b, is_Some (m1 !! b) ∧ is_Some (m2 !! b).
 Proof.
   split.
   * intros H.
@@ -94,73 +91,56 @@ Proof.
 Qed.
 
 (** Some other properties on disjointness. *)
-Instance: Symmetric mem_disjoint.
+Instance: Symmetric (@disjoint mem _).
 Proof. intros ?? H b. destruct (H b); intuition. Qed.
-Lemma mem_disjoint_empty_l m : mem_disjoint ∅ m.
+Lemma mem_disjoint_empty_l (m : mem) : ∅ ⊥ m.
 Proof. intros ?. simplify_map. auto. Qed.
-Lemma mem_disjoint_empty_r m : mem_disjoint m ∅.
+Lemma mem_disjoint_empty_r (m : mem) : m ⊥ ∅.
 Proof. intros ?. simplify_map. auto. Qed.
 Hint Resolve mem_disjoint_empty_l mem_disjoint_empty_r : mem.
 
-Lemma mem_disjoint_Some_l m1 m2 b x:
-  mem_disjoint m1 m2 → m1 !! b = Some x → m2 !! b = None.
+Lemma mem_disjoint_Some_l (m1 m2 : mem) b x:
+  m1 ⊥ m2 → m1 !! b = Some x → m2 !! b = None.
 Proof. intros H ?. specialize (H b). intuition congruence. Qed.
-Lemma mem_disjoint_Some_r m1 m2 b x:
-  mem_disjoint m1 m2 → m2 !! b = Some x → m1 !! b = None.
+Lemma mem_disjoint_Some_r (m1 m2 : mem) b x:
+  m1 ⊥ m2 → m2 !! b = Some x → m1 !! b = None.
 Proof. intros H ?. specialize (H b). intuition congruence. Qed.
 
-Lemma mem_disjoint_singleton_l m b v :
-  mem_disjoint {[(b, v)]} m ↔ m !! b = None.
+Lemma mem_disjoint_singleton_l (m : mem) b v :
+  {[(b, v)]} ⊥ m ↔ m !! b = None.
 Proof.
   split.
   * intros H. now destruct (H b); simplify_map.
   * intros ? b'. destruct (decide (b = b')); simplify_map; auto.
 Qed.
-Lemma mem_disjoint_singleton_r m b v :
-  mem_disjoint m {[(b, v)]} ↔ m !! b = None.
-Proof. now rewrite (symmetry_iff mem_disjoint), mem_disjoint_singleton_l. Qed.
+Lemma mem_disjoint_singleton_r (m : mem) b v :
+  m ⊥ {[(b, v)]} ↔ m !! b = None.
+Proof. now rewrite (symmetry_iff (⊥)), mem_disjoint_singleton_l. Qed.
 
 (** * The union operation *)
-(** The union of two memories only has a meaningful definition for memories
-that are disjoint. However, as working with partial functions is inconvenient
-in Coq, we define the union as a total function. In case both memories
-have a value at the same index, we take the value of the first memory. *)
-Instance mem_union: Union mem := union_with (λ x _ , x).
-
-Lemma mem_union_Some m1 m2 i x :
-  (m1 ∪ m2) !! i = Some x ↔
-    m1 !! i = Some x ∨ (m1 !! i = None ∧ m2 !! i = Some x).
-Proof.
-  unfold union, mem_union, union_with, finmap_union. rewrite (merge_spec _).
-  destruct (m1 !! i), (m2 !! i); compute; try intuition congruence.
-Qed.
-Lemma mem_union_None m1 m2 b :
-  (m1 ∪ m2) !! b = None ↔ m1 !! b = None ∧ m2 !! b = None.
-Proof. apply finmap_union_None. Qed.
-
-Lemma mem_union_Some_l m1 m2 b x :
+Lemma mem_union_Some_l (m1 m2 : mem) b x :
   m1 !! b = Some x → (m1 ∪ m2) !! b = Some x.
-Proof. rewrite mem_union_Some. intuition congruence. Qed.
-Lemma mem_union_Some_r m1 m2 b x :
+Proof. rewrite finmap_union_Some. intuition congruence. Qed.
+Lemma mem_union_Some_r (m1 m2 : mem) b x :
   m1 !! b = None → m2 !! b = Some x → (m1 ∪ m2) !! b = Some x.
-Proof. rewrite mem_union_Some. intuition congruence. Qed.
+Proof. rewrite finmap_union_Some. intuition congruence. Qed.
 
-Lemma mem_union_Some_inv_l m1 m2 b x :
+Lemma mem_union_Some_inv_l (m1 m2 : mem) b x :
   (m1 ∪ m2) !! b = Some x → m2 !! b = None → m1 !! b = Some x.
-Proof. rewrite mem_union_Some. intuition congruence. Qed.
-Lemma mem_union_Some_inv_r m1 m2 b x :
+Proof. rewrite finmap_union_Some. intuition congruence. Qed.
+Lemma mem_union_Some_inv_r (m1 m2 : mem) b x :
   (m1 ∪ m2) !! b = Some x → m1 !! b = None → m2 !! b = Some x.
-Proof. rewrite mem_union_Some. intuition congruence. Qed.
+Proof. rewrite finmap_union_Some. intuition congruence. Qed.
 
-Lemma mem_union_None_None m1 m2 b :
+Lemma mem_union_None_None (m1 m2 : mem) b :
   m1 !! b = None → m2 !! b = None → (m1 ∪ m2) !! b = None.
-Proof. rewrite mem_union_None. intuition. Qed.
-Lemma mem_union_None_inv_l m1 m2 b :
+Proof. rewrite finmap_union_None. intuition. Qed.
+Lemma mem_union_None_inv_l (m1 m2 : mem) b :
   (m1 ∪ m2) !! b = None → m1 !! b = None.
-Proof. rewrite mem_union_None. intuition. Qed.
-Lemma mem_union_None_inv_r m1 m2 b :
+Proof. rewrite finmap_union_None. intuition. Qed.
+Lemma mem_union_None_inv_r (m1 m2 : mem) b :
   (m1 ∪ m2) !! b = None → m2 !! b = None.
-Proof. rewrite mem_union_None. intuition. Qed.
+Proof. rewrite finmap_union_None. intuition. Qed.
 
 Hint Resolve
   mem_union_Some_l mem_union_Some_r
@@ -172,8 +152,8 @@ Instance: RightId (=) ∅ ((∪) : mem → mem → mem) := _.
 Instance: Associative (=) ((∪) : mem → mem → mem) := _.
 Instance: Idempotent (=) ((∪) : mem → mem → mem) := _.
 
-Lemma mem_union_comm m1 m2 :
-  mem_disjoint m1 m2 → m1 ∪ m2 = m2 ∪ m1.
+Lemma mem_union_comm (m1 m2 : mem) :
+  m1 ⊥ m2 → m1 ∪ m2 = m2 ∪ m1.
 Proof.
   intros H. apply (merge_comm (union_with (λ x _, x))).
   intros b. generalize (H b).
@@ -184,40 +164,46 @@ Lemma mem_subseteq_union (m1 m2 : mem) :
   m1 ⊆ m2 → m1 ∪ m2 = m2.
 Proof.
   intros E. apply finmap_eq. intros b. apply option_eq. intros v.
-  specialize (E b). rewrite mem_union_Some.
+  specialize (E b). rewrite finmap_union_Some.
   destruct (m1 !! b), (m2 !! b);
     try (einjection E; [| reflexivity ]); intuition (auto; congruence).
 Qed.
 Lemma mem_subseteq_union_l (m1 m2 : mem) :
   m1 ⊆ m1 ∪ m2.
 Proof.
-  intros b v. rewrite mem_union_Some.
+  intros b v. rewrite finmap_union_Some.
   destruct (m1 !! b), (m2 !! b); intuition congruence.
 Qed.
 Lemma mem_subseteq_union_r (m1 m2 : mem) :
-  mem_disjoint m1 m2 → m2 ⊆ m1 ∪ m2.
+  m1 ⊥ m2 → m2 ⊆ m1 ∪ m2.
 Proof.
   intros. rewrite mem_union_comm by auto.
   apply mem_subseteq_union_l.
 Qed.
 Hint Resolve mem_subseteq_union_l mem_subseteq_union_r : mem.
 
-Lemma mem_disjoint_union_l m1 m2 m3 :
-  mem_disjoint (m1 ∪ m2) m3 ↔ mem_disjoint m1 m3 ∧ mem_disjoint m2 m3.
-Proof. unfold mem_disjoint. setoid_rewrite mem_union_None. firstorder auto. Qed.
-Lemma mem_disjoint_union_r m1 m2 m3 :
-  mem_disjoint m1 (m2 ∪ m3) ↔ mem_disjoint m1 m2 ∧ mem_disjoint m1 m3.
-Proof. unfold mem_disjoint. setoid_rewrite mem_union_None. firstorder auto. Qed.
+Lemma mem_disjoint_union_l (m1 m2 m3 : mem) :
+  m1 ∪ m2 ⊥ m3 ↔ m1 ⊥ m3 ∧ m2 ⊥ m3.
+Proof.
+  unfold disjoint, finmap_disjoint.
+  setoid_rewrite finmap_union_None. firstorder auto.
+Qed.
+Lemma mem_disjoint_union_r (m1 m2 m3 : mem) :
+  m1 ⊥ m2 ∪ m3 ↔ m1 ⊥ m2 ∧ m1 ⊥ m3.
+Proof.
+  unfold disjoint, finmap_disjoint.
+  setoid_rewrite finmap_union_None. firstorder auto.
+Qed.
 
-Lemma mem_union_cancel_l m1 m2 m3 :
-  mem_disjoint m1 m3 →
-  mem_disjoint m2 m3 →
+Lemma mem_union_cancel_l (m1 m2 m3 : mem) :
+  m1 ⊥ m3 →
+  m2 ⊥ m3 →
   m1 ∪ m3 = m2 ∪ m3 →
   m1 = m2.
 Proof.
   revert m1 m2 m3.
-  cut (∀ m1 m2 m3 b v,
-    mem_disjoint m1 m3 → m1 ∪ m3 = m2 ∪ m3 →
+  cut (∀ (m1 m2 m3 : mem) b v,
+    m1 ⊥ m3 → m1 ∪ m3 = m2 ∪ m3 →
     m1 !! b = Some v → m2 !! b = Some v).
   { intros help ??????. apply finmap_eq. intros i.
     apply option_eq. split; eapply help; eauto with mem. }
@@ -226,9 +212,9 @@ Proof.
   * rewrite <-E. eauto with mem.
   * now apply mem_disjoint_Some_l with m1 v.
 Qed.
-Lemma mem_union_cancel_r m1 m2 m3 :
-  mem_disjoint m1 m3 →
-  mem_disjoint m2 m3 →
+Lemma mem_union_cancel_r (m1 m2 m3 : mem) :
+  m1 ⊥ m3 →
+  m2 ⊥m3 →
   m3 ∪ m1 = m3 ∪ m2 →
   m1 = m2.
 Proof.
@@ -236,33 +222,33 @@ Proof.
   now apply mem_union_cancel_l.
 Qed.
 
-Lemma mem_union_insert_l m1 m2 b v :
+Lemma mem_union_insert_l (m1 m2 : mem) b v :
   <[b:=v]>(m1 ∪ m2) = <[b:=v]>m1 ∪ m2.
 Proof.
   apply finmap_eq. intros b'. apply option_eq. intros v'.
   destruct (decide (b = b')); simplify_map;
-   rewrite ?mem_union_Some; simplify_map; intuition congruence.
+   rewrite ?finmap_union_Some; simplify_map; intuition congruence.
 Qed.
-Lemma mem_union_insert_r m1 m2 b v :
+Lemma mem_union_insert_r (m1 m2 : mem) b v :
   m1 !! b = None →
   <[b:=v]>(m1 ∪ m2) = m1 ∪ <[b:=v]>m2.
 Proof.
   intros. apply finmap_eq. intros b'. apply option_eq. intros v'.
   destruct (decide (b = b')); simplify_map;
-   rewrite ?mem_union_Some; simplify_map; intuition congruence.
+   rewrite ?finmap_union_Some; simplify_map; intuition congruence.
 Qed.
 
-Lemma mem_union_singleton_l m b v :
+Lemma mem_union_singleton_l (m : mem) b v :
   <[b:=v]>m = {[(b,v)]} ∪ m.
 Proof. rewrite <-(left_id ∅ (∪) m) at 1. now rewrite mem_union_insert_l. Qed.
-Lemma mem_union_singleton_r m b v :
+Lemma mem_union_singleton_r (m : mem) b v :
   m !! b = None →
   <[b:=v]>m = m ∪ {[(b,v)]}.
 Proof.
   intros. rewrite <-(right_id ∅ (∪) m) at 1. now rewrite mem_union_insert_r.
 Qed.
 
-Lemma mem_insert_list_union l m :
+Lemma mem_insert_list_union l (m : mem) :
   insert_list l m = list_to_map l ∪ m.
 Proof.
   induction l; simpl.
@@ -279,77 +265,77 @@ Proof.
 Qed.
 Hint Resolve mem_subseteq_insert : mem.
 
-Lemma mem_disjoint_insert_l m1 m2 b v :
-  mem_disjoint (<[b:=v]>m1) m2 ↔ m2 !! b = None ∧ mem_disjoint m1 m2.
+Lemma mem_disjoint_insert_l (m1 m2 : mem) b v :
+  <[b:=v]>m1 ⊥ m2 ↔ m2 !! b = None ∧ m1 ⊥ m2.
 Proof.
   rewrite mem_union_singleton_l.
   now rewrite mem_disjoint_union_l, mem_disjoint_singleton_l.
 Qed.
-Lemma mem_disjoint_insert_r m1 m2 b v :
-  mem_disjoint m1 (<[b:=v]>m2) ↔ m1 !! b = None ∧ mem_disjoint m1 m2.
+Lemma mem_disjoint_insert_r (m1 m2 : mem) b v :
+  m1 ⊥ <[b:=v]>m2 ↔ m1 !! b = None ∧ m1 ⊥ m2.
 Proof.
   rewrite mem_union_singleton_l.
   now rewrite mem_disjoint_union_r, mem_disjoint_singleton_r.
 Qed.
 
-Lemma mem_disjoint_delete_l m1 m2 b :
-  mem_disjoint m1 m2 → mem_disjoint (delete b m1) m2.
+Lemma mem_disjoint_delete_l (m1 m2 : mem) b :
+  m1 ⊥ m2 → delete b m1 ⊥ m2.
 Proof.
   intros H b'. destruct (H b'); auto.
   rewrite lookup_delete_None. tauto.
 Qed.
-Lemma mem_disjoint_delete_r m1 m2 b :
-  mem_disjoint m1 m2 → mem_disjoint m1 (delete b m2).
+Lemma mem_disjoint_delete_r (m1 m2 : mem) b :
+  m1 ⊥ m2 → m1 ⊥ delete b m2.
 Proof. symmetry. apply mem_disjoint_delete_l. now symmetry. Qed.
 Hint Resolve mem_disjoint_delete_l mem_disjoint_delete_r : mem.
 
-Lemma mem_disjoint_delete_list_l m1 m2 bs :
-  mem_disjoint m1 m2 → mem_disjoint (delete_list bs m1) m2.
+Lemma mem_disjoint_delete_list_l (m1 m2 : mem) bs :
+  m1 ⊥ m2 → delete_list bs m1 ⊥ m2.
 Proof. induction bs; simpl; auto with mem. Qed.
-Lemma mem_disjoint_delete_list_r m1 m2 bs :
-  mem_disjoint m1 m2 → mem_disjoint m1 (delete_list bs m2).
+Lemma mem_disjoint_delete_list_r (m1 m2 : mem) bs :
+  m1 ⊥m2 → m1 ⊥ delete_list bs m2.
 Proof. induction bs; simpl; auto with mem. Qed.
 Hint Resolve mem_disjoint_delete_list_l mem_disjoint_delete_list_r : mem.
 
-Lemma mem_union_delete m1 m2 b :
+Lemma mem_union_delete (m1 m2 : mem) b :
   delete b (m1 ∪ m2) = delete b m1 ∪ delete b m2.
 Proof.
   intros. apply finmap_eq. intros b'. apply option_eq. intros v'.
   destruct (decide (b = b')); simplify_map;
-   rewrite ?mem_union_Some; simplify_map; intuition congruence.
+   rewrite ?finmap_union_Some; simplify_map; intuition congruence.
 Qed.
-Lemma mem_union_delete_list m1 m2 bs :
+Lemma mem_union_delete_list (m1 m2 : mem) bs :
   delete_list bs (m1 ∪ m2) = delete_list bs m1 ∪ delete_list bs m2.
 Proof.
   induction bs; simpl; [easy |].
   now rewrite IHbs, mem_union_delete.
 Qed.
 
-Lemma mem_disjoint_list_to_map_l l m :
-  mem_disjoint (list_to_map l) m ↔ Forall (λ bv, m !! fst bv = None) l.
+Lemma mem_disjoint_list_to_map_l l (m : mem) :
+  list_to_map l ⊥ m ↔ Forall (λ bv, m !! fst bv = None) l.
 Proof.
   split.
   * induction l; simpl; rewrite ?mem_disjoint_insert_l in *;
       constructor; intuition auto.
   * induction 1; simpl; rewrite ?mem_disjoint_insert_l; auto with mem.
 Qed.
-Lemma mem_disjoint_list_to_map_r l m :
-  mem_disjoint m (list_to_map l) ↔ Forall (λ bv, m !! fst bv = None) l.
-Proof. now rewrite (symmetry_iff mem_disjoint), mem_disjoint_list_to_map_l. Qed.
+Lemma mem_disjoint_list_to_map_r l (m : mem) :
+  m ⊥ list_to_map l ↔ Forall (λ bv, m !! fst bv = None) l.
+Proof. now rewrite (symmetry_iff (⊥)), mem_disjoint_list_to_map_l. Qed.
 
-Lemma mem_disjoint_list_to_map_zip_l bs vs m :
+Lemma mem_disjoint_list_to_map_zip_l bs vs (m : mem) :
   same_length bs vs →
-  mem_disjoint (list_to_map (zip bs vs)) m ↔ Forall (λ b, m !! b = None) bs.
+  list_to_map (zip bs vs) ⊥ m ↔ Forall (λ b, m !! b = None) bs.
 Proof.
   intro. rewrite mem_disjoint_list_to_map_l.
   rewrite <-(zip_fst bs vs) at 2 by easy.
   now rewrite <-Forall_fst.
 Qed.
-Lemma mem_disjoint_list_to_map_zip_r bs vs m :
+Lemma mem_disjoint_list_to_map_zip_r bs vs (m : mem) :
   same_length bs vs →
-  mem_disjoint m (list_to_map (zip bs vs)) ↔ Forall (λ b, m !! b = None) bs.
+  m ⊥ list_to_map (zip bs vs) ↔ Forall (λ b, m !! b = None) bs.
 Proof.
-  intro. now rewrite (symmetry_iff mem_disjoint), mem_disjoint_list_to_map_zip_l.
+  intro. now rewrite (symmetry_iff (⊥)), mem_disjoint_list_to_map_zip_l.
 Qed.
 
 (** The tactic [simplify_mem_disjoint] simplifies occurences of [mem_disjoint]
@@ -357,22 +343,22 @@ in the conclusion and assumptions that involve the union, insert, or singleton
 operation. *)
 Ltac simplify_mem_disjoint := repeat
   match goal with
-  | H : mem_disjoint (_ ∪ _) _ |- _ =>
+  | H : _ ∪ _ ⊥ _ |- _ =>
     apply mem_disjoint_union_l in H; destruct H
-  | H : mem_disjoint _ (_ ∪ _) |- _ =>
+  | H : _ ⊥ _ ∪ _ |- _ =>
     apply mem_disjoint_union_r in H; destruct H
-  | H : mem_disjoint {[ _ ]} _ |- _ => apply mem_disjoint_singleton_l in H
-  | H : mem_disjoint _ {[ _ ]} |- _ =>  apply mem_disjoint_singleton_r in H
-  | H : mem_disjoint (<[_:=_]>_) _ |- _ =>
+  | H : {[ _ ]} ⊥ _ |- _ => apply mem_disjoint_singleton_l in H
+  | H : _ ⊥ {[ _ ]} |- _ =>  apply mem_disjoint_singleton_r in H
+  | H : <[_:=_]>_ ⊥ _ |- _ =>
     apply mem_disjoint_insert_l in H; destruct H
-  | H : mem_disjoint _ (<[_:=_]>_) |- _ =>
+  | H : _ ⊥ <[_:=_]>_ |- _ =>
     apply mem_disjoint_insert_r in H; destruct H
-  | |- mem_disjoint (_ ∪ _) _ => apply mem_disjoint_union_l; split
-  | |- mem_disjoint _ (_ ∪ _) => apply mem_disjoint_union_r; split
-  | |- mem_disjoint {[ _ ]} _ => apply mem_disjoint_singleton_l
-  | |- mem_disjoint _ {[ _ ]} => apply mem_disjoint_singleton_r
-  | |- mem_disjoint (<[_:=_]>_) _ =>  apply mem_disjoint_insert_l; split
-  | |- mem_disjoint _ (<[_:=_]>_) => apply mem_disjoint_insert_r; split
+  | |- _ ∪ _ ⊥ _ => apply mem_disjoint_union_l; split
+  | |- _ ⊥ _ ∪ _ => apply mem_disjoint_union_r; split
+  | |- {[ _ ]} ⊥ _ => apply mem_disjoint_singleton_l
+  | |- _ ⊥ {[ _ ]} => apply mem_disjoint_singleton_r
+  | |- <[_:=_]>_ ⊥ _ =>  apply mem_disjoint_insert_l; split
+  | |- _ ⊥ <[_:=_]>_ => apply mem_disjoint_insert_r; split
   end; try solve [intuition auto with mem].
 
 (** * Free indexes in a memory *)
@@ -404,7 +390,7 @@ Hint Resolve is_free_subseteq : mem.
 
 Lemma is_free_union m1 m2 b :
   is_free (m1 ∪ m2) b ↔ is_free m1 b ∧ is_free m2 b.
-Proof. apply mem_union_None. Qed.
+Proof. apply finmap_union_None. Qed.
 
 Lemma is_free_insert m b b' v :
   is_free (<[b':=v]>m) b ↔ is_free m b ∧ b' ≠ b.
@@ -495,29 +481,29 @@ Ltac simplify_is_free := repeat
 index contains a value in the second memory as well. *)
 Instance mem_difference: Difference mem := difference_with (λ _ _ , None).
 
-Lemma mem_difference_Some m1 m2 i x :
+Lemma mem_difference_Some (m1 m2 : mem) i x :
   (m1 ∖ m2) !! i = Some x ↔ m1 !! i = Some x ∧ m2 !! i = None.
 Proof.
-  unfold difference, mem_difference, difference_with, finmap_difference.
+  unfold difference, mem_difference, difference_with, finmap_difference_with.
   rewrite (merge_spec _).
   destruct (m1 !! i), (m2 !! i); compute; intuition congruence.
 Qed.
 
-Lemma mem_disjoint_difference_l m1 m2 m3 : m2 ⊆ m3 → mem_disjoint (m1 ∖ m3) m2.
+Lemma mem_disjoint_difference_l m1 m2 m3 : m2 ⊆ m3 → m1 ∖ m3 ⊥ m2.
 Proof.
   intros E b. specialize (E b).
-  unfold difference, mem_difference, difference_with, finmap_difference.
+  unfold difference, mem_difference, difference_with, finmap_difference_with.
   rewrite (merge_spec _).
   destruct (m1 !! b), (m2 !! b), (m3 !! b); compute; try intuition congruence.
   ediscriminate E; eauto.
 Qed.
-Lemma mem_disjoint_difference_r m1 m2 m3 : m2 ⊆ m3 → mem_disjoint m2 (m1 ∖ m3).
+Lemma mem_disjoint_difference_r m1 m2 m3 : m2 ⊆ m3 → m2 ⊥ m1 ∖ m3.
 Proof. intros. symmetry. now apply mem_disjoint_difference_l. Qed.
 
-Lemma mem_union_difference m1 m2 : m1 ∪ m2 = m1 ∪ m2 ∖ m1.
+Lemma mem_union_difference (m1 m2 : mem) : m1 ∪ m2 = m1 ∪ m2 ∖ m1.
 Proof.
   apply finmap_eq. intros b. apply option_eq. intros x.
-  rewrite !mem_union_Some, mem_difference_Some.
+  rewrite !finmap_union_Some, mem_difference_Some.
   destruct (m1 !! b), (m2 !! b); intuition congruence.
 Qed.
 
@@ -587,8 +573,8 @@ Proof.
 Qed.
 
 Lemma alloc_params_weaken m1 bs vs m2 m3 :
-  mem_disjoint m1 m3 →
-  mem_disjoint m2 m3 →
+  m1 ⊥ m3 →
+  m2 ⊥ m3 →
   alloc_params (m1 ∪ m3) bs vs (m2 ∪ m3) →
   alloc_params m1 bs vs m2.
 Proof.

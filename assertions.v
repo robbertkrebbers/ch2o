@@ -313,11 +313,11 @@ Definition assert_emp : assert := Assert $ λ ρ m, m = ∅.
 Notation "'emp'" := assert_emp : assert_scope.
 
 Definition assert_sep (P Q : assert) : assert := Assert $ λ ρ m, ∃ m1 m2,
-  mem_disjoint m1 m2 ∧ m1 ∪ m2 = m ∧ P ρ m1 ∧ Q ρ m2.
+  m1 ⊥ m2 ∧ m1 ∪ m2 = m ∧ P ρ m1 ∧ Q ρ m2.
 Infix "*" := assert_sep : assert_scope.
 
 Definition assert_wand (P Q : assert) : assert := Assert $ λ ρ m1, ∀ m2,
-  mem_disjoint m1 m2 → P ρ m2 → Q ρ (m1 ∪ m2).
+  m1 ⊥ m2 → P ρ m2 → Q ρ (m1 ∪ m2).
 Infix "-*" := assert_wand (at level 90) : assert_scope.
 
 (** Compatibility of the separation logic connectives with respect to order and
@@ -476,26 +476,29 @@ Proof. solve_assert. Qed.
 (** The assertion [P↑] asserts that [P] holds if the last element of the stack
 is removed. This connective is used to specify the pre- and postcondition of
 the block construct. *)
-Definition assert_inc_stack (P : assert) : assert := Assert $ λ ρ, P (tail ρ).
-Notation "P ↑" := (assert_inc_stack P) (at level 20) : assert_scope.
+Definition assert_lift (P : assert) : assert := Assert $ λ ρ, P (tail ρ).
+Notation "P ↑" := (assert_lift P) (at level 20) : assert_scope.
 
-Lemma assert_inc_stack_imp_distr P Q : ((P → Q)↑)%A ≡ (P↑ → Q↑)%A.
-Proof. solve_assert. Qed.
-Lemma assert_inc_stack_not_distr P : ((¬P)↑)%A ≡ (¬P↑)%A.
-Proof. solve_assert. Qed.
-Lemma assert_inc_stack_and_distr P Q : ((P ∧ Q)↑)%A ≡ (P↑ ∧ Q↑)%A.
-Proof. solve_assert. Qed.
-Lemma assert_inc_stack_or_distr P Q : ((P ∨ Q)↑)%A ≡ (P↑ ∨ Q↑)%A.
-Proof. solve_assert. Qed.
-Lemma assert_inc_stack_sep_distr P Q : ((P * Q)↑)%A ≡ (P↑ * Q↑)%A.
-Proof. solve_assert. Qed.
+Lemma assert_lift_expr e v : ((e ⇓ v)↑ ≡ e↑ ⇓ v)%A.
+Proof. now split; intros ??; unfold_assert; rewrite expr_eval_lift. Qed.
 
-Instance: Proper ((⊆) ==> (⊆)) assert_inc_stack.
+Lemma assert_lift_imp_distr P Q : ((P → Q)↑)%A ≡ (P↑ → Q↑)%A.
 Proof. solve_assert. Qed.
-Instance: Proper ((≡) ==> (≡)) assert_inc_stack.
+Lemma assert_lift_not_distr P : ((¬P)↑)%A ≡ (¬P↑)%A.
+Proof. solve_assert. Qed.
+Lemma assert_lift_and_distr P Q : ((P ∧ Q)↑)%A ≡ (P↑ ∧ Q↑)%A.
+Proof. solve_assert. Qed.
+Lemma assert_lift_or_distr P Q : ((P ∨ Q)↑)%A ≡ (P↑ ∨ Q↑)%A.
+Proof. solve_assert. Qed.
+Lemma assert_lift_sep_distr P Q : ((P * Q)↑)%A ≡ (P↑ * Q↑)%A.
 Proof. solve_assert. Qed.
 
-Instance assert_inc_stack_stack_indep: StackIndep P → StackIndep (P↑).
+Instance: Proper ((⊆) ==> (⊆)) assert_lift.
+Proof. solve_assert. Qed.
+Instance: Proper ((≡) ==> (≡)) assert_lift.
+Proof. solve_assert. Qed.
+
+Instance assert_lift_stack_indep: StackIndep P → StackIndep (P↑).
 Proof. solve_assert. Qed.
 Lemma stack_indep_inc `{StackIndep P} : (P↑)%A ≡ P.
 Proof. solve_assert. Qed.

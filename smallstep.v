@@ -191,6 +191,7 @@ define a hint database [cstep] that is used by these tactics. *)
 Hint Resolve expr_eval_weaken_mem expr_eval_weaken_stack : cstep.
 Hint Resolve mem_subseteq_union_l mem_subseteq_union_r : cstep.
 Hint Resolve Forall2_impl : cstep.
+Hint Extern 0 (is_writable _ _) => do 2 red; eauto with mem : cstep.
 
 (** The small step semantics is non-determistic on entering a block or calling
 a function: variables are given a memory cell that has an unspecified free

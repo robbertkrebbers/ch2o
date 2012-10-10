@@ -54,12 +54,22 @@ Instance finmap_singleton `{PartialAlter K M} {A}
 Definition list_to_map `{Insert K M} {A} `{Empty (M A)}
   (l : list (K * A)) : M A := insert_list l ∅.
 
-Instance finmap_union `{Merge M} : UnionWith M := λ A f,
+Instance finmap_union_with `{Merge M} : UnionWith M := λ A f,
   merge (union_with f).
-Instance finmap_intersection `{Merge M} : IntersectionWith M := λ A f,
+Instance finmap_intersection_with `{Merge M} : IntersectionWith M := λ A f,
   merge (intersection_with f).
-Instance finmap_difference `{Merge M} : DifferenceWith M := λ A f,
+Instance finmap_difference_with `{Merge M} : DifferenceWith M := λ A f,
   merge (difference_with f).
+
+(** Two finite maps are disjoint if they do not have overlapping cells. *)
+Instance finmap_disjoint `{Lookup K M} {A} : Disjoint (M A) := λ m1 m2,
+  ∀ i, m1 !! i = None ∨ m2 !! i = None.
+
+(** The union of two finite maps only has a meaningful definition for maps
+that are disjoint. However, as working with partial functions is inconvenient
+in Coq, we define the union as a total function. In case both finite maps
+have a value at the same index, we take the value of the first map. *)
+Instance finmap_union `{Merge M} {A} : Union (M A) := union_with (λ x _ , x).
 
 (** * General theorems *)
 Section finmap.
@@ -385,30 +395,30 @@ End merge.
 Section union_intersection.
   Context (f : A → A → A).
 
-  Lemma finmap_union_merge m1 m2 i x y :
+  Lemma finmap_union_with_merge m1 m2 i x y :
     m1 !! i = Some x →
     m2 !! i = Some y →
     union_with f m1 m2 !! i = Some (f x y).
   Proof.
-    intros Hx Hy. unfold union_with, finmap_union.
+    intros Hx Hy. unfold union_with, finmap_union_with.
     now rewrite (merge_spec _), Hx, Hy.
   Qed.
-  Lemma finmap_union_l m1 m2 i x :
+  Lemma finmap_union_with_l m1 m2 i x :
     m1 !! i = Some x → m2 !! i = None → union_with f m1 m2 !! i = Some x.
   Proof.
-    intros Hx Hy. unfold union_with, finmap_union.
+    intros Hx Hy. unfold union_with, finmap_union_with.
     now rewrite (merge_spec _), Hx, Hy.
   Qed.
-  Lemma finmap_union_r m1 m2 i y :
+  Lemma finmap_union_with_r m1 m2 i y :
     m1 !! i = None → m2 !! i = Some y → union_with f m1 m2 !! i = Some y.
   Proof.
-    intros Hx Hy. unfold union_with, finmap_union.
+    intros Hx Hy. unfold union_with, finmap_union_with.
     now rewrite (merge_spec _), Hx, Hy.
   Qed.
-  Lemma finmap_union_None m1 m2 i :
+  Lemma finmap_union_with_None m1 m2 i :
     union_with f m1 m2 !! i = None ↔ m1 !! i = None ∧ m2 !! i = None.
   Proof.
-    unfold union_with, finmap_union. rewrite (merge_spec _).
+    unfold union_with, finmap_union_with. rewrite (merge_spec _).
     destruct (m1 !! i), (m2 !! i); compute; intuition congruence.
   Qed.
 
@@ -421,6 +431,18 @@ Section union_intersection.
   Global Instance:
     Idempotent (=) f → Idempotent (=) (union_with f : M A → M A → M A) := _.
 End union_intersection.
+
+Lemma finmap_union_Some (m1 m2 : M A) i x :
+  (m1 ∪ m2) !! i = Some x ↔
+    m1 !! i = Some x ∨ (m1 !! i = None ∧ m2 !! i = Some x).
+Proof.
+  unfold union, finmap_union, union_with, finmap_union_with.
+  rewrite (merge_spec _).
+  destruct (m1 !! i), (m2 !! i); compute; try intuition congruence.
+Qed.
+Lemma finmap_union_None (m1 m2 : M A) b :
+  (m1 ∪ m2) !! b = None ↔ m1 !! b = None ∧ m2 !! b = None.
+Proof. apply finmap_union_with_None. Qed.
 End finmap.
 
 (** * The finite map tactic *)

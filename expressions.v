@@ -70,6 +70,16 @@ Infix "-" := (EBinOp MinusOp) : expr_scope.
 Infix "≤" := (EBinOp LeOp) : expr_scope.
 Infix "=" := (EBinOp EqOp) : expr_scope.
 
+Reserved Notation "e ↑" (at level 20).
+Fixpoint expr_lift (e : expr ) : expr :=
+  match e with
+  | var x => var (S x)
+  | val v => val v
+  | load e => load (e↑)
+  | e1 @{op} e2 => e1↑ @{op} e2↑
+  end%E
+where "e ↑" := (expr_lift e) : expr_scope.
+
 (** * Semantics *)
 (** We define the semantics of expressions by structural recursion. *)
 Reserved Notation "⟦ e ⟧" (at level 2, format "⟦  e  ⟧").
@@ -139,6 +149,15 @@ Proof.
   congruence.
 Qed.
 
+Lemma expr_eval_lift ρ m e : ⟦ e ↑ ⟧ ρ m = ⟦ e ⟧ (tail ρ) m.
+Proof.
+  revert ρ. induction e; simpl; intros;
+    repeat match goal with
+    | H : ∀ ρ, ⟦ _ ↑ ⟧ _ _ = _ |- _ => rewrite H
+    end; auto.
+  now rewrite list_lookup_tail.
+Qed.
+ 
 (** * Tactics *)
 (** The tactic [simplify_expr_eval] merges assumptions
 [H1 : ⟦ e ⟧ ρ m1 = Some v1] and [H2 : ⟦ e ⟧ ρ m2 = Some v2]  by substituting

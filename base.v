@@ -160,6 +160,13 @@ Notation "(∉)" := (λ x X, x ∉ X) (only parsing) : C_scope.
 Notation "( x ∉)" := (λ X, x ∉ X) (only parsing) : C_scope.
 Notation "(∉ X )" := (λ x, x ∉ X) (only parsing) : C_scope.
 
+Class Disjoint A := disjoint : A → A → Prop.
+Instance: Params (@disjoint) 2.
+Infix "⊥" := disjoint (at level 70) : C_scope.
+Notation "(⊥)" := disjoint (only parsing) : C_scope.
+Notation "( X ⊥)" := (disjoint X) (only parsing) : C_scope.
+Notation "(⊥ X )" := (λ Y, disjoint Y X) (only parsing) : C_scope.
+
 (** ** Operations on maps *)
 (** In this section we define operational type classes for the operations
 on maps. In the file [fin_maps] we will axiomatize finite maps.

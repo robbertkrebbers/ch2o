@@ -72,17 +72,17 @@ satisfies [Ploc]. We use an inductive predicate instead of logical quantifiers
 so as to obtain more convenient case analyses. *)
 Inductive ax_valid (k : ctx) (mf : mem) : state → Prop :=
   | ax_further m' loc' k' :
-     mem_disjoint m' mf →
+     m' ⊥ mf →
      red (δ⇒s{k}) (State k' loc' (m' ∪ mf)) →
      ax_valid k mf (State k' loc' (m' ∪ mf))
   | ax_done m' loc' :
      Ploc (get_stack k) m' loc' →
-     mem_disjoint m' mf →
+     m' ⊥ mf →
      ax_valid k mf (State k loc' (m' ∪ mf)).
 
 Definition ax (n : nat) (loc : location)
     (k : ctx) (m mf : mem) (S' : state) : Prop :=
-  mem_disjoint m mf →
+  m ⊥ mf →
   δ ⊢ State k loc (m ∪ mf) ⇒s{k}^n S' →
   ax_valid k mf S'.
 
@@ -98,12 +98,12 @@ remainder. *)
 Inductive ax_splitting (n : nat) (loc : location)
       (l k : ctx) (m mf : mem) : state → Prop :=
   | ax_splitting_further k'' loc'' m'' :
-     mem_disjoint m'' mf →
+     m'' ⊥ mf →
      red (δ⇒s{l ++ k}) (State k'' loc'' (m'' ∪ mf)) →
      ax_splitting n loc l k m mf (State k'' loc'' (m'' ∪ mf))
   | ax_splitting_done m' loc' S'' :
      Ploc (get_stack (l ++ k)) m' loc' →
-     mem_disjoint m' mf →
+     m' ⊥ mf →
      δ ⊢ State (l ++ k) loc (m ∪ mf) ⇒s{l ++ k}^n
          State (l ++ k) loc' (m' ∪ mf) →
      δ ⊢ State (l ++ k) loc' (m' ∪ mf) ⇒s{k}^n S'' →
@@ -111,7 +111,7 @@ Inductive ax_splitting (n : nat) (loc : location)
 
 Lemma ax_split n loc l k m mf S'' :
   (∀ S, ax n loc (l ++ k) m mf S) →
-  mem_disjoint m mf →
+  m ⊥ mf →
   δ ⊢ State (l ++ k) loc (m ∪ mf) ⇒s{k}^n S'' →
   ax_splitting n loc l k m mf S''.
 Proof.
@@ -237,7 +237,7 @@ auxiliary notions we defined above. This shows that the Hoare judgment is
 sound with respect to the intended meaning. *)
 Lemma ax_stmt_sound_sep P R s m mf S' :
   ∅ ⊢ {{ P }} s {{ R }} →
-  mem_disjoint m mf →
+  m ⊥ mf →
   P [] m →
   δ ⊢ State [] (Stmt ↘ s) (m ∪ mf) ⇒s* S' →
     (∃ m', S' = State [] (Stmt ↗ s) (m' ∪ mf) ∧ R None [] m')
@@ -268,7 +268,7 @@ Qed.
 
 Lemma ax_stmt_looping_sep P s m mf :
   ∅ ⊢ {{ P }} s {{ λ _, False }} →
-  mem_disjoint m mf →
+  m ⊥ mf →
   P [] m →
   looping (δ⇒s) (State [] (Stmt ↘ s) (m ∪ mf)).
 Proof.
@@ -429,19 +429,73 @@ Proof.
     + easy.
 Qed.
 
-Lemma ax_add_fun Δ f Pf sf Pd s :
-  δ !! f = Some sf →
-  (∀ c vs,
-    <[f:=Pf]>Δ ⊢ {{ Π imap (λ i v, var i ↦ val v) vs * fpre Pf c vs }}
+Lemma ax_call_Some J R Δ A f e es Pf (c : fcommon Pf) Q :
+  Δ !! f = Some Pf →
+  (∀ vs mv, fpost Pf c vs mv * A → ∃ a v,
+    e⇓ptr a ∧ ⌜ mv = Some v ⌝ ∧ load (ptr a)⇓- ∧ <[a:=v]>Q)%A →
+  Δ; J; R ⊢ {{ assert_call (fpre Pf c) es * A }} call (Some e) f es {{ Q }}.
+Proof.
+  intros Hf HQ n k [] m mf S' HΔ ? Hpre ? p; try contradiction.
+
+  destruct Hpre as [m1 [m2 [? [? [Hpre ?]]]]]; subst.
+  simplify_mem_disjoint.
+  apply assert_call_correct in Hpre.
+  destruct Hpre as [vs [??]].
+
+  inv_csteps p as [| n' ??? p1 p2].
+  { left. now simplify_mem_disjoint. solve_cred. }
+
+  rewrite <-(associative_eq _) in p1.
+  inv_cstep p1.
+  simplify_expr_eval.
+
+  feed destruct (ax_split
+    (ax_fun_loc Pf c vs)
+    (S n') (Call f vs) [CCall (Some e) f es] k
+    m1 (m2 ∪ mf) S') as [m' ??? Hred | m' ?? [? Hpost] ? _ p3].
+
+  * intros. apply HΔ. easy. now apply (stack_indep (get_stack k)).
+  * simplify_mem_disjoint.
+  * now apply bsteps_S.
+
+  * rewrite !(associative_eq (∪)) in Hred |- *. left.
+    + simplify_mem_disjoint.
+    + now apply (red_subrel (δ⇒s{CCall (Some e) f es :: k}) _ _).
+  * edestruct HQ as [a [v' [? [? [[v'' ?] ?]]]]].
+    { exists m' m2. repeat split.
+      + simplify_mem_disjoint.
+      + eapply (stack_indep _). eauto.
+      + eassumption. }
+    unfold_assert in *; simplify_option_bind; subst.
+    rewrite (associative_eq _) in p3.
+    inv_csteps p3 as [| n'' ??? p3 p4 ].
+    { left. simplify_mem_disjoint. solve_cred. }
+    inv_cstep p3. last_cstep p4.
+    simplify_expr_eval. rewrite mem_union_insert_l.
+    right.
+    + now constructor.
+    + simplify_mem_disjoint.
+      eapply mem_disjoint_Some_l; [| eassumption].
+      simplify_mem_disjoint.
+Qed.
+
+Lemma ax_add_funs Δ Δ' s Pd :
+  (∀ f Pf, Δ' !! f = Some Pf → is_Some (δ !! f)) →
+  (∀ f Pf sf c vs,
+    Δ' !! f = Some Pf →
+    δ !! f = Some sf →
+    Δ' ∪ Δ ⊢ {{ Π imap (λ i v, var i ↦ val v) vs * fpre Pf c vs }}
      sf
     {{ λ mv, Π imap (λ i _, var i ↦ -) vs * fpost Pf c vs mv }}) →
-  ax_stmt (<[f:=Pf]>Δ) s Pd →
+  ax_stmt (Δ' ∪ Δ) s Pd →
   ax_stmt Δ s Pd.
 Proof.
-  intros Hf Haxf. revert s.
-  cut (∀ n c vs m mf m' k bs S',
-   ax_funs n (<[f:=Pf]> Δ) →
-   mem_disjoint m mf →
+  intros HΔ' HaxΔ'. revert s.
+  cut (∀ f Pf sf n c vs m mf m' k bs S',
+   Δ' !! f = Some Pf →
+   δ !! f = Some sf →
+   ax_funs n (Δ' ∪ Δ) →
+   m ⊥ mf →
    alloc_params (m ∪ mf) bs vs m' →
    (fpre Pf c vs) (get_stack k) m →
    δ ⊢ State (CParams bs :: k) (Stmt ↘ sf) m' ⇒s{k}^n S' →
@@ -450,17 +504,19 @@ Proof.
   { intros help s Hax n k d m mf S' HΔ.
     eapply Hax. clear d s Pd k m mf S' Hax.
    induction n as [n IH] using lt_wf_ind.
-   intros f' Pf' c vs m mf k S' ??? p.
+   intros f' Pf' c vs m mf k S' Hf' ?? p.
+   rewrite finmap_union_Some in Hf'.
+   destruct Hf' as [? | [_ ?]]; [| eapply HΔ; eauto ].
 
-   destruct (decide (f' = f)); simplify_map; [| eapply HΔ; eauto ].
+   destruct (HΔ' f' Pf'); trivial.
    inv_csteps p as [| n' ??? p1 p2].
    { left. easy. solve_cred. }
 
    inv_cstep p1.
    apply (ax_funs_weaken n') in HΔ; [| omega].
-   eapply help; eauto. congruence. }
+   eapply help; eauto. }
 
-  intros n c vs m mf m' k bs S3 ?? Hparams Hpre p1.
+  intros f Pf sf n c vs m mf m' k bs S3 ???? Hparams Hpre p1.
 
   apply alloc_params_insert_list in Hparams.
   destruct Hparams as [? [??]]; subst.
@@ -475,7 +531,7 @@ Proof.
     (list_to_map (zip bs vs) ∪ m)
     mf S3) as [m' | m' ? S2 [??? Hpost] ? _ p2].
 
-  * intros. apply Haxf; auto.
+  * intros. eapply HaxΔ'; eauto.
     simpl. rewrite <-mem_insert_list_union.
     apply assert_alloc_params_alt; auto.
   * simplify_mem_disjoint.
@@ -549,10 +605,7 @@ Proof.
   destruct Hpre as [a [v [?[?[[v' ?]?]]]]].
   unfold_assert in *. simplify_option_bind.
   inv_csteps p as [| ???? p1 p2 ].
-  { left. easy.
-    assert (is_writable (m ∪ mf) a).
-    { do 2 red. eauto with mem. }
-    solve_cred. }
+  { left. easy. solve_cred. }
   inv_cstep p1. last_cstep p2.
   simplify_expr_eval. rewrite mem_union_insert_l.
   right.
