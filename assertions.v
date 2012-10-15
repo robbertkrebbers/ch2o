@@ -294,10 +294,10 @@ Notation "e ⇓ -" := (∃ v, e ⇓ v)%A
 Instance assert_expr_mem_ext e v : MemExt (e ⇓ v).
 Proof. intros ???. apply expr_eval_weaken_mem. Qed.
 
-Notation "e ⇓ ⊤" := (∃ v, e⇓v ∧ ⌜ val_true v ⌝)%A
-   (at level 60, format "e  '⇓'  '⊤'") : assert_scope.
-Notation "e ⇓ ⊥" := (∃ v, e⇓v ∧ ⌜ val_false v ⌝)%A
-   (at level 60, format "e  '⇓'  '⊥'") : assert_scope.
+Notation "e ⇓ 'true'" := (∃ v, e⇓v ∧ ⌜ val_true v ⌝)%A
+   (at level 60, format "e  '⇓'  'true'") : assert_scope.
+Notation "e ⇓ 'false'" := (∃ v, e⇓v ∧ ⌜ val_false v ⌝)%A
+   (at level 60, format "e  '⇓'  'false'") : assert_scope.
 
 Definition assert_subst (a : index) (v : value) (P : assert) :=
   Assert $ λ ρ m, P ρ (<[a:=v]>m).

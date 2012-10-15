@@ -61,26 +61,27 @@ Definition down_up_dec d s : {down d s} + {up d s} :=
   | ↷ l => decide_rel (∈) l (labels s)
   end.
 
-(** The type [location] contains the part of the execution states that is not
-shared between the three kinds of execution states. An execution state [state]
-is a [location] equiped with a program context and memory. A statement state
-[Stmt] contains the statement to be executed and the direction in which the
-execution is performed, a call state [Call] contains the name of the function
-to be called, and the values of the arguments, and a return state [Return]
-contains the return value of the called function. *)
-Inductive location :=
-  | Stmt : direction → stmt → location
-  | Call : funname → list value → location
-  | Return : option value → location.
+(** The type [focus] describes the part of the program that is currently
+focused. An execution state [state] is a [focus] equipped with a program context
+and memory. The focus [Stmt] is used for execution of statements. It contains
+the statement to be executed and the direction in which the execution should be
+performed. The focus [Call] is used to call a function, it contains the name of
+the called function and the values of the arguments. The focus [Return] is used
+to return from the called function to the calling function, it contains the
+return value. *)
+Inductive focus :=
+  | Stmt : direction → stmt → focus
+  | Call : funname → list value → focus
+  | Return : option value → focus.
 
 Record state := State {
   SCtx : ctx;
-  SLoc : location;
+  SFoc : focus;
   SMem : mem
 }.
 Add Printing Constructor state.
 
-Instance location_eq_dec (loc1 loc2 : location) : Decision (loc1 = loc2).
+Instance focus_eq_dec (φ1 φ2 : focus) : Decision (φ1 = φ2).
 Proof. solve_decision. Defined.
 Instance state_eq_dec (S1 S2 : state) : Decision (S1 = S2).
 Proof. solve_decision. Defined.
@@ -89,89 +90,89 @@ Proof. solve_decision. Defined.
 (** Our definition of execution state allows many incorrect states. For example,
 while in a [Call] state, the context should always contain a [CCall] as its last
 element, whereas this is not enforced by the definition of execution states.
-We define the proposition [ctx_wf k loc k' loc'] which states that starting at
-a state with location [loc] in context [k], it is valid to build a state with
-location [loc'] in context [k']. *)
+We define the proposition [ctx_wf k φ k' φ'] which states that starting at
+a state with focus [φ] in context [k], it is valid to build a state with
+focus [φ'] in context [k']. *)
 
 (** In the file [smallstep], we will prove that our operational semantics
-preserves well formed statements. This is the key property to prove that if 
+preserves well-formed statements. This is the key property to prove that if 
 [State k (Stmt d s) m] reduces to [State k (Stmt d' s') m'], then we have
 [s = s']. *)
 
-(** We restrict to a type of locations [simple_location] that contains less
-information than [location] so as to obtain a more powerful induction principle
+(** We restrict to a type of focuss [simple_focus] that contains less
+information than [focus] so as to obtain a more powerful induction principle
 for [ctx_wf]. *)
-Inductive simple_location :=
-  | Stmt_ : stmt → simple_location
-  | Call_ : funname → simple_location
-  | Return_ : simple_location.
+Inductive simple_focus :=
+  | Stmt_ : stmt → simple_focus
+  | Call_ : funname → simple_focus
+  | Return_ : simple_focus.
 
-Definition to_simple_location (loc : location) : simple_location :=
-  match loc with
+Definition to_simple_focus (φ : focus) : simple_focus :=
+  match φ with
   | Stmt _ s => Stmt_ s
   | Call f _ => Call_ f
   | Return _ => Return_
   end.
-Coercion to_simple_location : location >-> simple_location.
+Coercion to_simple_focus : focus >-> simple_focus.
 
-Definition simple_location_related (loc1 loc2 : simple_location) : Prop :=
-  match loc1, loc2 with
+Definition simple_focus_related (φ1 φ2 : simple_focus) : Prop :=
+  match φ1, φ2 with
   | Stmt_ s1, Stmt_ s2 => s1 = s2
   | Call_ f1, Call_ f2 => f1 = f2
   | _, _ => True
   end.
-Local Infix "≍" := simple_location_related (at level 80).
-Arguments simple_location_related !_ !_.
+Local Infix "≍" := simple_focus_related (at level 80).
+Arguments simple_focus_related !_ !_.
 
-Instance: Reflexive simple_location_related.
+Instance: Reflexive simple_focus_related.
 Proof. now intros []. Qed.
 
 Section ctx_wf.
 Context (δ : funenv).
 
-Inductive ctx_wf (k : ctx) (loc : simple_location) :
-      ctx → simple_location → Prop :=
+Inductive ctx_wf (k : ctx) (φ : simple_focus) :
+      ctx → simple_focus → Prop :=
   | ctx_wf_start :
-     ctx_wf k loc k loc
+     ctx_wf k φ k φ
   | ctx_wf_item k' E s :
-     ctx_wf k loc k' (Stmt_ (subst E s)) →
-     ctx_wf k loc (CItem E :: k') (Stmt_ s)
-  | ctx_wf_block k' b s :
-     ctx_wf k loc k' (Stmt_ (block s)) →
-     ctx_wf k loc (CBlock b :: k') (Stmt_ s)
+     ctx_wf k φ k' (Stmt_ (subst E s)) →
+     ctx_wf k φ (CItem E :: k') (Stmt_ s)
+  | ctx_wf_bφk k' b s :
+     ctx_wf k φ k' (Stmt_ (block s)) →
+     ctx_wf k φ (CBlock b :: k') (Stmt_ s)
   | ctx_wf_call k' e f es :
-     ctx_wf k loc k' (Stmt_ (call e f es)) →
-     ctx_wf k loc (CCall e f es :: k') (Call_ f)
+     ctx_wf k φ k' (Stmt_ (call e f es)) →
+     ctx_wf k φ (CCall e f es :: k') (Call_ f)
   | ctx_wf_return k' f :
-     ctx_wf k loc k' (Call_ f) →
-     ctx_wf k loc k' Return_
+     ctx_wf k φ k' (Call_ f) →
+     ctx_wf k φ k' Return_
   | ctx_wf_params k' f bs s :
      δ !! f = Some s →
-     ctx_wf k loc k' (Call_ f) →
-     ctx_wf k loc (CParams bs :: k') (Stmt_ s).
+     ctx_wf k φ k' (Call_ f) →
+     ctx_wf k φ (CParams bs :: k') (Stmt_ s).
 
-Lemma ctx_wf_suffix_of k loc k' loc' :
-  ctx_wf k loc k' loc' → suffix_of k k'.
+Lemma ctx_wf_suffix_of k φ k' φ' :
+  ctx_wf k φ k' φ' → suffix_of k k'.
 Proof. induction 1; simpl in *; solve_suffix_of. Qed.
 
-Lemma ctx_wf_related k loc k' loc1 loc2 :
-  ctx_wf k loc k' loc1 → ctx_wf k loc k' loc2 → loc1 ≍ loc2.
+Lemma ctx_wf_related k φ k' φ1 φ2 :
+  ctx_wf k φ k' φ1 → ctx_wf k φ k' φ2 → φ1 ≍ φ2.
 Proof.
-  intros wf1. revert loc2.
+  intros wf1. revert φ2.
   induction wf1; inversion 1; subst; simpl in *; trivial; try
     match goal with
     | H : ctx_wf _ _ _ _ |- _ =>
       apply ctx_wf_suffix_of in H; solve_suffix_of
     end.
   * easy.
-  * destruct loc; simpl in *; auto.
+  * destruct φ; simpl in *; auto.
   * eapply (injective (subst _)), (IHwf1 (Stmt_ _)); eassumption.
   * eapply (injective SBlock), (IHwf1 (Stmt_ _)); eassumption.
-  * destruct loc2; simpl in *; auto.
+  * destruct φ2; simpl in *; auto.
   * efeed specialize IHwf1; eauto; simpl in *; congruence.
 Qed.
 
-Lemma ctx_wf_unique k loc k' s1 s2 :
-  ctx_wf k loc k' (Stmt_ s1) → ctx_wf k loc k' (Stmt_ s2) → s1 = s2.
+Lemma ctx_wf_unique k φ k' s1 s2 :
+  ctx_wf k φ k' (Stmt_ s1) → ctx_wf k φ k' (Stmt_ s2) → s1 = s2.
 Proof. apply ctx_wf_related. Qed.
 End ctx_wf.

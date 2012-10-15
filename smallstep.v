@@ -335,8 +335,8 @@ formed program contexts, and use the theorem [ctx_wf_unique] to obtain the
 required result. *)
 Lemma cstep_preserves_wf k s S1 S2 :
   δ ⊢ S1 ⇒s{k} S2 →
-  ctx_wf δ k s (SCtx S1) (SLoc S1) →
-  ctx_wf δ k s (SCtx S2) (SLoc S2).
+  ctx_wf δ k s (SCtx S1) (SFoc S1) →
+  ctx_wf δ k s (SCtx S2) (SFoc S2).
 Proof.
   intros p.
   inv_cstep; try solve [inversion 1; subst;
@@ -353,8 +353,8 @@ Qed.
 
 Lemma cstep_rtc_preserves_wf k s S1 S2 :
   δ ⊢ S1 ⇒s{k}* S2 →
-  ctx_wf δ k s (SCtx S1) (SLoc S1) →
-  ctx_wf δ k s (SCtx S2) (SLoc S2).
+  ctx_wf δ k s (SCtx S1) (SFoc S1) →
+  ctx_wf δ k s (SCtx S2) (SFoc S2).
 Proof. induction 1; eauto using cstep_preserves_wf. Qed.
 
 Lemma cteps_rtc_preserves_stmt k d1 s1 m1 d2 s2 m2 :
