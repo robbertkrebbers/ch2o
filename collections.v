@@ -7,59 +7,108 @@ Require Export base tactics orders.
 
 (** * Theorems *)
 Section collection.
-  Context `{Collection A B}.
+  Context `{Collection A C}.
 
   Lemma elem_of_empty x : x ∈ ∅ ↔ False.
-  Proof. split. apply not_elem_of_empty. easy. Qed.
+  Proof. split. apply not_elem_of_empty. done. Qed.
   Lemma elem_of_union_l x X Y : x ∈ X → x ∈ X ∪ Y.
   Proof. intros. apply elem_of_union. auto. Qed.
   Lemma elem_of_union_r x X Y : x ∈ Y → x ∈ X ∪ Y.
   Proof. intros. apply elem_of_union. auto. Qed.
-  Lemma not_elem_of_singleton x y : x ∉ {[ y ]} ↔ x ≠ y.
-  Proof. now rewrite elem_of_singleton. Qed.
-  Lemma not_elem_of_union x X Y : x ∉ X ∪ Y ↔ x ∉ X ∧ x ∉ Y.
-  Proof. rewrite elem_of_union. tauto. Qed.
 
-  Global Instance collection_subseteq: SubsetEq B := λ X Y,
+  Global Instance collection_subseteq: SubsetEq C := λ X Y,
     ∀ x, x ∈ X → x ∈ Y.
-  Global Instance: BoundedJoinSemiLattice B.
-  Proof. firstorder. Qed.
-  Global Instance: MeetSemiLattice B.
-  Proof. firstorder. Qed.
+  Global Instance: LowerBoundedLattice C.
+  Proof. firstorder auto. Qed.
 
   Lemma elem_of_subseteq X Y : X ⊆ Y ↔ ∀ x, x ∈ X → x ∈ Y.
-  Proof. easy. Qed.
+  Proof. done. Qed.
   Lemma elem_of_equiv X Y : X ≡ Y ↔ ∀ x, x ∈ X ↔ x ∈ Y.
   Proof. firstorder. Qed.
   Lemma elem_of_equiv_alt X Y :
     X ≡ Y ↔ (∀ x, x ∈ X → x ∈ Y) ∧ (∀ x, x ∈ Y → x ∈ X).
   Proof. firstorder. Qed.
-
+  Lemma elem_of_subseteq_singleton x X : x ∈ X ↔ {[ x ]} ⊆ X.
+  Proof.
+    split.
+    * intros ??. rewrite elem_of_singleton. intro. by subst.
+    * intros Ex. by apply (Ex x), elem_of_singleton.
+  Qed.
   Global Instance singleton_proper : Proper ((=) ==> (≡)) singleton.
-  Proof. repeat intro. now subst. Qed.
+  Proof. repeat intro. by subst. Qed.
   Global Instance elem_of_proper: Proper ((=) ==> (≡) ==> iff) (∈).
   Proof. intros ???. subst. firstorder. Qed.
 
-  Lemma empty_ne_singleton x : ∅ ≢ {[ x ]}.
+  Lemma elem_of_union_list (x : A) (Xs : list C) :
+    x ∈ ⋃ Xs ↔ ∃ X, In X Xs ∧ x ∈ X.
   Proof.
-    intros [_ E]. apply (elem_of_empty x).
-    apply E. now apply elem_of_singleton.
+    split.
+    * induction Xs; simpl; intros HXs.
+      + by apply elem_of_empty in HXs.
+      + apply elem_of_union in HXs. naive_solver.
+    * intros [X []]. induction Xs; [done | intros [?|?] ?; subst; simpl].
+      + by apply elem_of_union_l.
+      + apply elem_of_union_r; auto.
+  Qed.
+
+  Lemma non_empty_singleton x : {[ x ]} ≢ ∅.
+  Proof. intros [E _]. by apply (elem_of_empty x), E, elem_of_singleton. Qed.
+
+  Lemma intersection_twice x : {[x]} ∩ {[x]} ≡ {[x]}.
+  Proof.
+    split; intros y; rewrite elem_of_intersection, !elem_of_singleton; tauto.
+  Qed.
+  Lemma not_elem_of_singleton x y : x ∉ {[ y ]} ↔ x ≠ y.
+  Proof. by rewrite elem_of_singleton. Qed.
+  Lemma not_elem_of_union x X Y : x ∉ X ∪ Y ↔ x ∉ X ∧ x ∉ Y.
+  Proof. rewrite elem_of_union. tauto. Qed.
+
+  Context `{∀ (X Y : C), Decision (X ⊆ Y)}.
+
+  Global Instance elem_of_dec_slow (x : A) (X : C) : Decision (x ∈ X) | 100.
+  Proof.
+    refine (cast_if (decide_rel (⊆) {[ x ]} X));
+      by rewrite elem_of_subseteq_singleton.
+  Defined.
+
+  Lemma not_elem_of_intersection x X Y : x ∉ X ∩ Y ↔ x ∉ X ∨ x ∉ Y.
+  Proof.
+    rewrite elem_of_intersection.
+    destruct (decide (x ∈ X)); tauto.
+  Qed.
+  Lemma not_elem_of_difference x X Y : x ∉ X ∖ Y ↔ x ∉ X ∨ x ∈ Y.
+  Proof.
+    rewrite elem_of_difference.
+    destruct (decide (x ∈ Y)); tauto.
+  Qed.
+  Lemma union_difference X Y : X ∪ Y ∖ X ≡ X ∪ Y.
+  Proof.
+    split; intros x; rewrite !elem_of_union, elem_of_difference.
+    * tauto.
+    * destruct (decide (x ∈ X)); tauto.
   Qed.
 End collection.
+
+Ltac decompose_empty := repeat
+  match goal with
+  | H : _ ∪ _ ≡ ∅ |- _ => apply empty_union in H; destruct H
+  | H : _ ∪ _ ≢ ∅ |- _ => apply non_empty_union in H; destruct H
+  | H : {[ _ ]} ≡ ∅ |- _ => destruct (non_empty_singleton _ H)
+  end.
 
 (** * Theorems about map *)
 Section map.
   Context `{Collection A C}.
 
   Lemma elem_of_map_1 (f : A → A) (X : C) (x : A) :
+    x ∈ map f X → ∃ y, x = f y ∧ y ∈ X.
+  Proof. intros. by apply (elem_of_map _). Qed.
+  Lemma elem_of_map_2 (f : A → A) (X : C) (x : A) :
     x ∈ X → f x ∈ map f X.
   Proof. intros. apply (elem_of_map _). eauto. Qed.
-  Lemma elem_of_map_1_alt (f : A → A) (X : C) (x : A) y :
+  Lemma elem_of_map_2_alt (f : A → A) (X : C) (x : A) y :
     x ∈ X → y = f x → y ∈ map f X.
   Proof. intros. apply (elem_of_map _). eauto. Qed.
-  Lemma elem_of_map_2 (f : A → A) (X : C) (x : A) :
-    x ∈ map f X → ∃ y, x = f y ∧ y ∈ X.
-  Proof. intros. now apply (elem_of_map _). Qed.
 End map.
 
 (** * Tactics *)
@@ -67,16 +116,19 @@ End map.
 [(∖)], [map], [∅], [{[_]}], [(≡)], and [(⊆)], by rewriting these into
 logically equivalent propositions. For example we rewrite [A → x ∈ X ∪ ∅] into
 [A → x ∈ X ∨ False]. *)
-Ltac unfold_elem_of := repeat
-  match goal with
-  | H : context [ _ ⊆ _ ] |- _ => setoid_rewrite elem_of_subseteq in H
-  | H : context [ _ ≡ _ ] |- _ => setoid_rewrite elem_of_equiv_alt in H
-  | H : context [ _ ∈ ∅ ] |- _ => setoid_rewrite elem_of_empty in H
-  | H : context [ _ ∈ {[ _ ]} ] |- _ => setoid_rewrite elem_of_singleton in H
-  | H : context [ _ ∈ _ ∪ _ ] |- _ => setoid_rewrite elem_of_union in H
-  | H : context [ _ ∈ _ ∩ _ ] |- _ => setoid_rewrite elem_of_intersection in H
-  | H : context [ _ ∈ _ ∖ _ ] |- _ => setoid_rewrite elem_of_difference in H
-  | H : context [ _ ∈ map _ _ ] |- _ => setoid_rewrite elem_of_map in H
+Ltac unfold_elem_of :=
+  repeat_on_hyps (fun H =>
+    repeat match type of H with
+    | context [ _ ⊆ _ ] => setoid_rewrite elem_of_subseteq in H
+    | context [ _ ≡ _ ] => setoid_rewrite elem_of_equiv_alt in H
+    | context [ _ ∈ ∅ ] => setoid_rewrite elem_of_empty in H
+    | context [ _ ∈ {[ _ ]} ] => setoid_rewrite elem_of_singleton in H
+    | context [ _ ∈ _ ∪ _ ] => setoid_rewrite elem_of_union in H
+    | context [ _ ∈ _ ∩ _ ] => setoid_rewrite elem_of_intersection in H
+    | context [ _ ∈ _ ∖ _ ] => setoid_rewrite elem_of_difference in H
+    | context [ _ ∈ map _ _ ] => setoid_rewrite elem_of_map in H
+    end);
+  repeat match goal with
   | |- context [ _ ⊆ _ ] => setoid_rewrite elem_of_subseteq
   | |- context [ _ ≡ _ ] => setoid_rewrite elem_of_equiv_alt
   | |- context [ _ ∈ ∅ ] => setoid_rewrite elem_of_empty
@@ -90,7 +142,7 @@ Ltac unfold_elem_of := repeat
 (** The tactic [solve_elem_of tac] composes the above tactic with [intuition].
 For goals that do not involve [≡], [⊆], [map], or quantifiers this tactic is
 generally powerful enough. This tactic either fails or proves the goal. *)
-Tactic Notation "solve_elem_of" tactic(tac) :=
+Tactic Notation "solve_elem_of" tactic3(tac) :=
   simpl in *;
   unfold_elem_of;
   solve [intuition (simplify_equality; tac)].
@@ -101,19 +153,20 @@ Tactic Notation "solve_elem_of" := solve_elem_of auto.
 fails or loops on very small goals generated by [solve_elem_of] already. We
 use the [naive_solver] tactic as a substitute. This tactic either fails or
 proves the goal. *)
-Tactic Notation "esolve_elem_of" tactic(tac) :=
+Tactic Notation "esolve_elem_of" tactic3(tac) :=
   simpl in *;
   unfold_elem_of;
   naive_solver tac.
 Tactic Notation "esolve_elem_of" := esolve_elem_of eauto.
 
-(** Given an assumption [H : _ ∈ _], the tactic [destruct_elem_of H] will
+(** Given a hypothesis [H : _ ∈ _], the tactic [destruct_elem_of H] will
 recursively split [H] for [(∪)], [(∩)], [(∖)], [map], [∅], [{[_]}]. *)
-Tactic Notation "destruct_elem_of" hyp(H) :=
+Tactic Notation "decompose_elem_of" hyp(H) :=
   let rec go H :=
   lazymatch type of H with
   | _ ∈ ∅ => apply elem_of_empty in H; destruct H
-  | _ ∈ {[ ?l' ]} => apply elem_of_singleton in H; subst l'
+  | ?l ∈ {[ ?l' ]} =>
+    apply elem_of_singleton in H; first [ subst l' | subst l | idtac ]
   | _ ∈ _ ∪ _ =>
     let H1 := fresh in let H2 := fresh in apply elem_of_union in H;
     destruct H as [H1|H2]; [go H1 | go H2]
@@ -128,6 +181,8 @@ Tactic Notation "destruct_elem_of" hyp(H) :=
     destruct H as [?[? H1]]; go H1
   | _ => idtac
   end in go H.
+Tactic Notation "decompose_elem_of" :=
+  repeat_on_hyps (fun H => decompose_elem_of H).
 
 (** * Sets without duplicates up to an equivalence *)
 Section no_dup.
@@ -208,10 +263,10 @@ End quantifiers.
 Section more_quantifiers.
   Context `{Collection A B}.
 
-  Lemma cforall_weak (P Q : A → Prop) (Hweak : ∀ x, P x → Q x) X :
+  Lemma cforall_weaken (P Q : A → Prop) (Hweaken : ∀ x, P x → Q x) X :
     cforall P X → cforall Q X.
   Proof. unfold cforall. naive_solver. Qed.
-  Lemma cexists_weak (P Q : A → Prop) (Hweak : ∀ x, P x → Q x) X :
+  Lemma cexists_weaken (P Q : A → Prop) (Hweaken : ∀ x, P x → Q x) X :
     cexists P X → cexists Q X.
   Proof. unfold cexists. naive_solver. Qed.
 End more_quantifiers.
@@ -226,7 +281,7 @@ Section fresh.
     exist (∉ X) (fresh X) (is_fresh X).
 
   Global Instance fresh_proper: Proper ((≡) ==> (=)) fresh.
-  Proof. intros ???. now apply fresh_proper_alt, elem_of_equiv. Qed.
+  Proof. intros ???. by apply fresh_proper_alt, elem_of_equiv. Qed.
 
   Fixpoint fresh_list (n : nat) (X : C) : list A :=
     match n with
@@ -238,8 +293,8 @@ Section fresh.
   Proof.
     intros ? n ?. subst.
     induction n; simpl; intros ?? E; f_equal.
-    * now rewrite E.
-    * apply IHn. now rewrite E.
+    * by rewrite E.
+    * apply IHn. by rewrite E.
   Qed.
 
   Lemma fresh_list_length n X : length (fresh_list n X) = n.
@@ -248,7 +303,7 @@ Section fresh.
   Lemma fresh_list_is_fresh n X x : In x (fresh_list n X) → x ∉ X.
   Proof.
     revert X. induction n; simpl.
-    * easy.
+    * done.
     * intros X [?| Hin]. subst.
       + apply is_fresh.
       + apply IHn in Hin. solve_elem_of.

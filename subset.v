@@ -16,4 +16,4 @@ Instance subset_difference {A} : Difference (subset A) := λ P Q x, P x ∧ ¬Q 
 Instance subset_map {A} : Map A (subset A) := λ f P x, ∃ y, f y = x ∧ P y.
 
 Instance subset_container: Collection A (subset A) | 100.
-Proof. firstorder try congruence. Qed.
+Proof. firstorder congruence. Qed.

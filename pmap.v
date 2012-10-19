@@ -14,13 +14,6 @@ Local Open Scope positive_scope.
 Local Hint Extern 0 (@eq positive _ _) => congruence.
 Local Hint Extern 0 (¬@eq positive _ _) => congruence.
 
-(** Enable unfolding of the finite map operations in this file. *)
-Local Arguments lookup _ _ _ _ _ !_ /.
-Local Arguments partial_alter _ _ _ _ _ _ !_ /.
-Local Arguments fmap _ _ _ _ _ !_ /.
-Local Arguments merge _ _ _ _ !_ _ /.
-Local Arguments mbind _ _ _ _ _ !_/.
-
 (** * The tree data structure *)
 (** The data type [Pmap_raw] specifies radix-2 search trees. These trees do
 not ensure canonical representations of maps. For example the empty map can
@@ -46,10 +39,9 @@ Local Hint Constructors Pmap_ne.
 Instance Pmap_ne_dec `(t : Pmap_raw A) : Decision (Pmap_ne t).
 Proof.
   red. induction t as [|? IHl [?|] ? IHr].
-  * right. now inversion 1.
-  * now intuition.
-  * destruct IHl, IHr; try solve [left; auto]; right;
-      inversion_clear 1; contradiction.
+  * right. by inversion 1.
+  * intuition.
+  * destruct IHl, IHr; try (by left; auto); right; by inversion_clear 1.
 Qed.
 
 (** The following predicate describes well well formed trees. A tree is well
@@ -65,10 +57,11 @@ Instance Pmap_wf_dec `(t : Pmap_raw A) : Decision (Pmap_wf t).
 Proof.
   red. induction t as [|l IHl [?|] r IHr]; simpl.
   * intuition.
-  * destruct IHl, IHr; try solve [left; intuition];
-      right; inversion_clear 1; intuition.
+  * destruct IHl, IHr; try solve [left; intuition auto];
+      right; by inversion_clear 1.
   * destruct IHl, IHr, (decide (Pmap_ne l)), (decide (Pmap_ne r));
-      try solve [left; intuition]; right; inversion_clear 1; intuition.
+      try solve [left; intuition auto];
+      right; inversion_clear 1; intuition.
 Qed.
 
 (** Now we restrict the data type of trees to those that are well formed. *)
@@ -100,14 +93,14 @@ Instance Plookup_raw: Lookup positive Pmap_raw :=
 Global Instance Plookup: Lookup positive Pmap := λ A i t, `t !! i.
 
 Lemma Plookup_raw_empty {A} i : (∅ : Pmap_raw A) !! i = None.
-Proof. now destruct i. Qed.
+Proof. by destruct i. Qed.
 
 Lemma Pmap_ne_lookup `(t : Pmap_raw A) : Pmap_ne t → ∃ i x, t !! i = Some x.
 Proof.
   induction 1 as [? x ?| l r ? IHl | l r ? IHr].
-  * intros. now exists 1 x.
-  * destruct IHl as [i [x ?]]. now exists (i~0) x.
-  * destruct IHr as [i [x ?]]. now exists (i~1) x.
+  * intros. by exists 1 x.
+  * destruct IHl as [i [x ?]]. by exists (i~0) x.
+  * destruct IHr as [i [x ?]]. by exists (i~1) x.
 Qed.
 
 Lemma Pmap_wf_eq_get {A} (t1 t2 : Pmap_raw A) :
@@ -116,29 +109,29 @@ Proof.
   intros t1wf. revert t2.
   induction t1wf as [| ? x ? ? IHl ? IHr | l r ? IHl ? IHr Hne1 ].
   * destruct 1 as [| | ???? [?|?]]; intros Hget.
-    + easy.
+    + done.
     + discriminate (Hget 1).
-    + destruct (Pmap_ne_lookup l) as [i [??]]; auto.
+    + destruct (Pmap_ne_lookup l) as [i [??]]; trivial.
       specialize (Hget (i~0)). simpl in *. congruence.
-    + destruct (Pmap_ne_lookup r) as [i [??]]; auto.
+    + destruct (Pmap_ne_lookup r) as [i [??]]; trivial.
       specialize (Hget (i~1)). simpl in *. congruence.
   * destruct 1; intros Hget.
     + discriminate (Hget xH).
     + f_equal.
-      - apply IHl; auto. intros i. now apply (Hget (i~0)).
-      - now apply (Hget 1).
-      - apply IHr; auto. intros i. now apply (Hget (i~1)).
+      - apply IHl; trivial. intros i. apply (Hget (i~0)).
+      - apply (Hget 1).
+      - apply IHr; trivial. intros i. apply (Hget (i~1)).
     + specialize (Hget 1). simpl in *. congruence.
   * destruct 1; intros Hget.
     + destruct Hne1.
-      destruct (Pmap_ne_lookup l) as [i [??]]; auto.
+      destruct (Pmap_ne_lookup l) as [i [??]]; trivial.
       - specialize (Hget (i~0)). simpl in *. congruence.
-      - destruct (Pmap_ne_lookup r) as [i [??]]; auto.
+      - destruct (Pmap_ne_lookup r) as [i [??]]; trivial.
         specialize (Hget (i~1)). simpl in *. congruence.
     + specialize (Hget 1). simpl in *. congruence.
     + f_equal.
-      - apply IHl; auto. intros i. now apply (Hget (i~0)).
-      - apply IHr; auto. intros i. now apply (Hget (i~1)).
+      - apply IHl; trivial. intros i. apply (Hget (i~0)).
+      - apply IHr; trivial. intros i. apply (Hget (i~1)).
 Qed.
 
 Fixpoint Psingleton_raw {A} (i : positive) (x : A) : Pmap_raw A :=
@@ -156,7 +149,7 @@ Proof. induction i; simpl; intuition. Qed.
 Local Hint Resolve Psingleton_raw_wf.
 
 Lemma Plookup_raw_singleton {A} i (x : A) : Psingleton_raw i x !! i = Some x.
-Proof. now induction i. Qed.
+Proof. by induction i. Qed.
 Lemma Plookup_raw_singleton_ne {A} i j (x : A) :
   i ≠ j → Psingleton_raw i x !! j = None.
 Proof. revert j. induction i; intros [?|?|]; simpl; auto. congruence. Qed.
@@ -174,13 +167,13 @@ Local Hint Resolve Pnode_canon_wf.
 
 Lemma Pnode_canon_lookup_xH `(l : Pmap_raw A) o (r : Pmap_raw A) :
   Pnode_canon l o r !! 1 = o.
-Proof. now destruct l,o,r. Qed.
+Proof. by destruct l,o,r. Qed.
 Lemma Pnode_canon_lookup_xO `(l : Pmap_raw A) o (r : Pmap_raw A) i :
   Pnode_canon l o r !! i~0 = l !! i.
-Proof. now destruct l,o,r. Qed.
+Proof. by destruct l,o,r. Qed.
 Lemma Pnode_canon_lookup_xI `(l : Pmap_raw A) o (r : Pmap_raw A) i :
   Pnode_canon l o r !! i~1 = r !! i.
-Proof. now destruct l,o,r. Qed.
+Proof. by destruct l,o,r. Qed.
 Ltac Pnode_canon_rewrite := repeat (
   rewrite Pnode_canon_lookup_xH ||
   rewrite Pnode_canon_lookup_xO ||
@@ -219,43 +212,43 @@ Lemma Plookup_raw_alter {A} f i (t : Pmap_raw A) :
   partial_alter f i t !! i = f (t !! i).
 Proof.
   revert i. induction t.
-  * simpl. case (f None).
-    + intros. now apply Plookup_raw_singleton.
-    + now destruct i.
-  * intros [?|?|]; simpl; Pnode_canon_rewrite; auto.
+  * intros i. unfold partial_alter, lookup. simpl. case (f None).
+    + intros. apply Plookup_raw_singleton.
+    + by destruct i.
+  * intros [?|?|]; simpl; by Pnode_canon_rewrite.
 Qed.
 Lemma Plookup_raw_alter_ne {A} f i j (t : Pmap_raw A) :
   i ≠ j → partial_alter f i t !! j = t !! j.
 Proof.
   revert i j. induction t as [|l IHl ? r IHr].
-  * simpl. intros. case (f None).
-    + intros. now apply Plookup_raw_singleton_ne.
-    + easy.
+  * intros. unfold partial_alter, lookup. simpl. case (f None).
+    + intros. by apply Plookup_raw_singleton_ne.
+    + done.
   * intros [?|?|] [?|?|]; simpl; Pnode_canon_rewrite; auto; congruence.
 Qed.
 
-Instance Pfmap_raw: FMap Pmap_raw :=
-  fix Pfmap_raw A B f (t : Pmap_raw A) : Pmap_raw B :=
+Instance Pfmap_raw {A B} (f : A → B) : FMap Pmap_raw f :=
+  fix Pfmap_raw (t : Pmap_raw A) : Pmap_raw B :=
   match t with
   | Pleaf => Pleaf
   | Pnode l x r =>
-    Pnode (@fmap _ Pfmap_raw _ _ f l) (fmap f x) (@fmap _ Pfmap_raw _ _ f r)
+    Pnode (@fmap _ _ _ f Pfmap_raw l) (fmap f x) (@fmap _ _ _ f Pfmap_raw r)
   end.
 
 Lemma Pfmap_raw_ne `(f : A → B) (t : Pmap_raw A) :
   Pmap_ne t → Pmap_ne (fmap f t).
-Proof. induction 1; simpl; auto. Qed.
+Proof.  induction 1; simpl; auto. Qed.
 Local Hint Resolve Pfmap_raw_ne.
 Lemma Pfmap_raw_wf `(f : A → B) (t : Pmap_raw A) :
   Pmap_wf t → Pmap_wf (fmap f t).
 Proof. induction 1; simpl; intuition auto. Qed.
 
-Global Instance Pfmap: FMap Pmap := λ A B f t,
+Global Instance Pfmap {A B} (f : A → B) : FMap Pmap f := λ t,
   dexist _ (Pfmap_raw_wf f _ (proj2_dsig t)).
 
 Lemma Plookup_raw_fmap `(f : A → B) (t : Pmap_raw A) i :
   fmap f t !! i = fmap f (t !! i).
-Proof. revert i. induction t. easy. intros [?|?|]; simpl; auto. Qed.
+Proof. revert i. induction t. done. by intros [?|?|]; simpl. Qed.
 
 (** The [dom] function is rather inefficient, but since we do not intend to
 use it for computation it does not really matter to us. *)
@@ -276,8 +269,8 @@ Section dom.
     * revert f. induction t as [|? IHl [?|] ? IHr]; esolve_elem_of.
     * intros [i [? Hlookup]]; subst. revert f i Hlookup.
       induction t as [|? IHl [?|] ? IHr]; intros f [?|?|];
-        solve_elem_of (now apply (IHl (f ∘ (~0)))
-        || now apply (IHr (f ∘ (~1))) || simplify_is_Some).
+        solve_elem_of (by apply (IHl (f ∘ (~0)))
+        || by apply (IHr (f ∘ (~1))) || simplify_is_Some).
   Qed.
 End dom.
 
@@ -299,7 +292,7 @@ Lemma Pmerge_aux_spec `(f : option A → option B) (Hf : f None = None)
     (t : Pmap_raw A) i :
   Pmerge_aux f t !! i = f (t !! i).
 Proof.
-  revert i. induction t as [| l IHl o r IHr ]; [easy |].
+  revert i. induction t as [| l IHl o r IHr ]; [done |].
   intros [?|?|]; simpl; Pnode_canon_rewrite; auto.
 Qed.
 
@@ -325,24 +318,24 @@ Lemma Pmerge_raw_spec {A} f (Hf : f None None = None) (t1 t2 : Pmap_raw A) i :
   merge f t1 t2 !! i = f (t1 !! i) (t2 !! i).
 Proof.
   revert t2 i. induction t1 as [| l1 IHl1 o1 r1 IHr1 ].
-  * simpl. now apply Pmerge_aux_spec.
+  * intros. unfold merge. simpl. by rewrite Pmerge_aux_spec.
   * destruct t2 as [| l2 o2 r2 ].
-    + unfold merge, Pmerge_raw. intros. now rewrite Pmerge_aux_spec.
-    + intros [?|?|]; simpl; Pnode_canon_rewrite; auto.
+    + unfold merge, Pmerge_raw. intros. by rewrite Pmerge_aux_spec.
+    + intros [?|?|]; simpl; by Pnode_canon_rewrite.
 Qed.
 
 Global Instance: FinMap positive Pmap.
 Proof.
   split.
   * intros ? [t1?] [t2?]. intros. apply dsig_eq. simpl.
-    apply Pmap_wf_eq_get; auto; now apply (bool_decide_unpack _).
-  * now destruct i.
-  * intros ?? [??] ?. now apply Plookup_raw_alter.
-  * intros ?? [??] ??. now apply Plookup_raw_alter_ne.
-  * intros ??? [??]. now apply Plookup_raw_fmap.
+    apply Pmap_wf_eq_get; trivial; by apply (bool_decide_unpack _).
+  * by destruct i.
+  * intros ?? [??] ?. by apply Plookup_raw_alter.
+  * intros ?? [??] ??. by apply Plookup_raw_alter_ne.
+  * intros ??? [??]. by apply Plookup_raw_fmap.
   * intros ?????????? [??] i. unfold dom, Pdom.
     rewrite Plookup_raw_dom. unfold id. split.
-    + intros [? [??]]. now subst.
-    + firstorder.
-  * intros ??? [??] [??] ?. now apply Pmerge_raw_spec.
+    + intros [? [??]]. by subst.
+    + naive_solver.
+  * intros ??? [??] [??] ?. by apply Pmerge_raw_spec.
 Qed.

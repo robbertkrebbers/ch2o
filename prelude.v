@@ -7,8 +7,10 @@ Require Export
   orders
   option
   list
+  vector
+  numbers
   collections
   fin_collections
   listset
   subset
-  numbers.
+  fresh_numbers.

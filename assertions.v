@@ -4,9 +4,9 @@
 statement, and [P] and [Q] are assertions called the pre and postcondition of
 [s], respectively. The intuitive reading of such a triple is:
 if [P] holds for the state before execution of [s], and execution of [s]
-terminates, then [Q] will hold afterwards. Like (Appel/Blazy, 2007), we model
-assertions using a shallow embedding. That is, assertions are defined as
-predicates over the contents of the stack and memory. *)
+terminates, then [Q] will hold afterwards. Like (Appel/Blazy, 2007), we define
+assertions using a shallow embedding. That is, assertions are predicates over
+the contents of the stack and memory. *)
 
 (** This file defines the data type of assertions, the usual connectives of
 Hoare logic ([∧], [∨], [¬], [↔], [∀] and [∃]), the connectives of separation
@@ -31,7 +31,7 @@ Definition assert_as_Prop (P : assert) : Prop := ∀ ρ m, P ρ m.
 Coercion assert_as_Prop : assert >-> Sortclass.
 
 (** By defining a pre-order on assertions we automatically obtain the desired
-equality as the generic equality on pre-orders. *)
+equality from the generic setoid equality on pre-orders. *)
 Instance assert_subseteq: SubsetEq assert := λ P Q, ∀ ρ m, P ρ m → Q ρ m.
 Instance: PreOrder assert_subseteq.
 Proof. firstorder. Qed.
@@ -56,7 +56,7 @@ Class StackIndep (P : assert) : Prop :=
 Class MemIndep (P : assert) : Prop :=
   mem_indep: ∀ ρ m1 m2, P ρ m1 → P ρ m2.
 Class MemExt (P : assert) : Prop :=
-  mem_ext: ∀ ρ m1 m2, m1 ⊆ m2 → P ρ m1 → P ρ m2.
+  mem_ext: ∀ ρ m1 m2, P ρ m1 → m1 ⊆ m2 → P ρ m2.
 
 Instance mem_indep_ext P : MemIndep P → MemExt P.
 Proof. firstorder. Qed.
@@ -99,12 +99,14 @@ Tactic Notation "unfold_assert" "in" "*" :=
   unfold_assert;
   repeat match goal with H : _ |- _ => progress unfold_assert in H end.
 
+Hint Extern 100 (_ ⊥ _) => solve_mem_disjoint : assert.
+
 Ltac solve_assert :=
   repeat intro;
   intuition auto;
   repeat autounfold with assert in *;
   unfold_assert in *;
-  naive_solver (eauto; congruence).
+  naive_solver (eauto with assert; congruence).
 
 (** * Hoare logic connectives *)
 (** Definitions and notations of the usual connectives of Hoare logic. *)
@@ -112,8 +114,8 @@ Definition Prop_as_assert (P : Prop) : assert := Assert $ λ _ _, P.
 Notation "⌜ P ⌝" := (Prop_as_assert P) (format "⌜  P  ⌝") : assert_scope.
 Notation "'True'" := (Prop_as_assert True) : assert_scope.
 Notation "'False'" := (Prop_as_assert False) : assert_scope.
-Definition assert_imp (P Q : assert) : assert := Assert $ λ ρ m, P ρ m → Q ρ m.
-Infix "→" := assert_imp : assert_scope.
+Definition assert_impl (P Q : assert) : assert := Assert $ λ ρ m, P ρ m → Q ρ m.
+Infix "→" := assert_impl : assert_scope.
 Definition assert_and (P Q : assert) : assert := Assert $ λ ρ m, P ρ m ∧ Q ρ m.
 Infix "∧" := assert_and : assert_scope.
 Definition assert_or (P Q : assert) : assert := Assert $ λ ρ m, P ρ m ∨ Q ρ m.
@@ -131,14 +133,15 @@ Notation "∃ x .. y , P" :=
 Definition assert_iff (P Q : assert) : assert := ((P → Q) ∧ (Q → P))%A.
 Infix "↔" := assert_iff : assert_scope.
 
-(** Compatibility of the connectives with respect to order and equality. *)
+(** Compatibility of the connectives with respect to order and setoid
+equality. *)
 Instance: Proper ((⊆) ==> impl) assert_as_Prop.
 Proof. solve_assert. Qed.
 Instance: Proper ((≡) ==> iff) assert_as_Prop.
 Proof. solve_assert. Qed.
-Instance: Proper (flip (⊆) ==> (⊆) ==> (⊆)) assert_imp.
+Instance: Proper (flip (⊆) ==> (⊆) ==> (⊆)) assert_impl.
 Proof. solve_assert. Qed.
-Instance: Proper ((≡) ==> (≡) ==> (≡)) assert_imp.
+Instance: Proper ((≡) ==> (≡) ==> (≡)) assert_impl.
 Proof. solve_assert. Qed.
 Instance: Proper ((≡) ==> (≡) ==> (≡)) assert_iff.
 Proof. solve_assert. Qed.
@@ -167,7 +170,7 @@ Proof. unfold pointwise_relation. solve_assert. Qed.
 and memory extensibility.  *)
 Instance Prop_as_assert_stack_indep P : StackIndep (⌜ P ⌝).
 Proof. solve_assert. Qed.
-Instance assert_imp_stack_indep :
+Instance assert_impl_stack_indep :
   StackIndep P → StackIndep Q → StackIndep (P → Q).
 Proof. solve_assert. Qed.
 Instance assert_and_stack_indep :
@@ -191,7 +194,7 @@ Proof. solve_assert. Qed.
 
 Instance Prop_as_assert_mem_indep P : MemIndep (⌜ P ⌝).
 Proof. solve_assert. Qed.
-Instance assert_imp_mem_indep : MemIndep P → MemIndep Q → MemIndep (P → Q).
+Instance assert_impl_mem_indep : MemIndep P → MemIndep Q → MemIndep (P → Q).
 Proof. solve_assert. Qed.
 Instance assert_and_mem_indep : MemIndep P → MemIndep Q → MemIndep (P ∧ Q).
 Proof. solve_assert. Qed.
@@ -208,7 +211,7 @@ Proof. solve_assert. Qed.
 Instance assert_iff_mem_indep : MemIndep P → MemIndep Q → MemIndep (P ↔ Q).
 Proof. solve_assert. Qed.
 
-Instance assert_imp_mem_ext : MemIndep P → MemExt Q → MemExt (P → Q).
+Instance assert_impl_mem_ext : MemIndep P → MemExt Q → MemExt (P → Q).
 Proof. solve_assert. Qed.
 Instance assert_and_mem_ext : MemExt P → MemExt Q → MemExt (P ∧ Q).
 Proof. solve_assert. Qed.
@@ -237,16 +240,39 @@ Proof. solve_assert. Qed.
 Instance: Idempotent (≡) assert_or.
 Proof. solve_assert. Qed.
 
-Lemma Prop_as_assert_imp_distr (P Q : Prop) : ⌜ P → Q ⌝%A ≡ (⌜P⌝ → ⌜Q⌝)%A.
+Instance: LeftId (≡) True%A assert_and.
 Proof. solve_assert. Qed.
-Lemma Prop_as_assert_not_distr (P : Prop) : ⌜ ¬P ⌝%A ≡ (¬⌜P⌝)%A.
+Instance: RightId (≡) True%A assert_and.
 Proof. solve_assert. Qed.
-Lemma Prop_as_assert_and_distr (P Q : Prop) : ⌜ P ∧ Q ⌝%A ≡ (⌜P⌝ ∧ ⌜Q⌝)%A.
+Instance: LeftAbsorb (≡) False%A assert_and.
 Proof. solve_assert. Qed.
-Lemma Prop_as_assert_or_distr (P Q : Prop) : ⌜ P ∨ Q ⌝%A ≡ (⌜P⌝ ∨ ⌜Q⌝)%A.
+Instance: RightAbsorb (≡) False%A assert_and.
 Proof. solve_assert. Qed.
 
-Lemma assert_subseteq_implies P Q : P ⊆ Q ↔ (P → Q)%A.
+Instance: LeftId (≡) False%A assert_or.
+Proof. solve_assert. Qed.
+Instance: RightId (≡) False%A assert_or.
+Proof. solve_assert. Qed.
+Instance: LeftAbsorb (≡) True%A assert_or.
+Proof. solve_assert. Qed.
+Instance: RightAbsorb (≡) True%A assert_or.
+Proof. solve_assert. Qed.
+
+Instance: LeftId (≡) True%A assert_impl.
+Proof. solve_assert. Qed.
+Instance: RightAbsorb (≡) True%A assert_impl.
+Proof. intros ?. solve_assert. Qed.
+
+Lemma Prop_as_assert_impl (P Q : Prop) : ⌜ P → Q ⌝%A ≡ (⌜P⌝ → ⌜Q⌝)%A.
+Proof. solve_assert. Qed.
+Lemma Prop_as_assert_not (P : Prop) : ⌜ ¬P ⌝%A ≡ (¬⌜P⌝)%A.
+Proof. solve_assert. Qed.
+Lemma Prop_as_assert_and (P Q : Prop) : ⌜ P ∧ Q ⌝%A ≡ (⌜P⌝ ∧ ⌜Q⌝)%A.
+Proof. solve_assert. Qed.
+Lemma Prop_as_assert_or (P Q : Prop) : ⌜ P ∨ Q ⌝%A ≡ (⌜P⌝ ∨ ⌜Q⌝)%A.
+Proof. solve_assert. Qed.
+
+Lemma assert_subseteq_impl P Q : P ⊆ Q ↔ (P → Q)%A.
 Proof. solve_assert. Qed.
 Lemma assert_equiv_iff P Q : P ≡ Q ↔ (P ↔ Q)%A.
 Proof. solve_assert. Qed.
@@ -261,11 +287,11 @@ Proof. solve_assert. Qed.
 Lemma assert_or_right (P Q : assert) : P ⊆ (P ∨ Q)%A.
 Proof. solve_assert. Qed.
 
-Lemma assert_imp_distr (P Q : assert) : (P → Q)%A → P → Q.
+Lemma assert_impl_distr (P Q : assert) : (P → Q)%A → P → Q.
 Proof. solve_assert. Qed.
-Lemma assert_imp_refl (P : assert) : (P → P)%A.
+Lemma assert_impl_refl (P : assert) : (P → P)%A.
 Proof. solve_assert. Qed.
-Lemma assert_imp_trans (P P' Q : assert) : (P → P')%A → (P' → Q)%A → (P → Q)%A.
+Lemma assert_impl_trans (P P' Q : assert) : (P → P')%A → (P' → Q)%A → (P → Q)%A.
 Proof. solve_assert. Qed.
 
 Lemma assert_iff_distr (P Q : assert) : (P ↔ Q)%A → (P ↔ Q).
@@ -283,37 +309,48 @@ Lemma assert_and_make (P Q : assert) : P → Q → (P ∧ Q)%A.
 Proof. solve_assert. Qed.
 
 (** The assertion [e ⇓ v] asserts that the expression [e] evaluates to [v]
-and the assertion [e ⇓ -] asserts that the expression [e] evaluates to an
-arbitrary value (in other words, [e] is defined). *)
-Definition assert_expr (e : expr) (v : value) : assert :=
+and [e ⇓ -] asserts that the expression [e] evaluates to an arbitrary value
+(in other words, [e] does not impose undefined behavior). *)
+Notation vassert := (value → assert).
+
+Definition assert_expr (e : expr) : vassert := λ v,
   Assert $ λ ρ m, ⟦ e ⟧ ρ m = Some v.
 Infix "⇓" := assert_expr (at level 60) : assert_scope.
 Notation "e ⇓ -" := (∃ v, e ⇓ v)%A
   (at level 60, format "e  '⇓'  '-'") : assert_scope.
 
 Instance assert_expr_mem_ext e v : MemExt (e ⇓ v).
-Proof. intros ???. apply expr_eval_weaken_mem. Qed.
+Proof. red. unfold_assert. eauto using expr_eval_weaken_mem. Qed.
 
-Notation "e ⇓ 'true'" := (∃ v, e⇓v ∧ ⌜ val_true v ⌝)%A
+Notation "e ⇓ 'true'" := (∃ v, e⇓v ∧ ⌜ value_true v ⌝)%A
    (at level 60, format "e  '⇓'  'true'") : assert_scope.
-Notation "e ⇓ 'false'" := (∃ v, e⇓v ∧ ⌜ val_false v ⌝)%A
+Notation "e ⇓ 'false'" := (∃ v, e⇓v ∧ ⌜ value_false v ⌝)%A
    (at level 60, format "e  '⇓'  'false'") : assert_scope.
+
+Lemma assert_expr_forget e v : (e ⇓ v)%A ⊆ (e ⇓ -)%A.
+Proof. solve_assert. Qed.
+
+Definition assert_is_true (Pv : vassert) : assert :=
+  (∃ v, Pv v ∧ ⌜ value_true v ⌝)%A.
+Definition assert_is_false (Pv : vassert) : assert :=
+  (∃ v, Pv v ∧ ⌜ value_false v ⌝)%A.
 
 Definition assert_subst (a : index) (v : value) (P : assert) :=
   Assert $ λ ρ m, P ρ (<[a:=v]>m).
+Notation "<[ a := v ]>" := (assert_subst a v) : assert_scope.
 
 (** * Separation logic connectives *)
 (** The assertion [emp] asserts that the memory is empty. The assertion [P * Q]
 (called separating conjunction) asserts that the memory can be split into two
 disjoint parts such that [P] holds in the one part, and [Q] in the other.
 The assertion [P -* Q] (called separating implication or magic wand) asserts
-that an arbitrary memory is extended with a disjoint part in which [P] holds,
-then [Q] holds in the extended memory. *)
+that if an arbitrary memory is extended with a disjoint part in which [P]
+holds, then [Q] holds in the extended memory. *)
 Definition assert_emp : assert := Assert $ λ ρ m, m = ∅.
 Notation "'emp'" := assert_emp : assert_scope.
 
 Definition assert_sep (P Q : assert) : assert := Assert $ λ ρ m, ∃ m1 m2,
-  m1 ⊥ m2 ∧ m1 ∪ m2 = m ∧ P ρ m1 ∧ Q ρ m2.
+  m1 ∪ m2 = m ∧ m1 ⊥ m2 ∧ P ρ m1 ∧ Q ρ m2.
 Infix "*" := assert_sep : assert_scope.
 
 Definition assert_wand (P Q : assert) : assert := Assert $ λ ρ m1, ∀ m2,
@@ -337,20 +374,20 @@ Lemma mem_ext_sep_true `{MemExt P} : P ≡ (P * True)%A.
 Proof.
   split.
   * intros ? m ?. exists m (∅ : mem).
-    repeat split; auto with mem. apply (right_id _ _).
-  * intros ? ? [m1 [m2 [? [? [??]]]]]. subst.
-    apply mem_ext with m1; auto with mem.
+    repeat split. apply (right_id _ _). solve_mem_disjoint. done.
+  * intros ? ? (m1 & m2 & ? & ? & ? & ?). subst.
+    eauto using mem_ext, mem_subseteq_union_l.
 Qed.
 Lemma assert_sep_true_mem_ext P : P ≡ (P * True)%A → MemExt P.
 Proof.
   intros H ρ m1 m2 ??. rewrite H.
   exists m1 (m2 ∖ m1). repeat split; auto.
-  * now apply mem_disjoint_difference_r.
-  * rewrite <-mem_union_difference. now apply mem_subseteq_union.
+  * by rewrite <-mem_union_difference.
+  * by apply mem_disjoint_difference_r.
 Qed.
 Lemma mem_ext_sep_true_iff P : P ≡ (P * True)%A ↔ MemExt P.
 Proof.
-  split; intros. now apply assert_sep_true_mem_ext. now apply mem_ext_sep_true.
+  split; intros. by apply assert_sep_true_mem_ext. by apply mem_ext_sep_true.
 Qed.
 
 (** Other type class instances for stack independence, memory independence, and
@@ -363,26 +400,27 @@ Proof. solve_assert. Qed.
 Instance assert_sep_mem_indep :
   MemIndep P → MemIndep Q → MemIndep (P * Q).
 Proof.
-  intros ???? ? m1 m2 [m2' [m2'' [? [??]]]]. subst.
-  exists m2 (∅ : mem). intuition auto with mem.
-  * now apply (right_id _ _).
+  intros ???? ? m1 m2 (m2' & m2'' & ? & ? & ?). subst.
+  exists m2 (∅ : mem). repeat split.
+  * by apply (right_id _ _).
+  * solve_mem_disjoint.
   * solve_assert.
   * solve_assert.
 Qed.
 Instance assert_sep_mem_ext : MemExt P → MemExt Q → MemExt (P * Q).
 Proof.
-  intros ???? ? m1 m2 ? [m2' [m2'' [? [??]]]]. subst.
-  exists m2' (m2'' ∪ m2 ∖ (m2' ∪ m2'')). intuition auto.
-  * simplify_mem_disjoint. auto using mem_disjoint_difference_r with mem.
-  * rewrite (associative _). rewrite <-mem_union_difference.
-    now apply mem_subseteq_union.
+  intros ???? ? m1 m2 (m2' & m2'' & ? & ? & ? & ?) ?; subst.
+  exists m2' (m2'' ∪ m2 ∖ (m2' ∪ m2'')). repeat split.
+  * by rewrite (associative _), <-mem_union_difference.
+  * solve_mem_disjoint.
+  * done.
   * apply mem_ext with m2''; auto with mem.
 Qed.
 
 (** Proofs of other useful properties. *)
 Lemma assert_sep_comm_1 P Q : (P * Q)%A ⊆ (Q * P)%A.
 Proof.
-  intros ? m [m1 [m2 [H [Hm1 Hm2]]]].
+  intros ? m (m1 & m2 & H & Hm1 & Hm2).
   exists m2 m1. rewrite mem_union_comm; intuition.
 Qed.
 Instance: Commutative (≡) assert_sep.
@@ -390,38 +428,44 @@ Proof. split; apply assert_sep_comm_1. Qed.
 
 Lemma assert_sep_left_id_1 P : (emp * P)%A ⊆ P.
 Proof.
-  intros ? m [m1 [m2 [H [Hm1 [Hm2 Hm3]]]]].
+  intros ? m (m1 & m2 & H & Hm1 & Hm2 & Hm3).
   unfold_assert in *. subst.
-  now rewrite (left_id ∅ (∪)).
+  by rewrite (left_id ∅ (∪)).
 Qed.
 Lemma assert_sep_left_id_2 P : P ⊆ (emp * P)%A.
 Proof.
-  intros ? m ?. exists (∅ : mem) m.
-  repeat split; auto with mem.
-  apply (left_id _ _).
+  intros ? m ?. exists (∅ : mem) m. repeat split.
+  * apply (left_id _ _).
+  * solve_mem_disjoint.
+  * done.
 Qed.
 Instance: LeftId (≡) assert_emp assert_sep.
 Proof. split. apply assert_sep_left_id_1. apply assert_sep_left_id_2. Qed.
 Instance: RightId (≡) assert_emp assert_sep.
 Proof. intros ?. rewrite (commutative _). apply (left_id _ _). Qed.
 
+Instance: LeftAbsorb (≡) False%A assert_sep.
+Proof. solve_assert. Qed.
+Instance: RightAbsorb (≡) False%A assert_sep.
+Proof. solve_assert. Qed.
+
 Lemma assert_sep_assoc_1 P Q R : ((P * Q) * R)%A ⊆ (P * (Q * R))%A.
 Proof.
-  intros ?? [? [mR [? [? [[mP [mQ ?]] ?]]]]]. intuition. subst.
+  intros ?? (? & mR & ? & ? & (mP & mQ & ?) & ?). intuition. subst.
   exists mP (mQ ∪ mR). repeat split.
-  * simplify_mem_disjoint.
   * apply (associative _).
-  * easy.
-  * exists mQ mR. simplify_mem_disjoint.
+  * solve_mem_disjoint.
+  * done.
+  * exists mQ mR. solve_mem_disjoint.
 Qed.
 Lemma assert_sep_assoc_2 P Q R : (P * (Q * R))%A ⊆ ((P * Q) * R)%A.
 Proof.
-  intros ?? [mP [? [? [? [? [mQ [mR ?]]]]]]]. intuition. subst.
+  intros ?? (mP & ? & ? & ? & ? & mQ & mR & ?). intuition. subst.
   exists (mP ∪ mQ) mR. repeat split.
-  * simplify_mem_disjoint.
-  * now rewrite (associative _).
-  * exists mP mQ. simplify_mem_disjoint.
-  * easy.
+  * by rewrite (associative _).
+  * solve_mem_disjoint.
+  * exists mP mQ. solve_mem_disjoint.
+  * done.
 Qed.
 Instance: Associative (≡) assert_sep.
 Proof. split. apply assert_sep_assoc_2. apply assert_sep_assoc_1. Qed.
@@ -434,16 +478,72 @@ Proof.
   intros H ρ m. destruct (H ρ m). solve_assert.
 Qed.
 
-(** The assertion [Π Ps] asserts that the memory can be split into [length Ps]
-disjoint parts such that for each [i], we have that [P !! i] holds in the
-[i]th part. *)
+(** The assertion [Π Ps] states that the memory can be split into disjoint
+parts such that for each part the corresponding assertion in [Ps] holds. *)
 Definition assert_sep_list : list assert → assert :=
-  fold_right assert_sep emp%A.
+  foldr assert_sep emp%A.
 Notation "'Π' Ps" := (assert_sep_list Ps)
   (at level 20, format "Π  Ps") : assert_scope.
 
+Lemma assert_sep_list_alt (Ps : list assert) ρ m :
+  (Π Ps)%A ρ m ↔ ∃ ms,
+    m = ⋃ ms
+  ∧ mem_list_disjoint ms
+  ∧ Forall2 (λ (P : assert) m, P ρ m) Ps ms.
+Proof.
+  split.
+  * revert m. induction Ps as [|P Ps IH].
+    + eexists []. by repeat constructor.
+    + intros ? (m1 & m2 & ? & ? & ? & ?); subst.
+      destruct (IH m2) as (ms & ? & ? & ?); trivial; subst.
+      exists (m1 :: ms). repeat constructor; trivial.
+      by apply mem_disjoint_union_list_r.
+  * intros (m2 & ? & Hdisjoint & Hassert); subst.
+    revert Hdisjoint.
+    induction Hassert as [|P m Ps ms IH]; inversion_clear 1.
+    + done.
+    + exists m (⋃ ms). rewrite mem_disjoint_union_list_r.
+      intuition.
+Qed.
+
+Lemma assert_sep_list_alt_vec {n} (Ps : vec assert n) ρ m :
+  (Π Ps)%A ρ m ↔ ∃ ms : vec mem n,
+    m = ⋃ ms
+  ∧ mem_list_disjoint ms
+  ∧ ∀ i, (Ps !!! i) ρ (ms !!! i).
+Proof.
+  rewrite assert_sep_list_alt. split.
+  * intros (ms & ? & ? & Hms).
+    assert (n = length ms); subst.
+    { by erewrite <-Forall2_length, vec_to_list_length by eauto. }
+    exists (list_to_vec ms).
+    rewrite ?vec_to_list_of_list.
+    by rewrite <-(vec_to_list_of_list ms), Forall2_vlookup in Hms.
+  * intros [ms ?]. exists ms. by rewrite Forall2_vlookup.
+Qed.
+
+Lemma assert_sep_list_alt_vec_2 {n} (Ps : vec assert n) ρ (ms : vec mem n) :
+  mem_list_disjoint ms →
+  (∀ i, (Ps !!! i) ρ (ms !!! i)) →
+  (Π Ps)%A ρ (⋃ ms).
+Proof. intros. apply assert_sep_list_alt_vec. by exists ms. Qed.
+
 Instance: Proper (eqlistA (≡) ==> (≡)) assert_sep_list.
-Proof. induction 1; simpl; now f_equiv. Qed.
+Proof. induction 1; simpl; by f_equiv. Qed.
+
+(** The assertion [e1 ↦ e2] asserts that the memory consists of exactly one cell
+at address [e1] with contents [e2] and the assertion [e1 ↦ -] asserts that the
+memory consists of exactly one cell at address [e1] with arbitrary contents. *)
+Definition assert_singleton (e1 e2 : expr) : assert := Assert $ λ ρ m, ∃ a v,
+  ⟦ e1 ⟧ ρ m = Some (ptr a)%V ∧ ⟦ e2 ⟧ ρ m = Some v ∧ m = {[(a, v)]}.
+Notation "e ↦ v" := (assert_singleton e v)%A (at level 20) : assert_scope.
+Definition assert_singleton_ (e : expr) : assert := Assert $ λ ρ m, ∃ a v,
+  ⟦ e ⟧ ρ m = Some (ptr a)%V ∧ m = {[(a, v)]}.
+Notation "e ↦ -" := (assert_singleton_ e)%A
+  (at level 20, format "e  '↦'  '-'") : assert_scope.
+
+Lemma assert_singleton_forget e1 e2 : (e1 ↦ e2)%A ⊆ (e1 ↦ -)%A.
+Proof. solve_assert. Qed.
 
 (** The assertion [P↡] asserts that [P] holds if the stack is cleared. This
 connective allows us to specify stack independence in an alternative way. *)
@@ -457,15 +557,15 @@ Proof. solve_assert. Qed.
 Lemma stack_indep_clear_stack_iff P : StackIndep P ↔ (P↡)%A ≡ P.
 Proof. solve_assert. Qed.
 
-Lemma assert_clear_stack_imp_distr P Q : ((P → Q)↡)%A ≡ (P↡ → Q↡)%A.
+Lemma assert_clear_stack_impl P Q : ((P → Q)↡)%A ≡ (P↡ → Q↡)%A.
 Proof. solve_assert. Qed.
-Lemma assert_clear_stack_not_distr P : ((¬P)↡)%A ≡ (¬P↡)%A.
+Lemma assert_clear_stack_not P : ((¬P)↡)%A ≡ (¬P↡)%A.
 Proof. solve_assert. Qed.
-Lemma assert_clear_stack_and_distr P Q : ((P ∧ Q)↡)%A ≡ (P↡ ∧ Q↡)%A.
+Lemma assert_clear_stack_and P Q : ((P ∧ Q)↡)%A ≡ (P↡ ∧ Q↡)%A.
 Proof. solve_assert. Qed.
-Lemma assert_clear_stack_or_distr P Q : ((P ∨ Q)↡)%A ≡ (P↡ ∨ Q↡)%A.
+Lemma assert_clear_stack_or P Q : ((P ∨ Q)↡)%A ≡ (P↡ ∨ Q↡)%A.
 Proof. solve_assert. Qed.
-Lemma assert_clear_stack_sep_distr P Q : ((P * Q)↡)%A ≡ (P↡ * Q↡)%A.
+Lemma assert_clear_stack_sep P Q : ((P * Q)↡)%A ≡ (P↡ * Q↡)%A.
 Proof. solve_assert. Qed.
 
 Instance: Proper ((⊆) ==> (⊆)) assert_clear_stack.
@@ -473,24 +573,34 @@ Proof. solve_assert. Qed.
 Instance: Proper ((≡) ==> (≡)) assert_clear_stack.
 Proof. solve_assert. Qed.
 
-(** The assertion [P↑] asserts that [P] holds if the last element of the stack
-is removed. This connective is used to specify the pre- and postcondition of
-the block construct. *)
+(** To deal with block scope variables we need to lift an assertion such that
+the De Bruijn indexes of its variables are increased. We define the lifting
+[P↑] of an assertion [P] semantically, and prove that it indeed behaves as
+expected. *)
 Definition assert_lift (P : assert) : assert := Assert $ λ ρ, P (tail ρ).
 Notation "P ↑" := (assert_lift P) (at level 20) : assert_scope.
 
-Lemma assert_lift_expr e v : ((e ⇓ v)↑ ≡ e↑ ⇓ v)%A.
-Proof. now split; intros ??; unfold_assert; rewrite expr_eval_lift. Qed.
-
-Lemma assert_lift_imp_distr P Q : ((P → Q)↑)%A ≡ (P↑ → Q↑)%A.
+Lemma assert_lift_expr e v : ((e ⇓ v)↑)%A ≡ ((e↑) ⇓ v)%A.
+Proof. by split; intros ??; unfold_assert; rewrite expr_eval_lift. Qed.
+Lemma assert_lift_expr_ e : ((e ⇓ -)↑)%A ≡ ((e↑) ⇓ -)%A.
+Proof. by split; intros ??; unfold_assert; rewrite expr_eval_lift. Qed.
+Lemma assert_lift_singleton e1 e2 : ((e1 ↦ e2)↑)%A ≡ ((e1↑) ↦ (e2↑))%A.
+Proof. by split; intros ??; unfold_assert; setoid_rewrite expr_eval_lift. Qed.
+Lemma assert_lift_singleton_ e : ((e ↦ -)↑)%A ≡ ((e↑) ↦ -)%A.
+Proof. by split; intros ??; unfold_assert; setoid_rewrite expr_eval_lift. Qed.
+Lemma assert_lift_impl P Q : ((P → Q)↑)%A ≡ (P↑ → Q↑)%A.
 Proof. solve_assert. Qed.
-Lemma assert_lift_not_distr P : ((¬P)↑)%A ≡ (¬P↑)%A.
+Lemma assert_lift_not P : ((¬P)↑)%A ≡ (¬P↑)%A.
 Proof. solve_assert. Qed.
-Lemma assert_lift_and_distr P Q : ((P ∧ Q)↑)%A ≡ (P↑ ∧ Q↑)%A.
+Lemma assert_lift_and P Q : ((P ∧ Q)↑)%A ≡ (P↑ ∧ Q↑)%A.
 Proof. solve_assert. Qed.
-Lemma assert_lift_or_distr P Q : ((P ∨ Q)↑)%A ≡ (P↑ ∨ Q↑)%A.
+Lemma assert_lift_or P Q : ((P ∨ Q)↑)%A ≡ (P↑ ∨ Q↑)%A.
 Proof. solve_assert. Qed.
-Lemma assert_lift_sep_distr P Q : ((P * Q)↑)%A ≡ (P↑ * Q↑)%A.
+Lemma assert_lift_sep P Q : ((P * Q)↑)%A ≡ (P↑ * Q↑)%A.
+Proof. solve_assert. Qed.
+Lemma assert_lift_forall `(P : A → assert) : ((∀ x, P x)↑)%A ≡ (∀ x, P x↑)%A.
+Proof. solve_assert. Qed.
+Lemma assert_lift_exists `(P : A → assert) : ((∃ x, P x)↑)%A ≡ (∃ x, P x↑)%A.
 Proof. solve_assert. Qed.
 
 Instance: Proper ((⊆) ==> (⊆)) assert_lift.
@@ -500,19 +610,8 @@ Proof. solve_assert. Qed.
 
 Instance assert_lift_stack_indep: StackIndep P → StackIndep (P↑).
 Proof. solve_assert. Qed.
-Lemma stack_indep_inc `{StackIndep P} : (P↑)%A ≡ P.
+Lemma stack_indep_lift `{StackIndep P} : (P↑)%A ≡ P.
 Proof. solve_assert. Qed.
-
-(** The assertion [e1 ↦ e2] asserts that the memory consists of exactly one cell
-at address [e1] with contents [e2] and the assertion [e1 ↦ -] asserts that the
-memory consists of exactly one cell at address [e1] with arbitrary contents. *)
-Definition assert_singleton (e1 e2 : expr) : assert := Assert $ λ ρ m, ∃ a v,
-  ⟦ e1 ⟧ ρ m = Some (ptr a)%V ∧ ⟦ e2 ⟧ ρ m = Some v ∧ m = {[(a, v)]}.
-Notation "e ↦ v" := (assert_singleton e v)%A (at level 20) : assert_scope.
-Definition assert_singleton_ (e : expr) : assert := Assert $ λ ρ m, ∃ a v,
-  ⟦ e ⟧ ρ m = Some (ptr a)%V ∧ m = {[(a, v)]}.
-Notation "e ↦ -" := (assert_singleton_ e)%A
-  (at level 20, format "e  '↦'  '-'") : assert_scope.
 
 (** The assertion [assert_call P es] asserts that calling a function with
 precondition [P] with arguments [es] is correct. That means, the arguments [es]
@@ -530,11 +629,11 @@ Lemma assert_call_correct P es ρ m :
 Proof.
   split.
   * revert P. induction es; unfold_assert; naive_solver.
-  * intros [vs [Hvs1 Hvs2]]. revert P Hvs2.
+  * intros (vs & Hvs1 & Hvs2). revert P Hvs2.
     induction Hvs1; unfold_assert; naive_solver.
 Qed.
 
-(** The rule for blocks is of the shape [{ var 0 ↦ - * P↑ } block s
+(** The rule for blocks is of the shape [{ var 0 ↦ - * P↑ } blk s
 { var 0 ↦ - * Q↑ }] implies [{P} s {Q}]. We prove that this pre and
 postcondition is correct with respect to allocation of a local variable when
 entering a block and freeing a local variable when leaving a block. *)
@@ -544,20 +643,19 @@ Lemma assert_alloc (P : assert) (b : index) (v : value) (ρ : stack) m :
   (var 0 ↦ - * P↑)%A (b :: ρ) (<[b:=v]>m).
 Proof.
   intros ??. eexists {[(b, v)]}, m. repeat split.
-  * simplify_mem_disjoint.
-  * now rewrite mem_union_singleton_l.
-  * now exists b v.
-  * easy.
+  * by rewrite mem_union_singleton_l.
+  * solve_mem_disjoint.
+  * by exists b v.
+  * done.
 Qed.
 
 Lemma assert_free (P : assert) (b : index) (ρ : stack) m :
   (var 0 ↦ - * P↑)%A (b :: ρ) m →
-  P ρ (delete b m).
+  P ρ (delete b m) ∧ ∃ v, m !! b = Some v.
 Proof.
-  intros [m1 [m2 [?[?[[a [v [??]]]?]]]]]; simplify_equality.
-  simplify_mem_disjoint.
-  rewrite <-mem_union_singleton_l.
-  now rewrite delete_insert.
+  intros (m1 & m2 & ? & ? & (a & v & ? & ?) & ?); simplify_equality.
+  rewrite <-mem_union_singleton_l, delete_insert by solve_mem_disjoint.
+  simplify_map_equality; eauto.
 Qed.
 
 (** We prove some properties related to allocation of local variables when
@@ -572,18 +670,19 @@ Proof.
   intros ? Halloc ?. cut (∀ bs',
     (Π imap_go (λ i v, var i ↦ val v) (length bs') vs * P)%A
       (bs' ++ bs ++ ρ) m2).
-  { intros aux. now apply (aux []). }
+  { intros aux. by apply (aux []). }
   induction Halloc as [| b bs v vs m2 ?? IH ]; intros bs'; simpl.
   * rewrite (left_id emp%A assert_sep).
-    now apply (stack_indep ρ).
+    by apply (stack_indep ρ).
   * rewrite <-(associative assert_sep).
     eexists {[(b, v)]}, m2. repeat split.
-    + simplify_mem_disjoint.
-    + now rewrite mem_union_singleton_l.
-    + exists b v. repeat split. simpl. now rewrite list_lookup_app_length.
+    + by rewrite mem_union_singleton_l.
+    + solve_mem_disjoint.
+    + exists b v. repeat split. simpl.
+      by rewrite list_lookup_middle.
     + specialize (IH (bs' ++ [b])).
       rewrite app_length in IH. simpl in IH.
-      now rewrite NPeano.Nat.add_1_r, <-app_assoc in IH.
+      by rewrite NPeano.Nat.add_1_r, <-app_assoc in IH.
 Qed.
 
 Lemma assert_alloc_params_alt (P : assert) (ρ : stack) m bs vs :
@@ -593,7 +692,7 @@ Lemma assert_alloc_params_alt (P : assert) (ρ : stack) m bs vs :
   P ρ m →
   (Π imap (λ i v, var i ↦ val v) vs * P)%A (bs ++ ρ)
     (insert_list (zip bs vs) m).
-Proof. eauto using assert_alloc_params, alloc_params_insert_list_1. Qed.
+Proof. eauto using assert_alloc_params, alloc_params_insert_list_2. Qed.
 
 Lemma assert_free_params (P : assert) (ρ : stack) m (bs : list index)
     (vs : list value) :
@@ -601,29 +700,33 @@ Lemma assert_free_params (P : assert) (ρ : stack) m (bs : list index)
   same_length bs vs →
   NoDup bs → (* admissible *)
   (Π imap (λ i _, var i ↦ -) vs * P)%A (bs ++ ρ) m →
-  P ρ (delete_list bs m).
+  P ρ (delete_list bs m) ∧ Forall (λ b, ∃ v, m !! b = Some v) bs.
 Proof.
   intros ? Hlength. revert m. cut (∀ bs' m,
     NoDup bs →
     (Π imap_go (λ i _, var i ↦ -) (length bs') vs * P)%A
       (bs' ++ bs ++ ρ) m →
-    P ρ (delete_list bs m)).
-  { intros aux. now apply (aux []). }
+    P ρ (delete_list bs m) ∧ Forall (λ b, ∃ v, m !! b = Some v) bs).
+  { intros aux. by apply (aux []). }
   induction Hlength as [|b v bs vs ? IH];
    intros bs' m; simpl; inversion_clear 1.
-  * rewrite (left_id emp%A assert_sep).
-    now apply (stack_indep _).
+  * rewrite (left_id emp%A assert_sep). split.
+    + by apply (stack_indep (bs' ++ ρ)).
+    + done.
   * rewrite <-(associative assert_sep).
-    intros [m1 [m2 [?[?[[b' [v' [Heval ?]]] ?]]]]].
+    intros (m1 & m2 & ? & ? & (b' & v' & Heval & ?) & ?).
     simplify_equality. simpl in Heval.
-    rewrite list_lookup_app_length in Heval. simplify_equality.
-    rewrite <-mem_union_singleton_l, delete_list_insert_comm by easy.
-    rewrite delete_insert.
-    + apply (IH (bs' ++ [b'])); [easy |].
-      rewrite app_length. simpl.
-      now rewrite NPeano.Nat.add_1_r, <-app_assoc.
-    + rewrite lookup_delete_list_notin by easy.
-      simplify_mem_disjoint.
+    rewrite list_lookup_middle in Heval. simplify_equality.
+    rewrite <-mem_union_singleton_l, delete_list_insert_comm by done.
+    feed destruct (IH (bs' ++ [b']) m2) as [??]; trivial.
+    { by rewrite app_length, NPeano.Nat.add_1_r, <-app_assoc. }
+    split.
+    + rewrite delete_insert; [done |].
+      rewrite lookup_delete_list_notin by done.
+      solve_mem_disjoint.
+    + constructor; simplify_mem_equality; eauto.
+      apply Forall_impl with (λ b, ∃ v, m2 !! b = Some v); trivial.
+      intros b [??].
+      destruct (decide (b = b')); simplify_mem_equality; eauto.
 Qed.
 
-Notation "<[ a := v ]>" := (assert_subst a v) : assert_scope.

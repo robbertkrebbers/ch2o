@@ -7,7 +7,9 @@ env = DefaultEnvironment(ENV = os.environ, tools=['default', 'Coq'])
 vs = glob.glob('./*.v')
 Rs = '-R . ""'
 
-os.system('coqdep ' + ' '.join(map(str, vs)) + ' ' + Rs + ' > deps')
+if os.system('coqdep ' + ' '.join(map(str, vs)) + ' ' + Rs + ' > deps'):
+	Exit(2)
+
 ParseDepends('deps')
 
 for v in vs:

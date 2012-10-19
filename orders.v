@@ -2,7 +2,8 @@
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects common properties of pre-orders and semi lattices. This
 theory will mainly be used for the theory on collections and finite maps. *)
-Require Export base.
+Require Import SetoidList.
+Require Export base decidable tactics list.
 
 (** * Pre-orders *)
 (** We extend a pre-order to a partial order by defining equality as
@@ -26,8 +27,12 @@ Section preorder.
     * transitivity x1. tauto. transitivity x2; tauto.
     * transitivity y1. tauto. transitivity y2; tauto.
   Qed.
-End preorder.
 
+  Context `{∀ X Y : A, Decision (X ⊆ Y)}.
+  Global Instance preorder_equiv_dec_slow (X Y : A) :
+    Decision (X ≡ Y) | 100 := _.
+End preorder.
+Typeclasses Opaque preorder_equiv.
 Hint Extern 0 (@Equivalence _ (≡)) =>
   class_apply preorder_equivalence : typeclass_instances.
 
@@ -47,7 +52,7 @@ Section bounded_join_sl.
   Lemma union_compat x1 x2 y1 y2 : x1 ⊆ x2 → y1 ⊆ y2 → x1 ∪ y1 ⊆ x2 ∪ y2.
   Proof. auto. Qed.
   Lemma union_empty x : x ∪ ∅ ⊆ x.
-  Proof. apply union_least. easy. auto. Qed.
+  Proof. by apply union_least. Qed.
   Lemma union_comm x y : x ∪ y ⊆ y ∪ x.
   Proof. auto. Qed.
   Lemma union_assoc_1 x y z : (x ∪ y) ∪ z ⊆ x ∪ (y ∪ z).
@@ -55,7 +60,7 @@ Section bounded_join_sl.
   Lemma union_assoc_2 x y z : x ∪ (y ∪ z) ⊆ (x ∪ y) ∪ z.
   Proof. auto. Qed.
 
-  Global Instance: Proper ((≡) ==> (≡) ==> (≡)) (∪).
+  Global Instance union_proper: Proper ((≡) ==> (≡) ==> (≡)) (∪).
   Proof.
     unfold equiv, preorder_equiv. split; apply union_compat; simpl in *; tauto.
   Qed.
@@ -79,6 +84,33 @@ Section bounded_join_sl.
 
   Lemma equiv_empty X : X ⊆ ∅ → X ≡ ∅.
   Proof. split; eauto. Qed.
+
+  Global Instance: Proper (eqlistA (≡) ==> (≡)) union_list.
+  Proof.
+    induction 1; simpl.
+    * done.
+    * by apply union_proper.
+  Qed.
+
+  Lemma empty_union X Y : X ∪ Y ≡ ∅ ↔ X ≡ ∅ ∧ Y ≡ ∅.
+  Proof.
+    split.
+    * intros E. split; apply equiv_empty;
+        by transitivity (X ∪ Y); [auto | rewrite E].
+    * intros [E1 E2]. by rewrite E1, E2, (left_id _ _).
+  Qed.
+  Lemma empty_list_union Xs : ⋃ Xs ≡ ∅ ↔ Forall (≡ ∅) Xs.
+  Proof.
+    split.
+    * induction Xs; simpl; rewrite ?empty_union; intuition.
+    * induction 1 as [|?? E1 ? E2]; simpl. done. by apply empty_union.
+  Qed.
+
+  Context `{∀ X Y : A, Decision (X ⊆ Y)}.
+  Lemma non_empty_union X Y : X ∪ Y ≢ ∅ → X ≢ ∅ ∨ Y ≢ ∅.
+  Proof. rewrite empty_union. destruct (decide (X ≡ ∅)); intuition. Qed.
+  Lemma non_empty_list_union Xs : ⋃ Xs ≢ ∅ → Exists (≢ ∅) Xs.
+  Proof. rewrite empty_list_union. apply (not_Forall_Exists _). Qed.
 End bounded_join_sl.
 
 (** * Meet semi lattices *)
@@ -123,3 +155,17 @@ Section meet_sl.
   Lemma subseteq_intersection_2 X Y : X ∩ Y ≡ X → X ⊆ Y.
   Proof. apply subseteq_intersection. Qed.
 End meet_sl.
+
+(** * Lower bounded lattices *)
+Section lower_bounded_lattice.
+  Context `{LowerBoundedLattice A}.
+
+  Global Instance: LeftAbsorb (≡) ∅ (∩).
+  Proof.
+    split.
+    * by apply subseteq_intersection_l.
+    * by apply subseteq_empty.
+  Qed.
+  Global Instance: RightAbsorb (≡) ∅ (∩).
+  Proof. intros ?. by rewrite (commutative _), (left_absorb _ _). Qed.
+End lower_bounded_lattice.

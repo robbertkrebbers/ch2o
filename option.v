@@ -2,7 +2,7 @@
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects general purpose definitions and theorems on the option
 data type that are not in the Coq standard library. *)
-Require Export base tactics decidable orders.
+Require Export base tactics decidable.
 
 (** * General definitions and theorems *)
 (** Basic properties about equality. *)
@@ -36,12 +36,12 @@ Lemma option_eq {A} (x y : option A) :
   x = y ↔ ∀ a, x = Some a ↔ y = Some a.
 Proof.
   split.
-  { intros. now subst. }
+  { intros. by subst. }
   intros E. destruct x, y.
-  + now apply E.
-  + symmetry. now apply E.
-  + now apply E.
-  + easy.
+  + by apply E.
+  + symmetry. by apply E.
+  + by apply E.
+  + done.
 Qed.
 
 (** We define [is_Some] as a [sig] instead of a [sigT] as extraction of
@@ -97,44 +97,46 @@ Instance option_eq_dec `{dec : ∀ x y : A, Decision (x = y)}
   end.
 
 (** * Monadic operations *)
-Instance option_ret: MRet option := @Some.
-Instance option_bind: MBind option := λ A B f x,
+Instance option_bind {A B} (f : A → option B) : MBind option f := λ x,
   match x with
   | Some a => f a
   | None => None
   end.
-Instance option_join: MJoin option := λ A x,
+Instance option_join {A} : MJoin option := λ x : option (option A),
   match x with
   | Some x => x
   | None => None
   end.
-Instance option_fmap: FMap option := @option_map.
+Instance option_fmap {A B} (f : A → B) : FMap option f := option_map f.
 
 Lemma option_fmap_is_Some {A B} (f : A → B) (x : option A) :
   is_Some x ↔ is_Some (f <$> x).
-Proof. destruct x; split; intros [??]; subst; compute; eauto; discriminate. Qed.
+Proof. destruct x; split; intros [??]; subst; compute; by eauto. Qed.
 Lemma option_fmap_is_None {A B} (f : A → B) (x : option A) :
   x = None ↔ f <$> x = None.
 Proof. unfold fmap, option_fmap. destruct x; simpl; split; congruence. Qed.
 
-Ltac simplify_option_bind := repeat
+Tactic Notation "simplify_option_bind" "by" tactic3(tac) := repeat
   match goal with
-  | |- context C [mbind (M:=option) ?f None] =>
-    let X := (context C [ None ]) in change X
-  | H : context C [mbind (M:=option) ?f None] |- _ =>
-    let X := (context C [ None ]) in change X in H
-  | |- context C [mbind (M:=option) ?f (Some ?a)] =>
-    let X := (context C [ f a ]) in
-    let X' := eval simpl in X in change X'
-  | H : context C [mbind (M:=option) ?f (Some ?a)] |- _ =>
-    let X := context C [ f a ] in
-    let X' := eval simpl in X in change X' in H
-  | _ => progress simplify_equality
+  | _ => first [progress simpl in * | progress simplify_equality]
+  | H : mbind (M:=option) (A:=?A) ?f ?o = ?x |- _ =>
+    let x := fresh in evar (x:A);
+    let x' := eval unfold x in x in clear x;
+    let Hx := fresh in
+    assert (o = Some x') as Hx by tac;
+    rewrite Hx in H; clear Hx
   | H : mbind (M:=option) ?f ?o = ?x |- _ =>
+    match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
+    match x with Some _ => idtac | None => idtac | _ => fail 1 end;
     destruct o eqn:?
-  | H : context [ ?o = _ ] |- mbind (M:=option) ?f ?o = ?x =>
-    erewrite H by eauto
+  | |- mbind (M:=option) (A:=?A) ?f ?o = ?x =>
+    let x := fresh in evar (x:A);
+    let x' := eval unfold x in x in clear x;
+    let Hx := fresh in
+    assert (o = Some x') as Hx by tac;
+    rewrite Hx; clear Hx
   end.
+Tactic Notation "simplify_option_bind" := simplify_option_bind by eauto.
 
 (** * Union, intersection and difference *)
 Instance option_union: UnionWith option := λ A f x y,
@@ -160,39 +162,39 @@ Section option_union_intersection.
   Context {A} (f : A → A → A).
 
   Global Instance: LeftId (=) None (union_with f).
-  Proof. now intros [?|]. Qed.
+  Proof. by intros [?|]. Qed.
   Global Instance: RightId (=) None (union_with f).
-  Proof. now intros [?|]. Qed.
+  Proof. by intros [?|]. Qed.
   Global Instance: Commutative (=) f → Commutative (=) (union_with f).
   Proof.
     intros ? [?|] [?|]; compute; try reflexivity.
-    now rewrite (commutative f).
+    by rewrite (commutative f).
   Qed.
   Global Instance: Associative (=) f → Associative (=) (union_with f).
   Proof.
     intros ? [?|] [?|] [?|]; compute; try reflexivity.
-    now rewrite (associative f).
+    by rewrite (associative f).
   Qed.
   Global Instance: Idempotent (=) f → Idempotent (=) (union_with f).
   Proof.
     intros ? [?|]; compute; try reflexivity.
-    now rewrite (idempotent f).
+    by rewrite (idempotent f).
   Qed.
 
   Global Instance: Commutative (=) f → Commutative (=) (intersection_with f).
   Proof.
     intros ? [?|] [?|]; compute; try reflexivity.
-    now rewrite (commutative f).
+    by rewrite (commutative f).
   Qed.
   Global Instance: Associative (=) f → Associative (=) (intersection_with f).
   Proof.
     intros ? [?|] [?|] [?|]; compute; try reflexivity.
-    now rewrite (associative f).
+    by rewrite (associative f).
   Qed.
   Global Instance: Idempotent (=) f → Idempotent (=) (intersection_with f).
   Proof.
     intros ? [?|]; compute; try reflexivity.
-    now rewrite (idempotent f).
+    by rewrite (idempotent f).
   Qed.
 End option_union_intersection.
 
@@ -200,5 +202,5 @@ Section option_difference.
   Context {A} (f : A → A → option A).
 
   Global Instance: RightId (=) None (difference_with f).
-  Proof. now intros [?|]. Qed.
+  Proof. by intros [?|]. Qed.
 End option_difference.

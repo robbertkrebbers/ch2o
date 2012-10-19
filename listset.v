@@ -3,7 +3,7 @@
 (** This file implements finite as unordered lists without duplicates.
 Although this implementation is slow, it is very useful as decidable equality
 is the only constraint on the carrier set. *)
-Require Export base decidable list collections.
+Require Export base decidable collections list.
 
 Definition listset A := sig (@NoDup A).
 
@@ -33,8 +33,8 @@ Lemma listset_difference_raw_nodup l k :
 Proof.
   induction 1; simpl; try case_decide.
   * constructor.
-  * easy.
-  * constructor. rewrite listset_difference_raw_in; intuition. easy.
+  * done.
+  * constructor. rewrite listset_difference_raw_in; intuition. done.
 Qed.
 Global Instance listset_difference: Difference (listset A) := λ l k,
   listset_difference_raw (`l) (`k)↾
@@ -51,8 +51,8 @@ Lemma listset_union_raw_nodup l k :
   NoDup l → NoDup k → NoDup (listset_union_raw l k).
 Proof.
   intros. apply NoDup_app.
-  * now apply listset_difference_raw_nodup.
-  * easy.
+  * by apply listset_difference_raw_nodup.
+  * done.
   * intro. rewrite listset_difference_raw_in. intuition.
 Qed.
 Global Instance listset_union: Union (listset A) := λ l k,
@@ -77,8 +77,8 @@ Lemma listset_intersection_raw_nodup l k :
 Proof.
   induction 1; simpl; try case_decide.
   * constructor.
-  * constructor. rewrite listset_intersection_raw_in; intuition. easy.
-  * easy.
+  * constructor. rewrite listset_intersection_raw_in; intuition. done.
+  * done.
 Qed.
 Global Instance listset_intersection: Intersection (listset A) := λ l k,
   listset_intersection_raw (`l) (`k)↾
@@ -99,14 +99,14 @@ Fixpoint listset_map_raw (f : A → A) (l : list A) :=
   | x :: l => listset_add_raw (f x) (listset_map_raw f l)
   end.
 Lemma listset_map_raw_nodup f l : NoDup (listset_map_raw f l).
-Proof. induction l; simpl. constructor. now apply listset_add_raw_nodup. Qed.
+Proof. induction l; simpl. constructor. by apply listset_add_raw_nodup. Qed.
 Lemma listset_map_raw_in f l x :
   In x (listset_map_raw f l) ↔ ∃ y, x = f y ∧ In y l.
 Proof.
   split.
-  * induction l; simpl; [easy |].
+  * induction l; simpl; [done |].
     rewrite listset_add_raw_in. firstorder.
-  * intros [?[??]]. subst. induction l; simpl in *; [easy |].
+  * intros [?[??]]. subst. induction l; simpl in *; [done |].
     rewrite listset_add_raw_in. firstorder congruence.
 Qed.
 Global Instance listset_map: Map A (listset A) := λ f l,
@@ -115,7 +115,7 @@ Global Instance listset_map: Map A (listset A) := λ f l,
 Global Instance: Collection A (listset A).
 Proof.
   split.
-  * easy.
+  * intros ? [].
   * compute. intuition.
   * intros. apply listset_union_raw_in.
   * intros. apply listset_intersection_raw_in.
@@ -126,5 +126,5 @@ Qed.
 Global Instance listset_elems: Elements A (listset A) := @proj1_sig _ _.
 
 Global Instance: FinCollection A (listset A).
-Proof. split. apply _. easy. now intros [??]. Qed.
+Proof. split. apply _. done. by intros [??]. Qed.
 End list_collection.

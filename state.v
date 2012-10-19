@@ -1,33 +1,43 @@
 (* Copyright (c) 2012, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-(** Our operational semantics is a binary relation between execution states. We
-consider three kinds of execution states:
-- Execution of statements,
-- Calling a function,
-- Returning from a function.
+(** The small step reduction (as defined in the file [smallstep]) is a binary
+relation between execution states. In this file we define execution states, of
+which we consider five variants:
 
-When execution of a statement is finished, a transition to the return state
-is performed. The return state then performs a transition back to the caller.
-When a function is called, a transition to the call state is performed. The call
-state then performs a transition to a statement state with the called function's
-body. This distinction between execution states is adapted from Compcert,
-however we do not consider an explicit stuck state for undefined behavior. *)
+- Execution of statements,
+- Execution of expressions,
+- Calling a function,
+- Returning from a function, and,
+- Undefined behavior.
+
+The above kinds of execution states are adapted from Compcert's Cmedium. Like
+CompCert, we capture undefined behavior by an explicit state for undefined
+behavior. *)
+
+(** Undefined behavior is different from the reduction semantics getting stuck.
+For statically correct programs (i.e. those where all function names have a
+corresponding body, labels for gotos exist, etc) the reduction semantics should
+not get stuck, but might still end up in a state of undefined behavior. *)
+
 Require Export statements.
 
 (** * Definitions *)
-(** Execution of statements is performed by moving the focus of the substatement
-that is being executed. This movement may occur in four directions: down [↘]
-towards a leaf (assignment, skip, ...), up [↗] from a leaf to the next statement
-to be executed, to the top [⇈] after a return, or it may jump [↷] to a label
-after a goto. *)
+(** Execution of statements occurs by traversal through the program context in
+one of the following directions: down [↘], up [↗], to the top [⇈], or jump [↷].
+When a [return e] statement is executed, and the expression [e] is evaluated to
+the value [v], the direction is changed to [⇈ v]. The semantics then performs
+a traversal to the top of the statement, and returns from the called function.
+When a [goto l] statement is executed, the direction is changed to [↷l], and
+the semantics performs a non-deterministic small step traversal through the
+zipper until the label [l] is found. *)
 Inductive direction :=
   | Down : direction
   | Up : direction
-  | Top : option value → direction
+  | Top : value → direction
   | Jump : label → direction.
 Notation "↘" := Down : C_scope.
 Notation "↗" := Up : C_scope.
-Notation "⇈ mv" := (Top mv) (at level 20) : C_scope.
+Notation "⇈ v" := (Top v) (at level 20) : C_scope.
 Notation "↷ l" := (Jump l) (at level 20) : C_scope.
 
 Instance direction_eq_dec (d1 d2 : direction) : Decision (d1 = d2).
@@ -61,19 +71,28 @@ Definition down_up_dec d s : {down d s} + {up d s} :=
   | ↷ l => decide_rel (∈) l (labels s)
   end.
 
-(** The type [focus] describes the part of the program that is currently
-focused. An execution state [state] is a [focus] equipped with a program context
-and memory. The focus [Stmt] is used for execution of statements. It contains
-the statement to be executed and the direction in which the execution should be
-performed. The focus [Call] is used to call a function, it contains the name of
-the called function and the values of the arguments. The focus [Return] is used
-to return from the called function to the calling function, it contains the
-return value. *)
+(** The data type [focus] describes the part of the program that is focused. An
+execution state [state] equips a focus with a program context and memory.
+
+- The focus [Stmt] is used for execution of statements, it contains the
+  statement to be executed and the direction in which traversal should be
+  performed.
+- The focus [Expr] is used for expressions and contains the whole expression
+  that is being executed.
+- The focus [Call] is used to call a function, it contains the name of the
+  called function and the values of the arguments.
+- The focus [Return] is used to return from the called function to the calling
+  function, it contains the return value.
+- The focus [Undef] is used to capture undefined behavior.
+
+These focuses correspond to the five variants of execution states as described
+above. *)
 Inductive focus :=
   | Stmt : direction → stmt → focus
+  | Expr : expr → focus
   | Call : funname → list value → focus
-  | Return : option value → focus.
-
+  | Return : value → focus
+  | Undef : focus.
 Record state := State {
   SCtx : ctx;
   SFoc : focus;
@@ -85,94 +104,3 @@ Instance focus_eq_dec (φ1 φ2 : focus) : Decision (φ1 = φ2).
 Proof. solve_decision. Defined.
 Instance state_eq_dec (S1 S2 : state) : Decision (S1 = S2).
 Proof. solve_decision. Defined.
-
-(** * Theorems *)
-(** Our definition of execution state allows many incorrect states. For example,
-while in a [Call] state, the context should always contain a [CCall] as its last
-element, whereas this is not enforced by the definition of execution states.
-We define the proposition [ctx_wf k φ k' φ'] which states that starting at
-a state with focus [φ] in context [k], it is valid to build a state with
-focus [φ'] in context [k']. *)
-
-(** In the file [smallstep], we will prove that our operational semantics
-preserves well-formed statements. This is the key property to prove that if 
-[State k (Stmt d s) m] reduces to [State k (Stmt d' s') m'], then we have
-[s = s']. *)
-
-(** We restrict to a type of focuss [simple_focus] that contains less
-information than [focus] so as to obtain a more powerful induction principle
-for [ctx_wf]. *)
-Inductive simple_focus :=
-  | Stmt_ : stmt → simple_focus
-  | Call_ : funname → simple_focus
-  | Return_ : simple_focus.
-
-Definition to_simple_focus (φ : focus) : simple_focus :=
-  match φ with
-  | Stmt _ s => Stmt_ s
-  | Call f _ => Call_ f
-  | Return _ => Return_
-  end.
-Coercion to_simple_focus : focus >-> simple_focus.
-
-Definition simple_focus_related (φ1 φ2 : simple_focus) : Prop :=
-  match φ1, φ2 with
-  | Stmt_ s1, Stmt_ s2 => s1 = s2
-  | Call_ f1, Call_ f2 => f1 = f2
-  | _, _ => True
-  end.
-Local Infix "≍" := simple_focus_related (at level 80).
-Arguments simple_focus_related !_ !_.
-
-Instance: Reflexive simple_focus_related.
-Proof. now intros []. Qed.
-
-Section ctx_wf.
-Context (δ : funenv).
-
-Inductive ctx_wf (k : ctx) (φ : simple_focus) :
-      ctx → simple_focus → Prop :=
-  | ctx_wf_start :
-     ctx_wf k φ k φ
-  | ctx_wf_item k' E s :
-     ctx_wf k φ k' (Stmt_ (subst E s)) →
-     ctx_wf k φ (CItem E :: k') (Stmt_ s)
-  | ctx_wf_bφk k' b s :
-     ctx_wf k φ k' (Stmt_ (block s)) →
-     ctx_wf k φ (CBlock b :: k') (Stmt_ s)
-  | ctx_wf_call k' e f es :
-     ctx_wf k φ k' (Stmt_ (call e f es)) →
-     ctx_wf k φ (CCall e f es :: k') (Call_ f)
-  | ctx_wf_return k' f :
-     ctx_wf k φ k' (Call_ f) →
-     ctx_wf k φ k' Return_
-  | ctx_wf_params k' f bs s :
-     δ !! f = Some s →
-     ctx_wf k φ k' (Call_ f) →
-     ctx_wf k φ (CParams bs :: k') (Stmt_ s).
-
-Lemma ctx_wf_suffix_of k φ k' φ' :
-  ctx_wf k φ k' φ' → suffix_of k k'.
-Proof. induction 1; simpl in *; solve_suffix_of. Qed.
-
-Lemma ctx_wf_related k φ k' φ1 φ2 :
-  ctx_wf k φ k' φ1 → ctx_wf k φ k' φ2 → φ1 ≍ φ2.
-Proof.
-  intros wf1. revert φ2.
-  induction wf1; inversion 1; subst; simpl in *; trivial; try
-    match goal with
-    | H : ctx_wf _ _ _ _ |- _ =>
-      apply ctx_wf_suffix_of in H; solve_suffix_of
-    end.
-  * easy.
-  * destruct φ; simpl in *; auto.
-  * eapply (injective (subst _)), (IHwf1 (Stmt_ _)); eassumption.
-  * eapply (injective SBlock), (IHwf1 (Stmt_ _)); eassumption.
-  * destruct φ2; simpl in *; auto.
-  * efeed specialize IHwf1; eauto; simpl in *; congruence.
-Qed.
-
-Lemma ctx_wf_unique k φ k' s1 s2 :
-  ctx_wf k φ k' (Stmt_ s1) → ctx_wf k φ k' (Stmt_ s2) → s1 = s2.
-Proof. apply ctx_wf_related. Qed.
-End ctx_wf.

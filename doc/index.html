@@ -19,6 +19,8 @@
 <li>Non local control flow (<span class="bracket">return</span> and <span class="bracket">goto</span>).</li>
 <li>Block scoped variables and pointers to these.</li>
 <li>Mutual recursive function calls.</li>
+<li>Expressions with side-effects.</li>
+<li>Dynamically allocated memory (<span class="bracket">alloc</span> and <span class="bracket">free</span>).</li>
 </ul>
 <p>
 The operational semantics is given by a small step reduction semantics using a zipper like data structure to accurately model allocation and deallocation of block scoped variables. For example, our semantics will correctly assign undefined behavior to:</p>
@@ -35,9 +37,9 @@ The axiomatic semantics is defined semantically with respect to the operational 
 <h2>Goals</h2>
 <p>To get more closely to the actual C11 standard we intend to implement the following features in future versions:</p>
 <ul>
+<li>Sequence points and permissions.</li>
 <li>The C type system including structs, arrays, unions, and an abstract way of handling primitive data types (integers, floats).</li>
 <li>The non-aliasing restrictions introduced by C99 and C11 (effective types in particular).</li>
-<li>Expressions with side effects and sequence points, and a separation logic to reason about these.</li>
 <li>A simple verification condition generator inside Coq allowing us to verify simple programs.</li>
 <li>An embedding of the <a href="http://compcert.inria.fr">CompCert</a> semantics into our semantics.</li>
 </ul>
@@ -56,17 +58,20 @@ The axiomatic semantics is defined semantically with respect to the operational 
 <li><a href="orders.html">orders</a>: theorems on ordered structures. </li>
 <li><a href="option.html">option</a>: miscellaneous definitions and theorems on the option data type. </li>
 <li><a href="list.html">list</a>:  miscellaneous definitions and theorems on lists. </li>
+<li><a href="vector.html">vector</a>:  miscellaneous definitions and theorems on vectors. </li>
+<li><a href="numbers.html">numbers</a>: miscellaneous facts on <span class="bracket">nat</span>, <span class="bracket">N</span> and <span class="bracket">Z</span>.</li>
 <li><a href="collections.html">collections</a>: definitions, theorems, and tactics for collections.</li>
 <li><a href="fin_collections.html">fin_collections</a>: theorems on finite collections.</li>
 <li><a href="subset.html">subset</a>: non computable implementation of subsets.</li>
 <li><a href="listset.html">listset</a>: finite set implementation using unordered lists.</li>
-<li><a href="numbers.html">numbers</a>: miscellaneous facts on <span class="bracket">nat</span>, <span class="bracket">N</span> and <span class="bracket">Z</span>.</li>
+<li><a href="fresh_numbers.html">numbers</a>: generation of fresh numbers.</li>
 <li><a href="prelude.html">prelude</a>: exports all of the above.</li>
 </ul>
 
 <h3>Miscellaneous</h3>
 <ul>
 <li><a href="ars.html">ars</a>: theorems and definitions on abstract rewriting systems.</li>
+<li><a href="contexts.html">contexts</a>: general purpose definitions on contexts/zippers.</li>
 </ul>
 
 <h3>Finite maps</h3>
