@@ -251,11 +251,12 @@ Proof.
   apply vec_to_list_drop_lookup.
 Qed. 
 
-Lemma In_vlookup {A n} (v : vec A n) x :
-  In x (vec_to_list v) ↔ ∃ i, v !!! i = x.
+Lemma elem_of_vlookup {A n} (v : vec A n) x :
+  x ∈ vec_to_list v ↔ ∃ i, v !!! i = x.
 Proof.
   split.
-  * induction v; simpl; [done | intros [?|?]; subst].
+  * induction v; simpl; [by rewrite elem_of_nil |].
+    inversion 1; subst.
     + by eexists 0%fin.
     + destruct IHv as [i ?]; trivial. by exists (FS i).
   * intros [i ?]; subst. induction v; inv_fin i.
@@ -267,7 +268,7 @@ Lemma Forall_vlookup {A} (P : A → Prop) {n} (v : vec A n) :
   Forall P (vec_to_list v) ↔ ∀ i, P (v !!! i).
 Proof.
   rewrite Forall_forall.
-  setoid_rewrite In_vlookup. naive_solver.
+  setoid_rewrite elem_of_vlookup. naive_solver.
 Qed.
 Lemma Forall_vlookup_1 {A} (P : A → Prop) {n} (v : vec A n) i :
   Forall P (vec_to_list v) → P (v !!! i).
@@ -280,7 +281,7 @@ Lemma Exists_vlookup {A} (P : A → Prop) {n} (v : vec A n) :
   Exists P (vec_to_list v) ↔ ∃ i, P (v !!! i).
 Proof.
   rewrite Exists_exists.
-  setoid_rewrite In_vlookup. naive_solver.
+  setoid_rewrite elem_of_vlookup. naive_solver.
 Qed.
 
 Lemma Forall2_vlookup {A B} (P : A → B → Prop)

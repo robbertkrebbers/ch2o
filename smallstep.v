@@ -71,10 +71,10 @@ Ltac do_ehstep :=
 
 Hint Constructors ehstep : cstep.
 Hint Extern 100 (_ !! _ = _) =>
-  decompose_mem_disjoint; eauto 10 with mem : cstep.
+  decompose_finmap_disjoint; eauto 10 with mem : cstep.
 (* Since the definition of [is_writable] is still rather boring, we just
 unfold it and continue. *)
-Hint Extern 100 (is_writable _ _) => red; eexists : cstep.
+Hint Extern 100 (is_writable _ _) => red : cstep.
 Hint Constructors ehsafe : cstep.
 
 (** We prove some basic properties of head reduction for expression, and show
@@ -90,14 +90,7 @@ Lemma ehstep_expr_eval_inv ρ m v e1 m1 e2 m2 :
   ⟦ e1 ⟧ ρ m = Some v →
   m ⊆ m1 →
   m2 = m1 ∧ ⟦ e2 ⟧ ρ m = Some v.
-Proof.
-  destruct 1; intros; simplify_option_bind;
-   repeat (destruct (value_true_false_dec _));
-   split; first
-    [ congruence
-    | solve [exfalso; eauto using value_true_false]
-    | solve [eauto using expr_eval_weaken_mem]].
-Qed.
+Proof. destruct 1; intros; simplify_expr_equality; intuition congruence. Qed.
 
 Lemma ehstep_expr_eval ρ e1 m v :
   ⟦ e1 ⟧ ρ m = Some v →
@@ -108,9 +101,7 @@ Proof.
     repeat match goal with
     | H : is_value _ |- _ => inversion H; subst; clear H
     end;
-    intros; simplify_option_bind;
-    repeat (destruct (value_true_false_dec _));
-    by eexists; split; [do_ehstep | ].
+    intros; simplify_expr_equality; by eexists; split; [do_ehstep | ].
 Qed.
 
 Lemma ehstep_expr_eval_subst ρ (E : ectx) e1 m v :
@@ -780,11 +771,8 @@ Tactic Notation "inv_cstep" hyp(H) :=
     (**i clean up, and discharge impossible cases *)
     simplify_list_subst_equality;
     repeat match goal with
-    | H : up _ _ |- _ => progress simpl in H
-    | H : down _ _ |- _ => progress simpl in H
-    | H : True |- _ => clear H
-    | H : False |- _ => destruct H
-    | Hl : ?l ∉ _ |- _ => destruct Hl; solve_stmt_elem_of
+    | _ => done
+    | _ => progress discriminate_down_up
     | Ht : value_true ?v, Hf : value_false ?v |- _ =>
       destruct (value_true_false v Ht Hf)
     | H : suffix_of _ _ |- _ =>
@@ -1094,7 +1082,7 @@ Lemma in_fun_ctx_r k1 k2 E :
   ctx_item_or_block E →
   in_fun_ctx k1 k2 →
   in_fun_ctx k1 (E :: k2).
-Proof. intros ? [l [??]]. subst. exists (E :: l). intuition auto. Qed.
+Proof. intros ? [l [??]]. subst. exists (E :: l). intuition. Qed.
 Lemma in_fun_ctx_app_r k1 k2 k :
   Forall ctx_item_or_block k →
   in_fun_ctx k1 k2 →
@@ -1108,7 +1096,7 @@ Lemma in_fun_ctx_r_inv k1 k2 E :
 Proof.
   intros ? [l1 ?] [l2 [H1 H2]]. subst.
   rewrite app_comm_cons in H2. apply app_inv_tail in H2. subst.
-  inversion_clear H1. exists l1. intuition auto.
+  inversion_clear H1. exists l1. intuition.
 Qed.
 Lemma in_fun_ctx_change k1 k2 E1 E2 :
   ctx_item_or_block E2 →
@@ -1117,10 +1105,10 @@ Lemma in_fun_ctx_change k1 k2 E1 E2 :
   in_fun_ctx k1 (E2 :: k2).
 Proof.
   intros ? [[|E2' l1] ?] [l2 [H1 H2]].
-  { eexists []. intuition auto. }
+  { eexists []. intuition. }
   destruct l2; simpl in *; simplify_equality.
   * discriminate_list_equality.
-  * inversion_clear H1. eexists (E2' :: l2). intuition auto.
+  * inversion_clear H1. eexists (E2' :: l2). intuition.
 Qed.
 Lemma in_fun_ctx_not_item_or_block k1 k2 E :
   ¬ctx_item_or_block E →

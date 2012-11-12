@@ -44,37 +44,44 @@ Proof.
   + done.
 Qed.
 
-(** We define [is_Some] as a [sig] instead of a [sigT] as extraction of
-witnesses can be derived (see [is_Some_sigT] below). *)
-Definition is_Some `(x : option A) : Prop := ∃ a, x = Some a.
-Hint Extern 10 (is_Some _) => solve [eexists; eauto].
+Inductive is_Some {A} : option A → Prop :=
+  make_is_Some x : is_Some (Some x).
 
-Ltac simplify_is_Some := repeat intro; repeat
+Lemma make_is_Some_alt `(x : option A) a : x = Some a → is_Some x.
+Proof. intros. by subst. Qed.
+Hint Resolve make_is_Some_alt.
+Lemma is_Some_None {A} : ¬is_Some (@None A).
+Proof. by inversion 1. Qed.
+Hint Resolve is_Some_None.
+
+Lemma is_Some_alt `(x : option A) : is_Some x ↔ ∃ y, x = Some y.
+Proof. split. inversion 1; eauto. intros [??]. by subst. Qed.
+
+Ltac inv_is_Some := repeat
   match goal with
-  | _ => progress simplify_equality
-  | H : is_Some _ |- _ => destruct H as [??]
-  | |- is_Some _ => eauto
+  | H : is_Some _ |- _ => inversion H; clear H; subst
   end.
-
-Lemma Some_is_Some `(a : A) : is_Some (Some a).
-Proof. simplify_is_Some. Qed.
-Lemma None_not_is_Some {A} : ¬is_Some (@None A).
-Proof. simplify_is_Some. Qed.
 
 Definition is_Some_sigT `(x : option A) : is_Some x → { a | x = Some a } :=
   match x with
-  | None => False_rect _ ∘ ex_ind None_ne_Some
-  | Some a => λ _, a↾eq_refl
+  | None => False_rect _ ∘ is_Some_None
+  | Some a => λ _, a ↾ eq_refl
   end.
-Lemma eq_Some_is_Some `(x : option A) a : x = Some a → is_Some x.
-Proof. simplify_is_Some. Qed.
+
+Instance is_Some_dec `(x : option A) : Decision (is_Some x) :=
+  match x with
+  | Some x => left (make_is_Some x)
+  | None => right is_Some_None
+  end.
 
 Lemma eq_None_not_Some `(x : option A) : x = None ↔ ¬is_Some x.
-Proof. destruct x; simpl; firstorder congruence. Qed.
+Proof. split. by destruct 2. destruct x. by intros []. done. Qed.
+Lemma not_eq_None_Some `(x : option A) : x ≠ None ↔ is_Some x.
+Proof. rewrite eq_None_not_Some. intuition auto using dec_stable. Qed.
 
 Lemma make_eq_Some {A} (x : option A) a :
   is_Some x → (∀ b, x = Some b → b = a) → x = Some a.
-Proof. intros [??] H. subst. f_equal. auto. Qed.
+Proof. destruct 1. intros. f_equal. auto. Qed.
 
 (** Equality on [option] is decidable. *)
 Instance option_eq_dec `{dec : ∀ x y : A, Decision (x = y)}
@@ -97,26 +104,29 @@ Instance option_eq_dec `{dec : ∀ x y : A, Decision (x = y)}
   end.
 
 (** * Monadic operations *)
-Instance option_bind {A B} (f : A → option B) : MBind option f := λ x,
+Instance option_ret: MRet option := @Some.
+Instance option_bind: MBind option := λ A B f x,
   match x with
   | Some a => f a
   | None => None
   end.
-Instance option_join {A} : MJoin option := λ x : option (option A),
+Instance option_join: MJoin option := λ A x,
   match x with
   | Some x => x
   | None => None
   end.
-Instance option_fmap {A B} (f : A → B) : FMap option f := option_map f.
+Instance option_fmap: FMap option := @option_map.
+Instance option_guard: MGuard option := λ P dec A x,
+  if dec then x else None.
 
 Lemma option_fmap_is_Some {A B} (f : A → B) (x : option A) :
   is_Some x ↔ is_Some (f <$> x).
-Proof. destruct x; split; intros [??]; subst; compute; by eauto. Qed.
+Proof. split; inversion 1. done. by destruct x. Qed.
 Lemma option_fmap_is_None {A B} (f : A → B) (x : option A) :
   x = None ↔ f <$> x = None.
-Proof. unfold fmap, option_fmap. destruct x; simpl; split; congruence. Qed.
+Proof. unfold fmap, option_fmap. by destruct x. Qed.
 
-Tactic Notation "simplify_option_bind" "by" tactic3(tac) := repeat
+Tactic Notation "simplify_option_equality" "by" tactic3(tac) := repeat
   match goal with
   | _ => first [progress simpl in * | progress simplify_equality]
   | H : mbind (M:=option) (A:=?A) ?f ?o = ?x |- _ =>
@@ -135,8 +145,14 @@ Tactic Notation "simplify_option_bind" "by" tactic3(tac) := repeat
     let Hx := fresh in
     assert (o = Some x') as Hx by tac;
     rewrite Hx; clear Hx
+  | H : context C [@mguard option _ ?P ?dec _ ?x] |- _ =>
+    let X := context C [ if dec then x else None ] in
+    change X in H; destruct dec
+  | |- context C [@mguard option _ ?P ?dec _ ?x] =>
+    let X := context C [ if dec then x else None ] in
+    change X; destruct dec
   end.
-Tactic Notation "simplify_option_bind" := simplify_option_bind by eauto.
+Tactic Notation "simplify_option_equality" := simplify_option_equality by eauto.
 
 (** * Union, intersection and difference *)
 Instance option_union: UnionWith option := λ A f x y,

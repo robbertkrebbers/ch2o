@@ -6,8 +6,8 @@ collections. *)
 Require Export base tactics orders.
 
 (** * Theorems *)
-Section collection.
-  Context `{Collection A C}.
+Section simple_collection.
+  Context `{SimpleCollection A C}.
 
   Lemma elem_of_empty x : x ∈ ∅ ↔ False.
   Proof. split. apply not_elem_of_empty. done. Qed.
@@ -18,7 +18,7 @@ Section collection.
 
   Global Instance collection_subseteq: SubsetEq C := λ X Y,
     ∀ x, x ∈ X → x ∈ Y.
-  Global Instance: LowerBoundedLattice C.
+  Global Instance: BoundedJoinSemiLattice C.
   Proof. firstorder auto. Qed.
 
   Lemma elem_of_subseteq X Y : X ⊆ Y ↔ ∀ x, x ∈ X → x ∈ Y.
@@ -36,28 +36,25 @@ Section collection.
   Qed.
   Global Instance singleton_proper : Proper ((=) ==> (≡)) singleton.
   Proof. repeat intro. by subst. Qed.
-  Global Instance elem_of_proper: Proper ((=) ==> (≡) ==> iff) (∈).
+  Global Instance elem_of_proper: Proper ((=) ==> (≡) ==> iff) (∈) | 5.
   Proof. intros ???. subst. firstorder. Qed.
 
   Lemma elem_of_union_list (x : A) (Xs : list C) :
-    x ∈ ⋃ Xs ↔ ∃ X, In X Xs ∧ x ∈ X.
+    x ∈ ⋃ Xs ↔ ∃ X, X ∈ Xs ∧ x ∈ X.
   Proof.
     split.
     * induction Xs; simpl; intros HXs.
       + by apply elem_of_empty in HXs.
-      + apply elem_of_union in HXs. naive_solver.
-    * intros [X []]. induction Xs; [done | intros [?|?] ?; subst; simpl].
+      + setoid_rewrite elem_of_cons.
+        apply elem_of_union in HXs. naive_solver.
+    * intros [X []]. induction 1; simpl.
       + by apply elem_of_union_l.
-      + apply elem_of_union_r; auto.
+      + intros. apply elem_of_union_r; auto.
   Qed.
 
   Lemma non_empty_singleton x : {[ x ]} ≢ ∅.
   Proof. intros [E _]. by apply (elem_of_empty x), E, elem_of_singleton. Qed.
 
-  Lemma intersection_twice x : {[x]} ∩ {[x]} ≡ {[x]}.
-  Proof.
-    split; intros y; rewrite elem_of_intersection, !elem_of_singleton; tauto.
-  Qed.
   Lemma not_elem_of_singleton x y : x ∉ {[ y ]} ↔ x ≠ y.
   Proof. by rewrite elem_of_singleton. Qed.
   Lemma not_elem_of_union x X Y : x ∉ X ∪ Y ↔ x ∉ X ∧ x ∉ Y.
@@ -70,6 +67,20 @@ Section collection.
     refine (cast_if (decide_rel (⊆) {[ x ]} X));
       by rewrite elem_of_subseteq_singleton.
   Defined.
+End simple_collection.
+
+Section collection.
+  Context `{Collection A C}.
+
+  Global Instance: LowerBoundedLattice C.
+  Proof. split. apply _. firstorder auto. Qed.
+
+  Lemma intersection_twice x : {[x]} ∩ {[x]} ≡ {[x]}.
+  Proof.
+    split; intros y; rewrite elem_of_intersection, !elem_of_singleton; tauto.
+  Qed.
+
+  Context `{∀ (X Y : C), Decision (X ⊆ Y)}.
 
   Lemma not_elem_of_intersection x X Y : x ∉ X ∩ Y ↔ x ∉ X ∨ x ∉ Y.
   Proof.
@@ -96,21 +107,6 @@ Ltac decompose_empty := repeat
   | H : {[ _ ]} ≡ ∅ |- _ => destruct (non_empty_singleton _ H)
   end.
 
-(** * Theorems about map *)
-Section map.
-  Context `{Collection A C}.
-
-  Lemma elem_of_map_1 (f : A → A) (X : C) (x : A) :
-    x ∈ map f X → ∃ y, x = f y ∧ y ∈ X.
-  Proof. intros. by apply (elem_of_map _). Qed.
-  Lemma elem_of_map_2 (f : A → A) (X : C) (x : A) :
-    x ∈ X → f x ∈ map f X.
-  Proof. intros. apply (elem_of_map _). eauto. Qed.
-  Lemma elem_of_map_2_alt (f : A → A) (X : C) (x : A) y :
-    x ∈ X → y = f x → y ∈ map f X.
-  Proof. intros. apply (elem_of_map _). eauto. Qed.
-End map.
-
 (** * Tactics *)
 (** The first pass consists of eliminating all occurrences of [(∪)], [(∩)],
 [(∖)], [map], [∅], [{[_]}], [(≡)], and [(⊆)], by rewriting these into
@@ -126,7 +122,10 @@ Ltac unfold_elem_of :=
     | context [ _ ∈ _ ∪ _ ] => setoid_rewrite elem_of_union in H
     | context [ _ ∈ _ ∩ _ ] => setoid_rewrite elem_of_intersection in H
     | context [ _ ∈ _ ∖ _ ] => setoid_rewrite elem_of_difference in H
-    | context [ _ ∈ map _ _ ] => setoid_rewrite elem_of_map in H
+    | context [ _ ∈ _ <$> _ ] => setoid_rewrite elem_of_fmap in H
+    | context [ _ ∈ mret _ ] => setoid_rewrite elem_of_ret in H
+    | context [ _ ∈ _ ≫= _ ] => setoid_rewrite elem_of_bind in H
+    | context [ _ ∈ mjoin _ ] => setoid_rewrite elem_of_join in H
     end);
   repeat match goal with
   | |- context [ _ ⊆ _ ] => setoid_rewrite elem_of_subseteq
@@ -136,7 +135,10 @@ Ltac unfold_elem_of :=
   | |- context [ _ ∈ _ ∪ _ ] => setoid_rewrite elem_of_union
   | |- context [ _ ∈ _ ∩ _ ] => setoid_rewrite elem_of_intersection
   | |- context [ _ ∈ _ ∖ _ ] => setoid_rewrite elem_of_difference
-  | |- context [ _ ∈ map _ _ ] => setoid_rewrite elem_of_map
+  | |- context [ _ ∈ _ <$> _ ] => setoid_rewrite elem_of_fmap
+  | |- context [ _ ∈ mret _ ] => setoid_rewrite elem_of_ret
+  | |- context [ _ ∈ _ ≫= _ ] => setoid_rewrite elem_of_bind
+  | |- context [ _ ∈ mjoin _ ] => setoid_rewrite elem_of_join
   end.
 
 (** The tactic [solve_elem_of tac] composes the above tactic with [intuition].
@@ -165,8 +167,8 @@ Tactic Notation "decompose_elem_of" hyp(H) :=
   let rec go H :=
   lazymatch type of H with
   | _ ∈ ∅ => apply elem_of_empty in H; destruct H
-  | ?l ∈ {[ ?l' ]} =>
-    apply elem_of_singleton in H; first [ subst l' | subst l | idtac ]
+  | ?x ∈ {[ ?y ]} =>
+    apply elem_of_singleton in H; try first [subst y | subst x]
   | _ ∈ _ ∪ _ =>
     let H1 := fresh in let H2 := fresh in apply elem_of_union in H;
     destruct H as [H1|H2]; [go H1 | go H2]
@@ -176,9 +178,17 @@ Tactic Notation "decompose_elem_of" hyp(H) :=
   | _ ∈ _ ∖ _ =>
     let H1 := fresh in let H2 := fresh in apply elem_of_difference in H;
     destruct H as [H1 H2]; go H1; go H2
-  | _ ∈ map _ _ =>
-    let H1 := fresh in apply elem_of_map in H;
-    destruct H as [?[? H1]]; go H1
+  | ?x ∈ _ <$> _ =>
+    let H1 := fresh in apply elem_of_fmap in H;
+    destruct H as [? [? H1]]; try (subst x); go H1
+  | _ ∈ _ ≫= _ =>
+    let H1 := fresh in let H2 := fresh in apply elem_of_bind in H;
+    destruct H as [? [H1 H2]]; go H1; go H2
+  | ?x ∈ mret ?y =>
+    apply elem_of_ret in H; try first [subst y | subst x]
+  | _ ∈ mjoin _ ≫= _ =>
+    let H1 := fresh in let H2 := fresh in apply elem_of_join in H;
+    destruct H as [? [H1 H2]]; go H1; go H2
   | _ => idtac
   end in go H.
 Tactic Notation "decompose_elem_of" :=
@@ -186,7 +196,7 @@ Tactic Notation "decompose_elem_of" :=
 
 (** * Sets without duplicates up to an equivalence *)
 Section no_dup.
-  Context `{Collection A B} (R : relation A) `{!Equivalence R}.
+  Context `{SimpleCollection A B} (R : relation A) `{!Equivalence R}.
 
   Definition elem_of_upto (x : A) (X : B) := ∃ y, y ∈ X ∧ R x y.
   Definition no_dup (X : B) := ∀ x y, x ∈ X → y ∈ X → R x y → x = y.
@@ -232,7 +242,7 @@ End no_dup.
 
 (** * Quantifiers *)
 Section quantifiers.
-  Context `{Collection A B} (P : A → Prop).
+  Context `{SimpleCollection A B} (P : A → Prop).
 
   Definition cforall X := ∀ x, x ∈ X → P x.
   Definition cexists X := ∃ x, x ∈ X ∧ P x.
@@ -275,7 +285,7 @@ End more_quantifiers.
 (** We collect some properties on the [fresh] operation. In particular we
 generalize [fresh] to generate lists of fresh elements. *)
 Section fresh.
-  Context `{Collection A C} `{Fresh A C} `{!FreshSpec A C} .
+  Context `{FreshSpec A C} .
 
   Definition fresh_sig (X : C) : { x : A | x ∉ X } :=
     exist (∉ X) (fresh X) (is_fresh X).
@@ -300,11 +310,11 @@ Section fresh.
   Lemma fresh_list_length n X : length (fresh_list n X) = n.
   Proof. revert X. induction n; simpl; auto. Qed.
 
-  Lemma fresh_list_is_fresh n X x : In x (fresh_list n X) → x ∉ X.
+  Lemma fresh_list_is_fresh n X x : x ∈ fresh_list n X → x ∉ X.
   Proof.
-    revert X. induction n; simpl.
-    * done.
-    * intros X [?| Hin]. subst.
+    revert X. induction n; intros X; simpl.
+    * by rewrite elem_of_nil.
+    * rewrite elem_of_cons. intros [?| Hin]; subst.
       + apply is_fresh.
       + apply IHn in Hin. solve_elem_of.
   Qed.
@@ -317,3 +327,73 @@ Section fresh.
     solve_elem_of.
   Qed.
 End fresh.
+
+Definition option_collection `{Singleton A C} `{Empty C} (x : option A) : C :=
+  match x with
+  | None => ∅
+  | Some a => {[ a ]}
+  end.
+
+Section collection_monad.
+  Context `{CollectionMonad M}.
+
+  Global Instance collection_guard: MGuard M := λ P dec A x,
+    if dec then x else ∅.
+
+  Global Instance collection_fmap_proper {A B} (f : A → B) :
+    Proper ((≡) ==> (≡)) (fmap f).
+  Proof. intros X Y E. esolve_elem_of. Qed.
+  Global Instance collection_ret_proper {A} :
+    Proper ((=) ==> (≡)) (@mret M _ A).
+  Proof. intros X Y E. esolve_elem_of. Qed.
+  Global Instance collection_bind_proper {A B} (f : A → M B) :
+    Proper ((≡) ==> (≡)) (mbind f).
+  Proof. intros X Y E. esolve_elem_of. Qed.
+  Global Instance collection_join_proper {A} :
+    Proper ((≡) ==> (≡)) (@mjoin M _ A).
+  Proof. intros X Y E. esolve_elem_of. Qed.
+
+  Lemma collection_fmap_compose {A B C} (f : A → B) (g : B → C) X :
+    g ∘ f <$> X ≡ g <$> (f <$> X).
+  Proof. esolve_elem_of. Qed.
+  Lemma elem_of_fmap_1 {A B} (f : A → B) (X : M A) (y : B) :
+    y ∈ f <$> X → ∃ x, y = f x ∧ x ∈ X.
+  Proof. esolve_elem_of. Qed.
+  Lemma elem_of_fmap_2 {A B} (f : A → B) (X : M A) (x : A) :
+    x ∈ X → f x ∈ f <$> X.
+  Proof. esolve_elem_of. Qed.
+  Lemma elem_of_fmap_2_alt {A B} (f : A → B) (X : M A) (x : A) (y : B) :
+    x ∈ X → y = f x → y ∈ f <$> X.
+  Proof. esolve_elem_of. Qed.
+
+  Lemma elem_of_mapM {A B} (f : A → M B) l k :
+    l ∈ mapM f k ↔ Forall2 (λ x y, x ∈ f y) l k.
+  Proof.
+    split.
+    * revert l. induction k; esolve_elem_of.
+    * induction 1; esolve_elem_of.
+  Qed.
+  Lemma mapM_length {A B} (f : A → M B) l k :
+    l ∈ mapM f k → length l = length k.
+  Proof. revert l; induction k; esolve_elem_of. Qed.
+
+  Lemma elem_of_mapM_fmap {A B} (f : A → B) (g : B → M A) l k :
+    Forall (λ x, ∀ y, y ∈ g x → f y = x) l →
+    k ∈ mapM g l → fmap f k = l.
+  Proof.
+    intros Hl. revert k.
+    induction Hl; simpl; intros;
+      decompose_elem_of; simpl; f_equal; auto.
+  Qed.
+
+  Lemma elem_of_mapM_Forall {A B} (f : A → M B) (P : B → Prop) l k :
+    l ∈ mapM f k →
+    Forall (λ x, ∀ y, y ∈ f x → P y) k →
+    Forall P l.
+  Proof. rewrite elem_of_mapM. apply Forall2_Forall_1. Qed.
+
+  Lemma mapM_non_empty {A B} (f : A → M B) l :
+    Forall (λ x, ∃ y, y ∈ f x) l →
+    ∃ k, k ∈ mapM f l.
+  Proof. induction 1; esolve_elem_of. Qed.
+End collection_monad.

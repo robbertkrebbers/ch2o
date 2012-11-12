@@ -57,8 +57,8 @@ Definition up (d : direction) (s : stmt) : Prop :=
   | _ => False
   end.
 
-Hint Extern 0 (down _ _) => constructor.
-Hint Extern 0 (up _ _) => constructor.
+Hint Extern 0 (down _ _) => simpl.
+Hint Extern 0 (up _ _) => simpl.
 
 Lemma not_down_up d s : ¬down d s → up d s.
 Proof. destruct d; intuition. Qed.
@@ -69,6 +69,21 @@ Definition down_up_dec d s : {down d s} + {up d s} :=
   | ↗ => right I
   | ⇈ _ => right I
   | ↷ l => decide_rel (∈) l (labels s)
+  end.
+
+Tactic Notation "discriminate_down_up" hyp(H) := repeat
+  match type of H with
+  | up _ _ => progress simpl in H
+  | down _ _ => progress simpl in H
+  | True => clear H
+  | False => destruct H
+  | ?l ∉ _ => destruct H; solve_stmt_elem_of
+  | ?l ∈ _ => solve [decompose_elem_of H]
+  end.
+Tactic Notation "discriminate_down_up" := repeat
+  match goal with
+  | H : up _ _ |- _ => discriminate_down_up H
+  | H : down _ _ |- _ => discriminate_down_up H
   end.
 
 (** The data type [focus] describes the part of the program that is focused. An

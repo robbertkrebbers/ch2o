@@ -177,15 +177,74 @@ Notation "(⊥)" := disjoint (only parsing) : C_scope.
 Notation "( X ⊥)" := (disjoint X) (only parsing) : C_scope.
 Notation "(⊥ X )" := (λ Y, disjoint Y X) (only parsing) : C_scope.
 
+Inductive list_disjoint `{Disjoint A} : list A → Prop :=
+  | disjoint_nil :
+     list_disjoint []
+  | disjoint_cons X Xs :
+     Forall (⊥ X) Xs →
+     list_disjoint Xs →
+     list_disjoint (X :: Xs).
+Lemma list_disjoint_cons_inv `{Disjoint A} X Xs :
+  list_disjoint (X :: Xs) →
+  Forall (⊥ X) Xs ∧ list_disjoint Xs.
+Proof. inversion_clear 1; auto. Qed.
+
 Instance generic_disjoint `{ElemOf A B} : Disjoint B | 100 :=
   λ X Y, ∀ x, x ∉ X ∨ x ∉ Y.
+
+(** ** Monadic operations *)
+(** We define operational type classes for the monadic operations bind, join 
+and fmap. These type classes are defined in a non-standard way by taking the
+function as a parameter of the class. For example, we define
+<<
+  Class FMapD := fmap: ∀ {A B}, (A → B) → M A → M B.
+>>
+instead of
+<<
+  Class FMap {A B} (f : A → B) := fmap: M A → M B.
+>>
+This approach allows us to define [fmap] on lists such that [simpl] unfolds it
+in the appropriate way, and so that it can be used for mutual recursion
+(the mapped function [f] is not part of the fixpoint) as well. This is a hack,
+and should be replaced by something more appropriate in future versions. *)
+
+(* We use these type classes merely for convenient overloading of notations and
+do not formalize any theory on monads (we do not even define a class with the
+monad laws). *)
+Class MRet (M : Type → Type) := mret: ∀ {A}, A → M A.
+Instance: Params (@mret) 3.
+Arguments mret {_ _ _} _.
+
+Class MBindD (M : Type → Type) {A B} (f : A → M B) := mbind: M A → M B.
+Notation MBind M := (∀ {A B} (f : A → M B), MBindD M f)%type.
+Instance: Params (@mbind) 5.
+Arguments mbind {_ _ _} _ {_} !_ / : simpl nomatch.
+
+Class MJoin (M : Type → Type) := mjoin: ∀ {A}, M (M A) → M A.
+Instance: Params (@mjoin) 3.
+Arguments mjoin {_ _ _} !_ / : simpl nomatch.
+
+Class FMapD (M : Type → Type) {A B} (f : A → B) := fmap: M A → M B.
+Notation FMap M := (∀ {A B} (f : A → B), FMapD M f)%type.
+Instance: Params (@fmap) 6.
+Arguments fmap {_ _ _} _ {_} !_ / : simpl nomatch.
+
+Notation "m ≫= f" := (mbind f m) (at level 60, right associativity) : C_scope.
+Notation "x ← y ; z" := (y ≫= (λ x : _, z))
+  (at level 65, only parsing, next at level 35, right associativity) : C_scope.
+Infix "<$>" := fmap (at level 65, right associativity, only parsing) : C_scope.
+
+Class MGuard (M : Type → Type) :=
+  mguard: ∀ P {dec : Decision P} {A}, M A → M A.
+Notation "'guard' P ; o" := (mguard P o)
+  (at level 65, only parsing, next at level 35, right associativity) : C_scope.
 
 (** ** Operations on maps *)
 (** In this section we define operational type classes for the operations
 on maps. In the file [fin_maps] we will axiomatize finite maps.
 The function lookup [m !! k] should yield the element at key [k] in [m]. *)
-Class Lookup (K : Type) (M : Type → Type) :=
-  lookup: ∀ {A}, K → M A → option A.
+Class Lookup (K M A : Type) :=
+  lookup: K → M → option A.
 Instance: Params (@lookup) 4.
 
 Notation "m !! i" := (lookup i m) (at level 20) : C_scope.
@@ -196,8 +255,8 @@ Arguments lookup _ _ _ _ !_ !_ / : simpl nomatch.
 
 (** The function insert [<[k:=a]>m] should update the element at key [k] with
 value [a] in [m]. *)
-Class Insert (K : Type) (M : Type → Type) :=
-  insert: ∀ {A}, K → A → M A → M A.
+Class Insert (K M A : Type) :=
+  insert: K → A → M → M.
 Instance: Params (@insert) 4.
 Notation "<[ k := a ]>" := (insert k a)
   (at level 5, right associativity, format "<[ k := a ]>") : C_scope.
@@ -206,33 +265,34 @@ Arguments insert _ _ _ _ !_ _ !_ / : simpl nomatch.
 (** The function delete [delete k m] should delete the value at key [k] in
 [m]. If the key [k] is not a member of [m], the original map should be
 returned. *)
-Class Delete (K : Type) (M : Type → Type) :=
-  delete: ∀ {A}, K → M A → M A.
-Instance: Params (@delete) 4.
-Arguments delete _ _ _ _ !_ !_ / : simpl nomatch.
+Class Delete (K M : Type) :=
+  delete: K → M → M.
+Instance: Params (@delete) 3.
+Arguments delete _ _ _ !_ !_ / : simpl nomatch.
 
 (** The function [alter f k m] should update the value at key [k] using the
 function [f], which is called with the original value. *)
-Class Alter (K : Type) (M : Type → Type) :=
-  alter: ∀ {A}, (A → A) → K → M A → M A.
-Instance: Params (@alter) 4.
-Arguments alter _ _ _ _ _ !_ !_ / : simpl nomatch.
+Class AlterD (K M A : Type) (f : A → A) :=
+  alter: K → M → M.
+Notation Alter K M A := (∀ (f : A → A), AlterD K M A f)%type.
+Instance: Params (@alter) 5.
+Arguments alter {_ _ _} _ {_} !_ !_ / : simpl nomatch.
 
 (** The function [alter f k m] should update the value at key [k] using the
 function [f], which is called with the original value at key [k] or [None]
 if [k] is not a member of [m]. The value at [k] should be deleted if [f] 
 yields [None]. *)
-Class PartialAlter (K : Type) (M : Type → Type) :=
-  partial_alter: ∀ {A}, (option A → option A) → K → M A → M A.
+Class PartialAlter (K M A : Type) :=
+  partial_alter: (option A → option A) → K → M → M.
 Instance: Params (@partial_alter) 4.
 Arguments partial_alter _ _ _ _ _ !_ !_ / : simpl nomatch.
 
 (** The function [dom C m] should yield the domain of [m]. That is a finite
 collection of type [C] that contains the keys that are a member of [m]. *)
-Class Dom (K : Type) (M : Type → Type) :=
-  dom: ∀ {A} C `{Empty C} `{Union C} `{Singleton K C}, M A → C.
-Instance: Params (@dom) 8.
-Arguments dom _ _ _ _ _ _ _ _ !_ / : simpl nomatch.
+Class Dom (K M : Type) :=
+  dom: ∀ C `{Empty C} `{Union C} `{Singleton K C}, M → C.
+Instance: Params (@dom) 7.
+Arguments dom _ _ _ _ _ _ _ !_ / : simpl nomatch.
 
 (** The function [merge f m1 m2] should merge the maps [m1] and [m2] by
 constructing a new map whose value at key [k] is [f (m1 !! k) (m2 !! k)]
@@ -243,12 +303,17 @@ Instance: Params (@merge) 3.
 Arguments merge _ _ _ _ !_ !_ / : simpl nomatch.
 
 (** We lift the insert and delete operation to lists of elements. *)
-Definition insert_list `{Insert K M} {A} (l : list (K * A)) (m : M A) : M A :=
+Definition insert_list `{Insert K M A} (l : list (K * A)) (m : M) : M :=
   fold_right (λ p, <[ fst p := snd p ]>) m l.
 Instance: Params (@insert_list) 4.
-Definition delete_list `{Delete K M} {A} (l : list K) (m : M A) : M A :=
+Definition delete_list `{Delete K M} (l : list K) (m : M) : M :=
   fold_right delete m l.
-Instance: Params (@delete_list) 4.
+Instance: Params (@delete_list) 3.
+
+Definition insert_consecutive `{Insert nat M A}
+    (i : nat) (l : list A) (m : M) : M :=
+  fold_right (λ x f i, <[i:=x]>(f (S i))) (λ _, m) l i.
+Instance: Params (@insert_consecutive) 3.
 
 (** The function [union_with f m1 m2] should yield the union of [m1] and [m2]
 using the function [f] to combine values of members that are in both [m1] and
@@ -320,43 +385,6 @@ Lemma right_absorb_eq {A} (i : A) (f : A → A → A) `{!RightAbsorb (=) i f} x 
   f x i = i.
 Proof. auto. Qed.
 
-(** ** Monadic operations *)
-(** We define operational type classes for the monadic operations bind, join 
-and fmap. These type classes are defined in a non-standard way by taking the
-function as a parameter of the class. For example, we define
-<<
-  Class FMap := fmap: ∀ {A B}, (A → B) → M A → M B.
->>
-instead of
-<<
-  Class FMap {A B} (f : A → B) := fmap: M A → M B.
->>
-This approach allows us to define [fmap] on lists such that [simpl] unfolds it
-in the appropriate way, and so that it can be used for mutual recursion
-(the mapped function [f] is not part of the fixpoint) as well.
-We use these type classes merely for convenient overloading of notations and do
-not formalize any theory on monads (we do not even define a class with the
-monad laws). *)
-Section monad_ops.
-  Context (M : Type → Type).
-
-  Class MBind {A B} (f : A → M B) := mbind: M A → M B.
-  Class MJoin {A} := mjoin: M (M A) → M A.
-  Class FMap {A B} (f : A → B) := fmap: M A → M B.
-End monad_ops.
-
-Instance: Params (@mbind) 4.
-Arguments mbind {_ _ _} _ {_} !_ / : simpl nomatch.
-Instance: Params (@mjoin) 3.
-Arguments mjoin {_ _ _} !_ / : simpl nomatch.
-Instance: Params (@fmap) 4.
-Arguments fmap {_ _ _} _ {_} !_ / : simpl nomatch.
-
-Notation "m ≫= f" := (mbind f m) (at level 60, right associativity) : C_scope.
-Notation "x ← y ; z" := (y ≫= (λ x : _, z))
-  (at level 65, next at level 35, right associativity) : C_scope.
-Infix "<$>" := fmap (at level 65, right associativity, only parsing) : C_scope.
-
 (** ** Axiomatization of ordered structures *)
 (** A pre-order equiped with a smallest element. *)
 Class BoundedPreOrder A `{Empty A} `{SubsetEq A} := {
@@ -386,19 +414,20 @@ Class LowerBoundedLattice A `{Empty A} `{SubsetEq A}
   lbl_msl :>> MeetSemiLattice A
 }.
 (** ** Axiomatization of collections *)
-(** The class [Collection A C] axiomatizes a collection of type [C] with
-elements of type [A]. Since [C] is not dependent on [A], we use the monomorphic
-[Map] type class instead of the polymorphic [FMap]. *)
-Class Map A C := map: (A → A) → (C → C).
+(** The class [SimpleCollection A C] axiomatizes a collection of type [C] with
+elements of type [A]. *)
 Instance: Params (@map) 3.
-Class Collection A C `{ElemOf A C} `{Empty C} `{Union C}
-    `{Intersection C} `{Difference C} `{Singleton A C} `{Map A C} := {
+Class SimpleCollection A C `{ElemOf A C}
+  `{Empty C} `{Singleton A C} `{Union C} := {
   not_elem_of_empty (x : A) : x ∉ ∅;
   elem_of_singleton (x y : A) : x ∈ {[ y ]} ↔ x = y;
-  elem_of_union X Y (x : A) : x ∈ X ∪ Y ↔ x ∈ X ∨ x ∈ Y;
+  elem_of_union X Y (x : A) : x ∈ X ∪ Y ↔ x ∈ X ∨ x ∈ Y
+}.
+Class Collection A C `{ElemOf A C} `{Empty C} `{Singleton A C} `{Union C}
+    `{Intersection C} `{Difference C} := {
+  collection_simple :>> SimpleCollection A C;
   elem_of_intersection X Y (x : A) : x ∈ X ∩ Y ↔ x ∈ X ∧ x ∈ Y;
-  elem_of_difference X Y (x : A) : x ∈ X ∖ Y ↔ x ∈ X ∧ x ∉ Y;
-  elem_of_map f X (x : A) : x ∈ map f X ↔ ∃ y, x = f y ∧ y ∈ X
+  elem_of_difference X Y (x : A) : x ∈ X ∖ Y ↔ x ∈ X ∧ x ∉ Y
 }.
 
 (** We axiomative a finite collection as a collection whose elements can be
@@ -407,24 +436,59 @@ in any order and should not contain duplicates. *)
 Class Elements A C := elements: C → list A.
 Instance: Params (@elements) 3.
 
+(** We redefine the standard library's [In] and [NoDup] using type classes. *)
+Inductive elem_of_list {A} : ElemOf A (list A) :=
+  | elem_of_list_here (x : A) l : x ∈ x :: l
+  | elem_of_list_further (x y : A) l : x ∈ l → x ∈ y :: l.
+Existing Instance elem_of_list.
+
+Inductive NoDup {A} : list A → Prop :=
+  | NoDup_nil_2 : NoDup []
+  | NoDup_cons_2 x l : x ∉ l → NoDup l → NoDup (x :: l).
+
 (** Decidability of equality of the carrier set is admissible, but we add it
 anyway so as to avoid cycles in type class search. *)
 Class FinCollection A C `{ElemOf A C} `{Empty C} `{Union C}
-    `{Intersection C} `{Difference C} `{Singleton A C} `{Map A C}
+    `{Intersection C} `{Difference C} `{Singleton A C}
     `{Elements A C} `{∀ x y : A, Decision (x = y)} := {
   fin_collection :>> Collection A C;
-  elements_spec X x : x ∈ X ↔ In x (elements X);
+  elements_spec X x : x ∈ X ↔ x ∈ elements X;
   elements_nodup X : NoDup (elements X)
 }.
 Class Size C := size: C → nat.
+Arguments size {_ _} !_ / : simpl nomatch.
 Instance: Params (@size) 2.
+
+(** The class [Collection M] axiomatizes a type constructor [M] that can be
+used to construct a collection [M A] with elements of type [A]. The advantage
+of this class, compared to [Collection], is that it also axiomatizes the
+the monadic operations. The disadvantage, is that not many inhabits are
+possible (we will only provide an inhabitant using unordered lists without
+duplicates removed). More interesting implementations typically need
+decidability of equality, or a total order on the elements, which do not fit
+in a type constructor of type [Type → Type]. *)
+Class CollectionMonad M `{∀ A, ElemOf A (M A)}
+    `{∀ A, Empty (M A)} `{∀ A, Singleton A (M A)} `{∀ A, Union (M A)}
+    `{!MBind M} `{!MRet M} `{!FMap M} `{!MJoin M} := {
+  collection_monad_simple A :> SimpleCollection A (M A);
+  elem_of_bind {A B} (f : A → M B) (x : B) (X : M A) :
+    x ∈ X ≫= f ↔ ∃ y, x ∈ f y ∧ y ∈ X;
+  elem_of_ret {A} (x y : A) :
+    x ∈ mret y ↔ x = y;
+  elem_of_fmap {A B} (f : A → B) (x : B) (X : M A) :
+    x ∈ f <$> X ↔ ∃ y, x = f y ∧ y ∈ X;
+  elem_of_join {A} (x : A) (X : M (M A)) :
+    x ∈ mjoin X ↔ ∃ Y, x ∈ Y ∧ Y ∈ X
+}.
 
 (** The function [fresh X] yields an element that is not contained in [X]. We
 will later prove that [fresh] is [Proper] with respect to the induced setoid
 equality on collections. *)
 Class Fresh A C := fresh: C → A.
 Instance: Params (@fresh) 3.
-Class FreshSpec A C `{!Fresh A C} `{!ElemOf A C} := {
+Class FreshSpec A C `{ElemOf A C}
+    `{Empty C} `{Singleton A C} `{Union C} `{Fresh A C} := {
+  fresh_collection_simple :>> SimpleCollection A C;
   fresh_proper_alt X Y : (∀ x, x ∈ X ↔ x ∈ Y) → fresh X = fresh Y;
   is_fresh (X : C) : fresh X ∉ X
 }.

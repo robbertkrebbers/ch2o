@@ -57,10 +57,10 @@ Instance Pmap_wf_dec `(t : Pmap_raw A) : Decision (Pmap_wf t).
 Proof.
   red. induction t as [|l IHl [?|] r IHr]; simpl.
   * intuition.
-  * destruct IHl, IHr; try solve [left; intuition auto];
+  * destruct IHl, IHr; try solve [left; intuition];
       right; by inversion_clear 1.
   * destruct IHl, IHr, (decide (Pmap_ne l)), (decide (Pmap_ne r));
-      try solve [left; intuition auto];
+      try solve [left; intuition];
       right; inversion_clear 1; intuition.
 Qed.
 
@@ -77,20 +77,20 @@ Global Instance Pmap_dec `{∀ x y : A, Decision (x = y)} (t1 t2 : Pmap A) :
 
 Instance Pempty_raw {A} : Empty (Pmap_raw A) := Pleaf.
 Global Instance Pempty {A} : Empty (Pmap A) :=
-  (∅ : Pmap_raw A)↾bool_decide_pack _ Pmap_wf_leaf.
+  (∅ : Pmap_raw A) ↾ bool_decide_pack _ Pmap_wf_leaf.
 
-Instance Plookup_raw: Lookup positive Pmap_raw :=
-  fix Plookup_raw A (i : positive) (t : Pmap_raw A) {struct t} : option A :=
+Instance Plookup_raw {A} : Lookup positive (Pmap_raw A) A :=
+  fix Plookup_raw (i : positive) (t : Pmap_raw A) {struct t} : option A :=
   match t with
   | Pleaf => None
   | Pnode l o r =>
     match i with
     | 1 => o
-    | i~0 => @lookup _ _ Plookup_raw _ i l
-    | i~1 => @lookup _ _ Plookup_raw _ i r
+    | i~0 => @lookup _ _ _ Plookup_raw i l
+    | i~1 => @lookup _ _ _ Plookup_raw i r
     end
   end.
-Global Instance Plookup: Lookup positive Pmap := λ A i t, `t !! i.
+Instance Plookup {A} : Lookup positive (Pmap A) A := λ i t, `t !! i.
 
 Lemma Plookup_raw_empty {A} i : (∅ : Pmap_raw A) !! i = None.
 Proof. by destruct i. Qed.
@@ -179,9 +179,8 @@ Ltac Pnode_canon_rewrite := repeat (
   rewrite Pnode_canon_lookup_xO ||
   rewrite Pnode_canon_lookup_xI).
 
-Instance Ppartial_alter_raw: PartialAlter positive Pmap_raw :=
-  fix Ppartial_alter_raw A (f : option A → option A) (i : positive)
-    (t : Pmap_raw A) {struct t} : Pmap_raw A :=
+Instance Ppartial_alter_raw {A} : PartialAlter positive (Pmap_raw A) A :=
+  fix go f i t {struct t} : Pmap_raw A :=
   match t with
   | Pleaf =>
     match f None with
@@ -191,8 +190,8 @@ Instance Ppartial_alter_raw: PartialAlter positive Pmap_raw :=
   | Pnode l o r =>
     match i with
     | 1 => Pnode_canon l (f o) r
-    | i~0 => Pnode_canon (@partial_alter _ _ Ppartial_alter_raw _ f i l) o r
-    | i~1 => Pnode_canon l o (@partial_alter _ _ Ppartial_alter_raw _ f i r)
+    | i~0 => Pnode_canon (@partial_alter _ _ _ go f i l) o r
+    | i~1 => Pnode_canon l o (@partial_alter _ _ _ go f i r)
     end
   end.
 
@@ -205,14 +204,18 @@ Proof.
   * intros [?|?|]; simpl; intuition.
 Qed.
 
-Global Instance Ppartial_alter: PartialAlter positive Pmap := λ A f i t,
+Instance Ppartial_alter {A} : PartialAlter positive (Pmap A) A := λ f i t,
   dexist (partial_alter f i (`t)) (Ppartial_alter_raw_wf f i _ (proj2_dsig t)).
 
 Lemma Plookup_raw_alter {A} f i (t : Pmap_raw A) :
   partial_alter f i t !! i = f (t !! i).
 Proof.
   revert i. induction t.
-  * intros i. unfold partial_alter, lookup. simpl. case (f None).
+  * intros i. change (
+     match f None with
+     | Some x => Psingleton_raw i x
+     | None => Pleaf
+     end !! i = f None). destruct (f None).
     + intros. apply Plookup_raw_singleton.
     + by destruct i.
   * intros [?|?|]; simpl; by Pnode_canon_rewrite.
@@ -221,29 +224,33 @@ Lemma Plookup_raw_alter_ne {A} f i j (t : Pmap_raw A) :
   i ≠ j → partial_alter f i t !! j = t !! j.
 Proof.
   revert i j. induction t as [|l IHl ? r IHr].
-  * intros. unfold partial_alter, lookup. simpl. case (f None).
+  * intros. change (
+     match f None with
+     | Some x => Psingleton_raw i x
+     | None => Pleaf
+     end !! j = None). destruct (f None).
     + intros. by apply Plookup_raw_singleton_ne.
     + done.
   * intros [?|?|] [?|?|]; simpl; Pnode_canon_rewrite; auto; congruence.
 Qed.
 
-Instance Pfmap_raw {A B} (f : A → B) : FMap Pmap_raw f :=
-  fix Pfmap_raw (t : Pmap_raw A) : Pmap_raw B :=
+Instance Pfmap_raw {A B} (f : A → B) : FMapD Pmap_raw f :=
+  fix go (t : Pmap_raw A) : Pmap_raw B :=
+  let _ : FMapD Pmap_raw f := @go in
   match t with
   | Pleaf => Pleaf
-  | Pnode l x r =>
-    Pnode (@fmap _ _ _ f Pfmap_raw l) (fmap f x) (@fmap _ _ _ f Pfmap_raw r)
+  | Pnode l x r => Pnode (f <$> l) (f <$> x) (f <$> r)
   end.
 
 Lemma Pfmap_raw_ne `(f : A → B) (t : Pmap_raw A) :
   Pmap_ne t → Pmap_ne (fmap f t).
-Proof.  induction 1; simpl; auto. Qed.
+Proof. induction 1; simpl; auto. Qed.
 Local Hint Resolve Pfmap_raw_ne.
 Lemma Pfmap_raw_wf `(f : A → B) (t : Pmap_raw A) :
   Pmap_wf t → Pmap_wf (fmap f t).
-Proof. induction 1; simpl; intuition auto. Qed.
+Proof. induction 1; simpl; intuition. Qed.
 
-Global Instance Pfmap {A B} (f : A → B) : FMap Pmap f := λ t,
+Global Instance Pfmap {A B} (f : A → B) : FMapD Pmap f := λ t,
   dexist _ (Pfmap_raw_wf f _ (proj2_dsig t)).
 
 Lemma Plookup_raw_fmap `(f : A → B) (t : Pmap_raw A) i :
@@ -258,8 +265,9 @@ Section dom.
   Fixpoint Pdom_raw (f : positive → B) `(t : Pmap_raw A) : D :=
     match t with
     | Pleaf => ∅
-    | Pnode l o r => option_case (λ _, {[ f 1 ]}) ∅ o
-                       ∪ Pdom_raw (f ∘ (~0)) l ∪ Pdom_raw (f ∘ (~1)) r
+    | Pnode l o r =>
+       option_case (λ _, {[ f 1 ]}) ∅ o
+         ∪ Pdom_raw (f ∘ (~0)) l ∪ Pdom_raw (f ∘ (~1)) r
     end.
 
   Lemma Plookup_raw_dom f `(t : Pmap_raw A) x :
@@ -269,12 +277,14 @@ Section dom.
     * revert f. induction t as [|? IHl [?|] ? IHr]; esolve_elem_of.
     * intros [i [? Hlookup]]; subst. revert f i Hlookup.
       induction t as [|? IHl [?|] ? IHr]; intros f [?|?|];
-        solve_elem_of (by apply (IHl (f ∘ (~0)))
-        || by apply (IHr (f ∘ (~1))) || simplify_is_Some).
+       solve_elem_of (first
+        [ by apply (IHl (f ∘ (~0)))
+        | by apply (IHr (f ∘ (~1)))
+        | inv_is_Some; eauto ]).
   Qed.
 End dom.
 
-Global Instance Pdom : Dom positive Pmap := λ C _ _ _ _ t,
+Global Instance Pdom {A} : Dom positive (Pmap A) := λ C _ _ _ t,
   Pdom_raw id (`t).
 
 Fixpoint Pmerge_aux `(f : option A → option B) (t : Pmap_raw A) : Pmap_raw B :=
@@ -333,7 +343,7 @@ Proof.
   * intros ?? [??] ?. by apply Plookup_raw_alter.
   * intros ?? [??] ??. by apply Plookup_raw_alter_ne.
   * intros ??? [??]. by apply Plookup_raw_fmap.
-  * intros ?????????? [??] i. unfold dom, Pdom.
+  * intros ????????? [??] i. unfold dom, Pdom.
     rewrite Plookup_raw_dom. unfold id. split.
     + intros [? [??]]. by subst.
     + naive_solver.

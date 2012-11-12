@@ -380,9 +380,8 @@ Hint Resolve ax_funs_empty ax_funs_S ax_funs_pred : ax.
 a function from directions to assertions taking the pre- and post, returning,
 and jumping condition together. We generalize this idea slightly, and define
 the type [directed A] as functions [direction → A]. *)
-Definition directed A := direction → A.
 Definition directed_pack {A} (P : A) (Q : A) (R : value → A)
-  (J : label → A) : directed A := direction_rect (λ _, A) P Q R J.
+  (J : label → A) : direction → A := direction_rect (λ _, A) P Q R J.
 Global Instance directed_pack_proper `{!@Equivalence A R} : Proper
   (R ==> R ==> pointwise_relation _ R ==>
     pointwise_relation _ R ==> pointwise_relation _ R)
@@ -391,18 +390,18 @@ Proof. intros ???????????? []; subst; firstorder. Qed.
 
 (** This hideous definition of [fmap] makes [f <$> directed_pack P Q R J]
 convertable with [directed_pack (f P) (f Q) (f ∘ R) (f ∘ J)]. *)
-Instance directed_fmap {A B} (f : A → B) : FMap directed f := λ Pd d,
+Instance directed_fmap: FMap (λ A, direction → A) := λ A B f Pd d,
   match d with
   | ↘ => f (Pd ↘)
   | ↗ => f (Pd ↗)
   | ⇈ v => f (Pd (⇈ v))
   | ↷ l => f (Pd (↷ l))
   end.
-Lemma directed_fmap_spec {A B} (f : A → B) (P : directed A) d :
+Lemma directed_fmap_spec {A B} (f : A → B) (P : direction → A) d :
   (f <$> P) d = f (P d).
 Proof. by destruct d. Qed.
 
-Notation dassert := (directed assert).
+Notation dassert := (direction → assert).
 Notation dassert_pack P Q R J := (@directed_pack assert P%A Q%A R%A J%A).
 Definition dassert_pack_top (P : assert) (R : vassert) :
   dassert := dassert_pack P (R VVoid) R (λ _, False%A).
@@ -574,10 +573,10 @@ Qed.
 
 Lemma ax_expr_compose n {vn} (Ps : vec vassert vn) (Q : vassert)
     (E : ectx_full vn) (es : vec expr vn) (l : ctx) (ms : vec mem vn) :
-  mem_list_disjoint ms →
+  list_disjoint ms →
   (∀ i, ax (ax_expr_P (Ps !!! i)) l n l (Expr (es !!! i)) (ms !!! i)) →
   (∀ vs (ms' : vec mem vn),
-    mem_list_disjoint ms' →
+    list_disjoint ms' →
     (∀ i, (Ps !!! i) (vs !!! i) (get_stack l) (ms' !!! i)) →
     ax (ax_expr_P Q) l n l (Expr (depsubst E (vmap EVal vs)%E)) (⋃ ms')) →
   ax (ax_expr_P Q) l n l (Expr (depsubst E es)) (⋃ ms).
@@ -595,7 +594,7 @@ Proof.
   { intros mf ?.
     rewrite (ectx_full_to_item_correct _ _ i).
     apply (cred_ectx _ [_]).
-    rewrite <-(mem_union_delete_vec ms i),
+    rewrite <-(finmap_union_delete_vec ms i),
       <-(associative_eq (∪)) by done.
     apply (ax_red (ax_expr_P (Ps !!! i)) n); trivial.
     + solve_mem_disjoint.
@@ -609,13 +608,13 @@ Proof.
       l (Expr (es !!! i)) (ms !!! i) (State l (Expr e') m'))
       as [???? m'']; subst; trivial.
     { solve_mem_disjoint. }
-    { by rewrite (associative_eq (∪)), mem_union_delete_vec. }
+    { by rewrite (associative_eq (∪)), finmap_union_delete_vec. }
 
     rewrite (associative_eq (∪)). constructor.
     { solve_mem_disjoint. }
     { done. }
 
-    rewrite <-mem_union_insert_vec by solve_mem_disjoint.
+    rewrite <-finmap_union_insert_vec by solve_mem_disjoint.
     apply IH; auto with arith.
     + solve_mem_disjoint.
     + intros j. destruct (decide (i = j)); subst.
@@ -624,7 +623,7 @@ Proof.
     + intros vs ms' ??. by apply ax_S, Hax2.
   * clear i Hi. intros i E' f vs HE p.
     constructor; [done | done |].
-    rewrite <-(mem_union_delete_vec ms i) by done.
+    rewrite <-(finmap_union_delete_vec ms i) by done.
     apply ax_call_compose with (P:=ax_expr_P (Ps !!! i)) (k:=[]) (E:=E').
     { solve_mem_disjoint. }
     { feed inversion (ax_step (ax_expr_P (Ps !!! i)) n
@@ -633,11 +632,11 @@ Proof.
         (State (CCall E' :: l) (Call f vs) (ms !!! i ∪
           (⋃ delete (fin_to_nat i) (vec_to_list ms) ∪ mf)))); subst; trivial.
       + solve_mem_disjoint.
-      + by rewrite (associative_eq (∪)), mem_union_delete_vec.
+      + by rewrite (associative_eq (∪)), finmap_union_delete_vec.
       + by simplify_mem_equality. }
 
     intros n' m' e' ?? Hax.
-    rewrite <-mem_union_insert_vec by done.
+    rewrite <-finmap_union_insert_vec by done.
     rewrite list_subst_snoc, <-ectx_full_to_item_correct_alt.
     apply IH; auto with arith.
     + solve_mem_disjoint.
@@ -656,7 +655,7 @@ Proof.
       l (⋃ delete (fin_to_nat i) (vec_to_list ms) ∪ mf)
       l (Expr (es !!! i)) (ms !!! i) l (⋃ ms ∪ mf)); trivial.
     + solve_mem_disjoint.
-    + by rewrite (associative_eq (∪)), mem_union_delete_vec.
+    + by rewrite (associative_eq (∪)), finmap_union_delete_vec.
 Qed.
 
 (** * Partial program correctness *)
@@ -790,7 +789,7 @@ Lemma ax_stmt_or Δ R J P P' Q s :
   Δ \ R \ J ⊨ₛ {{ P' }} s {{ Q }} →
   Δ \ R \ J ⊨ₛ {{ P ∨ P' }} s {{ Q }}.
 Proof.
-  intros Hax1 Hax2 n k [] m HΔ Hd Hpre; try contradiction.
+  intros Hax1 Hax2 n k [] m HΔ Hd Hpre; discriminate_down_up.
   * destruct Hpre.
     + apply ax_weaken with (ax_stmt_P s (dassert_pack P Q R J)); auto.
       intros ?? [[] ??]; constructor; solve_assert.
@@ -805,7 +804,7 @@ Lemma ax_stmt_ex Δ R J {A} (P Q : A → assert) s :
   (∀ x, Δ \ R \ J ⊨ₛ {{ P x }} s {{ Q x }}) →
   Δ \ R \ J ⊨ₛ {{ ∃ x, P x }} s {{ ∃ x, Q x }}.
 Proof.
-  intros HA Hax n k [] m HΔ Hd Hpre; try contradiction.
+  intros HA Hax n k [] m HΔ Hd Hpre; discriminate_down_up.
   * destruct Hpre as [x Hpre].
     apply ax_weaken with (ax_stmt_P s (dassert_pack (P x) (Q x) R J)).
     + intros ?? [[] ??]; constructor; solve_assert.
@@ -869,7 +868,7 @@ Proof.
   intros HaxΔ' HΔ.
   induction n as [|n IH]; [by constructor |].
   intros f Pf c vs m k Hf Hpre.
-  rewrite finmap_union_Some in Hf.
+  rewrite finmap_union_Some_raw in Hf.
   destruct Hf as [? | [_ ?]]; [| eapply HΔ; eauto ].
   destruct (HaxΔ' f Pf c vs) as [sf [Hsf Haxsf]]; trivial.
 
@@ -886,9 +885,9 @@ Proof.
 
   pose proof (is_free_list_nodup _ _ Hfree).
   decompose_is_free.
-  rewrite mem_insert_list_union, (associative_eq (∪)).
+  rewrite finmap_insert_list_union, (associative_eq (∪)).
   constructor; [solve_mem_disjoint | done |].
-  rewrite <-mem_insert_list_union.
+  rewrite <-finmap_insert_list_union.
 
   eapply ax_compose_cons; [| clear dependent m mf S' f Δ].
   { eapply Haxsf; eauto.
@@ -898,19 +897,19 @@ Proof.
   intros m ? [d ? Hpost]. apply ax_further_pred.
   { intros. solve_cred. }
   intros mf S' ? p.
-  destruct d; try contradiction; inv_cstep p.
+  destruct d; discriminate_down_up; inv_cstep p.
   * simpl in Hpost; apply assert_free_params in Hpost; eauto with mem.
     destruct Hpost.
-    rewrite mem_union_delete_list, (delete_list_notin mf).
+    rewrite finmap_union_delete_list, (delete_list_notin mf).
     { by constructor; [solve_mem_disjoint | done | apply ax_done]. }
     apply Forall_impl with (λ i, ∃ v, m !! i = Some v); auto.
-    intros b [??]; eauto using mem_disjoint_Some_l.
+    intros b [??]; eauto using finmap_disjoint_Some_l.
   * simpl in Hpost; apply assert_free_params in Hpost; eauto with mem.
     destruct Hpost.
-    rewrite mem_union_delete_list, (delete_list_notin mf).
+    rewrite finmap_union_delete_list, (delete_list_notin mf).
     { by constructor; [solve_mem_disjoint | done | apply ax_done]. }
     apply Forall_impl with (λ i, ∃ v, m !! i = Some v); auto.
-    intros b [??]; eauto using mem_disjoint_Some_l.
+    intros b [??]; eauto using finmap_disjoint_Some_l.
 Qed.
 
 Lemma ax_stmt_funs_add Δ Δ' Pd s :
@@ -1036,10 +1035,10 @@ Proof.
 
   intros mf' S' ? p. inv_cstep p.
   * inv_ehstep.
-    rewrite !mem_union_insert_l, insert_singleton.
+    rewrite !finmap_union_insert_l, insert_singleton.
     constructor; [solve_mem_disjoint | done |].
     apply ax_done; constructor; solve_assert.
-  * exfalso; eauto with cstep.
+  * exfalso; eauto 6 with cstep.
 Qed.
 
 Lemma ax_load Δ e P Q :
@@ -1078,7 +1077,7 @@ Proof.
   apply ax_further_pred.
   { intros. solve_cred. }
   intros mf S' ? p. rewrite (left_id_eq ∅ (∪)) in p. inv_cstep p.
-  * inv_ehstep. rewrite mem_union_singleton_l.
+  * inv_ehstep. rewrite finmap_union_singleton_l.
     constructor; [solve_mem_disjoint | done | apply ax_done].
     constructor. solve_assert.
   * exfalso; eauto with cstep.
@@ -1107,10 +1106,10 @@ Proof.
 
   intros mf S' ? p. inv_cstep p.
   * inv_ehstep.
-    decompose_mem_disjoint.
-    rewrite !mem_union_delete, (delete_notin mf),
+    decompose_finmap_disjoint.
+    rewrite !finmap_union_delete, (delete_notin mf),
       (delete_notin m1), delete_singleton, (right_id_eq ∅ (∪)) by
-        by eauto using mem_disjoint_Some_r.
+        by eauto using finmap_disjoint_Some_r.
     by constructor; [| | apply ax_done].
   * exfalso; eauto with cstep.
 Qed.
@@ -1217,7 +1216,7 @@ Lemma ax_do Δ R J P Q e :
   Δ ⊨ₑ {{ P }} e {{ λ _, Q }} →
   Δ \ R \ J ⊨ₛ {{ P }} do e {{ Q }}.
 Proof.
-  intros Hax n k [] m ???; try contradiction.
+  intros Hax n k [] m ???; discriminate_down_up.
   apply ax_further_pred.
   { intros. solve_cred. }
   intros mf S' ? p. inv_cstep p.
@@ -1232,7 +1231,7 @@ Qed.
 
 Lemma ax_skip Δ R J P : Δ \ R \ J ⊨ₛ {{ P }} skip {{ P }}.
 Proof.
-  intros n k [] m ???; try contradiction.
+  intros n k [] m ???; discriminate_down_up.
   apply ax_further_pred.
   { intros. solve_cred. }
   intros mf S' ? p. inv_cstep p.
@@ -1244,7 +1243,7 @@ Lemma ax_ret Δ J P R e Q :
   Δ ⊨ₑ {{ P }} e {{ R }} →
   Δ \ R \ J ⊨ₛ {{ P }} ret e {{ Q }}.
 Proof.
-  intros Hax n k [] m ???; try contradiction.
+  intros Hax n k [] m ???; discriminate_down_up.
   apply ax_further_pred.
   { intros. solve_cred. }
   intros mf S' ? p. inv_cstep p.
@@ -1270,8 +1269,8 @@ Proof.
   { intros help n d m ???. apply ax_further_pred.
     { intros. solve_cred. }
     intros mf S' ? p.
-    destruct d; try contradiction; inv_cstep p;
-      rewrite mem_union_insert_l; decompose_is_free;
+    destruct d; discriminate_down_up; inv_cstep p;
+      rewrite finmap_union_insert_l; decompose_is_free;
       by constructor; [solve_mem_disjoint | |]; auto with ax. }
 
   intros n d m b v ????.
@@ -1285,9 +1284,9 @@ Proof.
   rewrite directed_fmap_spec in Hpost. simpl in Hpost.
   apply assert_free in Hpost. destruct Hpost as [? [v' ?]].
   intros mf S' ? p.
-  destruct d; try contradiction; inv_cstep p;
-    rewrite mem_union_delete, (delete_notin mf)
-      by eauto using mem_disjoint_Some_l;
+  destruct d; discriminate_down_up; inv_cstep p;
+    rewrite finmap_union_delete, (delete_notin mf)
+      by eauto using finmap_disjoint_Some_l;
     by constructor; [solve_mem_disjoint | | apply ax_done].
 Qed.
 
@@ -1310,7 +1309,7 @@ Proof.
   { intros help n d m ???. apply ax_further_pred.
     { intros. clear dependent Pd. solve_cred. }
     intros mf S' ? p.
-    destruct d; try contradiction; inv_cstep p;
+    destruct d; discriminate_down_up; inv_cstep p;
       by constructor; auto with ax. }
 
   induction n as [|n IH]; [constructor |].
@@ -1320,7 +1319,7 @@ Proof.
   intros m φ [d ? Hpost]. apply ax_further.
   { intros. solve_cred. }
 
-  intros mf S' ? p. destruct d; try contradiction; inv_cstep p.
+  intros mf S' ? p. destruct d; discriminate_down_up; inv_cstep p.
   * by constructor; [| | apply ax_done].
   * by constructor; [| | apply ax_done].
   * match goal with
@@ -1345,7 +1344,7 @@ Proof.
    ax_funs n Δ → down d s → Pd' d (get_stack k) m →
    ax (ax_stmt_P (while (e) s) Pd) k n
      (CStmt (while (e) □) :: k) (Stmt d s) m).
-  { intros help n [] m ???; try contradiction.
+  { intros help n [] m ???; discriminate_down_up.
     * apply ax_further_pred.
       { intros. solve_cred. }
       intros mf S' ? p. inv_cstep p.
@@ -1368,7 +1367,7 @@ Proof.
   intros m φ [d ? Hpost]. apply ax_further.
   { intros. solve_cred. }
 
-  intros mf S' ? p. destruct d; try contradiction; inv_cstep p.
+  intros mf S' ? p. destruct d; discriminate_down_up; inv_cstep p.
   * constructor; [done | done | clear dependent φ mf S'].
     apply ax_further_pred.
     { intros. solve_cred. }
@@ -1406,7 +1405,7 @@ Proof.
   { intros help n d m ???. apply ax_further_pred.
     { intros. solve_cred. }
     intros mf S' ? p.
-    destruct d; try contradiction; inv_cstep p;
+    destruct d; discriminate_down_up; inv_cstep p;
       by constructor; [done | done | eapply help]; eauto with ax. }
 
   induction n as [|n IH]; [repeat constructor |].
@@ -1416,7 +1415,7 @@ Proof.
     intros m φ [d ? Hpost]. apply ax_further.
     { intros. solve_cred. }
 
-    intros mf S' ? p. destruct d; try contradiction; inv_cstep p.
+    intros mf S' ? p. destruct d; discriminate_down_up; inv_cstep p.
     + constructor; [done | done | eapply IH]; auto with ax arith.
     + by constructor; [| | apply ax_done].
     + match goal with
@@ -1432,7 +1431,7 @@ Proof.
     intros m φ [d ? Hpost]. apply ax_further.
     { intros. solve_cred. }
 
-    intros mf S' ? p. destruct d; try contradiction; inv_cstep p.
+    intros mf S' ? p. destruct d; discriminate_down_up; inv_cstep p.
     + by constructor; [| | apply ax_done].
     + by constructor; [| | apply ax_done].
     + match goal with
@@ -1463,7 +1462,7 @@ Proof.
    ∧ (down d sr → Pdr d (get_stack k) m →
      ax (ax_stmt_P (IF e then sl else sr) Pd) k n
        (CStmt (IF e then sl else □) :: k) (Stmt d sr) m)).
-  { intros help n [] m ???; try contradiction.
+  { intros help n [] m ???; discriminate_down_up.
     * apply ax_further_pred.
       { intros. solve_cred. }
       intros mf S' ? p. inv_cstep p.
@@ -1486,7 +1485,7 @@ Proof.
     intros m φ [d ? Hpost]. apply ax_further.
     { intros. solve_cred. }
 
-    intros mf S' ? p. destruct d; try contradiction; inv_cstep p.
+    intros mf S' ? p. destruct d; discriminate_down_up; inv_cstep p.
     + by constructor; [| | apply ax_done].
     + by constructor; [| | apply ax_done].
     + match goal with
@@ -1502,7 +1501,7 @@ Proof.
     intros m φ [d ? Hpost]. apply ax_further.
     { intros. solve_cred. }
 
-    intros mf S' ? p. destruct d; try contradiction; inv_cstep p.
+    intros mf S' ? p. destruct d; discriminate_down_up; inv_cstep p.
     + by constructor; [| | apply ax_done].
     + by constructor; [| | apply ax_done].
     + match goal with
@@ -1522,7 +1521,7 @@ Instance: Params (@ax_stmt_top) 2.
 Instance: Params (@ax_expr) 2.
 
 Notation fassert_env := (funmap fassert).
-Notation dassert := (directed assert).
+Notation dassert := (direction → assert).
 Notation dassert_pack P Q R J := (@directed_pack assert P%A Q%A R%A J%A).
 
 Notation "δ \ Δ \ P ⊨ₚ s" :=

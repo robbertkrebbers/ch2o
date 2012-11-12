@@ -39,21 +39,21 @@ implementation [Nmap] for efficient finite maps indexed by labels. We define
 type classes [Gotos] and [Labels] to collect the labels of gotos respectively
 those of labeled statements. *)
 Definition label := N.
-Class Gotos A := gotos: ∀ `{Empty C} `{Union C} `{Singleton label C}, A → C.
-Arguments gotos {_ _ _ _ _ _} !_ / : simpl nomatch.
-Class Labels A := labels: ∀ `{Empty C} `{Union C} `{Singleton label C}, A → C.
-Arguments labels {_ _ _ _ _ _} !_ / : simpl nomatch.
+Class Gotos A := gotos: A → listset label.
+Arguments gotos {_ _} !_ / : simpl nomatch.
+Class Labels A := labels: A → listset label.
+Arguments labels {_ _} !_ / : simpl nomatch.
 
 (** We lift instances of the above type classes to lists. *)
 Instance list_gotos `{Gotos A} : Gotos (list A) :=
-  fix go `{Empty C} `{Union C} `{Singleton label C} (l : list A) : C :=
+  fix go (l : list A) : listset label :=
   let _ : Gotos _ := @go in
   match l with
   | [] => ∅
   | a :: l => gotos a ∪ gotos l
   end.
 Instance list_labels `{Labels A} : Labels (list A) :=
-  fix go `{Empty C} `{Union C} `{Singleton label C} (l : list A) : C :=
+  fix go (l : list A) : listset label :=
   let _ : Labels _ := @go in
   match l with
   | [] => ∅
@@ -115,7 +115,7 @@ Instance: Injective (=) (=) SBlock.
 Proof. by injection 1. Qed.
 
 Instance stmt_gotos: Gotos stmt :=
-  fix go `{Empty C} `{Union C} `{Singleton label C} (s : stmt) : C :=
+  fix go (s : stmt) : listset label :=
   let _ : Gotos _ := @go in
   match s with
   | blk s => gotos s
@@ -127,7 +127,7 @@ Instance stmt_gotos: Gotos stmt :=
   | _ => ∅
   end.
 Instance stmt_labels: Labels stmt :=
-  fix go `{Empty C} `{Union C} `{Singleton label C} (s : stmt) : C :=
+  fix go (s : stmt) : listset label :=
   let _ : Labels _ := @go in
   match s with
   | blk s => labels s
@@ -178,7 +178,7 @@ Instance: DestructSubst sctx_item_subst.
 Instance: ∀ E : sctx_item, Injective (=) (=) (subst E).
 Proof. destruct E; repeat intro; simpl in *; by simplify_equality. Qed.
 
-Instance sctx_item_gotos: Gotos sctx_item := λ _ _ _ _ E,
+Instance sctx_item_gotos: Gotos sctx_item := λ E,
   match E with
   | s2 ;; □ => gotos s2
   | □ ;; s1 => gotos s1
@@ -187,7 +187,7 @@ Instance sctx_item_gotos: Gotos sctx_item := λ _ _ _ _ E,
   | (IF _ then □ else s2) => gotos s2
   | (IF _ then s1 else □) => gotos s1
   end.
-Instance sctx_item_labels: Labels sctx_item := λ _ _ _ _ E,
+Instance sctx_item_labels: Labels sctx_item := λ E,
   match E with
   | s2 ;; □ => labels s2
   | □ ;; s1 => labels s1
@@ -197,22 +197,20 @@ Instance sctx_item_labels: Labels sctx_item := λ _ _ _ _ E,
   | (IF _ then s1 else □) => labels s1
   end.
 
-Lemma elem_of_sctx_item_gotos `{Collection label C} (l : label)
-    (E : sctx_item) (s : stmt) :
+Lemma elem_of_sctx_item_gotos (E : sctx_item) (s : stmt) (l : label) :
   l ∈ gotos (subst E s) ↔ l ∈ gotos E ∨ l ∈ gotos s.
 Proof. destruct E; solve_elem_of. Qed.
-Lemma sctx_item_gotos_spec `{Collection label C} (E : sctx_item) (s : stmt) :
+Lemma sctx_item_gotos_spec (E : sctx_item) (s : stmt) :
   gotos (subst E s) ≡ gotos E ∪ gotos s.
 Proof.
   apply elem_of_equiv. intros.
   rewrite elem_of_union. by apply elem_of_sctx_item_gotos.
 Qed.
 
-Lemma elem_of_sctx_item_labels `{Collection label C} (l : label)
-    (E : sctx_item) (s : stmt) :
+Lemma elem_of_sctx_item_labels (E : sctx_item) (s : stmt) (l : label) :
   l ∈ labels (subst E s) ↔ l ∈ labels E ∨ l ∈ labels s.
 Proof. destruct E; solve_elem_of. Qed.
-Lemma sctx_item_labels_spec `{Collection label C} (E : sctx_item) (s : stmt) :
+Lemma sctx_item_labels_spec (E : sctx_item) (s : stmt) :
   labels (subst E s) ≡ labels E ∪ labels s.
 Proof.
   apply elem_of_equiv. intros.

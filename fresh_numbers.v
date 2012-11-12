@@ -9,14 +9,14 @@ Definition Nmax `{Elements N C} : C → N := collection_fold Nmax 0%N.
 
 Instance Nmax_proper `{FinCollection N C} : Proper ((≡) ==> (=)) Nmax.
 Proof.
-  apply collection_fold_proper. intros.
-  rewrite !N.max_assoc. f_equal. apply N.max_comm.
+  apply (collection_fold_proper (=)).
+  * solve_proper.
+  * intros. rewrite !N.max_assoc. f_equal. apply N.max_comm.
 Qed.
 
 Lemma Nmax_max `{FinCollection N C} X x : x ∈ X → (x ≤ Nmax X)%N.
 Proof.
-  change ((λ b X, x ∈ X → (x ≤ b)%N) (collection_fold N.max 0%N X) X).
-  apply collection_fold_ind.
+  apply (collection_fold_ind (λ b X, x ∈ X → (x ≤ b)%N)).
   * solve_proper.
   * solve_elem_of.
   * solve_elem_of (eauto using N.le_max_l, N.le_max_r, N.le_trans).
@@ -26,6 +26,7 @@ Instance Nfresh `{FinCollection N C} : Fresh N C := λ l, (1 + Nmax l)%N.
 Instance Nfresh_spec `{FinCollection N C} : FreshSpec N C.
 Proof.
   split.
+  * apply _.
   * intros. unfold fresh, Nfresh.
     setoid_replace X with Y; [done |].
     by apply elem_of_equiv.

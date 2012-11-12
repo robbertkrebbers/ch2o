@@ -2,7 +2,20 @@
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects some general purpose tactics that are used throughout
 the development. *)
+Require Export Psatz.
 Require Export base.
+
+(** We declare hint databases [lia] and [congruence] containing solely the
+following hints. These hint database are useful in combination with another
+hint database [db] that contain lemmas with premises that should be solved by
+[lia] or [congruence]. One can now just say [auto with db,lia]. *)
+Hint Extern 1000 => lia : lia.
+Hint Extern 1000 => congruence : congruence.
+
+(** The tactic [intuition] expands to [intuition auto with *] by default. This
+is rather efficient when having big hint databases, or expensive [Hint Extern]
+declarations as the above. *)
+Tactic Notation "intuition" := intuition auto.
 
 (** A slightly modified version of Ssreflect's finishing tactic [done]. It
 also performs [reflexivity] and does not compute the goal's [hnf] so as to

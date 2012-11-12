@@ -21,12 +21,13 @@ Instance funname_fresh_spec `{FinCollection funname C} :
 Instance funmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
   ∀ m1 m2 : funmap A, Decision (m1 = m2) := decide_rel (=).
 Instance funmap_empty {A} : Empty (funmap A) := @empty (Nmap A) _.
-Instance funmap_lookup: Lookup funname funmap := @lookup _ Nmap _.
-Instance funmap_partial_alter: PartialAlter funname funmap :=
-  @partial_alter _ Nmap _.
-Instance funmap_dom : Dom funname funmap := @dom _ Nmap _.
+Instance funmap_lookup {A} : Lookup funname (funmap A) A :=
+  @lookup _ (Nmap A) _ _.
+Instance funmap_partial_alter {A} : PartialAlter funname (funmap A) A :=
+  @partial_alter _ (Nmap A) _ _.
+Instance funmap_dom {A} : Dom funname (funmap A) := @dom _ (Nmap A) _.
 Instance funmap_merge: Merge funmap := @merge Nmap _.
-Instance funmap_fmap {A B} (f : A → B) : FMap funmap f := @fmap Nmap _ _ f _.
+Instance funmap_fmap: FMap funmap := λ A B f, @fmap Nmap _ _ f _.
 Instance: FinMap funname funmap := _.
 
 Typeclasses Opaque funname funmap.
@@ -86,7 +87,7 @@ Inductive expr : Type :=
   | EUnOp : unop → expr → expr
   | EBinOp : binop → expr → expr → expr
   | EIf : expr → expr → expr → expr.
-  
+
 (** Stacks are lists of memory indexes rather than lists of values. This allows
 us to treat pointers to both local and allocated storage in a uniform way.
 Evaluation of a variable will therefore consist of a looking up its address in
@@ -202,8 +203,9 @@ Section expr_ind.
     | var x => Pvar x
     | val v => Pval v
     | el ::= er => Passign _ _ (go el) (go er)
-    | call f @ es => Pcall f es $
-       list_ind (Forall P) Forall_nil (λ e _, Forall_cons _ _ (go e)) es
+    | call f @ es => Pcall f es $ list_ind (Forall P)
+        (Forall_nil _)
+        (λ e _, Forall_cons _ _ _ (go e)) es
     | load e => Pload e (go e)
     | alloc => Palloc
     | free e => Pfree e (go e)
@@ -222,7 +224,7 @@ Instance expr_size: Size expr :=
   | var _ => 0
   | val _ => 0
   | el ::= er => S (size el + size er)
-  | call _ @ es => S (fold_right (plus ∘ size) 0 es)
+  | call _ @ es => S (foldr (plus ∘ size) 0 es)
   | load e => S (size e)
   | alloc => 0
   | free e => S (size e)
@@ -235,10 +237,10 @@ Lemma expr_wf_ind (P : expr → Prop)
   (Pind : ∀ e, (∀ e', size e' < size e → P e') → P e) : ∀ e, P e.
 Proof.
   cut (∀ n e, size e < n → P e).
-  { intros help e. apply (help (S (size e))). omega. }
+  { intros help e. apply (help (S (size e))). lia. }
   induction n.
-  * intros. omega.
-  * intros e ?. apply Pind. intros. apply IHn. omega.
+  * intros. lia.
+  * intros e ?. apply Pind. intros. apply IHn. lia.
 Qed.
 
 (** * Miscellaneous Operations and properties *)
@@ -322,7 +324,7 @@ Proof.
   * induction 1 as [|?? [v] _ IH].
     + by eexists [].
     + destruct IH as [vs ?]. exists (v :: vs). by subst.
-  * intros [vs H]. subst. rewrite <-Forall_fmap.
+  * intros [vs H]. subst. rewrite Forall_fmap.
     apply Forall_true, is_value_val.
 Qed.
 
@@ -331,12 +333,17 @@ Qed.
 [e] by structural recursion over [e]. Expressions with side-effects are given
 no semantics here. *)
 Reserved Notation "⟦ e ⟧" (format "⟦  e  ⟧").
+
 Fixpoint expr_eval (e : expr) (ρ : stack) (m : mem) : option value :=
   match e with
   | var x =>
     b ← ρ !! x;
     Some (ptr b)%V
   | val v => Some v
+  | load e =>
+    v ← ⟦ e ⟧ ρ m;
+    a ← is_ptr v;
+    m !! a
   | @{op} e =>
     v ← ⟦ e ⟧ ρ m;
     eval_unop op v
@@ -349,20 +356,7 @@ Fixpoint expr_eval (e : expr) (ρ : stack) (m : mem) : option value :=
     ⟦ if value_true_false_dec v then el else er ⟧ ρ m
   | _ => None
   end%E
-where "⟦ e ⟧" := (expr_eval e).
-
-(** Lifting DeBruijn indexes distributes over expression evaluation. *)
-Lemma expr_eval_lift ρ e m : ⟦ e↑ ⟧ ρ m = ⟦ e ⟧ (tail ρ) m.
-Proof.
-  revert ρ.
-  induction e using expr_ind_alt; intros; simplify_option_bind;
-    repeat match goal with
-    | H : ∀ ρ, ⟦ _↑ ⟧ ρ _ = _ |- _ => rewrite H
-    | |- _ ← ?x; ⟦ if _ then _ else _ ⟧ _ _ = _ =>
-      destruct x; simpl; try destruct (value_true_false_dec _)
-    end; auto.
-  by rewrite <-list_lookup_tail.
-Qed.
+where "⟦ e ⟧" := (expr_eval e) : C_scope.
 
 (** * Contexts with one hole *)
 (** We define singular expression contexts [ectx_item], and then full expression
@@ -587,7 +581,7 @@ Lemma ectx_full_item_subst {n} (E : ectx_full n) (es : vec expr n)
 Proof.
   intros H. destruct E, E'; simpl; simplify_equality; eauto.
   * edestruct (vec_to_list_lookup_middle es) as [i [H1 [? H2]]]; eauto.
-    exists i. split; [| f_equal]; trivial.
+    exists i. split; f_equal; trivial.
     by rewrite <-H1, reverse_involutive.
 Qed.
 
@@ -621,23 +615,14 @@ Proof.
 Qed.
 
 (** * Theorems *)
-(** Evaluation of expressions is preserved under extensions of the memory and
-the stack. *)
+(** Evaluation of expressions is preserved under extensions of the memory. *)
 Lemma expr_eval_weaken_mem ρ m1 m2 e v :
   ⟦ e ⟧ ρ m1 = Some v →
   m1 ⊆ m2 →
   ⟦ e ⟧ ρ m2 = Some v.
 Proof.
-  revert v. induction e; intros; simplify_option_bind;
-    repeat destruct (value_true_false_dec _); auto.
-Qed.
-
-Lemma expr_eval_weaken_stack ρ ρ' m e v :
-  ⟦ e ⟧ ρ m = Some v → ⟦ e ⟧ (ρ ++ ρ') m = Some v.
-Proof.
-  revert v. induction e; intros; simplify_option_bind; trivial.
-  * by erewrite list_lookup_weaken.
-  * destruct (value_true_false_dec _); auto.
+  revert v. induction e; intros; simplify_option_equality; auto.
+  destruct (value_true_false_dec _); auto.
 Qed.
 
 Lemma expr_eval_weaken_inv ρ m1 m2 e v1 v2 :
@@ -665,32 +650,78 @@ Proof.
   * congruence.
 Qed.
 
+Tactic Notation "simplify_expr_equality" "by" tactic3(tac) := repeat
+  match goal with
+  | _ => progress simplify_mem_equality by tac
+  | _ => progress simplify_option_equality by tac
+  | Ht : value_true ?v, Hf : value_false ?v |- _ =>
+    destruct (value_true_false v Ht Hf)
+  | H : is_ptr ?v = Some _ |- _ =>
+    apply is_ptr_Some in H
+  | H : context [ value_true_false_dec ?v ] |- _ =>
+    destruct (value_true_false_dec v)
+  | |- context [ value_true_false_dec ?v ] =>
+    destruct (value_true_false_dec v)
+  | H1 : ⟦ ?e ⟧ ?ρ ?m1 = Some ?v1, H2 : ⟦ ?e ⟧ ?ρ ?m2 = Some ?v2 |- _ =>
+    let H3 := fresh in
+    feed pose proof (expr_eval_weaken_inv e ρ m1 m2 v1 v2) as H3;
+      [done | by tac | done | ];
+    clear H2; symmetry in H3
+  end.
+Tactic Notation "simplify_expr_equality" :=
+  simplify_expr_equality by eauto.
+
+(** Lifting DeBruijn indexes distributes over expression evaluation. *)
+Lemma expr_eval_lift ρ e m :
+  ⟦ e↑ ⟧ ρ m = ⟦ e ⟧ (tail ρ) m.
+Proof.
+  induction e; intros; simpl; repeat
+    match goal with
+    | H : ⟦ _↑ ⟧ _ _ = _ |- _ => rewrite H
+    | |- _ ← ?o; ⟦ if _ then _ else _ ⟧ _ _ = _ =>
+      destruct o; simpl; try destruct (value_true_false_dec _)
+    end; auto.
+  by rewrite <-lookup_tail.
+Qed.
+
+(** Evaluation of expressions is preserved under extensions of the stack. *)
+Lemma expr_eval_weaken_stack ρ ρ' m e v :
+  ⟦ e ⟧ ρ m = Some v → ⟦ e ⟧ (ρ ++ ρ') m = Some v.
+Proof.
+  revert v. induction e; intros; simplify_expr_equality; auto.
+  rewrite lookup_app_l.
+  * by simplify_expr_equality.
+  * eauto using lookup_lt_length_alt.
+Qed.
+
+(** If an expression has a denotation, then each subexpression has a
+denotation as well. *)
 Lemma expr_eval_subst_inv (E : ectx) e ρ m v :
   ⟦ subst E e ⟧ ρ m = Some v →
   ∃ v', ⟦ e ⟧ ρ m = Some v' ∧ ⟦ subst E (val v')%E ⟧ ρ m = Some v.
 Proof.
   revert v. induction E as [|E' E IH] using rev_ind;
-    simpl; intros v; [by eauto |];
-    setoid_rewrite list_subst_snoc;
-    intros; destruct E'; simplify_option_bind;
-    naive_solver (by eauto || by simplify_option_bind).
+    simpl; intros v; [by eauto |].
+  setoid_rewrite list_subst_snoc.
+  intros; destruct E'; simplify_option_equality;
+    naive_solver (by eauto || by simplify_option_equality).
 Qed.
 
 Lemma subst_preserves_expr_eval (E : ectx) e1 e2 ρ m :
   ⟦ e1 ⟧ ρ m = ⟦ e2 ⟧ ρ m →
   ⟦ subst E e1 ⟧ ρ m = ⟦ subst E e2 ⟧ ρ m.
 Proof.
-  intros. induction E as [|E' ? IH] using rev_ind;
-   [done | destruct E'; rewrite ?list_subst_snoc; simpl; rewrite ?IH; auto].
+  intros. induction E as [|E' ? IH] using rev_ind; [done |].
+  destruct E'; rewrite ?list_subst_snoc; simpl; rewrite ?IH; auto.
 Qed.
 
 (** The function [expr_redexes e] computes the set of redexes contained in an
 expression [e]. Here, redexes are pairs [(E', e')] where [E'] is an expression
 evaluation context, and [e'] an expression with [is_redex e']. *)
 Section expr_split.
-  Context `{Collection (ectx * expr) redexes}.
+  Context C `{Collection (ectx * expr) C}.
 
-  Definition expr_redexes_aux : ectx → expr → redexes :=
+  Definition expr_redexes_aux : ectx → expr → C :=
     fix go E e {struct e} :=
     if decide (is_redex e) then {[ (E, e) ]} else
     match e with
@@ -706,19 +737,21 @@ Section expr_split.
     | e1 @{op} e2 => go (□ @{op} e2 :: E) e1 ∪ go (e1 @{op} □ :: E) e2
     | (IF e then el else er) => go ((IF □ then el else er) :: E) e
     end%E.
-  Definition expr_redexes : expr → redexes := expr_redexes_aux [].
+  Definition expr_redexes : expr → C := expr_redexes_aux [].
 
   Lemma expr_redexes_aux_is_redex E e E' e' :
     (E', e') ∈ expr_redexes_aux E e →
     is_redex e'.
   Proof.
-    assert (∀ (f : list expr → list expr → expr → redexes) es,
+    assert (∀ (f : list expr → list expr → expr → C) es,
       (E', e') ∈ ⋃ zipped_map f [] es →
       zipped_Forall (λ esl esr e, (E', e') ∈ f esl esr e → is_redex e') [] es →
       is_redex e').
     { intros f es Hes Hforall.
-      rewrite elem_of_union_list in Hes. destruct Hes as [rs [Hes ?]].
-      rewrite In_zipped_map in Hes. destruct Hes as [? [? [? [??]]]]; subst.
+      rewrite elem_of_union_list in Hes.
+      destruct Hes as [rs [Hes ?]].
+      rewrite elem_of_zipped_map in Hes.
+      destruct Hes as [? [? [? [??]]]]; subst.
       apply zipped_Forall_app in Hforall. inversion Hforall; subst. auto. }
     ectx_expr_ind E e;
      simpl; intros; repeat case_decide;
@@ -733,14 +766,16 @@ Section expr_split.
     (E', e') ∈ expr_redexes_aux E e →
     subst E e = subst E' e'.
   Proof.
-    assert (∀ g (f : list expr → list expr → expr → redexes) (E : ectx) es,
+    assert (∀ g (f : list expr → list expr → expr → C) (E : ectx) es,
       (E', e') ∈ ⋃ zipped_map f [] es →
       zipped_Forall (λ esl esr e, (E', e') ∈ f esl esr e →
         subst E (g (reverse esl ++ [e] ++ esr)) = subst E' e') [] es →
       subst E (g es) = subst E' e').
     { intros ? g f es Hes Hforall.
-      rewrite elem_of_union_list in Hes. destruct Hes as [rs [Hes ?]].
-      rewrite In_zipped_map in Hes. destruct Hes as [esl [? [? [??]]]]; subst.
+      rewrite elem_of_union_list in Hes.
+      destruct Hes as [rs [Hes ?]].
+      rewrite elem_of_zipped_map in Hes.
+      destruct Hes as [esl [? [? [??]]]]; subst.
       apply zipped_Forall_app in Hforall. inversion Hforall; subst.
       rewrite <-(reverse_involutive esl), <-(app_nil_r (reverse esl)).
       auto. }
@@ -757,7 +792,7 @@ Section expr_split.
     expr_redexes_aux E e ≡ ∅ →
     is_value e.
   Proof.
-    assert (∀ (f : list expr → list expr → expr → redexes) es1 es2,
+    assert (∀ (f : list expr → list expr → expr → C) es1 es2,
       ⋃ zipped_map f es1 es2 ≡ ∅ →
       zipped_Forall (λ esl esr e, f esl esr e ≡ ∅ → is_value e) es1 es2 →
       Forall is_value es2).
@@ -779,34 +814,13 @@ End expr_split.
 Lemma is_value_or_redex e :
   is_value e ∨ ∃ (E' : ectx) e', is_redex e' ∧ e = subst E' e'.
 Proof.
-  destruct (elem_of_or_empty (expr_redexes e : listset (ectx * expr)))
+  destruct (elem_of_or_empty (expr_redexes (listset (ectx * expr)) e))
     as [[[E' e'] ?]|?].
-  * right. exists E' e'.
-    eauto using expr_redexes_is_redex, expr_redexes_correct.
-  * left. by apply expr_redexes_is_value.
+  * right. exists E' e'. split.
+    + by apply (expr_redexes_is_redex (listset _)) with e E'. 
+    + by apply (expr_redexes_correct (listset _)).
+  * left. by apply (expr_redexes_is_value (listset _)).
 Qed.
 Lemma is_value_is_redex e :
   ¬is_value e → ∃ (E' : ectx) e', is_redex e' ∧ e = subst E' e'.
 Proof. intros. by destruct (is_value_or_redex e). Qed.
-
-(** * Tactics *)
-(** The tactic [simplify_expr_eval] merges hypotheses
-[H1 : ⟦ e ⟧ ρ m1 = Some v1] and [H2 : ⟦ e ⟧ ρ m2 = Some v2] by substituting
-[v1] for [v2] and removing the hypothesis [H1] or [H2] that is on the largest
-memory. The tactic may yield goals of the shape [m1 ⊆ m2] if these cannot be
-solved automatically. *)
-Ltac simplify_expr_eval := repeat
-  match goal with
-  | H1 : ⟦ ?e ⟧ ?ρ ?m1 = Some ?v1, H2 : ⟦ ?e ⟧ ?ρ ?m2 = Some ?v2 |- _ =>
-    let H3 := fresh in
-    feed pose proof (expr_eval_weaken_inv e ρ m1 m2 v1 v2) as H3;
-      [done | eauto with mem | done | ];
-    clear H2; symmetry in H3
-  | H1 : Forall2 (λ e v, ⟦ e ⟧ ?ρ ?m1 = Some v) ?es ?vs1,
-     H2 : Forall2 (λ e v, ⟦ e ⟧ ?ρ ?m2 = Some v) ?es ?vs2 |- _ =>
-    let H3 := fresh in
-    feed pose proof (Forall_expr_eval_weaken_inv es ρ m1 m2 vs1 vs2) as H3;
-      [done | eauto with mem | done | ];
-    clear H2; symmetry in H3
-  | _ => progress simplify_equality
-  end.

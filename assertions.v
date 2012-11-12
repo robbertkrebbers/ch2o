@@ -103,7 +103,7 @@ Hint Extern 100 (_ ⊥ _) => solve_mem_disjoint : assert.
 
 Ltac solve_assert :=
   repeat intro;
-  intuition auto;
+  intuition;
   repeat autounfold with assert in *;
   unfold_assert in *;
   naive_solver (eauto with assert; congruence).
@@ -376,14 +376,14 @@ Proof.
   * intros ? m ?. exists m (∅ : mem).
     repeat split. apply (right_id _ _). solve_mem_disjoint. done.
   * intros ? ? (m1 & m2 & ? & ? & ? & ?). subst.
-    eauto using mem_ext, mem_subseteq_union_l.
+    eauto using mem_ext, finmap_subseteq_union_l.
 Qed.
 Lemma assert_sep_true_mem_ext P : P ≡ (P * True)%A → MemExt P.
 Proof.
   intros H ρ m1 m2 ??. rewrite H.
   exists m1 (m2 ∖ m1). repeat split; auto.
-  * by rewrite <-mem_union_difference.
-  * by apply mem_disjoint_difference_r.
+  * by rewrite <-finmap_union_difference.
+  * by apply finmap_disjoint_difference_r.
 Qed.
 Lemma mem_ext_sep_true_iff P : P ≡ (P * True)%A ↔ MemExt P.
 Proof.
@@ -411,7 +411,7 @@ Instance assert_sep_mem_ext : MemExt P → MemExt Q → MemExt (P * Q).
 Proof.
   intros ???? ? m1 m2 (m2' & m2'' & ? & ? & ? & ?) ?; subst.
   exists m2' (m2'' ∪ m2 ∖ (m2' ∪ m2'')). repeat split.
-  * by rewrite (associative _), <-mem_union_difference.
+  * by rewrite (associative _), <-finmap_union_difference.
   * solve_mem_disjoint.
   * done.
   * apply mem_ext with m2''; auto with mem.
@@ -420,8 +420,8 @@ Qed.
 (** Proofs of other useful properties. *)
 Lemma assert_sep_comm_1 P Q : (P * Q)%A ⊆ (Q * P)%A.
 Proof.
-  intros ? m (m1 & m2 & H & Hm1 & Hm2).
-  exists m2 m1. rewrite mem_union_comm; intuition.
+  intros ? m (m1 & m2 & ? & ? & HP & HQ).
+  exists m2 m1. by rewrite finmap_union_comm.
 Qed.
 Instance: Commutative (≡) assert_sep.
 Proof. split; apply assert_sep_comm_1. Qed.
@@ -488,7 +488,7 @@ Notation "'Π' Ps" := (assert_sep_list Ps)
 Lemma assert_sep_list_alt (Ps : list assert) ρ m :
   (Π Ps)%A ρ m ↔ ∃ ms,
     m = ⋃ ms
-  ∧ mem_list_disjoint ms
+  ∧ list_disjoint ms
   ∧ Forall2 (λ (P : assert) m, P ρ m) Ps ms.
 Proof.
   split.
@@ -497,19 +497,19 @@ Proof.
     + intros ? (m1 & m2 & ? & ? & ? & ?); subst.
       destruct (IH m2) as (ms & ? & ? & ?); trivial; subst.
       exists (m1 :: ms). repeat constructor; trivial.
-      by apply mem_disjoint_union_list_r.
+      by apply finmap_disjoint_union_list_r.
   * intros (m2 & ? & Hdisjoint & Hassert); subst.
     revert Hdisjoint.
     induction Hassert as [|P m Ps ms IH]; inversion_clear 1.
     + done.
-    + exists m (⋃ ms). rewrite mem_disjoint_union_list_r.
+    + exists m (⋃ ms). rewrite finmap_disjoint_union_list_r.
       intuition.
 Qed.
 
 Lemma assert_sep_list_alt_vec {n} (Ps : vec assert n) ρ m :
   (Π Ps)%A ρ m ↔ ∃ ms : vec mem n,
     m = ⋃ ms
-  ∧ mem_list_disjoint ms
+  ∧ list_disjoint ms
   ∧ ∀ i, (Ps !!! i) ρ (ms !!! i).
 Proof.
   rewrite assert_sep_list_alt. split.
@@ -523,7 +523,7 @@ Proof.
 Qed.
 
 Lemma assert_sep_list_alt_vec_2 {n} (Ps : vec assert n) ρ (ms : vec mem n) :
-  mem_list_disjoint ms →
+  list_disjoint ms →
   (∀ i, (Ps !!! i) ρ (ms !!! i)) →
   (Π Ps)%A ρ (⋃ ms).
 Proof. intros. apply assert_sep_list_alt_vec. by exists ms. Qed.
@@ -643,7 +643,7 @@ Lemma assert_alloc (P : assert) (b : index) (v : value) (ρ : stack) m :
   (var 0 ↦ - * P↑)%A (b :: ρ) (<[b:=v]>m).
 Proof.
   intros ??. eexists {[(b, v)]}, m. repeat split.
-  * by rewrite mem_union_singleton_l.
+  * by rewrite finmap_union_singleton_l.
   * solve_mem_disjoint.
   * by exists b v.
   * done.
@@ -654,7 +654,7 @@ Lemma assert_free (P : assert) (b : index) (ρ : stack) m :
   P ρ (delete b m) ∧ ∃ v, m !! b = Some v.
 Proof.
   intros (m1 & m2 & ? & ? & (a & v & ? & ?) & ?); simplify_equality.
-  rewrite <-mem_union_singleton_l, delete_insert by solve_mem_disjoint.
+  rewrite <-finmap_union_singleton_l, delete_insert by solve_mem_disjoint.
   simplify_map_equality; eauto.
 Qed.
 
@@ -676,7 +676,7 @@ Proof.
     by apply (stack_indep ρ).
   * rewrite <-(associative assert_sep).
     eexists {[(b, v)]}, m2. repeat split.
-    + by rewrite mem_union_singleton_l.
+    + by rewrite finmap_union_singleton_l.
     + solve_mem_disjoint.
     + exists b v. repeat split. simpl.
       by rewrite list_lookup_middle.
@@ -717,16 +717,15 @@ Proof.
     intros (m1 & m2 & ? & ? & (b' & v' & Heval & ?) & ?).
     simplify_equality. simpl in Heval.
     rewrite list_lookup_middle in Heval. simplify_equality.
-    rewrite <-mem_union_singleton_l, delete_list_insert_comm by done.
+    rewrite <-finmap_union_singleton_l, delete_list_insert_comm by done.
     feed destruct (IH (bs' ++ [b']) m2) as [??]; trivial.
     { by rewrite app_length, NPeano.Nat.add_1_r, <-app_assoc. }
     split.
     + rewrite delete_insert; [done |].
-      rewrite lookup_delete_list_notin by done.
+      rewrite lookup_delete_list_not_elem_of by done.
       solve_mem_disjoint.
     + constructor; simplify_mem_equality; eauto.
       apply Forall_impl with (λ b, ∃ v, m2 !! b = Some v); trivial.
       intros b [??].
       destruct (decide (b = b')); simplify_mem_equality; eauto.
 Qed.
-

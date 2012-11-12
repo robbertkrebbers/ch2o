@@ -4,11 +4,11 @@
 importantly, it implements a fold and size function and some useful induction
 principles on finite collections . *)
 Require Import Permutation.
-Require Export collections listset numbers.
+Require Export collections numbers listset.
 
-Instance collection_size `{Elements A C} : Size C := λ X, length (elements X).
-Definition collection_fold `{Elements A C} {B} (f : A → B → B)
-  (b : B) (X : C) : B := foldr f b (elements X).
+Instance collection_size `{Elements A C} : Size C := length ∘ elements.
+Definition collection_fold `{Elements A C} {B}
+  (f : A → B → B) (b : B) : C → B := foldr f b ∘ elements.
 
 Section fin_collection.
 Context `{FinCollection A C}.
@@ -23,42 +23,44 @@ Qed.
 Global Instance collection_size_proper: Proper ((≡) ==> (=)) size.
 Proof. intros ?? E. apply Permutation_length. by rewrite E. Qed.
 
-Lemma size_empty : size ∅ = 0.
+Lemma size_empty : size (∅ : C) = 0.
 Proof.
-  unfold size, collection_size. rewrite (in_nil_inv (elements ∅)).
+  unfold size, collection_size. simpl.
+  rewrite (elem_of_nil_inv (elements ∅)).
   * done.
   * intro. rewrite <-elements_spec. solve_elem_of.
 Qed.
-Lemma size_empty_inv X : size X = 0 → X ≡ ∅.
+Lemma size_empty_inv (X : C) : size X = 0 → X ≡ ∅.
 Proof.
   intros. apply equiv_empty. intro. rewrite elements_spec.
-  rewrite (nil_length (elements X)); intuition.
+  rewrite (nil_length (elements X)). by rewrite elem_of_nil. done.
 Qed.
-Lemma size_empty_iff X : size X = 0 ↔ X ≡ ∅.
+Lemma size_empty_iff (X : C) : size X = 0 ↔ X ≡ ∅.
 Proof. split. apply size_empty_inv. intros E. by rewrite E, size_empty. Qed.
 
-Lemma size_singleton x : size {[ x ]} = 1.
+Lemma size_singleton (x : A) : size {[ x ]} = 1.
 Proof.
   change (length (elements {[ x ]}) = length [x]).
   apply Permutation_length, NoDup_Permutation.
   * apply elements_nodup.
   * apply NoDup_singleton.
-  * intros. rewrite <-elements_spec. esolve_elem_of firstorder.
+  * intros.
+    by rewrite <-elements_spec, elem_of_singleton, elem_of_list_singleton.
 Qed.
 Lemma size_singleton_inv X x y : size X = 1 → x ∈ X → y ∈ X → x = y.
 Proof.
-  unfold size, collection_size. rewrite !elements_spec.
+  unfold size, collection_size. simpl. rewrite !elements_spec.
   generalize (elements X). intros [|? l].
   * done.
   * injection 1. intro. rewrite (nil_length l) by done.
-    simpl. intuition congruence.
+    simpl. rewrite !elem_of_list_singleton. congruence.
 Qed.
 
 Lemma elem_of_or_empty X : (∃ x, x ∈ X) ∨ X ≡ ∅.
 Proof.
   destruct (elements X) as [|x xs] eqn:E.
   * right. apply equiv_empty. intros x Ex.
-    by rewrite elements_spec, E in Ex.
+    by rewrite elements_spec, E, elem_of_nil in Ex.
   * left. exists x. rewrite elements_spec, E.
     by constructor.
 Qed.
@@ -87,17 +89,17 @@ Qed.
 
 Lemma size_union X Y : X ∩ Y ≡ ∅ → size (X ∪ Y) = size X + size Y.
 Proof.
-  intros [E _]. unfold size, collection_size. rewrite <-app_length.
+  intros [E _]. unfold size, collection_size. simpl. rewrite <-app_length.
   apply Permutation_length, NoDup_Permutation.
   * apply elements_nodup.
-  * apply NoDup_app; try apply elements_nodup.
+  * apply NoDup_app; repeat split; try apply elements_nodup.
     intros x. rewrite <-!elements_spec. esolve_elem_of.
-  * intros. rewrite in_app_iff, <-!elements_spec. solve_elem_of.
+  * intros. rewrite elem_of_app, <-!elements_spec. solve_elem_of.
 Qed.
 
 Instance elem_of_dec_slow (x : A) (X : C) : Decision (x ∈ X) | 100.
 Proof.
-  refine (cast_if (decide_rel In x (elements X)));
+  refine (cast_if (decide_rel (∈) x (elements X)));
     by rewrite (elements_spec _).
 Defined.
 Global Program Instance collection_subseteq_dec_slow (X Y : C) :
@@ -178,11 +180,12 @@ Lemma collection_fold_ind {B} (P : B → C → Prop) (f : A → B → B) (b : B)
   ∀ X, P (collection_fold f b X) X.
 Proof.
   intros ? Hemp Hadd.
-  cut (∀ l, NoDup l → ∀ X, (∀ x, x ∈ X ↔ In x l) → P (foldr f b l) X).
+  cut (∀ l, NoDup l → ∀ X, (∀ x, x ∈ X ↔ x ∈ l) → P (foldr f b l) X).
   { intros help ?. apply help. apply elements_nodup. apply elements_spec. }
-  induction 1 as [|x l ?? IHl]; simpl.
-  * intros X HX. rewrite equiv_empty; firstorder.
-  * intros X HX.
+  induction 1 as [|x l ?? IHl].
+  * intros X HX. setoid_rewrite elem_of_nil in HX.
+    rewrite equiv_empty; firstorder.
+  * intros X HX. setoid_rewrite elem_of_cons in HX.
     rewrite <-(subseteq_union_1 {[ x ]} X) by esolve_elem_of.
     rewrite <-union_difference.
     apply Hadd. solve_elem_of. apply IHl.
@@ -191,25 +194,32 @@ Proof.
     + esolve_elem_of.
 Qed.
 
-Lemma collection_fold_proper {B} (f : A → B → B) (b : B) :
-  (∀ a1 a2 b, f a1 (f a2 b) = f a2 (f a1 b)) →
-  Proper ((≡) ==> (=)) (collection_fold f b).
-Proof. intros ??? E. apply foldr_permutation. auto. by rewrite E. Qed.
+Lemma collection_fold_proper {B} (R : relation B)
+    `{!Equivalence R}
+    (f : A → B → B) (b : B)
+    `{!Proper ((=) ==> R ==> R) f}
+    (Hf : ∀ a1 a2 b, R (f a1 (f a2 b)) (f a2 (f a1 b))) :
+  Proper ((≡) ==> R) (collection_fold f b).
+Proof.
+  intros ?? E. apply (foldr_permutation R f b).
+  * auto.
+  * by rewrite E.
+Qed.
 
 Global Instance cforall_dec `(P : A → Prop)
-    `{∀ x, Decision (P x)} X : Decision (cforall P X) | 100.
+  `{∀ x, Decision (P x)} X : Decision (cforall P X) | 100.
 Proof.
   refine (cast_if (decide (Forall P (elements X))));
-  abstract (unfold cforall; setoid_rewrite elements_spec;
-    by rewrite <-Forall_forall).
+    abstract (unfold cforall; setoid_rewrite elements_spec;
+      by rewrite <-Forall_forall).
 Defined.
 
 Global Instance cexists_dec `(P : A → Prop) `{∀ x, Decision (P x)} X :
   Decision (cexists P X) | 100.
 Proof.
   refine (cast_if (decide (Exists P (elements X))));
-  abstract (unfold cexists; setoid_rewrite elements_spec;
-    by rewrite <-Exists_exists).
+    abstract (unfold cexists; setoid_rewrite elements_spec;
+      by rewrite <-Exists_exists).
 Defined.
 
 Global Instance rel_elem_of_dec `{∀ x y, Decision (R x y)} x X :

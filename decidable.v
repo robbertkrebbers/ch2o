@@ -93,12 +93,14 @@ Instance False_dec: Decision False := right (False_rect False).
 Section prop_dec.
   Context `(P_dec : Decision P) `(Q_dec : Decision Q).
 
+  Global Instance not_dec: Decision (¬P).
+  Proof. refine (cast_if_not P_dec); intuition. Defined.
   Global Instance and_dec: Decision (P ∧ Q).
-  Proof. refine (cast_if_and P_dec Q_dec); intuition. Qed.
+  Proof. refine (cast_if_and P_dec Q_dec); intuition. Defined.
   Global Instance or_dec: Decision (P ∨ Q).
-  Proof. refine (cast_if_or P_dec Q_dec); intuition. Qed.
+  Proof. refine (cast_if_or P_dec Q_dec); intuition. Defined.
   Global Instance impl_dec: Decision (P → Q).
-  Proof. refine (if P_dec then cast_if Q_dec else left _); intuition. Qed.
+  Proof. refine (if P_dec then cast_if Q_dec else left _); intuition. Defined.
 End prop_dec.
 
 (** Instances of [Decision] for common data types. *)

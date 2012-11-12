@@ -6,11 +6,11 @@ Require Export
   decidable
   orders
   option
-  list
   vector
   numbers
   collections
   fin_collections
   listset
-  subset
-  fresh_numbers.
+  listset_nodup
+  fresh_numbers
+  list.

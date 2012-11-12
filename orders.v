@@ -127,7 +127,8 @@ Section meet_sl.
   Proof. intros. transitivity x1; auto. Qed.
   Hint Resolve intersection_compat_l intersection_compat_r.
 
-  Lemma intersection_compat x1 x2 y1 y2 : x1 ⊆ x2 → y1 ⊆ y2 → x1 ∩ y1 ⊆ x2 ∩ y2.
+  Lemma intersection_compat x1 x2 y1 y2 :
+    x1 ⊆ x2 → y1 ⊆ y2 → x1 ∩ y1 ⊆ x2 ∩ y2.
   Proof. auto. Qed.
   Lemma intersection_comm x y : x ∩ y ⊆ y ∩ x.
   Proof. auto. Qed.

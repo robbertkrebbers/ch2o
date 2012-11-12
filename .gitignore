@@ -13,4 +13,4 @@ coqidescript
 utils/coq2html
 utils/coq2html.ml
 doc/*.html
-
+*.cache

@@ -4,7 +4,7 @@
 These are particularly useful as we define the operational semantics as a
 small step semantics. This file defines a hint database [ars] containing
 some theorems on abstract rewriting systems. *)
-Require Import Omega Wf_nat.
+Require Import Wf_nat.
 Require Export tactics base.
 
 (** * Definitions *)
@@ -101,7 +101,7 @@ Section rtc.
     bsteps R n x y → bsteps R (m + n) x y.
   Proof. apply bsteps_weaken. auto with arith. Qed.
   Lemma bsteps_S n x y :  bsteps R n x y → bsteps R (S n) x y.
-  Proof. apply bsteps_weaken. omega. Qed.
+  Proof. apply bsteps_weaken. lia. Qed.
   Lemma bsteps_trans n m x y z :
     bsteps R n x y → bsteps R m y z → bsteps R (n + m) x z.
   Proof. induction 1; simpl; eauto using bsteps_plus_l with ars. Qed.
@@ -129,11 +129,11 @@ Section rtc.
     induction 1 as [|m x' y z p2 p3 IH]; [by eauto with arith|].
     intros n p1 H. rewrite <-plus_n_Sm.
     apply (IH (S n)); [by eauto using bsteps_r |].
-    intros [|m'] [??]; [omega |].
+    intros [|m'] [??]; [lia |].
     apply Pstep with x'.
-    * apply bsteps_weaken with n; intuition omega.
+    * apply bsteps_weaken with n; intuition lia.
     * done.
-    * apply H; intuition omega.
+    * apply H; intuition lia.
   Qed.
 
   Global Instance tc_trans: Transitive (tc R).
