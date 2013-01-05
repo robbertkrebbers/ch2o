@@ -1106,7 +1106,7 @@ Proof.
 
   intros mf S' ? p. inv_cstep p.
   * inv_ehstep.
-    decompose_finmap_disjoint.
+    decompose_map_disjoint.
     rewrite !finmap_union_delete, (delete_notin mf),
       (delete_notin m1), delete_singleton, (right_id_eq ∅ (∪)) by
         by eauto using finmap_disjoint_Some_r.

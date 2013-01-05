@@ -21,12 +21,13 @@ Instance funname_fresh_spec `{FinCollection funname C} :
 Instance funmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
   ∀ m1 m2 : funmap A, Decision (m1 = m2) := decide_rel (=).
 Instance funmap_empty {A} : Empty (funmap A) := @empty (Nmap A) _.
-Instance funmap_lookup {A} : Lookup funname (funmap A) A :=
-  @lookup _ (Nmap A) _ _.
-Instance funmap_partial_alter {A} : PartialAlter funname (funmap A) A :=
-  @partial_alter _ (Nmap A) _ _.
-Instance funmap_dom {A} : Dom funname (funmap A) := @dom _ (Nmap A) _.
-Instance funmap_merge: Merge funmap := @merge Nmap _.
+Instance funmap_lookup {A} : Lookup funname A (funmap A) :=
+  @lookup _ _ (Nmap A) _.
+Instance funmap_partial_alter {A} : PartialAlter funname A (funmap A) :=
+  @partial_alter _ _ (Nmap A) _.
+Instance funmap_to_list {A} : FinMapToList funname A (funmap A) :=
+  @finmap_to_list _ _ (funmap A) _.
+Instance funmap_merge {A} : Merge A (funmap A) := @merge _ (Nmap A) _.
 Instance funmap_fmap: FMap funmap := λ A B f, @fmap Nmap _ _ f _.
 Instance: FinMap funname funmap := _.
 
@@ -204,8 +205,8 @@ Section expr_ind.
     | val v => Pval v
     | el ::= er => Passign _ _ (go el) (go er)
     | call f @ es => Pcall f es $ list_ind (Forall P)
-        (Forall_nil _)
-        (λ e _, Forall_cons _ _ _ (go e)) es
+       (Forall_nil _)
+       (λ e _, Forall_cons _ _ _ (go e)) es
     | load e => Pload e (go e)
     | alloc => Palloc
     | free e => Pfree e (go e)
@@ -224,7 +225,7 @@ Instance expr_size: Size expr :=
   | var _ => 0
   | val _ => 0
   | el ::= er => S (size el + size er)
-  | call _ @ es => S (foldr (plus ∘ size) 0 es)
+  | call _ @ es => S (sum_list_with size es)
   | load e => S (size e)
   | alloc => 0
   | free e => S (size e)
@@ -337,23 +338,23 @@ Reserved Notation "⟦ e ⟧" (format "⟦  e  ⟧").
 Fixpoint expr_eval (e : expr) (ρ : stack) (m : mem) : option value :=
   match e with
   | var x =>
-    b ← ρ !! x;
-    Some (ptr b)%V
+     b ← ρ !! x;
+     Some (ptr b)%V
   | val v => Some v
   | load e =>
-    v ← ⟦ e ⟧ ρ m;
-    a ← is_ptr v;
-    m !! a
+     v ← ⟦ e ⟧ ρ m;
+     a ← is_ptr v;
+     m !! a
   | @{op} e =>
-    v ← ⟦ e ⟧ ρ m;
-    eval_unop op v
+     v ← ⟦ e ⟧ ρ m;
+     eval_unop op v
   | el @{op} er =>
-    vl ← ⟦ el ⟧ ρ m;
-    vr ← ⟦ er ⟧ ρ m;
-    eval_binop op vl vr
+     vl ← ⟦ el ⟧ ρ m;
+     vr ← ⟦ er ⟧ ρ m;
+     eval_binop op vl vr
   | (IF e then el else er) =>
-    v ← ⟦ e ⟧ ρ m;
-    ⟦ if value_true_false_dec v then el else er ⟧ ρ m
+     v ← ⟦ e ⟧ ρ m;
+     ⟦ if value_true_false_dec v then el else er ⟧ ρ m
   | _ => None
   end%E
 where "⟦ e ⟧" := (expr_eval e) : C_scope.
@@ -729,7 +730,7 @@ Section expr_split.
     | var x => ∅ (* impossible *)
     | el ::= er => go (□ ::= er :: E) el ∪ go (el ::= □ :: E) er
     | call f @ es =>
-      ⋃ (zipped_map (λ esl esr, go ((call f @ esl □ esr) :: E)) [] es)
+       ⋃ (zipped_map (λ esl esr, go ((call f @ esl □ esr) :: E)) [] es)
     | load e => go (load □ :: E) e
     | alloc => ∅ (* impossible *)
     | free e => go (free □ :: E) e

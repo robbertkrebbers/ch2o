@@ -8,9 +8,9 @@ Require Export
   option
   vector
   numbers
+  ars
   collections
   fin_collections
   listset
-  listset_nodup
   fresh_numbers
   list.

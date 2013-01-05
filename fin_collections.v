@@ -3,7 +3,7 @@
 (** This file collects definitions and theorems on finite collections. Most
 importantly, it implements a fold and size function and some useful induction
 principles on finite collections . *)
-Require Import Permutation.
+Require Import Permutation ars.
 Require Export collections numbers listset.
 
 Instance collection_size `{Elements A C} : Size C := length ∘ elements.
@@ -37,6 +37,8 @@ Proof.
 Qed.
 Lemma size_empty_iff (X : C) : size X = 0 ↔ X ≡ ∅.
 Proof. split. apply size_empty_inv. intros E. by rewrite E, size_empty. Qed.
+Lemma size_non_empty_iff (X : C) : size X ≠ 0 ↔ X ≢ ∅.
+Proof. by rewrite size_empty_iff. Qed.
 
 Lemma size_singleton (x : A) : size {[ x ]} = 1.
 Proof.
@@ -123,39 +125,25 @@ Qed.
 
 Lemma size_union_alt X Y : size (X ∪ Y) = size X + size (Y ∖ X).
 Proof.
-  rewrite <-size_union. by rewrite union_difference. solve_elem_of.
-Qed.
-Lemma size_add X x : x ∉ X → size ({[ x ]} ∪ X) = S (size X).
-Proof.
-  intros. rewrite size_union. by rewrite size_singleton. solve_elem_of.
-Qed.
-
-Lemma size_difference X Y : X ⊆ Y → size X + size (Y ∖ X) = size Y.
-Proof. intros. by rewrite <-size_union_alt, subseteq_union_1. Qed.
-Lemma size_remove X x : x ∈ X → S (size (X ∖ {[ x ]})) = size X.
-Proof.
-  intros. rewrite <-(size_difference {[ x ]} X).
-  * rewrite size_singleton. auto with arith.
-  * solve_elem_of.
+  rewrite <-size_union by solve_elem_of.
+  setoid_replace (Y ∖ X) with ((Y ∪ X) ∖ X) by esolve_elem_of.
+  rewrite <-union_difference, (commutative (∪)); solve_elem_of.
 Qed.
 
 Lemma subseteq_size X Y : X ⊆ Y → size X ≤ size Y.
 Proof.
-  intros. rewrite <-(subseteq_union_1 X Y) by done.
-  rewrite <-(union_difference X Y), size_union by solve_elem_of.
-  auto with arith.
+  intros. rewrite (union_difference X Y), size_union_alt by done. lia.
+Qed.
+Lemma subset_size X Y : X ⊂ Y → size X < size Y.
+Proof.
+  intros. rewrite (union_difference X Y) by solve_elem_of.
+  rewrite size_union_alt, difference_twice.
+  cut (size (Y ∖ X) ≠ 0); [lia |].
+  by apply size_non_empty_iff, non_empty_difference.
 Qed.
 
-Lemma collection_wf_ind (P : C → Prop) :
-  (∀ X, (∀ Y, size Y < size X → P Y) → P X) →
-  ∀ X, P X.
-Proof.
-  intros Hind. cut (∀ n X, size X < n → P X).
-  { intros help X. apply help with (S (size X)). auto with arith. }
-  induction n; intros.
-  * by destruct (Lt.lt_n_0 (size X)).
-  * apply Hind. intros. apply IHn. eauto with arith.
-Qed.
+Lemma collection_wf : wf (@subset C _).
+Proof. apply well_founded_lt_compat with size, subset_size. Qed.
 
 Lemma collection_ind (P : C → Prop) :
   Proper ((≡) ==> iff) P →
@@ -163,14 +151,12 @@ Lemma collection_ind (P : C → Prop) :
   (∀ x X, x ∉ X → P X → P ({[ x ]} ∪ X)) →
   ∀ X, P X.
 Proof.
-  intros ? Hemp Hadd. apply collection_wf_ind.
-  intros X IH. destruct (Compare_dec.zerop (size X)).
-  * by rewrite size_empty_inv.
-  * destruct (size_pos_choose X); auto.
-    rewrite <-(subseteq_union_1 {[ x ]} X) by solve_elem_of.
-    rewrite <-union_difference.
-    apply Hadd; [solve_elem_of |]. apply IH.
-    rewrite <-(size_remove X x); auto with arith.
+  intros ? Hemp Hadd. apply well_founded_induction with (⊂).
+  { apply collection_wf. }
+  intros X IH. destruct (elem_of_or_empty X) as [[x ?]|HX].
+  * rewrite (union_difference {[ x ]} X) by solve_elem_of.
+    apply Hadd. solve_elem_of. apply IH. esolve_elem_of.
+  * by rewrite HX.
 Qed.
 
 Lemma collection_fold_ind {B} (P : B → C → Prop) (f : A → B → B) (b : B) :
@@ -182,16 +168,12 @@ Proof.
   intros ? Hemp Hadd.
   cut (∀ l, NoDup l → ∀ X, (∀ x, x ∈ X ↔ x ∈ l) → P (foldr f b l) X).
   { intros help ?. apply help. apply elements_nodup. apply elements_spec. }
-  induction 1 as [|x l ?? IHl].
+  induction 1 as [|x l ?? IH]; simpl.
   * intros X HX. setoid_rewrite elem_of_nil in HX.
-    rewrite equiv_empty; firstorder.
+    rewrite equiv_empty. done. esolve_elem_of.
   * intros X HX. setoid_rewrite elem_of_cons in HX.
-    rewrite <-(subseteq_union_1 {[ x ]} X) by esolve_elem_of.
-    rewrite <-union_difference.
-    apply Hadd. solve_elem_of. apply IHl.
-    intros y. split.
-    + intros. destruct (proj1 (HX y)); solve_elem_of.
-    + esolve_elem_of.
+    rewrite (union_difference {[ x ]} X) by esolve_elem_of.
+    apply Hadd. solve_elem_of. apply IH. esolve_elem_of.
 Qed.
 
 Lemma collection_fold_proper {B} (R : relation B)

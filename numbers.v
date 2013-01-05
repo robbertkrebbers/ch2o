@@ -31,9 +31,22 @@ Proof. auto with arith. Qed.
 Lemma lt_n_SSS n : n < S (S (S n)).
 Proof. auto with arith. Qed.
 
+Definition sum_list_with {A} (f : A → nat) : list A → nat :=
+  fix go l :=
+  match l with
+  | [] => 0
+  | x :: l => f x + go l
+  end.
+Notation sum_list := (sum_list_with id).
+
 Instance positive_eq_dec: ∀ x y : positive, Decision (x = y) := Pos.eq_dec.
 Notation "(~0)" := xO (only parsing) : positive_scope.
 Notation "(~1)" := xI (only parsing) : positive_scope.
+
+Instance: Injective (=) (=) xO.
+Proof. by injection 1. Qed.
+Instance: Injective (=) (=) xI.
+Proof. by injection 1. Qed.
 
 Infix "≤" := N.le : N_scope.
 Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z)%N : N_scope.
@@ -45,6 +58,9 @@ Notation "(<)" := N.lt (only parsing) : N_scope.
 
 Infix "`div`" := N.div (at level 35) : N_scope.
 Infix "`mod`" := N.modulo (at level 35) : N_scope.
+
+Instance: Injective (=) (=) Npos.
+Proof. by injection 1. Qed.
 
 Instance N_eq_dec: ∀ x y : N, Decision (x = y) := N.eq_dec.
 Program Instance N_le_dec (x y : N) : Decision (x ≤ y)%N :=

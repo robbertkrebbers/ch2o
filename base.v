@@ -12,9 +12,11 @@ Require Export Morphisms RelationClasses List Bool Utf8 Program Setoid NArith.
 (** The following coercion allows us to use Booleans as propositions. *)
 Coercion Is_true : bool >-> Sortclass.
 
-(** Ensure that [simpl] unfolds [id] and [compose] when fully applied. *)
+(** Ensure that [simpl] unfolds [id], [compose], and [flip] when fully
+applied. *)
 Arguments id _ _/.
 Arguments compose _ _ _ _ _ _ /.
+Arguments flip _ _ _ _ _ _/.
 
 (** Change [True] and [False] into notations in order to enable overloading.
 We will use this in the file [assertions] to give [True] and [False] a
@@ -22,6 +24,9 @@ different interpretation in [assert_scope] used for assertions of our axiomatic
 semantics. *)
 Notation "'True'" := True : type_scope.
 Notation "'False'" := False : type_scope.
+
+Notation curry := prod_curry.
+Notation uncurry := prod_uncurry.
 
 (** Throughout this development we use [C_scope] for all general purpose
 notations that do not belong to a more specific scope. *)
@@ -159,6 +164,17 @@ Notation "( ⊈ X )" := (λ Y, Y ⊈ X) (only parsing) : C_scope.
 
 Hint Extern 0 (_ ⊆ _) => reflexivity.
 
+Class Subset A := subset: A → A → Prop.
+Instance: Params (@subset) 2.
+Infix "⊂" := subset (at level 70) : C_scope.
+Notation "(⊂)" := subset (only parsing) : C_scope.
+Notation "( X ⊂ )" := (subset X) (only parsing) : C_scope.
+Notation "( ⊂ X )" := (λ Y, subset Y X) (only parsing) : C_scope.
+Notation "X ⊄  Y" := (¬X ⊂ Y) (at level 70) : C_scope.
+Notation "(⊄)" := (λ X Y, X ⊄ Y) (only parsing) : C_scope.
+Notation "( X ⊄ )" := (λ Y, X ⊄ Y) (only parsing) : C_scope.
+Notation "( ⊄ X )" := (λ Y, Y ⊄ X) (only parsing) : C_scope.
+
 Class ElemOf A B := elem_of: A → B → Prop.
 Instance: Params (@elem_of) 3.
 Infix "∈" := elem_of (at level 70) : C_scope.
@@ -191,6 +207,10 @@ Proof. inversion_clear 1; auto. Qed.
 
 Instance generic_disjoint `{ElemOf A B} : Disjoint B | 100 :=
   λ X Y, ∀ x, x ∉ X ∨ x ∉ Y.
+
+Class Filter A B :=
+  filter: ∀ (P : A → Prop) `{∀ x, Decision (P x)}, B → B.
+(* Arguments filter {_ _ _} _ {_} !_ / : simpl nomatch. *)
 
 (** ** Monadic operations *)
 (** We define operational type classes for the monadic operations bind, join 
@@ -230,9 +250,13 @@ Instance: Params (@fmap) 6.
 Arguments fmap {_ _ _} _ {_} !_ / : simpl nomatch.
 
 Notation "m ≫= f" := (mbind f m) (at level 60, right associativity) : C_scope.
+Notation "( m ≫=)" := (λ f, mbind f m) (only parsing) : C_scope.
+Notation "(≫= f )" := (mbind f) (only parsing) : C_scope.
+Notation "(≫=)" := (λ m f, mbind f m) (only parsing) : C_scope.
+
 Notation "x ← y ; z" := (y ≫= (λ x : _, z))
   (at level 65, only parsing, next at level 35, right associativity) : C_scope.
-Infix "<$>" := fmap (at level 65, right associativity, only parsing) : C_scope.
+Infix "<$>" := fmap (at level 65, right associativity) : C_scope.
 
 Class MGuard (M : Type → Type) :=
   mguard: ∀ P {dec : Decision P} {A}, M A → M A.
@@ -243,7 +267,7 @@ Notation "'guard' P ; o" := (mguard P o)
 (** In this section we define operational type classes for the operations
 on maps. In the file [fin_maps] we will axiomatize finite maps.
 The function lookup [m !! k] should yield the element at key [k] in [m]. *)
-Class Lookup (K M A : Type) :=
+Class Lookup (K A M : Type) :=
   lookup: K → M → option A.
 Instance: Params (@lookup) 4.
 
@@ -255,7 +279,7 @@ Arguments lookup _ _ _ _ !_ !_ / : simpl nomatch.
 
 (** The function insert [<[k:=a]>m] should update the element at key [k] with
 value [a] in [m]. *)
-Class Insert (K M A : Type) :=
+Class Insert (K A M : Type) :=
   insert: K → A → M → M.
 Instance: Params (@insert) 4.
 Notation "<[ k := a ]>" := (insert k a)
@@ -272,9 +296,9 @@ Arguments delete _ _ _ !_ !_ / : simpl nomatch.
 
 (** The function [alter f k m] should update the value at key [k] using the
 function [f], which is called with the original value. *)
-Class AlterD (K M A : Type) (f : A → A) :=
+Class AlterD (K A M : Type) (f : A → A) :=
   alter: K → M → M.
-Notation Alter K M A := (∀ (f : A → A), AlterD K M A f)%type.
+Notation Alter K A M := (∀ (f : A → A), AlterD K A M f)%type.
 Instance: Params (@alter) 5.
 Arguments alter {_ _ _} _ {_} !_ !_ / : simpl nomatch.
 
@@ -282,7 +306,7 @@ Arguments alter {_ _ _} _ {_} !_ !_ / : simpl nomatch.
 function [f], which is called with the original value at key [k] or [None]
 if [k] is not a member of [m]. The value at [k] should be deleted if [f] 
 yields [None]. *)
-Class PartialAlter (K M A : Type) :=
+Class PartialAlter (K A M : Type) :=
   partial_alter: (option A → option A) → K → M → M.
 Instance: Params (@partial_alter) 4.
 Arguments partial_alter _ _ _ _ _ !_ !_ / : simpl nomatch.
@@ -297,38 +321,42 @@ Arguments dom _ _ _ _ _ _ _ !_ / : simpl nomatch.
 (** The function [merge f m1 m2] should merge the maps [m1] and [m2] by
 constructing a new map whose value at key [k] is [f (m1 !! k) (m2 !! k)]
 provided that [k] is a member of either [m1] or [m2].*)
-Class Merge (M : Type → Type) :=
-  merge: ∀ {A}, (option A → option A → option A) → M A → M A → M A.
+Class Merge (A M : Type) :=
+  merge: (option A → option A → option A) → M → M → M.
 Instance: Params (@merge) 3.
 Arguments merge _ _ _ _ !_ !_ / : simpl nomatch.
 
 (** We lift the insert and delete operation to lists of elements. *)
-Definition insert_list `{Insert K M A} (l : list (K * A)) (m : M) : M :=
+Definition insert_list `{Insert K A M} (l : list (K * A)) (m : M) : M :=
   fold_right (λ p, <[ fst p := snd p ]>) m l.
 Instance: Params (@insert_list) 4.
 Definition delete_list `{Delete K M} (l : list K) (m : M) : M :=
   fold_right delete m l.
 Instance: Params (@delete_list) 3.
 
-Definition insert_consecutive `{Insert nat M A}
+Definition insert_consecutive `{Insert nat A M}
     (i : nat) (l : list A) (m : M) : M :=
   fold_right (λ x f i, <[i:=x]>(f (S i))) (λ _, m) l i.
 Instance: Params (@insert_consecutive) 3.
 
-(** The function [union_with f m1 m2] should yield the union of [m1] and [m2]
-using the function [f] to combine values of members that are in both [m1] and
-[m2]. *)
-Class UnionWith (M : Type → Type) :=
-  union_with: ∀ {A}, (A → A → A) → M A → M A → M A.
+(** The function [union_with f m1 m2] is supposed to yield the union of [m1]
+and [m2] using the function [f] to combine values of members that are in
+both [m1] and [m2]. *)
+Class UnionWith (A M : Type) :=
+  union_with: (A → A → option A) → M → M → M.
 Instance: Params (@union_with) 3.
 
-(** Similarly for the intersection and difference. *)
-Class IntersectionWith (M : Type → Type) :=
-  intersection_with: ∀ {A}, (A → A → A) → M A → M A → M A.
+(** Similarly for intersection and difference. *)
+Class IntersectionWith (A M : Type) :=
+  intersection_with: (A → A → option A) → M → M → M.
 Instance: Params (@intersection_with) 3.
-Class DifferenceWith (M : Type → Type) :=
-  difference_with: ∀ {A}, (A → A → option A) → M A → M A → M A.
+Class DifferenceWith (A M : Type) :=
+  difference_with: (A → A → option A) → M → M → M.
 Instance: Params (@difference_with) 3.
+
+Definition intersection_with_list `{IntersectionWith A M}
+  (f : A → A → option A) : M → list M → M := fold_right (intersection_with f).
+Arguments intersection_with_list _ _ _ _ _ !_ /.
 
 (** ** Common properties *)
 (** These operational type classes allow us to refer to common mathematical
@@ -350,6 +378,8 @@ Class LeftAbsorb {A} R (i : A) (f : A → A → A) :=
   left_absorb: ∀ x, R (f i x) i.
 Class RightAbsorb {A} R (i : A) (f : A → A → A) :=
   right_absorb: ∀ x, R (f x i) i.
+Class AntiSymmetric {A} (R : A → A → Prop) :=
+  anti_symmetric: ∀ x y, R x y → R y x → x = y.
 
 Arguments injective {_ _ _ _} _ {_} _ _ _.
 Arguments idempotent {_ _} _ {_} _.
@@ -359,6 +389,7 @@ Arguments right_id {_ _} _ _ {_} _.
 Arguments associative {_ _} _ {_} _ _ _.
 Arguments left_absorb {_ _} _ _ {_} _.
 Arguments right_absorb {_ _} _ _ {_} _.
+Arguments anti_symmetric {_} _ {_} _ _ _ _.
 
 (** The following lemmas are more specific versions of the projections of the
 above type classes. These lemmas allow us to enforce Coq not to use the setoid
@@ -390,6 +421,10 @@ Proof. auto. Qed.
 Class BoundedPreOrder A `{Empty A} `{SubsetEq A} := {
   bounded_preorder :>> PreOrder (⊆);
   subseteq_empty x : ∅ ⊆ x
+}.
+Class PartialOrder A `{SubsetEq A} := {
+  po_preorder :>> PreOrder (⊆);
+  po_antisym :> AntiSymmetric (⊆)
 }.
 
 (** We do not include equality in the following interfaces so as to avoid the
@@ -423,11 +458,13 @@ Class SimpleCollection A C `{ElemOf A C}
   elem_of_singleton (x y : A) : x ∈ {[ y ]} ↔ x = y;
   elem_of_union X Y (x : A) : x ∈ X ∪ Y ↔ x ∈ X ∨ x ∈ Y
 }.
-Class Collection A C `{ElemOf A C} `{Empty C} `{Singleton A C} `{Union C}
-    `{Intersection C} `{Difference C} := {
+Class Collection A C `{ElemOf A C} `{Empty C} `{Singleton A C}
+    `{Union C} `{Intersection C} `{Difference C} `{IntersectionWith A C} := {
   collection_simple :>> SimpleCollection A C;
   elem_of_intersection X Y (x : A) : x ∈ X ∩ Y ↔ x ∈ X ∧ x ∈ Y;
-  elem_of_difference X Y (x : A) : x ∈ X ∖ Y ↔ x ∈ X ∧ x ∉ Y
+  elem_of_difference X Y (x : A) : x ∈ X ∖ Y ↔ x ∈ X ∧ x ∉ Y;
+  elem_of_intersection_with (f : A → A → option A) X Y (x : A) :
+    x ∈ intersection_with f X Y ↔ ∃ x1 x2, x1 ∈ X ∧ x2 ∈ Y ∧ f x1 x2 = Some x
 }.
 
 (** We axiomative a finite collection as a collection whose elements can be
@@ -448,10 +485,12 @@ Inductive NoDup {A} : list A → Prop :=
 
 (** Decidability of equality of the carrier set is admissible, but we add it
 anyway so as to avoid cycles in type class search. *)
-Class FinCollection A C `{ElemOf A C} `{Empty C} `{Union C}
-    `{Intersection C} `{Difference C} `{Singleton A C}
-    `{Elements A C} `{∀ x y : A, Decision (x = y)} := {
+Class FinCollection A C `{ElemOf A C} `{Empty C} `{Singleton A C}
+    `{Union C} `{Intersection C} `{Difference C} `{IntersectionWith A C}
+    `{Filter A C} `{Elements A C} `{∀ x y : A, Decision (x = y)} := {
   fin_collection :>> Collection A C;
+  elem_of_filter X P `{∀ x, Decision (P x)} x :
+    x ∈ filter P X ↔ P x ∧ x ∈ X;
   elements_spec X x : x ∈ X ↔ x ∈ elements X;
   elements_nodup X : NoDup (elements X)
 }.
@@ -471,13 +510,13 @@ Class CollectionMonad M `{∀ A, ElemOf A (M A)}
     `{∀ A, Empty (M A)} `{∀ A, Singleton A (M A)} `{∀ A, Union (M A)}
     `{!MBind M} `{!MRet M} `{!FMap M} `{!MJoin M} := {
   collection_monad_simple A :> SimpleCollection A (M A);
-  elem_of_bind {A B} (f : A → M B) (x : B) (X : M A) :
+  elem_of_bind {A B} (f : A → M B) (X : M A) (x : B) :
     x ∈ X ≫= f ↔ ∃ y, x ∈ f y ∧ y ∈ X;
   elem_of_ret {A} (x y : A) :
     x ∈ mret y ↔ x = y;
-  elem_of_fmap {A B} (f : A → B) (x : B) (X : M A) :
+  elem_of_fmap {A B} (f : A → B) (X : M A) (x : B) :
     x ∈ f <$> X ↔ ∃ y, x = f y ∧ y ∈ X;
-  elem_of_join {A} (x : A) (X : M (M A)) :
+  elem_of_join {A} (X : M (M A)) (x : A) :
     x ∈ mjoin X ↔ ∃ Y, x ∈ Y ∧ Y ∈ X
 }.
 
@@ -520,6 +559,24 @@ Definition fst_map {A A' B} (f : A → A') (p : A * B) : A' * B :=
   (f (fst p), snd p).
 Definition snd_map {A B B'} (f : B → B') (p : A * B) : A * B' :=
   (fst p, f (snd p)).
+Arguments fst_map {_ _ _} _ !_ /.
+Arguments snd_map {_ _ _} _ !_ /.
+
+Instance: ∀ {A A' B} (f : A → A'),
+  Injective (=) (=) f → Injective (=) (=) (@fst_map A A' B f).
+Proof.
+  intros ????? [??] [??]; simpl; intro; f_equal.
+  * apply (injective f). congruence.
+  * congruence.
+Qed.
+Instance: ∀ {A B B'} (f : B → B'),
+  Injective (=) (=) f → Injective (=) (=) (@snd_map A B B' f).
+Proof.
+  intros ????? [??] [??]; simpl; intro; f_equal.
+  * congruence.
+  * apply (injective f). congruence.
+Qed.
+
 Definition prod_relation {A B} (R1 : relation A) (R2 : relation B) :
   relation (A * B) := λ x y, R1 (fst x) (fst y) ∧ R2 (snd x) (snd y).
 

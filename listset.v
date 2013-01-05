@@ -20,29 +20,44 @@ Instance listset_empty: Empty (listset A) :=
 Instance listset_singleton: Singleton A (listset A) := λ x,
   Listset [x].
 Instance listset_union: Union (listset A) := λ l k,
-  Listset (listset_car l ++ listset_car k).
+  match l, k with
+  | Listset l', Listset k' => Listset (l' ++ k')
+  end.
 
 Global Instance: SimpleCollection A (listset A).
 Proof.
   split.
   * by apply not_elem_of_nil.
   * by apply elem_of_list_singleton.
-  * intros. apply elem_of_app.
+  * intros [?] [?]. apply elem_of_app.
 Qed.
 
 Context `{∀ x y : A, Decision (x = y)}.
 
 Instance listset_intersection: Intersection (listset A) := λ l k,
-  Listset (list_intersection (listset_car l) (listset_car k)).
+  match l, k with
+  | Listset l', Listset k' => Listset (list_intersection l' k')
+  end.
 Instance listset_difference: Difference (listset A) := λ l k,
-  Listset (list_difference (listset_car l) (listset_car k)).
+  match l, k with
+  | Listset l', Listset k' => Listset (list_difference l' k')
+  end.
+Instance listset_intersection_with: IntersectionWith A (listset A) := λ f l k,
+  match l, k with
+  | Listset l', Listset k' => Listset (list_intersection_with f l' k')
+  end.
+Instance listset_filter: Filter A (listset A) := λ P _ l,
+  match l with
+  | Listset l' => Listset (filter P l')
+  end.
 
 Global Instance: Collection A (listset A).
 Proof.
   split.
   * apply _.
-  * intros. apply elem_of_list_intersection.
-  * intros. apply elem_of_list_difference.
+  * intros [?] [?]. apply elem_of_list_intersection.
+  * intros [?] [?]. apply elem_of_list_difference.
+  * intros ? [?] [?]. apply elem_of_list_intersection_with.
 Qed.
 
 Instance listset_elems: Elements A (listset A) :=
@@ -52,6 +67,7 @@ Global Instance: FinCollection A (listset A).
 Proof.
   split.
   * apply _.
+  * intros [?] ??. apply elem_of_list_filter.
   * symmetry. apply elem_of_remove_dups.
   * intros. apply remove_dups_nodup.
 Qed.
@@ -69,27 +85,35 @@ Hint Extern 1 (Union (listset _)) =>
   eapply @listset_union : typeclass_instances.
 Hint Extern 1 (Intersection (listset _)) =>
   eapply @listset_intersection : typeclass_instances.
+Hint Extern 1 (IntersectionWith _ (listset _)) =>
+  eapply @listset_intersection_with : typeclass_instances.
 Hint Extern 1 (Difference (listset _)) =>
   eapply @listset_difference : typeclass_instances.
 Hint Extern 1 (Elements _ (listset _)) =>
   eapply @listset_elems : typeclass_instances.
+Hint Extern 1 (Filter _ (listset _)) =>
+  eapply @listset_filter : typeclass_instances.
 
 Instance listset_ret: MRet listset := λ A x,
   {[ x ]}.
 Instance listset_fmap: FMap listset := λ A B f l,
-  Listset (f <$> listset_car l).
+  match l with
+  | Listset l' => Listset (f <$> l')
+  end.
 Instance listset_bind: MBind listset := λ A B f l,
-  Listset (mbind (listset_car ∘ f) (listset_car l)).
+  match l with
+  | Listset l' => Listset (mbind (listset_car ∘ f) l')
+  end.
 Instance listset_join: MJoin listset := λ A, mbind id.
 
 Instance: CollectionMonad listset.
 Proof.
   split.
   * intros. apply _.
-  * intros. apply elem_of_list_bind.
+  * intros ??? [?] ?. apply elem_of_list_bind.
   * intros. apply elem_of_list_ret.
-  * intros. apply elem_of_list_fmap.
-  * intros ?? [l].
+  * intros ??? [?]. apply elem_of_list_fmap.
+  * intros ? [?] ?.
     unfold mjoin, listset_join, elem_of, listset_elem_of.
     simpl. by rewrite elem_of_list_bind.
 Qed.

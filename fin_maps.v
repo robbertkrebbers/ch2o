@@ -4,6 +4,7 @@
 finite maps and collects some theory on it. Most importantly, it proves useful
 induction principles for finite maps and implements the tactic [simplify_map]
 to simplify goals involving finite maps. *)
+Require Import Permutation.
 Require Export prelude.
 (** * Axiomatization of finite maps *)
 (** We require Leibniz equality to be extensional on finite maps. This of
@@ -13,17 +14,22 @@ be a serious limitation. The main application of finite maps is to implement
 the memory, where extensionality of Leibniz equality is very important for a
 convenient use in the assertions of our axiomatic semantics. *)
 
-(** Finiteness is axiomatized by requiring each map to have a finite domain.
-Since we may have multiple implementations of finite sets, the [dom] function is
-parametrized by an implementation of finite sets over the map's key type. *)
+(** Finiteness is axiomatized by requiring that each map can be translated
+to an association list. The translation to association lists is used to
+implement the [dom] function, and for well founded recursion on finite maps. *)
 
 (** Finite map implementations are required to implement the [merge] function
 which enables us to give a generic implementation of [union_with],
 [intersection_with], and [difference_with]. *)
 
+Class FinMapToList K A M := finmap_to_list: M → list (K * A).
+
 Class FinMap K M `{!FMap M}
-    `{∀ A, Lookup K (M A) A} `{∀ A, Empty (M A)}
-    `{∀ A, PartialAlter K (M A) A} `{∀ A, Dom K (M A)} `{!Merge M}
+    `{∀ A, Lookup K A (M A)}
+    `{∀ A, Empty (M A)}
+    `{∀ A, PartialAlter K A (M A)}
+    `{∀ A, Merge A (M A)}
+    `{∀ A, FinMapToList K A (M A)}
     `{∀ i j : K, Decision (i = j)} := {
   finmap_eq {A} (m1 m2 : M A) :
     (∀ i, m1 !! i = m2 !! i) → m1 = m2;
@@ -35,8 +41,10 @@ Class FinMap K M `{!FMap M}
     i ≠ j → partial_alter f i m !! j = m !! j;
   lookup_fmap {A B} (f : A → B) (m : M A) i :
     (f <$> m) !! i = f <$> m !! i;
-  elem_of_dom C {A} `{Collection K C} (m : M A) i :
-    i ∈ dom C m ↔ is_Some (m !! i);
+  finmap_to_list_nodup {A} (m : M A) :
+    NoDup (finmap_to_list m);
+  elem_of_finmap_to_list {A} (m : M A) i x :
+    (i,x) ∈ finmap_to_list m ↔ m !! i = Some x;
   merge_spec {A} f `{!PropHolds (f None None = None)}
     (m1 m2 : M A) i : merge f m1 m2 !! i = f (m1 !! i) (m2 !! i)
 }.
@@ -46,43 +54,48 @@ Class FinMap K M `{!FMap M}
 finite map implementations. These generic implementations do not cause a
 significant performance loss to make including them in the finite map interface
 worthwhile. *)
-Instance finmap_insert `{PartialAlter K M A} : Insert K M A := λ i x,
+Instance finmap_insert `{PartialAlter K A M} : Insert K A M := λ i x,
   partial_alter (λ _, Some x) i.
-Instance finmap_alter `{PartialAlter K M A} : Alter K M A := λ f,
+Instance finmap_alter `{PartialAlter K A M} : Alter K A M := λ f,
   partial_alter (fmap f).
-Instance finmap_delete `{PartialAlter K M A} : Delete K M :=
+Instance finmap_delete `{PartialAlter K A M} : Delete K M :=
   partial_alter (λ _, None).
-
-Instance finmap_singleton `{PartialAlter K M A}
+Instance finmap_singleton `{PartialAlter K A M}
   `{Empty M} : Singleton (K * A) M := λ p, <[fst p:=snd p]>∅.
-Definition list_to_map `{Insert K M A} `{Empty M}
-  (l : list (K * A)) : M := insert_list l ∅.
 
-Instance finmap_union_with `{Merge M} : UnionWith M := λ A f,
+Definition finmap_of_list `{Insert K A M} `{Empty M}
+  (l : list (K * A)) : M := insert_list l ∅.
+Instance finmap_dom `{FinMapToList K A M} : Dom K M := λ C _ _ _,
+  foldr ((∪) ∘ singleton ∘ fst) ∅ ∘ finmap_to_list.
+
+Instance finmap_union_with `{Merge A M} : UnionWith A M := λ f,
   merge (union_with f).
-Instance finmap_intersection_with `{Merge M} : IntersectionWith M := λ A f,
+Instance finmap_intersection_with `{Merge A M} : IntersectionWith A M := λ f,
   merge (intersection_with f).
-Instance finmap_difference_with `{Merge M} : DifferenceWith M := λ A f,
+Instance finmap_difference_with `{Merge A M} : DifferenceWith A M := λ f,
   merge (difference_with f).
 
 (** The relation [intersection_forall R] on finite maps describes that the
 relation [R] holds for each pair in the intersection. *)
-Definition intersection_forall `{Lookup K M A} (R : relation A) : relation M :=
-  λ m1 m2, ∀ i x1 x2, m1 !! i = Some x1 → m2 !! i = Some x2 → R x1 x2.
-Instance finmap_disjoint `{∀ A, Lookup K (M A) A} : Disjoint (M A) := λ A,
-  intersection_forall (λ _ _, False).
+Definition finmap_forall `{Lookup K A M} (P : K → A → Prop) : M → Prop :=
+  λ m, ∀ i x, m !! i = Some x → P i x.
+Definition finmap_intersection_forall `{Lookup K A M}
+    (R : relation A) : relation M := λ m1 m2,
+  ∀ i x1 x2, m1 !! i = Some x1 → m2 !! i = Some x2 → R x1 x2.
+Instance finmap_disjoint `{∀ A, Lookup K A (M A)} : Disjoint (M A) := λ A,
+  finmap_intersection_forall (λ _ _, False).
 
 (** The union of two finite maps only has a meaningful definition for maps
 that are disjoint. However, as working with partial functions is inconvenient
 in Coq, we define the union as a total function. In case both finite maps
 have a value at the same index, we take the value of the first map. *)
-Instance finmap_union `{Merge M} {A} : Union (M A) :=
-  union_with (λ x _, x).
-Instance finmap_intersection `{Merge M} {A} : Intersection (M A) :=
-  union_with (λ x _, x).
+Instance finmap_union `{Merge A M} : Union M :=
+  union_with (λ x _, Some x).
+Instance finmap_intersection `{Merge A M} : Intersection M :=
+  union_with (λ x _, Some x).
 (** The difference operation removes all values from the first map whose
 index contains a value in the second map as well. *)
-Instance finmap_difference `{Merge M} {A} : Difference (M A) :=
+Instance finmap_difference `{Merge A M} : Difference M :=
   difference_with (λ _ _, None).
 
 (** * General theorems *)
@@ -97,6 +110,9 @@ Section finmap_common.
   Lemma lookup_weaken (m1 m2 : M A) i x :
     m1 !! i = Some x → m1 ⊆ m2 → m2 !! i = Some x.
   Proof. auto. Qed.
+  Lemma lookup_weaken_is_Some (m1 m2 : M A) i :
+    is_Some (m1 !! i) → m1 ⊆ m2 → is_Some (m2 !! i).
+  Proof. inversion 1. eauto using lookup_weaken. Qed.
   Lemma lookup_weaken_None (m1 m2 : M A) i :
     m2 !! i = None → m1 ⊆ m2 → m1 !! i = None.
   Proof.
@@ -116,26 +132,9 @@ Section finmap_common.
 
   Lemma lookup_ne (m : M A) i j : m !! i ≠ m !! j → i ≠ j.
   Proof. congruence. Qed.
-
-  Lemma not_elem_of_dom C `{Collection K C} (m : M A) i :
-    i ∉ dom C m ↔ m !! i = None.
-  Proof. by rewrite (elem_of_dom C), eq_None_not_Some. Qed.
-
   Lemma finmap_empty (m : M A) : (∀ i, m !! i = None) → m = ∅.
   Proof. intros Hm. apply finmap_eq. intros. by rewrite Hm, lookup_empty. Qed.
-  Lemma dom_empty C `{Collection K C} : dom C (∅ : M A) ≡ ∅.
-  Proof.
-    split; intro.
-    * rewrite (elem_of_dom C), lookup_empty. by inversion 1.
-    * solve_elem_of.
-  Qed.
-  Lemma dom_empty_inv C `{Collection K C} (m : M A) : dom C m ≡ ∅ → m = ∅.
-  Proof.
-    intros E. apply finmap_empty. intros. apply (not_elem_of_dom C).
-    rewrite E. solve_elem_of.
-  Qed.
-
-  Lemma lookup_empty_not i : ¬is_Some ((∅ : M A) !! i).
+  Lemma lookup_empty_is_Some i : ¬is_Some ((∅ : M A) !! i).
   Proof. rewrite lookup_empty. by inversion 1. Qed.
   Lemma lookup_empty_Some i (x : A) : ¬∅ !! i = Some x.
   Proof. by rewrite lookup_empty. Qed.
@@ -272,15 +271,9 @@ Section finmap_common.
     intros. unfold delete, finmap_delete. rewrite <-partial_alter_compose.
     rapply partial_alter_self_alt. congruence.
   Qed.
-  Lemma delete_partial_alter_dom C `{Collection K C} (m : M A) i f :
-    i ∉ dom C m → delete i (partial_alter f i m) = m.
-  Proof. rewrite (not_elem_of_dom C). apply delete_partial_alter. Qed.
   Lemma delete_insert (m : M A) i x :
     m !! i = None → delete i (<[i:=x]>m) = m.
   Proof. apply delete_partial_alter. Qed.
-  Lemma delete_insert_dom C `{Collection K C} (m : M A) i x :
-    i ∉ dom C m → delete i (<[i:=x]>m) = m.
-  Proof. rewrite (not_elem_of_dom C). apply delete_partial_alter. Qed.
   Lemma insert_delete (m : M A) i x :
     m !! i = Some x → <[i:=x]>(delete i m) = m.
   Proof.
@@ -288,16 +281,6 @@ Section finmap_common.
     rewrite <-partial_alter_compose. unfold compose. rewrite <-Hmi.
     by apply partial_alter_self_alt.
   Qed.
-
-  Lemma elem_of_dom_delete C `{Collection K C} (m : M A) i j :
-    i ∈ dom C (delete j m) ↔ i ≠ j ∧ i ∈ dom C m.
-  Proof.
-    rewrite !(elem_of_dom C), <-!not_eq_None_Some.
-    rewrite lookup_delete_None. intuition.
-  Qed.
-  Lemma not_elem_of_dom_delete C `{Collection K C} (m : M A) i :
-    i ∉ dom C (delete i m).
-  Proof. apply (not_elem_of_dom C), lookup_delete. Qed.
 
   Lemma lookup_delete_list (m : M A) is j :
     j ∈ is → delete_list is m !! j = None.
@@ -329,6 +312,117 @@ Section finmap_common.
     rewrite elem_of_cons. intros.
     rewrite IHis, delete_insert_comm; intuition.
   Qed.
+
+  Lemma elem_of_dom C `{SimpleCollection K C} (m : M A) i :
+    i ∈ dom C m ↔ is_Some (m !! i).
+  Proof.
+    unfold dom, finmap_dom. simpl. rewrite is_Some_alt.
+    setoid_rewrite <-elem_of_finmap_to_list.
+    induction (finmap_to_list m) as [|[j x] l IH]; simpl.
+    * rewrite elem_of_empty.
+      setoid_rewrite elem_of_nil. naive_solver.
+    * rewrite elem_of_union, elem_of_singleton.
+      setoid_rewrite elem_of_cons. naive_solver.
+  Qed.
+  Lemma not_elem_of_dom C `{SimpleCollection K C} (m : M A) i :
+    i ∉ dom C m ↔ m !! i = None.
+  Proof. by rewrite (elem_of_dom C), eq_None_not_Some. Qed.
+
+  Lemma dom_empty C `{SimpleCollection K C} : dom C (∅ : M A) ≡ ∅.
+  Proof.
+    split; intro.
+    * rewrite (elem_of_dom C), lookup_empty. by inversion 1.
+    * solve_elem_of.
+  Qed.
+  Lemma dom_empty_inv C `{SimpleCollection K C} (m : M A) : dom C m ≡ ∅ → m = ∅.
+  Proof.
+    intros E. apply finmap_empty. intros. apply (not_elem_of_dom C).
+    rewrite E. solve_elem_of.
+  Qed.
+
+  Lemma delete_partial_alter_dom C `{SimpleCollection K C} (m : M A) i f :
+    i ∉ dom C m → delete i (partial_alter f i m) = m.
+  Proof. rewrite (not_elem_of_dom C). apply delete_partial_alter. Qed.
+  Lemma delete_insert_dom C `{SimpleCollection K C} (m : M A) i x :
+    i ∉ dom C m → delete i (<[i:=x]>m) = m.
+  Proof. rewrite (not_elem_of_dom C). apply delete_partial_alter. Qed.
+  Lemma elem_of_dom_delete C `{SimpleCollection K C} (m : M A) i j :
+    i ∈ dom C (delete j m) ↔ i ≠ j ∧ i ∈ dom C m.
+  Proof.
+    rewrite !(elem_of_dom C), <-!not_eq_None_Some.
+    rewrite lookup_delete_None. intuition.
+  Qed.
+  Lemma not_elem_of_dom_delete C `{SimpleCollection K C} (m : M A) i :
+    i ∉ dom C (delete i m).
+  Proof. apply (not_elem_of_dom C), lookup_delete. Qed.
+
+  Lemma subseteq_dom C `{SimpleCollection K C} (m1 m2 : M A) :
+    m1 ⊆ m2 → dom C m1 ⊆ dom C m2.
+  Proof.
+    unfold subseteq, finmap_subseteq, collection_subseteq.
+    intros ??. rewrite !(elem_of_dom C). inversion 1. eauto.
+  Qed.
+  Lemma subset_dom C `{SimpleCollection K C} (m1 m2 : M A) :
+    m1 ⊂ m2 → dom C m1 ⊂ dom C m2.
+  Proof.
+    intros [Hss1 Hss2]. split.
+    * by apply subseteq_dom.
+    * intros Hdom. destruct Hss2. intros i x Hi.
+      specialize (Hdom i). rewrite !(elem_of_dom C) in Hdom.
+      feed inversion Hdom. eauto.
+      by erewrite (Hss1 i) in Hi by eauto.
+  Qed.
+  Lemma finmap_wf : wf (@subset (M A) _).
+  Proof.
+    apply (wf_projected (⊂) (dom (listset K))).
+    * by apply (subset_dom _).
+    * by apply collection_wf.
+  Qed.
+
+  Lemma partial_alter_subseteq (m : M A) i f :
+    m !! i = None →
+    m ⊆ partial_alter f i m.
+  Proof.
+    intros Hi j x Hj. rewrite lookup_partial_alter_ne; congruence.
+  Qed.
+  Lemma partial_alter_subset (m : M A) i f :
+    m !! i = None →
+    is_Some (f (m !! i)) →
+    m ⊂ partial_alter f i m.
+  Proof.
+    intros Hi Hfi. split.
+    * by apply partial_alter_subseteq.
+    * inversion Hfi as [x Hx]. intros Hm.
+      apply (Some_ne_None x). rewrite <-(Hm i x); [done|].
+      by rewrite lookup_partial_alter.
+  Qed.
+  Lemma insert_subseteq (m : M A) i x :
+    m !! i = None →
+    m ⊆ <[i:=x]>m.
+  Proof. apply partial_alter_subseteq. Qed.
+  Lemma insert_subset (m : M A) i x :
+    m !! i = None →
+    m ⊂ <[i:=x]>m.
+  Proof. intro. apply partial_alter_subset; eauto. Qed.
+
+  Lemma delete_subseteq (m : M A) i :
+    delete i m ⊆ m.
+  Proof. intros j x. rewrite lookup_delete_Some. tauto. Qed.
+  Lemma delete_subseteq_compat (m1 m2 : M A) i :
+    m1 ⊆ m2 →
+    delete i m1 ⊆ delete i m2.
+  Proof. intros ? j x. rewrite !lookup_delete_Some. intuition eauto. Qed.
+  Lemma delete_subset_alt (m : M A) i x :
+    m !! i = Some x → delete i m ⊂ m.
+  Proof.
+    split.
+    * apply delete_subseteq.
+    * intros Hi. apply (None_ne_Some x).
+      by rewrite <-(lookup_delete m i), (Hi i x).
+  Qed.
+  Lemma delete_subset (m : M A) i :
+    is_Some (m !! i) → delete i m ⊂ m.
+  Proof. inversion 1. eauto using delete_subset_alt. Qed.
 
   (** * Induction principles *)
   (** We use the induction principle on finite collections to prove the
@@ -369,49 +463,6 @@ Section finmap_common.
     setoid_rewrite <-(not_elem_of_dom (listset _)).
     apply (finmap_ind_alt (listset _) P).
   Qed.
-
-  (** * Properties of the merge operation *)
-  Section merge_with.
-    Context (f : option A → option A → option A).
-
-    Global Instance: LeftId (=) None f → LeftId (=) ∅ (merge f).
-    Proof.
-      intros ??. apply finmap_eq. intros.
-      by rewrite !(merge_spec f), lookup_empty, (left_id None f).
-    Qed.
-    Global Instance: RightId (=) None f → RightId (=) ∅ (merge f).
-    Proof.
-      intros ??. apply finmap_eq. intros.
-      by rewrite !(merge_spec f), lookup_empty, (right_id None f).
-    Qed.
-    Global Instance: Idempotent (=) f → Idempotent (=) (merge f).
-    Proof. intros ??. apply finmap_eq. intros. by rewrite !(merge_spec f). Qed.
-
-    Context `{!PropHolds (f None None = None)}.
-
-    Lemma merge_spec_alt m1 m2 m :
-      (∀ i, m !! i = f (m1 !! i) (m2 !! i)) ↔ merge f m1 m2 = m.
-    Proof.
-      split; [| intro; subst; apply (merge_spec _) ].
-      intros Hlookup. apply finmap_eq. intros. rewrite Hlookup.
-      apply (merge_spec _).
-    Qed.
-
-    Lemma merge_comm m1 m2 :
-      (∀ i, f (m1 !! i) (m2 !! i) = f (m2 !! i) (m1 !! i)) →
-      merge f m1 m2 = merge f m2 m1.
-    Proof. intros. apply finmap_eq. intros. by rewrite !(merge_spec f). Qed.
-    Global Instance: Commutative (=) f → Commutative (=) (merge f).
-    Proof. intros ???. apply merge_comm. intros. by apply (commutative f). Qed.
-
-    Lemma merge_assoc m1 m2 m3 :
-      (∀ i, f (m1 !! i) (f (m2 !! i) (m3 !! i)) =
-            f (f (m1 !! i) (m2 !! i)) (m3 !! i)) →
-      merge f m1 (merge f m2 m3) = merge f (merge f m1 m2) m3.
-    Proof. intros. apply finmap_eq. intros. by rewrite !(merge_spec f). Qed.
-    Global Instance: Associative (=) f → Associative (=) (merge f).
-    Proof. intros ????. apply merge_assoc. intros. by apply (associative f). Qed.
-  End merge_with.
 End finmap_common.
 
 (** * The finite map tactic *)
@@ -446,28 +497,253 @@ Tactic Notation "simplify_map_equality" "by" tactic3(tac) := repeat
     feed pose proof (lookup_weaken_inv m1 m2 i x y) as H3;
       [done | by tac | done | ];
     clear H2; symmetry in H3
+  | H1 : ?m1 !! ?i = Some ?x, H2 : ?m2 !! ?i = None |- _ =>
+    let H3 := fresh in
+    assert (m1 ⊆ m2) as H3 by tac;
+    apply H3 in H1; congruence
   end.
 Tactic Notation "simplify_map_equality" := simplify_map_equality by auto.
 
+(** * More theorems on finite maps *)
 Section finmap_more.
   Context `{FinMap K M} {A : Type}.
 
-  (** * Properties on the relation [intersection_forall] *)
+  (** ** Properties of conversion to lists *)
+  Lemma finmap_to_list_unique (m : M A) i x y :
+    (i,x) ∈ finmap_to_list m →
+    (i,y) ∈ finmap_to_list m →
+    x = y.
+  Proof. rewrite !elem_of_finmap_to_list. congruence. Qed.
+  Lemma finmap_to_list_key_nodup (m : M A) :
+    NoDup (fst <$> finmap_to_list m).
+  Proof.
+    eauto using NoDup_fmap_fst, finmap_to_list_unique, finmap_to_list_nodup.
+  Qed.
+
+  Lemma elem_of_finmap_of_list_1 (l : list (K * A)) i x :
+    NoDup (fst <$> l) → (i,x) ∈ l → finmap_of_list l !! i = Some x.
+  Proof.
+    induction l as [|[j y] l IH]; simpl.
+    * by rewrite elem_of_nil.
+    * rewrite NoDup_cons, elem_of_cons, elem_of_list_fmap.
+      intros [Hl ?] [?|?]; simplify_map_equality; [done |].
+      destruct (decide (i = j)); simplify_map_equality; [| by auto].
+      destruct Hl. by exists (j,x).
+  Qed.
+  Lemma elem_of_finmap_of_list_2 (l : list (K * A)) i x :
+    finmap_of_list l !! i = Some x → (i,x) ∈ l.
+  Proof.
+    induction l as [|[j y] l IH]; simpl.
+    * by rewrite lookup_empty.
+    * rewrite elem_of_cons. destruct (decide (i = j));
+        simplify_map_equality; intuition congruence.
+  Qed.
+  Lemma elem_of_finmap_of_list (l : list (K * A)) i x :
+    NoDup (fst <$> l) →
+    (i,x) ∈ l ↔ finmap_of_list l !! i = Some x.
+  Proof.
+    split; auto using elem_of_finmap_of_list_1, elem_of_finmap_of_list_2.
+  Qed.
+
+  Lemma not_elem_of_finmap_of_list_1 (l : list (K * A)) i :
+    i ∉ fst <$> l → finmap_of_list l !! i = None.
+  Proof.
+    rewrite elem_of_list_fmap, eq_None_not_Some, is_Some_alt.
+    intros Hi [x ?]. destruct Hi. exists (i,x). simpl.
+    auto using elem_of_finmap_of_list_2.
+  Qed.
+  Lemma not_elem_of_finmap_of_list_2 (l : list (K * A)) i :
+    finmap_of_list l !! i = None → i ∉ fst <$> l.
+  Proof.
+    induction l as [|[j y] l IH]; simpl.
+    * rewrite elem_of_nil. tauto.
+    * rewrite elem_of_cons.
+      destruct (decide (i = j)); simplify_map_equality; by intuition.
+  Qed.
+  Lemma not_elem_of_finmap_of_list (l : list (K * A)) i :
+    i ∉ fst <$> l ↔ finmap_of_list l !! i = None.
+  Proof.
+    split; auto using not_elem_of_finmap_of_list_1,
+      not_elem_of_finmap_of_list_2.
+  Qed.
+
+  Lemma finmap_of_list_proper (l1 l2 : list (K * A)) :
+    NoDup (fst <$> l1) →
+    Permutation l1 l2 →
+    finmap_of_list l1 = finmap_of_list l2.
+  Proof.
+    intros ? Hperm. apply finmap_eq. intros i. apply option_eq. intros x.
+    by rewrite <-!elem_of_finmap_of_list; rewrite <-?Hperm.
+  Qed.
+  Lemma finmap_of_list_inj (l1 l2 : list (K * A)) :
+    NoDup (fst <$> l1) →
+    NoDup (fst <$> l2) →
+    finmap_of_list l1 = finmap_of_list l2 →
+    Permutation l1 l2.
+  Proof.
+    intros ?? Hl1l2.
+    apply NoDup_Permutation; auto using (NoDup_fmap_1 fst).
+    intros [i x]. by rewrite !elem_of_finmap_of_list, Hl1l2.
+  Qed.
+  Lemma finmap_of_to_list (m : M A) :
+    finmap_of_list (finmap_to_list m) = m.
+  Proof.
+    apply finmap_eq. intros i. apply option_eq. intros x.
+    by rewrite <-elem_of_finmap_of_list, elem_of_finmap_to_list
+      by auto using finmap_to_list_key_nodup.
+  Qed.
+  Lemma finmap_to_of_list (l : list (K * A)) :
+    NoDup (fst <$> l) →
+    Permutation (finmap_to_list (finmap_of_list l)) l.
+  Proof.
+    auto using finmap_of_list_inj,
+      finmap_to_list_key_nodup, finmap_of_to_list.
+  Qed.
+  Lemma finmap_to_list_inj (m1 m2 : M A) :
+    Permutation (finmap_to_list m1) (finmap_to_list m2) →
+    m1 = m2.
+  Proof.
+    intros.
+    rewrite <-(finmap_of_to_list m1), <-(finmap_of_to_list m2).
+    auto using finmap_of_list_proper, finmap_to_list_key_nodup.
+  Qed.
+
+  Lemma finmap_to_list_empty :
+    finmap_to_list ∅ = @nil (K * A).
+  Proof.
+    apply elem_of_nil_inv. intros [i x].
+    rewrite elem_of_finmap_to_list. apply lookup_empty_Some.
+  Qed.
+  Lemma finmap_to_list_insert (m : M A) i x :
+    m !! i = None →
+    Permutation (finmap_to_list (<[i:=x]>m)) ((i,x) :: finmap_to_list m).
+  Proof.
+    intros. apply finmap_of_list_inj; simpl.
+    * apply finmap_to_list_key_nodup.
+    * constructor; auto using finmap_to_list_key_nodup.
+      rewrite elem_of_list_fmap.
+      intros [[??] [? Hlookup]]; subst; simpl in *.
+      rewrite elem_of_finmap_to_list in Hlookup. congruence.
+    * by rewrite !finmap_of_to_list.
+  Qed.
+
+  Lemma finmap_of_list_nil :
+    finmap_of_list (@nil (K * A)) = ∅.
+  Proof. done. Qed.
+  Lemma finmap_of_list_cons (l : list (K * A)) i x :
+    finmap_of_list ((i, x) :: l) = <[i:=x]>(finmap_of_list l).
+  Proof. done. Qed.
+
+  Lemma finmap_to_list_empty_inv (m : M A) :
+    Permutation (finmap_to_list m) [] → m = ∅.
+  Proof. rewrite <-finmap_to_list_empty. apply finmap_to_list_inj. Qed.
+  Lemma finmap_to_list_insert_inv (m : M A) l i x :
+    Permutation (finmap_to_list m) ((i,x) :: l) →
+    m = <[i:=x]>(finmap_of_list l).
+  Proof.
+    intros Hperm. apply finmap_to_list_inj.
+    assert (NoDup (fst <$> (i, x) :: l)) as Hnodup.
+    { rewrite <-Hperm. auto using finmap_to_list_key_nodup. }
+    simpl in Hnodup. rewrite NoDup_cons in Hnodup.
+    destruct Hnodup.
+    rewrite Hperm, finmap_to_list_insert, finmap_to_of_list;
+      auto using not_elem_of_finmap_of_list_1.
+  Qed.
+
+  (** ** Properties of the forall predicate *)
+  Section finmap_forall.
+    Context (P : K → A → Prop).
+
+    Lemma finmap_forall_to_list m :
+      finmap_forall P m ↔ Forall (curry P) (finmap_to_list m).
+    Proof.
+      rewrite Forall_forall. split.
+      * intros Hforall [i x].
+        rewrite elem_of_finmap_to_list. by apply (Hforall i x).
+      * intros Hforall i x.
+        rewrite <-elem_of_finmap_to_list. by apply (Hforall (i,x)).
+    Qed.
+
+    Global Instance finmap_forall_dec
+      `{∀ i x, Decision (P i x)} m : Decision (finmap_forall P m).
+    Proof.
+      refine (cast_if (decide (Forall (curry P) (finmap_to_list m))));
+        by rewrite finmap_forall_to_list.
+    Defined.
+  End finmap_forall.
+
+  (** ** Properties of the merge operation *)
+  Section merge_with.
+    Context (f : option A → option A → option A).
+
+    Global Instance: LeftId (=) None f → LeftId (=) ∅ (merge f).
+    Proof.
+      intros ??. apply finmap_eq. intros.
+      by rewrite !(merge_spec f), lookup_empty, (left_id None f).
+    Qed.
+    Global Instance: RightId (=) None f → RightId (=) ∅ (merge f).
+    Proof.
+      intros ??. apply finmap_eq. intros.
+      by rewrite !(merge_spec f), lookup_empty, (right_id None f).
+    Qed.
+
+    Context `{!PropHolds (f None None = None)}.
+
+    Lemma merge_spec_alt m1 m2 m :
+      (∀ i, m !! i = f (m1 !! i) (m2 !! i)) ↔ merge f m1 m2 = m.
+    Proof.
+      split; [| intro; subst; apply (merge_spec _) ].
+      intros Hlookup. apply finmap_eq. intros. rewrite Hlookup.
+      apply (merge_spec _).
+    Qed.
+
+    Lemma merge_commutative m1 m2 :
+      (∀ i, f (m1 !! i) (m2 !! i) = f (m2 !! i) (m1 !! i)) →
+      merge f m1 m2 = merge f m2 m1.
+    Proof. intros. apply finmap_eq. intros. by rewrite !(merge_spec f). Qed.
+    Global Instance: Commutative (=) f → Commutative (=) (merge f).
+    Proof.
+      intros ???. apply merge_commutative. intros. by apply (commutative f).
+    Qed.
+
+    Lemma merge_associative m1 m2 m3 :
+      (∀ i, f (m1 !! i) (f (m2 !! i) (m3 !! i)) =
+            f (f (m1 !! i) (m2 !! i)) (m3 !! i)) →
+      merge f m1 (merge f m2 m3) = merge f (merge f m1 m2) m3.
+    Proof. intros. apply finmap_eq. intros. by rewrite !(merge_spec f). Qed.
+    Global Instance: Associative (=) f → Associative (=) (merge f).
+    Proof.
+      intros ????. apply merge_associative. intros. by apply (associative f).
+    Qed.
+
+    Lemma merge_idempotent m1 :
+      (∀ i, f (m1 !! i) (m1 !! i) = m1 !! i) →
+      merge f m1 m1 = m1.
+    Proof. intros. apply finmap_eq. intros. by rewrite !(merge_spec f). Qed.
+    Global Instance: Idempotent (=) f → Idempotent (=) (merge f).
+    Proof.
+      intros ??. apply merge_idempotent. intros. by apply (idempotent f).
+    Qed.
+  End merge_with.
+
+  (** ** Properties on the intersection forall relation *)
   Section intersection_forall.
     Context (R : relation A).
 
-    Global Instance intersection_forall_sym:
-      Symmetric R → Symmetric (intersection_forall R).
+    Global Instance finmap_intersection_forall_sym:
+      Symmetric R → Symmetric (finmap_intersection_forall R).
     Proof. firstorder auto. Qed.
-    Lemma intersection_forall_empty_l (m : M A) : intersection_forall R ∅ m.
+    Lemma finmap_intersection_forall_empty_l (m : M A) :
+      finmap_intersection_forall R ∅ m.
     Proof. intros ???. by simpl_map. Qed.
-    Lemma intersection_forall_empty_r (m : M A) : intersection_forall R m ∅.
+    Lemma finmap_intersection_forall_empty_r (m : M A) :
+      finmap_intersection_forall R m ∅.
     Proof. intros ???. by simpl_map. Qed.
 
     (** Due to the finiteness of finite maps, we can extract a witness are
     property does not hold for the intersection. *)
-    Lemma not_intersection_forall `{∀ x y, Decision (R x y)} (m1 m2 : M A) :
-      ¬intersection_forall R m1 m2
+    Lemma finmap_not_intersection_forall `{∀ x y, Decision (R x y)} (m1 m2 : M A) :
+      ¬finmap_intersection_forall R m1 m2
         ↔ ∃ i x1 x2, m1 !! i = Some x1 ∧ m2 !! i = Some x2 ∧ ¬R x1 x2.
     Proof.
       split.
@@ -494,7 +770,7 @@ Section finmap_more.
     Qed.
   End intersection_forall.
 
-  (** * Properties on the disjoint maps *)
+  (** ** Properties on the disjoint maps *)
   Lemma finmap_disjoint_alt (m1 m2 : M A) :
     m1 ⊥ m2 ↔ ∀ i, m1 !! i = None ∨ m2 !! i = None.
   Proof.
@@ -505,17 +781,17 @@ Section finmap_more.
     ¬m1 ⊥ m2 ↔ ∃ i x1 x2, m1 !! i = Some x1 ∧ m2 !! i = Some x2.
   Proof.
     unfold disjoint, finmap_disjoint.
-    rewrite not_intersection_forall.
-    * firstorder auto.
+    rewrite finmap_not_intersection_forall.
+    * naive_solver.
     * right. auto.
   Qed.
 
   Global Instance: Symmetric (@disjoint (M A) _).
-  Proof. apply intersection_forall_sym. auto. Qed.
+  Proof. apply finmap_intersection_forall_sym. auto. Qed.
   Lemma finmap_disjoint_empty_l (m : M A) : ∅ ⊥ m.
-  Proof. apply intersection_forall_empty_l. Qed.
+  Proof. apply finmap_intersection_forall_empty_l. Qed.
   Lemma finmap_disjoint_empty_r (m : M A) : m ⊥ ∅.
-  Proof. apply intersection_forall_empty_r. Qed.
+  Proof. apply finmap_intersection_forall_empty_r. Qed.
 
   Lemma finmap_disjoint_weaken (m1 m1' m2 m2' : M A) :
     m1' ⊥ m2' →
@@ -565,14 +841,14 @@ Section finmap_more.
     m !! i = None → m ⊥ {[(i, x)]}.
   Proof. by rewrite finmap_disjoint_singleton_r. Qed.
 
-  (** * Properties of the union and intersection operation *)
+  (** ** Properties of the union and intersection operation *)
   Section union_intersection_with.
-    Context (f : A → A → A).
+    Context (f : A → A → option A).
 
     Lemma finmap_union_with_Some m1 m2 i x y :
       m1 !! i = Some x →
       m2 !! i = Some y →
-      union_with f m1 m2 !! i = Some (f x y).
+      union_with f m1 m2 !! i = f x y.
     Proof.
       intros Hx Hy. unfold union_with, finmap_union_with.
       by rewrite (merge_spec _), Hx, Hy.
@@ -593,29 +869,28 @@ Section finmap_more.
       intros Hx Hy. unfold union_with, finmap_union_with.
       by rewrite (merge_spec _), Hx, Hy.
     Qed.
-    Lemma finmap_union_with_None m1 m2 i :
-      union_with f m1 m2 !! i = None ↔ m1 !! i = None ∧ m2 !! i = None.
-    Proof.
-      unfold union_with, finmap_union_with. rewrite (merge_spec _).
-      destruct (m1 !! i), (m2 !! i); compute; intuition congruence.
-    Qed.
 
-    Global Instance: LeftId (=) ∅ (@union_with M _ _ f).
+    Global Instance: LeftId (=) ∅ (@union_with _ (M A) _ f).
     Proof. unfold union_with, finmap_union_with. apply _. Qed.
-    Global Instance: RightId (=) ∅ (@union_with M _ _ f).
+    Global Instance: RightId (=) ∅ (@union_with _ (M A) _ f).
     Proof. unfold union_with, finmap_union_with. apply _. Qed.
-    Global Instance: Commutative (=) f → Commutative (=) (@union_with M _ _ f).
-    Proof. unfold union_with, finmap_union_with. apply _. Qed.
-    Global Instance: Associative (=) f → Associative (=) (@union_with M _ _ f).
-    Proof. unfold union_with, finmap_union_with. apply _. Qed.
-    Global Instance: Idempotent (=) f → Idempotent (=) (@union_with M _ _ f).
+    Global Instance:
+      Commutative (=) f → Commutative (=) (@union_with _ (M A) _ f).
     Proof. unfold union_with, finmap_union_with. apply _. Qed.
   End union_intersection_with.
 
   Global Instance: LeftId (=) ∅ (@union (M A) _) := _.
   Global Instance: RightId (=) ∅ (@union (M A) _) := _.
-  Global Instance: Associative (=) (@union (M A) _) := _.
-  Global Instance: Idempotent (=) (@union (M A) _) := _.
+  Global Instance: Associative (=) (@union (M A) _).
+  Proof.
+    intros m1 m2 m3. unfold union, finmap_union, union_with, finmap_union_with.
+    apply (merge_associative _). intros i.
+    by destruct (m1 !! i), (m2 !! i), (m3 !! i).
+  Qed.
+  Global Instance: Idempotent (=) (@union (M A) _).
+    intros m. unfold union, finmap_union, union_with, finmap_union_with.
+    apply (merge_idempotent _). intros i. by destruct (m !! i).
+  Qed.
 
   Lemma finmap_union_Some_raw (m1 m2 : M A) i x :
     (m1 ∪ m2) !! i = Some x ↔
@@ -623,11 +898,15 @@ Section finmap_more.
   Proof.
     unfold union, finmap_union, union_with, finmap_union_with.
     rewrite (merge_spec _).
-    destruct (m1 !! i), (m2 !! i); compute; try intuition congruence.
+    destruct (m1 !! i), (m2 !! i); compute; intuition congruence.
   Qed.
   Lemma finmap_union_None (m1 m2 : M A) i :
     (m1 ∪ m2) !! i = None ↔ m1 !! i = None ∧ m2 !! i = None.
-  Proof. apply finmap_union_with_None. Qed.
+  Proof.
+    unfold union, finmap_union, union_with, finmap_union_with.
+    rewrite (merge_spec _).
+    destruct (m1 !! i), (m2 !! i); compute; intuition congruence.
+  Qed.
 
   Lemma finmap_union_Some (m1 m2 : M A) i x :
     m1 ⊥ m2 →
@@ -652,7 +931,7 @@ Section finmap_more.
     m1 ⊥ m2 →
     m1 ∪ m2 = m2 ∪ m1.
   Proof.
-    intros Hdisjoint. apply (merge_comm (union_with (λ x _, x))).
+    intros Hdisjoint. apply (merge_commutative (union_with (λ x _, Some x))).
     intros i. specialize (Hdisjoint i).
     destruct (m1 !! i), (m2 !! i); compute; naive_solver.
   Qed.
@@ -776,7 +1055,7 @@ Section finmap_more.
   Qed.
 
   Lemma finmap_insert_list_union l (m : M A) :
-    insert_list l m = list_to_map l ∪ m.
+    insert_list l m = finmap_of_list l ∪ m.
   Proof.
     induction l; simpl.
     * by rewrite (left_id _ _).
@@ -791,7 +1070,7 @@ Section finmap_more.
     * intros. simpl_map. auto.
   Qed.
 
-  (** * Properties of the delete operation *)
+  (** ** Properties of the delete operation *)
   Lemma finmap_disjoint_delete_l (m1 m2 : M A) i :
     m1 ⊥ m2 → delete i m1 ⊥ m2.
   Proof.
@@ -844,9 +1123,9 @@ Section finmap_more.
     Forall (⊥ m) ms → m ⊥ ⋃ ms.
   Proof. by rewrite finmap_disjoint_union_list_r. Qed.
 
-  (** * Properties of the conversion from lists to maps *)
-  Lemma finmap_disjoint_list_to_map_l (m : M A) ixs :
-    list_to_map ixs ⊥ m ↔ Forall (λ ix, m !! fst ix = None) ixs.
+  (** ** Properties of the conversion from lists to maps *)
+  Lemma finmap_disjoint_of_list_l (m : M A) ixs :
+    finmap_of_list ixs ⊥ m ↔ Forall (λ ix, m !! fst ix = None) ixs.
   Proof.
     split.
     * induction ixs; simpl; rewrite ?finmap_disjoint_insert_l in *; intuition.
@@ -854,36 +1133,36 @@ Section finmap_more.
       + apply finmap_disjoint_empty_l.
       + rewrite finmap_disjoint_insert_l. auto.
   Qed.
-  Lemma finmap_disjoint_list_to_map_r (m : M A) ixs :
-    m ⊥ list_to_map ixs ↔ Forall (λ ix, m !! fst ix = None) ixs.
-  Proof. by rewrite (symmetry_iff (⊥)), finmap_disjoint_list_to_map_l. Qed.
+  Lemma finmap_disjoint_of_list_r (m : M A) ixs :
+    m ⊥ finmap_of_list ixs ↔ Forall (λ ix, m !! fst ix = None) ixs.
+  Proof. by rewrite (symmetry_iff (⊥)), finmap_disjoint_of_list_l. Qed.
 
-  Lemma finmap_disjoint_list_to_map_zip_l (m : M A) is xs :
+  Lemma finmap_disjoint_of_list_zip_l (m : M A) is xs :
     same_length is xs →
-    list_to_map (zip is xs) ⊥ m ↔ Forall (λ i, m !! i = None) is.
+    finmap_of_list (zip is xs) ⊥ m ↔ Forall (λ i, m !! i = None) is.
   Proof.
-    intro. rewrite finmap_disjoint_list_to_map_l.
+    intro. rewrite finmap_disjoint_of_list_l.
     rewrite <-(zip_fst is xs) at 2 by done.
     by rewrite Forall_fmap.
   Qed.
-  Lemma finmap_disjoint_list_to_map_zip_r (m : M A) is xs :
+  Lemma finmap_disjoint_of_list_zip_r (m : M A) is xs :
     same_length is xs →
-    m ⊥ list_to_map (zip is xs) ↔ Forall (λ i, m !! i = None) is.
+    m ⊥ finmap_of_list (zip is xs) ↔ Forall (λ i, m !! i = None) is.
   Proof.
-    intro. by rewrite (symmetry_iff (⊥)), finmap_disjoint_list_to_map_zip_l.
+    intro. by rewrite (symmetry_iff (⊥)), finmap_disjoint_of_list_zip_l.
   Qed.
-  Lemma finmap_disjoint_list_to_map_zip_l_2 (m : M A) is xs :
+  Lemma finmap_disjoint_of_list_zip_l_2 (m : M A) is xs :
     same_length is xs →
     Forall (λ i, m !! i = None) is →
-    list_to_map (zip is xs) ⊥ m.
-  Proof. intro. by rewrite finmap_disjoint_list_to_map_zip_l. Qed.
-  Lemma finmap_disjoint_list_to_map_zip_r_2 (m : M A) is xs :
+    finmap_of_list (zip is xs) ⊥ m.
+  Proof. intro. by rewrite finmap_disjoint_of_list_zip_l. Qed.
+  Lemma finmap_disjoint_of_list_zip_r_2 (m : M A) is xs :
     same_length is xs →
     Forall (λ i, m !! i = None) is →
-    m ⊥ list_to_map (zip is xs).
-  Proof. intro. by rewrite finmap_disjoint_list_to_map_zip_r. Qed.
+    m ⊥ finmap_of_list (zip is xs).
+  Proof. intro. by rewrite finmap_disjoint_of_list_zip_r. Qed.
 
-  (** * Properties with respect to vectors of elements *)
+  (** ** Properties with respect to vectors *)
   Lemma finmap_union_delete_vec {n} (ms : vec (M A) n) (i : fin n) :
     list_disjoint ms →
     ms !!! i ∪ ⋃ delete (fin_to_nat i) (vec_to_list ms) = ⋃ ms.
@@ -930,11 +1209,12 @@ Section finmap_more.
     * by apply Forall_vlookup.
   Qed.
 
-  (** * Properties of the difference operation *)
+  (** ** Properties of the difference operation *)
   Lemma finmap_difference_Some (m1 m2 : M A) i x :
     (m1 ∖ m2) !! i = Some x ↔ m1 !! i = Some x ∧ m2 !! i = None.
   Proof.
-    unfold difference, finmap_difference, difference_with, finmap_difference_with.
+    unfold difference, finmap_difference,
+      difference_with, finmap_difference_with.
     rewrite (merge_spec _).
     destruct (m1 !! i), (m2 !! i); compute; intuition congruence.
   Qed.
@@ -943,9 +1223,11 @@ Section finmap_more.
     m2 ⊆ m3 → m1 ∖ m3 ⊥ m2.
   Proof.
     intros E i. specialize (E i).
-    unfold difference, finmap_difference, difference_with, finmap_difference_with.
+    unfold difference, finmap_difference,
+      difference_with, finmap_difference_with.
     rewrite (merge_spec _).
-    destruct (m1 !! i), (m2 !! i), (m3 !! i); compute; try intuition congruence.
+    destruct (m1 !! i), (m2 !! i), (m3 !! i); compute;
+      try intuition congruence.
     ediscriminate E; eauto.
   Qed.
   Lemma finmap_disjoint_difference_r (m1 m2 m3 : M A) :
@@ -957,17 +1239,19 @@ Section finmap_more.
   Proof.
     intro Hm1m2. apply finmap_eq. intros i.
     apply option_eq. intros v. specialize (Hm1m2 i).
-    unfold difference, finmap_difference, difference_with, finmap_difference_with.
+    unfold difference, finmap_difference,
+      difference_with, finmap_difference_with.
     rewrite finmap_union_Some_raw, (merge_spec _).
     destruct (m1 !! i) as [v'|], (m2 !! i);
       try specialize (Hm1m2 v'); compute; intuition congruence.
   Qed.
 End finmap_more.
 
-(** The tactic [simplify_finmap_disjoint] simplifies occurences of [disjoint]
+(** * Tactic to decompose disjoint assumptions *)
+(** The tactic [decompose_map_disjoint] simplifies occurences of [disjoint]
 in the conclusion and hypotheses that involve the union, insert, or singleton
 operation. *)
-Ltac decompose_finmap_disjoint := repeat
+Ltac decompose_map_disjoint := repeat
   match goal with
   | H : _ ∪ _ ⊥ _ |- _ =>
     apply finmap_disjoint_union_l in H; destruct H
@@ -990,5 +1274,7 @@ Ltac decompose_finmap_disjoint := repeat
   | H : Forall (⊥ _) _ |- _ => rewrite Forall_vlookup in H
   | H : Forall (⊥ _) [] |- _ => clear H
   | H : Forall (⊥ _) (_ :: _) |- _ =>
-    apply Forall_inv in H; destruct H
+    rewrite Forall_cons in H; destruct H
+  | H : Forall (⊥ _) (_ :: _) |- _ =>
+    rewrite Forall_app in H; destruct H
   end.

@@ -24,12 +24,13 @@ Instance index_fresh_spec `{FinCollection index C} : FreshSpec index C := _.
 Instance indexmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
   ∀ m1 m2 : indexmap A, Decision (m1 = m2) := decide_rel (=).
 Instance indexmap_empty {A} : Empty (indexmap A) := @empty (Nmap A) _.
-Instance indexmap_lookup {A} : Lookup index (indexmap A) A :=
-  @lookup _ (Nmap A) _ _.
-Instance indexmap_partial_alter {A} : PartialAlter index (indexmap A) A :=
-  @partial_alter _ (Nmap A) _ _.
-Instance indexmap_dom {A} : Dom index (indexmap A) := @dom _ (Nmap A) _.
-Instance indexmap_merge: Merge indexmap := @merge Nmap _.
+Instance indexmap_lookup {A} : Lookup index A (indexmap A) :=
+  @lookup _ _ (Nmap A) _.
+Instance indexmap_partial_alter {A} : PartialAlter index A (indexmap A) :=
+  @partial_alter _ _ (Nmap A) _.
+Instance indexmap_to_list {A} : FinMapToList index A (indexmap A) :=
+  @finmap_to_list _ _ (Nmap A) _.
+Instance indexmap_merge {A} : Merge A (indexmap A) := @merge _ (Nmap A) _.
 Instance indexmap_fmap: FMap indexmap := λ A B f, @fmap Nmap _ _ f _.
 Instance: FinMap index indexmap := _.
 
@@ -111,7 +112,7 @@ Hint Resolve finmap_subseteq_union_l finmap_subseteq_union_r : mem.
 Hint Resolve finmap_disjoint_union_l_2 finmap_disjoint_union_r_2 : mem.
 Hint Resolve finmap_disjoint_insert_l_2 finmap_disjoint_insert_r_2 : mem.
 Hint Resolve finmap_disjoint_delete_l finmap_disjoint_delete_r : mem.
-Hint Resolve finmap_disjoint_list_to_map_zip_l_2 finmap_disjoint_list_to_map_zip_r_2 : mem.
+Hint Resolve finmap_disjoint_of_list_zip_l_2 finmap_disjoint_of_list_zip_r_2 : mem.
 Hint Resolve finmap_disjoint_union_list_l_2 finmap_disjoint_union_list_r_2 : mem.
 Hint Resolve finmap_disjoint_delete_list_l finmap_disjoint_delete_list_r : mem.
 Hint Resolve finmap_list_disjoint_delete_vec : mem.
@@ -122,7 +123,7 @@ Hint Resolve Forall_delete : mem.
 Hint Extern 1 (_ ⊥ _) => done : mem.
 
 Ltac solve_mem_disjoint :=
-  solve [decompose_finmap_disjoint; auto with mem].
+  solve [decompose_map_disjoint; auto with mem].
 
 Tactic Notation "simplify_mem_equality" "by" tactic3(tac) := repeat
   match goal with
@@ -351,7 +352,7 @@ Proof.
     + done.
     + decompose_is_free.
       apply finmap_disjoint_union_l_2; [|done].
-      apply finmap_disjoint_list_to_map_zip_l; auto with mem.
+      apply finmap_disjoint_of_list_zip_l; auto with mem.
     + by rewrite <-(associative_eq (∪)).
   * by decompose_is_free.
 Qed.

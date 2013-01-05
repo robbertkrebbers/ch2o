@@ -5,7 +5,7 @@ and computation is defined as the reflexive transitive closure of this
 reduction relation. This file also defines tactics to automatically perform and
 invert reduction steps. These tactics use the hint database [cstep] to solve
 side-conditions. *)
-Require Export state ars.
+Require Export state.
 
 (** * Head reduction for expressions *)
 (** We define head reduction for all redexes whose reduction is local (i.e.
@@ -71,7 +71,7 @@ Ltac do_ehstep :=
 
 Hint Constructors ehstep : cstep.
 Hint Extern 100 (_ !! _ = _) =>
-  decompose_finmap_disjoint; eauto 10 with mem : cstep.
+  decompose_map_disjoint; eauto 10 with mem : cstep.
 (* Since the definition of [is_writable] is still rather boring, we just
 unfold it and continue. *)
 Hint Extern 100 (is_writable _ _) => red : cstep.
@@ -899,8 +899,7 @@ Proof.
     simplify_list_fmap_equality.
     simplify_list_subst_equality. inv_ehstep.
   * intros E f' vs' Hvs _ H1 _.
-    simplify_list_subst_equality Hvs.
-    { replace vs' with vs; auto. by apply (injective (fmap EVal)). }
+    simplify_list_subst_equality Hvs; [done |].
     simplify_list_fmap_equality.
     simplify_list_subst_equality.
   * intros E e1 Hvs ?? _ _ H2.

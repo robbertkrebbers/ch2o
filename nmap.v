@@ -17,21 +17,22 @@ Instance Pmap_dec `{∀ x y : A, Decision (x = y)} :
 Proof. solve_decision. Defined.
 
 Instance Nempty {A} : Empty (Nmap A) := NMap None ∅.
-Instance Nlookup {A} : Lookup N (Nmap A) A := λ i t,
+Instance Nlookup {A} : Lookup N A (Nmap A) := λ i t,
   match i with
   | N0 => Nmap_0 t
   | Npos p => Nmap_pos t !! p
   end.
-Instance Npartial_alter {A} : PartialAlter N (Nmap A) A := λ f i t,
+Instance Npartial_alter {A} : PartialAlter N A (Nmap A) := λ f i t,
   match i, t with
   | N0, NMap o t => NMap (f o) t
   | Npos p, NMap o t => NMap o (partial_alter f p t)
   end.
-Instance Ndom {A} : Dom N (Nmap A) := λ C _ _ _ t,
+Instance Nto_list {A} : FinMapToList N A (Nmap A) := λ t,
   match t with
-  | NMap o t => option_case (λ _, {[ 0 ]}) ∅ o ∪ (Pdom_raw Npos (`t))
+  | NMap o t => option_case (λ x, [(0,x)]) [] o ++
+     (fst_map Npos <$> finmap_to_list t)
   end.
-Instance Nmerge: Merge Nmap := λ A f t1 t2,
+Instance Nmerge {A} : Merge A (Nmap A) := λ f t1 t2,
   match t1, t2 with
   | NMap o1 t1, NMap o2 t2 => NMap (f o1 o2) (merge f t1 t2)
   end.
@@ -53,9 +54,26 @@ Proof.
   * intros ? f [? t] [|i] [|j]; simpl; try intuition congruence.
     intros. apply lookup_partial_alter_ne. congruence.
   * intros ??? [??] []; simpl. done. apply lookup_fmap.
-  * intros ?? ??????? [o t] n; simpl.
-    rewrite elem_of_union, Plookup_raw_dom.
-    destruct o, n; esolve_elem_of (inv_is_Some; eauto).
+  * intros ? [[x|] t]; unfold finmap_to_list; simpl.
+    + constructor.
+      - rewrite elem_of_list_fmap. by intros [[??] [??]].
+      - rewrite (NoDup_fmap _). apply finmap_to_list_nodup.
+    + rewrite (NoDup_fmap _). apply finmap_to_list_nodup.
+  * intros ? t i x. unfold finmap_to_list. split.
+    + destruct t as [[y|] t]; simpl.
+      - rewrite elem_of_cons, elem_of_list_fmap.
+        intros [? | [[??] [??]]]; simplify_equality; simpl; [done |].
+        by apply elem_of_finmap_to_list.
+      - rewrite elem_of_list_fmap.
+        intros [[??] [??]]; simplify_equality; simpl.
+        by apply elem_of_finmap_to_list.
+    + destruct t as [[y|] t]; simpl.
+      - rewrite elem_of_cons, elem_of_list_fmap.
+        destruct i as [|i]; simpl; [intuition congruence |].
+        intros. right. exists (i, x). by rewrite elem_of_finmap_to_list.
+      - rewrite elem_of_list_fmap.
+        destruct i as [|i]; simpl; [done |].
+        intros. exists (i, x). by rewrite elem_of_finmap_to_list.
   * intros ? f ? [o1 t1] [o2 t2] [|?]; simpl.
     + done.
     + apply (merge_spec f t1 t2).

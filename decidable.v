@@ -5,6 +5,8 @@ with a decidable equality. Such propositions are collected by the [Decision]
 type class. *)
 Require Export base tactics.
 
+Hint Extern 200 (Decision _) => progress (lazy beta) : typeclass_instances.
+
 Lemma dec_stable `{Decision P} : ¬¬P → P.
 Proof. firstorder. Qed.
 
@@ -82,6 +84,8 @@ combination with the [refine] tactic. *)
 Notation cast_if S := (if S then left _ else right _).
 Notation cast_if_and S1 S2 := (if S1 then cast_if S2 else right _).
 Notation cast_if_and3 S1 S2 S3 := (if S1 then cast_if_and S2 S3 else right _).
+Notation cast_if_and4 S1 S2 S3 S4 :=
+  (if S1 then cast_if_and3 S2 S3 S4 else right _).
 Notation cast_if_or S1 S2 := (if S1 then left _ else cast_if S2).
 Notation cast_if_not S := (if S then right _ else left _).
 
@@ -104,14 +108,24 @@ Section prop_dec.
 End prop_dec.
 
 (** Instances of [Decision] for common data types. *)
+Instance bool_eq_dec (x y : bool) : Decision (x = y).
+Proof. solve_decision. Defined.
 Instance unit_eq_dec (x y : unit) : Decision (x = y).
 Proof. refine (left _); by destruct x, y. Defined.
 Instance prod_eq_dec `(A_dec : ∀ x y : A, Decision (x = y))
-    `(B_dec : ∀ x y : B, Decision (x = y)) (x y : A * B) : Decision (x = y).
+  `(B_dec : ∀ x y : B, Decision (x = y)) (x y : A * B) : Decision (x = y).
 Proof.
   refine (cast_if_and (A_dec (fst x) (fst y)) (B_dec (snd x) (snd y)));
     abstract (destruct x, y; simpl in *; congruence).
 Defined.
 Instance sum_eq_dec `(A_dec : ∀ x y : A, Decision (x = y))
-    `(B_dec : ∀ x y : B, Decision (x = y)) (x y : A + B) : Decision (x = y).
+  `(B_dec : ∀ x y : B, Decision (x = y)) (x y : A + B) : Decision (x = y).
 Proof. solve_decision. Defined.
+
+Instance curry_dec `(P_dec : ∀ (x : A) (y : B), Decision (P x y)) p :
+    Decision (curry P p) :=
+  match p as p return Decision (curry P p) with
+  | (x,y) => P_dec x y
+  end.
+Instance uncurry_dec `(P_dec : ∀ (p : A * B), Decision (P p)) x y :
+  Decision (uncurry P x y) := P_dec (x,y).

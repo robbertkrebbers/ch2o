@@ -48,13 +48,15 @@ Hint Constructors rtc nsteps bsteps tc : ars.
 Section rtc.
   Context `{R : relation A}.
 
-  Global Instance: Reflexive (rtc R).
-  Proof rtc_refl R.
-  Global Instance rtc_trans: Transitive (rtc R).
-  Proof. red; induction 1; eauto with ars. Qed.
+  Instance rtc_preorder: PreOrder (rtc R).
+  Proof.
+    split.
+    * red. apply rtc_refl.
+    * red. induction 1; eauto with ars.
+  Qed.
   Lemma rtc_once x y : R x y → rtc R x y.
   Proof. eauto with ars. Qed.
-  Global Instance: subrelation R (rtc R).
+  Instance rtc_once_subrel: subrelation R (rtc R).
   Proof. exact @rtc_once. Qed.
   Lemma rtc_r x y z : rtc R x y → R y z → rtc R x z.
   Proof. intros. etransitivity; eauto with ars. Qed.
@@ -142,7 +144,7 @@ Section rtc.
   Proof. intros. etransitivity; eauto with ars. Qed.
   Lemma tc_rtc x y : tc R x y → rtc R x y.
   Proof. induction 1; eauto with ars. Qed.
-  Global Instance: subrelation (tc R) (rtc R).
+  Instance tc_once_subrel: subrelation (tc R) (rtc R).
   Proof. exact @tc_rtc. Qed.
 
   Lemma looping_red x : looping R x → red R x.
@@ -162,6 +164,14 @@ Section rtc.
       cofix FIX. constructor; eauto using rtc_r with ars.
   Qed.
 End rtc.
+
+(* Avoid too eager type class resolution *)
+Hint Extern 5 (subrelation _ (rtc _)) =>
+  eapply @rtc_once_subrel : typeclass_instances.
+Hint Extern 5 (subrelation _ (tc _)) =>
+  eapply @tc_once_subrel : typeclass_instances.
+Hint Extern 5 (PreOrder (rtc _)) =>
+  eapply @rtc_preorder : typeclass_instances.
 
 Hint Resolve
   rtc_once rtc_r
@@ -186,3 +196,35 @@ Section subrel.
   Global Instance tc_subrel: subrelation (tc R1) (tc R2).
   Proof. induction 1; [left|eright]; eauto; by apply Hsub. Qed.
 End subrel.
+
+Notation wf := well_founded.
+
+Section wf.
+  Context `{R : relation A}.
+
+  (** A trick by Thomas Braibant to compute with well-founded recursions:
+  it lazily adds [2^n] [Acc_intro] constructors in front of a well foundedness
+  proof, so that the actual proof is never reached in practise. *)
+  Fixpoint wf_guard (n : nat) (wfR : wf R) : wf R :=
+    match n with
+    | 0 => wfR
+    | S n => λ x, Acc_intro x (λ y _, wf_guard n (wf_guard n wfR) y)
+    end.
+
+  Lemma wf_projected `(R2 : relation B) (f : A → B) :
+    (∀ x y, R x y → R2 (f x) (f y)) →
+    wf R2 → wf R.
+  Proof.
+    intros Hf Hwf.
+    cut (∀ y, Acc R2 y → ∀ x, y = f x → Acc R x).
+    { intros aux x. apply (aux (f x)); auto. }
+    induction 1 as [y _ IH]. intros x ?. subst.
+    constructor. intros. apply (IH (f y)); auto.
+  Qed.
+End wf.
+
+(* Generally we do not want [wf_guard] to be expanded (neither by tactics,
+nor by conversion tests in the kernel), but in some cases we do need it for
+computation (that is, we cannot make it opaque). We use the [Strategy]
+command to make its expanding behavior less eager. *)
+Strategy 100 [wf_guard].

@@ -36,6 +36,12 @@ Ltac done :=
 Tactic Notation "by" tactic(tac) :=
   tac; done.
 
+Ltac case_match :=
+  match goal with
+  | H : context [ match ?x with _ => _ end ] |- _ => destruct x eqn:?
+  | |- context [ match ?x with _ => _ end ] => destruct x eqn:?
+  end.
+
 (** The tactic [clear dependent H1 ... Hn] clears the hypotheses [Hi] and
 their dependencies. *)
 Tactic Notation "clear" "dependent" hyp(H1) hyp(H2) :=
@@ -114,6 +120,8 @@ Ltac simplify_equality := repeat
   | H : ?x = _ |- _ => subst x
   | H : _ = ?x |- _ => subst x
   | H : _ = _ |- _ => discriminate H
+  | H : ?f _ = ?f _ |- _ => apply (injective f) in H
+    (* before [injection'] to circumvent bug #2939 in some situations *)
   | H : _ = _ |- _ => injection' H
   end.
 

@@ -28,10 +28,48 @@ Section preorder.
     * transitivity y1. tauto. transitivity y2; tauto.
   Qed.
 
+  Global Instance preorder_subset: Subset A := λ X Y, X ⊆ Y ∧ Y ⊈ X.
+  Lemma subset_spec X Y : X ⊂ Y ↔ X ⊆ Y ∧ Y ⊈ X.
+  Proof. done. Qed.
+
+  Lemma subset_subseteq X Y : X ⊂ Y → X ⊆ Y.
+  Proof. by intros [? _]. Qed.
+  Lemma subset_trans_l X Y Z : X ⊂ Y → Y ⊆ Z → X ⊂ Z.
+  Proof.
+    intros [? Hxy] ?. split.
+    * by transitivity Y.
+    * contradict Hxy. by transitivity Z.
+  Qed.
+  Lemma subset_trans_r X Y Z : X ⊆ Y → Y ⊂ Z → X ⊂ Z.
+  Proof.
+    intros ? [? Hyz]. split.
+    * by transitivity Y.
+    * contradict Hyz. by transitivity X.
+  Qed.
+
+  Global Instance: StrictOrder (⊂).
+  Proof.
+    split.
+    * firstorder.
+    * eauto using subset_trans_r, subset_subseteq.
+  Qed.
+  Global Instance: Proper ((≡) ==> (≡) ==> iff) (⊂).
+  Proof. unfold subset, preorder_subset. solve_proper. Qed.
+
   Context `{∀ X Y : A, Decision (X ⊆ Y)}.
   Global Instance preorder_equiv_dec_slow (X Y : A) :
     Decision (X ≡ Y) | 100 := _.
+  Global Instance preorder_subset_dec_slow (X Y : A) :
+    Decision (X ⊂ Y) | 100 := _.
+
+  Lemma subseteq_inv X Y : X ⊆ Y → X ⊂ Y ∨ X ≡ Y.
+  Proof.
+    destruct (decide (Y ⊆ X)).
+    * by right.
+    * by left.
+  Qed.
 End preorder.
+
 Typeclasses Opaque preorder_equiv.
 Hint Extern 0 (@Equivalence _ (≡)) =>
   class_apply preorder_equivalence : typeclass_instances.
