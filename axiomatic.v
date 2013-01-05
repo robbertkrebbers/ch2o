@@ -743,7 +743,7 @@ Proof. intros. eapply ax_stmt_weaken_packed; intros []; solve_assert. Qed.
 
 Lemma ax_stmt_packed_right_frame Δ A Pd s :
   ax_stmt_packed Δ Pd s →
-  ax_stmt_packed Δ ((λ P, P * A)%A <$> Pd) s.
+  ax_stmt_packed Δ ((λ P, P ★ A)%A <$> Pd) s.
 Proof.
   intros Hax n k d m HΔ Hd Hpre.
   rewrite directed_fmap_spec in Hpre.
@@ -754,7 +754,7 @@ Proof.
 Qed.
 Lemma ax_stmt_packed_left_frame Δ A Pd s :
   ax_stmt_packed Δ Pd s →
-  ax_stmt_packed Δ ((λ P, A * P)%A <$> Pd) s.
+  ax_stmt_packed Δ ((λ P, A ★ P)%A <$> Pd) s.
 Proof.
   intros Hax. apply (ax_stmt_packed_right_frame _ A) in Hax.
   eapply ax_stmt_weaken_packed; [eassumption | |].
@@ -763,11 +763,11 @@ Proof.
 Qed.
 Lemma ax_stmt_right_frame Δ R J A P Q s :
   Δ \ R \ J ⊨ₛ {{ P }} s {{ Q }} →
-  Δ \ (λ v, R v * A) \ (λ l, J l * A) ⊨ₛ {{ P * A }} s {{ Q * A }}.
+  Δ \ (λ v, R v ★ A) \ (λ l, J l ★ A) ⊨ₛ {{ P ★ A }} s {{ Q ★ A }}.
 Proof. apply ax_stmt_packed_right_frame. Qed.
 Lemma ax_stmt_left_frame Δ R J A P Q s :
   Δ \ R \ J ⊨ₛ {{ P }} s {{ Q }} →
-  Δ \ (λ v, A * R v) \ (λ l, A * J l) ⊨ₛ {{ A * P }} s {{ A * Q }}.
+  Δ \ (λ v, A ★ R v) \ (λ l, A ★ J l) ⊨ₛ {{ A ★ P }} s {{ A ★ Q }}.
 Proof. apply ax_stmt_packed_left_frame. Qed.
 
 Lemma ax_stmt_and Δ R J P Q Q' s :
@@ -842,7 +842,7 @@ Proof. intros. eapply ax_expr_weaken; eauto. Qed.
 
 Lemma ax_expr_right_frame Δ A P Q e :
   Δ ⊨ₑ {{ P }} e {{ λ v, Q v }} →
-  Δ ⊨ₑ {{ P * A }} e {{ λ v, Q v * A }}.
+  Δ ⊨ₑ {{ P ★ A }} e {{ λ v, Q v ★ A }}.
 Proof.
   intros Hax n k m HΔ Hpre.
   destruct Hpre as [m1 [m2 [? [? [??]]]]]; simplify_equality.
@@ -851,7 +851,7 @@ Proof.
 Qed.
 Lemma ax_expr_left_frame Δ A P Q e :
   Δ ⊨ₑ {{ P }} e {{ λ v, Q v }} →
-  Δ ⊨ₑ {{ A * P }} e {{ λ v, A * Q v }}.
+  Δ ⊨ₑ {{ A ★ P }} e {{ λ v, A ★ Q v }}.
 Proof.
   setoid_rewrite (commutative assert_sep).
   apply ax_expr_right_frame.
@@ -862,9 +862,9 @@ Lemma ax_funs_add n Δ Δ' :
   (∀ f Pf c vs,
     Δ' !! f = Some Pf → ∃ sf,
     δ !! f = Some sf ∧
-    Δ' ∪ Δ ⊨ₜ {{ Π imap (λ i v, var i ↦ val v) vs * fpre Pf c vs }}
+    Δ' ∪ Δ ⊨ₜ {{ Π imap (λ i v, var i ↦ val v) vs ★ fpre Pf c vs }}
      sf
-    {{ λ v, Π imap (λ i _, var i ↦ -) vs * fpost Pf c vs v }}) →
+    {{ λ v, Π imap (λ i _, var i ↦ -) vs ★ fpost Pf c vs v }}) →
   ax_funs n Δ →
   ax_funs n (Δ' ∪ Δ).
 Proof.
@@ -919,9 +919,9 @@ Lemma ax_stmt_funs_add Δ Δ' Pd s :
   (∀ f Pf c vs,
     Δ' !! f = Some Pf → ∃ sf,
     δ !! f = Some sf ∧
-    Δ' ∪ Δ ⊨ₜ {{ Π imap (λ i v, var i ↦ val v) vs * fpre Pf c vs }}
+    Δ' ∪ Δ ⊨ₜ {{ Π imap (λ i v, var i ↦ val v) vs ★ fpre Pf c vs }}
      sf
-    {{ λ v, Π imap (λ i _, var i ↦ -) vs * fpost Pf c vs v }}) →
+    {{ λ v, Π imap (λ i _, var i ↦ -) vs ★ fpost Pf c vs v }}) →
   Δ' ∪ Δ \ Pd ⊨ₚ s →
   Δ \ Pd ⊨ₚ s.
 Proof. intros ? Hax ?????. apply Hax; eauto using ax_funs_add. Qed.
@@ -929,9 +929,9 @@ Lemma ax_expr_funs_add Δ Δ' P Q e :
   (∀ f Pf c vs,
     Δ' !! f = Some Pf → ∃ sf,
     δ !! f = Some sf ∧
-    Δ' ∪ Δ ⊨ₜ {{ Π imap (λ i v, var i ↦ val v) vs * fpre Pf c vs }}
+    Δ' ∪ Δ ⊨ₜ {{ Π imap (λ i v, var i ↦ val v) vs ★ fpre Pf c vs }}
      sf
-    {{ λ v, Π imap (λ i _, var i ↦ -) vs * fpost Pf c vs v }}) →
+    {{ λ v, Π imap (λ i _, var i ↦ -) vs ★ fpost Pf c vs v }}) →
   Δ' ∪ Δ ⊨ₑ {{ P }} e {{ Q }} →
   Δ ⊨ₑ {{ P }} e {{ Q }}.
 Proof. intros ? Hax ?????. apply Hax; eauto using ax_funs_add. Qed.
@@ -1011,8 +1011,8 @@ Qed.
 Lemma ax_assign Δ el Pl Ql er Pr Qr R :
   Δ ⊨ₑ {{ Pl }} el {{ Ql }} →
   Δ ⊨ₑ {{ Pr }} er {{ Qr }} →
-  (∀ a v, Ql a * Qr v → val a ↦ - * R a v)%A →
-  Δ ⊨ₑ {{ Pl * Pr }} el ::= er {{ λ v, ∃ a, val a ↦ val v * R a v }}.
+  (∀ a v, Ql a ★ Qr v → val a ↦ - ★ R a v)%A →
+  Δ ⊨ₑ {{ Pl ★ Pr }} el ::= er {{ λ v, ∃ a, val a ↦ val v ★ R a v }}.
 Proof.
   intros Haxl Haxr Hassign n k ?? [m1 [m2 [? [? [??]]]]]; subst.
   rewrite <-(right_id_eq ∅ (∪) m2).
@@ -1045,13 +1045,13 @@ Proof.
 Qed.
 
 Lemma ax_load Δ e P Q :
-  Δ ⊨ₑ {{ P }} e {{ λ a, ∃ v, Q a v * val a ↦ val v }} →
-  Δ ⊨ₑ {{ P }} load e {{ λ v, ∃ a, Q a v * val a ↦ val v }}.
+  Δ ⊨ₑ {{ P }} e {{ λ a, ∃ v, Q a v ★ val a ↦ val v }} →
+  Δ ⊨ₑ {{ P }} load e {{ λ v, ∃ a, Q a v ★ val a ↦ val v }}.
 Proof.
   intros Hax n k m ? Hpre.
   rewrite <-(right_id_eq ∅ (∪) m).
   apply (ax_expr_compose n
-    [# λ a, ∃ v, Q a v * val a ↦ val v]%A _ DCLoad [# e] k [# m]).
+    [# λ a, ∃ v, Q a v ★ val a ↦ val v]%A _ DCLoad [# e] k [# m]).
   { simpl. solve_mem_disjoint. }
   { intros. inv_all_vec_fin; simpl; auto. }
 
@@ -1087,12 +1087,12 @@ Proof.
 Qed.
 
 Lemma ax_free Δ e P Q :
-  Δ ⊨ₑ {{ P }} e {{ λ a, Q * val a ↦ - }} →
+  Δ ⊨ₑ {{ P }} e {{ λ a, Q ★ val a ↦ - }} →
   Δ ⊨ₑ {{ P }} free e {{ λ v, Q }}.
 Proof.
   intros Hax n k m ? Hpre.
   rewrite <-(right_id_eq ∅ (∪) m).
-  apply (ax_expr_compose n [# λ a, Q * val a ↦ -]%A _ DCFree [# e] k [# m]).
+  apply (ax_expr_compose n [# λ a, Q ★ val a ↦ -]%A _ DCFree [# e] k [# m]).
   { simpl. solve_mem_disjoint. }
   { intros. inv_all_vec_fin; simpl; auto. }
 
@@ -1153,9 +1153,9 @@ Qed.
 Lemma ax_binop Δ op el Pl Ql er Pr Qr :
   Δ ⊨ₑ {{ Pl }} el {{ Ql }} →
   Δ ⊨ₑ {{ Pr }} er {{ Qr }} →
-  (∀ vl vr, Ql vl * Qr vr → val vl @{op} val vr ⇓-)%A →
-  Δ ⊨ₑ {{ Pl * Pr }} el @{op} er
-       {{ λ v', ∃ vl vr, val vl @{op} val vr ⇓ v' ∧ (Ql vl * Qr vr) }}.
+  (∀ vl vr, Ql vl ★ Qr vr → val vl @{op} val vr ⇓-)%A →
+  Δ ⊨ₑ {{ Pl ★ Pr }} el @{op} er
+       {{ λ v', ∃ vl vr, val vl @{op} val vr ⇓ v' ∧ (Ql vl ★ Qr vr) }}.
 Proof.
   intros Haxl Haxr Hop n k ?? [m1 [m2 [? [? [??]]]]]; subst.
   rewrite <-(right_id_eq ∅ (∪) m2).
@@ -1260,7 +1260,7 @@ Proof.
 Qed.
 
 Lemma ax_packed_blk Δ Pd s :
-  Δ \ (λ P, var O ↦ - * P↑)%A <$> Pd ⊨ₚ s →
+  Δ \ (λ P, var O ↦ - ★ P↑)%A <$> Pd ⊨ₚ s →
   Δ \ Pd ⊨ₚ blk s.
 Proof.
   intros Hax n k. revert n.
@@ -1294,8 +1294,8 @@ Proof.
 Qed.
 
 Lemma ax_blk Δ R J P Q s :
-  Δ \ (λ v, var O ↦ - * R v↑) \ (λ l, var O ↦ - * J l↑)
-    ⊨ₛ {{ var O ↦ - * P↑ }} s {{ var O ↦ - * Q↑ }} →
+  Δ \ (λ v, var O ↦ - ★ R v↑) \ (λ l, var O ↦ - ★ J l↑)
+    ⊨ₛ {{ var O ↦ - ★ P↑ }} s {{ var O ↦ - ★ Q↑ }} →
   Δ \ R \ J ⊨ₛ {{ P }} blk s {{ Q }}.
 Proof. intros. by apply ax_packed_blk. Qed.
 
