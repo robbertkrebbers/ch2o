@@ -799,21 +799,24 @@ Proof.
     intros ?? [[] ??]; constructor; solve_assert.
 Qed.
 
-Lemma ax_stmt_ex Δ R J {A} (P Q : A → assert) s :
-  inhabited A →
-  (∀ x, Δ \ R \ J ⊨ₛ {{ P x }} s {{ Q x }}) →
-  Δ \ R \ J ⊨ₛ {{ ∃ x, P x }} s {{ ∃ x, Q x }}.
+Lemma ax_stmt_ex_pre `{!Inhabited A} Δ R J (P : A → assert) Q s :
+  (∀ x, Δ \ R \ J ⊨ₛ {{ P x }} s {{ Q }}) →
+  Δ \ R \ J ⊨ₛ {{ ∃ x, P x }} s {{ Q }}.
 Proof.
-  intros HA Hax n k [] m HΔ Hd Hpre; discriminate_down_up.
+  intros Hax n k [] m HΔ Hd Hpre; discriminate_down_up.
   * destruct Hpre as [x Hpre].
-    apply ax_weaken with (ax_stmt_P s (dassert_pack (P x) (Q x) R J)).
+    apply ax_weaken with (ax_stmt_P s (dassert_pack (P x) Q R J)).
     + intros ?? [[] ??]; constructor; solve_assert.
     + by apply Hax.
-  * destruct HA as [x].
-    apply ax_weaken with (ax_stmt_P s (dassert_pack (P x) (Q x) R J)).
+  * destruct (_ : Inhabited A) as [x].
+    apply ax_weaken with (ax_stmt_P s (dassert_pack (P x) Q R J)).
     + intros ?? [[] ??]; constructor; solve_assert.
     + by apply Hax.
 Qed.
+Lemma ax_stmt_ex_post `{!Inhabited A} Δ R J P (Q : A → assert) s x :
+  Δ \ R \ J ⊨ₛ {{ P }} s {{ Q x }} →
+  Δ \ R \ J ⊨ₛ {{ P }} s {{ ∃ x, Q x }}.
+Proof. intro. apply ax_stmt_weaken_post with (Q x); solve_assert. Qed.
 
 Lemma ax_expr_weaken Δ P P' Q Q' e :
   Δ ⊨ₑ {{ P' }} e {{ Q' }} →

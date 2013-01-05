@@ -86,6 +86,28 @@ on a type [A] we write [`{∀ x y : A, Decision (x = y)}] and use it by writing
 Class Decision (P : Prop) := decide : {P} + {¬P}.
 Arguments decide _ {_}.
 
+(** ** Inhabited types *)
+(** This type class collects types that are inhabited. *)
+Class Inhabited (A : Type) : Prop := populate { _ : A }.
+Arguments populate {_} _.
+
+Instance unit_inhabited: Inhabited unit := populate ().
+Instance list_inhabited {A} : Inhabited (list A) := populate [].
+Instance prod_inhabited {A B} (iA : Inhabited A)
+    (iB : Inhabited B) : Inhabited (A * B) :=
+  match iA, iB with
+  | populate x, populate y => populate (x,y)
+  end.
+Instance sum_inhabited_l {A B} (iA : Inhabited A) : Inhabited (A + B) :=
+  match iA with
+  | populate x => populate (inl x)
+  end.
+Instance sum_inhabited_r {A B} (iB : Inhabited A) : Inhabited (A + B) :=
+  match iB with
+  | populate y => populate (inl y)
+  end.
+Instance option_inhabited {A} : Inhabited (option A) := populate None.
+
 (** ** Setoid equality *)
 (** We define an operational type class for setoid equality. This is based on
 (Spitters/van der Weegen, 2011). *)

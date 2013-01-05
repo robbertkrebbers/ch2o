@@ -25,6 +25,7 @@ Infix "`mod`" := NPeano.modulo (at level 35) : nat_scope.
 Instance nat_eq_dec: ∀ x y : nat, Decision (x = y) := eq_nat_dec.
 Instance nat_le_dec: ∀ x y : nat, Decision (x ≤ y) := le_dec.
 Instance nat_lt_dec: ∀ x y : nat, Decision (x < y) := lt_dec.
+Instance nat_inhabited: Inhabited nat := populate 0%nat.
 
 Lemma lt_n_SS n : n < S (S n).
 Proof. auto with arith. Qed.
@@ -40,6 +41,8 @@ Definition sum_list_with {A} (f : A → nat) : list A → nat :=
 Notation sum_list := (sum_list_with id).
 
 Instance positive_eq_dec: ∀ x y : positive, Decision (x = y) := Pos.eq_dec.
+Instance positive_inhabited: Inhabited positive := populate 1%positive.
+
 Notation "(~0)" := xO (only parsing) : positive_scope.
 Notation "(~1)" := xI (only parsing) : positive_scope.
 
@@ -75,6 +78,7 @@ Program Instance N_lt_dec (x y : N) : Decision (x < y)%N :=
   | _ => right _
   end.
 Next Obligation. congruence. Qed.
+Instance N_inhabited: Inhabited N := populate 1%N.
 
 Infix "≤" := Z.le : Z_scope.
 Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z)%Z : Z_scope.
@@ -87,6 +91,7 @@ Notation "(<)" := Z.lt (only parsing) : Z_scope.
 Instance Z_eq_dec: ∀ x y : Z, Decision (x = y) := Z.eq_dec.
 Instance Z_le_dec: ∀ x y : Z, Decision (x ≤ y)%Z := Z_le_dec.
 Instance Z_lt_dec: ∀ x y : Z, Decision (x < y)%Z := Z_lt_dec.
+Instance Z_inhabited: Inhabited Z := populate 1%Z.
 
 (** * Conversions *)
 (** The function [Z_to_option_N] converts an integer [x] into a natural number
