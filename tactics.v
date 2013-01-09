@@ -123,6 +123,7 @@ Ltac simplify_equality := repeat
   | H : ?f _ = ?f _ |- _ => apply (injective f) in H
     (* before [injection'] to circumvent bug #2939 in some situations *)
   | H : _ = _ |- _ => injection' H
+  | H : ?x = ?x |- _ => clear H
   end.
 
 (** Coq's default [remember] tactic does have an option to name the generated

@@ -48,12 +48,10 @@ Hint Constructors rtc nsteps bsteps tc : ars.
 Section rtc.
   Context `{R : relation A}.
 
-  Instance rtc_preorder: PreOrder (rtc R).
-  Proof.
-    split.
-    * red. apply rtc_refl.
-    * red. induction 1; eauto with ars.
-  Qed.
+  Global Instance rtc_reflexive: Reflexive (rtc R).
+  Proof. red. apply rtc_refl. Qed.
+  Global Instance rtc_transitive: Transitive (rtc R).
+  Proof. red. induction 1; eauto with ars. Qed.
   Lemma rtc_once x y : R x y → rtc R x y.
   Proof. eauto with ars. Qed.
   Instance rtc_once_subrel: subrelation R (rtc R).
@@ -170,8 +168,6 @@ Hint Extern 5 (subrelation _ (rtc _)) =>
   eapply @rtc_once_subrel : typeclass_instances.
 Hint Extern 5 (subrelation _ (tc _)) =>
   eapply @tc_once_subrel : typeclass_instances.
-Hint Extern 5 (PreOrder (rtc _)) =>
-  eapply @rtc_preorder : typeclass_instances.
 
 Hint Resolve
   rtc_once rtc_r
@@ -187,15 +183,24 @@ Section subrel.
   Lemma nf_subrel x : nf R2 x → nf R1 x.
   Proof. intros H1 H2. destruct H1. by apply red_subrel. Qed.
 
-  Global Instance rtc_subrel: subrelation (rtc R1) (rtc R2).
+  Instance rtc_subrel: subrelation (rtc R1) (rtc R2).
   Proof. induction 1; [left|eright]; eauto; by apply Hsub. Qed.
-  Global Instance nsteps_subrel: subrelation (nsteps R1 n) (nsteps R2 n).
+  Instance nsteps_subrel: subrelation (nsteps R1 n) (nsteps R2 n).
   Proof. induction 1; [left|eright]; eauto; by apply Hsub. Qed.
-  Global Instance bsteps_subrel: subrelation (bsteps R1 n) (bsteps R2 n).
+  Instance bsteps_subrel: subrelation (bsteps R1 n) (bsteps R2 n).
   Proof. induction 1; [left|eright]; eauto; by apply Hsub. Qed.
-  Global Instance tc_subrel: subrelation (tc R1) (tc R2).
+  Instance tc_subrel: subrelation (tc R1) (tc R2).
   Proof. induction 1; [left|eright]; eauto; by apply Hsub. Qed.
 End subrel.
+
+Hint Extern 5 (subrelation (rtc _) (rtc _)) =>
+  eapply @rtc_subrel : typeclass_instances.
+Hint Extern 5 (subrelation (nsteps _) (nsteps _)) =>
+  eapply @nsteps_subrel : typeclass_instances.
+Hint Extern 5 (subrelation (bsteps _) (bsteps _)) =>
+  eapply @bsteps_subrel : typeclass_instances.
+Hint Extern 5 (subrelation (tc _) (tc _)) =>
+  eapply @tc_subrel : typeclass_instances.
 
 Notation wf := well_founded.
 

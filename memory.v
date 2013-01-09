@@ -20,6 +20,7 @@ Definition indexmap := Nmap.
 Instance index_dec: ∀ i1 i2 : index, Decision (i1 = i2) := decide_rel (=).
 Instance index_fresh_`{FinCollection index C} : Fresh index C := _.
 Instance index_fresh_spec `{FinCollection index C} : FreshSpec index C := _.
+Instance index_inhabited: Inhabited index := populate 0%N.
 
 Instance indexmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
   ∀ m1 m2 : indexmap A, Decision (m1 = m2) := decide_rel (=).
@@ -47,6 +48,7 @@ Inductive value :=
 
 Instance value_eq_dec (v1 v2 : value) : Decision (v1 = v2).
 Proof. solve_decision. Defined.
+Instance value_inhabited: Inhabited value := populate VVoid.
 
 (** We define better readable notations for values in the scope
 [value_scope]. *)
@@ -107,7 +109,7 @@ Hint Resolve (lookup_insert (M:=indexmap)) : mem.
 Hint Resolve finmap_disjoint_empty_l finmap_disjoint_empty_r : mem.
 Hint Resolve finmap_disjoint_singleton_l_2 finmap_disjoint_singleton_r_2 : mem.
 Hint Constructors list_disjoint : mem.
-Hint Resolve finmap_union_Some_l finmap_union_Some_r : mem.
+Hint Resolve lookup_union_Some_l lookup_union_Some_r : mem.
 Hint Resolve finmap_subseteq_union_l finmap_subseteq_union_r : mem.
 Hint Resolve finmap_disjoint_union_l_2 finmap_disjoint_union_r_2 : mem.
 Hint Resolve finmap_disjoint_insert_l_2 finmap_disjoint_insert_r_2 : mem.
@@ -172,7 +174,7 @@ Hint Immediate is_free_subseteq : mem.
 
 Lemma is_free_union m1 m2 b :
   is_free (m1 ∪ m2) b ↔ is_free m1 b ∧ is_free m2 b.
-Proof. apply finmap_union_None. Qed.
+Proof. apply lookup_union_None. Qed.
 
 Lemma is_free_union_2 m1 m2 b :
   is_free m1 b → is_free m2 b → is_free (m1 ∪ m2) b.
@@ -300,7 +302,7 @@ Qed.
 
 Lemma alloc_params_subseteq m1 bs vs m2 :
   alloc_params m1 bs vs m2 → m1 ⊆ m2.
-Proof. induction 1; eauto using finmap_subseteq_insert with mem. Qed.
+Proof. induction 1; eauto using insert_subseteq_r with mem. Qed.
 Lemma alloc_params_is_free m1 bs vs m2 b :
   alloc_params m1 bs vs m2 → is_free m2 b → is_free m1 b.
 Proof. eauto using is_free_subseteq, alloc_params_subseteq. Qed.
@@ -346,7 +348,7 @@ Lemma alloc_params_weaken m1 bs vs m2 m3 :
   alloc_params (m1 ∪ m3) bs vs (m2 ∪ m3) →
   alloc_params m1 bs vs m2.
 Proof.
-  rewrite !alloc_params_insert_list, !finmap_insert_list_union.
+  rewrite !alloc_params_insert_list, !insert_list_union.
   intuition idtac.
   * apply finmap_union_cancel_l with m3.
     + done.

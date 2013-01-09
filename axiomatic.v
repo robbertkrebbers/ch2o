@@ -594,7 +594,7 @@ Proof.
   { intros mf ?.
     rewrite (ectx_full_to_item_correct _ _ i).
     apply (cred_ectx _ [_]).
-    rewrite <-(finmap_union_delete_vec ms i),
+    rewrite <-(union_delete_vec ms i),
       <-(associative_eq (∪)) by done.
     apply (ax_red (ax_expr_P (Ps !!! i)) n); trivial.
     + solve_mem_disjoint.
@@ -608,13 +608,13 @@ Proof.
       l (Expr (es !!! i)) (ms !!! i) (State l (Expr e') m'))
       as [???? m'']; subst; trivial.
     { solve_mem_disjoint. }
-    { by rewrite (associative_eq (∪)), finmap_union_delete_vec. }
+    { by rewrite (associative_eq (∪)), union_delete_vec. }
 
     rewrite (associative_eq (∪)). constructor.
     { solve_mem_disjoint. }
     { done. }
 
-    rewrite <-finmap_union_insert_vec by solve_mem_disjoint.
+    rewrite <-union_insert_vec by solve_mem_disjoint.
     apply IH; auto with arith.
     + solve_mem_disjoint.
     + intros j. destruct (decide (i = j)); subst.
@@ -623,7 +623,7 @@ Proof.
     + intros vs ms' ??. by apply ax_S, Hax2.
   * clear i Hi. intros i E' f vs HE p.
     constructor; [done | done |].
-    rewrite <-(finmap_union_delete_vec ms i) by done.
+    rewrite <-(union_delete_vec ms i) by done.
     apply ax_call_compose with (P:=ax_expr_P (Ps !!! i)) (k:=[]) (E:=E').
     { solve_mem_disjoint. }
     { feed inversion (ax_step (ax_expr_P (Ps !!! i)) n
@@ -632,11 +632,11 @@ Proof.
         (State (CCall E' :: l) (Call f vs) (ms !!! i ∪
           (⋃ delete (fin_to_nat i) (vec_to_list ms) ∪ mf)))); subst; trivial.
       + solve_mem_disjoint.
-      + by rewrite (associative_eq (∪)), finmap_union_delete_vec.
+      + by rewrite (associative_eq (∪)), union_delete_vec.
       + by simplify_mem_equality. }
 
     intros n' m' e' ?? Hax.
-    rewrite <-finmap_union_insert_vec by done.
+    rewrite <-union_insert_vec by done.
     rewrite list_subst_snoc, <-ectx_full_to_item_correct_alt.
     apply IH; auto with arith.
     + solve_mem_disjoint.
@@ -655,7 +655,7 @@ Proof.
       l (⋃ delete (fin_to_nat i) (vec_to_list ms) ∪ mf)
       l (Expr (es !!! i)) (ms !!! i) l (⋃ ms ∪ mf)); trivial.
     + solve_mem_disjoint.
-    + by rewrite (associative_eq (∪)), finmap_union_delete_vec.
+    + by rewrite (associative_eq (∪)), union_delete_vec.
 Qed.
 
 (** * Partial program correctness *)
@@ -871,7 +871,7 @@ Proof.
   intros HaxΔ' HΔ.
   induction n as [|n IH]; [by constructor |].
   intros f Pf c vs m k Hf Hpre.
-  rewrite finmap_union_Some_raw in Hf.
+  rewrite lookup_union_Some_raw in Hf.
   destruct Hf as [? | [_ ?]]; [| eapply HΔ; eauto ].
   destruct (HaxΔ' f Pf c vs) as [sf [Hsf Haxsf]]; trivial.
 
@@ -888,9 +888,9 @@ Proof.
 
   pose proof (is_free_list_nodup _ _ Hfree).
   decompose_is_free.
-  rewrite finmap_insert_list_union, (associative_eq (∪)).
+  rewrite insert_list_union, (associative_eq (∪)).
   constructor; [solve_mem_disjoint | done |].
-  rewrite <-finmap_insert_list_union.
+  rewrite <-insert_list_union.
 
   eapply ax_compose_cons; [| clear dependent m mf S' f Δ].
   { eapply Haxsf; eauto.
@@ -1038,7 +1038,7 @@ Proof.
 
   intros mf' S' ? p. inv_cstep p.
   * inv_ehstep.
-    rewrite !finmap_union_insert_l, insert_singleton.
+    rewrite !insert_union_l, insert_singleton.
     constructor; [solve_mem_disjoint | done |].
     apply ax_done; constructor; solve_assert.
   * exfalso; eauto 6 with cstep.
@@ -1080,7 +1080,7 @@ Proof.
   apply ax_further_pred.
   { intros. solve_cred. }
   intros mf S' ? p. rewrite (left_id_eq ∅ (∪)) in p. inv_cstep p.
-  * inv_ehstep. rewrite finmap_union_singleton_l.
+  * inv_ehstep. rewrite insert_union_singleton_l.
     constructor; [solve_mem_disjoint | done | apply ax_done].
     constructor. solve_assert.
   * exfalso; eauto with cstep.
@@ -1273,7 +1273,7 @@ Proof.
     { intros. solve_cred. }
     intros mf S' ? p.
     destruct d; discriminate_down_up; inv_cstep p;
-      rewrite finmap_union_insert_l; decompose_is_free;
+      rewrite insert_union_l; decompose_is_free;
       by constructor; [solve_mem_disjoint | |]; auto with ax. }
 
   intros n d m b v ????.

@@ -244,6 +244,63 @@ Proof.
   * intros e ?. apply Pind. intros. apply IHn. lia.
 Qed.
 
+Inductive load_free : expr → Prop :=
+  | var_load_free x : load_free (var x)
+  | val_load_free v : load_free (val v)
+  | assign_load_free el er :
+     load_free el → load_free er → load_free (el ::= er)
+  | call_load_free f es :
+     Forall load_free es → load_free (call f @ es)
+  | alloc_load_free : load_free alloc
+  | free_load_free e : load_free e → load_free (free e)
+  | unop_load_free op e : load_free e → load_free (@{op} e)
+  | binop_load_free op el er :
+     load_free el → load_free er → load_free (el @{op} er)
+  | if_load_free e el er :
+     load_free e → load_free el → load_free er →
+     load_free (IF e then el else er).
+
+Instance load_free_dec: ∀ e, Decision (load_free e).
+Proof.
+ refine (
+  fix go e :=
+  match e return Decision (load_free e) with
+  | var x => left _
+  | val v => left _
+  | el ::= er => cast_if_and (go el) (go er)
+  | call f @ es => cast_if (decide (Forall load_free es))
+  | load e => right _
+  | alloc => left _
+  | free e => cast_if (go e)
+  | @{op} e => cast_if (go e)
+  | el @{op} er => cast_if_and (go el) (go er)
+  | (IF e then el else er) =>
+      cast_if_and3 (go e) (go el) (go er)
+  end%E); first [by constructor | by inversion 1].
+Defined.
+
+Fixpoint expr_vars (e : expr) : listset nat :=
+  match e with
+  | var n => {[ n ]}
+  | val _ => ∅
+  | el ::= er => expr_vars el ∪ expr_vars er
+  | call _ @ es => ⋃ (expr_vars <$> es)
+  | load e => expr_vars e
+  | alloc => ∅
+  | free e => expr_vars e
+  | @{_} e => expr_vars e
+  | el @{_} er => expr_vars el ∪ expr_vars er
+  | (IF e then el else er) =>
+      expr_vars e ∪ expr_vars el ∪ expr_vars er
+  end%E.
+
+Hint Extern 1 (load_free _) => assumption : typeclass_instances.
+Hint Extern 100 (load_free ?e) =>
+  apply (bool_decide_unpack _); vm_compute; exact I : typeclass_instances.
+Hint Extern 1 (expr_vars _ ≡ ∅) => assumption : typeclass_instances.
+Hint Extern 100 (expr_vars _ ≡ ∅) =>
+  apply (bool_decide_unpack _); vm_compute; exact I : typeclass_instances.
+
 (** * Miscellaneous Operations and properties *)
 (** The operation [e↑] increases all De Bruijn indexes of variables in [e]
 by one. That means, each variable [var x] in [e] becomes [var (S x)]. *)
@@ -649,6 +706,34 @@ Proof.
       eauto using expr_eval_weaken_mem.
   * done.
   * congruence.
+Qed.
+
+Lemma expr_var_free_stack_indep ρ1 ρ2 m e :
+  expr_vars e ≡ ∅ →
+  ⟦ e ⟧ ρ1 m = ⟦ e ⟧ ρ2 m.
+Proof.
+  induction e; simpl; intro; decompose_empty; repeat
+    match goal with
+    | H : expr_vars _ ≡ ∅ → ⟦ _ ⟧ _ _ = _ |- _ => rewrite H
+    | _ => done
+    | |- mbind (M:=option) _ ?o = mbind (M:=option) _ ?o =>
+       destruct o; simpl
+    | _ => destruct (value_true_false_dec _)
+    end.
+Qed.
+
+Lemma expr_load_free_mem_indep ρ m1 m2 e :
+  load_free e →
+  ⟦ e ⟧ ρ m1 = ⟦ e ⟧ ρ m2.
+Proof.
+  induction 1; simpl; repeat
+    match goal with
+    | H : ⟦ _ ⟧ _ _ = _ |- _ => rewrite H
+    | _ => done
+    | |- mbind (M:=option) _ ?o = mbind (M:=option) _ ?o =>
+       destruct o; simpl
+    | _ => destruct (value_true_false_dec _)
+    end.
 Qed.
 
 Tactic Notation "simplify_expr_equality" "by" tactic3(tac) := repeat

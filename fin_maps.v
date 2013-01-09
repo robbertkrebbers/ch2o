@@ -148,8 +148,8 @@ Section finmap_common.
   Qed.
   Lemma partial_alter_comm (m : M A) i j f g :
     i ≠ j →
-      partial_alter f i (partial_alter g j m)
-    = partial_alter g j (partial_alter f i m).
+    partial_alter f i (partial_alter g j m) =
+      partial_alter g j (partial_alter f i m).
   Proof.
     intros. apply finmap_eq. intros jj.
     destruct (decide (jj = j)).
@@ -334,7 +334,8 @@ Section finmap_common.
     * rewrite (elem_of_dom C), lookup_empty. by inversion 1.
     * solve_elem_of.
   Qed.
-  Lemma dom_empty_inv C `{SimpleCollection K C} (m : M A) : dom C m ≡ ∅ → m = ∅.
+  Lemma dom_empty_inv C `{SimpleCollection K C} (m : M A) :
+    dom C m ≡ ∅ → m = ∅.
   Proof.
     intros E. apply finmap_empty. intros. apply (not_elem_of_dom C).
     rewrite E. solve_elem_of.
@@ -485,13 +486,24 @@ Tactic Notation "simpl_map" "by" tactic3(tac) := repeat
   | |- context[ (delete _ _) !! _ ] => rewrite lookup_delete_ne by tac
   | |- context[ {[ _ ]} !! _ ] => rewrite lookup_singleton
   | |- context[ {[ _ ]} !! _ ] => rewrite lookup_singleton_ne by tac
+  | |- context [ lookup (A:=?A) ?i ?m ] =>
+     let x := fresh in evar (x:A);
+     let x' := eval unfold x in x in clear x;
+     let E := fresh in
+     assert (m !! i = Some x') as E by tac;
+     rewrite E; clear E
   end.
-Tactic Notation "simpl_map" := simpl_map by auto.
+
+Create HintDb simpl_map.
+Tactic Notation "simpl_map" := simpl_map by eauto with simpl_map.
 
 Tactic Notation "simplify_map_equality" "by" tactic3(tac) := repeat
   match goal with
   | _ => progress simpl_map by tac
   | _ => progress simplify_equality
+  | H : {[ _ ]} !! _ = None |- _ => rewrite lookup_singleton_None in H
+  | H : {[ _ ]} !! _ = Some _ |- _ =>
+     rewrite lookup_singleton_Some in H; destruct H
   | H1 : ?m1 !! ?i = Some ?x, H2 : ?m2 !! ?i = Some ?y |- _ =>
     let H3 := fresh in
     feed pose proof (lookup_weaken_inv m1 m2 i x y) as H3;
@@ -502,7 +514,8 @@ Tactic Notation "simplify_map_equality" "by" tactic3(tac) := repeat
     assert (m1 ⊆ m2) as H3 by tac;
     apply H3 in H1; congruence
   end.
-Tactic Notation "simplify_map_equality" := simplify_map_equality by auto.
+Tactic Notation "simplify_map_equality" :=
+  simplify_map_equality by eauto with simpl_map.
 
 (** * More theorems on finite maps *)
 Section finmap_more.
@@ -527,7 +540,7 @@ Section finmap_more.
     * by rewrite elem_of_nil.
     * rewrite NoDup_cons, elem_of_cons, elem_of_list_fmap.
       intros [Hl ?] [?|?]; simplify_map_equality; [done |].
-      destruct (decide (i = j)); simplify_map_equality; [| by auto].
+      destruct (decide (i = j)); simplify_map_equality; [|done].
       destruct Hl. by exists (j,x).
   Qed.
   Lemma elem_of_finmap_of_list_2 (l : list (K * A)) i x :
@@ -892,7 +905,7 @@ Section finmap_more.
     apply (merge_idempotent _). intros i. by destruct (m !! i).
   Qed.
 
-  Lemma finmap_union_Some_raw (m1 m2 : M A) i x :
+  Lemma lookup_union_Some_raw (m1 m2 : M A) i x :
     (m1 ∪ m2) !! i = Some x ↔
       m1 !! i = Some x ∨ (m1 !! i = None ∧ m2 !! i = Some x).
   Proof.
@@ -900,7 +913,7 @@ Section finmap_more.
     rewrite (merge_spec _).
     destruct (m1 !! i), (m2 !! i); compute; intuition congruence.
   Qed.
-  Lemma finmap_union_None (m1 m2 : M A) i :
+  Lemma lookup_union_None (m1 m2 : M A) i :
     (m1 ∪ m2) !! i = None ↔ m1 !! i = None ∧ m2 !! i = None.
   Proof.
     unfold union, finmap_union, union_with, finmap_union_with.
@@ -908,24 +921,23 @@ Section finmap_more.
     destruct (m1 !! i), (m2 !! i); compute; intuition congruence.
   Qed.
 
-  Lemma finmap_union_Some (m1 m2 : M A) i x :
+  Lemma lookup_union_Some (m1 m2 : M A) i x :
     m1 ⊥ m2 →
     (m1 ∪ m2) !! i = Some x ↔ m1 !! i = Some x ∨ m2 !! i = Some x.
   Proof.
-    intros Hdisjoint. rewrite finmap_union_Some_raw.
+    intros Hdisjoint. rewrite lookup_union_Some_raw.
     intuition eauto using finmap_disjoint_Some_r.
   Qed.
 
-  Lemma finmap_union_Some_l (m1 m2 : M A) i x :
-    m1 ⊥ m2 →
+  Lemma lookup_union_Some_l (m1 m2 : M A) i x :
     m1 !! i = Some x →
     (m1 ∪ m2) !! i = Some x.
-  Proof. intro. rewrite finmap_union_Some; intuition. Qed.
-  Lemma finmap_union_Some_r (m1 m2 : M A) i x :
+  Proof. intro. rewrite lookup_union_Some_raw; intuition. Qed.
+  Lemma lookup_union_Some_r (m1 m2 : M A) i x :
     m1 ⊥ m2 →
     m2 !! i = Some x →
     (m1 ∪ m2) !! i = Some x.
-  Proof. intro. rewrite finmap_union_Some; intuition. Qed.
+  Proof. intro. rewrite lookup_union_Some; intuition. Qed.
 
   Lemma finmap_union_comm (m1 m2 : M A) :
     m1 ⊥ m2 →
@@ -942,15 +954,14 @@ Section finmap_more.
   Proof.
     intros Hm1m2.
     apply finmap_eq. intros i. apply option_eq. intros x.
-    rewrite finmap_union_Some_raw. split; [by intuition |].
+    rewrite lookup_union_Some_raw. split; [by intuition |].
     intros Hm2. specialize (Hm1m2 i).
     destruct (m1 !! i) as [y|]; [| by auto].
     rewrite (Hm1m2 y eq_refl) in Hm2. intuition congruence.
   Qed.
   Lemma finmap_subseteq_union_l (m1 m2 : M A) :
-    m1 ⊥ m2 →
     m1 ⊆ m1 ∪ m2.
-  Proof. intros ? i x. rewrite finmap_union_Some_raw. intuition. Qed.
+  Proof. intros ? i x. rewrite lookup_union_Some_raw. intuition. Qed.
   Lemma finmap_subseteq_union_r (m1 m2 : M A) :
     m1 ⊥ m2 →
     m2 ⊆ m1 ∪ m2.
@@ -963,13 +974,13 @@ Section finmap_more.
     m1 ∪ m2 ⊥ m3 ↔ m1 ⊥ m3 ∧ m2 ⊥ m3.
   Proof.
     rewrite !finmap_disjoint_alt.
-    setoid_rewrite finmap_union_None. naive_solver.
+    setoid_rewrite lookup_union_None. naive_solver.
   Qed.
   Lemma finmap_disjoint_union_r (m1 m2 m3 : M A) :
     m1 ⊥ m2 ∪ m3 ↔ m1 ⊥ m2 ∧ m1 ⊥ m3.
   Proof.
     rewrite !finmap_disjoint_alt.
-    setoid_rewrite finmap_union_None. naive_solver.
+    setoid_rewrite lookup_union_None. naive_solver.
   Qed.
   Lemma finmap_disjoint_union_l_2 (m1 m2 m3 : M A) :
     m1 ⊥ m3 → m2 ⊥ m3 → m1 ∪ m2 ⊥ m3.
@@ -992,8 +1003,8 @@ Section finmap_more.
     { intros. apply finmap_eq. intros i.
       apply option_eq. naive_solver. }
     intros m1 m2 m3 b v Hm1m3 Hm2m3 E ?.
-    destruct (proj1 (finmap_union_Some m2 m3 b v Hm2m3)) as [E2|E2].
-    * rewrite <-E. by apply finmap_union_Some_l.
+    destruct (proj1 (lookup_union_Some m2 m3 b v Hm2m3)) as [E2|E2].
+    * rewrite <-E. by apply lookup_union_Some_l.
     * done.
     * contradict E2. by apply eq_None_ne_Some, finmap_disjoint_Some_l with m1 v.
   Qed.
@@ -1007,31 +1018,31 @@ Section finmap_more.
     by apply finmap_union_cancel_l.
   Qed.
 
-  Lemma finmap_union_singleton_l (m : M A) i x :
+  Lemma insert_union_singleton_l (m : M A) i x :
     <[i:=x]>m = {[(i,x)]} ∪ m.
   Proof.
     apply finmap_eq. intros j. apply option_eq. intros y.
-    rewrite finmap_union_Some_raw.
+    rewrite lookup_union_Some_raw.
     destruct (decide (i = j)); simplify_map_equality; intuition congruence.
   Qed.
-  Lemma finmap_union_singleton_r (m : M A) i x :
+  Lemma insert_union_singleton_r (m : M A) i x :
     m !! i = None →
     <[i:=x]>m = m ∪ {[(i,x)]}.
   Proof.
-    intro. rewrite finmap_union_singleton_l, finmap_union_comm; [done |].
+    intro. rewrite insert_union_singleton_l, finmap_union_comm; [done |].
     by apply finmap_disjoint_singleton_l.
   Qed.
 
   Lemma finmap_disjoint_insert_l (m1 m2 : M A) i x :
     <[i:=x]>m1 ⊥ m2 ↔ m2 !! i = None ∧ m1 ⊥ m2.
   Proof.
-    rewrite finmap_union_singleton_l.
+    rewrite insert_union_singleton_l.
     by rewrite finmap_disjoint_union_l, finmap_disjoint_singleton_l.
   Qed.
   Lemma finmap_disjoint_insert_r (m1 m2 : M A) i x :
     m1 ⊥ <[i:=x]>m2 ↔ m1 !! i = None ∧ m1 ⊥ m2.
   Proof.
-    rewrite finmap_union_singleton_l.
+    rewrite insert_union_singleton_l.
     by rewrite finmap_disjoint_union_r, finmap_disjoint_singleton_r.
   Qed.
 
@@ -1042,32 +1053,30 @@ Section finmap_more.
     m1 !! i = None → m1 ⊥ m2 → m1 ⊥ <[i:=x]>m2.
   Proof. by rewrite finmap_disjoint_insert_r. Qed.
 
-  Lemma finmap_union_insert_l (m1 m2 : M A) i x :
+  Lemma insert_union_l (m1 m2 : M A) i x :
     <[i:=x]>(m1 ∪ m2) = <[i:=x]>m1 ∪ m2.
-  Proof. by rewrite !finmap_union_singleton_l, (associative (∪)). Qed.
-  Lemma finmap_union_insert_r (m1 m2 : M A) i x :
+  Proof. by rewrite !insert_union_singleton_l, (associative (∪)). Qed.
+  Lemma insert_union_r (m1 m2 : M A) i x :
     m1 !! i = None →
     <[i:=x]>(m1 ∪ m2) = m1 ∪ <[i:=x]>m2.
   Proof.
-    intro. rewrite !finmap_union_singleton_l, !(associative (∪)).
+    intro. rewrite !insert_union_singleton_l, !(associative (∪)).
     rewrite (finmap_union_comm m1); [done |].
     by apply finmap_disjoint_singleton_r.
   Qed.
 
-  Lemma finmap_insert_list_union l (m : M A) :
+  Lemma insert_list_union l (m : M A) :
     insert_list l m = finmap_of_list l ∪ m.
   Proof.
     induction l; simpl.
     * by rewrite (left_id _ _).
-    * by rewrite IHl, finmap_union_insert_l.
+    * by rewrite IHl, insert_union_l.
   Qed.
 
-  Lemma finmap_subseteq_insert (m1 m2 : M A) i x :
+  Lemma insert_subseteq_r (m1 m2 : M A) i x :
     m1 !! i = None → m1 ⊆ m2 → m1 ⊆ <[i:=x]>m2.
   Proof.
-    intros ?? j. destruct (decide (j = i)).
-    * intros y ?. congruence.
-    * intros. simpl_map. auto.
+    intros ?? j. by destruct (decide (j = i)); intros; simplify_map_equality.
   Qed.
 
   (** ** Properties of the delete operation *)
@@ -1094,7 +1103,7 @@ Section finmap_more.
   Proof.
     intros. apply finmap_eq. intros j. apply option_eq. intros y.
     destruct (decide (i = j)); simplify_map_equality;
-     rewrite ?finmap_union_Some_raw; simpl_map; intuition congruence.
+    rewrite ?lookup_union_Some_raw; simpl_map; intuition congruence.
   Qed.
   Lemma finmap_union_delete_list (m1 m2 : M A) is :
     delete_list is (m1 ∪ m2) = delete_list is m1 ∪ delete_list is m2.
@@ -1163,7 +1172,7 @@ Section finmap_more.
   Proof. intro. by rewrite finmap_disjoint_of_list_zip_r. Qed.
 
   (** ** Properties with respect to vectors *)
-  Lemma finmap_union_delete_vec {n} (ms : vec (M A) n) (i : fin n) :
+  Lemma union_delete_vec {n} (ms : vec (M A) n) (i : fin n) :
     list_disjoint ms →
     ms !!! i ∪ ⋃ delete (fin_to_nat i) (vec_to_list ms) = ⋃ ms.
   Proof.
@@ -1175,7 +1184,7 @@ Section finmap_more.
     * by apply finmap_disjoint_union_list_r, Forall_delete.
   Qed.
 
-  Lemma finmap_union_insert_vec {n} (ms : vec (M A) n) (i : fin n) m :
+  Lemma union_insert_vec {n} (ms : vec (M A) n) (i : fin n) m :
     m ⊥ ⋃ delete (fin_to_nat i) (vec_to_list ms) →
     ⋃ vinsert i m ms = m ∪ ⋃ delete (fin_to_nat i) (vec_to_list ms).
   Proof.
@@ -1241,11 +1250,20 @@ Section finmap_more.
     apply option_eq. intros v. specialize (Hm1m2 i).
     unfold difference, finmap_difference,
       difference_with, finmap_difference_with.
-    rewrite finmap_union_Some_raw, (merge_spec _).
+    rewrite lookup_union_Some_raw, (merge_spec _).
     destruct (m1 !! i) as [v'|], (m2 !! i);
       try specialize (Hm1m2 v'); compute; intuition congruence.
   Qed.
 End finmap_more.
+
+Hint Extern 80 ((_ ∪ _) !! _ = Some _) =>
+  apply lookup_union_Some_l : simpl_map.
+Hint Extern 81 ((_ ∪ _) !! _ = Some _) =>
+  apply lookup_union_Some_r : simpl_map.
+Hint Extern 80 ({[ _ ]} !! _ = Some _) =>
+  apply lookup_singleton : simpl_map.
+Hint Extern 80 (<[_:=_]> _ !! _ = Some _) =>
+  apply lookup_insert : simpl_map.
 
 (** * Tactic to decompose disjoint assumptions *)
 (** The tactic [decompose_map_disjoint] simplifies occurences of [disjoint]

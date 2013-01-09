@@ -43,9 +43,9 @@ Notation "(≠ x )" := (λ y, y ≠ x) (only parsing) : C_scope.
 
 Hint Extern 0 (?x = ?x) => reflexivity.
 
-Notation "(→)" := (λ x y, x → y) (only parsing) : C_scope.
-Notation "( T →)" := (λ y, T → y) (only parsing) : C_scope.
-Notation "(→ T )" := (λ y, y → T) (only parsing) : C_scope.
+Notation "(→)" := (λ A B, A → B) (only parsing) : C_scope.
+Notation "( A →)" := (λ B, A → B) (only parsing) : C_scope.
+Notation "(→ B )" := (λ A, A → B) (only parsing) : C_scope.
 
 Notation "t $ r" := (t r)
   (at level 65, right associativity, only parsing) : C_scope.
@@ -56,6 +56,18 @@ Infix "∘" := compose : C_scope.
 Notation "(∘)" := compose (only parsing) : C_scope.
 Notation "( f ∘)" := (compose f) (only parsing) : C_scope.
 Notation "(∘ f )" := (λ g, compose g f) (only parsing) : C_scope.
+
+Notation "(∧)" := and (only parsing) : C_scope.
+Notation "( A ∧)" := (and A) (only parsing) : C_scope.
+Notation "(∧ B )" := (λ A, A ∧ B) (only parsing) : C_scope.
+
+Notation "(∨)" := or (only parsing) : C_scope.
+Notation "( A ∨)" := (or A) (only parsing) : C_scope.
+Notation "(∨ B )" := (λ A, A ∨ B) (only parsing) : C_scope.
+
+Notation "(↔)" := iff (only parsing) : C_scope.
+Notation "( A ↔)" := (iff A) (only parsing) : C_scope.
+Notation "(↔ B )" := (λ A, A ↔ B) (only parsing) : C_scope.
 
 (** Set convenient implicit arguments for [existT] and introduce notations. *)
 Arguments existT {_ _} _ _.
@@ -412,6 +424,41 @@ Arguments associative {_ _} _ {_} _ _ _.
 Arguments left_absorb {_ _} _ _ {_} _.
 Arguments right_absorb {_ _} _ _ {_} _.
 Arguments anti_symmetric {_} _ {_} _ _ _ _.
+
+Instance: Commutative (↔) (↔).
+Proof. red. intuition. Qed.
+Instance: Commutative (↔) (∧).
+Proof. red. intuition. Qed.
+Instance: Associative (↔) (∧).
+Proof. red. intuition. Qed.
+Instance: Idempotent (↔) (∧).
+Proof. red. intuition. Qed.
+Instance: Commutative (↔) (∨).
+Proof. red. intuition. Qed.
+Instance: Associative (↔) (∨).
+Proof. red. intuition. Qed.
+Instance: Idempotent (↔) (∨).
+Proof. red. intuition. Qed.
+Instance: LeftId (↔) True (∧).
+Proof. red. intuition. Qed.
+Instance: RightId (↔) True (∧).
+Proof. red. intuition. Qed.
+Instance: LeftAbsorb (↔) False (∧).
+Proof. red. intuition. Qed.
+Instance: RightAbsorb (↔) False (∧).
+Proof. red. intuition. Qed.
+Instance: LeftId (↔) False (∨).
+Proof. red. intuition. Qed.
+Instance: RightId (↔) False (∨).
+Proof. red. intuition. Qed.
+Instance: LeftAbsorb (↔) True (∨).
+Proof. red. intuition. Qed.
+Instance: RightAbsorb (↔) True (∨).
+Proof. red. intuition. Qed.
+Instance: LeftId (↔) True impl.
+Proof. unfold impl. red. intuition. Qed.
+Instance: RightAbsorb (↔) True impl.
+Proof. unfold impl. red. intuition. Qed.
 
 (** The following lemmas are more specific versions of the projections of the
 above type classes. These lemmas allow us to enforce Coq not to use the setoid
