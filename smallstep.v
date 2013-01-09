@@ -23,7 +23,7 @@ Inductive cstep (δ : funenv) : relation state :=
       ⇒s State k (Stmt ↗ (e1 ::= e2)) (<[a:=v]>m)
   | cstep_in_call k f e es vs m :
      Forall2 (λ e v, ⟦ e ⟧ (get_stack k) m = Some v) es vs →
-     δ ⊢ State k (Stmt ↘ (call e f es)) m
+     δ ⊢ State k (Stmt ↘ (SCall e f es)) m
       ⇒s State (CCall e f es :: k) (Call f vs) m
   | cstep_in_skip k m :
      δ ⊢ State k (Stmt ↘ (skip)) m
@@ -48,22 +48,22 @@ Inductive cstep (δ : funenv) : relation state :=
       ⇒s State (CItem (□ ;; s2) :: k) (Stmt ↘ s1) m
   | cstep_in_while1 k e s v m :
      ⟦ e ⟧ (get_stack k) m = Some v →
-     val_true v →
+     value_true v →
      δ ⊢ State k (Stmt ↘ (while (e) s)) m
       ⇒s State (CItem (while (e) □) :: k) (Stmt ↘ s) m
   | cstep_in_while2 k e s v m :
      ⟦ e ⟧ (get_stack k) m = Some v →
-     val_false v →
+     value_false v →
      δ ⊢ State k (Stmt ↘ (while (e) s)) m
       ⇒s State k (Stmt ↗ (while (e) s)) m
   | cstep_in_if1 k e s1 s2 v m :
      ⟦ e ⟧ (get_stack k) m = Some v →
-     val_true v →
+     value_true v →
      δ ⊢ State k (Stmt ↘ (IF e then s1 else s2)) m
       ⇒s State (CItem (IF e then □ else s2) :: k) (Stmt ↘ s1) m
   | cstep_in_if2 k e s1 s2 v m :
      ⟦ e ⟧ (get_stack k) m = Some v →
-     val_false v →
+     value_false v →
      δ ⊢ State k (Stmt ↘ (IF e then s1 else s2)) m
       ⇒s State (CItem (IF e then s1 else □) :: k) (Stmt ↘ s2) m
   | cstep_in_label k l s m :
@@ -106,12 +106,12 @@ Inductive cstep (δ : funenv) : relation state :=
 
   | cstep_return_None k v f es m :
      δ ⊢ State (CCall None f es :: k) (Return v) m
-      ⇒s State k (Stmt ↗ (call None f es)) m
+      ⇒s State k (Stmt ↗ (call f @ es)) m
   | cstep_return_Some k v e a f es m :
      ⟦ e ⟧ (get_stack k) m = Some (ptr a)%V →
      is_writable m a →
      δ ⊢ State (CCall (Some e) f es :: k) (Return (Some v)) m
-      ⇒s State k (Stmt ↗ (call (Some e) f es)) (<[a:=v]>m)
+      ⇒s State k (Stmt ↗ (e ::= call f @ es)) (<[a:=v]>m)
 
   | cstep_top_block v k b s m :
      δ ⊢ State (CBlock b :: k) (Stmt (⇈ v) s) m
@@ -179,19 +179,19 @@ Notation "( δ ⇒s{ k }^ n )" := (bsteps (δ ⇒s{k}) n) (only parsing) : C_sco
 
 Instance cstep_subrel_suffix_of δ k1 k2 :
   PropHolds (suffix_of k1 k2) → subrelation (δ ⇒s{k2}) (δ ⇒s{k1}).
-Proof. intros ? S1 S2 [??]. split. easy. now transitivity k2. Qed.
+Proof. intros ? S1 S2 [??]. split. done. by transitivity k2. Qed.
 Instance cstep_subrel δ k : subrelation (δ ⇒s{k}) (δ ⇒s).
 Proof. firstorder. Qed.
 Instance cstep_subrel_nil δ : subrelation (δ ⇒s) (δ ⇒s{ [] }).
-Proof. intros S1 S2 ?. split. easy. solve_suffix_of. Qed.
+Proof. intros S1 S2 ?. split. done. solve_suffix_of. Qed.
 
 (** * Tactics *)
 (** We implement some tactics to perform and to invert reduction steps. We
 define a hint database [cstep] that is used by these tactics. *)
 Hint Resolve expr_eval_weaken_mem expr_eval_weaken_stack : cstep.
-Hint Resolve mem_subseteq_union_l mem_subseteq_union_r : cstep.
+Hint Resolve finmap_subseteq_union_l finmap_subseteq_union_r : cstep.
 Hint Resolve Forall2_impl : cstep.
-Hint Extern 0 (is_writable _ _) => do 2 red; eauto with mem : cstep.
+Hint Extern 0 (is_writable _ _) => red; eauto with mem : cstep.
 
 (** The small step semantics is non-determistic on entering a block or calling
 a function: variables are given a memory cell that has an unspecified free
@@ -209,7 +209,7 @@ Lemma cstep_label_block_down_fresh δ l k s m :
   let b := fresh_index m in
   δ ⊢ State k (Stmt (↷ l) (block s)) m
    ⇒s State (CBlock b :: k) (Stmt (↷ l) s) (<[b:=int 0]>m)%V.
-Proof. constructor. easy. apply is_free_fresh_index. Qed.
+Proof. constructor. done. apply is_free_fresh_index. Qed.
 
 Lemma cstep_alloc_params_fresh δ k f s m vs :
   δ !! f = Some s →
@@ -217,9 +217,9 @@ Lemma cstep_alloc_params_fresh δ k f s m vs :
   δ ⊢ State k (Call f vs) m
    ⇒s State (CParams bs :: k) (Stmt ↘ s) (insert_list (zip bs vs) m).
 Proof.
-  constructor. easy. apply alloc_params_insert_list.
+  constructor. done. apply alloc_params_insert_list.
   intuition auto with mem.
-  apply same_length_length. now rewrite fresh_indexes_length.
+  apply same_length_length. by rewrite fresh_indexes_length.
 Qed.
 
 Hint Resolve cstep_in_block_fresh
@@ -243,7 +243,7 @@ side condition [suffix_of k (SCtx S2)]. This tactic either fails or proves
 the goal. *)
 Ltac do_cstep :=
   match goal with
-  | |- ?δ ⊢ State ?k (Stmt ?d ?s) ?m ⇒s ?S => map
+  | |- ?δ ⊢ State ?k (Stmt ?d ?s) ?m ⇒s ?S => iter
     (fun s' => change (δ ⊢ State k (Stmt d s') m ⇒s S); do_cstep)
     (quote_stmt s)
   | |- _ ⊢ _ ⇒s _ => econstructor (solve [intuition eauto with cstep])
@@ -272,19 +272,21 @@ Ltac do_csteps :=
 [red (δ⇒s{k}) S] by performing case distinctions on [S] and using the
 [do_cstep] tactic to perform the actual step. *)
 Ltac solve_cred :=
-  match goal with
-  | H : down _ _ |- _ => progress simpl in H; solve_cred
-  | H : up _ _ |- _ => progress simpl in H; solve_cred
-  | H : red (_ ⇒s{_}) ?S |- red (_ ⇒s{_}) ?S =>
-    now apply (red_subrel _ _ _ _ H)
+  repeat match goal with
+  | H : down _ _ |- _ => progress simpl in H
+  | H : up _ _ |- _ => progress simpl in H
   | |- red (_⇒s) (State _ (Stmt ?d _) _) =>
-    is_var d; destruct d; try contradiction; solve_cred
+    is_var d; destruct d; try contradiction
   | |- red (_⇒s{_}) (State _ (Stmt ?d _) _) =>
-    is_var d; destruct d; try contradiction; solve_cred
+    is_var d; destruct d; try contradiction
   | H : ?l ∈ _ |- red (_⇒s) (State _ (Stmt (↷ ?l) _) _) =>
-    is_var l; progress destruct_elem_of H; solve_cred
+    progress decompose_elem_of H
   | H : ?l ∈ _ |- red (_⇒s{_}) (State _ (Stmt (↷ ?l) _) _) =>
-    is_var l; progress destruct_elem_of H; solve_cred
+    progress decompose_elem_of H
+  end;
+  match goal with
+  | H : red (_ ⇒s{_}) ?S |- red (_ ⇒s{_}) ?S =>
+    by apply (red_subrel _ _ _ _ H)
   | |- red (_⇒s) _ => eexists; do_cstep
   | |- red (_⇒s{_}) _ => eexists; do_cstep
   | |- _ => solve [intuition eauto with cstep]
@@ -344,11 +346,11 @@ Proof.
   * inversion 1; subst. solve_suffix_of.
     match goal with
     | H : ctx_wf _ _ _ _ (Call_ _) |- _ => inversion H; subst
-    end. solve_suffix_of. easy.
+    end. solve_suffix_of. done.
   * inversion 1; subst. solve_suffix_of.
     match goal with
     | H : ctx_wf _ _ _ _ (Call_ _) |- _ => inversion H; subst
-    end. solve_suffix_of. easy.
+    end. solve_suffix_of. done.
 Qed.
 
 Lemma cstep_rtc_preserves_wf k s S1 S2 :
@@ -362,7 +364,7 @@ Lemma cteps_rtc_preserves_stmt k d1 s1 m1 d2 s2 m2 :
   s1 = s2.
 Proof.
   pose proof (ctx_wf_start δ k (Stmt d1 s1)).
-  intros p. apply (ctx_wf_unique δ k (Stmt d1 s1) k). easy.
+  intros p. apply (ctx_wf_unique δ k (Stmt d1 s1) k). done.
   apply (cstep_rtc_preserves_wf k (Stmt d1 s1)) in p; intuition.
 Qed.
 
@@ -395,7 +397,7 @@ Lemma cstep_subctx_cut n l k S1 S3 :
     ∧ nf (δ⇒s{l ++ k}) S2 ∧ δ ⊢ S2 ⇒s{k}^n S3.
 Proof.
   intros p ?. induction p as [ n S1 | n S1 S2 S3 [p1 ?] p2].
-  * left. now auto with ars.
+  * left. by auto with ars.
   * destruct (cstep_subctx_step_or_nf (l ++ k) S1 S2); auto.
     + destruct IHp2 as [? | [S2' ?]]; auto.
       - left. do_csteps.

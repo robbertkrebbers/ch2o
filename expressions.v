@@ -9,7 +9,7 @@ Require Export memory.
 (** * Operations *)
 (** We define a data type of binary operations and give an interpretation of
 these binary operations as Coq functions. *)
-Inductive binop := PlusOp | MultOp | MinusOp | LeOp | EqOp.
+Inductive binop := PlusOp | MultOp | MinusOp | LeOp | EqOp | DivOp | ModOp.
 
 Instance binop_eq_dec (o1 o2 : binop) : Decision (o1 = o2).
 Proof. solve_decision. Defined.
@@ -19,6 +19,8 @@ Definition value_eval_binop (op : binop) (v1 v2 : value) : option value :=
   | PlusOp, int x1, int x2 => Some (int (x1 + x2))
   | MultOp, int x1, int x2 => Some (int (x1 * x2))
   | MinusOp, int x1, int x2 => Some (int (x1 - x2))
+  | DivOp, int x1, int x2 => Some (int (x1 `div` x2))
+  | ModOp, int x1, int x2 => Some (int (x1 `mod` x2))
   | LeOp, int x1, int x2 => Some (int (Z_decide_rel (≤)%Z x1 x2))
   | EqOp, int x1, int x2 => Some (int (Z_decide_rel (=) x1 x2))
   | EqOp, ptr b1, ptr b2 => Some (int (Z_decide_rel (=) b1 b2))
@@ -27,6 +29,7 @@ Definition value_eval_binop (op : binop) (v1 v2 : value) : option value :=
   | EqOp, null, int _ => Some (int 0)
   | _, _, _ => None
   end%V.
+Arguments value_eval_binop !_ !_ !_ /.
 
 (** * Syntax *)
 (** We treat variables as De Bruijn indexes, i.e. the variable [var i]
@@ -69,9 +72,11 @@ Infix "*" := (EBinOp MultOp) : expr_scope.
 Infix "-" := (EBinOp MinusOp) : expr_scope.
 Infix "≤" := (EBinOp LeOp) : expr_scope.
 Infix "=" := (EBinOp EqOp) : expr_scope.
+Infix "`div`" := (EBinOp DivOp) (at level 35) : nat_scope.
+Infix "`mod`" := (EBinOp ModOp) (at level 35) : nat_scope.
 
 Reserved Notation "e ↑" (at level 20).
-Fixpoint expr_lift (e : expr ) : expr :=
+Fixpoint expr_lift (e : expr) : expr :=
   match e with
   | var x => var (S x)
   | val v => val v
@@ -79,6 +84,40 @@ Fixpoint expr_lift (e : expr ) : expr :=
   | e1 @{op} e2 => e1↑ @{op} e2↑
   end%E
 where "e ↑" := (expr_lift e) : expr_scope.
+
+Fixpoint expr_load_free (e : expr) : Prop :=
+  match e with
+  | var _ => True
+  | val _ => True
+  | load _ => False
+  | e1 @{_} e2 => expr_load_free e1 ∧ expr_load_free e2
+  end%E.
+Instance expr_load_free_dec: ∀ e, Decision (expr_load_free e).
+Proof.
+ refine (
+  fix go e :=
+  match e return Decision (expr_load_free e) with
+  | var _ => left _
+  | val _ => left _
+  | load _ => right _
+  | e1 @{_} e2 => cast_if_and (go e1) (go e2)
+  end%E); simpl; tauto.
+Defined.
+
+Fixpoint expr_vars (e : expr) : listset nat :=
+  match e with
+  | var x => {[ x ]}
+  | val _ => ∅
+  | load e => expr_vars e
+  | e1 @{_} e2 => expr_vars e1 ∪ expr_vars e2
+  end%E.
+
+Hint Extern 1 (expr_load_free _) => assumption : typeclass_instances.
+Hint Extern 100 (expr_load_free ?e) =>
+  apply (bool_decide_unpack _); vm_compute; exact I : typeclass_instances.
+Hint Extern 1 (expr_vars _ ≡ ∅) => assumption : typeclass_instances.
+Hint Extern 100 (expr_vars _ ≡ ∅) =>
+  apply (bool_decide_unpack _); vm_compute; exact I : typeclass_instances.
 
 (** * Semantics *)
 (** We define the semantics of expressions by structural recursion. *)
@@ -91,10 +130,8 @@ Fixpoint expr_eval (e : expr) (ρ : stack) (m : mem) : option value :=
   | val v => Some v
   | load e =>
     v ← ⟦ e ⟧ ρ m;
-    match v with
-    | ptr b => m !! b
-    | _ => None
-    end%V
+    b ← is_ptr v;
+    m !! b
   | e1 @{op} e2 =>
     v1 ← ⟦ e1 ⟧ ρ m;
     v2 ← ⟦ e2 ⟧ ρ m;
@@ -111,19 +148,17 @@ Lemma expr_eval_weaken_mem e ρ m1 m2 v :
   ⟦ e ⟧ ρ m2 = Some v.
 Proof.
   revert v.
-  induction e; simpl; intros; simplify_option_bind; auto.
-  match goal with
-  | |- match ?v with _ => _ end = _ => destruct v as [|[]]; auto
-  end.
+  induction e; simpl; intros; simplify_option_equality; auto.
 Qed.
 
 Lemma expr_eval_weaken_stack e ρ ρ' m v :
   ⟦ e ⟧ ρ m = Some v → ⟦ e ⟧ (ρ ++ ρ') m = Some v.
 Proof.
   revert v.
-  induction e; simpl; intros; simplify_option_bind; auto.
-  erewrite list_lookup_weaken by eassumption.
-  simplify_option_bind.
+  induction e; simpl; intros; simplify_option_equality; auto.
+  rewrite lookup_app_l.
+  * by simplify_option_equality.
+  * eauto using lookup_lt_length_alt.
 Qed.
 
 Lemma expr_eval_subseteq_mem_eq e ρ m1 m2 v1 v2 :
@@ -155,9 +190,29 @@ Proof.
     repeat match goal with
     | H : ∀ ρ, ⟦ _ ↑ ⟧ _ _ = _ |- _ => rewrite H
     end; auto.
-  now rewrite list_lookup_tail.
+  by rewrite lookup_tail.
 Qed.
- 
+
+Lemma expr_var_free_stack_indep ρ1 ρ2 m e :
+  expr_vars e ≡ ∅ →
+  ⟦ e ⟧ ρ1 m = ⟦ e ⟧ ρ2 m.
+Proof.
+  induction e; simpl; intro; decompose_empty; repeat
+    match goal with
+    | H : expr_vars _ ≡ ∅ → ⟦ _ ⟧ _ _ = _ |- _ => rewrite H
+    end; intuition.
+Qed.
+
+Lemma expr_load_free_mem_indep ρ m1 m2 e :
+  expr_load_free e →
+  ⟦ e ⟧ ρ m1 = ⟦ e ⟧ ρ m2.
+Proof.
+  induction e; simpl; intro; repeat
+    match goal with
+    | H : expr_load_free _ → ⟦ _ ⟧ _ _ = _ |- _ => rewrite H
+    end; intuition.
+Qed.
+
 (** * Tactics *)
 (** The tactic [simplify_expr_eval] merges assumptions
 [H1 : ⟦ e ⟧ ρ m1 = Some v1] and [H2 : ⟦ e ⟧ ρ m2 = Some v2]  by substituting

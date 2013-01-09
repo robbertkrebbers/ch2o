@@ -44,36 +44,46 @@ Proof. revert b. induction l1; simpl; auto. Qed.
 Definition funname := N.
 Definition funmap := Nmap.
 
-Instance funname_eq_dec: ∀ i1 i2 : funname, Decision (i1 = i2) := decide_rel (=).
+Instance funname_eq_dec: ∀ i1 i2: funname, Decision (i1 = i2) := decide_rel (=).
+Instance funname_fresh `{FinCollection funname C} : Fresh funname C := _.
+Instance funname_fresh_spec `{FinCollection funname C} :
+  FreshSpec funname C := _.
+
+Instance funmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
+  ∀ m1 m2 : funmap A, Decision (m1 = m2) := decide_rel (=).
 Instance funmap_empty {A} : Empty (funmap A) := @empty (Nmap A) _.
-Instance funmap_lookup: Lookup funname funmap := @lookup _ Nmap _.
-Instance funmap_partial_alter: PartialAlter funname funmap :=
-  @partial_alter _ Nmap _.
-Instance funmap_dom : Dom funname funmap := @dom _ Nmap _.
-Instance funmap_merge: Merge funmap := @merge Nmap _.
-Instance funmap_fmap: FMap funmap := @fmap Nmap _.
+Instance funmap_lookup {A} : Lookup funname A (funmap A) :=
+  @lookup _ _ (Nmap A) _.
+Instance funmap_partial_alter {A} : PartialAlter funname A (funmap A) :=
+  @partial_alter _ _ (Nmap A) _.
+Instance funmap_to_list {A} : FinMapToList funname A (funmap A) :=
+  @finmap_to_list _ _ (funmap A) _.
+Instance funmap_merge {A} : Merge A (funmap A) := @merge _ (Nmap A) _.
+Instance funmap_fmap: FMap funmap := λ A B f, @fmap Nmap _ _ f _.
 Instance: FinMap funname funmap := _.
+
+Typeclasses Opaque funname funmap.
 
 (** * Labels and gotos *)
 (** We use Coq's type of binary natural numbers [N] for label names. We define
 operational type classes to collect free occurrences of labels and labels used
 by gotos. *)
 Definition label := N.
-Class Gotos A := gotos: ∀ `{Empty C} `{Union C} `{Singleton label C}, A → C.
-Arguments gotos {_ _ _ _ _ _} !_ /.
-Class Labels A := labels: ∀ `{Empty C} `{Union C} `{Singleton label C}, A → C.
-Arguments labels {_ _ _ _ _ _} !_ /.
+Class Gotos A := gotos: A → listset label.
+Arguments gotos {_ _} !_ / : simpl nomatch.
+Class Labels A := labels: A → listset label.
+Arguments labels {_ _} !_ / : simpl nomatch.
 
 (** We lift instances of the above type classes to lists of contexts. *)
 Instance list_gotos `{Gotos A} : Gotos (list A) :=
-  fix go `{Empty C} `{Union C} `{Singleton label C} (l : list A) : C :=
+  fix go (l : list A) :=
   let _ : Gotos _ := @go in
   match l with
   | [] => ∅
   | a :: l => gotos a ∪ gotos l
   end.
 Instance list_labels `{Labels A} : Labels (list A) :=
-  fix go `{Empty C} `{Union C} `{Singleton label C} (l : list A) : C :=
+  fix go (l : list A) :=
   let _ : Labels _ := @go in
   match l with
   | [] => ∅
@@ -114,14 +124,16 @@ Arguments SWhile _%E _%S.
 Arguments SIf _%E _%S _%S.
 
 Infix "::=" := SAssign (at level 60) : stmt_scope.
-Notation "'call' e" := (SCall e) (at level 10) : stmt_scope.
+Notation "'call' f @ es" := (SCall None f es%E) (at level 60) : stmt_scope.
+Notation "e ::= 'call' f @ es" := (SCall (Some e%E) f es%E)
+  (at level 60, format "e  ::=  'call'  f  @  es") : stmt_scope.
 Notation "'skip'" := SSkip : stmt_scope.
 Notation "'goto' l" := (SGoto l) (at level 10) : stmt_scope.
-Notation "'ret' e" := (SReturn e) (at level 10) : stmt_scope.
+Notation "'ret' e" := (SReturn e%E) (at level 10) : stmt_scope.
 Notation "'block' s" := (SBlock s) (at level 10) : stmt_scope.
 
 Infix ";;" := SComp (at level 80, right associativity) : stmt_scope.
-Infix ":;" := SLabel (at level 81) : stmt_scope.
+Infix ":;" := SLabel (at level 81, right associativity) : stmt_scope.
 Notation "'while' '(' e ')' s" := (SWhile e s)
   (at level 10, format "'while'  '(' e ')'  s") : stmt_scope.
 Notation "'IF' e 'then' s1 'else' s2" := (SIf e s1 s2) : stmt_scope.
@@ -130,7 +142,7 @@ Instance: Injective (=) (=) SBlock.
 Proof. congruence. Qed.
 
 Instance stmt_gotos: Gotos stmt :=
-  fix go `{Empty C} `{Union C} `{Singleton label C} (s : stmt) : C :=
+  fix go (s : stmt) :=
   let _ : Gotos _ := @go in
   match s with
   | block s => gotos s
@@ -142,7 +154,7 @@ Instance stmt_gotos: Gotos stmt :=
   | _ => ∅
   end.
 Instance stmt_labels: Labels stmt :=
-  fix go `{Empty C} `{Union C} `{Singleton label C} (s : stmt) : C :=
+  fix go (s : stmt) :=
   let _ : Labels _ := @go in
   match s with
   | block s => labels s
@@ -190,9 +202,9 @@ Instance sctx_item_subst: Subst sctx_item stmt stmt := λ E s,
   end.
 
 Instance: ∀ E : sctx_item, Injective (=) (=) (subst E).
-Proof. destruct E; repeat intro; simpl in *; simplify_equality. Qed.
+Proof. by destruct E; repeat intro; simpl in *; simplify_equality. Qed.
 
-Instance sctx_item_gotos: Gotos sctx_item := λ _ _ _ _ E,
+Instance sctx_item_gotos: Gotos sctx_item := λ E,
   match E with
   | s2 ;; □ => gotos s2
   | □ ;; s1 => gotos s1
@@ -201,7 +213,7 @@ Instance sctx_item_gotos: Gotos sctx_item := λ _ _ _ _ E,
   | (IF _ then □ else s2) => gotos s2
   | (IF _ then s1 else □) => gotos s1
   end.
-Instance sctx_item_labels: Labels sctx_item := λ _ _ _ _ E,
+Instance sctx_item_labels: Labels sctx_item := λ E,
   match E with
   | s2 ;; □ => labels s2
   | □ ;; s1 => labels s1
@@ -211,26 +223,24 @@ Instance sctx_item_labels: Labels sctx_item := λ _ _ _ _ E,
   | (IF _ then s1 else □) => labels s1
   end.
 
-Lemma elem_of_sctx_item_gotos `{Collection label C} (l : label)
-    (E : sctx_item) (s : stmt) :
+Lemma elem_of_sctx_item_gotos (E : sctx_item) (s : stmt) l :
   l ∈ gotos (subst E s) ↔ l ∈ gotos E ∨ l ∈ gotos s.
 Proof. destruct E; solve_elem_of. Qed.
-Lemma sctx_item_gotos_spec `{Collection label C} (E : sctx_item) (s : stmt) :
+Lemma sctx_item_gotos_spec (E : sctx_item) (s : stmt) :
   gotos (subst E s) ≡ gotos E ∪ gotos s.
 Proof.
   apply elem_of_equiv. intros.
-  rewrite elem_of_union. now apply elem_of_sctx_item_gotos.
+  rewrite elem_of_union. by apply elem_of_sctx_item_gotos.
 Qed.
 
-Lemma elem_of_sctx_item_labels `{Collection label C} (l : label)
-    (E : sctx_item) (s : stmt) :
+Lemma elem_of_sctx_item_labels (E : sctx_item) (s : stmt) l :
   l ∈ labels (subst E s) ↔ l ∈ labels E ∨ l ∈ labels s.
 Proof. destruct E; solve_elem_of. Qed.
-Lemma sctx_item_labels_spec `{Collection label C} (E : sctx_item) (s : stmt) :
+Lemma sctx_item_labels_spec (E : sctx_item) (s : stmt) :
   labels (subst E s) ≡ labels E ∪ labels s.
 Proof.
   apply elem_of_equiv. intros.
-  rewrite elem_of_union. now apply elem_of_sctx_item_labels.
+  rewrite elem_of_union. by apply elem_of_sctx_item_labels.
 Qed.
 
 (** Now we define the type [ctx_item] which extends [sctx_item] with the

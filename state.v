@@ -51,7 +51,7 @@ Hint Extern 0 (down _ _) => constructor.
 Hint Extern 0 (up _ _) => constructor.
 
 Lemma not_down_up d s : ¬down d s → up d s.
-Proof. destruct d; intuition. Qed.
+Proof. destruct d; simpl; intuition. Qed.
 
 Definition down_up_dec d s : {down d s} + {up d s} :=
   match d with
@@ -59,6 +59,21 @@ Definition down_up_dec d s : {down d s} + {up d s} :=
   | ↗ => right I
   | ⇈ _ => right I
   | ↷ l => decide_rel (∈) l (labels s)
+  end.
+
+Tactic Notation "discriminate_down_up" hyp(H) := repeat
+  match type of H with
+  | up _ _ => progress simpl in H
+  | down _ _ => progress simpl in H
+  | True => clear H
+  | False => destruct H
+  | ?l ∉ _ => destruct H; solve_stmt_elem_of
+  | ?l ∈ _ => solve [decompose_elem_of H]
+  end.
+Tactic Notation "discriminate_down_up" := repeat
+  match goal with
+  | H : up _ _ |- _ => discriminate_down_up H
+  | H : down _ _ |- _ => discriminate_down_up H
   end.
 
 (** The type [focus] describes the part of the program that is currently
@@ -125,7 +140,7 @@ Local Infix "≍" := simple_focus_related (at level 80).
 Arguments simple_focus_related !_ !_.
 
 Instance: Reflexive simple_focus_related.
-Proof. now intros []. Qed.
+Proof. by intros []. Qed.
 
 Section ctx_wf.
 Context (δ : funenv).
@@ -141,7 +156,7 @@ Inductive ctx_wf (k : ctx) (φ : simple_focus) :
      ctx_wf k φ k' (Stmt_ (block s)) →
      ctx_wf k φ (CBlock b :: k') (Stmt_ s)
   | ctx_wf_call k' e f es :
-     ctx_wf k φ k' (Stmt_ (call e f es)) →
+     ctx_wf k φ k' (Stmt_ (SCall e f es)) →
      ctx_wf k φ (CCall e f es :: k') (Call_ f)
   | ctx_wf_return k' f :
      ctx_wf k φ k' (Call_ f) →
@@ -164,11 +179,9 @@ Proof.
     | H : ctx_wf _ _ _ _ |- _ =>
       apply ctx_wf_suffix_of in H; solve_suffix_of
     end.
-  * easy.
   * destruct φ; simpl in *; auto.
   * eapply (injective (subst _)), (IHwf1 (Stmt_ _)); eassumption.
   * eapply (injective SBlock), (IHwf1 (Stmt_ _)); eassumption.
-  * destruct φ2; simpl in *; auto.
   * efeed specialize IHwf1; eauto; simpl in *; congruence.
 Qed.
 
