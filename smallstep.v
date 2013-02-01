@@ -923,7 +923,7 @@ Lemma cstep_ctx_irrel l l' k1 φ1 m1 k2 φ2 m2 :
   δ ⊢ₛ State (k1 ++ l') φ1 m1 ⇒ State (k2 ++ l') φ2 m2.
 Proof.
   intros p Hstack.
-  change (lift_relation (=) get_stack l l') in Hstack.
+  change (proj_relation (=) get_stack l l') in Hstack.
   inv_cstep p;
     rewrite ?app_comm_cons in *; simplify_list_equality; first
     [ do_cstep
@@ -1141,7 +1141,7 @@ Proof.
   destruct (cstep_bsteps_subctx_cut_alt _ _ _ _ _ _ p2)
      as [p | [? [? [_ [? p3]]]]]; clear p2.
   * destruct (cstep_in_ctx_bsteps _ _ _ _ _ p)
-      as [[??]|?]; by discriminate_list_equality.
+      as [[??]|?]; by simplify_list_equality.
   * inv_csteps p3 as [| n4 ??? p4h p4].
     { discriminate_list_equality. }
     inv_cstep p4h; try solve_cnf;

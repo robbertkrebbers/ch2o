@@ -311,13 +311,13 @@ Fixpoint get_stack (k : ctx) : stack :=
   | CParams bs :: k => bs ++ get_stack k
   end.
 
-Instance: Proper (lift_relation (=) get_stack ==> (=)) get_stack.
+Instance: Proper (proj_relation (=) get_stack ==> (=)) get_stack.
 Proof. firstorder. Qed.
 
-Instance: Proper (lift_relation (=) get_stack ==>
-  lift_relation (=) get_stack) (k ++).
+Instance: Proper (proj_relation (=) get_stack ==>
+  proj_relation (=) get_stack) (k ++).
 Proof.
-  intros k l1 l2 E. unfold lift_relation in *.
+  intros k l1 l2 E. unfold proj_relation in *.
   induction k as [|[] ?]; simpl; intuition congruence.
 Qed.
 

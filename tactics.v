@@ -5,12 +5,12 @@ the development. *)
 Require Export Psatz.
 Require Export base.
 
-(** We declare hint databases [lia] and [congruence] containing solely the
-following hints. These hint database are useful in combination with another
-hint database [db] that contain lemmas with premises that should be solved by
-[lia] or [congruence]. One can now just say [auto with db,lia]. *)
+(** We declare hint databases [f_equal], [congruence] and [lia] and containing
+solely the tactic corresponding to its name. These hint database are useful in
+to be combined in combination with other hint database. *)
+Hint Extern 998 (_ = _) => f_equal : f_equal.
+Hint Extern 999 => congruence : congruence.
 Hint Extern 1000 => lia : lia.
-Hint Extern 1000 => congruence : congruence.
 
 (** The tactic [intuition] expands to [intuition auto with *] by default. This
 is rather efficient when having big hint databases, or expensive [Hint Extern]

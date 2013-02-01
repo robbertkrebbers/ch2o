@@ -403,7 +403,7 @@ Proof.
   by rewrite !(expr_var_free_stack_indep ρ2 ρ1).
 Qed.
 
-Lemma assert_expr_load e p v : 
+Lemma assert_expr_load e p v :
   (load e ⇓ p ∧ load (val p) ⇓ v)%A ⊆ (load (load e) ⇓ v)%A.
 Proof. intros ρ m [He ?]. unfold_assert in *. by rewrite He. Qed.
 Lemma assert_expr_forget e v : (e ⇓ v)%A ⊆ (e ⇓ -)%A.
@@ -535,9 +535,12 @@ Qed.
 Instance: Associative (≡) (★)%A.
 Proof. split. apply assert_sep_assoc_2. apply assert_sep_assoc_1. Qed.
 
-Lemma assert_wand_1 (P Q R S : assert) : (P ★ Q)%A ⊆ R → P ⊆ (Q -★ R)%A.
+Lemma assert_wand_intro (P Q R S : assert) :
+  (P ★ Q)%A ⊆ R →
+  P ⊆ (Q -★ R)%A.
 Proof. solve_assert. Qed.
-Lemma assert_wand_2 (P Q : assert) : (P ★ (P -★ Q))%A ⊆ Q.
+Lemma assert_wand_elim (P Q : assert) :
+  (P ★ (P -★ Q))%A ⊆ Q.
 Proof. rewrite (commutative (★))%A. solve_assert. Qed.
 
 Lemma assert_and_sep_assoc (P Q R : assert) :
@@ -567,9 +570,7 @@ Proof.
   * by apply finmap_disjoint_difference_r.
 Qed.
 Lemma mem_ext_sep_true_iff P : P ≡ (P ★ True)%A ↔ MemExt P.
-Proof.
-  split; intros. by apply assert_sep_true_mem_ext. by apply mem_ext_sep_true.
-Qed.
+Proof. split; auto using @mem_ext_sep_true, assert_sep_true_mem_ext. Qed.
 
 (** Other type class instances for stack independence, memory independence, and
 memory extensibility. *)
@@ -959,7 +960,7 @@ Proof.
       by rewrite list_lookup_middle.
     + specialize (IH (bs' ++ [b])).
       rewrite app_length in IH. simpl in IH.
-      by rewrite NPeano.Nat.add_1_r, <-app_assoc in IH.
+      by rewrite NPeano.Nat.add_1_r, <-(associative (++)) in IH.
 Qed.
 
 Lemma assert_alloc_params_alt (P : assert) (ρ : stack) m bs vs :
@@ -996,7 +997,7 @@ Proof.
     rewrite list_lookup_middle in Heval. simplify_equality.
     rewrite <-insert_union_singleton_l, delete_list_insert_comm by done.
     feed destruct (IH (bs' ++ [b']) m2) as [??]; trivial.
-    { by rewrite app_length, NPeano.Nat.add_1_r, <-app_assoc. }
+    { by rewrite app_length, NPeano.Nat.add_1_r, <-(associative (++)). }
     split.
     + rewrite delete_insert; [done |].
       rewrite lookup_delete_list_not_elem_of by done.

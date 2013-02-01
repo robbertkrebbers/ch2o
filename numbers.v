@@ -6,6 +6,8 @@ notations. *)
 Require Export PArith NArith ZArith.
 Require Export base decidable.
 
+Coercion Z.of_nat : nat >-> Z.
+
 Reserved Notation "x ≤ y ≤ z" (at level 70, y at next level).
 Reserved Notation "x ≤ y < z" (at level 70, y at next level).
 Reserved Notation "x < y < z" (at level 70, y at next level).
@@ -105,17 +107,50 @@ Definition Z_to_option_N (x : Z) : option N :=
   | Zpos p => Some (Npos p)
   | Zneg _ => None
   end.
+Definition Z_to_option_nat (x : Z) : option nat :=
+  match x with
+  | Z0 => Some 0
+  | Zpos p => Some (Pos.to_nat p)
+  | Zneg _ => None
+  end.
 
-(** The function [Z_decide] converts a decidable proposition [P] into an integer
-by yielding one if [P] holds and zero if [P] does not. *)
-Definition Z_decide (P : Prop) {dec : Decision P} : Z :=
-  (if dec then 1 else 0)%Z.
+Lemma Z_to_option_N_Some x y :
+  Z_to_option_N x = Some y ↔ (0 ≤ x)%Z ∧ y = Z.to_N x.
+Proof.
+  split.
+  * intros. by destruct x; simpl in *; simplify_equality;
+      auto using Zle_0_pos.
+  * intros [??]. subst. destruct x; simpl; auto; lia.
+Qed.
+Lemma Z_to_option_N_Some_alt x y :
+  Z_to_option_N x = Some y ↔ (0 ≤ x)%Z ∧ x = Z.of_N y.
+Proof.
+  rewrite Z_to_option_N_Some.
+  split; intros [??]; subst; auto using N2Z.id, Z2N.id, eq_sym.
+Qed.
 
-(** The function [Z_decide_rel] is the more efficient variant of [Z_decide] when
-used for binary relations. It yields one if [R x y] and zero if not [R x y]. *)
-Definition Z_decide_rel {A B} (R : A → B → Prop)
-    {dec : ∀ x y, Decision (R x y)} (x : A) (y : B) : Z :=
-  (if dec x y then 1 else 0)%Z.
+Lemma Z_to_option_nat_Some x y :
+  Z_to_option_nat x = Some y ↔ (0 ≤ x)%Z ∧ y = Z.to_nat x.
+Proof.
+  split.
+  * intros. by destruct x; simpl in *; simplify_equality;
+      auto using Zle_0_pos.
+  * intros [??]. subst. destruct x; simpl; auto; lia.
+Qed.
+Lemma Z_to_option_nat_Some_alt x y :
+  Z_to_option_nat x = Some y ↔ (0 ≤ x)%Z ∧ x = Z.of_nat y.
+Proof.
+  rewrite Z_to_option_nat_Some.
+  split; intros [??]; subst; auto using Nat2Z.id, Z2Nat.id, eq_sym.
+Qed.
+Lemma Z_to_option_of_nat x :
+  Z_to_option_nat (Z.of_nat x) = Some x.
+Proof. apply Z_to_option_nat_Some_alt. auto using Nat2Z.is_nonneg. Qed.
+
+(** The function [Z_of_sumbool] converts a sumbool [P] into an integer
+by yielding one if [P] and zero if [Q]. *)
+Definition Z_of_sumbool {P Q : Prop} (p : {P} + {Q}) : Z :=
+  (if p then 1 else 0)%Z.
 
 (** Some correspondence lemmas between [nat] and [N] that are not part of the
 standard library. We declare a hint database [natify] to rewrite a goal

@@ -105,10 +105,26 @@ Fixpoint resize {A} (n : nat) (y : A) (l : list A) : list A :=
   end.
 Arguments resize {_} !_ _ !_.
 
-(** The predicate [prefix_of] holds if the first list is a prefix of the second.
-The predicate [suffix_of] holds if the first list is a suffix of the second. *)
-Definition prefix_of {A} (l1 l2 : list A) : Prop := ∃ k, l2 = l1 ++ k.
+(** The predicate [suffix_of] holds if the first list is a suffix of the second.
+The predicate [prefix_of] holds if the first list is a prefix of the second. *)
 Definition suffix_of {A} (l1 l2 : list A) : Prop := ∃ k, l2 = k ++ l1.
+Definition prefix_of {A} (l1 l2 : list A) : Prop := ∃ k, l2 = l1 ++ k.
+Definition max_prefix_of `{∀ x y : A, Decision (x = y)} :
+    list A → list A → list A * list A * list A :=
+  fix go l1 l2 :=
+  match l1, l2 with
+  | [], l2 => ([], l2, [])
+  | l1, [] => (l1, [], [])
+  | x1 :: l1, x2 :: l2 =>
+     if decide_rel (=) x1 x2
+     then snd_map (x1 ::) (go l1 l2)
+     else (x1 :: l1, x2 :: l2, [])
+  end.
+Definition max_suffix_of `{∀ x y : A, Decision (x = y)} (l1 l2 : list A) :
+    list A * list A * list A :=
+  match max_prefix_of (reverse l1) (reverse l2) with
+  | (k1, k2, k3) => (reverse k1, reverse k2, reverse k3)
+  end.
 
 (** * Tactics on lists *)
 Lemma cons_inv {A} (l1 l2 : list A) x1 x2 :
@@ -122,7 +138,7 @@ Tactic Notation "discriminate_list_equality" hyp(H) :=
   repeat (simpl in H || rewrite app_length in H);
   exfalso; lia.
 Tactic Notation "discriminate_list_equality" :=
-  repeat_on_hyps (fun H => discriminate_list_equality H).
+  solve [repeat_on_hyps (fun H => discriminate_list_equality H)].
 
 (** The tactic [simplify_list_equality] simplifies assumptions involving
 equalities on lists. *)
@@ -153,6 +169,12 @@ Global Instance: ∀ k : list A, Injective (=) (=) (k ++).
 Proof. intros ???. apply app_inv_head. Qed.
 Global Instance: ∀ k : list A, Injective (=) (=) (++ k).
 Proof. intros ???. apply app_inv_tail. Qed.
+Global Instance: Associative (=) (@app A).
+Proof. intros ???. apply app_assoc. Qed.
+Global Instance: LeftId (=) [] (@app A).
+Proof. done. Qed.
+Global Instance: RightId (=) [] (@app A).
+Proof. intro. apply app_nil_r. Qed.
 
 Lemma app_inj (l1 k1 l2 k2 : list A) :
   length l1 = length k1 →
@@ -532,6 +554,8 @@ Qed.
 
 Lemma reverse_nil : reverse [] = @nil A.
 Proof. done. Qed.
+Lemma reverse_singleton (x : A) : reverse [x] = [x].
+Proof. done. Qed.
 Lemma reverse_cons (l : list A) x : reverse (x :: l) = reverse l ++ [x].
 Proof. unfold reverse. by rewrite <-!rev_alt. Qed.
 Lemma reverse_snoc (l : list A) x : reverse (l ++ [x]) = x :: reverse l.
@@ -704,7 +728,7 @@ Lemma resize_le (l : list A) n x :
   resize n x l = take n l.
 Proof.
   intros. rewrite resize_spec, (proj2 (NPeano.Nat.sub_0_le _ _)) by done.
-  simpl. by rewrite app_nil_r.
+  simpl. by rewrite (right_id [] (++)).
 Qed.
 
 Lemma resize_all (l : list A) x :
@@ -720,7 +744,7 @@ Lemma resize_plus (l : list A) n m x :
 Proof.
   revert n m.
   induction l; intros [|?] [|?]; simpl; f_equal; auto.
-  * by rewrite plus_0_r, app_nil_r.
+  * by rewrite plus_0_r, (right_id [] (++)).
   * by rewrite replicate_plus.
 Qed.
 Lemma resize_plus_eq (l : list A) n m x :
@@ -743,7 +767,7 @@ Lemma resize_app_ge (l1 l2 : list A) n x :
   resize n x (l1 ++ l2) = l1 ++ resize (n - length l1) x l2.
 Proof.
   intros.
-  rewrite !resize_spec, take_app_ge, app_assoc by done.
+  rewrite !resize_spec, take_app_ge, (associative (++)) by done.
   do 2 f_equal. rewrite app_length. lia.
 Qed.
 
@@ -1205,18 +1229,21 @@ Section prefix_postfix.
   Global Instance: PreOrder (@prefix_of A).
   Proof.
     split.
-    * intros ?. eexists []. by rewrite app_nil_r.
+    * intros ?. eexists []. by rewrite (right_id [] (++)).
     * intros ??? [k1 ?] [k2 ?].
-      exists (k1 ++ k2). subst. by rewrite app_assoc.
+      exists (k1 ++ k2). subst. by rewrite (associative (++)).
   Qed.
 
   Lemma prefix_of_nil (l : list A) : prefix_of [] l.
   Proof. by exists l. Qed.
   Lemma prefix_of_nil_not x (l : list A) : ¬prefix_of (x :: l) [].
   Proof. by intros [k E]. Qed.
-  Lemma prefix_of_cons x y (l1 l2 : list A) :
+  Lemma prefix_of_cons x (l1 l2 : list A) :
+    prefix_of l1 l2 → prefix_of (x :: l1) (x :: l2).
+  Proof. intros [k E]. exists k. by subst. Qed.
+  Lemma prefix_of_cons_alt x y (l1 l2 : list A) :
     x = y → prefix_of l1 l2 → prefix_of (x :: l1) (y :: l2).
-  Proof. intros ? [k E]. exists k. by subst. Qed.
+  Proof. intro. subst. apply prefix_of_cons. Qed.
   Lemma prefix_of_cons_inv_1 x y (l1 l2 : list A) :
     prefix_of (x :: l1) (y :: l2) → x = y.
   Proof. intros [k E]. by injection E. Qed.
@@ -1224,20 +1251,128 @@ Section prefix_postfix.
     prefix_of (x :: l1) (y :: l2) → prefix_of l1 l2.
   Proof. intros [k E]. exists k. by injection E. Qed.
 
+  Lemma prefix_of_app k (l1 l2 : list A) :
+    prefix_of l1 l2 → prefix_of (k ++ l1) (k ++ l2).
+  Proof. intros [k' ?]. subst. exists k'. by rewrite (associative (++)). Qed.
+  Lemma prefix_of_app_alt k1 k2 (l1 l2 : list A) :
+    k1 = k2 → prefix_of l1 l2 → prefix_of (k1 ++ l1) (k2 ++ l2).
+  Proof. intro. subst. apply prefix_of_app. Qed.
   Lemma prefix_of_app_l (l1 l2 l3 : list A) :
     prefix_of (l1 ++ l3) l2 → prefix_of l1 l2.
-  Proof. intros [k ?]. red. exists (l3 ++ k). subst. by rewrite <-app_assoc. Qed.
+  Proof.
+    intros [k ?]. red. exists (l3 ++ k). subst.
+    by rewrite <-(associative (++)).
+  Qed.
   Lemma prefix_of_app_r (l1 l2 l3 : list A) :
     prefix_of l1 l2 → prefix_of l1 (l2 ++ l3).
-  Proof. intros [k ?]. exists (k ++ l3). subst. by rewrite app_assoc. Qed.
+  Proof.
+    intros [k ?]. exists (k ++ l3). subst.
+    by rewrite (associative (++)).
+  Qed.
+
+  Lemma prefix_of_length (l1 l2 : list A) :
+    prefix_of l1 l2 → length l1 ≤ length l2.
+  Proof. intros [??]. subst. rewrite app_length. lia. Qed.
+  Lemma prefix_of_snoc_not (l : list A) x : ¬prefix_of (l ++ [x]) l.
+  Proof. intros [??]. discriminate_list_equality. Qed.
 
   Global Instance: PreOrder (@suffix_of A).
   Proof.
     split.
     * intros ?. by eexists [].
     * intros ??? [k1 ?] [k2 ?].
-      exists (k2 ++ k1). subst. by rewrite app_assoc.
+      exists (k2 ++ k1). subst. by rewrite (associative (++)).
   Qed.
+
+  Global Instance prefix_of_dec `{∀ x y : A, Decision (x = y)} :
+      ∀ l1 l2 : list A, Decision (prefix_of l1 l2) :=
+    fix go l1 l2 :=
+    match l1, l2 return { prefix_of l1 l2 } + { ¬prefix_of l1 l2 } with
+    | [], _ => left (prefix_of_nil _)
+    | _, [] => right (prefix_of_nil_not _ _)
+    | x :: l1, y :: l2 =>
+      match decide_rel (=) x y with
+      | left Exy =>
+        match go l1 l2 with
+        | left Hl1l2 => left (prefix_of_cons_alt _ _ _ _ Exy Hl1l2)
+        | right Hl1l2 => right (Hl1l2 ∘ prefix_of_cons_inv_2 _ _ _ _)
+        end
+      | right Exy => right (Exy ∘ prefix_of_cons_inv_1 _ _ _ _)
+      end
+    end.
+
+  Section max_prefix_of.
+    Context `{∀ x y : A, Decision (x = y)}.
+
+    Lemma max_prefix_of_fst (l1 l2 : list A) :
+      l1 = snd (max_prefix_of l1 l2) ++ fst (fst (max_prefix_of l1 l2)).
+    Proof.
+      revert l2. induction l1; intros [|??]; simpl;
+        repeat case_decide; simpl; f_equal; auto.
+    Qed.
+    Lemma max_prefix_of_fst_alt (l1 l2 : list A) k1 k2 k3 :
+      max_prefix_of l1 l2 = (k1,k2,k3) → l1 = k3 ++ k1.
+    Proof.
+      intro. pose proof (max_prefix_of_fst l1 l2).
+      by destruct (max_prefix_of l1 l2) as [[]?]; simplify_equality.
+    Qed.
+    Lemma max_prefix_of_fst_prefix (l1 l2 : list A) :
+      prefix_of (snd (max_prefix_of l1 l2)) l1.
+    Proof. eexists. apply max_prefix_of_fst. Qed.
+    Lemma max_prefix_of_fst_prefix_alt (l1 l2 : list A) k1 k2 k3 :
+      max_prefix_of l1 l2 = (k1,k2,k3) → prefix_of k3 l1.
+    Proof. eexists. eauto using max_prefix_of_fst_alt. Qed.
+
+    Lemma max_prefix_of_snd (l1 l2 : list A) :
+      l2 = snd (max_prefix_of l1 l2) ++ snd (fst (max_prefix_of l1 l2)).
+    Proof.
+      revert l2. induction l1; intros [|??]; simpl;
+        repeat case_decide; simpl; f_equal; auto.
+    Qed.
+    Lemma max_prefix_of_snd_alt (l1 l2 : list A) k1 k2 k3 :
+      max_prefix_of l1 l2 = (k1,k2,k3) → l2 = k3 ++ k2.
+    Proof.
+      intro. pose proof (max_prefix_of_snd l1 l2).
+      by destruct (max_prefix_of l1 l2) as [[]?]; simplify_equality.
+    Qed.
+    Lemma max_prefix_of_snd_prefix (l1 l2 : list A) :
+      prefix_of (snd (max_prefix_of l1 l2)) l2.
+    Proof. eexists. apply max_prefix_of_snd. Qed.
+    Lemma max_prefix_of_snd_prefix_alt (l1 l2 : list A) k1 k2 k3 :
+      max_prefix_of l1 l2 = (k1,k2,k3) → prefix_of k3 l2.
+    Proof. eexists. eauto using max_prefix_of_snd_alt. Qed.
+
+    Lemma max_prefix_of_max (l1 l2 : list A) k :
+      prefix_of k l1 →
+      prefix_of k l2 →
+      prefix_of k (snd (max_prefix_of l1 l2)).
+    Proof.
+      intros [l1' ?] [l2' ?]. subst.
+      by induction k; simpl; repeat case_decide; simpl;
+        auto using prefix_of_nil, prefix_of_cons.
+    Qed.
+    Lemma max_prefix_of_max_alt (l1 l2 : list A) k1 k2 k3 k :
+      max_prefix_of l1 l2 = (k1,k2,k3) →
+      prefix_of k l1 →
+      prefix_of k l2 →
+      prefix_of k k3.
+    Proof.
+      intro. pose proof (max_prefix_of_max l1 l2 k).
+      by destruct (max_prefix_of l1 l2) as [[]?]; simplify_equality.
+    Qed.
+
+    Lemma max_prefix_of_max_snoc (l1 l2 : list A) k1 k2 k3 x1 x2 :
+      max_prefix_of l1 l2 = (x1 :: k1, x2 :: k2, k3) →
+      x1 ≠ x2.
+    Proof.
+      intros Hl ?. subst. destruct (prefix_of_snoc_not k3 x2).
+      eapply max_prefix_of_max_alt; eauto.
+      * rewrite (max_prefix_of_fst_alt _ _ _ _ _ Hl).
+        apply prefix_of_app, prefix_of_cons, prefix_of_nil.
+      * rewrite (max_prefix_of_snd_alt _ _ _ _ _ Hl).
+        apply prefix_of_app, prefix_of_cons, prefix_of_nil.
+    Qed.
+  End max_prefix_of.
 
   Lemma prefix_suffix_reverse (l1 l2 : list A) :
     prefix_of l1 l2 ↔ suffix_of (reverse l1) (reverse l2).
@@ -1251,15 +1386,24 @@ Section prefix_postfix.
   Proof. by rewrite prefix_suffix_reverse, !reverse_involutive. Qed.
 
   Lemma suffix_of_nil (l : list A) : suffix_of [] l.
-  Proof. exists l. by rewrite app_nil_r. Qed.
+  Proof. exists l. by rewrite (right_id [] (++)). Qed.
   Lemma suffix_of_nil_inv (l : list A) : suffix_of l [] → l = [].
   Proof. by intros [[|?] ?]; simplify_list_equality. Qed.
   Lemma suffix_of_cons_nil_inv x (l : list A) : ¬suffix_of (x :: l) [].
   Proof. by intros [[] ?]. Qed.
-
+  Lemma suffix_of_snoc (l1 l2 : list A) x :
+    suffix_of l1 l2 → suffix_of (l1 ++ [x]) (l2 ++ [x]).
+  Proof. intros [k E]. exists k. subst. by rewrite (associative (++)). Qed.
+  Lemma suffix_of_snoc_alt x y (l1 l2 : list A) :
+    x = y → suffix_of l1 l2 → suffix_of (l1 ++ [x]) (l2 ++ [y]).
+  Proof. intro. subst. apply suffix_of_snoc. Qed.
+ 
   Lemma suffix_of_app (l1 l2 k : list A) :
     suffix_of l1 l2 → suffix_of (l1 ++ k) (l2 ++ k).
-  Proof. intros [k' E]. exists k'. subst. by rewrite app_assoc. Qed.
+  Proof. intros [k' E]. exists k'. subst. by rewrite (associative (++)). Qed.
+  Lemma suffix_of_app_alt (l1 l2 k1 k2 : list A) :
+    k1 = k2 → suffix_of l1 l2 → suffix_of (l1 ++ k1) (l2 ++ k2).
+  Proof. intro. subst. apply suffix_of_app. Qed.
 
   Lemma suffix_of_snoc_inv_1 x y (l1 l2 : list A) :
     suffix_of (l1 ++ [x]) (l2 ++ [y]) → x = y.
@@ -1276,17 +1420,25 @@ Section prefix_postfix.
 
   Lemma suffix_of_cons_l (l1 l2 : list A) x :
     suffix_of (x :: l1) l2 → suffix_of l1 l2.
-  Proof. intros [k ?]. exists (k ++ [x]). subst. by rewrite <-app_assoc. Qed.
+  Proof.
+    intros [k ?]. exists (k ++ [x]). subst.
+    by rewrite <-(associative (++)).
+  Qed.
   Lemma suffix_of_app_l (l1 l2 l3 : list A) :
-
-  suffix_of (l3 ++ l1) l2 → suffix_of l1 l2.
-  Proof. intros [k ?]. exists (k ++ l3). subst. by rewrite <-app_assoc. Qed.
+    suffix_of (l3 ++ l1) l2 → suffix_of l1 l2.
+  Proof.
+    intros [k ?]. exists (k ++ l3). subst.
+    by rewrite <-(associative (++)).
+  Qed.
   Lemma suffix_of_cons_r (l1 l2 : list A) x :
     suffix_of l1 l2 → suffix_of l1 (x :: l2).
   Proof. intros [k ?]. exists (x :: k). by subst. Qed.
   Lemma suffix_of_app_r (l1 l2 l3 : list A) :
     suffix_of l1 l2 → suffix_of l1 (l3 ++ l2).
-  Proof. intros [k ?]. exists (l3 ++ k). subst. by rewrite app_assoc. Qed.
+  Proof.
+    intros [k ?]. exists (l3 ++ k). subst.
+    by rewrite (associative (++)).
+  Qed.
 
   Lemma suffix_of_cons_inv (l1 l2 : list A) x y :
     suffix_of (x :: l1) (y :: l2) →
@@ -1297,44 +1449,98 @@ Section prefix_postfix.
     * right. simplify_equality. by apply suffix_of_app_r.
   Qed.
 
+  Lemma suffix_of_length (l1 l2 : list A) :
+    suffix_of l1 l2 → length l1 ≤ length l2.
+  Proof. intros [??]. subst. rewrite app_length. lia. Qed.
   Lemma suffix_of_cons_not x (l : list A) : ¬suffix_of (x :: l) l.
   Proof. intros [??]. discriminate_list_equality. Qed.
 
-  Context `{∀ x y : A, Decision (x = y)}.
-
-  Fixpoint strip_prefix (l1 l2 : list A) : list A * (list A * list A) :=
-    match l1, l2 with
-    | [], l2 => ([], ([], l2))
-    | l1, [] => ([], (l1, []))
-    | x :: l1, y :: l2 =>
-      if decide_rel (=) x y
-      then fst_map (x ::) (strip_prefix l1 l2)
-      else ([], (x :: l1, y :: l2))
-    end.
-
-  Global Instance prefix_of_dec: ∀ l1 l2 : list A,
-      Decision (prefix_of l1 l2) :=
-    fix go l1 l2 :=
-    match l1, l2 return { prefix_of l1 l2 } + { ¬prefix_of l1 l2 } with
-    | [], _ => left (prefix_of_nil _)
-    | _, [] => right (prefix_of_nil_not _ _)
-    | x :: l1, y :: l2 =>
-      match decide_rel (=) x y with
-      | left Exy =>
-        match go l1 l2 with
-        | left Hl1l2 => left (prefix_of_cons _ _ _ _ Exy Hl1l2)
-        | right Hl1l2 => right (Hl1l2 ∘ prefix_of_cons_inv_2 _ _ _ _)
-        end
-      | right Exy => right (Exy ∘ prefix_of_cons_inv_1 _ _ _ _)
-      end
-    end.
-
-  Global Instance suffix_of_dec (l1 l2 : list A) :
-    Decision (suffix_of l1 l2).
+  Global Instance suffix_of_dec `{∀ x y : A, Decision (x = y)}
+    (l1 l2 : list A) : Decision (suffix_of l1 l2).
   Proof.
     refine (cast_if (decide_rel prefix_of (reverse l1) (reverse l2)));
      abstract (by rewrite suffix_prefix_reverse).
   Defined.
+
+  Section max_suffix_of.
+    Context `{∀ x y : A, Decision (x = y)}.
+
+    Lemma max_suffix_of_fst (l1 l2 : list A) :
+      l1 = fst (fst (max_suffix_of l1 l2)) ++ snd (max_suffix_of l1 l2).
+    Proof.
+      rewrite <-(reverse_involutive l1) at 1.
+      rewrite (max_prefix_of_fst (reverse l1) (reverse l2)).
+      unfold max_suffix_of.
+      destruct (max_prefix_of (reverse l1) (reverse l2)) as ((?&?)&?); simpl.
+      by rewrite reverse_app.
+    Qed.
+    Lemma max_suffix_of_fst_alt (l1 l2 : list A) k1 k2 k3 :
+      max_suffix_of l1 l2 = (k1,k2,k3) → l1 = k1 ++ k3.
+    Proof.
+      intro. pose proof (max_suffix_of_fst l1 l2).
+      by destruct (max_suffix_of l1 l2) as [[]?]; simplify_equality.
+    Qed.
+    Lemma max_suffix_of_fst_suffix (l1 l2 : list A) :
+      suffix_of (snd (max_suffix_of l1 l2)) l1.
+    Proof. eexists. apply max_suffix_of_fst. Qed.
+    Lemma max_suffix_of_fst_suffix_alt (l1 l2 : list A) k1 k2 k3 :
+      max_suffix_of l1 l2 = (k1,k2,k3) → suffix_of k3 l1.
+    Proof. eexists. eauto using max_suffix_of_fst_alt. Qed.
+
+    Lemma max_suffix_of_snd (l1 l2 : list A) :
+      l2 = snd (fst (max_suffix_of l1 l2)) ++ snd (max_suffix_of l1 l2).
+    Proof.
+      rewrite <-(reverse_involutive l2) at 1.
+      rewrite (max_prefix_of_snd (reverse l1) (reverse l2)).
+      unfold max_suffix_of.
+      destruct (max_prefix_of (reverse l1) (reverse l2)) as ((?&?)&?); simpl.
+      by rewrite reverse_app.
+    Qed.
+    Lemma max_suffix_of_snd_alt (l1 l2 : list A) k1 k2 k3 :
+      max_suffix_of l1 l2 = (k1,k2,k3) → l2 = k2 ++ k3.
+    Proof.
+      intro. pose proof (max_suffix_of_snd l1 l2).
+      by destruct (max_suffix_of l1 l2) as [[]?]; simplify_equality.
+    Qed.
+    Lemma max_suffix_of_snd_suffix (l1 l2 : list A) :
+      suffix_of (snd (max_suffix_of l1 l2)) l2.
+    Proof. eexists. apply max_suffix_of_snd. Qed.
+    Lemma max_suffix_of_snd_suffix_alt (l1 l2 : list A) k1 k2 k3 :
+      max_suffix_of l1 l2 = (k1,k2,k3) → suffix_of k3 l2.
+    Proof. eexists. eauto using max_suffix_of_snd_alt. Qed.
+
+    Lemma max_suffix_of_max (l1 l2 : list A) k :
+      suffix_of k l1 →
+      suffix_of k l2 →
+      suffix_of k (snd (max_suffix_of l1 l2)).
+    Proof.
+      generalize (max_prefix_of_max (reverse l1) (reverse l2)).
+      rewrite !suffix_prefix_reverse. unfold max_suffix_of.
+      destruct (max_prefix_of (reverse l1) (reverse l2)) as ((?&?)&?); simpl.
+      rewrite reverse_involutive. auto.
+    Qed.
+    Lemma max_suffix_of_max_alt (l1 l2 : list A) k1 k2 k3 k :
+      max_suffix_of l1 l2 = (k1,k2,k3) →
+      suffix_of k l1 →
+      suffix_of k l2 →
+      suffix_of k k3.
+    Proof.
+      intro. pose proof (max_suffix_of_max l1 l2 k).
+      by destruct (max_suffix_of l1 l2) as [[]?]; simplify_equality.
+    Qed.
+
+    Lemma max_suffix_of_max_snoc (l1 l2 : list A) k1 k2 k3 x1 x2 :
+      max_suffix_of l1 l2 = (k1 ++ [x1], k2 ++ [x2], k3) →
+      x1 ≠ x2.
+    Proof.
+      intros Hl ?. subst. destruct (suffix_of_cons_not x2 k3).
+      eapply max_suffix_of_max_alt; eauto.
+      * rewrite (max_suffix_of_fst_alt _ _ _ _ _ Hl).
+        by apply (suffix_of_app [x2]), suffix_of_app_r.
+      * rewrite (max_suffix_of_snd_alt _ _ _ _ _ Hl).
+        by apply (suffix_of_app [x2]), suffix_of_app_r.
+    Qed.
+  End max_suffix_of.
 End prefix_postfix.
 
 (** The [simplify_suffix_of] tactic removes [suffix_of] hypotheses that are
@@ -1455,8 +1661,13 @@ Section list_fmap.
   Qed.
   Lemma fmap_app l1 l2 : f <$> l1 ++ l2 = (f <$> l1) ++ (f <$> l2).
   Proof. induction l1; simpl; by f_equal. Qed.
+
+  Lemma fmap_nil_inv k :
+    f <$> k = [] → k = [].
+  Proof. by destruct k. Qed.
   Lemma fmap_cons_inv y l k :
-    f <$> l = y :: k → ∃ x l', y = f x ∧ l = x :: l'.
+    f <$> l = y :: k → ∃ x l',
+      y = f x ∧ k = f <$> l' ∧ l = x :: l'.
   Proof. intros. destruct l; simpl; simplify_equality; eauto. Qed.
   Lemma fmap_app_inv l k1 k2 :
     f <$> l = k1 ++ k2 → ∃ l1 l2,
@@ -1610,7 +1821,7 @@ Section list_bind.
     (l1 ++ l2) ≫= f = (l1 ≫= f) ++ (l2 ≫= f).
   Proof.
     induction l1; simpl; [done|].
-    by rewrite <-app_assoc, IHl1.
+    by rewrite <-(associative (++)), IHl1.
   Qed.
   Lemma elem_of_list_bind (x : B) (l : list A) :
     x ∈ l ≫= f ↔ ∃ y, x ∈ f y ∧ y ∈ l.
@@ -1717,11 +1928,13 @@ End list_ret_join.
 Ltac simplify_list_fmap_equality := repeat
   match goal with
   | _ => progress simplify_equality
+  | H : _ <$> _ = [] |- _ => apply fmap_nil_inv in H
+  | H : [] = _ <$> _ |- _ => symmetry in H; apply fmap_nil_inv in H
   | H : _ <$> _ = _ :: _ |- _ =>
-    apply fmap_cons_inv in H; destruct H as [? [? [??]]]
+    apply fmap_cons_inv in H; destruct H as (?&?&?&?&?)
   | H : _ :: _ = _ <$> _ |- _ => symmetry in H
   | H : _ <$> _ = _ ++ _ |- _ =>
-    apply fmap_app_inv in H; destruct H as [? [? [? [??]]]]
+    apply fmap_app_inv in H; destruct H as (?&?&?&?&?)
   | H : _ ++ _ = _ <$> _ |- _ => symmetry in H
   end.
 
@@ -1922,11 +2135,11 @@ Proof.
     + by eexists [], k, z.
     + destruct (IH (z :: l)) as [k' [k'' [y [??]]]]; [done |]; subst.
       eexists (z :: k'), k'', y. split; [done |].
-      by rewrite reverse_cons, <-app_assoc.
+      by rewrite reverse_cons, <-(associative (++)).
   * intros [k' [k'' [y [??]]]]; subst.
     revert l. induction k' as [|z k' IH]; intros l.
     + by left.
-    + right. by rewrite reverse_cons, <-!app_assoc.
+    + right. by rewrite reverse_cons, <-!(associative (++)).
 Qed.
 
 Section zipped_list_ind.
@@ -1955,7 +2168,7 @@ Lemma zipped_Forall_app {A} (P : list A → list A → A → Prop) l k k' :
   zipped_Forall P l (k ++ k') → zipped_Forall P (reverse k ++ l) k'.
 Proof.
   revert l. induction k as [|x k IH]; simpl; [done |].
-  inversion_clear 1. rewrite reverse_cons, <-app_assoc.
+  inversion_clear 1. rewrite reverse_cons, <-(associative (++)).
   by apply IH.
 Qed.
 

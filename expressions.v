@@ -61,10 +61,10 @@ Definition eval_binop (op : binop) (v1 v2 : value) : option value :=
   | MultOp, int x1, int x2 => Some (int (x1 * x2))
   | DivOp, int x1, int x2 => Some (int (x1 / x2))
   | ModOp, int x1, int x2 => Some (int (Zmod x1 x2))
-  | LeOp, int x1, int x2 => Some (int (Z_decide_rel (≤)%Z x1 x2))
-  | LtOp, int x1, int x2 => Some (int (Z_decide_rel (<)%Z x1 x2))
-  | EqOp, int x1, int x2 => Some (int (Z_decide_rel (=) x1 x2))
-  | EqOp, ptr b1, ptr b2 => Some (int (Z_decide_rel (=) b1 b2))
+  | LeOp, int x1, int x2 => Some (int (Z_of_sumbool (decide_rel (≤)%Z x1 x2)))
+  | LtOp, int x1, int x2 => Some (int (Z_of_sumbool (decide_rel (<)%Z x1 x2)))
+  | EqOp, int x1, int x2 => Some (int (Z_of_sumbool (decide_rel (=) x1 x2)))
+  | EqOp, ptr b1, ptr b2 => Some (int (Z_of_sumbool (decide_rel (=) b1 b2)))
   | EqOp, null, null => Some (int 1)
   | EqOp, int _, null => Some (int 0)
   | EqOp, null, int _ => Some (int 0)
@@ -285,9 +285,9 @@ Fixpoint expr_vars (e : expr) : listset nat :=
   | val _ => ∅
   | el ::= er => expr_vars el ∪ expr_vars er
   | call _ @ es => ⋃ (expr_vars <$> es)
-  | load e => expr_vars e
   | alloc => ∅
-  | free e => expr_vars e
+  | load e
+  | free e
   | @{_} e => expr_vars e
   | el @{_} er => expr_vars el ∪ expr_vars er
   | (IF e then el else er) =>
@@ -356,9 +356,9 @@ Proof.
   | val _ => right _
   | el ::= er => cast_if_and (decide (is_value el)) (decide (is_value er))
   | call _ @ es => cast_if (decide (Forall is_value es))
-  | load e => cast_if (decide (is_value e))
   | alloc => left _
-  | free e => cast_if (decide (is_value e))
+  | load e
+  | free e
   | @{_} e => cast_if (decide (is_value e))
   | el @{_} er => cast_if_and (decide (is_value el)) (decide (is_value er))
   | (IF e then _ else _) => cast_if (decide (is_value e))
@@ -379,11 +379,10 @@ Qed.
 Lemma Forall_is_value_alt es : Forall is_value es ↔ ∃ vs, es = EVal <$> vs.
 Proof.
   split.
-  * induction 1 as [|?? [v] _ IH].
+  * induction 1 as [|?? [v] _ [vs ?]]; subst.
     + by eexists [].
-    + destruct IH as [vs ?]. exists (v :: vs). by subst.
-  * intros [vs H]. subst. rewrite Forall_fmap.
-    apply Forall_true, is_value_val.
+    + by exists (v :: vs).
+  * intros [vs H]. subst. induction vs; simpl; auto using is_value_val.
 Qed.
 
 (** * Evaluation of side-effect free expressions *)
@@ -863,7 +862,7 @@ Section expr_split.
       rewrite elem_of_zipped_map in Hes.
       destruct Hes as [esl [? [? [??]]]]; subst.
       apply zipped_Forall_app in Hforall. inversion Hforall; subst.
-      rewrite <-(reverse_involutive esl), <-(app_nil_r (reverse esl)).
+      rewrite <-(reverse_involutive esl), <-(right_id [] (++) (reverse esl)).
       auto. }
     ectx_expr_ind E e;
      simpl; intros; repeat case_decide;

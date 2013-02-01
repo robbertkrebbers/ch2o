@@ -290,7 +290,7 @@ Notation "(≫=)" := (λ m f, mbind f m) (only parsing) : C_scope.
 
 Notation "x ← y ; z" := (y ≫= (λ x : _, z))
   (at level 65, only parsing, next at level 35, right associativity) : C_scope.
-Infix "<$>" := fmap (at level 65, right associativity) : C_scope.
+Infix "<$>" := fmap (at level 60, right associativity) : C_scope.
 
 Class MGuard (M : Type → Type) :=
   mguard: ∀ P {dec : Decision P} {A}, M A → M A.
@@ -425,6 +425,10 @@ Arguments left_absorb {_ _} _ _ {_} _.
 Arguments right_absorb {_ _} _ _ {_} _.
 Arguments anti_symmetric {_} _ {_} _ _ _ _.
 
+Instance: Commutative (↔) (@eq A).
+Proof. red. intuition. Qed.
+Instance: Commutative (↔) (λ x y, @eq A y x).
+Proof. red. intuition. Qed.
 Instance: Commutative (↔) (↔).
 Proof. red. intuition. Qed.
 Instance: Commutative (↔) (∧).
@@ -672,13 +676,11 @@ Section prod_relation.
 End prod_relation.
 
 (** ** Other *)
-Definition lift_relation {A B} (R : relation A)
+Definition proj_relation {A B} (R : relation A)
   (f : B → A) : relation B := λ x y, R (f x) (f y).
-Definition lift_relation_equivalence {A B} (R : relation A) (f : B → A) :
-  Equivalence R → Equivalence (lift_relation R f).
-Proof. unfold lift_relation. firstorder auto. Qed.
-Hint Extern 0 (Equivalence (lift_relation _ _)) =>
-  eapply @lift_relation_equivalence : typeclass_instances.
+Definition proj_relation_equivalence {A B} (R : relation A) (f : B → A) :
+  Equivalence R → Equivalence (proj_relation R f).
+Proof. unfold proj_relation. firstorder auto. Qed.
 
 Instance: ∀ A B (x : B), Commutative (=) (λ _ _ : A, x).
 Proof. red. trivial. Qed.

@@ -46,6 +46,17 @@ Ltac solve_decision := intros; first
   [ solve_trivial_decision
   | unfold Decision; decide equality; solve_trivial_decision ].
 
+(** The following combinators are useful to create Decision proofs in
+combination with the [refine] tactic. *)
+Notation cast_if S := (if S then left _ else right _).
+Notation cast_if_and S1 S2 := (if S1 then cast_if S2 else right _).
+Notation cast_if_and3 S1 S2 S3 := (if S1 then cast_if_and S2 S3 else right _).
+Notation cast_if_and4 S1 S2 S3 S4 :=
+  (if S1 then cast_if_and3 S2 S3 S4 else right _).
+Notation cast_if_or S1 S2 := (if S1 then left _ else cast_if S2).
+Notation cast_if_not_or S1 S2 := (if S1 then cast_if S2 else left _).
+Notation cast_if_not S := (if S then right _ else left _).
+
 (** We can convert decidable propositions to booleans. *)
 Definition bool_decide (P : Prop) {dec : Decision P} : bool :=
   if dec then true else false.
@@ -66,8 +77,7 @@ Definition proj2_dsig `{∀ x : A, Decision (P x)} (x : dsig P) : P (`x) :=
   bool_decide_unpack _ (proj2_sig x).
 Definition dexist `{∀ x : A, Decision (P x)} (x : A) (p : P x) : dsig P :=
   x↾bool_decide_pack _ p.
-
-Lemma dsig_eq {A} (P : A → Prop) {dec : ∀ x, Decision (P x)}
+Lemma dsig_eq `(P : A → Prop) `{∀ x, Decision (P x)}
   (x y : dsig P) : x = y ↔ `x = `y.
 Proof.
   split.
@@ -78,16 +88,13 @@ Proof.
     + by intros [] [].
     + done.
 Qed.
+Lemma dexists_proj1 `(P : A → Prop) `{∀ x, Decision (P x)} (x : dsig P) p :
+  dexist (`x) p = x.
+Proof. by apply dsig_eq. Qed.
 
-(** The following combinators are useful to create Decision proofs in
-combination with the [refine] tactic. *)
-Notation cast_if S := (if S then left _ else right _).
-Notation cast_if_and S1 S2 := (if S1 then cast_if S2 else right _).
-Notation cast_if_and3 S1 S2 S3 := (if S1 then cast_if_and S2 S3 else right _).
-Notation cast_if_and4 S1 S2 S3 S4 :=
-  (if S1 then cast_if_and3 S2 S3 S4 else right _).
-Notation cast_if_or S1 S2 := (if S1 then left _ else cast_if S2).
-Notation cast_if_not S := (if S then right _ else left _).
+Global Instance dsig_eq_dec `(P : A → Prop) `{∀ x, Decision (P x)}
+  `{∀ x y : A, Decision (x = y)} (x y : dsig P) : Decision (x = y).
+Proof. refine (cast_if (decide (`x = `y))); by rewrite dsig_eq. Defined.
 
 (** * Instances of Decision *)
 (** Instances of [Decision] for operators of propositional logic. *)
