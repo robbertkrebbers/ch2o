@@ -1,4 +1,4 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects type class interfaces, notations, and general theorems
 that are used throughout the whole development. Most importantly it contains
@@ -133,6 +133,27 @@ Notation "x ≢ y":= (¬x ≡ y) (at level 70, no associativity) : C_scope.
 Notation "( x ≢)" := (λ y, x ≢ y) (only parsing) : C_scope.
 Notation "(≢ x )" := (λ y, y ≢ x) (only parsing) : C_scope.
 
+(** The type class [LeibnizEquiv] collects setoid equalities that coincide
+with Leibniz equality. We provide the tactic [fold_leibniz] to transform such
+setoid equalities into Leibniz equalities, and [unfold_leibniz] for the
+reverse. *)
+Class LeibnizEquiv A `{Equiv A} := leibniz_equiv x y : x ≡ y ↔ x = y.
+
+Ltac fold_leibniz := repeat
+  match goal with
+  | H : context [ @equiv ?A _ _ _ ] |- _ =>
+    setoid_rewrite (leibniz_equiv (A:=A)) in H
+  | |- context [ @equiv ?A _ _ _ ] =>
+    setoid_rewrite (leibniz_equiv (A:=A))
+  end.
+Ltac unfold_leibniz := repeat
+  match goal with
+  | H : context [ @eq ?A _ _ ] |- _ =>
+    setoid_rewrite <-(leibniz_equiv (A:=A)) in H
+  | |- context [ @eq ?A _ _ ] =>
+    setoid_rewrite <-(leibniz_equiv (A:=A))
+  end.
+
 (** A [Params f n] instance forces the setoid rewriting mechanism not to
 rewrite in the first [n] arguments of the function [f]. We will declare such
 instances for all operational type classes in this development. *)
@@ -227,23 +248,22 @@ Notation "(⊥)" := disjoint (only parsing) : C_scope.
 Notation "( X ⊥)" := (disjoint X) (only parsing) : C_scope.
 Notation "(⊥ X )" := (λ Y, disjoint Y X) (only parsing) : C_scope.
 
-Inductive list_disjoint `{Disjoint A} : list A → Prop :=
+Inductive list_disjoint `{Empty A} `{Union A}
+      `{Disjoint A} : list A → Prop :=
   | disjoint_nil :
      list_disjoint []
   | disjoint_cons X Xs :
-     Forall (⊥ X) Xs →
+     X ⊥ ⋃ Xs →
      list_disjoint Xs →
      list_disjoint (X :: Xs).
-Lemma list_disjoint_cons_inv `{Disjoint A} X Xs :
+Lemma list_disjoint_cons_inv `{Empty A} `{Union A} `{Disjoint A} X Xs :
   list_disjoint (X :: Xs) →
-  Forall (⊥ X) Xs ∧ list_disjoint Xs.
+  X ⊥ ⋃ Xs ∧ list_disjoint Xs.
 Proof. inversion_clear 1; auto. Qed.
-
-Instance generic_disjoint `{ElemOf A B} : Disjoint B | 100 :=
-  λ X Y, ∀ x, x ∉ X ∨ x ∉ Y.
 
 Class Filter A B :=
   filter: ∀ (P : A → Prop) `{∀ x, Decision (P x)}, B → B.
+
 (* Arguments filter {_ _ _} _ {_} !_ / : simpl nomatch. *)
 
 (** ** Monadic operations *)
@@ -347,18 +367,16 @@ Arguments partial_alter _ _ _ _ _ !_ !_ / : simpl nomatch.
 
 (** The function [dom C m] should yield the domain of [m]. That is a finite
 collection of type [C] that contains the keys that are a member of [m]. *)
-Class Dom (K M : Type) :=
-  dom: ∀ C `{Empty C} `{Union C} `{Singleton K C}, M → C.
-Instance: Params (@dom) 7.
-Arguments dom _ _ _ _ _ _ _ !_ / : simpl nomatch.
+Class Dom (M C : Type) := dom: M → C.
+Instance: Params (@dom) 3.
+Arguments dom {_} _ {_} !_ / : simpl nomatch, clear implicits.
 
 (** The function [merge f m1 m2] should merge the maps [m1] and [m2] by
-constructing a new map whose value at key [k] is [f (m1 !! k) (m2 !! k)]
-provided that [k] is a member of either [m1] or [m2].*)
-Class Merge (A M : Type) :=
-  merge: (option A → option A → option A) → M → M → M.
-Instance: Params (@merge) 3.
-Arguments merge _ _ _ _ !_ !_ / : simpl nomatch.
+constructing a new map whose value at key [k] is [f (m1 !! k) (m2 !! k)].*)
+Class Merge (M : Type → Type) :=
+  merge: ∀ {A B C}, (option A → option B → option C) → M A → M B → M C.
+Instance: Params (@merge) 4.
+Arguments merge _ _ _ _ _ _ !_ !_ / : simpl nomatch.
 
 (** We lift the insert and delete operation to lists of elements. *)
 Definition insert_list `{Insert K A M} (l : list (K * A)) (m : M) : M :=
@@ -379,14 +397,18 @@ both [m1] and [m2]. *)
 Class UnionWith (A M : Type) :=
   union_with: (A → A → option A) → M → M → M.
 Instance: Params (@union_with) 3.
+Arguments union_with {_ _ _} _ !_ !_ / : simpl nomatch.
 
 (** Similarly for intersection and difference. *)
 Class IntersectionWith (A M : Type) :=
   intersection_with: (A → A → option A) → M → M → M.
 Instance: Params (@intersection_with) 3.
+Arguments intersection_with {_ _ _} _ !_ !_ / : simpl nomatch.
+
 Class DifferenceWith (A M : Type) :=
   difference_with: (A → A → option A) → M → M → M.
 Instance: Params (@difference_with) 3.
+Arguments difference_with {_ _ _} _ !_ !_ / : simpl nomatch.
 
 Definition intersection_with_list `{IntersectionWith A M}
   (f : A → A → option A) : M → list M → M := fold_right (intersection_with f).
@@ -396,25 +418,30 @@ Arguments intersection_with_list _ _ _ _ _ !_ /.
 (** These operational type classes allow us to refer to common mathematical
 properties in a generic way. For example, for injectivity of [(k ++)] it
 allows us to write [injective (k ++)] instead of [app_inv_head k]. *)
-Class Injective {A B} R S (f : A → B) :=
+Class Injective {A B} (R : relation A) S (f : A → B) : Prop :=
   injective: ∀ x y : A, S (f x) (f y) → R x y.
-Class Idempotent {A} R (f : A → A → A) :=
+Class Idempotent {A} (R : relation A) (f : A → A → A) : Prop :=
   idempotent: ∀ x, R (f x x) x.
-Class Commutative {A B} R (f : B → B → A) :=
+Class Commutative {A B} (R : relation A) (f : B → B → A) : Prop :=
   commutative: ∀ x y, R (f x y) (f y x).
-Class LeftId {A} R (i : A) (f : A → A → A) :=
+Class LeftId {A} (R : relation A) (i : A) (f : A → A → A) : Prop :=
   left_id: ∀ x, R (f i x) x.
-Class RightId {A} R (i : A) (f : A → A → A) :=
+Class RightId {A} (R : relation A) (i : A) (f : A → A → A) : Prop :=
   right_id: ∀ x, R (f x i) x.
-Class Associative {A} R (f : A → A → A) :=
+Class Associative {A} (R : relation A) (f : A → A → A) : Prop :=
   associative: ∀ x y z, R (f x (f y z)) (f (f x y) z).
-Class LeftAbsorb {A} R (i : A) (f : A → A → A) :=
+Class LeftAbsorb {A} (R : relation A) (i : A) (f : A → A → A) : Prop :=
   left_absorb: ∀ x, R (f i x) i.
-Class RightAbsorb {A} R (i : A) (f : A → A → A) :=
+Class RightAbsorb {A} (R : relation A) (i : A) (f : A → A → A) : Prop :=
   right_absorb: ∀ x, R (f x i) i.
-Class AntiSymmetric {A} (R : A → A → Prop) :=
+Class LeftDistr {A} (R : relation A) (f g : A → A → A) : Prop :=
+  left_distr: ∀ x y z, R (f x (g y z)) (g (f x y) (f x z)).
+Class RightDistr {A} (R : relation A) (f g : A → A → A) : Prop :=
+  right_distr: ∀ y z x, R (f (g y z) x) (g (f y x) (f z x)).
+Class AntiSymmetric {A} (R : relation A) : Prop :=
   anti_symmetric: ∀ x y, R x y → R y x → x = y.
 
+Arguments irreflexivity {_} _ {_} _ _.
 Arguments injective {_ _ _ _} _ {_} _ _ _.
 Arguments idempotent {_ _} _ {_} _.
 Arguments commutative {_ _ _} _ {_} _ _.
@@ -423,6 +450,8 @@ Arguments right_id {_ _} _ _ {_} _.
 Arguments associative {_ _} _ {_} _ _ _.
 Arguments left_absorb {_ _} _ _ {_} _.
 Arguments right_absorb {_ _} _ _ {_} _.
+Arguments left_distr {_ _} _ _ {_} _ _ _.
+Arguments right_distr {_ _} _ _ {_} _ _ _.
 Arguments anti_symmetric {_} _ {_} _ _ _ _.
 
 Instance: Commutative (↔) (@eq A).
@@ -463,6 +492,14 @@ Instance: LeftId (↔) True impl.
 Proof. unfold impl. red. intuition. Qed.
 Instance: RightAbsorb (↔) True impl.
 Proof. unfold impl. red. intuition. Qed.
+Instance: LeftDistr (↔) (∧) (∨).
+Proof. red. intuition. Qed.
+Instance: RightDistr (↔) (∧) (∨).
+Proof. red. intuition. Qed.
+Instance: LeftDistr (↔) (∨) (∧).
+Proof. red. intuition. Qed.
+Instance: RightDistr (↔) (∨) (∧).
+Proof. red. intuition. Qed.
 
 (** The following lemmas are more specific versions of the projections of the
 above type classes. These lemmas allow us to enforce Coq not to use the setoid
@@ -488,56 +525,76 @@ Proof. auto. Qed.
 Lemma right_absorb_eq {A} (i : A) (f : A → A → A) `{!RightAbsorb (=) i f} x :
   f x i = i.
 Proof. auto. Qed.
+Lemma left_distr_eq {A} (f g : A → A → A) `{!LeftDistr (=) f g} x y z :
+  f x (g y z) = g (f x y) (f x z).
+Proof. auto. Qed.
+Lemma right_distr_eq {A} (f g : A → A → A) `{!RightDistr (=) f g} y z x :
+  f (g y z) x = g (f y x) (f z x).
+Proof. auto. Qed.
 
 (** ** Axiomatization of ordered structures *)
-(** A pre-order equiped with a smallest element. *)
-Class BoundedPreOrder A `{Empty A} `{SubsetEq A} := {
+(** A pre-order equipped with a smallest element. *)
+Class BoundedPreOrder A `{Empty A} `{SubsetEq A} : Prop := {
   bounded_preorder :>> PreOrder (⊆);
   subseteq_empty x : ∅ ⊆ x
 }.
-Class PartialOrder A `{SubsetEq A} := {
+Class PartialOrder A `{SubsetEq A} : Prop := {
   po_preorder :>> PreOrder (⊆);
   po_antisym :> AntiSymmetric (⊆)
 }.
 
 (** We do not include equality in the following interfaces so as to avoid the
-need for proofs that the  relations and operations respect setoid equality.
+need for proofs that the relations and operations respect setoid equality.
 Instead, we will define setoid equality in a generic way as
 [λ X Y, X ⊆ Y ∧ Y ⊆ X]. *)
-Class BoundedJoinSemiLattice A `{Empty A} `{SubsetEq A} `{Union A} := {
+Class BoundedJoinSemiLattice A `{Empty A} `{SubsetEq A} `{Union A} : Prop := {
   bjsl_preorder :>> BoundedPreOrder A;
-  subseteq_union_l x y : x ⊆ x ∪ y;
-  subseteq_union_r x y : y ⊆ x ∪ y;
+  union_subseteq_l x y : x ⊆ x ∪ y;
+  union_subseteq_r x y : y ⊆ x ∪ y;
   union_least x y z : x ⊆ z → y ⊆ z → x ∪ y ⊆ z
 }.
-Class MeetSemiLattice A `{Empty A} `{SubsetEq A} `{Intersection A} := {
+Class MeetSemiLattice A `{Empty A} `{SubsetEq A} `{Intersection A} : Prop := {
   msl_preorder :>> BoundedPreOrder A;
-  subseteq_intersection_l x y : x ∩ y ⊆ x;
-  subseteq_intersection_r x y : x ∩ y ⊆ y;
+  intersection_subseteq_l x y : x ∩ y ⊆ x;
+  intersection_subseteq_r x y : x ∩ y ⊆ y;
   intersection_greatest x y z : z ⊆ x → z ⊆ y → z ⊆ x ∩ y
 }.
+
+(** A join distributive lattice with distributivity stated in the order
+theoretic way. We will prove that distributivity of join, and distributivity
+as an equality can be derived. *)
 Class LowerBoundedLattice A `{Empty A} `{SubsetEq A}
-    `{Union A} `{Intersection A} := {
+    `{Union A} `{Intersection A} : Prop := {
   lbl_bjsl :>> BoundedJoinSemiLattice A;
-  lbl_msl :>> MeetSemiLattice A
+  lbl_msl :>> MeetSemiLattice A;
+  lbl_distr x y z : (x ∪ y) ∩ (x ∪ z) ⊆ x ∪ (y ∩ z)
 }.
+
 (** ** Axiomatization of collections *)
 (** The class [SimpleCollection A C] axiomatizes a collection of type [C] with
 elements of type [A]. *)
 Instance: Params (@map) 3.
 Class SimpleCollection A C `{ElemOf A C}
-  `{Empty C} `{Singleton A C} `{Union C} := {
+    `{Empty C} `{Singleton A C} `{Union C} : Prop := {
   not_elem_of_empty (x : A) : x ∉ ∅;
   elem_of_singleton (x y : A) : x ∈ {[ y ]} ↔ x = y;
   elem_of_union X Y (x : A) : x ∈ X ∪ Y ↔ x ∈ X ∨ x ∈ Y
 }.
 Class Collection A C `{ElemOf A C} `{Empty C} `{Singleton A C}
-    `{Union C} `{Intersection C} `{Difference C} `{IntersectionWith A C} := {
+    `{Union C} `{Intersection C} `{Difference C} : Prop := {
   collection_simple :>> SimpleCollection A C;
   elem_of_intersection X Y (x : A) : x ∈ X ∩ Y ↔ x ∈ X ∧ x ∈ Y;
-  elem_of_difference X Y (x : A) : x ∈ X ∖ Y ↔ x ∈ X ∧ x ∉ Y;
+  elem_of_difference X Y (x : A) : x ∈ X ∖ Y ↔ x ∈ X ∧ x ∉ Y
+}.
+Class CollectionOps A C
+    `{ElemOf A C} `{Empty C} `{Singleton A C}
+    `{Union C} `{Intersection C} `{Difference C}
+    `{IntersectionWith A C} `{Filter A C} : Prop := {
+  collection_ops :>> Collection A C;
   elem_of_intersection_with (f : A → A → option A) X Y (x : A) :
-    x ∈ intersection_with f X Y ↔ ∃ x1 x2, x1 ∈ X ∧ x2 ∈ Y ∧ f x1 x2 = Some x
+    x ∈ intersection_with f X Y ↔ ∃ x1 x2, x1 ∈ X ∧ x2 ∈ Y ∧ f x1 x2 = Some x;
+  elem_of_filter X P `{∀ x, Decision (P x)} x :
+    x ∈ filter P X ↔ P x ∧ x ∈ X
 }.
 
 (** We axiomative a finite collection as a collection whose elements can be
@@ -559,11 +616,9 @@ Inductive NoDup {A} : list A → Prop :=
 (** Decidability of equality of the carrier set is admissible, but we add it
 anyway so as to avoid cycles in type class search. *)
 Class FinCollection A C `{ElemOf A C} `{Empty C} `{Singleton A C}
-    `{Union C} `{Intersection C} `{Difference C} `{IntersectionWith A C}
-    `{Filter A C} `{Elements A C} `{∀ x y : A, Decision (x = y)} := {
+    `{Union C} `{Intersection C} `{Difference C}
+    `{Elements A C} `{∀ x y : A, Decision (x = y)} : Prop := {
   fin_collection :>> Collection A C;
-  elem_of_filter X P `{∀ x, Decision (P x)} x :
-    x ∈ filter P X ↔ P x ∧ x ∈ X;
   elements_spec X x : x ∈ X ↔ x ∈ elements X;
   elements_nodup X : NoDup (elements X)
 }.
@@ -581,7 +636,7 @@ decidability of equality, or a total order on the elements, which do not fit
 in a type constructor of type [Type → Type]. *)
 Class CollectionMonad M `{∀ A, ElemOf A (M A)}
     `{∀ A, Empty (M A)} `{∀ A, Singleton A (M A)} `{∀ A, Union (M A)}
-    `{!MBind M} `{!MRet M} `{!FMap M} `{!MJoin M} := {
+    `{!MBind M} `{!MRet M} `{!FMap M} `{!MJoin M} : Prop := {
   collection_monad_simple A :> SimpleCollection A (M A);
   elem_of_bind {A B} (f : A → M B) (X : M A) (x : B) :
     x ∈ X ≫= f ↔ ∃ y, x ∈ f y ∧ y ∈ X;
@@ -599,7 +654,7 @@ equality on collections. *)
 Class Fresh A C := fresh: C → A.
 Instance: Params (@fresh) 3.
 Class FreshSpec A C `{ElemOf A C}
-    `{Empty C} `{Singleton A C} `{Union C} `{Fresh A C} := {
+    `{Empty C} `{Singleton A C} `{Union C} `{Fresh A C} : Prop := {
   fresh_collection_simple :>> SimpleCollection A C;
   fresh_proper_alt X Y : (∀ x, x ∈ X ↔ x ∈ Y) → fresh X = fresh Y;
   is_fresh (X : C) : fresh X ∉ X
@@ -609,7 +664,9 @@ Class FreshSpec A C `{ElemOf A C}
 Lemma proj1_sig_inj {A} (P : A → Prop) x (Px : P x) y (Py : P y) :
   x↾Px = y↾Py → x = y.
 Proof. injection 1; trivial. Qed.
-
+Lemma not_symmetry `{R : relation A} `{!Symmetric R} (x y : A) :
+  ¬R x y → ¬R y x.
+Proof. intuition. Qed.
 Lemma symmetry_iff `(R : relation A) `{!Symmetric R} (x y : A) :
   R x y ↔ R y x.
 Proof. intuition. Qed.
@@ -700,6 +757,12 @@ Instance left_id_propholds {A} (R : relation A) i f :
 Proof. red. trivial. Qed.
 Instance right_id_propholds {A} (R : relation A) i f :
   RightId R i f → ∀ x, PropHolds (R (f x i) x).
+Proof. red. trivial. Qed.
+Instance left_absorb_propholds {A} (R : relation A) i f :
+  LeftAbsorb R i f → ∀ x, PropHolds (R (f i x) i).
+Proof. red. trivial. Qed.
+Instance right_absorb_propholds {A} (R : relation A) i f :
+  RightAbsorb R i f → ∀ x, PropHolds (R (f x i) i).
 Proof. red. trivial. Qed.
 Instance idem_propholds {A} (R : relation A) f :
   Idempotent R f → ∀ x, PropHolds (R (f x x) x).

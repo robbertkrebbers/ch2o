@@ -1,4 +1,4 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** The small step reduction (as defined in the file [smallstep]) is a binary
 relation between execution states. In this file we define execution states, of
@@ -19,7 +19,7 @@ For statically correct programs (i.e. those where all function names have a
 corresponding body, labels for gotos exist, etc) the reduction semantics should
 not get stuck, but might still end up in a state of undefined behavior. *)
 
-Require Export statements.
+Require Export statements memory.
 
 (** * Definitions *)
 (** Execution of statements occurs by traversal through the program context in
@@ -93,7 +93,9 @@ execution state [state] equips a focus with a program context and memory.
   statement to be executed and the direction in which traversal should be
   performed.
 - The focus [Expr] is used for expressions and contains the whole expression
-  that is being executed.
+  that is being executed. Notice that this constructor does not contain the set
+  of locked locations due to sequenced writes, these are contained more
+  structurally in the expression itself.
 - The focus [Call] is used to call a function, it contains the name of the
   called function and the values of the arguments.
 - The focus [Return] is used to return from the called function to the calling
@@ -119,3 +121,10 @@ Instance focus_eq_dec (φ1 φ2 : focus) : Decision (φ1 = φ2).
 Proof. solve_decision. Defined.
 Instance state_eq_dec (S1 S2 : state) : Decision (S1 = S2).
 Proof. solve_decision. Defined.
+
+Instance focus_locks: Locks focus := λ φ,
+  match φ with
+  | Stmt _ s => locks s
+  | Expr e => locks e
+  | _ => ∅
+  end.

@@ -1,4 +1,4 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects general purpose definitions and theorems on vectors
 (lists of fixed length) and the fin type (bounded naturals). It uses the
@@ -132,6 +132,14 @@ Proof. apply vcons_inj. Qed.
 Lemma vcons_inj_2 {A n} x y (v w : vec A n) : x ::: v = y ::: w → v = w.
 Proof. apply vcons_inj. Qed.
 
+Lemma vec_eq {A n} (v w : vec A n) :
+  (∀ i, v !!! i = w !!! i) → v = w.
+Proof.
+  vec_double_ind v w; [done|]. intros n v w IH x y Hi. f_equal.
+  * apply (Hi 0%fin).
+  * apply IH. intros i. apply (Hi (FS i)).
+Qed.
+
 Instance vec_dec {A} {dec : ∀ x y : A, Decision (x = y)} {n} :
   ∀ v w : vec A n, Decision (v = w).
 Proof.
@@ -204,6 +212,9 @@ Proof. by induction l; simpl; f_equal. Qed.
 
 Lemma vec_to_list_length {A n} (v : vec A n) : length (vec_to_list v) = n.
 Proof. induction v; simpl; by f_equal. Qed.
+Lemma vec_to_list_same_length {A B n} (v : vec A n) (w : vec B n) :
+  same_length v w.
+Proof. apply same_length_length. by rewrite !vec_to_list_length. Qed.
 
 Lemma vec_to_list_inj1 {A n m} (v : vec A n) (w : vec A m) :
   vec_to_list v = vec_to_list w → n = m.
@@ -234,8 +245,7 @@ Proof.
   rewrite <-(vec_to_list_of_list l), <-(vec_to_list_of_list k) in H.
   rewrite <-vec_to_list_cons, <-vec_to_list_app in H.
   pose proof (vec_to_list_inj1 _ _ H); subst.
-  apply vec_to_list_inj2 in H; subst.
-  induction l. simpl.
+  apply vec_to_list_inj2 in H; subst. induction l. simpl.
   * eexists 0%fin. simpl. by rewrite vec_to_list_of_list.
   * destruct IHl as [i ?]. exists (FS i). simpl. intuition congruence.
 Qed.
@@ -300,7 +310,7 @@ Proof.
       constructor. apply (H 0%fin). apply IH, (λ i, H (FS i)).
 Qed.
 
-(** The function [vmap f v] applies a function [f] element wise to [v]. *)
+(** The function [vmap f v] applies a funlocks (mem_unlock (⋃ Ωs) (⋃ ms)) ≡ ∅ction [f] element wise to [v]. *)
 Notation vmap := Vector.map.
 
 Lemma vlookup_map `(f : A → B) {n} (v : vec A n) i :
@@ -315,9 +325,19 @@ Proof. induction v; simpl. done. by rewrite IHv. Qed.
 wise using the function [f]. *)
 Notation vzip_with := Vector.map2.
 
-Lemma vzip_with_lookup `(f : A → B → C) {n} (v1 : vec A n) (v2 : vec B n) i :
+Lemma vlookup_zip_with `(f : A → B → C) {n} (v1 : vec A n) (v2 : vec B n) i :
   vzip_with f v1 v2 !!! i = f (v1 !!! i) (v2 !!! i).
 Proof. by apply Vector.nth_map2. Qed.
+
+Lemma vec_to_list_zip_with `(f : A → B → C) {n}
+    (v1 : vec A n) (v2 : vec B n) :
+  vec_to_list (vzip_with f v1 v2) =
+    zip_with f (vec_to_list v1) (vec_to_list v2).
+Proof.
+  revert v2. induction v1; intros v2; inv_vec v2; intros; simpl.
+  * done.
+  * by rewrite IHv1.
+Qed.
 
 (** Similar to vlookup, we cannot define [vinsert] as an instance of the
 [Insert] type class, as it has a dependent type. *)

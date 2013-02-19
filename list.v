@@ -1,10 +1,10 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects general purpose definitions and theorems on lists that
 are not in the Coq standard library. *)
 
 Require Import Permutation.
-Require Export base decidable option numbers.
+Require Export numbers base decidable option.
 
 Arguments length {_} _.
 Arguments cons {_} _ _.
@@ -65,7 +65,7 @@ Instance list_insert {A} : Insert nat A (list A) := λ i x,
   alter (λ _, x) i.
 
 (** The function [option_list] converts an element of the option type into
-a list. *)
+the empty list or a singleton list. *)
 Definition option_list {A} : option A → list A := option_rect _ (λ x, [x]) [].
 
 (** The function [filter P l] returns the list of elements of [l] that
@@ -107,32 +107,42 @@ Arguments resize {_} !_ _ !_.
 
 (** The predicate [suffix_of] holds if the first list is a suffix of the second.
 The predicate [prefix_of] holds if the first list is a prefix of the second. *)
-Definition suffix_of {A} (l1 l2 : list A) : Prop := ∃ k, l2 = k ++ l1.
-Definition prefix_of {A} (l1 l2 : list A) : Prop := ∃ k, l2 = l1 ++ k.
-Definition max_prefix_of `{∀ x y : A, Decision (x = y)} :
-    list A → list A → list A * list A * list A :=
-  fix go l1 l2 :=
-  match l1, l2 with
-  | [], l2 => ([], l2, [])
-  | l1, [] => (l1, [], [])
-  | x1 :: l1, x2 :: l2 =>
-     if decide_rel (=) x1 x2
-     then snd_map (x1 ::) (go l1 l2)
-     else (x1 :: l1, x2 :: l2, [])
-  end.
-Definition max_suffix_of `{∀ x y : A, Decision (x = y)} (l1 l2 : list A) :
-    list A * list A * list A :=
-  match max_prefix_of (reverse l1) (reverse l2) with
-  | (k1, k2, k3) => (reverse k1, reverse k2, reverse k3)
-  end.
+Definition suffix_of {A} : relation (list A) := λ l1 l2, ∃ k, l2 = k ++ l1.
+Definition prefix_of {A} : relation (list A) := λ l1 l2, ∃ k, l2 = l1 ++ k.
+
+Section prefix_suffix_ops.
+  Context `{∀ x y : A, Decision (x = y)}.
+
+  Definition max_prefix_of : list A → list A → list A * list A * list A :=
+    fix go l1 l2 :=
+    match l1, l2 with
+    | [], l2 => ([], l2, [])
+    | l1, [] => (l1, [], [])
+    | x1 :: l1, x2 :: l2 =>
+       if decide_rel (=) x1 x2
+       then snd_map (x1 ::) (go l1 l2)
+       else (x1 :: l1, x2 :: l2, [])
+    end.
+  Definition max_suffix_of (l1 l2 : list A) : list A * list A * list A :=
+    match max_prefix_of (reverse l1) (reverse l2) with
+    | (k1, k2, k3) => (reverse k1, reverse k2, reverse k3)
+    end.
+
+  Definition strip_prefix (l1 l2 : list A) := snd $ fst $ max_prefix_of l1 l2.
+  Definition strip_suffix (l1 l2 : list A) := snd $ fst $ max_suffix_of l1 l2.
+End prefix_suffix_ops.
+
+(** A list [l1] is a sub list of [l2] if [l2] is obtained by removing elements
+from [l1] without changing the order. *)
+Inductive sublist {A} : relation (list A) :=
+  | sublist_nil : sublist [] []
+  | sublist_cons x l1 l2 : sublist l1 l2 → sublist (x :: l1) (x :: l2)
+  | sublist_cons_skip x l1 l2 : sublist l1 l2 → sublist l1 (x :: l2).
 
 (** * Tactics on lists *)
-Lemma cons_inv {A} (l1 l2 : list A) x1 x2 :
-  x1 :: l1 = x2 :: l2 → x1 = x2 ∧ l1 = l2.
-Proof. by injection 1. Qed.
-
-(** The tactic [discriminate_list_equality] discharges goals containing
-invalid list equalities as an assumption. *)
+(** The tactic [discriminate_list_equality] discharges a goal if it contains
+a list equality involving [(::)] and [(++)] of two lists that have a different
+length as one of its hypotheses. *)
 Tactic Notation "discriminate_list_equality" hyp(H) :=
   apply (f_equal length) in H;
   repeat (simpl in H || rewrite app_length in H);
@@ -140,8 +150,13 @@ Tactic Notation "discriminate_list_equality" hyp(H) :=
 Tactic Notation "discriminate_list_equality" :=
   solve [repeat_on_hyps (fun H => discriminate_list_equality H)].
 
-(** The tactic [simplify_list_equality] simplifies assumptions involving
-equalities on lists. *)
+(** The tactic [simplify_list_equality] simplifies hypotheses involving
+equalities on lists using injectivity of [(::)] and [(++)]. Also, it simplifies
+lookups in singleton lists. *)
+Lemma cons_inv {A} (l1 l2 : list A) x1 x2 :
+  x1 :: l1 = x2 :: l2 → x1 = x2 ∧ l1 = l2.
+Proof. by injection 1. Qed.
+
 Ltac simplify_list_equality := repeat
   match goal with
   | H : _ :: _ = _ :: _ |- _ =>
@@ -181,7 +196,7 @@ Lemma app_inj (l1 k1 l2 k2 : list A) :
   l1 ++ l2 = k1 ++ k2 → l1 = k1 ∧ l2 = k2.
 Proof. revert k1. induction l1; intros [|??]; naive_solver. Qed.
 
-Lemma list_eq (l1 l2 : list A) : (∀ i, l1 !! i = l2 !! i) → l1 = l2.
+Lemma list_eq (l1 l2 : list A) : (∀ i, l1 !! i = l2 !! i)%C → l1 = l2.
 Proof.
   revert l2. induction l1; intros [|??] H.
   * done.
@@ -195,7 +210,8 @@ Proof. intros. by apply list_eq. Qed.
 
 Global Instance list_eq_dec {dec : ∀ x y : A, Decision (x = y)} : ∀ l k,
   Decision (l = k) := list_eq_dec dec.
-Definition list_singleton_dec (l : list A) : { x | l = [x] } + { length l ≠ 1 }.
+Definition list_singleton_dec (l : list A) :
+  { x | l = [x] } + { length l ≠ 1 }.
 Proof.
  by refine (
   match l with
@@ -203,6 +219,9 @@ Proof.
   | _ => inright _
   end).
 Defined.
+
+Global Instance: Proper (Permutation ==> (=)) (@length A).
+Proof. induction 1; simpl; auto with lia. Qed.
 
 Lemma nil_or_length_pos (l : list A) : l = [] ∨ length l ≠ 0.
 Proof. destruct l; simpl; auto with lia. Qed.
@@ -374,6 +393,10 @@ Proof. apply alter_app_r_alt. Qed.
 Lemma insert_consecutive_length (l : list A) i k :
   length (insert_consecutive i k l) = length l.
 Proof. revert i. by induction k; intros; simpl; rewrite ?insert_length. Qed.
+
+Lemma delete_middle (l1 l2 : list A) x :
+  delete (length l1) (l1 ++ x :: l2) = l1 ++ l2.
+Proof. induction l1; simpl; f_equal; auto. Qed.
 
 Lemma not_elem_of_nil (x : A) : x ∉ [].
 Proof. by inversion 1. Qed.
@@ -566,7 +589,7 @@ Proof. unfold reverse. rewrite <-!rev_alt. apply rev_app_distr. Qed.
 Lemma reverse_length (l : list A) : length (reverse l) = length l.
 Proof. unfold reverse. rewrite <-!rev_alt. apply rev_length. Qed.
 Lemma reverse_involutive (l : list A) : reverse (reverse l) = l.
-Proof. unfold reverse. rewrite <-!rev_alt. apply rev_involutive. Qed. 
+Proof. unfold reverse. rewrite <-!rev_alt. apply rev_involutive. Qed.
 
 Lemma take_nil n :
   take n (@nil A) = [].
@@ -840,6 +863,136 @@ Lemma drop_resize_plus (l : list A) n m x :
   drop n (resize (n + m) x l) = resize m x (drop n l).
 Proof. rewrite drop_resize_le by lia. f_equal. lia. Qed.
 
+Lemma delete_take_drop (l : list A) i :
+  delete i l = take i l ++ drop (S i) l.
+Proof. revert i. induction l; intros [|?]; simpl; auto using f_equal. Qed.
+
+Lemma sublist_nil_l (l : list A) :
+  sublist [] l.
+Proof. induction l; try constructor; auto. Qed.
+Lemma sublist_nil_r (l : list A) :
+  sublist l [] ↔ l = [].
+Proof. split. by inversion 1. intros. subst. constructor. Qed.
+
+Lemma sublist_app_skip_l (k : list A) l1 l2 :
+  sublist l1 l2 →
+  sublist l1 (k ++ l2).
+Proof. induction k; try constructor; auto. Qed.
+Lemma sublist_app_skip_r (k : list A) l1 l2 :
+  sublist l1 l2 →
+  sublist l1 (l2 ++ k).
+Proof. induction 1; simpl; try constructor; auto using sublist_nil_l. Qed.
+
+Lemma sublist_cons_r (x : A) l k :
+  sublist l (x :: k) ↔ sublist l k ∨ ∃ l', l = x :: l' ∧ sublist l' k.
+Proof.
+  split.
+  * inversion 1; eauto.
+  * intros [?|(?&?&?)]; subst; constructor; auto.
+Qed.
+Lemma sublist_cons_l (x : A) l k :
+  sublist (x :: l) k ↔ ∃ k1 k2, k = k1 ++ x :: k2 ∧ sublist l k2.
+Proof.
+  split.
+  * intros Hlk. induction k as [|y k IH]; inversion Hlk.
+    + eexists [], k. by repeat constructor.
+    + destruct IH as (k1 & k2 & ? & ?); subst; auto.
+      by exists (y :: k1) k2.
+  * intros (k1 & k2 & ? & ?). subst.
+    by apply sublist_app_skip_l, sublist_cons.
+Qed.
+
+Lemma sublist_app_compat (l1 l2 k1 k2 : list A) :
+  sublist l1 l2 → sublist k1 k2 →
+  sublist (l1 ++ k1) (l2 ++ k2).
+Proof. induction 1; simpl; try constructor; auto. Qed.
+
+Lemma sublist_app_r (l k1 k2 : list A) :
+  sublist l (k1 ++ k2) ↔ ∃ l1 l2,
+    l = l1 ++ l2 ∧ sublist l1 k1 ∧ sublist l2 k2.
+Proof.
+  split.
+  * revert l k2. induction k1 as [|y k1 IH]; intros l k2; simpl.
+    { eexists [], l. by repeat constructor. }
+    rewrite sublist_cons_r. intros [?|(l' & ? &?)]; subst.
+    + destruct (IH l k2) as (l1&l2&?&?&?); trivial; subst.
+      exists l1 l2. auto using sublist_cons_skip.
+    + destruct (IH l' k2) as (l1&l2&?&?&?); trivial; subst.
+      exists (y :: l1) l2. auto using sublist_cons.
+  * intros (?&?&?&?&?); subst. auto using sublist_app_compat.
+Qed.
+Lemma sublist_app_l (l1 l2 k : list A) :
+  sublist (l1 ++ l2) k ↔ ∃ k1 k2,
+    k = k1 ++ k2 ∧ sublist l1 k1 ∧ sublist l2 k2.
+Proof.
+  split.
+  * revert l2 k. induction l1 as [|x l1 IH]; intros l2 k; simpl.
+    { eexists [], k. by repeat constructor. }
+    rewrite sublist_cons_l. intros (k1 & k2 &?&?); subst.
+    destruct (IH l2 k2) as (h1 & h2 &?&?&?); trivial; subst.
+    exists (k1 ++ x :: h1) h2. rewrite <-(associative (++)).
+    auto using sublist_app_skip_l, sublist_cons.
+  * intros (?&?&?&?&?); subst. auto using sublist_app_compat.
+Qed.
+
+Global Instance: PreOrder (@sublist A).
+Proof.
+  split.
+  * intros l. induction l; constructor; auto.
+  * intros l1 l2 l3 Hl12. revert l3. induction Hl12.
+    + auto using sublist_nil_l.
+    + intros ?. rewrite sublist_cons_l. intros (?&?&?&?); subst.
+      eauto using sublist_app_skip_l, sublist_cons.
+    + intros ?. rewrite sublist_cons_l. intros (?&?&?&?); subst.
+      eauto using sublist_app_skip_l, sublist_cons_skip.
+Qed.
+
+Lemma sublist_length (l1 l2 : list A) :
+  sublist l1 l2 → length l1 ≤ length l2.
+Proof. induction 1; simpl; auto with arith. Qed.
+
+Lemma sublist_take (l : list A) i :
+  sublist (take i l) l.
+Proof. rewrite <-(take_drop i l) at 2. by apply sublist_app_skip_r. Qed.
+Lemma sublist_drop (l : list A) i :
+  sublist (drop i l) l.
+Proof. rewrite <-(take_drop i l) at 2. by apply sublist_app_skip_l. Qed.
+Lemma sublist_delete (l : list A) i :
+  sublist (delete i l) l.
+Proof. revert i. by induction l; intros [|?]; simpl; constructor. Qed.
+Lemma sublist_delete_list (l : list A) is :
+  sublist (delete_list is l) l.
+Proof.
+  induction is as [|i is IH]; simpl; [done |].
+  transitivity (delete_list is l); auto using sublist_delete.
+Qed.
+
+Lemma sublist_alt (l1 l2 : list A) :
+  sublist l1 l2 ↔ ∃ is, l1 = delete_list is l2.
+Proof.
+  split.
+  * intros Hl12.
+    cut (∀ k, ∃ is, k ++ l1 = delete_list is (k ++ l2)).
+    { intros help. apply (help []). }
+    induction Hl12 as [|x l1 l2 _ IH|x l1 l2 _ IH]; intros k.
+    + by eexists [].
+    + destruct (IH (k ++ [x])) as [is His]. exists is.
+      by rewrite <-!(associative (++)) in His.
+    + destruct (IH k) as [is His]. exists (is ++ [length k]).
+      unfold delete_list. rewrite fold_right_app. simpl.
+      by rewrite delete_middle.
+  * intros [is ?]. subst. apply sublist_delete_list.
+Qed.
+
+Global Instance: AntiSymmetric (@sublist A).
+Proof.
+  intros l1 l2 Hl12 Hl21. apply sublist_length in Hl21.
+  induction Hl12; simpl in *.
+  * done.
+  * f_equal. auto with arith.
+  * apply sublist_length in Hl12. lia.
+Qed.
+
 Section Forall_Exists.
   Context (P : A → Prop).
 
@@ -872,6 +1025,15 @@ Section Forall_Exists.
   Lemma Forall_impl l (Q : A → Prop) :
     Forall P l → (∀ x, P x → Q x) → Forall Q l.
   Proof. intros H ?. induction H; auto. Defined.
+
+  Global Instance Forall_proper:
+    Proper (pointwise_relation _ (↔) ==> (=) ==> (↔)) (@Forall A).
+  Proof. split; subst; induction 1; constructor; firstorder. Qed.
+
+  Lemma Forall_iff l (Q : A → Prop) :
+    (∀ x, P x ↔ Q x) →
+    Forall P l ↔ Forall Q l.
+  Proof. intros H. apply Forall_proper. red. apply H. done. Qed.
 
   Lemma Forall_delete l i : Forall P l → Forall P (delete i l).
   Proof.
@@ -910,7 +1072,7 @@ Section Forall_Exists.
     split.
     * induction 1 as [x|y ?? IH].
       + exists x. split. constructor. done.
-      + destruct IH as [x [??]]. exists x. split. by constructor. done. 
+      + destruct IH as [x [??]]. exists x. split. by constructor. done.
     * intros [x [Hin ?]]. induction l.
       + by destruct (not_elem_of_nil x).
       + inversion Hin; subst. by left. right; auto.
@@ -923,8 +1085,12 @@ Section Forall_Exists.
     * induction l1; inversion 1; intuition.
     * intros [H|H].
       + induction H; simpl; intuition.
-      + induction l1; simpl; intuition. 
+      + induction l1; simpl; intuition.
   Qed.
+
+  Global Instance Exists_proper:
+    Proper (pointwise_relation _ (↔) ==> (=) ==> (↔)) (@Exists A).
+  Proof. split; subst; (induction 1; [left|right]; firstorder auto). Qed.
 
   Lemma Exists_not_Forall l : Exists (not ∘ P) l → ¬Forall P l.
   Proof. induction 1; inversion_clear 1; contradiction. Qed.
@@ -1083,6 +1249,14 @@ Section Forall2.
   Proof.
     intros Hl. revert i.
     induction Hl; simpl; intros [|i]; constructor; auto.
+  Qed.
+
+  Lemma Forall2_delete l1 l2 i :
+    Forall2 P l1 l2 →
+    Forall2 P (delete i l1) (delete i l2).
+  Proof.
+    intros Hl12. revert i.
+    induction Hl12; intros [|i]; simpl; intuition.
   Qed.
 
   Lemma Forall2_replicate_l l n x :
@@ -1301,7 +1475,7 @@ Section prefix_postfix.
       end
     end.
 
-  Section max_prefix_of.
+  Section prefix_ops.
     Context `{∀ x y : A, Decision (x = y)}.
 
     Lemma max_prefix_of_fst (l1 l2 : list A) :
@@ -1372,7 +1546,7 @@ Section prefix_postfix.
       * rewrite (max_prefix_of_snd_alt _ _ _ _ _ Hl).
         apply prefix_of_app, prefix_of_cons, prefix_of_nil.
     Qed.
-  End max_prefix_of.
+  End prefix_ops.
 
   Lemma prefix_suffix_reverse (l1 l2 : list A) :
     prefix_of l1 l2 ↔ suffix_of (reverse l1) (reverse l2).
@@ -1397,7 +1571,7 @@ Section prefix_postfix.
   Lemma suffix_of_snoc_alt x y (l1 l2 : list A) :
     x = y → suffix_of l1 l2 → suffix_of (l1 ++ [x]) (l2 ++ [y]).
   Proof. intro. subst. apply suffix_of_snoc. Qed.
- 
+
   Lemma suffix_of_app (l1 l2 k : list A) :
     suffix_of l1 l2 → suffix_of (l1 ++ k) (l2 ++ k).
   Proof. intros [k' E]. exists k'. subst. by rewrite (associative (++)). Qed.
@@ -1666,12 +1840,18 @@ Section list_fmap.
     f <$> k = [] → k = [].
   Proof. by destruct k. Qed.
   Lemma fmap_cons_inv y l k :
-    f <$> l = y :: k → ∃ x l',
-      y = f x ∧ k = f <$> l' ∧ l = x :: l'.
+    f <$> l = y :: k →
+    ∃ x l',
+      y = f x ∧
+      k = f <$> l' ∧
+      l = x :: l'.
   Proof. intros. destruct l; simpl; simplify_equality; eauto. Qed.
   Lemma fmap_app_inv l k1 k2 :
-    f <$> l = k1 ++ k2 → ∃ l1 l2,
-      k1 = f <$> l1 ∧ k2 = f <$> l2 ∧ l = l1 ++ l2.
+    f <$> l = k1 ++ k2 →
+    ∃ l1 l2,
+      k1 = f <$> l1 ∧
+      k2 = f <$> l2 ∧
+      l = l1 ++ l2.
   Proof.
     revert l. induction k1 as [|y k1 IH]; simpl.
     * intros l ?. by eexists [], l.
@@ -1699,7 +1879,7 @@ Section list_fmap.
     intros Hi. rewrite list_lookup_fmap in Hi.
     destruct (l !! i) eqn:?; simplify_equality; eauto.
   Qed.
-   
+
   Lemma list_alter_fmap (g : A → A) (h : B → B) l i :
     Forall (λ x, f (g x) = h (f x)) l →
     f <$> alter g i l = alter h i (f <$> l).
@@ -1931,10 +2111,10 @@ Ltac simplify_list_fmap_equality := repeat
   | H : _ <$> _ = [] |- _ => apply fmap_nil_inv in H
   | H : [] = _ <$> _ |- _ => symmetry in H; apply fmap_nil_inv in H
   | H : _ <$> _ = _ :: _ |- _ =>
-    apply fmap_cons_inv in H; destruct H as (?&?&?&?&?)
+     apply fmap_cons_inv in H; destruct H as (?&?&?&?&?)
   | H : _ :: _ = _ <$> _ |- _ => symmetry in H
   | H : _ <$> _ = _ ++ _ |- _ =>
-    apply fmap_app_inv in H; destruct H as (?&?&?&?&?)
+     apply fmap_app_inv in H; destruct H as (?&?&?&?&?)
   | H : _ ++ _ = _ <$> _ |- _ => symmetry in H
   end.
 
@@ -2036,6 +2216,47 @@ Definition zip_with {A B C} (f : A → B → C) : list A → list B → list C :
 Section zip_with.
   Context {A B C : Type} (f : A → B → C).
 
+  Lemma zip_with_nil_inv l1 l2 :
+    zip_with f l1 l2 = [] → l1 = [] ∨ l2 = [].
+  Proof. destruct l1, l2; simpl; auto with congruence. Qed.
+  Lemma zip_with_cons_inv y l1 l2 k :
+    zip_with f l1 l2 = y :: k →
+    ∃ x1 x2 l1' l2',
+      y = f x1 x2 ∧
+      k = zip_with f l1' l2' ∧
+      l1 = x1 :: l1' ∧
+      l2 = x2 :: l2'.
+  Proof.
+    intros. destruct l1, l2; simpl; simplify_equality; repeat eexists.
+  Qed.
+  Lemma zip_with_app_inv l1 l2 k' k'' :
+    zip_with f l1 l2 = k' ++ k'' →
+    ∃ l1' l1'' l2' l2'',
+      k' = zip_with f l1' l2' ∧
+      k'' = zip_with f l1'' l2'' ∧
+      l1 = l1' ++ l1'' ∧
+      l2 = l2' ++ l2''.
+  Proof.
+    revert l1 l2. induction k' as [|y k' IH]; simpl.
+    * intros l1 l2 ?. by eexists [], l1, [], l2.
+    * intros [|x1 l1] [|x2 l2] ?; simpl; simplify_equality.
+      destruct (IH l1 l2) as (l1' & l1'' & l2' & l2'' &?&?&?&?);
+        subst; [done |].
+      by exists (x1 :: l1') l1'' (x2 :: l2') l2''.
+  Qed.
+
+  Lemma zip_with_inj l1 l2 k1 k2 :
+    (∀ x1 x2 y1 y2, f x1 x2 = f y1 y2 → x1 = y1 ∧ x2 = y2) →
+    same_length l1 l2 →
+    same_length k1 k2 →
+    zip_with f l1 l2 = zip_with f k1 k2 →
+    l1 = k1 ∧ l2 = k2.
+  Proof.
+    intros ? Hl. revert k1 k2.
+    induction Hl; intros ?? [] ?; simpl;
+      simplify_equality; f_equal; naive_solver.
+  Qed.
+
   Lemma zip_with_length l1 l2 :
     length l1 ≤ length l2 →
     length (zip_with f l1 l2) = length l1.
@@ -2116,6 +2337,21 @@ Section zip.
     same_length l1 l2 → snd <$> zip l1 l2 = l2.
   Proof. by apply zip_with_fmap_snd. Qed.
 End zip.
+
+Ltac simplify_zip_equality := repeat
+  match goal with
+  | _ => progress simplify_equality
+  | H : zip_with _ _ _ = [] |- _ =>
+     apply zip_with_nil_inv in H; destruct H
+  | H : [] = zip_with _ _ _ |- _ =>
+     symmetry in H
+  | H : zip_with _ _ _ = _ :: _ |- _ =>
+    apply zip_with_cons_inv in H; destruct H as (?&?&?&?&?&?&?&?)
+  | H : _ :: _ = zip_with _ _ _ |- _ => symmetry in H
+  | H : zip_with _ _ _ = _ ++ _ |- _ =>
+     apply zip_with_app_inv in H; destruct H as (?&?&?&?&?&?&?&?)
+  | H : _ ++ _ = zip_with _ _ _ |- _ => symmetry in H
+  end.
 
 Definition zipped_map {A B} (f : list A → list A → A → B) :
     list A → list A → list B :=
@@ -2208,14 +2444,14 @@ Section permutations.
     * by apply elem_of_list_singleton.
     * apply elem_of_list_bind. eauto using interleave_cons.
   Qed.
-  Lemma permutations_skip (x : A) (l l' : list A) : 
+  Lemma permutations_skip (x : A) (l l' : list A) :
     l ∈ permutations l' →
     x :: l ∈ permutations (x :: l').
   Proof.
     intros Hl. simpl. apply elem_of_list_bind.
     eauto using interleave_cons.
   Qed.
-  Lemma permutations_swap (x y : A) (l : list A) : 
+  Lemma permutations_swap (x y : A) (l : list A) :
     y :: x :: l ∈ permutations (x :: y :: l).
   Proof.
     simpl. apply elem_of_list_bind.

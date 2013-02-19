@@ -1,4 +1,4 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** The small step reduction (as defined in the file [smallstep]) traverses
 through the program in small steps by moving the focus on the substatement
@@ -20,40 +20,70 @@ However, there are some notable differences.
 - Since the complete program is preserved, looping constructs (e.g. while and
   for) do not have to duplicate code.
 
-The fact that program contexts do not throw away the part of the statement
-that has been executed is essential for our treatment of goto. Upon an
-invocation of a goto, we will traverse through the program context until we
-have found the label. During this traversal we pass all block scope variables
-that went out of scope, allowing us to free all storage that needs to be freed
-in a natural way. *)
+The fact that program contexts do not throw away the parts of the statement
+that have been executed is essential for our treatment of goto. Upon an
+invocation of a goto, the semantics traverses through the program context until
+the corresponding label has been found. During this traversal it passes all
+block scope variables that went out of scope, allowing it to perform required
+allocations and deallocations in a natural way. Hence, the point of this
+traversal is not so much to search for the label, but much more to incrementally
+calculate the required allocations and deallocations. *)
 
-(** In a continuation semantics, upon a use of a goto, one has to reset the
-continuation to its calling state, look up the statement and continuation
-corresponding to the label, and then reconstruct which storage has to be
-allocated and freed *)
+(** In a continuation semantics, upon the use of a goto, one typically computes,
+or looks up, the statement and continuation corresponding to the target label.
+However, it is not very natural to reconstruct the required allocations and
+deallocations from the current and target continuations. *)
+
+Require Import nmap mapset.
 Require Export expressions.
 
 (** * Labels and gotos *)
 (** We use the type [N] of binary natural numbers for labels, and the
-implementation [Nmap] for efficient finite maps indexed by labels. We define
-type classes [Gotos] and [Labels] to collect the labels of gotos respectively
-those of labeled statements. *)
+implementation [Nmap] for efficient finite sets, and finite maps indexed by
+labels. We define type classes [Gotos] and [Labels] to collect the labels of
+gotos respectively the labels of labeled statements. *)
 Definition label := N.
-Class Gotos A := gotos: A → listset label.
+Definition labelmap := Nmap.
+Notation labelset := (mapset labelmap).
+
+Instance label_dec: ∀ i1 i2 : label, Decision (i1 = i2) := decide_rel (=).
+Instance label_fresh_`{FinCollection label C} : Fresh label C := _.
+Instance label_fresh_spec `{FinCollection label C} : FreshSpec label C := _.
+Instance label_inhabited: Inhabited label := populate 0%N.
+
+Instance labelmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
+  ∀ m1 m2 : labelmap A, Decision (m1 = m2) := decide_rel (=).
+Instance labelmap_empty {A} : Empty (labelmap A) := @empty (Nmap A) _.
+Instance labelmap_lookup {A} : Lookup label A (labelmap A) :=
+  @lookup _ _ (Nmap A) _.
+Instance labelmap_partial_alter {A} : PartialAlter label A (labelmap A) :=
+  @partial_alter _ _ (Nmap A) _.
+Instance labelmap_to_list {A} : FinMapToList label A (labelmap A) :=
+  @map_to_list _ _ (Nmap A) _.
+Instance labelmap_merge: Merge labelmap := @merge Nmap _.
+Instance labelmap_fmap: FMap labelmap := λ A B f, @fmap Nmap _ _ f _.
+Instance: FinMap label labelmap := _.
+
+Instance labelmap_dom {A} : Dom (labelmap A) labelset := mapset_dom.
+Instance: FinMapDom label labelmap labelset := mapset_dom_spec.
+
+Typeclasses Opaque label labelmap.
+
+Class Gotos A := gotos: A → labelset.
 Arguments gotos {_ _} !_ / : simpl nomatch.
-Class Labels A := labels: A → listset label.
+Class Labels A := labels: A → labelset.
 Arguments labels {_ _} !_ / : simpl nomatch.
 
 (** We lift instances of the above type classes to lists. *)
 Instance list_gotos `{Gotos A} : Gotos (list A) :=
-  fix go (l : list A) : listset label :=
+  fix go (l : list A) : labelset :=
   let _ : Gotos _ := @go in
   match l with
   | [] => ∅
   | a :: l => gotos a ∪ gotos l
   end.
 Instance list_labels `{Labels A} : Labels (list A) :=
-  fix go (l : list A) : listset label :=
+  fix go (l : list A) : labelset :=
   let _ : Labels _ := @go in
   match l with
   | [] => ∅
@@ -115,7 +145,7 @@ Instance: Injective (=) (=) SBlock.
 Proof. by injection 1. Qed.
 
 Instance stmt_gotos: Gotos stmt :=
-  fix go (s : stmt) : listset label :=
+  fix go (s : stmt) : labelset :=
   let _ : Gotos _ := @go in
   match s with
   | blk s => gotos s
@@ -127,7 +157,7 @@ Instance stmt_gotos: Gotos stmt :=
   | _ => ∅
   end.
 Instance stmt_labels: Labels stmt :=
-  fix go (s : stmt) : listset label :=
+  fix go (s : stmt) : labelset :=
   let _ : Labels _ := @go in
   match s with
   | blk s => labels s
@@ -136,6 +166,20 @@ Instance stmt_labels: Labels stmt :=
   | while (_) s => labels s
   | (IF _ then s1 else s2) => labels s1 ∪ labels s2
   | _ => ∅
+  end.
+Instance stmt_locks: Locks stmt :=
+  fix go (s : stmt) : indexset :=
+  let _ : Locks _ := @go in
+  match s with
+  | blk s => locks s
+  | s1 ;; s2 => locks s1 ∪ locks s2
+  | _ :; s => locks s
+  | while (e) s => locks e ∪ locks s
+  | (IF e then s1 else s2) => locks e ∪ locks s1 ∪ locks s2
+  | do e => locks e
+  | ret e => locks e
+  | skip => ∅
+  | goto _ => ∅
   end.
 
 (** * Program contexts *)
@@ -217,6 +261,20 @@ Proof.
   rewrite elem_of_union. by apply elem_of_sctx_item_labels.
 Qed.
 
+Instance sctx_item_locks: Locks sctx_item := λ E,
+  match E with
+  | □ ;; s2 => locks s2
+  | s1 ;; □ => locks s1
+  | l :; □ => ∅
+  | while (e) □ => locks e
+  | (IF e then □ else s2) => locks e ∪ locks s2
+  | (IF e then s1 else □) => locks e ∪ locks s1
+  end.
+
+Lemma sctx_item_subst_locks (E : sctx_item) s :
+  locks (subst E s) = locks E ∪ locks s.
+Proof. apply elem_of_equiv_L. destruct E; esolve_elem_of. Qed.
+
 (** Next, we define the data type [esctx_item] of expression in statement
 contexts. These contexts are used to store the statement to which an expression
 that is being executed belongs to. *)
@@ -248,29 +306,42 @@ Instance: DestructSubst esctx_item_subst.
 Instance: ∀ E : esctx_item, Injective (=) (=) (subst E).
 Proof. destruct E; intros ???; simpl in *; by simplify_equality. Qed.
 
+Instance esctx_item_locks: Locks esctx_item := λ E,
+  match E with
+  | do □ => ∅
+  | ret □ => ∅
+  | while (□) s => locks s
+  | (IF □ then s1 else s2) => locks s1 ∪ locks s2
+  end.
+
+Lemma esctx_item_subst_locks (E : esctx_item) e :
+  locks (subst E e) = locks E ∪ locks e.
+Proof. apply elem_of_equiv_L. destruct E; esolve_elem_of. Qed.
+
 (** Finally, we define the type [ctx_item] to extends [sctx_item] with some
 additional singular contexts. These contexts will be used as follows.
 
-- When entering a block, [block s], the context [CBlock b] is pushed on the
-  program context. It associates the block scope variable with its corresponding
-  memory index [b].
+- When entering a block, [block s], the context [CBlock b] is appended to the
+  head of the program context. It associates the block scope variable with its
+  corresponding memory index [b].
 - To execute a statement [subst E e] containing an expression [e], the context
-  [CExpr e E] is pushed on the program context. It stores the expression itself
-  and its location. This way, the expression is needed to restore the statement
-  when execution of the expression is finished, the location is needed to
-  determine what to do with the result of the expression.
-- Upon a function call, [subst E (call f @ vs)], the context [CCall E] is
-  pushed on the program context. It contains an expression context [E]
-  containing the expression that remains to be executed after the function call.
-- When a function body is entered, [CParams bs] is pushed on the program
-  context. It contains a list of memory indexes of the function parameters.
+  [CExpr e E] is appended to the head of the program context. It stores the
+  expression [e] itself and its location [E]. The expression itself is needed
+  to restore the statement when execution of the expression is finished. The
+  location is needed to determine what to do with the result of the expression.
+- Upon a function call, [subst E (call f @ vs)], the context [CFun E] is
+  appended to the head of the program context. It contains the location [E]
+  of the caller so that it can be restored when the called function [f] returns.
+- When a function body is entered, the context [CParams bs] is appended to the
+  head of the program context. It contains a list of memory indexes of the
+  function parameters.
 
 Program contexts [ctx] are then defined as lists of singular contexts. *)
 Inductive ctx_item : Type :=
   | CStmt : sctx_item → ctx_item
   | CBlock : index → ctx_item
   | CExpr : expr → esctx_item → ctx_item
-  | CCall : ectx → ctx_item
+  | CFun : ectx → ctx_item
   | CParams : list index → ctx_item.
 Notation ctx := (list ctx_item).
 
@@ -293,12 +364,21 @@ Proof.
   * by apply (injective SBlock).
 Qed.
 
+Instance ctx_item_locks: Locks ctx_item := λ E,
+  match E with
+  | CStmt s => locks s
+  | CBlock _ => ∅
+  | CExpr e E => locks e ∪ locks E
+  | CFun E => locks E
+  | CParams _ => ∅
+  end.
+
 Inductive ctx_item_or_block : ctx_item → Prop :=
   | ctx_item_or_block_item E : ctx_item_or_block (CStmt E)
   | ctx_item_or_block_block b : ctx_item_or_block (CBlock b).
 
 (** Given a context, we can construct a stack using the following erasure
-function. We define [get_stack (CCall _ :: k)] as [[]] instead of [getstack k],
+function. We define [get_stack (CFun _ :: k)] as [[]] instead of [getstack k],
 as otherwise it would be possible to refer to the local variables of the
 calling function. *)
 Fixpoint get_stack (k : ctx) : stack :=
@@ -307,7 +387,7 @@ Fixpoint get_stack (k : ctx) : stack :=
   | CStmt _ :: k => get_stack k
   | CExpr _ _ :: k => get_stack k
   | CBlock b :: k => b :: get_stack k
-  | CCall _ :: _ => []
+  | CFun _ :: _ => []
   | CParams bs :: k => bs ++ get_stack k
   end.
 

@@ -13,7 +13,7 @@
 <h1>The CH<sub>2</sub>O formalization</h1>
 <p><em>By <a href="http://robbertkrebbers.nl">Robbert Krebbers</a>, Radboud University Nijmegen</em></p>
 
-<p><strong>This is an ongoing development. If you are looking for the Coq sources corresponding to one of my papers, please look <a href="#papers">here</a>.</strong></p>
+<p><strong>This is an ongoing development. If you are looking for the Coq sources corresponding to my papers, please take a look <a href="#papers">here</a>.</strong></p>
 
 <h2>About</h2>
 <p>The <a href="http://ch2o.cs.ru.nl"> CH<sub>2</sub>O project</a> aims at formalizing novel features of the <a href="http://www.open-std.org/jtc1/sc22/wg14/">ISO/ANSI C11 standard</a> of the C programming language. This Coq development includes an operational and axiomatic semantics for a fragment of a C-like language supporting:</p>
@@ -21,11 +21,12 @@
 <li>Non local control flow (<span class="bracket">return</span> and <span class="bracket">goto</span>).</li>
 <li>Block scoped variables and pointers to these.</li>
 <li>Mutual recursive function calls.</li>
-<li>Expressions with side-effects.</li>
 <li>Dynamically allocated memory (<span class="bracket">alloc</span> and <span class="bracket">free</span>).</li>
+<li>Non-deterministic expressions with multiple side-effects.</li>
+<li>A strict interpretation of sequence points.</li>
 </ul>
 <p>
-The operational semantics is given by a small step reduction semantics using a zipper like data structure to accurately model allocation and deallocation of block scoped variables. For example, our semantics will correctly assign undefined behavior to:</p>
+The operational semantics is given by a small step reduction semantics using a zipper like data structure to accurately model allocation and deallocation of block scoped variables. For example, our semantics will correctly assign undefined behavior to uses of non-local control flow that jump out of scope:</p>
 <pre>
   int f(void) {
     int *p = 0;
@@ -34,12 +35,11 @@ The operational semantics is given by a small step reduction semantics using a z
   }
 </pre>
 <p>
-The axiomatic semantics is defined semantically with respect to the operational semantics. We prove that it satisfies the standard rules of separation logic and novel rules for our specific features.</p>
+The axiomatic semantics is defined semantically with respect to the operational semantics. We prove that it satisfies the standard rules of separation logic and novel rules for our specific features. The rules to reason about non-deterministic expressions are inspired by the separation logic rules for parallelism, and use a permission system based on fractional permissions.</p>
 
 <h2>Goals</h2>
 <p>To get more closely to the actual C11 standard we intend to implement the following features in future versions:</p>
 <ul>
-<li>Sequence points and permissions.</li>
 <li>The C type system including structs, arrays, unions, and an abstract way of handling primitive data types (integers, floats).</li>
 <li>The non-aliasing restrictions introduced by C99 and C11 (effective types in particular).</li>
 <li>A simple verification condition generator inside Coq allowing us to verify simple programs.</li>
@@ -47,7 +47,7 @@ The axiomatic semantics is defined semantically with respect to the operational 
 </ul>
 
 <h2>Download</h2>
-<p>The most recent version of the source code of this development can be downloaded <a href="http://github.com/robbertkrebbers/ch2o">here</a>.</p>
+<p>The most recent version of the Coq source code of this development can be downloaded <a href="http://github.com/robbertkrebbers/ch2o">here</a>.</p>
 
 <h2><a name="papers"></a>Papers</h2>
 <ul>
@@ -59,7 +59,6 @@ The axiomatic semantics is defined semantically with respect to the operational 
 	<a href="/research/ch2o/fossacs2013">[documentation]</a>
 </li>
 </ul>
-
 
 <h2>Table of contents</h2>
 
@@ -78,7 +77,7 @@ The axiomatic semantics is defined semantically with respect to the operational 
 <li><a href="collections.html">collections</a>: definitions, theorems, and tactics for collections.</li>
 <li><a href="fin_collections.html">fin_collections</a>: theorems on finite collections.</li>
 <li><a href="listset.html">listset</a>: finite set implementation using unordered lists.</li>
-<li><a href="fresh_numbers.html">numbers</a>: generation of fresh numbers.</li>
+<li><a href="fresh_numbers.html">fresh_numbers</a>: generation of fresh numbers.</li>
 <li><a href="prelude.html">prelude</a>: exports all of the above.</li>
 </ul>
 
@@ -91,22 +90,37 @@ The axiomatic semantics is defined semantically with respect to the operational 
 <h3>Finite maps</h3>
 <ul>
 <li><a href="fin_maps.html">fin_maps</a>: an interface and theorems for finite maps.</li>
+<li><a href="fin_map_dom.html">fin_map_dom</a>: an interface and theorems for the domain function of finite maps.</li>
 <li><a href="pmap.html">pmap</a>: finite map indexed by <span class="bracket">positive</span>.</li>
 <li><a href="nmap.html">nmap</a>: finite map indexed by <span class="bracket">N</span>.</li>
+<li><a href="mapset.html">mapset</a>: finite maps give rise to finite sets with extensional equality.</li>
+</ul>
+
+<h3>Memory</h3>
+<ul>
+<li><a href="values.html">values</a>: the representation of values.</li>
+<li><a href="abstract_permissions.html">abstract_permissions</a>: an abstract interface for permissions used in the memory.</li>
+<li><a href="abstract_memory.html">abstract_memory</a>: the abstract version of the memory model.</li>
+<li><a href="empty_permissions.html">empty_permissions</a>: an instance of the permission interface using the unit type.</li>
+<li><a href="frac.html">frac</a>: fractional permissions.</li>
+<li><a href="seqfrac.html">seqfrac</a>: fractional permissions that can be locked.</li>
+<li><a href="permissions.html">permissions</a>: the concrete type of permissions used in the memory model.</li>
+<li><a href="memory.html">memory</a>: an instantiation of the memory model using concrete permissions.</li>
 </ul>
 
 <h3>Operational semantics</h3>
 <ul>
-<li><a href="memory.html">memory</a>: the memory model.</li>
-<li><a href="expressions.html">expressions</a>: expressions and their semantics.</li>
+<li><a href="expressions.html">expressions</a>: expressions and their decomposition into contexts.</li>
 <li><a href="statements.html">statements</a>:  statements and program contexts.</li>
 <li><a href="state.html">state</a>: the execution state.</li>
 <li><a href="smallstep.html">smallstep</a>: the small step operational semantics.</li>
+<li><a href="expression_eval.html">expression_eval</a>: evaluation of side-effect free expressions.</li>
+<li><a href="expression_eval_correct.html">expression_eval_correct</a>: correctness of evaluation of side-effect free expressions.</li>
 </ul>
 
 <h3>Axiomatic semantics</h3>
 <ul>
-<li><a href="assertions.html">assertions</a>:assertions of the axiomatic semantics.</li>
+<li><a href="assertions.html">assertions</a>: assertions of the axiomatic semantics.</li>
 <li><a href="axiomatic.html">axiomatic</a>: axiomatic semantics using separation logic.</li>
 </ul>
 </body>

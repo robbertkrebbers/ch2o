@@ -1,4 +1,4 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file implements finite as unordered lists without duplicates.
 Although this implementation is slow, it is very useful as decidable equality
@@ -59,18 +59,14 @@ Instance listset_nodup_intersection_with:
 Instance listset_nodup_filter: Filter A C :=
   λ P _ l, LS _ (filter_nodup P _ (listset_nodup_prf l)).
 
-Global Instance: Collection A C.
+Instance: Collection A C.
 Proof.
-  split; [split | | |].
+  split; [split | | ].
   * by apply not_elem_of_nil.
   * by apply elem_of_list_singleton.
   * intros. apply elem_of_listset_nodup_union_raw.
   * intros. apply elem_of_list_intersection.
   * intros. apply elem_of_list_difference.
-  * intros. unfold intersection_with, listset_nodup_intersection_with,
-      elem_of, listset_nodup_elem_of. simpl.
-    rewrite elem_of_remove_dups.
-    by apply elem_of_list_intersection_with.
 Qed.
 
 Global Instance listset_nodup_elems: Elements A C := listset_nodup_car.
@@ -79,9 +75,19 @@ Global Instance: FinCollection A C.
 Proof.
   split.
   * apply _.
-  * intros. apply elem_of_list_filter.
   * done.
   * by intros [??].
+Qed.
+
+Global Instance: CollectionOps A C.
+Proof.
+  split.
+  * apply _.
+  * intros. unfold intersection_with, listset_nodup_intersection_with,
+      elem_of, listset_nodup_elem_of. simpl.
+    rewrite elem_of_remove_dups.
+    by apply elem_of_list_intersection_with.
+  * intros. apply elem_of_list_filter.
 Qed.
 End list_collection.
 

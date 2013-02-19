@@ -1,4 +1,4 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects theorems, definitions, tactics, related to propositions
 with a decidable equality. Such propositions are collected by the [Decision]
@@ -9,6 +9,9 @@ Hint Extern 200 (Decision _) => progress (lazy beta) : typeclass_instances.
 
 Lemma dec_stable `{Decision P} : ¬¬P → P.
 Proof. firstorder. Qed.
+
+Lemma Is_true_reflect (b : bool) : reflect b b.
+Proof. destruct b. by left. right. intros []. Qed.
 
 (** We introduce [decide_rel] to avoid inefficienct computation due to eager
 evaluation of propositions by [vm_compute]. This inefficiency occurs if
@@ -21,18 +24,27 @@ Lemma decide_rel_correct {A B} (R : A → B → Prop) `{∀ x y, Decision (R x y
   (x : A) (y : B) : decide_rel R x y = decide (R x y).
 Proof. done. Qed.
 
+(** The tactic [destruct_decide] destructs a sumbool [dec]. If one of the
+components is double negated, it will try to remove the double negation. *)
+Ltac destruct_decide dec :=
+  let H := fresh in
+  destruct dec as [H|H];
+  try match type of H with
+  | ¬¬_ => apply dec_stable in H
+  end.
+
 (** The tactic [case_decide] performs case analysis on an arbitrary occurrence
 of [decide] or [decide_rel] in the conclusion or hypotheses. *)
 Ltac case_decide :=
   match goal with
   | H : context [@decide ?P ?dec] |- _ =>
-    destruct (@decide P dec)
+    destruct_decide (@decide P dec)
   | H : context [@decide_rel _ _ ?R ?x ?y ?dec] |- _ =>
-    destruct (@decide_rel _ _ R x y dec)
+    destruct_decide (@decide_rel _ _ R x y dec)
   | |- context [@decide ?P ?dec] =>
-    destruct (@decide P dec)
+    destruct_decide (@decide P dec)
   | |- context [@decide_rel _ _ ?R ?x ?y ?dec] =>
-    destruct (@decide_rel _ _ R x y dec)
+    destruct_decide (@decide_rel _ _ R x y dec)
   end.
 
 (** The tactic [solve_decision] uses Coq's [decide equality] tactic together
@@ -61,6 +73,17 @@ Notation cast_if_not S := (if S then right _ else left _).
 Definition bool_decide (P : Prop) {dec : Decision P} : bool :=
   if dec then true else false.
 
+Lemma bool_decide_reflect P `{dec : Decision P} : reflect P (bool_decide P).
+Proof. unfold bool_decide. destruct dec. by left. by right. Qed.
+
+Ltac case_bool_decide :=
+  match goal with
+  | H : context [@bool_decide ?P ?dec] |- _ =>
+    destruct_decide (@bool_decide_reflect P dec)
+  | |- context [@bool_decide ?P ?dec] =>
+    destruct_decide (@bool_decide_reflect P dec)
+  end.
+
 Lemma bool_decide_unpack (P : Prop) {dec : Decision P} : bool_decide P → P.
 Proof. unfold bool_decide. by destruct dec. Qed.
 Lemma bool_decide_pack (P : Prop) {dec : Decision P} : P → bool_decide P.
@@ -70,9 +93,14 @@ Proof. unfold bool_decide. by destruct dec. Qed.
 (** Leibniz equality on Sigma types requires the equipped proofs to be
 equal as Coq does not support proof irrelevance. For decidable we
 propositions we define the type [dsig P] whose Leibniz equality is proof
-irrelevant. That is [∀ x y : dsig P, x = y ↔ `x = `y]. *)
+irrelevant. That is [∀ x y : dsig P, x = y ↔ `x = `y]. Due to the absence of
+universe polymorpic definitions we also define a variant [dsigS] for types
+in [Set]. *)
 Definition dsig `(P : A → Prop) `{∀ x : A, Decision (P x)} :=
   { x | bool_decide (P x) }.
+Definition dsigS {A : Set} (P : A → Prop) `{∀ x : A, Decision (P x)} : Set :=
+  { x | bool_decide (P x) }.
+
 Definition proj2_dsig `{∀ x : A, Decision (P x)} (x : dsig P) : P (`x) :=
   bool_decide_unpack _ (proj2_sig x).
 Definition dexist `{∀ x : A, Decision (P x)} (x : A) (p : P x) : dsig P :=

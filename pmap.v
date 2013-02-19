@@ -1,4 +1,4 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This files implements an efficient implementation of finite maps whose keys
 range over Coq's data type of positive binary naturals [positive]. The
@@ -29,7 +29,7 @@ Instance Pmap_raw_eq_dec `{∀ x y : A, Decision (x = y)} (x y : Pmap_raw A) :
   Decision (x = y).
 Proof. solve_decision. Defined.
 
-(** The following predicate describes non empty trees. *)
+(** The following decidable predicate describes non empty trees. *)
 Inductive Pmap_ne {A} : Pmap_raw A → Prop :=
   | Pmap_ne_val l x r : Pmap_ne (Pnode l (Some x) r)
   | Pmap_ne_l l r : Pmap_ne l → Pmap_ne (Pnode l None r)
@@ -64,8 +64,9 @@ Proof.
       right; inversion_clear 1; intuition.
 Qed.
 
-(** Now we restrict the data type of trees to those that are well formed. *)
-Definition Pmap A := @dsig (Pmap_raw A) Pmap_wf _.
+(** Now we restrict the data type of trees to those that are well formed and
+thereby obtain a data type that ensures canonicity. *)
+Definition Pmap A := dsig (@Pmap_wf A).
 
 (** * Operations on the data structure *)
 Global Instance Pmap_dec `{∀ x y : A, Decision (x = y)} (t1 t2 : Pmap A) :
@@ -257,63 +258,79 @@ Lemma Plookup_raw_fmap `(f : A → B) (t : Pmap_raw A) i :
   fmap f t !! i = fmap f (t !! i).
 Proof. revert i. induction t. done. by intros [?|?|]; simpl. Qed.
 
-(** The [finmap_to_list] function is rather inefficient, but since we do not
-use it for computation at this moment, we do not care. *)
-Fixpoint Pto_list_raw {A} (t : Pmap_raw A) : list (positive * A) :=
+Fixpoint Pto_list_raw {A} (j : positive) (t : Pmap_raw A) :
+    list (positive * A) :=
   match t with
   | Pleaf => []
-  | Pnode l o r =>
-     option_case (λ x, [(1,x)]) [] o ++ 
-       (fst_map (~0) <$> Pto_list_raw l) ++ 
-       (fst_map (~1) <$> Pto_list_raw r)
-  end.
+  | Pnode l o r => option_case (λ x, [(Preverse j, x)]) [] o ++ 
+     Pto_list_raw (j~0) l ++ Pto_list_raw (j~1) r
+  end%list.
 
-Lemma Pto_list_raw_nodup {A} (t : Pmap_raw A) : NoDup (Pto_list_raw t).
-Proof.
-  induction t as [|? IHl [?|] ? IHr]; simpl.
-  * constructor.
-  * rewrite NoDup_cons, NoDup_app, !(NoDup_fmap _).
-    repeat split; trivial.
-    + rewrite elem_of_app, !elem_of_list_fmap.
-      intros [[[??] [??]] | [[??] [??]]]; simpl in *; simplify_equality.
-    + intro. rewrite !elem_of_list_fmap.
-      intros [[??] [??]] [[??] [??]]; simpl in *; simplify_equality.
-  * rewrite NoDup_app, !(NoDup_fmap _).
-    repeat split; trivial.
-    intro. rewrite !elem_of_list_fmap.
-    intros [[??] [??]] [[??] [??]]; simpl in *; simplify_equality.
-Qed.
-
-Lemma Pelem_of_to_list_raw {A} (t : Pmap_raw A) i x :
-  (i,x) ∈ Pto_list_raw t ↔ t !! i = Some x.
+Lemma Pelem_of_to_list_raw_aux {A} (t : Pmap_raw A) j i x :
+  (i,x) ∈ Pto_list_raw j t ↔ ∃ i', i = i' ++ Preverse j ∧ t !! i' = Some x.
 Proof.
   split.
-  * revert i. induction t as [|? IHl [?|] ? IHr]; intros i; simpl.
+  * revert j. induction t as [|? IHl [?|] ? IHr]; intros j; simpl.
     + by rewrite ?elem_of_nil.
-    + rewrite elem_of_cons, !elem_of_app, !elem_of_list_fmap.
-      intros [? | [[[??] [??]] | [[??] [??]]]]; naive_solver.
-    + rewrite !elem_of_app, !elem_of_list_fmap.
-      intros [[[??] [??]] | [[??] [??]]]; naive_solver.
-  * revert i. induction t as [|? IHl [?|] ? IHr]; simpl.
+    + rewrite elem_of_cons, !elem_of_app. intros [?|[?|?]].
+      - simplify_equality. exists 1. by rewrite (left_id 1 (++))%positive.
+      - destruct (IHl (j~0)) as (i' &?&?); trivial; subst.
+         exists (i' ~ 0). by rewrite Preverse_xO, (associative _).
+      - destruct (IHr (j~1)) as (i' &?&?); trivial; subst.
+         exists (i' ~ 1). by rewrite Preverse_xI, (associative _).
+    + rewrite !elem_of_app. intros [?|?].
+      - destruct (IHl (j~0)) as (i' &?&?); trivial; subst.
+         exists (i' ~ 0). by rewrite Preverse_xO, (associative _).
+      - destruct (IHr (j~1)) as (i' &?&?); trivial; subst.
+         exists (i' ~ 1). by rewrite Preverse_xI, (associative _).
+  * intros (i' & ?& Hi'); subst. revert i' j Hi'.
+    induction t as [|? IHl [?|] ? IHr]; intros i j; simpl.
     + done.
-    + intros i. rewrite elem_of_cons, elem_of_app.
-      destruct i as [i|i|]; simpl.
-      - right. right. rewrite elem_of_list_fmap.
-        exists (i,x); simpl; auto.
-      - right. left. rewrite elem_of_list_fmap.
-        exists (i,x); simpl; auto.
-      - left. congruence.
-    + intros i. rewrite elem_of_app.
-      destruct i as [i|i|]; simpl.
-      - right. rewrite elem_of_list_fmap.
-        exists (i,x); simpl; auto.
-      - left. rewrite elem_of_list_fmap.
-        exists (i,x); simpl; auto.
+    + rewrite elem_of_cons, elem_of_app. destruct i as [i|i|]; simpl in *.
+      - right. right. specialize (IHr i (j~1)).
+        rewrite Preverse_xI, (associative_eq _) in IHr. auto.
+      - right. left. specialize (IHl i (j~0)).
+        rewrite Preverse_xO, (associative_eq _) in IHl. auto.
+      - left. simplify_equality. by rewrite (left_id_eq 1 (++))%positive.
+    + rewrite elem_of_app. destruct i as [i|i|]; simpl in *.
+      - right. specialize (IHr i (j~1)).
+        rewrite Preverse_xI, (associative_eq _) in IHr. auto.
+      - left. specialize (IHl i (j~0)).
+        rewrite Preverse_xO, (associative_eq _) in IHl. auto.
       - done.
+Qed.
+Lemma Pelem_of_to_list_raw {A} (t : Pmap_raw A) i x :
+  (i,x) ∈ Pto_list_raw 1 t ↔ t !! i = Some x.
+Proof.
+  rewrite Pelem_of_to_list_raw_aux. split.
+  * by intros (i' &?&?); subst.
+  * intros. by exists i.
+Qed.
+
+Lemma Pto_list_raw_nodup {A} j (t : Pmap_raw A) : NoDup (Pto_list_raw j t).
+Proof.
+  revert j. induction t as [|? IHl [?|] ? IHr]; simpl.
+  * constructor.
+  * intros. rewrite NoDup_cons, NoDup_app. split_ands; trivial.
+    + rewrite elem_of_app, !Pelem_of_to_list_raw_aux.
+      intros [(i&Hi&?)|(i&Hi&?)].
+      - rewrite Preverse_xO in Hi. apply (f_equal Plength) in Hi.
+        rewrite !Papp_length in Hi. simpl in Hi. lia.
+      - rewrite Preverse_xI in Hi. apply (f_equal Plength) in Hi.
+        rewrite !Papp_length in Hi. simpl in Hi. lia.
+    + intros [??]. rewrite !Pelem_of_to_list_raw_aux.
+      intros (i1&?&?) (i2&Hi&?); subst.
+      rewrite Preverse_xO, Preverse_xI, !(associative_eq _) in Hi.
+      by apply (injective (++ _)) in Hi.
+  * intros. rewrite NoDup_app. split_ands; trivial.
+    intros [??]. rewrite !Pelem_of_to_list_raw_aux.
+    intros (i1&?&?) (i2&Hi&?); subst.
+    rewrite Preverse_xO, Preverse_xI, !(associative_eq _) in Hi.
+    by apply (injective (++ _)) in Hi.
 Qed.
 
 Global Instance Pto_list {A} : FinMapToList positive A (Pmap A) :=
-  λ t, Pto_list_raw (`t).
+  λ t, Pto_list_raw 1 (`t).
 
 Fixpoint Pmerge_aux `(f : option A → option B) (t : Pmap_raw A) : Pmap_raw B :=
   match t with
@@ -334,25 +351,26 @@ Proof.
   intros [?|?|]; simpl; Pnode_canon_rewrite; auto.
 Qed.
 
-Global Instance Pmerge_raw {A} : Merge A (Pmap_raw A) :=
-  fix Pmerge_raw f (t1 t2 : Pmap_raw A) : Pmap_raw A :=
+Global Instance Pmerge_raw : Merge Pmap_raw :=
+  fix Pmerge_raw A B C f t1 t2 : Pmap_raw C :=
   match t1, t2 with
   | Pleaf, t2 => Pmerge_aux (f None) t2
   | t1, Pleaf => Pmerge_aux (flip f None) t1
   | Pnode l1 o1 r1, Pnode l2 o2 r2 =>
-     Pnode_canon (@merge _ _ Pmerge_raw f l1 l2)
-      (f o1 o2) (@merge _ _ Pmerge_raw f r1 r2)
+     Pnode_canon (@merge _ Pmerge_raw A B C f l1 l2)
+      (f o1 o2) (@merge _ Pmerge_raw A B C f r1 r2)
   end.
 Local Arguments Pmerge_aux _ _ _ _ : simpl never.
 
-Lemma Pmerge_wf {A} f (t1 t2 : Pmap_raw A) :
+Lemma Pmerge_wf {A B C} (f : option A → option B → option C) t1 t2 :
   Pmap_wf t1 → Pmap_wf t2 → Pmap_wf (merge f t1 t2).
 Proof. intros t1wf. revert t2. induction t1wf; destruct 1; simpl; auto. Qed.
-Global Instance Pmerge {A} : Merge A (Pmap A) := λ f t1 t2,
+Global Instance Pmerge: Merge Pmap := λ A B C f t1 t2,
   dexist (merge f (`t1) (`t2))
     (Pmerge_wf _ _ _ (proj2_dsig t1) (proj2_dsig t2)).
 
-Lemma Pmerge_raw_spec {A} f (Hf : f None None = None) (t1 t2 : Pmap_raw A) i :
+Lemma Pmerge_raw_spec {A B C} (f : option A → option B → option C)
+    (Hf : f None None = None) (t1 : Pmap_raw A) t2 i :
   merge f t1 t2 !! i = f (t1 !! i) (t2 !! i).
 Proof.
   revert t2 i. induction t1 as [| l1 IHl1 o1 r1 IHr1 ].
@@ -362,6 +380,7 @@ Proof.
     + intros [?|?|]; simpl; by Pnode_canon_rewrite.
 Qed.
 
+(** * Instantiation of the finite map interface *)
 Global Instance: FinMap positive Pmap.
 Proof.
   split.
@@ -373,5 +392,5 @@ Proof.
   * intros ??? [??]. by apply Plookup_raw_fmap.
   * intros ? [??]. apply Pto_list_raw_nodup.
   * intros ? [??]. apply Pelem_of_to_list_raw.
-  * intros ??? [??] [??] ?. by apply Pmerge_raw_spec.
+  * intros ??? ?? [??] [??] ?. by apply Pmerge_raw_spec.
 Qed.

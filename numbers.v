@@ -1,13 +1,16 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects some trivial facts on the Coq types [nat] and [N] for
 natural numbers, and the type [Z] for integers. It also declares some useful
 notations. *)
 Require Export PArith NArith ZArith.
+Require Import Qcanon.
 Require Export base decidable.
+Open Scope nat_scope.
 
 Coercion Z.of_nat : nat >-> Z.
 
+(** * Notations and properties of [nat] *)
 Reserved Notation "x ≤ y ≤ z" (at level 70, y at next level).
 Reserved Notation "x ≤ y < z" (at level 70, y at next level).
 Reserved Notation "x < y < z" (at level 70, y at next level).
@@ -42,17 +45,86 @@ Definition sum_list_with {A} (f : A → nat) : list A → nat :=
   end.
 Notation sum_list := (sum_list_with id).
 
+(** * Notations and properties of [positive] *)
+Open Scope positive_scope.
+
 Instance positive_eq_dec: ∀ x y : positive, Decision (x = y) := Pos.eq_dec.
-Instance positive_inhabited: Inhabited positive := populate 1%positive.
+Instance positive_inhabited: Inhabited positive := populate 1.
 
 Notation "(~0)" := xO (only parsing) : positive_scope.
 Notation "(~1)" := xI (only parsing) : positive_scope.
 
-Instance: Injective (=) (=) xO.
+Instance: Injective (=) (=) (~0).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) xI.
+Instance: Injective (=) (=) (~1).
 Proof. by injection 1. Qed.
 
+(** Since [positive] represents lists of bits, we define list operations
+on it. These operations are in reverse, as positives are treated as snoc
+lists instead of cons lists. *)
+Fixpoint Papp (p1 p2 : positive) : positive :=
+  match p2 with
+  | 1 => p1
+  | p2~0 => (Papp p1 p2)~0
+  | p2~1 => (Papp p1 p2)~1
+  end.
+Infix "++" := Papp : positive_scope.
+Notation "(++)" := Papp (only parsing) : positive_scope.
+Notation "( p ++)" := (Papp p) (only parsing) : positive_scope.
+Notation "(++ q )" := (λ p, Papp p q) (only parsing) : positive_scope.
+
+Fixpoint Preverse_go (p1 p2 : positive) : positive :=
+  match p2 with
+  | 1 => p1
+  | p2~0 => Preverse_go (p1~0) p2
+  | p2~1 => Preverse_go (p1~1) p2
+  end.
+Definition Preverse : positive → positive := Preverse_go 1.
+
+Global Instance: LeftId (=) 1 (++).
+Proof. intros p. induction p; simpl; intros; f_equal; auto. Qed.
+Global Instance: RightId (=) 1 (++).
+Proof. done. Qed.
+Global Instance: Associative (=) (++).
+Proof. intros ?? p. induction p; simpl; intros; f_equal; auto. Qed.
+Global Instance: ∀ p : positive, Injective (=) (=) (++ p).
+Proof. intros p ???. induction p; simplify_equality; auto. Qed.
+
+Lemma Preverse_go_app_cont p1 p2 p3 :
+  Preverse_go (p2 ++ p1) p3 = p2 ++ Preverse_go p1 p3.
+Proof.
+  revert p1. induction p3; simpl; intros.
+  * apply (IHp3 (_~1)).
+  * apply (IHp3 (_~0)).
+  * done.
+Qed.
+Lemma Preverse_go_app p1 p2 p3 :
+  Preverse_go p1 (p2 ++ p3) = Preverse_go p1 p3 ++ Preverse_go 1 p2.
+Proof.
+  revert p1. induction p3; intros p1; simpl; auto.
+  by rewrite <-Preverse_go_app_cont.
+Qed.
+Lemma Preverse_app p1 p2 :
+  Preverse (p1 ++ p2) = Preverse p2 ++ Preverse p1.
+Proof. unfold Preverse. by rewrite Preverse_go_app. Qed.
+
+Lemma Preverse_xO p : Preverse (p~0) = (1~0) ++ Preverse p.
+Proof Preverse_app p (1~0).
+Lemma Preverse_xI p : Preverse (p~1) = (1~1) ++ Preverse p.
+Proof Preverse_app p (1~1).
+
+Fixpoint Plength (p : positive) : nat :=
+  match p with
+  | 1 => 0%nat
+  | p~0 | p~1 => S (Plength p)
+  end.
+Lemma Papp_length p1 p2 :
+  Plength (p1 ++ p2) = (Plength p2 + Plength p1)%nat.
+Proof. induction p2; simpl; f_equal; auto. Qed.
+
+Close Scope positive_scope.
+
+(** * Notations and properties of [N] *)
 Infix "≤" := N.le : N_scope.
 Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z)%N : N_scope.
 Notation "x ≤ y < z" := (x ≤ y ∧ y < z)%N : N_scope.
@@ -82,6 +154,7 @@ Program Instance N_lt_dec (x y : N) : Decision (x < y)%N :=
 Next Obligation. congruence. Qed.
 Instance N_inhabited: Inhabited N := populate 1%N.
 
+(** * Notations and properties of [Z] *)
 Infix "≤" := Z.le : Z_scope.
 Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z)%Z : Z_scope.
 Notation "x ≤ y < z" := (x ≤ y ∧ y < z)%Z : Z_scope.
@@ -97,6 +170,53 @@ Instance Z_eq_dec: ∀ x y : Z, Decision (x = y) := Z.eq_dec.
 Instance Z_le_dec: ∀ x y : Z, Decision (x ≤ y)%Z := Z_le_dec.
 Instance Z_lt_dec: ∀ x y : Z, Decision (x < y)%Z := Z_lt_dec.
 Instance Z_inhabited: Inhabited Z := populate 1%Z.
+
+(** * Notations and properties of [Qc] *)
+Notation "2" := (1+1)%Qc : Qc_scope.
+Infix "≤" := Qcle : Qc_scope.
+Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z)%Qc : Qc_scope.
+Notation "x ≤ y < z" := (x ≤ y ∧ y < z)%Qc : Qc_scope.
+Notation "x < y < z" := (x < y ∧ y < z)%Qc : Qc_scope.
+Notation "x < y ≤ z" := (x < y ∧ y ≤ z)%Qc : Qc_scope.
+Notation "(≤)" := Qcle (only parsing) : Qc_scope.
+Notation "(<)" := Qclt (only parsing) : Qc_scope.
+
+Instance Qc_eq_dec: ∀ x y : Qc, Decision (x = y) := Qc_eq_dec.
+Program Instance Qc_le_dec (x y : Qc) : Decision (x ≤ y)%Qc :=
+  if Qclt_le_dec y x then right _ else left _.
+Next Obligation. by apply Qclt_not_le. Qed.
+Program Instance Qc_lt_dec (x y : Qc) : Decision (x < y)%Qc :=
+  if Qclt_le_dec x y then left _ else right _.
+Next Obligation. by apply Qcle_not_lt. Qed.
+
+Instance: Reflexive Qcle.
+Proof. red. apply Qcle_refl. Qed.
+Instance: Transitive Qcle.
+Proof. red. apply Qcle_trans. Qed.
+
+Lemma Qcle_ngt (x y : Qc) : (x ≤ y ↔ ¬y < x)%Qc.
+Proof. split; auto using Qcle_not_lt, Qcnot_lt_le. Qed.
+Lemma Qclt_nge (x y : Qc) : (x < y ↔ ¬y ≤ x)%Qc.
+Proof. split; auto using Qclt_not_le, Qcnot_le_lt. Qed.
+
+Lemma Qcplus_le_mono_l (x y z : Qc) :
+  (x ≤ y ↔ z + x ≤ z + y)%Qc.
+Proof.
+  split; intros.
+  * by apply Qcplus_le_compat.
+  * replace x with ((0 - z) + (z + x))%Qc by ring.
+    replace y with ((0 - z) + (z + y))%Qc by ring.
+    by apply Qcplus_le_compat.
+Qed.
+Lemma Qcplus_le_mono_r (x y z : Qc) :
+  (x ≤ y ↔ x + z ≤ y + z)%Qc.
+Proof. rewrite !(Qcplus_comm _ z). apply Qcplus_le_mono_l. Qed.
+Lemma Qcplus_lt_mono_l (x y z : Qc) :
+  (x < y ↔ z + x < z + y)%Qc.
+Proof. by rewrite !Qclt_nge, <-Qcplus_le_mono_l. Qed.
+Lemma Qcplus_lt_mono_r (x y z : Qc) :
+  (x < y ↔ x + z < y + z)%Qc.
+Proof. by rewrite !Qclt_nge, <-Qcplus_le_mono_r. Qed.
 
 (** * Conversions *)
 (** The function [Z_to_option_N] converts an integer [x] into a natural number

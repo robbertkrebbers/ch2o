@@ -1,11 +1,11 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file defines expressions and some associated theory. Most importantly,
-to define the operational semantics of expressions in the file [smallstep], we
-define evaluation contexts here. Besides, we define a denotational semantics
-for side-effect free expressions. Notations for expressions are declared in the
+to define the operational semantics in the file [smallstep], we define
+corresponding evaluation contexts. Notations for expressions are declared in the
 scope [expr_scope]. *)
-Require Export memory contexts.
+Require Export values contexts.
+Require Import nmap.
 
 (** * Function names *)
 (** We use the type [N] of binary natural numbers for function names, and the
@@ -26,60 +26,46 @@ Instance funmap_lookup {A} : Lookup funname A (funmap A) :=
 Instance funmap_partial_alter {A} : PartialAlter funname A (funmap A) :=
   @partial_alter _ _ (Nmap A) _.
 Instance funmap_to_list {A} : FinMapToList funname A (funmap A) :=
-  @finmap_to_list _ _ (funmap A) _.
-Instance funmap_merge {A} : Merge A (funmap A) := @merge _ (Nmap A) _.
+  @map_to_list _ _ (funmap A) _.
+Instance funmap_merge : Merge funmap := @merge Nmap _.
 Instance funmap_fmap: FMap funmap := λ A B f, @fmap Nmap _ _ f _.
 Instance: FinMap funname funmap := _.
 
 Typeclasses Opaque funname funmap.
 
-(** * Operations *)
-(** We define a data type of unary and binary operations, and give denotations
-for these as partial functions over values. *)
-Inductive unop :=
-  | NotOp | NegOp.
-Inductive binop :=
-  | PlusOp | MinusOp | MultOp | DivOp | ModOp
-  | LeOp | LtOp | EqOp.
+(** * Stacks *)
+(** Stacks are lists of memory indexes rather than lists of values. This allows
+us to treat pointers to both automatically and dynamically allocated memory in
+a uniform way. Evaluation of a variable will therefore consist of a looking up
+its address in the stack and returning a pointer to that address. *)
 
-Instance unop_eq_dec (op1 op2 : unop) : Decision (op1 = op2).
-Proof. solve_decision. Defined.
-Instance binop_eq_dec (op1 op2 : binop) : Decision (op1 = op2).
-Proof. solve_decision. Defined.
-
-Definition eval_unop (op : unop) (v : value) : option value :=
-  match op, v with
-  | NotOp, v =>
-    if value_true_false_dec v then Some (int 0) else Some (int 1)
-  | NegOp, int x => Some (int (-x))
-  | _, _ => None
-  end%V.
-Definition eval_binop (op : binop) (v1 v2 : value) : option value :=
-  match op, v1, v2 with
-  | PlusOp, int x1, int x2 => Some (int (x1 + x2))
-  | MinusOp, int x1, int x2 => Some (int (x1 - x2))
-  | MultOp, int x1, int x2 => Some (int (x1 * x2))
-  | DivOp, int x1, int x2 => Some (int (x1 / x2))
-  | ModOp, int x1, int x2 => Some (int (Zmod x1 x2))
-  | LeOp, int x1, int x2 => Some (int (Z_of_sumbool (decide_rel (≤)%Z x1 x2)))
-  | LtOp, int x1, int x2 => Some (int (Z_of_sumbool (decide_rel (<)%Z x1 x2)))
-  | EqOp, int x1, int x2 => Some (int (Z_of_sumbool (decide_rel (=) x1 x2)))
-  | EqOp, ptr b1, ptr b2 => Some (int (Z_of_sumbool (decide_rel (=) b1 b2)))
-  | EqOp, null, null => Some (int 1)
-  | EqOp, int _, null => Some (int 0)
-  | EqOp, null, int _ => Some (int 0)
-  | _, _, _ => None
-  end%V.
+Notation stack := (list index) (only parsing).
 
 (** * Syntax *)
 (** The variables used in expressions are De Bruijn indexes, i.e. the variable
 [var i] refers to the [i]th value on the stack. De Bruijn indexes avoid us
 having to deal with shadowing due to block scope variables. Especially in
-the axiomatic semantics this is useful, as we do not want to loose information
+the axiomatic semantics this is useful, as we do not want to lose information
 because a local variable may shadow an already existing one. *)
+
+(** Values are annotated with a set of locked locations. Initially, all values
+in a program should be annotated with the empty set. Whenever a write occurs
+during the execution of the program, the written location is locked in memory,
+and added to the set of locked locations in the subexpression where that write
+occurred. On the execution of a connective that contains a sequence point, the
+annotated locations in the subexpression where the sequence point occurred are
+unlocked in memory and then discarded. Connectives without a sequence point
+just take the union of the locked locations of their children. *)
+
+(** This way of dealing with sequence points is more restrictive than the
+treatment by (Norrish, PhD thesis) and (Ellison/Rosu, 2012), as whenever a
+sequence point occurs, we only unlock the locations that have been locked by
+evaluating the sub-expression corresponding to that particular sequence point,
+instead of unlocking all locations. *)
+
 Inductive expr : Type :=
   | EVar : nat → expr
-  | EVal : value → expr
+  | EVal : indexset → value → expr
   | EAssign : expr → expr → expr
   | ECall : funname → list expr → expr
   | ELoad : expr → expr
@@ -89,13 +75,6 @@ Inductive expr : Type :=
   | EBinOp : binop → expr → expr → expr
   | EIf : expr → expr → expr → expr.
 
-(** Stacks are lists of memory indexes rather than lists of values. This allows
-us to treat pointers to both local and allocated storage in a uniform way.
-Evaluation of a variable will therefore consist of a looking up its address in
-the stack and returning a pointer to that address. *)
-
-Notation stack := (list index) (only parsing).
-
 (** We use the scope [expr_scope] to declare notations for expressions. We
 overload some notations already in [value_scope], and define both general and
 specific notations for operations, allowing us for example to to write
@@ -103,6 +82,8 @@ specific notations for operations, allowing us for example to to write
 [val (int 10) @op{PlusOp} val (int 20)]. *)
 Delimit Scope expr_scope with E.
 Bind Scope expr_scope with expr.
+
+Arguments EVal _ _%value_scope.
 Arguments EAssign _%expr_scope _%expr_scope.
 Arguments ECall _ _%expr_scope.
 Arguments ELoad _%expr_scope.
@@ -111,22 +92,32 @@ Arguments EUnOp _ _%expr_scope.
 Arguments EBinOp _ _%expr_scope _%expr_scope.
 
 Notation "'var' x" := (EVar x) (at level 10) : expr_scope.
-Notation "'val' v" := (EVal v) (at level 10) : expr_scope.
-Notation "'void'" := (EVal void) : expr_scope.
-Notation "'int' x" := (EVal (int x%Z)) : expr_scope.
-Notation "'ptr' b" := (EVal (ptr b%N)) : expr_scope.
-Notation "'null'" := (EVal null) : expr_scope.
+Notation "'val' @{ Ω } v" := (EVal Ω v)
+  (at level 10, format "'val' @{ Ω }  v") : expr_scope.
+Notation "'val' v" := (EVal ∅ v) (at level 10) : expr_scope.
+Notation "'void' @{ Ω }" := (EVal Ω void)
+  (at level 10, format "'void' @{ Ω }") : expr_scope.
+Notation "'void'" := (EVal ∅ void) : expr_scope.
+Notation "'int' @{ Ω } x" := (EVal Ω (int x))
+  (at level 10, format "'int' @{ Ω }  x") : expr_scope.
+Notation "'int' x" := (EVal ∅ (int x%Z)) : expr_scope.
+Notation "'ptr' @{ Ω } b" := (EVal Ω (ptr b))
+  (at level 10, format "'ptr' @{ Ω }  b") : expr_scope.
+Notation "'ptr' b" := (EVal ∅ (ptr b%N)) : expr_scope.
+Notation "'null' @{ Ω }" := (EVal Ω null)
+  (at level 10, format "'null' @{ Ω }") : expr_scope.
+Notation "'null'" := (EVal ∅ null) : expr_scope.
 Infix "::=" := EAssign (at level 60) : expr_scope.
-(* The infixes ++ and :: are at level 60, <$> at 65. *)
+(* The infixes [++] and [::] are at level 60, [<$>] at 65. *)
 Notation "'call' f @ es" := (ECall f es)
   (at level 10, es at level 66) : expr_scope.
 Notation "'load' e" := (ELoad e) (at level 10) : expr_scope.
 Notation "'alloc'" := EAlloc : expr_scope.
 Notation "'free' e" := (EFree e) (at level 10) : expr_scope.
-Notation "@{ op } e" := (EUnOp op e)
-  (at level 21, format "@{ op }  e") : expr_scope.
-Notation "el @{ op } er" := (EBinOp op el er)
-  (at level 50, format "el  @{ op }  er") : expr_scope.
+Notation "⊙{ op } e" := (EUnOp op e)
+  (at level 21, format "⊙{ op }  e") : expr_scope.
+Notation "el ⊙{ op } er" := (EBinOp op el er)
+  (at level 50, format "el  ⊙{ op }  er") : expr_scope.
 Notation "'IF' e 'then' el 'else' er" := (EIf e el er) : expr_scope.
 
 Infix "+" := (EBinOp PlusOp) : expr_scope.
@@ -140,19 +131,20 @@ Notation "- e" := (EUnOp NegOp e) : expr_scope.
 
 Instance: Injective (=) (=) EVar.
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) EVal.
-Proof. by injection 1. Qed.
 Instance: Injective (=) (=) ELoad.
 Proof. by injection 1. Qed.
 Instance: Injective (=) (=) EFree.
 Proof. by injection 1. Qed.
+Instance: Proper ((≡) ==> (=) ==> (=)) EVal.
+Proof. repeat intro. fold_leibniz. by subst. Qed.
 
 Instance expr_eq_dec: ∀ e1 e2 : expr, Decision (e1 = e2).
 Proof.
   refine (fix go e1 e2 : Decision (e1 = e2) :=
   match e1, e2 with
   | var i1, var i2 => cast_if (decide_rel (=) i1 i2)
-  | val v1, val v2 => cast_if (decide_rel (=) v1 v2)
+  | val@{Ω1} v1, val@{Ω2} v2 =>
+     cast_if_and (decide_rel (=) Ω1 Ω2) (decide_rel (=) v1 v2)
   | el1 ::= er1, el2 ::= er2 => cast_if_and (decide_rel (=) el1 el2)
      (decide_rel (=) er1 er2)
   | call f1 @ es1, call f2 @ es2 => cast_if_and (decide_rel (=) f1 f2)
@@ -160,18 +152,18 @@ Proof.
   | load e1, load e2 => cast_if (decide_rel (=) e1 e2)
   | alloc, alloc => left _
   | free e1, free e2 => cast_if (decide_rel (=) e1 e2)
-  | @{op1} e1, @{op2} e2 => cast_if_and (decide_rel (=) op1 op2)
+  | ⊙{op1} e1, ⊙{op2} e2 => cast_if_and (decide_rel (=) op1 op2)
      (decide_rel (=) e1 e2)
-  | el1 @{op1} er1, el2 @{op2} er2 => cast_if_and3 (decide_rel (=) op1 op2)
+  | el1 ⊙{op1} er1, el2 ⊙{op2} er2 => cast_if_and3 (decide_rel (=) op1 op2)
      (decide_rel (=) el1 el2) (decide_rel (=) er1 er2)
   | (IF e1 then el1 else er1), (IF e2 then el2 else er2) =>
      cast_if_and3 (decide_rel (=) e1 e2)
        (decide_rel (=) el1 el2) (decide_rel (=) er1 er2)
   | _, _ => right _
-  end%E); clear go; try abstract congruence.
+  end%E); clear go; abstract congruence.
 Defined.
 
-(** The sequenced "or" and "and" operation are defined in terms of the
+(** The sequenced [||] and [&&] operators are defined in terms of the
 conditional. This keeps the expression language small. *)
 Definition EAnd (e1 e2 : expr) :=
   (IF e1 then (IF e2 then int 1 else int 0) else int 0)%E.
@@ -188,21 +180,21 @@ define an appropriate induction principle for expressions by hand. *)
 Section expr_ind.
   Context (P : expr → Prop).
   Context (Pvar : ∀ x, P (var x)).
-  Context (Pval : ∀ v, P (val v)).
+  Context (Pval : ∀ Ω v, P (val@{Ω} v)).
   Context (Passign : ∀ el er, P el → P er → P (el ::= er)).
   Context (Pcall : ∀ f es, Forall P es → P (call f @ es)).
   Context (Pload : ∀ e, P e → P (load e)).
   Context (Palloc : P alloc).
   Context (Pfree : ∀ e, P e → P (free e)).
-  Context (Punop : ∀ op e, P e → P (@{op} e)).
-  Context (Pbinop : ∀ op e1 e2, P e1 → P e2 → P (e1 @{op} e2)).
+  Context (Punop : ∀ op e, P e → P (⊙{op} e)).
+  Context (Pbinop : ∀ op e1 e2, P e1 → P e2 → P (e1 ⊙{op} e2)).
   Context (Pif : ∀ e el er, P e → P el → P er → P (IF e then el else er)).
 
   Definition expr_ind_alt : ∀ e, P e :=
     fix go e : P e :=
     match e with
     | var x => Pvar x
-    | val v => Pval v
+    | val@{Ω} v => Pval Ω v
     | el ::= er => Passign _ _ (go el) (go er)
     | call f @ es => Pcall f es $ list_ind (Forall P)
        (Forall_nil _)
@@ -210,8 +202,8 @@ Section expr_ind.
     | load e => Pload e (go e)
     | alloc => Palloc
     | free e => Pfree e (go e)
-    | @{op} e => Punop op _ (go e)
-    | el @{op} er => Pbinop op _ _ (go el) (go er)
+    | ⊙{op} e => Punop op _ (go e)
+    | el ⊙{op} er => Pbinop op _ _ (go el) (go er)
     | (IF e then el else er) => Pif _ _ _ (go e) (go el) (go er)
     end%E.
 End expr_ind.
@@ -223,14 +215,14 @@ Instance expr_size: Size expr :=
   let _ : Size _ := go in
   match e with
   | var _ => 0
-  | val _ => 0
+  | val@{_} _ => 0
   | el ::= er => S (size el + size er)
   | call _ @ es => S (sum_list_with size es)
   | load e => S (size e)
   | alloc => 0
   | free e => S (size e)
-  | @{_} e => S (size e)
-  | el @{_} er => S (size el + size er)
+  | ⊙{_} e => S (size e)
+  | el ⊙{_} er => S (size el + size er)
   | (IF e then el else er) => S (size e + size el + size er)
   end%E.
 
@@ -244,19 +236,22 @@ Proof.
   * intros e ?. apply Pind. intros. apply IHn. lia.
 Qed.
 
+(** * Miscellaneous Operations and properties *)
+(** An expression is [load_free] if it does not contain any uses of the [load]
+operator. *)
 Inductive load_free : expr → Prop :=
-  | var_load_free x : load_free (var x)
-  | val_load_free v : load_free (val v)
-  | assign_load_free el er :
+  | EVar_load_free x : load_free (var x)
+  | EVal_load_free Ω v : load_free (val@{Ω} v)
+  | EAssign_load_free el er :
      load_free el → load_free er → load_free (el ::= er)
-  | call_load_free f es :
+  | ECall_load_free f es :
      Forall load_free es → load_free (call f @ es)
-  | alloc_load_free : load_free alloc
-  | free_load_free e : load_free e → load_free (free e)
-  | unop_load_free op e : load_free e → load_free (@{op} e)
-  | binop_load_free op el er :
-     load_free el → load_free er → load_free (el @{op} er)
-  | if_load_free e el er :
+  | EAlloc_load_free : load_free alloc
+  | EFree_load_free e : load_free e → load_free (free e)
+  | EUnOp_load_free op e : load_free e → load_free (⊙{op} e)
+  | EBinOp_load_free op el er :
+     load_free el → load_free er → load_free (el ⊙{op} er)
+  | EIf_load_free e el er :
      load_free e → load_free el → load_free er →
      load_free (IF e then el else er).
 
@@ -266,30 +261,31 @@ Proof.
   fix go e :=
   match e return Decision (load_free e) with
   | var x => left _
-  | val v => left _
+  | val@{_} _ => left _
   | el ::= er => cast_if_and (go el) (go er)
   | call f @ es => cast_if (decide (Forall load_free es))
   | load e => right _
   | alloc => left _
   | free e => cast_if (go e)
-  | @{op} e => cast_if (go e)
-  | el @{op} er => cast_if_and (go el) (go er)
+  | ⊙{op} e => cast_if (go e)
+  | el ⊙{op} er => cast_if_and (go el) (go er)
   | (IF e then el else er) =>
       cast_if_and3 (go e) (go el) (go er)
   end%E); first [by constructor | by inversion 1].
 Defined.
 
+(** The operation [expr_vars e] yields the set of variables in [e]. *)
 Fixpoint expr_vars (e : expr) : listset nat :=
   match e with
   | var n => {[ n ]}
-  | val _ => ∅
+  | val@{_} _ => ∅
   | el ::= er => expr_vars el ∪ expr_vars er
   | call _ @ es => ⋃ (expr_vars <$> es)
   | alloc => ∅
   | load e
   | free e
-  | @{_} e => expr_vars e
-  | el @{_} er => expr_vars el ∪ expr_vars er
+  | ⊙{_} e => expr_vars e
+  | el ⊙{_} er => expr_vars el ∪ expr_vars er
   | (IF e then el else er) =>
       expr_vars e ∪ expr_vars el ∪ expr_vars er
   end%E.
@@ -301,21 +297,62 @@ Hint Extern 1 (expr_vars _ ≡ ∅) => assumption : typeclass_instances.
 Hint Extern 100 (expr_vars _ ≡ ∅) =>
   apply (bool_decide_unpack _); vm_compute; exact I : typeclass_instances.
 
-(** * Miscellaneous Operations and properties *)
+(** The operation [expr_locks e] yields the union of the sets of locked
+locations in the leafs of [e]. *)
+Instance expr_locks: Locks expr :=
+  fix go (e : expr) : indexset :=
+  let _ : Locks expr := @go in
+  match e with
+  | var n => ∅
+  | val@{Ω} _ => Ω
+  | el ::= er => locks el ∪ locks er
+  | call _ @ es => ⋃ (locks <$> es)
+  | alloc => ∅
+  | load e
+  | free e
+  | ⊙{_} e => locks e
+  | el ⊙{_} er => locks el ∪ locks er
+  | (IF e then el else er) => locks e ∪ locks el ∪ locks er
+  end%E.
+
+(** An expression is pure, or side-effect free, if it does not modify the
+memory or contains sequence points. *)
+Inductive is_pure: expr → Prop :=
+  | EVar_pure x : is_pure (var x)
+  | EVal_pure v Ω : is_pure (val@{Ω} v)
+  | ELoad_pure e : is_pure e → is_pure (load e)
+  | EUnOp_pure op e : is_pure e → is_pure (⊙{op} e)
+  | EBinOp_pure op el er :
+     is_pure el → is_pure er → is_pure (el ⊙{op} er).
+
+Instance is_pure_dec: ∀ e, Decision (is_pure e).
+Proof.
+ refine (
+  fix go e :=
+  match e return Decision (is_pure e) with
+  | var x => left _
+  | val@{_} _ => left _
+  | load e => cast_if (go e)
+  | ⊙{op} e => cast_if (go e)
+  | el ⊙{op} er => cast_if_and (go el) (go er)
+  | _ => right _
+  end%E); first [by constructor | by inversion 1].
+Defined.
+
 (** The operation [e↑] increases all De Bruijn indexes of variables in [e]
 by one. That means, each variable [var x] in [e] becomes [var (S x)]. *)
 Reserved Notation "e ↑" (at level 20, format "e ↑").
 Fixpoint expr_lift (e : expr) : expr :=
   match e with
   | var x => var (S x)
-  | val v => val v
+  | val@{Ω} v => val@{Ω} v
   | el ::= er => el↑ ::= er↑
   | call f @ es => call f @ expr_lift <$> es
   | load e => load (e↑)
   | alloc => alloc
   | free e => free (e↑)
-  | @{op} e => @{op} e↑
-  | el @{op} er => el↑ @{op} er↑
+  | ⊙{op} e => ⊙{op} e↑
+  | el ⊙{op} er => el↑ ⊙{op} er↑
   | (IF e then el else er) => IF e↑ then el↑ else er↑
   end%E
 where "e ↑" := (expr_lift e) : expr_scope.
@@ -324,27 +361,27 @@ where "e ↑" := (expr_lift e) : expr_scope.
 [e] is finished), the predicate [is_redex e] states that [e] is a head redex
 (i.e. a head reduction step is possible). *)
 Inductive is_value : expr → Prop :=
-  | is_value_val v : is_value (val v).
+  | EVal_is_value Ω v : is_value (val@{Ω} v).
 Inductive is_redex : expr → Prop :=
-  | is_redex_var x : is_redex (var x)
-  | is_redex_assign el er :
+  | EVar_is_redex x : is_redex (var x)
+  | EAssign_is_redex el er :
      is_value el → is_value er → is_redex (el ::= er)
-  | is_redex_call f es : Forall is_value es → is_redex (call f @ es)
-  | is_redex_load e : is_value e → is_redex (load e)
-  | is_redex_alloc : is_redex alloc
-  | is_redex_free e : is_value e → is_redex (free e)
-  | is_redex_unop op e :
-     is_value e → is_redex (@{op} e)
-  | is_redex_binop op el er :
-     is_value el → is_value er → is_redex (el @{op} er)
-  | is_redex_if e el er :
+  | ECall_is_redex f es : Forall is_value es → is_redex (call f @ es)
+  | ELoad_is_redex e : is_value e → is_redex (load e)
+  | EAlloc_is_redex : is_redex alloc
+  | EFree_is_redex e : is_value e → is_redex (free e)
+  | EUnOp_is_redex op e :
+     is_value e → is_redex (⊙{op} e)
+  | EBinOp_is_redex op el er :
+     is_value el → is_value er → is_redex (el ⊙{op} er)
+  | EIf_is_redex e el er :
      is_value e → is_redex (IF e then el else er).
 
 Instance is_value_dec e : Decision (is_value e).
 Proof.
  refine (
   match e with
-  | val _ => left _
+  | val@{_} _ => left _
   | _ => right _
   end%E); try constructor; abstract (inversion 1).
 Defined.
@@ -353,67 +390,40 @@ Proof.
  refine (
   match e with
   | var _ => left _
-  | val _ => right _
+  | val@{_} _ => right _
   | el ::= er => cast_if_and (decide (is_value el)) (decide (is_value er))
   | call _ @ es => cast_if (decide (Forall is_value es))
   | alloc => left _
   | load e
   | free e
-  | @{_} e => cast_if (decide (is_value e))
-  | el @{_} er => cast_if_and (decide (is_value el)) (decide (is_value er))
+  | ⊙{_} e => cast_if (decide (is_value e))
+  | el ⊙{_} er => cast_if_and (decide (is_value el)) (decide (is_value er))
   | (IF e then _ else _) => cast_if (decide (is_value e))
   end%E); try (by constructor); abstract (by inversion 1).
 Defined.
 
 Lemma is_redex_value e : is_redex e → is_value e → False.
 Proof. destruct 1; inversion 1. Qed.
-Lemma is_redex_val v : ¬is_redex (val v).
+Lemma is_redex_val Ω v : ¬is_redex (val@{Ω} v).
 Proof. inversion 1. Qed.
 
-Lemma is_value_alt e : is_value e ↔ ∃ v, e = (val v)%E.
+Lemma is_value_alt e : is_value e ↔ ∃ Ω v, e = (val@{Ω} v)%E.
 Proof.
   split.
   * inversion 1. eauto.
-  * intros [??]. by subst.
+  * intros (?&?&?). by subst.
 Qed.
-Lemma Forall_is_value_alt es : Forall is_value es ↔ ∃ vs, es = EVal <$> vs.
+
+Lemma Forall_is_value_alt es :
+  Forall is_value es ↔ ∃ Ωs vs, es = zip_with EVal Ωs vs.
 Proof.
   split.
-  * induction 1 as [|?? [v] _ [vs ?]]; subst.
-    + by eexists [].
-    + by exists (v :: vs).
-  * intros [vs H]. subst. induction vs; simpl; auto using is_value_val.
+  * induction 1 as [|?? [Ω v] _ (Ωs & vs & ?)]; subst.
+    + by eexists [], [].
+    + by exists (Ω :: Ωs) (v :: vs).
+  * intros (Ωs & vs & H). subst. revert vs.
+    induction Ωs; intros [|??]; simpl; auto using EVal_is_value.
 Qed.
-
-(** * Evaluation of side-effect free expressions *)
-(** We define a denotational semantics [⟦ e ⟧] for side-effect free expressions
-[e] by structural recursion over [e]. Expressions with side-effects are given
-no semantics here. *)
-Reserved Notation "⟦ e ⟧" (format "⟦  e  ⟧").
-
-Fixpoint expr_eval (e : expr) (ρ : stack) (m : mem) : option value :=
-  match e with
-  | var x =>
-     b ← ρ !! x;
-     Some (ptr b)%V
-  | val v => Some v
-  | load e =>
-     v ← ⟦ e ⟧ ρ m;
-     a ← is_ptr v;
-     m !! a
-  | @{op} e =>
-     v ← ⟦ e ⟧ ρ m;
-     eval_unop op v
-  | el @{op} er =>
-     vl ← ⟦ el ⟧ ρ m;
-     vr ← ⟦ er ⟧ ρ m;
-     eval_binop op vl vr
-  | (IF e then el else er) =>
-     v ← ⟦ e ⟧ ρ m;
-     ⟦ if value_true_false_dec v then el else er ⟧ ρ m
-  | _ => None
-  end%E
-where "⟦ e ⟧" := (expr_eval e) : C_scope.
 
 (** * Contexts with one hole *)
 (** We define singular expression contexts [ectx_item], and then full expression
@@ -443,12 +453,12 @@ Notation "'call' f @ es1 □ es2" := (CCall f es1 es2)
   (at level 10, es1 at level 66, es2 at level 66) : expr_scope.
 Notation "'load' □" := CLoad (at level 10, format "load  □") : expr_scope.
 Notation "'free' □" := CFree (at level 10, format "free  □") : expr_scope.
-Notation "@{ op } □" := (CUnOp op)
-  (at level 21, format "@{ op } □") : expr_scope.
-Notation "□ @{ op } er" := (CBinOpL op er)
-  (at level 50, format "□  @{ op }  er") : expr_scope.
-Notation "el @{ op } □" := (CBinOpR op el)
-  (at level 50, format "el  @{ op }  □") : expr_scope.
+Notation "⊙{ op } □" := (CUnOp op)
+  (at level 21, format "⊙{ op } □") : expr_scope.
+Notation "□ ⊙{ op } er" := (CBinOpL op er)
+  (at level 50, format "□  ⊙{ op }  er") : expr_scope.
+Notation "el ⊙{ op } □" := (CBinOpR op el)
+  (at level 50, format "el  ⊙{ op }  □") : expr_scope.
 Notation "'IF' □ 'then' el 'else' er" := (CIf el er)
   (at level 200, format "'IF'  □  'then'  el  'else'  er") : expr_scope.
 
@@ -461,9 +471,9 @@ Instance ectx_item_subst: Subst ectx_item expr expr := λ E e,
   | call f @ es1 □ es2 => call f @ (reverse es1 ++ e :: es2)
   | load □ => load e
   | free □ => free e
-  | @{op} □ => @{op} e
-  | □ @{op} er => e @{op} er
-  | el @{op} □ => el @{op} e
+  | ⊙{op} □ => ⊙{op} e
+  | □ ⊙{op} er => e ⊙{op} er
+  | el ⊙{op} □ => el ⊙{op} e
   | (IF □ then el else er) => IF e then el else er
   end%E.
 Instance: DestructSubst ectx_item_subst.
@@ -480,7 +490,37 @@ Lemma is_value_ectx (E : ectx) e : is_redex e → ¬is_value (subst E e).
 Proof.
   destruct E as [|E E' _] using rev_ind.
   * eauto using is_redex_value.
-  * rewrite list_subst_snoc. auto using is_value_ectx_item.
+  * rewrite subst_snoc. auto using is_value_ectx_item.
+Qed.
+
+Instance ectx_locks: Locks ectx_item := λ E,
+  match E with
+  | □ ::= er => locks er
+  | el ::= □ => locks el
+  | call f @ es1 □ es2 => ⋃ (locks <$> es1) ∪ ⋃ (locks <$> es2)
+  | load □ => ∅
+  | free □ => ∅
+  | ⊙{op} □ => ∅
+  | □ ⊙{op} er => locks er
+  | el ⊙{op} □ => locks el
+  | (IF □ then el else er) => locks el ∪ locks er
+  end%E.
+
+Lemma ectx_item_subst_locks (E : ectx_item) e :
+  locks (subst E e) = locks E ∪ locks e.
+Proof.
+  destruct E; simpl; try esolve_elem_of.
+  intros. rewrite fmap_app, fmap_reverse; simpl.
+  rewrite union_list_app_L, union_list_cons, union_list_reverse_L.
+  esolve_elem_of.
+Qed.
+Lemma ectx_subst_locks (E : ectx) e :
+  locks (subst E e) = locks E ∪ locks e.
+Proof.
+  apply elem_of_equiv_L.
+  intros b. revert e. induction E as [|E' E IH]; simpl.
+  * esolve_elem_of.
+  * intros. rewrite IH, ectx_item_subst_locks. esolve_elem_of.
 Qed.
 
 (** The induction principle [ectx_expr_ind] is used to perform simultaneous
@@ -492,7 +532,7 @@ context. *)
 Section ectx_expr_ind.
   Context (P : ectx → expr → Prop).
   Context (Pvar : ∀ E x, P E (var x)).
-  Context (Pval : ∀ E v, P E (val v)).
+  Context (Pval : ∀ E Ω v, P E (val@{Ω} v)).
   Context (Passign : ∀ E el er,
     P ((□ ::= er)%E :: E) el → P ((el ::= □)%E :: E) er → P E (el ::= er)).
   Context (Pcall : ∀ E f es,
@@ -501,11 +541,11 @@ Section ectx_expr_ind.
   Context (Pload : ∀ E e, P ((load □)%E :: E) e → P E (load e)).
   Context (Palloc : ∀ E, P E alloc).
   Context (Pfree : ∀ E e, P ((free □)%E :: E) e → P E (free e)).
-  Context (Punop : ∀ E op e, P ((@{op} □)%E :: E) e → P E (@{op} e)).
+  Context (Punop : ∀ E op e, P ((⊙{op} □)%E :: E) e → P E (⊙{op} e)).
   Context (Pbinop : ∀ E op el er,
-    P ((□ @{op} er)%E :: E) el →
-    P ((el @{op} □)%E :: E) er →
-    P E (el @{op} er)).
+    P ((□ ⊙{op} er)%E :: E) el →
+    P ((el ⊙{op} □)%E :: E) er →
+    P E (el ⊙{op} er)).
   Context (Pif : ∀ E e el er,
     P ((IF □ then el else er)%E :: E) e →
     P E (IF e then el else er)).
@@ -514,7 +554,7 @@ Section ectx_expr_ind.
     fix go E e : P E e :=
     match e with
     | var x => Pvar _ x
-    | val v => Pval _ v
+    | val@{Ω} v => Pval _ Ω v
     | el ::= er => Passign _ _ _ (go _ el) (go _ er)
     | call f @ es => Pcall E f es $
        zipped_list_ind _ zipped_Forall_nil
@@ -522,8 +562,8 @@ Section ectx_expr_ind.
     | load e => Pload _ _ (go _ e)
     | alloc => Palloc _
     | free e => Pfree _ _ (go _ e)
-    | @{op} e => Punop _ op _ (go _ e)
-    | el @{op} er => Pbinop _ op _ _ (go _ el) (go _ er)
+    | ⊙{op} e => Punop _ op _ (go _ e)
+    | el ⊙{op} er => Pbinop _ op _ _ (go _ el) (go _ er)
     | (IF e then el else er) => Pif _ _ _ _ (go _ e)
     end%E.
 End ectx_expr_ind.
@@ -541,9 +581,9 @@ Ltac ectx_expr_ind E e :=
 (** * Contexts with multiple holes *)
 (** We define singular expression contexts indexed by the number of holes. These
 contexts are particularly useful to prove some of the Hoare rules in a more
-general way. *)
+generic way. *)
 Inductive ectx_full : nat → Type :=
-  | DCVal : value → ectx_full 0
+  | DCVal : indexset → value → ectx_full 0
   | DCVar : nat → ectx_full 0
   | DCAssign : ectx_full 2
   | DCCall {n} : funname → ectx_full n
@@ -556,24 +596,39 @@ Inductive ectx_full : nat → Type :=
 
 Instance ectx_full_subst: DepSubst ectx_full (vec expr) expr := λ _ E,
   match E with
-  | DCVal v => λ _, val v
+  | DCVal Ω v => λ _, val@{Ω} v
   | DCVar x => λ _, var x
   | DCAssign => λ es, es !!! 0 ::= es !!! 1
   | DCCall _ f => λ es, call f @ es
   | DCLoad => λ es, load (es !!! 0)
   | DCAlloc => λ es, alloc
   | DCFree => λ es, free (es !!! 0)
-  | DCUnOp op => λ es, @{op} es !!! 0
-  | DCBinOp op => λ es, es !!! 0 @{op} es !!! 1
+  | DCUnOp op => λ es, ⊙{op} es !!! 0
+  | DCBinOp op => λ es, es !!! 0 ⊙{op} es !!! 1
   | DCIf el er => λ es, IF es !!! 0 then el else er
   end%E.
 
 Lemma ectx_full_subst_inj {n} (E : ectx_full n) es1 es2 :
-  depsubst E es1 = depsubst E es2 → es1 = es2.
+  depsubst E es1 = depsubst E es2 →
+  es1 = es2.
 Proof.
   destruct E; inv_all_vec_fin;
    simpl; intros; simplify_equality;
    auto using vec_to_list_inj2.
+Qed.
+
+Instance ectx_full_locks {n} : Locks (ectx_full n) := λ E,
+  match E with
+  | DCVal Ω v => Ω
+  | DCIf el er => locks el ∪ locks er
+  | _ => ∅
+  end%E.
+
+Lemma ectx_full_subst_locks {n} (E : ectx_full n) (es : vec expr n) :
+  locks (depsubst E es) = locks E ∪ ⋃ (locks <$> vec_to_list es).
+Proof.
+  apply elem_of_equiv_L. intros b.
+  destruct E; inv_all_vec_fin; esolve_elem_of.
 Qed.
 
 (** Giving values [es] for the holes of the context [E], the function
@@ -582,8 +637,8 @@ Qed.
 Definition ectx_full_to_item {n} (E : ectx_full n)
     (es : vec expr n) (i : fin n) : ectx_item :=
   match E in ectx_full n return fin n → vec expr n → ectx_item with
-  | DCVal v => fin_0_inv _
-  | DCVar x => fin_0_inv _
+  | DCVal _ _ => fin_0_inv _
+  | DCVar _ => fin_0_inv _
   | DCAssign =>
      fin_S_inv _ (λ es, □ ::= es !!! 1)%E $
      fin_S_inv _ (λ es, es !!! 0 ::= □)%E $
@@ -598,11 +653,11 @@ Definition ectx_full_to_item {n} (E : ectx_full n)
      fin_S_inv _ (λ es, free □)%E $
      fin_0_inv _
   | DCUnOp op =>
-     fin_S_inv _ (λ es, @{op} □)%E $
+     fin_S_inv _ (λ es, ⊙{op} □)%E $
      fin_0_inv _
   | DCBinOp op =>
-     fin_S_inv _ (λ es, □ @{op} es !!! 1)%E $
-     fin_S_inv _ (λ es, es !!! 0 @{op} □)%E $
+     fin_S_inv _ (λ es, □ ⊙{op} es !!! 1)%E $
+     fin_S_inv _ (λ es, es !!! 0 ⊙{op} □)%E $
      fin_0_inv _
   | DCIf el er =>
      fin_S_inv _ (λ es, IF □ then el else er)%E $
@@ -643,21 +698,22 @@ Proof.
 Qed.
 
 Lemma Forall_is_value_alt_vec {n} (es : vec expr n) :
-  Forall is_value es ↔ ∃ vs, es = vmap EVal vs.
+  Forall is_value es ↔ ∃ Ωs vs, es = vzip_with EVal Ωs vs.
 Proof.
   rewrite Forall_is_value_alt. split.
-  * intros [vs Hvs].
-    rewrite <-(vec_to_list_of_list vs) in Hvs.
-    rewrite <-vec_to_list_map in Hvs.
-    pose proof (vec_to_list_inj1 _ _ Hvs); subst.
-    apply vec_to_list_inj2 in Hvs; subst.
-    by exists (list_to_vec vs).
-  * intros [vs Hvs]. exists vs.
-    by rewrite Hvs, vec_to_list_map.
+  * intros (Ωs & vs & Hes). revert n vs es Hes.
+    induction Ωs; intros ? [|??] [|???] ?; simpl in *;
+      simplify_equality;
+      try (done || by eexists [#], [#]).
+    edestruct IHΩs as (?&?&?); eauto. subst.
+    eexists (_ ::: _), (_ ::: _); simpl; eauto.
+  * intros (Ωs & vs & Hes). exists Ωs vs.
+    by rewrite Hes, vec_to_list_zip_with.
 Qed.
 
 Lemma expr_vec_values {n} (es : vec expr n) :
-  (∃ vs, es = vmap EVal vs) ∨ (∃ i, ¬is_value (es !!! i)).
+  (∃ Ωs vs, es = vzip_with EVal Ωs vs)
+  ∨ (∃ i, ¬is_value (es !!! i)).
 Proof.
   destruct (Forall_Exists_dec is_value es) as [H | H].
   * left. by apply Forall_is_value_alt_vec.
@@ -671,133 +727,14 @@ Proof.
     repeat constructor; auto.
 Qed.
 
-(** * Theorems *)
-(** Evaluation of expressions is preserved under extensions of the memory. *)
-Lemma expr_eval_weaken_mem ρ m1 m2 e v :
-  ⟦ e ⟧ ρ m1 = Some v →
-  m1 ⊆ m2 →
-  ⟦ e ⟧ ρ m2 = Some v.
+Lemma ectx_full_to_item_locks {n} (E : ectx_full n) (es : vec expr n) i :
+  locks (ectx_full_to_item E es i) =
+    locks E ∪ ⋃ (locks <$> delete (fin_to_nat i) (vec_to_list es)).
 Proof.
-  revert v. induction e; intros; simplify_option_equality; auto.
-  destruct (value_true_false_dec _); auto.
-Qed.
-
-Lemma expr_eval_weaken_inv ρ m1 m2 e v1 v2 :
-  ⟦ e ⟧ ρ m1 = Some v1 →
-  m1 ⊆ m2 →
-  ⟦ e ⟧ ρ m2 = Some v2 →
-  v1 = v2.
-Proof.
-  intros ? H1 H2.
-  erewrite (expr_eval_weaken_mem _ m1 m2) in H2 by eauto.
-  congruence.
-Qed.
-
-Lemma Forall_expr_eval_weaken_inv es ρ m1 m2 vs1 vs2 :
-  Forall2 (λ e v, ⟦ e ⟧ ρ m1 = Some v) es vs1 →
-  m1 ⊆ m2 →
-  Forall2 (λ e v, ⟦ e ⟧ ρ m2 = Some v) es vs2 →
-  vs1 = vs2.
-Proof.
-  intros ? H1 H2.
-  apply (Forall2_unique (λ e v, ⟦ e ⟧ ρ m2 = Some v) es).
-  * apply Forall2_impl with (λ e v, ⟦ e ⟧ ρ m1 = Some v);
-      eauto using expr_eval_weaken_mem.
-  * done.
-  * congruence.
-Qed.
-
-Lemma expr_var_free_stack_indep ρ1 ρ2 m e :
-  expr_vars e ≡ ∅ →
-  ⟦ e ⟧ ρ1 m = ⟦ e ⟧ ρ2 m.
-Proof.
-  induction e; simpl; intro; decompose_empty; repeat
-    match goal with
-    | H : expr_vars _ ≡ ∅ → ⟦ _ ⟧ _ _ = _ |- _ => rewrite H
-    | _ => done
-    | |- mbind (M:=option) _ ?o = mbind (M:=option) _ ?o =>
-       destruct o; simpl
-    | _ => destruct (value_true_false_dec _)
-    end.
-Qed.
-
-Lemma expr_load_free_mem_indep ρ m1 m2 e :
-  load_free e →
-  ⟦ e ⟧ ρ m1 = ⟦ e ⟧ ρ m2.
-Proof.
-  induction 1; simpl; repeat
-    match goal with
-    | H : ⟦ _ ⟧ _ _ = _ |- _ => rewrite H
-    | _ => done
-    | |- mbind (M:=option) _ ?o = mbind (M:=option) _ ?o =>
-       destruct o; simpl
-    | _ => destruct (value_true_false_dec _)
-    end.
-Qed.
-
-Tactic Notation "simplify_expr_equality" "by" tactic3(tac) := repeat
-  match goal with
-  | _ => progress simplify_mem_equality by tac
-  | _ => progress simplify_option_equality by tac
-  | Ht : value_true ?v, Hf : value_false ?v |- _ =>
-    destruct (value_true_false v Ht Hf)
-  | H : is_ptr ?v = Some _ |- _ =>
-    apply is_ptr_Some in H
-  | H : context [ value_true_false_dec ?v ] |- _ =>
-    destruct (value_true_false_dec v)
-  | |- context [ value_true_false_dec ?v ] =>
-    destruct (value_true_false_dec v)
-  | H1 : ⟦ ?e ⟧ ?ρ ?m1 = Some ?v1, H2 : ⟦ ?e ⟧ ?ρ ?m2 = Some ?v2 |- _ =>
-    let H3 := fresh in
-    feed pose proof (expr_eval_weaken_inv e ρ m1 m2 v1 v2) as H3;
-      [done | by tac | done | ];
-    clear H2; symmetry in H3
-  end.
-Tactic Notation "simplify_expr_equality" :=
-  simplify_expr_equality by eauto.
-
-(** Lifting DeBruijn indexes distributes over expression evaluation. *)
-Lemma expr_eval_lift ρ e m :
-  ⟦ e↑ ⟧ ρ m = ⟦ e ⟧ (tail ρ) m.
-Proof.
-  induction e; intros; simpl; repeat
-    match goal with
-    | H : ⟦ _↑ ⟧ _ _ = _ |- _ => rewrite H
-    | |- _ ← ?o; ⟦ if _ then _ else _ ⟧ _ _ = _ =>
-      destruct o; simpl; try destruct (value_true_false_dec _)
-    end; auto.
-  by rewrite <-lookup_tail.
-Qed.
-
-(** Evaluation of expressions is preserved under extensions of the stack. *)
-Lemma expr_eval_weaken_stack ρ ρ' m e v :
-  ⟦ e ⟧ ρ m = Some v → ⟦ e ⟧ (ρ ++ ρ') m = Some v.
-Proof.
-  revert v. induction e; intros; simplify_expr_equality; auto.
-  rewrite lookup_app_l.
-  * by simplify_expr_equality.
-  * eauto using lookup_lt_length_alt.
-Qed.
-
-(** If an expression has a denotation, then each subexpression has a
-denotation as well. *)
-Lemma expr_eval_subst_inv (E : ectx) e ρ m v :
-  ⟦ subst E e ⟧ ρ m = Some v →
-  ∃ v', ⟦ e ⟧ ρ m = Some v' ∧ ⟦ subst E (val v')%E ⟧ ρ m = Some v.
-Proof.
-  revert v. induction E as [|E' E IH] using rev_ind;
-    simpl; intros v; [by eauto |].
-  setoid_rewrite list_subst_snoc.
-  intros; destruct E'; simplify_option_equality;
-    naive_solver (by eauto || by simplify_option_equality).
-Qed.
-
-Lemma subst_preserves_expr_eval (E : ectx) e1 e2 ρ m :
-  ⟦ e1 ⟧ ρ m = ⟦ e2 ⟧ ρ m →
-  ⟦ subst E e1 ⟧ ρ m = ⟦ subst E e2 ⟧ ρ m.
-Proof.
-  intros. induction E as [|E' ? IH] using rev_ind; [done |].
-  destruct E'; rewrite ?list_subst_snoc; simpl; rewrite ?IH; auto.
+  apply elem_of_equiv_L. intros b.
+  destruct E; inv_all_vec_fin; simpl; try esolve_elem_of.
+  rewrite fmap_reverse, union_list_reverse.
+  rewrite delete_take_drop, fmap_app, union_list_app. esolve_elem_of.
 Qed.
 
 (** The function [expr_redexes e] computes the set of redexes contained in an
@@ -810,16 +747,16 @@ Section expr_split.
     fix go E e {struct e} :=
     if decide (is_redex e) then {[ (E, e) ]} else
     match e with
-    | val v => ∅
+    | val@{_} _ => ∅
     | var x => ∅ (* impossible *)
     | el ::= er => go (□ ::= er :: E) el ∪ go (el ::= □ :: E) er
     | call f @ es =>
-       ⋃ (zipped_map (λ esl esr, go ((call f @ esl □ esr) :: E)) [] es)
+       ⋃ zipped_map (λ esl esr, go ((call f @ esl □ esr) :: E)) [] es
     | load e => go (load □ :: E) e
     | alloc => ∅ (* impossible *)
     | free e => go (free □ :: E) e
-    | @{op} e => go (@{op} □ :: E) e
-    | e1 @{op} e2 => go (□ @{op} e2 :: E) e1 ∪ go (e1 @{op} □ :: E) e2
+    | ⊙{op} e => go (⊙{op} □ :: E) e
+    | e1 ⊙{op} e2 => go (□ ⊙{op} e2 :: E) e1 ∪ go (e1 ⊙{op} □ :: E) e2
     | (IF e then el else er) => go ((IF □ then el else er) :: E) e
     end%E.
   Definition expr_redexes : expr → C := expr_redexes_aux [].
@@ -834,13 +771,13 @@ Section expr_split.
       is_redex e').
     { intros f es Hes Hforall.
       rewrite elem_of_union_list in Hes.
-      destruct Hes as [rs [Hes ?]].
+      destruct Hes as (rs & Hes & ?).
       rewrite elem_of_zipped_map in Hes.
-      destruct Hes as [? [? [? [??]]]]; subst.
+      destruct Hes as (?&?&?&?&?); subst.
       apply zipped_Forall_app in Hforall. inversion Hforall; subst. auto. }
     ectx_expr_ind E e;
      simpl; intros; repeat case_decide;
-     try solve_elem_of (eauto; try constructor).
+     solve_elem_of (eauto; try constructor).
   Qed.
   Lemma expr_redexes_is_redex e E' e' :
     (E', e') ∈ expr_redexes e →
@@ -858,9 +795,9 @@ Section expr_split.
       subst E (g es) = subst E' e').
     { intros ? g f es Hes Hforall.
       rewrite elem_of_union_list in Hes.
-      destruct Hes as [rs [Hes ?]].
+      destruct Hes as (rs & Hes &?).
       rewrite elem_of_zipped_map in Hes.
-      destruct Hes as [esl [? [? [??]]]]; subst.
+      destruct Hes as (esl &?&?&?&?); subst.
       apply zipped_Forall_app in Hforall. inversion Hforall; subst.
       rewrite <-(reverse_involutive esl), <-(right_id [] (++) (reverse esl)).
       auto. }

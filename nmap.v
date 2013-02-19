@@ -1,4 +1,4 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This files extends the implementation of finite over [positive] to finite
 maps whose keys range over Coq's data type of binary naturals [N]. *)
@@ -30,9 +30,9 @@ Instance Npartial_alter {A} : PartialAlter N A (Nmap A) := λ f i t,
 Instance Nto_list {A} : FinMapToList N A (Nmap A) := λ t,
   match t with
   | NMap o t => option_case (λ x, [(0,x)]) [] o ++
-     (fst_map Npos <$> finmap_to_list t)
+     (fst_map Npos <$> map_to_list t)
   end.
-Instance Nmerge {A} : Merge A (Nmap A) := λ f t1 t2,
+Instance Nmerge: Merge Nmap := λ A B C f t1 t2,
   match t1, t2 with
   | NMap o1 t1, NMap o2 t2 => NMap (f o1 o2) (merge f t1 t2)
   end.
@@ -46,7 +46,7 @@ Proof.
   split.
   * intros ? [??] [??] H. f_equal.
     + apply (H 0).
-    + apply finmap_eq. intros i. apply (H (Npos i)).
+    + apply map_eq. intros i. apply (H (Npos i)).
   * by intros ? [|?].
   * intros ? f [? t] [|i]; simpl.
     + done.
@@ -54,27 +54,27 @@ Proof.
   * intros ? f [? t] [|i] [|j]; simpl; try intuition congruence.
     intros. apply lookup_partial_alter_ne. congruence.
   * intros ??? [??] []; simpl. done. apply lookup_fmap.
-  * intros ? [[x|] t]; unfold finmap_to_list; simpl.
+  * intros ? [[x|] t]; unfold map_to_list; simpl.
     + constructor.
       - rewrite elem_of_list_fmap. by intros [[??] [??]].
-      - rewrite (NoDup_fmap _). apply finmap_to_list_nodup.
-    + rewrite (NoDup_fmap _). apply finmap_to_list_nodup.
-  * intros ? t i x. unfold finmap_to_list. split.
+      - rewrite (NoDup_fmap _). apply map_to_list_nodup.
+    + rewrite (NoDup_fmap _). apply map_to_list_nodup.
+  * intros ? t i x. unfold map_to_list. split.
     + destruct t as [[y|] t]; simpl.
       - rewrite elem_of_cons, elem_of_list_fmap.
         intros [? | [[??] [??]]]; simplify_equality; simpl; [done |].
-        by apply elem_of_finmap_to_list.
+        by apply elem_of_map_to_list.
       - rewrite elem_of_list_fmap.
         intros [[??] [??]]; simplify_equality; simpl.
-        by apply elem_of_finmap_to_list.
+        by apply elem_of_map_to_list.
     + destruct t as [[y|] t]; simpl.
       - rewrite elem_of_cons, elem_of_list_fmap.
         destruct i as [|i]; simpl; [intuition congruence |].
-        intros. right. exists (i, x). by rewrite elem_of_finmap_to_list.
+        intros. right. exists (i, x). by rewrite elem_of_map_to_list.
       - rewrite elem_of_list_fmap.
         destruct i as [|i]; simpl; [done |].
-        intros. exists (i, x). by rewrite elem_of_finmap_to_list.
-  * intros ? f ? [o1 t1] [o2 t2] [|?]; simpl.
+        intros. exists (i, x). by rewrite elem_of_map_to_list.
+  * intros ??? f ? [o1 t1] [o2 t2] [|?]; simpl.
     + done.
-    + apply (merge_spec f t1 t2).
+    + apply (lookup_merge f t1 t2).
 Qed.

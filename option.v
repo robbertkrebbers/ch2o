@@ -1,4 +1,4 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects general purpose definitions and theorems on the option
 data type that are not in the Coq standard library. *)
@@ -95,21 +95,15 @@ Proof. destruct 1. intros. f_equal. auto. Qed.
 (** Equality on [option] is decidable. *)
 Instance option_eq_dec `{dec : ∀ x y : A, Decision (x = y)}
     (x y : option A) : Decision (x = y) :=
-  match x with
-  | Some a =>
-    match y with
-    | Some b =>
-       match dec a b with
-       | left H => left (f_equal _ H)
-       | right H => right (H ∘ injective Some _ _)
-       end
-    | None => right (Some_ne_None _)
-    end
-  | None =>
-     match y with
-     | Some _ => right (None_ne_Some _)
-     | None => left eq_refl
+  match x, y with
+  | Some a, Some b =>
+     match dec a b with
+     | left H => left (f_equal _ H)
+     | right H => right (H ∘ injective Some _ _)
      end
+  | Some _, None => right (Some_ne_None _)
+  | None, Some _ => right (None_ne_Some _)
+  | None, None => left eq_refl
   end.
 
 (** * Monadic operations *)
@@ -128,13 +122,19 @@ Instance option_fmap: FMap option := @option_map.
 Instance option_guard: MGuard option := λ P dec A x,
   if dec then x else None.
 
-Lemma option_fmap_is_Some {A B} (f : A → B) (x : option A) :
-  is_Some x ↔ is_Some (f <$> x).
-Proof. split; inversion 1. done. by destruct x. Qed.
-Lemma option_fmap_is_None {A B} (f : A → B) (x : option A) :
-  x = None ↔ f <$> x = None.
+Lemma fmap_is_Some {A B} (f : A → B) (x : option A) :
+  is_Some (f <$> x) ↔ is_Some x.
+Proof. split; inversion 1. by destruct x. done. Qed.
+Lemma fmap_Some {A B} (f : A → B) (x : option A) y :
+  f <$> x = Some y ↔ ∃ x', x = Some x' ∧ y = f x'.
+Proof. unfold fmap, option_fmap. destruct x; naive_solver. Qed.
+Lemma fmap_None {A B} (f : A → B) (x : option A) :
+  f <$> x = None ↔ x = None.
 Proof. unfold fmap, option_fmap. by destruct x. Qed.
 
+Lemma option_fmap_id {A} (x : option A) :
+  id <$> x = x.
+Proof. by destruct x. Qed.
 Lemma option_bind_assoc {A B C} (f : A → option B)
     (g : B → option C) (x : option A) : (x ≫= f) ≫= g = x ≫= (mbind g ∘ f).
 Proof. by destruct x; simpl. Qed.
@@ -214,10 +214,10 @@ Tactic Notation "simplify_option_equality" "by" tactic3(tac) := repeat
     end
   | H : context C [@mguard option _ ?P ?dec _ ?x] |- _ =>
     let X := context C [ if dec then x else None ] in
-    change X in H; destruct dec
+    change X in H; destruct_decide dec
   | |- context C [@mguard option _ ?P ?dec _ ?x] =>
     let X := context C [ if dec then x else None ] in
-    change X; destruct dec
+    change X; destruct_decide dec
   | H1 : ?o = Some ?x, H2 : ?o = Some ?y |- _ =>
     assert (y = x) by congruence; clear H2
   | H1 : ?o = Some ?x, H2 : ?o = None |- _ =>
@@ -259,8 +259,14 @@ Section option_union_intersection_difference.
   Proof. by intros [?|]. Qed.
   Global Instance: Commutative (=) f → Commutative (=) (union_with f).
   Proof. by intros ? [?|] [?|]; compute; rewrite 1?(commutative f). Qed.
+
+  Global Instance: LeftAbsorb (=) None (intersection_with f).
+  Proof. by intros [?|]. Qed.
+  Global Instance: RightAbsorb (=) None (intersection_with f).
+  Proof. by intros [?|]. Qed.
   Global Instance: Commutative (=) f → Commutative (=) (intersection_with f).
   Proof. by intros ? [?|] [?|]; compute; rewrite 1?(commutative f). Qed.
+
   Global Instance: RightId (=) None (difference_with f).
   Proof. by intros [?|]. Qed.
 End option_union_intersection_difference.

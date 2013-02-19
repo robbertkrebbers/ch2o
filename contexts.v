@@ -1,4 +1,4 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This development makes use of contexts to define the semantics of various
 constructs. This file collects some general purpose definitions, theorems, and
@@ -30,15 +30,15 @@ Instance list_subst `{Subst A B B} : Subst (list A) B B :=
   | [] => b
   | a :: l => subst l (subst a b)
   end.
-Lemma list_subst_nil `{Subst A B B} b :
+Lemma subst_nil `{Subst A B B} b :
   subst [] b = b.
 Proof. done. Qed.
-Lemma list_subst_app `{Subst A B B} (l1 l2 : list A) b :
+Lemma subst_app `{Subst A B B} (l1 l2 : list A) b :
   subst (l1 ++ l2) b = subst l2 (subst l1 b).
 Proof. revert b. induction l1; simpl; auto. Qed.
-Lemma list_subst_snoc `{Subst A B B} (l1 : list A) a b :
+Lemma subst_snoc `{Subst A B B} (l1 : list A) a b :
   subst (l1 ++ [a]) b = subst a (subst l1 b).
-Proof. exact (list_subst_app l1 [a] b). Qed.
+Proof. exact (subst_app l1 [a] b). Qed.
 
 Instance list_subst_injective `{Subst A B B} :
   (∀ a, Injective (=) (=) (subst a)) →
@@ -89,12 +89,12 @@ Tactic Notation "simplify_list_subst_equality" hyp(H) :=
   | subst ?l _ = subst ?l _ => apply (list_subst_injective _ l) in H
   | @subst _ _ _ list_subst ?l _ = _ =>
      destruct l as [|?? _] using rev_ind;
-       [ rewrite list_subst_nil in H; simplify_equality
-       | rewrite list_subst_snoc in H; simplify_subst_equality H]
+       [ rewrite subst_nil in H; simplify_equality
+       | rewrite subst_snoc in H; simplify_subst_equality H]
   | _ = @subst _ _ _ list_subst ?l _ =>
      destruct l as [|?? _] using rev_ind;
-       [ rewrite list_subst_nil in H; simplify_equality
-       | rewrite list_subst_snoc in H; simplify_subst_equality H]
+       [ rewrite subst_nil in H; simplify_equality
+       | rewrite subst_snoc in H; simplify_subst_equality H]
   | _ => simplify_subst_equality H
   end.
 Tactic Notation "simplify_list_subst_equality" :=

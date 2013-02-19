@@ -1,4 +1,4 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file implements finite as unordered lists without duplicates
 removed. This implementation forms a monad. *)
@@ -51,13 +51,12 @@ Instance listset_filter: Filter A (listset A) := λ P _ l,
   | Listset l' => Listset (filter P l')
   end.
 
-Global Instance: Collection A (listset A).
+Instance: Collection A (listset A).
 Proof.
   split.
   * apply _.
   * intros [?] [?]. apply elem_of_list_intersection.
   * intros [?] [?]. apply elem_of_list_difference.
-  * intros ? [?] [?]. apply elem_of_list_intersection_with.
 Qed.
 
 Instance listset_elems: Elements A (listset A) :=
@@ -67,9 +66,16 @@ Global Instance: FinCollection A (listset A).
 Proof.
   split.
   * apply _.
-  * intros [?] ??. apply elem_of_list_filter.
   * symmetry. apply elem_of_remove_dups.
   * intros. apply remove_dups_nodup.
+Qed.
+
+Global Instance: CollectionOps A (listset A).
+Proof.
+  split.
+  * apply _.
+  * intros ? [?] [?]. apply elem_of_list_intersection_with.
+  * intros [?] ??. apply elem_of_list_filter.
 Qed.
 End listset.
 
