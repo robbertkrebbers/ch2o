@@ -48,26 +48,51 @@ Inductive ehstep (ρ : stack) : expr → mem → expr → mem → Prop :=
 where "ρ  ⊢ₕ e1 , m1 '⇒' e2 , m2" :=
   (ehstep ρ e1%E m1 e2%E m2) : C_scope.
 
-Lemma ehstep_pure_pure ρ e1 m1 e2 m2 :
+Lemma ehstep_pure_pure fs ρ e1 m1 e2 m2 :
   ρ ⊢ₕ e1, m1 ⇒ e2, m2 →
-  is_pure e1 →
-  is_pure e2.
-Proof. destruct 1; inversion 1; constructor. Qed.
-Lemma ehstep_pure_mem ρ e1 m1 e2 m2 :
+  is_pure fs e1 →
+  is_pure fs e2.
+Proof.
+  intros p He1. pose proof (is_pure_locks _ _ He1) as HΩ.
+  destruct p; inversion He1; simpl in *; rewrite ?HΩ;
+    try constructor; auto.
+Qed.
+Lemma ehstep_pure_mem fs ρ e1 m1 e2 m2 :
   ρ ⊢ₕ e1, m1 ⇒ e2, m2 →
-  is_pure e1 →
+  is_pure fs e1 →
   m1 = m2.
-Proof. by destruct 1; inversion 1. Qed.
-Lemma ehstep_pure_locks ρ e1 m1 e2 m2 :
+Proof.
+  by destruct 1; inversion 1;
+    try match goal with
+    | H : is_pure _ (val@{_} _) |- _ =>
+      apply is_pure_locks in H; simpl in H;
+      rewrite H, mem_unlock_empty_locks
+    end.
+Qed.
+Lemma ehstep_pure_locks fs ρ e1 m1 e2 m2 :
   ρ ⊢ₕ e1, m1 ⇒ e2, m2 →
-  is_pure e1 →
+  is_pure fs e1 →
   locks e1 = locks e2.
-Proof. by destruct 1; inversion 1. Qed.
-
+Proof.
+  destruct 1; inversion 1; simpl;
+    repeat match goal with
+    | H : is_pure _ _ |- _ =>
+      apply is_pure_locks in H; simpl in H; rewrite H
+    end; solve_elem_of.
+Qed.
 Lemma ehstep_is_redex ρ e1 m1 v2 m2 :
   ρ ⊢ₕ e1, m1 ⇒ v2, m2 →
   is_redex e1.
 Proof. destruct 1; repeat constructor. Qed.
+
+Lemma estep_if1_no_locks ρ v el er m :
+  value_true v →
+  ρ ⊢ₕ IF val v then el else er, m ⇒ el, m.
+Proof. rewrite <-(mem_unlock_empty_locks m) at 2. by constructor. Qed.
+Lemma estep_if2_no_locks ρ v el er m :
+  value_false v →
+  ρ ⊢ₕ IF val v then el else er, m ⇒ er, m.
+Proof. rewrite <-(mem_unlock_empty_locks m) at 2. by constructor. Qed.
 
 (** An expression is safe if a head reduction step is possible. This relation
 is adapted from CompCert and is used to capture undefined behavior. If the
@@ -95,10 +120,12 @@ Ltac inv_ehstep :=
 Ltac do_ehstep :=
   match goal with
   | |- _ ⊢ₕ _, _ ⇒ _, _ => constructor (solve [eauto with cstep])
+  | |- _ ⊢ₕ _, _ ⇒ _, _ => solve [eauto with cstep]
   end.
 
 Hint Constructors ehstep : cstep.
 Hint Constructors ehsafe : cstep.
+Hint Resolve estep_if1_no_locks estep_if2_no_locks : cstep.
 Hint Extern 100 (_ !! _ = _) => progress simpl_mem : cstep.
 Hint Extern 100 (is_writable (_ ∪ _) _) => apply is_writable_union_l : cstep.
 Hint Extern 100 (is_writable (_ ∪ _) _) => apply is_writable_union_r : cstep.

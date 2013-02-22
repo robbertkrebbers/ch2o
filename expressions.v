@@ -4,14 +4,15 @@
 to define the operational semantics in the file [smallstep], we define
 corresponding evaluation contexts. Notations for expressions are declared in the
 scope [expr_scope]. *)
+Require Import nmap mapset.
 Require Export values contexts.
-Require Import nmap.
 
 (** * Function names *)
 (** We use the type [N] of binary natural numbers for function names, and the
 implementation [Nmap] for efficient finite maps over function names. *)
 Definition funname := N.
 Definition funmap := Nmap.
+Notation funset := (mapset funmap).
 
 Instance funname_eq_dec: ∀ i1 i2: funname, Decision (i1 = i2) := decide_rel (=).
 Instance funname_fresh `{FinCollection funname C} : Fresh funname C := _.
@@ -31,7 +32,13 @@ Instance funmap_merge : Merge funmap := @merge Nmap _.
 Instance funmap_fmap: FMap funmap := λ A B f, @fmap Nmap _ _ f _.
 Instance: FinMap funname funmap := _.
 
+Instance funmap_dom {A} : Dom (funmap A) funset := mapset_dom.
+Instance: FinMapDom funname funmap funset := mapset_dom_spec.
+
 Typeclasses Opaque funname funmap.
+
+Class Funs A := funs : A → funset.
+Arguments funs {_ _} !_ / : simpl nomatch.
 
 (** * Stacks *)
 (** Stacks are lists of memory indexes rather than lists of values. This allows
@@ -197,8 +204,8 @@ Section expr_ind.
     | val@{Ω} v => Pval Ω v
     | el ::= er => Passign _ _ (go el) (go er)
     | call f @ es => Pcall f es $ list_ind (Forall P)
-       (Forall_nil _)
-       (λ e _, Forall_cons _ _ _ (go e)) es
+       (Forall_nil_2 _)
+       (λ e _, Forall_cons_2 _ _ _ (go e)) es
     | load e => Pload e (go e)
     | alloc => Palloc
     | free e => Pfree e (go e)
@@ -237,8 +244,8 @@ Proof.
 Qed.
 
 (** * Miscellaneous Operations and properties *)
-(** An expression is [load_free] if it does not contain any uses of the [load]
-operator. *)
+(** An expression is [load_free] if it does not contain any occurrences of the
+[load] operator. *)
 Inductive load_free : expr → Prop :=
   | EVar_load_free x : load_free (var x)
   | EVal_load_free Ω v : load_free (val@{Ω} v)
@@ -254,6 +261,40 @@ Inductive load_free : expr → Prop :=
   | EIf_load_free e el er :
      load_free e → load_free el → load_free er →
      load_free (IF e then el else er).
+
+Section load_free_ind.
+  Context (P : expr → Prop).
+  Context (Pvar : ∀ x, P (var x)).
+  Context (Pval : ∀ Ω v, P (val@{Ω} v)).
+  Context (Passign : ∀ el er,
+    load_free el → P el → load_free er → P er → P (el ::= er)).
+  Context (Pcall : ∀ f es,
+    Forall load_free es → Forall P es → P (call f @ es)).
+  Context (Palloc : P alloc).
+  Context (Pfree : ∀ e, load_free e → P e → P (free e)).
+  Context (Punop : ∀ op e, load_free e → P e → P (⊙{op} e)).
+  Context (Pbinop : ∀ op e1 e2,
+    load_free e1 → P e1 → load_free e2 → P e2 → P (e1 ⊙{op} e2)).
+  Context (Pif : ∀ e el er,
+    load_free e → P e → load_free el → P el → load_free er → P er →
+    P (IF e then el else er)).
+
+  Definition load_free_ind_alt: ∀ e, load_free e → P e :=
+    fix go e H :=
+    match H in load_free e return P e with
+    | EVar_load_free x => Pvar _
+    | EVal_load_free Ω v => Pval _ _
+    | EAssign_load_free _ _ Hl Hr => Passign _ _ Hl (go _ Hl) Hr (go _ Hr)
+    | ECall_load_free _ _ H => Pcall _ _ H (Forall_impl _ _ _ H go)
+    | EAlloc_load_free => Palloc
+    | EFree_load_free _ H => Pfree _ H (go _ H)
+    | EUnOp_load_free _ _ H => Punop _ _ H (go _ H)
+    | EBinOp_load_free _ _ _ H1 H2 =>
+       Pbinop _ _ _ H1 (go _ H1) H2 (go _ H2)
+    | EIf_load_free _ _ _ H Hl Hr =>
+       Pif _ _ _ H (go _ H) Hl (go _ Hl) Hr (go _ Hr)
+    end.
+End load_free_ind.
 
 Instance load_free_dec: ∀ e, Decision (load_free e).
 Proof.
@@ -274,27 +315,47 @@ Proof.
   end%E); first [by constructor | by inversion 1].
 Defined.
 
-(** The operation [expr_vars e] yields the set of variables in [e]. *)
-Fixpoint expr_vars (e : expr) : listset nat :=
+(** The operation [vars e] yields the set of variables in [e]. *)
+Class Vars A := vars: A → listset nat.
+Arguments vars {_ _} !_ / : simpl nomatch.
+
+Instance expr_vars: Vars expr:=
+  fix go e :=
+  let _ : Vars _ := @go in
   match e with
   | var n => {[ n ]}
   | val@{_} _ => ∅
-  | el ::= er => expr_vars el ∪ expr_vars er
-  | call _ @ es => ⋃ (expr_vars <$> es)
+  | el ::= er => vars el ∪ vars er
+  | call _ @ es => ⋃ (vars <$> es)
   | alloc => ∅
   | load e
   | free e
-  | ⊙{_} e => expr_vars e
-  | el ⊙{_} er => expr_vars el ∪ expr_vars er
-  | (IF e then el else er) =>
-      expr_vars e ∪ expr_vars el ∪ expr_vars er
+  | ⊙{_} e => vars e
+  | el ⊙{_} er => vars el ∪ vars er
+  | (IF e then el else er) => vars e ∪ vars el ∪ vars er
+  end%E.
+
+Instance expr_funs: Funs expr:=
+  fix go e :=
+  let _ : Funs _ := @go in
+  match e with
+  | var n => ∅
+  | val@{_} _ => ∅
+  | el ::= er => funs el ∪ funs er
+  | call f @ es => {[ f ]} ∪ ⋃ (funs <$> es)
+  | alloc => ∅
+  | load e
+  | free e
+  | ⊙{_} e => funs e
+  | el ⊙{_} er => funs el ∪ funs er
+  | (IF e then el else er) => funs e ∪ funs el ∪ funs er
   end%E.
 
 Hint Extern 1 (load_free _) => assumption : typeclass_instances.
 Hint Extern 100 (load_free ?e) =>
   apply (bool_decide_unpack _); vm_compute; exact I : typeclass_instances.
-Hint Extern 1 (expr_vars _ ≡ ∅) => assumption : typeclass_instances.
-Hint Extern 100 (expr_vars _ ≡ ∅) =>
+Hint Extern 1 (vars _ ≡ ∅) => assumption : typeclass_instances.
+Hint Extern 100 (vars _ ≡ ∅) =>
   apply (bool_decide_unpack _); vm_compute; exact I : typeclass_instances.
 
 (** The operation [expr_locks e] yields the union of the sets of locked
@@ -315,29 +376,83 @@ Instance expr_locks: Locks expr :=
   | (IF e then el else er) => locks e ∪ locks el ∪ locks er
   end%E.
 
-(** An expression is pure, or side-effect free, if it does not modify the
-memory or contains sequence points. *)
-Inductive is_pure: expr → Prop :=
-  | EVar_pure x : is_pure (var x)
-  | EVal_pure v Ω : is_pure (val@{Ω} v)
-  | ELoad_pure e : is_pure e → is_pure (load e)
-  | EUnOp_pure op e : is_pure e → is_pure (⊙{op} e)
+(** An expression is pure (or side-effect free) if it does not modify the
+memory. Although these expressions may have sequence points (namely at the
+conditional and at calls to pure functions), these sequence points are not
+observable, as pure expressions do not allow any locations to get locked in
+the first place. The predicate is parametrized by a set [fs] of names of pure
+functions. The denotational semantics for pure expressions in the file
+[expression_eval] uses a map from function names to denotations to deal with
+pure function calls. *)
+Inductive is_pure (fs : funset) : expr → Prop :=
+  | EVar_pure x : is_pure fs (var x)
+  | EVal_pure v : is_pure fs (val v)
+  | ECall_pure f es :
+     f ∈ fs → Forall (is_pure fs) es → is_pure fs (call f @ es)
+  | ELoad_pure e : is_pure fs e → is_pure fs (load e)
+  | EUnOp_pure op e : is_pure fs e → is_pure fs (⊙{op} e)
   | EBinOp_pure op el er :
-     is_pure el → is_pure er → is_pure (el ⊙{op} er).
+     is_pure fs el → is_pure fs er → is_pure fs (el ⊙{op} er)
+  | EIf_pure e el er :
+     is_pure fs e → is_pure fs el → is_pure fs er →
+     is_pure fs (IF e then el else er).
 
-Instance is_pure_dec: ∀ e, Decision (is_pure e).
+Section is_pure_ind.
+  Context (fs : funset) (P : expr → Prop).
+  Context (Pvar : ∀ x, P (var x)).
+  Context (Pval : ∀ v, P (val v)).
+  Context (Pcall : ∀ f es,
+    f ∈ fs →
+    Forall (is_pure fs) es → Forall P es → P (call f @ es)).
+  Context (Pload : ∀ e, is_pure fs e → P e → P (load e)).
+  Context (Punop : ∀ op e, is_pure fs e → P e → P (⊙{op} e)).
+  Context (Pbinop : ∀ op e1 e2,
+    is_pure fs e1 → P e1 → is_pure fs e2 → P e2 → P (e1 ⊙{op} e2)).
+  Context (Pif : ∀ e el er,
+    is_pure fs e → P e → is_pure fs el → P el → is_pure fs er → P er →
+    P (IF e then el else er)).
+
+  Definition is_pure_ind_alt: ∀ e, is_pure fs e → P e :=
+    fix go e H  :=
+    match H in is_pure _ e return P e with
+    | EVar_pure x => Pvar _
+    | EVal_pure v => Pval _
+    | ECall_pure _ _ Hf H => Pcall _ _ Hf H (Forall_impl _ _ _ H go)
+    | ELoad_pure _ H => Pload _ H (go _ H)
+    | EUnOp_pure _ _ H => Punop _ _ H (go _ H)
+    | EBinOp_pure _ _ _ H1 H2 =>
+       Pbinop _ _ _ H1 (go _ H1) H2 (go _ H2)
+    | EIf_pure _ _ _ H Hl Hr =>
+       Pif _ _ _ H (go _ H) Hl (go _ Hl) Hr (go _ Hr)
+    end.
+End is_pure_ind.
+
+Instance is_pure_dec fs : ∀ e, Decision (is_pure fs e).
 Proof.
  refine (
   fix go e :=
-  match e return Decision (is_pure e) with
+  match e return Decision (is_pure fs e) with
   | var x => left _
-  | val@{_} _ => left _
+  | val@{Ω} _ => cast_if (decide (Ω = ∅))
+  | call f @ es =>
+     cast_if_and (decide (f ∈ fs)) (decide (Forall (is_pure fs) es))
   | load e => cast_if (go e)
   | ⊙{op} e => cast_if (go e)
   | el ⊙{op} er => cast_if_and (go el) (go er)
+  | (IF e then el else er) => cast_if_and3 (go e) (go el) (go er)
   | _ => right _
-  end%E); first [by constructor | by inversion 1].
+  end%E); try first [by subst; constructor | by inversion 1; subst].
 Defined.
+
+Lemma is_pure_locks fs e : is_pure fs e → locks e = ∅.
+Proof.
+  assert (∀ es b,
+    Forall (λ e, b ∉ locks e) es →
+    b ∉ ⋃ (locks <$> es)).
+  { induction 1; esolve_elem_of. }
+  intros He. apply elem_of_equiv_empty_L. intros b.
+  induction He using is_pure_ind_alt; esolve_elem_of.
+Qed.
 
 (** The operation [e↑] increases all De Bruijn indexes of variables in [e]
 by one. That means, each variable [var x] in [e] becomes [var (S x)]. *)
@@ -415,14 +530,15 @@ Proof.
 Qed.
 
 Lemma Forall_is_value_alt es :
-  Forall is_value es ↔ ∃ Ωs vs, es = zip_with EVal Ωs vs.
+  Forall is_value es ↔
+    ∃ Ωs vs, es = zip_with EVal Ωs vs ∧ same_length Ωs vs.
 Proof.
   split.
-  * induction 1 as [|?? [Ω v] _ (Ωs & vs & ?)]; subst.
-    + by eexists [], [].
-    + by exists (Ω :: Ωs) (v :: vs).
-  * intros (Ωs & vs & H). subst. revert vs.
-    induction Ωs; intros [|??]; simpl; auto using EVal_is_value.
+  * induction 1 as [|?? [Ω v] _ (Ωs & vs & ?&?)]; subst.
+    + eexists [], []. split. done. constructor.
+    + exists (Ω :: Ωs) (v :: vs). split. done. by constructor.
+  * intros (Ωs & vs & H & Hvs); subst.
+    induction Hvs; simpl; auto using EVal_is_value.
 Qed.
 
 (** * Contexts with one hole *)
@@ -701,14 +817,15 @@ Lemma Forall_is_value_alt_vec {n} (es : vec expr n) :
   Forall is_value es ↔ ∃ Ωs vs, es = vzip_with EVal Ωs vs.
 Proof.
   rewrite Forall_is_value_alt. split.
-  * intros (Ωs & vs & Hes). revert n vs es Hes.
-    induction Ωs; intros ? [|??] [|???] ?; simpl in *;
+  * intros (Ωs & vs & Hes & Hvs). revert n es Hes.
+    induction Hvs; intros ?  [|???] ?; simpl in *;
       simplify_equality;
       try (done || by eexists [#], [#]).
-    edestruct IHΩs as (?&?&?); eauto. subst.
+    edestruct IHHvs as (?&?&?); eauto. subst.
     eexists (_ ::: _), (_ ::: _); simpl; eauto.
-  * intros (Ωs & vs & Hes). exists Ωs vs.
-    by rewrite Hes, vec_to_list_zip_with.
+  * intros (Ωs & vs & Hes). exists Ωs vs. split.
+    + by rewrite Hes, vec_to_list_zip_with.
+    + apply vec_to_list_same_length.
 Qed.
 
 Lemma expr_vec_values {n} (es : vec expr n) :
@@ -815,10 +932,11 @@ Section expr_split.
     is_value e.
   Proof.
     assert (∀ (f : list expr → list expr → expr → C) es1 es2,
-      ⋃ zipped_map f es1 es2 ≡ ∅ →
+      ⋃ (zipped_map f es1 es2) ≡ ∅ →
       zipped_Forall (λ esl esr e, f esl esr e ≡ ∅ → is_value e) es1 es2 →
       Forall is_value es2).
-    { induction 2; simpl in *; decompose_empty; intuition. }
+    { intros ???. rewrite empty_union_list.
+      induction 2; simpl in *; decompose_Forall; auto. }
     ectx_expr_ind E e;
       simpl; intros; repeat case_decide; decompose_empty;
       try match goal with
