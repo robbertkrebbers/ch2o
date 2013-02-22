@@ -122,6 +122,14 @@ Instance option_fmap: FMap option := @option_map.
 Instance option_guard: MGuard option := λ P dec A x,
   if dec then x else None.
 
+Definition mapM `{!MBind M} `{!MRet M} {A B}
+    (f : A → M B) : list A → M (list B) :=
+  fix go l :=
+  match l with
+  | [] => mret []
+  | x :: l => y ← f x; k ← go l; mret (y :: k)
+  end.
+
 Lemma fmap_is_Some {A B} (f : A → B) (x : option A) :
   is_Some (f <$> x) ↔ is_Some x.
 Proof. split; inversion 1. by destruct x. done. Qed.
@@ -138,6 +146,51 @@ Proof. by destruct x. Qed.
 Lemma option_bind_assoc {A B C} (f : A → option B)
     (g : B → option C) (x : option A) : (x ≫= f) ≫= g = x ≫= (mbind g ∘ f).
 Proof. by destruct x; simpl. Qed.
+Lemma option_bind_ext {A B} (f g : A → option B) x y :
+  (∀ a, f a = g a) →
+  x = y →
+  x ≫= f = y ≫= g.
+Proof. intros. destruct x, y; simplify_equality; simpl; auto. Qed.
+Lemma option_bind_ext_fun {A B} (f g : A → option B) x :
+  (∀ a, f a = g a) →
+  x ≫= f = x ≫= g.
+Proof. intros. by apply option_bind_ext. Qed.
+
+Section mapM.
+  Context {A B : Type} (f : A → option B).
+
+  Lemma mapM_ext (g : A → option B) l :
+    (∀ x, f x = g x) → mapM f l = mapM g l.
+  Proof. intros Hfg. by induction l; simpl; rewrite ?Hfg, ?IHl. Qed.
+  Lemma Forall2_mapM_ext (g : A → option B) l k :
+    Forall2 (λ x y, f x = g y) l k → mapM f l = mapM g k.
+  Proof.
+    induction 1 as [|???? Hfg ? IH]; simpl. done. by rewrite Hfg, IH.
+  Qed.
+  Lemma Forall_mapM_ext (g : A → option B) l :
+    Forall (λ x, f x = g x) l → mapM f l = mapM g l.
+  Proof.
+    induction 1 as [|?? Hfg ? IH]; simpl. done. by rewrite Hfg, IH.
+  Qed.
+
+  Lemma mapM_Some_1 l k :
+    mapM f l = Some k → Forall2 (λ x y, f x = Some y) l k.
+  Proof.
+    revert k. induction l as [|x l]; intros [|y k]; simpl; try done.
+    * destruct (f x); simpl; [|discriminate]. by destruct (mapM f l).
+    * destruct (f x) eqn:?; simpl; [|discriminate].
+      destruct (mapM f l); intros; simplify_equality. constructor; auto.
+  Qed.
+  Lemma mapM_Some_2 l k :
+    Forall2 (λ x y, f x = Some y) l k → mapM f l = Some k.
+  Proof.
+    induction 1 as [|???? Hf ? IH]; simpl; [done |].
+    rewrite Hf. simpl. by rewrite IH.
+  Qed.
+  Lemma mapM_Some l k :
+    mapM f l = Some k ↔ Forall2 (λ x y, f x = Some y) l k.
+  Proof. split; auto using mapM_Some_1, mapM_Some_2. Qed.
+End mapM.
 
 Tactic Notation "simplify_option_equality" "by" tactic3(tac) := repeat
   match goal with
@@ -222,11 +275,13 @@ Tactic Notation "simplify_option_equality" "by" tactic3(tac) := repeat
     assert (y = x) by congruence; clear H2
   | H1 : ?o = Some ?x, H2 : ?o = None |- _ =>
     congruence
+  | H : mapM _ _ = Some _ |- _ => apply mapM_Some in H
   end.
 Tactic Notation "simplify_option_equality" :=
   simplify_option_equality by eauto.
 
-Hint Extern 100 => simplify_option_equality : simplify_option_equality.
+Hint Extern 800 =>
+  progress simplify_option_equality : simplify_option_equality.
 
 (** * Union, intersection and difference *)
 Instance option_union_with {A} : UnionWith A (option A) := λ f x y,

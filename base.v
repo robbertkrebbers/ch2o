@@ -266,6 +266,22 @@ Class Filter A B :=
 
 (* Arguments filter {_ _ _} _ {_} !_ / : simpl nomatch. *)
 
+(** We define variants of the relations [(≡)] and [(⊆)] that are indexed by
+an environment. *)
+Class EquivEnv A B := equiv_env : A → relation B.
+Notation "X ≡@{ E } Y" := (equiv_env E X Y)
+  (at level 70, format "X  ≡@{ E }  Y") : C_scope.
+Notation "(≡@{ E } )" := (equiv_env E)
+  (E at level 1, only parsing) : C_scope.
+Instance: Params (@equiv_env) 4.
+
+Class SubsetEqEnv A B := subseteq_env : A → relation B.
+Notation "X ⊆@{ E } Y" := (subseteq_env E X Y)
+  (at level 70, format "X  ⊆@{ E }  Y") : C_scope.
+Notation "(⊆@{ E } )" := (subseteq_env E)
+  (E at level 1, only parsing) : C_scope.
+Instance: Params (@subseteq_env) 4.
+
 (** ** Monadic operations *)
 (** We define operational type classes for the monadic operations bind, join 
 and fmap. These type classes are defined in a non-standard way by taking the
@@ -282,7 +298,7 @@ in the appropriate way, and so that it can be used for mutual recursion
 (the mapped function [f] is not part of the fixpoint) as well. This is a hack,
 and should be replaced by something more appropriate in future versions. *)
 
-(* We use these type classes merely for convenient overloading of notations and
+(** We use these type classes merely for convenient overloading of notations and
 do not formalize any theory on monads (we do not even define a class with the
 monad laws). *)
 Class MRet (M : Type → Type) := mret: ∀ {A}, A → M A.
@@ -316,11 +332,12 @@ Class MGuard (M : Type → Type) :=
   mguard: ∀ P {dec : Decision P} {A}, M A → M A.
 Notation "'guard' P ; o" := (mguard P o)
   (at level 65, only parsing, next at level 35, right associativity) : C_scope.
+Arguments mguard _ _ _ !_ _ !_ / : simpl nomatch.
 
 (** ** Operations on maps *)
 (** In this section we define operational type classes for the operations
 on maps. In the file [fin_maps] we will axiomatize finite maps.
-The function lookup [m !! k] should yield the element at key [k] in [m]. *)
+The function look up [m !! k] should yield the element at key [k] in [m]. *)
 Class Lookup (K A M : Type) :=
   lookup: K → M → option A.
 Instance: Params (@lookup) 4.

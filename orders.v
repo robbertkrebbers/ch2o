@@ -209,7 +209,7 @@ Section bounded_join_sl.
         by transitivity (X ∪ Y); [auto | rewrite E].
     * intros [E1 E2]. by rewrite E1, E2, (left_id _ _).
   Qed.
-  Lemma empty_list_union Xs : ⋃ Xs ≡ ∅ ↔ Forall (≡ ∅) Xs.
+  Lemma empty_union_list Xs : ⋃ Xs ≡ ∅ ↔ Forall (≡ ∅) Xs.
   Proof.
     split.
     * induction Xs; simpl; rewrite ?empty_union; intuition.
@@ -248,8 +248,8 @@ Section bounded_join_sl.
 
     Lemma empty_union_L X Y : X ∪ Y = ∅ ↔ X = ∅ ∧ Y = ∅.
     Proof. unfold_leibniz. apply empty_union. Qed.
-    Lemma empty_list_union_L Xs : ⋃ Xs = ∅ ↔ Forall (= ∅) Xs.
-    Proof. unfold_leibniz. apply empty_list_union. Qed.
+    Lemma empty_union_list_L Xs : ⋃ Xs = ∅ ↔ Forall (= ∅) Xs.
+    Proof. unfold_leibniz. apply empty_union_list. Qed.
   End leibniz.
 
   Section dec.
@@ -257,14 +257,14 @@ Section bounded_join_sl.
 
     Lemma non_empty_union X Y : X ∪ Y ≢ ∅ → X ≢ ∅ ∨ Y ≢ ∅.
     Proof. rewrite empty_union. destruct (decide (X ≡ ∅)); intuition. Qed.
-    Lemma non_empty_list_union Xs : ⋃ Xs ≢ ∅ → Exists (≢ ∅) Xs.
-    Proof. rewrite empty_list_union. apply (not_Forall_Exists _). Qed.
+    Lemma non_empty_union_list Xs : ⋃ Xs ≢ ∅ → Exists (≢ ∅) Xs.
+    Proof. rewrite empty_union_list. apply (not_Forall_Exists _). Qed.
 
     Context `{!LeibnizEquiv A}.
     Lemma non_empty_union_L X Y : X ∪ Y ≠ ∅ → X ≠ ∅ ∨ Y ≠ ∅.
     Proof. unfold_leibniz. apply non_empty_union. Qed.
-    Lemma non_empty_list_union_L Xs : ⋃ Xs ≠ ∅ → Exists (≠ ∅) Xs.
-    Proof. unfold_leibniz. apply non_empty_list_union. Qed.
+    Lemma non_empty_union_list_L Xs : ⋃ Xs ≠ ∅ → Exists (≠ ∅) Xs.
+    Proof. unfold_leibniz. apply non_empty_union_list. Qed.
   End dec.
 End bounded_join_sl.
 

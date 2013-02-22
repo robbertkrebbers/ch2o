@@ -69,7 +69,7 @@ thereby obtain a data type that ensures canonicity. *)
 Definition Pmap A := dsig (@Pmap_wf A).
 
 (** * Operations on the data structure *)
-Global Instance Pmap_dec `{∀ x y : A, Decision (x = y)} (t1 t2 : Pmap A) :
+Global Instance Pmap_eq_dec `{∀ x y : A, Decision (x = y)} (t1 t2 : Pmap A) :
     Decision (t1 = t2) :=
   match Pmap_raw_eq_dec (`t1) (`t2) with
   | left H => left (proj2 (dsig_eq _ t1 t2) H)

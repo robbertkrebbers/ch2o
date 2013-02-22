@@ -47,9 +47,14 @@ Proof.
     apply option_eq. intros []. by apply E.
 Qed.
 
-Global Instance mapset_eq_dec `{∀ m1 m2 : M unit, Decision (m1 = m2)} :
-  ∀ X1 X2 : mapset M, Decision (X1 = X2) | 1.
-Proof. solve_decision. Defined.
+Global Instance mapset_eq_dec `{∀ m1 m2 : M unit, Decision (m1 = m2)}
+    (X1 X2 : mapset M) : Decision (X1 = X2) | 1.
+Proof.
+ refine
+  match X1, X2 with
+  | Mapset m1, Mapset m2 => cast_if (decide (m1 = m2))
+  end; abstract congruence.
+Defined.
 Global Instance mapset_elem_of_dec x (X : mapset M) :
   Decision (x ∈ X) | 1.
 Proof. solve_decision. Defined.

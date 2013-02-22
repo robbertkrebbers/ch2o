@@ -2172,18 +2172,26 @@ Tactic Notation "decompose_mem_disjoint" "by" tactic3(tac) := repeat
   match goal with
   | H : ∅ ⊥ _ |- _ => clear H
   | H : _ ⊥ ∅ |- _ => clear H
-  | H : ?m1 ∪ ?m2 ⊥ ?m3 |- _ => assert (m1 ⊥ m3) unless done by
-     (by apply (mem_disjoint_union_ll m1 m2 m3); tac)
-  | H : ?m1 ∪ ?m2 ⊥ ?m3 |- _ => assert (m2 ⊥ m3) unless done by
-     (by apply (mem_disjoint_union_lr m1 m2 m3); tac)
-  | H : ?m1 ⊥ ?m2 ∪ ?m3 |- _ => assert (m1 ⊥ m2) unless done by
-     (by apply (mem_disjoint_union_rl m1 m2 m3); tac)
-  | H : ?m1 ⊥ ?m2 ∪ ?m3 |- _ => assert (m1 ⊥ m3) unless done by
-     (by apply (mem_disjoint_union_rr m1 m2 m3); tac)
-  | H : ?m1 ∪ ?m2 ⊥ ?m3 |- _ => assert (m1 ⊥ m2 ∪ m3) unless done by
-     (by apply (mem_disjoint_union_move_l m1 m2 m3); tac)
-  | H : ?m1 ⊥ ?m2 ∪ ?m3 |- _ => assert (m1 ∪ m2 ⊥ m3) unless done by
-     (by apply (mem_disjoint_union_move_r m1 m2 m3); tac)
+  | H : ?m1 ∪ ?m2 ⊥ ?m3 |- _ =>
+     unless (m1 ⊥ m3) by done;
+     assert (m1 ⊥ m3) by (by apply (mem_disjoint_union_ll m1 m2 m3))
+  | H : ?m1 ∪ ?m2 ⊥ ?m3 |- _ =>
+     unless (m2 ⊥ m3) by done;
+     assert (m2 ⊥ m3) by (by apply (mem_disjoint_union_lr m1 m2 m3); tac)
+  | H : ?m1 ⊥ ?m2 ∪ ?m3 |- _ =>
+     unless (m1 ⊥ m2) by done;
+     assert (m1 ⊥ m2) by (by apply (mem_disjoint_union_rl m1 m2 m3); tac)
+  | H : ?m1 ⊥ ?m2 ∪ ?m3 |- _ =>
+     unless (m1 ⊥ m3) by done;
+     assert (m1 ⊥ m3) by (by apply (mem_disjoint_union_rr m1 m2 m3); tac)
+  | H : ?m1 ∪ ?m2 ⊥ ?m3 |- _ =>
+     unless (m1 ⊥ m2 ∪ m3) by done;
+     assert (m1 ⊥ m2 ∪ m3) by
+       (by apply (mem_disjoint_union_move_l m1 m2 m3); tac)
+  | H : ?m1 ⊥ ?m2 ∪ ?m3 |- _ =>
+     unless (m1 ∪ m2 ⊥ m3) by done;
+     assert (m1 ∪ m2 ⊥ m3) by
+       (by apply (mem_disjoint_union_move_r m1 m2 m3); tac)
   | H : list_disjoint [] |- _ => clear H
   | H : list_disjoint [_] |- _ => clear H
   | H : list_disjoint (_ :: _) |- _ =>
