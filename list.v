@@ -581,15 +581,7 @@ Proof.
   * rewrite NoDup_nil.
     setoid_rewrite elem_of_nil. naive_solver.
   * rewrite !NoDup_cons.
-    setoid_rewrite elem_of_cons. setoid_rewrite elem_of_app.
-split.
-destruct IHl.
-intros [??].
-split.
-    naive_solver.
-
-    naive_solver.
-naive_solver.
+    setoid_rewrite elem_of_cons. setoid_rewrite elem_of_app. naive_solver.
 Qed.
 
 Global Instance NoDup_proper:

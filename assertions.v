@@ -1013,6 +1013,8 @@ Proof.
   intros. by rewrite <-assert_assign_load_, assert_singleton_assign_.
 Qed.
 
+(** The assertion [P▷] asserts that [P] holds if all sequenced locations
+are unlocked. *)
 Definition assert_unlock (P : assert) : assert :=
   Assert $ λ δ ρ m, assert_holds δ P ρ (mem_unlock (locks m) m).
 Notation "P ▷" := (assert_unlock P) (at level 20) : assert_scope.
