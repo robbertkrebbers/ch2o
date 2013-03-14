@@ -499,7 +499,7 @@ Proof. solve_assert. Qed.
 (** The assertion [e ⇓ v] asserts that the expression [e] evaluates to [v]
 and [e ⇓ -] asserts that the expression [e] evaluates to an arbitrary value
 (in other words, [e] does not impose undefined behavior). *)
-Notation vassert := (value → assert).
+Notation vassert := (val → assert).
 
 Definition assert_expr (e : expr) : vassert := λ v,
   Assert $ λ δ ρ m, ⟦ e ⟧ δ ρ m = Some v.
@@ -549,7 +549,7 @@ Proof.
 Qed.
 
 Lemma assert_expr_load e p v δ :
-  (load e ⇓ p ∧ load (val p) ⇓ v)%A ⊆@{δ} (load (load e) ⇓ v)%A.
+  (load e ⇓ p ∧ load (valc p) ⇓ v)%A ⊆@{δ} (load (load e) ⇓ v)%A.
 Proof.
   intros ?? [He ?]. unfold_assert in *. rewrite He.
   by simplify_option_equality.
@@ -557,17 +557,17 @@ Qed.
 Lemma assert_expr_forget e v δ : (e ⇓ v)%A ⊆@{δ} (e ⇓ -)%A.
 Proof. solve_assert. Qed.
 
-Notation "e ⇓ 'true'" := (∃ v, e⇓v ∧ ⌜ value_true v ⌝)%A
+Notation "e ⇓ 'true'" := (∃ v, e⇓v ∧ ⌜ val_true v ⌝)%A
   (at level 60, format "e  '⇓'  'true'") : assert_scope.
-Notation "e ⇓ 'false'" := (∃ v, e⇓v ∧ ⌜ value_false v ⌝)%A
+Notation "e ⇓ 'false'" := (∃ v, e⇓v ∧ ⌜ val_false v ⌝)%A
   (at level 60, format "e  '⇓'  'false'") : assert_scope.
 
 Definition assert_is_true (Pv : vassert) : assert :=
-  (∃ v, Pv v ∧ ⌜ value_true v ⌝)%A.
+  (∃ v, Pv v ∧ ⌜ val_true v ⌝)%A.
 Definition assert_is_false (Pv : vassert) : assert :=
-  (∃ v, Pv v ∧ ⌜ value_false v ⌝)%A.
+  (∃ v, Pv v ∧ ⌜ val_false v ⌝)%A.
 
-Definition assert_subst (a : index) (v : value) (P : assert) :=
+Definition assert_subst (a : index) (v : val) (P : assert) :=
   Assert $ λ δ ρ m, assert_holds δ P ρ (<[a:=v]>m).
 Notation "<[ a := v ]>" := (assert_subst a v) : assert_scope.
 
@@ -848,12 +848,12 @@ cell at address [e1] with permission [γ] and contents [e2]. The assertion
 [e1] with permission [γ] and arbitrary contents. *)
 Definition assert_singleton (e1 e2 : expr) (γ : memperm) : assert :=
   Assert $ λ δ ρ m, ∃ a v,
-    ⟦ e1 ⟧ δ ρ m = Some (ptr a)%V ∧ ⟦ e2 ⟧ δ ρ m = Some v ∧ m = {[(a,v,γ)]}.
+    ⟦ e1 ⟧ δ ρ m = Some (ptrc a)%V ∧ ⟦ e2 ⟧ δ ρ m = Some v ∧ m = {[(a,v,γ)]}.
 Notation "e1 ↦{ γ } e2" := (assert_singleton e1 e2 γ)%A
   (at level 20, format "e1  ↦{ γ }  e2") : assert_scope.
 Definition assert_singleton_ (e : expr) (γ : memperm) : assert :=
   Assert $ λ δ ρ m, ∃ a v,
-    ⟦ e ⟧ δ ρ m = Some (ptr a)%V ∧ m = {[(a,v,γ)]}.
+    ⟦ e ⟧ δ ρ m = Some (ptrc a)%V ∧ m = {[(a,v,γ)]}.
 Notation "e ↦{ γ } -" := (assert_singleton_ e γ)%A
   (at level 20, format "e  ↦{ γ }  -") : assert_scope.
 
@@ -877,13 +877,13 @@ Proof.
 Qed.
 
 Lemma assert_singleton_eval_l δ e1 v1 e2 γ :
-  (e1 ⇓ v1 ∧ val v1 ↦{γ} e2)%A ⊆@{δ} (e1 ↦{γ} e2)%A.
+  (e1 ⇓ v1 ∧ valc v1 ↦{γ} e2)%A ⊆@{δ} (e1 ↦{γ} e2)%A.
 Proof. solve_assert. Qed.
 Lemma assert_singleton_eval_r δ e1 v2 e2 γ :
-  (e1 ↦{γ} val v2 ∧ e2 ⇓ v2)%A ⊆@{δ} (e1 ↦{γ} e2)%A.
+  (e1 ↦{γ} valc v2 ∧ e2 ⇓ v2)%A ⊆@{δ} (e1 ↦{γ} e2)%A.
 Proof. solve_assert. Qed.
 Lemma assert_singleton_eval_ δ e v γ :
-  (e ⇓ v ∧ val v ↦{γ} -)%A ⊆@{δ} (e ↦{γ} -)%A.
+  (e ⇓ v ∧ valc v ↦{γ} -)%A ⊆@{δ} (e ↦{γ} -)%A.
 Proof. solve_assert. Qed.
 
 (** The assertion [e1 ↪{γ} e2] asserts that the memory contains at least one
@@ -892,14 +892,14 @@ cell at address [e1] with permission [γ] and contents [e2]. The assertion
 [e1] with permission [γ] and arbitrary contents. *)
 Definition assert_assign (e1 e2 : expr) (γ : memperm) : assert :=
   Assert $ λ δ ρ m, ∃ a v,
-    ⟦ e1 ⟧ δ ρ m = Some (ptr a)%V ∧
+    ⟦ e1 ⟧ δ ρ m = Some (ptrc a)%V ∧
     ⟦ e2 ⟧ δ ρ m = Some v ∧
     {[(a,v,γ)]} ⊆ m.
 Notation "e1 ↪{ γ } e2" := (assert_assign e1 e2 γ)%A
   (at level 20, format "e1  ↪{ γ }  e2") : assert_scope.
 Definition assert_assign_ (e : expr) (γ : memperm) : assert :=
   Assert $ λ δ ρ m, ∃ a v,
-    ⟦ e ⟧ δ ρ m = Some (ptr a)%V ∧
+    ⟦ e ⟧ δ ρ m = Some (ptrc a)%V ∧
     {[(a,v,γ)]} ⊆ m.
 Notation "e ↪{ γ } -" := (assert_assign_ e γ)%A
   (at level 20, format "e  ↪{ γ }  -") : assert_scope.
@@ -912,13 +912,13 @@ Lemma assert_singleton_assign_ δ e γ : (e ↦{γ} -)%A ⊆@{δ} (e ↪{γ} -)%
 Proof. solve_assert. Qed.
 
 Lemma assert_assign_eval_l δ e1 v1 e2 γ :
-  (e1 ⇓ v1 ∧ val v1 ↪{γ} e2)%A ⊆@{δ} (e1 ↪{γ} e2)%A.
+  (e1 ⇓ v1 ∧ valc v1 ↪{γ} e2)%A ⊆@{δ} (e1 ↪{γ} e2)%A.
 Proof. solve_assert. Qed.
 Lemma assert_assign_eval_r δ e1 v2 e2 γ :
-  (e1 ↪{γ} val v2 ∧ e2 ⇓ v2)%A ⊆@{δ} (e1 ↪{γ} e2)%A.
+  (e1 ↪{γ} valc v2 ∧ e2 ⇓ v2)%A ⊆@{δ} (e1 ↪{γ} e2)%A.
 Proof. solve_assert. Qed.
 Lemma assert_assign_eval_ δ e v γ :
-  (e ⇓ v ∧ val v ↪{γ} -)%A ⊆@{δ} (e ↪{γ} -)%A.
+  (e ⇓ v ∧ valc v ↪{γ} -)%A ⊆@{δ} (e ↪{γ} -)%A.
 Proof. solve_assert. Qed.
 
 Instance assert_assign_stack_indep e1 e2 γ :
@@ -983,7 +983,7 @@ Qed.
 
 Lemma assert_assign_load δ e v γ :
   perm_kind γ ≠ Locked →
-  (e ↪{γ} val v)%A ⊆@{δ} (load e ⇓ v)%A.
+  (e ↪{γ} valc v)%A ⊆@{δ} (load e ⇓ v)%A.
 Proof.
   intros ? ρ m (a&v'&Ha&?&?).
   unfold_assert. rewrite Ha. simplify_option_equality.
@@ -1002,7 +1002,7 @@ Qed.
 
 Lemma assert_singleton_load δ e v γ :
   perm_kind γ ≠ Locked →
-  (e ↦{γ} val v)%A ⊆@{δ} (load e ⇓ v)%A.
+  (e ↦{γ} valc v)%A ⊆@{δ} (load e ⇓ v)%A.
 Proof.
   intros. rewrite assert_singleton_assign. by apply assert_assign_load.
 Qed.
@@ -1200,10 +1200,10 @@ Lemma assert_alloc_params (P : assert) δ ρ m1 γ bs vs m2 :
   StackIndep P →
   alloc_params γ m1 bs vs m2 →
   assert_holds δ P ρ m1 →
-  assert_holds δ (Π imap (λ i v, var i ↦{γ} val v) vs ★ P)%A (bs ++ ρ) m2.
+  assert_holds δ (Π imap (λ i v, var i ↦{γ} valc v) vs ★ P)%A (bs ++ ρ) m2.
 Proof.
   intros ? Halloc ?. cut (∀ bs',
-    assert_holds δ (Π imap_go (λ i v, var i ↦{γ} val v) (length bs') vs ★ P)%A
+    assert_holds δ (Π imap_go (λ i v, var i ↦{γ} valc v) (length bs') vs ★ P)%A
       (bs' ++ bs ++ ρ) m2).
   { intros aux. by apply (aux []). }
   induction Halloc as [| b bs v vs m2 ?? IH ]; intros bs'; simpl.
@@ -1222,11 +1222,11 @@ Lemma assert_alloc_params_alt (P : assert) δ ρ m γ bs vs :
   same_length bs vs →
   is_free_list m bs →
   assert_holds δ P ρ m →
-  assert_holds δ (Π imap (λ i v, var i ↦{γ} val v) vs ★ P)%A (bs ++ ρ)
+  assert_holds δ (Π imap (λ i v, var i ↦{γ} valc v) vs ★ P)%A (bs ++ ρ)
     (mem_alloc_list γ (zip bs vs) m).
 Proof. eauto using assert_alloc_params, alloc_params_alloc_list_2. Qed.
 
-Lemma assert_free_params (P : assert) δ ρ m γ bs (vs : list value) :
+Lemma assert_free_params (P : assert) δ ρ m γ bs (vs : list val) :
   StackIndep P →
   ¬perm_fragment γ →
   same_length bs vs →

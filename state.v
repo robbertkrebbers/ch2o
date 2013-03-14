@@ -33,7 +33,7 @@ zipper until the label [l] is found. *)
 Inductive direction :=
   | Down : direction
   | Up : direction
-  | Top : value → direction
+  | Top : val → direction
   | Jump : label → direction.
 Notation "↘" := Down : C_scope.
 Notation "↗" := Up : C_scope.
@@ -107,8 +107,8 @@ above. *)
 Inductive focus :=
   | Stmt : direction → stmt → focus
   | Expr : expr → focus
-  | Call : funname → list value → focus
-  | Return : value → focus
+  | Call : funname → list val → focus
+  | Return : val → focus
   | Undef : focus.
 Record state := State {
   SCtx : ctx;

@@ -44,7 +44,7 @@ Lemma ehstep_expr_eval_subst δ ρ m (E : ectx) e1 v :
     same_length Ωs vs ∧
     δ !! f = Some F ∧
     F vs = Some w ∧
-    ⟦ subst E (val w)%E ⟧ δ ρ m = Some v).
+    ⟦ subst E (valc w)%E ⟧ δ ρ m = Some v).
 Proof.
   intros Heval ?.
   destruct (expr_eval_subst_inv _ _ _ _ _ _ Heval) as [v' [Heval' ?]].

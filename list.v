@@ -812,6 +812,9 @@ Proof.
   revert i.
   induction n; intros [|?]; naive_solver auto with lia.
 Qed.
+Lemma replicate_S n (x : A) :
+  replicate (S n) x = x :: replicate  n x.
+Proof. done. Qed.
 Lemma replicate_plus n m (x : A) :
   replicate (n + m) x = replicate n x ++ replicate m x.
 Proof. induction n; simpl; f_equal; auto. Qed.
@@ -828,6 +831,14 @@ Proof. revert m. by induction n; intros [|?]; simpl; f_equal. Qed.
 Lemma drop_replicate_plus n m (x : A) :
   drop n (replicate (n + m) x) = replicate m x.
 Proof. rewrite drop_replicate. f_equal. lia. Qed.
+
+Lemma reverse_replicate n (x : A) :
+  reverse (replicate n x) = replicate n x.
+Proof.
+  induction n as [|n IH]; [done|].
+  simpl. rewrite reverse_cons, IH. change [x] with (replicate 1 x).
+  by rewrite <-replicate_plus, plus_comm.
+Qed.
 
 (** ** Properties of the [resize] function *)
 Lemma resize_spec (l : list A) n x :

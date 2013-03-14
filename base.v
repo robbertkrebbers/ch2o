@@ -120,6 +120,12 @@ Instance sum_inhabited_r {A B} (iB : Inhabited A) : Inhabited (A + B) :=
   end.
 Instance option_inhabited {A} : Inhabited (option A) := populate None.
 
+(** ** Proof irrelevant types *)
+(** This type class collects types that are proof irrelevant. That means, all
+elements of the type are equal. We use this notion only used for propositions,
+but by universe polymorphism we can generalize it. *)
+Class ProofIrrel (A : Type) : Prop := proof_irrel (x y : A) : x = y.
+
 (** ** Setoid equality *)
 (** We define an operational type class for setoid equality. This is based on
 (Spitters/van der Weegen, 2011). *)

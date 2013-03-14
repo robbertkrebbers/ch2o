@@ -10,44 +10,44 @@ that consists of exactly one cell. *)
 (** Furthermore, this file defines some tactics to simplify occurrences of
 operations on the memory. *)
 Require Import fin_maps mapset.
-Require Export abstract_permissions values.
+Require Export abstract_permissions abstract_values.
 
 (** * Definition of the memory *)
 (** We pack the memory into a record so as to avoid ambiguity with already
 existing type class instances for finite maps. *)
-Record amem P := Mem {
-  MMap : indexmap (value * P)
+Record mem_ (Vi P : Set) := Mem {
+  MMap : indexmap (val_ Vi * P)
 }.
-Arguments Mem {_} _.
-Arguments MMap {_} _.
+Arguments Mem {_ _} _.
+Arguments MMap {_ _} _.
 
 Section mem.
-Context `{Permissions P}.
+Context `{Permissions P} `{IntEnvSpec Ti Vi}.
 
 (** * Relations and operations *)
 (** A memory [m2] extends [m1] in case [m2] contains more cells than [m1]. If
 a cell already exists in [m1], it should have the same value and stronger or
 equal permissions than the cell in [m2]. *)
-Global Instance mem_subseteq: SubsetEq (amem P) := λ m1 m2,
+Global Instance mem_subseteq: SubsetEq (mem_ Vi P) := λ m1 m2,
   ∀ b v1 γ1,
     MMap m1 !! b = Some (v1,γ1) →
     ∃ γ2, γ1 ⊆ γ2 ∧ MMap m2 !! b = Some (v1,γ2).
 
 (** Two memories are disjoint if all overlapping cells have the same value and
 disjoint permissions. *)
-Definition mem_cell_disjoint (c1 c2 : value * P) : Prop :=
+Definition mem_cell_disjoint (c1 c2 : val_ Vi * P) : Prop :=
   fst c1 = fst c2 ∧ snd c1 ⊥ snd c2.
 Arguments mem_cell_disjoint !_ !_ /.
-Global Instance mem_disjoint: Disjoint (amem P) := λ m1 m2,
+Global Instance mem_disjoint: Disjoint (mem_ Vi P) := λ m1 m2,
   map_intersection_forall mem_cell_disjoint (MMap m1) (MMap m2).
 
 (** The initial memory state. *)
-Global Instance mem_empty: Empty (amem P) := Mem ∅.
+Global Instance mem_empty: Empty (mem_ Vi P) := Mem ∅.
 
 (** The operation [m !! b] reads the value at index [b]. In case the index
 [b] has not been allocated, it yields [None]. Also, if the permission at
 index [b] does not permit reading, it yields [None]. *)
-Global Instance mem_lookup: Lookup index value (amem P) := λ b m,
+Global Instance mem_lookup: Lookup index (val_ Vi) (mem_ Vi P) := λ b m,
   c ← MMap m !! b;
   guard (perm_kind (snd c) ≠ Locked);
   Some (fst c).
@@ -56,9 +56,9 @@ Global Instance mem_lookup: Lookup index value (amem P) := λ b m,
 [b]. In case [b] has not been allocated before, it yields [None]. Similarly,
 the operation [mem_perm_kind b m] gives the kind of the permission of the cell
 at index [b]. *)
-Definition mem_perm (b : index) (m : amem P) : option P :=
+Definition mem_perm (b : index) (m : mem_ Vi P) : option P :=
   snd <$> MMap m !! b.
-Definition mem_perm_kind (b : index) (m : amem P) : option pkind :=
+Definition mem_perm_kind (b : index) (m : mem_ Vi P) : option pkind :=
   perm_kind <$> mem_perm b m.
 
 (** The insert operation [<[b:=v]>m] updates a value [v] at index [b] leaving
@@ -67,16 +67,17 @@ the permissions of [b] unchanged. The insert operation ignores permissions of
 In case the of an attempt to update unallocated memory, it leaves the memory
 unchanged. Hence, in the operational semantics, the insert operation is only
 used if the predicate [is_writable m b] holds. *)
-Definition is_writable (m : amem P) (b : index) : Prop := ∃ γ,
+Definition is_writable (m : mem_ Vi P) (b : index) : Prop := ∃ γ,
   mem_perm b m = Some γ ∧ Write ⊆ perm_kind γ.
-Global Instance mem_insert: Insert index value (amem P) := λ b v m,
+Global Instance mem_insert: Insert index (val_ Vi) (mem_ Vi P) := λ b v m,
   match m with
   | Mem m => Mem $ alter (fst_map (λ _, v)) b m
   end.
 
 (** The singleton memory [{[ (b,v,γ) ]}] consists of exactly one cell at index
 [b] with value [v] and permission [γ]. *)
-Global Instance mem_singleton: Singleton (index * value * P) (amem P) := λ bvγ,
+Global Instance mem_singleton:
+    Singleton (index * val_ Vi * P) (mem_ Vi P) := λ bvγ,
   match bvγ with
   | (b,v,γ) => Mem $ {[ (b, (v, γ)) ]}
   end.
@@ -88,7 +89,7 @@ In case of non disjoint memories it is left biased, i.e. it prefers the left
 value over the right. This gives us associativity even in the case of non
 disjoint memories, whereas commutativity only holds if the memories are
 disjoint. *)
-Global Instance mem_union: Union (amem P) := λ m1 m2,
+Global Instance mem_union: Union (mem_ Vi P) := λ m1 m2,
   match m1, m2 with
   | Mem m1,Mem m2 => Mem $ union_with (λ c1 c2,
      Some (fst c1, snd c1 ∪ snd c2)) m1 m2
@@ -97,7 +98,7 @@ Global Instance mem_union: Union (amem P) := λ m1 m2,
 (** The difference operation is the opposite of the union operation, and
 thus satisfies [m2 ∪ m1 ∖ m2 = m1]. Like the union, difference is a total
 function and only has the desired semantics in case [m2 ⊆ m1]. *)
-Global Instance mem_difference: Difference (amem P) := λ m1 m2,
+Global Instance mem_difference: Difference (mem_ Vi P) := λ m1 m2,
   match m1, m2 with
   | Mem m1, Mem m2 => Mem $ difference_with (λ c1 c2,
     guard (snd c2 ⊂ snd c1);
@@ -112,13 +113,13 @@ free index [b] for which the predicate [is_free m b] holds. This operation is
 used to allocate block scope and function variables as well as dynamically
 allocated memory, but depending on its use, a different permission is used. We
 model an infinite memory and allocation therefore never fails. *)
-Definition is_free (m : amem P) (b : index) : Prop :=
+Definition is_free (m : mem_ Vi P) (b : index) : Prop :=
   mem_perm b m = None.
-Definition mem_alloc (b : index) (v : value) (γ : P) (m : amem P) : amem P :=
-  Mem $ <[b:=(v,γ)]>(MMap m).
+Definition mem_alloc (b : index) (v : val_ Vi) (γ : P)
+  (m : mem_ Vi P) : mem_ Vi P := Mem $ <[b:=(v,γ)]>(MMap m).
 
 (** We lift [is_free] and [mem_alloc] to lists. *)
-Inductive is_free_list (m : amem P) : list index → Prop :=
+Inductive is_free_list (m : mem_ Vi P) : list index → Prop :=
   | is_free_nil :
      is_free_list m []
   | is_free_cons b bs :
@@ -126,8 +127,8 @@ Inductive is_free_list (m : amem P) : list index → Prop :=
      is_free m b →
      is_free_list m bs →
      is_free_list m (b :: bs).
-Fixpoint mem_alloc_list (γ : P) (bvs : list (index * value))
-    (m : amem P) : amem P :=
+Fixpoint mem_alloc_list (γ : P) (bvs : list (index * val_ Vi))
+    (m : mem_ Vi P) : mem_ Vi P :=
   match bvs with
   | [] => m
   | (b,v) :: bvs => mem_alloc b v γ (mem_alloc_list γ bvs m)
@@ -136,8 +137,8 @@ Fixpoint mem_alloc_list (γ : P) (bvs : list (index * value))
 (** The predicate [alloc_params γ m1 bs vs m2] states that [m2] is obtained
 by allocating the values [vs] with permission [γ] at disjoint free indexes
 [bs] in [m1]. *)
-Inductive alloc_params (γ : P) (m : amem P) :
-      list index → list value → amem P → Prop :=
+Inductive alloc_params (γ : P) (m : mem_ Vi P) :
+      list index → list (val_ Vi) → mem_ Vi P → Prop :=
   | alloc_params_nil : alloc_params γ m [] [] m
   | alloc_params_cons b bs v vs m2 :
      is_free m2 b →
@@ -149,23 +150,23 @@ In case [b] has not been allocated, it leaves the memory unchanged. This
 operation is used to deallocate automatically as well as dynamically allocated
 memory. To free dynamically allocated memory, the operational semantics
 requires the predicate [is_freeable m b] to holds. *)
-Definition is_freeable (m : amem P) (b : index) : Prop := ∃ γ,
+Definition is_freeable (m : mem_ Vi P) (b : index) : Prop := ∃ γ,
   mem_perm b m = Some γ ∧ perm_kind γ = Free.
-Global Instance mem_delete: Delete index (amem P) := λ b m,
+Global Instance mem_delete: Delete index (mem_ Vi P) := λ b m,
   match m with
   | Mem m => Mem $ delete b m
   end.
 
 (** The operation [dom m] gives a finite set of indexes that have been
 allocated. *)
-Global Instance mem_dom: Dom (amem P) indexset := λ m,
+Global Instance mem_dom: Dom (mem_ Vi P) indexset := λ m,
   match m with
   | Mem m => dom indexset m
   end.
 
 (** The operation [mem_locks m] gives a finite set of indexes whose
 permissions have kind [Locked]. *)
-Global Instance mem_locks: Locks (amem P) := λ m,
+Global Instance mem_locks: Locks (mem_ Vi P) := λ m,
   match m with
   | Mem m => mapset_dom_with (λ vγ,
       bool_decide (perm_kind (snd vγ) = Locked)) m
@@ -174,23 +175,23 @@ Global Instance mem_locks: Locks (amem P) := λ m,
 (** The operation [mem_lock b m] changes the permission [γ] at index [b]
 to [perm_lock γ] regardless of whether [γ] is already locked. This operation
 is used to mark a location that has been written to during a sequence. *)
-Definition mem_lock (b : index) (m : amem P) : amem P :=
+Definition mem_lock (b : index) (m : mem_ Vi P) : mem_ Vi P :=
   Mem $ alter (snd_map perm_lock) b (MMap m).
 
 (** The operation [mem_unlock Ω m] is used to change the each permission [γ]
 at index [b ∈ Ω] to [perm_unlock γ]. This operation is used when a sequence
 point occurs. *)
-Definition mem_unlock (Ω : indexset) (m : amem P) : amem P :=
+Definition mem_unlock (Ω : indexset) (m : mem_ Vi P) : mem_ Vi P :=
   match m with
   | Mem m => Mem $ mapset_map_with (λ b,
       if b then snd_map perm_unlock else id) Ω m
   end.
 
 (** * Properties *)
-Global Instance mem_eq_dec (m1 m2 : amem P) : Decision (m1 = m2).
+Global Instance mem_eq_dec (m1 m2 : mem_ Vi P) : Decision (m1 = m2).
 Proof. solve_decision. Defined.
 
-Global Instance: Injective (=) (=) (@MMap P).
+Global Instance: Injective (=) (=) (@MMap Vi P).
 Proof. intros [?] [?] ?. simpl. by f_equal. Qed.
 
 Lemma mem_lookup_Some_raw m b v :
@@ -208,18 +209,18 @@ Proof.
     simplify_option_equality; naive_solver.
 Qed.
 
-Lemma elem_of_mem_dom (m : amem P) b :
+Lemma elem_of_mem_dom m b :
   b ∈ dom indexset m ↔ is_Some (mem_perm b m).
 Proof.
   destruct m as [m]. unfold dom, mem_dom, is_free, mem_perm.
   simpl. by rewrite elem_of_dom, fmap_is_Some.
 Qed.
-Lemma not_elem_of_mem_dom (m : amem P) b :
+Lemma not_elem_of_mem_dom (m : mem_ Vi P) b :
   b ∉ dom indexset m ↔ is_free m b.
 Proof. by rewrite elem_of_mem_dom, <-eq_None_not_Some. Qed.
 
 (** ** Properties on the order *)
-Global Instance: PartialOrder (amem P).
+Global Instance: PartialOrder (mem_ Vi P).
 Proof.
   repeat split.
   * intros m b v γ; simpl. by exists γ.
@@ -240,23 +241,23 @@ Proof.
       by apply (anti_symmetric (⊆)).
 Qed.
 
-Lemma mem_lookup_weaken (m1 m2 : amem P) b v :
+Lemma mem_lookup_weaken (m1 m2 : mem_ Vi P) b v :
   m1 !! b = Some v → m1 ⊆ m2 → m2 !! b = Some v.
 Proof.
   rewrite !mem_lookup_Some_raw. intros [γ1 [??]] Hm12.
   destruct (Hm12 b v γ1) as [γ2 [??]]; eauto.
   exists γ2. eauto using not_Locked_weaken, perm_kind_preserving.
 Qed.
-Lemma mem_lookup_weaken_is_Some (m1 m2 : amem P) b :
+Lemma mem_lookup_weaken_is_Some (m1 m2 : mem_ Vi P) b :
   is_Some (m1 !! b) → m1 ⊆ m2 → is_Some (m2 !! b).
 Proof. inversion 1. eauto using mem_lookup_weaken. Qed.
-Lemma mem_lookup_weaken_None (m1 m2 : amem P) b :
+Lemma mem_lookup_weaken_None (m1 m2 : mem_ Vi P) b :
   m2 !! b = None → m1 ⊆ m2 → m1 !! b = None.
 Proof.
   rewrite !eq_None_not_Some. eauto using mem_lookup_weaken_is_Some.
 Qed.
 
-Lemma mem_lookup_weaken_inv (m1 m2 : amem P) b v w :
+Lemma mem_lookup_weaken_inv (m1 m2 : mem_ Vi P) b v w :
   m1 !! b = Some v →
   m1 ⊆ m2 →
   m2 !! b = Some w →
@@ -267,13 +268,13 @@ Proof.
 Qed.
 
 Lemma mem_lookup_empty b :
-  @empty (amem P) _ !! b = None.
+  @empty (mem_ Vi P) _ !! b = None.
 Proof.
   unfold empty, lookup, mem_empty, mem_lookup.
   simpl. by simpl_map.
 Qed.
 
-Lemma mem_ind (Q : amem P → Prop) :
+Lemma mem_ind (Q : mem_ Vi P → Prop) :
   Q ∅ →
   (∀ b v p m, is_free m b → Q m → Q (mem_alloc b v p m)) →
   ∀ m, Q m.
@@ -287,15 +288,15 @@ Qed.
 (** ** Properties on disjoint memories *)
 Global Instance: Symmetric mem_cell_disjoint.
 Proof. intros [v1 γ1] [v2 γ2] [??]. by split. Qed.
-Global Instance: Symmetric (@disjoint (amem P) _).
+Global Instance: Symmetric (@disjoint (mem_ Vi P) _).
 Proof. intros ??. unfold disjoint, mem_disjoint. apply symmetry. Qed.
 
-Lemma mem_disjoint_empty_l (m : amem P) : ∅ ⊥ m.
+Lemma mem_disjoint_empty_l (m : mem_ Vi P) : ∅ ⊥ m.
 Proof. apply map_intersection_forall_empty_l. Qed.
-Lemma mem_disjoint_empty_r (m : amem P) : m ⊥ ∅.
+Lemma mem_disjoint_empty_r (m : mem_ Vi P) : m ⊥ ∅.
 Proof. apply map_intersection_forall_empty_r. Qed.
 
-Lemma mem_disjoint_weaken_l (m1 m1' m2  : amem P) :
+Lemma mem_disjoint_weaken_l (m1 m1' m2  : mem_ Vi P) :
   m1' ⊥ m2 → m1 ⊆ m1' → m1 ⊥ m2.
 Proof.
   intros Hm12 Hm12' b [v1 γ1] [v2 γ2] ??. red. simpl in *.
@@ -303,16 +304,16 @@ Proof.
   destruct (Hm12 b (v1, γ') (v2, γ2)); auto. simpl in *.
   eauto using perm_disjoint_weaken_l.
 Qed.
-Lemma mem_disjoint_weaken_r (m1 m2 m2' : amem P) :
+Lemma mem_disjoint_weaken_r (m1 m2 m2' : mem_ Vi P) :
   m1 ⊥ m2' → m2 ⊆ m2' → m1 ⊥ m2.
 Proof. rewrite !(symmetry_iff (⊥) m1). apply mem_disjoint_weaken_l. Qed.
-Lemma mem_disjoint_weaken (m1 m1' m2 m2' : amem P) :
+Lemma mem_disjoint_weaken (m1 m1' m2 m2' : mem_ Vi P) :
   m1' ⊥ m2' →
   m1 ⊆ m1' → m2 ⊆ m2' →
   m1 ⊥ m2.
 Proof. eauto using mem_disjoint_weaken_l, mem_disjoint_weaken_r. Qed.
 
-Lemma mem_disjoint_lookup (m1 m2 : amem P) b v1 v2 :
+Lemma mem_disjoint_lookup (m1 m2 : mem_ Vi P) b v1 v2 :
   m1 ⊥ m2 →
   m1 !! b = Some v1 →
   m2 !! b = Some v2 →
@@ -323,17 +324,17 @@ Proof.
 Qed.
 
 (** ** Properties of the [union] operation *)
-Global Instance: LeftId (@eq (amem P)) ∅ (∪).
+Global Instance: LeftId (@eq (mem_ Vi P)) ∅ (∪).
 Proof.
   intros [m]. unfold empty, mem_empty, union, mem_union.
   f_equal. by rewrite (left_id_eq _ _).
 Qed.
-Global Instance: RightId (@eq (amem P)) ∅ (∪).
+Global Instance: RightId (@eq (mem_ Vi P)) ∅ (∪).
 Proof.
   intros [m]. unfold empty, mem_empty, union, mem_union.
   f_equal. by rewrite (right_id_eq _ _).
 Qed.
-Global Instance: Associative (@eq (amem P)) (∪).
+Global Instance: Associative (@eq (mem_ Vi P)) (∪).
 Proof.
   intros [m1] [m2] [m3].
   unfold union, mem_union, union_with, map_union_with.
@@ -341,7 +342,7 @@ Proof.
   destruct (m1 !! b), (m2 !! b), (m3 !! b); try reflexivity.
   simpl. by rewrite (associative_eq _).
 Qed.
-Lemma mem_union_commutative (m1 m2 : amem P) :
+Lemma mem_union_commutative (m1 m2 : mem_ Vi P) :
   m1 ⊥ m2 →
   m1 ∪ m2 = m2 ∪ m1.
 Proof.
@@ -352,7 +353,7 @@ Proof.
   by rewrite (commutative_eq (∪)).
 Qed.
 
-Lemma mem_union_subseteq_l (m1 m2 : amem P) :
+Lemma mem_union_subseteq_l (m1 m2 : mem_ Vi P) :
   m1 ⊥ m2 →
   m1 ⊆ m1 ∪ m2.
 Proof.
@@ -362,7 +363,7 @@ Proof.
     eauto using lookup_union_with_Some_lr, perm_union_subseteq_l.
   * eauto using lookup_union_with_Some_l.
 Qed.
-Lemma mem_union_subseteq_r (m1 m2 : amem P) :
+Lemma mem_union_subseteq_r (m1 m2 : mem_ Vi P) :
   m2 ⊥ m1 →
   m1 ⊆ m2 ∪ m1.
 Proof.
@@ -370,7 +371,7 @@ Proof.
   by apply mem_union_subseteq_l.
 Qed.
 
-Lemma mem_disjoint_union_ll (m1 m2 m3 : amem P) :
+Lemma mem_disjoint_union_ll (m1 m2 m3 : mem_ Vi P) :
   m1 ∪ m2 ⊥ m3 →
   m1 ⊥ m3.
 Proof.
@@ -383,7 +384,7 @@ Proof.
   * destruct (Hm123 b (v1,γ1) (v3,γ3)); auto.
     simpl. eauto using lookup_union_with_Some_l.
 Qed.
-Lemma mem_disjoint_union_lr (m1 m2 m3 : amem P) :
+Lemma mem_disjoint_union_lr (m1 m2 m3 : mem_ Vi P) :
   m1 ⊥ m2 →
   m1 ∪ m2 ⊥ m3 →
   m2 ⊥ m3.
@@ -391,11 +392,11 @@ Proof.
   intro. rewrite mem_union_commutative by done.
   by apply mem_disjoint_union_ll.
 Qed.
-Lemma mem_disjoint_union_rl (m1 m2 m3 : amem P) :
+Lemma mem_disjoint_union_rl (m1 m2 m3 : mem_ Vi P) :
   m1 ⊥ m2 ∪ m3 →
   m1 ⊥ m2.
 Proof. rewrite !(symmetry_iff _ m1). apply mem_disjoint_union_ll. Qed.
-Lemma mem_disjoint_union_rr (m1 m2 m3 : amem P) :
+Lemma mem_disjoint_union_rr (m1 m2 m3 : mem_ Vi P) :
   m2 ⊥ m3 →
   m1 ⊥ m2 ∪ m3 →
   m1 ⊥ m3.
@@ -404,7 +405,7 @@ Proof.
   by apply mem_disjoint_union_rl.
 Qed.
 
-Lemma mem_disjoint_union_move_l (m1 m2 m3 : amem P) :
+Lemma mem_disjoint_union_move_l (m1 m2 m3 : mem_ Vi P) :
   m1 ⊥ m2 →
   m1 ∪ m2 ⊥ m3 →
   m1 ⊥ m2 ∪ m3.
@@ -421,7 +422,7 @@ Proof.
     destruct (Hm123 b (v1,γ1 ∪ γ2) (v3', γ3')); simpl;
       eauto using lookup_union_with_Some_lr, perm_disjoint_union_move_l.
 Qed.
-Lemma mem_disjoint_union_move_r (m1 m2 m3 : amem P) :
+Lemma mem_disjoint_union_move_r (m1 m2 m3 : mem_ Vi P) :
   m2 ⊥ m3 →
   m1 ⊥ m2 ∪ m3 →
   m1 ∪ m2 ⊥ m3.
@@ -432,7 +433,7 @@ Proof.
   by rewrite mem_union_commutative.
 Qed.
 
-Lemma mem_union_preserving_r (m1 m2 m3 : amem P) :
+Lemma mem_union_preserving_r (m1 m2 m3 : mem_ Vi P) :
   m2 ⊥ m3 →
   m1 ⊆ m2 →
   m1 ∪ m3 ⊆ m2 ∪ m3.
@@ -452,7 +453,7 @@ Proof.
     exists (γ2 ∪ γ3). split; auto using perm_union_preserving_r.
     eauto using lookup_union_with_Some_lr.
 Qed.
-Lemma mem_union_preserving_l (m1 m2 m3 : amem P) :
+Lemma mem_union_preserving_l (m1 m2 m3 : mem_ Vi P) :
   m3 ⊥ m2 →
   m1 ⊆ m2 →
   m3 ∪ m1 ⊆ m3 ∪ m2.
@@ -462,7 +463,7 @@ Proof.
   by apply mem_union_preserving_r.
 Qed.
 
-Lemma mem_union_reflecting_l (m1 m2 m3 : amem P) :
+Lemma mem_union_reflecting_l (m1 m2 m3 : mem_ Vi P) :
   m3 ⊥ m1 →
   m3 ⊥ m2 →
   m3 ∪ m1 ⊆ m3 ∪ m2 →
@@ -488,7 +489,7 @@ Proof.
   destruct Hm as [[??] | [[??] | ([v3' γ3'] & [v2 γ2] & ?&?&?)]];
     eauto with congruence.
 Qed.
-Lemma mem_union_reflecting_r (m1 m2 m3 : amem P) :
+Lemma mem_union_reflecting_r (m1 m2 m3 : mem_ Vi P) :
   m1 ⊥ m3 → m2 ⊥ m3 →
   m1 ∪ m3 ⊆ m2 ∪ m3 → m1 ⊆ m2.
 Proof.
@@ -496,7 +497,7 @@ Proof.
   by apply mem_union_reflecting_l.
 Qed.
 
-Lemma mem_union_strict_preserving_l (m1 m2 m3 : amem P) :
+Lemma mem_union_strict_preserving_l (m1 m2 m3 : mem_ Vi P) :
   m3 ⊥ m1 → m3 ⊥ m2 →
   m1 ⊂ m2 →
   m3 ∪ m1 ⊂ m3 ∪ m2.
@@ -505,7 +506,7 @@ Proof.
   * auto using mem_union_preserving_l.
   * contradict Hxy2. by apply mem_union_reflecting_l with m3.
 Qed.
-Lemma mem_union_strict_preserving_r (m1 m2 m3 : amem P) :
+Lemma mem_union_strict_preserving_r (m1 m2 m3 : mem_ Vi P) :
   m1 ⊥ m3 → m2 ⊥ m3 →
   m1 ⊂ m2 → m1 ∪ m3 ⊂ m2 ∪ m3.
 Proof.
@@ -513,7 +514,7 @@ Proof.
   by apply mem_union_strict_preserving_l.
 Qed.
 
-Lemma mem_union_strict_reflecting_l (m1 m2 m3 : amem P) :
+Lemma mem_union_strict_reflecting_l (m1 m2 m3 : mem_ Vi P) :
   m3 ⊥ m1 → m3 ⊥ m2 →
   m3 ∪ m1 ⊂ m3 ∪ m2 → m1 ⊂ m2.
 Proof.
@@ -521,7 +522,7 @@ Proof.
   * eauto using mem_union_reflecting_l.
   * contradict Hm. by apply mem_union_preserving_l.
 Qed.
-Lemma mem_union_strict_reflecting_r (m1 m2 m3 : amem P) :
+Lemma mem_union_strict_reflecting_r (m1 m2 m3 : mem_ Vi P) :
   m1 ⊥ m3 → m2 ⊥ m3 →
   m1 ∪ m3 ⊂ m2 ∪ m3 → m1 ⊂ m2.
 Proof.
@@ -529,14 +530,14 @@ Proof.
   by apply mem_union_strict_reflecting_l.
 Qed.
 
-Lemma mem_union_cancel_l (m1 m2 m3 : amem P) :
+Lemma mem_union_cancel_l (m1 m2 m3 : mem_ Vi P) :
   m3 ⊥ m1 → m3 ⊥ m2 →
   m3 ∪ m1 = m3 ∪ m2 → m1 = m2.
 Proof.
   intros ?? E. by apply (anti_symmetric _);
     apply mem_union_reflecting_l with m3; rewrite ?E.
 Qed.
-Lemma mem_union_cancel_r (m1 m2 m3 : amem P) :
+Lemma mem_union_cancel_r (m1 m2 m3 : mem_ Vi P) :
   m1 ⊥ m3 → m2 ⊥ m3 →
   m1 ∪ m3 = m2 ∪ m3 → m1 = m2.
 Proof.
@@ -632,7 +633,7 @@ Proof.
   setoid_rewrite mem_perm_kind_Some. naive_solver.
 Qed.
 
-Lemma mem_perm_weaken (m1 m2 : amem P) b γ :
+Lemma mem_perm_weaken m1 m2 b γ :
   mem_perm b m1 = Some γ →
   m1 ⊆ m2 →
   ∃ γ', γ ⊆ γ' ∧ mem_perm b m2 = Some γ'.
@@ -641,7 +642,7 @@ Proof.
   destruct (Hm12 b v γ) as [γ2 [??]]; eauto.
 Qed.
 
-Lemma mem_perm_kind_weaken (m1 m2 : amem P) b k :
+Lemma mem_perm_kind_weaken m1 m2 b k :
   mem_perm_kind b m1 = Some k →
   m1 ⊆ m2 →
   ∃ k', k ⊆ k' ∧ mem_perm_kind b m2 = Some k'.
@@ -652,18 +653,18 @@ Proof.
   eauto using perm_kind_preserving.
 Qed.
 
-Lemma mem_perm_weaken_is_Some (m1 m2 : amem P) b :
+Lemma mem_perm_weaken_is_Some m1 m2 b :
   is_Some (mem_perm b m1) → m1 ⊆ m2 → is_Some (mem_perm b m2).
 Proof. inversion 1. intros. edestruct mem_perm_weaken as [?[??]]; eauto. Qed.
-Lemma mem_perm_weaken_None (m1 m2 : amem P) b :
+Lemma mem_perm_weaken_None m1 m2 b :
   mem_perm b m2 = None → m1 ⊆ m2 → mem_perm b m1 = None.
 Proof. rewrite !eq_None_not_Some. eauto using mem_perm_weaken_is_Some. Qed.
-Lemma mem_perm_kind_weaken_is_Some (m1 m2 : amem P) b :
+Lemma mem_perm_kind_weaken_is_Some m1 m2 b :
   is_Some (mem_perm_kind b m1) → m1 ⊆ m2 → is_Some (mem_perm_kind b m2).
 Proof.
   inversion 1. intros. edestruct mem_perm_kind_weaken as [?[??]]; eauto.
 Qed.
-Lemma mem_perm_kind_weaken_None (m1 m2 : amem P) b :
+Lemma mem_perm_kind_weaken_None m1 m2 b :
   mem_perm_kind b m2 = None → m1 ⊆ m2 → mem_perm_kind b m1 = None.
 Proof.
   rewrite !eq_None_not_Some. eauto using mem_perm_kind_weaken_is_Some.
@@ -959,17 +960,17 @@ Lemma is_free_insert_2 b b' v m :
   is_free m b → is_free (<[b':=v]>m) b.
 Proof. rewrite is_free_insert. auto. Qed.
 
-Lemma mem_lookup_insert_None (m : amem P) i j v :
+Lemma mem_lookup_insert_None (m : mem_ Vi P) i j v :
   <[i:=v]>m !! j = None ↔ m !! j = None.
 Proof. by rewrite <-!mem_perm_lookup_None, mem_perm_insert. Qed.
-Lemma mem_lookup_insert_None_1 (m : amem P) i j v :
+Lemma mem_lookup_insert_None_1 (m : mem_ Vi P) i j v :
   <[i:=v]>m !! j = None → m !! j = None.
 Proof. by rewrite mem_lookup_insert_None. Qed.
-Lemma mem_lookup_insert_None_2 (m : amem P) i j v :
+Lemma mem_lookup_insert_None_2 (m : mem_ Vi P) i j v :
   m !! j = None → <[i:=v]>m !! j = None.
 Proof. by rewrite mem_lookup_insert_None. Qed.
 
-Lemma mem_lookup_insert (m : amem P) b v :
+Lemma mem_lookup_insert (m : mem_ Vi P) b v :
   is_Some (m !! b) →
   <[b:=v]>m !! b = Some v.
 Proof.
@@ -977,28 +978,28 @@ Proof.
   unfold lookup, mem_lookup, insert, mem_insert in *. simpl in *.
   rewrite lookup_alter. by simplify_option_equality.
 Qed.
-Lemma mem_lookup_insert_ne (m : amem P) b b' v :
+Lemma mem_lookup_insert_ne (m : mem_ Vi P) b b' v :
   b ≠ b' → <[b:=v]>m !! b' = m !! b'.
 Proof.
   destruct m as [m]. intros.
   unfold lookup, mem_lookup, insert, mem_insert.
   simpl. by rewrite lookup_alter_ne.
 Qed.
-Lemma mem_lookup_insert_rev (m : amem P) b v w :
+Lemma mem_lookup_insert_rev (m : mem_ Vi P) b v w :
   <[b:=v]>m !! b = Some w → v = w.
 Proof.
   intros Hb. destruct (m !! b) eqn:?.
   * rewrite mem_lookup_insert in Hb by eauto. congruence.
   * by rewrite mem_lookup_insert_None_2 in Hb.
 Qed.
-Lemma mem_insert_None (m : amem P) b v :
+Lemma mem_insert_None (m : mem_ Vi P) b v :
   mem_perm b m = None → <[b:=v]>m = m.
 Proof.
   destruct m as [m]. unfold mem_perm, insert, mem_insert. simpl.
   rewrite fmap_None. intros. by rewrite alter_None.
 Qed.
 
-Lemma mem_disjoint_insert (m1 m2 : amem P) b v :
+Lemma mem_disjoint_insert (m1 m2 : mem_ Vi P) b v :
   m1 ⊥ m2 → <[b:=v]>m1 ⊥ <[b:=v]>m2.
 Proof.
   destruct m1 as [m1], m2 as [m2].
@@ -1011,41 +1012,41 @@ Proof.
   * rewrite lookup_alter_ne in Hm1, Hm2 by done.
     by destruct (Hm12 b' (v1,γ1) (v2,γ2)).
 Qed.
-Lemma mem_disjoint_insert_l (m1 m2 : amem P) b v :
+Lemma mem_disjoint_insert_l (m1 m2 : mem_ Vi P) b v :
   mem_perm b m2 = None →
   m1 ⊥ m2 → <[b:=v]>m1 ⊥ m2.
 Proof.
   intros. rewrite <-(mem_insert_None m2 b v); auto using mem_disjoint_insert.
 Qed.
-Lemma mem_disjoint_insert_r (m1 m2 : amem P) b v :
+Lemma mem_disjoint_insert_r (m1 m2 : mem_ Vi P) b v :
   mem_perm b m1 = None →
   m1 ⊥ m2 → m1 ⊥ <[b:=v]>m2.
 Proof.
   intros. rewrite <-(mem_insert_None m1 b v); auto using mem_disjoint_insert.
 Qed.
 
-Lemma mem_insert_union (m1 m2 : amem P) b v :
+Lemma mem_insert_union (m1 m2 : mem_ Vi P) b v :
   <[b:=v]>(m1 ∪ m2) = <[b:=v]>m1 ∪ <[b:=v]>m2.
 Proof.
   destruct m1 as [m1], m2 as [m2].
   unfold insert, mem_insert, union, mem_union. f_equal.
   by apply alter_union_with.
 Qed.
-Lemma mem_insert_union_l (m1 m2 : amem P) b v :
+Lemma mem_insert_union_l m1 m2 b v :
   mem_perm b m2 = None →
   <[b:=v]>(m1 ∪ m2) = <[b:=v]>m1 ∪ m2.
 Proof. intros. by rewrite mem_insert_union, (mem_insert_None m2). Qed.
-Lemma mem_insert_union_r (m1 m2 : amem P) b v :
+Lemma mem_insert_union_r m1 m2 b v :
   mem_perm b m1 = None →
   <[b:=v]>(m1 ∪ m2) = m1 ∪ <[b:=v]>m2.
 Proof. intros. by rewrite mem_insert_union, (mem_insert_None m1). Qed.
-Lemma mem_insert_union_fragment_l (m1 m2 : amem P) b v γ :
+Lemma mem_insert_union_fragment_l m1 m2 b v γ :
   m1 ⊥ m2 →
   mem_perm b m1 = Some γ →
   ¬perm_fragment γ →
   <[b:=v]>(m1 ∪ m2) = <[b:=v]>m1 ∪ m2.
 Proof. eauto using mem_insert_union_l, mem_perm_fragment_l. Qed.
-Lemma mem_insert_union_fragment_r (m1 m2 : amem P) b v γ :
+Lemma mem_insert_union_fragment_r m1 m2 b v γ :
   m1 ⊥ m2 →
   mem_perm b m2 = Some γ →
   ¬perm_fragment γ →
@@ -1053,10 +1054,10 @@ Lemma mem_insert_union_fragment_r (m1 m2 : amem P) b v γ :
 Proof. eauto using mem_insert_union_r, mem_perm_fragment_r. Qed.
 
 (** ** Properties of the [singleton] operation *)
-Lemma mem_lookup_singleton_raw (b : index) (v : value) (γ : P) :
+Lemma mem_lookup_singleton_raw (b : index) (v : val_ Vi) (γ : P) :
   MMap {[ (b,v,γ) ]} !! b = Some (v,γ).
 Proof. unfold singleton, mem_singleton. simpl. by simpl_map. Qed.
-Lemma mem_lookup_singleton_raw_ne (b b' : index) (v : value) (γ : P) :
+Lemma mem_lookup_singleton_raw_ne (b b' : index) (v : val_ Vi) (γ : P) :
   b ≠ b' → MMap {[ (b,v,γ) ]} !! b' = None.
 Proof. intros. unfold singleton, mem_singleton. simpl. by simpl_map. Qed.
 
@@ -1074,21 +1075,21 @@ Lemma mem_perm_kind_singleton_ne b b' v γ :
   b ≠ b' → mem_perm_kind b' {[ (b,v,γ) ]} = None.
 Proof. intros. unfold mem_perm_kind. by rewrite mem_perm_singleton_ne. Qed.
 
-Lemma mem_lookup_singleton (b : index) (v : value) (γ : P) :
+Lemma mem_lookup_singleton (b : index) (v : val_ Vi) (γ : P) :
   perm_kind γ ≠ Locked →
   {[ (b,v,γ) ]} !! b = Some v.
 Proof.
   intros. unfold lookup, mem_lookup. rewrite mem_lookup_singleton_raw.
   by simplify_option_equality.
 Qed.
-Lemma mem_lookup_singleton_ne (b b' : index) (v : value) (γ : P) :
+Lemma mem_lookup_singleton_ne (b b' : index) (v : val_ Vi) (γ : P) :
   b ≠ b' →
   {[ (b,v,γ) ]} !! b' = None.
 Proof.
   intros. unfold lookup, mem_lookup.
   by rewrite mem_lookup_singleton_raw_ne.
 Qed.
-Lemma mem_lookup_singleton_locked (b b' : index) (v : value) (γ : P) :
+Lemma mem_lookup_singleton_locked (b b' : index) (v : val_ Vi) (γ : P) :
   perm_kind γ = Locked →
   {[ (b,v,γ) ]} !! b = None.
 Proof.
@@ -1096,7 +1097,7 @@ Proof.
   by simplify_option_equality.
 Qed.
 
-Lemma mem_lookup_singleton_Some (b b' : index) (v w : value) (γ : P) :
+Lemma mem_lookup_singleton_Some (b b' : index) (v w : val_ Vi) (γ : P) :
   {[ (b,v,γ) ]} !! b' = Some w ↔ b = b' ∧ v = w ∧ perm_kind γ ≠ Locked.
 Proof.
   unfold lookup, mem_lookup. destruct (decide (b = b')); subst.
@@ -1104,7 +1105,7 @@ Proof.
     simplify_option_equality; naive_solver.
   * rewrite mem_lookup_singleton_raw_ne; naive_solver.
 Qed.
-Lemma mem_lookup_singleton_None (b b' : index) (v : value) (γ : P) :
+Lemma mem_lookup_singleton_None (b b' : index) (v : val_ Vi) (γ : P) :
   {[ (b,v,γ) ]} !! b' = None ↔ b ≠ b' ∨ perm_kind γ = Locked.
 Proof.
   unfold lookup, mem_lookup. destruct (decide (b = b')); subst.
@@ -1113,13 +1114,13 @@ Proof.
   * rewrite mem_lookup_singleton_raw_ne; naive_solver.
 Qed.
 
-Lemma mem_insert_singleton (b : index) (v w : value) (γ : P) :
+Lemma mem_insert_singleton (b : index) (v w : val_ Vi) (γ : P) :
   <[b:=v]>{[ (b,w,γ) ]} = {[ (b,v,γ) ]}.
 Proof.
   unfold insert, mem_insert, singleton, mem_singleton.
   by rewrite alter_singleton.
 Qed.
-Lemma mem_insert_singleton_ne (b b' : index) (v w : value) (γ : P) :
+Lemma mem_insert_singleton_ne (b b' : index) (v w : val_ Vi) (γ : P) :
   b ≠ b' → <[b:=v]>{[ (b',w,γ) ]} = {[ (b',w,γ) ]}.
 Proof.
   intros. unfold insert, mem_insert, singleton, mem_singleton.
@@ -1160,10 +1161,10 @@ Lemma is_writable_singleton b v γ :
 Proof. intros. exists γ. by rewrite mem_perm_singleton. Qed.
 
 (** ** Properties of the [union_list] operation *)
-Lemma mem_list_disjoint_singleton (m : amem P) :
+Lemma mem_list_disjoint_singleton (m : mem_ Vi P) :
   list_disjoint [m].
 Proof. constructor. simpl. apply mem_disjoint_empty_r. constructor. Qed.
-Lemma mem_list_disjoint_double (m1 m2 : amem P) :
+Lemma mem_list_disjoint_double (m1 m2 : mem_ Vi P) :
   list_disjoint [m1; m2] ↔ m1 ⊥ m2.
 Proof.
   rewrite <-(right_id ∅ (∪) m2) at 2. split.
@@ -1171,7 +1172,7 @@ Proof.
   * constructor. done. apply mem_list_disjoint_singleton.
 Qed.
 
-Lemma mem_union_sublist (ms1 ms2 : list (amem P)) :
+Lemma mem_union_sublist (ms1 ms2 : list (mem_ Vi P)) :
   list_disjoint ms2 →
   sublist ms1 ms2 →
   ⋃ ms1 ⊆ ⋃ ms2.
@@ -1182,7 +1183,7 @@ Proof.
   * transitivity (⋃ ms2); auto. by apply mem_union_subseteq_r.
   * apply mem_union_preserving_l; auto.
 Qed.
-Lemma mem_list_disjoint_sublist (ms1 ms2 : list (amem P)) :
+Lemma mem_list_disjoint_sublist (ms1 ms2 : list (mem_ Vi P)) :
   list_disjoint ms2 →
   sublist ms1 ms2 →
   list_disjoint ms1.
@@ -1193,7 +1194,7 @@ Proof.
   * auto.
 Qed.
 
-Lemma mem_disjoint_union_list_delete_l (ms : list (amem P)) m i :
+Lemma mem_disjoint_union_list_delete_l (ms : list (mem_ Vi P)) m i :
   list_disjoint ms →
   ⋃ ms ⊥ m →
   ⋃ delete i ms ⊥ m.
@@ -1201,13 +1202,13 @@ Proof.
   intros. apply mem_disjoint_weaken_l with (⋃ ms); [done |].
   apply mem_union_sublist; auto using sublist_delete.
 Qed.
-Lemma mem_disjoint_union_list_delete_r (ms : list (amem P)) m i :
+Lemma mem_disjoint_union_list_delete_r (ms : list (mem_ Vi P)) m i :
   list_disjoint ms →
   m ⊥ ⋃ ms →
   m ⊥ ⋃ delete i ms.
 Proof. intros. symmetry. by apply mem_disjoint_union_list_delete_l. Qed.
 
-Lemma mem_disjoint_union_list_l (ms : list (amem P)) m :
+Lemma mem_disjoint_union_list_l (ms : list (mem_ Vi P)) m :
   list_disjoint ms →
   ⋃ ms ⊥ m →
   Forall (⊥ m) ms.
@@ -1216,14 +1217,14 @@ Proof.
   * eauto using mem_disjoint_union_ll.
   * eauto using mem_disjoint_union_lr.
 Qed.
-Lemma mem_disjoint_union_list_r (ms : list (amem P)) m :
+Lemma mem_disjoint_union_list_r (ms : list (mem_ Vi P)) m :
   list_disjoint ms →
   m ⊥ ⋃ ms →
   Forall (⊥ m) ms.
 Proof. intros. by apply mem_disjoint_union_list_l. Qed.
 
 (** ** Properties with respect to vectors *)
-Lemma mem_union_delete_vec {n} (ms : vec (amem P) n) (i : fin n) :
+Lemma mem_union_delete_vec {n} (ms : vec (mem_ Vi P) n) (i : fin n) :
   list_disjoint ms →
   ms !!! i ∪ ⋃ delete (fin_to_nat i) (vec_to_list ms) = ⋃ ms.
 Proof.
@@ -1235,7 +1236,7 @@ Proof.
   * by apply mem_disjoint_union_list_delete_r.
 Qed.
 
-Lemma mem_list_disjoint_delete_vec_r {n} (ms : vec (amem P) n) (i : fin n) :
+Lemma mem_list_disjoint_delete_vec_r {n} (ms : vec (mem_ Vi P) n) (i : fin n) :
   list_disjoint ms →
   ms !!! i ⊥ ⋃ delete (fin_to_nat i) (vec_to_list ms).
 Proof.
@@ -1252,12 +1253,12 @@ Proof.
   * intros. rewrite (associative_eq (∪)). apply IHms; trivial.
     by apply mem_disjoint_union_move_r.
 Qed.
-Lemma mem_list_disjoint_delete_vec_l {n} (ms : vec (amem P) n) (i : fin n) :
+Lemma mem_list_disjoint_delete_vec_l {n} (ms : vec (mem_ Vi P) n) (i : fin n) :
   list_disjoint ms →
   ⋃ delete (fin_to_nat i) (vec_to_list ms) ⊥ ms !!! i.
 Proof. intros. symmetry. by apply mem_list_disjoint_delete_vec_r. Qed.
 
-Lemma mem_union_insert_vec {n} (ms : vec (amem P) n) (i : fin n) m :
+Lemma mem_union_insert_vec {n} (ms : vec (mem_ Vi P) n) (i : fin n) m :
   list_disjoint ms →
   m ⊥ ⋃ delete (fin_to_nat i) (vec_to_list ms) →
   ⋃ vinsert i m ms = m ∪ ⋃ delete (fin_to_nat i) (vec_to_list ms).
@@ -1270,7 +1271,7 @@ Proof.
     by apply mem_disjoint_union_list_delete_r.
 Qed.
 
-Lemma mem_list_disjoint_insert_vec {n} (ms : vec (amem P) n) (i : fin n) m :
+Lemma mem_list_disjoint_insert_vec {n} (ms : vec (mem_ Vi P) n) (i : fin n) m :
   list_disjoint ms →
   m ⊥ ⋃ delete (fin_to_nat i) (vec_to_list ms) →
   list_disjoint (vinsert i m ms).
@@ -1289,13 +1290,13 @@ Proof.
   by apply mem_disjoint_union_move_l.
 Qed.
 
-Lemma mem_disjoint_insert_vec_l {n} (ms : vec (amem P) n) (i : fin n) m1 m2 :
+Lemma mem_disjoint_insert_vec_l {n} (ms : vec (mem_ Vi P) n) (i : fin n) m1 m2 :
   list_disjoint ms →
   m1 ⊥ ⋃ delete (fin_to_nat i) (vec_to_list ms) →
   m1 ∪ ⋃ delete (fin_to_nat i) (vec_to_list ms) ⊥ m2 →
   ⋃ vinsert i m1 ms ⊥ m2.
 Proof. intros. by rewrite mem_union_insert_vec. Qed.
-Lemma mem_disjoint_insert_vec_r {n} (ms : vec (amem P) n) (i : fin n) m1 m2 :
+Lemma mem_disjoint_insert_vec_r {n} (ms : vec (mem_ Vi P) n) (i : fin n) m1 m2 :
   list_disjoint ms →
   m2 ⊥ ⋃ delete (fin_to_nat i) (vec_to_list ms) →
   m1 ⊥ m2 ∪ ⋃ delete (fin_to_nat i) (vec_to_list ms) →
@@ -1353,19 +1354,19 @@ Proof.
   rewrite not_elem_of_cons, is_free_alloc. intuition.
 Qed.
 
-Lemma mem_delete_singleton (b : index) (v : value) (γ : P) :
+Lemma mem_delete_singleton (b : index) (v : val_ Vi) (γ : P) :
   delete b {[ (b,v,γ) ]} = ∅.
 Proof.
   unfold singleton, mem_singleton, delete, mem_delete, empty, mem_empty.
   by rewrite delete_singleton.
 Qed.
 
-Lemma mem_delete_subseteq (m : amem P) b : delete b m ⊆ m.
+Lemma mem_delete_subseteq (m : mem_ Vi P) b : delete b m ⊆ m.
 Proof.
   destruct m as [m]. intros b' v γ. simpl.
   rewrite lookup_delete_Some. naive_solver.
 Qed.
-Lemma mem_delete_subseteq_compat (m1 m2 : amem P) b :
+Lemma mem_delete_subseteq_compat (m1 m2 : mem_ Vi P) b :
   m1 ⊆ m2 → delete b m1 ⊆ delete b m2.
 Proof.
   destruct m1 as [m1], m2 as [m2]. intros Hm12 b' v γ. simpl.
@@ -1382,12 +1383,12 @@ Lemma mem_disjoint_delete_r m1 m2 b :
   m1 ⊥ delete b m2.
 Proof. eauto using mem_disjoint_weaken_r, mem_delete_subseteq. Qed.
 
-Lemma mem_delete_list_subseteq (m : amem P) bs : delete_list bs m ⊆ m.
+Lemma mem_delete_list_subseteq (m : mem_ Vi P) bs : delete_list bs m ⊆ m.
 Proof.
   induction bs as [|b bs IH]; simpl; [done |].
   transitivity (delete_list bs m); auto using mem_delete_subseteq.
 Qed.
-Lemma mem_delete_list_subseteq_compat (m1 m2 : amem P) bs :
+Lemma mem_delete_list_subseteq_compat (m1 m2 : mem_ Vi P) bs :
   m1 ⊆ m2 → delete_list bs m1 ⊆ delete_list bs m2.
 Proof.
   induction bs as [|b bs IH]; simpl; auto using mem_delete_subseteq_compat.
@@ -1649,7 +1650,7 @@ Proof.
   right. by exists Locked.
 Qed.
 
-Lemma mem_locks_disjoint (m1 m2 : amem P) :
+Lemma mem_locks_disjoint (m1 m2 : mem_ Vi P) :
   m1 ⊥ m2 →
   locks m1 ∩ locks m2 = ∅.
 Proof.
@@ -1659,18 +1660,18 @@ Proof.
   destruct (perm_disjoint_locked_l γ1 γ2); eauto using mem_perm_disjoint.
 Qed.
 
-Lemma mem_locks_empty : locks (@empty (amem P) _) = ∅.
+Lemma mem_locks_empty : locks (@empty (mem_ Vi P) _) = ∅.
 Proof.
   apply elem_of_equiv_empty_L. intros b.
   by rewrite elem_of_mem_locks, mem_perm_kind_empty.
 Qed.
-Lemma mem_locks_insert (m : amem P) b v :
+Lemma mem_locks_insert (m : mem_ Vi P) b v :
   locks (<[b:=v]>m) = locks m.
 Proof.
   apply elem_of_equiv_L. intros b'.
   by rewrite !elem_of_mem_locks, !mem_perm_kind_insert.
 Qed.
-Lemma mem_locks_union (m1 m2 : amem P) :
+Lemma mem_locks_union (m1 m2 : mem_ Vi P) :
   m1 ⊥ m2 →
   locks (m1 ∪ m2) = locks m1 ∪ locks m2.
 Proof.
@@ -1681,7 +1682,7 @@ Proof.
   * eapply mem_perm_kind_union_Some_l; eauto using mem_perm_kind_locked_l.
   * eapply mem_perm_kind_union_Some_r; eauto using mem_perm_kind_locked_r.
 Qed.
-Lemma mem_locks_union_list (ms : list (amem P)) :
+Lemma mem_locks_union_list (ms : list (mem_ Vi P)) :
   list_disjoint ms →
   locks (⋃ ms) = ⋃ (locks <$> ms).
 Proof.
@@ -2107,7 +2108,7 @@ Proof.
 Qed.
 
 (** ** Properties of the [difference] operator *)
-Lemma mem_difference_disjoint_r (m1 m2 : amem P) :
+Lemma mem_difference_disjoint_r (m1 m2 : mem_ Vi P) :
   m1 ⊆ m2 →
   m1 ⊥ m2 ∖ m1.
 Proof.
@@ -2122,7 +2123,7 @@ Proof.
       by (by simplify_option_equality; eauto).
 Qed.
 
-Lemma mem_difference_union (m1 m2 : amem P) :
+Lemma mem_difference_union (m1 m2 : mem_ Vi P) :
   m1 ⊆ m2 →
   m1 ∪ m2 ∖ m1 = m2.
 Proof.
@@ -2160,6 +2161,8 @@ Proof.
   eapply lookup_difference_with_Some_l; eauto.
 Qed.
 End mem.
+
+Arguments mem_unlock _ _ _ _ _ : simpl never.
 
 (** * Tactics *)
 (** The tactic [decompose_mem_disjoint] simplifies occurrences of [disjoint].
@@ -2257,8 +2260,8 @@ Tactic Notation "simpl_mem" "by" tactic3(tac) := repeat
     rewrite mem_lookup_singleton_ne in H by tac
   | H : context[ {[ _ ]} !! _ ] |- _ =>
     rewrite mem_lookup_singleton_locked in H by tac
-  | H : context[ lookup (M:=amem _) ?b (?m1 ∪ ?m2) ] |- _ =>
-    let v := fresh in evar (v:value);
+  | H : context[ lookup (M:=mem_ ?Vi _) ?b (?m1 ∪ ?m2) ] |- _ =>
+    let v := fresh in evar (v:val_ Vi);
     let v' := eval unfold v in v in clear v;
     let E := fresh in
     assert ((m1 ∪ m2) !! b = Some v') as E by (clear H; by tac);
@@ -2269,8 +2272,8 @@ Tactic Notation "simpl_mem" "by" tactic3(tac) := repeat
   | |- context[ {[ _ ]} !! _ ] => rewrite mem_lookup_singleton
   | |- context[ {[ _ ]} !! _ ] => rewrite mem_lookup_singleton_ne by tac
   | |- context[ {[ _ ]} !! _ ] => rewrite mem_lookup_singleton_locked by tac
-  | |- context [ lookup (M:=amem _) ?b ?m ] =>
-    let v := fresh in evar (v:value);
+  | |- context [ lookup (M:=mem_ ?Vi _) ?b ?m ] =>
+    let v := fresh in evar (v:val_ Vi);
     let v' := eval unfold v in v in clear v;
     let E := fresh in
     assert (m !! b = Some v') as E by tac;

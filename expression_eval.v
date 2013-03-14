@@ -4,10 +4,10 @@
 an expression evaluator. It is parametrized by a map of function names to
 denotations. We use this to enable convenient reasoning about pure functions
 in our axiomatic semantics. *)
-Require Export fin_map_dom expressions abstract_memory.
+Require Export fin_map_dom expressions abstract_memory values.
 
 (** The type [purefun] represents denotations of pure functions. *)
-Definition purefun := list value → option value.
+Definition purefun := list val → option val.
 Notation purefuns := (funmap purefun).
 
 (** * Definition of the semantics *)
@@ -15,17 +15,17 @@ Reserved Notation "⟦ e ⟧" (format "⟦  e  ⟧").
 Section expression_eval.
 Context `{Permissions P}.
 
-Fixpoint expr_eval (e : expr)
-    (δ : purefuns) (ρ : stack) (m : amem P) : option value :=
+Fixpoint expr_eval (e : expr) (δ : purefuns)
+    (ρ : stack) (m : mem_ _ P) : option val :=
   match e with
   | var x =>
      b ← ρ !! x;
-     Some (ptr b)%V
+     Some (ptrc b)%V
   | load e =>
      v ← ⟦ e ⟧ δ ρ m;
      a ← maybe_ptr v;
      m !! a
-  | val@{Ω} v =>
+  | valc@{Ω} v =>
      guard (Ω = ∅); Some v
   | ⊙{op} e =>
      v ← ⟦ e ⟧ δ ρ m;
@@ -42,13 +42,16 @@ Fixpoint expr_eval (e : expr)
      v ← ⟦ e ⟧ δ ρ m;
      vl ← ⟦ el ⟧ δ ρ m;
      vr ← ⟦ er ⟧ δ ρ m;
-     Some $ if value_true_false_dec v then vl else vr
+     Some $ if val_true_false_dec v then vl else vr
+  | (cast@{τ} e) =>
+     v ← ⟦ e ⟧ δ ρ m;
+     eval_cast τ v
   | _ => None
   end%E
 where "⟦ e ⟧" := (expr_eval e) : C_scope.
 
 (** * Theorems *)
-Lemma expr_eval_val δ ρ m v : ⟦ val v ⟧ δ ρ m = Some v.
+Lemma expr_eval_val δ ρ m v : ⟦ valc v ⟧ δ ρ m = Some v.
 Proof. done. Qed.
 
 Lemma mapM_expr_eval_val δ ρ m Ωs vs :
@@ -182,7 +185,7 @@ Lemma expr_eval_fun_irrel δ1 δ2 ρ m e :
   (∀ f, f ∈ funs e → δ1 !! f = δ2 !! f) →
   ⟦ e ⟧ δ1 ρ m = ⟦ e ⟧ δ2 ρ m.
 Proof.
-  assert (∀ f es i e', 
+  assert (∀ f es i (e' : expr), 
     es !! i = Some e' →
     f ∈ funs e' → f ∈ ⋃ (funs <$> es)).
   { intros ???? Hi Hf. apply elem_of_union_list.
@@ -212,7 +215,7 @@ Qed.
 expression has a semantics too. *)
 Lemma expr_eval_subst_inv δ ρ m (E : ectx) e v :
   ⟦ subst E e ⟧ δ ρ m = Some v →
-  ∃ v', ⟦ e ⟧ δ ρ m = Some v' ∧ ⟦ subst E (val v')%E ⟧ δ ρ m = Some v.
+  ∃ v', ⟦ e ⟧ δ ρ m = Some v' ∧ ⟦ subst E (valc v')%E ⟧ δ ρ m = Some v.
 Proof.
   revert v. induction E as [|E' E IH] using rev_ind;
     simpl; intros v; [eauto |].
@@ -242,14 +245,14 @@ Tactic Notation "simplify_expr_equality" "by" tactic3(tac) := repeat
   match goal with
   | _ => progress simplify_mem_equality by tac
   | _ => progress simplify_option_equality by tac
-  | Ht : value_true ?v, Hf : value_false ?v |- _ =>
-    destruct (value_true_false v Ht Hf)
+  | Ht : val_true ?v, Hf : val_false ?v |- _ =>
+    destruct (val_true_false v Ht Hf)
   | H : maybe_ptr ?v = Some _ |- _ =>
     apply maybe_ptr_Some in H
-  | H : context [ value_true_false_dec ?v ] |- _ =>
-    destruct (value_true_false_dec v)
-  | |- context [ value_true_false_dec ?v ] =>
-    destruct (value_true_false_dec v)
+  | H : context [ val_true_false_dec ?v ] |- _ =>
+    destruct (val_true_false_dec v)
+  | |- context [ val_true_false_dec ?v ] =>
+    destruct (val_true_false_dec v)
   | H1: ⟦ ?e ⟧ ?δ ?ρ ?m1 = Some ?v1, H2: ⟦ ?e ⟧ ?δ ?ρ ?m2 = Some ?v2 |- _ =>
     let H3 := fresh in
     feed pose proof (expr_eval_weaken_inv ρ m1 m2 e v1 v2) as H3;

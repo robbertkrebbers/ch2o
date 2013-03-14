@@ -2,7 +2,7 @@
 (* This file is distributed under the terms of the BSD license. *)
 (** This files shows that the unit type forms a valid trivial permission
 system with no permissions at all. The permission kind is [Free] (i.e.
-everything is permitted), and all operations are no-ops.*)
+everything is allowed), and all operations are no-ops.*)
 Require Export abstract_permissions.
 
 Instance unit_perm_kind: PermKind unit := λ _, Free.

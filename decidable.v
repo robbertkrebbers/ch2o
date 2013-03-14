@@ -3,7 +3,7 @@
 (** This file collects theorems, definitions, tactics, related to propositions
 with a decidable equality. Such propositions are collected by the [Decision]
 type class. *)
-Require Export base tactics.
+Require Export proof_irrel.
 
 Hint Extern 200 (Decision _) => progress (lazy beta) : typeclass_instances.
 
@@ -24,28 +24,38 @@ Lemma decide_rel_correct {A B} (R : A → B → Prop) `{∀ x y, Decision (R x y
   (x : A) (y : B) : decide_rel R x y = decide (R x y).
 Proof. done. Qed.
 
+Lemma decide_true {A} `{Decision P} (x y : A) :
+  P → (if decide P then x else y) = x.
+Proof. by destruct (decide P). Qed.
+Lemma decide_false {A} `{Decision P} (x y : A) :
+  ¬P → (if decide P then x else y) = y.
+Proof. by destruct (decide P). Qed.
+
 (** The tactic [destruct_decide] destructs a sumbool [dec]. If one of the
 components is double negated, it will try to remove the double negation. *)
-Ltac destruct_decide dec :=
-  let H := fresh in
+Tactic Notation "destruct_decide" constr(dec) "as" ident(H) :=
   destruct dec as [H|H];
   try match type of H with
   | ¬¬_ => apply dec_stable in H
   end.
+Tactic Notation "destruct_decide" constr(dec) :=
+  let H := fresh in destruct_decide dec as H.
 
 (** The tactic [case_decide] performs case analysis on an arbitrary occurrence
 of [decide] or [decide_rel] in the conclusion or hypotheses. *)
-Ltac case_decide :=
+Tactic Notation "case_decide" "as" ident(Hd) :=
   match goal with
   | H : context [@decide ?P ?dec] |- _ =>
-    destruct_decide (@decide P dec)
+    destruct_decide (@decide P dec) as Hd
   | H : context [@decide_rel _ _ ?R ?x ?y ?dec] |- _ =>
-    destruct_decide (@decide_rel _ _ R x y dec)
+    destruct_decide (@decide_rel _ _ R x y dec) as Hd
   | |- context [@decide ?P ?dec] =>
-    destruct_decide (@decide P dec)
+    destruct_decide (@decide P dec) as Hd
   | |- context [@decide_rel _ _ ?R ?x ?y ?dec] =>
-    destruct_decide (@decide_rel _ _ R x y dec)
+    destruct_decide (@decide_rel _ _ R x y dec) as Hd
   end.
+Tactic Notation "case_decide" :=
+  let H := fresh in case_decide as H.
 
 (** The tactic [solve_decision] uses Coq's [decide equality] tactic together
 with instance resolution to automatically generate decision procedures. *)
@@ -107,22 +117,10 @@ Definition dexist `{∀ x : A, Decision (P x)} (x : A) (p : P x) : dsig P :=
   x↾bool_decide_pack _ p.
 Lemma dsig_eq `(P : A → Prop) `{∀ x, Decision (P x)}
   (x y : dsig P) : x = y ↔ `x = `y.
-Proof.
-  split.
-  * destruct x, y. apply proj1_sig_inj.
-  * intro. destruct x as [x Hx], y as [y Hy].
-    simpl in *. subst. f_equal.
-    revert Hx Hy. case (bool_decide (P y)).
-    + by intros [] [].
-    + done.
-Qed.
+Proof. apply (sig_eq_pi _). Qed.
 Lemma dexists_proj1 `(P : A → Prop) `{∀ x, Decision (P x)} (x : dsig P) p :
   dexist (`x) p = x.
 Proof. by apply dsig_eq. Qed.
-
-Global Instance dsig_eq_dec `(P : A → Prop) `{∀ x, Decision (P x)}
-  `{∀ x y : A, Decision (x = y)} (x y : dsig P) : Decision (x = y).
-Proof. refine (cast_if (decide (`x = `y))); by rewrite dsig_eq. Defined.
 
 (** * Instances of Decision *)
 (** Instances of [Decision] for operators of propositional logic. *)
@@ -164,3 +162,7 @@ Instance curry_dec `(P_dec : ∀ (x : A) (y : B), Decision (P x y)) p :
   end.
 Instance uncurry_dec `(P_dec : ∀ (p : A * B), Decision (P p)) x y :
   Decision (uncurry P x y) := P_dec (x,y).
+
+Instance sig_eq_dec `(P : A → Prop) `{∀ x, ProofIrrel (P x)}
+  `{∀ x y : A, Decision (x = y)} (x y : sig P) : Decision (x = y).
+Proof. refine (cast_if (decide (`x = `y))); by rewrite sig_eq_pi. Defined.

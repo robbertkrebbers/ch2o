@@ -49,13 +49,13 @@ Existing Instance seqfrac_disjoint.
 Instance seqfrac_union: Union seqfrac := λ f1 f2,
   match f1, f2 with
   | UnSeq f1, UnSeq f2 => UnSeq (f1 ∪ f2)
-  | _, _ => Seq (* dummy *)
+  | _, _ => Seq (**i dummy *)
   end.
 
 Instance seqfrac_difference: Difference seqfrac := λ f1 f2,
   match f1, f2 with
   | UnSeq f1, UnSeq f2 => UnSeq (f1 ∖ f2)
-  | _, _ => Seq (* dummy *)
+  | _, _ => Seq (**i dummy *)
   end.
 
 Instance seqfrac_eq_dec (f1 f2 : seqfrac) : Decision (f1 = f2).

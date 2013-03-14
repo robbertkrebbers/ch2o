@@ -165,11 +165,25 @@ Notation "(<)" := Z.lt (only parsing) : Z_scope.
 
 Infix "`div`" := Z.div (at level 35) : Z_scope.
 Infix "`mod`" := Z.modulo (at level 35) : Z_scope.
+Infix "`quot`" := Z.quot (at level 35) : Z_scope.
+Infix "`rem`" := Z.rem (at level 35) : Z_scope.
 
 Instance Z_eq_dec: ∀ x y : Z, Decision (x = y) := Z.eq_dec.
 Instance Z_le_dec: ∀ x y : Z, Decision (x ≤ y)%Z := Z_le_dec.
 Instance Z_lt_dec: ∀ x y : Z, Decision (x < y)%Z := Z_lt_dec.
 Instance Z_inhabited: Inhabited Z := populate 1%Z.
+
+(* Note that we cannot disable simpl for [Z.of_nat] as that would break
+[omega] and [lia]. *)
+Arguments Z.to_nat _ : simpl never.
+Arguments Z.mul _ _ : simpl never.
+Arguments Z.add _ _ : simpl never.
+Arguments Z.opp _ : simpl never.
+Arguments Z.pow _ _ : simpl never.
+Arguments Z.div _ _ : simpl never.
+Arguments Z.modulo _ _ : simpl never.
+Arguments Z.quot _ _ : simpl never.
+Arguments Z.rem _ _ : simpl never.
 
 (** * Notations and properties of [Qc] *)
 Notation "2" := (1+1)%Qc : Qc_scope.

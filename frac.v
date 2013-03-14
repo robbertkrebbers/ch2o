@@ -3,12 +3,11 @@
 (** This file gives an implementation of fractional permissions and shows that
 they are an instance of our abstract interface for permissions. A fractional
 permission is a rational number [x] with [0 < x ≤ 1], where [1] means full
-permissions, and any other value means read only access. *)
+access, and any other value means read only access. *)
 
 (** We implement fractional permissions using the type [Qc] of rational numbers
-in canonical representation from Coq's standard library. We equip these
-rational numbers with a boolean proof of being in the required interval to
-ensure canonical representations. *)
+in canonical representation. We equip these rational numbers with a boolean
+proof of being in the required interval to ensure canonicity. *)
 
 Require Import Field Qcanon.
 Require Export abstract_permissions numbers.
@@ -51,7 +50,7 @@ Instance frac_disjoint_dec (f1 f2 : frac) :
 Program Instance frac_union: Union frac := λ f1 f2,
   if decide (`f1 + `f2 ≤ 1)
   then dexist (`f1 + `f2) _
-  else 1%frac (* dummy *).
+  else 1%frac (**i dummy *).
 Next Obligation.
   split; [|done]. apply Qclt_le_trans with (`f1 + 0).
   * ring_simplify. auto using frac_lower.
@@ -61,7 +60,7 @@ Qed.
 Program Instance frac_difference: Difference frac := λ f1 f2,
   if decide (`f2 < `f1)
   then dexist (`f1 - `f2) _
-  else 1%frac (* dummy *).
+  else 1%frac (**i dummy *).
 Next Obligation.
   unfold Qcminus. split.
   { by rewrite <-Qclt_minus_iff. }

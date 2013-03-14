@@ -14,49 +14,52 @@ consider three variants of permissions:
 Require Export seqfrac.
 
 Inductive memperm :=
-  | Freeable : seqfrac → memperm
-  | Writable : seqfrac → memperm
-  | ReadOnly : frac → memperm.
-Notation Freeable_ := (Freeable (UnSeq 1)).
-Notation Writable_ := (Writable (UnSeq 1)).
-Notation ReadOnly_ := (ReadOnly 1).
+  | Freeable_ : seqfrac → memperm
+  | Writable_ : seqfrac → memperm
+  | ReadOnly_ : frac → memperm.
+Notation Freeable := (Freeable_ (UnSeq 1)).
+Notation Writable := (Writable_ (UnSeq 1)).
+Notation ReadOnly := (ReadOnly_ 1).
 
 Instance memperm_kind: PermKind memperm := λ γ,
   match γ with
-  | Freeable f => seqfrac_gen_kind Free f
-  | Writable f => seqfrac_gen_kind Write f
-  | ReadOnly f => frac_gen_kind Read f
+  | Freeable_ f => seqfrac_gen_kind Free f
+  | Writable_ f => seqfrac_gen_kind Write f
+  | ReadOnly_ f => frac_gen_kind Read f
   end.
 Instance memperm_lock: PermLock memperm := λ l γ,
   match γ with
-  | Freeable f => Freeable (perm_lock_ l f)
-  | Writable f => Writable (perm_lock_ l f)
-  | ReadOnly f => ReadOnly (perm_lock_ l f)
+  | Freeable_ f => Freeable_ (perm_lock_ l f)
+  | Writable_ f => Writable_ (perm_lock_ l f)
+  | ReadOnly_ f => ReadOnly_ (perm_lock_ l f)
   end.
 Inductive memperm_subseteq: SubsetEq memperm :=
   | Freeable_subseteq_Freeable f1 f2 :
      f1 ⊆ f2 →
-     Freeable f1 ⊆ Freeable f2
-  | Writable_subseteq_Writable f1 f2 :
+     Freeable_ f1 ⊆ Freeable_ f2
+  | Writable_subseteq_Writable_ f1 f2 :
      f1 ⊆ f2 →
-     Writable f1 ⊆ Writable f2
+     Writable_ f1 ⊆ Writable_ f2
   | ReadOnly_subseteq_ReadOnly f1 f2 :
      f1 ⊆ f2 →
-     ReadOnly f1 ⊆ ReadOnly f2.
+     ReadOnly_ f1 ⊆ ReadOnly_ f2.
 Existing Instance memperm_subseteq.
 
-Lemma Freeable_subset_Freeable f1 f2 : f1 ⊂ f2 → Freeable f1 ⊂ Freeable f2.
+Lemma Freeable_subset_Freeable f1 f2 :
+  f1 ⊂ f2 → Freeable_ f1 ⊂ Freeable_ f2.
 Proof. intros [? H]. by split; [constructor|contradict H; inversion H]. Qed.
-Lemma Writable_subset_Writable f1 f2 : f1 ⊂ f2 → Writable f1 ⊂ Writable f2.
+Lemma Writable_subset_Writable f1 f2 :
+  f1 ⊂ f2 → Writable_ f1 ⊂ Writable_ f2.
 Proof. intros [? H]. by split; [constructor|contradict H; inversion H]. Qed.
-Lemma ReadOnly_subset_ReadOnly f1 f2 : f1 ⊂ f2 → ReadOnly f1 ⊂ ReadOnly f2.
+Lemma ReadOnly_subset_ReadOnly f1 f2 :
+  f1 ⊂ f2 → ReadOnly_ f1 ⊂ ReadOnly_ f2.
 Proof. intros [? H]. by split; [constructor|contradict H; inversion H]. Qed.
 
 Lemma seqfrac_subset_alt γ1 γ2 :
   γ1 ⊂ γ2 ↔
-    (∃ f1 f2, γ1 = Freeable f1 ∧ γ2 = Freeable f2 ∧ f1 ⊂ f2) ∨
-    (∃ f1 f2, γ1 = Writable f1 ∧ γ2 = Writable f2 ∧ f1 ⊂ f2) ∨
-    (∃ f1 f2, γ1 = ReadOnly f1 ∧ γ2 = ReadOnly f2 ∧ f1 ⊂ f2).
+    (∃ f1 f2, γ1 = Freeable_ f1 ∧ γ2 = Freeable_ f2 ∧ f1 ⊂ f2) ∨
+    (∃ f1 f2, γ1 = Writable_ f1 ∧ γ2 = Writable_ f2 ∧ f1 ⊂ f2) ∨
+    (∃ f1 f2, γ1 = ReadOnly_ f1 ∧ γ2 = ReadOnly_ f2 ∧ f1 ⊂ f2).
 Proof.
   split.
   * intros [H1 H2]. destruct H1; [left | right;left | right;right];
@@ -68,27 +71,27 @@ Qed.
 
 Inductive memperm_disjoint: Disjoint memperm :=
   | Freeable_disjoint f1 f2 :
-     f1 ⊥ f2 → Freeable f1 ⊥ Freeable f2
+     f1 ⊥ f2 → Freeable_ f1 ⊥ Freeable_ f2
   | Writable_disjoint f1 f2 :
-     f1 ⊥ f2 → Writable f1 ⊥ Writable f2
+     f1 ⊥ f2 → Writable_ f1 ⊥ Writable_ f2
   | ReadOnly_disjoint f1 f2 :
-     f1 ⊥ f2 → ReadOnly f1 ⊥ ReadOnly f2.
+     f1 ⊥ f2 → ReadOnly_ f1 ⊥ ReadOnly_ f2.
 Existing Instance memperm_disjoint.
 
 Instance memperm_union: Union memperm := λ γ1 γ2,
   match γ1, γ2 with
-  | Freeable f1, Freeable f2 => Freeable (f1 ∪ f2)
-  | Writable f1, Writable f2 => Writable (f1 ∪ f2)
-  | ReadOnly f1, ReadOnly f2 => ReadOnly (f1 ∪ f2)
-  | _, _ => Freeable Seq (* dummy *)
+  | Freeable_ f1, Freeable_ f2 => Freeable_ (f1 ∪ f2)
+  | Writable_ f1, Writable_ f2 => Writable_ (f1 ∪ f2)
+  | ReadOnly_ f1, ReadOnly_ f2 => ReadOnly_ (f1 ∪ f2)
+  | _, _ => Freeable_ Seq (**i dummy *)
   end.
 
 Instance memperm_difference: Difference memperm := λ γ1 γ2,
   match γ1, γ2 with
-  | Freeable f1, Freeable f2 => Freeable (f1 ∖ f2)
-  | Writable f1, Writable f2 => Writable (f1 ∖ f2)
-  | ReadOnly f1, ReadOnly f2 => ReadOnly (f1 ∖ f2)
-  | _, _ => Freeable Seq (* dummy *)
+  | Freeable_ f1, Freeable_ f2 => Freeable_ (f1 ∖ f2)
+  | Writable_ f1, Writable_ f2 => Writable_ (f1 ∖ f2)
+  | ReadOnly_ f1, ReadOnly_ f2 => ReadOnly_ (f1 ∖ f2)
+  | _, _ => Freeable_ Seq (**i dummy *)
   end.
 
 Instance memperm_eq_dec (γ1 γ2 : memperm) : Decision (γ1 = γ2).
@@ -97,9 +100,9 @@ Instance memperm_subseteq_dec (γ1 γ2 : memperm) : Decision (γ1 ⊆ γ2).
 Proof.
  refine
   match γ1, γ2 with
-  | Freeable f1, Freeable f2 => cast_if (decide (f1 ⊆ f2))
-  | Writable f1, Writable f2 => cast_if (decide (f1 ⊆ f2))
-  | ReadOnly f1, ReadOnly f2 => cast_if (decide (f1 ⊆ f2))
+  | Freeable_ f1, Freeable_ f2 => cast_if (decide (f1 ⊆ f2))
+  | Writable_ f1, Writable_ f2 => cast_if (decide (f1 ⊆ f2))
+  | ReadOnly_ f1, ReadOnly_ f2 => cast_if (decide (f1 ⊆ f2))
   | _, _ => right _
   end; first [by subst; constructor | by inversion 1; subst].
 Defined.
@@ -107,9 +110,9 @@ Instance memperm_disjoint_dec (γ1 γ2 : memperm) : Decision (γ1 ⊥ γ2).
 Proof.
  refine
   match γ1, γ2 with
-  | Freeable f1, Freeable f2 => cast_if (decide (f1 ⊥ f2))
-  | Writable f1, Writable f2 => cast_if (decide (f1 ⊥ f2))
-  | ReadOnly f1, ReadOnly f2 => cast_if (decide (f1 ⊥ f2))
+  | Freeable_ f1, Freeable_ f2 => cast_if (decide (f1 ⊥ f2))
+  | Writable_ f1, Writable_ f2 => cast_if (decide (f1 ⊥ f2))
+  | ReadOnly_ f1, ReadOnly_ f2 => cast_if (decide (f1 ⊥ f2))
   | _, _ => right _
   end; first [by constructor | by inversion 1].
 Defined.
@@ -174,32 +177,32 @@ Proof.
       f_equal; by apply perm_union_difference.
 Qed.
 
-Lemma ReadOnly_fragment f : perm_fragment (ReadOnly f) ↔ perm_fragment f.
+Lemma ReadOnly_fragment_ f : perm_fragment (ReadOnly_ f) ↔ perm_fragment f.
 Proof.
   split.
   * intros [? Hf]. inversion Hf. red. eauto.
-  * intros [??]. eexists (ReadOnly _). constructor. eauto.
+  * intros [??]. eexists (ReadOnly_ _). constructor. eauto.
 Qed.
-Lemma Writable_fragment f : perm_fragment (Writable f) ↔ perm_fragment f.
+Lemma Writable_fragment_ f : perm_fragment (Writable_ f) ↔ perm_fragment f.
 Proof.
   split.
   * intros [? Hf]. inversion Hf. red. eauto.
   * intros [? []]. intros.
-    eexists (Writable (UnSeq _)). do 2 constructor. eauto.
+    eexists (Writable_ (UnSeq _)). do 2 constructor. eauto.
 Qed.
-Lemma Freeable_fragment f : perm_fragment (Freeable f) ↔ perm_fragment f.
+Lemma Freeable_fragment_ f : perm_fragment (Freeable_ f) ↔ perm_fragment f.
 Proof.
   split.
   * intros [? Hf]. inversion Hf. red. eauto.
   * intros [? []]. intros.
-    eexists (Freeable (UnSeq _)). do 2 constructor. eauto.
+    eexists (Freeable_ (UnSeq _)). do 2 constructor. eauto.
 Qed.
 
-Lemma ReadOnly__fragment : ¬perm_fragment ReadOnly_.
-Proof. rewrite ReadOnly_fragment. by apply perm_fragment_not_read. Qed.
-Lemma Writable__fragment : ¬perm_fragment Writable_.
+Lemma ReadOnly_fragment : ¬perm_fragment ReadOnly.
+Proof. rewrite ReadOnly_fragment_. by apply perm_fragment_not_read. Qed.
+Lemma Writable_fragment : ¬perm_fragment Writable.
 Proof. by apply perm_fragment_not_read. Qed.
-Lemma Freeable__fragment : ¬perm_fragment Freeable_.
+Lemma Freeable_fragment : ¬perm_fragment Freeable.
 Proof. by apply perm_fragment_not_read. Qed.
 
 Lemma memperm_kind_lock (γ : memperm) :

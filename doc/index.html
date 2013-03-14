@@ -22,8 +22,12 @@
 <li>Block scoped variables and pointers to these.</li>
 <li>Mutual recursive function calls.</li>
 <li>Dynamically allocated memory (<span class="bracket">alloc</span> and <span class="bracket">free</span>).</li>
+<li>A powerful permission system based on fractional permissions.</li>
 <li>Non-deterministic expressions with multiple side-effects.</li>
 <li>A strict interpretation of sequence points.</li>
+<li>An axiomatization of machine integers that takes overflow seriously.</li>
+<li>Big and little endian two's complement integer implementations parametric in the bit length of bytes.
+</li>
 </ul>
 <p>
 The operational semantics is given by a small step reduction semantics using a zipper like data structure to accurately model allocation and deallocation of block scoped variables. For example, our semantics will correctly assign undefined behavior to uses of non-local control flow that jump out of scope:</p>
@@ -40,7 +44,7 @@ The axiomatic semantics is defined semantically with respect to the operational 
 <h2>Goals</h2>
 <p>To get more closely to the actual C11 standard we intend to implement the following features in future versions:</p>
 <ul>
-<li>The C type system including structs, arrays, unions, and an abstract way of handling primitive data types (integers, floats).</li>
+<li>The C type system including structs, arrays and unions.</li>
 <li>The non-aliasing restrictions introduced by C99 and C11 (effective types in particular).</li>
 <li>A simple verification condition generator inside Coq allowing us to verify simple programs.</li>
 <li>An embedding of the <a href="http://compcert.inria.fr">CompCert</a> semantics into our semantics.</li>
@@ -67,6 +71,7 @@ The axiomatic semantics is defined semantically with respect to the operational 
 <ul>
 <li><a href="base.html">base</a>: interfaces, notations, and general theorems.</li>
 <li><a href="tactics.html">tactics</a>: general purpose tactics. </li>
+<li><a href="proof_irrel.html">proof_irrel</a>: facts about proof irrelevant types/propositions. </li>
 <li><a href="decidable.html">decidable</a>: theorems on decidable structures. </li>
 <li><a href="orders.html">orders</a>: theorems on ordered structures. </li>
 <li><a href="option.html">option</a>: miscellaneous definitions and theorems on the option data type. </li>
@@ -96,15 +101,21 @@ The axiomatic semantics is defined semantically with respect to the operational 
 <li><a href="mapset.html">mapset</a>: finite maps give rise to finite sets with extensional equality.</li>
 </ul>
 
+<h3>Values</h3>
+<ul>
+<li><a href="abstract_integers.html">abstract_integers</a>: an axiomatization of machine integers.</li>
+<li><a href="integers.html">integers</a>: an implementation of big and little two's complement machine integers.</li>
+<li><a href="abstract_values.html">abstract_values</a>: values parametrized by arbitrary integer implementations.</li>
+<li><a href="values.html">values</a>: values instantiated with concrete machine integers.</li>
+</ul>
 <h3>Memory</h3>
 <ul>
-<li><a href="values.html">values</a>: the representation of values.</li>
-<li><a href="abstract_permissions.html">abstract_permissions</a>: an abstract interface for permissions used in the memory.</li>
-<li><a href="abstract_memory.html">abstract_memory</a>: the abstract version of the memory model.</li>
-<li><a href="empty_permissions.html">empty_permissions</a>: an instance of the permission interface using the unit type.</li>
+<li><a href="abstract_permissions.html">abstract_permissions</a>: an axiomatization of permissions.</li>
+<li><a href="abstract_memory.html">abstract_memory</a>: the memory parametrized by arbitrary permissions and integer implementations.</li>
+<li><a href="empty_permissions.html">empty_permissions</a>: an implementation of permissions using the unit type.</li>
 <li><a href="frac.html">frac</a>: fractional permissions.</li>
-<li><a href="seqfrac.html">seqfrac</a>: fractional permissions that can be locked.</li>
-<li><a href="permissions.html">permissions</a>: the concrete type of permissions used in the memory model.</li>
+<li><a href="seqfrac.html">seqfrac</a>: lockable fractional permissions.</li>
+<li><a href="permissions.html">permissions</a>: readonly, writable, freeable, and lockable fractional permissioms.</li>
 <li><a href="memory.html">memory</a>: an instantiation of the memory model using concrete permissions.</li>
 </ul>
 

@@ -3,10 +3,10 @@
 (** The concrete memory model is obtained by instantiating the abstract memory
 model with our most expressive implementation of permissions. *)
 
-Require Export permissions abstract_memory.
+Require Export permissions values abstract_memory.
 
-Notation mem := (amem memperm).
+Notation mem := (mem_ int memperm).
 
-Hint Resolve Freeable__fragment : simpl_mem.
-Hint Resolve Writable__fragment : simpl_mem.
-Hint Resolve ReadOnly__fragment : simpl_mem.
+Hint Resolve Freeable_fragment : simpl_mem.
+Hint Resolve Writable_fragment : simpl_mem.
+Hint Resolve ReadOnly_fragment : simpl_mem.
