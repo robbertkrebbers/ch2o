@@ -182,12 +182,12 @@ Defined.
 
 (** The sequenced [||] and [&&] operators are defined in terms of the
 conditional. This keeps the expression language small. *)
-Definition EAnd `{IntEnv Ti Vi} (e1 e2 : expr) :=
+Definition EAnd (e1 e2 : expr) :=
   (IF e1
   then (IF e2 then intc int_true else intc int_false)
   else intc int_false)%E.
 Infix "&&" := EAnd : expr_scope.
-Definition EOr `{IntEnv Ti Vi} (e1 e2 : expr) :=
+Definition EOr (e1 e2 : expr) :=
   (IF e1
   then intc int_true
   else (IF e2 then intc int_true else intc int_false))%E.
