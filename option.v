@@ -47,6 +47,19 @@ Qed.
 Inductive is_Some {A} : option A → Prop :=
   make_is_Some x : is_Some (Some x).
 
+Instance is_Some_pi {A} (x : option A) : ProofIrrel (is_Some x).
+Proof.
+  intros [?] p2. by refine
+    match p2 in is_Some o return
+      match o with
+      | Some y => (make_is_Some y =)
+      | _ => λ _, False
+      end p2
+    with
+    | make_is_Some y => _
+    end.
+Qed.
+
 Lemma make_is_Some_alt `(x : option A) a : x = Some a → is_Some x.
 Proof. intros. by subst. Qed.
 Hint Resolve make_is_Some_alt.

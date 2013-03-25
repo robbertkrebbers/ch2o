@@ -102,6 +102,17 @@ Fixpoint replicate {A} (n : nat) (x : A) : list A :=
 (** The function [reverse l] returns the elements of [l] in reverse order. *)
 Definition reverse {A} (l : list A) : list A := rev_append l [].
 
+Fixpoint last' {A} (x : A) (l : list A) : A :=
+  match l with
+  | [] => x
+  | x :: l => last' x l
+  end.
+Definition last {A} (l : list A) : option A :=
+  match l with
+  | [] => None
+  | x :: l => Some (last' x l)
+  end.
+
 (** The function [resize n y l] takes the first [n] elements of [l] in case
 [length l ≤ n], and otherwise appends elements with value [x] to [l] to obtain
 a list of length [n]. *)
