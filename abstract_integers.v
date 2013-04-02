@@ -131,7 +131,9 @@ Class IntEnv (Ti Vi : Set) := {
   int_of_Z : Ti → Z → Vi;
   int_eval_unop : unop → Vi → option Vi;
   int_eval_binop : binop → Vi → Vi → option Vi;
-  int_cast : Ti → Vi → option Vi
+  int_cast : Ti → Vi → option Vi;
+  int_type_eq_dec (τ1 τ2 : Ti) :> Decision (τ1 = τ2);
+  int_eq_dec (x1 x2 : Vi) :> Decision (x1 = x2)
 }.
 
 Arguments int_type_size _ _ _ _ : simpl never.
@@ -186,9 +188,7 @@ that like the C standard, overflow of unsigned integers is defined behavior
 behavior. As [int_eval_unop], [int_eval_binop], and [int_cast], are partial
 functions, an implementation is thus free to decide whether to yield a bogus
 values, or to make the result actual undefined behavior. *)
-Class IntEnvSpec Ti Vi `{IntEnv Ti Vi}
-    `{∀ τ1 τ2 : Ti, Decision (τ1 = τ2)}
-    `{∀ x1 x2 : Vi, Decision (x1 = x2)} := {
+Class IntEnvSpec Ti Vi `{IntEnv Ti Vi} := {
   int_type_range_pos τ :
     (0 < int_type_range τ)%Z;
   size_TuChar :

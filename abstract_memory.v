@@ -101,8 +101,8 @@ function and only has the desired semantics in case [m2 ⊆ m1]. *)
 Global Instance mem_difference: Difference (mem_ Vi P) := λ m1 m2,
   match m1, m2 with
   | Mem m1, Mem m2 => Mem $ difference_with (λ c1 c2,
-    guard (snd c2 ⊂ snd c1);
-    Some (fst c1, snd c1 ∖ snd c2)) m1 m2
+     guard (snd c2 ⊂ snd c1);
+     Some (fst c1, snd c1 ∖ snd c2)) m1 m2
   end.
 
 (** The operation [mem_alloc b v γ m] extends the memory [m] with a new cell
@@ -169,7 +169,7 @@ permissions have kind [Locked]. *)
 Global Instance mem_locks: Locks (mem_ Vi P) := λ m,
   match m with
   | Mem m => mapset_dom_with (λ vγ,
-      bool_decide (perm_kind (snd vγ) = Locked)) m
+     bool_decide (perm_kind (snd vγ) = Locked)) m
   end.
 
 (** The operation [mem_lock b m] changes the permission [γ] at index [b]
@@ -184,7 +184,7 @@ point occurs. *)
 Definition mem_unlock (Ω : indexset) (m : mem_ Vi P) : mem_ Vi P :=
   match m with
   | Mem m => Mem $ mapset_map_with (λ b,
-      if b then snd_map perm_unlock else id) Ω m
+     if b then snd_map perm_unlock else id) Ω m
   end.
 
 (** * Properties *)
@@ -359,7 +359,7 @@ Lemma mem_union_subseteq_l (m1 m2 : mem_ Vi P) :
 Proof.
   destruct m1 as [m1],m2 as [m2]. intros Hm12 b v1 γ1 ?. simpl in *.
   destruct (m2 !! b) as [[v2 γ2]|] eqn:?.
-  * destruct (Hm12 b (v1,γ1) (v2,γ2)); auto; subst. exists (γ1 ∪ γ2).
+  * destruct (Hm12 b (v1,γ1) (v2,γ2)); auto; subst; simpl in *. exists (γ1 ∪ γ2).
     eauto using lookup_union_with_Some_lr, perm_union_subseteq_l.
   * eauto using lookup_union_with_Some_l.
 Qed.
@@ -554,7 +554,7 @@ Proof.
   rewrite !mem_lookup_Some_raw. intros Hm12 (γ1&?&?). simpl.
   destruct (m2 !! b) as [[v2 γ2]|] eqn:?.
   * destruct (Hm12 b (v,γ1) (v2,γ2)); auto; simpl in *; subst.
-    exists (γ1 ∪ γ2). split; auto using perm_kind_union.
+    exists (γ1 ∪ γ2). split; auto using perm_kind_union_locked.
     eapply lookup_union_with_Some_lr; eauto.
   * exists γ1. split; auto using lookup_union_with_Some_l.
 Qed.
@@ -800,7 +800,7 @@ Proof.
   intros (γ&Hmbγ&?); subst. rewrite mem_perm_union_Some in Hmbγ by done.
   destruct Hmbγ as [(γ1&γ2&?&?&?&?)|]; subst.
   * left. split_ands.
-    + eauto using perm_kind_union.
+    + eauto using perm_kind_union_locked.
     + exists γ1. eauto using perm_disjoint_kind_l.
     + exists γ2. eauto using perm_disjoint_kind_r.
   * naive_solver.
@@ -1159,6 +1159,41 @@ Lemma is_writable_singleton b v γ :
   Write ⊆ perm_kind γ →
   is_writable {[ (b,v,γ) ]} b.
 Proof. intros. exists γ. by rewrite mem_perm_singleton. Qed.
+
+Lemma mem_disjoint_singletons_same b v (γ1 γ2 : P) :
+  γ1 ⊥ γ2 →
+  {[ (b,v,γ1) ]} ⊥ {[ (b,v,γ2) ]}.
+Proof. repeat intro. simpl in *. by simplify_map_equality. Qed.
+Lemma mem_disjoint_singletons_other b1 b2 v1 v2 (γ1 γ2 : P) :
+  b1 ≠ b2 →
+  {[ (b1,v1,γ1) ]} ⊥ {[ (b2,v2,γ2) ]}.
+Proof. repeat intro. simpl in *. simplify_map_equality. Qed.
+
+Lemma mem_disjoint_singletons b1 v1 γ1 b2 v2 γ2 :
+  {[ (b1,v1,γ1) ]} ⊥ {[ (b2,v2,γ2) ]} ↔
+    b1 ≠ b2 ∨ (b1 = b2 ∧ v1 = v2 ∧ γ1 ⊥ γ2).
+Proof.
+  split.
+  * destruct (decide (b1 = b2)); subst; auto.
+    intros Hdisjoint. right.
+    by destruct (Hdisjoint b2 (v1,γ1) (v2,γ2)); simpl; simpl_map.
+  * naive_solver eauto using mem_disjoint_singletons_same,
+      mem_disjoint_singletons_other.
+Qed.
+
+Lemma mem_subseteq_singletons_same b v (γ1 γ2 : P) :
+  γ1 ⊆ γ2 →
+  {[ (b,v,γ1) ]} ⊆ {[ (b,v,γ2) ]}.
+Proof. repeat intro. simpl in *. simplify_map_equality. eauto. Qed.
+
+Lemma mem_union_singletons b v γ1 γ2 :
+  {[ (b,v,γ1); (b,v,γ2) ]} = {[ (b,v,γ1 ∪ γ2) ]}.
+Proof.
+  unfold union at 1, singleton, mem_union, mem_singleton. simpl. f_equal.
+  apply map_eq. intros b'. destruct (decide (b = b')); subst.
+  * simpl_map. apply lookup_union_with_Some. simpl_map. naive_solver.
+  * simpl_map. apply lookup_union_with_None. simpl_map. eauto.
+Qed.
 
 (** ** Properties of the [union_list] operation *)
 Lemma mem_list_disjoint_singleton (m : mem_ Vi P) :
@@ -1997,8 +2032,7 @@ Qed.
 Lemma mem_lookup_unlock Ω m b v :
   m !! b = Some v → mem_unlock Ω m !! b = Some v.
 Proof.
-  destruct m as [m].
-  unfold lookup, mem_lookup, mem_unlock. simpl.
+  destruct m as [m]. unfold lookup, mem_lookup, mem_unlock. simpl.
   intros. rewrite lookup_mapset_map_with.
   case_bool_decide; simplify_option_equality; auto.
   edestruct perm_unlock_kind; eauto.
@@ -2269,7 +2303,7 @@ Tactic Notation "simpl_mem" "by" tactic3(tac) := repeat
   | |- context[ ∅ !! _ ] => rewrite mem_lookup_empty
   | |- context[ (<[_:=_]>_) !! _ ] => rewrite mem_lookup_insert
   | |- context[ (<[_:=_]>_) !! _ ] => rewrite mem_lookup_insert_ne by tac
-  | |- context[ {[ _ ]} !! _ ] => rewrite mem_lookup_singleton
+  | |- context[ {[ _ ]} !! _ ] => rewrite mem_lookup_singleton by tac
   | |- context[ {[ _ ]} !! _ ] => rewrite mem_lookup_singleton_ne by tac
   | |- context[ {[ _ ]} !! _ ] => rewrite mem_lookup_singleton_locked by tac
   | |- context [ lookup (M:=mem_ ?Vi _) ?b ?m ] =>
@@ -2335,11 +2369,17 @@ Hint Extern 1 (¬perm_fragment _) =>
   apply perm_fragment_free : simpl_mem.
 Hint Extern 1 (¬perm_fragment _) =>
   apply perm_fragment_locked : simpl_mem.
+Hint Extern 1 (perm_kind _ ≠ _) =>
+  apply perm_kind_half_locked : simpl_mem.
 
 Tactic Notation "simplify_mem_equality" "by" tactic3(tac) := repeat
   match goal with
   | _ => progress simpl_mem by tac
   | _ => progress simplify_equality
+  | H1 : ?o = Some ?x, H2 : ?o = Some ?y |- _ =>
+    assert (y = x) by congruence; clear H2
+  | H1 : ?o = Some ?x, H2 : ?o = None |- _ =>
+    congruence
   | H : {[ _ ]} !! _ = None |- _ =>
     rewrite mem_lookup_singleton_None in H
   | H : {[ _ ]} !! _ = Some _ |- _ =>
@@ -2357,6 +2397,9 @@ Tactic Notation "simplify_mem_equality" "by" tactic3(tac) := repeat
     apply mem_union_cancel_l in H; [| solve[tac] | solve [tac]]
   | H : _ ∪ ?m = _ ∪ ?m |- _ =>
     apply mem_union_cancel_r in H; [| solve[tac] | solve [tac]]
+  | H1 : ?m1 !! ?b = Some ?v1, H2 : ?m2 !! ?b = Some ?v2, H : ?m1 ⊥ ?m2 |- _ =>
+    unless (v1 = v2) by done;
+    pose proof (mem_disjoint_lookup m1 m2 b v1 v2 H H1 H2)
   end.
 Tactic Notation "simplify_mem_equality" :=
   simplify_mem_equality by eauto with simpl_mem.

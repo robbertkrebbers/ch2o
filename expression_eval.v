@@ -88,16 +88,21 @@ Qed.
 
 (** Evaluation of pure expressions is preserved under extensions of the
 memory. *)
-Lemma expr_eval_weaken_mem δ ρ m1 m2 e v :
+Lemma expr_eval_weaken_mem_lookup δ ρ m1 m2 e v :
   ⟦ e ⟧ δ ρ m1 = Some v →
-  m1 ⊆ m2 →
+  (∀ i w, m1 !! i = Some w → m2 !! i = Some w) →
   ⟦ e ⟧ δ ρ m2 = Some v.
 Proof.
   revert v. induction e using expr_ind_alt; intros;
     simplify_option_equality; eauto.
-  * erewrite mapM_Some_2; [by eauto|]. decompose_Forall; auto.
-  * eapply mem_lookup_weaken; eauto.
+  erewrite mapM_Some_2; [by eauto|]. decompose_Forall; auto.
 Qed.
+
+Lemma expr_eval_weaken_mem δ ρ m1 m2 e v :
+  ⟦ e ⟧ δ ρ m1 = Some v →
+  m1 ⊆ m2 →
+  ⟦ e ⟧ δ ρ m2 = Some v.
+Proof. eauto using expr_eval_weaken_mem_lookup, mem_lookup_weaken. Qed.
 
 Lemma expr_eval_weaken_inv δ ρ m1 m2 e v1 v2 :
   ⟦ e ⟧ δ ρ m1 = Some v1 →
@@ -124,16 +129,36 @@ Proof.
   * congruence.
 Qed.
 
+Lemma expr_eval_disjoint δ ρ m1 m2 e v1 v2 :
+  m1 ⊥ m2 →
+  ⟦ e ⟧ δ ρ m1 = Some v1 →
+  ⟦ e ⟧ δ ρ m2 = Some v2 →
+  v1 = v2.
+Proof.
+  intros Hm1m2.
+  assert (∀ es vs1 vs2,
+    Forall (λ e, ∀ w1 w2,
+      ⟦ e ⟧ δ ρ m1 = Some w1 → ⟦ e ⟧ δ ρ m2 = Some w2 → w1 = w2) es →
+    Forall2 (λ e v, ⟦ e ⟧ δ ρ m1 = Some v) es vs1 →
+    Forall2 (λ e v, ⟦ e ⟧ δ ρ m2 = Some v) es vs2 →
+    vs1 = vs2) as help.
+  { intros es vs1 vs2 Hes. revert vs1 vs2.
+    induction Hes; intros; decompose_Forall_hyps; f_equal; eauto. }
+  revert v1 v2. induction e using expr_ind_alt; intros;
+    simplify_option_equality;
+    repeat match goal with
+    | H : ∀ _ _, Some _ = Some _ → Some _ = Some _ → _ |- _ =>
+       efeed pose proof H; eauto; clear H; subst
+    | H1 : Forall2 _ ?es ?vs1, H2 : Forall2 _ ?es ?vs2 |- _ =>
+       assert (vs1 = vs2) by eauto; clear H1 H2
+    end; simplify_mem_equality; congruence.
+Qed.
+
 (** Evaluation of pure expressions is preserved under unlocking. *)
 Lemma expr_eval_unlock δ Ω ρ m e v :
   ⟦ e ⟧ δ ρ m = Some v →
   ⟦ e ⟧ δ ρ (mem_unlock Ω m) = Some v.
-Proof.
-  revert v. induction e using expr_ind_alt; intros;
-    simplify_option_equality; eauto.
-  * erewrite mapM_Some_2; [by eauto |]. decompose_Forall; auto.
-  * eapply mem_lookup_unlock; eauto.
-Qed.
+Proof. eauto using expr_eval_weaken_mem_lookup, mem_lookup_unlock. Qed.
 
 (** Evaluation of pure expressions is preserved under extensions of the
 stack. *)
@@ -258,6 +283,10 @@ Tactic Notation "simplify_expr_equality" "by" tactic3(tac) := repeat
     feed pose proof (expr_eval_weaken_inv ρ m1 m2 e v1 v2) as H3;
       [done | by tac | done | ];
     clear H2; symmetry in H3
+  | H1 : ⟦ ?e ⟧ ?δ ?ρ ?m1 = Some ?v1, H2 : ⟦ ?e ⟧ ?δ ?ρ ?m2 = Some ?v2,
+    H : ?m1 ⊥ ?m2 |- _ =>
+    unless (v1 = v2) by done;
+    pose proof (expr_eval_disjoint δ ρ m1 m2 e v1 v2 H H1 H2); subst
   end.
 Tactic Notation "simplify_expr_equality" :=
   simplify_expr_equality by eauto with simpl_mem.

@@ -684,6 +684,9 @@ Class FreshSpec A C `{ElemOf A C}
 }.
 
 (** * Miscellaneous *)
+Class Half A := half: A → A.
+Notation "x .½" := (half x) (at level 20, format "x .½") : C_scope.
+
 Lemma proj1_sig_inj {A} (P : A → Prop) x (Px : P x) y (Py : P y) :
   x↾Px = y↾Py → x = y.
 Proof. injection 1; trivial. Qed.
