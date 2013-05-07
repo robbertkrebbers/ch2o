@@ -15,7 +15,6 @@ logic ([emp], [↦], [★], [-★]), and other connectives that are more specifi
 our development. We overload the usual notations in [assert_scope] to obtain
 nicely looking assertions. Furthermore, we prove various properties to make
 reasoning about assertions easier. *)
-Require Import SetoidList.
 Require Export expression_eval memory.
 
 (** * Definition of assertions *)
@@ -36,7 +35,7 @@ of pure functions [δ]. *)
 Instance assert_subseteq: SubsetEqEnv purefuns assert := λ δ P Q,
   ∀ ρ m, assert_holds δ P ρ m → assert_holds δ Q ρ m.
 Instance assert_equiv: EquivEnv purefuns assert := λ δ P Q,
-  P ⊆@{δ} Q ∧ Q ⊆@{δ} P.
+  P ⊑@{δ} Q ∧ Q ⊑@{δ} P.
 Instance: PreOrder (assert_subseteq δ).
 Proof. firstorder. Qed.
 Instance: Equivalence (assert_equiv δ).
@@ -44,7 +43,7 @@ Proof. firstorder. Qed.
 Instance: Proper ((≡@{δ}) ==> (≡@{δ}) ==> iff) (assert_subseteq δ).
 Proof. firstorder auto. Qed.
 
-Instance: Proper ((⊆@{δ}) ==> (=) ==> (=) ==> impl) (assert_holds δ).
+Instance: Proper ((⊑@{δ}) ==> (=) ==> (=) ==> impl) (assert_holds δ).
 Proof. firstorder. Qed.
 Instance: Proper ((≡@{δ}) ==> (=) ==> (=) ==> iff) (assert_holds δ).
 Proof. firstorder. Qed.
@@ -194,18 +193,19 @@ Tactic Notation "fold_assert" "in" "*" :=
   repeat match goal with H : _ |- _ => progress fold_assert in H end.
 
 Tactic Notation "unfold_assert" :=
-  repeat (autounfold with assert; simpl);
-  fold_assert.
+  repeat (autounfold with assert; simpl); fold_assert.
 Tactic Notation "unfold_assert" "in" "*" :=
-  repeat (autounfold with assert in *; simpl in *);
-  fold_assert in *.
+  repeat (autounfold with assert in *; simpl in *); fold_assert in *.
+
+Create HintDb solve_assert.
+Hint Extern 1000 (⊥ _) => solve_mem_disjoint : solve_assert.
 
 Tactic Notation "solve_assert" tactic3(tac) :=
   repeat intro;
   intuition;
   unfold_assert in *;
   naive_solver tac.
-Tactic Notation "solve_assert" := solve_assert auto.
+Tactic Notation "solve_assert" := solve_assert auto with solve_assert.
 
 (** * Hoare logic connectives *)
 (** Definitions and notations of the usual connectives of Hoare logic. *)
@@ -255,11 +255,11 @@ Notation "∃ x .. y , P" :=
 
 (** Compatibility of the connectives with respect to order and setoid
 equality. *)
-Instance: Proper (impl ==> (⊆@{δ})) Prop_as_assert.
+Instance: Proper (impl ==> (⊑@{δ})) Prop_as_assert.
 Proof. solve_assert. Qed.
 Instance: Proper (iff ==> (≡@{δ})) Prop_as_assert.
 Proof. solve_assert. Qed.
-Instance: Proper (flip (⊆@{δ}) ==> (⊆@{δ}) ==> (⊆@{δ})) (→)%A.
+Instance: Proper (flip (⊑@{δ}) ==> (⊑@{δ}) ==> (⊑@{δ})) (→)%A.
 Proof. solve_assert. Qed.
 Instance: Proper ((≡@{δ}) ==> (≡@{δ}) ==> (≡@{δ})) (→)%A.
 Proof. solve_assert. Qed.
@@ -267,27 +267,27 @@ Instance: Proper ((≡@{δ}) ==> (≡@{δ}) ==> (≡@{δ})) (↔)%A.
 Proof. solve_assert. Qed.
 Instance: Proper ((≡@{δ}) ==> (≡@{δ}) ==> (≡@{δ})) (∧)%A.
 Proof. solve_assert. Qed.
-Instance: Proper ((⊆@{δ}) ==> (⊆@{δ}) ==> (⊆@{δ})) (∧)%A.
+Instance: Proper ((⊑@{δ}) ==> (⊑@{δ}) ==> (⊑@{δ})) (∧)%A.
 Proof. solve_assert. Qed.
 Instance: Proper ((≡@{δ}) ==> (≡@{δ}) ==> (≡@{δ})) (∨)%A.
 Proof. solve_assert. Qed.
-Instance: Proper ((⊆@{δ}) ==> (⊆@{δ}) ==> (⊆@{δ})) (∨)%A.
+Instance: Proper ((⊑@{δ}) ==> (⊑@{δ}) ==> (⊑@{δ})) (∨)%A.
 Proof. solve_assert. Qed.
 Instance: Proper ((≡@{δ}) ==> (≡@{δ})) assert_not.
 Proof. solve_assert. Qed.
-Instance: Proper (flip (⊆@{δ}) ==> (⊆@{δ})) assert_not.
+Instance: Proper (flip (⊑@{δ}) ==> (⊑@{δ})) assert_not.
 Proof. solve_assert. Qed.
 Instance:
   Proper (pointwise_relation _ (≡@{δ}) ==> (≡@{δ})) (@assert_forall A).
 Proof. unfold pointwise_relation. solve_assert. Qed.
 Instance:
-  Proper (pointwise_relation _ (⊆@{δ}) ==> (⊆@{δ})) (@assert_forall A).
+  Proper (pointwise_relation _ (⊑@{δ}) ==> (⊑@{δ})) (@assert_forall A).
 Proof. unfold pointwise_relation. solve_assert. Qed.
 Instance:
   Proper (pointwise_relation _ (≡@{δ}) ==> (≡@{δ})) (@assert_exist A).
 Proof. unfold pointwise_relation. solve_assert. Qed.
 Instance:
-  Proper (pointwise_relation _ (⊆@{δ}) ==> (⊆@{δ})) (@assert_exist A).
+  Proper (pointwise_relation _ (⊑@{δ}) ==> (⊑@{δ})) (@assert_exist A).
 Proof. unfold pointwise_relation. solve_assert. Qed.
 
 (** Instances of the type classes for stack independence, memory independence,
@@ -303,8 +303,7 @@ Proof. solve_assert. Qed.
 Instance assert_or_stack_indep :
   StackIndep P → StackIndep Q → StackIndep (P ∨ Q).
 Proof. solve_assert. Qed.
-Instance assert_not_stack_indep :
-  StackIndep P → StackIndep (¬P).
+Instance assert_not_stack_indep : StackIndep P → StackIndep (¬P).
 Proof. solve_assert. Qed.
 Instance assert_forall_stack_indep A :
   (∀ x : A, StackIndep (P x)) → StackIndep (assert_forall P).
@@ -439,41 +438,41 @@ Proof. solve_assert. Qed.
 Lemma Prop_as_assert_or (P Q : Prop) δ : ⌜ P ∨ Q ⌝%A ≡@{δ} (⌜P⌝ ∨ ⌜Q⌝)%A.
 Proof. solve_assert. Qed.
 
-Lemma assert_true_intro P δ : P ⊆@{δ} True%A.
+Lemma assert_true_intro P δ : P ⊑@{δ} True%A.
 Proof. solve_assert. Qed.
-Lemma assert_false_elim P δ : False%A ⊆@{δ} P.
+Lemma assert_false_elim P δ : False%A ⊑@{δ} P.
 Proof. solve_assert. Qed.
 
-Lemma assert_and_l P Q δ : (P ∧ Q)%A ⊆@{δ} P.
+Lemma assert_and_l P Q δ : (P ∧ Q)%A ⊑@{δ} P.
 Proof. solve_assert. Qed.
-Lemma assert_and_r P Q δ : (P ∧ Q)%A ⊆@{δ} Q.
+Lemma assert_and_r P Q δ : (P ∧ Q)%A ⊑@{δ} Q.
 Proof. solve_assert. Qed.
-Lemma assert_and_intro P Q1 Q2 δ : P ⊆@{δ} Q1 → P ⊆@{δ} Q2 → P ⊆@{δ} (Q1 ∧ Q2)%A.
+Lemma assert_and_intro P Q1 Q2 δ : P ⊑@{δ} Q1 → P ⊑@{δ} Q2 → P ⊑@{δ} (Q1 ∧ Q2)%A.
 Proof. solve_assert. Qed.
-Lemma assert_and_elim_l P1 P2 Q δ : P1 ⊆@{δ} Q → (P1 ∧ P2)%A ⊆@{δ} Q.
+Lemma assert_and_elim_l P1 P2 Q δ : P1 ⊑@{δ} Q → (P1 ∧ P2)%A ⊑@{δ} Q.
 Proof. solve_assert. Qed.
-Lemma assert_and_elim_r P1 P2 Q δ : P2 ⊆@{δ} Q → (P1 ∧ P2)%A ⊆@{δ} Q.
+Lemma assert_and_elim_r P1 P2 Q δ : P2 ⊑@{δ} Q → (P1 ∧ P2)%A ⊑@{δ} Q.
 Proof. solve_assert. Qed.
 
 Lemma assert_forall_intro {A} P (Q : A → assert) δ :
-  (∀ x, P ⊆@{δ} Q x) → P ⊆@{δ} (∀ x, Q x)%A.
+  (∀ x, P ⊑@{δ} Q x) → P ⊑@{δ} (∀ x, Q x)%A.
 Proof. solve_assert. Qed.
 Lemma assert_forall_specialize {A} (P : A → assert) Q δ x :
-  (P x ⊆@{δ} Q) → (∀ x, P x)%A ⊆@{δ} Q.
+  (P x ⊑@{δ} Q) → (∀ x, P x)%A ⊑@{δ} Q.
 Proof. solve_assert. Qed.
 
 Lemma assert_exists_intro {A} P (Q : A → assert) δ x :
-  P ⊆@{δ} Q x → P ⊆@{δ} (∃ x, Q x)%A.
+  P ⊑@{δ} Q x → P ⊑@{δ} (∃ x, Q x)%A.
 Proof. solve_assert. Qed.
 Lemma assert_exists_elim {A} (P : A → assert) Q δ :
-  (∀ x, P x ⊆@{δ} Q) → (∃ x, P x)%A ⊆@{δ} Q.
+  (∀ x, P x ⊑@{δ} Q) → (∃ x, P x)%A ⊑@{δ} Q.
 Proof. solve_assert. Qed.
 
-Lemma assert_or_l P Q δ : P ⊆@{δ} (P ∨ Q)%A.
+Lemma assert_or_l P Q δ : P ⊑@{δ} (P ∨ Q)%A.
 Proof. solve_assert. Qed.
-Lemma assert_or_r P Q δ : P ⊆@{δ} (P ∨ Q)%A.
+Lemma assert_or_r P Q δ : P ⊑@{δ} (P ∨ Q)%A.
 Proof. solve_assert. Qed.
-Lemma assert_or_elim P Q R δ : P ⊆@{δ} R → Q ⊆@{δ} R → (P ∨ Q)%A ⊆@{δ} R.
+Lemma assert_or_elim P Q R δ : P ⊑@{δ} R → Q ⊑@{δ} R → (P ∨ Q)%A ⊑@{δ} R.
 Proof. solve_assert. Qed.
 
 Lemma assert_and_exists {A} P (Q : A → assert) δ :
@@ -491,31 +490,23 @@ Lemma assert_and_exists_r {A} (P : A → assert) Q δ :
 Proof. solve_assert. Qed.
 
 Lemma assert_Prop_intro_l (P : Prop) Q R δ :
-  (P → Q ⊆@{δ} R) →
-  (⌜ P ⌝ ∧ Q)%A ⊆@{δ} R.
+  (P → Q ⊑@{δ} R) → (⌜ P ⌝ ∧ Q)%A ⊑@{δ} R.
 Proof. solve_assert. Qed.
 Lemma assert_Prop_intro_r (P : Prop) Q R δ :
-  (P → Q ⊆@{δ} R) →
-  (Q ∧ ⌜ P ⌝)%A ⊆@{δ} R.
+  (P → Q ⊑@{δ} R) → (Q ∧ ⌜ P ⌝)%A ⊑@{δ} R.
 Proof. solve_assert. Qed.
 
 Lemma assert_Prop_and_elim (P : Prop) Q R δ :
-  (P → Q ⊆@{δ} R) →
-  (⌜ P ⌝ ∧ Q)%A ⊆@{δ} R.
+  (P → Q ⊑@{δ} R) → (⌜ P ⌝ ∧ Q)%A ⊑@{δ} R.
 Proof. solve_assert. Qed.
 Lemma assert_and_Prop_elim (P : Prop) Q R δ :
-  (P → Q ⊆@{δ} R) →
-  (Q ∧ ⌜ P ⌝)%A ⊆@{δ} R.
+  (P → Q ⊑@{δ} R) → (Q ∧ ⌜ P ⌝)%A ⊑@{δ} R.
 Proof. solve_assert. Qed.
 Lemma assert_Prop_and_intro (P : Prop) Q R δ :
-  P →
-  Q ⊆@{δ} R →
-  Q ⊆@{δ} (⌜ P ⌝ ∧ R)%A.
+  P → Q ⊑@{δ} R → Q ⊑@{δ} (⌜ P ⌝ ∧ R)%A.
 Proof. solve_assert. Qed.
 Lemma assert_and_Prop_intro (P : Prop) Q R δ :
-  P →
-  Q ⊆@{δ} R →
-  Q ⊆@{δ} (R ∧ ⌜ P ⌝)%A.
+  P → Q ⊑@{δ} R → Q ⊑@{δ} (R ∧ ⌜ P ⌝)%A.
 Proof. solve_assert. Qed.
 
 (** The assertion [e ⇓ v] asserts that the expression [e] evaluates to [v]
@@ -536,47 +527,44 @@ Notation "(⇓ - )" := assert_expr (only parsing) : assert_scope.
 
 Instance assert_expr_mem_ext e v : MemExt (e ⇓ v).
 Proof.
-  intros ρ m1 m2 ? Hm. unfold_assert in *.
-  eauto using expr_eval_weaken_mem.
+  intros ρ m1 m2 ? Hm. unfold_assert in *. eauto using expr_eval_weaken_mem.
 Qed.
 
-Instance assert_expr_mem_indep e :
-  load_free e →
-  MemIndep (e ⇓ v).
+Instance assert_expr_mem_indep e : load_free e → MemIndep (e ⇓ v).
 Proof.
   intros ?? δ ρ m1 m2. unfold_assert.
   erewrite !(expr_load_free_mem_indep δ ρ m1 m2); eauto.
 Qed.
-Instance assert_expr_mem_indep_ e :
-  load_free e →
-  MemIndep (e ⇓ -).
+Instance assert_expr_mem_indep_ e : load_free e → MemIndep (e ⇓ -).
 Proof.
   intros ? δ ρ m1 m2 [v ?]. exists v. unfold_assert in *.
   erewrite !(expr_load_free_mem_indep δ ρ m2 m1); eauto.
 Qed.
 
-Instance assert_expr_stack_indep e v :
-  vars e ≡ ∅ →
-  StackIndep (e ⇓ v).
+Instance assert_expr_stack_indep e v : vars e ≡ ∅ → StackIndep (e ⇓ v).
 Proof.
   intros ? δ ρ1 ρ2 m. unfold_assert.
   by rewrite !(expr_var_free_stack_indep δ ρ2 ρ1).
 Qed.
-Instance assert_expr_stack_indep_ e :
-  vars e ≡ ∅ →
-  StackIndep (e ⇓ -).
+Instance assert_expr_stack_indep_ e : vars e ≡ ∅ → StackIndep (e ⇓ -).
 Proof.
   intros ? δ ρ1 ρ2 m. unfold_assert.
   by rewrite !(expr_var_free_stack_indep δ ρ2 ρ1).
 Qed.
+Instance assert_expr_unlock_indep e v :
+  UnlockIndep (e ⇓ v).
+Proof. solve_assert eauto using expr_eval_unlock. Qed.
+Instance assert_expr_unlock_indep_ e :
+  UnlockIndep (e ⇓ -).
+Proof. solve_assert eauto using expr_eval_unlock. Qed.
 
 Lemma assert_expr_load e p v δ :
-  (load e ⇓ p ∧ load (valc p) ⇓ v)%A ⊆@{δ} (load (load e) ⇓ v)%A.
+  (load e ⇓ p ∧ load (valc p) ⇓ v)%A ⊑@{δ} (load (load e) ⇓ v)%A.
 Proof.
   intros ?? [He ?]. unfold_assert in *. rewrite He.
   by simplify_option_equality.
 Qed.
-Lemma assert_expr_forget e v δ : (e ⇓ v)%A ⊆@{δ} (e ⇓ -)%A.
+Lemma assert_expr_forget e v δ : (e ⇓ v)%A ⊑@{δ} (e ⇓ -)%A.
 Proof. solve_assert. Qed.
 
 Notation "e ⇓ 'true'" := (∃ v, e⇓v ∧ ⌜ val_true v ⌝)%A
@@ -596,8 +584,7 @@ Notation "<[ a := v ]>" := (assert_subst a v) : assert_scope.
 Instance: ∀ a v, Proper ((≡@{δ}) ==> (≡@{δ})) (assert_subst a v).
 Proof. solve_assert. Qed.
 
-Lemma assert_subst_mem_indep P `{MemIndep P} δ a v:
-  (<[a:=v]>P)%A ≡@{δ} P.
+Lemma assert_subst_mem_indep P `{MemIndep P} δ a v: (<[a:=v]>P)%A ≡@{δ} P.
 Proof. solve_assert. Qed.
 Lemma assert_subst_impl P Q δ a v :
   (<[a:=v]>(P → Q))%A ≡@{δ} (<[a:=v]>P → <[a:=v]>Q)%A.
@@ -629,7 +616,7 @@ Notation "'emp'" := assert_emp : assert_scope.
 
 Definition assert_sep (P Q : assert) : assert :=
   Assert $ λ δ ρ m, ∃ m1 m2,
-    m1 ∪ m2 = m ∧ m1 ⊥ m2 ∧ assert_holds δ P ρ m1 ∧ assert_holds δ Q ρ m2.
+    m1 ∪ m2 = m ∧ ⊥[m1; m2] ∧ assert_holds δ P ρ m1 ∧ assert_holds δ Q ρ m2.
 Infix "★" := assert_sep (at level 80, right associativity) : assert_scope.
 Notation "(★)" := assert_sep (only parsing) : assert_scope.
 Notation "( P ★)" := (assert_sep P) (only parsing) : assert_scope.
@@ -637,7 +624,7 @@ Notation "(★ Q )" := (λ P, assert_sep P Q) (only parsing) : assert_scope.
 
 Definition assert_wand (P Q : assert) : assert :=
   Assert $ λ δ ρ m1, ∀ m2,
-    m1 ⊥ m2 → assert_holds δ P ρ m2 → assert_holds δ Q ρ (m1 ∪ m2).
+    ⊥[m1; m2] → assert_holds δ P ρ m2 → assert_holds δ Q ρ (m1 ∪ m2).
 Infix "-★" := assert_wand (at level 90) : assert_scope.
 Notation "(-★)" := assert_wand (only parsing) : assert_scope.
 Notation "( P -★)" := (assert_wand P) (only parsing) : assert_scope.
@@ -645,34 +632,32 @@ Notation "(-★ Q )" := (λ P, assert_wand P Q) (only parsing) : assert_scope.
 
 (** Compatibility of the separation logic connectives with respect to order and
 equality. *)
-Instance: Proper ((⊆@{δ}) ==> (⊆@{δ}) ==> (⊆@{δ})) (★)%A.
+Instance: Proper ((⊑@{δ}) ==> (⊑@{δ}) ==> (⊑@{δ})) (★)%A.
 Proof. solve_assert. Qed.
 Instance: Proper ((≡@{δ}) ==> (≡@{δ}) ==> (≡@{δ})) (★)%A.
 Proof. solve_assert. Qed.
-Instance: Proper (flip (⊆@{δ}) ==> (⊆@{δ}) ==> (⊆@{δ})) (-★)%A.
+Instance: Proper (flip (⊑@{δ}) ==> (⊑@{δ}) ==> (⊑@{δ})) (-★)%A.
 Proof. solve_assert. Qed.
 Instance: Proper ((≡@{δ}) ==> (≡@{δ}) ==> (≡@{δ})) (-★)%A.
 Proof. solve_assert. Qed.
 
 (** Basic properties. *)
-Lemma assert_sep_commutative_1 P Q δ : (P ★ Q)%A ⊆@{δ} (Q ★ P)%A.
+Lemma assert_sep_commutative_1 P Q δ : (P ★ Q)%A ⊑@{δ} (Q ★ P)%A.
 Proof.
   intros ρ m (m1 & m2 & ? & ? & HP & HQ); simpl in *.
-  exists m2 m1. by rewrite mem_union_commutative.
+  exists m2 m1. rewrite mem_union_commutative; split_ands; auto with mem.
 Qed.
 Instance: Commutative (≡@{δ}) (★)%A.
 Proof. split; apply assert_sep_commutative_1. Qed.
 
-Lemma assert_sep_left_id_1 P δ : (emp ★ P)%A ⊆@{δ} P.
+Lemma assert_sep_left_id_1 P δ : (emp ★ P)%A ⊑@{δ} P.
 Proof.
   intros ρ m (m1 & m2 & H & ? & ? & Hm2). simpl in *.
-  unfold_assert in *. subst. by rewrite (left_id_eq ∅ (∪)).
+  unfold_assert in *. subst. by rewrite (left_id_L ∅ (∪)).
 Qed.
-Lemma assert_sep_left_id_2 P δ : P ⊆@{δ} (emp ★ P)%A.
+Lemma assert_sep_left_id_2 P δ : P ⊑@{δ} (emp ★ P)%A.
 Proof.
-  intros ? m ?. exists (∅ : mem) m. unfold_assert. split_ands; auto.
-  * apply (left_id _ _).
-  * apply mem_disjoint_empty_l.
+  intros ? m ?. exists (∅ : mem) m. rewrite (left_id_L ∅ (∪)). solve_assert.
 Qed.
 Instance: LeftId (≡@{δ}) emp%A (★)%A.
 Proof. split. apply assert_sep_left_id_1. apply assert_sep_left_id_2. Qed.
@@ -684,47 +669,41 @@ Proof. solve_assert. Qed.
 Instance: RightAbsorb (≡@{δ}) False%A (★)%A.
 Proof. solve_assert. Qed.
 
-Lemma assert_sep_associative_1 P Q R δ : ((P ★ Q) ★ R)%A ⊆@{δ} (P ★ (Q ★ R))%A.
+Lemma assert_sep_associative_1 P Q R δ : ((P ★ Q) ★ R)%A ⊑@{δ} (P ★ (Q ★ R))%A.
 Proof.
   intros ?? (?&mR&?&?& (mP&mQ&?&?&?&?) &?); simpl in *; subst.
   exists mP (mQ ∪ mR). split_ands; auto.
-  * apply (associative _).
-  * by apply mem_disjoint_union_move_l.
-  * exists mQ mR. eauto using mem_disjoint_union_lr.
+  * apply (associative_L (∪)).
+  * solve_mem_disjoint.
+  * exists mQ mR. split_ands; auto with mem.
 Qed.
 
-Lemma assert_sep_associative_2 P Q R δ : (P ★ (Q ★ R))%A ⊆@{δ} ((P ★ Q) ★ R)%A.
+Lemma assert_sep_associative_2 P Q R δ : (P ★ (Q ★ R))%A ⊑@{δ} ((P ★ Q) ★ R)%A.
 Proof.
   intros ?? (mP&?&?&?&?&mQ&mR&?&?&?&?); simpl in *; subst.
   exists (mP ∪ mQ) mR. split_ands; auto.
-  * by rewrite (associative _).
-  * by apply mem_disjoint_union_move_r.
-  * exists mP mQ. eauto using mem_disjoint_union_rl.
+  * by rewrite (associative_L (∪)).
+  * solve_mem_disjoint.
+  * exists mP mQ. split_ands; auto with mem.
 Qed.
 Instance: Associative (≡@{δ}) (★)%A.
 Proof.
   split. apply assert_sep_associative_2. apply assert_sep_associative_1.
 Qed.
 
-Lemma assert_wand_intro P Q R δ :
-  (P ★ Q)%A ⊆@{δ} R →
-  P ⊆@{δ} (Q -★ R)%A.
+Lemma assert_wand_intro P Q R δ : (P ★ Q)%A ⊑@{δ} R → P ⊑@{δ} (Q -★ R)%A.
 Proof. solve_assert. Qed.
-Lemma assert_wand_elim δ P Q :
-  (P ★ (P -★ Q))%A ⊆@{δ} Q.
+Lemma assert_wand_elim δ P Q : (P ★ (P -★ Q))%A ⊑@{δ} Q.
 Proof. rewrite (commutative (★))%A. solve_assert. Qed.
 
 Lemma assert_and_sep_associative P Q R δ :
-  MemIndep P →
-  (P ∧ (Q ★ R))%A ≡@{δ} ((P ∧ Q) ★ R)%A.
+  MemIndep P → (P ∧ (Q ★ R))%A ≡@{δ} ((P ∧ Q) ★ R)%A.
 Proof. solve_assert. Qed.
 Lemma assert_sep_and_associative P Q R δ :
-  MemIndep R →
-  (P ★ (Q ∧ R))%A ≡@{δ} ((P ★ Q) ∧ R)%A.
+  MemIndep R → (P ★ (Q ∧ R))%A ≡@{δ} ((P ★ Q) ∧ R)%A.
 Proof. solve_assert. Qed.
 Lemma assert_sep_and_swap P Q R δ :
-  MemIndep Q →
-  (P ★ (Q ∧ R))%A ≡@{δ} ((P ∧ Q) ★ R)%A.
+  MemIndep Q → (P ★ (Q ∧ R))%A ≡@{δ} ((P ∧ Q) ★ R)%A.
 Proof. solve_assert. Qed.
 
 (** The separation conjunction allows us to give an alternative formulation
@@ -732,18 +711,15 @@ of memory extensibility. *)
 Lemma mem_ext_sep_true P `{MemExt P} δ : P ≡@{δ} (P ★ True)%A.
 Proof.
   split.
-  * intros ? m ?. exists m (∅ : mem). unfold_assert. split_ands; auto.
-    + apply (right_id _ _).
-    + apply mem_disjoint_empty_r.
-  * intros ?? (m1 & m2 & ? & ? & ? & ?). subst.
-    apply mem_ext with m1; auto using mem_union_subseteq_l.
+  * intros ? m ?. exists m (∅ : mem). rewrite (right_id_L ∅ (∪)). solve_assert.
+  * intros ?? (m1&m2&?&?&?&?); subst. apply mem_ext with m1; auto with mem.
 Qed.
 Lemma assert_sep_true_mem_ext P : (∀ δ, P ≡@{δ} (P ★ True)%A) → MemExt P.
 Proof.
   intros H δ ρ m1 m2 ??. rewrite H. exists m1 (m2 ∖ m1).
   unfold_assert. split_ands; auto.
-  * by rewrite mem_difference_union.
-  * by apply mem_difference_disjoint_r.
+  * by rewrite mem_union_difference.
+  * rewrite <-mem_disjoint_difference by done. solve_mem_disjoint.
 Qed.
 Lemma mem_ext_sep_true_iff P : (∀ δ, P ≡@{δ} (P ★ True)%A) ↔ MemExt P.
 Proof. split; auto using @mem_ext_sep_true, assert_sep_true_mem_ext. Qed.
@@ -756,31 +732,27 @@ Instance assert_emp_fun_indep fs : FunIndep fs emp.
 Proof. solve_assert. Qed.
 Instance assert_emp_unlock_indep : UnlockIndep emp.
 Proof.
-  intros δ ρ Ω m ?. unfold_assert in *. subst. by rewrite mem_unlock_empty.
+  intros δ ρ Ω m ?; unfold_assert in *; subst. by rewrite mem_unlock_empty.
 Qed.
 
 Instance assert_sep_stack_indep :
   StackIndep P → StackIndep Q → StackIndep (P ★ Q).
 Proof. solve_assert. Qed.
-Instance assert_sep_mem_indep :
-  MemIndep P → MemIndep Q → MemIndep (P ★ Q).
+Instance assert_sep_mem_indep : MemIndep P → MemIndep Q → MemIndep (P ★ Q).
 Proof.
   intros ????? ? m1 m2 (m2' & m2'' &?&?&?&?). subst.
-  exists m2 (∅ : mem). split_ands.
-  * by apply (right_id _ _).
-  * apply mem_disjoint_empty_r.
-  * solve_assert.
-  * solve_assert.
+  exists m2 (∅ : mem). rewrite (right_id_L ∅ (∪)). solve_assert.
 Qed.
 Instance assert_sep_mem_ext_2 : MemExt Q → MemExt (P ★ Q).
 Proof.
   intros ???? ? m1 m2 (m2' & m2'' &?&?&?&?) ?. subst.
   exists m2' (m2'' ∪ m2 ∖ (m2' ∪ m2'')). split_ands; auto.
-  * by rewrite (associative _), mem_difference_union.
-  * apply mem_disjoint_union_move_l; auto using mem_difference_disjoint_r.
-  * apply mem_ext with m2''; auto.
-    apply mem_union_subseteq_l.
-    apply mem_disjoint_union_lr with m2'; auto using mem_difference_disjoint_r.
+  * by rewrite (associative_L (∪)), mem_union_difference.
+  * rewrite <-mem_disjoint_union_le, <-(mem_disjoint_union m2') by done.
+    by apply mem_disjoint_difference_alt.
+  * apply mem_ext with m2''; auto. apply mem_union_subseteq_l.
+    rewrite (mem_union_subseteq_r m2' m2'') at 1 by done.
+    by apply mem_disjoint_difference_alt.
 Qed.
 Instance assert_sep_mem_ext_l : MemExt P → MemExt (P ★ Q).
 Proof.
@@ -795,58 +767,43 @@ Instance assert_sep_unlock_indep P Q :
 Proof.
   intros ?? δ Ω ρ m (m1 & m2 &?&?&?&?); subst.
   exists (mem_unlock Ω m1) (mem_unlock Ω m2). rewrite mem_unlock_union by done.
-  solve_assert eauto using mem_disjoint_unlock_l, mem_disjoint_unlock_r.
+  split_ands; auto. by rewrite <-!mem_disjoint_unlock.
 Qed.
 
 (** Proofs of other useful properties. *)
 Lemma assert_and_sep_emp_l P Q δ :
-  MemIndep P →
-  (P ∧ Q)%A ≡@{δ} ((P ∧ emp) ★ Q)%A.
-Proof.
-  intro. by rewrite <-assert_and_sep_associative, (left_id emp (★))%A.
-Qed.
+  MemIndep P → (P ∧ Q)%A ≡@{δ} ((P ∧ emp) ★ Q)%A.
+Proof. intro. by rewrite <-assert_and_sep_associative, (left_id emp (★))%A. Qed.
 Lemma assert_and_sep_emp_r P Q δ :
-  MemIndep Q →
-  (P ∧ Q)%A ≡@{δ} (P ★ (Q ∧ emp))%A.
+  MemIndep Q → (P ∧ Q)%A ≡@{δ} (P ★ (Q ∧ emp))%A.
 Proof. intro. by rewrite !(commutative _ P), assert_and_sep_emp_l. Qed.
 
 Lemma assert_sep_elim_l P1 P2 Q δ :
-  MemExt Q →
-  P1 ⊆@{δ} Q → (P1 ★ P2)%A ⊆@{δ} Q.
-Proof.
-  intros ? H.
-  by rewrite (mem_ext_sep_true Q), H, <-assert_true_intro.
-Qed.
+  MemExt Q → P1 ⊑@{δ} Q → (P1 ★ P2)%A ⊑@{δ} Q.
+Proof. intros ? H. by rewrite (mem_ext_sep_true Q), H, <-assert_true_intro. Qed.
 Lemma assert_sep_elim_r P1 P2 Q δ :
-  MemExt Q →
-  P2 ⊆@{δ} Q → (P1 ★ P2)%A ⊆@{δ} Q.
+  MemExt Q → P2 ⊑@{δ} Q → (P1 ★ P2)%A ⊑@{δ} Q.
 Proof. rewrite (commutative (★))%A. apply assert_sep_elim_l. Qed.
 
 (** The assertion [Π Ps] states that the memory can be split into disjoint
 parts such that for each part the corresponding assertion in [Ps] holds. *)
-Definition assert_sep_list : list assert → assert :=
-  foldr (★)%A emp%A.
+Definition assert_sep_list : list assert → assert := foldr (★)%A emp%A.
 Notation "'Π' Ps" := (assert_sep_list Ps)
   (at level 20, format "Π  Ps") : assert_scope.
-
-Instance: Proper (eqlistA (≡@{δ}) ==> (≡@{δ})) assert_sep_list.
+Instance: Proper (Forall2 (≡@{δ}) ==> (≡@{δ})) assert_sep_list.
 Proof. induction 1; simpl; by f_equiv. Qed.
 
 Lemma assert_sep_list_alt_2 (Ps : list assert) δ ρ ms :
-  list_disjoint ms →
-  Forall2 (λ (P : assert) m, assert_holds δ P ρ m) Ps ms →
+  ⊥ ms → Forall2 (λ (P : assert) m, assert_holds δ P ρ m) Ps ms →
   assert_holds δ (Π Ps)%A ρ (⋃ ms).
 Proof.
-  intros Hms HPs. revert Hms.
-  induction HPs as [|P m Ps ms IH]; inversion_clear 1.
+  intros Hms HPs. revert Hms. induction HPs as [|P m Ps ms IH].
   + done.
-  + exists m (⋃ ms); simpl; auto.
+  + exists m (⋃ ms); simpl; auto. solve_assert.
 Qed.
 Lemma assert_sep_list_alt (Ps : list assert) δ ρ m :
   assert_holds δ (Π Ps)%A ρ m ↔ ∃ ms,
-    m = ⋃ ms
-  ∧ list_disjoint ms
-  ∧ Forall2 (λ (P : assert) m, assert_holds δ P ρ m) Ps ms.
+    m = ⋃ ms ∧ ⊥ ms ∧ Forall2 (λ (P : assert) m, assert_holds δ P ρ m) Ps ms.
 Proof.
   split.
   * revert m. induction Ps as [|P Ps IH].
@@ -854,16 +811,14 @@ Proof.
     intros ? (m1 & m2 & ? & ? & ? & ?); simpl in *; subst.
     destruct (IH m2) as (ms & ? & ? & ?); trivial; subst.
     exists (m1 :: ms). split_ands; trivial.
-    + constructor; eauto using mem_disjoint_union_list_r.
+    + solve_mem_disjoint.
     + constructor; auto.
   * naive_solver auto using assert_sep_list_alt_2.
 Qed.
 
 Lemma assert_sep_list_alt_vec {n} (Ps : vec assert n) δ ρ m :
   assert_holds δ (Π Ps)%A ρ m ↔ ∃ ms : vec mem n,
-    m = ⋃ ms
-  ∧ list_disjoint ms
-  ∧ ∀ i, assert_holds δ (Ps !!! i) ρ (ms !!! i).
+    m = ⋃ ms ∧ ⊥ ms ∧ ∀ i, assert_holds δ (Ps !!! i) ρ (ms !!! i).
 Proof.
   rewrite assert_sep_list_alt. split.
   * intros (ms & ? & ? & Hms).
@@ -875,8 +830,7 @@ Proof.
   * intros [ms ?]. exists ms. by rewrite Forall2_vlookup.
 Qed.
 Lemma assert_sep_list_alt_vec_2 {n} (Ps : vec assert n) δ ρ (ms : vec mem n) :
-  list_disjoint ms →
-  (∀ i, assert_holds δ (Ps !!! i) ρ (ms !!! i)) →
+  ⊥ ms → (∀ i, assert_holds δ (Ps !!! i) ρ (ms !!! i)) →
   assert_holds δ (Π Ps)%A ρ (⋃ ms).
 Proof. intros. apply assert_sep_list_alt_vec. eauto. Qed.
 
@@ -890,38 +844,49 @@ Definition assert_singleton (e1 e2 : expr) (γ : memperm) : assert :=
 Notation "e1 ↦{ γ } e2" := (assert_singleton e1 e2 γ)%A
   (at level 20, format "e1  ↦{ γ }  e2") : assert_scope.
 Definition assert_singleton_ (e : expr) (γ : memperm) : assert :=
-  Assert $ λ δ ρ m, ∃ a v,
-    ⟦ e ⟧ δ ρ m = Some (ptrc a)%V ∧ m = {[(a,v,γ)]}.
+  Assert $ λ δ ρ m, ∃ a v, ⟦ e ⟧ δ ρ m = Some (ptrc a)%V ∧ m = {[(a,v,γ)]}.
 Notation "e ↦{ γ } -" := (assert_singleton_ e γ)%A
   (at level 20, format "e  ↦{ γ }  -") : assert_scope.
 
-Lemma assert_singleton_forget δ e1 e2 γ : (e1 ↦{γ} e2)%A ⊆@{δ} (e1 ↦{γ} -)%A.
+Lemma assert_singleton_forget δ e1 e2 γ : (e1 ↦{γ} e2)%A ⊑@{δ} (e1 ↦{γ} -)%A.
 Proof. solve_assert. Qed.
 
 Instance assert_singleton_stack_indep e1 e2 γ :
-  vars e1 ≡ ∅ →
-  vars e2 ≡ ∅ →
-  StackIndep (e1 ↦{γ} e2).
+  vars e1 ≡ ∅ → vars e2 ≡ ∅ → StackIndep (e1 ↦{γ} e2).
 Proof.
   intros ?? δ ρ1 ρ2 m (a & v & ?). exists a v.
   by rewrite !(expr_var_free_stack_indep δ ρ2 ρ1).
 Qed.
-Instance assert_singleton_stack_indep_ e γ :
-  vars e ≡ ∅ →
-  StackIndep (e ↦{γ} -).
+Instance assert_singleton_stack_indep_ e γ : vars e ≡ ∅ → StackIndep (e ↦{γ} -).
 Proof.
   intros ? δ ρ1 ρ2 m (a&v&?). exists a v.
   by rewrite !(expr_var_free_stack_indep δ ρ2 ρ1).
 Qed.
+Instance assert_singleton_unlock_indep e1 e2 γ :
+  perm_kind γ ≠ Locked → UnlockIndep (e1 ↦{γ} e2).
+Proof.
+  intros ? δ Ω ρ m (a & v &?&?&?); subst. exists a v.
+  split_ands; eauto using expr_eval_unlock. destruct (decide (a ∈ Ω)).
+  * by rewrite mem_unlock_singleton, perm_unlock_other.
+  * by rewrite mem_unlock_singleton_ne.
+Qed.
+Instance assert_singleton_unlock_indep_ e γ :
+  perm_kind γ ≠ Locked → UnlockIndep (e ↦{γ} -).
+Proof.
+  intros ? δ Ω ρ m (a & v &?&?); subst. exists a v.
+  split_ands; eauto using expr_eval_unlock. destruct (decide (a ∈ Ω)).
+  * by rewrite mem_unlock_singleton, perm_unlock_other.
+  * by rewrite mem_unlock_singleton_ne.
+Qed.
 
 Lemma assert_singleton_eval_l_1 δ e1 v1 e2 γ :
-  (e1 ⇓ v1 ∧ valc v1 ↦{γ} e2)%A ⊆@{δ} (e1 ↦{γ} e2)%A.
+  (e1 ⇓ v1 ∧ valc v1 ↦{γ} e2)%A ⊑@{δ} (e1 ↦{γ} e2)%A.
 Proof. solve_assert. Qed.
 Lemma assert_singleton_eval_r_1 δ e1 e2 v2 γ :
-  (e1 ↦{γ} valc v2 ∧ e2 ⇓ v2)%A ⊆@{δ} (e1 ↦{γ} e2)%A.
+  (e1 ↦{γ} valc v2 ∧ e2 ⇓ v2)%A ⊑@{δ} (e1 ↦{γ} e2)%A.
 Proof. solve_assert. Qed.
 Lemma assert_singleton_eval__1 δ e v γ :
-  (e ⇓ v ∧ valc v ↦{γ} -)%A ⊆@{δ} (e ↦{γ} -)%A.
+  (e ⇓ v ∧ valc v ↦{γ} -)%A ⊑@{δ} (e ↦{γ} -)%A.
 Proof. solve_assert. Qed.
 
 Lemma assert_singleton_eval_l δ e1 e2 γ :
@@ -940,141 +905,119 @@ cell at address [e1] with permission [γ] and contents [e2]. The assertion
 [e1] with permission [γ] and arbitrary contents. *)
 Definition assert_assign (e1 e2 : expr) (γ : memperm) : assert :=
   Assert $ λ δ ρ m, ∃ a v,
-    ⟦ e1 ⟧ δ ρ m = Some (ptrc a)%V ∧
-    ⟦ e2 ⟧ δ ρ m = Some v ∧
-    {[(a,v,γ)]} ⊆ m.
+    ⟦ e1 ⟧ δ ρ m = Some (ptrc a)%V ∧ ⟦ e2 ⟧ δ ρ m = Some v ∧ {[(a,v,γ)]} ⊆ m.
 Notation "e1 ↪{ γ } e2" := (assert_assign e1 e2 γ)%A
   (at level 20, format "e1  ↪{ γ }  e2") : assert_scope.
 Definition assert_assign_ (e : expr) (γ : memperm) : assert :=
-  Assert $ λ δ ρ m, ∃ a v,
-    ⟦ e ⟧ δ ρ m = Some (ptrc a)%V ∧
-    {[(a,v,γ)]} ⊆ m.
+  Assert $ λ δ ρ m, ∃ a v, ⟦ e ⟧ δ ρ m = Some (ptrc a)%V ∧ {[(a,v,γ)]} ⊆ m.
 Notation "e ↪{ γ } -" := (assert_assign_ e γ)%A
   (at level 20, format "e  ↪{ γ }  -") : assert_scope.
 
-Lemma assert_assign_forget δ e1 e2 γ : (e1 ↪{γ} e2)%A ⊆@{δ} (e1 ↪{γ} -)%A.
+Lemma assert_assign_forget δ e1 e2 γ : (e1 ↪{γ} e2)%A ⊑@{δ} (e1 ↪{γ} -)%A.
 Proof. solve_assert. Qed.
-Lemma assert_singleton_assign δ e1 e2 γ : (e1 ↦{γ} e2)%A ⊆@{δ} (e1 ↪{γ} e2)%A.
+Lemma assert_singleton_assign δ e1 e2 γ : (e1 ↦{γ} e2)%A ⊑@{δ} (e1 ↪{γ} e2)%A.
 Proof. solve_assert. Qed.
-Lemma assert_singleton_assign_ δ e γ : (e ↦{γ} -)%A ⊆@{δ} (e ↪{γ} -)%A.
+Lemma assert_singleton_assign_ δ e γ : (e ↦{γ} -)%A ⊑@{δ} (e ↪{γ} -)%A.
 Proof. solve_assert. Qed.
 
 Lemma assert_assign_eval_l δ e1 v1 e2 γ :
-  (e1 ⇓ v1 ∧ valc v1 ↪{γ} e2)%A ⊆@{δ} (e1 ↪{γ} e2)%A.
+  (e1 ⇓ v1 ∧ valc v1 ↪{γ} e2)%A ⊑@{δ} (e1 ↪{γ} e2)%A.
 Proof. solve_assert. Qed.
 Lemma assert_assign_eval_r δ e1 v2 e2 γ :
-  (e1 ↪{γ} valc v2 ∧ e2 ⇓ v2)%A ⊆@{δ} (e1 ↪{γ} e2)%A.
+  (e1 ↪{γ} valc v2 ∧ e2 ⇓ v2)%A ⊑@{δ} (e1 ↪{γ} e2)%A.
 Proof. solve_assert. Qed.
 Lemma assert_assign_eval_ δ e v γ :
-  (e ⇓ v ∧ valc v ↪{γ} -)%A ⊆@{δ} (e ↪{γ} -)%A.
+  (e ⇓ v ∧ valc v ↪{γ} -)%A ⊑@{δ} (e ↪{γ} -)%A.
 Proof. solve_assert. Qed.
 
 Instance assert_assign_stack_indep e1 e2 γ :
-  vars e1 ≡ ∅ →
-  vars e2 ≡ ∅ →
-  StackIndep (e1 ↪{γ} e2).
+  vars e1 ≡ ∅ → vars e2 ≡ ∅ → StackIndep (e1 ↪{γ} e2).
 Proof.
   intros ?? δ ρ1 ρ2 m (a&v&γ'&?). exists a v.
   by rewrite !(expr_var_free_stack_indep δ ρ2 ρ1).
 Qed.
-Instance assert_assign_stack_indep_ e γ :
-  vars e ≡ ∅ →
-  StackIndep (e ↪{γ} -).
+Instance assert_assign_stack_indep_ e γ : vars e ≡ ∅ → StackIndep (e ↪{γ} -).
 Proof.
   intros ? δ ρ1 ρ2 m (a&v&γ'&?). exists a v.
   by rewrite !(expr_var_free_stack_indep δ ρ2 ρ1).
 Qed.
 
-Instance assert_assign_mem_ext e1 e2 γ :
-  MemExt (e1 ↪{γ} e2).
+Instance assert_assign_mem_ext e1 e2 γ : MemExt (e1 ↪{γ} e2).
 Proof.
-  intros δ ρ m1 m2 (a&v&γ2&?&?) Hm12.
-  exists a v. split_ands; eauto using expr_eval_weaken_mem.
-  by transitivity m1.
+  intros δ ρ m1 m2 (a&v&γ2&?&?) Hm12. exists a v.
+  split_ands; eauto using expr_eval_weaken_mem. by transitivity m1.
 Qed.
-Instance assert_assign_mem_ext_ e γ :
-  MemExt (e ↪{γ} -).
+Instance assert_assign_mem_ext_ e γ : MemExt (e ↪{γ} -).
 Proof.
-  intros δ ρ m1 m2 (a&v&γ2&?) Hm12.
-  exists a v. split_ands; eauto using expr_eval_weaken_mem.
-  by transitivity m1.
+  intros δ ρ m1 m2 (a&v&γ2&?) Hm12. exists a v.
+  split_ands; eauto using expr_eval_weaken_mem. by transitivity m1.
 Qed.
 
 Lemma assign_assign_alt δ e1 e2 γ :
-  load_free e1 → load_free e2 →
-  (e1 ↪{γ} e2)%A ≡@{δ} (e1 ↦{γ} e2 ★ True)%A.
+  load_free e1 → load_free e2 → (e1 ↪{γ} e2)%A ≡@{δ} (e1 ↦{γ} e2 ★ True)%A.
 Proof.
   split.
   * intros ρ m (a&v&γ'&?&?).
     eexists {[ (a,v,γ) ]}, (m ∖ {[ (a,v,γ) ]}). split_ands.
-    + by apply mem_difference_union.
-    + by apply mem_difference_disjoint_r.
-    + exists a v.
-      erewrite !(expr_load_free_mem_indep _ _ {[(a,v,γ)]} m); eauto.
+    + by apply mem_union_difference.
+    + by apply mem_disjoint_difference_alt.
+    + exists a v. erewrite !(expr_load_free_mem_indep _ _ {[(a,v,γ)]} m); eauto.
     + done.
   * rewrite assert_singleton_assign. apply (mem_ext_sep_true _).
 Qed.
 Lemma assert_assign_assign_alt_ δ e γ :
-  load_free e →
-  (e ↪{γ} -)%A ≡@{δ} (e ↦{γ} - ★ True)%A.
+  load_free e → (e ↪{γ} -)%A ≡@{δ} (e ↦{γ} - ★ True)%A.
 Proof.
   split.
   * intros ρ m (a&v&γ'&?).
     eexists {[ (a,v,γ) ]}, (m ∖ {[ (a,v,γ) ]}). split_ands.
-    + by apply mem_difference_union.
-    + by apply mem_difference_disjoint_r.
-    + exists a v. simpl.
+    + by apply mem_union_difference.
+    + by apply mem_disjoint_difference_alt.
+    + exists a v; simpl.
       erewrite !(expr_load_free_mem_indep _ _ {[(a,v,γ)]} m); eauto.
     + done.
   * rewrite assert_singleton_assign_. apply (mem_ext_sep_true _).
 Qed.
 
 Lemma assert_assign_load δ e v γ :
-  perm_kind γ ≠ Locked →
-  (e ↪{γ} valc v)%A ⊆@{δ} (load e ⇓ v)%A.
+  perm_kind γ ≠ Locked → (e ↪{γ} valc v)%A ⊑@{δ} (load e ⇓ v)%A.
 Proof.
-  intros ? ρ m (a&v'&Ha&?&?).
-  unfold_assert. rewrite Ha. simplify_option_equality.
-  apply mem_lookup_weaken with {[(a, v', γ)]}; [|done].
-  by apply mem_lookup_singleton.
+  intros ? ρ m (a&v'&Ha&?&?); unfold_assert.
+  rewrite Ha. simplify_option_equality.
+  by apply mem_lookup_weaken with {[(a, v', γ)]}; simpl_mem.
 Qed.
 Lemma assert_assign_load_ δ e γ :
-  perm_kind γ ≠ Locked →
-  (e ↪{γ} -)%A ⊆@{δ} (load e ⇓ -)%A.
+  perm_kind γ ≠ Locked → (e ↪{γ} -)%A ⊑@{δ} (load e ⇓ -)%A.
 Proof.
-  intros ? ρ m (a&v'&Ha&?).
-  unfold_assert. rewrite Ha. simplify_option_equality.
-  exists v'. apply mem_lookup_weaken with {[(a, v', γ)]}; [|done].
-  by apply mem_lookup_singleton.
+  intros ? ρ m (a&v'&Ha&?); unfold_assert.
+  rewrite Ha. simplify_option_equality.
+  exists v'. by apply mem_lookup_weaken with {[(a, v', γ)]}; simpl_mem.
 Qed.
 
 Lemma assert_singleton_load δ e v γ :
-  perm_kind γ ≠ Locked →
-  (e ↦{γ} valc v)%A ⊆@{δ} (load e ⇓ v)%A.
+  perm_kind γ ≠ Locked → (e ↦{γ} valc v)%A ⊑@{δ} (load e ⇓ v)%A.
 Proof.
   intros. rewrite assert_singleton_assign. by apply assert_assign_load.
 Qed.
 Lemma assert_singleton_load_ δ e γ :
-  perm_kind γ ≠ Locked →
-  (e ↦{γ} -)%A ⊆@{δ} (load e ⇓ -)%A.
+  perm_kind γ ≠ Locked → (e ↦{γ} -)%A ⊑@{δ} (load e ⇓ -)%A.
 Proof.
   intros. by rewrite <-assert_assign_load_, assert_singleton_assign_.
 Qed.
 
 Lemma assert_singleton_half δ e1 e2 γ :
-  perm_kind γ ≠ Locked →
-  (e1 ↦{γ.½} e2 ★ e1 ↦{γ.½} e2)%A ≡@{δ} (e1 ↦{γ} e2)%A.
+  perm_kind γ ≠ Locked → (e1 ↦{γ.½} e2 ★ e1 ↦{γ.½} e2)%A ≡@{δ} (e1 ↦{γ} e2)%A.
 Proof.
   intros. split.
   * intros ?? (m1 & m2 & ?&?&(a1&v1&?&?&?)&(a2&v2&?&?&?)).
     simplify_expr_equality. exists a2 v2. split_ands.
-    + eapply expr_eval_weaken_mem; eauto using mem_union_subseteq_l.
-    + eapply expr_eval_weaken_mem; eauto using mem_union_subseteq_l.
-    + by rewrite mem_union_singletons, perm_union_half.
+    + eapply expr_eval_weaken_mem; eauto using mem_union_subseteq_r.
+    + eapply expr_eval_weaken_mem; eauto using mem_union_subseteq_r.
+    + by rewrite mem_union_double, perm_union_half.
   * intros ?? (a&v&?&?&?); subst. exists {[(a, v, γ.½)]} {[(a, v, γ.½)]}.
     split_ands; auto.
-    + by rewrite mem_union_singletons, perm_union_half.
-    + by apply mem_disjoint_singletons_same, perm_disjoint_half.
+    + by rewrite mem_union_double, perm_union_half.
+    + by apply mem_disjoint_double_same, perm_disjoint_half.
     + exists a v; split_ands; auto; eapply expr_eval_weaken_mem_lookup;
        eauto; by intros; simplify_mem_equality.
     + exists a v; split_ands; auto; eapply expr_eval_weaken_mem_lookup;
@@ -1087,12 +1030,12 @@ Definition assert_unlock (P : assert) : assert :=
   Assert $ λ δ ρ m, assert_holds δ P ρ (mem_unlock (locks m) m).
 Notation "P ▷" := (assert_unlock P) (at level 20) : assert_scope.
 
-Instance: Proper ((⊆@{δ}) ==> (⊆@{δ})) assert_unlock.
+Instance: Proper ((⊑@{δ}) ==> (⊑@{δ})) assert_unlock.
 Proof. solve_assert. Qed.
 Instance: Proper ((≡@{δ}) ==> (≡@{δ})) assert_unlock.
 Proof. solve_assert. Qed.
 
-Lemma assert_unlock_unlock_indep P `{UnlockIndep P} δ : P ⊆@{δ} (P ▷)%A.
+Lemma assert_unlock_unlock_indep P `{UnlockIndep P} δ : P ⊑@{δ} (P ▷)%A.
 Proof. solve_assert. Qed.
 Lemma assert_unlock_impl P Q δ : ((P → Q) ▷)%A ≡@{δ} (P ▷ → Q ▷)%A.
 Proof. solve_assert. Qed.
@@ -1102,18 +1045,15 @@ Lemma assert_unlock_and P Q δ : ((P ∧ Q) ▷)%A ≡@{δ} (P ▷ ∧ Q ▷)%A.
 Proof. solve_assert. Qed.
 Lemma assert_unlock_or P Q δ : ((P ∨ Q) ▷)%A ≡@{δ} (P ▷ ∨ Q ▷)%A.
 Proof. solve_assert. Qed.
-Lemma assert_unlock_sep P Q δ : (P ▷ ★ Q ▷)%A ⊆@{δ} ((P ★ Q) ▷)%A.
+Lemma assert_unlock_sep P Q δ : (P ▷ ★ Q ▷)%A ⊑@{δ} ((P ★ Q) ▷)%A.
 Proof.
-  intros ?? (m1&m2&?&?&?&?).
-  exists (mem_unlock (locks m1) m1) (mem_unlock (locks m2) m2).
+  intros ?? (m1&m2&?&?&?&?). exists (mem_unlock_all m1) (mem_unlock_all m2).
   split_ands; trivial.
-  * subst. by rewrite mem_unlock_all_union.
-  * by apply mem_disjoint_unlock_l, mem_disjoint_unlock_r.
+  * subst. by rewrite <-mem_unlock_all_union.
+  * by rewrite <-!mem_disjoint_unlock.
 Qed.
 Lemma assert_unlock_sep_alt P P' Q Q' δ :
-  P ⊆@{δ} (P' ▷)%A →
-  Q ⊆@{δ} (Q' ▷)%A →
-  (P ★ Q)%A ⊆@{δ} ((P' ★ Q') ▷)%A.
+  P ⊑@{δ} (P' ▷)%A → Q ⊑@{δ} (Q' ▷)%A → (P ★ Q)%A ⊑@{δ} ((P' ★ Q') ▷)%A.
 Proof. intros HP HQ. rewrite HP, HQ. apply assert_unlock_sep. Qed.
 
 Lemma assert_unlock_forall {A} (P : A → assert) δ :
@@ -1124,7 +1064,7 @@ Lemma assert_unlock_exists {A} (P : A → assert) δ :
 Proof. solve_assert. Qed.
 
 Lemma assert_unlock_singleton δ e1 e2 γ :
-  (e1 ↦{γ} e2)%A ⊆@{δ} ((e1 ↦{perm_unlock γ} e2) ▷)%A.
+  (e1 ↦{γ} e2)%A ⊑@{δ} ((e1 ↦{perm_unlock γ} e2) ▷)%A.
 Proof.
   intros ρ m (a&v&?&?&?). exists a v. split_ands.
   * unfold_assert. eauto using expr_eval_unlock.
@@ -1132,23 +1072,21 @@ Proof.
   * subst. apply mem_unlock_all_singleton.
 Qed.
 Lemma assert_lock_singleton δ e1 e2 γ :
-  Write ⊆ perm_kind γ →
-  (e1 ↦{perm_lock γ} e2)%A ⊆@{δ} ((e1 ↦{γ} e2) ▷)%A.
+  Write ⊆ perm_kind γ → (e1 ↦{perm_lock γ} e2)%A ⊑@{δ} ((e1 ↦{γ} e2) ▷)%A.
 Proof.
   intros. etransitivity; [apply assert_unlock_singleton|].
   by rewrite perm_unlock_lock.
 Qed.
 
 Lemma assert_unlock_singleton_ δ e1 γ :
-  (e1 ↦{γ} -)%A ⊆@{δ} ((e1 ↦{perm_unlock γ} -) ▷)%A.
+  (e1 ↦{γ} -)%A ⊑@{δ} ((e1 ↦{perm_unlock γ} -) ▷)%A.
 Proof.
   intros ρ m (a&v&?&?). exists a v. split.
   * unfold_assert. eauto using expr_eval_unlock.
   * subst. apply mem_unlock_all_singleton.
 Qed.
 Lemma assert_lock_singleton_ δ e1 γ :
-  Write ⊆ perm_kind γ →
-  (e1 ↦{perm_lock γ} -)%A ⊆@{δ} ((e1 ↦{γ} -) ▷)%A.
+  Write ⊆ perm_kind γ → (e1 ↦{perm_lock γ} -)%A ⊑@{δ} ((e1 ↦{γ} -) ▷)%A.
 Proof.
   intros. etransitivity; [apply assert_unlock_singleton_|].
   by rewrite perm_unlock_lock.
@@ -1178,7 +1116,7 @@ Proof. solve_assert. Qed.
 Lemma assert_clear_stack_sep P Q δ : ((P ★ Q)↡)%A ≡@{δ} (P↡ ★ Q↡)%A.
 Proof. solve_assert. Qed.
 
-Instance: Proper ((⊆@{δ}) ==> (⊆@{δ})) assert_clear_stack.
+Instance: Proper ((⊑@{δ}) ==> (⊑@{δ})) assert_clear_stack.
 Proof. solve_assert. Qed.
 Instance: Proper ((≡@{δ}) ==> (≡@{δ})) assert_clear_stack.
 Proof. solve_assert. Qed.
@@ -1225,7 +1163,7 @@ Lemma assert_lift_exists {A} (P : A → assert) δ :
   ((∃ x, P x)↑)%A ≡@{δ} (∃ x, P x↑)%A.
 Proof. solve_assert. Qed.
 
-Instance: Proper ((⊆@{δ}) ==> (⊆@{δ})) assert_lift.
+Instance: Proper ((⊑@{δ}) ==> (⊑@{δ})) assert_lift.
 Proof. solve_assert. Qed.
 Instance: Proper ((≡@{δ}) ==> (≡@{δ})) assert_lift.
 Proof. solve_assert. Qed.
@@ -1237,7 +1175,7 @@ Proof. solve_assert. Qed.
 
 (** The assertion [assert_forall2 P xs ys] asserts that [P x y] holds for each
 corresponding pair [x] and [y] of elements of [xs] and [ys]. *)
-Definition assert_forall2 `(P : A → B → assert) : list A → list B → assert :=
+Definition assert_Forall2 `(P : A → B → assert) : list A → list B → assert :=
   fix go xs ys :=
   match xs, ys with
   | [], [] => True
@@ -1246,8 +1184,8 @@ Definition assert_forall2 `(P : A → B → assert) : list A → list B → asse
   end%A.
 
 (** An alternative semantic formulation of the above assertion. *)
-Lemma assert_forall2_correct `(P : A → B → assert) δ ρ m xs ys :
-  assert_holds δ (assert_forall2 P xs ys) ρ m ↔
+Lemma assert_Forall2_correct `(P : A → B → assert) δ ρ m xs ys :
+  assert_holds δ (assert_Forall2 P xs ys) ρ m ↔
     Forall2 (λ x y, assert_holds δ (P x y) ρ m) xs ys.
 Proof.
   split.
@@ -1260,8 +1198,7 @@ Qed.
 postcondition is correct with respect to allocation of a local variable when
 entering a block and freeing a local variable when leaving a block. *)
 Lemma assert_alloc (P : assert) δ ρ m b v γ :
-  is_free m b →
-  assert_holds δ P ρ m →
+  is_free m b → assert_holds δ P ρ m →
   assert_holds δ (var 0 ↦{γ} - ★ P↑)%A (b :: ρ) (mem_alloc b v γ m).
 Proof.
   intros ??. eexists {[(b,v,γ)]}, m. split_ands.
@@ -1272,25 +1209,22 @@ Proof.
 Qed.
 
 Lemma assert_free (P : assert) δ ρ m b γ :
-  ¬perm_fragment γ →
-  assert_holds δ (var 0 ↦{γ} - ★ P↑)%A (b :: ρ) m →
+  ¬perm_fragment γ → assert_holds δ (var 0 ↦{γ} - ★ P↑)%A (b :: ρ) m →
   assert_holds δ P ρ (delete b m) ∧ mem_perm b m = Some γ.
 Proof.
   intros ? (m1 & m2 &?&?& (a&v&?&?) &?); simplify_equality. split.
-  * rewrite mem_delete_union, mem_delete_singleton, (left_id ∅ _),
+  * rewrite mem_delete_union, mem_delete_singleton, (left_id_L ∅ (∪)),
       mem_delete_free; eauto using mem_disjoint_singleton_l_inv.
   * apply mem_perm_union_Some_l.
     + apply mem_perm_singleton.
-    + by apply mem_disjoint_singleton_l_inv with γ v. 
+    + by apply mem_disjoint_singleton_l_inv with γ v.
 Qed.
 
 (** We prove some properties related to allocation of local variables when
 calling a function, and to freeing these when returning from the function
 call. *)
 Lemma assert_alloc_params (P : assert) δ ρ m1 γ bs vs m2 :
-  StackIndep P →
-  alloc_params γ m1 bs vs m2 →
-  assert_holds δ P ρ m1 →
+  StackIndep P → alloc_params γ m1 bs vs m2 → assert_holds δ P ρ m1 →
   assert_holds δ (Π imap (λ i v, var i ↦{γ} valc v) vs ★ P)%A (bs ++ ρ) m2.
 Proof.
   intros ? Halloc ?. cut (∀ bs',
@@ -1298,29 +1232,24 @@ Proof.
       (bs' ++ bs ++ ρ) m2).
   { intros aux. by apply (aux []). }
   induction Halloc as [| b bs v vs m2 ?? IH ]; intros bs'; simpl.
-  * rewrite (left_id emp (★))%A. by apply (stack_indep δ ρ).
-  * rewrite <-(associative (★))%A. eexists {[(b,v,γ)]}, m2. split_ands.
-    + by rewrite mem_alloc_singleton_l.
-    + by apply mem_disjoint_singleton_l.
-    + exists b v. split_ands; trivial.
-      simpl. by rewrite list_lookup_middle.
-    + specialize (IH (bs' ++ [b])). rewrite app_length in IH. simpl in IH.
-      by rewrite NPeano.Nat.add_1_r, <-(associative (++)) in IH.
+  { rewrite (left_id emp (★))%A. by apply (stack_indep δ ρ). }
+  rewrite <-(associative (★))%A. eexists {[(b,v,γ)]}, m2. split_ands.
+  * by rewrite mem_alloc_singleton_l.
+  * by apply mem_disjoint_singleton_l.
+  * exists b v. split_ands; trivial; simpl. by rewrite list_lookup_middle.
+  * specialize (IH (bs' ++ [b])). rewrite app_length in IH. simpl in IH.
+    by rewrite NPeano.Nat.add_1_r, <-(associative_L (++)) in IH.
 Qed.
 
 Lemma assert_alloc_params_alt (P : assert) δ ρ m γ bs vs :
-  StackIndep P →
-  same_length bs vs →
-  is_free_list m bs →
+  StackIndep P → bs `same_length` vs → is_free_list m bs →
   assert_holds δ P ρ m →
   assert_holds δ (Π imap (λ i v, var i ↦{γ} valc v) vs ★ P)%A (bs ++ ρ)
     (mem_alloc_list γ (zip bs vs) m).
 Proof. eauto using assert_alloc_params, alloc_params_alloc_list_2. Qed.
 
 Lemma assert_free_params (P : assert) δ ρ m γ bs (vs : list val) :
-  StackIndep P →
-  ¬perm_fragment γ →
-  same_length bs vs →
+  StackIndep P → ¬perm_fragment γ → bs `same_length` vs →
   NoDup bs → (* admissible *)
   assert_holds δ (Π imap (λ i _, var i ↦{γ} -) vs ★ P)%A (bs ++ ρ) m →
   assert_holds δ P ρ (delete_list bs m) ∧
@@ -1344,7 +1273,7 @@ Proof.
     rewrite <-mem_alloc_singleton_l
       by eauto using mem_disjoint_singleton_l_inv.
     feed destruct (IH (bs' ++ [b']) m2) as [??]; trivial.
-    { by rewrite app_length, NPeano.Nat.add_1_r, <-(associative (++)). }
+    { by rewrite app_length, NPeano.Nat.add_1_r, <-(associative_L (++)). }
     split.
     + rewrite mem_delete_list_alloc_ne, mem_delete_alloc; auto.
       apply is_free_subseteq with m2;

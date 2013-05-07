@@ -3,7 +3,7 @@
 (** This file defines an axiomatic semantics (in the form of separation logic)
 for our language. This axiomatic semantics has two judgments: one for
 statements and one for expressions. Statement judgment are sextuples of the
-shape [Δ \ R \ J ⊨ₛ {{ P }} s {{ Q }}] where:
+shape [Δ\ R\ J ⊨ₛ {{ P }} s {{ Q }}] where:
 
 - [s] is a statement, and [P] and [Q] are assertions called the pre- and
   postcondition of [s], respectively.
@@ -21,11 +21,12 @@ therefore treat the sextuple as a triple [Δ \ Pd ⊨ₚ s] where [Pd] is a func
 from directions to assertions such that [Pd ↘ = P], [Pd ↗ = Q],
 [Pd (⇈ v) = R v] and [P (↷ l) = J l]. *)
 
-(** Furthermore, expression judgments are quadruples [Δ ⊨ₑ {{ P }} e {{ Q }}].
-As usual, [P] and [Q] are the pre- and postcondition of [e], but whereas
-the precondition is just an assertion, the postcondition is a function from
-values to assertions. It ensures that if execution of [e] yields a value [v],
-then [Q v] holds. *)
+(** Expression judgments are quintuples [Δ\ A ⊨ₑ {{ P }} e {{ Q }}]. As usual,
+[P] and [Q] are the pre- and postcondition of [e], but whereas the precondition
+is just an assertion, the postcondition is a function from values to assertions.
+It ensures that if execution of [e] yields a value [v], then [Q v] holds. The
+environment [A] can be used to "frame" writable memory that is being shared by
+all function calls. *)
 
 (** Instead of first defining the axiomatic semantics inductively as a set of
 derivation rules, we directly define an interpretation, and show that the rules
@@ -39,7 +40,7 @@ Section axiomatic.
 Context (δ : funenv).
 
 (** * The Hoare judgment *)
-(** We want [Δ \ R \ J ⊨ₛ {{ P }} s {{ Q }}] to ensure partial program
+(** We want [Δ\ R\ J ⊨ₛ {{ P }} s {{ Q }}] to ensure partial program
 correctness. Intuitively, that means: if [P (get_stack k) m] and
 [State k (Stmt s ↘) m ⇒* State k (Stmt s ↗) m'], then [Q (get_stack k) m'].
 Due to the additional features we consider, this intuition is too simple.
@@ -56,7 +57,7 @@ Due to the additional features we consider, this intuition is too simple.
 - Our language has various kinds of undefined behavior (e.g. invalid pointer
   dereferences). We therefore also want [Δ \ Pd ⊨ₚ s] to guarantee that [s]
   does not exhibit any undefined behaviors.
-  Hence, [Δ \ Pd ⊨ₚ s] should at least guarantee that if [P d k m] and
+  Hence, [Δ\ Pd ⊨ₚ s] should at least guarantee that if [P d k m] and
   [State k (Stmt s d) m ⇒* S], then [S] is either:
 -- reducible (no undefined behavior has occurred), or,
 -- of the shape [State k (Stmt s d') m'] with [Pd d' (get_stack k) m']
@@ -74,7 +75,7 @@ Due to the additional features we consider, this intuition is too simple.
   functions in [Δ] to the statement [s].
 
 Nearly all of the above properties apply to the expression judgment
-[Δ ⊨ₑ {{ P }} e {{ Q }}] as well. Therefore, we first define a more general
+[Δ\ A ⊨ₑ {{ P }} e {{ Q }}] as well. Therefore, we first define a more general
 notion that captures these properties for both kinds of judgments. *)
 
 (** The intuitive meaning of the predicate [ax P l n k φ m] is that all
@@ -90,254 +91,267 @@ memory [mf] during the execution. Therefore, instead of defining [ax] using
 the reflexive transitive closure, we define this predicate inductively using
 single steps. The condition on the annotated locks in the program with respect
 to the locks in the memory is used to separate the locks. *)
+
+Notation ax_assert := (ctx → mem → focus → Prop).
+Record ax_frame_cond A := {
+  frame : ctx → focus → mem → mem → A → Prop;
+  unframe : ctx → focus → mem → mem → A → Prop
+}.
+Arguments frame {_} _ _ _ _ _ _.
+Arguments unframe {_} _ _ _ _ _ _.
+
 Section ax.
-  Context (P : stack → mem → focus → Prop).
-  Context `{P_nf : PropHolds (∀ mf l m φ,
-    P (get_stack l) m φ →
-    nf (cstep_in_ctx δ l) (State l φ (m ∪ mf)))}.
+  Context `(F: ax_frame_cond A) (P : ax_assert).
+  Context `{Pnf: PropHolds (∀ l φ m m' a,
+    P l m φ → frame F l φ m m' a → nf (cstep_in_ctx δ l) (State l φ m'))}.
 
   Inductive ax (l : ctx) : nat → ctx → focus → mem → Prop :=
-    | ax_O k φ m :
-       ax l 0 k φ m
-    | ax_done n φ m :
-       P (get_stack l) m φ →
-       ax l n l φ m
+    | ax_O k φ m : ax l 0 k φ m
+    | ax_done n φ m : P l m φ → ax l n l φ m
     | ax_further n k φ m :
-       (∀ mf,
-         m ⊥ mf →
-         red (cstep_in_ctx δ l) (State k φ (m ∪ mf))) →
-       (∀ mf S',
-         m ⊥ mf →
-         δ ⊢ₛ State k φ (m ∪ mf) ⇒{l} S' →
-         ax_next l n mf S') →
+       (∀ m' a,
+         frame F k φ m m' a →
+         red (cstep_in_ctx δ l) (State k φ m')) →
+       (∀ m' a S',
+         frame F k φ m m' a →
+         δ ⊢ₛ State k φ m' ⇒{l} S' →
+         ax_next l n a S') →
        ax l (S n) k φ m
-  with ax_next (l : ctx) : nat → mem → state → Prop :=
-    | mk_ax_next n mf k φ m :
-       m ⊥ mf →
+  with ax_next (l : ctx) : nat → A → state → Prop :=
+    | mk_ax_next n k φ m m' a :
+       unframe F k φ m m' a →
        φ ≠ Undef →
        locks φ ⊆ locks m →
        ax l n k φ m →
-       ax_next l n mf (State k φ (m ∪ mf)).
+       ax_next l n a (State k φ m').
 
-  Lemma mk_ax_next_alt l n mf k φ m :
-    m ⊥ mf →
+  Lemma mk_ax_next_empty l n k φ m m' a :
+    unframe F k φ m m' a →
     φ ≠ Undef →
     locks φ = ∅ →
     ax l n k φ m →
-    ax_next l n mf (State k φ (m ∪ mf)).
-  Proof. constructor; esolve_elem_of. Qed.
+    ax_next l n a (State k φ m').
+  Proof. econstructor; esolve_elem_of. Qed.
 
   Lemma ax_further_pred l n k φ m :
-    (∀ mf,
-      m ⊥ mf →
-      red (cstep_in_ctx δ l) (State k φ (m ∪ mf))) →
-    (∀ mf S',
-      m ⊥ mf →
-      δ ⊢ₛ State k φ (m ∪ mf) ⇒{l} S' →
-      ax_next l (pred n) mf S') →
+    (∀ m' a,
+      frame F k φ m m' a →
+      red (cstep_in_ctx δ l) (State k φ m')) →
+    (∀ m' a S',
+      frame F k φ m m' a →
+      δ ⊢ₛ State k φ m' ⇒{l} S' →
+      ax_next l (pred n) a S') →
     ax l n k φ m.
-  Proof. destruct n; constructor (solve [auto]). Qed.
+  Proof. destruct n; econstructor (by eauto). Qed.
 
-  Lemma ax_S l n k φ m
-    (Hax : ax l (S n) k φ m) : ax l n k φ m
-  with ax_next_S l n mf S'
-    (Hax : ax_next l (S n) mf S') : ax_next l n mf S'.
+  Lemma ax_S l n k φ m (Hax : ax l (S n) k φ m) : ax l n k φ m
+  with ax_next_S l n a S' (Hax : ax_next l (S n) a S') : ax_next l n a S'.
   Proof.
   { inversion Hax; subst.
     * by apply ax_done.
-    * destruct n.
-      + apply ax_O.
-      + apply ax_further; [done |].
-        intros. apply (ax_next_S). eauto. }
-  { inversion Hax; subst.
-    constructor; trivial. by apply ax_S. }
+    * destruct n; [apply ax_O |].
+      apply ax_further; [done |]. intros. apply (ax_next_S). eauto. }
+  { inversion Hax; subst. econstructor; eauto. }
   Qed.
 
-  Lemma ax_plus_l l n1 n2 k φ m :
-    ax l (n1 + n2) k φ m → ax l n2 k φ m.
+  Lemma ax_plus_l l n1 n2 k φ m : ax l (n1 + n2) k φ m → ax l n2 k φ m.
   Proof. induction n1; simpl; auto using ax_S. Qed.
-  Lemma ax_next_plus_l l n1 n2 mf S' :
-    ax_next l (n1 + n2) mf S' → ax_next l n2 mf S'.
+  Lemma ax_next_plus_l l n1 n2 a S' :
+    ax_next l (n1 + n2) a S' → ax_next l n2 a S'.
   Proof. induction n1; simpl; auto using ax_next_S. Qed.
-  Lemma ax_le l n1 n2 k φ m :
-    ax l n2 k φ m → n1 ≤ n2 → ax l n1 k φ m.
+  Lemma ax_le l n1 n2 k φ m : ax l n2 k φ m → n1 ≤ n2 → ax l n1 k φ m.
   Proof.
     intros Hax ?. rewrite (Minus.le_plus_minus n1 n2), plus_comm in Hax;
-     eauto using ax_plus_l.
+      eauto using ax_plus_l.
   Qed.
-  Lemma ax_next_le l n1 n2 mf S :
-    ax_next l n2 mf S → n1 ≤ n2 → ax_next l n1 mf S.
+  Lemma ax_next_le l n1 n2 a S : ax_next l n2 a S → n1 ≤ n2 → ax_next l n1 a S.
   Proof.
     intros Hax ?. rewrite (Minus.le_plus_minus n1 n2), plus_comm in Hax;
-     eauto using ax_next_plus_l.
+      eauto using ax_next_plus_l.
   Qed.
   Lemma ax_pred l n k φ m : ax l n k φ m → ax l (pred n) k φ m.
   Proof. intros. eauto using ax_le with arith. Qed.
 
-  Lemma ax_step n l mf k φ m S' :
-    m ⊥ mf →
+  Lemma ax_step l n k φ m m' a S' :
+    frame F k φ m m' a →
+    δ ⊢ₛ State k φ m' ⇒{l} S' →
     ax l (S n) k φ m →
-    δ ⊢ₛ State k φ (m ∪ mf) ⇒{l} S' →
-    ax_next l n mf S'.
+    ax_next l n a S'.
   Proof.
-    intros ? Hax p.
-    inversion Hax as [| | ???? _ Hnext]. simplify_equality.
-    * destruct (P_nf mf k m φ). done. solve_cred.
-    * eauto.
+    inversion 3 as [| | ???? _ Hnext]; subst; eauto.
+    destruct (Pnf k φ m m' a); trivial. solve_cred.
   Qed.
 
-  Lemma ax_red n l mf k φ m :
-    m ⊥ mf →
+  Lemma ax_red l n k φ m m' a :
+    frame F k φ m m' a →
+    ¬P k m φ →
     ax l (S n) k φ m →
-    ¬P (get_stack k) m φ →
-    red (cstep_in_ctx δ l) (State k φ (m ∪ mf)).
-  Proof. inversion 2; subst; by auto. Qed.
+    red (cstep_in_ctx δ l) (State k φ m').
+  Proof. inversion 3; subst; by eauto. Qed.
 
-  Lemma ax_step_undef n l mf k φ m k' m' :
-    m ⊥ mf →
-    δ ⊢ₛ State k φ (m ∪ mf) ⇒{l} State k' Undef m' →
+  Lemma ax_step_undef l n k φ m m' a k' m'' :
+    frame F k φ m m' a →
+    δ ⊢ₛ State k φ m' ⇒{l} State k' Undef m'' →
     ¬ax l (S n) k φ m.
   Proof.
     intros ? p Hax.
-    by feed inversion (ax_step n l mf k φ m (State k' Undef m')); subst.
+    by feed inversion (ax_step l n k φ m m' a (State k' Undef m'')); subst.
   Qed.
 
-  Lemma ax_steps n1 n2 l mf φ k m S' :
-    m ⊥ mf →
+  Lemma ax_steps n1 n2 l k φ m m' a S' :
+    (∀ k φ k' φ' m m' a, unframe F k φ m m' a → frame F k' φ' m m' a) →
+    (∀ k φ k' φ' m m' a, frame F k φ m m' a → unframe F k' φ' m m' a) →
+    frame F k φ m m' a →
     φ ≠ Undef →
     locks φ ⊆ locks m →
     ax l (n1 + n2) k φ m →
-    δ ⊢ₛ State k φ (m ∪ mf) ⇒{l}^n1 S' →
-    ax_next l n2 mf S'.
+    δ ⊢ₛ State k φ m' ⇒{l}^n1 S' →
+    ax_next l n2 a S'.
   Proof.
-    revert k φ m.
-    induction n1 as [n1 IH] using lt_wf_ind.
-    intros k φ m ??? Hax p.
-    inv_csteps p as [|n' ? S'' ? p1 p2].
-    * constructor; eauto using ax_plus_l.
-    * feed inversion (ax_step (n' + n2) l mf k φ m S''); subst; eauto.
+    intros ??. revert k φ m m'. induction n1 as [n1 IH] using lt_wf_ind.
+    intros k φ m m' ??? Hax p. inv_csteps p as [|n' ? S'' ? p1 p2].
+    * econstructor; eauto using ax_plus_l.
+    * feed inversion (ax_step l (n' + n2) k φ m m' a S''); subst; eauto.
   Qed.
 End ax.
 Hint Resolve ax_pred ax_S : ax.
 
 (** The predicate [ax] can be composed. This property is used to prove the
 structural Hoare rules. *)
-Lemma ax_compose P Q n φ k1 k2 k3 m :
-  suffix_of k2 k1 →
-  suffix_of k3 k2 →
-  ax P k2 n k1 φ m →
-  (∀ m' φ',
-    P (get_stack k2) m' φ' →
-    ax Q k3 n k2 φ' m') →
-  ax Q k3 n k1 φ m.
+Definition ax_compose_diagram `(F : ax_frame_cond A) `(G : ax_frame_cond B)
+    (l : ctx) := ∀ k φ m m' b,
+  l `suffix_of` k →
+  frame G k φ m m' b →
+  ∃ a, frame F k φ m m' a ∧ ∀ k' φ' m2 m2',
+    l `suffix_of` k' →
+    unframe F k' φ' m2 m2' a → unframe G k' φ' m2 m2' b.
+
+Lemma ax_compose `(F : ax_frame_cond A) `(G : ax_frame_cond B)
+    P Q n φ k1 k2 k3 m :
+  k2 `suffix_of` k1 → k3 `suffix_of` k2 →
+  ax_compose_diagram F G k2 →
+  ax F P k2 n k1 φ m →
+  (∀ m' φ', P k2 m' φ' → ax G Q k3 n k2 φ' m') →
+  ax G Q k3 n k1 φ m.
 Proof.
   revert φ k1 m. induction n as [|n IH].
   { intros. apply ax_O. }
-  intros φ k1 m ?? Hax Hnext.
+  intros φ k1 m ?? HF Hax Hnext.
   inversion Hax as [| | ???? Hred Hstep]; subst.
   { by apply Hnext. }
   apply ax_further.
-  { intros mf ?. apply (red_subrel (cstep_in_ctx δ k2) _ _). auto. }
-  intros ??? [p _].
-  feed pose proof (cred_preserves_subctx δ k2
-    (State k1 φ (m ∪ mf)) S'); auto.
-  feed destruct (Hstep mf S') as [? mf' k' φ' m']; trivial.
-  { by split. }
-  constructor; trivial. apply IH; trivial.
-  intros m'' φ'' ?. by apply ax_S, Hnext.
+  { intros m' a ?. apply (red_subrel (cstep_in_ctx δ k2) _ _).
+    destruct (HF k1 φ m m' a) as (b&?&?); eauto. }
+  intros m' a S' ? [p _]. destruct (HF k1 φ m m' a) as (b&?&?); auto.
+  feed pose proof (cred_preserves_subctx δ k2 (State k1 φ m') S'); eauto.
+  feed destruct (Hstep m' b S') as [? k' φ' mf' m2 m2']; auto.
+  * by split.
+  * econstructor; eauto. apply IH; eauto using ax_S.
 Qed.
 
 (** A variant of the previous lemma that is more convenient for backwards
 chaining. *)
-Lemma ax_compose_cons P Q n φ l E m :
-  ax P (E :: l) n (E :: l) φ m →
-  (∀ m' φ',
-    P (get_stack (E :: l)) m' φ' →
-    ax Q l n (E :: l) φ' m') →
-  ax Q l n (E :: l) φ m.
+Lemma ax_compose_cons `(F : ax_frame_cond A) `(G : ax_frame_cond B)
+    P Q n φ l E m :
+  ax_compose_diagram F G (E :: l) →
+  ax F P (E :: l) n (E :: l) φ m →
+  (∀ m' φ', P (E :: l) m' φ' → ax G Q l n (E :: l) φ' m') →
+  ax G Q l n (E :: l) φ m.
 Proof. apply ax_compose; solve_suffix_of. Qed.
+Lemma ax_compose_diagram_diag `(F : ax_frame_cond A) k :
+  ax_compose_diagram F F k.
+Proof. red. eauto. Qed.
+Hint Resolve ax_compose_diagram_diag : ax.
 
 (** The predicates [ax] satisfies an abstract version of the frame, weaken, and
 conjunction rule. These abstract versions are used to prove the concrete rules
 for both the expression and statement judgment. *)
-Lemma ax_frame (P Q : stack → mem → focus → Prop) m2 l n k φ m :
-  (∀ m φ,
-    m ⊥ m2 →
-    P (get_stack l) m φ →
-    Q (get_stack l) (m ∪ m2) φ) →
-  ax P l n k φ m →
-  m ⊥ m2 →
-  ax Q l n k φ (m ∪ m2).
+Definition ax_frame_diagram `(F : ax_frame_cond A) `(G : ax_frame_cond B)
+    (mf : mem) := ∀ k φ m m' b,
+  ⊥ [m; mf] →
+  frame G k φ (m ∪ mf) m' b →
+  ∃ a, frame F k φ m m' a ∧ ∀ k' φ' m2 m2',
+    unframe F k' φ' m2 m2' a →
+    unframe G k' φ' (m2 ∪ mf) m2' b ∧ ⊥ [m2; mf].
+Lemma ax_frame_diagram_empty `(F : ax_frame_cond A) : ax_frame_diagram F F ∅.
 Proof.
-  intros HPQ. revert k φ m.
-  induction n as [|n]; [constructor |].
-  intros k φ m Hax ?.
-  inversion Hax as [| |???? Hred Hstep]; subst.
+  intros ???? a ? Ha. exists a. rewrite (right_id_L ∅ (∪)) in Ha. split; auto.
+  intros. rewrite (right_id_L ∅ (∪)). split; auto; solve_mem_disjoint.
+Qed.
+
+Lemma ax_frame `(F : ax_frame_cond A) `(G : ax_frame_cond B)
+    (P Q : ax_assert) l n k φ m mf :
+  ax_frame_diagram F G mf →
+  (∀ m φ, ⊥ [m; mf] → P l m φ → Q l (m ∪ mf) φ) →
+  ax F P l n k φ m →
+  ⊥ [m; mf] →
+  ax G Q l n k φ (m ∪ mf).
+Proof.
+  intros HFG HPQ. revert k φ m. induction n as [|n]; [constructor |].
+  intros k φ m Hax ?. inversion Hax as [| |???? Hred Hstep]; subst.
   { by apply ax_done, HPQ. }
   apply ax_further.
-  { intros mf ?. rewrite <-(associative_eq _).
-    apply Hred. by apply mem_disjoint_union_move_l. }
-  intros mf S' ? p.
-  feed inversion (Hstep (m2 ∪ mf) S'); subst.
-  * by apply mem_disjoint_union_move_l.
-  * by rewrite (associative_eq _).
-  * rewrite (associative_eq _). constructor; auto.
-    + apply mem_disjoint_union_move_r; eauto using mem_disjoint_union_lr.
-    + rewrite mem_locks_union by (eapply mem_disjoint_union_rl; eauto).
-      esolve_elem_of.
-    + apply IHn; eauto using mem_disjoint_union_rl, mem_disjoint_union_lr.
+  { intros m' a ?. destruct (HFG k φ m m' a) as (b&?&?); eauto. }
+  intros m' a S' ? p. destruct (HFG k φ m m' a) as (b&?&Hunframe); auto.
+  feed inversion (Hstep m' b S') as [? k' φ' m2 m2' ?]; subst; auto.
+  destruct (Hunframe k' φ' m2 m2'); trivial.
+  apply mk_ax_next with (m2 ∪ mf); eauto.
+  rewrite mem_locks_union by done. solve_elem_of.
 Qed.
 
-Lemma ax_weaken (P Q : stack → mem → focus → Prop) l n k φ m :
-  (∀ m φ,
-    P (get_stack l) m φ →
-    Q (get_stack l) m φ) →
-  ax P l n k φ m →
-  ax Q l n k φ m.
+Lemma ax_weaken {A} (F G : ax_frame_cond A) (P Q : ax_assert) l n k φ m :
+  (∀ k φ m m' a, frame G k φ m m' a → frame F k φ m m' a) →
+  (∀ k φ m m' a, unframe F k φ m m' a → unframe G k φ m m' a) →
+  (∀ m φ, P l φ m → Q l φ m) →
+  ax F P l n k φ m → ax G Q l n k φ m.
 Proof.
-  intros HPQ ?.
-  rewrite <-(right_id_eq ∅ (∪) m). apply (ax_frame P Q).
-  * intros. rewrite (right_id_eq ∅ (∪)). auto.
-  * done.
-  * by apply mem_disjoint_empty_r.
+  intros Hf Hunf HPQ. revert k φ m. induction n as [|n]; [constructor |].
+  intros k φ m Hax. inversion Hax as [| |???? Hred Hstep]; subst.
+  { by apply ax_done, HPQ. }
+  apply ax_further; eauto. intros m' a S' ? p.
+  feed inversion (Hstep m' a S'); eauto. econstructor; eauto.
 Qed.
 
-Global Instance: Proper (((=) ==> (=) ==> (=) ==> impl) ==>
-   (=) ==> (=) ==> (=) ==> (=) ==> (=) ==> impl) ax.
+(** The standard framing condition that just adds an arbitrary frame to the
+memory before each step and takes it off after. *)
+Definition ax_disjoint_cond: ax_frame_cond mem := {|
+  frame k φ m m' mf := m' = m ∪ mf ∧ ⊥ [m; mf];
+  unframe k φ m m' mf := m' = m ∪ mf ∧ ⊥ [m; mf]
+|}.
+Lemma ax_disjoint_cond_frame_diagram mf :
+  ax_frame_diagram ax_disjoint_cond ax_disjoint_cond mf.
 Proof.
-  intros ?? H ? l ?? n ?? k ?? φ ?? m ?.
-  subst. red. apply ax_weaken. intros ??. by apply H.
+  intros k φ m m' mf' ? [??]; subst. exists (mf ∪ mf'). split; [split|].
+  * by rewrite (associative_L (∪)).
+  * solve_mem_disjoint.
+  * intros k' φ' m2 m2' [??]; subst. simplify_mem_disjoint_hyps.
+    split; [split |]; auto with mem. by rewrite <-(associative_L (∪)).
 Qed.
-Global Instance: Proper (((=) ==> (=) ==> (=) ==> iff) ==>
-   (=) ==> (=) ==> (=) ==> (=) ==> (=) ==> iff) ax.
-Proof.
-  intros ?? H ? l ?? n ?? k ?? φ ?? m ?. subst. split; apply ax_weaken;
-    intros ??; apply H; first [by eauto | by symmetry; eauto].
-Qed.
+Hint Resolve ax_disjoint_cond_frame_diagram : ax.
 
-Lemma ax_and (P Q R : stack → mem → focus → Prop)
-  `{P_nf : PropHolds (∀ mf l m φ,
-     P (get_stack l) m φ → nf (cstep_in_ctx δ l) (State l φ (m ∪ mf)))}
-  `{Q_nf : PropHolds (∀ mf l m φ,
-     Q (get_stack l) m φ → nf (cstep_in_ctx δ l) (State l φ (m ∪ mf)))}
+Lemma ax_and `(F : ax_frame_cond A) (P Q R : ctx → mem → focus → Prop)
+  `{Pnf : PropHolds (∀ l φ m m' a,
+    P l m φ → frame F l φ m m' a → nf (cstep_in_ctx δ l) (State l φ m'))}
+  `{Qnf : PropHolds (∀ l φ m m' a,
+    Q l m φ → frame F l φ m m' a → nf (cstep_in_ctx δ l) (State l φ m'))}
     l n k φ m :
+  (∀ k φ m, ∃ m' a,  frame F k φ m m' a) →
+  (∀ k φ a m1 m2 m', unframe F k φ m1 m' a → unframe F k φ m2 m' a → m1 = m2) →
   (∀ ρ m φ, P ρ m φ → Q ρ m φ → R ρ m φ) →
-  ax P l n k φ m →
-  ax Q l n k φ m →
-  ax R l n k φ m.
+  ax F P l n k φ m → ax F Q l n k φ m → ax F R l n k φ m.
 Proof.
-  intros HPQ. revert k φ m.
-  induction n as [|n]; [constructor |].
-  intros k φ m Hax1 Hax2.
-  inversion Hax1 as [| |???? Hred1 Hstep1];
+  intros HFex HFuni HPQ. revert k φ m. induction n as [|n]; [constructor |].
+  intros k φ m Hax1 Hax2. inversion Hax1 as [| |???? Hred1 Hstep1];
     inversion Hax2 as [| |???? Hred2 Hstep2]; subst.
   * by apply ax_done, HPQ.
-  * exfalso. by eapply P_nf, (Hred2 ∅), mem_disjoint_empty_r.
-  * exfalso. by eapply Q_nf, (Hred1 ∅), mem_disjoint_empty_r.
-  * apply ax_further; [done |]. intros mf S' ??.
-    specialize (Hstep1 mf S'). specialize (Hstep2 mf S').
-    feed destruct Hstep1; feed inversion Hstep2; subst; trivial.
-    constructor; auto. simplify_mem_equality; eauto.
+  * exfalso. edestruct HFex as (m'&a&?); eauto.
+    eapply Pnf, (Hred2 m' a); eauto.
+  * exfalso. edestruct HFex as (m'&a&?); eauto.
+    eapply Qnf, (Hred1 m' a); eauto.
+  * apply ax_further; [done |]. intros m' a S' HF1 p.
+    feed destruct (Hstep1 _ _ _ HF1 p) as [?????? HF1']; trivial.
+    feed inversion (Hstep2 _ _ _ HF1 p) as [?????? HF1'']; trivial.
+    specialize (HFuni _ _ _ _ _ _ HF1' HF1''); subst. econstructor; eauto.
 Qed.
 
 (** ** Function calls *)
@@ -394,8 +408,7 @@ Definition fpure: fassert_env → purefuns :=
     | _ => None
     end) (@empty purefuns _).
 
-Lemma lookup_fpure_Some Δ f F :
-  fpure Δ !! f = Some F ↔ Δ !! f = Some (FPure F).
+Lemma lookup_fpure_Some Δ f F : fpure Δ !! f = Some F ↔ Δ !! f = Some (FPure F).
 Proof.
   unfold fpure. rewrite lookup_merge by done.
   destruct (Δ !! f) as [[]|]; naive_solver.
@@ -411,16 +424,11 @@ Qed.
 
 Lemma fpure_empty : fpure ∅ = ∅.
 Proof.
-  apply map_empty. intros f. unfold fpure.
-  by rewrite lookup_merge, lookup_empty.
+  apply map_empty. intro. unfold fpure. by rewrite lookup_merge, lookup_empty.
 Qed.
-Lemma fassert_disjoint_union Δ1 Δ2 :
-  Δ1 ⊥ Δ2 → fpure Δ1 ⊥ fpure Δ2.
+Lemma fassert_disjoint_union Δ1 Δ2 : Δ1 ⊥ Δ2 → fpure Δ1 ⊥ fpure Δ2.
 Proof. intros ????. rewrite !lookup_fpure_Some. eauto. Qed.
-
-Lemma fpure_union Δ1 Δ2 :
-  Δ1 ⊥ Δ2 →
-  fpure (Δ1 ∪ Δ2) = fpure Δ1 ∪ fpure Δ2.
+Lemma fpure_union Δ1 Δ2 : Δ1 ⊥ Δ2 → fpure (Δ1 ∪ Δ2) = fpure Δ1 ∪ fpure Δ2.
 Proof.
   intros. apply map_eq. intros f. apply option_eq. intros F.
   by rewrite lookup_fpure_Some, !lookup_union_Some,
@@ -430,30 +438,24 @@ Qed.
 Definition fassert_fun_indep (fs : funset) (Pf : fassert) : Prop :=
   match Pf with
   | FImpure _ pre post _ _ =>
-      (∀ c vs, FunIndep fs (pre c vs)) ∧
-      (∀ c vs v, FunIndep fs (post c vs v))
+    (∀ c vs, FunIndep fs (pre c vs)) ∧ (∀ c vs v, FunIndep fs (post c vs v))
   | FPure _ => True
   end.
 Lemma fpre_fun_indep fs Pf c vs :
-  fassert_fun_indep fs Pf →
-  FunIndep fs (fpre Pf c vs).
+  fassert_fun_indep fs Pf → FunIndep fs (fpre Pf c vs).
 Proof. destruct Pf; simpl. apply _. by intros [??]. Qed.
 Lemma fpost_fun_indep fs Pf c vs v :
-  fassert_fun_indep fs Pf →
-  FunIndep fs (fpost Pf c vs v).
+  fassert_fun_indep fs Pf → FunIndep fs (fpost Pf c vs v).
 Proof. destruct Pf; simpl. apply _. by intros [??]. Qed.
 
 Definition fassert_env_fun_indep (fs : funset) : fassert_env → Prop :=
   map_forall (λ _, fassert_fun_indep fs).
 
 Lemma lookup_fpre_fun_indep Δ fs f Pf c vs :
-  fassert_env_fun_indep fs Δ →
-  Δ !! f = Some Pf →
-  FunIndep fs (fpre Pf c vs).
+  fassert_env_fun_indep fs Δ → Δ !! f = Some Pf → FunIndep fs (fpre Pf c vs).
 Proof. intros HΔ ?. eapply fpre_fun_indep, HΔ; eauto. Qed.
 Lemma lookup_fpost_fun_indep Δ fs f Pf c vs v :
-  fassert_env_fun_indep fs Δ →
-  Δ !! f = Some Pf →
+  fassert_env_fun_indep fs Δ → Δ !! f = Some Pf →
   FunIndep fs (fpost Pf c vs v).
 Proof. intros HΔ ?. eapply fpost_fun_indep, HΔ; eauto. Qed.
 
@@ -461,30 +463,27 @@ Proof. intros HΔ ?. eapply fpost_fun_indep, HΔ; eauto. Qed.
 accordingly. Intuitively this means that if a [Call f vs] with [vs] satisfying
 the precondition of [f] terminates, then the result is a [Return v] with [v]
 satisfying the postcondition of [f]. *)
-Inductive ax_fun_P (δp : purefuns) (Pf : fassert) (c : fcommon Pf) (vs : list val)
-    (ρ : stack) (m : mem) : focus → Prop :=
-  | make_ax_fun_P v :
-     locks m = ∅ →
-     assert_holds δp (fpost Pf c vs v) ρ m →
-     ax_fun_P δp Pf c vs ρ m (Return v).
+Inductive ax_fun_post (δp : purefuns) (Pf : fassert) (c : fcommon Pf)
+    (vs : list val) (k : ctx) (m : mem) : focus → Prop :=
+  mk_ax_fun_P v :
+    locks m = ∅ →
+    assert_holds δp (fpost Pf c vs v) (get_stack k) m →
+    ax_fun_post δp Pf c vs k m (Return v).
 Definition ax_funs (n : nat) (Δ : fassert_env) : Prop :=
   ∀ f Pf c vs m k,
     Δ !! f = Some Pf →
     locks m = ∅ →
     assert_holds (fpure Δ) (fpre Pf c vs) (get_stack k) m →
-    ax (ax_fun_P (fpure Δ) Pf c vs) k n k (Call f vs) m.
+    ax ax_disjoint_cond (ax_fun_post (fpure Δ) Pf c vs) k n k (Call f vs) m.
 
-Instance: PropHolds (∀ mf l m φ,
-  ax_fun_P δp Pf c vs (get_stack l) m φ →
-  nf (cstep_in_ctx δ l) (State l φ (m ∪ mf))).
-Proof. destruct 1. intros [? p]. inv_cstep p. Qed.
-Instance: PropHolds (∀ ρ m, ¬ax_fun_P δp Pf c vs ρ m Undef).
-Proof. inversion 1. Qed.
+Instance: PropHolds (∀ l φ m m' mf,
+  ax_fun_post δp Pf c vs l m φ → frame ax_disjoint_cond l φ m m' mf →
+  nf (cstep_in_ctx δ l) (State l φ m')).
+Proof. destruct 1. intros ? [? p]. inv_cstep p. Qed.
 
 Lemma ax_funs_weaken n1 n2 Δ :
   ax_funs n2 Δ → n1 ≤ n2 → ax_funs n1 Δ.
 Proof. unfold ax_funs. eauto using ax_le. Qed.
-
 Lemma ax_funs_empty n : ax_funs n ∅.
 Proof. repeat intro. simplify_map_equality. Qed.
 Lemma ax_funs_S n Δ : ax_funs (S n) Δ → ax_funs n Δ.
@@ -493,16 +492,13 @@ Lemma ax_funs_pred n Δ : ax_funs n Δ → ax_funs (pred n) Δ.
 Proof. eauto using ax_funs_weaken with arith. Qed.
 Hint Resolve ax_funs_empty ax_funs_S ax_funs_pred : ax.
 
-Lemma ax_fun_P_union_l_pure δp Δ f Pf c vs :
-  fassert_env_fun_indep (dom funset δp) Δ →
-  Δ !! f = Some Pf →
-  ((=) ==> (=) ==> (=) ==> iff)%signature
-    (ax_fun_P (δp ∪ fpure Δ) Pf c vs) (ax_fun_P (fpure Δ) Pf c vs).
+Lemma ax_fun_union_l_pure δp Δ f Pf c vs l n k φ m :
+  fassert_env_fun_indep (dom funset δp) Δ → Δ !! f = Some Pf →
+  ax ax_disjoint_cond (ax_fun_post (fpure Δ) Pf c vs) l n k φ m →
+    ax ax_disjoint_cond (ax_fun_post (δp ∪ fpure Δ) Pf c vs) l n k φ m.
 Proof.
-  intros ?? ? ρ ? ? m ? ? φ ?; subst.
-  split; destruct 1; constructor; eauto.
-  * rewrite <-fun_indep_union_l; eauto using lookup_fpost_fun_indep.
-  * rewrite fun_indep_union_l; eauto using lookup_fpost_fun_indep.
+  intros ??. apply ax_weaken; auto. destruct 1; constructor; eauto.
+  eapply fun_indep_union_l; eauto using lookup_fpost_fun_indep.
 Qed.
 
 (** ** Directed assertions *)
@@ -514,8 +510,7 @@ Definition directed_pack {A} (P : A) (Q : A) (R : val → A)
   (J : label → A) : direction → A := direction_rect (λ _, A) P Q R J.
 Global Instance directed_pack_proper `{!@Equivalence A R} : Proper
   (R ==> R ==> pointwise_relation _ R ==>
-    pointwise_relation _ R ==> pointwise_relation _ R)
-  (@directed_pack A).
+    pointwise_relation _ R ==> pointwise_relation _ R) (@directed_pack A).
 Proof. intros ???????????? []; subst; firstorder. Qed.
 
 (** This hideous definition of [fmap] makes [f <$> directed_pack P Q R J]
@@ -542,13 +537,13 @@ of the previously defined notions together. We require both the program and
 the memory to contain no locks at the start. Also, we require all locks to be
 released in the end, as each statement that contains an expression always has
 a sequence point in the end. *)
-Inductive ax_stmt_P (s : stmt) (δp : purefuns) (Pd : dassert)
-    (ρ : stack) (m : mem) : focus → Prop :=
-  make_ax_stmt_P d :
+Inductive ax_stmt_post (s : stmt) (δp : purefuns) (Pd : dassert)
+    (k : ctx) (m : mem) : focus → Prop :=
+  mk_ax_stmt_P d :
     up d s →
     locks m = ∅ →
-    assert_holds δp (Pd d) ρ m →
-    ax_stmt_P s δp Pd ρ m (Stmt d s).
+    assert_holds δp (Pd d) (get_stack k) m →
+    ax_stmt_post s δp Pd k m (Stmt d s).
 Definition ax_stmt_packed (Δ : fassert_env) (Pd : dassert) (s : stmt) : Prop :=
   ∀ n k d m,
     ax_funs n Δ →
@@ -556,30 +551,26 @@ Definition ax_stmt_packed (Δ : fassert_env) (Pd : dassert) (s : stmt) : Prop :=
     locks s = ∅ →
     locks m = ∅ →
     assert_holds (fpure Δ) (Pd d) (get_stack k) m →
-    ax (ax_stmt_P s (fpure Δ) Pd) k n k (Stmt d s) m.
+    ax ax_disjoint_cond (ax_stmt_post s (fpure Δ) Pd) k n k (Stmt d s) m.
 Notation "Δ \ P ⊨ₚ s" :=
   (ax_stmt_packed Δ P%A s%S)
   (at level 74, P at next level, format "Δ  \  P  ⊨ₚ  '[' s ']'").
 
-Instance: PropHolds (∀ mf l m φ,
-  ax_stmt_P s δp Pd (get_stack l) m φ →
-  nf (cstep_in_ctx δ l) (State l φ (m ∪ mf))).
-Proof. destruct 1. intros [? p]. inv_cstep p. Qed.
-
-Instance ax_stmt_P_proper: Proper
-  (pointwise_relation _ (≡@{δp}) ==> (=) ==> (=) ==> (=) ==> iff)
-  (ax_stmt_P s δp).
-Proof.
-  intros ???? E. repeat intro; subst.
-  split; destruct 1; constructor; eauto; eapply E; eauto.
-Qed.
+Instance: PropHolds (∀ l φ m m' mf,
+  ax_stmt_post s δp Pd l m φ → frame ax_disjoint_cond l φ m m' mf →
+  nf (cstep_in_ctx δ l) (State l φ m')).
+Proof. destruct 1. intros ? [? p]. inv_cstep p. Qed.
 
 Global Instance ax_stmt_packed_proper: Proper
-  (pointwise_relation _ (≡@{fpure Δ}) ==> (=) ==> iff)
-  (ax_stmt_packed Δ).
+  (pointwise_relation _ (≡@{fpure Δ}) ==> (=) ==> iff) (ax_stmt_packed Δ).
 Proof.
-  intros Δ Pd Qd E1 ???; subst. unfold ax_stmt_packed.
-  by setoid_rewrite E1.
+  intros Δ. cut (Proper
+    (pointwise_relation _ (≡@{fpure Δ}) ==> (=) ==> impl) (ax_stmt_packed Δ)).
+  { intros help. by split; apply help. }
+  intros Pd Qd E1 ??? Hax ?????????; subst.
+  eapply ax_weaken; [| | |apply Hax]; auto.
+  * destruct 1; constructor; eauto. by apply E1.
+  * by apply E1.
 Qed.
 
 Definition ax_stmt Δ R J P s Q := Δ \ dassert_pack P Q R J ⊨ₚ s.
@@ -589,7 +580,7 @@ Definition ax_stmt_top Δ P s Q := Δ \ dassert_pack_top P Q ⊨ₚ s.
 Notation "Δ \ R \ J ⊨ₛ {{ P }} s {{ Q }}" :=
   (ax_stmt Δ R%A J%A P%A s%S Q%A)
   (at level 74, J at next level, R at next level,
-   format "Δ  \  R  \  J  ⊨ₛ  '[' {{  P  }} '/'  s  '/' {{  Q  }} ']'").
+   format "Δ \  R \  J  ⊨ₛ  '[' {{  P  }} '/'  s  '/' {{  Q  }} ']'").
 Notation "Δ ⊨ₜ {{ P }} s {{ Q }}" :=
   (ax_stmt_top Δ P%A s%S Q%A)
   (at level 74, format "Δ  ⊨ₜ  '[' {{  P  }} '/'  s  '/' {{  Q  }} ']'").
@@ -597,11 +588,9 @@ Notation "Δ ⊨ₜ {{ P }} s {{ Q }}" :=
 Lemma ax_stmt_top_unfold Δ P s Q :
   Δ ⊨ₜ {{ P }} s {{ Q }} ↔ Δ \ Q \ (λ _, False) ⊨ₛ {{ P }} s {{ Q voidc%V }}.
 Proof. done. Qed.
-
 Global Instance ax_stmt_proper: Proper
   (pointwise_relation _ (≡@{fpure Δ}) ==> pointwise_relation _ (≡@{fpure Δ}) ==>
-     (≡@{fpure Δ}) ==> (=) ==> (≡@{fpure Δ}) ==> iff)
-  (ax_stmt Δ).
+     (≡@{fpure Δ}) ==> (=) ==> (≡@{fpure Δ}) ==> iff) (ax_stmt Δ).
 Proof.
   intros ??? E1 ?? E2 ?? E3 ??? ?? E4; subst.
   unfold ax_stmt. by rewrite E1, E2, E3, E4.
@@ -614,16 +603,14 @@ Proof.
   unfold ax_stmt_top, dassert_pack_top. by rewrite E1, E2.
 Qed.
 
-Lemma ax_stmt_P_union_l_pure δp Δ s Pd :
+Lemma ax_stmt_union_l_pure δp Δ s Pd l n k φ m :
   (∀ d, FunIndep (dom funset δp) (Pd d)) →
   fassert_env_fun_indep (dom funset δp) Δ →
-  ((=) ==> (=) ==> (=) ==> iff)%signature
-    (ax_stmt_P s (δp ∪ fpure Δ) Pd) (ax_stmt_P s (fpure Δ) Pd).
+  ax ax_disjoint_cond (ax_stmt_post s (δp ∪ fpure Δ) Pd) l n k φ m →
+  ax ax_disjoint_cond (ax_stmt_post s (fpure Δ) Pd) l n k φ m.
 Proof.
-  intros ??? ρ ? ? m ? ? φ ?; subst.
-  split; destruct 1; constructor; eauto.
-  * rewrite <-fun_indep_union_l; eauto.
-  * rewrite fun_indep_union_l; eauto.
+  intros ??. apply ax_weaken; auto.
+  destruct 1; constructor; eauto. eapply fun_indep_union_l; eauto.
 Qed.
 
 (** ** The Hoare judgment for expressions *)
@@ -633,87 +620,189 @@ the expression and the memory to be lock free. In the end, the locks in the
 memory should exactly match the annotated locations in the final expression
 that remain to be unlocked. The latter is important, as an unlock operation at
 a sequence point thereby corresponds to unlocking everything. *)
-Inductive ax_expr_P (δp : purefuns) (Q : val → assert)
-    (ρ : stack) (m : mem) : focus → Prop :=
-  make_ax_expr_P v Ω :
+Inductive ax_expr_frame := InExpr (mf mA : mem) | InFun (mf : mem).
+Inductive ax_expr_cond_frame (δp : purefuns) (l : ctx) (A : assert)
+    (k : ctx) (φ : focus) (m m' : mem) : ax_expr_frame → Prop :=
+  | ax_frame_in_expr mA mf :
+     m' = m ∪ mf ∪ mA →
+     l = k →
+     ⊥ [m; mf; mA] →
+     assert_holds δp A (get_stack l) mA →
+     locks mA = ∅ →
+     ax_expr_cond_frame δp l A k φ m m' (InExpr mf mA)
+  | ax_frame_in_fun mf :
+     m' = m ∪ mf →
+     l ≠ k →
+     ⊥ [m; mf] →
+     ax_expr_cond_frame δp l A k φ m m' (InFun mf).
+Inductive ax_expr_cond_unframe (δp : purefuns) (l : ctx) (A : assert)
+    (k : ctx) (φ : focus) (m m' : mem) : ax_expr_frame → Prop :=
+  | ax_unframe_expr_to_expr mA mf :
+     m' = m ∪ mf ∪ mA →
+     l = k →
+     ⊥ [m; mf; mA] →
+     ax_expr_cond_unframe δp l A k φ m m' (InExpr mf mA)
+  | ax_unframe_fun_to_expr mA mf :
+     m' = m ∪ mf ∪ mA →
+     l = k →
+     ⊥ [m; mf; mA] →
+     assert_holds δp A (get_stack l) mA →
+     locks mA = ∅ →
+     ax_expr_cond_unframe δp l A k φ m m' (InFun mf)
+  | ax_unframe_expr_to_fun m'' mA mf :
+     m = m'' ∪ mA →
+     m' = m'' ∪ mf ∪ mA →
+     l ≠ k →
+     ⊥ [m''; mf; mA] →
+     ax_expr_cond_unframe δp l A k φ m m' (InExpr mf mA)
+  | ax_unframe_fun_to_fun mf :
+     m' = m ∪ mf →
+     l ≠ k →
+     ⊥ [m; mf] →
+     ax_expr_cond_unframe δp l A k φ m m' (InFun mf).
+Definition ax_expr_cond (δp : purefuns) (l : ctx)
+    (A : assert) : ax_frame_cond ax_expr_frame := {|
+  frame := ax_expr_cond_frame δp l A;
+  unframe := ax_expr_cond_unframe δp l A
+|}.
+
+Definition ax_expr_funframe (δp : purefuns) (A : assert) (k : ctx) (m : mem) :=
+  ∃ mA, ⊥ [mA; m] ∧ locks mA = ∅ ∧ assert_holds δp A (get_stack k) mA.
+Lemma ax_expr_funframe_emp δp k m : ax_expr_funframe δp emp k m.
+Proof. eexists ∅. rewrite mem_locks_empty. solve_assert. Qed.
+Hint Resolve ax_expr_funframe_emp : ax.
+Lemma ax_expr_funframe_weaken δp A k m1 m2 :
+  ax_expr_funframe δp A k m2 → m1 ⊆ m2 → ax_expr_funframe δp A k m1.
+Proof. intros (mA&?&?&?) Hm12. exists mA. by rewrite Hm12. Qed.
+
+Lemma ax_disjoint_expr_compose_diagram δp E l A :
+  ax_compose_diagram ax_disjoint_cond (ax_expr_cond δp l A) (E :: l).
+Proof.
+  intros k φ a m m' ?. simpl. inversion 1; subst.
+  * simplify_suffix_of.
+  * exists mf. split; [done|]. intros k' φ' m2 m2' ? [??]; subst.
+    constructor; trivial. intro; simplify_suffix_of.
+Qed.
+Lemma ax_expr_disjoint_compose_diagram δp l l' :
+  ax_compose_diagram (ax_expr_cond δp l emp) ax_disjoint_cond l'.
+Proof.
+  intros k φ m m' mf ? [??]; subst. simpl. destruct (decide (l = k)); subst.
+  * exists (InExpr mf ∅). split.
+    { constructor; auto with mem.
+      + by rewrite (right_id_L ∅ (∪)).
+      + solve_assert.
+      + by rewrite mem_locks_empty. }
+    intros k' φ' m2 m2' _. inversion 1; subst.
+    + rewrite (right_id_L ∅ (∪)); auto with mem.
+    + rewrite !(right_id_L ∅ (∪)). auto with mem.
+  * exists (InFun mf). split; [by constructor |].
+    intros k' φ' m2 m2' _. inversion 1; unfold_assert in *; subst; [|done].
+    rewrite (right_id_L ∅ (∪)); auto with mem.
+Qed.
+Lemma ax_expr_cond_frame_diagram_simple δp l B mf :
+  ax_frame_diagram (ax_expr_cond δp l B) (ax_expr_cond δp l B) mf.
+Proof.
+  intros k φ m m' ?. destruct 2 as [mA mf'|mf']; subst.
+  * simplify_mem_disjoint_hyps. exists (InExpr (mf ∪ mf') mA). split.
+    { constructor; auto with mem. by rewrite (associative_L (∪)). }
+    intros k' φ' m2 m2'.
+    inversion 1 as [| |m''|]; simplify_mem_disjoint_hyps; subst.
+    + split; [|solve_mem_disjoint].
+      apply ax_unframe_expr_to_expr; auto with mem.
+      by rewrite (associative_L (∪)).
+    + split; [|solve_mem_disjoint].
+      apply ax_unframe_expr_to_fun with (m'' ∪ mf); auto with mem.
+      - rewrite <-!(associative_L (∪)).
+        by rewrite (mem_union_commutative mA) by solve_mem_disjoint.
+      - by rewrite !(associative_L (∪)).
+  * simplify_mem_disjoint_hyps. exists (InFun (mf ∪ mf')). split.
+    { constructor; auto with mem. by rewrite (associative_L (∪)). }
+    intros k' φ' m2 m2'.
+    inversion 1 as [|mA| |]; simplify_mem_disjoint_hyps; subst.
+    + split; [|solve_mem_disjoint].
+      apply ax_unframe_fun_to_expr with mA; auto with mem.
+      by rewrite (associative_L (∪)).
+    + split; [|solve_mem_disjoint].
+      apply ax_unframe_fun_to_fun; auto with mem.
+      by rewrite (associative_L (∪)).
+Qed.
+Hint Resolve ax_disjoint_expr_compose_diagram : ax.
+Hint Resolve ax_expr_disjoint_compose_diagram : ax.
+Hint Resolve ax_expr_cond_frame_diagram_simple : ax.
+
+Inductive ax_expr_post (δp : purefuns) (Q : val → assert)
+    (k : ctx) (m : mem) : focus → Prop :=
+  mk_ax_expr_P v Ω :
     locks m = Ω →
-    assert_holds δp (Q v) ρ m →
-    ax_expr_P δp Q ρ m (Expr (valc@{Ω} v)).
-Definition ax_expr (Δ : fassert_env) (P : assert)
+    assert_holds δp (Q v) (get_stack k) m →
+    ax_expr_post δp Q k m (Expr (valc@{Ω} v)).
+Definition ax_expr (Δ : fassert_env) (A P : assert)
     (e : expr) (Q : val → assert) : Prop :=
   ∀ n k m,
     ax_funs n Δ →
     locks e = ∅ →
     locks m = ∅ →
+    ax_expr_funframe (fpure Δ) A k m →
     assert_holds (fpure Δ) P (get_stack k) m →
-    ax (ax_expr_P (fpure Δ) Q) k n k (Expr e) m.
-Notation "Δ ⊨ₑ {{ P }} e {{ Q }}" :=
-  (ax_expr Δ P%A e%E Q%A)
-  (at level 74, format "Δ  ⊨ₑ  '[' {{  P  }} '/'  e  '/' {{  Q  }} ']'").
+    ax (ax_expr_cond (fpure Δ) k A) (ax_expr_post (fpure Δ) Q) k n k (Expr e) m.
+Notation "Δ \ A ⊨ₑ {{ P }} e {{ Q }}" := (ax_expr Δ A%A P%A e%E Q%A)
+  (at level 74, A at next level,
+  format "Δ \  A  ⊨ₑ  '[' {{  P  }} '/'  e  '/' {{  Q  }} ']'").
 
-Instance: PropHolds (∀ mf l m φ,
-  ax_expr_P δp Q (get_stack l) m φ →
-  nf (cstep_in_ctx δ l) (State l φ (m ∪ mf))).
-Proof. destruct 1. apply cnf_val. Qed.
+Instance: PropHolds (∀ l φ m m' mf,
+  ax_expr_post δp Q l m φ →
+  frame (ax_expr_cond δp l' A) l φ m m' mf →
+  nf (cstep_in_ctx δ l) (State l φ m')).
+Proof. destruct 1. intros. apply cnf_val. Qed.
 
-Instance ax_expr_P_impl: Proper
-  (pointwise_relation _ (⊆@{δp}) ==> (=) ==> (=) ==> (=) ==> impl)
-  (ax_expr_P δp).
+Global Instance ax_expr_proper: Proper ((≡@{fpure Δ}) ==> (≡@{fpure Δ}) ==>
+  (=) ==> pointwise_relation _ (≡@{fpure Δ}) ==> iff) (ax_expr Δ).
 Proof.
-  intros ??? E ??? ??? ???.
-  destruct 1; subst; constructor; eauto; eapply E; eauto.
-Qed.
-Instance ax_expr_P_proper: Proper
-  (pointwise_relation _ (≡@{δp}) ==> (=) ==> (=) ==> (=) ==> iff)
-  (ax_expr_P δp).
-Proof.
-  intros ??? E. repeat intro; subst.
-  split; destruct 1; constructor; eauto; eapply E; eauto.
+  intros Δ. cut (Proper ((≡@{fpure Δ}) ==> (≡@{fpure Δ}) ==>
+    (=) ==> pointwise_relation _ (≡@{fpure Δ}) ==> impl) (ax_expr Δ)).
+  { intros help. by split; apply help. }
+  intros A1 A2 E1 P1 P2 E2 ??? Q1 Q2 E3 Hax ?????? (?&?&?&?) ?; subst.
+  eapply ax_weaken; [| | |apply Hax]; auto.
+  * destruct 1; constructor; auto. by apply E1.
+  * destruct 1; econstructor (first [by eauto | by apply E1]).
+  * destruct 1; constructor; auto. by apply E3.
+  * repeat esplit; eauto. by apply E1.
+  * by apply E2.
 Qed.
 
-Lemma ax_expr_P_is_value P δp ρ m e :
-  ax_expr_P δp P ρ m (Expr e) →
-  is_value e.
+Lemma ax_expr_post_is_value δp Q ρ m e :
+  ax_expr_post δp Q ρ m (Expr e) → is_value e.
 Proof. by inversion 1. Qed.
-
-Lemma ax_expr_val P n δp k v Ω m :
-  ax (ax_expr_P δp P) k (S n) k (Expr (valc@{Ω} v)) m →
+Lemma ax_expr_val δp A P n k v Ω m :
+  ax_expr_funframe δp A k m →
+  ax (ax_expr_cond δp k A) (ax_expr_post δp P) k (S n) k (Expr (valc@{Ω} v)) m →
   assert_holds δp (P v) (get_stack k) m.
 Proof.
-  inversion 1 as [|??? [????]|???? Hred]; subst.
-  * done.
-  * destruct (cnf_val δ k Ω v (m ∪ ∅)).
-    apply Hred. apply mem_disjoint_empty_r.
+  intros (mA&?&?&?). inversion 1 as [|??? [????]|???? Hred]; subst; auto.
+  destruct (cnf_val δ k Ω v (m ∪ mA)). apply Hred with (InExpr ∅ mA).
+  constructor; auto with mem. by rewrite (right_id_L ∅ (∪)).
 Qed.
-
-Lemma ax_expr_val_locks P n δp k v Ω m :
-  ax (ax_expr_P δp P) k (S n) k (Expr (valc@{Ω} v)) m →
+Lemma ax_expr_val_locks δp A P n k v Ω m :
+  ax_expr_funframe δp A k m →
+  ax (ax_expr_cond δp k A) (ax_expr_post δp P) k (S n) k (Expr (valc@{Ω} v)) m →
   locks m = Ω.
 Proof.
-  inversion 1 as [|??? [????]|???? Hred]; subst.
-  * done.
-  * destruct (cnf_val δ k Ω v (m ∪ ∅)).
-    apply Hred. apply mem_disjoint_empty_r.
+  intros (mA&?&?&?). inversion 1 as [|??? [????]|???? Hred]; subst; auto.
+  destruct (cnf_val δ k Ω v (m ∪ mA)). apply Hred with (InExpr ∅ mA).
+  constructor; auto with mem. by rewrite (right_id_L ∅ (∪)).
 Qed.
 
-Global Instance ax_expr_proper: Proper
-  ((≡@{fpure Δ}) ==> (=) ==> pointwise_relation _ (≡@{fpure Δ}) ==> iff)
-  (ax_expr Δ).
-Proof.
-  intros Δ P Q E1 ??? Pf Qf E2; subst. unfold ax_expr.
-  by setoid_rewrite E1; setoid_rewrite E2.
-Qed.
-
-Lemma ax_expr_P_union_l_pure δp Δ Q :
-  (∀ v, FunIndep (dom funset δp) (Q v)) →
+Lemma ax_expr_union_l_pure δp Δ A Q l n k φ m :
+  (∀ v, FunIndep (dom funset δp) (Q v)) → FunIndep (dom funset δp) A →
   fassert_env_fun_indep (dom funset δp) Δ →
-  ((=) ==> (=) ==> (=) ==> iff)%signature
-    (ax_expr_P (δp ∪ fpure Δ) Q) (ax_expr_P (fpure Δ) Q).
+  ax (ax_expr_cond (δp ∪ fpure Δ) k A)
+    (ax_expr_post (δp ∪ fpure Δ) Q) l n k φ m →
+  ax (ax_expr_cond (fpure Δ) k A) (ax_expr_post (fpure Δ) Q) l n k φ m.
 Proof.
-  intros ??? ρ ? ? m ? ? φ ?; subst.
-  split; destruct 1; constructor; eauto.
-  * rewrite <-fun_indep_union_l; eauto.
-  * rewrite fun_indep_union_l; eauto.
+  intros ???. apply ax_weaken; auto.
+  * destruct 1; constructor; eauto. eapply fun_indep_union_l; eauto.
+  * destruct 1; try econstructor (eauto; eapply fun_indep_union_l; eauto).
+  * destruct 1; constructor; eauto. eapply fun_indep_union_l; eauto.
 Qed.
 
 (** The lemma [ax_expr_compose] is used to prove the structural Hoare rules for
@@ -725,199 +814,245 @@ cases:
 - Some subexpression contains a redex that is not a function call.
 - Some subexpression contains a redex that is a function call. In this case we
   use the lemma [ax_call_compose]. *)
-Lemma ax_call_compose P Q (E : ectx) E' n φ l k m1 m2 :
+Lemma ax_call_compose δp A P Q (E : ectx) E' n φ l k m1 m2 mA :
   locks E' ⊆ locks E ∪ locks m2 →
-  m1 ⊥ m2 →
-  ax P l n (k ++ [CFun E] ++ l) φ m1 →
+  ⊥ [m1; m2; mA] →
+  ax (ax_expr_cond δp l A) P l n (k ++ [CFun E] ++ l) φ (m1 ∪ mA) →
   (∀ n' m1' e',
     n' ≤ n →
-    m1' ⊥ m2 →
+    ⊥ [m1'; m2] →
+    ax_expr_funframe δp A l (m1' ∪ m2) →
     locks (subst E e') ⊆ locks m1' →
-    ax P l n' l (Expr (subst E e')) m1' →
-    ax Q l n' l (Expr (subst E' e')) (m1' ∪ m2)) →
-  ax Q l n (k ++ [CFun E'] ++ l) φ (m1 ∪ m2).
+    ax (ax_expr_cond δp l A) P l n' l (Expr (subst E e')) m1' →
+    ax (ax_expr_cond δp l A) Q l n' l (Expr (subst E' e')) (m1' ∪ m2)) →
+  ax (ax_expr_cond δp l A) Q l n (k ++ [CFun E'] ++ l) φ (m1 ∪ m2 ∪ mA).
 Proof.
-  intros HE. revert m1 φ k. induction n as [|n IH]; [intros; apply ax_O |].
+  intros HE Hm. rewrite <-(associative_L (∪)),
+    (mem_union_commutative m2), (associative_L (∪)) by solve_mem_disjoint.
+  cut (⊥ [m1 ∪ mA; m2]); [|solve_mem_disjoint].
+  revert φ k. generalize (m1 ∪ mA). clear m1 mA Hm.
 
+  induction n as [|n IH]; [intros; apply ax_O |].
   intros m1 φ k ? Hax Hnext.
-  inversion Hax as [| | ???? Hred Hstep]; simplify_list_equality.
+  inversion Hax as [| |???? Hred Hstep]; simplify_list_equality.
   apply ax_further.
-  { intros mf ?. rewrite <-(associative_eq (∪)).
-    destruct (Hred (m2 ∪ mf)) as [S' p].
-    { by apply mem_disjoint_union_move_l. }
-    apply (cstep_call_inv _ _ E E' _ _ _ _ _ p);
-      intros; subst; eexists; eauto. }
+  { intros m' a Hframe; inversion_clear Hframe; simplify_list_equality.
+    simplify_mem_disjoint_hyps.
 
-  intros mf S' ? p. rewrite <-(associative_eq (∪)) in p.
+    destruct (Hred (m1 ∪ m2 ∪ mf) (InFun (m2 ∪ mf))) as [S' p].
+    { rewrite <-(associative_L (∪)).
+      constructor; auto with mem. intro; simplify_list_equality. }
+    apply (cstep_call_inv _ _ E E' _ _ _ _ _ p); intros; subst; red; eauto. }
+
+  intros ?? S' Hframe p;
+    inversion_clear Hframe as [mA mf|mf]; simplify_list_equality.
+  simplify_mem_disjoint_hyps.
+
   apply (cstep_call_inv _ _ _ E _ _ _ _ _ p).
   * intros k' φ' m' p'.
-    feed inversion (Hstep (m2 ∪ mf)
-      (State (k' ++ [CFun E] ++ l) φ' m'));
-      subst; trivial.
-    { by apply mem_disjoint_union_move_l. }
-    rewrite (associative_eq (∪)). decompose_mem_disjoint.
-    constructor; try done.
-    { rewrite mem_locks_union by done. esolve_elem_of. }
-    by apply IH; auto with arith.
-  * intros v ? ? p'. subst.
-    feed inversion (Hstep (m2 ∪ mf)
+    feed inversion (Hstep (m1 ∪ m2 ∪ mf) (InFun (m2 ∪ mf))
+      (State (k' ++ [CFun E] ++ l) φ' m'))
+      as [??? m1' ?? Hunframe]; subst; trivial.
+    { constructor; auto with mem.
+      + by rewrite (associative_L (∪)).
+      + intro; simplify_list_equality. }
+    inversion_clear Hunframe as [|mA| |]; simplify_list_equality.
+    simplify_mem_disjoint_hyps.
+
+    apply mk_ax_next with (m1' ∪ m2); trivial.
+    + apply ax_unframe_fun_to_fun; auto with mem.
+      - by rewrite (associative_L (∪)).
+      - intro; simplify_list_equality.
+    + rewrite mem_locks_union by solve_mem_disjoint. esolve_elem_of.
+    + apply IH; auto with mem.
+  * intros v ? ? p'; subst.
+    feed inversion (Hstep (m1 ∪ m2 ∪ mf) (InFun (m2 ∪ mf))
       (State l (Expr (subst E (valc v)%E))
-      (m1 ∪ (m2 ∪ mf)))) as [???]; subst; trivial.
-    { by apply mem_disjoint_union_move_l. }
-    rewrite (associative_eq (∪)). decompose_mem_disjoint.
-    constructor; try done.
-    { rewrite mem_locks_union by done. simpl in *.
-      rewrite ectx_subst_locks in H9 |- *. esolve_elem_of. (* fixme *) }
-    by apply Hnext; auto with arith.
+      (m1 ∪ (m2 ∪ mf)))) as [??? m1' ?? Hunframe _ Hlocks]; subst; trivial.
+    { constructor; auto with mem.
+      + by rewrite (associative_L (∪)).
+      + intro; simplify_list_equality. }
+    { by rewrite (associative_L (∪)). }
+
+    inversion_clear Hunframe as [|mA ? Hm| |]; simplify_list_equality.
+    simplify_mem_disjoint_hyps.
+
+    assert (m1 = m1' ∪ mA); subst.
+    { apply mem_union_cancel_r with (m2 ∪ mf); auto with mem.
+      rewrite <-(associative_L (∪)).
+      rewrite (mem_union_commutative mA) by solve_mem_disjoint.
+      by rewrite (associative_L (∪) m1'). }
+    simplify_mem_disjoint_hyps.
+
+    apply mk_ax_next with (m1' ∪ m2).
+    + apply ax_unframe_fun_to_expr with mA; auto with mem.
+      by rewrite !(associative_L (∪)) in Hm.
+    + done.
+    + rewrite mem_locks_union by solve_mem_disjoint. revert Hlocks HE. clear.
+      simpl. rewrite !ectx_subst_locks. esolve_elem_of.
+    + eapply Hnext; auto with mem. exists mA; auto with mem.
 Qed.
 
-Lemma ax_expr_compose n {vn} δp (Ps : vec vassert vn) (Q : vassert)
+Lemma ax_expr_compose n {vn} δp A (Ps : vec vassert vn) (Q : vassert)
     (E : ectx_full vn) (es : vec expr vn) (l : ctx) (ms : vec mem vn) :
   locks E = ∅ →
-  list_disjoint ms →
+  ⊥ ms →
+  ax_expr_funframe δp A l (⋃ ms) →
   (∀ i, locks (es !!! i) ⊆ locks (ms !!! i)) →
-  (∀ i, ax (ax_expr_P δp (Ps !!! i)) l n l (Expr (es !!! i)) (ms !!! i)) →
+  (∀ i, ax (ax_expr_cond δp l A) (ax_expr_post δp (Ps !!! i)) l n l
+           (Expr (es !!! i)) (ms !!! i)) →
   (∀ (Ωs : vec _ vn) (vs : vec val vn) (ms' : vec mem vn),
-    list_disjoint ms' →
+    ⊥ ms' →
     (∀ i, locks (ms' !!! i) = Ωs !!! i) →
-    (∀ i, assert_holds δp ((Ps !!! i) (vs !!! i))
-      (get_stack l) (ms' !!! i)) →
-    ax (ax_expr_P δp Q) l n l
-      (Expr (depsubst E (vzip_with EVal Ωs vs)%E)) (⋃ ms')) →
-  ax (ax_expr_P δp Q) l n l (Expr (depsubst E es)) (⋃ ms).
+    (∀ i, assert_holds δp ((Ps !!! i) (vs !!! i)) (get_stack l) (ms' !!! i)) →
+    ax (ax_expr_cond δp l A) (ax_expr_post δp Q) l n l
+       (Expr (depsubst E (vzip_with EVal Ωs vs)%E)) (⋃ ms')) →
+  ax (ax_expr_cond δp l A) (ax_expr_post δp Q) l n l
+     (Expr (depsubst E es)) (⋃ ms).
 Proof.
   intros HE. revert es ms.
   induction n as [[|n] IH] using lt_wf_ind; [intros; apply ax_O |].
 
-  intros es ms ? Hes Hax1 Hax2.
-  destruct (expr_vec_values es) as [(Ωs & vs & ?) | [i Hi]]; subst.
+  intros es ms ? HA Hes Hax1 Hax2.
+  destruct (expr_vec_values es) as [(Ωs&vs&?)|[i Hi]]; subst.
   { apply Hax2.
     + done.
     + intros i. specialize (Hax1 i). rewrite vlookup_zip_with in Hax1.
-      eauto using ax_expr_val_locks.
+      eauto using
+        ax_expr_val_locks, ax_expr_funframe_weaken, mem_subseteq_lookup_vec.
     + intros i. specialize (Hax1 i). rewrite vlookup_zip_with in Hax1.
-      eauto using ax_expr_val. }
+      eauto using
+        ax_expr_val, ax_expr_funframe_weaken, mem_subseteq_lookup_vec. }
 
   apply ax_further.
-  { intros mf ?.
-    rewrite (ectx_full_to_item_correct _ _ i).
-    apply (cred_ectx _ [_]).
-    rewrite <-(mem_union_delete_vec ms i), <-(associative_eq (∪)) by done.
-    apply (ax_red (ax_expr_P δp (Ps !!! i)) n).
-    + apply mem_disjoint_union_move_l.
-      - by apply mem_list_disjoint_delete_vec_r.
-      - by rewrite mem_union_delete_vec.
-    + done.
-    + contradict Hi. eauto using ax_expr_P_is_value. }
+  { intros ?? Hframe; inversion_clear Hframe; simplify_list_equality.
+    simplify_mem_disjoint_hyps.
+    rewrite (ectx_full_to_item_correct _ _ i). apply (cred_ectx _ [_]).
+    eapply (ax_red (ax_expr_cond δp l A) (ax_expr_post δp (Ps !!! i)) _ n)
+      with (ms !!! i) (InExpr (⋃ delete (i:nat) (ms:list _) ∪ mf) mA), Hax1.
+    + econstructor; eauto.
+      - by rewrite !(associative_L (∪)),
+          mem_union_delete_vec by solve_mem_disjoint.
+      - rewrite <-mem_disjoint_union_le, <-mem_disjoint_union_list_le.
+        rewrite app_comm_cons, mem_disjoint_delete_vec; solve_mem_disjoint.
+    + contradict Hi; eauto using ax_expr_post_is_value. }
 
-  intros mf S' ? p.
+  intros m' a S' Hframe p;
+    inversion_clear Hframe as [mA mf ?? Hm|]; simplify_list_equality.
+  simplify_mem_disjoint_hyps.
+
   apply (cstep_expr_depsubst_inv _ _ _ _ _ _ _ p); clear p.
-  * clear i Hi. intros i e' m' p'.
-    feed inversion (ax_step (ax_expr_P δp (Ps !!! i))
-      n l (⋃ delete (fin_to_nat i) (vec_to_list ms) ∪ mf)
-      l (Expr (es !!! i)) (ms !!! i) (State l (Expr e') m'))
-      as [???? m'']; subst.
-    { apply mem_disjoint_union_move_l.
-      + by apply mem_list_disjoint_delete_vec_r.
-      + by rewrite mem_union_delete_vec. }
-    { done. }
-    { by rewrite (associative_eq (∪)), mem_union_delete_vec. }
+  * clear i Hi. intros i e' m2 p'.
+    rewrite <-(mem_disjoint_delete_vec _ i) in Hm.
 
-    rewrite (associative_eq (∪)). decompose_mem_disjoint.
-    rewrite <-mem_union_insert_vec by done. constructor.
-    { by apply mem_disjoint_insert_vec_l. }
+    feed inversion (ax_step (ax_expr_cond δp l A) (ax_expr_post δp (Ps !!! i))
+      l n l (Expr (es !!! i)) (ms !!! i)
+      (ms !!! i ∪ ⋃ delete (i:nat) (ms:list _) ∪ mf ∪ mA)
+      (InExpr (⋃ delete (i:nat) (ms:list _) ∪ mf) mA)
+      (State l (Expr e') m2)) as [??? m ?? Hunframe _]; subst.
+    { constructor; auto with mem. by rewrite (associative_L (∪)). }
+    { by rewrite mem_union_delete_vec. }
+    { auto. }
+
+    inversion_clear Hunframe; simplify_list_equality.
+    simplify_mem_disjoint_hyps.
+    apply mk_ax_next with (m ∪ ⋃ delete (i:nat) (ms:list _)).
+    { constructor; auto with mem. by rewrite (associative_L (∪)). }
     { done. }
-    { simpl. rewrite ectx_full_subst_locks, HE, (left_id ∅ _).
-      rewrite mem_locks_union_list by eauto using mem_list_disjoint_insert_vec.
-      rewrite <-!vec_to_list_map.
-      apply union_list_preserving. apply Forall2_vlookup.
+    { simpl. rewrite ectx_full_subst_locks, HE, (left_id_L ∅ (∪)).
+      rewrite <-mem_union_insert_vec by solve_mem_disjoint.
+      rewrite mem_locks_union_list
+        by (rewrite mem_disjoint_insert_vec; solve_mem_disjoint).
+      apply union_list_preserving, Forall2_fmap, Forall2_vlookup.
       intros j. destruct (decide (i = j)); subst.
-      + by rewrite !vlookup_map, !vlookup_insert.
-      + rewrite !vlookup_map, !vlookup_insert_ne by done. auto. }
+      + by rewrite !vlookup_insert.
+      + by rewrite !vlookup_insert_ne. }
+    rewrite <-mem_union_insert_vec by solve_mem_disjoint.
 
     apply IH; auto with arith.
-    + by apply mem_list_disjoint_insert_vec.
+    + rewrite mem_disjoint_insert_vec; solve_mem_disjoint.
+    + exists mA. split; [|done].
+      rewrite <-mem_disjoint_union_list_le.
+      rewrite mem_disjoint_insert_vec. solve_mem_disjoint.
     + intros j. destruct (decide (i = j)); subst.
       - by rewrite !vlookup_insert.
-      - rewrite !vlookup_insert_ne by done. auto.
+      - by rewrite !vlookup_insert_ne.
     + intros j. destruct (decide (i = j)); subst.
       - by rewrite !vlookup_insert.
       - rewrite !vlookup_insert_ne by done. apply ax_S, Hax1.
     + intros ωs vs ms' ???. by apply ax_S, Hax2.
   * clear i Hi. intros i E' f Ωs vs ? HΩs p.
+    rewrite <-(mem_disjoint_delete_vec _ i) in Hm.
 
-    assert (mem_unlock (⋃ Ωs) (⋃ ms ∪ mf) = mem_unlock (⋃ Ωs) (ms !!! i) ∪
-      ⋃ delete (fin_to_nat i) (vec_to_list ms) ∪ mf) as Hms.
-    { rewrite <-(associative_eq _), <-(mem_union_delete_vec ms i) by done.
-      rewrite <-(associative_eq _), mem_unlock_union_l; trivial.
-      + apply mem_disjoint_union_move_l;
-          auto using mem_list_disjoint_delete_vec_r.
-        by rewrite mem_union_delete_vec.
-      + transitivity (locks (es !!! i)); [|done].
-        rewrite HΩs. rewrite ectx_subst_locks. simpl.
-        rewrite zip_with_fmap_fst by done. apply union_subseteq_r. }
-    assert (mem_unlock (⋃ Ωs) (ms !!! i) ⊥
-      ⋃ delete (fin_to_nat i) (vec_to_list ms) ∪ mf) as Hmsi.
-    { apply mem_disjoint_union_move_l.
-      { by apply mem_disjoint_unlock_l, mem_list_disjoint_delete_vec_r. }
-      rewrite <-mem_unlock_union_l, mem_union_delete_vec.
-      + by apply mem_disjoint_unlock_l.
-      + done.
-      + by apply mem_list_disjoint_delete_vec_r.
-      + transitivity (locks (es !!! i)); [|done].
-        rewrite HΩs. rewrite ectx_subst_locks. simpl.
-        rewrite zip_with_fmap_fst by done. apply union_subseteq_r. }
+    assert (⋃ Ωs ⊆ locks (ms !!! i)).
+    { transitivity (locks (es !!! i)); [|done].
+      rewrite HΩs. rewrite ectx_subst_locks. simpl.
+      rewrite zip_with_fmap_fst by done. apply union_subseteq_r. }
 
-    rewrite Hms in p |- *. rewrite <-(mem_union_delete_vec ms i) in p by done.
-    constructor.
-    { apply mem_disjoint_union_move_r; eauto with mem_disjoint. }
+    apply mk_ax_next with
+      (mem_unlock (⋃ Ωs) (ms !!! i) ∪ ⋃ delete (i:nat) (ms:list _) ∪ mA).
+    { eapply ax_unframe_expr_to_fun; eauto.
+      + rewrite <-!(associative_L (∪)).
+        rewrite <-!mem_unlock_union_l by auto with mem.
+        by rewrite !(associative_L (∪)),
+          mem_union_delete_vec by solve_mem_disjoint.
+      + intro; simplify_list_equality.
+      + rewrite <-mem_disjoint_union_le, <-mem_disjoint_union_list_le.
+        rewrite <-mem_disjoint_unlock. solve_mem_disjoint. }
     { done. }
     { simpl. apply subseteq_empty. }
 
-    apply ax_call_compose with (P:=ax_expr_P δp (Ps !!! i)) (k:=[]) (E:=E').
+    apply ax_call_compose with (P:=ax_expr_post δp (Ps !!! i)) (k:=[]) (E:=E').
     { rewrite locks_snoc. apply union_preserving_l.
-      rewrite ectx_full_to_item_locks, HE, (left_id ∅ _).
-      rewrite mem_locks_union_list by
-        eauto using mem_list_disjoint_sublist, sublist_delete.
+      rewrite ectx_full_to_item_locks, HE, (left_id_L ∅ (∪)).
+      rewrite mem_locks_union_list by solve_mem_disjoint.
       apply union_list_preserving, Forall2_fmap, Forall2_delete.
-      apply Forall2_vlookup. auto. }
-    { by apply mem_disjoint_unlock_l, mem_list_disjoint_delete_vec_r. }
-    { feed inversion (ax_step (ax_expr_P δp (Ps !!! i)) n
-        l (⋃ delete (fin_to_nat i) (vec_to_list ms) ∪ mf)
-        l (Expr (es !!! i)) (ms !!! i)
-        (State (CFun E' :: l) (Call f vs) (mem_unlock (⋃ Ωs) (ms !!! i) ∪
-          (⋃ delete (fin_to_nat i) (vec_to_list ms) ∪ mf)))); subst; trivial.
-      + apply mem_disjoint_union_move_l.
-        - by apply mem_list_disjoint_delete_vec_r.
-        - by rewrite mem_union_delete_vec.
-      + by rewrite !(associative_eq (∪)).
-      + by simplify_mem_equality. }
+      apply Forall2_vlookup; auto. }
+    { rewrite <-mem_disjoint_unlock; solve_mem_disjoint. }
+    { feed inversion (ax_step (ax_expr_cond δp l A) (ax_expr_post δp (Ps !!! i))
+        l n l (Expr (es !!! i)) (ms !!! i)
+        (⋃ ms ∪ mf ∪ mA) (InExpr (⋃ delete (i:nat) (ms:list _) ∪ mf) mA)
+        (State (CFun E' :: l) (Call f vs) (mem_unlock (⋃ Ωs) (⋃ ms ∪ mf ∪ mA))))
+        as [??? m ?? Hunframe _]; trivial; subst.
+      { constructor; auto with mem. by rewrite (associative_L (∪)),
+          mem_union_delete_vec by solve_mem_disjoint. }
 
-    intros n' m' e' ??? Hax.
-    rewrite <-mem_union_insert_vec by done.
+      inversion_clear Hunframe; simplify_list_equality.
+      simplify_mem_disjoint_hyps.
+      replace (mem_unlock (⋃ Ωs) (ms !!! i)) with m''; [done|].
+      apply mem_union_cancel_r with (⋃ delete (i:nat) (ms:list _) ∪ mf ∪ mA).
+      { solve_mem_disjoint. }
+      { rewrite <-mem_disjoint_unlock; solve_mem_disjoint. }
+      rewrite <-mem_unlock_union_l by auto with mem.
+      rewrite (associative_L (∪) m''), !(associative_L (∪) (ms !!! i)).
+      by rewrite mem_union_delete_vec by solve_mem_disjoint. }
+
+    intros n' m' e' ???? Hax. simplify_mem_disjoint_hyps.
+    rewrite <-mem_union_insert_vec by solve_mem_disjoint.
+
     rewrite subst_snoc, <-ectx_full_to_item_correct_alt.
     apply IH; auto with arith.
-    + by apply mem_list_disjoint_insert_vec.
-    + intros j. destruct (decide (i = j)); subst.
+    + rewrite mem_disjoint_insert_vec; solve_mem_disjoint.
+    + by rewrite mem_union_insert_vec by solve_mem_disjoint.
+    + intros j. destruct (decide (i = j)); simplify_equality.
       - by rewrite !vlookup_insert.
-      - rewrite !vlookup_insert_ne by done. auto.
-    + intros j. destruct (decide (i = j)); subst.
+      - by rewrite !vlookup_insert_ne.
+    + intros j. destruct (decide (i = j)); simplify_equality.
       - by rewrite !vlookup_insert.
       - rewrite !vlookup_insert_ne by done.
         apply ax_le with (S n); auto with arith.
     + intros ωs' vs' ms' ???.
       apply ax_le with (S n); auto with arith.
-
   * intros ωs vs Hvs. destruct Hi. by rewrite Hvs, vlookup_zip_with.
-  * clear i Hi. intros i p.
-    destruct (ax_step_undef
-      (ax_expr_P δp (Ps !!! i)) n
-      l (⋃ delete (fin_to_nat i) (vec_to_list ms) ∪ mf)
-      l (Expr (es !!! i)) (ms !!! i) l (⋃ ms ∪ mf)); trivial.
-    + apply mem_disjoint_union_move_l.
-      - by apply mem_list_disjoint_delete_vec_r.
-      - by rewrite mem_union_delete_vec.
-    + by rewrite (associative_eq (∪)), mem_union_delete_vec.
+  * clear i Hi. intros i p. destruct (ax_step_undef (ax_expr_cond δp l A)
+      (ax_expr_post δp (Ps !!! i)) l n l (Expr (es !!! i))
+      (ms !!! i) (⋃ ms ∪ mf ∪ mA)
+      (InExpr (⋃ delete (i:nat) (ms:list _) ∪ mf) mA) l
+      (⋃ ms ∪ mf ∪ mA)); trivial.
+    constructor; auto.
+    + by rewrite (associative_L (∪)),
+        mem_union_delete_vec by solve_mem_disjoint.
+    + rewrite <-(mem_disjoint_delete_vec _ i) in Hm. solve_mem_disjoint.
 Qed.
 
 (** * Partial program correctness *)
@@ -925,50 +1060,43 @@ Qed.
 implies partial program correctness. *)
 Lemma ax_stmt_sound_sep P Q s m mf S' :
   ∅ ⊨ₜ {{ P }} s {{ Q }} →
-  locks s = ∅ →
-  locks m = ∅ →
-  m ⊥ mf →
+  locks s = ∅ → locks m = ∅ → ⊥ [m; mf] →
   assert_holds ∅ P [] m →
   δ ⊢ₛ State [] (Stmt ↘ s) (m ∪ mf) ⇒* S' →
-    (∃ m', S' = State [] (Stmt ↗ s) (m' ∪ mf) ∧
-           assert_holds ∅ (Q VVoid) [] m')
-  ∨ (∃ m' v, S' = State [] (Stmt (⇈ v) s) (m' ∪ mf) ∧
-             assert_holds ∅ (Q v) [] m')
+    (∃ m', S' = State [] (Stmt ↗ s) (m'∪mf) ∧ assert_holds ∅ (Q VVoid) [] m')
+  ∨ (∃ m' v, S' = State [] (Stmt (⇈ v) s) (m'∪mf) ∧ assert_holds ∅ (Q v) [] m')
   ∨ red (cstep δ) S'.
 Proof.
-  intros Hax Hs Hm ? ? p.
-  apply rtc_bsteps in p. destruct p as [n p].
-  feed inversion (ax_steps
-    (ax_stmt_P s ∅ (dassert_pack_top P Q))
-    n 1 [] mf (Stmt ↘ s) [] m S') as [???????? Hax']; subst; try done.
-  * simpl. rewrite Hs. apply subseteq_empty.
+  intros Hax Hs Hm ? ? p. apply rtc_bsteps in p. destruct p as [n p].
+  feed inversion (ax_steps ax_disjoint_cond
+    (ax_stmt_post s ∅ (dassert_pack_top P Q)) n 1 [] [] (Stmt ↘ s)
+    m (m ∪ mf) mf S') as [?????? [??] ?? Hax']; subst; try done.
+  * simpl. esolve_elem_of.
   * rewrite <-fpure_empty. apply Hax; auto with ax.
     simpl. by rewrite fpure_empty.
   * by apply (bsteps_subrel (cstep δ) _ _).
-  * inversion Hax' as [|??? [d' ??]|]; subst.
-    + destruct d'; naive_solver.
-    + right; right. apply (red_subrel (cstep_in_ctx δ []) _ _); auto.
+  * inversion Hax' as [|??? [d' ??]|???? Hred]; subst.
+    { destruct d'; naive_solver. }
+    right; right. eapply (red_subrel (cstep_in_ctx δ []) _ _), Hred.
+    split; eauto.
 Qed.
 Lemma ax_stmt_sound P R s m S' :
   ∅ ⊨ₜ {{ P }} s {{ R }} →
-  locks s = ∅ →
-  locks m = ∅ →
+  locks s = ∅ → locks m = ∅ →
   assert_holds ∅ P [] m →
   δ ⊢ₛ State [] (Stmt ↘ s) m ⇒* S' →
     (∃ m', S' = State [] (Stmt ↗ s) m' ∧ assert_holds ∅ (R VVoid) [] m')
   ∨ (∃ m' v, S' = State [] (Stmt (⇈ v) s) m' ∧ assert_holds ∅ (R v) [] m')
   ∨ red (cstep δ) S'.
 Proof.
-  intros ???? p. rewrite <-(right_id_eq ∅ (∪) m) in p.
+  intros ???? p. rewrite <-(right_id_L ∅ (∪) m) in p.
   destruct (ax_stmt_sound_sep P R s m ∅ S') as [[? [E ?]]|[[?[?[E ?]]]|]];
-    try rewrite (right_id_eq ∅ (∪)) in E; intuition eauto with mem_disjoint.
+    try rewrite (right_id_L ∅ (∪)) in E; intuition eauto with mem.
 Qed.
 
 Lemma ax_stmt_looping_sep P s m mf :
   ∅ ⊨ₜ {{ P }} s {{ λ _, False }} →
-  locks s = ∅ →
-  locks m = ∅ →
-  m ⊥ mf →
+  locks s = ∅ → locks m = ∅ → ⊥ [m; mf] →
   assert_holds ∅ P [] m →
   looping (cstep δ) (State [] (Stmt ↘ s) (m ∪ mf)).
 Proof.
@@ -978,59 +1106,50 @@ Proof.
 Qed.
 Lemma ax_stmt_looping P s m :
   ∅ ⊨ₜ {{ P }} s {{ λ _, False }} →
-  locks s = ∅ →
-  locks m = ∅ →
+  locks s = ∅ → locks m = ∅ →
   assert_holds ∅ P [] m →
   looping (cstep δ) (State [] (Stmt ↘ s) m).
 Proof.
-  intros. rewrite <-(right_id_eq ∅ (∪) m).
-  apply ax_stmt_looping_sep with P; auto with mem_disjoint.
+  intros. rewrite <-(right_id_L ∅ (∪) m).
+  apply ax_stmt_looping_sep with P; auto with mem.
 Qed.
 
 (** * The Hoare rules *)
 (** We prove that the Hoare rules are inhabited by the interpretation of the
 Hoare judgment. *)
-
 (** ** Logical rules *)
 Lemma ax_stmt_weaken_packed Δ Pd Pd' s :
-  (∀ d, down d s → Pd' d ⊆@{fpure Δ} Pd d) →
-  (∀ d, up d s → Pd d ⊆@{fpure Δ} Pd' d) →
-  Δ \ Pd ⊨ₚ s →
-  Δ \ Pd' ⊨ₚ s.
+  (∀ d, down d s → Pd' d ⊑@{fpure Δ} Pd d) →
+  (∀ d, up d s → Pd d ⊑@{fpure Δ} Pd' d) →
+  Δ\ Pd ⊨ₚ s → Δ\ Pd' ⊨ₚ s.
 Proof.
   intros Hdown Hup Hax n k d m ?????.
-  apply ax_weaken with (ax_stmt_P s (fpure Δ) Pd).
+  apply ax_weaken with ax_disjoint_cond (ax_stmt_post s (fpure Δ) Pd); auto.
   * intros ?? []; constructor; try done. by apply Hup.
   * by apply Hax, Hdown.
 Qed.
 
 Lemma ax_stmt_weaken_pre Δ R J P P' Q s :
-  P' ⊆@{fpure Δ} P →
-  Δ \ R \ J ⊨ₛ {{ P }} s {{ Q }} →
-  Δ \ R \ J ⊨ₛ {{ P' }} s {{ Q }}.
+  P' ⊑@{fpure Δ} P →
+  Δ\ R\ J ⊨ₛ {{ P }} s {{ Q }} → Δ\ R\ J ⊨ₛ {{ P' }} s {{ Q }}.
 Proof. intro. by apply ax_stmt_weaken_packed; intros []. Qed.
 Lemma ax_stmt_weaken_post Δ R J P Q Q' s :
-  Q ⊆@{fpure Δ} Q' →
-  Δ \ R \ J ⊨ₛ {{ P }} s {{ Q }} →
-  Δ \ R \ J ⊨ₛ {{ P }} s {{ Q' }}.
+  Q ⊑@{fpure Δ} Q' →
+  Δ\ R\ J ⊨ₛ {{ P }} s {{ Q }} → Δ\ R\ J ⊨ₛ {{ P }} s {{ Q' }}.
 Proof. intro. by apply ax_stmt_weaken_packed; intros []. Qed.
 
-Lemma ax_stmt_packed_frame_r Δ A Pd s :
-  ax_stmt_packed Δ Pd s →
-  ax_stmt_packed Δ ((λ P, P ★ A)%A <$> Pd) s.
+Lemma ax_stmt_packed_frame_r Δ A Pd s : Δ\ Pd ⊨ₚ s → Δ\ (★ A)%A <$> Pd ⊨ₚ s.
 Proof.
-  intros Hax n k d m HΔ Hd ? Hm Hpre.
-  rewrite directed_fmap_spec in Hpre.
+  intros Hax n k d m HΔ Hd ? Hm Hpre. rewrite directed_fmap_spec in Hpre.
   destruct Hpre as (m1&m2&?&?&?&?); simplify_equality.
   rewrite mem_locks_union in Hm by done. decompose_empty.
-  apply ax_frame with (ax_stmt_P s (fpure Δ) Pd); auto.
+  apply ax_frame with ax_disjoint_cond
+    (ax_stmt_post s (fpure Δ) Pd); auto with ax.
   intros m ?? []; constructor; trivial.
   + rewrite mem_locks_union by done. by apply empty_union_L.
   + rewrite directed_fmap_spec. by exists m m2.
 Qed.
-Lemma ax_stmt_packed_frame_l Δ A Pd s :
-  ax_stmt_packed Δ Pd s →
-  ax_stmt_packed Δ ((λ P, A ★ P)%A <$> Pd) s.
+Lemma ax_stmt_packed_frame_l Δ A Pd s : Δ\ Pd ⊨ₚ s → Δ\ (A ★)%A <$> Pd ⊨ₚ s.
 Proof.
   intros Hax. apply (ax_stmt_packed_frame_r _ A) in Hax.
   eapply ax_stmt_weaken_packed, Hax.
@@ -1038,104 +1157,184 @@ Proof.
   { by intros [] ?; unfold fmap; simpl; rewrite (commutative _). }
 Qed.
 Lemma ax_stmt_frame_r Δ R J A P Q s :
-  Δ \ R \ J ⊨ₛ {{ P }} s {{ Q }} →
-  Δ \ (λ v, R v ★ A) \ (λ l, J l ★ A) ⊨ₛ {{ P ★ A }} s {{ Q ★ A }}.
+  Δ\ R\ J ⊨ₛ {{ P }} s {{ Q }} →
+  Δ\ (λ v, R v ★ A)\ (λ l, J l ★ A) ⊨ₛ {{ P ★ A }} s {{ Q ★ A }}.
 Proof. apply ax_stmt_packed_frame_r. Qed.
 Lemma ax_stmt_frame_l Δ R J A P Q s :
-  Δ \ R \ J ⊨ₛ {{ P }} s {{ Q }} →
-  Δ \ (λ v, A ★ R v) \ (λ l, A ★ J l) ⊨ₛ {{ A ★ P }} s {{ A ★ Q }}.
+  Δ\ R \ J ⊨ₛ {{ P }} s {{ Q }} →
+  Δ\ (λ v, A ★ R v)\ (λ l, A ★ J l) ⊨ₛ {{ A ★ P }} s {{ A ★ Q }}.
 Proof. apply ax_stmt_packed_frame_l. Qed.
 
 Lemma ax_stmt_and Δ R J P Q Q' s :
-  Δ \ R \ J ⊨ₛ {{ P }} s {{ Q }} →
-  Δ \ R \ J ⊨ₛ {{ P }} s {{ Q' }} →
-  Δ \ R \ J ⊨ₛ {{ P }} s {{ Q ∧ Q' }}.
+  Δ\ R\ J ⊨ₛ {{ P }} s {{ Q }} → Δ\ R\ J ⊨ₛ {{ P }} s {{ Q' }} →
+  Δ\ R\ J ⊨ₛ {{ P }} s {{ Q ∧ Q' }}.
 Proof.
-  intros Hax1 Hax2 n k d m ???? Hpre.
-  eapply (ax_and (ax_stmt_P s (fpure Δ) _) (ax_stmt_P s (fpure Δ) _) _);
-    [| apply Hax1 | apply Hax2]; trivial.
-  * intros ??? [d' ???]. inversion 1; subst.
+  intros Hax1 Hax2 n k d m ???? Hpre. eapply (ax_and ax_disjoint_cond
+    (ax_stmt_post s (fpure Δ) _) (ax_stmt_post s (fpure Δ) _) _);
+    [| | |apply Hax1|apply Hax2]; trivial.
+  * intros k' φ' m'. exists m'; eexists ∅; simpl.
+    rewrite (right_id_L ∅ (∪)); auto with mem.
+  * by intros ?????? [??] [??]; simplify_mem_equality.
+  * intros ??? [d' ???]; inversion 1; subst.
     constructor; try done; by destruct d'.
   * by destruct d.
   * by destruct d.
 Qed.
 
 Lemma ax_stmt_or Δ R J P P' Q s :
-  Δ \ R \ J ⊨ₛ {{ P }} s {{ Q }} →
-  Δ \ R \ J ⊨ₛ {{ P' }} s {{ Q }} →
-  Δ \ R \ J ⊨ₛ {{ P ∨ P' }} s {{ Q }}.
+  Δ\ R\ J ⊨ₛ {{ P }} s {{ Q }} → Δ\ R\ J ⊨ₛ {{ P' }} s {{ Q }} →
+  Δ\ R\ J ⊨ₛ {{ P ∨ P' }} s {{ Q }}.
 Proof.
   intros Hax1 Hax2 n k [] m HΔ Hd ?? Hpre; discriminate_down_up.
   * destruct Hpre.
-    + apply ax_weaken with (ax_stmt_P s (fpure Δ) (dassert_pack P Q R J)); auto.
+    + apply ax_weaken with ax_disjoint_cond
+        (ax_stmt_post s (fpure Δ) (dassert_pack P Q R J)); auto.
       by intros ?? [[] ??]; constructor.
-    + apply ax_weaken with (ax_stmt_P s (fpure Δ) (dassert_pack P' Q R J));auto.
+    + apply ax_weaken with ax_disjoint_cond
+        (ax_stmt_post s (fpure Δ) (dassert_pack P' Q R J));auto.
       by intros ?? [[] ??]; constructor.
-  * apply ax_weaken with (ax_stmt_P s (fpure Δ) (dassert_pack P Q R J)); auto.
+  * apply ax_weaken with ax_disjoint_cond
+      (ax_stmt_post s (fpure Δ) (dassert_pack P Q R J)); auto.
     by intros ?? [[] ??]; constructor.
 Qed.
 
 Lemma ax_stmt_ex_pre `{!Inhabited A} Δ R J (P : A → assert) Q s :
-  (∀ x, Δ \ R \ J ⊨ₛ {{ P x }} s {{ Q }}) →
-  Δ \ R \ J ⊨ₛ {{ ∃ x, P x }} s {{ Q }}.
+  (∀ x, Δ\ R\ J ⊨ₛ {{ P x }} s {{ Q }}) → Δ\ R\ J ⊨ₛ {{ ∃ x, P x }} s {{ Q }}.
 Proof.
   intros Hax n k [] m HΔ Hd ?? Hpre; discriminate_down_up.
-  * destruct Hpre as [x Hpre].
-    apply ax_weaken with (ax_stmt_P s (fpure Δ) (dassert_pack (P x) Q R J)).
+  * destruct Hpre as [x Hpre]. apply ax_weaken with ax_disjoint_cond
+      (ax_stmt_post s (fpure Δ) (dassert_pack (P x) Q R J)); auto.
     + by intros ?? [[] ??]; constructor.
     + by apply Hax.
-  * destruct (_ : Inhabited A) as [x].
-    apply ax_weaken with (ax_stmt_P s (fpure Δ) (dassert_pack (P x) Q R J)).
+  * destruct (_ : Inhabited A) as [x]. apply ax_weaken with ax_disjoint_cond
+      (ax_stmt_post s (fpure Δ) (dassert_pack (P x) Q R J)); auto.
     + by intros ?? [[] ??]; constructor.
     + by apply Hax.
 Qed.
 Lemma ax_stmt_ex_post `{A} Δ R J P (Q : A → assert) s x :
-  Δ \ R \ J ⊨ₛ {{ P }} s {{ Q x }} →
-  Δ \ R \ J ⊨ₛ {{ P }} s {{ ∃ x, Q x }}.
+  Δ\ R\ J ⊨ₛ {{ P }} s {{ Q x }} → Δ\ R\ J ⊨ₛ {{ P }} s {{ ∃ x, Q x }}.
 Proof. apply ax_stmt_weaken_post. by apply assert_exists_intro with x. Qed.
 
-Lemma ax_expr_ex_pre {A} Δ (P : A → assert) Q e :
-  (∀ x, Δ ⊨ₑ {{ P x }} e {{ Q }}) →
-  Δ ⊨ₑ {{ ∃ x, P x }} e {{ Q }}.
-Proof. intros Hax n k m HΔ Hd ? [x Hpre]. eapply Hax; eauto. Qed.
+Lemma ax_expr_ex_pre {A} Δ (B : assert) (P : A → assert) Q e :
+  (∀ x, Δ\ B ⊨ₑ {{ P x }} e {{ Q }}) → Δ\ B ⊨ₑ {{ ∃ x, P x }} e {{ Q }}.
+Proof. intros Hax n k m HΔ Hd ?? [x Hpre]. eapply Hax; eauto. Qed.
 
-Lemma ax_expr_weaken Δ P P' Q Q' e :
-  P ⊆@{fpure Δ} P' →
-  (∀ v, Q' v ⊆@{fpure Δ} Q v) →
-  Δ ⊨ₑ {{ P' }} e {{ Q' }} →
-  Δ ⊨ₑ {{ P }} e {{ Q }}.
+Lemma ax_expr_weaken Δ P P' A Q Q' e :
+  P ⊑@{fpure Δ} P' → (∀ v, Q' v ⊑@{fpure Δ} Q v) →
+  Δ\ A ⊨ₑ {{ P' }} e {{ Q' }} → Δ\ A ⊨ₑ {{ P }} e {{ Q }}.
 Proof.
-  intros HP HQ Hax n k m ????. apply ax_weaken with (ax_expr_P (fpure Δ) Q').
-  * intros ?? []; constructor; try done. by apply HQ.
-  * by apply Hax, HP.
+  intros HP HQ Hax n k m ?????. apply ax_weaken
+    with (ax_expr_cond (fpure Δ) k A) (ax_expr_post (fpure Δ) Q'); auto.
+  intros ?? []; constructor; try done. by apply HQ.
 Qed.
-Lemma ax_expr_weaken_pre Δ P P' Q e :
-  P ⊆@{fpure Δ} P' →
-  Δ ⊨ₑ {{ P' }} e {{ Q }} →
-  Δ ⊨ₑ {{ P }} e {{ Q }}.
+Lemma ax_expr_weaken_pre Δ A P P' Q e :
+  P ⊑@{fpure Δ} P' → Δ\ A ⊨ₑ {{ P' }} e {{ Q }} → Δ\ A ⊨ₑ {{ P }} e {{ Q }}.
 Proof. intro. by apply ax_expr_weaken. Qed.
-Lemma ax_expr_weaken_post Δ P Q Q' e :
-  (∀ v, Q' v ⊆@{fpure Δ} Q v) →
-  Δ ⊨ₑ {{ P }} e {{ Q' }} →
-  Δ ⊨ₑ {{ P }} e {{ Q }}.
+Lemma ax_expr_weaken_post Δ A P Q Q' e :
+  (∀ v, Q' v ⊑@{fpure Δ} Q v) →
+  Δ\ A ⊨ₑ {{ P }} e {{ Q' }} → Δ\ A ⊨ₑ {{ P }} e {{ Q }}.
 Proof. intro. by apply ax_expr_weaken. Qed.
 
-Lemma ax_expr_frame_r Δ A P Q e :
-  Δ ⊨ₑ {{ P }} e {{ λ v, Q v }} →
-  Δ ⊨ₑ {{ P ★ A }} e {{ λ v, Q v ★ A }}.
+Lemma ax_expr_frame_r Δ B A P Q e :
+  Δ\ B ⊨ₑ {{ P }} e {{ λ v, Q v }} → Δ\ B ⊨ₑ {{ P ★ A }} e {{ λ v, Q v ★ A }}.
 Proof.
-  intros Hax n k m HΔ ? Hm Hpre.
-  destruct Hpre as (m1&m2&?&?&?&?); simplify_equality.
+  intros Hax n k m HΔ ? Hm ? (m1&m2&?&?&?&?); simplify_equality.
   rewrite mem_locks_union in Hm by done. decompose_empty.
-  apply ax_frame with (ax_expr_P (fpure Δ) Q); auto.
-  intros m ?? [v ?]. constructor.
-  + rewrite mem_locks_union by done. esolve_elem_of.
-  + by exists m m2.
+  apply ax_frame with (ax_expr_cond (fpure Δ) k B)
+    (ax_expr_post (fpure Δ) Q); auto with ax.
+  * intros m ?? [v ?]. constructor.
+    + rewrite mem_locks_union by done. esolve_elem_of.
+    + by exists m m2.
+  * eauto using ax_expr_funframe_weaken, mem_union_subseteq_l.
 Qed.
-Lemma ax_expr_frame_l Δ A P Q e :
-  Δ ⊨ₑ {{ P }} e {{ λ v, Q v }} →
-  Δ ⊨ₑ {{ A ★ P }} e {{ λ v, A ★ Q v }}.
-Proof. setoid_rewrite (commutative assert_sep). apply ax_expr_frame_r. Qed.
+Lemma ax_expr_frame_l Δ B A P Q e :
+  Δ\ B ⊨ₑ {{ P }} e {{ λ v, Q v }} → Δ\ B ⊨ₑ {{ A ★ P }} e {{ λ v, A ★ Q v }}.
+Proof. setoid_rewrite (commutative (★))%A. apply ax_expr_frame_r. Qed.
+
+Lemma ax_expr_funframe_r Δ B A P Q e :
+  Δ\ A ★ B ⊨ₑ {{ P }} e {{ λ v, Q v }} → Δ\ B ⊨ₑ {{ P ★ A }} e {{ λ v, Q v ★ A }}.
+Proof.
+  cut (∀ δp n l k φ m,
+    ax (ax_expr_cond δp l (A ★ B)) (ax_expr_post δp Q) l n k φ m →
+    (l = k → ∀ mA,
+      ⊥ [m; mA] →
+      assert_holds δp A (get_stack k) mA →
+      locks mA = ∅ →
+      ax (ax_expr_cond δp l B)
+         (ax_expr_post δp (λ v, Q v ★ A))%A l n k φ (m ∪ mA))
+    ∧ (l ≠ k →
+      ax (ax_expr_cond δp l B) (ax_expr_post δp (λ v, Q v ★ A))%A l n k φ m)).
+  { intros help Hax n k ? HΔ ? Hm (mB&?&?&?) (m&mA&?&?&?&?); simplify_equality.
+    rewrite mem_locks_union in Hm by done; decompose_empty.
+    refine (proj1 (help (fpure Δ) n k k (Expr e) m _) _ mA _ _ _); auto.
+    apply Hax; auto. exists (mA ∪ mB); split_ands.
+    * solve_mem_disjoint.
+    * rewrite mem_locks_union by solve_mem_disjoint. by apply empty_union_L.
+    * solve_assert. }
+  clear P Δ. intros δp n l. induction n as [|n].
+  { repeat constructor. }
+  intros k φ m Hax. inversion Hax as [|??? [v ???]|???? Hred Hstep]; subst.
+  { split; [|done]. intros _ mA ???. apply ax_done. constructor.
+    * rewrite mem_locks_union by solve_mem_disjoint. esolve_elem_of.
+    * solve_assert. }
+
+  split.
+  * intros ? mA ???; subst. apply ax_further.
+    { intros ?? Hframe; inversion_clear Hframe as [mB mf|]; simplify_equality.
+      simplify_mem_disjoint_hyps.
+      rewrite <-!(associative_L (∪) m), (mem_union_commutative mA),
+        <-(associative_L (∪) mf), (associative_L (∪) m) by solve_mem_disjoint.
+      eapply Hred, ax_frame_in_expr; eauto with mem.
+      + solve_assert.
+      + rewrite mem_locks_union by solve_mem_disjoint. by apply empty_union_L. }
+    intros ?? S' Hframe p; inversion_clear Hframe as [mB mf|];
+      simplify_equality; simplify_mem_disjoint_hyps.
+    feed inversion (Hstep (m ∪ mA ∪ mf ∪ mB) (InExpr mf (mA ∪ mB)) S')
+      as [? k' φ' m' ?? Hunframe]; subst; auto.
+    { constructor; auto with mem.
+      * by rewrite <-!(associative_L (∪) m), (mem_union_commutative mA),
+          <-(associative_L (∪) mf), (associative_L (∪) m) by solve_mem_disjoint.
+      * solve_assert.
+      * rewrite mem_locks_union by solve_mem_disjoint. by apply empty_union_L. }
+    inversion Hunframe as [| |m''|]; subst.
+    + apply mk_ax_next with (m' ∪ mA); auto.
+      - apply ax_unframe_expr_to_expr; auto with mem.
+        by rewrite <-!(associative_L (∪) m'), (mem_union_commutative mA mf),
+          !(associative_L (∪)) by solve_mem_disjoint.
+      - rewrite mem_locks_union by solve_mem_disjoint. esolve_elem_of.
+      - refine (proj1 (IHn _ _ _ _) _ _ _ _ _); auto with mem.
+    + apply mk_ax_next with (m'' ∪ mA ∪ mB); auto.
+      - apply ax_unframe_expr_to_fun with (m'' ∪ mA); auto with mem.
+        by rewrite <-!(associative_L (∪) m''), (mem_union_commutative mA mf),
+          !(associative_L (∪)) by solve_mem_disjoint.
+      - by rewrite <-(associative_L (∪)).
+      - refine (proj2 (IHn _ _ _ _) _); auto with mem.
+        by rewrite <-(associative_L (∪)).
+  * intros ?. apply ax_further.
+    { intros ?? Hframe; inversion_clear Hframe as [|mf]; simplify_equality.
+      by eapply Hred, ax_frame_in_fun. }
+    intros ?? S' Hframe p; inversion_clear Hframe as [|mf]; simplify_equality.
+    feed inversion (Hstep (m ∪ mf) (InFun mf) S')
+      as [? k' φ' m' ?? Hunframe]; subst; auto.
+    { by apply ax_frame_in_fun. }
+    inversion Hunframe as [|????? (mA&mB&?&?&?&?) HmAB| |]; subst.
+    rewrite mem_locks_union in HmAB by done; decompose_empty.
+    + apply mk_ax_next with (m' ∪ mA); auto.
+      - eapply ax_unframe_fun_to_expr with mB; auto with mem.
+        by rewrite <-!(associative_L (∪) m'), (mem_union_commutative mA mf),
+          !(associative_L (∪)) by solve_mem_disjoint.
+      - rewrite mem_locks_union by solve_mem_disjoint. esolve_elem_of.
+      - refine (proj1 (IHn _ _ _ _) _ _ _ _ _); auto with mem.
+    + apply mk_ax_next with m'; auto.
+      - by apply ax_unframe_fun_to_fun.
+      - by refine (proj2 (IHn _ _ _ _) _).
+Qed.
+Lemma ax_expr_funframe_l Δ B A P Q e :
+  Δ\ A ★ B ⊨ₑ {{ P }} e {{ λ v, Q v }} →
+  Δ\ B ⊨ₑ {{ A ★ P }} e {{ λ v, A ★ Q v }}.
+Proof.
+  intro. setoid_rewrite (commutative (★))%A. by apply ax_expr_funframe_r.
+Qed.
 
 (** ** Rules for function calls *)
 Lemma ax_funs_add n Δ Δ' :
@@ -1146,64 +1345,65 @@ Lemma ax_funs_add n Δ Δ' :
     δ !! f = Some sf ∧
     locks sf = ∅ ∧
     Δ' ∪ Δ ⊨ₜ {{ Π imap (λ i v, var i ↦{Writable} valc v) vs ★ fpre Pf c vs }}
-     sf
+      sf
     {{ λ v, Π imap (λ i _, var i ↦{Writable} -) vs ★ fpost Pf c vs v }}) →
-  ax_funs n Δ →
-  ax_funs n (Δ' ∪ Δ).
+  ax_funs n Δ → ax_funs n (Δ' ∪ Δ).
 Proof.
   intros ? Hpure HaxΔ' HΔ.
-  induction n as [|n IH]; [by constructor |].
-  intros f Pf c vs m k Hf Hm Hpre.
+  induction n as [|n IH]; [by constructor |]. intros f Pf c vs m k Hf Hm Hpre.
 
   rewrite map_union_commutative, lookup_union_Some in Hf by done.
   destruct Hf as [?|?].
   { rewrite fpure_union in Hpre |- * by done.
     rewrite fun_indep_union_l in Hpre by eauto using lookup_fpre_fun_indep.
-    rewrite ax_fun_P_union_l_pure by eauto. apply HΔ; try done. }
+    eapply ax_fun_union_l_pure; eauto. }
 
   destruct (HaxΔ' f Pf c vs) as (sf & Hsf & Hsflocks & Haxsf); trivial.
 
   apply ax_further.
   { intros. solve_cred. }
 
-  intros mf S' ? p. inv_cstep p.
-  simplify_map_equality.
+  intros ? mf S' [??] p; subst. inv_cstep p; simplify_option_equality.
   match goal with
   | H : alloc_params _ _ _ _ _ |- _ =>
-    apply alloc_params_alloc_list in H; destruct H as [? [Hfree ?]]; subst
+    apply alloc_params_alloc_list in H; destruct H as (?&Hfree&?); subst
   end.
 
   pose proof (is_free_list_nodup _ _ Hfree).
   rewrite is_free_list_union in Hfree. destruct Hfree.
   rewrite mem_alloc_list_union_l by (by rewrite zip_fst).
 
-  constructor.
-  { apply mem_disjoint_alloc_list_l. by rewrite zip_fst. done. }
+  econstructor.
+  { split. done. rewrite mem_disjoint_alloc_list; [done|].
+    repeat constructor; trivial. rewrite zip_fst by done.
+    auto using is_free_list_free. }
   { done. }
   { esolve_elem_of. }
 
-  eapply ax_compose_cons; [| clear dependent m mf S' f].
-  { eapply Haxsf; eauto.
-    * by apply IH, ax_funs_S.
-    * rewrite mem_locks_alloc_list, Hm; by rewrite ?zip_fst.
-    * simpl. eauto using assert_alloc_params_alt. }
+  eapply ax_compose_cons; [|eapply Haxsf; eauto | clear dependent m mf S' f].
+  { auto with ax. }
+  { auto with ax. }
+  { rewrite mem_locks_alloc_list, Hm; by rewrite ?zip_fst. }
+  { simpl. eauto using assert_alloc_params_alt. }
 
   intros m ? [d ?? Hpost]. apply ax_further_pred.
   { intros. solve_cred. }
-  intros mf S' ? p.
+  intros ? mf S' [??] p; subst.
   destruct d; discriminate_down_up; inv_cstep p.
   * simpl in Hpost. apply assert_free_params in Hpost;
       eauto using Writable_fragment. destruct Hpost.
     rewrite mem_delete_list_union, (mem_delete_list_free mf)
       by eauto using is_free_list_fragment_l, Writable_fragment.
-    constructor; try (by auto with mem_disjoint); [esolve_elem_of |].
+    eapply mk_ax_next_empty; try done.
+    { split. done. by rewrite mem_delete_list_subseteq. }
     apply ax_done.
     constructor. by apply mem_locks_delete_list_empty. done.
   * simpl in Hpost; apply assert_free_params in Hpost;
       eauto using Writable_fragment. destruct Hpost.
     rewrite mem_delete_list_union, (mem_delete_list_free mf)
       by eauto using is_free_list_fragment_l, Writable_fragment.
-    constructor; try (by auto with mem_disjoint); [esolve_elem_of |].
+    eapply mk_ax_next_empty; try done.
+    { split. done. by rewrite mem_delete_list_subseteq. }
     apply ax_done.
     constructor. by apply mem_locks_delete_list_empty. done.
 Qed.
@@ -1217,19 +1417,19 @@ Lemma ax_stmt_funs_add Δ Δ' Pd s :
     δ !! f = Some sf ∧
     locks sf = ∅ ∧
     Δ' ∪ Δ ⊨ₜ {{ Π imap (λ i v, var i ↦{Writable} valc v) vs ★ fpre Pf c vs }}
-     sf
+      sf
     {{ λ v, Π imap (λ i _, var i ↦{Writable} -) vs ★ fpost Pf c vs v }}) →
-  Δ' ∪ Δ \ Pd ⊨ₚ s →
-  Δ \ Pd ⊨ₚ s.
+  Δ' ∪ Δ\ Pd ⊨ₚ s → Δ\ Pd ⊨ₚ s.
 Proof.
-  intros ???? Hax ??????.
-  rewrite <-ax_stmt_P_union_l_pure with (δp:=fpure Δ') by eauto.
-  rewrite <-fun_indep_union_l with (δ1:=fpure Δ') by eauto.
+  intros ???? Hax; repeat intro.
+  apply ax_stmt_union_l_pure with (fpure Δ'); eauto.
   rewrite <-fpure_union by done. eapply Hax; eauto using ax_funs_add.
+  by rewrite fpure_union, fun_indep_union_l by eauto.
 Qed.
-Lemma ax_expr_funs_add Δ Δ' P Q e :
+Lemma ax_expr_funs_add Δ Δ' P A Q e :
   Δ' ⊥ Δ →
   fassert_env_fun_indep (dom _ (fpure Δ')) Δ →
+  FunIndep (dom _ (fpure Δ')) A →
   FunIndep (dom _ (fpure Δ')) P →
   (∀ v, FunIndep (dom _ (fpure Δ')) (Q v)) →
   (∀ f Pf c vs,
@@ -1239,182 +1439,233 @@ Lemma ax_expr_funs_add Δ Δ' P Q e :
     Δ' ∪ Δ ⊨ₜ {{ Π imap (λ i v, var i ↦{Writable} valc v) vs ★ fpre Pf c vs }}
      sf
     {{ λ v, Π imap (λ i _, var i ↦{Writable} -) vs ★ fpost Pf c vs v }}) →
-  Δ' ∪ Δ ⊨ₑ {{ P }} e {{ Q }} →
-  Δ ⊨ₑ {{ P }} e {{ Q }}.
+  Δ' ∪ Δ\ A ⊨ₑ {{ P }} e {{ Q }} → Δ\ A ⊨ₑ {{ P }} e {{ Q }}.
 Proof.
-  intros ????? Hax ??????.
-  rewrite <-ax_expr_P_union_l_pure with (δp:=fpure Δ') by eauto.
-  rewrite <-fun_indep_union_l with (δ1:=fpure Δ') by eauto.
+  intros ?????? Hax ?????? (mA&?&?) ?.
+  apply ax_expr_union_l_pure with (fpure Δ'); eauto.
   rewrite <-fpure_union by done. eapply Hax; eauto using ax_funs_add.
+  + exists mA. by rewrite fpure_union, fun_indep_union_l by eauto.
+  + by rewrite fpure_union, fun_indep_union_l by eauto.
 Qed.
 
-Lemma ax_call Δ f Pf (c : fcommon Pf) {vn} (Ps : vec assert vn)
-    (es : vec expr vn) (Qs : vec vassert vn) (Q : list val → assert) :
+Lemma ax_call Δ A f Pf (c : fcommon Pf) {vn} (Ps : vec assert vn)
+    (es : vec expr vn) (Qs : vec vassert vn) (Q : list val → assert) R :
   Δ !! f = Some Pf →
-  (∀ vs, (Π vzip_with ($) Qs vs)%A ⊆@{fpure Δ} (fpre Pf c vs ★ Q vs)%A) →
-  (∀ i, Δ ⊨ₑ {{ Ps !!! i }} es !!! i {{ λ v, (Qs !!! i) v ▷ }}) →
-  Δ ⊨ₑ {{ Π Ps }} call f @ es {{ λ v, ∃ vs, fpost Pf c vs v ★ Q vs }}.
+  (∀ vs, (A ★ Π vzip_with ($) Qs vs)%A ⊑@{fpure Δ} (fpre Pf c vs ★ Q vs)%A) →
+  (∀ vs v, (fpost Pf c vs v ★ Q vs)%A ⊑@{fpure Δ} (A ★ R v)%A) →
+  (∀ i, Δ\ A ⊨ₑ {{ Ps !!! i }} es !!! i {{ λ v, (Qs !!! i) v ▷ }}) →
+  Δ\ A ⊨ₑ {{ Π Ps }} call f @ es {{ R }}.
 Proof.
-  intros Hf HPf Haxs n k m HΔ Hes Hm Hpre. simpl in Hes.
+  intros Hf Hfpre Hfpost Haxs n k m HΔ Hes Hm Hframe Hpre. simpl in Hes.
+  apply assert_sep_list_alt_vec in Hpre. destruct Hpre as (ms&?&?&?); subst.
 
-  apply assert_sep_list_alt_vec in Hpre.
-  destruct Hpre as (ms &?&?&?); subst.
+  rewrite empty_union_list_L, Forall_fmap,
+    Forall_vlookup in Hes; simpl in Hes.
+  rewrite mem_locks_union_list, empty_union_list_L,
+    Forall_fmap, Forall_vlookup in Hm by done; simpl in Hm.
 
-  rewrite empty_union_list_L, Forall_fmap, Forall_vlookup in Hes.
-  simpl in Hes. rewrite mem_locks_union_list, empty_union_list_L,
-    Forall_fmap, Forall_vlookup in Hm by done. simpl in Hm.
-
-  apply (ax_expr_compose n (fpure Δ) (vmap (assert_unlock ∘) Qs) _
+  apply (ax_expr_compose n (fpure Δ) A (vmap (assert_unlock ∘) Qs) _
     (DCCall f) es k ms); trivial.
   { esolve_elem_of. }
-  { intros i. rewrite vlookup_map. by apply Haxs. }
+  { intros i. rewrite vlookup_map. apply Haxs; eauto using
+      ax_expr_funframe_weaken, mem_subseteq_lookup_vec. }
 
   clear dependent ms es. intros Ωs vs ms ? Hms Hax.
   assert (⋃ Ωs = locks (⋃ ms)) as HΩs.
   { rewrite mem_locks_union_list, <-vec_to_list_map by done.
-    f_equal; f_equal. apply vec_eq. intros i. by rewrite vlookup_map. }
-  destruct (HPf vs (get_stack k) (mem_unlock (⋃ Ωs) (⋃ ms)))
-    as (m1 & m2 & Hm12 & ? & HPf' & HQ); clear HPf.
-  { rewrite HΩs, mem_unlock_all_union_list by done.
-    apply assert_sep_list_alt_2.
-    { by apply mem_list_disjoint_unlock_all. }
-    rewrite <-vec_to_list_map. apply Forall2_vlookup. intros i.
-    rewrite vlookup_map, vlookup_zip_with.
-    specialize (Hax i). rewrite vlookup_map in Hax. auto. }
-  assert (locks m1 ∪ locks m2 = ∅).
-  { by rewrite <-mem_locks_union, Hm12, HΩs, mem_locks_unlock_all. }
-  decompose_empty.
+    f_equal; f_equal. apply vec_eq. intros; by rewrite vlookup_map. }
 
   simpl. rewrite vec_to_list_zip_with.
   pose proof (vec_to_list_same_length Ωs vs).
   apply ax_further_pred.
   { intros. solve_cred. }
 
-  intros mf S' ? p.
+  intros m' frame S' Hframe p.
+  inversion_clear Hframe as [mA mf|]; simplify_equality; clear frame.
+  simplify_mem_disjoint_hyps.
+
+  destruct (Hfpre vs (get_stack k) (mA ∪ mem_unlock (⋃ Ωs) (⋃ ms)))
+    as (m1 & m2 & Hm12 & ? & HPf' & HQ); clear Hfpre.
+  { exists mA (mem_unlock (⋃ Ωs) (⋃ ms)); split_ands; auto.
+    { rewrite <-mem_disjoint_unlock. solve_mem_disjoint. }
+    rewrite HΩs, mem_unlock_all_union_list by done.
+    apply assert_sep_list_alt_2.
+    { by rewrite <-mem_disjoint_unlock_all. }
+    rewrite <-vec_to_list_map. apply Forall2_vlookup. intros i.
+    rewrite vlookup_map, vlookup_zip_with.
+    specialize (Hax i); rewrite vlookup_map in Hax; auto. }
+
+  assert (locks m1 ∪ locks m2 = ∅); decompose_empty.
+  { rewrite <-mem_locks_union, Hm12, HΩs by done.
+    rewrite mem_locks_union, mem_locks_unlock_all by
+      (rewrite <-mem_disjoint_unlock; solve_mem_disjoint). esolve_elem_of. }
+
   apply (cstep_expr_call_inv _ _ _ _ _ _ _ _ p); clear p.
   * done.
-  * rewrite mem_unlock_union_l by solve_elem_of.
-    constructor; try (by auto with mem_disjoint); [solve_elem_of|].
-    rewrite <-Hm12.
-    apply ax_frame with (ax_expr_P (fpure Δ) (fpost Pf c vs)); auto.
-    { clear dependent m1 ms mf S'.
-      intros m1 φ ? [v ?? Hpost]. constructor.
-      { rewrite mem_locks_union; esolve_elem_of. }
-      exists vs. by exists m1 m2. }
+  * assert (⋃ Ωs ⊆ locks (⋃ ms ∪ mf)).
+    { rewrite mem_locks_union, <-HΩs by solve_mem_disjoint; solve_elem_of. }
+    rewrite mem_unlock_union_l by auto with mem.
+    econstructor.
+    { apply ax_unframe_expr_to_fun with (mem_unlock (⋃ Ωs) (⋃ ms)).
+      + done.
+      + by rewrite mem_unlock_union_l by (solve_mem_disjoint || solve_elem_of).
+      + intro. discriminate_list_equality.
+      + rewrite <-mem_disjoint_unlock. solve_mem_disjoint. }
+    { done. }
+    { solve_elem_of. }
+    rewrite (mem_union_commutative _ mA), <-Hm12 by
+      (rewrite <-mem_disjoint_unlock; solve_mem_disjoint).
+    clear dependent mA Ωs ms mf S'.
 
-    apply ax_compose_cons with (ax_fun_P (fpure Δ) Pf c vs);
-      [|clear dependent ms mf S'].
-    { apply ax_pred, HΔ; try done.
-      by apply (stack_indep _ (get_stack k)). }
-
-    intros m' φ' [v ? Hpost].
+    apply ax_compose_cons with ax_disjoint_cond (λ k' m φ, ∃ m1 m2,
+      m1 ∪ m2 = m ∧ ⊥ [m1; m2] ∧ locks m2 = ∅ ∧
+      ax_fun_post (fpure Δ) Pf c vs k' m1 φ ∧
+      assert_holds (fpure Δ) (Q vs) (get_stack k) m2); auto with ax.
+    { apply ax_frame with ax_disjoint_cond
+        (ax_fun_post (fpure Δ) Pf c vs); eauto 8 with ax.
+      apply ax_pred, HΔ; try done. by apply (stack_indep _ (get_stack k)). }
+    clear dependent m1 m2. intros ?? (m1&m2&?&?&?&[v ? Hpost]&?); subst.
     apply (stack_indep _ _ (get_stack k)) in Hpost.
     apply ax_further_pred.
     { intros. solve_cred. }
 
-    intros mf S' ? p. inv_cstep p. constructor; try done.
-    + esolve_elem_of.
+    intros ?? S' Hframe p.
+    inversion_clear Hframe as [|mf ? _ Hm]; simplify_list_equality.
+    destruct (Hfpost vs v (get_stack k) (m1 ∪ m2))
+      as (m3&m4&Hm34&?&?&?); [solve_assert |].
+    rewrite <-Hm34 in p, Hm.
+    assert (locks m3 ∪ locks m4 = ∅); decompose_empty.
+    { by rewrite <-mem_locks_union, Hm34, mem_locks_union, empty_union_L. }
+    clear dependent m1 m2. simplify_mem_disjoint_hyps.
+
+    inv_cstep p. apply mk_ax_next with m4.
+    + apply ax_unframe_fun_to_expr with m3; auto with mem.
+      by rewrite (mem_union_commutative _ m3),
+        (associative_L (∪)) by solve_mem_disjoint.
+    + done.
+    + solve_elem_of.
     + by apply ax_done; constructor.
-  * intros. exfalso. eauto with cstep.
+  * intros; exfalso; eauto with cstep.
 Qed.
 
 (** ** Rules for expressions *)
-Lemma ax_expr_base Δ P e v :
-  P ⊆@{fpure Δ} (e ⇓ v)%A →
-  Δ ⊨ₑ {{ P }} e {{ λ v', ⌜v = v'⌝ ∧ P }}.
+Lemma ax_expr_base Δ A P e v :
+  P ⊑@{fpure Δ} (e ⇓ v)%A → Δ\ A ⊨ₑ {{ P }} e {{ λ v', ⌜v = v'⌝ ∧ P }}.
 Proof.
-  intros HPeval n k m HΔ He Hm HP.
-  cut (∀ e',
+  intros HPeval n k m HΔ He Hm HA HP. cut (∀ e',
     locks e' = ∅ →
     ⟦ e' ⟧ (fpure Δ) (get_stack k) m = Some v →
-    ax (ax_expr_P (fpure Δ) (λ v', (⌜v = v'⌝ ∧ P)%A)) k n k (Expr e') m).
-  { intros help. eapply help; eauto. eapply HPeval; eauto. }
+    ax (ax_expr_cond (fpure Δ) k A)
+      (ax_expr_post (fpure Δ) (λ v', (⌜v = v'⌝ ∧ P)%A)) k n k (Expr e') m).
+  { intros help. apply help; auto. apply HPeval; solve_assert. }
 
-  clear He. induction n as [|n IH]; [by constructor |].
-  intros e' He' Heval'.
-  destruct (decide (is_value e')) as [Hval | Hval].
-  { inversion Hval; subst. simplify_expr_equality. by apply ax_done. }
+  clear He HPeval. induction n as [|n IH]; [by constructor |].
+  intros e' He' Heval. destruct (decide (is_value e')) as [Hval | Hval].
+  { inversion Hval; simplify_expr_equality. by apply ax_done. }
 
   apply ax_further.
-  { intros. apply cred_expr_eval with (fpure Δ) v;
-      eauto using expr_eval_weaken_mem, mem_union_subseteq_l. }
+  { intros ?? Hframe. inversion_clear Hframe as [mA mf|]; simplify_equality.
+    apply cred_expr_eval with (fpure Δ) v; auto. rewrite <-(associative_L (∪)).
+    apply expr_eval_weaken_mem with m; auto with mem. }
 
-  intros mf S' ? [p Hk]. revert Hk. pattern S'.
-  apply (cstep_focus_inv _ _ _ _ p); clear p;
+  intros ? frame S' Hframe [p Hk].
+  inversion_clear Hframe as [mA mf|]; clear frame; simplify_equality.
+  assert (is_pure (dom _ (fpure Δ)) e').
+  { eapply expr_eval_is_pure, Heval; eauto with mem. }
+
+  revert Hk. pattern S'. apply (cstep_focus_inv _ _ _ _ p); clear p;
     try solve [simpl; intros; simplify_suffix_of].
-  * intros E e1 e2 m2 ? p _. subst.
-    apply expr_eval_subst_inv in Heval'.
-    destruct Heval' as [w [Heval ?]].
-    edestruct ehstep_expr_eval_inv; eauto using mem_union_subseteq_l.
-    erewrite ectx_subst_locks, ehstep_pure_locks,
-      <-ectx_subst_locks in He' by eauto using expr_eval_is_pure.
-    subst. constructor; try done; [esolve_elem_of |].
+  * intros E e1 e2 m2 ? p _; subst.
+    efeed pose proof ehstep_pure_mem; eauto using ectx_is_pure. subst.
+    erewrite ectx_subst_locks, ehstep_pure_locks in He'
+      by eauto using ectx_is_pure.
+
+    apply mk_ax_next_empty with m; try done.
+    { apply ax_unframe_expr_to_expr; auto with mem. }
+    { simpl. by rewrite ectx_subst_locks. }
+
     apply IH; auto with ax.
-    by rewrite (subst_preserves_expr_eval _ _ _ _ _ (valc w)).
-  * intros E f Ωs vs ?? _. subst.
-    rewrite ectx_subst_locks in He'. simpl in He'.
+    { simpl. by rewrite ectx_subst_locks. }
+    eapply ehstep_expr_eval_subst_inv; eauto.
+    rewrite <-(associative_L (∪)); auto with mem.
+  * intros E f Ωs vs ?? _; subst.
+    rewrite ectx_subst_locks in He'; simpl in He'.
     rewrite zip_with_fmap_fst in He' by done.
-    rewrite empty_union_L in He'. destruct He' as [HE HΩs].
+    rewrite empty_union_L in He'; destruct He' as [HE HΩs].
 
-    apply expr_eval_subst_inv in Heval'.
-    destruct Heval' as [w [Heval' ?]]. simpl in Heval'.
-    destruct (fpure Δ !! f) as [F|] eqn:Hf; simpl in Heval'; [|done].
-    apply lookup_fpure_Some in Hf.
-    rewrite mapM_expr_eval_val in Heval' by done. simpl in Heval'.
+    rewrite expr_eval_subst in Heval;
+      destruct Heval as (w&Heval&?); simpl in Heval.
+    destruct (fpure Δ !! f) as [F|] eqn:Hf; simpl in Heval; [|done].
+    rewrite lookup_fpure_Some in Hf.
+    rewrite mapM_expr_eval_val in Heval by done; simpl in Heval.
 
-    rewrite HΩs, mem_unlock_empty_locks. constructor; try done.
-    { solve_elem_of. }
+    rewrite HΩs, mem_unlock_empty_locks.
+    apply mk_ax_next_empty with (m ∪ mA); try done.
+    { apply ax_unframe_expr_to_fun with m; auto.
+      intro; discriminate_list_equality. }
 
-    apply ax_compose_cons with (λ _ m' φ, m' = m ∧ φ = Return w).
-    { rewrite <-(left_id ∅ (∪) m).
-      apply ax_frame with (ax_fun_P (fpure Δ) (FPure F) () vs).
-      + intros ??? [?? [??]]. unfold_assert in *. subst.
-        rewrite (left_id ∅ _). intuition congruence.
+    apply ax_compose_cons with ax_disjoint_cond
+      (λ _ m' φ, m' = m ∪ mA ∧ φ = Return w); auto with ax.
+    { rewrite <-(left_id_L ∅ (∪) (m ∪ mA)).
+      apply ax_frame with ax_disjoint_cond
+        (ax_fun_post (fpure Δ) (FPure F) () vs); auto with ax.
+      + intros ??? [?? [??]]. unfold_assert in *; subst.
+        rewrite (left_id_L ∅ (∪)). intuition congruence.
       + by apply ax_S, HΔ; rewrite ?mem_locks_empty.
-      + apply mem_disjoint_empty_l. }
+      + solve_mem_disjoint. }
 
     intros ?? [??]; subst. apply ax_S, ax_further.
-    { intros. solve_cred. }
+    { intros; solve_cred. }
 
-    clear dependent mf S'.
-    intros mf S' ? p. inv_cstep p. constructor; try done.
-    { simpl. rewrite ectx_subst_locks. esolve_elem_of. }
+    clear dependent S'. intros ?? S' Hframe p.
+    inversion_clear Hframe as [|mf']; simplify_list_equality.
+    simplify_mem_disjoint_hyps. clear dependent mf.
+
+    inv_cstep p. apply mk_ax_next_empty with m.
+    { apply ax_unframe_fun_to_expr with mA; auto with mem.
+      by rewrite <-!(associative_L (∪) m),
+        (mem_union_commutative mA) by solve_mem_disjoint. }
+    { done. }
+    { simpl. rewrite ectx_subst_locks, HE. clear; solve_elem_of. }
 
     apply IH; auto with ax.
-    rewrite ectx_subst_locks. esolve_elem_of.
-  * intros. subst. exfalso. eauto using
-      ehsafe_expr_eval_subst, expr_eval_weaken_mem, mem_union_subseteq_l.
+    simpl. rewrite ectx_subst_locks, HE. clear; solve_elem_of.
+  * intros E e1 ?? []; subst.
+    apply ehsafe_expr_eval_subst with (fpure Δ) E v; trivial.
+    rewrite <-(associative_L (∪)).
+    apply expr_eval_weaken_mem with m; auto with mem.
 Qed.
 
-Lemma ax_assign Δ γ el Pl Ql er Pr Qr R :
+Lemma ax_assign Δ A γ el Pl Ql er Pr Qr R :
   Write ⊆ perm_kind γ →
-  Δ ⊨ₑ {{ Pl }} el {{ Ql }} →
-  Δ ⊨ₑ {{ Pr }} er {{ Qr }} →
-  (∀ a v, (Ql a ★ Qr v)%A ⊆@{fpure Δ} (valc a ↦{γ} - ★ R a v)%A) →
-  Δ ⊨ₑ {{ Pl ★ Pr }}
-         el ::= er
-       {{ λ v, ∃ a, valc a ↦{perm_lock γ} valc v ★ R a v }}.
+  Δ\ A ⊨ₑ {{ Pl }} el {{ Ql }} →
+  Δ\ A ⊨ₑ {{ Pr }} er {{ Qr }} →
+  (∀ a v, (Ql a ★ Qr v)%A ⊑@{fpure Δ} (valc a ↦{γ} - ★ R a v)%A) →
+  Δ\ A ⊨ₑ {{ Pl ★ Pr }}
+            el ::= er
+          {{ λ v, ∃ a, valc a ↦{perm_lock γ} valc v ★ R a v }}.
 Proof.
-  intros Hγ Haxl Haxr Hassign n k ? HΔ He Hm (m1&m2&?&?&?&?); subst.
+  intros Hγ Haxl Haxr Hassign n k ? HΔ He Hm HA (m1&m2&?&?&?&?); subst.
   simpl in He. rewrite mem_locks_union in Hm by done. decompose_empty.
 
-  rewrite <-(right_id_eq ∅ (∪) m2).
-  apply (ax_expr_compose n (fpure Δ)
+  rewrite <-(right_id_L ∅ (∪) m2).
+  apply (ax_expr_compose n (fpure Δ) A
     [# Ql;Qr] _ DCAssign [# el;er] k [# m1;m2]).
   { done. }
-  { by apply mem_list_disjoint_double. }
-  { intros. inv_all_vec_fin; esolve_elem_of. }
-  { intros. inv_all_vec_fin; simpl; auto. }
+  { done. }
+  { simpl; by rewrite (right_id_L ∅ (∪)). }
+  { simpl; intros; inv_all_vec_fin; esolve_elem_of. }
+  { intros; inv_all_vec_fin; simpl; eauto using ax_expr_funframe_weaken,
+      mem_union_subseteq_l, mem_union_subseteq_r. }
 
   clear dependent m1 m2 HΔ Haxl Haxr. intros Ωs vs ms.
   inv_vec Ωs; intros Ω1 Ωs; inv_vec Ωs; intros Ω2 Ωs; inv_vec Ωs.
   inv_vec vs; intros v1 vs; inv_vec vs; intros v2 vs; inv_vec vs.
   inv_vec ms; intros m1 ms; inv_vec ms; intros m2 ms; inv_vec ms.
-  simpl. intros Hdisjoint HΩs Hax. rewrite (right_id_eq ∅ (∪) m2).
+  simpl. intros Hdisjoint HΩs Hax. rewrite (right_id_L ∅ (∪) m2).
   pose proof (HΩs 0%fin) as HΩl. pose proof (HΩs 1%fin) as HΩr.
   pose proof (Hax 0%fin) as Haxl. pose proof (Hax 1%fin) as Haxr.
   simpl in HΩl, HΩr, Haxl, Haxr. clear HΩs Hax.
-  rewrite mem_list_disjoint_double in Hdisjoint.
 
   destruct (Hassign v1 v2 (get_stack k) (m1 ∪ m2))
     as (m3 & m4 & Hm3412 & Hm4 & [(a & ? & Ha & ?) HR]).
@@ -1422,324 +1673,329 @@ Proof.
 
   rewrite expr_eval_val in Ha.
   assert (locks (m3 ∪ m4) = Ω1 ∪ Ω2) as HΩ.
-  { rewrite Hm3412, mem_locks_union by done.
-    clear Ha. esolve_elem_of. }
+  { rewrite Hm3412, mem_locks_union by done. clear Ha; esolve_elem_of. }
   clear Hassign HΩl HΩr.
   rewrite <-Hm3412. simplify_equality. clear dependent m1 m2.
 
   apply ax_further_pred.
-  { intros. solve_cred. }
+  { intros ?? Hframe; inversion_clear Hframe; simplify_equality. solve_cred. }
 
-  intros mf' S' Hmf p. inv_cstep p.
-  * inv_ehstep. simpl.
-    erewrite !mem_lock_insert_union_fragment_l by eauto with simpl_mem.
+  intros ?? S' Hframe p.
+  inversion_clear Hframe as [mA mf ?? Hm|]; simplify_equality.
+  simplify_mem_disjoint_hyps. inv_cstep p.
+  * inv_ehstep; simpl.
+    erewrite !mem_lock_insert_union_fragment_l by auto with mem.
     rewrite mem_lock_insert_singleton.
-
-    pose proof Hm4 as Hm4'.
-    eapply mem_disjoint_lock_insert_fragment_l in Hm4'; eauto with simpl_mem.
-    rewrite mem_lock_insert_singleton in Hm4'.
-
-    pose proof Hmf as Hmf'.
-    eapply mem_disjoint_lock_insert_fragment_l in Hmf'; eauto with simpl_mem.
-    erewrite !mem_lock_insert_union_fragment_l in Hmf' by eauto with simpl_mem.
-    rewrite mem_lock_insert_singleton in Hmf'.
-
+    erewrite mem_disjoint_lock_insert_singleton in Hm by auto with mem.
     assert (perm_kind γ ≠ Locked).
     { intros E. rewrite E in Hγ. inversion Hγ. }
 
     rewrite mem_locks_union, mem_locks_singleton_ne in HΩ by done.
-    constructor.
-    + eauto.
+    econstructor.
+    + apply ax_unframe_expr_to_expr; auto with mem.
     + done.
-    + simpl. rewrite mem_locks_union, mem_locks_singleton
-        by eauto using memperm_kind_lock. esolve_elem_of.
-    + apply ax_done. constructor; [|solve_assert].
-      rewrite mem_locks_union, mem_locks_singleton
-        by eauto using memperm_kind_lock.
-      by rewrite <-(associative_eq _), <-HΩ, (left_id_eq ∅ _).
+    + simpl. rewrite mem_locks_union, mem_locks_singleton by auto with mem.
+      rewrite <-(associative_L (∪)), <-HΩ. clear; solve_elem_of.
+    + apply ax_done. constructor.
+      { rewrite mem_locks_union, mem_locks_singleton by auto with mem.
+        rewrite <-(associative_L (∪)), <-HΩ. clear; solve_elem_of. }
+      solve_assert.
   * exfalso; eauto 8 with cstep.
 Qed.
 
-Lemma ax_load Δ γ e P Q :
+Lemma ax_load Δ A γ e P Q :
   perm_kind γ ≠ Locked →
-  Δ ⊨ₑ {{ P }} e {{ λ a, ∃ v, Q a v ★ valc a ↦{γ} valc v }} →
-  Δ ⊨ₑ {{ P }} load e {{ λ v, ∃ a, Q a v ★ valc a ↦{γ} valc v }}.
+  Δ\ A ⊨ₑ {{ P }} e {{ λ a, ∃ v, Q a v ★ valc a ↦{γ} valc v }} →
+  Δ\ A ⊨ₑ {{ P }} load e {{ λ v, ∃ a, Q a v ★ valc a ↦{γ} valc v }}.
 Proof.
-  intros Hγ Hax n k m ??? Hpre.
-  rewrite <-(right_id_eq ∅ (∪) m).
-  apply (ax_expr_compose n (fpure Δ)
+  intros Hγ Hax n k m ??? HA Hpre. rewrite <-(right_id_L ∅ (∪) m).
+  apply (ax_expr_compose n (fpure Δ) A
     [# λ a, ∃ v, Q a v ★ valc a ↦{γ} valc v]%A _ DCLoad [# e] k [# m]).
   { done. }
-  { apply mem_list_disjoint_singleton. }
-  { intros. inv_all_vec_fin; esolve_elem_of. }
-  { intros. inv_all_vec_fin; simpl; auto. }
+  { simpl; solve_mem_disjoint. }
+  { simpl; by rewrite (right_id_L ∅ (∪)). }
+  { intros; inv_all_vec_fin; esolve_elem_of. }
+  { intros; inv_all_vec_fin; simpl; auto. }
 
   clear dependent m Hax. intros Ωs vs ms.
-  inv_vec Ωs; intros Ω Ωs; inv_vec Ωs.
-  inv_vec vs; intros v vs; inv_vec vs.
+  inv_vec Ωs; intros Ω Ωs; inv_vec Ωs. inv_vec vs; intros v vs; inv_vec vs.
   inv_vec ms; intros m ms; inv_vec ms; simpl; intros _ HΩ Hax.
-  rewrite (right_id_eq ∅ (∪) m).
-  specialize (HΩ 0%fin). simpl in HΩ.
-  specialize (Hax 0%fin). simpl in Hax.
+  rewrite (right_id_L ∅ (∪) m).
+  specialize (HΩ 0%fin); simpl in HΩ. specialize (Hax 0%fin); simpl in Hax.
 
   destruct Hax as (?&m1&?&?&?&?&a'&v'&?&?&?); simpl in *; simplify_equality.
   apply ax_further_pred.
-  { intros. solve_cred. }
+  { intros ?? Hframe; inversion_clear Hframe; simplify_equality.
+   solve_cred. }
 
-  intros mf S' ? p. inv_cstep p.
-  * inv_ehstep. simplify_mem_equality. constructor; try done.
-    apply ax_done. constructor.
-    { by rewrite mem_locks_union. }
-    solve_assert.
+  intros ?? S' Hframe p; inversion_clear Hframe; simplify_equality.
+  inv_cstep p.
+  * inv_ehstep; simplify_mem_equality. econstructor.
+    + by apply ax_unframe_expr_to_expr.
+    + done.
+    + done.
+    + apply ax_done. constructor. by rewrite mem_locks_union. solve_assert.
   * exfalso; eauto with cstep.
 Qed.
 
-Lemma ax_alloc Δ :
-  Δ ⊨ₑ {{ emp }} alloc {{ λ a, valc a ↦{Freeable} - }}.
+Lemma ax_alloc Δ A : Δ\ A ⊨ₑ {{ emp }} alloc {{ λ a, valc a ↦{Freeable} - }}.
 Proof.
-  intros n k ?? _ _ ?. unfold_assert in *; subst.
+  intros n k ?? _ _ ? ?; unfold_assert in *; subst.
   apply ax_further_pred.
-  { intros. solve_cred. }
-  intros mf S' ? p. rewrite (left_id_eq ∅ (∪)) in p. inv_cstep p.
-  * inv_ehstep. rewrite mem_alloc_singleton_l by done.
-    constructor; try (by auto with mem_disjoint); [esolve_elem_of|].
-    apply ax_done. constructor.
-    { by apply mem_locks_singleton_ne. }
-    solve_assert.
+  { intros; solve_cred. }
+  intros ?? S' Hframe p; inversion_clear Hframe; simplify_equality.
+  rewrite (left_id_L ∅ (∪)) in p. inv_cstep p.
+  * inv_ehstep. rewrite mem_alloc_singleton_l, (associative_L (∪)) by done.
+    decompose_is_free. eapply mk_ax_next_empty.
+    + apply ax_unframe_expr_to_expr; auto with mem.
+      apply mem_disjoint_singleton; [by repeat constructor|]; auto with mem.
+    + done.
+    + done.
+    + apply ax_done. constructor. by apply mem_locks_singleton_ne. solve_assert.
   * exfalso; eauto with cstep.
 Qed.
 
-Lemma ax_free Δ e P Q :
-  Δ ⊨ₑ {{ P }} e {{ λ a, Q ★ valc a ↦{Freeable} - }} →
-  Δ ⊨ₑ {{ P }} free e {{ λ v, Q }}.
+Lemma ax_free Δ A e P Q :
+  Δ\ A ⊨ₑ {{ P }} e {{ λ a, Q ★ valc a ↦{Freeable} - }} →
+  Δ\ A ⊨ₑ {{ P }} free e {{ λ v, Q }}.
 Proof.
-  intros Hax n k m ??? Hpre.
-  rewrite <-(right_id_eq ∅ (∪) m).
-  apply (ax_expr_compose n (fpure Δ)
+  intros Hax n k m ???? Hpre. rewrite <-(right_id_L ∅ (∪) m).
+  apply (ax_expr_compose n (fpure Δ) A
     [# λ a, Q ★ valc a ↦{Freeable} -]%A _ DCFree [# e] k [# m]).
   { done. }
-  { apply mem_list_disjoint_singleton. }
-  { intros. inv_all_vec_fin; esolve_elem_of. }
-  { intros. inv_all_vec_fin; simpl; auto. }
+  { simpl; solve_mem_disjoint. }
+  { simpl; by rewrite (right_id_L ∅ (∪)). }
+  { intros; inv_all_vec_fin; esolve_elem_of. }
+  { intros; inv_all_vec_fin; simpl; auto. }
 
   clear dependent m Hax. intros Ωs vs ms.
-  inv_vec Ωs; intros Ω Ωs; inv_vec Ωs.
-  inv_vec vs; intros v vs; inv_vec vs.
+  inv_vec Ωs; intros Ω Ωs; inv_vec Ωs. inv_vec vs; intros v vs; inv_vec vs.
   inv_vec ms; intros m ms; inv_vec ms; simpl; intros _ HΩs Hax.
-  rewrite (right_id_eq ∅ (∪) m).
+  rewrite (right_id_L ∅ (∪) m).
 
-  specialize (Hax 0%fin). simpl in Hax.
-  specialize (HΩs 0%fin). simpl in HΩs. subst.
+  specialize (Hax 0%fin); simpl in Hax. specialize (HΩs 0%fin); simpl in HΩs.
 
   destruct Hax as (m1&?&?&?&?&a&v'&?&?); simpl in *; simplify_equality.
   apply ax_further_pred.
-  { intros. solve_cred. }
+  { intros ?? Hframe; inversion_clear Hframe; simplify_equality.
+    solve_cred. }
 
-  intros mf S' ? p. inv_cstep p.
+  intros ?? S' Hframe p; inversion_clear Hframe; simplify_equality.
+  simplify_mem_disjoint_hyps. inv_cstep p.
   * inv_ehstep.
-    erewrite mem_delete_union_l, mem_delete_union_r by eauto with simpl_mem.
-    rewrite mem_delete_singleton, (right_id_eq ∅ _).
-    rewrite mem_locks_union, mem_locks_singleton_ne, (right_id_eq ∅ _) by done.
-    decompose_mem_disjoint. constructor; try done.
-    by apply ax_done; constructor.
+    erewrite 2!mem_delete_union_l, mem_delete_union_r by auto with mem.
+    rewrite mem_delete_singleton, (right_id_L ∅ (∪)).
+    rewrite mem_locks_union, mem_locks_singleton_ne, (right_id_L ∅ (∪)) by done.
+    econstructor.
+    + apply ax_unframe_expr_to_expr; auto with mem.
+    + done.
+    + done.
+    + by apply ax_done; constructor.
   * exfalso; eauto 10 with cstep.
 Qed.
 
-Lemma ax_unop Δ op e P Q :
-  Δ ⊨ₑ {{ P }} e {{ Q }} →
-  (∀ v, Q v ⊆@{fpure Δ} (⊙{op} valc v ⇓-)%A) →
-  Δ ⊨ₑ {{ P }}
-         ⊙{op} e
-       {{ λ v', ∃ v, ⊙{op} valc v ⇓ v' ∧ Q v }}.
+Lemma ax_unop Δ A op e P Q R :
+  Δ\ A ⊨ₑ {{ P }} e {{ Q }} →
+  (∀ v', Q v' ⊑@{fpure Δ} (∃ v, R v v' ∧ (⊙{op} valc v' ⇓ v))%A) →
+  Δ\ A ⊨ₑ {{ P }} ⊙{op} e {{ λ v, ∃ v', R v v' }}.
 Proof.
-  intros Hax Hop n k m ????.
-  rewrite <-(right_id_eq ∅ (∪) m).
-  apply (ax_expr_compose n (fpure Δ) [# Q] _ (DCUnOp op) [# e] k [# m]).
+  intros Hax Hop n k m ?????. rewrite <-(right_id_L ∅ (∪) m).
+  apply (ax_expr_compose n (fpure Δ) A [# Q] _ (DCUnOp op) [# e] k [# m]).
   { done. }
-  { simpl. eauto with mem_disjoint. }
-  { intros. inv_all_vec_fin; esolve_elem_of. }
-  { intros. inv_all_vec_fin; simpl; auto. }
+  { simpl; solve_mem_disjoint. }
+  { simpl; by rewrite (right_id_L ∅ (∪)). }
+  { intros; inv_all_vec_fin; esolve_elem_of. }
+  { intros; inv_all_vec_fin; simpl; auto. }
 
   clear dependent m Hax e. intros Ωs vs ms.
-  inv_vec Ωs; intros Ω Ωs; inv_vec Ωs.
-  inv_vec vs; intros v vs; inv_vec vs.
+  inv_vec Ωs; intros Ω Ωs; inv_vec Ωs. inv_vec vs; intros v vs; inv_vec vs.
   inv_vec ms; intros m ms; inv_vec ms.
-  simpl. intros _ HΩ Hax. rewrite (right_id_eq ∅ (∪) m).
-  specialize (HΩ 0%fin). simpl in HΩ.
-  specialize (Hax 0%fin). simpl in Hax.
+  simpl. intros _ HΩ Hax. rewrite (right_id_L ∅ (∪) m).
+  specialize (HΩ 0%fin); simpl in HΩ. specialize (Hax 0%fin); simpl in Hax.
 
-  destruct (Hop v (get_stack k) m) as [v' Hv']; [done|].
-  clear Hop. unfold_assert in *; simpl in Hv'.
+  destruct (Hop v (get_stack k) m) as (v'&Hv'&?); [done|].
+  clear Hop. unfold_assert in *.
 
   apply ax_further_pred.
-  { intros. solve_cred. }
+  { intros; solve_cred. }
 
-  intros mf' S' ? p. inv_cstep p.
-  * inv_ehstep. constructor; try done.
-    apply ax_done; constructor; try done.
-    by exists v.
+  intros ?? S' Hframe p; inversion_clear Hframe; simplify_equality.
+  simplify_mem_disjoint_hyps. inv_cstep p.
+  * inv_ehstep. simplify_option_equality. econstructor.
+    + apply ax_unframe_expr_to_expr; auto with mem.
+    + done.
+    + done.
+    + apply ax_done; constructor; try done. by exists v.
   * exfalso; eauto with cstep.
 Qed.
 
-Lemma ax_binop Δ op el Pl Ql er Pr Qr :
-  Δ ⊨ₑ {{ Pl }} el {{ Ql }} →
-  Δ ⊨ₑ {{ Pr }} er {{ Qr }} →
-  (∀ vl vr, (Ql vl ★ Qr vr)%A ⊆@{fpure Δ} (valc vl ⊙{op} valc vr ⇓-)%A) →
-  Δ ⊨ₑ {{ Pl ★ Pr }}
-         el ⊙{op} er
-       {{ λ v', ∃ vl vr, valc vl ⊙{op} valc vr ⇓ v' ∧ (Ql vl ★ Qr vr) }}.
+Lemma ax_binop Δ A op el Pl Ql er Pr Qr R :
+  Δ\ A ⊨ₑ {{ Pl }} el {{ Ql }} → Δ\ A ⊨ₑ {{ Pr }} er {{ Qr }} →
+  (∀ vl vr, (Ql vl ★ Qr vr)%A
+    ⊑@{fpure Δ} (∃ v, R v vl vr ∧ (valc vl ⊙{op} valc vr ⇓ v))%A) →
+  Δ\ A ⊨ₑ {{ Pl ★ Pr }} el ⊙{op} er {{ λ v, ∃ vl vr, R v vl vr }}.
 Proof.
-  intros Haxl Haxr Hop n k ??? Hm (m1&m2&?&?&?&?); subst.
+  intros Haxl Haxr Hop n k ??? Hm ? (m1&m2&?&?&?&?); subst.
   rewrite mem_locks_union in Hm by done. simpl in *. decompose_empty.
-  rewrite <-(right_id_eq ∅ (∪) m2).
-  apply (ax_expr_compose n (fpure Δ)
+  rewrite <-(right_id_L ∅ (∪) m2). apply (ax_expr_compose n (fpure Δ) A
     [# Ql;Qr] _ (DCBinOp op) [# el;er] k [# m1;m2]).
   { done. }
-  { simpl. by apply mem_list_disjoint_double. }
-  { intros. inv_all_vec_fin; esolve_elem_of. }
-  { intros. inv_all_vec_fin; simpl; auto. }
+  { simpl; solve_mem_disjoint. }
+  { simpl; by rewrite (right_id_L ∅ (∪)). }
+  { intros; inv_all_vec_fin; esolve_elem_of. }
+  { intros; inv_all_vec_fin; simpl; eauto using ax_expr_funframe_weaken,
+      mem_union_subseteq_l, mem_union_subseteq_r. }
 
   clear dependent m1 m2 Haxl Haxr. intros Ωs vs ms.
   inv_vec Ωs; intros Ω1 Ωs; inv_vec Ωs; intros Ω2 Ωs; inv_vec Ωs.
   inv_vec vs; intros v1 vs; inv_vec vs; intros v2 vs; inv_vec vs.
   inv_vec ms; intros m1 ms; inv_vec ms; intros m2 ms; inv_vec ms.
-  simpl. intros Hdisjoint HΩs Hax. rewrite (right_id_eq ∅ (∪) m2).
+  simpl. intros Hdisjoint HΩs Hax. rewrite (right_id_L ∅ (∪) m2).
   pose proof (HΩs 0%fin) as HΩl. pose proof (HΩs 1%fin) as HΩr.
   pose proof (Hax 0%fin) as Haxl. pose proof (Hax 1%fin) as Haxr.
   simpl in HΩl, HΩr, Haxl, Haxr. clear HΩs Hax.
-  rewrite mem_list_disjoint_double in Hdisjoint.
 
-  destruct (Hop v1 v2 (get_stack k) (m1 ∪ m2)) as [v' Hv'].
+  destruct (Hop v1 v2 (get_stack k) (m1 ∪ m2)) as (v'&?&?).
   { by exists m1 m2. }
-  clear Hop. unfold_assert in *; simpl in Hv'.
+  clear Hop. unfold_assert in *.
 
   apply ax_further_pred.
   { intros. solve_cred. }
 
-  intros mf' S' ? p. inv_cstep p.
+  intros ?? S' Hframe p; inversion_clear Hframe; simplify_equality.
+  simplify_mem_disjoint_hyps. inv_cstep p.
   * inv_ehstep. rewrite <-mem_locks_union by done.
-    constructor; try done. apply ax_done; constructor; try done.
-    exists v1 v2. solve_assert.
+    simplify_option_equality. econstructor.
+    + apply ax_unframe_expr_to_expr; auto with mem.
+    + done.
+    + done.
+    + apply ax_done; constructor; try done. exists v1 v2. solve_assert.
   * exfalso; eauto with cstep.
 Qed.
 
-Lemma ax_expr_if Δ e el er P (P' : vassert) Q :
-  Δ ⊨ₑ {{ P }} e {{ λ v, P' v ▷ }} →
-  Δ ⊨ₑ {{ assert_is_true P' }} el {{ Q }} →
-  Δ ⊨ₑ {{ assert_is_false P' }} er {{ Q }} →
-  Δ ⊨ₑ {{ P }} IF e then el else er {{ Q }}.
+Lemma ax_expr_if Δ A e el er P (P' : vassert) Q :
+  Δ\ A ⊨ₑ {{ P }} e {{ λ v, P' v ▷ }} →
+  Δ\ A ⊨ₑ {{ assert_is_true P' }} el {{ Q }} →
+  Δ\ A ⊨ₑ {{ assert_is_false P' }} er {{ Q }} →
+  Δ\ A ⊨ₑ {{ P }} IF e then el else er {{ Q }}.
 Proof.
-  intros Hax Haxl Haxr n k m HΔ He Hm Hpre.
-  simpl in He. decompose_empty.
-  rewrite <-(right_id_eq ∅ (∪) m).
-  apply (ax_expr_compose n (fpure Δ)
+  intros Hax Haxl Haxr n k m HΔ He Hm Hpre HA.
+  simpl in He. decompose_empty. rewrite <-(right_id_L ∅ (∪) m).
+  apply (ax_expr_compose n (fpure Δ) A
     [# assert_unlock ∘ P'] _ (DCIf el er) [# e] k [# m]).
-  { simpl. by apply empty_union_L. }
-  { apply mem_list_disjoint_singleton. }
-  { intros. inv_all_vec_fin; esolve_elem_of. }
-  { intros. inv_all_vec_fin; simpl; intuition. }
+  { simpl; by apply empty_union_L. }
+  { simpl; solve_mem_disjoint. }
+  { simpl; by rewrite (right_id_L ∅ (∪)). }
+  { intros; inv_all_vec_fin; esolve_elem_of. }
+  { intros; inv_all_vec_fin; simpl; intuition. }
 
   clear dependent e m. intros Ωs vs ms.
-  inv_vec Ωs; intros Ω Ωs; inv_vec Ωs.
-  inv_vec vs; intros v vs; inv_vec vs.
+  inv_vec Ωs; intros Ω Ωs; inv_vec Ωs. inv_vec vs; intros v vs; inv_vec vs.
   inv_vec ms; intros m ms; inv_vec ms; simpl; intros ? HΩ Hax.
-  rewrite (right_id_eq ∅ (∪) m).
-  specialize (Hax 0%fin). simpl in Hax.
-  specialize (HΩ 0%fin). simpl in HΩ.
+  rewrite (right_id_L ∅ (∪) m).
+  specialize (Hax 0%fin); simpl in Hax. specialize (HΩ 0%fin); simpl in HΩ.
 
   apply ax_further_pred.
   { intros. simpl. destruct (val_true_false_dec v); solve_cred. }
 
-  intros mf S' ? p. inv_cstep p.
+  intros ?? S' Hframe p; inversion_clear Hframe as [mA mf|]; simplify_equality.
+  simplify_mem_disjoint_hyps. inv_cstep p.
   * inv_ehstep.
-    + rewrite mem_unlock_union_l by done.
-      apply mk_ax_next_alt; try by auto with mem_disjoint.
-      apply Haxl; rewrite ?mem_locks_unlock_all; auto with ax.
-      solve_assert.
-    + rewrite mem_unlock_union_l by done.
-      apply mk_ax_next_alt; try by auto with mem_disjoint.
-      apply Haxr; rewrite ?mem_locks_unlock_all; auto with ax.
-      solve_assert.
+    + rewrite <-(associative_L (∪)), mem_unlock_union_l by auto with mem.
+      rewrite (associative_L (∪)). eapply mk_ax_next_empty.
+      - apply ax_unframe_expr_to_expr; auto with mem.
+        by rewrite <-mem_disjoint_unlock.
+      - done.
+      - done.
+      - apply Haxl; rewrite ?mem_locks_unlock_all; auto with ax.
+        { exists mA. rewrite <-mem_disjoint_unlock; auto with mem. }
+        solve_assert.
+    + rewrite <-(associative_L (∪)), mem_unlock_union_l by auto with mem.
+      rewrite (associative_L (∪)). eapply mk_ax_next_empty.
+      - apply ax_unframe_expr_to_expr; auto with mem.
+        by rewrite <-mem_disjoint_unlock.
+      - done.
+      - done.
+      - apply Haxr; rewrite ?mem_locks_unlock_all; auto with ax.
+        { exists mA. rewrite <-mem_disjoint_unlock; auto with mem. }
+        solve_assert.
   * exfalso; destruct (val_true_false_dec v); eauto with cstep.
 Qed.
 
 (** ** Rules for statements *)
 Lemma ax_do Δ R J P Q e :
-  Δ ⊨ₑ {{ P }} e {{ λ _, Q ▷ }} →
-  Δ \ R \ J ⊨ₛ {{ P }} do e {{ Q }}.
+  Δ\ emp ⊨ₑ {{ P }} e {{ λ _, Q ▷ }} → Δ\ R\ J ⊨ₛ {{ P }} do e {{ Q }}.
 Proof.
   intros Hax n k [] m ?? He ??; discriminate_down_up.
   apply ax_further_pred.
   { intros. solve_cred. }
-  intros mf S' ? p. inv_cstep p. constructor; try done.
+  intros ? mf S' [??] p; subst. inv_cstep p. econstructor; try done.
   { esolve_elem_of. }
   clear dependent mf S'. eapply ax_compose_cons; auto with ax.
   intros m' φ' [v ???]. apply ax_further_pred.
   { intros. solve_cred. }
-  intros mf S' ? p. inv_cstep p.
+  intros ? mf S' [??] p. inv_cstep p.
   rewrite mem_unlock_union_l by solve_elem_of.
-  apply mk_ax_next_alt; try by auto with mem_disjoint.
+  eapply mk_ax_next_empty; try done.
+  { split. done. by rewrite <-mem_disjoint_unlock. }
   clear dependent m mf φ' v S'.
   apply ax_done; constructor; auto. by rewrite mem_locks_unlock_all.
 Qed.
 
-Lemma ax_skip Δ R J P : Δ \ R \ J ⊨ₛ {{ P }} skip {{ P }}.
+Lemma ax_skip Δ R J P : Δ\ R\ J ⊨ₛ {{ P }} skip {{ P }}.
 Proof.
   intros n k [] m ?????; discriminate_down_up.
   apply ax_further_pred.
   { intros. solve_cred. }
-  intros mf S' ? p. inv_cstep p.
-  apply mk_ax_next_alt; try done.
+  intros m' mf S' [??] p; subst. inv_cstep p.
+  eapply mk_ax_next_empty; try done.
   clear dependent mf S'. by apply ax_done; constructor.
 Qed.
 
 Lemma ax_ret Δ J P R e Q :
-  Δ ⊨ₑ {{ P }} e {{ λ v, R v ▷ }} →
-  Δ \ R \ J ⊨ₛ {{ P }} ret e {{ Q }}.
+  Δ\ emp ⊨ₑ {{ P }} e {{ λ v, R v ▷ }} → Δ\ R\ J ⊨ₛ {{ P }} ret e {{ Q }}.
 Proof.
   intros Hax n k [] m ?? He ??; discriminate_down_up.
   apply ax_further_pred.
   { intros. solve_cred. }
-  intros mf S' ? p. inv_cstep p. apply mk_ax_next_alt; try done.
-  clear dependent mf S'. eapply ax_compose_cons; auto with ax.
+  intros ? mf S' [??] p; subst. inv_cstep p.
+  eapply mk_ax_next_empty; try done.
+  clear dependent mf S'. eapply ax_compose_cons; eauto with ax.
   intros m' φ' [v ???]. apply ax_further_pred.
   { intros. solve_cred. }
-  intros mf S' ? p. inv_cstep p.
+  intros ? mf S' [??] p; subst. inv_cstep p.
   rewrite mem_unlock_union_l by solve_elem_of.
-  apply mk_ax_next_alt; try by auto with mem_disjoint.
+  eapply mk_ax_next_empty; try done.
+  { split. done. by rewrite <-mem_disjoint_unlock. }
   clear dependent m mf φ' S'.
   apply ax_done; constructor; auto. by rewrite mem_locks_unlock_all.
 Qed.
 
 Lemma ax_packed_blk Δ Pd s :
-  Δ \ (λ P, var O ↦{Writable} - ★ P↑)%A <$> Pd ⊨ₚ s →
-  Δ \ Pd ⊨ₚ blk s.
+  Δ\ (λ P, var O ↦{Writable} - ★ P↑)%A <$> Pd ⊨ₚ s → Δ\ Pd ⊨ₚ blk s.
 Proof.
   intros Hax n k. revert n.
   cut (∀ n d m b,
-   ax_funs n Δ →
-   is_free m b →
-   down d s →
-   locks s = ∅ →
-   locks m = ∅ →
+   ax_funs n Δ → is_free m b → down d s → locks s = ∅ → locks m = ∅ →
    assert_holds (fpure Δ) (Pd d) (get_stack k) m →
-   ax (ax_stmt_P (blk s) (fpure Δ) Pd) k n
+   ax ax_disjoint_cond (ax_stmt_post (blk s) (fpure Δ) Pd) k n
      (CBlock b :: k) (Stmt d s) (mem_alloc b voidc Writable m)).
   { intros help n d m ?????. apply ax_further_pred.
     { intros. solve_cred. }
-    intros mf S' ? p.
+    intros ? mf S' [??] p; subst.
     destruct d; discriminate_down_up; inv_cstep p; decompose_is_free.
     * rewrite mem_alloc_union_l by done.
-      apply mk_ax_next_alt; try by auto with mem_disjoint.
+      eapply mk_ax_next_empty; try done.
+      { split. done. by rewrite mem_disjoint_alloc by (by repeat constructor). }
       apply help; auto with ax.
     * rewrite mem_alloc_union_l by done.
-      apply mk_ax_next_alt; try by auto with mem_disjoint.
+      eapply mk_ax_next_empty; try done.
+      { split. done. by rewrite mem_disjoint_alloc by (by repeat constructor). }
       apply help; auto with ax. }
 
-  intros n d m b v ?????.
-  eapply ax_compose_cons; [| clear dependent m v d].
-  { eapply Hax; eauto.
-    { by rewrite mem_locks_alloc. }
+  intros n d m b v ?????. eapply ax_compose_cons; [| | clear dependent m v d].
+  { apply ax_compose_diagram_diag. }
+  { eapply Hax; eauto; [by rewrite mem_locks_alloc |].
     rewrite directed_fmap_spec. simpl. by apply assert_alloc. }
 
   intros m φ [d ?? Hpost]. apply ax_further_pred.
@@ -1747,292 +2003,290 @@ Proof.
 
   rewrite directed_fmap_spec in Hpost. simpl in Hpost.
   apply assert_free in Hpost; [|by auto using Writable_fragment].
-  destruct Hpost. intros mf S' ? p.
+  destruct Hpost. intros ? mf S' [??] p; subst.
   destruct d; discriminate_down_up; inv_cstep p.
   * erewrite mem_delete_union_l by eauto using Writable_fragment.
-    apply mk_ax_next_alt; try by auto with mem_disjoint.
+    eapply mk_ax_next_empty; try done.
+    { split. done. by rewrite mem_delete_subseteq. }
     apply ax_done; constructor; try done. by apply mem_locks_delete_empty.
   * erewrite mem_delete_union_l by eauto using Writable_fragment.
-    apply mk_ax_next_alt; try by auto with mem_disjoint.
+    eapply mk_ax_next_empty; try done.
+    { split. done. by rewrite mem_delete_subseteq. }
     apply ax_done; constructor; try done. by apply mem_locks_delete_empty.
   * erewrite mem_delete_union_l by eauto using Writable_fragment.
-    apply mk_ax_next_alt; try by auto with mem_disjoint.
+    eapply mk_ax_next_empty; try done.
+    { split. done. by rewrite mem_delete_subseteq. }
     apply ax_done; constructor; try done. by apply mem_locks_delete_empty.
 Qed.
-
 Lemma ax_blk Δ R J P Q s :
-  Δ \ (λ v, var O ↦{Writable} - ★ R v↑) \ (λ l, var O ↦{Writable} - ★ J l↑) ⊨ₛ
+  Δ\ (λ v, var O ↦{Writable} - ★ R v↑)\ (λ l, var O ↦{Writable} - ★ J l↑) ⊨ₛ
     {{ var O ↦{Writable} - ★ P↑ }} s {{ var O ↦{Writable} - ★ Q↑ }} →
-  Δ \ R \ J ⊨ₛ {{ P }} blk s {{ Q }}.
+  Δ\ R\ J ⊨ₛ {{ P }} blk s {{ Q }}.
 Proof. intros. by apply ax_packed_blk. Qed.
 
 Lemma ax_label Δ R J l s Q :
-  Δ \ R \ J ⊨ₛ {{ J l }} s {{ Q }} →
-  Δ \ R \ J ⊨ₛ {{ J l }} l :; s {{ Q }}.
+  Δ\ R\ J ⊨ₛ {{ J l }} s {{ Q }} → Δ\ R\ J ⊨ₛ {{ J l }} l :; s {{ Q }}.
 Proof.
   intros Hax n k. revert n.
   set (Pd := dassert_pack (J l) Q R J).
   cut (∀ n d m,
-   ax_funs n Δ →
-   down d s →
-   locks s = ∅ →
-   locks m = ∅ →
+   ax_funs n Δ → down d s → locks s = ∅ → locks m = ∅ →
    assert_holds (fpure Δ) (Pd d) (get_stack k) m →
-   ax (ax_stmt_P (l :; s) (fpure Δ) Pd) k n
+   ax ax_disjoint_cond (ax_stmt_post (l :; s) (fpure Δ) Pd) k n
      (CStmt (l :; □) :: k) (Stmt d s) m).
   { intros help n d m ?? Hs ??. apply ax_further_pred.
     { intros. clear dependent Pd. solve_cred. }
-    intros mf S' ? p. simpl in Hs.
-    by destruct d; discriminate_down_up; inv_cstep p;
-      apply mk_ax_next_alt; auto with ax. }
+    intros ?? S' [??] p; simpl in Hs;
+    destruct d; discriminate_down_up; inv_cstep p;
+      eapply mk_ax_next_empty; try done; auto with ax. }
 
-  induction n as [|n IH]; [constructor |].
-  intros d m ?????.
-  eapply ax_compose_cons; [by apply Hax | clear dependent m d].
+  induction n as [|n IH]; [constructor |]. intros d m ?????.
+  eapply ax_compose_cons; [|by apply Hax | clear dependent m d].
+  { auto with ax. }
 
   intros m φ [d ?? Hpost]. apply ax_further.
   { intros. solve_cred. }
 
-  intros mf S' ? p. destruct d; discriminate_down_up; inv_cstep p.
-  * apply mk_ax_next_alt; try done. by apply ax_done.
-  * apply mk_ax_next_alt; try done. by apply ax_done.
+  intros ? mf S' [??] p; subst.
+  destruct d; discriminate_down_up; inv_cstep p.
+  * eapply mk_ax_next_empty; try done. by apply ax_done.
+  * eapply mk_ax_next_empty; try done. by apply ax_done.
   * match goal with
     | _ : ?l' ∉ labels s |- _ => destruct (decide (l' = l))
     end; subst.
-    + apply mk_ax_next_alt; try done. apply ax_further_pred.
+    + eapply mk_ax_next_empty; try done. apply ax_further_pred.
       { intros. solve_cred. }
-      intros mf' S'' ? p. inv_cstep p.
-      by apply mk_ax_next_alt; auto with ax.
-    + apply mk_ax_next_alt; try done.
+      intros ? mf' S'' [??] p; subst. inv_cstep p.
+      eapply mk_ax_next_empty; try done; auto with ax.
+    + eapply mk_ax_next_empty; try done.
       apply ax_done; constructor; try done. solve_elem_of.
 Qed.
 
 Lemma ax_while Δ R J P Q e s :
-  Δ ⊨ₑ {{ P }} e {{ λ v, Q v ▷ }} →
-  Δ \ R \ J ⊨ₛ {{ assert_is_true Q }} s {{ P }} →
-  Δ \ R \ J ⊨ₛ {{ P }} while (e) s {{ assert_is_false Q }}.
+  Δ\ emp ⊨ₑ {{ P }} e {{ λ v, Q v ▷ }} →
+  Δ\ R\ J ⊨ₛ {{ assert_is_true Q }} s {{ P }} →
+  Δ\ R\ J ⊨ₛ {{ P }} while (e) s {{ assert_is_false Q }}.
 Proof.
   intros Haxe Hax n k. revert n.
   set (Pd := dassert_pack P (assert_is_false Q) R J).
   set (Pd' := dassert_pack (assert_is_true Q) P R J).
   cut (∀ n d m,
-   ax_funs n Δ →
-   down d s →
-   locks e = ∅ →
-   locks s = ∅ →
-   locks m = ∅ →
+   ax_funs n Δ → down d s → locks e = ∅ → locks s = ∅ → locks m = ∅ →
    assert_holds (fpure Δ) (Pd' d) (get_stack k) m →
-   ax (ax_stmt_P (while (e) s) (fpure Δ) Pd) k n
+   ax ax_disjoint_cond (ax_stmt_post (while (e) s) (fpure Δ) Pd) k n
      (CStmt (while (e) □) :: k) (Stmt d s) m).
   { intros help n [] m ?? Hs ??; simpl in Hs;
       decompose_empty; discriminate_down_up.
     * apply ax_further_pred.
       { intros. solve_cred. }
-      intros mf S' ? p. inv_cstep p.
-      apply mk_ax_next_alt; try done.
+      intros ? mf S' [??] p; subst. inv_cstep p.
+      eapply mk_ax_next_empty; try done.
       eapply ax_compose_cons;
-        [apply Haxe; auto with ax | clear dependent m mf S'].
+        [|apply Haxe; auto with ax | clear dependent m mf S'].
+      { auto with ax. }
       intros m φ [v ???]. apply ax_further_pred.
       { intros. destruct (val_true_false_dec v); solve_cred. }
-      intros mf S' ? p. inv_cstep p.
+      intros ? mf S' [??] p; subst. inv_cstep p.
       + rewrite mem_unlock_union_l by done.
-        apply mk_ax_next_alt; try by auto with mem_disjoint.
+        eapply mk_ax_next_empty; try done.
+        { split. done. by rewrite <-mem_disjoint_unlock. }
         apply help; rewrite ?mem_locks_unlock_all; auto with ax. solve_assert.
       + rewrite mem_unlock_union_l by done.
-        apply mk_ax_next_alt; try (by auto with mem_disjoint);[esolve_elem_of|].
+        eapply mk_ax_next_empty; try done.
+        { split. done. by rewrite <-mem_disjoint_unlock. }
+        { esolve_elem_of. }
         apply ax_done; constructor; rewrite ?mem_locks_unlock_all; try done.
         solve_assert.
     * apply ax_further_pred.
       { intros. solve_cred. }
-      intros mf S' ? p. inv_cstep p.
-      by apply mk_ax_next_alt; auto with ax. }
+      intros ? mf S' [??] p; subst. inv_cstep p.
+      eapply mk_ax_next_empty; try done; auto with ax. }
 
-  induction n as [|n IH]; [constructor |].
-  intros d m ??????.
-  eapply ax_compose_cons; [by apply Hax | clear dependent m d].
+  induction n as [|n IH]; [constructor |]. intros d m ??????.
+  eapply ax_compose_cons; [|by apply Hax | clear dependent m d].
+  { auto with ax. }
 
   intros m φ [d ?? Hpost]. apply ax_further.
   { intros. solve_cred. }
 
-  intros mf S' ? p. destruct d; discriminate_down_up; inv_cstep p.
-  * apply mk_ax_next_alt; try done.
+  intros ? mf S' [??] p; subst. destruct d; discriminate_down_up; inv_cstep p.
+  * eapply mk_ax_next_empty; try done.
     { simpl. by apply empty_union_L. }
     clear dependent φ mf S'. apply ax_further_pred.
     { intros. solve_cred. }
-    intros mf S' ? p. inv_cstep p.
-    apply mk_ax_next_alt; try done. eapply ax_compose_cons;
-      [apply Haxe; auto with ax | clear dependent m mf S'].
+    intros ? mf S' [??] p; subst. inv_cstep p.
+    eapply mk_ax_next_empty; try done. eapply ax_compose_cons;
+      [|apply Haxe; auto with ax | clear dependent m mf S'].
+    { auto with ax. }
     intros m φ [v ???]. apply ax_further_pred.
     { intros. destruct (val_true_false_dec v); solve_cred. }
-    intros mf S' ? p. inv_cstep p.
+    intros ? mf S' [??] p; subst. inv_cstep p.
     + rewrite mem_unlock_union_l by done.
-      apply mk_ax_next_alt; try by auto with mem_disjoint.
+      eapply mk_ax_next_empty; try done.
+      { split. done. by rewrite <-mem_disjoint_unlock. }
       apply ax_pred, ax_pred, IH; rewrite ?mem_locks_unlock_all; auto with ax.
       solve_assert.
     + rewrite mem_unlock_union_l by done.
-      apply mk_ax_next_alt; try by auto with mem_disjoint.
+      eapply mk_ax_next_empty; try done.
+      { split. done. by rewrite <-mem_disjoint_unlock. }
       { simpl. by apply empty_union_L. }
       apply ax_done; constructor; rewrite ?mem_locks_unlock_all; try done.
       solve_assert.
-  * apply mk_ax_next_alt; try done; [esolve_elem_of |]. by apply ax_done.
-  * apply mk_ax_next_alt; try done; [esolve_elem_of |]. by apply ax_done.
+  * eapply mk_ax_next_empty; try done; [esolve_elem_of |]. by apply ax_done.
+  * eapply mk_ax_next_empty; try done; [esolve_elem_of |]. by apply ax_done.
 Qed.
 
 Lemma ax_comp Δ R J sl sr P P' Q :
-  Δ \ R \ J ⊨ₛ {{ P }} sl {{ P' }} →
-  Δ \ R \ J ⊨ₛ {{ P' }} sr {{ Q }} →
-  Δ \ R \ J ⊨ₛ {{ P }} sl ;; sr {{ Q }}.
+  Δ\ R\ J ⊨ₛ {{ P }} sl {{ P' }} → Δ\ R\ J ⊨ₛ {{ P' }} sr {{ Q }} →
+  Δ\ R\ J ⊨ₛ {{ P }} sl ;; sr {{ Q }}.
 Proof.
   intros Haxl Haxr n k. revert n.
   set (Pd := dassert_pack P Q R J).
   set (Pdl := dassert_pack P P' R J).
   set (Pdr := dassert_pack P' Q R J).
   cut (∀ n d m,
-   ax_funs n Δ →
-   locks sl = ∅ →
-   locks sr = ∅ →
-   locks m = ∅ →
+   ax_funs n Δ → locks sl = ∅ → locks sr = ∅ → locks m = ∅ →
    (down d sl → assert_holds (fpure Δ) (Pdl d) (get_stack k) m →
-     ax (ax_stmt_P (sl ;; sr) (fpure Δ) Pd) k n
+     ax ax_disjoint_cond (ax_stmt_post (sl ;; sr) (fpure Δ) Pd) k n
        (CStmt (□ ;; sr) :: k) (Stmt d sl) m)
    ∧ (down d sr → assert_holds (fpure Δ) (Pdr d) (get_stack k) m →
-     ax (ax_stmt_P (sl ;; sr) (fpure Δ) Pd) k n
+     ax ax_disjoint_cond (ax_stmt_post (sl ;; sr) (fpure Δ) Pd) k n
        (CStmt (sl ;; □) :: k) (Stmt d sr) m)).
-  { intros help n d m ?? Hs ??. simpl in Hs. decompose_empty.
+  { intros help n d m ?? Hs ??; simpl in Hs; decompose_empty.
     apply ax_further_pred.
     { intros. solve_cred. }
-    intros mf S' ? p.
-    destruct d; discriminate_down_up; inv_cstep p.
-    * apply mk_ax_next_alt; try done. eapply help; eauto with ax.
-    * apply mk_ax_next_alt; try done. eapply help; eauto with ax.
-    * apply mk_ax_next_alt; try done. eapply help; eauto with ax. }
+    intros ? mf S' [??] p; subst.
+    destruct d; discriminate_down_up; inv_cstep p;
+      eapply mk_ax_next_empty; try done; eapply help; eauto with ax. }
 
-  induction n as [|n IH]; [repeat constructor |].
-  intros d m; split; intros ??.
+  induction n as [|n IH]; [repeat constructor |]. intros d m; split; intros ??.
 
-  * eapply ax_compose_cons; [by apply Haxl | clear dependent m d].
+  * eapply ax_compose_cons; [|by apply Haxl | clear dependent m d].
+    { auto with ax. }
     intros m φ [d ?? Hpost]. apply ax_further.
     { intros. solve_cred. }
 
-    intros mf S' ? p. destruct d; discriminate_down_up; inv_cstep p.
-    + apply mk_ax_next_alt; try done. eapply IH; auto with ax arith.
-    + apply mk_ax_next_alt; try done.
+    intros ? mf S' [??] p; subst. destruct d; discriminate_down_up; inv_cstep p.
+    + eapply mk_ax_next_empty; try done. eapply IH; auto with ax arith.
+    + eapply mk_ax_next_empty; try done.
       { simpl. by apply empty_union_L. }
       by apply ax_done.
     + match goal with
       | _ : ?l ∉ labels sl |- _ => destruct (decide (l ∈ labels sr))
       end; subst.
-      - apply mk_ax_next_alt; try done; [esolve_elem_of|].
+      - eapply mk_ax_next_empty; try done.
+        { by apply empty_union_L. }
         apply ax_further_pred.
-        { intros. solve_cred. }
-        intros mf' S'' ? p. inv_cstep p.
-        apply mk_ax_next_alt; try done. apply ax_pred, IH; auto with ax.
-      - apply mk_ax_next_alt; try done; [esolve_elem_of|].
+        { intros; solve_cred. }
+        intros ? mf' S'' [??] p; subst. inv_cstep p.
+        eapply mk_ax_next_empty; try done. apply ax_pred, IH; auto with ax.
+      - eapply mk_ax_next_empty; try done. esolve_elem_of.
         apply ax_done; constructor; solve_elem_of.
 
-  * eapply ax_compose_cons; [by apply Haxr | clear dependent m d].
+  * eapply ax_compose_cons; [|by apply Haxr | clear dependent m d].
+    { auto with ax. }
     intros m φ [d ?? Hpost]. apply ax_further.
     { intros. solve_cred. }
 
-    intros mf S' ? p. destruct d; discriminate_down_up; inv_cstep p.
-    + apply mk_ax_next_alt; try done; [esolve_elem_of |]. by apply ax_done.
-    + apply mk_ax_next_alt; try done; [esolve_elem_of |]. by apply ax_done.
+    intros ? mf S' [??] p; subst. destruct d; discriminate_down_up; inv_cstep p.
+    + eapply mk_ax_next_empty; try done. esolve_elem_of. by apply ax_done.
+    + eapply mk_ax_next_empty; try done. esolve_elem_of. by apply ax_done.
     + match goal with
       | _ : ?l ∉ labels sr |- _ => destruct (decide (l ∈ labels sl))
       end; subst.
-      - apply mk_ax_next_alt; try done; [esolve_elem_of |].
+      - eapply mk_ax_next_empty; try done; [esolve_elem_of |].
         apply ax_further_pred.
-        { intros. solve_cred. }
-        intros mf' S'' ? p. inv_cstep p.
-        apply mk_ax_next_alt; try done. apply ax_pred, IH; auto with ax.
-      - apply mk_ax_next_alt; try done; [esolve_elem_of |].
+        { intros; solve_cred. }
+        intros ? mf' S'' [??] p; subst. inv_cstep p.
+        eapply mk_ax_next_empty; try done. apply ax_pred, IH; auto with ax.
+      - eapply mk_ax_next_empty; try done; [esolve_elem_of |].
         apply ax_done; constructor; solve_elem_of.
 Qed.
 
 Lemma ax_if Δ R J e sl sr P P' Q :
-  Δ ⊨ₑ {{ P }} e {{ λ v, P' v ▷ }} →
-  Δ \ R \ J ⊨ₛ {{ assert_is_true P' }} sl {{ Q }} →
-  Δ \ R \ J ⊨ₛ {{ assert_is_false P' }} sr {{ Q }} →
-  Δ \ R \ J ⊨ₛ {{ P }} IF e then sl else sr {{ Q }}.
+  Δ\ emp ⊨ₑ {{ P }} e {{ λ v, P' v ▷ }} →
+  Δ\ R\ J ⊨ₛ {{ assert_is_true P' }} sl {{ Q }} →
+  Δ\ R\ J ⊨ₛ {{ assert_is_false P' }} sr {{ Q }} →
+  Δ\ R\ J ⊨ₛ {{ P }} IF e then sl else sr {{ Q }}.
 Proof.
   intros Haxe Haxl Haxr n k. revert n.
   set (Pd := dassert_pack P Q R J).
   set (Pdl := dassert_pack (assert_is_true P') Q R J).
   set (Pdr := dassert_pack (assert_is_false P') Q R J).
   cut (∀ n d m,
-   ax_funs n Δ →
-   locks e = ∅ →
-   locks sl = ∅ →
-   locks sr = ∅ →
-   locks m = ∅ →
+   ax_funs n Δ → locks e = ∅ → locks sl = ∅ → locks sr = ∅ → locks m = ∅ →
    (down d sl → assert_holds (fpure Δ) (Pdl d) (get_stack k) m →
-     ax (ax_stmt_P (IF e then sl else sr) (fpure Δ) Pd) k n
+     ax ax_disjoint_cond (ax_stmt_post (IF e then sl else sr) (fpure Δ) Pd) k n
        (CStmt (IF e then □ else sr) :: k) (Stmt d sl) m)
    ∧ (down d sr → assert_holds (fpure Δ) (Pdr d) (get_stack k) m →
-     ax (ax_stmt_P (IF e then sl else sr) (fpure Δ) Pd) k n
+     ax ax_disjoint_cond (ax_stmt_post (IF e then sl else sr) (fpure Δ) Pd) k n
        (CStmt (IF e then sl else □) :: k) (Stmt d sr) m)).
   { intros help n [] m ?? Hs ??; simpl in Hs;
       decompose_empty; discriminate_down_up.
     * apply ax_further_pred.
       { intros. solve_cred. }
-      intros mf S' ? p. inv_cstep p.
-      apply mk_ax_next_alt; try done. eapply ax_compose_cons;
-        [apply Haxe; auto with ax | clear dependent m mf S'].
+      intros ? mf S' [??] p; subst. inv_cstep p.
+      eapply mk_ax_next_empty; try done. eapply ax_compose_cons;
+        [|apply Haxe; auto with ax | clear dependent m mf S'].
+      { auto with ax. }
       intros m φ [v ???]. apply ax_further_pred.
       { intros. destruct (val_true_false_dec v); solve_cred. }
-      intros mf S' ? p. inv_cstep p.
+      intros ? mf S' [??] p; subst. inv_cstep p.
       + rewrite mem_unlock_union_l by done.
-        apply mk_ax_next_alt; try by auto with mem_disjoint.
+        eapply mk_ax_next_empty; try done.
+        { split. done. by rewrite <-mem_disjoint_unlock. }
         apply help; rewrite ?mem_locks_unlock_all; auto with ax. solve_assert.
       + rewrite mem_unlock_union_l by done.
-        apply mk_ax_next_alt; try by auto with mem_disjoint.
+        eapply mk_ax_next_empty; try done.
+        { split. done. by rewrite <-mem_disjoint_unlock. }
         apply help; rewrite ?mem_locks_unlock_all; auto with ax. solve_assert.
     * apply ax_further_pred.
       { intros. solve_cred. }
-      intros mf S' ? p. inv_cstep p.
-      + apply mk_ax_next_alt; try by auto with mem_disjoint.
+      intros ? mf S' [??] p; subst. inv_cstep p.
+      + eapply mk_ax_next_empty; try done.
         apply help; rewrite ?mem_locks_unlock_all; auto with ax.
-      + apply mk_ax_next_alt; try by auto with mem_disjoint.
+      + eapply mk_ax_next_empty; try done.
         apply help; rewrite ?mem_locks_unlock_all; auto with ax. }
 
-  induction n as [|n IH]; [repeat constructor |].
-  intros d m; split; intros ??.
+  induction n as [|n IH]; [repeat constructor |]. intros d m; split; intros ??.
 
-  * eapply ax_compose_cons; [by apply Haxl | clear dependent m d].
+  * eapply ax_compose_cons; [|by apply Haxl | clear dependent m d].
+    { auto with ax. }
     intros m φ [d ?? Hpost]. apply ax_further.
-    { intros. solve_cred. }
+    { intros; solve_cred. }
 
-    intros mf S' ? p. destruct d; discriminate_down_up; inv_cstep p.
-    + apply mk_ax_next_alt; try done; [esolve_elem_of|]. by apply ax_done.
-    + apply mk_ax_next_alt; try done; [esolve_elem_of|]. by apply ax_done.
+    intros ? mf S' [??] p; subst. destruct d; discriminate_down_up; inv_cstep p.
+    + eapply mk_ax_next_empty; try done. esolve_elem_of. by apply ax_done.
+    + eapply mk_ax_next_empty; try done. esolve_elem_of. by apply ax_done.
     + match goal with
       | _ : ?l ∉ labels sl |- _ => destruct (decide (l ∈ labels sr))
       end; subst.
-      - apply mk_ax_next_alt; try done; [esolve_elem_of|].
+      - eapply mk_ax_next_empty; try done; [esolve_elem_of|].
         apply ax_further_pred.
-        { intros. solve_cred. }
-        intros mf' S'' ? p. inv_cstep p.
-        apply mk_ax_next_alt; try done. apply ax_pred, IH; auto with ax.
-      - apply mk_ax_next_alt; try done; [esolve_elem_of|].
+        { intros; solve_cred. }
+        intros ? mf' S'' [??] p; subst. inv_cstep p.
+        eapply mk_ax_next_empty; try done. apply ax_pred, IH; auto with ax.
+      - eapply mk_ax_next_empty; try done; [esolve_elem_of|].
         apply ax_done. constructor; solve_elem_of.
 
-  * eapply ax_compose_cons; [by apply Haxr | clear dependent m d].
+  * eapply ax_compose_cons; [|by apply Haxr | clear dependent m d].
+    { auto with ax. }
     intros m φ [d ?? Hpost]. apply ax_further.
     { intros. solve_cred. }
 
-    intros mf S' ? p. destruct d; discriminate_down_up; inv_cstep p.
-    + apply mk_ax_next_alt; try done; [esolve_elem_of|]. by apply ax_done.
-    + apply mk_ax_next_alt; try done; [esolve_elem_of|]. by apply ax_done.
+    intros ? mf S' [??] p; subst. destruct d; discriminate_down_up; inv_cstep p.
+    + eapply mk_ax_next_empty; try done; [esolve_elem_of|]. by apply ax_done.
+    + eapply mk_ax_next_empty; try done; [esolve_elem_of|]. by apply ax_done.
     + match goal with
       | _ : ?l ∉ labels sr |- _ => destruct (decide (l ∈ labels sl))
       end; subst.
-      - apply mk_ax_next_alt; try done; [esolve_elem_of|].
+      - eapply mk_ax_next_empty; try done; [esolve_elem_of|].
         apply ax_further_pred.
         { intros. solve_cred. }
-        intros mf' S'' ? p. inv_cstep p.
-        apply mk_ax_next_alt; try done. apply ax_pred, IH; auto with ax.
-      - apply mk_ax_next_alt; try done; [esolve_elem_of|].
-        apply ax_done. constructor; solve_elem_of.
+        intros ? mf' S'' [??] p; subst. inv_cstep p.
+        eapply mk_ax_next_empty; try done. apply ax_pred, IH; auto with ax.
+      - eapply mk_ax_next_empty; try done; [esolve_elem_of|].
+        apply ax_done; constructor; solve_elem_of.
 Qed.
 End axiomatic.
 
@@ -2048,16 +2302,16 @@ Notation dassert_pack P Q R J := (@directed_pack assert P%A Q%A R%A J%A).
 Notation "δ \ Δ \ P ⊨ₚ s" :=
   (ax_stmt_packed δ Δ P%A s%S)
   (at level 74, Δ at next level, P at next level,
-   format "δ  \  Δ  \  P  ⊨ₚ  '[' s ']'").
+   format "δ \  Δ \  P  ⊨ₚ  '[' s ']'").
 Notation "δ \ Δ \ R \ J ⊨ₛ {{ P }} s {{ Q }}" :=
   (ax_stmt δ Δ R%A J%A P%A s%S Q%A)
   (at level 74, Δ at next level, R at next level, J at next level,
-   format "δ  \  Δ  \  R  \  J  ⊨ₛ  '[' {{  P  }} '/'  s  '/' {{  Q  }} ']'").
+   format "δ \  Δ \  R  \  J  ⊨ₛ  '[' {{  P  }} '/'  s  '/' {{  Q  }} ']'").
 Notation "δ \ Δ ⊨ₜ {{ P }} s {{ Q }}" :=
   (ax_stmt_top δ Δ P%A s%S Q%A)
   (at level 74, Δ at next level,
-   format "δ  \  Δ  ⊨ₜ  '[' {{  P  }} '/'  s  '/' {{  Q  }} ']'").
-Notation "δ \ Δ ⊨ₑ {{ P }} e {{ Q }}" :=
-  (ax_expr δ Δ P%A e%E Q%A)
-  (at level 74, Δ at next level,
-   format "δ  \  Δ  ⊨ₑ  '[' {{  P  }} '/'  e  '/' {{  Q  }} ']'").
+   format "δ \  Δ  ⊨ₜ  '[' {{  P  }} '/'  s  '/' {{  Q  }} ']'").
+Notation "δ \ Δ \ A ⊨ₑ {{ P }} e {{ Q }}" :=
+  (ax_expr δ Δ A%A P%A e%E Q%A)
+  (at level 74, Δ at next level, A at next level,
+   format "δ \  Δ \  A  ⊨ₑ  '[' {{  P  }} '/'  e  '/' {{  Q  }} ']'").
