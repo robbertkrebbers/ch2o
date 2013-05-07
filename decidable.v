@@ -76,6 +76,7 @@ Notation cast_if_and3 S1 S2 S3 := (if S1 then cast_if_and S2 S3 else right _).
 Notation cast_if_and4 S1 S2 S3 S4 :=
   (if S1 then cast_if_and3 S2 S3 S4 else right _).
 Notation cast_if_or S1 S2 := (if S1 then left _ else cast_if S2).
+Notation cast_if_or3 S1 S2 S3 := (if S1 then left _ else cast_if_or S2 S3).
 Notation cast_if_not_or S1 S2 := (if S1 then cast_if S2 else left _).
 Notation cast_if_not S := (if S then right _ else left _).
 

@@ -245,9 +245,9 @@ Lemma elem_of_sctx_item_gotos (E : sctx_item) (s : stmt) (l : label) :
   l ∈ gotos (subst E s) ↔ l ∈ gotos E ∨ l ∈ gotos s.
 Proof. destruct E; solve_elem_of. Qed.
 Lemma sctx_item_gotos_spec (E : sctx_item) (s : stmt) :
-  gotos (subst E s) ≡ gotos E ∪ gotos s.
+  gotos (subst E s) = gotos E ∪ gotos s.
 Proof.
-  apply elem_of_equiv. intros.
+  apply elem_of_equiv_L. intros.
   rewrite elem_of_union. by apply elem_of_sctx_item_gotos.
 Qed.
 
@@ -255,9 +255,9 @@ Lemma elem_of_sctx_item_labels (E : sctx_item) (s : stmt) (l : label) :
   l ∈ labels (subst E s) ↔ l ∈ labels E ∨ l ∈ labels s.
 Proof. destruct E; solve_elem_of. Qed.
 Lemma sctx_item_labels_spec (E : sctx_item) (s : stmt) :
-  labels (subst E s) ≡ labels E ∪ labels s.
+  labels (subst E s) = labels E ∪ labels s.
 Proof.
-  apply elem_of_equiv. intros.
+  apply elem_of_equiv_L. intros.
   rewrite elem_of_union. by apply elem_of_sctx_item_labels.
 Qed.
 
@@ -415,7 +415,4 @@ Ltac unfold_stmt_elem_of := repeat
   | |- context [ _ ∈ labels (subst _ _) ] =>
     setoid_rewrite elem_of_sctx_item_labels
   end.
-Ltac solve_stmt_elem_of :=
-  simpl in *;
-  unfold_stmt_elem_of;
-  solve_elem_of.
+Ltac solve_stmt_elem_of := simpl in *; unfold_stmt_elem_of; solve_elem_of.

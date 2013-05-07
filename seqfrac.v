@@ -14,13 +14,10 @@ Definition seqfrac_gen_kind (k : pkind) (f : seqfrac) : pkind :=
   end.
 
 Inductive seqfrac_subseteq: SubsetEq seqfrac :=
-  | Seq_subseteq_Seq :
-     Seq ⊆ Seq
-  | UnSeq_subseteq_UnSeq f1 f2 :
-     f1 ⊆ f2 → UnSeq f1 ⊆ UnSeq f2.
+  | Seq_subseteq_Seq : Seq ⊆ Seq
+  | UnSeq_subseteq_UnSeq f1 f2 : f1 ⊆ f2 → UnSeq f1 ⊆ UnSeq f2.
 Inductive seqfrac_disjoint: Disjoint seqfrac :=
-  | UnSeq_disjoint f1 f2 :
-     f1 ⊥ f2 → UnSeq f1 ⊥ UnSeq f2.
+  | UnSeq_disjoint f1 f2 : f1 ⊥ f2 → UnSeq f1 ⊥ UnSeq f2.
 
 Instance seqfrac_ops: PermissionsOps seqfrac := {
   perm_kind := seqfrac_gen_kind Write;
@@ -65,8 +62,7 @@ Lemma UnSeq_subset_UnSeq f1 f2 : f1 ⊂ f2 → UnSeq f1 ⊂ UnSeq f2.
 Proof. intros [? H]. by split; [constructor|contradict H; inversion H]. Qed.
 
 Lemma seqfrac_subset_alt f1 f2 :
-  f1 ⊂ f2 ↔
-    ∃ f1' f2', f1 = UnSeq f1' ∧ f2 = UnSeq f2' ∧ f1' ⊂ f2'.
+  f1 ⊂ f2 ↔ ∃ f1' f2', f1 = UnSeq f1' ∧ f2 = UnSeq f2' ∧ f1' ⊂ f2'.
 Proof.
   split.
   * intros [H1 H2]. destruct H1.
@@ -76,45 +72,37 @@ Proof.
 Qed.
 
 Lemma seqfrac_gen_kind_preserving k f1 f2 :
-  Read ⊆ k →
-  f1 ⊆ f2 →
-  seqfrac_gen_kind k f1 ⊆ seqfrac_gen_kind k f2.
+  Read ⊆ k → f1 ⊆ f2 → seqfrac_gen_kind k f1 ⊆ seqfrac_gen_kind k f2.
 Proof.
   destruct 2; simpl.
   * done.
   * by apply frac_gen_kind_preserving.
 Qed.
 Lemma seqfrac_fragment_gen_kind k f :
-  perm_fragment f →
-  seqfrac_gen_kind k f = Read.
+  perm_fragment f → seqfrac_gen_kind k f = Read.
 Proof.
   intros [? [???]]; simpl.
   apply frac_fragment_gen_kind. by exists f2.
 Qed.
 Lemma seqfrac_lock_unlock k f :
-  Read ⊆ k →
-  seqfrac_gen_kind k f = Locked →
-  perm_lock (perm_unlock f) = f.
+  Read ⊆ k → seqfrac_gen_kind k f = Locked → perm_lock (perm_unlock f) = f.
 Proof.
   unfold perm_lock_; destruct f; simpl.
   * done.
   * unfold frac_gen_kind. case_decide. by inversion 1; subst. done.
 Qed.
 Lemma seqfrac_unlock_lock k f :
-  Write ⊆ seqfrac_gen_kind k f →
-  perm_unlock (perm_lock f) = f.
+  Write ⊆ seqfrac_gen_kind k f → perm_unlock (perm_lock f) = f.
 Proof.
   unfold perm_lock_; destruct f; simpl.
   * inversion 1.
   * unfold frac_gen_kind. case_decide. by subst. inversion 1.
 Qed.
 Lemma seqfrac_unlock_other k f :
-  seqfrac_gen_kind k f ≠ Locked →
-  perm_unlock f = f.
+  seqfrac_gen_kind k f ≠ Locked → perm_unlock f = f.
 Proof. by destruct f. Qed.
 Lemma seqfrac_unlock_kind k f :
-  k ≠ Locked →
-  seqfrac_gen_kind k (perm_unlock f) ≠ Locked.
+  k ≠ Locked → seqfrac_gen_kind k (perm_unlock f) ≠ Locked.
 Proof. destruct f. done. apply frac_unlock_kind. Qed.
 
 Instance: Permissions seqfrac.
@@ -137,10 +125,9 @@ Proof.
   * apply seqfrac_unlock_other.
   * intros. by apply seqfrac_unlock_kind.
   * red. unfold union, perm_union. simpl.
-    intros [|?] [|?] [|?]; try reflexivity.
-    f_equal. apply (associative_eq _).
+    intros [|?] [|?] [|?]; try reflexivity. f_equal. apply (associative_L (∪)).
   * red. unfold union, perm_union; simpl.
-    intros [|?] [|?]; try reflexivity. f_equal. apply (commutative _).
+    intros [|?] [|?]; try reflexivity. f_equal. apply (commutative_L (∪)).
   * unfold union, perm_union; simpl.
     intros [|?] [|?]; inversion_clear 1.
     constructor. eapply perm_disjoint_union_ll; eauto.
@@ -156,7 +143,7 @@ Proof.
     constructor. eapply perm_union_reflecting_l; eauto.
   * unfold union, difference, perm_union, perm_difference; simpl.
     intros ??. rewrite seqfrac_subset_alt. intros (?&?&?&?&?); subst.
-    constructor; by apply perm_difference_disjoint.
+    constructor; by apply perm_disjoint_difference.
   * unfold union, difference, perm_union, perm_difference; simpl.
     intros ??. rewrite seqfrac_subset_alt. intros (?&?&?&?&?); subst.
     f_equal. by apply perm_union_difference.
@@ -181,15 +168,12 @@ Definition to_frac (f : seqfrac) : frac :=
   | Seq => frac1
   | UnSeq f => f
   end.
-
 Instance seqfrac_half: Half seqfrac := λ f,
   match f with
   | Seq => Seq
   | UnSeq f => UnSeq (f.½)
   end.
-Lemma seqfrac_disjoint_half k f :
-  seqfrac_gen_kind k f ≠ Locked →
-  f.½ ⊥ f.½.
+Lemma seqfrac_disjoint_half k f : seqfrac_gen_kind k f ≠ Locked → f.½ ⊥ f.½.
 Proof. destruct f; [done |]. constructor. apply frac_disjoint_half. Qed.
 
 Instance: FracPermissions seqfrac.

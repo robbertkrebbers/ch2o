@@ -18,7 +18,6 @@ behavior. *)
 For statically correct programs (i.e. those where all function names have a
 corresponding body, labels for gotos exist, etc) the reduction semantics should
 not get stuck, but might still end up in a state of undefined behavior. *)
-
 Require Export statements memory.
 
 (** * Definitions *)
@@ -30,11 +29,7 @@ a traversal to the top of the statement, and returns from the called function.
 When a [goto l] statement is executed, the direction is changed to [↷l], and
 the semantics performs a non-deterministic small step traversal through the
 zipper until the label [l] is found. *)
-Inductive direction :=
-  | Down : direction
-  | Up : direction
-  | Top : val → direction
-  | Jump : label → direction.
+Inductive direction := Down | Up | Top (v : val) | Jump (l : label).
 Notation "↘" := Down : C_scope.
 Notation "↗" := Up : C_scope.
 Notation "⇈ v" := (Top v) (at level 20) : C_scope.
@@ -110,11 +105,7 @@ Inductive focus :=
   | Call : funname → list val → focus
   | Return : val → focus
   | Undef : focus.
-Record state := State {
-  SCtx : ctx;
-  SFoc : focus;
-  SMem : mem
-}.
+Record state := State { SCtx : ctx; SFoc : focus; SMem : mem }.
 Add Printing Constructor state.
 
 Instance focus_eq_dec (φ1 φ2 : focus) : Decision (φ1 = φ2).

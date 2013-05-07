@@ -28,9 +28,7 @@ Proof.
   split.
   * apply _.
   * intros. unfold fresh, Nfresh.
-    setoid_replace X with Y; [done |].
-    by apply elem_of_equiv.
+    setoid_replace X with Y; [done |]. by apply elem_of_equiv.
   * intros X E. assert (1 ≤ 0)%N as []; [| done].
-    apply N.add_le_mono_r with (Nmax X).
-    by apply Nmax_max.
+    apply N.add_le_mono_r with (Nmax X). by apply Nmax_max.
 Qed.

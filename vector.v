@@ -21,16 +21,11 @@ Notation FS := Fin.FS.
 Delimit Scope fin_scope with fin.
 Arguments Fin.FS _ _%fin.
 
-Notation "0" := Fin.F1 : fin_scope.
-Notation "1" := (FS 0) : fin_scope.
-Notation "2" := (FS 1) : fin_scope.
-Notation "3" := (FS 2) : fin_scope.
-Notation "4" := (FS 3) : fin_scope.
-Notation "5" := (FS 4) : fin_scope.
-Notation "6" := (FS 5) : fin_scope.
-Notation "7" := (FS 6) : fin_scope.
-Notation "8" := (FS 7) : fin_scope.
-Notation "9" := (FS 8) : fin_scope.
+Notation "0" := Fin.F1 : fin_scope. Notation "1" := (FS 0) : fin_scope.
+Notation "2" := (FS 1) : fin_scope. Notation "3" := (FS 2) : fin_scope.
+Notation "4" := (FS 3) : fin_scope. Notation "5" := (FS 4) : fin_scope.
+Notation "6" := (FS 5) : fin_scope. Notation "7" := (FS 6) : fin_scope.
+Notation "8" := (FS 7) : fin_scope. Notation "9" := (FS 8) : fin_scope.
 Notation "10" := (FS 9) : fin_scope.
 
 Fixpoint fin_to_nat {n} (i : fin n) : nat :=
@@ -76,14 +71,10 @@ Ltac inv_fin i :=
   match type of i with
   | fin 0 =>
     revert dependent i;
-    match goal with
-    |- ∀ i, @?P i => apply (fin_0_inv P)
-    end
+    match goal with |- ∀ i, @?P i => apply (fin_0_inv P) end
   | fin (S ?n) =>
     revert dependent i;
-    match goal with
-    |- ∀ i, @?P i => apply (fin_S_inv P)
-    end
+    match goal with |- ∀ i, @?P i => apply (fin_S_inv P) end
   end.
 
 (** * Vectors *)
@@ -117,13 +108,10 @@ Ltac vec_double_ind v1 v2 :=
   match type of v1 with
   | vec _ ?n =>
     repeat match goal with
-    | H' : context [ n ] |- _ =>
-      var_neq v1 H'; var_neq v2 H'; revert H'
+    | H' : context [ n ] |- _ => var_neq v1 H'; var_neq v2 H'; revert H'
     end;
     revert n v1 v2;
-    match goal with
-    | |- ∀ n v1 v2, @?P n v1 v2 => apply (vec_rect2 P)
-    end
+    match goal with |- ∀ n v1 v2, @?P n v1 v2 => apply (vec_rect2 P) end
   end.
 
 Notation vcons_inj := VectorSpec.cons_inj.
@@ -132,8 +120,7 @@ Proof. apply vcons_inj. Qed.
 Lemma vcons_inj_2 {A n} x y (v w : vec A n) : x ::: v = y ::: w → v = w.
 Proof. apply vcons_inj. Qed.
 
-Lemma vec_eq {A n} (v w : vec A n) :
-  (∀ i, v !!! i = w !!! i) → v = w.
+Lemma vec_eq {A n} (v w : vec A n) : (∀ i, v !!! i = w !!! i) → v = w.
 Proof.
   vec_double_ind v w; [done|]. intros n v w IH x y Hi. f_equal.
   * apply (Hi 0%fin).
@@ -168,14 +155,10 @@ Ltac inv_vec v :=
   match type of v with
   | vec _ 0 =>
     revert dependent v;
-    match goal with
-    |- ∀ v, @?P v => apply (vec_0_inv P)
-    end
+    match goal with |- ∀ v, @?P v => apply (vec_0_inv P) end
   | vec _ (S ?n) =>
     revert dependent v;
-    match goal with
-    |- ∀ v, @?P v => apply (vec_S_inv P)
-    end
+    match goal with |- ∀ v, @?P v => apply (vec_S_inv P) end
   end.
 
 (** The following tactic performs case analysis on all hypotheses of the shape
@@ -213,7 +196,7 @@ Proof. by induction l; simpl; f_equal. Qed.
 Lemma vec_to_list_length {A n} (v : vec A n) : length (vec_to_list v) = n.
 Proof. induction v; simpl; by f_equal. Qed.
 Lemma vec_to_list_same_length {A B n} (v : vec A n) (w : vec B n) :
-  same_length v w.
+  v `same_length` w.
 Proof. apply same_length_length. by rewrite !vec_to_list_length. Qed.
 
 Lemma vec_to_list_inj1 {A n m} (v : vec A n) (w : vec A m) :
@@ -253,12 +236,10 @@ Qed.
 Lemma vec_to_list_drop_lookup {A n} (v : vec A n) (i : fin n) :
   drop i v = v !!! i :: drop (S i) v.
 Proof. induction i; inv_vec v; simpl; intros; [done | by rewrite IHi]. Qed.
-
 Lemma vec_to_list_take_drop_lookup {A n} (v : vec A n) (i : fin n) :
   vec_to_list v = take i v ++ v !!! i :: drop (S i) v.
 Proof.
-  rewrite <-(take_drop i v) at 1. f_equal.
-  apply vec_to_list_drop_lookup.
+  rewrite <-(take_drop i v) at 1. f_equal. apply vec_to_list_drop_lookup.
 Qed. 
 
 Lemma elem_of_vlookup {A n} (v : vec A n) x :
@@ -273,31 +254,21 @@ Proof.
     + by left.
     + right. apply IHv.
 Qed.
-
 Lemma Forall_vlookup {A} (P : A → Prop) {n} (v : vec A n) :
   Forall P (vec_to_list v) ↔ ∀ i, P (v !!! i).
-Proof.
-  rewrite Forall_forall.
-  setoid_rewrite elem_of_vlookup. naive_solver.
-Qed.
+Proof. rewrite Forall_forall. setoid_rewrite elem_of_vlookup. naive_solver. Qed.
 Lemma Forall_vlookup_1 {A} (P : A → Prop) {n} (v : vec A n) i :
   Forall P (vec_to_list v) → P (v !!! i).
 Proof. by rewrite Forall_vlookup. Qed.
 Lemma Forall_vlookup_2 {A} (P : A → Prop) {n} (v : vec A n) :
   (∀ i, P (v !!! i)) → Forall P (vec_to_list v).
 Proof. by rewrite Forall_vlookup. Qed.
-
 Lemma Exists_vlookup {A} (P : A → Prop) {n} (v : vec A n) :
   Exists P (vec_to_list v) ↔ ∃ i, P (v !!! i).
-Proof.
-  rewrite Exists_exists.
-  setoid_rewrite elem_of_vlookup. naive_solver.
-Qed.
-
-Lemma Forall2_vlookup {A B} (P : A → B → Prop)
-    {n} (v1 : vec A n) (v2 : vec B n) :
-  Forall2 P (vec_to_list v1) (vec_to_list v2) ↔
-    ∀ i, P (v1 !!! i) (v2 !!! i).
+Proof. rewrite Exists_exists. setoid_rewrite elem_of_vlookup. naive_solver. Qed.
+Lemma Forall2_vlookup {A B} (P : A → B → Prop) {n}
+    (v1 : vec A n) (v2 : vec B n) :
+  Forall2 P (vec_to_list v1) (vec_to_list v2) ↔ ∀ i, P (v1 !!! i) (v2 !!! i).
 Proof.
   split.
   * vec_double_ind v1 v2.
@@ -310,13 +281,12 @@ Proof.
       constructor. apply (H 0%fin). apply IH, (λ i, H (FS i)).
 Qed.
 
-(** The function [vmap f v] applies a funlocks (mem_unlock (⋃ Ωs) (⋃ ms)) ≡ ∅ction [f] element wise to [v]. *)
+(** The function [vmap f v] applies a function [f] element wise to [v]. *)
 Notation vmap := Vector.map.
 
 Lemma vlookup_map `(f : A → B) {n} (v : vec A n) i :
   vmap f v !!! i = f (v !!! i).
 Proof. by apply Vector.nth_map. Qed.
-
 Lemma vec_to_list_map `(f : A → B) {n} (v : vec A n) :
   vec_to_list (vmap f v) = f <$> vec_to_list v.
 Proof. induction v; simpl. done. by rewrite IHv. Qed.
@@ -328,15 +298,12 @@ Notation vzip_with := Vector.map2.
 Lemma vlookup_zip_with `(f : A → B → C) {n} (v1 : vec A n) (v2 : vec B n) i :
   vzip_with f v1 v2 !!! i = f (v1 !!! i) (v2 !!! i).
 Proof. by apply Vector.nth_map2. Qed.
-
-Lemma vec_to_list_zip_with `(f : A → B → C) {n}
-    (v1 : vec A n) (v2 : vec B n) :
+Lemma vec_to_list_zip_with `(f : A → B → C) {n} (v1 : vec A n) (v2 : vec B n) :
   vec_to_list (vzip_with f v1 v2) =
     zip_with f (vec_to_list v1) (vec_to_list v2).
 Proof.
-  revert v2. induction v1; intros v2; inv_vec v2; intros; simpl.
-  * done.
-  * by rewrite IHv1.
+  revert v2. induction v1; intros v2; inv_vec v2; intros; simpl; [done|].
+  by rewrite IHv1.
 Qed.
 
 (** Similar to vlookup, we cannot define [vinsert] as an instance of the
@@ -350,13 +317,13 @@ Fixpoint vinsert {A n} (i : fin n) (x : A) : vec A n → vec A n :=
 Lemma vec_to_list_insert {A n} i x (v : vec A n) :
   vec_to_list (vinsert i x v) = insert (fin_to_nat i) x (vec_to_list v).
 Proof. induction v; inv_fin i. done. simpl. intros. by rewrite IHv. Qed.
-
 Lemma vlookup_insert {A n} i x (v : vec A n) : vinsert i x v !!! i = x.
 Proof. by induction i; inv_vec v. Qed.
-
 Lemma vlookup_insert_ne {A n} i j x (v : vec A n) :
   i ≠ j → vinsert i x v !!! j = v !!! j.
 Proof.
   induction i; inv_fin j; inv_vec v; simpl; try done.
   intros. apply IHi. congruence.
 Qed.
+Lemma vlookup_insert_self {A n} i (v : vec A n) : vinsert i (v !!! i) v = v.
+Proof. by induction v; inv_fin i; simpl; intros; f_equal. Qed.

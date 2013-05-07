@@ -61,7 +61,7 @@ Proof.
   rewrite <-Qclt_nge. intuition auto using Qclt_le_weak.
 Qed.
 
-Local Instance: PartialOrder frac.
+Local Instance: PartialOrder (@subseteq frac _).
 Proof.
   repeat split.
   * intros ?. apply Qcle_refl.
@@ -74,23 +74,17 @@ Proof.
   by rewrite Qcplus_comm.
 Qed.
 
-Lemma frac_disjoint_weaken_l (f1 f1' f2 : frac) :
-  f1 ⊥ f2 →
-  f1' ⊆ f1 →
-  f1' ⊥ f2.
+Lemma frac_disjoint_weaken_l (f1 f1' f2 : frac) : f1 ⊥ f2 → f1' ⊆ f1 → f1' ⊥ f2.
 Proof.
   unfold disjoint, perm_disjoint, subseteq, perm_subseteq; simpl.
   intros ??. transitivity (`f1 + `f2); [|done].
   by apply Qcplus_le_mono_r.
 Qed.
 
-Lemma frac_union_not_disjoint (f1 f2 : frac) :
-  ¬f1 ⊥ f2 →
-  f1 ∪ f2 = frac1.
+Lemma frac_union_not_disjoint (f1 f2 : frac) : ¬f1 ⊥ f2 → f1 ∪ f2 = frac1.
 Proof. intros. unfold union, perm_union; simpl. by case_decide. Qed.
 Lemma frac_union_disjoint (f1 f2 : frac) :
-  f1 ⊥ f2 →
-  @proj1_sig Qc _ (f1 ∪ f2) = `f1 + `f2.
+  f1 ⊥ f2 → @proj1_sig Qc _ (f1 ∪ f2) = `f1 + `f2.
 Proof. intros. unfold union, perm_union; simpl. by case_decide. Qed.
 
 Local Instance: Commutative (=) (@union frac _).
@@ -101,8 +95,7 @@ Proof.
   * by rewrite !frac_union_not_disjoint.
 Qed.
 
-Lemma frac_disjoint_union_ll (f1 f2 f3 : frac) :
-  f1 ∪ f2 ⊥ f3 → f1 ⊥ f3.
+Lemma frac_disjoint_union_ll (f1 f2 f3 : frac) : f1 ∪ f2 ⊥ f3 → f1 ⊥ f3.
 Proof.
   unfold union, perm_union, disjoint, perm_disjoint; simpl.
   case_decide; simpl.
@@ -113,18 +106,14 @@ Proof.
   * rewrite Qcle_ngt. intros [].
     apply (Qcplus_lt_mono_l 0 (`f3) 1), frac_lower.
 Qed.
-Lemma frac_disjoint_union_lr (f1 f2 f3 : frac) :
-  f1 ∪ f2 ⊥ f3 → f2 ⊥ f3.
-Proof. rewrite (commutative (∪)). apply frac_disjoint_union_ll. Qed.
-Lemma frac_disjoint_union_rl (f1 f2 f3 : frac) :
-  f1 ⊥ f2 ∪ f3 → f1 ⊥ f2.
+Lemma frac_disjoint_union_lr (f1 f2 f3 : frac) : f1 ∪ f2 ⊥ f3 → f2 ⊥ f3.
+Proof. rewrite (commutative_L (∪)). apply frac_disjoint_union_ll. Qed.
+Lemma frac_disjoint_union_rl (f1 f2 f3 : frac) : f1 ⊥ f2 ∪ f3 → f1 ⊥ f2.
 Proof. rewrite !(symmetry_iff (⊥) f1). apply frac_disjoint_union_ll. Qed.
-Lemma frac_disjoint_union_rr (f1 f2 f3 : frac) :
-  f1 ⊥ f2 ∪ f3 → f1 ⊥ f3.
-Proof. rewrite (commutative (∪)). apply frac_disjoint_union_rl. Qed.
+Lemma frac_disjoint_union_rr (f1 f2 f3 : frac) : f1 ⊥ f2 ∪ f3 → f1 ⊥ f3.
+Proof. rewrite (commutative_L (∪)). apply frac_disjoint_union_rl. Qed.
 
-Lemma frac_disjoint_union_l (f1 f2 f3 : frac) :
-  f1 ∪ f2 ⊥ f3 → f1 ⊥ f2.
+Lemma frac_disjoint_union_l (f1 f2 f3 : frac) : f1 ∪ f2 ⊥ f3 → f1 ⊥ f2.
 Proof.
   intros H1. apply dec_stable.
   unfold disjoint, perm_disjoint in H1; simpl in H1.
@@ -146,14 +135,13 @@ Qed.
 Lemma frac_disjoint_union_move_r (f1 f2 f3 : frac) :
   f1 ⊥ f2 ∪ f3 → f1 ∪ f2 ⊥ f3.
 Proof.
-  intros. symmetry. rewrite (commutative _).
-  apply frac_disjoint_union_move_l. by rewrite (commutative _).
+  intros. symmetry. rewrite (commutative_L (∪)).
+  apply frac_disjoint_union_move_l. by rewrite (commutative_L (∪)).
 Qed.
 
 Lemma frac_1_max f : f ⊆ frac1.
 Proof. apply frac_upper. Qed.
-Lemma frac_1_max_alt f :
-  frac1 ⊆ f → f = frac1.
+Lemma frac_1_max_alt f : frac1 ⊆ f → f = frac1.
 Proof. intros. apply (anti_symmetric _); auto using frac_1_max. Qed.
 
 Lemma frac_disjoint_1_l f : ¬frac1 ⊥ f.
@@ -166,24 +154,20 @@ Lemma frac_disjoint_1_r f : ¬f ⊥ frac1.
 Proof. rewrite (symmetry_iff _). by apply frac_disjoint_1_l. Qed.
 
 Lemma frac_gen_kind_preserving k f1 f2 :
-  Read ⊆ k →
-  f1 ⊆ f2 →
-  frac_gen_kind k f1 ⊆ frac_gen_kind k f2.
+  Read ⊆ k → f1 ⊆ f2 → frac_gen_kind k f1 ⊆ frac_gen_kind k f2.
 Proof.
   intro. unfold frac_gen_kind.
   pose proof frac_1_max_alt.
   repeat case_decide; try constructor; naive_solver.
 Qed.
 Lemma frac_fragment_gen_kind k f :
-  perm_fragment f →
-  frac_gen_kind k f = Read.
+  perm_fragment f → frac_gen_kind k f = Read.
 Proof.
   intros [f' ?]. unfold frac_gen_kind. case_decide; subst; [|done].
   by destruct (frac_disjoint_1_l f').
 Qed.
 Lemma frac_unlock_kind k f :
-  k ≠ Locked →
-  frac_gen_kind k (perm_unlock f) ≠ Locked.
+  k ≠ Locked → frac_gen_kind k (perm_unlock f) ≠ Locked.
 Proof. unfold frac_gen_kind. by case_decide. Qed.
 
 Local Instance: Permissions frac.
@@ -244,7 +228,7 @@ Proof.
   rewrite frac_union_not_disjoint; eauto using frac_disjoint_1_l.
 Qed.
 Instance: RightAbsorb (=) frac1 (∪).
-Proof. intro. rewrite (commutative_eq (∪)). apply (left_absorb _ _). Qed.
+Proof. intro. rewrite (commutative_L (∪)). apply (left_absorb_L _ (∪)). Qed.
 
 Program Instance frac_half: Half frac := λ f, dexist (`f / 2) _.
 Next Obligation.

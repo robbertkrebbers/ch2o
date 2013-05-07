@@ -16,28 +16,20 @@ Instance Some_inj {A} : Injective (=) (=) (@Some A).
 Proof. congruence. Qed.
 
 (** The non dependent elimination principle on the option type. *)
-Definition option_case {A B} (f : A → B) (b : B) (x : option A) : B :=
-  match x with
-  | None => b
-  | Some a => f a
-  end.
+Definition default {A B} (b : B) (x : option A) (f : A → B)  : B :=
+  match x with None => b | Some a => f a end.
 
 (** The [from_option] function allows us to get the value out of the option
 type by specifying a default value. *)
 Definition from_option {A} (a : A) (x : option A) : A :=
-  match x with
-  | None => a
-  | Some b => b
-  end.
+  match x with None => a | Some b => b end.
 
 (** An alternative, but equivalent, definition of equality on the option
 data type. This theorem is useful to prove that two options are the same. *)
 Lemma option_eq {A} (x y : option A) :
   x = y ↔ ∀ a, x = Some a ↔ y = Some a.
 Proof.
-  split.
-  { intros. by subst. }
-  intros E. destruct x, y.
+  split; [by intros; by subst |]. intros E. destruct x, y.
   + by apply E.
   + symmetry. by apply E.
   + by apply E.
@@ -45,24 +37,19 @@ Proof.
 Qed.
 
 Inductive is_Some {A} : option A → Prop :=
-  make_is_Some x : is_Some (Some x).
+  mk_is_Some x : is_Some (Some x).
 
 Instance is_Some_pi {A} (x : option A) : ProofIrrel (is_Some x).
 Proof.
   intros [?] p2. by refine
     match p2 in is_Some o return
-      match o with
-      | Some y => (make_is_Some y =)
-      | _ => λ _, False
-      end p2
-    with
-    | make_is_Some y => _
-    end.
+      match o with Some y => (mk_is_Some y =) | _ => λ _, False end p2
+    with mk_is_Some y => _ end.
 Qed.
 
-Lemma make_is_Some_alt `(x : option A) a : x = Some a → is_Some x.
+Lemma mk_is_Some_alt `(x : option A) a : x = Some a → is_Some x.
 Proof. intros. by subst. Qed.
-Hint Resolve make_is_Some_alt.
+Hint Resolve mk_is_Some_alt.
 Lemma is_Some_None {A} : ¬is_Some (@None A).
 Proof. by inversion 1. Qed.
 Hint Resolve is_Some_None.
@@ -71,9 +58,7 @@ Lemma is_Some_alt `(x : option A) : is_Some x ↔ ∃ y, x = Some y.
 Proof. split. inversion 1; eauto. intros [??]. by subst. Qed.
 
 Ltac inv_is_Some := repeat
-  match goal with
-  | H : is_Some _ |- _ => inversion H; clear H; subst
-  end.
+  match goal with H : is_Some _ |- _ => inversion H; clear H; subst end.
 
 Definition is_Some_proj `{x : option A} : is_Some x → A :=
   match x with
@@ -87,7 +72,7 @@ Definition Some_dec `(x : option A) : { a | x = Some a } + { x = None } :=
   end.
 Instance is_Some_dec `(x : option A) : Decision (is_Some x) :=
   match x with
-  | Some x => left (make_is_Some x)
+  | Some x => left (mk_is_Some x)
   | None => right is_Some_None
   end.
 Instance None_dec `(x : option A) : Decision (x = None) :=
@@ -101,7 +86,7 @@ Proof. split. by destruct 2. destruct x. by intros []. done. Qed.
 Lemma not_eq_None_Some `(x : option A) : x ≠ None ↔ is_Some x.
 Proof. rewrite eq_None_not_Some. split. apply dec_stable. tauto. Qed.
 
-Lemma make_eq_Some {A} (x : option A) a :
+Lemma mk_eq_Some {A} (x : option A) a :
   is_Some x → (∀ b, x = Some b → b = a) → x = Some a.
 Proof. destruct 1. intros. f_equal. auto. Qed.
 
@@ -122,18 +107,12 @@ Instance option_eq_dec `{dec : ∀ x y : A, Decision (x = y)}
 (** * Monadic operations *)
 Instance option_ret: MRet option := @Some.
 Instance option_bind: MBind option := λ A B f x,
-  match x with
-  | Some a => f a
-  | None => None
-  end.
+  match x with Some a => f a | None => None end.
 Instance option_join: MJoin option := λ A x,
-  match x with
-  | Some x => x
-  | None => None
-  end.
+  match x with Some x => x | None => None end.
 Instance option_fmap: FMap option := @option_map.
 Instance option_guard: MGuard option := λ P dec A x,
-  if dec then x else None.
+  match dec with left H => x H | _ => None end.
 
 Definition mapM `{!MBind M} `{!MRet M} {A B}
     (f : A → M B) : list A → M (list B) :=
@@ -153,60 +132,49 @@ Lemma fmap_None {A B} (f : A → B) (x : option A) :
   f <$> x = None ↔ x = None.
 Proof. unfold fmap, option_fmap. by destruct x. Qed.
 
-Lemma option_fmap_id {A} (x : option A) :
-  id <$> x = x.
+Lemma option_fmap_id {A} (x : option A) : id <$> x = x.
 Proof. by destruct x. Qed.
 Lemma option_bind_assoc {A B C} (f : A → option B)
     (g : B → option C) (x : option A) : (x ≫= f) ≫= g = x ≫= (mbind g ∘ f).
 Proof. by destruct x; simpl. Qed.
 Lemma option_bind_ext {A B} (f g : A → option B) x y :
-  (∀ a, f a = g a) →
-  x = y →
-  x ≫= f = y ≫= g.
+  (∀ a, f a = g a) → x = y → x ≫= f = y ≫= g.
 Proof. intros. destruct x, y; simplify_equality; simpl; auto. Qed.
 Lemma option_bind_ext_fun {A B} (f g : A → option B) x :
-  (∀ a, f a = g a) →
-  x ≫= f = x ≫= g.
+  (∀ a, f a = g a) → x ≫= f = x ≫= g.
 Proof. intros. by apply option_bind_ext. Qed.
 
 Section mapM.
   Context {A B : Type} (f : A → option B).
 
-  Lemma mapM_ext (g : A → option B) l :
-    (∀ x, f x = g x) → mapM f l = mapM g l.
+  Lemma mapM_ext (g : A → option B) l : (∀ x, f x = g x) → mapM f l = mapM g l.
   Proof. intros Hfg. by induction l; simpl; rewrite ?Hfg, ?IHl. Qed.
   Lemma Forall2_mapM_ext (g : A → option B) l k :
     Forall2 (λ x y, f x = g y) l k → mapM f l = mapM g k.
-  Proof.
-    induction 1 as [|???? Hfg ? IH]; simpl. done. by rewrite Hfg, IH.
-  Qed.
+  Proof. induction 1 as [|???? Hfg ? IH]; simpl. done. by rewrite Hfg, IH. Qed.
   Lemma Forall_mapM_ext (g : A → option B) l :
     Forall (λ x, f x = g x) l → mapM f l = mapM g l.
-  Proof.
-    induction 1 as [|?? Hfg ? IH]; simpl. done. by rewrite Hfg, IH.
-  Qed.
+  Proof. induction 1 as [|?? Hfg ? IH]; simpl. done. by rewrite Hfg, IH. Qed.
 
-  Lemma mapM_Some_1 l k :
-    mapM f l = Some k → Forall2 (λ x y, f x = Some y) l k.
+  Lemma mapM_Some_1 l k : mapM f l = Some k → Forall2 (λ x y, f x = Some y) l k.
   Proof.
     revert k. induction l as [|x l]; intros [|y k]; simpl; try done.
     * destruct (f x); simpl; [|discriminate]. by destruct (mapM f l).
     * destruct (f x) eqn:?; simpl; [|discriminate].
       destruct (mapM f l); intros; simplify_equality. constructor; auto.
   Qed.
-  Lemma mapM_Some_2 l k :
-    Forall2 (λ x y, f x = Some y) l k → mapM f l = Some k.
+  Lemma mapM_Some_2 l k : Forall2 (λ x y, f x = Some y) l k → mapM f l = Some k.
   Proof.
     induction 1 as [|???? Hf ? IH]; simpl; [done |].
     rewrite Hf. simpl. by rewrite IH.
   Qed.
-  Lemma mapM_Some l k :
-    mapM f l = Some k ↔ Forall2 (λ x y, f x = Some y) l k.
+  Lemma mapM_Some l k : mapM f l = Some k ↔ Forall2 (λ x y, f x = Some y) l k.
   Proof. split; auto using mapM_Some_1, mapM_Some_2. Qed.
 End mapM.
 
 Tactic Notation "simplify_option_equality" "by" tactic3(tac) := repeat
   match goal with
+  | _ => progress (unfold default in *)
   | _ => first [progress simpl in * | progress simplify_equality]
   | H : context [mbind (M:=option) (A:=?A) ?f ?o] |- _ =>
     let Hx := fresh in
@@ -279,10 +247,10 @@ Tactic Notation "simplify_option_equality" "by" tactic3(tac) := repeat
       rewrite Hx; clear Hx
     end
   | H : context C [@mguard option _ ?P ?dec _ ?x] |- _ =>
-    let X := context C [ if dec then x else None ] in
+    let X := context C [ match dec with left H => x H | _ => None end ] in
     change X in H; destruct_decide dec
   | |- context C [@mguard option _ ?P ?dec _ ?x] =>
-    let X := context C [ if dec then x else None ] in
+    let X := context C [ match dec with left H => x H | _ => None end ] in
     change X; destruct_decide dec
   | H1 : ?o = Some ?x, H2 : ?o = Some ?y |- _ =>
     assert (y = x) by congruence; clear H2
@@ -304,14 +272,9 @@ Instance option_union_with {A} : UnionWith A (option A) := λ f x y,
   | None, Some b => Some b
   | None, None => None
   end.
-Instance option_intersection_with {A} :
-    IntersectionWith A (option A) := λ f x y,
-  match x, y with
-  | Some a, Some b => f a b
-  | _, _ => None
-  end.
-Instance option_difference_with {A} :
-    DifferenceWith A (option A) := λ f x y,
+Instance option_intersection_with {A} : IntersectionWith A (option A) :=
+  λ f x y, match x, y with Some a, Some b => f a b | _, _ => None end.
+Instance option_difference_with {A} : DifferenceWith A (option A) := λ f x y,
   match x, y with
   | Some a, Some b => f a b
   | Some a, None => Some a

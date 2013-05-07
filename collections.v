@@ -42,8 +42,7 @@ Section simple_collection.
   Global Instance elem_of_proper: Proper ((=) ==> (≡) ==> iff) (∈) | 5.
   Proof. intros ???. subst. firstorder. Qed.
 
-  Lemma elem_of_union_list (Xs : list C) (x : A) :
-    x ∈ ⋃ Xs ↔ ∃ X, X ∈ Xs ∧ x ∈ X.
+  Lemma elem_of_union_list Xs x : x ∈ ⋃ Xs ↔ ∃ X, X ∈ Xs ∧ x ∈ X.
   Proof.
     split.
     * induction Xs; simpl; intros HXs.
@@ -249,13 +248,11 @@ Section collection.
 
     Lemma not_elem_of_intersection x X Y : x ∉ X ∩ Y ↔ x ∉ X ∨ x ∉ Y.
     Proof.
-      rewrite elem_of_intersection.
-      destruct (decide (x ∈ X)); tauto.
+      rewrite elem_of_intersection. destruct (decide (x ∈ X)); tauto.
     Qed.
     Lemma not_elem_of_difference x X Y : x ∉ X ∖ Y ↔ x ∉ X ∨ x ∈ Y.
     Proof.
-      rewrite elem_of_difference.
-      destruct (decide (x ∈ Y)); tauto.
+      rewrite elem_of_difference. destruct (decide (x ∈ Y)); tauto.
     Qed.
     Lemma union_difference X Y : X ⊆ Y → Y ≡ X ∪ Y ∖ X.
     Proof.
@@ -303,19 +300,18 @@ Section collection_ops.
     (∀ x y z, Q x → P y → f x y = Some z → P z) →
     ∀ x, x ∈ intersection_with_list f Y Xs → P x.
   Proof.
-    intros HY HXs Hf.
-    induction Xs; simplify_option_equality; [done |].
+    intros HY HXs Hf. induction Xs; simplify_option_equality; [done |].
     intros x Hx. rewrite elem_of_intersection_with in Hx.
     decompose_Forall. destruct Hx as (? & ? & ? & ? & ?). eauto.
   Qed.
 End collection_ops.
 
 (** * Sets without duplicates up to an equivalence *)
-Section no_dup.
+Section NoDup.
   Context `{SimpleCollection A B} (R : relation A) `{!Equivalence R}.
 
   Definition elem_of_upto (x : A) (X : B) := ∃ y, y ∈ X ∧ R x y.
-  Definition no_dup (X : B) := ∀ x y, x ∈ X → y ∈ X → R x y → x = y.
+  Definition set_NoDup (X : B) := ∀ x y, x ∈ X → y ∈ X → R x y → x = y.
 
   Global Instance: Proper ((≡) ==> iff) (elem_of_upto x).
   Proof. intros ??? E. unfold elem_of_upto. by setoid_rewrite E. Qed.
@@ -325,7 +321,7 @@ Section no_dup.
     * rewrite <-E1, <-E2; intuition.
     * rewrite E1, E2; intuition.
   Qed.
-  Global Instance: Proper ((≡) ==> iff) no_dup.
+  Global Instance: Proper ((≡) ==> iff) set_NoDup.
   Proof. firstorder. Qed.
 
   Lemma elem_of_upto_elem_of x X : x ∈ X → elem_of_upto x X.
@@ -341,60 +337,63 @@ Section no_dup.
   Lemma not_elem_of_upto x X : ¬elem_of_upto x X → ∀ y, y ∈ X → ¬R x y.
   Proof. unfold elem_of_upto. esolve_elem_of. Qed.
 
-  Lemma no_dup_empty: no_dup ∅.
-  Proof. unfold no_dup. solve_elem_of. Qed.
-  Lemma no_dup_add x X : ¬elem_of_upto x X → no_dup X → no_dup ({[ x ]} ∪ X).
-  Proof. unfold no_dup, elem_of_upto. esolve_elem_of. Qed.
-  Lemma no_dup_inv_add x X : x ∉ X → no_dup ({[ x ]} ∪ X) → ¬elem_of_upto x X.
+  Lemma set_NoDup_empty: set_NoDup ∅.
+  Proof. unfold set_NoDup. solve_elem_of. Qed.
+  Lemma set_NoDup_add x X :
+    ¬elem_of_upto x X → set_NoDup X → set_NoDup ({[ x ]} ∪ X).
+  Proof. unfold set_NoDup, elem_of_upto. esolve_elem_of. Qed.
+  Lemma set_NoDup_inv_add x X :
+    x ∉ X → set_NoDup ({[ x ]} ∪ X) → ¬elem_of_upto x X.
   Proof.
     intros Hin Hnodup [y [??]].
     rewrite (Hnodup x y) in Hin; solve_elem_of.
   Qed.
-  Lemma no_dup_inv_union_l X Y : no_dup (X ∪ Y) → no_dup X.
-  Proof. unfold no_dup. solve_elem_of. Qed.
-  Lemma no_dup_inv_union_r X Y : no_dup (X ∪ Y) → no_dup Y.
-  Proof. unfold no_dup. solve_elem_of. Qed.
-End no_dup.
+  Lemma set_NoDup_inv_union_l X Y : set_NoDup (X ∪ Y) → set_NoDup X.
+  Proof. unfold set_NoDup. solve_elem_of. Qed.
+  Lemma set_NoDup_inv_union_r X Y : set_NoDup (X ∪ Y) → set_NoDup Y.
+  Proof. unfold set_NoDup. solve_elem_of. Qed.
+End NoDup.
 
 (** * Quantifiers *)
 Section quantifiers.
   Context `{SimpleCollection A B} (P : A → Prop).
 
-  Definition cforall X := ∀ x, x ∈ X → P x.
-  Definition cexists X := ∃ x, x ∈ X ∧ P x.
+  Definition set_Forall X := ∀ x, x ∈ X → P x.
+  Definition set_Exists X := ∃ x, x ∈ X ∧ P x.
 
-  Lemma cforall_empty : cforall ∅.
-  Proof. unfold cforall. solve_elem_of. Qed.
-  Lemma cforall_singleton x : cforall {[ x ]} ↔ P x.
-  Proof. unfold cforall. solve_elem_of. Qed.
-  Lemma cforall_union X Y : cforall X → cforall Y → cforall (X ∪ Y).
-  Proof. unfold cforall. solve_elem_of. Qed.
-  Lemma cforall_union_inv_1 X Y : cforall (X ∪ Y) → cforall X.
-  Proof. unfold cforall. solve_elem_of. Qed.
-  Lemma cforall_union_inv_2 X Y : cforall (X ∪ Y) → cforall Y.
-  Proof. unfold cforall. solve_elem_of. Qed.
+  Lemma set_Forall_empty : set_Forall ∅.
+  Proof. unfold set_Forall. solve_elem_of. Qed.
+  Lemma set_Forall_singleton x : set_Forall {[ x ]} ↔ P x.
+  Proof. unfold set_Forall. solve_elem_of. Qed.
+  Lemma set_Forall_union X Y : set_Forall X → set_Forall Y → set_Forall (X ∪ Y).
+  Proof. unfold set_Forall. solve_elem_of. Qed.
+  Lemma set_Forall_union_inv_1 X Y : set_Forall (X ∪ Y) → set_Forall X.
+  Proof. unfold set_Forall. solve_elem_of. Qed.
+  Lemma set_Forall_union_inv_2 X Y : set_Forall (X ∪ Y) → set_Forall Y.
+  Proof. unfold set_Forall. solve_elem_of. Qed.
 
-  Lemma cexists_empty : ¬cexists ∅.
-  Proof. unfold cexists. esolve_elem_of. Qed.
-  Lemma cexists_singleton x : cexists {[ x ]} ↔ P x.
-  Proof. unfold cexists. esolve_elem_of. Qed.
-  Lemma cexists_union_1 X Y : cexists X → cexists (X ∪ Y).
-  Proof. unfold cexists. esolve_elem_of. Qed.
-  Lemma cexists_union_2 X Y : cexists Y → cexists (X ∪ Y).
-  Proof. unfold cexists. esolve_elem_of. Qed.
-  Lemma cexists_union_inv X Y : cexists (X ∪ Y) → cexists X ∨ cexists Y.
-  Proof. unfold cexists. esolve_elem_of. Qed.
+  Lemma set_Exists_empty : ¬set_Exists ∅.
+  Proof. unfold set_Exists. esolve_elem_of. Qed.
+  Lemma set_Exists_singleton x : set_Exists {[ x ]} ↔ P x.
+  Proof. unfold set_Exists. esolve_elem_of. Qed.
+  Lemma set_Exists_union_1 X Y : set_Exists X → set_Exists (X ∪ Y).
+  Proof. unfold set_Exists. esolve_elem_of. Qed.
+  Lemma set_Exists_union_2 X Y : set_Exists Y → set_Exists (X ∪ Y).
+  Proof. unfold set_Exists. esolve_elem_of. Qed.
+  Lemma set_Exists_union_inv X Y :
+    set_Exists (X ∪ Y) → set_Exists X ∨ set_Exists Y.
+  Proof. unfold set_Exists. esolve_elem_of. Qed.
 End quantifiers.
 
 Section more_quantifiers.
   Context `{Collection A B}.
 
-  Lemma cforall_weaken (P Q : A → Prop) (Hweaken : ∀ x, P x → Q x) X :
-    cforall P X → cforall Q X.
-  Proof. unfold cforall. naive_solver. Qed.
-  Lemma cexists_weaken (P Q : A → Prop) (Hweaken : ∀ x, P x → Q x) X :
-    cexists P X → cexists Q X.
-  Proof. unfold cexists. naive_solver. Qed.
+  Lemma set_Forall_weaken (P Q : A → Prop) (Hweaken : ∀ x, P x → Q x) X :
+    set_Forall P X → set_Forall Q X.
+  Proof. unfold set_Forall. naive_solver. Qed.
+  Lemma set_Exists_weaken (P Q : A → Prop) (Hweaken : ∀ x, P x → Q x) X :
+    set_Exists P X → set_Exists Q X.
+  Proof. unfold set_Exists. naive_solver. Qed.
 End more_quantifiers.
 
 (** * Fresh elements *)
@@ -417,8 +416,7 @@ Section fresh.
 
   Global Instance fresh_list_proper: Proper ((=) ==> (≡) ==> (=)) fresh_list.
   Proof.
-    intros ? n ?. subst.
-    induction n; simpl; intros ?? E; f_equal.
+    intros ? n ?. subst. induction n; simpl; intros ?? E; f_equal.
     * by rewrite E.
     * apply IHn. by rewrite E.
   Qed.
@@ -437,10 +435,8 @@ Section fresh.
 
   Lemma fresh_list_nodup n X : NoDup (fresh_list n X).
   Proof.
-    revert X.
-    induction n; simpl; constructor; auto.
-    intros Hin. apply fresh_list_is_fresh in Hin.
-    solve_elem_of.
+    revert X. induction n; simpl; constructor; auto.
+    intros Hin. apply fresh_list_is_fresh in Hin. solve_elem_of.
   Qed.
 End fresh.
 
@@ -455,7 +451,10 @@ Section collection_monad.
   Context `{CollectionMonad M}.
 
   Global Instance collection_guard: MGuard M := λ P dec A x,
-    if dec then x else ∅.
+    match dec with
+    | left H => x H
+    | _ => ∅
+    end.
 
   Global Instance collection_fmap_proper {A B} (f : A → B) :
     Proper ((≡) ==> (≡)) (fmap f).
@@ -495,8 +494,7 @@ Section collection_monad.
   Proof. revert l; induction k; esolve_elem_of. Qed.
 
   Lemma elem_of_mapM_fmap {A B} (f : A → B) (g : B → M A) l k :
-    Forall (λ x, ∀ y, y ∈ g x → f y = x) l →
-    k ∈ mapM g l → fmap f k = l.
+    Forall (λ x, ∀ y, y ∈ g x → f y = x) l → k ∈ mapM g l → fmap f k = l.
   Proof.
     intros Hl. revert k.
     induction Hl; simpl; intros;
@@ -504,14 +502,10 @@ Section collection_monad.
   Qed.
 
   Lemma elem_of_mapM_Forall {A B} (f : A → M B) (P : B → Prop) l k :
-    l ∈ mapM f k →
-    Forall (λ x, ∀ y, y ∈ f x → P y) k →
-    Forall P l.
+    l ∈ mapM f k → Forall (λ x, ∀ y, y ∈ f x → P y) k → Forall P l.
   Proof. rewrite elem_of_mapM. apply Forall2_Forall_l. Qed.
-  Lemma elem_of_mapM_Forall2_l {A B C} (f : A → M B)
-      (P : B → C → Prop) l1 l2 k :
-    l1 ∈ mapM f k →
-    Forall2 (λ x y, ∀ z, z ∈ f x → P z y) k l2 →
+  Lemma elem_of_mapM_Forall2_l {A B C} (f : A → M B) (P: B → C → Prop) l1 l2 k :
+    l1 ∈ mapM f k → Forall2 (λ x y, ∀ z, z ∈ f x → P z y) k l2 →
     Forall2 P l1 l2.
   Proof.
     rewrite elem_of_mapM. intros Hl1. revert l2.

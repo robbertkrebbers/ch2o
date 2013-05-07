@@ -4,8 +4,8 @@
 to define the operational semantics in the file [smallstep], we define
 corresponding evaluation contexts. Notations for expressions are declared in the
 scope [expr_scope]. *)
-Require Import nmap mapset.
-Require Export values contexts.
+Require Import nmap mapset natmap.
+Require Export values_old contexts.
 
 (** * Function names *)
 (** We use the type [N] of binary natural numbers for function names, and the
@@ -47,7 +47,7 @@ a uniform way. Evaluation of a variable will therefore consist of a looking up
 its address in the stack and returning a pointer to that address. *)
 
 Notation stack := (list index) (only parsing).
-Class Vars A := vars: A → listset nat.
+Class Vars A := vars: A → natset.
 Arguments vars {_ _} !_ / : simpl nomatch.
 
 (** * Syntax *)
@@ -150,8 +150,6 @@ Instance: Injective (=) (=) ELoad.
 Proof. by injection 1. Qed.
 Instance: Injective (=) (=) EFree.
 Proof. by injection 1. Qed.
-Instance: Proper ((≡) ==> (=) ==> (=)) EVal.
-Proof. repeat intro. fold_leibniz. by subst. Qed.
 
 Instance expr_eq_dec: ∀ e1 e2 : expr, Decision (e1 = e2).
 Proof.
@@ -183,13 +181,11 @@ Defined.
 (** The sequenced [||] and [&&] operators are defined in terms of the
 conditional. This keeps the expression language small. *)
 Definition EAnd (e1 e2 : expr) :=
-  (IF e1
-  then (IF e2 then intc int_true else intc int_false)
+  (IF e1 then (IF e2 then intc int_true else intc int_false)
   else intc int_false)%E.
 Infix "&&" := EAnd : expr_scope.
 Definition EOr (e1 e2 : expr) :=
-  (IF e1
-  then intc int_true
+  (IF e1 then intc int_true
   else (IF e2 then intc int_true else intc int_false))%E.
 Infix "||" := EOr : expr_scope.
 
@@ -219,8 +215,7 @@ Section expr_ind.
     | valc@{Ω} v => Pval Ω v
     | el ::= er => Passign _ _ (go el) (go er)
     | call f @ es => Pcall f es $ list_ind (Forall P)
-       (Forall_nil_2 _)
-       (λ e _, Forall_cons_2 _ _ _ (go e)) es
+       (Forall_nil_2 _) (λ e _, Forall_cons_2 _ _ _ (go e)) es
     | load e => Pload e (go e)
     | alloc => Palloc
     | free e => Pfree e (go e)
@@ -268,8 +263,7 @@ Inductive load_free: expr → Prop :=
   | EVal_load_free Ω v : load_free (valc@{Ω} v)
   | EAssign_load_free el er :
      load_free el → load_free er → load_free (el ::= er)
-  | ECall_load_free f es :
-     Forall load_free es → load_free (call f @ es)
+  | ECall_load_free f es : Forall load_free es → load_free (call f @ es)
   | EAlloc_load_free : load_free alloc
   | EFree_load_free e : load_free e → load_free (free e)
   | EUnOp_load_free op e : load_free e → load_free (⊙{op} e)
@@ -278,8 +272,7 @@ Inductive load_free: expr → Prop :=
   | EIf_load_free e el er :
      load_free e → load_free el → load_free er →
      load_free (IF e then el else er)
-  | ECast_load_free τ e :
-     load_free e → load_free (cast@{τ} e).
+  | ECast_load_free τ e : load_free e → load_free (cast@{τ} e).
 
 Section load_free_ind.
   Context (P : expr → Prop).
@@ -287,8 +280,7 @@ Section load_free_ind.
   Context (Pval : ∀ Ω v, P (valc@{Ω} v)).
   Context (Passign : ∀ el er,
     load_free el → P el → load_free er → P er → P (el ::= er)).
-  Context (Pcall : ∀ f es,
-    Forall load_free es → Forall P es → P (call f @ es)).
+  Context (Pcall : ∀ f es, Forall load_free es → Forall P es → P (call f @ es)).
   Context (Palloc : P alloc).
   Context (Pfree : ∀ e, load_free e → P e → P (free e)).
   Context (Punop : ∀ op e, load_free e → P e → P (⊙{op} e)).
@@ -297,8 +289,7 @@ Section load_free_ind.
   Context (Pif : ∀ e el er,
     load_free e → P e → load_free el → P el → load_free er → P er →
     P (IF e then el else er)).
-  Context (Pcast : ∀ τ e,
-    load_free e → P e → P (cast@{τ} e)).
+  Context (Pcast : ∀ τ e, load_free e → P e → P (cast@{τ} e)).
 
   Definition load_free_ind_alt: ∀ e, load_free e → P e :=
     fix go e H :=
@@ -375,8 +366,8 @@ Instance expr_funs: Funs expr :=
 Hint Extern 1 (load_free _) => assumption : typeclass_instances.
 Hint Extern 100 (load_free ?e) =>
   apply (bool_decide_unpack _); vm_compute; exact I : typeclass_instances.
-Hint Extern 1 (vars _ ≡ ∅) => assumption : typeclass_instances.
-Hint Extern 100 (vars _ ≡ ∅) =>
+Hint Extern 1 (vars _ = ∅) => assumption : typeclass_instances.
+Hint Extern 100 (vars _ = ∅) =>
   apply (bool_decide_unpack _); vm_compute; exact I : typeclass_instances.
 
 (** The operation [expr_locks e] yields the union of the sets of locked
@@ -409,8 +400,7 @@ pure function calls. *)
 Inductive is_pure (fs : funset) : expr → Prop :=
   | EVar_pure x : is_pure fs (var x)
   | EVal_pure v : is_pure fs (valc v)
-  | ECall_pure f es :
-     f ∈ fs → Forall (is_pure fs) es → is_pure fs (call f @ es)
+  | ECall_pure f es : f ∈ fs → Forall (is_pure fs) es → is_pure fs (call f @ es)
   | ELoad_pure e : is_pure fs e → is_pure fs (load e)
   | EUnOp_pure op e : is_pure fs e → is_pure fs (⊙{op} e)
   | EBinOp_pure op el er :
@@ -418,16 +408,14 @@ Inductive is_pure (fs : funset) : expr → Prop :=
   | EIf_pure e el er :
      is_pure fs e → is_pure fs el → is_pure fs er →
      is_pure fs (IF e then el else er)
-  | ECast_pure τ e :
-     is_pure fs e → is_pure fs (cast@{τ} e).
+  | ECast_pure τ e : is_pure fs e → is_pure fs (cast@{τ} e).
 
 Section is_pure_ind.
   Context (fs : funset) (P : expr → Prop).
   Context (Pvar : ∀ x, P (var x)).
   Context (Pval : ∀ v, P (valc v)).
   Context (Pcall : ∀ f es,
-    f ∈ fs →
-    Forall (is_pure fs) es → Forall P es → P (call f @ es)).
+    f ∈ fs → Forall (is_pure fs) es → Forall P es → P (call f @ es)).
   Context (Pload : ∀ e, is_pure fs e → P e → P (load e)).
   Context (Punop : ∀ op e, is_pure fs e → P e → P (⊙{op} e)).
   Context (Pbinop : ∀ op e1 e2,
@@ -435,8 +423,7 @@ Section is_pure_ind.
   Context (Pif : ∀ e el er,
     is_pure fs e → P e → is_pure fs el → P el → is_pure fs er → P er →
     P (IF e then el else er)).
-  Context (Pcast : ∀ τ e,
-    is_pure fs e → P e → P (cast@{τ} e)).
+  Context (Pcast : ∀ τ e, is_pure fs e → P e → P (cast@{τ} e)).
 
   Definition is_pure_ind_alt: ∀ e, is_pure fs e → P e :=
     fix go e H  :=
@@ -446,10 +433,8 @@ Section is_pure_ind.
     | ECall_pure _ _ Hf H => Pcall _ _ Hf H (Forall_impl _ _ _ H go)
     | ELoad_pure _ H => Pload _ H (go _ H)
     | EUnOp_pure _ _ H => Punop _ _ H (go _ H)
-    | EBinOp_pure _ _ _ H1 H2 =>
-       Pbinop _ _ _ H1 (go _ H1) H2 (go _ H2)
-    | EIf_pure _ _ _ H Hl Hr =>
-       Pif _ _ _ H (go _ H) Hl (go _ Hl) Hr (go _ Hr)
+    | EBinOp_pure _ _ _ H1 H2 => Pbinop _ _ _ H1 (go _ H1) H2 (go _ H2)
+    | EIf_pure _ _ _ H Hl Hr => Pif _ _ _ H (go _ H) Hl (go _ Hl) Hr (go _ Hr)
     | ECast_pure _ _ H => Pcast _ _ H (go _ H)
     end.
 End is_pure_ind.
@@ -471,12 +456,10 @@ Proof.
   | _ => right _
   end%E); first [by subst; constructor | by inversion 1; subst].
 Defined.
-
 Lemma is_pure_locks fs (e : expr) : is_pure fs e → locks e = ∅.
 Proof.
   assert (∀ (es : list expr) b,
-    Forall (λ e, b ∉ locks e) es →
-    b ∉ ⋃ (locks <$> es)).
+    Forall (λ e, b ∉ locks e) es → b ∉ ⋃ (locks <$> es)).
   { induction 1; esolve_elem_of. }
   intros He. apply elem_of_equiv_empty_L. intros b.
   induction He using is_pure_ind_alt; esolve_elem_of.
@@ -508,28 +491,22 @@ Inductive is_value : expr → Prop :=
   | EVal_is_value Ω v : is_value (valc@{Ω} v).
 Inductive is_redex : expr → Prop :=
   | EVar_is_redex x : is_redex (var x)
-  | EAssign_is_redex el er :
-     is_value el → is_value er → is_redex (el ::= er)
+  | EAssign_is_redex el er : is_value el → is_value er → is_redex (el ::= er)
   | ECall_is_redex f es : Forall is_value es → is_redex (call f @ es)
   | ELoad_is_redex e : is_value e → is_redex (load e)
   | EAlloc_is_redex : is_redex alloc
   | EFree_is_redex e : is_value e → is_redex (free e)
-  | EUnOp_is_redex op e :
-     is_value e → is_redex (⊙{op} e)
+  | EUnOp_is_redex op e : is_value e → is_redex (⊙{op} e)
   | EBinOp_is_redex op el er :
      is_value el → is_value er → is_redex (el ⊙{op} er)
-  | EIf_is_redex e el er :
-     is_value e → is_redex (IF e then el else er)
-  | ECast_is_redex τ e :
-     is_value e → is_redex (cast@{τ} e).
+  | EIf_is_redex e el er : is_value e → is_redex (IF e then el else er)
+  | ECast_is_redex τ e : is_value e → is_redex (cast@{τ} e).
 
 Instance is_value_dec (e : expr) : Decision (is_value e).
 Proof.
- refine (
-  match e with
-  | valc@{_} _ => left _
-  | _ => right _
-  end%E); try constructor; abstract (inversion 1).
+ refine
+  (match e with valc@{_} _ => left _ | _ => right _ end%E);
+  try constructor; abstract (inversion 1).
 Defined.
 Instance is_redex_dec (e : expr) : Decision (is_redex e).
 Proof.
@@ -549,23 +526,18 @@ Proof.
   end%E); try (by constructor); abstract (by inversion 1).
 Defined.
 
-Lemma is_redex_value (e : expr) :
-  is_redex e → is_value e → False.
+Lemma is_redex_value (e : expr) : is_redex e → is_value e → False.
 Proof. destruct 1; inversion 1. Qed.
 Lemma is_redex_val Ω v : ¬is_redex (valc@{Ω} v).
 Proof. inversion 1. Qed.
-
-Lemma is_value_alt (e : expr) :
-  is_value e ↔ ∃ Ω v, e = (valc@{Ω} v)%E.
+Lemma is_value_alt (e : expr) : is_value e ↔ ∃ Ω v, e = (valc@{Ω} v)%E.
 Proof.
   split.
   * inversion 1. eauto.
   * intros (?&?&?). by subst.
 Qed.
-
 Lemma Forall_is_value_alt (es : list expr) :
-  Forall is_value es ↔
-    ∃ Ωs vs, es = zip_with EVal Ωs vs ∧ same_length Ωs vs.
+  Forall is_value es ↔ ∃ Ωs vs, es = zip_with EVal Ωs vs ∧ Ωs `same_length` vs.
 Proof.
   split.
   * induction 1 as [|?? [Ω v] _ (Ωs & vs & ?&?)]; subst.
@@ -645,16 +617,11 @@ Instance ectx_item_subst: Subst ectx_item expr expr := λ E e,
 Instance: DestructSubst ectx_item_subst.
 
 Instance: ∀ E : ectx_item, Injective (=) (=) (subst E).
-Proof.
-  destruct E; intros ???; simpl in *;
-    simplify_list_equality; trivial.
-Qed.
+Proof. destruct E; intros ???; simpl in *; simplify_list_equality; trivial. Qed.
 
-Lemma is_value_ectx_item (E : ectx_item) e :
-  ¬is_value (subst E e).
+Lemma is_value_ectx_item (E : ectx_item) e : ¬is_value (subst E e).
 Proof. destruct E; inversion 1. Qed.
-Lemma is_value_ectx (E : ectx) e :
-  is_redex e → ¬is_value (subst E e).
+Lemma is_value_ectx (E : ectx) e : is_redex e → ¬is_value (subst E e).
 Proof.
   destruct E as [|E E' _] using rev_ind.
   * eauto using is_redex_value.
@@ -675,20 +642,23 @@ Instance ectx_locks: Locks ectx_item := λ E,
   | cast @{τ} □ => ∅
   end%E.
 
+Lemma ectx_is_pure fs (E : ectx) (e : expr) :
+  is_pure fs (subst E e) → is_pure fs e.
+Proof.
+  induction E as [|[]??] using rev_ind; auto;
+    rewrite ?subst_snoc; simpl; inversion_clear 1; decompose_Forall; eauto.
+Qed.
 Lemma ectx_item_subst_locks (E : ectx_item) e :
   locks (subst E e) = locks E ∪ locks e.
 Proof.
-  apply elem_of_equiv_L.
-  destruct E; simpl; try esolve_elem_of.
+  apply elem_of_equiv_L. destruct E; simpl; try esolve_elem_of.
   intros. rewrite fmap_app, fmap_reverse; simpl.
   rewrite union_list_app_L, union_list_cons, union_list_reverse_L.
   esolve_elem_of.
 Qed.
-Lemma ectx_subst_locks (E : ectx) e :
-  locks (subst E e) = locks E ∪ locks e.
+Lemma ectx_subst_locks (E : ectx) e : locks (subst E e) = locks E ∪ locks e.
 Proof.
-  apply elem_of_equiv_L.
-  intros b. revert e. induction E as [|E' E IH]; simpl.
+  apply elem_of_equiv_L. intros b. revert e. induction E as [|E' E IH]; simpl.
   * esolve_elem_of.
   * intros. rewrite IH, ectx_item_subst_locks. esolve_elem_of.
 Qed.
@@ -713,15 +683,12 @@ Section ectx_expr_ind.
   Context (Pfree : ∀ E e, P ((free □)%E :: E) e → P E (free e)).
   Context (Punop : ∀ E op e, P ((⊙{op} □)%E :: E) e → P E (⊙{op} e)).
   Context (Pbinop : ∀ E op el er,
-    P ((□ ⊙{op} er)%E :: E) el →
-    P ((el ⊙{op} □)%E :: E) er →
+    P ((□ ⊙{op} er)%E :: E) el → P ((el ⊙{op} □)%E :: E) er →
     P E (el ⊙{op} er)).
   Context (Pif : ∀ E e el er,
-    P ((IF □ then el else er)%E :: E) e →
-    P E (IF e then el else er)).
+    P ((IF □ then el else er)%E :: E) e → P E (IF e then el else er)).
   Context (Pcast : ∀ E τ e,
-    P ((cast @{τ} □)%E :: E) e →
-    P E (cast @{τ} e)).
+    P ((cast @{τ} □)%E :: E) e → P E (cast @{τ} e)).
 
   Definition ectx_expr_ind : ∀ E e, P E e :=
     fix go E e : P E e :=
@@ -748,9 +715,7 @@ Ltac ectx_expr_ind E e :=
   | H : context [ e ] |- _ => revert H
   end;
   revert E e;
-  match goal with
-  | |- ∀ E e, @?P E e => apply (ectx_expr_ind P)
-  end.
+  match goal with |- ∀ E e, @?P E e => apply (ectx_expr_ind P) end.
 
 (** * Contexts with multiple holes *)
 (** We define singular expression contexts indexed by the number of holes. These
@@ -797,12 +762,10 @@ Instance ectx_full_subst: DepSubst ectx_full (vec expr) expr := λ _ E,
   end%E.
 
 Lemma ectx_full_subst_inj {n} (E : ectx_full n) es1 es2 :
-  depsubst E es1 = depsubst E es2 →
-  es1 = es2.
+  depsubst E es1 = depsubst E es2 → es1 = es2.
 Proof.
-  destruct E; inv_all_vec_fin;
-   simpl; intros; simplify_equality;
-   auto using vec_to_list_inj2.
+  destruct E; inv_all_vec_fin; simpl; intros; simplify_equality;
+    auto using vec_to_list_inj2.
 Qed.
 
 Instance ectx_full_locks {n} : Locks (ectx_full n) := λ E,
@@ -815,8 +778,7 @@ Instance ectx_full_locks {n} : Locks (ectx_full n) := λ E,
 Lemma ectx_full_subst_locks {n} (E : ectx_full n) (es : vec expr n) :
   locks (depsubst E es) = locks E ∪ ⋃ (locks <$> vec_to_list es).
 Proof.
-  apply elem_of_equiv_L. intros b.
-  destruct E; inv_all_vec_fin; esolve_elem_of.
+  apply elem_of_equiv_L. intros b. destruct E; inv_all_vec_fin; esolve_elem_of.
 Qed.
 
 (** Giving values [es] for the holes of the context [E], the function
@@ -824,41 +786,23 @@ Qed.
 [i]th value. The [i]th value in [es] is ignored. *)
 Definition ectx_full_to_item {n} (E : ectx_full n)
     (es : vec expr n) (i : fin n) : ectx_item :=
-  match E in ectx_full n
-    return fin n → vec expr n → ectx_item
-  with
+  match E in ectx_full n return fin n → vec expr n → ectx_item with
   | DCVal _ _ => fin_0_inv _
   | DCVar _ => fin_0_inv _
   | DCAssign =>
      fin_S_inv _ (λ es, □ ::= es !!! 1)%E $
-     fin_S_inv _ (λ es, es !!! 0 ::= □)%E $
-     fin_0_inv _
-  | DCCall _ f => λ i es,
-     (call f @ reverse (take i es) □ drop (FS i) es)%E
-  | DCLoad =>
-     fin_S_inv _ (λ es, load □)%E $
-     fin_0_inv _
+     fin_S_inv _ (λ es, es !!! 0 ::= □)%E $ fin_0_inv _
+  | DCCall _ f => λ i es, (call f @ reverse (take i es) □ drop (FS i) es)%E
+  | DCLoad => fin_S_inv _ (λ es, load □)%E $ fin_0_inv _
   | DCAlloc => fin_0_inv _
-  | DCFree =>
-     fin_S_inv _ (λ es, free □)%E $
-     fin_0_inv _
-  | DCUnOp op =>
-     fin_S_inv _ (λ es, ⊙{op} □)%E $
-     fin_0_inv _
+  | DCFree => fin_S_inv _ (λ es, free □)%E $ fin_0_inv _
+  | DCUnOp op => fin_S_inv _ (λ es, ⊙{op} □)%E $ fin_0_inv _
   | DCBinOp op =>
      fin_S_inv _ (λ es, □ ⊙{op} es !!! 1)%E $
-     fin_S_inv _ (λ es, es !!! 0 ⊙{op} □)%E $
-     fin_0_inv _
-  | DCIf el er =>
-     fin_S_inv _ (λ es, IF □ then el else er)%E $
-     fin_0_inv _
-  | DCCast τ =>
-     fin_S_inv _ (λ es, cast@{τ} □)%E $
-     fin_0_inv _
+     fin_S_inv _ (λ es, es !!! 0 ⊙{op} □)%E $ fin_0_inv _
+  | DCIf el er => fin_S_inv _ (λ es, IF □ then el else er)%E $ fin_0_inv _
+  | DCCast τ => fin_S_inv _ (λ es, cast@{τ} □)%E $ fin_0_inv _
   end i es.
-
-Section ectx_full.
-Context {Ti Vi : Set}.
 
 Lemma ectx_full_to_item_insert {n} (E : ectx_full n) es i e :
   ectx_full_to_item E (vinsert i e es) i = ectx_full_to_item E es i.
@@ -899,8 +843,7 @@ Proof.
   rewrite Forall_is_value_alt. split.
   * intros (Ωs & vs & Hes & Hvs). revert n es Hes.
     induction Hvs; intros ?  [|???] ?; simpl in *;
-      simplify_equality;
-      try (done || by eexists [#], [#]).
+      simplify_equality; try (done || by eexists [#], [#]).
     edestruct IHHvs as (?&?&?); eauto. subst.
     eexists (_ ::: _), (_ ::: _); simpl; eauto.
   * intros (Ωs & vs & Hes). exists Ωs vs. split.
@@ -909,8 +852,7 @@ Proof.
 Qed.
 
 Lemma expr_vec_values {n} (es : vec expr n) :
-  (∃ Ωs vs, es = vzip_with EVal Ωs vs)
-  ∨ (∃ i, ¬is_value (es !!! i)).
+  (∃ Ωs vs, es = vzip_with EVal Ωs vs) ∨ (∃ i, ¬is_value (es !!! i)).
 Proof.
   destruct (Forall_Exists_dec is_value es) as [H | H].
   * left. by apply Forall_is_value_alt_vec.
@@ -920,8 +862,7 @@ Qed.
 Lemma is_redex_ectx_full {n} (E : ectx_full n) (es : vec _ n) :
   is_redex (depsubst E es) → Forall is_value es.
 Proof.
-  destruct E; inversion_clear 1; inv_all_vec_fin;
-    repeat constructor; auto.
+  destruct E; inversion_clear 1; inv_all_vec_fin; repeat constructor; auto.
 Qed.
 
 Lemma ectx_full_to_item_locks {n} (E : ectx_full n) (es : vec _ n) i :
@@ -933,7 +874,6 @@ Proof.
   rewrite fmap_reverse, union_list_reverse.
   rewrite delete_take_drop, fmap_app, union_list_app. esolve_elem_of.
 Qed.
-End ectx_full.
 
 (** The function [expr_redexes e] computes the set of redexes contained in an
 expression [e]. Here, redexes are pairs [(E', e')] where [E'] is an expression
@@ -961,8 +901,7 @@ Section expr_split.
   Definition expr_redexes : expr → C := expr_redexes_aux [].
 
   Lemma expr_redexes_aux_is_redex E e E' e' :
-    (E', e') ∈ expr_redexes_aux E e →
-    is_redex e'.
+    (E', e') ∈ expr_redexes_aux E e → is_redex e'.
   Proof.
     assert (∀ (f : list _ → list _ → expr → C) es,
       (E', e') ∈ ⋃ zipped_map f [] es →
@@ -978,14 +917,11 @@ Section expr_split.
      simpl; intros; repeat case_decide;
      solve_elem_of (eauto; try constructor).
   Qed.
-  Lemma expr_redexes_is_redex e E' e' :
-    (E', e') ∈ expr_redexes e →
-    is_redex e'.
+  Lemma expr_redexes_is_redex e E' e' : (E', e') ∈ expr_redexes e → is_redex e'.
   Proof. apply expr_redexes_aux_is_redex. Qed.
 
   Lemma expr_redexes_aux_correct E e E' e' :
-    (E', e') ∈ expr_redexes_aux E e →
-    subst E e = subst E' e'.
+    (E', e') ∈ expr_redexes_aux E e →  subst E e = subst E' e'.
   Proof.
     assert (∀ g (f : list _ → list _ → expr → C) (E : ectx) es,
       (E', e') ∈ ⋃ zipped_map f [] es →
@@ -1005,13 +941,10 @@ Section expr_split.
      solve_elem_of eauto.
   Qed.
   Lemma expr_redexes_correct e E' e' :
-    (E', e') ∈ expr_redexes e →
-    e = subst E' e'.
+    (E', e') ∈ expr_redexes e → e = subst E' e'.
   Proof. apply expr_redexes_aux_correct. Qed.
 
-  Lemma expr_redexes_aux_is_value E e :
-    expr_redexes_aux E e ≡ ∅ →
-    is_value e.
+  Lemma expr_redexes_aux_is_value E e : expr_redexes_aux E e ≡ ∅ → is_value e.
   Proof.
     assert (∀ (f : list _ → list _ → expr → C) es1 es2,
       ⋃ (zipped_map f es1 es2) ≡ ∅ →
@@ -1026,9 +959,7 @@ Section expr_split.
       | H : ¬is_redex _ |- _ => destruct H; constructor
       end; eauto.
   Qed.
-  Lemma expr_redexes_is_value e :
-    expr_redexes e ≡ ∅ →
-    is_value e.
+  Lemma expr_redexes_is_value e : expr_redexes e ≡ ∅ → is_value e.
   Proof. apply expr_redexes_aux_is_value. Qed.
   (* Todo: completeness *)
 End expr_split.

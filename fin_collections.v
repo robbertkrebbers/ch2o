@@ -13,7 +13,7 @@ Definition collection_fold `{Elements A C} {B}
 Section fin_collection.
 Context `{FinCollection A C}.
 
-Global Instance elements_proper: Proper ((≡) ==> Permutation) elements.
+Global Instance elements_proper: Proper ((≡) ==> (≡ₚ)) elements.
 Proof.
   intros ?? E. apply NoDup_Permutation.
   * apply elements_nodup.
@@ -176,10 +176,8 @@ Proof.
     apply Hadd. solve_elem_of. apply IH. esolve_elem_of.
 Qed.
 
-Lemma collection_fold_proper {B} (R : relation B)
-    `{!Equivalence R}
-    (f : A → B → B) (b : B)
-    `{!Proper ((=) ==> R ==> R) f}
+Lemma collection_fold_proper {B} (R : relation B) `{!Equivalence R}
+    (f : A → B → B) (b : B) `{!Proper ((=) ==> R ==> R) f}
     (Hf : ∀ a1 a2 b, R (f a1 (f a2 b)) (f a2 (f a1 b))) :
   Proper ((≡) ==> R) (collection_fold f b).
 Proof.
@@ -188,22 +186,22 @@ Proof.
   * by rewrite E.
 Qed.
 
-Global Instance cforall_dec `(P : A → Prop)
-  `{∀ x, Decision (P x)} X : Decision (cforall P X) | 100.
+Global Instance set_Forall_dec `(P : A → Prop)
+  `{∀ x, Decision (P x)} X : Decision (set_Forall P X) | 100.
 Proof.
   refine (cast_if (decide (Forall P (elements X))));
-    abstract (unfold cforall; setoid_rewrite elements_spec;
+    abstract (unfold set_Forall; setoid_rewrite elements_spec;
       by rewrite <-Forall_forall).
 Defined.
 
-Global Instance cexists_dec `(P : A → Prop) `{∀ x, Decision (P x)} X :
-  Decision (cexists P X) | 100.
+Global Instance set_Exists_dec `(P : A → Prop) `{∀ x, Decision (P x)} X :
+  Decision (set_Exists P X) | 100.
 Proof.
   refine (cast_if (decide (Exists P (elements X))));
-    abstract (unfold cexists; setoid_rewrite elements_spec;
+    abstract (unfold set_Exists; setoid_rewrite elements_spec;
       by rewrite <-Exists_exists).
 Defined.
 
 Global Instance rel_elem_of_dec `{∀ x y, Decision (R x y)} x X :
-  Decision (elem_of_upto R x X) | 100 := decide (cexists (R x) X).
+  Decision (elem_of_upto R x X) | 100 := decide (set_Exists (R x) X).
 End fin_collection.

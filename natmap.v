@@ -1,15 +1,13 @@
 (* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-(** This files implements finite maps whose keys range over Coq's data type of
-unary natural numbers [nat]. *)
-Require Import fin_maps.
+(** This files implements a type [natmap A] of finite maps whose keys range
+over Coq's data type of unary natural numbers [nat]. The implementation equips
+a list with a proof of canonicity. *)
+Require Import fin_maps mapset.
 
 Notation natmap_raw A := (list (option A)).
 Definition natmap_wf {A} (l : natmap_raw A) :=
-  match last l with
-  | None => True
-  | Some x => is_Some x
-  end.
+  match last l with None => True | Some x => is_Some x end.
 Instance natmap_wf_pi {A} (l : natmap_raw A) : ProofIrrel (natmap_wf l).
 Proof. unfold natmap_wf. case_match; apply _. Qed.
 
@@ -31,7 +29,7 @@ Definition natmap (A : Type) : Type := sig (@natmap_wf A).
 
 Instance natmap_empty {A} : Empty (natmap A) := [] ↾ I.
 Instance natmap_lookup {A} : Lookup nat A (natmap A) :=
-  λ i m, mjoin (`m !! i).
+  λ i m, match m with exist l _ => mjoin (l !! i) end.
 
 Fixpoint natmap_singleton_raw {A} (i : nat) (x : A) : natmap_raw A :=
   match i with
@@ -91,7 +89,7 @@ Proof.
     eauto using natmap_singleton_wf, natmap_cons_canon_wf, natmap_wf_inv.
 Qed.
 Instance natmap_alter {A} : PartialAlter nat A (natmap A) := λ f i m,
-  natmap_alter_raw f i (`m)↾natmap_alter_wf _ _ _ (proj2_sig m).
+  match m with exist l Hl => _↾natmap_alter_wf f i l Hl end.
 Lemma natmap_lookup_alter_raw {A} (f : option A → option A) i l :
   mjoin (natmap_alter_raw f i l !! i) = f (mjoin (l !! i)).
 Proof.
@@ -138,15 +136,18 @@ Proof.
   revert l2. induction l1; intros [|??]; simpl;
     eauto using natmap_merge_aux_wf, natmap_cons_canon_wf, natmap_wf_inv.
 Qed.
-Lemma natmap_lookup_merge_raw {A B C} (f : option A → option B → option C) l1 l2 i :
-  f None None = None →
+Lemma natmap_lookup_merge_raw {A B C} (f : option A → option B → option C)
+    l1 l2 i : f None None = None →
   mjoin (natmap_merge_raw f l1 l2 !! i) = f (mjoin (l1 !! i)) (mjoin (l2 !! i)).
 Proof.
   intros. revert i l2. induction l1; intros [|?] [|??]; simpl;
     autorewrite with natmap; auto.
 Qed.
 Instance natmap_merge: Merge natmap := λ A B C f m1 m2,
-  natmap_merge_raw f _ _ ↾ natmap_merge_wf _ _ _ (proj2_sig m1) (proj2_sig m2).
+  match m1, m2 with
+  | exist l1 Hl1, exist l2 Hl2 =>
+     natmap_merge_raw f _ _ ↾ natmap_merge_wf _ _ _ Hl1 Hl2
+  end.
 
 Fixpoint natmap_to_list_raw {A} (i : nat) (l : natmap_raw A) : list (nat * A) :=
   match l with
@@ -186,7 +187,7 @@ Proof.
   rewrite natmap_elem_of_to_list_raw_aux. intros (?&?&?). lia.
 Qed.
 Instance natmap_to_list {A} : FinMapToList nat A (natmap A) := λ m,
-  natmap_to_list_raw 0 (`m).
+  match m with exist l _ => natmap_to_list_raw 0 l end.
 
 Definition natmap_map_raw {A B} (f : A → B) : natmap_raw A → natmap_raw B :=
   fmap (fmap f).
@@ -199,7 +200,9 @@ Proof.
 Qed.
 Lemma natmap_lookup_map_raw {A B} (f : A → B) i l :
   mjoin (natmap_map_raw f l !! i) = f <$> mjoin (l !! i).
-Proof. unfold natmap_map_raw. rewrite list_lookup_fmap. by destruct (l !! i). Qed.
+Proof.
+  unfold natmap_map_raw. rewrite list_lookup_fmap. by destruct (l !! i).
+Qed.
 Instance natmap_map: FMap natmap := λ A B f m,
   natmap_map_raw f _ ↾ natmap_map_wf _ _ (proj2_sig m).
 
@@ -228,3 +231,37 @@ Proof.
   * intros ? [??] ??. by apply natmap_elem_of_to_list_raw.
   * intros ????? [??] [??] ?. by apply natmap_lookup_merge_raw.
 Qed.
+
+(** Finally, we can construct sets of [nat]s satisfying extensional equality. *)
+Notation natset := (mapset natmap).
+Instance natmap_dom {A} : Dom (natmap A) natset := mapset_dom.
+Instance: FinMapDom nat natmap natset := mapset_dom_spec.
+
+(** A [natmap A] forms a stack with elements of type [A] and possible holes *)
+Definition natmap_push {A} (o : option A) (m : natmap A) : natmap A :=
+  match m with exist l Hl => _↾natmap_cons_canon_wf o l Hl end.
+
+Definition natmap_pop_raw {A} (l : natmap_raw A) : natmap_raw A := tail l.
+Lemma natmap_pop_wf {A} (l : natmap_raw A) :
+  natmap_wf l → natmap_wf (natmap_pop_raw l).
+Proof. destruct l; simpl; eauto using natmap_wf_inv. Qed.
+Definition natmap_pop {A} (m : natmap A) : natmap A :=
+  match m with exist l Hl => _↾natmap_pop_wf _ Hl end.
+
+Lemma lookup_natmap_push_O {A} o (m : natmap A) : natmap_push o m !! 0 = o.
+Proof. by destruct o, m as [[|??]]. Qed.
+Lemma lookup_natmap_push_S {A} o (m : natmap A) i :
+  natmap_push o m !! S i = m !! i.
+Proof. by destruct o, m as [[|??]]. Qed.
+Lemma lookup_natmap_pop {A} (m : natmap A) i : natmap_pop m !! i = m !! S i.
+Proof. by destruct m as [[|??]]. Qed.
+
+Lemma natmap_push_pop {A} (m : natmap A) :
+  natmap_push (m !! 0) (natmap_pop m) = m.
+Proof.
+  apply map_eq. intros i. destruct i.
+  * by rewrite lookup_natmap_push_O.
+  * by rewrite lookup_natmap_push_S, lookup_natmap_pop.
+Qed.
+Lemma natmap_pop_push {A} o (m : natmap A) : natmap_pop (natmap_push o m) = m.
+Proof. apply (sig_eq_pi _). by destruct o, m as [[|??]]. Qed.

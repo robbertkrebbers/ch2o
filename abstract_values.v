@@ -59,7 +59,7 @@ Lemma locks_app `{Locks A} (l1 l2 : list A) :
 Proof. apply elem_of_equiv_L. induction l1; esolve_elem_of. Qed.
 Lemma locks_snoc `{Locks A} (l1 : list A) a :
   locks (l1 ++ [a]) = locks l1 ∪ locks a.
-Proof. rewrite locks_app. simpl. by rewrite (right_id_eq ∅ (∪)). Qed.
+Proof. rewrite locks_app. simpl. by rewrite (right_id_L ∅ (∪)). Qed.
 
 (** * Values *)
 (** A value is inductively defined to be either a special void value (used for
@@ -107,8 +107,7 @@ Definition val_false (v : val_ Vi) : Prop :=
   | nullc => True
   end%V.
 
-Definition val_true_false_dec (v : val_ Vi) :
-  { val_true v } + { val_false v }.
+Definition val_true_false_dec (v : val_ Vi) : { val_true v } + { val_false v }.
 Proof.
  by refine (
   match v as v return { val_true v } + { val_false v } with
@@ -119,8 +118,7 @@ Proof.
   end%V).
 Defined.
 
-Lemma val_true_false (v : val_ Vi) :
-  val_true v → val_false v → False.
+Lemma val_true_false (v : val_ Vi) : val_true v → val_false v → False.
 Proof. by destruct v as [| |[]]. Qed.
 
 Definition maybe_ptr (v : val_ Vi) : option index :=

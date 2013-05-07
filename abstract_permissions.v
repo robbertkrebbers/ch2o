@@ -60,7 +60,7 @@ Proof.
   | _, _ => right _
   end; first [by constructor | by inversion 1].
 Defined.
-Instance: PartialOrder pkind.
+Instance: PartialOrder (@subseteq pkind _).
 Proof.
   repeat split.
   * by intros []; constructor.
@@ -136,53 +136,29 @@ Notation perm_unlock := (perm_lock_ false).
 Definition perm_fragment `{PermissionsOps P} (p : P) := ∃ p', p ⊥ p'.
 
 Class Permissions (P : Set) `{PermissionsOps P} : Prop := {
-  perm_po :> PartialOrder P;
+  perm_po :> PartialOrder (@subseteq P _);
   perm_sym :> Symmetric (@disjoint P _);
-  perm_kind_preserving (x y : P) :
-    x ⊆ y →
-    perm_kind x ⊆ perm_kind y;
-  perm_fragment_read (x : P) :
-    perm_fragment x →
-    perm_kind x = Read;
-  perm_disjoint_weaken_l (x x' y : P) :
-    x ⊥ y → x' ⊆ x → x' ⊥ y;
-  perm_unlock_lock (x : P) :
-    Write ⊆ perm_kind x →
-    perm_unlock (perm_lock x) = x;
-  perm_unlock_other (x : P) :
-    perm_kind x ≠ Locked →
-    perm_unlock x = x;
-  perm_unlock_kind (x : P) :
-    perm_kind (perm_unlock x) ≠ Locked;
+  perm_kind_preserving (x y : P) : x ⊆ y → perm_kind x ⊆ perm_kind y;
+  perm_fragment_read (x : P) : perm_fragment x → perm_kind x = Read;
+  perm_disjoint_weaken_l (x x' y : P) : x ⊥ y → x' ⊆ x → x' ⊥ y;
+  perm_unlock_lock (x: P) : Write ⊆ perm_kind x → perm_unlock (perm_lock x) = x;
+  perm_unlock_other (x : P) : perm_kind x ≠ Locked → perm_unlock x = x;
+  perm_unlock_kind (x : P) : perm_kind (perm_unlock x) ≠ Locked;
   perm_assoc :> Associative (=) (@union P _);
   perm_comm :> Commutative (=) (@union P _);
-  perm_disjoint_union_ll (x y z : P) :
-    x ∪ y ⊥ z → x ⊥ z;
-  perm_disjoint_union_move_l (x y z : P) :
-    x ∪ y ⊥ z → x ⊥ y ∪ z;
-  perm_union_subset_l (x y : P) :
-    x ⊥ y →
-    x ⊂ x ∪ y;
-  perm_union_preserving_l (x y z : P) :
-    x ⊆ y → z ∪ x ⊆ z ∪ y;
-  perm_union_reflecting_l (x y z : P) :
-    z ⊥ x → z ⊥ y →
-    z ∪ x ⊆ z ∪ y →
-    x ⊆ y;
-  perm_difference_disjoint (x y : P) :
-    x ⊂ y → x ⊥ y ∖ x;
-  perm_union_difference (x y : P) :
-    x ⊂ y →
-    x ∪ y ∖ x = y
+  perm_disjoint_union_ll (x y z : P) : x ∪ y ⊥ z → x ⊥ z;
+  perm_disjoint_union_move_l (x y z : P) : x ∪ y ⊥ z → x ⊥ y ∪ z;
+  perm_union_subset_l (x y : P) : x ⊥ y →  x ⊂ x ∪ y;
+  perm_union_preserving_l (x y z : P) : x ⊆ y → z ∪ x ⊆ z ∪ y;
+  perm_union_reflecting_l (x y z : P) : z ⊥ x → z ⊥ y → z ∪ x ⊆ z ∪ y → x ⊆ y;
+  perm_disjoint_difference (x y : P) : x ⊂ y → x ⊥ y ∖ x;
+  perm_union_difference (x y : P) : x ⊂ y → x ∪ y ∖ x = y
 }.
 
 Class FracPermissions (P : Set) `{PermissionsOps P} `{Half P} : Prop := {
   frac_permissions :> Permissions P;
-  perm_disjoint_half (x : P) :
-    perm_kind x ≠ Locked →
-    x.½ ⊥ x.½;
-  perm_union_half (x : P) :
-    x.½ ∪ x.½ = x
+  perm_disjoint_half (x : P) : perm_kind x ≠ Locked → x.½ ⊥ x.½;
+  perm_union_half (x : P) : x.½ ∪ x.½ = x
 }.
 
 (** * General properties of fractional permissions *)
@@ -191,198 +167,159 @@ Many of these properties are just variants of the laws using commutativity of
 [(∪)] and symmetry of [(⊥)]. *)
 Section permissions.
 Context `{Permissions P}.
+Implicit Types x y z : P.
 
-Lemma perm_fragment_alt (x : P) :
-  perm_fragment x ↔ ∃ y, x ⊂ y.
+Lemma perm_fragment_alt x : perm_fragment x ↔ ∃ y, x ⊂ y.
 Proof.
   split.
   * intros [y ?]. exists (x ∪ y). eauto using perm_union_subset_l.
-  * intros [y ?]. exists (y ∖ x). eauto using perm_difference_disjoint.
+  * intros [y ?]. exists (y ∖ x). eauto using perm_disjoint_difference.
 Qed.
 
-Lemma perm_disjoint_kind_l (x y : P) : x ⊥ y → perm_kind x = Read.
+Lemma perm_disjoint_kind_l x y : x ⊥ y → perm_kind x = Read.
 Proof. intros. apply perm_fragment_read. by exists y. Qed.
-Lemma perm_disjoint_kind_r (x y : P) :  x ⊥ y → perm_kind y = Read.
+Lemma perm_disjoint_kind_r x y :  x ⊥ y → perm_kind y = Read.
 Proof. intros. by apply perm_disjoint_kind_l with x. Qed.
-Lemma perm_disjoint_locked_l (x y : P) :  x ⊥ y → perm_kind x ≠ Locked.
+Lemma perm_disjoint_locked_l x y :  x ⊥ y → perm_kind x ≠ Locked.
 Proof. intros Hxy ?. apply perm_disjoint_kind_l in Hxy. congruence. Qed.
-Lemma perm_disjoint_locked_r (x y : P) :  x ⊥ y → perm_kind y ≠ Locked.
+Lemma perm_disjoint_locked_r x y :  x ⊥ y → perm_kind y ≠ Locked.
 Proof. intros Hxy ?. apply perm_disjoint_kind_r in Hxy. congruence. Qed.
-Lemma perm_disjoint_write_l (x y : P) :  x ⊥ y → perm_kind x ≠ Write.
+Lemma perm_disjoint_write_l x y :  x ⊥ y → perm_kind x ≠ Write.
 Proof. intros Hxy ?. apply perm_disjoint_kind_l in Hxy. congruence. Qed.
-Lemma perm_disjoint_write_r (x y : P) :  x ⊥ y → perm_kind y ≠ Write.
+Lemma perm_disjoint_write_r x y :  x ⊥ y → perm_kind y ≠ Write.
 Proof. intros Hxy ?. apply perm_disjoint_kind_r in Hxy. congruence. Qed.
-Lemma perm_disjoint_free_l (x y : P) :  x ⊥ y → perm_kind x ≠ Free.
+Lemma perm_disjoint_free_l x y :  x ⊥ y → perm_kind x ≠ Free.
 Proof. intros Hxy ?. apply perm_disjoint_kind_l in Hxy. congruence. Qed.
-Lemma perm_disjoint_free_r (x y : P) :  x ⊥ y → perm_kind y ≠ Free.
+Lemma perm_disjoint_free_r x y :  x ⊥ y → perm_kind y ≠ Free.
 Proof. intros Hxy ?. apply perm_disjoint_kind_r in Hxy. congruence. Qed.
 
-Lemma perm_fragment_not_read (x : P) :  perm_kind x ≠ Read → ¬perm_fragment x.
+Lemma perm_fragment_not_read x :  perm_kind x ≠ Read → ¬perm_fragment x.
 Proof. intuition auto using perm_fragment_read. Qed.
-Lemma perm_fragment_write (x : P) :  perm_kind x = Write → ¬perm_fragment x.
+Lemma perm_fragment_write x :  perm_kind x = Write → ¬perm_fragment x.
 Proof. intros ? Hx. apply perm_fragment_read in Hx. congruence. Qed.
-Lemma perm_fragment_free (x : P) :  perm_kind x = Free → ¬perm_fragment x.
+Lemma perm_fragment_free x :  perm_kind x = Free → ¬perm_fragment x.
 Proof. intros ? Hx. apply perm_fragment_read in Hx. congruence. Qed.
-Lemma perm_fragment_subseteq_write (x : P) :
-  Write ⊆ perm_kind x → ¬perm_fragment x.
+Lemma perm_fragment_subseteq_write x : Write ⊆ perm_kind x → ¬perm_fragment x.
 Proof.
   rewrite Write_subseteq.
   intros [?|?]; eauto using perm_fragment_write, perm_fragment_free.
 Qed.
-Lemma perm_fragment_locked (x : P) :  perm_kind x = Locked → ¬perm_fragment x.
+Lemma perm_fragment_locked x : perm_kind x = Locked → ¬perm_fragment x.
 Proof. intros ? Hx. apply perm_fragment_read in Hx. congruence. Qed.
 
-Lemma perm_disjoint_weaken_r (x y y' : P) :
-  x ⊥ y → y' ⊆ y → x ⊥ y'.
+Lemma perm_disjoint_weaken_r x y y' : x ⊥ y → y' ⊆ y → x ⊥ y'.
 Proof. rewrite !(symmetry_iff _ x). apply perm_disjoint_weaken_l. Qed.
-Lemma perm_disjoint_weaken (x x' y y' : P) :
-  x ⊥ y → x' ⊆ x → y' ⊆ y → x' ⊥ y'.
+Lemma perm_disjoint_weaken x x' y y' : x ⊥ y → x' ⊆ x → y' ⊆ y → x' ⊥ y'.
 Proof. eauto using perm_disjoint_weaken_l, perm_disjoint_weaken_r. Qed.
 
-Lemma perm_disjoint_union_lr (x y z : P) :
-  x ∪ y ⊥ z → y ⊥ z.
-Proof. rewrite (commutative _). apply perm_disjoint_union_ll. Qed.
-Lemma perm_disjoint_union_rl (x y z : P) :
-  x ⊥ y ∪ z → x ⊥ y.
+Lemma perm_disjoint_union_lr x y z : x ∪ y ⊥ z → y ⊥ z.
+Proof. rewrite (commutative_L (∪)). apply perm_disjoint_union_ll. Qed.
+Lemma perm_disjoint_union_rl x y z : x ⊥ y ∪ z → x ⊥ y.
 Proof. rewrite !(symmetry_iff _ x). apply perm_disjoint_union_ll. Qed.
-Lemma perm_disjoint_union_rr (x y z : P) :
-  x ⊥ y ∪ z → x ⊥ z.
-Proof. rewrite (commutative _). apply perm_disjoint_union_rl. Qed.
+Lemma perm_disjoint_union_rr x y z : x ⊥ y ∪ z → x ⊥ z.
+Proof. rewrite (commutative_L (∪)). apply perm_disjoint_union_rl. Qed.
 
-Lemma perm_disjoint_union_move_r (x y z : P) :
-  x ⊥ y ∪ z → x ∪ y ⊥ z.
+Lemma perm_disjoint_union_move_r x y z : x ⊥ y ∪ z → x ∪ y ⊥ z.
 Proof.
-  intros. symmetry. rewrite (commutative _).
-  apply perm_disjoint_union_move_l. by rewrite (commutative _).
+  intros. symmetry. rewrite (commutative_L (∪)).
+  apply perm_disjoint_union_move_l. by rewrite (commutative_L (∪)).
 Qed.
 
-Lemma perm_disjoint_union_l (x y z : P) :
-  x ∪ y ⊥ z → x ⊥ y.
+Lemma perm_disjoint_union_l x y z : x ∪ y ⊥ z → x ⊥ y.
 Proof. eauto using perm_disjoint_union_rl, perm_disjoint_union_move_l. Qed.
-Lemma perm_disjoint_union_r (x y z : P) :
-  x ⊥ y ∪ z → y ⊥ z.
+Lemma perm_disjoint_union_r x y z : x ⊥ y ∪ z → y ⊥ z.
 Proof. eauto using perm_disjoint_union_lr, perm_disjoint_union_move_r. Qed.
 
-Lemma perm_union_subset_r (x y : P) :
-  y ⊥ x → x ⊂ y ∪ x.
+Lemma perm_union_subset_r x y : y ⊥ x → x ⊂ y ∪ x.
 Proof.
-  rewrite (symmetry_iff _), (commutative_eq (∪)).
-  by apply perm_union_subset_l.
+  rewrite (symmetry_iff _), (commutative_L (∪)). by apply perm_union_subset_l.
 Qed.
-Lemma perm_union_subseteq_l (x y : P) :
-  x ⊥ y → x ⊆ x ∪ y.
+Lemma perm_union_subseteq_l x y : x ⊥ y → x ⊆ x ∪ y.
 Proof. intros. by apply subset_subseteq, perm_union_subset_l. Qed.
-Lemma perm_union_subseteq_r (x y : P) :
-  y ⊥ x → x ⊆ y ∪ x.
+Lemma perm_union_subseteq_r x y : y ⊥ x → x ⊆ y ∪ x.
 Proof. intros. by apply subset_subseteq, perm_union_subset_r. Qed.
-Lemma perm_union_ne_l (x y : P) :
-  x ⊥ y → x ≠ x ∪ y.
+Lemma perm_union_ne_l x y : x ⊥ y → x ≠ x ∪ y.
 Proof.
   intros ? E. destruct (perm_union_subset_l x y) as [? []]; auto.
   by rewrite <-E.
 Qed.
-Lemma perm_union_ne_r (x y : P) :
-  y ⊥ x → x ≠ y ∪ x.
+Lemma perm_union_ne_r x y : y ⊥ x → x ≠ y ∪ x.
 Proof.
   intros ? E. destruct (perm_union_subset_r x y) as [? []]; auto.
   by rewrite <-E.
 Qed.
 
-Lemma perm_union_preserving_r (x y z : P) :
-  x ⊆ y → x ∪ z ⊆ y ∪ z.
-Proof. rewrite !(commutative _ _ z). apply perm_union_preserving_l. Qed.
-Lemma perm_union_strict_preserving_l (x y z : P) :
-  z ⊥ x → z ⊥ y →
-  x ⊂ y → z ∪ x ⊂ z ∪ y.
+Lemma perm_union_preserving_r x y z : x ⊆ y → x ∪ z ⊆ y ∪ z.
+Proof. rewrite !(commutative_L (∪) _ z). apply perm_union_preserving_l. Qed.
+Lemma perm_union_strict_preserving_l x y z :
+  z ⊥ x → z ⊥ y → x ⊂ y → z ∪ x ⊂ z ∪ y.
 Proof.
   intros ?? [Hxy1 Hxy2]. split.
   * auto using perm_union_preserving_l.
   * contradict Hxy2. by apply perm_union_reflecting_l with z.
 Qed.
-Lemma perm_union_strict_preserving_r (x y z : P) :
-  x ⊥ z → y ⊥ z →
-  x ⊂ y → x ∪ z ⊂ y ∪ z.
+Lemma perm_union_strict_preserving_r x y z :
+  x ⊥ z → y ⊥ z → x ⊂ y → x ∪ z ⊂ y ∪ z.
 Proof.
-  intros. rewrite !(commutative_eq (∪) _ z).
+  intros. rewrite !(commutative_L (∪) _ z).
   by apply perm_union_strict_preserving_l.
 Qed.
 
-Lemma perm_union_reflecting_r (x y z : P) :
-  x ⊥ z → y ⊥ z →
-  x ∪ z ⊆ y ∪ z → x ⊆ y.
+Lemma perm_union_reflecting_r x y z : x ⊥ z → y ⊥ z → x ∪ z ⊆ y ∪ z → x ⊆ y.
 Proof.
-  intros ??. rewrite !(commutative_eq (∪) _ z).
-  by apply perm_union_reflecting_l.
+  intros ??. rewrite !(commutative_L (∪) _ z). by apply perm_union_reflecting_l.
 Qed.
-Lemma perm_union_strict_reflecting_l (x y z : P) :
-  z ⊥ x → z ⊥ y →
-  z ∪ x ⊂ z ∪ y → x ⊂ y.
+Lemma perm_union_strict_reflecting_l x y z :
+  z ⊥ x → z ⊥ y → z ∪ x ⊂ z ∪ y → x ⊂ y.
 Proof.
   intros ?? [Hxy1 Hxy2]. split.
   * eauto using perm_union_reflecting_l.
   * contradict Hxy2. by apply perm_union_preserving_l.
 Qed.
-Lemma perm_union_strict_reflecting_r (x y z : P) :
-  x ⊥ z → y ⊥ z →
-  x ∪ z ⊂ y ∪ z → x ⊂ y.
+Lemma perm_union_strict_reflecting_r x y z :
+  x ⊥ z → y ⊥ z → x ∪ z ⊂ y ∪ z → x ⊂ y.
 Proof.
-  rewrite !(commutative_eq (∪) _ z), !(symmetry_iff _ _ z).
+  rewrite !(commutative_L (∪) _ z), !(symmetry_iff _ _ z).
   apply perm_union_strict_reflecting_l.
 Qed.
 
-Lemma perm_union_cancel_l (x y z : P) :
-  z ⊥ x → z ⊥ y →
-  z ∪ x = z ∪ y → x = y.
+Lemma perm_union_cancel_l x y z : z ⊥ x → z ⊥ y → z ∪ x = z ∪ y → x = y.
 Proof.
   intros ?? E. by apply (anti_symmetric _);
     apply perm_union_reflecting_l with z; rewrite ?E.
 Qed.
-Lemma perm_union_cancel_r (x y z : P) :
-  x ⊥ z → y ⊥ z →
-  x ∪ z = y ∪ z → x = y.
+Lemma perm_union_cancel_r x y z : x ⊥ z → y ⊥ z → x ∪ z = y ∪ z → x = y.
 Proof.
-  intros ??. rewrite !(commutative_eq (∪) _ z).
-  by apply perm_union_cancel_l.
+  intros ??. rewrite !(commutative_L (∪) _ z). by apply perm_union_cancel_l.
 Qed.
 
-Lemma perm_kind_union_l (x y : P) :
-  x ⊥ y →
-  perm_kind x ⊆ perm_kind (x ∪ y).
+Lemma perm_kind_union_l x y : x ⊥ y → perm_kind x ⊆ perm_kind (x ∪ y).
 Proof. intros. by apply perm_kind_preserving, perm_union_subseteq_l. Qed.
-Lemma perm_kind_union_r (x y : P) :
-  x ⊥ y →
-  perm_kind y ⊆ perm_kind (x ∪ y).
+Lemma perm_kind_union_r x y : x ⊥ y → perm_kind y ⊆ perm_kind (x ∪ y).
 Proof. intros. by apply perm_kind_preserving, perm_union_subseteq_r. Qed.
-Lemma perm_kind_union_locked (x y : P) :
-  x ⊥ y →
-  perm_kind (x ∪ y) ≠ Locked.
+Lemma perm_kind_union_locked x y : x ⊥ y → perm_kind (x ∪ y) ≠ Locked.
 Proof.
   intros Hdisjoint Hxy. pose proof (perm_kind_union_l x y Hdisjoint) as Hxxy.
-  rewrite (perm_disjoint_kind_l x y), Hxy in Hxxy by done.
-  by inversion Hxxy.
+  rewrite (perm_disjoint_kind_l x y), Hxy in Hxxy by done. by inversion Hxxy.
 Qed.
 
-Lemma perm_unlock_union (x y : P) :
-  x ⊥ y →
-  perm_unlock (x ∪ y) = perm_unlock x ∪ perm_unlock y.
+Lemma perm_unlock_union x y :
+  x ⊥ y → perm_unlock (x ∪ y) = perm_unlock x ∪ perm_unlock y.
 Proof.
   intros. by rewrite !perm_unlock_other by eauto using perm_kind_union_locked,
      perm_disjoint_locked_l, perm_disjoint_locked_r.
 Qed.
 
-Lemma perm_disjoint_unlock_l (x y : P) :
-  x ⊥ y → perm_unlock x ⊥ y.
+Lemma perm_disjoint_unlock_l x y : x ⊥ y → perm_unlock x ⊥ y.
 Proof.
   destruct (decide (perm_kind x = Locked)).
   * intros. by destruct (perm_disjoint_locked_l x y).
   * by rewrite perm_unlock_other.
 Qed.
-Lemma perm_disjoint_unlock_r (x y : P) :
-  x ⊥ y → x ⊥ perm_unlock y.
+Lemma perm_disjoint_unlock_r x y : x ⊥ y → x ⊥ perm_unlock y.
 Proof. intros. symmetry. by apply perm_disjoint_unlock_l. Qed.
 
-Lemma perm_unlock_idempotent (x : P) :
-  perm_unlock (perm_unlock x) = perm_unlock x.
+Lemma perm_unlock_idempotent x : perm_unlock (perm_unlock x) = perm_unlock x.
 Proof.
   rewrite (perm_unlock_other (perm_unlock x)); auto using perm_unlock_kind.
 Qed.
@@ -391,20 +328,14 @@ End permissions.
 Section frac_permissions.
 Context `{FracPermissions P}.
 
-Lemma perm_half_subseteq (x : P) :
-  perm_kind x ≠ Locked →
-  x.½ ⊆ x.
+Lemma perm_half_subseteq x : perm_kind x ≠ Locked → x.½ ⊆ x.
 Proof.
   intros. rewrite <-(perm_union_half x) at 2.
   by apply perm_union_subseteq_l, perm_disjoint_half.
 Qed.
 
-Lemma perm_kind_half (x : P) :
-  perm_kind x ≠ Locked →
-  perm_kind (x.½) = Read.
+Lemma perm_kind_half x : perm_kind x ≠ Locked → perm_kind (x.½) = Read.
 Proof. intros. by eapply perm_disjoint_kind_l, perm_disjoint_half. Qed.
-Lemma perm_kind_half_locked (x : P) :
-  perm_kind x ≠ Locked →
-  perm_kind (x.½) ≠ Locked.
+Lemma perm_kind_half_locked x : perm_kind x ≠ Locked → perm_kind (x.½) ≠ Locked.
 Proof. intros Hx. apply perm_kind_half in Hx. congruence. Qed.
 End frac_permissions.

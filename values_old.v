@@ -8,5 +8,6 @@ Require Export abstract_values.
 Require Import integers.
 
 Notation int_type := int_type. (* otherwise it won't be exported *)
-Notation int := (int_ false 8).
+Definition char_bit := 8.
+Notation int := (int_ false char_bit).
 Notation val := (val_ int).

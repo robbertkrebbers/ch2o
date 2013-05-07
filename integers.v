@@ -151,8 +151,7 @@ Fixpoint decode_Z (cs : list char_) : Z :=
   | c :: cs => INum (`c) + 2 ^ Csz * decode_Z cs
   end.
 
-Lemma encode_Z_length n x :
-  length (encode_Z n x) = S n.
+Lemma encode_Z_length n x : length (encode_Z n x) = S n.
 Proof. revert x. induction n; simpl; intros; f_equal; auto. Qed.
 Lemma decode_encode_Z n x :
   decode_Z (encode_Z n x) = x `mod` (2 ^ (S n * Csz)%nat).
@@ -174,8 +173,7 @@ Proof.
       rewrite char_bits_, Z.mod_add, char_mod_eq_; auto.
     + f_equal. by rewrite Z.div_add, Z.div_small by auto.
 Qed.
-Lemma decode_Z_range cs :
-  0 ≤ decode_Z cs < 2 ^ (length cs * Csz)%nat.
+Lemma decode_Z_range cs : 0 ≤ decode_Z cs < 2 ^ (length cs * Csz)%nat.
 Proof.
   rewrite Nat2Z.inj_mul. split.
   * induction cs; simpl; auto.
@@ -188,15 +186,13 @@ Proof.
     apply Z.mul_le_mono_pos_r; auto.
 Qed.
 Lemma decode_Z_zeroes n (c : char_) :
-  INum (`c) = 0 →
-  decode_Z (replicate n c) = 0.
+  INum (`c) = 0 → decode_Z (replicate n c) = 0.
 Proof.
   intros Hc. induction n as [|n IH]; simpl; auto.
   rewrite Hc, IH. ring.
 Qed.
 
-Definition reverse_if_be {A} (l : list A) :=
-  if be then reverse l else l.
+Definition reverse_if_be {A} (l : list A) := if be then reverse l else l.
 Lemma reverse_if_be_length {A} (l : list A) :
   length (reverse_if_be l) = length l.
 Proof. unfold reverse_if_be. by destruct be; rewrite ?reverse_length. Qed.
@@ -240,8 +236,7 @@ be evaluated directly on the underlaying numeral. *)
 Global Instance: IntEnv int_type (int_ be Csz) := {|
   int_type_size := S ∘ ILen;
   int_type_sign := ISign;
-  int_type_range := λ σ,
-    2 ^ pred (int_type_bits_ Csz σ);
+  int_type_range := λ σ, 2 ^ pred (int_type_bits_ Csz σ);
   type_of_int := IType;
   TuChar := IntType Unsigned 0;
   TuChar_bits := Csz;
@@ -250,14 +245,12 @@ Global Instance: IntEnv int_type (int_ be Csz) := {|
   decode_int := decode_int_;
   int_to_Z := int_to_Z_;
   int_of_Z := mk_int_mod_;
-  int_eval_unop := λ op i,
-    mk_int_ (IType i) $ Z_eval_unop op (int_to_Z_ i);
+  int_eval_unop := λ op i, mk_int_ (IType i) $ Z_eval_unop op (int_to_Z_ i);
   int_eval_binop := λ op i1 i2,
     let σ := IType i1 in
     y ← Z_eval_binop (int_type_bits_ Csz σ) op (int_to_Z_ i1) (int_to_Z_ i2);
     mk_int_ σ y;
-  int_cast := λ σ i,
-    mk_int_ σ (int_to_Z_ i)
+  int_cast := λ σ i, mk_int_ σ (int_to_Z_ i)
 |}.
 
 Context `{PropHolds (0 < Csz)%nat}.
@@ -268,8 +261,7 @@ Local Hint Resolve int_bits_pos_.
 Lemma int_bits_pow_pred_ (σ : int_type) :
   2 * 2 ^ pred (int_type_bits_ Csz σ) = 2 ^ int_type_bits_ Csz σ.
 Proof. by rewrite <-Z.pow_succ_r, Nat2Z.inj_pred, Z.succ_pred by auto. Qed.
-Lemma int_bits_TuChar_:
-  int_type_bits_ Csz (TuChar (Ti:=int_type)) = Csz.
+Lemma int_bits_TuChar_: int_type_bits_ Csz (TuChar (Ti:=int_type)) = Csz.
 Proof. unfold int_type_bits_. simpl. by rewrite plus_0_r. Qed.
 
 Global Instance: IntEnvSpec int_type (int_ be Csz).

@@ -1,4 +1,4 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file describes an axiomatization of machine integers. It differs
 in two important aspects from the specification in the C11 standard. *)
@@ -116,6 +116,8 @@ Proof. solve_decision. Defined.
 - [Vi] represents the set of integer values.
 
 We require various operations to be implemented on these data types. *)
+Local Unset Elimination Schemes.
+
 Class IntEnv (Ti Vi : Set) := {
   int_type_size : Ti → nat;
   int_type_sign : Ti → signedness;
@@ -167,10 +169,8 @@ Definition int_type_bits `{IntEnv Ti Vi} (τ : Ti) : nat :=
 
 Definition int_sign `{IntEnv Ti Vi} : Vi → signedness :=
   int_type_sign ∘ type_of_int.
-Definition int_lower `{IntEnv Ti Vi} : Vi → Z :=
-  int_type_lower ∘ type_of_int.
-Definition int_upper `{IntEnv Ti Vi} : Vi → Z :=
-  int_type_upper ∘ type_of_int.
+Definition int_lower `{IntEnv Ti Vi} : Vi → Z := int_type_lower ∘ type_of_int.
+Definition int_upper `{IntEnv Ti Vi} : Vi → Z := int_type_upper ∘ type_of_int.
 
 Definition maybe_int_of_Z `{IntEnv Ti Vi} (τ : Ti) (x : Z) : option Vi :=
   guard (int_type_lower τ ≤ x ≤ int_type_upper τ)%Z;
@@ -189,44 +189,28 @@ behavior. As [int_eval_unop], [int_eval_binop], and [int_cast], are partial
 functions, an implementation is thus free to decide whether to yield a bogus
 values, or to make the result actual undefined behavior. *)
 Class IntEnvSpec Ti Vi `{IntEnv Ti Vi} := {
-  int_type_range_pos τ :
-    (0 < int_type_range τ)%Z;
-  size_TuChar :
-    int_type_size TuChar = 1;
-  sign_TuChar :
-    int_type_sign TuChar = Unsigned;
-  range_TuChar :
-    (2 * int_type_range TuChar = 2 ^ TuChar_bits)%Z;
-  int_type_size_enough (τ : Ti) :
-    (2 * int_type_range τ ≤ 2 ^ int_type_bits τ)%Z;
+  int_type_range_pos τ : (0 < int_type_range τ)%Z;
+  size_TuChar : int_type_size TuChar = 1;
+  sign_TuChar : int_type_sign TuChar = Unsigned;
+  range_TuChar : (2 * int_type_range TuChar = 2 ^ TuChar_bits)%Z;
+  int_type_size_enough (τ: Ti) : (2 * int_type_range τ ≤ 2 ^ int_type_bits τ)%Z;
 
-  encode_int_exists x :
-    ∃ cs, cs ∈ encode_int x;
+  encode_int_exists x : ∃ cs, cs ∈ encode_int x;
   encode_int_length x cs :
-    cs ∈ encode_int x →
-    length cs = int_type_size (type_of_int x);
-  decode_int_typed τ cs x :
-    decode_int τ cs = Some x →
-    type_of_int x = τ;
-  decode_encode_int τ cs x :
-    decode_int τ cs = Some x →
-    cs ∈ encode_int x;
+    cs ∈ encode_int x → length cs = int_type_size (type_of_int x);
+  decode_int_typed τ cs x : decode_int τ cs = Some x → type_of_int x = τ;
+  decode_encode_int τ cs x : decode_int τ cs = Some x → cs ∈ encode_int x;
   encode_decode_int (cs : list (char Ti Vi)) x :
-    cs ∈ encode_int x →
-    decode_int (type_of_int x) cs = Some x;
+    cs ∈ encode_int x → decode_int (type_of_int x) cs = Some x;
   decode_int_zeros τ c :
     int_to_Z (`c) = 0%Z →
     decode_int τ (replicate (int_type_size τ) c) = Some (int_of_Z τ 0);
 
-  int_to_Z_in_range x :
-    (int_lower x ≤ int_to_Z x < int_upper x)%Z;
-  int_of_Z_typed τ x :
-    type_of_int (int_of_Z τ x) = τ;
-  int_of_to_Z x :
-    int_of_Z (type_of_int x) (int_to_Z x) = x;
+  int_to_Z_in_range x : (int_lower x ≤ int_to_Z x < int_upper x)%Z;
+  int_of_Z_typed τ x : type_of_int (int_of_Z τ x) = τ;
+  int_of_to_Z x : int_of_Z (type_of_int x) (int_to_Z x) = x;
   int_to_of_Z_signed τ x :
-    int_type_sign τ = Signed →
-    (int_type_lower τ ≤ x < int_type_upper τ)%Z →
+    int_type_sign τ = Signed → (int_type_lower τ ≤ x < int_type_upper τ)%Z →
     int_to_Z (int_of_Z τ x) = x;
   int_to_of_Z_unsigned τ x :
     int_type_sign τ = Unsigned →
@@ -234,47 +218,35 @@ Class IntEnvSpec Ti Vi `{IntEnv Ti Vi} := {
 
   int_unop_typed op x τ y :
     int_eval_unop op x = Some y →
-    type_of_int x = τ →
-    type_of_int y = τ;
+    type_of_int x = τ → type_of_int y = τ;
   int_unop_signed op x τ :
-    type_of_int x = τ →
-    int_type_sign τ = Signed →
+    type_of_int x = τ → int_type_sign τ = Signed →
     (int_type_lower τ ≤ Z_eval_unop op (int_to_Z x) < int_type_upper τ)%Z →
     int_eval_unop op x = Some (int_of_Z τ (Z_eval_unop op (int_to_Z x)));
   int_unop_unsigned op x τ :
-    type_of_int x = τ →
-    int_type_sign τ = Unsigned →
+    type_of_int x = τ → int_type_sign τ = Unsigned →
     int_eval_unop op x = Some (int_of_Z τ (Z_eval_unop op (int_to_Z x)));
 
   int_binop_typed op x1 x2 τ y :
     int_eval_binop op x1 x2 = Some y →
-    type_of_int x1 = τ →
-    type_of_int x2 = τ →
-    type_of_int y = τ;
+    type_of_int x1 = τ → type_of_int x2 = τ → type_of_int y = τ;
   int_binop_signed op x1 x2 τ y :
     Z_eval_binop (int_type_bits τ) op (int_to_Z x1) (int_to_Z x2) = Some y →
-    type_of_int x1 = τ →
-    type_of_int x2 = τ →
-    int_type_sign τ = Signed →
+    type_of_int x1 = τ → type_of_int x2 = τ → int_type_sign τ = Signed →
     (int_type_lower τ ≤ y < int_type_upper τ)%Z →
     int_eval_binop op x1 x2 = Some (int_of_Z τ y);
   int_binop_unsigned op x1 x2 τ y :
     Z_eval_binop (int_type_bits τ) op (int_to_Z x1) (int_to_Z x2) = Some y →
-    type_of_int x1 = τ →
-    type_of_int x2 = τ →
-    int_type_sign τ = Unsigned →
+    type_of_int x1 = τ → type_of_int x2 = τ → int_type_sign τ = Unsigned →
     int_eval_binop op x1 x2 = Some (int_of_Z τ y);
 
-  int_cast_typed τ x y :
-    int_cast τ x = Some y →
-    type_of_int y = τ;
+  int_cast_typed τ x y : int_cast τ x = Some y → type_of_int y = τ;
   int_cast_signed τ x :
     int_type_sign τ = Signed →
     (int_type_lower τ ≤ int_to_Z x < int_type_upper τ)%Z →
     int_cast τ x = Some (int_of_Z τ (int_to_Z x));
   int_cast_unsigned τ x :
-    int_type_sign τ = Unsigned →
-    int_cast τ x = Some (int_of_Z τ (int_to_Z x))
+    int_type_sign τ = Unsigned → int_cast τ x = Some (int_of_Z τ (int_to_Z x))
 }.
 
 (** * Theorems *)
@@ -288,8 +260,7 @@ Section abstract_integers.
     unfold int_type_bits. rewrite Hτ, mult_0_l, Z.pow_0_r.
     pose proof (int_type_range_pos τ). lia.
   Qed.
-  Lemma int_type_size_pos τ :
-    (0 < int_type_size τ)%Z.
+  Lemma int_type_size_pos τ : (0 < int_type_size τ)%Z.
   Proof. pose proof (int_type_size_ne_0 τ). lia. Qed.
 
   Lemma decode_int_nil τ : decode_int τ [] = None.

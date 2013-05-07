@@ -13,7 +13,7 @@
 <h1>The CH<sub>2</sub>O formalization</h1>
 <p><em>By <a href="http://robbertkrebbers.nl">Robbert Krebbers</a>, Radboud University Nijmegen</em></p>
 
-<p><strong>This is an ongoing development. If you are looking for the Coq sources corresponding to my papers, please take a look <a href="#papers">here</a>.</strong></p>
+<p><strong>This is an ongoing development. If you are looking for the Coq sources corresponding to my papers or forks of this development, please take a look <a href="#other">here</a>.</strong></p>
 
 <h2>About</h2>
 <p>The <a href="http://ch2o.cs.ru.nl"> CH<sub>2</sub>O project</a> aims at formalizing novel features of the <a href="http://www.open-std.org/jtc1/sc22/wg14/">ISO/ANSI C11 standard</a> of the C programming language. This Coq development includes an operational and axiomatic semantics for a fragment of a C-like language supporting:</p>
@@ -49,11 +49,12 @@ The axiomatic semantics is defined semantically with respect to the operational 
 <li>A simple verification condition generator inside Coq allowing us to verify simple programs.</li>
 <li>An embedding of the <a href="http://compcert.inria.fr">CompCert</a> semantics into our semantics.</li>
 </ul>
+<p>A work-in-progress version of the first two goals can be found <a href="types">here</a>.</p>
 
 <h2>Download</h2>
 <p>The most recent version of the Coq source code of this development can be downloaded <a href="http://github.com/robbertkrebbers/ch2o">here</a>.</p>
 
-<h2><a name="papers"></a>Papers</h2>
+<h2><a name="other"></a>Papers and forks</h2>
 <ul>
 <li>Robbert Krebbers and Freek Wiedijk.
 	Separation Logic for Non-local Control Flow and Block Scope Variables. 
@@ -62,6 +63,7 @@ The axiomatic semantics is defined semantically with respect to the operational 
 	<a href="http://github.com/robbertkrebbers/ch2o/tree/fossacs2013">[coq sources]</a>
 	<a href="/research/ch2o/fossacs2013">[documentation]</a>
 </li>
+<li>A fork of this development aiming at formalizing the C type system and effective types can be found <a href="types">here</a>.</li>
 </ul>
 
 <h2>Table of contents</h2>
@@ -96,8 +98,9 @@ The axiomatic semantics is defined semantically with respect to the operational 
 <ul>
 <li><a href="fin_maps.html">fin_maps</a>: an interface and theorems for finite maps.</li>
 <li><a href="fin_map_dom.html">fin_map_dom</a>: an interface and theorems for the domain function of finite maps.</li>
-<li><a href="pmap.html">pmap</a>: finite map indexed by <span class="bracket">positive</span>.</li>
-<li><a href="nmap.html">nmap</a>: finite map indexed by <span class="bracket">N</span>.</li>
+<li><a href="natmap.html">natmap</a>: finite maps indexed by <span class="bracket">nat</span>.</li>
+<li><a href="pmap.html">pmap</a>: finite maps indexed by <span class="bracket">positive</span>.</li>
+<li><a href="nmap.html">nmap</a>: finite maps indexed by <span class="bracket">N</span>.</li>
 <li><a href="mapset.html">mapset</a>: finite maps give rise to finite sets with extensional equality.</li>
 </ul>
 

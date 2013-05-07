@@ -2,7 +2,6 @@
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects common properties of pre-orders and semi lattices. This
 theory will mainly be used for the theory on collections and finite maps. *)
-Require Import SetoidList.
 Require Export base decidable tactics list.
 
 (** * Pre-orders *)
@@ -15,9 +14,9 @@ Section preorder.
   Instance preorder_equivalence: @Equivalence A (≡).
   Proof.
     split.
-    * firstorder.
-    * firstorder.
-    * intros x y z; split; transitivity y; firstorder.
+    * done.
+    * by intros ?? [??].
+    * by intros x y z [??] [??]; split; transitivity y.
   Qed.
 
   Global Instance: Proper ((≡) ==> (≡) ==> iff) (⊆).
@@ -40,13 +39,13 @@ Section preorder.
 
   Lemma subset_subseteq X Y : X ⊂ Y → X ⊆ Y.
   Proof. by intros [? _]. Qed.
-  Lemma subset_trans_l X Y Z : X ⊂ Y → Y ⊆ Z → X ⊂ Z.
+  Lemma subset_transitive_l X Y Z : X ⊂ Y → Y ⊆ Z → X ⊂ Z.
   Proof.
     intros [? HXY] ?. split.
     * by transitivity Y.
     * contradict HXY. by transitivity Z.
   Qed.
-  Lemma subset_trans_r X Y Z : X ⊆ Y → Y ⊂ Z → X ⊂ Z.
+  Lemma subset_transitive_r X Y Z : X ⊆ Y → Y ⊂ Z → X ⊂ Z.
   Proof.
     intros ? [? HYZ]. split.
     * by transitivity Y.
@@ -57,7 +56,7 @@ Section preorder.
   Proof.
     split.
     * firstorder.
-    * eauto using subset_trans_r, subset_subseteq.
+    * eauto using subset_transitive_r, subset_subseteq.
   Qed.
   Global Instance: Proper ((≡) ==> (≡) ==> iff) (⊂).
   Proof. unfold subset, preorder_subset. solve_proper. Qed.
@@ -98,7 +97,7 @@ Hint Extern 0 (@Equivalence _ (≡)) =>
 
 (** * Partial orders *)
 Section partialorder.
-  Context `{PartialOrder A}.
+  Context `{SubsetEq A} `{!PartialOrder (⊆)}.
 
   Global Instance: LeibnizEquiv A.
   Proof.
@@ -121,26 +120,20 @@ Section bounded_join_sl.
   Proof. intros. transitivity x2; auto. Qed.
   Hint Resolve union_subseteq_l_alt union_subseteq_r_alt.
 
-  Lemma union_preserving_l x y1 y2 :
-    y1 ⊆ y2 →
-    x ∪ y1 ⊆ x ∪ y2.
+  Lemma union_preserving_l x y1 y2 : y1 ⊆ y2 → x ∪ y1 ⊆ x ∪ y2.
   Proof. auto. Qed.
-  Lemma union_preserving_r x1 x2 y :
-    x1 ⊆ x2 →
-    x1 ∪ y ⊆ x2 ∪ y.
+  Lemma union_preserving_r x1 x2 y : x1 ⊆ x2 → x1 ∪ y ⊆ x2 ∪ y.
   Proof. auto. Qed.
-  Lemma union_preserving x1 x2 y1 y2 :
-    x1 ⊆ x2 → y1 ⊆ y2 →
-    x1 ∪ y1 ⊆ x2 ∪ y2.
+  Lemma union_preserving x1 x2 y1 y2 : x1 ⊆ x2 → y1 ⊆ y2 → x1 ∪ y1 ⊆ x2 ∪ y2.
   Proof. auto. Qed.
 
   Lemma union_empty x : x ∪ ∅ ⊆ x.
   Proof. by apply union_least. Qed.
-  Lemma union_comm_1 x y : x ∪ y ⊆ y ∪ x.
+  Lemma union_commutative_1 x y : x ∪ y ⊆ y ∪ x.
   Proof. auto. Qed.
-  Lemma union_assoc_1 x y z : (x ∪ y) ∪ z ⊆ x ∪ (y ∪ z).
+  Lemma union_associative_1 x y z : (x ∪ y) ∪ z ⊆ x ∪ (y ∪ z).
   Proof. auto. Qed.
-  Lemma union_assoc_2 x y z : x ∪ (y ∪ z) ⊆ (x ∪ y) ∪ z.
+  Lemma union_associative_2 x y z : x ∪ (y ∪ z) ⊆ (x ∪ y) ∪ z.
   Proof. auto. Qed.
 
   Global Instance union_proper: Proper ((≡) ==> (≡) ==> (≡)) (∪).
@@ -155,9 +148,9 @@ Section bounded_join_sl.
   Global Instance: RightId (≡) ∅ (∪).
   Proof. split; eauto. Qed.
   Global Instance: Commutative (≡) (∪).
-  Proof. split; apply union_comm_1. Qed.
+  Proof. split; apply union_commutative_1. Qed.
   Global Instance: Associative (≡) (∪).
-  Proof. split. apply union_assoc_2. apply union_assoc_1. Qed.
+  Proof. split. apply union_associative_2. apply union_associative_1. Qed.
 
   Lemma subseteq_union X Y : X ⊆ Y ↔ X ∪ Y ≡ Y.
   Proof. repeat split; eauto. intros E. rewrite <-E. auto. Qed.
@@ -169,8 +162,7 @@ Section bounded_join_sl.
   Lemma equiv_empty X : X ⊆ ∅ → X ≡ ∅.
   Proof. split; eauto. Qed.
 
-  Global Instance union_list_proper:
-    Proper (eqlistA (≡) ==> (≡)) union_list.
+  Global Instance union_list_proper: Proper (Forall2 (≡) ==> (≡)) union_list.
   Proof.
     induction 1; simpl.
     * done.
@@ -189,17 +181,13 @@ Section bounded_join_sl.
     * by rewrite (left_id ∅ _).
     * by rewrite IH, (associative _).
   Qed.
-  Lemma union_list_reverse (Xs : list A) :
-    ⋃ (reverse Xs) ≡ ⋃ Xs.
+  Lemma union_list_reverse (Xs : list A) : ⋃ (reverse Xs) ≡ ⋃ Xs.
   Proof.
     induction Xs as [|X Xs IH]; simpl; [done |].
     by rewrite reverse_cons, union_list_app,
       union_list_singleton, (commutative _), IH.
   Qed.
-
-  Lemma union_list_preserving (Xs Ys : list A) :
-    Forall2 (⊆) Xs Ys →
-    ⋃ Xs ⊆ ⋃ Ys.
+  Lemma union_list_preserving (Xs Ys : list A) : Xs ⊆* Ys → ⋃ Xs ⊆ ⋃ Ys.
   Proof. induction 1; simpl; auto using union_preserving. Qed.
 
   Lemma empty_union X Y : X ∪ Y ≡ ∅ ↔ X ≡ ∅ ∧ Y ≡ ∅.
@@ -282,24 +270,19 @@ Section meet_sl.
   Proof. intros. transitivity x1; auto. Qed.
   Hint Resolve intersection_subseteq_l_alt intersection_subseteq_r_alt.
 
-  Lemma intersection_preserving_l x y1 y2 :
-    y1 ⊆ y2 →
-    x ∩ y1 ⊆ x ∩ y2.
+  Lemma intersection_preserving_l x y1 y2 : y1 ⊆ y2 → x ∩ y1 ⊆ x ∩ y2.
   Proof. auto. Qed.
-  Lemma intersection_preserving_r x1 x2 y :
-    x1 ⊆ x2 →
-    x1 ∩ y ⊆ x2 ∩ y.
+  Lemma intersection_preserving_r x1 x2 y : x1 ⊆ x2 → x1 ∩ y ⊆ x2 ∩ y.
   Proof. auto. Qed.
   Lemma intersection_preserving x1 x2 y1 y2 :
-    x1 ⊆ x2 → y1 ⊆ y2 →
-    x1 ∩ y1 ⊆ x2 ∩ y2.
+    x1 ⊆ x2 → y1 ⊆ y2 → x1 ∩ y1 ⊆ x2 ∩ y2.
   Proof. auto. Qed.
 
-  Lemma intersection_comm_1 x y : x ∩ y ⊆ y ∩ x.
+  Lemma intersection_commutative_1 x y : x ∩ y ⊆ y ∩ x.
   Proof. auto. Qed.
-  Lemma intersection_assoc_1 x y z : (x ∩ y) ∩ z ⊆ x ∩ (y ∩ z).
+  Lemma intersection_associative_1 x y z : (x ∩ y) ∩ z ⊆ x ∩ (y ∩ z).
   Proof. auto. Qed.
-  Lemma intersection_assoc_2 x y z : x ∩ (y ∩ z) ⊆ (x ∩ y) ∩ z.
+  Lemma intersection_associative_2 x y z : x ∩ (y ∩ z) ⊆ (x ∩ y) ∩ z.
   Proof. auto. Qed.
 
   Global Instance: Proper ((≡) ==> (≡) ==> (≡)) (∩).
@@ -310,9 +293,11 @@ Section meet_sl.
   Global Instance: Idempotent (≡) (∩).
   Proof. split; eauto. Qed.
   Global Instance: Commutative (≡) (∩).
-  Proof. split; apply intersection_comm_1. Qed.
+  Proof. split; apply intersection_commutative_1. Qed.
   Global Instance: Associative (≡) (∩).
-  Proof. split. apply intersection_assoc_2. apply intersection_assoc_1. Qed.
+  Proof.
+    split. apply intersection_associative_2. apply intersection_associative_1.
+  Qed.
 
   Lemma subseteq_intersection X Y : X ⊆ Y ↔ X ∩ Y ≡ X.
   Proof. repeat split; eauto. intros E. rewrite <-E. auto. Qed.

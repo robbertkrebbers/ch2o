@@ -3,7 +3,7 @@
 (** This file collects some trivial facts on the Coq types [nat] and [N] for
 natural numbers, and the type [Z] for integers. It also declares some useful
 notations. *)
-Require Export PArith NArith ZArith.
+Require Export Eqdep PArith NArith ZArith.
 Require Import Qcanon.
 Require Export base decidable.
 Open Scope nat_scope.
@@ -32,6 +32,21 @@ Instance nat_le_dec: ∀ x y : nat, Decision (x ≤ y) := le_dec.
 Instance nat_lt_dec: ∀ x y : nat, Decision (x < y) := lt_dec.
 Instance nat_inhabited: Inhabited nat := populate 0%nat.
 
+Instance nat_le_pi: ∀ x y : nat, ProofIrrel (x ≤ y).
+Proof.
+  assert (∀ x y (p : x ≤ y) y' (q : x ≤ y'),
+    y = y' → eq_dep nat (le x) y p y' q) as aux.
+  { fix 3. intros x ? [|y p] ? [|y' q].
+    * done.
+    * clear nat_le_pi. omega.
+    * clear nat_le_pi. omega.
+    * injection 1. intros Hy. by case (nat_le_pi x y p y' q Hy). }
+  intros x y p q.
+  by apply (eq_dep_eq_dec (λ x y, decide (x = y))), aux.
+Qed.
+Instance nat_lt_pi: ∀ x y : nat, ProofIrrel (x < y).
+Proof. apply _. Qed.
+
 Lemma lt_n_SS n : n < S (S n).
 Proof. auto with arith. Qed.
 Lemma lt_n_SSS n : n < S (S (S n)).
@@ -44,6 +59,14 @@ Definition sum_list_with {A} (f : A → nat) : list A → nat :=
   | x :: l => f x + go l
   end.
 Notation sum_list := (sum_list_with id).
+
+Lemma mult_split_eq n x1 x2 y1 y2 :
+  x2 < n → y2 < n → x1 * n + x2 = y1 * n + y2 → x1 = y1 ∧ x2 = y2.
+Proof.
+  intros Hx2 Hy2 E.
+  cut (x1 = y1); [intros; subst;lia |].
+  revert y1 E. induction x1; simpl; intros [|?]; simpl; auto with lia.
+Qed.
 
 (** * Notations and properties of [positive] *)
 Open Scope positive_scope.
@@ -185,6 +208,16 @@ Arguments Z.modulo _ _ : simpl never.
 Arguments Z.quot _ _ : simpl never.
 Arguments Z.rem _ _ : simpl never.
 
+Lemma Zmod_pos a b : (0 < b)%Z → (0 ≤ a `mod` b)%Z.
+Proof. apply Z.mod_pos_bound. Qed.
+
+Hint Resolve Z.lt_le_incl : zpos.
+Hint Resolve Z.add_nonneg_pos Z.add_pos_nonneg Z.add_nonneg_nonneg : zpos.
+Hint Resolve Z.mul_nonneg_nonneg Z.mul_pos_pos : zpos.
+Hint Resolve Z.pow_pos_nonneg : zpos.
+Hint Resolve Zmod_pos Z.div_pos : zpos.
+Hint Extern 1000 => lia : zpos.
+
 (** * Notations and properties of [Qc] *)
 Notation "2" := (1+1)%Qc : Qc_scope.
 Infix "≤" := Qcle : Qc_scope.
@@ -213,8 +246,7 @@ Proof. split; auto using Qcle_not_lt, Qcnot_lt_le. Qed.
 Lemma Qclt_nge (x y : Qc) : (x < y ↔ ¬y ≤ x)%Qc.
 Proof. split; auto using Qclt_not_le, Qcnot_le_lt. Qed.
 
-Lemma Qcplus_le_mono_l (x y z : Qc) :
-  (x ≤ y ↔ z + x ≤ z + y)%Qc.
+Lemma Qcplus_le_mono_l (x y z : Qc) : (x ≤ y ↔ z + x ≤ z + y)%Qc.
 Proof.
   split; intros.
   * by apply Qcplus_le_compat.
@@ -222,17 +254,20 @@ Proof.
     replace y with ((0 - z) + (z + y))%Qc by ring.
     by apply Qcplus_le_compat.
 Qed.
-Lemma Qcplus_le_mono_r (x y z : Qc) :
-  (x ≤ y ↔ x + z ≤ y + z)%Qc.
+Lemma Qcplus_le_mono_r (x y z : Qc) : (x ≤ y ↔ x + z ≤ y + z)%Qc.
 Proof. rewrite !(Qcplus_comm _ z). apply Qcplus_le_mono_l. Qed.
-Lemma Qcplus_lt_mono_l (x y z : Qc) :
-  (x < y ↔ z + x < z + y)%Qc.
+Lemma Qcplus_lt_mono_l (x y z : Qc) : (x < y ↔ z + x < z + y)%Qc.
 Proof. by rewrite !Qclt_nge, <-Qcplus_le_mono_l. Qed.
-Lemma Qcplus_lt_mono_r (x y z : Qc) :
-  (x < y ↔ x + z < y + z)%Qc.
+Lemma Qcplus_lt_mono_r (x y z : Qc) : (x < y ↔ x + z < y + z)%Qc.
 Proof. by rewrite !Qclt_nge, <-Qcplus_le_mono_r. Qed.
 
 (** * Conversions *)
+Lemma Z_to_nat_nonpos x : (x ≤ 0)%Z → Z.to_nat x = 0.
+Proof.
+  destruct x; simpl; auto using Z2Nat.inj_neg.
+  by intros [].
+Qed.
+
 (** The function [Z_to_option_N] converts an integer [x] into a natural number
 by giving [None] in case [x] is negative. *)
 Definition Z_to_option_N (x : Z) : option N :=
@@ -277,8 +312,7 @@ Proof.
   rewrite Z_to_option_nat_Some.
   split; intros [??]; subst; auto using Nat2Z.id, Z2Nat.id, eq_sym.
 Qed.
-Lemma Z_to_option_of_nat x :
-  Z_to_option_nat (Z.of_nat x) = Some x.
+Lemma Z_to_option_of_nat x : Z_to_option_nat (Z.of_nat x) = Some x.
 Proof. apply Z_to_option_nat_Some_alt. auto using Nat2Z.is_nonneg. Qed.
 
 (** The function [Z_of_sumbool] converts a sumbool [P] into an integer
@@ -308,11 +342,9 @@ Proof.
 Qed.
 (* We have [x `mod` 0 = 0] on [nat], and [x `mod` 0 = x] on [N]. *)
 Lemma N_to_nat_mod x y :
-  y ≠ 0%N →
-  N.to_nat (x `mod` y) = N.to_nat x `mod` N.to_nat y.
+  y ≠ 0%N → N.to_nat (x `mod` y) = N.to_nat x `mod` N.to_nat y.
 Proof.
-  intros.
-  apply NPeano.Nat.mod_unique with (N.to_nat (x `div` y)).
+  intros. apply NPeano.Nat.mod_unique with (N.to_nat (x `div` y)).
   { by apply N_to_nat_lt, N.mod_lt. }
   rewrite (N.div_unique_exact (x * y) y x), N.div_mul by lia.
   by rewrite <-N2Nat.inj_mul, <-N2Nat.inj_add, <-N.div_mod.

@@ -4,25 +4,18 @@
 removed. This implementation forms a monad. *)
 Require Export base decidable collections list.
 
-Record listset A := Listset {
-  listset_car: list A
-}.
+Record listset A := Listset { listset_car: list A }.
 Arguments listset_car {_} _.
 Arguments Listset {_} _.
 
 Section listset.
 Context {A : Type}.
 
-Instance listset_elem_of: ElemOf A (listset A) := λ x l,
-  x ∈ listset_car l.
-Instance listset_empty: Empty (listset A) :=
-  Listset [].
-Instance listset_singleton: Singleton A (listset A) := λ x,
-  Listset [x].
+Instance listset_elem_of: ElemOf A (listset A) := λ x l, x ∈ listset_car l.
+Instance listset_empty: Empty (listset A) := Listset [].
+Instance listset_singleton: Singleton A (listset A) := λ x, Listset [x].
 Instance listset_union: Union (listset A) := λ l k,
-  match l, k with
-  | Listset l', Listset k' => Listset (l' ++ k')
-  end.
+  match l, k with Listset l', Listset k' => Listset (l' ++ k') end.
 
 Global Instance: SimpleCollection A (listset A).
 Proof.
@@ -47,9 +40,7 @@ Instance listset_intersection_with: IntersectionWith A (listset A) := λ f l k,
   | Listset l', Listset k' => Listset (list_intersection_with f l' k')
   end.
 Instance listset_filter: Filter A (listset A) := λ P _ l,
-  match l with
-  | Listset l' => Listset (filter P l')
-  end.
+  match l with Listset l' => Listset (filter P l') end.
 
 Instance: Collection A (listset A).
 Proof.
@@ -59,8 +50,7 @@ Proof.
   * intros [?] [?]. apply elem_of_list_difference.
 Qed.
 
-Instance listset_elems: Elements A (listset A) :=
-  remove_dups ∘ listset_car.
+Instance listset_elems: Elements A (listset A) := remove_dups ∘ listset_car.
 
 Global Instance: FinCollection A (listset A).
 Proof.
@@ -100,16 +90,11 @@ Hint Extern 1 (Elements _ (listset _)) =>
 Hint Extern 1 (Filter _ (listset _)) =>
   eapply @listset_filter : typeclass_instances.
 
-Instance listset_ret: MRet listset := λ A x,
-  {[ x ]}.
+Instance listset_ret: MRet listset := λ A x, {[ x ]}.
 Instance listset_fmap: FMap listset := λ A B f l,
-  match l with
-  | Listset l' => Listset (f <$> l')
-  end.
+  match l with Listset l' => Listset (f <$> l') end.
 Instance listset_bind: MBind listset := λ A B f l,
-  match l with
-  | Listset l' => Listset (mbind (listset_car ∘ f) l')
-  end.
+  match l with Listset l' => Listset (mbind (listset_car ∘ f) l') end.
 Instance listset_join: MJoin listset := λ A, mbind id.
 
 Instance: CollectionMonad listset.
@@ -119,7 +104,6 @@ Proof.
   * intros ??? [?] ?. apply elem_of_list_bind.
   * intros. apply elem_of_list_ret.
   * intros ??? [?]. apply elem_of_list_fmap.
-  * intros ? [?] ?.
-    unfold mjoin, listset_join, elem_of, listset_elem_of.
+  * intros ? [?] ?. unfold mjoin, listset_join, elem_of, listset_elem_of.
     simpl. by rewrite elem_of_list_bind.
 Qed.

@@ -22,22 +22,13 @@ Notation Writable := (Writable_ (UnSeq frac1)).
 Notation ReadOnly := (ReadOnly_ frac1).
 
 Inductive memperm_subseteq: SubsetEq memperm :=
-  | Freeable_subseteq_Freeable f1 f2 :
-     f1 ⊆ f2 →
-     Freeable_ f1 ⊆ Freeable_ f2
-  | Writable_subseteq_Writable_ f1 f2 :
-     f1 ⊆ f2 →
-     Writable_ f1 ⊆ Writable_ f2
-  | ReadOnly_subseteq_ReadOnly f1 f2 :
-     f1 ⊆ f2 →
-     ReadOnly_ f1 ⊆ ReadOnly_ f2.
+  | Freeable_subseteq_Freeable f1 f2 : f1 ⊆ f2 → Freeable_ f1 ⊆ Freeable_ f2
+  | Writable_subseteq_Writable_ f1 f2 : f1 ⊆ f2 → Writable_ f1 ⊆ Writable_ f2
+  | ReadOnly_subseteq_ReadOnly f1 f2 : f1 ⊆ f2 → ReadOnly_ f1 ⊆ ReadOnly_ f2.
 Inductive memperm_disjoint: Disjoint memperm :=
-  | Freeable_disjoint f1 f2 :
-     f1 ⊥ f2 → Freeable_ f1 ⊥ Freeable_ f2
-  | Writable_disjoint f1 f2 :
-     f1 ⊥ f2 → Writable_ f1 ⊥ Writable_ f2
-  | ReadOnly_disjoint f1 f2 :
-     f1 ⊥ f2 → ReadOnly_ f1 ⊥ ReadOnly_ f2.
+  | Freeable_disjoint f1 f2 : f1 ⊥ f2 → Freeable_ f1 ⊥ Freeable_ f2
+  | Writable_disjoint f1 f2 : f1 ⊥ f2 → Writable_ f1 ⊥ Writable_ f2
+  | ReadOnly_disjoint f1 f2 : f1 ⊥ f2 → ReadOnly_ f1 ⊥ ReadOnly_ f2.
 
 Instance memperm_ops: PermissionsOps memperm := {
   perm_kind := λ γ,
@@ -167,7 +158,7 @@ Proof.
   * unfold union, difference, perm_union, perm_difference; simpl.
     intros ??. rewrite seqfrac_subset_alt.
     intros [(?&?&?&?&?)|[(?&?&?&?&?)|(?&?&?&?&?)]]; subst;
-      constructor; by apply perm_difference_disjoint.
+      constructor; by apply perm_disjoint_difference.
   * unfold union, difference, perm_union, perm_difference; simpl.
     intros ??. rewrite seqfrac_subset_alt.
     intros [(?&?&?&?&?)|[(?&?&?&?&?)|(?&?&?&?&?)]]; subst;
@@ -203,8 +194,7 @@ Lemma Freeable_fragment : ¬perm_fragment Freeable.
 Proof. by apply perm_fragment_not_read. Qed.
 
 Lemma memperm_kind_lock (γ : memperm) :
-  Write ⊆ perm_kind γ →
-  perm_kind (perm_lock γ) = Locked.
+  Write ⊆ perm_kind γ → perm_kind (perm_lock γ) = Locked.
 Proof.
   destruct γ; try done.
   unfold perm_kind, perm_kind, perm_lock_; simpl.

@@ -7,7 +7,7 @@ trees (uncompressed Patricia trees) and guarantees logarithmic-time operations.
 However, we extend Leroy's implementation by packing the trees into a Sigma
 type such that canonicity of representation is ensured. This is necesarry for
 Leibniz equality to become extensional. *)
-Require Import PArith.
+Require Import PArith mapset.
 Require Export prelude fin_maps.
 
 Local Open Scope positive_scope.
@@ -108,7 +108,7 @@ Lemma Pmap_wf_eq_get {A} (t1 t2 : Pmap_raw A) :
   Pmap_wf t1 → Pmap_wf t2 → (∀ i, t1 !! i = t2 !! i) → t1 = t2.
 Proof.
   intros t1wf. revert t2.
-  induction t1wf as [| ? x ? ? IHl ? IHr | l r ? IHl ? IHr Hne1 ].
+  induction t1wf as [| ? x ? ? IHl ? IHr | l r ? IHl ? IHr Hne1].
   * destruct 1 as [| | ???? [?|?]]; intros Hget.
     + done.
     + discriminate (Hget 1).
@@ -125,11 +125,11 @@ Proof.
     + specialize (Hget 1). simpl in *. congruence.
   * destruct 1; intros Hget.
     + destruct Hne1.
-      destruct (Pmap_ne_lookup l) as [i [??]]; trivial.
-      - specialize (Hget (i~0)). simpl in *. congruence.
+      - destruct (Pmap_ne_lookup l) as [i [??]]; trivial.
+        specialize (Hget (i~0)); simpl in *. congruence.
       - destruct (Pmap_ne_lookup r) as [i [??]]; trivial.
-        specialize (Hget (i~1)). simpl in *. congruence.
-    + specialize (Hget 1). simpl in *. congruence.
+        specialize (Hget (i~1)); simpl in *. congruence.
+    + specialize (Hget 1); simpl in *. congruence.
     + f_equal.
       - apply IHl; trivial. intros i. apply (Hget (i~0)).
       - apply IHr; trivial. intros i. apply (Hget (i~1)).
@@ -176,8 +176,7 @@ Lemma Pnode_canon_lookup_xI `(l : Pmap_raw A) o (r : Pmap_raw A) i :
   Pnode_canon l o r !! i~1 = r !! i.
 Proof. by destruct l,o,r. Qed.
 Ltac Pnode_canon_rewrite := repeat (
-  rewrite Pnode_canon_lookup_xH ||
-  rewrite Pnode_canon_lookup_xO ||
+  rewrite Pnode_canon_lookup_xH || rewrite Pnode_canon_lookup_xO ||
   rewrite Pnode_canon_lookup_xI).
 
 Instance Ppartial_alter_raw {A} : PartialAlter positive A (Pmap_raw A) :=
@@ -262,7 +261,7 @@ Fixpoint Pto_list_raw {A} (j : positive) (t : Pmap_raw A) :
     list (positive * A) :=
   match t with
   | Pleaf => []
-  | Pnode l o r => option_case (λ x, [(Preverse j, x)]) [] o ++ 
+  | Pnode l o r => default [] o (λ x, [(Preverse j, x)]) ++ 
      Pto_list_raw (j~0) l ++ Pto_list_raw (j~1) r
   end%list.
 
@@ -273,30 +272,30 @@ Proof.
   * revert j. induction t as [|? IHl [?|] ? IHr]; intros j; simpl.
     + by rewrite ?elem_of_nil.
     + rewrite elem_of_cons, !elem_of_app. intros [?|[?|?]].
-      - simplify_equality. exists 1. by rewrite (left_id 1 (++))%positive.
+      - simplify_equality. exists 1. by rewrite (left_id_L 1 (++))%positive.
       - destruct (IHl (j~0)) as (i' &?&?); trivial; subst.
-         exists (i' ~ 0). by rewrite Preverse_xO, (associative _).
+         exists (i' ~ 0). by rewrite Preverse_xO, (associative_L _).
       - destruct (IHr (j~1)) as (i' &?&?); trivial; subst.
-         exists (i' ~ 1). by rewrite Preverse_xI, (associative _).
+         exists (i' ~ 1). by rewrite Preverse_xI, (associative_L _).
     + rewrite !elem_of_app. intros [?|?].
       - destruct (IHl (j~0)) as (i' &?&?); trivial; subst.
-         exists (i' ~ 0). by rewrite Preverse_xO, (associative _).
+         exists (i' ~ 0). by rewrite Preverse_xO, (associative_L _).
       - destruct (IHr (j~1)) as (i' &?&?); trivial; subst.
-         exists (i' ~ 1). by rewrite Preverse_xI, (associative _).
+         exists (i' ~ 1). by rewrite Preverse_xI, (associative_L _).
   * intros (i' & ?& Hi'); subst. revert i' j Hi'.
     induction t as [|? IHl [?|] ? IHr]; intros i j; simpl.
     + done.
     + rewrite elem_of_cons, elem_of_app. destruct i as [i|i|]; simpl in *.
       - right. right. specialize (IHr i (j~1)).
-        rewrite Preverse_xI, (associative_eq _) in IHr. auto.
+        rewrite Preverse_xI, (associative_L _) in IHr. auto.
       - right. left. specialize (IHl i (j~0)).
-        rewrite Preverse_xO, (associative_eq _) in IHl. auto.
-      - left. simplify_equality. by rewrite (left_id_eq 1 (++))%positive.
+        rewrite Preverse_xO, (associative_L _) in IHl. auto.
+      - left. simplify_equality. by rewrite (left_id_L 1 (++))%positive.
     + rewrite elem_of_app. destruct i as [i|i|]; simpl in *.
       - right. specialize (IHr i (j~1)).
-        rewrite Preverse_xI, (associative_eq _) in IHr. auto.
+        rewrite Preverse_xI, (associative_L _) in IHr. auto.
       - left. specialize (IHl i (j~0)).
-        rewrite Preverse_xO, (associative_eq _) in IHl. auto.
+        rewrite Preverse_xO, (associative_L _) in IHl. auto.
       - done.
 Qed.
 Lemma Pelem_of_to_list_raw {A} (t : Pmap_raw A) i x :
@@ -320,12 +319,12 @@ Proof.
         rewrite !Papp_length in Hi. simpl in Hi. lia.
     + intros [??]. rewrite !Pelem_of_to_list_raw_aux.
       intros (i1&?&?) (i2&Hi&?); subst.
-      rewrite Preverse_xO, Preverse_xI, !(associative_eq _) in Hi.
+      rewrite Preverse_xO, Preverse_xI, !(associative_L _) in Hi.
       by apply (injective (++ _)) in Hi.
   * intros. rewrite NoDup_app. split_ands; trivial.
     intros [??]. rewrite !Pelem_of_to_list_raw_aux.
     intros (i1&?&?) (i2&Hi&?); subst.
-    rewrite Preverse_xO, Preverse_xI, !(associative_eq _) in Hi.
+    rewrite Preverse_xO, Preverse_xI, !(associative_L _) in Hi.
     by apply (injective (++ _)) in Hi.
 Qed.
 
@@ -394,3 +393,8 @@ Proof.
   * intros ? [??]. apply Pelem_of_to_list_raw.
   * intros ??? ?? [??] [??] ?. by apply Pmerge_raw_spec.
 Qed.
+
+(** Finally, we can construct sets of [positive]s satisfying extensional equality. *)
+Notation Pset := (mapset Pmap).
+Instance Pmap_dom {A} : Dom (Pmap A) Pset := mapset_dom.
+Instance: FinMapDom positive Pmap Pset := mapset_dom_spec.

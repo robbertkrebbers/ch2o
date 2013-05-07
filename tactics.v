@@ -24,26 +24,21 @@ unfolding setoid equalities. Note that this tactic performs much better than
 Coq's [easy] tactic as it does not perform [inversion]. *)
 Ltac done :=
   trivial; intros; solve
-    [ repeat first
-      [ solve [trivial]
-      | solve [symmetry; trivial]
-      | reflexivity
-      | discriminate
-      | contradiction
-      | solve [apply not_symmetry; trivial]
-      | split ]
-    | match goal with
-      H : ¬_ |- _ => solve [destruct H; trivial]
-      end ].
+  [ repeat first
+    [ solve [trivial]
+    | solve [symmetry; trivial]
+    | reflexivity
+    | discriminate
+    | contradiction
+    | solve [apply not_symmetry; trivial]
+    | split ]
+  | match goal with H : ¬_ |- _ => solve [destruct H; trivial] end ].
 Tactic Notation "by" tactic(tac) :=
   tac; done.
 
 (** Whereas the [split] tactic splits any inductive with one constructor, the
 tactic [split_and] only splits a conjunction. *)
-Ltac split_and :=
-  match goal with
-  | |- _ ∧ _ => split
-  end.
+Ltac split_and := match goal with |- _ ∧ _ => split end.
 Ltac split_ands := repeat split_and.
 
 (** The tactic [case_match] destructs an arbitrary match in the conclusion or
@@ -144,16 +139,12 @@ is already blocked, it will not be blocked again. The tactic [unblock_hyps]
 removes [blocked] everywhere. *)
 
 Ltac block_hyps := repeat_on_hyps (fun H =>
-  match type of H with
-  | block _ => idtac
-  | ?T => change (block T) in H
-  end).
+  match type of H with block _ => idtac | ?T => change (block T) in H end).
 Ltac unblock_hyps := unfold block in * |-.
 
 (** The tactic [injection' H] is a variant of injection that introduces the
 generated equalities. *)
-Ltac injection' H :=
-  block_goal; injection H; clear H; intros; unblock_goal.
+Ltac injection' H := block_goal; injection H; clear H; intros; unblock_goal.
 
 (** The tactic [simplify_equality] repeatedly substitutes, discriminates,
 and injects equalities, and tries to contradict impossible inequalities. *)
@@ -165,6 +156,7 @@ Ltac simplify_equality := repeat
   | H : _ = ?x |- _ => subst x
   | H : _ = _ |- _ => discriminate H
   | H : ?f _ = ?f _ |- _ => apply (injective f) in H
+  | H : ?f _ _ = ?f _ _ |- _ => apply (injective2 f) in H; destruct H
     (* before [injection'] to circumvent bug #2939 in some situations *)
   | H : _ = _ |- _ => injection' H
   | H : ?x = ?x |- _ => clear H
@@ -174,18 +166,14 @@ Ltac simplify_equality := repeat
 equality. The following tactic extends [remember] to do so. *)
 Tactic Notation "remember" constr(t) "as" "(" ident(x) "," ident(E) ")" :=
   remember t as x;
-  match goal with
-  | E' : x = _ |- _ => rename E' into E
-  end.
+  match goal with E' : x = _ |- _ => rename E' into E end.
 
 (** Given a tactic [tac2] generating a list of terms, [iter tac1 tac2]
 runs [tac x] for each element [x] until [tac x] succeeds. If it does not
 suceed for any element of the generated list, the whole tactic wil fail. *)
 Tactic Notation "iter" tactic(tac) tactic(l) :=
   let rec go l :=
-  match l with
-  | ?x :: ?l => tac x || go l
-  end in go l.
+  match l with ?x :: ?l => tac x || go l end in go l.
 
 (** Given H : [A_1 → ... → A_n → B] (where each [A_i] is non-dependent), the
 tactic [feed tac H tac_by] creates a subgoal for each [A_i] and calls [tac p]

@@ -19,10 +19,8 @@ Context {A : Type} `{∀ x y : A, Decision (x = y)}.
 Notation C := (listset_nodup A).
 Notation LS := ListsetNoDup.
 
-Instance listset_nodup_elem_of: ElemOf A C := λ x l,
-  x ∈ listset_nodup_car l.
-Instance listset_nodup_empty: Empty C :=
-  LS [] (@NoDup_nil_2 _).
+Instance listset_nodup_elem_of: ElemOf A C := λ x l, x ∈ listset_nodup_car l.
+Instance listset_nodup_empty: Empty C := LS [] (@NoDup_nil_2 _).
 Instance listset_nodup_singleton: Singleton A C := λ x,
   LS [x] (NoDup_singleton x).
 Instance listset_nodup_difference: Difference C := λ l k,
@@ -85,8 +83,7 @@ Proof.
   * apply _.
   * intros. unfold intersection_with, listset_nodup_intersection_with,
       elem_of, listset_nodup_elem_of. simpl.
-    rewrite elem_of_remove_dups.
-    by apply elem_of_list_intersection_with.
+    rewrite elem_of_remove_dups. by apply elem_of_list_intersection_with.
   * intros. apply elem_of_list_filter.
 Qed.
 End list_collection.
