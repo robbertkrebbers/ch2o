@@ -94,8 +94,7 @@ Inductive ehsafe (ρ : stack) : expr → mem → Prop :=
   | ehsafe_step e1 m1 v2 m2 : ρ ⊢ₕ e1, m1 ⇒ v2, m2 → ρ ⊢ₕ safe e1, m1
 where "ρ  ⊢ₕ 'safe' e ,  m" := (ehsafe ρ e m) : C_scope.
 
-Lemma ehstep_val ρ Ω v1 m1 v2 m2 :
-  ¬ρ ⊢ₕ valc@{Ω} v1, m1 ⇒ v2, m2.
+Lemma ehstep_val ρ Ω v1 m1 v2 m2 : ¬ρ ⊢ₕ valc@{Ω} v1, m1 ⇒ v2, m2.
 Proof. intros p. eapply is_redex_val, ehstep_is_redex, p. Qed.
 
 (** The tactic [inv_ehstep] is used to invert an arbitrary expression head

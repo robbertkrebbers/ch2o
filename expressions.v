@@ -504,8 +504,7 @@ Inductive is_redex : expr → Prop :=
 
 Instance is_value_dec (e : expr) : Decision (is_value e).
 Proof.
- refine
-  (match e with valc@{_} _ => left _ | _ => right _ end%E);
+ refine (match e with valc@{_} _ => left _ | _ => right _ end%E);
   try constructor; abstract (inversion 1).
 Defined.
 Instance is_redex_dec (e : expr) : Decision (is_redex e).
@@ -526,17 +525,13 @@ Proof.
   end%E); try (by constructor); abstract (by inversion 1).
 Defined.
 
-Lemma is_redex_value (e : expr) : is_redex e → is_value e → False.
+Lemma is_redex_value e : is_redex e → is_value e → False.
 Proof. destruct 1; inversion 1. Qed.
 Lemma is_redex_val Ω v : ¬is_redex (valc@{Ω} v).
 Proof. inversion 1. Qed.
-Lemma is_value_alt (e : expr) : is_value e ↔ ∃ Ω v, e = (valc@{Ω} v)%E.
-Proof.
-  split.
-  * inversion 1. eauto.
-  * intros (?&?&?). by subst.
-Qed.
-Lemma Forall_is_value_alt (es : list expr) :
+Lemma is_value_alt e : is_value e ↔ ∃ Ω v, e = (valc@{Ω} v)%E.
+Proof. split. inversion 1; eauto. by intros (?&?&?); subst. Qed.
+Lemma Forall_is_value_alt es :
   Forall is_value es ↔ ∃ Ωs vs, es = zip_with EVal Ωs vs ∧ Ωs `same_length` vs.
 Proof.
   split.
@@ -596,13 +591,13 @@ Notation "'IF' □ 'then' el 'else' er" := (CIf el er)
 Notation "'cast' @{ τ } □" := (CCast τ)
   (at level 10, format "'cast' @{ τ }  □") : expr_scope.
 
-Instance ectx_item_dec: ∀ E1 E2 : ectx_item, Decision (E1 = E2).
+Instance ectx_item_dec: ∀ Ei1 Ei2 : ectx_item, Decision (Ei1 = Ei2).
 Proof. solve_decision. Defined.
 
 (** Substitution is defined in a straightforward way. Using the type class
 instances in the file [contexts], it is lifted to full expression contexts. *)
-Instance ectx_item_subst: Subst ectx_item expr expr := λ E e,
-  match E with
+Instance ectx_item_subst: Subst ectx_item expr expr := λ Ei e,
+  match Ei with
   | □ ::= er => e ::= er
   | el ::= □ => el ::= e
   | call f @ es1 □ es2 => call f @ (reverse es1 ++ e :: es2)
@@ -616,20 +611,33 @@ Instance ectx_item_subst: Subst ectx_item expr expr := λ E e,
   end%E.
 Instance: DestructSubst ectx_item_subst.
 
-Instance: ∀ E : ectx_item, Injective (=) (=) (subst E).
-Proof. destruct E; intros ???; simpl in *; simplify_list_equality; trivial. Qed.
+Instance: ∀ Ei : ectx_item, Injective (=) (=) (subst Ei).
+Proof. by destruct Ei; intros ???; simplify_list_equality. Qed.
 
-Lemma is_value_ectx_item (E : ectx_item) e : ¬is_value (subst E e).
-Proof. destruct E; inversion 1. Qed.
-Lemma is_value_ectx (E : ectx) e : is_redex e → ¬is_value (subst E e).
+Lemma is_value_ectx_item (Ei : ectx_item) e : ¬is_value (subst Ei e).
+Proof. destruct Ei; inversion 1. Qed.
+Lemma is_value_ectx (E : ectx) e : is_value (subst E e) → E = [].
 Proof.
-  destruct E as [|E E' _] using rev_ind.
-  * eauto using is_redex_value.
-  * rewrite subst_snoc. auto using is_value_ectx_item.
+  destruct E using rev_ind; auto.
+  rewrite subst_snoc. intros; edestruct is_value_ectx_item; eauto.
+Qed.
+Lemma is_value_redex_ectx (E : ectx) e : is_redex e → ¬is_value (subst E e).
+Proof.
+  intros ? HEe. rewrite (is_value_ectx E e) in HEe by done; simpl in HEe.
+  eauto using is_redex_value.
+Qed.
+Lemma is_redex_ectx_item (Ei : ectx_item) e: is_redex (subst Ei e) → is_value e.
+Proof. by destruct Ei; inversion 1; decompose_Forall. Qed.
+Lemma is_redex_ectx (E : ectx) e :
+  is_redex (subst E e) → (E = [] ∧ is_redex e) ∨ (∃ Ei, E = [Ei] ∧ is_value e).
+Proof.
+  destruct E as [|Ei E _] using rev_ind; eauto.
+  rewrite subst_snoc. intros HE. apply is_redex_ectx_item in HE.
+  feed pose proof (is_value_ectx E e); subst; simpl in *; eauto.
 Qed.
 
-Instance ectx_locks: Locks ectx_item := λ E,
-  match E with
+Instance ectx_locks: Locks ectx_item := λ Ei,
+  match Ei with
   | □ ::= er => locks er
   | el ::= □ => locks el
   | call f @ es1 □ es2 => ⋃ (locks <$> es1) ∪ ⋃ (locks <$> es2)
@@ -642,25 +650,27 @@ Instance ectx_locks: Locks ectx_item := λ E,
   | cast @{τ} □ => ∅
   end%E.
 
+Lemma ectx_item_is_pure fs (Ei : ectx_item) (e : expr) :
+  is_pure fs (subst Ei e) → is_pure fs e.
+Proof. destruct Ei; simpl; inversion_clear 1; decompose_Forall; eauto. Qed.
 Lemma ectx_is_pure fs (E : ectx) (e : expr) :
   is_pure fs (subst E e) → is_pure fs e.
 Proof.
-  induction E as [|[]??] using rev_ind; auto;
-    rewrite ?subst_snoc; simpl; inversion_clear 1; decompose_Forall; eauto.
+  induction E using rev_ind; rewrite ?subst_snoc; eauto using ectx_item_is_pure.
 Qed.
-Lemma ectx_item_subst_locks (E : ectx_item) e :
-  locks (subst E e) = locks E ∪ locks e.
+Lemma ectx_item_subst_locks (Ei : ectx_item) e :
+  locks (subst Ei e) = locks Ei ∪ locks e.
 Proof.
-  apply elem_of_equiv_L. destruct E; simpl; try esolve_elem_of.
-  intros. rewrite fmap_app, fmap_reverse; simpl.
+  apply elem_of_equiv_L. intro. destruct Ei; simpl; try solve_elem_of.
+  rewrite fmap_app, fmap_reverse; simpl.
   rewrite union_list_app_L, union_list_cons, union_list_reverse_L.
-  esolve_elem_of.
+  solve_elem_of.
 Qed.
 Lemma ectx_subst_locks (E : ectx) e : locks (subst E e) = locks E ∪ locks e.
 Proof.
-  apply elem_of_equiv_L. intros b. revert e. induction E as [|E' E IH]; simpl.
-  * esolve_elem_of.
-  * intros. rewrite IH, ectx_item_subst_locks. esolve_elem_of.
+  apply elem_of_equiv_L. intros. revert e. induction E as [|Ei E IH]; simpl.
+  * solve_elem_of.
+  * intros. rewrite IH, ectx_item_subst_locks. solve_elem_of.
 Qed.
 
 (** The induction principle [ectx_expr_ind] is used to perform simultaneous
@@ -760,14 +770,6 @@ Instance ectx_full_subst: DepSubst ectx_full (vec expr) expr := λ _ E,
   | DCIf el er => λ es, IF es !!! 0 then el else er
   | DCCast τ => λ es, cast @{τ} (es !!! 0)
   end%E.
-
-Lemma ectx_full_subst_inj {n} (E : ectx_full n) es1 es2 :
-  depsubst E es1 = depsubst E es2 → es1 = es2.
-Proof.
-  destruct E; inv_all_vec_fin; simpl; intros; simplify_equality;
-    auto using vec_to_list_inj2.
-Qed.
-
 Instance ectx_full_locks {n} : Locks (ectx_full n) := λ E,
   match E with
   | DCVal Ω v => Ω
@@ -775,10 +777,16 @@ Instance ectx_full_locks {n} : Locks (ectx_full n) := λ E,
   | _ => ∅
   end%E.
 
+Lemma ectx_full_subst_inj {n} (E : ectx_full n) es1 es2 :
+  depsubst E es1 = depsubst E es2 → es1 = es2.
+Proof.
+  destruct E; inv_all_vec_fin; simpl; intros; simplify_equality;
+    auto using vec_to_list_inj2.
+Qed.
 Lemma ectx_full_subst_locks {n} (E : ectx_full n) (es : vec expr n) :
   locks (depsubst E es) = locks E ∪ ⋃ (locks <$> vec_to_list es).
 Proof.
-  apply elem_of_equiv_L. intros b. destruct E; inv_all_vec_fin; esolve_elem_of.
+  apply elem_of_equiv_L. intro. destruct E; inv_all_vec_fin; solve_elem_of.
 Qed.
 
 (** Giving values [es] for the holes of the context [E], the function
@@ -808,35 +816,29 @@ Lemma ectx_full_to_item_insert {n} (E : ectx_full n) es i e :
   ectx_full_to_item E (vinsert i e es) i = ectx_full_to_item E es i.
 Proof.
   destruct E; inv_all_vec_fin; simpl; try reflexivity.
-  rewrite !vec_to_list_insert,
-   take_insert, drop_insert; auto with arith.
+  rewrite !vec_to_list_insert, take_insert, drop_insert; auto with arith.
 Qed.
-
 Lemma ectx_full_to_item_correct {n} (E : ectx_full n) es i :
   depsubst E es = subst (ectx_full_to_item E es i) (es !!! i).
 Proof.
   destruct E; inv_all_vec_fin; simpl; try reflexivity.
   by rewrite reverse_involutive, <-vec_to_list_take_drop_lookup.
 Qed.
-
 Lemma ectx_full_to_item_correct_alt {n} (E : ectx_full n) es i e :
   depsubst E (vinsert i e es) = subst (ectx_full_to_item E es i) e.
 Proof.
   rewrite (ectx_full_to_item_correct _ _ i).
   by rewrite vlookup_insert, ectx_full_to_item_insert.
 Qed.
-
 Lemma ectx_full_item_subst {n} (E : ectx_full n) (es : vec _ n)
-    (E' : ectx_item) (e : expr) :
-  depsubst E es = subst E' e →
-    ∃ i, e = es !!! i ∧ E' = ectx_full_to_item E es i.
+    (Ei : ectx_item) (e : expr) :
+  depsubst E es = subst Ei e →
+    ∃ i, e = es !!! i ∧ Ei = ectx_full_to_item E es i.
 Proof.
-  intros H. destruct E, E'; simpl; simplify_equality; eauto.
-  * edestruct (vec_to_list_lookup_middle es) as [i [H1 [? H2]]]; eauto.
-    exists i. split; f_equal; trivial.
-    by rewrite <-H1, reverse_involutive.
+  intros H. destruct E, Ei; simpl; simplify_equality; eauto.
+  edestruct (vec_to_list_lookup_middle es) as (i&H1&?&H2); eauto.
+  exists i. subst. by rewrite <-H1, reverse_involutive.
 Qed.
-
 Lemma Forall_is_value_alt_vec {n} (es : vec expr n) :
   Forall is_value es ↔ ∃ Ωs vs, es = vzip_with EVal Ωs vs.
 Proof.
@@ -850,7 +852,6 @@ Proof.
     + by rewrite Hes, vec_to_list_zip_with.
     + apply vec_to_list_same_length.
 Qed.
-
 Lemma expr_vec_values {n} (es : vec expr n) :
   (∃ Ωs vs, es = vzip_with EVal Ωs vs) ∨ (∃ i, ¬is_value (es !!! i)).
 Proof.
@@ -858,13 +859,11 @@ Proof.
   * left. by apply Forall_is_value_alt_vec.
   * right. by apply Exists_vlookup in H.
 Qed.
-
 Lemma is_redex_ectx_full {n} (E : ectx_full n) (es : vec _ n) :
   is_redex (depsubst E es) → Forall is_value es.
 Proof.
   destruct E; inversion_clear 1; inv_all_vec_fin; repeat constructor; auto.
 Qed.
-
 Lemma ectx_full_to_item_locks {n} (E : ectx_full n) (es : vec _ n) i :
   locks (ectx_full_to_item E es i) =
     locks E ∪ ⋃ (locks <$> delete (fin_to_nat i) (vec_to_list es)).
@@ -881,7 +880,7 @@ evaluation context, and [e'] an expression with [is_redex e']. *)
 Section expr_split.
   Context C `{Collection (ectx * expr) C}.
 
-  Definition expr_redexes_aux : ectx → expr → C :=
+  Definition expr_redexes_go : ectx → expr → C :=
     fix go E e {struct e} :=
     if decide (is_redex e) then {[ (E, e) ]} else
     match e with
@@ -898,30 +897,24 @@ Section expr_split.
     | (IF e then el else er) => go ((IF □ then el else er) :: E) e
     | cast@{τ} e => go ((cast@{τ} □) :: E) e
     end%E.
-  Definition expr_redexes : expr → C := expr_redexes_aux [].
+  Definition expr_redexes : expr → C := expr_redexes_go [].
 
-  Lemma expr_redexes_aux_is_redex E e E' e' :
-    (E', e') ∈ expr_redexes_aux E e → is_redex e'.
+  Lemma expr_redexes_go_is_redex E e E' e' :
+    (E', e') ∈ expr_redexes_go E e → is_redex e'.
   Proof.
     assert (∀ (f : list _ → list _ → expr → C) es,
       (E', e') ∈ ⋃ zipped_map f [] es →
       zipped_Forall (λ esl esr e, (E', e') ∈ f esl esr e → is_redex e') [] es →
       is_redex e').
     { intros f es Hes Hforall.
-      rewrite elem_of_union_list in Hes.
-      destruct Hes as (rs & Hes & ?).
-      rewrite elem_of_zipped_map in Hes.
-      destruct Hes as (?&?&?&?&?); subst.
+      rewrite elem_of_union_list in Hes. destruct Hes as (rs&Hes&?).
+      rewrite elem_of_zipped_map in Hes. destruct Hes as (?&?&?&?&?); subst.
       apply zipped_Forall_app in Hforall. inversion Hforall; subst. auto. }
     ectx_expr_ind E e;
-     simpl; intros; repeat case_decide;
-     solve_elem_of (eauto; try constructor).
+     simpl; intros; repeat case_decide; solve_elem_of (eauto; try constructor).
   Qed.
-  Lemma expr_redexes_is_redex e E' e' : (E', e') ∈ expr_redexes e → is_redex e'.
-  Proof. apply expr_redexes_aux_is_redex. Qed.
-
-  Lemma expr_redexes_aux_correct E e E' e' :
-    (E', e') ∈ expr_redexes_aux E e →  subst E e = subst E' e'.
+  Lemma expr_redexes_go_sound E e E' e' :
+    (E', e') ∈ expr_redexes_go E e → subst E e = subst E' e'.
   Proof.
     assert (∀ g (f : list _ → list _ → expr → C) (E : ectx) es,
       (E', e') ∈ ⋃ zipped_map f [] es →
@@ -929,22 +922,50 @@ Section expr_split.
         subst E (g (reverse esl ++ [e] ++ esr)) = subst E' e') [] es →
       subst E (g es) = subst E' e').
     { intros ? g f es Hes Hforall.
-      rewrite elem_of_union_list in Hes.
-      destruct Hes as (rs & Hes &?).
-      rewrite elem_of_zipped_map in Hes.
-      destruct Hes as (esl &?&?&?&?); subst.
+      rewrite elem_of_union_list in Hes. destruct Hes as (rs&Hes&?).
+      rewrite elem_of_zipped_map in Hes. destruct Hes as (esl&?&?&?&?); subst.
       apply zipped_Forall_app in Hforall. inversion Hforall; subst.
       rewrite <-(reverse_involutive esl), <-(right_id [] (++) (reverse esl)).
       auto. }
     ectx_expr_ind E e;
-     simpl; intros; repeat case_decide;
-     solve_elem_of eauto.
+     simpl; intros; repeat case_decide; solve_elem_of eauto.
+  Qed.
+  Lemma expr_redexes_go_complete E' E e :
+    is_redex e → (E ++ E', e) ∈ expr_redexes_go E' (subst E e).
+  Proof.
+    intros. revert E'. induction E as [|Ei E IH] using rev_ind; simpl.
+    { intros. unfold expr_redexes_go. destruct e; case_decide; solve_elem_of. }
+    intros E'. assert (¬is_redex (subst (E ++ [Ei]) e)) as Hredex.
+    { intro. destruct (is_redex_ectx (E ++ [Ei]) e) as [[??]|(?&?&?)]; auto.
+      * discriminate_list_equality.
+      * eauto using is_redex_value. }
+    rewrite subst_snoc in Hredex |- *. rewrite <-(associative_L (++)).
+    destruct Ei; simpl; case_decide; try solve_elem_of.
+    rewrite elem_of_union_list. eexists (expr_redexes_go _ _).
+    rewrite elem_of_zipped_map. split; eauto. eexists (reverse _), _, _.
+    split. done. by rewrite reverse_involutive, (right_id_L [] (++)). 
+  Qed.
+
+  Lemma expr_redexes_is_redex e E' e' : (E', e') ∈ expr_redexes e → is_redex e'.
+  Proof. apply expr_redexes_go_is_redex. Qed.
+  Lemma expr_redexes_sound e E' e' :
+    (E', e') ∈ expr_redexes e → e = subst E' e'.
+  Proof. apply expr_redexes_go_sound. Qed.
+  Lemma expr_redexes_complete E e :
+    is_redex e → (E, e) ∈ expr_redexes (subst E e).
+  Proof.
+    generalize (expr_redexes_go_complete [] E e).
+    by rewrite (right_id_L [] (++) E).
   Qed.
   Lemma expr_redexes_correct e E' e' :
-    (E', e') ∈ expr_redexes e → e = subst E' e'.
-  Proof. apply expr_redexes_aux_correct. Qed.
+    (E', e') ∈ expr_redexes e ↔ e = subst E' e' ∧ is_redex e'.
+  Proof.
+    split.
+    * eauto using expr_redexes_sound, expr_redexes_is_redex.
+    * by intros [??]; subst; apply expr_redexes_complete.
+  Qed.
 
-  Lemma expr_redexes_aux_is_value E e : expr_redexes_aux E e ≡ ∅ → is_value e.
+  Lemma expr_redexes_go_is_value E e : expr_redexes_go E e ≡ ∅ → is_value e.
   Proof.
     assert (∀ (f : list _ → list _ → expr → C) es1 es2,
       ⋃ (zipped_map f es1 es2) ≡ ∅ →
@@ -960,8 +981,7 @@ Section expr_split.
       end; eauto.
   Qed.
   Lemma expr_redexes_is_value e : expr_redexes e ≡ ∅ → is_value e.
-  Proof. apply expr_redexes_aux_is_value. Qed.
-  (* Todo: completeness *)
+  Proof. apply expr_redexes_go_is_value. Qed.
 End expr_split.
 
 Lemma is_value_or_redex (e : expr) :
