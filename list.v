@@ -2703,10 +2703,11 @@ Ltac simplify_zip_equality := repeat
 
 Ltac decompose_Forall_hyps := repeat
   match goal with
-  | H : Forall _ [] |- _ => inversion H
+  | H : Forall _ [] |- _ => clear H
   | H : Forall _ (_ :: _) |- _ => rewrite Forall_cons in H; destruct H
   | H : Forall _ (_ ++ _) |- _ => rewrite Forall_app in H; destruct H
   | H : Forall _ (_ <$> _) |- _ => rewrite Forall_fmap in H
+  | H : Forall _ ?l, H' : length ?l ≠ 0 |- _ => is_var l; destruct H; [done|]
   | H : Forall2 _ [] [] |- _ => clear H
   | H : Forall2 _ (_ :: _) [] |- _ => destruct (Forall2_cons_nil_inv _ _ _ H)
   | H : Forall2 _ [] (_ :: _) |- _ => destruct (Forall2_nil_cons_inv _ _ _ H)
