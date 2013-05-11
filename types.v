@@ -205,6 +205,12 @@ Ltac simplify_type_equality := repeat
     unless (τ1 = τ2) by done; pose proof (typed_unique_alt m x τ1 τ2 H1 H2)
   end.
 
+Class Valid (M V : Type) := valid: M → V → Prop.
+Notation "m ⊢ 'valid' v" := (valid m v)
+  (at level 74, v at level 9, format "m  ⊢  'valid'  v") : C_scope.
+Notation "m ⊢* 'valid' vs" := (Forall (valid m) vs)
+  (at level 74, v at level 9, format "m  ⊢*  'valid'  vs") : C_scope.
+
 (** * Well-formed types *)
 (** Our definition of types still allows invalid types; in particular circular
 unions and structs. For example [struct s { struct s x; }]. The predicate

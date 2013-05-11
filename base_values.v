@@ -23,8 +23,7 @@ Inductive base_typed' `{IntEnv Ti Vi} `{PtrEnv Ti} `{TypeOfIndex Ti M}
   | VUndef_typed τ : base_type_valid get_env τ → base_typed' m (VUndef τ) τ
   | VInt_typed x τ : τ = type_of_int x → base_typed' m (VInt x) (intt τ)
   | VPtr_typed p τ : m ⊢ p : τ → base_typed' m (VPtr p) (τ.*)
-  | VPtrSeg_typed ps :
-     ptr_seg_valid m ps → base_typed' m (VPtrSeg ps) uchar.
+  | VPtrSeg_typed ps : m ⊢ valid ps → base_typed' m (VPtrSeg ps) uchar.
 Instance base_typed `{IntEnv Ti Vi} `{PtrEnv Ti} `{TypeOfIndex Ti M} :
   Typed M (base_type Ti) (base_val Ti Vi) := base_typed'.
 
@@ -42,7 +41,7 @@ Instance base_type_check `{IntEnv Ti Vi} `{PtrEnv Ti}
   | VUndef τ => guard (base_type_valid get_env τ); Some τ
   | VInt x => Some (intt (type_of_int x))
   | VPtr p => TPtr <$> type_check m p
-  | VPtrSeg ps => guard (ptr_seg_valid m ps); Some uchar
+  | VPtrSeg ps => guard (m ⊢ valid ps); Some uchar
   end.
 
 Inductive base_val_le' `{IntEnv Ti Vi} `{PtrEnv Ti} `{TypeOfIndex Ti M}
@@ -208,13 +207,13 @@ Section base_value.
   Qed.
 
   Lemma base_val_to_bytes_valid m v τ bs :
-    m ⊢ v : τ → bs ∈ base_val_to_bytes v → Forall (byte_valid m) bs.
+    m ⊢ v : τ → bs ∈ base_val_to_bytes v → m ⊢* valid bs.
   Proof.
     destruct 1; simpl; intros; decompose_elem_of.
     * apply base_undef_bytes_valid.
     * apply Forall_fmap, Forall_true. constructor.
-    * eapply Forall_fmap, (Forall_impl (ptr_seg_valid m));
-        eauto using to_ptr_segs_valid. by constructor.
+    * eapply Forall_fmap; eapply (Forall_impl (valid m));
+        eauto using to_ptr_segs_valid, BPtrSeg_valid.
     * by repeat constructor.
   Qed.
   Lemma base_val_to_bytes_freeze v :
@@ -285,12 +284,11 @@ Section base_value.
   Qed.
 
   Lemma base_val_of_bytes_typed m τ bs :
-    base_type_valid get_env τ → Forall (byte_valid m) bs →
-    m ⊢ base_val_of_bytes τ bs : τ.
+    base_type_valid get_env τ → m ⊢* valid bs → m ⊢ base_val_of_bytes τ bs : τ.
   Proof.
     assert (∀ bs pss,
       Forall2 (λ b ps, maybe_BPtrSeg b = Some ps) bs pss →
-      Forall (byte_valid m) bs → Forall (ptr_seg_valid m) pss).
+      m ⊢* valid bs → m ⊢* valid pss).
     { induction 1 as [|[]]; inversion 1; simplify_equality;
         constructor; eauto using BPtrSeg_valid_inv. }
     destruct 1; simpl; unfold default;
@@ -359,7 +357,7 @@ Section base_value.
       + f_equal. eauto using of_ptr_segs_type_of.
   Qed.
   Lemma base_val_to_of_bytes_le m τ bs2 :
-    Forall (byte_valid m) bs2 →
+    m ⊢* valid bs2 →
     length bs2 = size_of (base τ) → ∃ bs1, bs1 ⊑@{m}* bs2 ∧
       bs1 ∈ base_val_to_bytes (base_val_of_bytes τ bs2).
   Proof.
@@ -385,7 +383,7 @@ Section base_value.
   Qed.
   Lemma base_val_of_bytes_le m τ bs1 bs2 :
     base_type_valid get_env τ →
-    Forall (byte_valid m) bs1 → bs1 ⊑@{m}* bs2 →
+    m ⊢* valid bs1 → bs1 ⊑@{m}* bs2 →
     base_val_of_bytes τ bs1 ⊑@{m} base_val_of_bytes τ bs2.
   Proof.
     intros.
@@ -423,7 +421,7 @@ Section base_value.
 
   Lemma base_val_of_bytes_masked m τ bs1 bs2 cs2 :
     base_type_valid get_env τ →
-    bs1 ⊑@{m}* bs2 → Forall (byte_valid m) cs2 →
+    bs1 ⊑@{m}* bs2 → m ⊢* valid cs2 →
     base_val_of_bytes τ bs2 = base_val_of_bytes τ cs2 →
     base_val_of_bytes τ (mask_bytes bs1 cs2) = base_val_of_bytes τ bs1.
   Proof.

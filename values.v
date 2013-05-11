@@ -235,7 +235,7 @@ Section vtyped.
        length τs ≠ 1 →
        Forall2 (vtyped' m) vs τs →
        vs = flip val_of_bytes bs <$> τs →
-       Forall (byte_valid m) bs →
+       m ⊢* valid bs →
        vtyped' m (VUnionNone s vs) (union s).
   Global Instance vtyped: Typed M (type Ti) (val Ti Vi) := vtyped'.
 
@@ -282,7 +282,7 @@ Section vtyped.
     m ⊢ v : τ → m ⊢ VUnion s i v : union s.
   Proof. econstructor; eauto. Qed.
   Lemma val_of_bytes_typed m τ bs :
-    type_valid get_env τ → Forall (byte_valid m) bs → m ⊢ val_of_bytes τ bs : τ.
+    type_valid get_env τ → m ⊢* valid bs → m ⊢ val_of_bytes τ bs : τ.
   Proof.
     intros Hτ. revert τ Hτ bs. refine (type_env_ind _ _ _ _).
     * intros τ Hτ bs Hbs. rewrite val_of_bytes_base. apply VBase_typed;
@@ -302,7 +302,7 @@ Section vtyped.
   Lemma VUnionNone_typed m s vs τs bs :
     get_env !! s = Some τs → length τs ≠ 1 →
     vs = flip val_of_bytes bs <$> τs →
-    Forall (byte_valid m) bs → m ⊢ VUnionNone s vs : union s.
+    m ⊢* valid bs → m ⊢ VUnionNone s vs : union s.
   Proof.
     intros Hs Hτs_len Hvs Hbs. subst.
     eapply VUnionNone_typed'; eauto. change (vtyped' m) with (typed m).
@@ -324,7 +324,7 @@ Section vtyped.
     | VUnionNone s vs =>
        (∀ τs bs,
          get_env !! s = Some τs → length τs ≠ 1 → m ⊢* vs :* τs →
-         vs = flip val_of_bytes bs <$> τs → Forall (byte_valid m) bs →
+         vs = flip val_of_bytes bs <$> τs → m ⊢* valid bs →
          P (union s)) → P τ
     end.
   Proof. destruct 1; eauto. Qed.
@@ -344,7 +344,7 @@ Section vtyped.
     Context (Punion_none : ∀ s vs τs bs,
       get_env !! s = Some τs → length τs ≠ 1 → m ⊢* vs :* τs →
       Forall2 P vs τs → vs = flip val_of_bytes bs <$> τs →
-      Forall (byte_valid m) bs → P (VUnionNone s vs) (union s)).
+      m ⊢* valid bs → P (VUnionNone s vs) (union s)).
     Lemma vtyped_ind : ∀ v τ, vtyped' m v τ → P v τ.
     Proof.
      exact (fix go v τ H :=
@@ -373,7 +373,7 @@ Section vtyped.
       m ⊢ v : τ → P (VUnion s i v) (union s)).
     Context (Punion_none : ∀ s vs τs bs,
       get_env !! s = Some τs → length τs ≠ 1 → m ⊢* vs :* τs →
-      vs = flip val_of_bytes bs <$> τs → Forall (byte_valid m) bs →
+      vs = flip val_of_bytes bs <$> τs → m ⊢* valid bs →
       P (VUnionNone s vs) (union s)).
     Lemma vtyped_case : ∀ v τ, vtyped' m v τ → P v τ.
     Proof. destruct 1; eauto. Qed.
@@ -399,7 +399,7 @@ Section val_le.
     | VUnionNone_le' s vs1 vs2 τs bs1 bs2 :
        get_env !! s = Some τs →
        vs1 = flip val_of_bytes bs1 <$> τs →
-       Forall (byte_valid m) bs1 →
+       m ⊢* valid bs1 →
        vs2 = flip val_of_bytes bs2 <$> τs →
        bs1 ⊑@{m}* bs2 →
        val_le' m (VUnionNone s vs1) (VUnionNone s vs2)
@@ -409,7 +409,7 @@ Section val_le.
        vs2 !! i = Some v2 →
        val_le' m v1 v2 →
        vs2 = flip val_of_bytes bs2 <$> τs →
-       Forall (byte_valid m) bs2 →
+       m ⊢* valid bs2 →
        val_le' m (VUnion s i v1) (VUnionNone s vs2).
   Global Instance val_le: SubsetEqEnv M (val Ti Vi) := val_le'.
 
@@ -427,7 +427,7 @@ Section val_le.
   Lemma VUnionNone_le m s vs1 vs2 τs bs1 bs2 :
     get_env !! s = Some τs →
     vs1 = flip val_of_bytes bs1 <$> τs →
-    Forall (byte_valid m) bs1 →
+    m ⊢* valid bs1 →
     vs2 = flip val_of_bytes bs2 <$> τs →
     bs1 ⊑@{m}* bs2 →
     VUnionNone s vs1 ⊑@{m} VUnionNone s vs2.
@@ -437,13 +437,13 @@ Section val_le.
     vs2 !! i = Some v2 →
     v1 ⊑@{m} v2 →
     vs2 = flip val_of_bytes bs2 <$> τs →
-    Forall (byte_valid m) bs2 →
+    m ⊢* valid bs2 →
     VUnion s i v1 ⊑@{m} VUnionNone s vs2.
   Proof. econstructor; eauto. Qed.
 
   Lemma val_of_bytes_le m τ bs1 bs2 :
     type_valid get_env τ →
-    Forall (byte_valid m) bs1 → bs1 ⊑@{m}* bs2 →
+    m ⊢* valid bs1 → bs1 ⊑@{m}* bs2 →
     val_of_bytes τ bs1 ⊑@{m} val_of_bytes τ bs2.
   Proof.
     intros Hτ. revert τ Hτ bs1 bs2. refine (type_env_ind _ _ _ _).
@@ -479,7 +479,7 @@ Section val_le.
          vs2 !! i = Some v2 →
          v1 ⊑@{m} v2 →
          vs2 = flip val_of_bytes bs2 <$> τs →
-         Forall (byte_valid m) bs2 →
+         m ⊢* valid bs2 →
          P (VUnionNone s vs2)) →
        P v2
     | VUnionNone s vs1 =>
@@ -487,7 +487,7 @@ Section val_le.
        (∀ vs2 τs bs1 bs2,
          get_env !! s = Some τs →
          vs1 = flip val_of_bytes bs1 <$> τs →
-         Forall (byte_valid m) bs1 →
+         m ⊢* valid bs1 →
          vs2 = flip val_of_bytes bs2 <$> τs →
          bs1 ⊑@{m}* bs2 →
          P (VUnionNone s vs2)) →
@@ -509,7 +509,7 @@ Section val_le.
          s1 = s2 →
          get_env !! s1 = Some τs →
          vs1 = flip val_of_bytes bs1 <$> τs →
-         Forall (byte_valid m) bs1 →
+         m ⊢* valid bs1 →
          vs2 = flip val_of_bytes bs2 <$> τs →
          bs1 ⊑@{m}* bs2 →
          P) →
@@ -522,7 +522,7 @@ Section val_le.
          vs2 !! i = Some v2 →
          v1 ⊑@{m} v2 →
          vs2 = flip val_of_bytes bs2 <$> τs →
-         Forall (byte_valid m) bs2 →
+         m ⊢* valid bs2 →
          P) →
        P
     | _, _ => P
@@ -542,7 +542,7 @@ Section val_le.
     Context (Punion_none : ∀ s vs1 vs2 τs bs1 bs2,
       get_env !! s = Some τs →
       vs1 = flip val_of_bytes bs1 <$> τs →
-      Forall (byte_valid m) bs1 →
+      m ⊢* valid bs1 →
       vs2 = flip val_of_bytes bs2 <$> τs →
       bs1 ⊑@{m}* bs2 →
       vs1 ⊑@{m}* vs2 →
@@ -555,7 +555,7 @@ Section val_le.
       v1 ⊑@{m} v2 →
       P v1 v2 →
       vs2 = flip val_of_bytes bs2 <$> τs →
-      Forall (byte_valid m) bs2 →
+      m ⊢* valid bs2 →
       P (VUnion s i v1) (VUnionNone s vs2)).
     Lemma val_le_ind: ∀ v1 v2, val_le' m v1 v2 → P v1 v2.
     Proof.
@@ -564,7 +564,7 @@ Section val_le.
        Forall2 P vs1 vs2).
      { induction 1; intros; decompose_Forall; auto. }
      assert (∀ τs bs1 bs2,
-       Forall (type_valid get_env) τs → Forall (byte_valid m) bs1 →
+       Forall (type_valid get_env) τs → m ⊢* valid bs1 →
        bs1 ⊑@{m}* bs2 →
        flip val_of_bytes bs1 <$> τs ⊑@{m}* flip val_of_bytes bs2 <$> τs).
      { induction 1; simpl; constructor; eauto using val_of_bytes_le. }
@@ -664,15 +664,15 @@ Proof.
 Qed.
 
 Lemma fmap_val_of_bytes_typed m τs bs :
-  Forall (type_valid get_env) τs → Forall (byte_valid m) bs →
+  Forall (type_valid get_env) τs → m ⊢* valid bs →
   m ⊢* (flip val_of_bytes bs <$> τs) :* τs.
 Proof. intros Hτs Hbs. induction Hτs; simpl; auto using val_of_bytes_typed. Qed.
 Lemma val_of_bytes_type_of m τ bs :
-  type_valid get_env τ → Forall (byte_valid m) bs →
+  type_valid get_env τ → m ⊢* valid bs →
   type_of (val_of_bytes τ bs) = τ.
 Proof. intros. eapply type_of_correct, val_of_bytes_typed; eauto. Qed.
 Lemma val_of_bytes_fmap_type_of m τs bs :
-  Forall (type_valid get_env) τs → Forall (byte_valid m) bs →
+  Forall (type_valid get_env) τs → m ⊢* valid bs →
   type_of <$> flip val_of_bytes bs <$> τs = τs.
 Proof. induction 1; simpl; eauto using val_of_bytes_type_of with f_equal. Qed.
 
@@ -806,7 +806,7 @@ Proof.
   assert (∀ s i τs v1 v2 vs bs,
     get_env !! s = Some τs →
     v1 ⊑@{m} v2 → vs !! i = Some v2 →
-    vs = flip val_of_bytes bs <$> τs → Forall (byte_valid m) bs →
+    vs = flip val_of_bytes bs <$> τs → m ⊢* valid bs →
     (∀ τ, m ⊢ v2 : τ → m ⊢ v1 : τ) →
     m ⊢ VUnion s i v1 : union s).
   { intros. subst. edestruct @list_lookup_fmap_inv as [? [??]]; eauto.
@@ -822,7 +822,7 @@ Qed.
 
 Lemma val_of_bytes_masked m τ bs1 bs2 cs2 :
   type_valid get_env τ →
-  bs1 ⊑@{m}* bs2 → Forall (byte_valid m) cs2 →
+  bs1 ⊑@{m}* bs2 → m ⊢* valid cs2 →
   val_of_bytes τ bs2 = val_of_bytes τ cs2 →
   val_of_bytes τ (mask_bytes bs1 cs2) = val_of_bytes τ bs1.
 Proof.
@@ -845,7 +845,7 @@ Qed.
 
 Lemma Forall_val_of_bytes_masked m τs bs1 bs2 cs2 :
   Forall (type_valid get_env) τs →
-  bs1 ⊑@{m}* bs2 → Forall (byte_valid m) cs2 →
+  bs1 ⊑@{m}* bs2 → m ⊢* valid cs2 →
   flip val_of_bytes bs2 <$> τs = flip val_of_bytes cs2 <$> τs →
   flip val_of_bytes (mask_bytes bs1 cs2) <$> τs =
     flip val_of_bytes bs1 <$> τs.
@@ -868,7 +868,7 @@ Proof.
       get_env !! s = Some τs → length τs ≠ 1 →
       vs2 !! i = Some v2 → v1 ⊑@{m} v2 → (∀ v3, v2 ⊑@{m} v3 → v1 ⊑@{m} v3) →
       bs2 ⊑@{m}* bs3 →
-      vs2 = flip val_of_bytes bs2 <$> τs → Forall (byte_valid m) bs2 →
+      vs2 = flip val_of_bytes bs2 <$> τs → m ⊢* valid bs2 →
       vs3 = flip val_of_bytes bs3 <$> τs →
       VUnion s i v1 ⊑@{m} VUnionNone s vs3).
     { intros s i τs ?? v1 v2 bs2 bs3 Hs Hτs Hv2 ??????. subst.
@@ -878,9 +878,9 @@ Proof.
       rewrite list_lookup_fmap. by simplify_option_equality. }
     assert (∀ s τs vs1 vs2 vs3 bs1 bs2 bs2' bs3,
       get_env !! s = Some τs → bs1 ⊑@{m}* bs2 →
-      vs1 = flip val_of_bytes bs1 <$> τs → Forall (byte_valid m) bs1 →
+      vs1 = flip val_of_bytes bs1 <$> τs → m ⊢* valid bs1 →
       vs2 = flip val_of_bytes bs2 <$> τs → bs2' ⊑@{m}* bs3 →
-      vs2 = flip val_of_bytes bs2' <$> τs → Forall (byte_valid m) bs2' →
+      vs2 = flip val_of_bytes bs2' <$> τs → m ⊢* valid bs2' →
       vs3 = flip val_of_bytes bs3 <$> τs →
       VUnionNone s vs1 ⊑@{m} VUnionNone s vs3).
     { intros s τs ??? bs1 bs2 bs2' bs3 ?????????. subst.
@@ -899,7 +899,7 @@ Proof.
       Forall (type_valid get_env) τs →
       Forall2 (λ v1 v2, v2 ⊑@{m} v1 → v1 = v2) vs1 vs2 →
       bs1 ⊑@{m}* bs2 →
-      vs2 = flip val_of_bytes bs1 <$> τs → Forall (byte_valid m) bs1 →
+      vs2 = flip val_of_bytes bs1 <$> τs → m ⊢* valid bs1 →
       vs1 = flip val_of_bytes bs2 <$> τs → vs1 = vs2).
     { intros ?? τs ?? Hτs ?????. subst. induction Hτs; simpl in *;
         decompose_Forall; f_equal; eauto using val_of_bytes_le. }
@@ -1080,11 +1080,11 @@ Proof.
 Qed.
 Lemma union_to_bytes_valid_aux m f sz vs τs bs :
   Forall2 (λ v τ, ∀ w, w ∈ f v → m ⊢ w : τ) vs τs →
-  bs ∈ union_to_bytes f sz vs → Forall (byte_valid m) bs.
+  bs ∈ union_to_bytes f sz vs → m ⊢* valid bs.
 Proof.
   unfold union_to_bytes. intros Hvs Hbs.
   apply elem_of_filter in Hbs. destruct Hbs as (_ & Hbs).
-  revert bs Hbs. apply (intersection_with_list_ind _ (Forall (byte_valid m))).
+  revert bs Hbs. apply (intersection_with_list_ind _ (Forall (valid m))).
   + intros. decompose_elem_of. apply Forall_replicate, BUndef_valid.
   + unfold compose. simpl.
     induction Hvs; constructor; intros; decompose_elem_of;
@@ -1120,7 +1120,7 @@ Proof.
 Qed.
 Lemma union_to_bytes_valid m sz vs τs bs :
   m ⊢* vs :* τs →
-  bs ∈ union_to_bytes mval_of_val sz vs → Forall (byte_valid m) bs.
+  bs ∈ union_to_bytes mval_of_val sz vs → m ⊢* valid bs.
 Proof.
   intros Hvs. apply union_to_bytes_valid_aux with τs.
   induction Hvs; constructor; eauto using mval_of_val_typed.
@@ -1164,7 +1164,7 @@ Qed.
 Lemma union_to_of_bytes_exists_help m τs sz bs2
     (vs := flip val_of_bytes bs2 <$> τs) :
   Forall (type_valid get_env) τs → Forall (λ τ, size_of τ ≤ sz) τs →
-  Forall (byte_valid m) bs2 → Forall (λ τ, ∀ bs2, Forall (byte_valid m) bs2 →
+  m ⊢* valid bs2 → Forall (λ τ, ∀ bs2, m ⊢* valid bs2 →
     ∃ bs1, bs1 ∈ mval_to_bytes <$> mval_of_val (val_of_bytes τ bs2) ∧
       bs1 ⊑@{m}* resize (size_of τ) BUndef bs2) τs →
   ∃ bs1, bs1 ∈ union_to_bytes mval_of_val sz vs ∧
@@ -1187,11 +1187,11 @@ Proof.
   rewrite Forall_cons in Hτs. destruct Hτs as [Hτ Hτs].
   rewrite Forall_cons in Hsz. destruct Hsz as [Hsz Hsz'].
   destruct (IHτ bs2) as (bs3 & Hbs3 & ?); trivial.
-  assert (Forall (byte_valid m) bs3).
+  assert (m ⊢* valid bs3).
   { decompose_elem_of. eauto using mval_to_bytes_valid,
       mval_of_val_typed, val_of_bytes_typed, env_valid_lookup. }
   destruct (IHτs Hτs Hsz' bs2) as (bs4 & ? & Hbs4 & ?); trivial.
-  assert (Forall (byte_valid m) bs4).
+  assert (m ⊢* valid bs4).
   { apply (union_to_bytes_valid m sz (flip val_of_bytes bs2 <$> τs) τs);
       eauto using fmap_val_of_bytes_typed.
     unfold union_to_bytes. apply elem_of_filter. split; auto.
@@ -1219,7 +1219,7 @@ Proof.
 Qed.
 
 Lemma val_to_of_bytes_exists m τ bs2 :
-  type_valid get_env τ → Forall (byte_valid m) bs2 →
+  type_valid get_env τ → m ⊢* valid bs2 →
   ∃ bs1, bs1 ∈ mval_to_bytes <$> mval_of_val (val_of_bytes τ bs2) ∧
     bs1 ⊑@{m}* resize (size_of τ) BUndef bs2.
 Proof.
@@ -1284,7 +1284,7 @@ Qed.
 
 Lemma union_to_of_bytes_exists m τs sz bs2 (vs:=flip val_of_bytes bs2 <$> τs) :
   Forall (type_valid get_env) τs → Forall (λ τ, size_of τ ≤ sz) τs →
-  Forall (byte_valid m) bs2 →
+  m ⊢* valid bs2 →
   ∃ bs1, bs1 ∈ union_to_bytes mval_of_val sz vs ∧
     bs1 ⊑@{m}* resize sz BUndef bs2.
 Proof.
@@ -1393,7 +1393,7 @@ Proof.
     apply elem_of_fmap in Hw2. destruct Hw2 as (bs4 & ? & Hbs4). subst.
     assert (length bs4 = size_of (union s))
       by eauto using union_to_bytes_length.
-    assert (Forall (byte_valid m) bs4).
+    assert (m ⊢* valid bs4).
     { eapply union_to_bytes_valid with _ (flip val_of_bytes bs2 <$> τs) _;
         eauto using fmap_val_of_bytes_typed, bytes_valid_ge, env_valid_lookup. }
     unfold union_to_bytes in Hbs4.
@@ -1416,7 +1416,7 @@ Proof.
     assert (length bs3 = size_of (union s))
       by eauto using union_to_bytes_length.
     unfold union_to_bytes in Hbs3.
-    assert (Forall (byte_valid m) bs3).
+    assert (m ⊢* valid bs3).
     { eapply union_to_bytes_valid with _ (flip val_of_bytes bs2 <$> τs) _;
         eauto using fmap_val_of_bytes_typed, env_valid_lookup. }
     apply elem_of_filter in Hbs3. destruct Hbs3 as [Hbs3 ?].
@@ -1453,7 +1453,7 @@ Proof.
     bs ∈ union_to_bytes mval_of_val sz vs).
   { intros. by apply choose_Some. }
   assert (∀ s τs bs,
-    get_env !! s = Some τs → Forall (byte_valid m) bs →
+    get_env !! s = Some τs → m ⊢* valid bs →
     choose (union_to_bytes mval_of_val (size_of (union s))
       (flip val_of_bytes bs <$> τs)) ≠ None).
   { intros s τs bs ??. rewrite not_eq_None_Some.
@@ -1572,7 +1572,7 @@ Lemma val_lookup_seg_le m v1 v2 rs v3 :
 Proof.
   assert (∀ s τs i v3 bs1 bs2,
     get_env !! s = Some τs →
-    bs1 ⊑@{m}* bs2 → Forall (byte_valid m) bs1 →
+    bs1 ⊑@{m}* bs2 → m ⊢* valid bs1 →
     (flip val_of_bytes bs1 <$> τs) !! i = Some v3 →
     ∃ v4, (flip val_of_bytes bs2 <$> τs) !! i = Some v4 ∧ v3 ⊑@{m} v4).
   { intros s τs i ? bs1 bs2 ????.
@@ -1592,7 +1592,7 @@ Lemma val_lookup_seg_ge m v1 v2 rs v4 :
 Proof.
   assert (∀ s τs i v4 bs1 bs2,
     get_env !! s = Some τs →
-    bs1 ⊑@{m}* bs2 → Forall (byte_valid m) bs1 →
+    bs1 ⊑@{m}* bs2 → m ⊢* valid bs1 →
     (flip val_of_bytes bs2 <$> τs) !! i = Some v4 →
     ∃ v3, (flip val_of_bytes bs1 <$> τs) !! i = Some v3 ∧ v3 ⊑@{m} v4).
   { intros s τs i ? bs1 bs2 ????.

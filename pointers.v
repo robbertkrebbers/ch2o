@@ -746,9 +746,8 @@ Definition mk_frozen_ptr {Ti} (p : ptr Ti) : frozen_ptr Ti :=
   dexist _ (ptr_freeze_frozen p).
 Notation ptr_seg Ti := (segment (frozen_ptr Ti)).
 
-Definition ptr_seg_valid `{PtrEnv Ti} `{IntEnv Ti Vi}
-    `{TypeOfIndex Ti M} (m : M) (ps : ptr_seg Ti) : Prop :=
-  ∃ τ, m ⊢ proj1_sig (segment_item ps) : τ.
+Instance ptr_seg_valid `{PtrEnv Ti} `{IntEnv Ti Vi} `{TypeOfIndex Ti M} :
+  Valid M (ptr_seg Ti) := λ m ps, ∃ τ, m ⊢ proj1_sig (segment_item ps) : τ.
 
 Definition to_ptr_segs `{PtrEnv Ti} (p : ptr Ti) : list (ptr_seg Ti) :=
   to_segments (size_of (type_of p.*)) (mk_frozen_ptr p).
@@ -766,7 +765,7 @@ Section ptr_segs.
   Implicit Types q : frozen_ptr Ti.
   Implicit Types ps : ptr_seg Ti.
 
-  Global Instance ptr_seg_valid_dec m ps : Decision (ptr_seg_valid m ps).
+  Global Instance ptr_seg_valid_dec m ps : Decision (m ⊢ valid ps).
   Proof.
    refine
     match Some_dec (type_check m (proj1_sig (segment_item ps))) with
@@ -827,15 +826,14 @@ Section ptr_segs.
     simpl. rewrite ptr_freeze_type_of. by simplify_option_equality.
   Qed.
 
-  Lemma to_ptr_segs_valid m p τ :
-    m ⊢ p : τ → Forall (ptr_seg_valid m) (to_ptr_segs p).
+  Lemma to_ptr_segs_valid m p τ : m ⊢ p : τ → m ⊢* valid (to_ptr_segs p).
   Proof.
     intros. apply (Forall_to_segments _ (λ q, ∃ τ, m ⊢ `q : τ)).
     exists τ. by apply ptr_typed_freeze.
   Qed.
 
   Lemma of_ptr_segs_typed m p τ pss :
-    of_ptr_segs τ pss = Some p → Forall (ptr_seg_valid m) pss → m ⊢ p : τ.
+    of_ptr_segs τ pss = Some p → m ⊢* valid pss → m ⊢ p : τ.
   Proof.
     unfold of_ptr_segs. intros.
     destruct (of_segments _ _) as [q|] eqn:?; simplify_option_equality.

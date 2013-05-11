@@ -26,16 +26,17 @@ Proof. by injection 1. Qed.
 Global Instance: Injective (=) (=) (@BPtrSeg Ti C).
 Proof. by injection 1. Qed.
 
-Inductive byte_valid `{PtrEnv Ti} `{IntEnv Ti Vi} `{TypeOfIndex Ti M}
+Inductive byte_valid' `{PtrEnv Ti} `{IntEnv Ti Vi} `{TypeOfIndex Ti M}
     (m : M) : byte Ti Vi → Prop :=
-  | BUndef_valid : byte_valid m BUndef
-  | BChar_valid c : byte_valid m (BChar c)
-  | BPtrSeg_valid (ps : ptr_seg Ti) :
-     ptr_seg_valid m ps → byte_valid m (BPtrSeg ps).
+  | BUndef_valid' : byte_valid' m BUndef
+  | BChar_valid' c : byte_valid' m (BChar c)
+  | BPtrSeg_valid' ps : m ⊢ valid ps → byte_valid' m (BPtrSeg ps).
+Instance byte_valid `{PtrEnv Ti} `{IntEnv Ti Vi} `{TypeOfIndex Ti M} :
+  Valid M (byte Ti Vi) := byte_valid'.
 
 Inductive byte_le' `{PtrEnv Ti} `{IntEnv Ti Vi} `{TypeOfIndex Ti M}
     (m : M) : relation (byte Ti Vi) :=
-  | BUndef_le' b : byte_valid m b → byte_le' m BUndef b
+  | BUndef_le' b : m ⊢ valid b → byte_le' m BUndef b
   | byte_le_refl b : byte_le' m b b.
 Instance byte_le `{PtrEnv Ti} `{IntEnv Ti Vi} `{TypeOfIndex Ti M} :
   SubsetEqEnv M (byte Ti Vi) := byte_le'.
@@ -101,38 +102,45 @@ Section byte.
   Implicit Types b : byte Ti Vi.
   Implicit Types bs : list (byte Ti Vi).
 
-  Global Instance byte_valid_dec m b : Decision (byte_valid m b).
+  Lemma BUndef_valid m : m ⊢ valid BUndef.
+  Proof. constructor. Qed.
+  Lemma BChar_valid m c : m ⊢ valid (BChar c).
+  Proof. by constructor. Qed.
+  Lemma BPtrSeg_valid m ps : m ⊢ valid ps → m ⊢ valid (BPtrSeg ps).
+  Proof. by constructor. Qed.
+
+  Global Instance byte_valid_dec m b : Decision (m ⊢ valid b).
   Proof.
    refine
     match b with
     | BUndef => left _
     | BChar _ => left _
-    | BPtrSeg ps => cast_if (decide (ptr_seg_valid m ps))
+    | BPtrSeg ps => cast_if (decide (m ⊢ valid ps))
     end; first [by constructor | abstract by inversion 1].
   Defined.
 
-  Lemma BUndef_le m b : byte_valid m b → BUndef ⊑@{m} b.
+  Lemma BUndef_le m b : m ⊢ valid b → BUndef ⊑@{m} b.
   Proof. by constructor. Qed.
   Lemma Forall_BUndef_le m bs :
-    Forall (byte_valid m) bs → Forall (subseteq_env m BUndef) bs.
+    m ⊢* valid bs → Forall (subseteq_env m BUndef) bs.
   Proof. induction 1; constructor; auto using BUndef_le. Qed.
-  Lemma byte_valid_ge m b1 b2 : byte_valid m b1 → b1 ⊑@{m} b2 → byte_valid m b2.
+  Lemma byte_valid_ge m b1 b2 : m ⊢ valid b1 → b1 ⊑@{m} b2 → m ⊢ valid b2.
   Proof. by destruct 1; inversion 1; subst; try constructor. Qed.
-  Lemma byte_valid_le m b1 b2 : byte_valid m b2 → b1 ⊑@{m} b2 → byte_valid m b1.
+  Lemma byte_valid_le m b1 b2 : m ⊢ valid b2 → b1 ⊑@{m} b2 → m ⊢ valid b1.
   Proof. by destruct 1; inversion 1; subst; try constructor. Qed.
 
   Lemma bytes_valid_ge m bs1 bs2 :
-    Forall (byte_valid m) bs1 → bs1 ⊑@{m}* bs2 → Forall (byte_valid m) bs2.
+    m ⊢* valid bs1 → bs1 ⊑@{m}* bs2 → m ⊢* valid bs2.
   Proof.
     intros Hbs1 Hbs. induction Hbs; decompose_Forall; eauto using byte_valid_ge.
   Qed.
   Lemma bytes_valid_le m bs1 bs2 :
-    Forall (byte_valid m) bs2 → bs1 ⊑@{m}* bs2 → Forall (byte_valid m) bs1.
+    m ⊢* valid bs2 → bs1 ⊑@{m}* bs2 → m ⊢* valid bs1.
   Proof.
     intros Hbs1 Hbs. induction Hbs; decompose_Forall; eauto using byte_valid_le.
   Qed.
 
-  Lemma BPtrSeg_valid_inv m ps : byte_valid m (BPtrSeg ps) → ptr_seg_valid m ps.
+  Lemma BPtrSeg_valid_inv m ps : m ⊢ valid (BPtrSeg ps) → m ⊢ valid ps.
   Proof. by inversion 1. Qed.
 
   Global Instance: PartialOrder (@subseteq_env M (byte Ti Vi) _ m).
@@ -143,12 +151,11 @@ Section byte.
     * by destruct 1; inversion_clear 1.
   Qed.
 
-  Lemma base_undef_bytes_valid m τ : Forall (byte_valid m) (base_undef_bytes τ).
+  Lemma base_undef_bytes_valid m τ : m ⊢* valid (base_undef_bytes τ).
   Proof. intros. apply Forall_replicate. by constructor. Qed.
 
   Lemma base_undef_bytes_le m τ bs :
-    Forall (byte_valid m) bs → length bs = size_of (base τ) →
-    base_undef_bytes τ ⊑@{m}* bs.
+    m ⊢* valid bs → length bs = size_of (base τ) → base_undef_bytes τ ⊑@{m}* bs.
   Proof.
     intros. apply Forall2_replicate_l.
     * eapply Forall_impl; eauto. by constructor.
@@ -170,28 +177,25 @@ Section byte.
     intros. destruct (bytes_le_inv m bs1 bs2) as [? | [? [??]]];
       eauto using elem_of_list_lookup_2.
   Qed.
-  Lemma bytes_le_no_undef m bs1 bs2 :
-    bs1 ⊑@{m}* bs2 → BUndef ∉ bs1 → bs1 = bs2.
+  Lemma bytes_le_no_undef m bs1 bs2 : bs1 ⊑@{m}* bs2 → BUndef ∉ bs1 → bs1 = bs2.
   Proof. intros. by edestruct bytes_le_eq_or_undef; eauto. Qed.
-  Lemma bytes_le_undef m bs1 bs2 :
-    BUndef ∈ bs1 → bs2 ⊑@{m}* bs1 → BUndef ∈ bs2.
+  Lemma bytes_le_undef m bs1 bs2 : BUndef ∈ bs1 → bs2 ⊑@{m}* bs1 → BUndef ∈ bs2.
   Proof. intros. edestruct bytes_le_eq_or_undef; eauto. by subst. Qed.
 
   Lemma bytes_le_resize m bs1 bs2 n :
     bs1 ⊑@{m}* bs2 → resize n BUndef bs1 ⊑@{m}* resize n BUndef bs2.
   Proof. by apply Forall2_resize. Qed.
 
-  Lemma mask_byte_le m bm b : byte_valid m b → mask_byte bm b ⊑@{m} b.
+  Lemma mask_byte_le m bm b : m ⊢ valid b → mask_byte bm b ⊑@{m} b.
   Proof. by destruct bm; constructor. Qed.
   Lemma mask_byte_not_undef bm b : bm ≠ BUndef → mask_byte bm b = b.
   Proof. by destruct bm. Qed.
-  Lemma mask_byte_valid m bm b : byte_valid m b → byte_valid m (mask_byte bm b).
+  Lemma mask_byte_valid m bm b : m ⊢ valid b → m ⊢ valid (mask_byte bm b).
   Proof. destruct bm; simpl; auto using BUndef_valid. Qed.
 
   Lemma mask_bytes_length bms bs : length (mask_bytes bms bs) = length bs.
   Proof. revert bms. induction bs; intros [|??]; simpl; f_equal; auto. Qed.
-  Lemma mask_bytes_le m bms bs :
-    Forall (byte_valid m) bs → mask_bytes bms bs ⊑@{m}* bs.
+  Lemma mask_bytes_le m bms bs : m ⊢* valid bs → mask_bytes bms bs ⊑@{m}* bs.
   Proof.
     intros Hbs. revert bms.
     by induction Hbs; intros [|??]; simpl; constructor; auto using mask_byte_le.
@@ -209,7 +213,7 @@ Section byte.
     f_equal; auto using mask_byte_not_undef.
   Qed.
   Lemma mask_bytes_valid m bms bs :
-    Forall (byte_valid m) bs → Forall (byte_valid m) (mask_bytes bms bs).
+    m ⊢* valid bs → m ⊢* valid (mask_bytes bms bs).
   Proof.
     intros Hbs. revert bms.
     induction Hbs; intros [|??]; simpl; auto using mask_byte_valid.
@@ -263,9 +267,9 @@ Section byte.
 
   Lemma array_of_bytes_masked m τ n bs1 bs2 cs2 :
     (∀ bs1 bs2 cs2,
-      bs1 ⊑@{m}* bs2 →  Forall (byte_valid m) cs2 →
+      bs1 ⊑@{m}* bs2 → m ⊢* valid cs2 →
       f bs2 = f cs2 → f (mask_bytes bs1 cs2) = f bs1) →
-    bs1 ⊑@{m}* bs2 → Forall (byte_valid m) cs2 →
+    bs1 ⊑@{m}* bs2 → m ⊢* valid cs2 →
     array_of_bytes f τ n bs2 = array_of_bytes f τ n cs2 →
     array_of_bytes f τ n (mask_bytes bs1 cs2) = array_of_bytes f τ n bs1.
   Proof.
@@ -342,10 +346,10 @@ Section byte.
 
   Lemma struct_of_bytes_masked m τs bs1 bs2 cs2 :
     Forall (λ τ, ∀ bs1 bs2 cs2,
-      bs1 ⊑@{m}* bs2 →  Forall (byte_valid m) cs2 →
+      bs1 ⊑@{m}* bs2 → m ⊢* valid cs2 →
       f τ bs2 = f τ cs2 → f τ (mask_bytes bs1 cs2) = f τ bs1) τs →
     bs1 ⊑@{m}* bs2 →
-    Forall (byte_valid m) cs2 →
+    m ⊢* valid cs2 →
     struct_of_bytes f τs bs2 = struct_of_bytes f τs cs2 →
     struct_of_bytes f τs (mask_bytes bs1 cs2) = struct_of_bytes f τs bs1.
   Proof.
@@ -367,15 +371,15 @@ Section byte.
   Proof. by destruct b; simplify_option_equality. Qed.
 
   Lemma byte_join_Some_l m b1 b2 b3 :
-    byte_valid m b1 → byte_valid m b2 → byte_join b1 b2 = Some b3 → b1 ⊑@{m} b3.
+    m ⊢ valid b1 → m ⊢ valid b2 → byte_join b1 b2 = Some b3 → b1 ⊑@{m} b3.
   Proof.
     by destruct 1, 1; intros; simplify_option_equality; repeat constructor.
   Qed.
   Lemma byte_join_Some_r m b1 b2 b3 :
-    byte_valid m b1 → byte_valid m b2 → byte_join b1 b2 = Some b3 → b2 ⊑@{m} b3.
+    m ⊢ valid b1 → m ⊢ valid b2 → byte_join b1 b2 = Some b3 → b2 ⊑@{m} b3.
   Proof. by destruct b1, b2; intros; simplify_option_equality; constructor. Qed.
   Lemma byte_join_Some m b1 b2 b3 :
-    byte_valid m b1 → byte_valid m b2 → byte_join b1 b2 = Some b3 →
+    m ⊢ valid b1 → m ⊢ valid b2 → byte_join b1 b2 = Some b3 →
     b1 ⊑@{m} b3 ∧ b2 ⊑@{m} b3.
   Proof. eauto using byte_join_Some_l, byte_join_Some_r. Qed.
 
@@ -411,7 +415,7 @@ Section byte.
   Qed.
 
   Lemma bytes_join_Some_l m bs1 bs2 bs3 :
-    Forall (byte_valid m) bs1 → Forall (byte_valid m) bs2 →
+    m ⊢* valid bs1 → m ⊢* valid bs2 →
     bytes_join bs1 bs2 = Some bs3 → bs1 ⊑@{m}* bs3.
   Proof.
     intros Hbs1. revert bs2 bs3.
@@ -419,14 +423,14 @@ Section byte.
       simplify_option_equality; constructor; eauto using byte_join_Some_l.
   Qed.
   Lemma bytes_join_Some_r m bs1 bs2 bs3 :
-    Forall (byte_valid m) bs1 → Forall (byte_valid m) bs2 →
+    m ⊢* valid bs1 → m ⊢* valid bs2 →
     bytes_join bs1 bs2 = Some bs3 → bs2 ⊑@{m}* bs3.
   Proof.
     intros. apply bytes_join_Some_l with bs1; auto.
     by rewrite (commutative bytes_join).
   Qed.
   Lemma bytes_join_Some m bs1 bs2 bs3 :
-    Forall (byte_valid m) bs1 → Forall (byte_valid m) bs2 →
+    m ⊢* valid bs1 → m ⊢* valid bs2 →
     bytes_join bs1 bs2 = Some bs3 → bs1 ⊑@{m}* bs3 ∧ bs2 ⊑@{m}* bs3.
   Proof. eauto using bytes_join_Some_l, bytes_join_Some_r. Qed.
 
