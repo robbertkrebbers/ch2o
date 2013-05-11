@@ -15,7 +15,7 @@ Arguments segment_index {_} _.
 
 Section segmented.
 Context {A : Type} `{∀ x y : A, Decision (x = y)}.
-Context (len : nat) {len_pos : PropHolds (0 < len)}.
+Context (len : nat) {len_pos : PropHolds (len ≠ 0)}.
 
 Global Instance segment_eq_dec (s1 s2 : segment A) : Decision (s1 = s2).
 Proof. solve_decision. Defined.

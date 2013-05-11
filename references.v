@@ -1,6 +1,7 @@
 (* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export abstract_integers types.
+Local Open Scope ctype_scope.
 
 (** * Pointers environments *)
 Class PtrEnv (Ti : Set) := {
@@ -12,39 +13,53 @@ Class PtrEnv (Ti : Set) := {
 Class EnvSpec (Ti Vi : Set) `{IntEnv Ti Vi} `{PtrEnv Ti} := {
   int_env_spec :>> IntEnvSpec Ti Vi;
   get_env_valid :> EnvValid get_env;
-  size_of_pos τ : 0 < size_of τ;
-  size_of_int τ : size_of (TBase (TInt τ)) = int_type_size τ;
-  size_of_array τ n : size_of (TArray τ n) = n * size_of τ;
+  size_of_base_ne_0 τ : size_of (base τ) ≠ 0;
+  size_of_int τ : size_of (intt τ) = int_type_size τ;
+  size_of_array τ n : size_of (τ.[n]) = n * size_of τ;
   size_of_struct s τs :
-    get_env !! s = Some τs → size_of (TStruct s) = sum_list (struct_fields τs);
+    get_env !! s = Some τs → size_of (struct s) = sum_list (struct_fields τs);
   size_of_struct_fields τs :
     Forall2 (λ τ sz, size_of τ ≤ sz) τs (struct_fields τs);
   size_of_union s τs :
-    get_env !! s = Some τs → Forall (λ τ, size_of τ ≤ size_of (TUnion s)) τs
+    get_env !! s = Some τs → Forall (λ τ, size_of τ ≤ size_of (union s)) τs
 }.
 
 Section env_spec.
   Context `{EnvSpec Ti Vi}.
 
-  Global Instance: ∀ τ, PropHolds (0 < size_of τ).
-  Proof size_of_pos.
-
   Definition struct_offset (τs : list (type Ti))
     (i : nat) : nat := sum_list $ take i $ struct_fields τs.
 
   Lemma size_of_union_lookup s τs i τ :
-    get_env !! s = Some τs → τs !! i = Some τ → size_of τ ≤ size_of (TUnion s).
+    get_env !! s = Some τs → τs !! i = Some τ → size_of τ ≤ size_of (union s).
   Proof.
-    intros. assert (Forall (λ τ, size_of τ ≤ size_of (TUnion s)) τs) as Hτs
+    intros. assert (Forall (λ τ, size_of τ ≤ size_of (union s)) τs) as Hτs
       by eauto using size_of_union.
     rewrite Forall_lookup in Hτs. eauto.
   Qed.
   Lemma size_of_union_singleton s τ :
-    get_env !! s = Some [τ] → size_of τ ≤ size_of (TUnion s).
+    get_env !! s = Some [τ] → size_of τ ≤ size_of (union s).
   Proof. intros. by apply (size_of_union_lookup s [τ] 0). Qed.
 
   Lemma struct_fields_same_length τs : τs `same_length` struct_fields τs.
   Proof. eauto using Forall2_same_length, size_of_struct_fields. Qed.
+
+  Global Instance: ∀ τ, PropHolds (size_of (base τ) ≠ 0).
+  Proof. apply size_of_base_ne_0. Qed.
+  Lemma size_of_ne_0 τ : type_valid get_env τ → size_of τ ≠ 0.
+  Proof.
+    revert τ. refine (type_env_ind _ _ _ _).
+    * auto using size_of_base_ne_0.
+    * intros. rewrite size_of_array. by apply NPeano.Nat.neq_mul_0.
+    * intros [] s τs Hs Hτs Hsz Hlen.
+      + erewrite size_of_struct by eauto.
+        clear Hs. induction (size_of_struct_fields τs);
+          simpl; decompose_Forall; auto with lia.
+      + apply size_of_union in Hs.
+        destruct Hs; decompose_Forall; auto with lia.
+  Qed.
+  Lemma size_of_pos τ : type_valid get_env τ → 0 < size_of τ.
+  Proof. intros. by apply NPeano.Nat.neq_0_lt_0, size_of_ne_0. Qed.
 End env_spec.
 
 (** * References *)
@@ -73,12 +88,11 @@ Proof.
 Defined.
 
 Inductive ref_seg_typed `{PtrEnv Ti} : PathTyped (type Ti) ref_seg :=
-  | RArray_typed τ i n Hi :
-     TArray τ n ∙ RArray i n Hi ↝ τ
+  | RArray_typed τ i n Hi : τ.[n] ∙ RArray i n Hi ↝ τ
   | RStruct_typed s i τs τ :
-     get_env !! s = Some τs → τs !! i = Some τ → TStruct s ∙ RStruct i ↝ τ
+     get_env !! s = Some τs → τs !! i = Some τ → struct s ∙ RStruct i ↝ τ
   | RUnion_typed s i b τs τ :
-     get_env !! s = Some τs → τs !! i = Some τ → TUnion s ∙ RUnion i b ↝ τ.
+     get_env !! s = Some τs → τs !! i = Some τ → union s ∙ RUnion i b ↝ τ.
 Existing Instance ref_seg_typed.
 Inductive ref_typed `{PtrEnv Ti} : PathTyped (type Ti) ref :=
   | ref_nil_2 τ : τ ∙ [] ↝ τ
@@ -89,9 +103,9 @@ Existing Instance ref_typed.
 Instance ref_seg_lookup `{PtrEnv Ti} :
     Lookup ref_seg (type Ti) (type Ti) := λ rs τ,
   match rs, τ with
-  | RArray i n' _, TArray τ n => guard (n = n'); Some τ
-  | RStruct i, TStruct s => get_env !! s ≫= (!! i)
-  | RUnion i _, TUnion s => get_env !! s ≫= (!! i)
+  | RArray i n' _, τ.[n] => guard (n = n'); Some τ
+  | RStruct i, struct s => get_env !! s ≫= (!! i)
+  | RUnion i _, union s => get_env !! s ≫= (!! i)
   | _, _ => None
   end.
 Instance ref_lookup `{PtrEnv Ti} : Lookup ref (type Ti) (type Ti) :=
@@ -126,15 +140,9 @@ Definition ref_base (r : ref) : ref :=
   | _ => r
   end.
 Definition ref_offset (r : ref) : nat :=
-  match r with
-  | RArray i _ _ :: r => i
-  | _ => 0
-  end.
+  match r with RArray i _ _ :: r => i | _ => 0 end.
 Definition ref_size (r : ref) : nat :=
-  match r with
-  | RArray _ n _ :: _ => n
-  | _ => 1
-  end.
+  match r with RArray _ n _ :: _ => n | _ => 1 end.
 
 Lemma ref_plus_prf (i n : nat) (j : Z) :
   (0 ≤ i + j < n)%Z →
@@ -156,13 +164,13 @@ Arguments ref_minus !_ !_ /.
 Definition ref_seg_byte_offset `{PtrEnv Ti} (τ : type Ti) (rs : ref_seg) :
     option (type Ti * nat) :=
   match rs, τ with
-  | RArray i _ _, TArray τ _ =>
+  | RArray i _ _, τ.[_] =>
      Some (τ, i * size_of τ)
-  | RStruct i, TStruct s =>
+  | RStruct i, struct s =>
      τs ← get_env !! s;
      τ ← τs !! i;
      Some (τ, struct_offset τs i)
-  | RUnion i _, TUnion s =>
+  | RUnion i _, union s =>
      τs ← get_env !! s;
      τ ← τs !! i;
      Some (τ, 0)
@@ -181,8 +189,7 @@ Fixpoint ref_byte_offset `{PtrEnv Ti} (τ : type Ti) (r : ref) :
 Inductive ref_seg_disjoint: Disjoint ref_seg :=
   | RArray_disjoint i1 i2 n Hi1 Hi2 :
      i1 ≠ i2 → RArray i1 n Hi1 ⊥ RArray i2 n Hi2
-  | RStruct_disjoint i1 i2 :
-     i1 ≠ i2 → RStruct i1 ⊥ RStruct i2.
+  | RStruct_disjoint i1 i2 : i1 ≠ i2 → RStruct i1 ⊥ RStruct i2.
 Existing Instance ref_seg_disjoint.
 Inductive ref_disjoint: Disjoint ref :=
   | ref_disjoint_here (r1 r2 : ref) rs1 rs2 :
@@ -286,9 +293,9 @@ Section refs.
   Lemma ref_lookup_complete τ r σ : τ ∙ r ↝ σ → τ !! r = Some σ.
   Proof. by rewrite ref_lookup_correct. Qed.
 
-  Lemma ref_seg_typed_void rs σ : ¬TVoid ∙ rs ↝ σ.
+  Lemma ref_seg_typed_void rs σ : ¬void ∙ rs ↝ σ.
   Proof. inversion 1. Qed.
-  Lemma ref_typed_void r σ : TVoid ∙ r ↝ σ → σ = TVoid ∧ r = [].
+  Lemma ref_typed_void r σ : void ∙ r ↝ σ → σ = void ∧ r = [].
   Proof.
     destruct r as [|rs r] using rev_ind.
     * rewrite ref_typed_nil. by intros; subst.
@@ -694,7 +701,7 @@ Section refs.
   Proof.
     apply ref_plus_Some_2.
     * rewrite ref_offset_base, ref_size_base.
-      pose proof (ref_offset_size r). lia.
+      pose proof (ref_offset_size r); lia.
     * by rewrite !ref_base_idempotent.
     * rewrite ref_offset_base. lia.
   Qed.
@@ -753,7 +760,8 @@ Inductive bref_typed `{PtrEnv Ti} `{IntEnv Ti Vi} :
     PathTyped (type Ti) bref :=
   | RObj_typed τ r σ : τ ∙ r ↝ σ → τ ∙ RObj r ↝ σ
   | RByte_typed τ r σ i n Hi :
-     τ ∙ r ↝ σ → n = size_of σ → τ ∙ RByte r i n Hi ↝ TBase (TInt TuChar).
+     τ ∙ r ↝ σ → τ ≠ uchar → n = size_of σ →
+     τ ∙ RByte r i n Hi ↝ uchar.
 Existing Instance bref_typed.
 
 Instance bref_lookup `{PtrEnv Ti} `{IntEnv Ti Vi} :
@@ -762,8 +770,9 @@ Instance bref_lookup `{PtrEnv Ti} `{IntEnv Ti Vi} :
   | RObj r => τ !! r
   | RByte r i n _ =>
      σ ← τ !! r;
+     guard (τ ≠ uchar);
      guard (n = size_of σ);
-     Some (TBase (TInt TuChar))
+     Some uchar
   end.
 
 Inductive bref_frozen: Frozen bref :=
@@ -855,8 +864,7 @@ Section bref.
   Lemma bref_lookup_complete τ r σ : τ ∙ r ↝ σ → τ !! r = Some σ.
   Proof. by rewrite bref_lookup_correct. Qed.
 
-  Lemma bref_typed_void r σ :
-    TVoid ∙ r ↝ σ → σ = TVoid ∨ σ = TBase (TInt TuChar).
+  Lemma bref_typed_void r σ : void ∙ r ↝ σ → σ = void ∨ σ = uchar.
   Proof.
     inversion 1 as [? r' σ'|]; subst.
     * edestruct ref_typed_void; eauto.
@@ -959,8 +967,7 @@ Section bref.
   Lemma bref_offset_size r : bref_offset r < bref_size r.
   Proof.
     assert (∀ n i x y, i < n → x < y → x * n + i < y * n).
-    { intros.
-      assert (exists j, y = x + j /\ 0 < j) as (j&?&?)
+    { intros. assert (exists j, y = x + j /\ 0 < j) as (j&?&?)
         by (exists (y - x); lia); subst.
       rewrite NPeano.Nat.mul_add_distr_r, <-(NPeano.Nat.mul_1_l i).
       apply NPeano.Nat.add_lt_mono_l. apply NPeano.Nat.le_lt_trans with (j * i),

@@ -41,7 +41,7 @@ Instance byte_le `{PtrEnv Ti} `{IntEnv Ti Vi} `{TypeOfIndex Ti M} :
   SubsetEqEnv M (byte Ti Vi) := byte_le'.
 
 Definition base_undef_bytes `{IntEnv Ti Vi} `{PtrEnv Ti} (τ : base_type Ti) :
-  list (byte Ti Vi) := replicate (size_of (TBase τ)) BUndef.
+  list (byte Ti Vi) := replicate (size_of (base τ)) BUndef.
 Arguments base_undef_bytes _ _ _ _ !_ /.
 
 Definition array_of_bytes `{PtrEnv Ti} `(f : list (byte' Ti C) → A)
@@ -64,10 +64,7 @@ Definition struct_of_bytes `{PtrEnv Ti} `(f : type Ti → list (byte' Ti C) → 
   struct_of_bytes_aux f (zip (struct_fields τs) τs).
 
 Definition mask_byte {Ti C} (bm b : byte' Ti C) :=
-  match bm with
-  | BUndef => BUndef
-  | _ => b
-  end.
+  match bm with BUndef => BUndef | _ => b end.
 Fixpoint mask_bytes {Ti C} (bms bs : list (byte' Ti C)) :=
   match bms, bs with
   | [], bs => bs
@@ -150,7 +147,7 @@ Section byte.
   Proof. intros. apply Forall_replicate. by constructor. Qed.
 
   Lemma base_undef_bytes_le m τ bs :
-    Forall (byte_valid m) bs → length bs = size_of (TBase τ) →
+    Forall (byte_valid m) bs → length bs = size_of (base τ) →
     base_undef_bytes τ ⊑@{m}* bs.
   Proof.
     intros. apply Forall2_replicate_l.

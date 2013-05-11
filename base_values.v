@@ -1,6 +1,7 @@
 (* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export pointers bytes.
+Local Open Scope cbase_type_scope.
 
 Inductive base_val (Ti Vi : Set) :=
   | VUndef : base_type Ti → base_val Ti Vi
@@ -20,10 +21,10 @@ Proof. solve_decision. Defined.
 Inductive base_typed' `{IntEnv Ti Vi} `{PtrEnv Ti} `{TypeOfIndex Ti M}
     (m : M) : base_val Ti Vi → base_type Ti → Prop :=
   | VUndef_typed τ : base_type_valid get_env τ → base_typed' m (VUndef τ) τ
-  | VInt_typed x τ : τ = type_of_int x → base_typed' m (VInt x) (TInt τ)
-  | VPtr_typed p τ : m ⊢ p : τ → base_typed' m (VPtr p) (TPtr τ)
+  | VInt_typed x τ : τ = type_of_int x → base_typed' m (VInt x) (intt τ)
+  | VPtr_typed p τ : m ⊢ p : τ → base_typed' m (VPtr p) (τ.*)
   | VPtrSeg_typed ps :
-     ptr_seg_valid m ps → base_typed' m (VPtrSeg ps) (TInt TuChar).
+     ptr_seg_valid m ps → base_typed' m (VPtrSeg ps) uchar.
 Instance base_typed `{IntEnv Ti Vi} `{PtrEnv Ti} `{TypeOfIndex Ti M} :
   Typed M (base_type Ti) (base_val Ti Vi) := base_typed'.
 
@@ -31,9 +32,17 @@ Instance type_of_base_val `{IntEnv Ti Vi} :
     TypeOf (base_type Ti) (base_val Ti Vi) := λ v,
   match v with
   | VUndef τ => τ
-  | VInt x => TInt (type_of_int x)
-  | VPtr p => TPtr (type_of p)
-  | VPtrSeg _ => TInt TuChar
+  | VInt x => intt (type_of_int x)
+  | VPtr p => type_of p.*
+  | VPtrSeg _ => uchar
+  end.
+Instance base_type_check `{IntEnv Ti Vi} `{PtrEnv Ti}
+    `{TypeOfIndex Ti M} : TypeCheck M (base_type Ti) (base_val Ti Vi) := λ m v,
+  match v with
+  | VUndef τ => guard (base_type_valid get_env τ); Some τ
+  | VInt x => Some (intt (type_of_int x))
+  | VPtr p => TPtr <$> type_check m p
+  | VPtrSeg ps => guard (ptr_seg_valid m ps); Some uchar
   end.
 
 Inductive base_val_le' `{IntEnv Ti Vi} `{PtrEnv Ti} `{TypeOfIndex Ti M}
@@ -69,24 +78,78 @@ Definition base_val_to_bytes `{Ienv: IntEnv Ti Vi} `{PtrEnv Ti}
 Definition base_val_of_bytes `{IntEnv Ti Vi} `{PtrEnv Ti}
     (τ : base_type Ti) (bs : list (byte Ti Vi)) : base_val Ti Vi :=
   match τ with
-  | TInt τi =>
+  | intt τi =>
      match bs with
-     | [BPtrSeg ps] =>
-        if decide_rel (=) τi TuChar then VPtrSeg ps else VUndef τ
-     | _ =>
-        match mapM maybe_BChar bs ≫= decode_int τi
-        with Some vi => VInt vi | None => VUndef τ end
+     | [BPtrSeg ps] => if decide_rel (=) τi TuChar then VPtrSeg ps else VUndef τ
+     | _ => default (VUndef τ) (mapM maybe_BChar bs ≫= decode_int τi) VInt
      end
-  | TPtr τp =>
-     match mapM maybe_BPtrSeg bs ≫= of_ptr_segs τp
-     with Some p => VPtr p | None => VUndef τ end
+  | τp.* => default (VUndef τ) (mapM maybe_BPtrSeg bs ≫= of_ptr_segs τp) VPtr
   end.
 
 Definition base_val_0 `{IntEnv Ti Vi} (τ : base_type Ti) : base_val Ti Vi :=
   match τ with
-  | TInt τ => VInt (int_of_Z τ 0)
-  | TPtr τ => VPtr (NULL τ)
+  | intt τ => VInt (int_of_Z τ 0)
+  | τ.* => VPtr (NULL τ)
   end.
+
+Section ops.
+  Context `{IntEnv Ti Vi} `{PtrEnv Ti} `{TypeOfIndex Ti M}.
+
+  Inductive base_unop_typed : unop → base_type Ti → base_type Ti → Prop :=
+    | unop_TInt_typed op τ : base_unop_typed op (intt τ) (intt τ)
+    | NotOp_TPtr_typed τ : base_unop_typed NegOp (τ.*) sint.
+  Inductive base_binop_typed :
+      binop → base_type Ti → base_type Ti → base_type Ti → Prop :=
+    | binop_TInt_TInt_typed op τ: base_binop_typed op (intt τ) (intt τ) (intt τ)
+    | CompOp_TPtr_TPtr_typed c τ : base_binop_typed (CompOp c) (τ.*) (τ.*) sint
+    | PlusOp_TPtr_TInt_typed τ σ : base_binop_typed PlusOp (τ.*) (intt σ) (τ.*)
+    | PlusOp_VInt_TPtr_typed τ σ : base_binop_typed PlusOp (intt σ) (τ.*) (τ.*)
+    | MinusOp_TPtr_TInt_typed τ σ: base_binop_typed MinusOp (τ.*) (intt σ) (τ.*)
+    | MinusOp_TInt_TPtr_typed τ σ: base_binop_typed MinusOp (intt σ) (τ.*) (τ.*)
+    | MinusOp_TPtr_TPtr_typed τ  : base_binop_typed MinusOp (τ.*) (τ.*) sint.
+
+  Definition base_eval_unop (op : unop)
+      (v : base_val Ti Vi) : option (base_val Ti Vi) :=
+    match v, op with
+    | VInt x, _ => VInt <$> int_eval_unop op x
+    | VPtr p, NotOp => Some $ VInt $ int_of_sumbool (decide (is_NULL p))
+    | _, _ => None
+    end.
+  Global Arguments base_eval_unop !_ !_ /.
+  Definition base_eval_binop (op : binop)
+      (v1 v2 : base_val Ti Vi) : option (base_val Ti Vi) :=
+    match v1, v2, op with
+    | VInt x1, VInt x2, _ => VInt <$> int_eval_binop op x1 x2
+    | VPtr p1, VPtr p2, CompOp c =>
+       i ← ptr_minus p1 p2;
+       Some $ VInt $ int_of_sumbool (decide_rel (Z_comp c) i 0)
+    | VPtr p, VInt i, PlusOp => VPtr <$> ptr_plus p (int_to_Z i)
+    | VInt i, VPtr p, PlusOp => VPtr <$> ptr_plus p (int_to_Z i)
+    | VPtr p, VInt i, MinusOp => VPtr <$> ptr_plus p (-int_to_Z i)
+    | VInt i, VPtr p, MinusOp => VPtr <$> ptr_plus p (-int_to_Z i)
+    | VPtr p1, VPtr p2, MinusOp =>
+       VInt <$> ptr_minus p1 p2 ≫= maybe_int_of_Z TsInt
+    | _, _, _ => None
+    end.
+  Global Arguments base_eval_binop !_ !_ !_ /.
+
+  Inductive base_cast_typed : base_type Ti → base_type Ti → Prop :=
+    | TInt_cast_typed τ1 τ2 : base_cast_typed (intt τ1) (intt τ2)
+    | TPtr_to_void_cast_typed τ : base_cast_typed (τ.*) (void.*)
+    | TPtr_to_uchar_cast_typed τ : base_cast_typed (τ.*) (uchar.*)
+    | TPtr_of_void_cast_typed τ :
+       ptr_type_valid get_env τ → base_cast_typed (void.*) (τ.*)
+    | TPtr_of_uchar_cast_typed τ :
+       ptr_type_valid get_env τ → base_cast_typed (uchar.*) (τ.*).
+  Definition base_eval_cast (τ : base_type Ti)
+      (v : base_val Ti Vi) : option (base_val Ti Vi) :=
+    match v, τ with
+    | VInt x, intt τ => VInt <$> int_cast τ x
+    | VPtr p, τ.* => None (* TODO *)
+    | _ , _ => None
+    end.
+  Global Arguments base_eval_cast !_ !_ /.
+End ops.
 
 Section base_value.
   Context `{EnvSpec Ti Vi} `{TypeOfIndex Ti M}.
@@ -96,13 +159,21 @@ Section base_value.
   Implicit Types bs : list (byte Ti Vi).
 
   Context `{PropHolds (∀ m i (τ : type Ti),
-    type_of_index m i = Some τ → τ = TVoid ∨ type_valid get_env τ)}.
+    type_of_index m i = Some τ → type_valid get_env τ)}.
 
   Lemma base_typed_type_valid m v τ : m ⊢ v : τ → base_type_valid get_env τ.
   Proof. destruct 1; try econstructor; eauto using ptr_typed_type_valid. Qed.
 
   Global Instance: TypeOfSpec M (base_type Ti) (base_val Ti Vi).
   Proof. destruct 1; simpl; f_equal; eauto using type_of_correct. Qed.
+  Global Instance: TypeCheckSpec M (base_type Ti) (base_val Ti Vi).
+  Proof.
+    intros m v τ. split.
+    * destruct v; intros; simplify_option_equality; constructor;
+        eauto using type_check_sound.
+    * by destruct 1; simplify_option_equality;
+        erewrite ?type_check_complete by eauto.
+  Qed.
 
   Lemma base_typed_ge m v1 v2 τ : m ⊢ v1 : τ → v1 ⊑@{m} v2 → m ⊢ v2 : τ.
   Proof. intros Hv1τ. destruct 1; [|done]. by inversion Hv1τ; subst. Qed.
@@ -156,7 +227,7 @@ Section base_value.
     eexists (BChar <$> cs). esolve_elem_of.
   Qed.
   Lemma base_val_to_bytes_length v bs :
-    bs ∈ base_val_to_bytes v → length bs = size_of (TBase (type_of v)).
+    bs ∈ base_val_to_bytes v → length bs = size_of (base (type_of v)).
   Proof.
     destruct v; simpl; intros Hbs; try decompose_elem_of Hbs.
     * unfold base_undef_bytes. by rewrite replicate_length.
@@ -165,7 +236,7 @@ Section base_value.
     * by rewrite size_of_int, size_TuChar.
   Qed.
   Lemma base_val_to_bytes_length_typed m v τ bs :
-    m ⊢ v : τ → bs ∈ base_val_to_bytes v → length bs = size_of (TBase τ).
+    m ⊢ v : τ → bs ∈ base_val_to_bytes v → length bs = size_of (base τ).
   Proof.
     intros. rewrite <-(type_of_correct m v τ) by done.
     auto using base_val_to_bytes_length.
@@ -186,10 +257,9 @@ Section base_value.
     ∃ bs1, bs1 ∈ base_val_to_bytes v1 ∧ bs1 ⊑@{m}* bs2.
   Proof.
     destruct 1 as [τ v| ]; simpl.
-    * intros; decompose_elem_of.
-      exists (base_undef_bytes τ). split; [solve_elem_of |].
-      eauto using base_undef_bytes_le, base_val_to_bytes_valid,
-        base_val_to_bytes_length_typed.
+    * intros; decompose_elem_of. exists (base_undef_bytes τ).
+      solve_elem_of eauto using base_undef_bytes_le,
+        base_val_to_bytes_valid, base_val_to_bytes_length_typed.
     * by exists bs2.
   Qed.
 
@@ -199,14 +269,13 @@ Section base_value.
     intros Hbs. split.
     * intros Hud. destruct v; simpl in *; decompose_elem_of.
       + done.
-      + rewrite elem_of_list_fmap in Hud. by destruct Hud as [? [? _]].
-      + rewrite elem_of_list_fmap in Hud. by destruct Hud as [? [? _]].
+      + rewrite elem_of_list_fmap in Hud. by destruct Hud as (?&?&_).
+      + rewrite elem_of_list_fmap in Hud. by destruct Hud as (?&?&_).
       + by rewrite elem_of_list_singleton in Hud.
     * intros Hv. revert Hbs. rewrite Hv. simpl. unfold base_undef_bytes.
-      generalize (size_of_pos (TBase (type_of v))).
-      destruct (size_of (TBase (type_of v))); simpl.
-      + lia.
-      + rewrite elem_of_singleton. intros. simplify_equality. by left.
+      generalize (size_of_base_ne_0 (type_of v)).
+      destruct (size_of (base (type_of v))); simpl; try done.
+      rewrite elem_of_singleton. intros; simplify_equality. by left.
   Qed.
   Lemma base_val_to_bytes_undef_typed m v τ bs :
     m ⊢ v : τ → bs ∈ base_val_to_bytes v → BUndef ∈ bs ↔ v = VUndef τ.
@@ -224,7 +293,7 @@ Section base_value.
       Forall (byte_valid m) bs → Forall (ptr_seg_valid m) pss).
     { induction 1 as [|[]]; inversion 1; simplify_equality;
         constructor; eauto using BPtrSeg_valid_inv. }
-    destruct 1; simpl;
+    destruct 1; simpl; unfold default;
       repeat case_match; simplify_option_equality;
       repeat constructor; decompose_Forall_hyps;
       eauto using decode_int_typed, of_ptr_segs_type_of, eq_sym,
@@ -233,7 +302,7 @@ Section base_value.
   Lemma base_val_of_bytes_type_of τ bs :
     base_type_valid get_env τ → type_of (base_val_of_bytes τ bs) = τ.
   Proof.
-    destruct 1; simpl;
+    destruct 1; simpl; unfold default;
       repeat case_match; simplify_option_equality;
       eauto using decode_int_typed, of_ptr_segs_type_of, eq_sym, f_equal.
   Qed.
@@ -243,8 +312,7 @@ Section base_value.
   Proof.
     destruct v as [τ|x|p|ps]; simpl; intros Hbs.
     * decompose_elem_of Hbs. unfold base_undef_bytes.
-      pose proof (size_of_pos (TBase τ)).
-      destruct (size_of (TBase τ)), τ; simpl; auto with lia.
+      pose proof (size_of_base_ne_0 τ). by destruct (size_of (base τ)), τ.
     * apply elem_of_fmap in Hbs.
       destruct Hbs as [[|c cs] [? Hcs]]; subst; simpl.
       + apply encode_int_length in Hcs. edestruct int_type_size_ne_0; eauto.
@@ -260,7 +328,7 @@ Section base_value.
   Qed.
   Lemma base_val_of_bytes_frozen τ bs : frozen (base_val_of_bytes τ bs).
   Proof.
-    destruct τ; simpl; repeat case_match; constructor.
+    destruct τ; simpl; unfold default; repeat case_match; constructor.
     simplify_option_equality. eauto using of_ptr_segs_frozen.
   Qed.
 
@@ -292,7 +360,7 @@ Section base_value.
   Qed.
   Lemma base_val_to_of_bytes_le m τ bs2 :
     Forall (byte_valid m) bs2 →
-    length bs2 = size_of (TBase τ) → ∃ bs1, bs1 ⊑@{m}* bs2 ∧
+    length bs2 = size_of (base τ) → ∃ bs1, bs1 ⊑@{m}* bs2 ∧
       bs1 ∈ base_val_to_bytes (base_val_of_bytes τ bs2).
   Proof.
     destruct (base_val_to_of_bytes τ bs2) as [[? _]|Hbs2].
@@ -309,7 +377,7 @@ Section base_value.
     * done.
   Qed.
   Lemma base_val_of_bytes_length τ bs :
-    length bs ≠ size_of (TBase τ) → base_val_of_bytes τ bs = VUndef τ.
+    length bs ≠ size_of (base τ) → base_val_of_bytes τ bs = VUndef τ.
   Proof.
     intro Hlen. destruct (base_val_to_of_bytes τ bs) as [[? Hτ]|?].
     * destruct Hlen. by erewrite Hτ, base_val_to_bytes_length.
@@ -361,8 +429,8 @@ Section base_value.
   Proof.
     intros ? Hbs ? Hbscs. destruct (decide (BUndef ∈ bs1)) as [?|Hbs1].
     * rewrite (base_val_of_bytes_undef _ bs1) by done.
-      destruct (decide (length cs2 = size_of (TBase τ)));
-        [destruct (decide (length bs1 = size_of (TBase τ))) |].
+      destruct (decide (length cs2 = size_of (base τ)));
+        [destruct (decide (length bs1 = size_of (base τ))) |].
       + rewrite base_val_of_bytes_undef;
           auto using mask_bytes_undef, same_length_length_2 with congruence.
       + apply base_val_of_bytes_le_undef with m cs2; auto using mask_bytes_le.
@@ -375,15 +443,15 @@ Section base_value.
   Qed.
 
   Lemma base_val_of_bytes_resize_take τ bs :
-    base_val_of_bytes τ (resize (size_of (TBase τ)) BUndef bs) =
-      base_val_of_bytes τ (take (size_of (TBase τ)) bs).
+    base_val_of_bytes τ (resize (size_of (base τ)) BUndef bs) =
+      base_val_of_bytes τ (take (size_of (base τ)) bs).
   Proof.
-    destruct (le_lt_dec (size_of (TBase τ)) (length bs)).
+    destruct (le_lt_dec (size_of (base τ)) (length bs)).
     { by rewrite resize_le. }
     rewrite resize_ge, take_ge by lia.
     rewrite (base_val_of_bytes_length _ bs) by lia.
     rewrite base_val_of_bytes_undef; [done |].
-    destruct (size_of (TBase τ) - length bs) eqn:?; [lia |].
+    destruct (size_of (base τ) - length bs) eqn:?; [lia |].
     simpl. rewrite elem_of_app, elem_of_cons. auto.
   Qed.
 

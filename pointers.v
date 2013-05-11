@@ -2,6 +2,7 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Import nmap mapset segmented.
 Require Export references.
+Local Open Scope ctype_scope.
 
 (** * Indexes into the memory *)
 (** We define indexes into the memory as binary naturals and use the [Nmap]
@@ -70,18 +71,14 @@ Proof. solve_decision. Defined.
 
 Inductive lval_typed' `{IntEnv Ti Vi} `{PtrEnv Ti} `{TypeOfIndex Ti M}
      (m : M) : lval → type Ti → Prop :=
-  | LVal_typed_freed x r :
-     type_of_index m x = Some TVoid → lval_typed' m (LVal x r) TVoid
-  | LVal_typed x r τ σ :
-     type_of_index m x = Some τ → τ ≠ TVoid →
-     τ ∙ r ↝ σ → lval_typed' m (LVal x r) σ.
+  LVal_typed x r τ σ :
+    type_of_index m x = Some τ → τ ∙ r ↝ σ → lval_typed' m (LVal x r) σ.
 Instance lval_typed `{IntEnv Ti Vi} `{PtrEnv Ti} `{TypeOfIndex Ti M} :
   Typed M (type Ti) lval := lval_typed'.
 
 Instance lval_type_check `{IntEnv Ti Vi} `{PtrEnv Ti} `{TypeOfIndex Ti M} :
     TypeCheck M (type Ti) lval := λ m lv,
-  τ ← type_of_index m (LIndex lv);
-  if decide (τ = @TVoid Ti) then Some TVoid else τ !! LRef lv.
+  type_of_index m (LIndex lv) ≫= (!! LRef lv).
 Arguments lval_type_check {_ _ _ _ _ _ _} !_ /.
 
 Instance lval_frozen: Frozen lval := λ lv, frozen (LRef lv).
@@ -127,10 +124,10 @@ Section lvals.
 
   Section lval_typed.
     Context `{Hm: PropHolds (∀ m x τ,
-      type_of_index m x = Some τ → τ = TVoid ∨ type_valid get_env τ)}.
+      type_of_index m x = Some τ → τ = void ∨ type_valid get_env τ)}.
 
     Lemma lval_typed_type_valid m lv τ :
-      m ⊢ lv : τ → τ = TVoid ∨ type_valid get_env τ.
+      m ⊢ lv : τ → τ = void ∨ type_valid get_env τ.
     Proof.
       destruct 1; eauto. edestruct Hm; eauto.
       * subst. edestruct bref_typed_void; eauto.
@@ -376,12 +373,12 @@ Defined.
 
 Inductive ptr_cast `{PtrEnv Ti} : type Ti → type Ti → Prop :=
   | ptr_cast_refl τ : ptr_cast τ τ
-  | ptr_cast_to_void τ : ptr_cast τ TVoid.
+  | ptr_cast_to_void τ : ptr_cast τ void.
 
-Instance ptr_cast_dec `{EnvSpec Ti Vi}
+Instance ptr_cast_dec `{IntEnv Ti Vi} `{PtrEnv Ti}
   (τ1 τ2 : type Ti) : Decision (ptr_cast τ1 τ2).
 Proof.
- refine (cast_if_or (decide (τ2 = TVoid)) (decide (τ1 = τ2)));
+ refine (cast_if_or (decide (τ2 = void)) (decide (τ1 = τ2)));
   abstract first [subst; by constructor | inversion 1; congruence ].
 Defined.
 
@@ -389,38 +386,29 @@ Inductive ptr_typed' `{IntEnv Ti Vi} `{PtrEnv Ti} `{TypeOfIndex Ti M}
      (m : M) : ptr Ti → type Ti → Prop :=
   | NULL_typed (τ : type Ti) :
      ptr_type_valid get_env τ →  ptr_typed' m (NULL τ) τ
-  | Ptr_typed_freed (σ : type Ti) x r i Hlv Hi :
-     type_of_index m x = Some TVoid →
-     ptr_type_valid get_env σ → ptr_typed' m (Ptr σ x r i Hlv Hi) σ
   | Ptr_typed (τ τ' σ : type Ti) x r i Hlv Hi :
-     type_of_index m x = Some τ → τ ≠ TVoid →
+     type_of_index m x = Some τ →
      τ ∙ r ↝ τ' → ptr_cast τ' σ → ptr_typed' m (Ptr σ x r i Hlv Hi) σ.
 Instance ptr_typed `{IntEnv Ti Vi} `{PtrEnv Ti} `{TypeOfIndex Ti M} :
   Typed M (type Ti) (ptr Ti) := ptr_typed'.
 
 Instance type_of_ptr {Ti} : TypeOf (type Ti) (ptr Ti) := λ p,
-  match p with
-  | NULL τ => τ
-  | Ptr τ _ _ _ _ _ => τ
-  end.
-Instance ptr_type_check `{EnvSpec Ti Vi} `{TypeOfIndex Ti M} :
+  match p with NULL τ => τ | Ptr τ _ _ _ _ _ => τ end.
+Instance ptr_type_check `{IntEnv Ti Vi} `{PtrEnv Ti} `{TypeOfIndex Ti M} :
     TypeCheck M (type Ti) (ptr Ti) := λ m p,
   match p with
   | NULL τ => guard (ptr_type_valid get_env τ); Some τ
   | Ptr σ x r i _ _ =>
-     τ ← type_of_index m x;
-     if decide (τ = @TVoid Ti)
-     then guard (ptr_type_valid get_env σ); Some σ
-     else τ' ← τ !! r; guard (ptr_cast τ' σ); Some σ
+     τ' ← type_of_index m x ≫= (!! r);
+     guard (ptr_cast τ' σ); Some σ
   end.
 
 Lemma of_lval_prf r : bref_offset r ≤ bref_size (bref_base r).
 Proof. rewrite bref_size_base. pose proof (bref_offset_size r). lia. Qed.
 Definition of_lval {Ti} (τ : type Ti) (lv : lval) : ptr Ti :=
   match lv with
-  | LVal x r =>
-     Ptr τ x (bref_base r) (bref_offset r)
-             (bref_base_idempotent _) (of_lval_prf _)
+  | LVal x r => Ptr τ x (bref_base r) (bref_offset r)
+                        (bref_base_idempotent _) (of_lval_prf _)
   end.
 
 Definition to_lval {Ti} (p : ptr Ti) : option lval :=
@@ -435,19 +423,11 @@ Definition ptr_base {Ti} (p : ptr Ti) : ptr Ti :=
   | Ptr τ x r i Hlv Hi => Ptr τ x r 0 Hlv (le_0_n _)
   end.
 Definition ptr_offset {Ti} (p : ptr Ti) : nat :=
-  match p with
-  | NULL _ => 0
-  | Ptr _ _ _ i _ _ => i
-  end.
+  match p with NULL _ => 0 | Ptr _ _ _ i _ _ => i end.
 Definition ptr_size {Ti} (p : ptr Ti) : nat :=
-  match p with
-  | NULL _ => 0
-  | Ptr _ _ r _ _ _ => bref_size r
-  end.
+  match p with NULL _ => 0 | Ptr _ _ r _ _ _ => bref_size r end.
 
-Inductive is_NULL {Ti} : ptr Ti → Prop :=
-  | mk_is_NULL τ : is_NULL (NULL τ).
-
+Inductive is_NULL {Ti} : ptr Ti → Prop := mk_is_NULL τ : is_NULL (NULL τ).
 Inductive ptr_frozen {Ti} : Frozen (ptr Ti) :=
   | NULL_frozen τ : frozen (@NULL Ti τ)
   | Pointer_frozen τ x r i Hlv Hi : frozen r → frozen (@Ptr Ti x τ r i Hlv Hi).
@@ -457,7 +437,6 @@ Lemma ptr_freeze_prf_1 r : bref_base r = r → bref_base (freeze r) = freeze r.
 Proof. intros Hr. by rewrite bref_base_freeze, Hr. Qed.
 Lemma ptr_freeze_prf_2 i r : i ≤ bref_size r → i ≤ bref_size (freeze r).
 Proof. by rewrite bref_size_freeze. Qed.
-
 Instance ptr_freeze {Ti} : Freeze (ptr Ti) := λ p,
   match p with
   | NULL τ => NULL τ
@@ -466,8 +445,7 @@ Instance ptr_freeze {Ti} : Freeze (ptr Ti) := λ p,
   end.
 
 Lemma ptr_plus_prf (i n : nat) (j : Z) :
-  (0 ≤ i + j ≤ n)%Z →
-  Z.to_nat (i + j) ≤ n.
+  (0 ≤ i + j ≤ n)%Z → Z.to_nat (i + j) ≤ n.
 Proof. intros. rewrite <-(Nat2Z.id n). apply Z2Nat.inj_le; lia. Qed.
 Definition ptr_plus {Ti} (p : ptr Ti) (j : Z) : option (ptr Ti) :=
   match p with
@@ -494,7 +472,7 @@ Section ptr.
   Implicit Types τ : type Ti.
 
   Context `{Hm : PropHolds (∀ m i τ,
-    type_of_index m i = Some τ → τ = TVoid ∨ type_valid get_env τ)}.
+    type_of_index m i = Some τ → type_valid get_env τ)}.
 
   Lemma ptr_freeze_frozen p : frozen (freeze p).
   Proof. destruct p; constructor; simpl; auto using bref_freeze_frozen. Qed.
@@ -517,7 +495,7 @@ Section ptr.
   Lemma ptr_typed_type_valid m p τ : m ⊢ p : τ → ptr_type_valid get_env τ.
   Proof.
     destruct 1; eauto using TVoid_ptr_valid.
-    eapply ptr_cast_type_valid; eauto. edestruct Hm; eauto; try done.
+    eapply ptr_cast_type_valid; eauto.
     eapply type_valid_ptr_type_valid, bref_typed_type_valid; eauto.
   Qed.
 
@@ -773,10 +751,10 @@ Definition ptr_seg_valid `{PtrEnv Ti} `{IntEnv Ti Vi}
   ∃ τ, m ⊢ proj1_sig (segment_item ps) : τ.
 
 Definition to_ptr_segs `{PtrEnv Ti} (p : ptr Ti) : list (ptr_seg Ti) :=
-  to_segments (size_of $ TBase $ TPtr $ type_of p) (mk_frozen_ptr p).
+  to_segments (size_of (type_of p.*)) (mk_frozen_ptr p).
 Definition of_ptr_segs `{PtrEnv Ti} `{IntEnv Ti Vi} (τ : type Ti)
     (pps : list (ptr_seg Ti)) : option (ptr Ti) :=
-  p ← of_segments (size_of (TBase (TPtr τ))) pps;
+  p ← of_segments (size_of (τ.*)) pps;
   guard (type_of (`p) = τ);
   Some (`p).
 
@@ -823,8 +801,7 @@ Section ptr_segs.
     unfold to_ptr_segs. simpl. intros Htype E.
     apply mk_frozen_ptr_inj. revert E. rewrite Htype. apply (injective _).
   Qed.
-  Lemma to_ptr_segs_length p :
-    length (to_ptr_segs p) = size_of $ TBase $ TPtr $ type_of p.
+  Lemma to_ptr_segs_length p : length (to_ptr_segs p) = size_of (type_of p.*).
   Proof. unfold to_ptr_segs. by rewrite (to_segments_length _). Qed.
 
   Lemma of_ptr_segs_frozen p τ pss : of_ptr_segs τ pss = Some p → frozen p.
@@ -862,7 +839,7 @@ Section ptr_segs.
   Proof.
     unfold of_ptr_segs. intros.
     destruct (of_segments _ _) as [q|] eqn:?; simplify_option_equality.
-    destruct (Forall_of_segments (size_of (TBase (TPtr (type_of (`q)))))
+    destruct (Forall_of_segments (size_of (type_of (`q).*))
       (λ q, ∃ τ, m ⊢ `q : τ) q pss); eauto using type_of_typed.
   Qed.
 End ptr_segs.

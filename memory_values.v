@@ -1,16 +1,17 @@
 (* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export bytes.
+Local Open Scope ctype_scope.
 
 Inductive mval' (Ti C : Set) :=
   | MBase : base_type Ti → list (byte' Ti C) → mval' Ti C
-  | MArray : type Ti → list (mval' Ti C) → mval' Ti C
+  | MArray : list (mval' Ti C) → mval' Ti C
   | MStruct : tag → list (mval' Ti C) → mval' Ti C
   | MUnion : tag → nat → mval' Ti C → mval' Ti C
   | MUnionNone : tag → list (byte' Ti C) → mval' Ti C.
 Notation mval Ti Vi := (mval' Ti (char Ti Vi)).
 Arguments MBase {_ _} _ _.
-Arguments MArray {_ _} _ _.
+Arguments MArray {_ _} _.
 Arguments MStruct {_ _} _ _.
 Arguments MUnion {_ _} _ _ _.
 Arguments MUnionNone {_ _} _ _.
@@ -24,8 +25,7 @@ Proof.
   match w1, w2 with
   | MBase τ1 bs1, MBase τ2 bs2 =>
      cast_if_and (decide_rel (=) τ1 τ2) (decide_rel (=) bs1 bs2)
-  | MArray τ1 ws1, MArray τ2 ws2 =>
-     cast_if_and (decide_rel (=) τ1 τ2) (decide_rel (=) ws1 ws2)
+  | MArray ws1, MArray ws2 => cast_if (decide_rel (=) ws1 ws2)
   | MStruct s1 ws1, MStruct s2 ws2 =>
      cast_if_and (decide_rel (=) s1 s2) (decide_rel (=) ws1 ws2)
   | MUnion s1 i1 w1, MUnion s2 i2 w2 =>
@@ -40,7 +40,7 @@ Defined.
 Section mval_ind.
   Context {Ti C} (P : mval' Ti C → Prop).
   Context (Pbase : ∀ τ bs, P (MBase τ bs)).
-  Context (Parray : ∀ τ ws, Forall P ws → P (MArray τ ws)).
+  Context (Parray : ∀ ws, Forall P ws → P (MArray ws)).
   Context (Pstruct : ∀ s ws, Forall P ws → P (MStruct s ws)).
   Context (Punion : ∀ s i w, P w → P (MUnion s i w)).
   Context (Punion_none : ∀ s bs, P (MUnionNone s bs)).
@@ -51,7 +51,7 @@ Section mval_ind.
     fix go w :=
     match w return P w with
     | MBase τ bs => Pbase τ bs
-    | MArray τ ws => Parray _ _ $ list_ind (Forall P)
+    | MArray ws => Parray _ $ list_ind (Forall P)
        (Forall_nil_2 _) (λ w _, Forall_cons_2 _ _ _ (go w)) ws
     | MStruct s ws => Pstruct _ _ $ list_ind (Forall P)
        (Forall_nil_2 _) (λ w _, Forall_cons_2 _ _ _ (go w)) ws
@@ -66,7 +66,7 @@ Definition mval_map {Ti C} (f : list (byte' Ti C) → list (byte' Ti C)) :
   fix go w :=
   match w with
   | MBase τ bs => MBase τ (f bs)
-  | MArray τ ws => MArray τ (go <$> ws)
+  | MArray ws => MArray (go <$> ws)
   | MStruct s ws => MStruct s (go <$> ws)
   | MUnion s i w => MUnion s i (go w)
   | MUnionNone s bs => MUnionNone s (f bs)
@@ -75,69 +75,72 @@ Definition mval_map {Ti C} (f : list (byte' Ti C) → list (byte' Ti C)) :
 Section operations.
   Context `{EnvSpec Ti Vi} `{TypeOfIndex Ti M}.
 
-  Global Instance type_of_mval: TypeOf (type Ti) (mval Ti Vi) := λ w,
+  Global Instance type_of_mval: TypeOf (type Ti) (mval Ti Vi) :=
+    fix go w :=
     match w with
-    | MBase τ _ => TBase τ
-    | MArray τ ws => TArray τ (length ws)
-    | MStruct s ws => TStruct s
-    | MUnion s _ _ => TUnion s
-    | MUnionNone s _ => TUnion s
+    | MBase τ _ => base τ
+    | MArray [] => TVoid
+    | MArray (w :: ws) => go w.[length (w :: ws)]
+    | MStruct s ws => struct s
+    | MUnion s _ _ => union s
+    | MUnionNone s _ => union s
     end.
-  Global Instance mtyped_check: TypeCheck M (type Ti) (mval Ti Vi) := λ m,
+  Global Instance mtype_check: TypeCheck M (type Ti) (mval Ti Vi) := λ m,
     fix go w :=
     match w with
     | MBase τ bs =>
        guard (base_type_valid get_env τ);
        guard (Forall (byte_valid m) bs);
-       guard (length bs = size_of (TBase τ));
-       Some (TBase τ)
-    | MArray τ ws =>
-       guard (type_valid get_env τ);
+       guard (length bs = size_of (base τ));
+       Some (base τ)
+    | MArray [] => None
+    | MArray (w :: ws) =>
+       τ ← go w;
        τs ← mapM go ws;
        guard (Forall (= τ) τs);
-       Some (TArray τ (length ws))
+       Some (τ.[length (w :: ws)])
     | MStruct s ws =>
        τs ← get_env !! s;
        τs' ← mapM go ws;
        guard (τs = τs');
-       Some (TStruct s)
+       Some (struct s)
     | MUnion s i w =>
        τ ← get_env !! s ≫= (!! i);
        τ' ← go w;
        guard (τ = τ');
-       Some (TUnion s)
+       Some (union s)
     | MUnionNone s bs =>
        τs ← get_env !! s;
-       guard (1 ≠ length τs);
+       guard (length τs ≠ 1);
        guard (Forall (byte_valid m) bs);
-       guard (length bs = size_of (TUnion s));
-       Some (TUnion s)
+       guard (length bs = size_of (union s));
+       Some (union s)
     end.
 
   Definition mval_to_bytes : mval Ti Vi → list (byte Ti Vi) :=
     fix go w :=
     match w with
     | MBase _ bs => bs
-    | MArray _ ws => ws ≫= go
+    | MArray ws => ws ≫= go
     | MStruct s ws =>
        default [] (get_env !! s) $ λ τs,
          let flds := struct_fields τs in
          mjoin $ zip_with (λ w sz, resize sz BUndef (go w)) ws flds
-    | MUnion s i w => resize (size_of (TUnion s)) BUndef (go w)
+    | MUnion s i w => resize (size_of (union s)) BUndef (go w)
     | MUnionNone _ bs => bs
     end.
   Definition mval_of_bytes: type Ti → list (byte Ti Vi) → mval Ti Vi :=
     type_iter
-    (*i TBase =>     *) (λ τ bs, MBase τ $ resize (size_of (TBase τ)) BUndef bs)
-    (*i TVoid =>     *) (λ bs, MBase (TInt TuChar) []) (* dummy *)
-    (*i TArray =>    *) (λ τ n rec bs, MArray τ $ array_of_bytes rec τ n bs)
+    (*i TBase =>     *) (λ τ bs, MBase τ $ resize (size_of (base τ)) BUndef bs)
+    (*i TVoid =>     *) (λ bs, MBase uchar []) (* dummy *)
+    (*i TArray =>    *) (λ τ n rec bs, MArray $ array_of_bytes rec τ n bs)
     (*i TCompound => *) (λ c s τs rec bs,
       match c with
       | Struct => MStruct s $ struct_of_bytes rec τs bs
       | Union =>
          match list_singleton_dec τs with
          | inleft (τ↾_) => MUnion s 0 $ rec τ bs
-         | _ => MUnionNone s $ resize (size_of (TUnion s)) BUndef bs
+         | _ => MUnionNone s $ resize (size_of (union s)) BUndef bs
          end
       end).
 
@@ -145,39 +148,39 @@ Section operations.
       type Ti → mval Ti Vi := type_iter
     (*i TBase     *) (λ τ, MBase τ (f τ))
     (*i TVoid     *) (MBase (TInt TuChar) []) (* dummy *)
-    (*i TArray    *) (λ τ n x, MArray τ (replicate n x))
+    (*i TArray    *) (λ τ n x, MArray (replicate n x))
     (*i TCompound *) (λ c s τs rec,
       match c with
       | Struct => MStruct s (rec <$> τs)
       | Union =>
          match list_singleton_dec τs with
          | inleft (τ↾_) => MUnion s 0 (rec τ)
-         | _ => MUnionNone s $ replicate (size_of (TUnion s)) BUndef
+         | _ => MUnionNone s $ replicate (size_of (union s)) BUndef
          end
       end).
+  Notation mval_new_undef := (mval_new base_undef_bytes).
 
   Definition munion_reset : mval Ti Vi → mval Ti Vi :=
     fix go w :=
     match w with
     | MBase τ bs => MBase τ bs
-    | MArray τ ws => MArray τ $ go <$> ws
+    | MArray ws => MArray $ go <$> ws
     | MStruct s ws => MStruct s $ go <$> ws
     | MUnion s i w =>
        default (MUnion s i w) (get_env !! s) $ λ τs,
          match list_singleton_dec τs with
          | inleft (τ↾_) => MUnion s i (go w)
          | _ => MUnionNone s $
-            resize (size_of (TUnion s)) BUndef $ mval_to_bytes w
+            resize (size_of (union s)) BUndef $ mval_to_bytes w
          end
     | MUnionNone s bs => MUnionNone s bs
     end.
-  Notation mval_new_undef := (mval_new base_undef_bytes).
 
   Global Instance mval_alter_seg:
       Alter ref_seg (mval Ti Vi) (mval Ti Vi) := λ f rs w,
     match rs, w with
-    | RArray i n _, MArray τ ws =>
-       if decide (n = length ws) then MArray τ (alter f i ws) else w
+    | RArray i n _, MArray ws =>
+       if decide (n = length ws) then MArray (alter f i ws) else w
     | RStruct i, MStruct s ws => MStruct s (alter f i ws)
     | RUnion i b, MUnion s j w' =>
        if decide (i = j) then MUnion s i (f w')
@@ -204,7 +207,7 @@ Section operations.
   Global Instance mval_lookup_seg:
       Lookup ref_seg (mval Ti Vi) (mval Ti Vi) := λ rs w,
     match rs, w with
-    | RArray i n _, MArray τ ws => guard (n = length ws); ws !! i
+    | RArray i n _, MArray ws => guard (n = length ws); ws !! i
     | RStruct i, MStruct _ ws => ws !! i
     | RUnion i _, MUnion s j w => guard (i = j); Some w
     | RUnion i _, MUnionNone s bs =>
@@ -235,101 +238,88 @@ Section typed.
     | MBase_typed' τ bs :
        base_type_valid get_env τ →
        Forall (byte_valid m) bs →
-       length bs = size_of (TBase τ) →
-       mtyped' m (MBase τ bs) (TBase τ)
-    | MArray_typed' ws τ n :
-       type_valid get_env τ →
-       n = length ws →
+       length bs = size_of (base τ) →
+       mtyped' m (MBase τ bs) (base τ)
+    | MArray_typed' ws τ :
        Forall (λ w, mtyped' m w τ) ws →
-       mtyped' m (MArray τ ws) (TArray τ n)
+       length ws ≠ 0 →
+       mtyped' m (MArray ws) (τ.[length ws])
     | MStruct_typed' s ws τs :
        get_env !! s = Some τs →
        Forall2 (mtyped' m) ws τs →
-       mtyped' m (MStruct s ws) (TStruct s)
+       mtyped' m (MStruct s ws) (struct s)
     | MUnion_typed' s i τs w τ :
        get_env !! s = Some τs →
        τs !! i = Some τ →
        mtyped' m w τ →
-       mtyped' m (MUnion s i w) (TUnion s)
+       mtyped' m (MUnion s i w) (union s)
     | MUnionNone_typed' s τs bs :
        get_env !! s = Some τs →
        length τs ≠ 1 →
        Forall (byte_valid m) bs →
-       length bs = size_of (TUnion s) →
-       mtyped' m (MUnionNone s bs) (TUnion s).
+       length bs = size_of (union s) →
+       mtyped' m (MUnionNone s bs) (union s).
   Global Instance mtyped: Typed M (type Ti) (mval Ti Vi) := mtyped'.
 
   Lemma MBase_typed m τ bs :
     base_type_valid get_env τ →  Forall (byte_valid m) bs →
-    length bs = size_of (TBase τ) → m ⊢ MBase τ bs : TBase τ.
+    length bs = size_of (base τ) → m ⊢ MBase τ bs : base τ.
   Proof. by constructor. Qed.
-  Lemma MArray_typed m ws τ n :
-    type_valid get_env τ → n = length ws →
-    m ⊢* ws : τ → m ⊢ MArray τ ws : TArray τ n.
-  Proof. by constructor. Qed.
+  Lemma MArray_typed m ws n τ :
+    n = length ws → m ⊢* ws : τ → n ≠ 0 → m ⊢ MArray ws : τ.[n].
+  Proof. intros; subst. by constructor. Qed.
   Lemma MStruct_typed m s ws τs :
-    get_env !! s = Some τs → m ⊢* ws :* τs → m ⊢ MStruct s ws : TStruct s.
+    get_env !! s = Some τs → m ⊢* ws :* τs → m ⊢ MStruct s ws : struct s.
   Proof. econstructor; eauto. Qed.
   Lemma MUnion_typed m s i τs w τ :
     get_env !! s = Some τs → τs !! i = Some τ →
-    m ⊢ w : τ → m ⊢ MUnion s i w : TUnion s.
+    m ⊢ w : τ → m ⊢ MUnion s i w : union s.
   Proof. econstructor; eauto. Qed.
   Lemma MUnionNone_typed m s τs bs :
     get_env !! s = Some τs → length τs ≠ 1 → Forall (byte_valid m) bs →
-    length bs = size_of (TUnion s) → m ⊢ MUnionNone s bs : TUnion s.
+    length bs = size_of (union s) → m ⊢ MUnionNone s bs : union s.
   Proof. econstructor; eauto. Qed.
 
   Lemma mtyped_inv_l m (P : type Ti → Prop) w τ :
     m ⊢ w : τ →
     match w with
     | MBase τ' bs =>
-       (base_type_valid get_env τ' → length bs = size_of (TBase τ') →
-         Forall (byte_valid m) bs → P (TBase τ')) →
-       P τ
-    | MArray τ' ws =>
-       (∀ n,
-         type_valid get_env τ' → n = length ws →
-         m ⊢* ws : τ' → P (TArray τ' n)) →
-       P τ
+       (base_type_valid get_env τ' → length bs = size_of (base τ') →
+         Forall (byte_valid m) bs → P (base τ')) → P τ
+    | MArray ws =>
+       (∀ τ', m ⊢* ws : τ' → length ws ≠ 0 → P (τ'.[length ws])) → P τ
     | MStruct s ws =>
-       (∀ τs, get_env !! s = Some τs → m ⊢* ws :* τs → P (TStruct s)) →
-       P τ
+       (∀ τs, get_env !! s = Some τs → m ⊢* ws :* τs → P (struct s)) → P τ
     | MUnion s i w =>
        (∀ τs τ',
          get_env !! s = Some τs → τs !! i = Some τ' →
-         m ⊢ w : τ' → P (TUnion s)) →
-       P τ
+         m ⊢ w : τ' → P (union s)) → P τ
     | MUnionNone s bs =>
        (∀ τs,
          get_env !! s = Some τs → length τs ≠ 1 → Forall (byte_valid m) bs →
-         length bs = size_of (TUnion s) → P (TUnion s)) →
-       P τ
+         length bs = size_of (union s) → P (union s)) → P τ
     end .
   Proof. destruct 1; eauto. Qed.
 
   Lemma mtyped_inv_r m (P : mval Ti Vi → Prop) w τ :
     m ⊢ w : τ →
     match τ with
-    | TVoid => P w
-    | TBase τ' =>
-       (∀ bs, base_type_valid get_env τ' → length bs = size_of (TBase τ') →
-         Forall (byte_valid m) bs → P (MBase τ' bs)) →
-       P w
-    | TArray τ' n =>
-       (∀ ws,
-         type_valid get_env τ' → n = length ws →
-         m ⊢* ws : τ' → P (MArray τ' ws)) →
-       P w
-    | TStruct s =>
-       (∀ ws τs, get_env !! s = Some τs → m ⊢* ws :* τs → P (MStruct s ws)) →
-       P w
-    | TUnion s =>
+    | void => P w
+    | base τ' =>
+       (∀ bs, base_type_valid get_env τ' → length bs = size_of (base τ') →
+         Forall (byte_valid m) bs → P (MBase τ' bs)) → P w
+    | τ'.[n] =>
+       (∀ ws, n = length ws → m ⊢* ws : τ' → n ≠ 0 → P (MArray ws)) → P w
+    | struct s =>
+       (∀ ws τs, get_env !! s = Some τs → m ⊢* ws :* τs →
+         P (MStruct s ws)) → P w
+    | union s =>
        (∀ i τs w' τ',
          get_env !! s = Some τs → τs !! i = Some τ' →
          m ⊢ w' : τ' → P (MUnion s i w')) →
        (∀ τs bs,
          get_env !! s = Some τs → length τs ≠ 1 → Forall (byte_valid m) bs →
-         length bs = size_of (TUnion s) → P (MUnionNone s bs)) →
+         length bs = size_of (union s) → P (MUnionNone s bs)) →
        P w
     end.
   Proof. destruct 1; eauto. Qed.
@@ -338,28 +328,27 @@ Section typed.
     Context (m : M) (P : mval Ti Vi → type Ti → Prop).
     Context (Pbase : ∀ τ bs,
       base_type_valid get_env τ →  Forall (byte_valid m) bs →
-      length bs = size_of (TBase τ) → P (MBase τ bs) (TBase τ)).
-    Context (Parray : ∀ ws τ n,
-      type_valid get_env τ →  n = length ws → m ⊢* ws : τ →
-      Forall (λ w, P w τ) ws → P (MArray τ ws) (TArray τ n)).
+      length bs = size_of (base τ) → P (MBase τ bs) (base τ)).
+    Context (Parray : ∀ ws τ,
+      m ⊢* ws : τ → Forall (λ w, P w τ) ws →
+      length ws ≠ 0 → P (MArray ws) (τ.[length ws])).
     Context (Pstruct : ∀ s ws τs,
       get_env !! s = Some τs → m ⊢* ws :* τs →
-      Forall2 P ws τs → P (MStruct s ws) (TStruct s)).
+      Forall2 P ws τs → P (MStruct s ws) (struct s)).
     Context (Punion : ∀ s i τs w τ,
       get_env !! s = Some τs → τs !! i = Some τ →
-      m ⊢ w : τ → P w τ → P (MUnion s i w) (TUnion s)).
+      m ⊢ w : τ → P w τ → P (MUnion s i w) (union s)).
     Context (Punion_none : ∀ s τs bs,
       get_env !! s = Some τs →  length τs ≠ 1 →  Forall (byte_valid m) bs →
-      length bs = size_of (TUnion s) → P (MUnionNone s bs) (TUnion s)).
-
+      length bs = size_of (union s) → P (MUnionNone s bs) (union s)).
     Lemma mtyped_ind : ∀ w τ, mtyped' m w τ → P w τ.
     Proof.
      exact (
       fix go w τ H :=
       match H in mtyped' _ w τ return P w τ with
       | MBase_typed' _ _ Hτ Hbs Hlen => Pbase _ _ Hτ Hbs Hlen
-      | MArray_typed' _ _ _ Hτ Hn H =>
-         Parray _ _ _ Hτ Hn H (Forall_impl _ _ _ H (λ w, go _ _))
+      | MArray_typed' _ _ Hτs Hn =>
+         Parray _ _ Hτs (Forall_impl _ _ _ Hτs (λ w, go _ _)) Hn
       | MStruct_typed' s _ _ Hs H =>
          Pstruct _ _ _ Hs H (Forall2_impl _ _ _ _ H go)
       | MUnion_typed' _ _ _ _ _ Hs Hi H => Punion _ _ _ _ _ Hs Hi H (go _ _ H)
@@ -373,20 +362,17 @@ Section typed.
     Context (m : M) (P : mval Ti Vi → type Ti → Prop).
     Context (Pbase : ∀ τ bs,
       base_type_valid get_env τ → Forall (byte_valid m) bs →
-      length bs = size_of (TBase τ) → P (MBase τ bs) (TBase τ)).
-    Context (Parray : ∀ ws τ n,
-      type_valid get_env τ → n = length ws →
-      m ⊢* ws : τ → P (MArray τ ws) (TArray τ n)).
+      length bs = size_of (base τ) → P (MBase τ bs) (base τ)).
+    Context (Parray : ∀ ws τ,
+      m ⊢* ws : τ → length ws ≠ 0 → P (MArray ws) (τ.[length ws])).
     Context (Pstruct : ∀ s ws τs,
-      get_env !! s = Some τs →
-      m ⊢* ws :* τs → P (MStruct s ws) (TStruct s)).
+      get_env !! s = Some τs → m ⊢* ws :* τs → P (MStruct s ws) (struct s)).
     Context (Punion : ∀ s i τs w τ,
       get_env !! s = Some τs → τs !! i = Some τ →
-      m ⊢ w : τ → P (MUnion s i w) (TUnion s)).
+      m ⊢ w : τ → P (MUnion s i w) (union s)).
     Context (Punion_none : ∀ s τs bs,
       get_env !! s = Some τs → length τs ≠ 1 → Forall (byte_valid m) bs →
-      length bs = size_of (TUnion s) → P (MUnionNone s bs) (TUnion s)).
-
+      length bs = size_of (union s) → P (MUnionNone s bs) (union s)).
     Lemma mtyped_case : ∀ w τ, mtyped' m w τ → P w τ.
     Proof. destruct 1; eauto. Qed.
   End mtyped_case.
@@ -402,8 +388,8 @@ Section mval_le.
   Inductive mval_le' (m : M) : relation (mval Ti Vi) :=
     | MBase_le' τ bs1 bs2 :
        bs1 ⊑@{m}* bs2 → mval_le' m (MBase τ bs1) (MBase τ bs2)
-    | MArray_le' ws1 ws2 τ :
-       Forall2 (mval_le' m) ws1 ws2 → mval_le' m (MArray τ ws1) (MArray τ ws2)
+    | MArray_le' ws1 ws2 :
+       Forall2 (mval_le' m) ws1 ws2 → mval_le' m (MArray ws1) (MArray ws2)
     | MStruct_le' s ws1 ws2 :
        Forall2 (mval_le' m) ws1 ws2 → mval_le' m (MStruct s ws1) (MStruct s ws2)
     | MUnion_le' s i w1 w2 :
@@ -416,7 +402,7 @@ Section mval_le.
        τs !! i = Some τ →
        m ⊢ w : τ →
        length τs ≠ 1 →
-       resize (size_of (TUnion s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
+       resize (size_of (union s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
        Forall (byte_valid m) bs →
        mval_le' m (MUnion s i w) (MUnionNone s bs).
   Global Instance mval_le: SubsetEqEnv M (mval Ti Vi) := mval_le'.
@@ -428,13 +414,13 @@ Section mval_le.
          τs !! i = Some τ →
          length τs ≠ 1 →
          w ⊆ mval_of_bytes τ bs →
+         Forall (byte_valid m) bs →
          MUnion s i w ⊆ MUnionNone s bs.
   *)
 
   Lemma MBase_le m τ bs1 bs2 : bs1 ⊑@{m}* bs2 → MBase τ bs1 ⊑@{m} MBase τ bs2.
   Proof. by constructor. Qed.
-  Lemma MArray_le m ws1 ws2 τ :
-    ws1 ⊑@{m}* ws2 → MArray τ ws1 ⊑@{m} MArray τ ws2.
+  Lemma MArray_le m ws1 ws2 : ws1 ⊑@{m}* ws2 → MArray ws1 ⊑@{m} MArray ws2.
   Proof. by constructor. Qed.
   Lemma MStruct_le m s ws1 ws2 :
     ws1 ⊑@{m}* ws2 → MStruct s ws1 ⊑@{m} MStruct s ws2.
@@ -448,7 +434,7 @@ Section mval_le.
     get_env !! s = Some τs → τs !! i = Some τ →
     m ⊢ w : τ →
     length τs ≠ 1 →
-    resize (size_of (TUnion s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
+    resize (size_of (union s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
     Forall (byte_valid m) bs →
     MUnion s i w ⊑@{m} MUnionNone s bs.
   Proof. econstructor; eauto. Qed.
@@ -457,7 +443,7 @@ Section mval_le.
     w1 ⊑@{m} w2 →
     match w1 with
     | MBase τ bs1 => (∀ bs2, bs1 ⊑@{m}* bs2 → P (MBase τ bs2)) → P w2
-    | MArray τ ws1 => (∀ ws2, ws1 ⊑@{m}* ws2 → P (MArray τ ws2)) → P w2
+    | MArray ws1 => (∀ ws2, ws1 ⊑@{m}* ws2 → P (MArray ws2)) → P w2
     | MStruct s ws1 => (∀ ws2, ws1 ⊑@{m}* ws2 → P (MStruct s ws2)) → P w2
     | MUnion s i w1 =>
        (∀ w2, w1 ⊑@{m} w2 → P (MUnion s i w2)) →
@@ -466,7 +452,7 @@ Section mval_le.
          τs !! i = Some τ →
          m ⊢ w1 : τ →
          length τs ≠ 1 →
-         resize (size_of (TUnion s)) BUndef (mval_to_bytes w1) ⊑@{m}* bs →
+         resize (size_of (union s)) BUndef (mval_to_bytes w1) ⊑@{m}* bs →
          Forall (byte_valid m) bs →
          P (MUnionNone s bs)) →
        P w2
@@ -478,7 +464,7 @@ Section mval_le.
     w1 ⊑@{m} w2 →
     match w1, w2 with
     | MBase τ1 bs1, MBase τ2 bs2 => (τ1 = τ2 → bs1 ⊑@{m}* bs2 → P) → P
-    | MArray τ1 ws1, MArray τ2 ws2 => (τ1 = τ2 → ws1 ⊑@{m}* ws2 → P) → P
+    | MArray ws1, MArray ws2 => (ws1 ⊑@{m}* ws2 → P) → P
     | MStruct s1 ws1, MStruct s2 ws2 => (s1 = s2 → ws1 ⊑@{m}* ws2 → P) → P
     | MUnion s1 i1 w1, MUnion s2 i2 w2 =>
        (s1 = s2 → i1 = i2 → w1 ⊑@{m} w2 → P) → P
@@ -490,10 +476,8 @@ Section mval_le.
          τs !! i = Some τ →
          m ⊢ w1 : τ →
          length τs ≠ 1 →
-         resize (size_of (TUnion s1)) BUndef (mval_to_bytes w1) ⊑@{m}* bs →
-         Forall (byte_valid m) bs →
-         P) →
-       P
+         resize (size_of (union s1)) BUndef (mval_to_bytes w1) ⊑@{m}* bs →
+         Forall (byte_valid m) bs → P) → P
     | _, _ => P
     end.
   Proof. destruct 1; eauto. Qed.
@@ -502,8 +486,8 @@ Section mval_le.
     Context (m : M) (P : mval Ti Vi → mval Ti Vi → Prop).
     Context (Pbase : ∀ τ bs1 bs2,
       bs1 ⊑@{m}* bs2 → P (MBase τ bs1) (MBase τ bs2)).
-    Context (Parray : ∀ ws1 ws2 τ,
-      ws1 ⊑@{m}* ws2 → Forall2 P ws1 ws2 → P (MArray τ ws1) (MArray τ ws2)).
+    Context (Parray : ∀ ws1 ws2,
+      ws1 ⊑@{m}* ws2 → Forall2 P ws1 ws2 → P (MArray ws1) (MArray ws2)).
     Context (Pstruct : ∀ s ws1 ws2,
       ws1 ⊑@{m}* ws2 → Forall2 P ws1 ws2 → P (MStruct s ws1) (MStruct s ws2)).
     Context (Punion : ∀ s i w1 w2,
@@ -514,16 +498,15 @@ Section mval_le.
       get_env !! s = Some τs → τs !! i = Some τ →
       m ⊢ w : τ →
       length τs ≠ 1 →
-      resize (size_of (TUnion s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
+      resize (size_of (union s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
       Forall (byte_valid m) bs →
       P (MUnion s i w) (MUnionNone s bs)).
-
     Lemma mval_le_ind: ∀ w1 w2, mval_le' m w1 w2 → P w1 w2.
      exact (
       fix go w1 w2 H :=
       match H in mval_le' _ w1 w2 return P w1 w2 with
       | MBase_le' _ _ _ Hbs => Pbase _ _ _ Hbs
-      | MArray_le' _ _ _ Hvs => Parray _ _ _ Hvs (Forall2_impl _ _ _ _ Hvs go)
+      | MArray_le' _ _ Hvs => Parray _ _ Hvs (Forall2_impl _ _ _ _ Hvs go)
       | MStruct_le' _ _ _ Hvs => Pstruct _ _ _ Hvs (Forall2_impl _ _ _ _ Hvs go)
       | MUnion_le' _ _ _ _ Hv => Punion _ _ _ _ Hv (go _ _ Hv)
       | MUnionNone_le' _ _ _ Hbs => Punion_none _ _ _ Hbs
@@ -537,8 +520,8 @@ Section mval_le.
     Context (m : M) (P : mval Ti Vi → mval Ti Vi → Prop).
     Context (Pbase : ∀ τ bs1 bs2,
       bs1 ⊑@{m}* bs2 → P (MBase τ bs1) (MBase τ bs2)).
-    Context (Parray : ∀ ws1 ws2 τ,
-      ws1 ⊑@{m}* ws2 → P (MArray τ ws1) (MArray τ ws2)).
+    Context (Parray : ∀ ws1 ws2,
+      ws1 ⊑@{m}* ws2 → P (MArray ws1) (MArray ws2)).
     Context (Pstruct : ∀ s ws1 ws2,
       ws1 ⊑@{m}* ws2 → P (MStruct s ws1) (MStruct s ws2)).
     Context (Punion : ∀ s i w1 w2,
@@ -551,10 +534,9 @@ Section mval_le.
       τs !! i = Some τ →
       m ⊢ w : τ →
       length τs ≠ 1 →
-      resize (size_of (TUnion s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
+      resize (size_of (union s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
       Forall (byte_valid m) bs →
       P (MUnion s i w) (MUnionNone s bs)).
-
     Definition mval_le_case: ∀ w1 w2, mval_le' m w1 w2 → P w1 w2.
     Proof. destruct 1; eauto. Qed.
   End mval_le_case.
@@ -566,7 +548,7 @@ Ltac mval_le_constructor := first
 
 Inductive munion_free `{EnvSpec Ti Vi} : mval Ti Vi → Prop :=
   | MBase_union_free τ bs : munion_free (MBase τ bs)
-  | MArray_union_free ws τ : Forall munion_free ws → munion_free (MArray τ ws)
+  | MArray_union_free ws : Forall munion_free ws → munion_free (MArray ws)
   | MStruct_union_free s ws : Forall munion_free ws → munion_free (MStruct s ws)
   | MUnion_union_free s w τ :
      get_env !! s = Some [τ] → munion_free w → munion_free (MUnion s 0 w)
@@ -575,21 +557,20 @@ Inductive munion_free `{EnvSpec Ti Vi} : mval Ti Vi → Prop :=
 Section munion_free_ind.
   Context `{EnvSpec Ti Vi} (P : mval Ti Vi → Prop).
   Context (Pbase : ∀ τ bs, P (MBase τ bs)).
-  Context (Parray : ∀ τ ws,
-    Forall munion_free ws → Forall P ws → P (MArray τ ws)).
+  Context (Parray : ∀ ws,
+    Forall munion_free ws → Forall P ws → P (MArray ws)).
   Context (Pstruct : ∀ s ws,
     Forall munion_free ws → Forall P ws → P (MStruct s ws)).
   Context (Punion : ∀ s w τ,
     get_env !! s = Some [τ] → munion_free w → P w → P (MUnion s 0 w)).
   Context (Punion_none : ∀ s bs, P (MUnionNone s bs)).
-
   Lemma munion_free_ind_alt: ∀ w, munion_free w → P w.
   Proof.
    exact (
     fix go w Hv :=
     match Hv in munion_free w return P w with
     | MBase_union_free _ _ => Pbase _ _
-    | MArray_union_free _ _ H => Parray _ _ H (Forall_impl _ _ _ H go)
+    | MArray_union_free _ H => Parray _ H (Forall_impl _ _ _ H go)
     | MStruct_union_free _ _ H => Pstruct _ _ H (Forall_impl _ _ _ H go)
     | MUnion_union_free _ _ _ Hs H => Punion _ _ _ Hs H (go _ H)
     | MUnionNone_union_free _ _ => Punion_none _ _
@@ -609,36 +590,47 @@ Implicit Types r : ref.
 Implicit Types rs : ref_seg.
 
 Lemma mtyped_type_valid m w τ : m ⊢ w : τ → type_valid get_env τ.
-Proof. induction 1 using @mtyped_ind; econstructor; eauto. Qed.
+Proof.
+  induction 1 using @mtyped_ind; econstructor; decompose_Forall_hyps; eauto.
+Qed.
 Global Instance: TypeOfSpec M (type Ti) (mval Ti Vi).
-Proof. destruct 1; simpl; f_equal; eauto. Qed.
+Proof.
+  induction 1 using @mtyped_ind; decompose_Forall_hyps; simpl; f_equal; eauto.
+Qed.
 
 Global Instance: TypeCheckSpec M (type Ti) (mval Ti Vi).
 Proof.
-  intros m. assert (∀ ws τ,
+  intros m. assert (∀ ws τs τ,
+    Forall (λ w, ∀ τ, mtype_check m w = Some τ → m ⊢ w : τ) ws →
+    Forall2 (λ w τ, mtype_check m w = Some τ) ws τs →
+    m ⊢* ws :* τs).
+  { induction 2; intros; decompose_Forall; subst; eauto. }
+  assert (∀ ws τ,
     m ⊢* ws : τ → Forall (λ w, type_check m w = Some τ) ws →
     mapM (type_check m) ws = Some (replicate (length ws) τ)).
   { intros. apply mapM_Some, Forall2_replicate_r; decompose_Forall; eauto. }
-  intros w τ. split.
-  * revert τ. induction w using @mval_ind_alt; intros ? Hv;
-      simplify_option_equality; mtyped_constructor;
-      decompose_Forall; subst; eauto.
-  * induction 1 using @mtyped_ind; simplify_option_equality;
-      try naive_solver (eauto using Forall_replicate_eq).
-    erewrite mapM_Some_2; eauto. by simplify_option_equality.
+  intros w τ. unfold type_check. split.
+  * revert τ. induction w using @mval_ind_alt; intros;
+      simplify_option_equality; try mtyped_constructor; eauto.
+    + case_match; simplify_option_equality.
+      mtyped_constructor; eauto using Forall2_Forall_typed.
+    + decompose_Forall; eauto.
+  * induction 1 using @mtyped_ind; simplify_option_equality; try done.
+    + decompose_Forall_hyps; simplify_option_equality; try done;
+        exfalso; eauto using Forall_replicate_eq.
+    + erewrite mapM_Some_2; eauto. by simplify_option_equality.
 Qed.
 
 Lemma mval_to_bytes_length m w τ :
   m ⊢ w : τ → length (mval_to_bytes w) = size_of τ.
 Proof.
-  induction 1 as [|vs τ n ?? _ IH|s ws τs Hs Hτs IH| |]
-    using @mtyped_ind; simpl.
+  induction 1 as [|vs τ _ IH _|s ws τs Hs Hτs IH| |] using @mtyped_ind; simpl.
   * done.
   * rewrite size_of_array. subst.
     induction IH; simpl; rewrite ?app_length; auto.
   * rewrite (size_of_struct _ τs), Hs by done. simpl. clear Hs Hτs.
-    revert ws IH. induction (size_of_struct_fields τs) as [|τ sz ?? Hn]; intros;
-      simpl in *; decompose_Forall; [done |].
+    revert ws IH. induction (size_of_struct_fields τs)
+      as [|τ sz ?? Hn]; intros; simpl in *; decompose_Forall; [done |].
     simpl. rewrite app_length, resize_length; f_equal. eauto.
   * by rewrite resize_length.
   * done.
@@ -647,7 +639,7 @@ Qed.
 Lemma mval_to_bytes_valid m w τ :
   m ⊢ w : τ → Forall (byte_valid m) (mval_to_bytes w).
 Proof.
-  induction 1 as [|vs τ n ? _ _ IH|s ws τs Hs Hτs IH| |]
+  induction 1 as [|vs τ _ IH _|s ws τs Hs Hτs IH| |]
     using @mtyped_ind; simpl.
   * done.
   * induction IH; simpl; decompose_Forall; auto.
@@ -734,20 +726,20 @@ Qed.
 Section mval_new.
   Context (f : base_type Ti → list (byte Ti Vi)).
 
-  Lemma mval_new_base (τ : base_type Ti) : mval_new f (TBase τ) = MBase τ (f τ).
+  Lemma mval_new_base (τ : base_type Ti) : mval_new f (base τ) = MBase τ (f τ).
   Proof. unfold mval_new. by rewrite type_iter_base. Qed.
   Lemma mval_new_array τ n :
-    mval_new f (TArray τ n) = MArray τ (replicate n (mval_new f τ)).
+    mval_new f (τ.[n]) = MArray (replicate n (mval_new f τ)).
   Proof. unfold mval_new. by rewrite type_iter_array. Qed.
   Lemma mval_new_compound c s τs :
     get_env !! s = Some τs →
-    mval_new f (TCompound c s) =
+    mval_new f (compound@{c} s) =
       match c with
       | Struct => MStruct s (mval_new f <$> τs)
       | Union =>
          match list_singleton_dec τs with
          | inleft (τ↾_) => MUnion s 0 $ mval_new f τ
-         | _ => MUnionNone s $ replicate (size_of (TUnion s)) BUndef
+         | _ => MUnionNone s $ replicate (size_of (union s)) BUndef
          end
       end.
   Proof.
@@ -762,23 +754,23 @@ Section mval_new.
 
   Lemma mval_new_typed m τ :
     (∀ σ, base_type_valid get_env σ → Forall (byte_valid m) (f σ)) →
-    (∀ σ, length (f σ) = size_of (TBase σ)) →
+    (∀ σ, length (f σ) = size_of (base σ)) →
     type_valid get_env τ → m ⊢ mval_new f τ : τ.
   Proof.
     intros Hf1 Hf2. revert τ. refine (type_env_ind _ _ _ _).
-    * intros. rewrite mval_new_base. constructor; auto.
-    * intros τ n ? IH. rewrite mval_new_array. constructor.
-      + done.
+    * intros. rewrite mval_new_base. mtyped_constructor; auto.
+    * intros τ n ?? IH. rewrite mval_new_array. mtyped_constructor.
       + by rewrite replicate_length.
-      + induction n; simpl; constructor; auto.
-    * intros [|] s τs Hs Hτs IH.
+      + elim n; simpl; constructor; auto.
+      + done. 
+    * intros [|] s τs Hs Hτs IH _.
       { rewrite (mval_new_compound _ _ τs) by done.
-        econstructor; [by eauto|].
+        mtyped_constructor; [by eauto|].
         clear Hs Hτs. induction IH; constructor; auto. }
       rewrite (mval_new_compound _ _ τs) by done.
       destruct (list_singleton_dec τs) as [[τ ?]|?]; subst.
-      { decompose_Forall. by econstructor; eauto. }
-      econstructor; eauto.
+      { decompose_Forall. by mtyped_constructor; eauto. }
+      mtyped_constructor; eauto.
       + apply Forall_replicate. by constructor.
       + by rewrite ?replicate_length.
   Qed.
@@ -824,8 +816,7 @@ Proof.
   * done.
   * mval_le_constructor. by apply Forall2_fmap_r, Forall2_Forall.
   * mval_le_constructor. apply Forall2_fmap_r; eauto.
-  * by destruct (list_singleton_dec _) as [[??]|?]; subst;
-      mval_le_constructor;
+  * by destruct (list_singleton_dec _) as [[??]|?]; subst; mval_le_constructor;
       eauto using Forall_resize, BUndef_valid, mval_to_bytes_valid.
   * done.
 Qed.
@@ -836,19 +827,17 @@ Proof.
     Forall2 (λ w1 w2, munion_free w2 → munion_reset w1 ⊑@{m} w2) ws1 ws2 →
     Forall munion_free ws2 → munion_reset <$> ws1 ⊑@{m}* ws2).
   { induction 1; intros; decompose_Forall; simpl; auto. }
-  induction 1 using @mval_le_ind; inversion_clear 1;
-    simplify_option_equality;
+  induction 1 using @mval_le_ind; inversion_clear 1; simplify_option_equality;
     try destruct (list_singleton_dec _) as [[??]|?]; simplify_equality;
     mval_le_constructor; auto.
 Qed.
 
-Lemma munion_reset_typed m w τ : m ⊢ w : τ →  m ⊢ munion_reset w : τ.
+Lemma munion_reset_typed m w τ : m ⊢ w : τ → m ⊢ munion_reset w : τ.
 Proof. eauto using mtyped_ge, munion_reset_above. Qed.
 Lemma munion_reset_le m w1 w2 :
   w1 ⊑@{m} w2 → munion_reset w1 ⊑@{m} munion_reset w2.
 Proof.
-  induction 1 using @mval_le_ind;
-    simplify_option_equality; repeat case_match;
+  induction 1 using @mval_le_ind; simplify_option_equality; repeat case_match;
     repeat destruct (list_singleton_dec _) as [[??]|?]; simplify_equality;
     try mval_le_constructor; eauto using Forall2_fmap_2,
       bytes_le_resize, mval_to_bytes_le.
@@ -883,10 +872,10 @@ Lemma mval_to_bytes_new `{Inhabited M} τ :
 Proof.
   revert τ. refine (type_env_ind _ _ _ _).
   * intros τ ?. by rewrite mval_new_base.
-  * intros τ n ??. rewrite mval_new_array. simpl.
+  * intros τ n ?? _. rewrite mval_new_array. simpl.
     rewrite size_of_array. induction n as [|n IH]; simpl; [done|].
     rewrite replicate_plus. f_equal; auto.
-  * intros [] s τs Hs Hτs IH.
+  * intros [] s τs Hs Hτs IH _.
     + erewrite mval_new_compound by eauto. simpl.
       rewrite (size_of_struct _ τs) by done.
       rewrite Hs. simpl. clear Hs. revert Hτs IH.
@@ -939,22 +928,20 @@ Proof.
 Qed.
 
 Lemma mval_of_bytes_base (τ : base_type Ti) bs :
-  mval_of_bytes (TBase τ) bs = MBase τ $ resize (size_of (TBase τ)) BUndef bs.
+  mval_of_bytes (base τ) bs = MBase τ $ resize (size_of (base τ)) BUndef bs.
 Proof. unfold mval_of_bytes. by rewrite type_iter_base. Qed.
 Lemma mval_of_bytes_array τ n bs :
-  mval_of_bytes (TArray τ n) bs =
-    MArray τ $ array_of_bytes (mval_of_bytes τ) τ n bs.
+  mval_of_bytes (τ.[n]) bs = MArray $ array_of_bytes (mval_of_bytes τ) τ n bs.
 Proof. unfold mval_of_bytes. by rewrite type_iter_array. Qed.
 Lemma mval_of_bytes_compound c s τs bs :
   get_env !! s = Some τs →
-  mval_of_bytes (TCompound c s) bs =
+  mval_of_bytes (compound@{c} s) bs =
     match c with
-    | Struct => MStruct s $
-       struct_of_bytes mval_of_bytes τs bs
+    | Struct => MStruct s $ struct_of_bytes mval_of_bytes τs bs
     | Union =>
        match list_singleton_dec τs with
        | inleft (τ↾_) => MUnion s 0 $ mval_of_bytes τ bs
-       | _ => MUnionNone s $ resize (size_of (TUnion s)) BUndef bs
+       | _ => MUnionNone s $ resize (size_of (union s)) BUndef bs
        end
     end.
 Proof.
@@ -974,16 +961,16 @@ Proof.
   * intros τ Hτ bs Hbs. rewrite mval_of_bytes_base.
     mtyped_constructor; auto using Forall_resize, BUndef_valid.
     by rewrite resize_length.
-  * intros τ n Hτ IH bs Hbs. rewrite mval_of_bytes_array.
+  * intros τ n Hτ IH ? bs Hbs. rewrite mval_of_bytes_array.
     mtyped_constructor; eauto using array_of_bytes_length,
       Forall_array_of_bytes_alt.
-  * intros [] s τs Hs Hτs IH bs Hbs.
+  * intros [] s τs Hs Hτs IH ? bs Hbs.
     { rewrite (mval_of_bytes_compound _ _ τs) by done.
       apply MStruct_typed with τs; eauto using Forall2_struct_of_bytes_alt. }
     rewrite (mval_of_bytes_compound _ _ τs) by done.
     destruct (list_singleton_dec _) as [[τ ?]|?]; subst.
     + rewrite Forall_singleton in IH. eapply MUnion_typed, IH; eauto.
-    + econstructor; eauto using Forall_resize, BUndef_valid.
+    + mtyped_constructor; eauto using Forall_resize, BUndef_valid.
       by rewrite resize_length.
 Qed.
 Lemma mval_of_bytes_type_of m τ bs :
@@ -998,10 +985,9 @@ Proof.
   intros Hτ. revert τ Hτ bs sz. refine (type_env_ind _ _ _ _).
   * intros τ Hτ bs sz ?. rewrite !mval_of_bytes_base.
     f_equal. by rewrite resize_resize by lia.
-  * intros τ n Hτ IH bs sz.
-    rewrite !mval_of_bytes_array, size_of_array.
+  * intros τ n Hτ IH _ bs sz. rewrite !mval_of_bytes_array, size_of_array.
     intros. f_equal. auto using array_of_bytes_resize.
-  * intros [] s τs Hs Hτs IH bs ?.
+  * intros [] s τs Hs Hτs IH _ bs ?.
     { erewrite !mval_of_bytes_compound, size_of_struct by eauto.
       intros. f_equal. auto using struct_of_bytes_resize. }
     erewrite !mval_of_bytes_compound by eauto.
@@ -1022,9 +1008,8 @@ Lemma mval_of_bytes_app τ bs1 bs2 :
   type_valid get_env τ → length bs1 = size_of τ →
   mval_of_bytes τ (bs1 ++ bs2) = mval_of_bytes τ bs1.
 Proof.
-  intros.
-  rewrite <-(mval_of_bytes_resize _ (bs1 ++ bs2) (size_of τ)) by (auto; lia).
-  by rewrite resize_app_le, mval_of_bytes_resize by (auto; lia).
+  intros. by rewrite <-(mval_of_bytes_resize _ (bs1 ++ bs2) (size_of τ)),
+    resize_app_le, mval_of_bytes_resize by (auto with lia).
 Qed.
 Lemma mval_of_bytes_union_free τ bs :
   type_valid get_env τ → munion_free (mval_of_bytes τ bs).
@@ -1045,7 +1030,7 @@ Lemma mval_of_to_bytes_aux m w τ bs :
   m ⊢ w : τ → mval_of_bytes τ (mval_to_bytes w ++ bs) = munion_reset w.
 Proof.
   intros Hvτ. revert bs. induction Hvτ as
-    [τ bs'|vs τ n ?? Hvs IH|s ws τs Hs Hτs IH|s j τs w τ Hs ?? IH|s τs bs' Hs]
+    [τ bs'|vs τ Hvs IH _|s ws τs Hs Hτs IH|s j τs w τ Hs ?? IH|s τs bs' Hs]
     using @mtyped_ind; intros bs; simpl.
   * rewrite mval_of_bytes_base. by rewrite resize_app_le, resize_all_alt by lia.
   * rewrite mval_of_bytes_array. f_equal. subst.
@@ -1086,17 +1071,17 @@ Proof.
   intros Hτ. revert τ Hτ bs1 bs2. refine (type_env_ind _ _ _ _).
   * intros τ ? bs1 bs2 Hbs. rewrite !mval_of_bytes_base. mval_le_constructor.
     by apply bytes_le_resize.
-  * intros τ n ? IH bs1 bs2 Hbs.
+  * intros τ n ? IH Hn bs1 bs2 Hbs.
     rewrite !mval_of_bytes_array. mval_le_constructor. revert bs1 bs2 Hbs.
-    induction n; simpl; auto using Forall2_take, Forall2_drop.
-  * intros [] s τs Hs Hτs IH bs1 bs2 Hbs.
+    elim n; simpl; auto using Forall2_take, Forall2_drop.
+  * intros [] s τs Hs Hτs IH _ bs1 bs2 Hbs.
     { erewrite !mval_of_bytes_compound by eauto. mval_le_constructor.
       clear Hs Hτs. unfold struct_of_bytes. revert bs1 bs2 Hbs.
       induction (struct_fields_same_length τs); intros;
         decompose_Forall_hyps; simpl; auto using Forall2_take, Forall2_drop. }
     erewrite !mval_of_bytes_compound by eauto.
     destruct (list_singleton_dec _) as [[??]|?]; subst.
-    + rewrite Forall_singleton in IH. mval_le_constructor. auto.
+    + decompose_Forall_hyps. mval_le_constructor. auto.
     + mval_le_constructor. by apply bytes_le_resize.
 Qed.
 
@@ -1150,8 +1135,7 @@ Proof. apply mval_lookup_byte_app. Qed.
 Lemma mval_lookup_seg_Some m w τ rs w' :
   m ⊢ w : τ → w !! rs = Some w' → ∃ σ, τ ∙ rs ↝ σ ∧ m ⊢ w' : σ.
 Proof.
-  destruct 1
-    as [τ bs|ws τ n ?? Hws|s ws τs ? Hws|s j τs w τ ???|s τs bs ?? Hbs];
+  destruct 1 as [τ bs|ws τ n ?? Hws|s ws τs ? Hws|s j τs w τ|s τs bs];
     destruct rs as [i|i|i]; intros Hlookup; simplify_option_equality.
   * exists τ. split.
     + constructor; eauto using lookup_lt_length_1.
@@ -1195,14 +1179,14 @@ Proof.
   * intros τ bs ??? w2 Hw2. pattern w2.
     apply (mtyped_inv_r _ _ _ _ Hw2). intros bs' ?? Hbs' Hlookup.
     f_equal. apply list_eq. intros i. apply (Hlookup i []).
-  * intros ws τ n ??? IH w2 Hw2. pattern w2.
-    apply (mtyped_inv_r _ _ _ _ Hw2). intros ws' ?? Hvs' Hlookup.
+  * intros ws τ ? IH _ w2 Hw2. pattern w2.
+    apply (mtyped_inv_r _ _ _ _ Hw2). intros ws' ? Hws' ? Hlookup.
     f_equal. apply list_eq_length_eq; [by subst|]. intros j x y Hx Hy.
-    rewrite Forall_lookup in IH, Hvs'.
+    rewrite Forall_lookup in IH, Hws'.
     apply (IH j x); eauto. intros i r.
-    assert (j < n) as Hjn.
+    assert (j < length ws) as Hjn.
     { subst. eauto using lookup_lt_length_alt. }
-    specialize (Hlookup i (r ++ [RArray j n Hjn])).
+    specialize (Hlookup i (r ++ [RArray j (length ws) Hjn])).
     rewrite !mval_lookup_byte_snoc in Hlookup. by simplify_option_equality.
   * intros s ws τs ?? IH w2 Hw2. pattern w2.
     apply (mtyped_inv_r _ _ _ _ Hw2). intros ws' τs' ? Hvs' Hlookup.
@@ -1216,18 +1200,19 @@ Proof.
     by simplify_option_equality.
   * intros s j τs w τ ?? ? IH w2 Hw2. pattern w2.
     apply (mtyped_inv_r _ _ _ _ Hw2).
-    + intros j' τs' w' τ' ?? Hv' Hlookup. simplify_option_equality.
+    + intros j' τs' w' τ' ?? Hw' Hlookup. simplify_option_equality.
       destruct (decide (j' = j)); simplify_option_equality.
       - f_equal. eapply IH; auto. intros i r.
         specialize (Hlookup i (r ++ [RUnion j true])).
         setoid_rewrite mval_lookup_byte_snoc in Hlookup.
         by simplify_option_equality.
       - specialize (Hlookup 0 [RUnion j true]).
-        setoid_rewrite (mval_lookup_byte_snoc _ _ [] (RUnion j true)) in Hlookup.
-        simplify_option_equality.
+        setoid_rewrite (mval_lookup_byte_snoc _ _ [] (RUnion j true))
+          in Hlookup; simplify_option_equality.
         revert Hlookup. rewrite mval_lookup_byte_nil.
         feed destruct (lookup_lt_length_2 (mval_to_bytes w) 0); [|done].
-        rewrite (mval_to_bytes_length m _ τ); eauto using size_of_pos.
+        rewrite (mval_to_bytes_length m _ τ);
+          eauto using size_of_pos, env_valid_lookup_lookup.
     + intros τs' bs ???? Hlookup. simplify_option_equality.
       destruct (list_lookup_other τs j τ) as (j' & τ' & ? & ?); auto.
       specialize (Hlookup 0 [RUnion j' true]).
@@ -1258,18 +1243,18 @@ Lemma mval_lookup_seg_le m w1 w2 rs w3 :
 Proof.
   assert (∀ s i τs w τ bs,
     get_env !! s = Some τs → τs !! i = Some τ → m ⊢ w : τ →
-    resize (size_of (TUnion s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
+    resize (size_of (union s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
     w ⊑@{m} mval_of_bytes τ (take (size_of τ) bs)).
   { intros. apply mval_of_to_bytes_le; trivial.
     rewrite <-(take_length_resize_alt (mval_to_bytes w)
-      (size_of (TUnion s)) (size_of τ) BUndef);
+      (size_of (union s)) (size_of τ) BUndef);
      eauto using size_of_union_lookup, mval_to_bytes_length,
        Forall2_take, eq_sym. }
   assert (∀ s i τs w τ (bs : list (byte Ti Vi)),
-    resize (size_of (TUnion s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
+    resize (size_of (union s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
     get_env !! s = Some τs → τs !! i = Some τ →
     resize (size_of τ) BUndef (mval_to_bytes w) ⊑@{m}* take (size_of τ) bs).
-  { intros. rewrite <-(take_resize_le _ _ (size_of (TUnion s)));
+  { intros. rewrite <-(take_resize_le _ _ (size_of (union s)));
       eauto using size_of_union_lookup, Forall2_take. }
   destruct 1; destruct rs; intros;
     repeat (case_match || simplify_option_equality);
@@ -1283,11 +1268,11 @@ Lemma mval_lookup_seg_ge m w1 w2 rs w4 :
 Proof.
   assert (∀ s i τs w τ bs,
     get_env !! s = Some τs → τs !! i = Some τ → m ⊢ w : τ →
-    resize (size_of (TUnion s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
+    resize (size_of (union s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
     w ⊑@{m} mval_of_bytes τ (take (size_of τ) bs)).
   { intros. apply mval_of_to_bytes_le; trivial.
     rewrite <-(take_length_resize_alt (mval_to_bytes w)
-      (size_of (TUnion s)) (size_of τ) BUndef); eauto using
+      (size_of (union s)) (size_of τ) BUndef); eauto using
       size_of_union_lookup, mval_to_bytes_length, Forall2_take, eq_sym. }
   destruct 1; destruct rs; intros;
     repeat (case_match || simplify_option_equality);
@@ -1300,9 +1285,8 @@ Lemma mval_lookup_le m w1 w2 r w3 :
 Proof.
   revert w1 w2. induction r as [|rs r IH] using rev_ind; simpl.
   * intros. rewrite mval_lookup_nil. simplify_equality. eauto.
-  * intros w1 w2. rewrite !mval_lookup_snoc.
-    intros. simplify_option_equality.
-    edestruct (mval_lookup_seg_le m w1 w2 rs) as [? [??]];
+  * intros w1 w2. rewrite !mval_lookup_snoc. intros. simplify_option_equality.
+    edestruct (mval_lookup_seg_le m w1 w2 rs) as (?&?&?);
       simplify_option_equality; eauto.
 Qed.
 Lemma mval_lookup_ge m w1 w2 r w4 :
@@ -1311,8 +1295,7 @@ Lemma mval_lookup_ge m w1 w2 r w4 :
 Proof.
   revert w1 w2. induction r as [|rs r IH] using rev_ind; simpl.
   * intros. rewrite mval_lookup_nil. simplify_equality. eauto.
-  * intros w1 w2. rewrite !mval_lookup_snoc.
-    intros. simplify_option_equality.
+  * intros w1 w2. rewrite !mval_lookup_snoc. intros. simplify_option_equality.
     edestruct (mval_lookup_seg_ge m w1 w2 rs) as [?|(?&?&?)];
       simplify_option_equality; eauto.
 Qed.
@@ -1377,7 +1360,8 @@ Proof.
   * repeat (case_match || simplify_option_equality); mval_le_constructor;
       eauto using Forall2_alter with simplify_option_equality.
     exfalso; eauto using Forall2_length.
-  * mval_le_constructor; eauto using Forall2_alter with simplify_option_equality.
+  * mval_le_constructor;
+      eauto using Forall2_alter with simplify_option_equality.
   * repeat (case_match || simplify_option_equality); mval_le_constructor;
       eauto using Forall2_alter with simplify_option_equality.
   * repeat (case_match || simplify_option_equality); mval_le_constructor;

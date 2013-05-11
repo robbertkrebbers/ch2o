@@ -62,24 +62,15 @@ Definition Z_eval_unop (op : unop) (x : Z) : Z :=
   end%Z.
 
 Definition Z_comp (c : comp_kind) : Z → Z → Prop :=
-  match c with
-  | CEq => (=)
-  | CLt => (<)
-  | CLe => (≤)
-  end%Z.
+  match c with CEq => (=) | CLt => (<) | CLe => (≤) end%Z.
 Instance Z_comp_dec c : ∀ x y, Decision (Z_comp c x y) :=
   match c return ∀ x y : Z, Decision (Z_comp c x y) with
   | CEq => decide_rel (=)
   | CLt => decide_rel (<)
   | CLe => decide_rel (≤)
   end%Z.
-
 Definition nat_comp (c : comp_kind) : nat → nat → Prop :=
-  match c with
-  | CEq => (=)
-  | CLt => (<)
-  | CLe => (≤)
-  end.
+  match c with CEq => (=) | CLt => (<) | CLe => (≤) end.
 Instance nat_comp_dec c : ∀ x y, Decision (nat_comp c x y) :=
   match c return ∀ x y : nat, Decision (nat_comp c x y) with
   | CEq => decide_rel (=)
@@ -99,7 +90,7 @@ Definition Z_eval_binop (x2m : Z) (op : binop) (x1 x2 : Z) : option Z :=
   | XorOp => Some (Z.lxor x1 x2)
   | DivOp => guard (x2 ≠ 0); Some (x1 `quot` x2)
   | ModOp => guard (x2 ≠ 0); Some (x1 `rem` x2)
-  | CompOp c => Some (Z_of_sumbool (decide_rel (Z_comp c) x1 x2))
+  | CompOp c => Some $ Z_of_sumbool (decide_rel (Z_comp c) x1 x2)
   end%Z.
 
 (** We consider both signed and unsigned integers. Signed integers are an
