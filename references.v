@@ -4,6 +4,9 @@ Require Export abstract_integers types.
 Local Open Scope ctype_scope.
 
 (** * Pointers environments *)
+Section env.
+Local Unset Elimination Schemes.
+
 Class PtrEnv (Ti : Set) := {
   get_env : env Ti;
   size_of : type Ti → nat;
@@ -23,6 +26,7 @@ Class EnvSpec (Ti Vi : Set) `{IntEnv Ti Vi} `{PtrEnv Ti} := {
   size_of_union s τs :
     get_env !! s = Some τs → Forall (λ τ, size_of τ ≤ size_of (union s)) τs
 }.
+End env.
 
 Section env_spec.
   Context `{EnvSpec Ti Vi}.
