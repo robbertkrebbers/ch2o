@@ -443,8 +443,7 @@ Proof. apply alter_length. Qed.
 
 Lemma list_lookup_alter f l i : alter f i l !! i = f <$> l !! i.
 Proof. revert i. induction l. done. intros [|i]. done. apply (IHl i). Qed.
-Lemma list_lookup_alter_ne f l i j :
-  i ≠ j → alter f i l !! j = l !! j.
+Lemma list_lookup_alter_ne f l i j : i ≠ j → alter f i l !! j = l !! j.
 Proof.
   revert i j. induction l; [done|].
   intros [|i] [|j] ?; try done. apply (IHl i). congruence.
@@ -454,15 +453,13 @@ Proof.
   intros Hi. unfold insert, list_insert. rewrite list_lookup_alter.
   by feed inversion (lookup_lt_length_2 l i).
 Qed.
-Lemma list_lookup_insert_ne l i j x :
-  i ≠ j → <[i:=x]>l !! j = l !! j.
+Lemma list_lookup_insert_ne l i j x : i ≠ j → <[i:=x]>l !! j = l !! j.
 Proof. apply list_lookup_alter_ne. Qed.
 
 Lemma list_lookup_other l i x :
   length l ≠ 1 → l !! i = Some x → ∃ j y, j ≠ i ∧ l !! j = Some y.
 Proof.
-  intros Hl Hi.
-  destruct i; destruct l as [|x0 [|x1 l]]; simpl in *; simplify_equality.
+  intros. destruct i, l as [|x0 [|x1 l]]; simpl in *; simplify_equality.
   * by exists 1 x1.
   * by exists 0 x0.
 Qed.
@@ -524,8 +521,7 @@ Proof. rewrite elem_of_app. tauto. Qed.
 Lemma elem_of_list_singleton x y : x ∈ [y] ↔ x = y.
 Proof. rewrite elem_of_cons, elem_of_nil. tauto. Qed.
 
-Global Instance elem_of_list_permutation_proper x :
-  Proper ((≡ₚ) ==> iff) (x ∈).
+Global Instance elem_of_list_permutation_proper x : Proper ((≡ₚ) ==> iff) (x ∈).
 Proof. induction 1; rewrite ?elem_of_nil, ?elem_of_cons; intuition. Qed.
 
 Lemma elem_of_list_split l x : x ∈ l → ∃ l1 l2, l = l1 ++ x :: l2.
@@ -749,9 +745,7 @@ Proof.
   * destruct i; simpl; auto with arith.
 Qed.
 Lemma lookup_take_ge l n i : n ≤ i → take n l !! i = None.
-Proof.
-  revert n i. induction l; intros [|?] [|?] ?; simpl; auto with lia.
-Qed.
+Proof. revert n i. induction l; intros [|?] [|?] ?; simpl; auto with lia. Qed.
 Lemma take_alter f l n i : n ≤ i → take n (alter f i l) = take n l.
 Proof.
   intros. apply list_eq. intros j. destruct (le_lt_dec n j).
@@ -940,8 +934,7 @@ Proof.
 Qed.
 Global Instance: ∀ k : list A, Injective (≡ₚ) (≡ₚ) (++ k).
 Proof.
-  intros k l1 l2. rewrite !(commutative (++) _ k).
-  by apply (injective (k ++)).
+  intros k l1 l2. rewrite !(commutative (++) _ k). by apply (injective (k ++)).
 Qed.
 
 (** ** Properties of the [prefix_of] and [suffix_of] predicates *)
@@ -1533,9 +1526,8 @@ Qed.
 Lemma contains_app_inv_l l1 l2 k :
   k ++ l1 `contains` k ++ l2 → l1 `contains` l2.
 Proof.
-  induction k as [|y k IH]; simpl; [done |].
-  rewrite contains_cons_l. intros (?&E&?).
-  apply Permutation_cons_inv in E. apply IH. by rewrite E.
+  induction k as [|y k IH]; simpl; [done |]. rewrite contains_cons_l.
+  intros (?&E&?). apply Permutation_cons_inv in E. apply IH. by rewrite E.
 Qed.
 Lemma contains_app_inv_r l1 l2 k :
   l1 ++ k `contains` l2 ++ k → l1 `contains` l2.
@@ -1564,9 +1556,7 @@ Proof. by apply contains_inserts_l, contains_inserts_r. Qed.
 Lemma Permutation_alt l1 l2 :
   l1 ≡ₚ l2 ↔ length l1 = length l2 ∧ l1 `contains` l2.
 Proof.
-  split.
-  * intros Hl. by rewrite Hl.
-  * intros [??]. auto using contains_Permutation.
+  split. by intros Hl; rewrite Hl. intros [??]; auto using contains_Permutation.
 Qed.
 
 Section contains_dec.
@@ -1576,9 +1566,8 @@ Section contains_dec.
     l1 ≡ₚ l2 → list_remove x l1 = Some k1 →
     ∃ k2, list_remove x l2 = Some k2 ∧ k1 ≡ₚ k2.
   Proof.
-    intros Hl. revert k1.
-    induction Hl as [|y l1 l2 ? IH|y1 y2 l|l1 l2 l3 ? IH1 ? IH2];
-      simpl; intros k1 Hk1.
+    intros Hl. revert k1. induction Hl
+      as [|y l1 l2 ? IH|y1 y2 l|l1 l2 l3 ? IH1 ? IH2]; simpl; intros k1 Hk1.
     * done.
     * case_decide; simplify_equality; eauto.
       destruct (list_remove x l1) as [l|] eqn:?; simplify_equality.
@@ -2512,23 +2501,18 @@ End zip_with.
 
 Section zip.
   Context {A B : Type}.
+  Implicit Types l : list A.
+  Implicit Types k : list B.
 
-  Lemma zip_length (l1 : list A) (l2 : list B) :
-    length l1 ≤ length l2 → length (zip l1 l2) = length l1.
+  Lemma zip_length l k : length l ≤ length k → length (zip l k) = length l.
   Proof. by apply zip_with_length. Qed.
-
-  Lemma zip_fmap_fst_le (l1 : list A) (l2 : list B) :
-    length l1 ≤ length l2 → fst <$> zip l1 l2 = l1.
+  Lemma zip_fmap_fst_le l k : length l ≤ length k → fst <$> zip l k = l.
   Proof. by apply zip_with_fmap_fst_le. Qed.
-  Lemma zip_fmap_snd (l1 : list A) (l2 : list B) :
-    length l2 ≤ length l1 → snd <$> zip l1 l2 = l2.
+  Lemma zip_fmap_snd l k : length k ≤ length l → snd <$> zip l k = k.
   Proof. by apply zip_with_fmap_snd_le. Qed.
-
-  Lemma zip_fst (l1 : list A) (l2 : list B) :
-    l1 `same_length` l2 → fst <$> zip l1 l2 = l1.
+  Lemma zip_fst l k : l `same_length` k → fst <$> zip l k = l.
   Proof. by apply zip_with_fmap_fst. Qed.
-  Lemma zip_snd (l1 : list A) (l2 : list B) :
-    l1 `same_length` l2 → snd <$> zip l1 l2 = l2.
+  Lemma zip_snd l k : l `same_length` k → snd <$> zip l k = k.
   Proof. by apply zip_with_fmap_snd. Qed.
 End zip.
 
