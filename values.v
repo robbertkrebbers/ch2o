@@ -404,8 +404,7 @@ Section val_le.
        bs1 ⊑@{m}* bs2 →
        val_le' m (VUnionNone s vs1) (VUnionNone s vs2)
     | VUnion_VUnionNone_le' s i τs v1 v2 vs2 bs2 :
-       get_env !! s = Some τs →
-       length τs ≠ 1 →
+       get_env !! s = Some τs → length τs ≠ 1 →
        vs2 !! i = Some v2 →
        val_le' m v1 v2 →
        vs2 = flip val_of_bytes bs2 <$> τs →
@@ -474,8 +473,7 @@ Section val_le.
     | VUnion s i v1 =>
        (∀ v2, v1 ⊑@{m} v2 → P (VUnion s i v2)) →
        (∀ τs v2 vs2 bs2,
-         get_env !! s = Some τs →
-         length τs ≠ 1 →
+         get_env !! s = Some τs → length τs ≠ 1 →
          vs2 !! i = Some v2 →
          v1 ⊑@{m} v2 →
          vs2 = flip val_of_bytes bs2 <$> τs →
@@ -523,8 +521,7 @@ Section val_le.
          v1 ⊑@{m} v2 →
          vs2 = flip val_of_bytes bs2 <$> τs →
          m ⊢* valid bs2 →
-         P) →
-       P
+         P) → P
     | _, _ => P
     end.
   Proof. destruct 1; eauto. Qed.
@@ -545,15 +542,12 @@ Section val_le.
       m ⊢* valid bs1 →
       vs2 = flip val_of_bytes bs2 <$> τs →
       bs1 ⊑@{m}* bs2 →
-      vs1 ⊑@{m}* vs2 →
-      Forall2 P vs1 vs2 →
+      vs1 ⊑@{m}* vs2 → Forall2 P vs1 vs2 →
       P (VUnionNone s vs1) (VUnionNone s vs2)).
     Context (Punion_union_none : ∀ s i τs v1 v2 vs2 bs2,
-      get_env !! s = Some τs →
-      length τs ≠ 1 →
+      get_env !! s = Some τs → length τs ≠ 1 →
       vs2 !! i = Some v2 →
-      v1 ⊑@{m} v2 →
-      P v1 v2 →
+      v1 ⊑@{m} v2 → P v1 v2 →
       vs2 = flip val_of_bytes bs2 <$> τs →
       m ⊢* valid bs2 →
       P (VUnion s i v1) (VUnionNone s vs2)).
@@ -592,8 +586,7 @@ Inductive union_free `{EnvSpec Ti Vi} : val Ti Vi → Prop :=
 Section union_free_ind.
   Context `{EnvSpec Ti Vi} (P : val Ti Vi → Prop).
   Context (Pbase : ∀ v, P (VBase v)).
-  Context (Parray : ∀ vs,
-    Forall union_free vs → Forall P vs → P (VArray vs)).
+  Context (Parray : ∀ vs, Forall union_free vs → Forall P vs → P (VArray vs)).
   Context (Pstruct : ∀ s vs,
     Forall union_free vs → Forall P vs → P (VStruct s vs)).
   Context (Punion : ∀ s v τ,
@@ -843,7 +836,7 @@ Proof.
       induction IH; simpl in *; f_equal; simplify_list_equality; eauto.
 Qed.
 
-Lemma Forall_val_of_bytes_masked m τs bs1 bs2 cs2 :
+Lemma fmap_val_of_bytes_masked m τs bs1 bs2 cs2 :
   Forall (type_valid get_env) τs →
   bs1 ⊑@{m}* bs2 → m ⊢* valid cs2 →
   flip val_of_bytes bs2 <$> τs = flip val_of_bytes cs2 <$> τs →
@@ -885,7 +878,7 @@ Proof.
       VUnionNone s vs1 ⊑@{m} VUnionNone s vs3).
     { intros s τs ??? bs1 bs2 bs2' bs3 ?????????. subst.
       apply VUnionNone_le with τs (mask_bytes bs1 bs2') bs3; eauto using
-        mask_bytes_valid, Forall_val_of_bytes_masked, env_valid_lookup, eq_sym.
+        mask_bytes_valid, fmap_val_of_bytes_masked, env_valid_lookup, eq_sym.
       transitivity bs2'; eauto using mask_bytes_le. }
     intros v1 v2 v3 Hv1v2. revert v3. induction Hv1v2 using @val_le_ind;
       intros ? Hv2v3; apply (val_le_inv_l _ _ _ _ Hv2v3); intros;
@@ -1035,36 +1028,18 @@ Proof.
     Forall2 (λ w1 w2, mval_to_val w1 ⊑@{m} mval_to_val w2) ws1 ws2).
   { intros ws1 ws2 τs Hws1. revert ws2.
     induction Hws1; intros; decompose_Forall; auto. }
-  assert (∀ s i τs w1 τ bs,
-    get_env !! s = Some τs → τs !! i = Some τ →
-    m ⊢ w1 : τ →
-    (∀ w2, w1 ⊑@{m} w2 → mval_to_val w1 ⊑@{m} mval_to_val w2) →
-    length τs ≠ 1 →
-    resize (size_of (union s)) BUndef (mval_to_bytes w1) ⊑@{m}* bs →
-    VUnion s i (mval_to_val w1) ⊑@{m}
-      VUnionNone s (flip val_of_bytes bs <$> τs)).
-  { intros s i τs w1 τ bs Hs Hi Hw1τ IH Hτs_len Hbs.
-    rewrite resize_ge in Hbs by
-     (erewrite mval_to_bytes_length by eauto; eauto using size_of_union_lookup).
-    apply Forall2_app_inv_l in Hbs. destruct Hbs as (bs1&bs2&?&?&?); subst.
-    apply VUnion_VUnionNone_le with τs (val_of_bytes τ bs1) (bs1 ++ bs2); auto.
-    * rewrite list_lookup_fmap, Hi. simpl.
-      f_equal. apply val_of_bytes_app; eauto using env_valid_lookup_lookup.
-      erewrite <-Forall2_length; eauto using mval_to_bytes_length.
-    * erewrite <-mval_of_bytes_to_val;
-        eauto using mval_of_to_bytes_le, env_valid_lookup_lookup.
-    * eapply Forall_app. split.
-      + eauto using bytes_valid_ge, mval_to_bytes_valid.
-      + eauto using bytes_valid_ge, Forall_replicate, BUndef_valid. }
   induction 1 using @mtyped_ind;
     intros w2 Hw1w2; pattern w2; apply (mval_le_inv_l _ _ _ _ Hw1w2);
-    intros; simpl.
+    intros; simplify_option_equality.
   * val_le_constructor. eauto using base_val_of_bytes_le.
   * val_le_constructor. auto using Forall2_fmap_2.
   * val_le_constructor. eauto using Forall2_fmap_2.
   * val_le_constructor. auto.
   * erewrite val_of_bytes_compound by eauto.
-    by destruct (list_singleton_dec _) as [[??]|_]; subst; eauto.
+    destruct (list_singleton_dec _) as [[??]|_]; subst; [done|].
+    val_le_constructor; rewrite ?list_lookup_fmap;
+      eauto with simplify_option_equality.
+    rewrite <-mval_of_bytes_to_val; eauto using env_valid_lookup_lookup.
   * eauto using val_of_bytes_le, TCompound_valid.
 Qed.
 
@@ -1361,7 +1336,7 @@ Proof.
     destruct (base_val_to_bytes_ge m v1 v2 bs2) as (bs1 & ? & ?); auto.
     exists (MBase τ bs1). subst. simpl.
     erewrite !type_of_correct by eauto using base_typed_ge.
-    split; [esolve_elem_of|]. by constructor.
+    split; [esolve_elem_of|]. by mval_le_constructor.
   * intros vs1 vs2 Hvs IH τ' Hτ'. apply (vtyped_inv_l _ _ _ _ Hτ').
     clear τ' Hτ'. intros τ ?? Hvs1 _ w2 Hw2; subst. simpl in *.
     apply elem_of_fmap in Hw2. destruct Hw2 as (ws2 & ? & Hws2). subst.
@@ -1369,7 +1344,7 @@ Proof.
       Forall2 (λ w1 v1, w1 ∈ mval_of_val v1) ws1 vs1 ∧
       ws1 ⊑@{m}* ws2) as (ws1 & ? & ?).
     { revert ws2 Hws2. induction IH; intros; decompose_Forall; naive_solver. }
-    exists (MArray ws1); split; [|by constructor].
+    exists (MArray ws1); split; [|by mval_le_constructor].
     apply elem_of_fmap. exists ws1. by rewrite elem_of_mapM.
   * intros s vs1 vs2 _ IH τ' Hτ'. apply (vtyped_inv_l _ _ _ _ Hτ').
     clear τ' Hτ'. intros τs _ Hvs1 w2 Hw2. simpl in *.
@@ -1379,7 +1354,7 @@ Proof.
       ws1 ⊑@{m}* ws2) as (ws1 & ? & ?).
     { revert τs Hvs1 ws2 Hws2.
       induction IH; intros; decompose_Forall; naive_solver. }
-    exists (MStruct s ws1); split; [|by constructor].
+    exists (MStruct s ws1); split; [|by mval_le_constructor].
     apply elem_of_fmap. exists ws1. by rewrite elem_of_mapM.
   * intros s i v1 v2 Hv1v2 IH τ' Hτ'. apply (vtyped_inv_l _ _ _ _ Hτ').
     clear τ' Hτ'. intros τs τ Hs Hi Hv1τ w' Hw'. simpl in *. 
@@ -1400,13 +1375,13 @@ Proof.
     apply elem_of_filter in Hbs4. destruct Hbs4 as (Hbs2 & ?).
     rewrite list_fmap_compose, (val_of_bytes_fmap_type_of m) in Hbs2
       by eauto using env_valid_lookup, bytes_valid_ge.
-    rewrite <-(Forall_val_of_bytes_masked m τs bs1 bs2 bs4)
+    rewrite <-(fmap_val_of_bytes_masked m τs bs1 bs2 bs4)
       by eauto using env_valid_lookup.
     destruct (union_to_of_bytes_exists m τs (size_of (union s))
       (mask_bytes bs1 bs4)) as (bs3 & Hbs3 & Hbs3bs4);
       eauto using size_of_union, env_valid_lookup, mask_bytes_valid.
     exists (MUnionNone s bs3). split; [esolve_elem_of |].
-    constructor.
+    mval_le_constructor.
     rewrite resize_all_alt in Hbs3bs4 by (by rewrite mask_bytes_length).
     transitivity (mask_bytes bs1 bs4); auto using mask_bytes_le.
   * intros s i τs v1 v2 vs2 bs2 Hs Hτs Hi Hv1 IH Hvs2 Hbs2 τ' Hτ'.
@@ -1430,12 +1405,12 @@ Proof.
     simplify_option_equality.
     destruct (IH τ Hv1τ w2) as (w1 & ? & ?); [by rewrite Hbs3|].
     exists (MUnion s i w1). split; [esolve_elem_of |].
-    econstructor; eauto using mval_of_val_typed.
-    transitivity (resize (size_of (union s)) BUndef (mval_to_bytes w2));
-      eauto using bytes_le_resize, mval_to_bytes_le.
-    rewrite <-(resize_all_alt bs3 (size_of (union s)) BUndef) by done.
-    eauto using Forall2_resize_ge_r, BUndef_le, Forall_BUndef_le,
-      size_of_union_lookup.
+    mval_le_constructor; eauto using mval_of_val_typed.
+    transitivity w2; [done|].
+    rewrite <-(mval_of_bytes_resize _ _ (size_of τ)) by
+      eauto using env_valid_lookup_lookup.
+    apply mval_of_to_bytes_le_flip; eauto using mval_of_val_typed,
+      val_of_bytes_typed, env_valid_lookup_lookup.
 Qed.
 
 Global Instance: TypeCheckSpec M (type Ti) (val Ti Vi).
@@ -1501,13 +1476,10 @@ Proof.
   * rewrite list_lookup_fmap. by simplify_option_equality.
   * done.
   * erewrite val_of_bytes_compound by eauto.
+    rewrite mval_of_bytes_to_val by eauto using env_valid_lookup_lookup.
     destruct (list_singleton_dec _) as [[??]|?];
-      simplify_list_equality; simplify_option_equality.
-    + by rewrite mval_of_bytes_to_val, val_of_bytes_take by
-        eauto using env_valid_lookup_singleton.
-    + rewrite list_lookup_fmap. simplify_option_equality.
-      by rewrite mval_of_bytes_to_val, val_of_bytes_take by
-        eauto using env_valid_lookup_lookup.
+      simplify_list_equality; simplify_option_equality; [done|].
+    rewrite list_lookup_fmap. by simplify_option_equality.
 Qed.
 
 Lemma mval_of_val_lookup_seg m w1 τ rs v1 :
@@ -1522,9 +1494,7 @@ Proof.
     | H: val_of_bytes _ _ !! _ = Some _ |- _ =>
       erewrite val_of_bytes_compound in H by eauto;
       destruct (list_singleton_dec _) as [[??]|?]
-    end; eauto.
-  rewrite mval_of_bytes_take, <-mval_of_bytes_to_val;
-    eauto using env_valid_lookup_lookup.
+    end; eauto using  mval_of_bytes_to_val, env_valid_lookup_lookup.
 Qed.
 
 Lemma val_lookup_seg_Some m v τ rs v' :

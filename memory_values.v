@@ -190,7 +190,7 @@ Section operations.
        else w
     | RUnion i b, MUnionNone s bs =>
        default w (get_env !! s ≫= (!! i)) $ λ τ,
-         MUnion s i $ f $ mval_of_bytes τ $ take (size_of τ) bs
+         MUnion s i $ f $ mval_of_bytes τ bs
     | _, _ => w
     end.
   Global Instance mval_alter: Alter ref (mval Ti Vi) (mval Ti Vi) :=
@@ -212,7 +212,7 @@ Section operations.
     | RUnion i _, MUnion s j w => guard (i = j); Some w
     | RUnion i _, MUnionNone s bs =>
        τ ← get_env !! s ≫= (!! i);
-       Some $ mval_of_bytes τ $ take (size_of τ) bs
+       Some $ mval_of_bytes τ bs
     | _, _ => None
     end.
   Global Instance mval_lookup: Lookup ref (mval Ti Vi) (mval Ti Vi) :=
@@ -339,7 +339,7 @@ Section typed.
       get_env !! s = Some τs → τs !! i = Some τ →
       m ⊢ w : τ → P w τ → P (MUnion s i w) (union s)).
     Context (Punion_none : ∀ s τs bs,
-      get_env !! s = Some τs →  length τs ≠ 1 →  m ⊢* valid bs →
+      get_env !! s = Some τs →  length τs ≠ 1 → m ⊢* valid bs →
       length bs = size_of (union s) → P (MUnionNone s bs) (union s)).
     Lemma mtyped_ind : ∀ w τ, mtyped' m w τ → P w τ.
     Proof.
@@ -398,25 +398,11 @@ Section mval_le.
        bs1 ⊑@{m}* bs2 →
        mval_le' m (MUnionNone s bs1) (MUnionNone s bs2)
     | MUnion_MUnionNone_le' s i τs w τ bs :
-       get_env !! s = Some τs →
-       τs !! i = Some τ →
-       m ⊢ w : τ →
-       length τs ≠ 1 →
-       resize (size_of (union s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
-       m ⊢* valid bs →
+       get_env !! s = Some τs → τs !! i = Some τ → length τs ≠ 1 →
+       mval_le' m w (mval_of_bytes τ bs) →
+       m ⊢* valid bs → length bs = size_of (union s) →
        mval_le' m (MUnion s i w) (MUnionNone s bs).
   Global Instance mval_le: SubsetEqEnv M (mval Ti Vi) := mval_le'.
-
-  (*
-  alternative; better if it works:
-      | MUnion_MUnionNone_le s i τs w τ bs :
-         get_env !! s = Some τs →
-         τs !! i = Some τ →
-         length τs ≠ 1 →
-         w ⊆ mval_of_bytes τ bs →
-         m ⊢* valid bs →
-         MUnion s i w ⊆ MUnionNone s bs.
-  *)
 
   Lemma MBase_le m τ bs1 bs2 : bs1 ⊑@{m}* bs2 → MBase τ bs1 ⊑@{m} MBase τ bs2.
   Proof. by constructor. Qed.
@@ -431,11 +417,9 @@ Section mval_le.
     bs1 ⊑@{m}* bs2 → MUnionNone s bs1 ⊑@{m}MUnionNone s bs2.
   Proof. by constructor. Qed.
   Lemma MUnion_MUnionNone_le m s i τs w τ bs :
-    get_env !! s = Some τs → τs !! i = Some τ →
-    m ⊢ w : τ →
-    length τs ≠ 1 →
-    resize (size_of (union s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
-    m ⊢* valid bs →
+    get_env !! s = Some τs → τs !! i = Some τ → length τs ≠ 1 →
+    w ⊑@{m} mval_of_bytes τ bs →
+    m ⊢* valid bs → length bs = size_of (union s) →
     MUnion s i w ⊑@{m} MUnionNone s bs.
   Proof. econstructor; eauto. Qed.
 
@@ -448,14 +432,10 @@ Section mval_le.
     | MUnion s i w1 =>
        (∀ w2, w1 ⊑@{m} w2 → P (MUnion s i w2)) →
        (∀ τs τ bs,
-         get_env !! s = Some τs →
-         τs !! i = Some τ →
-         m ⊢ w1 : τ →
-         length τs ≠ 1 →
-         resize (size_of (union s)) BUndef (mval_to_bytes w1) ⊑@{m}* bs →
-         m ⊢* valid bs →
-         P (MUnionNone s bs)) →
-       P w2
+         get_env !! s = Some τs → τs !! i = Some τ → length τs ≠ 1 →
+         w1 ⊑@{m} mval_of_bytes τ bs →
+         m ⊢* valid bs → length bs = size_of (union s) →
+         P (MUnionNone s bs)) → P w2
     | MUnionNone s bs1 => (∀ bs2, bs1 ⊑@{m}* bs2 → P (MUnionNone s bs2)) → P w2
     end.
   Proof. destruct 1; eauto. Qed.
@@ -470,14 +450,11 @@ Section mval_le.
        (s1 = s2 → i1 = i2 → w1 ⊑@{m} w2 → P) → P
     | MUnionNone s1 bs1, MUnionNone s2 bs2 => (s1 = s2 → bs1 ⊑@{m}* bs2 → P) → P
     | MUnion s1 i w1, MUnionNone s2 bs =>
-       (∀ τs τ bs,
+       (∀ τs τ,
          s1 = s2 →
-         get_env !! s1 = Some τs →
-         τs !! i = Some τ →
-         m ⊢ w1 : τ →
-         length τs ≠ 1 →
-         resize (size_of (union s1)) BUndef (mval_to_bytes w1) ⊑@{m}* bs →
-         m ⊢* valid bs → P) → P
+         get_env !! s1 = Some τs → τs !! i = Some τ → length τs ≠ 1 →
+         w1 ⊑@{m} mval_of_bytes τ bs →
+         m ⊢* valid bs → length bs = size_of (union s1) → P) → P
     | _, _ => P
     end.
   Proof. destruct 1; eauto. Qed.
@@ -495,11 +472,9 @@ Section mval_le.
     Context (Punion_none : ∀ s bs1 bs2,
       bs1 ⊑@{m}* bs2 → P (MUnionNone s bs1) (MUnionNone s bs2)).
     Context (Punion_union_none : ∀ s i τs w τ bs,
-      get_env !! s = Some τs → τs !! i = Some τ →
-      m ⊢ w : τ →
-      length τs ≠ 1 →
-      resize (size_of (union s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
-      m ⊢* valid bs →
+      get_env !! s = Some τs → τs !! i = Some τ → length τs ≠ 1 →
+      w ⊑@{m} mval_of_bytes τ bs → P w (mval_of_bytes τ bs) →
+      m ⊢* valid bs → length bs = size_of (union s) →
       P (MUnion s i w) (MUnionNone s bs)).
     Lemma mval_le_ind: ∀ w1 w2, mval_le' m w1 w2 → P w1 w2.
      exact (
@@ -510,8 +485,8 @@ Section mval_le.
       | MStruct_le' _ _ _ Hvs => Pstruct _ _ _ Hvs (Forall2_impl _ _ _ _ Hvs go)
       | MUnion_le' _ _ _ _ Hv => Punion _ _ _ _ Hv (go _ _ Hv)
       | MUnionNone_le' _ _ _ Hbs => Punion_none _ _ _ Hbs
-      | MUnion_MUnionNone_le' _ _ _ _ _ _ Hs Hi Hτs Hv Hbs Hbs' =>
-         Punion_union_none _ _ _ _ _ _ Hs Hi Hτs Hv Hbs Hbs'
+      | MUnion_MUnionNone_le' _ _ _ _ _ _ Hs Hi Hτs Hw Hbs Hbs' =>
+         Punion_union_none _ _ _ _ _ _ Hs Hi Hτs Hw (go _ _ Hw) Hbs Hbs'
       end).
     Qed.
   End mval_le_ind.
@@ -530,12 +505,9 @@ Section mval_le.
       bs1 ⊑@{m}* bs2 →
       P (MUnionNone s bs1) (MUnionNone s bs2)).
     Context (Punion_union_none : ∀ s i τs w τ bs,
-      get_env !! s = Some τs →
-      τs !! i = Some τ →
-      m ⊢ w : τ →
-      length τs ≠ 1 →
-      resize (size_of (union s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
-      m ⊢* valid bs →
+      get_env !! s = Some τs → τs !! i = Some τ → length τs ≠ 1 →
+      w ⊑@{m} mval_of_bytes τ bs →
+      m ⊢* valid bs → length bs = size_of (union s) →
       P (MUnion s i w) (MUnionNone s bs)).
     Definition mval_le_case: ∀ w1 w2, mval_le' m w1 w2 → P w1 w2.
     Proof. destruct 1; eauto. Qed.
@@ -557,8 +529,7 @@ Inductive munion_free `{EnvSpec Ti Vi} : mval Ti Vi → Prop :=
 Section munion_free_ind.
   Context `{EnvSpec Ti Vi} (P : mval Ti Vi → Prop).
   Context (Pbase : ∀ τ bs, P (MBase τ bs)).
-  Context (Parray : ∀ ws,
-    Forall munion_free ws → Forall P ws → P (MArray ws)).
+  Context (Parray : ∀ ws, Forall munion_free ws → Forall P ws → P (MArray ws)).
   Context (Pstruct : ∀ s ws,
     Forall munion_free ws → Forall P ws → P (MStruct s ws)).
   Context (Punion : ∀ s w τ,
@@ -621,34 +592,122 @@ Proof.
     + erewrite mapM_Some_2; eauto. by simplify_option_equality.
 Qed.
 
-Lemma mval_to_bytes_length m w τ :
-  m ⊢ w : τ → length (mval_to_bytes w) = size_of τ.
+Lemma mval_of_bytes_base (τ : base_type Ti) bs :
+  mval_of_bytes (base τ) bs = MBase τ $ resize (size_of (base τ)) BUndef bs.
+Proof. unfold mval_of_bytes. by rewrite type_iter_base. Qed.
+Lemma mval_of_bytes_array τ n bs :
+  mval_of_bytes (τ.[n]) bs = MArray $ array_of_bytes (mval_of_bytes τ) τ n bs.
+Proof. unfold mval_of_bytes. by rewrite type_iter_array. Qed.
+Lemma mval_of_bytes_compound c s τs bs :
+  get_env !! s = Some τs →
+  mval_of_bytes (compound@{c} s) bs =
+    match c with
+    | Struct => MStruct s $ struct_of_bytes mval_of_bytes τs bs
+    | Union =>
+       match list_singleton_dec τs with
+       | inleft (τ↾_) => MUnion s 0 $ mval_of_bytes τ bs
+       | _ => MUnionNone s $ resize (size_of (union s)) BUndef bs
+       end
+    end.
 Proof.
-  induction 1 as [|vs τ _ IH _|s ws τs Hs Hτs IH| |] using @mtyped_ind; simpl.
-  * done.
-  * rewrite size_of_array. subst.
-    induction IH; simpl; rewrite ?app_length; auto.
-  * rewrite (size_of_struct _ τs), Hs by done. simpl. clear Hs Hτs.
-    revert ws IH. induction (size_of_struct_fields τs)
-      as [|τ sz ?? Hn]; intros; simpl in *; decompose_Forall; [done |].
-    simpl. rewrite app_length, resize_length; f_equal. eauto.
-  * by rewrite resize_length.
-  * done.
+  intros Hs. unfold mval_of_bytes. erewrite (type_iter_compound
+    (pointwise_relation (list (byte Ti Vi)) (@eq (mval Ti Vi)))); eauto.
+  { repeat intro. f_equal. auto using array_of_bytes_ext. }
+  clear s τs Hs bs. intros f g [] s τs Hs Hτs bs.
+  * f_equal. auto using struct_of_bytes_ext.
+  * by destruct (list_singleton_dec _) as [[??]|?];
+      subst; decompose_Forall; f_equal.
 Qed.
 
-Lemma mval_to_bytes_valid m w τ :
-  m ⊢ w : τ → m ⊢* valid (mval_to_bytes w).
+Lemma mval_of_bytes_typed m τ bs :
+  type_valid get_env τ → m ⊢* valid bs → m ⊢ mval_of_bytes τ bs : τ.
 Proof.
-  induction 1 as [|vs τ _ IH _|s ws τs Hs Hτs IH| |]
-    using @mtyped_ind; simpl.
-  * done.
-  * induction IH; simpl; decompose_Forall; auto.
-  * rewrite Hs; simpl; clear Hs. revert ws Hτs IH.
-    induction (size_of_struct_fields τs) as [|τ sz ?? Hn];
-      intros; decompose_Forall; simpl; [constructor |].
-    apply Forall_app; split; auto using Forall_resize, BUndef_valid.
-  * apply Forall_resize; auto. constructor.
-  * done.
+  intros Hτ. revert τ Hτ bs. refine (type_env_ind _ _ _ _).
+  * intros τ Hτ bs Hbs. rewrite mval_of_bytes_base.
+    mtyped_constructor; auto using Forall_resize, BUndef_valid.
+    by rewrite resize_length.
+  * intros τ n Hτ IH ? bs Hbs. rewrite mval_of_bytes_array.
+    mtyped_constructor; eauto using array_of_bytes_length,
+      Forall_array_of_bytes_alt.
+  * intros [] s τs Hs Hτs IH ? bs Hbs.
+    { rewrite (mval_of_bytes_compound _ _ τs) by done.
+      apply MStruct_typed with τs; eauto using Forall2_struct_of_bytes_alt. }
+    rewrite (mval_of_bytes_compound _ _ τs) by done.
+    destruct (list_singleton_dec _) as [[τ ?]|?]; subst.
+    + rewrite Forall_singleton in IH. eapply MUnion_typed, IH; eauto.
+    + mtyped_constructor; eauto using Forall_resize, BUndef_valid.
+      by rewrite resize_length.
+Qed.
+Lemma mval_of_bytes_type_of m τ bs :
+  type_valid get_env τ → m ⊢* valid bs → type_of (mval_of_bytes τ bs) = τ.
+Proof. eauto using type_of_correct, mval_of_bytes_typed. Qed.
+Lemma mval_of_bytes_le m τ bs1 bs2 :
+  type_valid get_env τ →
+  bs1 ⊑@{m}* bs2 → mval_of_bytes τ bs1 ⊑@{m} mval_of_bytes τ bs2.
+Proof.
+  intros Hτ. revert τ Hτ bs1 bs2. refine (type_env_ind _ _ _ _).
+  * intros τ ? bs1 bs2 Hbs. rewrite !mval_of_bytes_base. mval_le_constructor.
+    by apply bytes_le_resize.
+  * intros τ n ? IH Hn bs1 bs2 Hbs.
+    rewrite !mval_of_bytes_array. mval_le_constructor. revert bs1 bs2 Hbs.
+    elim n; simpl; auto using Forall2_take, Forall2_drop.
+  * intros [] s τs Hs Hτs IH _ bs1 bs2 Hbs.
+    { erewrite !mval_of_bytes_compound by eauto. mval_le_constructor.
+      clear Hs Hτs. unfold struct_of_bytes. revert bs1 bs2 Hbs.
+      induction (struct_fields_same_length τs); intros;
+        decompose_Forall_hyps; simpl; auto using Forall2_take, Forall2_drop. }
+    erewrite !mval_of_bytes_compound by eauto.
+    destruct (list_singleton_dec _) as [[??]|?]; subst.
+    + decompose_Forall_hyps. mval_le_constructor. auto.
+    + mval_le_constructor. by apply bytes_le_resize.
+Qed.
+
+Lemma mval_of_bytes_resize τ bs sz :
+  type_valid get_env τ → size_of τ ≤ sz →
+  mval_of_bytes τ (resize sz BUndef bs) = mval_of_bytes τ bs.
+Proof.
+  intros Hτ. revert τ Hτ bs sz. refine (type_env_ind _ _ _ _).
+  * intros τ Hτ bs sz ?. rewrite !mval_of_bytes_base.
+    f_equal. by rewrite resize_resize by lia.
+  * intros τ n Hτ IH _ bs sz. rewrite !mval_of_bytes_array, size_of_array.
+    intros. f_equal. auto using array_of_bytes_resize.
+  * intros [] s τs Hs Hτs IH _ bs ?.
+    { erewrite !mval_of_bytes_compound, size_of_struct by eauto.
+      intros. f_equal. auto using struct_of_bytes_resize. }
+    erewrite !mval_of_bytes_compound by eauto.
+    destruct (list_singleton_dec _) as [[τ ?]|?]; subst.
+    + decompose_Forall. intros. f_equal.
+      efeed pose proof size_of_union_singleton; eauto with lia.
+    + intros. f_equal. by rewrite resize_resize by lia.
+Qed.
+Lemma mval_of_bytes_take τ bs sz :
+  type_valid get_env τ → size_of τ ≤ sz →
+  mval_of_bytes τ (take sz bs) = mval_of_bytes τ bs.
+Proof.
+  destruct (le_lt_dec sz (length bs)).
+  * rewrite <-(resize_le bs _ BUndef) by done. apply mval_of_bytes_resize.
+  * by rewrite take_ge by lia.
+Qed.
+Lemma mval_of_bytes_app τ bs1 bs2 :
+  type_valid get_env τ → length bs1 = size_of τ →
+  mval_of_bytes τ (bs1 ++ bs2) = mval_of_bytes τ bs1.
+Proof.
+  intros. by rewrite <-(mval_of_bytes_resize _ (bs1 ++ bs2) (size_of τ)),
+    resize_app_le, mval_of_bytes_resize by auto with lia.
+Qed.
+Lemma mval_of_bytes_union_free τ bs :
+  type_valid get_env τ → munion_free (mval_of_bytes τ bs).
+Proof.
+  intros Hτ. revert τ Hτ bs. refine (type_env_ind _ _ _ _).
+  * intros. rewrite mval_of_bytes_base. by constructor.
+  * intros. rewrite mval_of_bytes_array.
+    constructor. by apply Forall_array_of_bytes.
+  * intros []; intros.
+    { erewrite !mval_of_bytes_compound by eauto.
+      constructor. by apply Forall_struct_of_bytes. }
+    erewrite !mval_of_bytes_compound by eauto.
+    destruct (list_singleton_dec _) as [[τ ?]|?];
+      subst; decompose_Forall; econstructor; eauto.
 Qed.
 
 Lemma mtyped_ge m w1 w2 τ : m ⊢ w1 : τ → w1 ⊑@{m} w2 → m ⊢ w2 : τ.
@@ -683,21 +742,8 @@ Proof.
     intros ? Hw1τ; apply (mtyped_inv_l _ _ _ _ Hw1τ); intros;
     mtyped_constructor; eauto; simplify_map_equality;
     erewrite ?Forall2_length by eassumption;
-    eauto using resize_length, Forall2_length, eq_sym, bytes_valid_le.
-Qed.
-
-Lemma mval_to_bytes_le m w1 w2 :
-  w1 ⊑@{m} w2 → mval_to_bytes w1 ⊑@{m}* mval_to_bytes w2.
-Proof.
-  assert (∀ ws1 ws2 szs,
-    Forall2 (λ w1 w2, mval_to_bytes w1 ⊑@{m}* mval_to_bytes w2) ws1 ws2 →
-    mjoin (zip_with (λ w sz, resize sz BUndef (mval_to_bytes w)) ws1 szs) ⊑@{m}*
-    mjoin (zip_with (λ w sz, resize sz BUndef (mval_to_bytes w)) ws2 szs)).
-  { intros ws1 ws2 szs Hvs. revert szs.
-    induction Hvs; intros [|??]; simpl;
-      auto using Forall2_app, bytes_le_resize. }
-  induction 1 using @mval_le_ind; simpl; unfold default;
-    repeat case_match; auto using bytes_le_resize, Forall2_bind.
+    eauto using resize_length, Forall2_length, eq_sym,
+      env_valid_lookup_lookup, mval_of_bytes_typed, bytes_valid_le.
 Qed.
 
 Global Instance: PartialOrder (@subseteq_env M (mval Ti Vi) _ m).
@@ -712,8 +758,9 @@ Proof.
     { intros ???. apply Forall2_transitive. auto. }
     intros w1 w2 w3 Hw1w2. revert w3. induction Hw1w2 using @mval_le_ind;
       intros w3 Hw2v3; apply (mval_le_inv_l _ _ _ _ Hw2v3); intros; subst;
-      mval_le_constructor; eauto using mtyped_le, bytes_valid_ge;
-      try etransitivity; eauto using bytes_le_resize, mval_to_bytes_le.
+      mval_le_constructor; eauto using bytes_valid_ge, mval_of_bytes_le,
+        env_valid_lookup_lookup; try by (etransitivity; eauto).
+    erewrite <-Forall2_length; eauto with lia.
   * assert (∀ ws1 ws2,
       Forall2 (λ w1 w2, w2 ⊑@{m} w1 → w1 = w2) ws1 ws2 →
       ws2 ⊑@{m}* ws1 → ws1 = ws2).
@@ -722,6 +769,133 @@ Proof.
       intros Hw2w1; apply (mval_le_inv _ _ _ _ Hw2w1);
       intros; subst; f_equal; auto; by apply (anti_symmetric (⊑@{m}*)).
 Qed.
+
+Lemma mval_to_bytes_length m w τ :
+  m ⊢ w : τ → length (mval_to_bytes w) = size_of τ.
+Proof.
+  induction 1 as [|vs τ _ IH _|s ws τs Hs Hτs IH| |] using @mtyped_ind; simpl.
+  * done.
+  * rewrite size_of_array. subst.
+    induction IH; simpl; rewrite ?app_length; auto.
+  * rewrite (size_of_struct _ τs), Hs by done. simpl. clear Hs Hτs.
+    revert ws IH. induction (size_of_struct_fields τs)
+      as [|τ sz ?? Hn]; intros; simpl in *; decompose_Forall; simpl; [done |].
+    rewrite app_length, resize_length; f_equal. eauto.
+  * by rewrite resize_length.
+  * done.
+Qed.
+Lemma mval_to_bytes_valid m w τ : m ⊢ w : τ → m ⊢* valid (mval_to_bytes w).
+Proof.
+  induction 1 as [|vs τ _ IH _|s ws τs Hs Hτs IH| |] using @mtyped_ind; simpl.
+  * done.
+  * induction IH; simpl; decompose_Forall; auto.
+  * rewrite Hs; simpl; clear Hs. revert ws Hτs IH.
+    induction (size_of_struct_fields τs) as [|τ sz ?? Hn];
+      intros; decompose_Forall; simpl; [constructor |].
+    apply Forall_app; split; auto using Forall_resize, BUndef_valid.
+  * apply Forall_resize; auto. constructor.
+  * done.
+Qed.
+Lemma mval_of_to_bytes_aux m w τ bs :
+  m ⊢ w : τ → mval_of_bytes τ (mval_to_bytes w ++ bs) = munion_reset w.
+Proof.
+  intros Hvτ. revert bs. induction Hvτ as
+    [τ bs'|vs τ Hvs IH _|s ws τs Hs Hτs IH|s j τs w τ Hs ?? IH|s τs bs' Hs]
+    using @mtyped_ind; intros bs; simpl.
+  * rewrite mval_of_bytes_base. by rewrite resize_app_le, resize_all_alt by lia.
+  * rewrite mval_of_bytes_array. f_equal. subst.
+    induction IH; simpl; [done |]; intros; decompose_Forall.
+    rewrite <-(associative_L (++)). f_equal; auto.
+    rewrite drop_app_alt by eauto using mval_to_bytes_length, eq_sym. auto.
+  * erewrite Hs, mval_of_bytes_compound by eauto. simpl.
+    f_equal. clear Hs. unfold struct_of_bytes. revert ws Hτs IH.
+    induction (size_of_struct_fields τs) as [|τ sz τs ??? IHflds]; intros ws;
+      intros; decompose_Forall; simpl; f_equal.
+    + rewrite resize_ge, <-!(associative_L (++)). auto.
+      erewrite mval_to_bytes_length; eauto.
+    + rewrite <-(associative_L (++)), drop_app_alt; eauto using resize_length.
+  * erewrite Hs, mval_of_bytes_compound by eauto. simpl.
+    destruct (list_singleton_dec _) as [[??]|?];
+      simplify_list_equality; f_equal.
+    + rewrite resize_ge, <-(associative_L (++)); auto.
+      erewrite ?mval_to_bytes_length by eauto;
+       eauto using (size_of_union_lookup _ _ 0).
+    + by rewrite resize_app_le, resize_all_alt by (by rewrite ?resize_length).
+  * erewrite mval_of_bytes_compound by eauto.
+    destruct (list_singleton_dec _) as [[??]|?]; subst; [done |].
+    by rewrite resize_app_le, resize_all_alt by lia.
+Qed.
+Lemma mval_of_to_bytes m w τ :
+  m ⊢ w : τ → mval_of_bytes τ (mval_to_bytes w) = munion_reset w.
+Proof.
+  rewrite <-(right_id_L [] (++) (mval_to_bytes w)). apply mval_of_to_bytes_aux.
+Qed.
+
+Lemma mval_to_of_bytes_below m τ bs :
+  type_valid get_env τ →
+  m ⊢* valid bs →
+  mval_to_bytes (mval_of_bytes τ bs) ⊑@{m}* resize (size_of τ) BUndef bs.
+Proof.
+  intros Hτ. revert τ Hτ bs. refine (type_env_ind _ _ _ _).
+  * done.
+  * intros τ n ? IH _ bs. rewrite mval_of_bytes_array; simpl.
+    rewrite size_of_array. revert bs. induction n; simpl; intros bs ?.
+    { by rewrite resize_0. }
+    rewrite resize_plus. auto using Forall2_app, Forall_drop.
+  * intros [] s τs Hs Hτs IH _ bs Hbs.
+    { erewrite mval_of_bytes_compound by eauto; simpl.
+      erewrite Hs, size_of_struct by eauto; simpl.
+      clear Hs Hτs. revert bs Hbs. unfold struct_of_bytes.
+      induction (size_of_struct_fields τs); simpl;
+        intros bs ?; decompose_Forall_hyps.
+      { by rewrite resize_0. }
+      rewrite resize_plus. apply Forall2_app; auto using Forall_drop.
+      eapply Forall2_resize_ge_r; eauto using Forall_BUndef_le. }
+    erewrite mval_of_bytes_compound by eauto. destruct (list_singleton_dec _)
+      as [[τ ?]|?]; subst; simpl; decompose_Forall_hyps; [|done].
+    apply Forall2_resize_ge_r with (size_of τ);
+      eauto using size_of_union_singleton, Forall_BUndef_le.
+Qed.
+Lemma mval_to_of_bytes_below_drop m τ bs :
+  type_valid get_env τ → m ⊢* valid bs → size_of τ ≤ length bs →
+  mval_to_bytes (mval_of_bytes τ bs) ++ drop (size_of τ) bs ⊑@{m}* bs.
+Proof.
+  intros. transitivity (resize (size_of τ) BUndef bs ++ drop (size_of τ) bs).
+  * by apply Forall2_app; auto using mval_to_of_bytes_below.
+  * by rewrite resize_le, take_drop.
+Qed.
+
+Lemma mval_to_of_bytes_le_flip_aux m w τ sz bs :
+  type_valid get_env τ → size_of τ ≤ sz →
+  m ⊢* valid bs → length bs = sz →
+  mval_to_bytes w ⊑@{m}* mval_to_bytes (mval_of_bytes τ bs) →
+  w ⊑@{m} mval_of_bytes τ bs → resize sz BUndef (mval_to_bytes w) ⊑@{m}* bs.
+Proof.
+  intros; subst. assert (m ⊢ w : τ) by eauto using mtyped_le, mval_of_bytes_typed.
+  transitivity (mval_to_bytes (mval_of_bytes τ bs) ++ drop (size_of τ) bs);
+    auto using mval_to_of_bytes_below_drop.
+  rewrite resize_ge by (erewrite mval_to_bytes_length; eauto).
+  apply Forall2_app, Forall2_replicate_l; auto using Forall_drop, Forall_BUndef_le.
+  erewrite drop_length, mval_to_bytes_length; eauto.
+Qed.
+Lemma mval_to_bytes_le m w1 w2 :
+  w1 ⊑@{m} w2 → mval_to_bytes w1 ⊑@{m}* mval_to_bytes w2.
+Proof.
+  assert (∀ ws1 ws2 szs,
+    Forall2 (λ w1 w2, mval_to_bytes w1 ⊑@{m}* mval_to_bytes w2) ws1 ws2 →
+    mjoin (zip_with (λ w sz, resize sz BUndef (mval_to_bytes w)) ws1 szs) ⊑@{m}*
+    mjoin (zip_with (λ w sz, resize sz BUndef (mval_to_bytes w)) ws2 szs)).
+  { intros ws1 ws2 szs Hvs. revert szs. induction Hvs; intros [|??]; simpl;
+      auto using Forall2_app, bytes_le_resize. }
+  induction 1 using @mval_le_ind; simpl; unfold default;
+    repeat case_match; eauto using bytes_le_resize, Forall2_bind,
+    mval_to_of_bytes_le_flip_aux, env_valid_lookup_lookup, size_of_union_lookup.
+Qed.
+Lemma mval_to_of_bytes_le_flip m w τ sz bs :
+  type_valid get_env τ → size_of τ ≤ sz →
+  m ⊢* valid bs → length bs = sz →
+  w ⊑@{m} mval_of_bytes τ bs → resize sz BUndef (mval_to_bytes w) ⊑@{m}* bs.
+Proof. eauto using mval_to_of_bytes_le_flip_aux, mval_to_bytes_le. Qed.
 
 Section mval_new.
   Context (f : base_type Ti → list (byte Ti Vi)).
@@ -786,7 +960,6 @@ Proof.
   intros Hw1. induction 1 using @mval_le_ind;
     inversion_clear Hw1; simplify_option_equality; econstructor; eauto.
 Qed.
-
 Lemma munion_free_reset w : munion_free w → munion_reset w = w.
 Proof.
   assert (∀ ws, Forall (λ w, munion_reset w = w) ws → munion_reset <$> ws = ws).
@@ -794,7 +967,6 @@ Proof.
   induction 1 using @munion_free_ind_alt;
     simplify_option_equality; f_equal; auto.
 Qed.
-
 Lemma munion_reset_free m w τ : m ⊢ w : τ → munion_free (munion_reset w).
 Proof.
   induction 1 using @mtyped_ind; simplify_option_equality.
@@ -816,8 +988,12 @@ Proof.
   * done.
   * mval_le_constructor. by apply Forall2_fmap_r, Forall2_Forall.
   * mval_le_constructor. apply Forall2_fmap_r; eauto.
-  * by destruct (list_singleton_dec _) as [[??]|?]; subst; mval_le_constructor;
-      eauto using Forall_resize, BUndef_valid, mval_to_bytes_valid.
+  * destruct (list_singleton_dec _) as [[??]|?]; subst;
+      mval_le_constructor; eauto.
+    + by erewrite mval_of_bytes_resize, mval_of_to_bytes
+        by eauto using env_valid_lookup_lookup, size_of_union_lookup.
+    + eauto using Forall_resize, BUndef_valid, mval_to_bytes_valid.
+    + by rewrite resize_length.
   * done.
 Qed.
 Lemma munion_reset_least m w1 w2 :
@@ -829,9 +1005,9 @@ Proof.
   { induction 1; intros; decompose_Forall; simpl; auto. }
   induction 1 using @mval_le_ind; inversion_clear 1; simplify_option_equality;
     try destruct (list_singleton_dec _) as [[??]|?]; simplify_equality;
-    mval_le_constructor; auto.
+    mval_le_constructor; eauto using mval_to_of_bytes_le_flip,
+      env_valid_lookup_lookup, size_of_union_lookup.
 Qed.
-
 Lemma munion_reset_typed m w τ : m ⊢ w : τ → m ⊢ munion_reset w : τ.
 Proof. eauto using mtyped_ge, munion_reset_above. Qed.
 Lemma munion_reset_le m w1 w2 :
@@ -840,9 +1016,9 @@ Proof.
   induction 1 using @mval_le_ind; simplify_option_equality; repeat case_match;
     repeat destruct (list_singleton_dec _) as [[??]|?]; simplify_equality;
     try mval_le_constructor; eauto using Forall2_fmap_2,
-      bytes_le_resize, mval_to_bytes_le.
+      bytes_le_resize, mval_to_bytes_le, mval_to_of_bytes_le_flip,
+      env_valid_lookup_lookup, size_of_union_lookup.
 Qed.
-
 Lemma mval_new_undef_typed m τ :
   type_valid get_env τ → m ⊢ mval_new_undef τ : τ.
 Proof.
@@ -912,13 +1088,8 @@ Proof.
       apply Forall2_replicate_l; auto using resize_length.
       apply Forall_resize; eauto using mval_to_bytes_valid.
   * erewrite mval_new_compound by eauto.
-    destruct (list_singleton_dec τs) as [[??]|?]; subst.
-    + mval_le_constructor; eauto using mval_new_undef_typed,
-        env_valid_lookup_singleton; try reflexivity.
-      by rewrite mval_to_bytes_new, resize_replicate;
-        eauto using Forall2_replicate_l, Forall_true, BUndef_le,
-        env_valid_lookup_singleton.
-    + mval_le_constructor. apply Forall2_replicate_l; auto.
+    destruct (list_singleton_dec τs) as [[??]|?]; subst; [done|].
+    mval_le_constructor. apply Forall2_replicate_l; auto.
 Qed.
 Lemma mval_new_least `{Inhabited M} m w τ :
   m ⊢ w : τ → munion_free w → mval_new_undef τ ⊑@{m} w.
@@ -927,178 +1098,22 @@ Proof.
   auto using mval_new_least_union_reset.
 Qed.
 
-Lemma mval_of_bytes_base (τ : base_type Ti) bs :
-  mval_of_bytes (base τ) bs = MBase τ $ resize (size_of (base τ)) BUndef bs.
-Proof. unfold mval_of_bytes. by rewrite type_iter_base. Qed.
-Lemma mval_of_bytes_array τ n bs :
-  mval_of_bytes (τ.[n]) bs = MArray $ array_of_bytes (mval_of_bytes τ) τ n bs.
-Proof. unfold mval_of_bytes. by rewrite type_iter_array. Qed.
-Lemma mval_of_bytes_compound c s τs bs :
-  get_env !! s = Some τs →
-  mval_of_bytes (compound@{c} s) bs =
-    match c with
-    | Struct => MStruct s $ struct_of_bytes mval_of_bytes τs bs
-    | Union =>
-       match list_singleton_dec τs with
-       | inleft (τ↾_) => MUnion s 0 $ mval_of_bytes τ bs
-       | _ => MUnionNone s $ resize (size_of (union s)) BUndef bs
-       end
-    end.
-Proof.
-  intros Hs. unfold mval_of_bytes. erewrite (type_iter_compound
-    (pointwise_relation (list (byte Ti Vi)) (@eq (mval Ti Vi)))); eauto.
-  { repeat intro. f_equal. auto using array_of_bytes_ext. }
-  clear s τs Hs bs. intros f g [] s τs Hs Hτs bs.
-  * f_equal. auto using struct_of_bytes_ext.
-  * by destruct (list_singleton_dec _) as [[??]|?];
-      subst; decompose_Forall; f_equal.
-Qed.
-
-Lemma mval_of_bytes_typed m τ bs :
-  type_valid get_env τ → m ⊢* valid bs → m ⊢ mval_of_bytes τ bs : τ.
-Proof.
-  intros Hτ. revert τ Hτ bs. refine (type_env_ind _ _ _ _).
-  * intros τ Hτ bs Hbs. rewrite mval_of_bytes_base.
-    mtyped_constructor; auto using Forall_resize, BUndef_valid.
-    by rewrite resize_length.
-  * intros τ n Hτ IH ? bs Hbs. rewrite mval_of_bytes_array.
-    mtyped_constructor; eauto using array_of_bytes_length,
-      Forall_array_of_bytes_alt.
-  * intros [] s τs Hs Hτs IH ? bs Hbs.
-    { rewrite (mval_of_bytes_compound _ _ τs) by done.
-      apply MStruct_typed with τs; eauto using Forall2_struct_of_bytes_alt. }
-    rewrite (mval_of_bytes_compound _ _ τs) by done.
-    destruct (list_singleton_dec _) as [[τ ?]|?]; subst.
-    + rewrite Forall_singleton in IH. eapply MUnion_typed, IH; eauto.
-    + mtyped_constructor; eauto using Forall_resize, BUndef_valid.
-      by rewrite resize_length.
-Qed.
-Lemma mval_of_bytes_type_of m τ bs :
-  type_valid get_env τ → m ⊢* valid bs →
-  type_of (mval_of_bytes τ bs) = τ.
-Proof. eauto using type_of_correct, mval_of_bytes_typed. Qed.
-
-Lemma mval_of_bytes_resize τ bs sz :
-  type_valid get_env τ → size_of τ ≤ sz →
-  mval_of_bytes τ (resize sz BUndef bs) = mval_of_bytes τ bs.
-Proof.
-  intros Hτ. revert τ Hτ bs sz. refine (type_env_ind _ _ _ _).
-  * intros τ Hτ bs sz ?. rewrite !mval_of_bytes_base.
-    f_equal. by rewrite resize_resize by lia.
-  * intros τ n Hτ IH _ bs sz. rewrite !mval_of_bytes_array, size_of_array.
-    intros. f_equal. auto using array_of_bytes_resize.
-  * intros [] s τs Hs Hτs IH _ bs ?.
-    { erewrite !mval_of_bytes_compound, size_of_struct by eauto.
-      intros. f_equal. auto using struct_of_bytes_resize. }
-    erewrite !mval_of_bytes_compound by eauto.
-    destruct (list_singleton_dec _) as [[τ ?]|?]; subst.
-    + decompose_Forall. intros. f_equal.
-      efeed pose proof size_of_union_singleton; eauto with lia.
-    + intros. f_equal. by rewrite resize_resize by lia.
-Qed.
-Lemma mval_of_bytes_take τ bs sz :
-  type_valid get_env τ → size_of τ ≤ sz →
-  mval_of_bytes τ (take sz bs) = mval_of_bytes τ bs.
-Proof.
-  destruct (le_lt_dec sz (length bs)).
-  * rewrite <-(resize_le bs _ BUndef) by done. apply mval_of_bytes_resize.
-  * by rewrite take_ge by lia.
-Qed.
-Lemma mval_of_bytes_app τ bs1 bs2 :
-  type_valid get_env τ → length bs1 = size_of τ →
-  mval_of_bytes τ (bs1 ++ bs2) = mval_of_bytes τ bs1.
-Proof.
-  intros. by rewrite <-(mval_of_bytes_resize _ (bs1 ++ bs2) (size_of τ)),
-    resize_app_le, mval_of_bytes_resize by (auto with lia).
-Qed.
-Lemma mval_of_bytes_union_free τ bs :
-  type_valid get_env τ → munion_free (mval_of_bytes τ bs).
-Proof.
-  intros Hτ. revert τ Hτ bs. refine (type_env_ind _ _ _ _).
-  * intros. rewrite mval_of_bytes_base. by constructor.
-  * intros. rewrite mval_of_bytes_array.
-    constructor. by apply Forall_array_of_bytes.
-  * intros []; intros.
-    { erewrite !mval_of_bytes_compound by eauto.
-      constructor. by apply Forall_struct_of_bytes. }
-    erewrite !mval_of_bytes_compound by eauto.
-    destruct (list_singleton_dec _) as [[τ ?]|?];
-      subst; decompose_Forall; econstructor; eauto.
-Qed.
-
-Lemma mval_of_to_bytes_aux m w τ bs :
-  m ⊢ w : τ → mval_of_bytes τ (mval_to_bytes w ++ bs) = munion_reset w.
-Proof.
-  intros Hvτ. revert bs. induction Hvτ as
-    [τ bs'|vs τ Hvs IH _|s ws τs Hs Hτs IH|s j τs w τ Hs ?? IH|s τs bs' Hs]
-    using @mtyped_ind; intros bs; simpl.
-  * rewrite mval_of_bytes_base. by rewrite resize_app_le, resize_all_alt by lia.
-  * rewrite mval_of_bytes_array. f_equal. subst.
-    induction IH; simpl; [done |]; intros; decompose_Forall.
-    rewrite <-(associative_L (++)). f_equal; auto.
-    rewrite drop_app_alt by eauto using mval_to_bytes_length, eq_sym. auto.
-  * erewrite Hs, mval_of_bytes_compound by eauto. simpl.
-    f_equal. clear Hs. unfold struct_of_bytes. revert ws Hτs IH.
-    induction (size_of_struct_fields τs) as [|τ sz τs ??? IHflds]; intros ws;
-      intros; decompose_Forall; simpl; f_equal.
-    + rewrite resize_ge, <-!(associative_L (++)). auto.
-      erewrite mval_to_bytes_length; eauto.
-    + rewrite <-(associative_L (++)), drop_app_alt; eauto using resize_length.
-  * erewrite Hs, mval_of_bytes_compound by eauto. simpl.
-    destruct (list_singleton_dec _) as [[??]|?];
-      simplify_list_equality; f_equal.
-    + rewrite resize_ge, <-(associative_L (++)); auto.
-      erewrite ?mval_to_bytes_length by eauto;
-       eauto using (size_of_union_lookup _ _ 0).
-    + by rewrite resize_app_le, resize_all_alt by (by rewrite ?resize_length).
-  * erewrite mval_of_bytes_compound by eauto.
-    destruct (list_singleton_dec _) as [[??]|?]; subst; [done |].
-    by rewrite resize_app_le, resize_all_alt by lia.
-Qed.
-Lemma mval_of_to_bytes m w τ :
-  m ⊢ w : τ → mval_of_bytes τ (mval_to_bytes w) = munion_reset w.
-Proof.
-  rewrite <-(right_id_L [] (++) (mval_to_bytes w)). apply mval_of_to_bytes_aux.
-Qed.
 Lemma mval_of_to_bytes_union_free m w τ :
   m ⊢ w : τ → munion_free w → mval_of_bytes τ (mval_to_bytes w) = w.
 Proof. intros. erewrite mval_of_to_bytes, munion_free_reset; eauto. Qed.
-
-Lemma mval_of_bytes_le m τ bs1 bs2 :
-  type_valid get_env τ →
-  bs1 ⊑@{m}* bs2 → mval_of_bytes τ bs1 ⊑@{m} mval_of_bytes τ bs2.
-Proof.
-  intros Hτ. revert τ Hτ bs1 bs2. refine (type_env_ind _ _ _ _).
-  * intros τ ? bs1 bs2 Hbs. rewrite !mval_of_bytes_base. mval_le_constructor.
-    by apply bytes_le_resize.
-  * intros τ n ? IH Hn bs1 bs2 Hbs.
-    rewrite !mval_of_bytes_array. mval_le_constructor. revert bs1 bs2 Hbs.
-    elim n; simpl; auto using Forall2_take, Forall2_drop.
-  * intros [] s τs Hs Hτs IH _ bs1 bs2 Hbs.
-    { erewrite !mval_of_bytes_compound by eauto. mval_le_constructor.
-      clear Hs Hτs. unfold struct_of_bytes. revert bs1 bs2 Hbs.
-      induction (struct_fields_same_length τs); intros;
-        decompose_Forall_hyps; simpl; auto using Forall2_take, Forall2_drop. }
-    erewrite !mval_of_bytes_compound by eauto.
-    destruct (list_singleton_dec _) as [[??]|?]; subst.
-    + decompose_Forall_hyps. mval_le_constructor. auto.
-    + mval_le_constructor. by apply bytes_le_resize.
-Qed.
-
-Lemma mval_of_to_bytes_le m w τ bs :
+Lemma mval_of_to_bytes_le_flip m w τ bs :
   m ⊢ w : τ → mval_to_bytes w ⊑@{m}* bs → w ⊑@{m} mval_of_bytes τ bs.
 Proof.
   intros. transitivity (munion_reset w); eauto using munion_reset_above.
   erewrite <-mval_of_to_bytes by eauto.
   eauto using mval_of_bytes_le, mtyped_type_valid.
 Qed.
-
 Lemma mval_to_bytes_inj m w1 w2 τ :
   m ⊢ w1 : τ → m ⊢ w2 : τ →
   mval_to_bytes w1 = mval_to_bytes w2 → munion_reset w1 = munion_reset w2.
 Proof. intros. erewrite <-!(mval_of_to_bytes) by eauto. by f_equal. Qed.
 
-Lemma mval_of_bytes_new `{Inhabited M} τ :
+Lemma mval_of_bytes_replicate `{Inhabited M} τ :
   type_valid get_env τ →
   mval_of_bytes τ (replicate (size_of τ) BUndef) = mval_new_undef τ.
 Proof.
@@ -1237,7 +1252,6 @@ Proof.
         size_of_pos, mval_of_bytes_typed, env_valid_lookup_lookup.
     + intros ?????? Hlookup. f_equal. apply list_eq, (λ i, Hlookup i []).
 Qed.
-
 Lemma mval_lookup_seg_le m w1 w2 rs w3 :
   w1 ⊑@{m} w2 → w1 !! rs = Some w3 → ∃ w4, w2 !! rs = Some w4 ∧ w3 ⊑@{m} w4.
 Proof.
@@ -1245,7 +1259,7 @@ Proof.
     get_env !! s = Some τs → τs !! i = Some τ → m ⊢ w : τ →
     resize (size_of (union s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
     w ⊑@{m} mval_of_bytes τ (take (size_of τ) bs)).
-  { intros. apply mval_of_to_bytes_le; trivial.
+  { intros. apply mval_of_to_bytes_le_flip; trivial.
     rewrite <-(take_length_resize_alt (mval_to_bytes w)
       (size_of (union s)) (size_of τ) BUndef);
      eauto using size_of_union_lookup, mval_to_bytes_length,
@@ -1256,7 +1270,7 @@ Proof.
     resize (size_of τ) BUndef (mval_to_bytes w) ⊑@{m}* take (size_of τ) bs).
   { intros. rewrite <-(take_resize_le _ _ (size_of (union s)));
       eauto using size_of_union_lookup, Forall2_take. }
-  destruct 1; destruct rs; intros;
+  destruct 1 using @mval_le_case; destruct rs; intros;
     repeat (case_match || simplify_option_equality);
     eauto 7 using mval_of_bytes_le, mval_to_bytes_le,
       env_valid_lookup_lookup, bytes_le_resize, Forall2_take, Forall2_lookup_l;
@@ -1270,11 +1284,11 @@ Proof.
     get_env !! s = Some τs → τs !! i = Some τ → m ⊢ w : τ →
     resize (size_of (union s)) BUndef (mval_to_bytes w) ⊑@{m}* bs →
     w ⊑@{m} mval_of_bytes τ (take (size_of τ) bs)).
-  { intros. apply mval_of_to_bytes_le; trivial.
+  { intros. apply mval_of_to_bytes_le_flip; trivial.
     rewrite <-(take_length_resize_alt (mval_to_bytes w)
       (size_of (union s)) (size_of τ) BUndef); eauto using
       size_of_union_lookup, mval_to_bytes_length, Forall2_take, eq_sym. }
-  destruct 1; destruct rs; intros;
+  destruct 1 using @mval_le_case; destruct rs; intros;
     repeat (case_match || simplify_option_equality);
     eauto 7 using mval_of_bytes_le, mval_to_bytes_le,
      env_valid_lookup_lookup, bytes_le_resize, Forall2_take, Forall2_lookup_r.
@@ -1299,7 +1313,6 @@ Proof.
     edestruct (mval_lookup_seg_ge m w1 w2 rs) as [?|(?&?&?)];
       simplify_option_equality; eauto.
 Qed.
-
 Lemma mval_lookup_seg_freeze rs: lookup (A:=mval Ti Vi) (freeze rs) = lookup rs.
 Proof. by destruct rs. Qed.
 Lemma mval_lookup_freeze w r : w !! (freeze <$> r) = w !! r.
@@ -1381,7 +1394,6 @@ Proof.
     simplify_option_equality. edestruct mval_lookup_le as (?&?&?); eauto.
     eauto using mval_alter_seg_le with simplify_option_equality.
 Qed.
-
 Lemma mval_lookup_alter_seg m f w rs τ w' :
   m ⊢ w : τ → w !! rs = Some w' → alter f rs w !! rs = Some (f w').
 Proof.
@@ -1422,7 +1434,6 @@ Proof.
   intros. simplify_option_equality. erewrite mval_lookup_alter by eauto. simpl.
   rewrite mval_lookup_alter_seg_disjoint by done. by simplify_option_equality.
 Qed.
-
 Lemma mval_force_le m w1 w2 r w3 :
   w1 !! r = Some w3 → w1 ⊑@{m} w2 → mval_force r w1 ⊑@{m} mval_force r w2.
 Proof.
