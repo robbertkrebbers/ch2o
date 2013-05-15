@@ -156,9 +156,7 @@ Lemma expr_eval_weaken_stack δ ρ ρ' m e v :
 Proof.
   revert v. induction e using expr_ind_alt;
     intros; simplify_option_equality; intuition.
-  * rewrite lookup_app_l.
-    + by simplify_option_equality.
-    + eauto using lookup_lt_length_alt.
+  * rewrite lookup_app_l; simplify_option_equality; eauto using lookup_lt_Some.
   * erewrite mapM_Some_2; [by eauto |]. decompose_Forall; auto.
 Qed.
 
@@ -237,8 +235,7 @@ Lemma expr_eval_subst δ ρ m (E : ectx) e v :
     ∃ v', ⟦ e ⟧ δ ρ m = Some v' ∧ ⟦ subst E (valc v')%E ⟧ δ ρ m = Some v.
 Proof.
   split.
-  * revert v. induction E as [|E' E IH] using rev_ind; simpl; intros v.
-    { by eauto. }
+  * revert v. induction E as [|E' E IH] using rev_ind; simpl; intros v; eauto.
     setoid_rewrite subst_snoc.
     intros; destruct E'; simplify_option_equality; decompose_Forall;
       edestruct IH as (?&?&?); eauto with simplify_option_equality.

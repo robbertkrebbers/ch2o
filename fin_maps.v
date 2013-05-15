@@ -427,7 +427,7 @@ Proof. split; auto using elem_of_map_of_list_1, elem_of_map_of_list_2. Qed.
 Lemma not_elem_of_map_of_list_1 {A} (l : list (K * A)) i :
   i ∉ fst <$> l → map_of_list l !! i = None.
 Proof.
-  rewrite elem_of_list_fmap, eq_None_not_Some, is_Some_alt.
+  rewrite elem_of_list_fmap, eq_None_not_Some.
   intros Hi [x ?]. destruct Hi. exists (i,x). simpl.
   auto using elem_of_map_of_list_2.
 Qed.
@@ -749,7 +749,7 @@ Proof. eauto using map_disjoint_weaken. Qed.
 Lemma map_disjoint_Some_l {A} (m1 m2 : M A) i x:
   m1 ⊥ m2 → m1 !! i = Some x → m2 !! i = None.
 Proof.
-  intros Hdisjoint ?. rewrite eq_None_not_Some, is_Some_alt.
+  intros Hdisjoint ?. rewrite eq_None_not_Some.
   intros [x2 ?]. by apply (Hdisjoint i x x2).
 Qed.
 Lemma map_disjoint_Some_r {A} (m1 m2 : M A) i x:
@@ -1110,10 +1110,8 @@ Qed.
 Lemma lookup_intersection_Some {A} (m1 m2 : M A) i x :
   (m1 ∩ m2) !! i = Some x ↔ m1 !! i = Some x ∧ is_Some (m2 !! i).
 Proof.
-  unfold intersection, map_intersection,
-    intersection_with, map_intersection_with.
-  rewrite (lookup_merge _).
-  rewrite is_Some_alt.
+  unfold intersection, map_intersection, intersection_with,
+    map_intersection_with. rewrite (lookup_merge _).
   destruct (m1 !! i), (m2 !! i); compute; naive_solver.
 Qed.
 

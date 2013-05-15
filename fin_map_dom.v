@@ -33,7 +33,7 @@ Proof.
   { by apply subseteq_dom. }
   intros Hdom. destruct Hss2. intros i x Hi.
   specialize (Hdom i). rewrite !elem_of_dom in Hdom.
-  feed inversion Hdom. eauto. by erewrite (Hss1 i) in Hi by eauto.
+  destruct Hdom; eauto. erewrite (Hss1 i) in Hi by eauto. congruence.
 Qed.
 
 Lemma dom_empty {A} : dom D (@empty (M A) _) ≡ ∅.
@@ -50,9 +50,8 @@ Qed.
 
 Lemma dom_insert {A} (m : M A) i x : dom D (<[i:=x]>m) ≡ {[ i ]} ∪ dom D m.
 Proof.
-  apply elem_of_equiv. intros j.
-  rewrite elem_of_union, !elem_of_dom, !is_Some_alt.
-  setoid_rewrite lookup_insert_Some.
+  apply elem_of_equiv. intros j. rewrite elem_of_union, !elem_of_dom.
+  unfold is_Some. setoid_rewrite lookup_insert_Some.
   destruct (decide (i = j)); esolve_elem_of.
 Qed.
 Lemma dom_insert_subseteq {A} (m : M A) i x : dom D m ⊆ dom D (<[i:=x]>m).
@@ -69,14 +68,12 @@ Qed.
 
 Lemma dom_delete {A} (m : M A) i : dom D (delete i m) ≡ dom D m ∖ {[ i ]}.
 Proof.
-  apply elem_of_equiv. intros j.
-  rewrite elem_of_difference, !elem_of_dom, !is_Some_alt.
-  setoid_rewrite lookup_delete_Some. esolve_elem_of.
+  apply elem_of_equiv. intros j. rewrite elem_of_difference, !elem_of_dom.
+  unfold is_Some. setoid_rewrite lookup_delete_Some. esolve_elem_of.
 Qed.
 Lemma delete_partial_alter_dom {A} (m : M A) i f :
   i ∉ dom D m → delete i (partial_alter f i m) = m.
 Proof. rewrite not_elem_of_dom. apply delete_partial_alter. Qed.
-
 Lemma delete_insert_dom {A} (m : M A) i x :
   i ∉ dom D m → delete i (<[i:=x]>m) = m.
 Proof. rewrite not_elem_of_dom. apply delete_insert. Qed.
@@ -85,7 +82,7 @@ Lemma map_disjoint_dom {A} (m1 m2 : M A) : m1 ⊥ m2 ↔ dom D m1 ∩ dom D m2 �
 Proof.
   unfold disjoint, map_disjoint, map_intersection_forall.
   rewrite elem_of_equiv_empty. setoid_rewrite elem_of_intersection.
-  setoid_rewrite elem_of_dom. setoid_rewrite is_Some_alt. naive_solver.
+  setoid_rewrite elem_of_dom. unfold is_Some. naive_solver.
 Qed.
 Lemma map_disjoint_dom_1 {A} (m1 m2 : M A) : m1 ⊥ m2 → dom D m1 ∩ dom D m2 ≡ ∅.
 Proof. apply map_disjoint_dom. Qed.
@@ -94,24 +91,22 @@ Proof. apply map_disjoint_dom. Qed.
 
 Lemma dom_union {A} (m1 m2 : M A) : dom D (m1 ∪ m2) ≡ dom D m1 ∪ dom D m2.
 Proof.
-  apply elem_of_equiv. intros i.
-  rewrite elem_of_union, !elem_of_dom, !is_Some_alt.
-  setoid_rewrite lookup_union_Some_raw. destruct (m1 !! i); naive_solver.
+  apply elem_of_equiv. intros i. rewrite elem_of_union, !elem_of_dom.
+  unfold is_Some. setoid_rewrite lookup_union_Some_raw.
+  destruct (m1 !! i); naive_solver.
 Qed.
 
 Lemma dom_intersection {A} (m1 m2 : M A) :
   dom D (m1 ∩ m2) ≡ dom D m1 ∩ dom D m2.
 Proof.
-  apply elem_of_equiv. intros i.
-  rewrite elem_of_intersection, !elem_of_dom, !is_Some_alt.
-  setoid_rewrite lookup_intersection_Some.
-  setoid_rewrite is_Some_alt. naive_solver.
+  apply elem_of_equiv. intros i. rewrite elem_of_intersection, !elem_of_dom.
+  unfold is_Some. setoid_rewrite lookup_intersection_Some. naive_solver.
 Qed.
 
 Lemma dom_difference {A} (m1 m2 : M A) : dom D (m1 ∖ m2) ≡ dom D m1 ∖ dom D m2.
 Proof.
-  apply elem_of_equiv. intros i.
-  rewrite elem_of_difference, !elem_of_dom, !is_Some_alt.
-  setoid_rewrite lookup_difference_Some. destruct (m2 !! i); naive_solver.
+  apply elem_of_equiv. intros i. rewrite elem_of_difference, !elem_of_dom.
+  unfold is_Some. setoid_rewrite lookup_difference_Some.
+  destruct (m2 !! i); naive_solver.
 Qed.
 End fin_map_dom.

@@ -26,69 +26,47 @@ Definition from_option {A} (a : A) (x : option A) : A :=
 
 (** An alternative, but equivalent, definition of equality on the option
 data type. This theorem is useful to prove that two options are the same. *)
-Lemma option_eq {A} (x y : option A) :
-  x = y ↔ ∀ a, x = Some a ↔ y = Some a.
-Proof.
-  split; [by intros; by subst |]. intros E. destruct x, y.
-  + by apply E.
-  + symmetry. by apply E.
-  + by apply E.
-  + done.
-Qed.
+Lemma option_eq {A} (x y : option A) : x = y ↔ ∀ a, x = Some a ↔ y = Some a.
+Proof. split; [by intros; by subst |]. destruct x, y; naive_solver. Qed.
 
-Inductive is_Some {A} : option A → Prop :=
-  mk_is_Some x : is_Some (Some x).
+Definition is_Some {A} (x : option A) := ∃ y, x = Some y.
+Lemma mk_is_Some {A} (x : option A) y : x = Some y → is_Some x.
+Proof. intros; red; subst; eauto. Qed.
+Hint Resolve mk_is_Some.
+Lemma is_Some_None {A} : ¬is_Some (@None A).
+Proof. by destruct 1. Qed.
+Hint Resolve is_Some_None.
 
 Instance is_Some_pi {A} (x : option A) : ProofIrrel (is_Some x).
 Proof.
-  intros [?] p2. by refine
-    match p2 in is_Some o return
-      match o with Some y => (mk_is_Some y =) | _ => λ _, False end p2
-    with mk_is_Some y => _ end.
+  set (P (y : option A) := match y with Some _ => True | _ => False end).
+  set (f x := match x return P x → is_Some x with
+    Some _ => λ _, ex_intro _ _ eq_refl | None => False_rect _ end).
+  set (g x (H : is_Some x) :=
+    match H return P x with ex_intro _ p => eq_rect _ _ I _ (eq_sym p) end).
+  assert (∀ x H, f x (g x H) = H) as f_g by (by intros ? [??]; subst).
+  intros p1 p2. rewrite <-(f_g _ p1), <-(f_g _ p2). by destruct x, p1.
 Qed.
-
-Lemma mk_is_Some_alt `(x : option A) a : x = Some a → is_Some x.
-Proof. intros. by subst. Qed.
-Hint Resolve mk_is_Some_alt.
-Lemma is_Some_None {A} : ¬is_Some (@None A).
-Proof. by inversion 1. Qed.
-Hint Resolve is_Some_None.
-
-Lemma is_Some_alt `(x : option A) : is_Some x ↔ ∃ y, x = Some y.
-Proof. split. inversion 1; eauto. intros [??]. by subst. Qed.
-
-Ltac inv_is_Some := repeat
-  match goal with H : is_Some _ |- _ => inversion H; clear H; subst end.
-
-Definition is_Some_proj `{x : option A} : is_Some x → A :=
+Instance is_Some_dec {A} (x : option A) : Decision (is_Some x) :=
   match x with
-  | Some a => λ _, a
-  | None => False_rect _ ∘ is_Some_None
+  | Some x => left (ex_intro _ x eq_refl)
+  | None => right is_Some_None
   end.
-Definition Some_dec `(x : option A) : { a | x = Some a } + { x = None } :=
+
+Definition is_Some_proj {A} {x : option A} : is_Some x → A :=
+  match x with Some a => λ _, a | None => False_rect _ ∘ is_Some_None end.
+Definition Some_dec {A} (x : option A) : { a | x = Some a } + { x = None } :=
   match x return { a | x = Some a } + { x = None } with
   | Some a => inleft (a ↾ eq_refl _)
   | None => inright eq_refl
   end.
-Instance is_Some_dec `(x : option A) : Decision (is_Some x) :=
-  match x with
-  | Some x => left (mk_is_Some x)
-  | None => right is_Some_None
-  end.
-Instance None_dec `(x : option A) : Decision (x = None) :=
-  match x with
-  | Some x => right (Some_ne_None x)
-  | None => left eq_refl
-  end.
+Instance None_dec {A} (x : option A) : Decision (x = None) :=
+  match x with Some x => right (Some_ne_None x) | None => left eq_refl end.
 
-Lemma eq_None_not_Some `(x : option A) : x = None ↔ ¬is_Some x.
-Proof. split. by destruct 2. destruct x. by intros []. done. Qed.
+Lemma eq_None_not_Some {A} (x : option A) : x = None ↔ ¬is_Some x.
+Proof. destruct x; unfold is_Some; naive_solver. Qed.
 Lemma not_eq_None_Some `(x : option A) : x ≠ None ↔ is_Some x.
 Proof. rewrite eq_None_not_Some. split. apply dec_stable. tauto. Qed.
-
-Lemma mk_eq_Some {A} (x : option A) a :
-  is_Some x → (∀ b, x = Some b → b = a) → x = Some a.
-Proof. destruct 1. intros. f_equal. auto. Qed.
 
 (** Equality on [option] is decidable. *)
 Instance option_eq_dec `{dec : ∀ x y : A, Decision (x = y)}
@@ -122,20 +100,18 @@ Definition mapM `{!MBind M} `{!MRet M} {A B}
   | x :: l => y ← f x; k ← go l; mret (y :: k)
   end.
 
-Lemma fmap_is_Some {A B} (f : A → B) (x : option A) :
-  is_Some (f <$> x) ↔ is_Some x.
-Proof. split; inversion 1. by destruct x. done. Qed.
-Lemma fmap_Some {A B} (f : A → B) (x : option A) y :
+Lemma fmap_is_Some {A B} (f : A → B) x : is_Some (f <$> x) ↔ is_Some x.
+Proof. unfold is_Some; destruct x; naive_solver. Qed.
+Lemma fmap_Some {A B} (f : A → B) x y :
   f <$> x = Some y ↔ ∃ x', x = Some x' ∧ y = f x'.
-Proof. unfold fmap, option_fmap. destruct x; naive_solver. Qed.
-Lemma fmap_None {A B} (f : A → B) (x : option A) :
-  f <$> x = None ↔ x = None.
-Proof. unfold fmap, option_fmap. by destruct x. Qed.
+Proof. destruct x; naive_solver. Qed.
+Lemma fmap_None {A B} (f : A → B) x : f <$> x = None ↔ x = None.
+Proof. by destruct x. Qed.
 
 Lemma option_fmap_id {A} (x : option A) : id <$> x = x.
 Proof. by destruct x. Qed.
 Lemma option_bind_assoc {A B C} (f : A → option B)
-    (g : B → option C) (x : option A) : (x ≫= f) ≫= g = x ≫= (mbind g ∘ f).
+  (g : B → option C) (x : option A) : (x ≫= f) ≫= g = x ≫= (mbind g ∘ f).
 Proof. by destruct x; simpl. Qed.
 Lemma option_bind_ext {A B} (f g : A → option B) x y :
   (∀ a, f a = g a) → x = y → x ≫= f = y ≫= g.

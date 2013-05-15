@@ -373,45 +373,43 @@ Proof. by destruct i. Qed.
 Lemma lookup_tail l i : tail l !! i = l !! S i.
 Proof. by destruct l. Qed.
 
-Lemma lookup_lt_length l i : is_Some (l !! i) ↔ i < length l.
+Lemma lookup_lt_Some l i x : l !! i = Some x → i < length l.
 Proof.
-  revert i. induction l.
-  * split; by inversion 1.
-  * intros [|?]; simpl.
-    + split; eauto with arith.
-    + by rewrite <-NPeano.Nat.succ_lt_mono.
+  revert i. induction l; intros [|?] ?;
+    simpl in *; simplify_equality; simpl; auto with arith.
 Qed.
-Lemma lookup_lt_length_1 l i : is_Some (l !! i) → i < length l.
-Proof. apply lookup_lt_length. Qed.
-Lemma lookup_lt_length_alt l i x : l !! i = Some x → i < length l.
-Proof. intros Hl. by rewrite <-lookup_lt_length, Hl. Qed.
-Lemma lookup_lt_length_2 l i : i < length l → is_Some (l !! i).
-Proof. apply lookup_lt_length. Qed.
+Lemma lookup_lt_is_Some_1 l i : is_Some (l !! i) → i < length l.
+Proof. intros [??]; eauto using lookup_lt_Some. Qed.
+Lemma lookup_lt_is_Some_2 l i : i < length l → is_Some (l !! i).
+Proof.
+  revert i. induction l; intros [|?] ?;
+    simpl in *; simplify_equality; simpl; eauto with lia.
+Qed.
+Lemma lookup_lt_is_Some l i : is_Some (l !! i) ↔ i < length l.
+Proof. split; auto using lookup_lt_is_Some_1, lookup_lt_is_Some_2. Qed.
 
-Lemma lookup_ge_length l i : l !! i = None ↔ length l ≤ i.
-Proof. rewrite eq_None_not_Some, lookup_lt_length. lia. Qed.
-Lemma lookup_ge_length_1 l i : l !! i = None → length l ≤ i.
-Proof. by rewrite lookup_ge_length. Qed.
-Lemma lookup_ge_length_2 l i : length l ≤ i → l !! i = None.
-Proof. by rewrite lookup_ge_length. Qed.
+Lemma lookup_ge_None l i : l !! i = None ↔ length l ≤ i.
+Proof. rewrite eq_None_not_Some, lookup_lt_is_Some. lia. Qed.
+Lemma lookup_ge_None_1 l i : l !! i = None → length l ≤ i.
+Proof. by rewrite lookup_ge_None. Qed.
+Lemma lookup_ge_None_2 l i : length l ≤ i → l !! i = None.
+Proof. by rewrite lookup_ge_None. Qed.
 
-Lemma list_eq_length_eq l1 l2 :
+Lemma list_eq_length l1 l2 :
   length l2 = length l1 →
   (∀ i x y, l1 !! i = Some x → l2 !! i = Some y → x = y) → l1 = l2.
 Proof.
-  intros Hlength Hlookup. apply list_eq. intros i.
-  destruct (l2 !! i) as [x|] eqn:E.
-  * feed inversion (lookup_lt_length_2 l1 i) as [y]; [|eauto with f_equal].
-    pose proof (lookup_lt_length_alt l2 i x E). lia.
-  * rewrite lookup_ge_length in E |- *. lia.
+  intros Hl ?. apply list_eq. intros i. destruct (l2 !! i) as [x|] eqn:Hx.
+  * destruct (lookup_lt_is_Some_2 l1 i) as [y ?]; subst.
+    + rewrite <-Hl. eauto using lookup_lt_Some.
+    + naive_solver.
+  * by rewrite lookup_ge_None, <-Hl, <-lookup_ge_None.
 Qed.
 
-Lemma lookup_app_l l1 l2 i :
-  i < length l1 → (l1 ++ l2) !! i = l1 !! i.
+Lemma lookup_app_l l1 l2 i : i < length l1 → (l1 ++ l2) !! i = l1 !! i.
 Proof. revert i. induction l1; intros [|?]; simpl; auto with lia. Qed.
-Lemma lookup_app_l_Some l1 l2 i x :
-  l1 !! i = Some x → (l1 ++ l2) !! i = Some x.
-Proof. intros. rewrite lookup_app_l; eauto using lookup_lt_length_alt. Qed.
+Lemma lookup_app_l_Some l1 l2 i x : l1 !! i = Some x → (l1 ++ l2) !! i = Some x.
+Proof. intros. rewrite lookup_app_l; eauto using lookup_lt_Some. Qed.
 Lemma lookup_app_r l1 l2 i : (l1 ++ l2) !! (length l1 + i) = l2 !! i.
 Proof.
   revert i. induction l1; intros [|i]; simpl in *; simplify_equality; auto.
@@ -451,7 +449,7 @@ Qed.
 Lemma list_lookup_insert l i x : i < length l → <[i:=x]>l !! i = Some x.
 Proof.
   intros Hi. unfold insert, list_insert. rewrite list_lookup_alter.
-  by feed inversion (lookup_lt_length_2 l i).
+  by destruct (lookup_lt_is_Some_2 l i); simplify_option_equality.
 Qed.
 Lemma list_lookup_insert_ne l i j x : i ≠ j → <[i:=x]>l !! j = l !! j.
 Proof. apply list_lookup_alter_ne. Qed.
@@ -1597,7 +1595,7 @@ Section contains_dec.
   Lemma list_remove_list_contains l1 l2 :
     l1 `contains` l2 ↔ is_Some (list_remove_list l1 l2).
   Proof.
-    rewrite is_Some_alt. split.
+    split.
     * revert l2. induction l1 as [|x l1 IH]; simpl.
       { intros l2 _. by exists l2. }
       intros l2. rewrite contains_cons_l. intros (k&Hk&?).
@@ -1646,10 +1644,7 @@ Section same_length.
 
   Lemma same_length_lookup l k i :
     l `same_length` k → is_Some (l !! i) → is_Some (k !! i).
-  Proof.
-    rewrite same_length_length. setoid_rewrite lookup_lt_length.
-    intros E. by rewrite E.
-  Qed.
+  Proof. rewrite same_length_length. rewrite !lookup_lt_is_Some. lia. Qed.
 
   Lemma same_length_take l k n :
     l `same_length` k → take n l `same_length` take n k.
