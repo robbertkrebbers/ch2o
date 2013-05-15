@@ -27,10 +27,9 @@ Instance mapset_elems: Elements K (mapset M) := λ X,
 
 Lemma mapset_eq (X1 X2 : mapset M) : X1 = X2 ↔ ∀ x, x ∈ X1 ↔ x ∈ X2.
 Proof.
-  split.
-  * intros. by subst.
-  * destruct X1 as [m1], X2 as [m2]. simpl. intros E.
-    f_equal. apply map_eq. intros i. apply option_eq. intros []. by apply E.
+  split; [by intros; subst |].
+  destruct X1 as [m1], X2 as [m2]. simpl. intros E.
+  f_equal. apply map_eq. intros i. apply option_eq. intros []. by apply E.
 Qed.
 
 Global Instance mapset_eq_dec `{∀ m1 m2 : M unit, Decision (m1 = m2)}
@@ -56,7 +55,7 @@ Proof.
   * unfold intersection, elem_of, mapset_intersection, mapset_elem_of.
     intros [m1] [m2] ?. simpl. rewrite lookup_intersection_Some.
     setoid_replace (is_Some (m2 !! x)) with (m2 !! x = Some ()); [done |].
-    rewrite is_Some_alt. split; eauto. by intros [[] ?].
+    split; eauto. by intros [[] ?].
   * unfold difference, elem_of, mapset_difference, mapset_elem_of.
     intros [m1] [m2] ?. simpl. rewrite lookup_difference_Some.
     destruct (m2 !! x) as [[]|]; intuition congruence.
@@ -113,7 +112,7 @@ Instance mapset_dom {A} : Dom (M A) (mapset M) := mapset_dom_with (λ _, true).
 Instance mapset_dom_spec: FinMapDom K M (mapset M).
 Proof.
   split; try apply _. intros. unfold dom, mapset_dom.
-  rewrite is_Some_alt, elem_of_mapset_dom_with. naive_solver.
+  rewrite elem_of_mapset_dom_with. unfold is_Some. naive_solver.
 Qed.
 End mapset.
 

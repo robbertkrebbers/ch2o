@@ -449,7 +449,7 @@ Section type_iter.
   Context (fbase : base_type Ti → A).
   Context (fvoid : A).
   Context (farray : type Ti → nat → A → A).
-  Context (fcompound : compound_kind → tag → list (type Ti) → (type Ti → A) → A).
+  Context (fcompound: compound_kind → tag → list (type Ti) → (type Ti → A) → A).
 
   Definition type_iter_inner
       (g : tag → list (type Ti) * (type Ti → A)) : type Ti → A :=
@@ -482,19 +482,17 @@ Section type_iter.
     intros HΓ Harray. revert Σ1 Σ2 acc1 acc2 τ HΓ.
     induction Γ as [Γ IH] using (well_founded_induction map_wf).
     intros Σ1 Σ2 [acc1] [acc2] τ HΓ Hcompound Hτ HΣ1 HΣ2. simpl.
-    induction Hτ as [τ Hτ | τ n Hτ | c s Hs]; simpl; try reflexivity; auto.
-    unfold type_iter_accF.
-    rewrite is_Some_alt in Hs. destruct Hs as [τs Hs].
-    destruct (Some_dec (Σ1 !! s)) as [[τs1 Hs1]|?],
+    induction Hτ as [τ Hτ | τ n Hτ | c s [τs Hs]]; simpl; try reflexivity; auto.
+    unfold type_iter_accF. destruct (Some_dec (Σ1 !! s)) as [[τs1 Hs1]|?],
       (Some_dec (Σ2 !! s)) as [[τs2 Hs2]|?];
-      try solve [exfalso; simplify_map_equality].
+      try by (exfalso; simplify_map_equality).
     generalize (acc1 _ (delete_subset_alt Σ1 s τs1 Hs1)),
       (acc2 _ (delete_subset_alt Σ2 s τs2 Hs2)); intros acc1' acc2'.
     simplify_map_equality.
     destruct (env_valid_delete Γ s τs) as (Γ'&?&Hτs&Hlen&?); trivial.
     assert (Γ' ⊆ Γ) by (transitivity (delete s Γ); auto using delete_subseteq).
-    apply Hcompound; auto. apply mk_is_Some_alt in Hs.
-    clear Hlen acc1 acc2.
+    apply Hcompound; auto. assert (is_Some (Γ !! s)) by eauto.
+    clear Hs Hlen acc1 acc2.
     induction Hτs; constructor; auto. apply (IH Γ'); trivial.
     * eauto using subset_transitive_r, delete_subset, lookup_weaken_is_Some.
     * eauto using lookup_weaken.

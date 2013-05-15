@@ -726,7 +726,7 @@ Qed.
 Lemma mem_perm_lookup m b :
   (∃ γ, mem_perm b m = Some γ ∧ perm_kind γ ≠ Locked) ↔ is_Some (m !! b).
 Proof.
-  rewrite is_Some_alt. setoid_rewrite mem_perm_Some.
+  unfold is_Some. setoid_rewrite mem_perm_Some.
   setoid_rewrite mem_lookup_Some_raw. naive_solver.
 Qed.
 Lemma mem_perm_lookup_None m b :
@@ -1033,7 +1033,7 @@ Proof. by rewrite mem_lookup_insert_None. Qed.
 
 Lemma mem_lookup_insert m b v : is_Some (m !! b) → <[b:=v]>m !! b = Some v.
 Proof.
-  rewrite is_Some_alt. destruct m as [m]. intros [w ?].
+  destruct m as [m]. intros [w ?].
   unfold lookup, mem_lookup, insert, mem_insert in *. simpl in *.
   rewrite lookup_alter. by simplify_option_equality.
 Qed.

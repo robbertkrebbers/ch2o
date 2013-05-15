@@ -667,10 +667,8 @@ Section refs.
   Lemma ref_plus_is_Some r i :
     is_Some (ref_plus r i) ↔ (0 ≤ ref_offset r + i < ref_size r)%Z.
   Proof.
-    rewrite is_Some_alt. split.
-    * intros [??]. eauto using ref_offset_plus_range.
-    * intros [??].
-      destruct r as [|[]]; simplify_option_equality; eauto with lia.
+    split; intros [??]; eauto using ref_offset_plus_range.
+    destruct r as [|[]]; simplify_option_equality; eauto with lia.
   Qed.
 
   Lemma ref_plus_Some_2 r i r' :
@@ -1041,12 +1039,13 @@ Section bref.
   Lemma bref_plus_is_Some r i :
     is_Some (bref_plus r i) ↔ (0 ≤ bref_offset r + i < bref_size r)%Z.
   Proof.
-    rewrite is_Some_alt. split.
+    split.
     { intros [??]. eauto using bref_offset_plus_range. }
     intros [??]. destruct r as [o|o j n]; simpl.
-    { feed inversion (proj2 (ref_plus_is_Some o i)); simpl; eauto. }
-    feed inversion (proj2 (ref_plus_is_Some o ((j + i) `div` n)));
-      simpl in *; eauto; split.
+    { apply fmap_is_Some. by apply (proj2 (ref_plus_is_Some o i)). }
+    destruct (proj2 (ref_plus_is_Some o ((j + i) `div` n)));
+      simplify_option_equality; eauto.
+    split.
     * apply Z.le_sub_le_add_l, Z.div_le_lower_bound; lia.
     * apply Z.lt_add_lt_sub_l, Z.div_lt_upper_bound; lia.
   Qed.

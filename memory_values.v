@@ -1196,16 +1196,15 @@ Proof.
     f_equal. apply list_eq. intros i. apply (Hlookup i []).
   * intros ws τ ? IH _ w2 Hw2. pattern w2.
     apply (mtyped_inv_r _ _ _ _ Hw2). intros ws' ? Hws' ? Hlookup.
-    f_equal. apply list_eq_length_eq; [by subst|]. intros j x y Hx Hy.
+    f_equal. apply list_eq_length; [by subst|]. intros j x y Hx Hy.
     rewrite Forall_lookup in IH, Hws'.
     apply (IH j x); eauto. intros i r.
-    assert (j < length ws) as Hjn.
-    { subst. eauto using lookup_lt_length_alt. }
+    assert (j < length ws) as Hjn by eauto using lookup_lt_Some.
     specialize (Hlookup i (r ++ [RArray j (length ws) Hjn])).
     rewrite !mval_lookup_byte_snoc in Hlookup. by simplify_option_equality.
   * intros s ws τs ?? IH w2 Hw2. pattern w2.
     apply (mtyped_inv_r _ _ _ _ Hw2). intros ws' τs' ? Hvs' Hlookup.
-    simplify_option_equality. f_equal. apply list_eq_length_eq.
+    simplify_option_equality. f_equal. apply list_eq_length.
     { transitivity (length τs); eauto using Forall2_length, eq_sym. }
     intros j x y Hx Hy.
     destruct (Forall2_lookup_l (typed m) ws' τs j y) as [τ [??]]; auto.
@@ -1224,10 +1223,9 @@ Proof.
       - specialize (Hlookup 0 [RUnion j true]).
         setoid_rewrite (mval_lookup_byte_snoc _ _ [] (RUnion j true))
           in Hlookup; simplify_option_equality.
-        revert Hlookup. rewrite mval_lookup_byte_nil.
-        feed destruct (lookup_lt_length_2 (mval_to_bytes w) 0); [|done].
-        rewrite (mval_to_bytes_length m _ τ);
-          eauto using size_of_pos, env_valid_lookup_lookup.
+        revert Hlookup. rewrite mval_lookup_byte_nil, lookup_ge_None,
+          (mval_to_bytes_length m _ τ), NPeano.Nat.le_ngt by done.
+        intros []. eauto using size_of_pos, env_valid_lookup_lookup.
     + intros τs' bs ???? Hlookup. simplify_option_equality.
       destruct (list_lookup_other τs j τ) as (j' & τ' & ? & ?); auto.
       specialize (Hlookup 0 [RUnion j' true]).
@@ -1235,7 +1233,7 @@ Proof.
       simpl in Hlookup. repeat case_decide; simplify_option_equality.
       symmetry in Hlookup. apply eq_None_not_Some in Hlookup.
       destruct Hlookup. rewrite mval_lookup_byte_nil.
-      apply lookup_lt_length_2.
+      apply lookup_lt_is_Some_2.
       rewrite (mval_to_bytes_length m _ τ'); eauto using Forall_take,
         size_of_pos, mval_of_bytes_typed, env_valid_lookup_lookup.
   * intros s τs bs ???? w2 Hw2. pattern w2.
@@ -1247,7 +1245,7 @@ Proof.
       simpl in Hlookup. repeat case_decide; simplify_option_equality.
       apply eq_None_not_Some in Hlookup.
       destruct Hlookup. rewrite mval_lookup_byte_nil.
-      apply lookup_lt_length_2.
+      apply lookup_lt_is_Some_2.
       rewrite (mval_to_bytes_length m _ τ); eauto using Forall_take,
         size_of_pos, mval_of_bytes_typed, env_valid_lookup_lookup.
     + intros ?????? Hlookup. f_equal. apply list_eq, (λ i, Hlookup i []).

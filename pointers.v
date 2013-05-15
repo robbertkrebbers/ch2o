@@ -271,10 +271,10 @@ Section lvals.
   Lemma lval_plus_is_Some lv i :
     is_Some (lval_plus lv i) ↔ (0 ≤ lval_offset lv + i < lval_size lv)%Z.
   Proof.
-    rewrite is_Some_alt. split.
+    split.
     * intros [??]. eauto using lval_offset_plus_range.
     * intros [??]. destruct lv as [y r]. simpl.
-      feed inversion (proj2 (bref_plus_is_Some r i)); simpl; eauto.
+      by apply fmap_is_Some, (proj2 (bref_plus_is_Some r i)).
   Qed.
 
   Lemma lval_plus_Some_2 lv i lv' :
@@ -609,9 +609,8 @@ Section ptr.
   Lemma ptr_plus_is_Some p i :
     is_Some (ptr_plus p i) ↔ (0 ≤ ptr_offset p + i ≤ ptr_size p)%Z.
   Proof.
-    rewrite is_Some_alt. split.
-    { intros [??]. eauto using ptr_offset_plus_range. }
-    intros [??]. destruct p; simplify_option_equality; eauto with lia.
+    split; intros [??]; eauto using ptr_offset_plus_range.
+    destruct p; simplify_option_equality; eauto with lia.
   Qed.
 
   Lemma ptr_plus_Some_2 p i p' :

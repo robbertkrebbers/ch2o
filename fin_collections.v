@@ -70,7 +70,7 @@ Lemma elem_of_or_empty X : (∃ x, x ∈ X) ∨ X ≡ ∅.
 Proof. destruct (choose X) eqn:?; eauto using choose_Some, choose_None. Qed.
 Lemma choose_is_Some X : X ≢ ∅ ↔ is_Some (choose X).
 Proof.
-  rewrite is_Some_alt. destruct (choose X) eqn:?.
+  destruct (choose X) eqn:?.
   * rewrite elem_of_equiv_empty. split; eauto using choose_Some.
   * split. intros []; eauto using choose_None. by intros [??].
 Qed.

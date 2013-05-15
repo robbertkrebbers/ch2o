@@ -17,11 +17,10 @@ Proof. by destruct l. Qed.
 Lemma natmap_wf_lookup {A} (l : natmap_raw A) :
   natmap_wf l → l ≠ [] → ∃ i x, mjoin (l !! i) = Some x.
 Proof.
-  intros Hwf Hl. induction l as [|[x|] l IH]; simpl.
-  * done.
+  intros Hwf Hl. induction l as [|[x|] l IH]; simpl; [done| |].
   * exists 0. simpl. eauto.
   * destruct IH as (i&x&?); eauto using natmap_wf_inv.
-    { intro. subst. inversion Hwf. }
+    { intro. subst. by destruct Hwf. }
     by exists (S i) x.
 Qed.
 
@@ -221,8 +220,7 @@ Proof.
     + by specialize (E 0).
     + destruct (natmap_wf_lookup (None :: l1)) as [i [??]]; auto with congruence.
     + by specialize (E 0).
-    + f_equal. apply IH; eauto using natmap_wf_inv.
-      intros i. apply (E (S i)).
+    + f_equal. apply IH; eauto using natmap_wf_inv. intros i. apply (E (S i)).
   * done.
   * intros ?? [??] ?. apply natmap_lookup_alter_raw.
   * intros ?? [??] ??. apply natmap_lookup_alter_raw_ne.
