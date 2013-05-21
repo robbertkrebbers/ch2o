@@ -75,6 +75,8 @@ Notation cast_if_and S1 S2 := (if S1 then cast_if S2 else right _).
 Notation cast_if_and3 S1 S2 S3 := (if S1 then cast_if_and S2 S3 else right _).
 Notation cast_if_and4 S1 S2 S3 S4 :=
   (if S1 then cast_if_and3 S2 S3 S4 else right _).
+Notation cast_if_and5 S1 S2 S3 S4 S5 :=
+  (if S1 then cast_if_and4 S2 S3 S4 S5 else right _).
 Notation cast_if_or S1 S2 := (if S1 then left _ else cast_if S2).
 Notation cast_if_or3 S1 S2 S3 := (if S1 then left _ else cast_if_or S2 S3).
 Notation cast_if_not_or S1 S2 := (if S1 then cast_if S2 else left _).
@@ -87,13 +89,15 @@ Definition bool_decide (P : Prop) {dec : Decision P} : bool :=
 Lemma bool_decide_reflect P `{dec : Decision P} : reflect P (bool_decide P).
 Proof. unfold bool_decide. destruct dec. by left. by right. Qed.
 
-Ltac case_bool_decide :=
+Tactic Notation "case_bool_decide" "as" ident (Hd) :=
   match goal with
   | H : context [@bool_decide ?P ?dec] |- _ =>
-    destruct_decide (@bool_decide_reflect P dec)
+    destruct_decide (@bool_decide_reflect P dec) as Hd
   | |- context [@bool_decide ?P ?dec] =>
-    destruct_decide (@bool_decide_reflect P dec)
+    destruct_decide (@bool_decide_reflect P dec) as Hd
   end.
+Tactic Notation "case_bool_decide" :=
+  let H := fresh in case_bool_decide as H.
 
 Lemma bool_decide_unpack (P : Prop) {dec : Decision P} : bool_decide P → P.
 Proof. unfold bool_decide. by destruct dec. Qed.
