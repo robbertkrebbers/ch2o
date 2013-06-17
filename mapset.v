@@ -54,8 +54,9 @@ Proof.
     destruct (m1 !! x) as [[]|]; tauto.
   * unfold intersection, elem_of, mapset_intersection, mapset_elem_of.
     intros [m1] [m2] ?. simpl. rewrite lookup_intersection_Some.
-    setoid_replace (is_Some (m2 !! x)) with (m2 !! x = Some ()); [done |].
-    split; eauto. by intros [[] ?].
+    assert (is_Some (m2 !! x) ↔ m2 !! x = Some ()).
+    { split; eauto. by intros [[] ?]. }
+    naive_solver.
   * unfold difference, elem_of, mapset_difference, mapset_elem_of.
     intros [m1] [m2] ?. simpl. rewrite lookup_difference_Some.
     destruct (m2 !! x) as [[]|]; intuition congruence.

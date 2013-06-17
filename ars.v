@@ -170,8 +170,7 @@ Hint Extern 5 (subrelation _ (tc _)) =>
   eapply @tc_once_subrel : typeclass_instances.
 
 Hint Resolve
-  rtc_once rtc_r
-  tc_r
+  rtc_once rtc_r tc_r
   bsteps_once bsteps_r bsteps_refl bsteps_trans : ars.
 
 (** * Theorems on sub relations *)

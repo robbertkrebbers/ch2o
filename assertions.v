@@ -1269,7 +1269,7 @@ Proof.
   * by apply mem_disjoint_singleton_l.
   * exists b v. split_ands; trivial; simpl. by rewrite list_lookup_middle.
   * specialize (IH (bs' ++ [b])). rewrite app_length in IH. simpl in IH.
-    by rewrite NPeano.Nat.add_1_r, <-(associative_L (++)) in IH.
+    by rewrite Nat.add_1_r, <-(associative_L (++)) in IH.
 Qed.
 
 Lemma assert_alloc_params_alt (P : assert) δ ρ m γ bs vs :
@@ -1303,7 +1303,7 @@ Proof.
     rewrite <-mem_alloc_singleton_l
       by eauto using mem_disjoint_singleton_l_inv.
     feed destruct (IH (bs' ++ [b']) m2) as [??]; trivial.
-    { by rewrite app_length, NPeano.Nat.add_1_r, <-(associative_L (++)). }
+    { by rewrite app_length, Nat.add_1_r, <-(associative_L (++)). }
     split.
     + rewrite mem_delete_list_alloc_ne, mem_delete_alloc; auto.
       apply is_free_subseteq with m2;

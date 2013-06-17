@@ -5,7 +5,7 @@
 definitions from the standard library, but renames or changes their notations,
 so that it becomes more consistent with the naming conventions in this
 development. *)
-Require Import list.
+Require Import list finite.
 Open Scope vector_scope.
 
 (** * The fin type *)
@@ -35,8 +35,8 @@ Fixpoint fin_to_nat {n} (i : fin n) : nat :=
   end.
 Coercion fin_to_nat : fin >-> nat.
 
+Notation fin_of_nat := Fin.of_nat_lt.
 Notation fin_rect2 := Fin.rect2.
-Notation FS_inj := Fin.FS_inj.
 
 Instance fin_dec {n} : ∀ i j : fin n, Decision (i = j).
 Proof.
@@ -46,7 +46,7 @@ Proof.
   (λ _ _, right _)
   (λ _ _, right _)
   (λ _ _ _ H, cast_if H));
-  abstract (f_equal; by auto using FS_inj).
+  abstract (f_equal; by auto using Fin.FS_inj).
 Defined.
 
 (** The inversion principle [fin_S_inv] is more convenient than its variant
@@ -77,6 +77,37 @@ Ltac inv_fin i :=
     match goal with |- ∀ i, @?P i => apply (fin_S_inv P) end
   end.
 
+Instance: Injective (=) (=) (@FS n).
+Proof. intros n i j. apply Fin.FS_inj. Qed.
+Instance: Injective (=) (=) (@fin_to_nat n).
+Proof.
+  intros n i. induction i; intros j; inv_fin j; simpl; auto with lia f_equal.
+Qed.
+Lemma fin_to_nat_lt {n} (i : fin n) : fin_to_nat i < n.
+Proof. induction i; simpl; lia. Qed.
+Lemma fin_to_of_nat n m (H : n < m) : fin_to_nat (Fin.of_nat_lt H) = n.
+Proof.
+  revert m H. induction n; intros [|?]; simpl; auto; intros; exfalso; lia.
+Qed.
+
+Fixpoint fin_enum (n : nat) : list (fin n) :=
+  match n with
+  | 0 =>  []
+  | S n => 0%fin :: FS <$> fin_enum n
+  end.
+Program Instance fin_finite n : Finite (fin n) := {| enum := fin_enum n |}.
+Next Obligation.
+  intros n. induction n; simpl; constructor.
+  * rewrite elem_of_list_fmap. by intros (?&?&?).
+  * by apply (fmap_nodup _).
+Qed.
+Next Obligation.
+  intros n i. induction i as [|n i IH]; simpl;
+    rewrite elem_of_cons, ?elem_of_list_fmap; eauto.
+Qed.
+Lemma fin_card n : card (fin n) = n.
+Proof. unfold card; simpl. induction n; simpl; rewrite ?fmap_length; auto. Qed.
+
 (** * Vectors *)
 (** The type [vec n] represents lists of consisting of exactly [n] elements.
 Whereas the standard library declares exactly the same notations for vectors as
@@ -90,11 +121,16 @@ Notation vapp := Vector.append.
 Arguments vcons {_} _ {_} _.
 
 Infix ":::" := vcons (at level 60, right associativity) : vector_scope.
+Notation "(:::)" := vcons (only parsing) : vector_scope.
+Notation "( x :::)" := (vcons x) (only parsing) : vector_scope.
+Notation "(::: v )" := (λ x, vcons x v) (only parsing) : vector_scope.
 Notation "[# ] " := vnil : vector_scope.
 Notation "[# x ] " := (vcons x vnil) : vector_scope.
 Notation "[# x ; .. ; y ] " := (vcons x .. (vcons y vnil) ..) : vector_scope.
-
 Infix "+++" := vapp (at level 60, right associativity) : vector_scope.
+Notation "(+++)" := vapp (only parsing) : vector_scope.
+Notation "( v +++)" := (vapp v) (only parsing) : vector_scope.
+Notation "(+++ w )" := (λ v, vapp v w) (only parsing) : vector_scope.
 
 (** Notice that we cannot define [Vector.nth] as an instance of our [Lookup]
 type class, as it has a dependent type. *)
@@ -203,13 +239,13 @@ Lemma vec_to_list_inj1 {A n m} (v : vec A n) (w : vec A m) :
   vec_to_list v = vec_to_list w → n = m.
 Proof.
   revert m w. induction v; intros ? [|???] ?;
-   simpl in *; simplify_equality; f_equal; eauto.
+    simplify_equality'; f_equal; eauto.
 Qed.
 Lemma vec_to_list_inj2 {A n} (v : vec A n) (w : vec A n) :
   vec_to_list v = vec_to_list w → v = w.
 Proof.
   revert w. induction v; intros w; inv_vec w; intros;
-    simpl in *; simplify_equality; f_equal; eauto.
+    simplify_equality'; f_equal; eauto.
 Qed.
 
 Lemma vlookup_middle {A n m} (v : vec A n) (w : vec A m) x :

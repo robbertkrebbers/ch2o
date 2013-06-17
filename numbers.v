@@ -3,7 +3,7 @@
 (** This file collects some trivial facts on the Coq types [nat] and [N] for
 natural numbers, and the type [Z] for integers. It also declares some useful
 notations. *)
-Require Export Eqdep PArith NArith ZArith.
+Require Export Eqdep PArith NArith ZArith NPeano.
 Require Import Qcanon.
 Require Export base decidable.
 Open Scope nat_scope.
@@ -31,6 +31,10 @@ Instance nat_eq_dec: ∀ x y : nat, Decision (x = y) := eq_nat_dec.
 Instance nat_le_dec: ∀ x y : nat, Decision (x ≤ y) := le_dec.
 Instance nat_lt_dec: ∀ x y : nat, Decision (x < y) := lt_dec.
 Instance nat_inhabited: Inhabited nat := populate 0%nat.
+Instance: Injective (=) (=) S.
+Proof. by injection 1. Qed.
+Instance: PartialOrder (≤).
+Proof. repeat split; repeat intro; auto with lia. Qed.
 
 Instance nat_le_pi: ∀ x y : nat, ProofIrrel (x ≤ y).
 Proof.
@@ -38,19 +42,14 @@ Proof.
     y = y' → eq_dep nat (le x) y p y' q) as aux.
   { fix 3. intros x ? [|y p] ? [|y' q].
     * done.
-    * clear nat_le_pi. omega.
-    * clear nat_le_pi. omega.
+    * clear nat_le_pi. intros; exfalso; auto with lia.
+    * clear nat_le_pi. intros; exfalso; auto with lia.
     * injection 1. intros Hy. by case (nat_le_pi x y p y' q Hy). }
   intros x y p q.
   by apply (eq_dep_eq_dec (λ x y, decide (x = y))), aux.
 Qed.
 Instance nat_lt_pi: ∀ x y : nat, ProofIrrel (x < y).
 Proof. apply _. Qed.
-
-Lemma lt_n_SS n : n < S (S n).
-Proof. auto with arith. Qed.
-Lemma lt_n_SSS n : n < S (S (S n)).
-Proof. auto with arith. Qed.
 
 Definition sum_list_with {A} (f : A → nat) : list A → nat :=
   fix go l :=
@@ -60,22 +59,34 @@ Definition sum_list_with {A} (f : A → nat) : list A → nat :=
   end.
 Notation sum_list := (sum_list_with id).
 
-Lemma mult_split_eq n x1 x2 y1 y2 :
+Lemma Nat_lt_succ_succ n : n < S (S n).
+Proof. auto with arith. Qed.
+Lemma Nat_mul_split_l n x1 x2 y1 y2 :
   x2 < n → y2 < n → x1 * n + x2 = y1 * n + y2 → x1 = y1 ∧ x2 = y2.
 Proof.
-  intros Hx2 Hy2 E.
-  cut (x1 = y1); [intros; subst;lia |].
+  intros Hx2 Hy2 E. cut (x1 = y1); [intros; subst;lia |].
   revert y1 E. induction x1; simpl; intros [|?]; simpl; auto with lia.
 Qed.
+Lemma Nat_mul_split_r n x1 x2 y1 y2 :
+  x1 < n → y1 < n → x1 + x2 * n = y1 + y2 * n → x1 = y1 ∧ x2 = y2.
+Proof. intros. destruct (Nat_mul_split_l n x2 x1 y2 y1); auto with lia. Qed.
 
 (** * Notations and properties of [positive] *)
 Open Scope positive_scope.
 
-Instance positive_eq_dec: ∀ x y : positive, Decision (x = y) := Pos.eq_dec.
-Instance positive_inhabited: Inhabited positive := populate 1.
-
+Infix "≤" := Pos.le : positive_scope.
+Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z)%positive : positive_scope.
+Notation "x ≤ y < z" := (x ≤ y ∧ y < z)%positive : positive_scope.
+Notation "x < y < z" := (x < y ∧ y < z)%positive : positive_scope.
+Notation "x < y ≤ z" := (x < y ∧ y ≤ z)%positive : positive_scope.
+Notation "(≤)" := Pos.le (only parsing) : positive_scope.
+Notation "(<)" := Pos.lt (only parsing) : positive_scope.
 Notation "(~0)" := xO (only parsing) : positive_scope.
 Notation "(~1)" := xI (only parsing) : positive_scope.
+
+Arguments Pos.of_nat _ : simpl never.
+Instance positive_eq_dec: ∀ x y : positive, Decision (x = y) := Pos.eq_dec.
+Instance positive_inhabited: Inhabited positive := populate 1.
 
 Instance: Injective (=) (=) (~0).
 Proof. by injection 1. Qed.
@@ -178,11 +189,13 @@ Next Obligation. congruence. Qed.
 Instance N_inhabited: Inhabited N := populate 1%N.
 
 (** * Notations and properties of [Z] *)
+Open Scope Z_scope.
+
 Infix "≤" := Z.le : Z_scope.
-Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z)%Z : Z_scope.
-Notation "x ≤ y < z" := (x ≤ y ∧ y < z)%Z : Z_scope.
-Notation "x < y < z" := (x < y ∧ y < z)%Z : Z_scope.
-Notation "x < y ≤ z" := (x < y ∧ y ≤ z)%Z : Z_scope.
+Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z) : Z_scope.
+Notation "x ≤ y < z" := (x ≤ y ∧ y < z) : Z_scope.
+Notation "x < y < z" := (x < y ∧ y < z) : Z_scope.
+Notation "x < y ≤ z" := (x < y ∧ y ≤ z) : Z_scope.
 Notation "(≤)" := Z.le (only parsing) : Z_scope.
 Notation "(<)" := Z.lt (only parsing) : Z_scope.
 
@@ -190,14 +203,28 @@ Infix "`div`" := Z.div (at level 35) : Z_scope.
 Infix "`mod`" := Z.modulo (at level 35) : Z_scope.
 Infix "`quot`" := Z.quot (at level 35) : Z_scope.
 Infix "`rem`" := Z.rem (at level 35) : Z_scope.
+Infix "≪" := Z.shiftl (at level 35) : Z_scope.
+Infix "≫" := Z.shiftr (at level 35) : Z_scope.
 
 Instance Z_eq_dec: ∀ x y : Z, Decision (x = y) := Z.eq_dec.
-Instance Z_le_dec: ∀ x y : Z, Decision (x ≤ y)%Z := Z_le_dec.
-Instance Z_lt_dec: ∀ x y : Z, Decision (x < y)%Z := Z_lt_dec.
-Instance Z_inhabited: Inhabited Z := populate 1%Z.
+Instance Z_le_dec: ∀ x y : Z, Decision (x ≤ y) := Z_le_dec.
+Instance Z_lt_dec: ∀ x y : Z, Decision (x < y) := Z_lt_dec.
+Instance Z_inhabited: Inhabited Z := populate 1.
+
+Lemma Z_pow_pred_r n m : 0 < m → n * n ^ (Z.pred m) = n ^ m.
+Proof.
+  intros. rewrite <-Z.pow_succ_r, Z.succ_pred. done. by apply Z.lt_le_pred.
+Qed.
+Lemma Z_quot_range_nonneg k x y : 0 ≤ x < k → 0 < y → 0 ≤ x `quot` y < k.
+Proof.
+  intros [??] ?.
+  destruct (decide (y = 1)); subst; [rewrite Z.quot_1_r; auto |].
+  destruct (decide (x = 0)); subst; [rewrite Z.quot_0_l; auto with lia |].
+  split. apply Z.quot_pos; lia. transitivity x; auto. apply Z.quot_lt; lia.
+Qed.
 
 (* Note that we cannot disable simpl for [Z.of_nat] as that would break
-[omega] and [lia]. *)
+tactics as [lia]. *)
 Arguments Z.to_nat _ : simpl never.
 Arguments Z.mul _ _ : simpl never.
 Arguments Z.add _ _ : simpl never.
@@ -208,15 +235,40 @@ Arguments Z.modulo _ _ : simpl never.
 Arguments Z.quot _ _ : simpl never.
 Arguments Z.rem _ _ : simpl never.
 
-Lemma Zmod_pos a b : (0 < b)%Z → (0 ≤ a `mod` b)%Z.
+Lemma Z_mod_pos a b : 0 < b → 0 ≤ a `mod` b.
 Proof. apply Z.mod_pos_bound. Qed.
 
 Hint Resolve Z.lt_le_incl : zpos.
 Hint Resolve Z.add_nonneg_pos Z.add_pos_nonneg Z.add_nonneg_nonneg : zpos.
 Hint Resolve Z.mul_nonneg_nonneg Z.mul_pos_pos : zpos.
-Hint Resolve Z.pow_pos_nonneg : zpos.
-Hint Resolve Zmod_pos Z.div_pos : zpos.
+Hint Resolve Z.pow_pos_nonneg Z.pow_nonneg: zpos.
+Hint Resolve Z_mod_pos Z.div_pos : zpos.
 Hint Extern 1000 => lia : zpos.
+
+Lemma Z2Nat_inj_pow (x y : nat) : Z.of_nat (x ^ y) = x ^ y.
+Proof.
+  induction y as [|y IH].
+  * by rewrite Z.pow_0_r, Nat.pow_0_r.
+  * by rewrite Nat.pow_succ_r, Nat2Z.inj_succ, Z.pow_succ_r,
+      Nat2Z.inj_mul, IH by auto with zpos.
+Qed.
+Lemma Z2Nat_inj_div x y : Z.of_nat (x `div` y) = x `div` y.
+Proof.
+  destruct (decide (y = 0%nat)); [by subst; destruct x |].
+  apply Z.div_unique with (x `mod` y)%nat.
+  { left. rewrite <-(Nat2Z.inj_le 0), <-Nat2Z.inj_lt.
+    apply Nat.mod_bound_pos; lia. }
+  by rewrite <-Nat2Z.inj_mul, <-Nat2Z.inj_add, <-Nat.div_mod.
+Qed.
+Lemma Z2Nat_inj_mod x y : Z.of_nat (x `mod` y) = x `mod` y.
+Proof.
+  destruct (decide (y = 0%nat)); [by subst; destruct x |].
+  apply Z.mod_unique with (x `div` y)%nat.
+  { left. rewrite <-(Nat2Z.inj_le 0), <-Nat2Z.inj_lt.
+    apply Nat.mod_bound_pos; lia. }
+  by rewrite <-Nat2Z.inj_mul, <-Nat2Z.inj_add, <-Nat.div_mod.
+Qed.
+Close Scope Z_scope.
 
 (** * Notations and properties of [Qc] *)
 Notation "2" := (1+1)%Qc : Qc_scope.
@@ -263,24 +315,17 @@ Proof. by rewrite !Qclt_nge, <-Qcplus_le_mono_r. Qed.
 
 (** * Conversions *)
 Lemma Z_to_nat_nonpos x : (x ≤ 0)%Z → Z.to_nat x = 0.
-Proof.
-  destruct x; simpl; auto using Z2Nat.inj_neg.
-  by intros [].
-Qed.
+Proof. destruct x; simpl; auto using Z2Nat.inj_neg. by intros []. Qed.
 
 (** The function [Z_to_option_N] converts an integer [x] into a natural number
 by giving [None] in case [x] is negative. *)
 Definition Z_to_option_N (x : Z) : option N :=
   match x with
-  | Z0 => Some N0
-  | Zpos p => Some (Npos p)
-  | Zneg _ => None
+  | Z0 => Some N0 | Zpos p => Some (Npos p) | Zneg _ => None
   end.
 Definition Z_to_option_nat (x : Z) : option nat :=
   match x with
-  | Z0 => Some 0
-  | Zpos p => Some (Pos.to_nat p)
-  | Zneg _ => None
+  | Z0 => Some 0 | Zpos p => Some (Pos.to_nat p) | Zneg _ => None
   end.
 
 Lemma Z_to_option_N_Some x y :
@@ -333,9 +378,8 @@ Lemma N_to_nat_1 : N.to_nat 1 = 1.
 Proof. done. Qed.
 Lemma N_to_nat_div x y : N.to_nat (x `div` y) = N.to_nat x `div` N.to_nat y.
 Proof.
-  destruct (decide (y = 0%N)).
-  { subst. by destruct x. }
-  apply NPeano.Nat.div_unique with (N.to_nat (x `mod` y)).
+  destruct (decide (y = 0%N)); [by subst; destruct x |].
+  apply Nat.div_unique with (N.to_nat (x `mod` y)).
   { by apply N_to_nat_lt, N.mod_lt. }
   rewrite (N.div_unique_exact (x * y) y x), N.div_mul by lia.
   by rewrite <-N2Nat.inj_mul, <-N2Nat.inj_add, <-N.div_mod.
@@ -344,7 +388,7 @@ Qed.
 Lemma N_to_nat_mod x y :
   y ≠ 0%N → N.to_nat (x `mod` y) = N.to_nat x `mod` N.to_nat y.
 Proof.
-  intros. apply NPeano.Nat.mod_unique with (N.to_nat (x `div` y)).
+  intros. apply Nat.mod_unique with (N.to_nat (x `div` y)).
   { by apply N_to_nat_lt, N.mod_lt. }
   rewrite (N.div_unique_exact (x * y) y x), N.div_mul by lia.
   by rewrite <-N2Nat.inj_mul, <-N2Nat.inj_add, <-N.div_mod.

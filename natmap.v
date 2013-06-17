@@ -170,14 +170,15 @@ Proof.
     induction l as [|[y|] l IH]; intros i j ?; simpl.
     + done.
     + destruct i as [|i]; simplify_equality; [left|].
-      right. rewrite NPeano.Nat.add_succ_comm. by apply (IH i (S j)).
+      right. rewrite Nat.add_succ_comm. by apply (IH i (S j)).
     + destruct i as [|i]; simplify_equality.
-      rewrite NPeano.Nat.add_succ_comm. by apply (IH i (S j)).
+      rewrite Nat.add_succ_comm. by apply (IH i (S j)).
 Qed.
 Lemma natmap_elem_of_to_list_raw {A} (l : natmap_raw A) i x :
   (i,x) ∈ natmap_to_list_raw 0 l ↔ mjoin (l !! i) = Some x.
 Proof.
-  rewrite natmap_elem_of_to_list_raw_aux. setoid_rewrite plus_0_r. naive_solver.
+  rewrite natmap_elem_of_to_list_raw_aux. setoid_rewrite Nat.add_0_r.
+  naive_solver.
 Qed.
 Lemma natmap_to_list_raw_nodup {A} i (l : natmap_raw A) :
   NoDup (natmap_to_list_raw i l).
