@@ -3,32 +3,31 @@
 Require Export memory_values base_values.
 Local Open Scope ctype_scope.
 
-Inductive val (Ti Vi : Set) :=
-  | VBase : base_val Ti Vi → val Ti Vi
-  | VArray : list (val Ti Vi) → val Ti Vi
-  | VStruct : tag → list (val Ti Vi) → val Ti Vi
-  | VUnion : tag → nat → val Ti Vi → val Ti Vi
-  | VUnionNone : tag → list (val Ti Vi) → val Ti Vi.
-Arguments VBase {_ _} _.
-Arguments VArray {_ _} _.
-Arguments VStruct {_ _} _ _.
-Arguments VUnion {_ _} _ _ _.
-Arguments VUnionNone  {_ _} _ _.
+Inductive val (Ti : Set) :=
+  | VBase : base_val Ti → val Ti
+  | VArray : list (val Ti) → val Ti
+  | VStruct : tag → list (val Ti) → val Ti
+  | VUnion : tag → nat → val Ti → val Ti
+  | VUnionNone : tag → list (val Ti) → val Ti.
+Arguments VBase {_} _.
+Arguments VArray {_} _.
+Arguments VStruct {_} _ _.
+Arguments VUnion {_} _ _ _.
+Arguments VUnionNone  {_} _ _.
 
-Instance: Injective (=) (=) (@VBase Ti Vi).
+Instance: Injective (=) (=) (@VBase Ti).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@VArray Ti Vi).
+Instance: Injective (=) (=) (@VArray Ti).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@VStruct Ti Vi s).
+Instance: Injective (=) (=) (@VStruct Ti s).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@VUnion Ti Vi s i).
+Instance: Injective2 (=) (=) (=) (@VUnion Ti s).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@VUnionNone Ti Vi s).
+Instance: Injective (=) (=) (@VUnionNone Ti s).
 Proof. by injection 1. Qed.
 
-Instance val_eq_dec {Ti Vi : Set}
-  `{∀ τ1 τ2 : Ti, Decision (τ1 = τ2)} `{∀ x1 x2 : Vi, Decision (x1 = x2)} :
-  ∀ v1 v2 : val Ti Vi, Decision (v1 = v2).
+Instance val_eq_dec {Ti : Set} `{∀ τ1 τ2 : Ti, Decision (τ1 = τ2)} :
+  ∀ v1 v2 : val Ti, Decision (v1 = v2).
 Proof.
  refine (
   fix go v1 v2 : Decision (v1 = v2) :=
@@ -47,7 +46,7 @@ Proof.
 Defined.
 
 Section val_ind.
-  Context {Ti Vi} (P : val Ti Vi → Prop).
+  Context {Ti} (P : val Ti → Prop).
   Context (Pbase : ∀ v, P (VBase v)).
   Context (Parray : ∀ vs, Forall P vs → P (VArray vs)).
   Context (Pstruct : ∀ s vs, Forall P vs → P (VStruct s vs)).
@@ -67,8 +66,8 @@ Section val_ind.
     end.
 End val_ind.
 
-Definition val_map {Ti Vi} (f : base_val Ti Vi → base_val Ti Vi) :
-    val Ti Vi → val Ti Vi :=
+Definition val_map {Ti} (f : base_val Ti → base_val Ti) :
+    val Ti → val Ti :=
   fix go v :=
   match v with
   | VBase v => VBase (f v)
@@ -78,7 +77,7 @@ Definition val_map {Ti Vi} (f : base_val Ti Vi → base_val Ti Vi) :
   | VUnionNone s vs => VUnionNone s (go <$> vs)
   end.
 
-Inductive val_forall {Ti Vi} (P : base_val Ti Vi → Prop) : val Ti Vi → Prop :=
+Inductive val_forall {Ti} (P : base_val Ti → Prop) : val Ti → Prop :=
   | VBase_forall v : P v → val_forall P (VBase v)
   | VArray_forall vs : Forall (val_forall P) vs → val_forall P (VArray vs)
   | VStruct_forall s vs : Forall (val_forall P) vs → val_forall P (VStruct s vs)
@@ -87,8 +86,8 @@ Inductive val_forall {Ti Vi} (P : base_val Ti Vi → Prop) : val Ti Vi → Prop 
      Forall (val_forall P) vs → val_forall P (VUnionNone s vs).
 
 Section val_forall_ind.
-  Context {Ti Vi} (P : base_val Ti Vi → Prop).
-  Context (Q : val Ti Vi → Prop).
+  Context {Ti} (P : base_val Ti → Prop).
+  Context (Q : val Ti → Prop).
   Context (Qbase : ∀ v, P v → Q (VBase v)).
   Context (Qarray : ∀ vs,
     Forall (val_forall P) vs → Forall Q vs → Q (VArray vs)).
@@ -109,9 +108,9 @@ Section val_forall_ind.
 End val_forall_ind.
 
 Section operations.
-  Context `{EnvSpec Ti Vi} `{TypeOfIndex Ti M}.
+  Context `{IntEnv Ti} `{PtrEnv Ti} `{TypeOfIndex Ti M} `{IndexAlive M}.
 
-  Global Instance type_of_val: TypeOf (type Ti) (val Ti Vi) :=
+  Global Instance type_of_val: TypeOf (type Ti) (val Ti) :=
     fix go v :=
     match v with
     | VBase v => base (type_of v)
@@ -122,49 +121,75 @@ Section operations.
     | VUnionNone s _ => union s
     end.
 
-  Definition val_of_bytes : type Ti → list (byte Ti Vi) → val Ti Vi :=
-    type_iter
-    (*i TBase =>     *) (λ τ bs,
-      VBase $ base_val_of_bytes τ $ resize (size_of (base τ)) BUndef bs)
-    (*i TVoid =>     *) (λ bs, VBase $ VUndef $ TInt $ TsInt)
-    (*i TArray =>    *) (λ τ n rec bs,
-      VArray $ array_of_bytes rec τ n bs)
-    (*i TCompound => *) (λ c s τs rec bs,
+  Definition val_new : type Ti → val Ti := type_iter
+    (*i TBase     *) (λ τ, VBase (VIndet τ))
+    (*i TVoid     *) (VBase (VIndet uchar)) (* dummy *)
+    (*i TArray    *) (λ τ n x, VArray (replicate n x))
+    (*i TCompound *) (λ c s τs rec,
       match c with
-      | Struct => VStruct s $ struct_of_bytes rec τs bs
+      | Struct => VStruct s (rec <$> τs)
       | Union =>
          match list_singleton_dec τs with
-         | inleft (τ↾_) => VUnion s 0 $ rec τ bs
-         | _ => VUnionNone s $ flip rec bs <$> τs
+         | inleft (τ↾_) => VUnion s 0 (rec τ)
+         | _ => VUnionNone s (rec <$> τs)
          end
-      end).
-  Definition mval_to_val : mval Ti Vi → val Ti Vi :=
-    fix go v :=
-    match v with
-    | MBase τ bs => VBase (base_val_of_bytes τ bs)
-    | MArray vs => VArray (go <$> vs)
-    | MStruct s vs => VStruct s (go <$> vs)
-    | MUnion s i v => VUnion s i (go v)
-    | MUnionNone s bs => val_of_bytes (union s) bs
+      end) get_env.
+
+  Definition val_of_bits : type Ti → list (bit Ti) → val Ti :=
+    type_iter
+    (*i TBase =>     *) (λ τ bs, VBase (base_val_of_bits τ bs))
+    (*i TVoid =>     *) (λ bs, VBase (VIndet sint))
+    (*i TArray =>    *) (λ τ n rec bs, VArray $ array_of_bits rec τ n bs)
+    (*i TCompound => *) (λ c s τs rec bs,
+      match c with
+      | Struct => VStruct s (struct_of_bits rec τs bs)
+      | Union =>
+         match list_singleton_dec τs with
+         | inleft (τ↾_) => VUnion s 0 (rec τ bs)
+         | _ => VUnionNone s (flip rec bs <$> τs)
+         end
+      end) get_env.
+  Fixpoint mval_to_val (w : mval Ti) : val Ti :=
+    match w with
+    | MBase τ bs => VBase (base_val_of_bits τ bs)
+    | MArray ws => VArray (mval_to_val <$> ws)
+    | MStruct s ws => VStruct s (mval_to_val <$> ws)
+    | MUnion s i w => VUnion s i (mval_to_val w)
+    | MUnionNone s bs => val_of_bits (union s) bs
     end.
 
-  Definition union_to_bytes (f : val Ti Vi → listset (mval Ti Vi))
-      (sz : nat) (vs : list (val Ti Vi)) : listset (list (byte Ti Vi)) :=
-    filter (λ bs, vs = flip val_of_bytes bs ∘ type_of <$> vs) $
-      intersection_with_list bytes_join {[ replicate sz BUndef ]} $
-      fmap (resize sz BUndef ∘ mval_to_bytes) ∘ f <$> vs.
-  Definition mval_of_val : val Ti Vi → listset (mval Ti Vi) :=
-    fix go v :=
+  Definition union_of_val (f : val Ti → mval Ti) (sz : nat) :
+      list (val Ti) → option (list (bit Ti)) :=
+    fix go vs :=
+    match vs with
+    | [] => Some (replicate sz BIndet)
+    | v :: vs =>
+       let bs := mval_to_bits (f v) in
+       go vs ≫= bits_join (resize sz BIndet bs)
+    end.
+  Fixpoint mval_of_val (v : val Ti) : mval Ti :=
     match v with
-    | VBase v => MBase (type_of v) <$> base_val_to_bytes v
-    | VArray vs => MArray <$> mapM go vs
-    | VStruct s vs => MStruct s <$> mapM go vs
-    | VUnion s i v => MUnion s i <$> go v
+    | VBase v => MBase (type_of v) (base_val_to_bits v)
+    | VArray vs => MArray (mval_of_val <$> vs)
+    | VStruct s vs => MStruct s (mval_of_val <$> vs)
+    | VUnion s i v => MUnion s i (mval_of_val v)
     | VUnionNone s vs =>
-       MUnionNone s <$> union_to_bytes go (size_of (union s)) vs
+       let sz := bit_size_of (union s) in
+       match union_of_val mval_of_val sz vs with
+       | Some bs => MUnionNone s bs
+       | None => MUnionNone s (replicate sz BIndet)
+       end
     end.
+  Notation val_to_bits v := (mval_to_bits (mval_of_val v)).
 
-  Global Instance vtype_check: TypeCheck M (type Ti) (val Ti Vi) := λ m,
+  Global Instance mval_lookup_byte: Lookup nat (val Ti) (mval Ti) := λ i w,
+    bs ← sublist_lookup (i * char_bits) char_bits (mval_to_bits w);
+    Some (val_of_bits uchar bs).
+  Global Instance mval_insert_byte: Insert nat (val Ti) (mval Ti) := λ i v w,
+    mval_of_bits (type_of w) $
+      sublist_insert (i * char_bits) (val_to_bits v) (mval_to_bits w).
+
+  Global Instance vtype_check: TypeCheck M (type Ti) (val Ti) := λ m,
     fix go v :=
     match v with
     | VBase v => TBase <$> type_check m v
@@ -189,31 +214,83 @@ Section operations.
        guard (1 ≠ length τs);
        τs' ← mapM go vs;
        guard (τs = τs');
-       _ ← choose (union_to_bytes mval_of_val (size_of (union s)) vs);
+       let sz := bit_size_of (union s) in
+       bs ← union_of_val mval_of_val sz vs;
+       guard (vs = flip val_of_bits bs <$> τs);
        Some (union s)
     end.
 
   Global Instance val_lookup_item:
-      Lookup ref_seg (val Ti Vi) (val Ti Vi) := λ rs v,
+      Lookup ref_seg (val Ti) (val Ti) := λ rs v,
     match rs, v with
-    | RArray i n _, VArray vs => guard (n = length vs); vs !! i
-    | RStruct i, VStruct _ vs => vs !! i
-    | RUnion i _, VUnion s j v => guard (i = j); Some v
-    | RUnion i _, VUnionNone s vs => vs !! i
+    | RArray i n, VArray vs => guard (n = length vs); vs !! i
+    | RStruct i s, VStruct s' vs => guard (s = s'); vs !! i
+    | RUnion i s _, VUnion s' j v => guard (s = s'); guard (i = j); Some v
+    | RUnion i s _, VUnionNone s' vs => guard (s = s'); vs !! i
     | _, _ => None
     end.
-  Global Instance val_lookup: Lookup ref (val Ti Vi) (val Ti Vi) :=
+  Global Instance val_lookup: Lookup ref (val Ti) (val Ti) :=
     fix go r v :=
     match r with
-    | [] => Some v
-    | rs :: r => @lookup _ _ _ go r v ≫= (!! rs)
+    | [] => Some v | rs :: r => @lookup _ _ _ go r v ≫= (!! rs)
     end.
+
+  Inductive vunop_typed : unop → type Ti → type Ti → Prop :=
+    | TBase_unop_typed op τ σ :
+       base_unop_typed op τ σ → vunop_typed op (base τ) (base σ).
+  Definition vunop_ok (op : unop) (v : val Ti) : Prop :=
+    match v with
+    | VBase v => base_unop_ok op v
+    | _ => False
+    end.
+  Global Arguments vunop_ok !_ !_ /.
+  Definition vunop (op : unop) (v : val Ti) : val Ti :=
+    match v with
+    | VBase v => VBase (base_unop op v)
+    | _ => v
+    end.
+  Global Arguments vunop !_ !_ /.
+
+  Inductive vbinop_typed : binop → type Ti → type Ti → type Ti → Prop :=
+    | binop_TInt_TInt_typed op τ1 τ2 σ :
+       base_binop_typed op τ1 τ2 σ →
+       vbinop_typed op (base τ1) (base τ2) (base σ).
+  Definition vbinop_ok (m : M) (op : binop) (v1 v2 : val Ti) : Prop :=
+    match v1, v2 with
+    | VBase v1, VBase v2 => base_binop_ok m op v1 v2
+    | _, _ => False
+    end.
+  Global Arguments vbinop_ok _ !_ !_ !_ /.
+  Definition vbinop (op : binop) (v1 v2 : val Ti) : val Ti :=
+    match v1, v2 with
+    | VBase v1, VBase v2 => VBase (base_binop op v1 v2)
+    | _, _ => v1
+    end.
+  Global Arguments vbinop !_ !_ !_ /.
+
+  Inductive vcast_typed : type Ti → type Ti → Prop :=
+    | TBase_cast_typed τ1 τ2 :
+       base_cast_typed τ1 τ2 → vcast_typed (base τ1) (base τ2).
+  Definition vcast_ok (τ : type Ti) (v : val Ti) : Prop :=
+    match v, τ with
+    | VBase v, base τ => base_cast_ok τ v
+    | _ , _ => False
+    end.
+  Global Arguments vcast_ok !_ !_ /.
+  Definition vcast (τ : type Ti) (v : val Ti) : val Ti :=
+    match v, τ with
+    | VBase v, base τ => VBase (base_cast τ v)
+    | _ , _ => v
+    end.
+  Global Arguments vcast !_ !_ /.
 End operations.
 
-Section vtyped.
-  Context `{EnvSpec Ti Vi} `{TypeOfIndex Ti M}.
+Notation val_to_bits v := (mval_to_bits (mval_of_val v)).
 
-  Inductive vtyped' (m : M) : val Ti Vi → type Ti → Prop :=
+Section vtyped.
+  Context `{MemorySpec Ti M}.
+
+  Inductive vtyped' (m : M) : val Ti → type Ti → Prop :=
     | VBase_typed' v τ :
        m ⊢ v : τ →
        vtyped' m (VBase v) (base τ)
@@ -231,39 +308,38 @@ Section vtyped.
        vtyped' m v τ →
        vtyped' m (VUnion s i v) (union s)
     | VUnionNone_typed' s vs τs bs :
-       get_env !! s = Some τs →
-       length τs ≠ 1 →
+       get_env !! s = Some τs → length τs ≠ 1 →
+       (* we prove a smart constructor without this premise later *)
        Forall2 (vtyped' m) vs τs →
-       vs = flip val_of_bytes bs <$> τs →
-       m ⊢* valid bs →
+       vs = flip val_of_bits bs <$> τs →
+       m ⊢* valid bs → length bs = bit_size_of (union s) →
        vtyped' m (VUnionNone s vs) (union s).
-  Global Instance vtyped: Typed M (type Ti) (val Ti Vi) := vtyped'.
+  Global Instance vtyped: Typed M (type Ti) (val Ti) := vtyped'.
 
-  Lemma val_of_bytes_base τ bs :
-    val_of_bytes (base τ) bs =
-      VBase $ base_val_of_bytes τ $ resize (size_of (base τ)) BUndef bs.
-  Proof. unfold val_of_bytes. by rewrite type_iter_base. Qed. 
-  Lemma val_of_bytes_array τ n bs :
-    val_of_bytes (τ.[n]) bs = VArray $ array_of_bytes (val_of_bytes τ) τ n bs.
-  Proof. unfold val_of_bytes. by rewrite type_iter_array. Qed.
-  Lemma val_of_bytes_compound c s τs bs :
+  Lemma val_of_bits_base τ bs :
+    val_of_bits (base τ) bs = VBase (base_val_of_bits τ bs).
+  Proof. unfold val_of_bits. by rewrite type_iter_base. Qed. 
+  Lemma val_of_bits_array τ n bs :
+    val_of_bits (τ.[n]) bs = VArray (array_of_bits (val_of_bits τ) τ n bs).
+  Proof. unfold val_of_bits. by rewrite type_iter_array. Qed.
+  Lemma val_of_bits_compound c s τs bs :
     get_env !! s = Some τs →
-    val_of_bytes (compound@{c} s) bs =
+    val_of_bits (compound@{c} s) bs =
       match c with
-      | Struct => VStruct s $ struct_of_bytes val_of_bytes τs bs
+      | Struct => VStruct s (struct_of_bits val_of_bits τs bs)
       | Union =>
          match list_singleton_dec τs with
-         | inleft (τ↾_) => VUnion s 0 $ val_of_bytes τ bs
-         | _ => VUnionNone s $ flip val_of_bytes bs <$> τs
+         | inleft (τ↾_) => VUnion s 0 (val_of_bits τ bs)
+         | _ => VUnionNone s (flip val_of_bits bs <$> τs)
          end
       end.
   Proof.
-    intros Hs. unfold val_of_bytes. erewrite (type_iter_compound
-      (pointwise_relation (list (byte Ti Vi)) (@eq (val Ti Vi)))); eauto.
+    intros Hs. unfold val_of_bits. erewrite (type_iter_compound
+      (pointwise_relation (list (bit Ti)) (@eq (val Ti))) _ _ _ _); eauto.
     { clear s τs Hs bs. intros τ n f g Hfg bs. f_equal.
-      auto using array_of_bytes_ext. }
+      auto using array_of_bits_ext. }
     clear s τs Hs bs. intros f g [] s τs Hs Hτs bs.
-    { f_equal. auto using struct_of_bytes_ext. }
+    { f_equal. auto using struct_of_bits_ext. }
     destruct (list_singleton_dec _) as [[??]|?]; subst; f_equal.
     * by decompose_Forall.
     * apply Forall_fmap_ext. eauto using Forall_impl.
@@ -281,33 +357,67 @@ Section vtyped.
     get_env !! s = Some τs → τs !! i = Some τ →
     m ⊢ v : τ → m ⊢ VUnion s i v : union s.
   Proof. econstructor; eauto. Qed.
-  Lemma val_of_bytes_typed m τ bs :
-    type_valid get_env τ → m ⊢* valid bs → m ⊢ val_of_bytes τ bs : τ.
+  Lemma val_of_bits_resize τ bs sz :
+    type_valid get_env τ → bit_size_of τ ≤ sz →
+    val_of_bits τ (resize sz BIndet bs) = val_of_bits τ bs.
+  Proof.
+    intros Hτ. revert τ Hτ bs sz. refine (type_env_ind _ _ _ _).
+    * intros τ Hτ bs sz ?. rewrite !val_of_bits_base.
+      by rewrite base_val_of_bits_resize.
+    * intros τ n Hτ IH _ bs sz. rewrite !val_of_bits_array, bit_size_of_array.
+      intros. f_equal. auto using array_of_bits_resize.
+    * intros [] s τs Hs Hτs IH _ bs sz Hsz.
+      { erewrite !val_of_bits_compound by eauto.
+        erewrite bit_size_of_struct in Hsz by eauto.
+        f_equal. auto using struct_of_bits_resize. }
+      erewrite !val_of_bits_compound by eauto.
+      destruct (list_singleton_dec _) as [[τ ?]|_]; subst.
+      + decompose_Forall. intros. f_equal.
+        efeed pose proof bit_size_of_union_singleton; eauto with lia.
+      + intros. f_equal. apply bit_size_of_union in Hs.
+        induction Hs; decompose_Forall_hyps; simpl; f_equal; auto with lia.
+  Qed.
+  Lemma fmap_val_of_bits_resize τs bs sz :
+    Forall (type_valid get_env) τs → Forall (λ τ, bit_size_of τ ≤ sz) τs →
+    flip val_of_bits (resize sz BIndet bs) <$> τs = flip val_of_bits bs <$> τs.
+  Proof.
+    induction 1; intros; decompose_Forall_hyps; simpl; f_equal;
+      auto using val_of_bits_resize.
+  Qed.
+  Lemma val_of_bits_typed m τ bs :
+    type_valid get_env τ → m ⊢* valid bs → m ⊢ val_of_bits τ bs : τ.
   Proof.
     intros Hτ. revert τ Hτ bs. refine (type_env_ind _ _ _ _).
-    * intros τ Hτ bs Hbs. rewrite val_of_bytes_base. apply VBase_typed;
-        auto using base_val_of_bytes_typed, Forall_resize, BUndef_valid.
-    * intros τ n Hτ IH ? bs Hbs. rewrite val_of_bytes_array. apply VArray_typed;
-        eauto using array_of_bytes_length, Forall_array_of_bytes_alt.
+    * intros τ Hτ bs Hbs. rewrite val_of_bits_base. apply VBase_typed;
+        auto using base_val_of_bits_typed, Forall_resize, BIndet_valid.
+    * intros τ n Hτ IH Hn bs Hbs. rewrite val_of_bits_array.
+      apply VArray_typed; eauto using array_of_bits_length.
+      revert bs Hbs. clear Hn. induction n; simpl; auto using Forall_drop.
     * intros [] s τs Hs Hτs IH _ bs Hbs.
-      { erewrite val_of_bytes_compound by eauto.
-        apply VStruct_typed with τs; eauto using Forall2_struct_of_bytes_alt. }
-      erewrite val_of_bytes_compound by eauto.
+      { erewrite val_of_bits_compound by eauto.
+        apply VStruct_typed with τs; auto. unfold struct_of_bits.
+        revert bs Hbs. clear Hs Hτs. induction (bit_size_of_fields τs);
+          intros; decompose_Forall; simpl; auto using Forall_drop. }
+      erewrite val_of_bits_compound by eauto.
       destruct (list_singleton_dec _) as [[τ ?]|Hτs_len]; subst.
-      + rewrite Forall_singleton in IH. eapply VUnion_typed, IH; eauto.
-      + apply VUnionNone_typed' with τs bs; auto using resize_length.
-        change (vtyped' m) with (typed m).
+      { rewrite Forall_singleton in IH. eapply VUnion_typed, IH; eauto. }
+      apply VUnionNone_typed'
+        with τs (resize (bit_size_of (union s)) BIndet bs);
+        auto using resize_length, Forall_resize, BIndet_valid.
+      + change (vtyped' m) with (typed m).
         clear Hτs Hs Hτs_len; induction IH; simpl; constructor; auto.
+      + by rewrite fmap_val_of_bits_resize by eauto using bit_size_of_union.
   Qed.
   Lemma VUnionNone_typed m s vs τs bs :
     get_env !! s = Some τs → length τs ≠ 1 →
-    vs = flip val_of_bytes bs <$> τs →
-    m ⊢* valid bs → m ⊢ VUnionNone s vs : union s.
+    vs = flip val_of_bits bs <$> τs →
+    m ⊢* valid bs → length bs = bit_size_of (union s) →
+    m ⊢ VUnionNone s vs : union s.
   Proof.
     intros Hs Hτs_len Hvs Hbs. subst.
     eapply VUnionNone_typed'; eauto. change (vtyped' m) with (typed m).
     elim (env_valid_lookup s τs Hs); simpl;
-      constructor; eauto using val_of_bytes_typed.
+      constructor; eauto using val_of_bits_typed.
   Qed.
 
   Lemma vtyped_inv_l m (P : type Ti → Prop) v τ :
@@ -324,13 +434,14 @@ Section vtyped.
     | VUnionNone s vs =>
        (∀ τs bs,
          get_env !! s = Some τs → length τs ≠ 1 → m ⊢* vs :* τs →
-         vs = flip val_of_bytes bs <$> τs → m ⊢* valid bs →
+         vs = flip val_of_bits bs <$> τs →
+         m ⊢* valid bs → length bs = bit_size_of (union s) →
          P (union s)) → P τ
     end.
   Proof. destruct 1; eauto. Qed.
 
   Section vtyped_ind.
-    Context (m : M) (P : val Ti Vi → type Ti → Prop).
+    Context (m : M) (P : val Ti → type Ti → Prop).
     Context (Pbase : ∀ v τ, m ⊢ v : τ → P (VBase v) (base τ)).
     Context (Parray : ∀ vs τ,
       m ⊢* vs : τ → Forall (λ v, P v τ) vs →
@@ -343,8 +454,9 @@ Section vtyped.
       P (VUnion s i v) (union s)).
     Context (Punion_none : ∀ s vs τs bs,
       get_env !! s = Some τs → length τs ≠ 1 → m ⊢* vs :* τs →
-      Forall2 P vs τs → vs = flip val_of_bytes bs <$> τs →
-      m ⊢* valid bs → P (VUnionNone s vs) (union s)).
+      Forall2 P vs τs → vs = flip val_of_bits bs <$> τs →
+      m ⊢* valid bs → length bs = bit_size_of (union s) →
+      P (VUnionNone s vs) (union s)).
     Lemma vtyped_ind : ∀ v τ, vtyped' m v τ → P v τ.
     Proof.
      exact (fix go v τ H :=
@@ -355,14 +467,14 @@ Section vtyped.
       | VStruct_typed' s _ _ Hs H =>
          Pstruct _ _ _ Hs H (Forall2_impl _ _ _ _ H go)
       | VUnion_typed' _ _ _ _ _ Hs Hτs H => PUnion _ _ _ _ _ Hs Hτs H (go _ _ H)
-      | VUnionNone_typed' _ _ _ _ Hs Hτs H Hvs Hbs =>
-         Punion_none _ _ _ _ Hs Hτs H (Forall2_impl _ _ _ _ H go) Hvs Hbs
+      | VUnionNone_typed' _ _ _ _ Hs Hτs H Hvs Hbs Hlen =>
+         Punion_none _ _ _ _ Hs Hτs H (Forall2_impl _ _ _ _ H go) Hvs Hbs Hlen
       end).
     Qed.
   End vtyped_ind.
 
   Section vtyped_case.
-    Context (m : M) (P : val Ti Vi → type Ti → Prop).
+    Context (m : M) (P : val Ti → type Ti → Prop).
     Context (Pbase : ∀ v τ, m ⊢ v : τ → P (VBase v) (base τ)).
     Context (Parray : ∀ vs τ,
       m ⊢* vs : τ → length vs ≠ 0 → P (VArray vs) (τ.[length vs])).
@@ -373,7 +485,8 @@ Section vtyped.
       m ⊢ v : τ → P (VUnion s i v) (union s)).
     Context (Punion_none : ∀ s vs τs bs,
       get_env !! s = Some τs → length τs ≠ 1 → m ⊢* vs :* τs →
-      vs = flip val_of_bytes bs <$> τs → m ⊢* valid bs →
+      vs = flip val_of_bits bs <$> τs →
+      m ⊢* valid bs → length bs = bit_size_of (union s) →
       P (VUnionNone s vs) (union s)).
     Lemma vtyped_case : ∀ v τ, vtyped' m v τ → P v τ.
     Proof. destruct 1; eauto. Qed.
@@ -385,9 +498,7 @@ Ltac vtyped_constructor := first
   | eapply VUnion_typed | eapply VUnionNone_typed ].
 
 Section val_le.
-  Context `{EnvSpec Ti Vi} `{TypeOfIndex Ti M}.
-
-  Inductive val_le' (m : M) : relation (val Ti Vi) :=
+  Inductive val_le' `{MemorySpec Ti M} (m : M) : relation (val Ti) :=
     | VBase_le' v1 v2 : v1 ⊑@{m} v2 → val_le' m (VBase v1) (VBase v2)
     | VArray_le' vs1 vs2 :
        Forall2 (val_le' m) vs1 vs2 → val_le' m (VArray vs1) (VArray vs2)
@@ -398,19 +509,22 @@ Section val_le.
     | VUnionNone_le_refl' s vs : val_le' m (VUnionNone s vs) (VUnionNone s vs)
     | VUnionNone_le' s vs1 vs2 τs bs1 bs2 :
        get_env !! s = Some τs →
-       vs1 = flip val_of_bytes bs1 <$> τs →
+       vs1 = flip val_of_bits bs1 <$> τs →
        m ⊢* valid bs1 →
-       vs2 = flip val_of_bytes bs2 <$> τs →
-       bs1 ⊑@{m}* bs2 →
+       vs2 = flip val_of_bits bs2 <$> τs →
+       bs1 ⊑@{m}* bs2 → length bs2 = bit_size_of (union s) →
        val_le' m (VUnionNone s vs1) (VUnionNone s vs2)
     | VUnion_VUnionNone_le' s i τs v1 v2 vs2 bs2 :
        get_env !! s = Some τs → length τs ≠ 1 →
        vs2 !! i = Some v2 →
        val_le' m v1 v2 →
-       vs2 = flip val_of_bytes bs2 <$> τs →
-       m ⊢* valid bs2 →
+       vs2 = flip val_of_bits bs2 <$> τs →
+       m ⊢* valid bs2 → length bs2 = bit_size_of (union s) →
        val_le' m (VUnion s i v1) (VUnionNone s vs2).
-  Global Instance val_le: SubsetEqEnv M (val Ti Vi) := val_le'.
+
+  Context `{MemorySpec Ti M}.
+
+  Global Instance val_le: SubsetEqEnv M (val Ti) := val_le'.
 
   Lemma VBase_le m v1 v2 : v1 ⊑@{m} v2 → VBase v1 ⊑@{m} VBase v2.
   Proof. by constructor. Qed.
@@ -425,46 +539,50 @@ Section val_le.
   Proof. by constructor. Qed.
   Lemma VUnionNone_le m s vs1 vs2 τs bs1 bs2 :
     get_env !! s = Some τs →
-    vs1 = flip val_of_bytes bs1 <$> τs →
+    vs1 = flip val_of_bits bs1 <$> τs →
     m ⊢* valid bs1 →
-    vs2 = flip val_of_bytes bs2 <$> τs →
-    bs1 ⊑@{m}* bs2 →
+    vs2 = flip val_of_bits bs2 <$> τs →
+    bs1 ⊑@{m}* bs2 → length bs2 = bit_size_of (union s) →
     VUnionNone s vs1 ⊑@{m} VUnionNone s vs2.
   Proof. econstructor; eauto. Qed.
   Lemma VUnion_VUnionNone_le m s i τs v1 v2 vs2 bs2 :
     get_env !! s = Some τs → length τs ≠ 1 →
     vs2 !! i = Some v2 →
     v1 ⊑@{m} v2 →
-    vs2 = flip val_of_bytes bs2 <$> τs →
-    m ⊢* valid bs2 →
+    vs2 = flip val_of_bits bs2 <$> τs →
+    m ⊢* valid bs2 → length bs2 = bit_size_of (union s) →
     VUnion s i v1 ⊑@{m} VUnionNone s vs2.
   Proof. econstructor; eauto. Qed.
 
-  Lemma val_of_bytes_le m τ bs1 bs2 :
+  Lemma val_of_bits_le m τ bs1 bs2 :
     type_valid get_env τ →
     m ⊢* valid bs1 → bs1 ⊑@{m}* bs2 →
-    val_of_bytes τ bs1 ⊑@{m} val_of_bytes τ bs2.
+    val_of_bits τ bs1 ⊑@{m} val_of_bits τ bs2.
   Proof.
     intros Hτ. revert τ Hτ bs1 bs2. refine (type_env_ind _ _ _ _).
-    * intros τ ? bs1 bs2 Hbs. rewrite !val_of_bytes_base. constructor.
-      apply base_val_of_bytes_le;
-        auto using Forall_resize, BUndef_valid, Forall2_resize.
+    * intros τ ? bs1 bs2 Hbs. rewrite !val_of_bits_base. constructor.
+      apply base_val_of_bits_le;
+        auto using Forall_resize, BIndet_valid, Forall2_resize.
     * intros τ n ? IH _ bs1 bs2 Hbs1 Hbs.
-      rewrite !val_of_bytes_array. apply VArray_le. revert bs1 bs2 Hbs1 Hbs.
+      rewrite !val_of_bits_array. apply VArray_le. revert bs1 bs2 Hbs1 Hbs.
       induction n; simpl; auto using Forall2_take, Forall2_drop, Forall_drop.
     * intros [] s τs Hs Hτs IH _ bs1 bs2 Hbs1 Hbs.
-      { erewrite !val_of_bytes_compound by eauto. apply VStruct_le.
-        clear Hs Hτs. unfold struct_of_bytes. revert bs1 bs2 Hbs1 Hbs.
-        induction (struct_fields_same_length τs);
+      { erewrite !val_of_bits_compound by eauto. apply VStruct_le.
+        clear Hs Hτs. unfold struct_of_bits. revert bs1 bs2 Hbs1 Hbs.
+        induction (field_bit_sizes_same_length τs);
           intros; decompose_Forall; simpl;
           auto using Forall2_take, Forall2_drop, Forall_drop. }
-      erewrite !val_of_bytes_compound by eauto.
-      destruct (list_singleton_dec _) as [[??]|?]; subst.
+      erewrite !val_of_bits_compound by eauto.
+      destruct (list_singleton_dec _) as [[??]|?]; subst; simpl.
       { rewrite Forall_singleton in IH. apply VUnion_le. auto. }
-      simpl. eapply VUnionNone_le; eauto.
+      apply VUnionNone_le with τs (resize (bit_size_of (union s)) BIndet bs1)
+          (resize (bit_size_of (union s)) BIndet bs2);
+        rewrite ?resize_length, ?fmap_val_of_bits_resize by
+          auto using bit_size_of_union;
+        auto using Forall_resize, BIndet_valid, Forall2_resize, BIndet_le.
   Qed.
 
-  Lemma val_le_inv_l m (P : val Ti Vi → Prop) v1 v2 :
+  Lemma val_le_inv_l m (P : val Ti → Prop) v1 v2 :
     v1 ⊑@{m} v2 →
     match v1 with
     | VBase v1 => (∀ v2, v1 ⊑@{m} v2 → P (VBase v2)) → P v2
@@ -476,20 +594,18 @@ Section val_le.
          get_env !! s = Some τs → length τs ≠ 1 →
          vs2 !! i = Some v2 →
          v1 ⊑@{m} v2 →
-         vs2 = flip val_of_bytes bs2 <$> τs →
-         m ⊢* valid bs2 →
-         P (VUnionNone s vs2)) →
-       P v2
+         vs2 = flip val_of_bits bs2 <$> τs →
+         m ⊢* valid bs2 → length bs2 = bit_size_of (union s) →
+         P (VUnionNone s vs2)) → P v2
     | VUnionNone s vs1 =>
        P (VUnionNone s vs1) →
        (∀ vs2 τs bs1 bs2,
          get_env !! s = Some τs →
-         vs1 = flip val_of_bytes bs1 <$> τs →
+         vs1 = flip val_of_bits bs1 <$> τs →
          m ⊢* valid bs1 →
-         vs2 = flip val_of_bytes bs2 <$> τs →
-         bs1 ⊑@{m}* bs2 →
-         P (VUnionNone s vs2)) →
-       P v2
+         vs2 = flip val_of_bits bs2 <$> τs →
+         bs1 ⊑@{m}* bs2 → length bs2 = bit_size_of (union s) →
+         P (VUnionNone s vs2)) → P v2
     end.
   Proof. destruct 1; eauto. Qed.
 
@@ -506,12 +622,10 @@ Section val_le.
        (∀ τs bs1 bs2,
          s1 = s2 →
          get_env !! s1 = Some τs →
-         vs1 = flip val_of_bytes bs1 <$> τs →
+         vs1 = flip val_of_bits bs1 <$> τs →
          m ⊢* valid bs1 →
-         vs2 = flip val_of_bytes bs2 <$> τs →
-         bs1 ⊑@{m}* bs2 →
-         P) →
-       P
+         vs2 = flip val_of_bits bs2 <$> τs →
+         bs1 ⊑@{m}* bs2 → length bs2 = bit_size_of (union s1) → P) → P
     | VUnion s1 i v1, VUnionNone s2 vs2 =>
        (∀ τs v2 bs2,
          s1 = s2 →
@@ -519,15 +633,14 @@ Section val_le.
          length τs ≠ 1 →
          vs2 !! i = Some v2 →
          v1 ⊑@{m} v2 →
-         vs2 = flip val_of_bytes bs2 <$> τs →
-         m ⊢* valid bs2 →
-         P) → P
+         vs2 = flip val_of_bits bs2 <$> τs →
+         m ⊢* valid bs2 → length bs2 = bit_size_of (union s1) → P) → P
     | _, _ => P
     end.
   Proof. destruct 1; eauto. Qed.
 
   Section val_le_ind.
-    Context (m : M) (P : val Ti Vi → val Ti Vi → Prop).
+    Context (m : M) (P : val Ti → val Ti → Prop).
     Context (Pbase : ∀ v1 v2, v1 ⊑@{m} v2 → P (VBase v1) (VBase v2)).
     Context (Parray : ∀ vs1 vs2,
       vs1 ⊑@{m}* vs2 → Forall2 P vs1 vs2 → P (VArray vs1) (VArray vs2)).
@@ -538,33 +651,33 @@ Section val_le.
     Context (Punion_none_refl : ∀ s vs, P (VUnionNone s vs) (VUnionNone s vs)).
     Context (Punion_none : ∀ s vs1 vs2 τs bs1 bs2,
       get_env !! s = Some τs →
-      vs1 = flip val_of_bytes bs1 <$> τs →
+      vs1 = flip val_of_bits bs1 <$> τs →
       m ⊢* valid bs1 →
-      vs2 = flip val_of_bytes bs2 <$> τs →
-      bs1 ⊑@{m}* bs2 →
+      vs2 = flip val_of_bits bs2 <$> τs →
+      bs1 ⊑@{m}* bs2 → length bs2 = bit_size_of (union s) →
       vs1 ⊑@{m}* vs2 → Forall2 P vs1 vs2 →
       P (VUnionNone s vs1) (VUnionNone s vs2)).
     Context (Punion_union_none : ∀ s i τs v1 v2 vs2 bs2,
       get_env !! s = Some τs → length τs ≠ 1 →
       vs2 !! i = Some v2 →
       v1 ⊑@{m} v2 → P v1 v2 →
-      vs2 = flip val_of_bytes bs2 <$> τs →
-      m ⊢* valid bs2 →
+      vs2 = flip val_of_bits bs2 <$> τs →
+      m ⊢* valid bs2 → length bs2 = bit_size_of (union s) →
       P (VUnion s i v1) (VUnionNone s vs2)).
     Lemma val_le_ind: ∀ v1 v2, val_le' m v1 v2 → P v1 v2.
     Proof.
-     assert (∀ vs1 vs2,
-       vs1 ⊑@{m}* vs2 → Forall (λ v1, ∀ v2, v1 ⊑@{m} v2 → P v1 v2) vs1 →
-       Forall2 P vs1 vs2).
-     { induction 1; intros; decompose_Forall; auto. }
-     assert (∀ τs bs1 bs2,
-       Forall (type_valid get_env) τs → m ⊢* valid bs1 →
-       bs1 ⊑@{m}* bs2 →
-       flip val_of_bytes bs1 <$> τs ⊑@{m}* flip val_of_bytes bs2 <$> τs).
-     { induction 1; simpl; constructor; eauto using val_of_bytes_le. }
-     induction v1 using val_ind_alt;
-       intros ? Hv1v2; apply (val_le_inv_l _ _ _ _ Hv1v2);
-       intros; subst; eauto 7 using env_valid_lookup.
+      assert (∀ vs1 vs2,
+        vs1 ⊑@{m}* vs2 → Forall (λ v1, ∀ v2, v1 ⊑@{m} v2 → P v1 v2) vs1 →
+        Forall2 P vs1 vs2).
+      { induction 1; intros; decompose_Forall; auto. }
+      assert (∀ τs bs1 bs2,
+        Forall (type_valid get_env) τs → m ⊢* valid bs1 →
+        bs1 ⊑@{m}* bs2 →
+        flip val_of_bits bs1 <$> τs ⊑@{m}* flip val_of_bits bs2 <$> τs).
+      { induction 1; simpl; constructor; eauto using val_of_bits_le. }
+      induction v1 using val_ind_alt;
+        intros ? Hv1v2; apply (val_le_inv_l _ _ _ _ Hv1v2);
+        intros; subst; eauto 7 using env_valid_lookup.
     Qed.
   End val_le_ind.
 End val_le.
@@ -574,7 +687,7 @@ Ltac val_le_constructor := first
   | eapply VUnion_le | eapply VUnionNone_le_refl
   | eapply VUnionNone_le | eapply VUnion_VUnionNone_le ].
 
-Inductive union_free `{EnvSpec Ti Vi} : val Ti Vi → Prop :=
+Inductive union_free `{IntEnv Ti} `{PtrEnv Ti} : val Ti → Prop :=
   | VBase_union_free v : union_free (VBase v)
   | VArray_union_free vs : Forall union_free vs → union_free (VArray vs)
   | VStruct_union_free s vs : Forall union_free vs → union_free (VStruct s vs)
@@ -584,7 +697,7 @@ Inductive union_free `{EnvSpec Ti Vi} : val Ti Vi → Prop :=
      Forall union_free vs → union_free (VUnionNone s vs).
 
 Section union_free_ind.
-  Context `{EnvSpec Ti Vi} (P : val Ti Vi → Prop).
+  Context `{IntEnv Ti} `{PtrEnv Ti} (P : val Ti → Prop).
   Context (Pbase : ∀ v, P (VBase v)).
   Context (Parray : ∀ vs, Forall union_free vs → Forall P vs → P (VArray vs)).
   Context (Pstruct : ∀ s vs,
@@ -631,65 +744,83 @@ Section union_free_ind.
 End union_free_ind.
 
 Section val.
-Context `{EnvSpec Ti Vi} `{TypeOfIndex Ti M}.
-Implicit Types v : val Ti Vi.
-Implicit Types vs : list (val Ti Vi).
-Implicit Types w : mval Ti Vi.
-Implicit Types ws : list (mval Ti Vi).
+Context `{MemorySpec Ti M}.
+Implicit Types v : val Ti.
+Implicit Types vs : list (val Ti).
+Implicit Types w : mval Ti.
+Implicit Types ws : list (mval Ti).
 Implicit Types m : M.
 Implicit Types τ : type Ti.
 Implicit Types τs : list (type Ti).
-Implicit Types bs : list (byte Ti Vi).
+Implicit Types bs : list (bit Ti).
 Implicit Types r : ref.
 Implicit Types rs : ref_seg.
-Context `{PropHolds (∀ m i τ,
-  type_of_index m i = Some τ → type_valid get_env τ)}.
 
+Lemma vtyped_not_void m v τ : m ⊢ v : τ → τ ≠ void.
+Proof. by destruct 1. Qed.
 Lemma vtyped_type_valid m v τ : m ⊢ v : τ → type_valid get_env τ.
 Proof.
-  induction 1 using @vtyped_ind; econstructor;
-    decompose_Forall_hyps; eauto using base_typed_type_valid.
+  induction 1 using @vtyped_ind; econstructor; decompose_Forall_hyps;
+    try match goal with
+    | H : length ?vs ≠ 0, H2 : Forall _ ?vs |- _ => destruct H2; [done|]
+    end; eauto using base_typed_type_valid.
 Qed.
-Global Instance: TypeOfSpec M (type Ti) (val Ti Vi).
+Global Instance: TypeOfSpec M (type Ti) (val Ti).
 Proof.
-  induction 1 using @vtyped_ind; decompose_Forall_hyps; simpl; f_equal; eauto.
-  eapply type_of_correct; eauto.
+  induction 1 using @vtyped_ind; decompose_Forall_hyps;
+    try match goal with
+    | H : length ?vs ≠ 0, H2 : Forall _ ?vs |- _ => destruct H2; [done|]
+    end; simpl; eauto using type_of_correct with f_equal.
+Qed.
+Lemma vtyped_weaken_mem m1 m2 v τ :
+  (∀ x σ, type_of_index m1 x = Some σ → type_of_index m2 x = Some σ) →
+  m1 ⊢ v : τ → m2 ⊢ v : τ.
+Proof.
+  intro. induction 1 using @vtyped_ind;
+    econstructor; eauto using base_typed_weaken_mem, bits_valid_weaken_mem.
+Qed.
+Lemma val_le_weaken_mem m1 m2 v1 v2 :
+  (∀ x σ, type_of_index m1 x = Some σ → type_of_index m2 x = Some σ) →
+  v1 ⊑@{m1} v2 → v1 ⊑@{m2} v2.
+Proof.
+  intro. induction 1 using @val_le_ind; econstructor; eauto using
+    base_val_le_weaken_mem, bits_le_weaken_mem, bits_valid_weaken_mem.
 Qed.
 
-Lemma fmap_val_of_bytes_typed m τs bs :
+Lemma fmap_val_of_bits_typed m τs bs :
   Forall (type_valid get_env) τs → m ⊢* valid bs →
-  m ⊢* (flip val_of_bytes bs <$> τs) :* τs.
-Proof. intros Hτs Hbs. induction Hτs; simpl; auto using val_of_bytes_typed. Qed.
-Lemma val_of_bytes_type_of m τ bs :
+  m ⊢* (flip val_of_bits bs <$> τs) :* τs.
+Proof. intros Hτs Hbs. induction Hτs; simpl; auto using val_of_bits_typed. Qed.
+Lemma val_of_bits_type_of m τ bs :
   type_valid get_env τ → m ⊢* valid bs →
-  type_of (val_of_bytes τ bs) = τ.
-Proof. intros. eapply type_of_correct, val_of_bytes_typed; eauto. Qed.
-Lemma val_of_bytes_fmap_type_of m τs bs :
+  type_of (val_of_bits τ bs) = τ.
+Proof. intros. eapply type_of_correct, val_of_bits_typed; eauto. Qed.
+Lemma val_of_bits_fmap_type_of m τs bs :
   Forall (type_valid get_env) τs → m ⊢* valid bs →
-  type_of <$> flip val_of_bytes bs <$> τs = τs.
-Proof. induction 1; simpl; eauto using val_of_bytes_type_of with f_equal. Qed.
+  type_of <$> flip val_of_bits bs <$> τs = τs.
+Proof. induction 1; simpl; eauto using val_of_bits_type_of with f_equal. Qed.
 
-Lemma val_of_bytes_trans m τ bs1 bs2 bs3 :
+Lemma val_of_bits_trans m τ bs1 bs2 bs3 :
   type_valid get_env τ → bs1 ⊑@{m}* bs2 → bs2 ⊑@{m}* bs3 →
-  val_of_bytes τ bs1 = val_of_bytes τ bs3 →
-  val_of_bytes τ bs2 = val_of_bytes τ bs3.
+  val_of_bits τ bs1 = val_of_bits τ bs3 →
+  val_of_bits τ bs2 = val_of_bits τ bs3.
 Proof.
   intros Hτ. revert τ Hτ bs1 bs2 bs3. refine (type_env_ind _ _ _ _).
-  * intros τ ? bs1 bs2 bs3 ??. rewrite !val_of_bytes_base.
+  * intros τ ? bs1 bs2 bs3 ??. rewrite !val_of_bits_base.
     intros. f_equal. simplify_equality.
-    eauto using bytes_le_resize, base_val_of_bytes_trans.
-  * intros τ n ? IH _ bs1 bs2 bs3 Hbs1 Hbs2. rewrite !val_of_bytes_array.
+    eauto using bits_le_resize, base_val_of_bits_trans.
+  * intros τ n ? IH _ bs1 bs2 bs3 Hbs1 Hbs2. rewrite !val_of_bits_array.
     intros Hbs3. f_equal. simplify_equality. revert bs1 bs2 bs3 Hbs1 Hbs2 Hbs3.
     induction n; simpl; intros; f_equal; simplify_list_equality;
       eauto using Forall2_drop, Forall2_take.
   * intros [] s τs Hs Hτs IH _ bs1 bs2 bs3 Hbs1 Hbs2.
-    { erewrite !val_of_bytes_compound by eauto.
+    { erewrite !val_of_bits_compound by eauto.
       intros Hbs3. f_equal. simplify_equality.
-      clear Hs Hτs. revert bs1 bs2 bs3 Hbs1 Hbs2 Hbs3. unfold struct_of_bytes.
-      induction (struct_fields_same_length τs); simpl in *;
+      clear Hs Hτs. revert bs1 bs2 bs3 Hbs1 Hbs2 Hbs3. unfold struct_of_bits.
+      induction (field_bit_sizes_same_length τs); simpl in *;
         decompose_Forall; intros; f_equal; simplify_list_equality;
         eauto using Forall2_drop, Forall2_take. }
-    erewrite !val_of_bytes_compound by eauto.
+    erewrite !val_of_bits_compound by eauto.
     destruct (list_singleton_dec _) as [[??]|_];
       intros Hbs3; f_equal; simplify_equality; decompose_Forall; eauto.
     clear Hs Hτs. revert bs1 bs2 bs3 Hbs1 Hbs2 Hbs3.
@@ -733,28 +864,33 @@ Proof. apply vals_frozen_freeze, vals_freeze_frozen. Qed.
 Lemma vals_freeze_type_of vs :
   type_of <$> val_map freeze <$> vs = type_of <$> vs.
 Proof. induction vs; simpl; f_equal; auto using val_freeze_type_of. Qed.
+Lemma vtyped_int_frozen m v τi : m ⊢ v : intt τi → val_forall frozen v.
+Proof. inversion_clear 1; constructor. eauto using base_typed_int_frozen. Qed.
 
-Lemma val_of_bytes_frozen τ bs :
-  type_valid get_env τ → val_forall frozen (val_of_bytes τ bs).
+Lemma val_of_bits_frozen m τ bs :
+  type_valid get_env τ → m ⊢* valid bs → val_forall frozen (val_of_bits τ bs).
 Proof.
   intros Hτ. revert τ Hτ bs. refine (type_env_ind _ _ _ _).
-  * intros. rewrite val_of_bytes_base. constructor.
-    apply base_val_of_bytes_frozen.
-  * intros. rewrite val_of_bytes_array. constructor.
-    auto using Forall_array_of_bytes.
-  * intros [] s τs ? _ IH _ bs.
-    { erewrite val_of_bytes_compound by eauto. constructor.
-      auto using Forall_struct_of_bytes. }
-    erewrite val_of_bytes_compound by eauto.
+  * intros. rewrite val_of_bits_base. constructor.
+    eapply base_val_of_bits_frozen; eauto using Forall_resize, BIndet_valid.
+  * intros τ n ? IH _ bs Hbs. rewrite val_of_bits_array. constructor.
+    revert bs Hbs. induction n; simpl; auto using Forall_drop.
+  * intros [] s τs Hs _ IH _ bs Hbs.
+    { erewrite val_of_bits_compound by eauto. constructor.
+      unfold struct_of_bits. revert bs Hbs. clear Hs.
+      induction (bit_size_of_fields τs);
+        intros; decompose_Forall; simpl; auto using Forall_drop. }
+    erewrite val_of_bits_compound by eauto.
     destruct (list_singleton_dec _) as [[??]|?]; subst;
       decompose_Forall; constructor; auto.
     apply Forall_fmap. elim IH; constructor; eauto.
 Qed.
-Lemma vals_of_bytes_frozen τs bs :
-  Forall (type_valid get_env) τs →
-  Forall (val_forall frozen) (flip val_of_bytes bs <$> τs).
+Lemma vals_of_bits_frozen m τs bs :
+  Forall (type_valid get_env) τs → m ⊢* valid bs →
+  Forall (val_forall frozen) (flip val_of_bits bs <$> τs).
 Proof.
-  intros. eapply Forall_fmap, Forall_impl; eauto using val_of_bytes_frozen.
+  intros. eapply Forall_fmap, Forall_impl; eauto.
+  intros. eapply val_of_bits_frozen; eauto.
 Qed.
 
 Lemma typed_freeze m v τ : m ⊢ v : τ → m ⊢ val_map freeze v : τ.
@@ -765,7 +901,7 @@ Proof.
   * vtyped_constructor; eauto. by apply Forall2_fmap_l.
   * vtyped_constructor; eauto.
   * subst. rewrite vals_frozen_freeze by
-      eauto using vals_of_bytes_frozen, env_valid_lookup.
+      eauto using vals_of_bits_frozen, env_valid_lookup.
     vtyped_constructor; eauto.
 Qed.
 
@@ -783,7 +919,7 @@ Proof.
   intros Hv1τ Hv1v2. revert τ Hv1τ. induction Hv1v2 using @val_le_ind;
     intros ? Hv1τ; apply (vtyped_inv_l _ _ _ _ Hv1τ); intros; clear Hv1τ;
     simplify_map_equality; vtyped_constructor; eauto using
-      bytes_valid_ge, Forall2_length, base_typed_ge.
+      bits_valid_ge, Forall2_length, base_typed_ge.
 Qed.
 Lemma vtyped_le m v1 v2 τ : m ⊢ v1 : τ → v2 ⊑@{m} v1 → m ⊢ v2 : τ.
 Proof.
@@ -799,55 +935,70 @@ Proof.
   assert (∀ s i τs v1 v2 vs bs,
     get_env !! s = Some τs →
     v1 ⊑@{m} v2 → vs !! i = Some v2 →
-    vs = flip val_of_bytes bs <$> τs → m ⊢* valid bs →
+    vs = flip val_of_bits bs <$> τs → m ⊢* valid bs →
     (∀ τ, m ⊢ v2 : τ → m ⊢ v1 : τ) →
     m ⊢ VUnion s i v1 : union s).
   { intros. subst. edestruct @list_lookup_fmap_inv as [? [??]]; eauto.
-    subst. vtyped_constructor; eauto using val_of_bytes_typed,
+    subst. vtyped_constructor; eauto using val_of_bits_typed,
       env_valid_lookup_lookup. }
   intros Hv1τ Hv1v2. revert τ Hv1τ. induction Hv1v2 using @val_le_ind;
     intros ? Hv1τ; apply (vtyped_inv_l _ _ _ _ Hv1τ); intros;
     simplify_map_equality; first
      [ by eauto using vunion_none_typed_alt
      | by eauto
-     | vtyped_constructor; eauto using base_typed_le, Forall2_length, eq_sym].
+     | vtyped_constructor; eauto using base_typed_le ].
+  * by erewrite <-Forall2_length by eauto.
+  * by erewrite Forall2_length by eauto.
 Qed.
 
-Lemma val_of_bytes_masked m τ bs1 bs2 cs2 :
+Lemma val_of_bits_masked m τ bs1 bs2 bs3 :
   type_valid get_env τ →
-  bs1 ⊑@{m}* bs2 → m ⊢* valid cs2 →
-  val_of_bytes τ bs2 = val_of_bytes τ cs2 →
-  val_of_bytes τ (mask_bytes bs1 cs2) = val_of_bytes τ bs1.
+  bs1 ⊑@{m}* bs2 → m ⊢* valid bs3 →
+  bit_size_of τ ≤ length bs2 → length bs2 = length bs3 →
+  val_of_bits τ bs2 = val_of_bits τ bs3 →
+  val_of_bits τ (mask_bits bs1 bs3) = val_of_bits τ bs1.
 Proof.
-  intros Hτ. revert τ Hτ bs1 bs2 cs2. refine (type_env_ind _ _ _ _).
-  * intros τ ? bs1 bs2 cs2.
-    rewrite !val_of_bytes_base, !base_val_of_bytes_resize_take.
-    intros. f_equal. simplify_equality. rewrite mask_bytes_take.
-    eauto using base_val_of_bytes_masked, Forall_take, Forall2_take.
-  * intros τ n ? IH _ bs1 bs2 cs2. rewrite !val_of_bytes_array.
-    intros. f_equal. simplify_equality. eauto using array_of_bytes_masked.
-  * intros [] s τs Hs Hτs IH _ bs1 bs2 cs2.
-    { erewrite !val_of_bytes_compound by eauto. intros ???.
-      f_equal. simplify_equality. eauto using struct_of_bytes_masked. }
-    erewrite !val_of_bytes_compound by eauto.
+  intros Hτ. revert τ Hτ bs1 bs2 bs3. refine (type_env_ind _ _ _ _).
+  * intros τ ? bs1 bs2 bs3 ????. rewrite !val_of_bits_base, !(injective_iff _).
+    eauto using base_val_of_bits_masked.
+  * intros τ n ? IH _ bs1 bs2 bs3.
+    rewrite !bit_size_of_array, !val_of_bits_array, !(injective_iff _).
+    revert bs1 bs2 bs3.
+    induction n as [|n IHn]; intros; simplify_equality'; f_equal.
+    + eapply IH; eauto using Forall2_drop with lia.
+    + rewrite mask_bits_drop. eapply IHn; eauto using Forall2_drop,
+        Forall_drop; rewrite ?drop_length; lia.
+  * intros [] s τs Hs Hτs IH _ bs1 bs2 bs3.
+    { erewrite !val_of_bits_compound, !(injective_iff _),
+        bit_size_of_struct by eauto. revert bs1 bs2 bs3; clear Hs Hτs.
+      unfold struct_of_bits.
+      induction (bit_size_of_fields τs) as [|?????? IHτs];
+        inversion IH as [|?? IH']; intros; simplify_equality'; f_equal.
+      + eapply IH'; eauto using Forall2_drop with lia.
+      + rewrite mask_bits_drop. eapply IHτs; eauto using Forall2_drop,
+          Forall_drop; rewrite ?drop_length; lia. }
+    erewrite !val_of_bits_compound by eauto.
     intros. destruct (list_singleton_dec _) as [[??]|_]; subst.
-    + simplify_equality. f_equal. rewrite Forall_singleton in IH. eauto.
-    + simplify_equality. f_equal. clear Hs Hτs.
-      induction IH; simpl in *; f_equal; simplify_list_equality; eauto.
+    + simplify_equality; f_equal. rewrite Forall_singleton in IH.
+      eapply IH; eauto. transitivity (bit_size_of (union s));
+        eauto using bit_size_of_union_singleton.
+    + simplify_equality; f_equal. apply bit_size_of_union in Hs.
+      clear Hτs. induction IH; decompose_Forall;
+        simplify_equality'; f_equal; eauto with lia.
 Qed.
-
-Lemma fmap_val_of_bytes_masked m τs bs1 bs2 cs2 :
+Lemma fmap_val_of_bits_masked m τs bs1 bs2 bs3 :
   Forall (type_valid get_env) τs →
-  bs1 ⊑@{m}* bs2 → m ⊢* valid cs2 →
-  flip val_of_bytes bs2 <$> τs = flip val_of_bytes cs2 <$> τs →
-  flip val_of_bytes (mask_bytes bs1 cs2) <$> τs =
-    flip val_of_bytes bs1 <$> τs.
+  bs1 ⊑@{m}* bs2 → m ⊢* valid bs3 →
+  Forall (λ τ, bit_size_of τ ≤ length bs2) τs →
+  length bs2 = length bs3 →
+  flip val_of_bits bs2 <$> τs = flip val_of_bits bs3 <$> τs →
+  flip val_of_bits (mask_bits bs1 bs3) <$> τs = flip val_of_bits bs1 <$> τs.
 Proof.
-  intros Hτs ??. induction Hτs; simpl; intros; simplify_list_equality;
-    f_equal; eauto using val_of_bytes_masked.
+  induction 1; intros; decompose_Forall; simplify_list_equality'; f_equal;
+    eauto using val_of_bits_masked.
 Qed.
 
-Global Instance: PartialOrder (@subseteq_env M (val Ti Vi) _ m).
+Global Instance: PartialOrder (@subseteq_env M (val Ti) _ m).
 Proof.
   intros m. repeat split.
   * assert (∀ vs, Forall (λ v, v ⊑@{m} v) vs → vs ⊑@{m}* vs).
@@ -861,25 +1012,32 @@ Proof.
       get_env !! s = Some τs → length τs ≠ 1 →
       vs2 !! i = Some v2 → v1 ⊑@{m} v2 → (∀ v3, v2 ⊑@{m} v3 → v1 ⊑@{m} v3) →
       bs2 ⊑@{m}* bs3 →
-      vs2 = flip val_of_bytes bs2 <$> τs → m ⊢* valid bs2 →
-      vs3 = flip val_of_bytes bs3 <$> τs →
+      vs2 = flip val_of_bits bs2 <$> τs → m ⊢* valid bs2 →
+      vs3 = flip val_of_bits bs3 <$> τs → length bs3 = bit_size_of (union s) →
       VUnion s i v1 ⊑@{m} VUnionNone s vs3).
-    { intros s i τs ?? v1 v2 bs2 bs3 Hs Hτs Hv2 ??????. subst.
+    { intros s i τs ?? v1 v2 bs2 bs3 Hs Hτs Hv2 ???????; subst.
       destruct (list_lookup_fmap_inv _ _ _ _ Hv2) as [τ [Hτ ?]]. subst.
-      simpl in *. apply VUnion_VUnionNone_le with τs (val_of_bytes τ bs3) bs3;
-        eauto using val_of_bytes_le, env_valid_lookup_lookup, bytes_valid_ge.
+      simpl in *. apply VUnion_VUnionNone_le with τs (val_of_bits τ bs3) bs3;
+        eauto using val_of_bits_le, env_valid_lookup_lookup, bits_valid_ge.
       rewrite list_lookup_fmap. by simplify_option_equality. }
     assert (∀ s τs vs1 vs2 vs3 bs1 bs2 bs2' bs3,
-      get_env !! s = Some τs → bs1 ⊑@{m}* bs2 →
-      vs1 = flip val_of_bytes bs1 <$> τs → m ⊢* valid bs1 →
-      vs2 = flip val_of_bytes bs2 <$> τs → bs2' ⊑@{m}* bs3 →
-      vs2 = flip val_of_bytes bs2' <$> τs → m ⊢* valid bs2' →
-      vs3 = flip val_of_bytes bs3 <$> τs →
+      get_env !! s = Some τs →
+      bs1 ⊑@{m}* bs2 → length bs2 = bit_size_of (union s) →
+      vs1 = flip val_of_bits bs1 <$> τs → m ⊢* valid bs1 →
+      vs2 = flip val_of_bits bs2 <$> τs →
+      bs2' ⊑@{m}* bs3 → length bs3 = bit_size_of (union s) →
+      vs2 = flip val_of_bits bs2' <$> τs → m ⊢* valid bs2' →
+      vs3 = flip val_of_bits bs3 <$> τs →
       VUnionNone s vs1 ⊑@{m} VUnionNone s vs3).
-    { intros s τs ??? bs1 bs2 bs2' bs3 ?????????. subst.
-      apply VUnionNone_le with τs (mask_bytes bs1 bs2') bs3; eauto using
-        mask_bytes_valid, fmap_val_of_bytes_masked, env_valid_lookup, eq_sym.
-      transitivity bs2'; eauto using mask_bytes_le. }
+    { intros s τs ??? bs1 bs2 bs2' bs3 ?? Hbs2 ????????; subst.
+      apply VUnionNone_le with τs (mask_bits bs1 bs2') bs3; eauto.
+      * symmetry. eapply fmap_val_of_bits_masked; eauto using env_valid_lookup.
+        + rewrite Hbs2. by apply bit_size_of_union.
+        + by erewrite (Forall2_length _ bs2' bs3), Hbs2 by eauto.
+      * by apply mask_bits_valid.
+      * transitivity bs2'; auto. apply mask_bits_le_same_length; auto.
+        erewrite (Forall2_length _ bs1), (Forall2_length _ bs2' bs3) by eauto.
+        congruence. }
     intros v1 v2 v3 Hv1v2. revert v3. induction Hv1v2 using @val_le_ind;
       intros ? Hv2v3; apply (val_le_inv_l _ _ _ _ Hv2v3); intros;
       simplify_map_equality; first
@@ -892,14 +1050,14 @@ Proof.
       Forall (type_valid get_env) τs →
       Forall2 (λ v1 v2, v2 ⊑@{m} v1 → v1 = v2) vs1 vs2 →
       bs1 ⊑@{m}* bs2 →
-      vs2 = flip val_of_bytes bs1 <$> τs → m ⊢* valid bs1 →
-      vs1 = flip val_of_bytes bs2 <$> τs → vs1 = vs2).
+      vs2 = flip val_of_bits bs1 <$> τs → m ⊢* valid bs1 →
+      vs1 = flip val_of_bits bs2 <$> τs → vs1 = vs2).
     { intros ?? τs ?? Hτs ?????. subst. induction Hτs; simpl in *;
-        decompose_Forall; f_equal; eauto using val_of_bytes_le. }
+        decompose_Forall; f_equal; eauto using val_of_bits_le. }
     induction 1 using @val_le_ind;
       intros Hv2v1; apply (val_le_inv _ _ _ _ Hv2v1); intros;
       f_equal; eauto using env_valid_lookup;
-      try by apply (anti_symmetric (⊑@{m})).
+      by apply (anti_symmetric (⊑@{m})).
 Qed.
 
 Lemma union_free_freeze v : union_free (val_map freeze v) ↔ union_free v.
@@ -914,17 +1072,97 @@ Proof.
       econstructor; eauto; by apply Forall_fmap.
 Qed.
 
-Lemma val_of_bytes_union_free τ bs :
-  type_valid get_env τ → union_free (val_of_bytes τ bs).
+Lemma val_new_base (τ : base_type Ti) : val_new (base τ) = VBase (VIndet τ).
+Proof. unfold val_new. by rewrite type_iter_base. Qed.
+Lemma val_new_array τ n :
+  val_new (τ.[n]) = VArray (replicate n (val_new τ)).
+Proof. unfold val_new. by rewrite type_iter_array. Qed.
+Lemma val_new_compound c s τs :
+  get_env !! s = Some τs →
+  val_new (compound@{c} s) =
+    match c with
+    | Struct => VStruct s (val_new <$> τs)
+    | Union =>
+       match list_singleton_dec τs with
+       | inleft (τ↾_) => VUnion s 0 (val_new τ)
+       | _ => VUnionNone s (val_new <$> τs)
+       end
+    end.
+Proof.
+  intros. unfold val_new.
+  rapply (@type_iter_compound Ti _ (@eq (val Ti))); eauto.
+  { by intros; subst. }
+  clear dependent s τs. intros ?? [] ? τs ??; simpl.
+  { f_equal; by apply Forall_fmap_ext. }
+  destruct (list_singleton_dec _) as [[??]|?]; subst; decompose_Forall.
+  * by f_equal.
+  * f_equal; by apply Forall_fmap_ext.
+Qed.
+
+Lemma val_of_bits_replicate τ sz :
+  type_valid get_env τ → bit_size_of τ ≤ sz →
+  val_of_bits τ (replicate sz BIndet) = val_new τ.
+Proof.
+  intros Hτ. revert τ Hτ sz. refine (type_env_ind _ _ _ _).
+  * intros. rewrite val_new_base, val_of_bits_base. f_equal.
+    rewrite <-(base_val_of_bits_resize _ _ (bit_size_of τ)) by done.
+    by rewrite resize_replicate, base_val_of_bits_replicate.
+  * intros τ n ? IH _ sz. rewrite val_new_array, val_of_bits_array,
+      bit_size_of_array. intros Hsz. f_equal.
+    revert sz Hsz. induction n; simpl; intros; f_equal.
+    + by rewrite IH by lia.
+    + rewrite drop_replicate. auto with lia.
+  * intros [] s τs Hs Hτs IH _ sz.
+    { erewrite val_new_compound, val_of_bits_compound by eauto.
+      erewrite bit_size_of_struct by eauto. unfold struct_of_bits.
+      intros Hsz. clear Hs Hτs. f_equal. revert sz Hsz.
+      induction (bit_size_of_fields τs); decompose_Forall;
+        simpl; intros; rewrite ?drop_replicate; f_equal; auto with lia. }
+    erewrite val_new_compound, val_of_bits_compound by eauto. intros.
+    destruct (list_singleton_dec τs) as [[τ ?]|_]; subst.
+    { rewrite Forall_singleton in IH. f_equal.
+      apply IH. transitivity (bit_size_of (union s));
+        eauto using bit_size_of_union_singleton. }
+    f_equal. apply bit_size_of_union in Hs. clear Hτs.
+    induction IH; decompose_Forall; simpl; f_equal; auto with lia.
+Qed.
+
+Lemma val_new_typed m τ : type_valid get_env τ → m ⊢ val_new τ : τ.
+Proof.
+  revert τ. refine (type_env_ind _ _ _ _).
+  * intros. rewrite val_new_base. by vtyped_constructor; constructor.
+  * intros τ n ?? IH. rewrite val_new_array. vtyped_constructor.
+    + by rewrite replicate_length.
+    + elim n; simpl; constructor; auto.
+    + done.
+  * intros [|] s τs Hs Hτs IH _.
+    { erewrite val_new_compound by eauto. vtyped_constructor; [by eauto|].
+      clear Hs Hτs. induction IH; constructor; auto. }
+    erewrite val_new_compound by eauto.
+    destruct (list_singleton_dec τs) as [[τ ?]|Hlen]; subst.
+    { decompose_Forall. by vtyped_constructor; eauto. }
+    apply VUnionNone_typed with
+      τs (replicate (bit_size_of (union s)) BIndet); auto.
+    + clear IH Hlen. symmetry. apply bit_size_of_union in Hs.
+      induction Hs; decompose_Forall; simpl; f_equal;
+        auto using val_of_bits_replicate.
+    + auto using Forall_replicate, BIndet_valid.
+    + by rewrite replicate_length.
+Qed.
+
+Lemma val_of_bits_union_free τ bs :
+  type_valid get_env τ → union_free (val_of_bits τ bs).
 Proof.
   intros Hτ. revert τ Hτ bs. refine (type_env_ind _ _ _ _).
-  * intros. rewrite val_of_bytes_base. by constructor.
-  * intros. rewrite val_of_bytes_array.
-    constructor. by apply Forall_array_of_bytes.
-  * intros [] s τs Hs Hτs IH; intros.
-    { erewrite !val_of_bytes_compound by eauto.
-      constructor. by apply Forall_struct_of_bytes. }
-    erewrite !val_of_bytes_compound by eauto.
+  * intros. rewrite val_of_bits_base. by constructor.
+  * intros τ n Hτ IH _ bs. rewrite val_of_bits_array. constructor.
+    revert bs. induction n; simpl; auto using Forall_drop.
+  * intros [] s τs Hs Hτs IH _ bs.
+    { erewrite !val_of_bits_compound by eauto. constructor.
+      unfold struct_of_bits. revert bs. clear Hs Hτs.
+      induction (bit_size_of_fields τs);
+        intros; decompose_Forall; simpl; auto using Forall_drop. }
+    erewrite !val_of_bits_compound by eauto.
     destruct (list_singleton_dec _) as [[τ ?]|?]; subst.
     + decompose_Forall. econstructor; eauto.
     + econstructor; eauto. apply Forall_fmap.
@@ -934,11 +1172,21 @@ Qed.
 Lemma mval_to_val_typed m w τ : m ⊢ w : τ → m ⊢ mval_to_val w : τ.
 Proof.
   induction 1 using @mtyped_ind; simpl.
-  * vtyped_constructor. eauto using base_val_of_bytes_typed.
+  * vtyped_constructor. eauto using base_val_of_bits_typed.
   * vtyped_constructor; trivial. by rewrite fmap_length. by apply Forall_fmap.
   * vtyped_constructor; eauto. by apply Forall2_fmap_l.
   * vtyped_constructor; eauto.
-  * eapply val_of_bytes_typed; eauto. constructor; eauto.
+  * eapply val_of_bits_typed; eauto. constructor; eauto.
+Qed.
+Lemma mval_to_val_frozen m w τ : m ⊢ w : τ → val_forall frozen (mval_to_val w).
+Proof.
+  induction 1 using @mtyped_ind; simpl.
+  * constructor. eauto using base_val_of_bits_frozen.
+  * constructor. by apply Forall_fmap.
+  * constructor. eapply Forall_fmap, Forall2_Forall_l; eauto.
+    eapply Forall_true; eauto.
+  * by constructor.
+  * eauto using val_of_bits_frozen, TCompound_valid.
 Qed.
 
 Lemma mval_to_val_union_free_1 w : union_free (mval_to_val w) → munion_free w.
@@ -970,7 +1218,7 @@ Proof.
   * inversion_clear 1. constructor; auto.
   * inversion_clear 1. econstructor; eauto.
   * inversion_clear 1. econstructor; eauto.
-  * intros. apply val_of_bytes_union_free. constructor; eauto.
+  * intros. apply val_of_bits_union_free. constructor; eauto.
 Qed.
 Lemma mval_to_val_union_free m w τ :
   m ⊢ w : τ → union_free (mval_to_val w) ↔ munion_free w.
@@ -978,39 +1226,36 @@ Proof.
   split; eauto using mval_to_val_union_free_2, mval_to_val_union_free_1.
 Qed.
 
-Lemma mval_of_bytes_to_val τ bs :
-  type_valid get_env τ → mval_to_val (mval_of_bytes τ bs) = val_of_bytes τ bs.
+Lemma mval_of_bits_to_val τ bs :
+  type_valid get_env τ → mval_to_val (mval_of_bits τ bs) = val_of_bits τ bs.
 Proof.
   intros Hτ. revert τ Hτ bs. refine (type_env_ind _ _ _ _).
-  * intros τ ? bs. by rewrite mval_of_bytes_base, val_of_bytes_base.
-  * intros. rewrite mval_of_bytes_array, val_of_bytes_array.
-    simpl. erewrite array_of_bytes_fmap; eauto.
+  * intros τ ? bs. rewrite mval_of_bits_base, val_of_bits_base; simpl.
+    by rewrite base_val_of_bits_resize by done.
+  * intros. rewrite mval_of_bits_array, val_of_bits_array.
+    simpl. erewrite array_of_bits_fmap; eauto.
   * intros [] s τs Hs Hτs IH _ bs.
-    { erewrite mval_of_bytes_compound, val_of_bytes_compound by eauto.
-      simpl. erewrite struct_of_bytes_fmap; eauto. }
-    erewrite mval_of_bytes_compound, val_of_bytes_compound by eauto.
+    { erewrite mval_of_bits_compound, val_of_bits_compound by eauto.
+      simpl. erewrite struct_of_bits_fmap; eauto. }
+    erewrite mval_of_bits_compound, val_of_bits_compound by eauto.
     destruct (list_singleton_dec _) as [[??]|Hτ]; subst; simpl.
     { f_equal. by decompose_Forall. }
-    erewrite val_of_bytes_compound by eauto.
+    erewrite val_of_bits_compound by eauto.
     destruct (list_singleton_dec _) as [[??]|_]; subst; [done|].
-    pose proof (size_of_union s τs Hs). pose proof (env_valid_lookup s τs Hs).
-    f_equal. clear Hs Hs Hτs Hτ.
+    pose proof (bit_size_of_union s τs Hs).
+    pose proof (env_valid_lookup s τs Hs). f_equal. clear Hs Hs Hτs Hτ.
     induction IH as [|?? Hτ]; decompose_Forall; simpl; f_equal; auto.
-    by rewrite <-Hτ, mval_of_bytes_resize.
+    by rewrite <-Hτ, mval_of_bits_resize.
 Qed.
 
-Lemma val_of_bytes_resize τ bs sz :
-  type_valid get_env τ → size_of τ ≤ sz →
-  val_of_bytes τ (resize sz BUndef bs) = val_of_bytes τ bs.
-Proof. intros. by rewrite <-!mval_of_bytes_to_val, mval_of_bytes_resize. Qed.
-Lemma val_of_bytes_take τ bs sz :
-  type_valid get_env τ → size_of τ ≤ sz →
-  val_of_bytes τ (take sz bs) = val_of_bytes τ bs.
-Proof. intros. by rewrite <-!mval_of_bytes_to_val, mval_of_bytes_take. Qed.
-Lemma val_of_bytes_app τ bs1 bs2 :
-  type_valid get_env τ → length bs1 = size_of τ →
-  val_of_bytes τ (bs1 ++ bs2) = val_of_bytes τ bs1.
-Proof. intros. by rewrite <-!mval_of_bytes_to_val, mval_of_bytes_app. Qed.
+Lemma val_of_bits_take τ bs sz :
+  type_valid get_env τ → bit_size_of τ ≤ sz →
+  val_of_bits τ (take sz bs) = val_of_bits τ bs.
+Proof. intros. by rewrite <-!mval_of_bits_to_val, mval_of_bits_take. Qed.
+Lemma val_of_bits_app τ bs1 bs2 :
+  type_valid get_env τ → length bs1 = bit_size_of τ →
+  val_of_bits τ (bs1 ++ bs2) = val_of_bits τ bs1.
+Proof. intros. by rewrite <-!mval_of_bits_to_val, mval_of_bits_app. Qed.
 
 Lemma mval_to_val_le m w1 w2 τ :
   m ⊢ w1 : τ → w1 ⊑@{m} w2 → mval_to_val w1 ⊑@{m} mval_to_val w2.
@@ -1031,427 +1276,542 @@ Proof.
   induction 1 using @mtyped_ind;
     intros w2 Hw1w2; pattern w2; apply (mval_le_inv_l _ _ _ _ Hw1w2);
     intros; simplify_option_equality.
-  * val_le_constructor. eauto using base_val_of_bytes_le.
+  * val_le_constructor. eauto using base_val_of_bits_le.
   * val_le_constructor. auto using Forall2_fmap_2.
   * val_le_constructor. eauto using Forall2_fmap_2.
   * val_le_constructor. auto.
-  * erewrite val_of_bytes_compound by eauto.
+  * erewrite val_of_bits_compound by eauto.
     destruct (list_singleton_dec _) as [[??]|_]; subst; [done|].
     val_le_constructor; rewrite ?list_lookup_fmap;
       eauto with simplify_option_equality.
-    rewrite <-mval_of_bytes_to_val; eauto using env_valid_lookup_lookup.
-  * eauto using val_of_bytes_le, TCompound_valid.
+    rewrite <-mval_of_bits_to_val; eauto using env_valid_lookup_lookup.
+  * eauto using val_of_bits_le, TCompound_valid.
 Qed.
 
-Lemma union_to_bytes_length f sz vs bs :
-  bs ∈ union_to_bytes f sz vs → length bs = sz.
+Lemma union_of_val_length f sz vs bs :
+  union_of_val f sz vs = Some bs → length bs = sz.
 Proof.
-  unfold union_to_bytes. intros Hbs.
-  apply elem_of_filter in Hbs. destruct Hbs as (_ & Hbs).
-  revert bs Hbs. apply (intersection_with_list_ind _ (λ _, True)).
-  + intros. decompose_elem_of. by apply replicate_length.
-  + by apply Forall_true.
-  + intros. by erewrite bytes_join_length_r by eauto.
+  revert bs. induction vs; intros; simplify_option_equality.
+  * by rewrite replicate_length.
+  * erewrite bits_join_length_r by eauto; eauto.
 Qed.
-Lemma union_to_bytes_valid_aux m f sz vs τs bs :
-  Forall2 (λ v τ, ∀ w, w ∈ f v → m ⊢ w : τ) vs τs →
-  bs ∈ union_to_bytes f sz vs → m ⊢* valid bs.
+Lemma union_of_val_valid f m sz vs τs bs :
+  Forall2 (λ v τ, m ⊢ f v : τ) vs τs →
+  union_of_val f sz vs = Some bs → m ⊢* valid bs.
 Proof.
-  unfold union_to_bytes. intros Hvs Hbs.
-  apply elem_of_filter in Hbs. destruct Hbs as (_ & Hbs).
-  revert bs Hbs. apply (intersection_with_list_ind _ (Forall (valid m))).
-  + intros. decompose_elem_of. apply Forall_replicate, BUndef_valid.
-  + unfold compose. simpl.
-    induction Hvs; constructor; intros; decompose_elem_of;
-      eauto using Forall_resize, BUndef_valid, mval_to_bytes_valid.
-  + eauto using bytes_valid_ge, bytes_join_Some_l.
+  intros Hvs. revert bs. induction Hvs; intros bs Hbs; simplify_equality'.
+  { eauto using Forall_replicate, BIndet_valid. }
+  destruct (union_of_val f sz l) as [bs'|] eqn:Hbs'; simplify_equality'.
+  eapply bits_join_Some_r in Hbs; eauto using bits_valid_ge,
+    Forall_resize, BIndet_valid, mval_to_bits_valid.
 Qed.
 
-Lemma mval_of_val_typed m v τ w : m ⊢ v : τ → w ∈ mval_of_val v → m ⊢ w : τ.
+Lemma mval_of_val_typed m v τ : m ⊢ v : τ → m ⊢ mval_of_val v : τ.
 Proof.
-  intros Hvτ. revert v τ Hvτ w. refine (vtyped_ind _ _ _ _ _ _ _); simpl.
-  * intros. decompose_elem_of. erewrite type_of_correct by eauto.
+  intros Hvτ. revert v τ Hvτ. refine (vtyped_ind _ _ _ _ _ _ _); simpl.
+  * intros. erewrite type_of_correct by eauto.
     mtyped_constructor; eauto using base_typed_type_valid,
-      base_val_to_bytes_valid, base_val_to_bytes_length_typed.
-  * intros. decompose_elem_of. mtyped_constructor.
-    + symmetry. eapply mapM_length; eauto.
-    + eapply elem_of_mapM_Forall; eauto.
-    + done. 
-  * intros. decompose_elem_of. mtyped_constructor; eauto.
-    eapply elem_of_mapM_Forall2_l; eauto.
-  * intros. decompose_elem_of. mtyped_constructor; eauto.
-  * intros s vs τs bs Hs Hτs Hvsτs IH Hvs Hbs w Hw.
-    apply elem_of_fmap in Hw. destruct Hw as (cs & ? & Hcs); subst.
-    econstructor; eauto using union_to_bytes_valid_aux, union_to_bytes_length.
+      base_val_to_bits_valid, base_val_to_bits_length.
+  * intros. mtyped_constructor.
+    + by rewrite fmap_length.
+    + by apply Forall_fmap.
+    + done.
+  * intros. mtyped_constructor; eauto. by apply Forall2_fmap_l.
+  * intros. mtyped_constructor; eauto.
+  * intros s vs τs bs Hs Hτs Hvsτs IH ? Hbs Hlen; subst.
+    destruct (union_of_val _ _ _) as [bs'|] eqn:Hbs'.
+    + mtyped_constructor;
+        eauto using union_of_val_length, union_of_val_valid.
+    + mtyped_constructor; eauto using
+        Forall_replicate, BIndet_valid, replicate_length.
 Qed.
 
-Lemma val_of_bytes_union_to_bytes m sz vs τs bs :
-  m ⊢* vs :* τs →
-  bs ∈ union_to_bytes mval_of_val sz vs →
-  flip val_of_bytes bs <$> τs = vs.
+Lemma union_of_val_Some_inv_aux m τs sz bs bs' :
+  let vs := flip val_of_bits bs <$> τs in
+  Forall (type_valid get_env) τs →
+  Forall (λ τ, bit_size_of τ ≤ sz) τs →
+  m ⊢* valid bs →
+  Forall (λ τ, ∀ bs', m ⊢* valid bs' →
+    val_to_bits (val_of_bits τ bs') ⊑@{m}*
+      resize (bit_size_of τ) BIndet bs') τs →
+  union_of_val mval_of_val sz vs = Some bs' →
+  bs' ⊑@{m}* resize sz BIndet bs.
 Proof.
-  intros Hvs. unfold union_to_bytes. rewrite elem_of_filter.
-  erewrite list_fmap_compose, fmap_type_of by eauto. by intros [??].
+  intros vs Hτs Hszτs Hbs IH. unfold vs; clear vs.
+  revert bs'. induction IH; intros bs' Hbs';
+    decompose_Forall_hyps; simplify_option_equality.
+  { eapply Forall2_replicate_l; eauto using
+     resize_length, Forall_resize, Forall_BIndet_le. }
+  eapply bits_join_min; eauto using Forall2_resize_ge_r,
+    Forall2_resize_ge_r, Forall_BIndet_le.
 Qed.
-Lemma union_to_bytes_valid m sz vs τs bs :
-  m ⊢* vs :* τs →
-  bs ∈ union_to_bytes mval_of_val sz vs → m ⊢* valid bs.
+Lemma mval_to_bits_of_val_of_bits_le m τ bs :
+  type_valid get_env τ → m ⊢* valid bs →
+  val_to_bits (val_of_bits τ bs) ⊑@{m}* resize (bit_size_of τ) BIndet bs.
 Proof.
-  intros Hvs. apply union_to_bytes_valid_aux with τs.
-  induction Hvs; constructor; eauto using mval_of_val_typed.
+  intros Hvτ. revert τ Hvτ bs. refine (type_env_ind _ _ _ _).
+  * intros τ ? bs Hbs. rewrite val_of_bits_base; simpl.
+    rewrite <-(base_val_of_bits_resize τ bs (bit_size_of τ)) by done.
+    apply base_val_to_of_bits_le; auto using Forall_resize, BIndet_valid.
+    by rewrite resize_length.
+  * intros τ n Hτ IH _ bs Hbs. rewrite val_of_bits_array; simpl.
+    rewrite bit_size_of_array.
+    revert bs Hbs. induction n as [|n IHn]; intros bs Hbs; simpl.
+    { by rewrite resize_0. }
+    rewrite resize_plus; apply Forall2_app; auto using Forall_drop.
+  * intros [] s τs Hs Hτs IH _ bs Hbs.
+    { erewrite val_of_bits_compound by eauto; simpl.
+      erewrite bit_size_of_struct, Hs by eauto; simpl.
+      clear Hs Hτs. revert bs Hbs.
+      unfold struct_of_bits. induction (bit_size_of_fields τs)
+        as [|τ sz τs szs]; decompose_Forall_hyps; simpl; intros bs Hbs.
+      { by rewrite resize_0. }
+      rewrite resize_plus. apply Forall2_app; eauto using Forall_drop,
+        Forall2_resize_ge_r, Forall_BIndet_le. }
+    erewrite val_of_bits_compound by eauto; simpl.
+    destruct (list_singleton_dec _) as [[??]|_]; subst; simpl.
+    { rewrite Forall_singleton in IH.
+      eauto using Forall2_resize_ge_r, Forall_BIndet_le,
+         bit_size_of_union_singleton. }
+    destruct (union_of_val _ _ _) as [bs'|] eqn:Hbs'; simpl.
+    + apply bit_size_of_union in Hs. revert bs' Hbs'.
+      induction IH; intros bs' Hbs';
+        decompose_Forall_hyps; simplify_option_equality.
+      { eapply Forall2_replicate_l; eauto using
+          resize_length, Forall_resize, Forall_BIndet_le. }
+      eapply bits_join_min; eauto using Forall2_resize_ge_r,
+        Forall2_resize_ge_r, Forall_BIndet_le.
+    + eapply Forall2_replicate_l; eauto using
+        resize_length, Forall_resize, Forall_BIndet_le.
 Qed.
 
-Lemma mval_of_to_val m v τ w :
-  m ⊢ v : τ → w ∈ mval_of_val v → val_map freeze v = mval_to_val w.
+Lemma union_of_val_Some_aux m τs sz bs :
+  let vs := flip val_of_bits bs <$> τs in
+  Forall (type_valid get_env) τs →
+  Forall (λ τ, bit_size_of τ ≤ sz) τs →
+  m ⊢* valid bs → length bs = sz →
+  Forall (λ v, mval_to_val (mval_of_val v) = val_map freeze v) vs →
+  ∃ bs',
+    union_of_val mval_of_val sz vs = Some bs' ∧
+    bs' ⊑@{m}* bs ∧
+    vs = flip val_of_bits bs' <$> τs.
 Proof.
-  intros Hvτ. revert v τ Hvτ w. refine (vtyped_ind _ _ _ _ _ _ _); simpl.
-  * intros. decompose_elem_of. simpl. by rewrite base_val_of_to_bytes.
-  * intros vs τ Hvs IH _ w Hw.
-    rewrite elem_of_fmap in Hw. destruct Hw as (ws & ? & Hws); subst.
-    simpl. f_equal. rewrite elem_of_mapM in Hws.
-    induction Hws; simpl; decompose_Forall; f_equal; auto.
-  * intros s vs τs _ _ IH w Hw.
-    rewrite elem_of_fmap in Hw. destruct Hw as (ws & ? & Hws); subst.
-    simpl. f_equal. rewrite elem_of_mapM in Hws. revert τs IH.
-    induction Hws; simpl; intros; decompose_Forall; f_equal; eauto.
-  * intros. decompose_elem_of. simpl. f_equal. eauto.
-  * intros s vs τs bs Hs Hτs Hvsτs IH Hvs Hbs w Hw.
-    rewrite elem_of_fmap in Hw. destruct Hw as (cs & ? & Hcs); subst.
-    simpl. erewrite val_of_bytes_compound by eauto.
+  intros vs Hτs Hsz Hbs Hlen IH; unfold vs in *; clear vs.
+  rewrite Forall_fmap in IH; unfold compose in IH.
+  induction IH as [|τ τs IHτ _ IHτs]; simpl.
+  { eexists (replicate sz BIndet). split_ands; auto.
+    eapply Forall2_replicate_l; eauto using
+      resize_length, Forall_resize, Forall_BIndet_le. }
+  rewrite Forall_cons in Hτs; destruct Hτs as [Hτ Hτs]; simpl in *.
+  rewrite Forall_cons in Hsz; destruct Hsz as [Hsz Hsz'].
+  destruct IHτs as (bs2&Hbs2&?&?); auto. rewrite Hbs2; simpl.
+  set (bs3:=resize sz BIndet (val_to_bits (val_of_bits τ bs))).
+  assert (bs3 ⊑@{m}* bs).
+  { rewrite <-(resize_all_alt bs sz BIndet) by done.
+    eapply Forall2_resize_ge_r; eauto using Forall_BIndet_le,
+      mval_to_bits_of_val_of_bits_le. } 
+  destruct (bits_join_exists m bs3 bs2 bs) as (bs4&Hbs4&?); eauto.
+  exists bs4. split_ands; auto. f_equal.
+  * symmetry. apply (val_of_bits_trans m τ bs3 bs4 bs); eauto
+      using bits_join_Some_l, bits_valid_le.
+    rewrite val_frozen_freeze in IHτ by eauto using val_of_bits_frozen.
+    unfold bs3. rewrite val_of_bits_resize by done.
+    rewrite <-(mval_of_bits_to_val _ (mval_to_bits _)) by done.
+    assert (munion_free (mval_of_val (val_of_bits τ bs))).
+    { rewrite <-(mval_to_val_union_free m), IHτ by
+        eauto using mval_of_val_typed, val_of_bits_typed.
+      by apply val_of_bits_union_free. }
+    by rewrite (mval_of_to_bits_union_free m) by
+      eauto using mval_of_val_typed, val_of_bits_typed.
+  * apply (bits_join_Some_r m) in Hbs4; eauto using bits_valid_le.
+    clear dependent bs3; clear dependent τ; clear Hbs2.
+    induction Hτs as [|τ τs]; simpl in *;
+      decompose_Forall; simplify_list_equality; f_equal; auto.
+    symmetry. apply (val_of_bits_trans m τ bs2 bs4 bs); eauto
+      using bits_join_Some_l, bits_valid_le.
+Qed.
+Lemma mval_to_of_val m v τ :
+  m ⊢ v : τ → mval_to_val (mval_of_val v) = val_map freeze v.
+Proof.
+  intros Hvτ. revert v τ Hvτ. refine (vtyped_ind _ _ _ _ _ _ _); simpl.
+  * intros. erewrite type_of_correct by eauto.
+    f_equal. eauto using base_val_of_to_bits.
+  * intros vs τ Hvs IH _. f_equal.
+    induction IH; simpl; decompose_Forall; f_equal; auto.
+  * intros s vs τs _ _ IH. f_equal.
+    induction IH; simpl; intros; decompose_Forall; f_equal; auto.
+  * intros. f_equal. auto.
+  * intros s vs τs bs Hs Hτs Hvs IH ? Hbs Hlen; subst.
+    destruct (union_of_val_Some_aux m τs (bit_size_of (union s)) bs)
+      as (bs'&Hbs'&?&Hbsbs'); eauto using bit_size_of_union, env_valid_lookup.
+    { clear Hs Hτs Hvs. induction IH; constructor; auto. }
+    rewrite Hbs'; simpl. erewrite val_of_bits_compound by eauto.
     destruct (list_singleton_dec _) as [[??]|_]; subst; [done|].
-    f_equal. rewrite vals_frozen_freeze by
-      eauto using vals_of_bytes_frozen, env_valid_lookup.
-    symmetry. eauto using val_of_bytes_union_to_bytes.
+    by rewrite vals_frozen_freeze, Hbsbs' by
+      eauto using vals_of_bits_frozen, env_valid_lookup.
 Qed.
-
-Lemma val_of_to_bytes_union_free m v τ bs :
-  m ⊢ v : τ → union_free v →
-  bs ∈ mval_to_bytes <$> mval_of_val v → val_of_bytes τ bs = val_map freeze v.
+Lemma union_of_val_Some m τs sz bs :
+  let vs := flip val_of_bits bs <$> τs in
+  Forall (type_valid get_env) τs →
+  Forall (λ τ, bit_size_of τ ≤ sz) τs →
+  m ⊢* valid bs → length bs = sz →
+  ∃ bs',
+    union_of_val mval_of_val sz vs = Some bs' ∧
+    bs' ⊑@{m}* bs ∧
+    vs = flip val_of_bits bs' <$> τs.
 Proof.
-  intros Hvτ ? Hbs. apply elem_of_fmap in Hbs. destruct Hbs as (w&?&Hw).
-  assert (m ⊢ w : τ) by eauto using mval_of_val_typed.
-  eapply mval_of_to_val in Hw; eauto. subst.
-  rewrite <-!mval_of_bytes_to_val by eauto using vtyped_type_valid.
-  rewrite (mval_of_to_bytes_union_free m); eauto.
-  apply mval_to_val_union_free_1. rewrite <-Hw. by apply union_free_freeze.
+  intros vs Hτs Hsz Hbs ?. apply union_of_val_Some_aux; auto.
+  apply Forall_fmap. clear vs Hsz. induction Hτs; constructor; simpl;
+    eauto using mval_to_of_val, val_of_bits_typed.
 Qed.
 
-Lemma union_to_of_bytes_exists_help m τs sz bs2
-    (vs := flip val_of_bytes bs2 <$> τs) :
-  Forall (type_valid get_env) τs → Forall (λ τ, size_of τ ≤ sz) τs →
-  m ⊢* valid bs2 → Forall (λ τ, ∀ bs2, m ⊢* valid bs2 →
-    ∃ bs1, bs1 ∈ mval_to_bytes <$> mval_of_val (val_of_bytes τ bs2) ∧
-      bs1 ⊑@{m}* resize (size_of τ) BUndef bs2) τs →
-  ∃ bs1, bs1 ∈ union_to_bytes mval_of_val sz vs ∧
-    bs1 ⊑@{m}* resize sz BUndef bs2.
+Lemma mval_of_val_union_free m v τ :
+  m ⊢ v : τ → munion_free (mval_of_val v) ↔ union_free v.
 Proof.
-  intros Hτs Hsz Hbs2 IH. cut (∃ bs1,
-    flip val_of_bytes bs1 <$> τs = flip val_of_bytes bs2 <$> τs ∧
-    bs1 ∈ intersection_with_list bytes_join {[ replicate sz BUndef ]} $
-      fmap (resize sz BUndef ∘ mval_to_bytes) ∘ mval_of_val <$> vs ∧
-    bs1 ⊑@{m}* resize sz BUndef bs2).
-  { intros (bs1 & ? & ? & ?). unfold vs. exists bs1. split; [|done].
-    unfold union_to_bytes. apply elem_of_filter. split; [|done].
-    rewrite list_fmap_compose, (fmap_type_of m _ τs); [done |].
-    elim Hτs; simpl; constructor; auto using val_of_bytes_typed. }
-  unfold vs. clear vs. revert bs2 Hbs2.
-  induction IH as [|τ τs IHτ _ IHτs]; intros bs2 Hbs2; simpl.
-  { eexists (replicate sz BUndef). rewrite elem_of_singleton. split_ands; auto.
-    eapply Forall2_replicate_l; eauto using resize_length.
-    eapply Forall_resize; eauto. eapply Forall_impl; eauto. by constructor. }
-  rewrite Forall_cons in Hτs. destruct Hτs as [Hτ Hτs].
-  rewrite Forall_cons in Hsz. destruct Hsz as [Hsz Hsz'].
-  destruct (IHτ bs2) as (bs3 & Hbs3 & ?); trivial.
-  assert (m ⊢* valid bs3).
-  { decompose_elem_of. eauto using mval_to_bytes_valid,
-      mval_of_val_typed, val_of_bytes_typed, env_valid_lookup. }
-  destruct (IHτs Hτs Hsz' bs2) as (bs4 & ? & Hbs4 & ?); trivial.
-  assert (m ⊢* valid bs4).
-  { apply (union_to_bytes_valid m sz (flip val_of_bytes bs2 <$> τs) τs);
-      eauto using fmap_val_of_bytes_typed.
-    unfold union_to_bytes. apply elem_of_filter. split; auto.
-    rewrite list_fmap_compose, (val_of_bytes_fmap_type_of m); eauto. }
-  destruct (bytes_join_exists m (resize sz BUndef bs3) bs4
-    (resize sz BUndef bs2)) as (bs5 & ? & ?); eauto using
-    Forall2_resize_ge_r, Forall2_resize, BUndef_le, Forall_BUndef_le.
-  exists bs5. split_ands.
-  * eapply val_of_to_bytes_union_free in Hbs3;
-      eauto using val_of_bytes_typed, val_of_bytes_union_free.
-    rewrite val_frozen_freeze in Hbs3
-      by eauto using val_of_bytes_frozen. f_equal.
-    + rewrite (val_of_bytes_trans m τ (resize sz BUndef bs3)
-        bs5 (resize sz BUndef bs2));
-        rewrite ?val_of_bytes_resize by done; eauto using
-        val_of_bytes_resize, @bytes_join_Some_l, Forall_resize, BUndef_valid.
-    + clear dependent τ. clear Hbs4 IHτs.
-      induction Hτs as [|τ τs]; simpl in *;
-        decompose_Forall; simplify_list_equality; f_equal; auto.
-      rewrite (val_of_bytes_trans m τ bs4 bs5 (resize sz BUndef bs2));
-        rewrite ?val_of_bytes_resize by done; eauto using
-        val_of_bytes_resize, @bytes_join_Some_r, Forall_resize, BUndef_valid.
-  * apply elem_of_intersection_with. repeat esplit; eauto. esolve_elem_of.
-  * auto.
+  intros. rewrite <-mval_to_val_union_free by eauto using mval_of_val_typed.
+  by erewrite mval_to_of_val, union_free_freeze by eauto. 
 Qed.
+Lemma mval_of_val_union_free_2 m v τ :
+  m ⊢ v : τ → union_free v → munion_free (mval_of_val v).
+Proof. intros. eapply mval_of_val_union_free; eauto. Qed.
 
-Lemma val_to_of_bytes_exists m τ bs2 :
-  type_valid get_env τ → m ⊢* valid bs2 →
-  ∃ bs1, bs1 ∈ mval_to_bytes <$> mval_of_val (val_of_bytes τ bs2) ∧
-    bs1 ⊑@{m}* resize (size_of τ) BUndef bs2.
-Proof.
-  intros Hvτ. revert τ Hvτ bs2. refine (type_env_ind _ _ _ _).
-  * intros τ ? bs2 Hbs2. destruct (base_val_to_of_bytes_le m τ
-      (resize (size_of (base τ)) BUndef bs2)) as (bs1 & ? & ?).
-    { eauto using Forall_resize, BUndef_valid. }
-    { by rewrite resize_length. }
-    exists bs1. split; [|done]. rewrite val_of_bytes_base. simpl.
-    rewrite <-collection_fmap_compose. apply elem_of_fmap. by exists bs1.
-  * intros τ n Hτ IH _ bs2 Hbs2. rewrite val_of_bytes_array. simpl.
-    simpl. setoid_rewrite <-collection_fmap_compose.
-    unfold compose. simpl. rewrite size_of_array.
-    revert bs2 Hbs2. induction n as [|n IHn]; intros bs2 Hbs2; simpl.
-    { eexists []. split. by left. by rewrite resize_0. }
-    destruct (IH bs2) as (bs3 & Hbs3 & ?); trivial.
-    destruct (IHn (drop (size_of τ) bs2)) as (bs4 & Hbs4 & ?);
-      auto using Forall_drop.
-    exists (bs3 ++ bs4). split; [| by rewrite resize_plus; apply Forall2_app].
-    apply elem_of_fmap in Hbs3. destruct Hbs3 as (v & ? & ?).
-    apply elem_of_fmap in Hbs4. destruct Hbs4 as (vs & ? & ?).
-    apply elem_of_fmap. exists (v :: vs). split.
-    { simpl. by f_equal. }
-    rewrite elem_of_bind. exists v. split; [|done].
-    rewrite elem_of_bind. exists vs. split; [by left|done].
-  * intros [] s τs Hs Hτs IH _ bs2 Hbs2.
-    { erewrite val_of_bytes_compound by eauto.
-      simpl. setoid_rewrite <-collection_fmap_compose.
-      unfold compose. simpl. erewrite size_of_struct by eauto.
-      rewrite Hs; simpl; clear Hs Hτs. revert bs2 Hbs2.
-      unfold struct_of_bytes. induction (size_of_struct_fields τs)
-        as [|τ sz τs szs ?? IHflds]; simpl; intros bs2 Hbs2.
-      { intros. eexists []. split. by left. by rewrite resize_0. }
-      rewrite Forall_cons in IH. destruct IH as [IHτ IHτs].
-      destruct (IHτ bs2) as (bs3 & Hbs3 & ?); trivial.
-      destruct (IHflds IHτs (drop sz bs2)) as (bs4 & Hbs4 & ?);
-        auto using Forall_drop.
-      exists (resize sz BUndef bs3 ++ bs4). split.
-      + apply elem_of_fmap in Hbs3. destruct Hbs3 as (v & ? & ?).
-        apply elem_of_fmap in Hbs4. destruct Hbs4 as (vs & ? & ?).
-        apply elem_of_fmap. exists (v :: vs). split.
-        { simpl. f_equal. by f_equal. done. }
-        simpl. rewrite elem_of_bind. exists v. split; [|done].
-        rewrite elem_of_bind. exists vs. split; [by left|done].
-      + rewrite resize_plus. eauto using Forall2_app,
-          Forall2_resize_ge_r, BUndef_le, Forall_BUndef_le. }
-    erewrite val_of_bytes_compound by eauto.
-    destruct (list_singleton_dec _) as [[??]|_]; subst.
-    { rewrite Forall_singleton in IH. simpl.
-      setoid_rewrite <-collection_fmap_compose. unfold compose. simpl.
-      destruct (IH bs2) as (bs3 & Hbs3 & ?); trivial.
-      apply elem_of_fmap in Hbs3. destruct Hbs3 as (v & ? & ?).
-      exists (resize (size_of (union s)) BUndef bs3).
-      split; [| eauto using Forall2_resize_ge_r, BUndef_le,
-        Forall_BUndef_le, size_of_union_singleton].
-      apply elem_of_fmap. subst. by exists v. }
-    destruct (union_to_of_bytes_exists_help m τs (size_of (union s)) bs2)
-      as (bs1 & ? & ?); eauto using size_of_union.
-    exists bs1. split; [|done]. simpl. setoid_rewrite <-collection_fmap_compose.
-    apply elem_of_fmap. by exists bs1.
-Qed.
-
-Lemma union_to_of_bytes_exists m τs sz bs2 (vs:=flip val_of_bytes bs2 <$> τs) :
-  Forall (type_valid get_env) τs → Forall (λ τ, size_of τ ≤ sz) τs →
-  m ⊢* valid bs2 →
-  ∃ bs1, bs1 ∈ union_to_bytes mval_of_val sz vs ∧
-    bs1 ⊑@{m}* resize sz BUndef bs2.
-Proof.
-  eauto using union_to_of_bytes_exists_help, Forall_impl,
-    val_to_of_bytes_exists.
-Qed.
-
-Lemma mval_of_val_exists m v τ : m ⊢ v : τ → ∃ w, w ∈ mval_of_val v.
-Proof.
-  revert v τ. refine (vtyped_ind _ _ _ _ _ _ _); simpl.
-  * intros v τ Hvτ. destruct (base_val_to_bytes_exists v) as [bs ?].
-    exists (MBase τ bs). erewrite type_of_correct by eauto. esolve_elem_of.
-  * intros vs τ Hvs IH _. subst.
-    assert (∃ ws, ws ∈ mapM mval_of_val vs) as [ws ?].
-    { clear Hvs. induction IH; esolve_elem_of. }
-    exists (MArray ws). esolve_elem_of.
-  * intros s vs τs Hs Hτs IH.
-    assert (∃ ws, ws ∈ mapM mval_of_val vs) as [ws ?].
-    { clear Hs Hτs. induction IH; esolve_elem_of. }
-    exists (MStruct s ws). esolve_elem_of.
-  * intros s i τs v τ Hs Hτs ? [w Hw]. exists (MUnion s i w). esolve_elem_of.
-  * intros s vs τs bs Hs Hτs ??? Hbs.
-    destruct (union_to_of_bytes_exists m τs (size_of (union s)) bs)
-      as (bs' & ? & Hbs'); eauto using size_of_union, env_valid_lookup.
-    exists (MUnionNone s bs'). esolve_elem_of.
-Qed.
-
-Lemma mval_of_to_val_exists m w τ :
-  m ⊢ w : τ → ∃ w', w' ∈ mval_of_val (mval_to_val w) ∧ w' ⊑@{m} w.
+Lemma mval_of_to_val m w τ : m ⊢ w : τ → mval_of_val (mval_to_val w) ⊑@{m} w.
 Proof.
   revert w τ. refine (mtyped_ind _ _ _ _ _ _ _); simpl.
-  * intros τ bs ???.
-    destruct (base_val_to_of_bytes_le m τ bs) as (bs'&?&?); trivial.
-    exists (MBase τ bs'). rewrite base_val_of_bytes_type_of by done.
-    split. esolve_elem_of. by constructor.
-  * intros ws τ Hws IH _. subst.
-    assert (∃ ws', ws' ∈ mapM mval_of_val (mval_to_val <$> ws) ∧
-      ws' ⊑@{m}* ws) as (ws'&?&?). by (clear Hws; induction IH; esolve_elem_of).
-    exists (MArray ws'). split. esolve_elem_of. by constructor.
-  * intros s ws τs Hs Hτs IH.
-    assert (∃ ws', ws' ∈ mapM mval_of_val (mval_to_val <$> ws) ∧
-      ws' ⊑@{m}* ws) as (ws'&?&?).
-    { clear Hs Hτs. induction IH; esolve_elem_of. }
-    exists (MStruct s ws'). split. esolve_elem_of. by constructor.
-  * intros s i τs w τ Hs Hτs ? (w' & ? & ?).
-    exists (MUnion s i w'). split. esolve_elem_of. by constructor.
+  * intros τ bs ???. rewrite base_val_of_bits_type_of by done.
+    mval_le_constructor. by apply base_val_to_of_bits_le.
+  * intros ws τ Hws IH _. mval_le_constructor.
+    elim IH; constructor; auto.
+  * intros s ws τs Hs Hτs IH. mval_le_constructor.
+    elim IH; constructor; auto.
+  * intros s i τs w τ Hs Hτs Hw IH. by mval_le_constructor.
   * intros s τs bs Hs Hτs Hbs Hlen.
-    destruct (union_to_of_bytes_exists m τs (size_of (union s)) bs)
-     as (bs' & Hbs' & Hbs'bs); eauto using size_of_union, env_valid_lookup.
-    rewrite resize_all_alt in Hbs'bs by done.
-    exists (MUnionNone s bs'). erewrite val_of_bytes_compound by eauto.
-    destruct (list_singleton_dec _) as [[??]|_]; subst; [done |].
-    split. esolve_elem_of. by constructor.
+    erewrite val_of_bits_compound by eauto.
+    destruct (list_singleton_dec _) as [[??]|_]; subst; [done |]; simpl.
+    destruct (union_of_val_Some m τs (bit_size_of (union s)) bs)
+      as (bs'&Hbs'&?&?); eauto using bit_size_of_union, env_valid_lookup.
+    rewrite Hbs'. by mval_le_constructor.
 Qed.
-
-Lemma mval_of_to_bytes_to_of_val m w τ :
-  m ⊢ w : τ → ∃ w', w' ∈ mval_of_val (mval_to_val w) ∧
-    w' ⊑@{m} mval_of_bytes τ (mval_to_bytes w).
+Lemma mval_of_to_bits_to_of_val m w τ :
+  m ⊢ w : τ → mval_of_val (mval_to_val w) ⊑@{m} mval_of_bits τ (mval_to_bits w).
 Proof.
-  intros. destruct (mval_of_to_val_exists m w τ) as (w'&?&?); trivial.
-  exists w'. split; [done |]. rewrite (mval_of_to_bytes m) by done.
-  transitivity w; eauto using munion_reset_above.
+  intros. erewrite mval_of_to_bits by eauto.
+  transitivity w; eauto using mval_of_to_val, munion_reset_above.
 Qed.
-
-Lemma mval_of_val_ge m v1 v2 τ w2 :
-  m ⊢ v1 : τ → v1 ⊑@{m} v2 → w2 ∈ mval_of_val v2 →
-  ∃ w1, w1 ∈ mval_of_val v1 ∧ w1 ⊑@{m} w2.
+Lemma mval_of_val_le m v1 v2 τ :
+  m ⊢ v1 : τ → v1 ⊑@{m} v2 → mval_of_val v1 ⊑@{m} mval_of_val v2.
 Proof.
-  intros Hv1τ Hv1v2. revert v1 v2 Hv1v2 τ Hv1τ w2.
+  intros Hv1τ Hv1v2. revert v1 v2 Hv1v2 τ Hv1τ.
   refine (val_le_ind _ _ _ _ _ _ _ _ _).
   * intros v1 v2 Hv1v2 τ' Hτ'. apply (vtyped_inv_l _ _ _ _ Hτ').
-    clear τ' Hτ'. intros τ Hv1τ w2 Hw2. simpl in *.
-    apply elem_of_fmap in Hw2. destruct Hw2 as (bs2 & ? & Hbs2).
-    destruct (base_val_to_bytes_ge m v1 v2 bs2) as (bs1 & ? & ?); auto.
-    exists (MBase τ bs1). subst. simpl.
+    clear τ' Hτ'; intros τ Hv1τ; simpl.
     erewrite !type_of_correct by eauto using base_typed_ge.
-    split; [esolve_elem_of|]. by mval_le_constructor.
+    mval_le_constructor. by apply base_val_to_bits_le.
   * intros vs1 vs2 Hvs IH τ' Hτ'. apply (vtyped_inv_l _ _ _ _ Hτ').
-    clear τ' Hτ'. intros τ ?? Hvs1 _ w2 Hw2; subst. simpl in *.
-    apply elem_of_fmap in Hw2. destruct Hw2 as (ws2 & ? & Hws2). subst.
-    apply elem_of_mapM in Hws2. assert (∃ ws1,
-      Forall2 (λ w1 v1, w1 ∈ mval_of_val v1) ws1 vs1 ∧
-      ws1 ⊑@{m}* ws2) as (ws1 & ? & ?).
-    { revert ws2 Hws2. induction IH; intros; decompose_Forall; naive_solver. }
-    exists (MArray ws1); split; [|by mval_le_constructor].
-    apply elem_of_fmap. exists ws1. by rewrite elem_of_mapM.
-  * intros s vs1 vs2 _ IH τ' Hτ'. apply (vtyped_inv_l _ _ _ _ Hτ').
-    clear τ' Hτ'. intros τs _ Hvs1 w2 Hw2. simpl in *.
-    apply elem_of_fmap in Hw2. destruct Hw2 as (ws2 & ? & Hws2).
-    subst. apply elem_of_mapM in Hws2. assert (∃ ws1,
-      Forall2 (λ w1 v1, w1 ∈ mval_of_val v1) ws1 vs1 ∧
-      ws1 ⊑@{m}* ws2) as (ws1 & ? & ?).
-    { revert τs Hvs1 ws2 Hws2.
-      induction IH; intros; decompose_Forall; naive_solver. }
-    exists (MStruct s ws1); split; [|by mval_le_constructor].
-    apply elem_of_fmap. exists ws1. by rewrite elem_of_mapM.
-  * intros s i v1 v2 Hv1v2 IH τ' Hτ'. apply (vtyped_inv_l _ _ _ _ Hτ').
-    clear τ' Hτ'. intros τs τ Hs Hi Hv1τ w' Hw'. simpl in *. 
-    apply elem_of_fmap in Hw'. destruct Hw' as (w2 & ? & Hw2). subst.
-    destruct (IH _ Hv1τ _ Hw2) as (w1 & ? & ?).
-    exists (MUnion s i w1). split; [esolve_elem_of |]. by constructor.
-  * eauto.
-  * intros s vs1 vs2 τs bs1 bs2 Hs Hvs1 Hbs1 Hvs2 Hbs Hvs _ τ' Hτ'.
-    apply (vtyped_inv_l _ _ _ _ Hτ').
-    clear τ' Hτ'. intros ??????? w2 Hw2. simplify_option_equality.
-    apply elem_of_fmap in Hw2. destruct Hw2 as (bs4 & ? & Hbs4). subst.
-    assert (length bs4 = size_of (union s))
-      by eauto using union_to_bytes_length.
-    assert (m ⊢* valid bs4).
-    { eapply union_to_bytes_valid with _ (flip val_of_bytes bs2 <$> τs) _;
-        eauto using fmap_val_of_bytes_typed, bytes_valid_ge, env_valid_lookup. }
-    unfold union_to_bytes in Hbs4.
-    apply elem_of_filter in Hbs4. destruct Hbs4 as (Hbs2 & ?).
-    rewrite list_fmap_compose, (val_of_bytes_fmap_type_of m) in Hbs2
-      by eauto using env_valid_lookup, bytes_valid_ge.
-    rewrite <-(fmap_val_of_bytes_masked m τs bs1 bs2 bs4)
-      by eauto using env_valid_lookup.
-    destruct (union_to_of_bytes_exists m τs (size_of (union s))
-      (mask_bytes bs1 bs4)) as (bs3 & Hbs3 & Hbs3bs4);
-      eauto using size_of_union, env_valid_lookup, mask_bytes_valid.
-    exists (MUnionNone s bs3). split; [esolve_elem_of |].
+    clear τ' Hτ'; intros τ ? _ Hvs1 _; simpl.
     mval_le_constructor.
-    rewrite resize_all_alt in Hbs3bs4 by (by rewrite mask_bytes_length).
-    transitivity (mask_bytes bs1 bs4); auto using mask_bytes_le.
-  * intros s i τs v1 v2 vs2 bs2 Hs Hτs Hi Hv1 IH Hvs2 Hbs2 τ' Hτ'.
-    apply (vtyped_inv_l _ _ _ _ Hτ'). clear τ' Hτ'.
-    intros ? τ ? Hiτ Hv1τ w2' Hw2'. simplify_option_equality.
-    apply elem_of_fmap in Hw2'. destruct Hw2' as (bs3 & Hv2 & Hbs3).
-    assert (length bs3 = size_of (union s))
-      by eauto using union_to_bytes_length.
-    unfold union_to_bytes in Hbs3.
-    assert (m ⊢* valid bs3).
-    { eapply union_to_bytes_valid with _ (flip val_of_bytes bs2 <$> τs) _;
-        eauto using fmap_val_of_bytes_typed, env_valid_lookup. }
-    apply elem_of_filter in Hbs3. destruct Hbs3 as [Hbs3 ?].
-    destruct (val_to_of_bytes_exists m τ bs3) as (bs1 & Hbs1 & ?);
-      eauto using env_valid_lookup_lookup.
-    rewrite list_fmap_compose, (val_of_bytes_fmap_type_of m) in Hbs3
-      by eauto using env_valid_lookup.
-    apply (f_equal (!! i)) in Hbs3. rewrite !list_lookup_fmap, Hiτ in Hbs3.
-    rewrite !list_lookup_fmap, Hiτ in Hi.
-    rewrite elem_of_fmap in Hbs1. destruct Hbs1 as (w2 & ? & Hw2).
-    simplify_option_equality.
-    destruct (IH τ Hv1τ w2) as (w1 & ? & ?); [by rewrite Hbs3|].
-    exists (MUnion s i w1). split; [esolve_elem_of |].
-    mval_le_constructor; eauto using mval_of_val_typed.
-    transitivity w2; [done|].
-    rewrite <-(mval_of_bytes_resize _ _ (size_of τ)) by
-      eauto using env_valid_lookup_lookup.
-    apply mval_of_to_bytes_le_flip; eauto using mval_of_val_typed,
-      val_of_bytes_typed, env_valid_lookup_lookup.
+    induction IH; decompose_Forall_hyps; constructor; eauto.
+  * intros s vs1 vs2 _ IH τ' Hτ'. apply (vtyped_inv_l _ _ _ _ Hτ').
+    clear τ' Hτ'; intros τs _ Hvs1; simpl.
+    mval_le_constructor. revert τs Hvs1.
+    induction IH; intros; decompose_Forall_hyps; constructor; eauto.
+  * intros s i v1 v2 Hv1v2 IH τ' Hτ'. apply (vtyped_inv_l _ _ _ _ Hτ').
+    clear τ' Hτ'; intros τs τ Hs Hi Hv1τ; simpl.
+    mval_le_constructor; eauto.
+  * eauto.
+  * intros s vs1 vs2 τs bs1 bs2 Hs Hvs1 Hbs1 Hlen Hvs2 Hbs2 Hvs _ τ' Hτ'.
+    apply (vtyped_inv_l _ _ _ _ Hτ').
+    clear τ' Hτ'; intros ????????; simplify_option_equality.
+    assert (m ⊢* valid bs2) by eauto using bits_valid_ge.
+    assert (Forall (λ τ, bit_size_of τ ≤ length bs2) τs).
+    { rewrite Hbs2. by apply bit_size_of_union. }
+    destruct (union_of_val_Some m τs (bit_size_of (union s)) bs2)
+      as (bs2'&Hbs2'&?&?); eauto using bit_size_of_union, env_valid_lookup.
+    rewrite <-(fmap_val_of_bits_masked m τs bs1 bs2 bs2') by
+      eauto using env_valid_lookup, Forall2_length, eq_sym, bits_valid_le.
+    destruct (union_of_val_Some m τs
+      (bit_size_of (union s)) (mask_bits bs1 bs2'))
+      as (bs1'&Hbs1'&?&?); eauto using bit_size_of_union, env_valid_lookup,
+      mask_bits_valid, bits_valid_le.
+    { by erewrite mask_bits_length, Forall2_length by eauto. }
+    simplify_option_equality. mval_le_constructor.
+    transitivity (mask_bits bs1 bs2'); auto.
+    apply mask_bits_le_same_length; eauto using bits_valid_le.
+    erewrite (Forall2_length _ bs2' bs2) by eauto. eauto using Forall2_length. 
+  * intros s i τs v1 v2 vs2 bs2 Hs Hτs Hi Hv1 IH Hvs2 Hbs2 Hlen τ' Hτ'.
+    apply (vtyped_inv_l _ _ _ _ Hτ').
+    clear τ' Hτ'; intros ? τ ? Hiτ Hv1τ; simplify_option_equality.
+    destruct (union_of_val_Some m τs (bit_size_of (union s)) bs2)
+      as (bs2'&Hbs2'&?&Hbs); eauto using bit_size_of_union, env_valid_lookup.
+    rewrite Hbs, list_lookup_fmap, Hiτ in Hi; simplify_option_equality.
+    mval_le_constructor; eauto using bits_valid_le.
+    + transitivity (mval_of_val (val_of_bits τ bs2')); eauto.
+      rewrite <-(mval_of_bits_resize _ _ (bit_size_of τ)) by
+        eauto using env_valid_lookup_lookup.
+      apply mval_of_to_bits_le_flip; eauto 8 using mval_of_val_typed,
+        val_of_bits_typed, bits_valid_le, env_valid_lookup_lookup.
+      apply mval_to_bits_of_val_of_bits_le; eauto using
+        env_valid_lookup_lookup, bits_valid_le.
+    + by erewrite Forall2_length by eauto.
 Qed.
 
-Global Instance: TypeCheckSpec M (type Ti) (val Ti Vi).
+Lemma val_to_bits_valid m τ v : m ⊢ v : τ → m ⊢* valid val_to_bits v.
+Proof. eauto using mval_of_val_typed, mval_to_bits_valid. Qed.
+Lemma val_to_bits_length m τ v :
+  m ⊢ v : τ → length (val_to_bits v) = bit_size_of τ.
+Proof. eauto using mval_to_bits_length, mval_of_val_typed. Qed.
+Lemma val_of_to_bits m τ v :
+  m ⊢ v : τ → union_free v →
+  val_of_bits τ (val_to_bits v) = val_map freeze v.
+Proof.
+  intros. erewrite <-mval_of_bits_to_val, mval_of_to_bits
+    by eauto using vtyped_type_valid, mval_of_val_typed.
+  by erewrite munion_free_reset, mval_to_of_val
+    by eauto using mval_of_val_union_free_2.
+Qed.
+
+Lemma mval_lookup_byte_typed m w τ i v :
+  m ⊢ w : τ → w !! i = Some v → m ⊢ v : uchar.
+Proof.
+  unfold lookup, mval_lookup_byte; intros; simplify_option_equality.
+  apply val_of_bits_typed; auto using TBase_valid, TInt_valid.
+  eauto using Forall_sublist_lookup, mval_to_bits_valid.
+Qed.
+Lemma mval_lookup_byte_length m w τ i v :
+  m ⊢ w : τ → w !! i = Some v → i < size_of τ.
+Proof.
+  unfold lookup, mval_lookup_byte, sublist_lookup.
+  intros; simplify_option_equality.
+  apply (Nat.mul_lt_mono_pos_r (char_bits)); auto using char_bits_pos.
+  change (size_of τ * char_bits) with (bit_size_of τ).
+  rewrite <-(mval_to_bits_length m w) by done. pose proof char_bits_pos; lia.
+Qed.
+Lemma mval_insert_byte_typed m w τ i v :
+  m ⊢ w : τ → m ⊢ v : uchar → m ⊢ <[i:=v]>w : τ.
+Proof.
+  unfold insert, mval_insert_byte. intros. simplify_type_equality.
+  apply mval_of_bits_typed; eauto using mtyped_type_valid.
+  apply Forall_sublist_insert;
+    eauto using val_to_bits_valid, mval_to_bits_valid.
+Qed.
+
+Lemma mval_lookup_byte_le m w1 w2 τ i v1 :
+  m ⊢ w1 : τ →
+  w1 ⊑@{m} w2 → w1 !! i = Some v1 → ∃ v2, w2 !! i = Some v2 ∧ v1 ⊑@{m} v2.
+Proof.
+  unfold lookup, mval_lookup_byte. intros.
+  destruct (sublist_lookup _ _ (mval_to_bits w1)) as [bs1|]
+    eqn:Hbs1; simplify_equality'.
+  destruct (Forall2_sublist_lookup_l (⊑@{m}) (mval_to_bits w1)
+    (mval_to_bits w2) (i * char_bits) char_bits bs1) as (bs2&?&?);
+    eauto using mval_to_bits_le.
+  exists (val_of_bits uchar bs2); simplify_option_equality.
+  naive_solver eauto using val_of_bits_le, val_of_bits_le,
+    TBase_valid, TInt_valid, Forall_sublist_lookup, mval_to_bits_valid.
+Qed.
+Lemma mval_lookup_byte_ge m w1 w2 τ i v2 :
+  m ⊢ w1 : τ →
+  w1 ⊑@{m} w2 → w2 !! i = Some v2 → ∃ v1, w1 !! i = Some v1 ∧ v1 ⊑@{m} v2.
+Proof.
+  unfold lookup, mval_lookup_byte. intros.
+  destruct (sublist_lookup _ _ (mval_to_bits w2)) as [bs2|]
+    eqn:Hbs1; simplify_equality'.
+  destruct (Forall2_sublist_lookup_r (⊑@{m}) (mval_to_bits w1)
+    (mval_to_bits w2) (i * char_bits) char_bits bs2) as (bs1&?&?);
+    eauto using mval_to_bits_le.
+  exists (val_of_bits uchar bs1); simplify_option_equality.
+  naive_solver eauto using val_of_bits_le, val_of_bits_le,
+    TBase_valid, TInt_valid, Forall_sublist_lookup, mval_to_bits_valid.
+Qed.
+
+Lemma mval_insert_byte_le m w1 w2 τ i v1 v2 :
+  m ⊢ w1 : τ →
+  m ⊢ v1 : uchar → w1 ⊑@{m} w2 → v1 ⊑@{m} v2 → <[i:=v1]>w1 ⊑@{m} <[i:=v2]>w2.
+Proof.
+  unfold insert, mval_insert_byte. intros.
+  rewrite <-(mval_le_type_of m w1 w2) by done. simplify_type_equality.
+  apply mval_of_bits_le; eauto using mtyped_type_valid.
+  apply Forall2_sublist_insert;
+    eauto using mval_to_bits_le, mval_to_bits_le, mval_of_val_le.
+Qed.
+
+Lemma mval_lookup_insert_byte m w τ i j v1 v2 :
+  m ⊢ w : τ → i ≠ j → m ⊢ v2 : uchar →
+  w !! i = Some v1 → <[j:=v2]>w !! i = Some v1.
+Proof.
+  unfold lookup, mval_lookup_byte, insert, mval_insert_byte. intros.
+  destruct (sublist_lookup _ _ (mval_to_bits w)) as [bs|]
+    eqn:Hbs; simplify_type_equality'.
+  rewrite sublist_lookup_Some in Hbs; destruct Hbs as (Hi&?&Hbs).
+  erewrite mval_to_bits_length in Hi by eauto.
+  erewrite mval_to_of_bits by eauto using mtyped_type_valid,
+    Forall_sublist_insert, val_to_bits_valid, mval_to_bits_valid.
+  apply bind_Some; exists bs; split; auto.
+  rewrite sublist_lookup_Some; split_ands; auto.
+  { by erewrite mask_bits_length, mval_to_bits_length
+      by eauto using (mval_0_typed m), mtyped_type_valid. }
+  intros j' Hj'. rewrite <-(Hbs j') by done.
+  transitivity (mask_bits (mval_to_bits (mval_0 τ)) (mval_to_bits w)
+    !! (i * char_bits + j')); [| by erewrite mval_to_bits_mask by eauto].
+  destruct (mval_to_bits (mval_0 τ) !! (i * char_bits + j')) as [bm|] eqn:Hbmj';
+    [| by rewrite !lookup_mask_bits_None ].
+  destruct (decide (bm = BIndet)) as [Hbm|Hbm]; subst;
+    [by rewrite !lookup_mask_bits_indet |].
+  rewrite (lookup_mask_bits _ bm), lookup_sublist_insert_ne,
+    (lookup_mask_bits _ bm); auto.
+  * erewrite mval_to_bits_length by eauto; lia.
+  * erewrite val_to_bits_length, bit_size_of_int, int_bits_char by eauto.
+    destruct (decide (i < j)).
+    { left. replace j with (i + (j - i)) by lia.
+      rewrite Nat.mul_add_distr_r. apply Nat.add_lt_mono_l.
+      apply Nat.lt_le_trans with (1 * char_bits); auto with lia.
+      apply Nat.mul_le_mono_r; lia. }
+    right. rewrite <-Nat.mul_succ_l.
+    transitivity (i * char_bits). apply Nat.mul_le_mono_r; lia. lia.
+  * erewrite sublist_insert_length, mval_to_bits_length by eauto; lia.
+Qed.
+
+Lemma mval_insert_byte_commute_aux m w τ i j v1 v2 :
+  m ⊢ w : τ → i < j → m ⊢ v1 : uchar → m ⊢ v2 : uchar →
+  <[i:=v1]>(<[j:=v2]>w) = <[j:=v2]>(<[i:=v1]>w).
+Proof.
+  intros. unfold insert, mval_insert_byte; simplify_type_equality.
+  set (f := sublist_insert (i * char_bits) (val_to_bits v1)).
+  set (g := sublist_insert (j * char_bits) (val_to_bits v2)).
+  assert (∀ bs, m ⊢* valid bs → m ⊢* valid (f bs)).
+  { eauto using Forall_sublist_insert, val_to_bits_valid. }
+  assert (∀ bs, m ⊢* valid bs → m ⊢* valid (g bs)).
+  { eauto using Forall_sublist_insert, val_to_bits_valid. }
+  assert (length (val_to_bits v1) = char_bits) as Hv1 by (by erewrite
+    val_to_bits_length, bit_size_of_int, int_bits_char by eauto).
+  assert (length (val_to_bits v2) = char_bits) as Hv2 by (by erewrite
+    val_to_bits_length, bit_size_of_int, int_bits_char by eauto).
+  erewrite !mval_to_of_bits by
+    eauto using mtyped_type_valid, mval_to_bits_valid.
+  erewrite !type_of_correct by
+    eauto using mval_of_bits_typed, mtyped_type_valid, mval_to_bits_valid.
+  erewrite <-(mval_of_bits_mask _ _ (f _)), <-(mval_of_bits_mask _ _ (g _))
+    by eauto using mtyped_type_valid, mask_bits_valid,
+      mval_0_typed, mval_to_bits_valid.
+  f_equal. apply list_eq. intros j'.
+  destruct (mval_to_bits (mval_0 τ) !! j') as [bm|] eqn:?;
+    [|by rewrite !lookup_mask_bits_None ].
+  destruct (decide (bm = BIndet)); subst; [by rewrite !lookup_mask_bits_indet|].
+  assert (j' < bit_size_of τ).
+  { rewrite <-(mval_to_bits_length m (mval_0 τ)) by eauto using mval_0_typed,
+      mtyped_type_valid. eauto using lookup_lt_Some. }
+  assert (j' < length (f (mask_bits (mval_to_bits (mval_0 τ))
+    (g (mval_to_bits w))))) as Hfj'.
+  { unfold f. by erewrite sublist_insert_length, mask_bits_length,
+      mval_to_bits_length by eauto using (mval_0_typed m), mtyped_type_valid. }
+  assert (j' < length (g (mask_bits (mval_to_bits (mval_0 τ))
+    (f (mval_to_bits w))))) as Hgj'.
+  { unfold g. by erewrite sublist_insert_length, mask_bits_length,
+      mval_to_bits_length by eauto using (mval_0_typed m), mtyped_type_valid. }
+  rewrite !(lookup_mask_bits _ bm) by done; clear Hfj' Hgj'.
+  destruct (decide (size_of τ ≤ j)).
+  { assert (bit_size_of τ ≤ j * char_bits) by (by apply Nat.mul_le_mono_r; lia).
+    unfold g. rewrite !sublist_insert_ge by
+      (by erewrite ?mask_bits_length, mval_to_bits_length
+         by eauto using (mval_0_typed m), mtyped_type_valid).
+    destruct (decide (size_of τ ≤ i)).
+    { assert (bit_size_of τ ≤ i * char_bits) by (by apply Nat.mul_le_mono_r).
+      unfold f. by rewrite !sublist_insert_ge by
+        (by erewrite ?mask_bits_length, mval_to_bits_length
+           by eauto using (mval_0_typed m), mtyped_type_valid). }
+    assert (i * char_bits + char_bits ≤ bit_size_of τ).
+    { rewrite <-Nat.mul_succ_l. apply Nat.mul_le_mono_r; omega. }
+    destruct (decide (i * char_bits ≤ j' < i * char_bits + char_bits)).
+    { unfold f. rewrite !(lookup_mask_bits _ bm) by
+       (by erewrite ?sublist_insert_length, ?mval_to_bits_length by eauto).
+     by rewrite !lookup_sublist_insert by 
+       (by erewrite ?mask_bits_length, ?Hv1, ?mval_to_bits_length
+          by eauto using (mval_0_typed m), mtyped_type_valid). }
+    unfold f. rewrite !lookup_sublist_insert_ne by omega.
+    rewrite !(lookup_mask_bits _ bm) by
+      (by erewrite ?sublist_insert_length, ?mval_to_bits_length by eauto).
+    by rewrite !lookup_sublist_insert_ne by omega. }
+  assert (i * char_bits + char_bits ≤ bit_size_of τ).
+  { rewrite <-Nat.mul_succ_l. apply Nat.mul_le_mono_r; omega. }
+  assert (j * char_bits + char_bits ≤ bit_size_of τ).
+  { rewrite <-Nat.mul_succ_l. apply Nat.mul_le_mono_r; omega. }
+  destruct (decide (i * char_bits ≤ j' < i * char_bits + char_bits)).
+  { unfold f at 1. rewrite lookup_sublist_insert by 
+     (by erewrite ?mask_bits_length, ?Hv1, ?mval_to_bits_length
+        by eauto using (mval_0_typed m), mtyped_type_valid).
+    assert (j' < j * char_bits).
+    { apply Nat.lt_le_trans with (i * char_bits + char_bits); [omega|].
+      rewrite <-Nat.mul_succ_l. apply Nat.mul_le_mono_r; omega. }
+    unfold g at 1. rewrite lookup_sublist_insert_ne by omega.
+    unfold f. rewrite !(lookup_mask_bits _ bm) by
+      (by erewrite ?sublist_insert_length, ?mval_to_bits_length by eauto).
+    by rewrite lookup_sublist_insert by
+      (by erewrite ?Hv1, ?mval_to_bits_length by eauto). }
+  unfold f at 1. rewrite lookup_sublist_insert_ne by omega.
+  destruct (decide (j * char_bits ≤ j' < j * char_bits + char_bits)).
+  { unfold g at 2. rewrite lookup_sublist_insert by 
+     (by erewrite ?mask_bits_length, ?Hv2, ?mval_to_bits_length
+        by eauto using (mval_0_typed m), mtyped_type_valid).
+    assert (j' < length (g (mval_to_bits w))).
+    { unfold g.
+      by erewrite sublist_insert_length, mval_to_bits_length by eauto. }
+    rewrite !(lookup_mask_bits _ bm) by done.
+    unfold g. by rewrite lookup_sublist_insert by
+      (by erewrite ?Hv2, ?mval_to_bits_length by eauto). }
+  unfold g at 2. rewrite lookup_sublist_insert_ne by omega.
+  unfold f, g. rewrite !(lookup_mask_bits _ bm) by
+    (by erewrite ?sublist_insert_length, ?mval_to_bits_length by eauto).
+  by rewrite !lookup_sublist_insert_ne by omega.
+Qed.
+Lemma mval_insert_byte_commute m w τ i j v1 v2 :
+  m ⊢ w : τ → i ≠ j → m ⊢ v1 : uchar → m ⊢ v2 : uchar →
+  <[i:=v1]>(<[j:=v2]>w) = <[j:=v2]>(<[i:=v1]>w).
+Proof.
+  intros. destruct (decide (i < j)).
+  * eapply mval_insert_byte_commute_aux; eauto.
+  * symmetry. eapply mval_insert_byte_commute_aux; eauto with lia.
+Qed.
+
+Global Instance: TypeCheckSpec M (type Ti) (val Ti).
 Proof.
   intros m. assert (∀ vs τs,
     Forall (λ v, ∀ τ, vtype_check m v = Some τ → m ⊢ v : τ) vs →
-    Forall2 (λ v τ, vtype_check m v = Some τ) vs τs → m ⊢* vs :* τs).
-  { induction 2; intros; decompose_Forall; subst; eauto. }
+    mapM (vtype_check m) vs = Some τs → m ⊢* vs :* τs).
+  { intros vs τs Hvs Hτs. eapply mapM_Some_1 in Hτs.
+    induction Hτs; intros; decompose_Forall; subst; eauto. }
   assert (∀ vs τ,
     m ⊢* vs : τ → Forall (λ v, vtype_check m v = Some τ) vs →
     mapM (type_check m) vs = Some (replicate (length vs) τ)).
   { intros. apply mapM_Some, Forall2_replicate_r; decompose_Forall; eauto. }
   assert (∀ sz vs τs bs,
-    choose (union_to_bytes mval_of_val sz vs) = Some bs →
-    bs ∈ union_to_bytes mval_of_val sz vs).
-  { intros. by apply choose_Some. }
-  assert (∀ s τs bs,
-    get_env !! s = Some τs → m ⊢* valid bs →
-    choose (union_to_bytes mval_of_val (size_of (union s))
-      (flip val_of_bytes bs <$> τs)) ≠ None).
-  { intros s τs bs ??. rewrite not_eq_None_Some.
-    rewrite <-choose_is_Some, not_elem_of_equiv_empty.
-    destruct (union_to_of_bytes_exists m τs (size_of (union s))  bs) as (?&?&?);
-      eauto using size_of_union, env_valid_lookup. }
+    m ⊢* vs :* τs → union_of_val mval_of_val sz vs = Some bs → m ⊢* valid bs).
+  { intros sz vs τs bs Hvs.
+    eapply (union_of_val_valid mval_of_val m _ _ τs); eauto.
+    induction Hvs; constructor; eauto using mval_of_val_typed. }
   intros v τ. unfold type_check. split.
   * revert τ. induction v using @val_ind_alt; intros; simplify_option_equality.
     + vtyped_constructor; eauto. by apply type_check_sound.
-    + case_match; simplify_option_equality.
-      vtyped_constructor; eauto. eapply Forall2_Forall_typed; eauto.
-    + vtyped_constructor; decompose_Forall; eauto.
+    + case_match; simplify_option_equality; decompose_Forall_hyps.
+      vtyped_constructor; eauto. constructor; eauto.
+      eapply Forall2_Forall_typed; eauto.
+    + vtyped_constructor; decompose_Forall_hyps; eauto.
     + vtyped_constructor; eauto.
-    + vtyped_constructor; eauto using
-        val_of_bytes_union_to_bytes, eq_sym, union_to_bytes_valid.
+    + vtyped_constructor; eauto using union_of_val_length.
   * induction 1 using @vtyped_ind; simplify_option_equality.
     + by erewrite type_check_complete by eauto.
-    + decompose_Forall_hyps; simplify_option_equality; try done;
-        exfalso; eauto using Forall_replicate_eq.
+    + match goal with
+      | H : length ?vs ≠ 0, H2 : Forall _ ?vs |- _ => destruct H2; [done|]
+      end; decompose_Forall_hyps; simplify_option_equality;
+        naive_solver eauto using Forall_replicate_eq.
     + erewrite mapM_Some_2; eauto. by simplify_option_equality.
     + done.
     + erewrite mapM_Some_2; eauto; simplify_option_equality.
-      destruct (choose _) eqn:?; naive_solver.
+      match goal with
+      | _ : get_env !! ?s = Some ?τs, _ : ?m ⊢* valid ?bs |- _ =>
+        edestruct (union_of_val_Some m τs
+          (bit_size_of (union s)) bs) as (?&?&?&?)
+      end; eauto using env_valid_lookup, bit_size_of_union.
+      by simplify_option_equality.
 Qed.
 
 Lemma val_lookup_nil v : v !! [] = Some v.
@@ -1467,22 +1827,71 @@ Qed.
 Lemma val_lookup_snoc v r rs : v !! (r ++ [rs]) = v !! rs ≫= (!! r).
 Proof. apply val_lookup_app. Qed.
 
-Lemma mval_to_val_lookup_seg w rs w' :
-  w !! rs = Some w' → mval_to_val w !! rs = Some (mval_to_val w').
+Lemma val_lookup_seg_Some m v τ rs v' :
+  m ⊢ v : τ → v !! rs = Some v' → ∃ σ, rs @ τ ↣ σ ∧ m ⊢ v' : σ.
 Proof.
-  destruct w,rs; intros; simplify_option_equality.
+  destruct 1 as [τ v|vs τ n ?? Hvs|s vs τs ? Hvs|s j τs v τ|s vs τs bs];
+    destruct rs as [i|i|i]; intros Hlookup; simplify_option_equality.
+  * exists τ. split.
+    + constructor; eauto using lookup_lt_Some.
+    + eapply (Forall_lookup (λ v, m ⊢ v : τ)); eauto.
+  * destruct (Forall2_lookup_l _ _ _ i v' Hvs) as [σ [??]]; eauto.
+    exists σ. split; [|done]. econstructor; eauto.
+  * exists τ. split; try econstructor; eauto.
+  * edestruct @list_lookup_fmap_inv as [? [??]]; eauto.
+    subst. eexists; split; try econstructor;
+      eauto using val_of_bits_typed, env_valid_lookup_lookup.
+Qed.
+Lemma val_lookup_Some m v τ r v' :
+  m ⊢ v : τ → v !! r = Some v' → ∃ σ, r @ τ ↣ σ ∧ m ⊢ v' : σ.
+Proof.
+  revert v τ. induction r using rev_ind; intros v τ Hvτ Hr.
+  { simplify_equality. eexists; split; [econstructor |]; eauto. }
+  rewrite val_lookup_snoc in Hr. simplify_option_equality.
+  edestruct val_lookup_seg_Some as [? [??]]; eauto.
+  edestruct IHr as [? [??]]; eauto.
+  eexists; split; [eapply ref_typed_snoc |]; eauto.
+Qed.
+Lemma val_lookup_seg_typed m v τ rs v' σ :
+  m ⊢ v : τ → v !! rs = Some v' → rs @ τ ↣ σ → m ⊢ v' : σ.
+Proof.
+  intros Hvτ Hv' Hrσ. by destruct (val_lookup_seg_Some _ _ _ _ _ Hvτ Hv')
+    as (σ'&Hrσ'&?); simplify_type_equality.
+Qed.
+Lemma val_lookup_typed m v τ r v' σ :
+  m ⊢ v : τ → v !! r = Some v' → r @ τ ↣ σ → m ⊢ v' : σ.
+Proof.
+  intros Hvτ Hv' Hrσ. by destruct (val_lookup_Some _ _ _ _ _ Hvτ Hv')
+    as (σ'&Hrσ'&?); simplify_type_equality.
+Qed.
+
+Lemma mval_to_val_lookup_seg w rs w' :
+  w !! rs = Some w' → frozen rs →
+  mval_to_val w !! rs = Some (mval_to_val w').
+Proof.
+  intros Hw Hrs. destruct w, Hrs; simplify_option_equality.
   * rewrite list_lookup_fmap. by simplify_option_equality.
   * exfalso. eauto using fmap_length.
   * rewrite list_lookup_fmap. by simplify_option_equality.
   * done.
-  * erewrite val_of_bytes_compound by eauto.
-    rewrite mval_of_bytes_to_val by eauto using env_valid_lookup_lookup.
+  * erewrite val_of_bits_compound by eauto.
+    rewrite mval_of_bits_to_val by eauto using env_valid_lookup_lookup.
     destruct (list_singleton_dec _) as [[??]|?];
       simplify_list_equality; simplify_option_equality; [done|].
     rewrite list_lookup_fmap. by simplify_option_equality.
 Qed.
+Lemma mval_to_val_lookup w r w' :
+  w !! r = Some w' → Forall frozen r →
+  mval_to_val w !! r = Some (mval_to_val w').
+Proof.
+  revert w. induction r using rev_ind; intros w Hr ?.
+  { by rewrite mval_lookup_nil in Hr; simplify_equality. }
+  rewrite mval_lookup_snoc in Hr; simplify_option_equality.
+  decompose_Forall_hyps.
+  erewrite val_lookup_snoc, mval_to_val_lookup_seg by eauto; eauto.
+Qed.
 
-Lemma mval_of_val_lookup_seg m w1 τ rs v1 :
+Lemma mval_to_val_lookup_seg_inv m w1 τ rs v1 :
   m ⊢ w1 : τ → mval_to_val w1 !! rs = Some v1 →
   ∃ w2, w1 !! rs = Some w2 ∧ mval_to_val w2 = v1.
 Proof.
@@ -1491,50 +1900,23 @@ Proof.
     | _ => progress simplify_option_equality
     | H: (_ <$> _) !! _ = Some _ |- _ => rewrite list_lookup_fmap in H
     | H: length (_ <$> _) ≠ _ |- _ => rewrite fmap_length in H
-    | H: val_of_bytes _ _ !! _ = Some _ |- _ =>
-      erewrite val_of_bytes_compound in H by eauto;
+    | H: val_of_bits _ _ !! _ = Some _ |- _ =>
+      erewrite val_of_bits_compound in H by eauto;
       destruct (list_singleton_dec _) as [[??]|?]
-    end; eauto using  mval_of_bytes_to_val, env_valid_lookup_lookup.
+    end; eauto using  mval_of_bits_to_val, env_valid_lookup_lookup.
 Qed.
-
-Lemma val_lookup_seg_Some m v τ rs v' :
-  m ⊢ v : τ → v !! rs = Some v' → ∃ σ, τ ∙ rs ↝ σ ∧ m ⊢ v' : σ.
+Lemma mval_to_val_lookup_inv m w1 τ r v1 :
+  m ⊢ w1 : τ → mval_to_val w1 !! r = Some v1 →
+  ∃ w2, w1 !! r = Some w2 ∧ mval_to_val w2 = v1.
 Proof.
-  destruct 1 as [τ v|vs τ n ?? Hvs|s vs τs ? Hvs|s j τs v τ|s vs τs bs];
-    destruct rs as [i|i|i]; intros Hlookup; simplify_option_equality.
-  * exists τ. split.
-    + constructor; eauto using lookup_lt_length_1.
-    + eapply (Forall_lookup (λ v, m ⊢ v : τ)); eauto.
-  * destruct (Forall2_lookup_l _ _ _ i v' Hvs) as [σ [??]]; eauto.
-    exists σ. split; [|done]. econstructor; eauto.
-  * exists τ. split; try econstructor; eauto.
-  * edestruct @list_lookup_fmap_inv as [? [??]]; eauto.
-    subst. eexists; split; try econstructor;
-      eauto using val_of_bytes_typed, env_valid_lookup_lookup.
-Qed.
-Lemma val_lookup_Some m v τ r v' :
-  m ⊢ v : τ → v !! r = Some v' → ∃ σ, τ ∙ r ↝ σ ∧ m ⊢ v' : σ.
-Proof.
-  revert v τ. induction r using rev_ind; intros v τ Hvτ Hr.
-  * simpl in Hr. simplify_equality. eexists; split; [econstructor |]; eauto.
-  * rewrite val_lookup_snoc in Hr. simplify_option_equality.
-    edestruct val_lookup_seg_Some as [? [??]]; eauto.
-    edestruct IHr as [? [??]]; eauto.
-    eexists; split; [eapply ref_typed_snoc |]; eauto.
-Qed.
-Lemma val_lookup_seg_typed m v τ rs v' σ :
-  m ⊢ v : τ → v !! rs = Some v' → τ ∙ rs ↝ σ → m ⊢ v' : σ.
-Proof.
-  intros Hvτ Hv' Hrσ.
-  destruct (val_lookup_seg_Some _ _ _ _ _ Hvτ Hv') as (σ'&Hrσ'&?).
-  rewrite ref_seg_lookup_correct in Hrσ, Hrσ'. by simplify_option_equality.
-Qed.
-Lemma val_lookup_typed m v τ r v' σ :
-  m ⊢ v : τ → v !! r = Some v' → τ ∙ r ↝ σ → m ⊢ v' : σ.
-Proof.
-  intros Hvτ Hv' Hrσ.
-  destruct (val_lookup_Some _ _ _ _ _ Hvτ Hv') as (σ'&Hrσ'&?).
-  rewrite ref_lookup_correct in Hrσ, Hrσ'. by simplify_option_equality.
+  revert w1 τ. induction r as [|rs r IH] using rev_ind; intros w1 τ Hw1τ Hr.
+  { rewrite val_lookup_nil in Hr; simplify_equality. by exists w1. }
+  rewrite val_lookup_snoc in Hr.
+  destruct (mval_to_val w1 !! rs) as [v|] eqn:Hv; simplify_equality'.
+  destruct (mval_to_val_lookup_seg_inv m w1 τ rs v) as (w2&?&?); auto; subst.
+  destruct (mval_lookup_seg_Some m w1 τ rs w2) as (τ2&?&?); auto.
+  destruct (IH w2 τ2) as (w3&?&?); auto. exists w3.
+  rewrite mval_lookup_snoc. by simplify_option_equality.
 Qed.
 
 Lemma val_lookup_seg_le m v1 v2 rs v3 :
@@ -1543,17 +1925,17 @@ Proof.
   assert (∀ s τs i v3 bs1 bs2,
     get_env !! s = Some τs →
     bs1 ⊑@{m}* bs2 → m ⊢* valid bs1 →
-    (flip val_of_bytes bs1 <$> τs) !! i = Some v3 →
-    ∃ v4, (flip val_of_bytes bs2 <$> τs) !! i = Some v4 ∧ v3 ⊑@{m} v4).
+    (flip val_of_bits bs1 <$> τs) !! i = Some v3 →
+    ∃ v4, (flip val_of_bits bs2 <$> τs) !! i = Some v4 ∧ v3 ⊑@{m} v4).
   { intros s τs i ? bs1 bs2 ????.
     edestruct @list_lookup_fmap_inv as [τ [??]]; eauto.
-    exists (val_of_bytes τ bs2). rewrite list_lookup_fmap.
+    exists (val_of_bits τ bs2). rewrite list_lookup_fmap.
     simplify_option_equality.
-    eauto using val_of_bytes_le, env_valid_lookup_lookup. }
+    eauto using val_of_bits_le, env_valid_lookup_lookup. }
   destruct 1; destruct rs; intros;
     repeat (case_match || simplify_option_equality);
-    eauto 7 using val_of_bytes_le, env_valid_lookup_lookup,
-      bytes_le_resize, Forall2_take, Forall2_lookup_l;
+    eauto 7 using val_of_bits_le, env_valid_lookup_lookup,
+      bits_le_resize, Forall2_take, Forall2_lookup_l;
     exfalso; eauto using Forall2_length.
 Qed.
 Lemma val_lookup_seg_ge m v1 v2 rs v4 :
@@ -1563,45 +1945,70 @@ Proof.
   assert (∀ s τs i v4 bs1 bs2,
     get_env !! s = Some τs →
     bs1 ⊑@{m}* bs2 → m ⊢* valid bs1 →
-    (flip val_of_bytes bs2 <$> τs) !! i = Some v4 →
-    ∃ v3, (flip val_of_bytes bs1 <$> τs) !! i = Some v3 ∧ v3 ⊑@{m} v4).
+    (flip val_of_bits bs2 <$> τs) !! i = Some v4 →
+    ∃ v3, (flip val_of_bits bs1 <$> τs) !! i = Some v3 ∧ v3 ⊑@{m} v4).
   { intros s τs i ? bs1 bs2 ????.
     edestruct @list_lookup_fmap_inv as [τ [??]]; eauto.
-    exists (val_of_bytes τ bs1). rewrite list_lookup_fmap.
+    exists (val_of_bits τ bs1). rewrite list_lookup_fmap.
     simplify_option_equality.
-    eauto using val_of_bytes_le, env_valid_lookup_lookup. }
+    eauto using val_of_bits_le, env_valid_lookup_lookup. }
   destruct 1; destruct rs; intros;
     repeat (case_match || simplify_option_equality);
-    eauto 7 using mval_of_bytes_le, mval_to_bytes_le,
-     env_valid_lookup_lookup, bytes_le_resize, Forall2_take, Forall2_lookup_r.
+    eauto 7 using mval_of_bits_le, mval_to_bits_le,
+     env_valid_lookup_lookup, bits_le_resize, Forall2_take, Forall2_lookup_r.
 Qed.
 
 Lemma val_lookup_le m v1 v2 r v3 :
   v1 ⊑@{m} v2 → v1 !! r = Some v3 → ∃ v4, v2 !! r = Some v4 ∧ v3 ⊑@{m} v4.
 Proof.
   revert v1 v2. induction r as [|rs r IH] using rev_ind; simpl.
-  * intros. rewrite val_lookup_nil. simplify_equality. eauto.
-  * intros v1 v2. rewrite !val_lookup_snoc. intros. simplify_option_equality.
-    edestruct (val_lookup_seg_le m v1 v2 rs) as [? [??]];
-      simplify_option_equality; eauto.
+  { intros. rewrite val_lookup_nil. simplify_equality. eauto. }
+  intros v1 v2. rewrite !val_lookup_snoc. intros. simplify_option_equality.
+  edestruct (val_lookup_seg_le m v1 v2 rs) as [? [??]];
+    simplify_option_equality; eauto.
 Qed.
 Lemma val_lookup_ge m v1 v2 r v4 :
   v1 ⊑@{m} v2 → v2 !! r = Some v4 →
   v1 !! r = None ∨ ∃ v3, v1 !! r = Some v3 ∧ v3 ⊑@{m} v4.
 Proof.
   revert v1 v2. induction r as [|rs r IH] using rev_ind; simpl.
-  * intros. rewrite val_lookup_nil. simplify_equality. eauto.
-  * intros v1 v2. rewrite !val_lookup_snoc. intros. simplify_option_equality.
-    edestruct (val_lookup_seg_ge m v1 v2 rs) as [|(?&?&?)];
-      simplify_option_equality; eauto.
+  { intros. rewrite val_lookup_nil. simplify_equality. eauto. }
+  intros v1 v2. rewrite !val_lookup_snoc. intros. simplify_option_equality.
+  edestruct (val_lookup_seg_ge m v1 v2 rs) as [|(?&?&?)];
+    simplify_option_equality; eauto.
 Qed.
 
-Lemma val_lookup_seg_freeze rs : lookup (A:=val Ti Vi) (freeze rs) = lookup rs.
+Lemma val_lookup_seg_freeze rs : lookup (A:=val Ti) (freeze rs) = lookup rs.
 Proof. by destruct rs. Qed.
 Lemma val_lookup_freeze v r : v !! (freeze <$> r) = v !! r.
 Proof.
   induction r; simpl.
   * by rewrite val_lookup_nil.
   * rewrite !val_lookup_cons, val_lookup_seg_freeze. congruence.
+Qed.
+
+Lemma vunop_ok_typed m op v τ σ :
+  m ⊢ v : τ → vunop_typed op τ σ →
+  vunop_ok op v → m ⊢ vunop op v : σ.
+Proof.
+  unfold vunop_ok, vunop. intros Hvτ Hσ Hop.
+  destruct Hσ; inversion Hvτ; simpl; simplify_equality; try done.
+  constructor. eauto using base_unop_ok_typed.
+Qed.
+Lemma vbinop_ok_typed m op v1 v2 τ1 τ2 σ :
+  ⊢ valid m → m ⊢ v1 : τ1 → m ⊢ v2 : τ2 → vbinop_typed op τ1 τ2 σ →
+  vbinop_ok m op v1 v2 → m ⊢ vbinop op v1 v2 : σ.
+Proof.
+  unfold vbinop_ok, vbinop. intros Hm Hv1τ Hv2τ Hσ Hop.
+  destruct Hσ; inversion Hv1τ; inversion Hv2τ;
+    simpl; simplify_equality; try done.
+  constructor. eauto using base_binop_ok_typed.
+Qed.
+Lemma vcast_ok_typed m v τ σ :
+  m ⊢ v : τ → vcast_typed τ σ → vcast_ok σ v → m ⊢ vcast σ v : σ.
+Proof.
+  unfold vcast_ok, vcast. intros Hvτ Hσ Hok.
+  destruct Hσ; inversion Hvτ; simpl; simplify_equality; try done.
+  constructor. eauto using base_cast_ok_typed.
 Qed.
 End val.

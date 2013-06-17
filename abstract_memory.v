@@ -332,7 +332,7 @@ Proof.
   rewrite mem_disjoint_list_double.
   destruct m1 as [m1],m2 as [m2], m3 as [m3]. intros Hm13d Hm12 b v γ Hm13.
   simpl in *. rewrite lookup_union_with_Some in Hm13.
-  destruct Hm13 as [[??]| [[??]|([v1 γ1]&[v3 γ3]&?&?&?)]].
+  destruct Hm13 as [[??]| [[??]|([v1 γ1]&[v3 γ3]&?&?&?)]]; simpl in *.
   * destruct (Hm12 b v γ) as (γ2&?&?); auto.
     exists γ2. auto using lookup_union_with_Some_l.
   * destruct (m2 !! b) as [[v2 γ2]|] eqn:?.
@@ -588,7 +588,7 @@ Proof.
     rewrite !mem_lookup_Some_raw. intros (γ&Hv&?). simpl in *.
     rewrite lookup_union_with_Some in Hv.
     destruct Hv as [[??]|[[??]|([v1 γ1]&[v2 γ2]&?&?&?)]];
-      simplify_equality; eauto.
+      simpl in *; simplify_equality; eauto.
     left. exists γ1. split; [done |].
     intros Hγ1. destruct (perm_disjoint_locked_l γ1 γ2); eauto.
     by destruct (Hm12 b (v,γ1) (v2,γ2)).

@@ -220,7 +220,7 @@ Instance sctx_item_subst: Subst sctx_item stmt stmt := λ E s,
 Instance: DestructSubst sctx_item_subst.
 
 Instance: ∀ E : sctx_item, Injective (=) (=) (subst E).
-Proof. destruct E; repeat intro; simpl in *; by simplify_equality. Qed.
+Proof. destruct E; repeat intro; by simplify_equality'. Qed.
 
 Instance sctx_item_gotos: Gotos sctx_item := λ E,
   match E with
@@ -304,7 +304,7 @@ Instance esctx_item_subst: Subst esctx_item expr stmt := λ E e,
 Instance: DestructSubst esctx_item_subst.
 
 Instance: ∀ E : esctx_item, Injective (=) (=) (subst E).
-Proof. destruct E; intros ???; simpl in *; by simplify_equality. Qed.
+Proof. destruct E; intros ???; by simplify_equality'. Qed.
 
 Instance esctx_item_locks: Locks esctx_item := λ E,
   match E with

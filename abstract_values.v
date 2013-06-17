@@ -89,7 +89,7 @@ Notation "'ptrc' b" := (VPtr (Some b)) (at level 10) : val_scope.
 Notation "'nullc'" := (VPtr None) : val_scope.
 
 Section values.
-Context `{IntEnvSpec Ti Vi}.
+Context `{IntEnvSpec Ti}.
 
 (** Truth and falsehood of values is defined in the C-like way. *)
 Definition val_true (v : val_ Vi) : Prop :=
@@ -149,7 +149,7 @@ Definition eval_binop (op : binop) (v1 v2 : val_ Vi) : option (val_ Vi) :=
      end
   | _, _ => None
   end%V.
-Definition eval_cast (τ : Ti) (v : val_ Vi) : option (val_ Vi) :=
+Definition eval_cast (τ : int_type Ti) (v : val_ Vi) : option (val_ Vi) :=
   match v with
   | intc x => i ← int_cast τ x; Some (intc i)
   | _ => None

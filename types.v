@@ -55,7 +55,7 @@ Inductive type (Ti : Set) :=
   | TArray : type Ti → nat → type Ti
   | TCompound : compound_kind → tag → type Ti
 with base_type (Ti : Set) :=
-  | TInt : Ti → base_type Ti
+  | TInt : int_type Ti → base_type Ti
   | TPtr : type Ti → base_type Ti.
 
 Delimit Scope ctype_scope with T.
@@ -67,7 +67,7 @@ Arguments TBase {_} _%BT.
 Arguments TVoid {_}.
 Arguments TArray {_} _ _.
 Arguments TCompound {_} _ _.
-Arguments TInt {_} _.
+Arguments TInt {_} _%IT.
 Arguments TPtr {_} _%T.
 
 Notation "'base' τ" := (TBase τ) (at level 10) : ctype_scope.
@@ -80,10 +80,18 @@ Notation "'struct' s" := (TCompound Struct s) (at level 10) : ctype_scope.
 Notation "'union' s" := (TCompound Union s) (at level 10) : ctype_scope.
 Notation "'intt' τ" := (TInt τ) (at level 10) : cbase_type_scope.
 Notation "'intt' τ" := (TBase (intt τ)) (at level 10) : ctype_scope.
-Notation "'uchar'" := (TInt TuChar) : cbase_type_scope.
-Notation "'uchar'" := (TBase uchar) : type_scope.
-Notation "'sint'" := (TInt TsInt) : cbase_type_scope.
-Notation "'sint'" := (TBase sint) : type_scope.
+Notation "'uchar'" := (TInt uchar) : cbase_type_scope.
+Notation "'uchar'" := (TBase uchar) : ctype_scope.
+Notation "'schar'" := (TInt schar) : cbase_type_scope.
+Notation "'schar'" := (TBase schar) : ctype_scope.
+Notation "'uint'" := (TInt uint) : cbase_type_scope.
+Notation "'uint'" := (TBase uint) : ctype_scope.
+Notation "'sint'" := (TInt sint) : cbase_type_scope.
+Notation "'sint'" := (TBase sint) : ctype_scope.
+Notation "'uptr'" := (TInt uptr) : cbase_type_scope.
+Notation "'uptr'" := (TBase uptr) : ctype_scope.
+Notation "'sptr'" := (TInt sptr) : cbase_type_scope.
+Notation "'sptr'" := (TBase sptr) : ctype_scope.
 Notation "τ .*" := (TPtr τ) (at level 25, format "τ .*") : cbase_type_scope.
 Notation "τ .*" := (TBase (τ.*)) (at level 25, format "τ .*") : ctype_scope.
 
@@ -124,6 +132,8 @@ Proof.
   first [constructor | abstract by inversion 1].
 Defined.
 
+Definition array_elem {Ti} (τ : type Ti) : type Ti :=
+  match τ with τ.[n] => τ | _ => τ end%T.
 Definition array_size {Ti} (τ : type Ti) : nat :=
   match τ with _.[n] => n | _ => 1 end%T.
 
@@ -132,24 +142,23 @@ kinds of values that we will consider. *)
 Class Typed (M T V : Type) := typed: M → V → T → Prop.
 Notation "m ⊢ v : τ" := (typed m v τ) (at level 74, v at level 50) : C_scope.
 Notation "m ⊢* vs :* τs" := (Forall2 (typed m) vs τs)
-  (at level 74, vs at level 50) : C_scope.
+  (at level 74, vs at level 70) : C_scope.
 Notation "m ⊢* vs : τ" := (Forall (λ v, m ⊢ v : τ) vs)
-  (at level 74, vs at level 50) : C_scope.
+  (at level 74, vs at level 70) : C_scope.
+Class PathTyped (T R : Type) := path_typed: T → R → T → Prop.
+Notation "p @ τ ↣ σ" := (path_typed τ p σ) (at level 70) : C_scope.
 
 Class TypeCheck (M T V : Type) := type_check: M → V → option T.
 Arguments type_check {_ _ _ _} _ !_ / : simpl nomatch.
-
 Class TypeCheckSpec (M T V : Type) `{Typed M T V} `{TypeCheck M T V} :=
   type_check_correct m x τ : type_check m x = Some τ ↔ m ⊢ x : τ.
 
 Class TypeOf (T V : Type) := type_of: V → T.
 Arguments type_of {_ _ _} !_ / : simpl nomatch.
-
 Class TypeOfSpec (M T V : Type) `{Typed M T V} `{TypeOf T V} :=
   type_of_correct m x τ : m ⊢ x : τ → type_of x = τ.
-
-Class PathTyped (T R : Type) := path_typed: T → R → T → Prop.
-Notation "τ ∙ p ↝ σ" := (path_typed τ p σ) (at level 50) : C_scope.
+Class PathTypeCheckSpec (T R : Type) `{PathTyped T R} `{Lookup R T T} :=
+  path_type_check_correct p τ σ : τ !! p = Some σ ↔ p @ τ ↣ σ.
 
 Section typed.
   Context `{Typed M T V}.
@@ -196,20 +205,56 @@ Section type_of.
   Proof. induction 1; simpl; f_equal; eauto using type_of_correct. Qed.
 End type_of.
 
+Section path_type_check.
+  Context `{PathTypeCheckSpec T R}.
+
+  Lemma path_type_check_None p τ σ : τ !! p = None → p @ τ ↣ σ → False.
+  Proof. rewrite <-path_type_check_correct. congruence. Qed.
+  Lemma path_type_check_sound p τ σ : τ !! p = Some σ → p @ τ ↣ σ.
+  Proof. by rewrite path_type_check_correct. Qed.
+  Lemma path_type_check_complete p τ σ : p @ τ ↣ σ → τ !! p = Some σ.
+  Proof. by rewrite path_type_check_correct. Qed.
+  Lemma path_typed_unique p τ σ1 σ2 : p @ τ ↣ σ1 → p @ τ ↣ σ2 → σ1 = σ2.
+  Proof. rewrite <-!path_type_check_correct. congruence. Qed.
+
+  Context `{∀ τ1 τ2 : T, Decision (τ1 = τ2)}.
+  Global Instance path_typed_dec p τ σ : Decision (p @ τ ↣ σ).
+  Proof.
+   refine (cast_if (decide (τ !! p = Some σ)));
+    abstract by rewrite <-path_type_check_correct.
+  Defined.
+End path_type_check.
+
 Ltac simplify_type_equality := repeat
   match goal with
   | _ => progress simplify_equality
+  | H : type_check _ _ = Some _ |- _ => apply type_check_sound in H
+  | H : _ !! _ = Some _ |- _ => apply path_type_check_sound in H
+  | H : context [ type_of ?x ], H2 : _ ⊢ ?x : _ |- _ =>
+    rewrite !(type_of_correct _ _ _ H2) in H
+  | H2 : _ ⊢ ?x : _ |- context [ type_of ?x ] =>
+    rewrite !(type_of_correct _ _ _ H2)
+  | H1 : type_check ?m ?x = None, H2 : ?m ⊢ ?x : _ |- _ =>
+    destruct (type_check_None _ _ _ H1 H2)
+  | H1 : ?τ !! ?p = None, H2 : ?p @ ?τ ↣ _ |- _ =>
+    destruct (path_type_check_None _ _ _ H1 H2)
   | H1 : ?m ⊢ ?x : ?τ1, H2 : ?m ⊢ ?x : ?τ2 |- _ =>
-    unless (τ1 = τ2) by done; pose proof (typed_unique m x τ1 τ2 H1 H2)
+    unless (τ2 = τ1) by done; pose proof (typed_unique m x τ2 τ1 H2 H1)
   | H1 : ?m ⊢ ?x : ?τ1, H2 : ?m ⊢ ?x : ?τ2 |- _ =>
-    unless (τ1 = τ2) by done; pose proof (typed_unique_alt m x τ1 τ2 H1 H2)
+    unless (τ2 = τ1) by done; pose proof (typed_unique_alt m x τ2 τ1 H2 H1)
+  | H1 : ?p @ ?τ ↣ ?σ1, H2 : ?p @ ?τ ↣ ?σ2 |- _ =>
+    unless (σ2 = σ1) by done; pose proof (path_typed_unique p τ σ2 σ1 H2 H1)
   end.
+Ltac simplify_type_equality' :=
+  repeat (progress simpl in * || simplify_type_equality).
 
 Class Valid (M V : Type) := valid: M → V → Prop.
 Notation "m ⊢ 'valid' v" := (valid m v)
   (at level 74, v at level 9, format "m  ⊢  'valid'  v") : C_scope.
 Notation "m ⊢* 'valid' vs" := (Forall (valid m) vs)
   (at level 74, v at level 9, format "m  ⊢*  'valid'  vs") : C_scope.
+Notation "⊢ 'valid' v" := (valid () v)
+  (at level 10, v at level 9, format "⊢  'valid'  v") : C_scope.
 
 (** * Well-formed types *)
 (** Our definition of types still allows invalid types; in particular circular
@@ -442,6 +487,29 @@ Section type_env_ind.
   Qed.
 End type_env_ind.
 
+(** And a weaker one for arbitrary types in a well formed environment. *)
+Section weak_type_env_ind.
+  Context `{Γ : env Ti} `{!EnvValid Γ}.
+
+  Context (P : type Ti → Prop).
+  Context (Pbase : ∀ τ, P (base τ)).
+  Context (Pvoid : P void).
+  Context (Parray : ∀ τ n, P τ → P (τ.[n])).
+  Context (Pcompound : ∀ c s τs,
+    Γ !! s = Some τs → Forall P τs → P (compound@{c} s)).
+  Context (PcompoundNone : ∀ c s, Γ !! s = None → P (compound@{c} s)).
+
+  Lemma weak_type_env_ind τ : P τ.
+  Proof.
+    induction τ as [τ| |τ n|c s]; auto.
+    destruct (Γ !! s) as [τs|] eqn:Hs; auto.
+    destruct (env_valid_lookup_subset Γ s τs) as (Σ'&?&Hτs&_&?); auto.
+    apply Pcompound with τs; auto.
+    clear Hs. induction Hτs as [|τ τs]; constructor; auto.
+    apply type_env_ind; eauto using type_valid_weaken, subset_subseteq.
+  Qed.
+End weak_type_env_ind.
+
 (** A nice iteration principle for wellformed types. *)
 Section type_iter.
   Context {Ti : Set} {A : Type} (R : relation A) `{!Equivalence R}.
@@ -468,7 +536,8 @@ Section type_iter.
     end.
   Definition type_iter_acc : ∀ Γ, Acc (⊂) Γ → type Ti → A :=
     Fix_F _ $ λ Γ go, type_iter_inner (type_iter_accF Γ go).
-  Definition type_iter `{!EnvValid Γ} := type_iter_acc _ (wf_guard 32 map_wf Γ).
+  Definition type_iter (Γ : env Ti) : type Ti → A :=
+    type_iter_acc _ (wf_guard 32 map_wf Γ).
 
   Lemma type_iter_acc_weaken Γ (Σ1 Σ2 : env Ti) acc1 acc2 τ :
     env_valid Γ →
@@ -502,11 +571,12 @@ Section type_iter.
 
   Context `{Γ : env Ti} `{!EnvValid Γ}.
 
-  Lemma type_iter_base τ : type_iter (base τ) = fbase τ.
+  Lemma type_iter_base τ : type_iter Γ (base τ) = fbase τ.
   Proof. done. Qed.
-  Lemma type_iter_void : type_iter void = fvoid.
+  Lemma type_iter_void : type_iter Γ void = fvoid.
   Proof. done. Qed.
-  Lemma type_iter_array τ n : type_iter (τ.[n]) = farray τ n (type_iter τ).
+  Lemma type_iter_array τ n :
+    type_iter Γ (τ.[n]) = farray τ n (type_iter Γ τ).
   Proof. unfold type_iter. by destruct (wf_guard _ map_wf Γ). Qed.
   Lemma type_iter_compound c s τs :
     (∀ τ n x y, x ≡ y → farray τ n x ≡ farray τ n y) →
@@ -514,7 +584,7 @@ Section type_iter.
       Γ !! s = Some τs → Forall (λ τ, f τ ≡ g τ) τs →
       fcompound c s τs f ≡ fcompound c s τs g) →
     Γ !! s = Some τs →
-    type_iter (compound@{c} s) ≡ fcompound c s τs type_iter.
+    type_iter Γ (compound@{c} s) ≡ fcompound c s τs (type_iter Γ).
   Proof.
     intros Harray Hcompound Hs. unfold type_iter at 1.
     destruct (wf_guard _ map_wf Γ) as [accΓ]. simpl.
