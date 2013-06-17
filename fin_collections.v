@@ -3,10 +3,11 @@
 (** This file collects definitions and theorems on finite collections. Most
 importantly, it implements a fold and size function and some useful induction
 principles on finite collections . *)
-Require Import Permutation ars.
-Require Export collections numbers listset.
+Require Import Permutation ars listset.
+Require Export numbers collections.
 
-Definition choose `{Elements A C} (X : C) : option A := head (elements X).
+Definition collection_choose `{Elements A C} (X : C) : option A :=
+  head (elements X).
 Instance collection_size `{Elements A C} : Size C := length ∘ elements.
 Definition collection_fold `{Elements A C} {B}
   (f : A → B → B) (b : B) : C → B := foldr f b ∘ elements.
@@ -56,23 +57,27 @@ Proof.
   rewrite (nil_length l), !elem_of_list_singleton by done. congruence.
 Qed.
 
-Lemma choose_Some X x : choose X = Some x → x ∈ X.
+Lemma collection_choose_Some X x : collection_choose X = Some x → x ∈ X.
 Proof.
-  unfold choose. destruct (elements X) eqn:E; intros; simplify_equality.
-  rewrite elements_spec, E. by left.
+  unfold collection_choose. destruct (elements X) eqn:E; intros;
+    simplify_equality. rewrite elements_spec, E. by left.
 Qed.
-Lemma choose_None X : choose X = None → X ≡ ∅.
+Lemma collection_choose_None X : collection_choose X = None → X ≡ ∅.
 Proof.
-  unfold choose. destruct (elements X) eqn:E; intros; simplify_equality.
+  unfold collection_choose.
+  destruct (elements X) eqn:E; intros; simplify_equality.
   apply equiv_empty. intros x. by rewrite elements_spec, E, elem_of_nil.
 Qed.
 Lemma elem_of_or_empty X : (∃ x, x ∈ X) ∨ X ≡ ∅.
-Proof. destruct (choose X) eqn:?; eauto using choose_Some, choose_None. Qed.
-Lemma choose_is_Some X : X ≢ ∅ ↔ is_Some (choose X).
 Proof.
-  destruct (choose X) eqn:?.
-  * rewrite elem_of_equiv_empty. split; eauto using choose_Some.
-  * split. intros []; eauto using choose_None. by intros [??].
+  destruct (collection_choose X) eqn:?;
+    eauto using collection_choose_Some, collection_choose_None.
+Qed.
+Lemma collection_choose_is_Some X : X ≢ ∅ ↔ is_Some (collection_choose X).
+Proof.
+  destruct (collection_choose X) eqn:?.
+  * rewrite elem_of_equiv_empty. split; eauto using collection_choose_Some.
+  * split. intros []; eauto using collection_choose_None. by intros [??].
 Qed.
 Lemma not_elem_of_equiv_empty X : X ≢ ∅ ↔ (∃ x, x ∈ X).
 Proof.
@@ -156,8 +161,7 @@ Qed.
 
 Lemma collection_fold_ind {B} (P : B → C → Prop) (f : A → B → B) (b : B) :
   Proper ((=) ==> (≡) ==> iff) P →
-  P b ∅ →
-  (∀ x X r, x ∉ X → P r X → P (f x r) ({[ x ]} ∪ X)) →
+  P b ∅ → (∀ x X r, x ∉ X → P r X → P (f x r) ({[ x ]} ∪ X)) →
   ∀ X, P (collection_fold f b X) X.
 Proof.
   intros ? Hemp Hadd.
@@ -184,7 +188,6 @@ Proof.
     abstract (unfold set_Forall; setoid_rewrite elements_spec;
       by rewrite <-Forall_forall).
 Defined.
-
 Global Instance set_Exists_dec `(P : A → Prop) `{∀ x, Decision (P x)} X :
   Decision (set_Exists P X) | 100.
 Proof.
@@ -192,7 +195,6 @@ Proof.
     abstract (unfold set_Exists; setoid_rewrite elements_spec;
       by rewrite <-Exists_exists).
 Defined.
-
 Global Instance rel_elem_of_dec `{∀ x y, Decision (R x y)} x X :
   Decision (elem_of_upto R x X) | 100 := decide (set_Exists (R x) X).
 End fin_collection.

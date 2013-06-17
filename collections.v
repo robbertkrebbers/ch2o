@@ -489,7 +489,7 @@ Section collection_monad.
     * revert l. induction k; esolve_elem_of.
     * induction 1; esolve_elem_of.
   Qed.
-  Lemma mapM_length {A B} (f : A → M B) l k :
+  Lemma collection_mapM_length {A B} (f : A → M B) l k :
     l ∈ mapM f k → length l = length k.
   Proof. revert l; induction k; esolve_elem_of. Qed.
 

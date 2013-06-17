@@ -135,14 +135,21 @@ Lemma map_subset_empty {A} (m : M A) : m ⊄ ∅.
 Proof. intros [? []]. intros i x. by rewrite lookup_empty. Qed.
 
 (** ** Properties of the [partial_alter] operation *)
-Lemma partial_alter_compose {A} (m : M A) i f g :
+Lemma partial_alter_ext {A} (f g : option A → option A) (m : M A) i :
+  (∀ x, m !! i = x → f x = g x) → partial_alter f i m = partial_alter g i m.
+Proof.
+  intros Hfg. apply map_eq. intros j. destruct (decide (i = j)); subst.
+  * rewrite !lookup_partial_alter. by apply Hfg.
+  * by rewrite !lookup_partial_alter_ne.
+Qed.
+Lemma partial_alter_compose {A} f g (m : M A) i:
   partial_alter (f ∘ g) i m = partial_alter f i (partial_alter g i m).
 Proof.
   intros. apply map_eq. intros ii. case (decide (i = ii)).
   * intros. subst. by rewrite !lookup_partial_alter.
   * intros. by rewrite !lookup_partial_alter_ne.
 Qed.
-Lemma partial_alter_commute {A} (m : M A) i j f g :
+Lemma partial_alter_commute {A} f g (m : M A) i j :
   i ≠ j → partial_alter f i (partial_alter g j m) =
     partial_alter g j (partial_alter f i m).
 Proof.
@@ -164,10 +171,10 @@ Qed.
 Lemma partial_alter_self {A} (m : M A) i : partial_alter (λ _, m !! i) i m = m.
 Proof. by apply partial_alter_self_alt. Qed.
 
-Lemma partial_alter_subseteq {A} (m : M A) i f :
+Lemma partial_alter_subseteq {A} f (m : M A) i :
   m !! i = None → m ⊆ partial_alter f i m.
 Proof. intros Hi j x Hj. rewrite lookup_partial_alter_ne; congruence. Qed.
-Lemma partial_alter_subset {A} (m : M A) i f :
+Lemma partial_alter_subset {A} f (m : M A) i :
   m !! i = None → is_Some (f (m !! i)) → m ⊂ partial_alter f i m.
 Proof.
   intros Hi Hfi. split.
@@ -178,10 +185,25 @@ Proof.
 Qed.
 
 (** ** Properties of the [alter] operation *)
+Lemma alter_ext {A} (f g : A → A) (m : M A) i :
+  (∀ x, m !! i = Some x → f x = g x) → alter f i m = alter g i m.
+Proof. intro. apply partial_alter_ext. intros [x|] ?; simpl; f_equal; auto. Qed.
+
 Lemma lookup_alter {A} (f : A → A) m i : alter f i m !! i = f <$> m !! i.
 Proof. apply lookup_partial_alter. Qed.
 Lemma lookup_alter_ne {A} (f : A → A) m i j : i ≠ j → alter f i m !! j = m !! j.
 Proof. apply lookup_partial_alter_ne. Qed.
+
+Lemma alter_compose {A} (f g : A → A) (m : M A) i:
+  alter (f ∘ g) i m = alter f i (alter g i m).
+Proof.
+  unfold alter, map_alter. rewrite <-partial_alter_compose.
+  apply partial_alter_ext. by intros [?|].
+Qed.
+
+Lemma alter_commute {A} (f g : A → A) (m : M A) i j :
+  i ≠ j → alter f i (alter g j m) = alter g j (alter f i m).
+Proof. apply partial_alter_commute. Qed.
 
 Lemma lookup_alter_Some {A} (f : A → A) m i j y :
   alter f i m !! j = Some y ↔
@@ -456,7 +478,7 @@ Lemma map_of_list_inj {A} (l1 l2 : list (K * A)) :
   NoDup (fst <$> l1) → NoDup (fst <$> l2) →
   map_of_list l1 = map_of_list l2 → l1 ≡ₚ l2.
 Proof.
-  intros ?? Hl1l2. apply NoDup_Permutation; auto using (NoDup_fmap_1 fst).
+  intros ?? Hl1l2. apply NoDup_Permutation; auto using (fmap_nodup_1 fst).
   intros [i x]. by rewrite !elem_of_map_of_list, Hl1l2.
 Qed.
 Lemma map_of_to_list {A} (m : M A) : map_of_list (map_to_list m) = m.

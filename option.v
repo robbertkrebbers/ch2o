@@ -92,14 +92,6 @@ Instance option_fmap: FMap option := @option_map.
 Instance option_guard: MGuard option := λ P dec A x,
   match dec with left H => x H | _ => None end.
 
-Definition mapM `{!MBind M} `{!MRet M} {A B}
-    (f : A → M B) : list A → M (list B) :=
-  fix go l :=
-  match l with
-  | [] => mret []
-  | x :: l => y ← f x; k ← go l; mret (y :: k)
-  end.
-
 Lemma fmap_is_Some {A B} (f : A → B) x : is_Some (f <$> x) ↔ is_Some x.
 Proof. unfold is_Some; destruct x; naive_solver. Qed.
 Lemma fmap_Some {A B} (f : A → B) x y :
@@ -110,6 +102,9 @@ Proof. by destruct x. Qed.
 
 Lemma option_fmap_id {A} (x : option A) : id <$> x = x.
 Proof. by destruct x. Qed.
+Lemma option_fmap_bind {A B C} (f : A → B) (g : B → option C) x :
+  (f <$> x) ≫= g = x ≫= g ∘ f.
+Proof. by destruct x. Qed.
 Lemma option_bind_assoc {A B C} (f : A → option B)
   (g : B → option C) (x : option A) : (x ≫= f) ≫= g = x ≫= (mbind g ∘ f).
 Proof. by destruct x; simpl. Qed.
@@ -119,39 +114,33 @@ Proof. intros. destruct x, y; simplify_equality; simpl; auto. Qed.
 Lemma option_bind_ext_fun {A B} (f g : A → option B) x :
   (∀ a, f a = g a) → x ≫= f = x ≫= g.
 Proof. intros. by apply option_bind_ext. Qed.
+Lemma bind_Some {A B} (f : A → option B) (x : option A) b :
+  x ≫= f = Some b ↔ ∃ a, x = Some a ∧ f a = Some b.
+Proof. split. by destruct x as [a|]; [exists a|]. by intros (?&->&?). Qed.
+Lemma bind_None {A B} (f : A → option B) (x : option A) :
+  x ≫= f = None ↔ x = None ∨ ∃ a, x = Some a ∧ f a = None.
+Proof.
+  split.
+  * destruct x; intros; simplify_equality'; eauto.
+  * by intros [->|(?&->&?)].
+Qed.
 
-Section mapM.
-  Context {A B : Type} (f : A → option B).
-
-  Lemma mapM_ext (g : A → option B) l : (∀ x, f x = g x) → mapM f l = mapM g l.
-  Proof. intros Hfg. by induction l; simpl; rewrite ?Hfg, ?IHl. Qed.
-  Lemma Forall2_mapM_ext (g : A → option B) l k :
-    Forall2 (λ x y, f x = g y) l k → mapM f l = mapM g k.
-  Proof. induction 1 as [|???? Hfg ? IH]; simpl. done. by rewrite Hfg, IH. Qed.
-  Lemma Forall_mapM_ext (g : A → option B) l :
-    Forall (λ x, f x = g x) l → mapM f l = mapM g l.
-  Proof. induction 1 as [|?? Hfg ? IH]; simpl. done. by rewrite Hfg, IH. Qed.
-
-  Lemma mapM_Some_1 l k : mapM f l = Some k → Forall2 (λ x y, f x = Some y) l k.
-  Proof.
-    revert k. induction l as [|x l]; intros [|y k]; simpl; try done.
-    * destruct (f x); simpl; [|discriminate]. by destruct (mapM f l).
-    * destruct (f x) eqn:?; simpl; [|discriminate].
-      destruct (mapM f l); intros; simplify_equality. constructor; auto.
-  Qed.
-  Lemma mapM_Some_2 l k : Forall2 (λ x y, f x = Some y) l k → mapM f l = Some k.
-  Proof.
-    induction 1 as [|???? Hf ? IH]; simpl; [done |].
-    rewrite Hf. simpl. by rewrite IH.
-  Qed.
-  Lemma mapM_Some l k : mapM f l = Some k ↔ Forall2 (λ x y, f x = Some y) l k.
-  Proof. split; auto using mapM_Some_1, mapM_Some_2. Qed.
-End mapM.
+Tactic Notation "case_option_guard" "as" ident(Hx) :=
+  match goal with
+  | H : context C [@mguard option _ ?P ?dec _ ?x] |- _ =>
+    let X := context C [ match dec with left H => x H | _ => None end ] in
+    change X in H; destruct_decide dec as Hx
+  | |- context C [@mguard option _ ?P ?dec _ ?x] =>
+    let X := context C [ match dec with left H => x H | _ => None end ] in
+    change X; destruct_decide dec as Hx
+  end.
+Tactic Notation "case_option_guard" :=
+  let H := fresh in case_option_guard as H.
 
 Tactic Notation "simplify_option_equality" "by" tactic3(tac) := repeat
   match goal with
   | _ => progress (unfold default in *)
-  | _ => first [progress simpl in * | progress simplify_equality]
+  | _ => progress simplify_equality'
   | H : context [mbind (M:=option) (A:=?A) ?f ?o] |- _ =>
     let Hx := fresh in
     first
@@ -222,17 +211,10 @@ Tactic Notation "simplify_option_equality" "by" tactic3(tac) := repeat
         | assert (o = None) as Hx by tac ];
       rewrite Hx; clear Hx
     end
-  | H : context C [@mguard option _ ?P ?dec _ ?x] |- _ =>
-    let X := context C [ match dec with left H => x H | _ => None end ] in
-    change X in H; destruct_decide dec
-  | |- context C [@mguard option _ ?P ?dec _ ?x] =>
-    let X := context C [ match dec with left H => x H | _ => None end ] in
-    change X; destruct_decide dec
   | H1 : ?o = Some ?x, H2 : ?o = Some ?y |- _ =>
     assert (y = x) by congruence; clear H2
-  | H1 : ?o = Some ?x, H2 : ?o = None |- _ =>
-    congruence
-  | H : mapM _ _ = Some _ |- _ => apply mapM_Some in H
+  | H1 : ?o = Some ?x, H2 : ?o = None |- _ => congruence
+  | _ => progress case_option_guard
   end.
 Tactic Notation "simplify_option_equality" :=
   simplify_option_equality by eauto.

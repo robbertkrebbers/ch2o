@@ -161,12 +161,7 @@ Ltac simplify_equality := repeat
   | H : _ = _ |- _ => injection' H
   | H : ?x = ?x |- _ => clear H
   end.
-
-(** Coq's default [remember] tactic does have an option to name the generated
-equality. The following tactic extends [remember] to do so. *)
-Tactic Notation "remember" constr(t) "as" "(" ident(x) "," ident(E) ")" :=
-  remember t as x;
-  match goal with E' : x = _ |- _ => rename E' into E end.
+Ltac simplify_equality' := repeat (progress simpl in * || simplify_equality).
 
 (** Given a tactic [tac2] generating a list of terms, [iter tac1 tac2]
 runs [tac x] for each element [x] until [tac x] succeeds. If it does not
@@ -264,7 +259,7 @@ Tactic Notation "naive_solver" tactic(tac) :=
   unfold iff, not in *;
   repeat match goal with
   | H : context [∀ _, _ ∧ _ ] |- _ =>
-     repeat setoid_rewrite forall_and_distr in H; revert H
+    repeat setoid_rewrite forall_and_distr in H; revert H
   end;
   let rec go n :=
   repeat match goal with

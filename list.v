@@ -53,6 +53,10 @@ Instance list_alter {A} (f : A → A) : AlterD nat A (list A) f :=
   | x :: l => match i with 0 => f x :: l | S i => x :: @alter _ _ _ f go i l end
   end.
 
+(** The operation [<[i:=x]> l] overwrites the element at position [i] with the
+value [x]. In case [i] is out of bounds, the list is returned unchanged. *)
+Instance list_insert {A} : Insert nat A (list A) := λ i x, alter (λ _, x) i.
+
 (** The operation [delete i l] removes the [i]th element of [l] and moves
 all consecutive elements one position ahead. In case [i] is out of bounds,
 the list is returned unchanged. *)
@@ -62,10 +66,6 @@ Instance list_delete {A} : Delete nat (list A) :=
   | [] => []
   | x :: l => match i with 0 => l | S i => x :: @delete _ _ go i l end
   end.
-
-(** The operation [<[i:=x]> l] overwrites the element at position [i] with the
-value [x]. In case [i] is out of bounds, the list is returned unchanged. *)
-Instance list_insert {A} : Insert nat A (list A) := λ i x, alter (λ _, x) i.
 
 (** The function [option_list o] converts an element [Some x] into the
 singleton list [[x]], and [None] into the empty list [[]]. *)
@@ -81,6 +81,21 @@ Instance list_filter {A} : Filter A (list A) :=
     if decide (P x)
     then x :: @filter _ _ (@go) _ _ l
     else @filter _ _ (@go) _ _ l
+  end.
+Fixpoint filter_Some {A} (l : list (option A)) : list A :=
+  match l with
+  | [] => []
+  | Some x :: l => x :: filter_Some l
+  | None :: l => filter_Some l
+  end.
+
+(** The function [list_find P l] returns the first index [i] whose element
+satisfies the predicate [P]. *)
+Definition list_find {A} P `{∀ x, Decision (P x)} : list A → option nat :=
+  fix go l :=
+  match l with
+  | [] => None
+  | x :: l => if decide (P x) then Some 0 else S <$> go l
   end.
 
 (** The function [replicate n x] generates a list with length [n] of elements
@@ -106,6 +121,11 @@ Fixpoint resize {A} (n : nat) (y : A) (l : list A) : list A :=
   end.
 Arguments resize {_} !_ _ !_.
 
+Definition sublist_lookup {A} (i n : nat) (l : list A) : option (list A) :=
+  guard (i + n ≤ length l); Some $ take n $ drop i l.
+Definition sublist_insert {A} (i : nat) (k l : list A) : list A :=
+  take i l ++ take (length l - i) k ++ drop (i + length k) l.
+
 (** Functions to fold over a list. We redefine [foldl] with the arguments in
 the same order as in Haskell. *)
 Notation foldr := fold_right.
@@ -128,6 +148,13 @@ Instance list_bind {A B} (f : A → list B) : MBindD list f :=
 Instance list_join: MJoin list :=
   fix go A (ls : list (list A)) : list A :=
   match ls with [] => [] | l :: ls => l ++ @mjoin _ go _ ls end.
+Definition mapM `{!MBind M} `{!MRet M} {A B}
+    (f : A → M B) : list A → M (list B) :=
+  fix go l :=
+  match l with
+  | [] => mret []
+  | x :: l => y ← f x; k ← go l; mret (y :: k)
+  end.
 
 (** We define stronger variants of map and fold that allow the mapped
 function to use the index of the elements. *)
@@ -199,12 +226,12 @@ Section prefix_suffix_ops.
   Definition strip_suffix (l1 l2 : list A) := snd $ fst $ max_suffix_of l1 l2.
 End prefix_suffix_ops.
 
-(** A list [l1] is a sub list of [l2] if [l2] is obtained by removing elements
+(** A list [l1] is a sublist of [l2] if [l2] is obtained by removing elements
 from [l1] without changing the order. *)
 Inductive sublist {A} : relation (list A) :=
   | sublist_nil : sublist [] []
   | sublist_skip x l1 l2 : sublist l1 l2 → sublist (x :: l1) (x :: l2)
-  | sublist_insert x l1 l2 : sublist l1 l2 → sublist l1 (x :: l2).
+  | sublist_cons x l1 l2 : sublist l1 l2 → sublist l1 (x :: l2).
 Infix "`sublist`" := sublist (at level 70) : C_scope.
 
 (** A list [l2] contains a list [l1] if [l2] is obtained by removing elements
@@ -213,7 +240,7 @@ Inductive contains {A} : relation (list A) :=
   | contains_nil : contains [] []
   | contains_skip x l1 l2 : contains l1 l2 → contains (x :: l1) (x :: l2)
   | contains_swap x y l : contains (y :: x :: l) (x :: y :: l)
-  | contains_insert x l1 l2 : contains l1 l2 → contains l1 (x :: l2)
+  | contains_cons x l1 l2 : contains l1 l2 → contains l1 (x :: l2)
   | contains_trans l1 l2 l3 : contains l1 l2 → contains l2 l3 → contains l1 l3.
 Infix "`contains`" := contains (at level 70) : C_scope.
 
@@ -312,6 +339,8 @@ Ltac simplify_list_equality :=
     destruct i; [change (Some x = Some y) in H | discriminate]
   end;
   try discriminate_list_equality.
+Ltac simplify_list_equality' :=
+  repeat (progress simpl in * || simplify_list_equality).
 
 (** * General theorems *)
 Section general_properties.
@@ -320,10 +349,6 @@ Implicit Types x y z : A.
 Implicit Types l k : list A.
 
 Global Instance: Injective2 (=) (=) (=) (@cons A).
-Proof. by injection 1. Qed.
-Global Instance: ∀ x, Injective (=) (=) (x ::).
-Proof. by injection 1. Qed.
-Global Instance: ∀ l, Injective (=) (=) (:: l).
 Proof. by injection 1. Qed.
 Global Instance: ∀ k, Injective (=) (=) (k ++).
 Proof. intros ???. apply app_inv_head. Qed.
@@ -375,15 +400,13 @@ Proof. by destruct l. Qed.
 
 Lemma lookup_lt_Some l i x : l !! i = Some x → i < length l.
 Proof.
-  revert i. induction l; intros [|?] ?;
-    simpl in *; simplify_equality; simpl; auto with arith.
+  revert i. induction l; intros [|?] ?; simplify_equality'; auto with arith.
 Qed.
 Lemma lookup_lt_is_Some_1 l i : is_Some (l !! i) → i < length l.
 Proof. intros [??]; eauto using lookup_lt_Some. Qed.
 Lemma lookup_lt_is_Some_2 l i : i < length l → is_Some (l !! i).
 Proof.
-  revert i. induction l; intros [|?] ?;
-    simpl in *; simplify_equality; simpl; eauto with lia.
+  revert i. induction l; intros [|?] ?; simplify_equality'; eauto with lia.
 Qed.
 Lemma lookup_lt_is_Some l i : is_Some (l !! i) ↔ i < length l.
 Proof. split; auto using lookup_lt_is_Some_1, lookup_lt_is_Some_2. Qed.
@@ -410,27 +433,22 @@ Lemma lookup_app_l l1 l2 i : i < length l1 → (l1 ++ l2) !! i = l1 !! i.
 Proof. revert i. induction l1; intros [|?]; simpl; auto with lia. Qed.
 Lemma lookup_app_l_Some l1 l2 i x : l1 !! i = Some x → (l1 ++ l2) !! i = Some x.
 Proof. intros. rewrite lookup_app_l; eauto using lookup_lt_Some. Qed.
+
 Lemma lookup_app_r l1 l2 i : (l1 ++ l2) !! (length l1 + i) = l2 !! i.
-Proof.
-  revert i. induction l1; intros [|i]; simpl in *; simplify_equality; auto.
-Qed.
-Lemma lookup_app_r_alt l1 l2 i :
-  length l1 ≤ i → (l1 ++ l2) !! i = l2 !! (i - length l1).
-Proof.
-  intros. assert (i = length l1 + (i - length l1)) as Hi by lia.
-  rewrite Hi at 1. by apply lookup_app_r.
-Qed.
+Proof. revert i. induction l1; intros [|i]; simplify_equality'; auto. Qed.
+Lemma lookup_app_r_alt l1 l2 i j :
+  j = length l1 → (l1 ++ l2) !! (j + i) = l2 !! i.
+Proof. intros ->. by apply lookup_app_r. Qed.
 Lemma lookup_app_r_Some l1 l2 i x :
   l2 !! i = Some x → (l1 ++ l2) !! (length l1 + i) = Some x.
 Proof. by rewrite lookup_app_r. Qed.
-Lemma lookup_app_r_Some_alt l1 l2 i x :
-  length l1 ≤ i → l2 !! (i - length l1) = Some x → (l1 ++ l2) !! i = Some x.
-Proof. intro. by rewrite lookup_app_r_alt. Qed.
+Lemma lookup_app_minus_r l1 l2 i :
+  length l1 ≤ i → (l1 ++ l2) !! i = l2 !! (i - length l1).
+Proof. intros. rewrite <-(lookup_app_r l1 l2). f_equal. lia. Qed.
+
 Lemma lookup_app_inv l1 l2 i x :
   (l1 ++ l2) !! i = Some x → l1 !! i = Some x ∨ l2 !! (i - length l1) = Some x.
-Proof.
-  revert i. induction l1; intros [|i] ?; simpl in *; simplify_equality; auto.
-Qed.
+Proof. revert i. induction l1; intros [|i] ?; simplify_equality'; auto. Qed.
 Lemma list_lookup_middle l1 l2 x : (l1 ++ x :: l2) !! length l1 = Some x.
 Proof. by induction l1; simpl. Qed.
 
@@ -457,7 +475,7 @@ Proof. apply list_lookup_alter_ne. Qed.
 Lemma list_lookup_other l i x :
   length l ≠ 1 → l !! i = Some x → ∃ j y, j ≠ i ∧ l !! j = Some y.
 Proof.
-  intros. destruct i, l as [|x0 [|x1 l]]; simpl in *; simplify_equality.
+  intros. destruct i, l as [|x0 [|x1 l]]; simplify_equality'.
   * by exists 1 x1.
   * by exists 0 x0.
 Qed.
@@ -476,6 +494,18 @@ Proof.
   intros. assert (i = length l1 + (i - length l1)) as Hi by lia.
   rewrite Hi at 1. by apply alter_app_r.
 Qed.
+Lemma list_alter_ext f g l i :
+  (∀ x, l !! i = Some x → f x = g x) → alter f i l = alter g i l.
+Proof. revert i. induction l; intros [|?] ?; simpl; f_equal; auto. Qed.
+Lemma list_alter_compose f g l i :
+  alter (f ∘ g) i l = alter f i (alter g i l).
+Proof. revert i. induction l; intros [|?]; simpl; f_equal; auto. Qed.
+Lemma list_alter_commute f g l i j :
+  i ≠ j → alter f i (alter g j l) = alter g j (alter f i l).
+Proof.
+  revert i j.
+  induction l; intros [|?] [|?]; simpl; auto with f_equal congruence.
+Qed.
 
 Lemma insert_app_l l1 l2 i x :
   i < length l1 → <[i:=x]>(l1 ++ l2) = <[i:=x]>l1 ++ l2.
@@ -485,10 +515,6 @@ Proof. apply alter_app_r. Qed.
 Lemma insert_app_r_alt l1 l2 i x :
   length l1 ≤ i → <[i:=x]>(l1 ++ l2) = l1 ++ <[i - length l1:=x]>l2.
 Proof. apply alter_app_r_alt. Qed.
-
-Lemma insert_consecutive_length l i k :
-  length (insert_consecutive i k l) = length l.
-Proof. revert i. by induction k; intros; simpl; rewrite ?insert_length. Qed.
 
 Lemma delete_middle l1 l2 x : delete (length l1) (l1 ++ x :: l2) = l1 ++ l2.
 Proof. induction l1; simpl; f_equal; auto. Qed.
@@ -536,8 +562,7 @@ Proof.
 Qed.
 Lemma elem_of_list_lookup_2 l i x : l !! i = Some x → x ∈ l.
 Proof.
-  revert i. induction l; intros [|i] ?;
-    simpl; simplify_equality; constructor; eauto.
+  revert i. induction l; intros [|i] ?; simplify_equality'; constructor; eauto.
 Qed.
 Lemma elem_of_list_lookup l x : x ∈ l ↔ ∃ i, l !! i = Some x.
 Proof. firstorder eauto using elem_of_list_lookup_1, elem_of_list_lookup_2. Qed.
@@ -618,7 +643,6 @@ Proof.
   * rewrite !NoDup_cons.
     setoid_rewrite elem_of_cons. setoid_rewrite elem_of_app. naive_solver.
 Qed.
-
 Global Instance NoDup_proper: Proper ((≡ₚ) ==> iff) (@NoDup A).
 Proof.
   induction 1 as [|x l k Hlk IH | |].
@@ -627,18 +651,20 @@ Proof.
   * rewrite !NoDup_cons, !elem_of_cons. intuition.
   * intuition.
 Qed.
-
-Lemma NoDup_Permutation l k : NoDup l → NoDup k → (∀ x, x ∈ l ↔ x ∈ k) → l ≡ₚ k.
+Lemma NoDup_lookup l i j x : NoDup l → l !! i = Some x → l !! j = Some x → i = j.
 Proof.
-  intros Hl. revert k. induction Hl as [|x l Hin ? IH].
-  * intros k _ Hk. rewrite (elem_of_nil_inv k); [done |].
-    intros x. rewrite <-Hk, elem_of_nil. intros [].
-  * intros k Hk Hlk. destruct (elem_of_list_split k x) as [l1 [l2 ?]]; subst.
-    { rewrite <-Hlk. by constructor. }
-    rewrite <-Permutation_middle, NoDup_cons in Hk.
-    destruct Hk as [??]. apply Permutation_cons_app, IH; [done |].
-    intros y. specialize (Hlk y).
-    rewrite <-Permutation_middle, !elem_of_cons in Hlk. naive_solver.
+  intros Hl. revert i j. induction Hl as [|x' l Hx Hl IH].
+  { intros; simplify_equality. }
+  intros [|i] [|j] ??; simplify_equality'; eauto with f_equal;
+    exfalso; eauto using elem_of_list_lookup_2.
+Qed.
+Lemma NoDup_alt l : NoDup l ↔ ∀ i j x, l !! i = Some x → l !! j = Some x → i = j.
+Proof.
+  split; eauto using NoDup_lookup.
+  induction l as [|x l IH]; intros Hl; constructor.
+  * rewrite elem_of_list_lookup. intros [i ?].
+    by feed pose proof (Hl (S i) 0 x); auto.
+  * apply IH. intros i j x' ??. by apply (injective S), (Hl (S i) (S j) x').
 Qed.
 
 Section no_dup_dec.
@@ -687,6 +713,33 @@ Section filter.
   Qed.
 End filter.
 
+(** ** Properties of the [find] function *)
+Section find.
+  Context (P : A → Prop) `{∀ x, Decision (P x)}.
+
+  Lemma list_find_Some l i : list_find P l = Some i → ∃ x, l !! i = Some x ∧ P x.
+  Proof.
+    revert i. induction l; simpl; repeat case_decide;
+      eauto with simplify_option_equality.
+  Qed.
+  Lemma list_find_elem_of l x : x ∈ l → P x → ∃ i, list_find P l = Some i.
+  Proof.
+    induction 1; simpl; repeat case_decide;
+      naive_solver (by eauto with simplify_option_equality).
+  Qed.
+End find.
+
+Section find_eq.
+  Context `{∀ x y, Decision (x = y)}.
+
+  Lemma list_find_eq_Some l i x : list_find (x =) l = Some i → l !! i = Some x.
+  Proof.
+    intros. destruct (list_find_Some (x =) l i) as (?&?&?); auto with congruence.
+  Qed.
+  Lemma list_find_eq_elem_of l x : x ∈ l → ∃ i, list_find (x=) l = Some i.
+  Proof. eauto using list_find_elem_of. Qed.
+End find_eq.
+
 (** ** Properties of the [reverse] function *)
 Lemma reverse_nil : reverse [] = @nil A.
 Proof. done. Qed.
@@ -702,6 +755,21 @@ Lemma reverse_length l : length (reverse l) = length l.
 Proof. unfold reverse. rewrite <-!rev_alt. apply rev_length. Qed.
 Lemma reverse_involutive l : reverse (reverse l) = l.
 Proof. unfold reverse. rewrite <-!rev_alt. apply rev_involutive. Qed.
+Lemma elem_of_reverse_2 x l : x ∈ l → x ∈ reverse l.
+Proof.
+  induction 1; rewrite reverse_cons, elem_of_app,
+    ?elem_of_list_singleton; intuition.
+Qed.
+Lemma elem_of_reverse x l : x ∈ reverse l ↔ x ∈ l.
+Proof.
+  split; auto using elem_of_reverse_2.
+  intros. rewrite <-(reverse_involutive l). by apply elem_of_reverse_2.
+Qed.
+Global Instance: Injective (=) (=) (@reverse A).
+Proof.
+  intros l1 l2 Hl.
+  by rewrite <-(reverse_involutive l1), <-(reverse_involutive l2), Hl.
+Qed.
 
 (** ** Properties of the [take] function *)
 Definition take_drop := @firstn_skipn A.
@@ -733,8 +801,10 @@ Proof. by rewrite take_take, Min.min_idempotent. Qed.
 
 Lemma take_length l n : length (take n l) = min n (length l).
 Proof. revert n. induction l; intros [|?]; simpl; f_equal; done. Qed.
-Lemma take_length_alt l n : n ≤ length l → length (take n l) = n.
+Lemma take_length_le l n : n ≤ length l → length (take n l) = n.
 Proof. rewrite take_length. apply Min.min_l. Qed.
+Lemma take_length_ge l n : length l ≤ n → length (take n l) = length l.
+Proof. rewrite take_length. apply Min.min_r. Qed.
 
 Lemma lookup_take l n i : i < n → take n l !! i = l !! i.
 Proof.
@@ -762,10 +832,10 @@ Lemma drop_app_alt l k n : n = length l → drop n (l ++ k) = k.
 Proof. intros Hn. by rewrite Hn, drop_app. Qed.
 Lemma drop_length l n : length (drop n l) = length l - n.
 Proof. revert n. by induction l; intros [|i]; simpl; f_equal. Qed.
+Lemma drop_ge l n : length l ≤ n → drop n l = [].
+Proof. revert n. induction l; intros [|??]; simpl in *; auto with lia. Qed.
 Lemma drop_all l : drop (length l) l = [].
-Proof. induction l; simpl; auto. Qed.
-Lemma drop_all_alt l n : n = length l → drop n l = [].
-Proof. intros. subst. by rewrite drop_all. Qed.
+Proof. by apply drop_ge. Qed.
 
 Lemma lookup_drop l n i : drop n l !! i = l !! (n + i).
 Proof. revert n i. induction l; intros [|i] ?; simpl; auto. Qed.
@@ -788,6 +858,16 @@ Proof. revert i. induction n; intros [|?]; naive_solver auto with lia. Qed.
 Lemma lookup_replicate_inv n x y i :
   replicate n x !! i = Some y → y = x ∧ i < n.
 Proof. revert i. induction n; intros [|?]; naive_solver auto with lia. Qed.
+Lemma lookup_replicate_None n x i : n ≤ i ↔ replicate n x !! i = None.
+Proof.
+  rewrite eq_None_not_Some, Nat.le_ngt. split.
+  * intros Hin [x' Hx']; destruct Hin.
+    by destruct (lookup_replicate_inv n x x' i).
+  * intros Hx ?. destruct Hx. exists x; auto using lookup_replicate.
+Qed.
+
+Lemma elem_of_replicate_inv x n y : x ∈ replicate n y → x = y.
+Proof. induction n; simpl; rewrite ?elem_of_nil, ?elem_of_cons; intuition. Qed.
 Lemma replicate_S n x : replicate (S n) x = x :: replicate  n x.
 Proof. done. Qed.
 Lemma replicate_plus n m x :
@@ -803,10 +883,19 @@ Proof. revert m. by induction n; intros [|?]; simpl; f_equal. Qed.
 Lemma drop_replicate_plus n m x : drop n (replicate (n + m) x) = replicate m x.
 Proof. rewrite drop_replicate. f_equal. lia. Qed.
 
+Lemma replicate_as_elem_of x n l :
+  l = replicate n x ↔ length l = n ∧ ∀ y, y ∈ l → y = x.
+Proof.
+  split.
+  * intros; subst. eauto using elem_of_replicate_inv, replicate_length.
+  * intros [? Hl]; subst. induction l as [|y l IH]; simpl; f_equal.
+    + apply Hl. by left.
+    + apply IH. intros ??. apply Hl. by right.
+Qed.
 Lemma reverse_replicate n x : reverse (replicate n x) = replicate n x.
 Proof.
-  induction n as [|n IH]; [done|]. simpl. rewrite reverse_cons, IH.
-  change [x] with (replicate 1 x). by rewrite <-replicate_plus, plus_comm.
+  apply replicate_as_elem_of. rewrite reverse_length, replicate_length. split; auto.
+  intros y. rewrite elem_of_reverse. by apply elem_of_replicate_inv.
 Qed.
 
 (** ** Properties of the [resize] function *)
@@ -821,7 +910,7 @@ Lemma resize_ge l n x :
 Proof. intros. by rewrite resize_spec, take_ge. Qed.
 Lemma resize_le l n x : n ≤ length l → resize n x l = take n l.
 Proof.
-  intros. rewrite resize_spec, (proj2 (NPeano.Nat.sub_0_le _ _)) by done.
+  intros. rewrite resize_spec, (proj2 (Nat.sub_0_le _ _)) by done.
   simpl. by rewrite (right_id_L [] (++)).
 Qed.
 
@@ -834,7 +923,7 @@ Lemma resize_plus l n m x :
   resize (n + m) x l = resize n x l ++ resize m x (drop n l).
 Proof.
   revert n m. induction l; intros [|?] [|?]; simpl; f_equal; auto.
-  * by rewrite plus_0_r, (right_id_L [] (++)).
+  * by rewrite Nat.add_0_r, (right_id_L [] (++)).
   * by rewrite replicate_plus.
 Qed.
 Lemma resize_plus_eq l n m x :
@@ -859,6 +948,22 @@ Lemma resize_length l n x : length (resize n x l) = n.
 Proof. rewrite resize_spec, app_length, replicate_length, take_length. lia. Qed.
 Lemma resize_replicate x n m : resize n x (replicate m x) = replicate n x.
 Proof. revert m. induction n; intros [|?]; simpl; f_equal; auto. Qed.
+
+Lemma lookup_resize l n x i : i < n → i < length l → resize n x l !! i = l !! i.
+Proof.
+  intros ??. destruct (decide (n < length l)).
+  * by rewrite resize_le, lookup_take by lia.
+  * by rewrite resize_ge, lookup_app_l by lia.
+Qed.
+Lemma lookup_resize_new l n x i :
+  length l ≤ i → i < n → resize n x l !! i = Some x.
+Proof.
+  intros ??. rewrite resize_ge by lia.
+  replace i with (length l + (i - length l)) by lia.
+  by rewrite lookup_app_r, lookup_replicate by lia.
+Qed.
+Lemma lookup_resize_old l n x i : n ≤ i → resize n x l !! i = None.
+Proof. intros ?. apply lookup_ge_None_2. by rewrite resize_length. Qed.
 
 Lemma resize_resize l n m x : n ≤ m → resize n x (resize m x l) = resize n x l.
 Proof.
@@ -905,6 +1010,80 @@ Lemma drop_resize_plus l n m x :
   drop n (resize (n + m) x l) = resize m x (drop n l).
 Proof. rewrite drop_resize_le by lia. f_equal. lia. Qed.
 
+Lemma sublist_lookup_Some l i n k :
+  sublist_lookup i n l = Some k ↔
+    i + n ≤ length l ∧ length k = n ∧ ∀ j, j < n → l !! (i + j) = k !! j.
+Proof.
+  unfold sublist_lookup in *. split.
+  * intros Hk. simplify_option_equality. split_ands.
+    + done.
+    + by rewrite take_length_le by (rewrite drop_length; lia).
+    + intros j ?. by rewrite lookup_take, lookup_drop by done.
+  * intros (?&?&Hlookup). case_option_guard; [|lia].
+    f_equal; apply list_eq; intros j. destruct (decide (j < n)).
+    + by rewrite <-Hlookup, lookup_take, lookup_drop by done.
+    + by rewrite lookup_take_ge, lookup_ge_None_2 by lia.
+Qed.
+Lemma sublist_lookup_length l i n k :
+  sublist_lookup i n l = Some k → length k = n.
+Proof. rewrite sublist_lookup_Some. intuition. Qed.
+
+Lemma sublist_insert_length l i k :
+  length (sublist_insert i k l) = length l.
+Proof.
+  unfold sublist_insert. intros. rewrite !app_length, drop_length.
+  destruct (decide (i + length k ≤ length l)).
+  * rewrite !take_length_le, !take_length_ge by lia. lia.
+  * destruct (decide (i < length l));
+      rewrite ?take_length_ge, ?take_length_le by lia; lia.
+Qed.
+Lemma sublist_insert_ge l i k : length l ≤ i → sublist_insert i k l = l.
+Proof.
+  unfold sublist_insert. intros ?. rewrite drop_ge by lia.
+  rewrite take_ge, (proj2 (Nat.sub_0_le _ _)) by done; simpl.
+  by rewrite (right_id [] (++)).
+Qed.
+Lemma lookup_sublist_insert l i k j :
+  i + length k ≤ length l →
+  i ≤ j < i + length k → sublist_insert i k l !! j = k !! (j - i).
+Proof.
+  unfold sublist_insert. intros ? [??]. rewrite (take_ge _ (_ - _ )) by lia.
+  rewrite lookup_app_minus_r by (rewrite take_length_le; lia).
+  by rewrite !take_length_le, lookup_app_l by lia.
+Qed.
+Lemma lookup_sublist_insert_ne l i k j :
+  j < i ∨ i + length k ≤ j → sublist_insert i k l !! j = l !! j.
+Proof.
+  destruct (decide (length l ≤ j)).
+  { by rewrite !lookup_ge_None_2 by (by rewrite ?sublist_insert_length). }
+  unfold sublist_insert. intros [?|?].
+  { rewrite lookup_app_l by (rewrite take_length; apply Nat.min_glb_lt; lia).
+    by rewrite lookup_take. }
+  rewrite lookup_app_minus_r by (rewrite take_length_le; lia).
+  rewrite take_length_le by lia.
+  rewrite lookup_app_minus_r by (rewrite take_length_ge; lia).
+  rewrite lookup_drop, take_length_ge by lia. f_equal. lia.
+Qed.
+
+(** ** Properties of the [seq] function *)
+Lemma fmap_seq j n : S <$> seq j n = seq (S j) n.
+Proof. revert j. induction n; simpl; auto with f_equal. Qed.
+Lemma lookup_seq j n i : i < n → seq j n !! i = Some (j + i).
+Proof.
+  revert j i. induction n as [|n IH]; intros j [|i] ?; simpl; auto with lia.
+  rewrite IH; auto with lia.
+Qed.
+Lemma lookup_seq_ge j n i : n ≤ i → seq j n !! i = None.
+Proof.
+  revert j i. induction n as [|n IH]; intros j [|i] ?; simpl; auto with lia.
+Qed.
+Lemma lookup_seq_inv j n i j' : seq j n !! i = Some j' → j' = j + i ∧ i < n.
+Proof.
+  destruct (le_lt_dec n i).
+  * by rewrite lookup_seq_ge.
+  * rewrite lookup_seq by done. intuition congruence.
+Qed.
+
 (** ** Properties of the [Permutation] predicate *)
 Lemma Permutation_nil l : l ≡ₚ [] ↔ l = [].
 Proof. split. by intro; apply Permutation_nil. by intro; subst. Qed.
@@ -933,6 +1112,17 @@ Qed.
 Global Instance: ∀ k : list A, Injective (≡ₚ) (≡ₚ) (++ k).
 Proof.
   intros k l1 l2. rewrite !(commutative (++) _ k). by apply (injective (k ++)).
+Qed.
+Lemma replicate_Permutation n x l : l ≡ₚ replicate n x → l = replicate n x.
+Proof.
+  intros Hl. apply replicate_as_elem_of. split.
+  * by rewrite Hl, replicate_length.
+  * intros y. rewrite Hl. by apply elem_of_replicate_inv.
+Qed.
+Lemma reverse_Permutation l : reverse l ≡ₚ l.
+Proof.
+  induction l as [|x l IH]; [done|].
+  by rewrite reverse_cons, (commutative (++)), IH.
 Qed.
 
 (** ** Properties of the [prefix_of] and [suffix_of] predicates *)
@@ -1267,7 +1457,7 @@ Proof.
     { eexists [], l. by repeat constructor. }
     rewrite sublist_cons_r. intros [?|(l' & ? &?)]; subst.
     + destruct (IH l k2) as (l1&l2&?&?&?); trivial; subst.
-      exists l1 l2. auto using sublist_insert.
+      exists l1 l2. auto using sublist_cons.
     + destruct (IH l' k2) as (l1&l2&?&?&?); trivial; subst.
       exists (y :: l1) l2. auto using sublist_skip.
   * intros (?&?&?&?&?); subst. auto using sublist_app.
@@ -1290,7 +1480,7 @@ Proof.
   induction k as [|y k IH]; simpl; [done |].
   rewrite sublist_cons_r. intros [Hl12|(?&?&?)]; [|simplify_equality; eauto].
   rewrite sublist_cons_l in Hl12. destruct Hl12 as (k1&k2&Hk&?).
-  apply IH. rewrite Hk. eauto using sublist_inserts_l, sublist_insert.
+  apply IH. rewrite Hk. eauto using sublist_inserts_l, sublist_cons.
 Qed.
 Lemma sublist_app_inv_r k l1 l2 : l1 ++ k `sublist` l2 ++ k → l1 `sublist` l2.
 Proof.
@@ -1313,7 +1503,7 @@ Proof.
     + intros ?. rewrite sublist_cons_l. intros (?&?&?&?); subst.
       eauto using sublist_inserts_l, sublist_skip.
     + intros ?. rewrite sublist_cons_l. intros (?&?&?&?); subst.
-      eauto using sublist_inserts_l, sublist_insert.
+      eauto using sublist_inserts_l, sublist_cons.
   * intros l1 l2 Hl12 Hl21. apply sublist_length in Hl21.
     induction Hl12; simpl in *; f_equal; auto with arith.
     apply sublist_length in Hl12. lia.
@@ -1557,6 +1747,22 @@ Proof.
   split. by intros Hl; rewrite Hl. intros [??]; auto using contains_Permutation.
 Qed.
 
+Lemma NoDup_contains l k : NoDup l → (∀ x, x ∈ l → x ∈ k) → l `contains` k.
+Proof.
+  intros Hl. revert k. induction Hl as [|x l Hx ? IH].
+  { intros k Hk. by apply contains_nil_l. }
+  intros k Hlk. destruct (elem_of_list_split k x) as (l1&l2&?); subst.
+  { apply Hlk. by constructor. }
+  rewrite <-Permutation_middle. apply contains_skip, IH.
+  intros y Hy. rewrite elem_of_app.
+  specialize (Hlk y). rewrite elem_of_app, !elem_of_cons in Hlk.
+  by destruct Hlk as [?|[?|?]]; subst; eauto.
+Qed.
+Lemma NoDup_Permutation l k : NoDup l → NoDup k → (∀ x, x ∈ l ↔ x ∈ k) → l ≡ₚ k.
+Proof.
+  intros. apply (anti_symmetric contains); apply NoDup_contains; naive_solver.
+Qed.
+
 Section contains_dec.
   Context `{∀ x y, Decision (x = y)}.
 
@@ -1682,11 +1888,13 @@ Section Forall_Exists.
   Proof. split. by inversion 1. intros [??]. by constructor. Qed.
   Lemma Forall_singleton x : Forall P [x] ↔ P x.
   Proof. rewrite Forall_cons, Forall_nil; tauto. Qed.
+  Lemma Forall_app_2 l1 l2 : Forall P l1 → Forall P l2 → Forall P (l1 ++ l2).
+  Proof. induction 1; simpl; auto. Qed.
   Lemma Forall_app l1 l2 : Forall P (l1 ++ l2) ↔ Forall P l1 ∧ Forall P l2.
   Proof.
     split.
     * induction l1; inversion 1; intuition.
-    * intros [H ?]. induction H; simpl; intuition.
+    * intros [??]; auto using Forall_app_2.
   Qed.
   Lemma Forall_true l : (∀ x, P x) → Forall P l.
   Proof. induction l; auto. Qed.
@@ -1734,6 +1942,18 @@ Section Forall_Exists.
     intros ? Hl. revert n.
     induction Hl; intros [|?]; simpl; auto using Forall_replicate.
   Qed.
+  Lemma Forall_sublist_lookup l i n k :
+    sublist_lookup i n l = Some k → Forall P l → Forall P k.
+  Proof.
+    unfold sublist_lookup. intros; simplify_option_equality.
+    auto using Forall_take, Forall_drop.
+  Qed.
+  Lemma Forall_sublist_insert l i k :
+    Forall P l → Forall P k → Forall P (sublist_insert i k l).
+  Proof.
+    unfold sublist_insert. auto using Forall_app_2, Forall_drop, Forall_take.
+  Qed.
+
   Lemma Exists_exists l : Exists P l ↔ ∃ x, x ∈ l ∧ P x.
   Proof.
     split.
@@ -1801,9 +2021,22 @@ Section Forall_Exists.
     end.
 End Forall_Exists.
 
+Lemma replicate_as_Forall {A} (x : A) n l :
+  l = replicate n x ↔ length l = n ∧ Forall (x =) l.
+Proof. rewrite replicate_as_elem_of, Forall_forall. naive_solver. Qed.
+
 Lemma Forall_swap {A B} (Q : A → B → Prop) l1 l2 :
   Forall (λ y, Forall (Q y) l1) l2 ↔ Forall (λ x, Forall (flip Q x) l2) l1.
 Proof. repeat setoid_rewrite Forall_forall. simpl. split; eauto. Qed.
+Lemma Forall_seq (P : nat → Prop) i n :
+  Forall P (seq i n) ↔ ∀ j, i ≤ j < i + n → P j.
+Proof.
+  rewrite Forall_lookup. split.
+  * intros H j [??]. apply (H (j - i)).
+    rewrite lookup_seq; auto with f_equal lia.
+  * intros H j x Hj. apply lookup_seq_inv in Hj.
+    destruct Hj; subst. auto with lia.
+Qed.
 
 (** ** Properties of the [Forall2] predicate *)
 Section Forall2.
@@ -1841,6 +2074,12 @@ Section Forall2.
 
   Lemma Forall2_length l1 l2 : Forall2 P l1 l2 → length l1 = length l2.
   Proof. induction 1; simpl; auto. Qed.
+  Lemma Forall2_length_l l1 l2 n :
+    Forall2 P l1 l2 → length l1 = n → length l2 = n.
+  Proof. intros ? <-; symmetry. by apply Forall2_length. Qed.
+  Lemma Forall2_length_r l1 l2 n :
+    Forall2 P l1 l2 → length l2 = n → length l1 = n.
+  Proof. intros ? <-. by apply Forall2_length. Qed.
   Lemma Forall2_same_length l1 l2 : Forall2 P l1 l2 → l1 `same_length` l2.
   Proof. induction 1; constructor; auto. Qed.
 
@@ -1867,19 +2106,19 @@ Section Forall2.
     Forall2 P l1 l2 → l1 !! i = Some x → l2 !! i = Some y → P x y.
   Proof.
     intros H. revert i. induction H; [done|].
-    intros [|?] ??; simpl in *; simplify_equality; eauto.
+    intros [|?] ??; simplify_equality'; eauto.
   Qed.
   Lemma Forall2_lookup_l l1 l2 i x :
     Forall2 P l1 l2 → l1 !! i = Some x → ∃ y, l2 !! i = Some y ∧ P x y.
   Proof.
     intros H. revert i. induction H; [done|].
-    intros [|?] ?; simpl in *; simplify_equality; eauto.
+    intros [|?] ?; simplify_equality'; eauto.
   Qed.
   Lemma Forall2_lookup_r l1 l2 i y :
     Forall2 P l1 l2 → l2 !! i = Some y → ∃ x, l1 !! i = Some x ∧ P x y.
   Proof.
     intros H. revert i. induction H; [done|].
-    intros [|?] ?; simpl in *; simplify_equality; eauto.
+    intros [|?] ?; simplify_equality'; eauto.
   Qed.
   Lemma Forall2_lookup_2 l1 l2 :
     l1 `same_length` l2 →
@@ -1977,13 +2216,38 @@ Section Forall2.
     eauto using Forall_resize, Forall_drop.
   Qed.
 
+  Lemma Forall2_sublist_lookup_l l1 l2 n i k1 :
+    Forall2 P l1 l2 → sublist_lookup n i l1 = Some k1 →
+    ∃ k2, sublist_lookup n i l2 = Some k2 ∧ Forall2 P k1 k2.
+  Proof.
+    unfold sublist_lookup. intros Hl12 Hl1.
+    exists (take i (drop n l2)); simplify_option_equality.
+    * auto using Forall2_take, Forall2_drop.
+    * apply Forall2_length in Hl12; lia.
+  Qed.
+  Lemma Forall2_sublist_lookup_r l1 l2 n i k2 :
+    Forall2 P l1 l2 → sublist_lookup n i l2 = Some k2 →
+    ∃ k1, sublist_lookup n i l1 = Some k1 ∧ Forall2 P k1 k2.
+  Proof.
+    unfold sublist_lookup. intros Hl12 Hl2.
+    exists (take i (drop n l1)); simplify_option_equality.
+    * auto using Forall2_take, Forall2_drop.
+    * apply Forall2_length in Hl12; lia.
+  Qed.
+  Lemma Forall2_sublist_insert l1 l2 i k1 k2 :
+    Forall2 P l1 l2 → Forall2 P k1 k2 →
+    Forall2 P (sublist_insert i k1 l1) (sublist_insert i k2 l2).
+  Proof.
+    unfold sublist_insert. intros. erewrite !Forall2_length by eauto.
+    auto using Forall2_app, Forall2_take, Forall2_drop.
+  Qed.
+
   Lemma Forall2_transitive {C} (Q : B → C → Prop) (R : A → C → Prop) l1 l2 l3 :
     (∀ x1 x2 x3, P x1 x2 → Q x2 x3 → R x1 x3) →
     Forall2 P l1 l2 → Forall2 Q l2 l3 → Forall2 R l1 l3.
   Proof.
     intros ? Hl1l2. revert l3. induction Hl1l2; inversion_clear 1; eauto.
   Qed.
-
   Lemma Forall2_Forall (Q : A → A → Prop) l :
     Forall (λ x, Q x x) l → Forall2 Q l l.
   Proof. induction 1; constructor; auto. Qed.
@@ -2042,9 +2306,9 @@ Section fmap.
   Lemma list_fmap_compose {C} (g : B → C) l : g ∘ f <$> l = g <$> f <$> l.
   Proof. induction l; simpl; f_equal; auto. Qed.
 
-  Lemma list_fmap_ext (g : A → B) (l : list A) :
-    (∀ x, f x = g x) → fmap f l = fmap g l.
-  Proof. intro. induction l; simpl; f_equal; auto. Qed.
+  Lemma list_fmap_ext (g : A → B) (l1 l2 : list A) :
+    (∀ x, f x = g x) → l1 = l2 → fmap f l1 = fmap g l2.
+  Proof. intros ? <-. induction l1; simpl; f_equal; auto. Qed.
 
   Global Instance: Injective (=) (=) f → Injective (=) (=) (fmap f).
   Proof.
@@ -2059,13 +2323,13 @@ Section fmap.
   Proof. by destruct k. Qed.
   Lemma fmap_cons_inv y l k :
     f <$> l = y :: k → ∃ x l', y = f x ∧ k = f <$> l' ∧ l = x :: l'.
-  Proof. intros. destruct l; simpl; simplify_equality; eauto. Qed.
+  Proof. intros. destruct l; simplify_equality'; eauto. Qed.
   Lemma fmap_app_inv l k1 k2 :
     f <$> l = k1 ++ k2 → ∃ l1 l2, k1 = f <$> l1 ∧ k2 = f <$> l2 ∧ l = l1 ++ l2.
   Proof.
     revert l. induction k1 as [|y k1 IH]; simpl.
     * intros l ?. by eexists [], l.
-    * intros [|x l] ?; simpl; simplify_equality.
+    * intros [|x l] ?; simplify_equality'.
       destruct (IH l) as [l1 [l2 [? [??]]]]; subst; [done |].
       by exists (x :: l1) l2.
   Qed.
@@ -2108,18 +2372,18 @@ Section fmap.
     firstorder eauto using elem_of_list_fmap_1_alt, elem_of_list_fmap_2.
   Qed.
 
-  Lemma NoDup_fmap_1 l : NoDup (f <$> l) → NoDup l.
+  Lemma fmap_nodup_1 l : NoDup (f <$> l) → NoDup l.
   Proof.
     induction l; simpl; inversion_clear 1; constructor; auto.
     rewrite elem_of_list_fmap in *. naive_solver.
   Qed.
-  Lemma NoDup_fmap_2 `{!Injective (=) (=) f} l : NoDup l → NoDup (f <$> l).
+  Lemma fmap_nodup_2 `{!Injective (=) (=) f} l : NoDup l → NoDup (f <$> l).
   Proof.
     induction 1; simpl; constructor; trivial. rewrite elem_of_list_fmap.
     intros [y [Hxy ?]]. apply (injective f) in Hxy. by subst.
   Qed.
-  Lemma NoDup_fmap `{!Injective (=) (=) f} l : NoDup (f <$> l) ↔ NoDup l.
-  Proof. split; auto using NoDup_fmap_1, NoDup_fmap_2. Qed.
+  Lemma fmap_nodup `{!Injective (=) (=) f} l : NoDup (f <$> l) ↔ NoDup l.
+  Proof. split; auto using fmap_nodup_1, fmap_nodup_2. Qed.
 
   Global Instance fmap_sublist: Proper (sublist ==> sublist) (fmap f).
   Proof. induction 1; simpl; econstructor; eauto. Qed.
@@ -2158,15 +2422,8 @@ Section fmap.
     Forall2 P (f <$> l1) (g <$> l2) ↔ Forall2 (λ x1 x2, P (f x1) (g x2)) l1 l2.
   Proof. split; auto using Forall2_fmap_1, Forall2_fmap_2. Qed.
 
-  Lemma mapM_fmap_Some (g : B → option A) (l : list A) :
-    (∀ x, g (f x) = Some x) → mapM g (f <$> l) = Some l.
-  Proof. intros. by induction l; simpl; simplify_option_equality. Qed.
-  Lemma mapM_fmap_Some_inv (g : B → option A) (l : list A) (k : list B) :
-    (∀ x y, g y = Some x → y = f x) → mapM g k = Some l → k = f <$> l.
-  Proof.
-    intros Hgf. revert l; induction k as [|??]; intros [|??] ?;
-      simplify_option_equality; f_equiv; eauto.
-  Qed.
+  Lemma list_fmap_bind {C} (g : B → list C) l : (f <$> l) ≫= g = l ≫= g ∘ f.
+  Proof. induction l; simpl; f_equal; auto. Qed.
 End fmap.
 
 Lemma NoDup_fmap_fst {A B} (l : list (A * B)) :
@@ -2176,21 +2433,27 @@ Proof.
   * rewrite elem_of_list_fmap.
     intros [[x2 y2] [??]]; simpl in *; subst. destruct Hin.
     rewrite (Hunique x2 y1 y2); rewrite ?elem_of_cons; auto.
-  * apply IH. intros.
-    eapply Hunique; rewrite ?elem_of_cons; eauto.
+  * apply IH. intros. eapply Hunique; rewrite ?elem_of_cons; eauto.
 Qed.
 
 Section bind.
   Context {A B : Type} (f : A → list B).
 
-  Global Instance mbind_sublist: Proper (sublist ==> sublist) (mbind f).
+  Lemma list_bind_ext (g : A → list B) l1 l2 :
+    (∀ x, f x = g x) → l1 = l2 → l1 ≫= f = l2 ≫= g.
+  Proof. intros ? <-. induction l1; simpl; f_equal; auto. Qed.
+  Lemma Forall_bind_ext (g : A → list B) (l : list A) :
+    Forall (λ x, f x = g x) l → l ≫= f = l ≫= g.
+  Proof. induction 1; simpl; f_equal; auto. Qed.
+
+  Global Instance bind_sublist: Proper (sublist ==> sublist) (mbind f).
   Proof.
     induction 1; simpl; auto.
     * done.
     * by apply sublist_app.
     * by apply sublist_inserts_l.
   Qed.
-  Global Instance mbind_contains: Proper (contains ==> contains) (mbind f).
+  Global Instance bind_contains: Proper (contains ==> contains) (mbind f).
   Proof.
     induction 1; simpl; auto.
     * done.
@@ -2199,7 +2462,7 @@ Section bind.
     * by apply contains_inserts_l.
     * etransitivity; eauto.
   Qed.
-  Global Instance mbind_Permutation: Proper ((≡ₚ) ==> (≡ₚ)) (mbind f).
+  Global Instance bind_Permutation: Proper ((≡ₚ) ==> (≡ₚ)) (mbind f).
   Proof.
     induction 1; simpl; auto.
     * by f_equiv.
@@ -2268,13 +2531,12 @@ Section ret_join.
   Proof.
     intros Hn Hls. revert i. induction Hls as [|l ls ? Hls IH]; simpl; [done |].
     intros i. destruct (decide (i < n)) as [Hin|Hin].
-    * rewrite <-(NPeano.Nat.div_unique i n 0 i) by lia.
-      rewrite <-(NPeano.Nat.mod_unique i n 0 i) by lia.
+    * rewrite <-(Nat.div_unique i n 0 i), <-(Nat.mod_unique i n 0 i) by lia.
       simpl. rewrite lookup_app_l; auto with lia.
     * replace i with ((i - n) + 1 * n) by lia.
-      rewrite NPeano.Nat.div_add, NPeano.Nat.mod_add by done.
-      replace (i - n + 1 * n) with i by lia.
-      rewrite (plus_comm _ 1), lookup_app_r_alt, IH by lia. by subst.
+      rewrite Nat.div_add, Nat.mod_add by done.
+      replace (i - n + 1 * n) with (length l + (i - n)) by lia.
+      by rewrite (Nat.add_comm _ 1), lookup_app_r, IH.
   Qed.
 
   (* This should be provable using the previous lemma in a shorter way *)
@@ -2284,13 +2546,12 @@ Section ret_join.
   Proof.
     intros Hn Hls. revert i. induction Hls as [|l ls ? Hls IH]; simpl; [done |].
     intros i. destruct (decide (i < n)) as [Hin|Hin].
-    * rewrite <-(NPeano.Nat.div_unique i n 0 i) by lia.
-      rewrite <-(NPeano.Nat.mod_unique i n 0 i) by lia.
+    * rewrite <-(Nat.div_unique i n 0 i), <-(Nat.mod_unique i n 0 i) by lia.
       simpl. rewrite alter_app_l; auto with lia.
     * replace i with ((i - n) + 1 * n) by lia.
-      rewrite NPeano.Nat.div_add, NPeano.Nat.mod_add by done.
+      rewrite Nat.div_add, Nat.mod_add by done.
       replace (i - n + 1 * n) with i by lia.
-      rewrite (plus_comm _ 1), alter_app_r_alt, IH by lia. by subst.
+      rewrite (Nat.add_comm _ 1), alter_app_r_alt, IH by lia. by subst.
   Qed.
   Lemma insert_join_same_length (ls : list (list A)) n i x :
     n ≠ 0 → Forall (λ l, length l = n) ls →
@@ -2301,6 +2562,72 @@ Section ret_join.
     Forall2 (Forall2 P) ls1 ls2 → Forall2 P (mjoin ls1) (mjoin ls2).
   Proof. induction 1; simpl; auto using Forall2_app. Qed.
 End ret_join.
+
+Section mapM.
+  Context {A B : Type} (f : A → option B).
+
+  Lemma mapM_ext (g : A → option B) l : (∀ x, f x = g x) → mapM f l = mapM g l.
+  Proof. intros Hfg. by induction l; simpl; rewrite ?Hfg, ?IHl. Qed.
+  Lemma Forall2_mapM_ext (g : A → option B) l k :
+    Forall2 (λ x y, f x = g y) l k → mapM f l = mapM g k.
+  Proof. induction 1 as [|???? Hfg ? IH]; simpl. done. by rewrite Hfg, IH. Qed.
+  Lemma Forall_mapM_ext (g : A → option B) l :
+    Forall (λ x, f x = g x) l → mapM f l = mapM g l.
+  Proof. induction 1 as [|?? Hfg ? IH]; simpl. done. by rewrite Hfg, IH. Qed.
+
+  Lemma mapM_Some_1 l k : mapM f l = Some k → Forall2 (λ x y, f x = Some y) l k.
+  Proof.
+    revert k. induction l as [|x l]; intros [|y k]; simpl; try done.
+    * destruct (f x); simpl; [|discriminate]. by destruct (mapM f l).
+    * destruct (f x) eqn:?; simpl; [|discriminate].
+      destruct (mapM f l); intros; simplify_equality. constructor; auto.
+  Qed.
+  Lemma mapM_Some_2 l k : Forall2 (λ x y, f x = Some y) l k → mapM f l = Some k.
+  Proof.
+    induction 1 as [|???? Hf ? IH]; simpl; [done |].
+    rewrite Hf. simpl. by rewrite IH.
+  Qed.
+  Lemma mapM_Some l k : mapM f l = Some k ↔ Forall2 (λ x y, f x = Some y) l k.
+  Proof. split; auto using mapM_Some_1, mapM_Some_2. Qed.
+  Lemma mapM_length l k : mapM f l = Some k → length l = length k.
+  Proof. intros. by eapply Forall2_length, mapM_Some_1. Qed.
+
+  Lemma mapM_None_1 l : mapM f l = None → Exists (λ x, f x = None) l.
+  Proof.
+    induction l as [|x l IH]; simpl; [done|].
+    destruct (f x) eqn:?; simpl; eauto. by destruct (mapM f l); eauto.
+  Qed.
+  Lemma mapM_None_2 l : Exists (λ x, f x = None) l → mapM f l = None.
+  Proof.
+    induction 1 as [x l Hx|x l ? IH]; simpl; [by rewrite Hx|].
+    by destruct (f x); simpl; rewrite ?IH.
+  Qed.
+  Lemma mapM_None l : mapM f l = None ↔ Exists (λ x, f x = None) l.
+  Proof. split; auto using mapM_None_1, mapM_None_2. Qed.
+
+  Lemma mapM_is_Some_1 l : is_Some (mapM f l) → Forall (is_Some ∘ f) l.
+  Proof.
+    unfold compose. setoid_rewrite <-not_eq_None_Some.
+    rewrite mapM_None. apply (not_Exists_Forall _).
+  Qed.
+  Lemma mapM_is_Some_2 l : Forall (is_Some ∘ f) l → is_Some (mapM f l).
+  Proof.
+    unfold compose. setoid_rewrite <-not_eq_None_Some.
+    rewrite mapM_None. apply (Forall_not_Exists _).
+  Qed.
+  Lemma mapM_is_Some l : is_Some (mapM f l) ↔ Forall (is_Some ∘ f) l.
+  Proof. split; auto using mapM_is_Some_1, mapM_is_Some_2. Qed.
+
+  Lemma mapM_fmap_Some (g : B → A) (l : list B) :
+    (∀ x, f (g x) = Some x) → mapM f (g <$> l) = Some l.
+  Proof. intros. by induction l; simpl; simplify_option_equality. Qed.
+  Lemma mapM_fmap_Some_inv (g : B → A) (l : list B) (k : list A) :
+    (∀ x y, f y = Some x → y = g x) → mapM f k = Some l → k = g <$> l.
+  Proof.
+    intros Hgf. revert l; induction k as [|??]; intros [|??] ?;
+      simplify_option_equality; f_equiv; eauto.
+  Qed.
+End mapM.
 
 (** ** Properties of the [permutations] function *)
 Section permutations.
@@ -2430,6 +2757,32 @@ Proof. revert n a. induction l1; intros; simpl; f_equal; auto. Qed.
 Section zip_with.
   Context {A B C : Type} (f : A → B → C).
 
+  Lemma zip_with_ext (g : A → B → C) l1 l2 k1 k2 :
+    (∀ x y, f x y = g x y) → l1 = l2 → k1 = k2 →
+    zip_with f l1 k1 = zip_with g l2 k2.
+  Proof.
+    intros ? <- <-. revert k1. induction l1; intros [|??]; simpl; f_equal; auto.
+  Qed.
+  Lemma Forall_zip_with_ext_l (g : A → B → C) l k1 k2 :
+    Forall (λ x, ∀ y, f x y = g x y) l → k1 = k2 →
+    zip_with f l k1 = zip_with g l k2.
+  Proof.
+    intros Hl <-. revert k1. induction Hl; intros [|??]; simpl; f_equal; auto.
+  Qed.
+  Lemma Forall_zip_with_ext_r (g : A → B → C) l1 l2 k :
+    l1 = l2 → Forall (λ y, ∀ x, f x y = g x y) k →
+    zip_with f l1 k = zip_with g l2 k.
+  Proof.
+    intros <- Hk. revert l1. induction Hk; intros [|??]; simpl; f_equal; auto.
+  Qed.
+
+  Lemma zip_with_fmap_l {D} (g : D → A) l k :
+    zip_with f (g <$> l) k = zip_with (λ x, f (g x)) l k.
+  Proof. revert k. induction l; intros [|??]; simpl; f_equal; auto. Qed.
+  Lemma zip_with_fmap_r {D} (g : D → B) l k :
+    zip_with f l (g <$> k) = zip_with (λ x y, f x (g y)) l k.
+  Proof. revert k. induction l; intros [|??]; simpl; f_equal; auto. Qed.
+
   Lemma zip_with_nil_inv l1 l2 :
     zip_with f l1 l2 = [] → l1 = [] ∨ l2 = [].
   Proof. destruct l1, l2; simpl; auto with congruence. Qed.
@@ -2437,7 +2790,7 @@ Section zip_with.
     zip_with f l1 l2 = y :: k →
     ∃ x1 x2 l1' l2', y = f x1 x2 ∧ k = zip_with f l1' l2' ∧
       l1 = x1 :: l1' ∧ l2 = x2 :: l2'.
-  Proof. intros. destruct l1, l2; simpl; simplify_equality; repeat eexists. Qed.
+  Proof. intros. destruct l1, l2; simplify_equality'; repeat eexists. Qed.
   Lemma zip_with_app_inv l1 l2 k' k'' :
     zip_with f l1 l2 = k' ++ k'' →
     ∃ l1' l1'' l2' l2'', k' = zip_with f l1' l2' ∧ k'' = zip_with f l1'' l2'' ∧
@@ -2445,7 +2798,7 @@ Section zip_with.
   Proof.
     revert l1 l2. induction k' as [|y k' IH]; simpl.
     * intros l1 l2 ?. by eexists [], l1, [], l2.
-    * intros [|x1 l1] [|x2 l2] ?; simpl; simplify_equality.
+    * intros [|x1 l1] [|x2 l2] ?; simplify_equality'.
       destruct (IH l1 l2) as (l1'&l1''&l2'&l2''&?&?&?&?); subst; [done |].
       by exists (x1 :: l1') l1'' (x2 :: l2') l2''.
   Qed.
@@ -2455,8 +2808,8 @@ Section zip_with.
     l1 `same_length` l2 → k1 `same_length` k2 →
     zip_with f l1 l2 = zip_with f k1 k2 → l1 = k1 ∧ l2 = k2.
   Proof.
-    intros ? Hl. revert k1 k2. induction Hl; intros ?? [] ?; simpl;
-      simplify_equality; f_equal; naive_solver.
+    intros ? Hl. revert k1 k2. induction Hl; intros ?? [] ?;
+      simplify_equality'; f_equal; naive_solver.
   Qed.
 
   Lemma zip_with_length l1 l2 :
@@ -2686,7 +3039,6 @@ Ltac decompose_Forall_hyps := repeat
   | H : Forall _ (_ :: _) |- _ => rewrite Forall_cons in H; destruct H
   | H : Forall _ (_ ++ _) |- _ => rewrite Forall_app in H; destruct H
   | H : Forall _ (_ <$> _) |- _ => rewrite Forall_fmap in H
-  | H : Forall _ ?l, H' : length ?l ≠ 0 |- _ => is_var l; destruct H; [done|]
   | H : Forall2 _ [] [] |- _ => clear H
   | H : Forall2 _ (_ :: _) [] |- _ => destruct (Forall2_cons_nil_inv _ _ _ H)
   | H : Forall2 _ [] (_ :: _) |- _ => destruct (Forall2_nil_cons_inv _ _ _ H)

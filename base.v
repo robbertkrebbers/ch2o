@@ -6,7 +6,7 @@ abstract interfaces for ordered structures, collections, and various other data
 structures. *)
 Global Generalizable All Variables.
 Global Set Automatic Coercions Import.
-Require Export Morphisms RelationClasses List Bool Utf8 Program Setoid NArith.
+Require Export Morphisms RelationClasses List Bool Utf8 Program Setoid.
 
 (** * General *)
 (** The following coercion allows us to use Booleans as propositions. *)
@@ -17,6 +17,7 @@ applied. *)
 Arguments id _ _/.
 Arguments compose _ _ _ _ _ _ /.
 Arguments flip _ _ _ _ _ _/.
+Typeclasses Transparent id compose flip.
 
 (** Change [True] and [False] into notations in order to enable overloading.
 We will use this in the file [assertions] to give [True] and [False] a
@@ -415,10 +416,6 @@ Definition delete_list `{Delete K M} (l : list K) (m : M) : M :=
   fold_right delete m l.
 Instance: Params (@delete_list) 3.
 
-Definition insert_consecutive `{Insert nat A M} (i : nat) (l : list A)
-  (m : M) : M := fold_right (λ x f i, <[i:=x]>(f (S i))) (λ _, m) l i.
-Instance: Params (@insert_consecutive) 3.
-
 (** The function [union_with f m1 m2] is supposed to yield the union of [m1]
 and [m2] using the function [f] to combine values of members that are in
 both [m1] and [m2]. *)
@@ -451,6 +448,10 @@ Class Injective {A B} (R : relation A) (S : relation B) (f : A → B) : Prop :=
 Class Injective2 {A B C} (R1 : relation A) (R2 : relation B)
     (S : relation C) (f : A → B → C) : Prop :=
   injective2: ∀ x1 x2  y1 y2, S (f x1 x2) (f y1 y2) → R1 x1 y1 ∧ R2 x2 y2.
+Class Cancel {A B} (S : relation B) (f : A → B) (g : B → A) : Prop :=
+  cancel: ∀ x, S (f (g x)) x.
+Class Surjective {A B} (R : relation B) (f : A → B) :=
+  surjective : ∀ y, ∃ x, R (f x) y.
 Class Idempotent {A} (R : relation A) (f : A → A → A) : Prop :=
   idempotent: ∀ x, R (f x x) x.
 Class Commutative {A B} (R : relation A) (f : B → B → A) : Prop :=
@@ -475,6 +476,8 @@ Class AntiSymmetric {A} (R S : relation A) : Prop :=
 Arguments irreflexivity {_} _ {_} _ _.
 Arguments injective {_ _ _ _} _ {_} _ _ _.
 Arguments injective2 {_ _ _ _ _ _} _ {_} _ _ _ _ _.
+Arguments cancel {_ _ _} _ _ {_} _.
+Arguments surjective {_ _ _} _ {_} _.
 Arguments idempotent {_ _} _ {_} _.
 Arguments commutative {_ _ _} _ {_} _ _.
 Arguments left_id {_ _} _ _ {_} _.
@@ -485,55 +488,6 @@ Arguments right_absorb {_ _} _ _ {_} _.
 Arguments left_distr {_ _} _ _ {_} _ _ _.
 Arguments right_distr {_ _} _ _ {_} _ _ _.
 Arguments anti_symmetric {_ _} _ {_} _ _ _ _.
-
-Lemma impl_transitive (P Q R : Prop) : (P → Q) → (Q → R) → (P → R).
-Proof. tauto. Qed.
-Instance: Commutative (↔) (@eq A).
-Proof. red. intuition. Qed.
-Instance: Commutative (↔) (λ x y, @eq A y x).
-Proof. red. intuition. Qed.
-Instance: Commutative (↔) (↔).
-Proof. red. intuition. Qed.
-Instance: Commutative (↔) (∧).
-Proof. red. intuition. Qed.
-Instance: Associative (↔) (∧).
-Proof. red. intuition. Qed.
-Instance: Idempotent (↔) (∧).
-Proof. red. intuition. Qed.
-Instance: Commutative (↔) (∨).
-Proof. red. intuition. Qed.
-Instance: Associative (↔) (∨).
-Proof. red. intuition. Qed.
-Instance: Idempotent (↔) (∨).
-Proof. red. intuition. Qed.
-Instance: LeftId (↔) True (∧).
-Proof. red. intuition. Qed.
-Instance: RightId (↔) True (∧).
-Proof. red. intuition. Qed.
-Instance: LeftAbsorb (↔) False (∧).
-Proof. red. intuition. Qed.
-Instance: RightAbsorb (↔) False (∧).
-Proof. red. intuition. Qed.
-Instance: LeftId (↔) False (∨).
-Proof. red. intuition. Qed.
-Instance: RightId (↔) False (∨).
-Proof. red. intuition. Qed.
-Instance: LeftAbsorb (↔) True (∨).
-Proof. red. intuition. Qed.
-Instance: RightAbsorb (↔) True (∨).
-Proof. red. intuition. Qed.
-Instance: LeftId (↔) True impl.
-Proof. unfold impl. red. intuition. Qed.
-Instance: RightAbsorb (↔) True impl.
-Proof. unfold impl. red. intuition. Qed.
-Instance: LeftDistr (↔) (∧) (∨).
-Proof. red. intuition. Qed.
-Instance: RightDistr (↔) (∧) (∨).
-Proof. red. intuition. Qed.
-Instance: LeftDistr (↔) (∨) (∧).
-Proof. red. intuition. Qed.
-Instance: RightDistr (↔) (∨) (∧).
-Proof. red. intuition. Qed.
 
 (** The following lemmas are specific versions of the projections of the above
 type classes for Leibniz equality. These lemmas allow us to enforce Coq not to
@@ -696,11 +650,9 @@ Notation "x .½" := (half x) (at level 20, format "x .½") : C_scope.
 Lemma proj1_sig_inj {A} (P : A → Prop) x (Px : P x) y (Py : P y) :
   x↾Px = y↾Py → x = y.
 Proof. injection 1; trivial. Qed.
-Lemma not_symmetry `{R : relation A} `{!Symmetric R} (x y : A) :
-  ¬R x y → ¬R y x.
+Lemma not_symmetry `{R : relation A} `{!Symmetric R} x y : ¬R x y → ¬R y x.
 Proof. intuition. Qed.
-Lemma symmetry_iff `(R : relation A) `{!Symmetric R} (x y : A) :
-  R x y ↔ R y x.
+Lemma symmetry_iff `(R : relation A) `{!Symmetric R} x y : R x y ↔ R y x.
 Proof. intuition. Qed.
 
 (** ** Pointwise relations *)
@@ -765,11 +717,15 @@ Section prod_relation.
 End prod_relation.
 
 (** ** Other *)
-Definition proj_relation {A B} (R : relation A)
-  (f : B → A) : relation B := λ x y, R (f x) (f y).
-Definition proj_relation_equivalence {A B} (R : relation A) (f : B → A) :
-  Equivalence R → Equivalence (proj_relation R f).
-Proof. unfold proj_relation. firstorder auto. Qed.
+Definition proj_eq {A B} (f : B → A) : relation B := λ x y, f x = f y.
+Global Instance proj_eq_equivalence `(f : B → A) : Equivalence (proj_eq f).
+Proof. unfold proj_eq. repeat split; red; intuition congruence. Qed.
+Notation "x ~{ f } y" := (proj_eq f x y)
+  (at level 70, format "x  ~{ f }  y") : C_scope.
+Notation "(~{ f } )" := (proj_eq f) (f at level 10, only parsing) : C_scope.
+
+Hint Extern 0 (_ ~{_} _) => reflexivity.
+Hint Extern 0 (_ ~{_} _) => symmetry; assumption.
 
 Instance: ∀ A B (x : B), Commutative (=) (λ _ _ : A, x).
 Proof. red. trivial. Qed.
@@ -799,3 +755,96 @@ Proof. red. trivial. Qed.
 Instance idem_propholds {A} (R : relation A) f :
   Idempotent R f → ∀ x, PropHolds (R (f x x) x).
 Proof. red. trivial. Qed.
+
+Lemma injective_iff {A B} {R : relation A} {S : relation B} (f : A → B)
+  `{!Injective R S f} `{!Proper (R ==> S) f} x y : S (f x) (f y) ↔ R x y.
+Proof. firstorder. Qed.
+Instance: Injective (=) (=) (@inl A B).
+Proof. injection 1; auto. Qed.
+Instance: Injective (=) (=) (@inr A B).
+Proof. injection 1; auto. Qed.
+Instance: Injective2 (=) (=) (=) (@pair A B).
+Proof. injection 1; auto. Qed.
+Instance: ∀ `{Injective2 A B C R1 R2 R3 f} y, Injective R1 R3 (λ x, f x y).
+Proof. repeat intro; edestruct (injective2 f); eauto. Qed.
+Instance: ∀ `{Injective2 A B C R1 R2 R3 f} x, Injective R2 R3 (f x).
+Proof. repeat intro; edestruct (injective2 f); eauto. Qed.
+
+Lemma cancel_injective `{Cancel A B R1 f g}
+  `{!Equivalence R1} `{!Proper (R2 ==> R1) f} : Injective R1 R2 g.
+Proof.
+  intros x y E. rewrite <-(cancel f g x), <-(cancel f g y), E. reflexivity.
+Qed.
+Lemma cancel_surjective `{Cancel A B R1 f g} : Surjective R1 f.
+Proof. intros y. exists (g y). auto. Qed.
+
+Lemma impl_transitive (P Q R : Prop) : (P → Q) → (Q → R) → (P → R).
+Proof. tauto. Qed.
+Instance: Commutative (↔) (@eq A).
+Proof. red. intuition. Qed.
+Instance: Commutative (↔) (λ x y, @eq A y x).
+Proof. red. intuition. Qed.
+Instance: Commutative (↔) (↔).
+Proof. red. intuition. Qed.
+Instance: Commutative (↔) (∧).
+Proof. red. intuition. Qed.
+Instance: Associative (↔) (∧).
+Proof. red. intuition. Qed.
+Instance: Idempotent (↔) (∧).
+Proof. red. intuition. Qed.
+Instance: Commutative (↔) (∨).
+Proof. red. intuition. Qed.
+Instance: Associative (↔) (∨).
+Proof. red. intuition. Qed.
+Instance: Idempotent (↔) (∨).
+Proof. red. intuition. Qed.
+Instance: LeftId (↔) True (∧).
+Proof. red. intuition. Qed.
+Instance: RightId (↔) True (∧).
+Proof. red. intuition. Qed.
+Instance: LeftAbsorb (↔) False (∧).
+Proof. red. intuition. Qed.
+Instance: RightAbsorb (↔) False (∧).
+Proof. red. intuition. Qed.
+Instance: LeftId (↔) False (∨).
+Proof. red. intuition. Qed.
+Instance: RightId (↔) False (∨).
+Proof. red. intuition. Qed.
+Instance: LeftAbsorb (↔) True (∨).
+Proof. red. intuition. Qed.
+Instance: RightAbsorb (↔) True (∨).
+Proof. red. intuition. Qed.
+Instance: LeftId (↔) True impl.
+Proof. unfold impl. red. intuition. Qed.
+Instance: RightAbsorb (↔) True impl.
+Proof. unfold impl. red. intuition. Qed.
+Instance: LeftDistr (↔) (∧) (∨).
+Proof. red. intuition. Qed.
+Instance: RightDistr (↔) (∧) (∨).
+Proof. red. intuition. Qed.
+Instance: LeftDistr (↔) (∨) (∧).
+Proof. red. intuition. Qed.
+Instance: RightDistr (↔) (∨) (∧).
+Proof. red. intuition. Qed.
+Lemma not_injective `{Injective A B R R' f} x y : ¬R x y → ¬R' (f x) (f y).
+Proof. intuition. Qed.
+Instance injective_compose {A B C} R1 R2 R3 (f : A → B) (g : B → C) :
+  Injective R1 R2 f → Injective R2 R3 g → Injective R1 R3 (g ∘ f).
+Proof. red; intuition. Qed.
+Instance surjective_compose {A B C} R (f : A → B) (g : B → C) :
+  Surjective (=) f → Surjective R g → Surjective R (g ∘ f).
+Proof.
+  intros ?? x. unfold compose. destruct (surjective g x) as [y ?].
+  destruct (surjective f y) as [z ?]. exists z. congruence.
+Qed.
+
+Section sig_map.
+  Context `{P : A → Prop} `{Q : B → Prop} (f : A → B) (Hf : ∀ x, P x → Q (f x)).
+  Definition sig_map (x : sig P) : sig Q := f (`x) ↾ Hf _ (proj2_sig x).
+  Global Instance sig_map_injective:
+    (∀ x, ProofIrrel (P x)) → Injective (=) (=) f → Injective (=) (=) sig_map.
+  Proof.
+    intros ?? [x Hx] [y Hy]. injection 1. intros Hxy.
+    apply (injective f) in Hxy; subst. rewrite (proof_irrel _ Hy). auto.
+  Qed.
+End sig_map.
