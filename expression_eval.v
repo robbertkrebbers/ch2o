@@ -82,7 +82,9 @@ Proof.
     simplify_option_equality; try destruct (value_true_false_dec _);
     constructor; eauto.
   * apply elem_of_dom; eauto.
-  * decompose_Forall; eauto.
+  * match goal with
+    | H : mapM _ _ = Some _ |- _ => apply mapM_Some_1 in H
+    end; decompose_Forall; eauto.
 Qed.
 
 (** Evaluation of pure expressions is preserved under extensions of the
@@ -94,7 +96,10 @@ Lemma expr_eval_weaken_mem_lookup δ ρ m1 m2 e v :
 Proof.
   revert v. induction e using expr_ind_alt; intros;
     simplify_option_equality; eauto.
-  erewrite mapM_Some_2; [by eauto|]. decompose_Forall; auto.
+  erewrite mapM_Some_2; [by eauto|].
+  match goal with
+  | H : mapM _ _ = Some _ |- _ => apply mapM_Some_1 in H
+  end; decompose_Forall; eauto.
 Qed.
 
 Lemma expr_eval_weaken_mem δ ρ m1 m2 e v :
@@ -137,6 +142,7 @@ Proof.
   revert v1 v2. induction e using expr_ind_alt; intros;
     simplify_option_equality;
     repeat match goal with
+    | H : mapM _ _ = Some _ |- _ => apply mapM_Some_1 in H
     | H : ∀ _ _, Some _ = Some _ → Some _ = Some _ → _ |- _ =>
       efeed pose proof H; eauto; clear H; subst
     | H1 : Forall2 _ ?es ?vs1, H2 : Forall2 _ ?es ?vs2 |- _ =>
@@ -157,7 +163,10 @@ Proof.
   revert v. induction e using expr_ind_alt;
     intros; simplify_option_equality; intuition.
   * rewrite lookup_app_l; simplify_option_equality; eauto using lookup_lt_Some.
-  * erewrite mapM_Some_2; [by eauto |]. decompose_Forall; auto.
+  * erewrite mapM_Some_2; [by eauto |].
+    match goal with
+    | H : mapM _ _ = Some _ |- _ => apply mapM_Some_1 in H
+    end; decompose_Forall; eauto.
 Qed.
 
 (** Pure expressions without variables do not refer to the stack, so their
@@ -237,7 +246,10 @@ Proof.
   split.
   * revert v. induction E as [|E' E IH] using rev_ind; simpl; intros v; eauto.
     setoid_rewrite subst_snoc.
-    intros; destruct E'; simplify_option_equality; decompose_Forall;
+    intros; destruct E'; simplify_option_equality;
+      repeat match goal with
+      | H : mapM _ _ = Some _ |- _ => apply mapM_Some_1 in H
+      end; decompose_Forall;
       edestruct IH as (?&?&?); eauto with simplify_option_equality.
     eexists; split_ands; eauto. erewrite mapM_Some_2; [eassumption|].
     decompose_Forall; eauto.

@@ -17,7 +17,8 @@ applied. *)
 Arguments id _ _/.
 Arguments compose _ _ _ _ _ _ /.
 Arguments flip _ _ _ _ _ _/.
-Typeclasses Transparent id compose flip.
+Typeclasses Transparent id compose.
+Typeclasses Opaque flip.
 
 (** Change [True] and [False] into notations in order to enable overloading.
 We will use this in the file [assertions] to give [True] and [False] a

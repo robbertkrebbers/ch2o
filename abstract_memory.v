@@ -340,7 +340,7 @@ Proof.
       exists (γ2 ∪ γ). split; auto using perm_union_subseteq_r.
       eauto using lookup_union_with_Some_lr.
     + exists γ. eauto using lookup_union_with_Some_r.
-  * simplify_equality. destruct (Hm12 b v γ1) as (γ2&?&?); auto.
+  * simplify_equality. destruct (Hm12 b v1 γ1) as (γ2&?&?); auto.
     exists (γ2 ∪ γ3). split; auto using perm_union_preserving_r.
     eauto using lookup_union_with_Some_lr.
 Qed.
@@ -591,7 +591,7 @@ Proof.
       simplify_equality; eauto.
     left. exists γ1. split; [done |].
     intros Hγ1. destruct (perm_disjoint_locked_l γ1 γ2); eauto.
-    by destruct (Hm12 b (v,γ1) (v2,γ2)).
+    by destruct (Hm12 b (v1,γ1) (v2,γ2)).
   * intuition auto using mem_lookup_union_Some_l, mem_lookup_union_Some_r.
 Qed.
 
@@ -1274,8 +1274,9 @@ Lemma mem_subseteq_lookup_vec {n} (ms : vec (mem_ Vi P) n) (i : fin n) :
   ⊥ ms → ms !!! i ⊆ ⋃ ms.
 Proof.
   intros. rewrite <-(mem_union_delete_vec _ i) by done.
-  apply mem_union_subseteq_l. rewrite <-mem_disjoint_union_list_le.
-  by rewrite (right_id_L [] (++)), mem_disjoint_delete_vec.
+  apply mem_union_subseteq_l.
+  rewrite Permutation_swap, <-mem_disjoint_union_list_le, (commutative (++)).
+  simpl. by rewrite mem_disjoint_delete_vec.
 Qed.
 
 (** ** Properties of the [alloc] and [delete] operation *)

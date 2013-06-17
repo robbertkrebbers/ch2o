@@ -22,6 +22,7 @@ Lemma ehstep_expr_eval δ ρ e1 m v :
 Proof.
   destruct 2; intros;
     repeat match goal with
+    | H : mapM _ _ = Some _ |- _ => apply mapM_Some_1 in H
     | H : is_value _ |- _ => inversion H; subst; clear H
     | H : Forall is_value _ |- _ =>
       apply Forall_is_value_alt in H; destruct H as (?&?&?&?)

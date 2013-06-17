@@ -979,7 +979,7 @@ Section expr_split.
       rewrite elem_of_union_list in Hes. destruct Hes as (rs&Hes&?).
       rewrite elem_of_zipped_map in Hes. destruct Hes as (esl&?&?&?&?); subst.
       apply zipped_Forall_app in Hforall. inversion Hforall; subst.
-      rewrite <-(reverse_involutive esl), <-(right_id [] (++) (reverse esl)).
+      rewrite <-(reverse_involutive esl), <-(right_id_L [] (++) (reverse esl)).
       auto. }
     ectx_expr_ind E e;
      simpl; intros; repeat case_decide; solve_elem_of eauto.

@@ -782,7 +782,9 @@ Proof. intro. by rewrite !(commutative _ P), assert_and_sep_emp_l. Qed.
 
 Lemma assert_sep_elim_l P1 P2 Q δ :
   MemExt Q → P1 ⊑@{δ} Q → (P1 ★ P2)%A ⊑@{δ} Q.
-Proof. intros ? H. by rewrite (mem_ext_sep_true Q), H, <-assert_true_intro. Qed.
+Proof.
+  intros ? H. by rewrite (mem_ext_sep_true Q), H, (assert_true_intro P2).
+Qed.
 Lemma assert_sep_elim_r P1 P2 Q δ :
   MemExt Q → P2 ⊑@{δ} Q → (P1 ★ P2)%A ⊑@{δ} Q.
 Proof. rewrite (commutative (★))%A. apply assert_sep_elim_l. Qed.
