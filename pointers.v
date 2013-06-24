@@ -106,7 +106,7 @@ Class MemorySpec (Ti : Set) M `{TypeOfIndex Ti M} `{IndexAlive M}
 Record addr (Ti : Set) := Addr {
   addr_index : index;
   addr_ref_base : ref;
-  addr_offset : nat;
+  addr_byte : nat;
   addr_type_base : type Ti;
   addr_type : type Ti
 }.
@@ -114,7 +114,7 @@ Add Printing Constructor addr.
 Arguments Addr {_} _ _ _ _ _.
 Arguments addr_index {_} _.
 Arguments addr_ref_base {_} _.
-Arguments addr_offset {_} _.
+Arguments addr_byte {_} _.
 Arguments addr_type_base {_} _.
 Arguments addr_type {_} _.
 
@@ -140,61 +140,62 @@ Section addr_operations.
 
   Global Instance type_of_addr: TypeOf (type Ti) (addr Ti) := addr_type.
   Global Instance addr_type_check: TypeCheck M (type Ti) (addr Ti) := λ m a,
-    match a with
-    | Addr x r i σ σc =>
-       guard (ref_offset r = 0);
-       τ ← type_of_index m x;
-       guard (type_valid get_env τ);
-       σ' ← τ !! r;
-       guard (σ' = σ);
-       guard (σ >*> σc);
-       guard (i ≤ size_of σ * ref_size r);
-       guard (i `mod` size_of σc = 0);
-       Some σc
-    end.
+    let 'Addr x r i σ σc := a in
+    guard (ref_offset r = 0);
+    τ ← type_of_index m x;
+    guard (type_valid get_env τ);
+    σ' ← τ !! r;
+    guard (σ' = σ);
+    guard (σ >*> σc);
+    guard (i ≤ size_of σ * ref_size r);
+    guard (i `mod` size_of σc = 0);
+    Some σc.
   Global Arguments addr_type_check _ !_ /.
 
   Global Instance addr_frozen: Frozen (addr Ti) := λ a,
     Forall frozen (addr_ref_base a).
   Global Instance addr_freeze: Freeze (addr Ti) := λ a,
-    match a with Addr x r i σ σc => Addr x (freeze <$> r) i σ σc end.
+    let 'Addr x r i σ σc := a in Addr x (freeze <$> r) i σ σc.
 
-  Definition addr_size (a : addr Ti) : nat :=
+  Definition addr_byte_size (a : addr Ti) : nat :=
     size_of (addr_type_base a) * ref_size (addr_ref_base a).
-  Global Arguments addr_size !_ /.
+  Global Arguments addr_byte_size !_ /.
   Definition addr_strict (m : M) (a : addr Ti) : Prop :=
     index_alive m (addr_index a) ∧
-    addr_offset a < addr_size a ∧
+    addr_byte a < addr_byte_size a ∧
     type_of a ≠ void.
   Global Arguments addr_strict _ !_ /.
   Definition addr_is_obj (a : addr Ti) : Prop :=
     type_of a = addr_type_base a.
   Global Arguments addr_is_obj !_ /.
+  Definition addr_offset (a : addr Ti) : nat :=
+    addr_byte a `div` size_of' a.
+  Global Arguments addr_offset !_ /.
 
-  Definition addr_ref (a : addr Ti) : ref := ref_set_offset
-    (addr_offset a `div` size_of (addr_type_base a)) (addr_ref_base a).
+  Definition addr_ref (a : addr Ti) : ref :=
+    ref_set_offset (addr_byte a `div` size_of (addr_type_base a))
+      (addr_ref_base a).
   Global Arguments addr_ref !_ /.
-  Definition addr_byte (a : addr Ti) : nat :=
-    addr_offset a `mod` size_of (addr_type_base a).
-  Global Arguments addr_byte !_ /.
+  Definition addr_ref_byte (a : addr Ti) : nat :=
+    addr_byte a `mod` size_of (addr_type_base a).
+  Global Arguments addr_ref_byte !_ /.
 
   Global Instance addr_disjoint: Disjoint (addr Ti) := λ a1 a2,
     (addr_index a1 ≠ addr_index a2) ∨
     (addr_index a1 = addr_index a2 ∧ addr_ref a1 ⊥ addr_ref a2) ∨
     (addr_index a1 = addr_index a2 ∧
       freeze <$> addr_ref a1 = freeze <$> addr_ref a2 ∧
-      ¬addr_is_obj a1 ∧ ¬addr_is_obj a2 ∧ addr_byte a1 ≠ addr_byte a2).
+      ¬addr_is_obj a1 ∧ ¬addr_is_obj a2 ∧
+      addr_ref_byte a1 ≠ addr_ref_byte a2).
 
   Definition addr_new (x : index) (τ : type Ti) : addr Ti := Addr x [] 0 τ τ.
 
   Definition addr_plus_ok (m : M) (j : Z) (a : addr Ti) : Prop :=
     index_alive m (addr_index a) ∧
-    (0 ≤ addr_offset a + j * size_of' a ≤ addr_size a)%Z.
+    (0 ≤ addr_byte a + j * size_of' a ≤ addr_byte_size a)%Z.
   Global Arguments addr_plus_ok _ _ !_ /.
   Definition addr_plus (j : Z) (a : addr Ti): addr Ti :=
-    match a with
-    | Addr x r i σ σc => Addr x r (Z.to_nat (i + j * size_of σc)) σ σc
-    end.
+    let 'Addr x r i σ σc := a in Addr x r (Z.to_nat (i + j * size_of σc)) σ σc.
   Global Arguments addr_plus _ !_ /.
 
   Definition addr_minus_ok (m : M) (a1 a2 : addr Ti) : Prop :=
@@ -202,14 +203,14 @@ Section addr_operations.
     freeze <$> addr_ref_base a1 = freeze <$> addr_ref_base a2.
   Global Arguments addr_minus_ok _ !_ !_ /.
   Definition addr_minus (a1 a2 : addr Ti) : Z :=
-    ((addr_offset a1 - addr_offset a2) `div` size_of' a1)%Z.
+    (addr_offset a1 - addr_offset a2)%Z.
   Global Arguments addr_minus !_ !_ /.
 
   Definition addr_cast_ok (σc : type Ti) (a : addr Ti) : Prop :=
-    addr_type_base a >*> σc ∧ addr_offset a `mod` size_of σc = 0.
+    addr_type_base a >*> σc ∧ addr_byte a `mod` size_of σc = 0.
   Global Arguments addr_cast_ok _ !_ /.
   Definition addr_cast (σc : type Ti) (a : addr Ti) : addr Ti :=
-    match a with Addr x r i σ _ => Addr x r i σ σc end.
+    let 'Addr x r i σ _ := a in Addr x r i σ σc.
   Global Arguments addr_cast _ !_ /.
 
   Definition addr_array (a : addr Ti) : addr Ti :=
@@ -277,8 +278,8 @@ Section addresses.
       type_valid get_env τ ∧
       addr_ref_base a @ τ ↣ addr_type_base a ∧
       addr_type_base a >*> σ ∧
-      addr_offset a ≤ addr_size a ∧
-      addr_offset a `mod` size_of σ = 0 ∧
+      addr_byte a ≤ addr_byte_size a ∧
+      addr_byte a `mod` size_of σ = 0 ∧
       type_of a = σ.
   Proof.
     split.
@@ -295,10 +296,9 @@ Section addresses.
   Proof. destruct 1. eauto using ref_typed_type_valid, type_of_index_valid. Qed.
   Lemma addr_typed_cast m a σ : m ⊢ a : σ → addr_type_base a >*> σ.
   Proof. by destruct 1. Qed.
-  Lemma addr_typed_offset_size m a σ : m ⊢ a : σ → addr_offset a ≤ addr_size a.
+  Lemma addr_typed_byte_size m a σ : m ⊢ a : σ → addr_byte a ≤ addr_byte_size a.
   Proof. by destruct 1. Qed.
-  Lemma addr_offset_alligned m a σ :
-    m ⊢ a : σ → addr_offset a `mod` size_of σ = 0.
+  Lemma addr_offset_alligned m a σ : m ⊢ a : σ → addr_byte a `mod` size_of σ = 0.
   Proof. by destruct 1. Qed.
 
   Lemma addr_typed_ref_base m a σ :
@@ -316,34 +316,12 @@ Section addresses.
     apply Nat.div_lt_upper_bound;
       eauto using size_of_ne_0, addr_typed_base_type_valid.
   Qed.
-  Lemma addr_typed_ref_alt m a σ :
-    m ⊢ a : σ → ∃ τ,
-      type_of_index m (addr_index a) = Some τ ∧
-      ref_set_offset 0 (addr_ref a) @ τ ↣ addr_type_base a.
+  Lemma addr_typed_ref_type_base_inv m a σ τ σ' :
+    m ⊢ a : σ → type_of_index m (addr_index a) = Some τ →
+    addr_ref a @ τ ↣ σ' → σ' = addr_type_base a.
   Proof.
-    intros. destruct (addr_typed_ref_base m a σ) as (τ&?&?); auto.
-    exists τ; split; auto. unfold addr_ref.
-    by erewrite ref_set_offset_set_offset, <-(addr_typed_offset _ a),
-      ref_set_offset_offset by eauto.
-  Qed.
-
-  Lemma addr_size_typed m a σc :
-    ⊢ valid m → m ⊢ a : σc → int_typed (addr_size a) sptr.
-  Proof.
-    intros ? [x r i τ σ σc' ???????]. split.
-    { transitivity 0; auto using int_lower_nonpos with zpos. }
-    unfold addr_size; simpl. apply Z.le_lt_trans with (size_of τ).
-    { by apply Nat2Z.inj_le, size_of_ref. }
-    apply int_typed_upper; eauto using type_of_index_typed.
-  Qed.
-  Lemma addr_offset_typed m a σc :
-    ⊢ valid m → m ⊢ a : σc → int_typed (addr_offset a) sptr.
-  Proof.
-    intros. split.
-    { transitivity 0; auto using int_lower_nonpos with zpos. }
-    apply Z.le_lt_trans with (addr_size a).
-    { apply Nat2Z.inj_le. eauto using addr_typed_offset_size. }
-    apply int_typed_upper. eauto using addr_size_typed.
+    intros [] ??; simplify_option_equality.
+    eauto using ref_set_offset_typed_unique, eq_sym.
   Qed.
 
   Lemma addr_typed_type_valid m a τ :
@@ -379,6 +357,39 @@ Section addresses.
     m1 ⊢ a : τ → m2 ⊢ a : τ.
   Proof. destruct 2; econstructor; eauto. Qed.
 
+
+  Lemma addr_byte_size_typed m a σc :
+    ⊢ valid m → m ⊢ a : σc → int_typed (addr_byte_size a) sptr.
+  Proof.
+    intros ? [x r i τ σ σc' ???????]. split.
+    { transitivity 0; auto using int_lower_nonpos with zpos. }
+    unfold addr_byte_size; simpl. apply Z.le_lt_trans with (size_of τ).
+    { by apply Nat2Z.inj_le, size_of_ref. }
+    apply int_typed_upper; eauto using type_of_index_typed.
+  Qed.
+  Lemma addr_byte_typed m a σc :
+    ⊢ valid m → m ⊢ a : σc → int_typed (addr_byte a) sptr.
+  Proof.
+    intros. split.
+    { transitivity 0; auto using int_lower_nonpos with zpos. }
+    apply Z.le_lt_trans with (addr_byte_size a).
+    { apply Nat2Z.inj_le. eauto using addr_typed_byte_size. }
+    eauto using int_typed_upper, addr_byte_size_typed.
+  Qed.
+  Lemma addr_offset_typed m a σc :
+    ⊢ valid m → m ⊢ a : σc → int_typed (addr_offset a) sptr.
+  Proof.
+    unfold addr_offset. intros. split.
+    { transitivity 0; auto using int_lower_nonpos with zpos. }
+    assert (0 < size_of' a)%Z.
+    { erewrite type_of_correct by eauto.
+      eapply (Nat2Z.inj_lt 0), addr_size_of_type_pos; eauto. }
+    rewrite Z2Nat_inj_div. apply Z.div_lt_upper_bound; auto.
+    apply Z.lt_le_trans with (1 * int_upper sptr)%Z.
+    * rewrite Z.mul_1_l. eauto using int_typed_upper, addr_byte_typed.
+    * apply Z.mul_le_mono_pos_r; auto using int_upper_pos with lia.
+  Qed.
+
   Lemma addr_index_freeze a : addr_index (freeze a) = addr_index a.
   Proof. by destruct a. Qed.
   Global Instance: Proper ((~{freeze}) ==> (=)) (@addr_index Ti).
@@ -393,12 +404,10 @@ Section addresses.
   Proof.
     intros ?? Ha. unfold proj_eq. by rewrite <-!addr_ref_base_freeze, Ha.
   Qed.
-  Lemma addr_offset_freeze a : addr_offset (freeze a) = addr_offset a.
+  Lemma addr_byte_freeze a : addr_byte (freeze a) = addr_byte a.
   Proof. by destruct a. Qed.
-  Global Instance: Proper ((~{freeze}) ==> (=)) (@addr_offset Ti).
-  Proof.
-    intros ?? Ha. by rewrite <-addr_offset_freeze, Ha, addr_offset_freeze.
-  Qed.
+  Global Instance: Proper ((~{freeze}) ==> (=)) (@addr_byte Ti).
+  Proof. intros ?? Ha. by rewrite <-addr_byte_freeze, Ha, addr_byte_freeze. Qed.
   Lemma addr_type_base_freeze a : addr_type_base (freeze a) = addr_type_base a.
   Proof. by destruct a. Qed.
   Global Instance: Proper ((~{freeze}) ==> (=)) (@addr_type_base Ti).
@@ -411,9 +420,13 @@ Section addresses.
   Proof.
     intros ?? Ha. by rewrite <-addr_type_of_freeze, Ha, addr_type_of_freeze.
   Qed.
+  Lemma addr_offset_freeze a : addr_offset (freeze a) = addr_offset a.
+  Proof. by destruct a. Qed.
+  Global Instance: Proper ((~{freeze}) ==> (=)) (@addr_offset Ti _).
+  Proof. intros ?? Ha. by rewrite <-addr_offset_freeze, Ha, addr_offset_freeze. Qed.
   Lemma addr_ref_freeze a : addr_ref (freeze a) = freeze <$> addr_ref a.
   Proof.
-    unfold addr_ref. by rewrite !addr_ref_base_freeze, addr_offset_freeze,
+    unfold addr_ref. by rewrite !addr_ref_base_freeze, addr_byte_freeze,
       addr_type_base_freeze, ref_set_offset_freeze.
   Qed.
   Global Instance: Proper ((~{freeze}) ==> (~{fmap freeze})) (@addr_ref Ti _).
@@ -427,12 +440,14 @@ Section addresses.
     intros ?? Ha. by rewrite <-addr_is_obj_freeze, Ha, addr_is_obj_freeze.
   Qed.
 
-  Lemma addr_byte_freeze a : addr_byte (freeze a) = addr_byte a.
+  Lemma addr_ref_byte_freeze a : addr_ref_byte (freeze a) = addr_ref_byte a.
   Proof.
-    unfold addr_byte. by rewrite addr_offset_freeze, addr_type_base_freeze.
+    unfold addr_ref_byte. by rewrite addr_byte_freeze, addr_type_base_freeze.
   Qed.
-  Global Instance: Proper ((~{freeze}) ==> (=)) (@addr_byte Ti _).
-  Proof. intros ?? Ha. by rewrite <-addr_byte_freeze, Ha, addr_byte_freeze. Qed.
+  Global Instance: Proper ((~{freeze}) ==> (=)) (@addr_ref_byte Ti _).
+  Proof.
+    intros ?? Ha. by rewrite <-addr_ref_byte_freeze, Ha, addr_ref_byte_freeze.
+  Qed.
 
   Lemma addr_typed_freeze m a τ : m ⊢ freeze a : τ ↔ m ⊢ a : τ.
   Proof.
@@ -464,7 +479,7 @@ Section addresses.
     assert (∀ a1 a2, freeze a1 ⊥ a2 ↔ a1 ⊥ a2) as help2.
     { intros a1 a2. unfold disjoint, addr_disjoint.
       by rewrite !addr_index_freeze, !addr_ref_freeze, !addr_is_obj_freeze,
-        !addr_byte_freeze, !ref_freeze_idempotent, help. }
+        !addr_ref_byte_freeze, !ref_freeze_idempotent, help. }
     intros a1 a2 Ha12 a3 a4 Ha34. rewrite <-(help2 a1), Ha12, help2.
     by rewrite (symmetry_iff (⊥) a2), <-(help2 a3), Ha34, help2.
   Qed.
@@ -478,8 +493,8 @@ Section addresses.
 
   Lemma addr_strict_not_void m a σ : m ⊢ a : σ → addr_strict m a → σ ≠ void.
   Proof. by intros ? (?&?&?); simplify_type_equality. Qed.
-  Lemma addr_is_obj_byte m a σ :
-    m ⊢ a : σ → addr_is_obj a → addr_byte a = 0.
+  Lemma addr_is_obj_ref_byte m a σ :
+    m ⊢ a : σ → addr_is_obj a → addr_ref_byte a = 0.
   Proof. by intros [x r i τ σ' σc] ?; simpl in *; subst. Qed.
   Lemma addr_is_obj_type_base m a σ :
     m ⊢ a : σ → addr_is_obj a → addr_type_base a = σ.
@@ -501,7 +516,7 @@ Section addresses.
       eauto using size_of_ne_0, ref_typed_type_valid, type_of_index_valid.
   Qed.
   Lemma addr_byte_range m a σ :
-    m ⊢ a : σ → addr_strict m a → addr_byte a < size_of (addr_type_base a).
+    m ⊢ a : σ → addr_strict m a → addr_ref_byte a < size_of (addr_type_base a).
   Proof.
     intros. apply Nat.mod_bound_pos; auto with lia.
     eapply size_of_pos, addr_typed_base_type_valid; eauto.
@@ -511,36 +526,107 @@ Section addresses.
     m ⊢ a : σ → addr_plus_ok m j a → m ⊢ addr_plus j a : σ.
   Proof.
     intros [x r i τ σ' σc Hr] (?&?&?); simpl in *. econstructor; eauto.
-    * apply Nat2Z.inj_le. by rewrite Z2Nat.id by done.
-    * apply Nat2Z.inj. rewrite Z2Nat_inj_mod, Z2Nat.id by done.
-      rewrite Z.mod_add, <-Z2Nat_inj_mod; auto with f_equal.
-      rewrite (Nat2Z.inj_iff _ 0). eauto using castable_size_of_ne_0,
-        ref_typed_type_valid, type_of_index_valid.
+    { apply Nat2Z.inj_le. by rewrite Z2Nat.id by done. }
+    apply Nat2Z.inj. rewrite Z2Nat_inj_mod, Z2Nat.id by done.
+    rewrite Z.mod_add, <-Z2Nat_inj_mod; auto with f_equal.
+    rewrite (Nat2Z.inj_iff _ 0). eauto using castable_size_of_ne_0,
+      ref_typed_type_valid, type_of_index_valid.
   Qed.
+  Lemma addr_type_plus a j : type_of (addr_plus j a) = type_of a.
+  Proof. by destruct a. Qed.
+  Lemma addr_type_base_plus a j :
+    addr_type_base (addr_plus j a) = addr_type_base a.
+  Proof. by destruct a. Qed.
   Lemma addr_index_plus a j : addr_index (addr_plus j a) = addr_index a.
   Proof. by destruct a. Qed.
+  Lemma addr_byte_size_plus a j :
+    addr_byte_size (addr_plus j a) = addr_byte_size a.
+  Proof. by destruct a. Qed.
+  Lemma addr_plus_0 a : addr_plus 0 a = a.
+  Proof. destruct a; simpl. by rewrite Z.mul_0_l, Z.add_0_r, Nat2Z.id. Qed.
+  Lemma addr_plus_plus a j1 j2 :
+    (0 ≤ addr_byte a + j2 * size_of' a)%Z →
+    addr_plus j1 (addr_plus j2 a) = addr_plus (j1 + j2) a.
+  Proof.
+    intros. destruct a as [x r i τ σ]; simpl; do 2 f_equal.
+    by rewrite Z2Nat.id, (Z.add_comm j1), Z.mul_add_distr_r, Z.add_assoc.
+  Qed.
+  Lemma addr_plus_plus_nat a (j1 j2 : nat) :
+    addr_plus j1 (addr_plus j2 a) = addr_plus (j1 + j2)%nat a.
+  Proof. rewrite Nat2Z.inj_add. apply addr_plus_plus; auto with zpos. Qed.
+  Lemma addr_is_obj_plus a j : addr_is_obj (addr_plus j a) ↔ addr_is_obj a.
+  Proof. by destruct a. Qed.
+  Lemma addr_ref_base_plus a j :
+    addr_ref_base (addr_plus j a) = addr_ref_base a.
+  Proof. by destruct a. Qed.
+
   Lemma addr_minus_ok_typed m a1 a2 σ :
     ⊢ valid m → m ⊢ a1 : σ → m ⊢ a2 : σ → int_typed (addr_minus a1 a2) sptr.
   Proof.
-    intros. assert (0 < size_of' a1)%Z.
-    { erewrite type_of_correct by eauto.
-      eapply (Nat2Z.inj_lt 0), addr_size_of_type_pos; eauto. }
-    assert (addr_offset a1 < int_upper sptr)%Z.
-    { eauto using int_typed_upper, addr_offset_typed. }
-    assert (addr_offset a2 < int_upper sptr)%Z.
-    { eauto using int_typed_upper, addr_offset_typed. }
-    unfold addr_minus; simpl in *. split.
-    * apply Z.div_le_lower_bound; auto.
-      transitivity (1 * -int_upper sptr)%Z; auto with lia.
-      apply Z.mul_le_mono_neg_r; auto with lia.
-    * apply Z.div_lt_upper_bound; auto.
-      apply Z.lt_le_trans with (1 * int_upper sptr)%Z; auto with lia.
-      apply Z.mul_le_mono_pos_r; auto with lia.
+    intros Hm Ha1 Ha2. unfold addr_minus.
+    destruct (addr_offset_typed m a1 σ Hm Ha1),
+      (addr_offset_typed m a2 σ Hm Ha2).
+    red. change (int_lower sptr) with (-int_upper sptr)%Z. auto with lia.
   Qed.
 
+  Lemma addr_cast_ok_uchar a : addr_cast_ok uchar a.
+  Proof. split. constructor. by rewrite size_of_int, int_size_char. Qed.
   Lemma addr_cast_ok_typed m a σ σc :
     m ⊢ a : σ → addr_cast_ok σc a → m ⊢ addr_cast σc a : σc.
   Proof. intros [??????] [??]; econstructor; eauto. Qed.
+  Lemma addr_type_cast a σc : type_of (addr_cast σc a) = σc.
+  Proof. by destruct a. Qed.
+  Lemma addr_index_cast a σc : addr_index (addr_cast σc a) = addr_index a.
+  Proof. by destruct a. Qed.
+  Lemma addr_byte_size_cast a σc :
+    addr_byte_size (addr_cast σc a) = addr_byte_size a.
+  Proof. by destruct a. Qed.
+  Lemma addr_ref_cast a σc : addr_ref (addr_cast σc a) = addr_ref a.
+  Proof. by destruct a. Qed.
+  Lemma addr_ref_byte_cast a σc :
+    addr_ref_byte (addr_cast σc a) = addr_ref_byte a.
+  Proof. by destruct a. Qed.
+  Lemma addr_cast_self m a σ : m ⊢ a : σ → addr_cast σ a = a.
+  Proof. by destruct 1. Qed.
+  Lemma addr_is_obj_cast a σc :
+    addr_is_obj (addr_cast σc a) ↔ σc = addr_type_base a.
+  Proof. by destruct a. Qed.
+
+  Lemma addr_ref_plus_char_cast m a σ j :
+    m ⊢ a : σ → addr_is_obj a → j < size_of σ →
+    addr_ref (addr_plus j (addr_cast uchar a)) = addr_ref a.
+  Proof.
+    destruct 1 as [x r i σ' σ]; intros ??; simplify_equality'.
+    f_equal. rewrite size_of_int, int_size_char; simpl.
+    rewrite Z.mul_1_r, Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
+    symmetry. apply Nat.div_unique with (i `mod` size_of σ + j); [lia|].
+    by rewrite Nat.add_assoc, <-Nat.div_mod
+      by eauto using ref_typed_type_valid, size_of_ne_0.
+  Qed.
+  Lemma addr_ref_byte_plus_char_cast m a σ j :
+    m ⊢ a : σ → addr_is_obj a → j < size_of σ →
+    addr_ref_byte (addr_plus j (addr_cast uchar a)) = j.
+  Proof.
+    destruct 1 as [x r i σ' σ ??????? Hiσ]; intros ??; simplify_equality'.
+    f_equal. rewrite size_of_int, int_size_char; simpl.
+    rewrite Z.mul_1_r, Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
+    rewrite <-Nat.add_mod_idemp_l by eauto using ref_typed_type_valid, size_of_ne_0.
+    rewrite Hiσ, Nat.add_0_l. by apply Nat.mod_small.
+  Qed.
+  Lemma addr_byte_lt_size_char_cast m a σ j :
+    m ⊢ a : σ → addr_is_obj a → j < size_of σ →
+    addr_byte a < addr_byte_size a →
+    addr_byte (addr_plus j (addr_cast uchar a)) < addr_byte_size a.
+  Proof.
+    destruct 1 as [x r i σ' σ ??????? Hiσ]; intros ???; simplify_equality'.
+    rewrite size_of_int, int_size_char; simpl.
+    rewrite Z.mul_1_r, Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
+    apply Nat.lt_le_trans with (i + size_of σ); [lia|].
+    apply Nat.div_exact in Hiσ; eauto using ref_typed_type_valid, size_of_ne_0.
+    rewrite Hiσ, <-Nat.mul_succ_r. apply Nat.mul_le_mono_l, Nat.le_succ_l.
+    apply Nat.div_lt_upper_bound; eauto using ref_typed_type_valid, size_of_ne_0.
+  Qed.
+
   Lemma addr_array_typed m a n τ :
     m ⊢ a : τ.[n] → addr_strict m a → m ⊢ addr_array a : τ.
   Proof.
@@ -591,8 +677,8 @@ Section addresses.
     (* 2.) *) σ1 ⊆ σ2 ∨
     (* 3.) *) σ2 ⊆ σ1 ∨
     (* 4.) *) addr_index a1 = addr_index a2 ∧ (∃ s r1' i1 r2' i2 r',
-      addr_ref a1 = r1' ++ [RUnion i1 s false] ++ r' ∧
-      addr_ref a2 = r2' ++ [RUnion i2 s false] ++ r' ∧ i1 ≠ i2).
+      addr_ref_base a1 = r1' ++ [RUnion i1 s false] ++ r' ∧
+      addr_ref_base a2 = r2' ++ [RUnion i2 s false] ++ r' ∧ i1 ≠ i2).
   Proof.
     intros Ha1 Ha2 ????. destruct (decide (addr_index a1 = addr_index a2));
       [|by do 2 left; rewrite !addr_index_plus].
@@ -614,12 +700,9 @@ Section addresses.
       generalize (addr_offset a1 `div` size_of (addr_type_base a1)).
       intros j1 j2. destruct r1' as [|rs1 r1'], r2' as [|rs2 r2'].
       + eexists s, [], i1, [], i2, r'. by rewrite Hr1', Hr2'.
-      + eexists s, [], i1, (ref_set_offset j2 (rs2 :: r2')), i2, r'.
-        by rewrite Hr1', Hr2'.
-      + eexists s, (ref_set_offset j1 (rs1 :: r1')), i1, [], i2, r'.
-        by rewrite Hr1', Hr2'.
-      + eexists s, (ref_set_offset j1 (rs1 :: r1')), i1,
-          (ref_set_offset j2 (rs2 :: r2')), i2, r'.
+      + eexists s, [], i1, (rs2 :: r2'), i2, r'. by rewrite Hr1', Hr2'.
+      + eexists s, (rs1 :: r1'), i1, [], i2, r'. by rewrite Hr1', Hr2'.
+      + eexists s, (rs1 :: r1'), i1, (rs2 :: r2'), i2, r'.
         by rewrite Hr1', Hr2'.
   Qed.
 End addresses.

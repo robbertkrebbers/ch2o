@@ -246,14 +246,15 @@ Proof.
   by rewrite Hbs, resize_all.
 Qed.
 Lemma mask_bits_indet bms bs :
-  bms `same_length` bs → BIndet ∈ bms → BIndet ∈ mask_bits bms bs.
+  length bms = length bs → BIndet ∈ bms → BIndet ∈ mask_bits bms bs.
 Proof.
-  induction 1; simpl; try by rewrite elem_of_nil.
+  rewrite <-same_length_length. induction 1; simpl; try by rewrite elem_of_nil.
   rewrite !elem_of_cons. intros [?|?]; subst; auto.
 Qed.
 Lemma mask_bits_no_indet bms bs :
-  bms `same_length` bs → BIndet ∉ bms → mask_bits bms bs = bs.
+  length bms = length bs → BIndet ∉ bms → mask_bits bms bs = bs.
 Proof.
+  rewrite <-same_length_length.
   induction 1; simpl; [done|]. rewrite not_elem_of_cons.
   intros [??]; auto using mask_bit_non_indet_mask with f_equal.
 Qed.
@@ -342,6 +343,19 @@ Lemma lookup_mask_bits bms bm bs i :
 Proof.
   revert i bms. induction bs; intros [|?] [|??] ???;
     simplify_equality'; auto with lia. by rewrite mask_bit_non_indet_mask.
+Qed.
+Lemma mask_bits_sublist_insert bms bs1 bs2 j :
+  length bms = length bs2 →
+  mask_bits bms (sublist_insert j bs1 (mask_bits bms bs2)) =
+    mask_bits bms (sublist_insert j bs1 bs2).
+Proof.
+  intros Hbs. apply list_eq. intros i.
+  destruct (bms !! i) as [bm|] eqn:Hbm; [|by rewrite !lookup_mask_bits_None].
+  destruct (decide (bm = BIndet)); subst; [by rewrite !lookup_mask_bits_indet|].
+  assert (i < length bms) by eauto using lookup_lt_Some.
+  erewrite !lookup_mask_bits by
+    (rewrite ?sublist_insert_length, ?mask_bits_length; eauto with lia).
+  apply lookup_sublist_proper. by erewrite !lookup_mask_bits by eauto with lia.
 Qed.
 
 Section array_of_bits.

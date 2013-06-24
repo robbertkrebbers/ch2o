@@ -265,6 +265,9 @@ Proof.
       eauto using to_ptr_bits_valid, BPtr_valid.
   * done.
 Qed.
+
+Lemma base_val_frozen_int m v τi : m ⊢ v : intt τi → frozen v.
+Proof. inversion 1; constructor. Qed.
 Lemma base_val_freeze_frozen v : frozen (freeze v).
 Proof. destruct v; constructor; auto using ptr_freeze_frozen. Qed.
 Lemma base_val_frozen_freeze v : frozen v → freeze v = v.
@@ -492,20 +495,26 @@ Proof.
     <-(base_val_of_to_bits m v2 τ) by done; f_equal.
 Qed.
 
+Lemma base_val_to_of_bits_char bs :
+  length bs = bit_size_of uchar →
+  base_val_to_bits (base_val_of_bits uchar bs) = bs.
+Proof.
+  intros Hbs. simpl. rewrite resize_all_alt by done.
+  destruct (mapM _ _) as [cs|] eqn:Hcs; repeat case_decide; simpl.
+  * rewrite to_of_bits by
+      (by erewrite <-bit_size_of_int, <-Hbs, <-mapM_length by eauto).
+    by erewrite <-(mapM_fmap_Some_inv maybe_BBit BBit) by
+      (by eauto; intros ? [] ?; simplify_equality).
+  * symmetry. by apply replicate_as_Forall.
+  * done.
+  * done.
+Qed.
 Lemma base_val_of_bits_char_inj bs1 bs2 :
   length bs1 = bit_size_of uchar → length bs2 = bit_size_of uchar →
   base_val_of_bits uchar bs1 = base_val_of_bits uchar bs2 → bs1 = bs2.
 Proof.
-  intros Hbs1 Hbs2. unfold base_val_of_bits. rewrite !resize_all_alt by done.
-  intros; repeat case_match; simplify_equality.
-  * erewrite (mapM_fmap_Some_inv maybe_BBit BBit _ bs1),
-      (mapM_fmap_Some_inv maybe_BBit BBit _ bs2) by
-      (by eauto; intros ? [] ?; simplify_equality).
-    f_equal. by apply (of_bits_inj uchar);
-      erewrite <-?bit_size_of_int, <-?mapM_length by eauto.
-  * rewrite (proj2 (replicate_as_Forall BIndet (length bs1) bs1)),
-      (proj2 (replicate_as_Forall BIndet (length bs2) bs2)) by done. congruence.
-  * done.
+  intros ?? Hbs. by rewrite <-(base_val_to_of_bits_char bs1),
+    <-(base_val_to_of_bits_char bs2), Hbs.
 Qed.
 
 Lemma base_val_of_bits_trans m τ bs1 bs2 bs3 :
@@ -606,3 +615,5 @@ Proof.
   * constructor. eapply ptr_cast_ok_typed; eauto.
 Qed.
 End properties.
+
+Arguments base_val_of_bits _ _ _ _ _ : simpl never.

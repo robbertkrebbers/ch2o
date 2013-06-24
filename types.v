@@ -597,4 +597,12 @@ Section type_iter.
     clear Hs Hlen. induction Hτs; constructor; auto.
     apply (type_iter_acc_weaken Γ'); eauto using lookup_weaken.
   Qed.
+  Lemma type_iter_compound_None c s :
+    Γ !! s = None →
+    type_iter Γ (compound@{c} s) = fcompound c s [] (λ _, fvoid).
+  Proof.
+    intros Hs. unfold type_iter.
+    destruct (wf_guard _ map_wf Γ) as [accΓ]; simpl.
+    unfold type_iter_accF. destruct (Some_dec _) as [[??]|?]; congruence.
+  Qed.
 End type_iter.

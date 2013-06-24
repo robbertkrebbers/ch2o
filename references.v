@@ -232,21 +232,20 @@ Instance ref_seg_unfreeze: Unfreeze ref_seg := λ rs,
   | RUnion i s _ => RUnion i s true
   end.
 
-Definition ref_base (r : ref) : ref :=
-  match r with RArray _ n :: r => RArray 0 n :: r | _ => r end.
-Arguments ref_base !_ : simpl nomatch.
-Definition ref_offset (r : ref) : nat :=
-  match r with RArray i _ :: r => i | _ => 0 end.
-Arguments ref_offset !_ : simpl nomatch.
-Definition ref_size (r : ref) : nat :=
-  match r with RArray _ n :: _ => n | _ => 1 end.
-Arguments ref_size !_ : simpl nomatch.
 Definition ref_seg_set_offset (i : nat) (rs : ref_seg) : ref_seg :=
   match rs with RArray _ n => RArray i n | _ => rs end.
 Arguments ref_seg_set_offset _ !_ : simpl nomatch.
 Definition ref_set_offset (i : nat) (r : ref) : ref :=
   match r with rs :: r => ref_seg_set_offset i rs :: r | _ => r end.
 Arguments ref_set_offset _ !_ : simpl nomatch.
+Notation ref_base := (ref_set_offset 0).
+Definition ref_offset (r : ref) : nat :=
+  match r with RArray i _ :: r => i | _ => 0 end.
+Arguments ref_offset !_ : simpl nomatch.
+Definition ref_size (r : ref) : nat :=
+  match r with RArray _ n :: _ => n | _ => 1 end.
+Arguments ref_size !_ : simpl nomatch.
+
 (*
 Definition ref_seg_byte_offset `{PtrEnv Ti} (τ : type Ti) (rs : ref_seg) :
     option (type Ti * nat) :=
@@ -675,43 +674,12 @@ Proof.
   * intros [<- ?]; eauto using RStruct_disjoint.
 Qed.
 
-Lemma ref_base_idempotent r : ref_base (ref_base r) = ref_base r.
-Proof. destruct r as [|[]]; simpl; auto with f_equal. Qed.
-Lemma ref_offset_base r : ref_offset (ref_base r) = 0.
-Proof. by destruct r as [|[]]. Qed.
-Lemma ref_size_base r : ref_size (ref_base r) = ref_size r.
-Proof. by destruct r as [|[]]. Qed.
-Lemma ref_size_same_base r r' :
-  ref_base r = ref_base r' → ref_size r = ref_size r'.
-Proof. intros Hr. by rewrite <-(ref_size_base r), <-(ref_size_base r'), Hr. Qed.
-
 Lemma ref_typed_array_size r rs σ τ :
   rs @ σ ↣ τ → ref_size (rs :: r) = array_size σ.
 Proof. by intros []. Qed.
-
-Lemma ref_eq r1 r2 :
-  ref_base r1 = ref_base r2 → ref_offset r1 = ref_offset r2 → r1 = r2.
-Proof.
-  destruct r1 as [|[]], r2 as [|[]]; intros;
-    simplify_equality'; auto with f_equal.
-Qed.
-Lemma ref_typed_base τ r σ : r @ τ ↣ σ → ref_base r @ τ ↣ σ.
-Proof. destruct 1 as [|????? []]; repeat econstructor; eauto with lia. Qed.
 Lemma ref_typed_size τ r σ : r @ τ ↣ σ → ref_offset r < ref_size r.
 Proof. destruct 1 as [|????? []]; auto with lia. Qed.
-Lemma ref_typed_alt τ r σ :
-  r @ τ ↣ σ ↔ ref_base r @ τ ↣ σ ∧ ref_offset r < ref_size r.
-Proof.
-  split.
-  * eauto using ref_typed_base, ref_typed_size.
-  * intros [Hr ?]. destruct r as [|[]]; inversion Hr as [|????? Hrs];
-      try inversion Hrs; subst; repeat econstructor; eauto.
-Qed.
 
-Lemma ref_base_freeze r : ref_base (freeze <$> r) = freeze <$> ref_base r.
-Proof. by destruct r as [|[]]. Qed.
-Global Instance: Proper ((~{fmap freeze}) ==> (~{fmap freeze})) ref_base.
-Proof. unfold proj_eq. intros ???. rewrite <-!ref_base_freeze. by f_equal. Qed.
 Lemma ref_offset_freeze r : ref_offset (freeze <$> r) = ref_offset r.
 Proof. by destruct r as [|[]]. Qed.
 Global Instance: Proper ((~{fmap freeze}) ==> (=)) ref_offset.
@@ -735,26 +703,22 @@ Proof.
   unfold proj_eq. intros ????. rewrite <-!ref_set_offset_freeze. by f_equal.
 Qed.
 
-Lemma ref_base_set_offset i r  : ref_base (ref_set_offset i r) = ref_base r.
-Proof. by destruct r as [|[]]. Qed.
 Lemma ref_size_set_offset i r : ref_size (ref_set_offset i r) = ref_size r.
 Proof. by destruct r as [|[]]. Qed.
-
 Lemma ref_offset_set_offset r i :
   i < ref_size r → ref_offset (ref_set_offset i r) = i.
 Proof. destruct r as [|[]]; simpl in *; auto with lia. Qed.
 Lemma ref_set_offset_typed τ r σ i :
   i < ref_size r → r @ τ ↣ σ → ref_set_offset i r @ τ ↣ σ.
 Proof.
-  intros ??. apply ref_typed_alt. split.
-  * rewrite ref_base_set_offset. by apply ref_typed_base.
-  * by rewrite ref_size_set_offset, ref_offset_set_offset.
+  destruct 2 as [|r rs ??? [] Hr]; simpl; repeat econstructor; eauto.
 Qed.
 Lemma ref_set_offset_offset r : ref_set_offset (ref_offset r) r = r.
 Proof. by destruct r as [|[]]. Qed.
 Lemma ref_set_offset_set_offset r i j :
   ref_set_offset i (ref_set_offset j r) = ref_set_offset i r.
 Proof. by destruct r as [|[]]. Qed.
+
 Lemma ref_set_offset_typed_unique τ r σ1 σ2 i :
   r @ τ ↣ σ1 → ref_set_offset i r @ τ ↣ σ2 → σ1 = σ2.
 Proof.

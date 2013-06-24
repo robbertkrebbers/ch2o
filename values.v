@@ -180,14 +180,20 @@ Section operations.
        | None => MUnionNone s (replicate sz BIndet)
        end
     end.
-  Notation val_to_bits v := (mval_to_bits (mval_of_val v)).
+  Definition val_to_bits v := (mval_to_bits (mval_of_val v)).
 
   Global Instance mval_lookup_byte: Lookup nat (val Ti) (mval Ti) := λ i w,
-    bs ← sublist_lookup (i * char_bits) char_bits (mval_to_bits w);
-    Some (val_of_bits uchar bs).
+    val_of_bits uchar <$>
+      sublist_lookup (i * char_bits) char_bits (mval_to_bits w).
   Global Instance mval_insert_byte: Insert nat (val Ti) (mval Ti) := λ i v w,
     mval_of_bits (type_of w) $
       sublist_insert (i * char_bits) (val_to_bits v) (mval_to_bits w).
+  Fixpoint mval_insert_bytes (i : nat) (vs : list (val Ti))
+      (w : mval Ti) : mval Ti :=
+    match vs with
+    | [] => w
+    | v :: vs => <[i:=v]>(mval_insert_bytes (S i) vs w)
+    end.
 
   Global Instance vtype_check: TypeCheck M (type Ti) (val Ti) := λ m,
     fix go v :=
@@ -284,8 +290,6 @@ Section operations.
     end.
   Global Arguments vcast !_ !_ /.
 End operations.
-
-Notation val_to_bits v := (mval_to_bits (mval_of_val v)).
 
 Section vtyped.
   Context `{MemorySpec Ti M}.
@@ -437,6 +441,28 @@ Section vtyped.
          vs = flip val_of_bits bs <$> τs →
          m ⊢* valid bs → length bs = bit_size_of (union s) →
          P (union s)) → P τ
+    end.
+  Proof. destruct 1; eauto. Qed.
+  Lemma vtyped_inv_r m (P : val Ti → Prop) v τ :
+    m ⊢ v : τ →
+    match τ with
+    | void => P v
+    | base τ' => (∀ v', m ⊢ v' : τ' → P (VBase v')) → P v
+    | τ'.[n] =>
+       (∀ vs, n = length vs → m ⊢* vs : τ' → n ≠ 0 → P (VArray vs)) → P v
+    | struct s =>
+       (∀ vs τs, get_env !! s = Some τs → m ⊢* vs :* τs →
+         P (VStruct s vs)) → P v
+    | union s =>
+       (∀ i τs v' τ',
+         get_env !! s = Some τs → τs !! i = Some τ' →
+         m ⊢ v' : τ' → P (VUnion s i v')) →
+       (∀ vs τs bs,
+         get_env !! s = Some τs → length τs ≠ 1 → m ⊢* vs :* τs →
+         vs = flip val_of_bits bs <$> τs →
+         m ⊢* valid bs → length bs = bit_size_of (union s) →
+         P (VUnionNone s vs)) →
+       P v
     end.
   Proof. destruct 1; eauto. Qed.
 
@@ -827,6 +853,8 @@ Proof.
     induction IH; simpl; intros; f_equal; simplify_list_equality; eauto.
 Qed.
 
+Lemma val_frozen_int m v τi : m ⊢ v : intt τi → val_forall frozen v.
+Proof. inversion 1; constructor; eauto using base_val_frozen_int. Qed.
 Lemma val_freeze_frozen v : val_forall frozen (val_map freeze v).
 Proof.
   induction v using val_ind_alt; simpl; constructor;
@@ -1060,6 +1088,8 @@ Proof.
       by apply (anti_symmetric (⊑@{m})).
 Qed.
 
+Lemma union_free_base m v (τ : base_type Ti) : m ⊢ v : base τ → union_free v.
+Proof. inversion 1; constructor. Qed.
 Lemma union_free_freeze v : union_free (val_map freeze v) ↔ union_free v.
 Proof.
   split.
@@ -1349,6 +1379,7 @@ Lemma mval_to_bits_of_val_of_bits_le m τ bs :
   type_valid get_env τ → m ⊢* valid bs →
   val_to_bits (val_of_bits τ bs) ⊑@{m}* resize (bit_size_of τ) BIndet bs.
 Proof.
+  unfold val_to_bits.
   intros Hvτ. revert τ Hvτ bs. refine (type_env_ind _ _ _ _).
   * intros τ ? bs Hbs. rewrite val_of_bits_base; simpl.
     rewrite <-(base_val_of_bits_resize τ bs (bit_size_of τ)) by done.
@@ -1416,6 +1447,7 @@ Proof.
       using bits_join_Some_l, bits_valid_le.
     rewrite val_frozen_freeze in IHτ by eauto using val_of_bits_frozen.
     unfold bs3. rewrite val_of_bits_resize by done.
+    unfold val_to_bits.
     rewrite <-(mval_of_bits_to_val _ (mval_to_bits _)) by done.
     assert (munion_free (mval_of_val (val_of_bits τ bs))).
     { rewrite <-(mval_to_val_union_free m), IHτ by
@@ -1556,16 +1588,20 @@ Proof.
 Qed.
 
 Lemma val_to_bits_valid m τ v : m ⊢ v : τ → m ⊢* valid val_to_bits v.
-Proof. eauto using mval_of_val_typed, mval_to_bits_valid. Qed.
+Proof.
+  unfold val_to_bits; eauto using mval_of_val_typed, mval_to_bits_valid.
+Qed.
 Lemma val_to_bits_length m τ v :
   m ⊢ v : τ → length (val_to_bits v) = bit_size_of τ.
-Proof. eauto using mval_to_bits_length, mval_of_val_typed. Qed.
+Proof.
+  unfold val_to_bits; eauto using mval_to_bits_length, mval_of_val_typed.
+Qed.
 Lemma val_of_to_bits m τ v :
   m ⊢ v : τ → union_free v →
   val_of_bits τ (val_to_bits v) = val_map freeze v.
 Proof.
-  intros. erewrite <-mval_of_bits_to_val, mval_of_to_bits
-    by eauto using vtyped_type_valid, mval_of_val_typed.
+  intros. unfold val_to_bits. erewrite <-mval_of_bits_to_val,
+    mval_of_to_bits by eauto using vtyped_type_valid, mval_of_val_typed.
   by erewrite munion_free_reset, mval_to_of_val
     by eauto using mval_of_val_union_free_2.
 Qed.
@@ -1593,6 +1629,30 @@ Proof.
   apply mval_of_bits_typed; eauto using mtyped_type_valid.
   apply Forall_sublist_insert;
     eauto using val_to_bits_valid, mval_to_bits_valid.
+Qed.
+Lemma mval_insert_byte_union_free w i v : munion_free (<[i:=v]>w).
+Proof. apply mval_of_bits_union_free. Qed.
+
+Lemma mval_lookup_byte_char m w :
+  m ⊢ w : uchar → w !! 0 = Some (mval_to_val w).
+Proof.
+  intros Hw. unfold lookup, mval_lookup_byte; simpl.
+  rewrite lookup_sublist_all by (by erewrite mval_to_bits_length,
+    bit_size_of_int, int_bits_char by eauto); simpl; f_equal.
+  rewrite <-mval_of_bits_to_val by eauto using TBase_valid, TInt_valid.
+  erewrite mval_of_to_bits by eauto.
+  by rewrite munion_free_reset by eauto using munion_free_base.
+Qed.
+Lemma mval_insert_byte_char m w v :
+  m ⊢ w : uchar → m ⊢ v : uchar → <[0:=v]>w = mval_of_val v.
+Proof.
+  intros Hw Hv. unfold insert, mval_insert_byte; simplify_type_equality'.
+  rewrite insert_sublist_all by
+    (by erewrite val_to_bits_length, mval_to_bits_length by eauto).
+  unfold val_to_bits.
+  erewrite mval_of_to_bits by eauto using mval_of_val_typed.
+  by rewrite munion_free_reset by
+    eauto using mval_of_val_union_free_2, mval_of_val_typed, munion_free_base.
 Qed.
 
 Lemma mval_lookup_byte_le m w1 w2 τ i v1 :
@@ -1623,7 +1683,6 @@ Proof.
   naive_solver eauto using val_of_bits_le, val_of_bits_le,
     TBase_valid, TInt_valid, Forall_sublist_lookup, mval_to_bits_valid.
 Qed.
-
 Lemma mval_insert_byte_le m w1 w2 τ i v1 v2 :
   m ⊢ w1 : τ →
   m ⊢ v1 : uchar → w1 ⊑@{m} w2 → v1 ⊑@{m} v2 → <[i:=v1]>w1 ⊑@{m} <[i:=v2]>w2.
@@ -1646,7 +1705,7 @@ Proof.
   erewrite mval_to_bits_length in Hi by eauto.
   erewrite mval_to_of_bits by eauto using mtyped_type_valid,
     Forall_sublist_insert, val_to_bits_valid, mval_to_bits_valid.
-  apply bind_Some; exists bs; split; auto.
+  apply fmap_Some; exists bs; split; auto.
   rewrite sublist_lookup_Some; split_ands; auto.
   { by erewrite mask_bits_length, mval_to_bits_length
       by eauto using (mval_0_typed m), mtyped_type_valid. }
@@ -1770,6 +1829,69 @@ Proof.
   intros. destruct (decide (i < j)).
   * eapply mval_insert_byte_commute_aux; eauto.
   * symmetry. eapply mval_insert_byte_commute_aux; eauto with lia.
+Qed.
+
+Lemma mval_lookup_reshape m w τ i :
+  let szs := (replicate (size_of τ) char_bits) in
+  m ⊢ w : τ → w !! i = val_of_bits uchar <$> reshape szs (mval_to_bits w) !! i.
+Proof.
+  intros szs Hwτ. unfold lookup at 1, mval_lookup_byte. unfold szs.
+  by rewrite sublist_lookup_reshape
+    by (erewrite ?mval_to_bits_length by eauto; eauto using char_bits_pos).
+Qed.
+
+Lemma mval_insert_bytes_typed m w τ i vs :
+  m ⊢ w : τ → m ⊢* vs : uchar → m ⊢ mval_insert_bytes i vs w : τ.
+Proof.
+  intros Hw Hcs. revert i.
+  induction Hcs; simpl; auto using mval_insert_byte_typed.
+Qed.
+Lemma mval_insert_bytes_union_free w i vs :
+  0 < length vs → munion_free (mval_insert_bytes i vs w).
+Proof.
+  destruct vs; simpl; intros; auto using mval_insert_byte_union_free with lia.
+Qed.
+
+Lemma mval_insert_bytes_join m w τ cs :
+  m ⊢ w : τ → m ⊢* cs : uchar → length cs = size_of τ →
+  mval_insert_bytes 0 cs w = mval_of_bits τ (mjoin (val_to_bits <$> cs)).
+Proof.
+  intros Hw Hcs Hlen.
+  feed pose proof (size_of_pos τ); eauto using mtyped_type_valid.
+  erewrite <-(mval_of_to_bits_union_free _ (mval_insert_bytes _ _ _)) by
+    eauto using mval_insert_bytes_typed, mval_insert_bytes_union_free with lia.
+  assert (m ⊢* valid mjoin (val_to_bits <$> cs)) as Hjoin_cs.
+  { eapply Forall_join, Forall_fmap, Forall_impl;
+      eauto using val_to_bits_valid. }
+  erewrite <-(mval_of_bits_mask _ _ (mjoin _)) by eauto using mtyped_type_valid.
+  assert (length (mval_to_bits w) =
+    sum_list (length <$> val_to_bits <$> cs)) as Hw_len.
+  { clear Hjoin_cs. erewrite mval_to_bits_length by eauto.
+    unfold bit_size_of; rewrite <-Hlen; clear Hlen.
+    induction Hcs; simpl; f_equal; auto.
+    by erewrite val_to_bits_length, bit_size_of_int, int_bits_char by eauto. }
+  rewrite <-(sublist_insert_join (val_to_bits <$> cs) (mval_to_bits w)) by done.
+  set (g k f i := sublist_insert i k (f (length k + i))).
+  f_equal. clear Hlen Hw_len Hjoin_cs. change 0 with (0 * char_bits) at 2.
+  generalize 0; induction Hcs as [|c cs Hc Hcs IH]; simpl.
+  { intros _. by erewrite mval_to_bits_mask by eauto. }
+  intros i. unfold insert, mval_insert_byte, g at 1. rewrite IH.
+  erewrite val_to_bits_length, bit_size_of_int, int_bits_char by eauto.
+  erewrite type_of_correct by eauto using mval_insert_bytes_typed.
+  assert (∀ j,
+    m ⊢* valid foldr g (λ _, mval_to_bits w) (val_to_bits <$> cs) j) as Hvalid.
+  { clear IH. induction Hcs; simpl; intros j; eauto using mval_to_bits_valid.
+    unfold g at 1. eapply Forall_sublist_insert;
+      eauto using val_to_bits_valid. }
+  erewrite mval_to_of_bits by eauto using mtyped_type_valid,
+    Forall_sublist_insert, val_to_bits_valid, mask_bits_valid.
+  assert (∀ j, length (foldr g (λ _, mval_to_bits w) (val_to_bits <$> cs) j) =
+    bit_size_of τ) as Hlen.
+  { clear IH Hvalid. induction Hcs; simpl; intros j.
+    { by erewrite mval_to_bits_length by eauto. }
+    unfold g at 1. rewrite sublist_insert_length; auto. }
+  by rewrite mask_bits_sublist_insert by (by erewrite mval_to_bits_length, Hlen
+    by eauto using (mval_0_typed m), mtyped_type_valid).
 Qed.
 
 Global Instance: TypeCheckSpec M (type Ti) (val Ti).

@@ -286,7 +286,7 @@ Section typed.
        (∀ τs,
          get_env !! s = Some τs → length τs ≠ 1 → m ⊢* valid bs →
          length bs = bit_size_of (union s) → P (union s)) → P τ
-    end .
+    end.
   Proof. destruct 1; eauto. Qed.
 
   Lemma mtyped_inv_r m (P : mval Ti → Prop) w τ :
@@ -604,6 +604,9 @@ Qed.
 Lemma mval_of_bits_base (τ : base_type Ti) bs :
   mval_of_bits (base τ) bs = MBase τ $ resize (bit_size_of (base τ)) BIndet bs.
 Proof. unfold mval_of_bits. by rewrite type_iter_base. Qed.
+Lemma mval_of_bits_void bs :
+  mval_of_bits void bs = MBase uchar [BIndet].
+Proof. unfold mval_of_bits. by rewrite type_iter_void. Qed.
 Lemma mval_of_bits_array τ n bs :
   mval_of_bits (τ.[n]) bs = MArray $ array_of_bits (mval_of_bits τ) τ n bs.
 Proof. unfold mval_of_bits. by rewrite type_iter_array. Qed.
@@ -673,7 +676,6 @@ Proof.
     + decompose_Forall_hyps. mval_le_constructor. auto.
     + mval_le_constructor. by apply bits_le_resize.
 Qed.
-
 Lemma mval_of_bits_resize τ bs sz :
   type_valid get_env τ → bit_size_of τ ≤ sz →
   mval_of_bits τ (resize sz BIndet bs) = mval_of_bits τ bs.
@@ -707,21 +709,26 @@ Proof.
   intros. by rewrite <-(mval_of_bits_resize _ (bs1 ++ bs2) (bit_size_of τ)),
     resize_app_le, mval_of_bits_resize by auto with lia.
 Qed.
-Lemma mval_of_bits_union_free τ bs :
-  type_valid get_env τ → munion_free (mval_of_bits τ bs).
+Lemma mval_of_bits_union_free τ bs : munion_free (mval_of_bits τ bs).
 Proof.
-  intros Hτ. revert τ Hτ bs. refine (type_env_ind _ _ _ _).
+  revert τ bs. refine (weak_type_env_ind _ _ _ _ _ _).
   * intros. rewrite mval_of_bits_base. by constructor.
-  * intros τ n ?? _ bs. rewrite mval_of_bits_array. constructor.
+  * intros. rewrite mval_of_bits_void. by constructor.
+  * intros τ n IH bs. rewrite mval_of_bits_array. constructor.
     revert bs. elim n; simpl; constructor; auto.
-  * intros [] s τs Hs Hτs IH Hτs_len bs.
+  * intros [] s τs Hs IH bs.
     { erewrite !mval_of_bits_compound by eauto. constructor.
-      unfold struct_of_bits. revert bs. clear Hs Hτs Hτs_len.
+      unfold struct_of_bits. revert bs. clear Hs.
       induction (bit_size_of_fields τs);
         intros; decompose_Forall; simpl; auto using Forall_drop. }
     erewrite !mval_of_bits_compound by eauto.
     destruct (list_singleton_dec _) as [[τ ?]|?];
       subst; decompose_Forall; econstructor; eauto.
+  * intros c s Hs bs. unfold mval_of_bits.
+    rewrite type_iter_compound_None by done.
+    destruct c; simpl; constructor.
+    unfold struct_of_bits. revert bs. induction (zip _ _) as [|[??]];
+      intros [|??]; simpl; repeat constructor; auto.
 Qed.
 
 Lemma mval_le_type_of m w1 w2 : w1 ⊑@{m} w2 → type_of w1 = type_of w2.
@@ -995,6 +1002,8 @@ Lemma mval_to_of_bits_le_flip m w τ sz bs :
   w ⊑@{m} mval_of_bits τ bs → resize sz BIndet (mval_to_bits w) ⊑@{m}* bs.
 Proof. eauto using mval_to_of_bits_le_flip_aux, mval_to_bits_le. Qed.
 
+Lemma munion_free_base m w (τ : base_type Ti) : m ⊢ w : base τ → munion_free w.
+Proof. inversion 1; constructor. Qed.
 Lemma munion_free_ge m w1 w2 : munion_free w1 → w1 ⊑@{m} w2 → munion_free w2.
 Proof.
   assert (∀ ws1 ws2,
@@ -1254,7 +1263,7 @@ Lemma munion_free_lookup_seg w rs w' :
   munion_free w → w !! rs = Some w' → munion_free w'.
 Proof.
   destruct 1, rs; intros; repeat (case_decide || simplify_option_equality);
-    decompose_Forall;  eauto using mval_of_bits_union_free,
+    decompose_Forall; eauto using mval_of_bits_union_free,
     env_valid_lookup_lookup, env_valid_lookup_singleton.
 Qed.
 Lemma munion_free_lookup w r w' :
@@ -1466,9 +1475,9 @@ Global Instance:
 Proof. intros ??? E. by rewrite <-mval_alter_freeze, E, mval_alter_freeze. Qed.
 
 Lemma mval_alter_seg_typed m f w j rs τ σ :
-  m ⊢ w : τ → ref_seg_set_offset j rs @ τ ↣ σ →
+  m ⊢ w : τ → rs @ τ ↣ σ →
   (∀ w', m ⊢ w' : σ → m ⊢ f w' : σ) →
-  m ⊢ alter f rs w : τ.
+  m ⊢ alter f (ref_seg_set_offset j rs) w : τ.
 Proof.
   intros Hwτ Hrs Hf. unfold alter. revert w Hwτ.
   destruct rs; inversion Hrs; intros w Hwτ; pattern w;
@@ -1479,21 +1488,21 @@ Proof.
       mval_to_bits_valid with simplify_option_equality.
 Qed.
 Lemma mval_alter_typed m f w j r τ σ :
-  m ⊢ w : τ → ref_set_offset j r @ τ ↣ σ →
+  m ⊢ w : τ → r @ τ ↣ σ →
   (∀ w, m ⊢ w : σ → m ⊢ f w : σ) →
-  m ⊢ alter f r w : τ.
+  m ⊢ alter f (ref_set_offset j r) w : τ.
 Proof.
   revert f j σ w. induction r as [|rs r IH]; simpl; intros f j σ w Hwτ.
   { rewrite ref_typed_nil. intros <- Hf. by apply Hf. }
   rewrite ref_typed_cons, mval_alter_cons. intros (τ'&?&?) Hf.
-  eapply (IH _ (ref_offset r)); rewrite ?ref_set_offset_offset; eauto.
-  eauto using mval_alter_seg_typed.
+  rewrite <-(ref_set_offset_offset r). eauto using mval_alter_seg_typed.
 Qed.
 
 Lemma mval_alter_seg_le m f g w1 w2 τ j rs σ :
-  m ⊢ w1 : τ → ref_seg_set_offset j rs @ τ ↣ σ → w1 ⊑@{m} w2 →
+  m ⊢ w1 : τ → rs @ τ ↣ σ → w1 ⊑@{m} w2 →
   (∀ w3 w4, m ⊢ w3 : σ → w3 ⊑@{m} w4 → f w3 ⊑@{m} g w4) →
-  alter f rs w1 ⊑@{m} alter g rs w2.
+  alter f (ref_seg_set_offset j rs) w1 ⊑@{m}
+    alter g (ref_seg_set_offset j rs) w2.
 Proof.
   intros Hw1 Hrs Hw12 Hfg. unfold alter. destruct Hw12 using @mval_le_case;
     inversion Hw1; destruct rs; inversion Hrs; simpl; intros;
@@ -1520,15 +1529,14 @@ Proof.
         env_valid_lookup_lookup, bit_size_of_union_lookup.
 Qed.
 Lemma mval_alter_le m f g w1 w2 τ j r σ :
-  m ⊢ w1 : τ → ref_set_offset j r @ τ ↣ σ → w1 ⊑@{m} w2 →
+  m ⊢ w1 : τ → r @ τ ↣ σ → w1 ⊑@{m} w2 →
   (∀ w3 w4, m ⊢ w3 : σ → w3 ⊑@{m} w4 → f w3 ⊑@{m} g w4) →
-  alter f r w1 ⊑@{m} alter g r w2.
+  alter f (ref_set_offset j r) w1 ⊑@{m} alter g (ref_set_offset j r) w2.
 Proof.
   revert f g j σ w1 w2. induction r as [|rs r IH]; simpl; intros f g j σ w1 w2.
   { rewrite ref_typed_nil. intros ? <- ? Hf. by apply Hf. }
-  rewrite ref_typed_cons, mval_alter_cons. intros ? (τ'&?&?) ? Hf.
-  eapply (IH _ _ (ref_offset r)); rewrite ?ref_set_offset_offset; eauto.
-  eauto using mval_alter_seg_le.
+  rewrite ref_typed_cons, !mval_alter_cons. intros ? (τ'&?&?) ? Hf.
+  rewrite <-(ref_set_offset_offset r). eauto using mval_alter_seg_le.
 Qed.
 
 Lemma mval_lookup_alter_seg_freeze m f w rs τ w' :
@@ -1603,8 +1611,9 @@ Proof.
 Qed.
 
 Lemma mval_alter_seg_ext_typed m f g w τ i rs σ :
-  m ⊢ w : τ → ref_seg_set_offset i rs @ τ ↣ σ →
-  (∀ w', m ⊢ w' : σ → f w' = g w') → alter f rs w = alter g rs w.
+  m ⊢ w : τ → rs @ τ ↣ σ →
+  (∀ w', m ⊢ w' : σ → f w' = g w') →
+  alter f (ref_seg_set_offset i rs) w = alter g (ref_seg_set_offset i rs) w.
 Proof.
   unfold alter. destruct 1 using @mtyped_case;
     destruct rs; inversion 1;
@@ -1618,14 +1627,14 @@ Proof.
   * intros; f_equal; eauto 10 using mval_of_bits_typed, env_valid_lookup_lookup.
 Qed.
 Lemma mval_alter_ext_typed m f g w τ i r σ :
-  m ⊢ w : τ → ref_set_offset i r @ τ ↣ σ →
-  (∀ w', m ⊢ w' : σ → f w' = g w') → alter f r w = alter g r w.
+  m ⊢ w : τ → r @ τ ↣ σ →
+  (∀ w', m ⊢ w' : σ → f w' = g w') →
+  alter f (ref_set_offset i r) w = alter g (ref_set_offset i r) w.
 Proof.
   revert i f g σ. induction r as [|rs r IH]; simpl; intros i f g σ.
   { rewrite ref_typed_nil. intros ? <-; eauto. }
   rewrite ref_typed_cons, !mval_alter_cons. intros ? (?&?&?) ?.
-  eapply (IH (ref_offset r)); rewrite ?ref_set_offset_offset; eauto.
-  eauto using mval_alter_seg_ext_typed.
+  rewrite <-(ref_set_offset_offset r). eauto using mval_alter_seg_ext_typed.
 Qed.
 
 Lemma mval_alter_seg_compose f1 f2 w rs :
@@ -1679,8 +1688,8 @@ Lemma mval_lookup_non_aliasing m f w τ s r r1 j1 σ1 i1 r2 j2 σ2 i2 :
   let r1' := r1 ++ RUnion i1 s false :: r in
   let r2' := r2 ++ RUnion i2 s false :: r in
   m ⊢ w : τ →
-  ref_set_offset j1 r1' @ τ ↣ σ1 → ref_set_offset j2 r2' @ τ ↣ σ2 →
-  i1 ≠ i2 → alter f r1' w !! r2' = None.
+  r1' @ τ ↣ σ1 → r2' @ τ ↣ σ2 → i1 ≠ i2 →
+  alter f (ref_set_offset j1 r1') w !! (ref_set_offset j2 r2') = None.
 Proof.
   assert (∀ j r3 i3, ref_set_offset j (r3 ++ RUnion i3 s false :: r) =
     ref_set_offset j r3 ++ RUnion i3 s false :: r) as Hrhelp.
