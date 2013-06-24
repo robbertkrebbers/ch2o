@@ -121,6 +121,15 @@ Fixpoint resize {A} (n : nat) (y : A) (l : list A) : list A :=
   end.
 Arguments resize {_} !_ _ !_.
 
+(* The function [reshape k l] transforms [l] into a list of lists whose sizes are
+specified by [k]. In case [l] is too short, the resulting list will end with a
+a certain number of empty lists. In case [l] is too long, it will be truncated. *)
+Fixpoint reshape {A} (szs : list nat) (l : list A) : list (list A) :=
+  match szs with
+  | [] => []
+  | sz :: szs => take sz l :: reshape szs (drop sz l)
+  end.
+
 Definition sublist_lookup {A} (i n : nat) (l : list A) : option (list A) :=
   guard (i + n ≤ length l); Some $ take n $ drop i l.
 Definition sublist_insert {A} (i : nat) (k l : list A) : list A :=
@@ -651,14 +660,16 @@ Proof.
   * rewrite !NoDup_cons, !elem_of_cons. intuition.
   * intuition.
 Qed.
-Lemma NoDup_lookup l i j x : NoDup l → l !! i = Some x → l !! j = Some x → i = j.
+Lemma NoDup_lookup l i j x :
+  NoDup l → l !! i = Some x → l !! j = Some x → i = j.
 Proof.
   intros Hl. revert i j. induction Hl as [|x' l Hx Hl IH].
   { intros; simplify_equality. }
   intros [|i] [|j] ??; simplify_equality'; eauto with f_equal;
     exfalso; eauto using elem_of_list_lookup_2.
 Qed.
-Lemma NoDup_alt l : NoDup l ↔ ∀ i j x, l !! i = Some x → l !! j = Some x → i = j.
+Lemma NoDup_alt l :
+  NoDup l ↔ ∀ i j x, l !! i = Some x → l !! j = Some x → i = j.
 Proof.
   split; eauto using NoDup_lookup.
   induction l as [|x l IH]; intros Hl; constructor.
@@ -717,7 +728,8 @@ End filter.
 Section find.
   Context (P : A → Prop) `{∀ x, Decision (P x)}.
 
-  Lemma list_find_Some l i : list_find P l = Some i → ∃ x, l !! i = Some x ∧ P x.
+  Lemma list_find_Some l i :
+    list_find P l = Some i → ∃ x, l !! i = Some x ∧ P x.
   Proof.
     revert i. induction l; simpl; repeat case_decide;
       eauto with simplify_option_equality.
@@ -734,7 +746,8 @@ Section find_eq.
 
   Lemma list_find_eq_Some l i x : list_find (x =) l = Some i → l !! i = Some x.
   Proof.
-    intros. destruct (list_find_Some (x =) l i) as (?&?&?); auto with congruence.
+    intros.
+    destruct (list_find_Some (x =) l i) as (?&?&?); auto with congruence.
   Qed.
   Lemma list_find_eq_elem_of l x : x ∈ l → ∃ i, list_find (x=) l = Some i.
   Proof. eauto using list_find_elem_of. Qed.
@@ -836,7 +849,8 @@ Lemma drop_ge l n : length l ≤ n → drop n l = [].
 Proof. revert n. induction l; intros [|??]; simpl in *; auto with lia. Qed.
 Lemma drop_all l : drop (length l) l = [].
 Proof. by apply drop_ge. Qed.
-
+Lemma drop_drop l n1 n2 : drop n1 (drop n2 l) = drop (n2 + n1) l.
+Proof. revert n2. induction l; intros [|?]; simpl; rewrite ?drop_nil; auto. Qed.
 Lemma lookup_drop l n i : drop n l !! i = l !! (n + i).
 Proof. revert n i. induction l; intros [|i] ?; simpl; auto. Qed.
 Lemma drop_alter f l n i : i < n → drop n (alter f i l) = drop n l.
@@ -894,7 +908,8 @@ Proof.
 Qed.
 Lemma reverse_replicate n x : reverse (replicate n x) = replicate n x.
 Proof.
-  apply replicate_as_elem_of. rewrite reverse_length, replicate_length. split; auto.
+  apply replicate_as_elem_of. rewrite reverse_length, replicate_length.
+  split; auto.
   intros y. rewrite elem_of_reverse. by apply elem_of_replicate_inv.
 Qed.
 
@@ -1009,7 +1024,44 @@ Qed.
 Lemma drop_resize_plus l n m x :
   drop n (resize (n + m) x l) = resize m x (drop n l).
 Proof. rewrite drop_resize_le by lia. f_equal. lia. Qed.
+End general_properties.
 
+Section more_general_properties.
+Context {A : Type}.
+Implicit Types x y z : A.
+Implicit Types l k : list A.
+
+(** ** Properties of the [reshape] function *)
+Lemma reshape_length szs l : length (reshape szs l) = length szs.
+Proof. revert l. induction szs; simpl; auto with f_equal. Qed.
+Lemma sublist_lookup_reshape l i n m :
+  0 < n → length l = m * n →
+  reshape (replicate m n) l !! i = sublist_lookup (i * n) n l.
+Proof.
+  intros Hn Hl. unfold sublist_lookup.  apply option_eq; intros x; split.
+  * intros Hx. case_option_guard as Hi.
+    { f_equal. clear Hi. revert i l Hl Hx.
+      induction m as [|m IH]; intros [|i] l ??; simplify_equality'; auto.
+      rewrite <-drop_drop. apply IH; rewrite ?drop_length; auto with lia. }
+    destruct Hi. rewrite Hl, <-Nat.mul_succ_l.
+    apply Nat.mul_le_mono_r, Nat.le_succ_l. apply lookup_lt_Some in Hx.
+    by rewrite reshape_length, replicate_length in Hx.
+  * intros Hx. case_option_guard as Hi; simplify_equality'.
+    revert i l Hl Hi. induction m as [|m IH]; auto with lia.
+    intros [|i] l ??; simpl; [done|]. rewrite <-drop_drop.
+    rewrite IH; rewrite ?drop_length; auto with lia.
+Qed.
+Lemma join_reshape szs l :
+  sum_list szs = length l → mjoin (reshape szs l) = l.
+Proof.
+  revert l. induction szs as [|sz szs IH]; simpl; intros l Hl.
+  { by destruct l. }
+  by rewrite IH, take_drop by (rewrite drop_length; lia).
+Qed.
+Lemma sum_list_replicate n m : sum_list (replicate m n) = m * n.
+Proof. induction m; simpl; auto. Qed.
+
+(** ** Properties of [sublist_lookup] and [sublist_insert] *)
 Lemma sublist_lookup_Some l i n k :
   sublist_lookup i n l = Some k ↔
     i + n ≤ length l ∧ length k = n ∧ ∀ j, j < n → l !! (i + j) = k !! j.
@@ -1044,12 +1096,13 @@ Proof.
   by rewrite (right_id [] (++)).
 Qed.
 Lemma lookup_sublist_insert l i k j :
-  i + length k ≤ length l →
+  j < length l →
   i ≤ j < i + length k → sublist_insert i k l !! j = k !! (j - i).
 Proof.
-  unfold sublist_insert. intros ? [??]. rewrite (take_ge _ (_ - _ )) by lia.
-  rewrite lookup_app_minus_r by (rewrite take_length_le; lia).
-  by rewrite !take_length_le, lookup_app_l by lia.
+  unfold sublist_insert. intros ? [??].
+  rewrite lookup_app_minus_r by (rewrite take_length; lia).
+  rewrite take_length_le by lia.
+  by rewrite lookup_app_l, lookup_take by (rewrite ?take_length; lia).
 Qed.
 Lemma lookup_sublist_insert_ne l i k j :
   j < i ∨ i + length k ≤ j → sublist_insert i k l !! j = l !! j.
@@ -1064,6 +1117,48 @@ Proof.
   rewrite lookup_app_minus_r by (rewrite take_length_ge; lia).
   rewrite lookup_drop, take_length_ge by lia. f_equal. lia.
 Qed.
+Lemma lookup_sublist_proper l1 l2 i k j :
+  l1 !! j = l2 !! j →
+  sublist_insert i k l1 !! j = sublist_insert i k l2 !! j.
+Proof.
+  destruct (l2 !! j) as [x|] eqn:Hx2; intros Hx1.
+  * destruct (decide (j < i ∨ i + length k ≤ j)).
+    { by rewrite !lookup_sublist_insert_ne, Hx1, Hx2 by done. }
+    by rewrite !lookup_sublist_insert by eauto using lookup_lt_Some with lia.
+  * by rewrite !lookup_ge_None_2 by
+      (rewrite ?sublist_insert_length; eauto using lookup_ge_None_1).
+Qed.
+
+Lemma lookup_sublist_all l n :
+  length l = n → sublist_lookup 0 n l = Some l.
+Proof.
+  intros. unfold sublist_lookup; case_option_guard; [|lia].
+  by rewrite take_ge by (rewrite drop_length; lia).
+Qed.
+Lemma insert_sublist_all l k :
+  length l = length k → sublist_insert 0 k l = k.
+Proof.
+  intros Hlk. unfold sublist_insert. simpl.
+  by rewrite <-Hlk, drop_all, take_ge, (right_id_L [] (++)) by lia.
+Qed.
+
+Lemma sublist_insert_join_aux (ls : list (list A)) l i :
+  let g k f j := sublist_insert j k (f (length k + j)) in
+  length l = i + sum_list (length <$> ls) →
+  foldr g (λ _, l) ls i = take i l ++ mjoin ls.
+Proof.
+  intros g. revert i l. induction ls as [|l' ls IH]; simpl; intros i l ?.
+  { by rewrite (right_id_L [] (++)), take_ge by lia. }
+  unfold g at 1. rewrite IH by lia. unfold sublist_insert.
+  rewrite (take_app_le _ _ i) by (rewrite take_length_le; lia).
+  rewrite take_take, Nat.min_l by lia.
+  rewrite app_length, take_length_le, (take_ge l') by lia.
+  by rewrite drop_app_alt by (rewrite take_length_le; lia).
+Qed.
+Lemma sublist_insert_join (ls : list (list A)) l :
+  let g k f i := sublist_insert i k (f (length k + i)) in
+  length l = sum_list (length <$> ls) → foldr g (λ _, l) ls 0 = mjoin ls.
+Proof. intros. apply (sublist_insert_join_aux _ _ 0); lia. Qed.
 
 (** ** Properties of the [seq] function *)
 Lemma fmap_seq j n : S <$> seq j n = seq (S j) n.
@@ -1826,7 +1921,7 @@ Section contains_dec.
     abstract (rewrite Permutation_alt; tauto).
   Defined.
 End contains_dec.
-End general_properties.
+End more_general_properties.
 
 (** ** Properties of the [same_length] predicate *)
 Instance: ∀ A, Reflexive (@same_length A A).
@@ -1952,6 +2047,18 @@ Section Forall_Exists.
     Forall P l → Forall P k → Forall P (sublist_insert i k l).
   Proof.
     unfold sublist_insert. auto using Forall_app_2, Forall_drop, Forall_take.
+  Qed.
+  Lemma Forall_reshape l szs : Forall P l → Forall (Forall P) (reshape szs l).
+  Proof.
+    revert l. induction szs; simpl; auto using Forall_take, Forall_drop.
+  Qed.
+
+  Lemma Forall_rev_ind (Q : list A → Prop) :
+    Q [] → (∀ x l, P x → Forall P l → Q l → Q (l ++ [x])) →
+    ∀ l, Forall P l → Q l.
+  Proof.
+    intros ?? l. induction l using rev_ind; auto.
+    rewrite Forall_app, Forall_singleton; intros [??]; auto.
   Qed.
 
   Lemma Exists_exists l : Exists P l ↔ ∃ x, x ∈ l ∧ P x.
@@ -2303,6 +2410,8 @@ End Forall2_order.
 Section fmap.
   Context {A B : Type} (f : A → B).
 
+  Lemma list_fmap_id (l : list A) : id <$> l = l.
+  Proof. induction l; simpl; f_equal; auto. Qed.
   Lemma list_fmap_compose {C} (g : B → C) l : g ∘ f <$> l = g <$> f <$> l.
   Proof. induction l; simpl; f_equal; auto. Qed.
 
@@ -2524,6 +2633,10 @@ Section ret_join.
   Lemma join_length_same (ls : list (list A)) n :
     Forall (λ l, length l = n) ls → length (mjoin ls) = length ls * n.
   Proof. rewrite join_length. by induction 1; simpl; f_equal. Qed.
+
+  Lemma Forall_join (P : A → Prop) (ls: list (list A)) :
+    Forall (Forall P) ls → Forall P (mjoin ls).
+  Proof. induction 1; simpl; auto using Forall_app_2. Qed.
 
   Lemma lookup_join_same_length (ls : list (list A)) n i :
     n ≠ 0 → Forall (λ l, length l = n) ls →
