@@ -137,6 +137,13 @@ Tactic Notation "case_option_guard" "as" ident(Hx) :=
 Tactic Notation "case_option_guard" :=
   let H := fresh in case_option_guard as H.
 
+Lemma option_guard_True {A} (P : Prop) `{Decision P} (x : option A) :
+  P → guard P; x = x.
+Proof. intros. by case_option_guard. Qed.
+Lemma option_guard_False {A} (P : Prop) `{Decision P} (x : option A) :
+  ¬P → guard P; x = None.
+Proof. intros. by case_option_guard. Qed.
+
 Tactic Notation "simplify_option_equality" "by" tactic3(tac) := repeat
   match goal with
   | _ => progress (unfold default in *)
