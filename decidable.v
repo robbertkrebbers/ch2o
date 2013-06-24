@@ -24,10 +24,10 @@ Lemma decide_rel_correct {A B} (R : A → B → Prop) `{∀ x y, Decision (R x y
   (x : A) (y : B) : decide_rel R x y = decide (R x y).
 Proof. done. Qed.
 
-Lemma decide_true {A} `{Decision P} (x y : A) :
+Lemma decide_True {A} `{Decision P} (x y : A) :
   P → (if decide P then x else y) = x.
 Proof. by destruct (decide P). Qed.
-Lemma decide_false {A} `{Decision P} (x y : A) :
+Lemma decide_False {A} `{Decision P} (x y : A) :
   ¬P → (if decide P then x else y) = y.
 Proof. by destruct (decide P). Qed.
 

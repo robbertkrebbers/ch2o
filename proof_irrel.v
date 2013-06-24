@@ -30,10 +30,9 @@ Proof. destruct b; simpl; apply _. Qed.
 Lemma sig_eq_pi `(P : A → Prop) `{∀ x, ProofIrrel (P x)}
   (x y : sig P) : x = y ↔ `x = `y.
 Proof.
-  split.
-  * destruct x, y. apply proj1_sig_inj.
-  * destruct x as [x Hx], y as [y Hy]; simpl; intros; subst.
-    f_equal. apply proof_irrel.
+  split; [by intros <- |].
+  destruct x as [x Hx], y as [y Hy]; simpl; intros; subst.
+  f_equal. apply proof_irrel.
 Qed.
 
 Lemma exists_proj1_pi `(P : A → Prop) `{∀ x, ProofIrrel (P x)}

@@ -330,11 +330,11 @@ Proof.
     unfold int_to_Z_, signed_Z. simpl. rewrite Hτ, <-int_bits_pow_pred_.
     generalize (2 ^ pred (int_type_bits_ Csz τ)). intros y [??].
     destruct (Z_lt_le_dec x 0).
-    { rewrite decide_false.
+    { rewrite decide_False.
       + apply Z.sub_move_r. symmetry. apply Z.mod_unique_pos with (-1); auto.
       + apply Z.le_ngt. replace (x `mod` (2 * y)) with (x + 2 * y); auto.
         apply Z.mod_unique_pos with (-1); auto. }
-    rewrite decide_true; [apply Z.mod_small; lia |].
+    rewrite decide_True; [apply Z.mod_small; lia |].
     apply Z.le_lt_trans with x; auto using Z.mod_le.
   * intros τ x Hτ. unfold int_type_lower, int_type_upper. rewrite Hτ.
     unfold int_type_range, int_to_Z, int_of_Z, int_type_sign in *; simpl in *.
