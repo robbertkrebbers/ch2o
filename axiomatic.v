@@ -1248,7 +1248,10 @@ Proof.
 Qed.
 Lemma ax_expr_frame_l Δ B A P Q e :
   Δ\ B ⊨ₑ {{ P }} e {{ λ v, Q v }} → Δ\ B ⊨ₑ {{ A ★ P }} e {{ λ v, A ★ Q v }}.
-Proof. setoid_rewrite (commutative (★))%A. apply ax_expr_frame_r. Qed.
+Proof.
+  intros He. eapply ax_expr_weaken, ax_expr_frame_r, He;
+    intros; by rewrite (commutative (★) A)%A.
+Qed.
 
 Lemma ax_expr_funframe_r Δ B A P Q e :
   Δ\ A ★ B ⊨ₑ {{ P }} e {{ λ v, Q v }} →
@@ -1333,7 +1336,8 @@ Lemma ax_expr_funframe_l Δ B A P Q e :
   Δ\ A ★ B ⊨ₑ {{ P }} e {{ λ v, Q v }} →
   Δ\ B ⊨ₑ {{ A ★ P }} e {{ λ v, A ★ Q v }}.
 Proof.
-  intro. setoid_rewrite (commutative (★))%A. by apply ax_expr_funframe_r.
+  intros He. eapply ax_expr_weaken, ax_expr_funframe_r, He;
+    intros; by rewrite (commutative (★) A)%A.
 Qed.
 
 (** ** Rules for function calls *)

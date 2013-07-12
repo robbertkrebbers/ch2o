@@ -3,8 +3,8 @@ PREREQUISITES
 
 This version is known to compile with:
 
- - Coq 8.4pl1
- - SCons 2.0
+ - Coq 8.4pl2
+ - SCons 2.3
 
 BUILDING INSTRUCTIONS
 ---------------------
