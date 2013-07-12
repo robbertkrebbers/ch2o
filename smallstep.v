@@ -7,6 +7,28 @@ invert reduction steps. These tactics use the hint database [cstep] to solve
 side-conditions. *)
 Require Export state.
 
+(** * Semantics of assignments *)
+(** The judgment [assign_sem m b vr ass v' vb'] describes the resulting value
+[v'] of an assignment expression [ptrc@{Ωl} b ::=@{ass} valc@{Ωr} vr], and the
+value [v''] that needs to be stored at [b] in [m]. *)
+Inductive assign_sem (m : mem)
+     (b : index) (vr : val) : assign → val → val → Prop :=
+  | Assign_sem : assign_sem m b vr Assign vr vr
+  | PreOp_sem op vb vb' :
+     m !! b = Some vb →
+     eval_binop op vb vr = Some vb' →
+     assign_sem m b vr (PreOp op) vb' vb'
+  | PostOp_sem op vb vb' :
+     m !! b = Some vb →
+     eval_binop op vb vr = Some vb' →
+     assign_sem m b vr (PostOp op) vb vb'.
+
+Hint Constructors assign_sem : cstep.
+Ltac inv_assign_sem :=
+  match goal with
+  | H : assign_sem _ _ _ _ _ _ |- _ => inversion H; subst; clear H
+  end.
+
 (** * Head reduction for expressions *)
 (** We define head reduction for all redexes whose reduction is local (i.e.
 does not change the current program context). Only function calls are non-local,
@@ -17,21 +39,22 @@ relation [cstep].*)
 Reserved Notation "ρ ⊢ₕ e1 , m1 ⇒ e2 , m2"
   (at level 74, format "ρ  '⊢ₕ' '['  e1 ,  m1  ⇒ '/'  e2 ,  m2 ']'").
 Inductive ehstep (ρ : stack) : expr → mem → expr → mem → Prop :=
-  | estep_var x a m :
-     ρ !! x = Some a →
-     ρ ⊢ₕ var x, m ⇒ ptrc a, m
-  | estep_assign Ωl Ωr b v m :
+  | estep_var x b m :
+     ρ !! x = Some b →
+     ρ ⊢ₕ var x, m ⇒ ptrc b, m
+  | estep_assign ass Ωl Ωr b vr v' vb' m :
      is_writable m b →
-     ρ ⊢ₕ ptrc@{Ωl} b ::= valc@{Ωr} v, m ⇒
-          valc@{ {[b]} ∪ Ωl ∪ Ωr} v, mem_lock b (<[b:=v]>m)
-  | estep_load Ω a v m :
-     m !! a = Some v →
-     ρ ⊢ₕ load (ptrc@{Ω} a), m ⇒ valc@{Ω} v, m
+     assign_sem m b vr ass v' vb' →
+     ρ ⊢ₕ ptrc@{Ωl} b ::=@{ass} valc@{Ωr} vr, m ⇒
+          valc@{{[b]} ∪ Ωl ∪ Ωr} v', mem_lock b (<[b:=vb']>m)
+  | estep_load Ω b v m :
+     m !! b = Some v →
+     ρ ⊢ₕ load (ptrc@{Ω} b), m ⇒ valc@{Ω} v, m
   | estep_alloc a m :
-     is_free m a → ρ ⊢ₕ alloc, m ⇒ ptrc a, mem_alloc a voidc%V Freeable m
+     is_free m a → ρ ⊢ₕ alloc, m ⇒ ptrc a, mem_alloc a indetc%V Freeable m
   | estep_free Ω b m :
      is_freeable m b →
-     ρ ⊢ₕ free (ptrc@{Ω} b), m ⇒ voidc@{Ω}, delete b m
+     ρ ⊢ₕ free (ptrc@{Ω} b), m ⇒ indetc@{Ω}, delete b m
   | estep_unop op Ω v v' m :
      eval_unop op v = Some v' →
      ρ ⊢ₕ ⊙{op} valc@{Ω} v, m ⇒ valc@{Ω} v', m
@@ -44,6 +67,8 @@ Inductive ehstep (ρ : stack) : expr → mem → expr → mem → Prop :=
   | estep_if2 Ω v el er m :
      val_false v →
      ρ ⊢ₕ IF valc@{Ω} v then el else er, m ⇒ er, mem_unlock Ω m
+  | estep_comma Ω v er m :
+     ρ ⊢ₕ valc@{Ω} v ,, er, m ⇒ er, mem_unlock Ω m
   | estep_cast τ Ω v v' m :
      eval_cast τ v = Some v' →
      ρ ⊢ₕ cast@{τ} (valc@{Ω} v), m ⇒ valc@{Ω} v', m
@@ -83,6 +108,8 @@ Proof. rewrite <-(mem_unlock_empty_locks m) at 2. by constructor. Qed.
 Lemma estep_if2_no_locks ρ v el er m :
   val_false v → ρ ⊢ₕ IF valc v then el else er, m ⇒ er, m.
 Proof. rewrite <-(mem_unlock_empty_locks m) at 2. by constructor. Qed.
+Lemma estep_comma_no_locks ρ v er m : ρ ⊢ₕ valc v ,, er, m ⇒ er, m.
+Proof. rewrite <-(mem_unlock_empty_locks m) at 2. constructor. Qed.
 
 (** An expression is safe if a head reduction step is possible. This relation
 is adapted from CompCert and is used to capture undefined behavior. If the
@@ -91,7 +118,7 @@ to the [Undef] state. *)
 Reserved Notation "ρ  '⊢ₕ' 'safe' e , m" (at level 74).
 Inductive ehsafe (ρ : stack) : expr → mem → Prop :=
   | ehsafe_call f es m : ρ ⊢ₕ safe call f @ es, m
-  | ehsafe_step e1 m1 v2 m2 : ρ ⊢ₕ e1, m1 ⇒ v2, m2 → ρ ⊢ₕ safe e1, m1
+  | ehsafe_step e1 m1 e2 m2 : ρ ⊢ₕ e1, m1 ⇒ e2, m2 → ρ ⊢ₕ safe e1, m1
 where "ρ  ⊢ₕ 'safe' e ,  m" := (ehsafe ρ e m) : C_scope.
 
 Lemma ehstep_val ρ Ω v1 m1 v2 m2 : ¬ρ ⊢ₕ valc@{Ω} v1, m1 ⇒ v2, m2.
@@ -112,9 +139,17 @@ Ltac do_ehstep :=
 Hint Constructors ehstep : cstep.
 Hint Constructors ehsafe : cstep.
 Hint Resolve estep_if1_no_locks estep_if2_no_locks : cstep.
+Hint Resolve estep_comma_no_locks : cstep.
 Hint Extern 100 (_ !! _ = Some _) => by auto with mem : cstep.
 Hint Extern 100 (is_writable _ _) => by auto with mem : cstep.
 Hint Extern 100 (is_freeable _ _) => by auto with mem : cstep.
+
+Definition block_perm (c : bool) := if c then ReadOnly else Writable.
+
+Lemma block_perm_locked c : perm_kind (block_perm c) ≠ Locked.
+Proof. by destruct c. Qed.
+Lemma block_perm_fragment c : ¬perm_fragment (block_perm c).
+Proof. destruct c; auto using Writable_fragment, ReadOnly_fragment. Qed.
 
 (** * The reduction relation *)
 (** Small step reduction works by traversal of the focus. Each step the focus
@@ -173,11 +208,11 @@ Inductive cstep (δ : funenv) : relation state :=
           State (CStmt (IF e then s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)
 
   (**i For compound statements: *)
-  | cstep_in_block k b s m :
+  | cstep_in_block k b c s m :
      is_free m b →
-     δ ⊢ₛ State k (Stmt ↘ (blk s)) m ⇒
-          State (CBlock b :: k) (Stmt ↘ s)
-            (mem_alloc b voidc%V Writable m)
+     δ ⊢ₛ State k (Stmt ↘ (blk@{c} s)) m ⇒
+          State (CBlock c b :: k) (Stmt ↘ s)
+            (mem_alloc b indetc (block_perm c) m)
   | cstep_in_comp k s1 s2 m :
      δ ⊢ₛ State k (Stmt ↘ (s1 ;; s2)) m ⇒
           State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m
@@ -185,9 +220,9 @@ Inductive cstep (δ : funenv) : relation state :=
      δ ⊢ₛ State k (Stmt ↘ (l :; s)) m ⇒
           State (CStmt (l :; □) :: k) (Stmt ↘ s) m
 
-  | cstep_out_block k b s m :
-     δ ⊢ₛ State (CBlock b :: k) (Stmt ↗ s) m ⇒
-          State k (Stmt ↗ (blk s)) (delete b m)
+  | cstep_out_block k b c s m :
+     δ ⊢ₛ State (CBlock c b :: k) (Stmt ↗ s) m ⇒
+          State k (Stmt ↗ (blk@{c} s)) (delete b m)
   | cstep_out_comp1 k s1 s2 m :
      δ ⊢ₛ State (CStmt (□ ;; s2) :: k) (Stmt ↗ s1) m ⇒
           State (CStmt (s1 ;; □) :: k) (Stmt ↘ s2) m
@@ -215,7 +250,7 @@ Inductive cstep (δ : funenv) : relation state :=
           State (CParams bs :: k) (Stmt ↘ s) m2
   | cstep_free_params k s m bs :
      δ ⊢ₛ State (CParams bs :: k) (Stmt ↗ s) m ⇒
-          State k (Return voidc) (delete_list bs m)
+          State k (Return indetc) (delete_list bs m)
   | cstep_free_params_top k v s m bs :
      δ ⊢ₛ State (CParams bs :: k) (Stmt (⇈ v) s) m ⇒
           State k (Return v) (delete_list bs m)
@@ -224,27 +259,27 @@ Inductive cstep (δ : funenv) : relation state :=
           State k (Expr (subst E (valc v)%E)) m
 
   (**i For non-local control flow: *)
-  | cstep_top_block v k b s m :
-     δ ⊢ₛ State (CBlock b :: k) (Stmt (⇈ v) s) m ⇒
-          State k (Stmt (⇈ v) (blk s)) (delete b m)
+  | cstep_top_block v k b c s m :
+     δ ⊢ₛ State (CBlock c b :: k) (Stmt (⇈ v) s) m ⇒
+          State k (Stmt (⇈ v) (blk@{c} s)) (delete b m)
   | cstep_top_item v E k s m :
      δ ⊢ₛ State (CStmt E :: k) (Stmt (⇈ v) s) m ⇒
           State k (Stmt (⇈ v) (subst E s)) m
   | cstep_label_here l k s m :
      δ ⊢ₛ State k (Stmt (↷ l) (l :; s)) m ⇒
           State (CStmt (l :; □) :: k) (Stmt ↘ s) m
-  | cstep_label_block_down l k b s m :
+  | cstep_label_block_down l k b c s m :
      l ∈ labels s →
      is_free m b →
-     δ ⊢ₛ State k (Stmt (↷ l) (blk s)) m ⇒
-          State (CBlock b :: k) (Stmt (↷ l) s)
-            (mem_alloc b voidc Writable m)
-  | cstep_label_block_up l k b s m : 
+     δ ⊢ₛ State k (Stmt (↷ l) (blk@{c} s)) m ⇒
+          State (CBlock c b :: k) (Stmt (↷ l) s)
+            (mem_alloc b indetc (block_perm c) m)
+  | cstep_label_block_up l k b c s m : 
      (**i Not [l ∈ labels k] so as to avoid it going back and forth between 
      double occurrences of labels. *)
      l ∉ labels s →
-     δ ⊢ₛ State (CBlock b :: k) (Stmt (↷ l) s) m ⇒
-          State k (Stmt (↷l) (blk s)) (delete b m)
+     δ ⊢ₛ State (CBlock c b :: k) (Stmt (↷ l) s) m ⇒
+          State k (Stmt (↷l) (blk@{c} s)) (delete b m)
   | cstep_label_down l E k s m :
      l ∈ labels s →
      δ ⊢ₛ State k (Stmt (↷ l) (subst E s)) m ⇒
@@ -338,20 +373,20 @@ Section inversion.
          k = CFun E :: k' →
          P (State k' (Expr (subst E (valc v)%E)) m)) →
        P S2
-    | Stmt ↘ (blk s) =>
+    | Stmt ↘ (blk@{c} s) =>
        (∀ b,
          is_free m b →
-         P (State (CBlock b :: k) (Stmt ↘ s)
-           (mem_alloc b voidc Writable m))) →
+         P (State (CBlock c b :: k) (Stmt ↘ s)
+           (mem_alloc b indetc (block_perm c) m))) →
        P S2
     | Stmt ↘ (s1 ;; s2) =>
        P (State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m) → P S2
     | Stmt ↘ (l :; s) =>
        P (State (CStmt (l :; □) :: k) (Stmt ↘ s) m) → P S2
     | Stmt ↗ s =>
-       (∀ k' b,
-         k = CBlock b :: k' →
-         P (State k' (Stmt ↗ (blk s)) (delete b m))) →
+       (∀ k' c b,
+         k = CBlock c b :: k' →
+         P (State k' (Stmt ↗ (blk@{c} s)) (delete b m))) →
        (∀ k' s2,
          k = CStmt (□ ;; s2) :: k' →
          P (State (CStmt (s ;; □) :: k') (Stmt ↘ s2) m)) →
@@ -372,7 +407,7 @@ Section inversion.
          P (State k' (Stmt ↗ (l :; s)) m)) →
        (∀ k' bs,
          k = CParams bs :: k' →
-         P (State k' (Return voidc) (delete_list bs m))) →
+         P (State k' (Return indetc) (delete_list bs m))) →
        P S2
     | Call f vs =>
        (∀ s bs m2,
@@ -384,9 +419,9 @@ Section inversion.
        (∀ k' bs,
          k = CParams bs :: k' →
          P (State k' (Return v) (delete_list bs m))) →
-       (∀ k' b,
-         k = CBlock b :: k' →
-         P (State k' (Stmt (⇈ v) (blk s)) (delete b m))) →
+       (∀ k' c b,
+         k = CBlock c b :: k' →
+         P (State k' (Stmt (⇈ v) (blk@{c} s)) (delete b m))) →
        (∀ k' E,
          k = CStmt E :: k' →
          P (State k' (Stmt (⇈ v) (subst E s)) m)) →
@@ -395,16 +430,16 @@ Section inversion.
        (∀ s',
          s = (l :; s') →
          P (State (CStmt (l :; □) :: k) (Stmt ↘ s') m)) →
-       (∀ s' b,
-         s = blk s' →
+       (∀ s' c b,
+         s = blk@{c} s' →
          l ∈ labels s →
          is_free m b →
-         P (State (CBlock b :: k) (Stmt (↷ l) s')
-           (mem_alloc b voidc Writable m))) →
-       (∀ k' b,
-         k = CBlock b :: k' →
+         P (State (CBlock c b :: k) (Stmt (↷ l) s')
+           (mem_alloc b indetc (block_perm c) m))) →
+       (∀ k' c b,
+         k = CBlock c b :: k' →
          l ∉ labels s →
-         P (State k' (Stmt (↷l) (blk s)) (delete b m))) →
+         P (State k' (Stmt (↷l) (blk@{c} s)) (delete b m))) →
        (∀ s' E,
          s = subst E s' →
          l ∈ labels s' →
@@ -470,10 +505,10 @@ Section inversion.
        P (State k (Stmt ↗ (IF e then s1 else s)) m) → P S2
     | CStmt (l :; □) =>
        P (State k (Stmt ↗ (l :; s)) m) → P S2
-    | CBlock b =>
-       P (State k (Stmt ↗ (blk s)) (delete b m)) → P S2
+    | CBlock c b =>
+       P (State k (Stmt ↗ (blk@{c} s)) (delete b m)) → P S2
     | CParams bs =>
-       P (State k (Return voidc) (delete_list bs m)) → P S2
+       P (State k (Return indetc) (delete_list bs m)) → P S2
     | _ => P S2
     end.
   Proof.
@@ -487,7 +522,7 @@ Section inversion.
     match E with
     | CStmt E => P (State k (Stmt (⇈ v) (subst E s)) m) → P S2
     | CParams bs => P (State k (Return v) (delete_list bs m)) → P S2
-    | CBlock b => P (State k (Stmt (⇈ v) (blk s)) (delete b m)) → P S2
+    | CBlock c b => P (State k (Stmt (⇈ v) (blk@{c} s)) (delete b m)) → P S2
     | _ => P S2
     end.
   Proof.
@@ -499,11 +534,11 @@ Section inversion.
     δ ⊢ₛ State k (Stmt (↷ l) s) m ⇒ S2 →
     l ∈ labels s →
     match s with
-    | blk s =>
+    | blk@{c} s =>
        (∀ b,
          is_free m b → l ∈ labels s →
-         P (State (CBlock b :: k) (Stmt (↷ l) s)
-           (mem_alloc b voidc Writable m))) →
+         P (State (CBlock c b :: k) (Stmt (↷ l) s)
+           (mem_alloc b indetc (block_perm c) m))) →
        P S2
     | s1 ;; s2 =>
        (l ∈ labels s1 → P (State (CStmt (□ ;; s2) :: k) (Stmt (↷ l) s1) m)) →
@@ -534,7 +569,7 @@ Section inversion.
     l ∉ labels s →
     match E with
     | CStmt E => P (State k (Stmt (↷ l) (subst E s)) m) → P S2
-    | CBlock b => P (State k (Stmt (↷ l) (blk s)) (delete b m)) → P S2
+    | CBlock c b => P (State k (Stmt (↷ l) (blk@{c} s)) (delete b m)) → P S2
     | _ => P S2
     end.
   Proof.
@@ -624,20 +659,22 @@ lemmas, that are useful to automatically perform reduction steps, pick a fully
 determined one. *)
 Lemma ehstep_alloc_fresh ρ m :
   let b := fresh (dom indexset m) in
-  ρ ⊢ₕ alloc, m ⇒ ptrc b, (mem_alloc b voidc Freeable m)%V.
+  ρ ⊢ₕ alloc, m ⇒ ptrc b, (mem_alloc b indetc Freeable m)%V.
 Proof. constructor. eapply not_elem_of_mem_dom, is_fresh. Qed.
 
-Lemma cstep_in_block_fresh δ k s m :
+Lemma cstep_in_block_fresh δ k c s m :
   let b := fresh (dom indexset m) in
-  δ ⊢ₛ State k (Stmt ↘ (blk s)) m ⇒
-       State (CBlock b :: k) (Stmt ↘ s) (mem_alloc b voidc Writable m).
+  δ ⊢ₛ State k (Stmt ↘ (blk@{c} s)) m ⇒
+       State (CBlock c b :: k) (Stmt ↘ s)
+         (mem_alloc b indetc (block_perm c) m).
 Proof. constructor. eapply not_elem_of_mem_dom, is_fresh. Qed.
 
-Lemma cstep_label_block_down_fresh δ l k s m :
+Lemma cstep_label_block_down_fresh δ l k c s m :
   l ∈ labels s →
   let b := fresh (dom indexset m) in
-  δ ⊢ₛ State k (Stmt (↷ l) (blk s)) m ⇒
-       State (CBlock b :: k) (Stmt (↷ l) s) (mem_alloc b voidc Writable m).
+  δ ⊢ₛ State k (Stmt (↷ l) (blk@{c} s)) m ⇒
+       State (CBlock c b :: k) (Stmt (↷ l) s)
+         (mem_alloc b indetc (block_perm c) m).
 Proof. constructor. done. eapply not_elem_of_mem_dom, is_fresh. Qed.
 
 Lemma cstep_alloc_params_fresh δ k f s m vs :
@@ -700,12 +737,14 @@ Ltac quote_expr e :=
   with go k e :=
     let q :=
     match e with
-    | ?el ::= ?er => go2 (□ ::= er :: k) el (el ::= □ :: k) er
+    | ?el ::=@{?ass} ?er =>
+       go2 (□ ::=@{ass} er :: k) el (el ::=@{ass} □ :: k) er
     | load ?e => go (load □ :: k) e
     | free ?e => go (free □ :: k) e
     | ⊙{?op} ?e => go (⊙{op} □ :: k) e
     | ?el ⊙{?op} ?er => go2 (□ ⊙{op} er :: k) el (el ⊙{op} □ :: k) er
     | IF ?e then ?el else ?er => go (IF □ then el else er :: k) e
+    | ?el ,, ?er => go (□ ,, er :: k) el
     | _ => constr:(@nil expr)
     end in constr:(subst k e :: q)
   in go (@nil ectx_item) e.

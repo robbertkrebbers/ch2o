@@ -92,14 +92,15 @@ Instance list_labels `{Labels A} : Labels (list A) :=
 
 (** * Statements *)
 (** The construct [SDo e] executes the expression [e] and ignores the result.
-The construct [SBlock s] opens a new scope with one variable. Since we use De
+The construct [SBlock c s] opens a new scope with one variable, where [c]
+indicates whether that variable is read only or not. Since we use De
 Bruijn indexes for variables, it does not contain the name of the variable. *)
 Inductive stmt : Type :=
   | SDo : expr → stmt
   | SSkip : stmt
   | SGoto : label → stmt
   | SReturn : expr → stmt
-  | SBlock : stmt → stmt
+  | SBlock : bool → stmt → stmt
   | SComp : stmt → stmt → stmt
   | SLabel : label → stmt → stmt
   | SWhile : expr → stmt → stmt
@@ -114,7 +115,7 @@ Delimit Scope stmt_scope with S.
 Bind Scope stmt_scope with stmt.
 Open Scope stmt_scope.
 
-Arguments SBlock _%S.
+Arguments SBlock _%S _.
 Arguments SComp _%S _%S.
 Arguments SLabel _ _%S.
 Arguments SWhile _%E _%S.
@@ -124,7 +125,8 @@ Notation "'do' e" := (SDo e) (at level 10) : stmt_scope.
 Notation "'skip'" := SSkip : stmt_scope.
 Notation "'goto' l" := (SGoto l) (at level 10) : stmt_scope.
 Notation "'ret' e" := (SReturn e) (at level 10) : stmt_scope.
-Notation "'blk' s" := (SBlock s) (at level 10) : stmt_scope.
+Notation "'blk' @{ c } s" := (SBlock c s)
+  (at level 10, format "'blk' @{ c }  s") : stmt_scope.
 
 Notation "s1 ;; s2" := (SComp s1 s2)
   (at level 80, right associativity,
@@ -141,14 +143,14 @@ Instance: Injective (=) (=) SGoto.
 Proof. by injection 1. Qed.
 Instance: Injective (=) (=) SReturn.
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) SBlock.
+Instance: Injective (=) (=) (SBlock c).
 Proof. by injection 1. Qed.
 
 Instance stmt_gotos: Gotos stmt :=
   fix go (s : stmt) : labelset :=
   let _ : Gotos _ := @go in
   match s with
-  | blk s => gotos s
+  | blk@{_} s => gotos s
   | s1 ;; s2 => gotos s1 ∪ gotos s2
   | _ :; s => gotos s
   | while (_) s => gotos s
@@ -160,7 +162,7 @@ Instance stmt_labels: Labels stmt :=
   fix go (s : stmt) : labelset :=
   let _ : Labels _ := @go in
   match s with
-  | blk s => labels s
+  | blk@{_} s => labels s
   | s1 ;; s2 => labels s1 ∪ labels s2
   | l :; s => {[ l ]} ∪ labels s
   | while (_) s => labels s
@@ -171,7 +173,7 @@ Instance stmt_locks: Locks stmt :=
   fix go (s : stmt) : indexset :=
   let _ : Locks _ := @go in
   match s with
-  | blk s => locks s
+  | blk@{_} s => locks s
   | s1 ;; s2 => locks s1 ∪ locks s2
   | _ :; s => locks s
   | while (e) s => locks e ∪ locks s
@@ -339,7 +341,7 @@ additional singular contexts. These contexts will be used as follows.
 Program contexts [ctx] are then defined as lists of singular contexts. *)
 Inductive ctx_item : Type :=
   | CStmt : sctx_item → ctx_item
-  | CBlock : index → ctx_item
+  | CBlock : bool → index → ctx_item
   | CExpr : expr → esctx_item → ctx_item
   | CFun : ectx → ctx_item
   | CParams : list index → ctx_item.
@@ -353,7 +355,7 @@ Proof. solve_decision. Defined.
 Instance ctx_item_subst: Subst ctx_item stmt stmt := λ E s,
   match E with
   | CStmt E => subst E s
-  | CBlock _ => blk s
+  | CBlock c _ => blk@{c} s
   | _ => s
   end.
 
@@ -361,13 +363,13 @@ Instance: ∀ E : ctx_item, Injective (=) (=) (subst E).
 Proof.
   destruct E; intros ???; auto.
   * eapply (injective (subst (CStmt _))); eauto.
-  * by apply (injective SBlock).
+  * eapply (injective (SBlock _)); eauto.
 Qed.
 
 Instance ctx_item_locks: Locks ctx_item := λ E,
   match E with
   | CStmt s => locks s
-  | CBlock _ => ∅
+  | CBlock _ _ => ∅
   | CExpr e E => locks e ∪ locks E
   | CFun E => locks E
   | CParams _ => ∅
@@ -375,7 +377,7 @@ Instance ctx_item_locks: Locks ctx_item := λ E,
 
 Inductive ctx_item_or_block : ctx_item → Prop :=
   | ctx_item_or_block_item E : ctx_item_or_block (CStmt E)
-  | ctx_item_or_block_block b : ctx_item_or_block (CBlock b).
+  | ctx_item_or_block_block c b : ctx_item_or_block (CBlock c b).
 
 (** Given a context, we can construct a stack using the following erasure
 function. We define [get_stack (CFun _ :: k)] as [[]] instead of [getstack k],
@@ -386,7 +388,7 @@ Fixpoint get_stack (k : ctx) : stack :=
   | [] => []
   | CStmt _ :: k => get_stack k
   | CExpr _ _ :: k => get_stack k
-  | CBlock b :: k => b :: get_stack k
+  | CBlock _ b :: k => b :: get_stack k
   | CFun _ :: _ => []
   | CParams bs :: k => bs ++ get_stack k
   end.

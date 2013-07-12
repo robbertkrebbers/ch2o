@@ -386,7 +386,7 @@ Definition fcommon (Pf : fassert) : Type :=
 Definition fpre (Pf : fassert) : fcommon Pf → list val → assert :=
   match Pf return fcommon Pf → list val → assert with
   | FImpure _ pre _ _ _ => pre
-  | FPure _ => λ _ _, emp%A
+  | FPure F => λ _ vs, (emp ∧ ⌜ F vs ≠ None ⌝)%A
   end.
 Definition fpost (Pf : fassert) : fcommon Pf → list val → vassert :=
   match Pf return fcommon Pf → list val → vassert with
@@ -529,7 +529,7 @@ Proof. by destruct d. Qed.
 Notation dassert := (direction → assert).
 Notation dassert_pack P Q R J := (@directed_pack assert P%A Q%A R%A J%A).
 Definition dassert_pack_top (P : assert) (R : vassert) :
-  dassert := dassert_pack P (R VVoid) R (λ _, False%A).
+  dassert := dassert_pack P (R indetc%V) R (λ _, False%A).
 
 (** ** The Hoare judgment for statements *)
 (** Now the interpretation of the statement Hoare judgment is just taking all
@@ -586,7 +586,7 @@ Notation "Δ ⊨ₜ {{ P }} s {{ Q }}" :=
   (at level 74, format "Δ  ⊨ₜ  '[' {{  P  }} '/'  s  '/' {{  Q  }} ']'").
 
 Lemma ax_stmt_top_unfold Δ P s Q :
-  Δ ⊨ₜ {{ P }} s {{ Q }} ↔ Δ \ Q \ (λ _, False) ⊨ₛ {{ P }} s {{ Q voidc%V }}.
+  Δ ⊨ₜ {{ P }} s {{ Q }} ↔ Δ \ Q \ (λ _, False) ⊨ₛ {{ P }} s {{ Q indetc%V }}.
 Proof. done. Qed.
 Global Instance ax_stmt_proper: Proper
   (pointwise_relation _ (≡@{fpure Δ}) ==> pointwise_relation _ (≡@{fpure Δ}) ==>
@@ -1063,7 +1063,7 @@ Lemma ax_stmt_sound_sep P Q s m mf S' :
   locks s = ∅ → locks m = ∅ → ⊥ [m; mf] →
   assert_holds ∅ P [] m →
   δ ⊢ₛ State [] (Stmt ↘ s) (m ∪ mf) ⇒* S' →
-    (∃ m', S' = State [] (Stmt ↗ s) (m'∪mf) ∧ assert_holds ∅ (Q VVoid) [] m')
+    (∃ m', S' = State [] (Stmt ↗ s) (m'∪mf) ∧ assert_holds ∅ (Q indetc%V) [] m')
   ∨ (∃ m' v, S' = State [] (Stmt (⇈ v) s) (m'∪mf) ∧ assert_holds ∅ (Q v) [] m')
   ∨ red (cstep δ) S'.
 Proof.
@@ -1085,7 +1085,7 @@ Lemma ax_stmt_sound P R s m S' :
   locks s = ∅ → locks m = ∅ →
   assert_holds ∅ P [] m →
   δ ⊢ₛ State [] (Stmt ↘ s) m ⇒* S' →
-    (∃ m', S' = State [] (Stmt ↗ s) m' ∧ assert_holds ∅ (R VVoid) [] m')
+    (∃ m', S' = State [] (Stmt ↗ s) m' ∧ assert_holds ∅ (R indetc%V) [] m')
   ∨ (∃ m' v, S' = State [] (Stmt (⇈ v) s) m' ∧ assert_holds ∅ (R v) [] m')
   ∨ red (cstep δ) S'.
 Proof.
@@ -1198,7 +1198,7 @@ Proof.
     by intros ?? [[] ??]; constructor.
 Qed.
 
-Lemma ax_stmt_ex_pre `{!Inhabited A} Δ R J (P : A → assert) Q s :
+Lemma ax_stmt_exist_pre `{!Inhabited A} Δ R J (P : A → assert) Q s :
   (∀ x, Δ\ R\ J ⊨ₛ {{ P x }} s {{ Q }}) → Δ\ R\ J ⊨ₛ {{ ∃ x, P x }} s {{ Q }}.
 Proof.
   intros Hax n k [] m HΔ Hd ?? Hpre; discriminate_down_up.
@@ -1211,11 +1211,10 @@ Proof.
     + by intros ?? [[] ??]; constructor.
     + by apply Hax.
 Qed.
-Lemma ax_stmt_ex_post `{A} Δ R J P (Q : A → assert) s x :
+Lemma ax_stmt_exist_post `{A} Δ R J P (Q : A → assert) s x :
   Δ\ R\ J ⊨ₛ {{ P }} s {{ Q x }} → Δ\ R\ J ⊨ₛ {{ P }} s {{ ∃ x, Q x }}.
-Proof. apply ax_stmt_weaken_post. by apply assert_exists_intro with x. Qed.
-
-Lemma ax_expr_ex_pre {A} Δ (B : assert) (P : A → assert) Q e :
+Proof. apply ax_stmt_weaken_post. by apply assert_exist_intro with x. Qed.
+Lemma ax_expr_exist_pre {A} Δ (B : assert) (P : A → assert) Q e :
   (∀ x, Δ\ B ⊨ₑ {{ P x }} e {{ Q }}) → Δ\ B ⊨ₑ {{ ∃ x, P x }} e {{ Q }}.
 Proof. intros Hax n k m HΔ Hd ?? [x Hpre]. eapply Hax; eauto. Qed.
 
@@ -1252,7 +1251,8 @@ Lemma ax_expr_frame_l Δ B A P Q e :
 Proof. setoid_rewrite (commutative (★))%A. apply ax_expr_frame_r. Qed.
 
 Lemma ax_expr_funframe_r Δ B A P Q e :
-  Δ\ A ★ B ⊨ₑ {{ P }} e {{ λ v, Q v }} → Δ\ B ⊨ₑ {{ P ★ A }} e {{ λ v, Q v ★ A }}.
+  Δ\ A ★ B ⊨ₑ {{ P }} e {{ λ v, Q v }} →
+  Δ\ B ⊨ₑ {{ P ★ A }} e {{ λ v, Q v ★ A }}.
 Proof.
   cut (∀ δp n l k φ m,
     ax (ax_expr_cond δp l (A ★ B)) (ax_expr_post δp Q) l n k φ m →
@@ -1611,7 +1611,8 @@ Proof.
         (ax_fun_post (fpure Δ) (FPure F) () vs); auto with ax.
       + intros ??? [?? [??]]. unfold_assert in *; subst.
         rewrite (left_id_L ∅ (∪)). intuition congruence.
-      + by apply ax_S, HΔ; rewrite ?mem_locks_empty.
+      + apply ax_S, HΔ; rewrite ?mem_locks_empty; auto.
+        solve_assert auto with congruence.
       + solve_mem_disjoint. }
 
     intros ?? [??]; subst. apply ax_S, ax_further.
@@ -1636,21 +1637,29 @@ Proof.
     apply expr_eval_weaken_mem with m; auto with mem.
 Qed.
 
-Lemma ax_assign Δ A γ el Pl Ql er Pr Qr R :
+Definition assign_assert (vr va : val) (ass : assign) (v' va' : val) : assert :=
+  match ass with
+  | Assign => ⌜ va' = vr ∧ v' = vr ⌝
+  | PreOp op => valc va ⊙{op} valc vr ⇓ va' ∧ ⌜ v' = va' ⌝
+  | PostOp op => valc va ⊙{op} valc vr ⇓ va' ∧ ⌜ v' = va ⌝
+  end%A.
+
+Lemma ax_assign_aux Δ A ass γ el Pl Ql er Pr Qr R :
   Write ⊆ perm_kind γ →
   Δ\ A ⊨ₑ {{ Pl }} el {{ Ql }} →
   Δ\ A ⊨ₑ {{ Pr }} er {{ Qr }} →
-  (∀ a v, (Ql a ★ Qr v)%A ⊑@{fpure Δ} (valc a ↦{γ} - ★ R a v)%A) →
+  (∀ a vr, (Ql a ★ Qr vr)%A ⊑@{fpure Δ} (∃ va v' va',
+    valc a ↦{γ} valc va ★ (R a v' va' ∧ assign_assert vr va ass v' va'))%A) →
   Δ\ A ⊨ₑ {{ Pl ★ Pr }}
-            el ::= er
-          {{ λ v, ∃ a, valc a ↦{perm_lock γ} valc v ★ R a v }}.
+            el ::=@{ass} er
+          {{ λ v', ∃ a va', valc a ↦{perm_lock γ} valc va' ★ R a v' va' }}.
 Proof.
   intros Hγ Haxl Haxr Hassign n k ? HΔ He Hm HA (m1&m2&?&?&?&?); subst.
   simpl in He. rewrite mem_locks_union in Hm by done. decompose_empty.
 
   rewrite <-(right_id_L ∅ (∪) m2).
   apply (ax_expr_compose n (fpure Δ) A
-    [# Ql;Qr] _ DCAssign [# el;er] k [# m1;m2]).
+    [# Ql;Qr] _ (DCAssign ass) [# el;er] k [# m1;m2]).
   { done. }
   { done. }
   { simpl; by rewrite (right_id_L ∅ (∪)). }
@@ -1668,27 +1677,26 @@ Proof.
   simpl in HΩl, HΩr, Haxl, Haxr. clear HΩs Hax.
 
   destruct (Hassign v1 v2 (get_stack k) (m1 ∪ m2))
-    as (m3 & m4 & Hm3412 & Hm4 & [(a & ? & Ha & ?) HR]).
+    as (va&v'&va'&m3&m4&Hm3412&Hm34&(a&v&FOO&Ha&?)&HR&Hass); simplify_equality.
   { by exists m1 m2. }
+  rewrite <-Hm3412.
 
-  rewrite expr_eval_val in Ha.
-  assert (locks (m3 ∪ m4) = Ω1 ∪ Ω2) as HΩ.
-  { rewrite Hm3412, mem_locks_union by done. clear Ha; esolve_elem_of. }
-  clear Hassign HΩl HΩr.
-  rewrite <-Hm3412. simplify_equality. clear dependent m1 m2.
+  assert (locks ({[a, v, γ]} ∪ m4) = locks m1 ∪ locks m2) as HΩ.
+  { by rewrite Hm3412, mem_locks_union by done. }
+  revert HΩ; generalize (locks m1) (locks m2); clear dependent m1 m2.
+  intros Ω1 Ω2 HΩ.
+  assert (perm_kind γ ≠ Locked) by (by inversion Hγ).
 
   apply ax_further_pred.
-  { intros ?? Hframe; inversion_clear Hframe; simplify_equality. solve_cred. }
+  { intros ?? Hframe; inversion_clear Hframe; simplify_equality.
+    destruct ass; unfold_assert in Hass; solve_cred. }
 
   intros ?? S' Hframe p.
   inversion_clear Hframe as [mA mf ?? Hm|]; simplify_equality.
-  simplify_mem_disjoint_hyps. inv_cstep p.
-  * inv_ehstep; simpl.
-    erewrite !mem_lock_insert_union_fragment_l by auto with mem.
+  simplify_mem_disjoint_hyps. inv_cstep p; [inv_ehstep; inv_assign_sem; simpl |].
+  * erewrite !mem_lock_insert_union_fragment_l by auto with mem.
     rewrite mem_lock_insert_singleton.
     erewrite mem_disjoint_lock_insert_singleton in Hm by auto with mem.
-    assert (perm_kind γ ≠ Locked).
-    { intros E. rewrite E in Hγ. inversion Hγ. }
 
     rewrite mem_locks_union, mem_locks_singleton_ne in HΩ by done.
     econstructor.
@@ -1700,7 +1708,71 @@ Proof.
       { rewrite mem_locks_union, mem_locks_singleton by auto with mem.
         rewrite <-(associative_L (∪)), <-HΩ. clear; solve_elem_of. }
       solve_assert.
-  * exfalso; eauto 8 with cstep.
+  * simplify_mem_equality.
+    erewrite !mem_lock_insert_union_fragment_l by auto with mem.
+    rewrite mem_lock_insert_singleton.
+    erewrite mem_disjoint_lock_insert_singleton in Hm by auto with mem.
+
+    rewrite mem_locks_union, mem_locks_singleton_ne in HΩ by done.
+    econstructor.
+    + apply ax_unframe_expr_to_expr; auto with mem.
+    + done.
+    + simpl. rewrite mem_locks_union, mem_locks_singleton by auto with mem.
+      rewrite <-(associative_L (∪)), <-HΩ. clear; solve_elem_of.
+    + apply ax_done. constructor.
+      { rewrite mem_locks_union, mem_locks_singleton by auto with mem.
+        rewrite <-(associative_L (∪)), <-HΩ. clear; solve_elem_of. }
+      unfold_assert in Hass; destruct Hass; simplify_option_equality.
+      solve_assert.
+  * simplify_mem_equality.
+    erewrite !mem_lock_insert_union_fragment_l by auto with mem.
+    rewrite mem_lock_insert_singleton.
+    erewrite mem_disjoint_lock_insert_singleton in Hm by auto with mem.
+
+    rewrite mem_locks_union, mem_locks_singleton_ne in HΩ by done.
+    econstructor.
+    + apply ax_unframe_expr_to_expr; auto with mem.
+    + done.
+    + simpl. rewrite mem_locks_union, mem_locks_singleton by auto with mem.
+      rewrite <-(associative_L (∪)), <-HΩ. clear; solve_elem_of.
+    + apply ax_done. constructor.
+      { rewrite mem_locks_union, mem_locks_singleton by auto with mem.
+        rewrite <-(associative_L (∪)), <-HΩ. clear; solve_elem_of. }
+      unfold_assert in Hass; destruct Hass; simplify_option_equality.
+      solve_assert.
+  * destruct ass; unfold_assert in Hass; naive_solver eauto 10 with cstep.
+Qed.
+
+Lemma ax_assign Δ A γ el Pl Ql er Pr Qr R :
+  Write ⊆ perm_kind γ →
+  Δ\ A ⊨ₑ {{ Pl }} el {{ Ql }} →
+  Δ\ A ⊨ₑ {{ Pr }} er {{ Qr }} →
+  (∀ a vr, (Ql a ★ Qr vr)%A ⊑@{fpure Δ} (valc a ↦{γ} - ★ R a vr)%A) →
+  Δ\ A ⊨ₑ {{ Pl ★ Pr }}
+    el ::= er
+  {{ λ v, ∃ a, valc a ↦{perm_lock γ} valc v ★ R a v }}.
+Proof.
+  intros. set (R' (a v' va' : val) := (R a v' ∧ ⌜ va' = v' ⌝)%A).
+  apply ax_expr_weaken_post with
+    (λ v', ∃ a va', valc a ↦{perm_lock γ} valc va' ★ R' a v' va')%A.
+  { solve_assert. }
+  eapply ax_assign_aux; solve_assert.
+Qed.
+Lemma ax_assign_pre Δ A op γ el Pl Ql er Pr Qr R :
+  Write ⊆ perm_kind γ →
+  Δ\ A ⊨ₑ {{ Pl }} el {{ Ql }} →
+  Δ\ A ⊨ₑ {{ Pr }} er {{ Qr }} →
+  (∀ a vr, (Ql a ★ Qr vr)%A ⊑@{fpure Δ} (∃ va va',
+    valc a ↦{γ} valc va ★ R a va' ∧ valc va ⊙{op} valc vr ⇓ va')%A) →
+  Δ\ A ⊨ₑ {{ Pl ★ Pr }}
+    el ::⊙{op}= er
+  {{ λ v, ∃ a, valc a ↦{perm_lock γ} valc v ★ R a v }}.
+Proof.
+  intros. set (R' (a v' va' : val) := (R a v' ∧ ⌜ va' = v' ⌝)%A).
+  apply ax_expr_weaken_post with
+    (λ v', ∃ a va', valc a ↦{perm_lock γ} valc va' ★ R' a v' va')%A.
+  { solve_assert. }
+  eapply ax_assign_aux; eauto. solve_assert.
 Qed.
 
 Lemma ax_load Δ A γ e P Q :
@@ -1775,7 +1847,7 @@ Proof.
 
   specialize (Hax 0%fin); simpl in Hax. specialize (HΩs 0%fin); simpl in HΩs.
 
-  destruct Hax as (m1&?&?&?&?&a&v'&?&?); simpl in *; simplify_equality.
+  destruct Hax as (m1&?&?&?&?&?&a&v'&?&?&?); simpl in *; simplify_equality.
   apply ax_further_pred.
   { intros ?? Hframe; inversion_clear Hframe; simplify_equality.
     solve_cred. }
@@ -1796,7 +1868,7 @@ Qed.
 
 Lemma ax_unop Δ A op e P Q R :
   Δ\ A ⊨ₑ {{ P }} e {{ Q }} →
-  (∀ v', Q v' ⊑@{fpure Δ} (∃ v, R v v' ∧ (⊙{op} valc v' ⇓ v))%A) →
+  (∀ v', Q v' ⊑@{fpure Δ} (∃ v, R v v' ∧ ⊙{op} valc v' ⇓ v)%A) →
   Δ\ A ⊨ₑ {{ P }} ⊙{op} e {{ λ v, ∃ v', R v v' }}.
 Proof.
   intros Hax Hop n k m ?????. rewrite <-(right_id_L ∅ (∪) m).
@@ -1832,7 +1904,7 @@ Qed.
 Lemma ax_binop Δ A op el Pl Ql er Pr Qr R :
   Δ\ A ⊨ₑ {{ Pl }} el {{ Ql }} → Δ\ A ⊨ₑ {{ Pr }} er {{ Qr }} →
   (∀ vl vr, (Ql vl ★ Qr vr)%A
-    ⊑@{fpure Δ} (∃ v, R v vl vr ∧ (valc vl ⊙{op} valc vr ⇓ v))%A) →
+    ⊑@{fpure Δ} (∃ v, R v vl vr ∧ valc vl ⊙{op} valc vr ⇓ v)%A) →
   Δ\ A ⊨ₑ {{ Pl ★ Pr }} el ⊙{op} er {{ λ v, ∃ vl vr, R v vl vr }}.
 Proof.
   intros Haxl Haxr Hop n k ??? Hm ? (m1&m2&?&?&?&?); subst.
@@ -1874,7 +1946,7 @@ Proof.
 Qed.
 
 Lemma ax_expr_if Δ A e el er P (P' : vassert) Q :
-  Δ\ A ⊨ₑ {{ P }} e {{ λ v, P' v ▷ }} →
+  Δ\ A ⊨ₑ {{ P }} e {{ λ v, ⌜ v ≠ indetc ⌝%V ∧ P' v ▷ }} →
   Δ\ A ⊨ₑ {{ assert_is_true P' }} el {{ Q }} →
   Δ\ A ⊨ₑ {{ assert_is_false P' }} er {{ Q }} →
   Δ\ A ⊨ₑ {{ P }} IF e then el else er {{ Q }}.
@@ -1882,7 +1954,7 @@ Proof.
   intros Hax Haxl Haxr n k m HΔ He Hm Hpre HA.
   simpl in He. decompose_empty. rewrite <-(right_id_L ∅ (∪) m).
   apply (ax_expr_compose n (fpure Δ) A
-    [# assert_unlock ∘ P'] _ (DCIf el er) [# e] k [# m]).
+    [# λ v, ⌜ v ≠ indetc ⌝%V ∧ P' v ▷]%A _ (DCIf el er) [# e] k [# m]).
   { simpl; by apply empty_union_L. }
   { simpl; solve_mem_disjoint. }
   { simpl; by rewrite (right_id_L ∅ (∪)). }
@@ -1896,7 +1968,8 @@ Proof.
   specialize (Hax 0%fin); simpl in Hax. specialize (HΩ 0%fin); simpl in HΩ.
 
   apply ax_further_pred.
-  { intros. simpl. destruct (val_true_false_dec v); solve_cred. }
+  { intros ?? Hframe. inversion Hframe; simplify_list_equality.
+    destruct (val_true_false_dec v); solve_assert || solve_cred. }
 
   intros ?? S' Hframe p; inversion_clear Hframe as [mA mf|]; simplify_equality.
   simplify_mem_disjoint_hyps. inv_cstep p.
@@ -1919,7 +1992,47 @@ Proof.
       - apply Haxr; rewrite ?mem_locks_unlock_all; auto with ax.
         { exists mA. rewrite <-mem_disjoint_unlock; auto with mem. }
         solve_assert.
-  * exfalso; destruct (val_true_false_dec v); eauto with cstep.
+  * exfalso; destruct (val_true_false_dec v); solve_assert eauto with cstep.
+Qed.
+
+Lemma ax_expr_comma Δ A el er P P' Q :
+  Δ\ A ⊨ₑ {{ P }} el {{ λ v, ⌜ v ≠ indetc ⌝%V ∧ P' ▷ }} →
+  Δ\ A ⊨ₑ {{ P' }} er {{ Q }} →
+  Δ\ A ⊨ₑ {{ P }} el ,, er {{ Q }}.
+Proof.
+  intros Haxl Haxr n k m HΔ He Hm Hpre HA.
+  simpl in He. decompose_empty. rewrite <-(right_id_L ∅ (∪) m).
+  apply (ax_expr_compose n (fpure Δ) A
+    [# λ v, ⌜ v ≠ indetc ⌝%V ∧ P' ▷]%A _ (DCComma er) [# el] k [# m]).
+  { done.  }
+  { simpl; solve_mem_disjoint. }
+  { simpl; by rewrite (right_id_L ∅ (∪)). }
+  { intros; inv_all_vec_fin; esolve_elem_of. }
+  { intros; inv_all_vec_fin; simpl; intuition. }
+
+  clear dependent m. intros Ωs vs ms.
+  inv_vec Ωs; intros Ω Ωs; inv_vec Ωs. inv_vec vs; intros v vs; inv_vec vs.
+  inv_vec ms; intros m ms; inv_vec ms; simpl; intros ? HΩ Hax.
+  rewrite (right_id_L ∅ (∪) m).
+  specialize (Hax 0%fin); simpl in Hax. specialize (HΩ 0%fin); simpl in HΩ.
+
+  apply ax_further_pred.
+  { intros ?? Hframe. inversion Hframe; simplify_list_equality.
+    solve_cred. }
+
+  intros ?? S' Hframe p; inversion_clear Hframe as [mA mf|]; simplify_equality.
+  simplify_mem_disjoint_hyps. inv_cstep p.
+  * inv_ehstep.
+    rewrite <-(associative_L (∪)), mem_unlock_union_l by auto with mem.
+    rewrite (associative_L (∪)). eapply mk_ax_next_empty.
+    - apply ax_unframe_expr_to_expr; auto with mem.
+      by rewrite <-mem_disjoint_unlock.
+    - done.
+    - done.
+    - apply Haxr; rewrite ?mem_locks_unlock_all; auto with ax.
+      { exists mA. rewrite <-mem_disjoint_unlock; auto with mem. }
+      solve_assert.
+  * exfalso; eauto with cstep.
 Qed.
 
 (** ** Rules for statements *)
@@ -1971,15 +2084,15 @@ Proof.
   apply ax_done; constructor; auto. by rewrite mem_locks_unlock_all.
 Qed.
 
-Lemma ax_packed_blk Δ Pd s :
-  Δ\ (λ P, var O ↦{Writable} - ★ P↑)%A <$> Pd ⊨ₚ s → Δ\ Pd ⊨ₚ blk s.
+Lemma ax_packed_blk Δ Pd c s :
+  Δ\ (λ P, var O ↦{block_perm c} - ★ P↑)%A <$> Pd ⊨ₚ s → Δ\ Pd ⊨ₚ blk@{c} s.
 Proof.
   intros Hax n k. revert n.
   cut (∀ n d m b,
    ax_funs n Δ → is_free m b → down d s → locks s = ∅ → locks m = ∅ →
    assert_holds (fpure Δ) (Pd d) (get_stack k) m →
-   ax ax_disjoint_cond (ax_stmt_post (blk s) (fpure Δ) Pd) k n
-     (CBlock b :: k) (Stmt d s) (mem_alloc b voidc Writable m)).
+   ax ax_disjoint_cond (ax_stmt_post (blk@{c} s) (fpure Δ) Pd) k n
+     (CBlock c b :: k) (Stmt d s) (mem_alloc b indetc (block_perm c) m)).
   { intros help n d m ?????. apply ax_further_pred.
     { intros. solve_cred. }
     intros ? mf S' [??] p; subst.
@@ -1995,33 +2108,35 @@ Proof.
 
   intros n d m b v ?????. eapply ax_compose_cons; [| | clear dependent m v d].
   { apply ax_compose_diagram_diag. }
-  { eapply Hax; eauto; [by rewrite mem_locks_alloc |].
+  { eapply Hax; eauto.
+    { by rewrite mem_locks_alloc by eauto using block_perm_locked. }
     rewrite directed_fmap_spec. simpl. by apply assert_alloc. }
 
   intros m φ [d ?? Hpost]. apply ax_further_pred.
   { intros. solve_cred. }
 
   rewrite directed_fmap_spec in Hpost. simpl in Hpost.
-  apply assert_free in Hpost; [|by auto using Writable_fragment].
+  apply assert_free in Hpost; [|by auto using block_perm_fragment].
   destruct Hpost. intros ? mf S' [??] p; subst.
   destruct d; discriminate_down_up; inv_cstep p.
-  * erewrite mem_delete_union_l by eauto using Writable_fragment.
+  * erewrite mem_delete_union_l by eauto using block_perm_fragment.
     eapply mk_ax_next_empty; try done.
     { split. done. by rewrite mem_delete_subseteq. }
     apply ax_done; constructor; try done. by apply mem_locks_delete_empty.
-  * erewrite mem_delete_union_l by eauto using Writable_fragment.
+  * erewrite mem_delete_union_l by eauto using block_perm_fragment.
     eapply mk_ax_next_empty; try done.
     { split. done. by rewrite mem_delete_subseteq. }
     apply ax_done; constructor; try done. by apply mem_locks_delete_empty.
-  * erewrite mem_delete_union_l by eauto using Writable_fragment.
+  * erewrite mem_delete_union_l by eauto using block_perm_fragment.
     eapply mk_ax_next_empty; try done.
     { split. done. by rewrite mem_delete_subseteq. }
     apply ax_done; constructor; try done. by apply mem_locks_delete_empty.
 Qed.
-Lemma ax_blk Δ R J P Q s :
-  Δ\ (λ v, var O ↦{Writable} - ★ R v↑)\ (λ l, var O ↦{Writable} - ★ J l↑) ⊨ₛ
-    {{ var O ↦{Writable} - ★ P↑ }} s {{ var O ↦{Writable} - ★ Q↑ }} →
-  Δ\ R\ J ⊨ₛ {{ P }} blk s {{ Q }}.
+Lemma ax_blk Δ R J P Q c s :
+  Δ\ (λ v, var O ↦{block_perm c} - ★ R v↑)\
+    (λ l, var O ↦{block_perm c} - ★ J l↑) ⊨ₛ
+    {{ var O ↦{block_perm c} - ★ P↑ }} s {{ var O ↦{block_perm c} - ★ Q↑ }} →
+  Δ\ R\ J ⊨ₛ {{ P }} blk@{c} s {{ Q }}.
 Proof. intros. by apply ax_packed_blk. Qed.
 
 Lemma ax_label Δ R J l s Q :
@@ -2063,7 +2178,7 @@ Proof.
 Qed.
 
 Lemma ax_while Δ R J P Q e s :
-  Δ\ emp ⊨ₑ {{ P }} e {{ λ v, Q v ▷ }} →
+  Δ\ emp ⊨ₑ {{ P }} e {{ λ v, ⌜ v ≠ indetc ⌝%V ∧ Q v ▷ }} →
   Δ\ R\ J ⊨ₛ {{ assert_is_true Q }} s {{ P }} →
   Δ\ R\ J ⊨ₛ {{ P }} while (e) s {{ assert_is_false Q }}.
 Proof.
@@ -2085,7 +2200,8 @@ Proof.
         [|apply Haxe; auto with ax | clear dependent m mf S'].
       { auto with ax. }
       intros m φ [v ???]. apply ax_further_pred.
-      { intros. destruct (val_true_false_dec v); solve_cred. }
+      { intros ?? Hframe. inversion Hframe; simplify_list_equality.
+        destruct (val_true_false_dec v); solve_cred || solve_assert. }
       intros ? mf S' [??] p; subst. inv_cstep p.
       + rewrite mem_unlock_union_l by done.
         eapply mk_ax_next_empty; try done.
@@ -2119,7 +2235,7 @@ Proof.
       [|apply Haxe; auto with ax | clear dependent m mf S'].
     { auto with ax. }
     intros m φ [v ???]. apply ax_further_pred.
-    { intros. destruct (val_true_false_dec v); solve_cred. }
+    { intros. destruct (val_true_false_dec v); solve_cred || solve_assert. }
     intros ? mf S' [??] p; subst. inv_cstep p.
     + rewrite mem_unlock_union_l by done.
       eapply mk_ax_next_empty; try done.
@@ -2204,7 +2320,7 @@ Proof.
 Qed.
 
 Lemma ax_if Δ R J e sl sr P P' Q :
-  Δ\ emp ⊨ₑ {{ P }} e {{ λ v, P' v ▷ }} →
+  Δ\ emp ⊨ₑ {{ P }} e {{ λ v, ⌜ v ≠ indetc ⌝%V ∧ P' v ▷ }} →
   Δ\ R\ J ⊨ₛ {{ assert_is_true P' }} sl {{ Q }} →
   Δ\ R\ J ⊨ₛ {{ assert_is_false P' }} sr {{ Q }} →
   Δ\ R\ J ⊨ₛ {{ P }} IF e then sl else sr {{ Q }}.
@@ -2230,7 +2346,7 @@ Proof.
         [|apply Haxe; auto with ax | clear dependent m mf S'].
       { auto with ax. }
       intros m φ [v ???]. apply ax_further_pred.
-      { intros. destruct (val_true_false_dec v); solve_cred. }
+      { intros. destruct (val_true_false_dec v); solve_cred || solve_assert. }
       intros ? mf S' [??] p; subst. inv_cstep p.
       + rewrite mem_unlock_union_l by done.
         eapply mk_ax_next_empty; try done.
@@ -2287,6 +2403,131 @@ Proof.
         eapply mk_ax_next_empty; try done. apply ax_pred, IH; auto with ax.
       - eapply mk_ax_next_empty; try done; [esolve_elem_of|].
         apply ax_done; constructor; solve_elem_of.
+Qed.
+
+(** ** Derived rules *)
+Lemma ax_assign_load_free_lhs Δ P Q γ el er v :
+  load_free el → Write ⊆ perm_kind γ →
+  Δ\ emp ⊨ₑ {{ el ↦{γ} - ★ P }} er {{ λ v', ⌜ v = v' ⌝ ∧ el ↦{γ} - ★ Q }} →
+  Δ\ emp ⊨ₑ {{ el ↦{γ} - ★ P }}
+    el ::= er
+  {{ λ v', ⌜ v = v' ⌝ ∧ el ↦{perm_lock γ} valc v ★ Q }}.
+Proof.
+  intros ?? Her. rewrite assert_exist_sep; apply ax_expr_exist_pre; intros vl.
+  rewrite assert_singleton_eval_l_alt, assert_exist_and, assert_exist_sep;
+    apply ax_expr_exist_pre; intros a.
+  apply ax_expr_weaken with
+    ((el ⇓ a ∧ emp) ★ (el ↦{γ} - ★ P))%A
+    (λ v', ∃ a', valc a' ↦{perm_lock γ} valc v' ★
+      (⌜ v = v' ∧ a = a' ⌝ ∧ el ⇓ a' ∧ Q))%A.
+  { rewrite (associative (★))%A by apply _; f_equiv.
+    rewrite <-assert_and_sep_emp_l by apply _. solve_assert. }
+  { intro v'; apply assert_exist_elim; intros a'.
+    rewrite <-(assert_singleton_eval_l_1 _ el a').
+    rewrite assert_and_sep_associative by apply _.
+    rewrite !assert_sep_and_swap by apply _. solve_assert. }
+  eapply ax_assign.
+  { done. }
+  { apply ax_expr_base; solve_assert. }
+  { apply Her. }
+  intros a' v'; simpl.
+  rewrite !assert_sep_and_swap, (associative (★))%A by apply _; f_equiv.
+  rewrite <-!(associative (∧))%A, <-assert_and_sep_associative by apply _.
+  apply assert_Prop_intro_l; intros ->.
+  rewrite (commutative (∧) emp)%A, (associative (∧))%A.
+  rewrite <-assert_and_sep_emp_l by apply _.
+  rewrite <-(assert_eval_singleton__1 _ el a'). solve_assert.
+Qed.
+
+Lemma ax_assign_simple Δ J R P γ el er v :
+  UnlockIndep P → load_free el →
+  Write ⊆ perm_kind γ →
+  (el ↦{γ} - ★ P)%A ⊑@{fpure Δ} (er ⇓ v)%A →
+  Δ\ R\ J ⊨ₛ {{ el ↦{γ} - ★ P }} do (el ::= er) {{ el ↦{γ} valc v ★ P }}.
+Proof.
+  intros ??? HP. apply ax_do. apply ax_expr_weaken_post with
+    (λ v', ⌜ v = v' ⌝ ∧ (el ↦{perm_lock γ} valc v ★ P))%A.
+  { intros. rewrite <-assert_unlock_sep, <-assert_lock_singleton by done.
+    rewrite <-(assert_unlock_unlock_indep P). solve_assert. }
+  apply ax_assign_load_free_lhs; auto. by apply ax_expr_base.
+Qed.
+Lemma ax_assign_simple_twice Δ J R P γ1 γ2 el1 el2 er v :
+  UnlockIndep P → load_free el1 → load_free el2 →
+  Write ⊆ perm_kind γ1 → Write ⊆ perm_kind γ2 →
+  (el1 ↦{γ1} - ★ el2 ↦{γ2} - ★ P)%A ⊑@{fpure Δ} (er ⇓ v)%A →
+  Δ\ R\ J ⊨ₛ {{ el1 ↦{γ1} - ★ el2 ↦{γ2} - ★ P }}
+    do (el1 ::= el2 ::= er)
+  {{ el1 ↦{γ1} valc v ★ el2 ↦{γ2} valc v ★ P }}.
+Proof.
+  intros ????? HP. apply ax_do. apply ax_expr_weaken_post with
+    (λ v', ⌜ v = v' ⌝ ∧ (el1 ↦{perm_lock γ1} valc v ★
+            el2 ↦{perm_lock γ2} valc v ★ P))%A.
+  { intros. rewrite <-!assert_unlock_sep, <-!assert_lock_singleton by done.
+    rewrite <-(assert_unlock_unlock_indep P). solve_assert. }
+  apply ax_assign_load_free_lhs; auto.
+  setoid_rewrite (associative (★) (el1 ↦{γ1} -))%A.
+  setoid_rewrite (commutative (★) (el1 ↦{γ1} -))%A.
+  setoid_rewrite <-(associative (★))%A.
+  apply ax_assign_load_free_lhs; auto.
+  apply ax_expr_base. by rewrite (associative (★))%A,
+    (commutative (★) (el2 ↦{γ2} -))%A, <-(associative (★))%A.
+Qed.
+
+Lemma ax_ret_simple Δ J R Q e v :
+  UnlockIndep (R v) → Δ\ R\ J ⊨ₛ {{ e⇓v ∧ R v }} ret e {{ Q }}.
+Proof.
+  intros. apply ax_ret, ax_expr_weaken_post with
+    (λ v', ⌜ v = v' ⌝ ∧ (e ⇓ v ∧ R v))%A.
+  { intros v'. apply assert_Prop_intro_l; intros; subst.
+    rewrite <-(assert_unlock_unlock_indep (R v')). solve_assert. }
+  apply ax_expr_base. solve_assert.
+Qed.
+Lemma ax_ret_assign Δ J R Q P γ el er v :
+  UnlockIndep P → load_free el →
+  Write ⊆ perm_kind γ →
+  (el ↦{γ} - ★ P)%A ⊑@{fpure Δ} (er ⇓ v)%A →
+  (el ↦{γ} - ★ P)%A ⊑@{fpure Δ} R v →
+  Δ\ R\ J ⊨ₛ {{ el ↦{γ} - ★ P }} ret (el ::= er) {{ Q }}.
+Proof.
+  intros ???? HP HPR. apply ax_ret. apply ax_expr_weaken_post with
+    (λ v', ⌜ v = v' ⌝ ∧ (el ↦{perm_lock γ} valc v ★ P))%A.
+  { intros v'. apply assert_Prop_intro_l; intros ->.
+    rewrite <-HP, <-assert_unlock_sep, assert_lock_singleton by done.
+    rewrite <-(assert_unlock_unlock_indep P). solve_assert. }
+  apply ax_assign_load_free_lhs; auto. by apply ax_expr_base.
+Qed.
+
+Lemma ax_while_simple Δ J R P e s :
+  UnlockIndep P →
+  Δ\ R\ J ⊨ₛ {{ e⇓true ∧ P }} s {{ ∃ v, e⇓v ∧ ⌜ v ≠ indetc ⌝%V ∧ P }} →
+  Δ\ R\ J ⊨ₛ {{ ∃ v, e⇓v ∧ ⌜v ≠ indetc⌝%V ∧ P }} while (e) s {{ e⇓false ∧ P }}.
+Proof.
+  intros ? Hs. apply ax_stmt_weaken_post
+    with (assert_is_false (λ v, e ⇓ v ∧ P))%A, ax_while.
+  * solve_assert.
+  * apply ax_expr_exist_pre; intros v.
+    apply ax_expr_weaken_post with
+      (λ v', ⌜ v = v' ⌝ ∧ e ⇓ v ∧ ⌜ v ≠ indetc%V ⌝ ∧ P)%A.
+    { intros v'. rewrite assert_unlock_and, <-(assert_unlock_unlock_indep P).
+      rewrite assert_unlock_expr; solve_assert. }
+    apply ax_expr_base; solve_assert.
+  * eapply ax_stmt_weaken_pre, Hs; solve_assert.
+Qed.
+Lemma ax_if_simple Δ J R e sl sr P Q :
+  UnlockIndep P →
+  Δ\ R\ J ⊨ₛ {{ e⇓true ∧ P }} sl {{ Q }} →
+  Δ\ R\ J ⊨ₛ {{ e⇓false ∧ P }} sr {{ Q }} →
+  Δ\ R\ J ⊨ₛ {{ ∃ v, e⇓v ∧ ⌜v ≠ indetc⌝%V ∧ P }} IF e then sl else sr {{ Q }}.
+Proof.
+  intros ? Hsl Hsr. eapply ax_if with (λ v, e ⇓ v ∧ P)%A.
+  * apply ax_expr_exist_pre; intros v.
+    apply ax_expr_weaken_post with
+      (λ v', ⌜ v = v' ⌝ ∧ e ⇓ v ∧ ⌜ v ≠ indetc%V ⌝ ∧ P)%A.
+    { intros v'. rewrite assert_unlock_and, <-(assert_unlock_unlock_indep P).
+      rewrite assert_unlock_expr; solve_assert. }
+    apply ax_expr_base; solve_assert.
+  * eapply ax_stmt_weaken_pre, Hsl; solve_assert.
+  * eapply ax_stmt_weaken_pre, Hsr; solve_assert.
 Qed.
 End axiomatic.
 

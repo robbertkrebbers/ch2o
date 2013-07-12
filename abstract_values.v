@@ -1,7 +1,7 @@
 (* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file defines pointers and values. A value is either a pointer to a
-memory cell, a machine integer, or the special void value (used for
+memory cell, a machine integer, or the special undef value (used for
 functions without return value and uninitialized memory). *)
 Require Import nmap mapset.
 Require Export abstract_permissions abstract_integers.
@@ -62,28 +62,28 @@ Lemma locks_snoc `{Locks A} (l1 : list A) a :
 Proof. rewrite locks_app. simpl. by rewrite (right_id_L ∅ (∪)). Qed.
 
 (** * Values *)
-(** A value is inductively defined to be either a special void value (used for
+(** A value is inductively defined to be either a special undef value (used for
 functions without return value and uninitialized memory), an unbounded integer,
 or a pointer represented by an index into the memory. This index is optional
 so as to model the NULL pointer. *)
 Inductive val_ (Vi : Set) : Set :=
-  | VVoid : val_ Vi
+  | VIndet : val_ Vi
   | VInt : Vi → val_ Vi
   | VPtr : option index → val_ Vi.
-Arguments VVoid {_}.
+Arguments VIndet {_}.
 Arguments VInt {_} _.
 Arguments VPtr {_} _.
 
 Instance val_eq_dec {Vi : Set} `{∀ i1 i2 : Vi, Decision (i1 = i2)} :
   ∀ v1 v2 : val_ Vi, Decision (v1 = v2).
 Proof. solve_decision. Defined.
-Instance val_inhabited {Vi} : Inhabited (val_ Vi) := populate VVoid.
+Instance val_inhabited {Vi} : Inhabited (val_ Vi) := populate VIndet.
 
 (** We define better readable notations for values in the scope
 [val_scope]. *)
 Delimit Scope val_scope with V.
 Bind Scope val_scope with val_.
-Notation "'voidc'" := VVoid : val_scope.
+Notation "'indetc'" := VIndet : val_scope.
 Notation "'intc' x" := (VInt x) (at level 10) : val_scope.
 Notation "'ptrc' b" := (VPtr (Some b)) (at level 10) : val_scope.
 Notation "'nullc'" := (VPtr None) : val_scope.
@@ -94,29 +94,33 @@ Context `{IntEnvSpec Ti Vi}.
 (** Truth and falsehood of values is defined in the C-like way. *)
 Definition val_true (v : val_ Vi) : Prop :=
   match v with
-  | voidc => False
+  | indetc => False
   | intc x => int_to_Z x ≠ 0%Z
   | ptrc b => True
   | nullc => False
   end%V.
 Definition val_false (v : val_ Vi) : Prop :=
   match v with
-  | voidc => True
+  | indetc => False
   | intc x => int_to_Z x = 0%Z
   | ptrc b => False
   | nullc => True
   end%V.
 
-Definition val_true_false_dec (v : val_ Vi) : { val_true v } + { val_false v }.
+Definition val_true_false_dec (v : val_ Vi) :
+  v ≠indetc%V → { val_true v } + { val_false v }.
 Proof.
  by refine (
-  match v as v return { val_true v } + { val_false v } with
-  | voidc => right I
-  | intc x => cast_if_not (decide (int_to_Z x = 0%Z))
-  | ptrc b => left I
-  | nullc => right I
+  match v as v return v ≠indetc%V → { val_true v } + { val_false v } with
+  | indetc => λ _, _
+  | intc x => λ _, cast_if_not (decide (int_to_Z x = 0%Z))
+  | ptrc b => λ _, left I
+  | nullc => λ _, right I
   end%V).
 Defined.
+Definition val_true_false_option (v : val_ Vi) :
+    option ({ val_true v } + { val_false v }) :=
+  guard (v ≠ indetc)%V as Hv; Some (val_true_false_dec v Hv).
 
 Lemma val_true_false (v : val_ Vi) : val_true v → val_false v → False.
 Proof. by destruct v as [| |[]]. Qed.

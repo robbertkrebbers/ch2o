@@ -40,9 +40,13 @@ Fixpoint expr_eval (e : expr) (δ : purefuns)
      F vs
   | (IF e then el else er) =>
      v ← ⟦ e ⟧ δ ρ m;
+     b ← val_true_false_option v;
      vl ← ⟦ el ⟧ δ ρ m;
      vr ← ⟦ er ⟧ δ ρ m;
-     Some $ if val_true_false_dec v then vl else vr
+     Some (if b : sumbool _ _ then vl else vr)
+  | el ,, er =>
+     _ ← ⟦ el ⟧ δ ρ m;
+     ⟦ er ⟧ δ ρ m
   | (cast@{τ} e) =>
      v ← ⟦ e ⟧ δ ρ m;
      eval_cast τ v
@@ -137,7 +141,7 @@ Proof.
       efeed pose proof H; eauto; clear H; subst
     | H1 : Forall2 _ ?es ?vs1, H2 : Forall2 _ ?es ?vs2 |- _ =>
       assert (vs1 = vs2) by eauto; clear H1 H2
-    end; simplify_mem_equality; congruence.
+    end; simplify_mem_equality; try congruence.
 Qed.
 
 (** Evaluation of pure expressions is preserved under unlocking. *)
@@ -197,11 +201,11 @@ Proof.
   { intros ???? Hi Hf. apply elem_of_union_list.
     exists (funs e'). split; eauto.
     eapply elem_of_list_fmap_1, elem_of_list_lookup_2; eauto. }
-  intros Hfs.
-  induction e using expr_ind_alt; simpl in *; try done;
-    repeat (apply option_bind_ext; intros); eauto;
-    try solve_elem_of.
-  apply Forall_mapM_ext. decompose_Forall. esolve_elem_of.
+  intros Hfs. induction e using expr_ind_alt; simpl;
+    repeat (apply option_bind_ext; intros; [|solve_elem_of]); eauto.
+  * apply option_bind_ext; auto.
+    apply Forall_mapM_ext; decompose_Forall; esolve_elem_of.
+  * esolve_elem_of.
 Qed.
 
 (** Lifting DeBruijn indexes distributes over expression evaluation. *)
@@ -238,8 +242,8 @@ Proof.
     setoid_rewrite subst_snoc.
     intros; destruct E'; simplify_option_equality; decompose_Forall;
       edestruct IH as (?&?&?); eauto with simplify_option_equality.
-    eexists; split_ands; eauto.
-    erewrite mapM_Some_2; [eassumption|]. decompose_Forall; eauto.
+    eexists; split_ands; eauto. erewrite mapM_Some_2; [eassumption|].
+    decompose_Forall; eauto.
   * intros (v'&?&?). erewrite subst_preserves_expr_eval; eauto.
 Qed.
 End expression_eval.
@@ -254,6 +258,7 @@ Tactic Notation "simplify_expr_equality" "by" tactic3(tac) := repeat
   | Ht : val_true ?v, Hf : val_false ?v |- _ =>
     destruct (val_true_false v Ht Hf)
   | H : maybe_ptr ?v = Some _ |- _ => apply maybe_ptr_Some in H
+  | H : val_true_false_option _ = Some ?b |- _ => is_var b; destruct b
   | H : context [ val_true_false_dec ?v ] |- _ =>
     destruct (val_true_false_dec v)
   | |- context [ val_true_false_dec ?v ] =>
@@ -269,4 +274,4 @@ Tactic Notation "simplify_expr_equality" "by" tactic3(tac) := repeat
     pose proof (expr_eval_disjoint δ ρ m1 m2 e v1 v2 H H1 H2); subst
   end.
 Tactic Notation "simplify_expr_equality" :=
-  simplify_expr_equality by eauto with simpl_mem.
+  simplify_expr_equality by eauto with simpl_mem. 
