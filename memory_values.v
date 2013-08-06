@@ -129,10 +129,10 @@ Section operations.
     end.
   Definition mval_of_bits: type Ti → list (bit Ti) → mval Ti :=
     type_iter
-    (*i TBase =>  *) (λ τ bs, MBase τ $ resize (bit_size_of (base τ)) BIndet bs)
-    (*i TVoid =>     *) (λ bs, MBase uchar [BIndet]) (* dummy *)
-    (*i TArray =>    *) (λ τ n rec bs, MArray $ array_of_bits rec τ n bs)
-    (*i TCompound => *) (λ c s τs rec bs,
+    (**i TBase =>  *) (λ τ bs, MBase τ $ resize (bit_size_of (base τ)) BIndet bs)
+    (**i TVoid =>     *) (λ bs, MBase uchar [BIndet]) (* dummy *)
+    (**i TArray =>    *) (λ τ n rec bs, MArray $ array_of_bits rec τ n bs)
+    (**i TCompound => *) (λ c s τs rec bs,
       match c with
       | Struct => MStruct s $ struct_of_bits rec τs bs
       | Union =>
@@ -143,10 +143,10 @@ Section operations.
       end) get_env.
 
   Definition mval_new_ (b : bit Ti) : type Ti → mval Ti := type_iter
-    (*i TBase     *) (λ τ, MBase τ (replicate (bit_size_of τ) b))
-    (*i TVoid     *) (MBase uchar [BIndet]) (* dummy *)
-    (*i TArray    *) (λ τ n x, MArray (replicate n x))
-    (*i TCompound *) (λ c s τs rec,
+    (**i TBase     *) (λ τ, MBase τ (replicate (bit_size_of τ) b))
+    (**i TVoid     *) (MBase uchar [BIndet]) (* dummy *)
+    (**i TArray    *) (λ τ n x, MArray (replicate n x))
+    (**i TCompound *) (λ c s τs rec,
       match c with
       | Struct => MStruct s (rec <$> τs)
       | Union =>

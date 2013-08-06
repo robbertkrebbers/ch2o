@@ -122,10 +122,10 @@ Section operations.
     end.
 
   Definition val_new : type Ti → val Ti := type_iter
-    (*i TBase     *) (λ τ, VBase (VIndet τ))
-    (*i TVoid     *) (VBase (VIndet uchar)) (* dummy *)
-    (*i TArray    *) (λ τ n x, VArray (replicate n x))
-    (*i TCompound *) (λ c s τs rec,
+    (**i TBase     *) (λ τ, VBase (VIndet τ))
+    (**i TVoid     *) (VBase (VIndet uchar)) (* dummy *)
+    (**i TArray    *) (λ τ n x, VArray (replicate n x))
+    (**i TCompound *) (λ c s τs rec,
       match c with
       | Struct => VStruct s (rec <$> τs)
       | Union =>
@@ -137,10 +137,10 @@ Section operations.
 
   Definition val_of_bits : type Ti → list (bit Ti) → val Ti :=
     type_iter
-    (*i TBase =>     *) (λ τ bs, VBase (base_val_of_bits τ bs))
-    (*i TVoid =>     *) (λ bs, VBase (VIndet sint))
-    (*i TArray =>    *) (λ τ n rec bs, VArray $ array_of_bits rec τ n bs)
-    (*i TCompound => *) (λ c s τs rec bs,
+    (**i TBase =>     *) (λ τ bs, VBase (base_val_of_bits τ bs))
+    (**i TVoid =>     *) (λ bs, VBase (VIndet sint))
+    (**i TArray =>    *) (λ τ n rec bs, VArray $ array_of_bits rec τ n bs)
+    (**i TCompound => *) (λ c s τs rec bs,
       match c with
       | Struct => VStruct s (struct_of_bits rec τs bs)
       | Union =>
@@ -745,6 +745,7 @@ Section union_free_ind.
     end).
   Qed.
   Global Instance union_free_dec: ∀ v, Decision (union_free v).
+  Proof.
    refine (
     fix go v :=
     match v return Decision (union_free v) with

@@ -63,15 +63,15 @@ Section operations.
     | VByte_Vint_le bs1 x2 :
        ¬Forall (BIndet =) bs1 →
        ¬Forall (is_Some ∘ maybe_BBit) bs1 →
-       bs1 ⊑@{m}* BBit <$> to_bits uchar x2 →
+       bs1 ⊑@{m}* BBit <$> int_to_bits uchar x2 →
        int_typed x2 uchar → base_val_le' m (VByte bs1) (VInt uchar x2).
   Global Instance base_val_le: SubsetEqEnv M (base_val Ti) := base_val_le'.
 
   Definition base_val_to_bits (v : base_val Ti) : list (bit Ti) :=
     match v with
     | VIndet τ => base_indet_bits τ
-    | VInt τ x => BBit <$> to_bits τ x
-    | VPtr p => BPtr <$> to_ptr_bits p
+    | VInt τ x => BBit <$> int_to_bits τ x
+    | VPtr p => BPtr <$> ptr_to_bits p
     | VByte bs => bs
     end.
   Definition base_val_of_bits
@@ -80,14 +80,14 @@ Section operations.
     match τ with
     | intt τi =>
        match mapM maybe_BBit bs with
-       | Some cs => VInt τi (of_bits τi cs)
+       | Some cs => VInt τi (int_of_bits τi cs)
        | None =>
           if decide (τi = uchar%IT) then
             if decide (Forall (BIndet =) bs) then VIndet τ else VByte bs
           else VIndet τ
        end
     | τp.* =>
-       match mapM maybe_BPtr bs ≫= of_ptr_bits τp with
+       match mapM maybe_BPtr bs ≫= ptr_of_bits τp with
        | Some p => VPtr p
        | None => VIndet τ
        end
@@ -234,10 +234,10 @@ Proof.
   * inversion Hv1τ; subst. constructor; eauto using bits_valid_le,
       mapM_maybe_BBit_is_Some_le, Forall2_length_r.
   * inversion Hv1τ; subst. constructor; eauto.
-    { eapply bits_valid_le with (BBit <$> to_bits uchar _); eauto.
+    { eapply bits_valid_le with (BBit <$> int_to_bits uchar _); eauto.
       apply Forall_fmap, Forall_true. constructor. }
     erewrite Forall2_length by eauto.
-    by rewrite fmap_length, to_bits_length, int_bits_char.
+    by rewrite fmap_length, int_to_bits_length, int_bits_char.
 Qed.
 
 Global Instance: PartialOrder (@subseteq_env M (base_val Ti) _ m).
@@ -262,7 +262,7 @@ Proof.
   * apply base_indet_bits_valid.
   * apply Forall_fmap, Forall_true. constructor.
   * apply Forall_fmap; eapply (Forall_impl (valid m));
-      eauto using to_ptr_bits_valid, BPtr_valid.
+      eauto using ptr_to_bits_valid, BPtr_valid.
   * done.
 Qed.
 
@@ -287,14 +287,14 @@ Proof. inversion_clear 1; constructor. Qed.
 
 Lemma base_val_to_bits_freeze v :
   base_val_to_bits (freeze v) = base_val_to_bits v.
-Proof. by destruct v; simpl; rewrite ?to_ptr_bits_freeze. Qed.
+Proof. by destruct v; simpl; rewrite ?ptr_to_bits_freeze. Qed.
 Lemma base_val_to_bits_length m v τ :
   m ⊢ v : τ → length (base_val_to_bits v) = bit_size_of (base τ).
 Proof.
   destruct 1; simpl.
   * unfold base_indet_bits. by rewrite replicate_length.
-  * by rewrite fmap_length, bit_size_of_int, to_bits_length.
-  * by erewrite fmap_length, to_ptr_bits_length by eauto.
+  * by rewrite fmap_length, bit_size_of_int, int_to_bits_length.
+  * by erewrite fmap_length, ptr_to_bits_length by eauto.
   * by rewrite bit_size_of_int, int_bits_char.
 Qed.
 Lemma base_val_to_bits_le m v1 v2 :
@@ -333,14 +333,14 @@ Lemma base_val_of_bits_typed m τ bs :
 Proof.
   destruct 1; repeat (case_match || simplify_option_equality);
     decompose_Forall_hyps; constructor; simpl; auto.
-  * apply of_bits_typed. rewrite <-bit_size_of_int.
+  * apply int_of_bits_typed. rewrite <-bit_size_of_int.
     by erewrite <-Forall2_length, resize_length by eauto using mapM_Some_1.
   * constructor.
   * by rewrite <-mapM_is_Some, <-eq_None_not_Some. 
   * apply Forall_resize. constructor. done.
   * by rewrite resize_length, bit_size_of_int, int_bits_char.
   * constructor.
-  * eapply of_ptr_bits_typed; eauto using mapM_maybe_BPtr_valid,
+  * eapply ptr_of_bits_typed; eauto using mapM_maybe_BPtr_valid,
       Forall_resize, BIndet_valid.
   * by constructor.
   * by constructor.
@@ -349,7 +349,7 @@ Lemma base_val_of_bits_type_of τ bs :
   base_type_valid get_env τ → type_of (base_val_of_bits τ bs) = τ.
 Proof.
   destruct 1; repeat (case_match || simplify_option_equality);
-    eauto using of_ptr_bits_type_of, eq_sym, f_equal.
+    eauto using ptr_of_bits_type_of, eq_sym, f_equal.
 Qed.
 Lemma base_val_of_bits_resize τ bs sz :
   base_type_valid get_env τ → bit_size_of (base τ) ≤ sz →
@@ -369,11 +369,11 @@ Proof.
       - exfalso; eauto using Forall_replicate.
     + repeat case_match; auto. by destruct (bit_size_of _).
   * rewrite resize_all_alt by
-      (by rewrite bit_size_of_int, fmap_length, to_bits_length).
-    rewrite mapM_fmap_Some by done. by rewrite of_to_bits by done.
+      (by rewrite bit_size_of_int, fmap_length, int_to_bits_length).
+    rewrite mapM_fmap_Some by done. by rewrite int_of_to_bits by done.
   * rewrite resize_all_alt by
-      (by erewrite fmap_length, to_ptr_bits_length by eauto).
-    rewrite mapM_fmap_Some by done; simpl. by rewrite (of_to_ptr_bits m).
+      (by erewrite fmap_length, ptr_to_bits_length by eauto).
+    rewrite mapM_fmap_Some by done; simpl. by rewrite (ptr_of_to_bits m).
   * rewrite <-mapM_is_Some, <-eq_None_not_Some in Hbit.
     rewrite resize_all_alt by (by rewrite bit_size_of_int, int_bits_char).
     by destruct c; repeat case_match.
@@ -382,7 +382,7 @@ Lemma base_val_of_bits_frozen m τ bs :
   m ⊢* valid bs → frozen (base_val_of_bits τ bs).
 Proof.
   destruct τ; repeat (case_match || simplify_option_equality); constructor.
-  eapply of_ptr_bits_frozen; eauto using mapM_maybe_BPtr_valid,
+  eapply ptr_of_bits_frozen; eauto using mapM_maybe_BPtr_valid,
       Forall_resize, BIndet_valid.
 Qed.
 
@@ -395,13 +395,13 @@ Proof.
   * rewrite resize_all_alt by done. repeat case_match; simpl; auto.
     left. erewrite (mapM_fmap_Some_inv maybe_BBit BBit _ bs) by
       (by eauto; intros ? [] ?; simplify_equality).
-    by rewrite to_of_bits by
+    by rewrite int_to_of_bits by
       (by erewrite <-?bit_size_of_int, <-mapM_length by eauto).
   * rewrite resize_all_alt by done.
     repeat (simplify_option_equality || case_match); auto.
     left. erewrite (mapM_fmap_Some_inv maybe_BPtr BPtr _ bs) by
       (by eauto; intros ? [] ?; simplify_equality).
-    by erewrite to_of_ptr_bits by eauto using
+    by erewrite ptr_to_of_bits by eauto using
       mapM_maybe_BPtr_valid, Forall_resize, BIndet_valid.
 Qed.
 
@@ -456,9 +456,10 @@ Proof.
     { by erewrite mapM_maybe_BBit_Some_le by eauto. }
     repeat case_decide; simplify_equality.
     * destruct (mapM maybe_BBit bs2) as [βs|] eqn:Hβs; auto.
-      do 2 constructor. apply of_bits_typed. by erewrite <-mapM_length by eauto.
+      do 2 constructor. apply int_of_bits_typed.
+      by erewrite <-mapM_length by eauto.
     * destruct (mapM maybe_BBit bs2) as [βs|] eqn:Hβs.
-      { do 2 constructor. apply of_bits_typed.
+      { do 2 constructor. apply int_of_bits_typed.
         by erewrite <-mapM_length by eauto. }
       do 2 constructor; simpl; auto.
       + by rewrite <-mapM_is_Some, <-eq_None_not_Some.
@@ -468,10 +469,10 @@ Proof.
     * destruct (mapM maybe_BBit bs2) as [βs|] eqn:Hβs.
       { constructor; auto.
         + by rewrite <-mapM_is_Some, <-eq_None_not_Some.
-        + rewrite to_of_bits by (by erewrite <-mapM_length by eauto).
+        + rewrite int_to_of_bits by (by erewrite <-mapM_length by eauto).
           by erewrite <-(mapM_fmap_Some_inv maybe_BBit BBit) by
             (by eauto; intros ? [] ?; simplify_equality).
-        + apply of_bits_typed. by erewrite <-mapM_length by eauto. }
+        + apply int_of_bits_typed. by erewrite <-mapM_length by eauto. }
       constructor; auto. by rewrite <-mapM_is_Some, <-eq_None_not_Some. }
   intros. destruct (bits_le_eq_or_indet m bs1 bs2); subst; auto.
   rewrite (base_val_of_bits_indet m τ bs1); auto.
@@ -501,7 +502,7 @@ Lemma base_val_to_of_bits_char bs :
 Proof.
   intros Hbs. simpl. rewrite resize_all_alt by done.
   destruct (mapM _ _) as [cs|] eqn:Hcs; repeat case_decide; simpl.
-  * rewrite to_of_bits by
+  * rewrite int_to_of_bits by
       (by erewrite <-bit_size_of_int, <-Hbs, <-mapM_length by eauto).
     by erewrite <-(mapM_fmap_Some_inv maybe_BBit BBit) by
       (by eauto; intros ? [] ?; simplify_equality).

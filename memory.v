@@ -1,3 +1,5 @@
+(* Copyright (c) 2012-2013, Robbert Krebbers. *)
+(* This file is distributed under the terms of the BSD license. *)
 Require Import fin_maps mapset.
 Require Export values.
 Local Open Scope ctype_scope.
@@ -575,10 +577,10 @@ Lemma mem_aliasing_help m a1 a2 σ1 σ2 :
     Mem (alter (obj_map (alter f (addr_ref a))) (addr_index a) (MMap m)) in
   ⊢ valid m → m ⊢ a1 : σ1 → m ⊢ a2 : σ2 →
   frozen a1 → frozen a2 → addr_is_obj a1 → addr_is_obj a2 →
-  (* 1.) *) (∀ j1 j2, addr_plus j1 a1 ⊥ addr_plus j2 a2) ∨
-  (* 2.) *) σ1 ⊆ σ2 ∨
-  (* 3.) *) σ2 ⊆ σ1 ∨
-  (* 4.) *) ∀ f j1 j2,
+  (**i 1.) *) (∀ j1 j2, addr_plus j1 a1 ⊥ addr_plus j2 a2) ∨
+  (**i 2.) *) σ1 ⊆ σ2 ∨
+  (**i 3.) *) σ2 ⊆ σ1 ∨
+  (**i 4.) *) ∀ f j1 j2,
     mem_alter f (addr_plus j2 a2) !! addr_plus j1 a1 = None ∧
     mem_alter f (addr_plus j1 a1) !! addr_plus j2 a2 = None.
 Proof.
@@ -599,10 +601,10 @@ Qed.
 Lemma mem_aliasing m a1 a2 σ1 σ2 :
   ⊢ valid m → m ⊢ a1 : σ1 → m ⊢ a2 : σ2 →
   frozen a1 → frozen a2 → addr_is_obj a1 → addr_is_obj a2 →
-  (* 1.) *) (∀ j1 j2, addr_plus j1 a1 ⊥ addr_plus j2 a2) ∨
-  (* 2.) *) σ1 ⊆ σ2 ∨
-  (* 3.) *) σ2 ⊆ σ1 ∨
-  (* 4.) *) ∀ j1 j2,
+  (**i 1.) *) (∀ j1 j2, addr_plus j1 a1 ⊥ addr_plus j2 a2) ∨
+  (**i 2.) *) σ1 ⊆ σ2 ∨
+  (**i 3.) *) σ2 ⊆ σ1 ∨
+  (**i 4.) *) ∀ j1 j2,
     (∀ v1, <[addr_plus j1 a1:=v1]>m !! addr_plus j2 a2 = None) ∧
     mem_force (addr_plus j1 a1) m !! addr_plus j2 a2 = None ∧
     (∀ v2, <[addr_plus j2 a2:=v2]>m !! addr_plus j1 a1 = None) ∧
@@ -751,11 +753,11 @@ Qed.
 
 Lemma mem_lookup_value_bytes m a v σ :
   ⊢ valid m → m ⊢ a : σ → m !! a = Some v → ∃ cs,
-  (* a.) *) length cs = size_of σ ∧
-  (* b.) *) m ⊢* cs : uchar ∧
-  (* c.) *) (∀ j : nat,
+  (**i 1.) *) length cs = size_of σ ∧
+  (**i 2.) *) m ⊢* cs : uchar ∧
+  (**i 3.) *) (∀ j : nat,
     j < size_of σ → m !! addr_plus j (addr_cast uchar a) = cs !! j) ∧
-  (* d.) *) val_to_bits v ⊑@{m}* mjoin (val_to_bits <$> cs).
+  (**i 4.) *) val_to_bits v ⊑@{m}* mjoin (val_to_bits <$> cs).
 Proof.
   intros Hm Ha Hav. pose proof (mem_lookup_Some _ _ _ Hm Hav) as Hav'.
   destruct Hav' as (w&τ&w'&τ'&Hma&?&?&?&Hwa&Hw'&?&?&Hobj&Hbyte).

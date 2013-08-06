@@ -1,7 +1,7 @@
 (* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file defines a two's complements implementation of the interface for
-machine integers. This implementation is parametrized by its endianness, and
+machine integers. This implementation is parametrized by its endianness and
 the number of bits of which a byte consists. This implementation is convervative
 in the sense that it makes as much undefined behavior as possible.  *)
 Require Import abstract_integers.

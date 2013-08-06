@@ -288,8 +288,7 @@ Section addresses.
       econstructor; eauto.
   Qed.
 
-  Lemma addr_typed_offset m a σ :
-    m ⊢ a : σ → ref_offset (addr_ref_base a) = 0.
+  Lemma addr_typed_offset m a σ : m ⊢ a : σ → ref_offset (addr_ref_base a) = 0.
   Proof. by destruct 1. Qed.
   Lemma addr_typed_base_type_valid m a σ :
     m ⊢ a : σ → type_valid get_env (addr_type_base a).
@@ -423,7 +422,9 @@ Section addresses.
   Lemma addr_offset_freeze a : addr_offset (freeze a) = addr_offset a.
   Proof. by destruct a. Qed.
   Global Instance: Proper ((~{freeze}) ==> (=)) (@addr_offset Ti _).
-  Proof. intros ?? Ha. by rewrite <-addr_offset_freeze, Ha, addr_offset_freeze. Qed.
+  Proof.
+    intros ?? Ha. by rewrite <-addr_offset_freeze, Ha, addr_offset_freeze.
+  Qed.
   Lemma addr_ref_freeze a : addr_ref (freeze a) = freeze <$> addr_ref a.
   Proof.
     unfold addr_ref. by rewrite !addr_ref_base_freeze, addr_byte_freeze,
@@ -610,7 +611,8 @@ Section addresses.
     destruct 1 as [x r i σ' σ ??????? Hiσ]; intros ??; simplify_equality'.
     f_equal. rewrite size_of_int, int_size_char; simpl.
     rewrite Z.mul_1_r, Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
-    rewrite <-Nat.add_mod_idemp_l by eauto using ref_typed_type_valid, size_of_ne_0.
+    rewrite <-Nat.add_mod_idemp_l
+      by eauto using ref_typed_type_valid, size_of_ne_0.
     rewrite Hiσ, Nat.add_0_l. by apply Nat.mod_small.
   Qed.
   Lemma addr_byte_lt_size_char_cast m a σ j :
@@ -624,7 +626,8 @@ Section addresses.
     apply Nat.lt_le_trans with (i + size_of σ); [lia|].
     apply Nat.div_exact in Hiσ; eauto using ref_typed_type_valid, size_of_ne_0.
     rewrite Hiσ, <-Nat.mul_succ_r. apply Nat.mul_le_mono_l, Nat.le_succ_l.
-    apply Nat.div_lt_upper_bound; eauto using ref_typed_type_valid, size_of_ne_0.
+    apply Nat.div_lt_upper_bound;
+      eauto using ref_typed_type_valid, size_of_ne_0.
   Qed.
 
   Lemma addr_array_typed m a n τ :
@@ -673,10 +676,10 @@ Section addresses.
   Lemma addr_disjoint_cases m a1 a2 σ1 σ2 :
     m ⊢ a1 : σ1 → m ⊢ a2 : σ2 →
     frozen a1 → frozen a2 → addr_is_obj a1 → addr_is_obj a2 →
-    (* 1.) *) (∀ j1 j2, addr_plus j1 a1 ⊥ addr_plus j2 a2) ∨
-    (* 2.) *) σ1 ⊆ σ2 ∨
-    (* 3.) *) σ2 ⊆ σ1 ∨
-    (* 4.) *) addr_index a1 = addr_index a2 ∧ (∃ s r1' i1 r2' i2 r',
+    (**i 1.) *) (∀ j1 j2, addr_plus j1 a1 ⊥ addr_plus j2 a2) ∨
+    (**i 2.) *) σ1 ⊆ σ2 ∨
+    (**i 3.) *) σ2 ⊆ σ1 ∨
+    (**i 4.) *) addr_index a1 = addr_index a2 ∧ (∃ s r1' i1 r2' i2 r',
       addr_ref_base a1 = r1' ++ [RUnion i1 s false] ++ r' ∧
       addr_ref_base a2 = r2' ++ [RUnion i2 s false] ++ r' ∧ i1 ≠ i2).
   Proof.
@@ -865,9 +868,9 @@ Section ptr_bit_ops.
     frozen (frag_item ps) ∧
     frag_index ps < bit_size_of (τ.*).
 
-  Definition to_ptr_bits (p : ptr Ti) : list (ptr_bit Ti) :=
+  Definition ptr_to_bits (p : ptr Ti) : list (ptr_bit Ti) :=
     to_frags (bit_size_of (type_of p.*)) (freeze p).
-  Definition of_ptr_bits (τ : type Ti)
+  Definition ptr_of_bits (τ : type Ti)
       (pps : list (ptr_bit Ti)) : option (ptr Ti) :=
     p ← of_frags (bit_size_of (τ.*)) pps;
     guard (type_of p = τ);
@@ -897,61 +900,61 @@ Section ptr_bits.
     m1 ⊢ valid ps → m2 ⊢ valid ps.
   Proof. intros ? (τ&?&?&?); exists τ; eauto using ptr_typed_weaken_mem. Qed.
 
-  Lemma to_ptr_bits_freeze p : to_ptr_bits (freeze p) = to_ptr_bits p.
+  Lemma ptr_to_bits_freeze p : ptr_to_bits (freeze p) = ptr_to_bits p.
   Proof.
-    unfold to_ptr_bits. by rewrite ptr_freeze_type_of, ptr_freeze_idempotent.
+    unfold ptr_to_bits. by rewrite ptr_freeze_type_of, ptr_freeze_idempotent.
   Qed.
-  Lemma to_ptr_bits_length_alt p :
-    length (to_ptr_bits p) = bit_size_of (type_of p.* ).
-  Proof. unfold to_ptr_bits. by rewrite (to_frags_length _). Qed.
-  Lemma to_ptr_bits_length m p τ :
-    m ⊢ p : τ → length (to_ptr_bits p) = bit_size_of (τ.* ).
-  Proof. intros. erewrite to_ptr_bits_length_alt, type_of_correct; eauto. Qed.
+  Lemma ptr_to_bits_length_alt p :
+    length (ptr_to_bits p) = bit_size_of (type_of p.* ).
+  Proof. unfold ptr_to_bits. by rewrite (to_frags_length _). Qed.
+  Lemma ptr_to_bits_length m p τ :
+    m ⊢ p : τ → length (ptr_to_bits p) = bit_size_of (τ.* ).
+  Proof. intros. erewrite ptr_to_bits_length_alt, type_of_correct; eauto. Qed.
 
-  Lemma to_ptr_bits_valid m p τ : m ⊢ p : τ → m ⊢* valid (to_ptr_bits p).
+  Lemma ptr_to_bits_valid m p τ : m ⊢ p : τ → m ⊢* valid (ptr_to_bits p).
   Proof.
     intros. apply (Forall_to_frags _).
     intros i. erewrite type_of_correct by eauto. exists τ; simpl.
     rewrite ptr_typed_freeze. eauto using ptr_freeze_frozen.
   Qed.
-  Lemma of_ptr_bits_typed_frozen m p τ pss :
-    of_ptr_bits τ pss = Some p → m ⊢* valid pss → m ⊢ p : τ ∧ frozen p.
+  Lemma ptr_of_bits_typed_frozen m p τ pss :
+    ptr_of_bits τ pss = Some p → m ⊢* valid pss → m ⊢ p : τ ∧ frozen p.
   Proof.
-    unfold of_ptr_bits. intros.
+    unfold ptr_of_bits. intros.
     destruct (of_frags _ _) eqn:?; simplify_option_equality.
     destruct (Forall_of_frags (bit_size_of (type_of p.* ))
       (λ q, m ⊢ valid q) p pss 0) as (?&?&?&?); eauto using type_of_typed.
     by apply Nat.neq_0_lt_0, bit_size_of_base_ne_0.
   Qed.
-  Lemma of_ptr_bits_typed m p τ pss :
-    of_ptr_bits τ pss = Some p → m ⊢* valid pss → m ⊢ p : τ.
-  Proof. intros. eapply of_ptr_bits_typed_frozen; eauto. Qed.
-  Lemma of_ptr_bits_frozen m p τ pss :
-    of_ptr_bits τ pss = Some p → m ⊢* valid pss → frozen p.
-  Proof. intros. eapply of_ptr_bits_typed_frozen; eauto. Qed.
+  Lemma ptr_of_bits_typed m p τ pss :
+    ptr_of_bits τ pss = Some p → m ⊢* valid pss → m ⊢ p : τ.
+  Proof. intros. eapply ptr_of_bits_typed_frozen; eauto. Qed.
+  Lemma ptr_of_bits_frozen m p τ pss :
+    ptr_of_bits τ pss = Some p → m ⊢* valid pss → frozen p.
+  Proof. intros. eapply ptr_of_bits_typed_frozen; eauto. Qed.
 
-  Lemma of_ptr_bits_type_of p τ pss :
-    of_ptr_bits τ pss = Some p → τ = type_of p.
-  Proof. unfold of_ptr_bits. intros. by simplify_option_equality. Qed.
-  Lemma to_of_ptr_bits_alt p τ pss :
-    of_ptr_bits τ pss = Some (freeze p) → to_ptr_bits p = pss.
+  Lemma ptr_of_bits_type_of p τ pss :
+    ptr_of_bits τ pss = Some p → τ = type_of p.
+  Proof. unfold ptr_of_bits. intros. by simplify_option_equality. Qed.
+  Lemma ptr_to_of_bits_alt p τ pss :
+    ptr_of_bits τ pss = Some (freeze p) → ptr_to_bits p = pss.
   Proof.
-    intros. unfold of_ptr_bits, to_ptr_bits in *. simplify_option_equality.
+    intros. unfold ptr_of_bits, ptr_to_bits in *. simplify_option_equality.
     by rewrite <-(ptr_freeze_type_of p), (of_to_frags_1 _ _ pss).
   Qed.
-  Lemma to_of_ptr_bits m p τ pss :
-    of_ptr_bits τ pss = Some p → m ⊢* valid pss → to_ptr_bits p = pss.
+  Lemma ptr_to_of_bits m p τ pss :
+    ptr_of_bits τ pss = Some p → m ⊢* valid pss → ptr_to_bits p = pss.
   Proof.
-    intros. apply to_of_ptr_bits_alt with τ.
-    by rewrite ptr_frozen_freeze by eauto using of_ptr_bits_frozen.
+    intros. apply ptr_to_of_bits_alt with τ.
+    by rewrite ptr_frozen_freeze by eauto using ptr_of_bits_frozen.
   Qed.
-  Lemma of_to_ptr_bits_alt p :
-    of_ptr_bits (type_of p) (to_ptr_bits p) = Some (freeze p).
+  Lemma ptr_of_to_bits_alt p :
+    ptr_of_bits (type_of p) (ptr_to_bits p) = Some (freeze p).
   Proof.
-    unfold of_ptr_bits, to_ptr_bits. rewrite (of_to_frags_2 _).
+    unfold ptr_of_bits, ptr_to_bits. rewrite (of_to_frags_2 _).
     simpl. rewrite ptr_freeze_type_of. by simplify_option_equality.
   Qed.
-  Lemma of_to_ptr_bits m p τ :
-    m ⊢ p : τ → of_ptr_bits τ (to_ptr_bits p) = Some (freeze p).
-  Proof. intros. erewrite <-of_to_ptr_bits_alt, type_of_correct; eauto. Qed.
+  Lemma ptr_of_to_bits m p τ :
+    m ⊢ p : τ → ptr_of_bits τ (ptr_to_bits p) = Some (freeze p).
+  Proof. intros. erewrite <-ptr_of_to_bits_alt, type_of_correct; eauto. Qed.
 End ptr_bits.

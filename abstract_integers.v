@@ -1,27 +1,35 @@
 (* Copyright (c) 2012-2013, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-(** This file describes an axiomatization of machine integers. *)
+(** This file describes an abstract interface to capture different
+implementations of machine integers. It deals with integer representations and
+the underspecification of integer operations by the C standard. The majority of
+our subsequent Coq development is parametrized by this interface. *)
+
+(** Compared to the C standard we make some changes. First of all, since all
+modern architectures use two's complement representation, we allow
+representations to differ solely in endianness. Secondly, to keep the interface
+abstract, we only require three integer ranks to be present (char, int,
+ptr_diff/size_t), and put few restrictions on the range of these integer
+ranks. *)
 Require Import finite.
 Require Export prelude.
 Local Open Scope Z_scope.
 
-(** * Operations *)
-(** We define inductive data types [unop] and [binop] describing the operations
-that can be performed on integers, and give denotations using mathematical
-integers. These denotations are used in the axiomatization to describe the
-operations on machine integers. *)
+(** * Syntax of integer operations *)
+(** The inductive types [unop] and [binop] describe the abstract syntax of the
+C integer operations. *)
 Inductive comp_kind := CEq | CLt | CLe.
 Inductive unop := NegOp | ComplOp.
-Inductive bitop := And | Or | Xor.
+Inductive bitop := BAnd | BOr | BXor.
 Inductive binop :=
   | PlusOp | MinusOp | MultOp | ShiftLOp | ShiftROp | DivOp | ModOp
   | CompOp : comp_kind → binop | BitOp : bitop → binop.
 Notation EqOp := (CompOp CEq).
 Notation LtOp := (CompOp CLt).
 Notation LeOp := (CompOp CLe).
-Notation AndOp := (BitOp And).
-Notation OrOp := (BitOp Or).
-Notation XorOp := (BitOp Xor).
+Notation AndOp := (BitOp BAnd).
+Notation OrOp := (BitOp BOr).
+Notation XorOp := (BitOp BXor).
 
 Instance unop_dec (op1 op2 : unop) : Decision (op1 = op2).
 Proof. solve_decision. Defined.
@@ -45,32 +53,42 @@ Instance nat_comp_dec c : ∀ x y, Decision (nat_comp c x y) :=
   | CEq => decide_rel (=) | CLt => decide_rel (<) | CLe => decide_rel (≤)
   end.
 Definition bool_bitop (op : bitop) : bool → bool → bool :=
-  match op with And => andb | Or => orb | Xor => xorb end.
+  match op with BAnd => andb | BOr => orb | BXor => xorb end.
 
-(** * The required operations on machine integers *)
-(** The axiomatization of machine integers is parametrized by a type [Ti]
-that represents the set of integer ranks (char, short, int). *)
-
-(** We consider both signed and unsigned integers. Signed integers are an
-interval between [-x] (included) and [x] of mathematical integers. Similarly,
-unsigned integers are an interval between [0] (included) and [2 * x] of
-mathematical integers. *)
+(** * Operations on machine integers *)
+(** The abstract interface for machine integers is parametrized by a type [Ti]
+of integer ranks (char, short, int). Integer types consist of a rank and its
+signedness (signed/unsigned), and machine integers are just arbitrary precision
+integers [Z] that should be within the range of the corresponding type. *)
 Inductive signedness := Signed | Unsigned.
 Instance signedness_eq_dec (s1 s2 : signedness) : Decision (s1 = s2).
 Proof. solve_decision. Defined.
 
-Inductive int_type (Ti : Set) := IntType { ISign : signedness; IKind : Ti }.
+Inductive int_type (Ti : Set) := IntType { ISign : signedness; IRank : Ti }.
 Add Printing Constructor int_type.
 Delimit Scope int_type_scope with IT.
 Bind Scope int_type_scope with int_type.
 Arguments IntType {_} _ _.
 Arguments ISign {_} _%IT.
-Arguments IKind {_} _%IT.
+Arguments IRank {_} _%IT.
 
 Instance int_type_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (τ1 τ2 : int_type Ti) : Decision (τ1 = τ2).
 Proof. solve_decision. Defined.
 
+(** The class [IntCoding] describes functions related to representation and
+sizes of machine integers. The rank [char_rank] is the rank of the smallest
+available integer type, and [ptr_rank] the rank of the types size_t and
+ptrdiff_t. At an actual machine, integers of rank [char_rank] corresponds to a
+byte, and its bit size is [char_bits] (called CHAR_BIT in the C header
+files). *)
+
+(** The function [rank_size k] gives the byte size of an integer with rank [k].
+Since we restrict to two's complement, signed integers of rank [k] are between
+[-int_rank k] (included) and [int_rank k], and unsigned integers of rank [k]
+are between [0] (included) and [2 * int_rank k]. The operation [endianize]
+takes a list of bits in little endian order and permutes them according to the
+implementation's endianness. The function [deendianize] performs the inverse. *)
 Local Unset Elimination Schemes.
 Class IntCoding (Ti : Set) := {
   char_rank : Ti;
@@ -79,18 +97,17 @@ Class IntCoding (Ti : Set) := {
   char_bits : nat;
   rank_size : Ti → nat;
   endianize : Ti → list bool → list bool;
-  deendianize : Ti → list bool → list bool
-}.
-Class IntEnv (Ti : Set) := {
-  int_coding :>> IntCoding Ti;
-  int_binop_ok : int_type Ti → binop → Z → Z → Prop;
-  int_binop : int_type Ti → binop → Z → Z → Z;
-  int_cast_ok : int_type Ti → Z → Prop;
-  int_cast : int_type Ti → Z → Z;
-  int_binop_ok_dec τ op x y :> Decision (int_binop_ok τ op x y);
-  int_cast_ok_dec τ x :> Decision (int_cast_ok τ x);
+  deendianize : Ti → list bool → list bool;
   int_rank_eq_dec (k1 k2 : Ti) :> Decision (k1 = k2)
 }.
+
+Arguments char_rank _ _ : simpl never.
+Arguments int_rank _ _ : simpl never.
+Arguments ptr_rank _ _ : simpl never.
+Arguments char_bits _ _ : simpl never.
+Arguments rank_size _ _ _ : simpl never.
+Arguments endianize _ _ _ _ : simpl never.
+Arguments deendianize _ _ _ _ : simpl never.
 
 Notation "'uchar'" := (IntType Unsigned char_rank) : int_type_scope.
 Notation "'schar'" := (IntType Signed char_rank) : int_type_scope.
@@ -99,21 +116,41 @@ Notation "'sint'" := (IntType Signed int_rank) : int_type_scope.
 Notation "'uptr'" := (IntType Unsigned ptr_rank) : int_type_scope.
 Notation "'sptr'" := (IntType Signed ptr_rank) : int_type_scope.
 
-Arguments rank_size _ _ _ : simpl never.
-Arguments char_rank _ _ : simpl never.
-Arguments int_rank _ _ : simpl never.
-Arguments ptr_rank _ _ : simpl never.
-Arguments endianize _ _ _ _ : simpl never.
-Arguments deendianize _ _ _ _ : simpl never.
+(** The class [IntEnv] extends the previously defined class with binary integer
+operations and casts. Unary operations are derived from the binary operations,
+and integer promotions/demotions are handled explicitly using casts. *)
+
+(** In order to deal with underspecification of operations, the class [IntEnv]
+does not just contain a function [int_binop] to perform a binary operation, but
+also a predicate [int_binop_ok τ op x y] that describes when [op] is allowed to
+be performed on integers [x] and [y] of type [τ]. This is to allow both strict
+implementations that make integer overflow undefined, and those that let it
+wrap (as for example GCC with the -fno-strict-overflow flag does). When an
+operation is allowed by the C standard, the result of [int_binop τ op x y]
+should correspond to its specification by the standard. *)
+Class IntEnv (Ti : Set) := {
+  int_coding :>> IntCoding Ti;
+  int_binop_ok : int_type Ti → binop → Z → Z → Prop;
+  int_binop : int_type Ti → binop → Z → Z → Z;
+  int_cast_ok : int_type Ti → Z → Prop;
+  int_cast : int_type Ti → Z → Z;
+  int_binop_ok_dec τ op x y :> Decision (int_binop_ok τ op x y);
+  int_cast_ok_dec τ x :> Decision (int_cast_ok τ x)
+}.
+
 Arguments int_binop_ok _ _ _ _ _ _ : simpl never.
 Arguments int_binop _ _ _ _ _ _ : simpl never.
 Arguments int_cast_ok _ _ _ _ : simpl never.
 Arguments int_cast _ _ _ _ : simpl never.
 
+(** * The abstract interface for machine integers *)
+(** In order to declare classes to describe the laws of an implementation of
+machine integers, we first define functions to encode and decode integers, and
+functions to relate binary operations and casts to its specification. *)
 Section least_operations.
   Context `{IntCoding Ti}.
 
-  Definition int_size (τ : int_type Ti) : nat := rank_size (IKind τ).
+  Definition int_size (τ : int_type Ti) : nat := rank_size (IRank τ).
   Global Arguments int_size !_ /.
   Definition int_bits (τ : int_type Ti) : nat := (int_size τ * char_bits)%nat.
   Definition int_lower (τ : int_type Ti) : Z :=
@@ -140,14 +177,14 @@ Section least_operations.
     | b :: bs => Z.b2z b + 2 * Z_of_bits bs
     end.
 
-  Definition to_bits (τ : int_type Ti) (x : Z) : list bool :=
-    endianize (IKind τ) $ Z_to_bits (int_bits τ) $
+  Definition int_to_bits (τ : int_type Ti) (x : Z) : list bool :=
+    endianize (IRank τ) $ Z_to_bits (int_bits τ) $
       match ISign τ with
       | Signed => if decide (0 ≤ x) then x else x + 2 ^ int_bits τ
       | Unsigned => x
       end.
-  Definition of_bits (τ : int_type Ti) (bs : list bool) : Z :=
-    let x := Z_of_bits (deendianize (IKind τ) bs) in
+  Definition int_of_bits (τ : int_type Ti) (bs : list bool) : Z :=
+    let x := Z_of_bits (deendianize (IRank τ) bs) in
     match ISign τ with
     | Signed =>
        if decide (2 * x < 2 ^ int_bits τ) then x else x - 2 ^ int_bits τ
@@ -189,8 +226,8 @@ Section least_operations.
     | DivOp, _ => x `quot` y
     | ModOp, _ => x `rem` y
     | CompOp c, _ => Z_of_sumbool (decide_rel (Z_comp c) x y)
-    | BitOp op, _ =>
-       of_bits τ (zip_with (bool_bitop op) (to_bits τ x) (to_bits τ y))
+    | BitOp op, _ => int_of_bits τ (zip_with (bool_bitop op)
+        (int_to_bits τ x) (int_to_bits τ y))
     end.
 
   Definition int_cast_ok_ (σ : int_type Ti) (x : Z) :=
@@ -219,19 +256,13 @@ Section operations.
   Definition int_unop (τ : int_type Ti) (op : unop) (x : Z) : Z :=
     match op with
     | NegOp => int_binop τ MinusOp 0 x
-    | ComplOp => of_bits τ (negb <$> to_bits τ x)
+    | ComplOp => int_of_bits τ (negb <$> int_to_bits τ x)
     end.
 End operations.
 
-(** * The axiomatization of machine integers *)
-(** The following class defines the laws that an implementation of machine
-integers should satisfy. Most of these laws are straightforward. Keep in mind,
-that like the C standard, overflow of unsigned integers is defined behavior
-(namely, it wraps modulo), whereas overflow of signed integers is undefined
-behavior. As [int_eval_unop], [int_eval_binop], and [int_cast], are partial
-functions, an implementation is thus free to decide whether to yield a bogus
-values, or to make the result actual undefined behavior (by returning
-[None]). *)
+(** The classes [IntCodingSpec] and [IntEnvSpec] describe the laws that an
+implementation of machine integers should satisfy. Most of these laws are
+straightforward. *)
 Class IntCodingSpec Ti `{IntCoding Ti} := {
   char_bits_ge_8 : (8 ≤ char_bits)%nat;
   rank_size_char : rank_size char_rank = 1%nat;
@@ -400,17 +431,17 @@ Proof.
   apply Z.lt_le_trans with (2 ^ 8); [lia |].
   by apply Z.pow_le_mono_r; auto using int_bits_ge_8_alt.
 Qed.
-Lemma to_bits_length τ x : length (to_bits τ x) = int_bits τ.
+Lemma int_to_bits_length τ x : length (int_to_bits τ x) = int_bits τ.
 Proof.
-  unfold to_bits, int_bits. rewrite endianize_permutation.
+  unfold int_to_bits, int_bits. rewrite endianize_permutation.
   by destruct τ as [[] k]; simpl; rewrite Z_to_bits_length.
 Qed.
-Lemma to_of_bits τ bs :
-  length bs = int_bits τ → to_bits τ (of_bits τ bs) = bs.
+Lemma int_to_of_bits τ bs :
+  length bs = int_bits τ → int_to_bits τ (int_of_bits τ bs) = bs.
 Proof.
-  intros Hlen. unfold to_bits, of_bits.
-  rewrite <-!Hlen, <-!(deendianize_length (IKind τ) bs); clear Hlen.
-  pose proof (Z_of_bits_range (deendianize (IKind τ) bs)).
+  intros Hlen. unfold int_to_bits, int_of_bits.
+  rewrite <-!Hlen, <-!(deendianize_length (IRank τ) bs); clear Hlen.
+  pose proof (Z_of_bits_range (deendianize (IRank τ) bs)).
   destruct τ as [[] k]; simpl in *.
   * repeat case_decide; auto with lia.
     + by rewrite Z_to_of_bits, endianize_deendianize.
@@ -418,24 +449,25 @@ Proof.
       by rewrite Z_to_of_bits, endianize_deendianize.
   * by rewrite Z_to_of_bits, endianize_deendianize.
 Qed.
-Lemma of_bits_inj τ bs1 bs2 :
+Lemma int_of_bits_inj τ bs1 bs2 :
   length bs1 = int_bits τ → length bs2 = int_bits τ →
-  of_bits τ bs1 = of_bits τ bs2 →  bs1 = bs2.
+  int_of_bits τ bs1 = int_of_bits τ bs2 →  bs1 = bs2.
 Proof.
-  intros. rewrite <-(to_of_bits τ bs1),
-    <-(to_of_bits τ bs2) by done; congruence.
+  intros. rewrite <-(int_to_of_bits τ bs1),
+    <-(int_to_of_bits τ bs2) by done; congruence.
 Qed.
 
-Lemma of_bits_typed τ bs : length bs = int_bits τ → int_typed (of_bits τ bs) τ.
+Lemma int_of_bits_typed τ bs :
+  length bs = int_bits τ → int_typed (int_of_bits τ bs) τ.
 Proof.
-  intros Hlen. unfold of_bits. generalize (int_bits_pos τ).
-  generalize (Z_of_bits_range (deendianize (IKind τ) bs)).
-  rewrite int_typed_spec_alt, <-!Hlen, <-!(deendianize_length (IKind τ) bs).
+  intros Hlen. unfold int_of_bits. generalize (int_bits_pos τ).
+  generalize (Z_of_bits_range (deendianize (IRank τ) bs)).
+  rewrite int_typed_spec_alt, <-!Hlen, <-!(deendianize_length (IRank τ) bs).
   destruct τ as [[] k]; simpl; repeat case_decide; auto with lia.
 Qed.
-Lemma of_to_bits τ x : int_typed x τ → of_bits τ (to_bits τ x) = x.
+Lemma int_of_to_bits τ x : int_typed x τ → int_of_bits τ (int_to_bits τ x) = x.
 Proof.
-  unfold of_bits, to_bits. rewrite int_typed_spec_alt.
+  unfold int_of_bits, int_to_bits. rewrite int_typed_spec_alt.
   destruct τ as [[] k]; simpl in *.
   * intros [??]. repeat case_decide; repeat_on_hyps
       (fun H => rewrite deendianize_endianize, !Z_of_to_bits in H by lia);
@@ -443,20 +475,20 @@ Proof.
   * intros [??]. by rewrite deendianize_endianize, Z_of_to_bits.
 Qed.
 
-Lemma of_zero_bits τ : of_bits τ (replicate (int_bits τ) false) = 0.
+Lemma int_of_zero_bits τ : int_of_bits τ (replicate (int_bits τ) false) = 0.
 Proof.
   assert (∀ k n b, deendianize k (replicate n b) = replicate n b) as Hrepl.
   { intros k n b. apply replicate_Permutation.
     by rewrite deendianize_permutation. }
-  unfold of_bits. destruct (ISign τ).
+  unfold int_of_bits. destruct (ISign τ).
   * case_decide as Hbs.
     { by rewrite Hrepl, Z_of_zero_bits. }
     destruct Hbs. rewrite Hrepl, Z_of_zero_bits, Z.mul_0_r. auto with zpos.
   * by rewrite Hrepl, Z_of_zero_bits.
 Qed.
-Lemma to_bits_signed_unsigned k x :
-  0 ≤ x → to_bits (IntType Signed k) x = to_bits (IntType Unsigned k) x.
-Proof. unfold to_bits; simpl; case_decide; auto with lia. Qed.
+Lemma int_to_bits_signed_unsigned k x :
+  0 ≤ x → int_to_bits (IntType Signed k) x = int_to_bits (IntType Unsigned k) x.
+Proof. unfold int_to_bits; simpl; case_decide; auto with lia. Qed.
 
 Lemma int_binop_ok_typed_ τ op x y :
   int_typed x τ → int_typed y τ →
@@ -489,8 +521,8 @@ Proof.
       - apply Z.rem_bound_pos; lia.
       - transitivity y; auto. apply Z.rem_bound_pos; lia.
   * intros _. by case_decide; apply int_typed_small.
-  * intros ?. apply of_bits_typed.
-    by rewrite zip_with_length; rewrite !to_bits_length.
+  * intros ?. apply int_of_bits_typed.
+    by rewrite zip_with_length; rewrite !int_to_bits_length.
 Qed.
 Lemma int_cast_ok_typed_ σ x :
   int_cast_ok_ σ x → int_typed (int_cast_ σ x) σ.
@@ -508,6 +540,6 @@ Lemma int_unop_ok_typed op x τ :
 Proof.
   destruct op; simpl.
   * intros. apply int_binop_ok_typed; auto. by apply int_typed_small.
-  * intros. apply of_bits_typed. by rewrite fmap_length, to_bits_length.
+  * intros. apply int_of_bits_typed. by rewrite fmap_length, int_to_bits_length.
 Qed.
 End int_env.

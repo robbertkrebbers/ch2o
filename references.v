@@ -65,7 +65,7 @@ Section env_spec.
   Lemma bit_size_of_int τ : bit_size_of (intt τ) = int_bits τ.
   Proof. unfold bit_size_of. by rewrite size_of_int. Qed.
   Lemma bit_size_of_int_same_kind τ1 τ2 :
-    IKind τ1 = IKind τ2 → bit_size_of (intt τ1) = bit_size_of (intt τ2).
+    IRank τ1 = IRank τ2 → bit_size_of (intt τ1) = bit_size_of (intt τ2).
   Proof.
     destruct τ1, τ2; intros; simplify_equality'. by rewrite !bit_size_of_int.
   Qed.
@@ -272,7 +272,6 @@ Fixpoint ref_byte_offset `{PtrEnv Ti} (τ : type Ti) (r : ref) :
      Some (fst ρj, snd σi + snd ρj)
   end.
 *)
-
 Inductive ref_seg_disjoint: Disjoint ref_seg :=
   | RArray_disjoint i1 i2 n : i1 ≠ i2 → RArray i1 n ⊥ RArray i2 n
   | RStruct_disjoint i1 i2 s : i1 ≠ i2 → RStruct i1 s ⊥ RStruct i2 s.
@@ -727,7 +726,7 @@ Proof.
   by destruct Hrs; simpl in *; inversion Hrs'; simplify_option_equality.
 Qed.
 Lemma ref_set_offset_disjoint r i :
-  ref_set_offset i r ⊥ r \/ ref_set_offset i r = r.
+  ref_set_offset i r ⊥ r ∨ ref_set_offset i r = r.
 Proof.
   destruct r as [|[j n| |]]; simpl; auto.
   destruct (decide (i = j)); subst; auto. by left; repeat constructor.
@@ -751,10 +750,10 @@ Qed.
 
 Lemma ref_disjoint_cases_help τ r1 r2 σ1 σ2 :
   r1 @ τ ↣ σ1 → r2 @ τ ↣ σ2 →
-  (* 1.) *) (∀ j1 j2, ref_set_offset j1 r1 ⊥ ref_set_offset j2 r2) ∨
-  (* 2.) *) (∃ j r', r1 ~{fmap freeze} r' ++ ref_set_offset j r2) ∨
-  (* 3.) *) (∃ j r', r2 ~{fmap freeze} r' ++ ref_set_offset j r1) ∨
-  (* 4.) *) ∃ s r1' i1 q1 r2' i2 q2 r',
+  (**i 1.) *) (∀ j1 j2, ref_set_offset j1 r1 ⊥ ref_set_offset j2 r2) ∨
+  (**i 2.) *) (∃ j r', r1 ~{fmap freeze} r' ++ ref_set_offset j r2) ∨
+  (**i 3.) *) (∃ j r', r2 ~{fmap freeze} r' ++ ref_set_offset j r1) ∨
+  (**i 4.) *) ∃ s r1' i1 q1 r2' i2 q2 r',
     r1 ~{fmap freeze} r1' ++ [RUnion i1 s q1] ++ r' ∧
     r2 ~{fmap freeze} r2' ++ [RUnion i2 s q2] ++ r' ∧ i1 ≠ i2.
 Proof.
@@ -828,10 +827,10 @@ Proof.
 Qed.
 Lemma ref_disjoint_cases τ r1 r2 σ1 σ2 :
   r1 @ τ ↣ σ1 → r2 @ τ ↣ σ2 → Forall frozen r1 → Forall frozen r2 →
-  (* 1.) *) (∀ j1 j2, ref_set_offset j1 r1 ⊥ ref_set_offset j2 r2) ∨
-  (* 2.) *) σ1 ⊆ σ2 ∨
-  (* 3.) *) σ2 ⊆ σ1 ∨
-  (* 4.) *) ∃ s r1' i1 r2' i2 r',
+  (**i 1.) *) (∀ j1 j2, ref_set_offset j1 r1 ⊥ ref_set_offset j2 r2) ∨
+  (**i 2.) *) σ1 ⊆ σ2 ∨
+  (**i 3.) *) σ2 ⊆ σ1 ∨
+  (**i 4.) *) ∃ s r1' i1 r2' i2 r',
     r1 = r1' ++ [RUnion i1 s false] ++ r' ∧
     r2 = r2' ++ [RUnion i2 s false] ++ r' ∧ i1 ≠ i2.
 Proof.
