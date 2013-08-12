@@ -79,7 +79,8 @@ Proof.
     apply (lookup_merge f t1 t2).
 Qed.
 
-(** Finally, we can construct sets of [N]s satisfying extensional equality. *)
+(** * Finite sets *)
+(** We construct sets of [N]s satisfying extensional equality. *)
 Notation Nset := (mapset Nmap).
 Instance Nmap_dom {A} : Dom (Nmap A) Nset := mapset_dom.
 Instance: FinMapDom N Nmap Nset := mapset_dom_spec.

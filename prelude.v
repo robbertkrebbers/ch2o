@@ -13,4 +13,5 @@ Require Export
   fin_collections
   listset
   fresh_numbers
-  list.
+  list
+  lexico.

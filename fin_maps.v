@@ -372,7 +372,7 @@ Lemma insert_subset_inv {A} (m1 m2 : M A) i x :
   ∃ m2', m2 = <[i:=x]>m2' ∧ m1 ⊂ m2' ∧ m2' !! i = None.
 Proof.
   intros Hi Hm1m2. exists (delete i m2). split_ands.
-  * rewrite insert_delete. done. eapply lookup_weaken, subset_subseteq; eauto.
+  * rewrite insert_delete. done. eapply lookup_weaken, strict_include; eauto.
     by rewrite lookup_insert.
   * eauto using insert_delete_subset.
   * by rewrite lookup_delete.
@@ -564,7 +564,7 @@ Proof.
   rewrite !map_to_list_insert; simpl; auto with arith.
 Qed.
 
-Lemma map_wf {A} : wf (@subset (M A) _).
+Lemma map_wf {A} : wf (strict (@subseteq (M A) _)).
 Proof.
   apply (wf_projected (<) (length ∘ map_to_list)).
   * by apply map_to_list_length.
@@ -1013,13 +1013,13 @@ Qed.
 Lemma map_union_cancel_l {A} (m1 m2 m3 : M A) :
   m1 ⊥ m3 → m2 ⊥ m3 → m3 ∪ m1 = m3 ∪ m2 → m1 = m2.
 Proof.
-  intros. by apply (anti_symmetric _);
+  intros. by apply (anti_symmetric (⊆));
     apply map_union_reflecting_l with m3; auto with congruence.
 Qed.
 Lemma map_union_cancel_r {A} (m1 m2 m3 : M A) :
   m1 ⊥ m3 → m2 ⊥ m3 → m1 ∪ m3 = m2 ∪ m3 → m1 = m2.
 Proof.
-  intros. apply (anti_symmetric _);
+  intros. apply (anti_symmetric (⊆));
     apply map_union_reflecting_r with m3; auto with congruence.
 Qed.
 
