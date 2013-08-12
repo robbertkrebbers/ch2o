@@ -144,7 +144,7 @@ Proof.
   by apply size_non_empty_iff, non_empty_difference.
 Qed.
 
-Lemma collection_wf : wf (@subset C _).
+Lemma collection_wf : wf (strict (@subseteq C _)).
 Proof. apply well_founded_lt_compat with size, subset_size. Qed.
 
 Lemma collection_ind (P : C → Prop) :

@@ -187,6 +187,11 @@ Program Instance N_lt_dec (x y : N) : Decision (x < y)%N :=
   end.
 Next Obligation. congruence. Qed.
 Instance N_inhabited: Inhabited N := populate 1%N.
+Instance: PartialOrder (≤)%N.
+Proof.
+  repeat split; red. apply N.le_refl. apply N.le_trans. apply N.le_antisymm.
+Qed.
+Hint Extern 0 (_ ≤ _)%N => reflexivity.
 
 (** * Notations and properties of [Z] *)
 Open Scope Z_scope.
@@ -210,6 +215,10 @@ Instance Z_eq_dec: ∀ x y : Z, Decision (x = y) := Z.eq_dec.
 Instance Z_le_dec: ∀ x y : Z, Decision (x ≤ y) := Z_le_dec.
 Instance Z_lt_dec: ∀ x y : Z, Decision (x < y) := Z_lt_dec.
 Instance Z_inhabited: Inhabited Z := populate 1.
+Instance: PartialOrder (≤).
+Proof.
+  repeat split; red. apply Z.le_refl. apply Z.le_trans. apply Z.le_antisymm.
+Qed.
 
 Lemma Z_pow_pred_r n m : 0 < m → n * n ^ (Z.pred m) = n ^ m.
 Proof.
@@ -362,7 +371,7 @@ Proof. apply Z_to_option_nat_Some_alt. auto using Nat2Z.is_nonneg. Qed.
 
 (** The function [Z_of_sumbool] converts a sumbool [P] into an integer
 by yielding one if [P] and zero if [Q]. *)
-Definition Z_of_sumbool {P Q : Prop} (p : {P} + {Q}) : Z :=
+Definition Z_of_sumbool {P Q : Prop} (p : {P} + {Q} ) : Z :=
   (if p then 1 else 0)%Z.
 
 (** Some correspondence lemmas between [nat] and [N] that are not part of the

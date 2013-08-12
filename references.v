@@ -176,6 +176,38 @@ Proof.
   | _, _ => right _
   end; abstract congruence.
 Defined.
+Instance ref_seg_lexico: Lexico ref_seg := λ rs1 rs2,
+  match rs1, rs2 with
+  | RArray i1 n1, RArray i2 n2 => lexico (i1,n1) (i2,n2)
+  | RArray _ _, (RStruct _ _ | RUnion _ _ _) => True
+  | RStruct i1 s1, RStruct i2 s2 => lexico (i1,s1) (i2,s2)
+  | RStruct _ _, RUnion _ _ _ => True
+  | RUnion i1 s1 q1, RUnion i2 s2 q2 => lexico (i1,s1,q1) (i2,s2,q2)
+  | _, _ => False
+  end.
+Instance ref_seg_lexico_po: PartialOrder (@lexico ref_seg _).
+Proof.
+  unfold lexico, ref_seg_lexico. repeat split.
+  * by intros [??|??|???].
+  * by intros [] [] [] ??; simplify_order.
+  * by intros [] [] ??; simplify_order.
+Qed.
+Instance ref_seg_trichotomy: TrichotomyT (@lexico ref_seg _).
+Proof.
+ red; refine (λ rs1 rs2,
+  match rs1, rs2 with
+  | RArray i1 n1, RArray i2 n2 =>
+    cast_trichotomy (trichotomyT lexico (i1,n1) (i2,n2))
+  | RArray _ _, (RStruct _ _ | RUnion _ _ _) => inleft (left _)
+  | RStruct i1 s1, RStruct i2 s2 =>
+    cast_trichotomy (trichotomyT lexico (i1,s1) (i2,s2))
+  | RStruct _ _, RUnion _ _ _ => inleft (left _)
+  | RUnion i1 s1 q1, RUnion i2 s2 q2 =>
+    cast_trichotomy (trichotomyT lexico (i1,s1,q1) (i2,s2,q2))
+  | _, _ => inright _
+  end);
+  abstract (repeat (done || constructor || congruence || by inversion 1)).
+Defined.
 
 Inductive ref_seg_typed `{PtrEnv Ti} : PathTyped (type Ti) ref_seg :=
   | RArray_typed τ i n : i < n → RArray i n @ τ.[n] ↣ τ

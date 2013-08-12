@@ -84,6 +84,10 @@ Instance: FinMap index indexmap := _.
 Instance indexmap_dom {A} : Dom (indexmap A) indexset := mapset_dom.
 Instance: FinMapDom index indexmap indexset := mapset_dom_spec.
 
+Instance index_lexico : Lexico index := @lexico N _.
+Instance index_lexico_po : PartialOrder (@lexico index _) := _.
+Instance index_trichotomy: TrichotomyT (@lexico index _) := _.
+
 Typeclasses Opaque index indexmap.
 
 Class TypeOfIndex (Ti : Set) (M : Type) :=

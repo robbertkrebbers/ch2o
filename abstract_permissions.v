@@ -235,9 +235,9 @@ Proof.
   rewrite (symmetry_iff _), (commutative_L (∪)). by apply perm_union_subset_l.
 Qed.
 Lemma perm_union_subseteq_l x y : x ⊥ y → x ⊆ x ∪ y.
-Proof. intros. by apply subset_subseteq, perm_union_subset_l. Qed.
+Proof. intros. by apply strict_include, perm_union_subset_l. Qed.
 Lemma perm_union_subseteq_r x y : y ⊥ x → x ⊆ y ∪ x.
-Proof. intros. by apply subset_subseteq, perm_union_subset_r. Qed.
+Proof. intros. by apply strict_include, perm_union_subset_r. Qed.
 Lemma perm_union_ne_l x y : x ⊥ y → x ≠ x ∪ y.
 Proof.
   intros ? E. destruct (perm_union_subset_l x y) as [? []]; auto.
@@ -285,7 +285,7 @@ Qed.
 
 Lemma perm_union_cancel_l x y z : z ⊥ x → z ⊥ y → z ∪ x = z ∪ y → x = y.
 Proof.
-  intros ?? E. by apply (anti_symmetric _);
+  intros ?? E. by apply (anti_symmetric (⊆));
     apply perm_union_reflecting_l with z; rewrite ?E.
 Qed.
 Lemma perm_union_cancel_r x y z : x ⊥ z → y ⊥ z → x ∪ z = y ∪ z → x = y.

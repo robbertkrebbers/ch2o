@@ -14,9 +14,9 @@ Coercion Is_true : bool >-> Sortclass.
 
 (** Ensure that [simpl] unfolds [id], [compose], and [flip] when fully
 applied. *)
-Arguments id _ _/.
+Arguments id _ _ /.
 Arguments compose _ _ _ _ _ _ /.
-Arguments flip _ _ _ _ _ _/.
+Arguments flip _ _ _ _ _ _ /.
 Typeclasses Transparent id compose flip.
 
 (** Change [True] and [False] into notations in order to enable overloading.
@@ -211,7 +211,7 @@ Notation "{[ x , y ]}" := (singleton (x,y))
 Notation "{[ x , y , z ]}" := (singleton (x,y,z))
   (at level 1, y at next level, z at next level) : C_scope.
 
-Class SubsetEq A := subseteq: A → A → Prop.
+Class SubsetEq A := subseteq: relation A.
 Instance: Params (@subseteq) 2.
 Infix "⊆" := subseteq (at level 70) : C_scope.
 Notation "(⊆)" := subseteq (only parsing) : C_scope.
@@ -226,16 +226,21 @@ Notation "(⊆*)" := (Forall2 subseteq) (only parsing) : C_scope.
 
 Hint Extern 0 (_ ⊆ _) => reflexivity.
 
-Class Subset A := subset: A → A → Prop.
-Instance: Params (@subset) 2.
-Infix "⊂" := subset (at level 70) : C_scope.
-Notation "(⊂)" := subset (only parsing) : C_scope.
-Notation "( X ⊂ )" := (subset X) (only parsing) : C_scope.
-Notation "( ⊂ X )" := (λ Y, subset Y X) (only parsing) : C_scope.
+Definition strict {A} (R : relation A) : relation A := λ X Y, R X Y ∧ ¬R Y X.
+Instance: Params (@strict) 2.
+Infix "⊂" := (strict subseteq) (at level 70) : C_scope.
+Notation "(⊂)" := (strict subseteq) (only parsing) : C_scope.
+Notation "( X ⊂ )" := (strict subseteq X) (only parsing) : C_scope.
+Notation "( ⊂ X )" := (λ Y, strict subseteq Y X) (only parsing) : C_scope.
 Notation "X ⊄  Y" := (¬X ⊂ Y) (at level 70) : C_scope.
 Notation "(⊄)" := (λ X Y, X ⊄ Y) (only parsing) : C_scope.
 Notation "( X ⊄ )" := (λ Y, X ⊄ Y) (only parsing) : C_scope.
 Notation "( ⊄ X )" := (λ Y, Y ⊄ X) (only parsing) : C_scope.
+
+(** The class [Lexico A] is used for the lexicographic order on [A]. This order
+is used to create finite maps, finite sets, etc, and is typically different from
+the order [(⊆)]. *)
+Class Lexico A := lexico: relation A.
 
 Class ElemOf A B := elem_of: A → B → Prop.
 Instance: Params (@elem_of) 3.
@@ -472,6 +477,11 @@ Class RightDistr {A} (R : relation A) (f g : A → A → A) : Prop :=
   right_distr: ∀ y z x, R (f (g y z) x) (g (f y x) (f z x)).
 Class AntiSymmetric {A} (R S : relation A) : Prop :=
   anti_symmetric: ∀ x y, S x y → S y x → R x y.
+Class Total {A} (R : relation A) := total x y : R x y ∨ R y x.
+Class Trichotomy {A} (R : relation A) :=
+  trichotomy : ∀ x y, strict R x y ∨ x = y ∨ strict R y x.
+Class TrichotomyT {A} (R : relation A) :=
+  trichotomyT : ∀ x y, {strict R x y} + {x = y} + {strict R y x}.
 
 Arguments irreflexivity {_} _ {_} _ _.
 Arguments injective {_ _ _ _} _ {_} _ _ _.
@@ -488,6 +498,9 @@ Arguments right_absorb {_ _} _ _ {_} _.
 Arguments left_distr {_ _} _ _ {_} _ _ _.
 Arguments right_distr {_ _} _ _ {_} _ _ _.
 Arguments anti_symmetric {_ _} _ {_} _ _ _ _.
+Arguments total {_} _ {_} _ _.
+Arguments trichotomy {_} _ {_} _ _.
+Arguments trichotomyT {_} _ {_} _ _.
 
 (** The following lemmas are specific versions of the projections of the above
 type classes for Leibniz equality. These lemmas allow us to enforce Coq not to
@@ -518,14 +531,21 @@ Lemma right_distr_L {A} (f g : A → A → A) `{!RightDistr (=) f g} y z x :
 Proof. auto. Qed.
 
 (** ** Axiomatization of ordered structures *)
+(** The classes [PreOrder], [PartialOrder], and [TotalOrder] do not use the
+relation [⊆] because we often have multiple orders on the same structure. *)
+Class PartialOrder {A} (R : relation A) : Prop := {
+  po_preorder :> PreOrder R;
+  po_anti_symmetric :> AntiSymmetric (=) R
+}.
+Class TotalOrder {A} (R : relation A) : Prop := {
+  to_po :> PartialOrder R;
+  to_trichotomy :> Trichotomy R
+}.
+
 (** A pre-order equipped with a smallest element. *)
 Class BoundedPreOrder A `{Empty A} `{SubsetEq A} : Prop := {
   bounded_preorder :>> PreOrder (⊆);
   subseteq_empty x : ∅ ⊆ x
-}.
-Class PartialOrder {A} (R : relation A) : Prop := {
-  po_preorder :> PreOrder R;
-  po_antisym :> AntiSymmetric (=) R
 }.
 
 (** We do not include equality in the following interfaces so as to avoid the
@@ -678,18 +698,10 @@ Arguments snd_map {_ _ _} _ !_ /.
 
 Instance: ∀ {A A' B} (f : A → A'),
   Injective (=) (=) f → Injective (=) (=) (@fst_map A A' B f).
-Proof.
-  intros ????? [??] [??]; simpl; intro; f_equal.
-  * apply (injective f). congruence.
-  * congruence.
-Qed.
+Proof. intros ????? [??] [??]; injection 1; firstorder congruence. Qed.
 Instance: ∀ {A B B'} (f : B → B'),
   Injective (=) (=) f → Injective (=) (=) (@snd_map A B B' f).
-Proof.
-  intros ????? [??] [??]; simpl; intro; f_equal.
-  * congruence.
-  * apply (injective f). congruence.
-Qed.
+Proof. intros ????? [??] [??]; injection 1; firstorder congruence. Qed.
 
 Definition prod_relation {A B} (R1 : relation A) (R2 : relation B) :
   relation (A * B) := λ x y, R1 (fst x) (fst y) ∧ R2 (snd x) (snd y).
@@ -781,51 +793,51 @@ Proof. intros y. exists (g y). auto. Qed.
 Lemma impl_transitive (P Q R : Prop) : (P → Q) → (Q → R) → (P → R).
 Proof. tauto. Qed.
 Instance: Commutative (↔) (@eq A).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: Commutative (↔) (λ x y, @eq A y x).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: Commutative (↔) (↔).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: Commutative (↔) (∧).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: Associative (↔) (∧).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: Idempotent (↔) (∧).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: Commutative (↔) (∨).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: Associative (↔) (∨).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: Idempotent (↔) (∨).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: LeftId (↔) True (∧).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: RightId (↔) True (∧).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: LeftAbsorb (↔) False (∧).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: RightAbsorb (↔) False (∧).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: LeftId (↔) False (∨).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: RightId (↔) False (∨).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: LeftAbsorb (↔) True (∨).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: RightAbsorb (↔) True (∨).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: LeftId (↔) True impl.
-Proof. unfold impl. red. intuition. Qed.
+Proof. unfold impl. red; intuition. Qed.
 Instance: RightAbsorb (↔) True impl.
-Proof. unfold impl. red. intuition. Qed.
+Proof. unfold impl. red; intuition. Qed.
 Instance: LeftDistr (↔) (∧) (∨).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: RightDistr (↔) (∧) (∨).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: LeftDistr (↔) (∨) (∧).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Instance: RightDistr (↔) (∨) (∧).
-Proof. red. intuition. Qed.
+Proof. red; intuition. Qed.
 Lemma not_injective `{Injective A B R R' f} x y : ¬R x y → ¬R' (f x) (f y).
 Proof. intuition. Qed.
 Instance injective_compose {A B C} R1 R2 R3 (f : A → B) (g : B → C) :

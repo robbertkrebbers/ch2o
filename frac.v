@@ -57,7 +57,7 @@ Qed.
 
 Lemma frac_subset_spec f1 f2 : f1 ⊂ f2 ↔ `f1 < `f2.
 Proof.
-  unfold subset, orders.preorder_subset, subseteq, perm_subseteq; simpl.
+  unfold strict, subseteq, perm_subseteq; simpl.
   rewrite <-Qclt_nge. intuition auto using Qclt_le_weak.
 Qed.
 

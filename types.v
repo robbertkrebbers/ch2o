@@ -39,6 +39,10 @@ Instance: FinMap tag tagmap := _.
 Instance tagmap_dom {A} : Dom (tagmap A) tagset := mapset_dom.
 Instance: FinMapDom tag tagmap tagset := mapset_dom_spec.
 
+Instance tag_lexico : Lexico tag := @lexico N _.
+Instance tag_lexico_po : PartialOrder (@lexico tag _) := _.
+Instance tag_trichotomy: TrichotomyT (@lexico tag _) := _.
+
 Typeclasses Opaque tag tagmap.
 
 (** * Types *)
@@ -334,7 +338,7 @@ Section types.
 
   Lemma type_valid_weaken_subset Γ Σ τ :
     type_valid Γ τ → Γ ⊂ Σ → type_valid Σ τ.
-  Proof. eauto using type_valid_weaken, subset_subseteq. Qed.
+  Proof. eauto using type_valid_weaken, (strict_include (R:=(⊆))). Qed.
   Lemma types_valid_weaken Γ Σ τs :
     Forall (type_valid Γ) τs → Γ ⊆ Σ → Forall (type_valid Σ) τs.
   Proof. eauto using Forall_impl, type_valid_weaken. Qed.
@@ -360,7 +364,7 @@ Section types.
   Proof.
     intros. destruct (env_valid_delete Γ s τs) as (Σ&?&?&?&?); auto.
     exists Σ. split_ands; auto.
-    apply subset_transitive_r with (delete s Γ); eauto using delete_subset_alt.
+    apply strict_transitive_r with (delete s Γ); eauto using delete_subset_alt.
   Qed.
   Lemma env_valid_union Γ Σ :
     Γ ⊥ Σ → env_valid Γ → env_valid Σ → env_valid (Γ ∪ Σ).
@@ -478,12 +482,12 @@ Section type_env_ind.
     * apply Parray; eauto. by apply (type_valid_weaken Σ).
     * inversion Hs as [τs Hτs].
       destruct (env_valid_lookup_subset Σ s τs) as (Σ'&?&Hτs'&Hlen&?); auto.
-      assert (Σ' ⊂ Γ) by eauto using subset_transitive_l.
+      assert (Σ' ⊂ Γ) by eauto using (strict_transitive_l (R:=(⊆))).
       apply Pcompound with τs; auto.
       + apply Forall_impl with (type_valid Σ'); auto.
         intros. eapply type_valid_weaken_subset; eauto.
       + clear Hτs Hlen. induction Hτs'; constructor; auto.
-        apply (IH Σ'); eauto using subset_subseteq.
+        apply (IH Σ'); eauto using (strict_include (R:=(⊆))).
   Qed.
 End type_env_ind.
 
@@ -506,7 +510,7 @@ Section weak_type_env_ind.
     destruct (env_valid_lookup_subset Γ s τs) as (Σ'&?&Hτs&_&?); auto.
     apply Pcompound with τs; auto.
     clear Hs. induction Hτs as [|τ τs]; constructor; auto.
-    apply type_env_ind; eauto using type_valid_weaken, subset_subseteq.
+    apply type_env_ind; eauto using type_valid_weaken, (strict_include (R:=(⊆))).
   Qed.
 End weak_type_env_ind.
 
@@ -563,7 +567,8 @@ Section type_iter.
     apply Hcompound; auto. assert (is_Some (Γ !! s)) by eauto.
     clear Hs Hlen acc1 acc2.
     induction Hτs; constructor; auto. apply (IH Γ'); trivial.
-    * eauto using subset_transitive_r, delete_subset, lookup_weaken_is_Some.
+    * eauto using (strict_transitive_r (R:=(⊆))),
+        delete_subset, lookup_weaken_is_Some.
     * eauto using lookup_weaken.
     * transitivity (delete s Γ); eauto using delete_subseteq_compat.
     * transitivity (delete s Γ); eauto using delete_subseteq_compat.
