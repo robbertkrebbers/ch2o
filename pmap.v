@@ -257,76 +257,84 @@ Lemma Plookup_fmap {A B} (f : A → B) (t : Pmap_raw A) i :
   fmap f t !! i = fmap f (t !! i).
 Proof. revert i. induction t. done. by intros [?|?|]; simpl. Qed.
 
-Fixpoint Pto_list_raw {A} (j: positive) (t: Pmap_raw A) : list (positive * A) :=
+Fixpoint Pto_list_raw {A} (j: positive) (t: Pmap_raw A)
+    (acc : list (positive * A)) : list (positive * A) :=
   match t with
-  | PLeaf => []
-  | PNode l o r => default [] o (λ x, [(Preverse j, x)]) ++ 
-     Pto_list_raw (j~0) l ++ Pto_list_raw (j~1) r
+  | PLeaf => acc
+  | PNode l o r => default [] o (λ x, [(Preverse j, x)]) ++
+     Pto_list_raw (j~0) l (Pto_list_raw (j~1) r acc)
   end%list.
 
-Lemma Pelem_of_to_list_aux {A} (t : Pmap_raw A) j i x :
-  (i,x) ∈ Pto_list_raw j t ↔ ∃ i', i = i' ++ Preverse j ∧ t !! i' = Some x.
+Lemma Pelem_of_to_list {A} (t : Pmap_raw A) j i acc x :
+  (i,x) ∈ Pto_list_raw j t acc ↔
+    (∃ i', i = i' ++ Preverse j ∧ t !! i' = Some x) ∨ (i,x) ∈ acc.
 Proof.
   split.
-  * revert j. induction t as [|? IHl [?|] ? IHr]; intros j; simpl.
-    + by rewrite ?elem_of_nil.
-    + rewrite elem_of_cons, !elem_of_app. intros [?|[?|?]].
-      - simplify_equality. exists 1. by rewrite (left_id_L 1 (++))%positive.
-      - destruct (IHl (j~0)) as (i' &?&?); trivial; subst.
-         exists (i' ~ 0). by rewrite Preverse_xO, (associative_L _).
-      - destruct (IHr (j~1)) as (i' &?&?); trivial; subst.
-         exists (i' ~ 1). by rewrite Preverse_xI, (associative_L _).
-    + rewrite !elem_of_app. intros [?|?].
-      - destruct (IHl (j~0)) as (i' &?&?); trivial; subst.
-         exists (i' ~ 0). by rewrite Preverse_xO, (associative_L _).
-      - destruct (IHr (j~1)) as (i' &?&?); trivial; subst.
-         exists (i' ~ 1). by rewrite Preverse_xI, (associative_L _).
-  * intros (i' & ?& Hi'); subst. revert i' j Hi'.
-    induction t as [|? IHl [?|] ? IHr]; intros i j; simpl.
-    + done.
-    + rewrite elem_of_cons, elem_of_app. destruct i as [i|i|]; simpl in *.
-      - right. right. specialize (IHr i (j~1)).
-        rewrite Preverse_xI, (associative_L _) in IHr. auto.
-      - right. left. specialize (IHl i (j~0)).
-        rewrite Preverse_xO, (associative_L _) in IHl. auto.
-      - left. simplify_equality. by rewrite (left_id_L 1 (++))%positive.
-    + rewrite elem_of_app. destruct i as [i|i|]; simpl in *.
-      - right. specialize (IHr i (j~1)).
-        rewrite Preverse_xI, (associative_L _) in IHr. auto.
-      - left. specialize (IHl i (j~0)).
-        rewrite Preverse_xO, (associative_L _) in IHl. auto.
-      - done.
+  { revert j acc. induction t as [|l IHl [y|] r IHr]; intros j acc; simpl.
+    * by right.
+    * rewrite elem_of_cons. intros [?|?]; simplify_equality.
+      { left; exists 1. by rewrite (left_id_L 1 (++))%positive. }
+      destruct (IHl (j~0) (Pto_list_raw j~1 r acc)) as [(i'&->&?)|?]; auto.
+      { left; exists (i' ~ 0). by rewrite Preverse_xO, (associative_L _). }
+      destruct (IHr (j~1) acc) as [(i'&->&?)|?]; auto.
+      left; exists (i' ~ 1). by rewrite Preverse_xI, (associative_L _).
+    * intros.
+      destruct (IHl (j~0) (Pto_list_raw j~1 r acc)) as [(i'&->&?)|?]; auto.
+      { left; exists (i' ~ 0). by rewrite Preverse_xO, (associative_L _). }
+      destruct (IHr (j~1) acc) as [(i'&->&?)|?]; auto.
+      left; exists (i' ~ 1). by rewrite Preverse_xI, (associative_L _). }
+  revert t j i acc. assert (∀ t j i acc,
+    (i, x) ∈ acc → (i, x) ∈ Pto_list_raw j t acc) as help.
+  { intros t; induction t as [|l IHl [y|] r IHr]; intros j i acc;
+      simpl; rewrite ?elem_of_cons; auto. }
+  intros t j ? acc [(i&->&Hi)|?]; [|by auto]. revert j i acc Hi.
+  induction t as [|l IHl [y|] r IHr]; intros j i acc ?; simpl.
+  * done.
+  * rewrite elem_of_cons. destruct i as [i|i|]; simplify_equality'.
+    + right. apply help. specialize (IHr (j~1) i).
+      rewrite Preverse_xI, (associative_L _) in IHr. by apply IHr.
+    + right. specialize (IHl (j~0) i).
+      rewrite Preverse_xO, (associative_L _) in IHl. by apply IHl.
+    + left. by rewrite (left_id_L 1 (++))%positive.
+  * destruct i as [i|i|]; simplify_equality'.
+    + apply help. specialize (IHr (j~1) i).
+      rewrite Preverse_xI, (associative_L _) in IHr. by apply IHr.
+    + specialize (IHl (j~0) i).
+      rewrite Preverse_xO, (associative_L _) in IHl. by apply IHl.
 Qed.
-Lemma Pelem_of_to_list {A} (t : Pmap_raw A) i x :
-  (i,x) ∈ Pto_list_raw 1 t ↔ t !! i = Some x.
+Lemma Pto_list_nodup {A} j (t : Pmap_raw A) acc :
+  (∀ i x, (i ++ Preverse j, x) ∈ acc → t !! i = None) →
+  NoDup acc → NoDup (Pto_list_raw j t acc).
 Proof.
-  rewrite Pelem_of_to_list_aux. split. by intros (i'&->&?). intros. by exists i.
-Qed.
-
-Lemma Pto_list_nodup {A} j (t : Pmap_raw A) : NoDup (Pto_list_raw j t).
-Proof.
-  revert j. induction t as [|? IHl [?|] ? IHr]; simpl.
-  * constructor.
-  * intros. rewrite NoDup_cons, NoDup_app. split_ands; trivial.
-    + rewrite elem_of_app, !Pelem_of_to_list_aux.
-      intros [(i&Hi&?)|(i&Hi&?)].
-      - rewrite Preverse_xO in Hi. apply (f_equal Plength) in Hi.
-        rewrite !Papp_length in Hi. simpl in Hi. lia.
-      - rewrite Preverse_xI in Hi. apply (f_equal Plength) in Hi.
-        rewrite !Papp_length in Hi. simpl in Hi. lia.
-    + intros [??]. rewrite !Pelem_of_to_list_aux.
-      intros (i1&?&?) (i2&Hi&?); subst.
-      rewrite Preverse_xO, Preverse_xI, !(associative_L _) in Hi.
-      by apply (injective (++ _)) in Hi.
-  * intros. rewrite NoDup_app. split_ands; trivial.
-    intros [??]. rewrite !Pelem_of_to_list_aux.
-    intros (i1&?&?) (i2&Hi&?); subst.
-    rewrite Preverse_xO, Preverse_xI, !(associative_L _) in Hi.
-    by apply (injective (++ _)) in Hi.
+  revert j acc. induction t as [|l IHl [y|] r IHr]; simpl; intros j acc Hin ?.
+  * done.
+  * repeat constructor.
+    { rewrite Pelem_of_to_list. intros [(i&Hi&?)|Hj].
+      { apply (f_equal Plength) in Hi.
+        rewrite Preverse_xO, !Papp_length in Hi; simpl in *; lia. }
+      rewrite Pelem_of_to_list in Hj. destruct Hj as [(i&Hi&?)|Hj].
+      { apply (f_equal Plength) in Hi.
+        rewrite Preverse_xI, !Papp_length in Hi; simpl in *; lia. }
+      specialize (Hin 1 y). rewrite (left_id_L 1 (++))%positive in Hin.
+      discriminate (Hin Hj). }
+   apply IHl.
+   { intros i x. rewrite Pelem_of_to_list. intros [(?&Hi&?)|Hi].
+     + rewrite Preverse_xO, Preverse_xI, !(associative_L _) in Hi.
+       by apply (injective (++ _)) in Hi.
+     + apply (Hin (i~0) x). by rewrite Preverse_xO, (associative_L _) in Hi. }
+   apply IHr; auto. intros i x Hi.
+   apply (Hin (i~1) x). by rewrite Preverse_xI, (associative_L _) in Hi.
+ * apply IHl.
+   { intros i x. rewrite Pelem_of_to_list. intros [(?&Hi&?)|Hi].
+     + rewrite Preverse_xO, Preverse_xI, !(associative_L _) in Hi.
+       by apply (injective (++ _)) in Hi.
+     + apply (Hin (i~0) x). by rewrite Preverse_xO, (associative_L _) in Hi. }
+   apply IHr; auto. intros i x Hi.
+   apply (Hin (i~1) x). by rewrite Preverse_xI, (associative_L _) in Hi.
 Qed.
 
 Global Instance Pto_list {A} : FinMapToList positive A (Pmap A) :=
-  λ t, Pto_list_raw 1 (`t).
+  λ t, Pto_list_raw 1 (`t) [].
 
 Fixpoint Pmerge_aux `(f : option A → option B) (t : Pmap_raw A) : Pmap_raw B :=
   match t with
@@ -385,7 +393,11 @@ Proof.
   * intros ?? [??] ??. by apply Plookup_alter_ne.
   * intros ??? [??]. by apply Plookup_fmap.
   * intros ? [??]. apply Pto_list_nodup.
-  * intros ? [??]. apply Pelem_of_to_list.
+    + intros ??. by rewrite elem_of_nil.
+    + constructor.
+  * intros ? [??] i x; unfold map_to_list, Pto_list.
+    rewrite Pelem_of_to_list, elem_of_nil.
+    split. by intros [(?&->&?)|]. by left; exists i.
   * intros ??? ?? [??] [??] ?. by apply Pmerge_spec.
 Qed.
 
