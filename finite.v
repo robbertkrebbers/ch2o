@@ -75,7 +75,7 @@ Qed.
 Lemma finite_injective_Permutation `{Finite A} `{Finite B} (f : A → B)
   `{!Injective (=) (=) f} : card A = card B → f <$> enum A ≡ₚ enum B.
 Proof.
-  intros. apply contains_Permutation.
+  intros. apply contains_Permutation_length_eq.
   * by rewrite fmap_length.
   * by apply finite_injective_contains.
 Qed.
