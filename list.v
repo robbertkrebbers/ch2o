@@ -1693,22 +1693,26 @@ Lemma Permutation_contains l1 l2 : l1 ≡ₚ l2 → l1 `contains` l2.
 Proof. induction 1; econstructor; eauto. Qed.
 Lemma sublist_contains l1 l2 : l1 `sublist` l2 → l1 `contains` l2.
 Proof. induction 1; constructor; auto. Qed.
-Lemma contains_Permutation_alt l1 l2 :
+Lemma contains_Permutation l1 l2 : l1 `contains` l2 → ∃ k, l2 ≡ₚ l1 ++ k.
+Proof.
+  induction 1 as
+    [|x y l ? [k Hk]| |x l1 l2 ? [k Hk]|l1 l2 l3 ? [k Hk] ? [k' Hk']].
+  * by eexists [].
+  * exists k. by rewrite Hk.
+  * eexists []. rewrite (right_id_L [] (++)). by constructor.
+  * exists (x :: k). by rewrite Hk, Permutation_middle.
+  * exists (k ++ k'). by rewrite Hk', Hk, (associative_L (++)).
+Qed.
+Lemma contains_Permutation_length_le l1 l2 :
   length l2 ≤ length l1 → l1 `contains` l2 → l1 ≡ₚ l2.
 Proof.
-  intros Hl21 Hl12. revert Hl21. elim Hl12; clear l1 l2 Hl12; simpl.
-  * constructor.
-  * constructor; auto with lia.
-  * constructor; auto with lia.
-  * intros x l1 l2 ? IH ?. feed specialize IH; [lia|].
-    apply Permutation_length in IH. lia.
-  * intros l1 l2 l3 Hl12 ? Hl23 ?.
-    apply contains_length in Hl12. apply contains_length in Hl23.
-    transitivity l2; auto with lia.
+  intros Hl21 Hl12. destruct (contains_Permutation l1 l2) as [[|??] Hk]; auto.
+  * by rewrite Hk, (right_id_L [] (++)).
+  * rewrite Hk, app_length in Hl21; simpl in Hl21; lia.
 Qed.
-Lemma contains_Permutation l1 l2 :
+Lemma contains_Permutation_length_eq l1 l2 :
   length l2 = length l1 → l1 `contains` l2 → l1 ≡ₚ l2.
-Proof. intro. apply contains_Permutation_alt. lia. Qed.
+Proof. intro. apply contains_Permutation_length_le. lia. Qed.
 
 Global Instance: Proper ((≡ₚ) ==> (≡ₚ) ==> iff) (@contains A).
 Proof.
@@ -1719,7 +1723,7 @@ Proof.
     transitivity k2. done. by apply Permutation_contains.
 Qed.
 Global Instance: AntiSymmetric (≡ₚ) (@contains A).
-Proof. red. auto using contains_Permutation_alt, contains_length. Qed.
+Proof. red. auto using contains_Permutation_length_le, contains_length. Qed.
 
 Lemma contains_take l i : take i l `contains` l.
 Proof. auto using sublist_take, sublist_contains. Qed.
@@ -1839,7 +1843,9 @@ Proof. by apply contains_inserts_l, contains_inserts_r. Qed.
 Lemma Permutation_alt l1 l2 :
   l1 ≡ₚ l2 ↔ length l1 = length l2 ∧ l1 `contains` l2.
 Proof.
-  split. by intros Hl; rewrite Hl. intros [??]; auto using contains_Permutation.
+  split.
+  * by intros Hl; rewrite Hl.
+  * intros [??]; auto using contains_Permutation_length_eq.
 Qed.
 
 Lemma NoDup_contains l k : NoDup l → (∀ x, x ∈ l → x ∈ k) → l `contains` k.
