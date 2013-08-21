@@ -171,3 +171,9 @@ Instance uncurry_dec `(P_dec : ∀ (p : A * B), Decision (P p)) x y :
 Instance sig_eq_dec `(P : A → Prop) `{∀ x, ProofIrrel (P x)}
   `{∀ x y : A, Decision (x = y)} (x y : sig P) : Decision (x = y).
 Proof. refine (cast_if (decide (`x = `y))); by rewrite sig_eq_pi. Defined.
+
+(** Some laws for decidable propositions *)
+Lemma not_and_l {P Q : Prop} `{Decision P} : ¬(P ∧ Q) ↔ ¬P ∨ (¬Q ∧ P).
+Proof. destruct (decide P); tauto. Qed.
+Lemma not_and_r {P Q : Prop} `{Decision Q} : ¬(P ∧ Q) ↔ (¬P ∧ Q) ∨ ¬Q.
+Proof. destruct (decide Q); tauto. Qed.
