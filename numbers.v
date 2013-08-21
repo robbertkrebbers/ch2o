@@ -280,47 +280,92 @@ Qed.
 Close Scope Z_scope.
 
 (** * Notations and properties of [Qc] *)
-Notation "2" := (1+1)%Qc : Qc_scope.
+Open Scope Qc_scope.
+Notation "2" := (1+1) : Qc_scope.
 Infix "≤" := Qcle : Qc_scope.
-Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z)%Qc : Qc_scope.
-Notation "x ≤ y < z" := (x ≤ y ∧ y < z)%Qc : Qc_scope.
-Notation "x < y < z" := (x < y ∧ y < z)%Qc : Qc_scope.
-Notation "x < y ≤ z" := (x < y ∧ y ≤ z)%Qc : Qc_scope.
+Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z) : Qc_scope.
+Notation "x ≤ y < z" := (x ≤ y ∧ y < z) : Qc_scope.
+Notation "x < y < z" := (x < y ∧ y < z) : Qc_scope.
+Notation "x < y ≤ z" := (x < y ∧ y ≤ z) : Qc_scope.
 Notation "(≤)" := Qcle (only parsing) : Qc_scope.
 Notation "(<)" := Qclt (only parsing) : Qc_scope.
 
 Instance Qc_eq_dec: ∀ x y : Qc, Decision (x = y) := Qc_eq_dec.
-Program Instance Qc_le_dec (x y : Qc) : Decision (x ≤ y)%Qc :=
+Program Instance Qc_le_dec (x y : Qc) : Decision (x ≤ y) :=
   if Qclt_le_dec y x then right _ else left _.
 Next Obligation. by apply Qclt_not_le. Qed.
-Program Instance Qc_lt_dec (x y : Qc) : Decision (x < y)%Qc :=
+Program Instance Qc_lt_dec (x y : Qc) : Decision (x < y) :=
   if Qclt_le_dec x y then left _ else right _.
 Next Obligation. by apply Qcle_not_lt. Qed.
 
-Instance: Reflexive Qcle.
-Proof. red. apply Qcle_refl. Qed.
-Instance: Transitive Qcle.
-Proof. red. apply Qcle_trans. Qed.
+Instance: PartialOrder (≤).
+Proof.
+  repeat split; red. apply Qcle_refl. apply Qcle_trans. apply Qcle_antisym.
+Qed.
+Instance: StrictOrder (<).
+Proof.
+  split; red. intros x Hx. by destruct (Qclt_not_eq x x). apply Qclt_trans.
+Qed.
 
-Lemma Qcle_ngt (x y : Qc) : (x ≤ y ↔ ¬y < x)%Qc.
+Lemma Qcle_ngt (x y : Qc) : x ≤ y ↔ ¬y < x.
 Proof. split; auto using Qcle_not_lt, Qcnot_lt_le. Qed.
-Lemma Qclt_nge (x y : Qc) : (x < y ↔ ¬y ≤ x)%Qc.
+Lemma Qclt_nge (x y : Qc) : x < y ↔ ¬y ≤ x.
 Proof. split; auto using Qclt_not_le, Qcnot_le_lt. Qed.
 
-Lemma Qcplus_le_mono_l (x y z : Qc) : (x ≤ y ↔ z + x ≤ z + y)%Qc.
+Lemma Qcplus_le_mono_l (x y z : Qc) : x ≤ y ↔ z + x ≤ z + y.
 Proof.
   split; intros.
   * by apply Qcplus_le_compat.
-  * replace x with ((0 - z) + (z + x))%Qc by ring.
-    replace y with ((0 - z) + (z + y))%Qc by ring.
+  * replace x with ((0 - z) + (z + x)) by ring.
+    replace y with ((0 - z) + (z + y)) by ring.
     by apply Qcplus_le_compat.
 Qed.
-Lemma Qcplus_le_mono_r (x y z : Qc) : (x ≤ y ↔ x + z ≤ y + z)%Qc.
+Lemma Qcplus_le_mono_r (x y z : Qc) : x ≤ y ↔ x + z ≤ y + z.
 Proof. rewrite !(Qcplus_comm _ z). apply Qcplus_le_mono_l. Qed.
-Lemma Qcplus_lt_mono_l (x y z : Qc) : (x < y ↔ z + x < z + y)%Qc.
+Lemma Qcplus_lt_mono_l (x y z : Qc) : x < y ↔ z + x < z + y.
 Proof. by rewrite !Qclt_nge, <-Qcplus_le_mono_l. Qed.
-Lemma Qcplus_lt_mono_r (x y z : Qc) : (x < y ↔ x + z < y + z)%Qc.
+Lemma Qcplus_lt_mono_r (x y z : Qc) : x < y ↔ x + z < y + z.
 Proof. by rewrite !Qclt_nge, <-Qcplus_le_mono_r. Qed.
+Instance: Injective (=) (=) Qcopp.
+Proof.
+  intros x y H. by rewrite <-(Qcopp_involutive x), H, Qcopp_involutive.
+Qed.
+Instance: Injective (=) (=) (Qcplus z).
+Proof.
+  intros z x y H. by apply (anti_symmetric (≤));
+    rewrite (Qcplus_le_mono_l _ _ z), H.
+Qed.
+
+Lemma Qcplus_pos_nonneg (x y : Qc) : 0 < x → 0 ≤ y → 0 < x + y.
+Proof.
+  intros. apply Qclt_le_trans with (x + 0); [by rewrite Qcplus_0_r|].
+  by apply Qcplus_le_mono_l.
+Qed.
+Lemma Qcplus_nonneg_pos (x y : Qc) : 0 ≤ x → 0 < y → 0 < x + y.
+Proof. rewrite (Qcplus_comm x). auto using Qcplus_pos_nonneg. Qed. 
+Lemma Qcplus_pos_pos (x y : Qc) : 0 < x → 0 < y → 0 < x + y.
+Proof. auto using Qcplus_pos_nonneg, Qclt_le_weak. Qed.
+Lemma Qcplus_nonneg_nonneg (x y : Qc) : 0 ≤ x → 0 ≤ y → 0 ≤ x + y.
+Proof.
+  intros. transitivity (x + 0); [by rewrite Qcplus_0_r|].
+  by apply Qcplus_le_mono_l.
+Qed.
+
+Lemma Qcplus_neg_nonpos (x y : Qc) : x < 0 → y ≤ 0 → x + y < 0.
+Proof.
+  intros. apply Qcle_lt_trans with (x + 0); [|by rewrite Qcplus_0_r].
+  by apply Qcplus_le_mono_l.
+Qed.
+Lemma Qcplus_nonpos_neg (x y : Qc) : x ≤ 0 → y < 0 → x + y < 0.
+Proof. rewrite (Qcplus_comm x). auto using Qcplus_neg_nonpos. Qed.
+Lemma Qcplus_neg_neg (x y : Qc) : x < 0 → y < 0 → x + y < 0.
+Proof. auto using Qcplus_nonpos_neg, Qclt_le_weak. Qed.
+Lemma Qcplus_nonpos_nonpos (x y : Qc) : x ≤ 0 → y ≤ 0 → x + y ≤ 0.
+Proof.
+  intros. transitivity (x + 0); [|by rewrite Qcplus_0_r].
+  by apply Qcplus_le_mono_l.
+Qed.
+Close Scope Qc_scope.
 
 (** * Conversions *)
 Lemma Z_to_nat_nonpos x : (x ≤ 0)%Z → Z.to_nat x = 0.
