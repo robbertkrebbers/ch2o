@@ -72,8 +72,9 @@ Notation "(↔ B )" := (λ A, A ↔ B) (only parsing) : C_scope.
 
 (** Set convenient implicit arguments for [existT] and introduce notations. *)
 Arguments existT {_ _} _ _.
+Arguments proj1_sig {_ _} _.
 Notation "x ↾ p" := (exist _ x p) (at level 20) : C_scope.
-Notation "` x" := (proj1_sig x) : C_scope.
+Notation "` x" := (proj1_sig x) (at level 10, format "` x") : C_scope.
 
 (** * Type classes *)
 (** ** Provable propositions *)

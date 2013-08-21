@@ -240,8 +240,7 @@ Proof.
     induction l2 as [|[??] l2 IH2]; simplify_assoc; rewrite ?IH; simplify_assoc.
 Qed.
 
-Global Instance assoc_to_list {A} : FinMapToList K A (assoc K A) :=
-  @proj1_sig _ _.
+Global Instance assoc_to_list {A} : FinMapToList K A (assoc K A) := proj1_sig.
 Lemma assoc_to_list_nodup {A} (l : list (K * A)) : assoc_wf l → NoDup l.
 Proof.
   revert l. assert (∀ i x (l : list (K * A)), assoc_before i l → (i,x) ∉ l).
