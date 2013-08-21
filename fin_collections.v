@@ -145,7 +145,7 @@ Proof.
 Qed.
 
 Lemma collection_wf : wf (strict (@subseteq C _)).
-Proof. apply well_founded_lt_compat with size, subset_size. Qed.
+Proof. apply (wf_projected (<) size); auto using subset_size, lt_wf. Qed.
 
 Lemma collection_ind (P : C → Prop) :
   Proper ((≡) ==> iff) P →
