@@ -129,6 +129,27 @@ Lemma bijective_card `{Finite A} `{Finite B} (f : A → B)
   `{!Injective (=) (=) f} `{!Surjective (=) f} : card A = card B.
 Proof. apply finite_bijective. eauto. Qed.
 
+(** Decidability of quantification over finite types *)
+Section forall_exists.
+  Context `{Finite A} (P : A → Prop) `{∀ x, Decision (P x)}.
+
+  Lemma Forall_finite : Forall P (enum A) ↔ (∀ x, P x).
+  Proof. rewrite Forall_forall. intuition auto using elem_of_enum. Qed.
+  Lemma Exists_finite : Exists P (enum A) ↔ (∃ x, P x).
+  Proof. rewrite Exists_exists. naive_solver eauto using elem_of_enum. Qed.
+
+  Global Instance forall_dec: Decision (∀ x, P x).
+  Proof.
+   refine (cast_if (decide (Forall P (enum A))));
+    abstract by rewrite <-Forall_finite.
+  Defined.
+  Global Instance exists_dec: Decision (∃ x, P x).
+  Proof.
+   refine (cast_if (decide (Exists P (enum A))));
+    abstract by rewrite <-Exists_finite.
+  Defined.
+End forall_exists.
+
 (** Instances *)
 Section enc_finite.
   Context `{∀ x y : A, Decision (x = y)}.
