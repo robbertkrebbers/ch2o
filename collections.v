@@ -87,6 +87,25 @@ Section simple_collection.
   End dec.
 End simple_collection.
 
+Definition option_collection `{Singleton A C} `{Empty C} (x : option A) : C :=
+  match x with None => ∅ | Some a => {[ a ]} end.
+Notation "?! x" := (option_collection x) (at level 20, format "?!  x").
+
+Lemma elem_of_option_collection `{SimpleCollection A C} (x : A) o :
+  x ∈ ?! o ↔ o = Some x.
+Proof.
+  destruct o; simpl; rewrite ?elem_of_empty, ?elem_of_singleton; naive_solver.
+Qed.
+
+Global Instance collection_guard `{CollectionMonad M} : MGuard M :=
+  λ P dec A x, match dec with left H => x H | _ => ∅ end.
+Lemma elem_of_guard `{CollectionMonad M} `{Decision P} {A} (x : A) (X : M A) :
+  x ∈ guard P; X ↔ P ∧ x ∈ X.
+Proof.
+  unfold mguard, collection_guard; simpl; case_match;
+    rewrite ?elem_of_empty; naive_solver.
+Qed.
+
 (** * Tactics *)
 (** Given a hypothesis [H : _ ∈ _], the tactic [destruct_elem_of H] will
 recursively split [H] for [(∪)], [(∩)], [(∖)], [map], [∅], [{[_]}]. *)
@@ -116,6 +135,10 @@ Tactic Notation "decompose_elem_of" hyp(H) :=
   | _ ∈ mjoin _ ≫= _ =>
     let H1 := fresh in let H2 := fresh in apply elem_of_join in H;
     destruct H as [? [H1 H2]]; go H1; go H2
+  | _ ∈ guard _; _ =>
+    let H1 := fresh in let H2 := fresh in apply elem_of_guard in H;
+    destruct H as [H1 H2]; go H2
+  | _ ∈ ?! _ => apply elem_of_option_collection in H
   | _ => idtac
   end in go H.
 Tactic Notation "decompose_elem_of" :=
@@ -440,21 +463,9 @@ Section fresh.
   Qed.
 End fresh.
 
-Definition option_collection `{Singleton A C} `{Empty C} (x : option A) : C :=
-  match x with
-  | None => ∅
-  | Some a => {[ a ]}
-  end.
-
 (** * Properties of implementations of collections that form a monad *)
 Section collection_monad.
   Context `{CollectionMonad M}.
-
-  Global Instance collection_guard: MGuard M := λ P dec A x,
-    match dec with
-    | left H => x H
-    | _ => ∅
-    end.
 
   Global Instance collection_fmap_proper {A B} (f : A → B) :
     Proper ((≡) ==> (≡)) (fmap f).
