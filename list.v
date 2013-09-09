@@ -1934,6 +1934,8 @@ Instance: ∀ A, Reflexive (@same_length A A).
 Proof. intros A l. induction l; constructor; auto. Qed.
 Instance: ∀ A, Symmetric (@same_length A A).
 Proof. induction 1; constructor; auto. Qed.
+Hint Extern 0 (_ `same_length` _) => reflexivity.
+Hint Extern 0 (_ `same_length` _) => symmetry; assumption.
 
 Section same_length.
   Context {A B : Type}.
@@ -1963,6 +1965,10 @@ Section same_length.
   Qed.
   Lemma same_length_resize l k x y n : resize n x l `same_length` resize n y k.
   Proof. apply same_length_length. by rewrite !resize_length. Qed.
+
+  Lemma same_length_fmap {C D} (f : A → C) (g : B → D) l k :
+    l `same_length` k → f <$> l `same_length` g <$> k.
+  Proof. induction 1; simpl; constructor; auto. Qed.
 End same_length.
 
 (** ** Properties of the [Forall] and [Exists] predicate *)
@@ -2964,6 +2970,12 @@ Section zip_with.
     Forall (λ x, ∀ y, P y → Q (f x y)) l1 → Forall P l2 →
     Forall Q (zip_with f l1 l2).
   Proof. intros Hl. revert l2. induction Hl; destruct 1; simpl in *; auto. Qed.
+
+  Lemma zip_with_zip l k : zip_with f l k = curry f <$> zip l k.
+  Proof. revert k. induction l; intros [|??]; simpl; auto with f_equal. Qed.
+  Lemma zip_with_fst_snd lk :
+    zip_with f (fst <$> lk) (snd <$> lk) = curry f <$> lk.
+  Proof. induction lk as [|[]]; simpl; auto with f_equal. Qed.
 End zip_with.
 
 Section zip.
@@ -2981,6 +2993,8 @@ Section zip.
   Proof. by apply zip_with_fmap_fst. Qed.
   Lemma zip_snd l k : l `same_length` k → snd <$> zip l k = k.
   Proof. by apply zip_with_fmap_snd. Qed.
+  Lemma zip_fst_snd (lk : list (A * B)) : zip (fst <$> lk) (snd <$> lk) = lk.
+  Proof. induction lk as [|[]]; simpl; auto with f_equal. Qed.
 End zip.
 
 Lemma elem_of_zipped_map {A B} (f : list A → list A → A → B) l k x :
