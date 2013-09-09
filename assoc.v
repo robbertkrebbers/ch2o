@@ -12,18 +12,18 @@ Require Export fin_maps.
 (** Because the association list is sorted using [strict lexico] instead of
 [lexico], it automatically guarantees that no duplicates exist. *)
 Definition assoc (K : Type) `{Lexico K} `{!TrichotomyT lexico}
-    `{!PartialOrder lexico} (A : Type) : Type :=
-  dsig (λ l : list (K * A), StronglySorted (strict lexico) (fst <$> l)).
+    `{!StrictOrder lexico} (A : Type) : Type :=
+  dsig (λ l : list (K * A), StronglySorted lexico (fst <$> l)).
 
 Section assoc.
-Context `{Lexico K} `{!PartialOrder lexico}.
+Context `{Lexico K} `{!StrictOrder lexico}.
 Context `{∀ x y : K, Decision (x = y)} `{!TrichotomyT lexico}.
 
-Infix "⊂" := (strict lexico).
+Infix "⊂" := lexico.
 Notation assoc_before j l :=
-  (Forall (strict lexico j) (fst <$> l)) (only parsing).
+  (Forall (lexico j) (fst <$> l)) (only parsing).
 Notation assoc_wf l :=
-  (StronglySorted (strict lexico) (fst <$> l)) (only parsing).
+  (StronglySorted (lexico) (fst <$> l)) (only parsing).
 
 Lemma assoc_before_transitive {A} (l : list (K * A)) i j :
   i ⊂ j → assoc_before j l → assoc_before i l.
@@ -245,7 +245,7 @@ Lemma assoc_to_list_nodup {A} (l : list (K * A)) : assoc_wf l → NoDup l.
 Proof.
   revert l. assert (∀ i x (l : list (K * A)), assoc_before i l → (i,x) ∉ l).
   { intros i x l. rewrite Forall_fmap, Forall_forall. intros Hl Hi.
-    destruct (irreflexivity (strict lexico) i). by apply (Hl (i,x) Hi). }
+    destruct (irreflexivity (lexico) i). by apply (Hl (i,x) Hi). }
   induction l as [|[??]]; simplify_assoc; constructor; auto.
 Qed.
 Lemma assoc_to_list_elem_of {A} (l : list (K * A)) i x :
@@ -276,7 +276,7 @@ End assoc.
 (** We construct finite sets using the above implementation of maps. *)
 Notation assoc_set K := (mapset (assoc K)).
 Instance assoc_map_dom `{Lexico K} `{!TrichotomyT (@lexico K _)}
-  `{!PartialOrder lexico} {A} : Dom (assoc K A) (assoc_set K) := mapset_dom.
+  `{!StrictOrder lexico} {A} : Dom (assoc K A) (assoc_set K) := mapset_dom.
 Instance assoc_map_dom_spec `{Lexico K} `{!TrichotomyT (@lexico K _)}
-    `{!PartialOrder lexico} `{∀ x y : K, Decision (x = y)} :
+    `{!StrictOrder lexico} `{∀ x y : K, Decision (x = y)} :
   FinMapDom K (assoc K) (assoc_set K) := mapset_dom_spec.

@@ -480,9 +480,9 @@ Class AntiSymmetric {A} (R S : relation A) : Prop :=
   anti_symmetric: ∀ x y, S x y → S y x → R x y.
 Class Total {A} (R : relation A) := total x y : R x y ∨ R y x.
 Class Trichotomy {A} (R : relation A) :=
-  trichotomy : ∀ x y, strict R x y ∨ x = y ∨ strict R y x.
+  trichotomy : ∀ x y, R x y ∨ x = y ∨ R y x.
 Class TrichotomyT {A} (R : relation A) :=
-  trichotomyT : ∀ x y, {strict R x y} + {x = y} + {strict R y x}.
+  trichotomyT : ∀ x y, {R x y} + {x = y} + {R y x}.
 
 Arguments irreflexivity {_} _ {_} _ _.
 Arguments injective {_ _ _ _} _ {_} _ _ _.

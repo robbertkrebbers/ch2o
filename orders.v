@@ -11,7 +11,6 @@ the relation [⊆] because we often have multiple orders on the same structure *
 Section orders.
   Context {A} {R : relation A}.
   Implicit Types X Y : A.
-
   Infix "⊆" := R.
   Notation "X ⊈ Y" := (¬X ⊆ Y).
   Infix "⊂" := (strict R).
@@ -71,25 +70,41 @@ Section orders.
   Lemma total_not_strict `{!Total R} X Y : X ⊈ Y → Y ⊂ X.
   Proof. red; auto using total_not. Qed.
 
-  Global Instance trichotomyT_dec `{!TrichotomyT R} `{!Reflexive R} X Y :
-      Decision (X ⊆ Y) :=
-    match trichotomyT R X Y with
-    | inleft (left H) => left (proj1 H)
-    | inleft (right H) => left (reflexive_eq _ _ H)
-    | inright H => right (proj2 H)
-    end.
-  Global Instance trichotomyT_trichotomy `{!TrichotomyT R} : Trichotomy R.
-  Proof. intros X Y. destruct (trichotomyT R X Y) as [[|]|]; tauto. Qed.
-  Global Instance trichotomy_total `{!Trichotomy R} `{!Reflexive R} : Total R.
+  Global Instance trichotomy_total
+    `{!Trichotomy (strict R)} `{!Reflexive R} : Total R.
   Proof.
-    intros X Y. destruct (trichotomy R X Y) as [[??]|[<-|[??]]]; intuition.
+    intros X Y.
+    destruct (trichotomy (strict R) X Y) as [[??]|[<-|[??]]]; intuition.
   Qed.
 End orders.
+
+Section strict_orders.
+  Context {A} {R : relation A}.
+  Implicit Types X Y : A.
+  Infix "⊂" := R.
+
+  Lemma irreflexive_eq `{!Irreflexive R} X Y : X = Y → ¬X ⊂ Y.
+  Proof. intros ->. apply (irreflexivity R). Qed.
+  Lemma strict_anti_symmetric `{!StrictOrder R} X Y :
+    X ⊂ Y → Y ⊂ X → False.
+  Proof. intros. apply (irreflexivity R X). by transitivity Y. Qed.
+
+  Global Instance trichotomyT_dec `{!TrichotomyT R}
+      `{!StrictOrder R} X Y : Decision (X ⊂ Y) :=
+    match trichotomyT R X Y with
+    | inleft (left H) => left H
+    | inleft (right H) => right (irreflexive_eq _ _ H)
+    | inright H => right (strict_anti_symmetric _ _ H)
+    end.
+
+  Global Instance trichotomyT_trichotomy `{!TrichotomyT R} : Trichotomy R.
+  Proof. intros X Y. destruct (trichotomyT R X Y) as [[|]|]; tauto. Qed.
+End strict_orders.
 
 Ltac simplify_order := repeat
   match goal with
   | _ => progress simplify_equality
-  | H : strict _ ?x ?x |- _ => by destruct (irreflexivity _ _ H)
+  | H : ?R ?x ?x |- _ => by destruct (irreflexivity _ _ H)
   | H1 : ?R ?x ?y |- _ =>
     match goal with
     | H2 : R y x |- _ =>
