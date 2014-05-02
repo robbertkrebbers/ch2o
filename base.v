@@ -1,4 +1,4 @@
-(* Copyright (c) 2012-2013, Robbert Krebbers. *)
+(* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects type class interfaces, notations, and general theorems
 that are used throughout the whole development. Most importantly it contains

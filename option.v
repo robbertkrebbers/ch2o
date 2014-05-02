@@ -1,4 +1,4 @@
-(* Copyright (c) 2012-2013, Robbert Krebbers. *)
+(* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects general purpose definitions and theorems on the option
 data type that are not in the Coq standard library. *)

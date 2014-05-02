@@ -1,4 +1,4 @@
-(* Copyright (c) 2012, Robbert Krebbers. *)
+(* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file describes a subset of the C type system. This subset includes
 pointer, array, struct, and union types, but omits qualifiers as volatile and

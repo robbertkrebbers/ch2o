@@ -1,4 +1,4 @@
-(* Copyright (c) 2012-2013, Robbert Krebbers. *)
+(* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** Given a finite set of binary naturals [N], we generate a fresh element by
 taking the maximum, and adding one to it. We declare this operation as an
