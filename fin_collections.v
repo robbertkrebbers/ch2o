@@ -34,7 +34,7 @@ Qed.
 Lemma size_empty_inv (X : C) : size X = 0 → X ≡ ∅.
 Proof.
   intros. apply equiv_empty. intro. rewrite elements_spec.
-  rewrite (nil_length (elements X)). by rewrite elem_of_nil. done.
+  rewrite (nil_length_inv (elements X)). by rewrite elem_of_nil. done.
 Qed.
 Lemma size_empty_iff (X : C) : size X = 0 ↔ X ≡ ∅.
 Proof. split. apply size_empty_inv. intros E. by rewrite E, size_empty. Qed.
@@ -54,7 +54,7 @@ Lemma size_singleton_inv X x y : size X = 1 → x ∈ X → y ∈ X → x = y.
 Proof.
   unfold size, collection_size. simpl. rewrite !elements_spec.
   generalize (elements X). intros [|? l]; intro; simplify_equality.
-  rewrite (nil_length l), !elem_of_list_singleton by done. congruence.
+  rewrite (nil_length_inv l), !elem_of_list_singleton by done. congruence.
 Qed.
 
 Lemma collection_choose_Some X x : collection_choose X = Some x → x ∈ X.

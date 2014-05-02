@@ -20,7 +20,6 @@ Proof.
   | NMap x t1, NMap y t2 => cast_if_and (decide (x = y)) (decide (t1 = t2))
   end; abstract congruence.
 Defined.
-
 Instance Nempty {A} : Empty (Nmap A) := NMap None ∅.
 Instance Nlookup {A} : Lookup N A (Nmap A) := λ i t,
   match i with
@@ -34,24 +33,25 @@ Instance Npartial_alter {A} : PartialAlter N A (Nmap A) := λ f i t,
   end.
 Instance Nto_list {A} : FinMapToList N A (Nmap A) := λ t,
   match t with
-  | NMap o t => default [] o (λ x, [(0,x)]) ++ (fst_map Npos <$> map_to_list t)
+  | NMap o t =>
+     default [] o (λ x, [(0,x)]) ++ (prod_map Npos id <$> map_to_list t)
   end.
+Instance Nomap: OMap Nmap := λ A B f t,
+  match t with NMap o t => NMap (o ≫= f) (omap f t) end.
 Instance Nmerge: Merge Nmap := λ A B C f t1 t2,
   match t1, t2 with
   | NMap o1 t1, NMap o2 t2 => NMap (f o1 o2) (merge f t1 t2)
   end.
 Instance Nfmap: FMap Nmap := λ A B f t,
-  match t with NMap o t => NMap (fmap f o) (fmap f t) end.
+  match t with NMap o t => NMap (f <$> o) (f <$> t) end.
 
 Instance: FinMap N Nmap.
 Proof.
   split.
-  * intros ? [??] [??] H. f_equal.
-    + apply (H 0).
-    + apply map_eq. intros i. apply (H (Npos i)).
+  * intros ? [??] [??] H. f_equal; [apply (H 0)|].
+    apply map_eq. intros i. apply (H (Npos i)).
   * by intros ? [|?].
-  * intros ? f [? t] [|i]; simpl; [done |].
-    apply lookup_partial_alter.
+  * intros ? f [? t] [|i]; simpl; [done |]. apply lookup_partial_alter.
   * intros ? f [? t] [|i] [|j]; simpl; try intuition congruence.
     intros. apply lookup_partial_alter_ne. congruence.
   * intros ??? [??] []; simpl. done. apply lookup_fmap.
@@ -75,8 +75,8 @@ Proof.
       - rewrite elem_of_list_fmap.
         destruct i as [|i]; simpl; [done |].
         intros. exists (i, x). by rewrite elem_of_map_to_list.
-  * intros ??? f ? [o1 t1] [o2 t2] [|?]; simpl; [done|].
-    apply (lookup_merge f t1 t2).
+  * intros ?? f [??] [|?]; simpl; [done|]; apply (lookup_omap f).
+  * intros ??? f ? [??] [??] [|?]; simpl; [done|]; apply (lookup_merge f).
 Qed.
 
 (** * Finite sets *)

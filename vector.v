@@ -29,10 +29,7 @@ Notation "8" := (FS 7) : fin_scope. Notation "9" := (FS 8) : fin_scope.
 Notation "10" := (FS 9) : fin_scope.
 
 Fixpoint fin_to_nat {n} (i : fin n) : nat :=
-  match i with
-  | 0%fin => 0
-  | FS _ i => S (fin_to_nat i)
-  end.
+  match i with 0%fin => 0 | FS _ i => S (fin_to_nat i) end.
 Coercion fin_to_nat : fin >-> nat.
 
 Notation fin_of_nat := Fin.of_nat_lt.
@@ -60,28 +57,23 @@ Notation fin_0_inv := Fin.case0.
 Definition fin_S_inv {n} (P : fin (S n) → Type)
   (H0 : P 0%fin) (HS : ∀ i, P (FS i)) (i : fin (S n)) : P i.
 Proof.
- revert P H0 HS. refine (
-  match i with
-  | 0%fin => λ _ H0 _, H0
-  | FS _ i => λ _ _ HS, HS i
-  end).
+  revert P H0 HS.
+  refine match i with 0%fin => λ _ H0 _, H0 | FS _ i => λ _ _ HS, HS i end.
 Defined.
 
 Ltac inv_fin i :=
   match type of i with
   | fin 0 =>
-    revert dependent i;
-    match goal with |- ∀ i, @?P i => apply (fin_0_inv P) end
+    revert dependent i; match goal with |- ∀ i, @?P i => apply (fin_0_inv P) end
   | fin (S ?n) =>
-    revert dependent i;
-    match goal with |- ∀ i, @?P i => apply (fin_S_inv P) end
+    revert dependent i; match goal with |- ∀ i, @?P i => apply (fin_S_inv P) end
   end.
 
 Instance: Injective (=) (=) (@FS n).
 Proof. intros n i j. apply Fin.FS_inj. Qed.
 Instance: Injective (=) (=) (@fin_to_nat n).
 Proof.
-  intros n i. induction i; intros j; inv_fin j; simpl; auto with lia f_equal.
+  intros n i. induction i; intros j; inv_fin j; intros; f_equal'; auto with lia.
 Qed.
 Lemma fin_to_nat_lt {n} (i : fin n) : fin_to_nat i < n.
 Proof. induction i; simpl; lia. Qed.
@@ -91,10 +83,7 @@ Proof.
 Qed.
 
 Fixpoint fin_enum (n : nat) : list (fin n) :=
-  match n with
-  | 0 =>  []
-  | S n => 0%fin :: FS <$> fin_enum n
-  end.
+  match n with 0 => [] | S n => 0%fin :: FS <$> fin_enum n end.
 Program Instance fin_finite n : Finite (fin n) := {| enum := fin_enum n |}.
 Next Obligation.
   intros n. induction n; simpl; constructor.
@@ -180,42 +169,32 @@ Notation vec_0_inv := Vector.case0.
 Definition vec_S_inv {A n} (P : vec A (S n) → Type)
   (Hcons : ∀ x v, P (x ::: v)) v : P v.
 Proof.
- revert P Hcons. refine (
-  match v with
-  | [#] => tt
-  | x ::: v => λ P Hcons, Hcons x v
-  end).
+  revert P Hcons.
+  refine match v with [#] => tt | x ::: v => λ P Hcons, Hcons x v end.
 Defined.
 
 Ltac inv_vec v :=
   match type of v with
   | vec _ 0 =>
-    revert dependent v;
-    match goal with |- ∀ v, @?P v => apply (vec_0_inv P) end
+    revert dependent v; match goal with |- ∀ v, @?P v => apply (vec_0_inv P) end
   | vec _ (S ?n) =>
-    revert dependent v;
-    match goal with |- ∀ v, @?P v => apply (vec_S_inv P) end
+    revert dependent v; match goal with |- ∀ v, @?P v => apply (vec_S_inv P) end
   end.
 
 (** The following tactic performs case analysis on all hypotheses of the shape
 [fin 0], [fin (S n)], [vec A 0] and [vec A (S n)] until no further case
 analyses are possible. *)
-Ltac inv_all_vec_fin :=
-  block_goal;
+Ltac inv_all_vec_fin := block_goal;
   repeat match goal with
   | v : vec _ _ |- _ => inv_vec v; intros
   | i : fin _ |- _ => inv_fin i; intros
-  end;
-  unblock_goal.
+  end; unblock_goal.
 
 (** We define a coercion from [vec] to [list] and show that it preserves the
 operations on vectors. We also define a function to go in the other way, but
 do not define it as a coercion, as it would otherwise introduce ambiguity. *)
 Fixpoint vec_to_list {A n} (v : vec A n) : list A :=
-  match v with
-  | [#] => []
-  | x ::: v => x :: vec_to_list v
-  end.
+  match v with [#] => [] | x ::: v => x :: vec_to_list v end.
 Coercion vec_to_list : vec >-> list.
 Notation list_to_vec := Vector.of_list.
 
@@ -224,17 +203,14 @@ Lemma vec_to_list_cons {A n} x (v : vec A n) :
 Proof. done. Qed.
 Lemma vec_to_list_app {A n m} (v : vec A n) (w : vec A m) :
   vec_to_list (v +++ w) = vec_to_list v ++ vec_to_list w.
-Proof. by induction v; simpl; f_equal. Qed.
-
+Proof. by induction v; f_equal'. Qed.
 Lemma vec_to_list_of_list {A} (l : list A): vec_to_list (list_to_vec l) = l.
-Proof. by induction l; simpl; f_equal. Qed.
-
+Proof. by induction l; f_equal'. Qed.
 Lemma vec_to_list_length {A n} (v : vec A n) : length (vec_to_list v) = n.
 Proof. induction v; simpl; by f_equal. Qed.
 Lemma vec_to_list_same_length {A B n} (v : vec A n) (w : vec B n) :
-  v `same_length` w.
-Proof. apply same_length_length. by rewrite !vec_to_list_length. Qed.
-
+  length v = length w.
+Proof. by rewrite !vec_to_list_length. Qed.
 Lemma vec_to_list_inj1 {A n m} (v : vec A n) (w : vec A m) :
   vec_to_list v = vec_to_list w → n = m.
 Proof.
@@ -247,15 +223,12 @@ Proof.
   revert w. induction v; intros w; inv_vec w; intros;
     simplify_equality'; f_equal; eauto.
 Qed.
-
 Lemma vlookup_middle {A n m} (v : vec A n) (w : vec A m) x :
   ∃ i : fin (n + S m), x = (v +++ x ::: w) !!! i.
 Proof.
-  induction v; simpl.
-  * by eexists 0%fin.
-  * destruct IHv as [i ?]. by exists (FS i).
+  induction v; simpl; [by eexists 0%fin|].
+  destruct IHv as [i ?]. by exists (FS i).
 Qed.
-
 Lemma vec_to_list_lookup_middle {A n} (v : vec A n) (l k : list A) x :
   vec_to_list v = l ++ x :: k →
     ∃ i : fin n, l = take i v ∧ x = v !!! i ∧ k = drop (S i) v.
@@ -268,27 +241,22 @@ Proof.
   * eexists 0%fin. simpl. by rewrite vec_to_list_of_list.
   * destruct IHl as [i ?]. exists (FS i). simpl. intuition congruence.
 Qed.
-
 Lemma vec_to_list_drop_lookup {A n} (v : vec A n) (i : fin n) :
   drop i v = v !!! i :: drop (S i) v.
 Proof. induction i; inv_vec v; simpl; intros; [done | by rewrite IHi]. Qed.
 Lemma vec_to_list_take_drop_lookup {A n} (v : vec A n) (i : fin n) :
   vec_to_list v = take i v ++ v !!! i :: drop (S i) v.
-Proof.
-  rewrite <-(take_drop i v) at 1. f_equal. apply vec_to_list_drop_lookup.
-Qed. 
+Proof. rewrite <-(take_drop i v) at 1. by rewrite vec_to_list_drop_lookup. Qed.
 
 Lemma elem_of_vlookup {A n} (v : vec A n) x :
   x ∈ vec_to_list v ↔ ∃ i, v !!! i = x.
 Proof.
   split.
   * induction v; simpl; [by rewrite elem_of_nil |].
-    inversion 1; subst.
-    + by eexists 0%fin.
-    + destruct IHv as [i ?]; trivial. by exists (FS i).
-  * intros [i ?]; subst. induction v; inv_fin i.
-    + by left.
-    + right. apply IHv.
+    inversion 1; subst; [by eexists 0%fin|].
+    destruct IHv as [i ?]; trivial. by exists (FS i).
+  * intros [i ?]; subst. induction v as [|??? IH]; inv_fin i; [by left|].
+    right; apply IH.
 Qed.
 Lemma Forall_vlookup {A} (P : A → Prop) {n} (v : vec A n) :
   Forall P (vec_to_list v) ↔ ∀ i, P (v !!! i).
@@ -307,14 +275,11 @@ Lemma Forall2_vlookup {A B} (P : A → B → Prop) {n}
   Forall2 P (vec_to_list v1) (vec_to_list v2) ↔ ∀ i, P (v1 !!! i) (v2 !!! i).
 Proof.
   split.
-  * vec_double_ind v1 v2.
-    + intros _ i. inv_fin i.
-    + intros n v1 v2 IH a b; simpl. inversion_clear 1.
-      intros i. inv_fin i; simpl; auto.
-  * vec_double_ind v1 v2.
-    + constructor.
-    + intros ??? IH ?? H.
-      constructor. apply (H 0%fin). apply IH, (λ i, H (FS i)).
+  * vec_double_ind v1 v2; [intros _ i; inv_fin i |].
+    intros n v1 v2 IH a b; simpl. inversion_clear 1.
+    intros i. inv_fin i; simpl; auto.
+  * vec_double_ind v1 v2; [constructor|].
+    intros ??? IH ?? H. constructor. apply (H 0%fin). apply IH, (λ i, H (FS i)).
 Qed.
 
 (** The function [vmap f v] applies a function [f] element wise to [v]. *)
@@ -362,4 +327,4 @@ Proof.
   intros. apply IHi. congruence.
 Qed.
 Lemma vlookup_insert_self {A n} i (v : vec A n) : vinsert i (v !!! i) v = v.
-Proof. by induction v; inv_fin i; simpl; intros; f_equal. Qed.
+Proof. by induction v; inv_fin i; intros; f_equal'. Qed.

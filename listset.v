@@ -15,7 +15,7 @@ Instance listset_elem_of: ElemOf A (listset A) := λ x l, x ∈ listset_car l.
 Instance listset_empty: Empty (listset A) := Listset [].
 Instance listset_singleton: Singleton A (listset A) := λ x, Listset [x].
 Instance listset_union: Union (listset A) := λ l k,
-  match l, k with Listset l', Listset k' => Listset (l' ++ k') end.
+  let (l') := l in let (k') := k in Listset (l' ++ k').
 
 Global Instance: SimpleCollection A (listset A).
 Proof.
@@ -28,19 +28,13 @@ Qed.
 Context `{∀ x y : A, Decision (x = y)}.
 
 Instance listset_intersection: Intersection (listset A) := λ l k,
-  match l, k with
-  | Listset l', Listset k' => Listset (list_intersection l' k')
-  end.
+  let (l') := l in let (k') := k in Listset (list_intersection l' k').
 Instance listset_difference: Difference (listset A) := λ l k,
-  match l, k with
-  | Listset l', Listset k' => Listset (list_difference l' k')
-  end.
+  let (l') := l in let (k') := k in Listset (list_difference l' k').
 Instance listset_intersection_with: IntersectionWith A (listset A) := λ f l k,
-  match l, k with
-  | Listset l', Listset k' => Listset (list_intersection_with f l' k')
-  end.
+  let (l') := l in let (k') := k in Listset (list_intersection_with f l' k').
 Instance listset_filter: Filter A (listset A) := λ P _ l,
-  match l with Listset l' => Listset (filter P l') end.
+  let (l') := l in Listset (filter P l').
 
 Instance: Collection A (listset A).
 Proof.
@@ -49,9 +43,7 @@ Proof.
   * intros [?] [?]. apply elem_of_list_intersection.
   * intros [?] [?]. apply elem_of_list_difference.
 Qed.
-
 Instance listset_elems: Elements A (listset A) := remove_dups ∘ listset_car.
-
 Global Instance: FinCollection A (listset A).
 Proof.
   split.
@@ -59,7 +51,6 @@ Proof.
   * symmetry. apply elem_of_remove_dups.
   * intros. apply remove_dups_nodup.
 Qed.
-
 Global Instance: CollectionOps A (listset A).
 Proof.
   split.
@@ -92,9 +83,9 @@ Hint Extern 1 (Filter _ (listset _)) =>
 
 Instance listset_ret: MRet listset := λ A x, {[ x ]}.
 Instance listset_fmap: FMap listset := λ A B f l,
-  match l with Listset l' => Listset (f <$> l') end.
+  let (l') := l in Listset (f <$> l').
 Instance listset_bind: MBind listset := λ A B f l,
-  match l with Listset l' => Listset (mbind (listset_car ∘ f) l') end.
+  let (l') := l in Listset (mbind (listset_car ∘ f) l').
 Instance listset_join: MJoin listset := λ A, mbind id.
 
 Instance: CollectionMonad listset.

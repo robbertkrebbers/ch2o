@@ -85,14 +85,12 @@ Global Instance Pempty {A} : Empty (Pmap A) :=
   (∅ : Pmap_raw A) ↾ bool_decide_pack _ Pmap_wf_leaf.
 
 Instance Plookup_raw {A} : Lookup positive A (Pmap_raw A) :=
-  fix Plookup_raw (i : positive) (t : Pmap_raw A) {struct t} : option A :=
+  fix go (i : positive) (t : Pmap_raw A) {struct t} : option A :=
   match t with
   | PLeaf => None
   | PNode l o r =>
      match i with
-     | 1 => o
-     | i~0 => @lookup _ _ _ Plookup_raw i l
-     | i~1 => @lookup _ _ _ Plookup_raw i r
+     | 1 => o | i~0 => @lookup _ _ _ go i l | i~1 => @lookup _ _ _ go i r
      end
   end.
 Instance Plookup {A} : Lookup positive A (Pmap A) := λ i t, `t !! i.
@@ -100,7 +98,7 @@ Instance Plookup {A} : Lookup positive A (Pmap A) := λ i t, `t !! i.
 Lemma Plookup_empty {A} i : (∅ : Pmap_raw A) !! i = None.
 Proof. by destruct i. Qed.
 
-Lemma Pmap_ne_lookup `(t : Pmap_raw A) : Pmap_ne t → ∃ i x, t !! i = Some x.
+Lemma Pmap_ne_lookup {A} (t : Pmap_raw A) : Pmap_ne t → ∃ i x, t !! i = Some x.
 Proof.
   induction 1 as [? x ?| l r ? IHl | l r ? IHr].
   * intros. by exists 1 x.
@@ -145,52 +143,41 @@ Fixpoint Psingleton_raw {A} (i : positive) (x : A) : Pmap_raw A :=
   | i~0 => PNode (Psingleton_raw i x) None PLeaf
   | i~1 => PNode PLeaf None (Psingleton_raw i x)
   end.
-
 Lemma Psingleton_ne {A} i (x : A) : Pmap_ne (Psingleton_raw i x).
 Proof. induction i; simpl; intuition. Qed.
 Local Hint Resolve Psingleton_ne.
 Lemma Psingleton_wf {A} i (x : A) : Pmap_wf (Psingleton_raw i x).
 Proof. induction i; simpl; intuition. Qed.
 Local Hint Resolve Psingleton_wf.
-
 Lemma Plookup_singleton {A} i (x : A) : Psingleton_raw i x !! i = Some x.
 Proof. by induction i. Qed.
 Lemma Plookup_singleton_ne {A} i j (x : A) :
   i ≠ j → Psingleton_raw i x !! j = None.
 Proof. revert j. induction i; intros [?|?|]; simpl; auto. congruence. Qed.
 
-Definition PNode_canon `(l : Pmap_raw A) (o : option A) (r : Pmap_raw A) :=
-  match l, o, r with
-  | PLeaf, None, PLeaf => PLeaf
-  | _, _, _ => PNode l o r
-  end.
-
-Lemma PNode_canon_wf `(l : Pmap_raw A) (o : option A) (r : Pmap_raw A) :
+Definition PNode_canon {A} (l : Pmap_raw A) (o : option A) (r : Pmap_raw A) :=
+  match l, o, r with PLeaf, None, PLeaf => PLeaf | _, _, _ => PNode l o r end.
+Lemma PNode_canon_wf {A} (l : Pmap_raw A) (o : option A) (r : Pmap_raw A) :
   Pmap_wf l → Pmap_wf r → Pmap_wf (PNode_canon l o r).
 Proof. intros H1 H2. destruct H1, o, H2; simpl; intuition. Qed.
 Local Hint Resolve PNode_canon_wf.
-
-Lemma PNode_canon_lookup_xH `(l : Pmap_raw A) o (r : Pmap_raw A) :
+Lemma PNode_canon_lookup_xH {A} (l : Pmap_raw A) o (r : Pmap_raw A) :
   PNode_canon l o r !! 1 = o.
 Proof. by destruct l,o,r. Qed.
-Lemma PNode_canon_lookup_xO `(l : Pmap_raw A) o (r : Pmap_raw A) i :
+Lemma PNode_canon_lookup_xO {A} (l : Pmap_raw A) o (r : Pmap_raw A) i :
   PNode_canon l o r !! i~0 = l !! i.
 Proof. by destruct l,o,r. Qed.
-Lemma PNode_canon_lookup_xI `(l : Pmap_raw A) o (r : Pmap_raw A) i :
+Lemma PNode_canon_lookup_xI {A} (l : Pmap_raw A) o (r : Pmap_raw A) i :
   PNode_canon l o r !! i~1 = r !! i.
 Proof. by destruct l,o,r. Qed.
-Ltac PNode_canon_rewrite := repeat (
-  rewrite PNode_canon_lookup_xH || rewrite PNode_canon_lookup_xO ||
-  rewrite PNode_canon_lookup_xI).
+Ltac PNode_canon_rewrite := repeat first
+  [ rewrite PNode_canon_lookup_xH | rewrite PNode_canon_lookup_xO
+  | rewrite PNode_canon_lookup_xI].
 
 Instance Ppartial_alter_raw {A} : PartialAlter positive A (Pmap_raw A) :=
   fix go f i t {struct t} : Pmap_raw A :=
   match t with
-  | PLeaf =>
-     match f None with
-     | None => PLeaf
-     | Some x => Psingleton_raw i x
-     end
+  | PLeaf => match f None with None => PLeaf | Some x => Psingleton_raw i x end
   | PNode l o r =>
      match i with
      | 1 => PNode_canon l (f o) r
@@ -198,7 +185,6 @@ Instance Ppartial_alter_raw {A} : PartialAlter positive A (Pmap_raw A) :=
      | i~1 => PNode_canon l o (@partial_alter _ _ _ go f i r)
      end
   end.
-
 Lemma Ppartial_alter_wf {A} f i (t : Pmap_raw A) :
   Pmap_wf t → Pmap_wf (partial_alter f i t).
 Proof.
@@ -207,18 +193,14 @@ Proof.
   * intros [?|?|]; simpl; intuition.
   * intros [?|?|]; simpl; intuition.
 Qed.
-
 Instance Ppartial_alter {A} : PartialAlter positive A (Pmap A) := λ f i t,
   dexist (partial_alter f i (`t)) (Ppartial_alter_wf f i _ (proj2_dsig t)).
-
 Lemma Plookup_alter {A} f i (t : Pmap_raw A) :
   partial_alter f i t !! i = f (t !! i).
 Proof.
   revert i. induction t.
-  * intros i. change (
-     match f None with
-     | Some x => Psingleton_raw i x | None => PLeaf
-     end !! i = f None). destruct (f None).
+  * intros i. change (match f None with Some x => Psingleton_raw i x
+      | None => PLeaf end !! i = f None); destruct (f None).
     + intros. apply Plookup_singleton.
     + by destruct i.
   * intros [?|?|]; simpl; by PNode_canon_rewrite.
@@ -227,44 +209,35 @@ Lemma Plookup_alter_ne {A} f i j (t : Pmap_raw A) :
   i ≠ j → partial_alter f i t !! j = t !! j.
 Proof.
   revert i j. induction t as [|l IHl ? r IHr].
-  * intros. change (
-     match f None with
-     | Some x => Psingleton_raw i x | None => PLeaf
-     end !! j = None). destruct (f None).
-    + intros. by apply Plookup_singleton_ne.
-    + done.
+  * intros. change (match f None with Some x => Psingleton_raw i x
+      | None => PLeaf end !! j = None); destruct (f None); [|done].
+    intros. by apply Plookup_singleton_ne.
   * intros [?|?|] [?|?|]; simpl; PNode_canon_rewrite; auto; congruence.
 Qed.
 
 Instance Pfmap_raw {A B} (f : A → B) : FMapD Pmap_raw f :=
-  fix go (t : Pmap_raw A) : Pmap_raw B :=
-  let _ : FMapD Pmap_raw f := @go in
+  fix go (t : Pmap_raw A) := let _ : FMapD _ _ := @go in
   match t with
-  | PLeaf => PLeaf
-  | PNode l x r => PNode (f <$> l) (f <$> x) (f <$> r)
+  | PLeaf => PLeaf | PNode l x r => PNode (f <$> l) (f <$> x) (f <$> r)
   end.
-
 Lemma Pfmap_ne `(f : A → B) (t : Pmap_raw A) : Pmap_ne t → Pmap_ne (fmap f t).
 Proof. induction 1; simpl; auto. Qed.
 Local Hint Resolve Pfmap_ne.
 Lemma Pfmap_wf `(f : A → B) (t : Pmap_raw A) : Pmap_wf t → Pmap_wf (fmap f t).
 Proof. induction 1; simpl; intuition. Qed.
-
 Global Instance Pfmap {A B} (f : A → B) : FMapD Pmap f := λ t,
   dexist _ (Pfmap_wf f _ (proj2_dsig t)).
-
 Lemma Plookup_fmap {A B} (f : A → B) (t : Pmap_raw A) i :
-  fmap f t !! i = fmap f (t !! i).
+  (f <$> t) !! i = f <$> t !! i.
 Proof. revert i. induction t. done. by intros [?|?|]; simpl. Qed.
 
-Fixpoint Pto_list_raw {A} (j: positive) (t: Pmap_raw A)
+Fixpoint Pto_list_raw {A} (j : positive) (t : Pmap_raw A)
     (acc : list (positive * A)) : list (positive * A) :=
   match t with
   | PLeaf => acc
   | PNode l o r => default [] o (λ x, [(Preverse j, x)]) ++
      Pto_list_raw (j~0) l (Pto_list_raw (j~1) r acc)
   end%list.
-
 Lemma Pelem_of_to_list {A} (t : Pmap_raw A) j i acc x :
   (i,x) ∈ Pto_list_raw j t acc ↔
     (∃ i', i = i' ++ Preverse j ∧ t !! i' = Some x) ∨ (i,x) ∈ acc.
@@ -332,72 +305,70 @@ Proof.
    apply IHr; auto. intros i x Hi.
    apply (Hin (i~1) x). by rewrite Preverse_xI, (associative_L _) in Hi.
 Qed.
-
 Global Instance Pto_list {A} : FinMapToList positive A (Pmap A) :=
   λ t, Pto_list_raw 1 (`t) [].
 
-Fixpoint Pmerge_aux `(f : option A → option B) (t : Pmap_raw A) : Pmap_raw B :=
+Instance Pomap_raw {A B} (f : A → option B) : OMapD Pmap_raw f :=
+  fix go (t : Pmap_raw A) := let _ : OMapD _ _ := @go in
   match t with
-  | PLeaf => PLeaf
-  | PNode l o r => PNode_canon (Pmerge_aux f l) (f o) (Pmerge_aux f r)
+  | PLeaf => PLeaf | PNode l o r => PNode_canon (omap f l) (o ≫= f) (omap f r)
   end.
-
-Lemma Pmerge_aux_wf `(f : option A → option B) (t : Pmap_raw A) :
-  Pmap_wf t → Pmap_wf (Pmerge_aux f t).
+Lemma Pomap_wf {A B} (f : A → option B) (t : Pmap_raw A) :
+  Pmap_wf t → Pmap_wf (omap f t).
 Proof. induction 1; simpl; auto. Qed.
-Local Hint Resolve Pmerge_aux_wf.
-
-Lemma Pmerge_aux_spec `(f : option A → option B) (Hf : f None = None)
-  (t : Pmap_raw A) i : Pmerge_aux f t !! i = f (t !! i).
+Local Hint Resolve Pomap_wf.
+Lemma Pomap_lookup {A B} (f : A → option B) (t : Pmap_raw A) i :
+  omap f t !! i = t !! i ≫= f.
 Proof.
   revert i. induction t as [| l IHl o r IHr ]; [done |].
   intros [?|?|]; simpl; PNode_canon_rewrite; auto.
 Qed.
+Global Instance Pomap: OMap Pmap := λ A B f t,
+  dexist _ (Pomap_wf f _ (proj2_dsig t)).
 
-Global Instance Pmerge_raw : Merge Pmap_raw :=
+Instance Pmerge_raw : Merge Pmap_raw :=
   fix Pmerge_raw A B C f t1 t2 : Pmap_raw C :=
   match t1, t2 with
-  | PLeaf, t2 => Pmerge_aux (f None) t2
-  | t1, PLeaf => Pmerge_aux (flip f None) t1
+  | PLeaf, t2 => omap (f None ∘ Some) t2
+  | t1, PLeaf => omap (flip f None ∘ Some) t1
   | PNode l1 o1 r1, PNode l2 o2 r2 =>
      PNode_canon (@merge _ Pmerge_raw A B C f l1 l2)
       (f o1 o2) (@merge _ Pmerge_raw A B C f r1 r2)
   end.
-Local Arguments Pmerge_aux _ _ _ _ : simpl never.
-
+Local Arguments omap _ _ _ _ _ _ : simpl never.
 Lemma Pmerge_wf {A B C} (f : option A → option B → option C) t1 t2 :
   Pmap_wf t1 → Pmap_wf t2 → Pmap_wf (merge f t1 t2).
 Proof. intros t1wf. revert t2. induction t1wf; destruct 1; simpl; auto. Qed.
 Global Instance Pmerge: Merge Pmap := λ A B C f t1 t2,
   dexist _ (Pmerge_wf f _ _ (proj2_dsig t1) (proj2_dsig t2)).
-
 Lemma Pmerge_spec {A B C} (f : option A → option B → option C)
     (Hf : f None None = None) (t1 : Pmap_raw A) t2 i :
   merge f t1 t2 !! i = f (t1 !! i) (t2 !! i).
 Proof.
-  revert t2 i. induction t1 as [| l1 IHl1 o1 r1 IHr1 ].
-  * intros. unfold merge. simpl. by rewrite Pmerge_aux_spec.
-  * destruct t2 as [| l2 o2 r2 ].
-    + unfold merge, Pmerge_raw. intros. by rewrite Pmerge_aux_spec.
-    + intros [?|?|]; simpl; by PNode_canon_rewrite.
+  revert t2 i. induction t1 as [|l1 IHl1 o1 r1 IHr1]; intros t2 i.
+  { unfold merge; simpl. rewrite Pomap_lookup. by destruct (t2 !! i). }
+  destruct t2 as [|l2 o2 r2].
+  * unfold merge, Pmerge_raw. rewrite Pomap_lookup.
+    by destruct (PNode _ _ _ !! i).
+  * destruct i; simpl; by PNode_canon_rewrite.
 Qed.
 
 (** * Instantiation of the finite map interface *)
 Global Instance: FinMap positive Pmap.
 Proof.
   split.
-  * intros ? [t1?] [t2?]. intros. apply dsig_eq. simpl.
+  * intros ? [t1 ?] [t2 ?] ?. apply dsig_eq; simpl.
     apply Pmap_wf_eq_get; trivial; by apply (bool_decide_unpack _).
-  * by destruct i.
+  * by intros ? [].
   * intros ?? [??] ?. by apply Plookup_alter.
   * intros ?? [??] ??. by apply Plookup_alter_ne.
   * intros ??? [??]. by apply Plookup_fmap.
-  * intros ? [??]. apply Pto_list_nodup.
-    + intros ??. by rewrite elem_of_nil.
-    + constructor.
+  * intros ? [??]. apply Pto_list_nodup; [|constructor].
+    intros ??. by rewrite elem_of_nil.
   * intros ? [??] i x; unfold map_to_list, Pto_list.
     rewrite Pelem_of_to_list, elem_of_nil.
     split. by intros [(?&->&?)|]. by left; exists i.
+  * intros ?? ? [??] ?. by apply Pomap_lookup.
   * intros ??? ?? [??] [??] ?. by apply Pmerge_spec.
 Qed.
 

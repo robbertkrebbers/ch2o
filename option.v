@@ -4,13 +4,17 @@
 data type that are not in the Coq standard library. *)
 Require Export base tactics decidable.
 
+Inductive option_reflect {A} (P : A → Prop) (Q : Prop) : option A → Type :=
+  | ReflectSome x : P x → option_reflect P Q (Some x)
+  | ReflectNone : Q → option_reflect P Q None.
+
 (** * General definitions and theorems *)
 (** Basic properties about equality. *)
-Lemma None_ne_Some `(a : A) : None ≠ Some a.
+Lemma None_ne_Some {A} (a : A) : None ≠ Some a.
 Proof. congruence. Qed.
-Lemma Some_ne_None `(a : A) : Some a ≠ None.
+Lemma Some_ne_None {A} (a : A) : Some a ≠ None.
 Proof. congruence. Qed.
-Lemma eq_None_ne_Some `(x : option A) a : x = None → x ≠ Some a.
+Lemma eq_None_ne_Some {A} (x : option A) a : x = None → x ≠ Some a.
 Proof. congruence. Qed.
 Instance Some_inj {A} : Injective (=) (=) (@Some A).
 Proof. congruence. Qed.
@@ -18,6 +22,7 @@ Proof. congruence. Qed.
 (** The non dependent elimination principle on the option type. *)
 Definition default {A B} (b : B) (x : option A) (f : A → B)  : B :=
   match x with None => b | Some a => f a end.
+Hint Extern 1000 => simpl (default _ (Some _) _) || simpl (default _ None _).
 
 (** The [from_option] function allows us to get the value out of the option
 type by specifying a default value. *)
@@ -69,18 +74,19 @@ Lemma not_eq_None_Some `(x : option A) : x ≠ None ↔ is_Some x.
 Proof. rewrite eq_None_not_Some. split. apply dec_stable. tauto. Qed.
 
 (** Equality on [option] is decidable. *)
+Instance option_eq_None_dec {A} (x : option A) : Decision (x = None) :=
+  match x with Some _ => right (Some_ne_None _) | None => left eq_refl end.
+Instance option_None_eq_dec {A} (x : option A) : Decision (None = x) :=
+  match x with Some _ => right (None_ne_Some _) | None => left eq_refl end.
 Instance option_eq_dec `{dec : ∀ x y : A, Decision (x = y)}
-    (x y : option A) : Decision (x = y) :=
+  (x y : option A) : Decision (x = y).
+Proof.
+ refine
   match x, y with
-  | Some a, Some b =>
-     match dec a b with
-     | left H => left (f_equal _ H)
-     | right H => right (H ∘ injective Some _ _)
-     end
-  | Some _, None => right (Some_ne_None _)
-  | None, Some _ => right (None_ne_Some _)
-  | None, None => left eq_refl
-  end.
+  | Some a, Some b => cast_if (decide (a = b))
+  | None, None => left _ | _, _ => right _
+  end; abstract congruence.
+Defined.
 
 (** * Monadic operations *)
 Instance option_ret: MRet option := @Some.
@@ -99,8 +105,10 @@ Lemma fmap_Some {A B} (f : A → B) x y :
 Proof. destruct x; naive_solver. Qed.
 Lemma fmap_None {A B} (f : A → B) x : f <$> x = None ↔ x = None.
 Proof. by destruct x. Qed.
-
 Lemma option_fmap_id {A} (x : option A) : id <$> x = x.
+Proof. by destruct x. Qed.
+Lemma option_fmap_compose {A B} (f : A → B) {C} (g : B → C) x :
+  g ∘ f <$> x = g <$> f <$> x.
 Proof. by destruct x. Qed.
 Lemma option_fmap_bind {A B C} (f : A → B) (g : B → option C) x :
   (f <$> x) ≫= g = x ≫= g ∘ f.
@@ -120,10 +128,11 @@ Proof. split. by destruct x as [a|]; [exists a|]. by intros (?&->&?). Qed.
 Lemma bind_None {A B} (f : A → option B) (x : option A) :
   x ≫= f = None ↔ x = None ∨ ∃ a, x = Some a ∧ f a = None.
 Proof.
-  split.
-  * destruct x; intros; simplify_equality'; eauto.
-  * by intros [->|(?&->&?)].
+  split; [|by intros [->|(?&->&?)]].
+  destruct x; intros; simplify_equality'; eauto.
 Qed.
+Lemma bind_with_Some {A} (x : option A) : x ≫= Some = x.
+Proof. by destruct x. Qed.
 
 Tactic Notation "case_option_guard" "as" ident(Hx) :=
   match goal with
@@ -144,90 +153,61 @@ Lemma option_guard_False {A} (P : Prop) `{Decision P} (x : option A) :
   ¬P → guard P; x = None.
 Proof. intros. by case_option_guard. Qed.
 
-Tactic Notation "simplify_option_equality" "by" tactic3(tac) := repeat
-  match goal with
-  | _ => progress (unfold default in *)
+Tactic Notation "simplify_option_equality" "by" tactic3(tac) :=
+  let assert_Some_None A o H := first
+    [ let x := fresh in evar (x:A); let x' := eval unfold x in x in clear x;
+      assert (o = Some x') as H by tac
+    | assert (o = None) as H by tac ]
+  in repeat match goal with
   | _ => progress simplify_equality'
   | H : context [mbind (M:=option) (A:=?A) ?f ?o] |- _ =>
-    let Hx := fresh in
-    first
-      [ let x := fresh in evar (x:A);
-        let x' := eval unfold x in x in clear x;
-        assert (o = Some x') as Hx by tac
-      | assert (o = None) as Hx by tac ];
-    rewrite Hx in H; clear Hx
+    let Hx := fresh in assert_Some_None A o Hx; rewrite Hx in H; clear Hx
   | H : context [fmap (M:=option) (A:=?A) ?f ?o] |- _ =>
-    let Hx := fresh in
-    first
-      [ let x := fresh in evar (x:A);
-        let x' := eval unfold x in x in clear x;
-        assert (o = Some x') as Hx by tac
-      | assert (o = None) as Hx by tac ];
-    rewrite Hx in H; clear Hx
+    let Hx := fresh in assert_Some_None A o Hx; rewrite Hx in H; clear Hx
+  | H : context [default (A:=?A) _ ?o _] |- _ =>
+    let Hx := fresh in assert_Some_None A o Hx; rewrite Hx in H; clear Hx
   | H : context [ match ?o with _ => _ end ] |- _ =>
     match type of o with
     | option ?A =>
-      let Hx := fresh in
-      first
-        [ let x := fresh in evar (x:A);
-          let x' := eval unfold x in x in clear x;
-          assert (o = Some x') as Hx by tac
-        | assert (o = None) as Hx by tac ];
-      rewrite Hx in H; clear Hx
+      let Hx := fresh in assert_Some_None A o Hx; rewrite Hx in H; clear Hx
     end
-  | H : mbind (M:=option) ?f ?o = ?x |- _ =>
+  | H : mbind (M:=option) _ ?o = ?x |- _ =>
     match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
     match x with Some _ => idtac | None => idtac | _ => fail 1 end;
     destruct o eqn:?
-  | H : ?x = mbind (M:=option) ?f ?o |- _ =>
+  | H : ?x = mbind (M:=option) _ ?o |- _ =>
     match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
     match x with Some _ => idtac | None => idtac | _ => fail 1 end;
     destruct o eqn:?
-  | H : fmap (M:=option) ?f ?o = ?x |- _ =>
+  | H : fmap (M:=option) _ ?o = ?x |- _ =>
     match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
     match x with Some _ => idtac | None => idtac | _ => fail 1 end;
     destruct o eqn:?
-  | H : ?x = fmap (M:=option) ?f ?o |- _ =>
+  | H : ?x = fmap (M:=option) _ ?o |- _ =>
     match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
     match x with Some _ => idtac | None => idtac | _ => fail 1 end;
     destruct o eqn:?
   | |- context [mbind (M:=option) (A:=?A) ?f ?o] =>
-    let Hx := fresh in
-    first
-      [ let x := fresh in evar (x:A);
-        let x' := eval unfold x in x in clear x;
-        assert (o = Some x') as Hx by tac
-      | assert (o = None) as Hx by tac ];
-    rewrite Hx; clear Hx
+    let Hx := fresh in assert_Some_None A o Hx; rewrite Hx; clear Hx
   | |- context [fmap (M:=option) (A:=?A) ?f ?o] =>
-    let Hx := fresh in
-    first
-      [ let x := fresh in evar (x:A);
-        let x' := eval unfold x in x in clear x;
-        assert (o = Some x') as Hx by tac
-      | assert (o = None) as Hx by tac ];
-    rewrite Hx; clear Hx
+    let Hx := fresh in assert_Some_None A o Hx; rewrite Hx; clear Hx
+  | |- context [default (A:=?A) _ ?o _] =>
+    let Hx := fresh in assert_Some_None A o Hx; rewrite Hx; clear Hx
+  | |- context [from_option (A:=?A) _ ?o] =>
+    let Hx := fresh in assert_Some_None A o Hx; rewrite Hx; clear Hx
   | |- context [ match ?o with _ => _ end ] =>
     match type of o with
     | option ?A =>
-      let Hx := fresh in
-      first
-        [ let x := fresh in evar (x:A);
-          let x' := eval unfold x in x in clear x;
-          assert (o = Some x') as Hx by tac
-        | assert (o = None) as Hx by tac ];
-      rewrite Hx; clear Hx
+      let Hx := fresh in assert_Some_None A o Hx; rewrite Hx; clear Hx
     end
-  | H1 : ?o = Some ?x, H2 : ?o = Some ?y |- _ =>
-    assert (y = x) by congruence; clear H2
-  | H1 : ?o = Some ?x, H2 : ?o = None |- _ => congruence
+  | _ => rewrite decide_True by tac
+  | _ => rewrite decide_False by tac
+  | _ => rewrite option_guard_True by tac
+  | _ => rewrite option_guard_False by tac
+  | _ => progress case_decide
   | _ => progress case_option_guard
   end.
-Tactic Notation "simplify_option_equality" :=
-  simplify_option_equality by eauto.
-
-Hint Extern 800 =>
-  progress simplify_option_equality : simplify_option_equality.
+Tactic Notation "simplify_option_equality" := simplify_option_equality by eauto.
 
 (** * Union, intersection and difference *)
 Instance option_union_with {A} : UnionWith A (option A) := λ f x y,
@@ -248,21 +228,18 @@ Instance option_difference_with {A} : DifferenceWith A (option A) := λ f x y,
 
 Section option_union_intersection_difference.
   Context {A} (f : A → A → option A).
-
   Global Instance: LeftId (=) None (union_with f).
   Proof. by intros [?|]. Qed.
   Global Instance: RightId (=) None (union_with f).
   Proof. by intros [?|]. Qed.
   Global Instance: Commutative (=) f → Commutative (=) (union_with f).
   Proof. by intros ? [?|] [?|]; compute; rewrite 1?(commutative f). Qed.
-
   Global Instance: LeftAbsorb (=) None (intersection_with f).
   Proof. by intros [?|]. Qed.
   Global Instance: RightAbsorb (=) None (intersection_with f).
   Proof. by intros [?|]. Qed.
   Global Instance: Commutative (=) f → Commutative (=) (intersection_with f).
   Proof. by intros ? [?|] [?|]; compute; rewrite 1?(commutative f). Qed.
-
   Global Instance: RightId (=) None (difference_with f).
   Proof. by intros [?|]. Qed.
 End option_union_intersection_difference.

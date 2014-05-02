@@ -5,6 +5,9 @@ importantly, it implements some tactics to automatically solve goals involving
 collections. *)
 Require Export base tactics orders.
 
+Instance collection_subseteq `{ElemOf A C} : SubsetEq C := λ X Y,
+  ∀ x, x ∈ X → x ∈ Y.
+
 (** * Basic theorems *)
 Section simple_collection.
   Context `{SimpleCollection A C}.
@@ -16,8 +19,6 @@ Section simple_collection.
   Lemma elem_of_union_r x X Y : x ∈ Y → x ∈ X ∪ Y.
   Proof. intros. apply elem_of_union. auto. Qed.
 
-  Global Instance collection_subseteq: SubsetEq C := λ X Y,
-    ∀ x, x ∈ X → x ∈ Y.
   Global Instance: BoundedJoinSemiLattice C.
   Proof. firstorder auto. Qed.
 
@@ -34,29 +35,25 @@ Section simple_collection.
   Lemma elem_of_subseteq_singleton x X : x ∈ X ↔ {[ x ]} ⊆ X.
   Proof.
     split.
-    * intros ??. rewrite elem_of_singleton. intro. by subst.
+    * intros ??. rewrite elem_of_singleton. by intros ->.
     * intros Ex. by apply (Ex x), elem_of_singleton.
   Qed.
   Global Instance singleton_proper : Proper ((=) ==> (≡)) singleton.
-  Proof. repeat intro. by subst. Qed.
+  Proof. by repeat intro; subst. Qed.
   Global Instance elem_of_proper: Proper ((=) ==> (≡) ==> iff) (∈) | 5.
-  Proof. intros ???. subst. firstorder. Qed.
+  Proof. intros ???; subst. firstorder. Qed.
 
   Lemma elem_of_union_list Xs x : x ∈ ⋃ Xs ↔ ∃ X, X ∈ Xs ∧ x ∈ X.
   Proof.
     split.
-    * induction Xs; simpl; intros HXs.
-      + by apply elem_of_empty in HXs.
-      + setoid_rewrite elem_of_cons.
-        apply elem_of_union in HXs. naive_solver.
-    * intros [X []]. induction 1; simpl.
-      + by apply elem_of_union_l.
-      + intros. apply elem_of_union_r; auto.
+    * induction Xs; simpl; intros HXs; [by apply elem_of_empty in HXs|].
+      setoid_rewrite elem_of_cons. apply elem_of_union in HXs. naive_solver.
+    * intros [X []]. induction 1; simpl; [by apply elem_of_union_l |].
+      intros. apply elem_of_union_r; auto.
   Qed.
 
   Lemma non_empty_singleton x : {[ x ]} ≢ ∅.
   Proof. intros [E _]. by apply (elem_of_empty x), E, elem_of_singleton. Qed.
-
   Lemma not_elem_of_singleton x y : x ∉ {[ y ]} ↔ x ≠ y.
   Proof. by rewrite elem_of_singleton. Qed.
   Lemma not_elem_of_union x X Y : x ∉ X ∪ Y ↔ x ∉ X ∧ x ∉ Y.
@@ -64,7 +61,6 @@ Section simple_collection.
 
   Section leibniz.
     Context `{!LeibnizEquiv C}.
-
     Lemma elem_of_equiv_L X Y : X = Y ↔ ∀ x, x ∈ X ↔ x ∈ Y.
     Proof. unfold_leibniz. apply elem_of_equiv. Qed.
     Lemma elem_of_equiv_alt_L X Y :
@@ -78,7 +74,6 @@ Section simple_collection.
 
   Section dec.
     Context `{∀ X Y : C, Decision (X ⊆ Y)}.
-
     Global Instance elem_of_dec_slow (x : A) (X : C) : Decision (x ∈ X) | 100.
     Proof.
       refine (cast_if (decide_rel (⊆) {[ x ]} X));
@@ -203,18 +198,12 @@ Section collection.
   Context `{Collection A C}.
 
   Global Instance: LowerBoundedLattice C.
-  Proof.
-    split.
-    * apply _.
-    * firstorder auto.
-    * solve_elem_of.
-  Qed.
+  Proof. split. apply _. firstorder auto. solve_elem_of. Qed.
 
   Lemma intersection_singletons x : {[x]} ∩ {[x]} ≡ {[x]}.
   Proof. esolve_elem_of. Qed.
   Lemma difference_twice X Y : (X ∖ Y) ∖ Y ≡ X ∖ Y.
   Proof. esolve_elem_of. Qed.
-
   Lemma empty_difference X Y : X ⊆ Y → X ∖ Y ≡ ∅.
   Proof. esolve_elem_of. Qed.
   Lemma difference_diag X : X ∖ X ≡ ∅.
@@ -226,12 +215,10 @@ Section collection.
 
   Section leibniz.
     Context `{!LeibnizEquiv C}.
-
     Lemma intersection_singletons_L x : {[x]} ∩ {[x]} = {[x]}.
     Proof. unfold_leibniz. apply intersection_singletons. Qed.
     Lemma difference_twice_L X Y : (X ∖ Y) ∖ Y = X ∖ Y.
     Proof. unfold_leibniz. apply difference_twice. Qed.
-
     Lemma empty_difference_L X Y : X ⊆ Y → X ∖ Y = ∅.
     Proof. unfold_leibniz. apply empty_difference. Qed.
     Lemma difference_diag_L X : X ∖ X = ∅.
@@ -245,20 +232,14 @@ Section collection.
 
   Section dec.
     Context `{∀ X Y : C, Decision (X ⊆ Y)}.
-
     Lemma not_elem_of_intersection x X Y : x ∉ X ∩ Y ↔ x ∉ X ∨ x ∉ Y.
-    Proof.
-      rewrite elem_of_intersection. destruct (decide (x ∈ X)); tauto.
-    Qed.
+    Proof. rewrite elem_of_intersection. destruct (decide (x ∈ X)); tauto. Qed.
     Lemma not_elem_of_difference x X Y : x ∉ X ∖ Y ↔ x ∉ X ∨ x ∈ Y.
-    Proof.
-      rewrite elem_of_difference. destruct (decide (x ∈ Y)); tauto.
-    Qed.
+    Proof. rewrite elem_of_difference. destruct (decide (x ∈ Y)); tauto. Qed.
     Lemma union_difference X Y : X ⊆ Y → Y ≡ X ∪ Y ∖ X.
     Proof.
-      split; intros x; rewrite !elem_of_union, elem_of_difference.
-      * destruct (decide (x ∈ X)); intuition.
-      * intuition.
+      split; intros x; rewrite !elem_of_union, elem_of_difference; [|intuition].
+      destruct (decide (x ∈ X)); intuition.
     Qed.
     Lemma non_empty_difference X Y : X ⊂ Y → Y ∖ X ≢ ∅.
     Proof.
@@ -267,7 +248,6 @@ Section collection.
     Qed.
 
     Context `{!LeibnizEquiv C}.
-
     Lemma union_difference_L X Y : X ⊆ Y → Y = X ∪ Y ∖ X.
     Proof. unfold_leibniz. apply union_difference. Qed.
     Lemma non_empty_difference_L X Y : X ⊂ Y → Y ∖ X ≠ ∅.
@@ -283,12 +263,10 @@ Section collection_ops.
       Forall2 (∈) xs Xs ∧ y ∈ Y ∧ foldr (λ x, (≫= f x)) (Some y) xs = Some x.
   Proof.
     split.
-    * revert x. induction Xs; simpl; intros x HXs.
-      + eexists [], x. intuition.
-      + rewrite elem_of_intersection_with in HXs.
-        destruct HXs as (x1 & x2 & Hx1 & Hx2 & ?).
-        destruct (IHXs x2) as (xs & y & hy & ? & ?); trivial.
-        eexists (x1 :: xs), y. intuition (simplify_option_equality; auto).
+    * revert x. induction Xs; simpl; intros x HXs; [eexists [], x; intuition|].
+      rewrite elem_of_intersection_with in HXs; destruct HXs as (x1&x2&?&?&?).
+      destruct (IHXs x2) as (xs & y & hy & ? & ?); trivial.
+      eexists (x1 :: xs), y. intuition (simplify_option_equality; auto).
     * intros (xs & y & Hxs & ? & Hx). revert x Hx.
       induction Hxs; intros; simplify_option_equality; [done |].
       rewrite elem_of_intersection_with. naive_solver.
@@ -416,23 +394,17 @@ Section fresh.
 
   Global Instance fresh_list_proper: Proper ((=) ==> (≡) ==> (=)) fresh_list.
   Proof.
-    intros ? n ?. subst. induction n; simpl; intros ?? E; f_equal.
-    * by rewrite E.
-    * apply IHn. by rewrite E.
+    intros ? n ->. induction n as [|n IH]; intros ?? E; f_equal'; [by rewrite E|].
+    apply IH. by rewrite E.
   Qed.
-
   Lemma fresh_list_length n X : length (fresh_list n X) = n.
   Proof. revert X. induction n; simpl; auto. Qed.
-
   Lemma fresh_list_is_fresh n X x : x ∈ fresh_list n X → x ∉ X.
   Proof.
-    revert X. induction n; intros X; simpl.
-    * by rewrite elem_of_nil.
-    * rewrite elem_of_cons. intros [?| Hin]; subst.
-      + apply is_fresh.
-      + apply IHn in Hin. solve_elem_of.
+    revert X. induction n as [|n IH]; intros X; simpl; [by rewrite elem_of_nil|].
+    rewrite elem_of_cons; intros [->| Hin]; [apply is_fresh|].
+    apply IH in Hin; solve_elem_of.
   Qed.
-
   Lemma fresh_list_nodup n X : NoDup (fresh_list n X).
   Proof.
     revert X. induction n; simpl; constructor; auto.
@@ -441,20 +413,14 @@ Section fresh.
 End fresh.
 
 Definition option_collection `{Singleton A C} `{Empty C} (x : option A) : C :=
-  match x with
-  | None => ∅
-  | Some a => {[ a ]}
-  end.
+  match x with None => ∅ | Some a => {[ a ]} end.
 
 (** * Properties of implementations of collections that form a monad *)
 Section collection_monad.
   Context `{CollectionMonad M}.
 
   Global Instance collection_guard: MGuard M := λ P dec A x,
-    match dec with
-    | left H => x H
-    | _ => ∅
-    end.
+    match dec with left H => x H | _ => ∅ end.
 
   Global Instance collection_fmap_proper {A B} (f : A → B) :
     Proper ((≡) ==> (≡)) (fmap f).
@@ -496,9 +462,8 @@ Section collection_monad.
   Lemma elem_of_mapM_fmap {A B} (f : A → B) (g : B → M A) l k :
     Forall (λ x, ∀ y, y ∈ g x → f y = x) l → k ∈ mapM g l → fmap f k = l.
   Proof.
-    intros Hl. revert k.
-    induction Hl; simpl; intros;
-      decompose_elem_of; simpl; f_equal; auto.
+    intros Hl. revert k. induction Hl; simpl; intros;
+      decompose_elem_of; f_equal'; auto.
   Qed.
 
   Lemma elem_of_mapM_Forall {A B} (f : A → M B) (P : B → Prop) l k :

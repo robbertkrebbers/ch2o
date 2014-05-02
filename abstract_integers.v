@@ -53,7 +53,7 @@ Instance nat_comp_dec c : ∀ x y, Decision (nat_comp c x y) :=
   | CEq => decide_rel (=) | CLt => decide_rel (<) | CLe => decide_rel (≤)
   end.
 Definition bool_bitop (op : bitop) : bool → bool → bool :=
-  match op with BAnd => andb | BOr => orb | BXor => xorb end.
+  match op with BAnd => (&&) | BOr => (||) | BXor => xorb end.
 
 (** * Operations on machine integers *)
 (** The abstract interface for machine integers is parametrized by a type [Ti]
@@ -109,12 +109,12 @@ Arguments rank_size _ _ _ : simpl never.
 Arguments endianize _ _ _ _ : simpl never.
 Arguments deendianize _ _ _ _ : simpl never.
 
-Notation "'uchar'" := (IntType Unsigned char_rank) : int_type_scope.
-Notation "'schar'" := (IntType Signed char_rank) : int_type_scope.
-Notation "'uint'" := (IntType Unsigned int_rank) : int_type_scope.
-Notation "'sint'" := (IntType Signed int_rank) : int_type_scope.
-Notation "'uptr'" := (IntType Unsigned ptr_rank) : int_type_scope.
-Notation "'sptr'" := (IntType Signed ptr_rank) : int_type_scope.
+Notation "'ucharT'" := (IntType Unsigned char_rank) : int_type_scope.
+Notation "'scharT'" := (IntType Signed char_rank) : int_type_scope.
+Notation "'uintT'" := (IntType Unsigned int_rank) : int_type_scope.
+Notation "'sintT'" := (IntType Signed int_rank) : int_type_scope.
+Notation "'uptrT'" := (IntType Unsigned ptr_rank) : int_type_scope.
+Notation "'sptrT'" := (IntType Signed ptr_rank) : int_type_scope.
 
 (** The class [IntEnv] extends the previously defined class with binary integer
 operations and casts. Unary operations are derived from the binary operations,
@@ -154,28 +154,20 @@ Section least_operations.
   Global Arguments int_size !_ /.
   Definition int_bits (τ : int_type Ti) : nat := (int_size τ * char_bits)%nat.
   Definition int_lower (τ : int_type Ti) : Z :=
-    match ISign τ with
-    | Signed => -2 ^ (int_bits τ - 1)
-    | Unsigned => 0
-    end.
+    match ISign τ with Signed => -2 ^ (int_bits τ - 1) | Unsigned => 0 end.
   Definition int_upper (τ : int_type Ti) : Z :=
     match ISign τ with
-    | Signed => 2 ^ (int_bits τ - 1)
-    | Unsigned => 2 ^ int_bits τ
+    | Signed => 2 ^ (int_bits τ - 1) | Unsigned => 2 ^ int_bits τ
     end.
   Definition int_typed (x : Z) (τ : int_type Ti) : Prop :=
     int_lower τ ≤ x < int_upper τ.
 
   Fixpoint Z_to_bits (n : nat) (x : Z) : list bool :=
     match n with
-    | O => []
-    | S n => bool_decide (x `mod` 2 = 1) :: Z_to_bits n (x `div` 2)
+    | O => [] | S n => bool_decide (x `mod` 2 = 1) :: Z_to_bits n (x `div` 2)
     end.
   Fixpoint Z_of_bits (bs : list bool) : Z :=
-    match bs with
-    | [] => 0
-    | b :: bs => Z.b2z b + 2 * Z_of_bits bs
-    end.
+    match bs with [] => 0 | b :: bs => Z.b2z b + 2 * Z_of_bits bs end.
 
   Definition int_to_bits (τ : int_type Ti) (x : Z) : list bool :=
     endianize (IRank τ) $ Z_to_bits (int_bits τ) $
@@ -232,14 +224,10 @@ Section least_operations.
 
   Definition int_cast_ok_ (σ : int_type Ti) (x : Z) :=
     match ISign σ with
-    | Signed => int_lower σ ≤ x < int_upper σ
-    | Unsigned => True
+    | Signed => int_lower σ ≤ x < int_upper σ | Unsigned => True
     end.
   Definition int_cast_ (σ : int_type Ti) (x : Z) :=
-    match ISign σ with
-    | Signed => x
-    | Unsigned => x `mod` int_upper σ
-    end.
+    match ISign σ with Signed => x | Unsigned => x `mod` int_upper σ end.
 
   Global Instance int_binop_ok_dec_ τ op x y :
     Decision (int_binop_ok_ τ op x y).
@@ -478,11 +466,10 @@ Qed.
 Lemma int_of_zero_bits τ : int_of_bits τ (replicate (int_bits τ) false) = 0.
 Proof.
   assert (∀ k n b, deendianize k (replicate n b) = replicate n b) as Hrepl.
-  { intros k n b. apply replicate_Permutation.
+  { intros k n b. symmetry. apply replicate_Permutation.
     by rewrite deendianize_permutation. }
   unfold int_of_bits. destruct (ISign τ).
-  * case_decide as Hbs.
-    { by rewrite Hrepl, Z_of_zero_bits. }
+  * case_decide as Hbs; [by rewrite Hrepl, Z_of_zero_bits |].
     destruct Hbs. rewrite Hrepl, Z_of_zero_bits, Z.mul_0_r. auto with zpos.
   * by rewrite Hrepl, Z_of_zero_bits.
 Qed.
@@ -498,8 +485,7 @@ Proof.
   * destruct (ISign τ); auto with lia.
   * destruct (ISign τ); auto with lia.
   * destruct (ISign τ); auto with lia.
-  * destruct (ISign τ); auto with lia.
-    intros (?&[? _]&?). split; auto.
+  * destruct (ISign τ); auto with lia. intros (?&[? _]&?). split; auto.
     rewrite Z.shiftl_mul_pow2 by done. transitivity 0; auto with zpos.
   * intros ?. assert (0 ≤ x ∧ 0 ≤ y) as [??].
     { unfold int_lower, int_upper in *. destruct (ISign τ); auto with lia. }
@@ -510,25 +496,22 @@ Proof.
       transitivity (1 * x); auto with lia.
       apply Z.mul_le_mono_nonneg_r; auto with zpos.
       assert (0 < 2 ^ y); auto with zpos.
-  * intros Hy. unfold int_lower, int_upper in *. destruct (ISign τ).
-    + lia.
-    + apply Z_quot_range_nonneg; auto with lia.
+  * intros Hy. unfold int_lower, int_upper in *. destruct (ISign τ); [lia|].
+    apply Z_quot_range_nonneg; auto with lia.
   * intros Hy. unfold int_lower, int_upper in *. destruct (ISign τ).
     + generalize (Z.rem_bound_abs x y Hy). destruct (decide (0 < y)).
       - rewrite (Z.abs_eq y), Z.abs_lt by lia. lia.
       - rewrite (Z.abs_neq y), Z.abs_lt by lia. lia.
-    + split.
-      - apply Z.rem_bound_pos; lia.
-      - transitivity y; auto. apply Z.rem_bound_pos; lia.
+    + split; [apply Z.rem_bound_pos; lia|].
+      transitivity y; auto. apply Z.rem_bound_pos; lia.
   * intros _. by case_decide; apply int_typed_small.
   * intros ?. apply int_of_bits_typed.
-    by rewrite zip_with_length; rewrite !int_to_bits_length.
+    rewrite zip_with_length, !int_to_bits_length; lia.
 Qed.
 Lemma int_cast_ok_typed_ σ x :
   int_cast_ok_ σ x → int_typed (int_cast_ σ x) σ.
 Proof.
-  unfold int_typed, int_cast_ok_, int_cast_.
-  destruct (ISign σ); auto with lia.
+  unfold int_typed, int_cast_ok_, int_cast_. destruct (ISign σ); auto with lia.
 Qed.
 End int_coding.
 

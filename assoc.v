@@ -11,13 +11,13 @@ Require Export fin_maps.
 
 (** Because the association list is sorted using [strict lexico] instead of
 [lexico], it automatically guarantees that no duplicates exist. *)
-Definition assoc (K : Type) `{Lexico K} `{!TrichotomyT lexico}
-    `{!StrictOrder lexico} (A : Type) : Type :=
+Definition assoc (K : Type) `{Lexico K, !TrichotomyT lexico,
+    !StrictOrder lexico} (A : Type) : Type :=
   dsig (λ l : list (K * A), StronglySorted lexico (fst <$> l)).
 
 Section assoc.
-Context `{Lexico K} `{!StrictOrder lexico}.
-Context `{∀ x y : K, Decision (x = y)} `{!TrichotomyT lexico}.
+Context `{Lexico K, !StrictOrder lexico,
+  ∀ x y : K, Decision (x = y), !TrichotomyT lexico}.
 
 Infix "⊂" := lexico.
 Notation assoc_before j l :=
@@ -44,6 +44,7 @@ Ltac simplify_assoc := intros;
   | H : StronglySorted _ (_ :: _) |- _ => inversion_clear H
   | _ => progress decompose_elem_of_list
   | _ => progress simplify_equality'
+  | _ => match goal with |- context [?o ≫= _] => by destruct o end
   end;
   repeat first
   [ progress simplify_order
@@ -139,30 +140,45 @@ Proof.
     destruct (f _); simplify_assoc.
 Qed.
 Lemma assoc_fmap_wf {A B} (f : A → B) (l : list (K * A)) :
-  assoc_wf l → assoc_wf (snd_map f <$> l).
+  assoc_wf l → assoc_wf (prod_map id f <$> l).
 Proof.
   intros. by rewrite <-list_fmap_compose,
     (list_fmap_ext _ fst l l) by (done; by intros []).
 Qed.
 Global Program Instance assoc_fmap: FMap (assoc K) := λ A B f m,
   dexist _ (assoc_fmap_wf f _ (proj2_dsig m)).
-
 Lemma assoc_lookup_fmap {A B} (f : A → B) (l : list (K * A)) i :
-  assoc_lookup_raw i (snd_map f <$> l) = fmap f (assoc_lookup_raw i l).
+  assoc_lookup_raw i (prod_map id f <$> l) = fmap f (assoc_lookup_raw i l).
 Proof. induction l as [|[??]]; simplify_assoc. Qed.
 
-Fixpoint assoc_merge_aux {A B} (f : option A → option B)
+Fixpoint assoc_omap_raw {A B} (f : A → option B)
     (l : list (K * A)) : list (K * B) :=
   match l with
   | [] => []
-  | (i,x) :: l => assoc_cons i (f (Some x)) (assoc_merge_aux f l)
+  | (i,x) :: l => assoc_cons i (f x) (assoc_omap_raw f l)
   end.
+Lemma assoc_omap_raw_before {A B} (f : A → option B) l j :
+  assoc_before j l → assoc_before j (assoc_omap_raw f l).
+Proof. induction l as [|[??]]; simplify_assoc. Qed.
+Hint Resolve assoc_omap_raw_before.
+Lemma assoc_omap_wf {A B} (f : A → option B) l :
+  assoc_wf l → assoc_wf (assoc_omap_raw f l).
+Proof. induction l as [|[??]]; simplify_assoc. Qed.
+Hint Resolve assoc_omap_wf.
+Global Instance assoc_omap: OMap (assoc K) := λ A B f m,
+  dexist _ (assoc_omap_wf f _ (proj2_dsig m)).
+Lemma assoc_omap_spec {A B} (f : A → option B) l i :
+  assoc_wf l →
+  assoc_lookup_raw i (assoc_omap_raw f l) = assoc_lookup_raw i l ≫= f.
+Proof. intros. induction l as [|[??]]; simplify_assoc. Qed.
+Hint Rewrite @assoc_omap_spec using (by eauto) : assoc.
+
 Fixpoint assoc_merge_raw {A B C} (f : option A → option B → option C)
     (l : list (K * A)) : list (K * B) → list (K * C) :=
   fix go (k : list (K * B)) :=
   match l, k with
-  | [], _ => assoc_merge_aux (f None) k
-  | _, [] => assoc_merge_aux (flip f None) l
+  | [], _ => assoc_omap_raw (f None ∘ Some) k
+  | _, [] => assoc_omap_raw (flip f None ∘ Some) l
   | (i,x) :: l, (j,y) :: k =>
     match trichotomyT lexico i j with
     | (**i i ⊂ j *) inleft (left _) =>
@@ -173,15 +189,13 @@ Fixpoint assoc_merge_raw {A B C} (f : option A → option B → option C)
       assoc_cons j (f None (Some y)) (go k)
     end
   end.
-
 Section assoc_merge_raw.
-  Context  {A B C} (f : option A → option B → option C).
-
+  Context {A B C} (f : option A → option B → option C).
   Lemma assoc_merge_nil_l k :
-    assoc_merge_raw f [] k = assoc_merge_aux (f None) k.
+    assoc_merge_raw f [] k = assoc_omap_raw (f None ∘ Some) k.
   Proof. by destruct k. Qed.
   Lemma assoc_merge_nil_r l :
-    assoc_merge_raw f l [] = assoc_merge_aux (flip f None) l.
+    assoc_merge_raw f l [] = assoc_omap_raw (flip f None ∘ Some) l.
   Proof. by destruct l as [|[??]]. Qed.
   Lemma assoc_merge_cons i x j y l k :
     assoc_merge_raw f ((i,x) :: l) ((j,y) :: k) =
@@ -195,14 +209,8 @@ Section assoc_merge_raw.
       end.
   Proof. done. Qed.
 End assoc_merge_raw.
-
 Arguments assoc_merge_raw _ _ _ _ _ _ : simpl never.
 Hint Rewrite @assoc_merge_nil_l @assoc_merge_nil_r @assoc_merge_cons : assoc.
-
-Lemma assoc_merge_aux_before {A B} (f : option A → option B) l j :
-  assoc_before j l → assoc_before j (assoc_merge_aux f l).
-Proof. induction l as [|[??]]; simplify_assoc. Qed.
-Hint Resolve assoc_merge_aux_before.
 Lemma assoc_merge_before {A B C} (f : option A → option B → option C) l1 l2 j :
   assoc_before j l1 → assoc_before j l2 →
   assoc_before j (assoc_merge_raw f l1 l2).
@@ -211,26 +219,14 @@ Proof.
     intros l2; induction l2 as [|[??] l2 IH2]; simplify_assoc.
 Qed.
 Hint Resolve assoc_merge_before.
-
 Lemma assoc_merge_wf {A B C} (f : option A → option B → option C) l1 l2 :
   assoc_wf l1 → assoc_wf l2 → assoc_wf (assoc_merge_raw f l1 l2).
 Proof.
-  revert A B C f l1 l2. assert (∀ A B (f : option A → option B) l,
-    assoc_wf l → assoc_wf (assoc_merge_aux f l)).
-  { intros ?? j l. induction l as [|[??]]; simplify_assoc. }
-  intros A B C f l1. induction l1 as [|[i x] l1 IH];
+  revert l2. induction l1 as [|[i x] l1 IH];
     intros l2; induction l2 as [|[j y] l2 IH2]; simplify_assoc.
 Qed.
 Global Instance assoc_merge: Merge (assoc K) := λ A B C f m1 m2,
-  dexist (merge f (`m1) (`m2))
-    (assoc_merge_wf _ _ _ (proj2_dsig m1) (proj2_dsig m2)).
-
-Lemma assoc_merge_aux_spec {A B} (f : option A → option B) l i :
-  f None = None → assoc_wf l →
-  assoc_lookup_raw i (assoc_merge_aux f l) = f (assoc_lookup_raw i l).
-Proof. intros. induction l as [|[??]]; simplify_assoc. Qed.
-Hint Rewrite @assoc_merge_aux_spec using (by eauto) : assoc.
-
+  dexist _ (assoc_merge_wf f _ _ (proj2_dsig m1) (proj2_dsig m2)).
 Lemma assoc_merge_spec {A B C} (f : option A → option B → option C) l1 l2 i :
   f None None = None → assoc_wf l1 → assoc_wf l2 →
   assoc_lookup_raw i (assoc_merge_raw f l1 l2) =
@@ -268,6 +264,7 @@ Proof.
   * intros ??? [??] ?. apply assoc_lookup_fmap.
   * intros ? [??]. apply assoc_to_list_nodup; auto.
   * intros ? [??] ??. apply assoc_to_list_elem_of; auto.
+  * intros ??? [??] ?. apply assoc_omap_spec; auto.
   * intros ????? [??] [??] ?. apply assoc_merge_spec; auto.
 Qed.
 End assoc.
@@ -275,8 +272,8 @@ End assoc.
 (** * Finite sets *)
 (** We construct finite sets using the above implementation of maps. *)
 Notation assoc_set K := (mapset (assoc K)).
-Instance assoc_map_dom `{Lexico K} `{!TrichotomyT (@lexico K _)}
-  `{!StrictOrder lexico} {A} : Dom (assoc K A) (assoc_set K) := mapset_dom.
+Instance assoc_map_dom `{Lexico K, !TrichotomyT (@lexico K _),
+  !StrictOrder lexico} {A} : Dom (assoc K A) (assoc_set K) := mapset_dom.
 Instance assoc_map_dom_spec `{Lexico K} `{!TrichotomyT (@lexico K _)}
-    `{!StrictOrder lexico} `{∀ x y : K, Decision (x = y)} :
+    `{!StrictOrder lexico, ∀ x y : K, Decision (x = y)} :
   FinMapDom K (assoc K) (assoc_set K) := mapset_dom_spec.

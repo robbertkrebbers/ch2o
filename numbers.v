@@ -4,7 +4,7 @@
 natural numbers, and the type [Z] for integers. It also declares some useful
 notations. *)
 Require Export Eqdep PArith NArith ZArith NPeano.
-Require Import Qcanon.
+Require Import QArith Qcanon.
 Require Export base decidable.
 Open Scope nat_scope.
 
@@ -15,12 +15,15 @@ Reserved Notation "x ≤ y ≤ z" (at level 70, y at next level).
 Reserved Notation "x ≤ y < z" (at level 70, y at next level).
 Reserved Notation "x < y < z" (at level 70, y at next level).
 Reserved Notation "x < y ≤ z" (at level 70, y at next level).
+Reserved Notation "x ≤ y ≤ z ≤ z'"
+  (at level 70, y at next level, z at next level).
 
 Infix "≤" := le : nat_scope.
 Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z)%nat : nat_scope.
 Notation "x ≤ y < z" := (x ≤ y ∧ y < z)%nat : nat_scope.
 Notation "x < y < z" := (x < y ∧ y < z)%nat : nat_scope.
 Notation "x < y ≤ z" := (x < y ∧ y ≤ z)%nat : nat_scope.
+Notation "x ≤ y ≤ z ≤ z'" := (x ≤ y ∧ y ≤ z ∧ z ≤ z')%nat : nat_scope.
 Notation "(≤)" := le (only parsing) : nat_scope.
 Notation "(<)" := lt (only parsing) : nat_scope.
 
@@ -71,14 +74,26 @@ Lemma Nat_mul_split_r n x1 x2 y1 y2 :
   x1 < n → y1 < n → x1 + x2 * n = y1 + y2 * n → x1 = y1 ∧ x2 = y2.
 Proof. intros. destruct (Nat_mul_split_l n x2 x1 y2 y1); auto with lia. Qed.
 
+Notation lcm := Nat.lcm.
+Notation divide := Nat.divide.
+Notation "( x | y )" := (divide x y) : nat_scope.
+Instance: PartialOrder divide.
+Proof.
+  repeat split; try apply _. intros ??. apply Nat.divide_antisym_nonneg; lia.
+Qed.
+Hint Extern 0 (_ | _) => reflexivity.
+Lemma Nat_divide_ne_0 x y : (x | y) → y ≠ 0 → x ≠ 0.
+Proof. intros Hxy Hy ->. by apply Hy, Nat.divide_0_l. Qed.
+
 (** * Notations and properties of [positive] *)
 Open Scope positive_scope.
 
 Infix "≤" := Pos.le : positive_scope.
-Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z)%positive : positive_scope.
-Notation "x ≤ y < z" := (x ≤ y ∧ y < z)%positive : positive_scope.
-Notation "x < y < z" := (x < y ∧ y < z)%positive : positive_scope.
-Notation "x < y ≤ z" := (x < y ∧ y ≤ z)%positive : positive_scope.
+Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z) : positive_scope.
+Notation "x ≤ y < z" := (x ≤ y ∧ y < z) : positive_scope.
+Notation "x < y < z" := (x < y ∧ y < z) : positive_scope.
+Notation "x < y ≤ z" := (x < y ∧ y ≤ z) : positive_scope.
+Notation "x ≤ y ≤ z ≤ z'" := (x ≤ y ∧ y ≤ z ∧ z ≤ z') : positive_scope.
 Notation "(≤)" := Pos.le (only parsing) : positive_scope.
 Notation "(<)" := Pos.lt (only parsing) : positive_scope.
 Notation "(~0)" := xO (only parsing) : positive_scope.
@@ -116,11 +131,11 @@ Fixpoint Preverse_go (p1 p2 : positive) : positive :=
 Definition Preverse : positive → positive := Preverse_go 1.
 
 Global Instance: LeftId (=) 1 (++).
-Proof. intros p. induction p; simpl; intros; f_equal; auto. Qed.
+Proof. intros p. by induction p; intros; f_equal'. Qed.
 Global Instance: RightId (=) 1 (++).
 Proof. done. Qed.
 Global Instance: Associative (=) (++).
-Proof. intros ?? p. induction p; simpl; intros; f_equal; auto. Qed.
+Proof. intros ?? p. by induction p; intros; f_equal'. Qed.
 Global Instance: ∀ p : positive, Injective (=) (=) (++ p).
 Proof. intros p ???. induction p; simplify_equality; auto. Qed.
 
@@ -148,13 +163,10 @@ Lemma Preverse_xI p : Preverse (p~1) = (1~1) ++ Preverse p.
 Proof Preverse_app p (1~1).
 
 Fixpoint Plength (p : positive) : nat :=
-  match p with
-  | 1 => 0%nat
-  | p~0 | p~1 => S (Plength p)
-  end.
+  match p with 1 => 0%nat | p~0 | p~1 => S (Plength p) end.
 Lemma Papp_length p1 p2 :
   Plength (p1 ++ p2) = (Plength p2 + Plength p1)%nat.
-Proof. induction p2; simpl; f_equal; auto. Qed.
+Proof. by induction p2; f_equal'. Qed.
 
 Close Scope positive_scope.
 
@@ -164,6 +176,7 @@ Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z)%N : N_scope.
 Notation "x ≤ y < z" := (x ≤ y ∧ y < z)%N : N_scope.
 Notation "x < y < z" := (x < y ∧ y < z)%N : N_scope.
 Notation "x < y ≤ z" := (x < y ∧ y ≤ z)%N : N_scope.
+Notation "x ≤ y ≤ z ≤ z'" := (x ≤ y ∧ y ≤ z ∧ z ≤ z')%N : N_scope.
 Notation "(≤)" := N.le (only parsing) : N_scope.
 Notation "(<)" := N.lt (only parsing) : N_scope.
 
@@ -201,6 +214,7 @@ Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z) : Z_scope.
 Notation "x ≤ y < z" := (x ≤ y ∧ y < z) : Z_scope.
 Notation "x < y < z" := (x < y ∧ y < z) : Z_scope.
 Notation "x < y ≤ z" := (x < y ∧ y ≤ z) : Z_scope.
+Notation "x ≤ y ≤ z ≤ z'" := (x ≤ y ∧ y ≤ z ∧ z ≤ z') : Z_scope.
 Notation "(≤)" := Z.le (only parsing) : Z_scope.
 Notation "(<)" := Z.lt (only parsing) : Z_scope.
 
@@ -210,6 +224,11 @@ Infix "`quot`" := Z.quot (at level 35) : Z_scope.
 Infix "`rem`" := Z.rem (at level 35) : Z_scope.
 Infix "≪" := Z.shiftl (at level 35) : Z_scope.
 Infix "≫" := Z.shiftr (at level 35) : Z_scope.
+
+Instance: Injective (=) (=) Zpos.
+Proof. by injection 1. Qed.
+Instance: Injective (=) (=) Zneg.
+Proof. by injection 1. Qed.
 
 Instance Z_eq_dec: ∀ x y : Z, Decision (x = y) := Z.eq_dec.
 Instance Z_le_dec: ∀ x y : Z, Decision (x ≤ y) := Z_le_dec.
@@ -281,14 +300,24 @@ Close Scope Z_scope.
 
 (** * Notations and properties of [Qc] *)
 Open Scope Qc_scope.
+Delimit Scope Qc_scope with Qc.
+Notation "1" := (Q2Qc 1) : Qc_scope.
 Notation "2" := (1+1) : Qc_scope.
+Notation "- 1" := (Qcopp 1) : Qc_scope.
+Notation "- 2" := (Qcopp 2) : Qc_scope.
+Notation "x - y" := (x + -y) : Qc_scope.
+Notation "x / y" := (x * /y) : Qc_scope.
 Infix "≤" := Qcle : Qc_scope.
 Notation "x ≤ y ≤ z" := (x ≤ y ∧ y ≤ z) : Qc_scope.
 Notation "x ≤ y < z" := (x ≤ y ∧ y < z) : Qc_scope.
 Notation "x < y < z" := (x < y ∧ y < z) : Qc_scope.
 Notation "x < y ≤ z" := (x < y ∧ y ≤ z) : Qc_scope.
+Notation "x ≤ y ≤ z ≤ z'" := (x ≤ y ∧ y ≤ z ∧ z ≤ z') : Qc_scope.
 Notation "(≤)" := Qcle (only parsing) : Qc_scope.
 Notation "(<)" := Qclt (only parsing) : Qc_scope.
+
+Hint Extern 1 (_ ≤ _) => reflexivity || discriminate.
+Arguments Qred _ : simpl never.
 
 Instance Qc_eq_dec: ∀ x y : Qc, Decision (x = y) := Qc_eq_dec.
 Program Instance Qc_le_dec (x y : Qc) : Decision (x ≤ y) :=
@@ -306,12 +335,14 @@ Instance: StrictOrder (<).
 Proof.
   split; red. intros x Hx. by destruct (Qclt_not_eq x x). apply Qclt_trans.
 Qed.
-
+Lemma Qcmult_0_l x : 0 * x = 0.
+Proof. ring. Qed.
+Lemma Qcmult_0_r x : x * 0 = 0.
+Proof. ring. Qed.
 Lemma Qcle_ngt (x y : Qc) : x ≤ y ↔ ¬y < x.
 Proof. split; auto using Qcle_not_lt, Qcnot_lt_le. Qed.
 Lemma Qclt_nge (x y : Qc) : x < y ↔ ¬y ≤ x.
 Proof. split; auto using Qclt_not_le, Qcnot_le_lt. Qed.
-
 Lemma Qcplus_le_mono_l (x y z : Qc) : x ≤ y ↔ z + x ≤ z + y.
 Proof.
   split; intros.
@@ -330,12 +361,16 @@ Instance: Injective (=) (=) Qcopp.
 Proof.
   intros x y H. by rewrite <-(Qcopp_involutive x), H, Qcopp_involutive.
 Qed.
-Instance: Injective (=) (=) (Qcplus z).
+Instance: ∀ z, Injective (=) (=) (Qcplus z).
 Proof.
   intros z x y H. by apply (anti_symmetric (≤));
     rewrite (Qcplus_le_mono_l _ _ z), H.
 Qed.
-
+Instance: ∀ z, Injective (=) (=) (λ x, x + z).
+Proof.
+  intros z x y H. by apply (anti_symmetric (≤));
+    rewrite (Qcplus_le_mono_r _ _ z), H.
+Qed.
 Lemma Qcplus_pos_nonneg (x y : Qc) : 0 < x → 0 ≤ y → 0 < x + y.
 Proof.
   intros. apply Qclt_le_trans with (x + 0); [by rewrite Qcplus_0_r|].
@@ -350,7 +385,6 @@ Proof.
   intros. transitivity (x + 0); [by rewrite Qcplus_0_r|].
   by apply Qcplus_le_mono_l.
 Qed.
-
 Lemma Qcplus_neg_nonpos (x y : Qc) : x < 0 → y ≤ 0 → x + y < 0.
 Proof.
   intros. apply Qcle_lt_trans with (x + 0); [|by rewrite Qcplus_0_r].
@@ -364,6 +398,57 @@ Lemma Qcplus_nonpos_nonpos (x y : Qc) : x ≤ 0 → y ≤ 0 → x + y ≤ 0.
 Proof.
   intros. transitivity (x + 0); [|by rewrite Qcplus_0_r].
   by apply Qcplus_le_mono_l.
+Qed.
+Lemma Qcmult_le_mono_nonneg_l x y z : 0 ≤ z → x ≤ y → z * x ≤ z * y.
+Proof. intros. rewrite !(Qcmult_comm z). by apply Qcmult_le_compat_r. Qed.
+Lemma Qcmult_le_mono_nonneg_r x y z : 0 ≤ z → x ≤ y → x * z ≤ y * z.
+Proof. intros. by apply Qcmult_le_compat_r. Qed.
+Lemma Qcmult_le_mono_pos_l x y z : 0 < z → x ≤ y ↔ z * x ≤ z * y.
+Proof.
+  split; auto using Qcmult_le_mono_nonneg_l, Qclt_le_weak.
+  rewrite !Qcle_ngt, !(Qcmult_comm z).
+  intuition auto using Qcmult_lt_compat_r.
+Qed.
+Lemma Qcmult_le_mono_pos_r x y z : 0 < z → x ≤ y ↔ x * z ≤ y * z.
+Proof. rewrite !(Qcmult_comm _ z). by apply Qcmult_le_mono_pos_l. Qed.
+Lemma Qcmult_lt_mono_pos_l x y z : 0 < z → x < y ↔ z * x < z * y.
+Proof. intros. by rewrite !Qclt_nge, <-Qcmult_le_mono_pos_l. Qed.
+Lemma Qcmult_lt_mono_pos_r x y z : 0 < z → x < y ↔ x * z < y * z.
+Proof. intros. by rewrite !Qclt_nge, <-Qcmult_le_mono_pos_r. Qed.
+Lemma Qcmult_pos_pos x y : 0 < x → 0 < y → 0 < x * y.
+Proof.
+  intros. apply Qcle_lt_trans with (0 * y); [by rewrite Qcmult_0_l|].
+  by apply Qcmult_lt_mono_pos_r.
+Qed.
+Lemma Qcmult_nonneg_nonneg x y : 0 ≤ x → 0 ≤ y → 0 ≤ x * y.
+Proof.
+  intros. transitivity (0 * y); [by rewrite Qcmult_0_l|].
+  by apply Qcmult_le_mono_nonneg_r.
+Qed.
+
+Lemma inject_Z_Qred n : Qred (inject_Z n) = inject_Z n.
+Proof. apply Qred_identity; auto using Z.gcd_1_r. Qed.
+Coercion Qc_of_Z (n : Z) : Qc := Qcmake _ (inject_Z_Qred n).
+Lemma Z2Qc_inj_0 : Qc_of_Z 0 = 0.
+Proof. by apply Qc_is_canon. Qed.
+Lemma Z2Qc_inj n m : Qc_of_Z n = Qc_of_Z m → n = m.
+Proof. by injection 1. Qed.
+Lemma Z2Qc_inj_iff n m : Qc_of_Z n = Qc_of_Z m ↔ n = m.
+Proof. split. auto using Z2Qc_inj. by intros ->. Qed.
+Lemma Z2Qc_inj_le n m : (n ≤ m)%Z ↔ Qc_of_Z n ≤ Qc_of_Z m.
+Proof. by rewrite Zle_Qle. Qed.
+Lemma Z2Qc_inj_lt n m : (n < m)%Z ↔ Qc_of_Z n < Qc_of_Z m.
+Proof. by rewrite Zlt_Qlt. Qed.
+Lemma Z2Qc_inj_add n m : Qc_of_Z (n + m) = Qc_of_Z n + Qc_of_Z m.
+Proof. apply Qc_is_canon; simpl. by rewrite Qred_correct, inject_Z_plus. Qed.
+Lemma Z2Qc_inj_mul n m : Qc_of_Z (n * m) = Qc_of_Z n * Qc_of_Z m.
+Proof. apply Qc_is_canon; simpl. by rewrite Qred_correct, inject_Z_mult. Qed.
+Lemma Z2Qc_inj_opp n : Qc_of_Z (-n) = -Qc_of_Z n.
+Proof. apply Qc_is_canon; simpl. by rewrite Qred_correct, inject_Z_opp. Qed.
+Lemma Z2Qc_inj_sub n m : Qc_of_Z (n - m) = Qc_of_Z n - Qc_of_Z m.
+Proof.
+  apply Qc_is_canon; simpl.
+  by rewrite !Qred_correct, <-inject_Z_opp, <-inject_Z_plus.
 Qed.
 Close Scope Qc_scope.
 

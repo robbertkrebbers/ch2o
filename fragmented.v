@@ -8,110 +8,68 @@ describe abstract fragments of pointers so as to encode and decode pointers as
 bytes in the file [pointers]. *)
 Require Export numbers list.
 
-Record frag (A : Type) := Frag { frag_item : A; frag_index : nat }.
-Add Printing Constructor frag.
-Arguments Frag {_} _ _.
+Record fragment (A : Type) := Fragment { frag_item : A; frag_index : nat }.
+Add Printing Constructor fragment.
+Arguments Fragment {_} _ _.
 Arguments frag_item {_} _.
 Arguments frag_index {_} _.
+
+Instance fragment_eq_dec `{∀ x y : A, Decision (x = y)}
+  (s1 s2 : fragment A) : Decision (s1 = s2).
+Proof. solve_decision. Defined.
 
 Section fragmented.
 Context {A : Type} `{∀ x y : A, Decision (x = y)}.
 Context (len : nat) {len_pos : PropHolds (len ≠ 0)}.
 
-Global Instance frag_eq_dec (s1 s2 : frag A) : Decision (s1 = s2).
-Proof. solve_decision. Defined.
+Definition fragmented (x : A) (i : nat) (xss : list (fragment A)) : Prop :=
+  xss = Fragment x <$> seq i (len - i).
+Global Instance fragmented_dec x : ∀ i xss, Decision (fragmented x i xss) := _.
+Typeclasses Opaque fragmented.
 
-Inductive fragmented (x : A) : nat → list (frag A) → Prop :=
-  | fragmented_nil : fragmented x len []
-  | fragmented_cons i xss :
-     fragmented x (S i) xss → fragmented x i (Frag x i :: xss).
-
-Global Instance fragmented_dec x : ∀ i xss, Decision (fragmented x i xss).
-Proof.
- refine (
-  fix go i xss :=
+Definition to_fragments (x : A) : list (fragment A) := Fragment x <$> seq 0 len.
+Definition of_fragments (xss : list (fragment A)) : option A :=
   match xss with
-  | [] => cast_if (decide_rel (=) len i)
-  | Frag y j :: pss =>
-     cast_if_and3 (decide_rel (=) i j) (decide_rel (=) x y) (go (S j) pss)
-  end); clear go len_pos; abstract (simplify_equality;
-      first [by constructor | by inversion 1]).
-Defined.
-
-Lemma fragmented_length x i xss : fragmented x i xss → i + length xss = len.
-Proof. induction 1; simpl; lia. Qed.
-Lemma fragmented_seq x i xss :
-  fragmented x i xss → Frag x <$> seq i (length xss) = xss.
-Proof. induction 1; simpl; by f_equal. Qed.
-
-Lemma fragmented_alt x i xss :
-  fragmented x i xss ↔
-    i + length xss = len ∧ xss = Frag x <$> seq i (length xss).
-Proof.
-  split; [intros Hvalid; split |].
-  * by apply fragmented_length with x.
-  * by rewrite fragmented_seq.
-  * intros [Hi Hxss]. rewrite Hxss. clear Hxss. revert i Hi.
-    induction (length xss); simpl; intros i.
-    + rewrite Nat.add_0_r. intros; subst. constructor.
-    + constructor. apply IHn. lia.
-Qed.
-
-Definition to_frags (x : A) : list (frag A) := Frag x <$> seq 0 len.
-Definition of_frags (xss : list (frag A)) : option A :=
-  match xss with
-  | Frag x 0 :: xss => guard (fragmented x 1 xss); Some x
+  | Fragment x 0 :: xss => guard (fragmented x 1 xss); Some x
   | _ => None
   end.
 
-Lemma to_frags_fragmented x : fragmented x 0 (to_frags x).
+Lemma to_fragments_fragmented x : fragmented x 0 (to_fragments x).
+Proof. unfold fragmented, to_fragments. by rewrite Nat.sub_0_r. Qed.
+Lemma to_fragments_length x : length (to_fragments x) = len.
+Proof. unfold to_fragments. by rewrite fmap_length, seq_length. Qed.
+
+Lemma of_to_fragments x xss : of_fragments xss = Some x ↔ to_fragments x = xss.
 Proof.
-  unfold to_frags. apply fragmented_alt. by rewrite fmap_length, seq_length.
+  unfold of_fragments, to_fragments, fragmented, fragmented_dec, PropHolds in *.
+  destruct len as [|n]; [lia|].
+  by destruct xss as [|[y [|?]] xss]; split; intros;
+    simplify_option_equality; rewrite ?Nat.sub_0_r, ?Nat.sub_0_r in *.
 Qed.
-Lemma to_frags_length x : length (to_frags x) = len.
+Lemma of_to_fragments_1 x xss :
+  of_fragments xss = Some x → to_fragments x = xss.
+Proof. by apply of_to_fragments. Qed.
+Lemma of_to_fragments_2 x : of_fragments (to_fragments x) = Some x.
+Proof. by apply of_to_fragments. Qed.
+Global Instance to_fragments_inj: Injective (=) (=) to_fragments.
 Proof.
-  unfold to_frags. rewrite <-(plus_O_n (length _)).
-  apply fragmented_length with x, to_frags_fragmented.
+  intros x y. generalize (eq_refl (to_fragments y)).
+  rewrite <-!of_to_fragments. congruence.
 Qed.
 
-Lemma of_to_frags x xss : of_frags xss = Some x ↔ to_frags x = xss.
+Lemma Forall_to_fragments (P : fragment A → Prop) x :
+  (∀ i, i < len → P (Fragment x i)) → Forall P (to_fragments x).
 Proof.
-  unfold of_frags, to_frags, PropHolds in *.
-  destruct len as [|n] eqn:?; simpl; [lia |]. split; intros Hss.
-  * destruct xss as [|[y [|?]] xss]; simplify_option_equality.
-    replace n with (length xss).
-    + by rewrite fragmented_seq.
-    + pose proof (fragmented_length x 1 xss). intuition lia.
-  * simplify_option_equality; [done |].
-    match goal with H : ¬fragmented _ _ _ |- _ => destruct H end;
-      apply fragmented_alt.
-    rewrite fmap_length, seq_length. intuition lia.
+  unfold to_fragments. intros. apply Forall_fmap, Forall_seq; auto with lia.
 Qed.
-Lemma of_to_frags_1 x xss : of_frags xss = Some x → to_frags x = xss.
-Proof. by apply of_to_frags. Qed.
-Lemma of_to_frags_2 x : of_frags (to_frags x) = Some x.
-Proof. by apply of_to_frags. Qed.
-
-Global Instance to_frags_inj: Injective (=) (=) to_frags.
-Proof.
-  intros x y. generalize (eq_refl (to_frags y)).
-  rewrite <-!of_to_frags. congruence.
-Qed.
-
-Lemma Forall_to_frags (P : frag A → Prop) x :
-  (∀ i, i < len → P (Frag x i)) → Forall P (to_frags x).
-Proof.
-  unfold to_frags. intros. apply Forall_fmap, Forall_seq; auto with lia.
-Qed.
-Lemma Forall_of_frags (P : frag A → Prop) x xss i :
-  of_frags xss = Some x → i < len → Forall P xss → P (Frag x i).
+Lemma Forall_of_fragments (P : fragment A → Prop) x xss i :
+  of_fragments xss = Some x → i < len → Forall P xss → P (Fragment x i).
 Proof.
   revert xss i. assert (∀ i xss,
-    S i < len → fragmented x 1 xss → Forall P xss → P (Frag x (S i))).
-  { intros i xss ?. rewrite fragmented_alt. intros [? Hxss].
-    rewrite Hxss. rewrite Forall_fmap, Forall_seq.
+    S i < len → fragmented x 1 xss → Forall P xss → P (Fragment x (S i))).
+  { intros i xss ? ->. rewrite Forall_fmap, Forall_seq.
     intros Hx. apply Hx; auto with lia. }
-  unfold of_frags. intros. destruct xss as [|[? [|?]]], i;
-    simplify_option_equality; decompose_Forall; eauto.
+  unfold of_fragments. intros. destruct xss as [|[? [|?]]], i;
+    simplify_option_equality; decompose_Forall_hyps; eauto.
 Qed.
 End fragmented.

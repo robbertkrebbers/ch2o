@@ -11,13 +11,22 @@ Require Export Morphisms RelationClasses List Bool Utf8 Program Setoid.
 (** * General *)
 (** The following coercion allows us to use Booleans as propositions. *)
 Coercion Is_true : bool >-> Sortclass.
+Notation "(&&)" := andb (only parsing).
+Notation "(||)" := orb (only parsing).
+
+(** Zipping lists. *)
+Definition zip_with {A B C} (f : A → B → C) : list A → list B → list C :=
+  fix go l1 l2 :=
+  match l1, l2 with x1 :: l1, x2 :: l2 => f x1 x2 :: go l1 l2 | _ , _ => [] end.
+Notation zip := (zip_with pair).
 
 (** Ensure that [simpl] unfolds [id], [compose], and [flip] when fully
 applied. *)
 Arguments id _ _ /.
 Arguments compose _ _ _ _ _ _ /.
 Arguments flip _ _ _ _ _ _ /.
-Typeclasses Transparent id compose flip.
+Arguments const _ _ _ _ /.
+Typeclasses Transparent id compose flip const.
 
 (** Change [True] and [False] into notations in order to enable overloading.
 We will use this in the file [assertions] to give [True] and [False] a
@@ -43,6 +52,7 @@ Notation "( x ≠)" := (λ y, x ≠ y) (only parsing) : C_scope.
 Notation "(≠ x )" := (λ y, y ≠ x) (only parsing) : C_scope.
 
 Hint Extern 0 (?x = ?x) => reflexivity.
+Hint Extern 100 (_ ≠ _) => discriminate.
 
 Notation "(→)" := (λ A B, A → B) (only parsing) : C_scope.
 Notation "( A →)" := (λ B, A → B) (only parsing) : C_scope.
@@ -69,6 +79,22 @@ Notation "(∨ B )" := (λ A, A ∨ B) (only parsing) : C_scope.
 Notation "(↔)" := iff (only parsing) : C_scope.
 Notation "( A ↔)" := (iff A) (only parsing) : C_scope.
 Notation "(↔ B )" := (λ A, A ↔ B) (only parsing) : C_scope.
+
+Hint Extern 0 (_ ↔ _) => reflexivity.
+Hint Extern 0 (_ ↔ _) => symmetry; assumption.
+
+Notation "( x ,)" := (pair x) (only parsing) : C_scope.
+Notation "(, y )" := (λ x, (x,y)) (only parsing) : C_scope.
+
+Notation "p .1" := (fst p) (at level 10, format "p .1").
+Notation "p .2" := (snd p) (at level 10, format "p .2").
+
+Definition prod_map {A A' B B'} (f : A → A') (g : B → B')
+  (p : A * B) : A' * B' := (f (p.1), g (p.2)).
+Arguments prod_map {_ _ _ _} _ _ !_ /.
+Definition prod_zip {A A' A'' B B' B''} (f : A → A' → A'') (g : B → B' → B'')
+    (p : A * B) (q : A' * B') : A'' * B'' := (f (p.1) (q.1), g (p.2) (q.2)).
+Arguments prod_zip {_ _ _ _ _ _} _ _ !_ !_ /.
 
 (** Set convenient implicit arguments for [existT] and introduce notations. *)
 Arguments existT {_ _} _ _.
@@ -128,12 +154,12 @@ Class ProofIrrel (A : Type) : Prop := proof_irrel (x y : A) : x = y.
 Class Equiv A := equiv: relation A.
 Infix "≡" := equiv (at level 70, no associativity) : C_scope.
 Notation "(≡)" := equiv (only parsing) : C_scope.
-Notation "( x ≡)" := (equiv x) (only parsing) : C_scope.
-Notation "(≡ x )" := (λ y, y ≡ x) (only parsing) : C_scope.
-Notation "(≢)" := (λ x y, ¬x ≡ y) (only parsing) : C_scope.
-Notation "x ≢ y":= (¬x ≡ y) (at level 70, no associativity) : C_scope.
-Notation "( x ≢)" := (λ y, x ≢ y) (only parsing) : C_scope.
-Notation "(≢ x )" := (λ y, y ≢ x) (only parsing) : C_scope.
+Notation "( X ≡)" := (equiv X) (only parsing) : C_scope.
+Notation "(≡ X )" := (λ Y, Y ≡ X) (only parsing) : C_scope.
+Notation "(≢)" := (λ X Y, ¬X ≡ Y) (only parsing) : C_scope.
+Notation "X ≢ Y":= (¬X ≡ Y) (at level 70, no associativity) : C_scope.
+Notation "( X ≢)" := (λ Y, X ≢ Y) (only parsing) : C_scope.
+Notation "(≢ X )" := (λ Y, Y ≢ X) (only parsing) : C_scope.
 
 (** The type class [LeibnizEquiv] collects setoid equalities that coincide
 with Leibniz equality. We provide the tactic [fold_leibniz] to transform such
@@ -182,6 +208,12 @@ Infix "∪" := union (at level 50, left associativity) : C_scope.
 Notation "(∪)" := union (only parsing) : C_scope.
 Notation "( x ∪)" := (union x) (only parsing) : C_scope.
 Notation "(∪ x )" := (λ y, union y x) (only parsing) : C_scope.
+Infix "∪*" := (zip_with (∪)) (at level 50, left associativity) : C_scope.
+Notation "(∪*)" := (zip_with (∪)) (only parsing) : C_scope.
+Infix "∪**" := (zip_with (zip_with (∪)))
+  (at level 50, left associativity) : C_scope.
+Infix "∪*∪**" := (zip_with (prod_zip (∪) (∪*)))
+  (at level 50, left associativity) : C_scope.
 
 Definition union_list `{Empty A} `{Union A} : list A → A := fold_right (∪) ∅.
 Arguments union_list _ _ _ !_ /.
@@ -200,6 +232,12 @@ Infix "∖" := difference (at level 40) : C_scope.
 Notation "(∖)" := difference (only parsing) : C_scope.
 Notation "( x ∖)" := (difference x) (only parsing) : C_scope.
 Notation "(∖ x )" := (λ y, difference y x) (only parsing) : C_scope.
+Infix "∖*" := (zip_with (∖)) (at level 40, left associativity) : C_scope.
+Notation "(∖*)" := (zip_with (∖)) (only parsing) : C_scope.
+Infix "∖**" := (zip_with (zip_with (∖)))
+  (at level 40, left associativity) : C_scope.
+Infix "∖*∖**" := (zip_with (prod_zip (∖) (∖*)))
+  (at level 50, left associativity) : C_scope.
 
 Class Singleton A B := singleton: A → B.
 Instance: Params (@singleton) 3.
@@ -217,22 +255,58 @@ Instance: Params (@subseteq) 2.
 Infix "⊆" := subseteq (at level 70) : C_scope.
 Notation "(⊆)" := subseteq (only parsing) : C_scope.
 Notation "( X ⊆ )" := (subseteq X) (only parsing) : C_scope.
-Notation "( ⊆ X )" := (λ Y, subseteq Y X) (only parsing) : C_scope.
+Notation "( ⊆ X )" := (λ Y, Y ⊆ X) (only parsing) : C_scope.
 Notation "X ⊈ Y" := (¬X ⊆ Y) (at level 70) : C_scope.
 Notation "(⊈)" := (λ X Y, X ⊈ Y) (only parsing) : C_scope.
 Notation "( X ⊈ )" := (λ Y, X ⊈ Y) (only parsing) : C_scope.
 Notation "( ⊈ X )" := (λ Y, Y ⊈ X) (only parsing) : C_scope.
-Infix "⊆*" := (Forall2 subseteq) (at level 70) : C_scope.
-Notation "(⊆*)" := (Forall2 subseteq) (only parsing) : C_scope.
+Infix "⊆*" := (Forall2 (⊆)) (at level 70) : C_scope.
+Notation "(⊆*)" := (Forall2 (⊆)) (only parsing) : C_scope.
+Infix "⊆**" := (Forall2 (⊆*)) (at level 70) : C_scope.
+Infix "⊆1*" := (Forall2 (λ p q, p.1 ⊆ q.1)) (at level 70) : C_scope.
+Infix "⊆2*" := (Forall2 (λ p q, p.2 ⊆ q.2)) (at level 70) : C_scope.
+Infix "⊆1**" := (Forall2 (λ p q, p.1 ⊆* q.1)) (at level 70) : C_scope.
+Infix "⊆2**" := (Forall2 (λ p q, p.2 ⊆* q.2)) (at level 70) : C_scope.
 
 Hint Extern 0 (_ ⊆ _) => reflexivity.
+Hint Extern 0 (_ ⊆* _) => reflexivity.
+Hint Extern 0 (_ ⊆** _) => reflexivity.
+
+Class SubsetEqE E A := subseteqE: E → relation A.
+Instance: Params (@subseteqE) 4.
+Notation "X ⊆{ Γ } Y" := (subseteqE Γ X Y)
+  (at level 70, format "X  ⊆{ Γ }  Y") : C_scope.
+Notation "(⊆{ Γ } )" := (subseteqE Γ) (only parsing, Γ at level 1) : C_scope.
+Notation "X ⊈{ Γ } Y" := (¬X ⊆{Γ} Y)
+  (at level 70, format "X  ⊈{ Γ }  Y") : C_scope.
+Notation "(⊈{ Γ } )" := (λ X Y, X ⊈{Γ} Y)
+  (only parsing, Γ at level 1) : C_scope.
+Notation "Xs ⊆{ Γ }* Ys" := (Forall2 (⊆{Γ}) Xs Ys)
+  (at level 70, format "Xs  ⊆{ Γ }*  Ys") : C_scope.
+Notation "(⊆{ Γ }* )" := (Forall2 (⊆{Γ}))
+  (only parsing, Γ at level 1) : C_scope.
+Notation "X ⊆{ Γ1 , Γ2 , .. , Γ3 } Y" :=
+  (subseteqE (pair .. (Γ1, Γ2) .. Γ3) X Y)
+  (at level 70, format "'[' X  ⊆{ Γ1 , Γ2 , .. , Γ3 }  '/' Y ']'") : C_scope.
+Notation "(⊆{ Γ1 , Γ2 , .. , Γ3 } )" := (subseteqE (pair .. (Γ1, Γ2) .. Γ3))
+  (only parsing, Γ1 at level 1) : C_scope.
+Notation "X ⊈{ Γ1 , Γ2 , .. , Γ3 } Y" := (¬X ⊆{pair .. (Γ1, Γ2) .. Γ3} Y)
+  (at level 70, format "X  ⊈{ Γ1 , Γ2 , .. , Γ3 }  Y") : C_scope.
+Notation "(⊈{ Γ1 , Γ2 , .. , Γ3 } )" := (λ X Y, X ⊈{pair .. (Γ1, Γ2) .. Γ3} Y)
+  (only parsing) : C_scope.
+Notation "Xs ⊆{ Γ1 , Γ2 , .. , Γ3 }* Ys" :=
+  (Forall2 (⊆{pair .. (Γ1, Γ2) .. Γ3}) Xs Ys)
+  (at level 70, format "Xs  ⊆{ Γ1 , Γ2 , .. , Γ3 }*  Ys") : C_scope.
+Notation "(⊆{ Γ1 , Γ2 , .. , Γ3 }* )" := (Forall2 (⊆{pair .. (Γ1, Γ2) .. Γ3}))
+  (only parsing, Γ1 at level 1) : C_scope.
+Hint Extern 0 (_ ⊆{_} _) => reflexivity.
 
 Definition strict {A} (R : relation A) : relation A := λ X Y, R X Y ∧ ¬R Y X.
 Instance: Params (@strict) 2.
-Infix "⊂" := (strict subseteq) (at level 70) : C_scope.
-Notation "(⊂)" := (strict subseteq) (only parsing) : C_scope.
-Notation "( X ⊂ )" := (strict subseteq X) (only parsing) : C_scope.
-Notation "( ⊂ X )" := (λ Y, strict subseteq Y X) (only parsing) : C_scope.
+Infix "⊂" := (strict (⊆)) (at level 70) : C_scope.
+Notation "(⊂)" := (strict (⊆)) (only parsing) : C_scope.
+Notation "( X ⊂ )" := (strict (⊆) X) (only parsing) : C_scope.
+Notation "( ⊂ X )" := (λ Y, Y ⊂ X) (only parsing) : C_scope.
 Notation "X ⊄  Y" := (¬X ⊂ Y) (at level 70) : C_scope.
 Notation "(⊄)" := (λ X Y, X ⊄ Y) (only parsing) : C_scope.
 Notation "( X ⊄ )" := (λ Y, X ⊄ Y) (only parsing) : C_scope.
@@ -259,49 +333,51 @@ Instance: Params (@disjoint) 2.
 Infix "⊥" := disjoint (at level 70) : C_scope.
 Notation "(⊥)" := disjoint (only parsing) : C_scope.
 Notation "( X ⊥.)" := (disjoint X) (only parsing) : C_scope.
-Notation "(.⊥ X )" := (λ Y, disjoint Y X) (only parsing) : C_scope.
+Notation "(.⊥ X )" := (λ Y, Y ⊥  X) (only parsing) : C_scope.
+Infix "⊥*" := (Forall2 (⊥)) (at level 70) : C_scope.
+Notation "(⊥*)" := (Forall2 (⊥)) (only parsing) : C_scope.
+Infix "⊥**" := (Forall2 (⊥*)) (at level 70) : C_scope.
+Infix "⊥1*" := (Forall2 (λ p q, p.1 ⊥ q.1)) (at level 70) : C_scope.
+Infix "⊥2*" := (Forall2 (λ p q, p.2 ⊥ q.2)) (at level 70) : C_scope.
+Infix "⊥1**" := (Forall2 (λ p q, p.1 ⊥* q.1)) (at level 70) : C_scope.
+Infix "⊥2**" := (Forall2 (λ p q, p.2 ⊥* q.2)) (at level 70) : C_scope.
+Hint Extern 0 (_ ⊥ _) => symmetry; eassumption.
+Hint Extern 0 (_ ⊥* _) => symmetry; eassumption.
+
+Class DisjointE E A := disjointE : E → A → A → Prop.
+Instance: Params (@disjointE) 4.
+Notation "X ⊥{ Γ } Y" := (disjointE Γ X Y)
+  (at level 70, format "X  ⊥{ Γ }  Y") : C_scope.
+Notation "(⊥{ Γ } )" := (disjointE Γ) (only parsing, Γ at level 1) : C_scope.
+Notation "Xs ⊥{ Γ }* Ys" := (Forall2 (⊥{Γ}) Xs Ys)
+  (at level 70, format "Xs  ⊥{ Γ }*  Ys") : C_scope.
+Notation "(⊥{ Γ }* )" := (Forall2 (⊥{Γ}))
+  (only parsing, Γ at level 1) : C_scope.
+Notation "X ⊥{ Γ1 , Γ2 , .. , Γ3 } Y" := (disjoint (pair .. (Γ1, Γ2) .. Γ3) X Y)
+  (at level 70, format "X  ⊥{ Γ1 , Γ2 , .. , Γ3 }  Y") : C_scope.
+Notation "Xs ⊥{ Γ1 , Γ2 , .. , Γ3 }* Ys" :=
+  (Forall2 (disjoint (pair .. (Γ1, Γ2) .. Γ3)) Xs Ys)
+  (at level 70, format "Xs  ⊥{ Γ1 ,  Γ2 , .. , Γ3 }*  Ys") : C_scope.
+Hint Extern 0 (_ ⊥{_} _) => symmetry; eassumption.
 
 Class DisjointList A := disjoint_list : list A → Prop.
 Instance: Params (@disjoint_list) 2.
-Notation "⊥ l" := (disjoint_list l) (at level 20, format "⊥  l") : C_scope.
+Notation "⊥ Xs" := (disjoint_list Xs) (at level 20, format "⊥  Xs") : C_scope.
 
-Section default_disjoint_list.
-  Context `{Empty A} `{Union A} `{Disjoint A}.
-  Inductive default_disjoint_list : DisjointList A :=
-    | disjoint_nil_2 : ⊥ []
-    | disjoint_cons_2 X Xs : X ⊥ ⋃ Xs → ⊥ Xs → ⊥ (X :: Xs).
-  Global Existing Instance default_disjoint_list.
+Section disjoint_list.
+  Context `{Disjoint A, Union A, Empty A}.
+  Inductive disjoint_list_default : DisjointList A :=
+    | disjoint_nil_2 : ⊥ (@nil A)
+    | disjoint_cons_2 (X : A) (Xs : list A) : X ⊥ ⋃ Xs → ⊥ Xs → ⊥ (X :: Xs).
+  Global Existing Instance disjoint_list_default.
 
-  Lemma disjoint_list_nil : ⊥ @nil A ↔ True.
+  Lemma disjoint_list_nil  : ⊥ @nil A ↔ True.
   Proof. split; constructor. Qed.
   Lemma disjoint_list_cons X Xs : ⊥ (X :: Xs) ↔ X ⊥ ⋃ Xs ∧ ⊥ Xs.
   Proof. split. inversion_clear 1; auto. intros [??]. constructor; auto. Qed.
-End default_disjoint_list.
+End disjoint_list.
 
 Class Filter A B := filter: ∀ (P : A → Prop) `{∀ x, Decision (P x)}, B → B.
-
-(** We define variants of the relations [(≡)] and [(⊆)] that are indexed by
-an environment. *)
-Class EquivEnv A B := equiv_env : A → relation B.
-Notation "X ≡@{ E } Y" := (equiv_env E X Y)
-  (at level 70, format "X  ≡@{ E }  Y") : C_scope.
-Notation "(≡@{ E } )" := (equiv_env E) (E at level 1, only parsing) : C_scope.
-Instance: Params (@equiv_env) 4.
-
-Class SubsetEqEnv A B := subseteq_env : A → relation B.
-Instance: Params (@subseteq_env) 4.
-Notation "X ⊑@{ E } Y" := (subseteq_env E X Y)
-  (at level 70, format "X  ⊑@{ E }  Y") : C_scope.
-Notation "(⊑@{ E } )" := (subseteq_env E)
-  (E at level 1, only parsing) : C_scope.
-Notation "X ⊑@{ E }* Y" := (Forall2 (subseteq_env E) X Y)
-  (at level 70, format "X  ⊑@{ E }*  Y") : C_scope.
-Notation "(⊑@{ E }*)" := (Forall2 (subseteq_env E))
-  (E at level 1, only parsing) : C_scope.
-Instance: Params (@subseteq_env) 4.
-
-Hint Extern 0 (_ ≡@{_} _) => reflexivity.
-Hint Extern 0 (_ ⊑@{_} _) => reflexivity.
 
 (** ** Monadic operations *)
 (** We define operational type classes for the monadic operations bind, join 
@@ -340,6 +416,11 @@ Notation FMap M := (∀ {A B} (f : A → B), FMapD M f)%type.
 Instance: Params (@fmap) 6.
 Arguments fmap {_ _ _} _ {_} !_ /.
 
+Class OMapD (M : Type → Type) {A B} (f : A → option B) := omap: M A → M B.
+Notation OMap M := (∀ {A B} (f : A → option B), OMapD M f)%type.
+Instance: Params (@omap) 6.
+Arguments omap {_ _ _} _ {_} !_ /.
+
 Notation "m ≫= f" := (mbind f m) (at level 60, right associativity) : C_scope.
 Notation "( m ≫=)" := (λ f, mbind f m) (only parsing) : C_scope.
 Notation "(≫= f )" := (mbind f) (only parsing) : C_scope.
@@ -348,6 +429,12 @@ Notation "(≫=)" := (λ m f, mbind f m) (only parsing) : C_scope.
 Notation "x ← y ; z" := (y ≫= (λ x : _, z))
   (at level 65, next at level 35, only parsing, right associativity) : C_scope.
 Infix "<$>" := fmap (at level 60, right associativity) : C_scope.
+Notation "'( x1 , x2 ) ← y ; z" :=
+  (y ≫= (λ x : _, let ' (x1, x2) := x in z))
+  (at level 65, next at level 35, only parsing, right associativity) : C_scope.
+Notation "'( x1 , x2 , x3 ) ← y ; z" :=
+  (y ≫= (λ x : _, let ' (x1,x2,x3) := x in z))
+  (at level 65, next at level 35, only parsing, right associativity) : C_scope.
 
 Class MGuard (M : Type → Type) :=
   mguard: ∀ P {dec : Decision P} {A}, (P → M A) → M A.
@@ -363,10 +450,9 @@ on maps. In the file [fin_maps] we will axiomatize finite maps.
 The function look up [m !! k] should yield the element at key [k] in [m]. *)
 Class Lookup (K A M : Type) := lookup: K → M → option A.
 Instance: Params (@lookup) 4.
-
 Notation "m !! i" := (lookup i m) (at level 20) : C_scope.
 Notation "(!!)" := lookup (only parsing) : C_scope.
-Notation "( m !!)" := (λ i, lookup i m) (only parsing) : C_scope.
+Notation "( m !!)" := (λ i, m !! i) (only parsing) : C_scope.
 Notation "(!! i )" := (lookup i) (only parsing) : C_scope.
 Arguments lookup _ _ _ _ !_ !_ / : simpl nomatch.
 
@@ -416,7 +502,7 @@ Arguments merge _ _ _ _ _ _ !_ !_ / : simpl nomatch.
 
 (** We lift the insert and delete operation to lists of elements. *)
 Definition insert_list `{Insert K A M} (l : list (K * A)) (m : M) : M :=
-  fold_right (λ p, <[ fst p := snd p ]>) m l.
+  fold_right (λ p, <[p.1:=p.2]>) m l.
 Instance: Params (@insert_list) 4.
 Definition delete_list `{Delete K M} (l : list K) (m : M) : M :=
   fold_right delete m l.
@@ -444,6 +530,19 @@ Arguments difference_with {_ _ _} _ !_ !_ / : simpl nomatch.
 Definition intersection_with_list `{IntersectionWith A M}
   (f : A → A → option A) : M → list M → M := fold_right (intersection_with f).
 Arguments intersection_with_list _ _ _ _ _ !_ /.
+
+Class LookupE (E K A M : Type) := lookupE: E → K → M → option A.
+Instance: Params (@lookupE) 6.
+Notation "m !!{ Γ } i" := (lookupE Γ i m)
+  (at level 20, format "m  !!{ Γ }  i") : C_scope.
+Notation "(!!{ Γ } )" := (lookupE Γ) (only parsing, Γ at level 1) : C_scope.
+Arguments lookupE _ _ _ _ _ _ !_ !_ / : simpl nomatch.
+
+Class InsertE (E K A M : Type) := insertE: E → K → A → M → M.
+Instance: Params (@insert) 6.
+Notation "<[ k := a ]{ Γ }>" := (insertE Γ k a)
+  (at level 5, right associativity, format "<[ k := a ]{ Γ }>") : C_scope.
+Arguments insertE _ _ _ _ _ _ !_ _ !_ / : simpl nomatch.
 
 (** ** Common properties *)
 (** These operational type classes allow us to refer to common mathematical
@@ -503,6 +602,9 @@ Arguments total {_} _ {_} _ _.
 Arguments trichotomy {_} _ {_} _ _.
 Arguments trichotomyT {_} _ {_} _ _.
 
+Instance id_injective {A} : Injective (=) (=) (@id A).
+Proof. intros ??; auto. Qed.
+
 (** The following lemmas are specific versions of the projections of the above
 type classes for Leibniz equality. These lemmas allow us to enforce Coq not to
 use the setoid rewriting mechanism. *)
@@ -543,59 +645,56 @@ Class TotalOrder {A} (R : relation A) : Prop := {
   to_trichotomy :> Trichotomy R
 }.
 
-(** A pre-order equipped with a smallest element. *)
-Class BoundedPreOrder A `{Empty A} `{SubsetEq A} : Prop := {
-  bounded_preorder :>> PreOrder (⊆);
-  subseteq_empty x : ∅ ⊆ x
-}.
-
 (** We do not include equality in the following interfaces so as to avoid the
 need for proofs that the relations and operations respect setoid equality.
 Instead, we will define setoid equality in a generic way as
 [λ X Y, X ⊆ Y ∧ Y ⊆ X]. *)
-Class BoundedJoinSemiLattice A `{Empty A} `{SubsetEq A} `{Union A} : Prop := {
-  bjsl_preorder :>> BoundedPreOrder A;
-  union_subseteq_l x y : x ⊆ x ∪ y;
-  union_subseteq_r x y : y ⊆ x ∪ y;
-  union_least x y z : x ⊆ z → y ⊆ z → x ∪ y ⊆ z
+Class BoundedPreOrder A `{Empty A, SubsetEq A} : Prop := {
+  bounded_preorder :>> PreOrder (⊆);
+  subseteq_empty X : ∅ ⊆ X
 }.
-Class MeetSemiLattice A `{Empty A} `{SubsetEq A} `{Intersection A} : Prop := {
+Class BoundedJoinSemiLattice A `{Empty A, SubsetEq A, Union A} : Prop := {
+  bjsl_preorder :>> BoundedPreOrder A;
+  union_subseteq_l X Y : X ⊆ X ∪ Y;
+  union_subseteq_r X Y : Y ⊆ X ∪ Y;
+  union_least X Y Z : X ⊆ Z → Y ⊆ Z → X ∪ Y ⊆ Z
+}.
+Class MeetSemiLattice A `{Empty A, SubsetEq A, Intersection A} : Prop := {
   msl_preorder :>> BoundedPreOrder A;
-  intersection_subseteq_l x y : x ∩ y ⊆ x;
-  intersection_subseteq_r x y : x ∩ y ⊆ y;
-  intersection_greatest x y z : z ⊆ x → z ⊆ y → z ⊆ x ∩ y
+  intersection_subseteq_l X Y : X ∩ Y ⊆ X;
+  intersection_subseteq_r X Y : X ∩ Y ⊆ Y;
+  intersection_greatest X Y Z : Z ⊆ X → Z ⊆ Y → Z ⊆ X ∩ Y
 }.
 
 (** A join distributive lattice with distributivity stated in the order
 theoretic way. We will prove that distributivity of join, and distributivity
 as an equality can be derived. *)
-Class LowerBoundedLattice A `{Empty A} `{SubsetEq A}
-    `{Union A} `{Intersection A} : Prop := {
+Class LowerBoundedLattice A
+    `{Empty A, SubsetEq A, Union A, Intersection A} : Prop := {
   lbl_bjsl :>> BoundedJoinSemiLattice A;
   lbl_msl :>> MeetSemiLattice A;
-  lbl_distr x y z : (x ∪ y) ∩ (x ∪ z) ⊆ x ∪ (y ∩ z)
+  lbl_distr X Y Z : (X ∪ Y) ∩ (X ∪ Z) ⊆ X ∪ (Y ∩ Z)
 }.
 
 (** ** Axiomatization of collections *)
 (** The class [SimpleCollection A C] axiomatizes a collection of type [C] with
 elements of type [A]. *)
 Instance: Params (@map) 3.
-Class SimpleCollection A C `{ElemOf A C}
-    `{Empty C} `{Singleton A C} `{Union C} : Prop := {
+Class SimpleCollection A C `{ElemOf A C,
+    Empty C, Singleton A C, Union C} : Prop := {
   not_elem_of_empty (x : A) : x ∉ ∅;
   elem_of_singleton (x y : A) : x ∈ {[ y ]} ↔ x = y;
   elem_of_union X Y (x : A) : x ∈ X ∪ Y ↔ x ∈ X ∨ x ∈ Y
 }.
-Class Collection A C `{ElemOf A C} `{Empty C} `{Singleton A C}
-    `{Union C} `{Intersection C} `{Difference C} : Prop := {
+Class Collection A C `{ElemOf A C, Empty C, Singleton A C,
+    Union C, Intersection C, Difference C} : Prop := {
   collection_simple :>> SimpleCollection A C;
   elem_of_intersection X Y (x : A) : x ∈ X ∩ Y ↔ x ∈ X ∧ x ∈ Y;
   elem_of_difference X Y (x : A) : x ∈ X ∖ Y ↔ x ∈ X ∧ x ∉ Y
 }.
-Class CollectionOps A C
-    `{ElemOf A C} `{Empty C} `{Singleton A C}
-    `{Union C} `{Intersection C} `{Difference C}
-    `{IntersectionWith A C} `{Filter A C} : Prop := {
+Class CollectionOps A C `{ElemOf A C, Empty C, Singleton A C,
+    Union C, Intersection C, Difference C,
+    IntersectionWith A C, Filter A C} : Prop := {
   collection_ops :>> Collection A C;
   elem_of_intersection_with (f : A → A → option A) X Y (x : A) :
     x ∈ intersection_with f X Y ↔ ∃ x1 x2, x1 ∈ X ∧ x2 ∈ Y ∧ f x1 x2 = Some x;
@@ -621,9 +720,9 @@ Inductive NoDup {A} : list A → Prop :=
 
 (** Decidability of equality of the carrier set is admissible, but we add it
 anyway so as to avoid cycles in type class search. *)
-Class FinCollection A C `{ElemOf A C} `{Empty C} `{Singleton A C}
-    `{Union C} `{Intersection C} `{Difference C}
-    `{Elements A C} `{∀ x y : A, Decision (x = y)} : Prop := {
+Class FinCollection A C `{ElemOf A C, Empty C, Singleton A C,
+    Union C, Intersection C, Difference C,
+    Elements A C, ∀ x y : A, Decision (x = y)} : Prop := {
   fin_collection :>> Collection A C;
   elements_spec X x : x ∈ X ↔ x ∈ elements X;
   elements_nodup X : NoDup (elements X)
@@ -640,9 +739,9 @@ possible (we will only provide an inhabitant using unordered lists without
 duplicates removed). More interesting implementations typically need
 decidability of equality, or a total order on the elements, which do not fit
 in a type constructor of type [Type → Type]. *)
-Class CollectionMonad M `{∀ A, ElemOf A (M A)}
-    `{∀ A, Empty (M A)} `{∀ A, Singleton A (M A)} `{∀ A, Union (M A)}
-    `{!MBind M} `{!MRet M} `{!FMap M} `{!MJoin M} : Prop := {
+Class CollectionMonad M `{∀ A, ElemOf A (M A),
+    ∀ A, Empty (M A), ∀ A, Singleton A (M A), ∀ A, Union (M A),
+    !MBind M, !MRet M, !FMap M, !MJoin M} : Prop := {
   collection_monad_simple A :> SimpleCollection A (M A);
   elem_of_bind {A B} (f : A → M B) (X : M A) (x : B) :
     x ∈ X ≫= f ↔ ∃ y, x ∈ f y ∧ y ∈ X;
@@ -657,8 +756,8 @@ will later prove that [fresh] is [Proper] with respect to the induced setoid
 equality on collections. *)
 Class Fresh A C := fresh: C → A.
 Instance: Params (@fresh) 3.
-Class FreshSpec A C `{ElemOf A C}
-    `{Empty C} `{Singleton A C} `{Union C} `{Fresh A C} : Prop := {
+Class FreshSpec A C `{ElemOf A C,
+    Empty C, Singleton A C, Union C, Fresh A C} : Prop := {
   fresh_collection_simple :>> SimpleCollection A C;
   fresh_proper_alt X Y : (∀ x, x ∈ X ↔ x ∈ Y) → fresh X = fresh Y;
   is_fresh (X : C) : fresh X ∉ X
@@ -666,12 +765,13 @@ Class FreshSpec A C `{ElemOf A C}
 
 (** * Miscellaneous *)
 Class Half A := half: A → A.
-Notation "x .½" := (half x) (at level 20, format "x .½") : C_scope.
+Notation "½" := half : C_scope.
+Notation "½*" := (fmap (M:=list) half) : C_scope.
 
 Lemma proj1_sig_inj {A} (P : A → Prop) x (Px : P x) y (Py : P y) :
   x↾Px = y↾Py → x = y.
 Proof. injection 1; trivial. Qed.
-Lemma not_symmetry `{R : relation A} `{!Symmetric R} x y : ¬R x y → ¬R y x.
+Lemma not_symmetry `{R : relation A, !Symmetric R} x y : ¬R x y → ¬R y x.
 Proof. intuition. Qed.
 Lemma symmetry_iff `(R : relation A) `{!Symmetric R} x y : R x y ↔ R y x.
 Proof. intuition. Qed.
@@ -690,25 +790,18 @@ Instance pointwise_transitive {A} `{R : relation B} :
 Proof. firstorder. Qed.
 
 (** ** Products *)
-Definition fst_map {A A' B} (f : A → A') (p : A * B) : A' * B :=
-  (f (fst p), snd p).
-Definition snd_map {A B B'} (f : B → B') (p : A * B) : A * B' :=
-  (fst p, f (snd p)).
-Arguments fst_map {_ _ _} _ !_ /.
-Arguments snd_map {_ _ _} _ !_ /.
-
-Instance: ∀ {A A' B} (f : A → A'),
-  Injective (=) (=) f → Injective (=) (=) (@fst_map A A' B f).
-Proof. intros ????? [??] [??]; injection 1; firstorder congruence. Qed.
-Instance: ∀ {A B B'} (f : B → B'),
-  Injective (=) (=) f → Injective (=) (=) (@snd_map A B B' f).
-Proof. intros ????? [??] [??]; injection 1; firstorder congruence. Qed.
+Instance prod_map_injective {A A' B B'} (f : A → A') (g : B → B') :
+  Injective (=) (=) f → Injective (=) (=) g →
+  Injective (=) (=) (prod_map f g).
+Proof.
+  intros ?? [??] [??] ?; simpl in *; f_equal;
+    [apply (injective f)|apply (injective g)]; congruence.
+Qed.
 
 Definition prod_relation {A B} (R1 : relation A) (R2 : relation B) :
-  relation (A * B) := λ x y, R1 (fst x) (fst y) ∧ R2 (snd x) (snd y).
-
+  relation (A * B) := λ x y, R1 (x.1) (y.1) ∧ R2 (x.2) (y.2).
 Section prod_relation.
-  Context `{R1 : relation A} `{R2 : relation B}.
+  Context `{R1 : relation A, R2 : relation B}.
   Global Instance:
     Reflexive R1 → Reflexive R2 → Reflexive (prod_relation R1 R2).
   Proof. firstorder eauto. Qed.
@@ -735,8 +828,6 @@ Global Instance proj_eq_equivalence `(f : B → A) : Equivalence (proj_eq f).
 Proof. unfold proj_eq. repeat split; red; intuition congruence. Qed.
 Notation "x ~{ f } y" := (proj_eq f x y)
   (at level 70, format "x  ~{ f }  y") : C_scope.
-Notation "(~{ f } )" := (proj_eq f) (f at level 10, only parsing) : C_scope.
-
 Hint Extern 0 (_ ~{_} _) => reflexivity.
 Hint Extern 0 (_ ~{_} _) => symmetry; assumption.
 

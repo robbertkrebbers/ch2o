@@ -11,9 +11,9 @@ Notation cast_trichotomy T :=
   | inright _ => inright _
   end.
 
-Instance prod_lexico `{Lexico A} `{Lexico B} : Lexico (A * B) := λ p1 p2,
-  (**i 1.) *) lexico (fst p1) (fst p2) ∨
-  (**i 2.) *) fst p1 = fst p2 ∧ lexico (snd p1) (snd p2).
+Instance prod_lexico `{Lexico A, Lexico B} : Lexico (A * B) := λ p1 p2,
+  (**i 1.) *) lexico (p1.1) (p2.1) ∨
+  (**i 2.) *) p1.1 = p2.1 ∧ lexico (p1.2) (p2.2).
 
 Instance bool_lexico : Lexico bool := λ b1 b2,
   match b1, b2 with false, true => True | _, _ => False end.
@@ -32,12 +32,11 @@ Instance list_lexico `{Lexico A} : Lexico (list A) :=
 Instance sig_lexico `{Lexico A} (P : A → Prop) `{∀ x, ProofIrrel (P x)} :
   Lexico (sig P) := λ x1 x2, lexico (`x1) (`x2).
 
-Lemma prod_lexico_irreflexive `{Lexico A} `{Lexico B}
-    `{!Irreflexive (@lexico A _)} (x : A) (y : B) :
-  complement lexico y y → complement lexico (x,y) (x,y).
+Lemma prod_lexico_irreflexive `{Lexico A, Lexico B, !Irreflexive (@lexico A _)}
+  (x : A) (y : B) : complement lexico y y → complement lexico (x,y) (x,y).
 Proof. intros ? [?|[??]]. by apply (irreflexivity lexico x). done. Qed.
-Lemma prod_lexico_transitive `{Lexico A} `{Lexico B}
-    `{!Transitive (@lexico A _)} (x1 x2 x3 : A) (y1 y2 y3 : B) :
+Lemma prod_lexico_transitive `{Lexico A, Lexico B, !Transitive (@lexico A _)}
+    (x1 x2 x3 : A) (y1 y2 y3 : B) :
   lexico (x1,y1) (x2,y2) → lexico (x2,y2) (x3,y3) →
   (lexico y1 y2 → lexico y2 y3 → lexico y1 y3) → lexico (x1,y1) (x3,y3).
 Proof.
@@ -46,7 +45,7 @@ Proof.
   by left; transitivity x2.
 Qed.
 
-Instance prod_lexico_po `{Lexico A} `{Lexico B} `{!StrictOrder (@lexico A _)}
+Instance prod_lexico_po `{Lexico A, Lexico B, !StrictOrder (@lexico A _)}
   `{!StrictOrder (@lexico B _)} : StrictOrder (@lexico (A * B) _).
 Proof.
   split.
@@ -55,14 +54,13 @@ Proof.
   * intros [??] [??] [??] ??.
     eapply prod_lexico_transitive; eauto. apply transitivity.
 Qed.
-Instance prod_lexico_trichotomyT `{Lexico A} `{tA: !TrichotomyT (@lexico A _)}
-  `{Lexico B} `{tB:!TrichotomyT (@lexico B _)}: TrichotomyT (@lexico (A * B) _).
+Instance prod_lexico_trichotomyT `{Lexico A, tA : !TrichotomyT (@lexico A _)}
+  `{Lexico B, tB : !TrichotomyT (@lexico B _)}: TrichotomyT (@lexico (A * B) _).
 Proof.
  red; refine (λ p1 p2,
-  match trichotomyT lexico (fst p1) (fst p2) with
+  match trichotomyT lexico (p1.1) (p2.1) with
   | inleft (left _) => inleft (left _)
-  | inleft (right _) =>
-    cast_trichotomy (trichotomyT lexico (snd p1) (snd p2))
+  | inleft (right _) => cast_trichotomy (trichotomyT lexico (p1.2) (p2.2))
   | inright _ => inright _
   end); clear tA tB;
     abstract (unfold lexico, prod_lexico; auto using injective_projections).
@@ -117,7 +115,7 @@ Proof.
   end eq_refl).
 Defined.
 
-Instance list_lexico_po `{Lexico A} `{!StrictOrder (@lexico A _)} :
+Instance list_lexico_po `{Lexico A, !StrictOrder (@lexico A _)} :
   StrictOrder (@lexico (list A) _).
 Proof.
   split.
@@ -125,7 +123,7 @@ Proof.
   * intros l1. induction l1 as [|x1 l1]; intros [|x2 l2] [|x3 l3] ??; try done.
     eapply prod_lexico_transitive; eauto.
 Qed.
-Instance list_lexico_trichotomy `{Lexico A} `{tA:!TrichotomyT (@lexico A _)} :
+Instance list_lexico_trichotomy `{Lexico A, tA : !TrichotomyT (@lexico A _)} :
   TrichotomyT (@lexico (list A) _).
 Proof.
  refine (
@@ -140,14 +138,14 @@ Proof.
     abstract (repeat (done || constructor || congruence || by inversion 1)).
 Defined.
 
-Instance sig_lexico_po `{Lexico A} `{!StrictOrder (@lexico A _)}
+Instance sig_lexico_po `{Lexico A, !StrictOrder (@lexico A _)}
   (P : A → Prop) `{∀ x, ProofIrrel (P x)} : StrictOrder (@lexico (sig P) _).
 Proof.
   unfold lexico, sig_lexico. split.
   * intros [x ?] ?. by apply (irreflexivity lexico x). 
   * intros [x1 ?] [x2 ?] [x3 ?] ??. by transitivity x2.
 Qed.
-Instance sig_lexico_trichotomy `{Lexico A} `{tA: !TrichotomyT (@lexico A _)}
+Instance sig_lexico_trichotomy `{Lexico A, tA : !TrichotomyT (@lexico A _)}
   (P : A → Prop) `{∀ x, ProofIrrel (P x)} : TrichotomyT (@lexico (sig P) _).
 Proof.
  red; refine (λ x1 x2, cast_trichotomy (trichotomyT lexico (`x1) (`x2)));

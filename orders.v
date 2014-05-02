@@ -19,7 +19,6 @@ Section orders.
   Proof. by intros <-. Qed.
   Lemma anti_symmetric_iff `{!PartialOrder R} X Y : X = Y ↔ R X Y ∧ R Y X.
   Proof. intuition (subst; auto). Qed.
-
   Lemma strict_spec X Y : X ⊂ Y ↔ X ⊆ Y ∧ Y ⊈ X.
   Proof. done. Qed.
   Lemma strict_include X Y : X ⊂ Y → X ⊆ Y.
@@ -40,7 +39,6 @@ Section orders.
     * by transitivity Y.
     * contradict HYZ. by transitivity X.
   Qed.
-
   Global Instance: Irreflexive (strict R).
   Proof. firstorder. Qed.
   Global Instance: Transitive R → StrictOrder (strict R).
@@ -48,11 +46,9 @@ Section orders.
     split; try apply _.
     eauto using strict_transitive_r, strict_include.
   Qed.
-
   Global Instance preorder_subset_dec_slow `{∀ X Y, Decision (X ⊆ Y)}
     (X Y : A) : Decision (X ⊂ Y) | 100 := _.
-
-  Lemma strict_spec_alt `{!PartialOrder R} X Y : X ⊂ Y ↔ X ⊆ Y ∧ X ≠ Y.
+  Lemma strict_spec_alt `{!AntiSymmetric (=) R} X Y : X ⊂ Y ↔ X ⊆ Y ∧ X ≠ Y.
   Proof.
     split.
     * intros [? HYX]. split. done. by intros <-.
@@ -64,12 +60,10 @@ Section orders.
     refine (cast_if_and (decide (X ⊆ Y)) (decide (Y ⊆ X)));
      abstract (rewrite anti_symmetric_iff; tauto).
   Defined.
-
   Lemma total_not `{!Total R} X Y : X ⊈ Y → Y ⊆ X.
   Proof. intros. destruct (total R X Y); tauto. Qed.
   Lemma total_not_strict `{!Total R} X Y : X ⊈ Y → Y ⊂ X.
   Proof. red; auto using total_not. Qed.
-
   Global Instance trichotomy_total
     `{!Trichotomy (strict R)} `{!Reflexive R} : Total R.
   Proof.
@@ -308,7 +302,6 @@ Section merge_sort_correct.
     * rewrite IH, merge_list_to_stack_Permutation; simpl.
       by rewrite Permutation_middle.
   Qed.
-
   Lemma Sorted_merge_sort l : Sorted R (merge_sort R l).
   Proof. apply Sorted_merge_sort_aux. by constructor. Qed.
   Lemma merge_sort_Permutation l : merge_sort R l ≡ₚ l.
@@ -322,59 +315,53 @@ End merge_sort_correct.
 (** We extend the canonical pre-order [⊆] to a partial order by defining setoid
 equality as [λ X Y, X ⊆ Y ∧ Y ⊆ X]. We prove that this indeed gives rise to a
 setoid. *)
-Section preorder.
-  Context `{SubsetEq A} `{!PreOrder (⊆)}.
+Instance preorder_equiv `{SubsetEq A} : Equiv A := λ X Y, X ⊆ Y ∧ Y ⊆ X.
 
-  Global Instance preorder_equiv: Equiv A := λ X Y, X ⊆ Y ∧ Y ⊆ X.
+Section preorder.
+  Context `{SubsetEq A} `{!PreOrder (@subseteq A _)}.
+
   Instance preorder_equivalence: @Equivalence A (≡).
   Proof.
     split.
     * done.
     * by intros ?? [??].
-    * by intros x y z [??] [??]; split; transitivity y.
+    * by intros X Y Z [??] [??]; split; transitivity Y.
   Qed.
-
   Global Instance: Proper ((≡) ==> (≡) ==> iff) (⊆).
   Proof.
-    unfold equiv, preorder_equiv.
-    intros x1 y1 ? x2 y2 ?. split; intro.
-    * transitivity x1. tauto. transitivity x2; tauto.
-    * transitivity y1. tauto. transitivity y2; tauto.
+    unfold equiv, preorder_equiv. intros X1 Y1 ? X2 Y2 ?. split; intro.
+    * transitivity X1. tauto. transitivity X2; tauto.
+    * transitivity Y1. tauto. transitivity Y2; tauto.
   Qed.
-
   Lemma subset_spec X Y : X ⊂ Y ↔ X ⊆ Y ∧ X ≢ Y.
   Proof.
     split.
-    * intros [? HYX]. split. done. contradict HYX. by rewrite HYX.
+    * intros [? HYX]. split. done. contradict HYX. by rewrite <-HYX.
     * intros [? HXY]. split. done. by contradict HXY.
   Qed.
 
-  Section leibniz.
-    Context `{!LeibnizEquiv A}.
-
-    Lemma subset_spec_L X Y : X ⊂ Y ↔ X ⊆ Y ∧ X ≠ Y.
-    Proof. unfold_leibniz. apply subset_spec. Qed.
-  End leibniz.
-
   Section dec.
     Context `{∀ X Y : A, Decision (X ⊆ Y)}.
-
     Global Instance preorder_equiv_dec_slow (X Y : A) :
       Decision (X ≡ Y) | 100 := _.
-
     Lemma subseteq_inv X Y : X ⊆ Y → X ⊂ Y ∨ X ≡ Y.
     Proof. rewrite subset_spec. destruct (decide (X ≡ Y)); tauto. Qed.
     Lemma not_subset_inv X Y : X ⊄ Y → X ⊈ Y ∨ X ≡ Y.
     Proof. rewrite subset_spec. destruct (decide (X ≡ Y)); tauto. Qed.
-
-    Context `{!LeibnizEquiv A}.
-
-    Lemma subseteq_inv_L X Y : X ⊆ Y → X ⊂ Y ∨ X = Y.
-    Proof. unfold_leibniz. apply subseteq_inv. Qed.
-    Lemma not_subset_inv_L X Y : X ⊄ Y → X ⊈ Y ∨ X = Y.
-    Proof. unfold_leibniz. apply not_subset_inv. Qed.
   End dec.
 End preorder.
+
+Section preorder_leibniz.
+  Context `{SubsetEq A} `{!PreOrder (@subseteq A _)} `{!LeibnizEquiv A}.
+  Lemma subset_spec_L X Y : X ⊂ Y ↔ X ⊆ Y ∧ X ≠ Y.
+  Proof. unfold_leibniz. apply subset_spec. Qed.
+
+  Context `{∀ X Y : A, Decision (X ⊆ Y)}.
+  Lemma subseteq_inv_L X Y : X ⊆ Y → X ⊂ Y ∨ X = Y.
+  Proof. unfold_leibniz. apply subseteq_inv. Qed.
+  Lemma not_subset_inv_L X Y : X ⊄ Y → X ⊈ Y ∨ X = Y.
+  Proof. unfold_leibniz. apply not_subset_inv. Qed.
+End preorder_leibniz.
 
 Typeclasses Opaque preorder_equiv.
 Hint Extern 0 (@Equivalence _ (≡)) =>
@@ -382,46 +369,33 @@ Hint Extern 0 (@Equivalence _ (≡)) =>
 
 (** * Partial orders *)
 Section partialorder.
-  Context `{SubsetEq A} `{!PartialOrder (⊆)}.
-
+  Context `{SubsetEq A} `{!PartialOrder (@subseteq A _)}.
   Global Instance: LeibnizEquiv A.
-  Proof.
-    split.
-    * intros [??]. by apply (anti_symmetric (⊆)).
-    * intros. by subst.
-  Qed.
+  Proof. split. intros [??]. by apply (anti_symmetric (⊆)). by intros ->. Qed.
 End partialorder.
 
 (** * Join semi lattices *)
 (** General purpose theorems on join semi lattices. *)
 Section bounded_join_sl.
   Context `{BoundedJoinSemiLattice A}.
+  Implicit Types X Y : A.
+  Implicit Types Xs Ys : list A.
 
   Hint Resolve subseteq_empty union_subseteq_l union_subseteq_r union_least.
-
-  Lemma union_subseteq_l_alt x1 x2 y : x1 ⊆ x2 → x1 ⊆ x2 ∪ y.
-  Proof. intros. transitivity x2; auto. Qed.
-  Lemma union_subseteq_r_alt x1 x2 y : x1 ⊆ x2 → x1 ⊆ y ∪ x2.
-  Proof. intros. transitivity x2; auto. Qed.
-  Hint Resolve union_subseteq_l_alt union_subseteq_r_alt.
-
-  Lemma union_preserving_l x y1 y2 : y1 ⊆ y2 → x ∪ y1 ⊆ x ∪ y2.
+  Lemma union_subseteq_l_transitive X1 X2 Y : X1 ⊆ X2 → X1 ⊆ X2 ∪ Y.
+  Proof. intros. transitivity X2; auto. Qed.
+  Lemma union_subseteq_r_transitive X1 X2 Y : X1 ⊆ X2 → X1 ⊆ Y ∪ X2.
+  Proof. intros. transitivity X2; auto. Qed.
+  Hint Resolve union_subseteq_l_transitive union_subseteq_r_transitive.
+  Lemma union_preserving_l X Y1 Y2 : Y1 ⊆ Y2 → X ∪ Y1 ⊆ X ∪ Y2.
   Proof. auto. Qed.
-  Lemma union_preserving_r x1 x2 y : x1 ⊆ x2 → x1 ∪ y ⊆ x2 ∪ y.
+  Lemma union_preserving_r X1 X2 Y : X1 ⊆ X2 → X1 ∪ Y ⊆ X2 ∪ Y.
   Proof. auto. Qed.
-  Lemma union_preserving x1 x2 y1 y2 : x1 ⊆ x2 → y1 ⊆ y2 → x1 ∪ y1 ⊆ x2 ∪ y2.
+  Lemma union_preserving X1 X2 Y1 Y2 : X1 ⊆ X2 → Y1 ⊆ Y2 → X1 ∪ Y1 ⊆ X2 ∪ Y2.
   Proof. auto. Qed.
-
-  Lemma union_empty x : x ∪ ∅ ⊆ x.
+  Lemma union_empty X : X ∪ ∅ ⊆ X.
   Proof. by apply union_least. Qed.
-  Lemma union_commutative_1 x y : x ∪ y ⊆ y ∪ x.
-  Proof. auto. Qed.
-  Lemma union_associative_1 x y z : (x ∪ y) ∪ z ⊆ x ∪ (y ∪ z).
-  Proof. auto. Qed.
-  Lemma union_associative_2 x y z : x ∪ (y ∪ z) ⊆ (x ∪ y) ∪ z.
-  Proof. auto. Qed.
-
-  Global Instance union_proper: Proper ((≡) ==> (≡) ==> (≡)) (∪).
+  Global Instance union_proper : Proper ((≡) ==> (≡) ==> (≡)) (∪).
   Proof.
     unfold equiv, preorder_equiv.
     split; apply union_preserving; simpl in *; tauto.
@@ -433,54 +407,45 @@ Section bounded_join_sl.
   Global Instance: RightId (≡) ∅ (∪).
   Proof. split; eauto. Qed.
   Global Instance: Commutative (≡) (∪).
-  Proof. split; apply union_commutative_1. Qed.
+  Proof. split; auto. Qed.
   Global Instance: Associative (≡) (∪).
-  Proof. split. apply union_associative_2. apply union_associative_1. Qed.
-
+  Proof. split; auto. Qed.
   Lemma subseteq_union X Y : X ⊆ Y ↔ X ∪ Y ≡ Y.
-  Proof. repeat split; eauto. intros E. rewrite <-E. auto. Qed.
+  Proof. repeat split; eauto. intros HXY. rewrite <-HXY. auto. Qed.
   Lemma subseteq_union_1 X Y : X ⊆ Y → X ∪ Y ≡ Y.
   Proof. apply subseteq_union. Qed.
   Lemma subseteq_union_2 X Y : X ∪ Y ≡ Y → X ⊆ Y.
   Proof. apply subseteq_union. Qed.
-
   Lemma equiv_empty X : X ⊆ ∅ → X ≡ ∅.
   Proof. split; eauto. Qed.
-
-  Global Instance union_list_proper: Proper (Forall2 (≡) ==> (≡)) union_list.
-  Proof.
-    induction 1; simpl.
-    * done.
-    * by apply union_proper.
-  Qed.
-
+  Global Instance union_list_proper:
+    Proper (Forall2 (≡) ==> (≡)) union_list.
+  Proof. induction 1; simpl. done. by apply union_proper. Qed.
   Lemma union_list_nil : ⋃ @nil A = ∅.
   Proof. done. Qed.
-  Lemma union_list_cons (X : A) (Xs : list A) : ⋃ (X :: Xs) = X ∪ ⋃ Xs.
+  Lemma union_list_cons X Xs : ⋃ (X :: Xs) = X ∪ ⋃ Xs.
   Proof. done. Qed.
-  Lemma union_list_singleton (X : A) : ⋃ [X] ≡ X.
+  Lemma union_list_singleton X : ⋃ [X] ≡ X.
   Proof. simpl. by rewrite (right_id ∅ _). Qed.
-  Lemma union_list_app (Xs1 Xs2 : list A) : ⋃ (Xs1 ++ Xs2) ≡ ⋃ Xs1 ∪ ⋃ Xs2.
+  Lemma union_list_app Xs1 Xs2 : ⋃ (Xs1 ++ Xs2) ≡ ⋃ Xs1 ∪ ⋃ Xs2.
   Proof.
-    induction Xs1 as [|X Xs1 IH]; simpl.
-    * by rewrite (left_id ∅ _).
-    * by rewrite IH, (associative _).
+    induction Xs1 as [|X Xs1 IH]; simpl; [by rewrite (left_id ∅ _)|].
+    by rewrite IH, (associative _).
   Qed.
-  Lemma union_list_reverse (Xs : list A) : ⋃ (reverse Xs) ≡ ⋃ Xs.
+  Lemma union_list_reverse Xs : ⋃ (reverse Xs) ≡ ⋃ Xs.
   Proof.
     induction Xs as [|X Xs IH]; simpl; [done |].
     by rewrite reverse_cons, union_list_app,
       union_list_singleton, (commutative _), IH.
   Qed.
-  Lemma union_list_preserving (Xs Ys : list A) : Xs ⊆* Ys → ⋃ Xs ⊆ ⋃ Ys.
+  Lemma union_list_preserving Xs Ys : Xs ⊆* Ys → ⋃ Xs ⊆ ⋃ Ys.
   Proof. induction 1; simpl; auto using union_preserving. Qed.
-
   Lemma empty_union X Y : X ∪ Y ≡ ∅ ↔ X ≡ ∅ ∧ Y ≡ ∅.
   Proof.
     split.
-    * intros E. split; apply equiv_empty;
-        by transitivity (X ∪ Y); [auto | rewrite E].
-    * intros [E1 E2]. by rewrite E1, E2, (left_id _ _).
+    * intros HXY. split; apply equiv_empty;
+        by transitivity (X ∪ Y); [auto | rewrite HXY].
+    * intros [HX HY]. by rewrite HX, HY, (left_id _ _).
   Qed.
   Lemma empty_union_list Xs : ⋃ Xs ≡ ∅ ↔ Forall (≡ ∅) Xs.
   Proof.
@@ -491,7 +456,6 @@ Section bounded_join_sl.
 
   Section leibniz.
     Context `{!LeibnizEquiv A}.
-
     Global Instance: Idempotent (=) (∪).
     Proof. intros ?. unfold_leibniz. apply (idempotent _). Qed.
     Global Instance: LeftId (=) ∅ (∪).
@@ -502,14 +466,12 @@ Section bounded_join_sl.
     Proof. intros ??. unfold_leibniz. apply (commutative _). Qed.
     Global Instance: Associative (=) (∪).
     Proof. intros ???. unfold_leibniz. apply (associative _). Qed.
-
     Lemma subseteq_union_L X Y : X ⊆ Y ↔ X ∪ Y = Y.
     Proof. unfold_leibniz. apply subseteq_union. Qed.
     Lemma subseteq_union_1_L X Y : X ⊆ Y → X ∪ Y = Y.
     Proof. unfold_leibniz. apply subseteq_union_1. Qed.
     Lemma subseteq_union_2_L X Y : X ∪ Y = Y → X ⊆ Y.
     Proof. unfold_leibniz. apply subseteq_union_2. Qed.
-
     Lemma equiv_empty_L X : X ⊆ ∅ → X = ∅.
     Proof. unfold_leibniz. apply equiv_empty. Qed.
     Lemma union_list_singleton_L (X : A) : ⋃ [X] = X.
@@ -518,21 +480,18 @@ Section bounded_join_sl.
     Proof. unfold_leibniz. apply union_list_app. Qed.
     Lemma union_list_reverse_L (Xs : list A) : ⋃ (reverse Xs) = ⋃ Xs.
     Proof. unfold_leibniz. apply union_list_reverse. Qed.
-
     Lemma empty_union_L X Y : X ∪ Y = ∅ ↔ X = ∅ ∧ Y = ∅.
     Proof. unfold_leibniz. apply empty_union. Qed.
     Lemma empty_union_list_L Xs : ⋃ Xs = ∅ ↔ Forall (= ∅) Xs.
-    Proof. unfold_leibniz. apply empty_union_list. Qed.
+    Proof. unfold_leibniz. by rewrite empty_union_list. Qed. 
   End leibniz.
 
   Section dec.
     Context `{∀ X Y : A, Decision (X ⊆ Y)}.
-
     Lemma non_empty_union X Y : X ∪ Y ≢ ∅ → X ≢ ∅ ∨ Y ≢ ∅.
     Proof. rewrite empty_union. destruct (decide (X ≡ ∅)); intuition. Qed.
     Lemma non_empty_union_list Xs : ⋃ Xs ≢ ∅ → Exists (≢ ∅) Xs.
     Proof. rewrite empty_union_list. apply (not_Forall_Exists _). Qed.
-
     Context `{!LeibnizEquiv A}.
     Lemma non_empty_union_L X Y : X ∪ Y ≠ ∅ → X ≠ ∅ ∨ Y ≠ ∅.
     Proof. unfold_leibniz. apply non_empty_union. Qed.
@@ -545,31 +504,24 @@ End bounded_join_sl.
 (** The dual of the above section, but now for meet semi lattices. *)
 Section meet_sl.
   Context `{MeetSemiLattice A}.
+  Implicit Types X Y : A.
+  Implicit Types Xs Ys : list A.
 
   Hint Resolve intersection_subseteq_l intersection_subseteq_r
     intersection_greatest.
-
-  Lemma intersection_subseteq_l_alt x1 x2 y : x1 ⊆ x2 → x1 ∩ y ⊆ x2.
-  Proof. intros. transitivity x1; auto. Qed.
-  Lemma intersection_subseteq_r_alt x1 x2 y : x1 ⊆ x2 → y ∩ x1 ⊆ x2.
-  Proof. intros. transitivity x1; auto. Qed.
-  Hint Resolve intersection_subseteq_l_alt intersection_subseteq_r_alt.
-
-  Lemma intersection_preserving_l x y1 y2 : y1 ⊆ y2 → x ∩ y1 ⊆ x ∩ y2.
+  Lemma intersection_subseteq_l_transitive X1 X2 Y : X1 ⊆ X2 → X1 ∩ Y ⊆ X2.
+  Proof. intros. transitivity X1; auto. Qed.
+  Lemma intersection_subseteq_r_transitive X1 X2 Y : X1 ⊆ X2 → Y ∩ X1 ⊆ X2.
+  Proof. intros. transitivity X1; auto. Qed.
+  Hint Resolve intersection_subseteq_l_transitive
+    intersection_subseteq_r_transitive.
+  Lemma intersection_preserving_l X Y1 Y2 : Y1 ⊆ Y2 → X ∩ Y1 ⊆ X ∩ Y2.
   Proof. auto. Qed.
-  Lemma intersection_preserving_r x1 x2 y : x1 ⊆ x2 → x1 ∩ y ⊆ x2 ∩ y.
+  Lemma intersection_preserving_r X1 X2 Y : X1 ⊆ X2 → X1 ∩ Y ⊆ X2 ∩ Y.
   Proof. auto. Qed.
-  Lemma intersection_preserving x1 x2 y1 y2 :
-    x1 ⊆ x2 → y1 ⊆ y2 → x1 ∩ y1 ⊆ x2 ∩ y2.
+  Lemma intersection_preserving X1 X2 Y1 Y2 :
+    X1 ⊆ X2 → Y1 ⊆ Y2 → X1 ∩ Y1 ⊆ X2 ∩ Y2.
   Proof. auto. Qed.
-
-  Lemma intersection_commutative_1 x y : x ∩ y ⊆ y ∩ x.
-  Proof. auto. Qed.
-  Lemma intersection_associative_1 x y z : (x ∩ y) ∩ z ⊆ x ∩ (y ∩ z).
-  Proof. auto. Qed.
-  Lemma intersection_associative_2 x y z : x ∩ (y ∩ z) ⊆ (x ∩ y) ∩ z.
-  Proof. auto. Qed.
-
   Global Instance: Proper ((≡) ==> (≡) ==> (≡)) (∩).
   Proof.
     unfold equiv, preorder_equiv. split;
@@ -578,14 +530,11 @@ Section meet_sl.
   Global Instance: Idempotent (≡) (∩).
   Proof. split; eauto. Qed.
   Global Instance: Commutative (≡) (∩).
-  Proof. split; apply intersection_commutative_1. Qed.
+  Proof. split; auto. Qed.
   Global Instance: Associative (≡) (∩).
-  Proof.
-    split. apply intersection_associative_2. apply intersection_associative_1.
-  Qed.
-
+  Proof. split; auto. Qed.
   Lemma subseteq_intersection X Y : X ⊆ Y ↔ X ∩ Y ≡ X.
-  Proof. repeat split; eauto. intros E. rewrite <-E. auto. Qed.
+  Proof. repeat split; eauto. intros HXY. rewrite <-HXY. auto. Qed.
   Lemma subseteq_intersection_1 X Y : X ⊆ Y → X ∩ Y ≡ X.
   Proof. apply subseteq_intersection. Qed.
   Lemma subseteq_intersection_2 X Y : X ∩ Y ≡ X → X ⊆ Y.
@@ -593,14 +542,12 @@ Section meet_sl.
 
   Section leibniz.
     Context `{!LeibnizEquiv A}.
-
     Global Instance: Idempotent (=) (∩).
     Proof. intros ?. unfold_leibniz. apply (idempotent _). Qed.
     Global Instance: Commutative (=) (∩).
     Proof. intros ??. unfold_leibniz. apply (commutative _). Qed.
     Global Instance: Associative (=) (∩).
     Proof. intros ???. unfold_leibniz. apply (associative _). Qed.
-
     Lemma subseteq_intersection_L X Y : X ⊆ Y ↔ X ∩ Y = X.
     Proof. unfold_leibniz. apply subseteq_intersection. Qed.
     Lemma subseteq_intersection_1_L X Y : X ⊆ Y → X ∩ Y = X.
@@ -616,47 +563,42 @@ Section lower_bounded_lattice.
 
   Global Instance: LeftAbsorb (≡) ∅ (∩).
   Proof.
-    split.
-    * by apply intersection_subseteq_l.
-    * by apply subseteq_empty.
+    split. by apply intersection_subseteq_l. by apply subseteq_empty.
   Qed.
   Global Instance: RightAbsorb (≡) ∅ (∩).
   Proof. intros ?. by rewrite (commutative _), (left_absorb _ _). Qed.
   Global Instance: LeftDistr (≡) (∪) (∩).
   Proof.
-    intros x y z. split.
+    intros X Y Z. split.
     * apply union_least.
       { apply intersection_greatest; auto using union_subseteq_l. }
       apply intersection_greatest.
-      + apply union_subseteq_r_alt, intersection_subseteq_l.
-      + apply union_subseteq_r_alt, intersection_subseteq_r.
+      + apply union_subseteq_r_transitive, intersection_subseteq_l.
+      + apply union_subseteq_r_transitive, intersection_subseteq_r.
     * apply lbl_distr.
   Qed.
   Global Instance: RightDistr (≡) (∪) (∩).
-  Proof. intros x y z. by rewrite !(commutative _ _ z), (left_distr _ _). Qed.
+  Proof. intros X Y Z. by rewrite !(commutative _ _ Z), (left_distr _ _). Qed.
   Global Instance: LeftDistr (≡) (∩) (∪).
   Proof.
-    intros x y z. split.
+    intros X Y Z. split.
     * rewrite (left_distr (∪) (∩)).
       apply intersection_greatest.
-      { apply union_subseteq_r_alt, intersection_subseteq_l. }
+      { apply union_subseteq_r_transitive, intersection_subseteq_l. }
       rewrite (right_distr (∪) (∩)). apply intersection_preserving.
       + apply union_subseteq_l.
       + done.
     * apply intersection_greatest.
       { apply union_least; auto using intersection_subseteq_l. }
       apply union_least.
-      + apply intersection_subseteq_r_alt, union_subseteq_l.
-      + apply intersection_subseteq_r_alt, union_subseteq_r.
+      + apply intersection_subseteq_r_transitive, union_subseteq_l.
+      + apply intersection_subseteq_r_transitive, union_subseteq_r.
   Qed.
   Global Instance: RightDistr (≡) (∩) (∪).
-  Proof.
-    intros x y z. by rewrite !(commutative _ _ z), (left_distr _ _).
-  Qed.
+  Proof. intros X Y Z. by rewrite !(commutative _ _ Z), (left_distr _ _). Qed.
 
   Section leibniz.
     Context `{!LeibnizEquiv A}.
-
     Global Instance: LeftAbsorb (=) ∅ (∩).
     Proof. intros ?. unfold_leibniz. apply (left_absorb _ _). Qed.
     Global Instance: RightAbsorb (=) ∅ (∩).

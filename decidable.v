@@ -70,6 +70,7 @@ Ltac solve_decision := intros; first
 
 (** The following combinators are useful to create Decision proofs in
 combination with the [refine] tactic. *)
+Notation swap_if S := (match S with left H => right H | right H => left H end).
 Notation cast_if S := (if S then left _ else right _).
 Notation cast_if_and S1 S2 := (if S1 then cast_if S2 else right _).
 Notation cast_if_and3 S1 S2 S3 := (if S1 then cast_if_and S2 S3 else right _).
@@ -77,6 +78,8 @@ Notation cast_if_and4 S1 S2 S3 S4 :=
   (if S1 then cast_if_and3 S2 S3 S4 else right _).
 Notation cast_if_and5 S1 S2 S3 S4 S5 :=
   (if S1 then cast_if_and4 S2 S3 S4 S5 else right _).
+Notation cast_if_and6 S1 S2 S3 S4 S5 S6 :=
+  (if S1 then cast_if_and5 S2 S3 S4 S5 S6 else right _).
 Notation cast_if_or S1 S2 := (if S1 then left _ else cast_if S2).
 Notation cast_if_or3 S1 S2 S3 := (if S1 then left _ else cast_if_or S2 S3).
 Notation cast_if_not_or S1 S2 := (if S1 then cast_if S2 else left _).
@@ -131,6 +134,8 @@ Proof. by apply dsig_eq. Qed.
 (** Instances of [Decision] for operators of propositional logic. *)
 Instance True_dec: Decision True := left I.
 Instance False_dec: Decision False := right (False_rect False).
+Instance Is_true_dec b : Decision (Is_true b).
+Proof. destruct b; apply _. Defined.
 
 Section prop_dec.
   Context `(P_dec : Decision P) `(Q_dec : Decision Q).
@@ -144,18 +149,17 @@ Section prop_dec.
   Global Instance impl_dec: Decision (P → Q).
   Proof. refine (if P_dec then cast_if Q_dec else left _); intuition. Defined.
 End prop_dec.
+Instance iff_dec `(P_dec : Decision P) `(Q_dec : Decision Q) :
+  Decision (P ↔ Q) := and_dec _ _.
 
 (** Instances of [Decision] for common data types. *)
 Instance bool_eq_dec (x y : bool) : Decision (x = y).
 Proof. solve_decision. Defined.
 Instance unit_eq_dec (x y : unit) : Decision (x = y).
-Proof. refine (left _); by destruct x, y. Defined.
+Proof. solve_decision. Defined.
 Instance prod_eq_dec `(A_dec : ∀ x y : A, Decision (x = y))
   `(B_dec : ∀ x y : B, Decision (x = y)) (x y : A * B) : Decision (x = y).
-Proof.
-  refine (cast_if_and (A_dec (fst x) (fst y)) (B_dec (snd x) (snd y)));
-    abstract (destruct x, y; simpl in *; congruence).
-Defined.
+Proof. solve_decision. Defined.
 Instance sum_eq_dec `(A_dec : ∀ x y : A, Decision (x = y))
   `(B_dec : ∀ x y : B, Decision (x = y)) (x y : A + B) : Decision (x = y).
 Proof. solve_decision. Defined.
@@ -173,7 +177,11 @@ Instance sig_eq_dec `(P : A → Prop) `{∀ x, ProofIrrel (P x)}
 Proof. refine (cast_if (decide (`x = `y))); by rewrite sig_eq_pi. Defined.
 
 (** Some laws for decidable propositions *)
-Lemma not_and_l {P Q : Prop} `{Decision P} : ¬(P ∧ Q) ↔ ¬P ∨ (¬Q ∧ P).
+Lemma not_and_l {P Q : Prop} `{Decision P} : ¬(P ∧ Q) ↔ ¬P ∨ ¬Q.
 Proof. destruct (decide P); tauto. Qed.
-Lemma not_and_r {P Q : Prop} `{Decision Q} : ¬(P ∧ Q) ↔ (¬P ∧ Q) ∨ ¬Q.
+Lemma not_and_r {P Q : Prop} `{Decision Q} : ¬(P ∧ Q) ↔ ¬P ∨ ¬Q.
+Proof. destruct (decide Q); tauto. Qed.
+Lemma not_and_l_alt {P Q : Prop} `{Decision P} : ¬(P ∧ Q) ↔ ¬P ∨ (¬Q ∧ P).
+Proof. destruct (decide P); tauto. Qed.
+Lemma not_and_r_alt {P Q : Prop} `{Decision Q} : ¬(P ∧ Q) ↔ (¬P ∧ Q) ∨ ¬Q.
 Proof. destruct (decide Q); tauto. Qed.

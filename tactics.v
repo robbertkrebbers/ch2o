@@ -40,6 +40,7 @@ Tactic Notation "by" tactic(tac) :=
 tactic [split_and] only splits a conjunction. *)
 Ltac split_and := match goal with |- _ ∧ _ => split end.
 Ltac split_ands := repeat split_and.
+Ltac split_ands' := repeat (hnf; split_and).
 
 (** The tactic [case_match] destructs an arbitrary match in the conclusion or
 assumptions, and generates a corresponding equality. This tactic is best used
@@ -160,8 +161,13 @@ Ltac simplify_equality := repeat
     (* before [injection'] to circumvent bug #2939 in some situations *)
   | H : _ = _ |- _ => injection' H
   | H : ?x = ?x |- _ => clear H
+    (* unclear how to generalize the below *)
+  | H1 : ?o = Some ?x, H2 : ?o = Some ?y |- _ =>
+    assert (y = x) by congruence; clear H2
+  | H1 : ?o = Some ?x, H2 : ?o = None |- _ => congruence
   end.
 Ltac simplify_equality' := repeat (progress simpl in * || simplify_equality).
+Ltac f_equal' := simpl in *; f_equal.
 
 (** Given a tactic [tac2] generating a list of terms, [iter tac1 tac2]
 runs [tac x] for each element [x] until [tac x] succeeds. If it does not
@@ -271,8 +277,7 @@ Tactic Notation "naive_solver" tactic(tac) :=
   | H : ∃ _, _  |- _ => destruct H
   | H : ?P → ?Q, H2 : ?Q |- _ => specialize (H H2)
   (**i simplify and solve equalities *)
-  | |- _ => progress simpl in *
-  | |- _ => progress simplify_equality
+  | |- _ => progress simplify_equality'
   (**i solve the goal *)
   | |- _ =>
     solve
