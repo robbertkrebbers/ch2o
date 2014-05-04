@@ -1054,7 +1054,6 @@ Proof.
     end; rewrite <-?take_drop_commute, ?drop_drop, ?take_take, ?Min.min_l by lia;
     auto with lia.
 Qed.
-
 Lemma sublist_alter_length f i n l :
   (∀ k, sublist_lookup i n l = Some k → length (f k) = n) →
   i + n ≤ length l → length (sublist_alter f i n l) = length l.
@@ -1107,22 +1106,19 @@ Lemma mask_app f βs1 βs2 l :
   mask f (βs1 ++ βs2) l
   = mask f βs1 (take (length βs1) l) ++ mask f βs2 (drop (length βs1) l).
 Proof. revert l. induction βs1;intros [|??]; f_equal'; auto using mask_nil. Qed.
-Lemma mask_take f βs l n : mask f βs (take n l) = take n (mask f βs l).
+Lemma take_mask f βs l n : take n (mask f βs l) = mask f (take n βs) (take n l).
 Proof. revert n βs. induction l; intros [|?] [|[] ?]; f_equal'; auto. Qed.
-(*
-Lemma lookup_mask_None x y βs l i :
-  βs !! i = None → mask x y βs l !! i = None.
-Proof. revert i l. induction βs; intros [] [] ?; simplify_equality'; auto. Qed.
-Lemma lookup_mask_true x y βs l i :
-  βs !! i = Some true → mask x y βs l !! i = Some y.
-Proof. revert i l. induction βs; intros [] [] ?; simplify_equality'; auto. Qed.
-Lemma lookup_mask x y βs l i :
-  βs !! i = Some false → i < length l → mask x y βs l !! i = l !! i.
+Lemma drop_mask f βs l n : drop n (mask f βs l) = mask f (drop n βs) (drop n l).
 Proof.
-  revert i βs. induction l; intros [|?] [|??] ??;
-    simplify_equality'; auto with lia.
+  revert n βs. induction l; intros [|?] [|[] ?]; f_equal'; auto using mask_nil.
 Qed.
-*)
+Lemma sublist_lookup_mask f βs l i n :
+  sublist_lookup i n (mask f βs l)
+  = mask f (take n (drop i βs)) <$> sublist_lookup i n l.
+Proof.
+  unfold sublist_lookup; rewrite mask_length; simplify_option_equality; auto.
+  by rewrite drop_mask, take_mask.
+Qed.
 
 (** ** Properties of the [seq] function *)
 Lemma fmap_seq j n : S <$> seq j n = seq (S j) n.

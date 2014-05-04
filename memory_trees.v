@@ -1920,9 +1920,28 @@ Proof.
   change (size_of Γ τ * char_bits) with (bit_size_of Γ τ).
   erewrite <-ctree_flatten_length by eauto. pose proof char_bits_pos; lia.
 Qed.
+Lemma ctree_flatten_mask Γ mm w τ :
+  ✓ Γ → (Γ,mm) ⊢ w : τ → 
+  mask pbit_indetify (type_mask Γ τ) (ctree_flatten w) = ctree_flatten w.
+Proof.
+  intros. rewrite <-ctree_flatten_union_reset at 2.
+  by erewrite <-ctree_unflatten_flatten, ctree_flatten_unflatten by eauto.
+Qed.
+Definition ctree_lookup_byte_after (Γ : env Ti)
+    (τ : type Ti) (i : nat) : mtree Ti → mtree Ti :=
+  ctree_unflatten Γ ucharT ∘
+    mask pbit_indetify (take char_bits (drop (i * char_bits) (type_mask Γ τ))) ∘
+    ctree_flatten.
+Lemma ctree_lookup_byte_after_spec Γ mm w τ i :
+  ✓Γ → (Γ,mm) ⊢ w : τ → w !!{Γ} i = ctree_lookup_byte_after Γ τ i <$> w !!{Γ} i.
+Proof.
+  intros. unfold lookupE, ctree_lookup_byte, ctree_lookup_byte_after.
+  destruct (sublist_lookup (i * char_bits) _ _) as [xbs|] eqn:?; f_equal'.
+  unfold sublist_lookup in *; simplify_option_equality.
+  by erewrite <-take_mask, <-drop_mask, ctree_flatten_mask by eauto.
+Qed.
 Lemma ctree_lookup_byte_ext Γ mm w1 w2 τ :
-  ✓ Γ → (Γ,mm) ⊢ w1 : τ → union_free w1 →
-  (Γ,mm) ⊢ w2 : τ → union_free w2 →
+  ✓ Γ → (Γ,mm) ⊢ w1 : τ → union_free w1 → (Γ,mm) ⊢ w2 : τ → union_free w2 →
   (∀ i, i < size_of Γ τ → w1 !!{Γ} i = w2 !!{Γ} i) → w1 = w2.
 Proof.
   intros ????? Hlookup. erewrite <-(union_free_reset w1),
@@ -1989,11 +2008,11 @@ Proof.
   by erewrite (ctree_unflatten_flatten _ _ w), union_free_reset,
     ctree_unflatten_flatten, union_free_reset by eauto using union_free_base.
 Qed.
-(*
 Lemma ctree_lookup_alter_byte Γ mm g w τ i :
   ✓ Γ → (∀ c, w !!{Γ} i = Some c → (Γ,mm) ⊢ g c : ucharT) →
   (Γ,mm) ⊢ w : τ → i < size_of Γ τ →
-  ctree_alter_byte Γ g i w !!{Γ} i = g <$> w !!{Γ} i.
+  ctree_alter_byte Γ g i w !!{Γ} i
+  = ctree_lookup_byte_after Γ τ i <$> g <$> w !!{Γ} i.
 Proof.
   unfold lookupE, ctree_lookup_byte, ctree_alter_byte.
   intros; simplify_type_equality.
@@ -2006,13 +2025,10 @@ Proof.
     length (G xbs) = char_bits).
   { intros xbs ?; unfold G; simplify_option_equality.
     by erewrite ctree_flatten_length, bit_size_of_int, int_bits_char by eauto. }
-  erewrite ctree_flatten_unflatten; eauto.
-  * rewrite sublist_lookup_alter by auto. unfold G; rewrite option_fmap_compose.
-    destruct (ctree_unflatten Γ ucharT%BT <$> sublist_lookup _ _ _)
-      as [w'|] eqn:Hw'; f_equal'.
-    by erewrite ctree_unflatten_flatten,
-      union_free_reset by eauto using union_free_base.
-  * by rewrite sublist_alter_length by auto.
+  erewrite ctree_flatten_unflatten
+    by (rewrite ?sublist_alter_length by auto; eauto).
+  rewrite sublist_lookup_mask, sublist_lookup_alter by auto.
+  unfold G, ctree_lookup_byte_after. by rewrite !option_fmap_compose.
 Qed.
 Lemma ctree_lookup_alter_byte_ne Γ mm g w τ i j :
   ✓ Γ → (∀ c, w !!{Γ} j = Some c → (Γ,mm) ⊢ g c : ucharT) →
@@ -2034,8 +2050,11 @@ Proof.
     ∨ j * char_bits + char_bits ≤ i * char_bits).
   { destruct (decide (i < j)); [left|right];
       rewrite <-Nat.mul_succ_l; apply Nat.mul_le_mono_r; lia. }
-  by erewrite ctree_flatten_unflatten, sublist_lookup_alter_ne by
-    (rewrite ?sublist_alter_length by auto; eauto).
+  erewrite ctree_flatten_unflatten, sublist_lookup_mask, sublist_lookup_alter_ne
+    by (rewrite ?sublist_alter_length by auto; eauto).
+  destruct (sublist_lookup (i * char_bits) _ _) as [xbs|] eqn:?; f_equal'.
+  unfold sublist_lookup in *; simplify_option_equality.
+  by erewrite <-take_mask, <-drop_mask, ctree_flatten_mask by eauto.
 Qed.
 Lemma ctree_alter_byte_commute Γ mm g1 g2 w τ i j  :
   ✓ Γ → (∀ c, w !!{Γ} i = Some c → (Γ,mm) ⊢ g1 c : ucharT) →
@@ -2062,7 +2081,6 @@ Proof.
       by eauto using ctree_alter_byte_typed. }
   by erewrite !ctree_lookup_alter_byte_ne by eauto using ctree_alter_byte_typed.
 Qed.
-*)
 
 (** ** Refinements *)
 Lemma ctree_unflatten_refine Γ f τ xbs1 xbs2 :
