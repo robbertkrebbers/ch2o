@@ -222,17 +222,6 @@ Proof.
   unfold ref_object_type. rewrite list_typed_snoc, reverse_snoc.
   intros (?&?&?); eauto using ref_seg_object_type_correct.
 Qed.
-Lemma ref_seg_typed_unique Γ rs τ1 σ1 τ2 σ2 :
-  Γ ⊢ rs : τ1 ↣ σ1 → Γ ⊢ rs : τ2 ↣ σ2 → τ1 = τ2 ∧ σ1 = σ2.
-Proof. by destruct 1; inversion_clear 1; simplify_equality. Qed.
-Lemma ref_typed_unique Γ r τ1 σ1 τ2 σ2 :
-  Γ ⊢ r : τ1 ↣ σ1 → Γ ⊢ r : τ2 ↣ σ2 → r ≠ [] → τ1 = τ2 ∧ σ1 = σ2.
-Proof.
-  destruct r as [|rs r _] using rev_ind; [done|]. rewrite !list_typed_snoc.
-  intros (τ1'&?&?) (τ2'&?&?) _.
-  destruct (ref_seg_typed_unique Γ rs τ1 τ1' τ2 τ2') as [-> ->]; auto.
-  by simplify_type_equality.
-Qed.
 Lemma ref_typed_size Γ τ r σ : Γ ⊢ r : τ ↣ σ → ref_offset r < ref_size r.
 Proof. destruct 1 as [|????? []]; auto with lia. Qed.
 Lemma ref_set_offset_length r i : length (ref_set_offset i r) = length r.

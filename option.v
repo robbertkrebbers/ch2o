@@ -146,20 +146,22 @@ Tactic Notation "case_option_guard" "as" ident(Hx) :=
 Tactic Notation "case_option_guard" :=
   let H := fresh in case_option_guard as H.
 
-Lemma option_guard_True {A} (P : Prop) `{Decision P} (x : option A) :
+Lemma option_guard_True {A} P `{Decision P} (x : option A) :
   P → guard P; x = x.
 Proof. intros. by case_option_guard. Qed.
-Lemma option_guard_False {A} (P : Prop) `{Decision P} (x : option A) :
+Lemma option_guard_False {A} P `{Decision P} (x : option A) :
   ¬P → guard P; x = None.
 Proof. intros. by case_option_guard. Qed.
+Lemma option_guard_iff {A} P Q `{Decision P, Decision Q} (x : option A) :
+  (P ↔ Q) → guard P; x = guard Q; x.
+Proof. intros [??]. repeat case_option_guard; intuition. Qed.
 
-Tactic Notation "simplify_option_equality" "by" tactic3(tac) :=
+Tactic Notation "simpl_option_monad" "by" tactic3(tac) :=
   let assert_Some_None A o H := first
     [ let x := fresh in evar (x:A); let x' := eval unfold x in x in clear x;
       assert (o = Some x') as H by tac
     | assert (o = None) as H by tac ]
   in repeat match goal with
-  | _ => progress simplify_equality'
   | H : context [mbind (M:=option) (A:=?A) ?f ?o] |- _ =>
     let Hx := fresh in assert_Some_None A o Hx; rewrite Hx in H; clear Hx
   | H : context [fmap (M:=option) (A:=?A) ?f ?o] |- _ =>
@@ -171,22 +173,6 @@ Tactic Notation "simplify_option_equality" "by" tactic3(tac) :=
     | option ?A =>
       let Hx := fresh in assert_Some_None A o Hx; rewrite Hx in H; clear Hx
     end
-  | H : mbind (M:=option) _ ?o = ?x |- _ =>
-    match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
-    match x with Some _ => idtac | None => idtac | _ => fail 1 end;
-    destruct o eqn:?
-  | H : ?x = mbind (M:=option) _ ?o |- _ =>
-    match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
-    match x with Some _ => idtac | None => idtac | _ => fail 1 end;
-    destruct o eqn:?
-  | H : fmap (M:=option) _ ?o = ?x |- _ =>
-    match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
-    match x with Some _ => idtac | None => idtac | _ => fail 1 end;
-    destruct o eqn:?
-  | H : ?x = fmap (M:=option) _ ?o |- _ =>
-    match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
-    match x with Some _ => idtac | None => idtac | _ => fail 1 end;
-    destruct o eqn:?
   | |- context [mbind (M:=option) (A:=?A) ?f ?o] =>
     let Hx := fresh in assert_Some_None A o Hx; rewrite Hx; clear Hx
   | |- context [fmap (M:=option) (A:=?A) ?f ?o] =>
@@ -204,6 +190,31 @@ Tactic Notation "simplify_option_equality" "by" tactic3(tac) :=
   | _ => rewrite decide_False by tac
   | _ => rewrite option_guard_True by tac
   | _ => rewrite option_guard_False by tac
+  end.
+Tactic Notation "simplify_option_equality" "by" tactic3(tac) :=
+  let assert_Some_None A o H := first
+    [ let x := fresh in evar (x:A); let x' := eval unfold x in x in clear x;
+      assert (o = Some x') as H by tac
+    | assert (o = None) as H by tac ]
+  in repeat match goal with
+  | _ => progress simplify_equality'
+  | _ => progress simpl_option_monad by tac
+  | H : mbind (M:=option) _ ?o = ?x |- _ =>
+    match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
+    match x with Some _ => idtac | None => idtac | _ => fail 1 end;
+    destruct o eqn:?
+  | H : ?x = mbind (M:=option) _ ?o |- _ =>
+    match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
+    match x with Some _ => idtac | None => idtac | _ => fail 1 end;
+    destruct o eqn:?
+  | H : fmap (M:=option) _ ?o = ?x |- _ =>
+    match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
+    match x with Some _ => idtac | None => idtac | _ => fail 1 end;
+    destruct o eqn:?
+  | H : ?x = fmap (M:=option) _ ?o |- _ =>
+    match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
+    match x with Some _ => idtac | None => idtac | _ => fail 1 end;
+    destruct o eqn:?
   | _ => progress case_decide
   | _ => progress case_option_guard
   end.

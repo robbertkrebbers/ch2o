@@ -30,6 +30,9 @@ Proof. by destruct (decide P). Qed.
 Lemma decide_False {A} `{Decision P} (x y : A) :
   ¬P → (if decide P then x else y) = y.
 Proof. by destruct (decide P). Qed.
+Lemma decide_iff {A} P Q `{Decision P, Decision Q} (x y : A) :
+  (P ↔ Q) → (if decide P then x else y) = (if decide Q then x else y).
+Proof. intros [??]. destruct (decide P), (decide Q); intuition. Qed.
 
 (** The tactic [destruct_decide] destructs a sumbool [dec]. If one of the
 components is double negated, it will try to remove the double negation. *)

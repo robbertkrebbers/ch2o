@@ -1305,10 +1305,10 @@ simplify overlapping look ups, and perform cancellations of equalities
 involving unions. *)
 Tactic Notation "simplify_map_equality" "by" tactic3(tac) :=
   decompose_map_disjoint;
-  repeat
-  match goal with
+  repeat match goal with
   | _ => progress simpl_map by tac
   | _ => progress simplify_equality
+  | _ => progress simpl_option_monad by tac
   | H : {[ _ ]} !! _ = None |- _ => rewrite lookup_singleton_None in H
   | H : {[ _ ]} !! _ = Some _ |- _ =>
     rewrite lookup_singleton_Some in H; destruct H
@@ -1328,11 +1328,7 @@ Tactic Notation "simplify_map_equality" "by" tactic3(tac) :=
   end.
 Tactic Notation "simplify_map_equality'" "by" tactic3(tac) :=
   repeat (progress simpl in * || simplify_map_equality by tac).
-Tactic Notation "simplify_option_map_equality" "by" tactic3(tac) :=
-  repeat (simplify_option_equality || simplify_map_equality by tac).
 Tactic Notation "simplify_map_equality" :=
   simplify_map_equality by eauto with simpl_map map_disjoint.
 Tactic Notation "simplify_map_equality'" :=
   simplify_map_equality' by eauto with simpl_map map_disjoint.
-Tactic Notation "simplify_option_map_equality" :=
-  simplify_option_map_equality by eauto with simpl_map map_disjoint.

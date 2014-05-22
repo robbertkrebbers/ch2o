@@ -1054,43 +1054,46 @@ Proof.
     end; rewrite <-?take_drop_commute, ?drop_drop, ?take_take, ?Min.min_l by lia;
     auto with lia.
 Qed.
-Lemma sublist_alter_length f i n l :
-  (∀ k, sublist_lookup i n l = Some k → length (f k) = n) →
-  i + n ≤ length l → length (sublist_alter f i n l) = length l.
+Lemma sublist_alter_length f l i n k :
+  sublist_lookup i n l = Some k → length (f k) = n →
+  length (sublist_alter f i n l) = length l.
 Proof.
-  unfold sublist_alter. intros Hk ?. rewrite !app_length, Hk, !take_length,
-    !drop_length by auto using sublist_lookup_Some; lia.
+  unfold sublist_alter, sublist_lookup. intros Hk ?; simplify_option_equality.
+  rewrite !app_length, Hk, !take_length, !drop_length; lia.
 Qed.
-Lemma sublist_lookup_alter f i n l :
-  (∀ k, sublist_lookup i n l = Some k → length (f k) = n) →
-  i + n ≤ length l →
+Lemma sublist_lookup_alter f l i n k :
+  sublist_lookup i n l = Some k → length (f k) = n →
   sublist_lookup i n (sublist_alter f i n l) = f <$> sublist_lookup i n l.
 Proof.
-  intros Hk ?. unfold sublist_lookup. rewrite sublist_alter_length by done.
-  case_option_guard; f_equal'; unfold sublist_alter.
-  rewrite drop_app_alt by (rewrite take_length; lia).
-  by rewrite take_app_alt by (rewrite Hk; eauto using sublist_lookup_Some).
+  unfold sublist_lookup. intros Hk ?. erewrite sublist_alter_length by eauto.
+  unfold sublist_alter; simplify_option_equality.
+  by rewrite Hk, drop_app_alt, take_app_alt by (rewrite ?take_length; lia).
 Qed.
-Lemma sublist_lookup_alter_ne f l i j n :
-  (∀ k, sublist_lookup j n l = Some k → length (f k) = n) →
-  j + n ≤ length l → i + n ≤ j ∨ j + n ≤ i →
+Lemma sublist_lookup_alter_ne f l i j n k :
+  sublist_lookup j n l = Some k → length (f k) = n → i + n ≤ j ∨ j + n ≤ i →
   sublist_lookup i n (sublist_alter f j n l) = sublist_lookup i n l.
 Proof.
-  intros Hk Hij ?. unfold sublist_lookup. rewrite sublist_alter_length by done.
-  case_option_guard; f_equal'; unfold sublist_alter. apply list_eq; intros ii.
-  destruct (decide (ii < n)); [|by rewrite !lookup_take_ge by lia].
-  rewrite !lookup_take, !lookup_drop by done.
-  destruct (decide (i + ii < j)).
+  unfold sublist_lookup. intros Hk Hi ?. erewrite sublist_alter_length by eauto.
+  unfold sublist_alter; simplify_option_equality; f_equal; rewrite Hk.
+  apply list_eq; intros ii.
+  destruct (decide (ii < length (f k))); [|by rewrite !lookup_take_ge by lia].
+  rewrite !lookup_take, !lookup_drop by done. destruct (decide (i + ii < j)).
   { by rewrite lookup_app_l, lookup_take by (rewrite ?take_length; lia). }
   rewrite lookup_app_minus_r by (rewrite take_length; lia).
-  rewrite take_length_le by lia. rewrite lookup_app_minus_r
-    by (rewrite Hk; eauto using sublist_lookup_Some; lia).
-  rewrite Hk, lookup_drop by eauto using sublist_lookup_Some. f_equal; lia.
+  rewrite take_length_le, lookup_app_minus_r, lookup_drop by lia. f_equal; lia.
 Qed.
 Lemma sublist_alter_all f l n : length l = n → sublist_alter f 0 n l = f l.
 Proof.
   intros <-. unfold sublist_alter; simpl.
   by rewrite drop_all, (right_id_L [] (++)), take_ge.
+Qed.
+Lemma sublist_alter_compose f g l i n k :
+  sublist_lookup i n l = Some k → length (f k) = n → length (g k) = n →
+  sublist_alter (f ∘ g) i n l = sublist_alter f i n (sublist_alter g i n l).
+Proof.
+  unfold sublist_alter, sublist_lookup. intros Hk ??; simplify_option_equality.
+  by rewrite !take_app_alt, drop_app_alt, !(associative_L (++)), drop_app_alt,
+    take_app_alt by (rewrite ?app_length, ?take_length, ?Hk; lia).
 Qed.
 
 (** ** Properties of the [mask] function *)
@@ -1922,32 +1925,24 @@ Section Forall_Exists.
     unfold sublist_lookup. intros; simplify_option_equality.
     auto using Forall_take, Forall_drop.
   Qed.
-  Lemma Forall_sublist_alter f l i n :
-    i + n ≤ length l → Forall P l →
-    (∀ k, sublist_lookup i n l = Some k → Forall P k → Forall P (f k)) →
+  Lemma Forall_sublist_alter f l i n k :
+    Forall P l → sublist_lookup i n l = Some k → Forall P (f k) →
     Forall P (sublist_alter f i n l).
   Proof.
-    unfold sublist_alter.
-    auto 8 using Forall_app_2, Forall_drop, Forall_take, sublist_lookup_Some.
+    unfold sublist_alter, sublist_lookup. intros; simplify_option_equality.
+    auto using Forall_app_2, Forall_drop, Forall_take.
+  Qed.
+  Lemma Forall_sublist_alter_inv f l i n k :
+    sublist_lookup i n l = Some k →
+    Forall P (sublist_alter f i n l) → Forall P (f k).
+  Proof.
+    unfold sublist_alter, sublist_lookup. intros ?; simplify_option_equality.
+    rewrite !Forall_app; tauto.
   Qed.
   Lemma Forall_reshape l szs : Forall P l → Forall (Forall P) (reshape szs l).
   Proof.
     revert l. induction szs; simpl; auto using Forall_take, Forall_drop.
   Qed.
-(*
-  Lemma Forall_mask f βs l: P x → P y → Forall P l → Forall P (mask f βs l).
-  Proof.
-    intros ??. revert l. induction βs as [|[]]; intros ? [|????]; simpl; auto.
-  Qed.
-  Lemma Forall_resize_mask x y n βs l :
-    P y → Forall P (resize n x l) → length βs ≤ n → Forall P (mask x y βs l).
-  Proof.
-    intros ?. revert n l. induction βs as [|β βs IH]; [constructor|].
-    intros [|n] [|z l]; simpl; inversion_clear 1; intros; try lia.
-    * constructor. by destruct β. apply IH with n. by rewrite resize_nil. lia.
-    * constructor. by destruct β. apply IH with n; auto with lia.
-  Qed.
-*)
   Lemma Forall_rev_ind (Q : list A → Prop) :
     Q [] → (∀ x l, P x → Forall P l → Q l → Q (l ++ [x])) →
     ∀ l, Forall P l → Q l.
@@ -2202,36 +2197,31 @@ Section Forall2.
     Forall2 P l k → sublist_lookup n i k = Some k' →
     ∃ l', sublist_lookup n i l = Some l' ∧ Forall2 P l' k'.
   Proof.
-    unfold sublist_lookup. intros Hlk Hk.
-    exists (take i (drop n l)); simplify_option_equality.
-    * auto using Forall2_take, Forall2_drop.
-    * apply Forall2_length in Hlk; lia.
+    intro. unfold sublist_lookup.
+    erewrite Forall2_length by eauto; intros; simplify_option_equality.
+    eauto using Forall2_take, Forall2_drop.
   Qed.
-  Lemma Forall2_sublist_alter f g l k i n :
-    i + n ≤ length l → Forall2 P l k →
-    (∀ l' k', sublist_lookup i n l = Some l' → sublist_lookup i n k = Some k' →
-      Forall2 P l' k' → Forall2 P (f l') (g k')) →
+  Lemma Forall2_sublist_alter f g l k i n l' k' :
+    Forall2 P l k → sublist_lookup i n l = Some l' →
+    sublist_lookup i n k = Some k' → Forall2 P (f l') (g k') →
     Forall2 P (sublist_alter f i n l) (sublist_alter g i n k).
   Proof.
-    unfold sublist_alter. intros. assert (i + n ≤ length k).
-    { by erewrite <-Forall2_length by eauto. }
-    auto 8 using Forall2_app, Forall2_drop, Forall2_take, sublist_lookup_Some.
+    intro. unfold sublist_alter, sublist_lookup.
+    erewrite Forall2_length by eauto; intros; simplify_option_equality.
+    auto using Forall2_app, Forall2_drop, Forall2_take.
   Qed.
-(*
-  Lemma Forall2_mask x x' y y' βs l k :
-    P x y → P x' y' →
-    Forall2 P l k → Forall2 P (mask x x' βs l) (mask y y' βs k).
+  Lemma Forall2_sublist_alter_l f l k i n l' k' :
+    Forall2 P l k → sublist_lookup i n l = Some l' →
+    sublist_lookup i n k = Some k' → Forall2 P (f l') k' →
+    Forall2 P (sublist_alter f i n l) k.
   Proof.
-    intros ??. revert l k. induction βs as [|[]]; destruct 1; simpl; auto.
+    intro. unfold sublist_lookup, sublist_alter.
+    erewrite <-Forall2_length by eauto; intros; simplify_option_equality.
+    apply Forall2_app_l; rewrite ?take_length_le by lia; auto using Forall2_take.
+    apply Forall2_app_l; erewrite Forall2_length, take_length,
+      drop_length, <-Forall2_length, Min.min_l by eauto with lia; [done|].
+    rewrite drop_drop; auto using Forall2_drop.
   Qed.
-  Lemma Forall2_mask_resize x y βs l k n :
-    length βs = n → Forall (P x) k → P x y →
-    Forall2 P l k → Forall2 P (mask x x βs l) (resize n y k).
-  Proof.
-    intros <- Hk ? Hlk. revert l k Hlk Hk. induction βs as [|[]]; destruct 1;
-      inversion_clear 1; simpl; constructor; rewrite <-?resize_nil; eauto.
-  Qed.
-*)
   Lemma Forall2_transitive {C} (Q : B → C → Prop) (R : A → C → Prop) l k lC :
     (∀ x y z, P x y → Q y z → R x z) →
     Forall2 P l k → Forall2 Q k lC → Forall2 R l lC.
@@ -2842,6 +2832,18 @@ Section zip_with.
     Forall Q (zip_with f l k).
   Proof. intros Hl. revert k. induction Hl; destruct 1; simpl in *; auto. Qed.
 End zip_with.
+
+Lemma zip_with_sublist_alter {A B} (f : A → B → A) g l k i n l' k' :
+  length l = length k →
+  sublist_lookup i n l = Some l' → sublist_lookup i n k = Some k' →
+  length (g l') = length k' → zip_with f (g l') k' = g (zip_with f l' k') →
+  zip_with f (sublist_alter g i n l) k = sublist_alter g i n (zip_with f l k).
+Proof.
+  unfold sublist_lookup, sublist_alter. intros Hlen; rewrite Hlen.
+  intros ?? Hl' Hk'. simplify_option_equality.
+  by rewrite !zip_with_app_l, !zip_with_drop, Hl', drop_drop, !zip_with_take,
+    !take_length_le, Hk' by (rewrite ?drop_length; auto with lia).
+Qed.
 
 Section zip.
   Context {A B : Type}.

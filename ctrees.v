@@ -133,15 +133,16 @@ End ctree_Forall.
 Notation ctree_empty := (ctree_Forall (∅ =)).
 Notation ctree_unmapped := (ctree_Forall sep_unmapped).
 Notation ctree_splittable := (ctree_Forall sep_splittable).
+Notation ctree_unshared := (ctree_Forall sep_unshared).
 
 Definition ctree_flatten {Ti A : Set} : ctree Ti A → list A :=
   fix go w :=
   match w with
-  | MBase _ xbs => xbs
+  | MBase _ xs => xs
   | MArray _ ws => ws ≫= go
   | MStruct s wxss => wxss ≫= λ wxs, go (wxs.1) ++ wxs.2
-  | MUnion s i w xbs => go w ++ xbs
-  | MUnionAll _ xbs => xbs
+  | MUnion s i w xs => go w ++ xs
+  | MUnionAll _ xs => xs
   end.
 
 Definition MUnion' {Ti A : Set} `{SeparationOps A}
@@ -149,6 +150,16 @@ Definition MUnion' {Ti A : Set} `{SeparationOps A}
   if decide (ctree_unmapped w ∧ Forall sep_unmapped xs)
   then MUnionAll s (ctree_flatten w ++ xs) else MUnion s i w xs.
 
+Definition ctree_map {Ti A B : Set} `{SeparationOps B}
+    (f : A → B) : ctree Ti A → ctree Ti B :=
+  fix go w :=
+  match w with
+  | MBase τb xs => MBase τb (f <$> xs)
+  | MArray τ ws => MArray τ (go <$> ws)
+  | MStruct s wxss => MStruct s (prod_map go (fmap (M:=list) f) <$> wxss)
+  | MUnion s i w xs => MUnion' s i (go w) (f <$> xs)
+  | MUnionAll s xs => MUnionAll s (f <$> xs)
+  end.
 Definition ctree_merge_array {Ti A B C : Set}
   (f : ctree Ti A → list B → ctree Ti C) :
     list (ctree Ti A) → list B → list (ctree Ti C) :=
@@ -1379,10 +1390,21 @@ Proof.
     auto using ctree_disjoint_difference.
 Qed.
 Lemma ctree_unshared_weaken w1 w2 :
-  ctree_Forall sep_unshared w1 → w1 ⊆ w2 → ctree_Forall sep_unshared w2.
+  ctree_unshared w1 → w1 ⊆ w2 → ctree_unshared w2.
 Proof.
   rewrite <-!ctree_flatten_Forall.
   eauto using seps_unshared_weaken, ctree_flatten_subseteq.
+Qed.
+Lemma ctree_unshared_unmapped w1 w2 :
+  ctree_unshared w1 → w1 ⊥ w2 → ctree_unmapped w2.
+Proof.
+  rewrite <-!ctree_flatten_Forall.
+  eauto using seps_unshared_unmapped, ctree_flatten_disjoint.
+Qed.
+Lemma ctree_empty_unmapped w : ctree_empty w → ctree_unmapped w.
+Proof.
+  rewrite <-!ctree_flatten_Forall.
+  eauto using Forall_impl, sep_unmapped_empty_alt.
 Qed.
 Lemma ctree_splittable_union w : w ⊥ w → ctree_splittable (w ∪ w).
 Proof.

@@ -148,14 +148,18 @@ Proof.
 Qed.
 End mem_inj.
 
-Class Refine Ti A := refine: env Ti → mem_inj Ti → relation A.
-Class RefineT Ti A T := refineT: env Ti → mem_inj Ti → A → A → T → Prop.
-Instance: Params (@refine) 5.
-Instance: Params (@refineT) 6.
+Class RefineM Ti A := refineM: env Ti → mem_inj Ti → relation A.
+Class Refine Ti M A :=
+  refine: env Ti → mem_inj Ti → M → M → A → A → Prop.
+Class RefineT Ti M A T :=
+  refineT: env Ti → mem_inj Ti → M → M → A → A → T → Prop.
+Instance: Params (@refineM) 3.
+Instance: Params (@refine) 4.
+Instance: Params (@refineT) 5.
 
-Notation "X ⊑{ Γ , f } Y" := (refine Γ f X Y)
+Notation "X ⊑{ Γ , f } Y" := (refineM Γ f X Y)
   (at level 70, format "X  ⊑{ Γ , f }  Y") : C_scope.
-Notation "Xs ⊑{ Γ , f }* Ys" := (Forall2 (refine Γ f) Xs Ys)
+Notation "Xs ⊑{ Γ , f }* Ys" := (Forall2 (refineM Γ f) Xs Ys)
   (at level 70, format "Xs  ⊑{ Γ , f }*  Ys") : C_scope.
 Notation "Xss ⊑{ Γ , f }2** Yss" :=
   (Forall2 (λ Xs Ys, Xs.2 ⊑{Γ,f}* Ys.2) Xss Yss)
@@ -164,29 +168,50 @@ Notation "X ⊑{ Γ } Y" := (X ⊑{Γ,mem_inj_id} Y)
   (at level 70, format "X  ⊑{ Γ }  Y") : C_scope.
 Notation "Xs ⊑{ Γ }* Ys" := (Xs ⊑{Γ,mem_inj_id}* Ys)
   (at level 70, format "Xs  ⊑{ Γ }*  Ys") : C_scope.
-Notation "Xs ⊑{ Γ }1* Ys" := (Xs ⊑{Γ,mem_inj_id}1* Ys)
-  (at level 70, format "Xs  ⊑{ Γ }1*  Ys") : C_scope.
 Notation "Xss ⊑{ Γ }2** Yss" := (Xss ⊑{Γ,mem_inj_id}2** Yss)
   (at level 70, format "Xss  ⊑{ Γ }2**  Yss") : C_scope.
-Notation "X ⊑{ Γ , f } Y : τ" := (refineT Γ f X Y τ)
-  (at level 70, Y at next level, format "X  ⊑{ Γ , f }  Y  :  τ") : C_scope.
-Notation "Xs ⊑{ Γ , f }* Ys : τ" := (Forall2 (λ X Y, X ⊑{Γ,f} Y : τ) Xs Ys)
-  (at level 70, Ys at next level, format "Xs  ⊑{ Γ , f }*  Ys  :  τ") : C_scope.
-Notation "Xs ⊑{ Γ , f }* Ys :* τs" := (Forall3 (refineT Γ f) Xs Ys τs)
+
+Notation "X ⊑{ Γ , f @ m1 ↦ m2 } Y" := (refine Γ f m1 m2 X Y)
+  (at level 70, format "X  ⊑{ Γ , f  @  m1 ↦ m2 }  Y") : C_scope.
+Notation "Xs ⊑{ Γ , f @ m1 ↦ m2 }* Ys" := (Forall2 (refine Γ f m1 m2) Xs Ys)
+  (at level 70, format "Xs  ⊑{ Γ , f  @  m1 ↦ m2 }*  Ys") : C_scope.
+Notation "Xss ⊑{ Γ , f @ m1 ↦ m2 }2** Yss" :=
+  (Forall2 (λ Xs Ys, Xs.2 ⊑{Γ,f @ m1↦m2}* Ys.2) Xss Yss)
+  (at level 70, format "Xss  ⊑{ Γ , f  @  m1 ↦ m2 }2**  Yss") : C_scope.
+Notation "X ⊑{ Γ @ m } Y" := (X ⊑{Γ,mem_inj_id @ m↦m} Y)
+  (at level 70, format "X  ⊑{ Γ  @  m }  Y") : C_scope.
+Notation "Xs ⊑{ Γ @ m }* Ys" := (Xs ⊑{Γ,mem_inj_id @ m↦m}* Ys)
+  (at level 70, format "Xs  ⊑{ Γ  @  m }*  Ys") : C_scope.
+Notation "Xss ⊑{ Γ @ m }2** Yss" := (Xss ⊑{Γ,mem_inj_id @ m↦m}2** Yss)
+  (at level 70, format "Xss  ⊑{ Γ  @  m }2**  Yss") : C_scope.
+
+Notation "X ⊑{ Γ , f @ m1 ↦ m2 } Y : τ" := (refineT Γ f m1 m2 X Y τ)
+  (at level 70, Y at next level,
+   format "X  ⊑{ Γ , f  @  m1 ↦ m2 }  Y  :  τ") : C_scope.
+Notation "Xs ⊑{ Γ , f @ m1 ↦ m2 }* Ys : τ" :=
+  (Forall2 (λ X Y, X ⊑{Γ,f @ m1↦m2} Y : τ) Xs Ys)
   (at level 70, Ys at next level,
-   format "Xs  ⊑{ Γ , f }*  Ys  :*  τs") : C_scope.
-Notation "Xs ⊑{ Γ , f }1* Ys :* τs" :=
-  (Forall3 (λ X Y τ, X.1 ⊑{Γ,f} Y.1 : τ) Xs Ys τs)
+   format "Xs  ⊑{ Γ , f  @  m1 ↦ m2 }*  Ys  :  τ") : C_scope.
+Notation "Xs ⊑{ Γ , f @ m1 ↦ m2 }* Ys :* τs" :=
+  (Forall3 (refineT Γ f m1 m2) Xs Ys τs)
   (at level 70, Ys at next level,
-   format "Xs  ⊑{ Γ , f }1*  Ys  :*  τs") : C_scope.
-Notation "X ⊑{ Γ } Y : τ" := (X ⊑{Γ,mem_inj_id} Y : τ)
-  (at level 70, Y at next level, format "X  ⊑{ Γ }  Y  :  τ") : C_scope.
-Notation "Xs ⊑{ Γ }* Ys : τ" := (Xs ⊑{Γ,mem_inj_id}* Ys : τ)
-  (at level 70, Ys at next level, format "Xs  ⊑{ Γ }*  Ys  :  τ") : C_scope.
-Notation "Xs ⊑{ Γ }* Ys :* τs" := (Xs ⊑{Γ,mem_inj_id}* Ys : τs)
-  (at level 70, Ys at next level, format "Xs  ⊑{ Γ }*  Ys  :*  τs") : C_scope.
-Notation "Xs ⊑{ Γ }1* Ys :* τs" := (Xs ⊑{Γ,mem_inj_id}1* Ys :* τs)
-  (at level 70, Ys at next level, format "Xs  ⊑{ Γ }1*  Ys  :*  τs") : C_scope.
+   format "Xs  ⊑{ Γ , f  @  m1 ↦ m2 }*  Ys  :*  τs") : C_scope.
+Notation "Xs ⊑{ Γ , f @ m1 ↦ m2 }1* Ys :* τs" :=
+  (Forall3 (λ X Y τ, X.1 ⊑{Γ,f @ m1↦m2} Y.1 : τ) Xs Ys τs)
+  (at level 70, Ys at next level,
+   format "Xs  ⊑{ Γ , f  @  m1 ↦ m2 }1*  Ys  :*  τs") : C_scope.
+Notation "X ⊑{ Γ @ m } Y : τ" := (X ⊑{Γ,mem_inj_id @ m↦m} Y : τ)
+  (at level 70, Y at next level,
+   format "X  ⊑{ Γ  @  m }  Y  :  τ") : C_scope.
+Notation "Xs ⊑{ Γ @ m }* Ys : τ" := (Xs ⊑{Γ,mem_inj_id @ m↦m}* Ys : τ)
+  (at level 70, Ys at next level,
+   format "Xs  ⊑{ Γ  @  m }*  Ys  :  τ") : C_scope.
+Notation "Xs ⊑{ Γ @ m }* Ys :* τs" := (Xs ⊑{Γ,mem_inj_id @ m↦m}* Ys : τs)
+  (at level 70, Ys at next level,
+   format "Xs  ⊑{ Γ  @  m }*  Ys  :*  τs") : C_scope.
+Notation "Xs ⊑{ Γ @ m }1* Ys :* τs" := (Xs ⊑{Γ,mem_inj_id @ m↦m}1* Ys :* τs)
+  (at level 70, Ys at next level,
+   format "Xs  ⊑{ Γ  @  m }1*  Ys  :*  τs") : C_scope.
 
 Class TypeOfIndex (Ti : Set) (M : Type) :=
   type_of_index : M → index → option (type Ti).
@@ -198,8 +223,12 @@ Definition type_of_object {Ti : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2
   type_of_index m o ≫= lookupE Γ r.
 
 Class MemSpec (Ti : Set) M `{TypeOfIndex Ti M,
-    Refine Ti M, IndexAlive M, IntEnv Ti, PtrEnv Ti,
+    RefineM Ti M, IndexAlive M, IntEnv Ti, PtrEnv Ti,
     ∀ m o, Decision (index_alive m o)} `{EnvSpec Ti} := {
+  mem_refine_type_of_index Γ m1 m2 f o1 o2 r τ :
+    ✓ Γ → m1 ⊑{Γ,f} m2 → f !! o1 = Some (o2,r) →
+    type_of_index m1 o1 = Some τ →
+    ∃ τ', type_of_index m2 o2 = Some τ' ∧ Γ ⊢ r : τ' ↣ τ;
   mem_refine_alive Γ m1 m2 f o1 o2 r :
     ✓ Γ → m1 ⊑{Γ,f} m2 → f !! o1 = Some (o2,r) →
     index_alive m1 o1 → index_alive m2 o2
@@ -259,4 +288,8 @@ Qed.
 Lemma type_of_object_freeze Γ m q o r :
   type_of_object Γ m o (freeze q <$> r) = type_of_object Γ m o r.
 Proof. unfold type_of_object. by rewrite ref_lookup_freeze. Qed.
+Lemma mem_refine_type_of_object Γ m1 m2 f o1 o2 r τ :
+  ✓ Γ → m1 ⊑{Γ,f} m2 → f !! o1 = Some (o2,r) →
+  type_of_index m1 o1 = Some τ → type_of_object Γ m2 o2 r = Some τ.
+Proof. rewrite type_of_object_Some. apply mem_refine_type_of_index. Qed.
 End mem_spec.

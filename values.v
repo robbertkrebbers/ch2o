@@ -94,102 +94,101 @@ Section operations.
          VUnionAll s ((λ τ, rec τ (take (bit_size_of Γ τ) bs)) <$> τs)
       end) Γ.
 
-  Inductive vals_representable (Γ : env Ti) (mm : option (mem Ti))
+  Inductive vals_representable (Γ : env Ti) (m : mem Ti)
       (vs : list (val Ti)) (τs : list (type Ti)) : Prop :=
     make_vals_representable bs :
-      ✓{Γ,mm}* bs →
+      ✓{Γ,m}* bs →
       Forall (λ τ, bit_size_of Γ τ ≤ length bs) τs →
       vs = (λ τ, val_unflatten Γ τ (take (bit_size_of Γ τ) bs)) <$> τs →
-      vals_representable Γ mm vs τs.
-  Inductive val_typed' (Γ : env Ti)
-      (mm : option (mem Ti)) : val Ti → type Ti → Prop :=
+      vals_representable Γ m vs τs.
+  Inductive val_typed' (Γ : env Ti) (m : mem Ti) : val Ti → type Ti → Prop :=
     | VBase_typed' vb τb :
-       (Γ,mm) ⊢ vb : τb → val_typed' Γ mm (VBase vb) (baseT τb)
+       (Γ,m) ⊢ vb : τb → val_typed' Γ m (VBase vb) (baseT τb)
     | VArray_typed' vs τ :
-       Forall (λ v, val_typed' Γ mm v τ) vs → length vs ≠ 0 →
-       val_typed' Γ mm (VArray τ vs) (τ.[length vs])
+       Forall (λ v, val_typed' Γ m v τ) vs → length vs ≠ 0 →
+       val_typed' Γ m (VArray τ vs) (τ.[length vs])
     | VStruct_typed' s vs τs :
-       Γ !! s = Some τs → Forall2 (val_typed' Γ mm) vs τs →
-       val_typed' Γ mm (VStruct s vs) (structT s)
+       Γ !! s = Some τs → Forall2 (val_typed' Γ m) vs τs →
+       val_typed' Γ m (VStruct s vs) (structT s)
     | VUnion_typed' s i τs v τ :
        Γ !! s = Some τs → τs !! i = Some τ →
-       val_typed' Γ mm v τ → val_typed' Γ mm (VUnion s i v) (unionT s)
+       val_typed' Γ m v τ → val_typed' Γ m (VUnion s i v) (unionT s)
     | VUnionAll_typed' s vs τs :
-       Γ !! s = Some τs → Forall2 (val_typed' Γ mm) vs τs →
-       vals_representable Γ mm vs τs →
-       val_typed' Γ mm (VUnionAll s vs) (unionT s).
+       Γ !! s = Some τs → Forall2 (val_typed' Γ m) vs τs →
+       vals_representable Γ m vs τs →
+       val_typed' Γ m (VUnionAll s vs) (unionT s).
   Global Instance val_typed:
-    Typed (env Ti * option (mem Ti)) (type Ti) (val Ti) := curry val_typed'.
+    Typed (env Ti * mem Ti) (type Ti) (val Ti) := curry val_typed'.
 
-  Lemma VBase_typed Γ mm vb τb :
-    (Γ,mm) ⊢ vb : τb → (Γ,mm) ⊢ VBase vb : baseT τb.
+  Lemma VBase_typed Γ m vb τb :
+    (Γ,m) ⊢ vb : τb → (Γ,m) ⊢ VBase vb : baseT τb.
   Proof. by constructor. Qed.
-  Lemma VArray_typed Γ mm vs τ n :
-    n = length vs → (Γ,mm) ⊢* vs : τ → n ≠ 0 → (Γ,mm) ⊢ VArray τ vs : τ.[n].
+  Lemma VArray_typed Γ m vs τ n :
+    n = length vs → (Γ,m) ⊢* vs : τ → n ≠ 0 → (Γ,m) ⊢ VArray τ vs : τ.[n].
   Proof. intros ->. by constructor. Qed.
-  Lemma VStruct_typed Γ mm s vs τs :
-    Γ !! s = Some τs → (Γ,mm) ⊢* vs :* τs → (Γ,mm) ⊢ VStruct s vs : structT s.
+  Lemma VStruct_typed Γ m s vs τs :
+    Γ !! s = Some τs → (Γ,m) ⊢* vs :* τs → (Γ,m) ⊢ VStruct s vs : structT s.
   Proof. econstructor; eauto. Qed.
-  Lemma VUnion_typed Γ mm s i τs v τ :
+  Lemma VUnion_typed Γ m s i τs v τ :
     Γ !! s = Some τs → τs !! i = Some τ →
-    (Γ,mm) ⊢ v : τ → (Γ,mm) ⊢ VUnion s i v : unionT s.
+    (Γ,m) ⊢ v : τ → (Γ,m) ⊢ VUnion s i v : unionT s.
   Proof. econstructor; eauto. Qed.
-  Lemma VUnionAll_typed Γ mm s vs τs :
-    Γ !! s = Some τs → (Γ,mm) ⊢* vs :* τs →
-    vals_representable Γ mm vs τs → (Γ,mm) ⊢ VUnionAll s vs : unionT s.
+  Lemma VUnionAll_typed Γ m s vs τs :
+    Γ !! s = Some τs → (Γ,m) ⊢* vs :* τs →
+    vals_representable Γ m vs τs → (Γ,m) ⊢ VUnionAll s vs : unionT s.
   Proof. econstructor; eauto. Qed.
 
-  Lemma val_typed_inv_l Γ mm (P : type Ti → Prop) v τ :
-    (Γ,mm) ⊢ v : τ →
+  Lemma val_typed_inv_l Γ m (P : type Ti → Prop) v τ :
+    (Γ,m) ⊢ v : τ →
     match v with
-    | VBase vb => (∀ τb, (Γ,mm) ⊢ vb : τb → P (baseT τb)) → P τ
+    | VBase vb => (∀ τb, (Γ,m) ⊢ vb : τb → P (baseT τb)) → P τ
     | VArray τ' vs =>
-       (∀ n, n = length vs → (Γ,mm) ⊢* vs : τ' → n ≠ 0 → P (τ'.[n])) → P τ
+       (∀ n, n = length vs → (Γ,m) ⊢* vs : τ' → n ≠ 0 → P (τ'.[n])) → P τ
     | VStruct s vs =>
-       (∀ τs, Γ !! s = Some τs → (Γ,mm) ⊢* vs :* τs → P (structT s)) → P τ
+       (∀ τs, Γ !! s = Some τs → (Γ,m) ⊢* vs :* τs → P (structT s)) → P τ
     | VUnion s i v =>
        (∀ τs τ', Γ !! s = Some τs → τs !! i = Some τ' →
-         (Γ,mm) ⊢ v : τ' → P (unionT s)) → P τ
+         (Γ,m) ⊢ v : τ' → P (unionT s)) → P τ
     | VUnionAll s vs =>
-       (∀ τs, Γ !! s = Some τs → (Γ,mm) ⊢* vs :* τs →
-         vals_representable Γ mm vs τs → P (unionT s)) → P τ
+       (∀ τs, Γ !! s = Some τs → (Γ,m) ⊢* vs :* τs →
+         vals_representable Γ m vs τs → P (unionT s)) → P τ
     end.
   Proof. destruct 1; eauto. Qed.
-  Lemma val_typed_inv_r Γ mm (P : val Ti → Prop) v τ :
-    (Γ,mm) ⊢ v : τ →
+  Lemma val_typed_inv_r Γ m (P : val Ti → Prop) v τ :
+    (Γ,m) ⊢ v : τ →
     match τ with
     | voidT => P v
-    | baseT τb => (∀ vb, (Γ,mm) ⊢ vb : τb → P (VBase vb)) → P v
+    | baseT τb => (∀ vb, (Γ,m) ⊢ vb : τb → P (VBase vb)) → P v
     | τ'.[n] =>
        (∀ vs,
-         n = length vs → (Γ,mm) ⊢* vs : τ' → n ≠ 0 → P (VArray τ' vs)) → P v
+         n = length vs → (Γ,m) ⊢* vs : τ' → n ≠ 0 → P (VArray τ' vs)) → P v
     | structT s =>
-       (∀ vs τs, Γ !! s = Some τs → (Γ,mm) ⊢* vs :* τs →
+       (∀ vs τs, Γ !! s = Some τs → (Γ,m) ⊢* vs :* τs →
          P (VStruct s vs)) → P v
     | unionT s =>
        (∀ i τs v' τ', Γ !! s = Some τs → τs !! i = Some τ' →
-         (Γ,mm) ⊢ v' : τ' → P (VUnion s i v')) →
-       (∀ vs τs, Γ !! s = Some τs → (Γ,mm) ⊢* vs :* τs →
-         vals_representable Γ mm vs τs → P (VUnionAll s vs)) → P v
+         (Γ,m) ⊢ v' : τ' → P (VUnion s i v')) →
+       (∀ vs τs, Γ !! s = Some τs → (Γ,m) ⊢* vs :* τs →
+         vals_representable Γ m vs τs → P (VUnionAll s vs)) → P v
     end.
   Proof. destruct 1; eauto. Qed.
 
   Section val_typed_ind.
-    Context (Γ : env Ti) (mm : option (mem Ti)) (P : val Ti → type Ti → Prop).
-    Context (Pbase : ∀ vb τb, (Γ,mm) ⊢ vb : τb → P (VBase vb) (baseT τb)).
+    Context (Γ : env Ti) (m : mem Ti) (P : val Ti → type Ti → Prop).
+    Context (Pbase : ∀ vb τb, (Γ,m) ⊢ vb : τb → P (VBase vb) (baseT τb)).
     Context (Parray : ∀ vs τ,
-      (Γ,mm) ⊢* vs : τ → Forall (λ v, P v τ) vs →
+      (Γ,m) ⊢* vs : τ → Forall (λ v, P v τ) vs →
       length vs ≠ 0 → P (VArray τ vs) (τ.[length vs])).
     Context (Pstruct : ∀ s vs τs,
-      Γ !! s = Some τs → (Γ,mm) ⊢* vs :* τs → Forall2 P vs τs →
+      Γ !! s = Some τs → (Γ,m) ⊢* vs :* τs → Forall2 P vs τs →
       P (VStruct s vs) (structT s)).
     Context (PUnion : ∀ s i τs v τ,
-      Γ !! s = Some τs → τs !! i = Some τ → (Γ,mm) ⊢ v : τ → P v τ →
+      Γ !! s = Some τs → τs !! i = Some τ → (Γ,m) ⊢ v : τ → P v τ →
       P (VUnion s i v) (unionT s)).
     Context (Punion_none : ∀ s vs τs,
-      Γ !! s = Some τs → (Γ,mm) ⊢* vs :* τs → Forall2 P vs τs →
-      vals_representable Γ mm vs τs → P (VUnionAll s vs) (unionT s)).
-    Definition val_typed_ind : ∀ v τ, val_typed' Γ mm v τ → P v τ.
+      Γ !! s = Some τs → (Γ,m) ⊢* vs :* τs → Forall2 P vs τs →
+      vals_representable Γ m vs τs → P (VUnionAll s vs) (unionT s)).
+    Definition val_typed_ind : ∀ v τ, val_typed' Γ m v τ → P v τ.
     Proof. fix 3; destruct 1; eauto using Forall_impl, Forall2_impl. Qed.
   End val_typed_ind.
 
@@ -268,29 +267,29 @@ Section operations.
     end.
 
   Global Instance vtype_check:
-      TypeCheck (env Ti * option (mem Ti)) (type Ti) (val Ti) :=
-    fix go (Γmm : _ * _) v {struct v} := let _ : TypeCheck _ _ _ := @go in
-    let (Γ,mm) := Γmm in
+      TypeCheck (env Ti * mem Ti) (type Ti) (val Ti) :=
+    fix go (Γm : _ * _) v {struct v} := let _ : TypeCheck _ _ _ := @go in
+    let (Γ,m) := Γm in
     match v with
-    | VBase vb => TBase <$> type_check (Γ,mm) vb
+    | VBase vb => TBase <$> type_check (Γ,m) vb
     | VArray τ vs =>
        guard (length vs ≠ 0);
-       τs ← mapM (type_check (Γ,mm)) vs;
+       τs ← mapM (type_check (Γ,m)) vs;
        guard (Forall (τ =) τs);
        Some (τ.[length vs])
     | VStruct s vs =>
        τs ← Γ !! s;
-       τs' ← mapM (type_check (Γ,mm)) vs;
+       τs' ← mapM (type_check (Γ,m)) vs;
        guard ((τs' : list (type Ti)) = τs);
        Some (structT s)
     | VUnion s i v =>
        τ ← Γ !! s ≫= (!! i);
-       τ' ← type_check (Γ,mm) v;
+       τ' ← type_check (Γ,m) v;
        guard ((τ' : type Ti) = τ);
        Some (unionT s)
     | VUnionAll s vs =>
        τs ← Γ !! s;
-       τs' ← mapM (type_check (Γ,mm)) vs;
+       τs' ← mapM (type_check (Γ,m)) vs;
        guard (τs = τs');
        let sz := bit_size_of Γ (unionT s) in
        bs ← bits_list_join sz (val_flatten Γ <$> vs);
@@ -345,102 +344,108 @@ Section operations.
     end); clear go; abstract first [by constructor | by inversion 1].
   Defined.
 
-  Inductive val_refine' (Γ : env Ti) (f : mem_inj Ti) :
+  Inductive val_refine' (Γ : env Ti) (f : mem_inj Ti) (m1 m2 : mem Ti) :
        val Ti → val Ti → type Ti → Prop :=
     | VBase_refine' vb1 vb2 τb :
-       vb1 ⊑{Γ,f} vb2 : τb → val_refine' Γ f (VBase vb1) (VBase vb2) (baseT τb)
+       vb1 ⊑{Γ,f@m1↦m2} vb2 : τb →
+       val_refine' Γ f m1 m2 (VBase vb1) (VBase vb2) (baseT τb)
     | VArray_refine' τ n vs1 vs2 :
-       n = length vs1 → Forall2 (λ v1 v2, val_refine' Γ f v1 v2 τ) vs1 vs2 →
-       n ≠ 0 → val_refine' Γ f (VArray τ vs1) (VArray τ vs2) (τ.[n])
+       n = length vs1 →
+       Forall2 (λ v1 v2, val_refine' Γ f m1 m2 v1 v2 τ) vs1 vs2 →
+       n ≠ 0 → val_refine' Γ f m1 m2 (VArray τ vs1) (VArray τ vs2) (τ.[n])
     | VStruct_refine' s τs vs1 vs2 :
-       Γ !! s = Some τs → Forall3 (val_refine' Γ f) vs1 vs2 τs →
-       val_refine' Γ f (VStruct s vs1) (VStruct s vs2) (structT s)
+       Γ !! s = Some τs → Forall3 (val_refine' Γ f m1 m2) vs1 vs2 τs →
+       val_refine' Γ f m1 m2 (VStruct s vs1) (VStruct s vs2) (structT s)
     | VUnion_refine' s τs i v1 v2 τ :
-       Γ !! s = Some τs → τs !! i = Some τ → val_refine' Γ f v1 v2 τ →
-       val_refine' Γ f (VUnion s i v1) (VUnion s i v2) (unionT s)
+       Γ !! s = Some τs → τs !! i = Some τ → val_refine' Γ f m1 m2 v1 v2 τ →
+       val_refine' Γ f m1 m2 (VUnion s i v1) (VUnion s i v2) (unionT s)
     | VUnionAll_refine' s τs vs1 vs2 :
-       Γ !! s = Some τs → Forall3 (val_refine' Γ f) vs1 vs2 τs →
-       vals_representable Γ None vs1 τs → vals_representable Γ None vs2 τs →
-       val_refine' Γ f (VUnionAll s vs1) (VUnionAll s vs2) (unionT s)
+       Γ !! s = Some τs → Forall3 (val_refine' Γ f m1 m2) vs1 vs2 τs →
+       vals_representable Γ m1 vs1 τs → vals_representable Γ m2 vs2 τs →
+       val_refine' Γ f m1 m2 (VUnionAll s vs1) (VUnionAll s vs2) (unionT s)
     | VUnion_VUnionAll_refine' s τs i v1 v2 τ vs2 :
        Γ !! s = Some τs → τs !! i = Some τ → vs2 !! i = Some v2 →
-       val_refine' Γ f v1 v2 τ → vals_representable Γ None vs2 τs →
-       val_refine' Γ f (VUnion s i v1) (VUnionAll s vs2) (unionT s).
-  Global Instance val_refine: RefineT Ti (val Ti) (type Ti) := val_refine'.
+       val_refine' Γ f m1 m2 v1 v2 τ → vals_representable Γ m2 vs2 τs →
+       val_refine' Γ f m1 m2 (VUnion s i v1) (VUnionAll s vs2) (unionT s).
+  Global Instance val_refine:
+    RefineT Ti (mem Ti) (val Ti) (type Ti) := val_refine'.
 
-  Lemma VBase_refine Γ f vb1 vb2 τb :
-    vb1 ⊑{Γ,f} vb2 : τb → VBase vb1 ⊑{Γ,f} VBase vb2 : baseT τb.
+  Lemma VBase_refine Γ f m1 m2 vb1 vb2 τb :
+    vb1 ⊑{Γ,f@m1↦m2} vb2 : τb → VBase vb1 ⊑{Γ,f@m1↦m2} VBase vb2 : baseT τb.
   Proof. by constructor. Qed.
-  Lemma VArray_refine Γ f τ n vs1 vs2 :
-    n = length vs1 → vs1 ⊑{Γ,f}* vs2 : τ → n ≠ 0 →
-    VArray τ vs1 ⊑{Γ,f} VArray τ vs2 : τ.[n].
+  Lemma VArray_refine Γ f m1 m2 τ n vs1 vs2 :
+    n = length vs1 → vs1 ⊑{Γ,f@m1↦m2}* vs2 : τ → n ≠ 0 →
+    VArray τ vs1 ⊑{Γ,f@m1↦m2} VArray τ vs2 : τ.[n].
   Proof. by constructor. Qed.
-  Lemma VStruct_refine Γ f s τs vs1 vs2 :
-    Γ !! s = Some τs → vs1 ⊑{Γ,f}* vs2 :* τs →
-    VStruct s vs1 ⊑{Γ,f} VStruct s vs2 : structT s.
+  Lemma VStruct_refine Γ f m1 m2 s τs vs1 vs2 :
+    Γ !! s = Some τs → vs1 ⊑{Γ,f@m1↦m2}* vs2 :* τs →
+    VStruct s vs1 ⊑{Γ,f@m1↦m2} VStruct s vs2 : structT s.
   Proof. econstructor; eauto. Qed.
-  Lemma VUnion_refine Γ f s τs i v1 v2 τ :
-    Γ !! s = Some τs → τs !! i = Some τ →
-    v1 ⊑{Γ,f} v2 : τ → VUnion s i v1 ⊑{Γ,f} VUnion s i v2 : unionT s.
+  Lemma VUnion_refine Γ f m1 m2 s τs i v1 v2 τ :
+    Γ !! s = Some τs → τs !! i = Some τ → v1 ⊑{Γ,f@m1↦m2} v2 : τ →
+    VUnion s i v1 ⊑{Γ,f@m1↦m2} VUnion s i v2 : unionT s.
   Proof. econstructor; eauto. Qed.
-  Lemma VUnionAll_refine Γ f s τs vs1 vs2 :
-    Γ !! s = Some τs → vs1 ⊑{Γ,f}* vs2 :* τs →
-    vals_representable Γ None vs1 τs → vals_representable Γ None vs2 τs →
-    VUnionAll s vs1 ⊑{Γ,f} VUnionAll s vs2 : unionT s.
+  Lemma VUnionAll_refine Γ f m1 m2 s τs vs1 vs2 :
+    Γ !! s = Some τs → vs1 ⊑{Γ,f@m1↦m2}* vs2 :* τs →
+    vals_representable Γ m1 vs1 τs → vals_representable Γ m2 vs2 τs →
+    VUnionAll s vs1 ⊑{Γ,f@m1↦m2} VUnionAll s vs2 : unionT s.
   Proof. econstructor; eauto. Qed.
-  Lemma VUnion_VUnionAll_refine Γ f s τs i v1 v2 τ vs2 :
+  Lemma VUnion_VUnionAll_refine Γ f m1 m2 s τs i v1 v2 τ vs2 :
     Γ !! s = Some τs → τs !! i = Some τ → vs2 !! i = Some v2 →
-    v1 ⊑{Γ,f} v2 : τ → vals_representable Γ None vs2 τs →
-    VUnion s i v1 ⊑{Γ,f} VUnionAll s vs2 : unionT s.
+    v1 ⊑{Γ,f@m1↦m2} v2 : τ → vals_representable Γ m2 vs2 τs →
+    VUnion s i v1 ⊑{Γ,f@m1↦m2} VUnionAll s vs2 : unionT s.
   Proof. econstructor; eauto. Qed.
 
-  Lemma val_refine_inv_l Γ f (P : val Ti → Prop) v1 v2 τ :
-    v1 ⊑{Γ,f} v2 : τ →
+  Lemma val_refine_inv_l Γ f m1 m2 (P : val Ti → Prop) v1 v2 τ :
+    v1 ⊑{Γ,f@m1↦m2} v2 : τ →
     match v1, τ with
-    | VBase vb1, baseT τb => (∀ vb2, vb1 ⊑{Γ,f} vb2 : τb → P (VBase vb2)) → P v2
+    | VBase vb1, baseT τb =>
+       (∀ vb2, vb1 ⊑{Γ,f@m1↦m2} vb2 : τb → P (VBase vb2)) → P v2
     | VArray τ' vs1, _ =>
-       (∀ vs2, vs1 ⊑{Γ,f}* vs2 : τ' → P (VArray τ' vs2)) → P v2
+       (∀ vs2, vs1 ⊑{Γ,f@m1↦m2}* vs2 : τ' → P (VArray τ' vs2)) → P v2
     | VStruct s vs1, _ =>
        (∀ τs vs2, Γ !! s = Some τs →
-         vs1 ⊑{Γ,f}* vs2 :* τs → P (VStruct s vs2)) → P v2 
+         vs1 ⊑{Γ,f@m1↦m2}* vs2 :* τs → P (VStruct s vs2)) → P v2 
     | VUnion s i v1, _ =>
        (∀ τs v2 τ, Γ !! s = Some τs → τs !! i = Some τ →
-         v1 ⊑{Γ,f} v2 : τ → P (VUnion s i v2)) →
+         v1 ⊑{Γ,f@m1↦m2} v2 : τ → P (VUnion s i v2)) →
        (∀ τs v2 τ vs2, Γ !! s = Some τs → τs !! i = Some τ →
-         vs2 !! i = Some v2 → v1 ⊑{Γ,f} v2 : τ →
-         vals_representable Γ None vs2 τs → P (VUnionAll s vs2)) → P v2
+         vs2 !! i = Some v2 → v1 ⊑{Γ,f@m1↦m2} v2 : τ →
+         vals_representable Γ m2 vs2 τs → P (VUnionAll s vs2)) → P v2
     | VUnionAll s vs1, _ =>
-       (∀ τs vs2, Γ !! s = Some τs → vs1 ⊑{Γ,f}* vs2 :* τs →
-         vals_representable Γ None vs1 τs → vals_representable Γ None vs2 τs →
+       (∀ τs vs2, Γ !! s = Some τs → vs1 ⊑{Γ,f@m1↦m2}* vs2 :* τs →
+         vals_representable Γ m1 vs1 τs → vals_representable Γ m2 vs2 τs →
          P (VUnionAll s vs2)) → P v2
     | _, _ => P v2
     end.
   Proof. destruct 1; eauto. Qed.
 
   Section val_refine_ind.
-    Context (Γ : env Ti) (f : mem_inj Ti).
+    Context (Γ : env Ti) (f : mem_inj Ti) (m1 m2 : mem Ti).
     Context (P : val Ti → val Ti → type Ti → Prop).
     Context (Pbase : ∀ vb1 vb2 τb,
-      vb1 ⊑{Γ,f} vb2 : τb → P (VBase vb1) (VBase vb2) (baseT τb)).
+      vb1 ⊑{Γ,f@m1↦m2} vb2 : τb → P (VBase vb1) (VBase vb2) (baseT τb)).
     Context (Parray : ∀ τ n vs1 vs2,
-      length vs1 = n → vs1 ⊑{Γ,f}* vs2 : τ →
+      length vs1 = n → vs1 ⊑{Γ,f@m1↦m2}* vs2 : τ →
       Forall2 (λ v1 v2, P v1 v2 τ) vs1 vs2 → n ≠ 0 →
       P (VArray τ vs1) (VArray τ vs2) (τ.[n])).
     Context (Pstruct : ∀ s τs vs1 vs2,
-      Γ !! s = Some τs → vs1 ⊑{Γ,f}* vs2 :* τs → Forall3 P vs1 vs2 τs →
+      Γ !! s = Some τs → vs1 ⊑{Γ,f@m1↦m2}* vs2 :* τs → Forall3 P vs1 vs2 τs →
       P (VStruct s vs1) (VStruct s vs2) (structT s)).
     Context (Punion : ∀ s τs i v1 v2 τ,
-      Γ !! s = Some τs → τs !! i = Some τ → v1 ⊑{Γ,f} v2 : τ → P v1 v2 τ →
+      Γ !! s = Some τs → τs !! i = Some τ →
+      v1 ⊑{Γ,f@m1↦m2} v2 : τ → P v1 v2 τ →
       P (VUnion s i v1) (VUnion s i v2) (unionT s)).
     Context (Punion_none : ∀ s τs vs1 vs2,
-      Γ !! s = Some τs → vs1 ⊑{Γ,f}* vs2 :* τs → Forall3 P vs1 vs2 τs →
-      vals_representable Γ None vs1 τs → vals_representable Γ None vs2 τs →
+      Γ !! s = Some τs → vs1 ⊑{Γ,f@m1↦m2}* vs2 :* τs → Forall3 P vs1 vs2 τs →
+      vals_representable Γ m1 vs1 τs → vals_representable Γ m2 vs2 τs →
       P (VUnionAll s vs1) (VUnionAll s vs2) (unionT s)).
     Context (Punion_union_none : ∀ s τs i v1 v2 τ vs2,
       Γ !! s = Some τs → τs !! i = Some τ → vs2 !! i = Some v2 →
-      v1 ⊑{Γ,f} v2 : τ → P v1 v2 τ → vals_representable Γ None vs2 τs →
+      v1 ⊑{Γ,f@m1↦m2} v2 : τ → P v1 v2 τ → vals_representable Γ m2 vs2 τs →
       P (VUnion s i v1) (VUnionAll s vs2) (unionT s)).
-    Definition val_refine_ind: ∀ v1 v2 τ, val_refine' Γ f v1 v2 τ → P v1 v2 τ.
+    Definition val_refine_ind: ∀ v1 v2 τ,
+      val_refine' Γ f m1 m2 v1 v2 τ → P v1 v2 τ.
     Proof. fix 4; destruct 1; eauto using Forall2_impl, Forall3_impl. Qed.
   End val_refine_ind.
 
@@ -499,7 +504,6 @@ Section val.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
 Implicit Types m : mem Ti.
-Implicit Types mm : option (mem Ti).
 Implicit Types τb : base_type Ti.
 Implicit Types τ : type Ti.
 Implicit Types τs : list (type Ti).
@@ -528,10 +532,12 @@ Hint Resolve Forall2_take Forall2_drop Forall2_app
 Hint Resolve BIndet_valid BIndet_refine
   BIndet_BIndet_refine BIndet_weak_refine.
 Hint Immediate env_valid_lookup env_valid_lookup_lookup.
+Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
+Local Arguments union _ _ !_ !_ /.
 
 (** ** Properties of the [val_flatten] function *)
-Lemma val_flatten_length Γ mm τ v :
-  ✓ Γ → (Γ,mm) ⊢ v : τ → length (val_flatten Γ v) = bit_size_of Γ τ.
+Lemma val_flatten_length Γ m τ v :
+  ✓ Γ → (Γ,m) ⊢ v : τ → length (val_flatten Γ v) = bit_size_of Γ τ.
 Proof.
   intros HΓ Hvτ. revert v τ Hvτ. refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
   * intros. by erewrite base_val_flatten_length by eauto.
@@ -548,8 +554,8 @@ Proof.
     + eauto using bits_list_join_length.
     + by rewrite replicate_length.
 Qed.
-Lemma val_flatten_valid Γ mm v τ :
-  ✓ Γ → (Γ,mm) ⊢ v : τ → ✓{Γ,mm}* (val_flatten Γ v).
+Lemma val_flatten_valid Γ m v τ :
+  ✓ Γ → (Γ,m) ⊢ v : τ → ✓{Γ,m}* (val_flatten Γ v).
 Proof.
   intros HΓ Hvτ. revert v τ Hvτ. refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
   * eauto using base_val_flatten_valid.
@@ -626,9 +632,9 @@ Proof.
   induction 2; intros; f_equal'; auto.
   by erewrite bit_size_of_weaken, val_unflatten_weaken by eauto.
 Qed.
-Lemma val_unflatten_typed Γ mm τ bs :
-  ✓ Γ → ✓{Γ} τ → ✓{Γ,mm}* bs → length bs = bit_size_of Γ τ →
-  (Γ,mm) ⊢ val_unflatten Γ τ bs : τ.
+Lemma val_unflatten_typed Γ m τ bs :
+  ✓ Γ → ✓{Γ} τ → ✓{Γ,m}* bs → length bs = bit_size_of Γ τ →
+  (Γ,m) ⊢ val_unflatten Γ τ bs : τ.
 Proof.
   intros HΓ Hτ. revert τ Hτ bs. refine (type_env_ind _ HΓ _ _ _ _).
   * intros τb Hτ bs Hbs Hbs'. rewrite val_unflatten_base.
@@ -646,14 +652,14 @@ Proof.
       induction IH; decompose_Forall_hyps'; auto. }
     exists bs; auto. rewrite Hbs'. auto using bit_size_of_union.
 Qed.
-Lemma vals_unflatten_typed Γ mm τs bs :
-  ✓ Γ → ✓{Γ}* τs → ✓{Γ,mm}* bs → Forall (λ τ, bit_size_of Γ τ ≤ length bs) τs →
-  (Γ,mm) ⊢* vals_unflatten Γ τs bs :* τs.
+Lemma vals_unflatten_typed Γ m τs bs :
+  ✓ Γ → ✓{Γ}* τs → ✓{Γ,m}* bs → Forall (λ τ, bit_size_of Γ τ ≤ length bs) τs →
+  (Γ,m) ⊢* vals_unflatten Γ τs bs :* τs.
 Proof.
   induction 2; intros; decompose_Forall_hyps'; auto using val_unflatten_typed.
 Qed.
-Lemma vals_representable_typed Γ mm vs τs :
-  ✓ Γ → ✓{Γ}* τs → vals_representable Γ mm vs τs → (Γ,mm) ⊢* vs :* τs.
+Lemma vals_representable_typed Γ m vs τs :
+  ✓ Γ → ✓{Γ}* τs → vals_representable Γ m vs τs → (Γ,m) ⊢* vs :* τs.
 Proof. intros ?? [bs ?? ->]. auto using vals_unflatten_typed. Qed.
 Lemma val_unflatten_type_of Γ τ bs :
   ✓ Γ → ✓{Γ} τ → type_of (val_unflatten Γ τ bs) = τ.
@@ -668,12 +674,12 @@ Qed.
 Lemma vals_unflatten_type_of Γ τs bs :
   ✓ Γ → ✓{Γ}* τs → type_of <$> vals_unflatten Γ τs bs = τs.
 Proof. induction 2; f_equal'; auto using val_unflatten_type_of. Qed.
-Lemma vals_unflatten_representable Γ mm bs τs :
-  ✓{Γ,mm}* bs → Forall (λ τ, bit_size_of Γ τ ≤ length bs) τs →
-  vals_representable Γ mm (vals_unflatten Γ τs bs) τs.
+Lemma vals_unflatten_representable Γ m bs τs :
+  ✓{Γ,m}* bs → Forall (λ τ, bit_size_of Γ τ ≤ length bs) τs →
+  vals_representable Γ m (vals_unflatten Γ τs bs) τs.
 Proof. by exists bs. Qed.
-Lemma val_unflatten_frozen Γ mm τ bs :
-  ✓ Γ → ✓{Γ,mm}* bs →
+Lemma val_unflatten_frozen Γ m τ bs :
+  ✓ Γ → ✓{Γ,m}* bs →
   val_freeze true (val_unflatten Γ τ bs) = val_unflatten Γ τ bs.
 Proof.
   intros HΓ. revert τ bs. refine (weak_type_env_ind _ HΓ _ _ _ _ _ _).
@@ -693,8 +699,8 @@ Proof.
     destruct c; f_equal'. unfold struct_unflatten; simpl; auto.
     rewrite !field_bit_sizes_nil by done. repeat constructor.
 Qed.
-Lemma vals_unflatten_frozen Γ mm τs bs :
-  ✓ Γ → ✓{Γ,mm}* bs →
+Lemma vals_unflatten_frozen Γ m τs bs :
+  ✓ Γ → ✓{Γ,m}* bs →
   val_freeze true <$> vals_unflatten Γ τs bs = vals_unflatten Γ τs bs.
 Proof. intros. induction τs; f_equal'; eauto using val_unflatten_frozen. Qed.
 Lemma val_unflatten_union_free Γ τ bs :
@@ -749,31 +755,31 @@ Proof.
 Qed.
 
 (** ** General properties of the typing judgment *)
-Lemma val_typed_not_void Γ mm v τ : (Γ,mm) ⊢ v : τ → τ ≠ voidT.
+Lemma val_typed_not_void Γ m v τ : (Γ,m) ⊢ v : τ → τ ≠ voidT.
 Proof. by destruct 1. Qed.
-Lemma val_typed_int_frozen Γ mm v τi :
-  (Γ,mm) ⊢ v : intT τi → val_freeze true v = v.
+Lemma val_typed_int_frozen Γ m v τi :
+  (Γ,m) ⊢ v : intT τi → val_freeze true v = v.
 Proof. inversion_clear 1;simpl. by erewrite base_typed_int_frozen by eauto. Qed.
-Lemma val_union_free_base Γ mm v τb : (Γ,mm) ⊢ v : baseT τb → val_union_free v.
+Lemma val_union_free_base Γ m v τb : (Γ,m) ⊢ v : baseT τb → val_union_free v.
 Proof. inversion 1; constructor. Qed.
-Lemma val_typed_type_valid Γ mm v τ : ✓ Γ → (Γ,mm) ⊢ v : τ → ✓{Γ} τ.
+Lemma val_typed_type_valid Γ m v τ : ✓ Γ → (Γ,m) ⊢ v : τ → ✓{Γ} τ.
 Proof.
   induction 2 using @val_typed_ind; econstructor; decompose_Forall_hyps;
     try match goal with
     | H : length ?vs ≠ 0, H2 : Forall _ ?vs |- _ => destruct H2; [done|]
     end; eauto; eapply base_typed_type_valid; eauto.
 Qed.
-Lemma val_typed_types_valid Γ mm vs τs : ✓ Γ → (Γ,mm) ⊢* vs :* τs → ✓{Γ}* τs.
+Lemma val_typed_types_valid Γ m vs τs : ✓ Γ → (Γ,m) ⊢* vs :* τs → ✓{Γ}* τs.
 Proof. induction 2; constructor; eauto using val_typed_type_valid. Qed.
-Global Instance: TypeOfSpec (env Ti * option (mem Ti)) (type Ti) (val Ti).
+Global Instance: TypeOfSpec (env Ti * mem Ti) (type Ti) (val Ti).
 Proof.
   intros [Γ mm]. induction 1 using @val_typed_ind; decompose_Forall_hyps';
     eauto using type_of_correct with f_equal.
 Qed.
 Lemma vals_representable_weaken Γ1 Γ2 m1 m2 vs τs :
-  ✓ Γ1 → ✓{Γ1}* τs → vals_representable Γ1 (Some m1) vs τs → Γ1 ⊆ Γ2 →
+  ✓ Γ1 → ✓{Γ1}* τs → vals_representable Γ1 m1 vs τs → Γ1 ⊆ Γ2 →
   (∀ o σ, type_of_index m1 o = Some σ → type_of_index m2 o = Some σ) →
-  vals_representable Γ2 (Some m2) vs τs.
+  vals_representable Γ2 m2 vs τs.
 Proof.
   intros ? Hτs [bs ? Hlen Hvs]. exists bs.
   * eauto using Forall_impl, bit_valid_weaken.
@@ -782,9 +788,9 @@ Proof.
   * by erewrite <-vals_unflatten_weaken by eauto.
 Qed.
 Lemma val_typed_weaken Γ1 Γ2 m1 m2 v τ :
-  ✓ Γ1 → (Γ1,Some m1) ⊢ v : τ → Γ1 ⊆ Γ2 →
+  ✓ Γ1 → (Γ1,m1) ⊢ v : τ → Γ1 ⊆ Γ2 →
   (∀ o σ, type_of_index m1 o = Some σ → type_of_index m2 o = Some σ) →
-  (Γ2,Some m2) ⊢ v : τ.
+  (Γ2,m2) ⊢ v : τ.
 Proof.
   intros ? Hvτ ??. induction Hvτ using @val_typed_ind; econstructor;
     erewrite <-1?vals_unflatten_weaken;
@@ -806,12 +812,12 @@ Lemma vals_freeze_freeze β1 β2 vs :
   val_map (freeze β1) <$> val_map (freeze β2) <$> vs
   = val_map (freeze β1) <$> vs.
 Proof. induction vs; f_equal'; auto using val_freeze_freeze. Qed.
-Lemma vals_representable_freeze Γ mm vs τs :
-  ✓ Γ → vals_representable Γ mm vs τs →
-  vals_representable Γ mm (val_freeze true <$> vs) τs.
+Lemma vals_representable_freeze Γ m vs τs :
+  ✓ Γ → vals_representable Γ m vs τs →
+  vals_representable Γ m (val_freeze true <$> vs) τs.
 Proof. intros ? [bs ?? ->]. exists bs; eauto using vals_unflatten_frozen. Qed.
-Lemma typed_freeze Γ mm v τ :
-  ✓ Γ → (Γ,mm) ⊢ v : τ → (Γ,mm) ⊢ val_freeze true v : τ.
+Lemma typed_freeze Γ m v τ :
+  ✓ Γ → (Γ,m) ⊢ v : τ → (Γ,m) ⊢ val_freeze true v : τ.
 Proof.
   induction 2 using @val_typed_ind; simplify_equality'.
   * val_typed_constructor. by apply base_typed_freeze.
@@ -844,9 +850,9 @@ Proof.
 Qed.
 
 (** ** Interaction between [val_flatten] and [val_unflatten] *)
-Lemma val_union_to_bits_valid Γ mm sz vs τs bs :
+Lemma val_union_to_bits_valid Γ m sz vs τs bs :
   ✓ Γ → bits_list_join sz (val_flatten Γ <$> vs) = Some bs →
-  (Γ,mm) ⊢* vs :* τs → ✓{Γ,mm}* bs.
+  (Γ,m) ⊢* vs :* τs → ✓{Γ,m}* bs.
 Proof.
   intros ? Hbs Hvs. eapply bits_list_join_valid; eauto.
   elim Hvs; intros; constructor; eauto using val_flatten_valid.
@@ -861,8 +867,8 @@ Proof.
   * by rewrite take_length_le by auto.
   * apply Forall2_replicate_l. auto. auto using Forall_true, BIndet_weak_refine.
 Qed.
-Lemma val_flatten_unflatten Γ mm τ bs :
-  ✓ Γ → ✓{Γ} τ → ✓{Γ,mm}* bs → length bs = bit_size_of Γ τ →
+Lemma val_flatten_unflatten Γ m τ bs :
+  ✓ Γ → ✓{Γ} τ → ✓{Γ,m}* bs → length bs = bit_size_of Γ τ →
   val_flatten Γ (val_unflatten Γ τ bs) ⊑* bs.
 Proof.
   intros HΓ Hτ. revert τ Hτ bs. refine (type_env_ind _ HΓ _ _ _ _).
@@ -890,13 +896,13 @@ Proof.
       eapply bits_join_min; eauto using bits_weakly_refine_resize_l. }
     auto using Forall2_replicate_l, Forall_true, resize_length.
 Qed.
-Lemma vals_representable_as_bits_aux Γ mm sz vs τs :
+Lemma vals_representable_as_bits_aux Γ m sz vs τs :
   ✓ Γ → ✓{Γ}* τs → Forall (λ τ, bit_size_of Γ τ ≤ sz) τs →
   Forall2 (λ v τ, val_union_free v →
     val_unflatten Γ τ (val_flatten Γ v) = val_freeze true v) vs τs →
-  vals_representable Γ mm vs τs →
+  vals_representable Γ m vs τs →
   ∃ bs, bits_list_join sz (val_flatten Γ <$> vs) = Some bs ∧
-    ✓{Γ,mm}* bs ∧ vs = vals_unflatten Γ τs bs.
+    ✓{Γ,m}* bs ∧ vs = vals_unflatten Γ τs bs.
 Proof.
   intros HΓ Hτs Hsz IH [bs' ? Hlen ->].
   destruct (bits_list_join_exists sz (val_flatten Γ <$> vals_unflatten Γ τs bs')
@@ -906,7 +912,7 @@ Proof.
     eapply bits_weakly_refine_resize_l; eauto; rewrite take_resize_le,
       resize_le by auto; eauto using val_flatten_unflatten. }
   exists bs. split_ands; [done| |].
-  { assert ((Γ,mm) ⊢* vals_unflatten Γ τs bs' :* τs) as Hτs'
+  { assert ((Γ,m) ⊢* vals_unflatten Γ τs bs' :* τs) as Hτs'
       by auto using vals_unflatten_typed.
     eapply bits_list_join_valid; eauto. clear Hsz IH Hbs Hbsbs'.
     induction Hτs'; decompose_Forall_hyps'; eauto using val_flatten_valid. }
@@ -927,8 +933,8 @@ Proof.
   * by erewrite IH, val_unflatten_frozen
       by eauto using val_unflatten_union_free.
 Qed.
-Lemma val_unflatten_flatten Γ mm τ v :
-  ✓ Γ → (Γ,mm) ⊢ v : τ → val_union_free v →
+Lemma val_unflatten_flatten Γ m τ v :
+  ✓ Γ → (Γ,m) ⊢ v : τ → val_union_free v →
   val_unflatten Γ τ (val_flatten Γ v) = val_freeze true v.
 Proof.
   intros HΓ. revert v τ. refine (val_typed_ind _ _ _ _ _ _ _ _).
@@ -947,18 +953,18 @@ Proof.
   * intros s i τs v τ Hs Hτs Hv IH. inversion_clear 1.
   * intros s vs τs Hs Hvs IH Hrepr _.
     erewrite val_unflatten_compound by eauto; simpl.
-    destruct (vals_representable_as_bits_aux Γ mm
+    destruct (vals_representable_as_bits_aux Γ m
       (bit_size_of Γ (unionT s)) vs τs) as (bs&->&?&->);
       eauto using bit_size_of_union; simpl.
     by erewrite vals_unflatten_frozen by eauto.
 Qed.
-Lemma vals_representable_as_bits Γ mm sz vs τs :
+Lemma vals_representable_as_bits Γ m sz vs τs :
   ✓ Γ → ✓{Γ}* τs → Forall (λ τ, bit_size_of Γ τ ≤ sz) τs →
-  vals_representable Γ mm vs τs →
+  vals_representable Γ m vs τs →
   ∃ bs, bits_list_join sz (val_flatten Γ <$> vs) = Some bs ∧ length bs = sz ∧
-    ✓{Γ,mm}* bs ∧ vs = vals_unflatten Γ τs bs.
+    ✓{Γ,m}* bs ∧ vs = vals_unflatten Γ τs bs.
 Proof.
-  intros ??? Hvs. destruct (vals_representable_as_bits_aux Γ mm sz vs τs)
+  intros ??? Hvs. destruct (vals_representable_as_bits_aux Γ m sz vs τs)
     as (?&?&?&?); eauto 6 using bits_list_join_length.
   apply vals_representable_typed in Hvs; auto.
   elim Hvs; constructor; eauto using val_unflatten_flatten.
@@ -1010,7 +1016,7 @@ Proof.
     induction IH as [|τ τs Hτ IH]; decompose_Forall_hyps'; f_equal; auto.
     rewrite take_replicate, Hτ. do 2 f_equal; lia.
 Qed.
-Lemma val_new_typed Γ mm τ : ✓ Γ → ✓{Γ} τ → (Γ,mm) ⊢ val_new Γ τ : τ.
+Lemma val_new_typed Γ m τ : ✓ Γ → ✓{Γ} τ → (Γ,m) ⊢ val_new Γ τ : τ.
 Proof.
   intros. rewrite val_new_val_unflatten by done.
   apply val_unflatten_typed; auto using replicate_length.
@@ -1023,7 +1029,7 @@ Lemma val_new_frozen Γ τ :
   ✓ Γ → ✓{Γ} τ → val_freeze true (val_new Γ τ) = val_new Γ τ.
 Proof.
   intros. rewrite val_new_val_unflatten by done.
-  apply (val_unflatten_frozen Γ None); auto.
+  apply (val_unflatten_frozen Γ ∅); auto.
 Qed.
 Lemma val_new_union_free Γ τ : ✓ Γ → ✓{Γ} τ → val_union_free (val_new Γ τ).
 Proof.
@@ -1032,19 +1038,19 @@ Proof.
 Qed.
 
 (** ** Properties of the [to_val] function *)
-Lemma to_val_typed Γ mm w τ :
-  ✓ Γ → (Γ,mm) ⊢ w : τ → (Γ,mm) ⊢ to_val Γ w : τ.
+Lemma to_val_typed Γ m w τ :
+  ✓ Γ → (Γ,m) ⊢ w : τ → (Γ,m) ⊢ to_val Γ w : τ.
 Proof.
   intros HΓ. induction 1 using @ctree_typed_ind; simpl.
   * val_typed_constructor.
-    eauto using base_val_unflatten_typed, pbits_label_valid.
+    eauto using base_val_unflatten_typed, pbits_tag_valid.
   * val_typed_constructor; auto using fmap_length. by apply Forall_fmap.
   * val_typed_constructor; eauto. by apply Forall2_fmap_l.
   * val_typed_constructor; eauto.
-  * eauto using val_unflatten_typed, TCompound_valid, pbits_label_valid.
+  * eauto using val_unflatten_typed, TCompound_valid, pbits_tag_valid.
 Qed.
-Lemma to_vals_typed Γ mm ws τs :
-  ✓ Γ → (Γ,mm) ⊢* ws :* τs → (Γ,mm) ⊢* to_val Γ <$> ws :* τs.
+Lemma to_vals_typed Γ m ws τs :
+  ✓ Γ → (Γ,m) ⊢* ws :* τs → (Γ,m) ⊢* to_val Γ <$> ws :* τs.
 Proof. induction 2; simpl; auto using to_val_typed. Qed.
 Lemma to_val_type_of Γ w :
   ✓ Γ → ✓{Γ} (type_of w) → type_of (to_val Γ w) = type_of w.
@@ -1053,16 +1059,16 @@ Proof.
   * by rewrite base_val_unflatten_type_of.
   * intros. by rewrite val_unflatten_type_of.
 Qed.
-Lemma to_val_frozen Γ mm w τ :
-  ✓ Γ → (Γ,mm) ⊢ w : τ → val_freeze true (to_val Γ w) = to_val Γ w.
+Lemma to_val_frozen Γ m w τ :
+  ✓ Γ → (Γ,m) ⊢ w : τ → val_freeze true (to_val Γ w) = to_val Γ w.
 Proof.
   induction 2 using @ctree_typed_ind; simpl.
-  * by erewrite base_val_unflatten_frozen by eauto using pbits_label_valid.
+  * by erewrite base_val_unflatten_frozen by eauto using pbits_tag_valid.
   * f_equal. rewrite <-list_fmap_compose. by apply Forall_fmap_ext.
   * f_equal. rewrite <-list_fmap_compose.
     eapply Forall_fmap_ext, Forall2_Forall_l; eauto. eapply Forall_true; eauto.
   * by f_equal.
-  * eauto using val_unflatten_frozen, TCompound_valid, pbits_label_valid.
+  * eauto using val_unflatten_frozen, TCompound_valid, pbits_tag_valid.
 Qed.
 Lemma to_val_union_free Γ w :
   ✓ Γ → union_free w → val_union_free (to_val Γ w).
@@ -1096,8 +1102,8 @@ Proof.
 Qed.
 
 (** ** Properties of the [of_val] function *)
-Lemma ctree_flatten_of_val Γ mm xs v τ :
-  ✓ Γ → (Γ,mm) ⊢ v : τ → length xs = bit_size_of Γ τ →
+Lemma ctree_flatten_of_val Γ m xs v τ :
+  ✓ Γ → (Γ,m) ⊢ v : τ → length xs = bit_size_of Γ τ →
   ctree_flatten (of_val Γ xs v) = zip_with PBit xs (val_flatten Γ v).
 Proof.
   intros HΓ Hv. revert v τ Hv xs. refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
@@ -1118,19 +1124,18 @@ Proof.
     f_equal; auto.
   * done.
 Qed.
-Lemma of_val_Forall (P : pbit Ti → Prop) Γ mm xs v τ :
-  ✓ Γ → (Γ,mm) ⊢ v : τ → length xs = bit_size_of Γ τ →
+Lemma of_val_Forall (P : pbit Ti → Prop) Γ m xs v τ :
+  ✓ Γ → (Γ,m) ⊢ v : τ → length xs = bit_size_of Γ τ →
   Forall P (zip_with PBit xs (val_flatten Γ v)) →
   ctree_Forall P (of_val Γ xs v).
 Proof.
   intros. by erewrite <-ctree_flatten_Forall, ctree_flatten_of_val by eauto.
 Qed.
-Lemma of_val_typed Γ mm xs v τ :
-  ✓ Γ → Forall sep_valid xs → Forall (not ∘ sep_unmapped) xs →
-  length xs = bit_size_of Γ τ → (Γ,mm) ⊢ v : τ → (Γ,mm) ⊢ of_val Γ xs v : τ.
+Lemma of_val_typed Γ m xs v τ :
+  ✓ Γ → (Γ,m) ⊢ v : τ → Forall sep_valid xs → Forall (not ∘ sep_unmapped) xs →
+  length xs = bit_size_of Γ τ → (Γ,m) ⊢ of_val Γ xs v : τ.
 Proof.
-  intros HΓ Hxs Hxs' Hlen Hv. revert v τ Hv xs Hxs Hxs' Hlen.
-  refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
+  intros HΓ Hv. revert v τ Hv xs. refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
   * intros vb τb ? xs ???. erewrite type_of_correct by eauto.
     ctree_typed_constructor.
     + eauto using base_typed_type_valid.
@@ -1180,8 +1185,8 @@ Proof.
     intros xs; rewrite ?fmap_length; f_equal; auto.
   revert xs; induction vs; intros; f_equal'; auto.
 Qed.
-Lemma to_of_val Γ mm xs v τ :
-  ✓ Γ → (Γ,mm) ⊢ v : τ → length xs = bit_size_of Γ τ →
+Lemma to_of_val Γ m xs v τ :
+  ✓ Γ → (Γ,m) ⊢ v : τ → length xs = bit_size_of Γ τ →
   to_val Γ (of_val Γ xs v) = val_freeze true v.
 Proof.
   intros HΓ Hvτ. revert v τ Hvτ xs.
@@ -1198,7 +1203,7 @@ Proof.
       erewrite ?type_of_correct by eauto; f_equal; eauto.
   * intros; erewrite type_of_correct by eauto; f_equal; auto.
   * intros s vs τs Hs Hvs IH Hrepr xs ?.
-    destruct (vals_representable_as_bits Γ mm (bit_size_of Γ (unionT s)) vs τs)
+    destruct (vals_representable_as_bits Γ m (bit_size_of Γ (unionT s)) vs τs)
      as (bs&->&?&?&Hbs); simpl; eauto using bit_size_of_union.
     by erewrite fmap_zip_with_r,
       val_unflatten_compound, Hbs, vals_unflatten_frozen by eauto.
@@ -1212,26 +1217,91 @@ Proof.
   * generalize (field_bit_padding Γ (type_of <$> vs)). revert xs.
     induction IH; intros ? [|??]; constructor; simpl; auto.
 Qed.
-Lemma of_val_union_free_inv Γ mm xs v τ :
-  ✓ Γ → (Γ,mm) ⊢ v : τ → length xs = bit_size_of Γ τ →
+Lemma of_val_union_free_inv Γ m xs v τ :
+  ✓ Γ → (Γ,m) ⊢ v : τ → length xs = bit_size_of Γ τ →
   union_free (of_val Γ xs v) → val_union_free v.
 Proof.
   intros. erewrite <-(val_union_free_freeze true),
     <-(to_of_val _ _ xs) by eauto. by apply to_val_union_free.
 Qed.
+Lemma of_val_disjoint Γ m w1 w2 v τ :
+  ✓ Γ → (Γ,m) ⊢ w1 : τ → ctree_unshared w1 →
+  ctree_Forall (not ∘ sep_unmapped) w1 → (Γ,m) ⊢ v : τ → w1 ⊥ w2 →
+  of_val Γ (tagged_perm <$> ctree_flatten w1) v ⊥ w2.
+Proof.
+  intros. assert (ctree_unmapped w2) by eauto using @ctree_unshared_unmapped.
+  assert ((Γ,m) ⊢ w2 : τ) by eauto using ctree_disjoint_typed.
+  assert (union_free w2)
+    by eauto using union_free_unmapped, ctree_typed_sep_valid.
+  erewrite <-(union_free_reset w2), <-ctree_unflatten_flatten by eauto.
+  assert (Forall (not ∘ sep_unmapped) (tagged_perm <$> ctree_flatten w1)).
+  { apply pbits_perm_mapped; eauto using ctree_flatten_Forall_2,
+      Forall_impl, ctree_flatten_valid, pbit_valid_sep_valid. }
+  symmetry; eapply ctree_flatten_unflatten_disjoint; eauto using
+    ctree_flatten_Forall_2, of_val_typed,
+    pbits_valid_perm_valid, ctree_flatten_valid; symmetry.
+  erewrite ctree_flatten_of_val by eauto.
+  eauto using PBits_perm_disjoint,
+    ctree_flatten_Forall_2, @ctree_flatten_disjoint.
+Qed.
+Lemma of_val_union_help Γ m xs1 xs2 v τ :
+  ✓ Γ → (Γ,m) ⊢ v : τ → Forall sep_valid xs1 → Forall (not ∘ sep_unmapped) xs1 →
+  length xs1 = bit_size_of Γ τ → of_val Γ (xs1 ∪* xs2) v
+  = ctree_merge true (∪) (of_val Γ xs1 v) (flip PBit BIndet <$> xs2).
+Proof.
+  intros HΓ Hv. revert v τ Hv xs1 xs2.
+  refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
+  * intros; f_equal; auto using PBits_union.
+  * intros vs τ Hvs IH _ xs1 xs2 Hxs1 Hxs1'. rewrite bit_size_of_array.
+    intros Hlen; f_equal. revert xs1 xs2 Hxs1 Hxs1' Hlen.
+    induction IH; intros; decompose_Forall_hyps'; simplify_type_equality; auto.
+    erewrite zip_with_take, zip_with_drop, <-fmap_take, <-fmap_drop,
+      ctree_flatten_length by eauto using of_val_typed; f_equal; auto.
+  * intros s vs τs Hs Hvs IH xs1 xs2 Hxs1 Hxs1'.
+    erewrite bit_size_of_struct by eauto; intros Hlen; f_equal.
+    unfold field_bit_padding; erewrite fmap_type_of by eauto.
+    clear Hs. revert vs xs1 xs2 Hvs IH Hxs1 Hxs1' Hlen.
+    induction (bit_size_of_fields _ τs HΓ); intros;
+      decompose_Forall_hyps'; simplify_type_equality; auto.
+    erewrite !zip_with_drop, !zip_with_take, <-!fmap_drop, <-!fmap_take,
+      ctree_flatten_length, fmap_length, take_length, drop_length,
+      Min.min_l, PBits_BIndet_union by (eauto using of_val_typed; lia);
+      repeat f_equal; eauto 6.
+  * intros s i τs v τ ??? IH xs1 xs2 ???; simplify_type_equality'.
+    by erewrite zip_with_take, zip_with_drop, <-fmap_take, <-fmap_drop, IH,
+      ctree_flatten_length, PBits_BIndet_union by eauto using of_val_typed.
+  * intros; f_equal; auto using PBits_union.
+Qed.
+Lemma of_val_union Γ m w1 w2 v τ :
+  ✓ Γ → (Γ,m) ⊢ w1 : τ → ctree_unshared w1 →
+  ctree_Forall (not ∘ sep_unmapped) w1 → (Γ,m) ⊢ v : τ → w1 ⊥ w2 →
+  of_val Γ (tagged_perm <$> ctree_flatten (w1 ∪ w2)) v
+  = of_val Γ (tagged_perm <$> ctree_flatten w1) v ∪ w2.
+Proof.
+  intros. assert (ctree_unmapped w2).
+  { eapply ctree_flatten_Forall_1, @seps_unshared_unmapped,
+      @ctree_flatten_disjoint; eauto using ctree_flatten_Forall_2. }
+  assert (Forall (not ∘ sep_unmapped) (tagged_perm <$> ctree_flatten w1)).
+  { apply pbits_perm_mapped; eauto using ctree_flatten_Forall_2,
+      Forall_impl, ctree_flatten_valid, pbit_valid_sep_valid. }
+  rewrite ctree_flatten_union, pbits_perm_union by done.
+  by erewrite of_val_union_help, PBits_BIndet_tag, ctree_merge_flatten
+    by eauto using ctree_flatten_Forall_2, of_val_disjoint,
+    pbits_valid_perm_valid, ctree_flatten_valid.
+Qed.
 
 (** ** Decidable typing *)
 Local Arguments type_check _ _ _ _ _ !_ /.
 Global Instance:
-  TypeCheckSpec (env Ti * option (mem Ti)) (type Ti) (val Ti) (✓ ∘ fst).
+  TypeCheckSpec (env Ti * mem Ti) (type Ti) (val Ti) (✓ ∘ fst).
 Proof.
-  intros [Γ mm] v τ ?; revert v τ. assert (∀ vs τs,
-    Forall (λ v, ∀ τ, type_check (Γ,mm) v = Some τ → (Γ,mm) ⊢ v : τ) vs →
-    mapM (type_check (Γ,mm)) vs = Some τs → (Γ,mm) ⊢* vs :* τs).
+  intros [Γ m] v τ ?; revert v τ. assert (∀ vs τs,
+    Forall (λ v, ∀ τ, type_check (Γ,m) v = Some τ → (Γ,m) ⊢ v : τ) vs →
+    mapM (type_check (Γ,m)) vs = Some τs → (Γ,m) ⊢* vs :* τs).
   { intros vs τs. rewrite mapM_Some. intros. decompose_Forall; eauto. }
   assert (∀ vs τ,
-    (Γ,mm) ⊢* vs : τ → Forall (λ v, type_check (Γ,mm) v = Some τ) vs →
-    mapM (type_check (Γ,mm)) vs = Some (replicate (length vs) τ)).
+    (Γ,m) ⊢* vs : τ → Forall (λ v, type_check (Γ,m) v = Some τ) vs →
+    mapM (type_check (Γ,m)) vs = Some (replicate (length vs) τ)).
   { intros. apply mapM_Some, Forall2_replicate_r;decompose_Forall_hyps; eauto. }
   intros v τ; split.
   * revert τ. induction v using @val_ind_alt; intros; simplify_option_equality.
@@ -1250,18 +1320,18 @@ Proof.
     + done.
     + erewrite mapM_Some_2; eauto; simplify_option_equality.
       by match goal with
-      | _ : Γ !! ?s = Some _, H : vals_representable ?Γ ?mm ?vs ?τs |- _ =>
-        destruct (vals_representable_as_bits Γ mm
+      | _ : Γ !! ?s = Some _, H : vals_representable ?Γ ?m ?vs ?τs |- _ =>
+        destruct (vals_representable_as_bits Γ m
           (bit_size_of Γ (unionT s)) vs τs) as (?&?&?&?&->);
           eauto using val_typed_types_valid, bit_size_of_union
       end; simplify_option_equality.
 Qed.
 
 (** ** Refinements *)
-Lemma val_refine_typed_l Γ f v1 v2 τ :
-  ✓ Γ → v1 ⊑{Γ,f} v2 : τ → (Γ,None) ⊢ v1 : τ.
+Lemma val_refine_typed_l Γ f m1 m2 v1 v2 τ :
+  ✓ Γ → v1 ⊑{Γ,f@m1↦m2} v2 : τ → (Γ,m1) ⊢ v1 : τ.
 Proof.
-  intros ?. revert v1 v2 τ. refine (val_refine_ind _ _ _ _ _ _ _ _ _).
+  intros ?. revert v1 v2 τ. refine (val_refine_ind _ _ _ _ _ _ _ _ _ _ _).
   * intros; val_typed_constructor; eauto using base_val_refine_typed_l.
   * intros τ n vs1 vs2 Hn _ IH ?; val_typed_constructor; auto. elim IH; eauto.
   * intros s τs vs1 vs2 Hs _ IH; val_typed_constructor; eauto. elim IH; eauto.
@@ -1269,13 +1339,13 @@ Proof.
   * intros s τs vs1 vs2 ? _ IH ? _. val_typed_constructor; eauto. elim IH; auto.
   * intros; val_typed_constructor; eauto.
 Qed.
-Lemma vals_refine_typed_l Γ f vs1 vs2 τs :
-  ✓ Γ → vs1 ⊑{Γ,f}* vs2 :* τs → (Γ,None) ⊢* vs1 :* τs.
+Lemma vals_refine_typed_l Γ f m1 m2 vs1 vs2 τs :
+  ✓ Γ → vs1 ⊑{Γ,f@m1↦m2}* vs2 :* τs → (Γ,m1) ⊢* vs1 :* τs.
 Proof. induction 2; eauto using val_refine_typed_l. Qed.
-Lemma val_refine_typed_r Γ f v1 v2 τ :
-  ✓ Γ → v1 ⊑{Γ,f} v2 : τ → (Γ,None) ⊢ v2 : τ.
+Lemma val_refine_typed_r Γ f m1 m2 v1 v2 τ :
+  ✓ Γ → v1 ⊑{Γ,f@m1↦m2} v2 : τ → (Γ,m2) ⊢ v2 : τ.
 Proof.
-  intros ?. revert v1 v2 τ. refine (val_refine_ind _ _ _ _ _ _ _ _ _).
+  intros ?. revert v1 v2 τ. refine (val_refine_ind _ _ _ _ _ _ _ _ _ _ _).
   * intros; val_typed_constructor; eauto using base_val_refine_typed_r.
   * intros τ n vs1 vs2 <- _ IH ?; val_typed_constructor;
       eauto using Forall2_length. elim IH; auto.
@@ -1284,19 +1354,21 @@ Proof.
   * intros s τs vs1 vs2 ? _ IH _ ?. val_typed_constructor; eauto. elim IH; auto.
   * intros; val_typed_constructor; eauto using vals_representable_typed.
 Qed.
-Lemma val_refine_type_of_l Γ f v1 v2 τ : v1 ⊑{Γ,f} v2 : τ → type_of v1 = τ.
+Lemma val_refine_type_of_l Γ f m1 m2 v1 v2 τ :
+  v1 ⊑{Γ,f@m1↦m2} v2 : τ → type_of v1 = τ.
 Proof. destruct 1; f_equal'; eauto using base_val_refine_type_of_l. Qed.
-Lemma vals_refine_type_of_l Γ f vs1 vs2 τs :
-  ✓ Γ → vs1 ⊑{Γ,f}* vs2 :* τs → type_of <$> vs1 = τs.
+Lemma vals_refine_type_of_l Γ f m1 m2 vs1 vs2 τs :
+  ✓ Γ → vs1 ⊑{Γ,f@m1↦m2}* vs2 :* τs → type_of <$> vs1 = τs.
 Proof. induction 2; f_equal'; eauto using val_refine_type_of_l. Qed.
-Lemma val_refine_type_of_r Γ f v1 v2 τ : v1 ⊑{Γ,f} v2 : τ → type_of v2 = τ.
+Lemma val_refine_type_of_r Γ f m1 m2 v1 v2 τ :
+  v1 ⊑{Γ,f@m1↦m2} v2 : τ → type_of v2 = τ.
 Proof.
   destruct 1; f_equal'; eauto using base_val_refine_type_of_r, Forall2_length_l.
 Qed.
-Lemma vals_refine_type_of_r Γ f vs1 vs2 τs :
-  ✓ Γ → vs1 ⊑{Γ,f}* vs2 :* τs → type_of <$> vs2 = τs.
+Lemma vals_refine_type_of_r Γ f m1 m2 vs1 vs2 τs :
+  ✓ Γ → vs1 ⊑{Γ,f@m1↦m2}* vs2 :* τs → type_of <$> vs2 = τs.
 Proof. induction 2; f_equal'; eauto using val_refine_type_of_r. Qed.
-Lemma val_refine_id Γ v τ : (Γ,None) ⊢ v : τ → v ⊑{Γ} v : τ.
+Lemma val_refine_id Γ m v τ : (Γ,m) ⊢ v : τ → v ⊑{Γ@m} v : τ.
 Proof.
   revert v τ. refine (val_typed_ind _ _ _ _ _ _ _ _).
   * intros. val_refine_constructor; eauto using base_val_refine_id.
@@ -1307,69 +1379,73 @@ Proof.
   * intros s vs τs ? _ IH ?. val_refine_constructor; eauto.
     elim IH; constructor; auto.
 Qed.
-Lemma val_refine_compose Γ f g v1 v2 v3 τ :
-  ✓ Γ → v1 ⊑{Γ,f} v2 : τ → v2 ⊑{Γ,g} v3 : τ → v1 ⊑{Γ,f ◎ g} v3 : τ.
+Lemma val_refine_compose Γ f g m1 m2 m3 v1 v2 v3 τ :
+  ✓ Γ → v1 ⊑{Γ,f@m1↦m2} v2 : τ → v2 ⊑{Γ,g@m2↦m3} v3 : τ →
+  v1 ⊑{Γ,f ◎ g@m1↦m3} v3 : τ.
 Proof.
   intros HΓ. assert (∀ vs1 vs2 vs3 τs,
     Forall3 (λ v1 v2 τ, ∀ v3,
-      v2 ⊑{Γ,g} v3 : τ → v1 ⊑{Γ,f ◎ g} v3 : τ) vs1 vs2 τs →
-    vs2 ⊑{Γ,g}* vs3 :* τs → vs1 ⊑{Γ,f ◎ g}* vs3 :* τs).
+      v2 ⊑{Γ,g@m2↦m3} v3 : τ → v1 ⊑{Γ,f ◎ g@m1↦m3} v3 : τ) vs1 vs2 τs →
+    vs2 ⊑{Γ,g@m2↦m3}* vs3 :* τs → vs1 ⊑{Γ,f ◎ g@m1↦m3}* vs3 :* τs).
   { intros vs1 ws2 vs3 τs Hvs. revert vs3.
     induction Hvs; inversion_clear 1; constructor; auto. }
-  intros Hv. revert v1 v2  τ Hv v3. refine (val_refine_ind _ _ _ _ _ _ _ _ _).
-  * intros vb1 vb2 τb ? v3 Hv3;
-      pattern v3; apply (val_refine_inv_l _ _ _ _ _ _ Hv3); clear v3 Hv3.
+  intros Hv. revert v1 v2 τ Hv v3.
+  refine (val_refine_ind _ _ _ _ _ _ _ _ _ _ _).
+  * intros vb1 vb2 τb ? v3 Hv3; pattern v3;
+      apply (val_refine_inv_l _ _ _ _ _ _ _ _ Hv3); clear v3 Hv3.
     intros vb3 ?. val_refine_constructor; eauto using base_val_refine_compose.
-  * intros τ n vs1 vs2 <- _ IH Hlen v3 Hv3;
-      pattern v3; apply (val_refine_inv_l _ _ _ _ _ _ Hv3); clear v3 Hv3.
+  * intros τ n vs1 vs2 <- _ IH Hlen v3 Hv3; pattern v3;
+      apply (val_refine_inv_l _ _ _ _ _ _ _ _ Hv3); clear v3 Hv3.
     intros vs3 Hvs3. val_refine_constructor; eauto.
     revert vs3 Hvs3. clear Hlen. induction IH; inversion_clear 1; auto.
-  * intros s τs vs1 vs2 Hs _ IH v3 Hv3;
-      pattern v3; apply (val_refine_inv_l _ _ _ _ _ _ Hv3); clear v3 Hv3.
+  * intros s τs vs1 vs2 Hs _ IH v3 Hv3; pattern v3;
+      apply (val_refine_inv_l _ _ _ _ _ _ _ _ Hv3); clear v3 Hv3.
     intros ? vs3 ? Hvs3; simplify_equality. val_refine_constructor; eauto.
-  * intros s τs i v1 v2 τ ?? _ IH v3 Hv3;
-      pattern v3; apply (val_refine_inv_l _ _ _ _ _ _ Hv3); clear v3 Hv3;
+  * intros s τs i v1 v2 τ ?? _ IH v3 Hv3; pattern v3;
+      apply (val_refine_inv_l _ _ _ _ _ _ _ _ Hv3); clear v3 Hv3;
       intros; simplify_equality; val_refine_constructor; eauto.
-  * intros s τs vs1 vs2 Hs _ IH ?? v3 Hv3;
-      pattern v3; apply (val_refine_inv_l _ _ _ _ _ _ Hv3); clear v3 Hv3.
+  * intros s τs vs1 vs2 Hs _ IH ?? v3 Hv3; pattern v3;
+      apply (val_refine_inv_l _ _ _ _ _ _ _ _ Hv3); clear v3 Hv3.
     intros ? vs3 ? Hvs3 ??; simplify_equality. val_refine_constructor; eauto.
-  * intros s τs i v1 v2 τ vs2 Hs Hτ Hv2 _ IH Hvs2' v3 Hv3;
-      pattern v3; apply (val_refine_inv_l _ _ _ _ _ _ Hv3); clear v3 Hv3.
+  * intros s τs i v1 v2 τ vs2 Hs Hτ Hv2 _ IH Hvs2' v3 Hv3; pattern v3;
+      apply (val_refine_inv_l _ _ _ _ _ _ _ _ Hv3); clear v3 Hv3.
     intros ? vs3 ? Hvs3 _ Hvs3'; simplify_equality'.
-    assert (∃ v3, vs3 !! i = Some v3 ∧ v2 ⊑{Γ,g} v3 : τ) as (v3&?&?).
+    assert (∃ v3, vs3 !! i = Some v3 ∧ v2 ⊑{Γ,g@m2↦m3} v3 : τ) as (v3&?&?).
     { clear Hs IH Hvs2' Hvs3'. revert i v2 τ Hτ Hv2.
       induction Hvs3; intros [|?] ????; simplify_equality'; eauto. }
     val_refine_constructor; eauto.
 Qed.
-Lemma val_flatten_refine Γ f v1 v2 τ :
-  ✓ Γ → v1 ⊑{Γ,f} v2 : τ → val_flatten Γ v1 ⊑{Γ,f}* val_flatten Γ v2.
+Lemma val_flatten_refine Γ f m1 m2 v1 v2 τ :
+  ✓ Γ → v1 ⊑{Γ,f@m1↦m2} v2 : τ →
+  val_flatten Γ v1 ⊑{Γ,f@m1↦m2}* val_flatten Γ v2.
 Proof.
-  intros ?. revert v1 v2 τ. refine (val_refine_ind _ _ _ _ _ _ _ _ _); simpl.
+  intros ?. revert v1 v2 τ.
+  refine (val_refine_ind _ _ _ _ _ _ _ _ _ _ _); simpl.
   * eauto using base_val_flatten_refine.
   * intros τ n vs1 vs2 <- _ ? _. by apply Forall2_bind.
   * intros s τs vs1 vs2 -> _ IH; simpl. generalize (field_bit_sizes Γ τs).
     induction IH; intros [|?]; decompose_Forall_hyps'; auto.
   * eauto.
   * intros s τs vs1 vs2 ?? IH ??.
-    destruct (vals_representable_as_bits Γ None (bit_size_of Γ (unionT s)) vs1
+    destruct (vals_representable_as_bits Γ m1 (bit_size_of Γ (unionT s)) vs1
       τs) as (bs1&Hbs1&?&?&?); eauto using bit_size_of_union.
-    destruct (vals_representable_as_bits Γ None (bit_size_of Γ (unionT s)) vs2
+    destruct (vals_representable_as_bits Γ m2 (bit_size_of Γ (unionT s)) vs2
       τs) as (bs2&Hbs2&?&?&?); eauto using bit_size_of_union.
     rewrite Hbs1, Hbs2; simpl. eapply bits_list_join_refine; eauto.
     elim IH; simpl; constructor; auto.
   * intros s τs i v1 v2 τ vs2 ? Hτ Hv2 ???.
-    destruct (vals_representable_as_bits Γ None (bit_size_of Γ (unionT s)) vs2
+    destruct (vals_representable_as_bits Γ m2 (bit_size_of Γ (unionT s)) vs2
       τs) as (bs2&Hbs2&?&?&?); eauto using bit_size_of_union.
     rewrite Hbs2; simplify_equality'.
     rewrite <-(right_id_L mem_inj_id (◎) f). apply bits_refine_compose with
-      (resize (bit_size_of Γ (unionT s)) BIndet (val_flatten Γ v2)); auto.
+      m2 (resize (bit_size_of Γ (unionT s)) BIndet (val_flatten Γ v2)); auto.
     rewrite list_lookup_fmap, Hτ in Hv2; simplify_equality'.
     eapply bits_subseteq_refine, bits_weakly_refine_resize_l;
       eauto using val_flatten_unflatten, bit_size_of_union_lookup.
 Qed.
-Lemma val_unflatten_refine Γ f τ bs1 bs2 :
-  ✓ Γ → ✓{Γ} τ → bs1 ⊑{Γ,f}* bs2 → length bs1 = bit_size_of Γ τ →
-  val_unflatten Γ τ bs1 ⊑{Γ,f} val_unflatten Γ τ bs2 : τ.
+Lemma val_unflatten_refine Γ f m1 m2 τ bs1 bs2 :
+  ✓ Γ → ✓{Γ} τ → bs1 ⊑{Γ,f@m1↦m2}* bs2 → length bs1 = bit_size_of Γ τ →
+  val_unflatten Γ τ bs1 ⊑{Γ,f@m1↦m2} val_unflatten Γ τ bs2 : τ.
 Proof.
   intros HΓ Hτ. revert τ Hτ bs1 bs2. refine (type_env_ind _ HΓ _ _ _ _).
   * intros ? τb bs1 bs2 ??. rewrite !val_unflatten_base.
@@ -1391,68 +1467,69 @@ Proof.
     + apply vals_unflatten_representable; eauto using bits_refine_valid_r.
       by erewrite <-Forall2_length by eauto.
 Qed.
-Lemma val_new_refine Γ f τ : ✓ Γ → ✓{Γ} τ → val_new Γ τ ⊑{Γ,f} val_new Γ τ : τ.
+Lemma val_new_refine Γ f m1 m2 τ :
+  ✓ Γ → ✓{Γ} τ → val_new Γ τ ⊑{Γ,f@m1↦m2} val_new Γ τ : τ.
 Proof.
   intros. rewrite val_new_val_unflatten by done.
   eauto using val_unflatten_refine, replicate_length.
 Qed.
-Lemma to_val_refine Γ f w1 w2 τ :
-  ✓ Γ → w1 ⊑{Γ,f} w2 : τ → to_val Γ w1 ⊑{Γ,f} to_val Γ w2 : τ.
+Lemma to_val_refine Γ f m1 m2 w1 w2 τ :
+  ✓ Γ → w1 ⊑{Γ,f@m1↦m2} w2 : τ → to_val Γ w1 ⊑{Γ,f@m1↦m2} to_val Γ w2 : τ.
 Proof.
   (* Induction on the typing judgment because the IH is otherwise not
-     strong enough in the Union_UnionAll case *)
-  intros HΓ Hw. assert ((Γ,None) ⊢ w1 : τ) as Hw1
+     strong enough in the [Union_UnionAll] case *)
+  intros HΓ Hw. assert ((Γ,m1) ⊢ w1 : τ) as Hw1
     by eauto using ctree_refine_typed_l.
-  revert w1 τ Hw1 f w2 Hw. refine (ctree_typed_ind _ _ _ _ _ _ _ _).
-  * intros τb xbs ??? f w2 Hw2; pattern w2;
-      apply (ctree_refine_inv_l _ _ _ _ _ _ Hw2); simpl; clear w2 Hw2.
+  revert w1 τ Hw1 f m2 w2 Hw. refine (ctree_typed_ind _ _ _ _ _ _ _ _).
+  * intros τb xbs ??? f m2 w2 Hw2; pattern w2;
+      apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ Hw2); simpl; clear w2 Hw2.
     intros; val_refine_constructor;
-      eauto using base_val_unflatten_refine, pbits_label_refine.
-  * intros ws1 τ _ IH Hlen f w2 Hw2; pattern w2;
-      apply (ctree_refine_inv_l _ _ _ _ _ _ Hw2); simpl; clear w2 Hw2.
+      eauto using base_val_unflatten_refine, pbits_tag_refine.
+  * intros ws1 τ _ IH Hlen f m2 w2 Hw2; pattern w2;
+      apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ Hw2); simpl; clear w2 Hw2.
     intros ws2 Hws. val_refine_constructor; auto. clear Hlen.
     induction Hws; decompose_Forall_hyps'; constructor; auto.
-  * intros s wxbss1 τs Hs ? IH _ _ Hlen f w2 Hw2; pattern w2;
-      apply (ctree_refine_inv_l _ _ _ _ _ _ Hw2); simpl; clear w2 Hw2.
+  * intros s wxbss1 τs Hs ? IH _ _ Hlen f m2 w2 Hw2; pattern w2;
+      apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ Hw2); simpl; clear w2 Hw2.
     intros ? wxbss2 ? Hws _ _; simplify_equality.
     val_refine_constructor; eauto. clear Hlen Hs.
     induction Hws; decompose_Forall_hyps'; constructor; auto.
-  * intros s i τs w xbs1 τ ? Hτ ? IH ? _ Hlen _ f w2 Hw2; pattern w2;
-      apply (ctree_refine_inv_l _ _ _ _ _ _ Hw2); simpl; clear w2 Hw2.
+  * intros s i τs w xbs1 τ ? Hτ ? IH ? _ Hlen _ f m2 w2 Hw2; pattern w2;
+      apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ Hw2); simpl; clear w2 Hw2.
     { intros; simplify_equality; val_refine_constructor; eauto. }
     intros ?? xbs2_ ??; rewrite Forall2_app_inv_l;
       intros (xbs2&xbs2'&?&?&?) ?; decompose_Forall_hyps'.
     erewrite val_unflatten_compound by eauto.
-    val_refine_constructor; eauto; [by rewrite list_lookup_fmap, Hτ | |].
+    val_refine_constructor; eauto; [by rewrite list_lookup_fmap, Hτ| |].
     { rewrite <-(left_id_L _ (◎) f); apply val_refine_compose with
-        (val_unflatten Γ τ (tagged_tag <$> ctree_flatten w)); auto.
+        m1 (val_unflatten Γ τ (tagged_tag <$> ctree_flatten w)); auto.
       { erewrite <-to_val_unflatten,
           ctree_unflatten_flatten by eauto using ctree_typed_type_valid.
         apply IH, union_reset_above; eauto using ctree_refine_id,
           ctree_flatten_Forall_1, pbits_refine_unshared_inv. }
       rewrite fmap_app, take_app_alt by (by erewrite <-ctree_flatten_length,
         fmap_length by eauto; eauto using Forall2_length).
-      eauto using val_unflatten_refine, pbits_label_refine. }
+      eauto using val_unflatten_refine, pbits_tag_refine. }
     eapply vals_unflatten_representable;
-      eauto using pbits_label_valid, pbits_refine_valid_r.
+      eauto using pbits_tag_valid, pbits_refine_valid_r.
     erewrite fmap_length, app_length, <-Forall2_length,
       ctree_flatten_length, <-Forall2_length by eauto.
     rewrite <-Hlen; eauto using bit_size_of_union.
-  * intros s τs xbs ??? f w2 Hw2; pattern w2;
-      apply (ctree_refine_inv_l _ _ _ _ _ _ Hw2); simpl; clear w2 Hw2.
-    eauto using val_unflatten_refine, pbits_label_refine, TCompound_valid.
+  * intros s τs xbs ??? f m2 w2 Hw2; pattern w2;
+      apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ Hw2); simpl; clear w2 Hw2.
+    eauto using val_unflatten_refine, pbits_tag_refine, TCompound_valid.
 Qed.
-Lemma of_val_refine Γ f xs v1 v2 τ :
+Lemma of_val_refine Γ f m1 m2 xs v1 v2 τ :
   ✓ Γ → Forall sep_unshared xs → Forall (not ∘ sep_unmapped) xs →
   length xs = bit_size_of Γ τ →
-  v1 ⊑{Γ,f} v2 : τ → of_val Γ xs v1 ⊑{Γ,f} of_val Γ xs v2 : τ.
+  v1 ⊑{Γ,f@m1↦m2} v2 : τ → of_val Γ xs v1 ⊑{Γ,f@m1↦m2} of_val Γ xs v2 : τ.
 Proof.
   intros HΓ Hxs Hxs' Hxs'' Hvs. revert v1 v2 τ Hvs xs Hxs Hxs' Hxs''.
   assert (∀ x b, sep_unmapped (PBit x b) → sep_unmapped x) by (by destruct 1).
-  refine (val_refine_ind _ _ _ _ _ _ _ _ _).
+  refine (val_refine_ind _ _ _ _ _ _ _ _ _ _ _).
   * intros vb1 vb2 ??????; simpl.
-    assert ((Γ,None) ⊢ vb1 : τb) by eauto using base_val_refine_typed_l.
-    assert ((Γ,None) ⊢ vb2 : τb) by eauto using base_val_refine_typed_r.
+    assert ((Γ,m1) ⊢ vb1 : τb) by eauto using base_val_refine_typed_l.
+    assert ((Γ,m2) ⊢ vb2 : τb) by eauto using base_val_refine_typed_r.
     simplify_type_equality. ctree_refine_constructor; eauto using PBits_refine,
       base_val_flatten_refine, seps_unshared_valid, base_typed_type_valid.
   * intros τ n vs1 vs2 <- ? IH Hlen xs Hxs Hxs'; rewrite bit_size_of_array;
@@ -1480,8 +1557,8 @@ Proof.
       induction (bit_size_of_fields _ τs HΓ); inversion_clear 1; simpl; intros;
         erewrite ?val_refine_type_of_l by eauto; f_equal; eauto.
   * intros s τs i v1 v2 ???? IH xs ???; simpl.
-    assert ((Γ,None) ⊢ v1 : τ) by eauto using val_refine_typed_l.
-    assert ((Γ,None) ⊢ v2 : τ) by eauto using val_refine_typed_r.
+    assert ((Γ,m1) ⊢ v1 : τ) by eauto using val_refine_typed_l.
+    assert ((Γ,m2) ⊢ v2 : τ) by eauto using val_refine_typed_r.
     simplify_type_equality.
     ctree_refine_constructor; eauto using PBits_BIndet_refine.
     + eauto using PBits_BIndet_refine, seps_unshared_valid.
@@ -1500,8 +1577,8 @@ Proof.
     + erewrite zip_with_length, val_flatten_length
        by eauto using VUnionAll_typed, vals_refine_typed_l; solve_length.
   * intros s τs i v1 v2 τ vs2 Hs Hτ Hv2 Hv12 IH ? xs ???; simpl.
-    assert ((Γ,None) ⊢ v1 : τ) by eauto using val_refine_typed_l.
-    simplify_type_equality. destruct (vals_representable_as_bits Γ None
+    assert ((Γ,m1) ⊢ v1 : τ) by eauto using val_refine_typed_l.
+    simplify_type_equality. destruct (vals_representable_as_bits Γ m2
       (bit_size_of Γ (unionT s)) vs2 τs) as (bs2&->&Hlen&?&->); simpl;
       eauto using bit_size_of_union.
     rewrite list_lookup_fmap, Hτ in Hv2; simplify_equality'.
@@ -1528,32 +1605,32 @@ Proof.
       intros [? _]; destruct xs, (bit_size_of Γ τ), (val_flatten Γ v1);
         decompose_Forall_hyps'; eauto.
 Qed.
-Lemma of_val_to_val_refine Γ mm x w τ :
-  ✓ Γ → (Γ,mm) ⊢ w : τ → ctree_Forall (not ∘ sep_unmapped) w →
-  of_val Γ (tagged_perm <$> ctree_flatten w) (to_val Γ w) ⊑{Γ} w : τ.
+Lemma of_val_to_val_refine Γ m x w τ :
+  ✓ Γ → (Γ,m) ⊢ w : τ → ctree_Forall (not ∘ sep_unmapped) w →
+  of_val Γ (tagged_perm <$> ctree_flatten w) (to_val Γ w) ⊑{Γ@m} w : τ.
 Proof.
-  intros HΓ. assert (∀ xbs, ✓{Γ,mm}* xbs → Forall (not ∘ sep_unmapped) xbs →
+  intros HΓ. assert (∀ xbs, ✓{Γ,m}* xbs → Forall (not ∘ sep_unmapped) xbs →
     Forall (not ∘ sep_unmapped) (tagged_perm <$> xbs)).
   { eauto using pbits_perm_mapped, Forall_impl, pbit_valid_sep_valid. }
-  assert (∀ xbs, ✓{Γ,mm}* xbs → Forall sep_valid (tagged_perm <$> xbs)).
+  assert (∀ xbs, ✓{Γ,m}* xbs → Forall sep_valid (tagged_perm <$> xbs)).
   { intros. eapply Forall_fmap, Forall_impl; eauto. by intros ? (?&?&?). }
-  assert (∀ xbs, ✓{Γ,mm}* xbs →
+  assert (∀ xbs, ✓{Γ,m}* xbs →
     Forall (not ∘ sep_unmapped) (tagged_perm <$> xbs) →
-    flip PBit BIndet <$> tagged_perm <$> xbs ⊑{Γ}* xbs).
+    flip PBit BIndet <$> tagged_perm <$> xbs ⊑{Γ@m}* xbs).
   { intros xbs ??. rewrite <-(zip_with_replicate_r _ (length xbs)) by auto.
-    pattern xbs at 3; rewrite <-(PBits_perm_label xbs).
+    pattern xbs at 3; rewrite <-(PBits_perm_tag xbs).
     eapply PBits_refine, bits_subseteq_refine;
-      eauto using pbits_label_valid, base_val_flatten_unflatten.
+      eauto using pbits_tag_valid, base_val_flatten_unflatten.
     eapply Forall2_replicate_l; eauto using Forall_true. }
   revert w τ. refine (ctree_typed_ind _ _ _ _ _ _ _ _); simpl.
   * intros τb xbs ???; inversion_clear 1.
     rewrite base_val_unflatten_type_of by done.
-    assert ((Γ,mm) ⊢ base_val_unflatten Γ τb (tagged_tag <$> xbs) : τb).
-    { eauto using base_val_unflatten_typed, pbits_label_valid. }
+    assert ((Γ,m) ⊢ base_val_unflatten Γ τb (tagged_tag <$> xbs) : τb).
+    { eauto using base_val_unflatten_typed, pbits_tag_valid. }
     ctree_refine_constructor; eauto 1.
-    pattern xbs at 3; rewrite <-(PBits_perm_label xbs).
+    pattern xbs at 3; rewrite <-(PBits_perm_tag xbs).
     eapply PBits_refine, bits_subseteq_refine;
-      eauto using pbits_label_valid, base_val_flatten_unflatten.
+      eauto using pbits_tag_valid, base_val_flatten_unflatten.
   * intros ws τ Hws IH Hlen; inversion_clear 1.
     ctree_refine_constructor; eauto 1.
     + clear Hlen IH. induction Hws; decompose_Forall_hyps'; f_equal';
@@ -1587,36 +1664,35 @@ Proof.
     + rewrite fmap_app, drop_app_alt by auto; auto.
     + solve_length.
     + rewrite !fmap_app, take_app_alt, drop_app_alt by auto. intros [? _].
-      apply (ctree_Forall_not sep_unmapped Γ mm w τ);
+      apply (ctree_Forall_not sep_unmapped Γ m w τ);
         eauto using ctree_refine_Forall, pbit_refine_unmapped.
   * intros s τs xbs Hs Hxbs Hlen; inversion_clear 1.
     erewrite val_unflatten_compound by eauto; simpl.
-    destruct (vals_representable_as_bits Γ mm (bit_size_of Γ (unionT s))
+    destruct (vals_representable_as_bits Γ m (bit_size_of Γ (unionT s))
       (vals_unflatten Γ τs (tagged_tag <$> xbs)) τs) as (bs'&Hbs'&?&?&?);
       eauto using bit_size_of_union.
-    { apply vals_unflatten_representable; eauto using pbits_label_valid.
+    { apply vals_unflatten_representable; eauto using pbits_tag_valid.
       rewrite fmap_length, Hlen. eauto using bit_size_of_union. }
     rewrite Hbs'; simpl. ctree_refine_constructor; eauto 1.
-    pattern xbs at 2; rewrite <-(PBits_perm_label xbs).
-    eapply PBits_refine, bits_subseteq_refine; eauto using pbits_label_valid.
+    pattern xbs at 2; rewrite <-(PBits_perm_tag xbs).
+    eapply PBits_refine, bits_subseteq_refine; eauto using pbits_tag_valid.
     eapply (bits_list_join_min (bit_size_of Γ (unionT s)));
       eauto using resize_length.
     assert (✓{Γ}* τs) as Hτs_valid by eauto.
     apply bit_size_of_union in Hs; auto. clear Hbs'.
     induction Hτs_valid; decompose_Forall_hyps'; constructor;
       eauto using bits_weakly_refine_resize_l,
-      val_flatten_unflatten, pbits_label_valid.
+      val_flatten_unflatten, pbits_tag_valid.
 Qed.
-Lemma of_val_to_val_refine_unflatten_flatten Γ mm x w τ :
-  ✓ Γ → (Γ,mm) ⊢ w : τ →
+Lemma of_val_to_val_refine_unflatten_flatten Γ m x w τ :
+  ✓ Γ → (Γ,m) ⊢ w : τ →
   ctree_Forall (not ∘ sep_unmapped) w → ctree_Forall sep_unshared w →
   of_val Γ (tagged_perm <$> ctree_flatten w) (to_val Γ w)
-  ⊑{Γ} ctree_unflatten Γ τ (ctree_flatten w) : τ.
+  ⊑{Γ@m} ctree_unflatten Γ τ (ctree_flatten w) : τ.
 Proof.
   intros. erewrite ctree_unflatten_flatten by eauto.
-  apply (ctree_refine_compose _ mem_inj_id mem_inj_id) with w;
-    eauto using of_val_to_val_refine; apply union_reset_above; eauto.
-  destruct mm; eauto using ctree_refine_id, ctree_typed_weakly_typed.
+  apply (ctree_refine_compose _ mem_inj_id mem_inj_id m m) with w;
+    eauto using of_val_to_val_refine, union_reset_above, ctree_refine_id.
 Qed.
 
 (** ** Properties of lookup *)
@@ -1639,16 +1715,16 @@ Proof.
   induction r as [|rs r IH]; simpl; [done|].
   by rewrite !val_lookup_cons, val_lookup_seg_freeze, IH.
 Qed.
-Lemma val_lookup_seg_Some Γ mm v τ rs v' :
-  ✓ Γ → (Γ,mm) ⊢ v : τ → v !! rs = Some v' →
-  ∃ σ, Γ ⊢ rs : τ ↣ σ ∧ (Γ,mm) ⊢ v' : σ.
+Lemma val_lookup_seg_Some Γ m v τ rs v' :
+  ✓ Γ → (Γ,m) ⊢ v : τ → v !! rs = Some v' →
+  ∃ σ, Γ ⊢ rs : τ ↣ σ ∧ (Γ,m) ⊢ v' : σ.
 Proof.
   intros ?. destruct 1 as [|vs τ n _|s vs τs ? Hvs _|s j τs v τ
     |s vs τs ?? _ [bs ?? ->]] using @val_typed_ind;
     destruct rs as [i|i|i]; intros Hlookup; simplify_option_equality.
   * exists τ. split.
     + constructor; eauto using lookup_lt_Some.
-    + eapply (Forall_lookup (λ v, (Γ,mm) ⊢ v : τ)); eauto.
+    + eapply (Forall_lookup (λ v, (Γ,m) ⊢ v : τ)); eauto.
   * destruct (Forall2_lookup_l _ _ _ i v' Hvs) as (σ&?&?); eauto.
     exists σ; split; [|done]. econstructor; eauto.
   * exists τ; split; [|done]. econstructor; eauto.
@@ -1656,29 +1732,29 @@ Proof.
     decompose_Forall_hyps'. exists τ; split; [econstructor; eauto|].
     eauto using val_unflatten_typed.
 Qed.
-Lemma val_lookup_Some Γ mm v τ r v' :
-  ✓ Γ → (Γ,mm) ⊢ v : τ → v !! r = Some v' →
-  ∃ σ, Γ ⊢ r : τ ↣ σ ∧ (Γ,mm) ⊢ v' : σ.
+Lemma val_lookup_Some Γ m v τ r v' :
+  ✓ Γ → (Γ,m) ⊢ v : τ → v !! r = Some v' →
+  ∃ σ, Γ ⊢ r : τ ↣ σ ∧ (Γ,m) ⊢ v' : σ.
 Proof.
   intros ?. revert v τ.
   induction r as [|rs r IH] using rev_ind; intros v τ Hvτ Hr.
   { simplify_equality. exists τ; split; [econstructor |]; eauto. }
   rewrite val_lookup_snoc in Hr.
   destruct (v !! rs) as [v''|] eqn:Hv''; simplify_equality'.
-  destruct (val_lookup_seg_Some Γ mm v τ rs v'') as (σ''&?&?); auto.
+  destruct (val_lookup_seg_Some Γ m v τ rs v'') as (σ''&?&?); auto.
   destruct (IH v'' σ'') as (σ&?&?); auto.
   exists σ; split; [eapply list_typed_snoc|]; eauto.
 Qed.
-Lemma val_lookup_seg_typed Γ mm v τ rs v' σ :
-  ✓ Γ → (Γ,mm) ⊢ v : τ → v !! rs = Some v' → Γ ⊢ rs : τ ↣ σ → (Γ,mm) ⊢ v' : σ.
+Lemma val_lookup_seg_typed Γ m v τ rs v' σ :
+  ✓ Γ → (Γ,m) ⊢ v : τ → v !! rs = Some v' → Γ ⊢ rs : τ ↣ σ → (Γ,m) ⊢ v' : σ.
 Proof.
-  intros. by destruct (val_lookup_seg_Some Γ mm v τ rs v')
+  intros. by destruct (val_lookup_seg_Some Γ m v τ rs v')
     as (σ'&Hrσ'&?); simplify_type_equality.
 Qed.
-Lemma val_lookup_typed Γ mm v τ r v' σ :
-  ✓ Γ → (Γ,mm) ⊢ v : τ → v !! r = Some v' → Γ ⊢ r : τ ↣ σ → (Γ,mm) ⊢ v' : σ.
+Lemma val_lookup_typed Γ m v τ r v' σ :
+  ✓ Γ → (Γ,m) ⊢ v : τ → v !! r = Some v' → Γ ⊢ r : τ ↣ σ → (Γ,m) ⊢ v' : σ.
 Proof.
-  intros. by destruct (val_lookup_Some Γ mm v τ r v')
+  intros. by destruct (val_lookup_Some Γ m v τ r v')
     as (σ'&Hrσ'&?); simplify_type_equality.
 Qed.
 Lemma to_val_lookup_seg Γ w rs w' :
@@ -1705,8 +1781,8 @@ Proof.
 Qed.
 
 (*
-Lemma to_val_lookup_seg_inv Γ mm w1 τ rs v1 :
-  ✓ Γ → (Γ,mm) ⊢ w1 : τ → mval_is_full w1 → to_val Γ w1 !! rs = Some v1 →
+Lemma to_val_lookup_seg_inv Γ m w1 τ rs v1 :
+  ✓ Γ → (Γ,m) ⊢ w1 : τ → mval_is_full w1 → to_val Γ w1 !! rs = Some v1 →
   ∃ w2, w1 !!{Γ} rs = Some w2 ∧ to_val Γ w2 = v1.
 Proof.
   destruct 2 using @mtyped_case; inversion_clear 1; destruct rs; intros;
@@ -1719,8 +1795,8 @@ Proof.
     | _ => progress simplify_option_equality
     end; eauto using to_val_unflatten.
 Qed.
-Lemma to_val_lookup_inv Γ mm w1 τ r v1 :
-  ✓ Γ → (Γ,mm) ⊢ w1 : τ → mval_is_full w1 → to_val Γ w1 !! r = Some v1 →
+Lemma to_val_lookup_inv Γ m w1 τ r v1 :
+  ✓ Γ → (Γ,m) ⊢ w1 : τ → mval_is_full w1 → to_val Γ w1 !! r = Some v1 →
   ∃ w2, w1 !!{Γ} r = Some w2 ∧ to_val Γ w2 = v1.
 Proof.
   intros ?. revert w1 τ.
@@ -1728,17 +1804,17 @@ Proof.
   { rewrite val_lookup_nil; intros; simplify_equality. by exists w1. }
   rewrite val_lookup_snoc; intros.
   destruct (to_val Γ w1 !! rs) as [v|] eqn:Hv; simplify_equality'.
-  destruct (to_val_lookup_seg_inv Γ mm w1 τ rs v) as (w2&?&<-); auto.
-  destruct (mval_lookup_seg_Some Γ mm w1 τ rs w2) as (τ2&?&?); auto.
+  destruct (to_val_lookup_seg_inv Γ m w1 τ rs v) as (w2&?&<-); auto.
+  destruct (mval_lookup_seg_Some Γ m w1 τ rs w2) as (τ2&?&?); auto.
   destruct (IH w2 τ2) as (w3&?&?); eauto using mval_lookup_seg_perm_full.
   exists w3. rewrite mval_lookup_snoc. by simplify_option_equality.
 Qed.
 *)
-Lemma val_lookup_seg_refine Γ f v1 v2 τ rs v3 :
-  ✓ Γ → v1 ⊑{Γ,f} v2 : τ → v1 !! rs = Some v3 →
-  ∃ v4, v2 !! rs = Some v4 ∧ v3 ⊑{Γ,f} v4 : type_of v3.
+Lemma val_lookup_seg_refine Γ f m1 m2 v1 v2 τ rs v3 :
+  ✓ Γ → v1 ⊑{Γ,f@m1↦m2} v2 : τ → v1 !! rs = Some v3 →
+  ∃ v4, v2 !! rs = Some v4 ∧ v3 ⊑{Γ,f@m1↦m2} v4 : type_of v3.
 Proof.
-  intros ?. revert v1 v2 τ. refine (val_refine_ind _ _ _ _ _ _ _ _ _).
+  intros ?. revert v1 v2 τ. refine (val_refine_ind _ _ _ _ _ _ _ _ _ _ _).
   * by destruct rs.
   * intros τ n vs1 vs2 <- ? _ ??; destruct rs; simplify_option_equality
       by eauto using Forall2_length; decompose_Forall_hyps'.
@@ -1752,77 +1828,78 @@ Proof.
   * intros s τs i v1 v2 τ vs2 ???? _ _ ?; destruct rs; simplify_option_equality.
     decompose_Forall_hyps. erewrite val_refine_type_of_l by eauto; eauto.
 Qed.
-Lemma val_lookup_refine Γ f v1 v2 τ r v3 :
-  ✓ Γ → v1 ⊑{Γ,f} v2 : τ → v1 !! r = Some v3 →
-  ∃ v4, v2 !! r = Some v4 ∧ v3 ⊑{Γ,f} v4 : type_of v3.
+Lemma val_lookup_refine Γ f m1 m2 v1 v2 τ r v3 :
+  ✓ Γ → v1 ⊑{Γ,f@m1↦m2} v2 : τ → v1 !! r = Some v3 →
+  ∃ v4, v2 !! r = Some v4 ∧ v3 ⊑{Γ,f@m1↦m2} v4 : type_of v3.
 Proof.
   intros ?. revert v1 v2 τ. induction r as [|rs r IH] using rev_ind; simpl.
   { intros v1 v2 τ ??; simplify_equality'. exists v2.
     by erewrite val_refine_type_of_l by eauto. }
   intros v1 v2 τ. rewrite !val_lookup_snoc; intros; simplify_option_equality.
-  edestruct (val_lookup_seg_refine Γ f v1 v2 τ rs) as [? [??]];
+  edestruct (val_lookup_seg_refine Γ f m1 m2 v1 v2 τ rs) as [? [??]];
     simplify_option_equality; eauto.
 Qed.
 
 (** ** Properties of unary/binary operations and casts *)
-Lemma val_unop_ok_typed Γ mm op v τ σ :
-  (Γ,mm) ⊢ v : τ → val_unop_typed op τ σ →
-  val_unop_ok op v → (Γ,mm) ⊢ val_unop op v : σ.
+Lemma val_unop_ok_typed Γ m op v τ σ :
+  (Γ,m) ⊢ v : τ → val_unop_typed op τ σ →
+  val_unop_ok op v → (Γ,m) ⊢ val_unop op v : σ.
 Proof.
   intros Hvτ Hσ Hop. destruct Hσ; inversion Hvτ; simpl; simplify_equality;
     done || constructor; eauto using base_val_unop_ok_typed.
 Qed.
 Lemma val_binop_ok_typed Γ m op v1 v2 τ1 τ2 σ :
-  ✓ Γ → ✓{Γ} m → (Γ,Some m) ⊢ v1 : τ1 → (Γ,Some m) ⊢ v2 : τ2 →
+  ✓ Γ → ✓{Γ} m → (Γ,m) ⊢ v1 : τ1 → (Γ,m) ⊢ v2 : τ2 →
   val_binop_typed op τ1 τ2 σ →
-  val_binop_ok Γ m op v1 v2 → (Γ,Some m) ⊢ val_binop Γ op v1 v2 : σ.
+  val_binop_ok Γ m op v1 v2 → (Γ,m) ⊢ val_binop Γ op v1 v2 : σ.
 Proof.
   intros ?? Hv1τ Hv2τ Hσ Hop. destruct Hσ; inversion Hv1τ; inversion Hv2τ;
     simplify_equality'; done || constructor; eauto using base_binop_ok_typed.
 Qed.
 Lemma val_cast_ok_typed Γ m v τ σ :
-  (Γ,Some m) ⊢ v : τ → val_cast_typed Γ τ σ → val_cast_ok Γ σ v →
-  (Γ,Some m) ⊢ val_cast σ v : σ.
+  (Γ,m) ⊢ v : τ → val_cast_typed Γ τ σ → val_cast_ok Γ σ v →
+  (Γ,m) ⊢ val_cast σ v : σ.
 Proof.
   intros Hvτ Hσ Hok. destruct Hσ; inversion Hvτ; simplify_equality';
     done || constructor; eauto using base_val_cast_ok_typed.
 Qed.
 
 (** ** Refinements of unary/binary operations and casts *)
-Lemma val_unop_ok_refine Γ f op v1 v2 τ :
-  v1 ⊑{Γ,f} v2 : τ → val_unop_ok op v1 → val_unop_ok op v2.
+Lemma val_unop_ok_refine Γ f m1 m2 op v1 v2 τ :
+  v1 ⊑{Γ,f@m1↦m2} v2 : τ → val_unop_ok op v1 → val_unop_ok op v2.
 Proof. destruct op, 1; simpl; eauto using base_val_unop_ok_refine. Qed.
-Lemma val_unop_refine Γ f op v1 v2 τ σ :
+Lemma val_unop_refine Γ f m1 m2 op v1 v2 τ σ :
   ✓ Γ → val_unop_typed op τ σ → val_unop_ok op v1 →
-  v1 ⊑{Γ,f} v2 : τ → val_unop op v1 ⊑{Γ,f} val_unop op v2 : σ.
+  v1 ⊑{Γ,f@m1↦m2} v2 : τ → val_unop op v1 ⊑{Γ,f@m1↦m2} val_unop op v2 : σ.
 Proof.
   destruct 2; inversion 2; intros; simplify_equality';
     val_refine_constructor; eauto using base_val_unop_refine.
 Qed.
-Lemma val_binop_ok_refine Γ m1 m2 f op v1 v2 v3 v4 τ1 τ3 σ :
+Lemma val_binop_ok_refine Γ f m1 m2 op v1 v2 v3 v4 τ1 τ3 σ :
   ✓ Γ → m1 ⊑{Γ,f} m2 → val_binop_typed op τ1 τ3 σ →
-  v1 ⊑{Γ,f} v2 : τ1 → v3 ⊑{Γ,f} v4 : τ3 →
+  v1 ⊑{Γ,f@m1↦m2} v2 : τ1 → v3 ⊑{Γ,f@m1↦m2} v4 : τ3 →
   val_binop_ok Γ m1 op v1 v3 → val_binop_ok Γ m2 op v2 v4.
 Proof.
   unfold val_binop_ok; destruct 3; do 2 inversion 1;
     simplify_equality'; eauto using base_val_binop_ok_refine.
 Qed.
-Lemma val_binop_refine Γ m1 m2 f op v1 v2 v3 v4 τ1 τ3 σ :
+Lemma val_binop_refine Γ f m1 m2 op v1 v2 v3 v4 τ1 τ3 σ :
   ✓ Γ → m1 ⊑{Γ,f} m2 → val_binop_typed op τ1 τ3 σ →
-  val_binop_ok Γ m1 op v1 v3 → v1 ⊑{Γ,f} v2 : τ1 → v3 ⊑{Γ,f} v4 : τ3 →
-  val_binop Γ op v1 v3 ⊑{Γ,f} val_binop Γ op v2 v4 : σ.
+  val_binop_ok Γ m1 op v1 v3 →
+  v1 ⊑{Γ,f@m1↦m2} v2 : τ1 → v3 ⊑{Γ,f@m1↦m2} v4 : τ3 →
+  val_binop Γ op v1 v3 ⊑{Γ,f@m1↦m2} val_binop Γ op v2 v4 : σ.
 Proof.
   destruct 3; intro; do 2 inversion 1; simplify_equality';
     val_refine_constructor; eauto using base_val_binop_refine.
 Qed.
-Lemma val_cast_ok_refine Γ mm f v1 v2 τ σ :
-  ✓ Γ → v1 ⊑{Γ,f} v2 : τ → val_cast_ok Γ σ v1 → val_cast_ok Γ σ v2.
+Lemma val_cast_ok_refine Γ m1 m2 f v1 v2 τ σ :
+  ✓ Γ → v1 ⊑{Γ,f@m1↦m2} v2 : τ → val_cast_ok Γ σ v1 → val_cast_ok Γ σ v2.
 Proof.
   unfold val_cast_ok; destruct σ, 2; eauto using base_val_cast_ok_refine.
 Qed.
-Lemma val_cast_refine Γ f v1 v2 τ σ :
+Lemma val_cast_refine Γ f m1 m2 v1 v2 τ σ :
   val_cast_typed Γ τ σ → val_cast_ok Γ σ v1 →
-  v1 ⊑{Γ,f} v2 : τ → val_cast σ v1 ⊑{Γ,f} val_cast σ v2 : σ.
+  v1 ⊑{Γ,f@m1↦m2} v2 : τ → val_cast σ v1 ⊑{Γ,f@m1↦m2} val_cast σ v2 : σ.
 Proof.
   destruct 1; inversion 2; simplify_equality; val_refine_constructor;
     eauto using base_val_cast_refine.
