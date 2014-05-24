@@ -151,6 +151,18 @@ Proof.
   * erewrite addr_not_obj_type by eauto using addr_strict_not_void.
     eauto using ctree_lookup_byte_typed.
 Qed.
+Lemma cmap_lookup_Some Γ m w a :
+  ✓ Γ → ✓{Γ} m → m !!{Γ} a = Some w → ∃ σ, (Γ,m) ⊢ w : σ.
+Proof.
+  destruct m as [m]; simpl; intros ? Hm Ha.
+  case_option_guard; simplify_equality'.
+  destruct (m !! addr_index a) as [w'|] eqn:Hw; simplify_equality'.
+  destruct (w' !!{Γ} addr_ref Γ a) as [w''|] eqn:?; simplify_equality'.
+  destruct (Hm (addr_index a) w' Hw) as (τ&Hoτ&_); simplify_equality'.
+  destruct (ctree_lookup_Some Γ (CMap m) w' τ (addr_ref Γ a) w'')
+    as (σ'&?&?); auto; simplify_option_equality;
+    eauto using ctree_lookup_byte_typed.
+Qed.
 Lemma cmap_lookup_disjoint Γ m1 m2 a w1 w2 :
   ✓ Γ → ✓{Γ} m1 → ✓{Γ} m2 → m1 ⊥ m2 →
   m1 !!{Γ} a = Some w1 → m2 !!{Γ} a = Some w2 → w1 ⊥ w2.
@@ -282,7 +294,8 @@ Qed.
 Lemma cmap_lookup_alter_disjoint Γ g m a1 a2 w1 w2 τ2 :
   ✓ Γ → ✓{Γ} m → a1 ⊥{Γ} a2 → m !!{Γ} a1 = Some w1 →
   (Γ,m) ⊢ a2 : τ2 → m !!{Γ} a2 = Some w2 → (Γ,m) ⊢ g w2 : τ2 →
-  ctree_unshared (g w2) → cmap_alter Γ g a2 m !!{Γ} a1 = Some w1.
+  (ctree_unshared w2 → ctree_unshared (g w2)) →
+  cmap_alter Γ g a2 m !!{Γ} a1 = Some w1.
 Proof.
   destruct m as [m]; simpl; intros ? Hm [?|[[-> ?]|(->&Ha&?&?&?)]] ?? Hw2 ??;
     simplify_map_equality; auto.
@@ -301,10 +314,12 @@ Proof.
   destruct (ctree_lookup_Some Γ (CMap m)
     w τ (addr_ref Γ a2) w2') as (τ'&_&?); auto.
   repeat case_decide; try contradiction.
-  erewrite ctree_lookup_alter by eauto using ctree_lookup_unfreeze.
-  simplify_option_equality
+  erewrite ctree_lookup_alter by eauto using ctree_lookup_unfreeze; simpl.
+  case_option_guard; simplify_equality'.
+  assert (ctree_unshared (g w2))
+    by eauto using ctree_lookup_byte_Forall, pbit_indetify_unshared.
+  by erewrite option_guard_True, ctree_lookup_alter_byte_ne
     by eauto using ctree_alter_byte_Forall, pbit_indetify_unshared.
-  by erewrite ctree_lookup_alter_byte_ne by eauto.
 Qed.
 Lemma cmap_alter_disjoint Γ m1 m2 g a w1 τ1 :
   ✓ Γ → ✓{Γ} m1 → m1 ⊥ m2 →
@@ -367,7 +382,7 @@ Proof.
   simplify_equality. eapply ctree_alter_union; eauto using
    ctree_alter_byte_disjoint, ctree_alter_byte_union, ctree_alter_byte_unmapped.
 Qed.
-Lemma cmap_lookup_non_aliasing Γ m a1 a2 σ1 σ2 :
+Lemma cmap_non_aliasing Γ m a1 a2 σ1 σ2 :
   ✓ Γ → ✓{Γ} m → (Γ,m) ⊢ a1 : σ1 → frozen a1 → addr_is_obj a1 →
   (Γ,m) ⊢ a2 : σ2 → frozen a2 → addr_is_obj a2 →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
@@ -412,7 +427,7 @@ Proof.
   intros ? o r w ??; simplify_equality'. destruct (Hm o w) as (τ&?&_); auto.
   exists w w; simplify_type_equality; eauto using ctree_refine_id, type_of_typed.
 Qed.
-Lemma cmap_refine_compose Γ m1 m2 m3 f1 f2 :
+Lemma cmap_refine_compose Γ f1 f2 m1 m2 m3 :
   ✓ Γ → m1 ⊑{Γ,f1} m2 → m2 ⊑{Γ,f2} m3 → m1 ⊑{Γ,f1 ◎ f2} m3.
 Proof.
   intros ? (?&?&?&Hm12) (?&_&?&Hm23); split; split_ands;

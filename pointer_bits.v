@@ -147,11 +147,11 @@ Proof.
     <-(ptr_refine_type_of_l _ _ _ _ _ _ τ2) by eauto); subst.
   eauto using ptr_refine_compose with congruence.
 Qed.
-Lemma ptr_bit_refine_weaken Γ Γ' f m1 m2 m1' m2' pb1 pb2 :
-  ✓ Γ → pb1 ⊑{Γ,f@m1↦m2} pb2 → Γ ⊆ Γ' →
+Lemma ptr_bit_refine_weaken Γ Γ' f f' m1 m2 m1' m2' pb1 pb2 :
+  ✓ Γ → pb1 ⊑{Γ,f@m1↦m2} pb2 → Γ ⊆ Γ' → f ⊆ f' →
   (∀ o τ, type_of_index m1 o = Some τ → type_of_index m1' o = Some τ) →
   (∀ o τ, type_of_index m2 o = Some τ → type_of_index m2' o = Some τ) →
-  pb1 ⊑{Γ',f@m1'↦m2'} pb2.
+  pb1 ⊑{Γ',f'@m1'↦m2'} pb2.
 Proof.
   intros ? (τ&?&?&?&?) ??. exists τ.
   erewrite <-bit_size_of_weaken by eauto using TBase_valid, TPtr_valid,

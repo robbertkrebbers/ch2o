@@ -133,6 +133,11 @@ Proof. destruct x as [[[[][]]|[[][]]]|]; repeat sep_unfold; intuition. Qed.
 Lemma perm_unshared x :
   sep_valid x → Some Locked ⊆ perm_kind x → sep_unshared x.
 Proof. destruct (perm_kind_spec x); repeat sep_unfold; intuition. Qed.
+Lemma perm_mapped x : Some Readable ⊆ perm_kind x → ¬sep_unmapped x.
+Proof.
+  by destruct (perm_kind_spec x); repeat sep_unfold; intros;
+    simplify_equality'; intuition.
+Qed.
 Lemma perm_unmapped x :
   sep_valid x → perm_kind x = Some Existing → sep_unmapped x.
 Proof.

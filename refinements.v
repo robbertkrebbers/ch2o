@@ -60,6 +60,8 @@ Notation "(◎)" := mem_inj_compose (only parsing) : C_scope.
 
 Definition mem_inj_injective {Ti} (f : mem_inj Ti) : Prop := ∀ o1 o2 o r1 r2,
   f !! o1 = Some (o,r1) → f !! o2 = Some (o,r2) → o1 = o2 ∨ r1 ⊥ r2.
+Instance mem_inj_subseteq {Ti} : SubsetEq (mem_inj Ti) := λ f1 f2,
+  ∀ o o' r', f1 !! o = Some (o',r') → f2 !! o = Some (o',r').
 
 Section mem_inj.
 Context {Ti : Set}.
@@ -145,6 +147,14 @@ Lemma mem_inj_injective_ne f o1 o2 o3 o4 r2 r4 :
 Proof.
   intros Hf ???. destruct (decide (o2 = o4)) as [->|]; auto.
   destruct (Hf o1 o3 o4 r2 r4); auto.
+Qed.
+Global Instance: PartialOrder ((⊆) : relation (mem_inj Ti)).
+Proof.
+  repeat split.
+  * by intros f o o' r'.
+  * intros f1 f2 f3. unfold subseteq, mem_inj_subseteq. naive_solver.
+  * intros f1 f2; unfold subseteq, mem_inj_subseteq; intros.
+    apply mem_inj_eq. intros o. apply option_eq. intros [o' r']; naive_solver.
 Qed.
 End mem_inj.
 

@@ -1124,16 +1124,24 @@ Proof.
     f_equal; auto.
   * done.
 Qed.
-Lemma of_val_Forall (P : pbit Ti → Prop) Γ m xs v τ :
-  ✓ Γ → (Γ,m) ⊢ v : τ → length xs = bit_size_of Γ τ →
-  Forall P (zip_with PBit xs (val_flatten Γ v)) →
-  ctree_Forall P (of_val Γ xs v).
+Lemma of_val_unshared Γ m xs v τ :
+  ✓ Γ → (Γ,m) ⊢ v : τ → length xs = bit_size_of Γ τ → Forall sep_unshared xs →
+  Forall (not ∘ sep_unmapped) xs → ctree_unshared (of_val Γ xs v).
 Proof.
-  intros. by erewrite <-ctree_flatten_Forall, ctree_flatten_of_val by eauto.
+  intros. erewrite <-ctree_flatten_Forall, ctree_flatten_of_val by eauto.
+  eauto using PBits_unshared.
+Qed.
+Lemma of_val_mapped Γ m xs v τ :
+  ✓ Γ → (Γ,m) ⊢ v : τ → length xs = bit_size_of Γ τ →
+  Forall (not ∘ sep_unmapped) xs →
+  ctree_Forall (not ∘ sep_unmapped) (of_val Γ xs v).
+Proof.
+  intros. erewrite <-ctree_flatten_Forall, ctree_flatten_of_val by eauto.
+  eauto using PBits_mapped.
 Qed.
 Lemma of_val_typed Γ m xs v τ :
-  ✓ Γ → (Γ,m) ⊢ v : τ → Forall sep_valid xs → Forall (not ∘ sep_unmapped) xs →
-  length xs = bit_size_of Γ τ → (Γ,m) ⊢ of_val Γ xs v : τ.
+  ✓ Γ → (Γ,m) ⊢ v : τ → length xs = bit_size_of Γ τ → Forall sep_valid xs →
+  Forall (not ∘ sep_unmapped) xs → (Γ,m) ⊢ of_val Γ xs v : τ.
 Proof.
   intros HΓ Hv. revert v τ Hv xs. refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
   * intros vb τb ? xs ???. erewrite type_of_correct by eauto.
@@ -1141,15 +1149,15 @@ Proof.
     + eauto using base_typed_type_valid.
     + eauto using PBits_valid, base_val_flatten_valid.
     + erewrite zip_with_length, base_val_flatten_length by eauto; lia.
-  * intros vs τ Hvs IH Hvs' xs Hxs Hxs'. rewrite bit_size_of_array; intros Hlen.
+  * intros vs τ Hvs IH Hvs' xs. rewrite bit_size_of_array; intros Hlen  Hxs Hxs'.
     ctree_typed_constructor; trivial.
     + clear Hvs Hvs' Hxs Hxs' Hlen IH. revert xs.
       induction vs; intros; f_equal'; auto.
     + revert xs Hxs Hxs' Hlen. clear Hvs'. induction IH; intros;
         decompose_Forall_hyps'; erewrite ?type_of_correct by eauto;
         constructor; auto.
-  * intros s vs τs Hs Hvs IH xs Hxs Hxs'.
-    erewrite bit_size_of_struct, fmap_type_of by eauto; intros Hlen.
+  * intros s vs τs Hs Hvs IH xs.
+    erewrite bit_size_of_struct, fmap_type_of by eauto; intros Hlen Hxs Hxs'.
     ctree_typed_constructor; eauto; clear Hs; unfold field_bit_padding.
     + revert vs xs Hvs IH Hxs Hxs' Hlen.
       induction (bit_size_of_fields _ τs HΓ); intros; decompose_Forall_hyps';
@@ -1169,9 +1177,8 @@ Proof.
       auto using PBits_valid.
     + auto using PBits_indetify.
     + rewrite fmap_length; solve_length.
-    + intros [Hc _]. eapply (ctree_Forall_not sep_unmapped _ _
-        (of_val Γ (take (bit_size_of Γ τ) xs) v));
-        eauto using of_val_Forall, PBits_mapped.
+    + intros [Hc _]. eapply (ctree_Forall_not sep_unmapped Γ m
+        (of_val Γ (take (bit_size_of Γ τ) xs) v)); eauto using of_val_mapped.
   * intros s vs τs Hs Hvs IH Hrep xs ???.
     destruct (bits_list_join _ _) as [bs'|] eqn:Hbs'; simpl.
     { ctree_typed_constructor; eauto.
@@ -1595,7 +1602,7 @@ Proof.
       eapply val_flatten_unflatten; eauto using val_typed_type_valid.
     + auto using PBits_indetify.
     + apply of_val_typed; auto using seps_unshared_valid.
-    + auto using pbits_unshared.
+    + auto using PBits_unshared.
     + solve_length.
     + erewrite <-ctree_flatten_Forall, ctree_flatten_of_val by eauto.
       assert (bit_size_of Γ τ ≠ 0).

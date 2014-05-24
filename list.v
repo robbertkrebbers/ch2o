@@ -1849,11 +1849,9 @@ Section Forall_Exists.
   Definition Forall_cons_2 := @Forall_cons A.
   Lemma Forall_forall l : Forall P l ↔ ∀ x, x ∈ l → P x.
   Proof.
-    split.
-    { induction 1; inversion 1; subst; auto. }
-    intros Hin. induction l; constructor.
-    * apply Hin. constructor.
-    * apply IHl. intros ??. apply Hin. by constructor.
+    split; [induction 1; inversion 1; subst; auto|].
+    intros Hin; induction l as [|x l IH]; constructor; [apply Hin; constructor|].
+    apply IH. intros ??. apply Hin. by constructor.
   Qed.
   Lemma Forall_nil : Forall P [] ↔ True.
   Proof. done. Qed.
@@ -1867,9 +1865,8 @@ Section Forall_Exists.
   Proof. induction 1; simpl; auto. Qed.
   Lemma Forall_app l1 l2 : Forall P (l1 ++ l2) ↔ Forall P l1 ∧ Forall P l2.
   Proof.
-    split.
-    * induction l1; inversion 1; intuition.
-    * intros [??]; auto using Forall_app_2.
+    split; [induction l1; inversion 1; intuition|].
+    intros [??]; auto using Forall_app_2.
   Qed.
   Lemma Forall_true l : (∀ x, P x) → Forall P l.
   Proof. induction l; auto. Qed.
@@ -1881,7 +1878,9 @@ Section Forall_Exists.
   Proof. split; subst; induction 1; constructor (by firstorder auto). Qed.
   Lemma Forall_iff l (Q : A → Prop) :
     (∀ x, P x ↔ Q x) → Forall P l ↔ Forall Q l.
-  Proof. intros H. apply Forall_proper. red. apply H. done. Qed.
+  Proof. intros H. apply Forall_proper. red; apply H. done. Qed.
+  Lemma Forall_not l : length l ≠ 0 → Forall (not ∘ P) l → ¬Forall P l.
+  Proof. by destruct 2; inversion 1. Qed.
   Lemma Forall_delete l i : Forall P l → Forall P (delete i l).
   Proof. intros H. revert i. by induction H; intros [|i]; try constructor. Qed.
   Lemma Forall_lookup l : Forall P l ↔ ∀ i x, l !! i = Some x → P x.

@@ -639,9 +639,8 @@ Qed.
 Lemma ctree_Forall_not P Γ m w τ :
   ✓ Γ → (Γ,m) ⊢ w : τ → ctree_Forall (not ∘ P) w → ¬ctree_Forall P w.
 Proof.
-  intros ??. assert (length (ctree_flatten w) ≠ 0).
-  { erewrite ctree_flatten_length by eauto. eauto using bit_size_of_ne_0. }
-  rewrite <-!ctree_flatten_Forall. by destruct 1; inversion_clear 1.
+  intros ??. rewrite <-!ctree_flatten_Forall. apply Forall_not.
+  erewrite ctree_flatten_length by eauto. eauto using bit_size_of_ne_0.
 Qed.
 Lemma ctree_typed_subseteq Γ m w1 w2 τ :
   ✓ Γ → (∀ x1 x2, ✓{Γ,m} x2 → x1 ⊆ x2 → ✓{Γ,m} x1) →
@@ -1169,6 +1168,33 @@ Proof.
   eapply Forall2_replicate_l, Forall_impl; eauto using ctree_flatten_valid.
   eauto using @sep_disjoint_empty_l, pbit_valid_sep_valid.
 Qed.
+
+(** ** The map operation *)
+Lemma ctree_map_typed Γ m h w τ :
+  ✓ Γ → (∀ xb, ✓{Γ,m} xb → ✓{Γ,m} (h xb)) →
+  (∀ xb, pbit_indetify xb = xb → pbit_indetify (h xb) = h xb) →
+  (Γ,m) ⊢ w : τ → (Γ,m) ⊢ ctree_map h w : τ.
+Proof.
+  intros ???. revert w τ. assert (∀ xbs, ✓{Γ,m}* xbs → ✓{Γ,m}* (h <$> xbs)).
+  { induction 1; simpl; auto. }
+  assert (∀ xbs,
+    pbit_indetify <$> xbs = xbs → pbit_indetify <$> h <$> xbs = h <$> xbs).
+  { induction xbs; intros; simplify_equality'; f_equal; auto. }
+  refine (ctree_typed_ind _ _ _ _ _ _ _ _); simpl.
+  * intros. ctree_typed_constructor; auto.
+  * intros ws τ _ IH Hlen. ctree_typed_constructor; auto. clear Hlen.
+    induction IH; simpl; constructor; auto.
+  * intros s wxbss τs Hs _ IH Hxss Hindet Hlen. ctree_typed_constructor; eauto.
+    + elim IH; simpl; constructor; auto.
+    + elim Hxss; constructor; simpl; auto.
+    + elim Hindet; intros; constructor; simpl; auto.
+    + rewrite <-Hlen. elim wxbss; intros; f_equal'; auto.
+  * intros. unfold MUnion'; case_decide; ctree_typed_constructor;
+      eauto using ctree_flatten_valid; try solve_length.
+  * intros. ctree_typed_constructor; eauto.
+Qed.
+Lemma ctree_map_type_of h w : type_of (ctree_map h w) = type_of w.
+Proof. destruct w; simpl; unfold MUnion'; repeat case_decide; auto. Qed.
 
 (** ** Lookup operation *)
 Lemma ctree_lookup_seg_freeze Γ w rs w' :
@@ -2353,13 +2379,13 @@ Proof.
     intros; ctree_refine_constructor; eauto using ctree_unflatten_refine,
       Forall2_length_l, pbits_refine_compose, pbits_refine_unshared.
 Qed.
-Lemma ctree_refine_weaken Γ Γ' f m1 m2 m1' m2' w1 w2 τ :
-  ✓ Γ → w1 ⊑{Γ,f@m1↦m2} w2 : τ → Γ ⊆ Γ' →
+Lemma ctree_refine_weaken Γ Γ' f f' m1 m2 m1' m2' w1 w2 τ :
+  ✓ Γ → w1 ⊑{Γ,f@m1↦m2} w2 : τ → Γ ⊆ Γ' → f ⊆ f' →
   (∀ o τ, type_of_index m1 o = Some τ → type_of_index m1' o = Some τ) →
   (∀ o τ, type_of_index m2 o = Some τ → type_of_index m2' o = Some τ) →
-  w1 ⊑{Γ',f@m1'↦m2'} w2 : τ.
+  w1 ⊑{Γ',f'@m1'↦m2'} w2 : τ.
 Proof.
-  intros ? Hw ???. induction Hw using @ctree_refine_ind;
+  intros ? Hw ????. induction Hw using @ctree_refine_ind;
     ctree_refine_constructor; eauto using base_type_valid_weaken,
       lookup_weaken, Forall2_impl, pbit_refine_weaken, ctree_typed_weaken;
     erewrite <-?(bit_size_of_weaken Γ Γ'), <-?(field_bit_padding_weaken Γ Γ')

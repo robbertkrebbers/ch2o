@@ -1265,6 +1265,14 @@ Proof.
   intros. rewrite <-MUnion'_merge by done.
   unfold MUnion'; case_decide; f_equal'; auto using seps_commutative.
 Qed.
+Lemma ctree_flatten_map h w :
+  ctree_flatten (ctree_map h w) = h <$> ctree_flatten w.
+Proof.
+  induction w as [|? ws IH|? wxss IH| |] using @ctree_ind_alt; simpl; auto.
+  * induction IH; simpl; rewrite ?fmap_app; f_equal; auto.
+  * induction IH; simpl; rewrite ?fmap_app; repeat f_equal; auto.
+  * rewrite MUnion'_flatten, fmap_app; f_equal; auto.
+Qed.
 
 Lemma ctree_merge_difference_valid w ys :
   ys ⊆* ctree_flatten w → ctree_valid (ctree_merge false (∖) w ys).

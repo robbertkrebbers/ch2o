@@ -188,11 +188,11 @@ Lemma ptr_refine_compose Γ f g m1 m2 m3 p1 p2 p3 σ :
 Proof.
   destruct 1; inversion_clear 1; constructor; eauto using addr_refine_compose.
 Qed.
-Lemma ptr_refine_weaken Γ Γ' f m1 m2 m1' m2' p1 p2 σ :
-  ✓ Γ → p1 ⊑{Γ,f@m1↦m2} p2 : σ → Γ ⊆ Γ' →
+Lemma ptr_refine_weaken Γ Γ' f f' m1 m2 m1' m2' p1 p2 σ :
+  ✓ Γ → p1 ⊑{Γ,f@m1↦m2} p2 : σ → Γ ⊆ Γ' → f ⊆ f' →
   (∀ o τ, type_of_index m1 o = Some τ → type_of_index m1' o = Some τ) →
   (∀ o τ, type_of_index m2 o = Some τ → type_of_index m2' o = Some τ) →
-  p1 ⊑{Γ',f@m1'↦m2'} p2 : σ.
+  p1 ⊑{Γ',f'@m1'↦m2'} p2 : σ.
 Proof.
   destruct 2; constructor;
     eauto using ptr_type_valid_weaken, addr_refine_weaken.

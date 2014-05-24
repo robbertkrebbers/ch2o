@@ -732,11 +732,11 @@ Section addresses.
       by apply ref_refine_nil_alt; rewrite ?fmap_cons, ?fmap_app.
     * apply ref_refine_ne_nil_alt. by rewrite fmap_app, (associative_L (++)).
   Qed.
-  Lemma addr_refine_weaken Γ Γ' f m1 m2 m1' m2' a1 a2 σ :
-    ✓ Γ → a1 ⊑{Γ,f@m1↦m2} a2 : σ → Γ ⊆ Γ' →
+  Lemma addr_refine_weaken Γ Γ' f f' m1 m2 m1' m2' a1 a2 σ :
+    ✓ Γ → a1 ⊑{Γ,f@m1↦m2} a2 : σ → Γ ⊆ Γ' → f ⊆ f' →
     (∀ o τ, type_of_index m1 o = Some τ → type_of_index m1' o = Some τ) →
     (∀ o τ, type_of_index m2 o = Some τ → type_of_index m2' o = Some τ) →
-    a1 ⊑{Γ',f@m1'↦m2'} a2 : σ.
+    a1 ⊑{Γ',f'@m1'↦m2'} a2 : σ.
   Proof.
     destruct 2 as [o o2 r r2 r3 i i3 τ τ2 σ σc ????????? Hsz];
       intros; econstructor; eauto using type_valid_weaken, ref_typed_weaken.

@@ -165,11 +165,11 @@ Qed.
 Global Instance:
   PropHolds (✓ Γ) → Transitive (refine Γ mem_inj_id m m : relation (bit Ti)).
 Proof. intros Γ m ? b1 b2 b3. by apply bit_refine_compose. Qed.
-Lemma bit_refine_weaken Γ Γ' f m1 m2 m1' m2' b1 b2 :
-  ✓ Γ → b1 ⊑{Γ,f@m1↦m2} b2 → Γ ⊆ Γ' →
+Lemma bit_refine_weaken Γ Γ' f f' m1 m2 m1' m2' b1 b2 :
+  ✓ Γ → b1 ⊑{Γ,f@m1↦m2} b2 → Γ ⊆ Γ' → f ⊆ f' →
   (∀ o τ, type_of_index m1 o = Some τ → type_of_index m1' o = Some τ) →
   (∀ o τ, type_of_index m2 o = Some τ → type_of_index m2' o = Some τ) →
-  b1 ⊑{Γ',f@m1'↦m2'} b2.
+  b1 ⊑{Γ',f'@m1'↦m2'} b2.
 Proof.
   destruct 2; constructor; eauto using bit_valid_weaken, ptr_bit_refine_weaken.
 Qed.
