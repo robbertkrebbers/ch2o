@@ -488,12 +488,12 @@ Section bounded_join_sl.
 
   Section dec.
     Context `{∀ X Y : A, Decision (X ⊆ Y)}.
-    Lemma non_empty_union X Y : X ∪ Y ≢ ∅ → X ≢ ∅ ∨ Y ≢ ∅.
+    Lemma non_empty_union X Y : X ∪ Y ≢ ∅ ↔ X ≢ ∅ ∨ Y ≢ ∅.
     Proof. rewrite empty_union. destruct (decide (X ≡ ∅)); intuition. Qed.
     Lemma non_empty_union_list Xs : ⋃ Xs ≢ ∅ → Exists (≢ ∅) Xs.
     Proof. rewrite empty_union_list. apply (not_Forall_Exists _). Qed.
     Context `{!LeibnizEquiv A}.
-    Lemma non_empty_union_L X Y : X ∪ Y ≠ ∅ → X ≠ ∅ ∨ Y ≠ ∅.
+    Lemma non_empty_union_L X Y : X ∪ Y ≠ ∅ ↔ X ≠ ∅ ∨ Y ≠ ∅.
     Proof. unfold_leibniz. apply non_empty_union. Qed.
     Lemma non_empty_union_list_L Xs : ⋃ Xs ≠ ∅ → Exists (≠ ∅) Xs.
     Proof. unfold_leibniz. apply non_empty_union_list. Qed.

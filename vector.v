@@ -88,7 +88,7 @@ Program Instance fin_finite n : Finite (fin n) := {| enum := fin_enum n |}.
 Next Obligation.
   intros n. induction n; simpl; constructor.
   * rewrite elem_of_list_fmap. by intros (?&?&?).
-  * by apply (fmap_nodup _).
+  * by apply (NoDup_fmap _).
 Qed.
 Next Obligation.
   intros n i. induction i as [|n i IH]; simpl;

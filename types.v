@@ -362,7 +362,7 @@ Section env_valid_dec.
       + destruct IH as [Γ' [Hperm ?]]. exists ((s,τs) :: Γ').
         rewrite map_to_list_insert, Hperm by done.
         split; [done |]. apply map_of_list_proper in Hperm;
-          auto using map_to_list_key_nodup.
+          auto using NoDup_fst_map_to_list.
         rewrite map_of_to_list in Hperm. subst. constructor; auto.
     * intros [Γ' [Hperm HΓ']]. revert Γ Hperm.
       induction HΓ' as [| Γ' s τs ? IH]; intros Γ Hperm.

@@ -10,8 +10,7 @@ Require Import abstract_integers.
 and a natural [Csz]. The boolean [be] describes whether a big endian (in case
 it is [true] or little endian (in case it is [false]) representation should be
 used. The natural number [Csz] describes the number of bits of which an
-individual byte consists. We equip the data type with a boolean proof of being
-in range to ensure canonicity. *)
+individual byte consists. *)
 Inductive irank (be: bool) (Csz: nat) : Set := IKind {
   IBytes : nat; IBytes_pos : 0 < IBytes
 }.

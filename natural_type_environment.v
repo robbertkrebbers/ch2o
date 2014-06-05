@@ -13,9 +13,9 @@ Definition natural_align_of (Γ : env Ti) : type Ti → nat := type_iter
   (**i TBase =>     *) align_base
   (**i TVoid =>     *) 1
   (**i TArray =>    *) (λ _ _ x, x)
-  (**i TCompound => *) (λ c s τs rec, fold_right lcm 1 (rec <$> τs)) Γ.
+  (**i TCompound => *) (λ c s τs rec, foldr lcm 1 (rec <$> τs)) Γ.
 Definition natural_fields_align (Γ : env Ti) (τs : list (type Ti)) : nat :=
-  fold_right lcm 1 (natural_align_of Γ <$> τs).
+  foldr lcm 1 (natural_align_of Γ <$> τs).
 
 Definition natural_padding (pos al : nat) : nat :=
   let z := pos `mod` al in if decide (z = 0) then 0 else al - z.
@@ -41,7 +41,7 @@ Definition natural_size_of (Γ : env Ti) : type Ti → nat :=
     | Struct_kind =>
        sum_list (natural_field_sizes go Γ (natural_fields_align Γ τs) 0 τs)
     | Union_kind =>
-       let sz := fold_right max 1 (go <$> τs) in
+       let sz := foldr max 1 (go <$> τs) in
        sz + natural_padding sz (natural_fields_align Γ τs)
     end) Γ.
 
@@ -63,7 +63,7 @@ Proof.
   rewrite Nat.mod_eq by done. lia.
 Qed.
 Lemma natural_align_of_compound_proper Γ :
-  let fcompound c s τs rec := fold_right lcm 1 (rec <$> τs) in
+  let fcompound c s τs rec := foldr lcm 1 (rec <$> τs) in
   ∀ rec1 rec2 (c : compound_kind) s (τs : list (type Ti)),
   Γ !! s = Some τs → Forall (λ τ, rec1 τ = rec2 τ) τs →
   fcompound c s τs rec1 = fcompound c s τs rec2.
@@ -114,7 +114,7 @@ Lemma natural_size_of_compound_proper Γ1 Γ2 rec1 rec2 c s τs :
     | Struct_kind =>
        sum_list (natural_field_sizes rec Γ (natural_fields_align Γ τs) 0 τs)
     | Union_kind =>
-       let sz := fold_right max 1 (rec <$> τs) in
+       let sz := foldr max 1 (rec <$> τs) in
        sz + natural_padding sz (natural_fields_align Γ τs)
     end in
   ✓ Γ1 → Γ1 ⊆ Γ2 → Γ1 !! s = Some τs → ✓{Γ1}* τs →
@@ -134,7 +134,7 @@ Lemma natural_size_of_compound Γ c s τs :
     match c with
     | Struct_kind => sum_list (field_sizes Γ τs)
     | Union_kind =>
-       let sz := fold_right max 1 (size_of Γ <$> τs) in
+       let sz := foldr max 1 (size_of Γ <$> τs) in
        sz + natural_padding sz (natural_fields_align Γ τs)
     end.
 Proof.

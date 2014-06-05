@@ -17,23 +17,23 @@ Instance mapset_elem_of: ElemOf K (mapset M) := λ x X,
 Instance mapset_empty: Empty (mapset M) := Mapset ∅.
 Instance mapset_singleton: Singleton K (mapset M) := λ x, Mapset {[ (x,()) ]}.
 Instance mapset_union: Union (mapset M) := λ X1 X2,
-  match X1, X2 with Mapset m1, Mapset m2 => Mapset (m1 ∪ m2) end.
+  let (m1) := X1 in let (m2) := X2 in Mapset (m1 ∪ m2).
 Instance mapset_intersection: Intersection (mapset M) := λ X1 X2,
-  match X1, X2 with Mapset m1, Mapset m2 => Mapset (m1 ∩ m2) end.
+  let (m1) := X1 in let (m2) := X2 in Mapset (m1 ∩ m2).
 Instance mapset_difference: Difference (mapset M) := λ X1 X2,
-  match X1, X2 with Mapset m1, Mapset m2 => Mapset (m1 ∖ m2) end.
+  let (m1) := X1 in let (m2) := X2 in Mapset (m1 ∖ m2).
 Instance mapset_elems: Elements K (mapset M) := λ X,
-  match X with Mapset m => fst <$> map_to_list m end.
+  let (m) := X in fst <$> map_to_list m.
 
 Lemma mapset_eq (X1 X2 : mapset M) : X1 = X2 ↔ ∀ x, x ∈ X1 ↔ x ∈ X2.
 Proof.
-  split; [by intros; subst |].
+  split; [by intros ->|].
   destruct X1 as [m1], X2 as [m2]. simpl. intros E.
   f_equal. apply map_eq. intros i. apply option_eq. intros []. by apply E.
 Qed.
 
 Global Instance mapset_eq_dec `{∀ m1 m2 : M unit, Decision (m1 = m2)}
-    (X1 X2 : mapset M) : Decision (X1 = X2) | 1.
+  (X1 X2 : mapset M) : Decision (X1 = X2) | 1.
 Proof.
  refine
   match X1, X2 with Mapset m1, Mapset m2 => cast_if (decide (m1 = m2)) end;
@@ -61,46 +61,42 @@ Proof.
     intros [m1] [m2] ?. simpl. rewrite lookup_difference_Some.
     destruct (m2 !! x) as [[]|]; intuition congruence.
 Qed.
-
 Global Instance: PartialOrder (@subseteq (mapset M) _).
 Proof. split; try apply _. intros ????. apply mapset_eq. intuition. Qed.
-
 Global Instance: FinCollection K (mapset M).
 Proof.
   split.
   * apply _.
-  * unfold elements, elem_of at 1, mapset_elems, mapset_elem_of.
+  * unfold elements, elem_of at 2, mapset_elems, mapset_elem_of.
     intros [m] x. simpl. rewrite elem_of_list_fmap. split.
-    + intros. exists (x, ()). by rewrite elem_of_map_to_list.
     + intros ([y []] &?& Hy). subst. by rewrite <-elem_of_map_to_list.
+    + intros. exists (x, ()). by rewrite elem_of_map_to_list.
   * unfold elements, mapset_elems. intros [m]. simpl.
-    apply map_to_list_key_nodup.
+    apply NoDup_fst_map_to_list.
 Qed.
 
-Definition mapset_map_with `(f : bool → A → B) (X : mapset M) : M A → M B :=
-  match X with
-  | Mapset m => merge (λ x y,
+Definition mapset_map_with {A B} (f: bool → A → B) (X : mapset M) : M A → M B :=
+  let (m) := X in merge (λ x y,
     match x, y with
     | Some _, Some a => Some (f true a)
     | None, Some a => Some (f false a)
     | _, None => None
-    end) m
-  end.
-Definition mapset_dom_with `(f : A → bool) (m : M A) : mapset M :=
+    end) m.
+Definition mapset_dom_with {A} (f : A → bool) (m : M A) : mapset M :=
   Mapset $ merge (λ x _,
     match x with
     | Some a => if f a then Some () else None
     | None => None
     end) m (@empty (M A) _).
 
-Lemma lookup_mapset_map_with `(f : bool → A → B) X m i :
+Lemma lookup_mapset_map_with {A B} (f : bool → A → B) X m i :
   mapset_map_with f X m !! i = f (bool_decide (i ∈ X)) <$> m !! i.
 Proof.
   destruct X as [mX]. unfold mapset_map_with, elem_of, mapset_elem_of.
   rewrite lookup_merge by done. simpl.
   by case_bool_decide; destruct (mX !! i) as [[]|], (m !! i).
 Qed.
-Lemma elem_of_mapset_dom_with `(f : A → bool) m i :
+Lemma elem_of_mapset_dom_with {A} (f : A → bool) m i :
   i ∈ mapset_dom_with f m ↔ ∃ x, m !! i = Some x ∧ f x.
 Proof.
   unfold mapset_dom_with, elem_of, mapset_elem_of.
@@ -133,3 +129,4 @@ Hint Extern 1 (Difference (mapset _)) =>
   eapply @mapset_difference : typeclass_instances.
 Hint Extern 1 (Elements _ (mapset _)) =>
   eapply @mapset_elems : typeclass_instances.
+Arguments mapset_eq_dec _ _ _ _ : simpl never.

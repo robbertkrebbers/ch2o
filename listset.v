@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-(** This file implements finite as unordered lists without duplicates
+(** This file implements finite set as unordered lists without duplicates
 removed. This implementation forms a monad. *)
 Require Export base decidable collections list.
 
@@ -48,8 +48,8 @@ Global Instance: FinCollection A (listset A).
 Proof.
   split.
   * apply _.
-  * symmetry. apply elem_of_remove_dups.
-  * intros. apply remove_dups_nodup.
+  * intros. apply elem_of_remove_dups.
+  * intros. apply NoDup_remove_dups.
 Qed.
 Global Instance: CollectionOps A (listset A).
 Proof.

@@ -8,7 +8,7 @@ Inductive ptr (Ti : Set) :=
 Arguments NULL {_} _.
 Arguments Ptr {_} _.
 
-Instance ptr_eq_dec `{Ti : Set, ∀ τ1 τ2 : Ti, Decision (τ1 = τ2)}
+Instance ptr_eq_dec `{Ti : Set, ∀ k1 k2 : Ti, Decision (k1 = k2)}
   (p1 p2 : ptr Ti) : Decision (p1 = p2).
 Proof. solve_decision. Defined.
 
@@ -127,6 +127,12 @@ Proof.
    first [by constructor | abstract by inversion 1].
 Defined.
 
+Global Instance ptr_plus_ok_dec Γ m j p : Decision (ptr_plus_ok Γ m j p).
+Proof. destruct p; apply _. Defined.
+Global Instance ptr_minus_ok_dec m p1 p2 : Decision (ptr_minus_ok m p1 p2).
+Proof. destruct p1, p2; apply _. Defined.
+Global Instance ptr_cast_ok_dec Γ σc p : Decision (ptr_cast_ok Γ σc p).
+Proof. destruct p; apply _. Defined.
 Lemma ptr_plus_ok_typed Γ m p σ j :
   ✓ Γ → (Γ,m) ⊢ p : σ → ptr_plus_ok Γ m j p → (Γ,m) ⊢ ptr_plus Γ j p : σ.
 Proof. destruct 2; simpl; constructor; eauto using addr_plus_ok_typed. Qed.

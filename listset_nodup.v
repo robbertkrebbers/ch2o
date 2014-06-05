@@ -14,52 +14,34 @@ Arguments listset_nodup_prf {_} _.
 
 Section list_collection.
 Context {A : Type} `{∀ x y : A, Decision (x = y)}.
-
 Notation C := (listset_nodup A).
-Notation LS := ListsetNoDup.
 
 Instance listset_nodup_elem_of: ElemOf A C := λ x l, x ∈ listset_nodup_car l.
-Instance listset_nodup_empty: Empty C := LS [] (@NoDup_nil_2 _).
+Instance listset_nodup_empty: Empty C := ListsetNoDup [] (@NoDup_nil_2 _).
 Instance listset_nodup_singleton: Singleton A C := λ x,
-  LS [x] (NoDup_singleton x).
-Instance listset_nodup_difference: Difference C := λ l k,
-  let (l',Hl) := l in let (k',Hk) := k in LS _ (list_difference_nodup _ k' Hl).
-
-Definition listset_nodup_union_raw (l k : list A) : list A :=
-  list_difference l k ++ k.
-Lemma elem_of_listset_nodup_union_raw l k x :
-  x ∈ listset_nodup_union_raw l k ↔ x ∈ l ∨ x ∈ k.
-Proof.
-  unfold listset_nodup_union_raw.
-  rewrite elem_of_app, elem_of_list_difference.
-  intuition. case (decide (x ∈ k)); intuition.
-Qed.
-Lemma listset_nodup_union_raw_nodup l k :
-  NoDup l → NoDup k → NoDup (listset_nodup_union_raw l k).
-Proof.
-  intros. apply NoDup_app. repeat split.
-  * by apply list_difference_nodup.
-  * intro. rewrite elem_of_list_difference. intuition.
-  * done.
-Qed.
+  ListsetNoDup [x] (NoDup_singleton x).
 Instance listset_nodup_union: Union C := λ l k,
   let (l',Hl) := l in let (k',Hk) := k
-  in LS _ (listset_nodup_union_raw_nodup _ _ Hl Hk).
+  in ListsetNoDup _ (NoDup_list_union _ _ Hl Hk).
 Instance listset_nodup_intersection: Intersection C := λ l k,
   let (l',Hl) := l in let (k',Hk) := k
-  in LS _ (list_intersection_nodup _ k' Hl).
+  in ListsetNoDup _ (NoDup_list_intersection _ k' Hl).
+Instance listset_nodup_difference: Difference C := λ l k,
+  let (l',Hl) := l in let (k',Hk) := k
+  in ListsetNoDup _ (NoDup_list_difference _ k' Hl).
 Instance listset_nodup_intersection_with: IntersectionWith A C := λ f l k,
   let (l',Hl) := l in let (k',Hk) := k
-  in LS (remove_dups (list_intersection_with f l' k')) (remove_dups_nodup _).
+  in ListsetNoDup
+    (remove_dups (list_intersection_with f l' k')) (NoDup_remove_dups _).
 Instance listset_nodup_filter: Filter A C := λ P _ l,
-  let (l',Hl) := l in LS _ (filter_nodup P _ Hl).
+  let (l',Hl) := l in ListsetNoDup _ (NoDup_filter P _ Hl).
 
 Instance: Collection A C.
 Proof.
   split; [split | | ].
   * by apply not_elem_of_nil.
   * by apply elem_of_list_singleton.
-  * intros [??] [??] ?. apply elem_of_listset_nodup_union_raw.
+  * intros [??] [??] ?. apply elem_of_list_union.
   * intros [??] [??] ?. apply elem_of_list_intersection.
   * intros [??] [??] ?. apply elem_of_list_difference.
 Qed.

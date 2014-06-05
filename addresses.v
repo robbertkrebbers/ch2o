@@ -21,7 +21,7 @@ Arguments addr_type_object {_} _.
 Arguments addr_type_base {_} _.
 Arguments addr_type {_} _.
 
-Instance addr_eq_dec `{Ti : Set, ∀ τ1 τ2 : Ti, Decision (τ1 = τ2)}
+Instance addr_eq_dec `{Ti : Set, ∀ k1 k2 : Ti, Decision (k1 = k2)}
   (a1 a2 : addr Ti) : Decision (a1 = a2).
 Proof. solve_decision. Defined.
 
@@ -89,7 +89,7 @@ Section address_operations.
       freeze true <$> addr_ref Γ a1 = freeze true <$> addr_ref Γ a2 ∧
       ¬addr_is_obj a1 ∧ ¬addr_is_obj a2 ∧
       addr_ref_byte Γ a1 ≠ addr_ref_byte Γ a2).
-  Definition addr_new (o : index) (σ : type Ti) : addr Ti := Addr o [] 0 σ σ σ.
+  Definition addr_top (o : index) (σ : type Ti) : addr Ti := Addr o [] 0 σ σ σ.
 
   Definition addr_plus_ok (Γ : env Ti) (m : M) (j : Z) (a : addr Ti) : Prop :=
     index_alive m (addr_index a) ∧
@@ -117,13 +117,13 @@ Section address_operations.
     let 'Addr o r i τ σ _ := a in Addr o r i τ σ σc.
   Global Arguments addr_cast _ !_ /.
 
-  Definition addr_array (Γ : env Ti) (a : addr Ti) : addr Ti :=
+  Definition addr_elt (Γ : env Ti) (a : addr Ti) : addr Ti :=
     from_option a $
       '(σ,n) ← maybe_TArray (type_of a);
       Some (Addr (addr_index a) (RArray 0 σ n :: addr_ref Γ a) 0
                  (addr_type_object a) σ σ).
-  Global Arguments addr_array _ !_ /.
-  Definition addr_compound (Γ : env Ti) (i : nat) (a : addr Ti) : addr Ti :=
+  Global Arguments addr_elt _ !_ /.
+  Definition addr_field (Γ : env Ti) (i : nat) (a : addr Ti) : addr Ti :=
     from_option a $
       '(c,s) ← maybe_TCompound (type_of a);
       σ ← Γ !! s ≫= (!! i);
@@ -132,7 +132,7 @@ Section address_operations.
                 end in
       Some (Addr (addr_index a) (rs :: addr_ref Γ a) 0
                  (addr_type_object a) σ σ).
-  Global Arguments addr_compound _ _ !_ /.
+  Global Arguments addr_field _ _ !_ /.
 
   Inductive ref_refine (r' : ref Ti) (sz : nat) :
        ref Ti → nat → ref Ti → nat → Prop :=
@@ -575,8 +575,8 @@ Section addresses.
     apply Nat.div_lt_upper_bound;
       eauto using ref_typed_type_valid, size_of_ne_0.
   Qed.
-  Lemma addr_array_typed Γ m a n σ :
-    ✓ Γ → (Γ,m) ⊢ a : σ.[n] → addr_strict Γ a → (Γ,m) ⊢ addr_array Γ a : σ.
+  Lemma addr_elt_typed Γ m a n σ :
+    ✓ Γ → (Γ,m) ⊢ a : σ.[n] → addr_strict Γ a → (Γ,m) ⊢ addr_elt Γ a : σ.
   Proof.
     rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) (?&?).
     destruct a as [o r i σ' σc]; inversion Hcast; simplify_equality'.
@@ -591,12 +591,12 @@ Section addresses.
     * lia.
     * by rewrite Nat.mod_0_l by eauto using size_of_ne_0.
   Qed.
-  Lemma addr_array_weaken Γ1 Γ2 mm1 a σ :
-    ✓ Γ1 → (Γ1,mm1) ⊢ a : σ → Γ1 ⊆ Γ2 → addr_array Γ1 a = addr_array Γ2 a.
-  Proof. intros. unfold addr_array. by erewrite addr_ref_weaken by eauto. Qed.
-  Lemma addr_compound_typed Γ m c a j s σs σ :
+  Lemma addr_elt_weaken Γ1 Γ2 mm1 a σ :
+    ✓ Γ1 → (Γ1,mm1) ⊢ a : σ → Γ1 ⊆ Γ2 → addr_elt Γ1 a = addr_elt Γ2 a.
+  Proof. intros. unfold addr_elt. by erewrite addr_ref_weaken by eauto. Qed.
+  Lemma addr_field_typed Γ m c a j s σs σ :
     ✓ Γ → (Γ,m) ⊢ a : compoundT{c} s → addr_strict Γ a →
-    Γ !! s = Some σs → σs !! j = Some σ → (Γ,m) ⊢ addr_compound Γ j a : σ.
+    Γ !! s = Some σs → σs !! j = Some σ → (Γ,m) ⊢ addr_field Γ j a : σ.
   Proof.
     rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) (?&?) ??.
     destruct a as [o r i σ' σc]; inversion Hcast; simplify_option_equality.
@@ -610,11 +610,11 @@ Section addresses.
     * by rewrite Nat.mod_0_l
         by eauto using size_of_ne_0, env_valid_lookup_lookup.
   Qed.
-  Lemma addr_compound_weaken Γ1 Γ2 mm1 c a s i :
+  Lemma addr_field_weaken Γ1 Γ2 mm1 c a s i :
     ✓ Γ1 → (Γ1,mm1) ⊢ a : compoundT{c} s → Γ1 ⊆ Γ2 →
-    addr_compound Γ1 i a = addr_compound Γ2 i a.
+    addr_field Γ1 i a = addr_field Γ2 i a.
   Proof.
-    intros. unfold addr_compound. erewrite !type_of_correct by eauto; simpl.
+    intros. unfold addr_field. erewrite !type_of_correct by eauto; simpl.
     assert (is_Some (Γ1 !! s)) as [σs Hσs].
     { by destruct (addr_typed_type_valid Γ1 mm1 a (compoundT{c} s));
         eauto using TCompound_valid_inv. }
@@ -912,9 +912,9 @@ Section addresses.
     addr_cast_ok Γ σc a1 → a1 ⊑{Γ,f@m1↦m2} a2 : σ →
     addr_cast σc a1 ⊑{Γ,f@m1↦m2} addr_cast σc a2 : σc.
   Proof. intros [??]. destruct 1; simplify_equality'; econstructor; eauto. Qed.
-  Lemma addr_array_refine Γ f m1 m2 a1 a2 σ n :
+  Lemma addr_elt_refine Γ f m1 m2 a1 a2 σ n :
     ✓ Γ → addr_strict Γ a1 → a1 ⊑{Γ,f@m1↦m2} a2 : σ.[n] →
-    addr_array Γ a1 ⊑{Γ,f@m1↦m2} addr_array Γ a2 : σ.
+    addr_elt Γ a1 ⊑{Γ,f@m1↦m2} addr_elt Γ a2 : σ.
   Proof.
     intros ? [? _].
     inversion 1 as [o o' r r' r'' i i'' τ τ' ???????????? Hc Hr''];
@@ -934,10 +934,10 @@ Section addresses.
       by rewrite ref_set_offset_set_offset, (Nat.mul_comm (size_of _ _)),
         Nat.div_add, Nat.div_small, Nat.add_0_l, ref_set_offset_offset by lia.
   Qed.
-  Lemma addr_compound_refine Γ f m1 m2 c s σs j a1 a2 σ :
+  Lemma addr_field_refine Γ f m1 m2 c s σs j a1 a2 σ :
     ✓ Γ → addr_strict Γ a1 →
     a1 ⊑{Γ,f@m1↦m2} a2 : compoundT{c} s → Γ !! s = Some σs → σs !! j = Some σ →
-    addr_compound Γ j a1 ⊑{Γ,f@m1↦m2} addr_compound Γ j a2 : σ.
+    addr_field Γ j a1 ⊑{Γ,f@m1↦m2} addr_field Γ j a2 : σ.
   Proof.
     intros ? [? _].
     inversion 1 as [o o' r r' r'' i i'' τ τ' ???????????? Hc Hr''];

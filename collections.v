@@ -18,10 +18,8 @@ Section simple_collection.
   Proof. intros. apply elem_of_union. auto. Qed.
   Lemma elem_of_union_r x X Y : x ∈ Y → x ∈ X ∪ Y.
   Proof. intros. apply elem_of_union. auto. Qed.
-
   Global Instance: BoundedJoinSemiLattice C.
   Proof. firstorder auto. Qed.
-
   Lemma elem_of_subseteq X Y : X ⊆ Y ↔ ∀ x, x ∈ X → x ∈ Y.
   Proof. done. Qed.
   Lemma elem_of_equiv X Y : X ≡ Y ↔ ∀ x, x ∈ X ↔ x ∈ Y.
@@ -31,7 +29,12 @@ Section simple_collection.
   Proof. firstorder. Qed.
   Lemma elem_of_equiv_empty X : X ≡ ∅ ↔ ∀ x, x ∉ X.
   Proof. firstorder. Qed.
-
+  Lemma collection_positive_l X Y : X ∪ Y ≡ ∅ → X ≡ ∅.
+  Proof.
+    rewrite !elem_of_equiv_empty. setoid_rewrite elem_of_union. naive_solver.
+  Qed.
+  Lemma collection_positive_l_alt X Y : X ≢ ∅ → X ∪ Y ≢ ∅.
+  Proof. eauto using collection_positive_l. Qed.
   Lemma elem_of_subseteq_singleton x X : x ∈ X ↔ {[ x ]} ⊆ X.
   Proof.
     split.
@@ -42,7 +45,6 @@ Section simple_collection.
   Proof. by repeat intro; subst. Qed.
   Global Instance elem_of_proper: Proper ((=) ==> (≡) ==> iff) (∈) | 5.
   Proof. intros ???; subst. firstorder. Qed.
-
   Lemma elem_of_union_list Xs x : x ∈ ⋃ Xs ↔ ∃ X, X ∈ Xs ∧ x ∈ X.
   Proof.
     split.
@@ -51,7 +53,6 @@ Section simple_collection.
     * intros [X []]. induction 1; simpl; [by apply elem_of_union_l |].
       intros. apply elem_of_union_r; auto.
   Qed.
-
   Lemma non_empty_singleton x : {[ x ]} ≢ ∅.
   Proof. intros [E _]. by apply (elem_of_empty x), E, elem_of_singleton. Qed.
   Lemma not_elem_of_singleton x y : x ∉ {[ y ]} ↔ x ≠ y.
@@ -68,6 +69,10 @@ Section simple_collection.
     Proof. unfold_leibniz. apply elem_of_equiv_alt. Qed.
     Lemma elem_of_equiv_empty_L X : X = ∅ ↔ ∀ x, x ∉ X.
     Proof. unfold_leibniz. apply elem_of_equiv_empty. Qed.
+    Lemma collection_positive_l_L X Y : X ∪ Y = ∅ → X = ∅.
+    Proof. unfold_leibniz. apply collection_positive_l. Qed.
+    Lemma collection_positive_l_alt_L X Y : X ≠ ∅ → X ∪ Y ≠ ∅.
+    Proof. unfold_leibniz. apply collection_positive_l_alt. Qed.
     Lemma non_empty_singleton_L x : {[ x ]} ≠ ∅.
     Proof. unfold_leibniz. apply non_empty_singleton. Qed.
   End leibniz.
@@ -385,7 +390,7 @@ Section quantifiers.
 End quantifiers.
 
 Section more_quantifiers.
-  Context `{Collection A B}.
+  Context `{SimpleCollection A B}.
 
   Lemma set_Forall_weaken (P Q : A → Prop) (Hweaken : ∀ x, P x → Q x) X :
     set_Forall P X → set_Forall Q X.

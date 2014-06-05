@@ -241,6 +241,8 @@ Section operations.
 
   Definition int_unop_ok (τ : int_type Ti) (op : unop) (x : Z) : Prop :=
     match op with NegOp => int_binop_ok τ MinusOp 0 x | ComplOp => True end.
+  Global Instance int_unop_ok_dec τ op x : Decision (int_unop_ok τ op x).
+  Proof. destruct op; apply _. Defined.
   Definition int_unop (τ : int_type Ti) (op : unop) (x : Z) : Z :=
     match op with
     | NegOp => int_binop τ MinusOp 0 x

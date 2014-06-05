@@ -13,7 +13,16 @@ Arguments VInt {_} _ _.
 Arguments VPtr {_} _.
 Arguments VByte {_} _.
 
-Instance base_val_eq_dec {Ti : Set} `{∀ τ1 τ2 : Ti, Decision (τ1 = τ2)}
+Delimit Scope base_val_scope with B.
+Bind Scope base_val_scope with base_val.
+Open Scope base_val_scope.
+Notation "'indetV' τ" := (VIndet τ) (at level 10) : base_val_scope.
+Notation "'intV{' τi } x" := (VInt τi x)
+  (at level 10, format "intV{ τi }  x") : base_val_scope.
+Notation "'ptrV' p" := (VPtr p) (at level 10) : base_val_scope.
+Notation "'byteV' bs" := (VByte bs) (at level 10) : base_val_scope.
+
+Instance base_val_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (v1 v2 : base_val Ti) : Decision (v1 = v2).
 Proof. solve_decision. Defined.
 
@@ -106,6 +115,11 @@ Section operations.
        base_val_refine' Γ f m1 m2 (VByte bs1) (VInt ucharT x2) ucharT.
   Global Instance base_val_refine:
     RefineT Ti (mem Ti) (base_val Ti) (base_type Ti) := base_val_refine'.
+
+  Definition base_val_true (vb : base_val Ti) : Prop :=
+    match vb with VInt _ x => x ≠ 0 | VPtr (Ptr a) => True | _ => False end.
+  Definition base_val_false (vb : base_val Ti) : Prop :=
+    match vb with VInt _ x => x = 0 | VPtr (NULL _) => True | _ => False end.
 
   Definition base_val_0 (τb : base_type Ti) : base_val Ti :=
     match τb with intT τi => VInt τi 0 | τ.* => VPtr (NULL τ) end.
@@ -593,6 +607,27 @@ Proof.
 Qed.
 
 (** ** Properties of unary/binary operations and casts *)
+Definition base_val_true_false_dec vb :
+  { base_val_true vb ∧ ¬base_val_false vb }
+  + { ¬base_val_true vb ∧ base_val_false vb }
+  + { ¬base_val_true vb ∧ ¬base_val_false vb }.
+Proof.
+ refine
+  match vb with
+  | VInt _ x => inleft (cast_if_not (decide (x = 0)))
+  | VPtr (Ptr _) => inleft (left _)
+  | VPtr (NULL _) => inleft (right _)
+  | _ => inright _
+  end; abstract naive_solver.
+Defined.
+Global Instance base_val_unop_ok_dec op vb : Decision (base_val_unop_ok op vb).
+Proof. destruct vb; try apply _. Defined.
+Global Instance base_val_binop_ok_dec Γ m op vb1 vb2 :
+  Decision (base_val_binop_ok Γ m op vb1 vb2).
+Proof. destruct vb1, vb2; try apply _; destruct op; apply _. Defined.
+Global Instance base_val_cast_ok_dec Γ σb vb :
+  Decision (base_val_cast_ok Γ σb vb).
+Proof. destruct vb, σb; apply _. Defined.
 Lemma base_val_0_typed Γ m τb : ✓{Γ} τb → (Γ,m) ⊢ base_val_0 τb : τb.
 Proof.
   destruct 1; simpl; constructor. by apply int_typed_small. by constructor.
@@ -605,7 +640,7 @@ Proof.
   destruct Hσ; inversion Hvτb; simplify_equality'; try done.
   constructor. by apply int_unop_ok_typed.
 Qed.
-Lemma base_binop_ok_typed Γ m op vb1 vb2 τb1 τb2 σb :
+Lemma base_val_binop_ok_typed Γ m op vb1 vb2 τb1 τb2 σb :
   ✓ Γ → (Γ,m) ⊢ vb1 : τb1 → (Γ,m) ⊢ vb2 : τb2 →
   base_val_binop_typed op τb1 τb2 σb →
   base_val_binop_ok Γ m op vb1 vb2 →

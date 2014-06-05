@@ -1,39 +1,6 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export references.
-Require Import fin_map_dom nmap mapset.
-
-(** * Indexes into the memory *)
-(** We define indexes into the memory as binary naturals and use the [Nmap]
-implementation to obtain efficient finite maps and finite sets with these
-indexes as keys. *)
-Definition index := N.
-Definition indexmap := Nmap.
-Notation indexset := (mapset indexmap).
-
-Instance index_dec: ∀ o1 o2 : index, Decision (o1 = o2) := decide_rel (=).
-Instance index_fresh_`{FinCollection index C} : Fresh index C := _.
-Instance index_fresh_spec `{FinCollection index C} : FreshSpec index C := _.
-Instance index_inhabited: Inhabited index := populate 0%N.
-Instance indexmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
-  ∀ m1 m2 : indexmap A, Decision (m1 = m2) := decide_rel (=).
-Instance indexmap_empty {A} : Empty (indexmap A) := @empty (Nmap A) _.
-Instance indexmap_lookup {A} : Lookup index A (indexmap A) :=
-  @lookup _ _ (Nmap A) _.
-Instance indexmap_partial_alter {A} : PartialAlter index A (indexmap A) :=
-  @partial_alter _ _ (Nmap A) _.
-Instance indexmap_to_list {A} : FinMapToList index A (indexmap A) :=
-  @map_to_list _ _ (Nmap A) _.
-Instance indexmap_omap: OMap indexmap := λ A B f, @omap Nmap _ _ f _.
-Instance indexmap_merge: Merge indexmap := @merge Nmap _.
-Instance indexmap_fmap: FMap indexmap := λ A B f, @fmap Nmap _ _ f _.
-Instance: FinMap index indexmap := _.
-Instance indexmap_dom {A} : Dom (indexmap A) indexset := mapset_dom.
-Instance: FinMapDom index indexmap indexset := mapset_dom_spec.
-Instance index_lexico : Lexico index := @lexico N _.
-Instance index_lexico_order : StrictOrder (@lexico index _) := _.
-Instance index_trichotomy: TrichotomyT (@lexico index _) := _.
-Typeclasses Opaque index indexmap.
+Require Export references memory_basics.
 
 Inductive mem_inj (Ti : Set) :=
   | mem_inj_id : mem_inj Ti

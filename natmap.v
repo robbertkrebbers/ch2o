@@ -197,12 +197,12 @@ Proof.
     induction l1 as [|[x|] l1 IH]; intros [|[y|] l2] Hl1 Hl2 E; simpl in *.
     + done.
     + by specialize (E 0).
-    + destruct (natmap_wf_lookup (None :: l2)) as [i [??]]; auto with congruence.
+    + destruct (natmap_wf_lookup (None :: l2)) as (i&?&?); auto with congruence.
     + by specialize (E 0).
     + f_equal. apply (E 0). apply IH; eauto using natmap_wf_inv.
       intros i. apply (E (S i)).
     + by specialize (E 0).
-    + destruct (natmap_wf_lookup (None :: l1)) as [i [??]]; auto with congruence.
+    + destruct (natmap_wf_lookup (None :: l1)) as (i&?&?); auto with congruence.
     + by specialize (E 0).
     + f_equal. apply IH; eauto using natmap_wf_inv. intros i. apply (E (S i)).
   * done.
@@ -215,15 +215,66 @@ Proof.
   * intros ????? [??] [??] ?. by apply natmap_lookup_merge_raw.
 Qed.
 
-Lemma list_to_natmap_wf {A} (l : list A) : natmap_wf (Some <$> l).
-Proof. unfold natmap_wf. rewrite fmap_last. destruct (last l); simpl; eauto. Qed.
-Definition list_to_natmap {A} (l : list A) : natmap A :=
-  (Some <$> l) ↾ list_to_natmap_wf l.
+Fixpoint strip_Nones {A} (l : list (option A)) : list (option A) :=
+  match l with None :: l => strip_Nones l | _ => l end.
+
+Lemma list_to_natmap_wf {A} (l : list (option A)) :
+  natmap_wf (reverse (strip_Nones (reverse l))).
+Proof.
+  unfold natmap_wf. rewrite last_reverse.
+  induction (reverse l) as [|[]]; simpl; eauto.
+Qed.
+Definition list_to_natmap {A} (l : list (option A)) : natmap A :=
+  reverse (strip_Nones (reverse l)) ↾ list_to_natmap_wf l.
+Lemma list_to_natmap_spec {A} (l : list (option A)) i :
+  list_to_natmap l !! i = mjoin (l !! i).
+Proof.
+  unfold lookup at 1, natmap_lookup, list_to_natmap; simpl.
+  rewrite <-(reverse_involutive l) at 2. revert i.
+  induction (reverse l) as [|[x|] l' IH]; intros i; simpl; auto.
+  rewrite reverse_cons, IH. clear IH. revert i.
+  induction (reverse l'); intros [|?]; simpl; auto.
+Qed.
 
 (** Finally, we can construct sets of [nat]s satisfying extensional equality. *)
 Notation natset := (mapset natmap).
 Instance natmap_dom {A} : Dom (natmap A) natset := mapset_dom.
 Instance: FinMapDom nat natmap natset := mapset_dom_spec.
+
+(* Fixpoint avoids this definition from being unfolded *)
+Fixpoint of_bools (βs : list bool) : natset :=
+  Mapset $ list_to_natmap $ (λ β : bool, if β then Some () else None) <$> βs.
+Definition to_bools (X : natset) : list bool :=
+  (λ mu, match mu with Some _ => true | None => false end) <$> ` (mapset_car X).
+
+Lemma of_bools_unfold βs :
+  of_bools βs
+  = Mapset $ list_to_natmap $ (λ β : bool, if β then Some () else None) <$> βs.
+Proof. by destruct βs. Qed.
+Lemma elem_of_of_bools βs i : i ∈ of_bools βs ↔ βs !! i = Some true.
+Proof.
+  rewrite of_bools_unfold; unfold elem_of, mapset_elem_of; simpl.
+  rewrite list_to_natmap_spec, list_lookup_fmap.
+  destruct (βs !! i) as [[]|]; compute; intuition congruence.
+Qed.
+Lemma elem_of_to_bools X i : to_bools X !! i = Some true ↔ i ∈ X.
+Proof.
+  unfold to_bools, elem_of, mapset_elem_of, lookup at 2, natmap_lookup; simpl.
+  destruct (mapset_car X) as [l ?]; simpl. rewrite list_lookup_fmap.
+  destruct (l !! i) as [[[]|]|]; compute; intuition congruence.
+Qed.
+Lemma of_to_bools X : of_bools (to_bools X) = X.
+Proof.
+  apply elem_of_equiv_L. intros i. by rewrite elem_of_of_bools,elem_of_to_bools.
+Qed.
+Lemma of_bools_union βs1 βs2 :
+  length βs1 = length βs2 →
+  of_bools (βs1 ||* βs2) = of_bools βs1 ∪ of_bools βs2.
+Proof.
+  rewrite <-Forall2_same_length; intros Hβs.
+  apply elem_of_equiv_L. intros i. rewrite elem_of_union, !elem_of_of_bools.
+  revert i. induction Hβs as [|[] []]; intros [|?]; naive_solver.
+Qed.
 
 (** A [natmap A] forms a stack with elements of type [A] and possible holes *)
 Definition natmap_push {A} (o : option A) (m : natmap A) : natmap A :=

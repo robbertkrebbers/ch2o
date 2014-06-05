@@ -5,11 +5,11 @@ Obligation Tactic := idtac.
 
 Class Finite A `{∀ x y : A, Decision (x = y)} := {
   enum : list A;
-  enum_nodup : NoDup enum;
+  NoDup_enum : NoDup enum;
   elem_of_enum x : x ∈ enum
 }.
 Arguments enum _ {_ _} : clear implicits.
-Arguments enum_nodup _ {_ _} : clear implicits.
+Arguments NoDup_enum _ {_ _} : clear implicits.
 Definition card A `{Finite A} := length (enum A).
 Program Instance finite_countable `{Finite A} : Countable A := {|
   encode := λ x, Pos.of_nat $ S $ from_option 0 $ list_find (x =) (enum A);
@@ -72,7 +72,7 @@ Qed.
 Lemma finite_injective_contains `{finA: Finite A} `{finB: Finite B} (f: A → B)
   `{!Injective (=) (=) f} : f <$> enum A `contains` enum B.
 Proof.
-  intros. destruct finA, finB. apply NoDup_contains; auto using fmap_nodup_2.
+  intros. destruct finA, finB. apply NoDup_contains; auto using NoDup_fmap_2.
 Qed.
 Lemma finite_injective_Permutation `{Finite A} `{Finite B} (f : A → B)
   `{!Injective (=) (=) f} : card A = card B → f <$> enum A ≡ₚ enum B.
@@ -181,7 +181,7 @@ Section bijective_finite.
   Context `{!Injective (=) (=) f} `{!Cancel (=) f g}.
 
   Program Instance bijective_finite: Finite B := {| enum := f <$> enum A |}.
-  Next Obligation. apply (fmap_nodup _), enum_nodup. Qed.
+  Next Obligation. apply (NoDup_fmap_2 _), NoDup_enum. Qed.
   Next Obligation.
     intros y. rewrite elem_of_list_fmap. eauto using elem_of_enum.
   Qed.
@@ -192,7 +192,7 @@ Program Instance option_finite `{Finite A} : Finite (option A) :=
 Next Obligation.
   constructor.
   * rewrite elem_of_list_fmap. by intros (?&?&?).
-  * apply (fmap_nodup _); auto using enum_nodup.
+  * apply (NoDup_fmap_2 _); auto using NoDup_enum.
 Qed.
 Next Obligation.
   intros ??? [x|]; [right|left]; auto.
@@ -219,9 +219,9 @@ Program Instance sum_finite `{Finite A} `{Finite B} : Finite (A + B)%type :=
   {| enum := (inl <$> enum A) ++ (inr <$> enum B) |}.
 Next Obligation.
   intros. apply NoDup_app; split_ands.
-  * apply (fmap_nodup _). by apply enum_nodup.
+  * apply (NoDup_fmap_2 _). by apply NoDup_enum.
   * intro. rewrite !elem_of_list_fmap. intros (?&?&?) (?&?&?); congruence.
-  * apply (fmap_nodup _). by apply enum_nodup.
+  * apply (NoDup_fmap_2 _). by apply NoDup_enum.
 Qed.
 Next Obligation.
   intros ?????? [x|y]; rewrite elem_of_app, !elem_of_list_fmap;
@@ -233,10 +233,10 @@ Proof. unfold card. simpl. by rewrite app_length, !fmap_length. Qed.
 Program Instance prod_finite `{Finite A} `{Finite B} : Finite (A * B)%type :=
   {| enum := foldr (λ x, (pair x <$> enum B ++)) [] (enum A) |}.
 Next Obligation.
-  intros ??????. induction (enum_nodup A) as [|x xs Hx Hxs IH]; simpl.
+  intros ??????. induction (NoDup_enum A) as [|x xs Hx Hxs IH]; simpl.
   { constructor. }
   apply NoDup_app; split_ands.
-  * apply (fmap_nodup _). by apply enum_nodup.
+  * by apply (NoDup_fmap_2 _), NoDup_enum.
   * intros [? y]. rewrite elem_of_list_fmap. intros (?&?&?); simplify_equality.
     clear IH. induction Hxs as [|x' xs ?? IH]; simpl.
     { rewrite elem_of_nil. tauto. }
@@ -268,9 +268,9 @@ Program Instance list_finite `{Finite A} n : Finite { l | length l = n } :=
 Next Obligation.
   intros ????. induction n as [|n IH]; simpl; [apply NoDup_singleton |].
   revert IH. generalize (list_enum (enum A) n). intros l Hl.
-  induction (enum_nodup A) as [|x xs Hx Hxs IH]; simpl; auto; [constructor |].
+  induction (NoDup_enum A) as [|x xs Hx Hxs IH]; simpl; auto; [constructor |].
   apply NoDup_app; split_ands.
-  * by apply (fmap_nodup _).
+  * by apply (NoDup_fmap_2 _).
   * intros [k1 Hk1]. clear Hxs IH. rewrite elem_of_list_fmap.
     intros ([k2 Hk2]&?&?) Hxk2; simplify_equality. destruct Hx. revert Hxk2.
     induction xs as [|x' xs IH]; simpl in *; [by rewrite elem_of_nil |].

@@ -6,6 +6,8 @@ Local Open Scope ctype_scope.
 Section operations.
   Context `{IntEnv Ti, PtrEnv Ti}.
 
+  Global Instance cmap_dom: Dom (mem Ti) indexset := λ m,
+    let (m) := m in dom _ m.
   Global Instance cmap_valid: Valid (env Ti) (mem Ti) := λ Γ m,
     map_Forall (λ _ w, ∃ τ,
       (Γ,m) ⊢ w : τ ∧ ¬ctree_empty w ∧ int_typed (size_of Γ τ) sptrT
@@ -152,7 +154,7 @@ Proof.
     eauto using ctree_lookup_byte_typed.
 Qed.
 Lemma cmap_lookup_Some Γ m w a :
-  ✓ Γ → ✓{Γ} m → m !!{Γ} a = Some w → ∃ σ, (Γ,m) ⊢ w : σ.
+  ✓ Γ → ✓{Γ} m → m !!{Γ} a = Some w → (Γ,m) ⊢ w : type_of w.
 Proof.
   destruct m as [m]; simpl; intros ? Hm Ha.
   case_option_guard; simplify_equality'.
@@ -161,7 +163,7 @@ Proof.
   destruct (Hm (addr_index a) w' Hw) as (τ&Hoτ&_); simplify_equality'.
   destruct (ctree_lookup_Some Γ (CMap m) w' τ (addr_ref Γ a) w'')
     as (σ'&?&?); auto; simplify_option_equality;
-    eauto using ctree_lookup_byte_typed.
+    eauto using ctree_lookup_byte_typed, type_of_typed.
 Qed.
 Lemma cmap_lookup_disjoint Γ m1 m2 a w1 w2 :
   ✓ Γ → ✓{Γ} m1 → ✓{Γ} m2 → m1 ⊥ m2 →
@@ -328,8 +330,7 @@ Lemma cmap_alter_disjoint Γ m1 m2 g a w1 τ1 :
   (∀ w2, w1 ⊥ w2 → g w1 ⊥ w2) → cmap_alter Γ g a m1 ⊥ m2.
 Proof.
   assert (∀ w', ctree_empty w' → ctree_unmapped w').
-  { intros w'. rewrite <-!ctree_flatten_Forall.
-    eauto using Forall_impl, @sep_unmapped_empty_alt. }
+  { eauto using Forall_impl, @sep_unmapped_empty_alt. }
   destruct m1 as [m1], m2 as [m2]; simpl. intros ? Hm1 Hm ????? o.
   specialize (Hm o). case_option_guard; simplify_equality'.
   destruct (decide (o = addr_index a)); simplify_map_equality'; [|apply Hm].

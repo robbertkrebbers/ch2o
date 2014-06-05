@@ -275,6 +275,7 @@ Section list_set.
       if decide_rel (∈) x k
       then list_difference l k else x :: list_difference l k
     end.
+  Definition list_union (l k : list A) : list A := list_difference l k ++ k.
   Fixpoint list_intersection (l k : list A) : list A :=
     match l with
     | [] => []
@@ -495,6 +496,8 @@ Lemma elem_of_nil x : x ∈ [] ↔ False.
 Proof. intuition. by destruct (not_elem_of_nil x). Qed.
 Lemma elem_of_nil_inv l : (∀ x, x ∉ l) → l = [].
 Proof. destruct l. done. by edestruct 1; constructor. Qed.
+Lemma elem_of_not_nil x l : x ∈ l → l ≠ [].
+Proof. intros ? ->. by apply (elem_of_nil x). Qed.
 Lemma elem_of_cons l x y : x ∈ y :: l ↔ x = y ∨ x ∈ l.
 Proof. split; [inversion 1; subst|intros [->|?]]; constructor (done). Qed.
 Lemma not_elem_of_cons l x y : x ∉ y :: l ↔ x ≠ y ∧ x ∉ l.
@@ -527,57 +530,6 @@ Proof.
 Qed.
 Lemma elem_of_list_lookup l x : x ∈ l ↔ ∃ i, l !! i = Some x.
 Proof. firstorder eauto using elem_of_list_lookup_1, elem_of_list_lookup_2. Qed.
-
-(** ** Set operations on lists *)
-Section list_set.
-  Context {dec : ∀ x y, Decision (x = y)}.
-  Lemma elem_of_list_difference l k x : x ∈ list_difference l k ↔ x ∈ l ∧ x ∉ k.
-  Proof.
-    split; induction l; simpl; try case_decide;
-      rewrite ?elem_of_nil, ?elem_of_cons; intuition congruence.
-  Qed.
-  Lemma list_difference_nodup l k : NoDup l → NoDup (list_difference l k).
-  Proof.
-    induction 1; simpl; try case_decide.
-    * constructor.
-    * done.
-    * constructor. rewrite elem_of_list_difference; intuition. done.
-  Qed.
-  Lemma elem_of_list_intersection l k x :
-    x ∈ list_intersection l k ↔ x ∈ l ∧ x ∈ k.
-  Proof.
-    split; induction l; simpl; repeat case_decide;
-      rewrite ?elem_of_nil, ?elem_of_cons; intuition congruence.
-  Qed.
-  Lemma list_intersection_nodup l k : NoDup l → NoDup (list_intersection l k).
-  Proof.
-    induction 1; simpl; try case_decide.
-    * constructor.
-    * constructor. rewrite elem_of_list_intersection; intuition. done.
-    * done.
-  Qed.
-  Lemma elem_of_list_intersection_with f l k x :
-    x ∈ list_intersection_with f l k ↔ ∃ x1 x2,
-      x1 ∈ l ∧ x2 ∈ k ∧ f x1 x2 = Some x.
-  Proof.
-    split.
-    * induction l as [|x1 l IH]; simpl; [by rewrite elem_of_nil|].
-      intros Hx. setoid_rewrite elem_of_cons.
-      cut ((∃ x2, x2 ∈ k ∧ f x1 x2 = Some x)
-        ∨ x ∈ list_intersection_with f l k); [naive_solver|].
-      clear IH. revert Hx. generalize (list_intersection_with f l k).
-      induction k; simpl; [by auto|].
-      case_match; setoid_rewrite elem_of_cons; naive_solver.
-    * intros (x1&x2&Hx1&Hx2&Hx). induction Hx1 as [x1|x1 ? l ? IH]; simpl.
-      + generalize (list_intersection_with f l k).
-        induction Hx2; simpl; [by rewrite Hx; left |].
-        case_match; simpl; try setoid_rewrite elem_of_cons; auto.
-      + generalize (IH Hx). clear Hx IH Hx2.
-        generalize (list_intersection_with f l k).
-        induction k; simpl; intros; [done|].
-        case_match; simpl; rewrite ?elem_of_cons; auto.
-  Qed.
-End list_set.
 
 (** ** Properties of the [NoDup] predicate *)
 Lemma NoDup_nil : NoDup (@nil A) ↔ True.
@@ -644,12 +596,75 @@ Section no_dup_dec.
     split; induction l; simpl; repeat case_decide;
       rewrite ?elem_of_cons; intuition (simplify_equality; auto).
   Qed.
-  Lemma remove_dups_nodup l : NoDup (remove_dups l).
+  Lemma NoDup_remove_dups l : NoDup (remove_dups l).
   Proof.
     induction l; simpl; repeat case_decide; try constructor; auto.
     by rewrite elem_of_remove_dups.
   Qed.
 End no_dup_dec.
+
+(** ** Set operations on lists *)
+Section list_set.
+  Context {dec : ∀ x y, Decision (x = y)}.
+  Lemma elem_of_list_difference l k x : x ∈ list_difference l k ↔ x ∈ l ∧ x ∉ k.
+  Proof.
+    split; induction l; simpl; try case_decide;
+      rewrite ?elem_of_nil, ?elem_of_cons; intuition congruence.
+  Qed.
+  Lemma NoDup_list_difference l k : NoDup l → NoDup (list_difference l k).
+  Proof.
+    induction 1; simpl; try case_decide.
+    * constructor.
+    * done.
+    * constructor. rewrite elem_of_list_difference; intuition. done.
+  Qed.
+  Lemma elem_of_list_union l k x : x ∈ list_union l k ↔ x ∈ l ∨ x ∈ k.
+  Proof.
+    unfold list_union. rewrite elem_of_app, elem_of_list_difference.
+    intuition. case (decide (x ∈ k)); intuition.
+  Qed.
+  Lemma NoDup_list_union l k : NoDup l → NoDup k → NoDup (list_union l k).
+  Proof.
+    intros. apply NoDup_app. repeat split.
+    * by apply NoDup_list_difference.
+    * intro. rewrite elem_of_list_difference. intuition.
+    * done.
+  Qed.
+  Lemma elem_of_list_intersection l k x :
+    x ∈ list_intersection l k ↔ x ∈ l ∧ x ∈ k.
+  Proof.
+    split; induction l; simpl; repeat case_decide;
+      rewrite ?elem_of_nil, ?elem_of_cons; intuition congruence.
+  Qed.
+  Lemma NoDup_list_intersection l k : NoDup l → NoDup (list_intersection l k).
+  Proof.
+    induction 1; simpl; try case_decide.
+    * constructor.
+    * constructor. rewrite elem_of_list_intersection; intuition. done.
+    * done.
+  Qed.
+  Lemma elem_of_list_intersection_with f l k x :
+    x ∈ list_intersection_with f l k ↔ ∃ x1 x2,
+      x1 ∈ l ∧ x2 ∈ k ∧ f x1 x2 = Some x.
+  Proof.
+    split.
+    * induction l as [|x1 l IH]; simpl; [by rewrite elem_of_nil|].
+      intros Hx. setoid_rewrite elem_of_cons.
+      cut ((∃ x2, x2 ∈ k ∧ f x1 x2 = Some x)
+        ∨ x ∈ list_intersection_with f l k); [naive_solver|].
+      clear IH. revert Hx. generalize (list_intersection_with f l k).
+      induction k; simpl; [by auto|].
+      case_match; setoid_rewrite elem_of_cons; naive_solver.
+    * intros (x1&x2&Hx1&Hx2&Hx). induction Hx1 as [x1|x1 ? l ? IH]; simpl.
+      + generalize (list_intersection_with f l k).
+        induction Hx2; simpl; [by rewrite Hx; left |].
+        case_match; simpl; try setoid_rewrite elem_of_cons; auto.
+      + generalize (IH Hx). clear Hx IH Hx2.
+        generalize (list_intersection_with f l k).
+        induction k; simpl; intros; [done|].
+        case_match; simpl; rewrite ?elem_of_cons; auto.
+  Qed.
+End list_set.
 
 (** ** Properties of the [filter] function *)
 Section filter.
@@ -659,7 +674,7 @@ Section filter.
     unfold filter. induction l; simpl; repeat case_decide;
        rewrite ?elem_of_nil, ?elem_of_cons; naive_solver.
   Qed.
-  Lemma filter_nodup l : NoDup l → NoDup (filter P l).
+  Lemma NoDup_filter l : NoDup l → NoDup (filter P l).
   Proof.
     unfold filter. induction 1; simpl; repeat case_decide;
       rewrite ?NoDup_nil, ?NoDup_cons, ?elem_of_list_filter; tauto.
@@ -726,6 +741,10 @@ Qed.
 (** ** Properties of the [last] function *)
 Lemma last_snoc x l : last (l ++ [x]) = Some x.
 Proof. induction l as [|? []]; simpl; auto. Qed.
+Lemma last_reverse l : last (reverse l) = head l.
+Proof. by destruct l as [|x l]; rewrite ?reverse_cons, ?last_snoc. Qed.
+Lemma head_reverse l : head (reverse l) = last l.
+Proof. by rewrite <-last_reverse, reverse_involutive. Qed.
 
 (** ** Properties of the [take] function *)
 Definition take_drop i l : take i l ++ drop i l = l := firstn_skipn i l.
@@ -757,11 +776,9 @@ Lemma take_length_le l n : n ≤ length l → length (take n l) = n.
 Proof. rewrite take_length. apply Min.min_l. Qed.
 Lemma take_length_ge l n : length l ≤ n → length (take n l) = length l.
 Proof. rewrite take_length. apply Min.min_r. Qed.
-Lemma take_drop_commute l n m :
-  n ≤ m → take (m - n) (drop n l) = drop n (take m l).
+Lemma take_drop_commute l n m : take n (drop m l) = drop m (take (m + n) l).
 Proof.
-  revert n m. induction l; intros [|?] [|?] ?;
-    simpl; auto using take_nil with lia.
+  revert n m. induction l; intros [|?][|?]; simpl; auto using take_nil with lia.
 Qed.
 Lemma lookup_take l n i : i < n → take n l !! i = l !! i.
 Proof. revert n i. induction l; intros [|n] [|i] ?; simpl; auto with lia. Qed.
@@ -781,6 +798,8 @@ Proof.
 Qed.
 
 (** ** Properties of the [drop] function *)
+Lemma drop_0 l : drop 0 l = l.
+Proof. done. Qed.
 Lemma drop_nil n : drop n (@nil A) = [].
 Proof. by destruct n. Qed.
 Lemma drop_length l n : length (drop n l) = length l - n.
@@ -863,6 +882,8 @@ Proof.
   rewrite reverse_length, replicate_length. split; auto.
   intros y. rewrite elem_of_reverse. by apply elem_of_replicate_inv.
 Qed.
+Lemma replicate_false βs n : length βs = n → replicate n false =.>* βs.
+Proof. intros <-. by induction βs; simpl; constructor. Qed.
 
 (** ** Properties of the [resize] function *)
 Lemma resize_spec l n x : resize n x l = take n l ++ replicate (n - length l) x.
@@ -1051,8 +1072,8 @@ Proof.
   unfold sublist_lookup; intros; simplify_option_equality;
     repeat match goal with
     | H : _ ≤ length _ |- _ => rewrite take_length, drop_length in H
-    end; rewrite <-?take_drop_commute, ?drop_drop, ?take_take, ?Min.min_l by lia;
-    auto with lia.
+    end; rewrite ?take_drop_commute, ?drop_drop, ?take_take,
+      ?Min.min_l, Nat.add_assoc by lia; auto with lia.
 Qed.
 Lemma sublist_alter_length f l i n k :
   sublist_lookup i n l = Some k → length (f k) = n →
@@ -1121,6 +1142,12 @@ Lemma sublist_lookup_mask f βs l i n :
 Proof.
   unfold sublist_lookup; rewrite mask_length; simplify_option_equality; auto.
   by rewrite drop_mask, take_mask.
+Qed.
+Lemma mask_mask f g βs1 βs2 l :
+  (∀ x, f (g x) = f x) → βs1 =.>* βs2 →
+  mask f βs2 (mask g βs1 l) = mask f βs2 l.
+Proof.
+  intros ? Hβs. revert l. by induction Hβs as [|[] []]; intros [|??]; f_equal'.
 Qed.
 
 (** ** Properties of the [seq] function *)
@@ -1525,24 +1552,22 @@ Lemma sublist_drop l i : drop i l `sublist` l.
 Proof. rewrite <-(take_drop i l) at 2. by apply sublist_inserts_l. Qed.
 Lemma sublist_delete l i : delete i l `sublist` l.
 Proof. revert i. by induction l; intros [|?]; simpl; constructor. Qed.
-Lemma sublist_delete_list l is : delete_list is l `sublist` l.
+Lemma sublist_foldr_delete l is : foldr delete l is `sublist` l.
 Proof.
   induction is as [|i is IH]; simpl; [done |].
-  transitivity (delete_list is l); auto using sublist_delete.
+  transitivity (foldr delete l is); auto using sublist_delete.
 Qed.
-Lemma sublist_alt l1 l2 : l1 `sublist` l2 ↔ ∃ is, l1 = delete_list is l2.
+Lemma sublist_alt l1 l2 : l1 `sublist` l2 ↔ ∃ is, l1 = foldr delete l2 is.
 Proof.
-  split.
-  * intros Hl12. cut (∀ k, ∃ is, k ++ l1 = delete_list is (k ++ l2)).
-    { intros help. apply (help []). }
-    induction Hl12 as [|x l1 l2 _ IH|x l1 l2 _ IH]; intros k.
-    + by eexists [].
-    + destruct (IH (k ++ [x])) as [is His]. exists is.
-      by rewrite <-!(associative_L (++)) in His.
-    + destruct (IH k) as [is His]. exists (is ++ [length k]).
-      unfold delete_list. rewrite fold_right_app. simpl.
-      by rewrite delete_middle.
-  * intros [is ->]. apply sublist_delete_list.
+  split; [|intros [is ->]; apply sublist_foldr_delete].
+  intros Hl12. cut (∀ k, ∃ is, k ++ l1 = foldr delete (k ++ l2) is).
+  { intros help. apply (help []). }
+  induction Hl12 as [|x l1 l2 _ IH|x l1 l2 _ IH]; intros k.
+  * by eexists [].
+  * destruct (IH (k ++ [x])) as [is His]. exists is.
+    by rewrite <-!(associative_L (++)) in His.
+  * destruct (IH k) as [is His]. exists (is ++ [length k]).
+    rewrite fold_right_app. simpl. by rewrite delete_middle.
 Qed.
 Lemma Permutation_sublist l1 l2 l3 :
   l1 ≡ₚ l2 → l2 `sublist` l3 → ∃ l4, l1 `sublist` l4 ∧ l4 ≡ₚ l3.
@@ -1640,8 +1665,8 @@ Lemma contains_drop l i : drop i l `contains` l.
 Proof. auto using sublist_drop, sublist_contains. Qed.
 Lemma contains_delete l i : delete i l `contains` l.
 Proof. auto using sublist_delete, sublist_contains. Qed.
-Lemma contains_delete_list l is : delete_list is l `sublist` l.
-Proof. auto using sublist_delete_list, sublist_contains. Qed.
+Lemma contains_foldr_delete l is : foldr delete l is `sublist` l.
+Proof. auto using sublist_foldr_delete, sublist_contains. Qed.
 Lemma contains_sublist_l l1 l3 :
   l1 `contains` l3 ↔ ∃ l2, l1 `sublist` l2 ∧ l2 ≡ₚ l3.
 Proof.
@@ -1974,6 +1999,22 @@ Section Forall_Exists.
   Proof. induction 1; inversion_clear 1; contradiction. Qed.
   Lemma Forall_not_Exists l : Forall (not ∘ P) l → ¬Exists P l.
   Proof. induction 1; inversion_clear 1; contradiction. Qed.
+
+  Lemma Forall_list_difference `{∀ x y : A, Decision (x = y)} l k :
+    Forall P l → Forall P (list_difference l k).
+  Proof.
+    rewrite !Forall_forall.
+    intros ? x; rewrite elem_of_list_difference; naive_solver.
+  Qed.
+  Lemma Forall_list_union `{∀ x y : A, Decision (x = y)} l k :
+    Forall P l → Forall P k → Forall P (list_union l k).
+  Proof. intros. apply Forall_app; auto using Forall_list_difference. Qed.
+  Lemma Forall_list_intersection `{∀ x y : A, Decision (x = y)} l k :
+    Forall P l → Forall P (list_intersection l k).
+  Proof.
+    rewrite !Forall_forall.
+    intros ? x; rewrite elem_of_list_intersection; naive_solver.
+  Qed.
 
   Context {dec : ∀ x, Decision (P x)}.
   Lemma not_Forall_Exists l : ¬Forall P l → Exists (not ∘ P) l.
@@ -2388,18 +2429,18 @@ Section fmap.
   Proof.
     naive_solver eauto using elem_of_list_fmap_1_alt, elem_of_list_fmap_2.
   Qed.
-  Lemma fmap_nodup_1 l : NoDup (f <$> l) → NoDup l.
+  Lemma NoDup_fmap_1 l : NoDup (f <$> l) → NoDup l.
   Proof.
     induction l; simpl; inversion_clear 1; constructor; auto.
     rewrite elem_of_list_fmap in *. naive_solver.
   Qed.
-  Lemma fmap_nodup_2 `{!Injective (=) (=) f} l : NoDup l → NoDup (f <$> l).
+  Lemma NoDup_fmap_2 `{!Injective (=) (=) f} l : NoDup l → NoDup (f <$> l).
   Proof.
     induction 1; simpl; constructor; trivial. rewrite elem_of_list_fmap.
     intros [y [Hxy ?]]. apply (injective f) in Hxy. by subst.
   Qed.
-  Lemma fmap_nodup `{!Injective (=) (=) f} l : NoDup (f <$> l) ↔ NoDup l.
-  Proof. split; auto using fmap_nodup_1, fmap_nodup_2. Qed.
+  Lemma NoDup_fmap `{!Injective (=) (=) f} l : NoDup (f <$> l) ↔ NoDup l.
+  Proof. split; auto using NoDup_fmap_1, NoDup_fmap_2. Qed.
   Global Instance fmap_sublist: Proper (sublist ==> sublist) (fmap f).
   Proof. induction 1; simpl; econstructor; eauto. Qed.
   Global Instance fmap_contains: Proper (contains ==> contains) (fmap f).
@@ -2501,6 +2542,13 @@ Section bind.
       + destruct IH as [z [??]]. done. exists z. split; [done | by right].
     * intros [y [Hx Hy]]. induction Hy; simpl; rewrite elem_of_app; intuition.
   Qed.
+  Lemma Forall_bind (P : B → Prop) l :
+    Forall P (l ≫= f) ↔ Forall (Forall P ∘ f) l.
+  Proof.
+    split.
+    * induction l; simpl; rewrite ?Forall_app; constructor; simpl; intuition.
+    * induction 1; simpl; rewrite ?Forall_app; auto.
+  Qed.
   Lemma Forall2_bind {C D} (g : C → list D) (P : B → D → Prop) l1 l2 :
     Forall2 (λ x1 x2, Forall2 P (f x1) (g x2)) l1 l2 →
     Forall2 P (l1 ≫= f) (l2 ≫= g).
@@ -2529,12 +2577,6 @@ Section ret_join.
   Proof. by rewrite join_nil. Qed.
   Lemma join_nil_2 (ls : list (list A)) : Forall (= []) ls → mjoin ls = [].
   Proof. by rewrite join_nil. Qed.
-  Lemma join_length (ls : list (list A)) :
-    length (mjoin ls) = foldr (plus ∘ length) 0 ls.
-  Proof. by induction ls; simpl; rewrite ?app_length; f_equal. Qed.
-  Lemma join_length_same (ls : list (list A)) n :
-    Forall (λ l, length l = n) ls → length (mjoin ls) = length ls * n.
-  Proof. rewrite join_length. by induction 1; f_equal'. Qed.
   Lemma Forall_join (P : A → Prop) (ls: list (list A)) :
     Forall (Forall P) ls → Forall P (mjoin ls).
   Proof. induction 1; simpl; auto using Forall_app_2. Qed.
@@ -3059,7 +3101,8 @@ Ltac decompose_Forall_hyps := repeat
       apply Forall2_app_inv_r in H; destruct H as (l1&l2&?&?&->)
     | apply Forall2_app_inv_r in H; destruct H as (?&?&?&?&?) ]
   | H : Forall ?P ?l, H1 : ?l !! _ = Some ?x |- _ =>
-    unless (P x) by done;
+    (* to avoid some stupid loops, not fool proof *)
+    unless (P x) by auto using Forall_app_2, Forall_nil_2;
     let E := fresh in
     assert (P x) as E by (apply (Forall_lookup_1 P _ _ _ H H1)); lazy beta in E
   | H : Forall2 ?P ?l ?k |- _ =>
@@ -3094,8 +3137,9 @@ Ltac decompose_Forall := repeat
   | |- Forall _ _ => by apply Forall_true
   | |- Forall _ [] => constructor
   | |- Forall _ (_ :: _) => constructor
-  | |- Forall _ (_ ++ _) => apply Forall_app
+  | |- Forall _ (_ ++ _) => apply Forall_app_2
   | |- Forall _ (_ <$> _) => apply Forall_fmap
+  | |- Forall _ (_ ≫= _) => apply Forall_bind
   | |- Forall2 _ _ _ => apply Forall2_Forall
   | |- Forall2 _ [] [] => constructor
   | |- Forall2 _ (_ :: _) (_ :: _) => constructor
@@ -3106,6 +3150,7 @@ Ltac decompose_Forall := repeat
   | |- Forall2 _ _ (_ <$> _) => apply Forall2_fmap_r
   | _ => progress decompose_Forall_hyps
   | H : Forall _ (_ <$> _) |- _ => rewrite Forall_fmap in H
+  | H : Forall _ (_ ≫= _) |- _ => rewrite Forall_bind in H
   | |- Forall _ _ =>
     apply Forall_lookup_2; intros ???; progress decompose_Forall_hyps
   | |- Forall2 _ _ _ =>

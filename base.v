@@ -9,11 +9,6 @@ Global Set Automatic Coercions Import.
 Require Export Morphisms RelationClasses List Bool Utf8 Program Setoid.
 
 (** * General *)
-(** The following coercion allows us to use Booleans as propositions. *)
-Coercion Is_true : bool >-> Sortclass.
-Notation "(&&)" := andb (only parsing).
-Notation "(||)" := orb (only parsing).
-
 (** Zipping lists. *)
 Definition zip_with {A B C} (f : A → B → C) : list A → list B → list C :=
   fix go l1 l2 :=
@@ -500,14 +495,6 @@ Class Merge (M : Type → Type) :=
 Instance: Params (@merge) 4.
 Arguments merge _ _ _ _ _ _ !_ !_ / : simpl nomatch.
 
-(** We lift the insert and delete operation to lists of elements. *)
-Definition insert_list `{Insert K A M} (l : list (K * A)) (m : M) : M :=
-  fold_right (λ p, <[p.1:=p.2]>) m l.
-Instance: Params (@insert_list) 4.
-Definition delete_list `{Delete K M} (l : list K) (m : M) : M :=
-  fold_right delete m l.
-Instance: Params (@delete_list) 3.
-
 (** The function [union_with f m1 m2] is supposed to yield the union of [m1]
 and [m2] using the function [f] to combine values of members that are in
 both [m1] and [m2]. *)
@@ -724,8 +711,8 @@ Class FinCollection A C `{ElemOf A C, Empty C, Singleton A C,
     Union C, Intersection C, Difference C,
     Elements A C, ∀ x y : A, Decision (x = y)} : Prop := {
   fin_collection :>> Collection A C;
-  elements_spec X x : x ∈ X ↔ x ∈ elements X;
-  elements_nodup X : NoDup (elements X)
+  elem_of_elements X x : x ∈ elements X ↔ x ∈ X;
+  NoDup_elements X : NoDup (elements X)
 }.
 Class Size C := size: C → nat.
 Arguments size {_ _} !_ / : simpl nomatch.
@@ -762,6 +749,20 @@ Class FreshSpec A C `{ElemOf A C,
   fresh_proper_alt X Y : (∀ x, x ∈ X ↔ x ∈ Y) → fresh X = fresh Y;
   is_fresh (X : C) : fresh X ∉ X
 }.
+
+(** * Booleans *)
+(** The following coercion allows us to use Booleans as propositions. *)
+Coercion Is_true : bool >-> Sortclass.
+Notation "(&&)" := andb (only parsing).
+Notation "(||)" := orb (only parsing).
+Infix "&&*" := (zip_with (&&)) (at level 40).
+Infix "||*" := (zip_with (||)) (at level 50).
+
+Definition bool_le (β1 β2 : bool) : Prop := negb β1 || β2.
+Infix "=.>" := bool_le (at level 70).
+Infix "=.>*" := (Forall2 bool_le) (at level 70).
+Instance: PartialOrder bool_le.
+Proof. repeat split; repeat intros [|]; compute; tauto. Qed.
 
 (** * Miscellaneous *)
 Class Half A := half: A → A.
@@ -823,14 +824,6 @@ Section prod_relation.
 End prod_relation.
 
 (** ** Other *)
-Definition proj_eq {A B} (f : B → A) : relation B := λ x y, f x = f y.
-Global Instance proj_eq_equivalence `(f : B → A) : Equivalence (proj_eq f).
-Proof. unfold proj_eq. repeat split; red; intuition congruence. Qed.
-Notation "x ~{ f } y" := (proj_eq f x y)
-  (at level 70, format "x  ~{ f }  y") : C_scope.
-Hint Extern 0 (_ ~{_} _) => reflexivity.
-Hint Extern 0 (_ ~{_} _) => symmetry; assumption.
-
 Instance: ∀ A B (x : B), Commutative (=) (λ _ _ : A, x).
 Proof. red. trivial. Qed.
 Instance: ∀ A (x : A), Associative (=) (λ _ _ : A, x).

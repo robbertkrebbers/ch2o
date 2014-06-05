@@ -85,21 +85,6 @@ Instance ref_seg_lookup {Ti : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)}
   | _, _ => None
   end.
 
-Definition ref_seg_object_type {Ti} (rs : ref_seg Ti) : type Ti :=
-  match rs with
-  | RArray _ τ n => τ.[n]
-  | RStruct _ s => structT s
-  | RUnion _ s _ => unionT s
-  end.
-Definition ref_object_type {Ti} (τ : type Ti) (r : ref Ti) : type Ti :=
-  match reverse r with [] => τ | rs :: _ => ref_seg_object_type rs end.
-Definition ref_seg_type {Ti} (Γ : env Ti) (rs : ref_seg Ti) : type Ti :=
-  match rs with
-  | RArray _ τ n => τ
-  | RStruct i s => from_option voidT (Γ !! s ≫= (!! i))
-  | RUnion i s _ => from_option voidT (Γ !! s ≫= (!! i))
-  end.
-
 Class Freeze A := freeze: bool → A → A.
 Arguments freeze {_ _} _ !_ /.
 Definition frozen `{Freeze A} (x : A) : Prop := freeze true x = x.
@@ -154,14 +139,6 @@ Definition ref_seg_object_offset `{IntEnv Ti, PtrEnv Ti}
 Definition ref_object_offset `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti)
   (r : ref Ti) : nat := sum_list (ref_seg_object_offset Γ <$> r).
 
-Definition ref_seg_object_offset_right `{IntEnv Ti, PtrEnv Ti}
-    (Γ : env Ti) (rs : ref_seg Ti) : nat :=
-  bit_size_of Γ (ref_seg_object_type rs)
-  - ref_seg_object_offset Γ rs - bit_size_of Γ (ref_seg_type Γ rs).
-Arguments ref_seg_object_offset_right _ _ _ _ !_ /.
-Definition ref_object_offset_right `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti)
-  (r : ref Ti) : nat := sum_list (ref_seg_object_offset_right Γ <$> r).
-
 Section references.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
@@ -212,15 +189,6 @@ Proof.
   destruct r as [|rs r] using rev_ind; [by rewrite list_typed_nil|].
   rewrite list_typed_snoc; intros (?&Hrs&_).
   edestruct ref_seg_typed_inv_base; eauto.
-Qed.
-Lemma ref_seg_object_type_correct Γ rs τ σ :
-  Γ ⊢ rs : τ ↣ σ → ref_seg_object_type rs = τ.
-Proof. by destruct 1. Qed.
-Lemma ref_object_type_correct Γ r τ σ : Γ ⊢ r : τ ↣ σ → ref_object_type σ r = τ.
-Proof.
-  destruct r as [|rs r _] using rev_ind; [by rewrite list_typed_nil|].
-  unfold ref_object_type. rewrite list_typed_snoc, reverse_snoc.
-  intros (?&?&?); eauto using ref_seg_object_type_correct.
 Qed.
 Lemma ref_typed_size Γ τ r σ : Γ ⊢ r : τ ↣ σ → ref_offset r < ref_size r.
 Proof. destruct 1 as [|????? []]; auto with lia. Qed.
@@ -550,19 +518,6 @@ Proof. unfold ref_object_offset. induction r1; simpl; lia. Qed.
 Lemma ref_object_offset_singleton Γ rs :
   ref_object_offset Γ [rs] = ref_seg_object_offset Γ rs.
 Proof. unfold ref_object_offset; simpl; lia. Qed.
-Lemma ref_object_offset_right_app Γ r1 r2 :
-  ref_object_offset_right Γ (r1 ++ r2)
-  = ref_object_offset_right Γ r1 + ref_object_offset_right Γ r2.
-Proof. unfold ref_object_offset_right. induction r1; simpl; lia. Qed.
-Lemma ref_seg_object_offset_right_freeze Γ β rs :
-  ref_seg_object_offset_right Γ (freeze β rs) = ref_seg_object_offset_right Γ rs.
-Proof. by destruct rs. Qed.
-Lemma ref_object_offset_right_freeze Γ β r :
-  ref_object_offset_right Γ (freeze β <$> r) = ref_object_offset_right Γ r.
-Proof.
-  unfold ref_object_offset_right.
-  induction r; f_equal'; auto using ref_seg_object_offset_right_freeze.
-Qed.
 Lemma ref_object_offset_set_offset Γ τ r σ i :
   Γ ⊢ r : τ ↣ σ → i < ref_size r →
   ref_object_offset Γ (ref_set_offset i r) + ref_offset r * bit_size_of Γ σ

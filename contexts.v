@@ -3,7 +3,7 @@
 (** This development makes use of contexts to define the semantics of various
 constructs. This file collects some general purpose definitions, theorems, and
 tactics. *)
-Require Export base tactics.
+Require Export tactics.
 
 (** * Contexts with one hole *)
 (** The most commonly used kind of context is the one with exactly one hole.
@@ -24,14 +24,9 @@ turned inside-out representing a path from the top. *)
 
 (** We define subsitution for contexts as singular contexts in a generic way. *)
 Instance list_subst `{Subst A B B} : Subst (list A) B B :=
-  fix go (l : list A) (b : B) : B :=
-  let _ : Subst _ _ _ := @go in
-  match l with
-  | [] => b
-  | a :: l => subst l (subst a b)
-  end.
-Lemma subst_nil `{Subst A B B} b :
-  subst [] b = b.
+  fix go (l : list A) (b : B) : B := let _ : Subst _ _ _ := @go in
+  match l with [] => b | a :: l => subst l (subst a b) end.
+Lemma subst_nil `{Subst A B B} b : subst [] b = b.
 Proof. done. Qed.
 Lemma subst_app `{Subst A B B} (l1 l2 : list A) b :
   subst (l1 ++ l2) b = subst l2 (subst l1 b).
@@ -44,9 +39,8 @@ Instance list_subst_injective `{Subst A B B} :
   (∀ a, Injective (=) (=) (subst a)) →
   ∀ l : list A, Injective (=) (=) (subst l).
 Proof.
-  intros ? l. red. induction l; simpl.
-  * done.
-  * intros. eapply (injective (subst _)), IHl; eassumption.
+  intros ? l. red. induction l as [|x l IH]; simpl; intros; auto.
+  eapply (injective (subst _)), IH; eassumption.
 Qed.
 
 (** * Contexts with multiple holes *)

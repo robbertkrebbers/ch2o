@@ -28,6 +28,8 @@ Section operations.
     PBit (perm_lock (tagged_perm xb)) (tagged_tag xb).
   Definition pbit_unlock (xb : pbit Ti) : pbit Ti :=
     PBit (perm_unlock (tagged_perm xb)) (tagged_tag xb).
+  Definition pbit_unlock_if (xb : pbit Ti) (β : bool) : pbit Ti :=
+    if β then pbit_unlock xb else xb.
 
   Global Instance pbit_refine: Refine Ti M (pbit Ti) := λ Γ f m1 m2 xb1 xb2,
     tagged_tag xb1 ⊑{Γ,f@m1↦m2} tagged_tag xb2 ∧
@@ -251,6 +253,81 @@ Lemma PBits_BIndet_tag xbs :
   Forall sep_unmapped xbs →
   flip PBit BIndet <$> tagged_perm <$> xbs = xbs.
 Proof. induction 1 as [|[] ? [??]]; simplify_equality'; f_equal; auto. Qed.
+
+Lemma pbits_locked_union xbs1 xbs2 :
+  xbs1 ⊥* xbs2 → pbit_locked <$> xbs1 ∪* xbs2
+  = (pbit_locked <$> xbs1) ||* (pbit_locked <$> xbs2).
+Proof.
+  assert (∀ x1 x2, x1 ⊥ x2 →
+    perm_locked (x1 ∪ x2) = perm_locked x1 || perm_locked x2).
+  { intros [[]|] [[]|]; repeat sep_unfold; naive_solver. }
+  unfold pbit_locked. induction 1 as [|???? (?&?&?&?)]; f_equal'; auto.
+Qed.
+Lemma pbits_locked_unmapped xbs :
+  Forall sep_unmapped xbs → Forall sep_unmapped (pbit_locked <$> xbs).
+Proof.
+  assert (∀ x, sep_unmapped x → sep_unmapped (perm_locked x)).
+  { intros [[[[]]|]|]; repeat sep_unfold; naive_solver. }
+  unfold pbit_locked. induction 1 as [|?? []]; simpl; auto.
+Qed.
+Lemma pbits_locks_unlock βs xbs :
+  βs =.>* pbit_locked <$> xbs →
+  pbit_locked <$> zip_with pbit_unlock_if xbs βs = (pbit_locked <$> xbs) ∖* βs.
+Proof.
+  revert βs. induction xbs as [|[[[]|]] ?]; intros [|[] ?] ?;
+    decompose_Forall_hyps'; f_equal; auto.
+Qed.
+Lemma pbits_unlock_union_1 βs1 βs2 xbs :
+  zip_with pbit_unlock_if xbs (βs1 ∪* βs2)
+  = zip_with pbit_unlock_if (zip_with pbit_unlock_if xbs βs2) βs1.
+Proof.
+  assert (∀ x, perm_unlock x = perm_unlock (perm_unlock x)).
+  { by intros [[]|]. }
+  revert βs1 βs2. unfold pbit_unlock_if, pbit_unlock.
+  induction xbs as [|[]]; intros [|[] ?] [|[] ?]; f_equal'; auto with f_equal.
+Qed.
+Lemma pbits_unlock_empty_inv xbs βs :
+  Forall (∅ =) (zip_with pbit_unlock_if xbs βs) → Forall sep_valid xbs →
+  length xbs = length βs → Forall (∅ =) xbs.
+Proof.
+  assert (∀ x, sep_valid x → perm_unlock x = ∅ → x = ∅).
+  { intros [[]|]; repeat sep_unfold; naive_solver. }
+  intros Hxbs Hxbs'. revert βs Hxbs. induction Hxbs' as [|[] ? []];
+    intros [|[] ?] ??; decompose_Forall_hyps'; constructor; eauto.
+  sep_unfold; f_equal; eauto using eq_sym.
+Qed.
+Lemma pbits_unmapped_inv xbs βs :
+  Forall sep_unmapped (zip_with pbit_unlock_if xbs βs) → Forall sep_valid xbs →
+  length xbs = length βs → Forall sep_unmapped xbs.
+Proof.
+  intros Hxbs Hxbs'. revert βs Hxbs. induction Hxbs' as [|[] ? []]; sep_unfold;
+    intros [|[] ?] ??; decompose_Forall_hyps'; constructor;
+    intuition eauto using perm_unlock_unmapped_inv.
+Qed.
+Lemma pbits_unlock_if_valid Γ m xbs βs :
+  ✓{Γ,m}* xbs → ✓{Γ,m}* (zip_with pbit_unlock_if xbs βs).
+Proof.
+  intros Hxs. revert βs.
+  induction Hxs; intros [|[] ?]; simpl; auto using pbit_unlock_valid.
+Qed.
+Lemma pbit_indetify_unlock_if xbs βs :
+  pbit_indetify <$> zip_with pbit_unlock_if xbs βs
+  = zip_with pbit_unlock_if (pbit_indetify <$> xbs) βs.
+Proof. revert βs. induction xbs; intros [|[] ?]; f_equal'; auto. Qed.
+Lemma pbits_mapped_lock xbs :
+  Forall (not ∘ sep_unmapped) xbs →
+  Forall (not ∘ sep_unmapped) (pbit_lock <$> xbs).
+Proof.
+  sep_unfold. induction 1; constructor; simpl in *;
+    intuition eauto using perm_lock_unmapped_inv.
+Qed.
+Lemma pbits_lock_valid Γ m xbs :
+  ✓{Γ,m}* xbs → Forall (λ xb, Some Writable ⊆ pbit_kind xb) xbs →
+  ✓{Γ,m}* (pbit_lock <$> xbs).
+Proof.
+  induction 1 as [|[??] ? (?&?&?)]; repeat constructor; decompose_Forall_hyps';
+    eauto using perm_lock_valid, perm_lock_unmapped_inv.
+Qed.
 
 (** ** Refinements *)
 Lemma pbit_refine_valid_l Γ f m1 m2 xb1 xb2 :

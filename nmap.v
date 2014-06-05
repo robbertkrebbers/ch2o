@@ -58,8 +58,8 @@ Proof.
   * intros ? [[x|] t]; unfold map_to_list; simpl.
     + constructor.
       - rewrite elem_of_list_fmap. by intros [[??] [??]].
-      - apply (fmap_nodup _), map_to_list_nodup.
-    + apply (fmap_nodup _), map_to_list_nodup.
+      - by apply (NoDup_fmap _), NoDup_map_to_list.
+    + apply (NoDup_fmap _), NoDup_map_to_list.
   * intros ? t i x. unfold map_to_list. split.
     + destruct t as [[y|] t]; simpl.
       - rewrite elem_of_cons, elem_of_list_fmap.
