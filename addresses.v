@@ -586,7 +586,7 @@ Section addresses.
     * assert (i `div` size_of Γ (σ.[n]) < ref_size r).
       { apply Nat.div_lt_upper_bound;
           eauto using size_of_ne_0, ref_typed_type_valid. }
-      apply list_typed_cons; exists (σ.[n]); split;
+      apply ref_typed_cons; exists (σ.[n]); split;
         [auto using ref_set_offset_typed|constructor; lia].
     * lia.
     * by rewrite Nat.mod_0_l by eauto using size_of_ne_0.
@@ -601,7 +601,7 @@ Section addresses.
     rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) (?&?) ??.
     destruct a as [o r i σ' σc]; inversion Hcast; simplify_option_equality.
     constructor; simpl; eauto using env_valid_lookup_lookup.
-    * apply list_typed_cons; eexists (compoundT{c} s); split.
+    * apply ref_typed_cons; eexists (compoundT{c} s); split.
       + apply ref_set_offset_typed; auto. apply Nat.div_lt_upper_bound;
           eauto using size_of_ne_0, TCompound_valid.
       + destruct c; econstructor; eauto.
@@ -683,7 +683,7 @@ Section addresses.
     constructor; auto.
     * destruct Hr''; simplify_type_equality'.
       + apply ref_set_offset_typed, ref_typed_freeze; auto with lia.
-      + rewrite app_comm_cons, list_typed_app.
+      + rewrite app_comm_cons, ref_typed_app.
         exists τ. by rewrite ref_typed_freeze.
     * destruct Hr''; simplify_equality'; auto.
       by rewrite ref_offset_set_offset by lia.
@@ -713,7 +713,7 @@ Section addresses.
   Definition addr_refine_id Γ m a σ : (Γ,m) ⊢ a : σ → a ⊑{Γ@m} a : σ.
   Proof.
     destruct 1 as [o r i τ σ σc].
-    eexists []; simpl; auto; [by apply list_typed_nil|].
+    eexists []; simpl; auto; [by apply ref_typed_nil|].
     destruct r as [|rs r]; [apply ref_refine_nil_alt; simpl; auto with lia|].
     apply ref_refine_ne_nil_alt. by rewrite (right_id_L [] (++)).
   Qed.
@@ -725,7 +725,7 @@ Section addresses.
       inversion 1 as [? o4 ? r4 r5 ? i5 ? τ3 ????????????? Hr5]; subst.
     exists (r2 ++ r4); auto.
     { by rewrite lookup_mem_inj_compose; simplify_option_equality. }
-    { rewrite list_typed_app; eauto. }
+    { rewrite ref_typed_app; eauto. }
     destruct Hr3 as [?|rs r i]; inversion Hr5; subst.
     * destruct r2; simplify_equality'. apply ref_refine_nil_alt; auto with lia.
     * destruct r2; simplify_equality'.
@@ -925,7 +925,7 @@ Section addresses.
     * assert (i `div` size_of Γ (σ.[n]) < ref_size r).
       { apply Nat.div_lt_upper_bound;
           eauto using size_of_ne_0, ref_typed_type_valid. }
-      apply list_typed_cons; exists (σ.[n]); split;
+      apply ref_typed_cons; exists (σ.[n]); split;
         [auto using ref_set_offset_typed|constructor; lia].
     * lia.
     * by rewrite Nat.mod_0_l by eauto using size_of_ne_0.
@@ -943,7 +943,7 @@ Section addresses.
     inversion 1 as [o o' r r' r'' i i'' τ τ' ???????????? Hc Hr''];
       inversion Hc; clear Hc; intros; simplify_option_equality.
     econstructor; eauto using env_valid_lookup_lookup.
-    * apply list_typed_cons; eexists (compoundT{c} s); split.
+    * apply ref_typed_cons; eexists (compoundT{c} s); split.
       + apply ref_set_offset_typed; auto. apply Nat.div_lt_upper_bound;
           eauto using size_of_ne_0, TCompound_valid, ref_typed_type_valid.
       + destruct c; econstructor; eauto.

@@ -761,6 +761,9 @@ Lemma take_app_alt l k n : n = length l → take n (l ++ k) = l.
 Proof. intros Hn. by rewrite Hn, take_app. Qed.
 Lemma take_app_le l k n : n ≤ length l → take n (l ++ k) = take n l.
 Proof. revert n. induction l; intros [|?] ?; f_equal'; auto with lia. Qed.
+Lemma take_plus_app l k n m :
+  length l = n → take (n + m) (l ++ k) = l ++ take m k.
+Proof. intros <-. induction l; f_equal'; auto. Qed.
 Lemma take_app_ge l k n :
   length l ≤ n → take n (l ++ k) = l ++ take (n - length l) k.
 Proof. revert n. induction l; intros [|?] ?; f_equal'; auto with lia. Qed.
@@ -2833,6 +2836,12 @@ Section zip_with.
   Lemma zip_with_length_same_r P l k :
     Forall2 P l k → length (zip_with f l k) = length k.
   Proof. induction 1; simpl; auto. Qed.
+  Lemma lookup_zip_with l k i :
+    zip_with f l k !! i = x ← l !! i; y ← k !! i; Some (f x y).
+  Proof.
+    revert k i. induction l; intros [|??] [|?]; f_equal'; auto.
+    by destruct (_ !! _).
+  Qed.
   Lemma fmap_zip_with_l (g : C → A) l k :
     (∀ x y, g (f x y) = x) → length l ≤ length k → g <$> zip_with f l k = l.
   Proof. revert k. induction l; intros [|??] ??; f_equal'; auto with lia. Qed.

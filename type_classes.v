@@ -57,6 +57,16 @@ Class PathTypeCheckSpec (E T R : Type)
     Γ ⊢ r : τ1 ↣ σ → Γ ⊢ r : τ2 ↣ σ → τ1 = τ2
 }.
 
+Ltac typed_constructor :=
+  intros; match goal with
+  | |- typed (Typed:=?H) ?Γ _ _ =>
+    let H' := eval hnf in (H Γ) in
+    econstructor; change H' with (typed (Typed:=H) Γ)
+  | |- path_typed (PathTyped:=?H) ?Γ _ _ _ =>
+    let H' := eval hnf in (H Γ) in
+    econstructor; change H' with (path_typed (PathTyped:=H) Γ)
+  end.
+
 Section typed.
   Context `{Typed E T V}.
   Lemma Forall2_Forall_typed Γ vs τs τ :
@@ -91,7 +101,6 @@ End type_of.
 
 Section path_type_check.
   Context `{PathTypeCheckSpec E T R}.
-
   Lemma path_type_check_None Γ r τ σ : τ !!{Γ} r = None → ¬Γ ⊢ r : τ ↣ σ.
   Proof. rewrite <-path_type_check_correct. congruence. Qed.
   Lemma path_type_check_sound Γ r τ σ : τ !!{Γ} r = Some σ → Γ ⊢ r : τ ↣ σ.
@@ -101,106 +110,16 @@ Section path_type_check.
   Lemma path_typed_unique_r Γ r τ σ1 σ2 :
     Γ ⊢ r : τ ↣ σ1 → Γ ⊢ r : τ ↣ σ2 → σ1 = σ2.
   Proof. rewrite <-!path_type_check_correct. congruence. Qed.
-
-  Inductive list_typed' (Γ : E) : list R → T → T → Prop :=
-    | nil_typed_2 τ : list_typed' Γ [] τ τ
-    | cons_typed_2 r rs τ1 τ2 τ3 :
-       Γ ⊢ rs : τ2 ↣ τ3 → list_typed' Γ r τ1 τ2 →
-       list_typed' Γ (rs :: r) τ1 τ3.
-  Instance list_typed : PathTyped E T (list R) := list_typed'.
-
-  Section list_typed_ind.
-    Context (Γ : E) (P : list R → T → T → Prop).
-    Context (Pnil : ∀ τ, P [] τ τ).
-    Context (Pcons : ∀ r rs τ1 τ2 τ3,
-      Γ ⊢ rs : τ2 ↣ τ3 → Γ ⊢ r : τ1 ↣ τ2 → P r τ1 τ2 → P (rs :: r) τ1 τ3).
-    Lemma list_typed_ind r τ σ : list_typed' Γ r τ σ → P r τ σ.
-    Proof. induction 1; eauto. Qed. 
-  End list_typed_ind.
-
-  Instance list_path_lookup: LookupE E (list R) T T :=
-    fix go Γ r τ := let _ : LookupE _ _ _ _ := @go in
-    match r with [] => Some τ | rs :: r => τ !!{Γ} r ≫= lookupE Γ rs end.
-
-  Lemma list_typed_nil Γ τ1 τ2 : Γ ⊢ @nil R : τ1 ↣ τ2 ↔ τ1 = τ2.
-  Proof.
-    split. by inversion 1; simplify_list_equality. intros <-. constructor.
-  Qed.
-  Lemma list_typed_cons Γ rs r τ1 τ3 :
-    Γ ⊢ rs :: r : τ1 ↣ τ3 ↔ ∃ τ2, Γ ⊢ r : τ1 ↣ τ2 ∧ Γ ⊢ rs : τ2 ↣ τ3.
-  Proof.
-    unfold path_typed at 1 2, list_typed; simpl. split.
-    * inversion 1; subst; eauto.
-    * intros (?&?&?). econstructor; eauto.
-  Qed.
-  Lemma list_typed_app Γ r1 r2 τ1 τ3 :
-    Γ ⊢ r1 ++ r2 : τ1 ↣ τ3 ↔ ∃ τ2, Γ ⊢ r2 : τ1 ↣ τ2 ∧ Γ ⊢ r1 : τ2 ↣ τ3.
-  Proof.
-    revert τ1 τ3. induction r1; simpl; intros.
-    * setoid_rewrite list_typed_nil. naive_solver.
-    * setoid_rewrite list_typed_cons. naive_solver.
-  Qed.
-  Lemma list_typed_singleton Γ rs τ1 τ2 : Γ ⊢ [rs] : τ1 ↣ τ2 ↔ Γ ⊢ rs : τ1 ↣ τ2.
-  Proof.
-    rewrite list_typed_cons. setoid_rewrite list_typed_nil. naive_solver.
-  Qed.
-  Lemma list_typed_snoc Γ r rs τ1 τ3 :
-    Γ ⊢ r ++ [rs] : τ1 ↣ τ3 ↔ ∃ τ2, Γ ⊢ rs : τ1 ↣ τ2 ∧ Γ ⊢ r : τ2 ↣ τ3.
-  Proof.
-    setoid_rewrite list_typed_app. by setoid_rewrite list_typed_singleton.
-  Qed.
-  Lemma list_typed_snoc_2 Γ r rs τ1 τ2 τ3 :
-    Γ ⊢ rs : τ1 ↣ τ2 ∧ Γ ⊢ r : τ2 ↣ τ3 → Γ ⊢ r ++ [rs] : τ1 ↣ τ3.
-  Proof. rewrite list_typed_snoc; eauto. Qed.
-  Lemma list_path_lookup_nil Γ : lookupE Γ (@nil R) = Some.
-  Proof. done. Qed.
-  Lemma list_path_lookup_cons Γ rs r :
-    lookupE Γ (rs :: r) = λ τ, τ !!{Γ} r ≫= lookupE Γ rs.
-  Proof. done. Qed.
-  Lemma list_path_lookup_singleton Γ rs : lookupE Γ [rs] = lookupE Γ rs.
-  Proof. done. Qed.
-
-  Lemma list_path_lookup_app Γ r1 r2 τ :
-    τ !!{Γ} (r1 ++ r2) = (τ !!{Γ} r2) ≫= lookupE Γ r1.
-  Proof.
-    induction r1 as [|rs1 r1 IH]; simpl; [by destruct (τ !!{_} r2)|].
-    by rewrite list_path_lookup_cons, IH, option_bind_assoc.
-  Qed.
-  Lemma list_path_lookup_snoc Γ r rs τ :
-    τ !!{Γ} (r ++ [rs]) = (τ !!{Γ} rs) ≫= lookupE Γ r.
-  Proof. apply list_path_lookup_app. Qed.
-  Global Instance: PathTypeCheckSpec E T (list R).
-  Proof.
-    split.
-    * intros Γ r τ σ. split.
-      + revert σ. induction r; intros σ;
-          [intros;simplify_equality; constructor|].
-        rewrite list_path_lookup_cons, list_typed_cons.
-        intros. simplify_option_equality.
-        eexists; split; eauto. by apply path_type_check_correct.
-      + induction 1; [done|rewrite list_path_lookup_cons].
-        simplify_option_equality. by apply path_type_check_complete.
-    * intros Γ r τ1 τ2 σ Hr. revert τ2.
-      induction Hr as [|r rs σ1 σ2 σ3 ?? IH] using list_typed_ind; intros τ1.
-      { by rewrite list_typed_nil. }
-      rewrite list_typed_cons; intros (τ2&?&?); apply IH.
-      by rewrite (path_typed_unique_l Γ rs σ2 τ2 σ3) by done.
-  Qed.
 End path_type_check.
-
-Hint Extern 0 (PathTyped _ _ (list _)) =>
-  eapply @list_typed : typeclass_instances.
-Hint Extern 0 (LookupE _ (list _) _ _) =>
-  eapply @list_path_lookup : typeclass_instances.
 
 Instance typed_dec `{TypeCheckSpec E T V (λ _, True)}
   `{∀ τ1 τ2 : T, Decision (τ1 = τ2)} Γ x τ : Decision (Γ ⊢ x : τ).
 Proof.
- refine (
+ refine
   match Some_dec (type_check Γ x) with
   | inleft (τ'↾_) => cast_if (decide (τ = τ'))
   | inright _ => right _
-  end); abstract (rewrite <-type_check_correct by done; congruence).
+  end; abstract (rewrite <-type_check_correct by done; congruence).
 Defined.
 Instance path_typed_dec `{PathTypeCheckSpec E T R}
   `{∀ τ1 τ2 : T, Decision (τ1 = τ2)} Γ p τ σ : Decision (Γ ⊢ p : τ ↣ σ).
@@ -225,7 +144,7 @@ Ltac simplify_type_equality := repeat
     unless (τ2 = τ1) by done; pose proof (typed_unique _ x τ2 τ1 H2 H)
   | H : _ ⊢ ?x : ?τ1, H2 : _ ⊢ ?x : ?τ2 |- _ =>
     unless (τ2 = τ1) by done; pose proof (typed_unique_alt _ x τ2 τ1 H2 H)
-  | H : _ ⊢ [] : _ ↣ _ |- _ => rewrite list_typed_nil in H
+  | H : _ ⊢ [] : _ ↣ _ |- _ => inversion H; clear H (* hack *)
   | H : _ ⊢ ?p : ?τ ↣ ?σ1, H2 : _ ⊢ ?p : ?τ ↣ ?σ2 |- _ =>
     unless (σ2 = σ1) by done; pose proof (path_typed_unique_r _ p τ σ2 σ1 H2 H)
   | H : _ ⊢ ?p : ?τ1 ↣ ?σ, H2 : _ ⊢ ?p : ?τ2 ↣ ?σ |- _ =>

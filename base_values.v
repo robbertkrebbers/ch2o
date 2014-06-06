@@ -123,8 +123,8 @@ Section operations.
 
   Definition base_val_0 (τb : base_type Ti) : base_val Ti :=
     match τb with intT τi => VInt τi 0 | τ.* => VPtr (NULL τ) end.
-  Inductive base_val_unop_typed : unop → base_type Ti → base_type Ti → Prop :=
-    | unop_TInt_typed op τi : base_val_unop_typed op (intT τi) (intT τi).
+  Inductive base_unop_typed : unop → base_type Ti → base_type Ti → Prop :=
+    | unop_TInt_typed op τi : base_unop_typed op (intT τi) (intT τi).
   Definition base_val_unop_ok (op : unop) (vb : base_val Ti) : Prop :=
     match vb with VInt τ x => int_unop_ok τ op x | _ => False end.
   Global Arguments base_val_unop_ok !_ !_ /.
@@ -134,22 +134,22 @@ Section operations.
     end.
   Global Arguments base_val_unop !_ !_ /.
 
-  Inductive base_val_binop_typed :
+  Inductive base_binop_typed :
         binop → base_type Ti → base_type Ti → base_type Ti → Prop :=
     | binop_TInt_TInt_typed op τi:
-       base_val_binop_typed op (intT τi) (intT τi) (intT τi)
+       base_binop_typed op (intT τi) (intT τi) (intT τi)
     | CompOp_TPtr_TPtr_typed c τ :
-       base_val_binop_typed (CompOp c) (τ.*) (τ.*) sptrT
+       base_binop_typed (CompOp c) (τ.*) (τ.*) sptrT
     | PlusOp_TPtr_TInt_typed τ σ :
-       base_val_binop_typed PlusOp (τ.*) (intT σ) (τ.*)
+       base_binop_typed PlusOp (τ.*) (intT σ) (τ.*)
     | PlusOp_VInt_TPtr_typed τ σ :
-       base_val_binop_typed PlusOp (intT σ) (τ.*) (τ.*)
+       base_binop_typed PlusOp (intT σ) (τ.*) (τ.*)
     | MinusOp_TPtr_TInt_typed τ σi :
-       base_val_binop_typed MinusOp (τ.*) (intT σi) (τ.*)
+       base_binop_typed MinusOp (τ.*) (intT σi) (τ.*)
     | MinusOp_TInt_TPtr_typed τ σi :
-       base_val_binop_typed MinusOp (intT σi) (τ.*) (τ.*)
+       base_binop_typed MinusOp (intT σi) (τ.*) (τ.*)
     | MinusOp_TPtr_TPtr_typed τ  :
-       base_val_binop_typed MinusOp (τ.*) (τ.*) sptrT.
+       base_binop_typed MinusOp (τ.*) (τ.*) sptrT.
   Definition base_val_binop_ok (Γ : env Ti) (m : mem Ti)
       (op : binop) (vb1 vb2 : base_val Ti) : Prop :=
     match vb1, vb2, op with
@@ -179,15 +179,15 @@ Section operations.
     end.
   Global Arguments base_val_binop _ !_ !_ !_ /.
 
-  Inductive base_val_cast_typed (Γ : env Ti) :
+  Inductive base_cast_typed (Γ : env Ti) :
        base_type Ti → base_type Ti → Prop :=
-    | TInt_cast_typed τi1 τi2 : base_val_cast_typed Γ (intT τi1) (intT τi2)
-    | TPtr_to_void_cast_typed τ : base_val_cast_typed Γ (τ.*) (voidT.*)
-    | TPtr_to_uchar_cast_typed τ : base_val_cast_typed Γ (τ.*) (ucharT.*)
+    | TInt_cast_typed τi1 τi2 : base_cast_typed Γ (intT τi1) (intT τi2)
+    | TPtr_to_void_cast_typed τ : base_cast_typed Γ (τ.*) (voidT.*)
+    | TPtr_to_uchar_cast_typed τ : base_cast_typed Γ (τ.*) (ucharT.*)
     | TPtr_of_void_cast_typed τ :
-       ptr_type_valid Γ τ → base_val_cast_typed Γ (voidT.*) (τ.*)
+       ptr_type_valid Γ τ → base_cast_typed Γ (voidT.*) (τ.*)
     | TPtr_of_uchar_cast_typed τ :
-       ptr_type_valid Γ τ → base_val_cast_typed Γ (ucharT.*) (τ.*).
+       ptr_type_valid Γ τ → base_cast_typed Γ (ucharT.*) (τ.*).
   Definition base_val_cast_ok (Γ : env Ti)
       (τb : base_type Ti) (vb : base_val Ti) : Prop :=
     match vb, τb with
@@ -633,7 +633,7 @@ Proof.
   destruct 1; simpl; constructor. by apply int_typed_small. by constructor.
 Qed.
 Lemma base_val_unop_ok_typed Γ m op vb τb σb :
-  (Γ,m) ⊢ vb : τb → base_val_unop_typed op τb σb →
+  (Γ,m) ⊢ vb : τb → base_unop_typed op τb σb →
   base_val_unop_ok op vb → (Γ,m) ⊢ base_val_unop op vb : σb.
 Proof.
   unfold base_val_unop_ok, base_val_unop. intros Hvτb Hσ Hop.
@@ -642,8 +642,7 @@ Proof.
 Qed.
 Lemma base_val_binop_ok_typed Γ m op vb1 vb2 τb1 τb2 σb :
   ✓ Γ → (Γ,m) ⊢ vb1 : τb1 → (Γ,m) ⊢ vb2 : τb2 →
-  base_val_binop_typed op τb1 τb2 σb →
-  base_val_binop_ok Γ m op vb1 vb2 →
+  base_binop_typed op τb1 τb2 σb → base_val_binop_ok Γ m op vb1 vb2 →
   (Γ,m) ⊢ base_val_binop Γ op vb1 vb2 : σb.
 Proof.
   unfold base_val_binop_ok, base_val_binop. intros HΓ Hv1τb Hv2τb Hσ Hop.
@@ -658,7 +657,7 @@ Proof.
   * constructor. eapply ptr_minus_ok_typed; eauto.
 Qed.
 Lemma base_val_cast_ok_typed Γ m vb τb σb :
-  (Γ,m) ⊢ vb : τb → base_val_cast_typed Γ τb σb →
+  (Γ,m) ⊢ vb : τb → base_cast_typed Γ τb σb →
   base_val_cast_ok Γ σb vb → (Γ,m) ⊢ base_val_cast σb vb : σb.
 Proof.
   unfold base_val_cast_ok, base_val_cast. intros Hvτb Hσb Hok. revert Hvτb.
@@ -676,7 +675,7 @@ Lemma base_val_unop_ok_refine Γ f m1 m2 op vb1 vb2 τb :
   base_val_unop_ok op vb1 → base_val_unop_ok op vb2.
 Proof. by destruct op, 1. Qed.
 Lemma base_val_unop_refine Γ f m1 m2 op vb1 vb2 τb σb :
-  ✓ Γ → base_val_unop_typed op τb σb → base_val_unop_ok op vb1 →
+  ✓ Γ → base_unop_typed op τb σb → base_val_unop_ok op vb1 →
   vb1 ⊑{Γ,f@m1↦m2} vb2 : τb →
   base_val_unop op vb1 ⊑{Γ,f@m1↦m2} base_val_unop op vb2 : σb.
 Proof.
@@ -687,7 +686,7 @@ Proof.
     eauto using int_unop_ok_typed.
 Qed.
 Lemma base_val_binop_ok_refine Γ f m1 m2 op vb1 vb2 vb3 vb4 τb1 τb3 σb :
-  ✓ Γ → m1 ⊑{Γ,f} m2 → base_val_binop_typed op τb1 τb3 σb →
+  ✓ Γ → m1 ⊑{Γ,f} m2 → base_binop_typed op τb1 τb3 σb →
   vb1 ⊑{Γ,f@m1↦m2} vb2 : τb1 → vb3 ⊑{Γ,f@m1↦m2} vb4 : τb3 →
   base_val_binop_ok Γ m1 op vb1 vb3 → base_val_binop_ok Γ m2 op vb2 vb4.
 Proof.
@@ -695,7 +694,7 @@ Proof.
     eauto using ptr_plus_ok_refine, ptr_minus_ok_refine.
 Qed.
 Lemma base_val_binop_refine Γ f m1 m2 op vb1 vb2 vb3 vb4 τb1 τb3 σb :
-  ✓ Γ → m1 ⊑{Γ,f} m2 → base_val_binop_typed op τb1 τb3 σb →
+  ✓ Γ → m1 ⊑{Γ,f} m2 → base_binop_typed op τb1 τb3 σb →
   base_val_binop_ok Γ m1 op vb1 vb3 →
   vb1 ⊑{Γ,f@m1↦m2} vb2 : τb1 → vb3 ⊑{Γ,f@m1↦m2} vb4 : τb3 →
   base_val_binop Γ op vb1 vb3 ⊑{Γ,f@m1↦m2} base_val_binop Γ op vb2 vb4 : σb.
@@ -712,7 +711,7 @@ Lemma base_val_cast_ok_refine Γ f m1 m2 vb1 vb2 τb σb :
   base_val_cast_ok Γ σb vb1 → base_val_cast_ok Γ σb vb2.
 Proof. destruct σb, 2; simpl; try done; eauto using ptr_cast_ok_refine. Qed.
 Lemma base_val_cast_refine Γ f m1 m2 vb1 vb2 τb σb :
-  base_val_cast_typed Γ τb σb → base_val_cast_ok Γ σb vb1 →
+  base_cast_typed Γ τb σb → base_val_cast_ok Γ σb vb1 →
   vb1 ⊑{Γ,f@m1↦m2} vb2 : τb →
   base_val_cast σb vb1 ⊑{Γ,f@m1↦m2} base_val_cast σb vb2 : σb.
 Proof.

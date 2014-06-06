@@ -73,6 +73,15 @@ Inductive ref_seg_typed' `{PtrEnv Ti} (Γ : env Ti) :
      ref_seg_typed' Γ (RUnion i s β) (unionT s) τ.
 Instance ref_seg_typed `{PtrEnv Ti} :
   PathTyped (env Ti) (type Ti) (ref_seg Ti) := ref_seg_typed'.
+
+Inductive ref_typed' `{PtrEnv Ti} (Γ : env Ti) :
+     ref Ti → type Ti → type Ti → Prop :=
+  | ref_nil_typed' τ : ref_typed' Γ [] τ τ
+  | ref_cons_typed' r rs τ1 τ2 τ3 :
+     Γ ⊢ rs : τ2 ↣ τ3 → ref_typed' Γ r τ1 τ2 → ref_typed' Γ (rs :: r) τ1 τ3.
+Instance ref_typed `{PtrEnv Ti} :
+  PathTyped (env Ti) (type Ti) (ref Ti) := ref_typed'.
+
 Instance subtype `{PtrEnv Ti} : SubsetEqE (env Ti) (type Ti) :=
   λ Γ τ1 τ2, ∃ r : ref Ti, Γ ⊢ r : τ2 ↣ τ1.
 Instance ref_seg_lookup {Ti : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)} :
@@ -84,6 +93,10 @@ Instance ref_seg_lookup {Ti : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)}
   | RUnion i s' _, unionT s => guard (s = s'); Γ !! s ≫= (!! i)
   | _, _ => None
   end.
+Instance ref_lookup {Ti : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)} :
+    LookupE (env Ti) (ref Ti) (type Ti) (type Ti) :=
+  fix go Γ r τ := let _ : LookupE _ _ _ _ := @go in
+  match r with [] => Some τ | rs :: r => τ !!{Γ} r ≫= lookupE Γ rs end.
 
 Class Freeze A := freeze: bool → A → A.
 Arguments freeze {_ _} _ !_ /.
@@ -139,12 +152,62 @@ Definition ref_seg_object_offset `{IntEnv Ti, PtrEnv Ti}
 Definition ref_object_offset `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti)
   (r : ref Ti) : nat := sum_list (ref_seg_object_offset Γ <$> r).
 
+Section ref_typed_ind.
+  Context `{PtrEnv Ti} (Γ : env Ti) (P : ref Ti → type Ti → type Ti → Prop).
+  Context (Pnil : ∀ τ, P [] τ τ).
+  Context (Pcons : ∀ r rs τ1 τ2 τ3,
+    Γ ⊢ rs : τ2 ↣ τ3 → Γ ⊢ r : τ1 ↣ τ2 → P r τ1 τ2 → P (rs :: r) τ1 τ3).
+  Lemma ref_typed_ind r τ σ : ref_typed' Γ r τ σ → P r τ σ.
+  Proof. induction 1; eauto. Qed. 
+End ref_typed_ind.
+
 Section references.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
 Implicit Types τ : type Ti.
 Implicit Types rs : ref_seg Ti.
 Implicit Types r : ref Ti.
+
+Lemma ref_typed_nil Γ τ1 τ2 : Γ ⊢ @nil (ref_seg Ti) : τ1 ↣ τ2 ↔ τ1 = τ2.
+Proof. split. by intros; simplify_type_equality. intros <-. constructor. Qed.
+Lemma ref_typed_cons Γ rs r τ1 τ3 :
+  Γ ⊢ rs :: r : τ1 ↣ τ3 ↔ ∃ τ2, Γ ⊢ r : τ1 ↣ τ2 ∧ Γ ⊢ rs : τ2 ↣ τ3.
+Proof.
+  unfold path_typed at 1 2, ref_typed; simpl. split.
+  * inversion 1; subst; eauto.
+  * intros (?&?&?). econstructor; eauto.
+Qed.
+Lemma ref_typed_app Γ r1 r2 τ1 τ3 :
+  Γ ⊢ r1 ++ r2 : τ1 ↣ τ3 ↔ ∃ τ2, Γ ⊢ r2 : τ1 ↣ τ2 ∧ Γ ⊢ r1 : τ2 ↣ τ3.
+Proof.
+  revert τ1 τ3. induction r1; simpl; intros.
+  * setoid_rewrite ref_typed_nil. naive_solver.
+  * setoid_rewrite ref_typed_cons. naive_solver.
+Qed.
+Lemma ref_typed_singleton Γ rs τ1 τ2 : Γ ⊢ [rs] : τ1 ↣ τ2 ↔ Γ ⊢ rs : τ1 ↣ τ2.
+Proof. rewrite ref_typed_cons. setoid_rewrite ref_typed_nil. naive_solver. Qed.
+Lemma ref_typed_snoc Γ r rs τ1 τ3 :
+  Γ ⊢ r ++ [rs] : τ1 ↣ τ3 ↔ ∃ τ2, Γ ⊢ rs : τ1 ↣ τ2 ∧ Γ ⊢ r : τ2 ↣ τ3.
+Proof. setoid_rewrite ref_typed_app. by setoid_rewrite ref_typed_singleton. Qed.
+Lemma ref_typed_snoc_2 Γ r rs τ1 τ2 τ3 :
+  Γ ⊢ rs : τ1 ↣ τ2 ∧ Γ ⊢ r : τ2 ↣ τ3 → Γ ⊢ r ++ [rs] : τ1 ↣ τ3.
+Proof. rewrite ref_typed_snoc; eauto. Qed.
+Lemma ref_lookup_nil Γ : lookupE Γ (@nil (ref_seg Ti)) = Some.
+Proof. done. Qed.
+Lemma ref_lookup_cons Γ rs r :
+  lookupE Γ (rs :: r) = λ τ, τ !!{Γ} r ≫= lookupE Γ rs.
+Proof. done. Qed.
+Lemma ref_lookup_singleton Γ rs : lookupE Γ [rs] = lookupE Γ rs.
+Proof. done. Qed.
+Lemma ref_lookup_app Γ r1 r2 τ :
+  τ !!{Γ} (r1 ++ r2) = (τ !!{Γ} r2) ≫= lookupE Γ r1.
+Proof.
+  induction r1 as [|rs1 r1 IH]; simpl; [by destruct (τ !!{_} r2)|].
+  by rewrite ref_lookup_cons, IH, option_bind_assoc.
+Qed.
+Lemma ref_lookup_snoc Γ r rs τ :
+  τ !!{Γ} (r ++ [rs]) = (τ !!{Γ} rs) ≫= lookupE Γ r.
+Proof. apply ref_lookup_app. Qed.
 
 Lemma ref_seg_typed_type_valid Γ rs τ σ :
   ✓ Γ → Γ ⊢ rs : τ ↣ σ → ✓{Γ} τ → ✓{Γ} σ.
@@ -162,12 +225,29 @@ Proof.
       simplify_option_equality; econstructor; eauto.
   * by destruct 1; inversion 1.
 Qed.
+Global Instance: PathTypeCheckSpec (env Ti) (type Ti) (ref Ti).
+Proof.
+  split.
+  * intros Γ r τ σ. split.
+    + revert σ. induction r; intros σ;
+        [intros;simplify_equality; constructor|].
+      rewrite ref_lookup_cons, ref_typed_cons.
+      intros. simplify_option_equality.
+      eexists; split; eauto. by apply path_type_check_correct.
+    + induction 1; [done|rewrite ref_lookup_cons].
+      simplify_option_equality. by apply path_type_check_complete.
+  * intros Γ r τ1 τ2 σ Hr. revert τ2.
+    induction Hr as [|r rs σ1 σ2 σ3 ?? IH] using @ref_typed_ind; intros τ1.
+    { by rewrite ref_typed_nil. }
+    rewrite ref_typed_cons; intros (τ2&?&?); apply IH.
+    by rewrite (path_typed_unique_l Γ rs σ2 τ2 σ3) by done.
+Qed.
 Lemma ref_seg_typed_weaken Γ1 Γ2 rs τ σ :
   Γ1 ⊢ rs : τ ↣ σ → Γ1 ⊆ Γ2 → Γ2 ⊢ rs : τ ↣ σ.
 Proof. destruct 1; econstructor; eauto using lookup_weaken. Qed.
 Lemma ref_typed_weaken Γ1 Γ2 r τ σ : Γ1 ⊢ r : τ ↣ σ → Γ1 ⊆ Γ2 → Γ2 ⊢ r : τ ↣ σ.
 Proof.
-  intros Hr ?. induction Hr using @list_typed_ind;
+  intros Hr ?. induction Hr using @ref_typed_ind;
     econstructor; eauto using ref_seg_typed_weaken.
 Qed.
 Lemma ref_lookup_weaken Γ1 Γ2 r τ σ :
@@ -177,8 +257,8 @@ Lemma ref_seg_typed_inv_void Γ rs σ : ¬Γ ⊢ rs : voidT ↣ σ.
 Proof. inversion 1. Qed.
 Lemma ref_typed_inv_void Γ r σ : Γ ⊢ r : voidT ↣ σ → σ = voidT ∧ r = [].
 Proof.
-  destruct r as [|rs r] using rev_ind; [by rewrite list_typed_nil|].
-  rewrite list_typed_snoc. intros (?&Hrs&_).
+  destruct r as [|rs r] using rev_ind; [by rewrite ref_typed_nil|].
+  rewrite ref_typed_snoc. intros (?&Hrs&_).
   edestruct ref_seg_typed_inv_void; eauto.
 Qed.
 Lemma ref_seg_typed_inv_base Γ τb rs σ : ¬Γ ⊢ rs : baseT τb ↣ σ.
@@ -186,8 +266,8 @@ Proof. inversion 1. Qed.
 Lemma ref_typed_inv_base Γ τb r σ :
   Γ ⊢ r : baseT τb ↣ σ → σ = baseT τb ∧ r = [].
 Proof.
-  destruct r as [|rs r] using rev_ind; [by rewrite list_typed_nil|].
-  rewrite list_typed_snoc; intros (?&Hrs&_).
+  destruct r as [|rs r] using rev_ind; [by rewrite ref_typed_nil|].
+  rewrite ref_typed_snoc; intros (?&Hrs&_).
   edestruct ref_seg_typed_inv_base; eauto.
 Qed.
 Lemma ref_typed_size Γ τ r σ : Γ ⊢ r : τ ↣ σ → ref_offset r < ref_size r.
@@ -214,8 +294,8 @@ Proof. by destruct r as [|[]]. Qed.
 Lemma ref_set_offset_typed_unique Γ τ r σ1 σ2 i :
   Γ ⊢ r : τ ↣ σ1 → Γ ⊢ ref_set_offset i r : τ ↣ σ2 → σ1 = σ2.
 Proof.
-  destruct r as [|rs r]; simpl; [rewrite !list_typed_nil; congruence|].
-  rewrite !list_typed_cons. intros (τ1&?&Hrs1) (τ2&?&Hrs2).
+  destruct r as [|rs r]; simpl; [rewrite !ref_typed_nil; congruence|].
+  rewrite !ref_typed_cons. intros (τ1&?&Hrs1) (τ2&?&Hrs2).
   simplify_type_equality'.
   by destruct Hrs1; inversion Hrs2; simplify_option_equality.
 Qed.
@@ -223,7 +303,7 @@ Lemma size_of_ref Γ τ r σ :
   ✓ Γ → Γ ⊢ r : τ ↣ σ → size_of Γ σ * ref_size r ≤ size_of Γ τ.
 Proof.
   intros ?. induction 1 as [|r rs τ1 τ2 τ3 Hrs Hr IH]
-    using @list_typed_ind; simpl; [lia|].
+    using @ref_typed_ind; simpl; [lia|].
   transitivity (size_of Γ τ2 * ref_size r); [|done].
   apply ref_typed_size in Hr.
   destruct Hrs as [τ' i n|s i τs τ'|s i τs τ']; simpl.
@@ -243,12 +323,12 @@ Global Instance: PreOrder (@subseteqE (env Ti) (type Ti) _ Γ).
 Proof.
   intros Γ. repeat split.
   * eexists []. constructor.
-  * intros ??? (r1&?) (r2&?). exists (r1 ++ r2). apply list_typed_app; eauto.
+  * intros ??? (r1&?) (r2&?). exists (r1 ++ r2). apply ref_typed_app; eauto.
 Qed.
 Lemma ref_typed_subtype Γ τ r1 r2 σ1 σ2 :
   Γ ⊢ r1 : τ ↣ σ1 → Γ ⊢ r2 : τ ↣ σ2 → r1 `suffix_of` r2 → σ2 ⊆{Γ} σ1.
 Proof.
-  intros Hr1 Hr2 [r ->]. rewrite list_typed_app in Hr2.
+  intros Hr1 Hr2 [r ->]. rewrite ref_typed_app in Hr2.
   destruct Hr2 as (σ'&?&?); simplify_type_equality. by exists r.
 Qed.
 Lemma subtype_weaken Γ Σ σ τ : σ ⊆{Γ} τ → Γ ⊆ Σ → σ ⊆{Σ} τ.
@@ -268,7 +348,7 @@ Proof. by rewrite ref_seg_typed_freeze. Qed.
 Lemma ref_lookup_freeze Γ β r : lookupE Γ (freeze β <$> r) = lookupE Γ r.
 Proof.
   induction r as [|rs r IH]; [done|].
-  by rewrite fmap_cons, !list_path_lookup_cons, ref_seg_lookup_freeze, IH.
+  by rewrite fmap_cons, !ref_lookup_cons, ref_seg_lookup_freeze, IH.
 Qed.
 Lemma ref_typed_freeze Γ β τ r σ : Γ ⊢ freeze β <$> r : τ ↣ σ ↔ Γ ⊢ r : τ ↣ σ.
 Proof. by rewrite <-!path_type_check_correct, ref_lookup_freeze. Qed.
@@ -542,7 +622,7 @@ Qed.
 Lemma ref_object_offset_size Γ τ r σ :
   ✓ Γ → Γ ⊢ r : τ ↣ σ → ref_object_offset Γ r + bit_size_of Γ σ ≤ bit_size_of Γ τ.
 Proof.
-  unfold ref_object_offset. induction 2 using @list_typed_ind; simpl; [done|].
+  unfold ref_object_offset. induction 2 using @ref_typed_ind; simpl; [done|].
   efeed pose proof ref_seg_object_offset_size; eauto; lia.
 Qed.
 Lemma ref_seg_disjoint_object_offset Γ τ rs1 rs2 σ1 σ2 :
@@ -561,7 +641,7 @@ Lemma ref_disjoint_object_offset Γ τ r1 r2 σ1 σ2 :
   ref_object_offset Γ r2 + bit_size_of Γ σ2 ≤ ref_object_offset Γ r1.
 Proof.
   rewrite ref_disjoint_alt; intros ? (r1''&rs1&r1'&r2''&rs2&r2'&->&->&?&Hr').
-  repeat setoid_rewrite list_typed_app; setoid_rewrite list_typed_singleton.
+  repeat setoid_rewrite ref_typed_app; setoid_rewrite ref_typed_singleton.
   intros (σ1'&(τ'&Hτ'&?)&?) (σ2'&(?&?&?)&?); rewrite <-(ref_typed_freeze _ true),
     Hr', ref_typed_freeze in Hτ'; simplify_type_equality.
   rewrite !ref_object_offset_app, !ref_object_offset_singleton,
@@ -588,10 +668,10 @@ Proof.
       r2 = r2' ++ [RUnion i2 s true] ++ r' ∧ i1 ≠ i2).
   { intros [?|[(j&r'&->)|[(j&r'&->)|(s&r1'&i1&r2'&i2&r'&Hr1'&Hr2'&?)]]].
     * by left.
-    * rewrite list_typed_app in Hr1; destruct Hr1 as (σ2'&?&?).
+    * rewrite ref_typed_app in Hr1; destruct Hr1 as (σ2'&?&?).
       assert (σ2'=σ2) as -> by eauto using ref_set_offset_typed_unique, eq_sym.
       by right; left; exists r'.
-    * rewrite list_typed_app in Hr2; destruct Hr2 as (σ1'&?&?).
+    * rewrite ref_typed_app in Hr2; destruct Hr2 as (σ1'&?&?).
       assert (σ1'=σ1) as -> by eauto using ref_set_offset_typed_unique, eq_sym.
       by do 2 right; left; exists r'.
     * do 3 right; naive_solver. }
@@ -605,7 +685,7 @@ Proof.
       r2 = r2' ++ [RUnion i2 s true] ∧ i1 ≠ i2) as aux.
   { intros τ rs1 r2 σ1 σ2 Hrs1 Hrs1F Hr2 Hr2F.
     destruct r2 as [|rs2 r2 _] using rev_ind; [by do 2 right; left|].
-    rewrite list_typed_snoc in Hr2; destruct Hr2 as (σ2'&Hrs2&Hr2).
+    rewrite ref_typed_snoc in Hr2; destruct Hr2 as (σ2'&Hrs2&Hr2).
     rewrite fmap_app in Hr2F. destruct Hrs1 as [? i1 n|s i1|s i1 ?];
       inversion Hrs2 as [? i2|? i2|? i2 []]; simplify_list_equality'.
     * by right; left; exists i2 r2.
@@ -615,17 +695,17 @@ Proof.
     * destruct (decide (i1 = i2)) as [->|]; [by right; left; exists 0 r2|].
       do 3 right. by exists s i1 r2 i2. }
   induction 1 as [τ|r1 rs1 τ τ1 σ1 Hrs1 Hr1 IH]
-    using @list_typed_ind; intros r2 σ2 Hr1F Hr2 Hr2F; simplify_equality'.
+    using @ref_typed_ind; intros r2 σ2 Hr1F Hr2 Hr2F; simplify_equality'.
   { do 2 right; left; exists 0 r2. by rewrite (right_id_L [] (++)). }
   destruct Hr2 as [τ|r2 rs2 τ τ2 σ2 Hrs2 Hr2 _]
-    using @list_typed_ind; simplify_equality'.
+    using @ref_typed_ind; simplify_equality'.
   { right; left; exists 0 (rs1 :: r1). by rewrite (right_id_L [] (++)). }
   destruct (IH r2 τ2) as
     [Hr|[(j&r'&->)|[(j&r'&->)|(s&r1'&i1&r2'&i2&r'&->&->&?)]]];
     auto; clear IH; simplify_equality'.
   * left; intros j1 j2. apply ref_disjoint_cons_l, ref_disjoint_cons_r.
     by rewrite <-(ref_set_offset_offset r1), <-(ref_set_offset_offset r2).
-  * rewrite list_typed_app in Hr1; destruct Hr1 as (τ2'&Hr2'&Hr').
+  * rewrite ref_typed_app in Hr1; destruct Hr1 as (τ2'&Hr2'&Hr').
     assert (τ2' = τ2) as -> by eauto using ref_set_offset_typed_unique, eq_sym.
     destruct (ref_set_offset_disjoint r2 j) as [?| ->].
     { left; intros j1 j2. rewrite app_comm_cons.
@@ -643,7 +723,7 @@ Proof.
       by rewrite app_comm_cons, Hr'', <-(associative_L (++)).
     + do 3 right. eexists s, r2', i2, [], i1, r2.
       by rewrite app_comm_cons, Hr2'', <-(associative_L (++)).
-  * rewrite list_typed_app in Hr2; destruct Hr2 as (τ1'&Hr1'&Hr').
+  * rewrite ref_typed_app in Hr2; destruct Hr2 as (τ1'&Hr1'&Hr').
     assert (τ1' = τ1) as -> by eauto using ref_set_offset_typed_unique, eq_sym.
     destruct (ref_set_offset_disjoint r1 j) as [?| ->]; simpl.
     { left; intros. rewrite app_comm_cons. by apply (ref_disjoint_app [_]). }

@@ -79,7 +79,7 @@ Proof.
     exists w2; split; auto. contradict Hw1.
     apply (ctree_refine_Forall_inv _ Γ f (CMap m1) (CMap m2) w1 w2'
       (type_of w1)); eauto using @ctree_lookup_Forall.
-    unfold pbit_kind; by intros ??? (?&->&_).
+    unfold pbit_kind; simpl; by intros ??? (?&->&_).
 Qed.
 
 Lemma cmap_empty_valid Γ : ✓{Γ} (∅ : mem Ti).
@@ -440,7 +440,7 @@ Proof.
   destruct (ctree_lookup_refine Γ f2 m2 m3 w2 w3' (type_of w2)
     (freeze true <$> r2) w2') as (w3''&?&Hw23); auto.
   erewrite ctree_refine_type_of_r in Hw23 by eauto. exists w3 w3''.
-  rewrite fmap_app, list_path_lookup_app; simplify_option_equality.
+  rewrite fmap_app, ctree_lookup_app; simplify_option_equality.
   split_ands; eauto using ctree_refine_compose.
 Qed.
 Lemma cmap_lookup_refine Γ f m1 m2 a1 a2 w1 τ :
@@ -457,7 +457,7 @@ Proof.
     as (w2&w2'&->&Hr&?); auto; simpl.
   destruct (ctree_lookup_Some Γ (CMap m1) w1' (type_of w1')
     (addr_ref Γ a1) w1'') as (σ'&?&?); eauto using ctree_refine_typed_l.
-  rewrite list_path_lookup_app, Hr; simpl.
+  rewrite ctree_lookup_app, Hr; simpl.
   destruct (ctree_lookup_refine Γ f (CMap m1) (CMap m2) w1' w2' (type_of w1')
     (addr_ref Γ a1) w1'') as (w2''&->&?); auto; simpl.
   rewrite <-(decide_iff _ _ _ _ (addr_is_obj_refine _ _ _ _ _ _ _ Ha));
@@ -517,7 +517,7 @@ Proof.
   rewrite Hr2 in Hw2 |- *; clear Hr2.
   destruct (m1 !! addr_index a1) as [w1'|] eqn:?; simplify_equality'.
   destruct (m2 !! addr_index a2) as [w2'|] eqn:?; simplify_equality'.
-  rewrite list_path_lookup_app in Hw2.
+  rewrite ctree_lookup_app in Hw2.
   destruct (w1' !!{Γ} addr_ref Γ a1) as [w1''|] eqn:?; simplify_equality'.
   destruct (decide (o3 = addr_index a1)); simplify_map_equality'.
   * destruct (Hm (addr_index a1) (addr_index a2) r2 w1') as (?&w2''&?&?&?); auto.

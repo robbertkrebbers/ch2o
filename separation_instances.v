@@ -202,7 +202,7 @@ Proof.
   * sep_unfold; intros ??? (?&?&?&?) (?&?&?&Hxyz).
     split_ands; eauto using sep_disjoint_ll; intros.
     assert (sep_unmapped (y.2)).
-    { eapply sep_unshared_unmapped; eauto.
+    { apply sep_unshared_unmapped with (x.2 ∪ z.2); auto.
       rewrite sep_commutative' by eauto using sep_disjoint_ll.
       by apply sep_disjoint_move_r. }
     rewrite <-(Qcplus_0_r (x.1)). transitivity (x.1 + y.1 + z.1); auto.

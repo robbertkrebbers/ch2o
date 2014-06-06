@@ -22,54 +22,29 @@ Section operations.
     type_of <$> cmap_car m !! o.
 
   Inductive ctree_typed' (Γ: env Ti) (m : mem Ti) : mtree Ti → type Ti → Prop :=
-    | MBase_typed' τb xbs :
+    | MBase_typed τb xbs :
        ✓{Γ} τb → ✓{Γ,m}* xbs → length xbs = bit_size_of Γ (baseT τb) →
        ctree_typed' Γ m (MBase τb xbs) (baseT τb)
-    | MArray_typed' τ ws :
-       Forall (λ w, ctree_typed' Γ m w τ) ws → length ws ≠ 0 →
-       ctree_typed' Γ m (MArray τ ws) (τ.[length ws])
-    | MStruct_typed' s wxbss τs :
+    | MArray_typed τ n ws :
+       n = length ws → Forall (λ w, ctree_typed' Γ m w τ) ws → n ≠ 0 →
+       ctree_typed' Γ m (MArray τ ws) (τ.[n])
+    | MStruct_typed s wxbss τs :
        Γ !! s = Some τs → Forall2 (ctree_typed' Γ m ∘ fst) wxbss τs →
        ✓{Γ,m}2** wxbss →
        Forall (λ wxbs, pbit_indetify <$> wxbs.2 = wxbs.2) wxbss →
        length ∘ snd <$> wxbss = field_bit_padding Γ τs →
        ctree_typed' Γ m (MStruct s wxbss) (structT s)
-    | MUnion_typed' s i τs w xbs τ :
+    | MUnion_typed s i τs w xbs τ :
        Γ !! s = Some τs → τs !! i = Some τ → ctree_typed' Γ m w τ →
        ✓{Γ,m}* xbs → pbit_indetify <$> xbs = xbs →
        bit_size_of Γ (unionT s) = bit_size_of Γ τ + length xbs →
        ¬(ctree_unmapped w ∧ Forall sep_unmapped xbs) →
        ctree_typed' Γ m (MUnion s i w xbs) (unionT s)
-    | MUnionAll_typed' s τs xbs :
+    | MUnionAll_typed s τs xbs :
        Γ !! s = Some τs → ✓{Γ,m}* xbs → length xbs = bit_size_of Γ (unionT s) →
        ctree_typed' Γ m (MUnionAll s xbs) (unionT s).
   Global Instance ctree_typed:
     Typed (env Ti * mem Ti) (type Ti) (mtree Ti) := curry ctree_typed'.
-
-  Lemma MBase_typed Γ m τb xbs :
-    ✓{Γ} τb → ✓{Γ,m}* xbs →
-    length xbs = bit_size_of Γ (baseT τb) → (Γ,m) ⊢ MBase τb xbs : baseT τb.
-  Proof. by constructor. Qed.
-  Lemma MArray_typed Γ m τ ws n :
-    n = length ws → (Γ,m) ⊢* ws : τ → n ≠ 0 → (Γ,m) ⊢ MArray τ ws : τ.[n].
-  Proof. intros -> ??. by constructor. Qed.
-  Lemma MStruct_typed Γ m s wxbss τs :
-    Γ !! s = Some τs → (Γ,m) ⊢1* wxbss :* τs → ✓{Γ,m}2** wxbss →
-    Forall (λ wxbs, pbit_indetify <$> wxbs.2 = wxbs.2) wxbss →
-    length ∘ snd <$> wxbss = field_bit_padding Γ τs →
-    (Γ,m) ⊢ MStruct s wxbss : structT s.
-  Proof. econstructor; eauto. Qed.
-  Lemma MUnion_typed Γ m s i τs w xbs τ :
-    Γ !! s = Some τs → τs !! i = Some τ → (Γ,m) ⊢ w : τ →
-    ✓{Γ,m}* xbs → pbit_indetify <$> xbs = xbs →
-    bit_size_of Γ (unionT s) = bit_size_of Γ τ + length xbs →
-    ¬(ctree_unmapped w ∧ Forall sep_unmapped xbs) →
-    (Γ,m) ⊢ MUnion s i w xbs : unionT s.
-  Proof. econstructor; eauto. Qed.
-  Lemma MUnionAll_typed Γ m s τs xbs :
-    Γ !! s = Some τs → ✓{Γ,m}* xbs → length xbs = bit_size_of Γ (unionT s) →
-    (Γ,m) ⊢ MUnionAll s xbs : unionT s.
-  Proof. econstructor; eauto. Qed.
 
   Lemma ctree_typed_inv_l Γ m (P : type Ti → Prop) w τ :
     (Γ,m) ⊢ w : τ →
@@ -92,7 +67,7 @@ Section operations.
        (∀ τs, Γ !! s = Some τs → ✓{Γ,m}* xbs →
          length xbs = bit_size_of Γ (unionT s) → P (unionT s)) → P τ
     end.
-  Proof. destruct 1; eauto. Qed.
+  Proof. destruct 1; simplify_equality'; eauto. Qed.
   Lemma ctree_typed_inv_r Γ m (P : mtree Ti → Prop) w τ :
     (Γ,m) ⊢ w : τ →
     match τ with
@@ -142,7 +117,7 @@ Section operations.
          length xbs = bit_size_of Γ (unionT s) → P) → P
     | _, _ => P
     end.
-  Proof. destruct 1; eauto. Qed.
+  Proof. destruct 1; simplify_equality'; eauto. Qed.
   Section ctree_typed_ind.
     Context (Γ : env Ti) (m : mem Ti) (P : mtree Ti → type Ti → Prop).
     Context (Pbase : ∀ τb xbs,
@@ -167,32 +142,11 @@ Section operations.
       Γ !! s = Some τs → ✓{Γ,m}* xbs → length xbs = bit_size_of Γ (unionT s) →
       P (MUnionAll s xbs) (unionT s)).
     Definition ctree_typed_ind : ∀ w τ, ctree_typed' Γ m w τ → P w τ.
-    Proof. fix 3; destruct 1; eauto using Forall2_impl, Forall_impl. Qed.
+    Proof.
+      fix 3; destruct 1; simplify_equality';
+        eauto using Forall2_impl, Forall_impl.
+    Qed.
   End ctree_typed_ind.
-  Section ctree_typed_case.
-    Context (Γ : env Ti) (m : mem Ti) (P : mtree Ti → type Ti → Prop).
-    Context (Pbase : ∀ τb xbs,
-      ✓{Γ} τb → ✓{Γ,m}* xbs →
-      length xbs = bit_size_of Γ (baseT τb) → P (MBase τb xbs) (baseT τb)).
-    Context (Parray : ∀ ws τ,
-      (Γ,m) ⊢* ws : τ → length ws ≠ 0 → P (MArray τ ws) (τ.[length ws])).
-    Context (Pstruct : ∀ s wxbss τs,
-      Γ !! s = Some τs → (Γ,m) ⊢1* wxbss :* τs → ✓{Γ,m}2** wxbss →
-      Forall (λ wxbs, pbit_indetify <$> wxbs.2 = wxbs.2) wxbss →
-      length ∘ snd <$> wxbss = field_bit_padding Γ τs →
-      P (MStruct s wxbss) (structT s)).
-    Context (Punion : ∀ s i τs w xbs τ,
-      Γ !! s = Some τs → τs !! i = Some τ → (Γ,m) ⊢ w : τ →
-      ✓{Γ,m}* xbs → pbit_indetify <$> xbs = xbs →
-      bit_size_of Γ (unionT s) = bit_size_of Γ τ + length xbs →
-      ¬(ctree_unmapped w ∧ Forall sep_unmapped xbs) →
-      P (MUnion s i w xbs) (unionT s)).
-    Context (Punion_all : ∀ s τs xbs,
-      Γ !! s = Some τs → ✓{Γ,m}* xbs → length xbs = bit_size_of Γ (unionT s) →
-      P (MUnionAll s xbs) (unionT s)).
-    Lemma ctree_typed_case : ∀ w τ, ctree_typed' Γ m w τ → P w τ.
-    Proof. destruct 1; eauto. Qed.
-  End ctree_typed_case.
 
   Global Instance mval_check:TypeCheck (env Ti * mem Ti) (type Ti) (mtree Ti) :=
     fix go Γm w {struct w} := let _ : TypeCheck _ _ _ := @go in
@@ -334,6 +288,9 @@ Section operations.
        Some (ctree_unflatten Γ τ (take (bit_size_of Γ τ) xbs))
     | _, _ => None
     end.
+  Global Instance ctree_lookup: LookupE (env Ti) (ref Ti) (mtree Ti) (mtree Ti) :=
+    fix go Γ r w := let _ : LookupE _ _ _ _ := @go in
+    match r with [] => Some w | rs :: r => w !!{Γ} r ≫= lookupE Γ rs end.
 
   Definition ctree_alter_seg (Γ : env Ti) (g : mtree Ti → mtree Ti)
       (rs : ref_seg Ti) (w : mtree Ti) : mtree Ti :=
@@ -369,33 +326,33 @@ Section operations.
 
   Inductive ctree_refine' (Γ : env Ti) (f : mem_inj Ti) (m1 m2 : mem Ti) :
        mtree Ti → mtree Ti → type Ti → Prop :=
-    | MBase_refine' τb xbs1 xbs2 :
+    | MBase_refine τb xbs1 xbs2 :
        ✓{Γ} τb → xbs1 ⊑{Γ,f@m1↦m2}* xbs2 →
        length xbs1 = bit_size_of Γ (baseT τb) →
        ctree_refine' Γ f m1 m2 (MBase τb xbs1) (MBase τb xbs2) (baseT τb)
-    | MArray_refine' τ n ws1 ws2 :
+    | MArray_refine τ n ws1 ws2 :
        n = length ws1 →
        Forall2 (λ w1 w2, ctree_refine' Γ f m1 m2 w1 w2 τ) ws1 ws2 →
        n ≠ 0 → ctree_refine' Γ f m1 m2 (MArray τ ws1) (MArray τ ws2) (τ.[n])
-    | MStruct_refine' s wxbss1 wxbss2 τs :
+    | MStruct_refine s wxbss1 wxbss2 τs :
        Γ !! s = Some τs → Forall3 (λ wxbs1 wxbs2 τ,
          ctree_refine' Γ f m1 m2 (wxbs1.1) (wxbs2.1) τ) wxbss1 wxbss2 τs →
        wxbss1 ⊑{Γ,f@m1↦m2}2** wxbss2 →
        Forall (λ wxbs, pbit_indetify <$> wxbs.2 = wxbs.2) wxbss2 →
        length ∘ snd <$> wxbss1 = field_bit_padding Γ τs →
        ctree_refine' Γ f m1 m2 (MStruct s wxbss1) (MStruct s wxbss2) (structT s)
-    | MUnion_refine' s τs i w1 w2 xbs1 xbs2 τ :
+    | MUnion_refine s τs i w1 w2 xbs1 xbs2 τ :
        Γ !! s = Some τs → τs !! i = Some τ → ctree_refine' Γ f m1 m2 w1 w2 τ →
        xbs1 ⊑{Γ,f@m1↦m2}* xbs2 → pbit_indetify <$> xbs2 = xbs2 →
        bit_size_of Γ (unionT s) = bit_size_of Γ τ + length xbs1 →
        ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xbs1) →
        ctree_refine' Γ f m1 m2
          (MUnion s i w1 xbs1) (MUnion s i w2 xbs2) (unionT s)
-    | MUnionAll_refine' s τs xbs1 xbs2 :
+    | MUnionAll_refine s τs xbs1 xbs2 :
        Γ !! s = Some τs → xbs1 ⊑{Γ,f@m1↦m2}* xbs2 →
        length xbs1 = bit_size_of Γ (unionT s) →
        ctree_refine' Γ f m1 m2 (MUnionAll s xbs1) (MUnionAll s xbs2) (unionT s)
-    | MUnion_MUnionAll_refine' s τs i w1 xbs1 xbs2 τ :
+    | MUnion_MUnionAll_refine s τs i w1 xbs1 xbs2 τ :
        Γ !! s = Some τs → τs !! i = Some τ →
        ctree_flatten w1 ++ xbs1 ⊑{Γ,f@m1↦m2}* xbs2 →
        pbit_indetify <$> xbs1 = xbs1 →
@@ -406,44 +363,6 @@ Section operations.
          (MUnion s i w1 xbs1) (MUnionAll s xbs2) (unionT s).
   Global Instance ctree_refine:
     RefineT Ti (mem Ti) (mtree Ti) (type Ti) := ctree_refine'.
-
-  Lemma MBase_refine Γ f m1 m2 τb xbs1 xbs2 :
-    ✓{Γ} τb → xbs1 ⊑{Γ,f@m1↦m2}* xbs2 →
-    length xbs1 = bit_size_of Γ (baseT τb) →
-    MBase τb xbs1 ⊑{Γ,f@m1↦m2} MBase τb xbs2 : baseT τb.
-  Proof. by constructor. Qed.
-  Lemma MArray_refine Γ f m1 m2 τ n ws1 ws2 :
-    n = length ws1 → ws1 ⊑{Γ,f@m1↦m2}* ws2 : τ → n ≠ 0 →
-    MArray τ ws1 ⊑{Γ,f@m1↦m2} MArray τ ws2 : τ.[n].
-  Proof. by constructor. Qed.
-  Lemma MStruct_refine Γ f m1 m2 s τs (wxbss1 wxbss2 : list (_ * list _)) :
-    Γ !! s = Some τs →
-    wxbss1 ⊑{Γ,f@m1↦m2}1* wxbss2 :* τs → wxbss1 ⊑{Γ,f@m1↦m2}2** wxbss2 →
-    Forall (λ wxbs, pbit_indetify <$> wxbs.2 = wxbs.2) wxbss2 →
-    length ∘ snd <$> wxbss1 = field_bit_padding Γ τs →
-    MStruct s wxbss1 ⊑{Γ,f@m1↦m2} MStruct s wxbss2 : structT s.
-  Proof. econstructor; eauto. Qed.
-  Lemma MUnion_refine Γ f m1 m2 s τs i w1 w2 xbs1 xbs2 τ :
-    Γ !! s = Some τs → τs !! i = Some τ → w1 ⊑{Γ,f@m1↦m2} w2 : τ →
-    xbs1 ⊑{Γ,f@m1↦m2}* xbs2 → pbit_indetify <$> xbs2 = xbs2 →
-    bit_size_of Γ (unionT s) = bit_size_of Γ τ + length xbs1 →
-    ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xbs1) →
-    MUnion s i w1 xbs1 ⊑{Γ,f@m1↦m2} MUnion s i w2 xbs2 : unionT s.
-  Proof. econstructor; eauto. Qed.
-  Lemma MUnionAll_refine Γ f m1 m2 s τs xbs1 xbs2 :
-    Γ !! s = Some τs → xbs1 ⊑{Γ,f@m1↦m2}* xbs2 →
-    length xbs1 = bit_size_of Γ (unionT s) →
-    MUnionAll s xbs1 ⊑{Γ,f@m1↦m2} MUnionAll s xbs2 : unionT s.
-  Proof. econstructor; eauto. Qed.
-  Lemma MUnion_MUnionAll_refine Γ f m1 m2 s i τs w1 xbs1 xbs2 τ :
-    Γ !! s = Some τs → τs !! i = Some τ →
-    ctree_flatten w1 ++ xbs1 ⊑{Γ,f@m1↦m2}* xbs2 →
-    pbit_indetify <$> xbs1 = xbs1 →
-    (Γ,m1) ⊢ w1 : τ → Forall sep_unshared xbs2 →
-    bit_size_of Γ (unionT s) = bit_size_of Γ τ + length xbs1 →
-    ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xbs1) →
-    MUnion s i w1 xbs1 ⊑{Γ,f@m1↦m2} MUnionAll s xbs2 : unionT s.
-  Proof. econstructor; eauto. Qed.
 
   Lemma ctree_refine_inv_l (Γ : env Ti)
       (f : mem_inj Ti) (m1 m2 : mem Ti) (P : mtree Ti → Prop) w1 w2 τ :
@@ -470,7 +389,6 @@ Section operations.
        (∀ xbs2, xbs1 ⊑{Γ,f@m1↦m2}* xbs2 → P (MUnionAll s xbs2)) → P w2
     end.
   Proof. destruct 1; eauto. Qed.
-
   Section ctree_refine_ind.
     Context (Γ : env Ti) (f : mem_inj Ti) (m1 m2 : mem Ti).
     Context (P : mtree Ti → mtree Ti → type Ti → Prop).
@@ -512,13 +430,6 @@ Section operations.
     Proof. fix 4; destruct 1; eauto using Forall2_impl, Forall3_impl. Qed.
   End ctree_refine_ind.
 End operations.
-
-Ltac ctree_typed_constructor := first
-  [ eapply MBase_typed | eapply MArray_typed | eapply MStruct_typed
-  | eapply MUnion_typed | eapply MUnionAll_typed ].
-Ltac ctree_refine_constructor := first [ eapply MBase_refine
-  | eapply MArray_refine | eapply MStruct_refine | eapply MUnion_refine
-  | eapply MUnionAll_refine | eapply MUnion_MUnionAll_refine ].
 
 Section ctree.
 Context `{EnvSpec Ti}.
@@ -579,7 +490,7 @@ Proof.
       repeat (progress simplify_option_equality || case_match);
       repeat match goal with
       | H : mapM _ _ = Some _ |- _ => apply mapM_Some_1 in H
-      end; ctree_typed_constructor;
+      end; typed_constructor;
       eauto using Forall2_Forall_typed; decompose_Forall; eauto.
   * by induction 1 using @ctree_typed_ind;
       repeat (simplify_option_equality || case_match
@@ -594,10 +505,11 @@ Lemma ctree_typed_weaken Γ1 Γ2 m1 m2 w τ :
   (∀ o σ, type_of_index m1 o = Some σ → type_of_index m2 o = Some σ) →
   (Γ2,m2) ⊢ w : τ.
 Proof.
-  intros ? Hw ??. induction Hw using @ctree_typed_ind; ctree_typed_constructor;
+  intros ? Hw ??. induction Hw using @ctree_typed_ind; typed_constructor;
     eauto using base_type_valid_weaken,
       lookup_weaken, Forall_impl, pbit_valid_weaken;
-    by erewrite <-?(bit_size_of_weaken Γ1 Γ2), <-?(field_bit_padding_weaken Γ1 Γ2)
+    by erewrite <-?(bit_size_of_weaken Γ1 Γ2),
+      <-?(field_bit_padding_weaken Γ1 Γ2)
       by eauto using TBase_valid, TCompound_valid.
 Qed.
 Lemma ctree_typed_sep_valid Γ m w τ : (Γ,m) ⊢ w : τ → ctree_valid w.
@@ -651,14 +563,14 @@ Proof.
   { induction 2; decompose_Forall_hyps; eauto. }
   refine (ctree_subseteq_ind_alt _ _ _ _ _ _ _).
   * intros τb xbs1 xbs2 ?? Hw2; apply (ctree_typed_inv_l _ _ _ _ _ Hw2).
-    intros. ctree_typed_constructor; eauto using Forall2_length_r.
+    intros. typed_constructor; eauto using Forall2_length_r.
   * intros τ ws1 ws2 _ IH τ' Hw2;
       apply (ctree_typed_inv_l _ _ _ _ _ Hw2); clear τ' Hw2.
-    intros ? Hle; ctree_typed_constructor; eauto using Forall2_length, eq_sym.
+    intros ? Hle; typed_constructor; eauto using Forall2_length, eq_sym.
     clear Hle. induction IH; decompose_Forall_hyps; auto.
   * intros s wxbss1 wxbss2 _ IH Hxbss τ Hw2;
       apply (ctree_typed_inv_l _ _ _ _ _ Hw2); clear τ Hw2.
-    intros τs Hs Hws2 Hxbss2 Hindet Hlen. ctree_typed_constructor; eauto.
+    intros τs Hs Hws2 Hxbss2 Hindet Hlen. typed_constructor; eauto.
     + clear Hxbss Hs Hxbss2 Hlen. revert τs Hws2.
       induction IH; intros; decompose_Forall_hyps'; auto.
     + clear IH Hws2 Hlen. induction Hxbss; decompose_Forall_hyps; eauto.
@@ -668,14 +580,14 @@ Proof.
       induction Hxbss; f_equal'; eauto using Forall2_length.
   * intros s i w1 w2 xbs1 xbs2 ? IH ? Hmap τ Hw2;
       apply (ctree_typed_inv_l _ _ _ _ _ Hw2); clear τ Hw2.
-    intros. ctree_typed_constructor; eauto.
+    intros. typed_constructor; eauto.
     + eauto using pbits_indetified_subseteq.
     + by erewrite Forall2_length by eauto.
   * intros s xbs1 xbs2 ?? Hw2; apply (ctree_typed_inv_l _ _ _ _ _ Hw2).
-    intros. ctree_typed_constructor; eauto using Forall2_length_r.
+    intros. typed_constructor; eauto using Forall2_length_r.
   * intros s i xbs1 w2 xbs2 ??? Hmap τ Hw2;
       apply (ctree_typed_inv_l _ _ _ _ _ Hw2); clear τ Hw2.
-    intros τs τ ???????. ctree_typed_constructor; eauto 1.
+    intros τs τ ???????. typed_constructor; eauto 1.
     + eauto using ctree_flatten_valid.
     + by erewrite Forall2_length, app_length, ctree_flatten_length by eauto.
 Qed.
@@ -687,19 +599,19 @@ Lemma union_reset_typed Γ m w τ :
   ✓ Γ → (Γ,m) ⊢ w : τ → (Γ,m) ⊢ union_reset w : τ.
 Proof.
   intros HΓ. revert w τ. refine (ctree_typed_ind _ _ _ _ _ _ _ _); simpl.
-  * by ctree_typed_constructor.
-  * intros ws τ Hws IH; ctree_typed_constructor; auto.
+  * by typed_constructor.
+  * intros ws τ Hws IH Hlen; typed_constructor; auto.
     + by rewrite fmap_length.
-    + induction IH; decompose_Forall_hyps'; auto.
-  * intros s wxbss τs Hs Hws IH ? Hindet Hlen; ctree_typed_constructor; eauto.
+    + clear Hlen. induction IH; decompose_Forall_hyps'; auto.
+  * intros s wxbss τs Hs Hws IH ? Hindet Hlen; typed_constructor; eauto.
     + clear Hs Hlen Hindet. induction IH; decompose_Forall_hyps'; auto.
     + clear Hindet. eapply Forall_fmap, Forall_impl; eauto.
     + elim Hindet; intros; constructor; simpl; auto.
     + rewrite <-Hlen, <-list_fmap_compose. by apply list_fmap_ext.
-  * intros s i τs w xbs τ ??????? Hemp; simpl. ctree_typed_constructor; eauto.
+  * intros s i τs w xbs τ ??????? Hemp; simpl. typed_constructor; eauto.
     + eauto using ctree_flatten_valid.
     + by erewrite app_length, ctree_flatten_length by eauto.
-  * ctree_typed_constructor.
+  * typed_constructor; eauto.
 Qed.
 Lemma union_free_reset w : union_free w → union_reset w = w.
 Proof.
@@ -725,7 +637,7 @@ Qed.
 
 (** ** The [type_mask] function *)
 Definition type_mask (Γ : env Ti) : type Ti → list bool := type_iter
-  (**i TBase =>  *) (λ τb, replicate (bit_size_of Γ τb) false)
+  (**i TBase =>     *) (λ τb, replicate (bit_size_of Γ τb) false)
   (**i TVoid =>     *) [] (* dummy *)
   (**i TArray =>    *) (λ _ n go, mjoin (replicate n go))
   (**i TCompound => *) (λ c s τs go,
@@ -871,14 +783,14 @@ Lemma ctree_unflatten_typed Γ m τ xbs :
   (Γ,m) ⊢ ctree_unflatten Γ τ xbs : τ.
 Proof.
   intros HΓ Hτ. revert τ Hτ xbs. refine (type_env_ind _ HΓ _ _ _ _).
-  * intros τ ? xbs ??. rewrite ctree_unflatten_base. by ctree_typed_constructor.
+  * intros τ ? xbs ??. rewrite ctree_unflatten_base. by typed_constructor.
   * intros τ n Hτ IH Hn xbs Hxbs.
     rewrite ctree_unflatten_array, bit_size_of_array.
-    intros Hxbs'. ctree_typed_constructor; auto using array_unflatten_length.
+    intros Hxbs'. typed_constructor; auto using array_unflatten_length.
     clear Hn. revert xbs Hxbs Hxbs'. induction n; simpl; auto.
   * intros [] s τs Hs Hτs IH Hτs_len xbs Hxbs;
       erewrite ctree_unflatten_compound, ?bit_size_of_struct by eauto;
-      intros Hxbs'; simpl; ctree_typed_constructor; eauto.
+      intros Hxbs'; simpl; typed_constructor; eauto.
     + unfold struct_unflatten. clear Hs Hτs Hτs_len. revert xbs Hxbs Hxbs'.
       induction (bit_size_of_fields Γ τs HΓ);
         intros; decompose_Forall_hyps'; constructor; eauto.
@@ -1076,12 +988,12 @@ Proof.
     intros; constructor; eauto using pbits_disjoint_typed.
   * intros τ ws1 ws2 _ IH τ' Hw; pattern τ';
       apply (ctree_typed_inv_l _ _ _ _ _ Hw); clear τ' Hw; intros Hws2 Hlen ?.
-    ctree_typed_constructor; auto. clear Hlen.
+    typed_constructor; auto. clear Hlen.
     revert τ Hws2. induction IH; intros; decompose_Forall_hyps'; auto.
   * intros s wxbss1 wxbss2 _ IH Hxbs τ' Hw; pattern τ';
       apply (ctree_typed_inv_l _ _ _ _ _ Hw); clear τ' Hw;
       intros τs Hs Hws2 Hxbs2 ? Hlen ?.
-    ctree_typed_constructor; eauto.
+    typed_constructor; eauto.
     + clear Hlen Hxbs2 Hs. revert τs Hws2.
       induction IH; intros; decompose_Forall_hyps'; auto.
     + clear Hlen Hs Hws2 IH.
@@ -1091,7 +1003,7 @@ Proof.
     + rewrite <-Hlen. elim Hxbs; intros; f_equal'; auto.
   * intros; decompose_Forall_hyps'; naive_solver.
   * intros s ??? τ Hw; pattern τ; apply (ctree_typed_inv_l _ _ _ _ _ Hw).
-    intros. ctree_typed_constructor; eauto using pbits_disjoint_typed.
+    intros. typed_constructor; eauto using pbits_disjoint_typed.
   * intros; decompose_Forall_hyps'; naive_solver.
   * intros s i w1 xbs1 xbs2 ???? τ Hw; pattern τ;
       apply (ctree_typed_inv_l _ _ _ _ _ Hw); clear τ Hw; intros τs τ; intros.
@@ -1186,12 +1098,12 @@ Proof.
     pbit_indetify <$> xbs = xbs → pbit_indetify <$> h <$> xbs = h <$> xbs).
   { induction xbs; intros; simplify_equality'; f_equal; auto. }
   refine (ctree_typed_ind _ _ _ _ _ _ _ _); simpl.
-  * intros. ctree_typed_constructor; auto.
-  * intros ws τ _ IH Hlen Hw'. ctree_typed_constructor; auto. clear Hlen.
+  * intros. typed_constructor; auto.
+  * intros ws τ _ IH Hlen Hw'. typed_constructor; auto. clear Hlen.
     revert Hw'. induction IH; simpl; rewrite ?fmap_app; intros;
       decompose_Forall_hyps'; constructor; auto.
   * intros s wxbss τs Hs _ IH Hxss Hindet Hlen Hw'.
-    ctree_typed_constructor; eauto.
+    typed_constructor; eauto.
     + revert Hw'. elim IH; [|intros [??] ???]; simpl; rewrite ?fmap_app;
         intros; decompose_Forall_hyps'; auto.
     + revert Hw'. elim Hxss; [|intros [??] ???]; simpl; rewrite ?fmap_app;
@@ -1199,14 +1111,31 @@ Proof.
     + elim Hindet; intros; constructor; simpl; auto.
     + rewrite <-Hlen. elim wxbss; intros; f_equal'; auto.
   * intros s i τs w xbs τ; rewrite fmap_app; intros; decompose_Forall_hyps'.
-    unfold MUnion'; case_decide; ctree_typed_constructor;
+    unfold MUnion'; case_decide; typed_constructor;
       eauto using ctree_flatten_valid; try solve_length.
-  * intros. ctree_typed_constructor; eauto.
+  * intros. typed_constructor; eauto.
 Qed.
 Lemma ctree_map_type_of h w : type_of (ctree_map h w) = type_of w.
 Proof. destruct w; simpl; unfold MUnion'; repeat case_decide; auto. Qed.
 
 (** ** Lookup operation *)
+Lemma ctree_lookup_nil Γ : lookupE Γ (@nil (ref_seg Ti)) = (@Some (mtree Ti)).
+Proof. done. Qed.
+Lemma ctree_lookup_cons Γ rs r :
+  lookupE Γ (rs :: r) = λ w : mtree Ti, w !!{Γ} r ≫= lookupE Γ rs.
+Proof. done. Qed.
+Lemma ctree_lookup_singleton Γ rs :
+  lookupE (A:=mtree Ti) Γ [rs] = lookupE Γ rs.
+Proof. done. Qed.
+Lemma ctree_lookup_app Γ r1 r2 w :
+  w !!{Γ} (r1 ++ r2) = (w !!{Γ} r2) ≫= lookupE Γ r1.
+Proof.
+  induction r1 as [|rs1 r1 IH]; simpl; [by destruct (w !!{_} r2)|].
+  by rewrite ctree_lookup_cons, IH, option_bind_assoc.
+Qed.
+Lemma ctree_lookup_snoc Γ r rs w :
+  w !!{Γ} (r ++ [rs]) = (w !!{Γ} rs) ≫= lookupE Γ r.
+Proof. apply ctree_lookup_app. Qed.
 Lemma ctree_lookup_seg_freeze Γ w rs w' :
   w !!{Γ} freeze true rs = Some w' → w !!{Γ} rs = Some w'.
 Proof.
@@ -1216,8 +1145,8 @@ Qed.
 Lemma ctree_lookup_freeze Γ w r w' :
   w !!{Γ} (freeze true <$> r) = Some w' → w !!{Γ} r = Some w'.
 Proof.
-  revert w'. induction r; intros w'; simpl; [by rewrite list_path_lookup_nil|].
-  rewrite !list_path_lookup_cons. intros.
+  revert w'. induction r; intros w'; simpl; [by rewrite ctree_lookup_nil|].
+  rewrite !ctree_lookup_cons. intros.
   simplify_option_equality; eauto using ctree_lookup_seg_freeze.
 Qed.
 Lemma ctree_lookup_seg_unfreeze Γ w rs w' :
@@ -1229,8 +1158,8 @@ Qed.
 Lemma ctree_lookup_unfreeze Γ w r w' :
   w !!{Γ} r = Some w' → w !!{Γ} (freeze false <$> r) = Some w'.
 Proof.
-  revert w'. induction r; intros w'; simpl; [by rewrite list_path_lookup_nil|].
-  rewrite !list_path_lookup_cons. intros.
+  revert w'. induction r; intros w'; simpl; [by rewrite ctree_lookup_nil|].
+  rewrite !ctree_lookup_cons. intros.
   simplify_option_equality; eauto using ctree_lookup_seg_unfreeze.
 Qed.
 Lemma ctree_lookup_seg_freeze_proper Γ q1 q2 w rs1 rs2 w1 w2 :
@@ -1243,7 +1172,7 @@ Lemma ctree_lookup_freeze_proper Γ q1 q2 w r1 r2 w1 w2 :
 Proof.
   revert r2 w1 w2. induction r1 as [|rs1 r1 IH]; intros [|rs2 r2] ??; try done.
   { intros. by simplify_equality. }
-  rewrite !list_path_lookup_cons; intros; simplify_option_equality.
+  rewrite !ctree_lookup_cons; intros; simplify_option_equality.
   efeed pose proof IH; eauto. subst. eauto using ctree_lookup_seg_freeze_proper.
 Qed.
 Lemma ctree_lookup_seg_inv P Γ rs w w' :
@@ -1285,7 +1214,7 @@ Lemma ctree_lookup_union_free Γ w r w' :
   ✓ Γ → union_free w → w !!{Γ} r = Some w' → union_free w'.
 Proof.
   intros HΓ. revert w. induction r using rev_ind; intros w Hw Hr;
-    rewrite ?list_path_lookup_snoc in Hr; simplify_option_equality;
+    rewrite ?ctree_lookup_snoc in Hr; simplify_option_equality;
     eauto using ctree_lookup_seg_union_free.
 Qed.
 Lemma ctree_lookup_seg_Some Γ m w τ rs w' :
@@ -1293,7 +1222,8 @@ Lemma ctree_lookup_seg_Some Γ m w τ rs w' :
   ∃ σ, Γ ⊢ rs : τ ↣ σ ∧ (Γ,m) ⊢ w' : σ.
 Proof.
   intros ? Hw Hrs; destruct rs as [i τ' n|i|i]; destruct Hw as
-    [τ xbs|ws|s wxbss τs ? Hws|s j τs w xbs τ|s τs xbs] using @ctree_typed_case;
+    [τ xbs|ws|s wxbss τs ? Hws|s j τs w xbs τ|s τs xbs];
+    change (ctree_typed' Γ m) with (typed (Γ,m)) in *;
     pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
   * intros w'' -> -> ?. exists τ'. decompose_Forall_hyps'.
     repeat constructor; eauto using lookup_lt_is_Some_1.
@@ -1313,10 +1243,10 @@ Proof.
   intros HΓ. revert w τ.
   induction r as [|rs r IH] using rev_ind; intros w τ Hvτ Hr.
   { simplify_equality'. eexists; split; [econstructor |]; eauto. }
-  rewrite list_path_lookup_snoc in Hr. simplify_option_equality.
+  rewrite ctree_lookup_snoc in Hr. simplify_option_equality.
   edestruct ctree_lookup_seg_Some as (?&?&?); eauto.
   edestruct IH as (?&?&?); eauto.
-  eexists; split; [eapply list_typed_snoc |]; eauto.
+  eexists; split; [eapply ref_typed_snoc |]; eauto.
 Qed.
 Lemma ctree_lookup_seg_typed Γ m w τ rs w' σ :
   ✓ Γ → (Γ,m) ⊢ w : τ → w !!{Γ} rs = Some w' → Γ ⊢ rs : τ ↣ σ → (Γ,m) ⊢ w' :σ.
@@ -1346,7 +1276,7 @@ Lemma ctree_lookup_Forall (P : pbit Ti → Prop) Γ w r w' :
   ctree_Forall P w → w !!{Γ} r = Some w' → ctree_Forall P w'.
 Proof.
   intros HΓ ?. revert w. induction r as [|rs r] using rev_ind;
-    intros w; rewrite ?list_path_lookup_snoc; intros; simplify_option_equality;
+    intros w; rewrite ?ctree_lookup_snoc; intros; simplify_option_equality;
     eauto using ctree_lookup_seg_Forall.
 Qed.
 Lemma ctree_new_lookup_seg Γ τ x rs σ :
@@ -1367,15 +1297,15 @@ Lemma ctree_new_lookup Γ x τ r σ :
   ✓ Γ → sep_unshared x → ✓{Γ} τ →
   Γ ⊢ r : τ ↣ σ → ctree_new Γ x τ !!{Γ} r = Some (ctree_new Γ x σ).
 Proof.
-  induction 4 as [|r rs τ1 τ2 τ3 ?? IH] using @list_typed_ind; [done|].
-  rewrite list_path_lookup_cons, IH; simpl;
+  induction 4 as [|r rs τ1 τ2 τ3 ?? IH] using @ref_typed_ind; [done|].
+  rewrite ctree_lookup_cons, IH; simpl;
     eauto using ctree_new_lookup_seg, ref_typed_type_valid.
 Qed.
 Lemma ctree_lookup_seg_unfreeze_exists Γ m w τ rs σ :
   ✓ Γ → (Γ,m) ⊢ w : τ → ctree_unshared w →
   Γ ⊢ rs : τ ↣ σ → ∃ w', w !!{Γ} freeze false rs = Some w'.
 Proof.
-  destruct 2 as [|ws τ|s wxbss τs| | ] using @ctree_typed_case;
+  destruct 2 as [|ws τ|s wxbss τs| | ];
     inversion 2; decompose_Forall_hyps'; simplify_option_equality; eauto.
   by apply lookup_lt_is_Some_2.
 Qed.
@@ -1385,14 +1315,14 @@ Lemma ctree_lookup_unfreeze_exists Γ m w τ r σ :
 Proof.
   intros HΓ. revert w τ.
   induction r as [|rs r IH] using rev_ind; intros w τ Hwτ Hw Hr.
-  { rewrite list_typed_nil in Hr; subst. by exists w. }
-  rewrite list_typed_snoc in Hr; destruct Hr as (σ'&?&?).
+  { rewrite ref_typed_nil in Hr; subst. by exists w. }
+  rewrite ref_typed_snoc in Hr; destruct Hr as (σ'&?&?).
   destruct (ctree_lookup_seg_unfreeze_exists Γ m w τ rs σ') as (w'&?); auto.
   destruct (IH w' σ') as (w''&?); eauto using ctree_lookup_seg_union_free,
     ctree_lookup_seg_Forall, ctree_lookup_seg_typed,
     ref_seg_typed_freeze_2, pbit_indetify_unshared.
   exists w''. rewrite fmap_app; simpl.
-  rewrite list_path_lookup_snoc. by simplify_option_equality.
+  rewrite ctree_lookup_snoc. by simplify_option_equality.
 Qed.
 Lemma type_mask_ref_seg Γ τ rs σ :
   ✓ Γ → Γ ⊢ rs : τ ↣ σ → ✓{Γ} τ →
@@ -1472,7 +1402,7 @@ Proof.
   revert w' τ'. induction r as [|rs r IH]; intros w'' τ''.
   { intros; simplify_type_equality'.
     by erewrite drop_0, take_ge, ctree_mask_flatten by eauto. }
-  rewrite list_path_lookup_cons; intros.
+  rewrite ctree_lookup_cons; intros.
   destruct (w !!{Γ} r) as [w'|] eqn:?; simplify_equality'.
   destruct (ctree_lookup_Some Γ m w τ r w') as (τ'&?&?); auto.
   destruct (ctree_lookup_seg_Some Γ m w' τ' rs w'') as (?&?&?); auto.
@@ -1507,7 +1437,7 @@ Lemma ctree_lookup_disjoint Γ m1 m2 w1 w2 τ r w1' w2' :
 Proof.
   intros ??. revert w1' w2'. induction r as [|rs r]; intros w1'' w2''.
   { by intros; simplify_equality'. }
-  rewrite !list_path_lookup_cons; intros. destruct (w1 !!{Γ} r) as [w1'|] eqn:?,
+  rewrite !ctree_lookup_cons; intros. destruct (w1 !!{Γ} r) as [w1'|] eqn:?,
     (w2 !!{Γ} r) as [w2'|] eqn:?; simplify_equality'.
   destruct (ctree_lookup_Some Γ m1 w1 τ r w1') as (σ1&?&?); auto.
   destruct (ctree_lookup_Some Γ m2 w2 τ r w2') as (σ1'&?&?); auto.
@@ -1537,7 +1467,7 @@ Lemma ctree_lookup_subseteq Γ w1 w2 r w1' :
 Proof.
   intros ?. revert w1'. induction r as [|rs r IH]; intros w1'' w2''.
   { intros; simplify_equality'. by exists w2. }
-  rewrite !list_path_lookup_cons; intros.
+  rewrite !ctree_lookup_cons; intros.
   destruct (w1 !!{Γ} r) as [w1'|] eqn:?; simplify_equality'.
   destruct (IH w1') as (?&->&?);
     eauto using ctree_lookup_seg_Forall, pbit_unmapped_indetify; simpl.
@@ -1638,8 +1568,8 @@ Lemma ctree_alter_lookup_Forall (P : pbit Ti → Prop) Γ g w r w' :
   w !!{Γ} r = Some w' → ctree_Forall P (g w').
 Proof.
   revert g w. induction r as [|rs r IH] using @rev_ind.
-  { intros g w. rewrite list_path_lookup_nil. naive_solver. }
-  intros g w. rewrite ctree_alter_snoc, list_path_lookup_snoc.
+  { intros g w. rewrite ctree_lookup_nil. naive_solver. }
+  intros g w. rewrite ctree_alter_snoc, ctree_lookup_snoc.
   intros. destruct (w !!{Γ} rs) as [w''|] eqn:Hw''; simplify_equality'.
   eauto using ctree_alter_lookup_seg_Forall.
 Qed.
@@ -1647,8 +1577,8 @@ Lemma ctree_alter_seg_unmapped Γ m g w rs τ w' :
   ✓ Γ → (Γ,m) ⊢ w : τ → ctree_unmapped (ctree_alter_seg Γ g rs w) →
   w !!{Γ} rs = Some w' → ctree_unmapped (g w').
 Proof.
-  intros HΓ Hw Hgw Hrs; destruct rs as [i|i|i]; destruct Hw
-    as [|ws τ|s wxbss τs| |] using @ctree_typed_case;
+  intros HΓ Hw Hgw Hrs; destruct rs as [i|i|i], Hw as [|τ ? ws|s wxbss τs| |];
+    change (ctree_typed' Γ m) with (typed (Γ,m)) in *;
     pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
   * intros w _ ??; simplify_option_equality; rewrite Forall_bind in Hgw.
     cut (alter g i ws !! i = Some (g w)); [by intros; decompose_Forall_hyps|].
@@ -1666,8 +1596,8 @@ Lemma ctree_alter_unmapped Γ m g w r τ w' :
   w !!{Γ} r = Some w' → ctree_unmapped (g w').
 Proof.
   intros HΓ. revert g τ w. induction r as [|rs r IH] using @rev_ind.
-  { intros g τ w. rewrite list_path_lookup_nil. naive_solver. }
-  intros g τ w. rewrite ctree_alter_snoc, list_path_lookup_snoc; intros.
+  { intros g τ w. rewrite ctree_lookup_nil. naive_solver. }
+  intros g τ w. rewrite ctree_alter_snoc, ctree_lookup_snoc; intros.
   destruct (w !!{Γ} rs) as [w''|] eqn:?; simplify_equality'.
   destruct (ctree_lookup_seg_Some Γ m w τ rs w'') as (?&_&?);
     eauto using ctree_alter_seg_unmapped.
@@ -1677,31 +1607,31 @@ Lemma ctree_alter_seg_typed Γ m g w rs τ w' :
   (Γ,m) ⊢ g w' : type_of w' → ¬ctree_unmapped (g w') →
   (Γ,m) ⊢ ctree_alter_seg Γ g rs w : τ.
 Proof.
-  intros HΓ Hw Hrs. destruct rs as [i|i|i]; destruct Hw
-    as [|ws τ|s wxbss τs ??? Hindet Hlen| |] using @ctree_typed_case;
+  intros HΓ Hw Hrs.
+  destruct rs as [i|i|i], Hw as [|τ ? ws|s wxbss τs ??? Hindet Hlen| |];
+    change (ctree_typed' Γ m) with (typed (Γ,m)) in *;
     pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
   * intros; simplify_option_equality.
-    ctree_typed_constructor; auto using alter_length.
+    typed_constructor; auto using alter_length.
     apply (Forall_alter _ g _ i); auto. by intros; simplify_type_equality'.
-  * intros; simplify_option_equality. ctree_typed_constructor; eauto.
+  * intros; simplify_option_equality. typed_constructor; eauto.
     + apply Forall2_alter_l; auto 1. by intros [] ????; simplify_type_equality'.
     + apply Forall_alter; auto.
     + apply Forall_alter; auto.
     + rewrite <-Hlen. generalize i. elim wxbss; [done|].
       intros [??] wxbss' ? [|?]; f_equal'; auto.
-  * intros; simplify_option_equality. ctree_typed_constructor; eauto.
+  * intros; simplify_option_equality. typed_constructor; eauto.
     + by simplify_type_equality.
     + intuition.
   * intros ? τ'; intros; simplify_option_equality.
-    ctree_typed_constructor; eauto using pbits_indetify_idempotent.
+    typed_constructor; eauto using pbits_indetify_idempotent.
     + erewrite <-ctree_unflatten_type_of by eauto; eauto.
     + eauto using pbits_indetify_valid, ctree_flatten_valid.
     + erewrite fmap_length, drop_length,
         app_length, ctree_flatten_length by eauto; solve_length.
     + by intros [? _].
-  * intros ? τ'; intros; simplify_option_equality.
-    ctree_typed_constructor; eauto using
-      pbits_indetify_valid, pbits_indetify_idempotent.
+  * intros ? τ'; intros; simplify_option_equality. typed_constructor;
+      eauto using pbits_indetify_valid, pbits_indetify_idempotent.
     + erewrite <-ctree_unflatten_type_of by eauto; eauto.
     + solve_length.
     + by intros [? _].
@@ -1713,7 +1643,7 @@ Lemma ctree_alter_typed Γ m g w r τ w' :
 Proof.
   intros HΓ. revert g τ w. induction r as [|rs r IH] using @rev_ind.
   { by intros; simplify_type_equality'. }
-  intros g τ w; rewrite ctree_alter_snoc, list_path_lookup_snoc; intros.
+  intros g τ w; rewrite ctree_alter_snoc, ctree_lookup_snoc; intros.
   destruct (w !!{Γ} rs) as [w''|] eqn:?; simplify_equality'.
   destruct (ctree_lookup_seg_Some Γ m w τ rs w'') as (?&_&?); eauto.
   eapply ctree_alter_seg_typed;
@@ -1735,8 +1665,7 @@ Lemma ctree_alter_seg_type_of_weak Γ m g w rs τ w' :
   (Γ,m) ⊢ w : τ → w !!{Γ} rs = Some w' →
   type_of (g w') = type_of w' → type_of (ctree_alter_seg Γ g rs w) = τ.
 Proof.
-  intros Hw Hrs. destruct rs as [[]| |];
-    destruct Hw as [|?? []| | |] using @ctree_typed_case;
+  intros Hw Hrs. destruct rs as [[]| |], Hw as [|?? []| | |];
     pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs; intros;
     simplify_option_equality; simplify_type_equality; by rewrite ?alter_length.
 Qed.
@@ -1746,7 +1675,7 @@ Lemma ctree_alter_type_of_weak Γ m g w r τ w' :
 Proof.
   revert g τ w. induction r as [|rs r IH] using @rev_ind.
   { by intros; simplify_type_equality'. }
-  intros g τ w; rewrite ctree_alter_snoc, list_path_lookup_snoc; intros.
+  intros g τ w; rewrite ctree_alter_snoc, ctree_lookup_snoc; intros.
   destruct (w !!{Γ} rs) as [w''|] eqn:?; simplify_equality'.
   destruct (ctree_lookup_seg_Some Γ m w τ rs w'') as (?&_&?); eauto.
   eapply ctree_alter_seg_type_of_weak; eauto using type_of_typed.
@@ -1765,9 +1694,9 @@ Lemma ctree_lookup_alter_freeze Γ g w r w' :
   ctree_alter Γ g r w !!{Γ} (freeze true <$> r) = Some (g w').
 Proof.
   intros HΓ. revert g w. induction r as [|rs r IH] using rev_ind; simpl.
-  { intros g w. rewrite !list_path_lookup_nil. congruence. }
+  { intros g w. rewrite !ctree_lookup_nil. congruence. }
   intros g w. rewrite !fmap_app, !fmap_cons, !fmap_nil, !ctree_alter_snoc,
-    !list_path_lookup_snoc; intros; simplify_option_equality.
+    !ctree_lookup_snoc; intros; simplify_option_equality.
   erewrite ctree_lookup_alter_seg_freeze by eauto; eauto.
 Qed.
 Lemma ctree_lookup_alter Γ g w r1 r2 w' :
@@ -1804,9 +1733,9 @@ Lemma ctree_lookup_alter_inv Γ m g w r τ σ w' :
   ∃ w'', w' = g w'' ∧ (Γ,m) ⊢ w'' : σ.
 Proof.
   intros ? Hw Hr. revert g w w' Hw.
-  induction Hr as [|r rs ????? IH] using @list_typed_ind.
+  induction Hr as [|r rs ????? IH] using @ref_typed_ind.
   { intros ? w ???; simplify_equality. by exists w. }
-  intros g w w' Hw'. rewrite ctree_alter_cons, list_path_lookup_cons; intros.
+  intros g w w' Hw'. rewrite ctree_alter_cons, ctree_lookup_cons; intros.
   destruct (ctree_alter Γ (ctree_alter_seg Γ g rs) r w !!{Γ} r)
     as [w''|] eqn:Hw''; simplify_equality'.
   apply IH in Hw''; auto; destruct Hw'' as (w'''&->&?).
@@ -1815,10 +1744,8 @@ Qed.
 Lemma ctree_lookup_alter_seg_disjoint Γ g w rs1 rs2 :
   rs1 ⊥ rs2 → ctree_alter_seg Γ g rs2 w !!{Γ} rs1 = w !!{Γ} rs1.
 Proof.
-  destruct w; destruct 1; simplify_option_equality; auto.
-  * by rewrite list_lookup_alter_ne.
-  * exfalso; auto using alter_length.
-  * exfalso; auto using alter_length.
+  destruct w; destruct 1; simpl; auto.
+  * by rewrite alter_length, list_lookup_alter_ne by done.
   * by rewrite list_lookup_alter_ne by done.
 Qed.
 Lemma ctree_lookup_alter_disjoint Γ g w r1 r2 w' :
@@ -1826,8 +1753,8 @@ Lemma ctree_lookup_alter_disjoint Γ g w r1 r2 w' :
   ctree_alter Γ g r2 w !!{Γ} r1 = Some w'.
 Proof.
   intros HΓ. rewrite ref_disjoint_alt. intros (r1'&rs1&r&r2'&rs2&r'&->&->&?&Hr).
-  rewrite !ctree_alter_app, !list_path_lookup_app,
-    !ctree_alter_singleton, !list_path_lookup_singleton; intros.
+  rewrite !ctree_alter_app, !ctree_lookup_app,
+    !ctree_alter_singleton, !ctree_lookup_singleton; intros.
   destruct (w !!{_} r) as [w1'|] eqn:Hw1'; simplify_equality'.
   destruct (w1' !!{_} rs1) as [w2'|] eqn:Hw2'; simplify_equality'.
   erewrite ctree_lookup_alter by eauto using ctree_lookup_unfreeze; simpl.
@@ -1849,7 +1776,7 @@ Lemma ctree_alter_ext_lookup Γ g1 g2 w r w' :
 Proof.
   revert g1 g2 w'. induction r as [|rs r]; simpl; intros g1 g2 w'.
   { by intros; simplify_equality'. }
-  rewrite list_path_lookup_cons; intros; simplify_option_equality;
+  rewrite ctree_lookup_cons; intros; simplify_option_equality;
     eauto using ctree_alter_seg_ext_lookup.
 Qed.
 Lemma ctree_alter_seg_disjoint Γ m g w1 w2 τ rs w1' :
@@ -1927,7 +1854,7 @@ Lemma ctree_alter_disjoint Γ m g w1 w2 τ r w1' :
 Proof.
   intros ??. revert g w1'. induction r as [|rs r]; intros g w1''.
   { intros; simplify_equality'; eauto. }
-  rewrite !list_path_lookup_cons; intros.
+  rewrite !ctree_lookup_cons; intros.
   destruct (w1 !!{Γ} r) as [w1'|] eqn:?; simplify_equality'.
   destruct (ctree_lookup_Some Γ m w1 τ r w1') as (σ1&?&?);
     eauto 8 using ctree_alter_seg_unmapped, ctree_alter_seg_disjoint.
@@ -2019,7 +1946,7 @@ Lemma ctree_alter_union Γ m g w1 w2 τ r w1' :
 Proof.
   intros ??. revert g w1'. induction r as [|rs r IH]; intros g w1''.
   { intros; simplify_equality'; eauto. }
-  rewrite !list_path_lookup_cons; intros.
+  rewrite !ctree_lookup_cons; intros.
   destruct (w1 !!{Γ} r) as [w1'|] eqn:?; simplify_equality'.
   destruct (ctree_lookup_Some Γ m w1 τ r w1') as (σ1&?&?); auto.
   eapply IH; eauto using ctree_alter_seg_unmapped,
@@ -2035,7 +1962,7 @@ Lemma ctree_lookup_non_aliasing_help Γ m g w τ s τs r τ1 i1 τ2 i2 :
   i1 ≠ i2 → ctree_alter Γ g r1' w !!{Γ} r2' = None.
 Proof.
   intros r1' r2' ? Hwτ Hw Hr ?? Hi. unfold r1', r2'; clear r1' r2'.
-  rewrite !ctree_alter_cons, !list_path_lookup_cons.
+  rewrite !ctree_alter_cons, !ctree_lookup_cons.
   destruct (ctree_alter Γ (ctree_alter_seg Γ g
     (RUnion i1 s true)) r w !!{Γ} r) as [w'|] eqn:Hw'; simpl; [|done].
   eapply ctree_lookup_alter_inv in Hw'; eauto. destruct Hw' as (w''&->&?).
@@ -2053,10 +1980,10 @@ Proof.
     ref_set_offset j r3 ++ RUnion i3 s true :: r) as Hrhelp.
   { by intros ? [|??] ?. }
   intros r1' r2' HΓ; unfold r1', r2'; clear r1' r2'.
-  rewrite !Hrhelp, !list_typed_app; setoid_rewrite list_typed_cons.
+  rewrite !Hrhelp, !ref_typed_app; setoid_rewrite ref_typed_cons.
   intros Hwτ (τ1&(τ'&?&Hr1)&?) (τ2&(τ''&?&Hr2)&?) Hi; simplify_type_equality.
   inversion Hr1; inversion Hr2; simplify_option_equality.
-  rewrite list_path_lookup_app, ctree_alter_app, bind_None; left.
+  rewrite ctree_lookup_app, ctree_alter_app, bind_None; left.
   eauto using ctree_lookup_non_aliasing_help.
 Qed.
 
@@ -2331,14 +2258,14 @@ Lemma ctree_unflatten_refine Γ f m1 m2 τ xbs1 xbs2 :
   ctree_unflatten Γ τ xbs1 ⊑{Γ,f@m1↦m2} ctree_unflatten Γ τ xbs2 : τ.
 Proof.
   intros HΓ Hτ. revert τ Hτ xbs1 xbs2. refine (type_env_ind _ HΓ _ _ _ _).
-  * intros. rewrite !ctree_unflatten_base. by ctree_refine_constructor.
+  * intros. rewrite !ctree_unflatten_base. refine_constructor; eauto.
   * intros τ n _ IH Hn xbs1 xbs2 Hxbs.
     rewrite !ctree_unflatten_array, bit_size_of_array; intros Hxbs1.
-    ctree_refine_constructor; auto using array_unflatten_length.
+    refine_constructor; auto using array_unflatten_length.
     revert xbs1 xbs2 Hxbs Hxbs1. clear Hn. induction n; simpl; auto.
   * intros [] s τs Hs _ IH _ xbs1 xbs2 Hxbs; erewrite !ctree_unflatten_compound,
       ?bit_size_of_struct by eauto; simpl; intros Hxbs1.
-    { unfold struct_unflatten; ctree_refine_constructor; eauto; clear Hs.
+    { unfold struct_unflatten; refine_constructor; eauto; clear Hs.
       + revert xbs1 xbs2 Hxbs Hxbs1. induction (bit_size_of_fields _ τs HΓ);
           intros; decompose_Forall_hyps'; constructor; simpl; auto.
       + revert xbs1 xbs2 Hxbs Hxbs1. induction (bit_size_of_fields _ τs HΓ);
@@ -2349,7 +2276,7 @@ Proof.
           constructor; simpl; auto using pbits_indetify_idempotent.
       + unfold field_bit_padding. clear IH Hxbs. revert xbs1 Hxbs1.
         induction (bit_size_of_fields _ τs HΓ); intros; f_equal'; auto. }
-    ctree_refine_constructor; eauto.
+    refine_constructor; eauto.
 Qed.
 Lemma ctree_flatten_refine Γ f m1 m2 w1 w2 τ :
   ✓ Γ → w1 ⊑{Γ,f@m1↦m2} w2 : τ →
@@ -2365,56 +2292,50 @@ Lemma ctree_refine_Forall (P : pbit Ti → Prop) Γ f m1 m2 w1 w2 τ :
   ✓ Γ → (∀ x1 x2, P x1 → x1 ⊑{Γ,f@m1↦m2} x2 → P x2) →
   ctree_Forall P w1 → w1 ⊑{Γ,f@m1↦m2} w2 : τ → ctree_Forall P w2.
 Proof.
-  intros HΓ ? Hw2 Hw12. induction (ctree_flatten_refine Γ f m1 m2 w1 w2 τ HΓ Hw12);
-    decompose_Forall_hyps; eauto.
+  intros HΓ ? Hw2 Hw12. induction (ctree_flatten_refine
+    Γ f m1 m2 w1 w2 τ HΓ Hw12); decompose_Forall_hyps; eauto.
 Qed.
 Lemma ctree_refine_Forall_inv (P : pbit Ti → Prop) Γ f m1 m2 w1 w2 τ :
   ✓ Γ → (∀ x1 x2, P x2 → x1 ⊑{Γ,f@m1↦m2} x2 → P x1) →
   ctree_Forall P w2 → w1 ⊑{Γ,f@m1↦m2} w2 : τ → ctree_Forall P w1.
 Proof.
-  intros HΓ ? Hw2 Hw12. induction (ctree_flatten_refine Γ f m1 m2 w1 w2 τ HΓ Hw12);
-    decompose_Forall_hyps; eauto.
+  intros HΓ ? Hw2 Hw12. induction (ctree_flatten_refine
+    Γ f m1 m2 w1 w2 τ HΓ Hw12); decompose_Forall_hyps; eauto.
 Qed.
 Lemma ctree_refine_typed_l Γ f m1 m2 w1 w2 τ :
   ✓ Γ → w1 ⊑{Γ,f@m1↦m2} w2 : τ → (Γ,m1) ⊢ w1 : τ.
 Proof.
   intros ?. revert w1 w2 τ. refine (ctree_refine_ind _ _ _ _ _ _ _ _ _ _ _).
-  * intros; ctree_typed_constructor; eauto using pbits_refine_valid_l.
-  * intros τ n ws1 ws2 Hn _ IH ?; ctree_typed_constructor; auto.
+  * typed_constructor; eauto using pbits_refine_valid_l.
+  * intros τ n ws1 ws2 Hn _ IH ?; typed_constructor; auto.
     clear Hn. induction IH; auto.
-  * intros s τs wxbss1 wxbss2 Hs _ IH Hxbs Hindet Hlen.
-    ctree_typed_constructor; eauto; clear Hs Hlen; induction IH;
-      decompose_Forall_hyps';
+  * intros s τs wxbss1 wxbss2 Hs _ IH Hxbs Hindet Hlen. typed_constructor;
+      eauto; clear Hs Hlen; induction IH; decompose_Forall_hyps';
       eauto using pbits_refine_valid_l, pbits_indetified_refine.
-  * intros; ctree_typed_constructor;
-      eauto using pbits_refine_valid_l, pbits_indetified_refine.
-  * intros; ctree_typed_constructor; eauto using pbits_refine_valid_l.
-  * intros; decompose_Forall_hyps'; ctree_typed_constructor;
+  * typed_constructor; eauto using pbits_refine_valid_l,pbits_indetified_refine.
+  * intros; typed_constructor; eauto using pbits_refine_valid_l.
+  * intros; decompose_Forall_hyps'; typed_constructor;
       eauto using pbits_refine_valid_l.
 Qed.
 Lemma ctree_refine_typed_r Γ f m1 m2 w1 w2 τ :
   ✓ Γ → w1 ⊑{Γ,f@m1↦m2} w2 : τ → (Γ,m2) ⊢ w2 : τ.
 Proof.
   intros ?. revert w1 w2 τ. refine (ctree_refine_ind _ _ _ _ _ _ _ _ _ _ _).
-  * intros; ctree_typed_constructor;
-      eauto using Forall2_length_l, pbits_refine_valid_r.
+  * typed_constructor; eauto using Forall2_length_l, pbits_refine_valid_r.
   * intros τ n ws1 ws2 -> _ IH Hn;
-      ctree_typed_constructor; eauto using Forall2_length.
+      typed_constructor; eauto using Forall2_length.
     clear Hn. induction IH; auto.
-  * intros s τs wxbss1 wxbss2 Hs _ IH Hxbs Hindet Hlen.
-    ctree_typed_constructor; eauto.
+  * intros s τs wxbss1 wxbss2 Hs _ IH Hxbs ? Hlen. typed_constructor; eauto.
     + elim IH; eauto.
     + elim Hxbs; eauto using pbits_refine_valid_r.
     + rewrite <-Hlen; symmetry.
       elim Hxbs; intros; f_equal'; eauto using Forall2_length.
-  * intros; ctree_typed_constructor; eauto using pbits_refine_valid_r.
+  * intros; typed_constructor; eauto using pbits_refine_valid_r.
     + by erewrite <-Forall2_length by eauto.
     + intuition eauto using ctree_refine_Forall_inv,
         pbit_refine_unmapped_inv, pbits_refine_unmapped_inv.
-  * intros; ctree_typed_constructor;
-      eauto using Forall2_length_l, pbits_refine_valid_r.
-  * intros; ctree_typed_constructor;
-      eauto using Forall2_length_l, pbits_refine_valid_r.
+  * typed_constructor; eauto using Forall2_length_l, pbits_refine_valid_r.
+  * typed_constructor; eauto using Forall2_length_l, pbits_refine_valid_r.
 Qed.
 Hint Immediate ctree_refine_typed_l ctree_refine_typed_r.
 Lemma ctree_refine_type_of_l Γ f m1 m2 w1 w2 τ :
@@ -2426,9 +2347,9 @@ Proof. destruct 1; f_equal'; eauto using Forall2_length_l. Qed.
 Lemma ctree_refine_id Γ m w τ : (Γ,m) ⊢ w : τ → w ⊑{Γ@m} w : τ.
 Proof.
   revert w τ. refine (ctree_typed_ind _ _ _ _ _ _ _ _);
-     try by (intros; ctree_refine_constructor; eauto using pbits_refine_id).
-  * intros ws τ _ IH Hlen; ctree_refine_constructor; auto. elim IH; auto.
-  * intros s wxbss τs ? _ IH Hwxbss; ctree_refine_constructor; auto.
+     try by (intros; refine_constructor; eauto using pbits_refine_id).
+  * intros ws τ _ IH Hlen; refine_constructor; auto. elim IH; auto.
+  * intros s wxbss τs ? _ IH Hwxbss ??; refine_constructor; eauto.
     + elim IH; constructor; eauto.
     + elim Hwxbss; constructor; eauto using pbits_refine_id.
 Qed.
@@ -2440,16 +2361,16 @@ Proof.
   refine (ctree_refine_ind _ _ _ _ _ _ _ _ _ _ _); simpl.
   * intros τb xbs1 xbs2 ??? w3 Hw3; pattern w3;
       apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ Hw3);
-      intros; ctree_refine_constructor; eauto using pbits_refine_compose.
+      intros; refine_constructor; eauto using pbits_refine_compose.
   * intros τ n ws1 ws2 -> _ IH Hlen w3 Hw3;
       pattern w3; apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ Hw3); clear w3 Hw3;
-      intros ws3 Hws3; ctree_refine_constructor; auto.
+      intros ws3 Hws3; refine_constructor; auto.
     clear Hlen. revert ws3 Hws3.
     induction IH; intros; decompose_Forall_hyps'; constructor; auto.
   * intros s τs wxbss1 wxbss2 Hs _ IH Hxbs _ Hlen w3 Hw3; pattern w3;
       apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ Hw3); clear w3 Hw3.
     intros ? wxbss3 ? Hws3 Hindet Hxbs3;
-      simplify_equality; ctree_refine_constructor; eauto.
+      simplify_equality; refine_constructor; eauto.
     + clear Hs Hlen Hxbs3 Hxbs Hindet. revert wxbss3 Hws3.
       induction IH; inversion_clear 1; constructor; eauto.
     + clear Hs Hlen IH Hws3 Hindet. revert wxbss3 Hxbs3.
@@ -2457,15 +2378,15 @@ Proof.
         constructor; eauto using pbits_refine_compose.
   * intros s τs i w1 w2 xbs1 xbs2 τ Hs Hτs ? IH ???? w3 Hw3; pattern w3;
       apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ Hw3); clear w3 Hw3;
-      intros; decompose_Forall_hyps'; ctree_refine_constructor;
+      intros; decompose_Forall_hyps'; refine_constructor;
         eauto using ctree_flatten_refine, pbits_refine_compose,
         pbits_indetified_refine.
   * intros s τs xbs1 xbs2 Hs ?? w3 Hw3; pattern w3;
       apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ Hw3);
-      intros; ctree_refine_constructor; eauto using pbits_refine_compose.
+      intros; refine_constructor; eauto using pbits_refine_compose.
   * intros s i τs w1 xbs1 xbs2 τ ???????? w3 Hw3; pattern w3;
       apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ Hw3); clear w3 Hw3.
-    intros; ctree_refine_constructor; eauto using ctree_unflatten_refine,
+    intros; refine_constructor; eauto using ctree_unflatten_refine,
       Forall2_length_l, pbits_refine_compose, pbits_refine_unshared.
 Qed.
 Lemma ctree_refine_weaken Γ Γ' f f' m1 m2 m1' m2' w1 w2 τ :
@@ -2475,7 +2396,7 @@ Lemma ctree_refine_weaken Γ Γ' f f' m1 m2 m1' m2' w1 w2 τ :
   w1 ⊑{Γ',f'@m1'↦m2'} w2 : τ.
 Proof.
   intros ? Hw ????. induction Hw using @ctree_refine_ind;
-    ctree_refine_constructor; eauto using base_type_valid_weaken,
+    refine_constructor; eauto using base_type_valid_weaken,
       lookup_weaken, Forall2_impl, pbit_refine_weaken, ctree_typed_weaken;
     erewrite <-?(bit_size_of_weaken Γ Γ'), <-?(field_bit_padding_weaken Γ Γ')
       by eauto using TBase_valid, TCompound_valid; auto.
@@ -2499,32 +2420,32 @@ Lemma union_reset_above Γ f m1 m2 w1 w2 τ :
 Proof.
   intros HΓ. revert w1 w2 τ.
   refine (ctree_refine_ind _ _ _ _ _ _ _ _ _ _ _); simpl.
-  * by intros; ctree_refine_constructor.
-  * intros τ n ws1 ws2 Hn _ IH ??. ctree_refine_constructor; auto.
+  * by intros; refine_constructor.
+  * intros τ n ws1 ws2 Hn _ IH ??. refine_constructor; auto.
     clear Hn. induction IH; decompose_Forall_hyps'; auto.
   * intros s τs wxbss1 wxbss2 Hs _ IH ? Hindet Hlen ?;
-      ctree_refine_constructor; eauto; clear Hs Hlen;
+      refine_constructor; eauto; clear Hs Hlen;
       induction IH; decompose_Forall_hyps'; constructor; auto.
   * intros s τs i w1 w2 xbs1 xbs2 τ; intros.
-    ctree_refine_constructor; eauto using ctree_flatten_refine,
+    refine_constructor; eauto using ctree_flatten_refine,
       pbits_indetified_refine.
-  * intros; ctree_refine_constructor; eauto.
-  * intros; ctree_refine_constructor; eauto.
+  * intros; refine_constructor; eauto.
+  * intros; refine_constructor; eauto.
 Qed.
 Lemma union_reset_refine Γ f m1 m2 w1 w2 τ :
   ✓ Γ → w1 ⊑{Γ,f@m1↦m2} w2 : τ → union_reset w1 ⊑{Γ,f@m1↦m2} union_reset w2 : τ.
 Proof.
   intros ?. revert w1 w2 τ. refine (ctree_refine_ind _ _ _ _ _ _ _ _ _ _ _);
-    simpl; try by (intros; ctree_refine_constructor; eauto 1).
-  * intros τ n ws1 ws2 -> _ IH Hlen; ctree_refine_constructor; auto.
+    simpl; try by (intros; refine_constructor; eauto 1).
+  * intros τ n ws1 ws2 -> _ IH Hlen; refine_constructor; auto.
     elim IH; constructor; eauto.
   * intros s τs wxbss1 wxbss2 ? _ IH Hxbs Hindet Hlen.
-    ctree_refine_constructor; eauto.
+    refine_constructor; eauto.
     + elim IH; constructor; eauto.
     + elim Hxbs; constructor; eauto.
     + elim Hindet; constructor; auto.
     + rewrite <-Hlen. elim wxbss1; intros; f_equal'; auto.
-  * intros; ctree_refine_constructor; eauto using ctree_flatten_refine.
+  * intros; refine_constructor; eauto using ctree_flatten_refine.
 Qed.
 Lemma ctree_flatten_unflatten_refine Γ m1 m2 f w xbs τ :
   ✓ Γ → (Γ,m1) ⊢ w : τ → Forall sep_unshared xbs →
@@ -2571,9 +2492,9 @@ Lemma ctree_lookup_refine Γ f m1 m2 w1 w2 τ r w3 :
   ∃ w4, w2 !!{Γ} r = Some w4 ∧ w3 ⊑{Γ,f@m1↦m2} w4 : type_of w3.
 Proof.
   intros HΓ. revert w1 w2 τ. induction r as [|rs r IH] using rev_ind; simpl.
-  { intros. rewrite list_path_lookup_nil. simplify_equality.
+  { intros. rewrite ctree_lookup_nil. simplify_equality.
     erewrite ctree_refine_type_of_l by eauto; eauto. }
-  intros w1 w2. rewrite !list_path_lookup_snoc. intros. simplify_option_equality.
+  intros w1 w2. rewrite !ctree_lookup_snoc. intros. simplify_option_equality.
   edestruct (ctree_lookup_seg_refine Γ f m1 m2 w1 w2 τ rs) as (?&?&?);
     simplify_option_equality; eauto.
 Qed.
@@ -2601,25 +2522,25 @@ Proof.
        | erewrite ctree_unflatten_type_of in H by eauto
        | erewrite type_of_correct in H by eauto ]
     end.
-  * ctree_refine_constructor; auto using alter_length.
+  * refine_constructor; auto using alter_length.
     apply Forall2_alter; auto. intros; simplify_equality'; auto.
-  * ctree_refine_constructor; eauto.
+  * refine_constructor; eauto.
     + apply Forall3_alter_lm; [elim Hws; constructor; simpl; eauto|].
       intros [??] [??] ????; simplify_equality; auto.
     + by apply Forall2_alter; [elim Hxbss; constructor; simpl; eauto|].
     + apply Forall_alter; auto.
     + rewrite <-Hlen. generalize i'.
       elim wxbss1; [|intros ? wxbss ?]; intros [|?]; f_equal'; auto.
-  * ctree_refine_constructor; eauto; solve_length || tauto.
-  * ctree_refine_constructor; eauto using ctree_flatten_refine,
+  * refine_constructor; eauto; solve_length || tauto.
+  * refine_constructor; eauto using ctree_flatten_refine,
       pbits_indetify_refine, pbits_indetify_idempotent; solve_length || tauto.
-  * ctree_refine_constructor; eauto using pbits_indetify_refine,
+  * refine_constructor; eauto using pbits_indetify_refine,
       pbits_indetify_idempotent; solve_length || tauto.
-  * ctree_refine_constructor; eauto using pbits_indetify_idempotent; [|tauto].
+  * refine_constructor; eauto using pbits_indetify_idempotent; [|tauto].
     rewrite drop_app_alt by (by erewrite <-Forall2_length by eauto); eauto.
     match goal with H : pbit_indetify <$> _ = _ |- _ => rewrite <-H end.
     eauto using pbits_indetify_refine.
-  * ctree_refine_constructor; eauto using pbits_indetify_refine,
+  * refine_constructor; eauto using pbits_indetify_refine,
       pbits_indetify_idempotent; solve_length || intuition.
 Qed.
 Lemma ctree_alter_refine Γ f m1 m2 g1 g2 w1 w2 τ r w3 w4 :
@@ -2629,9 +2550,9 @@ Lemma ctree_alter_refine Γ f m1 m2 g1 g2 w1 w2 τ r w3 w4 :
 Proof.
   intros ?. revert g1 g2 w1 w2 τ.
   induction r as [|rs r IH] using rev_ind; simpl; intros g1 g2 w1 w2 τ.
-  { rewrite !list_path_lookup_nil; intros ???; simplify_equality.
+  { rewrite !ctree_lookup_nil; intros ???; simplify_equality.
     erewrite ctree_refine_type_of_l by eauto; eauto. }
-  rewrite !list_path_lookup_snoc, !ctree_alter_snoc; intros.
+  rewrite !ctree_lookup_snoc, !ctree_alter_snoc; intros.
   destruct (w1 !!{Γ} rs) as [w1'|] eqn:?; simplify_equality'.
   destruct (w2 !!{Γ} rs) as [w2'|] eqn:?; simplify_equality'.
   destruct (ctree_lookup_seg_refine Γ f m1 m2 w1 w2 τ rs w1')

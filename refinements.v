@@ -190,6 +190,13 @@ Notation "Xs ⊑{ Γ @ m }1* Ys :* τs" := (Xs ⊑{Γ,mem_inj_id @ m↦m}1* Ys :
   (at level 70, Ys at next level,
    format "Xs  ⊑{ Γ  @  m }1*  Ys  :*  τs") : C_scope.
 
+Ltac refine_constructor :=
+  intros; match goal with
+  |- refineT (RefineT:=?H) ?Γ ?f ?m1 ?m2 _ _ _ =>
+    let H' := eval hnf in (H Γ f m1 m2) in
+    econstructor; change H' with (refineT (RefineT:=H) Γ f m1 m2)
+  end.
+
 Class TypeOfIndex (Ti : Set) (M : Type) :=
   type_of_index : M → index → option (type Ti).
 Class IndexAlive (M : Type) :=
@@ -237,14 +244,10 @@ Lemma type_of_object_Some_2 Γ m o σ r τ :
 Proof. rewrite type_of_object_Some; eauto. Qed.
 Lemma type_of_object_nil Γ m o :
   type_of_object Γ m o (@nil (ref_seg Ti)) = type_of_index m o.
-Proof.
-  unfold type_of_object. by rewrite list_path_lookup_nil, bind_with_Some.
-Qed.
+Proof. unfold type_of_object. by rewrite ref_lookup_nil, bind_with_Some. Qed.
 Lemma type_of_object_cons Γ m o rs r :
   type_of_object Γ m o (rs :: r) = type_of_object Γ m o r ≫= lookupE Γ rs.
-Proof.
-  unfold type_of_object. by rewrite list_path_lookup_cons, option_bind_assoc.
-Qed.
+Proof. unfold type_of_object. by rewrite ref_lookup_cons,option_bind_assoc. Qed.
 Lemma type_of_object_weaken Γ1 Γ2 m1 m2 o r σ :
   ✓ Γ1 → type_of_object Γ1 m1 o r = Some σ → Γ1 ⊆ Γ2 →
   (∀ o σ, type_of_index m1 o = Some σ → type_of_index m2 o = Some σ) →

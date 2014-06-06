@@ -187,7 +187,7 @@ Lemma addr_top_typed_alloc Γ m o alloc τ a :
   (Γ,mem_alloc Γ o alloc τ m) ⊢ addr_top o τ : τ.
 Proof.
   constructor; simpl; split_ands; auto using mem_alloc_type_of.
-  * by apply list_typed_nil.
+  * by apply ref_typed_nil.
   * lia.
   * by apply Nat.mod_0_l, size_of_ne_0.
 Qed.
@@ -582,15 +582,15 @@ Lemma ctree_unlock_typed Γ m w τ βs :
 Proof.
   intros HΓ Hw. revert w τ Hw βs.
   refine (ctree_typed_ind _ _ _ _ _ _ _ _); simpl.
-  * intros; ctree_typed_constructor; auto using pbits_unlock_if_valid.
+  * intros; typed_constructor; auto using pbits_unlock_if_valid.
   * intros ws τ Hws IH Hlen βs. rewrite bit_size_of_array.
-    intros Hβs; ctree_typed_constructor; auto.
+    intros Hβs; typed_constructor; auto.
     + clear Hlen IH. revert βs Hβs. induction Hws; intros; f_equal'; auto.
     + clear Hlen. revert βs Hβs.
       induction Hws; intros; decompose_Forall_hyps'; constructor; auto.
   * intros s wxbss τs Hs Hws IH Hxbss Hindet Hlen βs.
     erewrite bit_size_of_struct by eauto. intros Hβs.
-    ctree_typed_constructor; eauto; clear Hs.
+    typed_constructor; eauto; clear Hs.
     + clear Hxbss Hindet. revert wxbss βs Hws IH Hβs Hlen.
       unfold field_bit_padding. induction (bit_size_of_fields _ τs HΓ);
         intros [|[??] ?] ?????; decompose_Forall_hyps';
@@ -603,14 +603,14 @@ Proof.
       unfold field_bit_padding. induction (bit_size_of_fields _ τs HΓ);
         intros [|[??] ?] ????; decompose_Forall_hyps';
         erewrite ?type_of_correct by eauto; f_equal; auto.
-  * intros s i τs w xbs τ ??????? Hc βs ?. ctree_typed_constructor; eauto.
+  * intros s i τs w xbs τ ??????? Hc βs ?. typed_constructor; eauto.
     + auto using pbits_unlock_if_valid.
     + rewrite pbit_indetify_unlock_if; congruence.
     + solve_length.
     + rewrite ctree_flatten_merge.
       intros [??]; destruct Hc; split; eapply pbits_unmapped_inv;
         eauto using ctree_flatten_valid, pbits_valid_sep_valid.
-  * intros; ctree_typed_constructor; eauto using pbits_unlock_if_valid.
+  * intros; typed_constructor; eauto using pbits_unlock_if_valid.
 Qed.
 Lemma mem_unlock_type_of m Ω o σ :
   type_of_index m o = Some σ → type_of_index (mem_unlock Ω m) o = Some σ.

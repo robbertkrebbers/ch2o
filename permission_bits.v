@@ -16,14 +16,12 @@ Section operations.
 
   Definition pbit_indetify (xb : pbit Ti) : pbit Ti :=
     PBit (tagged_perm xb) BIndet.
-  Definition pbit_kind (xb : pbit Ti) : option pkind :=
-    perm_kind (tagged_perm xb).
+  Definition pbit_kind : pbit Ti → option pkind := perm_kind ∘ tagged_perm.
   Definition pbit_freed : pbit Ti := PBit perm_freed BIndet.
   Definition pbit_full (alloc : bool) : pbit Ti :=
     PBit (perm_full alloc) BIndet.
   Definition pbit_token : pbit Ti := PBit perm_token BIndet.
-  Definition pbit_locked (xb : pbit Ti) : bool :=
-    perm_locked (tagged_perm xb).
+  Definition pbit_locked : pbit Ti → bool := perm_locked ∘ tagged_perm.
   Definition pbit_lock (xb : pbit Ti) : pbit Ti :=
     PBit (perm_lock (tagged_perm xb)) (tagged_tag xb).
   Definition pbit_unlock (xb : pbit Ti) : pbit Ti :=
@@ -501,5 +499,5 @@ Proof.
 Qed.
 Lemma pbit_refine_kind Γ f m1 m2 xb1 xb2 k :
   xb1 ⊑{Γ,f@m1↦m2} xb2 → k ⊆ pbit_kind xb1 → k ⊆ pbit_kind xb2.
-Proof. unfold pbit_kind. intros (?&?&?&?); congruence. Qed.
+Proof. unfold pbit_kind; intros (?&?&?&?); simpl; congruence. Qed.
 End properties.
