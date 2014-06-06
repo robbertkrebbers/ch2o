@@ -1,9 +1,10 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export smallstep.
+Require Import streams hashset.
 
 Section exec.
-Context `{EnvSpec Ti}.
+Context `{EnvSpec Ti} (hash : state Ti → Z).
 
 Definition assign_exec (Γ : env Ti) (m : mem Ti) (a : addr Ti)
     (v : val Ti) (ass : assign) : option (val Ti * val Ti) :=
@@ -34,11 +35,8 @@ Definition ehstep_exec (Γ : env Ti) (ρ : stack)
      '(v',va) ← assign_exec Γ m a v ass;
      Some (#{lock_singleton Γ a ∪ Ωl ∪ Ωr} v',
            mem_lock Γ a (<[a:=va]{Γ}>m))
-  | load (%{Ω} a) =>
-     match maybe_TArray (type_of a) with
-     | Some _ => Some (#{Ω} (ptrV (Ptr (addr_elt Γ a))), m)
-     | None => v ← m !!{Γ} a; Some (#{Ω} v, mem_force Γ a m)
-     end
+  | load (%{Ω} a) => v ← m !!{Γ} a; Some (#{Ω} v, mem_force Γ a m)
+  | elt (%{Ω} a) => Some (#{Ω} (ptrV (Ptr (addr_elt Γ a))), m)
   | alloc τ =>
      let o := fresh (dom indexset m) in
      Some (#(ptrV (Ptr (addr_top o τ))), mem_alloc Γ o true τ m)
@@ -176,7 +174,7 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
       | _ => ∅
       end
     | None =>
-      '(E,e') ← expr_redexes (listset _) e;
+      '(E,e') ← expr_redexes e;
       match ehstep_exec Γ (get_stack k) e' m with
       | Some (e2,m2) => {[ State k (Expr (subst E e2)) m2 ]}
       | None =>
@@ -189,20 +187,26 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
     end
   | Undef => ∅
   end.
-(*
-Fixpoint csteps_exec (δ : funenv) (n : nat)
-    (Ss : listset state) : listset state :=
-  match n with 0 => Ss | S n => csteps_exec δ n (Ss ≫= cstep_exec δ) end.
-*)
+Definition cstep_exec' (Γ : env Ti) (δ : funenv Ti)
+    (S : state Ti) : listset (state Ti) * listset (state Ti) :=
+  let Ss := cstep_exec Γ δ S in
+  if decide (listset_car Ss = []) then ({[ S ]}, ∅) else (∅, Ss).
+Definition csteps_exec (Γ : env Ti) (δ : funenv Ti) :
+    listset (state Ti) → stream (listset (state Ti) * listset (state Ti)) :=
+  cofix go Ss :=
+  let Sss := cstep_exec' Γ δ <$> Ss in
+  let nfs := listset_normalize hash (Sss ≫= fst) in
+  let reds := listset_normalize hash (Sss ≫= snd) in
+  (nfs,reds) :.: go reds.
 
-Definition assign_exec_correct Γ m a v ass v' va' :
+Lemma assign_exec_correct Γ m a v ass v' va' :
   assign_exec Γ m a v ass = Some (v',va') ↔ assign_sem Γ m a v ass v' va'.
 Proof.
   split.
   * intros. destruct ass; simplify_option_equality; econstructor; eauto.
   * by destruct 1; simplify_option_equality.
 Qed.
-Definition ehstep_exec_sound Γ ρ m1 m2 e1 e2 :
+Lemma ehstep_exec_sound Γ ρ m1 m2 e1 e2 :
   ehstep_exec Γ ρ e1 m1 = Some (e2, m2) → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
   intros. destruct e1;
@@ -214,7 +218,7 @@ Proof.
     | _ => case_match
     end; do_ehstep.
 Qed.
-Definition ehstep_exec_weak_complete Γ ρ e1 m1 e2 m2 :
+Lemma ehstep_exec_weak_complete Γ ρ e1 m1 e2 m2 :
   ehstep_exec Γ ρ e1 m1 = None → ¬Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
   destruct 2; 
@@ -227,7 +231,7 @@ Proof.
     | _ => case_match
     end; auto.
 Qed.
-Definition cstep_exec_sound Γ δ S1 S2 :
+Lemma cstep_exec_sound Γ δ S1 S2 :
   S2 ∈ cstep_exec Γ δ S1 → Γ\ δ ⊢ₛ S1 ⇒ S2.
 Proof.
   intros. assert (∀ (k : ctx Ti) e m,
@@ -241,8 +245,8 @@ Proof.
     repeat match goal with
     | H : ehstep_exec _ _ _ _ = Some _ |- _ =>
       apply ehstep_exec_sound in H
-    | H : _ ∈ expr_redexes _ _ |- _ =>
-      apply (expr_redexes_correct _) in H; destruct H
+    | H : _ ∈ expr_redexes _ |- _ =>
+      apply expr_redexes_correct in H; destruct H
     | H : maybe_EVal _ = Some _ |- _ => apply maybe_EVal_Some in H
     | H : maybe_CCall_redex _ = Some _ |- _ =>
       apply maybe_CCall_redex_Some in H; destruct H
@@ -253,4 +257,41 @@ Proof.
     | _ => progress simplify_equality'
     end; do_cstep.
 Qed.
+Lemma cstep_exec_weak_complete Γ δ S :
+  cstep_exec Γ δ S ≡ ∅ → nf (cstep Γ δ) S.
+Proof.
+  rewrite elem_of_equiv_empty. intros ? [S2 p].
+destruct p; simplify_equality'; try esolve_elem_of.
+case_match; esolve_elem_of.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+
+Lemma cstep_exec_sound_fst Γ δ S1 S2 :
+  S2 ∈ (cstep_exec' Γ δ S1).1 → S2 = S1 ∧ nf (cstep Γ δ) S2.
+Proof.
+Admitted.
+Lemma cstep_exec_sound_snd Γ δ S1 S2 :
+  S2 ∈ (cstep_exec' Γ δ S1).2 → Γ\ δ ⊢ₛ S1 ⇒ S2.
+Proof.
+Admitted.
+Lemma csteps_exec_sound_fst Γ δ S1 S2 i :
+  S1 ∈ SS1 → S2 ∈ (csteps_exec Γ δ SS1 !.! i).1 →
+  Γ\ δ ⊢ₛ S1 ⇒* S2 ∧ nf (cstep Γ δ) S2.
+Proof.
+Admitted.
+Lemma csteps_exec_sound_snd Γ δ S1 S2 i :
+  S1 ∈ SS2 → S2 ∈ (csteps_exec Γ δ SS1 !.! i).2 → Γ\ δ ⊢ₛ S1 ⇒* S2.
+Proof.
+Admitted.
 End exec.

@@ -148,7 +148,8 @@ Section operations.
     Qed.
   End ctree_typed_ind.
 
-  Global Instance mval_check:TypeCheck (env Ti * mem Ti) (type Ti) (mtree Ti) :=
+  Global Instance mtree_check :
+      TypeCheck (env Ti * mem Ti) (type Ti) (mtree Ti) :=
     fix go Γm w {struct w} := let _ : TypeCheck _ _ _ := @go in
     match w with
     | MBase τb xbs =>
