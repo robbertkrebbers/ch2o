@@ -46,11 +46,9 @@ Inductive ehstep `{IntEnv Ti, PtrEnv Ti}
      Γ\ ρ ⊢ₕ %{Ω1} a ::={ass} #{Ω2} v, m ⇒
              #{lock_singleton Γ a ∪ Ω1 ∪ Ω2} v', mem_lock Γ a (<[a:=va]{Γ}>m)
   | estep_load Ω a v m :
-     m !!{Γ} a = Some v → maybe_TArray (type_of a) = None →
-     Γ\ ρ ⊢ₕ load (%{Ω} a), m ⇒ #{Ω} v, mem_force Γ a m
-  | estep_load_array Ω a m :
-     is_Some (maybe_TArray (type_of a)) →
-     Γ\ ρ ⊢ₕ load (%{Ω} a), m ⇒ #{Ω} (ptrV (Ptr (addr_elt Γ a))), m
+     m !!{Γ} a = Some v → Γ\ ρ ⊢ₕ load (%{Ω} a), m ⇒ #{Ω} v, mem_force Γ a m
+  | estep_elt Ω a m :
+     Γ\ ρ ⊢ₕ elt (%{Ω} a), m ⇒ #{Ω} (ptrV (Ptr (addr_elt Γ a))), m
   | estep_alloc m o τ :
      mem_allocable o m →
      Γ\ ρ ⊢ₕ alloc τ, m ⇒ #(ptrV (Ptr (addr_top o τ))), mem_alloc Γ o true τ m
