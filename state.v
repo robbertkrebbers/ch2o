@@ -30,7 +30,7 @@ When a [goto l] statement is executed, the direction is changed to [↷l], and
 the semantics performs a non-deterministic small step traversal through the
 zipper until the label [l] is found. *)
 Inductive direction (Ti : Set) : Set :=
-  Down | Up | Top (v : val Ti) | Jump (l : label).
+  Down | Up | Top (v : val Ti) | Jump (l : labelname).
 Arguments Down {_}.
 Arguments Up {_}.
 Arguments Top {_} _.

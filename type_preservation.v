@@ -89,6 +89,8 @@ Proof.
      eexists; simpl; split_ands; repeat typed_constructor; eauto.
   * intros m k l (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eexists; simpl; split_ands; repeat typed_constructor; eauto.
+  * intros m k l (τf&HS&?&?) ?; typed_inversion_all; split; auto.
+    eexists; simpl; split_ands; repeat typed_constructor; eauto.
   * intros m k Ee e (τf&HS&?&?) ?; typed_inversion HS; split; auto.
     edestruct (esctx_item_subst_typed_rev Γ Γf m
       (get_stack_types k) Ee e) as (σ&?&?); eauto.
@@ -154,8 +156,6 @@ Proof.
       stmt_typed_weaken, ctx_typed_weaken, index_typed_alloc_free.
   * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eexists; simpl; split_ands; eauto; repeat typed_constructor; eauto.
-  * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; split; auto.
-    eexists; simpl; split_ands; repeat typed_constructor; eauto.
   * intros m k o τ s (τf&HS&?&?) ?; typed_inversion_all.
     split; [|eauto using funenv_typed_weaken, index_typed_free].
     eexists; simpl; split_ands; repeat typed_constructor;
@@ -173,8 +173,6 @@ Proof.
   * intros m k e s1 s2 (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eexists; simpl; split_ands; repeat typed_constructor; eauto.
     by rewrite andb_false_r.
-  * intros m k s l (τf&HS&?&?) ?; typed_inversion_all; split; auto.
-    eexists; simpl; split_ands; repeat typed_constructor; eauto.
   * intros m k f s os vs ??? (τf&HS&?&?) ?; typed_inversion_all.
     edestruct (funenv_lookup Γ m Γf δ f) as (s'&mτ&?&?&?&?&?); eauto.
     erewrite fmap_type_of by eauto; simplify_equality.
@@ -212,7 +210,7 @@ Proof.
       (get_stack_types k) Es) as [??]; eauto; simplify_equality'.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using sctx_item_subst_typed.
-  * intros m k l s (τf&HS&?&?) ?; typed_inversion_all; split; auto.
+  * intros m k l (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eexists; simpl; split_ands; repeat typed_constructor; eauto.
   * intros m k l o τ s ?? (τf&HS&?&?) ?; typed_inversion_all.
     split; [|eauto using funenv_typed_weaken, index_typed_alloc_free].

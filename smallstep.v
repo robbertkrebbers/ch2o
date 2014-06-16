@@ -100,6 +100,9 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
   | cstep_in_skip m k :
      Γ\ δ ⊢ₛ State k (Stmt ↘ skip) m ⇒
              State k (Stmt ↗ skip) m
+  | cstep_in_label m k l :
+     Γ\ δ ⊢ₛ State k (Stmt ↘ (label l)) m ⇒
+             State k (Stmt ↗ (label l)) m
   | cstep_in_goto m k l :
      Γ\ δ ⊢ₛ State k (Stmt ↘ (goto l)) m ⇒
              State k (Stmt (↷ l) (goto l)) m
@@ -153,9 +156,6 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
   | cstep_in_comp m k s1 s2 :
      Γ\ δ ⊢ₛ State k (Stmt ↘ (s1 ;; s2)) m ⇒
              State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m
-  | cstep_in_label m k l s :
-     Γ\ δ ⊢ₛ State k (Stmt ↘ (l :; s)) m ⇒
-             State (CStmt (l :; □) :: k) (Stmt ↘ s) m
   | cstep_out_block m k o τ s :
      Γ\ δ ⊢ₛ State (CBlock o τ :: k) (Stmt ↗ s) m ⇒
              State k (Stmt ↗ (blk{τ} s)) (mem_free o m)
@@ -174,9 +174,6 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
   | cstep_out_if2 m k e s1 s2 :
      Γ\ δ ⊢ₛ State (CStmt (if{e} s1 else □) :: k) (Stmt ↗ s2) m ⇒
              State k (Stmt ↗ (if{e} s1 else s2)) m
-  | cstep_out_label m k s l :
-     Γ\ δ ⊢ₛ State (CStmt (l :; □) :: k) (Stmt ↗ s) m ⇒
-             State k (Stmt ↗ (l :; s)) m
 
   (**i For function calls *)
   | cstep_call m k f s os vs :
@@ -201,9 +198,9 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
   | cstep_top_item m k E v s :
      Γ\ δ ⊢ₛ State (CStmt E :: k) (Stmt (⇈ v) s) m ⇒
              State k (Stmt (⇈ v) (subst E s)) m
-  | cstep_label_here m k l s :
-     Γ\ δ ⊢ₛ State k (Stmt (↷ l) (l :; s)) m ⇒
-             State (CStmt (l :; □) :: k) (Stmt ↘ s) m
+  | cstep_label_here m k l :
+     Γ\ δ ⊢ₛ State k (Stmt (↷ l) (label l)) m ⇒
+             State k (Stmt ↗ (label l)) m
   | cstep_label_block_down m k l o τ s :
      l ∈ labels s → mem_allocable o m →
      Γ\ δ ⊢ₛ State k (Stmt (↷ l) (blk{τ} s)) m ⇒
@@ -262,6 +259,8 @@ Section inversion.
     match φ with
     | Stmt ↘ skip =>
        P (State k (Stmt ↗ skip) m) → P S2
+    | Stmt ↘ (label l) =>
+       P (State k (Stmt ↗ (label l)) m) → P S2
     | Stmt ↘ (goto l) =>
        P (State k (Stmt (↷ l) (goto l)) m) → P S2
     | Stmt ↘ (! e) =>
@@ -322,8 +321,6 @@ Section inversion.
        P S2
     | Stmt ↘ (s1 ;; s2) =>
        P (State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m) → P S2
-    | Stmt ↘ (l :; s) =>
-       P (State (CStmt (l :; □) :: k) (Stmt ↘ s) m) → P S2
     | Stmt ↗ s =>
        (∀ k' o τ,
          k = CBlock o τ :: k' →
@@ -343,9 +340,6 @@ Section inversion.
        (∀ k' e s1,
          k = CStmt (if{e} s1 else □) :: k' →
          P (State k' (Stmt ↗ (if{e} s1 else s)) m)) →
-       (∀ k' l,
-         k = CStmt (l :; □) :: k' →
-         P (State k' (Stmt ↗ (l :; s)) m)) →
        (∀ k' oτs,
          k = CParams oτs :: k' →
          P (State k' (Return voidV) (foldr mem_free m (fst <$> oτs)))) →
@@ -368,9 +362,7 @@ Section inversion.
          P (State k' (Stmt (⇈ v) (subst Es s)) m)) →
        P S2
     | Stmt (↷ l) s =>
-       (∀ s',
-         s = (l :; s') →
-         P (State (CStmt (l :; □) :: k) (Stmt ↘ s') m)) →
+       (s = label l → P (State k (Stmt ↗ s) m)) →
        (∀ s' o τ,
          s = blk{τ} s' → l ∈ labels s → mem_allocable o m →
          P (State (CBlock o τ :: k) (Stmt (↷ l) s')
@@ -426,7 +418,6 @@ Section inversion.
     | CStmt (while{e} □) => P (State k (Stmt ↘ (while{e} s)) m) → P S2
     | CStmt (if{e} □ else s2) => P (State k (Stmt ↗ (if{e} s else s2)) m) → P S2
     | CStmt (if{e} s1 else □) => P (State k (Stmt ↗ (if{e} s1 else s)) m) → P S2
-    | CStmt (l :; □) => P (State k (Stmt ↗ (l :; s)) m) → P S2
     | CBlock o τ => P (State k (Stmt ↗ (blk{τ} s)) (mem_free o m)) → P S2
     | CParams oτs =>
        P (State k (Return voidV) (foldr mem_free m (fst <$> oτs))) → P S2
@@ -453,19 +444,14 @@ Section inversion.
     Γ\ δ ⊢ₛ State k (Stmt (↷ l) s) m ⇒ S2 →
     l ∈ labels s →
     match s with
+    | label l' => (l = l' → P (State k (Stmt ↗ s) m)) → P S2
     | blk{τ} s =>
-       (∀ o,
-         mem_allocable o m → l ∈ labels s →
-         P (State (CBlock o τ :: k) (Stmt (↷ l) s)
-           (mem_alloc Γ o false τ m))) →
+       (∀ o, mem_allocable o m → l ∈ labels s →
+         P (State (CBlock o τ :: k) (Stmt (↷ l) s) (mem_alloc Γ o false τ m))) →
        P S2
     | s1 ;; s2 =>
        (l ∈ labels s1 → P (State (CStmt (□ ;; s2) :: k) (Stmt (↷ l) s1) m)) →
        (l ∈ labels s2 → P (State (CStmt (s1 ;; □) :: k) (Stmt (↷ l) s2) m)) →
-       P S2
-    | l' :; s =>
-       (l = l' → P (State (CStmt (l' :; □) :: k) (Stmt ↘ s) m)) →
-       (l ∈ labels s → P (State (CStmt (l' :; □) :: k) (Stmt (↷ l) s) m)) →
        P S2
     | while{e} s =>
        (l ∈ labels s → P (State (CStmt (while{e} □) :: k) (Stmt (↷ l) s) m)) →
@@ -606,7 +592,6 @@ Ltac quote_stmt s :=
   | ! ?e => constr:[subst (! □) e]
   | ret ?e => constr:[subst (ret □) e]
   | ?s1 ;; ?s2 => constr:[subst (s1 ;; □) s2; subst (□ ;; s2) s1]
-  | ?l :; ?s => constr:[subst (l :; □) s]
   | while{?e} ?s =>
     constr:[subst (while{e} □) s; subst (while{□} s) e]
   | if{?e} ?s1 else ?s2 =>

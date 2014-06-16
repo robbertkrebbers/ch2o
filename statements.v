@@ -42,33 +42,34 @@ Require Export expressions.
 implementation [Nmap] for efficient finite sets, and finite maps indexed by
 labels. We define type classes [Gotos] and [Labels] to collect the labels of
 gotos respectively the labels of labeled statements. *)
-Definition label := N.
+Definition labelname := N.
 Definition labelmap := Nmap.
 Notation labelset := (mapset (labelmap unit)).
 
-Instance label_dec: ∀ i1 i2 : label, Decision (i1 = i2) := decide_rel (=).
-Instance label_fresh_`{FinCollection label C} : Fresh label C := _.
-Instance label_fresh_spec `{FinCollection label C} : FreshSpec label C := _.
-Instance label_inhabited: Inhabited label := populate 0%N.
+Instance labelname_dec: ∀ i1 i2 : labelname, Decision (i1 = i2) := decide_rel (=).
+Instance labelname_fresh_`{FinCollection labelname C} : Fresh labelname C := _.
+Instance labelname_fresh_spec `{FinCollection labelname C} :
+  FreshSpec labelname C := _.
+Instance labelname_inhabited: Inhabited labelname := populate 0%N.
 
 Instance labelmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
   ∀ m1 m2 : labelmap A, Decision (m1 = m2) := decide_rel (=).
 Instance labelmap_empty {A} : Empty (labelmap A) := @empty (Nmap A) _.
-Instance labelmap_lookup {A} : Lookup label A (labelmap A) :=
+Instance labelmap_lookup {A} : Lookup labelname A (labelmap A) :=
   @lookup _ _ (Nmap A) _.
-Instance labelmap_partial_alter {A} : PartialAlter label A (labelmap A) :=
+Instance labelmap_partial_alter {A} : PartialAlter labelname A (labelmap A) :=
   @partial_alter _ _ (Nmap A) _.
-Instance labelmap_to_list {A} : FinMapToList label A (labelmap A) :=
+Instance labelmap_to_list {A} : FinMapToList labelname A (labelmap A) :=
   @map_to_list _ _ (Nmap A) _.
 Instance labelmap_omap: OMap labelmap := @omap Nmap _.
 Instance labelmap_merge: Merge labelmap := @merge Nmap _.
 Instance labelmap_fmap: FMap labelmap := @fmap Nmap _.
-Instance: FinMap label labelmap := _.
+Instance: FinMap labelname labelmap := _.
 
 Instance labelmap_dom {A} : Dom (labelmap A) labelset := mapset_dom.
-Instance: FinMapDom label labelmap labelset := mapset_dom_spec.
+Instance: FinMapDom labelname labelmap labelset := mapset_dom_spec.
 
-Typeclasses Opaque label labelmap.
+Typeclasses Opaque labelname labelmap.
 
 Class Gotos A := gotos: A → labelset.
 Arguments gotos {_ _} !_ / : simpl nomatch.
@@ -82,11 +83,11 @@ Bruijn indexes for variables, it does not contain the name of the variable. *)
 Inductive stmt (Ti : Set) : Set :=
   | SDo : expr Ti → stmt Ti
   | SSkip : stmt Ti
-  | SGoto : label → stmt Ti
+  | SGoto : labelname → stmt Ti
   | SReturn : expr Ti → stmt Ti
   | SBlock : type Ti → stmt Ti → stmt Ti
   | SComp : stmt Ti → stmt Ti → stmt Ti
-  | SLabel : label → stmt Ti → stmt Ti
+  | SLabel : labelname → stmt Ti
   | SWhile : expr Ti → stmt Ti → stmt Ti
   | SIf : expr Ti → stmt Ti → stmt Ti → stmt Ti.
 Notation funenv Ti := (funmap (stmt Ti)).
@@ -106,7 +107,7 @@ Arguments SGoto {_} _%N.
 Arguments SReturn {_} _.
 Arguments SBlock {_} _ _%S.
 Arguments SComp {_}_%S _%S.
-Arguments SLabel {_} _%N _%S.
+Arguments SLabel {_} _%N.
 Arguments SWhile {_}_ _%S.
 Arguments SIf {_} _ _%S _%S.
 
@@ -119,8 +120,10 @@ Notation "'blk{' τ } s" := (SBlock τ s)
 Notation "s1 ;; s2" := (SComp s1 s2)
   (at level 80, right associativity,
    format "'[' s1  ;;  '/' s2 ']'") : stmt_scope.
-Notation "l :; s" := (SLabel l s)
-  (at level 81, format "l  :;  s") : stmt_scope.
+Notation "'label' l" := (SLabel l) (at level 10) : stmt_scope.
+
+Notation "l :; s" := (label l ;; s)
+  (at level 80, format "l  :;  s") : stmt_scope.
 Notation "'while{' e } s" := (SWhile e s)
   (at level 10, format "'while{' e }  s") : stmt_scope.
 Notation "'if{' e } s1 'else' s2" := (SIf e s1 s2)
@@ -141,7 +144,6 @@ Instance stmt_gotos {Ti} : Gotos (stmt Ti) :=
   | goto l => {[ l ]}
   | blk{_} s => gotos s
   | s1 ;; s2 => gotos s1 ∪ gotos s2
-  | _ :; s => gotos s
   | while{_} s => gotos s
   | if{_} s1 else s2 => gotos s1 ∪ gotos s2
   | _ => ∅
@@ -151,7 +153,7 @@ Instance stmt_labels {Ti} : Labels (stmt Ti) :=
   match s with
   | blk{_} s => labels s
   | s1 ;; s2 => labels s1 ∪ labels s2
-  | l :; s => {[ l ]} ∪ labels s
+  | label l => {[ l ]}
   | while{_} s => labels s
   | if{_} s1 else s2 => labels s1 ∪ labels s2
   | _ => ∅
@@ -160,12 +162,10 @@ Instance stmt_locks {Ti} : Locks (stmt Ti) :=
   fix go s := let _ : Locks _ := @go in
   match s with
   | ! e => locks e
-  | skip => ∅
-  | goto _ => ∅
+  | skip | goto _ | label _ => ∅
   | ret e => locks e
   | blk{_} s => locks s
   | s1 ;; s2 => locks s1 ∪ locks s2
-  | _ :; s => locks s
   | while{e} s => locks e ∪ locks s
   | if{e} s1 else s2 => locks e ∪ locks s1 ∪ locks s2
   end.
@@ -177,7 +177,6 @@ statement [s] forms a zipper for statements without block scope variables. *)
 Inductive sctx_item (Ti : Set) : Set :=
   | CCompL : stmt Ti → sctx_item Ti
   | CCompR : stmt Ti → sctx_item Ti
-  | CLabel : label → sctx_item Ti
   | CWhile : expr Ti → sctx_item Ti
   | CIfL : expr Ti → stmt Ti → sctx_item Ti
   | CIfR : expr Ti → stmt Ti → sctx_item Ti.
@@ -188,7 +187,6 @@ Proof. solve_decision. Defined.
 
 Arguments CCompL {_} _.
 Arguments CCompR {_} _.
-Arguments CLabel {_} _%N.
 Arguments CWhile {_} _.
 Arguments CIfL {_} _ _.
 Arguments CIfR {_} _ _.
@@ -196,7 +194,6 @@ Arguments CIfR {_} _ _.
 Bind Scope stmt_scope with sctx_item.
 Notation "□ ;; s" := (CCompL s) (at level 80, format "□  ;;  s") : stmt_scope.
 Notation "s ;; □" := (CCompR s) (at level 80, format "s  ;;  □") : stmt_scope.
-Notation "l :; □" := (CLabel l) (at level 81, format "l  :;  □") : stmt_scope.
 Notation "'while{' e } □" := (CWhile e)
   (at level 10, format "'while{' e }  □") : stmt_scope.
 Notation "'if{' e } □ 'else' s2" := (CIfL e s2)
@@ -209,7 +206,6 @@ Instance sctx_item_subst {Ti} :
   match Es with
   | □ ;; s2 => s ;; s2
   | s1 ;; □ => s1 ;; s
-  | l :; □ => l :; s
   | while{e} □ => while{e} s
   | if{e} □ else s2 => if{e} s else s2
   | if{e} s1 else □ => if{e} s1 else s
@@ -223,7 +219,6 @@ Instance sctx_item_gotos {Ti} : Gotos (sctx_item Ti) := λ Es,
   match Es with
   | s2 ;; □ => gotos s2
   | □ ;; s1 => gotos s1
-  | l :; □ => ∅
   | while{_} □ => ∅
   | if{_} □ else s2 => gotos s2
   | if{_} s1 else □ => gotos s1
@@ -232,7 +227,6 @@ Instance sctx_item_labels {Ti} : Labels (sctx_item Ti) := λ Es,
   match Es with
   | s2 ;; □ => labels s2
   | □ ;; s1 => labels s1
-  | l :; □ => {[ l ]}
   | while{_} □ => ∅
   | if{_} □ else s2 => labels s2
   | if{_} s1 else □ => labels s1
@@ -241,7 +235,6 @@ Instance sctx_item_locks {Ti} : Locks (sctx_item Ti) := λ Es,
   match Es with
   | □ ;; s2 => locks s2
   | s1 ;; □ => locks s1
-  | l :; □ => ∅
   | while{e} □ => locks e
   | if{e} □ else s2 => locks e ∪ locks s2
   | if{e} s1 else □ => locks e ∪ locks s1

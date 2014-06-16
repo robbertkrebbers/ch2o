@@ -226,8 +226,7 @@ Inductive stmt_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
   | SComp_typed s1 s2 c1 mσ1 c2 mσ2 mσ :
      stmt_typed' Γ Γf m τs s1 (c1,mσ1) → stmt_typed' Γ Γf m τs s2 (c2,mσ2) →
      rettype_union mσ1 mσ2 = Some mσ → stmt_typed' Γ Γf m τs (s1 ;; s2) (c2,mσ)
-  | SLabel_typed l s c mσ :
-     stmt_typed' Γ Γf m τs s (c,mσ) → stmt_typed' Γ Γf m τs (l :; s) (c,mσ)
+  | SLabel_typed l : stmt_typed' Γ Γf m τs (label l) (false,None)
   | SWhile_typed e τb s c mσ :
      (Γ,Γf,m,τs) ⊢ e : inr (baseT τb) → stmt_typed' Γ Γf m τs s (c,mσ) →
      stmt_typed' Γ Γf m τs (while{e} s) (false,mσ)
@@ -247,7 +246,6 @@ Inductive sctx_item_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
   | CCompR_typed s1 c1 mσ1 c2 mσ2 mσ :
      (Γ,Γf,m,τs) ⊢ s1 : (c1,mσ1) → rettype_union mσ1 mσ2 = Some mσ →
      sctx_item_typed' Γ Γf m τs (s1 ;; □) (c2,mσ2) (c2,mσ)
-  | CLabel_typed l c mσ : sctx_item_typed' Γ Γf m τs (l :; □) (c,mσ) (c,mσ)
   | CWhile_typed e τb c mσ :
      (Γ,Γf,m,τs) ⊢ e : inr (baseT τb) →
      sctx_item_typed' Γ Γf m τs (while{e} □) (c,mσ) (false,mσ)
@@ -558,4 +556,7 @@ Qed.
 Lemma Fun_type_stack_types Γ Γf m k f τf :
   (Γ,Γf,m) ⊢ k : Fun_type f ↣ τf → get_stack_types k = [].
 Proof. by destruct k as [|[]]; intros; typed_inversion_all. Qed.
+
+Lemma rettype_union_l mσ : rettype_union mσ None = Some mσ.
+Proof. by destruct mσ. Qed.
 End properties.

@@ -70,6 +70,7 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
   | Stmt ↘ s =>
     match s with
     | skip => {[ State k (Stmt ↗ skip) m ]}
+    | label l => {[ State k (Stmt ↗ (label l)) m ]}
     | goto l => {[ State k (Stmt (↷ l) (goto l)) m ]}
     | ! e => {[ State (CExpr e (! □) :: k) (Expr e) m ]}
     | ret e => {[ State (CExpr e (ret □) :: k) (Expr e) m ]}
@@ -77,7 +78,6 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
     | if{e} s1 else s2 =>
        {[ State (CExpr e (if{□} s1 else s2) :: k) (Expr e) m ]}
     | s1 ;; s2 => {[ State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m ]}
-    | l :; s => {[ State (CStmt (l :; □) :: k) (Stmt ↘ s) m ]}
     | blk{τ} s =>
        let o := fresh (dom indexset m) in
        {[ State (CBlock o τ :: k) (Stmt ↘ s)
@@ -95,7 +95,6 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
        {[ State k (Stmt ↗ (if{e} s else s2)) m ]}
     | CStmt (if{e} s1 else □) :: k =>
        {[ State k (Stmt ↗ (if{e} s1 else s)) m ]}
-    | CStmt (l :; □) :: k => {[ State k (Stmt ↗ (l :; s)) m ]}
     | CParams oτs :: k =>
        {[ State k (Return voidV) (foldr mem_free m (fst <$> oτs)) ]}
     | _ => ∅
@@ -111,10 +110,7 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
   | Stmt (↷ l) s =>
     if decide (l ∈ labels s) then
       match s with
-      | l' :; s =>
-         if decide (l = l')
-         then {[ State (CStmt (l' :; □) :: k) (Stmt ↘ s) m ]}
-         else {[ State (CStmt (l' :; □) :: k) (Stmt (↷ l) s) m ]}
+      | label l' => {[ State k (Stmt ↗ s) m ]}
       | blk{τ} s =>
          let o := fresh (dom indexset m) in
          {[ State (CBlock o τ :: k) (Stmt (↷ l) s)

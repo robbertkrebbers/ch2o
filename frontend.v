@@ -39,16 +39,20 @@ Arguments EField {_} _ _.
 Inductive cstmt (Ti : Set) :=
   | SDo : cexpr Ti → cstmt Ti
   | SSkip : cstmt Ti
-  | SGoto : label → cstmt Ti
+  | SGoto : labelname → cstmt Ti
+  | SBreak : cstmt Ti
+  | SContinue : cstmt Ti
   | SReturn : option (cexpr Ti) → cstmt Ti
   | SBlock : type Ti → cstmt Ti → cstmt Ti
   | SComp : cstmt Ti → cstmt Ti → cstmt Ti
-  | SLabel : label → cstmt Ti → cstmt Ti
+  | SLabel : labelname → cstmt Ti → cstmt Ti
   | SWhile : cexpr Ti → cstmt Ti → cstmt Ti
   | SIf : cexpr Ti → cstmt Ti → cstmt Ti → cstmt Ti.
 Arguments SDo {_} _.
 Arguments SSkip {_}.
 Arguments SGoto {_} _.
+Arguments SBreak {_}.
+Arguments SContinue {_}.
 Arguments SReturn {_} _.
 Arguments SBlock {_} _ _.
 Arguments SComp {_} _ _.
@@ -149,32 +153,67 @@ Definition to_expr (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      σ ← σs !! i;
      Some (e' .> i, inl σ)
   end%E.
+
+Global Instance cstmt_labels : Labels (cstmt Ti) :=
+  fix go s := let _ : Labels _ := @go in
+  match s with
+  | SBlock _ s => labels s
+  | SComp s1 s2 => labels s1 ∪ labels s2
+  | SLabel l s => {[ l ]} ∪ labels s
+  | SWhile _ s => labels s
+  | SIf _ s1 s2 => labels s1 ∪ labels s2
+  | _ => ∅
+  end.
+Fixpoint cstmt_has_break_continue (s : cstmt Ti) : bool :=
+  match s with
+  | SBreak | SContinue => true
+  | SBlock _ s => cstmt_has_break_continue s
+  | SComp s1 s2 => cstmt_has_break_continue s1 || cstmt_has_break_continue s2
+  | SLabel _ s => cstmt_has_break_continue s
+  | SIf _ s1 s2 => cstmt_has_break_continue s1 || cstmt_has_break_continue s2
+  | _ => false
+  end.
+Definition to_while (mLcLb : option (labelname * labelname))
+    (e : expr Ti) (s : stmt Ti) : stmt Ti :=
+  match mLcLb with
+  | Some (Lc,Lb) => while{e} (s ;; label Lc) ;; label Lb
+  | None => while{e} s
+  end.
+
 Definition to_stmt (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti) :
-    list (type Ti) → cstmt Ti → option (stmt Ti * rettype Ti) :=
-  fix go τs s {struct s} :=
+    list (type Ti) → labelset → option (labelname * labelname) →
+    cstmt Ti → option (stmt Ti * rettype Ti) :=
+  fix go τs Ls mLcLb s {struct s} :=
   match s with
   | SDo e => '(e',_) ← to_R <$> to_expr Γ Γf m τs e; Some (! e', (false, None))
   | SSkip => Some (skip, (false, None))
   | SGoto l => Some (goto l, (true, None))
+  | SContinue => '(Lc,_) ← mLcLb; Some (goto Lc, (true, None))
+  | SBreak => '(_,Lb) ← mLcLb; Some (goto Lb, (true, None))
   | SReturn (Some e) =>
      '(e',τ) ← to_R <$> to_expr Γ Γf m τs e; Some (ret e', (true, Some τ))
   | SReturn None => Some (ret (#voidV), (true, Some voidT))
   | SBlock τ s =>
      guard (✓{Γ} τ);
      guard (int_typed (size_of Γ τ) sptrT);
-     '(s',cmσ) ← go (τ :: τs) s;
+     '(s',cmσ) ← go (τ :: τs) Ls mLcLb s;
      Some (blk{τ} s', cmσ)
   | SComp s1 s2 =>
-     '(s1',cmσ1) ← go τs s1; '(s2',cmσ2) ← go τs s2;
+     '(s1',cmσ1) ← go τs Ls mLcLb s1; '(s2',cmσ2) ← go τs Ls mLcLb s2;
      mσ ← rettype_union (cmσ1.2) (cmσ2.2);
      Some (s1' ;; s2',(cmσ2.1, mσ))
-  | SLabel l s => '(s',cmσ) ← go τs s; Some (l :; s', cmσ)
+  | SLabel l s => '(s',cmσ) ← go τs Ls mLcLb s; Some (l :; s', cmσ)
   | SWhile e s =>
      '(e',τ) ← to_R <$> to_expr Γ Γf m τs e; _ ← maybe_TBase τ;
-     '(s',cmσ) ← go τs s; Some (while{e'} s',(false, cmσ.2))
+     let (mLcLr',Ls') :=
+       if cstmt_has_break_continue s
+       then let Lc := fresh Ls in let Lr := fresh ({[ Lc ]} ∪ Ls)
+            in (Some (Lc,Lr), {[ Lc ; Lr ]} ∪ Ls)
+       else (None,Ls) in
+     '(s',cmσ) ← go τs Ls' mLcLr' s; Some (to_while mLcLr' e' s',(false, cmσ.2))
   | SIf e s1 s2 =>
      '(e',τ) ← to_R <$> to_expr Γ Γf m τs e; _ ← maybe_TBase τ;
-     '(s1',cmσ1) ← go τs s1; '(s2',cmσ2) ← go τs s2;
+     '(s1',cmσ1) ← go τs Ls mLcLb s1; '(s2',cmσ2) ← go τs Ls mLcLb s2;
      mσ ← rettype_union (cmσ1.2) (cmσ2.2);
      Some (if{e'} s1' else s2', (cmσ1.1 && cmσ2.1, mσ))%S
   end%T.
@@ -204,7 +243,7 @@ Definition to_funs (Γ : env Ti) (m : mem Ti) :
   | (f,τs,σ,s) :: Γfuns =>
      guard (✓{Γ}* τs);
      guard (Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs);
-     '(s',cmσ) ← to_stmt Γ (fst <$> Γacc) m τs s;
+     '(s',cmσ) ← to_stmt Γ (fst <$> Γacc) m τs (labels s) None s;
      guard (rettype_match cmσ σ);
      guard (Γacc !! f = None);
      go Γfuns (<[f:=((τs,σ),s')]>Γacc)
@@ -298,26 +337,27 @@ Proof.
     | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
     | _ : maybe_TPtr ?τb = Some _ |- _ => is_var τb; destruct τb
     | _ : maybe_TCompound ?τ = Some _ |- _ => is_var τ; destruct τ
-    | H : assign_type_of _ _ _ = Some _ |- _ => apply assign_type_of_correct in H
-    | H : unop_type_of _ _ = Some _ |- _ => apply unop_type_of_correct in H
-    | H : binop_type_of _ _ _ = Some _ |- _ => apply binop_type_of_correct in H
+    | H: assign_type_of _ _ _ = Some _ |- _ => apply assign_type_of_correct in H
+    | H: unop_type_of _ _ = Some _ |- _ => apply unop_type_of_correct in H
+    | H: binop_type_of _ _ _ = Some _ |- _ => apply binop_type_of_correct in H
     | _ => progress (simplify_option_equality by fail)
     | x : (_ * _)%type |- _ => destruct x
     end; typed_constructor; eauto using to_R_typed,
       index_typed_valid, index_typed_representable,
       addr_top_typed, addr_top_strict.
 Qed.
-Lemma to_stmt_typed Γ Γf m τs cs s cmτ :
-  ✓ Γ → ✓{Γ} m → to_stmt Γ Γf m τs cs = Some (s,cmτ) → (Γ,Γf,m,τs) ⊢ s : cmτ.
+Lemma to_stmt_typed Γ Γf m τs Ls mLcLb cs s cmτ :
+  ✓ Γ → ✓{Γ} m → to_stmt Γ Γf m τs Ls mLcLb cs = Some (s,cmτ) →
+  (Γ,Γf,m,τs) ⊢ s : cmτ.
 Proof.
-  intros ??. revert s cmτ τs. induction cs; intros;
+  intros ??. revert s cmτ τs Ls mLcLb. induction cs; intros;
     repeat match goal with
-    | _ => progress case_match
+    | _ => case_match
     | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
     | _ => progress (simplify_option_equality by fail)
     | x : (_ * _)%type |- _ => destruct x
-    end; typed_constructor;
-    eauto using to_R_typed, to_expr_typed; naive_solver.
+    end; repeat typed_constructor;
+    eauto using to_R_typed, to_expr_typed, rettype_union_l; naive_solver.
 Qed.
 Lemma to_mem_typed Γ τmes o m m' :
   ✓ Γ → to_mem Γ τmes o m = Some m' → ✓{Γ} m → 
@@ -345,7 +385,7 @@ Proof.
   intros ??. revert Γres Γacc. induction Γfuns as [|[[[f τs] τ] cs] Γfuns IH];
     intros Γres Γacc ??; simplify_equality'; auto.
   repeat case_option_guard; simplify_equality'.
-  destruct (to_stmt _ _ _ _ _) as [[s mτ]|] eqn:?; simplify_equality'.
+  destruct (to_stmt _ _ _ _ _ _ _) as [[s mτ]|] eqn:?; simplify_equality'.
   repeat case_option_guard; simplify_equality'.
   eapply IH; eauto. rewrite !fmap_insert; simpl; typed_constructor; eauto.
   * by rewrite lookup_fmap; simplify_option_equality.
