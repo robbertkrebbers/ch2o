@@ -55,10 +55,10 @@ Proof. naive_solver. Qed.
 Lemma lookup_mem_inj_compose f g o :
   (f ◎ g) !! o = '(y1,r1) ← f !! o; '(y2,r2) ← g !! y1; Some (y2,r1 ++ r2).
 Proof.
-  unfold lookup; destruct f as [|m1], g as [|m2]; simpl.
+  unfold lookup; destruct f as [|m1], g as [|m2]; csimpl.
   * done.
   * by destruct (_ !! o) as [[??]|].
-  * by destruct (_ !! o) as [[??]|]; simpl; rewrite ?(right_id_L [] (++)).
+  * by destruct (_ !! o) as [[??]|]; csimpl; rewrite ?(right_id_L [] (++)).
   * by rewrite lookup_merge by done.
 Qed.
 Lemma lookup_mem_inj_compose_Some f g o1 o3 r :
@@ -78,10 +78,10 @@ Proof. by intros []. Qed.
 Global Instance: Associative (@eq (mem_inj Ti)) (◎).
 Proof.
   intros f g h. apply mem_inj_eq. intros o1. rewrite !lookup_mem_inj_compose.
-  destruct (f !! o1) as [[o2 r2]|]; simpl; [|done].
+  destruct (f !! o1) as [[o2 r2]|]; csimpl; [|done].
   rewrite !lookup_mem_inj_compose.
-  destruct (g !! o2) as [[o3 r3]|]; simpl; [|done].
-  by destruct (h !! o3) as [[??]|]; simpl; rewrite ?(associative_L (++)).
+  destruct (g !! o2) as [[o3 r3]|]; csimpl; [|done].
+  by destruct (h !! o3) as [[??]|]; csimpl; rewrite ?(associative_L (++)).
 Qed.
 Lemma mem_inj_positive_l f g : f ◎ g = mem_inj_id → f = mem_inj_id.
 Proof. by destruct f, g. Qed.
@@ -197,79 +197,21 @@ Ltac refine_constructor :=
     econstructor; change H' with (refineT (RefineT:=H) Γ f m1 m2)
   end.
 
-Class TypeOfIndex (Ti : Set) (M : Type) :=
-  type_of_index : M → index → option (type Ti).
 Class IndexAlive (M : Type) :=
   index_alive : M → index → Prop.
-Definition type_of_object {Ti : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)}
-    `{TypeOfIndex Ti M} (Γ : env Ti)
-    (m : M) (o : index) (r : ref Ti) : option (type Ti) :=
-  type_of_index m o ≫= lookupE Γ r.
+Instance index_typed {Ti : Set} {M} `{TypeCheck M (type Ti) index} :
+  Typed M (type Ti) index := λ m o τ, type_check m o  = Some τ.
+Instance index_type_check_spec {Ti : Set} {M} `{TypeCheck M (type Ti) index} :
+  TypeCheckSpec M (type Ti) index (λ _, True).
+Proof. done. Qed.
 
-Class MemSpec (Ti : Set) M `{TypeOfIndex Ti M,
-    RefineM Ti M, IndexAlive M, IntEnv Ti, PtrEnv Ti,
-    ∀ m o, Decision (index_alive m o)} `{EnvSpec Ti} := {
-  mem_refine_type_of_index Γ m1 m2 f o1 o2 r τ :
+Class MemSpec (Ti : Set) M `{TypeCheck M (type Ti) index, RefineM Ti M,
+   IndexAlive M, IntEnv Ti, PtrEnv Ti,
+   ∀ m o, Decision (index_alive m o)} `{EnvSpec Ti} := {
+  mem_refine_index_typed Γ m1 m2 f o1 o2 r τ :
     ✓ Γ → m1 ⊑{Γ,f} m2 → f !! o1 = Some (o2,r) →
-    type_of_index m1 o1 = Some τ →
-    ∃ τ', type_of_index m2 o2 = Some τ' ∧ Γ ⊢ r : τ' ↣ τ;
+    m1 ⊢ o1 : τ → ∃ τ', m2 ⊢ o2 : τ' ∧ Γ ⊢ r : τ' ↣ τ;
   mem_refine_alive Γ m1 m2 f o1 o2 r :
     ✓ Γ → m1 ⊑{Γ,f} m2 → f !! o1 = Some (o2,r) →
     index_alive m1 o1 → index_alive m2 o2
 }.
-
-Section mem_spec.
-Context `{MemSpec Ti}.
-Implicit Types o : index.
-Implicit Types m : M.
-Implicit Types r : ref Ti.
-Implicit Types τ σ : type Ti.
-
-Lemma type_of_object_Some Γ m o r τ :
-  type_of_object Γ m o r = Some τ ↔
-    ∃ σ, type_of_index m o = Some σ ∧ Γ ⊢ r : σ ↣ τ.
-Proof.
-  unfold type_of_object. split.
-  * intros; simplify_option_equality; eexists; split; eauto.
-    by apply path_type_check_sound.
-  * intros (?&->&?); by apply path_type_check_complete.
-Qed.
-Lemma type_of_object_Some_1 Γ m o r τ :
-  type_of_object Γ m o r = Some τ →
-    ∃ σ, type_of_index m o = Some σ ∧ Γ ⊢ r : σ ↣ τ.
-Proof. by rewrite type_of_object_Some. Qed.
-Lemma type_of_object_Some_2 Γ m o σ r τ :
-  type_of_index m o = Some σ ∧ Γ ⊢ r : σ ↣ τ →
-  type_of_object Γ m o r = Some τ.
-Proof. rewrite type_of_object_Some; eauto. Qed.
-Lemma type_of_object_nil Γ m o :
-  type_of_object Γ m o (@nil (ref_seg Ti)) = type_of_index m o.
-Proof. unfold type_of_object. by rewrite ref_lookup_nil, bind_with_Some. Qed.
-Lemma type_of_object_cons Γ m o rs r :
-  type_of_object Γ m o (rs :: r) = type_of_object Γ m o r ≫= lookupE Γ rs.
-Proof. unfold type_of_object. by rewrite ref_lookup_cons,option_bind_assoc. Qed.
-Lemma type_of_object_weaken Γ1 Γ2 m1 m2 o r σ :
-  ✓ Γ1 → type_of_object Γ1 m1 o r = Some σ → Γ1 ⊆ Γ2 →
-  (∀ o σ, type_of_index m1 o = Some σ → type_of_index m2 o = Some σ) →
-  type_of_object Γ2 m2 o r = Some σ.
-Proof.
-  unfold type_of_object; intros ??? Hm; simplify_option_equality.
-  eauto using ref_lookup_weaken.
-Qed.
-Lemma type_of_object_set_offset Γ m o r σ i :
-  i < ref_size r → type_of_object Γ m o r = Some σ →
-  type_of_object Γ m o (ref_set_offset i r) = Some σ.
-Proof.
-  unfold type_of_object; intros.
-  destruct (type_of_index m o) as [τ|] eqn:?; simplify_equality'.
-  apply path_type_check_correct, ref_set_offset_typed; auto.
-  by apply path_type_check_correct.
-Qed.
-Lemma type_of_object_freeze Γ m q o r :
-  type_of_object Γ m o (freeze q <$> r) = type_of_object Γ m o r.
-Proof. unfold type_of_object. by rewrite ref_lookup_freeze. Qed.
-Lemma mem_refine_type_of_object Γ m1 m2 f o1 o2 r τ :
-  ✓ Γ → m1 ⊑{Γ,f} m2 → f !! o1 = Some (o2,r) →
-  type_of_index m1 o1 = Some τ → type_of_object Γ m2 o2 r = Some τ.
-Proof. rewrite type_of_object_Some. apply mem_refine_type_of_index. Qed.
-End mem_spec.

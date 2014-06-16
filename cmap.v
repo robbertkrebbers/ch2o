@@ -4,7 +4,7 @@ Require Export ctrees refinements.
 
 (** We pack the memory into a record so as to avoid ambiguity with already
 existing type class instances for finite maps. *)
-Record cmap (Ti A : Set) : Type := CMap { cmap_car : indexmap (ctree Ti A) }.
+Record cmap (Ti A : Set) : Set := CMap { cmap_car : indexmap (ctree Ti A) }.
 Arguments CMap {_ _} _.
 Arguments cmap_car {_ _} _.
 Add Printing Constructor cmap.

@@ -44,7 +44,7 @@ labels. We define type classes [Gotos] and [Labels] to collect the labels of
 gotos respectively the labels of labeled statements. *)
 Definition label := N.
 Definition labelmap := Nmap.
-Notation labelset := (mapset labelmap).
+Notation labelset := (mapset (labelmap unit)).
 
 Instance label_dec: ∀ i1 i2 : label, Decision (i1 = i2) := decide_rel (=).
 Instance label_fresh_`{FinCollection label C} : Fresh label C := _.
@@ -60,9 +60,9 @@ Instance labelmap_partial_alter {A} : PartialAlter label A (labelmap A) :=
   @partial_alter _ _ (Nmap A) _.
 Instance labelmap_to_list {A} : FinMapToList label A (labelmap A) :=
   @map_to_list _ _ (Nmap A) _.
-Instance labelmap_omap: OMap labelmap := λ A B f, @omap Nmap _ _ f _.
+Instance labelmap_omap: OMap labelmap := @omap Nmap _.
 Instance labelmap_merge: Merge labelmap := @merge Nmap _.
-Instance labelmap_fmap: FMap labelmap := λ A B f, @fmap Nmap _ _ f _.
+Instance labelmap_fmap: FMap labelmap := @fmap Nmap _.
 Instance: FinMap label labelmap := _.
 
 Instance labelmap_dom {A} : Dom (labelmap A) labelset := mapset_dom.
@@ -75,19 +75,11 @@ Arguments gotos {_ _} !_ / : simpl nomatch.
 Class Labels A := labels: A → labelset.
 Arguments labels {_ _} !_ / : simpl nomatch.
 
-(** We lift instances of the above type classes to lists. *)
-Instance list_gotos `{Gotos A} : Gotos (list A) :=
-  fix go (l : list A) : labelset := let _ : Gotos _ := @go in
-  match l with [] => ∅ | a :: l => gotos a ∪ gotos l end.
-Instance list_labels `{Labels A} : Labels (list A) :=
-  fix go (l : list A) : labelset := let _ : Labels _ := @go in
-  match l with [] => ∅ | a :: l => labels a ∪ labels l end.
-
 (** * Statements *)
 (** The construct [SDo e] executes the expression [e] and ignores the result.
 The construct [SBlock s] opens a new scope with one variable. Since we use De
 Bruijn indexes for variables, it does not contain the name of the variable. *)
-Inductive stmt (Ti : Set) :=
+Inductive stmt (Ti : Set) : Set :=
   | SDo : expr Ti → stmt Ti
   | SSkip : stmt Ti
   | SGoto : label → stmt Ti
@@ -118,7 +110,7 @@ Arguments SLabel {_} _%N _%S.
 Arguments SWhile {_}_ _%S.
 Arguments SIf {_} _ _%S _%S.
 
-Notation "'do' e" := (SDo e) (at level 10) : stmt_scope.
+Notation "! e" := (SDo e) (at level 10) : stmt_scope.
 Notation "'skip'" := SSkip : stmt_scope.
 Notation "'goto' l" := (SGoto l) (at level 10) : stmt_scope.
 Notation "'ret' e" := (SReturn e) (at level 10) : stmt_scope.
@@ -129,9 +121,10 @@ Notation "s1 ;; s2" := (SComp s1 s2)
    format "'[' s1  ;;  '/' s2 ']'") : stmt_scope.
 Notation "l :; s" := (SLabel l s)
   (at level 81, format "l  :;  s") : stmt_scope.
-Notation "'while' '(' e ')' s" := (SWhile e s)
-  (at level 10, format "'while'  '(' e ')'  s") : stmt_scope.
-Notation "'IF' e 'then' s1 'else' s2" := (SIf e s1 s2) : stmt_scope.
+Notation "'while{' e } s" := (SWhile e s)
+  (at level 10, format "'while{' e }  s") : stmt_scope.
+Notation "'if{' e } s1 'else' s2" := (SIf e s1 s2)
+  (at level 56, format "if{ e }  s1  'else'  s2") : stmt_scope.
 
 Instance: Injective (=) (=) (@SDo Ti).
 Proof. by injection 1. Qed.
@@ -149,8 +142,8 @@ Instance stmt_gotos {Ti} : Gotos (stmt Ti) :=
   | blk{_} s => gotos s
   | s1 ;; s2 => gotos s1 ∪ gotos s2
   | _ :; s => gotos s
-  | while (_) s => gotos s
-  | (IF _ then s1 else s2) => gotos s1 ∪ gotos s2
+  | while{_} s => gotos s
+  | if{_} s1 else s2 => gotos s1 ∪ gotos s2
   | _ => ∅
   end.
 Instance stmt_labels {Ti} : Labels (stmt Ti) :=
@@ -159,29 +152,29 @@ Instance stmt_labels {Ti} : Labels (stmt Ti) :=
   | blk{_} s => labels s
   | s1 ;; s2 => labels s1 ∪ labels s2
   | l :; s => {[ l ]} ∪ labels s
-  | while (_) s => labels s
-  | (IF _ then s1 else s2) => labels s1 ∪ labels s2
+  | while{_} s => labels s
+  | if{_} s1 else s2 => labels s1 ∪ labels s2
   | _ => ∅
   end.
 Instance stmt_locks {Ti} : Locks (stmt Ti) :=
   fix go s := let _ : Locks _ := @go in
   match s with
-  | do e => locks e
+  | ! e => locks e
   | skip => ∅
   | goto _ => ∅
   | ret e => locks e
   | blk{_} s => locks s
   | s1 ;; s2 => locks s1 ∪ locks s2
   | _ :; s => locks s
-  | while (e) s => locks e ∪ locks s
-  | (IF e then s1 else s2) => locks e ∪ locks s1 ∪ locks s2
+  | while{e} s => locks e ∪ locks s
+  | if{e} s1 else s2 => locks e ∪ locks s1 ∪ locks s2
   end.
 
 (** * Program contexts *)
 (** We first define the data type [sctx_item] of singular statement contexts. A
 pair [(E, s)] consisting of a list of singular statement contexts [E] and a
 statement [s] forms a zipper for statements without block scope variables. *)
-Inductive sctx_item Ti : Type :=
+Inductive sctx_item (Ti : Set) : Set :=
   | CCompL : stmt Ti → sctx_item Ti
   | CCompR : stmt Ti → sctx_item Ti
   | CLabel : label → sctx_item Ti
@@ -204,113 +197,131 @@ Bind Scope stmt_scope with sctx_item.
 Notation "□ ;; s" := (CCompL s) (at level 80, format "□  ;;  s") : stmt_scope.
 Notation "s ;; □" := (CCompR s) (at level 80, format "s  ;;  □") : stmt_scope.
 Notation "l :; □" := (CLabel l) (at level 81, format "l  :;  □") : stmt_scope.
-Notation "'while' ( e ) □" := (CWhile e)
-  (at level 10, format "'while'  '(' e ')'  □") : stmt_scope.
-Notation "'IF' e 'then' □ 'else' s2" := (CIfL e s2)
-  (at level 200, format "'IF'  e  'then'  □  'else'  s2") : stmt_scope.
-Notation "'IF' e 'then' s1 'else' □" := (CIfR e s1)
-  (at level 200, format "'IF'  e  'then'  s1  'else'  □") : stmt_scope.
+Notation "'while{' e } □" := (CWhile e)
+  (at level 10, format "'while{' e }  □") : stmt_scope.
+Notation "'if{' e } □ 'else' s2" := (CIfL e s2)
+  (at level 56, format "if{ e }  □  'else'  s2") : stmt_scope.
+Notation "'if{' e } s1 'else' □" := (CIfR e s1)
+  (at level 56, format "if{ e }  s1  'else'  □") : stmt_scope.
 
-Instance sctx_item_subst {Ti} : Subst (sctx_item Ti) (stmt Ti) (stmt Ti) := λ E s,
-  match E with
+Instance sctx_item_subst {Ti} :
+    Subst (sctx_item Ti) (stmt Ti) (stmt Ti) := λ Es s,
+  match Es with
   | □ ;; s2 => s ;; s2
   | s1 ;; □ => s1 ;; s
   | l :; □ => l :; s
-  | while (e) □ => while (e) s
-  | (IF e then □ else s2) => IF e then s else s2
-  | (IF e then s1 else □) => IF e then s1 else s
+  | while{e} □ => while{e} s
+  | if{e} □ else s2 => if{e} s else s2
+  | if{e} s1 else □ => if{e} s1 else s
   end.
 Instance: DestructSubst (@sctx_item_subst Ti).
 
-Instance: ∀ E : sctx_item Ti, Injective (=) (=) (subst E).
-Proof. destruct E; repeat intro; simpl in *; by simplify_equality. Qed.
+Instance: ∀ Es : sctx_item Ti, Injective (=) (=) (subst Es).
+Proof. destruct Es; repeat intro; simpl in *; by simplify_equality. Qed.
 
-Instance sctx_item_gotos {Ti} : Gotos (sctx_item Ti) := λ E,
-  match E with
+Instance sctx_item_gotos {Ti} : Gotos (sctx_item Ti) := λ Es,
+  match Es with
   | s2 ;; □ => gotos s2
   | □ ;; s1 => gotos s1
   | l :; □ => ∅
-  | while (_) □ => ∅
-  | (IF _ then □ else s2) => gotos s2
-  | (IF _ then s1 else □) => gotos s1
+  | while{_} □ => ∅
+  | if{_} □ else s2 => gotos s2
+  | if{_} s1 else □ => gotos s1
   end.
-Instance sctx_item_labels {Ti} : Labels (sctx_item Ti) := λ E,
-  match E with
+Instance sctx_item_labels {Ti} : Labels (sctx_item Ti) := λ Es,
+  match Es with
   | s2 ;; □ => labels s2
   | □ ;; s1 => labels s1
   | l :; □ => {[ l ]}
-  | while (_) □ => ∅
-  | (IF _ then □ else s2) => labels s2
-  | (IF _ then s1 else □) => labels s1
+  | while{_} □ => ∅
+  | if{_} □ else s2 => labels s2
+  | if{_} s1 else □ => labels s1
   end.
-
-Lemma sctx_item_gotos_spec {Ti} (E : sctx_item Ti) (s : stmt Ti) :
-  gotos (subst E s) = gotos E ∪ gotos s.
-Proof. apply elem_of_equiv_L. intros. destruct E; solve_elem_of. Qed.
-Lemma sctx_item_labels_spec {Ti} (E : sctx_item Ti) (s : stmt Ti) :
-  labels (subst E s) = labels E ∪ labels s.
-Proof. apply elem_of_equiv_L. intros. destruct E; solve_elem_of. Qed.
-
-Instance sctx_item_locks {Ti} : Locks (sctx_item Ti) := λ E,
-  match E with
+Instance sctx_item_locks {Ti} : Locks (sctx_item Ti) := λ Es,
+  match Es with
   | □ ;; s2 => locks s2
   | s1 ;; □ => locks s1
   | l :; □ => ∅
-  | while (e) □ => locks e
-  | (IF e then □ else s2) => locks e ∪ locks s2
-  | (IF e then s1 else □) => locks e ∪ locks s1
+  | while{e} □ => locks e
+  | if{e} □ else s2 => locks e ∪ locks s2
+  | if{e} s1 else □ => locks e ∪ locks s1
   end.
 
-Lemma sctx_item_subst_locks {Ti} (E : sctx_item Ti) s :
-  locks (subst E s) = locks E ∪ locks s.
-Proof. apply elem_of_equiv_L. destruct E; esolve_elem_of. Qed.
+Lemma sctx_item_subst_gotos {Ti} (Es : sctx_item Ti) (s : stmt Ti) :
+  gotos (subst Es s) = gotos Es ∪ gotos s.
+Proof. apply elem_of_equiv_L. intros. destruct Es; solve_elem_of. Qed.
+Lemma sctx_item_subst_labels {Ti} (Es : sctx_item Ti) (s : stmt Ti) :
+  labels (subst Es s) = labels Es ∪ labels s.
+Proof. apply elem_of_equiv_L. intros. destruct Es; solve_elem_of. Qed.
+Lemma sctx_item_subst_locks {Ti} (Es : sctx_item Ti) s :
+  locks (subst Es s) = locks Es ∪ locks s.
+Proof. apply elem_of_equiv_L. destruct Es; esolve_elem_of. Qed.
 
 (** Next, we define the data type [esctx_item] of expression in statement
 contexts. These contexts are used to store the statement to which an expression
 that is being executed belongs to. *)
-Inductive esctx_item (Ti : Set) :=
+Inductive esctx_item (Ti : Set) : Set :=
   | CDoE : esctx_item Ti
   | CReturnE : esctx_item Ti
   | CWhileE : stmt Ti → esctx_item Ti
   | CIfE : stmt Ti → stmt Ti → esctx_item Ti.
 
 Instance esctx_item_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (E1 E2 : esctx_item Ti) : Decision (E1 = E2).
+  (Ee1 Ee2 : esctx_item Ti) : Decision (Ee1 = Ee2).
 Proof. solve_decision. Defined.
 
 Arguments CDoE {_}.
 Arguments CReturnE {_}.
 Arguments CWhileE {_} _.
 Arguments CIfE {_} _ _.
-Notation "'do' □" := CDoE (at level 10, format "'do'  □") : stmt_scope.
+Notation "! □" := CDoE (at level 10, format "!  □") : stmt_scope.
 Notation "'ret' □" := CReturnE (at level 10, format "'ret'  □") : stmt_scope.
-Notation "'while' ( □ ) s" := (CWhileE s)
-  (at level 10, format "'while'  '(' □ ')'  s") : stmt_scope.
-Notation "'IF' □ 'then' s1 'else' s2" := (CIfE s1 s2)
-  (at level 200, format "'IF'  □  'then'  s1  'else'  s2") : stmt_scope.
+Notation "'while{' □ } s" := (CWhileE s)
+  (at level 10, format "'while{' □ }  s") : stmt_scope.
+Notation "'if{' □ } s1 'else' s2" := (CIfE s1 s2)
+  (at level 56, format "if{ □ }  s1  'else'  s2") : stmt_scope.
 
-Instance esctx_item_subst {Ti} : Subst (esctx_item Ti) (expr Ti) (stmt Ti) := λ E e,
-  match E with
-  | do □ => do e
+Instance esctx_item_subst {Ti} :
+    Subst (esctx_item Ti) (expr Ti) (stmt Ti) := λ Ee e,
+  match Ee with
+  | ! □ => ! e
   | ret □ => ret e
-  | while (□) s => while (e) s
-  | (IF □ then s1 else s2) => IF e then s1 else s2
+  | while{□} s => while{e} s
+  | if{□} s1 else s2 => if{e} s1 else s2
   end.
 Instance: DestructSubst (@esctx_item_subst Ti).
 
-Instance: ∀ E : esctx_item Ti, Injective (=) (=) (subst E).
-Proof. destruct E; intros ???; simpl in *; by simplify_equality. Qed.
+Instance: ∀ Ee : esctx_item Ti, Injective (=) (=) (subst Ee).
+Proof. destruct Ee; intros ???; simpl in *; by simplify_equality. Qed.
 
-Instance esctx_item_locks {Ti} : Locks (esctx_item Ti) := λ E,
-  match E with
-  | do □  | ret □ => ∅
-  | while (□) s => locks s
-  | (IF □ then s1 else s2) => locks s1 ∪ locks s2
+Instance esctx_item_gotos {Ti} : Gotos (esctx_item Ti) := λ Ee,
+  match Ee with
+  | ! □ | ret □ => ∅
+  | while{□} s => gotos s
+  | if{□} s1 else s2 => gotos s1 ∪ gotos s2
+  end.
+Instance esctx_item_labels {Ti} : Labels (esctx_item Ti) := λ Ee,
+  match Ee with
+  | ! □ | ret □ => ∅
+  | while{□} s => labels s
+  | if{□} s1 else s2 => labels s1 ∪ labels s2
+  end.
+Instance esctx_item_locks {Ti} : Locks (esctx_item Ti) := λ Ee,
+  match Ee with
+  | ! □  | ret □ => ∅
+  | while{□} s => locks s
+  | if{□} s1 else s2 => locks s1 ∪ locks s2
   end.
 
-Lemma esctx_item_subst_locks {Ti} (E : esctx_item Ti) e :
-  locks (subst E e) = locks E ∪ locks e.
-Proof. apply elem_of_equiv_L. destruct E; esolve_elem_of. Qed.
+Lemma esctx_item_subst_gotos {Ti} (Ee : esctx_item Ti) (e : expr Ti) :
+  gotos (subst Ee e) = gotos Ee.
+Proof. apply elem_of_equiv_L. intros. destruct Ee; solve_elem_of. Qed.
+Lemma esctx_item_subst_labels {Ti} (Ee : esctx_item Ti) (e : expr Ti) :
+  labels (subst Ee e) = labels Ee.
+Proof. apply elem_of_equiv_L. intros. destruct Ee; solve_elem_of. Qed.
+Lemma esctx_item_subst_locks {Ti} (Ee : esctx_item Ti) e :
+  locks (subst Ee e) = locks Ee ∪ locks e.
+Proof. apply elem_of_equiv_L. destruct Ee; esolve_elem_of. Qed.
 
 (** Finally, we define the type [ctx_item] to extends [sctx_item] with some
 additional singular contexts. These contexts will be used as follows.
@@ -331,12 +342,12 @@ additional singular contexts. These contexts will be used as follows.
   function parameters.
 
 Program contexts [ctx] are then defined as lists of singular contexts. *)
-Inductive ctx_item (Ti : Set) :=
+Inductive ctx_item (Ti : Set) : Set :=
   | CStmt : sctx_item Ti → ctx_item Ti
   | CBlock : index → type Ti → ctx_item Ti
   | CExpr : expr Ti → esctx_item Ti → ctx_item Ti
   | CFun : ectx Ti → ctx_item Ti
-  | CParams : list index → ctx_item Ti.
+  | CParams : list (index * type Ti) → ctx_item Ti.
 Notation ctx Ti := (list (ctx_item Ti)).
 
 Arguments CStmt {_} _.
@@ -346,30 +357,34 @@ Arguments CFun {_} _.
 Arguments CParams {_} _.
 
 Instance ctx_item_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (E1 E2 : ctx_item Ti) : Decision (E1 = E2).
+  (Ek1 Ek2 : ctx_item Ti) : Decision (Ek1 = Ek2).
 Proof. solve_decision. Defined.
 
-Instance ctx_item_subst {Ti} : Subst (ctx_item Ti) (stmt Ti) (stmt Ti) := λ E s,
-  match E with CStmt E => subst E s | CBlock _ τ => blk{τ} s | _ => s end.
+Instance ctx_item_subst {Ti} :
+    Subst (ctx_item Ti) (stmt Ti) (stmt Ti) := λ Ek s,
+  match Ek with CStmt E => subst E s | CBlock _ τ => blk{τ} s | _ => s end.
 
-Instance: ∀ E : ctx_item Ti, Injective (=) (=) (subst E).
+Instance: ∀ Ek : ctx_item Ti, Injective (=) (=) (subst Ek).
 Proof.
-  destruct E; intros ???; auto.
+  destruct Ek; intros ???; auto.
   * eapply (injective (subst (CStmt _))); eauto.
   * eapply (injective (SBlock _)); eauto.
 Qed.
 
-Instance ctx_item_locks {Ti} : Locks (ctx_item Ti) := λ E,
-  match E with
-  | CStmt s => locks s
-  | CBlock _ _ => ∅
-  | CExpr e E => locks e ∪ locks E
+Instance ctx_item_locks {Ti} : Locks (ctx_item Ti) := λ Ek,
+  match Ek with
+  | CStmt Es => locks Es
+  | CExpr e Ee => locks e ∪ locks Ee
   | CFun E => locks E
-  | CParams _ => ∅
+  | _ => ∅
   end.
+Instance ctx_item_free_gotos {Ti} : Gotos (ctx_item Ti) := λ Ek,
+  match Ek with CStmt Es => gotos Es | CExpr _ Ee => gotos Ee | _ => ∅ end.
+Instance ctx_item_free_labels {Ti} : Labels (ctx_item Ti) := λ Ek,
+  match Ek with CStmt Es => labels Es | CExpr _ Ee => labels Ee | _ => ∅ end.
 
 Inductive ctx_item_or_block {Ti} : ctx_item Ti → Prop :=
-  | ctx_item_or_block_item E : ctx_item_or_block (CStmt E)
+  | ctx_item_or_block_item Es : ctx_item_or_block (CStmt Es)
   | ctx_item_or_block_block o τ : ctx_item_or_block (CBlock o τ).
 
 (** Given a context, we can construct a stack using the following erasure
@@ -379,12 +394,25 @@ calling function. *)
 Fixpoint get_stack {Ti} (k : ctx Ti) : stack :=
   match k with
   | [] => []
-  | CStmt _ :: k => get_stack k
-  | CExpr _ _ :: k => get_stack k
-  | CBlock o _ :: k => o :: get_stack k
+  | CStmt _ :: k | CExpr _ _ :: k => get_stack k
+  | CBlock o τ :: k => o :: get_stack k
   | CFun _ :: _ => []
-  | CParams bs :: k => bs ++ get_stack k
+  | CParams oτs :: k => (fst <$> oτs) ++ get_stack k
   end.
+Fixpoint get_stack_types {Ti} (k : ctx Ti) : list (type Ti) :=
+  match k with
+  | [] => []
+  | CStmt _ :: k | CExpr _ _ :: k => get_stack_types k
+  | CBlock o τ :: k => τ :: get_stack_types k
+  | CFun _ :: _ => []
+  | CParams oτs :: k => (snd <$> oτs) ++ get_stack_types k
+  end.
+Instance ctx_free_gotos {Ti} : Gotos (ctx Ti) :=
+  fix go k := let _ : Gotos _ := @go in
+  match k with [] => ∅ | CFun _ :: _ => ∅ | Ek :: k => gotos Ek ∪ gotos k end.
+Instance ctx_free_labels {Ti} : Labels (ctx Ti) :=
+  fix go k := let _ : Labels _ := @go in
+  match k with [] => ∅ | CFun _ :: _ => ∅ | Ek :: k => labels Ek ∪ labels k end.
 
 Lemma get_stack_app {Ti} (k1 k2 k3 : ctx Ti) :
   get_stack k2 = get_stack k3 → get_stack (k1 ++ k2) = get_stack (k1 ++ k3).

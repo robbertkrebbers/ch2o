@@ -6,8 +6,8 @@ Require Export pointers.
 Notation ptr_bit Ti := (fragment (ptr Ti)).
 
 Section pointer_bit_operations.
-  Context `{TypeOfIndex Ti M, Refine Ti M, IndexAlive M, IntEnv Ti, PtrEnv Ti,
-    ∀ m x, Decision (index_alive m x)}.
+  Context `{TypeCheck M (type Ti) index, Refine Ti M, IndexAlive M,
+    IntEnv Ti, PtrEnv Ti, ∀ m x, Decision (index_alive m x)}.
 
   Global Instance ptr_bit_valid:
       Valid (env Ti * M) (ptr_bit Ti) := λ Γm pb, ∃ τ,
@@ -15,17 +15,6 @@ Section pointer_bit_operations.
     (Γ,m) ⊢ frag_item pb : τ ∧
     frozen (frag_item pb) ∧
     frag_index pb < bit_size_of Γ (τ.*).
-  Global Instance ptr_bit_valid_dec Γm (pb : ptr_bit Ti) : Decision (✓{Γm} pb).
-  Proof.
-   refine
-    match Some_dec (type_check Γm (frag_item pb)) with
-    | inleft (τ↾Hτ) => cast_if_and (decide (frozen (frag_item pb)))
-       (decide (frag_index pb < bit_size_of (Γm.1) (τ.*)))
-    | inright Hτ => right _
-    end; abstract (destruct Γm; first
-    [ simplify_type_equality; econstructor; eauto
-    | by destruct 1 as (?&?&?&?); simplify_type_equality ]).
-  Defined.
   Definition ptr_to_bits (Γ : env Ti) (p : ptr Ti) : list (ptr_bit Ti) :=
     to_fragments (bit_size_of Γ (type_of p.*)) (freeze true p).
   Definition ptr_of_bits (Γ : env Ti) (τ : type Ti)
@@ -50,10 +39,19 @@ Implicit Types p : ptr Ti.
 Implicit Types pb : ptr_bit Ti.
 Implicit Types pbs : list (ptr_bit Ti).
 
+Global Instance ptr_bit_valid_dec Γm (pb : ptr_bit Ti) : Decision (✓{Γm} pb).
+Proof.
+ refine
+  match Some_dec (type_check Γm (frag_item pb)) with
+  | inleft (τ↾Hτ) => cast_if_and (decide (frozen (frag_item pb)))
+     (decide (frag_index pb < bit_size_of (Γm.1) (τ.*)))
+  | inright Hτ => right _
+  end; abstract (destruct Γm; first
+  [ simplify_type_equality; econstructor; eauto
+  | by destruct 1 as (?&?&?&?); simplify_type_equality ]).
+Defined.
 Lemma ptr_bit_valid_weaken Γ1 Γ2 m1 m2 pb :
-  ✓ Γ1 → ✓{Γ1,m1} pb → Γ1 ⊆ Γ2 →
-  (∀ o σ, type_of_index m1 o = Some σ → type_of_index m2 o = Some σ) →
-  ✓{Γ2,m2} pb.
+  ✓ Γ1 → ✓{Γ1,m1} pb → Γ1 ⊆ Γ2 → (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) → ✓{Γ2,m2} pb.
 Proof.
   intros ? (τ&?&?&?) ??. exists τ. erewrite <-bit_size_of_weaken
     by eauto using TBase_valid, TPtr_valid, ptr_typed_type_valid.
@@ -110,7 +108,7 @@ Qed.
 Lemma ptr_of_to_bits Γ p :
   ptr_of_bits Γ (type_of p) (ptr_to_bits Γ p) = Some (freeze true p).
 Proof.
-  unfold ptr_of_bits, ptr_to_bits. rewrite (of_to_fragments_2 _); simpl.
+  unfold ptr_of_bits, ptr_to_bits. rewrite (of_to_fragments_2 _); csimpl.
   rewrite ptr_freeze_type_of. by simplify_option_equality.
 Qed.
 Lemma ptr_of_to_bits_typed Γ m p τ :
@@ -149,8 +147,7 @@ Proof.
 Qed.
 Lemma ptr_bit_refine_weaken Γ Γ' f f' m1 m2 m1' m2' pb1 pb2 :
   ✓ Γ → pb1 ⊑{Γ,f@m1↦m2} pb2 → Γ ⊆ Γ' → f ⊆ f' →
-  (∀ o τ, type_of_index m1 o = Some τ → type_of_index m1' o = Some τ) →
-  (∀ o τ, type_of_index m2 o = Some τ → type_of_index m2' o = Some τ) →
+  (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
   pb1 ⊑{Γ',f'@m1'↦m2'} pb2.
 Proof.
   intros ? (τ&?&?&?&?) ??. exists τ.

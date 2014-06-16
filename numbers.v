@@ -179,9 +179,10 @@ Notation "x < y ≤ z" := (x < y ∧ y ≤ z)%N : N_scope.
 Notation "x ≤ y ≤ z ≤ z'" := (x ≤ y ∧ y ≤ z ∧ z ≤ z')%N : N_scope.
 Notation "(≤)" := N.le (only parsing) : N_scope.
 Notation "(<)" := N.lt (only parsing) : N_scope.
-
 Infix "`div`" := N.div (at level 35) : N_scope.
 Infix "`mod`" := N.modulo (at level 35) : N_scope.
+
+Arguments N.add _ _ : simpl never.
 
 Instance: Injective (=) (=) Npos.
 Proof. by injection 1. Qed.

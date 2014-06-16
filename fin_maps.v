@@ -205,9 +205,9 @@ Lemma alter_ext {A} (f g : A → A) (m : M A) i :
   (∀ x, m !! i = Some x → f x = g x) → alter f i m = alter g i m.
 Proof. intro. apply partial_alter_ext. intros [x|] ?; f_equal'; auto. Qed.
 Lemma lookup_alter {A} (f : A → A) m i : alter f i m !! i = f <$> m !! i.
-Proof. apply lookup_partial_alter. Qed.
+Proof. unfold alter. apply lookup_partial_alter. Qed.
 Lemma lookup_alter_ne {A} (f : A → A) m i j : i ≠ j → alter f i m !! j = m !! j.
-Proof. apply lookup_partial_alter_ne. Qed.
+Proof. unfold alter. apply lookup_partial_alter_ne. Qed.
 Lemma alter_compose {A} (f g : A → A) (m : M A) i:
   alter (f ∘ g) i m = alter f i (alter g i m).
 Proof.
@@ -375,6 +375,13 @@ Proof.
   * eauto using insert_delete_subset.
   * by rewrite lookup_delete.
 Qed.
+Lemma fmap_insert {A B} (f : A → B) (m : M A) i x :
+  f <$> <[i:=x]>m = <[i:=f x]>(f <$> m).
+Proof.
+  apply map_eq; intros i'; destruct (decide (i' = i)) as [->|].
+  * by rewrite lookup_fmap, !lookup_insert.
+  * by rewrite lookup_fmap, !lookup_insert_ne, lookup_fmap by done.
+Qed.
 
 (** ** Properties of the singleton maps *)
 Lemma lookup_singleton_Some {A} i j (x y : A) :
@@ -430,7 +437,7 @@ Proof. eauto using NoDup_fmap_fst, map_to_list_unique, NoDup_map_to_list. Qed.
 Lemma elem_of_map_of_list_1 {A} (l : list (K * A)) i x :
   NoDup (fst <$> l) → (i,x) ∈ l → map_of_list l !! i = Some x.
 Proof.
-  induction l as [|[j y] l IH]; simpl; [by rewrite elem_of_nil|].
+  induction l as [|[j y] l IH]; csimpl; [by rewrite elem_of_nil|].
   rewrite NoDup_cons, elem_of_cons, elem_of_list_fmap.
   intros [Hl ?] [?|?]; simplify_equality; [by rewrite lookup_insert|].
   destruct (decide (i = j)) as [->|]; [|rewrite lookup_insert_ne; auto].
@@ -455,7 +462,7 @@ Qed.
 Lemma not_elem_of_map_of_list_2 {A} (l : list (K * A)) i :
   map_of_list l !! i = None → i ∉ fst <$> l.
 Proof.
-  induction l as [|[j y] l IH]; simpl; [rewrite elem_of_nil; tauto|].
+  induction l as [|[j y] l IH]; csimpl; [rewrite elem_of_nil; tauto|].
   rewrite elem_of_cons. destruct (decide (i = j)); simplify_equality.
   * by rewrite lookup_insert.
   * by rewrite lookup_insert_ne; intuition.
@@ -499,7 +506,7 @@ Qed.
 Lemma map_to_list_insert {A} (m : M A) i x :
   m !! i = None → map_to_list (<[i:=x]>m) ≡ₚ (i,x) :: map_to_list m.
 Proof.
-  intros. apply map_of_list_inj; simpl.
+  intros. apply map_of_list_inj; csimpl.
   * apply NoDup_fst_map_to_list.
   * constructor; auto using NoDup_fst_map_to_list.
     rewrite elem_of_list_fmap. intros [[??] [? Hlookup]]; subst; simpl in *.
@@ -521,7 +528,7 @@ Proof.
   intros Hperm. apply map_to_list_inj.
   assert (NoDup (fst <$> (i, x) :: l)) as Hnodup.
   { rewrite <-Hperm. auto using NoDup_fst_map_to_list. }
-  simpl in Hnodup. rewrite NoDup_cons in Hnodup. destruct Hnodup.
+  csimpl in *. rewrite NoDup_cons in Hnodup. destruct Hnodup.
   rewrite Hperm, map_to_list_insert, map_to_of_list;
     auto using not_elem_of_map_of_list_1.
 Qed.
@@ -1374,7 +1381,7 @@ Tactic Notation "simplify_map_equality" "by" tactic3(tac) :=
   | H : ∅ = {[?i,?x]} |- _ => by destruct (map_non_empty_singleton i x)
   end.
 Tactic Notation "simplify_map_equality'" "by" tactic3(tac) :=
-  repeat (progress simpl in * || simplify_map_equality by tac).
+  repeat (progress csimpl in * || simplify_map_equality by tac).
 Tactic Notation "simplify_map_equality" :=
   simplify_map_equality by eauto with simpl_map map_disjoint.
 Tactic Notation "simplify_map_equality'" :=

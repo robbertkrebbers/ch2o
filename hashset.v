@@ -3,7 +3,7 @@
 (** This file implements finite set using hash maps. Hash sets are represented
 using radix-2 search trees. Each hash bucket is thus indexed using an binary
 integer of type [Z], and contains an unordered list without duplicates. *)
-Require Export fin_maps.
+Require Export fin_maps listset.
 Require Import zmap.
 
 Record hashset {A} (hash : A → Z) := Hashset {
@@ -15,7 +15,7 @@ Arguments Hashset {_ _} _ _.
 Arguments hashset_car {_ _} _.
 
 Section hashset.
-Context {A : Type} {hash : A → Z} `{∀ x y : A, Decision (x = y)}.
+Context `{∀ x y : A, Decision (x = y)} (hash : A → Z).
 
 Instance hashset_elem_of: ElemOf A (hashset hash) := λ x m, ∃ l,
   hashset_car m !! hash x = Some l ∧ x ∈ l.
@@ -106,7 +106,7 @@ Proof.
   * unfold elements, hashset_elems. intros [m Hm]; simpl.
     rewrite map_Forall_to_list in Hm. generalize (NoDup_fst_map_to_list m).
     induction Hm as [|[n l] m' [??]];
-      simpl; inversion_clear 1 as [|?? Hn]; [constructor|].
+      csimpl; inversion_clear 1 as [|?? Hn]; [constructor|].
     apply NoDup_app; split_ands; eauto.
     setoid_rewrite elem_of_list_bind; intros x ? ([n' l']&?&?); simpl in *.
     assert (hash x = n ∧ hash x = n') as [??]; subst.
@@ -114,6 +114,25 @@ Proof.
       eapply (Forall_forall (λ x, hash x = n') l'); eauto.
       rewrite Forall_forall in Hm. eapply (Hm (_,_)); eauto. }
     destruct Hn; rewrite elem_of_list_fmap; exists (hash x, l'); eauto.
+Qed.
+
+Definition remove_dups_fast (l : list A) : list A :=
+  elements (foldr (λ x, ({[ x ]} ∪)) ∅ l : hashset hash).
+Lemma elem_of_remove_dups_fast l x : x ∈ remove_dups_fast l ↔ x ∈ l.
+Proof.
+  unfold remove_dups_fast. rewrite elem_of_elements. split.
+  * revert x. induction l as [|y l IH]; intros x; simpl.
+    { by rewrite elem_of_empty. }
+    rewrite elem_of_union, elem_of_singleton. intros [->|]; [left|right]; eauto.
+  * induction 1; esolve_elem_of.
+Qed.
+Lemma NoDup_remove_dups_fast l : NoDup (remove_dups_fast l).
+Proof. unfold remove_dups_fast. apply NoDup_elements. Qed.
+Definition listset_normalize (X : listset A) : listset A :=
+  let (l) := X in Listset (remove_dups_fast l).
+Lemma listset_normalize_correct X : listset_normalize X ≡ X.
+Proof.
+  destruct X as [l]. apply elem_of_equiv; intro; apply elem_of_remove_dups_fast.
 Qed.
 End hashset.
 

@@ -231,9 +231,9 @@ Section least_operations.
 
   Global Instance int_binop_ok_dec_ τ op x y :
     Decision (int_binop_ok_ τ op x y).
-  Proof. unfold int_binop_ok_. destruct op, (ISign τ); apply _. Qed.
+  Proof. unfold int_binop_ok_. destruct op, (ISign τ); apply _. Defined.
   Global Instance int_cast_ok_dec_ σ x : Decision (int_cast_ok_ σ x).
-  Proof. unfold int_cast_ok_. destruct (ISign σ); apply _. Qed.
+  Proof. unfold int_cast_ok_. destruct (ISign σ); apply _. Defined.
 End least_operations.
 
 Section operations.

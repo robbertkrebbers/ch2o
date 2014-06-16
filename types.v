@@ -16,7 +16,7 @@ unions. *)
 obtain efficient finite maps and finite sets with these indexes as keys. *)
 Definition tag := N.
 Definition tagmap := Nmap.
-Notation tagset := (mapset tagmap).
+Notation tagset := (mapset (tagmap unit)).
 
 Instance tag_eq_dec: ∀ i1 i2: tag, Decision (i1 = i2) := decide_rel (=).
 Instance tag_fresh `{FinCollection tag C} : Fresh tag C := _.
@@ -32,9 +32,9 @@ Instance tagmap_partial_alter {A} : PartialAlter tag A (tagmap A) :=
   @partial_alter _ _ (Nmap A) _.
 Instance tagmap_to_list {A} : FinMapToList tag A (tagmap A) :=
   @map_to_list _ _ (tagmap A) _.
-Instance tagmap_omap: OMap tagmap := λ A B f, @omap Nmap _ _ f _.
+Instance tagmap_omap: OMap tagmap := @omap Nmap _.
 Instance tagmap_merge : Merge tagmap := @merge Nmap _.
-Instance tagmap_fmap: FMap tagmap := λ A B f, @fmap Nmap _ _ f _.
+Instance tagmap_fmap: FMap tagmap := @fmap Nmap _.
 Instance: FinMap tag tagmap := _.
 
 Instance tagmap_dom {A} : Dom (tagmap A) tagset := mapset_dom.
@@ -54,12 +54,12 @@ pointers). Structs and unions include a name that refers to their fields in the
 environment. *)
 Inductive compound_kind := Struct_kind | Union_kind.
 
-Inductive type (Ti : Set) :=
+Inductive type (Ti : Set) : Set :=
   | TBase :> base_type Ti → type Ti
-  | TVoid : type Ti
   | TArray : type Ti → nat → type Ti
   | TCompound : compound_kind → tag → type Ti
-with base_type (Ti : Set) :=
+with base_type (Ti : Set) : Set :=
+  | TVoid : base_type Ti
   | TInt : int_type Ti → base_type Ti
   | TPtr : type Ti → base_type Ti.
 
@@ -76,13 +76,14 @@ Arguments TInt {_} _%IT.
 Arguments TPtr {_} _%T.
 
 Notation "'baseT' τ" := (TBase τ) (at level 10) : ctype_scope.
-Notation "'voidT'" := TVoid : ctype_scope.
 Notation "τ .[ n ]" := (TArray τ n)
   (at level 25, left associativity, format "τ .[ n ]") : ctype_scope.
 Notation "'compoundT{' c } s" := (TCompound c s)
   (at level 10, format "'compoundT{' c }  s") : ctype_scope.
 Notation "'structT' s" := (TCompound Struct_kind s) (at level 10) : ctype_scope.
 Notation "'unionT' s" := (TCompound Union_kind s) (at level 10) : ctype_scope.
+Notation "'voidT'" := TVoid : cbase_type_scope.
+Notation "'voidT'" := (TBase TVoid) : ctype_scope.
 Notation "'intT' τ" := (TInt τ) (at level 10) : cbase_type_scope.
 Notation "'intT' τ" := (TBase (TInt τ)) (at level 10) : ctype_scope.
 Notation "'ucharT'" := (TInt ucharT) : cbase_type_scope.
@@ -112,7 +113,6 @@ Proof.
  refine
   match τ1, τ2 with
   | baseT τi1, baseT τi2 => cast_if (decide_rel (=) τi1 τi2)
-  | voidT, voidT => left _
   | τ1.[n1], τ2.[n2] =>
      cast_if_and (decide_rel (=) n1 n2) (decide_rel (=) τ1 τ2)
   | compoundT{c1} s1, compoundT{c2} s2 =>
@@ -121,6 +121,7 @@ Proof.
   end%T; clear base_type_eq_dec type_eq_dec; abstract congruence.
  refine
   match τ1, τ2 with
+  | voidT, voidT => left _
   | intT τi1, intT τi2 => cast_if (decide_rel (=) τi1 τi2)
   | τ1.*, τ2.* => cast_if (decide_rel (=) τ1 τ2)
   | _, _ => right _
@@ -129,6 +130,12 @@ Defined.
 Existing Instance type_eq_dec.
 Existing Instance base_type_eq_dec.
 
+Definition maybe_TInt {Ti} (τb : base_type Ti) : option (int_type Ti) :=
+  match τb with intT τi => Some τi | _ => None end%BT.
+Definition maybe_TPtr {Ti} (τb : base_type Ti) : option (type Ti) :=
+  match τb with τ.* => Some τ | _ => None end%BT.
+Definition maybe_TBase {Ti} (τ : type Ti) : option (base_type Ti) :=
+  match τ with baseT τb => Some τb | _ => None end%T.
 Definition maybe_TArray {Ti} (τ : type Ti) : option (type Ti * nat) :=
   match τ with τ.[n] => Some (τ,n) | _ => None end%T.
 Definition maybe_TCompound {Ti} (τ : type Ti) : option (compound_kind * tag) :=
@@ -154,10 +161,10 @@ Section types.
     | TCompound_valid' c s : is_Some (Γ !! s) → type_valid' Γ (compoundT{c} s)
   with ptr_type_valid Γ : type Ti → Prop :=
     | TBase_ptr_valid' τb : base_type_valid' Γ τb → ptr_type_valid Γ (baseT τb)
-    | TVoid_ptr_valid : ptr_type_valid Γ voidT
     | TArray_ptr_valid' τ n : type_valid' Γ τ → n ≠ 0 → ptr_type_valid Γ (τ.[n])
     | TCompound_ptr_valid c s : ptr_type_valid Γ (compoundT{c} s)
   with base_type_valid' Γ : base_type Ti → Prop :=
+    | TVoid_valid' : base_type_valid' Γ voidT
     | TInt_valid' τi : base_type_valid' Γ (intT τi)
     | TPtr_valid' τ : ptr_type_valid Γ τ → base_type_valid' Γ (τ.*).
   Global Instance type_valid : Valid (env Ti) (type Ti) := type_valid'.
@@ -173,6 +180,8 @@ Section types.
   Lemma TBase_ptr_valid Γ τb : ✓{Γ} τb → ptr_type_valid Γ (baseT τb)%T.
   Proof. by constructor. Qed.
   Lemma TArray_ptr_valid Γ τ n : ✓{Γ} τ → n ≠ 0 → ptr_type_valid Γ (τ.[n]).
+  Proof. by constructor. Qed.
+  Lemma TVoid_valid Γ : ✓{Γ} voidT%BT.
   Proof. by constructor. Qed.
   Lemma TInt_valid Γ τi : ✓{Γ} (intT τi)%BT.
   Proof. by constructor. Qed.
@@ -202,7 +211,6 @@ Section types.
   Proof.
    refine
     match τ with
-    | voidT => right _
     | baseT τb => cast_if (base_type_valid_dec Γ τb)
     | τ.[n] => cast_if_and (decide (n ≠ 0)) (type_valid_dec Γ τ)
     | compoundT{c} s => cast_if (decide (is_Some (Γ !! s)))
@@ -210,7 +218,6 @@ Section types.
       abstract first [by constructor | by inversion 1].
    refine
     match τ with
-    | voidT => left _
     | baseT τb => cast_if (base_type_valid_dec Γ τb)
     | τ.[n] => cast_if_and (decide (n ≠ 0)) (type_valid_dec Γ τ)
     | compoundT{_} _ => left _
@@ -218,6 +225,7 @@ Section types.
       abstract first [by constructor | by inversion 1].
    refine
     match τb with
+    | voidT => left _
     | intT _ => left _
     | τ.* => cast_if (ptr_type_valid_dec Γ τ)
     end%BT; clear type_valid_dec ptr_type_valid_dec base_type_valid_dec;
@@ -227,20 +235,12 @@ Section types.
   Global Existing Instance ptr_type_valid_dec.
   Global Existing Instance base_type_valid_dec.
 
-  Lemma base_type_valid_inv Γ (P : Prop) τb :
-    ✓{Γ} τb →
-    match τb with
-    | intT τ => P → P
-    | τ.* => (ptr_type_valid Γ τ → P) → P
-    end%BT.
-  Proof. destruct 1; eauto. Qed.
   Lemma type_valid_inv Γ (P : Prop) τ :
     ✓{Γ} τ →
     match τ with
     | baseT τ => (✓{Γ} τ → P) → P
     | τ.[n] => (✓{Γ} τ → n ≠ 0 → P) → P
     | compoundT{c} s => (is_Some (Γ !! s) → P) → P
-    | _ => P
     end%T.
   Proof. destruct 1; eauto. Qed.
 
@@ -277,7 +277,6 @@ Section types.
   Lemma types_valid_weaken_subset Γ Σ (τs : list (type Ti)) :
     ✓{Γ}* τs → Γ ⊂ Σ → ✓{Σ}* τs.
   Proof. eauto using Forall_impl, type_valid_weaken_subset. Qed.
-
   Lemma env_valid_delete Γ s τs :
     ✓ Γ → Γ !! s = Some τs → ∃ Σ, Σ ⊆ delete s Γ ∧ ✓{Σ}* τs ∧ 1 < length τs ∧ ✓ Σ.
   Proof.
@@ -302,7 +301,6 @@ Section types.
     constructor; eauto using types_valid_weaken, map_union_subseteq_l.
     by rewrite lookup_union_None.
   Qed.
-
   Lemma env_valid_lookup_length Γ s τs : ✓ Γ → Γ !! s = Some τs → 1 < length τs.
   Proof.
     intros. by destruct (env_valid_lookup_subset Γ s τs) as (?&?&?&?&?).
@@ -333,13 +331,11 @@ Section env_valid_dec.
        list_env_valid Γ → ✓{map_of_list Γ}* τs →
        1 < length τs → map_of_list Γ !! s = None →
        list_env_valid ((s,τs) :: Γ).
-
   Lemma list_env_valid_nodup Γ : list_env_valid Γ → NoDup (fst <$> Γ).
   Proof.
-    induction 1; simpl; constructor; auto using not_elem_of_map_of_list_2.
+    induction 1; csimpl; constructor; auto using not_elem_of_map_of_list_2.
   Qed.
-
-  Instance list_env_valid_dec: ∀ Γ, Decision (list_env_valid Γ).
+  Global Instance list_env_valid_dec: ∀ Γ, Decision (list_env_valid Γ).
   Proof.
    refine (
     fix go Γ :=
@@ -352,7 +348,6 @@ Section env_valid_dec.
        (go Γ)
     end); clear go; first [by constructor | by inversion 1].
   Defined.
-
   Lemma list_env_valid_correct Γ :
     ✓ Γ ↔ ∃ Γ', map_to_list Γ ≡ₚ Γ' ∧ list_env_valid Γ'.
   Proof.
@@ -370,13 +365,17 @@ Section env_valid_dec.
       + apply map_to_list_insert_inv in Hperm. subst. constructor; auto.
         apply IH. rewrite map_to_of_list; auto using list_env_valid_nodup.
   Qed.
+  Lemma env_valid_of_list Γ' : list_env_valid Γ' → ✓ (map_of_list Γ').
+  Proof.
+    intros. apply list_env_valid_correct.
+    eauto using map_to_of_list, list_env_valid_nodup.
+  Qed.
   Lemma list_env_valid_correct_alt Γ :
     ✓ Γ ↔ Exists list_env_valid (permutations (map_to_list Γ)).
   Proof.
     rewrite list_env_valid_correct, Exists_exists.
     by setoid_rewrite permutations_Permutation.
   Qed.
-
   Global Instance env_valid_dec (Γ : env Ti) : Decision (✓ Γ).
   Proof.
    refine (cast_if
@@ -421,7 +420,6 @@ Section weak_type_env_ind.
 
   Context (P : type Ti → Prop).
   Context (Pbase : ∀ τb, P (baseT τb)).
-  Context (Pvoid : P voidT).
   Context (Parray : ∀ τ n, P τ → P (τ.[n])).
   Context (Pcompound : ∀ c s τs,
     Γ !! s = Some τs → Forall P τs → P (compoundT{c} s)).
@@ -429,7 +427,7 @@ Section weak_type_env_ind.
 
   Lemma weak_type_env_ind τ : P τ.
   Proof.
-    intros. induction τ as [τb| |τ n|c s]; auto.
+    intros. induction τ as [τb|τ n|c s]; auto.
     destruct (Γ !! s) as [τs|] eqn:Hs; auto.
     destruct (env_valid_lookup_subset Γ s τs) as (Σ'&?&Hτs&_&?); auto.
     apply Pcompound with τs; auto.
@@ -448,7 +446,6 @@ Section type_iter.
 
   Section definition.
     Context (fb : base_type Ti → A)
-      (fv : A)
       (fa : type Ti → nat → A → A)
       (fc: compound_kind → tag → list (type Ti) → (type Ti → A) → A).
 
@@ -457,7 +454,6 @@ Section type_iter.
       fix go τ :=
       match τ with
       | baseT τb => fb τb
-      | voidT => fv
       | τ.[n] => fa τ n (go τ)
       | compoundT{c} s => let (τs,h) := g s in fc c s τs h
       end%T.
@@ -465,7 +461,7 @@ Section type_iter.
         (s : tag) : list (type Ti) * (type Ti → A) :=
       match Some_dec (Γ !! s) with
       | inleft (τs↾Hτs) => (τs, go (delete s Γ) (delete_subset_alt _ _ _ Hτs))
-      | inright _ => ([], λ _, fv) (**i dummy *)
+      | inright _ => ([], λ _, fb voidT) (**i dummy *)
       end.
     Definition type_iter_acc : ∀ Γ : env Ti, Acc (⊂) Γ → type Ti → A :=
       Fix_F _ (λ Γ go, type_iter_inner (type_iter_accF Γ go)).
@@ -473,7 +469,7 @@ Section type_iter.
       type_iter_acc _ (wf_guard 32 map_wf Γ).
   End definition.
 
-  Lemma type_iter_acc_weaken fb1 fb2 fv fa1 fa2 fc1 fc2 Γ Σ1 Σ2 acc1 acc2 τ :
+  Lemma type_iter_acc_weaken fb1 fb2 fa1 fa2 fc1 fc2 Γ Σ1 Σ2 acc1 acc2 τ :
     ✓ Γ →
     (∀ τb, ✓{Γ} τb → fb1 τb ≡ fb2 τb) →
     (∀ τ n x y, ✓{Γ} τ → x ≡ y → fa1 τ n x ≡ fa2 τ n y) →
@@ -481,8 +477,7 @@ Section type_iter.
       Γ !! s = Some τs → ✓{Γ}* τs → Forall (λ τ, rec1 τ ≡ rec2 τ) τs →
       fc1 c s τs rec1 ≡ fc2 c s τs rec2) →
     ✓{Γ} τ → Γ ⊆ Σ1 → Γ ⊆ Σ2 →
-    type_iter_acc fb1 fv fa1 fc1 Σ1 acc1 τ ≡
-      type_iter_acc fb2 fv fa2 fc2 Σ2 acc2 τ.
+    type_iter_acc fb1 fa1 fc1 Σ1 acc1 τ ≡ type_iter_acc fb2 fa2 fc2 Σ2 acc2 τ.
   Proof.
     intros HΓ Hbase Harray. revert Σ1 Σ2 acc1 acc2 τ HΓ.
     induction Γ as [Γ IH] using (well_founded_induction map_wf).
@@ -509,7 +504,7 @@ Section type_iter.
     * transitivity (delete s Γ); eauto using delete_subseteq_compat.
     * transitivity (delete s Γ); eauto using delete_subseteq_compat.
   Qed.
-  Lemma type_iter_weaken fb1 fb2 fv fa1 fa2 fc1 fc2 Γ Σ τ :
+  Lemma type_iter_weaken fb1 fb2 fa1 fa2 fc1 fc2 Γ Σ τ :
     ✓ Γ →
     (∀ τb, ✓{Γ} τb → fb1 τb ≡ fb2 τb) →
     (∀ τ n x y, ✓{Γ} τ → x ≡ y → fa1 τ n x ≡ fa2 τ n y) →
@@ -517,26 +512,21 @@ Section type_iter.
       Γ !! s = Some τs → ✓{Γ}* τs → Forall (λ τ, rec1 τ ≡ rec2 τ) τs →
       fc1 c s τs rec1 ≡ fc2 c s τs rec2) →
     ✓{Γ} τ → Γ ⊆ Σ →
-    type_iter fb1 fv fa1 fc1 Γ τ ≡ type_iter fb2 fv fa2 fc2 Σ τ.
-  Proof. intros. by apply (type_iter_acc_weaken _ _ _ _ _ _ _ Γ). Qed.
+    type_iter fb1 fa1 fc1 Γ τ ≡ type_iter fb2 fa2 fc2 Σ τ.
+  Proof. intros. by apply (type_iter_acc_weaken _ _ _ _ _ _ Γ). Qed.
 
-  Lemma type_iter_base fb fv fa fc Γ τb :
-    type_iter fb fv fa fc Γ (baseT τb) = fb τb.
+  Lemma type_iter_base fb fa fc Γ τb : type_iter fb fa fc Γ (baseT τb) = fb τb.
   Proof. done. Qed.
-  Lemma type_iter_void fb fv fa fc Γ : type_iter fb fv fa fc Γ voidT = fv.
-  Proof. done. Qed.
-  Lemma type_iter_array fb fv fa fc Γ τ n :
-    type_iter fb fv fa fc Γ (τ.[n]) = fa τ n (type_iter fb fv fa fc Γ τ).
+  Lemma type_iter_array fb fa fc Γ τ n :
+    type_iter fb fa fc Γ (τ.[n]) = fa τ n (type_iter fb fa fc Γ τ).
   Proof. unfold type_iter. by destruct (wf_guard _ map_wf Γ). Qed.
-  Lemma type_iter_compound fb fv fa fc Γ c s τs :
-    ✓ Γ →
-    (∀ τ n x y, ✓{Γ} τ → x ≡ y → fa τ n x ≡ fa τ n y) →
+  Lemma type_iter_compound fb fa fc Γ c s τs :
+    ✓ Γ → (∀ τ n x y, ✓{Γ} τ → x ≡ y → fa τ n x ≡ fa τ n y) →
     (∀ rec1 rec2 c s τs,
       Γ !! s = Some τs → ✓{Γ}* τs → Forall (λ τ, rec1 τ ≡ rec2 τ) τs →
       fc c s τs rec1 ≡ fc c s τs rec2) →
     Γ !! s = Some τs →
-    type_iter fb fv fa fc Γ (compoundT{c} s) ≡
-      fc c s τs (type_iter fb fv fa fc Γ).
+    type_iter fb fa fc Γ (compoundT{c} s) ≡ fc c s τs (type_iter fb fa fc Γ).
   Proof.
     intros ? Harray Hcompound Hs. unfold type_iter at 1.
     destruct (wf_guard _ map_wf Γ) as [accΓ]. simpl.
@@ -548,12 +538,12 @@ Section type_iter.
     assert (Γ' ⊆ Γ) by (transitivity (delete s Γ); auto using delete_subseteq).
     apply Hcompound; eauto using types_valid_weaken.
     clear Hs Hlen. induction Hτs; constructor; auto.
-    by apply (type_iter_acc_weaken _ _ _ _ _ _ _ Γ');
+    by apply (type_iter_acc_weaken _ _ _ _ _ _ Γ');
       eauto using lookup_weaken, type_valid_weaken, types_valid_weaken.
   Qed.
-  Lemma type_iter_compound_None fb fv fa fc Γ c s :
+  Lemma type_iter_compound_None fb fa fc Γ c s :
     Γ !! s = None →
-    type_iter fb fv fa fc Γ (compoundT{c} s) = fc c s [] (λ _, fv).
+    type_iter fb fa fc Γ (compoundT{c} s) = fc c s [] (λ _, fb voidT%BT).
   Proof.
     intros Hs. unfold type_iter.
     destruct (wf_guard _ map_wf Γ) as [accΓ]; simpl.

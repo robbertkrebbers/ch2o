@@ -26,12 +26,12 @@ Instance addr_eq_dec `{Ti : Set, ∀ k1 k2 : Ti, Decision (k1 = k2)}
 Proof. solve_decision. Defined.
 
 Section address_operations.
-  Context `{TypeOfIndex Ti M, Refine Ti M, IndexAlive M, IntEnv Ti, PtrEnv Ti,
-    ∀ m x, Decision (index_alive m x)}.
+  Context `{TypeCheck M (type Ti) index, Refine Ti M, IndexAlive M,
+    IntEnv Ti, PtrEnv Ti, ∀ m x, Decision (index_alive m x)}.
 
   Inductive addr_typed' (Γ : env Ti) (m : M) : addr Ti → type Ti → Prop :=
     Addr_typed o r i τ σ σc :
-      type_of_index m o = Some τ →
+      m ⊢ o : τ →
       ✓{Γ} τ →
       int_typed (size_of Γ τ) sptrT →
       Γ ⊢ r : τ ↣ σ →
@@ -50,7 +50,7 @@ Section address_operations.
       TypeCheck (env Ti * M) (type Ti) (addr Ti) := λ Γm a,
     let (Γ,m) := Γm in
     let 'Addr o r i τ σ σc := a in
-    τ' ← type_of_index m o; guard (τ' = τ);
+    guard (m ⊢ o : τ);
     guard (✓{Γ} τ);
     guard (int_typed (size_of Γ τ) sptrT);
     guard (Γ ⊢ r : τ ↣ σ);
@@ -62,8 +62,7 @@ Section address_operations.
   Global Arguments addr_type_check _ !_ /.
 
   Definition addr_strict (Γ : env Ti) (a : addr Ti) : Prop :=
-    addr_byte a < size_of Γ (addr_type_base a) * ref_size (addr_ref_base a) ∧
-    type_of a ≠ voidT.
+    addr_byte a < size_of Γ (addr_type_base a) * ref_size (addr_ref_base a).
   Global Arguments addr_strict _ !_ /.
   Definition addr_is_obj (a : addr Ti) : Prop :=
     type_of a = addr_type_base a.
@@ -144,8 +143,8 @@ Section address_operations.
        addr Ti → addr Ti → type Ti → Prop :=
     | Addr_refine' o o' r r' r'' i i'' τ τ' σ σc :
        f !! o = Some (o',r') →
-       type_of_index m1 o = Some τ →
-       type_of_index m2 o' = Some τ' →
+       m1 ⊢ o : τ →
+       m2 ⊢ o' : τ' →
        ✓{Γ} τ' →
        int_typed (size_of Γ τ') sptrT →
        Γ ⊢ r' : τ' ↣ τ → Γ ⊢ r : τ ↣ σ →
@@ -173,7 +172,7 @@ Section addresses.
   Proof. destruct a; f_equal'; auto using ref_freeze_freeze. Qed.
   Lemma addr_typed_alt Γ m a σ :
     (Γ,m) ⊢ a : σ ↔
-      type_of_index m (addr_index a) = Some (addr_type_object a) ∧
+      m ⊢ addr_index a: addr_type_object a ∧
       ✓{Γ} (addr_type_object a) ∧
       int_typed (size_of Γ (addr_type_object a)) sptrT ∧
       Γ ⊢ addr_ref_base a : addr_type_object a ↣ addr_type_base a ∧
@@ -187,7 +186,7 @@ Section addresses.
     by destruct a; simplify_equality; constructor.
   Qed.
   Lemma addr_typed_index Γ m a σ :
-    (Γ,m) ⊢ a : σ → type_of_index m (addr_index a) = Some (addr_type_object a).
+    (Γ,m) ⊢ a : σ → m ⊢ addr_index a : addr_type_object a.
   Proof. by destruct 1. Qed.
   Lemma addr_typed_offset Γ m a σ :
     (Γ,m) ⊢ a : σ → ref_offset (addr_ref_base a) = 0.
@@ -208,8 +207,7 @@ Section addresses.
     ✓ Γ → (Γ,m) ⊢ a : σ → addr_strict Γ a →
     Γ ⊢ addr_ref Γ a : addr_type_object a ↣ addr_type_base a.
   Proof.
-    intros ?? [??].
-    apply ref_set_offset_typed; eauto using addr_typed_ref_base_typed.
+    intros. apply ref_set_offset_typed; eauto using addr_typed_ref_base_typed.
     apply Nat.div_lt_upper_bound;
       eauto using size_of_ne_0, addr_typed_type_base_valid.
   Qed.
@@ -218,44 +216,13 @@ Section addresses.
   Lemma addr_offset_aligned Γ m a σ :
     (Γ,m) ⊢ a : σ → addr_byte a `mod` size_of Γ σ = 0.
   Proof. by destruct 1. Qed.
-  Lemma addr_typed_type_of_object_base Γ m a σ :
-    (Γ,m) ⊢ a : σ → type_of_object Γ m (addr_index a)
-      (addr_ref_base a) = Some (addr_type_base a).
-  Proof.
-    intros Ha. rewrite type_of_object_Some.
-    exists (addr_type_object a). by destruct Ha.
-  Qed.
-  Lemma addr_typed_type_of_object Γ m a σ :
-    ✓ Γ → (Γ,m) ⊢ a : σ → addr_strict Γ a →
-    type_of_object Γ m (addr_index a) (addr_ref Γ a) = Some (addr_type_base a).
-  Proof.
-    intros. unfold type_of_object. erewrite addr_typed_index by eauto; simpl.
-    eapply path_type_check_complete, addr_typed_ref_typed; eauto.
-  Qed.
-  Lemma addr_typed_type_valid Γ m a σ :
-    ✓ Γ → (Γ,m) ⊢ a : σ → ✓{Γ} σ ∨ σ = voidT.
-  Proof.
-    destruct 2 as [o r i τ σ σc]; destruct (castable_type_valid Γ σ σc);
-      subst; eauto using ref_typed_type_valid.
-  Qed.
-  Lemma addr_size_of_type_pos Γ m a σ : ✓ Γ → (Γ,m) ⊢ a : σ → 0 < size_of Γ σ.
-  Proof.
-    intros. destruct (addr_typed_type_valid Γ m a σ) as [?| ->];
-      auto using size_of_pos. rewrite size_of_void; lia.
-  Qed.
-  Lemma addr_size_of_type_ne_0 Γ m a σ: ✓ Γ → (Γ,m) ⊢ a : σ → size_of Γ σ ≠ 0.
-  Proof. rewrite Nat.neq_0_lt_0. by apply addr_size_of_type_pos. Qed.
+  Lemma addr_typed_type_valid Γ m a σ : ✓ Γ → (Γ,m) ⊢ a : σ → ✓{Γ} σ.
+  Proof. destruct 2; eauto using castable_type_valid, ref_typed_type_valid. Qed.
   Lemma addr_offset_aligned_alt Γ m a σ :
      ✓ Γ → (Γ,m) ⊢ a : σ → (size_of Γ σ | addr_byte a).
   Proof.
     intros. apply Nat.mod_divide;
-      eauto using addr_offset_aligned, addr_size_of_type_ne_0.
-  Qed.
-  Lemma addr_typed_ptr_type_valid Γ m a σ :
-    ✓ Γ → (Γ,m) ⊢ a : σ → ptr_type_valid Γ σ.
-  Proof.
-    intros. destruct (addr_typed_type_valid Γ m a σ) as [?| ->];
-      auto using TVoid_ptr_valid, type_valid_ptr_type_valid.
+      eauto using addr_offset_aligned, size_of_ne_0, addr_typed_type_valid.
   Qed.
   Global Instance: TypeOfSpec (env Ti * M) (type Ti) (addr Ti).
   Proof. by intros [??]; destruct 1. Qed.
@@ -266,18 +233,15 @@ Section addresses.
     * by destruct 1; simplify_option_equality.
   Qed.
   Lemma addr_typed_weaken Γ1 Γ2 m1 m2 a σ :
-    ✓ Γ1 → (Γ1,m1) ⊢ a : σ → Γ1 ⊆ Γ2 →
-    (∀ o σ, type_of_index m1 o = Some σ → type_of_index m2 o = Some σ) →
+    ✓ Γ1 → (Γ1,m1) ⊢ a : σ → Γ1 ⊆ Γ2 → (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) →
     (Γ2,m2) ⊢ a : σ.
   Proof.
     intros ? [o r i τ σ' σc'] ??. constructor; simpl; split_ands;
       eauto using type_valid_weaken, ref_typed_weaken.
     { by erewrite <-size_of_weaken by eauto. }
     { by erewrite <-size_of_weaken by eauto using ref_typed_type_valid. }
-    destruct (castable_type_valid Γ1 σ' σc') as [| ->];
-      eauto using ref_typed_type_valid.
-    * by erewrite <-size_of_weaken by eauto.
-    * by rewrite size_of_void.
+    by erewrite <-size_of_weaken
+      by eauto using castable_type_valid, ref_typed_type_valid.
   Qed.
   Global Instance addr_strict_dec Γ a : Decision (addr_strict Γ a).
   Proof. unfold addr_strict; apply _. Defined.
@@ -289,7 +253,7 @@ Section addresses.
     ✓ Γ → (Γ,m) ⊢ a : σc → int_typed (addr_offset Γ a) sptrT.
   Proof.
     intros ? Ha. assert (0 < size_of Γ σc)%Z.
-    { apply (Nat2Z.inj_lt 0); eauto using addr_size_of_type_pos. }
+    { apply (Nat2Z.inj_lt 0); eauto using size_of_pos, addr_typed_type_valid. }
     destruct Ha as [o r i τ σ σc ?? [_ ?]]; simpl; split.
     { transitivity 0; auto using int_lower_nonpos with zpos. }
     rewrite Z2Nat_inj_div. apply Z.div_lt_upper_bound; [done|].
@@ -327,7 +291,7 @@ Section addresses.
   Lemma addr_strict_freeze Γ β a : addr_strict Γ (freeze β a) ↔ addr_strict Γ a.
   Proof.
     unfold addr_strict. by rewrite addr_byte_freeze, addr_type_base_freeze,
-      addr_ref_base_freeze, addr_type_of_freeze, ref_size_freeze.
+      addr_ref_base_freeze, ref_size_freeze.
   Qed.
   Lemma addr_strict_freeze_2 Γ β a :
     addr_strict Γ a → addr_strict Γ (freeze β a).
@@ -348,9 +312,6 @@ Section addresses.
     destruct Γm. apply option_eq; intros.
     by rewrite !type_check_correct, addr_typed_freeze.
   Qed.
-  Lemma addr_strict_not_void Γ m a σ :
-    (Γ,m) ⊢ a : σ → addr_strict Γ a → σ ≠ voidT.
-  Proof. by intros ? (?&?); simplify_type_equality. Qed.
   Lemma addr_is_obj_ref_byte Γ m a σ :
     (Γ,m) ⊢ a : σ → addr_is_obj a → addr_ref_byte Γ a = 0.
   Proof. by destruct 1; intros; simplify_equality'. Qed.
@@ -384,15 +345,13 @@ Section addresses.
   Lemma addr_size_of_weaken Γ1 Γ2 m1 a σ :
     ✓ Γ1 → (Γ1,m1) ⊢ a : σ → Γ1 ⊆ Γ2 → size_of' Γ1 a = size_of' Γ2 a.
   Proof.
-    intros ? [o r i τ σ' σc'] ?; simpl. destruct (castable_type_valid Γ1 σ' σc')
-      as [| ->]; eauto using ref_typed_type_valid.
-    * by erewrite size_of_weaken by eauto using ref_typed_type_valid.
-    * by rewrite !size_of_void.
+    intros ? [o r i τ σ' σc'] ?; simpl. by erewrite size_of_weaken
+      by eauto using ref_typed_type_valid, castable_type_valid.
   Qed.
   Lemma addr_strict_weaken Γ1 Γ2 m1 a σ :
     ✓ Γ1 → (Γ1,m1) ⊢ a : σ → addr_strict Γ1 a → Γ1 ⊆ Γ2 → addr_strict Γ2 a.
   Proof.
-    unfold addr_strict. intros ?? [] ?.
+    unfold addr_strict. intros ????.
     by erewrite <-size_of_weaken by eauto using addr_typed_type_base_valid.
   Qed.
   Lemma addr_offset_weaken Γ1 Γ2 m1 a σ :
@@ -417,7 +376,7 @@ Section addresses.
     ✓ Γ → (Γ,m) ⊢ a : σ → addr_strict Γ a → addr_object_offset Γ a
     = ref_object_offset Γ (addr_ref Γ a) + addr_ref_byte Γ a * char_bits.
   Proof.
-    intros ? [o r i τ σ' σc' Hor] [??]; simpl in *.
+    intros ? [o r i τ σ' σc' Hor] ?; simpl in *.
     erewrite ref_object_offset_set_offset_0
       by eauto using Nat.div_lt_upper_bound, size_of_ne_0, ref_typed_type_valid.
     rewrite (Nat.div_mod i (size_of Γ σ')) at 1
@@ -425,6 +384,19 @@ Section addresses.
   Qed.
 
   (** ** Operations *)
+  Lemma addr_top_typed Γ m o τ :
+    ✓ Γ → m ⊢ o : τ → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
+    (Γ,m) ⊢ addr_top o τ : τ.
+  Proof.
+    constructor; simpl; split_ands; eauto using Nat.mod_0_l, size_of_ne_0.
+    * by apply ref_typed_nil.
+    * lia.
+  Qed.
+  Lemma addr_top_strict Γ o τ : ✓ Γ → ✓{Γ} τ → addr_strict Γ (addr_top o τ).
+  Proof.
+    unfold addr_strict, addr_top; simpl. rewrite Nat.mul_1_r.
+    eauto using size_of_pos.
+  Qed.
   Lemma addr_plus_ok_typed Γ m a σ j :
     ✓ Γ → (Γ,m) ⊢ a : σ → addr_plus_ok Γ m j a → (Γ,m) ⊢ addr_plus Γ j a : σ.
   Proof.
@@ -433,8 +405,8 @@ Section addresses.
     { apply Nat2Z.inj_le. by rewrite Nat2Z.inj_mul, Z2Nat.id by done. }
     apply Nat2Z.inj. rewrite Z2Nat_inj_mod, Z2Nat.id by done.
     rewrite Z.mod_add, <-Z2Nat_inj_mod; auto with f_equal.
-    rewrite (Nat2Z.inj_iff _ 0).
-    eauto using castable_size_of_ne_0, ref_typed_type_valid.
+    rewrite (Nat2Z.inj_iff _ 0); eauto using size_of_ne_0,
+      ref_typed_type_valid, castable_type_valid.
   Qed.
   Lemma addr_plus_ok_weaken Γ1 Γ2 m1 m2 a σ j :
     ✓ Γ1 → (Γ1,m1) ⊢ a : σ → addr_plus_ok Γ1 m1 j a →
@@ -447,10 +419,8 @@ Section addresses.
   Lemma addr_plus_weaken Γ1 Γ2 m1 a σ j :
     ✓ Γ1 → (Γ1,m1) ⊢ a : σ → Γ1 ⊆ Γ2 → addr_plus Γ1 j a = addr_plus Γ2 j a.
   Proof.
-    intros ? [o r i τ σ' σc'] ?; simpl. destruct (castable_type_valid Γ1 σ' σc')
-      as [| ->]; eauto using ref_typed_type_valid.
-    * by erewrite size_of_weaken by eauto using ref_typed_type_valid.
-    * by rewrite !size_of_void.
+    intros ? [o r i τ σ' σc'] ?; simpl. by erewrite size_of_weaken
+      by eauto using ref_typed_type_valid, castable_type_valid.
   Qed.
   Lemma addr_type_plus Γ a j : type_of (addr_plus Γ j a) = type_of a.
   Proof. by destruct a. Qed.
@@ -480,8 +450,8 @@ Section addresses.
     ✓ Γ → (Γ,m) ⊢ a1 : σ → (Γ,m) ⊢ a2 : σ →
     addr_minus Γ a1 a2 = (addr_offset Γ a1 - addr_offset Γ a2)%Z.
   Proof.
-    intros. assert (size_of Γ σ ≠ 0) by eauto using addr_size_of_type_ne_0.
-    unfold addr_minus, addr_offset; simplify_type_equality.
+    intros. unfold addr_minus, addr_offset; simplify_type_equality.
+    assert (size_of Γ σ ≠ 0) by eauto using size_of_ne_0, addr_typed_type_valid.
     destruct (addr_offset_aligned_alt Γ m a1 σ) as [z1 ->]; auto.
     destruct (addr_offset_aligned_alt Γ m a2 σ) as [z2 ->]; auto.
     rewrite !Z2Nat_inj_div, !Nat2Z.inj_mul, <-Z.mul_sub_distr_r.
@@ -505,9 +475,7 @@ Section addresses.
     Γ1 ⊆ Γ2 → addr_minus Γ1 a1 a2 = addr_minus Γ2 a1 a2.
   Proof.
     intros. unfold addr_minus; simplify_type_equality.
-    destruct (addr_typed_type_valid Γ1 mm1 a1 σ1) as [?| ->]; auto.
-    * by erewrite (size_of_weaken Γ1 Γ2) by eauto using addr_typed_type_valid.
-    * by rewrite !size_of_void.
+    by erewrite (size_of_weaken Γ1 Γ2) by eauto using addr_typed_type_valid.
   Qed.
   Lemma addr_cast_ok_uchar Γ a : addr_cast_ok Γ ucharT a.
   Proof. split. constructor. by rewrite size_of_int, int_size_char. Qed.
@@ -518,11 +486,8 @@ Section addresses.
     ✓ Γ1 → (Γ1,mm1) ⊢ a : σ →
     addr_cast_ok Γ1 σc a → Γ1 ⊆ Γ2 → addr_cast_ok Γ2 σc a.
   Proof.
-    intros ? [o r i τ σ' σc'] [??] ?; simpl.
-    destruct (castable_type_valid Γ1 σ' σc)
-      as [| ->]; eauto using ref_typed_type_valid.
-    * by erewrite <-size_of_weaken by eauto.
-    * by rewrite !size_of_void.
+    intros ?? [??]; split; auto. by erewrite <-size_of_weaken
+      by eauto using castable_type_valid, addr_typed_type_base_valid.
   Qed.
   Lemma addr_type_cast a σc : type_of (addr_cast σc a) = σc.
   Proof. by destruct a. Qed.
@@ -578,7 +543,7 @@ Section addresses.
   Lemma addr_elt_typed Γ m a n σ :
     ✓ Γ → (Γ,m) ⊢ a : σ.[n] → addr_strict Γ a → (Γ,m) ⊢ addr_elt Γ a : σ.
   Proof.
-    rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) (?&?).
+    rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) ?.
     destruct a as [o r i σ' σc]; inversion Hcast; simplify_equality'.
     assert (✓{Γ} σ ∧ n ≠ 0) as [??]
       by eauto using ref_typed_type_valid, TArray_valid_inv.
@@ -591,6 +556,15 @@ Section addresses.
     * lia.
     * by rewrite Nat.mod_0_l by eauto using size_of_ne_0.
   Qed.
+  Lemma addr_elt_strict Γ m a n σ :
+    ✓ Γ → (Γ,m) ⊢ a : σ.[n] → addr_strict Γ (addr_elt Γ a).
+  Proof.
+    rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?).
+    destruct a as [o r i σ' σc]; inversion Hcast; simplify_option_equality.
+    assert (✓{Γ} σ ∧ 0 < n) as [??] by (rewrite <-Nat.neq_0_lt_0;
+      eauto using ref_typed_type_valid, TArray_valid_inv).
+    eauto using Nat.mul_pos_pos, size_of_pos.
+  Qed.
   Lemma addr_elt_weaken Γ1 Γ2 mm1 a σ :
     ✓ Γ1 → (Γ1,mm1) ⊢ a : σ → Γ1 ⊆ Γ2 → addr_elt Γ1 a = addr_elt Γ2 a.
   Proof. intros. unfold addr_elt. by erewrite addr_ref_weaken by eauto. Qed.
@@ -598,7 +572,7 @@ Section addresses.
     ✓ Γ → (Γ,m) ⊢ a : compoundT{c} s → addr_strict Γ a →
     Γ !! s = Some σs → σs !! j = Some σ → (Γ,m) ⊢ addr_field Γ j a : σ.
   Proof.
-    rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) (?&?) ??.
+    rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) ? ??.
     destruct a as [o r i σ' σc]; inversion Hcast; simplify_option_equality.
     constructor; simpl; eauto using env_valid_lookup_lookup.
     * apply ref_typed_cons; eexists (compoundT{c} s); split.
@@ -610,14 +584,22 @@ Section addresses.
     * by rewrite Nat.mod_0_l
         by eauto using size_of_ne_0, env_valid_lookup_lookup.
   Qed.
+  Lemma addr_field_strict Γ m c a j s σs σ :
+    ✓ Γ → (Γ,m) ⊢ a : compoundT{c} s →
+    Γ !! s = Some σs → σs !! j = Some σ → addr_strict Γ (addr_field Γ j a).
+  Proof.
+    rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) ??.
+    destruct a as [o r i σ' σc]; inversion Hcast; simplify_option_equality.
+    destruct c; simpl; rewrite Nat.mul_1_r;
+      eauto 6 using size_of_pos, env_valid_lookup_lookup.
+  Qed.
   Lemma addr_field_weaken Γ1 Γ2 mm1 c a s i :
     ✓ Γ1 → (Γ1,mm1) ⊢ a : compoundT{c} s → Γ1 ⊆ Γ2 →
     addr_field Γ1 i a = addr_field Γ2 i a.
   Proof.
-    intros. unfold addr_field. erewrite !type_of_correct by eauto; simpl.
+    intros. unfold addr_field. erewrite !type_of_correct by eauto; csimpl.
     assert (is_Some (Γ1 !! s)) as [σs Hσs].
-    { by destruct (addr_typed_type_valid Γ1 mm1 a (compoundT{c} s));
-        eauto using TCompound_valid_inv. }
+    { eauto using addr_typed_type_valid, TCompound_valid_inv. }
     by erewrite Hσs, (lookup_weaken Γ1 Γ2 s σs), addr_ref_weaken by eauto.
   Qed.
 
@@ -634,7 +616,7 @@ Section addresses.
   Proof.
     unfold frozen. intros ? [o1 r1 i1 τ1 σ1' σc1] ??
       [o2 r2 i2 τ2 σ2' σc2] ??; simplify_equality'.
-    destruct (decide (o1 = o2)); [simplify_equality|by do 2 left].
+    destruct (decide (o1 = o2)); [simplify_type_equality|by do 2 left].
     destruct (ref_disjoint_cases Γ τ2 r1 r2 σ1' σ2')
       as [?|[?|[?|(s&r1'&i1'&r2'&i2'&r'&->&->&?)]]]; auto.
     * left; intros j1 j2; right; left; split; simpl; auto.
@@ -693,7 +675,8 @@ Section addresses.
     * destruct Hr''; simplify_equality'; auto.
       destruct (castable_divide Γ σ σc) as [z ->]; auto.
       by rewrite <-Nat.mul_assoc, (Nat.mul_comm (size_of _ _)), Nat.mul_assoc,
-        Nat.mod_add by eauto using castable_size_of_ne_0, ref_typed_type_valid.
+        Nat.mod_add by eauto using size_of_ne_0,
+        castable_type_valid, ref_typed_type_valid.
   Qed.
   Lemma addr_refine_type_of_l Γ f m1 m2 a1 a2 σ :
     a1 ⊑{Γ,f@m1↦m2} a2 : σ → type_of a1 = σ.
@@ -702,10 +685,10 @@ Section addresses.
     a1 ⊑{Γ,f@m1↦m2} a2 : σ → type_of a2 = σ.
   Proof. by destruct 1. Qed.
   Lemma addr_refine_frozen Γ f m1 m2 a1 a2 σ :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ → frozen a1 ↔ frozen a2.
+    a1 ⊑{Γ,f@m1↦m2} a2 : σ → frozen a1 ↔ frozen a2.
   Proof.
     unfold frozen.
-    destruct 1 as [o o' r' r r'' i i'' τ τ' σ σc ??????????? []]; simpl.
+    destruct 1 as [o o' r' r r'' i i'' τ τ' σ σc ??????????? []]; csimpl.
     * by rewrite ref_set_offset_freeze, ref_freeze_freeze.
     * rewrite fmap_app, ref_freeze_freeze.
       by split; intro; simplify_list_equality'; repeat f_equal.
@@ -713,8 +696,8 @@ Section addresses.
   Definition addr_refine_id Γ m a σ : (Γ,m) ⊢ a : σ → a ⊑{Γ@m} a : σ.
   Proof.
     destruct 1 as [o r i τ σ σc].
-    eexists []; simpl; auto; [by apply ref_typed_nil|].
-    destruct r as [|rs r]; [apply ref_refine_nil_alt; simpl; auto with lia|].
+    eexists []; csimpl; auto; [by apply ref_typed_nil|].
+    destruct r as [|rs r]; [apply ref_refine_nil_alt; csimpl; auto with lia|].
     apply ref_refine_ne_nil_alt. by rewrite (right_id_L [] (++)).
   Qed.
   Lemma addr_refine_compose Γ f g m1 m2 m3 a1 a2 a3 σ :
@@ -734,18 +717,15 @@ Section addresses.
   Qed.
   Lemma addr_refine_weaken Γ Γ' f f' m1 m2 m1' m2' a1 a2 σ :
     ✓ Γ → a1 ⊑{Γ,f@m1↦m2} a2 : σ → Γ ⊆ Γ' → f ⊆ f' →
-    (∀ o τ, type_of_index m1 o = Some τ → type_of_index m1' o = Some τ) →
-    (∀ o τ, type_of_index m2 o = Some τ → type_of_index m2' o = Some τ) →
+    (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
     a1 ⊑{Γ',f'@m1'↦m2'} a2 : σ.
   Proof.
     destruct 2 as [o o2 r r2 r3 i i3 τ τ2 σ σc ????????? Hsz];
       intros; econstructor; eauto using type_valid_weaken, ref_typed_weaken.
     * by erewrite <-size_of_weaken by eauto.
     * by erewrite <-size_of_weaken by eauto using ref_typed_type_valid.
-    * destruct (castable_type_valid Γ σ σc) as [?| ->];
-        eauto using ref_typed_type_valid.
-      + by erewrite <-size_of_weaken by eauto.
-      + by rewrite size_of_void in Hsz |- *.
+    * by erewrite <-size_of_weaken
+        by eauto using ref_typed_type_valid, castable_type_valid.
     * by erewrite <-size_of_weaken by eauto using ref_typed_type_valid.
   Qed.
   Lemma addr_refine_unique Γ f m1 m2 a1 a2 a3 σ2 σ3 :
@@ -759,9 +739,9 @@ Section addresses.
     a1 ⊑{Γ,f@m1↦m2} a2 : σ → freeze true a1 ⊑{Γ,f@m1↦m2} freeze true a2 : σ.
   Proof.
     intros Ha. destruct Ha as [o o' r r' r'' i i'' τ τ' σ σc ??????????? Hr''];
-      simpl; econstructor; eauto;
+      csimpl; econstructor; eauto;
       rewrite ?ref_typed_freeze, ?ref_offset_freeze, ?ref_size_freeze; auto.
-    destruct Hr'' as [|r'' i'']; simpl.
+    destruct Hr'' as [|r'' i'']; csimpl.
     * eapply ref_refine_nil_alt; eauto.
       by rewrite <-ref_set_offset_freeze, ref_freeze_freeze.
     * eapply ref_refine_ne_nil_alt; eauto.
@@ -772,8 +752,7 @@ Section addresses.
     ∃ r, f !! addr_index a1 = Some (addr_index a2, r)
       ∧ addr_ref Γ a2 = addr_ref Γ a1 ++ freeze true <$> r.
   Proof.
-    intros [?? r r' r'' i i'' τ τ' σ' ???????????? Hr'']
-      [? _]; simplify_equality'.
+    intros [?? r r' r'' i i'' τ τ' σ' ???????????? Hr''] ?; simplify_equality'.
     exists r'; split; auto. destruct Hr''; simplify_equality'; auto.
     rewrite Nat.mul_comm, Nat.div_add, Nat.div_small, Nat.add_0_l by lia.
     by rewrite ref_set_offset_set_offset, ref_set_offset_offset.
@@ -782,7 +761,7 @@ Section addresses.
     a1 ⊑{Γ,f@m1↦m2} a2 : σ → addr_strict Γ a1 →
     addr_ref_byte Γ a1 = addr_ref_byte Γ a2.
   Proof.
-    intros [?? r r' r'' i i'' τ τ' σ' ???????????? Hr''] [? _];
+    intros [?? r r' r'' i i'' τ τ' σ' ???????????? Hr''] ?;
       simplify_equality'; destruct Hr''; simplify_equality'; auto.
     by rewrite Nat.mul_comm, Nat.mod_add by lia.
   Qed.
@@ -845,10 +824,8 @@ Section addresses.
   Lemma addr_strict_refine Γ f m1 m2 a1 a2 σ :
     a1 ⊑{Γ,f@m1↦m2} a2 : σ → addr_strict Γ a1 → addr_strict Γ a2.
   Proof.
-    intros ? [??].
-    destruct (addr_byte_refine_help Γ f m1 m2 a1 a2 σ) as (i&?&?); auto.
-    split; [lia|]. by erewrite addr_refine_type_of_r,
-      <-(addr_refine_type_of_l _ _ _ _ a1 a2 σ) by eauto.
+    intros. destruct (addr_byte_refine_help Γ f m1 m2 a1 a2 σ) as (i&?&?); auto.
+    unfold addr_strict in *; lia.
   Qed.
   Lemma addr_plus_ok_refine Γ f m1 m2 a1 a2 σ j :
     ✓ Γ → m1 ⊑{Γ,f} m2 → a1 ⊑{Γ,f@m1↦m2} a2 : σ →
@@ -869,7 +846,7 @@ Section addresses.
     { apply Nat2Z.inj. rewrite Z2Nat_inj_mod, Z2Nat.id by done.
       rewrite Z.mod_add, <-Z2Nat_inj_mod; auto with f_equal.
       rewrite (Nat2Z.inj_iff _ 0).
-      eauto using castable_size_of_ne_0, ref_typed_type_valid. }
+      eauto using size_of_ne_0, ref_typed_type_valid, castable_type_valid. }
     destruct Hr'' as [i|r i]; simplify_equality'; [|by constructor].
     apply ref_refine_nil_alt; auto. rewrite ref_offset_freeze.
     rewrite Nat2Z.inj_add, Nat2Z.inj_mul. 
@@ -916,8 +893,7 @@ Section addresses.
     ✓ Γ → addr_strict Γ a1 → a1 ⊑{Γ,f@m1↦m2} a2 : σ.[n] →
     addr_elt Γ a1 ⊑{Γ,f@m1↦m2} addr_elt Γ a2 : σ.
   Proof.
-    intros ? [? _].
-    inversion 1 as [o o' r r' r'' i i'' τ τ' ???????????? Hc Hr''];
+    inversion 3 as [o o' r r' r'' i i'' τ τ' ???????????? Hc Hr''];
       inversion Hc; clear Hc; simplify_equality'.
     assert (✓{Γ} σ ∧ n ≠ 0) as [??]
       by eauto using TArray_valid_inv, ref_typed_type_valid.
@@ -939,8 +915,7 @@ Section addresses.
     a1 ⊑{Γ,f@m1↦m2} a2 : compoundT{c} s → Γ !! s = Some σs → σs !! j = Some σ →
     addr_field Γ j a1 ⊑{Γ,f@m1↦m2} addr_field Γ j a2 : σ.
   Proof.
-    intros ? [? _].
-    inversion 1 as [o o' r r' r'' i i'' τ τ' ???????????? Hc Hr''];
+    inversion 3 as [o o' r r' r'' i i'' τ τ' ???????????? Hc Hr''];
       inversion Hc; clear Hc; intros; simplify_option_equality.
     econstructor; eauto using env_valid_lookup_lookup.
     * apply ref_typed_cons; eexists (compoundT{c} s); split.

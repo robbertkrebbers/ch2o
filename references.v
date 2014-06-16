@@ -72,7 +72,7 @@ Inductive ref_seg_typed' `{PtrEnv Ti} (Γ : env Ti) :
      Γ !! s = Some τs → τs !! i = Some τ →
      ref_seg_typed' Γ (RUnion i s β) (unionT s) τ.
 Instance ref_seg_typed `{PtrEnv Ti} :
-  PathTyped (env Ti) (type Ti) (ref_seg Ti) := ref_seg_typed'.
+  PathTyped (env Ti) (type Ti) (type Ti) (ref_seg Ti) := ref_seg_typed'.
 
 Inductive ref_typed' `{PtrEnv Ti} (Γ : env Ti) :
      ref Ti → type Ti → type Ti → Prop :=
@@ -80,7 +80,7 @@ Inductive ref_typed' `{PtrEnv Ti} (Γ : env Ti) :
   | ref_cons_typed' r rs τ1 τ2 τ3 :
      Γ ⊢ rs : τ2 ↣ τ3 → ref_typed' Γ r τ1 τ2 → ref_typed' Γ (rs :: r) τ1 τ3.
 Instance ref_typed `{PtrEnv Ti} :
-  PathTyped (env Ti) (type Ti) (ref Ti) := ref_typed'.
+  PathTyped (env Ti) (type Ti) (type Ti) (ref Ti) := ref_typed'.
 
 Instance subtype `{PtrEnv Ti} : SubsetEqE (env Ti) (type Ti) :=
   λ Γ τ1 τ2, ∃ r : ref Ti, Γ ⊢ r : τ2 ↣ τ1.
@@ -217,15 +217,15 @@ Proof.
 Qed.
 Lemma ref_typed_type_valid Γ r τ σ : ✓ Γ → Γ ⊢ r : τ ↣ σ → ✓{Γ} τ → ✓{Γ} σ.
 Proof. intro. induction 1; eauto using ref_seg_typed_type_valid. Qed.
-Global Instance: PathTypeCheckSpec (env Ti) (type Ti) (ref_seg Ti).
+Global Instance: PathTypeCheckSpec (env Ti) (type Ti) (type Ti) (ref_seg Ti).
 Proof.
   split.
   * intros Γ rs τ σ. split; [|by destruct 1; simplify_option_equality].
-    destruct rs, τ as [| | |[]]; intros;
+    destruct rs, τ as [| |[]]; intros;
       simplify_option_equality; econstructor; eauto.
   * by destruct 1; inversion 1.
 Qed.
-Global Instance: PathTypeCheckSpec (env Ti) (type Ti) (ref Ti).
+Global Instance: PathTypeCheckSpec (env Ti) (type Ti) (type Ti) (ref Ti).
 Proof.
   split.
   * intros Γ r τ σ. split.
@@ -253,14 +253,6 @@ Qed.
 Lemma ref_lookup_weaken Γ1 Γ2 r τ σ :
   τ !!{Γ1} r = Some σ → Γ1 ⊆ Γ2 → τ !!{Γ2} r = Some σ.
 Proof. rewrite !path_type_check_correct. by apply ref_typed_weaken. Qed.
-Lemma ref_seg_typed_inv_void Γ rs σ : ¬Γ ⊢ rs : voidT ↣ σ.
-Proof. inversion 1. Qed.
-Lemma ref_typed_inv_void Γ r σ : Γ ⊢ r : voidT ↣ σ → σ = voidT ∧ r = [].
-Proof.
-  destruct r as [|rs r] using rev_ind; [by rewrite ref_typed_nil|].
-  rewrite ref_typed_snoc. intros (?&Hrs&_).
-  edestruct ref_seg_typed_inv_void; eauto.
-Qed.
 Lemma ref_seg_typed_inv_base Γ τb rs σ : ¬Γ ⊢ rs : baseT τb ↣ σ.
 Proof. inversion 1. Qed.
 Lemma ref_typed_inv_base Γ τb r σ :
@@ -375,7 +367,7 @@ Lemma ref_seg_set_offset_freeze β rs i :
 Proof. by destruct rs. Qed.
 Lemma ref_set_offset_freeze β r i :
   ref_set_offset i (freeze β <$> r) = freeze β <$> ref_set_offset i r.
-Proof. destruct r; simpl; f_equal; auto using ref_seg_set_offset_freeze. Qed.
+Proof. destruct r; f_equal'; auto using ref_seg_set_offset_freeze. Qed.
 Lemma ref_seg_size_freeze β rs : ref_seg_size (freeze β rs) = ref_seg_size rs.
 Proof. by destruct rs. Qed.
 Lemma ref_size_freeze β r : ref_size (freeze β <$> r) = ref_size r.
@@ -413,7 +405,7 @@ Proof.
     + constructor (by auto).
     + constructor (by auto).
     + constructor (by auto).
-  * induction 1; try constructor (by auto). constructor.
+  * induction 1; csimpl; try constructor (by auto). constructor.
     + by rewrite ref_freeze_freeze.
     + by rewrite ref_seg_disjoint_freeze_l.
 Qed.
@@ -452,7 +444,7 @@ Proof.
       apply ref_disjoint_app. by constructor.
   * intros [?|[? Hr]].
     + rewrite ref_disjoint_alt. naive_solver.
-    + by apply ref_disjoint_here_app_1; simpl; f_equal.
+    + by apply ref_disjoint_here_app_1; f_equal'.
 Qed.
 Lemma ref_disjoint_singleton rs1 rs2 : [rs1] ⊥ [rs2] ↔ rs1 ⊥ rs2.
 Proof.
@@ -527,7 +519,7 @@ Lemma ref_disjoint_rev_correct_1 r1 r2 :
 Proof.
   induction 1 as [|rs1 r1 r2]; rewrite !reverse_cons.
   * by apply ref_disjoint_app, ref_disjoint_singleton.
-  * by apply ref_disjoint_here_app_1; simpl; f_equal.
+  * by apply ref_disjoint_here_app_1; f_equal'.
 Qed.
 Lemma ref_disjoint_rev_correct_2 r1 r2 :
   r1 ⊥ r2 → ref_disjoint_rev (reverse r1) (reverse r2).
@@ -594,7 +586,7 @@ Qed.
 Lemma ref_object_offset_app Γ r1 r2 :
   ref_object_offset Γ (r1 ++ r2)
   = ref_object_offset Γ r1 + ref_object_offset Γ r2.
-Proof. unfold ref_object_offset. induction r1; simpl; lia. Qed.
+Proof. unfold ref_object_offset. induction r1; csimpl; lia. Qed.
 Lemma ref_object_offset_singleton Γ rs :
   ref_object_offset Γ [rs] = ref_seg_object_offset Γ rs.
 Proof. unfold ref_object_offset; simpl; lia. Qed.
@@ -622,7 +614,7 @@ Qed.
 Lemma ref_object_offset_size Γ τ r σ :
   ✓ Γ → Γ ⊢ r : τ ↣ σ → ref_object_offset Γ r + bit_size_of Γ σ ≤ bit_size_of Γ τ.
 Proof.
-  unfold ref_object_offset. induction 2 using @ref_typed_ind; simpl; [done|].
+  unfold ref_object_offset. induction 2 using @ref_typed_ind; csimpl; [done|].
   efeed pose proof ref_seg_object_offset_size; eauto; lia.
 Qed.
 Lemma ref_seg_disjoint_object_offset Γ τ rs1 rs2 σ1 σ2 :

@@ -32,6 +32,10 @@ Notation "'False'" := False : type_scope.
 
 Notation curry := prod_curry.
 Notation uncurry := prod_uncurry.
+Definition curry3 {A B C D} (f : A → B → C → D) (p : A * B * C) : D :=
+  let '(a,b,c) := p in f a b c.
+Definition curry4 {A B C D E} (f : A → B → C → D → E) (p : A * B * C * D) : E :=
+  let '(a,b,c,d) := p in f a b c d.
 
 (** Throughout this development we use [C_scope] for all general purpose
 notations that do not belong to a more specific scope. *)
@@ -376,45 +380,24 @@ Class Filter A B := filter: ∀ (P : A → Prop) `{∀ x, Decision (P x)}, B →
 
 (** ** Monadic operations *)
 (** We define operational type classes for the monadic operations bind, join 
-and fmap. These type classes are defined in a non-standard way by taking the
-function as a parameter of the class. For example, we define
-<<
-  Class FMapD := fmap: ∀ {A B}, (A → B) → M A → M B.
->>
-instead of
-<<
-  Class FMap {A B} (f : A → B) := fmap: M A → M B.
->>
-This approach allows us to define [fmap] on lists such that [simpl] unfolds it
-in the appropriate way, and so that it can be used for mutual recursion
-(the mapped function [f] is not part of the fixpoint) as well. This is a hack,
-and should be replaced by something more appropriate in future versions. *)
-
-(** We use these type classes merely for convenient overloading of notations and
-do not formalize any theory on monads (we do not even define a class with the
-monad laws). *)
+and fmap. We use these type classes merely for convenient overloading of
+notations and do not formalize any theory on monads (we do not even define a
+class with the monad laws). *)
 Class MRet (M : Type → Type) := mret: ∀ {A}, A → M A.
 Instance: Params (@mret) 3.
 Arguments mret {_ _ _} _.
-
-Class MBindD (M : Type → Type) {A B} (f : A → M B) := mbind: M A → M B.
-Notation MBind M := (∀ {A B} (f : A → M B), MBindD M f)%type.
+Class MBind (M : Type → Type) := mbind : ∀ {A B}, (A → M B) → M A → M B.
+Arguments mbind {_ _ _ _} _ !_ /.
 Instance: Params (@mbind) 5.
-Arguments mbind {_ _ _} _ {_} !_ /.
-
 Class MJoin (M : Type → Type) := mjoin: ∀ {A}, M (M A) → M A.
 Instance: Params (@mjoin) 3.
 Arguments mjoin {_ _ _} !_ /.
-
-Class FMapD (M : Type → Type) {A B} (f : A → B) := fmap: M A → M B.
-Notation FMap M := (∀ {A B} (f : A → B), FMapD M f)%type.
+Class FMap (M : Type → Type) := fmap : ∀ {A B}, (A → B) → M A → M B.
 Instance: Params (@fmap) 6.
-Arguments fmap {_ _ _} _ {_} !_ /.
-
-Class OMapD (M : Type → Type) {A B} (f : A → option B) := omap: M A → M B.
-Notation OMap M := (∀ {A B} (f : A → option B), OMapD M f)%type.
+Arguments fmap {_ _ _ _} _ !_ /.
+Class OMap (M : Type → Type) := omap: ∀ {A B}, (A → option B) → M A → M B.
 Instance: Params (@omap) 6.
-Arguments omap {_ _ _} _ {_} !_ /.
+Arguments omap {_ _ _ _} _ !_ /.
 
 Notation "m ≫= f" := (mbind f m) (at level 60, right associativity) : C_scope.
 Notation "( m ≫=)" := (λ f, mbind f m) (only parsing) : C_scope.
@@ -429,6 +412,9 @@ Notation "'( x1 , x2 ) ← y ; z" :=
   (at level 65, next at level 35, only parsing, right associativity) : C_scope.
 Notation "'( x1 , x2 , x3 ) ← y ; z" :=
   (y ≫= (λ x : _, let ' (x1,x2,x3) := x in z))
+  (at level 65, next at level 35, only parsing, right associativity) : C_scope.
+Notation "'( x1 , x2 , x3  , x4 ) ← y ; z" :=
+  (y ≫= (λ x : _, let ' (x1,x2,x3,x4) := x in z))
   (at level 65, next at level 35, only parsing, right associativity) : C_scope.
 
 Class MGuard (M : Type → Type) :=
@@ -468,10 +454,9 @@ Arguments delete _ _ _ !_ !_ / : simpl nomatch.
 
 (** The function [alter f k m] should update the value at key [k] using the
 function [f], which is called with the original value. *)
-Class AlterD (K A M : Type) (f : A → A) := alter: K → M → M.
-Notation Alter K A M := (∀ (f : A → A), AlterD K A M f)%type.
+Class Alter (K A M : Type) := alter: (A → A) → K → M → M.
 Instance: Params (@alter) 5.
-Arguments alter {_ _ _} _ {_} !_ !_ / : simpl nomatch.
+Arguments alter {_ _ _ _} _ !_ !_ / : simpl nomatch.
 
 (** The function [alter f k m] should update the value at key [k] using the
 function [f], which is called with the original value at key [k] or [None]

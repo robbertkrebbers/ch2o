@@ -25,18 +25,16 @@ Section castable.
   Defined.
   Global Instance: Reflexive (>*>).
   Proof. constructor. Qed.
-
   Lemma castable_divide Γ τ1 τ2 : τ1 >*> τ2 → (size_of Γ τ2 | size_of Γ τ1).
   Proof.
     rewrite castable_alt. intros [->|[->| ->]]; rewrite ?size_of_void,
       ?size_of_int, ?int_size_char; auto using Nat.divide_1_l.
   Qed.
-  Lemma castable_type_valid Γ τ σ : ✓{Γ} τ → τ >*> σ → ✓{Γ} σ ∨ σ = voidT.
-  Proof. destruct 2; auto; left; repeat constructor. Qed.
+  Lemma castable_type_valid Γ τ σ : ✓{Γ} τ → τ >*> σ → ✓{Γ} σ.
+  Proof. by destruct 2; repeat constructor. Qed.
   Lemma castable_ptr_type_valid Γ τ σ :
     ptr_type_valid Γ τ → τ >*> σ → ptr_type_valid Γ σ.
   Proof. destruct 2; auto; repeat constructor. Qed.
-
   Lemma castable_size_of Γ τ σ :
     ✓ Γ → ✓{Γ} τ → τ >*> σ → size_of Γ σ ≤ size_of Γ τ.
   Proof.
@@ -45,13 +43,4 @@ Section castable.
     * rewrite size_of_int, int_size_char; lia.
     * rewrite size_of_void; lia.
   Qed.
-  Lemma castable_size_of_pos Γ τ σ :
-    ✓ Γ → ✓{Γ} τ → τ >*> σ → 0 < size_of Γ σ.
-  Proof.
-    intros. destruct (castable_type_valid Γ τ σ) as [?|?]; subst;
-      auto using size_of_pos. rewrite size_of_void; lia.
-  Qed.
-  Lemma castable_size_of_ne_0 Γ τ σ :
-    ✓ Γ → ✓{Γ} τ → τ >*> σ → size_of Γ σ ≠ 0.
-  Proof. intros. eapply Nat.neq_0_lt_0, castable_size_of_pos; eauto. Qed.
 End castable.

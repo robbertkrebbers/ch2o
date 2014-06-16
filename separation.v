@@ -803,7 +803,7 @@ Proof.
   induction 2; decompose_Forall_hyps'; eauto using sep_splittable_weaken.
 Qed.
 Lemma seps_disjoint_half xs : Forall sep_splittable xs → ½* xs ⊥* ½* xs.
-Proof. induction 1; simpl; auto using sep_disjoint_half'. Qed.
+Proof. induction 1; csimpl; auto using sep_disjoint_half'. Qed.
 Lemma seps_union_half xs : Forall sep_splittable xs → ½* xs ∪* ½* xs = xs.
 Proof. induction 1; f_equal'; auto using sep_union_half. Qed.
 Lemma seps_unmapped_half_1 xs :

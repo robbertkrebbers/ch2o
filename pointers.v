@@ -12,9 +12,14 @@ Instance ptr_eq_dec `{Ti : Set, ∀ k1 k2 : Ti, Decision (k1 = k2)}
   (p1 p2 : ptr Ti) : Decision (p1 = p2).
 Proof. solve_decision. Defined.
 
+Definition maybe_NULL {Ti} (p : ptr Ti) : option (type Ti) :=
+  match p with NULL τ => Some τ | _ => None end.
+Definition maybe_Ptr {Ti} (p : ptr Ti) : option (addr Ti) :=
+  match p with Ptr a => Some a | _ => None end.
+
 Section pointer_operations.
-  Context `{TypeOfIndex Ti M, Refine Ti M, IndexAlive M, IntEnv Ti, PtrEnv Ti,
-    ∀ m x, Decision (index_alive m x)}.
+  Context `{TypeCheck M (type Ti) index, Refine Ti M, IndexAlive M,
+    IntEnv Ti, PtrEnv Ti, ∀ m x, Decision (index_alive m x)}.
 
   Inductive ptr_typed' (Γ : env Ti) (m : M) : ptr Ti → type Ti → Prop :=
     | NULL_typed τ : ptr_type_valid Γ τ → ptr_typed' Γ m (NULL τ) τ
@@ -83,7 +88,9 @@ Global Instance: Injective (=) (=) (@Ptr Ti).
 Proof. by injection 1. Qed.
 Lemma ptr_typed_type_valid Γ m p τ :
   ✓ Γ → (Γ,m) ⊢ p : τ → ptr_type_valid Γ τ.
-Proof. destruct 2; eauto using TVoid_ptr_valid,addr_typed_ptr_type_valid. Qed.
+Proof.
+  destruct 2; eauto using addr_typed_type_valid, type_valid_ptr_type_valid.
+Qed.
 Global Instance: TypeOfSpec (env Ti * M) (type Ti) (ptr Ti).
 Proof.
   intros [??]. by destruct 1; simpl; erewrite ?type_of_correct by eauto.
@@ -92,13 +99,12 @@ Global Instance: TypeCheckSpec (env Ti * M) (type Ti) (ptr Ti) (λ _, True).
 Proof.
   intros [Γ mm] p τ _. split.
   * destruct p; intros; simplify_option_equality;
-      constructor; auto using type_check_sound.
+      constructor; auto; by apply type_check_sound.
   * by destruct 1; simplify_option_equality;
       erewrite ?type_check_complete by eauto.
 Qed.
 Lemma ptr_typed_weaken Γ1 Γ2 m1 m2 p τ :
-  ✓ Γ1 → (Γ1,m1) ⊢ p : τ → Γ1 ⊆ Γ2 →
-  (∀ o σ, type_of_index m1 o = Some σ → type_of_index m2 o = Some σ) →
+  ✓ Γ1 → (Γ1,m1) ⊢ p : τ → Γ1 ⊆ Γ2 → (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) →
   (Γ2,m2) ⊢ p : τ.
 Proof.
   destruct 2; constructor;
@@ -196,8 +202,7 @@ Proof.
 Qed.
 Lemma ptr_refine_weaken Γ Γ' f f' m1 m2 m1' m2' p1 p2 σ :
   ✓ Γ → p1 ⊑{Γ,f@m1↦m2} p2 : σ → Γ ⊆ Γ' → f ⊆ f' →
-  (∀ o τ, type_of_index m1 o = Some τ → type_of_index m1' o = Some τ) →
-  (∀ o τ, type_of_index m2 o = Some τ → type_of_index m2' o = Some τ) →
+  (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
   p1 ⊑{Γ',f'@m1'↦m2'} p2 : σ.
 Proof.
   destruct 2; constructor;

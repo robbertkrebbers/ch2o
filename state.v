@@ -29,7 +29,8 @@ a traversal to the top of the statement, and returns from the called function.
 When a [goto l] statement is executed, the direction is changed to [↷l], and
 the semantics performs a non-deterministic small step traversal through the
 zipper until the label [l] is found. *)
-Inductive direction (Ti : Set) := Down | Up | Top (v : val Ti) | Jump (l : label).
+Inductive direction (Ti : Set) : Set :=
+  Down | Up | Top (v : val Ti) | Jump (l : label).
 Arguments Down {_}.
 Arguments Up {_}.
 Arguments Top {_} _.
@@ -88,17 +89,18 @@ execution state [state] equips a focus with a program context and memory.
   called function and the values of the arguments.
 - The focus [Return] is used to return from the called function to the calling
   function, it contains the return value.
-- The focus [Undef] is used to capture undefined behavior.
+- The focus [Undef] is used to capture undefined behavior. It contains the
+  expression that got stuck.
 
 These focuses correspond to the five variants of execution states as described
 above. *)
-Inductive focus (Ti : Set) :=
+Inductive focus (Ti : Set) : Set :=
   | Stmt : direction Ti → stmt Ti → focus Ti
   | Expr : expr Ti → focus Ti
   | Call : funname → list (val Ti) → focus Ti
   | Return : val Ti → focus Ti
-  | Undef : focus Ti.
-Record state (Ti : Set) :=
+  | Undef : expr Ti → focus Ti.
+Record state (Ti : Set) : Set :=
   State { SCtx : ctx Ti; SFoc : focus Ti; SMem : mem Ti }.
 Add Printing Constructor state.
 
@@ -106,7 +108,7 @@ Arguments Stmt {_} _ _.
 Arguments Expr {_} _.
 Arguments Call {_} _ _.
 Arguments Return {_} _.
-Arguments Undef {_}.
+Arguments Undef {_} _.
 Arguments State {_} _ _ _.
 Arguments SCtx {_} _.
 Arguments SFoc {_} _.
@@ -121,3 +123,7 @@ Proof. solve_decision. Defined.
 
 Instance focus_locks {Ti} : Locks (focus Ti) := λ φ,
   match φ with Stmt _ s => locks s | Expr e => locks e | _ => ∅ end.
+Instance focus_gotos {Ti} : Gotos (focus Ti) := λ φ,
+  match φ with Stmt _ s => gotos s | _ => ∅ end.
+Instance focus_labels {Ti} : Labels (focus Ti) := λ φ,
+  match φ with Stmt _ s => labels s | _ => ∅ end.

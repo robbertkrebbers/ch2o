@@ -9,7 +9,7 @@ implementation to obtain efficient finite maps and finite sets with these
 indexes as keys. *)
 Definition index := N.
 Definition indexmap := Nmap.
-Notation indexset := (mapset indexmap).
+Notation indexset := (mapset (indexmap unit)).
 
 Instance index_dec: ∀ o1 o2 : index, Decision (o1 = o2) := decide_rel (=).
 Instance index_fresh_`{FinCollection index C} : Fresh index C := _.
@@ -24,9 +24,9 @@ Instance indexmap_partial_alter {A} : PartialAlter index A (indexmap A) :=
   @partial_alter _ _ (Nmap A) _.
 Instance indexmap_to_list {A} : FinMapToList index A (indexmap A) :=
   @map_to_list _ _ (Nmap A) _.
-Instance indexmap_omap: OMap indexmap := λ A B f, @omap Nmap _ _ f _.
+Instance indexmap_omap: OMap indexmap := @omap Nmap _.
 Instance indexmap_merge: Merge indexmap := @merge Nmap _.
-Instance indexmap_fmap: FMap indexmap := λ A B f, @fmap Nmap _ _ f _.
+Instance indexmap_fmap: FMap indexmap := @fmap Nmap _.
 Instance: FinMap index indexmap := _.
 Instance indexmap_dom {A} : Dom (indexmap A) indexset := mapset_dom.
 Instance: FinMapDom index indexmap indexset := mapset_dom_spec.
@@ -35,8 +35,8 @@ Instance index_lexico_order : StrictOrder (@lexico index _) := _.
 Instance index_trichotomy: TrichotomyT (@lexico index _) := _.
 Typeclasses Opaque index indexmap.
 
-Definition lockset :=
-  dsig (map_Forall (λ _, (≠ ∅)) : indexmap natset → Prop).
+Definition lockset : Set :=
+  dsigS (map_Forall (λ _, (≠ ∅)) : indexmap natset → Prop).
 Instance lockset_eq_dec (Ω1 Ω2 : lockset) : Decision (Ω1 = Ω2) | 1 := _.
 Typeclasses Opaque lockset.
 
@@ -154,7 +154,7 @@ Proof.
     apply bool_decide_unpack in HΩ. rewrite map_Forall_to_list in HΩ.
     generalize (NoDup_fst_map_to_list Ω).
     induction HΩ as [|[o ω] Ω'];
-      simpl; inversion_clear 1 as [|?? Ho]; [constructor|].
+      csimpl; inversion_clear 1 as [|?? Ho]; [constructor|].
     apply NoDup_app; split_ands; eauto.
     { eapply (NoDup_fmap_2 _), NoDup_elements. }
     setoid_rewrite elem_of_list_bind; setoid_rewrite elem_of_list_fmap.

@@ -46,13 +46,13 @@ Section memory_operations.
     | mem_allocable_cons o os :
        o ∉ os → mem_allocable o m →
        mem_allocable_list m os → mem_allocable_list m (o :: os).
-  Fixpoint mem_alloc_list (Γ : env Ti)
+  Fixpoint mem_alloc_val_list (Γ : env Ti)
       (ovs : list (index * val Ti)) (m : mem Ti) : mem Ti :=
     match ovs with
     | [] => m
     | (o,v) :: ovs =>
-       let τ := type_of v in
-       <[addr_top o τ:=v]{Γ}>(mem_alloc Γ o false τ (mem_alloc_list Γ ovs m))
+       let τ := type_of v in let a := addr_top o τ in
+       mem_alloc_val_list Γ ovs (<[a:=v]{Γ}>(mem_alloc Γ o false τ m))
     end.
 
   Program Definition mem_locks (m : mem Ti) : lockset :=
@@ -65,7 +65,6 @@ Section memory_operations.
     intros o ω; rewrite lookup_omap, bind_Some; intros (?&?&?).
     by case_option_guard; simplify_equality.
   Qed.
-
   Definition mem_lock (Γ : env Ti) : addr Ti → mem Ti → mem Ti :=
     cmap_alter Γ (ctree_map pbit_lock).
   Definition mem_unlock (Ω : lockset) (m : mem Ti) : mem Ti :=
@@ -85,9 +84,7 @@ Section memory_operations.
     let ω := natmap.of_bools (replicate i false ++ replicate n true) in
     (**i does not happen for typed addresses, then [n] is always positive *)
     if decide (ω ≠ ∅) then dexist {[ addr_index a, ω ]} _ else ∅.
-  Next Obligation.
-    intros o ω. rewrite lookup_singleton_Some. by intros [<- <-].
-  Qed.
+  Next Obligation. by intros o ω ?; simplify_map_equality'. Qed.
 
   Global Instance locks_refine: Refine Ti (mem Ti) lockset := λ Γ f m1 m2 Ω1 Ω2,
     (**i 1.) *) Ω1 ⊆ mem_locks m1 ∧
@@ -120,13 +117,11 @@ Local Opaque nmap.Nempty.
 Arguments union _ _ !_ !_ /.
 Arguments difference _ _ !_ !_ /.
 Arguments cmap_lookup _ _ _ _ !_ !_ /.
-Arguments type_of_index _ _ _ !_ _ /.
-Arguments cmap_type_of_index _ !_ _ /.
-Arguments type_of_object _ _ _ _ _ !_ _ _ /.
 
 Hint Resolve Forall_app_2 Forall2_app.
 Hint Immediate cmap_lookup_typed.
 Hint Immediate ctree_refine_typed_l.
+Hint Immediate val_typed_type_valid.
 Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
 Hint Extern 0 (Separation _) => apply (_ : Separation bool).
 Hint Extern 0 (Separation _) => apply (_ : Separation (map bool)).
@@ -162,37 +157,24 @@ Proof.
   split; eauto using Forall_mem_allocable_list, NoDup_mem_allocable_list.
   intros [Hos Hmos]. induction Hos; decompose_Forall_hyps; constructor; auto.
 Qed.
-Lemma mem_alloc_type_of Γ m o alloc τ :
-  ✓ Γ → ✓{Γ} τ → type_of_index (mem_alloc Γ o alloc τ m) o = Some τ.
+Lemma mem_empty_allocable o : mem_allocable o (∅ : mem Ti).
+Proof. by unfold mem_allocable; simplify_map_equality'. Qed.
+Lemma index_typed_alloc Γ m o alloc τ :
+  ✓ Γ → ✓{Γ} τ → mem_alloc Γ o alloc τ m ⊢ o : τ.
 Proof.
-  intros. unfold mem_alloc, type_of_index.
+  intros. unfold typed, index_typed, type_check, index_type_check.
   destruct m as [m]; simplify_map_equality'; f_equal.
   apply (type_of_correct (Γ,∅) _), ctree_new_typed; auto using pbit_full_valid.
 Qed.
-Lemma mem_alloc_type_of_free Γ m o alloc τ o' τ' :
-  mem_allocable o m → type_of_index m o' = Some τ' →
-  type_of_index (mem_alloc Γ o alloc τ m) o' = Some τ'.
+Lemma index_typed_alloc_free Γ m o alloc τ o' τ' :
+  mem_allocable o m → m ⊢ o' : τ' → mem_alloc Γ o alloc τ m ⊢ o' : τ'.
 Proof.
-  unfold mem_alloc, type_of_index; destruct m as [m]; simpl; intros.
+  unfold mem_alloc, typed, index_typed, type_check, index_type_check.
+  destruct m as [m]; simpl; intros.
   by destruct (decide (o = o')); simplify_map_equality'.
 Qed.
-Lemma addr_typed_alloc Γ m o alloc τ a' τ' :
-  ✓ Γ → mem_allocable o m → (Γ,m) ⊢ a' : τ' → (Γ,mem_alloc Γ o alloc τ m) ⊢ a' : τ'.
-Proof. eauto using addr_typed_weaken, mem_alloc_type_of_free. Qed.
-Lemma val_typed_alloc Γ m o alloc τ v' τ' :
-  ✓ Γ → mem_allocable o m → (Γ,m) ⊢ v' : τ' → (Γ,mem_alloc Γ o alloc τ m) ⊢ v' : τ'.
-Proof. eauto using val_typed_weaken, mem_alloc_type_of_free. Qed.
-Lemma addr_top_typed_alloc Γ m o alloc τ a :
-  ✓ Γ → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
-  (Γ,mem_alloc Γ o alloc τ m) ⊢ addr_top o τ : τ.
-Proof.
-  constructor; simpl; split_ands; auto using mem_alloc_type_of.
-  * by apply ref_typed_nil.
-  * lia.
-  * by apply Nat.mod_0_l, size_of_ne_0.
-Qed.
-Lemma mem_alloc_valid Γ o alloc m τ :
-  ✓ Γ → ✓{Γ} m → mem_allocable o m → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
+Lemma mem_alloc_valid Γ m o alloc τ :
+  ✓ Γ → ✓{Γ} m → ✓{Γ} τ → mem_allocable o m → int_typed (size_of Γ τ) sptrT →
   ✓{Γ} (mem_alloc Γ o alloc τ m).
 Proof.
   destruct m as [m]; intros HΓ Hm Hx Hτ Hsz o' w; simpl.
@@ -200,7 +182,39 @@ Proof.
   { exists τ. split_ands; eauto 7 using (ctree_Forall_not _ _ (CMap m)),
      ctree_new_typed, pbit_full_valid, ctree_new_Forall. }
   destruct (Hm o' w) as (σ&?&?); eauto.
-  eauto using ctree_typed_weaken, (mem_alloc_type_of_free _ (CMap m)).
+  eauto using ctree_typed_weaken, (index_typed_alloc_free _ (CMap m)).
+Qed.
+Lemma mem_alloc_writable_top Γ m o alloc τ :
+  ✓ Γ → ✓{Γ} τ → 
+  mem_allocable o m → mem_writable Γ (addr_top o τ) (mem_alloc Γ o alloc τ m).
+Proof.
+  unfold mem_allocable. intros. exists (ctree_new Γ (pbit_full alloc) τ); split.
+  * unfold lookupE, cmap_lookup. 
+    rewrite option_guard_True by eauto using addr_top_strict.
+    by destruct m as [m]; simplify_map_equality'.
+  * apply ctree_new_Forall; auto; by destruct alloc.
+Qed.
+Lemma mem_alloc_writable Γ m o alloc a τ :
+  ✓ Γ → ✓{Γ} τ →  mem_allocable o m →
+  mem_writable Γ a m → mem_writable Γ a (mem_alloc Γ o alloc τ m).
+Proof.
+  intros ??? (w&?&?); exists w; split; auto.
+  unfold mem_allocable, lookupE, cmap_lookup in *; destruct m as [m].
+  case_option_guard; simplify_equality'.
+  destruct (m !! addr_index a) as [w'|] eqn:?; simplify_equality'.
+  by destruct (decide (o = addr_index a)); simplify_map_equality.
+Qed.
+Lemma mem_alloc_allocable Γ m o alloc o' τ :
+  mem_allocable o' m → o ≠ o' → mem_allocable o' (mem_alloc Γ o alloc τ m).
+Proof.
+  by destruct m as [m]; unfold mem_allocable; intros; simplify_map_equality'.
+Qed.
+Lemma mem_alloc_allocable_list Γ m o alloc os τ :
+  mem_allocable_list m os → o ∉ os →
+  mem_allocable_list (mem_alloc Γ o alloc τ m) os.
+Proof.
+  induction 1; rewrite ?elem_of_cons; constructor;
+    naive_solver auto using mem_alloc_allocable.
 Qed.
 
 (** ** Properties of the [mem_free] fucntion *)
@@ -214,32 +228,28 @@ Proof.
    | inright _ => right _
    end; abstract (unfold mem_freeable; naive_solver).
 Defined.
-Lemma mem_free_type_of_index m o o' :
-  type_of_index (mem_free o m) o' = type_of_index m o'.
+Lemma mem_free_index_type_check m o o' :
+  type_check (mem_free o m) o' = type_check m o'.
 Proof.
-  unfold type_of_index; destruct m as [m]; simpl; intros.
+  unfold type_check, index_type_check; destruct m as [m]; simpl; intros.
   destruct (decide (o' = o)); simplify_map_equality; auto.
   destruct (m !! o); f_equal'; auto using ctree_map_type_of.
 Qed.
+Lemma index_typed_free m o o' σ : m ⊢ o' : σ → mem_free o m ⊢ o' : σ.
+Proof.
+  intros. unfold typed, index_typed. by rewrite mem_free_index_type_check.
+Qed.
 Lemma addr_typed_free Γ m o a τ :
   ✓ Γ → (Γ,m) ⊢ a : τ → (Γ,mem_free o m) ⊢ a : τ.
-Proof.
-  intros. eapply addr_typed_weaken; eauto.
-  intros. by rewrite mem_free_type_of_index.
-Qed.
+Proof. eauto using addr_typed_weaken, index_typed_free. Qed.
 Lemma val_typed_free Γ m o v τ :
   ✓ Γ → (Γ,m) ⊢ v : τ → (Γ,mem_free o m) ⊢ v : τ.
-Proof.
-  intros. eapply val_typed_weaken; eauto.
-  intros. by rewrite mem_free_type_of_index.
-Qed.
-Lemma mem_free_valid Γ o m : ✓ Γ → ✓{Γ} m → ✓{Γ} (mem_free o m).
+Proof. eauto using val_typed_weaken, index_typed_free. Qed.
+Lemma mem_free_valid Γ m o : ✓ Γ → ✓{Γ} m → ✓{Γ} (mem_free o m).
 Proof.
   intros HΓ Hm o' w Hw.
   cut (∃ τ, (Γ,m) ⊢ w : τ ∧ ¬ctree_empty w ∧ int_typed (size_of Γ τ) sptrT).
-  { intros (τ&?&?&?); exists τ; split_ands; auto.
-    eapply ctree_typed_weaken; eauto.
-    intros. by rewrite mem_free_type_of_index. }
+  { intros (τ&?&?&?); eauto 6 using ctree_typed_weaken, index_typed_free. } 
   revert Hw; destruct m as [m]; simpl.
   rewrite lookup_alter_Some; intros [(?&w'&?&->)|[??]]; [|by apply (Hm o' w)].
   destruct (Hm o' w') as (τ&?&?&?); auto.
@@ -250,6 +260,11 @@ Proof.
   eapply ctree_Forall_not; eauto. rewrite ctree_flatten_map.
   by apply Forall_fmap, Forall_true.
 Qed.
+Lemma index_typed_foldr_free m os o' σ :
+  m ⊢ o' : σ → foldr mem_free m os ⊢ o' : σ.
+Proof. induction os; simpl; eauto using index_typed_free. Qed.
+Lemma mem_foldr_free_valid Γ m os : ✓ Γ → ✓{Γ} m → ✓{Γ} (foldr mem_free m os).
+Proof. induction os; simpl; auto using mem_free_valid. Qed.
 
 (** ** Properties of the [lookup] function *)
 Lemma mem_lookup_typed Γ m a v τ :
@@ -267,24 +282,22 @@ Proof.
 Qed.
 
 (** Properties of the [force] function *)
+Lemma index_typed_force Γ m a o σ :
+  ✓ Γ → ✓{Γ} m → is_Some (m !!{Γ} a) →
+  m ⊢ o : σ → mem_force Γ a m ⊢ o : σ.
+Proof.
+  unfold mem_force, lookupE, mem_lookup. intros ?? [v ?] ?.
+  destruct (m !!{Γ} a) as [w|] eqn:?; simplify_equality'.
+  eauto using cmap_alter_index_typed.
+Qed.
 Lemma addr_typed_force Γ m a a' τ' :
   ✓ Γ → ✓{Γ} m → is_Some (m !!{Γ} a) →
   (Γ,m) ⊢ a' : τ' → (Γ,mem_force Γ a m) ⊢ a' : τ'.
-Proof.
-  unfold mem_force, lookupE, mem_lookup. intros ?? [v ?] ?.
-  destruct (m !!{Γ} a) as [w|] eqn:?; simplify_equality'.
-  eapply addr_typed_weaken; eauto.
-  intros. by erewrite cmap_alter_type_of_index by eauto.
-Qed.
-Lemma val_typed_force Γ m a τ v' τ' :
+Proof. eauto using addr_typed_weaken, index_typed_force. Qed.
+Lemma val_typed_force Γ m a v' τ' :
   ✓ Γ → ✓{Γ} m → is_Some (m !!{Γ} a) →
   (Γ,m) ⊢ v' : τ' → (Γ,mem_force Γ a m) ⊢ v' : τ'.
-Proof.
-  unfold mem_force, lookupE, mem_lookup. intros ?? [v ?] ?.
-  destruct (m !!{Γ} a) as [w|] eqn:?; simplify_equality'.
-  eapply val_typed_weaken; eauto.
-  intros. by erewrite cmap_alter_type_of_index by eauto.
-Qed.
+Proof. eauto using val_typed_weaken, index_typed_force. Qed.
 Lemma mem_force_valid Γ m a :
   ✓ Γ → ✓{Γ} m → is_Some (m !!{Γ} a) → ✓{Γ} (mem_force Γ a m).
 Proof.
@@ -358,7 +371,7 @@ Proof.
   * eapply pbits_perm_mapped, pbits_mapped; eauto using pbits_kind_weaken,
       pbits_valid_sep_valid, ctree_flatten_valid.
 Qed.
-Lemma of_val_flatten_unmapped Γ m w v τ :
+Lemma of_val_flatten_mapped Γ m w v τ :
   ✓ Γ → (Γ,m) ⊢ w : τ → (Γ,m) ⊢ v : τ →
   ctree_Forall (λ xb, Some Writable ⊆ pbit_kind xb) w →
   ¬ctree_unmapped (of_val Γ (tagged_perm <$> ctree_flatten w) v).
@@ -368,33 +381,40 @@ Proof.
   eapply pbits_perm_mapped, pbits_mapped; eauto using pbits_kind_weaken,
     pbits_valid_sep_valid, ctree_flatten_valid.
 Qed.
+Lemma of_val_flatten_unshared Γ m w v τ :
+  ✓ Γ → (Γ,m) ⊢ w : τ → (Γ,m) ⊢ v : τ →
+  ctree_Forall (λ xb, Some Writable ⊆ pbit_kind xb) w →
+  ctree_unshared (of_val Γ (tagged_perm <$> ctree_flatten w) v).
+Proof.
+  intros. eapply of_val_unshared; eauto.
+  * eapply pbits_perm_unshared, pbits_unshared; eauto using
+      pbits_kind_weaken, pbits_valid_sep_valid, ctree_flatten_valid.
+  * eapply pbits_perm_mapped, pbits_mapped; eauto using
+      pbits_kind_weaken, pbits_valid_sep_valid, ctree_flatten_valid.
+Qed.
+Lemma index_typed_insert Γ m a v τ o σ :
+  ✓ Γ → ✓{Γ} m → (Γ,m) ⊢ a : τ → mem_writable Γ a m → (Γ,m) ⊢ v : τ →
+  m ⊢ o : σ → <[a:=v]{Γ}>m ⊢ o : σ.
+Proof.
+  unfold insertE, mem_insert, lookupE, mem_lookup. intros ??? (w&?&?) ??.
+  assert ((Γ,m) ⊢ w : τ) by eauto. eapply cmap_alter_index_typed; eauto.
+  rewrite of_val_type_of; simplify_type_equality; eauto.
+Qed.
 Lemma addr_typed_insert Γ m a v τ a' τ' :
   ✓ Γ → ✓{Γ} m → (Γ,m) ⊢ a : τ → mem_writable Γ a m → (Γ,m) ⊢ v : τ →
   (Γ,m) ⊢ a' : τ' → (Γ,<[a:=v]{Γ}>m) ⊢ a' : τ'.
-Proof.
-  unfold insertE, mem_insert, lookupE, mem_lookup. intros ??? (w&?&?) ??.
-  assert ((Γ,m) ⊢ w : τ) by eauto. eapply addr_typed_weaken; eauto. intros.
-  by erewrite cmap_alter_type_of_index
-    by (rewrite ?of_val_type_of by eauto using val_typed_not_void;
-        simplify_type_equality; eauto).
-Qed.
+Proof. eauto using addr_typed_weaken, index_typed_insert. Qed.
 Lemma val_typed_insert Γ m a v τ v' τ' :
   ✓ Γ → ✓{Γ} m → (Γ,m) ⊢ a : τ → mem_writable Γ a m → (Γ,m) ⊢ v : τ →
   (Γ,m) ⊢ v' : τ' → (Γ,<[a:=v]{Γ}>m) ⊢ v' : τ'.
-Proof.
-  unfold insertE, mem_insert, lookupE, mem_lookup. intros ??? (w&?&?) ??.
-  assert ((Γ,m) ⊢ w : τ) by eauto. eapply val_typed_weaken; eauto. intros.
-  by erewrite cmap_alter_type_of_index
-    by (rewrite ?of_val_type_of by eauto using val_typed_not_void;
-        simplify_type_equality; eauto).
-Qed.
+Proof. eauto using val_typed_weaken, index_typed_insert. Qed.
 Lemma mem_insert_valid Γ m a v τ :
   ✓ Γ → ✓{Γ} m → (Γ,m) ⊢ a : τ → mem_writable Γ a m → (Γ,m) ⊢ v : τ →
   ✓{Γ} (<[a:=v]{Γ}>m).
 Proof.
   intros ??? (w&?&?) ?. assert ((Γ,m) ⊢ w : τ) by eauto.
   eapply cmap_alter_valid; eauto; simplify_type_equality;
-    eauto using of_val_flatten_typed, of_val_flatten_unmapped.
+    eauto using of_val_flatten_typed, of_val_flatten_mapped.
 Qed.
 (** We need [addr_is_obj a] because writes at padding bytes are ignored *)
 Lemma mem_lookup_insert Γ m a v τ :
@@ -402,11 +422,10 @@ Lemma mem_lookup_insert Γ m a v τ :
   (Γ,m) ⊢ v : τ → <[a:=v]{Γ}>m !!{Γ} a = Some (val_map (freeze true) v).
 Proof.
   unfold insertE, lookupE, mem_insert, mem_lookup. intros ??? (w&?&Hw) ??.
-  erewrite cmap_lookup_alter by eauto using of_val_flatten_typed; simpl.
+  erewrite cmap_lookup_alter by eauto using of_val_flatten_typed; csimpl.
   assert (ctree_Forall (λ xb, Some Readable ⊆ pbit_kind xb)
     (of_val Γ (tagged_perm <$> ctree_flatten w) v)).
-  { revert Hw. erewrite ctree_flatten_of_val by eauto.
-    intros Hw. generalize (val_flatten Γ v).
+  { erewrite ctree_flatten_of_val by eauto. generalize (val_flatten Γ v).
     induction Hw; intros [|??]; simpl; constructor; auto.
     by transitivity (Some Writable). }
   by erewrite option_guard_True, to_of_val by eauto.
@@ -418,13 +437,8 @@ Lemma mem_lookup_insert_disjoint Γ m a1 a2 v1 v2 τ2 :
 Proof.
   unfold insertE, lookupE, mem_insert, mem_lookup. intros ????? (w2&?&Hw2) ?.
   destruct (m !!{Γ} a1) as [w1|] eqn:?; simplify_equality'.
-  assert (ctree_unshared (of_val Γ (tagged_perm <$> ctree_flatten w2) v2)).
-  { eapply of_val_unshared; eauto.
-    * eapply pbits_perm_unshared, pbits_unshared; eauto using
-        pbits_kind_weaken, pbits_valid_sep_valid, ctree_flatten_valid.
-    * eapply pbits_perm_mapped, pbits_mapped; eauto using
-        pbits_kind_weaken, pbits_valid_sep_valid, ctree_flatten_valid. }
-  by erewrite cmap_lookup_alter_disjoint by eauto using of_val_flatten_typed.
+  by erewrite cmap_lookup_alter_disjoint
+    by eauto using of_val_flatten_typed, of_val_flatten_unshared.
 Qed.
 Lemma mem_insert_commute Γ m a1 a2 v1 v2 τ1 τ2 :
   ✓ Γ → ✓{Γ} m → a1 ⊥{Γ} a2 →
@@ -445,6 +459,34 @@ Proof.
   destruct (m !!{Γ} a2) as [w2|] eqn:?; simplify_equality'.
   eapply cmap_alter_commute; eauto using of_val_flatten_typed.
 Qed.
+(** Horrible premises, should be able to prove this without some. *)
+Lemma mem_insert_writable Γ m a1 a2 v2 τ2 :
+  ✓ Γ → ✓{Γ} m → a1 = a2 ∨ a1 ⊥{Γ} a2 →
+  (Γ,m) ⊢ a2 : τ2 → mem_writable Γ a2 m → (Γ,m) ⊢ v2 : τ2 →
+  mem_writable Γ a1 m → mem_writable Γ a1 (<[a2:=v2]{Γ}>m).
+Proof.
+  intros ?? Ha ? (w2&?&Hw2) ? (w1&?&Hw1). red. unfold insertE, mem_insert.
+  destruct Ha as [<-|?]; [|erewrite cmap_lookup_alter_disjoint
+    by eauto using of_val_flatten_unshared, of_val_flatten_typed; eauto].
+  assert (ctree_Forall (λ xb, Some Writable ⊆ pbit_kind xb)
+    (of_val Γ (tagged_perm <$> ctree_flatten w2) v2)).
+  { erewrite ctree_flatten_of_val by eauto. generalize (val_flatten Γ v2).
+    induction Hw2; intros [|??]; simpl; constructor; auto. }
+  destruct (decide (addr_is_obj a1)).
+  { erewrite cmap_lookup_alter by eauto; eauto. }
+  erewrite cmap_lookup_alter_not_obj
+    by eauto using of_val_flatten_unshared, of_val_flatten_typed.
+  eauto using ctree_lookup_byte_after_Forall.
+Qed.
+Lemma mem_insert_allocable Γ m a v o :
+  mem_allocable o (<[a:=v]{Γ}>m) ↔ mem_allocable o m.
+Proof. destruct m as [m]; apply lookup_alter_None. Qed.
+Lemma mem_insert_allocable_list Γ m a v os :
+  mem_allocable_list (<[a:=v]{Γ}>m) os ↔ mem_allocable_list m os.
+Proof.
+  rewrite !mem_allocable_list_alt; unfold flip.
+  by setoid_rewrite mem_insert_allocable.
+Qed.
 Lemma ctree_insert_disjoint Γ m1 m2 a1 v1 τ1 :
   ✓ Γ → ✓{Γ} m1 → m1 ⊥ m2 →
   (Γ,m1) ⊢ a1 : τ1 → mem_writable Γ a1 m1 → (Γ,m1) ⊢ v1 : τ1 →
@@ -456,7 +498,7 @@ Proof.
   assert (ctree_Forall (not ∘ sep_unmapped) w1).
   { eapply pbits_mapped; eauto using pbits_kind_weaken. }
   eapply cmap_alter_disjoint; eauto using of_val_flatten_typed,
-    of_val_flatten_unmapped, of_val_disjoint.
+    of_val_flatten_mapped, of_val_disjoint.
 Qed.
 Lemma ctree_insert_union Γ m1 m2 a1 v1 τ1 :
   ✓ Γ → ✓{Γ} m1 → m1 ⊥ m2 →
@@ -469,7 +511,57 @@ Proof.
   assert (ctree_Forall (not ∘ sep_unmapped) w1).
   { eapply pbits_mapped; eauto using pbits_kind_weaken. }
   eapply cmap_alter_union; eauto using of_val_flatten_typed,
-    of_val_flatten_unmapped, of_val_disjoint, of_val_union.
+    of_val_flatten_mapped, of_val_disjoint, of_val_union.
+Qed.
+Lemma mem_alloc_val_valid Γ m alloc o v τ :
+  ✓ Γ → ✓{Γ} m → mem_allocable o m →
+  (Γ,m) ⊢ v : τ → int_typed (size_of Γ τ) sptrT →
+  ✓{Γ} (<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o alloc τ m)).
+Proof.
+  intros. eapply mem_insert_valid; eauto using mem_alloc_valid,
+    addr_top_typed, index_typed_alloc, mem_alloc_writable_top,
+    val_typed_weaken, index_typed_alloc_free.
+Qed.
+Lemma index_typed_alloc_val_free Γ m alloc o v τ :
+  ✓ Γ → ✓{Γ} m → mem_allocable o m →
+  (Γ,m) ⊢ v : τ → int_typed (size_of Γ τ) sptrT →
+  <[addr_top o τ:=v]{Γ}>(mem_alloc Γ o alloc τ m) ⊢ o : τ.
+Proof.
+  intros; eapply index_typed_insert; eauto using mem_alloc_valid,
+    addr_top_typed, index_typed_alloc, mem_alloc_writable_top,
+    val_typed_weaken, index_typed_alloc_free.
+Qed.
+Lemma index_typed_alloc_val Γ m alloc o v τ o' σ' :
+  ✓ Γ → ✓{Γ} m → mem_allocable o m →
+  (Γ,m) ⊢ v : τ → int_typed (size_of Γ τ) sptrT →
+  m ⊢ o' : σ' → <[addr_top o τ:=v]{Γ}>(mem_alloc Γ o alloc τ m) ⊢ o' : σ'.
+Proof.
+  intros. eapply index_typed_insert; eauto using mem_alloc_valid,
+    addr_top_typed, index_typed_alloc, mem_alloc_writable_top,
+    val_typed_weaken, index_typed_alloc_free.
+Qed.
+Lemma mem_alloc_val_allocable Γ m o alloc v τ o' :
+  mem_allocable o' m → o ≠ o' →
+  mem_allocable o' (<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o alloc τ m)).
+Proof. intros. by apply mem_insert_allocable, mem_alloc_allocable. Qed.
+Lemma mem_alloc_val_list_valid Γ m os vs τs :
+  ✓ Γ → ✓{Γ} m → mem_allocable_list m os → length os = length vs →
+  (Γ,m) ⊢* vs :* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
+  ✓{Γ} (mem_alloc_val_list Γ (zip os vs) m)
+  ∧ mem_alloc_val_list Γ (zip os vs) m ⊢* os :* τs
+  ∧ ∀ o σ, m ⊢ o : σ → mem_alloc_val_list Γ (zip os vs) m ⊢ o : σ.
+Proof.
+  rewrite <-Forall2_same_length. intros ? Hm Hfree Hovs Hvs Hτs.
+  revert os vs m Hovs Hm Hvs Hfree.
+  induction Hτs as [|τ τs ?? IH];
+    intros ?? m [|o v os vs ??]; inversion_clear 3;
+    decompose_Forall_hyps'; simplify_type_equality; auto.
+  destruct (IH os vs (<[addr_top o τ:=v]{Γ}> (mem_alloc Γ o false τ m))) as
+    (IH1&IH2&IH3); eauto using mem_alloc_val_valid.
+  { eauto using Forall2_impl, val_typed_weaken, index_typed_alloc_val. }
+  { by apply mem_insert_allocable_list, mem_alloc_allocable_list. }
+  repeat constructor;
+    eauto using index_typed_alloc_val_free, index_typed_alloc_val.
 Qed.
 
 (** ** Non-aliassing results *)
@@ -526,7 +618,7 @@ Proof.
   intros ??? (w1&?&?) ?.
   destruct (cmap_lookup_refine Γ f m1 m2 a1 a2 w1 τ) as (w2&?&?); auto.
   eapply cmap_alter_refine;
-    eauto using of_val_flatten_unmapped, val_refine_typed_l.
+    eauto using of_val_flatten_mapped, val_refine_typed_l.
   erewrite <-(pbits_refine_perm _ _ _ _ (ctree_flatten w1) (ctree_flatten w2))
     by eauto using ctree_flatten_refine.
   eapply of_val_refine; eauto.
@@ -545,7 +637,7 @@ Proof.
   intros Hm. apply dsig_eq. destruct m1 as [m1], m2 as [m2]; simpl.
   apply map_eq; intros o; specialize (Hm o);
     rewrite lookup_omap, !lookup_union_with, !lookup_omap.
-  destruct (m1 !! o) as [w1|], (m2 !! o) as [w2|]; simpl.
+  destruct (m1 !! o) as [w1|], (m2 !! o) as [w2|]; csimpl.
   * destruct Hm as (?&?&?). assert (length (pbit_locked <$> ctree_flatten w1)
       = length (pbit_locked <$> ctree_flatten w2)).
     { rewrite !fmap_length. by eapply Forall2_length, @ctree_flatten_disjoint. }
@@ -566,6 +658,20 @@ Proof.
   rewrite !sep_subseteq_spec'; intros (m3&->&?).
   rewrite mem_locks_union by done. esolve_elem_of.
 Qed.
+Lemma index_typed_lock Γ m a o σ :
+  ✓ Γ → ✓{Γ} m → mem_writable Γ a m → m ⊢ o : σ → mem_lock Γ a m ⊢ o : σ.
+Proof.
+  unfold mem_lock. intros ?? (v&?&?) ?.
+  eauto using cmap_alter_index_typed, ctree_map_type_of.
+Qed.
+Lemma addr_typed_lock Γ m a a' τ' :
+  ✓ Γ → ✓{Γ} m → mem_writable Γ a m →
+  (Γ,m) ⊢ a' : τ' → (Γ,mem_lock Γ a m) ⊢ a' : τ'.
+Proof. eauto using addr_typed_weaken, index_typed_lock. Qed.
+Lemma val_typed_lock Γ m a v' τ' :
+  ✓ Γ → ✓{Γ} m → mem_writable Γ a m →
+  (Γ,m) ⊢ v' : τ' → (Γ,mem_lock Γ a m) ⊢ v' : τ'.
+Proof. eauto using val_typed_weaken, index_typed_lock. Qed.
 Lemma mem_lock_valid Γ m a :
   ✓ Γ → ✓{Γ} m → mem_writable Γ a m → ✓{Γ} (mem_lock Γ a m).
 Proof.
@@ -612,21 +718,26 @@ Proof.
         eauto using ctree_flatten_valid, pbits_valid_sep_valid.
   * intros; typed_constructor; eauto using pbits_unlock_if_valid.
 Qed.
-Lemma mem_unlock_type_of m Ω o σ :
-  type_of_index m o = Some σ → type_of_index (mem_unlock Ω m) o = Some σ.
+Lemma index_typed_unlock m Ω o σ : m ⊢ o : σ → mem_unlock Ω m ⊢ o : σ.
 Proof.
-  unfold type_of_index; destruct m as [m], Ω as [Ω]; simpl; intros.
-  rewrite lookup_merge by done.
+  unfold typed, index_typed, type_check, index_type_check.
+  destruct m as [m], Ω as [Ω]; simpl; intros. rewrite lookup_merge by done.
   destruct (m !! o) as [w|], (Ω !! o) as [ω|]; simplify_equality'; f_equal.
   destruct w as [|? ws| | |]; f_equal'. generalize (natmap.to_bools ω).
   induction ws; intros; f_equal';
     rewrite ?app_length, ?resize_plus, ?drop_app_alt by auto; auto.
 Qed.
+Lemma addr_typed_unlock Γ m Ω a σ :
+  ✓ Γ → (Γ,m) ⊢ a : σ → (Γ,mem_unlock Ω m) ⊢ a : σ.
+Proof. eauto using addr_typed_weaken, index_typed_unlock. Qed.
+Lemma val_typed_unlock Γ m Ω v σ :
+  ✓ Γ → (Γ,m) ⊢ v : σ → (Γ,mem_unlock Ω m) ⊢ v : σ.
+Proof. eauto using val_typed_weaken, index_typed_unlock. Qed.
 Lemma mem_unlock_valid Γ m Ω : ✓ Γ → ✓{Γ} m → ✓{Γ} (mem_unlock Ω m).
 Proof.
   intros ? Hm o w Hw; simpl. cut (∃ τ,
     (Γ,m) ⊢ w : τ ∧ ¬ctree_empty w ∧ int_typed (size_of Γ τ) sptrT).
-  { intros (τ&?&?&?); eauto 7 using ctree_typed_weaken, mem_unlock_type_of. }
+  { intros (τ&?&?&?); eauto 7 using ctree_typed_weaken, index_typed_unlock. }
   revert Hw. destruct m as [m], Ω as [Ω HΩ']; simpl.
   rewrite lookup_merge by done; intros.
   destruct (m !! o) as [w'|] eqn:Hw',

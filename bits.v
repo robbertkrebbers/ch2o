@@ -13,25 +13,20 @@ Instance bit_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (b1 b2 : bit Ti) : Decision (b1 = b2).
 Proof. solve_decision. Defined.
 
+Definition maybe_BBit {Ti} (b : bit Ti) : option bool :=
+  match b with BBit b => Some b | _ => None end.
+Definition maybe_BPtr {Ti}  (b : bit Ti) : option (ptr_bit Ti) :=
+  match b with BPtr pb => Some pb | _ => None end.
+
 Section operations.
-  Context `{TypeOfIndex Ti M, Refine Ti M, IndexAlive M, IntEnv Ti, PtrEnv Ti,
-    ∀ m x, Decision (index_alive m x)}.
+  Context `{TypeCheck M (type Ti) index, Refine Ti M, IndexAlive M,
+    IntEnv Ti, PtrEnv Ti, ∀ m x, Decision (index_alive m x)}.
 
   Inductive bit_valid' (Γ : env Ti) (m : M) : bit Ti → Prop :=
     | BIndet_valid' : bit_valid' Γ m BIndet
     | BBit_valid' β : bit_valid' Γ m (BBit β)
     | BPtr_valid' pb : ✓{Γ,m} pb → bit_valid' Γ m (BPtr pb).
   Global Instance bit_valid: Valid (env Ti * M) (bit Ti) := curry bit_valid'.
-
-  Global Instance bit_valid_dec Γm (b : bit Ti) : Decision (✓{Γm} b).
-  Proof.
-   refine
-    match b with
-    | BIndet | BBit _ => left _ | BPtr pb => cast_if (decide (✓{Γm} pb))
-    end; destruct Γm; first [by constructor | abstract by inversion 1].
-  Defined.
-  Definition bit_indet (b : bit Ti) : bool :=
-    match b with BIndet => true | _ => false end.
 
   Inductive bit_weak_refine : relation (bit Ti) :=
     | bit_weak_refine_refl b : bit_weak_refine b b
@@ -80,10 +75,13 @@ Local Infix "⊑*" := (Forall2 bit_weak_refine) (at level 70).
 Hint Extern 0 (_ ⊑ _) => reflexivity.
 Hint Extern 0 (_ ⊑* _) => reflexivity.
 
-Definition maybe_BBit (b : bit Ti) : option bool :=
-  match b with BBit b => Some b | _ => None end.
-Definition maybe_BPtr (b : bit Ti) : option (ptr_bit Ti) :=
-  match b with BPtr pb => Some pb | _ => None end.
+Global Instance bit_valid_dec Γm (b : bit Ti) : Decision (✓{Γm} b).
+Proof.
+ refine
+  match b with
+  | BIndet | BBit _ => left _ | BPtr pb => cast_if (decide (✓{Γm} pb))
+  end; destruct Γm; first [by constructor | abstract by inversion 1].
+Defined.
 Global Instance: Injective (=) (=) (@BBit Ti).
 Proof. by injection 1. Qed.
 Global Instance: Injective (=) (=) (@BPtr Ti).
@@ -95,7 +93,7 @@ Proof. constructor. Qed.
 Lemma BPtr_valid Γ m pb : ✓{Γ,m} pb → ✓{Γ,m} (BPtr pb).
 Proof. by constructor. Qed.
 Lemma BPtrs_valid Γ m pbs : ✓{Γ,m}* pbs → ✓{Γ,m}* (BPtr <$> pbs).
-Proof. induction 1; simpl; auto using BPtr_valid. Qed.
+Proof. induction 1; csimpl; auto using BPtr_valid. Qed.
 Lemma BPtr_valid_inv Γ m pb : ✓{Γ,m} (BPtr pb) → ✓{Γ,m} pb.
 Proof. by inversion 1. Qed.
 Lemma BPtrs_valid_inv Γ m pbs : ✓{Γ,m}* (BPtr <$> pbs) → ✓{Γ,m}* pbs.
@@ -103,9 +101,7 @@ Proof.
   induction pbs; inversion_clear 1; constructor; auto using BPtr_valid_inv.
 Qed.
 Lemma bit_valid_weaken Γ1 Γ2 m1 m2 b :
-  ✓ Γ1 → ✓{Γ1,m1} b → Γ1 ⊆ Γ2 →
-  (∀ o σ, type_of_index m1 o = Some σ → type_of_index m2 o = Some σ) →
-  ✓{Γ2,m2} b.
+  ✓ Γ1 → ✓{Γ1,m1} b → Γ1 ⊆ Γ2 → (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) → ✓{Γ2,m2} b.
 Proof. destruct 2; econstructor; eauto using ptr_bit_valid_weaken. Qed.
 
 Lemma maybe_BBits_spec bs βs : mapM maybe_BBit bs = Some βs ↔ bs = BBit <$> βs.
@@ -167,8 +163,7 @@ Global Instance:
 Proof. intros Γ m ? b1 b2 b3. by apply bit_refine_compose. Qed.
 Lemma bit_refine_weaken Γ Γ' f f' m1 m2 m1' m2' b1 b2 :
   ✓ Γ → b1 ⊑{Γ,f@m1↦m2} b2 → Γ ⊆ Γ' → f ⊆ f' →
-  (∀ o τ, type_of_index m1 o = Some τ → type_of_index m1' o = Some τ) →
-  (∀ o τ, type_of_index m2 o = Some τ → type_of_index m2' o = Some τ) →
+  (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
   b1 ⊑{Γ',f'@m1'↦m2'} b2.
 Proof.
   destruct 2; constructor; eauto using bit_valid_weaken, ptr_bit_refine_weaken.
@@ -210,9 +205,9 @@ Lemma BPtrs_refine_inv_l Γ f m1 m2 pbs1 bs2 :
   BPtr <$> pbs1 ⊑{Γ,f@m1↦m2}* bs2 →
   ∃ pbs2, bs2 = BPtr <$> pbs2 ∧ pbs1 ⊑{Γ,f@m1↦m2}* pbs2.
 Proof.
-  rewrite Forall2_fmap_l. induction 1 as [|???? Hb ? (?&->&?)]; simpl.
+  rewrite Forall2_fmap_l. induction 1 as [|???? Hb ? (?&->&?)]; csimpl.
   { by eexists []. }
-  inversion Hb; subst. eexists (_ :: _); simpl; eauto.
+  inversion Hb; subst. eexists (_ :: _); csimpl; eauto.
 Qed.
 Lemma BPtrs_refine_inv_r Γ f m1 m2 bs1 pbs2 :
   ¬(∃ pbs, bs1 = BPtr <$> pbs) → bs1 ⊑{Γ,f@m1↦m2}* BPtr <$> pbs2 →
@@ -221,7 +216,7 @@ Proof.
   intros Hbps. rewrite Forall2_fmap_r. induction 1 as [|???? Hb ? IH].
   { destruct Hbps. by eexists []. }
   inversion Hb; subst; eauto using BPtr_valid_inv.
-  right. apply IH. intros [? ->]. destruct Hbps; eexists (_ :: _); simpl; eauto.
+  right. apply IH. intros [?->]. destruct Hbps; eexists (_ :: _); csimpl; eauto.
 Qed.
 
 (** ** Weak Refinements *)
@@ -322,7 +317,7 @@ Proof.
     inversion_clear 1 as [|b2]; [by eexists []|].
   edestruct IH as (?&Hbs2&?); eauto.
   edestruct (bit_join_exists b1 b2 b4) as (?&Hb2&?); eauto.
-  simpl; rewrite Hbs2; simpl; rewrite Hb2; simpl; eauto.
+  simpl; rewrite Hbs2; simpl; rewrite Hb2; csimpl; eauto.
 Qed.
 Lemma bits_join_min bs1 bs2 bs3 bs4 :
   bits_join bs1 bs2 = Some bs3 → bs1 ⊑* bs4 → bs2 ⊑* bs4 → bs3 ⊑* bs4.

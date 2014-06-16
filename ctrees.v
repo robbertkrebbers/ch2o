@@ -431,8 +431,8 @@ Lemma ctree_flatten_merge {B C : Set} `{SeparationOps C}
 Proof.
   revert w ys. refine (ctree_ind_alt _ _ _ _ _ _); simpl.
   * done.
-  * induction 2; simpl; intros; rewrite ?zip_with_app_l; f_equal'; auto.
-  * induction 2 as [|[]]; simpl in *; intros;
+  * induction 2; csimpl; intros; rewrite ?zip_with_app_l; f_equal'; auto.
+  * induction 2 as [|[]]; csimpl in *; intros;
       rewrite <-?(associative_L (++)), ?zip_with_app_l; repeat f_equal; auto.
   * intros. unfold MUnion'; destruct unchecked; repeat case_decide;
       rewrite zip_with_app_l; f_equal'; auto.
@@ -963,7 +963,7 @@ Proof.
         ctree_merge_array (ctree_merge true (∪)) ws2 ys2 → ws1 = ws2).
     { naive_solver. }
     revert ws2. induction IH as [|w1 ws1];
-      intros [|w2 ws2] ys1_ ys2_; simpl; try discriminate; auto.
+      intros [|w2 ws2] ys1_ ys2_; csimpl; try discriminate; auto.
     rewrite !Forall2_app_inv_l; intros (ys1&ys1'&?&?&->) (ys2&ys2'&?&?&->) ??.
     simplifier. assert (length ys1 = length ys2).
     { erewrite <-(zip_with_length_same_r _ _ _ ys1),  <-(zip_with_length_same_r
@@ -1175,8 +1175,8 @@ Lemma ctree_flatten_map h w :
   ctree_flatten (ctree_map h w) = h <$> ctree_flatten w.
 Proof.
   induction w as [|? ws IH|? wxss IH| |] using @ctree_ind_alt; simpl; auto.
-  * induction IH; simpl; rewrite ?fmap_app; f_equal; auto.
-  * induction IH; simpl; rewrite ?fmap_app; repeat f_equal; auto.
+  * induction IH; csimpl; rewrite ?fmap_app; f_equal; auto.
+  * induction IH; csimpl; rewrite ?fmap_app; repeat f_equal; auto.
   * rewrite MUnion'_flatten, fmap_app; f_equal; auto.
 Qed.
 

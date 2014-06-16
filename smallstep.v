@@ -31,8 +31,8 @@ relation [cstep].*)
 (* The level is just below logical negation (whose level is 75). *)
 Reserved Notation "Γ \ ρ ⊢ₕ e1 , m1 ⇒ e2 , m2"
   (at level 74, format "Γ \  ρ  '⊢ₕ' '['  e1 ,  m1  ⇒ '/'  e2 ,  m2 ']'").
-Inductive ehstep `{IntEnv Ti, PtrEnv Ti}
-      (Γ : env Ti) (ρ : stack) : expr Ti → mem Ti → expr Ti → mem Ti → Prop :=
+Inductive ehstep `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti) (ρ : stack) :
+     expr Ti → mem Ti → expr Ti → mem Ti → Prop :=
   | estep_var x τ o m :
      ρ !! x = Some o →
      Γ\ ρ ⊢ₕ var{τ} x, m ⇒ %(addr_top o τ), m
@@ -48,14 +48,13 @@ Inductive ehstep `{IntEnv Ti, PtrEnv Ti}
   | estep_load Ω a v m :
      m !!{Γ} a = Some v → Γ\ ρ ⊢ₕ load (%{Ω} a), m ⇒ #{Ω} v, mem_force Γ a m
   | estep_elt Ω a m :
-     Γ\ ρ ⊢ₕ elt (%{Ω} a), m ⇒ #{Ω} (ptrV (Ptr (addr_elt Γ a))), m
+     Γ\ ρ ⊢ₕ elt (%{Ω} a), m ⇒ %{Ω} (addr_elt Γ a), m
   | estep_alloc m o τ :
      mem_allocable o m →
-     Γ\ ρ ⊢ₕ alloc τ, m ⇒ #(ptrV (Ptr (addr_top o τ))), mem_alloc Γ o true τ m
+     Γ\ ρ ⊢ₕ alloc τ, m ⇒ %(addr_top o τ), mem_alloc Γ o true τ m
   | estep_free m Ω a :
      mem_freeable a m →
-     Γ\ ρ ⊢ₕ free (#{Ω} (ptrV (Ptr a))), m ⇒
-             #{Ω} VVoid, mem_free (addr_index a) m
+     Γ\ ρ ⊢ₕ free (%{Ω} a), m ⇒ #{Ω} voidV, mem_free (addr_index a) m
   | estep_unop op Ω v m :
      val_unop_ok op v →
      Γ\ ρ ⊢ₕ @{op} #{Ω} v, m ⇒ #{Ω} (val_unop op v), m
@@ -64,10 +63,10 @@ Inductive ehstep `{IntEnv Ti, PtrEnv Ti}
      Γ\ ρ ⊢ₕ #{Ω1} v1 @{op} #{Ω2} v2, m ⇒ #{Ω1 ∪ Ω2} (val_binop Γ op v1 v2), m
   | estep_if1 m Ω v e1 e2 :
      val_true v →
-     Γ\ ρ ⊢ₕ IF #{Ω} v then e1 else e2, m ⇒ e1, mem_unlock Ω m
+     Γ\ ρ ⊢ₕ if{#{Ω} v} e1 else e2, m ⇒ e1, mem_unlock Ω m
   | estep_if2 m Ω v e1 e2 :
      val_false v →
-     Γ\ ρ ⊢ₕ IF #{Ω} v then e1 else e2, m ⇒ e2, mem_unlock Ω m
+     Γ\ ρ ⊢ₕ if{#{Ω} v} e1 else e2, m ⇒ e2, mem_unlock Ω m
   | estep_comma m Ω v e2 :
      Γ\ ρ ⊢ₕ #{Ω} v,,e2, m ⇒ e2, mem_unlock Ω m
   | estep_cast m τ Ω v :
@@ -120,31 +119,31 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
   | cstep_expr_undef m k (E : ectx Ti) e :
      is_redex e → ¬Γ \ get_stack k ⊢ₕ safe e, m →
      Γ\ δ ⊢ₛ State k (Expr (subst E e)) m ⇒
-             State k Undef m
+             State k (Undef (subst E e)) m
 
   (**i For finished expressions: *)
   | cstep_expr_do m k e Ω v :
-     Γ\ δ ⊢ₛ State (CExpr e (do □) :: k) (Expr (#{Ω} v)) m ⇒
-             State k (Stmt ↗ (do e)) (mem_unlock Ω m)
+     Γ\ δ ⊢ₛ State (CExpr e (! □) :: k) (Expr (#{Ω} v)) m ⇒
+             State k (Stmt ↗ (! e)) (mem_unlock Ω m)
   | cstep_expr_ret m k e Ω v :
      Γ\ δ ⊢ₛ State (CExpr e (ret □) :: k) (Expr (#{Ω} v)) m ⇒
              State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m)
   | cstep_expr_while1 m k e Ω v s :
      val_true v →
-     Γ\ δ ⊢ₛ State (CExpr e (while (□) s) :: k) (Expr (#{Ω} v)) m ⇒
-             State (CStmt (while (e) □) :: k) (Stmt ↘ s) (mem_unlock Ω m)
+     Γ\ δ ⊢ₛ State (CExpr e (while{□} s) :: k) (Expr (#{Ω} v)) m ⇒
+             State (CStmt (while{e} □) :: k) (Stmt ↘ s) (mem_unlock Ω m)
   | cstep_expr_while2 m k e Ω v s :
      val_false v →
-     Γ\ δ ⊢ₛ State (CExpr e (while (□) s) :: k) (Expr (#{Ω} v)) m ⇒
-             State k (Stmt ↗ (while (e) s)) (mem_unlock Ω m)
+     Γ\ δ ⊢ₛ State (CExpr e (while{□} s) :: k) (Expr (#{Ω} v)) m ⇒
+             State k (Stmt ↗ (while{e} s)) (mem_unlock Ω m)
   | cstep_expr_if1 m k e Ω v s1 s2 :
      val_true v →
-     Γ\ δ ⊢ₛ State (CExpr e (IF □ then s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
-             State (CStmt (IF e then □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m)
+     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
+             State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m)
   | cstep_expr_if2 m k e Ω v s1 s2 :
      val_false v →
-     Γ\ δ ⊢ₛ State (CExpr e (IF □ then s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
-             State (CStmt (IF e then s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)
+     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
+             State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)
 
   (**i For compound statements: *)
   | cstep_in_block m k o τ s :
@@ -167,14 +166,14 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
      Γ\ δ ⊢ₛ State (CStmt (s1 ;; □) :: k) (Stmt ↗ s2) m ⇒
              State k (Stmt ↗ (s1 ;; s2)) m
   | cstep_out_loop m k e s :
-     Γ\ δ ⊢ₛ State (CStmt (while (e) □) :: k) (Stmt ↗ s) m ⇒
-             State k (Stmt ↘ (while (e) s)) m
+     Γ\ δ ⊢ₛ State (CStmt (while{e} □) :: k) (Stmt ↗ s) m ⇒
+             State k (Stmt ↘ (while{e} s)) m
   | cstep_out_if1 m k e s1 s2 :
-     Γ\ δ ⊢ₛ State (CStmt (IF e then □ else s2) :: k) (Stmt ↗ s1) m ⇒
-             State k (Stmt ↗ (IF e then s1 else s2)) m
+     Γ\ δ ⊢ₛ State (CStmt (if{e} □ else s2) :: k) (Stmt ↗ s1) m ⇒
+             State k (Stmt ↗ (if{e} s1 else s2)) m
   | cstep_out_if2 m k e s1 s2 :
-     Γ\ δ ⊢ₛ State (CStmt (IF e then s1 else □) :: k) (Stmt ↗ s2) m ⇒
-             State k (Stmt ↗ (IF e then s1 else s2)) m
+     Γ\ δ ⊢ₛ State (CStmt (if{e} s1 else □) :: k) (Stmt ↗ s2) m ⇒
+             State k (Stmt ↗ (if{e} s1 else s2)) m
   | cstep_out_label m k s l :
      Γ\ δ ⊢ₛ State (CStmt (l :; □) :: k) (Stmt ↗ s) m ⇒
              State k (Stmt ↗ (l :; s)) m
@@ -183,13 +182,14 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
   | cstep_call m k f s os vs :
      δ !! f = Some s → mem_allocable_list m os → length os = length vs →
      Γ\ δ ⊢ₛ State k (Call f vs) m ⇒
-             State (CParams os :: k) (Stmt ↘ s) (mem_alloc_list Γ (zip os vs) m)
-  | cstep_free_params m k os s :
-     Γ\ δ ⊢ₛ State (CParams os :: k) (Stmt ↗ s) m ⇒
-             State k (Return voidV) (foldr mem_free m os)
-  | cstep_free_params_top m k os v s :
-     Γ\ δ ⊢ₛ State (CParams os :: k) (Stmt (⇈ v) s) m ⇒
-             State k (Return v) (foldr mem_free m os)
+             State (CParams (zip os (type_of <$> vs)) :: k)
+               (Stmt ↘ s) (mem_alloc_val_list Γ (zip os vs) m)
+  | cstep_free_params m k oτs s :
+     Γ\ δ ⊢ₛ State (CParams oτs :: k) (Stmt ↗ s) m ⇒
+             State k (Return voidV) (foldr mem_free m (fst <$> oτs))
+  | cstep_free_params_top m k oτs v s :
+     Γ\ δ ⊢ₛ State (CParams oτs :: k) (Stmt (⇈ v) s) m ⇒
+             State k (Return v) (foldr mem_free m (fst <$> oτs))
   | cstep_return m k E v :
      Γ\ δ ⊢ₛ State (CFun E :: k) (Return v) m ⇒
              State k (Expr (subst E (#v)%E)) m
@@ -198,7 +198,7 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
   | cstep_top_block m k o τ v s :
      Γ\ δ ⊢ₛ State (CBlock o τ :: k) (Stmt (⇈ v) s) m ⇒
              State k (Stmt (⇈ v) (blk{τ} s)) (mem_free o m)
-  | cstep_top_item m E k v s :
+  | cstep_top_item m k E v s :
      Γ\ δ ⊢ₛ State (CStmt E :: k) (Stmt (⇈ v) s) m ⇒
              State k (Stmt (⇈ v) (subst E s)) m
   | cstep_label_here m k l s :
@@ -214,14 +214,14 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
      l ∉ labels s →
      Γ\ δ ⊢ₛ State (CBlock o τ :: k) (Stmt (↷ l) s) m ⇒
              State k (Stmt (↷l) (blk{τ} s)) (mem_free o m)
-  | cstep_label_down m k E l s :
+  | cstep_label_down m k Es l s :
      l ∈ labels s →
-     Γ\ δ ⊢ₛ State k (Stmt (↷ l) (subst E s)) m ⇒
-             State (CStmt E :: k) (Stmt (↷ l) s) m
-  | cstep_label_up m k E l s :
+     Γ\ δ ⊢ₛ State k (Stmt (↷ l) (subst Es s)) m ⇒
+             State (CStmt Es :: k) (Stmt (↷ l) s) m
+  | cstep_label_up m k Es l s :
      l ∉ labels s →
-     Γ\ δ ⊢ₛ State (CStmt E :: k) (Stmt (↷ l) s) m ⇒
-             State k (Stmt (↷ l) (subst E s)) m
+     Γ\ δ ⊢ₛ State (CStmt Es :: k) (Stmt (↷ l) s) m ⇒
+             State k (Stmt (↷ l) (subst Es s)) m
 where "Γ \ δ  ⊢ₛ S1 ⇒ S2" := (@cstep _ _ _ Γ δ S1%S S2%S) : C_scope.
 
 (** The reflexive transitive closure. *)
@@ -264,37 +264,37 @@ Section inversion.
        P (State k (Stmt ↗ skip) m) → P S2
     | Stmt ↘ (goto l) =>
        P (State k (Stmt (↷ l) (goto l)) m) → P S2
-    | Stmt ↘ (do e) =>
-       P (State (CExpr e (do □) :: k) (Expr e) m) → P S2
+    | Stmt ↘ (! e) =>
+       P (State (CExpr e (! □) :: k) (Expr e) m) → P S2
     | Stmt ↘ (ret e) =>
        P (State (CExpr e (ret □) :: k) (Expr e) m) → P S2
-    | Stmt ↘ (while (e) s) => 
-       P (State (CExpr e (while (□) s) :: k) (Expr e) m) → P S2
-    | Stmt ↘ (IF e then s1 else s2) =>
-       P (State (CExpr e (IF □ then s1 else s2) :: k) (Expr e) m) → P S2
+    | Stmt ↘ (while{e} s) => 
+       P (State (CExpr e (while{□} s) :: k) (Expr e) m) → P S2
+    | Stmt ↘ (if{e} s1 else s2) =>
+       P (State (CExpr e (if{□} s1 else s2) :: k) (Expr e) m) → P S2
     | Expr e =>
        (∀ Ω v k' e',
-         e = (#{Ω} v)%E → k = CExpr e' (do □) :: k' →
-         P (State k' (Stmt ↗ (do e')) (mem_unlock Ω m))) →
+         e = (#{Ω} v)%E → k = CExpr e' (! □) :: k' →
+         P (State k' (Stmt ↗ (! e')) (mem_unlock Ω m))) →
        (∀ Ω v k' e',
          e = (#{Ω} v)%E → k = CExpr e' (ret □) :: k' →
          P (State k' (Stmt (⇈ v) (ret e')) (mem_unlock Ω m))) →
        (∀ Ω v k' e' s,
-         e = (#{Ω} v)%E → val_true v → k = CExpr e' (while (□) s) :: k' →
-         P (State (CStmt (while (e') □) :: k')
+         e = (#{Ω} v)%E → val_true v → k = CExpr e' (while{□} s) :: k' →
+         P (State (CStmt (while{e'} □) :: k')
            (Stmt ↘ s) (mem_unlock Ω m))) →
        (∀ Ω v k' e' s,
-         e = (#{Ω} v)%E → val_false v → k = CExpr e' (while (□) s) :: k' →
-         P (State k' (Stmt ↗ (while (e') s)) (mem_unlock Ω m))) →
+         e = (#{Ω} v)%E → val_false v → k = CExpr e' (while{□} s) :: k' →
+         P (State k' (Stmt ↗ (while{e'} s)) (mem_unlock Ω m))) →
        (∀ Ω v k' e' s1 s2,
          e = (#{Ω} v)%E → val_true v →
-         k = CExpr e' (IF □ then s1 else s2) :: k' →
-         P (State (CStmt (IF e' then □ else s2) :: k')
+         k = CExpr e' (if{□} s1 else s2) :: k' →
+         P (State (CStmt (if{e'} □ else s2) :: k')
            (Stmt ↘ s1) (mem_unlock Ω m))) →
        (∀ Ω v k' e' s1 s2,
          e = (#{Ω} v)%E → val_false v →
-         k = CExpr e' (IF □ then s1 else s2) :: k' →
-         P (State (CStmt (IF e' then s1 else □) :: k')
+         k = CExpr e' (if{□} s1 else s2) :: k' →
+         P (State (CStmt (if{e'} s1 else □) :: k')
            (Stmt ↘ s2) (mem_unlock Ω m))) →
        (∀ (E : ectx Ti) e1 e2 m2,
          e = subst E e1 → Γ\ get_stack k ⊢ₕ e1, m ⇒ e2, m2 →
@@ -307,7 +307,7 @@ Section inversion.
          e = subst E e1 →
          is_redex e1 →
          ¬Γ\ get_stack k ⊢ₕ safe e1, m →
-         P (State k Undef m)) →
+         P (State k (Undef e) m)) →
        P S2
     | Return v =>
        (∀ k' E,
@@ -335,36 +335,37 @@ Section inversion.
          k = CStmt (s1 ;; □) :: k' →
          P (State k' (Stmt ↗ (s1 ;; s)) m)) →
        (∀ k' e,
-         k = CStmt (while (e) □) :: k' →
-         P (State k' (Stmt ↘ (while (e) s)) m)) →
+         k = CStmt (while{e} □) :: k' →
+         P (State k' (Stmt ↘ (while{e} s)) m)) →
        (∀ k' e s2,
-         k = CStmt (IF e then □ else s2) :: k' →
-         P (State k' (Stmt ↗ (IF e then s else s2)) m)) →
+         k = CStmt (if{e} □ else s2) :: k' →
+         P (State k' (Stmt ↗ (if{e} s else s2)) m)) →
        (∀ k' e s1,
-         k = CStmt (IF e then s1 else □) :: k' →
-         P (State k' (Stmt ↗ (IF e then s1 else s)) m)) →
+         k = CStmt (if{e} s1 else □) :: k' →
+         P (State k' (Stmt ↗ (if{e} s1 else s)) m)) →
        (∀ k' l,
          k = CStmt (l :; □) :: k' →
          P (State k' (Stmt ↗ (l :; s)) m)) →
-       (∀ k' os,
-         k = CParams os :: k' →
-         P (State k' (Return voidV) (foldr mem_free m os))) →
+       (∀ k' oτs,
+         k = CParams oτs :: k' →
+         P (State k' (Return voidV) (foldr mem_free m (fst <$> oτs)))) →
        P S2
     | Call f vs =>
        (∀ s os,
          δ !! f = Some s → mem_allocable_list m os → length os = length vs →
-         P (State (CParams os :: k) (Stmt ↘ s) (mem_alloc_list Γ (zip os vs) m))) →
+         P (State (CParams (zip os (type_of <$> vs)) :: k)
+           (Stmt ↘ s) (mem_alloc_val_list Γ (zip os vs) m))) →
        P S2
     | Stmt (⇈ v) s =>
-       (∀ k' os,
-         k = CParams os :: k' →
-         P (State k' (Return v) (foldr mem_free m os))) →
+       (∀ k' oτs,
+         k = CParams oτs :: k' →
+         P (State k' (Return v) (foldr mem_free m (fst <$> oτs)))) →
        (∀ k' o τ,
          k = CBlock o τ :: k' →
          P (State k' (Stmt (⇈ v) (blk{τ} s)) (mem_free o m))) →
-       (∀ k' E,
-         k = CStmt E :: k' →
-         P (State k' (Stmt (⇈ v) (subst E s)) m)) →
+       (∀ k' Es,
+         k = CStmt Es :: k' →
+         P (State k' (Stmt (⇈ v) (subst Es s)) m)) →
        P S2
     | Stmt (↷ l) s =>
        (∀ s',
@@ -377,36 +378,34 @@ Section inversion.
        (∀ k' o τ,
          k = CBlock o τ :: k' → l ∉ labels s →
          P (State k' (Stmt (↷l) (blk{τ} s)) (mem_free o m))) →
-       (∀ s' E,
-         s = subst E s' → l ∈ labels s' →
-         P (State (CStmt E :: k) (Stmt (↷ l) s') m)) →
-       (∀ k' E,
-         k = CStmt E :: k' → l ∉ labels s →
-         P (State k' (Stmt (↷ l) (subst E s)) m)) →
+       (∀ s' Es,
+         s = subst Es s' → l ∈ labels s' →
+         P (State (CStmt Es :: k) (Stmt (↷ l) s') m)) →
+       (∀ k' Es,
+         k = CStmt Es :: k' → l ∉ labels s →
+         P (State k' (Stmt (↷ l) (subst Es s)) m)) →
        P S2
-    | Undef => P S2
+    | Undef _ => P S2
     end.
   Proof. intros p. case p; eauto. intros ?? [] ?; simpl; eauto. Qed.
-  Lemma cstep_expr_inv (P : state Ti → Prop) E k Ω v m S2 :
-    Γ\ δ ⊢ₛ State (E :: k) (Expr (#{Ω} v)) m ⇒ S2 →
-    match E with
-    | CExpr e (do □) =>
-       P (State k (Stmt ↗ (do e)) (mem_unlock Ω m)) → P S2
+  Lemma cstep_expr_inv (P : state Ti → Prop) m k Ek Ω v S2 :
+    Γ\ δ ⊢ₛ State (Ek :: k) (Expr (#{Ω} v)) m ⇒ S2 →
+    match Ek with
+    | CExpr e (! □) =>
+       P (State k (Stmt ↗ (! e)) (mem_unlock Ω m)) → P S2
     | CExpr e (ret □) =>
        P (State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m)) → P S2
-    | CExpr e (while (□) s) =>
+    | CExpr e (while{□} s) =>
       (val_true v →
-        P (State (CStmt (while (e) □) :: k) (Stmt ↘ s) (mem_unlock Ω m))) →
+        P (State (CStmt (while{e} □) :: k) (Stmt ↘ s) (mem_unlock Ω m))) →
       (val_false v →
-        P (State k (Stmt ↗ (while (e) s)) (mem_unlock Ω m))) →
+        P (State k (Stmt ↗ (while{e} s)) (mem_unlock Ω m))) →
       P S2
-    | CExpr e (IF □ then s1 else s2) =>
+    | CExpr e (if{□} s1 else s2) =>
       (val_true v →
-        P (State (CStmt (IF e then □ else s2) :: k)
-          (Stmt ↘ s1) (mem_unlock Ω m))) →
+        P (State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m))) →
       (val_false v →
-        P (State (CStmt (IF e then s1 else □) :: k)
-          (Stmt ↘ s2) (mem_unlock Ω m))) →
+        P (State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m))) →
       P S2
     | _ => P S2
     end.
@@ -419,36 +418,30 @@ Section inversion.
     * intros Ee e1 Hv ? _. simplify_list_subst_equality Hv.
       by destruct (EVal_not_redex Ω v).
   Qed.
-  Lemma cstep_stmt_up_inv (P : state Ti → Prop) E k s m S2 :
-    Γ\ δ ⊢ₛ State (E :: k) (Stmt ↗ s) m ⇒ S2 →
-    match E with
-    | CStmt (□ ;; s2) =>
-       P (State (CStmt (s ;; □) :: k) (Stmt ↘ s2) m) → P S2
-    | CStmt (s1 ;; □) =>
-       P (State k (Stmt ↗ (s1 ;; s)) m) → P S2
-    | CStmt (while (e) □) =>
-       P (State k (Stmt ↘ (while (e) s)) m) → P S2
-    | CStmt (IF e then □ else s2) =>
-       P (State k (Stmt ↗ (IF e then s else s2)) m) → P S2
-    | CStmt (IF e then s1 else □) =>
-       P (State k (Stmt ↗ (IF e then s1 else s)) m) → P S2
-    | CStmt (l :; □) =>
-       P (State k (Stmt ↗ (l :; s)) m) → P S2
-    | CBlock o τ =>
-       P (State k (Stmt ↗ (blk{τ} s)) (mem_free o m)) → P S2
-    | CParams os =>
-       P (State k (Return voidV) (foldr mem_free m os)) → P S2
+  Lemma cstep_stmt_up_inv (P : state Ti → Prop) m k Ek s S2 :
+    Γ\ δ ⊢ₛ State (Ek :: k) (Stmt ↗ s) m ⇒ S2 →
+    match Ek with
+    | CStmt (□ ;; s2) => P (State (CStmt (s ;; □) :: k) (Stmt ↘ s2) m) → P S2
+    | CStmt (s1 ;; □) => P (State k (Stmt ↗ (s1 ;; s)) m) → P S2
+    | CStmt (while{e} □) => P (State k (Stmt ↘ (while{e} s)) m) → P S2
+    | CStmt (if{e} □ else s2) => P (State k (Stmt ↗ (if{e} s else s2)) m) → P S2
+    | CStmt (if{e} s1 else □) => P (State k (Stmt ↗ (if{e} s1 else s)) m) → P S2
+    | CStmt (l :; □) => P (State k (Stmt ↗ (l :; s)) m) → P S2
+    | CBlock o τ => P (State k (Stmt ↗ (blk{τ} s)) (mem_free o m)) → P S2
+    | CParams oτs =>
+       P (State k (Return voidV) (foldr mem_free m (fst <$> oτs))) → P S2
     | _ => P S2
     end.
   Proof.
     intros p. pattern S2. apply (cstep_focus_inv _ _ _ p);
       intros; simplify_equality; eauto.
   Qed.
-  Lemma cstep_stmt_top_inv (P : state Ti → Prop) E k v s m S2 :
-    Γ\ δ ⊢ₛ State (E :: k) (Stmt (⇈ v) s) m ⇒ S2 →
-    match E with
-    | CStmt E => P (State k (Stmt (⇈ v) (subst E s)) m) → P S2
-    | CParams os => P (State k (Return v) (foldr mem_free m os)) → P S2
+  Lemma cstep_stmt_top_inv (P : state Ti → Prop) m k Ek v s S2 :
+    Γ\ δ ⊢ₛ State (Ek :: k) (Stmt (⇈ v) s) m ⇒ S2 →
+    match Ek with
+    | CStmt Es => P (State k (Stmt (⇈ v) (subst Es s)) m) → P S2
+    | CParams oτs =>
+       P (State k (Return v) (foldr mem_free m (fst <$> oτs))) → P S2
     | CBlock o τ => P (State k (Stmt (⇈ v) (blk{τ} s)) (mem_free o m)) → P S2
     | _ => P S2
     end.
@@ -456,7 +449,7 @@ Section inversion.
     intros p. pattern S2.
     apply (cstep_focus_inv _ _ _ p); intros; simplify_equality; eauto.
   Qed.
-  Lemma cstep_stmt_jump_down_inv (P : state Ti → Prop) k l s m S2 :
+  Lemma cstep_stmt_jump_down_inv (P : state Ti → Prop) m k l s S2 :
     Γ\ δ ⊢ₛ State k (Stmt (↷ l) s) m ⇒ S2 →
     l ∈ labels s →
     match s with
@@ -474,14 +467,14 @@ Section inversion.
        (l = l' → P (State (CStmt (l' :; □) :: k) (Stmt ↘ s) m)) →
        (l ∈ labels s → P (State (CStmt (l' :; □) :: k) (Stmt (↷ l) s) m)) →
        P S2
-    | while (e) s =>
-       (l ∈ labels s → P (State (CStmt (while (e) □) :: k) (Stmt (↷ l) s) m)) →
+    | while{e} s =>
+       (l ∈ labels s → P (State (CStmt (while{e} □) :: k) (Stmt (↷ l) s) m)) →
        P S2
-    | (IF e then s1 else s2) =>
+    | if{e} s1 else s2 =>
        (l ∈ labels s1 →
-         P (State (CStmt (IF e then □ else s2) :: k) (Stmt (↷ l) s1) m)) →
+         P (State (CStmt (if{e} □ else s2) :: k) (Stmt (↷ l) s1) m)) →
        (l ∈ labels s2 →
-         P (State (CStmt (IF e then s1 else □) :: k) (Stmt (↷ l) s2) m)) →
+         P (State (CStmt (if{e} s1 else □) :: k) (Stmt (↷ l) s2) m)) →
        P S2
     | _ => P S2
     end.
@@ -489,11 +482,11 @@ Section inversion.
     intros p ?. pattern S2. apply (cstep_focus_inv _ _ _ p); try solve_elem_of.
     intros ? []; solve_elem_of.
   Qed.
-  Lemma cstep_stmt_jump_up_inv (P : state Ti → Prop) E k l s m S2 :
-    Γ\ δ ⊢ₛ State (E :: k) (Stmt (↷ l) s) m ⇒ S2 →
+  Lemma cstep_stmt_jump_up_inv (P : state Ti → Prop) m k Ek l s S2 :
+    Γ\ δ ⊢ₛ State (Ek :: k) (Stmt (↷ l) s) m ⇒ S2 →
     l ∉ labels s →
-    match E with
-    | CStmt E => P (State k (Stmt (↷ l) (subst E s)) m) → P S2
+    match Ek with
+    | CStmt Es => P (State k (Stmt (↷ l) (subst Es s)) m) → P S2
     | CBlock o τ => P (State k (Stmt (↷ l) (blk{τ} s)) (mem_free o m)) → P S2
     | _ => P S2
     end.
@@ -610,16 +603,15 @@ This tactic is useful to automatically perform reductions, as for example
 *)
 Ltac quote_stmt s :=
   lazymatch s with
-  | do ?e => constr:[subst (do □) e]
+  | ! ?e => constr:[subst (! □) e]
   | ret ?e => constr:[subst (ret □) e]
   | ?s1 ;; ?s2 => constr:[subst (s1 ;; □) s2; subst (□ ;; s2) s1]
   | ?l :; ?s => constr:[subst (l :; □) s]
-  | while (?e) ?s =>
-    constr:[subst (while (e) □) s; subst (while (□) s) e]
-  | IF ?e then ?s1 else ?s2 =>
-    constr:[subst (IF e then s1 else □) s2;
-            subst (IF e then □ else s2) s1;
-            subst (IF □ then s1 else s2) e]
+  | while{?e} ?s =>
+    constr:[subst (while{e} □) s; subst (while{□} s) e]
+  | if{?e} ?s1 else ?s2 =>
+    constr:[subst (if{e} s1 else □) s2;
+            subst (if{e} □ else s2) s1; subst (if{□} s1 else s2) e]
   end.
 
 (** The [quote_expr e] tactic yields a list of possible ways to write an
@@ -645,7 +637,7 @@ Ltac quote_expr e :=
     | free ?e => go (free □ :: k) e
     | @{?op} ?e => go (@{op} □ :: k) e
     | ?e1 @{?op} ?e2 => go2 (□ @{op} e2 :: k) e1 (e1 @{op} □ :: k) e2
-    | IF ?e1 then ?e2 else ?e3 => go (IF □ then e2 else e3 :: k) e1
+    | if{?e1} ?e2 else ?e3 => go (if{□} e2 else e3 :: k) e1
     | ?e1 ,, ?e2 => go (□ ,, e2 :: k) e1
     | ?e .> ?i => go (□ .> i :: k) e
     | _ => constr:(@nil expr)
@@ -762,10 +754,10 @@ Proof.
     end; solve_elem_of.
 Qed.
 Lemma estep_if1_empty_locks ρ m v e2 e3 :
-  val_true v → Γ\ ρ ⊢ₕ IF # v then e2 else e3, m ⇒ e2, m.
+  val_true v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e2, m.
 Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
 Lemma estep_if2_no_locks ρ v e2 e3 m :
-  val_false v → Γ\ ρ ⊢ₕ IF # v then e2 else e3, m ⇒ e3, m.
+  val_false v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e3, m.
 Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
 Lemma estep_comma_no_locks ρ m v e2 : Γ\ ρ ⊢ₕ # v ,, e2, m ⇒ e2, m.
 Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
@@ -776,7 +768,7 @@ lemmas, that are useful to automatically perform reduction steps, pick a fully
 determined one. *)
 Lemma estep_alloc_fresh ρ m τ :
   let o := fresh (dom indexset m) in
-  Γ\ ρ ⊢ₕ alloc τ, m ⇒ #(ptrV (Ptr (addr_top o τ))), mem_alloc Γ o true τ m.
+  Γ\ ρ ⊢ₕ alloc τ, m ⇒ %(addr_top o τ), mem_alloc Γ o true τ m.
 Proof. constructor. eapply mem_allocable_alt, is_fresh. Qed.
 Lemma cstep_in_block_fresh m k τ s :
   let o := fresh (dom indexset m) in
@@ -793,7 +785,8 @@ Lemma cstep_call_fresh m k f s vs :
   δ !! f = Some s →
   let os := fresh_list (length vs) (dom indexset m) in
   Γ\ δ ⊢ₛ State k (Call f vs) m ⇒
-          State (CParams os :: k) (Stmt ↘ s) (mem_alloc_list Γ (zip os vs) m).
+          State (CParams (zip os (type_of <$> vs)) :: k)
+            (Stmt ↘ s) (mem_alloc_val_list Γ (zip os vs) m).
 Proof.
   constructor; auto using fresh_list_length.
   apply mem_allocable_list_alt; split; [apply fresh_list_nodup|].
@@ -819,9 +812,9 @@ Lemma cstep_in_ctx_bsteps n k S1 S2 :
   Γ\ δ ⊢ₛ S1 ⇒{k}^n S2 → k `suffix_of` SCtx S2 ∨ S1 = S2.
 Proof. intros p. apply bsteps_rtc in p. eapply cstep_in_ctx_rtc; eauto. Qed.
 
-Lemma cnf_undef m k : nf (cstep Γ δ) (State k Undef m).
+Lemma cnf_undef m k e : nf (cstep Γ δ) (State k (Undef e) m).
 Proof. intros [? p]. inv_cstep p. Qed.
-Lemma cnf_in_ctx_undef m l k : nf (cstep_in_ctx Γ δ l) (State k Undef m).
+Lemma cnf_in_ctx_undef m l k e : nf (cstep_in_ctx Γ δ l) (State k (Undef e) m).
 Proof. apply (nf_subrel _ (cstep Γ δ) _), cnf_undef. Qed.
 Lemma cnf_val m l Ω v : nf (cstep_in_ctx Γ δ l) (State l (Expr (#{Ω} v)) m).
 Proof. intros [S p]; inv_cstep p. Qed.
@@ -845,8 +838,8 @@ Lemma cstep_expr_depsubst_inv {n} (P : state Ti → Prop)
       (Call f vs) (mem_unlock (⋃ Ωs) m))) →
   (Forall is_nf es → P S') →
   (∀ i,
-    Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k} State k Undef m →
-    P (State k Undef m)) →
+    Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k} State k (Undef (es !!! i)) m →
+    P (State k (Undef (depsubst E es)) m)) →
   P S'.
 Proof.
   intros [p Hsuffix]. revert Hsuffix. pattern S'.
@@ -875,7 +868,8 @@ Lemma cstep_expr_call_inv (P : state Ti → Prop) k f Ωs vs m S' :
   Γ\ δ ⊢ₛ State k (Expr (call f @ #{Ωs}* vs)) m ⇒{k} S' →
   length Ωs = length vs →
   P (State (CFun [] :: k) (Call f vs) (mem_unlock (⋃ Ωs) m)) →
-  (¬Γ\ get_stack k ⊢ₕ safe call f @ #{Ωs}* vs, m → P (State k Undef m)) →
+  (¬Γ\ get_stack k ⊢ₕ safe call f @ #{Ωs}* vs, m →
+    P (State k (Undef (call f @ #{Ωs}* vs)) m)) →
   P S'.
 Proof.
   intros [p Hsuffix] ?. revert Hsuffix. pattern S'.
@@ -1003,32 +997,32 @@ Definition in_fun_ctx (k1 k2 : ctx Ti) : Prop := ∃ l,
 
 Instance: Reflexive in_fun_ctx.
 Proof. intros k. eexists []. intuition trivial. Qed.
-Lemma in_fun_ctx_r k1 k2 E :
-  ctx_item_or_block E → in_fun_ctx k1 k2 → in_fun_ctx k1 (E :: k2).
-Proof. intros ? [l [??]]. subst. exists (E :: l). intuition. Qed.
+Lemma in_fun_ctx_r k1 k2 Ek :
+  ctx_item_or_block Ek → in_fun_ctx k1 k2 → in_fun_ctx k1 (Ek :: k2).
+Proof. intros ? [l [??]]. subst. exists (Ek :: l). intuition. Qed.
 Lemma in_fun_ctx_app_r k1 k2 k :
   Forall ctx_item_or_block k → in_fun_ctx k1 k2 → in_fun_ctx k1 (k ++ k2).
 Proof. induction 1; simpl; auto using in_fun_ctx_r. Qed.
-Lemma in_fun_ctx_r_inv k1 k2 E :
-  ctx_item_or_block E →
-  k1 `suffix_of` k2 → in_fun_ctx k1 (E :: k2) → in_fun_ctx k1 k2.
+Lemma in_fun_ctx_r_inv k1 k2 Ek :
+  ctx_item_or_block Ek →
+  k1 `suffix_of` k2 → in_fun_ctx k1 (Ek :: k2) → in_fun_ctx k1 k2.
 Proof.
   intros ? [l1 ?] [l2 [Hc1 Hc2]]. subst.
   rewrite app_comm_cons in Hc2. apply app_inv_tail in Hc2. subst.
   inversion_clear Hc1. exists l1. intuition.
 Qed.
-Lemma in_fun_ctx_change k1 k2 E1 E2 :
-  ctx_item_or_block E2 →
-  k1 `suffix_of` E2 :: k2 → in_fun_ctx k1 (E1 :: k2) → in_fun_ctx k1 (E2 :: k2).
+Lemma in_fun_ctx_change k1 k2 Ek1 Ek2 :
+  ctx_item_or_block Ek2 → k1 `suffix_of` Ek2 :: k2 →
+  in_fun_ctx k1 (Ek1 :: k2) → in_fun_ctx k1 (Ek2 :: k2).
 Proof.
-  intros ? [[|E2' l1] ?] [l2 [Hc1 Hc2]].
+  intros ? [[|Ek2' l1] ?] [l2 [Hc1 Hc2]].
   { eexists []. intuition. }
   destruct l2; simpl in *; simplify_equality.
   * discriminate_list_equality.
-  * inversion_clear Hc1. eexists (E2' :: l2). intuition.
+  * inversion_clear Hc1. eexists (Ek2' :: l2). intuition.
 Qed.
-Lemma in_fun_ctx_not_item_or_block k1 k2 E :
-  ¬ctx_item_or_block E → k1 `suffix_of` k2 → ¬in_fun_ctx k1 (E :: k2).
+Lemma in_fun_ctx_not_item_or_block k1 k2 Ek :
+  ¬ctx_item_or_block Ek → k1 `suffix_of` k2 → ¬in_fun_ctx k1 (Ek :: k2).
 Proof.
   intros ? [l1 ?] [l2 [Hc1 Hc2]]. subst.
   rewrite app_comm_cons in Hc2. apply app_inv_tail in Hc2. subst.

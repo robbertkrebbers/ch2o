@@ -214,7 +214,7 @@ Section sorted.
     (∀ x y, R1 x y → R2 (f x) (f y)) →
     StronglySorted R1 l → StronglySorted R2 (f <$> l).
   Proof.
-    induction 2; simpl; constructor;
+    induction 2; csimpl; constructor;
       rewrite ?Forall_fmap; eauto using Forall_impl.
   Qed.
 End sorted.

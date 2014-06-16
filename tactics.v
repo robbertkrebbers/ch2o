@@ -139,6 +139,10 @@ into [H: blocked T], where [blocked] is the identity function. If a hypothesis
 is already blocked, it will not be blocked again. The tactic [unblock_hyps]
 removes [blocked] everywhere. *)
 
+Ltac block_hyp H :=
+  lazymatch type of H with
+  | block _ => idtac | ?T => change T with (block T) in H
+  end.
 Ltac block_hyps := repeat_on_hyps (fun H =>
   match type of H with block _ => idtac | ?T => change (block T) in H end).
 Ltac unblock_hyps := unfold block in * |-.
@@ -149,6 +153,46 @@ Ltac injection' H := block_goal; injection H; clear H; intros; unblock_goal.
 
 (** The tactic [simplify_equality] repeatedly substitutes, discriminates,
 and injects equalities, and tries to contradict impossible inequalities. *)
+Ltac fold_classes :=
+  repeat match goal with
+  | |- appcontext [ ?F ] =>
+    progress match type of F with
+    | FMap _ =>
+       change F with (@fmap _ F);
+       repeat change (@fmap _ (@fmap _ F)) with (@fmap _ F)
+    | MBind _ =>
+       change F with (@mbind _ F);
+       repeat change (@mbind _ (@mbind _ F)) with (@mbind _ F)
+    | OMap _ =>
+       change F with (@omap _ F);
+       repeat change (@omap _ (@omap _ F)) with (@omap _ F)
+    | Alter _ _ _ =>
+       change F with (@alter _ _ _ F);
+       repeat change (@alter _ _ _ (@alter _ _ _ F)) with (@alter _ _ _ F)
+    end
+  end.
+Ltac fold_classes_hyps :=
+  repeat match goal with
+  | _ : appcontext [ ?F ] |- _ =>
+    progress match type of F with
+    | FMap _ =>
+       change F with (@fmap _ F) in *;
+       repeat change (@fmap _ (@fmap _ F)) with (@fmap _ F) in *
+    | MBind _ =>
+       change F with (@mbind _ F) in *;
+       repeat change (@mbind _ (@mbind _ F)) with (@mbind _ F) in *
+    | OMap _ =>
+       change F with (@omap _ F) in *;
+       repeat change (@omap _ (@omap _ F)) with (@omap _ F) in *
+    | Alter _ _ _ =>
+       change F with (@alter _ _ _ F) in *;
+       repeat change (@alter _ _ _ (@alter _ _ _ F)) with (@alter _ _ _ F) in *
+    end
+  end.
+Tactic Notation "csimpl" "in" "*" :=
+  try (progress simpl in *; fold_classes; fold_classes_hyps).
+Tactic Notation "csimpl" := try (progress simpl; fold_classes).
+
 Ltac simplify_equality := repeat
   match goal with
   | H : _ ≠ _ |- _ => by destruct H
@@ -166,8 +210,8 @@ Ltac simplify_equality := repeat
     assert (y = x) by congruence; clear H2
   | H1 : ?o = Some ?x, H2 : ?o = None |- _ => congruence
   end.
-Ltac simplify_equality' := repeat (progress simpl in * || simplify_equality).
-Ltac f_equal' := simpl in *; f_equal.
+Ltac simplify_equality' := repeat (progress csimpl in * || simplify_equality).
+Ltac f_equal' := csimpl in *; f_equal.
 
 (** Given a tactic [tac2] generating a list of terms, [iter tac1 tac2]
 runs [tac x] for each element [x] until [tac x] succeeds. If it does not

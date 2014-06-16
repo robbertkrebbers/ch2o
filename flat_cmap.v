@@ -3,24 +3,24 @@
 Require Export separation.
 Require Import refinements.
 
-Record map (A : Set) := Map { map_car : indexmap (list A) }.
-Arguments Map {_} _.
-Arguments map_car {_} _.
-Add Printing Constructor map.
-Instance: Injective (=) (=) (@Map A).
+Record flat_cmap (A : Set) := FlatCMap { flat_cmap_car : indexmap (list A) }.
+Arguments FlatCMap {_} _.
+Arguments flat_cmap_car {_} _.
+Add Printing Constructor flat_cmap.
+Instance: Injective (=) (=) (@FlatCMap A).
 Proof. by injection 1. Qed.
 
-Instance map_ops {A : Set} `{SeparationOps A} : SeparationOps (map A) := {
-  sep_empty := Map ∅;
+Instance flat_cmap_ops {A : Set} `{SeparationOps A} : SeparationOps (flat_cmap A) := {
+  sep_empty := FlatCMap ∅;
   sep_union m1 m2 :=
     let (m1) := m1 in let (m2) := m2 in
-    Map (union_with (λ xs1 xs2, Some (xs1 ∪* xs2)) m1 m2);
+    FlatCMap (union_with (λ xs1 xs2, Some (xs1 ∪* xs2)) m1 m2);
   sep_difference m1 m2 :=
     let (m1) := m1 in let (m2) := m2 in
-    Map (difference_with (λ xs1 xs2,
+    FlatCMap (difference_with (λ xs1 xs2,
       let xs' := xs1 ∖* xs2 in guard (¬Forall (∅ =) xs'); Some xs'
     ) m1 m2);
-  sep_half m := let (m) := m in Map (½* <$> m);
+  sep_half m := let (m) := m in FlatCMap (½* <$> m);
   sep_valid m :=
     let (m) := m in map_Forall (λ _ xs, Forall sep_valid xs ∧ ¬Forall (∅ =) xs) m;
   sep_disjoint m1 m2 :=
@@ -37,7 +37,7 @@ Instance map_ops {A : Set} `{SeparationOps A} : SeparationOps (map A) := {
       (λ xs1 w2, xs1 ⊆* w2 ∧ ¬Forall (∅ =) xs1)
       (λ xs1, False)
       (λ xs2, Forall sep_valid xs2 ∧ ¬Forall (∅ =) xs2) m1 m2;
-  sep_unmapped m := map_car m = ∅;
+  sep_unmapped m := flat_cmap_car m = ∅;
   sep_unshared m := False
 }.
 Proof.
@@ -48,11 +48,11 @@ Proof.
   * intros []; apply _.
 Defined.
 
-Instance map_sep {A : Set} `{Separation A} : Separation (map A).
+Instance flat_cmap_sep {A : Set} `{Separation A} : Separation (flat_cmap A).
 Proof.
   split.
   * destruct (sep_inhabited A) as (x&?&?).
-    eexists (Map {[fresh ∅, [x]]}).
+    eexists (FlatCMap {[fresh ∅, [x]]}).
     split; [|by intro]. intros o w ?; simplify_map_equality'. split.
     + by rewrite Forall_singleton.
     + by inversion_clear 1; decompose_Forall_hyps'.
@@ -84,11 +84,11 @@ Proof.
       rewrite !lookup_union_with; rewrite lookup_union_with in Hm'.
     destruct (m1 !! o) eqn:?, (m2 !! o), (m3 !! o); simplify_equality'; eauto.
     f_equal; intuition auto using seps_associative.
-  * sep_unfold; intros [m1] [m2] _; rewrite !(injective_iff Map); intros Hm.
+  * sep_unfold; intros [m1] [m2] _; rewrite !(injective_iff FlatCMap); intros Hm.
     apply map_eq; intros o. rewrite lookup_empty.
     apply (f_equal (!! o)) in Hm; rewrite lookup_union_with, lookup_empty in Hm.
     by destruct (m1 !! o), (m2 !! o); simplify_equality'.
-  * sep_unfold; intros [m1] [m2] [m3] Hm Hm'; rewrite !(injective_iff Map);
+  * sep_unfold; intros [m1] [m2] [m3] Hm Hm'; rewrite !(injective_iff FlatCMap);
       intros Hm''; apply map_eq; intros o.
     specialize (Hm o); specialize (Hm' o);
       apply (f_equal (!! o)) in Hm''; rewrite !lookup_union_with in Hm''.
@@ -133,7 +133,7 @@ Proof.
     by rewrite (left_id_L ∅ (union_with _)).
   * sep_unfold; intros [m]. split; [done|].
     intros [? Hm]. destruct (sep_inhabited A) as (x&?&?).
-    specialize (Hm (Map {[fresh (dom _ m), [x]]}));
+    specialize (Hm (FlatCMap {[fresh (dom _ m), [x]]}));
       feed specialize Hm; [|simplify_map_equality'].
     intros o. destruct (m !! o) as [w|] eqn:Hw; simplify_map_equality'.
     { rewrite lookup_singleton_ne; eauto. intros <-.

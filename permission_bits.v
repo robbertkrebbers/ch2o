@@ -6,8 +6,8 @@ Notation pbit Ti := (tagged perm (@BIndet Ti)).
 Notation PBit := (Tagged (d:=BIndet)).
 
 Section operations.
-  Context `{TypeOfIndex Ti M, Refine Ti M, IndexAlive M, IntEnv Ti, PtrEnv Ti,
-    ∀ m x, Decision (index_alive m x)}.
+  Context `{TypeCheck M (type Ti) index, Refine Ti M, IndexAlive M,
+    IntEnv Ti, PtrEnv Ti, ∀ m x, Decision (index_alive m x)}.
 
   Global Instance pbit_valid: Valid (env Ti * M) (pbit Ti) := λ Γm xb,
     sep_valid (tagged_perm xb) ∧
@@ -85,14 +85,12 @@ Proof.
 Qed.
 Lemma pbits_tag_valid Γ m xbs :
   ✓{Γ,m}* xbs → ✓{Γ,m}* (tagged_tag <$> xbs).
-Proof. induction 1 as [|?? (?&?&?)]; simpl; eauto. Qed.
+Proof. induction 1 as [|?? (?&?&?)]; csimpl; eauto. Qed.
 Lemma pbits_valid_perm_valid Γ m xbs :
   ✓{Γ,m}* xbs → Forall sep_valid (tagged_perm <$> xbs).
-Proof. induction 1 as [|?? (?&?&?)]; simpl; eauto. Qed.
+Proof. induction 1 as [|?? (?&?&?)]; csimpl; eauto. Qed.
 Lemma pbit_valid_weaken Γ1 Γ2 m1 m2 xb :
-  ✓ Γ1 → ✓{Γ1,m1} xb → Γ1 ⊆ Γ2 →
-  (∀ z σ, type_of_index m1 z = Some σ → type_of_index m2 z = Some σ) →
-  ✓{Γ2,m2} xb.
+  ✓ Γ1 → ✓{Γ1,m1} xb → Γ1 ⊆ Γ2 → (∀ o τ, m1 ⊢ o : τ → m2 ⊢ o : τ) → ✓{Γ2,m2} xb.
 Proof. intros ? (?&?&?); repeat split; eauto using bit_valid_weaken. Qed.
 Lemma pbit_valid_sep_valid Γ m xb  : ✓{Γ,m} xb → sep_valid xb.
 Proof. by intros (?&?&?); repeat split. Qed.
@@ -138,7 +136,7 @@ Lemma pbit_indetify_valid Γ m xb : ✓{Γ,m} xb → ✓{Γ,m} (pbit_indetify xb
 Proof. destruct xb; intros (?&?&?); split; eauto using BIndet_valid. Qed.
 Lemma pbits_indetify_valid Γ m xbs :
   ✓{Γ,m}* xbs → ✓{Γ,m}* (pbit_indetify <$> xbs).
-Proof. induction 1; simpl; auto using pbit_indetify_valid. Qed.
+Proof. induction 1; csimpl; auto using pbit_indetify_valid. Qed.
 Lemma pbits_indetify_idempotent xbs :
   pbit_indetify <$> pbit_indetify <$> xbs = pbit_indetify <$> xbs.
 Proof. by induction xbs; f_equal'. Qed.
@@ -180,7 +178,7 @@ Lemma pbit_indetify_disjoint xb1 xb2 :
 Proof. intros (?&?&?&?); split; eauto. Qed.
 Lemma pbits_indetify_disjoint xbs1 xbs2 :
   xbs1 ⊥* xbs2 → pbit_indetify <$> xbs1 ⊥* pbit_indetify <$> xbs2.
-Proof. induction 1; simpl; auto using pbit_indetify_disjoint. Qed.
+Proof. induction 1; csimpl; auto using pbit_indetify_disjoint. Qed.
 Lemma pbits_indetify_union xbs1 xbs2 :
   pbit_indetify <$> xbs1 ∪* xbs2
   = (pbit_indetify <$> xbs1) ∪* (pbit_indetify <$> xbs2).
@@ -266,7 +264,7 @@ Lemma pbits_locked_unmapped xbs :
 Proof.
   assert (∀ x, sep_unmapped x → sep_unmapped (perm_locked x)).
   { intros [[[[]]|]|]; repeat sep_unfold; naive_solver. }
-  unfold pbit_locked. induction 1 as [|?? []]; simpl; auto.
+  unfold pbit_locked. induction 1 as [|?? []]; csimpl; auto.
 Qed.
 Lemma pbits_locks_unlock βs xbs :
   βs =.>* pbit_locked <$> xbs →
@@ -369,8 +367,7 @@ Global Instance:
 Proof. intros Γ ?????. eapply @pbit_refine_compose; eauto; apply _. Qed.
 Lemma pbit_refine_weaken Γ Γ' f f' m1 m2 m1' m2' pb1 pb2 :
   ✓ Γ → pb1 ⊑{Γ,f@m1↦m2} pb2 → Γ ⊆ Γ' → f ⊆ f' →
-  (∀ o τ, type_of_index m1 o = Some τ → type_of_index m1' o = Some τ) →
-  (∀ o τ, type_of_index m2 o = Some τ → type_of_index m2' o = Some τ) →
+  (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
   pb1 ⊑{Γ',f'@m1'↦m2'} pb2.
 Proof. intros ? (?&?&?&?); repeat split; eauto using bit_refine_weaken. Qed.
 Lemma pbits_refine_perm Γ f m1 m2 xbs1 xbs2 :
@@ -439,13 +436,13 @@ Proof. repeat split; auto using BIndet_BIndet_refine. Qed.
 Lemma PBits_BIndet_refine Γ f m1 m2 xs :
   Forall sep_valid xs →
   flip PBit BIndet <$> xs ⊑{Γ,f@m1↦m2}* flip PBit BIndet <$> xs.
-Proof. induction 1; simpl; auto using PBit_BIndet_refine. Qed.
+Proof. induction 1; csimpl; auto using PBit_BIndet_refine. Qed.
 Lemma PBit_BIndet_refine_l Γ m xb :
   ✓{Γ,m} xb → PBit (tagged_perm xb) BIndet ⊑{Γ@m} xb.
 Proof. intros (?&?&?); split; naive_solver eauto using BIndet_refine. Qed.
 Lemma PBits_BIndet_refine_l Γ m xbs :
   ✓{Γ,m}* xbs → flip PBit BIndet <$> tagged_perm <$> xbs ⊑{Γ@m}* xbs.
-Proof. induction 1; simpl; eauto using PBit_BIndet_refine_l. Qed.
+Proof. induction 1; csimpl; eauto using PBit_BIndet_refine_l. Qed.
 Lemma PBit_unshared x b :
   sep_unshared x → ¬sep_unmapped x → sep_unshared (PBit x b).
 Proof. by repeat split. Qed.
@@ -484,7 +481,7 @@ Qed.
 Lemma pbits_indetify_refine Γ f m1 m2 xbs1 xbs2 :
   xbs1 ⊑{Γ,f@m1↦m2}* xbs2 →
   pbit_indetify <$> xbs1 ⊑{Γ,f@m1↦m2}* pbit_indetify <$> xbs2.
-Proof. induction 1; simpl; auto using pbit_indetify_refine. Qed.
+Proof. induction 1; csimpl; auto using pbit_indetify_refine. Qed.
 Lemma pbit_indetified_refine Γ f m1 m2 xb1 xb2 :
   pbit_indetify xb2 = xb2 → xb1 ⊑{Γ,f@m1↦m2} xb2 → pbit_indetify xb1 = xb1.
 Proof.

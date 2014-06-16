@@ -43,7 +43,8 @@ Instance Zomap: OMap Zmap := λ A B f t,
   match t with ZMap o t t' => ZMap (o ≫= f) (omap f t) (omap f t') end.
 Instance Zmerge: Merge Zmap := λ A B C f t1 t2,
   match t1, t2 with
-  | ZMap o1 t1 t1', ZMap o2 t2 t2' => ZMap (f o1 o2) (merge f t1 t2) (merge f t1' t2')
+  | ZMap o1 t1 t1', ZMap o2 t2 t2' =>
+     ZMap (f o1 o2) (merge f t1 t2) (merge f t1' t2')
   end.
 Instance Nfmap: FMap Zmap := λ A B f t,
   match t with ZMap o t t' => ZMap (f <$> o) (f <$> t) (f <$> t') end.
@@ -91,6 +92,6 @@ Qed.
 
 (** * Finite sets *)
 (** We construct sets of [Z]s satisfying extensional equality. *)
-Notation Zset := (mapset Zmap).
+Notation Zset := (mapset (Zmap unit)).
 Instance Zmap_dom {A} : Dom (Zmap A) Zset := mapset_dom.
 Instance: FinMapDom Z Zmap Zset := mapset_dom_spec.

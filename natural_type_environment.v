@@ -6,12 +6,12 @@ Section natural_type_environment.
 Context `{IntEnvSpec Ti}.
 Context (ptr_size : type Ti → nat) (align_base : base_type Ti → nat).
 Context (ptr_size_ne_0 : ∀ τ, ptr_size τ ≠ 0).
+Context (align_void : align_base voidT = 1).
 Context (align_int_divide : ∀ τ, (align_base (intT τ) | int_size τ)).
 Context (align_ptr_divide : ∀ τ, (align_base (τ.*) | ptr_size τ)).
 
 Definition natural_align_of (Γ : env Ti) : type Ti → nat := type_iter
   (**i TBase =>     *) align_base
-  (**i TVoid =>     *) 1
   (**i TArray =>    *) (λ _ _ x, x)
   (**i TCompound => *) (λ c s τs rec, foldr lcm 1 (rec <$> τs)) Γ.
 Definition natural_fields_align (Γ : env Ti) (τs : list (type Ti)) : nat :=
@@ -33,8 +33,7 @@ Definition natural_field_sizes (f : type Ti → nat) (Γ : env Ti)
 Definition natural_size_of (Γ : env Ti) : type Ti → nat :=
   type_iter
   (**i TBase =>     *) (λ τb,
-    match τb with intT τi => int_size τi | τ.* => ptr_size τ end%BT)
-  (**i TVoid =>     *) 1
+    match τb with voidT => 1 | intT τi => int_size τi | τ.* => ptr_size τ end%BT)
   (**i TArray =>    *) (λ _, mult)
   (**i TCompound => *) (λ c s τs go,
     match c with
@@ -45,7 +44,7 @@ Definition natural_size_of (Γ : env Ti) : type Ti → nat :=
        sz + natural_padding sz (natural_fields_align Γ τs)
     end) Γ.
 
-Instance natural_ptr_env: PtrEnv Ti := {
+Instance natural_ptr_env : PtrEnv Ti := {
   size_of := natural_size_of;
   field_sizes Γ τs :=
     natural_field_sizes (natural_size_of Γ) Γ (natural_fields_align Γ τs) 0 τs
@@ -127,7 +126,7 @@ Proof.
 Qed.
 Lemma natural_size_of_base Γ τb :
   size_of Γ (baseT τb) =
-    match τb with intT τ => int_size τ | τ.* => ptr_size τ end%BT.
+    match τb with voidT => 1 | intT τ => int_size τ | τ.* => ptr_size τ end%BT.
 Proof. done. Qed.
 Lemma natural_size_of_compound Γ c s τs :
   ✓ Γ → Γ !! s = Some τs → size_of Γ (compoundT{c} s) =
@@ -167,7 +166,7 @@ Proof.
   * intros Γ s τs ? Hτs. erewrite natural_size_of_compound by eauto.
     apply Forall_impl with (λ τ,
       size_of Γ τ ≤ foldr max 1 (size_of Γ <$> τs)); [|simpl; auto with lia].
-    clear Hτs. induction τs; simpl; constructor; [lia|].
+    clear Hτs. induction τs; csimpl; constructor; [lia|].
     eapply Forall_impl; eauto with lia.
   * apply natural_size_of_weaken.
   * intros Γ1 Γ2 τs ? Hτs ?. unfold field_sizes; simpl.
@@ -182,7 +181,7 @@ Lemma natural_align_of_divide Γ τ :
 Proof.
   intros HΓ. revert τ. refine (type_env_ind _ HΓ _ _ _ _).
   * intros τb. rewrite natural_align_of_base, natural_size_of_base.
-    destruct 1; auto.
+    destruct 1; auto. by rewrite align_void.
   * intros τ n ? ? _. rewrite natural_align_of_array, size_of_array.
     by apply Nat.divide_mul_r.
   * intros c s τs Hs Hτs IH Hlen.

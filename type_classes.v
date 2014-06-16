@@ -35,10 +35,10 @@ Notation "Γ ⊢* vs : τ" := (Forall (λ v, Γ ⊢ v : τ) vs)
   (at level 74, vs at next level) : C_scope.
 Instance: Params (@typed) 4.
 
-Class PathTyped (E T V : Type) := path_typed: E → V → T → T → Prop.
+Class PathTyped (E T1 T2 V : Type) := path_typed: E → V → T1 → T2 → Prop.
 Notation "Γ ⊢ v : τ ↣ σ" := (path_typed Γ v τ σ)
   (at level 74, v at next level, τ at next level, σ at next level) : C_scope.
-Instance: Params (@path_typed) 4.
+Instance: Params (@path_typed) 5.
 
 Class TypeCheck (E T V : Type) := type_check: E → V → option T.
 Arguments type_check {_ _ _ _} _ !_ / : simpl nomatch.
@@ -50,8 +50,8 @@ Class TypeOf (T V : Type) := type_of: V → T.
 Arguments type_of {_ _ _} !_ / : simpl nomatch.
 Class TypeOfSpec (E T V : Type) `{Typed E T V, TypeOf T V} :=
   type_of_correct Γ x τ : Γ ⊢ x : τ → type_of x = τ.
-Class PathTypeCheckSpec (E T R : Type)
-    `{PathTyped E T R, LookupE E R T T} := {
+Class PathTypeCheckSpec (E T1 T2 R : Type)
+    `{PathTyped E T1 T2 R, LookupE E R T2 T1} := {
   path_type_check_correct Γ p τ σ : τ !!{Γ} p = Some σ ↔ Γ ⊢ p : τ ↣ σ;
   path_typed_unique_l Γ r τ1 τ2 σ :
     Γ ⊢ r : τ1 ↣ σ → Γ ⊢ r : τ2 ↣ σ → τ1 = τ2
@@ -59,12 +59,34 @@ Class PathTypeCheckSpec (E T R : Type)
 
 Ltac typed_constructor :=
   intros; match goal with
-  | |- typed (Typed:=?H) ?Γ _ _ =>
-    let H' := eval hnf in (H Γ) in
-    econstructor; change H' with (typed (Typed:=H) Γ)
-  | |- path_typed (PathTyped:=?H) ?Γ _ _ _ =>
-    let H' := eval hnf in (H Γ) in
-    econstructor; change H' with (path_typed (PathTyped:=H) Γ)
+  | |- typed (Typed:=?T) ?Γ _ _ =>
+    let T' := eval hnf in (T Γ) in
+    econstructor; change T' with (typed (Typed:=T) Γ)
+  | |- path_typed (PathTyped:=?T) ?Γ _ _ _ =>
+    let T' := eval hnf in (T Γ) in
+    econstructor; change T' with (path_typed (PathTyped:=T) Γ)
+  end.
+Ltac typed_inversion H :=
+  match type of H with
+  | valid (Valid:=?T) ?Γ _ =>
+    let T' := eval hnf in (T Γ) in
+    inversion H; clear H; simplify_equality';
+    try change T' with (valid (Valid:=T) Γ) in *
+  | typed (Typed:=?T) ?Γ _ _ =>
+    let T' := eval hnf in (T Γ) in
+    inversion H; clear H; simplify_equality';
+    try change T' with (typed (Typed:=T) Γ) in *
+  | path_typed (PathTyped:=?T) ?Γ _ _ _ =>
+    let T' := eval hnf in (T Γ) in
+    inversion H; clear H; simplify_equality';
+    try change T' with (path_typed (PathTyped:=T) Γ) in *
+  end.
+Ltac typed_inversion_all :=
+  repeat match goal with
+  | H : ✓{_} ?x |- _ => progress first [is_var x | typed_inversion H]
+  | H : _ ⊢ ?x : _ |- _ =>
+     progress first [is_var x | typed_inversion H]
+  | H : _ ⊢ ?x : _ ↣ _ |- _ => progress first [is_var x | typed_inversion H]
   end.
 
 Section typed.
@@ -96,11 +118,11 @@ Section type_of.
     congruence.
   Qed.
   Lemma fmap_type_of Γ vs τs : Γ ⊢* vs :* τs → type_of <$> vs = τs.
-  Proof. induction 1; simpl; f_equal; eauto using type_of_correct. Qed.
+  Proof. induction 1; f_equal'; eauto using type_of_correct. Qed.
 End type_of.
 
 Section path_type_check.
-  Context `{PathTypeCheckSpec E T R}.
+  Context `{PathTypeCheckSpec E T1 T2 R}.
   Lemma path_type_check_None Γ r τ σ : τ !!{Γ} r = None → ¬Γ ⊢ r : τ ↣ σ.
   Proof. rewrite <-path_type_check_correct. congruence. Qed.
   Lemma path_type_check_sound Γ r τ σ : τ !!{Γ} r = Some σ → Γ ⊢ r : τ ↣ σ.
@@ -121,8 +143,8 @@ Proof.
   | inright _ => right _
   end; abstract (rewrite <-type_check_correct by done; congruence).
 Defined.
-Instance path_typed_dec `{PathTypeCheckSpec E T R}
-  `{∀ τ1 τ2 : T, Decision (τ1 = τ2)} Γ p τ σ : Decision (Γ ⊢ p : τ ↣ σ).
+Instance path_typed_dec `{PathTypeCheckSpec E T1 T2 R}
+  `{∀ τ1 τ2 : T2, Decision (τ1 = τ2)} Γ p τ σ : Decision (Γ ⊢ p : τ ↣ σ).
 Proof.
  refine (cast_if (decide (τ !!{Γ} p = Some σ)));
   abstract by rewrite <-path_type_check_correct by done.
@@ -141,7 +163,7 @@ Ltac simplify_type_equality := repeat
   | H : ?τ !!{?Γ} ?p = None, H2 : _ ⊢ ?p : (?τ,?σ) |- _ =>
     by destruct (path_type_check_None Γ p τ σ)
   | H : _ ⊢ ?x : ?τ1, H2 : _ ⊢ ?x : ?τ2 |- _ =>
-    unless (τ2 = τ1) by done; pose proof (typed_unique _ x τ2 τ1 H2 H)
+    unless (τ2 = τ1) by done; pose proof (typed_unique _ x τ2 τ1 I H2 H)
   | H : _ ⊢ ?x : ?τ1, H2 : _ ⊢ ?x : ?τ2 |- _ =>
     unless (τ2 = τ1) by done; pose proof (typed_unique_alt _ x τ2 τ1 H2 H)
   | H : _ ⊢ [] : _ ↣ _ |- _ => inversion H; clear H (* hack *)
@@ -151,4 +173,4 @@ Ltac simplify_type_equality := repeat
     unless (τ2 = τ1) by done; pose proof (path_typed_unique_l _ p τ2 τ1 σ H2 H)
   end.
 Ltac simplify_type_equality' :=
-  repeat (progress simpl in * || simplify_type_equality).
+  repeat (progress csimpl in * || simplify_type_equality).

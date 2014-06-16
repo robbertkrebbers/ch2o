@@ -12,7 +12,7 @@ Require Export values contexts.
 implementation [Nmap] for efficient finite maps over function names. *)
 Definition funname := N.
 Definition funmap := Nmap.
-Notation funset := (mapset funmap).
+Notation funset := (mapset (funmap unit)).
 
 Instance funname_eq_dec: ∀ i1 i2: funname, Decision (i1 = i2) := decide_rel (=).
 Instance funname_fresh `{FinCollection funname C} : Fresh funname C := _.
@@ -28,9 +28,9 @@ Instance funmap_partial_alter {A} : PartialAlter funname A (funmap A) :=
   @partial_alter _ _ (Nmap A) _.
 Instance funmap_to_list {A} : FinMapToList funname A (funmap A) :=
   @map_to_list _ _ (funmap A) _.
-Instance funmap_omap: OMap funmap := λ A B f, @omap Nmap _ _ f _.
+Instance funmap_omap: OMap funmap := @omap Nmap _.
 Instance funmap_merge : Merge funmap := @merge Nmap _.
-Instance funmap_fmap: FMap funmap := λ A B f, @fmap Nmap _ _ f _.
+Instance funmap_fmap: FMap funmap := @fmap Nmap _.
 Instance: FinMap funname funmap := _.
 
 Instance funmap_dom {A} : Dom (funmap A) funset := mapset_dom.
@@ -78,7 +78,7 @@ Inductive assign :=
      decrement, etc. *)
   | PostOp : binop → assign (**i postfix increment, decrement, etc. *).
 
-Inductive expr (Ti : Set) :=
+Inductive expr (Ti : Set) : Set :=
   | EVar : type Ti → nat → expr Ti
   | EVal : lockset → val Ti → expr Ti
   | EAddr : lockset → addr Ti → expr Ti
@@ -104,6 +104,7 @@ specific notations for operations, allowing us for example to to write
 [valc (intc 10) ⊙{PlusOp} valc (intc 20)]. *)
 Delimit Scope expr_scope with E.
 Bind Scope expr_scope with expr.
+Local Open Scope expr_scope.
 
 Arguments EVar {_} _ _.
 Arguments EVal {_} _ _.
@@ -123,6 +124,8 @@ Arguments EComma {_} _%expr_scope _%expr_scope.
 Arguments ECast {_} _ _%expr_scope.
 Arguments EField {_} _%expr_scope _.
 
+(* The infixes [++] and [::] are at level 60, and [<$>] is at level 65. We
+should remain below those. *)
 Notation "'var{' τ } x" := (EVar τ x)
   (at level 10, format "var{ τ }  x") : expr_scope.
 Notation "#{ Ω } v" := (EVal Ω v)
@@ -133,12 +136,11 @@ Notation "# v" := (EVal ∅ v) (at level 10) : expr_scope.
 Notation "%{ Ω } v" := (EAddr Ω v)
   (at level 10, format "%{ Ω }  v") : expr_scope.
 Notation "% v" := (EAddr ∅ v) (at level 10) : expr_scope.
-Notation ".* e" := (ERtoL e) (at level 10) : expr_scope.
-Notation "& e" := (ERofL e) (at level 10) : expr_scope.
+Notation ".* e" := (ERtoL e) (at level 24) : expr_scope.
+Notation "& e" := (ERofL e) (at level 24) : expr_scope.
 Notation "e1 ::={ ass } e2" := (EAssign ass e1 e2)
-  (at level 60, format "e1  ::={ ass }  e2", right associativity) : expr_scope.
-Infix "::=" := (EAssign Assign) (at level 60, right associativity) : expr_scope.
-(* The infixes [++] and [::] are at level 60, [<$>] at 65. *)
+  (at level 54, format "e1  ::={ ass }  e2", right associativity) : expr_scope.
+Infix "::=" := (EAssign Assign) (at level 54, right associativity) : expr_scope.
 Notation "'call' f @ es" := (ECall f es)
   (at level 10, es at level 66) : expr_scope.
 Notation "'load' e" := (ELoad e) (at level 10) : expr_scope.
@@ -146,24 +148,24 @@ Notation "'elt' e" := (EElt e) (at level 10) : expr_scope.
 Notation "'alloc' τ" := (EAlloc τ) (at level 10) : expr_scope.
 Notation "'free' e" := (EFree e) (at level 10) : expr_scope.
 Notation "@{ op } e" := (EUnOp op e)
-  (at level 21, format "@{ op }  e") : expr_scope.
+  (at level 35, format "@{ op }  e") : expr_scope.
 Notation "e1 @{ op } e2" := (EBinOp op e1 e2)
   (at level 50, format "e1  @{ op }  e2") : expr_scope.
-Notation "'IF' e1 'then' e2 'else' e3" := (EIf e1 e2 e3) : expr_scope.
+Notation "'if{' e1 } e2 'else' e3" := (EIf e1 e2 e3)
+  (at level 56, format "if{ e1 }  e2  'else'  e3") : expr_scope.
 Notation "'cast{' τ } e" := (ECast τ e)
   (at level 10, format "'cast{' τ }  e") : expr_scope.
 Notation "e1 ,, e2" := (EComma e1 e2)
-  (at level 55, right associativity, format "e1  ,,  e2") : expr_scope.
-Notation "e .> i" := (EField e i) (at level 60) : expr_scope.
+  (at level 58, right associativity, format "e1  ,,  e2") : expr_scope.
+Notation "e .> i" := (EField e i) (at level 22) : expr_scope.
 
-Infix "+" := (EBinOp PlusOp) : expr_scope.
-Infix "-" := (EBinOp MinusOp) : expr_scope.
-Infix "*" := (EBinOp MultOp) : expr_scope.
-Infix "/" := (EBinOp DivOp) : expr_scope.
-Infix "≤" := (EBinOp LeOp) : expr_scope.
-Infix "<" := (EBinOp LtOp) : expr_scope.
-Infix "=" := (EBinOp EqOp) : expr_scope.
-Notation "- e" := (EUnOp NegOp e) : expr_scope.
+Infix "+" := (EBinOp PlusOp) (at level 50, left associativity) : expr_scope.
+Infix "-" := (EBinOp MinusOp) (at level 50, left associativity) : expr_scope.
+Infix "*" := (EBinOp MultOp) (at level 40, left associativity) : expr_scope.
+Infix "/" := (EBinOp DivOp) (at level 40, left associativity) : expr_scope.
+Infix "==" := (EBinOp EqOp) (at level 52) : expr_scope.
+Notation "- e" := (EUnOp NegOp e)
+  (at level 35, right associativity) : expr_scope.
 
 Instance: Injective2 (=) (=) (=) (@EVar Ti).
 Proof. by injection 1. Qed.
@@ -203,7 +205,7 @@ Proof.
      (decide_rel (=) e1 e2)
   | e1 @{op1} e3, e2 @{op2} e4 => cast_if_and3 (decide_rel (=) op1 op2)
      (decide_rel (=) e1 e2) (decide_rel (=) e3 e4)
-  | (IF e1 then e3 else e5), (IF e2 then e4 else e6) =>
+  | if{e1} e3 else e5, if{e2} e4 else e6 =>
      cast_if_and3 (decide_rel (=) e1 e2)
        (decide_rel (=) e3 e4) (decide_rel (=) e5 e6)
   | e1,, e3, e2,, e4 =>
@@ -213,15 +215,15 @@ Proof.
   | e1 .> i1, e2 .> i2 =>
      cast_if_and (decide_rel (=) e1 e2) (decide_rel (=) i1 i2)
   | _, _ => right _
-  end%E); clear go; abstract congruence.
+  end); clear go; abstract congruence.
 Defined.
 
 (*
 (** The sequenced [||] and [&&] operators are defined in terms of the
 conditional. This keeps the expression language small. *)
-Definition EAnd {Ti} (e1 e2 : expr Ti) := (IF e1 then e2 else intc int_false)%E.
+Definition EAnd {Ti} (e1 e2 : expr Ti) := (IF e1 then e2 else intc int_false).
 Infix "&&" := EAnd : expr_scope.
-Definition EOr (e1 e2 : expr) := (IF e1 then intc int_true else e2)%E.
+Definition EOr (e1 e2 : expr) := (IF e1 then intc int_true else e2).
 Infix "||" := EOr : expr_scope.
 *)
 
@@ -245,7 +247,7 @@ Section expr_ind.
   Context (Pfree : ∀ e, P e → P (free e)).
   Context (Punop : ∀ op e, P e → P (@{op} e)).
   Context (Pbinop : ∀ op e1 e2, P e1 → P e2 → P (e1 @{op} e2)).
-  Context (Pif : ∀ e1 e2 e3, P e1 → P e2 → P e3 → P (IF e1 then e2 else e3)).
+  Context (Pif : ∀ e1 e2 e3, P e1 → P e2 → P e3 → P (if{e1} e2 else e3)).
   Context (Pcomma : ∀ e1 e2, P e1 → P e2 → P (e1 ,, e2)).
   Context (Pcast : ∀ τ e, P e → P (cast{τ} e)).
   Context (Pfield : ∀ e i, P e → P (e .> i)).
@@ -257,7 +259,7 @@ Section expr_ind.
     | %{Ω} a => Paddr Ω a
     | .* e => Prtol e (go e)
     | & e => Profl e (go e)
-    | el ::={_} er => Passign _ _ _ (go el) (go er)
+    | e1 ::={_} e2 => Passign _ _ _ (go e1) (go e2)
     | call f @ es => Pcall f es $ list_ind (Forall P)
        (Forall_nil_2 _) (λ e _, Forall_cons_2 _ _ _ (go e)) es
     | load e => Pload e (go e)
@@ -266,11 +268,11 @@ Section expr_ind.
     | free e => Pfree e (go e)
     | @{op} e => Punop op _ (go e)
     | e1 @{op} e2 => Pbinop op _ _ (go e1) (go e2)
-    | (IF e1 then e2 else e3) => Pif _ _ _ (go e1) (go e2) (go e3)
+    | if{e1} e2 else e3 => Pif _ _ _ (go e1) (go e2) (go e3)
     | e1,, e2 => Pcomma _ _ (go e1) (go e2)
     | cast{τ} e => Pcast _ _ (go e)
     | e .> i => Pfield e i (go e)
-    end%E.
+    end.
 End expr_ind.
 
 (** We also define [size e] giving the number of nodes in an expression. This
@@ -286,14 +288,14 @@ Instance expr_size {Ti} : Size (expr Ti) :=
   | alloc _ => 0
   | free e | @{_} e => S (size e)
   | e1 @{_} e2 => S (size e1 + size e2)
-  | (IF e1 then e2 else e3) => S (size e1 + size e2 + size e3)
+  | if{e1} e2 else e3 => S (size e1 + size e2 + size e3)
   | e1,, e2 => S (size e1 + size e2)
   | cast{_} e | e .> _ => S (go e)
-  end%E.
+  end.
 Lemma expr_wf_ind {Ti} (P : expr Ti → Prop)
-  (Pind : ∀ e, (∀ e', size e' < size e → P e') → P e) : ∀ e, P e.
+  (Pind : ∀ e, (∀ e', size e' < size e → P e')%nat → P e) : ∀ e, P e.
 Proof.
-  assert (∀ n e, size e < n → P e) as help by (induction n; auto with lia).
+  assert (∀ n e, size e < n → P e)%nat as help by (induction n; auto with lia).
   intros e. apply (help (S (size e))); lia.
 Qed.
 
@@ -317,7 +319,7 @@ Inductive load_free {Ti} : expr Ti → Prop :=
      load_free e1 → load_free e2 → load_free (e1 @{op} e2)
   | EIf_load_free e1 e2 e3 :
      load_free e1 → load_free e2 → load_free e3 →
-     load_free (IF e1 then e2 else e3)
+     load_free (if{e1} e2 else e3)
   | EComma_load_free e1 e2 :
      load_free e1 → load_free e2 → load_free (e1,, e2)
   | ECast_load_free τ e : load_free e → load_free (cast{τ} e)
@@ -341,7 +343,7 @@ Section load_free_ind.
     load_free e1 → P e1 → load_free e2 → P e2 → P (e1 @{op} e2)).
   Context (Pif : ∀ e1 e2 e3,
     load_free e1 → P e1 → load_free e2 → P e2 → load_free e3 → P e3 →
-    P (IF e1 then e2 else e3)).
+    P (if{e1} e2 else e3)).
   Context (Pcomma : ∀ e1 e2,
     load_free e1 → P e1 → load_free e2 → P e2 → P (e1,, e2)).
   Context (Pcast : ∀ τ e, load_free e → P e → P (cast{τ} e)).
@@ -365,12 +367,12 @@ Proof.
   | free e => cast_if (decide (load_free e))
   | @{op} e => cast_if (decide (load_free e))
   | e1 @{op} e2 => cast_if_and (decide (load_free e1)) (decide (load_free e2))
-  | (IF e1 then e2 else e3) => cast_if_and3 (decide (load_free e1))
+  | if{e1} e2 else e3 => cast_if_and3 (decide (load_free e1))
       (decide (load_free e2)) (decide (load_free e3))
   | e1,, e2 => cast_if_and (decide (load_free e1)) (decide (load_free e2))
   | cast{_} e => cast_if (decide (load_free e))
   | e .> _ => cast_if (decide (load_free e))
-  end%E); first [by constructor | by inversion 1].
+  end); first [by constructor | by inversion 1].
 Defined.
 
 Instance expr_free_vars {Ti} : Vars (expr Ti) :=
@@ -384,10 +386,10 @@ Instance expr_free_vars {Ti} : Vars (expr Ti) :=
   | alloc _ => ∅
   | load e | elt e | free e | @{_} e => vars e
   | e1 @{_} e2 => vars e1 ∪ vars e2
-  | (IF e1 then e2 else e3) => vars e1 ∪ vars e2 ∪ vars e3
+  | if{e1} e2 else e3 => vars e1 ∪ vars e2 ∪ vars e3
   | e1,, e2 => vars e1 ∪ vars e2
   | cast{_} e | e .> _ => vars e
-  end%E.
+  end.
 Instance expr_free_funs {Ti} : Funs (expr Ti) :=
   fix go e := let _ : Funs _ := @go in
   match e with
@@ -398,10 +400,10 @@ Instance expr_free_funs {Ti} : Funs (expr Ti) :=
   | alloc _ => ∅
   | load e | elt e | free e | @{_} e => funs e
   | e1 @{_} e2 => funs e1 ∪ funs e2
-  | (IF e1 then e2 else e3) => funs e1 ∪ funs e2 ∪ funs e3
+  | if{e1} e2 else e3 => funs e1 ∪ funs e2 ∪ funs e3
   | e1,, e2 => funs e1 ∪ funs e2
   | cast{_} e | e .> _ => funs e
-  end%E.
+  end.
 
 Hint Extern 1 (load_free _) => assumption : typeclass_instances.
 Hint Extern 100 (load_free ?e) =>
@@ -440,10 +442,10 @@ Instance expr_locks {Ti} : Locks (expr Ti) :=
   | alloc _ => ∅
   | load e | elt e | free e | @{_} e => locks e
   | e1 @{_} e2 => locks e1 ∪ locks e2
-  | (IF e1 then e2 else e3) => locks e1 ∪ locks e2 ∪ locks e3
+  | if{e1} e2 else e3 => locks e1 ∪ locks e2 ∪ locks e3
   | e1,, e2 => locks e1 ∪ locks e2
   | cast{_} e | e .> _ => locks e
-  end%E.
+  end.
 
 (** An expression is pure (or side-effect free) if it does not modify the
 memory. Although these expressions may have sequence points (namely at the
@@ -464,9 +466,9 @@ Inductive is_pure {Ti} (fs : funset) : (expr Ti) → Prop :=
   | EUnOp_pure op e : is_pure fs e → is_pure fs (@{op} e)
   | EBinOp_pure op e1 e2 :
      is_pure fs e1 → is_pure fs e2 → is_pure fs (e1 @{op} e2)
-  | EIf_pure e el er :
-     is_pure fs e → is_pure fs el → is_pure fs er →
-     is_pure fs (IF e then el else er)
+  | EIf_pure e1 e2 e3 :
+     is_pure fs e1 → is_pure fs e2 → is_pure fs e3 →
+     is_pure fs (if{e1} e2 else e3)
   | EComma_pure el er :
      is_pure fs el → is_pure fs er → is_pure fs (el,, er)
   | ECast_pure τ e : is_pure fs e → is_pure fs (cast{τ} e)
@@ -487,7 +489,7 @@ Section is_pure_ind.
     is_pure fs e1 → P e1 → is_pure fs e2 → P e2 → P (e1 @{op} e2)).
   Context (Pif : ∀ e1 e2 e3,
     is_pure fs e1 → P e1 → is_pure fs e2 → P e2 → is_pure fs e3 → P e3 →
-    P (IF e1 then e2 else e3)).
+    P (if{e1} e2 else e3)).
   Context (Pcomma : ∀ e1 e2,
     is_pure fs e1 → P e1 → is_pure fs e2 → P e2 → P (e1,, e2)).
   Context (Pcast : ∀ τ e, is_pure fs e → P e → P (cast{τ} e)).
@@ -508,13 +510,13 @@ Proof.
      cast_if_and (decide (f ∈ fs)) (decide (Forall (is_pure fs) es))
   | @{op} e => cast_if (decide (is_pure fs e))
   | e1 @{op} e2 => cast_if_and (decide (is_pure fs e1)) (decide (is_pure fs e2))
-  | (IF e1 then e2 else e3) => cast_if_and3 (decide (is_pure fs e1))
+  | if{e1} e2 else e3 => cast_if_and3 (decide (is_pure fs e1))
       (decide (is_pure fs e2)) (decide (is_pure fs e3))
   | e1,, e2 => cast_if_and (decide (is_pure fs e1)) (decide (is_pure fs e2))
   | cast{_} e => cast_if (decide (is_pure fs e))
   | e .> _ => cast_if (decide (is_pure fs e))
   | _ => right _
-  end%E);
+  end);
   clear go; first [by subst; constructor | abstract by inversion 1; subst].
 Defined.
 Lemma is_pure_locks {Ti} fs (e : expr Ti) : is_pure fs e → locks e = ∅.
@@ -544,11 +546,11 @@ Fixpoint expr_lift {Ti} (e : expr Ti) : expr Ti :=
   | free e => free (e↑)
   | @{op} e => @{op} e↑
   | e1 @{op} e2 => e1↑ @{op} e2↑
-  | (IF e1 then e2 else e3) => IF e1↑ then e2↑ else e3↑
+  | if{e1} e2 else e3 => if{e1↑} e2↑ else e3↑
   | e1,, e2 => e1↑,, e2↑
   | e .> i => e↑ .> i
   | cast{τ} e => cast{τ} (e↑)
-  end%E
+  end
 where "e ↑" := (expr_lift e) : expr_scope.
 
 (** The predicate [is_nf e] states that [e] is in normal form and [is_redex e]
@@ -571,19 +573,19 @@ Inductive is_redex {Ti} : expr Ti → Prop :=
   | EUnOp_redex op e : is_nf e → is_redex (@{op} e)
   | EBinOp_redex op e1 e2 :
      is_nf e1 → is_nf e2 → is_redex (e1 @{op} e2)
-  | EIf_redex e1 e2 e3 : is_nf e1 → is_redex (IF e1 then e2 else e3)
+  | EIf_redex e1 e2 e3 : is_nf e1 → is_redex (if{e1} e2 else e3)
   | EComma_redex e1 e2 : is_nf e1 → is_redex (e1,, e2)
   | ECast_redex τ e : is_nf e → is_redex (cast{τ} e)
   | EField_redex e i : is_nf e → is_redex (e .> i).
 
 Instance is_nf_dec {Ti} (e : expr Ti) : Decision (is_nf e).
 Proof.
- refine (match e with #{_} _ | %{_} _ => left _ | _ => right _ end%E);
+ refine (match e with #{_} _ | %{_} _ => left _ | _ => right _ end);
   try constructor; abstract (inversion 1).
 Defined.
 Instance is_redex_dec {Ti} (e : expr Ti) : Decision (is_redex e).
 Proof.
- refine (
+ refine
   match e with
   | var{_} _ => left _
   | .* e => cast_if (decide (is_nf e))
@@ -594,28 +596,28 @@ Proof.
   | alloc _ => left _
   | free e | @{_} e => cast_if (decide (is_nf e))
   | e1 @{_} e2 => cast_if_and (decide (is_nf e1)) (decide (is_nf e2))
-  | (IF e then _ else _) => cast_if (decide (is_nf e))
+  | if{e1} _ else _ => cast_if (decide (is_nf e1))
   | e1 ,, e2 => cast_if (decide (is_nf e1))
   | cast{_} e => cast_if (decide (is_nf e))
   | e .> _ => cast_if (decide (is_nf e))
   | _ => right _
-  end%E); first [by constructor | abstract (by inversion 1)].
+  end; first [by constructor | abstract (by inversion 1)].
 Defined.
 
 Lemma is_redex_nf {Ti} (e : expr Ti) : is_redex e → is_nf e → False.
 Proof. destruct 1; inversion 1. Qed.
 Lemma EVal_not_redex {Ti} Ω (v : val Ti) : ¬is_redex (#{Ω} v).
 Proof. inversion 1. Qed.
-Lemma EVals_nf {Ti} Ωs (vs : list (val Ti)) : Forall is_nf (#{Ωs}* vs)%E.
+Lemma EVals_nf {Ti} Ωs (vs : list (val Ti)) : Forall is_nf (#{Ωs}* vs).
 Proof. revert vs. induction Ωs; intros [|??]; repeat constructor; auto. Qed.
 Lemma EVals_nf_alt {Ti} es Ωs (vs : list (val Ti)) :
-  es = (#{Ωs}* vs)%E → Forall is_nf es.
+  es = #{Ωs}* vs → Forall is_nf es.
 Proof. intros ->. by apply EVals_nf. Qed.
 
 Definition maybe_EVal {Ti} (e : expr Ti) : option (lockset * val Ti) :=
-  match e with #{Ω} v => Some (Ω,v) | _ => None end%E.
+  match e with #{Ω} v => Some (Ω,v) | _ => None end.
 Definition maybe_ECall {Ti} (e : expr Ti) : option (funname * list (expr Ti)) :=
-  match e with call f @ es => Some (f,es) | _ => None end%E.
+  match e with call f @ es => Some (f,es) | _ => None end.
 Definition maybe_CCall_redex {Ti} (e : expr Ti) :
     option (funname * list lockset * list (val Ti)) :=
   '(f,es) ← maybe_ECall e;
@@ -623,22 +625,22 @@ Definition maybe_CCall_redex {Ti} (e : expr Ti) :
   Some (f, fst <$> vΩs, snd <$> vΩs).
 
 Lemma maybe_EVal_Some {Ti} (e : expr Ti) Ω v :
-  maybe_EVal e = Some (Ω, v) ↔ e = (#{Ω} v)%E.
+  maybe_EVal e = Some (Ω, v) ↔ e = #{Ω} v.
 Proof. split. by destruct e; intros; simplify_equality'. by intros ->. Qed.
 Lemma maybe_ECall_Some {Ti} (e : expr Ti) f es :
-  maybe_ECall e = Some (f, es) ↔ e = (call f @ es)%E.
+  maybe_ECall e = Some (f, es) ↔ e = call f @ es.
 Proof. split. by destruct e; intros; simplify_equality'. by intros ->. Qed.
 Lemma maybe_CCall_redex_Some {Ti} (e : expr Ti) f Ωs vs :
   maybe_CCall_redex e = Some (f, Ωs, vs) ↔
-    e = (call f @ zip_with EVal Ωs vs)%E ∧ length Ωs = length vs.
+    e = call f @ zip_with EVal Ωs vs ∧ length Ωs = length vs.
 Proof.
-  unfold maybe_CCall_redex. split; [intros|intros [-> ?]; simpl].
+  unfold maybe_CCall_redex. split; [intros|intros [-> ?]; csimpl].
   * destruct (maybe_ECall e) as [[f' es]|] eqn:?; simplify_option_equality.
     rewrite !fmap_length; split; auto.
     apply maybe_ECall_Some. rewrite zip_with_fst_snd.
     erewrite <-(mapM_fmap_Some_inv maybe_EVal (curry EVal)); eauto.
     by intros [??] [] ?; simplify_equality'.
-  * rewrite zip_with_zip, mapM_fmap_Some by (by intros []); simpl.
+  * rewrite zip_with_zip, mapM_fmap_Some by (by intros []); csimpl.
     by rewrite fst_zip, snd_zip by lia.
 Qed.
 
@@ -647,7 +649,7 @@ Qed.
 (evaluation) contexts [ectx] are lists of expression contexts. These expression
 contexts allow us to enforce an evaluation strategy. In particular, for the
 conditional we merely allow a hole for the first branch. *)
-Inductive ectx_item (Ti : Set) :=
+Inductive ectx_item (Ti : Set) : Set :=
   | CRtoL : ectx_item Ti
   | CLtoR : ectx_item Ti
   | CAssignL : assign → expr Ti → ectx_item Ti
@@ -683,30 +685,31 @@ Arguments CComma {_} _.
 Arguments CCast {_} _.
 Arguments CField {_} _.
 
-Notation ".* □" := CRtoL (at level 10, format ".*  □") : expr_scope.
-Notation "& □" := CLtoR (at level 10, format "&  □") : expr_scope.
+Notation ".* □" := CRtoL (at level 24, format ".*  □") : expr_scope.
+Notation "& □" := CLtoR (at level 24, format "&  □") : expr_scope.
 Notation "□ ::={ ass } e2" := (CAssignL ass e2)
-  (at level 60, format "□  ::={ ass }  e2") : expr_scope.
+  (at level 54, format "□  ::={ ass }  e2") : expr_scope.
 Notation "e1 ::={ ass } □" := (CAssignR ass e1)
-  (at level 60, format "e1  ::={ ass }  □") : expr_scope.
+  (at level 54, format "e1  ::={ ass }  □") : expr_scope.
 Notation "'call' f @ es1 □ es2" := (CCall f es1 es2)
   (at level 10, es1 at level 66, es2 at level 66) : expr_scope.
 Notation "'load' □" := CLoad (at level 10, format "load  □") : expr_scope.
 Notation "'elt' □" := CElt (at level 10, format "elt  □") : expr_scope.
 Notation "'free' □" := CFree (at level 10, format "free  □") : expr_scope.
 Notation "@{ op } □" := (CUnOp op)
-  (at level 21, format "@{ op } □") : expr_scope.
+  (at level 35, format "@{ op } □") : expr_scope.
 Notation "□ @{ op } e2" := (CBinOpL op e2)
   (at level 50, format "□  @{ op }  e2") : expr_scope.
 Notation "e1 @{ op } □" := (CBinOpR op e1)
   (at level 50, format "e1  @{ op }  □") : expr_scope.
-Notation "'IF' □ 'then' e2 'else' e3" := (CIf e2 e3)
-  (at level 200, format "'IF'  □  'then'  e2  'else'  e3") : expr_scope.
-Notation "□ ,, e2" := (CComma e2) (at level 55, format "□  ,,  e2") : expr_scope.
+Notation "'if{' □ } e2 'else' e3" := (CIf e2 e3)
+  (at level 56, format "'if{'  □  }  e2  'else'  e3") : expr_scope.
+Notation "□ ,, e2" := (CComma e2)
+  (at level 58, format "□  ,,  e2") : expr_scope.
 Notation "'cast{' τ } □" := (CCast τ)
   (at level 10, format "'cast{' τ }  □") : expr_scope.
 Notation "□ .> i" := (CField i)
-  (at level 10, format "□ .> i") : expr_scope.
+  (at level 22, format "□ .> i") : expr_scope.
 
 Instance ectx_item_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)} :
   ∀ Ei1 Ei2 : ectx_item Ti, Decision (Ei1 = Ei2).
@@ -714,7 +717,8 @@ Proof. solve_decision. Defined.
 
 (** Substitution is defined in a straightforward way. Using the type class
 instances in the file [contexts], it is lifted to full expression contexts. *)
-Instance ectx_item_subst {Ti} : Subst (ectx_item Ti) (expr Ti) (expr Ti) := λ Ei e,
+Instance ectx_item_subst {Ti} :
+    Subst (ectx_item Ti) (expr Ti) (expr Ti) := λ Ei e,
   match Ei with
   | .* □ => .* e
   | & □ => & e
@@ -728,10 +732,10 @@ Instance ectx_item_subst {Ti} : Subst (ectx_item Ti) (expr Ti) (expr Ti) := λ E
   | □ @{op} er => e @{op} er
   | el @{op} □ => el @{op} e
   | □,, er => e ,, er
-  | (IF □ then el else er) => IF e then el else er
+  | if{□} e2 else e3 => if{e} e2 else e3
   | cast{τ} □ => cast{τ} e
   | □ .> i => e .> i
-  end%E.
+  end.
 Instance: DestructSubst (@ectx_item_subst Ti).
 
 Instance: ∀ Ei : ectx_item Ti, Injective (=) (=) (subst Ei).
@@ -748,12 +752,13 @@ Proof.
   intros ? HEe. rewrite (is_nf_ectx E e) in HEe by done; simpl in HEe.
   eauto using is_redex_nf.
 Qed.
-Lemma is_redex_ectx_item {Ti} (Ei : ectx_item Ti) e : is_redex (subst Ei e) → is_nf e.
+Lemma is_redex_ectx_item {Ti} (Ei : ectx_item Ti) e :
+  is_redex (subst Ei e) → is_nf e.
 Proof. destruct Ei; inversion 1; decompose_Forall_hyps'; auto. Qed.
 Lemma is_redex_ectx {Ti} (E : ectx Ti) e :
   is_redex (subst E e) → (E = [] ∧ is_redex e) ∨ (∃ Ei, E = [Ei] ∧ is_nf e).
 Proof.
-  destruct E as [|Ei E _] using rev_ind; [eauto|]; rewrite subst_snoc; intros HE.
+  destruct E as [|Ei E _] using rev_ind; [eauto|]; rewrite subst_snoc; intros.
   feed pose proof (is_redex_ectx_item Ei (subst E e)); auto.
   feed pose proof (is_nf_ectx E e); subst; simpl in *; eauto.
 Qed.
@@ -767,10 +772,10 @@ Instance ectx_locks {Ti} : Locks (ectx_item Ti) := λ Ei,
   | load □ | elt □ | free □ | @{_} □ => ∅
   | □ @{op} e2 => locks e2
   | e1 @{op} □ => locks e1
-  | (IF □ then e2 else e3) => locks e2 ∪ locks e3
+  | if{□} e2 else e3 => locks e2 ∪ locks e3
   | □,, e2 => locks e2
   | cast{_} □ | □ .> _ => ∅
-  end%E.
+  end.
 
 Lemma ectx_item_is_pure {Ti} fs (Ei : ectx_item Ti) (e : expr Ti) :
   is_pure fs (subst Ei e) → is_pure fs e.
@@ -784,7 +789,7 @@ Lemma ectx_item_subst_locks {Ti} (Ei : ectx_item Ti) e :
   locks (subst Ei e) = locks Ei ∪ locks e.
 Proof.
   apply elem_of_equiv_L. intro. destruct Ei; simpl; try solve_elem_of.
-  rewrite fmap_app, fmap_reverse; simpl.
+  rewrite fmap_app, fmap_reverse; csimpl.
   rewrite union_list_app_L, union_list_cons, union_list_reverse_L.
   solve_elem_of.
 Qed.
@@ -807,27 +812,27 @@ Section ectx_expr_ind.
   Context (Pvar : ∀ E τ x, P E (var{τ} x)).
   Context (Pval : ∀ E Ω v, P E (#{Ω} v)).
   Context (Paddr : ∀ E Ω a, P E (%{Ω} a)).
-  Context (Prtol : ∀ E e, P ((.* □)%E :: E) e → P E (.* e)).
-  Context (Profl : ∀ E e, P ((& □)%E :: E) e → P E (& e)).
+  Context (Prtol : ∀ E e, P ((.* □) :: E) e → P E (.* e)).
+  Context (Profl : ∀ E e, P ((& □) :: E) e → P E (& e)).
   Context (Passign : ∀ E ass e1 e2,
-    P ((□ ::={ass} e2)%E :: E) e1 → P ((e1 ::={ass} □)%E :: E) e2 →
+    P ((□ ::={ass} e2) :: E) e1 → P ((e1 ::={ass} □) :: E) e2 →
     P E (e1 ::={ass} e2)).
   Context (Pcall : ∀ E f es,
-    zipped_Forall (λ esl esr, P ((call f @ esl □ esr)%E :: E)) [] es →
+    zipped_Forall (λ esl esr, P ((call f @ esl □ esr) :: E)) [] es →
     P E (call f @ es)).
-  Context (Pload : ∀ E e, P ((load □)%E :: E) e → P E (load e)).
-  Context (Pelt : ∀ E e, P ((elt □)%E :: E) e → P E (elt e)).
+  Context (Pload : ∀ E e, P ((load □) :: E) e → P E (load e)).
+  Context (Pelt : ∀ E e, P ((elt □) :: E) e → P E (elt e)).
   Context (Palloc : ∀ E τ, P E (alloc τ)).
-  Context (Pfree : ∀ E e, P ((free □)%E :: E) e → P E (free e)).
-  Context (Punop : ∀ E op e, P ((@{op} □)%E :: E) e → P E (@{op} e)).
+  Context (Pfree : ∀ E e, P ((free □) :: E) e → P E (free e)).
+  Context (Punop : ∀ E op e, P ((@{op} □) :: E) e → P E (@{op} e)).
   Context (Pbinop : ∀ E op e1 e2,
-    P ((□ @{op} e2)%E :: E) e1 → P ((e1 @{op} □)%E :: E) e2 →
+    P ((□ @{op} e2) :: E) e1 → P ((e1 @{op} □) :: E) e2 →
     P E (e1 @{op} e2)).
   Context (Pif : ∀ E e1 e2 e3,
-    P ((IF □ then e2 else e3)%E :: E) e1 → P E (IF e1 then e2 else e3)).
-  Context (Pcomma : ∀ E e1 e2, P ((□,, e2)%E :: E) e1 → P E (e1,, e2)).
-  Context (Pcast : ∀ E τ e, P ((cast{τ} □)%E :: E) e → P E (cast{τ} e)).
-  Context (Pfield : ∀ E e i, P ((□ .> i)%E :: E) e → P E (e .> i)).
+    P ((if{□} e2 else e3) :: E) e1 → P E (if{e1} e2 else e3)).
+  Context (Pcomma : ∀ E e1 e2, P ((□,, e2) :: E) e1 → P E (e1,, e2)).
+  Context (Pcast : ∀ E τ e, P ((cast{τ} □) :: E) e → P E (cast{τ} e)).
+  Context (Pfield : ∀ E e i, P ((□ .> i) :: E) e → P E (e .> i)).
 
   Definition ectx_expr_ind : ∀ E e, P E e :=
     fix go E e : P E e :=
@@ -847,11 +852,11 @@ Section ectx_expr_ind.
     | free e => Pfree _ _ (go _ e)
     | @{_} e => Punop _ _ _ (go _ e)
     | e1 @{_} e2 => Pbinop _ _ _ _ (go _ e1) (go _ e2)
-    | (IF e1 then _ else _) => Pif _ _ _ _ (go _ e1)
+    | if{e1} _ else _ => Pif _ _ _ _ (go _ e1)
     | e1,, _ => Pcomma _ _ _ (go _ e1)
     | cast{τ} e => Pcast _ _ _ (go _ e)
     | e .> i => Pfield _ _ _ (go _ e)
-    end%E.
+    end.
 End ectx_expr_ind.
 
 Ltac ectx_expr_ind E e :=
@@ -864,7 +869,7 @@ Ltac ectx_expr_ind E e :=
 (** We define singular expression contexts indexed by the number of holes. These
 contexts are particularly useful to prove some of the Hoare rules in a more
 generic way. *)
-Inductive ectx_full (Ti : Set) : nat → Type :=
+Inductive ectx_full (Ti : Set) : nat → Set :=
   | DCVar : type Ti → nat → ectx_full Ti 0
   | DCVal : lockset → val Ti → ectx_full Ti 0
   | DCAddr : lockset → addr Ti → ectx_full Ti 0
@@ -917,18 +922,18 @@ Instance ectx_full_subst {Ti} :
   | DCFree => λ es, free (es !!! 0)
   | DCUnOp op => λ es, @{op} es !!! 0
   | DCBinOp op => λ es, es !!! 0 @{op} es !!! 1
-  | DCIf e2 e3 => λ es, IF es !!! 0 then e2 else e3
+  | DCIf e2 e3 => λ es, if{es !!! 0} e2 else e3
   | DCComma e2 => λ es, es !!! 0,, e2
   | DCCast τ => λ es, cast{τ} (es !!! 0)
   | DCField i => λ es, es !!! 0 .> i
-  end%E.
+  end.
 Instance ectx_full_locks {Ti n} : Locks (ectx_full Ti n) := λ E,
   match E with
   | DCVal Ω _ | DCAddr Ω _ => Ω
   | DCIf el er => locks el ∪ locks er
   | DCComma er => locks er
   | _ => ∅
-  end%E.
+  end.
 
 Lemma ectx_full_subst_inj {Ti n} (E : ectx_full Ti n) es1 es2 :
   depsubst E es1 = depsubst E es2 → es1 = es2.
@@ -949,24 +954,24 @@ Definition ectx_full_to_item {Ti n} (E : ectx_full Ti n)
     (es : vec (expr Ti) n) (i : fin n) : ectx_item Ti :=
   match E in ectx_full _ n return fin n → vec (expr Ti) n → ectx_item Ti with
   | DCVar _ _  | DCVal _ _ | DCAddr _ _ => fin_0_inv _
-  | DCRtoL => fin_S_inv _ (λ _, .* □)%E $ fin_0_inv _
-  | DCLtoR => fin_S_inv _ (λ _, & □)%E $ fin_0_inv _
+  | DCRtoL => fin_S_inv _ (λ _, .* □) $ fin_0_inv _
+  | DCLtoR => fin_S_inv _ (λ _, & □) $ fin_0_inv _
   | DCAssign ass =>
-     fin_S_inv _ (λ es, □ ::={ass} es !!! 1)%E $
-     fin_S_inv _ (λ es, es !!! 0 ::={ass} □)%E $ fin_0_inv _
-  | DCCall _ f => λ i es, (call f @ reverse (take i es) □ drop (FS i) es)%E
-  | DCLoad => fin_S_inv _ (λ _, load □)%E $ fin_0_inv _
-  | DCElt => fin_S_inv _ (λ _, elt □)%E $ fin_0_inv _
+     fin_S_inv _ (λ es, □ ::={ass} es !!! 1) $
+     fin_S_inv _ (λ es, es !!! 0 ::={ass} □) $ fin_0_inv _
+  | DCCall _ f => λ i es, (call f @ reverse (take i es) □ drop (FS i) es)
+  | DCLoad => fin_S_inv _ (λ _, load □) $ fin_0_inv _
+  | DCElt => fin_S_inv _ (λ _, elt □) $ fin_0_inv _
   | DCAlloc _ => fin_0_inv _
-  | DCFree => fin_S_inv _ (λ _, free □)%E $ fin_0_inv _
-  | DCUnOp op => fin_S_inv _ (λ _, @{op} □)%E $ fin_0_inv _
+  | DCFree => fin_S_inv _ (λ _, free □) $ fin_0_inv _
+  | DCUnOp op => fin_S_inv _ (λ _, @{op} □) $ fin_0_inv _
   | DCBinOp op =>
-     fin_S_inv _ (λ es, □ @{op} es !!! 1)%E $
-     fin_S_inv _ (λ es, es !!! 0 @{op} □)%E $ fin_0_inv _
-  | DCIf e2 e3 => fin_S_inv _ (λ _, IF □ then e2 else e3)%E $ fin_0_inv _
-  | DCComma e2 => fin_S_inv _ (λ _, □,, e2)%E $ fin_0_inv _
-  | DCCast τ => fin_S_inv _ (λ _, cast{τ} □)%E $ fin_0_inv _
-  | DCField i => fin_S_inv _ (λ _, □ .> i)%E $ fin_0_inv _
+     fin_S_inv _ (λ es, □ @{op} es !!! 1) $
+     fin_S_inv _ (λ es, es !!! 0 @{op} □) $ fin_0_inv _
+  | DCIf e2 e3 => fin_S_inv _ (λ _, if{□} e2 else e3) $ fin_0_inv _
+  | DCComma e2 => fin_S_inv _ (λ _, □,, e2) $ fin_0_inv _
+  | DCCast τ => fin_S_inv _ (λ _, cast{τ} □) $ fin_0_inv _
+  | DCField i => fin_S_inv _ (λ _, □ .> i) $ fin_0_inv _
   end i es.
 
 Lemma ectx_full_to_item_insert {Ti n} (E : ectx_full Ti n) es i e :
@@ -1034,11 +1039,11 @@ Section expr_split.
     | free e => go (free □ :: E) e
     | @{op} e => go (@{op} □ :: E) e
     | e1 @{op} e2 => go (□ @{op} e2 :: E) e1 ∪ go (e1 @{op} □ :: E) e2
-    | (IF e1 then e2 else e3) => go ((IF □ then e2 else e3) :: E) e1
+    | if{e1} e2 else e3 => go ((if{□} e2 else e3) :: E) e1
     | e1 ,, e2 => go ((□,, e2) :: E) e1
     | cast{τ} e => go ((cast{τ} □) :: E) e
     | e .> i => go (□ .> i :: E) e
-    end%E.
+    end.
   Definition expr_redexes : expr Ti → listset (ectx Ti * expr Ti) :=
     expr_redexes_go [].
 

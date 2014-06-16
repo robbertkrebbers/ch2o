@@ -45,11 +45,11 @@ Instance list_lookup {A} : Lookup nat A (list A) :=
 
 (** The operation [alter f i l] applies the function [f] to the [i]th element
 of [l]. In case [i] is out of bounds, the list is returned unchanged. *)
-Instance list_alter {A} (f : A → A) : AlterD nat A (list A) f :=
-  fix go i l {struct l} := let _ : AlterD _ _ _ f := @go in
+Instance list_alter {A} : Alter nat A (list A) := λ f,
+  fix go i l {struct l} :=
   match l with
   | [] => []
-  | x :: l => match i with 0 => f x :: l | S i => x :: alter f i l end
+  | x :: l => match i with 0 => f x :: l | S i => x :: go i l end
   end.
 
 (** The operation [<[i:=x]> l] overwrites the element at position [i] with the
@@ -139,12 +139,10 @@ Definition foldl {A B} (f : A → B → A) : A → list B → A :=
 
 (** The monadic operations. *)
 Instance list_ret: MRet list := λ A x, x :: @nil A.
-Instance list_fmap {A B} (f : A → B) : FMapD list f :=
-  fix go (l : list A) :=
-  match l with [] => [] | x :: l => f x :: @fmap _ _ _ f go l end.
-Instance list_bind {A B} (f : A → list B) : MBindD list f :=
-  fix go (l : list A) :=
-  match l with [] => [] | x :: l => f x ++ @mbind _ _ _ f go l end.
+Instance list_fmap : FMap list := λ A B f,
+  fix go (l : list A) := match l with [] => [] | x :: l => f x :: go l end.
+Instance list_bind : MBind list := λ A B f,
+  fix go (l : list A) := match l with [] => [] | x :: l => f x ++ go l end.
 Instance list_join: MJoin list :=
   fix go A (ls : list (list A)) : list A :=
   match ls with [] => [] | l :: ls => l ++ @mjoin _ go _ ls end.
@@ -192,6 +190,8 @@ Definition suffix_of {A} : relation (list A) := λ l1 l2, ∃ k, l2 = k ++ l1.
 Definition prefix_of {A} : relation (list A) := λ l1 l2, ∃ k, l2 = l1 ++ k.
 Infix "`suffix_of`" := suffix_of (at level 70) : C_scope.
 Infix "`prefix_of`" := prefix_of (at level 70) : C_scope.
+Hint Extern 0 (?x `prefix_of` ?y) => reflexivity.
+Hint Extern 0 (?x `suffix_of` ?y) => reflexivity.
 
 Section prefix_suffix_ops.
   Context `{∀ x y : A, Decision (x = y)}.
@@ -219,6 +219,7 @@ Inductive sublist {A} : relation (list A) :=
   | sublist_skip x l1 l2 : sublist l1 l2 → sublist (x :: l1) (x :: l2)
   | sublist_cons x l1 l2 : sublist l1 l2 → sublist l1 (x :: l2).
 Infix "`sublist`" := sublist (at level 70) : C_scope.
+Hint Extern 0 (?x `sublist` ?y) => reflexivity.
 
 (** A list [l2] contains a list [l1] if [l2] is obtained by removing elements
 from [l1] while possiblity changing the order. *)
@@ -229,6 +230,7 @@ Inductive contains {A} : relation (list A) :=
   | contains_cons x l1 l2 : contains l1 l2 → contains l1 (x :: l2)
   | contains_trans l1 l2 l3 : contains l1 l2 → contains l2 l3 → contains l1 l3.
 Infix "`contains`" := contains (at level 70) : C_scope.
+Hint Extern 0 (?x `contains` ?y) => reflexivity.
 
 Section contains_dec_help.
   Context {A} {dec : ∀ x y : A, Decision (x = y)}.
@@ -439,7 +441,7 @@ Lemma list_lookup_alter f l i : alter f i l !! i = f <$> l !! i.
 Proof. revert i. induction l. done. intros [|i]. done. apply (IHl i). Qed.
 Lemma list_lookup_alter_ne f l i j : i ≠ j → alter f i l !! j = l !! j.
 Proof.
-  revert i j. induction l; [done|]. intros [] [] ?; simpl; auto with congruence.
+  revert i j. induction l; [done|]. intros [][] ?; csimpl; auto with congruence.
 Qed.
 Lemma list_lookup_insert l i x : i < length l → <[i:=x]>l !! i = Some x.
 Proof. revert i. induction l; intros [|?] ?; f_equal'; auto with lia. Qed.
@@ -2390,7 +2392,7 @@ Section fmap.
   Proof. by induction l; f_equal'. Qed.
   Lemma fmap_reverse l : f <$> reverse l = reverse (f <$> l).
   Proof.
-    induction l as [|?? IH]; simpl; by rewrite ?reverse_cons, ?fmap_app, ?IH.
+    induction l as [|?? IH]; csimpl; by rewrite ?reverse_cons, ?fmap_app, ?IH.
   Qed.
   Lemma fmap_last l : last (f <$> l) = f <$> last l.
   Proof. induction l as [|? []]; simpl; auto. Qed.
@@ -2419,7 +2421,7 @@ Section fmap.
     Forall (λ x, f (g x) = h (f x)) l → f <$> alter g i l = alter h i (f <$> l).
   Proof. intros Hl. revert i. by induction Hl; intros [|i]; f_equal'. Qed.
   Lemma elem_of_list_fmap_1 l x : x ∈ l → f x ∈ f <$> l.
-  Proof. induction 1; simpl; rewrite elem_of_cons; intuition. Qed.
+  Proof. induction 1; csimpl; rewrite elem_of_cons; intuition. Qed.
   Lemma elem_of_list_fmap_1_alt l x y : x ∈ l → y = f x → y ∈ f <$> l.
   Proof. intros. subst. by apply elem_of_list_fmap_1. Qed.
   Lemma elem_of_list_fmap_2 l x : x ∈ f <$> l → ∃ y, x = f y ∧ y ∈ l.
@@ -2478,7 +2480,7 @@ Section fmap.
   Proof. revert l2; induction l1; intros [|??]; inversion_clear 1; auto. Qed.
   Lemma Forall2_fmap_2 {C D} (g : C → D) (P : B → D → Prop) l1 l2 :
     Forall2 (λ x1 x2, P (f x1) (g x2)) l1 l2 → Forall2 P (f <$> l1) (g <$> l2).
-  Proof. induction 1; simpl; auto. Qed.
+  Proof. induction 1; csimpl; auto. Qed.
   Lemma Forall2_fmap {C D} (g : C → D) (P : B → D → Prop) l1 l2 :
     Forall2 P (f <$> l1) (g <$> l2) ↔ Forall2 (λ x1 x2, P (f x1) (g x2)) l1 l2.
   Proof. split; auto using Forall2_fmap_1, Forall2_fmap_2. Qed.
@@ -2492,7 +2494,7 @@ Proof. auto using list_alter_fmap. Qed.
 Lemma NoDup_fmap_fst {A B} (l : list (A * B)) :
   (∀ x y1 y2, (x,y1) ∈ l → (x,y2) ∈ l → y1 = y2) → NoDup l → NoDup (fst <$> l).
 Proof.
-  intros Hunique. induction 1 as [|[x1 y1] l Hin Hnodup IH]; simpl; constructor.
+  intros Hunique. induction 1 as [|[x1 y1] l Hin Hnodup IH]; csimpl; constructor.
   * rewrite elem_of_list_fmap.
     intros [[x2 y2] [??]]; simpl in *; subst. destruct Hin.
     rewrite (Hunique x2 y1 y2); rewrite ?elem_of_cons; auto.
@@ -2511,12 +2513,11 @@ Section bind.
   Global Instance bind_sublist: Proper (sublist ==> sublist) (mbind f).
   Proof.
     induction 1; simpl; auto;
-      [done|by apply sublist_app|by apply sublist_inserts_l].
+      [by apply sublist_app|by apply sublist_inserts_l].
   Qed.
   Global Instance bind_contains: Proper (contains ==> contains) (mbind f).
   Proof.
-    induction 1; simpl; auto.
-    * done.
+    induction 1; csimpl; auto.
     * by apply contains_app.
     * by rewrite !(associative_L (++)), (commutative (++) (f _)).
     * by apply contains_inserts_l.
@@ -2524,7 +2525,7 @@ Section bind.
   Qed.
   Global Instance bind_Permutation: Proper ((≡ₚ) ==> (≡ₚ)) (mbind f).
   Proof.
-    induction 1; simpl; auto.
+    induction 1; csimpl; auto.
     * by f_equiv.
     * by rewrite !(associative_L (++)), (commutative (++) (f _)).
     * etransitivity; eauto.
@@ -2532,30 +2533,30 @@ Section bind.
   Lemma bind_cons x l : (x :: l) ≫= f = f x ++ l ≫= f.
   Proof. done. Qed.
   Lemma bind_singleton x : [x] ≫= f = f x.
-  Proof. simpl. by rewrite (right_id_L _ (++)). Qed.
+  Proof. csimpl. by rewrite (right_id_L _ (++)). Qed.
   Lemma bind_app l1 l2 : (l1 ++ l2) ≫= f = (l1 ≫= f) ++ (l2 ≫= f).
-  Proof. by induction l1; simpl; rewrite <-?(associative_L (++)); f_equal. Qed.
+  Proof. by induction l1; csimpl; rewrite <-?(associative_L (++)); f_equal. Qed.
   Lemma elem_of_list_bind (x : B) (l : list A) :
     x ∈ l ≫= f ↔ ∃ y, x ∈ f y ∧ y ∈ l.
   Proof.
     split.
-    * induction l as [|y l IH]; simpl; [inversion 1|].
+    * induction l as [|y l IH]; csimpl; [inversion 1|].
       rewrite elem_of_app. intros [?|?].
       + exists y. split; [done | by left].
       + destruct IH as [z [??]]. done. exists z. split; [done | by right].
-    * intros [y [Hx Hy]]. induction Hy; simpl; rewrite elem_of_app; intuition.
+    * intros [y [Hx Hy]]. induction Hy; csimpl; rewrite elem_of_app; intuition.
   Qed.
   Lemma Forall_bind (P : B → Prop) l :
     Forall P (l ≫= f) ↔ Forall (Forall P ∘ f) l.
   Proof.
     split.
-    * induction l; simpl; rewrite ?Forall_app; constructor; simpl; intuition.
-    * induction 1; simpl; rewrite ?Forall_app; auto.
+    * induction l; csimpl; rewrite ?Forall_app; constructor; csimpl; intuition.
+    * induction 1; csimpl; rewrite ?Forall_app; auto.
   Qed.
   Lemma Forall2_bind {C D} (g : C → list D) (P : B → D → Prop) l1 l2 :
     Forall2 (λ x1 x2, Forall2 P (f x1) (g x2)) l1 l2 →
     Forall2 P (l1 ≫= f) (l2 ≫= g).
-  Proof. induction 1; simpl; auto using Forall2_app. Qed.
+  Proof. induction 1; csimpl; auto using Forall2_app. Qed.
 End bind.
 
 Section ret_join.
@@ -2676,7 +2677,7 @@ Section permutations.
   Lemma permutations_swap x y l : y :: x :: l ∈ permutations (x :: y :: l).
   Proof.
     simpl. apply elem_of_list_bind. exists (y :: l). split; simpl.
-    * destruct l; simpl; rewrite !elem_of_cons; auto.
+    * destruct l; csimpl; rewrite !elem_of_cons; auto.
     * apply elem_of_list_bind. simpl.
       eauto using interleave_cons, permutations_refl.
   Qed.
@@ -2694,12 +2695,12 @@ Section permutations.
     intros Hl1 [? | [l2' [??]]]; simplify_equality'.
     * rewrite !elem_of_cons, elem_of_list_fmap in Hl1.
       destruct Hl1 as [? | [? | [l4 [??]]]]; subst.
-      + exists (x1 :: y :: l3). simpl. rewrite !elem_of_cons. tauto.
-      + exists (x1 :: y :: l3). simpl. rewrite !elem_of_cons. tauto.
+      + exists (x1 :: y :: l3). csimpl. rewrite !elem_of_cons. tauto.
+      + exists (x1 :: y :: l3). csimpl. rewrite !elem_of_cons. tauto.
       + exists l4. simpl. rewrite elem_of_cons. auto using interleave_cons.
     * rewrite elem_of_cons, elem_of_list_fmap in Hl1.
       destruct Hl1 as [? | [l1' [??]]]; subst.
-      + exists (x1 :: y :: l3). simpl.
+      + exists (x1 :: y :: l3). csimpl.
         rewrite !elem_of_cons, !elem_of_list_fmap.
         split; [| by auto]. right. right. exists (y :: l2').
         rewrite elem_of_list_fmap. naive_solver.
@@ -3006,7 +3007,7 @@ Section eval.
 
   Lemma eval_alt t : eval E t = to_list t ≫= from_option [] ∘ (E !!).
   Proof.
-    induction t; simpl.
+    induction t; csimpl.
     * done.
     * by rewrite (right_id_L [] (++)).
     * rewrite bind_app. by f_equal.

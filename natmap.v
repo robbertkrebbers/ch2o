@@ -23,11 +23,29 @@ Proof.
   intros ->. by destruct Hwf.
 Qed.
 
-Definition natmap (A : Type) : Type := sig (@natmap_wf A).
+Record natmap (A : Type) : Type := NatMap {
+  natmap_car : natmap_raw A;
+  natmap_prf : natmap_wf natmap_car
+}.
+Arguments NatMap {_} _ _.
+Arguments natmap_car {_} _.
+Arguments natmap_prf {_} _.
+Lemma natmap_eq {A} (m1 m2 : natmap A) :
+  m1 = m2 ↔ natmap_car m1 = natmap_car m2.
+Proof.
+  split; [by intros ->|intros]; destruct m1 as [t1 ?], m2 as [t2 ?].
+  simplify_equality'; f_equal; apply proof_irrel.
+Qed.
+Global Instance natmap_eq_dec `{∀ x y : A, Decision (x = y)}
+    (m1 m2 : natmap A) : Decision (m1 = m2) :=
+  match decide (natmap_car m1 = natmap_car m2) with
+  | left H => left (proj2 (natmap_eq m1 m2) H)
+  | right H => right (H ∘ proj1 (natmap_eq m1 m2))
+  end.
 
-Instance natmap_empty {A} : Empty (natmap A) := [] ↾ I.
-Instance natmap_lookup {A} : Lookup nat A (natmap A) :=
-  λ i m, match m with exist l _ => mjoin (l !! i) end.
+Instance natmap_empty {A} : Empty (natmap A) := NatMap [] I.
+Instance natmap_lookup {A} : Lookup nat A (natmap A) := λ i m,
+  let (l,_) := m in mjoin (l !! i).
 
 Fixpoint natmap_singleton_raw {A} (i : nat) (x : A) : natmap_raw A :=
   match i with 0 => [Some x]| S i => None :: natmap_singleton_raw i x end.
@@ -75,7 +93,7 @@ Proof.
     eauto using natmap_singleton_wf, natmap_cons_canon_wf, natmap_wf_inv.
 Qed.
 Instance natmap_alter {A} : PartialAlter nat A (natmap A) := λ f i m,
-  match m with exist l Hl => _↾natmap_alter_wf f i l Hl end.
+  let (l,Hl) := m in NatMap _ (natmap_alter_wf f i l Hl).
 Lemma natmap_lookup_alter_raw {A} (f : option A → option A) i l :
   mjoin (natmap_alter_raw f i l !! i) = f (mjoin (l !! i)).
 Proof.
@@ -103,8 +121,8 @@ Proof.
   revert i. induction l; intros [|?]; simpl; autorewrite with natmap; auto.
 Qed.
 Hint Rewrite @natmap_lookup_omap_raw : natmap.
-Global Instance natmap_omap: OMap natmap := λ A B f l,
-  _ ↾ natmap_omap_raw_wf f _ (proj2_sig l).
+Global Instance natmap_omap: OMap natmap := λ A B f m,
+  let (l,Hl) := m in NatMap _ (natmap_omap_raw_wf f _ Hl).
 
 Definition natmap_merge_raw {A B C} (f : option A → option B → option C) :
     natmap_raw A → natmap_raw B → natmap_raw C :=
@@ -130,7 +148,7 @@ Proof.
 Qed.
 Instance natmap_merge: Merge natmap := λ A B C f m1 m2,
   let (l1, Hl1) := m1 in let (l2, Hl2) := m2 in
-  natmap_merge_raw f _ _ ↾ natmap_merge_wf _ _ _ Hl1 Hl2.
+  NatMap (natmap_merge_raw f l1 l2) (natmap_merge_wf _ _ _ Hl1 Hl2).
 
 Fixpoint natmap_to_list_raw {A} (i : nat) (l : natmap_raw A) : list (nat * A) :=
   match l with
@@ -171,7 +189,7 @@ Proof.
   rewrite natmap_elem_of_to_list_raw_aux. intros (?&?&?). lia.
 Qed.
 Instance natmap_to_list {A} : FinMapToList nat A (natmap A) := λ m,
-  match m with exist l _ => natmap_to_list_raw 0 l end.
+  let (l,_) := m in natmap_to_list_raw 0 l.
 
 Definition natmap_map_raw {A B} (f : A → B) : natmap_raw A → natmap_raw B :=
   fmap (fmap f).
@@ -187,13 +205,13 @@ Proof.
   unfold natmap_map_raw. rewrite list_lookup_fmap. by destruct (l !! i).
 Qed.
 Instance natmap_map: FMap natmap := λ A B f m,
-  natmap_map_raw f _ ↾ natmap_map_wf _ _ (proj2_sig m).
+  let (l,Hl) := m in NatMap (natmap_map_raw f l) (natmap_map_wf _ _ Hl).
 
 Instance: FinMap nat natmap.
 Proof.
   split.
   * unfold lookup, natmap_lookup. intros A [l1 Hl1] [l2 Hl2] E.
-    apply (sig_eq_pi _). revert l2 Hl1 Hl2 E. simpl.
+    apply natmap_eq. revert l2 Hl1 Hl2 E. simpl.
     induction l1 as [|[x|] l1 IH]; intros [|[y|] l2] Hl1 Hl2 E; simpl in *.
     + done.
     + by specialize (E 0).
@@ -225,7 +243,7 @@ Proof.
   induction (reverse l) as [|[]]; simpl; eauto.
 Qed.
 Definition list_to_natmap {A} (l : list (option A)) : natmap A :=
-  reverse (strip_Nones (reverse l)) ↾ list_to_natmap_wf l.
+  NatMap (reverse (strip_Nones (reverse l))) (list_to_natmap_wf l).
 Lemma list_to_natmap_spec {A} (l : list (option A)) i :
   list_to_natmap l !! i = mjoin (l !! i).
 Proof.
@@ -237,7 +255,7 @@ Proof.
 Qed.
 
 (** Finally, we can construct sets of [nat]s satisfying extensional equality. *)
-Notation natset := (mapset natmap).
+Notation natset := (mapset (natmap unit)).
 Instance natmap_dom {A} : Dom (natmap A) natset := mapset_dom.
 Instance: FinMapDom nat natmap natset := mapset_dom_spec.
 
@@ -245,7 +263,8 @@ Instance: FinMapDom nat natmap natset := mapset_dom_spec.
 Fixpoint of_bools (βs : list bool) : natset :=
   Mapset $ list_to_natmap $ (λ β : bool, if β then Some () else None) <$> βs.
 Definition to_bools (X : natset) : list bool :=
-  (λ mu, match mu with Some _ => true | None => false end) <$> ` (mapset_car X).
+  (λ mu, match mu with Some _ => true | None => false end)
+    <$> natmap_car (mapset_car X).
 
 Lemma of_bools_unfold βs :
   of_bools βs
@@ -278,14 +297,14 @@ Qed.
 
 (** A [natmap A] forms a stack with elements of type [A] and possible holes *)
 Definition natmap_push {A} (o : option A) (m : natmap A) : natmap A :=
-  match m with exist l Hl => _↾natmap_cons_canon_wf o l Hl end.
+  let (l,Hl) := m in NatMap _ (natmap_cons_canon_wf o l Hl).
 
 Definition natmap_pop_raw {A} (l : natmap_raw A) : natmap_raw A := tail l.
 Lemma natmap_pop_wf {A} (l : natmap_raw A) :
   natmap_wf l → natmap_wf (natmap_pop_raw l).
 Proof. destruct l; simpl; eauto using natmap_wf_inv. Qed.
 Definition natmap_pop {A} (m : natmap A) : natmap A :=
-  match m with exist l Hl => _↾natmap_pop_wf _ Hl end.
+  let (l,Hl) := m in NatMap _ (natmap_pop_wf _ Hl).
 
 Lemma lookup_natmap_push_O {A} o (m : natmap A) : natmap_push o m !! 0 = o.
 Proof. by destruct o, m as [[|??]]. Qed.
@@ -303,4 +322,4 @@ Proof.
   * by rewrite lookup_natmap_push_S, lookup_natmap_pop.
 Qed.
 Lemma natmap_pop_push {A} o (m : natmap A) : natmap_pop (natmap_push o m) = m.
-Proof. apply (sig_eq_pi _). by destruct o, m as [[|??]]. Qed.
+Proof. apply natmap_eq. by destruct o, m as [[|??]]. Qed.

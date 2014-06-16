@@ -271,7 +271,7 @@ End assoc.
 
 (** * Finite sets *)
 (** We construct finite sets using the above implementation of maps. *)
-Notation assoc_set K := (mapset (assoc K)).
+Notation assoc_set K := (mapset (assoc K unit)).
 Instance assoc_map_dom `{Lexico K, !TrichotomyT (@lexico K _),
   !StrictOrder lexico} {A} : Dom (assoc K A) (assoc_set K) := mapset_dom.
 Instance assoc_map_dom_spec `{Lexico K} `{!TrichotomyT (@lexico K _)}

@@ -165,7 +165,7 @@ Program Instance prod_countable `{Countable A} `{Countable B} :
 Next Obligation.
   intros ?????? [x y]; simpl.
   rewrite prod_decode_encode_fst, prod_decode_encode_snd.
-  simpl. by rewrite !decode_encode.
+  csimpl. by rewrite !decode_encode.
 Qed.
 
 Fixpoint list_encode_ (l : list positive) : positive :=
@@ -188,7 +188,7 @@ Lemma list_decode_encode l : list_decode (list_encode l) = Some l.
 Proof.
   cut (list_decode_ (length l) (list_encode_ l) = Some l).
   { intros help. unfold list_decode, list_encode.
-    rewrite prod_decode_encode_fst, prod_decode_encode_snd; simpl.
+    rewrite prod_decode_encode_fst, prod_decode_encode_snd; csimpl.
     by rewrite Nat2Pos.id by done; simpl. }
   induction l; simpl; auto.
   by rewrite prod_decode_encode_fst, prod_decode_encode_snd;
@@ -227,5 +227,5 @@ Program Instance nat_countable : Countable nat := {|
   decode p := N.to_nat <$> decode p
 |}.
 Next Obligation.
-  intros x. rewrite decode_encode; simpl. by rewrite Nat2N.id.
+  intros x. rewrite decode_encode; csimpl. by rewrite Nat2N.id.
 Qed.

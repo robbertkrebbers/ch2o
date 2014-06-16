@@ -97,6 +97,10 @@ Instance option_join: MJoin option := λ A x,
 Instance option_fmap: FMap option := @option_map.
 Instance option_guard: MGuard option := λ P dec A x,
   match dec with left H => x H | _ => None end.
+Definition maybe_inl {A B} (xy : A + B) : option A :=
+  match xy with inl x => Some x | _ => None end.
+Definition maybe_inr {A B} (xy : A + B) : option B :=
+  match xy with inr y => Some y | _ => None end.
 
 Lemma fmap_is_Some {A B} (f : A → B) x : is_Some (f <$> x) ↔ is_Some x.
 Proof. unfold is_Some; destruct x; naive_solver. Qed.
@@ -118,7 +122,7 @@ Lemma option_bind_assoc {A B C} (f : A → option B)
 Proof. by destruct x; simpl. Qed.
 Lemma option_bind_ext {A B} (f g : A → option B) x y :
   (∀ a, f a = g a) → x = y → x ≫= f = y ≫= g.
-Proof. intros. destruct x, y; simplify_equality; simpl; auto. Qed.
+Proof. intros. destruct x, y; simplify_equality; csimpl; auto. Qed.
 Lemma option_bind_ext_fun {A B} (f g : A → option B) x :
   (∀ a, f a = g a) → x ≫= f = x ≫= g.
 Proof. intros. by apply option_bind_ext. Qed.
@@ -192,11 +196,7 @@ Tactic Notation "simpl_option_monad" "by" tactic3(tac) :=
   | _ => rewrite option_guard_False by tac
   end.
 Tactic Notation "simplify_option_equality" "by" tactic3(tac) :=
-  let assert_Some_None A o H := first
-    [ let x := fresh in evar (x:A); let x' := eval unfold x in x in clear x;
-      assert (o = Some x') as H by tac
-    | assert (o = None) as H by tac ]
-  in repeat match goal with
+  repeat match goal with
   | _ => progress simplify_equality'
   | _ => progress simpl_option_monad by tac
   | H : mbind (M:=option) _ ?o = ?x |- _ =>

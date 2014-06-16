@@ -102,7 +102,7 @@ Lemma bit_size_of_struct Γ s τs :
 Proof.
   unfold bit_size_of, field_bit_sizes. intros.
   erewrite size_of_struct by eauto.
-  elim (field_sizes Γ τs); simpl; auto with lia.
+  elim (field_sizes Γ τs); csimpl; auto with lia.
 Qed.
 Lemma bit_size_of_fields Γ τs :
   ✓ Γ → Forall2 (λ τ sz, bit_size_of Γ τ ≤ sz) τs (field_bit_sizes Γ τs).
@@ -182,6 +182,7 @@ Qed.
 Lemma size_of_base_ne_0 Γ τb : size_of Γ (baseT τb) ≠ 0.
 Proof.
   destruct τb.
+  * by rewrite size_of_void. 
   * rewrite size_of_int. apply int_size_ne_0.
   * apply size_of_ptr_ne_0.
 Qed.

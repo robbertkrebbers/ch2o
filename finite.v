@@ -56,7 +56,7 @@ Proof.
   destruct finA as [xs Hxs HA]; unfold find, decode; simpl.
   intros Hx. destruct (list_find_elem_of P xs x) as [i Hi]; auto.
   rewrite Hi. destruct (list_find_Some P xs i) as (y&?&?); subst; auto.
-  exists y. simpl. by rewrite !Nat2Pos.id by done.
+  exists y. csimpl. by rewrite !Nat2Pos.id by done.
 Qed.
 
 Lemma card_0_inv P `{finA: Finite A} : card A = 0 → A → P.

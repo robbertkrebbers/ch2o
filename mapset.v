@@ -5,27 +5,28 @@ elements of the unit type. Since maps enjoy extensional equality, the
 constructed finite sets do so as well. *)
 Require Export fin_map_dom.
 
-Record mapset (M : Type → Type) := Mapset { mapset_car: M unit }.
+Record mapset (Mu : Type) := Mapset { mapset_car: Mu }.
 Arguments Mapset {_} _.
 Arguments mapset_car {_} _.
 
 Section mapset.
 Context `{FinMap K M}.
 
-Instance mapset_elem_of: ElemOf K (mapset M) := λ x X,
+Instance mapset_elem_of: ElemOf K (mapset (M unit)) := λ x X,
   mapset_car X !! x = Some ().
-Instance mapset_empty: Empty (mapset M) := Mapset ∅.
-Instance mapset_singleton: Singleton K (mapset M) := λ x, Mapset {[ (x,()) ]}.
-Instance mapset_union: Union (mapset M) := λ X1 X2,
+Instance mapset_empty: Empty (mapset (M unit)) := Mapset ∅.
+Instance mapset_singleton: Singleton K (mapset (M unit)) := λ x,
+  Mapset {[ (x,()) ]}.
+Instance mapset_union: Union (mapset (M unit)) := λ X1 X2,
   let (m1) := X1 in let (m2) := X2 in Mapset (m1 ∪ m2).
-Instance mapset_intersection: Intersection (mapset M) := λ X1 X2,
+Instance mapset_intersection: Intersection (mapset (M unit)) := λ X1 X2,
   let (m1) := X1 in let (m2) := X2 in Mapset (m1 ∩ m2).
-Instance mapset_difference: Difference (mapset M) := λ X1 X2,
+Instance mapset_difference: Difference (mapset (M unit)) := λ X1 X2,
   let (m1) := X1 in let (m2) := X2 in Mapset (m1 ∖ m2).
-Instance mapset_elems: Elements K (mapset M) := λ X,
+Instance mapset_elems: Elements K (mapset (M unit)) := λ X,
   let (m) := X in fst <$> map_to_list m.
 
-Lemma mapset_eq (X1 X2 : mapset M) : X1 = X2 ↔ ∀ x, x ∈ X1 ↔ x ∈ X2.
+Lemma mapset_eq (X1 X2 : mapset (M unit)) : X1 = X2 ↔ ∀ x, x ∈ X1 ↔ x ∈ X2.
 Proof.
   split; [by intros ->|].
   destruct X1 as [m1], X2 as [m2]. simpl. intros E.
@@ -33,16 +34,17 @@ Proof.
 Qed.
 
 Global Instance mapset_eq_dec `{∀ m1 m2 : M unit, Decision (m1 = m2)}
-  (X1 X2 : mapset M) : Decision (X1 = X2) | 1.
+  (X1 X2 : mapset (M unit)) : Decision (X1 = X2) | 1.
 Proof.
  refine
   match X1, X2 with Mapset m1, Mapset m2 => cast_if (decide (m1 = m2)) end;
   abstract congruence.
 Defined.
-Global Instance mapset_elem_of_dec x (X : mapset M) : Decision (x ∈ X) | 1.
+Global Instance mapset_elem_of_dec x (X : mapset (M unit)) :
+  Decision (x ∈ X) | 1.
 Proof. solve_decision. Defined.
 
-Instance: Collection K (mapset M).
+Instance: Collection K (mapset (M unit)).
 Proof.
   split; [split | | ].
   * unfold empty, elem_of, mapset_empty, mapset_elem_of.
@@ -61,9 +63,9 @@ Proof.
     intros [m1] [m2] ?. simpl. rewrite lookup_difference_Some.
     destruct (m2 !! x) as [[]|]; intuition congruence.
 Qed.
-Global Instance: PartialOrder (@subseteq (mapset M) _).
+Global Instance: PartialOrder (@subseteq (mapset (M unit)) _).
 Proof. split; try apply _. intros ????. apply mapset_eq. intuition. Qed.
-Global Instance: FinCollection K (mapset M).
+Global Instance: FinCollection K (mapset (M unit)).
 Proof.
   split.
   * apply _.
@@ -75,14 +77,15 @@ Proof.
     apply NoDup_fst_map_to_list.
 Qed.
 
-Definition mapset_map_with {A B} (f: bool → A → B) (X : mapset M) : M A → M B :=
+Definition mapset_map_with {A B} (f: bool → A → B)
+    (X : mapset (M unit)) : M A → M B :=
   let (m) := X in merge (λ x y,
     match x, y with
     | Some _, Some a => Some (f true a)
     | None, Some a => Some (f false a)
     | _, None => None
     end) m.
-Definition mapset_dom_with {A} (f : A → bool) (m : M A) : mapset M :=
+Definition mapset_dom_with {A} (f : A → bool) (m : M A) : mapset (M unit) :=
   Mapset $ merge (λ x _,
     match x with
     | Some a => if f a then Some () else None
@@ -105,8 +108,9 @@ Proof.
   * naive_solver.
 Qed.
 
-Instance mapset_dom {A} : Dom (M A) (mapset M) := mapset_dom_with (λ _, true).
-Instance mapset_dom_spec: FinMapDom K M (mapset M).
+Instance mapset_dom {A} : Dom (M A) (mapset (M unit)) :=
+  mapset_dom_with (λ _, true).
+Instance mapset_dom_spec: FinMapDom K M (mapset (M unit)).
 Proof.
   split; try apply _. intros. unfold dom, mapset_dom.
   rewrite elem_of_mapset_dom_with. unfold is_Some. naive_solver.
