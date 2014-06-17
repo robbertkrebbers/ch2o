@@ -184,22 +184,27 @@ Proof.
   induction HΩvs; simpl; intros; decompose_Forall;
     simplify_option_equality; f_equal; eauto.
 Qed.
-Lemma expr_eval_typed Γ Γf τs fs ρ m e av τlr :
-  ✓ Γ → ✓{Γ} m → (Γ,m) ⊢ fs : Γf → m ⊢* ρ :* τs → ⟦ e ⟧ Γ fs ρ m = Some av →
-  (Γ,Γf,m,τs) ⊢ e : τlr → (Γ,m) ⊢ av : τlr.
+Lemma expr_eval_typed_aux Γ Γf τs τs' fs ρ m e av τlr :
+  ✓ Γ → ✓{Γ} m → ⟦ e ⟧ Γ fs ρ m = Some av → (Γ,m) ⊢ fs : Γf → m ⊢* ρ :* τs →
+  τs `prefix_of` τs' → (Γ,Γf,m,τs') ⊢ e : τlr → (Γ,m) ⊢ av : τlr.
 Proof.
-  intros ?? Hfs ? Hav He. revert e av Hav τlr He. assert (∀ es vs σs,
-    Forall2 (λ e v, ∀ τlr, (Γ,Γf,m,τs) ⊢ e : τlr → (Γ, m) ⊢ inr v : τlr) es vs →
-    (Γ,Γf,m,τs) ⊢* es :* inr <$> σs → (Γ,m) ⊢* vs :* σs).
+  intros ?? Hav Hfs ? [τs'' ->] He. revert e av Hav τlr He. assert (∀ es vs σs,
+    Forall2 (λ e v, ∀ τlr,
+      (Γ,Γf,m,τs ++ τs'') ⊢ e : τlr → (Γ, m) ⊢ inr v : τlr) es vs →
+    (Γ,Γf,m,τs ++ τs'') ⊢* es :* inr <$> σs → (Γ,m) ⊢* vs :* σs).
   { intros es vs σs Hes. revert σs.
     induction Hes; intros [|??] ?; decompose_Forall_hyps';
       repeat match goal with
       | _ => progress typed_inversion_all
       | H : _ ⊢ ?e : _, H2 : ∀ _, _ ⊢ ?e : _  → _ |- _ => specialize (H2 _ H)
       end; constructor; eauto. }
-  rapply (expr_eval_ind Γ fs ρ m); intros; decompose_Forall_hyps';
+  rapply (expr_eval_ind Γ fs ρ m); intros;
     repeat match goal with
     | _ => progress typed_inversion_all
+    | _ => progress decompose_Forall_hyps'
+    | H : (?τs1 ++ ?τs2) !! _ = Some ?τ1, H2 : ?τs1 !! _ = Some ?τ2 |- _ =>
+      assert (τ1 = τ2) by (apply (lookup_app_l_Some _ τs2) in H2; congruence);
+      clear H
     | H : _ ⊢ ?e : _, H2 : ∀ _, _ ⊢ ?e : _  → _ |- _ => specialize (H2 _ H)
     end; try typed_constructor; eauto using
       val_unop_typed, val_binop_typed, val_cast_typed, addr_top_typed,
@@ -207,6 +212,10 @@ Proof.
       addr_elt_typed, addr_elt_strict, addr_field_typed, addr_field_strict.
   eapply purefuns_typed_lookup; eauto.
 Qed.
+Lemma expr_eval_typed Γ Γf τs fs ρ m e av τlr :
+  ✓ Γ → ✓{Γ} m → ⟦ e ⟧ Γ fs ρ m = Some av → (Γ,m) ⊢ fs : Γf → m ⊢* ρ :* τs →
+  (Γ,Γf,m,τs) ⊢ e : τlr → (Γ,m) ⊢ av : τlr.
+Proof. eauto using expr_eval_typed_aux. Qed.
 
 (** We prove that only pure expressions are given a semantics. The converse
 of this property is not true, as pure expressions may still exhibit undefined

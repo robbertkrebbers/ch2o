@@ -121,13 +121,20 @@ Notation "s1 ;; s2" := (SComp s1 s2)
   (at level 80, right associativity,
    format "'[' s1  ;;  '/' s2 ']'") : stmt_scope.
 Notation "'label' l" := (SLabel l) (at level 10) : stmt_scope.
-
 Notation "l :; s" := (label l ;; s)
   (at level 80, format "l  :;  s") : stmt_scope.
 Notation "'while{' e } s" := (SWhile e s)
   (at level 10, format "'while{' e }  s") : stmt_scope.
 Notation "'if{' e } s1 'else' s2" := (SIf e s1 s2)
   (at level 56, format "if{ e }  s1  'else'  s2") : stmt_scope.
+
+Notation "e1 ::={ ass } e2" := (!(e1 ::={ass} e2))
+  (at level 54, format "e1  ::={ ass }  e2", right associativity) : stmt_scope.
+Notation "e1 ::= e2" := (!(e1 ::= e2))
+  (at level 54, right associativity) : stmt_scope.
+Notation "'call' f @ es" := (!(call f @ es))
+  (at level 10, es at level 66) : stmt_scope.
+Notation "'free' e" := (!(free e)) (at level 10) : stmt_scope.
 
 Instance: Injective (=) (=) (@SDo Ti).
 Proof. by injection 1. Qed.

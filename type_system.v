@@ -219,7 +219,7 @@ Inductive stmt_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
   | SGoto_typed l : stmt_typed' Γ Γf m τs (goto l) (true,None)
   | SReturn_typed e τ :
      (Γ,Γf,m,τs) ⊢ e : inr τ → stmt_typed' Γ Γf m τs (ret e) (true,Some τ)
-  | SBlock_typed τ s c mσ :
+  | SBlock_typed' τ s c mσ :
      ✓{Γ} τ →int_typed (size_of Γ τ) sptrT →
      stmt_typed' Γ Γf m (τ :: τs) s (c,mσ) →
      stmt_typed' Γ Γf m τs (blk{τ} s) (c,mσ)
@@ -370,6 +370,11 @@ Implicit Types Es : sctx_item Ti.
 Implicit Types Ee : esctx_item Ti.
 Implicit Types Ek : ctx_item Ti.
 Implicit Types k : ctx Ti.
+
+Lemma SBlock_typed Γ Γf m τs τ s c mσ :
+  ✓{Γ} τ →int_typed (size_of Γ τ) sptrT →
+  (Γ,Γf,m,τ :: τs) ⊢ s : (c,mσ) → (Γ,Γf,m,τs) ⊢ blk{τ} s : (c,mσ).
+Proof. by constructor. Qed.
 
 Global Instance rettype_match_dec cmσ σ : Decision (rettype_match cmσ σ) :=
   match cmσ with
