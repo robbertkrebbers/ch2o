@@ -6,30 +6,23 @@ the number of bits of which a byte consists. This implementation is convervative
 in the sense that it makes as much undefined behavior as possible.  *)
 Require Import abstract_integers.
 
-(** The data type of integers [int_ be Csz] is indexed by a boolean [be]
+(** The data type of integers ranks [irank be Csz] is indexed by a boolean [be]
 and a natural [Csz]. The boolean [be] describes whether a big endian (in case
 it is [true] or little endian (in case it is [false]) representation should be
 used. The natural number [Csz] describes the number of bits of which an
 individual byte consists. *)
-Inductive irank (be: bool) (Csz: nat) : Set := IKind {
-  IBytes : nat; IBytes_pos : 0 < IBytes
-}.
-Arguments IBytes {_ _} _.
-Arguments IBytes_pos {_ _} _.
+Inductive irank (be: bool) (Csz: nat) : Set := IKind { ibytes_log2 : nat }.
+Arguments ibytes_log2 {_ _} _.
 
 Instance irank_eq_dec {be Csz} (k1 k2 : irank be Csz) : Decision (k1 = k2).
-Proof.
- refine
-  match k1, k2 with IKind b1 _, IKind b2 _ => cast_if (decide (b1 = b2)) end;
-  [subst; f_equal; apply (proof_irrel _) | congruence].
-Defined.
+Proof. solve_decision. Defined.
 
 Local Instance: IntCoding (irank be Csz) := {
-  char_rank := IKind be Csz 1 (bool_decide_unpack (0 < 1) I);
-  int_rank := IKind be Csz 4 (bool_decide_unpack (0 < 4) I);
-  ptr_rank := IKind be Csz 8 (bool_decide_unpack (0 < 8) I);
+  char_rank := IKind be Csz 0;
+  int_rank := IKind be Csz 2;
+  ptr_rank := IKind be Csz 3;
   char_bits := Csz;
-  rank_size := IBytes;
+  rank_size := λ k, 2 ^ ibytes_log2 k;
   endianize := λ _, if be then reverse else id;
   deendianize := λ _, if be then reverse else id
 }.
@@ -45,7 +38,7 @@ Proof.
   intros Csz be. split.
   * done.
   * done.
-  * by intros [??].
+  * unfold rank_size; simpl. intros. by apply Nat.neq_0_lt_0, Nat.pow_nonzero.
   * intros. unfold endianize; simpl.
     by destruct be; simpl; rewrite ?reverse_Permutation.
   * intros. unfold deendianize, endianize; simpl.
