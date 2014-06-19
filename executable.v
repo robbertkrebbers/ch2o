@@ -9,15 +9,23 @@ Context `{EnvSpec Ti} (hash : state Ti → Z).
 Definition assign_exec (Γ : env Ti) (m : mem Ti) (a : addr Ti)
     (v : val Ti) (ass : assign) : option (val Ti * val Ti) :=
   match ass with
-  | Assign => Some (v,v)
+  | Assign =>
+     guard (val_cast_ok Γ (type_of a) v);
+     let v' := val_cast (type_of a) v in
+     Some (v',v')
   | PreOp op =>
-     vb ← m !!{Γ} a;
-     guard (val_binop_ok Γ m op vb v);
-     Some (val_binop Γ op vb v, val_binop Γ op vb v)
+     va ← m !!{Γ} a;
+     guard (val_binop_ok Γ m op va v);
+     let v' := val_binop Γ op va v in
+     guard (val_cast_ok Γ (type_of a) v');
+     let v'' := val_cast (type_of a) v' in
+     Some (v'', v'')
   | PostOp op =>
-     vb ← m !!{Γ} a;
-     guard (val_binop_ok Γ m op vb v);
-     Some (vb, val_binop Γ op vb v)
+     va ← m !!{Γ} a;
+     guard (val_binop_ok Γ m op va v);
+     let v' := val_binop Γ op va v in
+     guard (val_cast_ok Γ (type_of a) v');
+     Some (va, val_cast (type_of a) v')
   end.
 Definition ehstep_exec (Γ : env Ti) (ρ : stack)
     (e : expr Ti) (m : mem Ti) : option (expr Ti * mem Ti) :=

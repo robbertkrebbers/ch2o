@@ -13,14 +13,19 @@ Require Export state.
 to be stored at [a] in [m]. *)
 Inductive assign_sem `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti) (m : mem Ti)
      (a : addr Ti) (v : val Ti) : assign → val Ti → val Ti → Prop :=
-  | Assign_sem : assign_sem Γ m a v Assign v v
+  | Assign_sem :
+     val_cast_ok Γ (type_of a) v →
+     let v' := val_cast (type_of a) v in assign_sem Γ m a v Assign v' v'
   | PreOp_sem op va :
      m !!{Γ} a = Some va → val_binop_ok Γ m op va v →
-     assign_sem Γ m a v (PreOp op)
-       (val_binop Γ op va v) (val_binop Γ op va v)
+     val_cast_ok Γ (type_of a) (val_binop Γ op va v) →
+     let v' := val_cast (type_of a) (val_binop Γ op va v) in
+     assign_sem Γ m a v (PreOp op) v' v'
   | PostOp_sem op va :
      m !!{Γ} a = Some va → val_binop_ok Γ m op va v →
-     assign_sem Γ m a v (PostOp op) va (val_binop Γ op va v).
+     val_cast_ok Γ (type_of a) (val_binop Γ op va v) →
+     let v' := val_cast (type_of a) (val_binop Γ op va v) in
+     assign_sem Γ m a v (PostOp op) va v'.
 
 (** * Head reduction for expressions *)
 (** We define head reduction for all redexes whose reduction is local (i.e.

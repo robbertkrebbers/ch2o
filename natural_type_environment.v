@@ -7,7 +7,7 @@ Context `{IntEnvSpec Ti}.
 Context (ptr_size : type Ti → nat) (align_base : base_type Ti → nat).
 Context (ptr_size_ne_0 : ∀ τ, ptr_size τ ≠ 0).
 Context (align_void : align_base voidT = 1).
-Context (align_int_divide : ∀ τ, (align_base (intT τ) | int_size τ)).
+Context (align_int_divide : ∀ τi, (align_base (intT τi) | rank_size (rank τi))).
 Context (align_ptr_divide : ∀ τ, (align_base (τ.*) | ptr_size τ)).
 
 Definition natural_align_of (Γ : env Ti) : type Ti → nat := type_iter
@@ -33,7 +33,9 @@ Definition natural_field_sizes (f : type Ti → nat) (Γ : env Ti)
 Definition natural_size_of (Γ : env Ti) : type Ti → nat :=
   type_iter
   (**i TBase =>     *) (λ τb,
-    match τb with voidT => 1 | intT τi => int_size τi | τ.* => ptr_size τ end%BT)
+    match τb with
+    | voidT => 1 | intT τi => rank_size (rank τi) | τ.* => ptr_size τ
+    end%BT)
   (**i TArray =>    *) (λ _, mult)
   (**i TCompound => *) (λ c s τs go,
     match c with
@@ -126,7 +128,9 @@ Proof.
 Qed.
 Lemma natural_size_of_base Γ τb :
   size_of Γ (baseT τb) =
-    match τb with voidT => 1 | intT τ => int_size τ | τ.* => ptr_size τ end%BT.
+    match τb with
+    | voidT => 1 | intT τi => rank_size (rank τi) | τ.* => ptr_size τ
+    end%BT.
 Proof. done. Qed.
 Lemma natural_size_of_compound Γ c s τs :
   ✓ Γ → Γ !! s = Some τs → size_of Γ (compoundT{c} s) =

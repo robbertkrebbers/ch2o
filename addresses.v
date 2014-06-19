@@ -328,7 +328,7 @@ Section addresses.
     (Γ,m) ⊢ a : σ → ¬addr_is_obj a → size_of Γ σ = 1.
   Proof.
     intros. destruct (decide (σ = voidT)) as [->|]; auto using size_of_void.
-    by rewrite (addr_not_obj_type _ _ a σ), size_of_int, int_size_char by eauto.
+    by erewrite (addr_not_obj_type _ _ a σ), size_of_uchar by eauto.
   Qed.
   Lemma addr_not_obj_bit_size_of Γ m a σ :
     (Γ,m) ⊢ a : σ → ¬addr_is_obj a → bit_size_of Γ σ = char_bits.
@@ -397,7 +397,7 @@ Section addresses.
     unfold addr_strict, addr_top; simpl. rewrite Nat.mul_1_r.
     eauto using size_of_pos.
   Qed.
-  Lemma addr_plus_ok_typed Γ m a σ j :
+  Lemma addr_plus_typed Γ m a σ j :
     ✓ Γ → (Γ,m) ⊢ a : σ → addr_plus_ok Γ m j a → (Γ,m) ⊢ addr_plus Γ j a : σ.
   Proof.
     intros ? [o r i τ σ' σc ??????] (?&?&?);
@@ -457,7 +457,7 @@ Section addresses.
     rewrite !Z2Nat_inj_div, !Nat2Z.inj_mul, <-Z.mul_sub_distr_r.
     by rewrite !Z.div_mul by lia.
   Qed.
-  Lemma addr_minus_ok_typed Γ m a1 a2 σ :
+  Lemma addr_minus_typed Γ m a1 a2 σ :
     ✓ Γ → (Γ,m) ⊢ a1 : σ → (Γ,m) ⊢ a2 : σ →
     int_typed (addr_minus Γ a1 a2) sptrT.
   Proof.
@@ -478,8 +478,8 @@ Section addresses.
     by erewrite (size_of_weaken Γ1 Γ2) by eauto using addr_typed_type_valid.
   Qed.
   Lemma addr_cast_ok_uchar Γ a : addr_cast_ok Γ ucharT a.
-  Proof. split. constructor. by rewrite size_of_int, int_size_char. Qed.
-  Lemma addr_cast_ok_typed Γ m a σ σc :
+  Proof. split. constructor. by rewrite size_of_uchar. Qed.
+  Lemma addr_cast_typed Γ m a σ σc :
     (Γ,m) ⊢ a : σ → addr_cast_ok Γ σc a → (Γ,m) ⊢ addr_cast σc a : σc.
   Proof. intros [] [??]; constructor; naive_solver. Qed.
   Lemma addr_cast_ok_weaken Γ1 Γ2 mm1 a σ σc :
@@ -507,9 +507,8 @@ Section addresses.
     ✓ Γ → (Γ,m) ⊢ a : σ → addr_is_obj a → j < size_of Γ σ →
     addr_ref Γ (addr_plus Γ j (addr_cast ucharT a)) = addr_ref Γ a.
   Proof.
-    destruct 2 as [o r i τ σ σc ?????]; intros ??; simplify_equality'.
-    f_equal. rewrite size_of_int, int_size_char; simpl.
-    rewrite Z.mul_1_r, Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
+    destruct 2 as [o r i τ σ σc ?????]; intros ??; simplify_equality'; f_equal.
+    rewrite size_of_uchar, Z.mul_1_r,Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
     symmetry. apply Nat.div_unique with (i `mod` size_of Γ σ + j); [lia|].
     by rewrite Nat.add_assoc, <-Nat.div_mod
       by eauto using ref_typed_type_valid, size_of_ne_0.
@@ -519,7 +518,7 @@ Section addresses.
     addr_ref_byte Γ (addr_plus Γ j (addr_cast ucharT a)) = j.
   Proof.
     destruct 2 as [o r i τ σ σc ?????? Hiσ]; intros; simplify_equality'.
-    f_equal. rewrite size_of_int, int_size_char; simpl.
+    f_equal. rewrite size_of_uchar.
     rewrite Z.mul_1_r, Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
     rewrite <-Nat.add_mod_idemp_l
       by eauto using ref_typed_type_valid, size_of_ne_0.
@@ -532,8 +531,7 @@ Section addresses.
       < size_of Γ (addr_type_base a) * ref_size (addr_ref_base a).
   Proof.
     destruct 2 as [o r i τ σ σc ?????? Hiσ]; intros; simplify_equality'.
-    rewrite size_of_int, int_size_char; simpl.
-    rewrite Z.mul_1_r, Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
+    rewrite size_of_uchar, Z.mul_1_r,Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
     apply Nat.lt_le_trans with (i + size_of Γ σ); [lia|].
     apply Nat.div_exact in Hiσ; eauto using ref_typed_type_valid, size_of_ne_0.
     rewrite Hiσ, <-Nat.mul_succ_r. apply Nat.mul_le_mono_l, Nat.le_succ_l.

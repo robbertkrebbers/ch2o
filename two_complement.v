@@ -2,8 +2,8 @@
 (* This file is distributed under the terms of the BSD license. *)
 (** This file defines a two's complements implementation of the interface for
 machine integers. This implementation is parametrized by its endianness and
-the number of bits of which a byte consists. This implementation is convervative
-in the sense that it makes as much undefined behavior as possible.  *)
+the number of bits of which a byte consists. This implementation is initial,
+that is, it makes as much undefined behavior as possible. *)
 Require Import abstract_integers.
 
 (** The data type of integers ranks [irank be Csz] is indexed by a boolean [be]
@@ -27,10 +27,18 @@ Local Instance: IntCoding (irank be Csz) := {
   deendianize := λ _, if be then reverse else id
 }.
 Instance: IntEnv (irank be Csz) := {
-  int_binop_ok := int_binop_ok_;
-  int_binop := int_binop_;
-  int_cast_ok := int_cast_ok_;
-  int_cast := int_cast_
+  int_arithop_ok op x τ1 y τ2 :=
+    let τ' := int_promote τ1 ∪ int_promote τ2 in
+    int_pre_arithop_ok op (int_pre_cast τ' x) (int_pre_cast τ' y) τ';
+  int_arithop op x τ1 y τ2 :=
+    let τ' := int_promote τ1 ∪ int_promote τ2 in
+    int_pre_arithop op (int_pre_cast τ' x) (int_pre_cast τ' y) τ';
+  int_shiftop_ok op x τ1 y τ2 :=
+    let τ' := int_promote τ1 in int_pre_shiftop_ok op (int_pre_cast τ' x) y τ';
+  int_shiftop op x τ1 y τ2 :=
+    let τ' := int_promote τ1 in int_pre_shiftop op (int_pre_cast τ' x) y τ';
+  int_cast_ok := int_pre_cast_ok;
+  int_cast := int_pre_cast
 }.
 
 Local Instance: PropHolds (8 ≤ Csz) → IntCodingSpec (irank be Csz).
@@ -39,6 +47,8 @@ Proof.
   * done.
   * done.
   * unfold rank_size; simpl. intros. by apply Nat.neq_0_lt_0, Nat.pow_nonzero.
+  * unfold rank_size; intros [i] [j] ?; simplify_equality'; f_equal.
+    apply Nat.pow_inj_r with 2; lia.
   * intros. unfold endianize; simpl.
     by destruct be; simpl; rewrite ?reverse_Permutation.
   * intros. unfold deendianize, endianize; simpl.
@@ -51,9 +61,19 @@ Proof.
   intros Csz be. split.
   * apply _.
   * done.
-  * apply int_binop_ok_typed_.
+  * intros. apply int_pre_arithop_typed; auto.
+    + apply int_pre_cast_typed; auto.
+      by apply int_union_pre_cast_ok_l, int_promote_typed.
+    + apply int_pre_cast_typed; auto.
+      by apply int_union_pre_cast_ok_r, int_promote_typed.
   * done.
   * done.
-  * apply int_cast_ok_typed_.
+  * intros. eapply int_pre_shiftop_typed; eauto.
+    apply int_pre_cast_typed; auto.
+    by apply int_typed_pre_cast_ok, int_promote_typed.
+  * unfold int_shiftop; simpl; intros.
+    by rewrite int_typed_pre_cast by auto using int_promote_typed.
+  * done.
+  * intros. by apply int_pre_cast_typed.
   * done.
 Qed.

@@ -468,13 +468,14 @@ Section operations.
   Global Arguments val_binop _ !_ !_ !_ /.
 
   Inductive cast_typed (Γ : env Ti) : type Ti → type Ti → Prop :=
+    | cast_typed_self τ : cast_typed Γ τ τ
     | TBase_cast_typed τb1 τb2 :
        base_cast_typed Γ τb1 τb2 → cast_typed Γ (baseT τb1) (baseT τb2)
     | TBase_TVoid_cast_typed τ : cast_typed Γ τ voidT.
   Definition val_cast_ok (Γ : env Ti) (τ : type Ti) (v : val Ti) : Prop :=
     match v, τ with
     | VBase vb, baseT τb => base_val_cast_ok Γ τb vb
-    | _, voidT => True | _ , _ => False
+    | _, _ => True
     end.
   Global Arguments val_cast_ok _ !_ !_ /.
   Definition val_cast (τ : type Ti) (v : val Ti) : val Ti :=
@@ -1898,15 +1899,21 @@ Proof.
 Qed.
 Global Instance cast_typed_dec Γ τ σ : Decision (cast_typed Γ τ σ).
 Proof.
- refine
-  match τ, σ with
-  | baseT τb, baseT σb => cast_if (decide (base_cast_typed Γ τb σb))
-  | _, baseT σb => cast_if (decide (σb = voidT%BT))
-  | _, _ => right _
-  end; try abstract first [by subst; constructor (done)|by inversion 1; subst;
-    try match goal with
-    | H : ¬base_cast_typed _ _ _ |- _ => destruct H; constructor
-    end].
+ refine 
+  match decide (τ = σ) with
+  | left _ => left _
+  | right Hτσ =>
+    match τ, σ return τ ≠ σ → Decision (cast_typed Γ τ σ) with
+    | baseT τb, baseT σb => λ _, cast_if (decide (base_cast_typed Γ τb σb))
+    | _, baseT σb => λ _, cast_if (decide (σb = voidT%BT))
+    | _, _ => λ _, right _
+    end Hτσ
+  end; abstract first
+   [ by subst; constructor
+   | by inversion 1; subst;
+      repeat match goal with
+      | H : ¬base_cast_typed _ _ _ |- _ => destruct H; constructor
+      end].
 Defined.
 Lemma cast_typed_weaken Γ1 Γ2 τ σ :
   cast_typed Γ1 τ σ → Γ1 ⊆ Γ2 → cast_typed Γ2 τ σ.
@@ -1949,7 +1956,8 @@ Lemma val_cast_typed Γ m v τ σ :
   (Γ,m) ⊢ val_cast σ v : σ.
 Proof.
   intros ? Hvτ Hσ Hok. destruct Hσ; inversion Hvτ; simplify_equality';
-    repeat constructor; eauto using base_val_cast_typed, TVoid_cast_typed.
+    repeat typed_constructor;
+    eauto using base_val_cast_typed, TVoid_cast_typed, base_cast_typed_self.
 Qed.
 
 (** ** Refinements of unary/binary operations and casts *)
@@ -1990,6 +1998,6 @@ Lemma val_cast_refine Γ f m1 m2 v1 v2 τ σ :
   v1 ⊑{Γ,f@m1↦m2} v2 : τ → val_cast σ v1 ⊑{Γ,f@m1↦m2} val_cast σ v2 : σ.
 Proof.
   destruct 2; inversion 2; simplify_equality; repeat refine_constructor;
-    eauto using base_val_cast_refine, TVoid_cast_typed.
+    eauto using base_val_cast_refine, TVoid_cast_typed, base_cast_typed_self.
 Qed.
 End val.

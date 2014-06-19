@@ -14,7 +14,7 @@ Class PtrEnv (Ti : Set) := {
 Class EnvSpec (Ti : Set) `{IntEnv Ti} `{PtrEnv Ti} := {
   int_env_spec :>> IntEnvSpec Ti;
   size_of_ptr_ne_0 Γ τ : size_of Γ (τ.*) ≠ 0;
-  size_of_int Γ τ : size_of Γ (intT τ) = int_size τ;
+  size_of_int Γ τ : size_of Γ (intT τ) = rank_size (rank τ);
   size_of_void Γ : size_of Γ voidT = 1;
   size_of_array Γ τ n : size_of Γ (τ.[n]) = n * size_of Γ τ;
   size_of_struct Γ s τs :
@@ -58,6 +58,8 @@ Implicit Types τ σ : type Ti.
 Implicit Types τs σs : list (type Ti).
 Implicit Types Γ : env Ti.
 
+Lemma size_of_uchar Γ : size_of Γ ucharT = 1.
+Proof. rewrite size_of_int. by apply rank_size_char. Qed.
 Lemma field_sizes_length Γ τs : ✓ Γ → length (field_sizes Γ τs) = length τs.
 Proof. symmetry. by eapply Forall2_length, size_of_fields. Qed.
 Lemma field_sizes_nil Γ : ✓ Γ → field_sizes Γ [] = [].
@@ -88,7 +90,7 @@ Proof. intros. unfold bit_size_of. f_equal. by apply size_of_weaken. Qed.
 Lemma bit_size_of_int Γ τi : bit_size_of Γ (intT τi) = int_bits τi.
 Proof. unfold bit_size_of. by rewrite size_of_int. Qed.
 Lemma bit_size_of_int_same_kind Γ τi1 τi2 :
-  IRank τi1 = IRank τi2 → bit_size_of Γ (intT τi1) = bit_size_of Γ (intT τi2).
+  rank τi1 = rank τi2 → bit_size_of Γ (intT τi1) = bit_size_of Γ (intT τi2).
 Proof.
   destruct τi1, τi2; intros; simplify_equality'. by rewrite !bit_size_of_int.
 Qed.
@@ -183,13 +185,11 @@ Lemma size_of_base_ne_0 Γ τb : size_of Γ (baseT τb) ≠ 0.
 Proof.
   destruct τb.
   * by rewrite size_of_void. 
-  * rewrite size_of_int. apply int_size_ne_0.
+  * rewrite size_of_int. apply rank_size_ne_0.
   * apply size_of_ptr_ne_0.
 Qed.
 Lemma bit_size_of_base_ne_0 Γ τb : bit_size_of Γ (baseT τb) ≠ 0.
-Proof.
-  apply Nat.neq_mul_0. auto using char_bits_ne_0, size_of_base_ne_0.
-Qed.
+Proof. apply Nat.neq_mul_0. auto using char_bits_ne_0, size_of_base_ne_0. Qed.
 Global Instance: ∀ Γ τb, PropHolds (size_of Γ (baseT τb) ≠ 0).
 Proof. apply size_of_base_ne_0. Qed.
 Global Instance: ∀ Γ τb, PropHolds (bit_size_of Γ (baseT τb) ≠ 0).
@@ -208,9 +208,7 @@ Qed.
 Lemma size_of_pos Γ τ : ✓ Γ → ✓{Γ} τ → 0 < size_of Γ τ.
 Proof. intros. by apply Nat.neq_0_lt_0, size_of_ne_0. Qed.
 Lemma bit_size_of_ne_0 Γ τ : ✓ Γ → ✓{Γ} τ → bit_size_of Γ τ ≠ 0.
-Proof.
-  intros. apply Nat.neq_mul_0. auto using char_bits_ne_0, size_of_ne_0.
-Qed.
+Proof. intros. apply Nat.neq_mul_0. auto using char_bits_ne_0,size_of_ne_0. Qed.
 Lemma bit_size_of_pos Γ τ : ✓ Γ → ✓{Γ} τ → 0 < bit_size_of Γ τ.
 Proof. intros. by apply Nat.neq_0_lt_0, bit_size_of_ne_0. Qed.
 End env_spec.

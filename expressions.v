@@ -155,15 +155,20 @@ Notation "'if{' e1 } e2 'else' e3" := (EIf e1 e2 e3)
   (at level 56, format "if{ e1 }  e2  'else'  e3") : expr_scope.
 Notation "'cast{' τ } e" := (ECast τ e)
   (at level 10, format "'cast{' τ }  e") : expr_scope.
+Notation "'cast{' τs }* es" := (zip_with ECast τs es)
+  (at level 10, format "'cast{' τs }*  es") : expr_scope.
 Notation "e1 ,, e2" := (EComma e1 e2)
   (at level 58, right associativity, format "e1  ,,  e2") : expr_scope.
 Notation "e .> i" := (EField e i) (at level 22) : expr_scope.
-
-Infix "+" := (EBinOp PlusOp) (at level 50, left associativity) : expr_scope.
-Infix "-" := (EBinOp MinusOp) (at level 50, left associativity) : expr_scope.
-Infix "*" := (EBinOp MultOp) (at level 40, left associativity) : expr_scope.
-Infix "/" := (EBinOp DivOp) (at level 40, left associativity) : expr_scope.
-Infix "==" := (EBinOp EqOp) (at level 52) : expr_scope.
+Infix "+" := (EBinOp (ArithOp PlusOp))
+  (at level 50, left associativity) : expr_scope.
+Infix "-" := (EBinOp (ArithOp MinusOp))
+  (at level 50, left associativity) : expr_scope.
+Infix "*" := (EBinOp (ArithOp MultOp))
+  (at level 40, left associativity) : expr_scope.
+Infix "/" := (EBinOp (ArithOp DivOp))
+  (at level 40, left associativity) : expr_scope.
+Infix "==" := (EBinOp (CompOp EqOp)) (at level 52) : expr_scope.
 Notation "- e" := (EUnOp NegOp e)
   (at level 35, right associativity) : expr_scope.
 

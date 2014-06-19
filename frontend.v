@@ -114,13 +114,13 @@ Definition to_expr (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      '(e1,τlr1) ← go ce1;
      τ1 ← maybe_inl τlr1;
      '(e2,τ2) ← to_R <$> go ce2;
-     σ ← assign_type_of τ1 τ2 ass;
+     σ ← assign_type_of Γ τ1 τ2 ass;
      Some (e1 ::={ass} e2, inr σ)
   | ECall f ces =>
      '(τs,σ) ← Γf !! (f : funname);
      τses ← fmap to_R <$> mapM go ces;
-     guard (snd <$> τses = τs);
-     Some (call f @ fst <$> τses, inr σ)
+     guard (Forall2 (cast_typed Γ) (snd <$> τses) τs);
+     Some (call f @ cast{τs}* (fst <$> τses), inr σ)
   | EAlloc τ =>
      guard (✓{Γ} τ);
      guard (int_typed (size_of Γ τ) sptrT);
@@ -418,12 +418,14 @@ Proof.
     | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
     | _ : maybe_TPtr ?τb = Some _ |- _ => is_var τb; destruct τb
     | _ : maybe_TCompound ?τ = Some _ |- _ => is_var τ; destruct τ
-    | H: assign_type_of _ _ _ = Some _ |- _ => apply assign_type_of_correct in H
+    | H: assign_type_of _ _ _ _ = Some _ |- _ =>
+       apply assign_type_of_correct in H
     | H: unop_type_of _ _ = Some _ |- _ => apply unop_type_of_correct in H
     | H: binop_type_of _ _ _ = Some _ |- _ => apply binop_type_of_correct in H
     | _ => progress (simplify_option_equality by fail)
     | x : (_ * _)%type |- _ => destruct x
-    end; try typed_constructor; eauto using to_R_typed, var_lookup_typed.
+    end; try typed_constructor;
+    eauto using to_R_typed, var_lookup_typed, ECasts_typed.
 Qed.
 Lemma alloc_global_typed Γ m xs x τ mce m' xs' :
   ✓ Γ → alloc_global Γ m xs x τ mce = Some (m',xs') →
@@ -475,7 +477,7 @@ Proof.
     end; try solve [split_ands; eauto using to_R_typed, to_expr_typed].
   * split_ands; eauto. eapply SBlock_typed; eauto.
     repeat typed_constructor; eauto using expr_typed_weaken, subseteq_empty.
-    constructor.
+    constructor. by apply cast_typed_self.
   * split_ands; eauto using stmt_typed_weaken.
   * split_ands; eauto using to_while_typed, expr_typed_weaken.
   * split_ands; eauto using stmt_typed_weaken, expr_typed_weaken.

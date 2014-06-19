@@ -19,18 +19,19 @@ Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
 Hint Extern 0 (_ ⊢ _ : _ ↣ _) => typed_constructor.
 
 Lemma assign_preservation_1 Γ m ass a v v' va' τ1 τ2 σ :
-  ✓ Γ → ✓{Γ} m → assign_typed τ1 τ2 ass σ → (Γ,m) ⊢ a : τ1 → (Γ,m) ⊢ v : τ2 →
+  ✓ Γ → ✓{Γ} m → assign_typed Γ τ1 τ2 ass σ →
+  (Γ,m) ⊢ a : τ1 → (Γ,m) ⊢ v : τ2 →
   assign_sem Γ m a v ass v' va' → (Γ,m) ⊢ v' : σ.
 Proof.
-  destruct 3; inversion 3; subst;
-    eauto using val_binop_typed, mem_lookup_typed.
+  destruct 3; inversion 3; simplify_type_equality';
+    eauto using val_cast_typed, val_binop_typed, mem_lookup_typed.
 Qed.
 Lemma assign_preservation_2 Γ m ass a v v' va' τ1 τ2 σ :
-  ✓ Γ → ✓{Γ} m → assign_typed τ1 τ2 ass σ → (Γ,m) ⊢ a : τ1 → (Γ,m) ⊢ v : τ2 →
+  ✓ Γ → ✓{Γ} m → assign_typed Γ τ1 τ2 ass σ → (Γ,m) ⊢ a : τ1 → (Γ,m) ⊢ v : τ2 →
   assign_sem Γ m a v ass v' va' → (Γ,m) ⊢ va' : τ1.
 Proof.
-  destruct 3; inversion 3; subst;
-    eauto using val_binop_typed, mem_lookup_typed.
+  destruct 3; inversion 3; simplify_type_equality';
+    eauto using val_cast_typed, val_binop_typed, mem_lookup_typed.
 Qed.
 Lemma ehstep_preservation Γ Γf m1 m2 ρ τs e1 e2 τlr :
   ✓ Γ → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 →

@@ -31,18 +31,21 @@ Global Instance lrval_typed:
 Global Instance funtypes_valid : Valid (env Ti) (funtypes Ti) := λ Γ,
   map_Forall (λ _ τsσ, ✓{Γ}* (τsσ.1) ∧
     Forall (λ τ, int_typed (size_of Γ τ) sptrT) (τsσ.1) ∧ ✓{Γ} (τsσ.2)).
-
-Inductive assign_typed (τ1 : type Ti) : type Ti → assign → type Ti → Prop :=
-  | Assign_typed : assign_typed τ1 τ1 Assign τ1
-  | PreOp_typed op τ2 :
-     binop_typed op τ1 τ2 τ1 → assign_typed τ1 τ2 (PreOp op) τ1
-  | PostOp_typed op τ2 :
-     binop_typed op τ1 τ2 τ1 → assign_typed τ1 τ2 (PostOp op) τ1.
-Definition assign_type_of (τ1 τ2 : type Ti) (ass : assign) : option (type Ti) :=
+Inductive assign_typed (Γ : env Ti) (τ1 : type Ti) :
+     type Ti → assign → type Ti → Prop :=
+  | Assign_typed τ2 : cast_typed Γ τ2 τ1 → assign_typed Γ τ1 τ2 Assign τ1
+  | PreOp_typed op τ2 σ :
+     binop_typed op τ1 τ2 σ → cast_typed Γ σ τ1 →
+     assign_typed Γ τ1 τ2 (PreOp op) τ1
+  | PostOp_typed op τ2 σ :
+     binop_typed op τ1 τ2 σ → cast_typed Γ σ τ1 →
+     assign_typed Γ τ1 τ2 (PostOp op) τ1.
+Definition assign_type_of (Γ : env Ti)
+    (τ1 τ2 : type Ti) (ass : assign) : option (type Ti) :=
   match ass with
-  | Assign => guard (τ1 = τ2); Some τ1
-  | PreOp op => σ ← binop_type_of op τ1 τ2; guard (σ = τ1); Some σ
-  | PostOp op => σ ← binop_type_of op τ1 τ2; guard (σ = τ1); Some σ
+  | Assign => guard (cast_typed Γ τ2 τ1); Some τ1
+  | PreOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed Γ σ τ1); Some τ1
+  | PostOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed Γ σ τ1); Some τ1
   end.
 
 Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
@@ -59,7 +62,7 @@ Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
   | ERofL_typed e τ :
      expr_typed' Γ Γf m τs e (inl τ) → expr_typed' Γ Γf m τs (& e) (inr (τ.*))
   | EAssign_typed ass e1 e2 τ1 τ2 σ :
-     assign_typed τ1 τ2 ass σ →
+     assign_typed Γ τ1 τ2 ass σ →
      expr_typed' Γ Γf m τs e1 (inl τ1) → expr_typed' Γ Γf m τs e2 (inr τ2) →
      expr_typed' Γ Γf m τs (e1 ::={ass} e2) (inr σ)
   | ECall_typed f es σ σs :
@@ -113,7 +116,7 @@ Section expr_typed_ind.
   Context (Profl : ∀ e τ,
     (Γ,Γf,m,τs) ⊢ e : inl τ → P e (inl τ) → P (& e) (inr (τ.*))).
   Context (Passign : ∀ ass e1 e2 τ1 τ2 σ,
-     assign_typed τ1 τ2 ass σ → (Γ,Γf,m,τs) ⊢ e1 : inl τ1 → P e1 (inl τ1) →
+     assign_typed Γ τ1 τ2 ass σ → (Γ,Γf,m,τs) ⊢ e1 : inl τ1 → P e1 (inl τ1) →
      (Γ,Γf,m,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ::={ass} e2) (inr σ)).
   Context (Pcall : ∀ f es σ σs,
      Γf !! f = Some (σs,σ) → (Γ,Γf,m,τs) ⊢* es :* inr <$> σs →
@@ -154,10 +157,10 @@ Inductive ectx_item_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
   | CRtoL_typed τ : ectx_item_typed' Γ Γf m τs (.* □) (inr (τ.*)) (inl τ)
   | CLtoR_typed τ : ectx_item_typed' Γ Γf m τs (& □) (inl τ) (inr (τ.*))
   | CAssignL_typed ass e2 τ1 τ2 σ :
-     assign_typed τ1 τ2 ass σ → (Γ,Γf,m,τs) ⊢ e2 : inr τ2 →
+     assign_typed Γ τ1 τ2 ass σ → (Γ,Γf,m,τs) ⊢ e2 : inr τ2 →
      ectx_item_typed' Γ Γf m τs (□ ::={ass} e2) (inl τ1) (inr σ)
   | CAssignR_typed ass e1 τ1 τ2 σ :
-     assign_typed τ1 τ2 ass σ → (Γ,Γf,m,τs) ⊢ e1 : inl τ1 →
+     assign_typed Γ τ1 τ2 ass σ → (Γ,Γf,m,τs) ⊢ e1 : inl τ1 →
      ectx_item_typed' Γ Γf m τs (e1 ::={ass} □) (inr τ2) (inr σ)
   | CCall_typed f es1 es2 σ τs1 τ τs2 :
      Γf !! f = Some (τs1 ++ τ :: τs2, σ) →
@@ -375,6 +378,13 @@ Lemma SBlock_typed Γ Γf m τs τ s c mσ :
   ✓{Γ} τ →int_typed (size_of Γ τ) sptrT →
   (Γ,Γf,m,τ :: τs) ⊢ s : (c,mσ) → (Γ,Γf,m,τs) ⊢ blk{τ} s : (c,mσ).
 Proof. by constructor. Qed.
+Lemma ECasts_typed Γ Γf m τs es σs' σs :
+  Forall2 (cast_typed Γ) σs' σs → (Γ,Γf,m,τs) ⊢* es :* inr <$> σs' →
+  (Γ,Γf,m,τs) ⊢* cast{σs}* es :* inr <$> σs.
+Proof.
+  intros Hσs. revert es. induction Hσs; intros [|??] ?;
+    decompose_Forall_hyps'; constructor; repeat typed_constructor; eauto.
+Qed.
 
 Global Instance rettype_match_dec cmσ σ : Decision (rettype_match cmσ σ) :=
   match cmσ with
@@ -382,17 +392,20 @@ Global Instance rettype_match_dec cmσ σ : Decision (rettype_match cmσ σ) :=
   | (false,Some _) => right (@id False)
   | (_,None) => decide (σ = voidT)
   end.
-Lemma assign_type_of_correct ass τ1 τ2 σ :
-  assign_typed τ1 τ2 ass σ ↔ assign_type_of τ1 τ2 ass = Some σ.
+Lemma assign_type_of_correct Γ ass τ1 τ2 σ :
+  assign_typed Γ τ1 τ2 ass σ ↔ assign_type_of Γ τ1 τ2 ass = Some σ.
 Proof.
   split.
   * by destruct 1; simplify_option_equality;
       erewrite ?(proj1 (binop_type_of_correct _ _ _ _)) by eauto;
       simplify_option_equality.
-  * destruct ass; intros; simplify_option_equality; econstructor;
+  * destruct ass; intros; simplify_option_equality; econstructor; eauto;
       eapply binop_type_of_correct; eauto.
 Qed.
 
+Lemma assign_typed_weaken Γ1 Γ2 ass τ1 τ2 σ :
+  ✓ Γ1 → assign_typed Γ1 τ1 τ2 ass σ → Γ1 ⊆ Γ2 → assign_typed Γ2 τ1 τ2 ass σ.
+Proof. destruct 2; econstructor; eauto using cast_typed_weaken. Qed.
 Lemma expr_typed_weaken Γ1 Γ2 Γf1 Γf2 m1 m2 τs1 τs2 e τlr :
   ✓ Γ1 → (Γ1,Γf1,m1,τs1) ⊢ e : τlr → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →
   (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) → τs1 `prefix_of` τs2 →
@@ -400,8 +413,8 @@ Lemma expr_typed_weaken Γ1 Γ2 Γf1 Γf2 m1 m2 τs1 τs2 e τlr :
 Proof.
   intros ? He ??? [σs ->].
   induction He using @expr_typed_ind; typed_constructor;
-    erewrite <-1?size_of_weaken by eauto;
-    eauto using val_typed_weaken, addr_typed_weaken, addr_strict_weaken,
+    erewrite <-1?size_of_weaken by eauto; eauto using val_typed_weaken,
+    assign_typed_weaken, addr_typed_weaken, addr_strict_weaken,
     type_valid_weaken, lookup_weaken, lookup_app_l_Some, cast_typed_weaken.
 Qed.
 Lemma ectx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 m1 m2 τs1 τs2 Ei τlr σlr :
@@ -409,7 +422,8 @@ Lemma ectx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 m1 m2 τs1 τs2 Ei τlr σlr :
   (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) → τs1 `prefix_of` τs2 →
   (Γ2,Γf2,m2,τs2) ⊢ Ei : τlr ↣ σlr.
 Proof.
-  destruct 2; typed_constructor; eauto using addr_strict_weaken,
+  destruct 2; typed_constructor;
+    eauto using addr_strict_weaken, assign_typed_weaken,
     expr_typed_weaken, lookup_weaken, cast_typed_weaken, Forall2_impl.
 Qed.
 Lemma ectx_typed_weaken Γ1 Γ2 Γf1 Γf2 m1 m2 τs1 τs2 E τlr σlr :

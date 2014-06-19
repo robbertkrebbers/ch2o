@@ -27,8 +27,8 @@ Section castable.
   Proof. constructor. Qed.
   Lemma castable_divide Γ τ1 τ2 : τ1 >*> τ2 → (size_of Γ τ2 | size_of Γ τ1).
   Proof.
-    rewrite castable_alt. intros [->|[->| ->]]; rewrite ?size_of_void,
-      ?size_of_int, ?int_size_char; auto using Nat.divide_1_l.
+    rewrite castable_alt. intros [->|[->| ->]];
+      rewrite ?size_of_void, ?size_of_uchar; auto using Nat.divide_1_l.
   Qed.
   Lemma castable_type_valid Γ τ σ : ✓{Γ} τ → τ >*> σ → ✓{Γ} σ.
   Proof. by destruct 2; repeat constructor. Qed.
@@ -39,8 +39,6 @@ Section castable.
     ✓ Γ → ✓{Γ} τ → τ >*> σ → size_of Γ σ ≤ size_of Γ τ.
   Proof.
     intros HΓ Hτ. pose proof (size_of_pos _ _ HΓ Hτ). rewrite castable_alt.
-    intros [?|[?|?]]; subst; auto.
-    * rewrite size_of_int, int_size_char; lia.
-    * rewrite size_of_void; lia.
+    intros [->|[->| ->]]; rewrite ?size_of_uchar, ?size_of_void; lia.
   Qed.
 End castable.

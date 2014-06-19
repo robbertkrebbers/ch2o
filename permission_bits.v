@@ -324,6 +324,9 @@ Proof.
   induction 1 as [|[??] ? (?&?&?)]; repeat constructor; decompose_Forall_hyps';
     eauto using perm_lock_valid, perm_lock_unmapped_inv.
 Qed.
+Lemma pbits_locked_mask βs xbs :
+  pbit_locked <$> mask pbit_indetify βs xbs = pbit_locked <$> xbs.
+Proof. revert βs. induction xbs; intros [|[] ?]; f_equal'; auto. Qed.
 
 (** ** Refinements *)
 Lemma pbit_refine_valid_l Γ f m1 m2 xb1 xb2 :
@@ -497,4 +500,10 @@ Qed.
 Lemma pbit_refine_kind Γ f m1 m2 xb1 xb2 k :
   xb1 ⊑{Γ,f@m1↦m2} xb2 → k ⊆ pbit_kind xb1 → k ⊆ pbit_kind xb2.
 Proof. unfold pbit_kind; intros (?&?&?&?); simpl; congruence. Qed.
+Lemma pbits_refine_locked Γ f m1 m2 xbs1 xbs2 :
+  xbs1 ⊑{Γ,f@m1↦m2}* xbs2 → pbit_locked <$> xbs1 = pbit_locked <$> xbs2.
+Proof.
+  unfold pbit_locked.
+  induction 1 as [|???? (?&?&?)]; f_equal'; auto with f_equal.
+Qed.
 End properties.

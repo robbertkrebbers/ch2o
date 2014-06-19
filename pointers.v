@@ -139,20 +139,20 @@ Global Instance ptr_minus_ok_dec m p1 p2 : Decision (ptr_minus_ok m p1 p2).
 Proof. destruct p1, p2; apply _. Defined.
 Global Instance ptr_cast_ok_dec Γ σc p : Decision (ptr_cast_ok Γ σc p).
 Proof. destruct p; apply _. Defined.
-Lemma ptr_plus_ok_typed Γ m p σ j :
+Lemma ptr_plus_typed Γ m p σ j :
   ✓ Γ → (Γ,m) ⊢ p : σ → ptr_plus_ok Γ m j p → (Γ,m) ⊢ ptr_plus Γ j p : σ.
-Proof. destruct 2; simpl; constructor; eauto using addr_plus_ok_typed. Qed.
-Lemma ptr_minus_ok_typed Γ m p1 p2 σ :
+Proof. destruct 2; simpl; constructor; eauto using addr_plus_typed. Qed.
+Lemma ptr_minus_typed Γ m p1 p2 σ :
   ✓ Γ → (Γ,m) ⊢ p1 : σ → (Γ,m) ⊢ p2 : σ →
   int_typed (ptr_minus Γ p1 p2) sptrT.
 Proof.
   destruct 2, 1; simpl;
-    eauto using addr_minus_ok_typed, int_typed_small with lia.
+    eauto using addr_minus_typed, int_typed_small with lia.
 Qed.
-Lemma ptr_cast_ok_typed Γ m p σ σc :
+Lemma ptr_cast_typed Γ m p σ σc :
   (Γ,m) ⊢ p : σ → ptr_cast_ok Γ σc p →
   ptr_type_valid Γ σc → (Γ,m) ⊢ ptr_cast σc p : σc.
-Proof. destruct 1; simpl; constructor; eauto using addr_cast_ok_typed. Qed.
+Proof. destruct 1; simpl; constructor; eauto using addr_cast_typed. Qed.
 Lemma ptr_plus_ok_weaken Γ1 Γ2 m1 m2 p τ j :
   ✓ Γ1 → (Γ1,m1) ⊢ p : τ → ptr_plus_ok Γ1 m1 j p →
   Γ1 ⊆ Γ2 → (∀ o, index_alive m1 o → index_alive m2 o) →
