@@ -111,8 +111,8 @@ Definition to_expr (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      guard (int_typed x τi);
      Some (# (intV{τi} x), inr (intT τi))
   | ESizeOf ce =>
-     '(_,τ) ← to_R <$> go ce;
-     let sz := size_of Γ τ in
+     '(_,τlr) ← go ce;
+     let sz := size_of Γ (lrtype_type τlr) in
      guard (int_typed sz sptrT);
      Some (# (intV{sptrT} sz), inr sptrT)
   | ESizeOfType τ =>

@@ -6,6 +6,8 @@ Local Open Scope ctype_scope.
 
 Notation funtypes Ti := (funmap (list (type Ti) * type Ti)).
 Notation lrtype Ti := (type Ti + type Ti)%type.
+Definition lrtype_type {Ti} (τlr : lrtype Ti) : type Ti :=
+  match τlr with inl τ | inr τ => τ end.
 Notation rettype Ti := (bool * option (type Ti))%type.
 Inductive focus_type (Ti : Set) :=
   | Stmt_type : rettype Ti → focus_type Ti
