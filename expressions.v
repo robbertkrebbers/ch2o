@@ -223,15 +223,6 @@ Proof.
   end); clear go; abstract congruence.
 Defined.
 
-(*
-(** The sequenced [||] and [&&] operators are defined in terms of the
-conditional. This keeps the expression language small. *)
-Definition EAnd {Ti} (e1 e2 : expr Ti) := (IF e1 then e2 else intc int_false).
-Infix "&&" := EAnd : expr_scope.
-Definition EOr (e1 e2 : expr) := (IF e1 then intc int_true else e2).
-Infix "||" := EOr : expr_scope.
-*)
-
 (** * Induction principles *)
 (** The induction principles that Coq generates for nested inductive types are
 too weak. For the case of expressions, the branch of [call f @ es] does not

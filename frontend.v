@@ -7,6 +7,8 @@ Local Open Scope ctype_scope.
 Inductive cexpr (Ti : Set) : Set :=
   | EVar : N → cexpr Ti
   | EConst : int_type Ti → Z → cexpr Ti
+  | ESizeOf : cexpr Ti → cexpr Ti
+  | ESizeOfType : type Ti → cexpr Ti
   | EAddrOf : cexpr Ti → cexpr Ti
   | EDeref : cexpr Ti → cexpr Ti
   | EAssign : assign → cexpr Ti → cexpr Ti → cexpr Ti
@@ -17,10 +19,14 @@ Inductive cexpr (Ti : Set) : Set :=
   | EBinOp : binop → cexpr Ti → cexpr Ti → cexpr Ti
   | EIf : cexpr Ti → cexpr Ti → cexpr Ti → cexpr Ti
   | EComma : cexpr Ti → cexpr Ti → cexpr Ti
+  | EAnd : cexpr Ti → cexpr Ti → cexpr Ti
+  | EOr : cexpr Ti → cexpr Ti → cexpr Ti
   | ECast : type Ti → cexpr Ti → cexpr Ti
   | EField : cexpr Ti → nat → cexpr Ti.
 Arguments EVar {_} _.
 Arguments EConst {_} _ _.
+Arguments ESizeOf {_} _.
+Arguments ESizeOfType {_} _.
 Arguments EAddrOf {_} _.
 Arguments EDeref {_} _.
 Arguments EAssign {_} _ _ _.
@@ -31,6 +37,8 @@ Arguments EUnOp {_} _ _.
 Arguments EBinOp {_} _ _ _.
 Arguments EIf {_} _ _ _.
 Arguments EComma {_} _ _.
+Arguments EAnd {_} _ _.
+Arguments EOr {_} _ _.
 Arguments ECast {_} _ _.
 Arguments EField {_} _ _.
 
@@ -102,6 +110,15 @@ Definition to_expr (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
   | EConst τi x =>
      guard (int_typed x τi);
      Some (# (intV{τi} x), inr (intT τi))
+  | ESizeOf ce =>
+     '(_,τ) ← to_R <$> go ce;
+     let sz := size_of Γ τ in
+     guard (int_typed sz sptrT);
+     Some (# (intV{sptrT} sz), inr sptrT)
+  | ESizeOfType τ =>
+     let sz := size_of Γ τ in
+     guard (int_typed sz sptrT);
+     Some (# (intV{sptrT} sz), inr sptrT)
   | EDeref ce =>
      '(e,τ) ← to_R <$> go ce;
      τp ← maybe_TBase τ ≫= maybe_TPtr;
@@ -126,8 +143,7 @@ Definition to_expr (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      guard (int_typed (size_of Γ τ) sptrT);
      Some (& (alloc τ), inr (τ.*))
   | EFree ce =>
-     '(e,τ) ← to_R <$> go ce;
-     _ ← maybe_TBase τ ≫= maybe_TPtr;
+     '(e,τ) ← to_R <$> go ce; _ ← maybe_TBase τ ≫= maybe_TPtr;
      Some (free (.* e), inr voidT)
   | EUnOp op ce =>
      '(e,τ) ← to_R <$> go ce;
@@ -139,8 +155,7 @@ Definition to_expr (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      σ ← binop_type_of op τ1 τ2;
      Some (e1 @{op} e2, inr σ)
   | EIf ce1 ce2 ce3 =>
-     '(e1,τ1) ← to_R <$> go ce1;
-     _ ← maybe_TBase τ1;
+     '(e1,τ1) ← to_R <$> go ce1; _ ← maybe_TBase τ1;
      '(e2,τ2) ← to_R <$> go ce2;
      '(e3,τ3) ← to_R <$> go ce3;
      guard (τ2 = τ3);
@@ -149,6 +164,16 @@ Definition to_expr (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      '(e1,τ1) ← to_R <$> go ce1;
      '(e2,τ2) ← to_R <$> go ce2;
      Some (e1,, e2, inr τ2)
+  | EAnd ce1 ce2 =>
+     '(e1,τ1) ← to_R <$> go ce1; _ ← maybe_TBase τ1;
+     '(e2,τ2) ← to_R <$> go ce2; _ ← maybe_TBase τ2;
+     Some (if{e1} if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)
+           else #(intV{sintT} 0), inr sintT)
+  | EOr ce1 ce2 =>
+     '(e1,τ1) ← to_R <$> go ce1; _ ← maybe_TBase τ1;
+     '(e2,τ2) ← to_R <$> go ce2; _ ← maybe_TBase τ2;
+     Some (if{e1} #(intV{sintT} 0)
+           else (if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)), inr sintT)
   | ECast σ ce =>
      '(e,τ) ← to_R <$> go ce;
      guard (cast_typed Γ τ σ);
@@ -313,6 +338,8 @@ Section cexpr_ind.
 Context {Ti : Set} (P : cexpr Ti → Prop).
 Context (Pvar : ∀ x, P (EVar x)).
 Context (Pconst : ∀ τi x, P (EConst τi x)).
+Context (Psizeof : ∀ ce, P ce → P (ESizeOf ce)).
+Context (Psizeoftype : ∀ τ, P (ESizeOfType τ)).
 Context (Paddrof : ∀ ce, P ce → P (EAddrOf ce)).
 Context (Pderef : ∀ ce, P ce → P (EDeref ce)).
 Context (Passign : ∀ ass ce1 ce2, P ce1 → P ce2 → P (EAssign ass ce1 ce2)).
@@ -323,6 +350,8 @@ Context (Punop : ∀ op ce, P ce → P (EUnOp op ce)).
 Context (Pbinop : ∀ op ce1 ce2, P ce1 → P ce2 → P (EBinOp op ce1 ce2)).
 Context (Pif : ∀ ce1 ce2 ce3, P ce1 → P ce2 → P ce3 → P (EIf ce1 ce2 ce3)).
 Context (Pcomma : ∀ ce1 ce2, P ce1 → P ce2 → P (EComma ce1 ce2)).
+Context (Pand : ∀ ce1 ce2, P ce1 → P ce2 → P (EAnd ce1 ce2)).
+Context (Por : ∀ ce1 ce2, P ce1 → P ce2 → P (EOr ce1 ce2)).
 Context (Pcast : ∀ τ ce, P ce → P (ECast τ ce)).
 Context (Pfield : ∀ ce i, P ce → P (EField ce i)).
 
@@ -331,6 +360,8 @@ Definition cexpr_ind_alt : ∀ e, P e :=
   match e return P e with
   | EVar _ => Pvar _
   | EConst _ _ => Pconst _ _
+  | ESizeOf ce => Psizeof _ (go ce)
+  | ESizeOfType _ => Psizeoftype _
   | EAddrOf ce => Paddrof _ (go ce)
   | EDeref ce => Pderef _ (go ce)
   | EAssign _ ce1 ce2 => Passign _ _ _ (go ce1) (go ce2)
@@ -342,6 +373,8 @@ Definition cexpr_ind_alt : ∀ e, P e :=
   | EBinOp _ ce1 ce2 => Pbinop _ _ _ (go ce1) (go ce2)
   | EIf ce1 ce2 ce3 => Pif _ _ _ (go ce1) (go ce2) (go ce3)
   | EComma ce1 ce2 => Pcomma _ _ (go ce1) (go ce2)
+  | EAnd ce1 ce2 => Pand _ _ (go ce1) (go ce2)
+  | EOr ce1 ce2 => Por _ _ (go ce1) (go ce2)
   | ECast _ ce => Pcast _ _ (go ce)
   | EField ce _ => Pfield _ _ (go ce)
   end.
@@ -361,6 +394,7 @@ Implicit Types τlr : lrtype Ti.
 
 Arguments to_R _ _ : simpl never.
 Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
+Hint Extern 1 (int_typed _ _) => by apply int_typed_small.
 
 Fixpoint var_env_stack_types (xs : var_env Ti) : list (type Ti) :=
   match xs with
@@ -424,7 +458,7 @@ Proof.
     | H: binop_type_of _ _ _ = Some _ |- _ => apply binop_type_of_correct in H
     | _ => progress (simplify_option_equality by fail)
     | x : (_ * _)%type |- _ => destruct x
-    end; try typed_constructor;
+    end; repeat typed_constructor;
     eauto using to_R_typed, var_lookup_typed, ECasts_typed.
 Qed.
 Lemma alloc_global_typed Γ m xs x τ mce m' xs' :
