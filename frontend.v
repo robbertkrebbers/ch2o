@@ -80,13 +80,6 @@ Arguments FunDecl {_} _ _ _.
 Notation var_env Ti := (list (N * (index + type Ti))).
 Notation rename_env := (tagmap (list N)).
 
-Definition find_index {A} (P : A → Prop)
-    `{∀ x, Decision (P x)} : nat → list A → option nat :=
-  fix go i l :=
-  match l with
-  | [] => None | x :: l => if decide (P x) then Some i else go (S i) l
-  end.
-
 Section frontend.
 Context `{IntEnv Ti, PtrEnv Ti}.
 
@@ -192,7 +185,7 @@ Definition to_expr (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) (m : mem
      τ ← maybe_inl τrl;
      '(c,s) ← maybe_TCompound τ;
      σs ← Γ !! s;
-     i ← Γn !! s ≫= find_index (x =) 0;
+     i ← Γn !! s ≫= list_find (x =);
      σ ← σs !! i;
      Some (e .> i, inl σ)
   end%E.
