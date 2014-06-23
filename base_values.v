@@ -457,12 +457,12 @@ Proof.
   intros. assert (∀ τi βs,
     Forall (@BIndet Ti =) (BBit <$> βs) → length βs ≠ int_bits τi).
   { intros τi βs ??. pose proof (int_bits_pos τi).
-    destruct βs; decompose_Forall_hyps'; lia. }
+    destruct βs; decompose_Forall_hyps; lia. }
   assert (∀ τ pbs p,
     Forall (BIndet =) (BPtr <$> pbs) → ptr_of_bits Γ τ pbs ≠ Some p).
   { intros τ pbs p ??. assert (length pbs ≠ 0).
     { erewrite ptr_of_bits_length by eauto. by apply bit_size_of_base_ne_0. }
-    destruct pbs; decompose_Forall_hyps'; lia. }
+    destruct pbs; decompose_Forall_hyps; lia. }
   feed inversion (base_val_unflatten_spec Γ τb bs); naive_solver.
 Qed.
 Lemma base_val_unflatten_int_indet Γ τi bs :

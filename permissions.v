@@ -115,6 +115,8 @@ Proof. destruct (perm_kind_spec x); repeat sep_unfold; intuition. Qed.
 Lemma perm_lock_unmapped_inv x :
   sep_unmapped (perm_lock x) → sep_unmapped x.
 Proof. destruct x as [[[]|[[][]]]|]; repeat sep_unfold; intuition. Qed.
+Lemma perm_lock_unshared x : sep_unshared x → sep_unshared (perm_lock x).
+Proof. destruct x as [[[[][]]|[[][]]]|]; repeat sep_unfold; intuition. Qed.
 Lemma perm_unlock_lock x :
   sep_valid x → Some Writable ⊆ perm_kind x → perm_unlock (perm_lock x) = x.
 Proof. by destruct (perm_kind_spec x). Qed.

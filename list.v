@@ -402,14 +402,15 @@ Lemma lookup_ge_None_1 l i : l !! i = None → length l ≤ i.
 Proof. by rewrite lookup_ge_None. Qed.
 Lemma lookup_ge_None_2 l i : length l ≤ i → l !! i = None.
 Proof. by rewrite lookup_ge_None. Qed.
-Lemma list_eq_length l1 l2 :
-  length l2 = length l1 →
-  (∀ i x y, l1 !! i = Some x → l2 !! i = Some y → x = y) → l1 = l2.
+Lemma list_eq_same_length l1 l2 n :
+  length l2 = n → length l1 = n →
+  (∀ i x y, i < n → l1 !! i = Some x → l2 !! i = Some y → x = y) → l1 = l2.
 Proof.
-  intros Hl ?; apply list_eq; intros i. destruct (l2 !! i) as [x|] eqn:Hx.
-  * destruct (lookup_lt_is_Some_2 l1 i) as [y ?]; [|naive_solver].
-    rewrite <-Hl. eauto using lookup_lt_Some.
-  * by rewrite lookup_ge_None, <-Hl, <-lookup_ge_None.
+  intros <- Hlen Hl; apply list_eq; intros i. destruct (l2 !! i) as [x|] eqn:Hx.
+  * destruct (lookup_lt_is_Some_2 l1 i) as [y Hy].
+    { rewrite Hlen; eauto using lookup_lt_Some. }
+    rewrite Hy; f_equal; apply (Hl i); eauto using lookup_lt_Some.
+  * by rewrite lookup_ge_None, Hlen, <-lookup_ge_None.
 Qed.
 Lemma lookup_app_l l1 l2 i : i < length l1 → (l1 ++ l2) !! i = l1 !! i.
 Proof. revert i. induction l1; intros [|?]; simpl; auto with lia. Qed.
@@ -3054,7 +3055,6 @@ Ltac decompose_elem_of_list := repeat
   | H : _ ∈ _ :: _ |- _ => apply elem_of_cons in H; destruct H
   | H : _ ∈ _ ++ _ |- _ => apply elem_of_app in H; destruct H
   end.
-
 Ltac simplify_list_fmap_equality := repeat
   match goal with
   | _ => progress simplify_equality
@@ -3091,6 +3091,7 @@ Ltac decompose_Forall_hyps := repeat
   | H : Forall2 _ ?l [] |- _ => apply Forall2_nil_inv_r in H; subst l
   | H : Forall2 _ (_ :: _) (_ :: _) |- _ =>
     apply Forall2_cons_inv in H; destruct H
+  | _ => progress simplify_equality'
   | H : Forall2 _ (_ :: _) ?k |- _ =>
     let k_hd := fresh k "_hd" in let k_tl := fresh k "_tl" in
     apply Forall2_cons_inv_l in H; destruct H as (k_hd&k_tl&?&?&->);
@@ -3100,8 +3101,8 @@ Ltac decompose_Forall_hyps := repeat
     apply Forall2_cons_inv_r in H; destruct H as (l_hd&l_tl&?&?&->);
     rename l_tl into l
   | H : Forall2 _ (_ ++ _) (_ ++ _) |- _ =>
-    apply Forall2_app_inv in H;
-     [destruct H | by eauto using Forall2_length, eq_sym]
+    apply Forall2_app_inv in H; [destruct H | first 
+      [by eauto using Forall2_length | by symmetry; eauto using Forall2_length]]
   | H : Forall2 _ (_ ++ _) ?k |- _ => first
     [ let k1 := fresh k "_1" in let k2 := fresh k "_2" in
       apply Forall2_app_inv_l in H; destruct H as (k1&k2&?&?&->)
@@ -3140,8 +3141,6 @@ Ltac decompose_Forall_hyps := repeat
       destruct (Forall3_lookup_r P _ _ _ _ _ H H3) as (?&?&?&?&?)
     end
   end.
-Ltac decompose_Forall_hyps' :=
-  repeat (progress simplify_equality' || decompose_Forall_hyps).
 Ltac decompose_Forall := repeat
   match goal with
   | |- Forall _ _ => by apply Forall_true

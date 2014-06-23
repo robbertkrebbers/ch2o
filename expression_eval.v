@@ -142,7 +142,7 @@ Proof.
     mapM (λ e, ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr) es = Some vs →
     fs !! f = Some F → F vs = Some v → P (call f @ es) (inr v)).
   { intros f F es vs v Hes Hvs Hf Hv. apply mapM_Some in Hvs.
-    eapply Pcall; eauto; clear Hf Hv; induction Hvs; decompose_Forall_hyps';
+    eapply Pcall; eauto; clear Hf Hv; induction Hvs; decompose_Forall_hyps;
       repeat match goal with
       | _ => progress simplify_option_equality
       | _ : maybe_inr ?va = Some _ |- _ => is_var va; destruct va
@@ -193,7 +193,7 @@ Proof.
       (Γ,Γf,m,τs ++ τs'') ⊢ e : τlr → (Γ, m) ⊢ inr v : τlr) es vs →
     (Γ,Γf,m,τs ++ τs'') ⊢* es :* inr <$> σs → (Γ,m) ⊢* vs :* σs).
   { intros es vs σs Hes. revert σs.
-    induction Hes; intros [|??] ?; decompose_Forall_hyps';
+    induction Hes; intros [|??] ?; decompose_Forall_hyps;
       repeat match goal with
       | _ => progress typed_inversion_all
       | H : _ ⊢ ?e : _, H2 : ∀ _, _ ⊢ ?e : _  → _ |- _ => specialize (H2 _ H)
@@ -201,7 +201,7 @@ Proof.
   rapply (expr_eval_ind Γ fs ρ m); intros;
     repeat match goal with
     | _ => progress typed_inversion_all
-    | _ => progress decompose_Forall_hyps'
+    | _ => progress decompose_Forall_hyps
     | H : (?τs1 ++ ?τs2) !! _ = Some ?τ1, H2 : ?τs1 !! _ = Some ?τ2 |- _ =>
       assert (τ1 = τ2) by (apply (lookup_app_l_Some _ τs2) in H2; congruence);
       clear H
@@ -241,7 +241,7 @@ Proof.
     (Γ1,Γf,m1,τs) ⊢* es :* inr <$> σs →
     mapM (λ e, ⟦ e ⟧ Γ2 fs (ρ1 ++ ρ3) m2 ≫= maybe_inr) es = Some vs). 
   { intros es vs σs Hes Hes'. apply mapM_Some. revert σs Hes'.
-    induction Hes; intros [|??] ?; decompose_Forall_hyps'; constructor;
+    induction Hes; intros [|??] ?; decompose_Forall_hyps; constructor;
       simplify_option_equality; eauto. }
   rapply (expr_eval_ind Γ1 fs ρ1 m1); intros; typed_inversion_all;
     repeat match goal with

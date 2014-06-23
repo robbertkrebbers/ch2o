@@ -382,6 +382,21 @@ Section addresses.
     rewrite (Nat.div_mod i (size_of Γ σ')) at 1
       by eauto using size_of_ne_0,ref_typed_type_valid; unfold bit_size_of; lia.
   Qed.
+  Lemma addr_object_offset_lt Γ m a σ :
+    ✓ Γ → (Γ,m) ⊢ a : σ → addr_strict Γ a →
+    addr_object_offset Γ a + bit_size_of Γ σ
+      ≤ bit_size_of Γ (addr_type_object a).
+  Proof.
+    intros. erewrite addr_object_offset_alt by eauto. transitivity
+      (ref_object_offset Γ (addr_ref Γ a) + bit_size_of Γ (addr_type_base a));
+      eauto using ref_object_offset_size, addr_typed_ref_typed.
+    rewrite <-Nat.add_assoc, <-Nat.add_le_mono_l.
+    destruct (decide (addr_is_obj a)).
+    * by erewrite addr_is_obj_ref_byte,
+        Nat.mul_0_l, Nat.add_0_l, addr_is_obj_type_base by eauto.
+    * erewrite addr_not_obj_bit_size_of, <-Nat.mul_succ_l by eauto.
+      eapply Nat.mul_le_mono_r, Nat.le_succ_l, addr_byte_range; eauto.
+  Qed.
 
   (** ** Operations *)
   Lemma addr_top_typed Γ m o τ :

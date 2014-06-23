@@ -39,7 +39,7 @@ Lemma ehstep_preservation Γ Γf m1 m2 ρ τs e1 e2 τlr :
   ✓{Γ} m2 ∧ (Γ,Γf,m2,τs) ⊢ e2 : τlr ∧ ∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ.
 Proof.
   intros ? [] ???.
-  * typed_inversion_all; decompose_Forall_hyps'; split_ands; auto.
+  * typed_inversion_all; decompose_Forall_hyps; split_ands; auto.
     typed_constructor; eauto using addr_top_typed, addr_top_strict,
       index_typed_valid, index_typed_representable.
   * typed_inversion_all; auto.

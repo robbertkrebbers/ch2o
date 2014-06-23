@@ -385,7 +385,7 @@ Lemma ECasts_typed Γ Γf m τs es σs' σs :
   (Γ,Γf,m,τs) ⊢* cast{σs}* es :* inr <$> σs.
 Proof.
   intros Hσs. revert es. induction Hσs; intros [|??] ?;
-    decompose_Forall_hyps'; constructor; repeat typed_constructor; eauto.
+    decompose_Forall_hyps; constructor; repeat typed_constructor; eauto.
 Qed.
 
 Global Instance rettype_match_dec cmσ σ : Decision (rettype_match cmσ σ) :=
@@ -480,7 +480,7 @@ Lemma funenv_typed_weaken Γ1 Γ2 m1 m2 δ Γf :
 Proof.
   induction 2 as [|Γf δ f s mτ τ τs Hf Hτs Hszs Hs ?? IH];
     typed_constructor; eauto using stmt_typed_weaken, types_valid_weaken.
-  clear Hf Hs. induction Hτs; decompose_Forall_hyps'; constructor;
+  clear Hf Hs. induction Hτs; decompose_Forall_hyps; constructor;
     simpl; erewrite <-1?size_of_weaken by eauto; eauto.
 Qed.
 
@@ -504,7 +504,7 @@ Lemma EVals_typed_inv Γ Γf m τs Ωs vs σs :
   (Γ,Γf,m,τs) ⊢* #{Ωs}* vs :* inr <$> σs → (Γ,m) ⊢* vs :* σs.
 Proof.
   rewrite <-Forall2_same_length. intros Hvs.
-  revert σs. induction Hvs; intros ? [|????] ?; decompose_Forall_hyps';
+  revert σs. induction Hvs; intros ? [|????] ?; decompose_Forall_hyps;
     typed_inversion_all; constructor; eauto.
 Qed.
 Lemma ctx_typed_stack_typed Γ Γf m k τf σf :
@@ -533,7 +533,7 @@ Lemma ectx_item_subst_typed_rev Γ Γf m τs Ei e σlr :
     (Γ,Γf,m,τs) ⊢ e : τlr ∧ (Γ,Γf,m,τs) ⊢ Ei : τlr ↣ σlr.
 Proof.
   intros He. destruct Ei; simpl; typed_inversion He;
-    decompose_Forall_hyps'; simplify_list_fmap_equality;
+    decompose_Forall_hyps; simplify_list_fmap_equality;
     eexists; split; eauto; typed_constructor; eauto.
 Qed.
 Lemma ectx_subst_typed_rev Γ Γf m τs E e σlr :

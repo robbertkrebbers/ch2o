@@ -261,30 +261,21 @@ Instance: FinMapDom nat natmap natset := mapset_dom_spec.
 
 (* Fixpoint avoids this definition from being unfolded *)
 Fixpoint of_bools (βs : list bool) : natset :=
-  Mapset $ list_to_natmap $ (λ β : bool, if β then Some () else None) <$> βs.
-Definition to_bools (X : natset) : list bool :=
-  (λ mu, match mu with Some _ => true | None => false end)
-    <$> natmap_car (mapset_car X).
+  let f (β : bool) := if β then Some () else None in
+  Mapset $ list_to_natmap $ f <$> βs.
+Definition to_bools (sz : nat) (X : natset) : list bool :=
+  let f (mu : option ()) := match mu with Some _ => true | None => false end in
+  resize sz false $ f <$> natmap_car (mapset_car X).
 
 Lemma of_bools_unfold βs :
-  of_bools βs
-  = Mapset $ list_to_natmap $ (λ β : bool, if β then Some () else None) <$> βs.
+  let f (β : bool) := if β then Some () else None in
+  of_bools βs = Mapset $ list_to_natmap $ f <$> βs.
 Proof. by destruct βs. Qed.
 Lemma elem_of_of_bools βs i : i ∈ of_bools βs ↔ βs !! i = Some true.
 Proof.
   rewrite of_bools_unfold; unfold elem_of, mapset_elem_of; simpl.
   rewrite list_to_natmap_spec, list_lookup_fmap.
   destruct (βs !! i) as [[]|]; compute; intuition congruence.
-Qed.
-Lemma elem_of_to_bools X i : to_bools X !! i = Some true ↔ i ∈ X.
-Proof.
-  unfold to_bools, elem_of, mapset_elem_of, lookup at 2, natmap_lookup; simpl.
-  destruct (mapset_car X) as [l ?]; simpl. rewrite list_lookup_fmap.
-  destruct (l !! i) as [[[]|]|]; compute; intuition congruence.
-Qed.
-Lemma of_to_bools X : of_bools (to_bools X) = X.
-Proof.
-  apply elem_of_equiv_L. intros i. by rewrite elem_of_of_bools,elem_of_to_bools.
 Qed.
 Lemma of_bools_union βs1 βs2 :
   length βs1 = length βs2 →
@@ -294,6 +285,23 @@ Proof.
   apply elem_of_equiv_L. intros i. rewrite elem_of_union, !elem_of_of_bools.
   revert i. induction Hβs as [|[] []]; intros [|?]; naive_solver.
 Qed.
+Lemma to_bools_length (X : natset) sz : length (to_bools sz X) = sz.
+Proof. apply resize_length. Qed.
+Lemma lookup_to_bools sz X i β :
+  i < sz → to_bools sz X !! i = Some β ↔ (i ∈ X ↔ β = true).
+Proof.
+  unfold to_bools, elem_of, mapset_elem_of, lookup at 2, natmap_lookup; simpl.
+  intros. destruct (mapset_car X) as [l ?]; simpl.
+  destruct (l !! i) as [mu|] eqn:Hmu; simpl.
+  { rewrite lookup_resize, list_lookup_fmap, Hmu
+      by (rewrite ?fmap_length; eauto using lookup_lt_Some).
+    destruct mu as [[]|], β; simpl; intuition congruence. }
+  rewrite lookup_resize_new by (rewrite ?fmap_length;
+    eauto using lookup_ge_None_1); destruct β; intuition congruence.
+Qed.
+Lemma lookup_to_bools_true sz X i :
+  i < sz → to_bools sz X !! i = Some true ↔ i ∈ X.
+Proof. intros. rewrite lookup_to_bools by done. intuition. Qed.
 
 (** A [natmap A] forms a stack with elements of type [A] and possible holes *)
 Definition natmap_push {A} (o : option A) (m : natmap A) : natmap A :=
@@ -313,7 +321,6 @@ Lemma lookup_natmap_push_S {A} o (m : natmap A) i :
 Proof. by destruct o, m as [[|??]]. Qed.
 Lemma lookup_natmap_pop {A} (m : natmap A) i : natmap_pop m !! i = m !! S i.
 Proof. by destruct m as [[|??]]. Qed.
-
 Lemma natmap_push_pop {A} (m : natmap A) :
   natmap_push (m !! 0) (natmap_pop m) = m.
 Proof.

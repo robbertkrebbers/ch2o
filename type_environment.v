@@ -145,7 +145,7 @@ Lemma field_bit_padding_weaken Γ1 Γ2 τs :
 Proof.
   intros HΓ1 Hτs ?. unfold field_bit_padding.
   erewrite <-(field_bit_sizes_weaken Γ1 Γ2) by eauto.
-  induction (bit_size_of_fields _ τs HΓ1); decompose_Forall_hyps';
+  induction (bit_size_of_fields _ τs HΓ1); decompose_Forall_hyps;
     auto using bit_size_of_weaken with f_equal.
 Qed.
 Lemma field_bit_padding_length Γ τs :
@@ -201,9 +201,9 @@ Proof.
   * intros. rewrite size_of_array. by apply Nat.neq_mul_0.
   * intros [] s τs Hs Hτs Hsz Hlen.
     + erewrite size_of_struct by eauto. clear Hs.
-      destruct (size_of_fields Γ τs HΓ); decompose_Forall_hyps'; auto with lia.
+      destruct (size_of_fields Γ τs HΓ); decompose_Forall_hyps; auto with lia.
     + apply size_of_union in Hs; auto.
-      destruct Hs; decompose_Forall_hyps'; auto with lia.
+      destruct Hs; decompose_Forall_hyps; auto with lia.
 Qed.
 Lemma size_of_pos Γ τ : ✓ Γ → ✓{Γ} τ → 0 < size_of Γ τ.
 Proof. intros. by apply Nat.neq_0_lt_0, size_of_ne_0. Qed.

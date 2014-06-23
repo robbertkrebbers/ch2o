@@ -639,12 +639,12 @@ Qed.
 (** ** Properties lifted to lists *)
 Lemma seps_left_id xs ys : xs ⊥* ys → Forall (∅ =) xs → xs ∪* ys = ys.
 Proof.
-  induction 1; intros; decompose_Forall_hyps';
+  induction 1; intros; decompose_Forall_hyps;
     f_equal; eauto using sep_left_id, sep_disjoint_valid_l.
 Qed.
 Lemma seps_right_id xs ys : xs ⊥* ys → Forall (∅ =) ys → xs ∪* ys = xs.
 Proof.
-  induction 1; intros; decompose_Forall_hyps';
+  induction 1; intros; decompose_Forall_hyps;
     f_equal; eauto using sep_right_id, sep_disjoint_valid_l.
 Qed.
 Lemma seps_disjoint_valid_l xs ys : xs ⊥* ys → Forall sep_valid xs.
@@ -654,13 +654,13 @@ Proof. induction 1; simpl; constructor; auto using sep_union_valid. Qed.
 Lemma seps_positive_l xs ys :
   xs ⊥* ys → Forall (∅ =) (xs ∪* ys) → Forall (∅ =) xs.
 Proof.
-  induction 1; intros; decompose_Forall_hyps';
+  induction 1; intros; decompose_Forall_hyps;
     eauto using sep_positive_l', eq_sym.
 Qed.
 Lemma seps_positive_r xs ys :
   xs ⊥* ys → Forall (∅ =) (xs ∪* ys) → Forall (∅ =) ys.
 Proof.
-  induction 1; intros; decompose_Forall_hyps';
+  induction 1; intros; decompose_Forall_hyps;
     eauto using sep_positive_r', eq_sym.
 Qed.
 Lemma seps_union_empty xs ys :
@@ -672,20 +672,20 @@ Qed.
 Lemma seps_unmapped_union_l xs ys :
   xs ⊥* ys → Forall sep_unmapped (xs ∪* ys) → Forall sep_unmapped xs.
 Proof.
-  induction 1; intros; decompose_Forall_hyps';
+  induction 1; intros; decompose_Forall_hyps;
     eauto using sep_unmapped_union_l'.
 Qed.
 Lemma seps_unmapped_union_r xs ys :
   xs ⊥* ys → Forall sep_unmapped (xs ∪* ys) → Forall sep_unmapped ys.
 Proof.
-  induction 1; intros; decompose_Forall_hyps';
+  induction 1; intros; decompose_Forall_hyps;
     eauto using sep_unmapped_union_r'.
 Qed.
 Lemma seps_unmapped_union xs ys :
   xs ⊥* ys → Forall sep_unmapped xs → Forall sep_unmapped ys →
   Forall sep_unmapped (xs ∪* ys).
 Proof.
-  induction 1; intros; decompose_Forall_hyps';
+  induction 1; intros; decompose_Forall_hyps;
     eauto using sep_unmapped_union_2'.
 Qed.
 Lemma seps_commutative xs ys : xs ⊥* ys → xs ∪* ys = ys ∪* xs.
@@ -693,40 +693,40 @@ Proof. induction 1; f_equal'; eauto using sep_commutative'. Qed.
 Lemma seps_disjoint_ll xs ys zs : xs ⊥* ys → xs ∪* ys ⊥* zs → xs ⊥* zs.
 Proof.
   intros Hxs. revert zs. induction Hxs; intros;
-    decompose_Forall_hyps'; constructor; eauto using sep_disjoint_ll.
+    decompose_Forall_hyps; constructor; eauto using sep_disjoint_ll.
 Qed.
 Lemma seps_disjoint_lr xs ys zs: xs ⊥* ys → xs ∪* ys ⊥* zs → ys ⊥* zs.
 Proof.
   intros Hxs. revert zs. induction Hxs; intros;
-    decompose_Forall_hyps'; constructor; eauto using sep_disjoint_lr.
+    decompose_Forall_hyps; constructor; eauto using sep_disjoint_lr.
 Qed.
 Lemma seps_disjoint_rl xs ys zs : ys ⊥* zs → xs ⊥* ys ∪* zs → xs ⊥* ys.
 Proof.
   intros Hys. revert xs. induction Hys; intros;
-    decompose_Forall_hyps'; constructor; eauto using sep_disjoint_rl.
+    decompose_Forall_hyps; constructor; eauto using sep_disjoint_rl.
 Qed.
 Lemma seps_disjoint_rr xs ys zs : ys ⊥* zs → xs ⊥* ys ∪* zs → xs ⊥* zs.
 Proof.
   intros Hys. revert xs. induction Hys; intros;
-    decompose_Forall_hyps'; constructor; eauto using sep_disjoint_rr.
+    decompose_Forall_hyps; constructor; eauto using sep_disjoint_rr.
 Qed.
 Lemma seps_disjoint_move_l xs ys zs :
   xs ⊥* ys → xs ∪* ys ⊥* zs → xs ⊥* ys ∪* zs.
 Proof.
   intros Hxs. revert zs. induction Hxs; intros;
-    decompose_Forall_hyps'; constructor; auto using sep_disjoint_move_l.
+    decompose_Forall_hyps; constructor; auto using sep_disjoint_move_l.
 Qed.
 Lemma seps_disjoint_move_r xs ys zs :
   ys ⊥* zs → xs ⊥* ys ∪* zs → xs ∪* ys ⊥* zs.
 Proof.
   intros Hys. revert xs. induction Hys; intros;
-    decompose_Forall_hyps'; constructor; auto using sep_disjoint_move_r.
+    decompose_Forall_hyps; constructor; auto using sep_disjoint_move_r.
 Qed.
 Lemma seps_associative xs ys zs :
   ys ⊥* zs → xs ⊥* ys ∪* zs → xs ∪* (ys ∪* zs) = xs ∪* ys ∪* zs.
 Proof.
   intros Hxs. revert xs. induction Hxs; intros;
-    decompose_Forall_hyps'; f_equal; auto using sep_associative'.
+    decompose_Forall_hyps; f_equal; auto using sep_associative'.
 Qed.
 Lemma seps_associative_rev xs ys zs :
   xs ⊥* ys → xs ∪* ys ⊥* zs → xs ∪* ys ∪* zs = xs ∪* (ys ∪* zs).
@@ -737,18 +737,18 @@ Lemma seps_permute xs ys zs :
   xs ⊥* ys → xs ∪* ys ⊥* zs → xs ∪* ys ∪* zs = xs ∪* zs ∪* ys.
 Proof.
   intros Hxs. revert zs. induction Hxs; intros;
-    decompose_Forall_hyps'; f_equal; auto using sep_permute.
+    decompose_Forall_hyps; f_equal; auto using sep_permute.
 Qed.
 Lemma seps_cancel_l xs ys zs :
   zs ⊥* xs → zs ⊥* ys → zs ∪* xs = zs ∪* ys → xs = ys.
 Proof.
-  intros Hzs. revert ys. induction Hzs; intros; decompose_Forall_hyps';
+  intros Hzs. revert ys. induction Hzs; intros; decompose_Forall_hyps;
     f_equal; eauto using sep_cancel_l'.
 Qed.
 Lemma seps_cancel_r xs ys zs :
   xs ⊥* zs → ys ⊥* zs → xs ∪* zs = ys ∪* zs → xs = ys.
 Proof.
-  intros Hzs. revert ys. induction Hzs; intros; decompose_Forall_hyps';
+  intros Hzs. revert ys. induction Hzs; intros; decompose_Forall_hyps;
     f_equal; eauto using sep_cancel_r'.
 Qed.
 Lemma seps_cancel_empty_l xs ys : xs ⊥* ys → xs ∪* ys = ys → Forall (∅ =) xs.
@@ -776,20 +776,20 @@ Proof. induction 1; f_equal'; auto using sep_union_difference. Qed.
 Lemma seps_difference_empty_rev xs ys :
   xs ⊆* ys → Forall (∅ =) (ys ∖* xs) → xs = ys.
 Proof.
-  induction 1; intros; decompose_Forall_hyps';
+  induction 1; intros; decompose_Forall_hyps;
     f_equal; auto using sep_difference_empty_rev.
 Qed.
 Lemma seps_unmapped_difference_1 xs ys :
   xs ⊆* ys → Forall sep_unmapped xs →
   Forall sep_unmapped (ys ∖* xs) → Forall sep_unmapped ys.
 Proof.
-  induction 1; intros; decompose_Forall_hyps';
+  induction 1; intros; decompose_Forall_hyps;
     eauto using sep_unmapped_difference_1.
 Qed.
 Lemma seps_unmapped_difference_2 xs ys :
   xs ⊆* ys → Forall sep_unmapped ys → Forall sep_unmapped (ys ∖* xs).
 Proof.
-  induction 1; intros; decompose_Forall_hyps';
+  induction 1; intros; decompose_Forall_hyps;
     eauto using sep_unmapped_difference_2.
 Qed.
 Lemma seps_splittable_union xs : xs ⊥* xs → Forall sep_splittable (xs ∪* xs).
@@ -800,7 +800,7 @@ Qed.
 Lemma seps_splittable_weaken xs ys :
   Forall sep_splittable ys → xs ⊆* ys → Forall sep_splittable xs.
 Proof.
-  induction 2; decompose_Forall_hyps'; eauto using sep_splittable_weaken.
+  induction 2; decompose_Forall_hyps; eauto using sep_splittable_weaken.
 Qed.
 Lemma seps_disjoint_half xs : Forall sep_splittable xs → ½* xs ⊥* ½* xs.
 Proof. induction 1; csimpl; auto using sep_disjoint_half'. Qed.
@@ -818,7 +818,7 @@ Qed.
 Lemma seps_union_half_distr xs ys :
   xs ⊥* ys → Forall sep_splittable (xs ∪* ys) → ½* (xs ∪* ys) = ½* xs ∪* ½* ys.
 Proof.
-  induction 1; intros; decompose_Forall_hyps';
+  induction 1; intros; decompose_Forall_hyps;
     f_equal; auto using sep_union_half_distr'.
 Qed.
 Lemma seps_unmapped_valid xs : Forall sep_unmapped xs → Forall sep_valid xs.

@@ -21,7 +21,7 @@ Proof.
   revert e1 av. assert (∀ es vs,
     Forall2 (λ e v, ⟦ e ⟧ Γ fs ρ m = Some (inr v)) es vs →
     Forall is_nf es → es = (#{locks <$> es}* vs)%E) as help.
-  { induction 1; intros; decompose_Forall_hyps';
+  { induction 1; intros; decompose_Forall_hyps;
       repeat match goal with H : is_nf _ |- _ => destruct H end;
       simplify_option_equality; f_equal; auto. }
   rapply (expr_eval_ind Γ fs ρ m); intros;

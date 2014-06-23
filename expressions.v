@@ -750,7 +750,7 @@ Proof.
 Qed.
 Lemma is_redex_ectx_item {Ti} (Ei : ectx_item Ti) e :
   is_redex (subst Ei e) → is_nf e.
-Proof. destruct Ei; inversion 1; decompose_Forall_hyps'; auto. Qed.
+Proof. destruct Ei; inversion 1; decompose_Forall_hyps; auto. Qed.
 Lemma is_redex_ectx {Ti} (E : ectx Ti) e :
   is_redex (subst E e) → (E = [] ∧ is_redex e) ∨ (∃ Ei, E = [Ei] ∧ is_nf e).
 Proof.
@@ -1116,7 +1116,7 @@ Section expr_split.
       zipped_Forall (λ esl esr e, f esl esr e ≡ ∅ → is_nf e) es1 es2 →
       Forall is_nf es2).
     { intros ???. rewrite empty_union_list.
-      induction 2; decompose_Forall_hyps'; auto. }
+      induction 2; decompose_Forall_hyps; auto. }
     ectx_expr_ind E e;
       simpl; intros; repeat case_decide; decompose_empty;
       try match goal with

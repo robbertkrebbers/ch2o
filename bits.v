@@ -184,12 +184,12 @@ Lemma BPtrs_refine Γ f m1 m2 pbs1 pbs2 :
 Proof. induction 1; constructor; auto using BPtr_refine. Qed.
 Lemma BIndets_refine_l_inv Γ f m1 m2 bs1 bs2 :
   Forall (BIndet =) bs1 → bs1 ⊑{Γ,f@m1↦m2}* bs2 → ✓{Γ,m2}* bs2.
-Proof. induction 2 as [|???? []]; decompose_Forall_hyps'; eauto. Qed.
+Proof. induction 2 as [|???? []]; decompose_Forall_hyps; eauto. Qed.
 Lemma BIndet_refine_r_inv Γ f m1 m2 b : b ⊑{Γ,f@m1↦m2} BIndet → b = BIndet.
 Proof. by inversion 1. Qed.
 Lemma BIndets_refine_r_inv Γ f m1 m2 bs1 bs2 :
   Forall (BIndet =) bs2 → bs1 ⊑{Γ,f@m1↦m2}* bs2 → Forall (BIndet =) bs1.
-Proof. induction 2 as [|????[]]; decompose_Forall_hyps'; eauto. Qed.
+Proof. induction 2 as [|????[]]; decompose_Forall_hyps; eauto. Qed.
 Lemma BBits_refine_inv_l Γ f m1 m2 βs bs :
   BBit <$> βs ⊑{Γ,f@m1↦m2}* bs → bs = BBit <$> βs.
 Proof.
