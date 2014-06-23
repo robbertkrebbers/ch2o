@@ -419,6 +419,9 @@ Notation "' ( x1 , x2 , x3  , x4 ) ← y ; z" :=
 Notation "' ( x1 , x2 , x3  , x4 , x5 ) ← y ; z" :=
   (y ≫= (λ x : _, let ' (x1,x2,x3,x4,x5) := x in z))
   (at level 65, next at level 35, only parsing, right associativity) : C_scope.
+Notation "' ( x1 , x2 , x3  , x4 , x5 , x6 ) ← y ; z" :=
+  (y ≫= (λ x : _, let ' (x1,x2,x3,x4,x5,x6) := x in z))
+  (at level 65, next at level 35, only parsing, right associativity) : C_scope.
 
 Class MGuard (M : Type → Type) :=
   mguard: ∀ P {dec : Decision P} {A}, (P → M A) → M A.

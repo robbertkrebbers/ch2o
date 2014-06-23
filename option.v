@@ -199,14 +199,16 @@ Tactic Notation "simplify_option_equality" "by" tactic3(tac) :=
   repeat match goal with
   | _ => progress simplify_equality'
   | _ => progress simpl_option_monad by tac
-  | H : mbind (M:=option) _ ?o = ?x |- _ =>
+  | H : mbind (M:=option) ?f ?o = ?x |- _ =>
     match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
     match x with Some _ => idtac | None => idtac | _ => fail 1 end;
-    destruct o eqn:?
-  | H : ?x = mbind (M:=option) _ ?o |- _ =>
+    let y := fresh in destruct o as [y|] eqn:?;
+      [change (f y = x) in H|change (None = x) in H]
+  | H : ?x = mbind (M:=option) ?f ?o |- _ =>
     match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
     match x with Some _ => idtac | None => idtac | _ => fail 1 end;
-    destruct o eqn:?
+    let y := fresh in destruct o as [y|] eqn:?;
+      [change (x = f y) in H|change (x = None) in H]
   | H : fmap (M:=option) _ ?o = ?x |- _ =>
     match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
     match x with Some _ => idtac | None => idtac | _ => fail 1 end;

@@ -13,7 +13,7 @@ Existing Instance ptr_env.
 
 Definition interpreter (Θ : list (N * decl Ti)) (f : funname) :
     option (stream (listset (state Ti) * listset (state Ti))) :=
-  '(Γ,Γf,δ,m,_) ← to_envs Θ;
+  '(_,Γ,Γf,δ,m,_) ← to_envs Θ;
   _ ← δ !! f;
   Some (csteps_exec hash Γ δ {[ State [] (Call f []) m ]}).
 End interpreter.
