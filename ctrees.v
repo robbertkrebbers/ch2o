@@ -571,6 +571,7 @@ Proof.
   * induction IH as [|[] []]; decompose_Forall_hyps;
       auto using seps_commutative with f_equal.
 Qed.
+Section hide_hint.
 Hint Extern 0 (length _ = _) => simplify_equality'; repeat first 
   [ rewrite take_length | rewrite drop_length | rewrite zip_with_length ]; lia.
 Lemma ctree_merge_id {B : Set} (h : A → B → A) w ys :
@@ -592,6 +593,7 @@ Proof.
     intros; simplify_list_equality; f_equal; auto.
   * by intros; f_equal.
 Qed.
+End hide_hint.
 Lemma ctree_merge_empty w ys :
   ctree_flatten w ⊥* ys → Forall (∅ =) ys → ctree_merge true (∪) w ys = w.
 Proof. eauto using ctree_merge_id, seps_right_id, Forall2_length. Qed.
