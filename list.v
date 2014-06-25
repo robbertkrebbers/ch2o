@@ -1260,12 +1260,12 @@ Global Instance prefix_of_dec `{∀ x y, Decision (x = y)} : ∀ l1 l2,
   | _, [] => right (prefix_of_nil_not _ _)
   | x :: l1, y :: l2 =>
     match decide_rel (=) x y with
-    | left Exy =>
+    | left Hxy =>
       match go l1 l2 with
-      | left Hl1l2 => left (prefix_of_cons_alt _ _ _ _ Exy Hl1l2)
+      | left Hl1l2 => left (prefix_of_cons_alt _ _ _ _ Hxy Hl1l2)
       | right Hl1l2 => right (Hl1l2 ∘ prefix_of_cons_inv_2 _ _ _ _)
       end
-    | right Exy => right (Exy ∘ prefix_of_cons_inv_1 _ _ _ _)
+    | right Hxy => right (Hxy ∘ prefix_of_cons_inv_1 _ _ _ _)
     end
   end.
 

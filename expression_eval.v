@@ -43,7 +43,7 @@ Fixpoint expr_eval `{IntEnv Ti, PtrEnv Ti} (e : expr Ti) (Γ : env Ti)
      Some (inl (addr_elt Γ a))
   | @{op} e =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
-     guard (val_unop_ok op v);
+     guard (val_unop_ok m op v);
      Some (inr (val_unop op v))
   | e1 @{op} e2 =>
      v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe_inr;
@@ -58,7 +58,7 @@ Fixpoint expr_eval `{IntEnv Ti, PtrEnv Ti} (e : expr Ti) (Γ : env Ti)
      v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe_inr;
      av2 ← ⟦ e2 ⟧ Γ fs ρ m;
      av3 ← ⟦ e3 ⟧ Γ fs ρ m;
-     match val_true_false_dec v1 with
+     match val_true_false_dec m v1 with
      | inleft (left _) => Some av2
      | inleft (right _) => Some av3
      | inright _ => None
@@ -68,7 +68,7 @@ Fixpoint expr_eval `{IntEnv Ti, PtrEnv Ti} (e : expr Ti) (Γ : env Ti)
      ⟦ e2 ⟧ Γ fs ρ m
   | cast{τ} e =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
-     guard (val_cast_ok Γ τ v);
+     guard (val_cast_ok Γ m τ v);
      Some (inr (val_cast τ v))
   | e .> i =>
      a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inl;
@@ -106,7 +106,7 @@ Context (Pelt : ∀ e a,
   ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) → P (elt e) (inl (addr_elt Γ a))).
 Context (Punop : ∀ op e v,
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
-  val_unop_ok op v → P (@{op} e) (inr (val_unop op v))).
+  val_unop_ok m op v → P (@{op} e) (inr (val_unop op v))).
 Context (Pbinop : ∀ op e1 e2 v1 v2,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e2 ⟧ Γ fs ρ m = Some (inr v2) → P e2 (inr v2) →
@@ -120,7 +120,7 @@ Context (Pif1 : ∀ e1 e2 e3 v1 av2 av3,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 →
   ⟦ e3 ⟧ Γ fs ρ m = Some av3 → P e3 av3 →
-  val_true v1 → P (if{e1} e2 else e3) av2).
+  val_true m v1 → P (if{e1} e2 else e3) av2).
 Context (Pif2 : ∀ e1 e2 e3 v1 av2 av3,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 →
@@ -131,7 +131,7 @@ Context (Pcomma : ∀ e1 e2 v1 av2,
   ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 → P (e1,, e2) av2).
 Context (Pcast : ∀ τ e v,
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
-  val_cast_ok Γ τ v → P (cast{τ} e) (inr (val_cast τ v))).
+  val_cast_ok Γ m τ v → P (cast{τ} e) (inr (val_cast τ v))).
 Context (Pfield : ∀ e i a,
   ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) →
   P (e .> i) (inl (addr_field Γ i a))).
@@ -155,7 +155,7 @@ Proof.
     | _ : maybe_VBase ?v = Some _ |- _ => is_var v; destruct v
     | _ : maybe_VPtr ?vb = Some _ |- _ => is_var vb; destruct vb
     | _ : maybe_Ptr ?p = Some _ |- _ => is_var p; destruct p
-    | _ => destruct (val_true_false_dec _) as [[[??]|[??]]|[??]]
+    | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]
     end; eauto.
 Qed.
 End expr_eval_ind.
@@ -253,14 +253,15 @@ Proof.
   * by simplify_option_equality by eauto using addr_strict_weaken.
   * by simplify_option_equality.
   * simplify_option_equality. by erewrite <-addr_elt_weaken by eauto.
-  * by simplify_option_equality.
+  * by simplify_option_equality by eauto using val_unop_ok_weaken.
   * simplify_option_equality by eauto using val_binop_ok_weaken.
     by erewrite <-val_binop_weaken by eauto.
   * by simplify_option_equality.
   * simplify_option_equality.
-    by destruct (val_true_false_dec _) as [[[??]|[??]]|[??]].
+    destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]];
+      naive_solver eauto using val_true_weaken.
   * simplify_option_equality.
-    by destruct (val_true_false_dec _) as [[[??]|[??]]|[??]].
+    by destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]].
   * simplify_option_equality; eauto.
   * by simplify_option_equality by eauto using val_cast_ok_weaken.
   * simplify_option_equality.

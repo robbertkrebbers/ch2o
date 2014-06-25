@@ -209,14 +209,16 @@ Tactic Notation "simplify_option_equality" "by" tactic3(tac) :=
     match x with Some _ => idtac | None => idtac | _ => fail 1 end;
     let y := fresh in destruct o as [y|] eqn:?;
       [change (x = f y) in H|change (x = None) in H]
-  | H : fmap (M:=option) _ ?o = ?x |- _ =>
+  | H : fmap (M:=option) ?f ?o = ?x |- _ =>
     match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
     match x with Some _ => idtac | None => idtac | _ => fail 1 end;
-    destruct o eqn:?
-  | H : ?x = fmap (M:=option) _ ?o |- _ =>
+    let y := fresh in destruct o as [y|] eqn:?;
+      [change (Some (f y) = x) in H|change (None = x) in H]
+  | H : ?x = fmap (M:=option) ?f ?o |- _ =>
     match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
     match x with Some _ => idtac | None => idtac | _ => fail 1 end;
-    destruct o eqn:?
+    let y := fresh in destruct o as [y|] eqn:?;
+      [change (x = Some (f y)) in H|change (x = None) in H]
   | _ => progress case_decide
   | _ => progress case_option_guard
   end.

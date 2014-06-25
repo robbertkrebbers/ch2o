@@ -42,11 +42,11 @@ Proof. solve_decision. Defined.
 Instance unop_dec (op1 op2 : unop) : Decision (op1 = op2).
 Proof. solve_decision. Defined.
 
-Definition Z_comp (c : compop) : Z → Z → Prop :=
-  match c with EqOp => (=) | LtOp => (<) | LeOp => (≤) end.
-Instance Z_comp_dec c : ∀ x y, Decision (Z_comp c x y) :=
-  match c return ∀ x y : Z, Decision (Z_comp c x y) with
-  | EqOp => decide_rel (=) | LtOp => decide_rel (<) | LeOp => decide_rel (≤)
+Definition Z_comp (c : compop) (x y : Z) : bool :=
+  match c with
+  | EqOp => bool_decide (x = y)
+  | LtOp => bool_decide (x < y)
+  | LeOp => bool_decide (x ≤ y)
   end.
 Definition bool_bitop (op : bitop) : bool → bool → bool :=
   match op with AndOp => (&&) | OrOp => (||) | XorOp => xorb end.

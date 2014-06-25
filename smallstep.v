@@ -14,16 +14,16 @@ to be stored at [a] in [m]. *)
 Inductive assign_sem `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti) (m : mem Ti)
      (a : addr Ti) (v : val Ti) : assign → val Ti → val Ti → Prop :=
   | Assign_sem :
-     val_cast_ok Γ (type_of a) v →
+     val_cast_ok Γ m (type_of a) v →
      let v' := val_cast (type_of a) v in assign_sem Γ m a v Assign v' v'
   | PreOp_sem op va :
      m !!{Γ} a = Some va → val_binop_ok Γ m op va v →
-     val_cast_ok Γ (type_of a) (val_binop Γ op va v) →
+     val_cast_ok Γ m (type_of a) (val_binop Γ op va v) →
      let v' := val_cast (type_of a) (val_binop Γ op va v) in
      assign_sem Γ m a v (PreOp op) v' v'
   | PostOp_sem op va :
      m !!{Γ} a = Some va → val_binop_ok Γ m op va v →
-     val_cast_ok Γ (type_of a) (val_binop Γ op va v) →
+     val_cast_ok Γ m (type_of a) (val_binop Γ op va v) →
      let v' := val_cast (type_of a) (val_binop Γ op va v) in
      assign_sem Γ m a v (PostOp op) va v'.
 
@@ -61,21 +61,21 @@ Inductive ehstep `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti) (ρ : stack) :
      mem_freeable a m →
      Γ\ ρ ⊢ₕ free (%{Ω} a), m ⇒ #{Ω} voidV, mem_free (addr_index a) m
   | estep_unop op Ω v m :
-     val_unop_ok op v →
+     val_unop_ok m op v →
      Γ\ ρ ⊢ₕ @{op} #{Ω} v, m ⇒ #{Ω} (val_unop op v), m
   | estep_binop op m Ω1 Ω2 v1 v2 :
      val_binop_ok Γ m op v1 v2 →
      Γ\ ρ ⊢ₕ #{Ω1} v1 @{op} #{Ω2} v2, m ⇒ #{Ω1 ∪ Ω2} (val_binop Γ op v1 v2), m
-  | estep_if1 m Ω v e1 e2 :
-     val_true v →
+  | estep_if_true m Ω v e1 e2 :
+     val_true m v →
      Γ\ ρ ⊢ₕ if{#{Ω} v} e1 else e2, m ⇒ e1, mem_unlock Ω m
-  | estep_if2 m Ω v e1 e2 :
+  | estep_if_false m Ω v e1 e2 :
      val_false v →
      Γ\ ρ ⊢ₕ if{#{Ω} v} e1 else e2, m ⇒ e2, mem_unlock Ω m
   | estep_comma m Ω v e2 :
      Γ\ ρ ⊢ₕ #{Ω} v,,e2, m ⇒ e2, mem_unlock Ω m
   | estep_cast m τ Ω v :
-     val_cast_ok Γ τ v →
+     val_cast_ok Γ m τ v →
      Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} (val_cast τ v), m
   | estep_field m Ω a i :
      Γ\ ρ ⊢ₕ %{Ω} a .> i, m ⇒ %{Ω} (addr_field Γ i a), m
@@ -136,19 +136,19 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
   | cstep_expr_ret m k e Ω v :
      Γ\ δ ⊢ₛ State (CExpr e (ret □) :: k) (Expr (#{Ω} v)) m ⇒
              State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m)
-  | cstep_expr_while1 m k e Ω v s :
-     val_true v →
+  | cstep_expr_while_true m k e Ω v s :
+     val_true m v →
      Γ\ δ ⊢ₛ State (CExpr e (while{□} s) :: k) (Expr (#{Ω} v)) m ⇒
              State (CStmt (while{e} □) :: k) (Stmt ↘ s) (mem_unlock Ω m)
-  | cstep_expr_while2 m k e Ω v s :
+  | cstep_expr_while_false m k e Ω v s :
      val_false v →
      Γ\ δ ⊢ₛ State (CExpr e (while{□} s) :: k) (Expr (#{Ω} v)) m ⇒
              State k (Stmt ↗ (while{e} s)) (mem_unlock Ω m)
-  | cstep_expr_if1 m k e Ω v s1 s2 :
-     val_true v →
+  | cstep_expr_if_true m k e Ω v s1 s2 :
+     val_true m v →
      Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
              State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m)
-  | cstep_expr_if2 m k e Ω v s1 s2 :
+  | cstep_expr_if_false m k e Ω v s1 s2 :
      val_false v →
      Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
              State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)
@@ -284,14 +284,14 @@ Section inversion.
          e = (#{Ω} v)%E → k = CExpr e' (ret □) :: k' →
          P (State k' (Stmt (⇈ v) (ret e')) (mem_unlock Ω m))) →
        (∀ Ω v k' e' s,
-         e = (#{Ω} v)%E → val_true v → k = CExpr e' (while{□} s) :: k' →
+         e = (#{Ω} v)%E → val_true m v → k = CExpr e' (while{□} s) :: k' →
          P (State (CStmt (while{e'} □) :: k')
            (Stmt ↘ s) (mem_unlock Ω m))) →
        (∀ Ω v k' e' s,
          e = (#{Ω} v)%E → val_false v → k = CExpr e' (while{□} s) :: k' →
          P (State k' (Stmt ↗ (while{e'} s)) (mem_unlock Ω m))) →
        (∀ Ω v k' e' s1 s2,
-         e = (#{Ω} v)%E → val_true v →
+         e = (#{Ω} v)%E → val_true m v →
          k = CExpr e' (if{□} s1 else s2) :: k' →
          P (State (CStmt (if{e'} □ else s2) :: k')
            (Stmt ↘ s1) (mem_unlock Ω m))) →
@@ -393,13 +393,13 @@ Section inversion.
     | CExpr e (ret □) =>
        P (State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m)) → P S2
     | CExpr e (while{□} s) =>
-      (val_true v →
+      (val_true m v →
         P (State (CStmt (while{e} □) :: k) (Stmt ↘ s) (mem_unlock Ω m))) →
       (val_false v →
         P (State k (Stmt ↗ (while{e} s)) (mem_unlock Ω m))) →
       P S2
     | CExpr e (if{□} s1 else s2) =>
-      (val_true v →
+      (val_true m v →
         P (State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m))) →
       (val_false v →
         P (State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m))) →
@@ -549,7 +549,8 @@ Tactic Notation "inv_cstep" hyp(H) :=
     repeat match goal with
     | _ => done
     | _ => progress discriminate_down_up
-    | _ : val_true ?v, _ : val_false ?v |- _ => by destruct (val_true_false v)
+    | _ : val_true ?m ?v, _ : val_false ?v |- _ =>
+       by destruct (val_true_false m v)
     | H : suffix_of _ _ |- _ => progress (simpl in H; simplify_suffix_of)
     | H : _\ _ ⊢ₕ #{_} _, _ ⇒ _, _ |- _ => by inversion H
     | H : _\ _ ⊢ₕ %{_} _, _ ⇒ _, _ |- _ => by inversion H
@@ -704,13 +705,6 @@ Ltac solve_cnf :=
   | H : nf (cstep_in_ctx _ _ _) _ |- _ => destruct H; solve_cred
   end.
 
-
-(*
-Hint Extern 100 (_ !! _ = Some _) => by auto with mem : cstep.
-Hint Extern 100 (is_writable _ _) => by auto with mem : cstep.
-Hint Extern 100 (is_freeable _ _) => by auto with mem : cstep.
-*)
-
 (** * Theorems *)
 Section smallstep_properties.
 Context `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti) (δ : funenv Ti).
@@ -743,10 +737,10 @@ Proof.
       apply is_pure_locks in H; simpl in H; rewrite H
     end; solve_elem_of.
 Qed.
-Lemma estep_if1_empty_locks ρ m v e2 e3 :
-  val_true v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e2, m.
-Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
-Lemma estep_if2_no_locks ρ v e2 e3 m :
+Lemma estep_if_true_no_locks ρ m v e2 e3 :
+  val_true m v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e2, m.
+Proof. rewrite <-(mem_unlock_empty m) at 3. by constructor. Qed.
+Lemma estep_if_false_no_locks ρ v e2 e3 m :
   val_false v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e3, m.
 Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
 Lemma estep_comma_no_locks ρ m v e2 : Γ\ ρ ⊢ₕ # v ,, e2, m ⇒ e2, m.
@@ -1053,7 +1047,7 @@ Proof.
 Qed.
 End smallstep_properties.
 
-Hint Resolve estep_if1_empty_locks estep_if2_no_locks
+Hint Resolve estep_if_true_no_locks estep_if_false_no_locks
   estep_comma_no_locks : cstep.
 Hint Resolve estep_alloc_fresh cstep_in_block_fresh
   cstep_label_block_down_fresh cstep_call_fresh : cstep.

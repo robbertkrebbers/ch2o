@@ -426,8 +426,8 @@ Section operations.
     Proof. fix 4; destruct 1; eauto using Forall2_impl, Forall3_impl. Qed.
   End val_refine_ind.
 
-  Definition val_true (v : val Ti) : Prop :=
-    match v with VBase vb => base_val_true vb | _ => False end.
+  Definition val_true (m : mem Ti) (v : val Ti) : Prop :=
+    match v with VBase vb => base_val_true m vb | _ => False end.
   Definition val_false (v : val Ti) : Prop :=
     match v with VBase vb => base_val_false vb | _ => False end.
 
@@ -438,9 +438,9 @@ Section operations.
     match τ with
     | baseT τb => σb ← base_unop_type_of op τb; Some (baseT σb) | _ => None
     end.
-  Definition val_unop_ok (op : unop) (v : val Ti) : Prop :=
-    match v with VBase vb => base_val_unop_ok op vb | _ => False end.
-  Global Arguments val_unop_ok !_ !_ /.
+  Definition val_unop_ok (m : mem Ti) (op : unop) (v : val Ti) : Prop :=
+    match v with VBase vb => base_val_unop_ok m op vb | _ => False end.
+  Global Arguments val_unop_ok _ !_ !_ /.
   Definition val_unop (op : unop) (v : val Ti) : val Ti :=
     match v with VBase vb => VBase (base_val_unop op vb) | _ => v end.
   Global Arguments val_unop !_ !_ /.
@@ -472,12 +472,12 @@ Section operations.
     | TBase_cast_typed τb1 τb2 :
        base_cast_typed Γ τb1 τb2 → cast_typed Γ (baseT τb1) (baseT τb2)
     | TBase_TVoid_cast_typed τ : cast_typed Γ τ voidT.
-  Definition val_cast_ok (Γ : env Ti) (τ : type Ti) (v : val Ti) : Prop :=
+  Definition val_cast_ok (Γ : env Ti) (m : mem Ti)
+      (τ : type Ti) (v : val Ti) : Prop :=
     match v, τ with
-    | VBase vb, baseT τb => base_val_cast_ok Γ τb vb
-    | _, _ => True
+    | VBase vb, baseT τb => base_val_cast_ok Γ m τb vb | _, _ => True
     end.
-  Global Arguments val_cast_ok _ !_ !_ /.
+  Global Arguments val_cast_ok _ _ !_ !_ /.
   Definition val_cast (τ : type Ti) (v : val Ti) : val Ti :=
     match v, τ with
     | VBase vb, baseT τb => VBase (base_val_cast τb vb)
@@ -1812,28 +1812,32 @@ Proof.
 Qed.
 
 (** ** Properties of unary/binary operations and casts *)
-Definition val_true_false_dec v :
-  { val_true v ∧ ¬val_false v } + { ¬val_true v ∧ val_false v }
-  + { ¬val_true v ∧ ¬val_false v }.
+Definition val_true_false_dec m v :
+  { val_true m v ∧ ¬val_false v } + { ¬val_true m v ∧ val_false v }
+  + { ¬val_true m v ∧ ¬val_false v }.
 Proof.
  refine
   match v with
   | VBase vb =>
-     match base_val_true_false_dec vb with
+     match base_val_true_false_dec m vb with
      | inleft (left _) => inleft (left _)
      | inleft (right _) => inleft (right _) | inright _ => inright _
      end
   | _ => inright _
   end; abstract naive_solver.
 Defined.
-Lemma val_true_false v : val_true v → val_false v → False.
-Proof. by destruct (val_true_false_dec v) as [[[??]|[??]]|[??]]. Qed.
-Global Instance val_unop_ok_dec op v : Decision (val_unop_ok op v).
+Lemma val_true_false m v : val_true m v → val_false v → False.
+Proof. by destruct (val_true_false_dec m v) as [[[??]|[??]]|[??]]. Qed.
+Lemma val_true_weaken Γ m1 m2 v :
+  val_true m1 v → (∀ o, index_alive m1 o → index_alive m2 o) → val_true m2 v.
+Proof. destruct v; simpl; eauto using base_val_true_weaken. Qed.
+
+Global Instance val_unop_ok_dec m op v : Decision (val_unop_ok m op v).
 Proof. destruct v; try apply _. Defined.
 Global Instance val_binop_ok_dec Γ m op v1 v2 :
   Decision (val_binop_ok Γ m op v1 v2).
 Proof. destruct v1, v2; apply _. Defined.
-Global Instance val_cast_ok_dec Γ σ v : Decision (val_cast_ok Γ σ v).
+Global Instance val_cast_ok_dec Γ m σ v : Decision (val_cast_ok Γ m σ v).
 Proof. destruct v, σ as [[]| |]; apply _. Defined.
 
 Lemma unop_type_of_correct op τ σ :
@@ -1875,9 +1879,12 @@ Defined.
 Lemma cast_typed_weaken Γ1 Γ2 τ σ :
   cast_typed Γ1 τ σ → Γ1 ⊆ Γ2 → cast_typed Γ2 τ σ.
 Proof. destruct 1; constructor; eauto using base_cast_typed_weaken. Qed.
-
+Lemma val_unop_ok_weaken m1 m2 op v :
+  val_unop_ok m1 op v → (∀ o, index_alive m1 o → index_alive m2 o) →
+  val_unop_ok m2 op v.
+Proof. unfold val_unop_ok; destruct v; eauto using base_val_unop_ok_weaken. Qed.
 Lemma val_unop_typed Γ m op v τ σ :
-  (Γ,m) ⊢ v : τ → unop_typed op τ σ → val_unop_ok op v →
+  (Γ,m) ⊢ v : τ → unop_typed op τ σ → val_unop_ok m op v →
   (Γ,m) ⊢ val_unop op v : σ.
 Proof.
   intros Hvτ Hσ Hop. destruct Hσ; inversion Hvτ; simpl; simplify_equality;
@@ -1905,11 +1912,12 @@ Proof.
   destruct Hσ; inversion Hv1τ; inversion Hv2τ; simplify_equality';
     done || constructor; eauto using base_val_binop_typed.
 Qed.
-Lemma val_cast_ok_weaken Γ1 Γ2 m1 v τ σ :
-  ✓ Γ1 → (Γ1,m1) ⊢ v : τ → val_cast_ok Γ1 σ v → Γ1 ⊆ Γ2 → val_cast_ok Γ2 σ v.
+Lemma val_cast_ok_weaken Γ1 Γ2 m1 m2 v τ σ :
+  ✓ Γ1 → (Γ1,m1) ⊢ v : τ → val_cast_ok Γ1 m1 σ v → Γ1 ⊆ Γ2 →
+  (∀ o, index_alive m1 o → index_alive m2 o) → val_cast_ok Γ2 m2 σ v.
 Proof. destruct 2, σ; simpl; eauto using base_val_cast_ok_weaken. Qed.
 Lemma val_cast_typed Γ m v τ σ :
-  ✓ Γ → (Γ,m) ⊢ v : τ → cast_typed Γ τ σ → val_cast_ok Γ σ v →
+  ✓ Γ → (Γ,m) ⊢ v : τ → cast_typed Γ τ σ → val_cast_ok Γ m σ v →
   (Γ,m) ⊢ val_cast σ v : σ.
 Proof.
   intros ? Hvτ Hσ Hok. destruct Hσ; inversion Hvτ; simplify_equality';
@@ -1919,10 +1927,10 @@ Qed.
 
 (** ** Refinements of unary/binary operations and casts *)
 Lemma val_unop_ok_refine Γ f m1 m2 op v1 v2 τ :
-  v1 ⊑{Γ,f@m1↦m2} v2 : τ → val_unop_ok op v1 → val_unop_ok op v2.
+  v1 ⊑{Γ,f@m1↦m2} v2 : τ → val_unop_ok m1 op v1 → val_unop_ok m2 op v2.
 Proof. destruct op, 1; simpl; eauto using base_val_unop_ok_refine. Qed.
 Lemma val_unop_refine Γ f m1 m2 op v1 v2 τ σ :
-  ✓ Γ → unop_typed op τ σ → val_unop_ok op v1 →
+  ✓ Γ → unop_typed op τ σ → val_unop_ok m1 op v1 →
   v1 ⊑{Γ,f@m1↦m2} v2 : τ → val_unop op v1 ⊑{Γ,f@m1↦m2} val_unop op v2 : σ.
 Proof.
   destruct 2; inversion 2; intros; simplify_equality';
@@ -1946,12 +1954,12 @@ Proof.
     refine_constructor; eauto using base_val_binop_refine.
 Qed.
 Lemma val_cast_ok_refine Γ m1 m2 f v1 v2 τ σ :
-  ✓ Γ → v1 ⊑{Γ,f@m1↦m2} v2 : τ → val_cast_ok Γ σ v1 → val_cast_ok Γ σ v2.
+  ✓ Γ → v1 ⊑{Γ,f@m1↦m2} v2 : τ → val_cast_ok Γ m1 σ v1 → val_cast_ok Γ m2 σ v2.
 Proof.
   unfold val_cast_ok; destruct σ, 2; eauto using base_val_cast_ok_refine.
 Qed.
 Lemma val_cast_refine Γ f m1 m2 v1 v2 τ σ :
-  ✓ Γ → cast_typed Γ τ σ → val_cast_ok Γ σ v1 →
+  ✓ Γ → cast_typed Γ τ σ → val_cast_ok Γ m1 σ v1 →
   v1 ⊑{Γ,f@m1↦m2} v2 : τ → val_cast σ v1 ⊑{Γ,f@m1↦m2} val_cast σ v2 : σ.
 Proof.
   destruct 2; inversion 2; simplify_equality; repeat refine_constructor;

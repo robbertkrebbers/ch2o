@@ -372,10 +372,9 @@ Qed.
 Lemma of_val_flatten_mapped Γ m w v τ :
   ✓ Γ → (Γ,m) ⊢ w : τ → (Γ,m) ⊢ v : τ →
   ctree_Forall (λ xb, Some Writable ⊆ pbit_kind xb) w →
-  ¬ctree_unmapped (of_val Γ (tagged_perm <$> ctree_flatten w) v).
+  ctree_Forall (not ∘ sep_unmapped) (of_val Γ (tagged_perm <$> ctree_flatten w) v).
 Proof.
-  intros. eapply ctree_Forall_not; eauto using of_val_flatten_typed.
-  eapply of_val_mapped; eauto.
+  intros. eapply of_val_mapped; eauto.
   eapply pbits_perm_mapped, pbits_mapped; eauto using pbits_kind_weaken,
     pbits_valid_sep_valid, ctree_flatten_valid.
 Qed.
@@ -412,7 +411,7 @@ Lemma mem_insert_valid Γ m a v τ :
 Proof.
   intros ??? (w&?&?) ?. assert ((Γ,m) ⊢ w : τ) by eauto.
   eapply cmap_alter_valid; eauto; simplify_type_equality;
-    eauto using of_val_flatten_typed, of_val_flatten_mapped.
+    eauto using of_val_flatten_typed, ctree_Forall_not, of_val_flatten_mapped.
 Qed.
 (** We need [addr_is_obj a] because writes at padding bytes are ignored *)
 Lemma mem_lookup_insert Γ m a v τ :
@@ -496,7 +495,7 @@ Proof.
   assert (ctree_Forall (not ∘ sep_unmapped) w1).
   { eapply pbits_mapped; eauto using pbits_kind_weaken. }
   eapply cmap_alter_disjoint; eauto using of_val_flatten_typed,
-    of_val_flatten_mapped, of_val_disjoint.
+    of_val_flatten_mapped, of_val_disjoint, ctree_Forall_not.
 Qed.
 Lemma ctree_insert_union Γ m1 m2 a1 v1 τ1 :
   ✓ Γ → ✓{Γ} m1 → m1 ⊥ m2 →
@@ -509,7 +508,7 @@ Proof.
   assert (ctree_Forall (not ∘ sep_unmapped) w1).
   { eapply pbits_mapped; eauto using pbits_kind_weaken. }
   eapply cmap_alter_union; eauto using of_val_flatten_typed,
-    of_val_flatten_mapped, of_val_disjoint, of_val_union.
+    of_val_flatten_mapped, of_val_disjoint, of_val_union, ctree_Forall_not.
 Qed.
 Lemma mem_alloc_val_valid Γ m alloc o v τ :
   ✓ Γ → ✓{Γ} m → mem_allocable o m →
@@ -590,7 +589,7 @@ Proof.
   destruct (m1 !!{Γ} a1) as [w1|] eqn:?; simplify_equality'.
   destruct (cmap_lookup_refine Γ f m1 m2 a1 a2 w1 τ) as (w2&->&?); auto.
   exists (to_val Γ w2); simplify_option_equality by eauto using
-    ctree_refine_Forall, pbit_refine_kind; eauto using to_val_refine.
+    ctree_refine_Forall, pbit_refine_kind_subseteq; eauto using to_val_refine.
 Qed.
 Lemma mem_force_refine Γ f m1 m2 a1 a2 v1 τ :
   ✓ Γ → m1 ⊑{Γ,f} m2 → a1 ⊑{Γ,f@m1↦m2} a2 : τ → m1 !!{Γ} a1 = Some v1 →
@@ -607,7 +606,7 @@ Lemma mem_writable_refine Γ f m1 m2 a1 a2 τ :
 Proof.
   intros ??? (w1&?&?).
   destruct (cmap_lookup_refine Γ f m1 m2 a1 a2 w1 τ) as (w2&?&?); auto.
-  exists w2; eauto using ctree_refine_Forall, pbit_refine_kind.
+  exists w2; eauto using ctree_refine_Forall, pbit_refine_kind_subseteq.
 Qed.
 Lemma mem_insert_refine Γ f m1 m2 a1 a2 v1 v2 τ :
   ✓ Γ → m1 ⊑{Γ,f} m2 → a1 ⊑{Γ,f@m1↦m2} a2 : τ → mem_writable Γ a1 m1 →
@@ -615,15 +614,17 @@ Lemma mem_insert_refine Γ f m1 m2 a1 a2 v1 v2 τ :
 Proof.
   intros ??? (w1&?&?) ?.
   destruct (cmap_lookup_refine Γ f m1 m2 a1 a2 w1 τ) as (w2&?&?); auto.
-  eapply cmap_alter_refine;
-    eauto using of_val_flatten_mapped, val_refine_typed_l.
-  erewrite <-(pbits_refine_perm _ _ _ _ (ctree_flatten w1) (ctree_flatten w2))
-    by eauto using ctree_flatten_refine.
-  eapply of_val_refine; eauto.
-  * eapply pbits_perm_unshared, pbits_unshared; eauto using
-      pbits_kind_weaken, pbits_valid_sep_valid, ctree_flatten_valid.
-  * eapply pbits_perm_mapped, pbits_mapped; eauto using
-      pbits_kind_weaken, pbits_valid_sep_valid, ctree_flatten_valid.
+  eapply cmap_alter_refine; eauto 1.
+  * eapply ctree_Forall_not, pbits_mapped; eauto using pbits_kind_weaken.
+  * erewrite <-(pbits_refine_perm _ _ _ _ (ctree_flatten w1) (ctree_flatten w2))
+      by eauto using ctree_flatten_refine.
+    eapply of_val_refine; eauto.
+    + eapply pbits_perm_unshared, pbits_unshared; eauto using
+        pbits_kind_weaken, pbits_valid_sep_valid, ctree_flatten_valid.
+    + eapply pbits_perm_mapped, pbits_mapped; eauto using
+        pbits_kind_weaken, pbits_valid_sep_valid, ctree_flatten_valid.
+  * eapply ctree_Forall_not, of_val_flatten_mapped;
+      eauto using val_refine_typed_l, of_val_flatten_typed.
 Qed.
 
 (** ** Locks *)
@@ -747,6 +748,16 @@ Proof.
   revert βs. induction ws; intros; f_equal';
     rewrite ?app_length, ?resize_plus, ?drop_app_alt by auto; auto.
 Qed.
+Lemma index_alive_unlock m Ω o :
+  index_alive (mem_unlock Ω m) o → index_alive m o.
+Proof.
+  destruct m as [m], Ω as [Ω]. intros (w&Hw&Hw'); do 2 red; simpl in *.
+  rewrite lookup_merge in Hw by done.
+  destruct (Ω !! o) as [ω|], (m !! o) as [w'|]; simplify_equality'; eauto.
+  exists w'; split; [done|contradict Hw']. rewrite ctree_flatten_merge.
+  generalize ((to_bools (length (ctree_flatten w')) ω)).
+  by induction Hw' as [|[[[?|?]|] ?] xbs]; intros [|[] ?]; constructor.
+Qed.
 Lemma addr_typed_unlock Γ m Ω a σ :
   ✓ Γ → (Γ,m) ⊢ a : σ → (Γ,mem_unlock Ω m) ⊢ a : σ.
 Proof. eauto using addr_typed_weaken, index_typed_unlock. Qed.
@@ -813,7 +824,7 @@ Proof.
   intros ? (Hm12&HΩ12) (?&HΩ23);
     split; eauto 2 using cmap_refine_compose; intros o1 o3 r σ1 i.
   rewrite lookup_mem_inj_compose_Some; intros (o2&r2&r3&?&?&->) ??.
-  destruct (mem_refine_index_typed Γ m1 m2 f o1 o2 r2 σ1)
+  destruct (cmap_refine_index_typed Γ m1 m2 f o1 o2 r2 σ1)
     as (σ2&?&?); auto.
   assert (ref_object_offset Γ r2 + i < bit_size_of Γ σ2).
   { apply Nat.lt_le_trans with
@@ -842,12 +853,14 @@ Proof.
   intros ??? (w1&?&?).
   destruct (cmap_lookup_refine Γ f m1 m2 a1 a2 w1 τ) as (w2&?&?); auto.
   eapply cmap_alter_refine; eauto.
-  { apply ctree_map_refine; eauto using pbit_lock_unshared,
-      pbits_lock_refine, ctree_flatten_refine. by intros ? <-. }
-  rewrite ctree_flatten_map. apply Forall_not, pbits_mapped_lock,
-    pbits_mapped; eauto using pbits_kind_weaken.
-  erewrite fmap_length,ctree_flatten_length by eauto using ctree_refine_typed_l.
-  eauto using bit_size_of_ne_0, ctree_typed_type_valid, ctree_refine_typed_l.
+  * eapply ctree_Forall_not, pbits_mapped; eauto using pbits_kind_weaken.
+  * apply ctree_map_refine; eauto using pbit_lock_unshared,
+      pbits_lock_refine, ctree_flatten_refine. by intros ? <-.
+  * rewrite ctree_flatten_map. apply Forall_not, pbits_mapped_lock,
+      pbits_mapped; eauto using pbits_kind_weaken.
+    erewrite fmap_length,
+      ctree_flatten_length by eauto using ctree_refine_typed_l.
+    eauto using bit_size_of_ne_0, ctree_typed_type_valid, ctree_refine_typed_l.
 Qed.
 Lemma ctree_unlock_refine Γ f m1 m2 w1 w2 τ βs :
   ✓ Γ → w1 ⊑{Γ,f@m1↦m2} w2 : τ → length βs = bit_size_of Γ τ →
@@ -862,7 +875,7 @@ Proof.
   * intros τ n ws1 ws2 -> ? IH _ βs. rewrite bit_size_of_array. intros Hlen.
     constructor. revert βs Hlen. induction IH; intros; decompose_Forall_hyps;
       erewrite ?Forall2_length by eauto using ctree_flatten_refine; auto.
-  * intros s τs wxbss1 wxbss2 Hs Hws IH Hxbss _ Hpad βs.
+  * intros s τs wxbss1 wxbss2 Hs Hws IH Hxbss _ _ Hpad βs.
     erewrite bit_size_of_struct by eauto; clear Hs. constructor.
     + revert wxbss1 wxbss2 βs Hws IH Hxbss Hlen Hpad. unfold field_bit_padding.
       induction (bit_size_of_fields _ τs HΓ);
@@ -896,12 +909,21 @@ Proof.
   { intros n xbs <-. rewrite zip_with_replicate_r by auto.
     by elim xbs; intros; f_equal'. }
   intros ? [(?&Hm1&Hm2&Hm) HΩ]; split; split_ands; auto using mem_unlock_valid.
-  intros o1 o2 r w1 ? Hw1. cut (∃ w2 w2' τ,
+  cut (∀ o1 o2 r w1, f !! o1 = Some (o2, r) →
+    cmap_car (mem_unlock Ω1 m1) !! o1 = Some w1 → ∃ w2 w2' τ,
     cmap_car (mem_unlock Ω2 m2) !! o2 = Some w2 ∧
     w2 !!{Γ} (freeze true <$> r) = Some w2' ∧ w1 ⊑{Γ,f @ m1↦m2} w2' : τ).
-  { intros (w2&w2'&τ&?&?&?). exists w2 w2'; split_ands; auto.
-    erewrite ctree_refine_type_of_l by eauto.
-    eapply ctree_refine_weaken; eauto using index_typed_unlock. }
+  { intros help o1 o2 r w1 ? Hw1.
+    destruct (help o1 o2 r w1) as (w2&w2'&τ&?&?&?); auto.
+    exists w2 w2'; split_ands; auto. erewrite ctree_refine_type_of_l by eauto.
+    eapply ctree_refine_weaken;
+      eauto 3 using index_typed_unlock, index_alive_unlock.
+    clear dependent o1 o2 r w1 w2 w2' τ. intros o1 o2 r ? (w1&?&Hw1).
+    destruct (help o1 o2 r w1) as (w2&w2'&τ&?&?&?); auto.
+    exists w2; split; auto; contradict Hw1.
+    eapply (ctree_refine_Forall_inv _ _ _ m1 m2 _ w2');
+      eauto 2 using ctree_lookup_Forall, pbit_refine_kind_rev. }
+  intros o1 o2 r w1 ? Hw1.
   destruct m1 as [m1], m2 as [m2], Ω1 as [Ω1 HΩ1], Ω2 as [Ω2 HΩ2]; simpl in *.
   unfold elem_of, lockset_elem_of in HΩ; simpl in HΩ; clear HΩ1 HΩ2.
   rewrite lookup_merge in Hw1 |- * by done.
@@ -970,9 +992,9 @@ Proof.
   destruct (mem_inj_injective_alt f o1 (addr_index a1) (addr_index a2) r r')
     as [->|[??]]; simplify_equality'; eauto using cmap_refine_injective.
   { intuition lia. }
-  exfalso. destruct (mem_refine_index_typed Γ m1 m2 f o1
+  exfalso. destruct (cmap_refine_index_typed Γ m1 m2 f o1
     (addr_index a2) r τ) as (τ'&?&?); auto.
-  destruct (mem_refine_index_typed Γ m1 m2 f (addr_index a1) (addr_index a2)
+  destruct (cmap_refine_index_typed Γ m1 m2 f (addr_index a1) (addr_index a2)
     r' (addr_type_object a1)) as (?&?&?); eauto using addr_typed_index.
   simplify_type_equality.
   assert (addr_object_offset Γ a1 + bit_size_of Γ σ ≤ bit_size_of Γ

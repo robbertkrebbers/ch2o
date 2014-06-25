@@ -136,16 +136,12 @@ Lemma perm_unshared x :
   sep_valid x → Some Locked ⊆ perm_kind x → sep_unshared x.
 Proof. destruct (perm_kind_spec x); repeat sep_unfold; intuition. Qed.
 Lemma perm_mapped x : Some Readable ⊆ perm_kind x → ¬sep_unmapped x.
-Proof.
-  by destruct (perm_kind_spec x); repeat sep_unfold; intros;
-    simplify_equality'; intuition.
-Qed.
+Proof. destruct (perm_kind_spec x); repeat sep_unfold; naive_solver. Qed.
 Lemma perm_unmapped x :
   sep_valid x → perm_kind x = Some Existing → sep_unmapped x.
-Proof.
-  destruct (perm_kind_spec x); repeat sep_unfold; intros;
-    simplify_equality'; intuition.
-Qed.
+Proof. destruct (perm_kind_spec x); repeat sep_unfold; naive_solver. Qed.
+Lemma perm_None_unmapped x : sep_valid x → perm_kind x = None → sep_unmapped x.
+Proof. destruct (perm_kind_spec x); repeat sep_unfold; naive_solver. Qed.
 Lemma perm_token_subseteq x :
   sep_valid x → Some Readable ⊆ perm_kind x → perm_token ⊂ x.
 Proof.

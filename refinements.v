@@ -205,13 +205,5 @@ Instance index_type_check_spec {Ti : Set} {M} `{TypeCheck M (type Ti) index} :
   TypeCheckSpec M (type Ti) index (λ _, True).
 Proof. done. Qed.
 
-Class MemSpec (Ti : Set) M `{TypeCheck M (type Ti) index, RefineM Ti M,
-   IndexAlive M, IntEnv Ti, PtrEnv Ti,
-   ∀ m o, Decision (index_alive m o)} `{EnvSpec Ti} := {
-  mem_refine_index_typed Γ m1 m2 f o1 o2 r τ :
-    ✓ Γ → m1 ⊑{Γ,f} m2 → f !! o1 = Some (o2,r) →
-    m1 ⊢ o1 : τ → ∃ τ', m2 ⊢ o2 : τ' ∧ Γ ⊢ r : τ' ↣ τ;
-  mem_refine_alive Γ m1 m2 f o1 o2 r :
-    ✓ Γ → m1 ⊑{Γ,f} m2 → f !! o1 = Some (o2,r) →
-    index_alive m1 o1 → index_alive m2 o2
-}.
+Class MemSpec (Ti : Set) M `{TypeCheck M (type Ti) index, IndexAlive M,
+  IntEnv Ti, PtrEnv Ti, ∀ m o, Decision (index_alive m o)} `{EnvSpec Ti} := {}.

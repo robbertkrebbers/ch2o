@@ -500,11 +500,6 @@ Qed.
 Lemma Z_to_option_of_nat x : Z_to_option_nat (Z.of_nat x) = Some x.
 Proof. apply Z_to_option_nat_Some_alt. auto using Nat2Z.is_nonneg. Qed.
 
-(** The function [Z_of_sumbool] converts a sumbool [P] into an integer
-by yielding one if [P] and zero if [Q]. *)
-Definition Z_of_sumbool {P Q : Prop} (p : {P} + {Q} ) : Z :=
-  (if p then 1 else 0)%Z.
-
 (** Some correspondence lemmas between [nat] and [N] that are not part of the
 standard library. We declare a hint database [natify] to rewrite a goal
 involving [N] into a corresponding variant involving [nat]. *)

@@ -33,6 +33,7 @@ Section operations.
     tagged_tag xb1 ⊑{Γ,f@m1↦m2} tagged_tag xb2 ∧
     tagged_perm xb1 = tagged_perm xb2 ∧
     sep_valid (tagged_perm xb1) ∧
+    (sep_unmapped (tagged_perm xb1) → tagged_tag xb1 = BIndet) ∧
     (sep_unmapped (tagged_perm xb2) → tagged_tag xb2 = BIndet).
 End operations.
 
@@ -113,10 +114,13 @@ Proof.
   intros Hxbs. revert βs. induction Hxbs; intros [|[] ?];
     simpl; constructor; auto using pbit_unlock_unshared.
 Qed.
-Lemma pbits_kind_perm xbs k :
-  Forall (λ xb, k ⊆ pbit_kind xb) xbs →
-  Forall (λ x, k ⊆ perm_kind x) (tagged_perm <$> xbs).
-Proof. intros. by apply Forall_fmap. Qed.
+Lemma pbits_kind_None_unmapped xbs :
+  Forall sep_valid xbs →
+  Forall (λ xb, pbit_kind xb = None) xbs → Forall sep_unmapped xbs.
+Proof.
+  sep_unfold. induction 1 as [|[??] ? [??]]; intros;
+    decompose_Forall_hyps; auto using perm_None_unmapped.
+Qed.
 Lemma pbits_kind_weaken xbs k1 k2 :
   Forall (λ xb, k2 ⊆ pbit_kind xb) xbs → k1 ⊆ k2 →
   Forall (λ xb, k1 ⊆ pbit_kind xb) xbs.
@@ -345,7 +349,7 @@ Lemma pbit_refine_valid_l Γ f m1 m2 xb1 xb2 :
   ✓ Γ → xb1 ⊑{Γ,f@m1↦m2} xb2 → ✓{Γ,m1} xb1.
 Proof.
   destruct xb1, xb2; intros ? (?&?&?&?); split;
-    naive_solver eauto using BIndet_refine_r_inv, bit_refine_valid_l.
+    naive_solver eauto using bit_refine_valid_l.
 Qed.
 Lemma pbits_refine_valid_l Γ f m1 m2 xbs1 xbs2 :
   ✓ Γ → xbs1 ⊑{Γ,f@m1↦m2}* xbs2 → ✓{Γ,m1}* xbs1.
@@ -354,7 +358,7 @@ Lemma pbit_refine_valid_r Γ f m1 m2 xb1 xb2 :
   ✓ Γ → xb1 ⊑{Γ,f@m1↦m2} xb2 → ✓{Γ,m2} xb2.
 Proof.
   destruct xb1, xb2; intros ? (?&?&?&?); split;
-      naive_solver eauto using BIndet_refine_r_inv, bit_refine_valid_r.
+      naive_solver eauto using bit_refine_valid_r.
 Qed.
 Lemma pbits_refine_valid_r Γ f m1 m2 xbs1 xbs2 :
   ✓ Γ → xbs1 ⊑{Γ,f@m1↦m2}* xbs2 → ✓{Γ,m2}* xbs2.
@@ -380,11 +384,13 @@ Qed.
 Global Instance:
   PropHolds (✓ Γ) → Transitive (refine Γ mem_inj_id m m : relation (pbit Ti)).
 Proof. intros Γ ?????. eapply @pbit_refine_compose; eauto; apply _. Qed.
-Lemma pbit_refine_weaken Γ Γ' f f' m1 m2 m1' m2' pb1 pb2 :
-  ✓ Γ → pb1 ⊑{Γ,f@m1↦m2} pb2 → Γ ⊆ Γ' → f ⊆ f' →
+Lemma pbit_refine_weaken Γ Γ' f f' m1 m2 m1' m2' xb1 xb2 :
+  ✓ Γ → xb1 ⊑{Γ,f@m1↦m2} xb2 → Γ ⊆ Γ' → f ⊆ f' →
   (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
-  pb1 ⊑{Γ',f'@m1'↦m2'} pb2.
-Proof. intros ? (?&?&?&?); repeat split; eauto using bit_refine_weaken. Qed.
+  (∀ o τ, m1 ⊢ o : τ → index_alive m1' o → index_alive m1 o) →
+  (∀ o1 o2 r, f !! o1 = Some (o2,r) → index_alive m1' o1 → index_alive m2' o2) →
+  xb1 ⊑{Γ',f'@m1'↦m2'} xb2.
+Proof. intros ? (?&?&?&?&?); repeat split; eauto using bit_refine_weaken. Qed.
 Lemma pbits_refine_perm Γ f m1 m2 xbs1 xbs2 :
   xbs1 ⊑{Γ,f@m1↦m2}* xbs2 → tagged_perm <$> xbs1 = tagged_perm <$> xbs2.
 Proof. induction 1 as [|???? (?&?&?&?)]; f_equal'; auto. Qed.
@@ -398,10 +404,7 @@ Proof.
 Qed.
 Lemma pbit_refine_unmapped_inv Γ f m1 m2 xb1 xb2 :
   sep_unmapped xb2 → xb1 ⊑{Γ,f@m1↦m2} xb2 → sep_unmapped xb1.
-Proof.
-  intros [??] (?&?&?);
-    split; eauto using (BIndet_refine_r_inv Γ f m1 m2) with congruence.
-Qed.
+Proof. intros [??] (?&?&?&?&?); split; eauto with congruence. Qed.
 Lemma pbits_refine_unmapped_inv Γ f m1 m2 xbs1 xbs2 :
   Forall sep_unmapped xbs2 → xbs1 ⊑{Γ,f@m1↦m2}* xbs2 → Forall sep_unmapped xbs1.
 Proof.
@@ -501,19 +504,10 @@ Lemma pbits_indetify_refine Γ f m1 m2 xbs1 xbs2 :
   xbs1 ⊑{Γ,f@m1↦m2}* xbs2 →
   pbit_indetify <$> xbs1 ⊑{Γ,f@m1↦m2}* pbit_indetify <$> xbs2.
 Proof. induction 1; csimpl; auto using pbit_indetify_refine. Qed.
-Lemma pbit_indetified_refine Γ f m1 m2 xb1 xb2 :
-  pbit_indetify xb2 = xb2 → xb1 ⊑{Γ,f@m1↦m2} xb2 → pbit_indetify xb1 = xb1.
-Proof.
-  unfold pbit_indetify. destruct xb1, xb2; intros ? (?&?&?&?);
-    simplify_equality'; f_equal; eauto using BIndet_refine_r_inv, eq_sym.
-Qed.
-Lemma pbits_indetified_refine Γ f m1 m2 xbs1 xbs2 :
-  pbit_indetify <$> xbs2 = xbs2 →
-  xbs1 ⊑{Γ,f@m1↦m2}* xbs2 → pbit_indetify <$> xbs1 = xbs1.
-Proof.
-  induction 2; simplify_equality'; f_equal; eauto using pbit_indetified_refine.
-Qed.
-Lemma pbit_refine_kind Γ f m1 m2 xb1 xb2 k :
+Lemma pbit_refine_kind_rev Γ f m1 m2 xb1 xb2 k :
+  xb1 ⊑{Γ,f@m1↦m2} xb2 → pbit_kind xb2 = k → pbit_kind xb1 = k.
+Proof. unfold pbit_kind; intros (?&?&?&?); simpl; congruence. Qed.
+Lemma pbit_refine_kind_subseteq Γ f m1 m2 xb1 xb2 k :
   xb1 ⊑{Γ,f@m1↦m2} xb2 → k ⊆ pbit_kind xb1 → k ⊆ pbit_kind xb2.
 Proof. unfold pbit_kind; intros (?&?&?&?); simpl; congruence. Qed.
 Lemma pbits_refine_locked Γ f m1 m2 xbs1 xbs2 :

@@ -133,6 +133,20 @@ Proof.
   intros. unfold ptr_of_bits. by erewrite bit_size_of_weaken
     by eauto using TBase_valid, TPtr_valid.
 Qed.
+Lemma ptr_to_bits_alive Γ m p :
+  ptr_alive m p →
+  Forall (λ pb, ptr_alive m (fragmented.frag_item pb)) (ptr_to_bits Γ p).
+Proof.
+  unfold ptr_to_bits. intros. apply (Forall_to_fragments _).
+  intros i _. by destruct p; simpl in *; rewrite ?addr_index_freeze.
+Qed.
+Lemma ptr_to_bits_dead Γ m p :
+  ¬ptr_alive m p →
+  Forall (λ pb, ¬ptr_alive m (fragmented.frag_item pb)) (ptr_to_bits Γ p).
+Proof.
+  unfold ptr_to_bits. intros. apply (Forall_to_fragments _).
+  intros i _. by destruct p; simpl in *; rewrite ?addr_index_freeze.
+Qed.
 
 (** ** Refinements *)
 Lemma ptr_bit_refine_id Γ m pb : ✓{Γ,m} pb → pb ⊑{Γ@m} pb.
@@ -148,6 +162,7 @@ Qed.
 Lemma ptr_bit_refine_weaken Γ Γ' f f' m1 m2 m1' m2' pb1 pb2 :
   ✓ Γ → pb1 ⊑{Γ,f@m1↦m2} pb2 → Γ ⊆ Γ' → f ⊆ f' →
   (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
+  (∀ o1 o2 r, f !! o1 = Some (o2,r) → index_alive m1' o1 → index_alive m2' o2) →
   pb1 ⊑{Γ',f'@m1'↦m2'} pb2.
 Proof.
   intros ? (τ&?&?&?&?) ??. exists τ.

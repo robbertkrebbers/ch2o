@@ -40,6 +40,24 @@ Section pointer_operations.
     end.
   Inductive is_NULL : ptr Ti → Prop := mk_is_NULL τ : is_NULL (NULL τ).
 
+  Definition ptr_alive (m : M) (p : ptr Ti) : Prop :=
+    match p with NULL _ => True | Ptr a => index_alive m (addr_index a) end.
+  Definition ptr_compare_ok (m : M) (c : compop) (p1 p2 : ptr Ti) : Prop :=
+    match p1, p2 with
+    | Ptr a1, Ptr a2 => addr_minus_ok m a1 a2
+    | NULL _, Ptr a2 =>
+       match c with EqOp => index_alive m (addr_index a2) | _ => False end
+    | Ptr a1, NULL _ =>
+       match c with EqOp => index_alive m (addr_index a1) | _ => False end
+    | NULL _, NULL _ => True
+    end.
+  Definition ptr_compare (Γ : env Ti) (c : compop) (p1 p2 : ptr Ti) : bool :=
+    match p1, p2 with
+    | Ptr a1, Ptr a2 => Z_comp c (addr_minus Γ a1 a2) 0
+    | NULL _, Ptr a2 => false (* only allowed for EqOp *)
+    | Ptr a1, NULL _ => false (* only allowed for EqOp *)
+    | NULL _, NULL _ => match c with EqOp | LeOp => true | LtOp => false end
+    end.
   Definition ptr_plus_ok (Γ : env Ti) (m : M) (j : Z) (p : ptr Ti) :=
     match p with NULL _ => j = 0 | Ptr a => addr_plus_ok Γ m j a end.
   Global Arguments ptr_plus_ok _ _ _ !_ /.
@@ -60,9 +78,10 @@ Section pointer_operations.
     | _, _ => 0
     end.
   Global Arguments ptr_minus _ !_ !_ /.
-  Definition ptr_cast_ok (Γ : env Ti) (σc : type Ti) (p : ptr Ti) : Prop :=
-    match p with NULL _ => True | Ptr a => addr_cast_ok Γ σc a end.
-  Global Arguments ptr_cast_ok _ _ !_ /.
+  Definition ptr_cast_ok (Γ : env Ti) (m : M)
+      (σc : type Ti) (p : ptr Ti) : Prop :=
+    match p with NULL _ => True | Ptr a => addr_cast_ok Γ m σc a end.
+  Global Arguments ptr_cast_ok _ _ _ !_ /.
   Definition ptr_cast (σc : type Ti) (p : ptr Ti) : ptr Ti :=
     match p with NULL _ => NULL σc | Ptr a => Ptr (addr_cast σc a) end.
   Global Arguments ptr_cast _ !_ /.
@@ -132,12 +151,22 @@ Proof.
  refine match p with NULL _ => left _ | _ => right _ end;
    first [by constructor | abstract by inversion 1].
 Defined.
-
+Lemma ptr_alive_weaken m1 m2 p :
+  ptr_alive m1 p → (∀ o, index_alive m1 o → index_alive m2 o) → ptr_alive m2 p.
+Proof. destruct p; simpl; auto. Qed.
+Lemma ptr_dead_weaken Γ m1 m2 p σ :
+  (Γ,m1) ⊢ p : σ → ptr_alive m2 p →
+  (∀ o τ, m1 ⊢ o : τ → index_alive m2 o → index_alive m1 o) → ptr_alive m1 p.
+Proof. destruct 1; simpl; eauto using addr_dead_weaken. Qed.
+Global Instance ptr_alive_dec m p : Decision (ptr_alive m p).
+Proof. destruct p; apply _. Defined.
+Global Instance ptr_compare_ok_dec m c p1 p2 : Decision (ptr_compare_ok m c p1 p2).
+Proof. destruct p1, p2, c; apply _. Defined.
 Global Instance ptr_plus_ok_dec Γ m j p : Decision (ptr_plus_ok Γ m j p).
 Proof. destruct p; apply _. Defined.
 Global Instance ptr_minus_ok_dec m p1 p2 : Decision (ptr_minus_ok m p1 p2).
 Proof. destruct p1, p2; apply _. Defined.
-Global Instance ptr_cast_ok_dec Γ σc p : Decision (ptr_cast_ok Γ σc p).
+Global Instance ptr_cast_ok_dec Γ m σc p : Decision (ptr_cast_ok Γ m σc p).
 Proof. destruct p; apply _. Defined.
 Lemma ptr_plus_typed Γ m p σ j :
   ✓ Γ → (Γ,m) ⊢ p : σ → ptr_plus_ok Γ m j p → (Γ,m) ⊢ ptr_plus Γ j p : σ.
@@ -150,9 +179,20 @@ Proof.
     eauto using addr_minus_typed, int_typed_small with lia.
 Qed.
 Lemma ptr_cast_typed Γ m p σ σc :
-  (Γ,m) ⊢ p : σ → ptr_cast_ok Γ σc p →
+  (Γ,m) ⊢ p : σ → ptr_cast_ok Γ m σc p →
   ptr_type_valid Γ σc → (Γ,m) ⊢ ptr_cast σc p : σc.
 Proof. destruct 1; simpl; constructor; eauto using addr_cast_typed. Qed.
+
+Lemma ptr_compare_ok_weaken m1 m2 c p1 p2 :
+  ptr_compare_ok m1 c p1 p2 → (∀ o, index_alive m1 o → index_alive m2 o) →
+  ptr_compare_ok m2 c p1 p2.
+Proof. destruct p1, p2, c; simpl; eauto using addr_minus_ok_weaken. Qed.
+Lemma ptr_compare_weaken Γ1 Γ2 m1 c p1 p2 τ1 τ2 :
+  ✓ Γ1 → (Γ1,m1) ⊢ p1 : τ1 → (Γ1,m1) ⊢ p2 : τ2 →
+  Γ1 ⊆ Γ2 → ptr_compare Γ1 c p1 p2 = ptr_compare Γ2 c p1 p2.
+Proof.
+  destruct 2,1,c; simpl; intros; done || by erewrite addr_minus_weaken by eauto.
+Qed.
 Lemma ptr_plus_ok_weaken Γ1 Γ2 m1 m2 p τ j :
   ✓ Γ1 → (Γ1,m1) ⊢ p : τ → ptr_plus_ok Γ1 m1 j p →
   Γ1 ⊆ Γ2 → (∀ o, index_alive m1 o → index_alive m2 o) →
@@ -169,9 +209,24 @@ Lemma ptr_minus_weaken Γ1 Γ2 m1 p1 p2 τ1 τ2 :
   ✓ Γ1 → (Γ1,m1) ⊢ p1 : τ1 → (Γ1,m1) ⊢ p2 : τ2 →
   Γ1 ⊆ Γ2 → ptr_minus Γ1 p1 p2 = ptr_minus Γ2 p1 p2.
 Proof. destruct 2, 1; simpl; eauto using addr_minus_weaken. Qed.
-Lemma ptr_cast_ok_weaken Γ1 Γ2 m1 p τ σc :
-  ✓Γ1 → (Γ1,m1) ⊢ p : τ → ptr_cast_ok Γ1 σc p → Γ1 ⊆ Γ2 → ptr_cast_ok Γ2 σc p.
+Lemma ptr_cast_ok_weaken Γ1 Γ2 m1 m2 p τ σc :
+  ✓ Γ1 → (Γ1,m1) ⊢ p : τ → ptr_cast_ok Γ1 m1 σc p → Γ1 ⊆ Γ2 →
+  (∀ o, index_alive m1 o → index_alive m2 o) → ptr_cast_ok Γ2 m2 σc p.
 Proof. destruct 2; simpl; eauto using addr_cast_ok_weaken. Qed.
+Lemma ptr_compare_ok_alive_l m c p1 p2 :
+  ptr_compare_ok m c p1 p2 → ptr_alive m p1.
+Proof. destruct p1, p2, c; try done; by intros [??]. Qed.
+Lemma ptr_compare_ok_alive_r m c p1 p2 :
+  ptr_compare_ok m c p1 p2 → ptr_alive m p2.
+Proof. destruct p1, p2, c; done || intros (?&?&?); simpl in *; congruence. Qed.
+Lemma ptr_plus_ok_alive Γ m p j : ptr_plus_ok Γ m j p → ptr_alive m p.
+Proof. destruct p. done. by intros [??]. Qed.
+Lemma ptr_minus_ok_alive_l m p1 p2 : ptr_minus_ok m p1 p2 → ptr_alive m p1.
+Proof. destruct p1, p2; try done. by intros [??]. Qed.
+Lemma ptr_minus_ok_alive_r m p1 p2 : ptr_minus_ok m p1 p2 → ptr_alive m p2.
+Proof. destruct p1, p2; try done. intros (?&?&?); simpl in *; congruence. Qed.
+Lemma ptr_cast_ok_alive Γ m p σ : ptr_cast_ok Γ m σ p → ptr_alive m p.
+Proof. destruct p. done. by intros [??]. Qed.
 
 (** ** Refinements *)
 Lemma ptr_refine_typed_l Γ f m1 m2 p1 p2 σ :
@@ -203,6 +258,7 @@ Qed.
 Lemma ptr_refine_weaken Γ Γ' f f' m1 m2 m1' m2' p1 p2 σ :
   ✓ Γ → p1 ⊑{Γ,f@m1↦m2} p2 : σ → Γ ⊆ Γ' → f ⊆ f' →
   (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
+  (∀ o1 o2 r, f !! o1 = Some (o2,r) → index_alive m1' o1 → index_alive m2' o2) →
   p1 ⊑{Γ',f'@m1'↦m2'} p2 : σ.
 Proof.
   destruct 2; constructor;
@@ -218,28 +274,44 @@ Qed.
 Lemma ptr_freeze_refine Γ f m1 m2 p1 p2 σ :
   p1 ⊑{Γ,f@m1↦m2} p2 : σ → freeze true p1 ⊑{Γ,f@m1↦m2} freeze true p2 : σ.
 Proof. destruct 1; simpl; constructor; eauto using addr_freeze_refine. Qed.
+Lemma ptr_alive_refine Γ f m1 m2 p1 p2 σ :
+  ptr_alive m1 p1 → p1 ⊑{Γ,f@m1↦m2} p2 : σ → ptr_alive m2 p2.
+Proof. destruct 2; simpl in *; eauto using addr_alive_refine. Qed.
+Lemma ptr_compare_ok_refine Γ m1 m2 f c p1 p2 p3 p4 σ :
+  p1 ⊑{Γ,f@m1↦m2} p2 : σ → p3 ⊑{Γ,f@m1↦m2} p4 : σ →
+  ptr_compare_ok m1 c p1 p3 → ptr_compare_ok m2 c p2 p4.
+Proof.
+  destruct 1, 1, c; simpl; eauto using addr_minus_ok_refine, addr_alive_refine.
+Qed.
+Lemma ptr_compare_refine Γ f m1 m2 c p1 p2 p3 p4 σ :
+  ✓ Γ → ptr_compare_ok m1 c p1 p3 →
+  p1 ⊑{Γ,f@m1↦m2} p2 : σ → p3 ⊑{Γ,f@m1↦m2} p4 : σ →
+  ptr_compare Γ c p1 p3 = ptr_compare Γ c p2 p4.
+Proof.
+  destruct 3, 1, c; simpl; done || by erewrite addr_minus_refine by eauto.
+Qed.
 Lemma ptr_plus_ok_refine Γ m1 m2 f p1 p2 σ j :
-  ✓ Γ → m1 ⊑{Γ,f} m2 →
   p1 ⊑{Γ,f@m1↦m2} p2 : σ → ptr_plus_ok Γ m1 j p1 → ptr_plus_ok Γ m2 j p2.
-Proof. destruct 3; simpl; eauto using addr_plus_ok_refine. Qed.
+Proof. destruct 1; simpl; eauto using addr_plus_ok_refine. Qed.
 Lemma ptr_plus_refine Γ f m1 m2 p1 p2 σ j :
-  ✓ Γ → m1 ⊑{Γ,f} m2 → ptr_plus_ok Γ m1 j p1 →
+  ✓ Γ → ptr_plus_ok Γ m1 j p1 →
   p1 ⊑{Γ,f@m1↦m2} p2 : σ → ptr_plus Γ j p1 ⊑{Γ,f@m1↦m2} ptr_plus Γ j p2 : σ.
-Proof. destruct 4; simpl; constructor; eauto using addr_plus_refine. Qed.
+Proof. destruct 3; simpl; constructor; eauto using addr_plus_refine. Qed.
 Lemma ptr_minus_ok_refine Γ m1 m2 f p1 p2 p3 p4 σ :
-  ✓ Γ → m1 ⊑{Γ,f} m2 → p1 ⊑{Γ,f@m1↦m2} p2 : σ → p3 ⊑{Γ,f@m1↦m2} p4 : σ→
+  p1 ⊑{Γ,f@m1↦m2} p2 : σ → p3 ⊑{Γ,f@m1↦m2} p4 : σ →
   ptr_minus_ok m1 p1 p3 → ptr_minus_ok m2 p2 p4.
-Proof. destruct 3, 1; simpl; eauto using addr_minus_ok_refine. Qed.
+Proof. destruct 1, 1; simpl; eauto using addr_minus_ok_refine. Qed.
 Lemma ptr_minus_refine Γ f m1 m2 p1 p2 p3 p4 σ :
   ✓ Γ → ptr_minus_ok m1 p1 p3 →
   p1 ⊑{Γ,f@m1↦m2} p2 : σ → p3 ⊑{Γ,f@m1↦m2} p4 : σ →
   ptr_minus Γ p1 p3 = ptr_minus Γ p2 p4.
 Proof. destruct 3, 1; simpl; eauto using addr_minus_refine. Qed.
 Lemma ptr_cast_ok_refine Γ f m1 m2 p1 p2 σ σc :
-  p1 ⊑{Γ,f@m1↦m2} p2 : σ → ptr_cast_ok Γ σc p1 → ptr_cast_ok Γ σc p2.
-Proof. destruct 1; simpl; eauto using addr_cast_ok_refine. Qed.
+  ✓ Γ → p1 ⊑{Γ,f@m1↦m2} p2 : σ →
+  ptr_cast_ok Γ m1 σc p1 → ptr_cast_ok Γ m2 σc p2.
+Proof. destruct 2; simpl; eauto using addr_cast_ok_refine. Qed.
 Lemma ptr_cast_refine Γ f m1 m2 p1 p2 σ σc :
-  ptr_cast_ok Γ σc p1 → ptr_type_valid Γ σc → p1 ⊑{Γ,f@m1↦m2} p2 : σ →
+  ptr_cast_ok Γ m1 σc p1 → ptr_type_valid Γ σc → p1 ⊑{Γ,f@m1↦m2} p2 : σ →
   ptr_cast σc p1 ⊑{Γ,f@m1↦m2} ptr_cast σc p2 : σc.
 Proof. destruct 3; constructor; eauto using addr_cast_refine. Qed.
 End pointers.
