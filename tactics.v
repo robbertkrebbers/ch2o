@@ -171,27 +171,29 @@ Ltac fold_classes :=
        repeat change (@alter _ _ _ (@alter _ _ _ F)) with (@alter _ _ _ F)
     end
   end.
-Ltac fold_classes_hyps :=
-  repeat match goal with
-  | _ : appcontext [ ?F ] |- _ =>
+Ltac fold_classes_hyps H :=
+  repeat match type of H with
+  | appcontext [ ?F ] =>
     progress match type of F with
     | FMap _ =>
-       change F with (@fmap _ F) in *;
-       repeat change (@fmap _ (@fmap _ F)) with (@fmap _ F) in *
+       change F with (@fmap _ F) in H;
+       repeat change (@fmap _ (@fmap _ F)) with (@fmap _ F) in H
     | MBind _ =>
-       change F with (@mbind _ F) in *;
-       repeat change (@mbind _ (@mbind _ F)) with (@mbind _ F) in *
+       change F with (@mbind _ F) in H;
+       repeat change (@mbind _ (@mbind _ F)) with (@mbind _ F) in H
     | OMap _ =>
-       change F with (@omap _ F) in *;
-       repeat change (@omap _ (@omap _ F)) with (@omap _ F) in *
+       change F with (@omap _ F) in H;
+       repeat change (@omap _ (@omap _ F)) with (@omap _ F) in H
     | Alter _ _ _ =>
-       change F with (@alter _ _ _ F) in *;
-       repeat change (@alter _ _ _ (@alter _ _ _ F)) with (@alter _ _ _ F) in *
+       change F with (@alter _ _ _ F) in H;
+       repeat change (@alter _ _ _ (@alter _ _ _ F)) with (@alter _ _ _ F) in H
     end
   end.
-Tactic Notation "csimpl" "in" "*" :=
-  try (progress simpl in *; fold_classes; fold_classes_hyps).
+Tactic Notation "csimpl" "in" hyp(H) :=
+  try (progress simpl in H; fold_classes_hyps H).
 Tactic Notation "csimpl" := try (progress simpl; fold_classes).
+Tactic Notation "csimpl" "in" "*" :=
+  repeat_on_hyps (fun H => csimpl in H); csimpl.
 
 Ltac simplify_equality := repeat
   match goal with
