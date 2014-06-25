@@ -127,7 +127,7 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
   | cstep_expr_undef m k (E : ectx Ti) e :
      is_redex e → ¬Γ \ get_stack k ⊢ₕ safe e, m →
      Γ\ δ ⊢ₛ State k (Expr (subst E e)) m ⇒
-             State k (Undef (subst E e)) m
+             State k (Undef (UndefExpr E e)) m
 
   (**i For finished expressions: *)
   | cstep_expr_do m k e Ω v :
@@ -144,6 +144,10 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
      val_false v →
      Γ\ δ ⊢ₛ State (CExpr e (while{□} s) :: k) (Expr (#{Ω} v)) m ⇒
              State k (Stmt ↗ (while{e} s)) (mem_unlock Ω m)
+  | cstep_expr_while_indet m k e Ω v s :
+     ¬val_true m v → ¬val_false v →
+     Γ\ δ ⊢ₛ State (CExpr e (while{□} s) :: k) (Expr (#{Ω} v)) m ⇒
+             State k (Undef (UndefBranch (while{□} s) Ω v)) m
   | cstep_expr_if_true m k e Ω v s1 s2 :
      val_true m v →
      Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
@@ -152,6 +156,10 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
      val_false v →
      Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
              State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)
+  | cstep_expr_if_indet m k e Ω v s1 s2 :
+     ¬val_true m v → ¬val_false v →
+     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
+             State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m
 
   (**i For compound statements: *)
   | cstep_in_block m k o τ s :
@@ -290,6 +298,10 @@ Section inversion.
        (∀ Ω v k' e' s,
          e = (#{Ω} v)%E → val_false v → k = CExpr e' (while{□} s) :: k' →
          P (State k' (Stmt ↗ (while{e'} s)) (mem_unlock Ω m))) →
+       (∀ Ω v k' e' s,
+         e = (#{Ω} v)%E → ¬val_true m v → ¬val_false v →
+         k = CExpr e' (while{□} s) :: k' →
+         P (State k' (Undef (UndefBranch (while{□} s) Ω v)) m)) →
        (∀ Ω v k' e' s1 s2,
          e = (#{Ω} v)%E → val_true m v →
          k = CExpr e' (if{□} s1 else s2) :: k' →
@@ -300,6 +312,10 @@ Section inversion.
          k = CExpr e' (if{□} s1 else s2) :: k' →
          P (State (CStmt (if{e'} s1 else □) :: k')
            (Stmt ↘ s2) (mem_unlock Ω m))) →
+       (∀ Ω v k' e' s1 s2,
+         e = (#{Ω} v)%E → ¬val_true m v → ¬val_false v →
+         k = CExpr e' (if{□} s1 else s2) :: k' →
+         P (State k' (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m)) →
        (∀ (E : ectx Ti) e1 e2 m2,
          e = subst E e1 → Γ\ get_stack k ⊢ₕ e1, m ⇒ e2, m2 →
          P (State k (Expr (subst E e2)) m2)) →
@@ -308,10 +324,8 @@ Section inversion.
          P (State (CFun E :: k)
            (Call f vs) (mem_unlock (⋃ Ωs) m))) →
        (∀ (E : ectx Ti) e1,
-         e = subst E e1 →
-         is_redex e1 →
-         ¬Γ\ get_stack k ⊢ₕ safe e1, m →
-         P (State k (Undef e) m)) →
+         e = subst E e1 → is_redex e1 → ¬Γ\ get_stack k ⊢ₕ safe e1, m →
+         P (State k (Undef (UndefExpr E e1)) m)) →
        P S2
     | Return v =>
        (∀ k' E,
@@ -384,7 +398,7 @@ Section inversion.
        P S2
     | Undef _ => P S2
     end.
-  Proof. intros p. case p; eauto. intros ?? [] ?; simpl; eauto. Qed.
+  Proof. intros p. case p; eauto 2. intros ?? [] ?; simpl; eauto. Qed.
   Lemma cstep_expr_inv (P : state Ti → Prop) m k Ek Ω v S2 :
     Γ\ δ ⊢ₛ State (Ek :: k) (Expr (#{Ω} v)) m ⇒ S2 →
     match Ek with
@@ -397,13 +411,15 @@ Section inversion.
         P (State (CStmt (while{e} □) :: k) (Stmt ↘ s) (mem_unlock Ω m))) →
       (val_false v →
         P (State k (Stmt ↗ (while{e} s)) (mem_unlock Ω m))) →
-      P S2
+      (¬val_true m v → ¬val_false v →
+        P (State k (Undef (UndefBranch (while{□} s) Ω v)) m)) → P S2
     | CExpr e (if{□} s1 else s2) =>
       (val_true m v →
         P (State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m))) →
       (val_false v →
         P (State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m))) →
-      P S2
+      (¬val_true m v → ¬val_false v →
+        P (State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m)) → P S2
     | _ => P S2
     end.
   Proof.
@@ -810,20 +826,19 @@ Proof. intros [S p]. inv_cstep p; rewrite <-subst_app; eexists; do_cstep. Qed.
 Lemma cstep_expr_depsubst_inv {n} (P : state Ti → Prop)
     m k (E : ectx_full Ti n) (es : vec (expr Ti) n) S' :
   Γ\ δ ⊢ₛ State k (Expr (depsubst E es)) m ⇒{k} S' →
-  (∀ i e' m',
-    Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k} State k (Expr e') m' →
+  (∀ i e' m', Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k} State k (Expr e') m' →
     P (State k (Expr (depsubst E (vinsert i e' es))) m')) →
-  (∀ i E' f Ωs vs,
-    length Ωs = length vs →
+  (∀ i E' f Ωs vs, length Ωs = length vs →
     es !!! i = subst E' (call f @ #{Ωs}* vs)%E →
     Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k}
             State (CFun E' :: k) (Call f vs) (mem_unlock (⋃ Ωs) m) →
     P (State (CFun (E' ++ [ectx_full_to_item E es i]) :: k)
       (Call f vs) (mem_unlock (⋃ Ωs) m))) →
   (Forall is_nf es → P S') →
-  (∀ i,
-    Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k} State k (Undef (es !!! i)) m →
-    P (State k (Undef (depsubst E es)) m)) →
+  (∀ i E' e, es !!! i = subst E' e →
+    Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k}
+            State k (Undef (UndefExpr E' e)) m →
+    P (State k (Undef (UndefExpr (E' ++ [ectx_full_to_item E es i]) e)) m)) →
   P S'.
 Proof.
   intros [p Hsuffix]. revert Hsuffix. pattern S'.
@@ -832,28 +847,27 @@ Proof.
     destruct E' as [|E'' E' _] using rev_ind; simplify_equality'.
     { eapply HP3, is_redex_ectx_full, ehstep_is_redex; eauto. }
     rewrite !subst_snoc in HE |- *.
-    apply ectx_full_item_subst in HE. destruct HE as [i [HE1 HE2]].
-    rewrite HE2, <-ectx_full_to_item_correct_alt.
-    apply HP1. rewrite <-HE1. do_cstep.
+    apply ectx_full_item_subst in HE. destruct HE as [i [HE1 ->]].
+    rewrite <-ectx_full_to_item_correct_alt. apply HP1. rewrite <-HE1. do_cstep.
   * intros E' f Ωs vs HE Hvs _ _ HP2 HP3 _.
     destruct E' as [|E'' E' _] using rev_ind.
     { destruct E; simplify_equality'. eapply HP3, EVals_nf_alt; eauto. }
     rewrite !subst_snoc in HE.
-    apply ectx_full_item_subst in HE. destruct HE as [i [HE1 HE2]].
-    rewrite HE2. apply HP2; rewrite <-?HE1; trivial. do_cstep.
+    apply ectx_full_item_subst in HE. destruct HE as [i [HE1 ->]].
+    apply HP2; auto. rewrite <-?HE1; trivial. do_cstep.
   * intros E' e1 HE Hred Hsafe _ HP1 HP2 HP3 HP4.
     destruct E' as [|E'' E' _] using rev_ind; simplify_equality'.
     { eapply HP3, is_redex_ectx_full; eauto. }
     rewrite !subst_snoc in HE.
-    apply ectx_full_item_subst in HE. destruct HE as [i [HE1 HE2]].
-    apply (HP4 i). rewrite <-HE1. do_cstep.
+    apply ectx_full_item_subst in HE. destruct HE as [i [HE1 ->]].
+    apply HP4; auto. rewrite <-HE1. do_cstep.
 Qed.
 Lemma cstep_expr_call_inv (P : state Ti → Prop) k f Ωs vs m S' :
   Γ\ δ ⊢ₛ State k (Expr (call f @ #{Ωs}* vs)) m ⇒{k} S' →
   length Ωs = length vs →
   P (State (CFun [] :: k) (Call f vs) (mem_unlock (⋃ Ωs) m)) →
   (¬Γ\ get_stack k ⊢ₕ safe call f @ #{Ωs}* vs, m →
-    P (State k (Undef (call f @ #{Ωs}* vs)) m)) →
+    P (State k (Undef (UndefExpr [] (call f @ #{Ωs}* vs))) m)) →
   P S'.
 Proof.
   intros [p Hsuffix] ?. revert Hsuffix. pattern S'.
@@ -1033,11 +1047,12 @@ Proof.
   * destruct (cstep_in_ctx_bsteps _ _ _ _ p)
       as [[??]|?]; by simplify_list_equality.
   * inv_csteps p3 as [| n4 ??? p4h p4]; [discriminate_list_equality|].
-    inv_cstep p4h; try solve_cnf;
-     apply (IH _ (Nat_lt_succ_succ n4) _ _ _ _ p4);
-     by repeat first
-      [ apply in_fun_ctx_app_r
-      | apply in_fun_ctx_r; [constructor|]].
+    inv_cstep p4h; try solve_cnf; first
+    [ apply (IH _ (Nat_lt_succ_succ n4) _ _ _ _ p4);
+       by repeat first
+        [ apply in_fun_ctx_app_r
+        | apply in_fun_ctx_r; [constructor|]]
+    | by inv_csteps p4 as [| ???? p5h p5]; inv_cstep p5h ].
 Qed.
 Lemma cstep_bsteps_preserves_stmt n k d1 s1 m1 d2 s2 m2 :
   Γ\ δ ⊢ₛ State k (Stmt d1 s1) m1 ⇒{k}^n State k (Stmt d2 s2) m2 → s1 = s2.

@@ -165,7 +165,7 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
            {[ State (CStmt (while{e} □) :: k) (Stmt ↘ s) (mem_unlock Ω m) ]}
         | inleft (right _) =>
            {[ State k (Stmt ↗ (while{e} s)) (mem_unlock Ω m) ]}
-        | inright _ => ∅
+        | inright _ => {[ State k (Undef (UndefBranch (while{□} s) Ω v)) m ]}
          end
       | CExpr e (if{□} s1 else s2) :: k =>
         match val_true_false_dec m v with
@@ -173,7 +173,7 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
            {[State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m)]}
         | inleft (right _) =>
            {[State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)]}
-        | inright _ => ∅
+        | inright _ => {[ State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m ]}
          end
       | _ => ∅
       end
@@ -185,7 +185,7 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
         match maybe_CCall_redex e' with
         | Some (f, Ωs, vs) =>
            {[ State (CFun E :: k) (Call f vs) (mem_unlock (⋃ Ωs) m) ]}
-        | _ => {[ State k (Undef e) m ]}
+        | _ => {[ State k (Undef (UndefExpr E e')) m ]}
         end
       end
     end

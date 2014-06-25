@@ -94,16 +94,21 @@ execution state [state] equips a focus with a program context and memory.
 
 These focuses correspond to the five variants of execution states as described
 above. *)
+Inductive undef_state (Ti : Set) :=
+  | UndefExpr : ectx Ti → expr Ti → undef_state Ti
+  | UndefBranch : esctx_item Ti → lockset → val Ti → undef_state Ti.
 Inductive focus (Ti : Set) : Set :=
   | Stmt : direction Ti → stmt Ti → focus Ti
   | Expr : expr Ti → focus Ti
   | Call : funname → list (val Ti) → focus Ti
   | Return : val Ti → focus Ti
-  | Undef : expr Ti → focus Ti.
+  | Undef : undef_state Ti → focus Ti.
 Record state (Ti : Set) : Set :=
   State { SCtx : ctx Ti; SFoc : focus Ti; SMem : mem Ti }.
 Add Printing Constructor state.
 
+Arguments UndefExpr {_} _ _.
+Arguments UndefBranch {_} _ _ _.
 Arguments Stmt {_} _ _.
 Arguments Expr {_} _.
 Arguments Call {_} _ _.
@@ -114,6 +119,9 @@ Arguments SCtx {_} _.
 Arguments SFoc {_} _.
 Arguments SMem {_} _.
 
+Instance undef_state_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
+  (S1 S2 : undef_state Ti) : Decision (S1 = S2).
+Proof. solve_decision. Defined.
 Instance focus_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (φ1 φ2 : focus Ti) : Decision (φ1 = φ2).
 Proof. solve_decision. Defined.

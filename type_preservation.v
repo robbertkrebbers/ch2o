@@ -117,6 +117,8 @@ Proof.
     + repeat typed_constructor; eauto using ectx_typed_weaken,
         ctx_typed_weaken, index_typed_unlock.
   * intros m k E e ?? (τf&HS&?&?) ?; typed_inversion HS; split; auto.
+    edestruct (ectx_subst_typed_rev Γ Γf m
+      (get_stack_types k) E e) as (τrl&?&?); eauto.
     eexists; simpl; split_ands; eauto.
   * intros m k e Ω v (τf&HS&?&?) ?; typed_inversion HS.
     split; [|eauto using funenv_typed_weaken, index_typed_unlock].
@@ -140,12 +142,22 @@ Proof.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, expr_typed_weaken,
       stmt_typed_weaken, index_typed_unlock, mem_unlock_valid.
-  * intros m k e Ω v s1 s2 ?  (τf&HS&?&?) ?; typed_inversion_all.
+  * intros m k e Ω v s ?? (τf&HS&?&?) ?; typed_inversion_all.
     split; [|eauto using funenv_typed_weaken, index_typed_unlock].
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, expr_typed_weaken,
       stmt_typed_weaken, index_typed_unlock, mem_unlock_valid.
   * intros m k e Ω v s1 s2 ? (τf&HS&?&?) ?; typed_inversion_all.
+    split; [|eauto using funenv_typed_weaken, index_typed_unlock].
+    eexists; simpl; split_ands; repeat typed_constructor;
+      eauto using ctx_typed_weaken, expr_typed_weaken,
+      stmt_typed_weaken, index_typed_unlock, mem_unlock_valid.
+  * intros m k e Ω v s1 s2 ? (τf&HS&?&?) ?; typed_inversion_all.
+    split; [|eauto using funenv_typed_weaken, index_typed_unlock].
+    eexists; simpl; split_ands; repeat typed_constructor;
+      eauto using ctx_typed_weaken, expr_typed_weaken,
+      stmt_typed_weaken, index_typed_unlock, mem_unlock_valid.
+  * intros m k e Ω v s1 s2 ?? (τf&HS&?&?) ?; typed_inversion_all.
     split; [|eauto using funenv_typed_weaken, index_typed_unlock].
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, expr_typed_weaken,
