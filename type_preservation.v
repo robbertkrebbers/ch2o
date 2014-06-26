@@ -1,6 +1,7 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export type_system smallstep.
+Require Import executable.
 Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 
@@ -187,7 +188,7 @@ Proof.
     eexists; simpl; split_ands; repeat typed_constructor; eauto.
     by rewrite andb_false_r.
   * intros m k f s os vs ??? (τf&HS&?&?) ?; typed_inversion_all.
-    edestruct (funenv_lookup Γ m Γf δ f) as (s'&mτ&?&?&?&?&?); eauto.
+    edestruct (funenv_lookup Γ m Γf δ f) as (s'&mτ&?&?&?&?&?&?); eauto.
     erewrite fmap_type_of by eauto; simplify_equality.
     edestruct (mem_alloc_val_list_valid Γ m) as (?&?&?); eauto.
     split; [|eauto using funenv_typed_weaken].
@@ -243,5 +244,51 @@ Proof.
   * intros m k E l s ? (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using sctx_item_subst_typed.
+Qed.
+
+Ltac ctx_inversion Hk :=
+  typed_inversion Hk;
+  repeat match goal with
+  | H : path_typed (V:=ctx_item _) _ _ _ _ |- _ => typed_inversion H
+  | H : path_typed (V:=sctx_item _) _ _ _ _ |- _ => typed_inversion H
+  | H : path_typed (V:=esctx_item _) _ _ _ _ |- _ => typed_inversion H
+  end.
+
+Lemma type_progress Γ Γf δ S :
+  ✓ Γ → ✓{Γ,Γf} S → (Γ,SMem S) ⊢ δ : Γf →
+  (**i 1.) *) red (cstep Γ δ) S ∨
+  (**i 2.) *) (SCtx S = [] ∧ ∃ v, SFoc S = Return v) ∨
+  (**i 3.) *) (∃ Su, SFoc S = Undef Su) ∨
+  (**i 4.) *) (∃ l s, SFoc S = Stmt (↷ l) s ∧ l ∉ labels s ∪ labels (SCtx S)).
+Proof.
+  destruct S as [k φ m]. intros ? (τf&Hφ&Hk&?) ?; simpl in *.
+  destruct Hφ as [d s cmσ Hs Hd|e τ|f vs σs σ| | |]; simpl.
+  * destruct Hd as [cmτ|mτ|c v τ|l cmτ]; simpl.
+    + destruct Hs; left; solve_cred.
+    + ctx_inversion Hk; left; solve_cred.
+    + ctx_inversion Hk; left; solve_cred.
+    + destruct (decide (l ∈ labels s)).
+      { destruct Hs; simplify_equality'; decompose_elem_of; left; solve_cred. }
+      ctx_inversion Hk; try (left; solve_cred).
+      do 3 right; exists l s. erewrite Fun_type_labels by eauto. solve_elem_of.
+  * destruct (is_nf_or_redex e) as [Hnf|(E&e'&?&->)].
+    { destruct Hnf as [Ω v|]; typed_inversion_all.
+      ctx_inversion Hk; left; try solve_cred;
+        destruct (val_true_false_dec m v) as [[[??]|[??]]|[??]]; solve_cred. }
+    destruct (ehstep_exec Γ (get_stack k) e' m) as [[e'' m']|] eqn:He''.
+    { apply ehstep_exec_sound in He''. left; solve_cred. }
+    destruct (maybe_CCall_redex e') as [[[f Ωs] vs]|] eqn:Hf.
+    { apply maybe_CCall_redex_Some in Hf; destruct Hf as [-> ?].
+      left; solve_cred. }
+    assert (¬Γ \ get_stack k ⊢ₕ safe e', m).
+    { rewrite eq_None_not_Some in Hf; contradict Hf; destruct Hf.
+      * eexists; apply maybe_CCall_redex_Some; eauto.
+      * edestruct ehstep_exec_weak_complete; eauto. }
+    left; solve_cred.
+  * destruct (funenv_lookup Γ m Γf δ f σs σ) as (s&cmτ&?&_); auto.
+    left; solve_cred.
+  * ctx_inversion Hk; eauto; left; solve_cred.
+  * eauto.
+  * eauto.
 Qed.
 End type_preservation.

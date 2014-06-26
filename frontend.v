@@ -336,6 +336,7 @@ Fixpoint to_envs (Θ : list (N * decl Ti)) : option
      guard (Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs);
      let xs' := (prod_map id inr <$> ys) ++ xs in
      '(m,s,cmσ) ← to_stmt Γn Γ Γf m xs' (labels cs) None None cs;
+     guard (gotos s ⊆ labels s);
      guard (rettype_match cmσ σ);
      Some(Γn, Γ, <[f:=(τs,σ)]>Γf, <[f:=s]>δ, m, xs)
   end.

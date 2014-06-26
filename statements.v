@@ -383,10 +383,6 @@ Instance ctx_item_free_gotos {Ti} : Gotos (ctx_item Ti) := λ Ek,
 Instance ctx_item_free_labels {Ti} : Labels (ctx_item Ti) := λ Ek,
   match Ek with CStmt Es => labels Es | CExpr _ Ee => labels Ee | _ => ∅ end.
 
-Inductive ctx_item_or_block {Ti} : ctx_item Ti → Prop :=
-  | ctx_item_or_block_item Es : ctx_item_or_block (CStmt Es)
-  | ctx_item_or_block_block o τ : ctx_item_or_block (CBlock o τ).
-
 (** Given a context, we can construct a stack using the following erasure
 function. We define [get_stack (CFun _ :: k)] as [[]] instead of [getstack k],
 as otherwise it would be possible to refer to the local variables of the

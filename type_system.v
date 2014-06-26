@@ -356,7 +356,7 @@ Inductive funenv_typed' (Γ : env Ti) (m : mem Ti) :
   | funenv_add_typed Γf δ f s cmτ τ τs :
      Γf !! f = None →
      ✓{Γ}* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
-     (Γ,Γf,m,τs) ⊢ s : cmτ → rettype_match cmτ τ →
+     (Γ,Γf,m,τs) ⊢ s : cmτ → gotos s ⊆ labels s → rettype_match cmτ τ →
      funenv_typed' Γ m δ Γf → funenv_typed' Γ m (<[f:=s]>δ) (<[f:=(τs,τ)]>Γf).
 Global Instance funenv_typed:
   Typed (env Ti * mem Ti) (funtypes Ti) (funenv Ti) := curry funenv_typed'.
@@ -492,12 +492,12 @@ Lemma funenv_lookup Γ m Γf δ f τs τ :
   ✓ Γ → (Γ,m) ⊢ δ : Γf → Γf !! f = Some (τs,τ) → ∃ s cmτ,
     δ !! f = Some s ∧
     ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧
-    (Γ,Γf,m,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ.
+    (Γ,Γf,m,τs) ⊢ s : cmτ ∧ gotos s ⊆ labels s ∧ rettype_match cmτ τ.
 Proof.
-  induction 2 as [|Γf δ f' s' mτ' τ' τs' ?????? IH]; intros; [by simpl_map|].
+  induction 2 as [|Γf δ f' s' mτ' τ' τs' ??????? IH]; intros; [by simpl_map|].
   destruct (decide (f = f')) as [->|?]; simplify_map_equality.
   { exists s' mτ'; split_ands; eauto using stmt_typed_weaken, insert_subseteq. }
-  destruct IH as (s&mτ&?&?&?&?&?); auto.
+  destruct IH as (s&mτ&?&?&?&?&?&?); auto.
   exists s mτ; split_ands; eauto using stmt_typed_weaken, insert_subseteq.
 Qed.
 Lemma funenv_lookup_args Γ m Γf δ f τs τ :
@@ -580,6 +580,9 @@ Proof.
 Qed.
 Lemma Fun_type_stack_types Γ Γf m k f τf :
   (Γ,Γf,m) ⊢ k : Fun_type f ↣ τf → get_stack_types k = [].
+Proof. by destruct k as [|[]]; intros; typed_inversion_all. Qed.
+Lemma Fun_type_labels Γ Γf m k f τf :
+  (Γ,Γf,m) ⊢ k : Fun_type f ↣ τf → labels k = ∅.
 Proof. by destruct k as [|[]]; intros; typed_inversion_all. Qed.
 
 Lemma rettype_union_l mσ : rettype_union mσ None = Some mσ.

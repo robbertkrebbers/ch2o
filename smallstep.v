@@ -990,6 +990,8 @@ That is, if [Γ\ δ ⊢ₛ State k (Stmt d1 s1) m1 ⇒{k}* State k (Stmt d2 s2) 
 [s1 = s2]. This proven on the length of the reduction path. When a transition
 to the expression state occurs, we cut of the prefix corresponding to execution
 of that expression. *)
+Definition ctx_item_or_block (Ek : ctx_item Ti) : Prop :=
+  match Ek with CStmt _ | CBlock _ _ => True | _ => False end.
 Definition in_fun_ctx (k1 k2 : ctx Ti) : Prop := ∃ l,
   Forall ctx_item_or_block l ∧ k2 = l ++ k1.
 
@@ -1005,26 +1007,23 @@ Lemma in_fun_ctx_r_inv k1 k2 Ek :
   ctx_item_or_block Ek →
   k1 `suffix_of` k2 → in_fun_ctx k1 (Ek :: k2) → in_fun_ctx k1 k2.
 Proof.
-  intros ? [l1 ?] [l2 [Hc1 Hc2]]. subst.
-  rewrite app_comm_cons in Hc2. apply app_inv_tail in Hc2. subst.
-  inversion_clear Hc1. exists l1. intuition.
+  intros ? [l1 ->] [l2 [Hc1 Hc2]].
+  rewrite app_comm_cons in Hc2; simplify_list_equality; decompose_Forall_hyps.
+  by exists l1.
 Qed.
 Lemma in_fun_ctx_change k1 k2 Ek1 Ek2 :
   ctx_item_or_block Ek2 → k1 `suffix_of` Ek2 :: k2 →
   in_fun_ctx k1 (Ek1 :: k2) → in_fun_ctx k1 (Ek2 :: k2).
 Proof.
-  intros ? [[|Ek2' l1] ?] [l2 [Hc1 Hc2]].
-  { eexists []. intuition. }
-  destruct l2; simpl in *; simplify_equality.
-  * discriminate_list_equality.
-  * inversion_clear Hc1. eexists (Ek2' :: l2). intuition.
+  intros ? [[|Ek2' l1] ?] [l2 [Hc1 Hc2]]; [by eexists []|].
+  destruct l2 as [|? l2]; decompose_Forall_hyps; [discriminate_list_equality|].
+  exists (Ek2' :: l2); auto.
 Qed.
 Lemma in_fun_ctx_not_item_or_block k1 k2 Ek :
   ¬ctx_item_or_block Ek → k1 `suffix_of` k2 → ¬in_fun_ctx k1 (Ek :: k2).
 Proof.
-  intros ? [l1 ?] [l2 [Hc1 Hc2]]. subst.
-  rewrite app_comm_cons in Hc2. apply app_inv_tail in Hc2. subst.
-  by inversion Hc1.
+  intros ? [l1 ->] [l2 [Hc1 Hc2]].
+  rewrite app_comm_cons in Hc2; simplify_list_equality; by inversion Hc1.
 Qed.
 Lemma cstep_bsteps_preserves_stmt_help n k1 d1 s1 m1 k2 d2 s2 m2 :
   Γ\ δ ⊢ₛ State k1 (Stmt d1 s1) m1 ⇒{k2}^n State k2 (Stmt d2 s2) m2 →
@@ -1036,12 +1035,11 @@ Proof.
    try apply (IH _ (lt_n_Sn n2) _ _ _ _ p2);
    try first
     [ done
-    | apply in_fun_ctx_r; eauto; constructor
-    | eapply in_fun_ctx_r_inv; eauto; constructor
-    | eapply in_fun_ctx_change; eauto; constructor
+    | by apply in_fun_ctx_r; eauto
+    | by eapply in_fun_ctx_r_inv; eauto
+    | by eapply in_fun_ctx_change; eauto
     | edestruct in_fun_ctx_not_item_or_block; eauto; inversion 1 ].
-  destruct Hin_fun as [l [??]]. subst.
-  rewrite app_comm_cons in p2.
+  destruct Hin_fun as [l [? ->]]. rewrite app_comm_cons in p2.
   destruct (cstep_bsteps_subctx_cut_alt _ _ _ _ _ _ p2)
     as [p|(?&?&_&?&p3)]; clear p2.
   * destruct (cstep_in_ctx_bsteps _ _ _ _ p)
