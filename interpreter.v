@@ -11,9 +11,12 @@ Context  (hash : state Ti → Z).
 Let ptr_env := (natural_ptr_env ptr_size align_base).
 Existing Instance ptr_env.
 
-Definition interpreter (Θ : list (N * decl Ti)) (f : funname) :
+Definition interpreter (Θ : list (N * decl Ti))
+    (f : funname) (vs : list (val Ti)) :
     option (stream (listset (state Ti) * listset (state Ti))) :=
   '(_,Γ,Γf,δ,m,_) ← to_envs Θ;
-  _ ← δ !! f;
-  Some (csteps_exec hash Γ δ {[ State [] (Call f []) m ]}).
+  '(σs,_) ← Γf !! f;
+  σs' ← mapM (type_check (Γ,m)) vs;
+  guard (σs' = (σs : list (type Ti)));
+  Some (csteps_exec hash Γ δ {[ initial_state m f vs ]}).
 End interpreter.

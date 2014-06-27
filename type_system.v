@@ -343,11 +343,11 @@ Inductive focus_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
 Global Instance focus_typed:
   Typed envs (focus_type Ti) (focus Ti) := curry4 focus_typed'.
 
-Global Instance state_valid :
-    Valid (env Ti * funtypes Ti) (state Ti) := λ ΓΓf S, ∃ τf,
+Global Instance state_typed :
+    Typed (env Ti * funtypes Ti) funname (state Ti) := λ ΓΓf S f, ∃ τf,
   let 'State k φ m := S in
   (ΓΓf,m,get_stack_types k) ⊢ φ : τf ∧
-  (ΓΓf,m) ⊢ k : τf ↣ Fun_type 0%N ∧
+  (ΓΓf,m) ⊢ k : τf ↣ Fun_type f ∧
   ✓{ΓΓf.1} m.
 
 Inductive funenv_typed' (Γ : env Ti) (m : mem Ti) :
@@ -584,7 +584,6 @@ Proof. by destruct k as [|[]]; intros; typed_inversion_all. Qed.
 Lemma Fun_type_labels Γ Γf m k f τf :
   (Γ,Γf,m) ⊢ k : Fun_type f ↣ τf → labels k = ∅.
 Proof. by destruct k as [|[]]; intros; typed_inversion_all. Qed.
-
 Lemma rettype_union_l mσ : rettype_union mσ None = Some mσ.
 Proof. by destruct mσ. Qed.
 End properties.
