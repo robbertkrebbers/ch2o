@@ -253,7 +253,7 @@ Proof. apply elem_of_equiv_L. intros. destruct Es; solve_elem_of. Qed.
 Lemma sctx_item_subst_labels {Ti} (Es : sctx_item Ti) (s : stmt Ti) :
   labels (subst Es s) = labels Es ∪ labels s.
 Proof. apply elem_of_equiv_L. intros. destruct Es; solve_elem_of. Qed.
-Lemma sctx_item_subst_locks {Ti} (Es : sctx_item Ti) s :
+Lemma sctx_item_subst_locks {Ti} (Es : sctx_item Ti) (s : stmt Ti) :
   locks (subst Es s) = locks Es ∪ locks s.
 Proof. apply elem_of_equiv_L. destruct Es; esolve_elem_of. Qed.
 
@@ -319,7 +319,7 @@ Proof. apply elem_of_equiv_L. intros. destruct Ee; solve_elem_of. Qed.
 Lemma esctx_item_subst_labels {Ti} (Ee : esctx_item Ti) (e : expr Ti) :
   labels (subst Ee e) = labels Ee.
 Proof. apply elem_of_equiv_L. intros. destruct Ee; solve_elem_of. Qed.
-Lemma esctx_item_subst_locks {Ti} (Ee : esctx_item Ti) e :
+Lemma esctx_item_subst_locks {Ti} (Ee : esctx_item Ti) (e : expr Ti) :
   locks (subst Ee e) = locks Ee ∪ locks e.
 Proof. apply elem_of_equiv_L. destruct Ee; esolve_elem_of. Qed.
 
@@ -359,17 +359,6 @@ Arguments CParams {_} _.
 Instance ctx_item_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (Ek1 Ek2 : ctx_item Ti) : Decision (Ek1 = Ek2).
 Proof. solve_decision. Defined.
-
-Instance ctx_item_subst {Ti} :
-    Subst (ctx_item Ti) (stmt Ti) (stmt Ti) := λ Ek s,
-  match Ek with CStmt E => subst E s | CBlock _ τ => blk{τ} s | _ => s end.
-
-Instance: ∀ Ek : ctx_item Ti, Injective (=) (=) (subst Ek).
-Proof.
-  destruct Ek; intros ???; auto.
-  * eapply (injective (subst (CStmt _))); eauto.
-  * eapply (injective (SBlock _)); eauto.
-Qed.
 
 Instance ctx_item_locks {Ti} : Locks (ctx_item Ti) := λ Ek,
   match Ek with

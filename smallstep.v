@@ -147,7 +147,7 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
   | cstep_expr_while_indet m k e Ω v s :
      ¬val_true m v → ¬val_false v →
      Γ\ δ ⊢ₛ State (CExpr e (while{□} s) :: k) (Expr (#{Ω} v)) m ⇒
-             State k (Undef (UndefBranch (while{□} s) Ω v)) m
+             State k (Undef (UndefBranch e (while{□} s) Ω v)) m
   | cstep_expr_if_true m k e Ω v s1 s2 :
      val_true m v →
      Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
@@ -159,7 +159,7 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
   | cstep_expr_if_indet m k e Ω v s1 s2 :
      ¬val_true m v → ¬val_false v →
      Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
-             State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m
+             State k (Undef (UndefBranch e (if{□} s1 else s2) Ω v)) m
 
   (**i For compound statements: *)
   | cstep_in_block m k o τ s :
@@ -308,7 +308,7 @@ Section inversion.
        (∀ Ω v k' e' s,
          e = (#{Ω} v)%E → ¬val_true m v → ¬val_false v →
          k = CExpr e' (while{□} s) :: k' →
-         P (State k' (Undef (UndefBranch (while{□} s) Ω v)) m)) →
+         P (State k' (Undef (UndefBranch e' (while{□} s) Ω v)) m)) →
        (∀ Ω v k' e' s1 s2,
          e = (#{Ω} v)%E → val_true m v →
          k = CExpr e' (if{□} s1 else s2) :: k' →
@@ -322,7 +322,7 @@ Section inversion.
        (∀ Ω v k' e' s1 s2,
          e = (#{Ω} v)%E → ¬val_true m v → ¬val_false v →
          k = CExpr e' (if{□} s1 else s2) :: k' →
-         P (State k' (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m)) →
+         P (State k' (Undef (UndefBranch e' (if{□} s1 else s2) Ω v)) m)) →
        (∀ (E : ectx Ti) e1 e2 m2,
          e = subst E e1 → Γ\ get_stack k ⊢ₕ e1, m ⇒ e2, m2 →
          P (State k (Expr (subst E e2)) m2)) →
@@ -419,14 +419,14 @@ Section inversion.
       (val_false v →
         P (State k (Stmt ↗ (while{e} s)) (mem_unlock Ω m))) →
       (¬val_true m v → ¬val_false v →
-        P (State k (Undef (UndefBranch (while{□} s) Ω v)) m)) → P S2
+        P (State k (Undef (UndefBranch e (while{□} s) Ω v)) m)) → P S2
     | CExpr e (if{□} s1 else s2) =>
       (val_true m v →
         P (State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m))) →
       (val_false v →
         P (State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m))) →
       (¬val_true m v → ¬val_false v →
-        P (State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m)) → P S2
+        P (State k (Undef (UndefBranch e (if{□} s1 else s2) Ω v)) m)) → P S2
     | _ => P S2
     end.
   Proof.
@@ -969,10 +969,10 @@ Proof.
 Qed.
 Lemma cstep_bsteps_subctx_cut n l k S1 S3 :
   Γ\ δ ⊢ₛ S1 ⇒{k}^n S3 → l ++ k `suffix_of` SCtx S1 →
-  Γ\ δ ⊢ₛ S1 ⇒{l ++ k}^n S3 ∨ ∃ S2, Γ\ δ ⊢ₛ S1 ⇒{l ++ k}^n S2
-    ∧ SCtx S2 = l ++ k
-    ∧ nf (cstep_in_ctx Γ δ (l ++ k)) S2
-    ∧ Γ\ δ ⊢ₛ S2 ⇒{k}^n S3.
+  (**i 1.) *) Γ\ δ ⊢ₛ S1 ⇒{l ++ k}^n S3 ∨
+  (**i 2.) *) ∃ S2,
+    Γ\ δ ⊢ₛ S1 ⇒{l ++ k}^n S2 ∧ SCtx S2 = l ++ k ∧
+    nf (cstep_in_ctx Γ δ (l ++ k)) S2 ∧ Γ\ δ ⊢ₛ S2 ⇒{k}^n S3.
 Proof.
   intros p ?. induction p as [n S1|n S1 S2 S3 p1 p2 IH]; [auto with ars|].
   destruct (cstep_subctx_cut l _ _ _ p1) as [[??]|[??]]; trivial.
@@ -982,13 +982,14 @@ Proof.
 Qed.
 Lemma cstep_bsteps_subctx_cut_alt n l k φ1 m1 S3 :
   Γ\ δ ⊢ₛ State (l ++ k) φ1 m1 ⇒{k}^n S3 →
-  Γ\ δ ⊢ₛ State (l ++ k) φ1 m1 ⇒{l ++ k}^n S3 ∨ ∃ φ2 m2,
-      Γ\ δ ⊢ₛ State (l ++ k) φ1 m1 ⇒{l ++ k}^n State (l ++ k) φ2 m2
-    ∧ nf (cstep_in_ctx Γ δ (l ++ k)) (State (l ++ k) φ2 m2)
-    ∧ Γ\ δ ⊢ₛ State (l ++ k) φ2 m2 ⇒{k}^n S3.
+  (**i 1.) *) Γ\ δ ⊢ₛ State (l ++ k) φ1 m1 ⇒{l ++ k}^n S3 ∨
+  (**i 2.) *) ∃ φ2 m2,
+    Γ\ δ ⊢ₛ State (l ++ k) φ1 m1 ⇒{l ++ k}^n State (l ++ k) φ2 m2 ∧
+    nf (cstep_in_ctx Γ δ (l ++ k)) (State (l ++ k) φ2 m2) ∧
+    Γ\ δ ⊢ₛ State (l ++ k) φ2 m2 ⇒{k}^n S3.
 Proof.
-  intros p.
-  destruct (cstep_bsteps_subctx_cut _ l _ _ _ p) as [?|([]&?&?&?)]; naive_solver.
+  intros p. destruct (cstep_bsteps_subctx_cut _ l _ _ _ p)
+    as [?|([]&?&?&?)]; naive_solver.
 Qed.
 
 (** ** Preservation of statements *)
@@ -997,21 +998,33 @@ That is, if [Γ\ δ ⊢ₛ State k (Stmt d1 s1) m1 ⇒{k}* State k (Stmt d2 s2) 
 [s1 = s2]. This proven on the length of the reduction path. When a transition
 to the expression state occurs, we cut of the prefix corresponding to execution
 of that expression. *)
-Definition ctx_item_or_block (Ek : ctx_item Ti) : Prop :=
+Instance ctx_item_subst {Ti} :
+    Subst (ctx_item Ti) (stmt Ti) (stmt Ti) := λ Ek s,
+  match Ek with
+  | CStmt E => subst E s | CBlock _ τ => blk{τ} s
+  | _ => s (* dummy *)
+  end.
+Definition is_CStmt_or_CBlock (Ek : ctx_item Ti) : Prop :=
   match Ek with CStmt _ | CBlock _ _ => True | _ => False end.
 Definition in_fun_ctx (k1 k2 : ctx Ti) : Prop := ∃ l,
-  Forall ctx_item_or_block l ∧ k2 = l ++ k1.
+  Forall is_CStmt_or_CBlock l ∧ k2 = l ++ k1.
 
+Instance: ∀ Ek : ctx_item Ti, Injective (=) (=) (subst Ek).
+Proof.
+  destruct Ek; intros ???; auto.
+  * eapply (injective (subst (CStmt _))); eauto.
+  * eapply (injective (SBlock _)); eauto.
+Qed.
 Instance: Reflexive in_fun_ctx.
 Proof. intros k. eexists []. intuition trivial. Qed.
 Lemma in_fun_ctx_r k1 k2 Ek :
-  ctx_item_or_block Ek → in_fun_ctx k1 k2 → in_fun_ctx k1 (Ek :: k2).
+  is_CStmt_or_CBlock Ek → in_fun_ctx k1 k2 → in_fun_ctx k1 (Ek :: k2).
 Proof. intros ? [l [??]]. subst. exists (Ek :: l). intuition. Qed.
 Lemma in_fun_ctx_app_r k1 k2 k :
-  Forall ctx_item_or_block k → in_fun_ctx k1 k2 → in_fun_ctx k1 (k ++ k2).
+  Forall is_CStmt_or_CBlock k → in_fun_ctx k1 k2 → in_fun_ctx k1 (k ++ k2).
 Proof. induction 1; simpl; auto using in_fun_ctx_r. Qed.
 Lemma in_fun_ctx_r_inv k1 k2 Ek :
-  ctx_item_or_block Ek →
+  is_CStmt_or_CBlock Ek →
   k1 `suffix_of` k2 → in_fun_ctx k1 (Ek :: k2) → in_fun_ctx k1 k2.
 Proof.
   intros ? [l1 ->] [l2 [Hc1 Hc2]].
@@ -1019,7 +1032,7 @@ Proof.
   by exists l1.
 Qed.
 Lemma in_fun_ctx_change k1 k2 Ek1 Ek2 :
-  ctx_item_or_block Ek2 → k1 `suffix_of` Ek2 :: k2 →
+  is_CStmt_or_CBlock Ek2 → k1 `suffix_of` Ek2 :: k2 →
   in_fun_ctx k1 (Ek1 :: k2) → in_fun_ctx k1 (Ek2 :: k2).
 Proof.
   intros ? [[|Ek2' l1] ?] [l2 [Hc1 Hc2]]; [by eexists []|].
@@ -1027,7 +1040,7 @@ Proof.
   exists (Ek2' :: l2); auto.
 Qed.
 Lemma in_fun_ctx_not_item_or_block k1 k2 Ek :
-  ¬ctx_item_or_block Ek → k1 `suffix_of` k2 → ¬in_fun_ctx k1 (Ek :: k2).
+  ¬is_CStmt_or_CBlock Ek → k1 `suffix_of` k2 → ¬in_fun_ctx k1 (Ek :: k2).
 Proof.
   intros ? [l1 ->] [l2 [Hc1 Hc2]].
   rewrite app_comm_cons in Hc2; simplify_list_equality; by inversion Hc1.
@@ -1065,9 +1078,63 @@ Proof.
   intros p. apply (injective (subst k)).
   by eapply cstep_bsteps_preserves_stmt_help; eauto.
 Qed.
+
+(** ** Preservation of validity of labels *)
+Fixpoint ctx_labels_valid (k : ctx Ti) : Prop :=
+  match k with
+  | [] => True
+  | CFun _ :: k => gotos k ⊆ labels k ∧ ctx_labels_valid k
+  | _ :: k => ctx_labels_valid k
+  end.
+Definition direction_gotos (d : direction Ti) : labelset :=
+  match d with ↷ l => {[ l ]} | _ => ∅ end.
+Definition state_labels_valid (S : state Ti) : Prop :=
+  let (k,φ,m) := S in
+  match φ with
+  | Stmt d s => gotos s ∪ gotos k ⊆ labels s ∪ labels k ∧
+     direction_gotos d ⊆ gotos s ∪ gotos k
+  | Expr e => gotos k ⊆ labels k
+  | Call _ _ => gotos k ⊆ labels k
+  | _ => True
+  end.
+Lemma cstep_gotos_labels S1 S2 :
+  (∀ f s, δ !! f = Some s → gotos s ⊆ labels s) →
+  Γ\ δ ⊢ₛ S1 ⇒ S2 → ctx_labels_valid (SCtx S1) → state_labels_valid S1 →
+  ctx_labels_valid (SCtx S2) ∧ state_labels_valid S2.
+Proof.
+  (* slow... *)
+  destruct 2; simpl;
+    rewrite ?esctx_item_subst_gotos, ?esctx_item_subst_labels,
+      ?sctx_item_subst_gotos, ?sctx_item_subst_labels;
+    rewrite ?(left_id_L ∅ (∪)), ?(associative_L (∪));
+    intuition idtac;
+    try (apply subseteq_empty);
+    try (by apply union_preserving; eauto);
+    let l := fresh in apply elem_of_subseteq; intros l;
+    repeat match goal with
+    | H : _ ⊆ _ |- _ => apply elem_of_subseteq in H; specialize (H l); revert H
+    end; rewrite !elem_of_union; tauto.
+Qed.
+Lemma csteps_gotos_labels S1 S2 :
+  (∀ f s, δ !! f = Some s → gotos s ⊆ labels s) →
+  Γ\ δ ⊢ₛ S1 ⇒* S2 → ctx_labels_valid (SCtx S1) → state_labels_valid S1 →
+  ctx_labels_valid (SCtx S2) ∧ state_labels_valid S2.
+Proof.
+  induction 2 as [|S1 S2 S3]; intros; [done|].
+  destruct (cstep_gotos_labels S1 S2); auto.
+Qed.
+Lemma csteps_initial_gotos m1 m2 f vs k s l :
+  (∀ f s, δ !! f = Some s → gotos s ⊆ labels s) →
+  Γ\ δ ⊢ₛ initial_state m1 f vs ⇒* State k (Stmt (↷ l) s) m2 →
+  l ∈ labels s ∪ labels k.
+Proof.
+  intros. destruct (csteps_gotos_labels (initial_state m1 f vs)
+    (State k (Stmt (↷ l) s) m2)); solve_elem_of.
+Qed.
 End smallstep_properties.
 
 Hint Resolve estep_if_true_no_locks estep_if_false_no_locks
   estep_comma_no_locks : cstep.
 Hint Resolve estep_alloc_fresh cstep_in_block_fresh
   cstep_label_block_down_fresh cstep_call_fresh : cstep.
+ 

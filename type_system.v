@@ -337,9 +337,9 @@ Inductive focus_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
   | UndefExpr_typed E e τlr τ :
      (Γ,Γf,m,τs) ⊢ e : τlr → (Γ,Γf,m,τs) ⊢ E : τlr ↣ inr τ →
      focus_typed' Γ Γf m τs (Undef (UndefExpr E e)) (Expr_type τ)
-  | UndefBranch_typed Es Ω v τ mσ :
-     (Γ,m) ⊢ v : τ → (Γ,Γf,m,τs) ⊢ Es : τ ↣ mσ →
-     focus_typed' Γ Γf m τs (Undef (UndefBranch Es Ω v)) (Stmt_type mσ).
+  | UndefBranch_typed e Es Ω v τ mσ :
+     (Γ,m) ⊢ v : τ → (Γ,Γf,m,τs) ⊢ e : inr τ → (Γ,Γf,m,τs) ⊢ Es : τ ↣ mσ →
+     focus_typed' Γ Γf m τs (Undef (UndefBranch e Es Ω v)) (Stmt_type mσ).
 Global Instance focus_typed:
   Typed envs (focus_type Ti) (focus Ti) := curry4 focus_typed'.
 
@@ -500,9 +500,26 @@ Proof.
   destruct IH as (s&mτ&?&?&?&?&?&?); auto.
   exists s mτ; split_ands; eauto using stmt_typed_weaken, insert_subseteq.
 Qed.
+Lemma funenv_lookup_inv Γ m Γf δ f s :
+  ✓ Γ → (Γ,m) ⊢ δ : Γf → δ !! f = Some s → ∃ τs τ cmτ,
+    Γf !! f = Some (τs,τ) ∧
+    ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧
+    (Γ,Γf,m,τs) ⊢ s : cmτ ∧ gotos s ⊆ labels s ∧ rettype_match cmτ τ.
+Proof.
+  induction 2 as [|Γf δ f' s' mτ' τ' τs' ??????? IH]; intros; [by simpl_map|].
+  destruct (decide (f = f')) as [->|?]; simplify_map_equality.
+  { exists τs' τ' mτ'; split_ands; eauto using stmt_typed_weaken, insert_subseteq. }
+  destruct IH as (τs&τ&mτ&?&?&?&?&?&?); auto.
+  exists τs τ mτ; split_ands; eauto using stmt_typed_weaken, insert_subseteq.
+Qed.
 Lemma funenv_lookup_args Γ m Γf δ f τs τ :
   ✓ Γ → (Γ,m) ⊢ δ : Γf → Γf !! f = Some (τs,τ) → ✓{Γ}* τs.
 Proof. intros. by destruct (funenv_lookup Γ m Γf δ f τs τ) as (?&?&?&?&_). Qed.
+Lemma funenv_lookup_gotos Γ m Γf δ f s :
+  ✓ Γ → (Γ,m) ⊢ δ : Γf → δ !! f = Some s → gotos s ⊆ labels s.
+Proof.
+  intros. by destruct (funenv_lookup_inv Γ m Γf δ f s) as (?&?&?&?&?&?&?&?&?).
+Qed.
 Lemma EVals_typed_inv Γ Γf m τs Ωs vs σs :
   length Ωs = length vs → ✓{Γ}* σs →
   (Γ,Γf,m,τs) ⊢* #{Ωs}* vs :* inr <$> σs → (Γ,m) ⊢* vs :* σs.

@@ -96,7 +96,7 @@ These focuses correspond to the five variants of execution states as described
 above. *)
 Inductive undef_state (Ti : Set) :=
   | UndefExpr : ectx Ti → expr Ti → undef_state Ti
-  | UndefBranch : esctx_item Ti → lockset → val Ti → undef_state Ti.
+  | UndefBranch : expr Ti → esctx_item Ti → lockset → val Ti → undef_state Ti.
 Inductive focus (Ti : Set) : Set :=
   | Stmt : direction Ti → stmt Ti → focus Ti
   | Expr : expr Ti → focus Ti
@@ -108,7 +108,7 @@ Record state (Ti : Set) : Set :=
 Add Printing Constructor state.
 
 Arguments UndefExpr {_} _ _.
-Arguments UndefBranch {_} _ _ _.
+Arguments UndefBranch {_} _ _ _ _.
 Arguments Stmt {_} _ _.
 Arguments Expr {_} _.
 Arguments Call {_} _ _.
@@ -131,7 +131,3 @@ Proof. solve_decision. Defined.
 
 Instance focus_locks {Ti} : Locks (focus Ti) := λ φ,
   match φ with Stmt _ s => locks s | Expr e => locks e | _ => ∅ end.
-Instance focus_gotos {Ti} : Gotos (focus Ti) := λ φ,
-  match φ with Stmt _ s => gotos s | _ => ∅ end.
-Instance focus_labels {Ti} : Labels (focus Ti) := λ φ,
-  match φ with Stmt _ s => labels s | _ => ∅ end.

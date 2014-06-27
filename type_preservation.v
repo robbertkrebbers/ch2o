@@ -245,6 +245,14 @@ Proof.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using sctx_item_subst_typed.
 Qed.
+Lemma csteps_preservation Γ Γf δ S1 S2 f :
+  ✓ Γ → Γ\ δ ⊢ₛ S1 ⇒* S2 →
+  (Γ,Γf) ⊢ S1 : f → (Γ,SMem S1) ⊢ δ : Γf →
+  (Γ,Γf) ⊢ S2 : f ∧ (Γ,SMem S2) ⊢ δ : Γf.
+Proof.
+  induction 2 as [|S1 S2 S3]; intros; [done|].
+  destruct (cstep_preservation Γ Γf δ S1 S2 f); auto.
+Qed.
 
 Ltac ctx_inversion Hk :=
   typed_inversion Hk;
@@ -253,8 +261,7 @@ Ltac ctx_inversion Hk :=
   | H : path_typed (V:=sctx_item _) _ _ _ _ |- _ => typed_inversion H
   | H : path_typed (V:=esctx_item _) _ _ _ _ |- _ => typed_inversion H
   end.
-
-Lemma type_progress Γ Γf δ S f :
+Lemma cstep_progress Γ Γf δ S f :
   ✓ Γ → (Γ,Γf) ⊢ S : f → (Γ,SMem S) ⊢ δ : Γf →
   (**i 1.) *) red (cstep Γ δ) S ∨
   (**i 2.) *) (∃ v, final_state v S) ∨
@@ -292,5 +299,18 @@ Proof.
     left; solve_cred.
   * do 2 right; left; constructor.
   * do 2 right; left; constructor.
+Qed.
+Lemma csteps_initial_progress Γ Γf δ m f vs S σs σ :
+  ✓ Γ → ✓{Γ} m → (Γ,m) ⊢ δ : Γf → Γf !! f = Some (σs,σ) → (Γ,m) ⊢* vs :* σs →
+  Γ\ δ ⊢ₛ initial_state m f vs ⇒* S →
+  (**i 1.) *) red (cstep Γ δ) S ∨
+  (**i 2.) *) (∃ v, final_state v S) ∨
+  (**i 3.) *) undef_state S.
+Proof.
+  intros. assert ((Γ,Γf) ⊢ S : f ∧ (Γ,SMem S) ⊢ δ : Γf) as [??].
+  { eauto using csteps_preservation, initial_state_typed. }
+  destruct (cstep_progress Γ Γf δ S f) as [?|[[v ?]|[?|(l&s&?&[])]]]; eauto.
+  destruct S as [k φ m2]; simplify_equality'.
+  eauto using csteps_initial_gotos, funenv_lookup_gotos.
 Qed.
 End type_preservation.
