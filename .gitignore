@@ -15,4 +15,5 @@ utils/coq2html.ml
 doc/*.html
 *.cache
 *.broken
-
+broken/*
+*.patch
