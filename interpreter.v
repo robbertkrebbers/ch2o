@@ -14,7 +14,7 @@ Existing Instance ptr_env.
 Definition interpreter (Θ : list (N * decl Ti))
     (f : funname) (vs : list (val Ti)) :
     option (stream (listset (state Ti) * listset (state Ti))) :=
-  '(_,Γ,Γf,δ,m,_) ← to_envs Θ;
+  '(Γ,Γf,δ,m) ← to_envs Θ;
   '(σs,_) ← Γf !! f;
   σs' ← mapM (type_check (Γ,m)) vs;
   guard (σs' = (σs : list (type Ti)));

@@ -72,7 +72,7 @@ Arguments SIf {_} _ _ _.
 Inductive decl (Ti : Set) : Set :=
   | CompoundDecl : list (N * type Ti) → decl Ti
   | GlobDecl : type Ti → option (cexpr Ti) → decl Ti
-  | FunDecl : list (N * type Ti) → type Ti → cstmt Ti → decl Ti.
+  | FunDecl : list (N * type Ti) → type Ti → option (cstmt Ti) → decl Ti.
 Arguments CompoundDecl {_} _.
 Arguments GlobDecl {_} _ _.
 Arguments FunDecl {_} _ _ _.
@@ -305,13 +305,23 @@ Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
      Some (m, if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S
   end%T.
 
-Fixpoint to_envs (Θ : list (N * decl Ti)) : option
+Definition extend_funtypes (Γ : env Ti) (f : funname) (τs : list (type Ti))
+    (τ : type Ti) (Γf : funtypes Ti) : option (funtypes Ti) :=
+  match Γf !! f with
+  | Some (τs',τ') => guard (τs' = τs); guard (τ' = τ); Some Γf
+  | None =>
+     guard (✓{Γ} τ);
+     guard (✓{Γ}* τs);
+     guard (Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs);
+     Some (<[f:=(τs,τ)]>Γf)
+  end.
+Fixpoint to_envs_go (Θ : list (N * decl Ti)) : option
     (rename_env * env Ti * funtypes Ti * funenv Ti * mem Ti * var_env Ti) :=
   match Θ with
   | [] => Some (∅,∅,∅,∅,∅,[])
   | (s,CompoundDecl τys) :: Θ =>
      (* todo: names of structures and unions should not collapse *)
-     '(Γn,Γ,Γf,δ,m,xs) ← to_envs Θ;
+     '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
      let s : tag := s in
      let ys := fst <$> τys in
      let τs := snd <$> τys in
@@ -322,24 +332,31 @@ Fixpoint to_envs (Θ : list (N * decl Ti)) : option
      Some (<[s:=ys]>Γn, <[s:=τs]>Γ, Γf, δ, m, xs)
   | (x,GlobDecl τ me) :: Θ =>
      (* todo: we just shadow, that is wrong *)
-     '(Γn,Γ,Γf,δ,m,xs) ← to_envs Θ;
+     '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
      '(m,xs) ← alloc_global Γn Γ m xs x τ me;
       Some (Γn, Γ, Γf, δ, m, xs)
-  | (f,FunDecl ys σ cs) :: Θ =>
+  | (f,FunDecl ys σ mcs) :: Θ =>
      (* todo: functions and globals cannot have the same name *)
-     '(Γn,Γ,Γf,δ,m,xs) ← to_envs Θ;
+     '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
      let f : funname := f in
      guard (NoDup (fst <$> ys));
-     let τs := snd <$> ys in
-     guard (Γf !! f = None);
-     guard (✓{Γ}* τs);
-     guard (Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs);
-     let xs' := (prod_map id inr <$> ys) ++ xs in
-     '(m,s,cmσ) ← to_stmt Γn Γ Γf m xs' (labels cs) None None cs;
-     guard (gotos s ⊆ labels s);
-     guard (rettype_match cmσ σ);
-     Some(Γn, Γ, <[f:=(τs,σ)]>Γf, <[f:=s]>δ, m, xs)
+     Γf ← extend_funtypes Γ f (snd <$> ys) σ Γf;
+     match mcs with
+     | Some cs =>
+        guard (δ !! f = None);
+        let xs' := (prod_map id inr <$> ys) ++ xs in
+        '(m,s,cmσ) ← to_stmt Γn Γ Γf m xs' (labels cs) None None cs;
+        guard (gotos s ⊆ labels s);
+        guard (rettype_match cmσ σ);
+        Some(Γn, Γ, Γf, <[f:=s]>δ, m, xs)
+     | None => Some(Γn, Γ, Γf, δ, m, xs)
+     end
   end.
+Definition to_envs (Θ : list (N * decl Ti)) :
+    option (env Ti * funtypes Ti * funenv Ti * mem Ti) :=
+  '(_,Γ,Γf,δ,m,_) ← to_envs_go Θ;
+   guard (dom funset Γf ⊆ dom funset δ);
+   Some (Γ,Γf,δ,m).
 End frontend.
 
 Section cexpr_ind.
@@ -524,32 +541,60 @@ Proof.
   * split_ands; eauto using to_while_typed, expr_typed_weaken.
   * split_ands; eauto using stmt_typed_weaken, expr_typed_weaken.
 Qed.
-Lemma to_envs_typed Θ Γn Γ Γf δ m xs :
-  to_envs Θ = Some (Γn,Γ,Γf,δ,m,xs) →
-  ✓ Γ ∧ (Γ,m) ⊢ δ : Γf ∧ ✓{Γ} m ∧ var_env_stack_types xs = [].
+Lemma extend_funtypes_typed Γ m f τs τ Γf Γf' :
+  ✓{Γ} Γf → extend_funtypes Γ f τs τ Γf = Some Γf' →
+  Γf ⊆ Γf' ∧ ✓{Γ} Γf' ∧ Γf' !! f = Some (τs,τ) ∧ ✓{Γ} τ ∧ ✓{Γ}* τs ∧
+    Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs.
 Proof.
-  revert Γn Γ Γf δ m xs. induction Θ as [|[x [τs|τ mce|ys σ cs]] Θ IH];
-    intros Γn Γ Γf δ m xs ?; simplify_equality'.
-  * eauto using env_empty_valid, cmap_empty_valid.
-  * destruct (to_envs Θ) as [[[[[[Γn2 Γ2] ?] ?] ?] ?]|]; simplify_option_equality.
-    destruct (IH Γn2 Γ2 Γf δ m xs) as (?&?&?&?); eauto. split_ands; auto.
+  unfold extend_funtypes; intros HΓf ?.
+  destruct (Γf !! f) as [[]|] eqn:?; simplify_option_equality; auto.
+  { destruct (HΓf f (τs,τ)); naive_solver. }
+  simpl_map; split_ands; eauto using insert_subseteq, funtypes_valid_insert.
+Qed.
+Lemma to_envs_go_typed Θ Γn Γ Γf δ m xs :
+  to_envs_go Θ = Some (Γn,Γ,Γf,δ,m,xs) →
+  ✓ Γ ∧ ✓{Γ} Γf ∧ funenv_pretyped Γ m δ Γf
+      ∧ ✓{Γ} m ∧ var_env_stack_types xs = [].
+Proof.
+  revert Γn Γ Γf δ m xs. induction Θ as [|[x [τs|τ mce|ys σ mcs]] Θ IH];
+    intros  Γn Γ Γf δ m xs ?; simplify_equality'.
+  * split_ands; eauto using env_empty_valid,
+      cmap_empty_valid, funtypes_valid_empty, funenv_pretyped_empty.
+  * destruct (to_envs_go Θ)
+      as [[[[[[Γn2 Γ2] ?] ?] ?] ?]|]; simplify_option_equality.
+    destruct (IH Γn2 Γ2 Γf δ m xs) as (?&?&?&?&?); eauto. split_ands; auto.
     + by constructor.
-    + eapply funenv_typed_weaken; eauto using insert_subseteq.
+    + eapply funtypes_valid_weaken; eauto using insert_subseteq.
+    + eapply funenv_pretyped_weaken; eauto using insert_subseteq.
     + eapply cmap_valid_weaken; eauto using insert_subseteq.
-  * destruct (to_envs Θ) as [[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]|]; simplify_equality'.
+  * destruct (to_envs_go Θ)
+      as [[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]|]; simplify_equality'.
     destruct (alloc_global _ _ _ _ _ _ _) as [[??]|] eqn:?; simplify_equality'.
-    destruct (IH Γn Γ Γf δ m2 xs2) as (?&?&?&?); eauto.
+    destruct (IH Γn Γ Γf δ m2 xs2) as (?&?&?&?&?); eauto.
     destruct (alloc_global_typed Γn Γ m2 xs2 x τ mce m xs)
-      as (?&?&<-); eauto using funenv_typed_weaken.
-  * destruct (to_envs Θ) as [[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]|]; simplify_equality'.
+      as (?&?&<-); split_ands; eauto using funenv_pretyped_weaken.
+  * destruct (to_envs_go Θ)
+      as [[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]|]; simplify_equality'.
+    destruct (IH Γn2 Γ2 Γf2 δ2 m2 xs2) as (?&?&?&?&?Hxs); eauto.
     repeat case_option_guard; simplify_equality'.
+    destruct (extend_funtypes _ _ _ _ _) as [Γf3|] eqn:?; simplify_equality'.
+    destruct (extend_funtypes_typed Γ2 m2 x
+      (snd <$> ys) σ Γf2 Γf3) as (?&?&?&?&?&?); auto.
+    destruct mcs as [cs|]; simplify_equality';
+      [|split_ands; eauto using funenv_pretyped_weaken].
     destruct (to_stmt _ _ _ _ _ _ _ _ _)
       as [[[m3 s] cmσ]|] eqn:?; simplify_option_equality.
-    destruct (IH Γn Γ Γf2 δ2 m2 xs) as (?&?&?&Hxs); eauto.
-    destruct (to_stmt_typed Γn Γ Γf2 m2 ((prod_map id inr <$> ys) ++ xs)
+    destruct (to_stmt_typed Γn Γ Γf m2 ((prod_map id inr <$> ys) ++ xs)
       (labels cs) None None cs m s cmσ) as (Hs&?&?); auto.
     rewrite var_env_stack_types_app,
       var_env_stack_types_snd, Hxs, (right_id_L [] (++)) in Hs.
-    split_ands; eauto using funenv_typed_weaken.
+    split_ands; eauto using funenv_pretyped_weaken, funenv_pretyped_insert.
+Qed.
+Lemma to_envs_typed Θ Γ Γf δ m :
+  to_envs Θ = Some (Γ,Γf,δ,m) → ✓ Γ ∧ (Γ,m) ⊢ δ : Γf ∧ ✓{Γ} m.
+Proof.
+  unfold to_envs. intros. destruct (to_envs_go _)
+    as [[[[[[Γn Γ2] Γf2] δ2] m2] xs]|] eqn:?; simplify_option_equality.
+  destruct (to_envs_go_typed Θ Γn Γ Γf δ m xs) as (?&?&?&?&?); auto.
 Qed.
 End properties.

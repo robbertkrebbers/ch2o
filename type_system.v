@@ -350,16 +350,16 @@ Global Instance state_typed :
   (ΓΓf,m) ⊢ k : τf ↣ Fun_type f ∧
   ✓{ΓΓf.1} m.
 
-Inductive funenv_typed' (Γ : env Ti) (m : mem Ti) :
-     funenv Ti → funtypes Ti → Prop :=
-  | funenv_empty_typed : funenv_typed' Γ m ∅ ∅
-  | funenv_add_typed Γf δ f s cmτ τ τs :
-     Γf !! f = None →
-     ✓{Γ}* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
-     (Γ,Γf,m,τs) ⊢ s : cmτ → gotos s ⊆ labels s → rettype_match cmτ τ →
-     funenv_typed' Γ m δ Γf → funenv_typed' Γ m (<[f:=s]>δ) (<[f:=(τs,τ)]>Γf).
+Definition funenv_pretyped (Γ : env Ti) (m : mem Ti)
+    (δ : funenv Ti) (Γf : funtypes Ti) :=
+  map_Forall (λ f s, ∃ τs τ cmτ,
+    Γf !! f = Some (τs, τ) ∧
+    ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧
+    (Γ,Γf,m,τs) ⊢ s : cmτ ∧ gotos s ⊆ labels s ∧ rettype_match cmτ τ
+  ) δ.
 Global Instance funenv_typed:
-  Typed (env Ti * mem Ti) (funtypes Ti) (funenv Ti) := curry funenv_typed'.
+    Typed (env Ti * mem Ti) (funtypes Ti) (funenv Ti) := λ Γm δ Γf,
+  curry funenv_pretyped Γm δ Γf ∧ dom funset Γf ⊆ dom funset δ.
 End typing.
 
 Section properties.
@@ -409,6 +409,13 @@ Proof.
       eapply binop_type_of_correct; eauto.
 Qed.
 
+Lemma funtypes_valid_weaken Γ1 Γ2 Γf : ✓ Γ1 → ✓{Γ1} Γf → Γ1 ⊆ Γ2 → ✓{Γ2} Γf.
+Proof.
+  intros ? HΓf ? f [τs τ] Hf. destruct (HΓf f (τs,τ)) as (Hτs&?&?); simpl in *;
+    split_ands; eauto using types_valid_weaken, type_valid_weaken.
+  clear Hf. induction Hτs; decompose_Forall_hyps; constructor;
+    simpl; erewrite <-1?size_of_weaken by eauto; eauto.
+Qed.
 Lemma assign_typed_weaken Γ1 Γ2 ass τ1 τ2 σ :
   ✓ Γ1 → assign_typed Γ1 τ1 τ2 ass σ → Γ1 ⊆ Γ2 → assign_typed Γ2 τ1 τ2 ass σ.
 Proof. destruct 2; econstructor; eauto using cast_typed_weaken. Qed.
@@ -478,40 +485,53 @@ Proof.
   intros ? Hk ???. revert τf Hk. induction k; intros; typed_inversion_all;
     typed_constructor; eauto using ctx_item_typed_weaken.
 Qed.
-Lemma funenv_typed_weaken Γ1 Γ2 m1 m2 δ Γf :
-  ✓ Γ1 → (Γ1,m1) ⊢ δ : Γf → Γ1 ⊆ Γ2 → (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) →
-  (Γ2,m2) ⊢ δ : Γf.
+Lemma funenv_pretyped_weaken Γ1 Γ2 m1 m2 δ Γf1 Γf2 :
+  ✓ Γ1 → funenv_pretyped Γ1 m1 δ Γf1 → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →
+  (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) → funenv_pretyped Γ2 m2 δ Γf2.
 Proof.
-  induction 2 as [|Γf δ f s mτ τ τs Hf Hτs Hszs Hs ?? IH];
-    typed_constructor; eauto using stmt_typed_weaken, types_valid_weaken.
+  intros ? Hδ ??? f s ?. destruct (Hδ f s) as (τs&τ&cmτ&Hf&Hτs&?&Hs&?&?); auto.
+  exists τs τ cmτ; split_ands;
+    eauto using stmt_typed_weaken, types_valid_weaken, lookup_weaken.
   clear Hf Hs. induction Hτs; decompose_Forall_hyps; constructor;
     simpl; erewrite <-1?size_of_weaken by eauto; eauto.
 Qed.
+Lemma funenv_typed_weaken Γ1 Γ2 m1 m2 δ Γf :
+  ✓ Γ1 → (Γ1,m1) ⊢ δ : Γf → Γ1 ⊆ Γ2 → (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) →
+  (Γ2,m2) ⊢ δ : Γf.
+Proof. destruct 2; split; simpl in *; eauto using funenv_pretyped_weaken. Qed.
 
+Lemma funtypes_valid_empty Γ : ✓{Γ} ∅.
+Proof. by intros ??; simpl_map. Qed.
+Lemma funtypes_valid_insert Γ Γf f τs τ :
+  ✓{Γ} Γf → ✓{Γ}* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
+  ✓{Γ} τ → ✓{Γ} (<[f:=(τs,τ)]>Γf).
+Proof.
+  intros ??????; rewrite lookup_insert_Some; intros [[<- <-]|[??]]; eauto.
+Qed.
+Lemma funenv_pretyped_empty Γ m Γf : funenv_pretyped Γ m ∅ Γf.
+Proof. by intros ??; simpl_map. Qed.
+Lemma funenv_pretyped_insert Γ m δ Γf f s τ τs cmτ :
+  funenv_pretyped Γ m δ Γf → Γf !! f = Some (τs, τ) → ✓{Γ}* τs →
+  Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
+  (Γ,Γf,m,τs) ⊢ s : cmτ → gotos s ⊆ labels s → rettype_match cmτ τ →
+  funenv_pretyped Γ m (<[f:=s]> δ) Γf.
+Proof. intros ??????? f' s'; rewrite lookup_insert_Some; naive_solver. Qed.
 Lemma funenv_lookup Γ m Γf δ f τs τ :
   ✓ Γ → (Γ,m) ⊢ δ : Γf → Γf !! f = Some (τs,τ) → ∃ s cmτ,
     δ !! f = Some s ∧
     ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧
     (Γ,Γf,m,τs) ⊢ s : cmτ ∧ gotos s ⊆ labels s ∧ rettype_match cmτ τ.
 Proof.
-  induction 2 as [|Γf δ f' s' mτ' τ' τs' ??????? IH]; intros; [by simpl_map|].
-  destruct (decide (f = f')) as [->|?]; simplify_map_equality.
-  { exists s' mτ'; split_ands; eauto using stmt_typed_weaken, insert_subseteq. }
-  destruct IH as (s&mτ&?&?&?&?&?&?); auto.
-  exists s mτ; split_ands; eauto using stmt_typed_weaken, insert_subseteq.
+  intros ? [Hδ HΓf] ?; simpl in *. assert (∃ s, δ !! f = Some s) as [s ?].
+  { apply elem_of_dom, HΓf, elem_of_dom; eauto. }
+  destruct (Hδ f s) as (?&?&?&?&?); simplify_equality; eauto.
 Qed.
 Lemma funenv_lookup_inv Γ m Γf δ f s :
   ✓ Γ → (Γ,m) ⊢ δ : Γf → δ !! f = Some s → ∃ τs τ cmτ,
     Γf !! f = Some (τs,τ) ∧
     ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧
     (Γ,Γf,m,τs) ⊢ s : cmτ ∧ gotos s ⊆ labels s ∧ rettype_match cmτ τ.
-Proof.
-  induction 2 as [|Γf δ f' s' mτ' τ' τs' ??????? IH]; intros; [by simpl_map|].
-  destruct (decide (f = f')) as [->|?]; simplify_map_equality.
-  { exists τs' τ' mτ'; split_ands; eauto using stmt_typed_weaken, insert_subseteq. }
-  destruct IH as (τs&τ&mτ&?&?&?&?&?&?); auto.
-  exists τs τ mτ; split_ands; eauto using stmt_typed_weaken, insert_subseteq.
-Qed.
+Proof. intros ? [Hδ _] ?. destruct (Hδ f s); naive_solver. Qed.
 Lemma funenv_lookup_args Γ m Γf δ f τs τ :
   ✓ Γ → (Γ,m) ⊢ δ : Γf → Γf !! f = Some (τs,τ) → ✓{Γ}* τs.
 Proof. intros. by destruct (funenv_lookup Γ m Γf δ f τs τ) as (?&?&?&?&_). Qed.
