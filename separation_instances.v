@@ -508,12 +508,12 @@ Instance tagged_separation_ops {A L : Set} {d : L}
   sep_valid x := sep_valid (x.1) ∧ (sep_unmapped (x.1) → x.2 = d);
   sep_empty := Tagged ∅ d;
   sep_disjoint x y :=
-    x.1 ⊥ y.1 ∧ (sep_unmapped (x.1) → x.2 = d) ∧ (sep_unmapped (y.1) → y.2 = d)
-    ∧ (sep_unmapped (x.1) ∧ x.2 = d ∨ x.2 = y.2 ∨ sep_unmapped (y.1) ∧ y.2 = d);
+    x.1 ⊥ y.1 ∧ (sep_unmapped (x.1) ∨ x.2 = y.2 ∨ sep_unmapped (y.1))
+    ∧ (sep_unmapped (x.1) → x.2 = d) ∧ (sep_unmapped (y.1) → y.2 = d);
   sep_union x y := Tagged (x.1 ∪ y.1) (if decide (x.2 = d) then y.2 else x.2);
   sep_subseteq x y :=
-    x.1 ⊆ y.1 ∧ (sep_unmapped (x.1) → x.2 = d) ∧ (sep_unmapped (y.1) → y.2 = d)
-    ∧ (x.2 = d ∧ sep_unmapped (x.1) ∨ x.2 = y.2);
+    x.1 ⊆ y.1 ∧ (x.2 = d ∧ sep_unmapped (x.1) ∨ x.2 = y.2)
+    ∧ (sep_unmapped (x.1) → x.2 = d) ∧ (sep_unmapped (y.1) → y.2 = d);
   sep_difference x y :=
     let z := x.1 ∖ y.1 in Tagged z (if decide (sep_unmapped z) then d else x.2);
   sep_splittable x := sep_splittable (x.1) ∧ (sep_unmapped (x.1) → x.2 = d);
@@ -540,10 +540,10 @@ Proof.
   * sep_unfold; intros [x1 c1] [x2 c2] (?&?&?&?); naive_solver.
   * sep_unfold; intros [x1 c1] [x2 c2] (?&?&?&?); simpl in *.
     rewrite sep_commutative' by done. repeat case_decide; naive_solver.
-  * sep_unfold; intros [x1 c1] [x2 c2] [x3 c3] (?&?&?&?) (?&?&?&Hx); simpl in *.
+  * sep_unfold; intros [x1 c1] [x2 c2] [x3 c3] (?&?&?&?) (?&Hx&?&?); simpl in *.
     rewrite sep_unmapped_union' in Hx by done.
     assert (x1 ⊥ x3) by eauto using sep_disjoint_ll; case_decide; naive_solver.
-  * sep_unfold; intros [x1 c1] [x2 c2] [x3 c3] (?&?&?&?) (?&_&?&Hx); simpl in *.
+  * sep_unfold; intros [x1 c1] [x2 c2] [x3 c3] (?&?&?&?) (?&Hx&_&?); simpl in *.
     assert (x1 ⊥ x2 ∪ x3) by eauto using sep_disjoint_move_l.
     assert (x2 ⊥ x3) by eauto using sep_disjoint_lr.
     rewrite !sep_unmapped_union' in Hx |- * by done.
