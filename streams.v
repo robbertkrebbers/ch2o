@@ -23,6 +23,12 @@ Fixpoint slookup {A} (i : nat) (s : stream A) : A :=
   match i with O => shead s | S i => stail s !.! i end
 where "s !.! i" := (slookup i s).
 
+Global Instance stream_fmap : FMap stream := λ A B f,
+  cofix go s := f (shead s) :.: go (stail s).
+
+Fixpoint stake {A} (n : nat) (s : stream A) :=
+  match n with 0 => [] | S n => shead s :: stake n (stail s) end.
+
 Section stream_properties.
 Context {A : Type}.
 Implicit Types x y : A.
