@@ -18,8 +18,7 @@ Section operations.
     PBit (tagged_perm xb) BIndet.
   Definition pbit_kind : pbit Ti → option pkind := perm_kind ∘ tagged_perm.
   Definition pbit_freed : pbit Ti := PBit perm_freed BIndet.
-  Definition pbit_full (alloc : bool) : pbit Ti :=
-    PBit (perm_full alloc) BIndet.
+  Definition pbit_full : pbit Ti := PBit perm_full BIndet.
   Definition pbit_token : pbit Ti := PBit perm_token BIndet.
   Definition pbit_locked : pbit Ti → bool := perm_locked ∘ tagged_perm.
   Definition pbit_lock (xb : pbit Ti) : pbit Ti :=
@@ -217,10 +216,10 @@ Proof.
   induction 1; intros; decompose_Forall_hyps; f_equal;
     eauto using pbit_disjoint_indetified.
 Qed.
-Lemma pbit_full_valid Γ m alloc : ✓{Γ,m} (pbit_full alloc).
-Proof. by destruct alloc; apply (bool_decide_unpack _). Qed.
-Lemma pbit_full_unshared alloc : sep_unshared (pbit_full alloc).
-Proof. by destruct alloc; apply (bool_decide_unpack _). Qed.
+Lemma pbit_full_valid Γ m : ✓{Γ,m} pbit_full.
+Proof. by apply (bool_decide_unpack _). Qed.
+Lemma pbit_full_unshared : sep_unshared (@pbit_full Ti).
+Proof. done. Qed.
 Lemma pbit_freed_valid Γ m : ✓{Γ,m} pbit_freed.
 Proof. by apply (bool_decide_unpack _). Qed.
 Lemma pbit_freed_unshared : sep_unshared (@pbit_freed Ti).

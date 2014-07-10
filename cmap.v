@@ -4,7 +4,8 @@ Require Export ctrees refinements.
 
 (** We pack the memory into a record so as to avoid ambiguity with already
 existing type class instances for finite maps. *)
-Record cmap (Ti A : Set) : Set := CMap { cmap_car : indexmap (ctree Ti A) }.
+Record cmap (Ti A : Set) : Set :=
+  CMap { cmap_car : indexmap (ctree Ti A * bool) }.
 Arguments CMap {_ _} _.
 Arguments cmap_car {_ _} _.
 Add Printing Constructor cmap.
@@ -16,28 +17,31 @@ Instance cmap_ops {Ti A : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2),
   sep_empty := CMap ∅;
   sep_union m1 m2 :=
     let (m1) := m1 in let (m2) := m2 in
-    CMap (union_with (λ w1 w2, Some (w1 ∪ w2)) m1 m2);
+    CMap (union_with (λ wβ1 wβ2, Some (wβ1.1 ∪ wβ2.1, wβ1.2)) m1 m2);
   sep_difference m1 m2 :=
     let (m1) := m1 in let (m2) := m2 in
-    CMap (difference_with (λ w1 w2,
-      let w := w1 ∖ w2 in guard (¬ctree_empty w); Some w
+    CMap (difference_with (λ wβ1 wβ2,
+      let w := wβ1.1 ∖ wβ2.1 in guard (¬ctree_empty w); Some (w, wβ1.2)
     ) m1 m2);
-  sep_half m := let (m) := m in CMap (½ <$> m);
+  sep_half m := let (m) := m in CMap (prod_map ½ id <$> m);
   sep_valid m :=
-    let (m) := m in map_Forall (λ _ w, ctree_valid w ∧ ¬ctree_empty w) m;
+    let (m) := m in
+    map_Forall (λ _ wβ, ctree_valid (wβ.1) ∧ ¬ctree_empty (wβ.1)) m;
   sep_disjoint m1 m2 :=
     let (m1) := m1 in let (m2) := m2 in map_Forall2
-      (λ w1 w2, w1 ⊥ w2 ∧ ¬ctree_empty w1 ∧ ¬ctree_empty w2) 
-      (λ w1, ctree_valid w1 ∧ ¬ctree_empty w1)
-      (λ w2, ctree_valid w2 ∧ ¬ctree_empty w2) m1 m2;
+      (λ wβ1 wβ2, wβ1.1 ⊥ wβ2.1 ∧ wβ1.2 = wβ2.2 ∧
+        ¬ctree_empty (wβ1.1) ∧ ¬ctree_empty (wβ2.1)) 
+      (λ wβ1, ctree_valid (wβ1.1) ∧ ¬ctree_empty (wβ1.1))
+      (λ wβ2, ctree_valid (wβ2.1) ∧ ¬ctree_empty (wβ2.1)) m1 m2;
   sep_splittable m :=
     let (m) := m in
-    map_Forall (λ _ w, ctree_valid w ∧ ¬ctree_empty w ∧ ctree_splittable w) m;
+    map_Forall (λ _ wβ, ctree_valid (wβ.1) ∧
+      ¬ctree_empty (wβ.1) ∧ ctree_splittable (wβ.1)) m;
   sep_subseteq m1 m2 :=
     let (m1) := m1 in let (m2) := m2 in map_Forall2
-      (λ w1 w2, w1 ⊆ w2 ∧ ¬ctree_empty w1)
-      (λ w1, False)
-      (λ w2, ctree_valid w2 ∧ ¬ctree_empty w2) m1 m2;
+      (λ wβ1 wβ2, wβ1.1 ⊆ wβ2.1 ∧ wβ1.2 = wβ2.2 ∧ ¬ctree_empty (wβ1.1))
+      (λ wβ1, False)
+      (λ wβ2, ctree_valid (wβ2.1) ∧ ¬ctree_empty (wβ2.1)) m1 m2;
   sep_unmapped m := cmap_car m = ∅;
   sep_unshared m := False
 }.
@@ -54,7 +58,7 @@ Instance cmap_sep {Ti A : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2),
 Proof.
   split.
   * destruct (sep_inhabited A) as (x&?&?).
-    eexists (CMap {[fresh ∅, MUnionAll (fresh ∅) [x]]}).
+    eexists (CMap {[fresh ∅, (MUnionAll (fresh ∅) [x], false)]}).
     split; [|by intro]. intros o w ?; simplify_map_equality'. split.
     + by constructor; rewrite Forall_singleton.
     + by inversion_clear 1; decompose_Forall_hyps.
@@ -72,7 +76,7 @@ Proof.
     destruct (m1 !! o), (m2 !! o); intuition.
   * sep_unfold; intros [m1] [m2] Hm; f_equal'. apply union_with_commutative.
     intros o w1 w2 ??; specialize (Hm o); simplify_option_equality.
-    f_equal; intuition auto using ctree_commutative.
+    f_equal; intuition auto using ctree_commutative with f_equal.
   * sep_unfold; intros [m1] [m2] [m3] Hm Hm' o; specialize (Hm o);
       specialize (Hm' o); simpl in *; rewrite lookup_union_with in Hm'.
     destruct (m1 !! o) eqn:?, (m2 !! o), (m3 !! o); simplify_equality';
@@ -86,7 +90,7 @@ Proof.
     apply map_eq; intros o; specialize (Hm o); specialize (Hm' o); simpl in *;
       rewrite !lookup_union_with; rewrite lookup_union_with in Hm'.
     destruct (m1 !! o) eqn:?, (m2 !! o), (m3 !! o); simplify_equality'; eauto.
-    f_equal; intuition auto using ctree_associative.
+    f_equal; intuition auto using ctree_associative with f_equal.
   * sep_unfold; intros [m1] [m2] _; rewrite !(injective_iff CMap); intros Hm.
     apply map_eq; intros o. rewrite lookup_empty.
     apply (f_equal (!! o)) in Hm; rewrite lookup_union_with, lookup_empty in Hm.
@@ -95,9 +99,10 @@ Proof.
       intros Hm''; apply map_eq; intros o.
     specialize (Hm o); specialize (Hm' o);
       apply (f_equal (!! o)) in Hm''; rewrite !lookup_union_with in Hm''.
-    destruct (m1 !! o) eqn:?, (m2 !! o), (m3 !! o); simplify_equality';
-      f_equal; naive_solver eauto using ctree_cancel_l,
-      ctree_cancel_empty_l, ctree_cancel_empty_r.
+    destruct (m1 !! o) as [[??]|] eqn:?, (m2 !! o) as [[??]|],
+      (m3 !! o) as [[??]|]; simplify_equality'; f_equal;
+      naive_solver eauto using ctree_cancel_l,
+        ctree_cancel_empty_l, ctree_cancel_empty_r with f_equal.
   * sep_unfold; intros [m1] [m2] Hm o; specialize (Hm o).
     rewrite lookup_union_with. destruct (m1 !! o), (m2 !! o); simpl;
       intuition auto using ctree_union_subseteq_l, ctree_subseteq_reflexive.
@@ -107,8 +112,9 @@ Proof.
       intuition eauto using ctree_disjoint_difference, ctree_disjoint_valid_l.
   * sep_unfold; intros [m1] [m2] Hm; f_equal; apply map_eq; intros o;
       specialize (Hm o); rewrite lookup_union_with, lookup_difference_with.
-    destruct (m1 !! o), (m2 !! o); simplify_option_equality; f_equal;
-      intuition eauto using ctree_union_difference, ctree_difference_empty_rev.
+    destruct (m1 !! o) as [[??]|], (m2 !! o) as [[??]|];
+      simplify_option_equality; f_equal; intuition eauto using
+        ctree_union_difference, ctree_difference_empty_rev with f_equal.
   * sep_unfold; intros [m] Hm o w; specialize (Hm o).
     rewrite lookup_union_with; intros; destruct (m !! o); simplify_equality'.
     intuition eauto using ctree_union_valid,
@@ -122,12 +128,14 @@ Proof.
       auto using ctree_half_empty_rev, ctree_disjoint_half.
   * sep_unfold; intros [m] Hm; f_equal; apply map_eq; intros o;
       specialize (Hm o); rewrite lookup_union_with, lookup_fmap.
-    destruct (m !! o); f_equal'; naive_solver auto using ctree_union_half.
+    destruct (m !! o) as [[??]|]; f_equal';
+      naive_solver auto using ctree_union_half with f_equal.
   * sep_unfold; intros [m1] [m2] Hm Hm'; f_equal; apply map_eq; intros o;
       rewrite lookup_fmap, !lookup_union_with, !lookup_fmap;
       specialize (Hm o); specialize (Hm' o); rewrite lookup_union_with in Hm'.
-    destruct (m1 !! o), (m2 !! o); simplify_equality'; f_equal; auto.
-    naive_solver auto using ctree_union_half_distr.
+    destruct (m1 !! o) as [[??]|], (m2 !! o) as [[??]|];
+      simplify_equality'; f_equal; auto.
+    naive_solver auto using ctree_union_half_distr with f_equal.
   * sep_unfold; intros [m] ????; simplify_map_equality'.
   * done.
   * sep_unfold; intros [m1] [m2] ? Hm; simplify_equality'. apply map_empty.
@@ -136,7 +144,7 @@ Proof.
     by rewrite (left_id_L ∅ (union_with _)).
   * sep_unfold; intros [m]. split; [done|].
     intros [? Hm]. destruct (sep_inhabited A) as (x&?&?).
-    specialize (Hm (CMap {[fresh (dom _ m),MUnionAll (fresh ∅) [x]]}));
+    specialize (Hm (CMap {[fresh (dom _ m), (MUnionAll (fresh ∅) [x], false)]}));
       feed specialize Hm; [|simplify_map_equality'].
     intros o. destruct (m !! o) as [w|] eqn:Hw; simplify_map_equality'.
     { rewrite lookup_singleton_ne; eauto. intros <-.

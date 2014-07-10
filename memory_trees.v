@@ -17,10 +17,10 @@ Section operations.
     | MUnion s _ _ _ | MUnionAll s _ => unionT s
     end.
   Global Instance index_type_check : TypeCheck (mem Ti) (type Ti) index := λ m o,
-    type_of <$> cmap_car m !! o.
-  Global Instance cmap_index_alive : IndexAlive (mem Ti) := λ m o, ∃ w,
-    cmap_car m !! o = Some w ∧
-    ¬ctree_Forall (λ xb, tagged_perm xb = perm_freed) w.
+    type_of ∘ fst <$> cmap_car m !! o.
+  Global Instance cmap_index_alive : IndexAlive (mem Ti) := λ m o, ∃ wβ,
+    cmap_car m !! o = Some wβ ∧
+    ¬ctree_Forall (λ xb, tagged_perm xb = perm_freed) (wβ.1).
 
   Inductive ctree_typed' (Γ: env Ti) (m : mem Ti) : mtree Ti → type Ti → Prop :=
     | MBase_typed τb xbs :
