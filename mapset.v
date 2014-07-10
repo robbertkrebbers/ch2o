@@ -77,23 +77,20 @@ Proof.
     apply NoDup_fst_map_to_list.
 Qed.
 
-Definition mapset_map_with {A B} (f: bool → A → B)
+Definition mapset_map_with {A B} (f : bool → A → option B)
     (X : mapset (M unit)) : M A → M B :=
-  let (m) := X in merge (λ x y,
+  let (mX) := X in merge (λ x y,
     match x, y with
-    | Some _, Some a => Some (f true a)
-    | None, Some a => Some (f false a)
-    | _, None => None
-    end) m.
+    | Some _, Some a => f true a | None, Some a => f false a | _, None => None
+    end) mX.
 Definition mapset_dom_with {A} (f : A → bool) (m : M A) : mapset (M unit) :=
   Mapset $ merge (λ x _,
     match x with
-    | Some a => if f a then Some () else None
-    | None => None
+    | Some a => if f a then Some () else None | None => None
     end) m (@empty (M A) _).
 
-Lemma lookup_mapset_map_with {A B} (f : bool → A → B) X m i :
-  mapset_map_with f X m !! i = f (bool_decide (i ∈ X)) <$> m !! i.
+Lemma lookup_mapset_map_with {A B} (f : bool → A → option B) X m i :
+  mapset_map_with f X m !! i = m !! i ≫= f (bool_decide (i ∈ X)).
 Proof.
   destruct X as [mX]. unfold mapset_map_with, elem_of, mapset_elem_of.
   rewrite lookup_merge by done. simpl.
@@ -107,13 +104,12 @@ Proof.
   * destruct (Is_true_reflect (f a)); naive_solver.
   * naive_solver.
 Qed.
-
 Instance mapset_dom {A} : Dom (M A) (mapset (M unit)) :=
   mapset_dom_with (λ _, true).
 Instance mapset_dom_spec: FinMapDom K M (mapset (M unit)).
 Proof.
-  split; try apply _. intros. unfold dom, mapset_dom.
-  rewrite elem_of_mapset_dom_with. unfold is_Some. naive_solver.
+  split; try apply _. intros. unfold dom, mapset_dom, is_Some.
+  rewrite elem_of_mapset_dom_with; naive_solver.
 Qed.
 End mapset.
 

@@ -141,6 +141,12 @@ Definition foldl {A B} (f : A → B → A) : A → list B → A :=
 Instance list_ret: MRet list := λ A x, x :: @nil A.
 Instance list_fmap : FMap list := λ A B f,
   fix go (l : list A) := match l with [] => [] | x :: l => f x :: go l end.
+Instance list_omap : OMap list := λ A B f,
+  fix go (l : list A) :=
+  match l with
+  | [] => []
+  | x :: l => match f x with Some y => y :: go l | None => go l end
+  end.
 Instance list_bind : MBind list := λ A B f,
   fix go (l : list A) := match l with [] => [] | x :: l => f x ++ go l end.
 Instance list_join: MJoin list :=
@@ -533,6 +539,15 @@ Proof.
 Qed.
 Lemma elem_of_list_lookup l x : x ∈ l ↔ ∃ i, l !! i = Some x.
 Proof. firstorder eauto using elem_of_list_lookup_1, elem_of_list_lookup_2. Qed.
+Lemma elem_of_list_omap {B} (f : A → option B) l (y : B) :
+  y ∈ omap f l ↔ ∃ x, x ∈ l ∧ f x = Some y.
+Proof.
+  split.
+  * induction l as [|x l]; csimpl; repeat case_match; inversion 1; subst;
+      setoid_rewrite elem_of_cons; naive_solver.
+  * intros (x&Hx&?). induction Hx; csimpl; repeat case_match;
+      simplify_equality; auto; constructor (by auto).
+Qed.
 
 (** ** Properties of the [NoDup] predicate *)
 Lemma NoDup_nil : NoDup (@nil A) ↔ True.
@@ -2067,6 +2082,11 @@ Section Forall2.
   Implicit Types l : list A.
   Implicit Types k : list B.
 
+  Lemma Forall2_true l k :
+    (∀ x y, P x y) → length l = length k → Forall2 P l k.
+  Proof.
+    intro. revert k. induction l; intros [|??] ?; simplify_equality'; auto.
+  Qed.
   Lemma Forall2_same_length l k :
     Forall2 (λ _ _, True) l k ↔ length l = length k.
   Proof.

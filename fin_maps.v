@@ -58,8 +58,11 @@ Instance map_delete `{PartialAlter K A M} : Delete K M :=
 Instance map_singleton `{PartialAlter K A M, Empty M} :
   Singleton (K * A) M := λ p, <[p.1:=p.2]> ∅.
 
-Definition map_of_list `{Insert K A M} `{Empty M} : list (K * A) → M :=
+Definition map_of_list `{Insert K A M, Empty M} : list (K * A) → M :=
   fold_right (λ p, <[p.1:=p.2]>) ∅.
+Definition map_of_collection `{Elements K C, Insert K A M, Empty M}
+    (f : K → option A) (X : C) : M :=
+  map_of_list (omap (λ i, (i,) <$> f i) (elements X)).
 
 Instance map_union_with `{Merge M} {A} : UnionWith A (M A) :=
   λ f, merge (union_with f).
@@ -539,7 +542,23 @@ Proof.
   exists i x. rewrite <-elem_of_map_to_list, Hm. by left.
 Qed.
 
-(** * Induction principles *)
+(** ** Properties of conversion from collections *)
+Lemma lookup_map_of_collection {A} `{FinCollection K C}
+    (f : K → option A) X i x :
+  map_of_collection f X !! i = Some x ↔ i ∈ X ∧ f i = Some x.
+Proof.
+  assert (NoDup (fst <$> omap (λ i, (i,) <$> f i) (elements X))).
+  { induction (NoDup_elements X) as [|i' l]; csimpl; [constructor|].
+    destruct (f i') as [x'|]; csimpl; auto; constructor; auto.
+    rewrite elem_of_list_fmap. setoid_rewrite elem_of_list_omap.
+    by intros (?&?&?&?&?); simplify_option_equality. }
+  unfold map_of_collection; rewrite <-elem_of_map_of_list by done.
+  rewrite elem_of_list_omap. setoid_rewrite elem_of_elements; split.
+  * intros (?&?&?); simplify_option_equality; eauto.
+  * intros [??]; exists i; simplify_option_equality; eauto.
+Qed.
+
+(** ** Induction principles *)
 Lemma map_ind {A} (P : M A → Prop) :
   P ∅ → (∀ i x m, m !! i = None → P m → P (<[i:=x]>m)) → ∀ m, P m.
 Proof.
@@ -572,7 +591,7 @@ Proof.
   * by apply lt_wf.
 Qed.
 
-(** ** Properties of the [map_forall] predicate *)
+(** ** Properties of the [map_Forall] predicate *)
 Section map_Forall.
 Context {A} (P : K → A → Prop).
 
