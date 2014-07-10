@@ -775,7 +775,7 @@ Proof.
   intros ? Hvτ ??. induction Hvτ using @val_typed_ind; econstructor;
     erewrite <-1?vals_unflatten_weaken;
     erewrite <-1?bit_size_of_weaken by eauto using TCompound_valid;
-    eauto using base_typed_weaken, lookup_weaken, vals_representable_weaken,
+    eauto using base_val_typed_weaken, lookup_weaken, vals_representable_weaken,
       Forall_impl, bit_valid_weaken, val_typed_types_valid.
 Qed.
 Lemma val_freeze_freeze β1 β2 v :
@@ -1435,6 +1435,17 @@ Proof.
       induction Hvs3; intros [|?] ????; simplify_equality'; eauto. }
     refine_constructor; eauto.
 Qed.
+Lemma val_refine_weaken Γ Γ' f f' m1 m2 m1' m2' v1 v2 τ :
+  ✓ Γ → v1 ⊑{Γ,f@m1↦m2} v2 : τ → Γ ⊆ Γ' →
+  (∀ o o2 r τ, m1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
+  (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
+  (∀ o τ, m1 ⊢ o : τ → index_alive m1' o → index_alive m1 o) →
+  (∀ o1 o2 r, f !! o1 = Some (o2,r) → index_alive m1' o1 → index_alive m2' o2) →
+  v1 ⊑{Γ',f'@m1'↦m2'} v2 : τ.
+Proof.
+  intros ? Hv; intros. induction Hv using @val_refine_ind; refine_constructor;
+    eauto using base_val_refine_weaken, lookup_weaken, vals_representable_weaken.
+Qed.
 Lemma val_flatten_refine Γ f m1 m2 v1 v2 τ :
   ✓ Γ → v1 ⊑{Γ,f@m1↦m2} v2 : τ →
   val_flatten Γ v1 ⊑{Γ,f@m1↦m2}* val_flatten Γ v2.
@@ -1525,7 +1536,7 @@ Proof.
       { erewrite <-to_val_unflatten,
           ctree_unflatten_flatten by eauto using ctree_typed_type_valid.
         apply IH, union_reset_above;
-          eauto using ctree_refine_id, pbits_refine_unshared_inv. }
+          eauto using ctree_refine_id, pbits_refine_shared. }
       rewrite fmap_app, take_app_alt by (by erewrite <-ctree_flatten_length,
         fmap_length by eauto; eauto using Forall2_length).
       eauto using val_unflatten_refine, pbits_tag_refine. }

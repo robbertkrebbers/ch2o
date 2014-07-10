@@ -412,9 +412,8 @@ Lemma addr_top_typed Γ m o τ :
   ✓ Γ → m ⊢ o : τ → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
   (Γ,m) ⊢ addr_top o τ : τ.
 Proof.
-  constructor; simpl; split_ands; eauto using Nat.mod_0_l, size_of_ne_0.
-  * by apply ref_typed_nil.
-  * lia.
+  constructor; simpl; split_ands; eauto using Nat.mod_0_l, size_of_ne_0; [|lia].
+  by apply ref_typed_nil.
 Qed.
 Lemma addr_top_strict Γ o τ : ✓ Γ → ✓{Γ} τ → addr_strict Γ (addr_top o τ).
 Proof.
@@ -713,7 +712,7 @@ Proof.
   * rewrite fmap_app, ref_freeze_freeze.
     by split; intro; simplify_list_equality'; repeat f_equal.
 Qed.
-Definition addr_refine_id Γ m a σ : (Γ,m) ⊢ a : σ → a ⊑{Γ@m} a : σ.
+Lemma addr_refine_id Γ m a σ : (Γ,m) ⊢ a : σ → a ⊑{Γ@m} a : σ.
 Proof.
   destruct 1 as [o r i τ σ σc].
   eexists []; csimpl; auto; [by apply ref_typed_nil|].
@@ -736,7 +735,8 @@ Proof.
   * apply ref_refine_ne_nil_alt. by rewrite fmap_app, (associative_L (++)).
 Qed.
 Lemma addr_refine_weaken Γ Γ' f f' m1 m2 m1' m2' a1 a2 σ :
-  ✓ Γ → a1 ⊑{Γ,f@m1↦m2} a2 : σ → Γ ⊆ Γ' → f ⊆ f' →
+  ✓ Γ → a1 ⊑{Γ,f@m1↦m2} a2 : σ → Γ ⊆ Γ' →
+  (∀ o o2 r τ, m1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
   (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
   (∀ o1 o2 r, f !! o1 = Some (o2,r) → index_alive m1' o1 → index_alive m2' o2) →
   a1 ⊑{Γ',f'@m1'↦m2'} a2 : σ.
@@ -852,6 +852,15 @@ Lemma addr_alive_refine Γ f m1 m2 a1 a2 σ :
   index_alive m1 (addr_index a1) → a1 ⊑{Γ,f@m1↦m2} a2 : σ →
   index_alive m2 (addr_index a2).
 Proof. destruct 2; auto. Qed.
+Lemma addr_top_refine Γ f m1 m2 o1 o2 τ :
+  ✓ Γ → m1 ⊢ o1 : τ → m2 ⊢ o2 : τ → (index_alive m1 o1 → index_alive m2 o2) →
+  ✓{Γ} τ → int_typed (size_of Γ τ) sptrT → f !! o1 = Some (o2,[]) →
+  addr_top o1 τ ⊑{Γ,f@m1↦m2} addr_top o2 τ : τ.
+Proof.
+  econstructor; eauto using Nat.mod_0_l, size_of_ne_0; try by constructor.
+  * simpl; lia.
+  * apply ref_refine_nil_alt; simpl; auto with lia.
+Qed.
 Lemma addr_plus_ok_refine Γ f m1 m2 a1 a2 σ j :
   a1 ⊑{Γ,f@m1↦m2} a2 : σ → addr_plus_ok Γ m1 j a1 → addr_plus_ok Γ m2 j a2.
 Proof.

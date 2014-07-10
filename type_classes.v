@@ -163,14 +163,18 @@ Ltac simplify_type_equality := repeat
   | H : ?τ !!{?Γ} ?p = None, H2 : _ ⊢ ?p : (?τ,?σ) |- _ =>
     by destruct (path_type_check_None Γ p τ σ)
   | H : _ ⊢ ?x : ?τ1, H2 : _ ⊢ ?x : ?τ2 |- _ =>
-    unless (τ2 = τ1) by done; pose proof (typed_unique _ x τ2 τ1 I H2 H)
+    unless (τ2 = τ1) by done;
+    pose proof (typed_unique _ x τ2 τ1 I H2 H); clear H2
   | H : _ ⊢ ?x : ?τ1, H2 : _ ⊢ ?x : ?τ2 |- _ =>
-    unless (τ2 = τ1) by done; pose proof (typed_unique_alt _ x τ2 τ1 H2 H)
+    unless (τ2 = τ1) by done;
+    pose proof (typed_unique_alt _ x τ2 τ1 H2 H); clear H2
   | H : _ ⊢ [] : _ ↣ _ |- _ => inversion H; clear H (* hack *)
   | H : _ ⊢ ?p : ?τ ↣ ?σ1, H2 : _ ⊢ ?p : ?τ ↣ ?σ2 |- _ =>
-    unless (σ2 = σ1) by done; pose proof (path_typed_unique_r _ p τ σ2 σ1 H2 H)
+    unless (σ2 = σ1) by done;
+    pose proof (path_typed_unique_r _ p τ σ2 σ1 H2 H); clear H2
   | H : _ ⊢ ?p : ?τ1 ↣ ?σ, H2 : _ ⊢ ?p : ?τ2 ↣ ?σ |- _ =>
-    unless (τ2 = τ1) by done; pose proof (path_typed_unique_l _ p τ2 τ1 σ H2 H)
+    unless (τ2 = τ1) by done;
+    pose proof (path_typed_unique_l _ p τ2 τ1 σ H2 H); clear H2
   end.
 Ltac simplify_type_equality' :=
   repeat (progress csimpl in * || simplify_type_equality).

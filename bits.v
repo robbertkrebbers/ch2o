@@ -169,7 +169,8 @@ Global Instance:
   PropHolds (✓ Γ) → Transitive (refine Γ mem_inj_id m m : relation (bit Ti)).
 Proof. intros Γ m ? b1 b2 b3. by apply bit_refine_compose. Qed.
 Lemma bit_refine_weaken Γ Γ' f f' m1 m2 m1' m2' b1 b2 :
-  ✓ Γ → b1 ⊑{Γ,f@m1↦m2} b2 → Γ ⊆ Γ' → f ⊆ f' →
+  ✓ Γ → b1 ⊑{Γ,f@m1↦m2} b2 → Γ ⊆ Γ' →
+  (∀ o o2 r τ, m1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
   (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
   (∀ o τ, m1 ⊢ o : τ → index_alive m1' o → index_alive m1 o) →
   (∀ o1 o2 r, f !! o1 = Some (o2,r) → index_alive m1' o1 → index_alive m2' o2) →

@@ -322,7 +322,7 @@ Lemma char_byte_valid_weaken Γ1 Γ2 m1 m2 bs :
   ✓ Γ1 → char_byte_valid Γ1 m1 bs → Γ1 ⊆ Γ2 → (∀ o τ, m1 ⊢ o : τ → m2 ⊢ o : τ) →
   char_byte_valid Γ2 m2 bs.
 Proof. destruct 2; constructor; eauto using Forall_impl, bit_valid_weaken. Qed.
-Lemma base_typed_weaken Γ1 Γ2 m1 m2 vb τb :
+Lemma base_val_typed_weaken Γ1 Γ2 m1 m2 vb τb :
   ✓ Γ1 → (Γ1,m1) ⊢ vb : τb → Γ1 ⊆ Γ2 → (∀ o τ, m1 ⊢ o : τ → m2 ⊢ o : τ) →
   (Γ2,m2) ⊢ vb : τb.
 Proof.
@@ -658,6 +658,18 @@ Proof.
       eauto using BBits_refine, bits_refine_compose.
   * refine_constructor; eauto using base_val_refine_typed_r,
       bits_refine_compose, BIndets_refine, BIndets_valid.
+Qed.
+Lemma base_val_refine_weaken Γ Γ' f f' m1 m2 m1' m2' vb1 vb2 τb :
+  ✓ Γ → vb1 ⊑{Γ,f@m1↦m2} vb2 : τb → Γ ⊆ Γ' →
+  (∀ o o2 r τ, m1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
+  (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
+  (∀ o τ, m1 ⊢ o : τ → index_alive m1' o → index_alive m1 o) →
+  (∀ o1 o2 r, f !! o1 = Some (o2,r) → index_alive m1' o1 → index_alive m2' o2) →
+  vb1 ⊑{Γ',f'@m1'↦m2'} vb2 : τb.
+Proof.
+  destruct 2; refine_constructor; eauto using base_val_typed_weaken,
+    ptr_refine_weaken, ptr_typed_weaken, char_byte_valid_weaken,
+    ptr_dead_weaken, Forall2_impl, bit_refine_weaken.
 Qed.
 Lemma base_val_unflatten_refine Γ f m1 m2 τb bs1 bs2 :
   ✓ Γ → ✓{Γ} τb → bs1 ⊑{Γ,f@m1↦m2}* bs2 → length bs1 = bit_size_of Γ τb →

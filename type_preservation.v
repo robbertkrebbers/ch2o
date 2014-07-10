@@ -66,7 +66,7 @@ Proof.
   * typed_inversion_all; split_ands.
     + eauto using mem_alloc_valid.
     + eauto using addr_top_typed, addr_top_strict, index_typed_alloc.
-    + eauto using index_typed_alloc_free.
+    + eauto using index_typed_alloc_other.
   * typed_inversion_all; eauto 7 using mem_free_valid, index_typed_free.
   * typed_inversion_all;
       repeat match goal with H : unop_typed _ _ _ |- _ => by inversion H end;
@@ -165,10 +165,10 @@ Proof.
       eauto using ctx_typed_weaken, expr_typed_weaken,
       stmt_typed_weaken, index_typed_unlock, mem_unlock_valid.
   * intros m k o τ s ? (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, index_typed_alloc_free].
+    split; [|eauto using funenv_typed_weaken, index_typed_alloc_other].
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using mem_alloc_valid, index_typed_alloc,
-      stmt_typed_weaken, ctx_typed_weaken, index_typed_alloc_free.
+      stmt_typed_weaken, ctx_typed_weaken, index_typed_alloc_other.
   * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eexists; simpl; split_ands; eauto; repeat typed_constructor; eauto.
   * intros m k o τ s (τf&HS&?&?) ?; typed_inversion_all.
@@ -227,10 +227,10 @@ Proof.
       eauto using sctx_item_subst_typed.
   * intros m k l (τf&HS&?&?) ?; typed_inversion_all; split; auto.
   * intros m k l o τ s ?? (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, index_typed_alloc_free].
+    split; [|eauto using funenv_typed_weaken, index_typed_alloc_other].
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using mem_alloc_valid, index_typed_alloc,
-      stmt_typed_weaken, ctx_typed_weaken, index_typed_alloc_free.
+      stmt_typed_weaken, ctx_typed_weaken, index_typed_alloc_other.
   * intros m k l o τ s ? (τf&HS&?&?) ?; typed_inversion_all.
     split; [|eauto using funenv_typed_weaken, index_typed_free].
     eexists; simpl; split_ands; repeat typed_constructor;

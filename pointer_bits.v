@@ -160,7 +160,8 @@ Proof.
   eauto using ptr_refine_compose with congruence.
 Qed.
 Lemma ptr_bit_refine_weaken Γ Γ' f f' m1 m2 m1' m2' pb1 pb2 :
-  ✓ Γ → pb1 ⊑{Γ,f@m1↦m2} pb2 → Γ ⊆ Γ' → f ⊆ f' →
+  ✓ Γ → pb1 ⊑{Γ,f@m1↦m2} pb2 → Γ ⊆ Γ' →
+  (∀ o o2 r τ, m1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
   (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
   (∀ o1 o2 r, f !! o1 = Some (o2,r) → index_alive m1' o1 → index_alive m2' o2) →
   pb1 ⊑{Γ',f'@m1'↦m2'} pb2.

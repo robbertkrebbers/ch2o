@@ -105,6 +105,8 @@ Arguments perm_kind _ : simpl never.
 
 Lemma perm_freed_valid : sep_valid perm_freed.
 Proof. done. Qed.
+Lemma perm_kind_Some_not_freed k x : Some k ⊆ perm_kind x → x ≠ perm_freed.
+Proof. intros Hk ->; inversion Hk. Qed.
 Lemma perm_full_valid alloc : sep_valid (perm_full alloc).
 Proof. by compute; intuition. Qed.
 Lemma perm_token_valid : sep_valid perm_token.
@@ -112,8 +114,7 @@ Proof. done. Qed.
 Lemma perm_lock_valid x :
   sep_valid x → Some Writable ⊆ perm_kind x → sep_valid (perm_lock x).
 Proof. destruct (perm_kind_spec x); repeat sep_unfold; intuition. Qed.
-Lemma perm_lock_unmapped_inv x :
-  sep_unmapped (perm_lock x) → sep_unmapped x.
+Lemma perm_lock_mapped x : sep_unmapped (perm_lock x) → sep_unmapped x.
 Proof. destruct x as [[[]|[[][]]]|]; repeat sep_unfold; intuition. Qed.
 Lemma perm_lock_unshared x : sep_unshared x → sep_unshared (perm_lock x).
 Proof. destruct x as [[[[][]]|[[][]]]|]; repeat sep_unfold; intuition. Qed.
@@ -124,12 +125,12 @@ Lemma perm_unlock_valid x : sep_valid x → sep_valid (perm_unlock x).
 Proof. destruct x as [[[[][]]|[[][]]]|]; repeat sep_unfold; naive_solver. Qed.
 Lemma perm_unlock_unmapped x : sep_unmapped x → sep_unmapped (perm_unlock x).
 Proof. destruct x as [[[[][]]|[[][]]]|]; repeat sep_unfold; intuition. Qed.
-Lemma perm_unlock_unmapped_inv x :
+Lemma perm_unlock_mapped x :
   sep_valid x → sep_unmapped (perm_unlock x) → sep_unmapped x.
 Proof. destruct x as [[[[][]]|[[][]]]|]; repeat sep_unfold; intuition. Qed.
 Lemma perm_unlock_unshared x : sep_unshared x → sep_unshared (perm_unlock x).
 Proof. destruct x as [[[[][]]|[[][]]]|]; repeat sep_unfold; intuition. Qed.
-Lemma perm_unlock_unshared_inv x :
+Lemma perm_unlock_shared x :
   sep_valid x → sep_unshared (perm_unlock x) → sep_unshared x.
 Proof. destruct x as [[[[][]]|[[][]]]|]; repeat sep_unfold; intuition. Qed.
 Lemma perm_unshared x :

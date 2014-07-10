@@ -10,7 +10,9 @@ Section operations.
     let (m) := m in dom _ m.
   Global Instance cmap_valid: Valid (env Ti) (mem Ti) := λ Γ m,
     map_Forall (λ _ w, ∃ τ,
-      (Γ,m) ⊢ w : τ ∧ ¬ctree_empty w ∧ int_typed (size_of Γ τ) sptrT
+      (**i 1). *) (Γ,m) ⊢ w : τ ∧
+      (**i 2). *) ¬ctree_empty w ∧
+      (**i 3). *) int_typed (size_of Γ τ) sptrT
     ) (cmap_car m).
   Global Instance cmap_lookup:
       LookupE (env Ti) (addr Ti) (mtree Ti) (mem Ti) := λ Γ a m,
@@ -24,15 +26,16 @@ Section operations.
       if decide (addr_is_obj a) then g w
       else ctree_alter_byte Γ g (addr_ref_byte Γ a) w
     ) (addr_ref Γ a)) (addr_index a) m.
+
   Global Instance cmap_refine: RefineM Ti (mem Ti) := λ Γ f m1 m2,
     (**i 1.) *) mem_inj_injective f ∧
     (**i 2.) *) ✓{Γ} m1 ∧
     (**i 3.) *) ✓{Γ} m2 ∧
     (**i 4.) *) ∀ o1 o2 r w1,
       f !! o1 = Some (o2,r) → cmap_car m1 !! o1 = Some w1 →
-      ∃ w2 w2', cmap_car m2 !! o2 = Some w2 ∧
+      ∃ w2 w2' τ, cmap_car m2 !! o2 = Some w2 ∧
         w2 !!{Γ} (freeze true <$> r) = Some w2' ∧
-        w1 ⊑{Γ,f@m1↦m2} w2' : type_of w1.
+        w1 ⊑{Γ,f@m1↦m2} w2' : τ.
 End operations.
 
 Section cmap_typed.
@@ -56,7 +59,8 @@ Global Instance mem_index_alive_dec m o : Decision (index_alive m o).
 Proof.
  refine
   match cmap_car m !! o as mo return Decision (∃ w, mo = Some w ∧ _) with
-  | Some w => cast_if_not (decide (ctree_Forall (λ xb, pbit_kind xb = None) w))
+  | Some w =>
+     cast_if_not (decide (ctree_Forall (λ xb, tagged_perm xb = perm_freed) w))
   | _ => right _
   end; abstract naive_solver.
 Defined.
@@ -122,6 +126,8 @@ Proof.
   * erewrite addr_not_obj_type by intuition eauto.
     eauto using ctree_lookup_byte_typed.
 Qed.
+Lemma cmap_lookup_strict Γ m a w : m !!{Γ} a = Some w → addr_strict Γ a.
+Proof. by destruct m as [m]; intros; simplify_option_equality. Qed.
 Lemma cmap_lookup_Some Γ m w a :
   ✓ Γ → ✓{Γ} m → m !!{Γ} a = Some w → (Γ,m) ⊢ w : type_of w.
 Proof.
@@ -203,7 +209,7 @@ Proof.
     destruct (ctree_lookup_Some Γ (CMap m) w' τ
       (addr_ref Γ a) w'') as (τ'&?&?); auto.
     eauto using ctree_lookup_Forall, pbit_unmapped_indetify,
-      pbits_kind_None_unmapped, pbits_valid_sep_valid, ctree_flatten_valid. }
+      pbits_freed_unmapped, pbits_valid_sep_valid, ctree_flatten_valid. }
   simplify_option_equality;
     eauto using ctree_lookup_byte_Forall, pbit_unmapped_indetify.
 Qed.
@@ -217,12 +223,13 @@ Lemma cmap_alter_valid Γ m g a w :
 Proof.
   intros ? Hm Hw ? Hgw o w''' ?. cut (∃ τ, (Γ,m) ⊢ w''' : τ
     ∧ ¬ctree_empty w''' ∧ int_typed (size_of Γ τ) sptrT).
-  { intros (τ&?&?&?); eauto 6 using cmap_typed_alter_weaken, type_of_correct. }
+  { intros (τ&?&?&?); exists τ; split_ands;
+      eauto using cmap_typed_alter_weaken, type_of_correct. }
   destruct m as [m]; simpl in *; case_option_guard; simplify_equality'.
   destruct (m !! addr_index a) as [w'|] eqn:?; simplify_equality'.
   destruct (w' !!{Γ} addr_ref Γ a) as [w''|] eqn:?; simplify_equality'.
   destruct (decide (addr_index a = o));
-    simplify_map_equality'; [|destruct (Hm o w''') as (τ&?&?&?); eauto].
+    simplify_map_equality'; [|destruct (Hm o w''') as (τ&?&?&?&?); eauto].
   destruct (Hm (addr_index a) w') as (τ&?&Hemp&?); auto.
   exists τ; simplify_option_equality.
   { intuition eauto using ctree_alter_lookup_Forall,
@@ -434,25 +441,24 @@ Lemma cmap_refine_index_typed Γ m1 m2 f o1 o2 r τ :
   ✓ Γ → m1 ⊑{Γ,f} m2 → f !! o1 = Some (o2,r) →
   m1 ⊢ o1 : τ → ∃ τ', m2 ⊢ o2 : τ' ∧ Γ ⊢ r : τ' ↣ τ.
 Proof.
-  unfold typed, index_typed, type_check, index_type_check.
-  intros ? (_&_&Hm2&Hm) ??; simplify_equality'.
-  destruct (cmap_car m1 !! o1) as [w1|] eqn:?; simplify_equality'.
-  destruct (Hm o1 o2 r w1) as (w2&w2'&Ho2&?&?); auto; rewrite Ho2; simpl.
-  destruct (Hm2 o2 w2) as (τ2&?&_); auto.
-  erewrite <-(ctree_refine_type_of_r _ _ _ _ w1 w2' (type_of w1)) by eauto.
-  destruct (ctree_lookup_Some Γ m2 w2 τ2
-    (freeze true <$> r) w2') as (τ2'&?&?); auto; simplify_type_equality'.
-  eauto using ref_typed_freeze_1.
+  rewrite index_typed_alt; unfold typed, index_typed,
+    type_check, index_type_check; intros ? (_&_&Hm2&Hm) ? (w1&?&->).
+  destruct (Hm o1 o2 r w1) as (w2&w2'&τ&Ho2&?&?); auto; rewrite Ho2; simpl.
+  assert ((Γ,m1) ⊢ w1 : τ) by eauto using ctree_refine_typed_l.
+  assert ((Γ,m2) ⊢ w2' : τ) by eauto using ctree_refine_typed_r.
+  destruct (Hm2 o2 w2) as (τ2&?&_); auto; simplify_type_equality.
+  exists τ2; split; auto. destruct (ctree_lookup_Some Γ m2 w2 τ2
+    (freeze true <$> r) w2') as (τ2'&?&?); simplify_type_equality';
+    eauto using ref_typed_freeze_1.
 Qed.
 Lemma cmap_refine_alive Γ m1 m2 f o1 o2 r :
   ✓ Γ → m1 ⊑{Γ,f} m2 → f !! o1 = Some (o2,r) →
   index_alive m1 o1 → index_alive m2 o2.
 Proof.
   intros ? (_&_&_&Hm) ? (w1&?&Hw1).
-  destruct (Hm o1 o2 r w1) as (w2&w2'&?&?&?); auto.
-  exists w2; split; auto. contradict Hw1.
-  apply (ctree_refine_Forall_inv _ Γ f m1 m2 w1 w2'
-    (type_of w1)); eauto using @ctree_lookup_Forall, pbit_refine_kind_rev.
+  destruct (Hm o1 o2 r w1) as (w2&w2'&τ&?&?&?); auto.
+  exists w2; split; auto. contradict Hw1; eauto using ctree_lookup_Forall,
+    ctree_flatten_refine, pbit_refine_freed_inv.
 Qed.
 Lemma cmap_refine_injective Γ f m1 m2 : m1 ⊑{Γ,f} m2 → mem_inj_injective f.
 Proof. by intros [??]. Qed.
@@ -474,20 +480,36 @@ Proof.
   intros ? (?&?&?&Hm12) (?&_&?&Hm23); split; split_ands;
     eauto 2 using mem_inj_compose_injective, cmap_refine_injective.
   intros o1 o3 r w1.
-  rewrite lookup_mem_inj_compose_Some; intros (o2&r2&r3&?&?&->) ?.
-  destruct (Hm12 o1 o2 r2 w1) as (w2&w2'&?&?&?); auto.
-  destruct (Hm23 o2 o3 r3 w2) as (w3&w3'&->&?&?); auto.
-  destruct (ctree_lookup_refine Γ f2 m2 m3 w2 w3' (type_of w2)
+  rewrite lookup_mem_inj_compose_Some; intros (o2&r2&r3&?&?&->) Hw1.
+  destruct (Hm12 o1 o2 r2 w1) as (w2&w2'&τ2&?&?&?); auto.
+  destruct (Hm23 o2 o3 r3 w2) as (w3&w3'&τ3&->&?&?); auto.
+  destruct (ctree_lookup_refine Γ f2 m2 m3 w2 w3' τ3
     (freeze true <$> r2) w2') as (w3''&?&Hw23); auto.
   erewrite ctree_refine_type_of_r in Hw23 by eauto. exists w3 w3''.
   rewrite fmap_app, ctree_lookup_app; simplify_option_equality.
   split_ands; eauto using ctree_refine_compose.
 Qed.
+Lemma cmap_refine_weaken Γ Γ' f f' m1 m2 :
+  ✓ Γ → m1 ⊑{Γ,f} m2 → Γ ⊆ Γ' → (∀ o τ, m1 ⊢ o : τ → f !! o = f' !! o) →
+  mem_inj_injective f' → m1 ⊑{Γ',f'} m2.
+Proof.
+  intros ? Hm ? Hf ?. assert (∀ o1 o2 r, f !! o1 = Some (o2,r) →
+    index_alive m1 o1 → index_alive m2 o2) by eauto using cmap_refine_alive.
+  assert (∀ o o2 r τ, m1 ⊢ o : τ → f !! o = Some (o2,r) →
+    f' !! o = Some (o2,r)) by (by intros; erewrite <-Hf by eauto).
+  assert (∀ o o2 r τ, m1 ⊢ o : τ → f' !! o = Some (o2,r) →
+    f !! o = Some (o2,r)) by (by intros; erewrite Hf by eauto).
+  destruct Hm as (?&?&?&Hm); split; split_ands;
+    eauto 2 using cmap_valid_weaken; intros o1 o2 r w1 ??.
+  assert (m1 ⊢ o1 : type_of w1) by (rewrite index_typed_alt; eauto).
+  destruct (Hm o1 o2 r w1) as (w2&w2'&τ&?&?&?); eauto.
+  exists w2 w2' τ; eauto using ctree_refine_weaken, ctree_lookup_weaken.
+Qed.
 Lemma cmap_lookup_refine Γ f m1 m2 a1 a2 w1 τ :
   ✓ Γ → m1 ⊑{Γ,f} m2 → a1 ⊑{Γ,f@m1↦m2} a2 : τ → m1 !!{Γ} a1 = Some w1 →
   ∃ w2, m2 !!{Γ} a2 = Some w2 ∧ w1 ⊑{Γ,f@m1↦m2} w2 : τ.
 Proof.
-  destruct m1 as [m1], m2 as [m2]; simpl; intros ? (_&_&_&Hm) Ha ?.
+  destruct m1 as [m1], m2 as [m2]; simpl; intros ? (_&_&_&Hm) Ha Hw1.
   assert ((Γ,CMap m1) ⊢ a1 : τ) by eauto using addr_refine_typed_l.
   assert ((Γ,CMap m2) ⊢ a2 : τ) by eauto using addr_refine_typed_r.
   case_option_guard; simplify_type_equality'.
@@ -496,11 +518,11 @@ Proof.
   destruct (w1' !!{Γ} addr_ref Γ a1) as [w1''|] eqn:?; simplify_equality'.
   destruct (addr_ref_refine Γ f (CMap m1) (CMap m2) a1 a2 τ) as (r&?&->); auto.
   destruct (Hm (addr_index a1) (addr_index a2) r w1')
-    as (w2&w2'&->&Hr&?); auto; csimpl.
-  destruct (ctree_lookup_Some Γ (CMap m1) w1' (type_of w1')
+    as (w2&w2'&τ2&->&Hr&?); auto; csimpl.
+  destruct (ctree_lookup_Some Γ (CMap m1) w1' τ2
     (addr_ref Γ a1) w1'') as (σ'&?&?); eauto using ctree_refine_typed_l.
   rewrite ctree_lookup_app, Hr; csimpl.
-  destruct (ctree_lookup_refine Γ f (CMap m1) (CMap m2) w1' w2' (type_of w1')
+  destruct (ctree_lookup_refine Γ f (CMap m1) (CMap m2) w1' w2' τ2
     (addr_ref Γ a1) w1'') as (w2''&->&?); auto; csimpl.
   rewrite <-(decide_iff _ _ _ _ (addr_is_obj_refine _ _ _ _ _ _ _ Ha));
     case_decide; simplify_equality'.
@@ -510,9 +532,10 @@ Proof.
       as (?&?&Hidx) by (eapply (index_typed_alt (CMap m1)),
       addr_typed_index, addr_refine_typed_l; eauto); simplify_type_equality'.
     eapply ref_set_offset_typed_unique; eauto.
+    erewrite <-(ctree_refine_type_of_l _ _ _ _ _ _ τ2) by eauto.
     rewrite <-Hidx; eauto using addr_typed_ref_base_typed, addr_refine_typed_l. }
   case_option_guard; simplify_equality'; rewrite option_guard_True
-    by intuition eauto using ctree_refine_Forall, pbit_refine_unshared.
+    by intuition eauto using pbits_refine_unshared, ctree_flatten_refine.
   assert (τ = ucharT) by (intuition eauto using
     addr_not_obj_type, addr_refine_typed_l); subst.
   erewrite <-addr_ref_byte_refine by eauto. eauto using ctree_lookup_byte_refine.
@@ -523,24 +546,25 @@ Lemma cmap_alter_refine Γ f g1 g2 m1 m2 a1 a2 w1 w2 τ :
   g1 w1 ⊑{Γ,f@m1↦m2} g2 w2 : τ → ¬ctree_unmapped (g1 w1) →
   cmap_alter Γ g1 a1 m1 ⊑{Γ,f} cmap_alter Γ g2 a2 m2.
 Proof.
-  intros ? (?&Hm1&Hm2&Hm) Ha Hw1 Hw2 ?? Hgw.
+  intros ? (?&Hm1&Hm2&Hm) Ha Hw1 Hw2 Hw1' ? Hgw1.
   assert ((Γ,m1) ⊢ a1 : τ) by eauto using addr_refine_typed_l.
   assert ((Γ,m2) ⊢ a2 : τ) by eauto using addr_refine_typed_r.
   assert ((Γ,m1) ⊢ w1 : τ) by eauto using cmap_lookup_typed.
   assert ((Γ,m2) ⊢ w2 : τ) by eauto using cmap_lookup_typed.
   split; split_ands.
   { eauto 2 using cmap_refine_injective. }
-  { eapply cmap_alter_valid; eauto; simplify_type_equality;
-      eauto using ctree_refine_typed_l. }
-  { eapply cmap_alter_valid; eauto; simplify_type_equality; eauto using
-      ctree_refine_typed_r, ctree_refine_Forall_inv, pbit_refine_unmapped_inv. }
+  { eapply cmap_alter_valid; eauto.
+    simplify_type_equality; eauto using ctree_refine_typed_l. }
+  { eapply cmap_alter_valid;
+      eauto using pbits_refine_mapped, ctree_flatten_refine.
+    simplify_type_equality; eauto using ctree_refine_typed_r. }
   cut (∀ o3 o4 r4 w3, f !! o3 = Some (o4, r4) →
-    cmap_car (cmap_alter Γ g1 a1 m1) !! o3 = Some w3 → ∃ τ' w4 w4',
+    cmap_car (cmap_alter Γ g1 a1 m1) !! o3 = Some w3 → ∃ w4 w4' τ',
     cmap_car (cmap_alter Γ g2 a2 m2) !! o4 = Some w4 ∧
     w4 !!{Γ} (freeze true<$>r4) = Some w4' ∧ w3 ⊑{Γ,f@m1↦m2} w4' : τ').
   { intros help o3 o4 r4 w3 ? Hw3.
-    destruct (help o3 o4 r4 w3) as (τ'&w4&w4'&?&?&?); auto.
-    exists w4 w4'; split_ands; auto. erewrite ctree_refine_type_of_l by eauto.
+    destruct (help o3 o4 r4 w3) as (w4&w4'&τ'&?&?&?); auto.
+    exists w4 w4' τ'; split_ands; auto.
     eapply (ctree_refine_weaken _ _ _ _ m1 m2); eauto 1.
     * intros. eapply cmap_alter_index_typed; eauto.
       by erewrite ctree_refine_type_of_l, type_of_correct by eauto.
@@ -548,10 +572,9 @@ Proof.
       by erewrite ctree_refine_type_of_r, type_of_correct by eauto.
     * eauto using cmap_alter_index_alive.
     * clear dependent o3 o4 r4 w3 τ' w4 w4'. intros o3 o4 r4 ? (w3&?&Hw3).
-      destruct (help o3 o4 r4 w3) as (τ'&w4&w4'&?&?&?); auto.
-      exists w4; split; auto; contradict Hw3.
-      eapply (ctree_refine_Forall_inv _ _ _ m1 m2 _ w4');
-        eauto 2 using ctree_lookup_Forall, pbit_refine_kind_rev. }
+      destruct (help o3 o4 r4 w3) as (w4&w4'&τ'&?&?&?); auto.
+      exists w4; split; auto. contradict Hw3; eauto using
+        ctree_lookup_Forall, pbit_refine_freed_inv, ctree_flatten_refine. }
   intros o3 o4 r4 w3 ? Hw3. destruct m1 as [m1], m2 as [m2]; simpl in *.
   repeat case_option_guard; simplify_type_equality'.
   destruct (addr_ref_refine Γ f (CMap m1) (CMap m2) a1 a2 τ) as (r2&?&Hr2); auto.
@@ -561,27 +584,27 @@ Proof.
   rewrite ctree_lookup_app in Hw2.
   destruct (w1' !!{Γ} addr_ref Γ a1) as [w1''|] eqn:?; simplify_equality'.
   destruct (decide (o3 = addr_index a1)); simplify_map_equality'.
-  * destruct (Hm (addr_index a1) (addr_index a2) r2 w1') as (?&w2''&?&?&?); auto.
-    destruct (ctree_lookup_refine Γ f (CMap m1) (CMap m2) w1' w2'' (type_of w1')
+  * destruct (Hm (addr_index a1) (addr_index a2) r2 w1') as (?&w2''&τ2&?&?&?); auto.
+    destruct (ctree_lookup_refine Γ f (CMap m1) (CMap m2) w1' w2'' τ2
       (addr_ref Γ a1) w1'') as (w2'''&?&?); auto; simplify_map_equality'.
-    eexists (type_of w1'), _,
-      (ctree_alter Γ _ (addr_ref Γ a1) w2''); split_ands; eauto.
+    eexists _, (ctree_alter Γ _ (addr_ref Γ a1) w2''), τ2; split_ands; eauto.
     { by erewrite ctree_alter_app, ctree_lookup_alter
         by eauto using ctree_lookup_unfreeze. }
     assert (addr_is_obj a1 ↔ addr_is_obj a2) by eauto using addr_is_obj_refine.
     simplify_option_equality; try tauto.
-    { eapply ctree_alter_refine; eauto; simplify_type_equality; eauto. }
+    { eapply ctree_alter_refine; eauto; simplify_type_equality; eauto using
+        ctree_Forall_not, ctree_refine_typed_l, ctree_refine_typed_r. }
     assert (τ = ucharT) by (intuition eauto using addr_not_obj_type); subst.
     erewrite addr_ref_byte_refine in Hw1 |- * by eauto.
     eapply ctree_alter_refine; eauto using ctree_alter_byte_refine.
-    contradict Hgw; eapply (ctree_alter_byte_unmapped _ _ _ w1'');
+    contradict Hgw1. eapply (ctree_alter_byte_unmapped _ _ _ w1'');
       eauto using ctree_alter_lookup_Forall, ctree_refine_typed_l.
-  * destruct (mem_inj_injective_ne f (addr_index a1) (addr_index a2) o3 o4 r2
-      r4) as [?|[??]]; eauto using cmap_refine_injective; simplify_map_equality'.
-    { exists (type_of w3). by apply (Hm o3). }
+  * destruct (mem_inj_injective_ne f (addr_index a1) (addr_index a2) o3 o4 r2 r4)
+      as [?|[??]]; eauto using cmap_refine_injective;
+      simplify_map_equality'; [eauto|].
     destruct (Hm o3 (addr_index a2) r4 w3)
-      as (w4''&w4'&?&?&?); auto; simplify_map_equality'.
-    eexists (type_of w3), _, w4'; split_ands; eauto.
+      as (w4''&w4'&τ4&?&?&?); auto; simplify_map_equality'.
+    eexists _, w4', τ4; split_ands; eauto.
     by erewrite ctree_alter_app, ctree_lookup_alter_disjoint by
       (eauto; by apply ref_disjoint_freeze_l, ref_disjoint_freeze_r).
 Qed.
