@@ -14,7 +14,7 @@ Inductive cexpr (Ti : Set) : Set :=
   | EDeref : cexpr Ti → cexpr Ti
   | EAssign : assign → cexpr Ti → cexpr Ti → cexpr Ti
   | ECall : N → list (cexpr Ti) → cexpr Ti
-  | EAlloc : type Ti → cexpr Ti
+  | EAlloc : type Ti → cexpr Ti → cexpr Ti
   | EFree : cexpr Ti → cexpr Ti
   | EUnOp : unop → cexpr Ti → cexpr Ti
   | EBinOp : binop → cexpr Ti → cexpr Ti → cexpr Ti
@@ -32,7 +32,7 @@ Arguments EAddrOf {_} _.
 Arguments EDeref {_} _.
 Arguments EAssign {_} _ _ _.
 Arguments ECall {_} _ _.
-Arguments EAlloc {_} _.
+Arguments EAlloc {_} _ _.
 Arguments EFree {_} _.
 Arguments EUnOp {_} _ _.
 Arguments EBinOp {_} _ _ _.
@@ -140,10 +140,11 @@ Definition to_expr (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) (m : mem
      τses ← fmap to_R <$> mapM go ces;
      guard (Forall2 (cast_typed Γ) (snd <$> τses) τs);
      Some (call f @ cast{τs}* (fst <$> τses), inr σ)
-  | EAlloc τ =>
+  | EAlloc τ ce =>
      guard (✓{Γ} τ);
-     guard (int_typed (size_of Γ τ) sptrT);
-     Some (& (alloc τ), inr (τ.*))
+     '(e,τe) ← to_R <$> go ce;
+     _ ← maybe_TBase τe ≫= maybe_TInt;
+     Some (& (alloc{τ} e), inr (τ.*))
   | EFree ce =>
      '(e,τ) ← to_R <$> go ce; _ ← maybe_TBase τ ≫= maybe_TPtr;
      Some (free (.* e), inr voidT)
@@ -369,7 +370,7 @@ Context (Paddrof : ∀ ce, P ce → P (EAddrOf ce)).
 Context (Pderef : ∀ ce, P ce → P (EDeref ce)).
 Context (Passign : ∀ ass ce1 ce2, P ce1 → P ce2 → P (EAssign ass ce1 ce2)).
 Context (Pcall : ∀ f ces, Forall P ces → P (ECall f ces)).
-Context (Palloc : ∀ τ, P (EAlloc τ)).
+Context (Palloc : ∀ τ ce, P ce → P (EAlloc τ ce)).
 Context (Pfree : ∀ ce, P ce → P (EFree ce)).
 Context (Punop : ∀ op ce, P ce → P (EUnOp op ce)).
 Context (Pbinop : ∀ op ce1 ce2, P ce1 → P ce2 → P (EBinOp op ce1 ce2)).
@@ -392,7 +393,7 @@ Definition cexpr_ind_alt : ∀ e, P e :=
   | EAssign _ ce1 ce2 => Passign _ _ _ (go ce1) (go ce2)
   | ECall f ces => Pcall _ ces $ list_ind (Forall P)
       (Forall_nil_2 _) (λ ce _, Forall_cons_2 _ _ _ (go ce)) ces
-  | EAlloc _ => Palloc _
+  | EAlloc _ ce => Palloc _ _ (go ce)
   | EFree ce => Pfree _ (go ce)
   | EUnOp _ ce => Punop _ _ (go ce)
   | EBinOp _ ce1 ce2 => Pbinop _ _ _ (go ce1) (go ce2)
@@ -475,6 +476,7 @@ Proof.
     | _ : maybe_inl ?τlr = Some _ |- _ => is_var τlr; destruct τlr
     | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
     | _ : maybe_TPtr ?τb = Some _ |- _ => is_var τb; destruct τb
+    | _ : maybe_TInt ?τb = Some _ |- _ => is_var τb; destruct τb
     | _ : maybe_TCompound ?τ = Some _ |- _ => is_var τ; destruct τ
     | H: assign_type_of _ _ _ _ = Some _ |- _ =>
        apply assign_type_of_correct in H

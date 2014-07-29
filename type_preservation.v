@@ -64,8 +64,12 @@ Proof.
   * typed_inversion_all.
     split_ands; eauto 7 using addr_elt_typed, addr_elt_strict.
   * typed_inversion_all; split_ands.
-    + eauto using mem_alloc_valid.
-    + eauto using addr_top_typed, addr_top_strict, index_typed_alloc.
+    + eapply mem_alloc_valid; eauto.
+      - apply TArray_valid; auto. rewrite (Z2Nat.inj_iff _ 0); lia.
+      - by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id by lia.
+    + typed_constructor; eauto using addr_top_array_strict.
+      apply addr_top_array_typed; eauto. apply index_typed_alloc; auto.
+      apply TArray_valid; auto. rewrite (Z2Nat.inj_iff _ 0); lia.
     + eauto using index_typed_alloc_other.
   * typed_inversion_all; eauto 7 using mem_free_valid, index_typed_free.
   * typed_inversion_all;

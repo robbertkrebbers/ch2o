@@ -76,9 +76,9 @@ Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
   | EElt_typed e τ n :
      expr_typed' Γ Γf m τs e (inl (τ.[n])) →
      expr_typed' Γ Γf m τs (elt e) (inl τ)
-  | EAlloc_typed τ :
-     ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
-     expr_typed' Γ Γf m τs (alloc τ) (inl τ)
+  | EAlloc_typed τ e τi :
+     ✓{Γ} τ → expr_typed' Γ Γf m τs e (inr (intT τi)) →
+     expr_typed' Γ Γf m τs (alloc{τ} e) (inl τ)
   | EFree_typed e τ :
      expr_typed' Γ Γf m τs e (inl τ) →
      expr_typed' Γ Γf m τs (free e) (inr voidT)
@@ -127,12 +127,14 @@ Section expr_typed_ind.
     (Γ,Γf,m,τs) ⊢ e : inl τ → P e (inl τ) → P (load e) (inr τ)).
   Context (Pelt : ∀ e τ n,
      (Γ,Γf,m,τs) ⊢ e : inl (τ.[n]) → P e (inl (τ.[n])) → P (elt e) (inl τ)).
-  Context (Palloc : ∀ τ,
-     ✓{Γ} τ → int_typed (size_of Γ τ) sptrT → P (alloc τ) (inl τ)).
+  Context (Palloc : ∀ τ e τi,
+     ✓{Γ} τ → (Γ,Γf,m,τs) ⊢ e : inr (intT τi) →
+     P e (inr (intT τi)) → P (alloc{τ} e) (inl τ)).
   Context (Pfree : ∀ e τ,
      (Γ,Γf,m,τs) ⊢ e : inl τ → P e (inl τ) → P (free e) (inr voidT)).
   Context (Punop : ∀ op e τ σ,
-     unop_typed op τ σ → (Γ,Γf,m,τs) ⊢ e : inr τ → P e (inr τ) → P (@{op} e) (inr σ)).
+     unop_typed op τ σ →
+     (Γ,Γf,m,τs) ⊢ e : inr τ → P e (inr τ) → P (@{op} e) (inr σ)).
   Context (Pbinop : ∀ op e1 e2 τ1 τ2 σ,
      binop_typed op τ1 τ2 σ → (Γ,Γf,m,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
      (Γ,Γf,m,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 @{op} e2) (inr σ)).
@@ -171,6 +173,8 @@ Inductive ectx_item_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      ectx_item_typed' Γ Γf m τs (call f @ es1 □ es2) (inr τ) (inr σ)
   | CLoad_typed τ : ectx_item_typed' Γ Γf m τs (load □) (inl τ) (inr τ)
   | CElt_typed τ n : ectx_item_typed' Γ Γf m τs (elt □) (inl (τ.[n])) (inl τ)
+  | CAlloc_typed τ τi :
+     ✓{Γ} τ → ectx_item_typed' Γ Γf m τs (alloc{τ} □) (inr (intT τi)) (inl τ)
   | CFree_typed τ : ectx_item_typed' Γ Γf m τs (free □) (inl τ) (inr voidT)
   | CUnOp_typed op τ σ :
      unop_typed op τ σ → ectx_item_typed' Γ Γf m τs (@{op} □) (inr τ) (inr σ)
@@ -436,7 +440,7 @@ Lemma ectx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 m1 m2 τs1 τs2 Ei τlr σlr :
   (Γ2,Γf2,m2,τs2) ⊢ Ei : τlr ↣ σlr.
 Proof.
   destruct 2; typed_constructor;
-    eauto using addr_strict_weaken, assign_typed_weaken,
+    eauto using type_valid_weaken, addr_strict_weaken, assign_typed_weaken,
     expr_typed_weaken, lookup_weaken, cast_typed_weaken, Forall2_impl.
 Qed.
 Lemma ectx_typed_weaken Γ1 Γ2 Γf1 Γf2 m1 m2 τs1 τs2 E τlr σlr :

@@ -50,13 +50,14 @@ Inductive ehstep `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti) (ρ : stack) :
      mem_writable Γ a m → assign_sem Γ m a v ass v' va →
      Γ\ ρ ⊢ₕ %{Ω1} a ::={ass} #{Ω2} v, m ⇒
              #{lock_singleton Γ a ∪ Ω1 ∪ Ω2} v', mem_lock Γ a (<[a:=va]{Γ}>m)
-  | estep_load Ω a v m :
+  | estep_load m Ω a v :
      m !!{Γ} a = Some v → Γ\ ρ ⊢ₕ load (%{Ω} a), m ⇒ #{Ω} v, mem_force Γ a m
-  | estep_elt Ω a m :
+  | estep_elt m Ω a :
      Γ\ ρ ⊢ₕ elt (%{Ω} a), m ⇒ %{Ω} (addr_elt Γ a), m
-  | estep_alloc m o τ :
-     mem_allocable o m →
-     Γ\ ρ ⊢ₕ alloc τ, m ⇒ %(addr_top o τ), mem_alloc Γ o true τ m
+  | estep_alloc m Ω o τi τ n :
+     mem_allocable o m → (0 < n)%Z → int_typed (n * size_of Γ τ) sptrT →
+     Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒
+             %{Ω} (addr_top_array o τ n), mem_alloc Γ o true (τ.[Z.to_nat n]) m
   | estep_free m Ω a :
      mem_freeable a m →
      Γ\ ρ ⊢ₕ free (%{Ω} a), m ⇒ #{Ω} voidV, mem_free (addr_index a) m
@@ -773,10 +774,12 @@ Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
 function scope as variables are given an arbitrary memory index. The following
 lemmas, that are useful to automatically perform reduction steps, pick a fully
 determined one. *)
-Lemma estep_alloc_fresh ρ m τ :
+Lemma estep_alloc_fresh ρ m Ω τ τi n :
   let o := fresh (dom indexset m) in
-  Γ\ ρ ⊢ₕ alloc τ, m ⇒ %(addr_top o τ), mem_alloc Γ o true τ m.
-Proof. constructor. eapply mem_allocable_alt, is_fresh. Qed.
+  (0 < n)%Z → int_typed (n * size_of Γ τ) sptrT →
+  Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒
+          %{Ω} (addr_top_array o τ n), mem_alloc Γ o true (τ.[Z.to_nat n]) m.
+Proof. constructor; auto. eapply mem_allocable_alt, is_fresh. Qed.
 Lemma cstep_in_block_fresh m k τ s :
   let o := fresh (dom indexset m) in
   Γ\ δ ⊢ₛ State k (Stmt ↘ (blk{τ} s)) m ⇒

@@ -89,6 +89,8 @@ Section address_operations.
       ¬addr_is_obj a1 ∧ ¬addr_is_obj a2 ∧
       addr_ref_byte Γ a1 ≠ addr_ref_byte Γ a2).
   Definition addr_top (o : index) (σ : type Ti) : addr Ti := Addr o [] 0 σ σ σ.
+  Definition addr_top_array (o : index) (σ : type Ti) (n : Z) : addr Ti :=
+    let n' := Z.to_nat n in Addr o [RArray 0 σ n'] 0 (σ.[n']) σ σ.
 
   Definition addr_plus_ok (Γ : env Ti) (m : M) (j : Z) (a : addr Ti) : Prop :=
     index_alive m (addr_index a) ∧
@@ -412,13 +414,31 @@ Lemma addr_top_typed Γ m o τ :
   ✓ Γ → m ⊢ o : τ → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
   (Γ,m) ⊢ addr_top o τ : τ.
 Proof.
-  constructor; simpl; split_ands; eauto using Nat.mod_0_l, size_of_ne_0; [|lia].
+  constructor; simpl; eauto using Nat.mod_0_l, size_of_ne_0; [|lia].
   by apply ref_typed_nil.
 Qed.
 Lemma addr_top_strict Γ o τ : ✓ Γ → ✓{Γ} τ → addr_strict Γ (addr_top o τ).
 Proof.
   unfold addr_strict, addr_top; simpl. rewrite Nat.mul_1_r.
   eauto using size_of_pos.
+Qed.
+Lemma addr_top_array_typed Γ m o τ (n : Z) :
+  ✓ Γ → m ⊢ o : τ.[Z.to_nat n] → ✓{Γ} τ → (0 < n)%Z →
+  int_typed (n * size_of Γ τ) sptrT → (Γ,m) ⊢ addr_top_array o τ n : τ.
+Proof.
+  intros. assert (0 < Z.to_nat n) by (apply (Z2Nat.inj_lt 0); lia).
+  constructor; simpl; auto.
+  * apply TArray_valid; auto with lia.
+  * by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id by lia.
+  * by repeat typed_constructor. 
+  * lia.
+  * eauto using Nat.mod_0_l, size_of_ne_0.
+Qed.
+Lemma addr_top_array_strict Γ o τ n :
+  ✓ Γ → ✓{Γ} τ → (0 < n)%Z → addr_strict Γ (addr_top_array o τ n).
+Proof.
+  intros. apply Nat.mul_pos_pos; simpl; eauto using size_of_pos.
+  apply (Z2Nat.inj_lt 0); lia.
 Qed.
 Lemma addr_plus_typed Γ m a σ j :
   ✓ Γ → (Γ,m) ⊢ a : σ → addr_plus_ok Γ m j a → (Γ,m) ⊢ addr_plus Γ j a : σ.
@@ -857,7 +877,9 @@ Lemma addr_top_refine Γ f m1 m2 o1 o2 τ :
   ✓{Γ} τ → int_typed (size_of Γ τ) sptrT → f !! o1 = Some (o2,[]) →
   addr_top o1 τ ⊑{Γ,f@m1↦m2} addr_top o2 τ : τ.
 Proof.
-  econstructor; eauto using Nat.mod_0_l, size_of_ne_0; try by constructor.
+  econstructor; eauto using Nat.mod_0_l, size_of_ne_0.
+  * by constructor.
+  * by constructor.
   * simpl; lia.
   * apply ref_refine_nil_alt; simpl; auto with lia.
 Qed.
