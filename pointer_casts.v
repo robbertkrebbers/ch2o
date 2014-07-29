@@ -14,31 +14,31 @@ Notation "(>*>)" := castable (only parsing) : C_scope.
 Hint Extern 0 (_ >*> _) => reflexivity.
 
 Section castable.
-  Context `{EnvSpec Ti}.
+Context `{EnvSpec Ti}.
 
-  Lemma castable_alt τ1 τ2 : τ1 >*> τ2 ↔ τ1 = τ2 ∨ τ2 = ucharT ∨ τ2 = voidT.
-  Proof. split. destruct 1; auto. intros [-> |[->| ->]]; constructor. Qed.
-  Global Instance castable_dec (τ1 τ2 : type Ti) : Decision (τ1 >*> τ2).
-  Proof.
-   refine (cast_if (decide (τ1 = τ2 ∨ τ2 = ucharT ∨ τ2 = voidT)));
-    abstract by rewrite castable_alt.
-  Defined.
-  Global Instance: Reflexive (>*>).
-  Proof. constructor. Qed.
-  Lemma castable_divide Γ τ1 τ2 : τ1 >*> τ2 → (size_of Γ τ2 | size_of Γ τ1).
-  Proof.
-    rewrite castable_alt. intros [->|[->| ->]];
-      rewrite ?size_of_void, ?size_of_uchar; auto using Nat.divide_1_l.
-  Qed.
-  Lemma castable_type_valid Γ τ σ : ✓{Γ} τ → τ >*> σ → ✓{Γ} σ.
-  Proof. by destruct 2; repeat constructor. Qed.
-  Lemma castable_ptr_type_valid Γ τ σ :
-    ptr_type_valid Γ τ → τ >*> σ → ptr_type_valid Γ σ.
-  Proof. destruct 2; auto; repeat constructor. Qed.
-  Lemma castable_size_of Γ τ σ :
-    ✓ Γ → ✓{Γ} τ → τ >*> σ → size_of Γ σ ≤ size_of Γ τ.
-  Proof.
-    intros HΓ Hτ. pose proof (size_of_pos _ _ HΓ Hτ). rewrite castable_alt.
-    intros [->|[->| ->]]; rewrite ?size_of_uchar, ?size_of_void; lia.
-  Qed.
+Lemma castable_alt τ1 τ2 : τ1 >*> τ2 ↔ τ1 = τ2 ∨ τ2 = ucharT ∨ τ2 = voidT.
+Proof. split. destruct 1; auto. intros [-> |[->| ->]]; constructor. Qed.
+Global Instance castable_dec (τ1 τ2 : type Ti) : Decision (τ1 >*> τ2).
+Proof.
+ refine (cast_if (decide (τ1 = τ2 ∨ τ2 = ucharT ∨ τ2 = voidT)));
+  abstract by rewrite castable_alt.
+Defined.
+Global Instance: Reflexive (>*>).
+Proof. constructor. Qed.
+Lemma castable_divide Γ τ1 τ2 : τ1 >*> τ2 → (size_of Γ τ2 | size_of Γ τ1).
+Proof.
+  rewrite castable_alt. intros [->|[->| ->]];
+    rewrite ?size_of_void, ?size_of_uchar; auto using Nat.divide_1_l.
+Qed.
+Lemma castable_type_valid Γ τ σ : ✓{Γ} τ → τ >*> σ → ✓{Γ} σ.
+Proof. by destruct 2; repeat constructor. Qed.
+Lemma castable_ptr_type_valid Γ τ σ :
+  ptr_type_valid Γ τ → τ >*> σ → ptr_type_valid Γ σ.
+Proof. destruct 2; auto; repeat constructor. Qed.
+Lemma castable_size_of Γ τ σ :
+  ✓ Γ → ✓{Γ} τ → τ >*> σ → size_of Γ σ ≤ size_of Γ τ.
+Proof.
+  intros HΓ Hτ. pose proof (size_of_pos _ _ HΓ Hτ). rewrite castable_alt.
+  intros [->|[->| ->]]; rewrite ?size_of_uchar, ?size_of_void; lia.
+Qed.
 End castable.
