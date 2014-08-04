@@ -138,6 +138,46 @@ Qed.
 Lemma bind_with_Some {A} (x : option A) : x ≫= Some = x.
 Proof. by destruct x. Qed.
 
+(** * Union, intersection and difference *)
+Instance option_union_with {A} : UnionWith A (option A) := λ f x y,
+  match x, y with
+  | Some a, Some b => f a b
+  | Some a, None => Some a
+  | None, Some b => Some b
+  | None, None => None
+  end.
+Instance option_intersection_with {A} : IntersectionWith A (option A) :=
+  λ f x y, match x, y with Some a, Some b => f a b | _, _ => None end.
+Instance option_difference_with {A} : DifferenceWith A (option A) := λ f x y,
+  match x, y with
+  | Some a, Some b => f a b
+  | Some a, None => Some a
+  | None, _ => None
+  end.
+Instance option_union {A} : Union (option A) := union_with (λ x _, Some x).
+Lemma option_union_Some {A} (x y : option A) z :
+  x ∪ y = Some z → x = Some z ∨ y = Some z.
+Proof. destruct x, y; intros; simplify_equality; auto. Qed.
+
+Section option_union_intersection_difference.
+  Context {A} (f : A → A → option A).
+  Global Instance: LeftId (=) None (union_with f).
+  Proof. by intros [?|]. Qed.
+  Global Instance: RightId (=) None (union_with f).
+  Proof. by intros [?|]. Qed.
+  Global Instance: Commutative (=) f → Commutative (=) (union_with f).
+  Proof. by intros ? [?|] [?|]; compute; rewrite 1?(commutative f). Qed.
+  Global Instance: LeftAbsorb (=) None (intersection_with f).
+  Proof. by intros [?|]. Qed.
+  Global Instance: RightAbsorb (=) None (intersection_with f).
+  Proof. by intros [?|]. Qed.
+  Global Instance: Commutative (=) f → Commutative (=) (intersection_with f).
+  Proof. by intros ? [?|] [?|]; compute; rewrite 1?(commutative f). Qed.
+  Global Instance: RightId (=) None (difference_with f).
+  Proof. by intros [?|]. Qed.
+End option_union_intersection_difference.
+
+(** * Tactics *)
 Tactic Notation "case_option_guard" "as" ident(Hx) :=
   match goal with
   | H : context C [@mguard option _ ?P ?dec _ ?x] |- _ =>
@@ -199,6 +239,7 @@ Tactic Notation "simplify_option_equality" "by" tactic3(tac) :=
   repeat match goal with
   | _ => progress simplify_equality'
   | _ => progress simpl_option_monad by tac
+  | H : _ ∪ _ = Some _ |- _ => apply option_union_Some in H; destruct H
   | H : mbind (M:=option) ?f ?o = ?x |- _ =>
     match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
     match x with Some _ => idtac | None => idtac | _ => fail 1 end;
@@ -223,38 +264,3 @@ Tactic Notation "simplify_option_equality" "by" tactic3(tac) :=
   | _ => progress case_option_guard
   end.
 Tactic Notation "simplify_option_equality" := simplify_option_equality by eauto.
-
-(** * Union, intersection and difference *)
-Instance option_union_with {A} : UnionWith A (option A) := λ f x y,
-  match x, y with
-  | Some a, Some b => f a b
-  | Some a, None => Some a
-  | None, Some b => Some b
-  | None, None => None
-  end.
-Instance option_intersection_with {A} : IntersectionWith A (option A) :=
-  λ f x y, match x, y with Some a, Some b => f a b | _, _ => None end.
-Instance option_difference_with {A} : DifferenceWith A (option A) := λ f x y,
-  match x, y with
-  | Some a, Some b => f a b
-  | Some a, None => Some a
-  | None, _ => None
-  end.
-
-Section option_union_intersection_difference.
-  Context {A} (f : A → A → option A).
-  Global Instance: LeftId (=) None (union_with f).
-  Proof. by intros [?|]. Qed.
-  Global Instance: RightId (=) None (union_with f).
-  Proof. by intros [?|]. Qed.
-  Global Instance: Commutative (=) f → Commutative (=) (union_with f).
-  Proof. by intros ? [?|] [?|]; compute; rewrite 1?(commutative f). Qed.
-  Global Instance: LeftAbsorb (=) None (intersection_with f).
-  Proof. by intros [?|]. Qed.
-  Global Instance: RightAbsorb (=) None (intersection_with f).
-  Proof. by intros [?|]. Qed.
-  Global Instance: Commutative (=) f → Commutative (=) (intersection_with f).
-  Proof. by intros ? [?|] [?|]; compute; rewrite 1?(commutative f). Qed.
-  Global Instance: RightId (=) None (difference_with f).
-  Proof. by intros [?|]. Qed.
-End option_union_intersection_difference.
