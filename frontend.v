@@ -95,6 +95,8 @@ Fixpoint lookup_var (m : mem Ti) (x : N)
      if decide (x = y) then Some (var{τ} i, τ)
      else lookup_var m x (S i) xs
   end.
+Definition is_pseudo_NULL (e : expr Ti) : bool :=
+  match e with #{_} (intV{_} 0) => true | _ => false end.
 Definition to_R (eτlr : expr Ti * lrtype Ti) : expr Ti * type Ti :=
   match eτlr with
   | (e, inl τ) =>
@@ -102,7 +104,58 @@ Definition to_R (eτlr : expr Ti * lrtype Ti) : expr Ti * type Ti :=
     | Some (τ',_) => (& (elt e), τ'.*) | None => (load e, τ)
     end
   | (e, inr τ) => (e,τ)
-  end%E.
+  end.
+Definition to_R_NULL (σ : type Ti)
+    (eτlr : expr Ti * lrtype Ti) : expr Ti * type Ti :=
+  let (e,τ) := to_R eτlr in
+  match σ with
+  | τp.* => if is_pseudo_NULL e then (# (ptrV (NULL τp)), τp.*) else (e,τ)
+  | _ => (e,τ)
+  end.
+Definition convert_ptrs (eτ1 eτ2 : expr Ti * type Ti) :
+    option (expr Ti * expr Ti * type Ti) :=
+  let (e1,τ1) := eτ1 in let (e2,τ2) := eτ2 in
+  match τ1, τ2 with
+  | τp1.*, τp2.* =>
+     if decide (τp1 = voidT) then Some (e1, cast{voidT.*} e2, voidT.*)
+     else if decide (τp2 = voidT) then Some (cast{voidT.*} e1, e2, voidT.*)
+     else None
+  | τp1.*, intT _ =>
+     guard (is_pseudo_NULL e2); Some (e1, # (ptrV (NULL τp1)), τp1.*)
+  | intT _, τp2.* =>
+     guard (is_pseudo_NULL e1); Some (# (ptrV (NULL τp2)), e2, τp2.*)
+  | _, _ => None
+  end.
+Definition to_if_expr (e1 : expr Ti)
+    (eτ2 eτ3 : expr Ti * type Ti) : option (expr Ti * lrtype Ti) :=
+  (** 1.) *) (
+    (** same types *)
+    let (e2,τ2) := eτ2 in let (e3,τ3) := eτ3 in
+    guard (τ2 = τ3); Some (if{e1} e2 else e3, inr τ2)) ∪
+  (** 2.) *) (
+    (** common arithmetic conversions *)
+    let (e2,τ2) := eτ2 in let (e3,τ3) := eτ3 in
+    match τ2, τ3 with
+    | intT τi2, intT τi3 =>
+       let τi' := int_promote τi2 ∪ int_promote τi3 in
+       Some (if{e1} cast{intT τi'} e2 else cast{intT τi'} e3, inr (intT τi'))
+    | _, _ => None
+    end) ∪
+  (** 3.) *) (
+    (** one side is NULL or void *)
+    '(e2,e3,τ) ← convert_ptrs eτ2 eτ3;
+    Some (if{e1} e2 else e3, inr τ)).
+Definition to_binop_expr (op : binop)
+    (eτ1 eτ2 : expr Ti * type Ti) : option (expr Ti * lrtype Ti) :=
+  (** 1.) *) (
+    let (e1,τ1) := eτ1 in let (e2,τ2) := eτ2 in
+    σ ← binop_type_of op τ1 τ2; Some (e1 @{op} e2, inr σ)) ∪
+  (** 2.) *) (
+    (** one side is NULL or void *)
+    guard (op = CompOp EqOp);
+    '(e1,e2,τ) ← convert_ptrs eτ1 eτ2;
+    σ ← binop_type_of (CompOp EqOp) τ τ;
+    Some (e1 @{op} e2, inr σ)).
 Definition to_expr (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
     (xs : var_env Ti) : cexpr Ti → option (expr Ti * lrtype Ti) :=
   fix go ce :=
@@ -124,6 +177,7 @@ Definition to_expr (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) (m : mem
   | EDeref ce =>
      '(e,τ) ← to_R <$> go ce;
      τp ← maybe_TBase τ ≫= maybe_TPtr;
+     guard (✓{Γ} τp);
      Some (.* e, inl τp)
   | EAddrOf ce =>
      '(e,τlr) ← go ce;
@@ -132,37 +186,39 @@ Definition to_expr (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) (m : mem
   | EAssign ass ce1 ce2 =>
      '(e1,τlr1) ← go ce1;
      τ1 ← maybe_inl τlr1;
-     '(e2,τ2) ← to_R <$> go ce2;
+     '(e2,τ2) ← to_R_NULL τ1 <$> go ce2;
      σ ← assign_type_of Γ τ1 τ2 ass;
      Some (e1 ::={ass} e2, inr σ)
   | ECall f ces =>
      '(τs,σ) ← Γf !! (f : funname);
-     τses ← fmap to_R <$> mapM go ces;
-     guard (Forall2 (cast_typed Γ) (snd <$> τses) τs);
-     Some (call f @ cast{τs}* (fst <$> τses), inr σ)
+     guard (length ces = length τs);
+     eτlrs ← mapM go ces;
+     let τes := zip_with to_R_NULL τs eτlrs in 
+     guard (Forall2 (cast_typed Γ) (snd <$> τes) τs);
+     Some (call f @ cast{τs}* (fst <$> τes), inr σ)
   | EAlloc τ ce =>
      guard (✓{Γ} τ);
      '(e,τe) ← to_R <$> go ce;
      _ ← maybe_TBase τe ≫= maybe_TInt;
      Some (& (alloc{τ} e), inr (τ.*))
   | EFree ce =>
-     '(e,τ) ← to_R <$> go ce; _ ← maybe_TBase τ ≫= maybe_TPtr;
+     '(e,τ) ← to_R <$> go ce;
+     τp ← maybe_TBase τ ≫= maybe_TPtr;
+     guard (✓{Γ} τp);
      Some (free (.* e), inr voidT)
   | EUnOp op ce =>
      '(e,τ) ← to_R <$> go ce;
      σ ← unop_type_of op τ;
      Some (@{op} e, inr σ)
   | EBinOp op ce1 ce2 =>
-     '(e1,τ1) ← to_R <$> go ce1;
-     '(e2,τ2) ← to_R <$> go ce2;
-     σ ← binop_type_of op τ1 τ2;
-     Some (e1 @{op} e2, inr σ)
+     eτ1 ← to_R <$> go ce1;
+     eτ2 ← to_R <$> go ce2;
+     to_binop_expr op eτ1 eτ2
   | EIf ce1 ce2 ce3 =>
      '(e1,τ1) ← to_R <$> go ce1; _ ← maybe_TBase τ1;
-     '(e2,τ2) ← to_R <$> go ce2;
-     '(e3,τ3) ← to_R <$> go ce3;
-     guard (τ2 = τ3);
-     Some (if{e1} e2 else e3, inr τ3)
+     eτ2 ← to_R <$> go ce2;
+     eτ3 ← to_R <$> go ce3;
+     to_if_expr e1 eτ2 eτ3
   | EComma ce1 ce2 =>
      '(e1,τ1) ← to_R <$> go ce1;
      '(e2,τ2) ← to_R <$> go ce2;
@@ -178,7 +234,8 @@ Definition to_expr (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) (m : mem
      Some (if{e1} #(intV{sintT} 0)
            else (if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)), inr sintT)
   | ECast σ ce =>
-     '(e,τ) ← to_R <$> go ce;
+     guard (ptr_type_valid Γ σ);
+     '(e,τ) ← to_R_NULL σ <$> go ce;
      guard (cast_typed Γ τ σ);
      Some (cast{σ} e, inr σ)
   | EField ce x =>
@@ -189,7 +246,7 @@ Definition to_expr (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) (m : mem
      i ← Γn !! s ≫= list_find (x =);
      σ ← σs !! i;
      Some (e .> i, inl σ)
-  end%E.
+  end.
 
 Global Instance cstmt_labels : Labels (cstmt Ti) :=
   fix go cs := let _ : Labels _ := @go in
@@ -240,10 +297,11 @@ Definition alloc_global (Γn : rename_env) (Γ : env Ti) (m : mem Ti) (xs : var_
     (x : N) (τ : type Ti) (mce : option (cexpr Ti)) : option (mem Ti * var_env Ti) :=
   match mce with
   | Some ce =>
-     '(e,τ') ← to_R <$> to_expr Γn Γ ∅ m xs ce;
-     guard (τ = τ');
+     guard (✓{Γ} τ);
      guard (int_typed (size_of Γ τ) sptrT);
-     v ← ⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr;
+     '(e,τ') ← to_R_NULL τ <$> to_expr Γn Γ ∅ m xs ce;
+     guard (cast_typed Γ τ' τ);
+     v ← ⟦ cast{τ} e ⟧ Γ ∅ [] m ≫= maybe_inr;
      let o := fresh (dom _ m) in
      Some (<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o false τ m), (x,inl o) :: xs)
   | None =>
@@ -278,7 +336,7 @@ Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
   | SBlock x τ (Some ce) cs =>
      guard (✓{Γ} τ);
      guard (int_typed (size_of Γ τ) sptrT);
-     '(e,τ') ← to_R <$> to_expr Γn Γ ∅ m ((x,inr τ) :: xs) ce;
+     '(e,τ') ← to_R <$> to_expr Γn Γ Γf m ((x,inr τ) :: xs) ce;
      guard (τ = τ');
      '(m,s,cmσ) ← go m ((x,inr τ) :: xs) Ls mLc mLb cs;
      Some (m, blk{τ} (var{τ} 0 ::= e ;; s), cmσ)
@@ -311,9 +369,9 @@ Definition extend_funtypes (Γ : env Ti) (f : funname) (τs : list (type Ti))
   match Γf !! f with
   | Some (τs',τ') => guard (τs' = τs); guard (τ' = τ); Some Γf
   | None =>
-     guard (✓{Γ} τ);
      guard (✓{Γ}* τs);
      guard (Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs);
+     guard (✓{Γ} τ);
      Some (<[f:=(τs,τ)]>Γf)
   end.
 Fixpoint to_envs_go (Θ : list (N * decl Ti)) : option
@@ -419,8 +477,11 @@ Implicit Types τ σ : type Ti.
 Implicit Types τlr : lrtype Ti.
 
 Arguments to_R _ _ : simpl never.
+Arguments convert_ptrs _ _ _ _ : simpl never.
 Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
 Hint Extern 1 (int_typed _ _) => by apply int_typed_small.
+Hint Extern 10 (cast_typed _ _ _) => constructor.
+Hint Extern 10 (base_cast_typed _ _ _) => constructor.
 
 Fixpoint var_env_stack_types (xs : var_env Ti) : list (type Ti) :=
   match xs with
@@ -436,13 +497,22 @@ Lemma var_env_stack_types_snd (ys : list (N * type Ti)) :
   var_env_stack_types (prod_map id inr <$> ys) = snd <$> ys.
 Proof. induction ys; f_equal'; auto. Qed.
 
-Lemma to_R_typed Γ Γf m τs e e' τlr τ' :
+Lemma to_R_typed Γ Γf m τs e τlr e' τ' :
   to_R (e,τlr) = (e',τ') → (Γ,Γf,m,τs) ⊢ e : τlr → (Γ,Γf,m,τs) ⊢ e' : inr τ'.
 Proof.
   unfold to_R; intros; destruct τlr as [τl|τr]; simplify_equality'; auto.
   destruct (maybe_TArray τl) as [[τ n]|] eqn:Hτ; simplify_equality'.
   { destruct τl; simplify_equality'. typed_constructor; eauto. }
   by typed_constructor.
+Qed.
+Lemma to_R_NULL_typed Γ Γf m τs σ e τlr e' τ' :
+  to_R_NULL σ (e,τlr) = (e',τ') → ptr_type_valid Γ σ →
+  (Γ,Γf,m,τs) ⊢ e : τlr → (Γ,Γf,m,τs) ⊢ e' : inr τ'.
+Proof.
+  unfold to_R_NULL. destruct (to_R (e,τlr)) as [e'' τ''] eqn:?.
+  destruct 2 as [σb Hσb| |]; simplify_equality'; eauto 2 using to_R_typed.
+  destruct Hσb; repeat case_match; simplify_equality'; eauto 2 using to_R_typed.
+  by repeat typed_constructor.
 Qed.
 Lemma var_lookup_typed Γ Γf m xs x e τ :
   ✓ Γ → ✓{Γ} m → lookup_var m x 0 xs = Some (e,τ) →
@@ -459,18 +529,65 @@ Proof.
   * rewrite cons_middle, (associative_L (++)). apply (IH (τs' ++ [τ'])).
     rewrite app_length; simpl. by rewrite Nat.add_comm.
 Qed.
+Lemma convert_ptrs_typed Γ Γf m τs e1 τ1 e2 τ2 e1' e2' τ' :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
+  convert_ptrs (e1,τ1) (e2,τ2) = Some (e1', e2', τ') →
+  (Γ,Γf,m,τs) ⊢ e1 : inr τ1 → (Γ,Γf,m,τs) ⊢ e2 : inr τ2 →
+  (Γ,Γf,m,τs) ⊢ e1' : inr τ' ∧ (Γ,Γf,m,τs) ⊢ e2' : inr τ'.
+Proof.
+  unfold convert_ptrs; destruct τ1 as [[|τp1|]| |], τ2 as [[|τp2|]| |]; intros;
+    simplify_option_equality; split; repeat typed_constructor;
+    eauto using TPtr_valid_inv, TBase_valid_inv, expr_inr_typed_type_valid.
+Qed.
+Lemma to_if_expr_typed Γ Γf m τs e1 τb e2 τ2 e3 τ3 e τlr :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
+  to_if_expr e1 (e2,τ2) (e3,τ3) = Some (e,τlr) →
+  (Γ,Γf,m,τs) ⊢ e1 : inr (baseT τb) → (Γ,Γf,m,τs) ⊢ e2 : inr τ2 →
+  (Γ,Γf,m,τs) ⊢ e3 : inr τ3 → (Γ,Γf,m,τs) ⊢ e : τlr.
+Proof.
+  unfold to_if_expr; intros;
+    repeat match goal with
+    | _ => progress simplify_option_equality
+    | _ => case_match
+    | x : (_ * _)%type |- _ => destruct x
+    | H : convert_ptrs _ _ = Some _ |- _ =>
+       eapply convert_ptrs_typed in H; eauto; destruct H
+    end; typed_constructor; eauto.
+Qed.
+Lemma to_binop_expr_typed Γ Γf m τs op e1 τ1 e2 τ2 e τlr :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
+  to_binop_expr op (e1,τ1) (e2,τ2) = Some (e,τlr) →
+  (Γ,Γf,m,τs) ⊢ e1 : inr τ1 → (Γ,Γf,m,τs) ⊢ e2 : inr τ2 →
+  (Γ,Γf,m,τs) ⊢ e : τlr.
+Proof.
+  unfold to_binop_expr; intros;
+    repeat match goal with
+    | _ => progress simplify_option_equality
+    | x : (_ * _)%type |- _ => destruct x
+    | H: binop_type_of _ _ _ = Some _ |- _ => apply binop_type_of_correct in H
+    | H : convert_ptrs _ _ = Some _ |- _ =>
+       eapply convert_ptrs_typed in H; eauto; destruct H
+    end; typed_constructor; eauto.
+Qed.
 Lemma to_expr_typed Γn Γ Γf m xs ce e τlr :
-  ✓ Γ → ✓{Γ} m → to_expr Γn Γ Γf m xs ce = Some (e,τlr) →
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
+  to_expr Γn Γ Γf m xs ce = Some (e,τlr) →
   (Γ,Γf,m,var_env_stack_types xs) ⊢ e : τlr.
 Proof.
-  intros ??. assert (∀ ces eτlrs,
+  intros ????. assert (∀ f ces τs τ eτlrs,
+     Γf !! f = Some (τs, τ) →
      Forall (λ ce, ∀ e τlr, to_expr Γn Γ Γf m xs ce = Some (e,τlr) →
        (Γ,Γf,m,var_env_stack_types xs) ⊢ e : τlr) ces →
+     Forall2 (cast_typed Γ) (snd <$> zip_with to_R_NULL τs eτlrs) τs →
      mapM (to_expr Γn Γ Γf m xs) ces = Some eτlrs →
      (Γ,Γf,m,var_env_stack_types xs) ⊢*
-       fst <$> to_R <$> eτlrs :* inr <$> snd <$> to_R <$> eτlrs).
-  { intros ces eτlrs. rewrite mapM_Some. induction 2 as [|? [??]];
-      decompose_Forall_hyps; eauto using to_R_typed, surjective_pairing. }
+       cast{τs}* (fst <$> zip_with to_R_NULL τs eτlrs) :* inr <$> τs).
+  { intros f ces τs τ eτlrs. rewrite mapM_Some. intros Hf ? Hcast Hces.
+    assert (Forall (ptr_type_valid Γ) τs) as Hτs by eauto using Forall_impl,
+      type_valid_ptr_type_valid, funtypes_valid_args_valid; clear Hf.
+    revert τs Hτs Hcast.
+    induction Hces as [|? [??]]; intros [|??] ??; decompose_Forall_hyps;
+      constructor; eauto using ECast_typed, to_R_NULL_typed, surjective_pairing. }
   revert e τlr. induction ce using @cexpr_ind_alt; intros;
     repeat match goal with
     | _ : maybe_inl ?τlr = Some _ |- _ => is_var τlr; destruct τlr
@@ -478,33 +595,49 @@ Proof.
     | _ : maybe_TPtr ?τb = Some _ |- _ => is_var τb; destruct τb
     | _ : maybe_TInt ?τb = Some _ |- _ => is_var τb; destruct τb
     | _ : maybe_TCompound ?τ = Some _ |- _ => is_var τ; destruct τ
+    | H : ∀ e τlr, Some _ = Some _ → _ |- _ => specialize (H _ _ eq_refl)
     | H: assign_type_of _ _ _ _ = Some _ |- _ =>
        apply assign_type_of_correct in H
     | H: unop_type_of _ _ = Some _ |- _ => apply unop_type_of_correct in H
     | H: binop_type_of _ _ _ = Some _ |- _ => apply binop_type_of_correct in H
+    | H: to_R_NULL _ _ = _ |- _ =>
+       first_of ltac:(eapply to_R_NULL_typed in H) idtac
+         ltac:(by eauto using type_valid_ptr_type_valid)
     | _ => progress (simplify_option_equality by fail)
     | _ => progress case_match
     | x : (_ * _)%type |- _ => destruct x
-    end; repeat typed_constructor;
-    eauto using to_R_typed, var_lookup_typed, ECasts_typed.
+    | _ : _ ⊢ _ : ?τlr |- _ =>
+       unless (✓{Γ} (lrtype_type τlr)) by assumption;
+       assert (✓{Γ} (lrtype_type τlr)) by eauto using expr_typed_type_valid
+    | _ : context [to_R ?eτlr] |- _ => 
+       let H := fresh in destruct (to_R eτlr) eqn:H;
+       first_of ltac:(eapply to_R_typed in H) idtac ltac:(by eauto)
+    end; repeat typed_constructor; eauto using to_binop_expr_typed,
+      to_if_expr_typed, var_lookup_typed.
 Qed.
 Lemma alloc_global_typed Γn Γ m xs x τ mce m' xs' :
   ✓ Γ → alloc_global Γn Γ m xs x τ mce = Some (m',xs') →
-  ✓{Γ} m → ✓{Γ} m' ∧ (∀ o σ, m ⊢ o : σ → m' ⊢ o : σ)
-    ∧ var_env_stack_types xs = var_env_stack_types xs'.
+  ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
+  (**i 1.) *) ✓{Γ} m' ∧
+  (**i 2.) *) (∀ o σ, m ⊢ o : σ → m' ⊢ o : σ) ∧
+  (**i 3.) *) var_env_stack_types xs = var_env_stack_types xs'.
 Proof.
   assert (mem_allocable (fresh (dom indexset m)) m).
   { eapply mem_allocable_alt, is_fresh. }
   destruct mce as [ce|]; intros; simplify_equality'.
-  * destruct (to_expr Γn Γ ∅ m xs ce) as [[e τlr]|] eqn:?; simplify_equality'.
-    destruct (to_R (e, τlr)) as [e' τ'] eqn:?.
+  * repeat case_option_guard; simplify_equality'.
+    destruct (to_expr Γn Γ ∅ m xs ce) as [[e τlr]|] eqn:?; simplify_equality'.
+    destruct (to_R_NULL τ (e, τlr)) as [e' τ'] eqn:?.
     repeat case_option_guard; simplify_equality'.
     destruct (⟦ e' ⟧ Γ ∅ [] m) as [[?|v]|] eqn:?; simplify_equality'.
+    repeat case_option_guard; simplify_equality'.
     assert ((Γ,m) ⊢ inr v : inr τ'); [|typed_inversion_all].
     { eapply (expr_eval_typed_aux Γ ∅ [] (var_env_stack_types xs) ∅);
-        eauto using to_R_typed, to_expr_typed, prefix_of_nil.
+        eauto using to_R_NULL_typed, type_valid_ptr_type_valid,
+        to_expr_typed, prefix_of_nil, funtypes_valid_empty.
       by intros ?; simpl_map. }
-    split; eauto using mem_alloc_val_valid, index_typed_alloc_val.
+    split_ands; eauto using mem_alloc_val_valid,
+      index_typed_alloc_val, val_cast_typed.
   * repeat case_option_guard; simplify_equality'.
     split; eauto using mem_alloc_val_valid, index_typed_alloc_val, val_0_typed.
 Qed.
@@ -517,36 +650,42 @@ Proof.
     repeat typed_constructor; eauto using rettype_union_l.
 Qed.
 Lemma to_stmt_typed Γn Γ Γf m xs Ls mLc mLb cs m' s cmτ :
-  ✓ Γ → ✓{Γ} m → to_stmt Γn Γ Γf m xs Ls mLc mLb cs = Some (m',s,cmτ) →
-  (Γ,Γf,m',var_env_stack_types xs) ⊢ s : cmτ
-  ∧ ✓{Γ} m' ∧ (∀ o σ, m ⊢ o : σ → m' ⊢ o : σ).
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
+  to_stmt Γn Γ Γf m xs Ls mLc mLb cs = Some (m',s,cmτ) →
+  (**i 1.) *) (Γ,Γf,m',var_env_stack_types xs) ⊢ s : cmτ ∧
+  (**i 2.) *) ✓{Γ} m' ∧
+  (**i 3.) *) (∀ o σ, m ⊢ o : σ → m' ⊢ o : σ).
 Proof.
-  intros ?. revert m m' s cmτ xs Ls mLc mLb. induction cs; intros;
+  intros ??. revert m m' s cmτ xs Ls mLc mLb. induction cs; intros;
     repeat match goal with
     | _ => case_match
     | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
     | _ => progress (simplify_option_equality by fail)
     | x : (_ * _)%type |- _ => destruct x
-    | IH : ∀ _ _ _ _ _ _ _ _, ✓{Γ} _ → to_stmt _ _ _ _ _ _ _ _ ?cs = Some _ → _,
+    | IH : ∀ _ _ _ _ _ _ _ _, ✓{_} _ → _ → to_stmt _ _ _ _ _ _ _ _ ?cs = Some _ → _,
       H : to_stmt _ _ _ _ _ _ _ _ ?cs = Some _ |- _ =>
-       destruct (λ Hm, IH _ _ _ _ _ _ _ _ Hm H) as (?&?&?); clear IH; [by auto|]
+       destruct (λ Hm Hxs, IH _ _ _ _ _ _ _ _ Hm Hxs H) as (?&?&?); clear IH;
+         simpl; [by auto|by auto with congruence|]
     | H : to_expr _ _ _ _ _ _ = Some _ |- _ =>
-       apply to_expr_typed in H; [|by auto|by auto];
+       apply to_expr_typed in H; simpl; [|by auto|by auto|by auto|by auto];
        eapply to_R_typed in H; [|by eauto]
     | H : alloc_global _ _ _ _ _ _ _ = Some _ |- _ =>
-       apply alloc_global_typed in H; [|by auto|by auto]; destruct H as (?&?&->)
+       apply alloc_global_typed in H; [|by auto|by auto|by auto]; destruct H as (?&?&?)
     end; try solve [split_ands; eauto using to_R_typed, to_expr_typed].
-  * split_ands; eauto. eapply SBlock_typed; eauto.
+  * split_ands; eauto 2. eapply SBlock_typed; eauto 2.
     repeat typed_constructor; eauto using expr_typed_weaken, subseteq_empty.
-    constructor. by apply cast_typed_self.
+    by constructor; apply cast_typed_self.
+  * split_ands; eauto with congruence.
   * split_ands; eauto using stmt_typed_weaken.
   * split_ands; eauto using to_while_typed, expr_typed_weaken.
   * split_ands; eauto using stmt_typed_weaken, expr_typed_weaken.
 Qed.
 Lemma extend_funtypes_typed Γ m f τs τ Γf Γf' :
   ✓{Γ} Γf → extend_funtypes Γ f τs τ Γf = Some Γf' →
-  Γf ⊆ Γf' ∧ ✓{Γ} Γf' ∧ Γf' !! f = Some (τs,τ) ∧ ✓{Γ} τ ∧ ✓{Γ}* τs ∧
-    Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs.
+  (**i 1.) *) Γf ⊆ Γf' ∧
+  (**i 2.) *) ✓{Γ} Γf' ∧
+  (**i 3.) *) Γf' !! f = Some (τs,τ) ∧
+  (**i 4.) *) ✓{Γ} τ ∧ ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs.
 Proof.
   unfold extend_funtypes; intros HΓf ?.
   destruct (Γf !! f) as [[]|] eqn:?; simplify_option_equality; auto.
@@ -572,9 +711,9 @@ Proof.
   * destruct (to_envs_go Θ)
       as [[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]|]; simplify_equality'.
     destruct (alloc_global _ _ _ _ _ _ _) as [[??]|] eqn:?; simplify_equality'.
-    destruct (IH Γn Γ Γf δ m2 xs2) as (?&?&?&?&?); eauto.
+    destruct (IH Γn Γ Γf δ m2 xs2) as (?&?&?&?&Hxs2); eauto.
     destruct (alloc_global_typed Γn Γ m2 xs2 x τ mce m xs)
-      as (?&?&<-); split_ands; eauto using funenv_pretyped_weaken.
+      as (?&?&<-); split_ands; rewrite ?Hxs2; eauto using funenv_pretyped_weaken.
   * destruct (to_envs_go Θ)
       as [[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]|]; simplify_equality'.
     destruct (IH Γn2 Γ2 Γf2 δ2 m2 xs2) as (?&?&?&?&?Hxs); eauto.
@@ -588,6 +727,8 @@ Proof.
       as [[[m3 s] cmσ]|] eqn:?; simplify_option_equality.
     destruct (to_stmt_typed Γn Γ Γf m2 ((prod_map id inr <$> ys) ++ xs)
       (labels cs) None None cs m s cmσ) as (Hs&?&?); auto.
+    { by rewrite var_env_stack_types_app,
+        var_env_stack_types_snd, Hxs, (right_id_L [] (++)). }
     rewrite var_env_stack_types_app,
       var_env_stack_types_snd, Hxs, (right_id_L [] (++)) in Hs.
     split_ands; eauto using funenv_pretyped_weaken, funenv_pretyped_insert.
