@@ -38,9 +38,13 @@ Fixpoint expr_eval `{IntEnv Ti, PtrEnv Ti} (e : expr Ti) (Γ : env Ti)
   | & e =>
      a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inl;
      Some (inr (ptrV (Ptr a)))
-  | elt e =>
+  | e %> rs =>
      a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inl;
-     Some (inl (addr_elt Γ a))
+     Some (inl (addr_elt Γ rs a))
+  | e #> rs =>
+     v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
+     v' ← v !! rs;
+     Some (inr v')
   | @{op} e =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
      guard (val_unop_ok m op v);
@@ -70,9 +74,6 @@ Fixpoint expr_eval `{IntEnv Ti, PtrEnv Ti} (e : expr Ti) (Γ : env Ti)
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
      guard (val_cast_ok Γ m τ v);
      Some (inr (val_cast τ v))
-  | e .> i =>
-     a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inl;
-     Some (inl (addr_field Γ i a))
   | _ => None
   end
 where "⟦ e ⟧" := (expr_eval e) : C_scope.
@@ -102,8 +103,12 @@ Context (Prtol : ∀ e a,
   P e (inr (ptrV (Ptr a))) → addr_strict Γ a → P (.* e) (inl a)).
 Context (Profl : ∀ e a,
   ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) → P (&e) (inr (ptrV (Ptr a)))).
-Context (Pelt : ∀ e a,
-  ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) → P (elt e) (inl (addr_elt Γ a))).
+Context (Peltl : ∀ e rs a,
+  ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) →
+  P (e %> rs) (inl (addr_elt Γ rs a))).
+Context (Peltr : ∀ e rs v v',
+  ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
+  v !! rs = Some v' → P (e #> rs) (inr v')).
 Context (Punop : ∀ op e v,
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
   val_unop_ok m op v → P (@{op} e) (inr (val_unop op v))).
@@ -132,9 +137,6 @@ Context (Pcomma : ∀ e1 e2 v1 av2,
 Context (Pcast : ∀ τ e v,
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
   val_cast_ok Γ m τ v → P (cast{τ} e) (inr (val_cast τ v))).
-Context (Pfield : ∀ e i a,
-  ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) →
-  P (e .> i) (inl (addr_field Γ i a))).
 Lemma expr_eval_ind : ∀ e av, ⟦ e ⟧ Γ fs ρ m = Some av → P e av.
 Proof.
   assert (∀ f F es vs v,
@@ -209,7 +211,8 @@ Proof.
     end; try typed_constructor; eauto using
       val_unop_typed, val_binop_typed, val_cast_typed, addr_top_typed,
       index_typed_valid, index_typed_representable, addr_top_strict,
-      addr_elt_typed, addr_elt_strict, addr_field_typed, addr_field_strict.
+      addr_elt_typed, addr_elt_strict, addr_elt_typed, addr_elt_strict,
+      val_lookup_seg_typed.
   eapply purefuns_typed_lookup; eauto.
 Qed.
 Lemma expr_eval_typed Γ Γf τs fs ρ m e av τlr :
@@ -253,6 +256,7 @@ Proof.
   * by simplify_option_equality by eauto using addr_strict_weaken.
   * by simplify_option_equality.
   * simplify_option_equality. by erewrite <-addr_elt_weaken by eauto.
+  * by simplify_option_equality.
   * by simplify_option_equality by eauto using val_unop_ok_weaken.
   * simplify_option_equality by eauto using val_binop_ok_weaken.
     by erewrite <-val_binop_weaken by eauto.
@@ -264,8 +268,6 @@ Proof.
     by destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]].
   * simplify_option_equality; eauto.
   * by simplify_option_equality by eauto using val_cast_ok_weaken.
-  * simplify_option_equality.
-    by erewrite <-addr_field_weaken by eauto.
 Qed.
 
 (** Only the denotations of functions that actually appear in an expression

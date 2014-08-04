@@ -121,22 +121,11 @@ Section address_operations.
     let 'Addr o r i τ σ _ := a in Addr o r i τ σ σc.
   Global Arguments addr_cast _ !_ /.
 
-  Definition addr_elt (Γ : env Ti) (a : addr Ti) : addr Ti :=
+  Definition addr_elt (Γ : env Ti) (rs : ref_seg Ti) (a : addr Ti) : addr Ti :=
     from_option a $
-      '(σ,n) ← maybe_TArray (type_of a);
-      Some (Addr (addr_index a) (RArray 0 σ n :: addr_ref Γ a) 0
-                 (addr_type_object a) σ σ).
-  Global Arguments addr_elt _ !_ /.
-  Definition addr_field (Γ : env Ti) (i : nat) (a : addr Ti) : addr Ti :=
-    from_option a $
-      '(c,s) ← maybe_TCompound (type_of a);
-      σ ← Γ !! s ≫= (!! i);
-      let rs := match c with
-                | Struct_kind => RStruct i s | Union_kind => RUnion i s false
-                end in
-      Some (Addr (addr_index a) (rs :: addr_ref Γ a) 0
-                 (addr_type_object a) σ σ).
-  Global Arguments addr_field _ _ !_ /.
+     σ ← type_of a !!{Γ} rs;
+     Some (Addr (addr_index a) (rs :: addr_ref Γ a) 0 (addr_type_object a) σ σ).
+  Global Arguments addr_elt _ _ !_ /.
 
   Inductive ref_refine (r' : ref Ti) (sz : nat) :
        ref Ti → nat → ref Ti → nat → Prop :=
@@ -579,67 +568,40 @@ Proof.
   apply Nat.div_lt_upper_bound;
     eauto using ref_typed_type_valid, size_of_ne_0.
 Qed.
-Lemma addr_elt_typed Γ m a n σ :
-  ✓ Γ → (Γ,m) ⊢ a : σ.[n] → addr_strict Γ a → (Γ,m) ⊢ addr_elt Γ a : σ.
+Lemma addr_elt_typed Γ m a rs σ σ' :
+  ✓ Γ → (Γ,m) ⊢ a : σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' →
+  ref_seg_offset rs = 0 → (Γ,m) ⊢ addr_elt Γ rs a : σ'.
 Proof.
-  rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) ?.
-  destruct a as [o r i σ' σc]; inversion Hcast; simplify_equality'.
-  assert (✓{Γ} σ ∧ n ≠ 0) as [??]
-    by eauto using ref_typed_type_valid, TArray_valid_inv.
-  constructor; simplify_equality'; auto.
-  * assert (i `div` size_of Γ (σ.[n]) < ref_size r).
-    { apply Nat.div_lt_upper_bound;
-        eauto using size_of_ne_0, ref_typed_type_valid. }
-    apply ref_typed_cons; exists (σ.[n]); split;
-      [auto using ref_set_offset_typed|constructor; lia].
+  rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) ? Hrs ?.
+  destruct a as [o r i τ σ'' σc]; simplify_equality'.
+  apply castable_alt in Hcast; destruct Hcast as [?|[?|?]];
+    simplify_equality'; try solve [inversion Hrs].
+  erewrite path_type_check_complete by eauto; simpl; constructor; auto.
+  * apply ref_typed_cons; exists σ; split; auto.
+    apply ref_set_offset_typed; auto.
+    apply Nat.div_lt_upper_bound; eauto using size_of_ne_0,ref_typed_type_valid.
   * lia.
-  * by rewrite Nat.mod_0_l by eauto using size_of_ne_0.
+  * by rewrite Nat.mod_0_l by eauto using size_of_ne_0, ref_typed_type_valid,
+      ref_seg_typed_type_valid, castable_type_valid.
 Qed.
-Lemma addr_elt_strict Γ m a n σ :
-  ✓ Γ → (Γ,m) ⊢ a : σ.[n] → addr_strict Γ (addr_elt Γ a).
+Lemma addr_elt_strict Γ m a rs σ σ' :
+  ✓ Γ → (Γ,m) ⊢ a : σ → Γ ⊢ rs : σ ↣ σ' → addr_strict Γ (addr_elt Γ rs a).
 Proof.
-  rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?).
-  destruct a as [o r i σ' σc]; inversion Hcast; simplify_option_equality.
-  assert (✓{Γ} σ ∧ 0 < n) as [??] by (rewrite <-Nat.neq_0_lt_0;
-    eauto using ref_typed_type_valid, TArray_valid_inv).
-  eauto using Nat.mul_pos_pos, size_of_pos.
+  rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) Hrs.
+  destruct a as [o r i τ σ'' σc]; simplify_equality'.
+  erewrite path_type_check_complete by eauto; simpl.
+  apply Nat.mul_pos_pos.
+  * eauto using size_of_pos, ref_typed_type_valid,
+      ref_seg_typed_type_valid, castable_type_valid.
+  * destruct Hrs; simpl; lia.
 Qed.
-Lemma addr_elt_weaken Γ1 Γ2 mm1 a σ :
-  ✓ Γ1 → (Γ1,mm1) ⊢ a : σ → Γ1 ⊆ Γ2 → addr_elt Γ1 a = addr_elt Γ2 a.
-Proof. intros. unfold addr_elt. by erewrite addr_ref_weaken by eauto. Qed.
-Lemma addr_field_typed Γ m c a j s σs σ :
-  ✓ Γ → (Γ,m) ⊢ a : compoundT{c} s → addr_strict Γ a →
-  Γ !! s = Some σs → σs !! j = Some σ → (Γ,m) ⊢ addr_field Γ j a : σ.
+Lemma addr_elt_weaken Γ1 Γ2 mm1 a rs σ σ' :
+  ✓ Γ1 → (Γ1,mm1) ⊢ a : σ → Γ1 ⊢ rs : σ ↣ σ' → Γ1 ⊆ Γ2 →
+  addr_elt Γ1 rs a = addr_elt Γ2 rs a.
 Proof.
-  rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) ? ??.
-  destruct a as [o r i σ' σc]; inversion Hcast; simplify_option_equality.
-  constructor; simpl; eauto using env_valid_lookup_lookup.
-  * apply ref_typed_cons; eexists (compoundT{c} s); split.
-    + apply ref_set_offset_typed; auto. apply Nat.div_lt_upper_bound;
-        eauto using size_of_ne_0, TCompound_valid.
-    + destruct c; econstructor; eauto.
-  * by destruct c.
-  * lia.
-  * by rewrite Nat.mod_0_l
-      by eauto using size_of_ne_0, env_valid_lookup_lookup.
-Qed.
-Lemma addr_field_strict Γ m c a j s σs σ :
-  ✓ Γ → (Γ,m) ⊢ a : compoundT{c} s →
-  Γ !! s = Some σs → σs !! j = Some σ → addr_strict Γ (addr_field Γ j a).
-Proof.
-  rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) ??.
-  destruct a as [o r i σ' σc]; inversion Hcast; simplify_option_equality.
-  destruct c; simpl; rewrite Nat.mul_1_r;
-    eauto 6 using size_of_pos, env_valid_lookup_lookup.
-Qed.
-Lemma addr_field_weaken Γ1 Γ2 mm1 c a s i :
-  ✓ Γ1 → (Γ1,mm1) ⊢ a : compoundT{c} s → Γ1 ⊆ Γ2 →
-  addr_field Γ1 i a = addr_field Γ2 i a.
-Proof.
-  intros. unfold addr_field. erewrite !type_of_correct by eauto; csimpl.
-  assert (is_Some (Γ1 !! s)) as [σs Hσs].
-  { eauto using addr_typed_type_valid, TCompound_valid_inv. }
-  by erewrite Hσs, (lookup_weaken Γ1 Γ2 s σs), addr_ref_weaken by eauto.
+  intros. unfold addr_elt; simplify_type_equality.
+  by erewrite addr_ref_weaken, !path_type_check_complete
+    by eauto using ref_seg_typed_weaken.
 Qed.
 
 (** ** Disjointness *)
@@ -941,46 +903,23 @@ Lemma addr_cast_refine Γ f m1 m2 a1 a2 σ σc :
   addr_cast_ok Γ m1 σc a1 → a1 ⊑{Γ,f@m1↦m2} a2 : σ →
   addr_cast σc a1 ⊑{Γ,f@m1↦m2} addr_cast σc a2 : σc.
 Proof. intros (?&?&?). destruct 1; simplify_equality'; econstructor; eauto. Qed.
-Lemma addr_elt_refine Γ f m1 m2 a1 a2 σ n :
-  ✓ Γ → addr_strict Γ a1 → a1 ⊑{Γ,f@m1↦m2} a2 : σ.[n] →
-  addr_elt Γ a1 ⊑{Γ,f@m1↦m2} addr_elt Γ a2 : σ.
+Lemma addr_elt_refine Γ f m1 m2 a1 a2 rs σ σ' :
+  ✓ Γ → a1 ⊑{Γ,f@m1↦m2} a2 : σ → addr_strict Γ a1 → Γ ⊢ rs : σ ↣ σ' →
+  ref_seg_offset rs = 0 → addr_elt Γ rs a1 ⊑{Γ,f@m1↦m2} addr_elt Γ rs a2 : σ'.
 Proof.
-  inversion 3 as [o o' r r' r'' i i'' τ τ' ????????????? Hc Hr''];
-    inversion Hc; clear Hc; simplify_equality'.
-  assert (✓{Γ} σ ∧ n ≠ 0) as [??]
-    by eauto using TArray_valid_inv, ref_typed_type_valid.
-  econstructor; eauto.
-  * assert (i `div` size_of Γ (σ.[n]) < ref_size r).
-    { apply Nat.div_lt_upper_bound;
-        eauto using size_of_ne_0, ref_typed_type_valid. }
-    apply ref_typed_cons; exists (σ.[n]); split;
-      [auto using ref_set_offset_typed|constructor; lia].
+  intros ? [o o' r r' r'' i i'' τ τ' σ'' ???????????? Hcast Hr''] ? Hrs ?; simpl.
+  apply castable_alt in Hcast; destruct Hcast as [<-|[?|?]];
+    simplify_equality'; try solve [inversion Hrs].
+  erewrite path_type_check_complete by eauto; simpl. econstructor; eauto.
+  * apply ref_typed_cons; exists σ''; split; auto.
+    apply ref_set_offset_typed; auto.
+    apply Nat.div_lt_upper_bound; eauto using size_of_ne_0,ref_typed_type_valid.
   * lia.
-  * by rewrite Nat.mod_0_l by eauto using size_of_ne_0.
+  * by rewrite Nat.mod_0_l by eauto using size_of_ne_0, ref_typed_type_valid,
+      ref_seg_typed_type_valid, castable_type_valid.
   * destruct Hr'' as [i''|]; simplify_equality'; [|by constructor].
     apply ref_refine_ne_nil_alt.
     by rewrite ref_set_offset_set_offset, (Nat.mul_comm (size_of _ _)),
       Nat.div_add, Nat.div_small, Nat.add_0_l, ref_set_offset_offset by lia.
-Qed.
-Lemma addr_field_refine Γ f m1 m2 c s σs j a1 a2 σ :
-  ✓ Γ → addr_strict Γ a1 →
-  a1 ⊑{Γ,f@m1↦m2} a2 : compoundT{c} s → Γ !! s = Some σs → σs !! j = Some σ →
-  addr_field Γ j a1 ⊑{Γ,f@m1↦m2} addr_field Γ j a2 : σ.
-Proof.
-  inversion 3 as [o o' r r' r'' i i'' τ τ' ????????????? Hc Hr''];
-    inversion Hc; clear Hc; intros; simplify_option_equality.
-  econstructor; eauto using env_valid_lookup_lookup.
-  * apply ref_typed_cons; eexists (compoundT{c} s); split.
-    + apply ref_set_offset_typed; auto. apply Nat.div_lt_upper_bound;
-        eauto using size_of_ne_0, TCompound_valid, ref_typed_type_valid.
-    + destruct c; econstructor; eauto.
-  * by destruct c.
-  * lia.
-  * by rewrite Nat.mod_0_l
-      by eauto using size_of_ne_0, env_valid_lookup_lookup.
-  * destruct Hr'' as [i''|]; simplify_equality'; [|constructor].
-    rewrite ref_set_offset_set_offset, (Nat.mul_comm (size_of _ _)),
-      Nat.div_add, Nat.div_small, Nat.add_0_l, ref_set_offset_offset by lia.
-    destruct c; constructor.
 Qed.
 End addresses.

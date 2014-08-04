@@ -52,8 +52,10 @@ Inductive ehstep `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti) (ρ : stack) :
              #{lock_singleton Γ a ∪ Ω1 ∪ Ω2} v', mem_lock Γ a (<[a:=va]{Γ}>m)
   | estep_load m Ω a v :
      m !!{Γ} a = Some v → Γ\ ρ ⊢ₕ load (%{Ω} a), m ⇒ #{Ω} v, mem_force Γ a m
-  | estep_elt m Ω a :
-     Γ\ ρ ⊢ₕ elt (%{Ω} a), m ⇒ %{Ω} (addr_elt Γ a), m
+  | estep_eltl m Ω a rs :
+     Γ\ ρ ⊢ₕ %{Ω} a %> rs, m ⇒ %{Ω} (addr_elt Γ rs a), m
+  | estep_eltr m Ω v rs v' :
+     v !! rs = Some v' → Γ\ ρ ⊢ₕ #{Ω} v #> rs, m ⇒ #{Ω} v', m
   | estep_alloc m Ω o τi τ n :
      mem_allocable o m → (0 < n)%Z → int_typed (n * size_of Γ τ) sptrT →
      Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒
@@ -78,8 +80,6 @@ Inductive ehstep `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti) (ρ : stack) :
   | estep_cast m τ Ω v :
      val_cast_ok Γ m τ v →
      Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} (val_cast τ v), m
-  | estep_field m Ω a i :
-     Γ\ ρ ⊢ₕ %{Ω} a .> i, m ⇒ %{Ω} (addr_field Γ i a), m
 where "Γ \ ρ  ⊢ₕ e1 , m1 '⇒' e2 , m2" :=
   (@ehstep _ _ _ Γ ρ e1%E m1 e2%E m2) : C_scope.
 
@@ -649,12 +649,14 @@ Ltac quote_expr e :=
     | ?e1 ::=@{?ass} ?e2 =>
        go2 (□ ::={ass} e2 :: k) e1 (e1 ::=@{ass} □ :: k) e2
     | load ?e => go (load □ :: k) e
+    | ?e %> ?i => go (□ %> i :: k) e
+    | ?e #> ?i => go (□ #> i :: k) e
     | free ?e => go (free □ :: k) e
+    | alloc{?τ} ?e => go (alloc{τ} □ :: k) e
     | @{?op} ?e => go (@{op} □ :: k) e
     | ?e1 @{?op} ?e2 => go2 (□ @{op} e2 :: k) e1 (e1 @{op} □ :: k) e2
     | if{?e1} ?e2 else ?e3 => go (if{□} e2 else e3 :: k) e1
     | ?e1 ,, ?e2 => go (□ ,, e2 :: k) e1
-    | ?e .> ?i => go (□ .> i :: k) e
     | _ => constr:(@nil expr)
     end in constr:(subst k e :: q)
   in go (@nil ectx_item) e.

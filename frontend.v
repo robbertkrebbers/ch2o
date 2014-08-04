@@ -101,7 +101,7 @@ Definition to_R (eτlr : expr Ti * lrtype Ti) : expr Ti * type Ti :=
   match eτlr with
   | (e, inl τ) =>
     match maybe_TArray τ with
-    | Some (τ',_) => (& (elt e), τ'.*) | None => (load e, τ)
+    | Some (τ',n) => (& (e %> RArray 0 τ' n), τ'.*) | None => (load e, τ)
     end
   | (e, inr τ) => (e,τ)
   end.
@@ -156,6 +156,7 @@ Definition to_binop_expr (op : binop)
     '(e1,e2,τ) ← convert_ptrs eτ1 eτ2;
     σ ← binop_type_of (CompOp EqOp) τ τ;
     Some (e1 @{op} e2, inr σ)).
+
 Definition to_expr (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
     (xs : var_env Ti) : cexpr Ti → option (expr Ti * lrtype Ti) :=
   fix go ce :=
@@ -240,12 +241,17 @@ Definition to_expr (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) (m : mem
      Some (cast{σ} e, inr σ)
   | EField ce x =>
      '(e,τrl) ← go ce;
-     τ ← maybe_inl τrl;
-     '(c,s) ← maybe_TCompound τ;
+     '(c,s) ← maybe_TCompound (lrtype_type τrl);
      σs ← Γ !! s;
      i ← Γn !! s ≫= list_find (x =);
      σ ← σs !! i;
-     Some (e .> i, inl σ)
+     let rs :=
+       match c with
+       | Struct_kind => RStruct i s | Union_kind => RUnion i s false
+       end in
+     match τrl with
+     | inl _ => Some (e %> rs, inl σ) | inr _ => Some (e #> rs, inr σ)
+     end
   end.
 
 Global Instance cstmt_labels : Labels (cstmt Ti) :=
@@ -498,19 +504,23 @@ Lemma var_env_stack_types_snd (ys : list (N * type Ti)) :
 Proof. induction ys; f_equal'; auto. Qed.
 
 Lemma to_R_typed Γ Γf m τs e τlr e' τ' :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
   to_R (e,τlr) = (e',τ') → (Γ,Γf,m,τs) ⊢ e : τlr → (Γ,Γf,m,τs) ⊢ e' : inr τ'.
 Proof.
   unfold to_R; intros; destruct τlr as [τl|τr]; simplify_equality'; auto.
   destruct (maybe_TArray τl) as [[τ n]|] eqn:Hτ; simplify_equality'.
-  { destruct τl; simplify_equality'. typed_constructor; eauto. }
+  { destruct τl; simplify_equality'. repeat typed_constructor; eauto.
+    apply Nat.neq_0_lt_0.
+    eauto using TArray_valid_inv_size, expr_inl_typed_type_valid. }
   by typed_constructor.
 Qed.
 Lemma to_R_NULL_typed Γ Γf m τs σ e τlr e' τ' :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
   to_R_NULL σ (e,τlr) = (e',τ') → ptr_type_valid Γ σ →
   (Γ,Γf,m,τs) ⊢ e : τlr → (Γ,Γf,m,τs) ⊢ e' : inr τ'.
 Proof.
   unfold to_R_NULL. destruct (to_R (e,τlr)) as [e'' τ''] eqn:?.
-  destruct 2 as [σb Hσb| |]; simplify_equality'; eauto 2 using to_R_typed.
+  destruct 5 as [σb Hσb| |]; simplify_equality'; eauto 2 using to_R_typed.
   destruct Hσb; repeat case_match; simplify_equality'; eauto 2 using to_R_typed.
   by repeat typed_constructor.
 Qed.
@@ -667,8 +677,9 @@ Proof.
        destruct (λ Hm Hxs, IH _ _ _ _ _ _ _ _ Hm Hxs H) as (?&?&?); clear IH;
          simpl; [by auto|by auto with congruence|]
     | H : to_expr _ _ _ _ _ _ = Some _ |- _ =>
-       apply to_expr_typed in H; simpl; [|by auto|by auto|by auto|by auto];
-       eapply to_R_typed in H; [|by eauto]
+       first_of ltac:(apply to_expr_typed in H; simpl) idtac ltac:(by auto)
+    | H: to_R _ = _, _ : (_,_,_,?τs) ⊢ _ : _ |- _ =>
+       first_of ltac:(eapply (to_R_typed _ _ _ τs) in H) idtac ltac:(by eauto)
     | H : alloc_global _ _ _ _ _ _ _ = Some _ |- _ =>
        apply alloc_global_typed in H; [|by auto|by auto|by auto]; destruct H as (?&?&?)
     end; try solve [split_ands; eauto using to_R_typed, to_expr_typed].

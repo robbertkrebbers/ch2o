@@ -63,6 +63,7 @@ Proof.
     + eauto using mem_lookup_typed, index_typed_force.
   * typed_inversion_all.
     split_ands; eauto 7 using addr_elt_typed, addr_elt_strict.
+  * typed_inversion_all; split_ands; eauto using val_lookup_seg_typed.
   * typed_inversion_all; split_ands.
     + eapply mem_alloc_valid; eauto.
       - apply TArray_valid; auto. rewrite (Z2Nat.inj_iff _ 0); lia.
@@ -87,8 +88,6 @@ Proof.
   * typed_inversion_all;
       repeat match goal with H : cast_typed _ _ _ |- _ => by inversion H end;
       eauto using val_cast_typed.
-  * typed_inversion_all;
-      split_ands; eauto using addr_field_typed, addr_field_strict.
 Qed.
 Lemma cstep_preservation Γ Γf δ S1 S2 f :
   ✓ Γ → Γ\ δ ⊢ₛ S1 ⇒ S2 →

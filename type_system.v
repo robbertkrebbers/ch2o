@@ -75,9 +75,12 @@ Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      expr_typed' Γ Γf m τs (call f @ es) (inr σ)
   | ELoad_typed e τ :
      expr_typed' Γ Γf m τs e (inl τ) → expr_typed' Γ Γf m τs (load e) (inr τ)
-  | EElt_typed e τ n :
-     expr_typed' Γ Γf m τs e (inl (τ.[n])) →
-     expr_typed' Γ Γf m τs (elt e) (inl τ)
+  | EEltL_typed e rs τ σ  :
+     expr_typed' Γ Γf m τs e (inl τ) → Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
+     expr_typed' Γ Γf m τs (e %> rs) (inl σ)
+  | EEltR_typed e rs τ σ  :
+     expr_typed' Γ Γf m τs e (inr τ) → Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
+     expr_typed' Γ Γf m τs (e #> rs) (inr σ)
   | EAlloc_typed τ e τi :
      ✓{Γ} τ → expr_typed' Γ Γf m τs e (inr (intT τi)) →
      expr_typed' Γ Γf m τs (alloc{τ} e) (inl τ)
@@ -100,11 +103,7 @@ Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      expr_typed' Γ Γf m τs (e1 ,, e2) (inr τ2)
   | ECast_typed e τ σ :
      expr_typed' Γ Γf m τs e (inr τ) → cast_typed Γ τ σ → 
-     expr_typed' Γ Γf m τs (cast{σ} e) (inr σ)
-  | EField_typed e c s σs i σ :
-     Γ !! s = Some σs → σs !! i = Some σ →
-     expr_typed' Γ Γf m τs e (inl (compoundT{c} s)) →
-     expr_typed' Γ Γf m τs (e .> i) (inl σ).
+     expr_typed' Γ Γf m τs (cast{σ} e) (inr σ).
 Global Instance expr_typed:
   Typed envs (lrtype Ti) (expr Ti) := curry4 expr_typed'.
 
@@ -120,40 +119,40 @@ Section expr_typed_ind.
   Context (Profl : ∀ e τ,
     (Γ,Γf,m,τs) ⊢ e : inl τ → P e (inl τ) → P (& e) (inr (τ.*))).
   Context (Passign : ∀ ass e1 e2 τ1 τ2 σ,
-     assign_typed Γ τ1 τ2 ass σ → (Γ,Γf,m,τs) ⊢ e1 : inl τ1 → P e1 (inl τ1) →
-     (Γ,Γf,m,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ::={ass} e2) (inr σ)).
+    assign_typed Γ τ1 τ2 ass σ → (Γ,Γf,m,τs) ⊢ e1 : inl τ1 → P e1 (inl τ1) →
+    (Γ,Γf,m,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ::={ass} e2) (inr σ)).
   Context (Pcall : ∀ f es σ σs,
-     Γf !! f = Some (σs,σ) → (Γ,Γf,m,τs) ⊢* es :* inr <$> σs →
-     Forall2 P es (inr <$> σs) → P (call f @ es) (inr σ)).
+    Γf !! f = Some (σs,σ) → (Γ,Γf,m,τs) ⊢* es :* inr <$> σs →
+    Forall2 P es (inr <$> σs) → P (call f @ es) (inr σ)).
   Context (Pload : ∀ e τ,
     (Γ,Γf,m,τs) ⊢ e : inl τ → P e (inl τ) → P (load e) (inr τ)).
-  Context (Pelt : ∀ e τ n,
-     (Γ,Γf,m,τs) ⊢ e : inl (τ.[n]) → P e (inl (τ.[n])) → P (elt e) (inl τ)).
+  Context (Peltl : ∀ e rs τ σ,
+    (Γ,Γf,m,τs) ⊢ e : inl τ → P e (inl τ) →
+    Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 → P (e %> rs) (inl σ)).
+  Context (Peltr : ∀ e rs τ σ,
+    (Γ,Γf,m,τs) ⊢ e : inr τ → P e (inr τ) →
+    Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 → P (e #> rs) (inr σ)).
   Context (Palloc : ∀ τ e τi,
-     ✓{Γ} τ → (Γ,Γf,m,τs) ⊢ e : inr (intT τi) →
-     P e (inr (intT τi)) → P (alloc{τ} e) (inl τ)).
+    ✓{Γ} τ → (Γ,Γf,m,τs) ⊢ e : inr (intT τi) →
+    P e (inr (intT τi)) → P (alloc{τ} e) (inl τ)).
   Context (Pfree : ∀ e τ,
-     (Γ,Γf,m,τs) ⊢ e : inl τ → P e (inl τ) → P (free e) (inr voidT)).
+    (Γ,Γf,m,τs) ⊢ e : inl τ → P e (inl τ) → P (free e) (inr voidT)).
   Context (Punop : ∀ op e τ σ,
-     unop_typed op τ σ →
-     (Γ,Γf,m,τs) ⊢ e : inr τ → P e (inr τ) → P (@{op} e) (inr σ)).
+    unop_typed op τ σ →
+    (Γ,Γf,m,τs) ⊢ e : inr τ → P e (inr τ) → P (@{op} e) (inr σ)).
   Context (Pbinop : ∀ op e1 e2 τ1 τ2 σ,
-     binop_typed op τ1 τ2 σ → (Γ,Γf,m,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
-     (Γ,Γf,m,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 @{op} e2) (inr σ)).
+    binop_typed op τ1 τ2 σ → (Γ,Γf,m,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
+    (Γ,Γf,m,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 @{op} e2) (inr σ)).
   Context (Pif : ∀ e1 e2 e3 τb σ,
-     (Γ,Γf,m,τs) ⊢ e1 : inr (baseT τb) → P e1 (inr (baseT τb)) →
-     (Γ,Γf,m,τs) ⊢ e2 : inr σ → P e2 (inr σ) →
-     (Γ,Γf,m,τs) ⊢ e3 : inr σ → P e3 (inr σ) → P (if{e1} e2 else e3) (inr σ)).
+    (Γ,Γf,m,τs) ⊢ e1 : inr (baseT τb) → P e1 (inr (baseT τb)) →
+    (Γ,Γf,m,τs) ⊢ e2 : inr σ → P e2 (inr σ) →
+    (Γ,Γf,m,τs) ⊢ e3 : inr σ → P e3 (inr σ) → P (if{e1} e2 else e3) (inr σ)).
   Context (Pcomma : ∀ e1 e2 τ1 τ2,
-     (Γ,Γf,m,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
-     (Γ,Γf,m,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ,, e2) (inr τ2)).
+    (Γ,Γf,m,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
+    (Γ,Γf,m,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ,, e2) (inr τ2)).
   Context (Pcast : ∀ e τ σ,
-     (Γ,Γf,m,τs) ⊢ e : inr τ → P e (inr τ) → cast_typed Γ τ σ →
-     P (cast{σ} e) (inr σ)).
-  Context (Pfield : ∀ e c s σs i σ,
-     Γ !! s = Some σs → σs !! i = Some σ →
-     (Γ,Γf,m,τs) ⊢ e : inl (compoundT{c} s) → P e (inl (compoundT{c} s)) →
-     P (e .> i) (inl σ)).
+    (Γ,Γf,m,τs) ⊢ e : inr τ → P e (inr τ) → cast_typed Γ τ σ →
+    P (cast{σ} e) (inr σ)).
   Lemma expr_typed_ind : ∀ e τ, expr_typed' Γ Γf m τs e τ → P e τ.
   Proof. fix 3; destruct 1; eauto using Forall2_impl. Qed.
 End expr_typed_ind.
@@ -175,7 +174,12 @@ Inductive ectx_item_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      (Γ,Γf,m,τs) ⊢* es2 :* inr <$> τs2 →
      ectx_item_typed' Γ Γf m τs (call f @ es1 □ es2) (inr τ) (inr σ)
   | CLoad_typed τ : ectx_item_typed' Γ Γf m τs (load □) (inl τ) (inr τ)
-  | CElt_typed τ n : ectx_item_typed' Γ Γf m τs (elt □) (inl (τ.[n])) (inl τ)
+  | CEltL_typed rs τ σ :
+     Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
+     ectx_item_typed' Γ Γf m τs (□ %> rs) (inl τ) (inl σ)
+  | CEltR_typed rs τ σ :
+     Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
+     ectx_item_typed' Γ Γf m τs (□ #> rs) (inr τ) (inr σ)
   | CAlloc_typed τ τi :
      ✓{Γ} τ → ectx_item_typed' Γ Γf m τs (alloc{τ} □) (inr (intT τi)) (inl τ)
   | CFree_typed τ : ectx_item_typed' Γ Γf m τs (free □) (inl τ) (inr voidT)
@@ -194,10 +198,7 @@ Inductive ectx_item_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      (Γ,Γf,m,τs) ⊢ e2 : inr τ2 →
      ectx_item_typed' Γ Γf m τs (□ ,, e2) (inr τ1) (inr τ2)
   | CCast_typed τ σ :
-     cast_typed Γ τ σ → ectx_item_typed' Γ Γf m τs (cast{σ} □) (inr τ) (inr σ)
-  | CField_typed c s σs i σ :
-     Γ !! s = Some σs → σs !! i = Some σ →
-     ectx_item_typed' Γ Γf m τs (□ .> i) (inl (compoundT{c} s)) (inl σ).
+     cast_typed Γ τ σ → ectx_item_typed' Γ Γf m τs (cast{σ} □) (inr τ) (inr σ).
 Global Instance ectx_item_typed: PathTyped envs
   (lrtype Ti) (lrtype Ti) (ectx_item Ti) := curry4 ectx_item_typed'.
 Inductive ectx_typed' (Γs : envs) : ectx Ti → lrtype Ti → lrtype Ti → Prop :=
@@ -420,11 +421,14 @@ Lemma expr_typed_type_valid Γ Γf m τs e τlr :
 Proof.
   induction 4 using @expr_typed_ind; decompose_Forall_hyps;
     eauto 4 using addr_typed_type_valid, val_typed_type_valid,
-    env_valid_lookup_lookup, type_valid_ptr_type_valid, funtypes_valid_type_valid,
+    type_valid_ptr_type_valid, funtypes_valid_type_valid,
     unop_typed_type_valid, binop_typed_type_valid, cast_typed_type_valid,
     TBase_valid, TPtr_valid, TVoid_valid, type_valid_ptr_type_valid,
-    assign_typed_type_valid, TArray_valid_inv_type.
+    assign_typed_type_valid, ref_seg_typed_type_valid.
 Qed.
+Lemma expr_inl_typed_type_valid Γ Γf m τs e τ :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs → (Γ,Γf,m,τs) ⊢ e : inl τ → ✓{Γ} τ.
+Proof. by apply expr_typed_type_valid. Qed.
 Lemma expr_inr_typed_type_valid Γ Γf m τs e τ :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs → (Γ,Γf,m,τs) ⊢ e : inr τ → ✓{Γ} τ.
 Proof. by apply expr_typed_type_valid. Qed.
@@ -447,7 +451,8 @@ Proof.
   induction He using @expr_typed_ind; typed_constructor;
     erewrite <-1?size_of_weaken by eauto; eauto using val_typed_weaken,
     assign_typed_weaken, addr_typed_weaken, addr_strict_weaken,
-    type_valid_weaken, lookup_weaken, lookup_app_l_Some, cast_typed_weaken.
+    type_valid_weaken, lookup_weaken, lookup_app_l_Some, cast_typed_weaken,
+    ref_seg_typed_weaken.
 Qed.
 Lemma ectx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 m1 m2 τs1 τs2 Ei τlr σlr :
   ✓ Γ1 → (Γ1,Γf1,m1,τs1) ⊢ Ei : τlr ↣ σlr → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →
@@ -456,7 +461,8 @@ Lemma ectx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 m1 m2 τs1 τs2 Ei τlr σlr :
 Proof.
   destruct 2; typed_constructor;
     eauto using type_valid_weaken, addr_strict_weaken, assign_typed_weaken,
-    expr_typed_weaken, lookup_weaken, cast_typed_weaken, Forall2_impl.
+    expr_typed_weaken, lookup_weaken, cast_typed_weaken, Forall2_impl,
+    ref_seg_typed_weaken.
 Qed.
 Lemma ectx_typed_weaken Γ1 Γ2 Γf1 Γf2 m1 m2 τs1 τs2 E τlr σlr :
   ✓ Γ1 → (Γ1,Γf1,m1,τs1) ⊢ E : τlr ↣ σlr → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →

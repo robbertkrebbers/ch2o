@@ -1761,7 +1761,6 @@ Proof.
     simplify_option_equality; simplify_list_equality.
   erewrite val_lookup_snoc, to_val_lookup_seg by eauto; eauto.
 Qed.
-
 (*
 Lemma to_val_lookup_seg_inv Γ m w1 τ rs v1 :
   ✓ Γ → (Γ,m) ⊢ w1 : τ → mval_is_full w1 → to_val Γ w1 !! rs = Some v1 →

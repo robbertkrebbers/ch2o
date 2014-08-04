@@ -44,7 +44,8 @@ Definition ehstep_exec (Γ : env Ti) (ρ : stack)
      Some (#{lock_singleton Γ a ∪ Ωl ∪ Ωr} v',
            mem_lock Γ a (<[a:=va]{Γ}>m))
   | load (%{Ω} a) => v ← m !!{Γ} a; Some (#{Ω} v, mem_force Γ a m)
-  | elt (%{Ω} a) => Some (%{Ω} (addr_elt Γ a), m)
+  | %{Ω} a %> rs => Some (%{Ω} (addr_elt Γ rs a), m)
+  | #{Ω} v #> rs => v' ← v !! rs; Some (#{Ω} v', m)
   | alloc{τ} (#{Ω} (intV{_} n)) =>
      let o := fresh (dom indexset m) in
      guard (0 < n)%Z;
@@ -70,7 +71,6 @@ Definition ehstep_exec (Γ : env Ti) (ρ : stack)
   | cast{τ} (#{Ω} v) =>
      guard (val_cast_ok Γ m τ v);
      Some (#{Ω} (val_cast τ v), m)
-  | %{Ω} a .> i => Some (%{Ω} (addr_field Γ i a), m)
   | _ => None
   end%E.
 Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
