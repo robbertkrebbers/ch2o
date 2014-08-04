@@ -119,8 +119,8 @@ Proof.
     eexists (Fun_type f'); simpl; split_ands; eauto using mem_unlock_valid.
     + typed_constructor; eauto.
       eapply (EVals_typed_inv Γ Γf _ (get_stack_types k));
-        eauto using funenv_lookup_args, Forall2_impl,
-        expr_typed_weaken, index_typed_unlock.
+        eauto using funenv_typed_funtypes_valid, funtypes_valid_args_valid,
+        Forall2_impl, expr_typed_weaken, index_typed_unlock.
     + repeat typed_constructor; eauto using ectx_typed_weaken,
         ctx_typed_weaken, index_typed_unlock.
   * intros m k E e ?? (τf&HS&?&?) ?; typed_inversion HS; split; auto.
@@ -193,7 +193,7 @@ Proof.
     eexists; simpl; split_ands; repeat typed_constructor; eauto.
     by rewrite andb_false_r.
   * intros m k f' s os vs ??? (τf&HS&?&?) ?; typed_inversion_all.
-    edestruct (funenv_lookup Γ m Γf δ f') as (s'&mτ&?&?&?&?&?&?); eauto.
+    edestruct (funenv_lookup Γ m Γf δ f') as (s'&mτ&?&?&?&?&?&?&?); eauto.
     erewrite fmap_type_of by eauto; simplify_equality.
     edestruct (mem_alloc_val_list_valid Γ m) as (?&?&?); eauto.
     split; [|eauto using funenv_typed_weaken].

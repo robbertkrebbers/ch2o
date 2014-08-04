@@ -1851,6 +1851,22 @@ Proof. destruct v1, v2; apply _. Defined.
 Global Instance val_cast_ok_dec Γ m σ v : Decision (val_cast_ok Γ m σ v).
 Proof. destruct v, σ as [[]| |]; apply _. Defined.
 
+Lemma unop_typed_type_valid Γ op τ σ : unop_typed op τ σ → ✓{Γ} τ → ✓{Γ} σ.
+Proof.
+  destruct 1; eauto using TBase_valid,
+    TBase_valid_inv, base_unop_typed_type_valid.
+Qed.
+Lemma binop_typed_type_valid Γ op τ1 τ2 σ :
+  binop_typed op τ1 τ2 σ → ✓{Γ} τ1 → ✓{Γ} τ2 → ✓{Γ} σ.
+Proof.
+  destruct 1; eauto using TBase_valid,
+    TBase_valid_inv, base_binop_typed_type_valid.
+Qed.
+Lemma cast_typed_type_valid Γ τ σ : cast_typed Γ τ σ → ✓{Γ} τ → ✓{Γ} σ.
+Proof.
+  destruct 1; eauto using TBase_valid, TVoid_valid, TBase_valid,
+    TBase_valid_inv, base_cast_typed_type_valid.
+Qed.
 Lemma unop_type_of_correct op τ σ :
   unop_typed op τ σ ↔ unop_type_of op τ = Some σ.
 Proof.

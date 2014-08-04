@@ -60,7 +60,9 @@ Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      (Γ,m) ⊢ a : τ → addr_strict Γ a →
      expr_typed' Γ Γf m τs (%{Ω} a) (inl τ)
   | ERtoL_typed e τ :
-     expr_typed' Γ Γf m τs e (inr (τ.*)) → expr_typed' Γ Γf m τs (.* e) (inl τ)
+     expr_typed' Γ Γf m τs e (inr (τ.*)) →
+     ✓{Γ} τ → (**i ensure that the type is complete, i.e. no incomplete structs *)
+     expr_typed' Γ Γf m τs (.* e) (inl τ)
   | ERofL_typed e τ :
      expr_typed' Γ Γf m τs e (inl τ) → expr_typed' Γ Γf m τs (& e) (inr (τ.*))
   | EAssign_typed ass e1 e2 τ1 τ2 σ :
@@ -97,7 +99,7 @@ Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      expr_typed' Γ Γf m τs e1 (inr τ1) → expr_typed' Γ Γf m τs e2 (inr τ2) →
      expr_typed' Γ Γf m τs (e1 ,, e2) (inr τ2)
   | ECast_typed e τ σ :
-     cast_typed Γ τ σ → expr_typed' Γ Γf m τs e (inr τ) →
+     expr_typed' Γ Γf m τs e (inr τ) → cast_typed Γ τ σ → 
      expr_typed' Γ Γf m τs (cast{σ} e) (inr σ)
   | EField_typed e c s σs i σ :
      Γ !! s = Some σs → σs !! i = Some σ →
@@ -114,7 +116,7 @@ Section expr_typed_ind.
   Context (Paddr : ∀ Ω a τ,
     (Γ,m) ⊢ a : τ → addr_strict Γ a → P (%{Ω} a) (inl τ)).
   Context (Prtol : ∀ e τ,
-    (Γ,Γf,m,τs) ⊢ e : inr (τ.*) → P e (inr (τ.*)) → P (.* e) (inl τ)).
+    (Γ,Γf,m,τs) ⊢ e : inr (τ.*) → P e (inr (τ.*)) → ✓{Γ} τ → P (.* e) (inl τ)).
   Context (Profl : ∀ e τ,
     (Γ,Γf,m,τs) ⊢ e : inl τ → P e (inl τ) → P (& e) (inr (τ.*))).
   Context (Passign : ∀ ass e1 e2 τ1 τ2 σ,
@@ -146,7 +148,7 @@ Section expr_typed_ind.
      (Γ,Γf,m,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
      (Γ,Γf,m,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ,, e2) (inr τ2)).
   Context (Pcast : ∀ e τ σ,
-     cast_typed Γ τ σ → (Γ,Γf,m,τs) ⊢ e : inr τ → P e (inr τ) →
+     (Γ,Γf,m,τs) ⊢ e : inr τ → P e (inr τ) → cast_typed Γ τ σ →
      P (cast{σ} e) (inr σ)).
   Context (Pfield : ∀ e c s σs i σ,
      Γ !! s = Some σs → σs !! i = Some σ →
@@ -158,7 +160,8 @@ End expr_typed_ind.
 
 Inductive ectx_item_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      (τs : list (type Ti)) : ectx_item Ti → lrtype Ti → lrtype Ti → Prop :=
-  | CRtoL_typed τ : ectx_item_typed' Γ Γf m τs (.* □) (inr (τ.*)) (inl τ)
+  | CRtoL_typed τ :
+     ✓{Γ} τ → ectx_item_typed' Γ Γf m τs (.* □) (inr (τ.*)) (inl τ)
   | CLtoR_typed τ : ectx_item_typed' Γ Γf m τs (& □) (inl τ) (inr (τ.*))
   | CAssignL_typed ass e2 τ1 τ2 σ :
      assign_typed Γ τ1 τ2 ass σ → (Γ,Γf,m,τs) ⊢ e2 : inr τ2 →
@@ -191,8 +194,7 @@ Inductive ectx_item_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      (Γ,Γf,m,τs) ⊢ e2 : inr τ2 →
      ectx_item_typed' Γ Γf m τs (□ ,, e2) (inr τ1) (inr τ2)
   | CCast_typed τ σ :
-     cast_typed Γ τ σ →
-     ectx_item_typed' Γ Γf m τs (cast{σ} □) (inr τ) (inr σ)
+     cast_typed Γ τ σ → ectx_item_typed' Γ Γf m τs (cast{σ} □) (inr τ) (inr σ)
   | CField_typed c s σs i σ :
      Γ !! s = Some σs → σs !! i = Some σ →
      ectx_item_typed' Γ Γf m τs (□ .> i) (inl (compoundT{c} s)) (inl σ).
@@ -215,9 +217,9 @@ Definition rettype_union
   end.
 Definition rettype_match (cmσ : rettype Ti) (σ : type Ti) : Prop :=
   match cmσ with
-  | (true,Some σ') => σ' = σ
-  | (false,Some _) => False
-  | (_,None) => σ = voidT
+  | (true, Some σ') => σ' = σ
+  | (false, Some _) => False
+  | (_, None) => σ = voidT
   end.
 
 Inductive stmt_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
@@ -358,7 +360,7 @@ Definition funenv_pretyped (Γ : env Ti) (m : mem Ti)
     (δ : funenv Ti) (Γf : funtypes Ti) :=
   map_Forall (λ f s, ∃ τs τ cmτ,
     Γf !! f = Some (τs, τ) ∧
-    ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧
+    ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
     (Γ,Γf,m,τs) ⊢ s : cmτ ∧ gotos s ⊆ labels s ∧ rettype_match cmτ τ
   ) δ.
 Global Instance funenv_typed:
@@ -388,20 +390,15 @@ Lemma SBlock_typed Γ Γf m τs τ s c mσ :
   ✓{Γ} τ →int_typed (size_of Γ τ) sptrT →
   (Γ,Γf,m,τ :: τs) ⊢ s : (c,mσ) → (Γ,Γf,m,τs) ⊢ blk{τ} s : (c,mσ).
 Proof. by constructor. Qed.
-Lemma ECasts_typed Γ Γf m τs es σs' σs :
-  Forall2 (cast_typed Γ) σs' σs → (Γ,Γf,m,τs) ⊢* es :* inr <$> σs' →
-  (Γ,Γf,m,τs) ⊢* cast{σs}* es :* inr <$> σs.
-Proof.
-  intros Hσs. revert es. induction Hσs; intros [|??] ?;
-    decompose_Forall_hyps; constructor; repeat typed_constructor; eauto.
-Qed.
-
 Global Instance rettype_match_dec cmσ σ : Decision (rettype_match cmσ σ) :=
   match cmσ with
   | (true,Some σ') => decide (σ' = σ)
   | (false,Some _) => right (@id False)
   | (_,None) => decide (σ = voidT)
   end.
+Lemma assign_typed_type_valid Γ τ1 τ2 ass σ :
+  assign_typed Γ τ1 τ2 ass σ → ✓{Γ} τ1 → ✓{Γ} σ.
+Proof. destruct 1; eauto using cast_typed_type_valid. Qed.
 Lemma assign_type_of_correct Γ ass τ1 τ2 σ :
   assign_typed Γ τ1 τ2 ass σ ↔ assign_type_of Γ τ1 τ2 ass = Some σ.
 Proof.
@@ -412,7 +409,25 @@ Proof.
   * destruct ass; intros; simplify_option_equality; econstructor; eauto;
       eapply binop_type_of_correct; eauto.
 Qed.
-
+Lemma funtypes_valid_args_valid Γ Γf f τs τ :
+  ✓{Γ} Γf → Γf !! f = Some (τs,τ) → ✓{Γ}* τs.
+Proof. intros HΓf ?. by apply (HΓf f (τs,τ)). Qed.
+Lemma funtypes_valid_type_valid Γ Γf f τs τ :
+  ✓{Γ} Γf → Γf !! f = Some (τs,τ) → ✓{Γ} τ.
+Proof. intros HΓf ?. by apply (HΓf f (τs,τ)). Qed.
+Lemma expr_typed_type_valid Γ Γf m τs e τlr :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs → (Γ,Γf,m,τs) ⊢ e : τlr → ✓{Γ} (lrtype_type τlr).
+Proof.
+  induction 4 using @expr_typed_ind; decompose_Forall_hyps;
+    eauto 4 using addr_typed_type_valid, val_typed_type_valid,
+    env_valid_lookup_lookup, type_valid_ptr_type_valid, funtypes_valid_type_valid,
+    unop_typed_type_valid, binop_typed_type_valid, cast_typed_type_valid,
+    TBase_valid, TPtr_valid, TVoid_valid, type_valid_ptr_type_valid,
+    assign_typed_type_valid, TArray_valid_inv_type.
+Qed.
+Lemma expr_inr_typed_type_valid Γ Γf m τs e τ :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs → (Γ,Γf,m,τs) ⊢ e : inr τ → ✓{Γ} τ.
+Proof. by apply expr_typed_type_valid. Qed.
 Lemma funtypes_valid_weaken Γ1 Γ2 Γf : ✓ Γ1 → ✓{Γ1} Γf → Γ1 ⊆ Γ2 → ✓{Γ2} Γf.
 Proof.
   intros ? HΓf ? f [τs τ] Hf. destruct (HΓf f (τs,τ)) as (Hτs&?&?); simpl in *;
@@ -493,9 +508,9 @@ Lemma funenv_pretyped_weaken Γ1 Γ2 m1 m2 δ Γf1 Γf2 :
   ✓ Γ1 → funenv_pretyped Γ1 m1 δ Γf1 → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →
   (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) → funenv_pretyped Γ2 m2 δ Γf2.
 Proof.
-  intros ? Hδ ??? f s ?. destruct (Hδ f s) as (τs&τ&cmτ&Hf&Hτs&?&Hs&?&?); auto.
-  exists τs τ cmτ; split_ands;
-    eauto using stmt_typed_weaken, types_valid_weaken, lookup_weaken.
+  intros ? Hδ ??? f s ?. destruct (Hδ f s) as (τs&τ&cmτ&Hf&Hτs&?&?&Hs&?&?); auto.
+  exists τs τ cmτ; split_ands; eauto using stmt_typed_weaken,
+    types_valid_weaken, type_valid_weaken, lookup_weaken.
   clear Hf Hs. induction Hτs; decompose_Forall_hyps; constructor;
     simpl; erewrite <-1?size_of_weaken by eauto; eauto.
 Qed.
@@ -503,7 +518,6 @@ Lemma funenv_typed_weaken Γ1 Γ2 m1 m2 δ Γf :
   ✓ Γ1 → (Γ1,m1) ⊢ δ : Γf → Γ1 ⊆ Γ2 → (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) →
   (Γ2,m2) ⊢ δ : Γf.
 Proof. destruct 2; split; simpl in *; eauto using funenv_pretyped_weaken. Qed.
-
 Lemma funtypes_valid_empty Γ : ✓{Γ} ∅.
 Proof. by intros ??; simpl_map. Qed.
 Lemma funtypes_valid_insert Γ Γf f τs τ :
@@ -515,15 +529,15 @@ Qed.
 Lemma funenv_pretyped_empty Γ m Γf : funenv_pretyped Γ m ∅ Γf.
 Proof. by intros ??; simpl_map. Qed.
 Lemma funenv_pretyped_insert Γ m δ Γf f s τ τs cmτ :
-  funenv_pretyped Γ m δ Γf → Γf !! f = Some (τs, τ) → ✓{Γ}* τs →
-  Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
+  funenv_pretyped Γ m δ Γf → Γf !! f = Some (τs, τ) →
+  ✓{Γ}* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs → ✓{Γ} τ →
   (Γ,Γf,m,τs) ⊢ s : cmτ → gotos s ⊆ labels s → rettype_match cmτ τ →
   funenv_pretyped Γ m (<[f:=s]> δ) Γf.
-Proof. intros ??????? f' s'; rewrite lookup_insert_Some; naive_solver. Qed.
+Proof. intros ???????? f' s'; rewrite lookup_insert_Some; naive_solver. Qed.
 Lemma funenv_lookup Γ m Γf δ f τs τ :
   ✓ Γ → (Γ,m) ⊢ δ : Γf → Γf !! f = Some (τs,τ) → ∃ s cmτ,
     δ !! f = Some s ∧
-    ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧
+    ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧ ✓{Γ} τ ∧
     (Γ,Γf,m,τs) ⊢ s : cmτ ∧ gotos s ⊆ labels s ∧ rettype_match cmτ τ.
 Proof.
   intros ? [Hδ HΓf] ?; simpl in *. assert (∃ s, δ !! f = Some s) as [s ?].
@@ -533,16 +547,18 @@ Qed.
 Lemma funenv_lookup_inv Γ m Γf δ f s :
   ✓ Γ → (Γ,m) ⊢ δ : Γf → δ !! f = Some s → ∃ τs τ cmτ,
     Γf !! f = Some (τs,τ) ∧
-    ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧
+    ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧ ✓{Γ} τ ∧
     (Γ,Γf,m,τs) ⊢ s : cmτ ∧ gotos s ⊆ labels s ∧ rettype_match cmτ τ.
 Proof. intros ? [Hδ _] ?. destruct (Hδ f s); naive_solver. Qed.
-Lemma funenv_lookup_args Γ m Γf δ f τs τ :
-  ✓ Γ → (Γ,m) ⊢ δ : Γf → Γf !! f = Some (τs,τ) → ✓{Γ}* τs.
-Proof. intros. by destruct (funenv_lookup Γ m Γf δ f τs τ) as (?&?&?&?&_). Qed.
 Lemma funenv_lookup_gotos Γ m Γf δ f s :
   ✓ Γ → (Γ,m) ⊢ δ : Γf → δ !! f = Some s → gotos s ⊆ labels s.
 Proof.
-  intros. by destruct (funenv_lookup_inv Γ m Γf δ f s) as (?&?&?&?&?&?&?&?&?).
+  intros. by destruct (funenv_lookup_inv Γ m Γf δ f s) as (?&?&?&?&?&?&?&?&?&?).
+Qed.
+Lemma funenv_typed_funtypes_valid Γ m δ Γf : ✓ Γ → (Γ,m) ⊢ δ : Γf → ✓{Γ} Γf.
+Proof.
+  intros ? HΓf f [τs τ] ?; simpl.
+  by destruct (funenv_lookup Γ m Γf δ f τs τ) as (?&?&?&?&?&?&?&?&?).
 Qed.
 Lemma EVals_typed_inv Γ Γf m τs Ωs vs σs :
   length Ωs = length vs → ✓{Γ}* σs →

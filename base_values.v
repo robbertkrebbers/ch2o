@@ -763,6 +763,15 @@ Global Instance base_val_cast_ok_dec Γ m σb vb :
   Decision (base_val_cast_ok Γ m σb vb).
 Proof. destruct vb, σb; apply _. Defined.
 
+Lemma base_unop_typed_type_valid Γ op τb σb :
+  base_unop_typed op τb σb → ✓{Γ} τb → ✓{Γ} σb.
+Proof. destruct 1; constructor. Qed.
+Lemma base_binop_typed_type_valid Γ op τb1 τb2 σb :
+  base_binop_typed op τb1 τb2 σb → ✓{Γ} τb1 → ✓{Γ} τb2 → ✓{Γ} σb.
+Proof. destruct 1; constructor; eauto using TPtr_valid_inv. Qed.
+Lemma base_cast_typed_type_valid Γ τb σb :
+  base_cast_typed Γ τb σb → ✓{Γ} τb → ✓{Γ} σb.
+Proof. destruct 1; repeat constructor; eauto using TPtr_valid_inv. Qed.
 Lemma base_unop_type_of_correct op τb σb :
   base_unop_typed op τb σb ↔ base_unop_type_of op τb = Some σb.
 Proof.

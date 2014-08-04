@@ -200,7 +200,7 @@ Section types.
   Proof. by inversion_clear 1. Qed.
   Lemma TBase_ptr_valid_inv Γ τb : ptr_type_valid Γ (baseT τb)%T → ✓{Γ} τb.
   Proof. by inversion_clear 1. Qed.
-  Lemma TArray_ptr_valid_inv Γ τ n : ✓{Γ} (τ.[n])%T → ✓{Γ} τ.
+  Lemma TArray_ptr_valid_inv_type Γ τ n : ptr_type_valid Γ (τ.[n]) → ✓{Γ} τ.
   Proof. by inversion_clear 1. Qed.
   Lemma TPtr_valid_inv Γ τ : ✓{Γ} (τ.*)%BT → ptr_type_valid Γ τ.
   Proof. by inversion_clear 1. Qed.
