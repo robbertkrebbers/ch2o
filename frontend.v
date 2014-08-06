@@ -61,8 +61,8 @@ Inductive cstmt (Ti : Set) : Set :=
   | CSBreak : cstmt Ti
   | CSContinue : cstmt Ti
   | CSReturn : option (cexpr Ti) → cstmt Ti
-  | CSBlock : N → ctype Ti → option (cexpr Ti) → cstmt Ti → cstmt Ti
-  | CSStatic : N → ctype Ti → option (cexpr Ti) → cstmt Ti → cstmt Ti
+  (* true = static, false = not static *)
+  | CSBlock : bool → N → ctype Ti → option (cexpr Ti) → cstmt Ti → cstmt Ti
   | CSComp : cstmt Ti → cstmt Ti → cstmt Ti
   | CSLabel : labelname → cstmt Ti → cstmt Ti
   | CSWhile : cexpr Ti → cstmt Ti → cstmt Ti
@@ -75,8 +75,7 @@ Arguments CSGoto {_} _.
 Arguments CSBreak {_}.
 Arguments CSContinue {_}.
 Arguments CSReturn {_} _.
-Arguments CSBlock {_} _ _ _ _.
-Arguments CSStatic {_} _ _ _ _.
+Arguments CSBlock {_} _ _ _ _ _.
 Arguments CSComp {_} _ _.
 Arguments CSLabel {_} _ _.
 Arguments CSWhile {_} _ _.
@@ -304,7 +303,7 @@ Context `{IntEnv Ti, PtrEnv Ti}.
 Global Instance cstmt_labels : Labels (cstmt Ti) :=
   fix go cs := let _ : Labels _ := @go in
   match cs with
-  | CSBlock _ _ _ cs | CSStatic _ _ _ cs => labels cs
+  | CSBlock _ _ _ _ cs => labels cs
   | CSComp cs1 cs2 => labels cs1 ∪ labels cs2
   | CSLabel l cs => {[ l ]} ∪ labels cs
   | CSWhile _ cs => labels cs
@@ -343,19 +342,19 @@ Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      Some (m, ret e, (true, Some τ))
   | CSReturn None => Some (m, ret (#voidV), (true, Some voidT))
-  | CSBlock x cτ None cs =>
+  | CSBlock false x cτ None cs =>
      τ ← to_type Γn Γ Γf m xs false cτ;
      guard (int_typed (size_of Γ τ) sptrT);
      '(m,s,cmσ) ← go m ((x,inr τ) :: xs) Ls mLc mLb cs;
      Some (m, blk{τ} s, cmσ)
-  | CSBlock x cτ (Some ce) cs =>
+  | CSBlock false x cτ (Some ce) cs =>
      τ ← to_type Γn Γ Γf m xs false cτ;
      guard (int_typed (size_of Γ τ) sptrT);
      '(e,τ') ← to_R <$> to_expr Γn Γ Γf m ((x,inr τ) :: xs) ce;
      guard (τ = τ');
      '(m,s,cmσ) ← go m ((x,inr τ) :: xs) Ls mLc mLb cs;
      Some (m, blk{τ} (var{τ} 0 ::= e ;; s), cmσ)
-  | CSStatic x cτ mce cs =>
+  | CSBlock true x cτ mce cs =>
      τ ← to_type Γn Γ Γf m xs false cτ;
      '(m,xs) ← alloc_global Γn Γ m xs x τ mce;
      go m xs Ls mLc mLb cs
@@ -749,10 +748,10 @@ Proof.
        destruct H as (?&?&?)
     | _ => case_match
     end; try solve [split_ands; eauto using to_R_typed, to_expr_typed].
+  * split_ands; eauto with congruence.
   * split_ands; eauto 2. eapply SBlock_typed; eauto 2.
     repeat typed_constructor; eauto using expr_typed_weaken, subseteq_empty.
     by constructor; apply cast_typed_self.
-  * split_ands; eauto with congruence.
   * split_ands; eauto using stmt_typed_weaken.
   * split_ands;
       repeat typed_constructor; eauto using expr_typed_weaken, rettype_union_l.
