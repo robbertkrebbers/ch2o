@@ -612,7 +612,8 @@ Proof.
   * eauto using bit_size_of_union_lookup.
 Qed.
 Lemma ref_object_offset_size Γ τ r σ :
-  ✓ Γ → Γ ⊢ r : τ ↣ σ → ref_object_offset Γ r + bit_size_of Γ σ ≤ bit_size_of Γ τ.
+  ✓ Γ → Γ ⊢ r : τ ↣ σ →
+  ref_object_offset Γ r + bit_size_of Γ σ ≤ bit_size_of Γ τ.
 Proof.
   unfold ref_object_offset. induction 2 using @ref_typed_ind; csimpl; [done|].
   efeed pose proof ref_seg_object_offset_size; eauto; lia.
@@ -634,8 +635,9 @@ Lemma ref_disjoint_object_offset Γ τ r1 r2 σ1 σ2 :
 Proof.
   rewrite ref_disjoint_alt; intros ? (r1''&rs1&r1'&r2''&rs2&r2'&->&->&?&Hr').
   repeat setoid_rewrite ref_typed_app; setoid_rewrite ref_typed_singleton.
-  intros (σ1'&(τ'&Hτ'&?)&?) (σ2'&(?&?&?)&?); rewrite <-(ref_typed_freeze _ true),
-    Hr', ref_typed_freeze in Hτ'; simplify_type_equality.
+  intros (σ1'&(τ'&Hτ'&?)&?) (σ2'&(?&?&?)&?);
+    rewrite <-(ref_typed_freeze _ true), Hr', ref_typed_freeze in Hτ';
+    simplify_type_equality.
   rewrite !ref_object_offset_app, !ref_object_offset_singleton,
     <-(ref_object_offset_freeze _ true r1'), Hr', !ref_object_offset_freeze.
   destruct (ref_seg_disjoint_object_offset Γ τ' rs1 rs2 σ1' σ2'); auto.

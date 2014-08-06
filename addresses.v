@@ -907,8 +907,8 @@ Lemma addr_elt_refine Γ f m1 m2 a1 a2 rs σ σ' :
   ✓ Γ → a1 ⊑{Γ,f@m1↦m2} a2 : σ → addr_strict Γ a1 → Γ ⊢ rs : σ ↣ σ' →
   ref_seg_offset rs = 0 → addr_elt Γ rs a1 ⊑{Γ,f@m1↦m2} addr_elt Γ rs a2 : σ'.
 Proof.
-  intros ? [o o' r r' r'' i i'' τ τ' σ'' ???????????? Hcast Hr''] ? Hrs ?; simpl.
-  apply castable_alt in Hcast; destruct Hcast as [<-|[?|?]];
+  intros ? [o o' r r' r'' i i'' τ τ' σ'' ???????????? Hcst Hr''] ? Hrs ?; simpl.
+  apply castable_alt in Hcst; destruct Hcst as [<-|[?|?]];
     simplify_equality'; try solve [inversion Hrs].
   erewrite path_type_check_complete by eauto; simpl. econstructor; eauto.
   * apply ref_typed_cons; exists σ''; split; auto.

@@ -10,7 +10,8 @@ Add Printing Constructor flat_cmap.
 Instance: Injective (=) (=) (@FlatCMap A).
 Proof. by injection 1. Qed.
 
-Instance flat_cmap_ops {A : Set} `{SeparationOps A} : SeparationOps (flat_cmap A) := {
+Instance flat_cmap_ops {A : Set}
+    `{SeparationOps A} : SeparationOps (flat_cmap A) := {
   sep_empty := FlatCMap ∅;
   sep_union m1 m2 :=
     let (m1) := m1 in let (m2) := m2 in
@@ -22,7 +23,8 @@ Instance flat_cmap_ops {A : Set} `{SeparationOps A} : SeparationOps (flat_cmap A
     ) m1 m2);
   sep_half m := let (m) := m in FlatCMap (½* <$> m);
   sep_valid m :=
-    let (m) := m in map_Forall (λ _ xs, Forall sep_valid xs ∧ ¬Forall (∅ =) xs) m;
+    let (m) := m in
+    map_Forall (λ _ xs, Forall sep_valid xs ∧ ¬Forall (∅ =) xs) m;
   sep_disjoint m1 m2 :=
     let (m1) := m1 in let (m2) := m2 in map_Forall2
       (λ xs1 xs2, xs1 ⊥* xs2 ∧ ¬Forall (∅ =) xs1 ∧ ¬Forall (∅ =) xs2) 
@@ -84,8 +86,8 @@ Proof.
       rewrite !lookup_union_with; rewrite lookup_union_with in Hm'.
     destruct (m1 !! o) eqn:?, (m2 !! o), (m3 !! o); simplify_equality'; eauto.
     f_equal; intuition auto using seps_associative.
-  * sep_unfold; intros [m1] [m2] _; rewrite !(injective_iff FlatCMap); intros Hm.
-    apply map_eq; intros o. rewrite lookup_empty.
+  * sep_unfold; intros [m1] [m2] _; rewrite !(injective_iff FlatCMap).
+    intros Hm. apply map_eq; intros o. rewrite lookup_empty.
     apply (f_equal (!! o)) in Hm; rewrite lookup_union_with, lookup_empty in Hm.
     by destruct (m1 !! o), (m2 !! o); simplify_equality'.
   * sep_unfold; intros [m1] [m2] [m3] Hm Hm'; rewrite !(injective_iff FlatCMap);

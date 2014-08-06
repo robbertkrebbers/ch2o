@@ -147,7 +147,9 @@ Lemma bits_refine_valid_r Γ f m1 m2 bs1 bs2 :
   ✓ Γ → bs1 ⊑{Γ,f@m1↦m2}* bs2 → ✓{Γ,m2}* bs2.
 Proof. induction 2; eauto using bit_refine_valid_r. Qed.
 Lemma bit_refine_id Γ m b : ✓{Γ,m} b → b ⊑{Γ@m} b.
-Proof. destruct 1; constructor; eauto using ptr_bit_refine_id, BIndet_valid. Qed.
+Proof.
+  destruct 1; constructor; eauto using ptr_bit_refine_id, BIndet_valid.
+Qed.
 Lemma bits_refine_id Γ m bs : ✓{Γ,m}* bs → bs ⊑{Γ@m}* bs.
 Proof. induction 1; eauto using bit_refine_id. Qed.
 Lemma bit_refine_compose Γ f g m1 m2 m3 b1 b2 b3 :

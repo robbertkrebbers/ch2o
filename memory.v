@@ -1096,8 +1096,8 @@ Proof.
       eauto 3 using index_typed_unlock, index_alive_unlock.
     clear dependent o1 o2 r w1 w2 w2' β τ. intros o1 o2 r ? ([w1 β]&?&Hw1).
     destruct (help o1 o2 r w1 β) as (w2&w2'&τ&?&?&?&_); auto.
-    exists (w2,β); split; auto. contradict Hw1; eauto using pbit_refine_freed_inv,
-      ctree_flatten_refine, ctree_lookup_Forall. }
+    exists (w2,β); split; auto. contradict Hw1; eauto using
+      pbit_refine_freed_inv, ctree_flatten_refine, ctree_lookup_Forall. }
   intros o1 o2 r w1 β ? Hw1.
   destruct m1 as [m1], m2 as [m2], Ω1 as [Ω1 HΩ1], Ω2 as [Ω2 HΩ2]; simpl in *.
   unfold elem_of, lockset_elem_of in HΩ; simpl in HΩ; clear HΩ1 HΩ2.

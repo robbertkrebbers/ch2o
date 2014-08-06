@@ -447,7 +447,7 @@ Qed.
 Lemma base_val_unflatten_int Γ τi βs :
   length βs = int_bits τi →
   base_val_unflatten Γ (intT τi) (BBit <$> βs) = VInt τi (int_of_bits τi βs).
-Proof. intros. unfold base_val_unflatten. by rewrite mapM_fmap_Some by done. Qed.
+Proof. intro. unfold base_val_unflatten. by rewrite mapM_fmap_Some by done. Qed.
 Lemma base_val_unflatten_ptr Γ τ pbs p :
   ptr_of_bits Γ τ pbs = Some p →
   base_val_unflatten Γ (τ.*) (BPtr <$> pbs) = VPtr p.
@@ -787,7 +787,7 @@ Proof.
   destruct τb1, τb2, op; intros;
     repeat (case_match || simplify_option_equality); constructor.
 Qed.
-Global Instance base_cast_typed_dec Γ τb σb : Decision (base_cast_typed Γ τb σb).
+Global Instance base_cast_typed_dec Γ τb σb: Decision (base_cast_typed Γ τb σb).
 Proof.
  refine
   match τb, σb with
@@ -937,8 +937,8 @@ Proof.
     rewrite zip_with_length, !int_to_bits_length; lia.
   * erewrite ptr_compare_refine by eauto.
     refine_constructor. by case_match; apply int_typed_small.
-  * erewrite ptr_minus_refine by eauto. refine_constructor. eapply ptr_minus_typed;
-      eauto using ptr_refine_typed_l, ptr_refine_typed_r.
+  * erewrite ptr_minus_refine by eauto. refine_constructor.
+    eapply ptr_minus_typed; eauto using ptr_refine_typed_l, ptr_refine_typed_r.
 Qed.
 Lemma base_val_cast_ok_refine Γ f m1 m2 vb1 vb2 τb σb :
   ✓ Γ → vb1 ⊑{Γ,f@m1↦m2} vb2 : τb →

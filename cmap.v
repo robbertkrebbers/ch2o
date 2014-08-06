@@ -144,7 +144,7 @@ Proof.
     by rewrite (left_id_L ∅ (union_with _)).
   * sep_unfold; intros [m]. split; [done|].
     intros [? Hm]. destruct (sep_inhabited A) as (x&?&?).
-    specialize (Hm (CMap {[fresh (dom _ m), (MUnionAll (fresh ∅) [x], false)]}));
+    specialize (Hm (CMap {[fresh (dom _ m), (MUnionAll (fresh ∅) [x],false)]}));
       feed specialize Hm; [|simplify_map_equality'].
     intros o. destruct (m !! o) as [w|] eqn:Hw; simplify_map_equality'.
     { rewrite lookup_singleton_ne; eauto. intros <-.

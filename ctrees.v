@@ -467,11 +467,15 @@ Hint Immediate ctree_flatten_disjoint_l : simplifier.
 Lemma ctree_merge_unmapped w ys :
   ctree_flatten w ⊥* ys → ctree_unmapped w → Forall sep_unmapped ys →
   ctree_unmapped (ctree_merge true (∪) w ys).
-Proof. rewrite ctree_flatten_merge by done. eauto using seps_unmapped_union. Qed.
+Proof.
+  rewrite ctree_flatten_merge by done. eauto using seps_unmapped_union.
+Qed.
 Lemma ctree_merge_mapped w ys :
   ctree_flatten w ⊥* ys →
   ctree_unmapped (ctree_merge true (∪) w ys) → ctree_unmapped w.
-Proof. rewrite ctree_flatten_merge by done. eauto using seps_unmapped_union_l. Qed.
+Proof.
+  rewrite ctree_flatten_merge by done. eauto using seps_unmapped_union_l.
+Qed.
 Lemma ctree_merge_valid w ys :
   ctree_valid w → ctree_flatten w ⊥* ys → Forall sep_unmapped ys →
   ctree_valid (ctree_merge true (∪) w ys).

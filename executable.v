@@ -175,7 +175,8 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
            {[State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m)]}
         | inleft (right _) =>
            {[State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)]}
-        | inright _ => {[ State k (Undef (UndefBranch e (if{□} s1 else s2) Ω v)) m ]}
+        | inright _ =>
+           {[ State k (Undef (UndefBranch e (if{□} s1 else s2) Ω v)) m ]}
          end
       | _ => ∅
       end

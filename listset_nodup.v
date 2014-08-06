@@ -48,12 +48,7 @@ Qed.
 
 Global Instance listset_nodup_elems: Elements A C := listset_nodup_car.
 Global Instance: FinCollection A C.
-Proof.
-  split.
-  * apply _.
-  * done.
-  * by intros [??].
-Qed.
+Proof. split. apply _. done. by intros [??]. Qed.
 Global Instance: CollectionOps A C.
 Proof.
   split.

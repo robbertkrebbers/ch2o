@@ -2283,7 +2283,8 @@ Section Forall2.
   Proof.
     intro. unfold sublist_lookup, sublist_alter.
     erewrite <-Forall2_length by eauto; intros; simplify_option_equality.
-    apply Forall2_app_l; rewrite ?take_length_le by lia; auto using Forall2_take.
+    apply Forall2_app_l;
+      rewrite ?take_length_le by lia; auto using Forall2_take.
     apply Forall2_app_l; erewrite Forall2_length, take_length,
       drop_length, <-Forall2_length, Min.min_l by eauto with lia; [done|].
     rewrite drop_drop; auto using Forall2_drop.

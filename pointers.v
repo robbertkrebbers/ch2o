@@ -160,7 +160,8 @@ Lemma ptr_dead_weaken Γ m1 m2 p σ :
 Proof. destruct 1; simpl; eauto using addr_dead_weaken. Qed.
 Global Instance ptr_alive_dec m p : Decision (ptr_alive m p).
 Proof. destruct p; apply _. Defined.
-Global Instance ptr_compare_ok_dec m c p1 p2 : Decision (ptr_compare_ok m c p1 p2).
+Global Instance ptr_compare_ok_dec m c p1 p2 :
+  Decision (ptr_compare_ok m c p1 p2).
 Proof. destruct p1, p2, c; apply _. Defined.
 Global Instance ptr_plus_ok_dec Γ m j p : Decision (ptr_plus_ok Γ m j p).
 Proof. destruct p; apply _. Defined.

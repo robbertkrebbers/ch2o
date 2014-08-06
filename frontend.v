@@ -310,8 +310,9 @@ Global Instance cstmt_labels : Labels (cstmt Ti) :=
   | CSIf _ cs1 cs2 => labels cs1 ∪ labels cs2
   | _ => ∅
   end.
-Definition alloc_global (Γn : rename_env) (Γ : env Ti) (m : mem Ti) (xs : var_env Ti)
-    (x : N) (τ : type Ti) (mce : option (cexpr Ti)) : option (mem Ti * var_env Ti) :=
+Definition alloc_global (Γn : rename_env) (Γ : env Ti) (m : mem Ti)
+    (xs : var_env Ti) (x : N) (τ : type Ti)
+    (mce : option (cexpr Ti)) : option (mem Ti * var_env Ti) :=
   match mce with
   | Some ce =>
      guard (int_typed (size_of Γ τ) sptrT);
@@ -370,7 +371,7 @@ Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
      let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
      let Ls := {[ LC ; LB ]} ∪ Ls in
      '(m,s,cmσ) ← go m xs Ls (Some LC) (Some LB) cs;
-     Some (m, while{e} (s ;; label LC) ;; label LB, (false, cmσ.2))
+     Some (m, while{e} (s;; label LC);; label LB, (false, cmσ.2))
   | CSFor ce1 ce2 ce3 cs =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1;
      '(e2,τ2) ← to_R <$> to_expr Γn Γ Γf m xs ce2; _ ← maybe_TBase τ2;
@@ -378,15 +379,14 @@ Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
      let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
      let Ls := {[ LC ; LB ]} ∪ Ls in
      '(m,s,cmσ) ← go m xs Ls (Some LC) (Some LB) cs;
-     Some (m, !e1 ;; while{e2} (s ;; label LC ;; !e3) ;; label LB, (false, cmσ.2))
+     Some (m, !e1 ;; while{e2} (s;; label LC;; !e3);; label LB, (false, cmσ.2))
   | CSDoWhile cs ce =>
      let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
      let Ls := {[ LC ; LB ]} ∪ Ls in
      '(m,s,cmσ) ← go m xs Ls (Some LC) (Some LB) cs;
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce; _ ← maybe_TBase τ;
      Some (m, while{#intV{sintT} 1}
-       (s ;; label LC ;; if{e} skip else goto LB) ;; label LB,
-     (false, cmσ.2))
+       (s;; label LC;; if{e} skip else goto LB);; label LB, (false, cmσ.2))
   | CSIf ce cs1 cs2 =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce; _ ← maybe_TBase τ;
      '(m,s1,cmσ1) ← go m xs Ls mLc mLb cs1;
@@ -644,7 +644,8 @@ Proof.
       type_valid_ptr_type_valid, funtypes_valid_args_valid; clear Hf.
     revert τs Hτs Hcast.
     induction Hces as [|? [??]]; intros [|??] ??; decompose_Forall_hyps;
-      constructor; eauto using ECast_typed, to_R_NULL_typed, surjective_pairing. }
+      constructor;
+      eauto using ECast_typed, to_R_NULL_typed, surjective_pairing. }
   apply cexpr_ctype_ind; intros; split_ands; intros;
     repeat match goal with
     | H : _ ∧ _ |- _ => destruct H
@@ -733,7 +734,8 @@ Proof.
     | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
     | _ => progress (simplify_option_equality by fail)
     | x : (_ * _)%type |- _ => destruct x
-    | IH : ∀ _ _ _ _ _ _ _ _, ✓{_} _ → _ → to_stmt _ _ _ _ _ _ _ _ ?cs = Some _ → _,
+    | IH : ∀ _ _ _ _ _ _ _ _,
+        ✓{_} _ → _ → to_stmt _ _ _ _ _ _ _ _ ?cs = Some _ → _,
       H : to_stmt _ _ _ _ _ _ _ _ ?cs = Some _ |- _ =>
        destruct (λ Hm Hxs, IH _ _ _ _ _ _ _ _ Hm Hxs H) as (?&?&?); clear IH;
          simpl; [by auto|by auto with congruence|]
@@ -753,14 +755,14 @@ Proof.
     repeat typed_constructor; eauto using expr_typed_weaken, subseteq_empty.
     by constructor; apply cast_typed_self.
   * split_ands; eauto using stmt_typed_weaken.
-  * split_ands;
-      repeat typed_constructor; eauto using expr_typed_weaken, rettype_union_l.
-  * split_ands;
-      repeat typed_constructor; eauto using expr_typed_weaken, rettype_union_l.
-  * split_ands;
-      repeat typed_constructor; eauto using expr_typed_weaken, rettype_union_l.
-  * split_ands;
-      repeat typed_constructor; eauto using stmt_typed_weaken, expr_typed_weaken.
+  * split_ands; repeat typed_constructor;
+      eauto using expr_typed_weaken, rettype_union_l.
+  * split_ands; repeat typed_constructor;
+      eauto using expr_typed_weaken, rettype_union_l.
+  * split_ands; repeat typed_constructor;
+      eauto using expr_typed_weaken, rettype_union_l.
+  * split_ands; repeat typed_constructor;
+      eauto using stmt_typed_weaken, expr_typed_weaken.
 Qed.
 Lemma extend_funtypes_typed Γ m f τs τ Γf Γf' :
   ✓{Γ} Γf → extend_funtypes Γ f τs τ Γf = Some Γf' → ✓{Γ}* τs → ✓{Γ} τ →

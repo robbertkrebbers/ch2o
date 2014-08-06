@@ -999,10 +999,10 @@ Qed.
 
 (** ** Preservation of statements *)
 (** We prove that small step reduction behaves as traversing through a zipper.
-That is, if [Γ\ δ ⊢ₛ State k (Stmt d1 s1) m1 ⇒{k}* State k (Stmt d2 s2) m2], then
-[s1 = s2]. This proven on the length of the reduction path. When a transition
-to the expression state occurs, we cut of the prefix corresponding to execution
-of that expression. *)
+That is, if [Γ\ δ ⊢ₛ State k (Stmt d1 s1) m1 ⇒{k}* State k (Stmt d2 s2) m2],
+then [s1 = s2]. This proven on the length of the reduction path. When a
+transition to the expression state occurs, we cut of the prefix corresponding
+to execution of that expression. *)
 Instance ctx_item_subst {Ti} :
     Subst (ctx_item Ti) (stmt Ti) (stmt Ti) := λ Ek s,
   match Ek with

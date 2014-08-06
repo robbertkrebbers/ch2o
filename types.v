@@ -278,7 +278,8 @@ Section types.
     ✓{Γ}* τs → Γ ⊂ Σ → ✓{Σ}* τs.
   Proof. eauto using Forall_impl, type_valid_weaken_subset. Qed.
   Lemma env_valid_delete Γ s τs :
-    ✓ Γ → Γ !! s = Some τs → ∃ Σ, Σ ⊆ delete s Γ ∧ ✓{Σ}* τs ∧ 1 < length τs ∧ ✓ Σ.
+    ✓ Γ → Γ !! s = Some τs →
+    ∃ Σ, Σ ⊆ delete s Γ ∧ ✓{Σ}* τs ∧ 1 < length τs ∧ ✓ Σ.
   Proof.
     intros HΓ Hs. induction HΓ as [|Γ s' τs' HΓ IH Hτs' Hs']; [by simpl_map|].
     destruct (decide (s = s')); simplify_map_equality.
@@ -313,7 +314,8 @@ Section types.
   Lemma env_valid_lookup_lookup Γ s τs i τ : 
     ✓ Γ →Γ !! s = Some τs → τs !! i = Some τ → ✓{Γ} τ.
   Proof.
-    intros ? Hs ?. apply env_valid_lookup in Hs; auto. eapply Forall_lookup; eauto.
+    intros ? Hs ?.
+    apply env_valid_lookup in Hs; auto. eapply Forall_lookup; eauto.
   Qed.
   Lemma env_valid_lookup_singleton Γ s τ : ✓ Γ → Γ !! s = Some [τ] → ✓{Γ} τ.
   Proof. intros. by apply (env_valid_lookup_lookup Γ s [τ] 0 τ). Qed.

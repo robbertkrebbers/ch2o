@@ -108,7 +108,8 @@ Proof.
     perm_unlock_unshared, perm_unlock_mapped, sep_unshared_valid.
 Qed.
 Lemma pbits_unlock_unshared xbs βs :
-  Forall sep_unshared xbs → Forall sep_unshared (zip_with pbit_unlock_if xbs βs).
+  Forall sep_unshared xbs →
+  Forall sep_unshared (zip_with pbit_unlock_if xbs βs).
 Proof.
   intros Hxbs. revert βs. induction Hxbs; intros [|[] ?];
     simpl; constructor; auto using pbit_unlock_unshared.

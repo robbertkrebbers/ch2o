@@ -61,7 +61,8 @@ Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
      expr_typed' Γ Γf m τs (%{Ω} a) (inl τ)
   | ERtoL_typed e τ :
      expr_typed' Γ Γf m τs e (inr (τ.*)) →
-     ✓{Γ} τ → (**i ensure that the type is complete, i.e. no incomplete structs *)
+     (**i ensure that the type is complete, i.e. no incomplete structs *)
+     ✓{Γ} τ →
      expr_typed' Γ Γf m τs (.* e) (inl τ)
   | ERofL_typed e τ :
      expr_typed' Γ Γf m τs e (inl τ) → expr_typed' Γ Γf m τs (& e) (inr (τ.*))
@@ -306,7 +307,8 @@ Inductive ctx_item_typed' (Γ : env Ti) (Γf : funtypes Ti)
   | CParams_typed f τs os cmσ σ :
      Γf !! f = Some (τs, σ) → length os = length τs →
      m ⊢* os :* τs → rettype_match cmσ σ →
-     ctx_item_typed' Γ Γf m k (CParams (zip os τs)) (Stmt_type cmσ) (Fun_type f).
+     ctx_item_typed'
+       Γ Γf m k (CParams (zip os τs)) (Stmt_type cmσ) (Fun_type f).
 Global Instance ctx_item_typed:
   PathTyped (env Ti * funtypes Ti * mem Ti * ctx Ti)
     (focus_type Ti) (focus_type Ti) (ctx_item Ti) := curry4 ctx_item_typed'.
@@ -514,7 +516,8 @@ Lemma funenv_pretyped_weaken Γ1 Γ2 m1 m2 δ Γf1 Γf2 :
   ✓ Γ1 → funenv_pretyped Γ1 m1 δ Γf1 → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →
   (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) → funenv_pretyped Γ2 m2 δ Γf2.
 Proof.
-  intros ? Hδ ??? f s ?. destruct (Hδ f s) as (τs&τ&cmτ&Hf&Hτs&?&?&Hs&?&?); auto.
+  intros ? Hδ ??? f s ?.
+  destruct (Hδ f s) as (τs&τ&cmτ&Hf&Hτs&?&?&Hs&?&?); auto.
   exists τs τ cmτ; split_ands; eauto using stmt_typed_weaken,
     types_valid_weaken, type_valid_weaken, lookup_weaken.
   clear Hf Hs. induction Hτs; decompose_Forall_hyps; constructor;

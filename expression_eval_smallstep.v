@@ -37,7 +37,8 @@ Proof.
 Qed.
 Lemma ehstep_expr_eval_subst Γ fs ρ m E e1 av :
   ⟦ subst E e1 ⟧ Γ fs ρ m = Some av → is_redex e1 →
-  (**i 1). *) (∃ e2, Γ\ ρ ⊢ₕ e1, m ⇒ e2, m ∧ ⟦ subst E e2 ⟧ Γ fs ρ m = Some av) ∨
+  (**i 1). *) (∃ e2,
+                  Γ\ ρ ⊢ₕ e1, m ⇒ e2, m ∧ ⟦ subst E e2 ⟧ Γ fs ρ m = Some av) ∨
   (**i 2). *) (∃ f F Ωs vs v, e1 = (call f @ zip_with EVal Ωs vs)%E ∧
                   length Ωs = length vs ∧ fs !! f = Some F ∧ F vs = Some v ∧
                   ⟦ subst E (# v)%E ⟧ Γ fs ρ m = Some av).

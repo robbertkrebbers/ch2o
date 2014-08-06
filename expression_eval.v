@@ -240,7 +240,7 @@ Lemma expr_eval_weaken Γ1 Γ2 Γf τs fs ρ1 ρ2 m1 m2 e av τlr :
 Proof.
   intros ???? He Hav ?? [ρ3 ->]. revert e av Hav τlr He. assert (∀ es vs σs,
     Forall2 (λ e v, ∀ τlr,
-      (Γ1,Γf,m1,τs) ⊢ e : τlr → ⟦ e ⟧ Γ2 fs (ρ1 ++ ρ3) m2 = Some (inr v)) es vs →
+     (Γ1,Γf,m1,τs) ⊢ e : τlr → ⟦ e ⟧ Γ2 fs (ρ1 ++ ρ3) m2 = Some (inr v)) es vs →
     (Γ1,Γf,m1,τs) ⊢* es :* inr <$> σs →
     mapM (λ e, ⟦ e ⟧ Γ2 fs (ρ1 ++ ρ3) m2 ≫= maybe_inr) es = Some vs). 
   { intros es vs σs Hes Hes'. apply mapM_Some. revert σs Hes'.
@@ -252,7 +252,8 @@ Proof.
       feed pose proof (expr_eval_typed Γ1 Γf τs fs ρ1 m1 e av τlr); auto;
       clear H
     end; typed_inversion_all; auto.
-  * rewrite lookup_app_l by eauto using lookup_lt_Some. by simplify_option_equality.
+  * rewrite lookup_app_l by eauto using lookup_lt_Some.
+    by simplify_option_equality.
   * by simplify_option_equality by eauto using addr_strict_weaken.
   * by simplify_option_equality.
   * simplify_option_equality. by erewrite <-addr_elt_weaken by eauto.
@@ -344,7 +345,8 @@ Proof.
     intros; destruct E';
       repeat match goal with
       | _ => progress simplify_option_equality
-      | H : mapM _ _ = Some _ |- _ => apply mapM_Some in H; decompose_Forall_hyps
+      | H : mapM _ _ = Some _ |- _ =>
+         apply mapM_Some in H; decompose_Forall_hyps
       | H : ∀ _, Some _ = Some _  → _ |- _ =>
          specialize (H _ eq_refl); destruct H as (?&->&?); eexists; split; eauto
       end; auto.

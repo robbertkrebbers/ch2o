@@ -16,7 +16,7 @@ Section operations.
     | MStruct s _ => structT s
     | MUnion s _ _ _ | MUnionAll s _ => unionT s
     end.
-  Global Instance index_type_check : TypeCheck (mem Ti) (type Ti) index := λ m o,
+  Global Instance index_type_check: TypeCheck (mem Ti) (type Ti) index := λ m o,
     type_of ∘ fst <$> cmap_car m !! o.
   Global Instance cmap_index_alive : IndexAlive (mem Ti) := λ m o, ∃ wβ,
     cmap_car m !! o = Some wβ ∧
@@ -287,7 +287,8 @@ Section operations.
        Some (ctree_unflatten Γ τ (take (bit_size_of Γ τ) xbs))
     | _, _ => None
     end.
-  Global Instance ctree_lookup: LookupE (env Ti) (ref Ti) (mtree Ti) (mtree Ti) :=
+  Global Instance ctree_lookup:
+      LookupE (env Ti) (ref Ti) (mtree Ti) (mtree Ti) :=
     fix go Γ r w := let _ : LookupE _ _ _ _ := @go in
     match r with [] => Some w | rs :: r => w !!{Γ} r ≫= lookupE Γ rs end.
 
@@ -951,7 +952,8 @@ Proof.
     unfold field_bit_padding, struct_unflatten.
     induction (bit_size_of_fields _ τs HΓ); decompose_Forall_hyps;
       rewrite ?take_replicate_plus, ?drop_replicate_plus, ?take_replicate,
-      ?drop_replicate, ?Min.min_l, ?fmap_replicate by done; repeat f_equal; auto.
+      ?drop_replicate, ?Min.min_l, ?fmap_replicate by done;
+      repeat f_equal; auto.
 Qed.
 Lemma ctree_new_weaken Γ1 Γ2 xb τ :
   ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊆ Γ2 → ctree_new Γ1 xb τ = ctree_new Γ2 xb τ.
@@ -969,7 +971,8 @@ Proof. induction 2; intros; f_equal'; auto using ctree_new_weaken. Qed.
 Lemma ctree_new_Forall (P : pbit Ti → Prop) Γ xb τ :
   ✓ Γ → ✓{Γ} τ → P xb → P (pbit_indetify xb) → ctree_Forall P (ctree_new Γ xb τ).
 Proof.
-  intros. rewrite <-ctree_unflatten_replicate, ctree_flatten_unflatten_le by done.
+  intros.
+  rewrite <-ctree_unflatten_replicate, ctree_flatten_unflatten_le by done.
   generalize (type_mask Γ τ).
   induction (bit_size_of Γ τ); intros [|[]?]; simpl; constructor; auto.
 Qed.
@@ -2006,8 +2009,9 @@ Proof.
       Hg, ctree_unflatten_disjoint; eauto).
     rewrite ctree_flatten_unflatten_le, mask_length, take_length_le by eauto.
     f_equal.
-    + by rewrite zip_with_take, ctree_unflatten_union, Hg', <-ctree_merge_flatten,
-        ctree_flatten_unflatten_le, pbits_indetify_mask_unmapped
+    + by rewrite zip_with_take, ctree_unflatten_union, Hg',
+        <-ctree_merge_flatten, ctree_flatten_unflatten_le,
+        pbits_indetify_mask_unmapped
         by eauto using ctree_unflatten_Forall_le, ctree_unflatten_disjoint,
           @seps_unshared_unmapped, pbit_unmapped_indetify.
     + by rewrite zip_with_drop, pbits_indetify_union, (pbits_indetify_unmapped
@@ -2445,7 +2449,8 @@ Proof.
     clear Hlen. induction IH; decompose_Forall_hyps; auto.
   * intros s wxbss1 wxbss2 _ IH Hxbs τ' Hw1; pattern τ';
       apply (ctree_typed_inv_l _ _ _ _ _ Hw1); clear τ' Hw1;
-      intros τs Hs Hws1 Hxbs1 Hindet1 Hlen Hw2; apply (ctree_typed_inv _ _ _ _ _ Hw2);
+      intros τs Hs Hws1 Hxbs1 Hindet1 Hlen Hw2;
+      apply (ctree_typed_inv _ _ _ _ _ Hw2);
       clear Hw2; intros ? _ ? Hws2 Hxbs2 Hindet2 _; simplify_equality';
       refine_constructor; eauto.
     clear Hs Hxbs1 Hlen Hxbs2 Hindet1 Hindet2 Hxbs. revert τs Hws1 Hws2.
@@ -2468,11 +2473,12 @@ Proof.
   revert w1 w2.
   refine (ctree_leaf_refine_ind_alt _ _ _ _ _ _ _ _ _ _ _); simpl; auto 2.
   * eauto using Forall2_bind.
-  * intros s wxbss1 wxbss2 _ IH Hxbss. induction IH; decompose_Forall_hyps; auto.
+  * intros s wxbss1 wxbss2 _ IH ?. induction IH; decompose_Forall_hyps; auto.
 Qed.
 Lemma ctree_unflatten_leaf_refine Γ f m1 m2 τ xbs1 xbs2 :
   ✓ Γ → ✓{Γ} τ → xbs1 ⊑{Γ,f@m1↦m2}* xbs2 →
-  ctree_leaf_refine Γ f m1 m2 (ctree_unflatten Γ τ xbs1) (ctree_unflatten Γ τ xbs2).
+  ctree_leaf_refine Γ f m1 m2
+    (ctree_unflatten Γ τ xbs1) (ctree_unflatten Γ τ xbs2).
 Proof.
   intros HΓ Hτ. revert τ Hτ xbs1 xbs2. refine (type_env_ind _ HΓ _ _ _ _).
   * intros. rewrite !ctree_unflatten_base. by constructor.
@@ -2505,8 +2511,8 @@ Proof.
   * intros τ n ws1 ws2 Hn _ IH ?; typed_constructor; auto.
     clear Hn. induction IH; auto.
   * intros s τs wxbss1 wxbss2 Hs _ IH Hxbs Hindet _ Hlen.
-    typed_constructor; eauto; clear Hs Hlen; induction IH; decompose_Forall_hyps;
-      eauto using pbits_refine_valid_l.
+    typed_constructor; eauto; clear Hs Hlen; induction IH;
+      decompose_Forall_hyps; eauto using pbits_refine_valid_l.
   * typed_constructor; eauto using pbits_refine_valid_l.
   * intros; typed_constructor; eauto using pbits_refine_valid_l.
   * intros; decompose_Forall_hyps; typed_constructor;
