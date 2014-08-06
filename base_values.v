@@ -25,6 +25,8 @@ Notation "'intV{' τi } x" := (VInt τi x)
 Notation "'ptrV' p" := (VPtr p) (at level 10) : base_val_scope.
 Notation "'byteV' bs" := (VByte bs) (at level 10) : base_val_scope.
 
+Definition maybe_VInt {Ti} (vb : base_val Ti) : option (int_type Ti * Z) :=
+  match vb with VInt τi x => Some (τi,x) | _ => None end.
 Definition maybe_VPtr {Ti} (vb : base_val Ti) : option (ptr Ti) :=
   match vb with VPtr p => Some p | _ => None end.
 Instance base_val_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}

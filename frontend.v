@@ -8,13 +8,12 @@ Local Open Scope ctype_scope.
 Inductive cexpr (Ti : Set) : Set :=
   | EVar : N → cexpr Ti
   | EConst : int_type Ti → Z → cexpr Ti
-  | ESizeOf : cexpr Ti → cexpr Ti
-  | ESizeOfType : type Ti → cexpr Ti
+  | ESizeOf : ctype Ti → cexpr Ti
   | EAddrOf : cexpr Ti → cexpr Ti
   | EDeref : cexpr Ti → cexpr Ti
   | EAssign : assign → cexpr Ti → cexpr Ti → cexpr Ti
   | ECall : N → list (cexpr Ti) → cexpr Ti
-  | EAlloc : type Ti → cexpr Ti → cexpr Ti
+  | EAlloc : ctype Ti → cexpr Ti → cexpr Ti
   | EFree : cexpr Ti → cexpr Ti
   | EUnOp : unop → cexpr Ti → cexpr Ti
   | EBinOp : binop → cexpr Ti → cexpr Ti → cexpr Ti
@@ -22,12 +21,18 @@ Inductive cexpr (Ti : Set) : Set :=
   | EComma : cexpr Ti → cexpr Ti → cexpr Ti
   | EAnd : cexpr Ti → cexpr Ti → cexpr Ti
   | EOr : cexpr Ti → cexpr Ti → cexpr Ti
-  | ECast : type Ti → cexpr Ti → cexpr Ti
-  | EField : cexpr Ti → N → cexpr Ti.
+  | ECast : ctype Ti → cexpr Ti → cexpr Ti
+  | EField : cexpr Ti → N → cexpr Ti
+with ctype (Ti : Set) : Set :=
+  | TArray : ctype Ti → cexpr Ti → ctype Ti
+  | TCompound : compound_kind → tag → ctype Ti
+  | TVoid : ctype Ti
+  | TInt : int_type Ti → ctype Ti
+  | TPtr : ctype Ti → ctype Ti
+  | TTypeOf : cexpr Ti → ctype Ti.
 Arguments EVar {_} _.
 Arguments EConst {_} _ _.
 Arguments ESizeOf {_} _.
-Arguments ESizeOfType {_} _.
 Arguments EAddrOf {_} _.
 Arguments EDeref {_} _.
 Arguments EAssign {_} _ _ _.
@@ -42,6 +47,12 @@ Arguments EAnd {_} _ _.
 Arguments EOr {_} _ _.
 Arguments ECast {_} _ _.
 Arguments EField {_} _ _.
+Arguments TArray {_} _ _.
+Arguments TCompound {_} _ _.
+Arguments TVoid {_}.
+Arguments TInt {_} _.
+Arguments TPtr {_} _.
+Arguments TTypeOf {_} _.
 
 Inductive cstmt (Ti : Set) : Set :=
   | SDo : cexpr Ti → cstmt Ti
@@ -50,8 +61,8 @@ Inductive cstmt (Ti : Set) : Set :=
   | SBreak : cstmt Ti
   | SContinue : cstmt Ti
   | SReturn : option (cexpr Ti) → cstmt Ti
-  | SBlock : N → type Ti → option (cexpr Ti) → cstmt Ti → cstmt Ti
-  | SStatic : N → type Ti → option (cexpr Ti) → cstmt Ti → cstmt Ti
+  | SBlock : N → ctype Ti → option (cexpr Ti) → cstmt Ti → cstmt Ti
+  | SStatic : N → ctype Ti → option (cexpr Ti) → cstmt Ti → cstmt Ti
   | SComp : cstmt Ti → cstmt Ti → cstmt Ti
   | SLabel : labelname → cstmt Ti → cstmt Ti
   | SWhile : cexpr Ti → cstmt Ti → cstmt Ti
@@ -74,9 +85,9 @@ Arguments SDoWhile {_} _ _.
 Arguments SIf {_} _ _ _.
 
 Inductive decl (Ti : Set) : Set :=
-  | CompoundDecl : list (N * type Ti) → decl Ti
-  | GlobDecl : type Ti → option (cexpr Ti) → decl Ti
-  | FunDecl : list (N * type Ti) → type Ti → option (cstmt Ti) → decl Ti.
+  | CompoundDecl : list (N * ctype Ti) → decl Ti
+  | GlobDecl : ctype Ti → option (cexpr Ti) → decl Ti
+  | FunDecl : list (N * ctype Ti) → ctype Ti → option (cstmt Ti) → decl Ti.
 Arguments CompoundDecl {_} _.
 Arguments GlobDecl {_} _ _.
 Arguments FunDecl {_} _ _ _.
@@ -160,91 +171,89 @@ Definition to_binop_expr (op : binop)
     '(e1,e2,τ) ← convert_ptrs eτ1 eτ2;
     σ ← binop_type_of (CompOp EqOp) τ τ;
     Some (e1 @{op} e2, inr σ)).
+End frontend.
 
-Definition to_expr (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti)
-    (xs : var_env Ti) : cexpr Ti → option (expr Ti * lrtype Ti) :=
-  fix go ce :=
+(* not in the section because of bug #3488 *)
+Fixpoint to_expr `{IntEnv Ti, PtrEnv Ti} (Γn : rename_env) (Γ : env Ti)
+    (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
+    (ce : cexpr Ti) : option (expr Ti * lrtype Ti) :=
   match ce with
   | EVar x =>
      '(e,τ) ← lookup_var m x 0 xs; Some (e, inl τ)
   | EConst τi x =>
      guard (int_typed x τi);
      Some (# (intV{τi} x), inr (intT τi))
-  | ESizeOf ce =>
-     '(_,τlr) ← go ce;
-     let sz := size_of Γ (lrtype_type τlr) in
-     guard (int_typed sz sptrT);
-     Some (# (intV{sptrT} sz), inr sptrT)
-  | ESizeOfType τ =>
+  | ESizeOf cτ =>
+     τ ← to_type Γn Γ Γf m xs false cτ;
      let sz := size_of Γ τ in
      guard (int_typed sz sptrT);
      Some (# (intV{sptrT} sz), inr sptrT)
   | EDeref ce =>
-     '(e,τ) ← to_R <$> go ce;
+     '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      τp ← maybe_TBase τ ≫= maybe_TPtr;
      guard (✓{Γ} τp);
      Some (.* e, inl τp)
   | EAddrOf ce =>
-     '(e,τlr) ← go ce;
+     '(e,τlr) ← to_expr Γn Γ Γf m xs ce;
      τ ← maybe_inl τlr;
      Some (& e, inr (τ.*))
   | EAssign ass ce1 ce2 =>
-     '(e1,τlr1) ← go ce1;
+     '(e1,τlr1) ← to_expr Γn Γ Γf m xs ce1;
      τ1 ← maybe_inl τlr1;
-     '(e2,τ2) ← to_R_NULL τ1 <$> go ce2;
+     '(e2,τ2) ← to_R_NULL τ1 <$> to_expr Γn Γ Γf m xs ce2;
      σ ← assign_type_of Γ τ1 τ2 ass;
      Some (e1 ::={ass} e2, inr σ)
   | ECall f ces =>
      '(τs,σ) ← Γf !! (f : funname);
      guard (length ces = length τs);
-     eτlrs ← mapM go ces;
+     eτlrs ← mapM (to_expr Γn Γ Γf m xs) ces;
      let τes := zip_with to_R_NULL τs eτlrs in 
      guard (Forall2 (cast_typed Γ) (snd <$> τes) τs);
      Some (call f @ cast{τs}* (fst <$> τes), inr σ)
-  | EAlloc τ ce =>
-     guard (✓{Γ} τ);
-     '(e,τe) ← to_R <$> go ce;
+  | EAlloc cτ ce =>
+     τ ← to_type Γn Γ Γf m xs false cτ;
+     '(e,τe) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      _ ← maybe_TBase τe ≫= maybe_TInt;
      Some (& (alloc{τ} e), inr (τ.*))
   | EFree ce =>
-     '(e,τ) ← to_R <$> go ce;
+     '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      τp ← maybe_TBase τ ≫= maybe_TPtr;
      guard (✓{Γ} τp);
      Some (free (.* e), inr voidT)
   | EUnOp op ce =>
-     '(e,τ) ← to_R <$> go ce;
+     '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      σ ← unop_type_of op τ;
      Some (@{op} e, inr σ)
   | EBinOp op ce1 ce2 =>
-     eτ1 ← to_R <$> go ce1;
-     eτ2 ← to_R <$> go ce2;
+     eτ1 ← to_R <$> to_expr Γn Γ Γf m xs ce1;
+     eτ2 ← to_R <$> to_expr Γn Γ Γf m xs ce2;
      to_binop_expr op eτ1 eτ2
   | EIf ce1 ce2 ce3 =>
-     '(e1,τ1) ← to_R <$> go ce1; _ ← maybe_TBase τ1;
-     eτ2 ← to_R <$> go ce2;
-     eτ3 ← to_R <$> go ce3;
+     '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1; _ ← maybe_TBase τ1;
+     eτ2 ← to_R <$> to_expr Γn Γ Γf m xs ce2;
+     eτ3 ← to_R <$> to_expr Γn Γ Γf m xs ce3;
      to_if_expr e1 eτ2 eτ3
   | EComma ce1 ce2 =>
-     '(e1,τ1) ← to_R <$> go ce1;
-     '(e2,τ2) ← to_R <$> go ce2;
+     '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1;
+     '(e2,τ2) ← to_R <$> to_expr Γn Γ Γf m xs ce2;
      Some (e1,, e2, inr τ2)
   | EAnd ce1 ce2 =>
-     '(e1,τ1) ← to_R <$> go ce1; _ ← maybe_TBase τ1;
-     '(e2,τ2) ← to_R <$> go ce2; _ ← maybe_TBase τ2;
+     '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1; _ ← maybe_TBase τ1;
+     '(e2,τ2) ← to_R <$> to_expr Γn Γ Γf m xs ce2; _ ← maybe_TBase τ2;
      Some (if{e1} if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)
            else #(intV{sintT} 0), inr sintT)
   | EOr ce1 ce2 =>
-     '(e1,τ1) ← to_R <$> go ce1; _ ← maybe_TBase τ1;
-     '(e2,τ2) ← to_R <$> go ce2; _ ← maybe_TBase τ2;
+     '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1; _ ← maybe_TBase τ1;
+     '(e2,τ2) ← to_R <$> to_expr Γn Γ Γf m xs ce2; _ ← maybe_TBase τ2;
      Some (if{e1} #(intV{sintT} 0)
            else (if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)), inr sintT)
-  | ECast σ ce =>
-     guard (ptr_type_valid Γ σ);
-     '(e,τ) ← to_R_NULL σ <$> go ce;
+  | ECast cσ ce =>
+     σ ← to_type Γn Γ Γf m xs true cσ;
+     '(e,τ) ← to_R_NULL σ <$> to_expr Γn Γ Γf m xs ce;
      guard (cast_typed Γ τ σ);
      Some (cast{σ} e, inr σ)
   | EField ce x =>
-     '(e,τrl) ← go ce;
+     '(e,τrl) ← to_expr Γn Γ Γf m xs ce;
      '(c,s) ← maybe_TCompound (lrtype_type τrl);
      σs ← Γ !! s;
      i ← Γn !! s ≫= list_find (x =);
@@ -256,7 +265,41 @@ Definition to_expr (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) (m : mem
      match τrl with
      | inl _ => Some (e %> rs, inl σ) | inr _ => Some (e #> rs, inr σ)
      end
-  end.
+  end
+with to_type `{IntEnv Ti, PtrEnv Ti} (Γn : rename_env) (Γ : env Ti)
+    (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
+    (ptr : bool) (cτ : ctype Ti) : option (type Ti) :=
+  match cτ with
+  | TVoid => Some voidT
+  | TInt τi => Some (intT τi)
+  | TPtr cτ => τ ← to_type Γn Γ Γf m xs true cτ; Some (τ.*)
+  | TArray cτ ce =>
+     τ ← to_type Γn Γ Γf m xs false cτ;
+     '(e,_) ← to_expr Γn Γ Γf m xs ce;
+     v ← ⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr;
+     '(_,x) ← maybe_VBase v ≫= maybe_VInt;
+     let n := Z.to_nat x in
+     guard (n ≠ 0);
+     Some (τ.[n])
+  | TCompound c s =>
+     guard (¬ptr → is_Some (Γ !! s));
+     Some (compoundT{c} s)
+  | TTypeOf ce =>
+     '(_,τ) ← to_expr Γn Γ Γf m xs ce;
+     Some (lrtype_type τ)
+  end
+with to_base_type `{IntEnv Ti, PtrEnv Ti} (Γn : rename_env) (Γ : env Ti)
+    (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
+    (cτ : ctype Ti) : option (base_type Ti) :=
+  match cτ with
+  | TVoid => Some voidT
+  | TInt τi => Some (intT τi)
+  | TPtr cτ => τ ← to_type Γn Γ Γf m xs true cτ; Some (τ.*)
+  | _ => None
+  end%BT.
+
+Section frontend_more.
+Context `{IntEnv Ti, PtrEnv Ti}.
 
 Global Instance cstmt_labels : Labels (cstmt Ti) :=
   fix go cs := let _ : Labels _ := @go in
@@ -272,7 +315,6 @@ Definition alloc_global (Γn : rename_env) (Γ : env Ti) (m : mem Ti) (xs : var_
     (x : N) (τ : type Ti) (mce : option (cexpr Ti)) : option (mem Ti * var_env Ti) :=
   match mce with
   | Some ce =>
-     guard (✓{Γ} τ);
      guard (int_typed (size_of Γ τ) sptrT);
      '(e,τ') ← to_R_NULL τ <$> to_expr Γn Γ ∅ m xs ce;
      guard (cast_typed Γ τ' τ);
@@ -280,7 +322,6 @@ Definition alloc_global (Γn : rename_env) (Γ : env Ti) (m : mem Ti) (xs : var_
      let o := fresh (dom _ m) in
      Some (<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o false τ m), (x,inl o) :: xs)
   | None =>
-     guard (✓{Γ} τ);
      guard (int_typed (size_of Γ τ) sptrT);
      let o := fresh (dom _ m) in
      Some (<[addr_top o τ:=val_0 Γ τ]{Γ}>(mem_alloc Γ o false τ m),
@@ -302,19 +343,20 @@ Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      Some (m, ret e, (true, Some τ))
   | SReturn None => Some (m, ret (#voidV), (true, Some voidT))
-  | SBlock x τ None cs =>
-     guard (✓{Γ} τ);
+  | SBlock x cτ None cs =>
+     τ ← to_type Γn Γ Γf m xs false cτ;
      guard (int_typed (size_of Γ τ) sptrT);
      '(m,s,cmσ) ← go m ((x,inr τ) :: xs) Ls mLc mLb cs;
      Some (m, blk{τ} s, cmσ)
-  | SBlock x τ (Some ce) cs =>
-     guard (✓{Γ} τ);
+  | SBlock x cτ (Some ce) cs =>
+     τ ← to_type Γn Γ Γf m xs false cτ;
      guard (int_typed (size_of Γ τ) sptrT);
      '(e,τ') ← to_R <$> to_expr Γn Γ Γf m ((x,inr τ) :: xs) ce;
      guard (τ = τ');
      '(m,s,cmσ) ← go m ((x,inr τ) :: xs) Ls mLc mLb cs;
      Some (m, blk{τ} (var{τ} 0 ::= e ;; s), cmσ)
-  | SStatic x τ mce cs =>
+  | SStatic x cτ mce cs =>
+     τ ← to_type Γn Γ Γf m xs false cτ;
      '(m,xs) ← alloc_global Γn Γ m xs x τ mce;
      go m xs Ls mLc mLb cs
   | SComp cs1 cs2 =>
@@ -359,41 +401,42 @@ Definition extend_funtypes (Γ : env Ti) (f : funname) (τs : list (type Ti))
   match Γf !! f with
   | Some (τs',τ') => guard (τs' = τs); guard (τ' = τ); Some Γf
   | None =>
-     guard (✓{Γ}* τs);
      guard (Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs);
-     guard (✓{Γ} τ);
      Some (<[f:=(τs,τ)]>Γf)
   end.
 Fixpoint to_envs_go (Θ : list (N * decl Ti)) : option
     (rename_env * env Ti * funtypes Ti * funenv Ti * mem Ti * var_env Ti) :=
   match Θ with
   | [] => Some (∅,∅,∅,∅,∅,[])
-  | (s,CompoundDecl τys) :: Θ =>
+  | (s,CompoundDecl cτys) :: Θ =>
      (* todo: names of structures and unions should not collapse *)
      '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
      let s : tag := s in
-     let ys := fst <$> τys in
-     let τs := snd <$> τys in
+     let ys := fst <$> cτys in
+     τs ← mapM (to_type Γn Γ Γf m xs false) (snd <$> cτys);
      guard (Γ !! s = None);
      guard (NoDup ys);
-     guard (✓{Γ}* τs);
      guard (1 < length τs);
      Some (<[s:=ys]>Γn, <[s:=τs]>Γ, Γf, δ, m, xs)
-  | (x,GlobDecl τ me) :: Θ =>
+  | (x,GlobDecl cτ me) :: Θ =>
      (* todo: we just shadow, that is wrong *)
      '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
+     τ ← to_type Γn Γ Γf m xs false cτ;
      '(m,xs) ← alloc_global Γn Γ m xs x τ me;
       Some (Γn, Γ, Γf, δ, m, xs)
-  | (f,FunDecl ys σ mcs) :: Θ =>
+  | (f,FunDecl cτys cσ mcs) :: Θ =>
      (* todo: functions and globals cannot have the same name *)
      '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
      let f : funname := f in
-     guard (NoDup (fst <$> ys));
-     Γf ← extend_funtypes Γ f (snd <$> ys) σ Γf;
+     let ys := fst <$> cτys in
+     τs ← mapM (to_type Γn Γ Γf m xs false) (snd <$> cτys);
+     guard (NoDup ys);
+     σ ← to_type Γn Γ Γf m xs false cσ;
+     Γf ← extend_funtypes Γ f τs σ Γf;
      match mcs with
      | Some cs =>
         guard (δ !! f = None);
-        let xs' := (prod_map id inr <$> ys) ++ xs in
+        let xs' := zip_with (λ y τ, (y, inr τ)) ys τs ++ xs in
         '(m,s,cmσ) ← to_stmt Γn Γ Γf m xs' (labels cs) None None cs;
         guard (gotos s ⊆ labels s);
         guard (rettype_match cmσ σ);
@@ -406,19 +449,18 @@ Definition to_envs (Θ : list (N * decl Ti)) :
   '(_,Γ,Γf,δ,m,_) ← to_envs_go Θ;
    guard (dom funset Γf ⊆ dom funset δ);
    Some (Γ,Γf,δ,m).
-End frontend.
+End frontend_more.
 
 Section cexpr_ind.
-Context {Ti : Set} (P : cexpr Ti → Prop).
+Context {Ti : Set} (P : cexpr Ti → Prop) (Q : ctype Ti → Prop).
 Context (Pvar : ∀ x, P (EVar x)).
 Context (Pconst : ∀ τi x, P (EConst τi x)).
-Context (Psizeof : ∀ ce, P ce → P (ESizeOf ce)).
-Context (Psizeoftype : ∀ τ, P (ESizeOfType τ)).
+Context (Psizeof : ∀ cτ, Q cτ → P (ESizeOf cτ)).
 Context (Paddrof : ∀ ce, P ce → P (EAddrOf ce)).
 Context (Pderef : ∀ ce, P ce → P (EDeref ce)).
 Context (Passign : ∀ ass ce1 ce2, P ce1 → P ce2 → P (EAssign ass ce1 ce2)).
 Context (Pcall : ∀ f ces, Forall P ces → P (ECall f ces)).
-Context (Palloc : ∀ τ ce, P ce → P (EAlloc τ ce)).
+Context (Palloc : ∀ cτ ce, Q cτ → P ce → P (EAlloc cτ ce)).
 Context (Pfree : ∀ ce, P ce → P (EFree ce)).
 Context (Punop : ∀ op ce, P ce → P (EUnOp op ce)).
 Context (Pbinop : ∀ op ce1 ce2, P ce1 → P ce2 → P (EBinOp op ce1 ce2)).
@@ -426,32 +468,48 @@ Context (Pif : ∀ ce1 ce2 ce3, P ce1 → P ce2 → P ce3 → P (EIf ce1 ce2 ce3
 Context (Pcomma : ∀ ce1 ce2, P ce1 → P ce2 → P (EComma ce1 ce2)).
 Context (Pand : ∀ ce1 ce2, P ce1 → P ce2 → P (EAnd ce1 ce2)).
 Context (Por : ∀ ce1 ce2, P ce1 → P ce2 → P (EOr ce1 ce2)).
-Context (Pcast : ∀ τ ce, P ce → P (ECast τ ce)).
+Context (Pcast : ∀ cτ ce, Q cτ → P ce → P (ECast cτ ce)).
 Context (Pfield : ∀ ce i, P ce → P (EField ce i)).
+Context (Qvoid : Q TVoid).
+Context (Qint : ∀ τi, Q (TInt τi)).
+Context (Qptr : ∀ cτ, Q cτ → Q (TPtr cτ)).
+Context (Qarray : ∀ cτ ce, Q cτ → P ce → Q (TArray cτ ce)).
+Context (Qcompound : ∀ c s, Q (TCompound c s)).
+Context (Qtypeof : ∀ ce, P ce → Q (TTypeOf ce)).
 
-Definition cexpr_ind_alt : ∀ e, P e :=
-  fix go e :=
-  match e return P e with
+Fixpoint cexpr_ind_alt ce : P ce :=
+  match ce return P ce with
   | EVar _ => Pvar _
   | EConst _ _ => Pconst _ _
-  | ESizeOf ce => Psizeof _ (go ce)
-  | ESizeOfType _ => Psizeoftype _
-  | EAddrOf ce => Paddrof _ (go ce)
-  | EDeref ce => Pderef _ (go ce)
-  | EAssign _ ce1 ce2 => Passign _ _ _ (go ce1) (go ce2)
+  | ESizeOf cτ => Psizeof _ (ctype_ind_alt cτ)
+  | EAddrOf ce => Paddrof _ (cexpr_ind_alt ce)
+  | EDeref ce => Pderef _ (cexpr_ind_alt ce)
+  | EAssign _ ce1 ce2 => Passign _ _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
   | ECall f ces => Pcall _ ces $ list_ind (Forall P)
-      (Forall_nil_2 _) (λ ce _, Forall_cons_2 _ _ _ (go ce)) ces
-  | EAlloc _ ce => Palloc _ _ (go ce)
-  | EFree ce => Pfree _ (go ce)
-  | EUnOp _ ce => Punop _ _ (go ce)
-  | EBinOp _ ce1 ce2 => Pbinop _ _ _ (go ce1) (go ce2)
-  | EIf ce1 ce2 ce3 => Pif _ _ _ (go ce1) (go ce2) (go ce3)
-  | EComma ce1 ce2 => Pcomma _ _ (go ce1) (go ce2)
-  | EAnd ce1 ce2 => Pand _ _ (go ce1) (go ce2)
-  | EOr ce1 ce2 => Por _ _ (go ce1) (go ce2)
-  | ECast _ ce => Pcast _ _ (go ce)
-  | EField ce _ => Pfield _ _ (go ce)
+      (Forall_nil_2 _) (λ ce _, Forall_cons_2 _ _ _ (cexpr_ind_alt ce)) ces
+  | EAlloc cτ ce => Palloc _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
+  | EFree ce => Pfree _ (cexpr_ind_alt ce)
+  | EUnOp _ ce => Punop _ _ (cexpr_ind_alt ce)
+  | EBinOp _ ce1 ce2 => Pbinop _ _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
+  | EIf ce1 ce2 ce3 =>
+     Pif _ _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2) (cexpr_ind_alt ce3)
+  | EComma ce1 ce2 => Pcomma _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
+  | EAnd ce1 ce2 => Pand _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
+  | EOr ce1 ce2 => Por _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
+  | ECast cτ ce => Pcast _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
+  | EField ce _ => Pfield _ _ (cexpr_ind_alt ce)
+  end
+with ctype_ind_alt cτ : Q cτ :=
+  match cτ with
+  | TVoid => Qvoid
+  | TInt _ => Qint _
+  | TPtr cτ => Qptr _ (ctype_ind_alt cτ)
+  | TArray cτ ce => Qarray _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
+  | TCompound _ _ => Qcompound _ _
+  | TTypeOf ce => Qtypeof _ (cexpr_ind_alt ce)
   end.
+Lemma cexpr_ctype_ind : (∀ ce, P ce) ∧ (∀ cτ, Q cτ).
+Proof. auto using cexpr_ind_alt, ctype_ind_alt. Qed.
 End cexpr_ind.
 
 Section properties.
@@ -464,6 +522,7 @@ Implicit Types e : expr Ti.
 Implicit Types ce : cexpr Ti.
 Implicit Types s : stmt Ti.
 Implicit Types τ σ : type Ti.
+Implicit Types cτ : ctype Ti.
 Implicit Types τlr : lrtype Ti.
 
 Arguments to_R _ _ : simpl never.
@@ -483,9 +542,10 @@ Lemma var_env_stack_types_app xs1 xs2 :
   var_env_stack_types (xs1 ++ xs2)
   = var_env_stack_types xs1 ++ var_env_stack_types xs2.
 Proof. induction xs1 as [|[?[?|?]] ??]; f_equal'; auto. Qed.
-Lemma var_env_stack_types_snd (ys : list (N * type Ti)) :
-  var_env_stack_types (prod_map id inr <$> ys) = snd <$> ys.
-Proof. induction ys; f_equal'; auto. Qed.
+Lemma var_env_stack_types_snd (ys : list N) (τs : list (type Ti)) :
+  length ys = length τs →
+  var_env_stack_types (zip_with (λ y τ, (y, inr τ)) ys τs) = τs.
+Proof. rewrite <-Forall2_same_length. induction 1; f_equal'; auto. Qed.
 
 Lemma to_R_typed Γ Γf m τs e τlr e' τ' :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
@@ -563,10 +623,14 @@ Proof.
        eapply convert_ptrs_typed in H; eauto; destruct H
     end; typed_constructor; eauto.
 Qed.
-Lemma to_expr_typed Γn Γ Γf m xs ce e τlr :
+Lemma to_expr_type_typed Γn Γ Γf m xs :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
-  to_expr Γn Γ Γf m xs ce = Some (e,τlr) →
-  (Γ,Γf,m,var_env_stack_types xs) ⊢ e : τlr.
+  (∀ ce e τlr, to_expr Γn Γ Γf m xs ce = Some (e,τlr) →
+    (Γ,Γf,m,var_env_stack_types xs) ⊢ e : τlr) ∧
+  (∀ cτ,
+    (∀ τ, to_type Γn Γ Γf m xs false cτ = Some τ → ✓{Γ} τ) ∧
+    (∀ τ, to_type Γn Γ Γf m xs true cτ = Some τ → ptr_type_valid Γ τ) ∧
+    (∀ τb, to_base_type Γn Γ Γf m xs cτ = Some τb → ✓{Γ} τb)).
 Proof.
   intros ????. assert (∀ f ces τs τ eτlrs,
      Γf !! f = Some (τs, τ) →
@@ -582,14 +646,16 @@ Proof.
     revert τs Hτs Hcast.
     induction Hces as [|? [??]]; intros [|??] ??; decompose_Forall_hyps;
       constructor; eauto using ECast_typed, to_R_NULL_typed, surjective_pairing. }
-  revert e τlr. induction ce using @cexpr_ind_alt; intros;
+  apply cexpr_ctype_ind; intros; split_ands; intros;
     repeat match goal with
+    | H : _ ∧ _ |- _ => destruct H
     | _ : maybe_inl ?τlr = Some _ |- _ => is_var τlr; destruct τlr
     | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
     | _ : maybe_TPtr ?τb = Some _ |- _ => is_var τb; destruct τb
     | _ : maybe_TInt ?τb = Some _ |- _ => is_var τb; destruct τb
     | _ : maybe_TCompound ?τ = Some _ |- _ => is_var τ; destruct τ
-    | H : ∀ e τlr, Some _ = Some _ → _ |- _ => specialize (H _ _ eq_refl)
+    | H : ∀ _, Some _ = Some _ → _ |- _ => specialize (H _ eq_refl)
+    | H : ∀ _ _, Some _ = Some _ → _ |- _ => specialize (H _ _ eq_refl)
     | H: assign_type_of _ _ _ _ = Some _ |- _ =>
        apply assign_type_of_correct in H
     | H: unop_type_of _ _ = Some _ |- _ => apply unop_type_of_correct in H
@@ -606,12 +672,33 @@ Proof.
     | _ : context [to_R ?eτlr] |- _ => 
        let H := fresh in destruct (to_R eτlr) eqn:H;
        first_of ltac:(eapply to_R_typed in H) idtac ltac:(by eauto)
-    end; repeat typed_constructor; eauto using to_binop_expr_typed,
-      to_if_expr_typed, var_lookup_typed.
+    end;
+    try match goal with
+    | |- _ ⊢ _ : _ =>
+       repeat typed_constructor; eauto using to_binop_expr_typed,
+         to_if_expr_typed, var_lookup_typed, type_valid_ptr_type_valid
+    | |- ✓{_} _ => repeat constructor; eauto
+    | |- ptr_type_valid _ _ =>
+       repeat constructor; eauto using type_valid_ptr_type_valid
+    end.
 Qed.
+Lemma to_expr_typed Γn Γ Γf m xs ce e τlr :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
+  to_expr Γn Γ Γf m xs ce = Some (e,τlr) →
+  (Γ,Γf,m,var_env_stack_types xs) ⊢ e : τlr.
+Proof. intros. eapply to_expr_type_typed; eauto. Qed.
+Lemma to_type_valid Γn Γ Γf m xs cτ τ :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
+  to_type Γn Γ Γf m xs false cτ = Some τ → ✓{Γ} τ.
+Proof. intros. eapply to_expr_type_typed; eauto. Qed.
+Lemma to_types_valid Γn Γ Γf m xs cτs τs :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
+  mapM (to_type Γn Γ Γf m xs false) cτs = Some τs → ✓{Γ}* τs.
+Proof. rewrite mapM_Some. induction 5; eauto using to_type_valid. Qed.
+
 Lemma alloc_global_typed Γn Γ m xs x τ mce m' xs' :
   ✓ Γ → alloc_global Γn Γ m xs x τ mce = Some (m',xs') →
-  ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
+  ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) → ✓{Γ} τ →
   (**i 1.) *) ✓{Γ} m' ∧
   (**i 2.) *) (∀ o σ, m ⊢ o : σ → m' ⊢ o : σ) ∧
   (**i 3.) *) var_env_stack_types xs = var_env_stack_types xs'.
@@ -642,7 +729,7 @@ Lemma to_stmt_typed Γn Γ Γf m xs Ls mLc mLb cs m' s cmτ :
   (**i 2.) *) ✓{Γ} m' ∧
   (**i 3.) *) (∀ o σ, m ⊢ o : σ → m' ⊢ o : σ).
 Proof.
-  intros ??. revert m m' s cmτ xs Ls mLc mLb. Time induction cs; intros;
+  intros ??. revert m m' s cmτ xs Ls mLc mLb. induction cs; intros;
     repeat match goal with
     | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
     | _ => progress (simplify_option_equality by fail)
@@ -653,10 +740,13 @@ Proof.
          simpl; [by auto|by auto with congruence|]
     | H : to_expr _ _ _ _ _ _ = Some _ |- _ =>
        first_of ltac:(apply to_expr_typed in H; simpl) idtac ltac:(by auto)
+    | H : to_type _ _ _ _ _ _ _ = Some _ |- _ =>
+       first_of ltac:(apply to_type_valid in H; simpl) idtac ltac:(by auto)
     | H: to_R _ = _, _ : (_,_,_,?τs) ⊢ _ : _ |- _ =>
        first_of ltac:(eapply (to_R_typed _ _ _ τs) in H) idtac ltac:(by eauto)
     | H : alloc_global _ _ _ _ _ _ _ = Some _ |- _ =>
-       apply alloc_global_typed in H; [|by auto|by auto|by auto]; destruct H as (?&?&?)
+       first_of ltac:(apply alloc_global_typed in H) idtac ltac:(by auto);
+       destruct H as (?&?&?)
     | _ => case_match
     end; try solve [split_ands; eauto using to_R_typed, to_expr_typed].
   * split_ands; eauto 2. eapply SBlock_typed; eauto 2.
@@ -674,13 +764,13 @@ Proof.
       repeat typed_constructor; eauto using stmt_typed_weaken, expr_typed_weaken.
 Qed.
 Lemma extend_funtypes_typed Γ m f τs τ Γf Γf' :
-  ✓{Γ} Γf → extend_funtypes Γ f τs τ Γf = Some Γf' →
+  ✓{Γ} Γf → extend_funtypes Γ f τs τ Γf = Some Γf' → ✓{Γ}* τs → ✓{Γ} τ →
   (**i 1.) *) Γf ⊆ Γf' ∧
   (**i 2.) *) ✓{Γ} Γf' ∧
   (**i 3.) *) Γf' !! f = Some (τs,τ) ∧
-  (**i 4.) *) ✓{Γ} τ ∧ ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs.
+  (**i 4.) *) Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs.
 Proof.
-  unfold extend_funtypes; intros HΓf ?.
+  unfold extend_funtypes; intros HΓf ???.
   destruct (Γf !! f) as [[]|] eqn:?; simplify_option_equality; auto.
   { destruct (HΓf f (τs,τ)); naive_solver. }
   simpl_map; split_ands; eauto using insert_subseteq, funtypes_valid_insert.
@@ -690,41 +780,52 @@ Lemma to_envs_go_typed Θ Γn Γ Γf δ m xs :
   ✓ Γ ∧ ✓{Γ} Γf ∧ funenv_pretyped Γ m δ Γf
       ∧ ✓{Γ} m ∧ var_env_stack_types xs = [].
 Proof.
-  revert Γn Γ Γf δ m xs. induction Θ as [|[x [τs|τ mce|ys σ mcs]] Θ IH];
+  revert Γn Γ Γf δ m xs. induction Θ as [|[x [cτys|cτ mce|cτys cσ mcs]] Θ IH];
     intros  Γn Γ Γf δ m xs ?; simplify_equality'.
   * split_ands; eauto using env_empty_valid,
       cmap_empty_valid, funtypes_valid_empty, funenv_pretyped_empty.
-  * destruct (to_envs_go Θ)
-      as [[[[[[Γn2 Γ2] ?] ?] ?] ?]|]; simplify_option_equality.
-    destruct (IH Γn2 Γ2 Γf δ m xs) as (?&?&?&?&?); eauto. split_ands; auto.
-    + by constructor.
+  * destruct (to_envs_go Θ) as [[[[[[Γn2 Γ2] ?] ?] ?] ?]|]; simplify_equality'.
+    destruct (mapM _ _) as [τs|] eqn:?; simplify_option_equality.
+    destruct (IH Γn2 Γ2 Γf δ m xs) as (?&?&?&?&Hxs); eauto.
+    assert (✓{Γ2}* (var_env_stack_types xs)) by (rewrite Hxs; constructor).
+    split_ands; auto.
+    + constructor; eauto using to_types_valid.
     + eapply funtypes_valid_weaken; eauto using insert_subseteq.
     + eapply funenv_pretyped_weaken; eauto using insert_subseteq.
     + eapply cmap_valid_weaken; eauto using insert_subseteq.
   * destruct (to_envs_go Θ)
       as [[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]|]; simplify_equality'.
+    destruct (to_type _ _ _ _ _ _ _) as [τ|] eqn:?; simplify_equality'.
     destruct (alloc_global _ _ _ _ _ _ _) as [[??]|] eqn:?; simplify_equality'.
     destruct (IH Γn Γ Γf δ m2 xs2) as (?&?&?&?&Hxs2); eauto.
+    assert (✓{Γ}* (var_env_stack_types xs2)) by (rewrite Hxs2; constructor).
     destruct (alloc_global_typed Γn Γ m2 xs2 x τ mce m xs)
-      as (?&?&<-); split_ands; rewrite ?Hxs2; eauto using funenv_pretyped_weaken.
+      as (?&?&<-); eauto 7 using funenv_pretyped_weaken, to_type_valid.
   * destruct (to_envs_go Θ)
       as [[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]|]; simplify_equality'.
-    destruct (IH Γn2 Γ2 Γf2 δ2 m2 xs2) as (?&?&?&?&?Hxs); eauto.
+    destruct (mapM _ _) as [τs|] eqn:?; simplify_equality'.
+    destruct (IH Γn2 Γ2 Γf2 δ2 m2 xs2) as (?&?&?&?&?Hxs2); eauto.
+    assert (✓{Γ2}* (var_env_stack_types xs2)) by (rewrite Hxs2; constructor).
     repeat case_option_guard; simplify_equality'.
+    destruct (to_type _ _ _ _ _ _ _) as [σ|] eqn:?; simplify_equality'.
     destruct (extend_funtypes _ _ _ _ _) as [Γf3|] eqn:?; simplify_equality'.
-    destruct (extend_funtypes_typed Γ2 m2 x
-      (snd <$> ys) σ Γf2 Γf3) as (?&?&?&?&?&?); auto.
+    destruct (extend_funtypes_typed Γ2 m2 x τs σ Γf2 Γf3) as (?&?&?&?);
+      eauto using to_types_valid, to_type_valid.
     destruct mcs as [cs|]; simplify_equality';
       [|split_ands; eauto using funenv_pretyped_weaken].
     destruct (to_stmt _ _ _ _ _ _ _ _ _)
       as [[[m3 s] cmσ]|] eqn:?; simplify_option_equality.
-    destruct (to_stmt_typed Γn Γ Γf m2 ((prod_map id inr <$> ys) ++ xs)
+    assert (length (fst <$> cτys) = length τs).
+    { by erewrite <-(mapM_length _ _ τs), !fmap_length by eauto. }
+    destruct (to_stmt_typed Γn Γ Γf m2
+      (zip_with (λ y τ, (y, inr τ)) (fst <$> cτys) τs ++ xs)
       (labels cs) None None cs m s cmσ) as (Hs&?&?); auto.
-    { by rewrite var_env_stack_types_app,
-        var_env_stack_types_snd, Hxs, (right_id_L [] (++)). }
+    { rewrite var_env_stack_types_app, var_env_stack_types_snd, Hxs2,
+        (right_id_L [] (++)) by done; eauto using to_types_valid. }
     rewrite var_env_stack_types_app,
-      var_env_stack_types_snd, Hxs, (right_id_L [] (++)) in Hs.
-    split_ands; eauto using funenv_pretyped_weaken, funenv_pretyped_insert.
+      var_env_stack_types_snd, Hxs2, (right_id_L [] (++)) in Hs by done.
+    split_ands; eauto using funenv_pretyped_weaken,
+      funenv_pretyped_insert, to_types_valid, to_type_valid.
 Qed.
 Lemma to_envs_typed Θ Γ Γf δ m :
   to_envs Θ = Some (Γ,Γf,δ,m) → ✓ Γ ∧ (Γ,m) ⊢ δ : Γf ∧ ✓{Γ} m.

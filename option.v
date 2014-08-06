@@ -22,7 +22,6 @@ Proof. congruence. Qed.
 (** The non dependent elimination principle on the option type. *)
 Definition default {A B} (b : B) (x : option A) (f : A → B)  : B :=
   match x with None => b | Some a => f a end.
-Hint Extern 1000 => simpl (default _ (Some _) _) || simpl (default _ None _).
 
 (** The [from_option] function allows us to get the value out of the option
 type by specifying a default value. *)

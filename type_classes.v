@@ -57,6 +57,12 @@ Class PathTypeCheckSpec (E T1 T2 R : Type)
     Γ ⊢ r : τ1 ↣ σ → Γ ⊢ r : τ2 ↣ σ → τ1 = τ2
 }.
 
+Ltac valid_constructor :=
+  intros; match goal with
+  | |- valid (Valid:=?T) ?Γ ?x =>
+    let T' := eval hnf in (T Γ) in
+    econstructor; change T' with (valid (Valid:=T) Γ)
+  end.  
 Ltac typed_constructor :=
   intros; match goal with
   | |- typed (Typed:=?T) ?Γ _ _ =>
@@ -66,12 +72,15 @@ Ltac typed_constructor :=
     let T' := eval hnf in (T Γ) in
     econstructor; change T' with (path_typed (PathTyped:=T) Γ)
   end.
-Ltac typed_inversion H :=
+Ltac valid_inversion H :=
   match type of H with
   | valid (Valid:=?T) ?Γ _ =>
     let T' := eval hnf in (T Γ) in
     inversion H; clear H; simplify_equality';
     try change T' with (valid (Valid:=T) Γ) in *
+  end.
+Ltac typed_inversion H :=
+  match type of H with
   | typed (Typed:=?T) ?Γ _ _ =>
     let T' := eval hnf in (T Γ) in
     inversion H; clear H; simplify_equality';
@@ -83,7 +92,6 @@ Ltac typed_inversion H :=
   end.
 Ltac typed_inversion_all :=
   repeat match goal with
-  | H : ✓{_} ?x |- _ => progress first [is_var x | typed_inversion H]
   | H : _ ⊢ ?x : _ |- _ =>
      progress first [is_var x | typed_inversion H]
   | H : _ ⊢ ?x : _ ↣ _ |- _ => progress first [is_var x | typed_inversion H]
