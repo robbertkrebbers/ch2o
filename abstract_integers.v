@@ -130,6 +130,7 @@ Section int_coding.
     end.
   Definition int_typed (x : Z) (τ : int_type Ti) : Prop :=
     int_lower τ ≤ x < int_upper τ.
+  Global Instance int_typed_dec x τ : Decision (int_typed x τ) := _.
 
   Fixpoint Z_to_bits (n : nat) (x : Z) : list bool :=
     match n with
@@ -226,6 +227,7 @@ Section int_coding.
     else if decide (sign τ1 = Signed
       ∧ rank_size (rank τ2) < rank_size (rank τ1)) then τ1 else τ2.
 End int_coding.
+Typeclasses Opaque int_typed.
 
 (** The classes [IntCodingSpec] describe the laws that an implementation of
 machine integers should satisfy with respect to representatons. *)
