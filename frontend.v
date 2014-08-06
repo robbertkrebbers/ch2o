@@ -55,6 +55,8 @@ Inductive cstmt (Ti : Set) : Set :=
   | SComp : cstmt Ti → cstmt Ti → cstmt Ti
   | SLabel : labelname → cstmt Ti → cstmt Ti
   | SWhile : cexpr Ti → cstmt Ti → cstmt Ti
+  | SFor : cexpr Ti → cexpr Ti → cexpr Ti → cstmt Ti → cstmt Ti
+  | SDoWhile : cstmt Ti → cexpr Ti → cstmt Ti
   | SIf : cexpr Ti → cstmt Ti → cstmt Ti → cstmt Ti.
 Arguments SDo {_} _.
 Arguments SSkip {_}.
@@ -67,6 +69,8 @@ Arguments SStatic {_} _ _ _ _.
 Arguments SComp {_} _ _.
 Arguments SLabel {_} _ _.
 Arguments SWhile {_} _ _.
+Arguments SFor {_} _ _ _ _.
+Arguments SDoWhile {_} _ _.
 Arguments SIf {_} _ _ _.
 
 Inductive decl (Ti : Set) : Set :=
@@ -264,41 +268,6 @@ Global Instance cstmt_labels : Labels (cstmt Ti) :=
   | SIf _ cs1 cs2 => labels cs1 ∪ labels cs2
   | _ => ∅
   end.
-Fixpoint cstmt_has_continue (cs : cstmt Ti) : bool :=
-  match cs with
-  | SContinue => true
-  | SBlock _ _ _ cs | SStatic _ _ _ cs => cstmt_has_continue cs
-  | SComp cs1 cs2 => cstmt_has_continue cs1 || cstmt_has_continue cs2
-  | SLabel _ cs => cstmt_has_continue cs
-  | SIf _ cs1 cs2 => cstmt_has_continue cs1 || cstmt_has_continue cs2
-  | _ => false
-  end.
-Fixpoint cstmt_has_break (cs : cstmt Ti) : bool :=
-  match cs with
-  | SBreak => true
-  | SBlock _ _ _ cs | SStatic _ _ _ cs => cstmt_has_break cs
-  | SComp cs1 cs2 => cstmt_has_break cs1 || cstmt_has_break cs2
-  | SLabel _ cs => cstmt_has_break cs
-  | SIf _ cs1 cs2 => cstmt_has_break cs1 || cstmt_has_break cs2
-  | _ => false
-  end.
-
-Definition to_while (e : expr Ti) (con bre : bool) (Ls : labelset) :
-    (labelset * option labelname * option labelname * (stmt Ti → stmt Ti)) :=
-  match con, bre with
-  | true, true =>
-     let Lc := fresh Ls in let Lb := fresh ({[ Lc ]} ∪ Ls) in
-     ({[ Lc ; Lb ]} ∪ Ls, Some Lc, Some Lb,
-      λ s, while{e} (s ;; label Lc) ;; label Lb)
-  | true, false =>
-     let Lc := fresh Ls in
-     ({[ Lc ]} ∪ Ls, Some Lc, None, λ s, while{e} (s ;; label Lc))
-  | false, true =>
-     let Lb := fresh Ls in
-     ({[ Lb ]} ∪ Ls, None, Some Lb, λ s, while{e} s ;; label Lb)
-  | false, false =>
-     (Ls, None, None, λ s, while{e} s)
-  end.
 Definition alloc_global (Γn : rename_env) (Γ : env Ti) (m : mem Ti) (xs : var_env Ti)
     (x : N) (τ : type Ti) (mce : option (cexpr Ti)) : option (mem Ti * var_env Ti) :=
   match mce with
@@ -317,7 +286,6 @@ Definition alloc_global (Γn : rename_env) (Γ : env Ti) (m : mem Ti) (xs : var_
      Some (<[addr_top o τ:=val_0 Γ τ]{Γ}>(mem_alloc Γ o false τ m),
            (x,inl o) :: xs)
   end.
-
 Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
     mem Ti → var_env Ti → labelset → option labelname → option labelname →
     cstmt Ti → option (mem Ti * stmt Ti * rettype Ti) :=
@@ -358,10 +326,26 @@ Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
      '(m,s,cmσ) ← go m xs Ls mLc mLb cs; Some (m, l :; s, cmσ)
   | SWhile ce cs =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce; _ ← maybe_TBase τ;
-     let '(Ls,mLc,mLb,Fs) :=
-       to_while e (cstmt_has_continue cs) (cstmt_has_break cs) Ls in
-     '(m,s,cmσ) ← go m xs Ls mLc mLb cs;
-     Some (m, Fs s, (false, cmσ.2))
+     let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
+     let Ls := {[ LC ; LB ]} ∪ Ls in
+     '(m,s,cmσ) ← go m xs Ls (Some LC) (Some LB) cs;
+     Some (m, while{e} (s ;; label LC) ;; label LB, (false, cmσ.2))
+  | SFor ce1 ce2 ce3 cs =>
+     '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1;
+     '(e2,τ2) ← to_R <$> to_expr Γn Γ Γf m xs ce2; _ ← maybe_TBase τ2;
+     '(e3,τ3) ← to_R <$> to_expr Γn Γ Γf m xs ce3;
+     let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
+     let Ls := {[ LC ; LB ]} ∪ Ls in
+     '(m,s,cmσ) ← go m xs Ls (Some LC) (Some LB) cs;
+     Some (m, !e1 ;; while{e2} (s ;; label LC ;; !e3) ;; label LB, (false, cmσ.2))
+  | SDoWhile cs ce =>
+     let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
+     let Ls := {[ LC ; LB ]} ∪ Ls in
+     '(m,s,cmσ) ← go m xs Ls (Some LC) (Some LB) cs;
+     '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce; _ ← maybe_TBase τ;
+     Some (m, while{#intV{sintT} 1}
+       (s ;; label LC ;; if{e} skip else goto LB) ;; label LB,
+     (false, cmσ.2))
   | SIf ce cs1 cs2 =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce; _ ← maybe_TBase τ;
      '(m,s1,cmσ1) ← go m xs Ls mLc mLb cs1;
@@ -651,14 +635,6 @@ Proof.
   * repeat case_option_guard; simplify_equality'.
     split; eauto using mem_alloc_val_valid, index_typed_alloc_val, val_0_typed.
 Qed.
-Lemma to_while_typed Γ Γf m τs e con bre Ls Ls' mLc mLb Fs s τb c mσ:
-  to_while e con bre Ls = (Ls',mLc,mLb,Fs) →
-  (Γ,Γf,m,τs) ⊢ e : inr (baseT τb) →
-  (Γ,Γf,m,τs) ⊢ s : (c,mσ) → (Γ,Γf,m,τs) ⊢ Fs s : (false,mσ).
-Proof.
-  destruct con, bre; intros; simplify_equality';
-    repeat typed_constructor; eauto using rettype_union_l.
-Qed.
 Lemma to_stmt_typed Γn Γ Γf m xs Ls mLc mLb cs m' s cmτ :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
   to_stmt Γn Γ Γf m xs Ls mLc mLb cs = Some (m',s,cmτ) →
@@ -666,9 +642,8 @@ Lemma to_stmt_typed Γn Γ Γf m xs Ls mLc mLb cs m' s cmτ :
   (**i 2.) *) ✓{Γ} m' ∧
   (**i 3.) *) (∀ o σ, m ⊢ o : σ → m' ⊢ o : σ).
 Proof.
-  intros ??. revert m m' s cmτ xs Ls mLc mLb. induction cs; intros;
+  intros ??. revert m m' s cmτ xs Ls mLc mLb. Time induction cs; intros;
     repeat match goal with
-    | _ => case_match
     | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
     | _ => progress (simplify_option_equality by fail)
     | x : (_ * _)%type |- _ => destruct x
@@ -682,14 +657,21 @@ Proof.
        first_of ltac:(eapply (to_R_typed _ _ _ τs) in H) idtac ltac:(by eauto)
     | H : alloc_global _ _ _ _ _ _ _ = Some _ |- _ =>
        apply alloc_global_typed in H; [|by auto|by auto|by auto]; destruct H as (?&?&?)
+    | _ => case_match
     end; try solve [split_ands; eauto using to_R_typed, to_expr_typed].
   * split_ands; eauto 2. eapply SBlock_typed; eauto 2.
     repeat typed_constructor; eauto using expr_typed_weaken, subseteq_empty.
     by constructor; apply cast_typed_self.
   * split_ands; eauto with congruence.
   * split_ands; eauto using stmt_typed_weaken.
-  * split_ands; eauto using to_while_typed, expr_typed_weaken.
-  * split_ands; eauto using stmt_typed_weaken, expr_typed_weaken.
+  * split_ands;
+      repeat typed_constructor; eauto using expr_typed_weaken, rettype_union_l.
+  * split_ands;
+      repeat typed_constructor; eauto using expr_typed_weaken, rettype_union_l.
+  * split_ands;
+      repeat typed_constructor; eauto using expr_typed_weaken, rettype_union_l.
+  * split_ands;
+      repeat typed_constructor; eauto using stmt_typed_weaken, expr_typed_weaken.
 Qed.
 Lemma extend_funtypes_typed Γ m f τs τ Γf Γf' :
   ✓{Γ} Γf → extend_funtypes Γ f τs τ Γf = Some Γf' →
