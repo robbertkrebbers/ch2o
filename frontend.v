@@ -6,83 +6,83 @@ Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 
 Inductive cexpr (Ti : Set) : Set :=
-  | EVar : N → cexpr Ti
-  | EConst : int_type Ti → Z → cexpr Ti
-  | ESizeOf : ctype Ti → cexpr Ti
-  | EAddrOf : cexpr Ti → cexpr Ti
-  | EDeref : cexpr Ti → cexpr Ti
-  | EAssign : assign → cexpr Ti → cexpr Ti → cexpr Ti
-  | ECall : N → list (cexpr Ti) → cexpr Ti
-  | EAlloc : ctype Ti → cexpr Ti → cexpr Ti
-  | EFree : cexpr Ti → cexpr Ti
-  | EUnOp : unop → cexpr Ti → cexpr Ti
-  | EBinOp : binop → cexpr Ti → cexpr Ti → cexpr Ti
-  | EIf : cexpr Ti → cexpr Ti → cexpr Ti → cexpr Ti
-  | EComma : cexpr Ti → cexpr Ti → cexpr Ti
-  | EAnd : cexpr Ti → cexpr Ti → cexpr Ti
-  | EOr : cexpr Ti → cexpr Ti → cexpr Ti
-  | ECast : ctype Ti → cexpr Ti → cexpr Ti
-  | EField : cexpr Ti → N → cexpr Ti
+  | CEVar : N → cexpr Ti
+  | CEConst : int_type Ti → Z → cexpr Ti
+  | CESizeOf : ctype Ti → cexpr Ti
+  | CEAddrOf : cexpr Ti → cexpr Ti
+  | CEDeref : cexpr Ti → cexpr Ti
+  | CEAssign : assign → cexpr Ti → cexpr Ti → cexpr Ti
+  | CECall : N → list (cexpr Ti) → cexpr Ti
+  | CEAlloc : ctype Ti → cexpr Ti → cexpr Ti
+  | CEFree : cexpr Ti → cexpr Ti
+  | CEUnOp : unop → cexpr Ti → cexpr Ti
+  | CEBinOp : binop → cexpr Ti → cexpr Ti → cexpr Ti
+  | CEIf : cexpr Ti → cexpr Ti → cexpr Ti → cexpr Ti
+  | CEComma : cexpr Ti → cexpr Ti → cexpr Ti
+  | CEAnd : cexpr Ti → cexpr Ti → cexpr Ti
+  | CEOr : cexpr Ti → cexpr Ti → cexpr Ti
+  | CECast : ctype Ti → cexpr Ti → cexpr Ti
+  | CEField : cexpr Ti → N → cexpr Ti
 with ctype (Ti : Set) : Set :=
-  | TArray : ctype Ti → cexpr Ti → ctype Ti
-  | TCompound : compound_kind → tag → ctype Ti
-  | TVoid : ctype Ti
-  | TInt : int_type Ti → ctype Ti
-  | TPtr : ctype Ti → ctype Ti
-  | TTypeOf : cexpr Ti → ctype Ti.
-Arguments EVar {_} _.
-Arguments EConst {_} _ _.
-Arguments ESizeOf {_} _.
-Arguments EAddrOf {_} _.
-Arguments EDeref {_} _.
-Arguments EAssign {_} _ _ _.
-Arguments ECall {_} _ _.
-Arguments EAlloc {_} _ _.
-Arguments EFree {_} _.
-Arguments EUnOp {_} _ _.
-Arguments EBinOp {_} _ _ _.
-Arguments EIf {_} _ _ _.
-Arguments EComma {_} _ _.
-Arguments EAnd {_} _ _.
-Arguments EOr {_} _ _.
-Arguments ECast {_} _ _.
-Arguments EField {_} _ _.
-Arguments TArray {_} _ _.
-Arguments TCompound {_} _ _.
-Arguments TVoid {_}.
-Arguments TInt {_} _.
-Arguments TPtr {_} _.
-Arguments TTypeOf {_} _.
+  | CTArray : ctype Ti → cexpr Ti → ctype Ti
+  | CTCompound : compound_kind → tag → ctype Ti
+  | CTVoid : ctype Ti
+  | CTInt : int_type Ti → ctype Ti
+  | CTPtr : ctype Ti → ctype Ti
+  | CTTypeOf : cexpr Ti → ctype Ti.
+Arguments CEVar {_} _.
+Arguments CEConst {_} _ _.
+Arguments CESizeOf {_} _.
+Arguments CEAddrOf {_} _.
+Arguments CEDeref {_} _.
+Arguments CEAssign {_} _ _ _.
+Arguments CECall {_} _ _.
+Arguments CEAlloc {_} _ _.
+Arguments CEFree {_} _.
+Arguments CEUnOp {_} _ _.
+Arguments CEBinOp {_} _ _ _.
+Arguments CEIf {_} _ _ _.
+Arguments CEComma {_} _ _.
+Arguments CEAnd {_} _ _.
+Arguments CEOr {_} _ _.
+Arguments CECast {_} _ _.
+Arguments CEField {_} _ _.
+Arguments CTArray {_} _ _.
+Arguments CTCompound {_} _ _.
+Arguments CTVoid {_}.
+Arguments CTInt {_} _.
+Arguments CTPtr {_} _.
+Arguments CTTypeOf {_} _.
 
 Inductive cstmt (Ti : Set) : Set :=
-  | SDo : cexpr Ti → cstmt Ti
-  | SSkip : cstmt Ti
-  | SGoto : labelname → cstmt Ti
-  | SBreak : cstmt Ti
-  | SContinue : cstmt Ti
-  | SReturn : option (cexpr Ti) → cstmt Ti
-  | SBlock : N → ctype Ti → option (cexpr Ti) → cstmt Ti → cstmt Ti
-  | SStatic : N → ctype Ti → option (cexpr Ti) → cstmt Ti → cstmt Ti
-  | SComp : cstmt Ti → cstmt Ti → cstmt Ti
-  | SLabel : labelname → cstmt Ti → cstmt Ti
-  | SWhile : cexpr Ti → cstmt Ti → cstmt Ti
-  | SFor : cexpr Ti → cexpr Ti → cexpr Ti → cstmt Ti → cstmt Ti
-  | SDoWhile : cstmt Ti → cexpr Ti → cstmt Ti
-  | SIf : cexpr Ti → cstmt Ti → cstmt Ti → cstmt Ti.
-Arguments SDo {_} _.
-Arguments SSkip {_}.
-Arguments SGoto {_} _.
-Arguments SBreak {_}.
-Arguments SContinue {_}.
-Arguments SReturn {_} _.
-Arguments SBlock {_} _ _ _ _.
-Arguments SStatic {_} _ _ _ _.
-Arguments SComp {_} _ _.
-Arguments SLabel {_} _ _.
-Arguments SWhile {_} _ _.
-Arguments SFor {_} _ _ _ _.
-Arguments SDoWhile {_} _ _.
-Arguments SIf {_} _ _ _.
+  | CSDo : cexpr Ti → cstmt Ti
+  | CSSkip : cstmt Ti
+  | CSGoto : labelname → cstmt Ti
+  | CSBreak : cstmt Ti
+  | CSContinue : cstmt Ti
+  | CSReturn : option (cexpr Ti) → cstmt Ti
+  | CSBlock : N → ctype Ti → option (cexpr Ti) → cstmt Ti → cstmt Ti
+  | CSStatic : N → ctype Ti → option (cexpr Ti) → cstmt Ti → cstmt Ti
+  | CSComp : cstmt Ti → cstmt Ti → cstmt Ti
+  | CSLabel : labelname → cstmt Ti → cstmt Ti
+  | CSWhile : cexpr Ti → cstmt Ti → cstmt Ti
+  | CSFor : cexpr Ti → cexpr Ti → cexpr Ti → cstmt Ti → cstmt Ti
+  | CSDoWhile : cstmt Ti → cexpr Ti → cstmt Ti
+  | CSIf : cexpr Ti → cstmt Ti → cstmt Ti → cstmt Ti.
+Arguments CSDo {_} _.
+Arguments CSSkip {_}.
+Arguments CSGoto {_} _.
+Arguments CSBreak {_}.
+Arguments CSContinue {_}.
+Arguments CSReturn {_} _.
+Arguments CSBlock {_} _ _ _ _.
+Arguments CSStatic {_} _ _ _ _.
+Arguments CSComp {_} _ _.
+Arguments CSLabel {_} _ _.
+Arguments CSWhile {_} _ _.
+Arguments CSFor {_} _ _ _ _.
+Arguments CSDoWhile {_} _ _.
+Arguments CSIf {_} _ _ _.
 
 Inductive decl (Ti : Set) : Set :=
   | CompoundDecl : list (N * ctype Ti) → decl Ti
@@ -178,81 +178,81 @@ Fixpoint to_expr `{IntEnv Ti, PtrEnv Ti} (Γn : rename_env) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
     (ce : cexpr Ti) : option (expr Ti * lrtype Ti) :=
   match ce with
-  | EVar x =>
+  | CEVar x =>
      '(e,τ) ← lookup_var m x 0 xs; Some (e, inl τ)
-  | EConst τi x =>
+  | CEConst τi x =>
      guard (int_typed x τi);
      Some (# (intV{τi} x), inr (intT τi))
-  | ESizeOf cτ =>
+  | CESizeOf cτ =>
      τ ← to_type Γn Γ Γf m xs false cτ;
      let sz := size_of Γ τ in
      guard (int_typed sz sptrT);
      Some (# (intV{sptrT} sz), inr sptrT)
-  | EDeref ce =>
+  | CEDeref ce =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      τp ← maybe_TBase τ ≫= maybe_TPtr;
      guard (✓{Γ} τp);
      Some (.* e, inl τp)
-  | EAddrOf ce =>
+  | CEAddrOf ce =>
      '(e,τlr) ← to_expr Γn Γ Γf m xs ce;
      τ ← maybe_inl τlr;
      Some (& e, inr (τ.*))
-  | EAssign ass ce1 ce2 =>
+  | CEAssign ass ce1 ce2 =>
      '(e1,τlr1) ← to_expr Γn Γ Γf m xs ce1;
      τ1 ← maybe_inl τlr1;
      '(e2,τ2) ← to_R_NULL τ1 <$> to_expr Γn Γ Γf m xs ce2;
      σ ← assign_type_of Γ τ1 τ2 ass;
      Some (e1 ::={ass} e2, inr σ)
-  | ECall f ces =>
+  | CECall f ces =>
      '(τs,σ) ← Γf !! (f : funname);
      guard (length ces = length τs);
      eτlrs ← mapM (to_expr Γn Γ Γf m xs) ces;
      let τes := zip_with to_R_NULL τs eτlrs in 
      guard (Forall2 (cast_typed Γ) (snd <$> τes) τs);
      Some (call f @ cast{τs}* (fst <$> τes), inr σ)
-  | EAlloc cτ ce =>
+  | CEAlloc cτ ce =>
      τ ← to_type Γn Γ Γf m xs false cτ;
      '(e,τe) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      _ ← maybe_TBase τe ≫= maybe_TInt;
      Some (& (alloc{τ} e), inr (τ.*))
-  | EFree ce =>
+  | CEFree ce =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      τp ← maybe_TBase τ ≫= maybe_TPtr;
      guard (✓{Γ} τp);
      Some (free (.* e), inr voidT)
-  | EUnOp op ce =>
+  | CEUnOp op ce =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      σ ← unop_type_of op τ;
      Some (@{op} e, inr σ)
-  | EBinOp op ce1 ce2 =>
+  | CEBinOp op ce1 ce2 =>
      eτ1 ← to_R <$> to_expr Γn Γ Γf m xs ce1;
      eτ2 ← to_R <$> to_expr Γn Γ Γf m xs ce2;
      to_binop_expr op eτ1 eτ2
-  | EIf ce1 ce2 ce3 =>
+  | CEIf ce1 ce2 ce3 =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1; _ ← maybe_TBase τ1;
      eτ2 ← to_R <$> to_expr Γn Γ Γf m xs ce2;
      eτ3 ← to_R <$> to_expr Γn Γ Γf m xs ce3;
      to_if_expr e1 eτ2 eτ3
-  | EComma ce1 ce2 =>
+  | CEComma ce1 ce2 =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1;
      '(e2,τ2) ← to_R <$> to_expr Γn Γ Γf m xs ce2;
      Some (e1,, e2, inr τ2)
-  | EAnd ce1 ce2 =>
+  | CEAnd ce1 ce2 =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1; _ ← maybe_TBase τ1;
      '(e2,τ2) ← to_R <$> to_expr Γn Γ Γf m xs ce2; _ ← maybe_TBase τ2;
      Some (if{e1} if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)
            else #(intV{sintT} 0), inr sintT)
-  | EOr ce1 ce2 =>
+  | CEOr ce1 ce2 =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1; _ ← maybe_TBase τ1;
      '(e2,τ2) ← to_R <$> to_expr Γn Γ Γf m xs ce2; _ ← maybe_TBase τ2;
      Some (if{e1} #(intV{sintT} 0)
            else (if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)), inr sintT)
-  | ECast cσ ce =>
+  | CECast cσ ce =>
      σ ← to_type Γn Γ Γf m xs true cσ;
      '(e,τ) ← to_R_NULL σ <$> to_expr Γn Γ Γf m xs ce;
      guard (cast_typed Γ τ σ);
      Some (cast{σ} e, inr σ)
-  | EField ce x =>
+  | CEField ce x =>
      '(e,τrl) ← to_expr Γn Γ Γf m xs ce;
      '(c,s) ← maybe_TCompound (lrtype_type τrl);
      σs ← Γ !! s;
@@ -270,10 +270,10 @@ with to_type `{IntEnv Ti, PtrEnv Ti} (Γn : rename_env) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
     (ptr : bool) (cτ : ctype Ti) : option (type Ti) :=
   match cτ with
-  | TVoid => Some voidT
-  | TInt τi => Some (intT τi)
-  | TPtr cτ => τ ← to_type Γn Γ Γf m xs true cτ; Some (τ.*)
-  | TArray cτ ce =>
+  | CTVoid => Some voidT
+  | CTInt τi => Some (intT τi)
+  | CTPtr cτ => τ ← to_type Γn Γ Γf m xs true cτ; Some (τ.*)
+  | CTArray cτ ce =>
      τ ← to_type Γn Γ Γf m xs false cτ;
      '(e,_) ← to_expr Γn Γ Γf m xs ce;
      v ← ⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr;
@@ -281,10 +281,10 @@ with to_type `{IntEnv Ti, PtrEnv Ti} (Γn : rename_env) (Γ : env Ti)
      let n := Z.to_nat x in
      guard (n ≠ 0);
      Some (τ.[n])
-  | TCompound c s =>
+  | CTCompound c s =>
      guard (¬ptr → is_Some (Γ !! s));
      Some (compoundT{c} s)
-  | TTypeOf ce =>
+  | CTTypeOf ce =>
      '(_,τ) ← to_expr Γn Γ Γf m xs ce;
      Some (lrtype_type τ)
   end
@@ -292,9 +292,9 @@ with to_base_type `{IntEnv Ti, PtrEnv Ti} (Γn : rename_env) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
     (cτ : ctype Ti) : option (base_type Ti) :=
   match cτ with
-  | TVoid => Some voidT
-  | TInt τi => Some (intT τi)
-  | TPtr cτ => τ ← to_type Γn Γ Γf m xs true cτ; Some (τ.*)
+  | CTVoid => Some voidT
+  | CTInt τi => Some (intT τi)
+  | CTPtr cτ => τ ← to_type Γn Γ Γf m xs true cτ; Some (τ.*)
   | _ => None
   end%BT.
 
@@ -304,11 +304,11 @@ Context `{IntEnv Ti, PtrEnv Ti}.
 Global Instance cstmt_labels : Labels (cstmt Ti) :=
   fix go cs := let _ : Labels _ := @go in
   match cs with
-  | SBlock _ _ _ cs | SStatic _ _ _ cs => labels cs
-  | SComp cs1 cs2 => labels cs1 ∪ labels cs2
-  | SLabel l cs => {[ l ]} ∪ labels cs
-  | SWhile _ cs => labels cs
-  | SIf _ cs1 cs2 => labels cs1 ∪ labels cs2
+  | CSBlock _ _ _ cs | CSStatic _ _ _ cs => labels cs
+  | CSComp cs1 cs2 => labels cs1 ∪ labels cs2
+  | CSLabel l cs => {[ l ]} ∪ labels cs
+  | CSWhile _ cs => labels cs
+  | CSIf _ cs1 cs2 => labels cs1 ∪ labels cs2
   | _ => ∅
   end.
 Definition alloc_global (Γn : rename_env) (Γ : env Ti) (m : mem Ti) (xs : var_env Ti)
@@ -332,47 +332,47 @@ Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
     cstmt Ti → option (mem Ti * stmt Ti * rettype Ti) :=
   fix go m xs Ls mLc mLb cs {struct cs} :=
   match cs with
-  | SDo ce =>
+  | CSDo ce =>
      '(e,_) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      Some (m, !e, (false, None))
-  | SSkip => Some (m, skip, (false, None))
-  | SGoto l => Some (m, goto l, (true, None))
-  | SContinue => Lc ← mLc; Some (m, goto Lc, (true, None))
-  | SBreak => Lb ← mLb; Some (m, goto Lb, (true, None))
-  | SReturn (Some ce) =>
+  | CSSkip => Some (m, skip, (false, None))
+  | CSGoto l => Some (m, goto l, (true, None))
+  | CSContinue => Lc ← mLc; Some (m, goto Lc, (true, None))
+  | CSBreak => Lb ← mLb; Some (m, goto Lb, (true, None))
+  | CSReturn (Some ce) =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      Some (m, ret e, (true, Some τ))
-  | SReturn None => Some (m, ret (#voidV), (true, Some voidT))
-  | SBlock x cτ None cs =>
+  | CSReturn None => Some (m, ret (#voidV), (true, Some voidT))
+  | CSBlock x cτ None cs =>
      τ ← to_type Γn Γ Γf m xs false cτ;
      guard (int_typed (size_of Γ τ) sptrT);
      '(m,s,cmσ) ← go m ((x,inr τ) :: xs) Ls mLc mLb cs;
      Some (m, blk{τ} s, cmσ)
-  | SBlock x cτ (Some ce) cs =>
+  | CSBlock x cτ (Some ce) cs =>
      τ ← to_type Γn Γ Γf m xs false cτ;
      guard (int_typed (size_of Γ τ) sptrT);
      '(e,τ') ← to_R <$> to_expr Γn Γ Γf m ((x,inr τ) :: xs) ce;
      guard (τ = τ');
      '(m,s,cmσ) ← go m ((x,inr τ) :: xs) Ls mLc mLb cs;
      Some (m, blk{τ} (var{τ} 0 ::= e ;; s), cmσ)
-  | SStatic x cτ mce cs =>
+  | CSStatic x cτ mce cs =>
      τ ← to_type Γn Γ Γf m xs false cτ;
      '(m,xs) ← alloc_global Γn Γ m xs x τ mce;
      go m xs Ls mLc mLb cs
-  | SComp cs1 cs2 =>
+  | CSComp cs1 cs2 =>
      '(m,s1,cmσ1) ← go m xs Ls mLc mLb cs1;
      '(m,s2,cmσ2) ← go m xs Ls mLc mLb cs2;
      mσ ← rettype_union (cmσ1.2) (cmσ2.2);
      Some (m, s1 ;; s2, (cmσ2.1, mσ))
-  | SLabel l cs =>
+  | CSLabel l cs =>
      '(m,s,cmσ) ← go m xs Ls mLc mLb cs; Some (m, l :; s, cmσ)
-  | SWhile ce cs =>
+  | CSWhile ce cs =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce; _ ← maybe_TBase τ;
      let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
      let Ls := {[ LC ; LB ]} ∪ Ls in
      '(m,s,cmσ) ← go m xs Ls (Some LC) (Some LB) cs;
      Some (m, while{e} (s ;; label LC) ;; label LB, (false, cmσ.2))
-  | SFor ce1 ce2 ce3 cs =>
+  | CSFor ce1 ce2 ce3 cs =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1;
      '(e2,τ2) ← to_R <$> to_expr Γn Γ Γf m xs ce2; _ ← maybe_TBase τ2;
      '(e3,τ3) ← to_R <$> to_expr Γn Γ Γf m xs ce3;
@@ -380,7 +380,7 @@ Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
      let Ls := {[ LC ; LB ]} ∪ Ls in
      '(m,s,cmσ) ← go m xs Ls (Some LC) (Some LB) cs;
      Some (m, !e1 ;; while{e2} (s ;; label LC ;; !e3) ;; label LB, (false, cmσ.2))
-  | SDoWhile cs ce =>
+  | CSDoWhile cs ce =>
      let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
      let Ls := {[ LC ; LB ]} ∪ Ls in
      '(m,s,cmσ) ← go m xs Ls (Some LC) (Some LB) cs;
@@ -388,7 +388,7 @@ Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
      Some (m, while{#intV{sintT} 1}
        (s ;; label LC ;; if{e} skip else goto LB) ;; label LB,
      (false, cmσ.2))
-  | SIf ce cs1 cs2 =>
+  | CSIf ce cs1 cs2 =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce; _ ← maybe_TBase τ;
      '(m,s1,cmσ1) ← go m xs Ls mLc mLb cs1;
      '(m,s2,cmσ2) ← go m xs Ls mLc mLb cs2;
@@ -453,60 +453,60 @@ End frontend_more.
 
 Section cexpr_ind.
 Context {Ti : Set} (P : cexpr Ti → Prop) (Q : ctype Ti → Prop).
-Context (Pvar : ∀ x, P (EVar x)).
-Context (Pconst : ∀ τi x, P (EConst τi x)).
-Context (Psizeof : ∀ cτ, Q cτ → P (ESizeOf cτ)).
-Context (Paddrof : ∀ ce, P ce → P (EAddrOf ce)).
-Context (Pderef : ∀ ce, P ce → P (EDeref ce)).
-Context (Passign : ∀ ass ce1 ce2, P ce1 → P ce2 → P (EAssign ass ce1 ce2)).
-Context (Pcall : ∀ f ces, Forall P ces → P (ECall f ces)).
-Context (Palloc : ∀ cτ ce, Q cτ → P ce → P (EAlloc cτ ce)).
-Context (Pfree : ∀ ce, P ce → P (EFree ce)).
-Context (Punop : ∀ op ce, P ce → P (EUnOp op ce)).
-Context (Pbinop : ∀ op ce1 ce2, P ce1 → P ce2 → P (EBinOp op ce1 ce2)).
-Context (Pif : ∀ ce1 ce2 ce3, P ce1 → P ce2 → P ce3 → P (EIf ce1 ce2 ce3)).
-Context (Pcomma : ∀ ce1 ce2, P ce1 → P ce2 → P (EComma ce1 ce2)).
-Context (Pand : ∀ ce1 ce2, P ce1 → P ce2 → P (EAnd ce1 ce2)).
-Context (Por : ∀ ce1 ce2, P ce1 → P ce2 → P (EOr ce1 ce2)).
-Context (Pcast : ∀ cτ ce, Q cτ → P ce → P (ECast cτ ce)).
-Context (Pfield : ∀ ce i, P ce → P (EField ce i)).
-Context (Qvoid : Q TVoid).
-Context (Qint : ∀ τi, Q (TInt τi)).
-Context (Qptr : ∀ cτ, Q cτ → Q (TPtr cτ)).
-Context (Qarray : ∀ cτ ce, Q cτ → P ce → Q (TArray cτ ce)).
-Context (Qcompound : ∀ c s, Q (TCompound c s)).
-Context (Qtypeof : ∀ ce, P ce → Q (TTypeOf ce)).
+Context (Pvar : ∀ x, P (CEVar x)).
+Context (Pconst : ∀ τi x, P (CEConst τi x)).
+Context (Psizeof : ∀ cτ, Q cτ → P (CESizeOf cτ)).
+Context (Paddrof : ∀ ce, P ce → P (CEAddrOf ce)).
+Context (Pderef : ∀ ce, P ce → P (CEDeref ce)).
+Context (Passign : ∀ ass ce1 ce2, P ce1 → P ce2 → P (CEAssign ass ce1 ce2)).
+Context (Pcall : ∀ f ces, Forall P ces → P (CECall f ces)).
+Context (Palloc : ∀ cτ ce, Q cτ → P ce → P (CEAlloc cτ ce)).
+Context (Pfree : ∀ ce, P ce → P (CEFree ce)).
+Context (Punop : ∀ op ce, P ce → P (CEUnOp op ce)).
+Context (Pbinop : ∀ op ce1 ce2, P ce1 → P ce2 → P (CEBinOp op ce1 ce2)).
+Context (Pif : ∀ ce1 ce2 ce3, P ce1 → P ce2 → P ce3 → P (CEIf ce1 ce2 ce3)).
+Context (Pcomma : ∀ ce1 ce2, P ce1 → P ce2 → P (CEComma ce1 ce2)).
+Context (Pand : ∀ ce1 ce2, P ce1 → P ce2 → P (CEAnd ce1 ce2)).
+Context (Por : ∀ ce1 ce2, P ce1 → P ce2 → P (CEOr ce1 ce2)).
+Context (Pcast : ∀ cτ ce, Q cτ → P ce → P (CECast cτ ce)).
+Context (Pfield : ∀ ce i, P ce → P (CEField ce i)).
+Context (Qvoid : Q CTVoid).
+Context (Qint : ∀ τi, Q (CTInt τi)).
+Context (Qptr : ∀ cτ, Q cτ → Q (CTPtr cτ)).
+Context (Qarray : ∀ cτ ce, Q cτ → P ce → Q (CTArray cτ ce)).
+Context (Qcompound : ∀ c s, Q (CTCompound c s)).
+Context (Qtypeof : ∀ ce, P ce → Q (CTTypeOf ce)).
 
 Fixpoint cexpr_ind_alt ce : P ce :=
   match ce return P ce with
-  | EVar _ => Pvar _
-  | EConst _ _ => Pconst _ _
-  | ESizeOf cτ => Psizeof _ (ctype_ind_alt cτ)
-  | EAddrOf ce => Paddrof _ (cexpr_ind_alt ce)
-  | EDeref ce => Pderef _ (cexpr_ind_alt ce)
-  | EAssign _ ce1 ce2 => Passign _ _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
-  | ECall f ces => Pcall _ ces $ list_ind (Forall P)
+  | CEVar _ => Pvar _
+  | CEConst _ _ => Pconst _ _
+  | CESizeOf cτ => Psizeof _ (ctype_ind_alt cτ)
+  | CEAddrOf ce => Paddrof _ (cexpr_ind_alt ce)
+  | CEDeref ce => Pderef _ (cexpr_ind_alt ce)
+  | CEAssign _ ce1 ce2 => Passign _ _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
+  | CECall f ces => Pcall _ ces $ list_ind (Forall P)
       (Forall_nil_2 _) (λ ce _, Forall_cons_2 _ _ _ (cexpr_ind_alt ce)) ces
-  | EAlloc cτ ce => Palloc _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
-  | EFree ce => Pfree _ (cexpr_ind_alt ce)
-  | EUnOp _ ce => Punop _ _ (cexpr_ind_alt ce)
-  | EBinOp _ ce1 ce2 => Pbinop _ _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
-  | EIf ce1 ce2 ce3 =>
+  | CEAlloc cτ ce => Palloc _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
+  | CEFree ce => Pfree _ (cexpr_ind_alt ce)
+  | CEUnOp _ ce => Punop _ _ (cexpr_ind_alt ce)
+  | CEBinOp _ ce1 ce2 => Pbinop _ _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
+  | CEIf ce1 ce2 ce3 =>
      Pif _ _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2) (cexpr_ind_alt ce3)
-  | EComma ce1 ce2 => Pcomma _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
-  | EAnd ce1 ce2 => Pand _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
-  | EOr ce1 ce2 => Por _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
-  | ECast cτ ce => Pcast _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
-  | EField ce _ => Pfield _ _ (cexpr_ind_alt ce)
+  | CEComma ce1 ce2 => Pcomma _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
+  | CEAnd ce1 ce2 => Pand _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
+  | CEOr ce1 ce2 => Por _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
+  | CECast cτ ce => Pcast _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
+  | CEField ce _ => Pfield _ _ (cexpr_ind_alt ce)
   end
 with ctype_ind_alt cτ : Q cτ :=
   match cτ with
-  | TVoid => Qvoid
-  | TInt _ => Qint _
-  | TPtr cτ => Qptr _ (ctype_ind_alt cτ)
-  | TArray cτ ce => Qarray _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
-  | TCompound _ _ => Qcompound _ _
-  | TTypeOf ce => Qtypeof _ (cexpr_ind_alt ce)
+  | CTVoid => Qvoid
+  | CTInt _ => Qint _
+  | CTPtr cτ => Qptr _ (ctype_ind_alt cτ)
+  | CTArray cτ ce => Qarray _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
+  | CTCompound _ _ => Qcompound _ _
+  | CTTypeOf ce => Qtypeof _ (cexpr_ind_alt ce)
   end.
 Lemma cexpr_ctype_ind : (∀ ce, P ce) ∧ (∀ cτ, Q cτ).
 Proof. auto using cexpr_ind_alt, ctype_ind_alt. Qed.
