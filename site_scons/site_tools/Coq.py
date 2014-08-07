@@ -1,33 +1,30 @@
-# -*- coding: utf-8 -*-
+# Copyright (c) 2012-2014, Robbert Krebbers.
+# This file is distributed under the terms of the BSD license.
 import SCons.Defaults, SCons.Tool, SCons.Util, os
 
-def add_glob(target, source, env):
+def coq_emitter(target, source, env):
   base, _ = os.path.splitext(str(target[0]))
   target.append(base + ".glob")
   return target, source
-
 Coq = SCons.Builder.Builder(
-  action = '$COQCMD',
+  action = '$COQC $COQFLAGS -q $SOURCE',
   suffix = '.vo',
   src_suffix = '.v',
-  emitter = add_glob)
+  emitter = coq_emitter
+)
 
 def make_coqidescript(target, source, env):
   open('coqidescript', 'w').write('#!/bin/sh\n' +
     env['COQIDE'] + ' ' + env['COQFLAGS'] + ' $@ \n')
   os.chmod('coqidescript', 0755)
   return 0
-
-CoqIdeScript = SCons.Builder.Builder(
-  action = make_coqidescript)
+CoqIdeScript = SCons.Builder.Builder(action = make_coqidescript)
 
 def generate(env):
   env['COQC'] = 'coqc'
   env['COQIDE'] = 'coqide'
-  env['COQCMD'] = '$COQC $COQFLAGS -q $SOURCE'
   env.Append(BUILDERS = {
-    'Coq': Coq,
-    'CoqIdeScript' : CoqIdeScript
+    'Coq' : Coq, 'CoqIdeScript' : CoqIdeScript
   })
 
 def exists(env):

@@ -9,6 +9,7 @@ coqidescript
 *~
 *.cmi
 *.cmx
+*.cmo
 *.o
 utils/coq2html
 utils/coq2html.ml
@@ -17,4 +18,9 @@ doc/*.html
 *.broken
 broken/*
 *.patch
-extraction/*
+extraction/*.ml
+extraction/*.mli
+parser/Lexer.ml
+parser/Parser.ml
+parser/Parser.mli
+
