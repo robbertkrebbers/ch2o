@@ -3,8 +3,9 @@ PREREQUISITES
 
 This version is known to compile with:
 
- - Coq 8.4pl1
+ - Coq 8.4pl3
  - SCons 2.0
+ - Ocaml 4.01.0
 
 BUILDING INSTRUCTIONS
 ---------------------
