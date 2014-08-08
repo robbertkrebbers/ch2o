@@ -327,7 +327,8 @@ Definition alloc_global (Γn : rename_env) (Γ : env Ti) (m : mem Ti)
      Some (<[addr_top o τ:=val_0 Γ τ]{Γ}>(mem_alloc Γ o false τ m),
            (x,inl o) :: xs)
   end.
-Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
+Definition to_stmt (Γn : rename_env) (Γ : env Ti)
+    (Γf : funtypes Ti) (τret : type Ti) :
     mem Ti → var_env Ti → labelset → option labelname → option labelname →
     cstmt Ti → option (mem Ti * stmt Ti * rettype Ti) :=
   fix go m xs Ls mLc mLb cs {struct cs} :=
@@ -340,8 +341,9 @@ Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
   | CSContinue => Lc ← mLc; Some (m, goto Lc, (true, None))
   | CSBreak => Lb ← mLb; Some (m, goto Lb, (true, None))
   | CSReturn (Some ce) =>
-     '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
-     Some (m, ret e, (true, Some τ))
+     '(e,τ') ← to_R <$> to_expr Γn Γ Γf m xs ce;
+     guard (cast_typed Γ τ' τret);
+     Some (m, ret (cast{τret} e), (true, Some τret))
   | CSReturn None => Some (m, ret (#voidV), (true, Some voidT))
   | CSBlock false x cτ None cs =>
      τ ← to_type Γn Γ Γf m xs false cτ;
@@ -352,7 +354,7 @@ Definition to_stmt (Γn : rename_env) (Γ : env Ti) (Γf : funtypes Ti) :
      τ ← to_type Γn Γ Γf m xs false cτ;
      guard (int_typed (size_of Γ τ) sptrT);
      '(e,τ') ← to_R <$> to_expr Γn Γ Γf m ((x,inr τ) :: xs) ce;
-     guard (τ = τ');
+     guard (cast_typed Γ τ' τ);
      '(m,s,cmσ) ← go m ((x,inr τ) :: xs) Ls mLc mLb cs;
      Some (m, blk{τ} (var{τ} 0 ::= e ;; s), cmσ)
   | CSBlock true x cτ mce cs =>
@@ -436,7 +438,7 @@ Fixpoint to_envs_go (Θ : list (N * decl Ti)) : option
      | Some cs =>
         guard (δ !! f = None);
         let xs' := zip_with (λ y τ, (y, inr τ)) ys τs ++ xs in
-        '(m,s,cmσ) ← to_stmt Γn Γ Γf m xs' (labels cs) None None cs;
+        '(m,s,cmσ) ← to_stmt Γn Γ Γf σ m xs' (labels cs) None None cs;
         guard (gotos s ⊆ labels s);
         guard (rettype_match cmσ σ);
         Some(Γn, Γ, Γf, <[f:=s]>δ, m, xs)
@@ -722,9 +724,9 @@ Proof.
   * repeat case_option_guard; simplify_equality'.
     split; eauto using mem_alloc_val_valid, index_typed_alloc_val, val_0_typed.
 Qed.
-Lemma to_stmt_typed Γn Γ Γf m xs Ls mLc mLb cs m' s cmτ :
+Lemma to_stmt_typed Γn Γ Γf τret m xs Ls mLc mLb cs m' s cmτ :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
-  to_stmt Γn Γ Γf m xs Ls mLc mLb cs = Some (m',s,cmτ) →
+  to_stmt Γn Γ Γf τret m xs Ls mLc mLb cs = Some (m',s,cmτ) →
   (**i 1.) *) (Γ,Γf,m',var_env_stack_types xs) ⊢ s : cmτ ∧
   (**i 2.) *) ✓{Γ} m' ∧
   (**i 3.) *) (∀ o σ, m ⊢ o : σ → m' ⊢ o : σ).
@@ -735,8 +737,8 @@ Proof.
     | _ => progress (simplify_option_equality by fail)
     | x : (_ * _)%type |- _ => destruct x
     | IH : ∀ _ _ _ _ _ _ _ _,
-        ✓{_} _ → _ → to_stmt _ _ _ _ _ _ _ _ ?cs = Some _ → _,
-      H : to_stmt _ _ _ _ _ _ _ _ ?cs = Some _ |- _ =>
+        ✓{_} _ → _ → to_stmt _ _ _ _ _ _ _ _ _ ?cs = Some _ → _,
+      H : to_stmt _ _ _ _ _ _ _ _ _ ?cs = Some _ |- _ =>
        destruct (λ Hm Hxs, IH _ _ _ _ _ _ _ _ Hm Hxs H) as (?&?&?); clear IH;
          simpl; [by auto|by auto with congruence|]
     | H : to_expr _ _ _ _ _ _ = Some _ |- _ =>
@@ -753,7 +755,7 @@ Proof.
   * split_ands; eauto with congruence.
   * split_ands; eauto 2. eapply SBlock_typed; eauto 2.
     repeat typed_constructor; eauto using expr_typed_weaken, subseteq_empty.
-    by constructor; apply cast_typed_self.
+    by constructor.
   * split_ands; eauto using stmt_typed_weaken.
   * split_ands; repeat typed_constructor;
       eauto using expr_typed_weaken, rettype_union_l.
@@ -814,11 +816,11 @@ Proof.
       eauto using to_types_valid, to_type_valid.
     destruct mcs as [cs|]; simplify_equality';
       [|split_ands; eauto using funenv_pretyped_weaken].
-    destruct (to_stmt _ _ _ _ _ _ _ _ _)
+    destruct (to_stmt _ _ _ _ _ _ _ _ _ _)
       as [[[m3 s] cmσ]|] eqn:?; simplify_option_equality.
     assert (length (fst <$> cτys) = length τs).
     { by erewrite <-(mapM_length _ _ τs), !fmap_length by eauto. }
-    destruct (to_stmt_typed Γn Γ Γf m2
+    destruct (to_stmt_typed Γn Γ Γf σ m2
       (zip_with (λ y τ, (y, inr τ)) (fst <$> cτys) τs ++ xs)
       (labels cs) None None cs m s cmσ) as (Hs&?&?); auto.
     { rewrite var_env_stack_types_app, var_env_stack_types_snd, Hxs2,
