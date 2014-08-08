@@ -39,7 +39,7 @@ Section memory_operations.
     let (m) := m in
     CMap (alter (prod_map (ctree_map (λ _ : pbit Ti, pbit_freed)) id) o m).
   Definition mem_freeable (a : addr Ti) (m : mem Ti) : Prop := ∃ w,
-    (**i 1.) *) addr_ref_base a = [] ∧ addr_byte a = 0 ∧
+    (**i 1.) *) addr_is_top_array a ∧
     (**i 2.) *) cmap_car m !! addr_index a = Some (w,true) ∧
     (**i 3.) *) ctree_Forall (λ xb, Some Freeable ⊆ pbit_kind xb) w.
 
@@ -228,25 +228,12 @@ Global Instance mem_freeable_dec a m : Decision (mem_freeable a m).
 Proof.
   refine
    match Some_dec (cmap_car m !! addr_index a) with
-   | inleft (wβ ↾ _) => cast_if_and4 (decide (wβ.2 = true))
-      (decide (addr_ref_base a = [])) (decide (addr_byte a = 0))
+   | inleft (wβ ↾ _) => cast_if_and3
+      (decide (wβ.2 = true)) (decide (addr_is_top_array a))
       (decide (ctree_Forall (λ xb, Some Freeable ⊆ pbit_kind xb) (wβ.1)))
    | inright _ => right _
    end; abstract (try destruct wβ; unfold mem_freeable; naive_solver).
 Defined.
-Lemma mem_freeable_alt Γ m a τ :
-  ✓ Γ → (Γ,m) ⊢ a : τ →
-  mem_freeable a m ↔ ∃ w, addr_strict Γ a ∧ addr_ref Γ a = [] ∧
-    addr_ref_byte Γ a = 0 ∧ cmap_car m !! addr_index a = Some (w,true) ∧
-    ctree_Forall (λ xb, Some Freeable ⊆ pbit_kind xb) w.
-Proof.
-  intros. assert (0 < size_of Γ (addr_type_base a)).
-  { eauto using size_of_pos, addr_typed_type_base_valid. }
-  unfold addr_strict, addr_ref, addr_ref_byte. split.
-  * intros (w&->&->&?&?); exists w; simpl; auto using Nat.mod_0_l with lia.
-  * intros (w&?&?&Hi&?&?); exists w; destruct a as [? []]; simplify_equality';
-      rewrite Nat.mod_small in Hi by lia; auto.
-Qed.
 Lemma mem_free_index_type_check m o o' :
   type_check (mem_free o m) o' = type_check m o'.
 Proof.
@@ -758,15 +745,16 @@ Lemma mem_freeable_refine Γ f m1 m2 a1 a2 τ :
   ✓ Γ → m1 ⊑{Γ,f} m2 →
   a1 ⊑{Γ,f@m1↦m2} a2 : τ → mem_freeable a1 m1 → mem_freeable a2 m2.
 Proof.
-  intros ? (_&_&_&Hm) ?. rewrite !mem_freeable_alt
-    by eauto using addr_refine_typed_l, addr_refine_typed_r.
-  intros (w1&?&?&?&?&?).
-  destruct (addr_ref_refine Γ f m1 m2 a1 a2 τ) as (r&?&->); auto.
+  intros ? (_&_&_&Hm) ? (w1&Ha&?&?).
+  rewrite addr_is_top_array_alt in Ha by eauto using addr_refine_typed_l.
+  destruct Ha as (τ'&n&?&Ha1&?). 
+  destruct (addr_ref_refine Γ f m1 m2 a1 a2 τ) as (r&?&Ha2); auto.
   destruct (Hm (addr_index a1) (addr_index a2) r w1 true)
-    as (?&w2&τ'&?&?&?&Hr); auto; specialize (Hr I); simplify_equality'.
-  erewrite <-addr_ref_byte_refine, (right_id_L [] (++)) by eauto.
-  exists w2; split_ands; eauto using pbits_refine_kind_subseteq,
-    ctree_flatten_refine, addr_strict_refine.
+    as (?&w2&τ''&?&?&?&Hr); auto; specialize (Hr I); simplify_equality'.
+  exists w2. rewrite addr_is_top_array_alt by eauto using addr_refine_typed_r.
+  erewrite <-addr_ref_byte_refine, Ha2, (right_id_L [] (++)), Ha1 by eauto.
+  split_ands; eauto using pbits_refine_kind_subseteq, ctree_flatten_refine.
+  exists τ' n; split_ands; eauto using addr_strict_refine.
 Qed.
 Lemma mem_free_refine Γ f m1 m2 o1 o2 :
   ✓ Γ → m1 ⊑{Γ,f} m2 → f !! o1 = Some (o2,[]) →

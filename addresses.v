@@ -91,6 +91,9 @@ Section address_operations.
   Definition addr_top (o : index) (σ : type Ti) : addr Ti := Addr o [] 0 σ σ σ.
   Definition addr_top_array (o : index) (σ : type Ti) (n : Z) : addr Ti :=
     let n' := Z.to_nat n in Addr o [RArray 0 σ n'] 0 (σ.[n']) σ σ.
+  Inductive addr_is_top_array : addr Ti → Prop :=
+    | Addr_is_top_array o σ n σc :
+       addr_is_top_array (Addr o [RArray 0 σ n] 0 (σ.[n]) σ σc).
 
   Definition addr_plus_ok (Γ : env Ti) (m : M) (j : Z) (a : addr Ti) : Prop :=
     index_alive m (addr_index a) ∧
@@ -429,6 +432,31 @@ Proof.
   intros. apply Nat.mul_pos_pos; simpl; eauto using size_of_pos.
   apply (Z2Nat.inj_lt 0); lia.
 Qed.
+Lemma addr_is_top_array_alt Γ m a τ :
+  ✓ Γ → (Γ,m) ⊢ a : τ → addr_is_top_array a ↔ ∃ τ' n, addr_strict Γ a ∧
+    addr_ref Γ a = [RArray 0 τ' n] ∧ addr_ref_byte Γ a = 0.
+Proof.
+  rewrite addr_typed_alt; intros ? (_&?&_&Hr&?&?&?&_&?); split.
+  * destruct 1 as [o τ' n σc]; simplify_equality'; exists τ' n.
+    assert (✓{Γ} τ' ∧ n ≠ 0) as [??] by auto using TArray_valid_inv.
+    rewrite Nat.div_0_l, Nat.mod_0_l by eauto using size_of_ne_0.
+    split_ands; auto using Nat.mul_pos_pos, size_of_pos with lia.
+  * intros (?&n&?&?&Hi); destruct a as [o [|[] r] i τ' σ σc]; simplify_equality'.
+    rewrite ref_typed_singleton in Hr; inversion Hr; simplify_equality'.
+    rewrite <-(Nat.mod_small i (size_of Γ σ)), Hi
+      by (apply Nat.div_small_iff; eauto using size_of_ne_0, TArray_valid_inv_type).
+    constructor.
+Qed.
+Global Instance addr_is_top_array_dec a : Decision (addr_is_top_array a).
+Proof.
+ refine
+  match a with
+  | Addr o [RArray 0 σ1 n1] 0 (σ2.[n2]) σ3 σ4 =>
+     cast_if_and3 (decide (n1 = n2)) (decide (σ1 = σ2)) (decide (σ2 = σ3))
+  | _ => right _
+  end; abstract first [by inversion 1 | subst; constructor].
+Defined.
+
 Lemma addr_plus_typed Γ m a σ j :
   ✓ Γ → (Γ,m) ⊢ a : σ → addr_plus_ok Γ m j a → (Γ,m) ⊢ addr_plus Γ j a : σ.
 Proof.
