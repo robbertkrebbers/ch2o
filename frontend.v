@@ -24,11 +24,13 @@ Inductive cexpr (Ti : Set) : Set :=
   | CECast : ctype Ti → cexpr Ti → cexpr Ti
   | CEField : cexpr Ti → N → cexpr Ti
 with ctype (Ti : Set) : Set :=
-  | CTArray : ctype Ti → cexpr Ti → ctype Ti
-  | CTCompound : compound_kind → tag → ctype Ti
   | CTVoid : ctype Ti
+  | CTDef : N → ctype Ti
+  | CTEnum : N → ctype Ti
   | CTInt : int_type Ti → ctype Ti
   | CTPtr : ctype Ti → ctype Ti
+  | CTArray : ctype Ti → cexpr Ti → ctype Ti
+  | CTCompound : compound_kind → N → ctype Ti
   | CTTypeOf : cexpr Ti → ctype Ti.
 Arguments CEVar {_} _.
 Arguments CEConst {_} _ _.
@@ -50,6 +52,8 @@ Arguments CEField {_} _ _.
 Arguments CTArray {_} _ _.
 Arguments CTCompound {_} _ _.
 Arguments CTVoid {_}.
+Arguments CTDef {_} _.
+Arguments CTEnum {_} _.
 Arguments CTInt {_} _.
 Arguments CTPtr {_} _.
 Arguments CTTypeOf {_} _.
@@ -63,6 +67,7 @@ Inductive cstmt (Ti : Set) : Set :=
   | CSReturn : option (cexpr Ti) → cstmt Ti
   (* true = static, false = not static *)
   | CSBlock : bool → N → ctype Ti → option (cexpr Ti) → cstmt Ti → cstmt Ti
+  | CSTypeDef : N → ctype Ti → cstmt Ti → cstmt Ti
   | CSComp : cstmt Ti → cstmt Ti → cstmt Ti
   | CSLabel : labelname → cstmt Ti → cstmt Ti
   | CSWhile : cexpr Ti → cstmt Ti → cstmt Ti
@@ -76,6 +81,7 @@ Arguments CSBreak {_}.
 Arguments CSContinue {_}.
 Arguments CSReturn {_} _.
 Arguments CSBlock {_} _ _ _ _ _.
+Arguments CSTypeDef {_} _ _ _.
 Arguments CSComp {_} _ _.
 Arguments CSLabel {_} _ _.
 Arguments CSWhile {_} _ _.
@@ -85,29 +91,69 @@ Arguments CSIf {_} _ _ _.
 
 Inductive decl (Ti : Set) : Set :=
   | CompoundDecl : compound_kind → list (N * ctype Ti) → decl Ti
+  | EnumDecl : int_type Ti → list (N * Z) → decl Ti
+  | TypeDefDecl : ctype Ti → decl Ti
   | GlobDecl : ctype Ti → option (cexpr Ti) → decl Ti
   | FunDecl : list (N * ctype Ti) → ctype Ti → option (cstmt Ti) → decl Ti.
 Arguments CompoundDecl {_} _ _.
+Arguments TypeDefDecl {_} _.
 Arguments GlobDecl {_} _ _.
 Arguments FunDecl {_} _ _ _.
 
-Notation var_env Ti := (list (N * (index + type Ti))).
-Notation compound_env := (tagmap (compound_kind * list N)).
+Inductive var_decl (Ti : Set) : Set :=
+  | Global : index → var_decl Ti
+  | Local : type Ti → var_decl Ti
+  | EnumVal : int_type Ti → Z → var_decl Ti
+  | TypeDef : type Ti → var_decl Ti.
+Arguments Global {_} _.
+Arguments Local {_} _.
+Arguments EnumVal {_} _ _.
+Arguments TypeDef {_} _.
+Notation var_env Ti := (list (N * var_decl Ti)).
+
+Inductive compound_type (Ti : Set) : Set :=
+  | CompoundType : compound_kind → list N → compound_type Ti
+  | EnumType : int_type Ti → compound_type Ti.
+Arguments CompoundType {_} _ _.
+Arguments EnumType {_} _.
+Definition maybe_CompoundType {Ti}
+    (t : compound_type Ti) : option (compound_kind * list N) :=
+  match t with CompoundType c xs => Some (c,xs) | _ => None end.
+Definition maybe_EnumType {Ti} (t : compound_type Ti) : option (int_type Ti) :=
+  match t with EnumType τi => Some τi | _ => None end.
+Notation compound_env Ti := (tagmap (compound_type Ti)).
 
 Section frontend.
 Context `{IntEnv Ti, PtrEnv Ti}.
 
+Fixpoint var_fresh (x : N) (xs : var_env Ti) : bool :=
+  match xs with
+  | [] => true | (y,_) :: xs => bool_decide (x = y) && var_fresh x xs
+  end.
 Fixpoint lookup_var (m : mem Ti) (x : N)
-    (i : nat) (xs : var_env Ti) : option (expr Ti * type Ti) :=
+    (i : nat) (xs : var_env Ti) : option (expr Ti * lrtype Ti) :=
   match xs with
   | [] => None
-  | (y,inl o) :: xs =>
+  | (y,Global o) :: xs =>
      if decide (x = y)
-     then τ ← type_check m o; Some (% (addr_top o τ), τ)
+     then τ ← type_check m o; Some (% (addr_top o τ), inl τ)
      else lookup_var m x i xs
-  | (y,inr τ) :: xs =>
-     if decide (x = y) then Some (var{τ} i, τ)
+  | (y,Local τ) :: xs =>
+     if decide (x = y) then Some (var{τ} i, inl τ)
      else lookup_var m x (S i) xs
+  | (y,EnumVal τi z) :: xs =>
+     if decide (x = y) then Some (# intV{τi} z, inr (intT τi))
+     else lookup_var m x i xs
+  | (y,TypeDef _) :: xs =>
+     if decide (x = y) then None else lookup_var m x i xs
+  end.
+Fixpoint lookup_typedef (x : N) (xs : var_env Ti) : option (type Ti) :=
+  match xs with
+  | [] => None
+  | (y,d) :: xs =>
+     if decide (x = y)
+     then match d with TypeDef τ => Some τ | _ => None end
+     else lookup_typedef x xs
   end.
 Definition is_pseudo_NULL (e : expr Ti) : bool :=
   match e with #{_} (intV{_} 0) => true | _ => false end.
@@ -173,12 +219,12 @@ Definition to_binop_expr (op : binop)
 End frontend.
 
 (* not in the section because of bug #3488 *)
-Fixpoint to_expr `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env) (Γ : env Ti)
+Fixpoint to_expr `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
     (ce : cexpr Ti) : option (expr Ti * lrtype Ti) :=
   match ce with
   | CEVar x =>
-     '(e,τ) ← lookup_var m x 0 xs; Some (e, inl τ)
+     lookup_var m x 0 xs
   | CEConst τi x =>
      guard (int_typed x τi);
      Some (# (intV{τi} x), inr (intT τi))
@@ -255,7 +301,7 @@ Fixpoint to_expr `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env) (Γ : env Ti)
      '(e,τrl) ← to_expr Γn Γ Γf m xs ce;
      '(c,s) ← maybe_TCompound (lrtype_type τrl);
      σs ← Γ !! s;
-     '(c',xs) ← Γn !! s;
+     '(c',xs) ← Γn !! s ≫= maybe_CompoundType;
      guard (c = c');
      i ← list_find (x =) xs;
      σ ← σs !! i;
@@ -267,11 +313,13 @@ Fixpoint to_expr `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env) (Γ : env Ti)
      | inl _ => Some (e %> rs, inl σ) | inr _ => Some (e #> rs, inr σ)
      end
   end
-with to_type `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env) (Γ : env Ti)
+with to_type `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
     (ptr : bool) (cτ : ctype Ti) : option (type Ti) :=
   match cτ with
   | CTVoid => Some voidT
+  | CTDef x => lookup_typedef x xs
+  | CTEnum s => τi ← Γn !! (s : tag) ≫= maybe_EnumType; Some (intT τi)
   | CTInt τi => Some (intT τi)
   | CTPtr cτ => τ ← to_type Γn Γ Γf m xs true cτ; Some (τ.*)
   | CTArray cτ ce =>
@@ -283,17 +331,20 @@ with to_type `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env) (Γ : env Ti)
      guard (n ≠ 0);
      Some (τ.[n])
   | CTCompound c s =>
+     let s : tag := s in
      guard (¬ptr → is_Some (Γ !! s));
      Some (compoundT{c} s)
   | CTTypeOf ce =>
      '(_,τ) ← to_expr Γn Γ Γf m xs ce;
      Some (lrtype_type τ)
   end
-with to_base_type `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env) (Γ : env Ti)
+with to_base_type `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
     (cτ : ctype Ti) : option (base_type Ti) :=
   match cτ with
   | CTVoid => Some voidT
+  | CTDef x => lookup_typedef x xs ≫= maybe_TBase
+  | CTEnum s => τi ← Γn !! (s : tag) ≫= maybe_EnumType; Some (intT τi)
   | CTInt τi => Some (intT τi)
   | CTPtr cτ => τ ← to_type Γn Γ Γf m xs true cτ; Some (τ.*)
   | _ => None
@@ -312,7 +363,7 @@ Global Instance cstmt_labels : Labels (cstmt Ti) :=
   | CSIf _ cs1 cs2 => labels cs1 ∪ labels cs2
   | _ => ∅
   end.
-Definition alloc_global (Γn : compound_env) (Γ : env Ti) (m : mem Ti)
+Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
     (xs : var_env Ti) (x : N) (τ : type Ti)
     (mce : option (cexpr Ti)) : option (mem Ti * var_env Ti) :=
   match mce with
@@ -322,14 +373,14 @@ Definition alloc_global (Γn : compound_env) (Γ : env Ti) (m : mem Ti)
      guard (cast_typed Γ τ' τ);
      v ← ⟦ cast{τ} e ⟧ Γ ∅ [] m ≫= maybe_inr;
      let o := fresh (dom _ m) in
-     Some (<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o false τ m), (x,inl o) :: xs)
+     Some (<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o false τ m), (x,Global o) :: xs)
   | None =>
      guard (int_typed (size_of Γ τ) sptrT);
      let o := fresh (dom _ m) in
      Some (<[addr_top o τ:=val_0 Γ τ]{Γ}>(mem_alloc Γ o false τ m),
-           (x,inl o) :: xs)
+           (x,Global o) :: xs)
   end.
-Definition to_stmt (Γn : compound_env) (Γ : env Ti)
+Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (τret : type Ti) :
     mem Ti → var_env Ti → labelset → option labelname → option labelname →
     cstmt Ti → option (mem Ti * stmt Ti * rettype Ti) :=
@@ -350,19 +401,22 @@ Definition to_stmt (Γn : compound_env) (Γ : env Ti)
   | CSBlock false x cτ None cs =>
      τ ← to_type Γn Γ Γf m xs false cτ;
      guard (int_typed (size_of Γ τ) sptrT);
-     '(m,s,cmσ) ← go m ((x,inr τ) :: xs) Ls mLc mLb cs;
+     '(m,s,cmσ) ← go m ((x,Local τ) :: xs) Ls mLc mLb cs;
      Some (m, blk{τ} s, cmσ)
   | CSBlock false x cτ (Some ce) cs =>
      τ ← to_type Γn Γ Γf m xs false cτ;
      guard (int_typed (size_of Γ τ) sptrT);
-     '(e,τ') ← to_R <$> to_expr Γn Γ Γf m ((x,inr τ) :: xs) ce;
+     '(e,τ') ← to_R <$> to_expr Γn Γ Γf m ((x,Local τ) :: xs) ce;
      guard (cast_typed Γ τ' τ);
-     '(m,s,cmσ) ← go m ((x,inr τ) :: xs) Ls mLc mLb cs;
+     '(m,s,cmσ) ← go m ((x,Local τ) :: xs) Ls mLc mLb cs;
      Some (m, blk{τ} (var{τ} 0 ::= e ;; s), cmσ)
   | CSBlock true x cτ mce cs =>
      τ ← to_type Γn Γ Γf m xs false cτ;
      '(m,xs) ← alloc_global Γn Γ m xs x τ mce;
      go m xs Ls mLc mLb cs
+  | CSTypeDef x cτ cs =>
+     τ ← to_type Γn Γ Γf m xs false cτ;
+     go m ((x,TypeDef τ) :: xs) Ls mLc mLb cs
   | CSComp cs1 cs2 =>
      '(m,s1,cmσ1) ← go m xs Ls mLc mLb cs1;
      '(m,s2,cmσ2) ← go m xs Ls mLc mLb cs2;
@@ -408,7 +462,7 @@ Definition extend_funtypes (Γ : env Ti) (f : funname) (τs : list (type Ti))
      Some (<[f:=(τs,τ)]>Γf)
   end.
 Fixpoint to_envs_go (Θ : list (N * decl Ti)) : option
-    (compound_env * env Ti * funtypes Ti * funenv Ti * mem Ti * var_env Ti) :=
+    (compound_env Ti * env Ti * funtypes Ti * funenv Ti * mem Ti * var_env Ti) :=
   match Θ with
   | [] => Some (∅,∅,∅,∅,∅,[])
   | (s,CompoundDecl c cτys) :: Θ =>
@@ -419,10 +473,24 @@ Fixpoint to_envs_go (Θ : list (N * decl Ti)) : option
      guard (Γ !! s = None);
      guard (NoDup ys);
      guard (1 < length τs);
-     Some (<[s:=(c,ys)]>Γn, <[s:=τs]>Γ, Γf, δ, m, xs)
+     Some (<[s:=CompoundType c ys]>Γn, <[s:=τs]>Γ, Γf, δ, m, xs)
+  | (s,EnumDecl τi yzs) :: Θ =>
+     '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
+     let s : tag := s in
+     let ys := fst <$> yzs in
+     guard (NoDup ys);
+     guard (Forall (λ x, var_fresh x xs) ys);
+     guard (Forall (λ z, int_typed z τi) (snd <$> yzs));
+     let xs' := (prod_map id (EnumVal τi) <$> yzs) ++ xs in
+     Some (<[s:=EnumType τi]>Γn, Γ, Γf, δ, m, xs')
+  | (x,TypeDefDecl cτ) :: Θ =>
+     '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
+     guard (var_fresh x xs);
+     τ ← to_type Γn Γ Γf m xs false cτ;
+     Some (Γn, Γ, Γf, δ, m, (x,TypeDef τ) :: xs)
   | (x,GlobDecl cτ me) :: Θ =>
      '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
-     guard (lookup_var m x 0 xs = None);
+     guard (var_fresh x xs);
      τ ← to_type Γn Γ Γf m xs false cτ;
      '(m,xs) ← alloc_global Γn Γ m xs x τ me;
       Some (Γn, Γ, Γf, δ, m, xs)
@@ -438,7 +506,7 @@ Fixpoint to_envs_go (Θ : list (N * decl Ti)) : option
      match mcs with
      | Some cs =>
         guard (δ !! f = None);
-        let xs' := zip_with (λ y τ, (y, inr τ)) ys τs ++ xs in
+        let xs' := zip_with (λ y τ, (y, Local τ)) ys τs ++ xs in
         '(m,s,cmσ) ← to_stmt Γn Γ Γf σ m xs' (labels cs) None None cs;
         guard (gotos s ⊆ labels s);
         guard (rettype_match cmσ σ);
@@ -473,6 +541,8 @@ Context (Por : ∀ ce1 ce2, P ce1 → P ce2 → P (CEOr ce1 ce2)).
 Context (Pcast : ∀ cτ ce, Q cτ → P ce → P (CECast cτ ce)).
 Context (Pfield : ∀ ce i, P ce → P (CEField ce i)).
 Context (Qvoid : Q CTVoid).
+Context (Qdef : ∀ x, Q (CTDef x)).
+Context (Qenum : ∀ s, Q (CTEnum s)).
 Context (Qint : ∀ τi, Q (CTInt τi)).
 Context (Qptr : ∀ cτ, Q cτ → Q (CTPtr cτ)).
 Context (Qarray : ∀ cτ ce, Q cτ → P ce → Q (CTArray cτ ce)).
@@ -504,6 +574,8 @@ Fixpoint cexpr_ind_alt ce : P ce :=
 with ctype_ind_alt cτ : Q cτ :=
   match cτ with
   | CTVoid => Qvoid
+  | CTDef _ => Qdef _
+  | CTEnum _ => Qenum _
   | CTInt _ => Qint _
   | CTPtr cτ => Qptr _ (ctype_ind_alt cτ)
   | CTArray cτ ce => Qarray _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
@@ -523,6 +595,7 @@ Implicit Types m : mem Ti.
 Implicit Types e : expr Ti.
 Implicit Types ce : cexpr Ti.
 Implicit Types s : stmt Ti.
+Implicit Types τi : int_type Ti.
 Implicit Types τ σ : type Ti.
 Implicit Types cτ : ctype Ti.
 Implicit Types τlr : lrtype Ti.
@@ -534,20 +607,48 @@ Hint Extern 1 (int_typed _ _) => by apply int_typed_small.
 Hint Extern 10 (cast_typed _ _ _) => constructor.
 Hint Extern 10 (base_cast_typed _ _ _) => constructor.
 
+Definition var_decl_valid (Γ : env Ti) (d : var_decl Ti) :=
+  match d with
+  | Global _ => True
+  | Local τ => ✓{Γ} τ
+  | EnumVal τi z => int_typed z τi
+  | TypeDef τ => ✓{Γ} τ
+  end.
+Notation var_env_valid Γ := (Forall (var_decl_valid Γ ∘ snd)).
+Lemma var_decl_valid_weaken Γ1 Γ2 d :
+  var_decl_valid Γ1 d → Γ1 ⊆ Γ2 → var_decl_valid Γ2 d.
+Proof. destruct d; simpl; eauto using type_valid_weaken. Qed.
+Lemma typedef_lookup_valid Γ xs x τ :
+  var_env_valid Γ xs → lookup_typedef x xs = Some τ → ✓{Γ} τ.
+Proof. induction 1 as [|[? []]]; intros; simplify_option_equality; eauto. Qed.
+Lemma var_env_valid_locals Γ (ys : list N) (τs : list (type Ti)) :
+  ✓{Γ}* τs → var_env_valid Γ (zip_with (λ y τ, (y, Local τ)) ys τs).
+Proof. intros Hτs. revert ys. induction Hτs; intros [|??]; simpl; auto. Qed.
+Lemma var_env_valid_enums Γ τi (yzs : list (N * Z)) :
+  Forall (λ z, int_typed z τi) (snd <$> yzs) →
+  var_env_valid Γ (prod_map id (EnumVal τi) <$> yzs).
+Proof. rewrite !Forall_fmap; eauto using Forall_impl. Qed.
+
 Fixpoint var_env_stack_types (xs : var_env Ti) : list (type Ti) :=
   match xs with
   | [] => []
-  | (_,inr τ) :: xs => τ :: var_env_stack_types xs
-  | (_,inl _) :: xs => var_env_stack_types xs
+  | (_,Local τ) :: xs => τ :: var_env_stack_types xs
+  | (_,_) :: xs => var_env_stack_types xs
   end.
 Lemma var_env_stack_types_app xs1 xs2 :
   var_env_stack_types (xs1 ++ xs2)
   = var_env_stack_types xs1 ++ var_env_stack_types xs2.
-Proof. induction xs1 as [|[?[?|?]] ??]; f_equal'; auto. Qed.
-Lemma var_env_stack_types_snd (ys : list N) (τs : list (type Ti)) :
+Proof. induction xs1 as [|[?[]] ??]; f_equal'; auto. Qed.
+Lemma var_env_stack_types_locals (ys : list N) (τs : list (type Ti)) :
   length ys = length τs →
-  var_env_stack_types (zip_with (λ y τ, (y, inr τ)) ys τs) = τs.
+  var_env_stack_types (zip_with (λ y τ, (y, Local τ)) ys τs) = τs.
 Proof. rewrite <-Forall2_same_length. induction 1; f_equal'; auto. Qed.
+Lemma var_env_stack_types_enums τi (yzs : list (N * Z)) :
+  var_env_stack_types ((prod_map id (EnumVal τi) <$> yzs)) = [].
+Proof. induction yzs; f_equal'; auto. Qed.
+Lemma var_env_stack_types_valid Γ xs :
+  var_env_valid Γ xs → ✓{Γ}* (var_env_stack_types xs).
+Proof. induction 1 as [|[? []]]; simpl; auto. Qed.
 
 Lemma to_R_typed Γ Γf m τs e τlr e' τ' :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
@@ -570,20 +671,21 @@ Proof.
   destruct Hσb; repeat case_match; simplify_equality'; eauto 2 using to_R_typed.
   by repeat typed_constructor.
 Qed.
-Lemma var_lookup_typed Γ Γf m xs x e τ :
-  ✓ Γ → ✓{Γ} m → lookup_var m x 0 xs = Some (e,τ) →
-  (Γ,Γf,m,var_env_stack_types xs) ⊢ e : inl τ.
+Lemma var_lookup_typed Γ Γf m xs x e τlr :
+  ✓ Γ → ✓{Γ} m → var_env_valid Γ xs → lookup_var m x 0 xs = Some (e,τlr) →
+  (Γ,Γf,m,var_env_stack_types xs) ⊢ e : τlr.
 Proof.
-  intros ??. cut (∀ τs', lookup_var m x (length τs') xs = Some (e,τ) →
-    (Γ,Γf,m,τs' ++ var_env_stack_types xs) ⊢ e : inl τ).
+  intros ?? Hxs. cut (∀ τs', lookup_var m x (length τs') xs = Some (e,τlr) →
+    (Γ,Γf,m,τs' ++ var_env_stack_types xs) ⊢ e : τlr).
   { intros help. apply (help []). }
-  induction xs as [|[x' [o|τ']] xs IH];
+  induction Hxs as [|[x' [o|τ|τi z|]] ? xs ? IH];
     intros τs' ?; simplify_option_equality; eauto 2.
   * typed_constructor; eauto using addr_top_typed, addr_top_strict,
       index_typed_valid, index_typed_representable.
   * typed_constructor. by rewrite list_lookup_middle.
-  * rewrite cons_middle, (associative_L (++)). apply (IH (τs' ++ [τ'])).
+  * rewrite cons_middle, (associative_L (++)). apply (IH (τs' ++ [τ])).
     rewrite app_length; simpl. by rewrite Nat.add_comm.
+  * by repeat typed_constructor.
 Qed.
 Lemma convert_ptrs_typed Γ Γf m τs e1 τ1 e2 τ2 e1' e2' τ' :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
@@ -626,7 +728,7 @@ Proof.
     end; typed_constructor; eauto.
 Qed.
 Lemma to_expr_type_typed Γn Γ Γf m xs :
-  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ xs →
   (∀ ce e τlr, to_expr Γn Γ Γf m xs ce = Some (e,τlr) →
     (Γ,Γf,m,var_env_stack_types xs) ⊢ e : τlr) ∧
   (∀ cτ,
@@ -647,8 +749,10 @@ Proof.
       type_valid_ptr_type_valid, funtypes_valid_args_valid; clear Hf.
     revert τs Hτs Hcast.
     induction Hces as [|? [??]]; intros [|??] ??; decompose_Forall_hyps;
-      constructor;
-      eauto using ECast_typed, to_R_NULL_typed, surjective_pairing. }
+      constructor; eauto using ECast_typed, to_R_NULL_typed,
+      surjective_pairing, var_env_stack_types_valid. }
+  assert (✓{Γ}* (var_env_stack_types xs))
+    by eauto using var_env_stack_types_valid.
   apply cexpr_ctype_ind; intros; split_ands; intros;
     repeat match goal with
     | H : _ ∧ _ |- _ => destruct H
@@ -680,31 +784,34 @@ Proof.
     | |- _ ⊢ _ : _ =>
        repeat typed_constructor; eauto using to_binop_expr_typed,
          to_if_expr_typed, var_lookup_typed, type_valid_ptr_type_valid
-    | |- ✓{_} _ => repeat constructor; eauto
+    | |- ✓{_} _ =>
+       repeat constructor; eauto using typedef_lookup_valid, TBase_valid_inv
     | |- ptr_type_valid _ _ =>
-       repeat constructor; eauto using type_valid_ptr_type_valid
+       repeat constructor; eauto using type_valid_ptr_type_valid,
+         typedef_lookup_valid
     end.
 Qed.
 Lemma to_expr_typed Γn Γ Γf m xs ce e τlr :
-  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ xs →
   to_expr Γn Γ Γf m xs ce = Some (e,τlr) →
   (Γ,Γf,m,var_env_stack_types xs) ⊢ e : τlr.
 Proof. intros. eapply to_expr_type_typed; eauto. Qed.
 Lemma to_type_valid Γn Γ Γf m xs cτ τ :
-  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ xs →
   to_type Γn Γ Γf m xs false cτ = Some τ → ✓{Γ} τ.
 Proof. intros. eapply to_expr_type_typed; eauto. Qed.
 Lemma to_types_valid Γn Γ Γf m xs cτs τs :
-  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ xs →
   mapM (to_type Γn Γ Γf m xs false) cτs = Some τs → ✓{Γ}* τs.
 Proof. rewrite mapM_Some. induction 5; eauto using to_type_valid. Qed.
 
 Lemma alloc_global_typed Γn Γ m xs x τ mce m' xs' :
   ✓ Γ → alloc_global Γn Γ m xs x τ mce = Some (m',xs') →
-  ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) → ✓{Γ} τ →
+  ✓{Γ} m → var_env_valid Γ xs → ✓{Γ} τ →
   (**i 1.) *) ✓{Γ} m' ∧
   (**i 2.) *) (∀ o σ, m ⊢ o : σ → m' ⊢ o : σ) ∧
-  (**i 3.) *) var_env_stack_types xs = var_env_stack_types xs'.
+  (**i 3.) *) var_env_valid Γ xs' ∧
+  (**i 4.) *) var_env_stack_types xs = var_env_stack_types xs'.
 Proof.
   assert (mem_allocable (fresh (dom indexset m)) m).
   { eapply mem_allocable_alt, is_fresh. }
@@ -717,16 +824,17 @@ Proof.
     repeat case_option_guard; simplify_equality'.
     assert ((Γ,m) ⊢ inr v : inr τ'); [|typed_inversion_all].
     { eapply (expr_eval_typed_aux Γ ∅ [] (var_env_stack_types xs) ∅);
-        eauto using to_R_NULL_typed, type_valid_ptr_type_valid,
-        to_expr_typed, prefix_of_nil, funtypes_valid_empty.
+        eauto using to_R_NULL_typed, type_valid_ptr_type_valid, to_expr_typed,
+        prefix_of_nil, funtypes_valid_empty, var_env_stack_types_valid.
       by intros ?; simpl_map. }
     split_ands; eauto using mem_alloc_val_valid,
-      index_typed_alloc_val, val_cast_typed.
+      index_typed_alloc_val, val_cast_typed; by repeat constructor.
   * repeat case_option_guard; simplify_equality'.
-    split; eauto using mem_alloc_val_valid, index_typed_alloc_val, val_0_typed.
+    split_ands; eauto using mem_alloc_val_valid,
+      index_typed_alloc_val, val_0_typed; by repeat constructor.
 Qed.
 Lemma to_stmt_typed Γn Γ Γf τret m xs Ls mLc mLb cs m' s cmτ :
-  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → ✓{Γ}* (var_env_stack_types xs) →
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ xs →
   to_stmt Γn Γ Γf τret m xs Ls mLc mLb cs = Some (m',s,cmτ) →
   (**i 1.) *) (Γ,Γf,m',var_env_stack_types xs) ⊢ s : cmτ ∧
   (**i 2.) *) ✓{Γ} m' ∧
@@ -747,10 +855,11 @@ Proof.
     | H : to_type _ _ _ _ _ _ _ = Some _ |- _ =>
        first_of ltac:(apply to_type_valid in H; simpl) idtac ltac:(by auto)
     | H: to_R _ = _, _ : (_,_,_,?τs) ⊢ _ : _ |- _ =>
-       first_of ltac:(eapply (to_R_typed _ _ _ τs) in H) idtac ltac:(by eauto)
+       first_of ltac:(eapply (to_R_typed _ _ _ τs) in H) idtac
+         ltac:(by eauto using var_env_stack_types_valid)
     | H : alloc_global _ _ _ _ _ _ _ = Some _ |- _ =>
        first_of ltac:(apply alloc_global_typed in H) idtac ltac:(by auto);
-       destruct H as (?&?&?)
+       destruct H as (?&?&?&?)
     | _ => case_match
     end; try solve [split_ands; eauto using to_R_typed, to_expr_typed].
   * split_ands; eauto with congruence.
@@ -781,36 +890,50 @@ Proof.
 Qed.
 Lemma to_envs_go_typed Θ Γn Γ Γf δ m xs :
   to_envs_go Θ = Some (Γn,Γ,Γf,δ,m,xs) →
-  ✓ Γ ∧ ✓{Γ} Γf ∧ funenv_pretyped Γ m δ Γf
-      ∧ ✓{Γ} m ∧ var_env_stack_types xs = [].
+  (**i 1.) *) ✓ Γ ∧
+  (**i 2.) *) ✓{Γ} Γf ∧
+  (**i 3.) *) funenv_pretyped Γ m δ Γf ∧
+  (**i 4.) *) ✓{Γ} m ∧
+  (**i 5.) *) var_env_valid Γ xs ∧
+  (**i 6.) *) var_env_stack_types xs = [].
 Proof.
-  revert Γn Γ Γf δ m xs. induction Θ as [|[x [cτys|cτ mce|cτys cσ mcs]] Θ IH];
-    intros  Γn Γ Γf δ m xs ?; simplify_equality'.
+  revert Γn Γ Γf δ m xs.
+  induction Θ as [|[x [cτys|τi yzs|cτ|cτ mce|cτys cσ mcs]] Θ IH];
+    intros Γn Γ Γf δ m xs ?; simplify_equality'.
   * split_ands; eauto using env_empty_valid,
       cmap_empty_valid, funtypes_valid_empty, funenv_pretyped_empty.
   * destruct (to_envs_go Θ) as [[[[[[Γn2 Γ2] ?] ?] ?] ?]|]; simplify_equality'.
     destruct (mapM _ _) as [τs|] eqn:?; simplify_option_equality.
-    destruct (IH Γn2 Γ2 Γf δ m xs) as (?&?&?&?&Hxs); eauto.
-    assert (✓{Γ2}* (var_env_stack_types xs)) by (rewrite Hxs; constructor).
+    destruct (IH Γn2 Γ2 Γf δ m xs) as (?&?&?&?&?&?); eauto.
+    assert (✓ (<[x:tag:=τs]> Γ2)) by (constructor; eauto using to_types_valid).
+    simpl in *; split_ands; auto.
+    + eauto using funtypes_valid_weaken, insert_subseteq.
+    + eauto using funenv_pretyped_weaken, insert_subseteq.
+    + eauto using cmap_valid_weaken, insert_subseteq.
+    + eauto using Forall_impl, var_decl_valid_weaken, insert_subseteq.
+  * destruct (to_envs_go Θ) as [[[[[[Γn2 ?] ?] ?] ?] xs2]|]; simplify_equality'.
+    repeat case_option_guard; simplify_equality'.
+    destruct (IH Γn2 Γ Γf δ m xs2) as (?&?&?&?&?&Hxs); eauto.
     split_ands; auto.
-    + constructor; eauto using to_types_valid.
-    + eapply funtypes_valid_weaken; eauto using insert_subseteq.
-    + eapply funenv_pretyped_weaken; eauto using insert_subseteq.
-    + eapply cmap_valid_weaken; eauto using insert_subseteq.
+    + auto using Forall_app_2, var_env_valid_enums.
+    + by rewrite var_env_stack_types_app, Hxs, var_env_stack_types_enums.
+  * destruct (to_envs_go Θ) as [[[[[[??] ?] ?] ?] xs2]|]; simplify_equality'.
+    repeat case_option_guard; simplify_equality'.
+    destruct (to_type _ _ _ _ _ _ _) as [τ|] eqn:?; simplify_equality'.
+    destruct (IH Γn Γ Γf δ m xs2) as (?&?&?&?&?&?); eauto.
+    split_ands; auto. constructor; simpl; eauto using to_type_valid.
   * destruct (to_envs_go Θ)
       as [[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]|]; simplify_equality'.
     repeat case_option_guard; simplify_equality'.
     destruct (to_type _ _ _ _ _ _ _) as [τ|] eqn:?; simplify_equality'.
     destruct (alloc_global _ _ _ _ _ _ _) as [[??]|] eqn:?; simplify_equality'.
-    destruct (IH Γn Γ Γf δ m2 xs2) as (?&?&?&?&Hxs2); eauto.
-    assert (✓{Γ}* (var_env_stack_types xs2)) by (rewrite Hxs2; constructor).
+    destruct (IH Γn Γ Γf δ m2 xs2) as (?&?&?&?&?&?); eauto.
     destruct (alloc_global_typed Γn Γ m2 xs2 x τ mce m xs)
-      as (?&?&<-); eauto 7 using funenv_pretyped_weaken, to_type_valid.
+      as (?&?&?&<-); eauto 7 using funenv_pretyped_weaken, to_type_valid.
   * destruct (to_envs_go Θ)
       as [[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]|]; simplify_equality'.
     destruct (mapM _ _) as [τs|] eqn:?; simplify_equality'.
-    destruct (IH Γn2 Γ2 Γf2 δ2 m2 xs2) as (?&?&?&?&?Hxs2); eauto.
-    assert (✓{Γ2}* (var_env_stack_types xs2)) by (rewrite Hxs2; constructor).
+    destruct (IH Γn2 Γ2 Γf2 δ2 m2 xs2) as (?&?&?&?&?&?Hxs2); eauto.
     repeat case_option_guard; simplify_equality'.
     destruct (to_type _ _ _ _ _ _ _) as [σ|] eqn:?; simplify_equality'.
     destruct (extend_funtypes _ _ _ _ _) as [Γf3|] eqn:?; simplify_equality'.
@@ -823,12 +946,11 @@ Proof.
     assert (length (fst <$> cτys) = length τs).
     { by erewrite <-(mapM_length _ _ τs), !fmap_length by eauto. }
     destruct (to_stmt_typed Γn Γ Γf σ m2
-      (zip_with (λ y τ, (y, inr τ)) (fst <$> cτys) τs ++ xs)
+      (zip_with (λ y τ, (y, Local τ)) (fst <$> cτys) τs ++ xs)
       (labels cs) None None cs m s cmσ) as (Hs&?&?); auto.
-    { rewrite var_env_stack_types_app, var_env_stack_types_snd, Hxs2,
-        (right_id_L [] (++)) by done; eauto using to_types_valid. }
+    { eauto using Forall_app_2, var_env_valid_locals, to_types_valid. }
     rewrite var_env_stack_types_app,
-      var_env_stack_types_snd, Hxs2, (right_id_L [] (++)) in Hs by done.
+      var_env_stack_types_locals, Hxs2, (right_id_L [] (++)) in Hs by done.
     split_ands; eauto using funenv_pretyped_weaken,
       funenv_pretyped_insert, to_types_valid, to_type_valid.
 Qed.
