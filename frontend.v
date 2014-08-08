@@ -301,8 +301,7 @@ Fixpoint to_expr `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env Ti) (Γ : env Ti)
      '(e,τrl) ← to_expr Γn Γ Γf m xs ce;
      '(c,s) ← maybe_TCompound (lrtype_type τrl);
      σs ← Γ !! s;
-     '(c',xs) ← Γn !! s ≫= maybe_CompoundType;
-     guard (c = c');
+     '(_,xs) ← Γn !! s ≫= maybe_CompoundType;
      i ← list_find (x =) xs;
      σ ← σs !! i;
      let rs :=
