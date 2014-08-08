@@ -84,15 +84,15 @@ Arguments CSDoWhile {_} _ _.
 Arguments CSIf {_} _ _ _.
 
 Inductive decl (Ti : Set) : Set :=
-  | CompoundDecl : list (N * ctype Ti) → decl Ti
+  | CompoundDecl : compound_kind → list (N * ctype Ti) → decl Ti
   | GlobDecl : ctype Ti → option (cexpr Ti) → decl Ti
   | FunDecl : list (N * ctype Ti) → ctype Ti → option (cstmt Ti) → decl Ti.
-Arguments CompoundDecl {_} _.
+Arguments CompoundDecl {_} _ _.
 Arguments GlobDecl {_} _ _.
 Arguments FunDecl {_} _ _ _.
 
 Notation var_env Ti := (list (N * (index + type Ti))).
-Notation rename_env := (tagmap (list N)).
+Notation compound_env := (tagmap (compound_kind * list N)).
 
 Section frontend.
 Context `{IntEnv Ti, PtrEnv Ti}.
@@ -173,7 +173,7 @@ Definition to_binop_expr (op : binop)
 End frontend.
 
 (* not in the section because of bug #3488 *)
-Fixpoint to_expr `{IntEnv Ti, PtrEnv Ti} (Γn : rename_env) (Γ : env Ti)
+Fixpoint to_expr `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
     (ce : cexpr Ti) : option (expr Ti * lrtype Ti) :=
   match ce with
@@ -255,7 +255,9 @@ Fixpoint to_expr `{IntEnv Ti, PtrEnv Ti} (Γn : rename_env) (Γ : env Ti)
      '(e,τrl) ← to_expr Γn Γ Γf m xs ce;
      '(c,s) ← maybe_TCompound (lrtype_type τrl);
      σs ← Γ !! s;
-     i ← Γn !! s ≫= list_find (x =);
+     '(c',xs) ← Γn !! s;
+     guard (c = c');
+     i ← list_find (x =) xs;
      σ ← σs !! i;
      let rs :=
        match c with
@@ -265,7 +267,7 @@ Fixpoint to_expr `{IntEnv Ti, PtrEnv Ti} (Γn : rename_env) (Γ : env Ti)
      | inl _ => Some (e %> rs, inl σ) | inr _ => Some (e #> rs, inr σ)
      end
   end
-with to_type `{IntEnv Ti, PtrEnv Ti} (Γn : rename_env) (Γ : env Ti)
+with to_type `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
     (ptr : bool) (cτ : ctype Ti) : option (type Ti) :=
   match cτ with
@@ -287,7 +289,7 @@ with to_type `{IntEnv Ti, PtrEnv Ti} (Γn : rename_env) (Γ : env Ti)
      '(_,τ) ← to_expr Γn Γ Γf m xs ce;
      Some (lrtype_type τ)
   end
-with to_base_type `{IntEnv Ti, PtrEnv Ti} (Γn : rename_env) (Γ : env Ti)
+with to_base_type `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
     (cτ : ctype Ti) : option (base_type Ti) :=
   match cτ with
@@ -310,7 +312,7 @@ Global Instance cstmt_labels : Labels (cstmt Ti) :=
   | CSIf _ cs1 cs2 => labels cs1 ∪ labels cs2
   | _ => ∅
   end.
-Definition alloc_global (Γn : rename_env) (Γ : env Ti) (m : mem Ti)
+Definition alloc_global (Γn : compound_env) (Γ : env Ti) (m : mem Ti)
     (xs : var_env Ti) (x : N) (τ : type Ti)
     (mce : option (cexpr Ti)) : option (mem Ti * var_env Ti) :=
   match mce with
@@ -327,7 +329,7 @@ Definition alloc_global (Γn : rename_env) (Γ : env Ti) (m : mem Ti)
      Some (<[addr_top o τ:=val_0 Γ τ]{Γ}>(mem_alloc Γ o false τ m),
            (x,inl o) :: xs)
   end.
-Definition to_stmt (Γn : rename_env) (Γ : env Ti)
+Definition to_stmt (Γn : compound_env) (Γ : env Ti)
     (Γf : funtypes Ti) (τret : type Ti) :
     mem Ti → var_env Ti → labelset → option labelname → option labelname →
     cstmt Ti → option (mem Ti * stmt Ti * rettype Ti) :=
@@ -406,11 +408,10 @@ Definition extend_funtypes (Γ : env Ti) (f : funname) (τs : list (type Ti))
      Some (<[f:=(τs,τ)]>Γf)
   end.
 Fixpoint to_envs_go (Θ : list (N * decl Ti)) : option
-    (rename_env * env Ti * funtypes Ti * funenv Ti * mem Ti * var_env Ti) :=
+    (compound_env * env Ti * funtypes Ti * funenv Ti * mem Ti * var_env Ti) :=
   match Θ with
   | [] => Some (∅,∅,∅,∅,∅,[])
-  | (s,CompoundDecl cτys) :: Θ =>
-     (* todo: names of structures and unions should not collapse *)
+  | (s,CompoundDecl c cτys) :: Θ =>
      '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
      let s : tag := s in
      let ys := fst <$> cτys in
@@ -418,10 +419,10 @@ Fixpoint to_envs_go (Θ : list (N * decl Ti)) : option
      guard (Γ !! s = None);
      guard (NoDup ys);
      guard (1 < length τs);
-     Some (<[s:=ys]>Γn, <[s:=τs]>Γ, Γf, δ, m, xs)
+     Some (<[s:=(c,ys)]>Γn, <[s:=τs]>Γ, Γf, δ, m, xs)
   | (x,GlobDecl cτ me) :: Θ =>
-     (* todo: we just shadow, that is wrong *)
      '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
+     guard (lookup_var m x 0 xs = None);
      τ ← to_type Γn Γ Γf m xs false cτ;
      '(m,xs) ← alloc_global Γn Γ m xs x τ me;
       Some (Γn, Γ, Γf, δ, m, xs)
@@ -798,6 +799,7 @@ Proof.
     + eapply cmap_valid_weaken; eauto using insert_subseteq.
   * destruct (to_envs_go Θ)
       as [[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]|]; simplify_equality'.
+    repeat case_option_guard; simplify_equality'.
     destruct (to_type _ _ _ _ _ _ _) as [τ|] eqn:?; simplify_equality'.
     destruct (alloc_global _ _ _ _ _ _ _) as [[??]|] eqn:?; simplify_equality'.
     destruct (IH Γn Γ Γf δ m2 xs2) as (?&?&?&?&Hxs2); eauto.
