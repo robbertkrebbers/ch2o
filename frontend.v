@@ -361,23 +361,7 @@ with to_type `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env Ti) (Γ : env Ti)
   | CTTypeOf ce =>
      '(_,τ) ← to_expr Γn Γ Γf m xs ce;
      inr (lrtype_type τ)
-  end
-with to_base_type `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env Ti) (Γ : env Ti)
-    (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
-    (cτ : ctype Ti) : string + base_type Ti :=
-  match cτ with
-  | CTVoid => inr voidT
-  | CTDef x =>
-     τ ← error_of_option (lookup_typedef x xs) "typedef not found";
-     error_of_option (maybe_TBase τ) "typedef with basetype expected"
-  | CTEnum s =>
-     let s : tag := s in
-     τi ← error_of_option (Γn !! s ≫= maybe_EnumType) "enum not found";
-     inr (intT τi)
-  | CTInt τi => inr (intT τi)
-  | CTPtr cτ => τ ← to_type Γn Γ Γf m xs true cτ; inr (τ.* )
-  | _ => inl "basetype expected"
-  end%BT.
+  end.
 
 Section frontend_more.
 Context `{IntEnv Ti, PtrEnv Ti}.
@@ -787,8 +771,7 @@ Lemma to_expr_type_typed Γn Γ Γf m xs :
     (Γ,Γf,m,var_env_stack_types xs) ⊢ e : τlr) ∧
   (∀ cτ,
     (∀ τ, to_type Γn Γ Γf m xs false cτ = inr τ → ✓{Γ} τ) ∧
-    (∀ τ, to_type Γn Γ Γf m xs true cτ = inr τ → ptr_type_valid Γ τ) ∧
-    (∀ τb, to_base_type Γn Γ Γf m xs cτ = inr τb → ✓{Γ} τb)).
+    (∀ τ, to_type Γn Γ Γf m xs true cτ = inr τ → ptr_type_valid Γ τ)).
 Proof.
   intros ????. assert (∀ f ces τs τ eτlrs,
      Γf !! f = Some (τs, τ) →
