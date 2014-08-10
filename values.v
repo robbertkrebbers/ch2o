@@ -1052,8 +1052,7 @@ Proof.
   * intros τ n ???. rewrite val_0_array. typed_constructor; auto.
   * intros [] s τs Hs _ IH ?; erewrite val_0_compound by eauto.
     { typed_constructor; eauto. elim IH; csimpl; auto. }
-    destruct IH as [|τ τs]; simpl in *; [lia|].
-    by typed_constructor; eauto.
+    by destruct IH; simplify_equality'; typed_constructor; eauto.
 Qed.
 
 (** ** Properties of the [to_val] function *)

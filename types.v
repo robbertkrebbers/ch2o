@@ -250,7 +250,7 @@ Section types.
   Inductive env_valid : Valid () (env Ti) :=
     | env_empty_valid : ✓ ∅
     | env_add_valid Γ s τs :
-       ✓ Γ → ✓{Γ}* τs → 1 < length τs → Γ !! s = None → ✓ (<[s:=τs]>Γ).
+       ✓ Γ → ✓{Γ}* τs → τs ≠ [] → Γ !! s = None → ✓ (<[s:=τs]>Γ).
   Global Existing Instance env_valid.
 
   Lemma type_valid_weaken Γ Σ τ : ✓{Γ} τ → Γ ⊆ Σ → ✓{Σ} τ
@@ -278,8 +278,7 @@ Section types.
     ✓{Γ}* τs → Γ ⊂ Σ → ✓{Σ}* τs.
   Proof. eauto using Forall_impl, type_valid_weaken_subset. Qed.
   Lemma env_valid_delete Γ s τs :
-    ✓ Γ → Γ !! s = Some τs →
-    ∃ Σ, Σ ⊆ delete s Γ ∧ ✓{Σ}* τs ∧ 1 < length τs ∧ ✓ Σ.
+    ✓ Γ → Γ !! s = Some τs → ∃ Σ, Σ ⊆ delete s Γ ∧ ✓{Σ}* τs ∧ τs ≠ [] ∧ ✓ Σ.
   Proof.
     intros HΓ Hs. induction HΓ as [|Γ s' τs' HΓ IH Hτs' Hs']; [by simpl_map|].
     destruct (decide (s = s')); simplify_map_equality.
@@ -289,7 +288,7 @@ Section types.
       apply insert_subseteq. by rewrite lookup_delete_ne.
   Qed.
   Lemma env_valid_lookup_subset Γ s τs :
-    ✓ Γ → Γ !! s = Some τs → ∃ Σ, Σ ⊂ Γ ∧ ✓{Σ}* τs ∧ 1 < length τs ∧ ✓ Σ.
+    ✓ Γ → Γ !! s = Some τs → ∃ Σ, Σ ⊂ Γ ∧ ✓{Σ}* τs ∧ τs ≠ [] ∧ ✓ Σ.
   Proof.
     intros. destruct (env_valid_delete Γ s τs) as (Σ&?&?&?&?); auto.
     exists Σ. split_ands; auto.
@@ -302,7 +301,7 @@ Section types.
     constructor; eauto using types_valid_weaken, map_union_subseteq_l.
     by rewrite lookup_union_None.
   Qed.
-  Lemma env_valid_lookup_length Γ s τs : ✓ Γ → Γ !! s = Some τs → 1 < length τs.
+  Lemma env_valid_lookup_length Γ s τs : ✓ Γ → Γ !! s = Some τs → τs ≠ [].
   Proof.
     intros. by destruct (env_valid_lookup_subset Γ s τs) as (?&?&?&?&?).
   Qed.
@@ -331,7 +330,7 @@ Section env_valid_dec.
     | env_nil_valid : list_env_valid []
     | env_cons_valid Γ s τs :
        list_env_valid Γ → ✓{map_of_list Γ}* τs →
-       1 < length τs → map_of_list Γ !! s = None →
+       τs ≠ [] → map_of_list Γ !! s = None →
        list_env_valid ((s,τs) :: Γ).
   Lemma list_env_valid_nodup Γ : list_env_valid Γ → NoDup (fst <$> Γ).
   Proof.
@@ -345,7 +344,7 @@ Section env_valid_dec.
     | [] => left _
     | (s,τs) :: Γ => cast_if_and4
        (decide (✓{map_of_list Γ}* τs))
-       (decide (1 < length τs))
+       (decide (τs ≠ []))
        (decide (map_of_list Γ !! s = None))
        (go Γ)
     end); clear go; first [by constructor | by inversion 1].
@@ -395,7 +394,7 @@ Section type_env_ind.
   Context (Parray : ∀ τ n, ✓{Γ} τ → P τ → n ≠ 0 → P (τ.[n])).
   Context (Pcompound : ∀ c s τs,
     Γ !! s = Some τs → ✓{Γ}* τs → Forall P τs →
-    1 < length τs → P (compoundT{c} s)).
+    τs ≠ [] → P (compoundT{c} s)).
 
   Lemma type_env_ind: ∀ τ : type Ti, ✓{Γ} τ → P τ.
   Proof.

@@ -197,14 +197,13 @@ Proof.
       apply Nat_divide_ne_0 with (size_of Γ τ); auto using size_of_ne_0. }
     destruct c; [|by apply natural_padding_divide].
     clear Hs Hτs IH. unfold field_sizes; simpl. revert Hne_0.
-    assert (0 ≠ length τs) by lia; clear Hlen.
     generalize (natural_fields_align Γ τs); intros whole_align ?.
     rewrite <-(Nat.add_0_l (sum_list _)). generalize 0.
     induction τs as [|τ1 τs IH]; intros pos; simpl; [done|].
     rewrite (Nat.add_assoc pos), (Nat.add_comm pos).
     destruct τs as [|τ2 τs]; [simpl|by apply IH].
     rewrite Nat.add_0_r, <-Nat.add_assoc, (Nat.add_comm _ pos),
-      Nat.add_assoc. by apply natural_padding_divide.
+      Nat.add_assoc; auto using natural_padding_divide.
 Qed.
 Lemma natural_align_ne_0 Γ τ : ✓ Γ → ✓{Γ} τ → natural_align_of Γ τ ≠ 0.
 Proof.

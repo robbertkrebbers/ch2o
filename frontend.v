@@ -506,7 +506,7 @@ Fixpoint to_envs_go (Θ : list (N * decl Ti)) : string +
      τs ← mapM (to_type Γn Γ Γf m xs false) (snd <$> cτys);
      guard (Γ !! s = None) with "compound type with previously declared name";
      guard (NoDup ys) with "compound type with non-unique fields";
-     guard (1 < length τs) with "compound type should have atleast 2 fields";
+     guard (τs ≠ []) with "compound type should have atleast 1 field";
      inr (<[s:=CompoundType c ys]>Γn, <[s:=τs]>Γ, Γf, δ, m, xs)
   | (s,EnumDecl τi yzs) :: Θ =>
      '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
