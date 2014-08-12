@@ -7,11 +7,12 @@ Local Open Scope ctype_scope.
 Section env.
 Local Unset Elimination Schemes.
 
-Class PtrEnv (Ti : Set) := {
+Class Env (Ti : Set) := {
+  env_type_env :> IntEnv Ti;
   size_of : env Ti → type Ti → nat;
   field_sizes : env Ti → list (type Ti) → list nat
 }.
-Class EnvSpec (Ti : Set) `{IntEnv Ti} `{PtrEnv Ti} := {
+Class EnvSpec (Ti : Set) `{Env Ti} := {
   int_env_spec :>> IntEnvSpec Ti;
   size_of_ptr_ne_0 Γ τ : size_of Γ (τ.*) ≠ 0;
   size_of_int Γ τ : size_of Γ (intT τ) = rank_size (rank τ);
@@ -35,17 +36,17 @@ End env.
 Arguments size_of _ _ _ _ : simpl never.
 Arguments field_sizes _ _ _ _ : simpl never.
 
-Definition field_offset `{PtrEnv Ti} (Γ : env Ti) (τs : list (type Ti))
+Definition field_offset `{Env Ti} (Γ : env Ti) (τs : list (type Ti))
   (i : nat) : nat := sum_list $ take i $ field_sizes Γ τs.
-Definition bit_size_of `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti)
+Definition bit_size_of `{Env Ti} (Γ : env Ti)
   (τ : type Ti) : nat := size_of Γ τ * char_bits.
-Definition field_bit_sizes `{IntEnv Ti, PtrEnv Ti}
-    (Γ : env Ti) (τs : list (type Ti)) : list nat :=
+Definition field_bit_sizes `{Env Ti} (Γ : env Ti)
+    (τs : list (type Ti)) : list nat :=
   (λ sz, sz * char_bits) <$> field_sizes Γ τs.
-Definition field_bit_padding `{IntEnv Ti, PtrEnv Ti}
+Definition field_bit_padding `{Env Ti}
     (Γ : env Ti) (τs : list (type Ti)) : list nat :=
   zip_with (λ sz τ, sz - bit_size_of Γ τ) (field_bit_sizes Γ τs) τs.
-Definition field_bit_offset `{IntEnv Ti, PtrEnv Ti}
+Definition field_bit_offset `{Env Ti}
     (Γ : env Ti) (τs : list (type Ti)) (i : nat) : nat :=
   sum_list $ take i $ field_bit_sizes Γ τs.
 

@@ -7,7 +7,7 @@ Notation ptr_bit Ti := (fragment (ptr Ti)).
 
 Section pointer_bit_operations.
   Context `{TypeCheck M (type Ti) index, Refine Ti M, IndexAlive M,
-    IntEnv Ti, PtrEnv Ti, ∀ m x, Decision (index_alive m x)}.
+    Env Ti, ∀ m x, Decision (index_alive m x)}.
 
   Global Instance ptr_bit_valid:
       Valid (env Ti * M) (ptr_bit Ti) := λ Γm pb, ∃ τ,

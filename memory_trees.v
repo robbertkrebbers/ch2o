@@ -7,7 +7,7 @@ Notation mtree Ti := (ctree Ti (pbit Ti)).
 Notation mem Ti := (cmap Ti (pbit Ti)).
 
 Section operations.
-  Context `{IntEnv Ti, PtrEnv Ti}.
+  Context `{Env Ti}.
 
   Global Instance type_of_ctree : TypeOf (type Ti) (mtree Ti) := λ w,
     match w with

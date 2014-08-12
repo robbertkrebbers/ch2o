@@ -18,7 +18,7 @@ Arguments Expr_type {_} _.
 Arguments Fun_type {_} _.
 
 Section typing.
-Context `{IntEnv Ti, PtrEnv Ti}.
+Context `{Env Ti}.
 
 Notation envs := (env Ti * funtypes Ti * mem Ti * list (type Ti))%type.
 

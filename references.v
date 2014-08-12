@@ -61,7 +61,7 @@ Proof.
 Defined.
 *)
 
-Inductive ref_seg_typed' `{PtrEnv Ti} (Γ : env Ti) :
+Inductive ref_seg_typed' `{Env Ti} (Γ : env Ti) :
      ref_seg Ti → type Ti → type Ti → Prop :=
   | RArray_typed τ i n :
      i < n → ref_seg_typed' Γ (RArray i τ n) (τ.[n]) τ
@@ -71,18 +71,18 @@ Inductive ref_seg_typed' `{PtrEnv Ti} (Γ : env Ti) :
   | RUnion_typed s i β τs τ :
      Γ !! s = Some τs → τs !! i = Some τ →
      ref_seg_typed' Γ (RUnion i s β) (unionT s) τ.
-Instance ref_seg_typed `{PtrEnv Ti} :
+Instance ref_seg_typed `{Env Ti} :
   PathTyped (env Ti) (type Ti) (type Ti) (ref_seg Ti) := ref_seg_typed'.
 
-Inductive ref_typed' `{PtrEnv Ti} (Γ : env Ti) :
+Inductive ref_typed' `{Env Ti} (Γ : env Ti) :
      ref Ti → type Ti → type Ti → Prop :=
   | ref_nil_typed' τ : ref_typed' Γ [] τ τ
   | ref_cons_typed' r rs τ1 τ2 τ3 :
      Γ ⊢ rs : τ2 ↣ τ3 → ref_typed' Γ r τ1 τ2 → ref_typed' Γ (rs :: r) τ1 τ3.
-Instance ref_typed `{PtrEnv Ti} :
+Instance ref_typed `{Env Ti} :
   PathTyped (env Ti) (type Ti) (type Ti) (ref Ti) := ref_typed'.
 
-Instance subtype `{PtrEnv Ti} : SubsetEqE (env Ti) (type Ti) :=
+Instance subtype `{Env Ti} : SubsetEqE (env Ti) (type Ti) :=
   λ Γ τ1 τ2, ∃ r : ref Ti, Γ ⊢ r : τ2 ↣ τ1.
 Instance ref_seg_lookup {Ti : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)} :
     LookupE (env Ti) (ref_seg Ti) (type Ti) (type Ti) := λ Γ rs τ,
@@ -142,18 +142,18 @@ Inductive ref_disjoint {Ti : Set} : Disjoint (ref Ti) :=
   | ref_disjoint_cons_r rs2 (r1 r2 : ref Ti): r1 ⊥ r2 → r1 ⊥ rs2 :: r2.
 Existing Instance ref_disjoint.
 
-Definition ref_seg_object_offset `{IntEnv Ti, PtrEnv Ti}
+Definition ref_seg_object_offset `{Env Ti}
     (Γ : env Ti) (rs : ref_seg Ti) : nat :=
   match rs with
   | RArray i τ _ => i * bit_size_of Γ τ
   | RStruct i s => default 0 (Γ !! s) $ λ τs, field_bit_offset Γ τs i
   | RUnion i _ _ => 0
   end.
-Definition ref_object_offset `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti)
+Definition ref_object_offset `{Env Ti} (Γ : env Ti)
   (r : ref Ti) : nat := sum_list (ref_seg_object_offset Γ <$> r).
 
 Section ref_typed_ind.
-  Context `{PtrEnv Ti} (Γ : env Ti) (P : ref Ti → type Ti → type Ti → Prop).
+  Context `{Env Ti} (Γ : env Ti) (P : ref Ti → type Ti → type Ti → Prop).
   Context (Pnil : ∀ τ, P [] τ τ).
   Context (Pcons : ∀ r rs τ1 τ2 τ3,
     Γ ⊢ rs : τ2 ↣ τ3 → Γ ⊢ r : τ1 ↣ τ2 → P r τ1 τ2 → P (rs :: r) τ1 τ3).

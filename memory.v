@@ -5,7 +5,7 @@ Require Import natmap.
 Local Open Scope ctype_scope.
 
 Section memory_operations.
-  Context `{IntEnv Ti, PtrEnv Ti}.
+  Context `{Env Ti}.
 
   Global Instance mem_lookup:
       LookupE (env Ti) (addr Ti) (val Ti) (mem Ti) := λ Γ a m,
@@ -113,7 +113,7 @@ Implicit Types Ω : lockset.
 Local Opaque nmap.Nempty.
 Arguments union _ _ !_ !_ /.
 Arguments difference _ _ !_ !_ /.
-Arguments cmap_lookup _ _ _ _ !_ !_ /.
+Arguments cmap_lookup _ _ _ !_ !_ /.
 
 Hint Resolve Forall_app_2 Forall2_app.
 Hint Immediate cmap_lookup_typed.

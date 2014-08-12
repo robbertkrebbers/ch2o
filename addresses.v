@@ -27,7 +27,7 @@ Proof. solve_decision. Defined.
 
 Section address_operations.
   Context `{TypeCheck M (type Ti) index, Refine Ti M, IndexAlive M,
-    IntEnv Ti, PtrEnv Ti, ∀ m x, Decision (index_alive m x)}.
+    Env Ti, ∀ m x, Decision (index_alive m x)}.
 
   Inductive addr_typed' (Γ : env Ti) (m : M) : addr Ti → type Ti → Prop :=
     Addr_typed o r i τ σ σc :

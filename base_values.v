@@ -34,7 +34,7 @@ Instance base_val_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
 Proof. solve_decision. Defined.
 
 Section operations.
-  Context `{IntEnv Ti, PtrEnv Ti}.
+  Context `{Env Ti}.
 
   Record char_byte_valid (Γ : env Ti)
       (m : mem Ti) (bs : list (bit Ti)) : Prop := {
@@ -290,7 +290,7 @@ Section operations.
   Global Arguments base_val_cast !_ !_ /.
 End operations.
 
-Arguments base_val_unflatten _ _ _ _ _ _ : simpl never.
+Arguments base_val_unflatten _ _ _ _ _ : simpl never.
 
 Section properties.
 Context `{EnvSpec Ti}.

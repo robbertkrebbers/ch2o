@@ -46,7 +46,7 @@ Definition natural_size_of (Γ : env Ti) : type Ti → nat :=
        sz + natural_padding sz (natural_fields_align Γ τs)
     end) Γ.
 
-Instance natural_ptr_env : PtrEnv Ti := {
+Instance natural_env : Env Ti := {
   size_of := natural_size_of;
   field_sizes Γ τs :=
     natural_field_sizes (natural_size_of Γ) Γ (natural_fields_align Γ τs) 0 τs

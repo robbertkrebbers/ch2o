@@ -4,7 +4,7 @@ Require Export memory_trees cmap.
 Local Open Scope ctype_scope.
 
 Section operations.
-  Context `{IntEnv Ti, PtrEnv Ti}.
+  Context `{Env Ti}.
 
   Global Instance cmap_dom: Dom (mem Ti) indexset := λ m,
     let (m) := m in dom _ m.
@@ -53,7 +53,7 @@ Implicit Types g : mtree Ti → mtree Ti.
 Implicit Types β : bool.
 
 Arguments lookupE _ _ _ _ _ _ _ !_ /.
-Arguments cmap_lookup _ _ _ _ _ !_ /.
+Arguments cmap_lookup _ _ _ _ !_ /.
 Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
 
 Global Instance mem_index_alive_dec m o : Decision (index_alive m o).
@@ -157,7 +157,7 @@ Proof.
     (Hm2 (addr_index a) (w2',β')) as (τ2&?&_), Hm as [? _]; auto.
   assert (τ1 = τ2) by eauto using ctree_disjoint_typed_unique.
   simplify_option_equality;
-    eauto using ctree_lookup_byte_disjoint, ctree_lookup_disjoint.
+    eauto 3 using ctree_lookup_byte_disjoint, ctree_lookup_disjoint.
 Qed.
 Lemma cmap_lookup_subseteq Γ m1 m2 a w1 w2 :
   ✓ Γ → m1 ⊆ m2 → m1 !!{Γ} a = Some w1 → ¬ctree_Forall sep_unmapped w1 →

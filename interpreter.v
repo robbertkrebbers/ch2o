@@ -10,8 +10,8 @@ Notation Ti := (irank be Csz).
 Context (ptr_size : type Ti → nat) (align_base : base_type Ti → nat).
 Context  (hash : state Ti → Z).
 
-Let ptr_env := (natural_ptr_env ptr_size align_base).
-Existing Instance ptr_env.
+Let interpreter_env := (natural_env ptr_size align_base).
+Existing Instance interpreter_env.
 
 Definition interpreter (Θ : list (N * decl Ti))
     (f : funname) (vs : list (val Ti)) :

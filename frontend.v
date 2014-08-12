@@ -126,7 +126,7 @@ Definition maybe_EnumType {Ti} (t : compound_type Ti) : option (int_type Ti) :=
 Notation compound_env Ti := (tagmap (compound_type Ti)).
 
 Section frontend.
-Context `{IntEnv Ti, PtrEnv Ti}.
+Context `{Env Ti}.
 
 Fixpoint var_fresh (x : N) (xs : var_env Ti) : bool :=
   match xs with
@@ -221,7 +221,7 @@ Definition to_binop_expr (op : binop)
 End frontend.
 
 (* not in the section because of bug #3488 *)
-Fixpoint to_expr `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env Ti) (Γ : env Ti)
+Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
     (ce : cexpr Ti) : string + expr Ti * lrtype Ti :=
   match ce with
@@ -331,7 +331,7 @@ Fixpoint to_expr `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env Ti) (Γ : env Ti)
      | inl _ => inr (e %> rs, inl σ) | inr _ => inr (e #> rs, inr σ)
      end
   end
-with to_type `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env Ti) (Γ : env Ti)
+with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
     (ptr : bool) (cτ : ctype Ti) : string + type Ti :=
   match cτ with
@@ -364,7 +364,7 @@ with to_type `{IntEnv Ti, PtrEnv Ti} (Γn : compound_env Ti) (Γ : env Ti)
   end.
 
 Section frontend_more.
-Context `{IntEnv Ti, PtrEnv Ti}.
+Context `{Env Ti}.
 
 Global Instance cstmt_labels : Labels (cstmt Ti) :=
   fix go cs := let _ : Labels _ := @go in

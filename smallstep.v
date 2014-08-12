@@ -11,7 +11,7 @@ Require Export state.
 (** The judgment [assign_sem Γ m a v ass v' va'] describes the resulting value
 [v'] of an assignment [%{Ω1} a ::={ass} #{Ω2} v], and the value [va'] that needs
 to be stored at [a] in [m]. *)
-Inductive assign_sem `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti) (m : mem Ti)
+Inductive assign_sem `{Env Ti} (Γ : env Ti) (m : mem Ti)
      (a : addr Ti) (v : val Ti) : assign → val Ti → val Ti → Prop :=
   | Assign_sem :
      val_cast_ok Γ m (type_of a) v →
@@ -36,7 +36,7 @@ relation [cstep].*)
 (* The level is just below logical negation (whose level is 75). *)
 Reserved Notation "Γ \ ρ ⊢ₕ e1 , m1 ⇒ e2 , m2"
   (at level 74, format "Γ \  ρ  '⊢ₕ' '['  e1 ,  m1  ⇒ '/'  e2 ,  m2 ']'").
-Inductive ehstep `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti) (ρ : stack) :
+Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
      expr Ti → mem Ti → expr Ti → mem Ti → Prop :=
   | estep_var x τ o m :
      ρ !! x = Some o →
@@ -81,27 +81,25 @@ Inductive ehstep `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti) (ρ : stack) :
      val_cast_ok Γ m τ v →
      Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} (val_cast τ v), m
 where "Γ \ ρ  ⊢ₕ e1 , m1 '⇒' e2 , m2" :=
-  (@ehstep _ _ _ Γ ρ e1%E m1 e2%E m2) : C_scope.
+  (@ehstep _ _ Γ ρ e1%E m1 e2%E m2) : C_scope.
 
 (** An expression is safe if a head reduction step is possible. This relation
 is adapted from CompCert and is used to capture undefined behavior. If the
 whole expression contains a redex that is not safe, the semantics transitions
 to the [Undef] state. *)
 Reserved Notation "Γ \ ρ  '⊢ₕ' 'safe' e , m" (at level 74).
-Inductive ehsafe `{IntEnv Ti, PtrEnv Ti}
-    (Γ : env Ti) (ρ : stack) : expr Ti → mem Ti → Prop :=
+Inductive ehsafe `{Env Ti} (Γ : env Ti) (ρ : stack) : expr Ti → mem Ti → Prop :=
   | ehsafe_call f Ωs vs m :
      length Ωs = length vs → Γ \ ρ ⊢ₕ safe call f @ #{Ωs}* vs, m
   | ehsafe_step e1 m1 e2 m2 : Γ \ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → Γ \ ρ ⊢ₕ safe e1, m1
-where "Γ \ ρ  ⊢ₕ 'safe' e ,  m" := (@ehsafe _ _ _ Γ ρ e m) : C_scope.
+where "Γ \ ρ  ⊢ₕ 'safe' e ,  m" := (@ehsafe _ _ Γ ρ e m) : C_scope.
 
 (** * The reduction relation *)
 (** Small step reduction works by traversal of the focus. Each step the focus
 is executed, after which a transition to the next program state is performed. *)
 Reserved Notation "Γ \ δ ⊢ₛ S1 ⇒ S2"
   (at level 74, format "Γ \  δ  ⊢ₛ  '[' S1  ⇒ '/'  S2 ']'").
-Inductive cstep `{IntEnv Ti, PtrEnv Ti}
-    (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :=
+Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :=
   (**i For simple statements: *)
   | cstep_in_skip m k :
      Γ\ δ ⊢ₛ State k (Stmt ↘ skip) m ⇒
@@ -233,7 +231,7 @@ Inductive cstep `{IntEnv Ti, PtrEnv Ti}
      l ∉ labels s →
      Γ\ δ ⊢ₛ State (CStmt Es :: k) (Stmt (↷ l) s) m ⇒
              State k (Stmt (↷ l) (subst Es s)) m
-where "Γ \ δ  ⊢ₛ S1 ⇒ S2" := (@cstep _ _ _ Γ δ S1%S S2%S) : C_scope.
+where "Γ \ δ  ⊢ₛ S1 ⇒ S2" := (@cstep _ _ Γ δ S1%S S2%S) : C_scope.
 
 Definition initial_state {Ti} (m : mem Ti)
   (f : funname) (vs : list (val Ti)) : state Ti := State [] (Call f vs) m.
@@ -254,8 +252,7 @@ Notation "Γ \ δ ⊢ₛ S1 ⇒^ n S2" := (bsteps (cstep Γ δ) n S1 S2)
 (** To give a model of our axiomatic semantics (see the file [axiomatic]) we
 need to restrict the traversal through the program context to remain below a
 certain context. *)
-Definition cstep_in_ctx `{IntEnv Ti, PtrEnv Ti} Γ δ k :
-    relation (state Ti) := λ S1 S2,
+Definition cstep_in_ctx `{Env Ti} Γ δ k : relation (state Ti) := λ S1 S2,
   Γ \ δ ⊢ₛ S1 ⇒ S2 ∧ k `suffix_of` SCtx S2.
 Notation "Γ \ δ ⊢ₛ S1 ⇒{ k } S2" := (cstep_in_ctx Γ δ k S1 S2)
   (at level 74,
@@ -272,7 +269,7 @@ Notation "Γ \ δ ⊢ₛ S1 ⇒{ k }^ n S2" := (bsteps (cstep_in_ctx Γ δ k) n 
 [cstep]). We therefore define some special purpose inversion schemes. The way
 of defining these schemes is based on small inversions (Monin, 2010). *)
 Section inversion.
-  Context `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti) (δ : funenv Ti).
+  Context `{Env Ti} (Γ : env Ti) (δ : funenv Ti).
 
   Lemma cstep_focus_inv (P : state Ti → Prop) S1 S2 :
     Γ\ δ ⊢ₛ S1 ⇒ S2 →
@@ -733,7 +730,7 @@ Ltac solve_cnf :=
 
 (** * Theorems *)
 Section smallstep_properties.
-Context `{IntEnv Ti, PtrEnv Ti} (Γ : env Ti) (δ : funenv Ti).
+Context `{Env Ti} (Γ : env Ti) (δ : funenv Ti).
 
 Lemma ehstep_is_redex ρ e1 m1 v2 m2 : Γ\ ρ ⊢ₕ e1, m1 ⇒ v2, m2 → is_redex e1.
 Proof. destruct 1; repeat constructor. Qed.

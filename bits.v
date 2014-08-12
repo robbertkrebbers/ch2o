@@ -20,7 +20,7 @@ Definition maybe_BPtr {Ti}  (b : bit Ti) : option (ptr_bit Ti) :=
 
 Section operations.
   Context `{TypeCheck M (type Ti) index, Refine Ti M, IndexAlive M,
-    IntEnv Ti, PtrEnv Ti, ∀ m x, Decision (index_alive m x)}.
+    Env Ti, ∀ m x, Decision (index_alive m x)}.
 
   Inductive bit_valid' (Γ : env Ti) (m : M) : bit Ti → Prop :=
     | BIndet_valid' : bit_valid' Γ m BIndet

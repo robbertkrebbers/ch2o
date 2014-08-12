@@ -7,7 +7,7 @@ Notation PBit := (Tagged (d:=BIndet)).
 
 Section operations.
   Context `{TypeCheck M (type Ti) index, Refine Ti M, IndexAlive M,
-    IntEnv Ti, PtrEnv Ti, ∀ m x, Decision (index_alive m x)}.
+    Env Ti, ∀ m x, Decision (index_alive m x)}.
 
   Global Instance pbit_valid: Valid (env Ti * M) (pbit Ti) := λ Γm xb,
     sep_valid (tagged_perm xb) ∧

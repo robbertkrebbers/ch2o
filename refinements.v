@@ -206,4 +206,4 @@ Instance index_type_check_spec {Ti : Set} {M} `{TypeCheck M (type Ti) index} :
 Proof. done. Qed.
 
 Class MemSpec (Ti : Set) M `{TypeCheck M (type Ti) index, IndexAlive M,
-  IntEnv Ti, PtrEnv Ti, ∀ m o, Decision (index_alive m o), !EnvSpec Ti} := {}.
+  Env Ti, ∀ m o, Decision (index_alive m o), !EnvSpec Ti} := {}.

@@ -11,7 +11,7 @@ Local Open Scope expr_scope.
 Definition purefun Ti := list (val Ti) → option (val Ti).
 Notation purefuns Ti := (funmap (purefun Ti)).
 
-Instance purefuns_typed `{IntEnv Ti, PtrEnv Ti} :
+Instance purefuns_typed `{Env Ti} :
     Typed (env Ti * mem Ti) (funtypes Ti) (purefuns Ti) := λ Γm,
   map_Forall2 (λ F τsτ, ∀ vs v,
     F vs = Some v → Γm ⊢* vs :* τsτ.1 → Γm ⊢ v : τsτ.2
@@ -20,7 +20,7 @@ Instance purefuns_typed `{IntEnv Ti, PtrEnv Ti} :
 (** * Definition of the semantics *)
 Reserved Notation "⟦ e ⟧" (format "⟦  e  ⟧").
 
-Fixpoint expr_eval `{IntEnv Ti, PtrEnv Ti} (e : expr Ti) (Γ : env Ti)
+Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
     (fs : purefuns Ti) (ρ : stack) (m : mem Ti) : option (addr Ti + val Ti) :=
   match e with
   | var{τ} x =>

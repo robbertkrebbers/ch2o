@@ -93,7 +93,7 @@ Definition val_map {Ti} (f : base_val Ti → base_val Ti) : val Ti → val Ti :=
 Notation val_freeze β := (val_map (freeze β)).
 
 Section operations.
-  Context `{IntEnv Ti, PtrEnv Ti}.
+  Context `{Env Ti}.
 
   Definition val_unflatten (Γ : env Ti) : type Ti → list (bit Ti) → val Ti :=
     type_iter

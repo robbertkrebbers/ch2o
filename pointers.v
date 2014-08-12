@@ -19,7 +19,7 @@ Definition maybe_Ptr {Ti} (p : ptr Ti) : option (addr Ti) :=
 
 Section pointer_operations.
   Context `{TypeCheck M (type Ti) index, Refine Ti M, IndexAlive M,
-    IntEnv Ti, PtrEnv Ti, ∀ m x, Decision (index_alive m x)}.
+    Env Ti, ∀ m x, Decision (index_alive m x)}.
 
   Inductive ptr_typed' (Γ : env Ti) (m : M) : ptr Ti → type Ti → Prop :=
     | NULL_typed τ : ptr_type_valid Γ τ → ptr_typed' Γ m (NULL τ) τ

@@ -5,11 +5,11 @@ Local Open Scope ctype_scope.
 
 (** * Pointer casts *)
 Reserved Infix ">*>" (at level 70).
-Inductive castable `{IntEnv Ti, PtrEnv Ti} : type Ti → type Ti → Prop :=
+Inductive castable `{Env Ti} : type Ti → type Ti → Prop :=
   | castable_void τ : τ >*> voidT
   | castable_uchar τ : τ >*> ucharT
   | castable_refl τ : τ >*> τ
-where "τ >*> σ" := (@castable _ _ _ τ σ) : C_scope.
+where "τ >*> σ" := (@castable _ _ τ σ) : C_scope.
 Notation "(>*>)" := castable (only parsing) : C_scope.
 Hint Extern 0 (_ >*> _) => reflexivity.
 
