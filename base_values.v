@@ -276,7 +276,9 @@ Section operations.
     | _, voidT => True
     | VInt _ x, intT τi => int_cast_ok τi x
     | VPtr p, τ.* => ptr_cast_ok Γ m τ p
-    | _ , _ => False
+    | VByte _, intT τi => τi = ucharT%IT
+    | VIndet τi, intT τi' => τi = ucharT ∧ τi' = ucharT%IT
+    | _, _ => False
     end.
   Global Arguments base_val_cast_ok _ _ !_ !_ /.
   Definition base_val_cast (τb : base_type Ti)
@@ -285,7 +287,7 @@ Section operations.
     | _, voidT => VVoid
     | VInt _ x, intT τi => VInt τi (int_cast τi x)
     | VPtr p, τ.* => VPtr (ptr_cast τ p)
-    | _ , _ => VIndet (type_of vb)
+    | _ , _ => vb
     end.
   Global Arguments base_val_cast !_ !_ /.
 End operations.
@@ -874,6 +876,7 @@ Lemma base_val_cast_typed Γ m vb τb σb :
 Proof.
   unfold base_val_cast_ok, base_val_cast. intros ? Hvτb Hσb Hok. revert Hvτb.
   destruct Hσb; inversion 1; simplify_equality'; try (done || by constructor).
+  * intuition; simplify_equality. by constructor.
   * constructor. by apply int_cast_typed.
   * constructor. eapply ptr_cast_typed,
       TPtr_valid_inv, base_val_typed_type_valid; eauto.
@@ -944,17 +947,24 @@ Lemma base_val_cast_ok_refine Γ f m1 m2 vb1 vb2 τb σb :
   ✓ Γ → vb1 ⊑{Γ,f@m1↦m2} vb2 : τb →
   base_val_cast_ok Γ m1 σb vb1 → base_val_cast_ok Γ m2 σb vb2.
 Proof.
-  destruct σb, 2; simpl; naive_solver eauto using
-    ptr_cast_ok_refine, ptr_cast_ok_alive, base_val_cast_ok_void.
+  assert (∀ vb, (Γ,m2) ⊢ vb : ucharT → base_val_cast_ok Γ m2 ucharT vb).
+  { inversion 1; simpl; eauto using int_unsigned_pre_cast_ok,int_cast_ok_more. }
+  destruct σb, 2; simpl; try naive_solver eauto using
+    ptr_cast_ok_refine, ptr_cast_ok_alive, base_val_cast_ok_void,
+    int_unsigned_pre_cast_ok, int_cast_ok_more.
 Qed.
 Lemma base_val_cast_refine Γ f m1 m2 vb1 vb2 τb σb :
   ✓ Γ → base_cast_typed Γ τb σb → base_val_cast_ok Γ m1 σb vb1 →
   vb1 ⊑{Γ,f@m1↦m2} vb2 : τb →
   base_val_cast σb vb1 ⊑{Γ,f@m1↦m2} base_val_cast σb vb2 : σb.
 Proof.
-  destruct 2; inversion 2; simplify_equality'; try first
+  assert (∀ vb, (Γ,m2) ⊢ vb : ucharT → base_val_cast ucharT vb = vb) as help.
+  { inversion 1; f_equal'. by rewrite int_cast_spec, int_typed_pre_cast
+      by eauto using int_unsigned_pre_cast_ok,int_cast_ok_more. }
+  destruct 2; inversion 2; simplify_equality'; intuition; simplify_equality'; try first
     [ by exfalso; eauto using ptr_cast_ok_alive
-    | rewrite ?base_val_cast_void;
+    | rewrite ?base_val_cast_void, ?help, ?int_cast_spec, ?int_typed_pre_cast
+        by eauto using int_unsigned_pre_cast_ok,int_cast_ok_more;
       by refine_constructor; eauto using ptr_cast_refine, int_cast_typed,
         ptr_cast_refine, TVoid_valid, TBase_ptr_valid, TInt_valid,
         TPtr_valid_inv, base_val_typed_type_valid, base_val_refine_typed_l ].
