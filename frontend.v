@@ -130,7 +130,7 @@ Context `{Env Ti}.
 
 Fixpoint var_fresh (x : N) (xs : var_env Ti) : bool :=
   match xs with
-  | [] => true | (y,_) :: xs => bool_decide (x = y) && var_fresh x xs
+  | [] => true | (y,_) :: xs => bool_decide (x ≠ y) && var_fresh x xs
   end.
 Fixpoint lookup_var (m : mem Ti) (x : N)
     (i : nat) (xs : var_env Ti) : option (expr Ti * lrtype Ti) :=
