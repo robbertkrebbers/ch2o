@@ -218,14 +218,9 @@ Section int_coding.
       then IntType (sign τ) int_rank
     else τ.
   Global Instance int_union : Union (int_type Ti) := λ τ1 τ2,
-    if decide (sign τ1 = sign τ2)
-      then if decide (rank_size (rank τ1) ≤ rank_size (rank τ2)) then τ2 else τ1
-    else if decide (sign τ1 = Unsigned
-      ∧ rank_size (rank τ2) ≤ rank_size (rank τ1)) then τ1
-    else if decide (sign τ2 = Unsigned
-      ∧ rank_size (rank τ1) ≤ rank_size (rank τ2)) then τ2
-    else if decide (sign τ1 = Signed
-      ∧ rank_size (rank τ2) < rank_size (rank τ1)) then τ1 else τ2.
+    if decide (rank_size (rank τ1) < rank_size (rank τ2)) then τ2
+    else if decide (rank_size (rank τ2) < rank_size (rank τ1)) then τ1
+    else if decide (sign τ1 = Unsigned) then τ1 else τ2.
 End int_coding.
 Typeclasses Opaque int_typed.
 
@@ -236,9 +231,9 @@ Class IntCodingSpec Ti `{IntCoding Ti} := {
   rank_size_char : rank_size char_rank = 1%nat;
   rank_size_pos k : (0 < rank_size k)%nat;
   rank_size_injective :> Injective (=) (=) rank_size;
-  endianize_permutation τ bs : endianize τ bs ≡ₚ bs;
-  deendianize_endianize τ bs : deendianize τ (endianize τ bs) = bs;
-  endianize_deendianize τ bs : endianize τ (deendianize τ bs) = bs
+  endianize_permutation k bs : endianize k bs ≡ₚ bs;
+  deendianize_endianize k bs : deendianize k (endianize k bs) = bs;
+  endianize_deendianize k bs : endianize k (deendianize k bs) = bs
 }.
 
 (** In order to deal with underspecification of operations, the class [IntEnv]
@@ -594,18 +589,18 @@ Qed.
 Global Instance: Commutative (=) (@union (int_type Ti) _).
 Proof.
   intros [s1 k1] [s2 k2]; simpl.
-  repeat case_decide; intuition; simplify_equality'; try lia.
-  * f_equal; apply (injective rank_size); lia.
-  * destruct s1, s2; intuition lia.
+  repeat case_decide; simplify_equality'; f_equal; try lia.
+  * apply (injective rank_size); lia.
+  * destruct s1, s2; congruence.
+  * apply (injective rank_size); lia.
 Qed.
 Global Instance: Associative (=) (@union (int_type Ti) _).
 Proof.
-  intros [[] ?] [[] ?] [[] ?]; repeat
+  intros [s1 k1] [s2 k2] [s3 k3]; repeat
     match goal with
     | _ => reflexivity
-    | H : _ ∧ _ |- _ => destruct H
     | _ => progress simplify_equality'
-    | _ => repeat case_decide
+    | _ => case_decide
     end; intuition lia.
 Qed.
 Global Instance: Idempotent (=) (@union (int_type Ti) _).
@@ -615,10 +610,14 @@ Lemma int_union_pre_cast_ok_l x τ1 τ2 :
 Proof.
   unfold union, int_union; repeat case_decide;
     eauto using int_typed_pre_cast_ok, int_typed_rank_le.
-  { intuition eauto using int_unsigned_pre_cast_ok. }
-  assert (sign τ1 = Unsigned ∧ rank_size (rank τ1) < rank_size (rank τ2)) as [].
-  { destruct (sign τ1), (sign τ2); intuition lia. }
-  eauto using int_typed_pre_cast_ok, int_typed_rank_lt.
+  * destruct (sign τ1) eqn:?;
+      [|eauto using int_typed_pre_cast_ok, int_typed_rank_lt].
+    destruct (sign τ2) eqn:?; [|eauto using int_unsigned_pre_cast_ok].
+    assert (sign τ1 = sign τ2) by congruence.
+    eauto using int_typed_pre_cast_ok, int_typed_rank_le with lia.
+  * destruct (sign τ2) eqn:?; [|eauto using int_unsigned_pre_cast_ok].
+    assert (sign τ1 = sign τ2) by (destruct (sign τ1); congruence).
+    eauto using int_typed_pre_cast_ok, int_typed_rank_le with lia.
 Qed.
 Lemma int_union_pre_cast_ok_r x τ1 τ2 :
   int_typed x τ1 → int_pre_cast_ok (τ2 ∪ τ1) x.
