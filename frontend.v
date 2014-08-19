@@ -309,6 +309,7 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
   | CECast cσ ce =>
      σ ← to_type Γn Γ Γf m xs true cσ;
      '(e,τ) ← to_R_NULL σ <$> to_expr Γn Γ Γf m xs ce;
+     guard (maybe_TCompound σ = None) with "cannot cast to struct/union";
      guard (cast_typed Γ τ σ) with "cast cannot be typed";
      inr (cast{σ} e, inr σ)
   | CEField ce x =>
