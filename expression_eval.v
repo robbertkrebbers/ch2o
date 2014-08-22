@@ -15,7 +15,7 @@ Instance purefuns_typed `{Env Ti} :
     Typed (env Ti * memenv Ti) (funtypes Ti) (purefuns Ti) := λ Γm,
   map_Forall2 (λ F τsτ, ∀ vs v,
     F vs = Some v → Γm ⊢* vs :* τsτ.1 → Γm ⊢ v : τsτ.2
-  ) (λ _, False) (λ _, False).
+  ) (λ _, False) (λ _, True).
 
 (** * Definition of the semantics *)
 Reserved Notation "⟦ e ⟧" (format "⟦  e  ⟧").
