@@ -542,7 +542,7 @@ Global Instance ref_disjoint_dec r1 r2 : Decision (r1 ⊥ r2).
 Proof.
   refine (cast_if (decide (ref_disjoint_rev (reverse r1) (reverse r2))));
    by rewrite ref_disjoint_rev_correct.
-Qed.
+Defined.
 
 Lemma RArray_disjoint_snoc r1 r2 i1 i2 τ n :
   r1 ++ [RArray i1 τ n] ⊥ r2 ++ [RArray i2 τ n] ↔ i1 ≠ i2 ∨ r1 ⊥ r2.
