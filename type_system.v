@@ -355,8 +355,8 @@ Global Instance focus_typed:
 Global Instance state_typed :
     Typed (env Ti * funtypes Ti) funname (state Ti) := λ ΓΓf S f, ∃ τf,
   let 'State k φ m := S in
-  (ΓΓf,memenv_of m,get_stack_types k) ⊢ φ : τf ∧
-  (ΓΓf,memenv_of m) ⊢ k : τf ↣ Fun_type f ∧
+  (ΓΓf,'{m},get_stack_types k) ⊢ φ : τf ∧
+  (ΓΓf,'{m}) ⊢ k : τf ↣ Fun_type f ∧
   ✓{ΓΓf.1} m.
 
 Definition funenv_pretyped (Γ : env Ti) (Γm : memenv Ti)

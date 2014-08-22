@@ -14,16 +14,16 @@ to be stored at [a] in [m]. *)
 Inductive assign_sem `{Env Ti} (Γ : env Ti) (m : mem Ti)
      (a : addr Ti) (v : val Ti) : assign → val Ti → val Ti → Prop :=
   | Assign_sem :
-     val_cast_ok Γ (memenv_of m) (type_of a) v →
+     val_cast_ok Γ ('{m}) (type_of a) v →
      let v' := val_cast (type_of a) v in assign_sem Γ m a v Assign v' v'
   | PreOp_sem op va :
-     m !!{Γ} a = Some va → val_binop_ok Γ (memenv_of m) op va v →
-     val_cast_ok Γ (memenv_of m) (type_of a) (val_binop Γ op va v) →
+     m !!{Γ} a = Some va → val_binop_ok Γ ('{m}) op va v →
+     val_cast_ok Γ ('{m}) (type_of a) (val_binop Γ op va v) →
      let v' := val_cast (type_of a) (val_binop Γ op va v) in
      assign_sem Γ m a v (PreOp op) v' v'
   | PostOp_sem op va :
-     m !!{Γ} a = Some va → val_binop_ok Γ (memenv_of m) op va v →
-     val_cast_ok Γ (memenv_of m) (type_of a) (val_binop Γ op va v) →
+     m !!{Γ} a = Some va → val_binop_ok Γ ('{m}) op va v →
+     val_cast_ok Γ ('{m}) (type_of a) (val_binop Γ op va v) →
      let v' := val_cast (type_of a) (val_binop Γ op va v) in
      assign_sem Γ m a v (PostOp op) va v'.
 
@@ -64,13 +64,13 @@ Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
      mem_freeable a m →
      Γ\ ρ ⊢ₕ free (%{Ω} a), m ⇒ #{Ω} voidV, mem_free (addr_index a) m
   | estep_unop op Ω v m :
-     val_unop_ok (memenv_of m) op v →
+     val_unop_ok ('{m}) op v →
      Γ\ ρ ⊢ₕ @{op} #{Ω} v, m ⇒ #{Ω} (val_unop op v), m
   | estep_binop op m Ω1 Ω2 v1 v2 :
-     val_binop_ok Γ (memenv_of m) op v1 v2 →
+     val_binop_ok Γ ('{m}) op v1 v2 →
      Γ\ ρ ⊢ₕ #{Ω1} v1 @{op} #{Ω2} v2, m ⇒ #{Ω1 ∪ Ω2} (val_binop Γ op v1 v2), m
   | estep_if_true m Ω v e1 e2 :
-     val_true (memenv_of m) v →
+     val_true ('{m}) v →
      Γ\ ρ ⊢ₕ if{#{Ω} v} e1 else e2, m ⇒ e1, mem_unlock Ω m
   | estep_if_false m Ω v e1 e2 :
      val_false v →
@@ -78,7 +78,7 @@ Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
   | estep_comma m Ω v e2 :
      Γ\ ρ ⊢ₕ #{Ω} v,,e2, m ⇒ e2, mem_unlock Ω m
   | estep_cast m τ Ω v :
-     val_cast_ok Γ (memenv_of m) τ v →
+     val_cast_ok Γ ('{m}) τ v →
      Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} (val_cast τ v), m
 where "Γ \ ρ  ⊢ₕ e1 , m1 '⇒' e2 , m2" :=
   (@ehstep _ _ Γ ρ e1%E m1 e2%E m2) : C_scope.
@@ -136,7 +136,7 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
      Γ\ δ ⊢ₛ State (CExpr e (ret □) :: k) (Expr (#{Ω} v)) m ⇒
              State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m)
   | cstep_expr_while_true m k e Ω v s :
-     val_true (memenv_of m) v →
+     val_true ('{m}) v →
      Γ\ δ ⊢ₛ State (CExpr e (while{□} s) :: k) (Expr (#{Ω} v)) m ⇒
              State (CStmt (while{e} □) :: k) (Stmt ↘ s) (mem_unlock Ω m)
   | cstep_expr_while_false m k e Ω v s :
@@ -144,11 +144,11 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
      Γ\ δ ⊢ₛ State (CExpr e (while{□} s) :: k) (Expr (#{Ω} v)) m ⇒
              State k (Stmt ↗ (while{e} s)) (mem_unlock Ω m)
   | cstep_expr_while_indet m k e Ω v s :
-     ¬val_true (memenv_of m) v → ¬val_false v →
+     ¬val_true ('{m}) v → ¬val_false v →
      Γ\ δ ⊢ₛ State (CExpr e (while{□} s) :: k) (Expr (#{Ω} v)) m ⇒
              State k (Undef (UndefBranch e (while{□} s) Ω v)) m
   | cstep_expr_if_true m k e Ω v s1 s2 :
-     val_true (memenv_of m) v →
+     val_true ('{m}) v →
      Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
              State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m)
   | cstep_expr_if_false m k e Ω v s1 s2 :
@@ -156,7 +156,7 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
      Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
              State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)
   | cstep_expr_if_indet m k e Ω v s1 s2 :
-     ¬val_true (memenv_of m) v → ¬val_false v →
+     ¬val_true ('{m}) v → ¬val_false v →
      Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
              State k (Undef (UndefBranch e (if{□} s1 else s2) Ω v)) m
 
@@ -297,7 +297,7 @@ Section inversion.
          e = (#{Ω} v)%E → k = CExpr e' (ret □) :: k' →
          P (State k' (Stmt (⇈ v) (ret e')) (mem_unlock Ω m))) →
        (∀ Ω v k' e' s,
-         e = (#{Ω} v)%E → val_true (memenv_of m) v →
+         e = (#{Ω} v)%E → val_true ('{m}) v →
          k = CExpr e' (while{□} s) :: k' →
          P (State (CStmt (while{e'} □) :: k')
            (Stmt ↘ s) (mem_unlock Ω m))) →
@@ -305,11 +305,11 @@ Section inversion.
          e = (#{Ω} v)%E → val_false v → k = CExpr e' (while{□} s) :: k' →
          P (State k' (Stmt ↗ (while{e'} s)) (mem_unlock Ω m))) →
        (∀ Ω v k' e' s,
-         e = (#{Ω} v)%E → ¬val_true (memenv_of m) v → ¬val_false v →
+         e = (#{Ω} v)%E → ¬val_true ('{m}) v → ¬val_false v →
          k = CExpr e' (while{□} s) :: k' →
          P (State k' (Undef (UndefBranch e' (while{□} s) Ω v)) m)) →
        (∀ Ω v k' e' s1 s2,
-         e = (#{Ω} v)%E → val_true (memenv_of m) v →
+         e = (#{Ω} v)%E → val_true ('{m}) v →
          k = CExpr e' (if{□} s1 else s2) :: k' →
          P (State (CStmt (if{e'} □ else s2) :: k')
            (Stmt ↘ s1) (mem_unlock Ω m))) →
@@ -319,7 +319,7 @@ Section inversion.
          P (State (CStmt (if{e'} s1 else □) :: k')
            (Stmt ↘ s2) (mem_unlock Ω m))) →
        (∀ Ω v k' e' s1 s2,
-         e = (#{Ω} v)%E → ¬val_true (memenv_of m) v → ¬val_false v →
+         e = (#{Ω} v)%E → ¬val_true ('{m}) v → ¬val_false v →
          k = CExpr e' (if{□} s1 else s2) :: k' →
          P (State k' (Undef (UndefBranch e' (if{□} s1 else s2) Ω v)) m)) →
        (∀ (E : ectx Ti) e1 e2 m2,
@@ -413,18 +413,18 @@ Section inversion.
     | CExpr e (ret □) =>
        P (State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m)) → P S2
     | CExpr e (while{□} s) =>
-      (val_true (memenv_of m) v →
+      (val_true ('{m}) v →
         P (State (CStmt (while{e} □) :: k) (Stmt ↘ s) (mem_unlock Ω m))) →
       (val_false v →
         P (State k (Stmt ↗ (while{e} s)) (mem_unlock Ω m))) →
-      (¬val_true (memenv_of m) v → ¬val_false v →
+      (¬val_true ('{m}) v → ¬val_false v →
         P (State k (Undef (UndefBranch e (while{□} s) Ω v)) m)) → P S2
     | CExpr e (if{□} s1 else s2) =>
-      (val_true (memenv_of m) v →
+      (val_true ('{m}) v →
         P (State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m))) →
       (val_false v →
         P (State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m))) →
-      (¬val_true (memenv_of m) v → ¬val_false v →
+      (¬val_true ('{m}) v → ¬val_false v →
         P (State k (Undef (UndefBranch e (if{□} s1 else s2) Ω v)) m)) → P S2
     | _ => P S2
     end.
@@ -762,7 +762,7 @@ Proof.
     end; solve_elem_of.
 Qed.
 Lemma estep_if_true_no_locks ρ m v e2 e3 :
-  val_true (memenv_of m) v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e2, m.
+  val_true ('{m}) v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e2, m.
 Proof. rewrite <-(mem_unlock_empty m) at 3. by constructor. Qed.
 Lemma estep_if_false_no_locks ρ v e2 e3 m :
   val_false v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e3, m.

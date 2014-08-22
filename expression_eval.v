@@ -47,12 +47,12 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
      Some (inr v')
   | @{op} e =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
-     guard (val_unop_ok (memenv_of m) op v);
+     guard (val_unop_ok ('{m}) op v);
      Some (inr (val_unop op v))
   | e1 @{op} e2 =>
      v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe_inr;
      v2 ← ⟦ e2 ⟧ Γ fs ρ m ≫= maybe_inr;
-     guard (val_binop_ok Γ (memenv_of m) op v1 v2);
+     guard (val_binop_ok Γ ('{m}) op v1 v2);
      Some (inr (val_binop Γ op v1 v2))
   | call f @ es =>
      F ← fs !! f;
@@ -62,7 +62,7 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
      v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe_inr;
      av2 ← ⟦ e2 ⟧ Γ fs ρ m;
      av3 ← ⟦ e3 ⟧ Γ fs ρ m;
-     match val_true_false_dec (memenv_of m) v1 with
+     match val_true_false_dec ('{m}) v1 with
      | inleft (left _) => Some av2
      | inleft (right _) => Some av3
      | inright _ => None
@@ -72,7 +72,7 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
      ⟦ e2 ⟧ Γ fs ρ m
   | cast{τ} e =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
-     guard (val_cast_ok Γ (memenv_of m) τ v);
+     guard (val_cast_ok Γ ('{m}) τ v);
      Some (inr (val_cast τ v))
   | _ => None
   end
@@ -112,11 +112,11 @@ Context (Peltr : ∀ e rs v v',
   v !! rs = Some v' → P (e #> rs) (inr v')).
 Context (Punop : ∀ op e v,
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
-  val_unop_ok (memenv_of m) op v → P (@{op} e) (inr (val_unop op v))).
+  val_unop_ok ('{m}) op v → P (@{op} e) (inr (val_unop op v))).
 Context (Pbinop : ∀ op e1 e2 v1 v2,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e2 ⟧ Γ fs ρ m = Some (inr v2) → P e2 (inr v2) →
-  val_binop_ok Γ (memenv_of m) op v1 v2 →
+  val_binop_ok Γ ('{m}) op v1 v2 →
   P (e1 @{op} e2) (inr (val_binop Γ op v1 v2))).
 Context (Pcall : ∀ f F es vs v,
   fs !! f = Some F →
@@ -127,7 +127,7 @@ Context (Pif1 : ∀ e1 e2 e3 v1 av2 av3,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 →
   ⟦ e3 ⟧ Γ fs ρ m = Some av3 → P e3 av3 →
-  val_true (memenv_of m) v1 → P (if{e1} e2 else e3) av2).
+  val_true ('{m}) v1 → P (if{e1} e2 else e3) av2).
 Context (Pif2 : ∀ e1 e2 e3 v1 av2 av3,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 →
@@ -138,7 +138,7 @@ Context (Pcomma : ∀ e1 e2 v1 av2,
   ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 → P (e1,, e2) av2).
 Context (Pcast : ∀ τ e v,
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
-  val_cast_ok Γ (memenv_of m) τ v → P (cast{τ} e) (inr (val_cast τ v))).
+  val_cast_ok Γ ('{m}) τ v → P (cast{τ} e) (inr (val_cast τ v))).
 Lemma expr_eval_ind : ∀ e av, ⟦ e ⟧ Γ fs ρ m = Some av → P e av.
 Proof.
   assert (∀ f F es vs v,
@@ -189,14 +189,14 @@ Proof.
     simplify_option_equality; f_equal; eauto.
 Qed.
 Lemma expr_eval_typed_aux Γ Γf τs τs' fs ρ m e av τlr :
-  let Γm := memenv_of m in
-  ✓ Γ → ✓{Γ,Γm} m → ⟦ e ⟧ Γ fs ρ m = Some av → (Γ,Γm) ⊢ fs : Γf → Γm ⊢* ρ :* τs →
-  τs `prefix_of` τs' → (Γ,Γf,Γm,τs') ⊢ e : τlr → (Γ,Γm) ⊢ av : τlr.
+  ✓ Γ → ✓{Γ,'{m} } m → ⟦ e ⟧ Γ fs ρ m = Some av →
+  (Γ,'{m}) ⊢ fs : Γf → '{m} ⊢* ρ :* τs →
+  τs `prefix_of` τs' → (Γ,Γf,'{m},τs') ⊢ e : τlr → (Γ,'{m}) ⊢ av : τlr.
 Proof.
-  intros ??? Hav Hfs ? [τs'' ->] He. revert e av Hav τlr He. assert (∀ es vs σs,
+  intros ?? Hav Hfs ? [τs'' ->] He. revert e av Hav τlr He. assert (∀ es vs σs,
     Forall2 (λ e v, ∀ τlr,
-      (Γ,Γf,Γm,τs ++ τs'') ⊢ e : τlr → (Γ,Γm) ⊢ inr v : τlr) es vs →
-    (Γ,Γf,Γm,τs ++ τs'') ⊢* es :* inr <$> σs → (Γ,Γm) ⊢* vs :* σs).
+      (Γ,Γf,'{m},τs ++ τs'') ⊢ e : τlr → (Γ,'{m}) ⊢ inr v : τlr) es vs →
+    (Γ,Γf,'{m},τs ++ τs'') ⊢* es :* inr <$> σs → (Γ,'{m}) ⊢* vs :* σs).
   { intros es vs σs Hes. revert σs.
     induction Hes; intros [|??] ?; decompose_Forall_hyps;
       repeat match goal with
@@ -219,9 +219,9 @@ Proof.
   eapply purefuns_typed_lookup; eauto.
 Qed.
 Lemma expr_eval_typed Γ Γf τs fs ρ m e av τlr :
-  let Γm := memenv_of m in
-  ✓ Γ → ✓{Γ,Γm} m → ⟦ e ⟧ Γ fs ρ m = Some av → (Γ,Γm) ⊢ fs : Γf → Γm ⊢* ρ :* τs →
-  (Γ,Γf,Γm,τs) ⊢ e : τlr → (Γ,Γm) ⊢ av : τlr.
+  ✓ Γ → ✓{Γ,'{m}} m → ⟦ e ⟧ Γ fs ρ m = Some av →
+  (Γ,'{m}) ⊢ fs : Γf → '{m} ⊢* ρ :* τs →
+  (Γ,Γf,'{m},τs) ⊢ e : τlr → (Γ,'{m}) ⊢ av : τlr.
 Proof. intros. eapply expr_eval_typed_aux; eauto. Qed.
 
 (** We prove that only pure expressions are given a semantics. The converse
@@ -237,23 +237,22 @@ Proof.
 Qed.
 
 Lemma expr_eval_weaken Γ1 Γ2 Γf τs fs ρ1 ρ2 m1 m2 e av τlr :
-  let Γm1 := memenv_of m1 in let Γm2 := memenv_of m2 in
-  ✓ Γ1 → ✓{Γ1,Γm1} m1 → (Γ1,Γm1) ⊢ fs : Γf → Γm1 ⊢* ρ1 :* τs → 
-  (Γ1,Γf,Γm1,τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 m1 = Some av → 
-  Γ1 ⊆ Γ2 → (∀ o, index_alive Γm1 o → index_alive Γm2 o) →
+  ✓ Γ1 → ✓{Γ1,'{m1}} m1 → (Γ1,'{m1}) ⊢ fs : Γf → '{m1} ⊢* ρ1 :* τs → 
+  (Γ1,Γf,'{m1},τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 m1 = Some av → 
+  Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
   ρ1 `prefix_of` ρ2 → ⟦ e ⟧ Γ2 fs ρ2 m2 = Some av.
 Proof.
-  intros ?????? He Hav ?? [ρ3 ->]. revert e av Hav τlr He. assert (∀ es vs σs,
-    Forall2 (λ e v, ∀ τlr, (Γ1,Γf,Γm1,τs) ⊢ e : τlr →
+  intros ???? He Hav ?? [ρ3 ->]. revert e av Hav τlr He. assert (∀ es vs σs,
+    Forall2 (λ e v, ∀ τlr, (Γ1,Γf,'{m1},τs) ⊢ e : τlr →
       ⟦ e ⟧ Γ2 fs (ρ1 ++ ρ3) m2 = Some (inr v)) es vs →
-    (Γ1,Γf,Γm1,τs) ⊢* es :* inr <$> σs →
+    (Γ1,Γf,'{m1},τs) ⊢* es :* inr <$> σs →
     mapM (λ e, ⟦ e ⟧ Γ2 fs (ρ1 ++ ρ3) m2 ≫= maybe_inr) es = Some vs). 
   { intros es vs σs Hes Hes'. apply mapM_Some. revert σs Hes'.
     induction Hes; intros [|??] ?; decompose_Forall_hyps; constructor;
       simplify_option_equality; eauto. }
   rapply (expr_eval_ind Γ1 fs ρ1 m1); intros; typed_inversion_all;
     repeat match goal with
-    | H : ⟦ ?e ⟧ Γ1 fs ρ1 m1 = Some ?av,  _ : (Γ1,Γf,Γm1,τs) ⊢ ?e : ?τlr |- _ =>
+    | H: ⟦ ?e ⟧ Γ1 fs ρ1 m1 = Some ?av,  _: (Γ1,Γf,'{m1},τs) ⊢ ?e : ?τlr |- _ =>
       feed pose proof (expr_eval_typed Γ1 Γf τs fs ρ1 m1 e av τlr); auto;
       clear H
     end; typed_inversion_all; auto.

@@ -55,6 +55,8 @@ Section operations.
     m1 ⊑{Γ,f@memenv_of m1↦memenv_of m2} m2.
 End operations.
 
+Notation "'{ m }" := (memenv_of m) (at level 20, format "''{' m }").
+
 Section cmap_typed.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
@@ -98,7 +100,7 @@ Proof.
     eauto using ctree_typed_sep_valid.
 Qed.
 Lemma index_typed_valid_representable Γ Γm m o τ :
-  ✓ Γ → ✓{Γ,Γm} m → memenv_of m ⊢ o : τ → ✓{Γ} τ ∧ int_typed (size_of Γ τ) sptrT.
+  ✓ Γ → ✓{Γ,Γm} m → '{m} ⊢ o : τ → ✓{Γ} τ ∧ int_typed (size_of Γ τ) sptrT.
 Proof.
   intros ? [Hm1 Hm2] [β Hβ]. destruct m as [m]; simplify_map_equality'.
   destruct (m !! o) as [[τ'|w malloc]|] eqn:?; simplify_equality'.
@@ -106,11 +108,10 @@ Proof.
   * destruct (Hm2 o w malloc) as (?&?&?&?&?&?);
       simplify_type_equality; eauto using ctree_typed_type_valid.
 Qed.
-Lemma index_typed_valid Γ Γm m o τ :
-  ✓ Γ → ✓{Γ,Γm} m → memenv_of m ⊢ o : τ → ✓{Γ} τ.
+Lemma index_typed_valid Γ Γm m o τ : ✓ Γ → ✓{Γ,Γm} m → '{m} ⊢ o : τ → ✓{Γ} τ.
 Proof. intros; eapply index_typed_valid_representable; eauto. Qed.
 Lemma index_typed_representable Γ Γm m o τ :
-  ✓ Γ → ✓{Γ,Γm} m → memenv_of m ⊢ o : τ → int_typed (size_of Γ τ) sptrT.
+  ✓ Γ → ✓{Γ,Γm} m → '{m} ⊢ o : τ → int_typed (size_of Γ τ) sptrT.
 Proof. intros; eapply index_typed_valid_representable; eauto. Qed.
 Lemma cmap_lookup_unfreeze Γ m a w :
   m !!{Γ} a = Some w → m !!{Γ} (freeze false a) = Some w.
@@ -192,7 +193,7 @@ Proof.
 Qed.
 Lemma cmap_alter_memenv_of Γ Γm m g a w :
   ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} a = Some w → type_of (g w) = type_of w →
-  memenv_of (cmap_alter Γ g a m) = memenv_of m.
+  '{cmap_alter Γ g a m} = '{m}.
 Proof.
   destruct m as [m]; simpl; intros ? Hm ??.
   apply map_eq; intros o; case_option_guard; simplify_map_equality'.
