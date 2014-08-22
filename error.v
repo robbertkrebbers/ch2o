@@ -16,6 +16,16 @@ Notation "'guard' P 'with' e ; o" := (error_guard P e (λ _, o))
 Definition error_of_option {A E} (x : option A) (e : E) : sum E A :=
   match x with Some a => inr a | None => inl e end.
 
+Lemma bind_inr {A B E} (f : A → E + B) x b :
+  x ≫= f = inr b ↔ ∃ a, x = inr a ∧ f a = inr b.
+Proof. destruct x; naive_solver. Qed.
+Lemma fmap_inr {A B E} (f : A → B) (x : E + A) b :
+  f <$> x = inr b ↔ ∃ a, x = inr a ∧ f a = b.
+Proof. destruct x; naive_solver. Qed.
+Lemma error_of_option_inr {A E} (o : option A) (e : E) a :
+  error_of_option o e = inr a ↔ o = Some a.
+Proof. destruct o; naive_solver. Qed.
+
 Tactic Notation "case_error_guard" "as" ident(Hx) :=
   match goal with
   | H : context C [@error_guard _ ?P ?dec _ ?e ?x] |- _ =>
@@ -31,33 +41,18 @@ Tactic Notation "case_error_guard" :=
 Tactic Notation "simplify_error_equality" :=
   repeat match goal with
   | _ => progress simplify_equality'
-  | H : error_of_option ?o ?e = ?x |- _ =>
-    match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;
-    match x with inr _ => idtac | inl _ => idtac | _ => fail 1 end;
-    let y := fresh in destruct o as [y|] eqn:?;
-      [change (inr y = x) in H|change (inl e = x) in H]
+  | H : error_of_option ?o ?e = ?x |- _ => apply error_of_option_inr in H
   | H : mbind (M:=sum _) ?f ?o = ?x |- _ =>
-    match o with inr _ => fail 1 | inl _ => fail 1 | _ => idtac end;
-    match x with inr _ => idtac | inl _ => idtac | _ => fail 1 end;
-    let e := fresh in let y := fresh in destruct o as [e|y] eqn:?;
-      [change (inl e = x) in H|change (f y = x) in H]
-  | H : ?x = mbind (M:=sum _) ?f ?o |- _ =>
-    match o with inr _ => fail 1 | inl _ => fail 1 | _ => idtac end;
-    match x with inr _ => idtac | inl _ => idtac | _ => fail 1 end;
-    let e := fresh in let y := fresh in destruct o as [e|y] eqn:?;
-      [change (inl e = x) in H|change (f y = x) in H]
+    apply bind_inr in H; destruct H as (?&?&?)
   | H : fmap (M:=sum _) ?f ?o = ?x |- _ =>
-    match o with inr _ => fail 1 | inl _ => fail 1 | _ => idtac end;
-    match x with inr _ => idtac | inl _ => idtac | _ => fail 1 end;
-    let e := fresh in let y := fresh in destruct o as [e|y] eqn:?;
-      [change (inl e = x) in H|change (inr (f y) = x) in H]
-  | H : ?x = fmap (M:=sum _) ?f ?o |- _ =>
-    match o with inr _ => fail 1 | inl _ => fail 1 | _ => idtac end;
-    match x with inr _ => idtac | inl _ => idtac | _ => fail 1 end;
-    let e := fresh in let y := fresh in destruct o as [e|y] eqn:?;
-      [change (inl e = x) in H|change (inr (f y) = x) in H]
+    apply fmap_inr in H; destruct H as (?&?&?)
+  | H : mbind (M:=option) ?f ?o = ?x |- _ =>
+    apply bind_Some in H; destruct H as (?&?&?)
+  | H : fmap (M:=option) ?f ?o = ?x |- _ =>
+    apply fmap_Some in H; destruct H as (?&?&?)
   | _ => progress case_decide
   | _ => progress case_error_guard
+  | _ => progress case_option_guard
   end.
 
 Section mapM.
