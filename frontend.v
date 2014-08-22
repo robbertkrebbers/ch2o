@@ -516,39 +516,36 @@ Definition to_enum (Γn : compound_env Ti)
      guard (int_typed z' τi) with "enum field with value out of range";
      go ((x,EnumVal τi z') :: xs) xces (z' + 1)%Z
   end.
-Fixpoint to_envs_go (Θ : list (N * decl Ti)) : string +
+Fixpoint to_envs_go (Γn : compound_env Ti)
+    (Γ : env Ti) (Γf : funtypes Ti) (δ : funenv Ti) (m : mem Ti) (xs : var_env Ti)
+    (Θ : list (N * decl Ti)) : string +
     compound_env Ti * env Ti * funtypes Ti * funenv Ti * mem Ti * var_env Ti :=
   match Θ with
-  | [] => inr (∅,∅,∅,∅,∅,[])
+  | [] => inr (Γn,Γ,Γf,δ,m,xs)
   | (s,CompoundDecl c cτys) :: Θ =>
-     '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
      let s : tag := s in
      let ys := fst <$> cτys in
      τs ← mapM (to_type Γn Γ Γf m xs false) (snd <$> cτys);
      guard (Γ !! s = None) with "compound type with previously declared name";
      guard (NoDup ys) with "compound type with non-unique fields";
      guard (τs ≠ []) with "compound type should have atleast 1 field";
-     inr (<[s:=CompoundType c ys]>Γn, <[s:=τs]>Γ, Γf, δ, m, xs)
+     to_envs_go (<[s:=CompoundType c ys]>Γn) (<[s:=τs]>Γ) Γf δ m xs Θ
   | (s,EnumDecl τi yces) :: Θ =>
-     '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
      let s : tag := s in
      guard (Γn !! s = None) with "enum type with previously declared name";
      xs' ← to_enum Γn Γ Γf m τi xs yces 0;
-     inr (<[s:=EnumType τi]>Γn, Γ, Γf, δ, m, xs')
+     to_envs_go (<[s:=EnumType τi]>Γn) Γ Γf δ m xs' Θ
   | (x,TypeDefDecl cτ) :: Θ =>
-     '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
      guard (var_fresh x xs) with "typedef with previously declared name";
      τ ← to_type Γn Γ Γf m xs false cτ;
-     inr (Γn, Γ, Γf, δ, m, (x,TypeDef τ) :: xs)
+     to_envs_go Γn Γ Γf δ m ((x,TypeDef τ) :: xs) Θ
   | (x,GlobDecl cτ me) :: Θ =>
-     '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
      guard (var_fresh x xs) with "global with previously declared name";
      τ ← to_type Γn Γ Γf m xs false cτ;
      '(m,xs) ← alloc_global Γn Γ Γf m xs x τ me;
-     inr (Γn, Γ, Γf, δ, m, xs)
+     to_envs_go Γn Γ Γf δ m xs Θ
   | (f,FunDecl cτys cσ mcs) :: Θ =>
      (* todo: functions and globals cannot have the same name *)
-     '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go Θ;
      let f : funname := f in
      let ys := fst <$> cτys in
      τs ← mapM (to_type Γn Γ Γf m xs false) (snd <$> cτys);
@@ -562,13 +559,13 @@ Fixpoint to_envs_go (Θ : list (N * decl Ti)) : string +
         '(m,s,cmσ) ← to_stmt Γn Γ Γf σ m xs' (labels cs) None None cs;
         guard (gotos s ⊆ labels s) with "function with unbound gotos";
         guard (rettype_match cmσ σ) with "function with incorrect return type";
-        inr (Γn, Γ, Γf, <[f:=s]>δ, m, xs)
-     | None => inr (Γn, Γ, Γf, δ, m, xs)
+        to_envs_go Γn Γ Γf (<[f:=s]>δ) m xs Θ
+     | None => to_envs_go Γn Γ Γf δ m xs Θ
      end
   end.
 Definition to_envs (Θ : list (N * decl Ti)) :
     string + env Ti * funtypes Ti * funenv Ti * mem Ti :=
-  '(_,Γ,Γf,δ,m,_) ← to_envs_go Θ;
+  '(_,Γ,Γf,δ,m,_) ← to_envs_go ∅ ∅ ∅ ∅ ∅ [] Θ;
   guard (dom funset Γf ⊆ dom funset δ)
     with "not all function prototypes completed";
   inr (Γ,Γf,δ,m).
@@ -937,8 +934,8 @@ Proof.
   simpl_map; split_ands; eauto using insert_subseteq, funtypes_valid_insert.
 Qed.
 Lemma to_enum_typed Γn Γ Γf m τi xs yces z xs' :
-  var_env_valid Γ xs →
   to_enum Γn Γ Γf m τi xs yces z = inr xs' →
+  var_env_valid Γ xs →
   (**i 1.) *) var_env_valid Γ xs' ∧
   (**i 2.) *) var_env_stack_types xs' = var_env_stack_types xs.
 Proof.
@@ -949,81 +946,80 @@ Proof.
     destruct (⟦ e ⟧ Γ ∅ [] m)
       as [[?|[[| |τi' z'| |]| | | |]]|] eqn:?; simplify_equality'.
     repeat case_error_guard; simplify_equality'.
-    destruct (IH (z' + 1)%Z ((x, EnumVal τi z') :: xs)); auto.
+    apply (IH (z' + 1)%Z ((x, EnumVal τi z') :: xs)); auto.
   * repeat case_error_guard; simplify_equality'.
-    destruct (IH (z + 1)%Z ((x, EnumVal τi z) :: xs)); auto.
+    apply (IH (z + 1)%Z ((x, EnumVal τi z) :: xs)); auto.
 Qed.
-Lemma to_envs_go_typed Θ Γn Γ Γf δ m xs :
-  to_envs_go Θ = inr (Γn,Γ,Γf,δ,m,xs) →
-  (**i 1.) *) ✓ Γ ∧
-  (**i 2.) *) ✓{Γ} Γf ∧
-  (**i 3.) *) funenv_pretyped Γ ('{m}) δ Γf ∧
-  (**i 4.) *) ✓{Γ} m ∧
-  (**i 5.) *) var_env_valid Γ xs ∧
+Lemma to_envs_go_typed Θ Γn Γ Γf δ m xs Γn' Γ' Γf' δ' m' xs' :
+  ✓ Γ → ✓{Γ} Γf → funenv_pretyped Γ ('{m}) δ Γf →
+  ✓{Γ} m → var_env_valid Γ xs → var_env_stack_types xs = [] →
+  to_envs_go Γn Γ Γf δ m xs Θ = inr (Γn',Γ',Γf',δ',m',xs') →
+  (**i 1.) *) ✓ Γ' ∧
+  (**i 2.) *) ✓{Γ'} Γf' ∧
+  (**i 3.) *) funenv_pretyped Γ' ('{m'}) δ' Γf' ∧
+  (**i 4.) *) ✓{Γ'} m' ∧
+  (**i 5.) *) var_env_valid Γ' xs' ∧
   (**i 6.) *) var_env_stack_types xs = [].
 Proof.
   revert Γn Γ Γf δ m xs.
-  induction Θ as [|[x [cτys|τi yces|cτ|cτ mce|cτys cσ mcs]] Θ IH];
-    intros Γn Γ Γf δ m xs ?; simplify_equality'.
-  * split_ands; eauto using env_empty_valid,
-      cmap_empty_valid, funtypes_valid_empty, funenv_pretyped_empty.
-  * destruct (to_envs_go Θ) as [|[[[[[Γn2 Γ2] ?] ?] ?] ?]]; simplify_equality'.
-    destruct (mapM _ _) as [|τs] eqn:?; simplify_error_equality.
-    destruct (IH Γn2 Γ2 Γf δ m xs) as (?&?&?&?&?&?); eauto.
-    assert (✓ (<[x:tag:=τs]> Γ2)) by (constructor; eauto using to_types_valid).
-    simpl in *; split_ands; auto.
+  induction Θ as [|[x [c cτys|τi yces|cτ|cτ mce|cτys cσ mcs]] Θ IH];
+    intros Γn Γ Γf δ m xs ????? Hxs ?; simplify_equality'.
+  * done.
+  * destruct (mapM _ _) as [|τs] eqn:?; simplify_error_equality.
+    assert (✓ (<[x:tag:=τs]> Γ)) by (constructor; eauto using to_types_valid).
+    apply (IH (<[(x:tag):=CompoundType c (fst <$> cτys)]>Γn)
+      (<[(x:tag):=τs]>Γ) Γf δ m xs); simpl in *; auto.
     + eauto using funtypes_valid_weaken, insert_subseteq.
     + eauto using funenv_pretyped_weaken, insert_subseteq.
     + eauto using cmap_valid'_weaken, insert_subseteq.
     + eauto using Forall_impl, var_decl_valid_weaken, insert_subseteq.
-  * destruct (to_envs_go Θ)
-      as [|[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]]; simplify_equality'.
-    repeat case_error_guard; simplify_equality'.
-    destruct (to_enum Γn2 Γ2 Γf2 m2 τi xs2 yces 0) eqn:?; simplify_equality'.
-    destruct (IH Γn2 Γ Γf δ m xs2) as (?&?&?&?&?&Hxs); eauto.
-    destruct (to_enum_typed Γn2 Γ Γf m τi xs2 yces 0 xs); auto 6 with congruence.
-  * destruct (to_envs_go Θ) as [|[[[[[??] ?] ?] ?] xs2]]; simplify_equality'.
-    repeat case_error_guard; simplify_equality'.
+  * repeat case_error_guard; simplify_equality'.
+    destruct (to_enum Γn Γ Γf m τi xs yces 0)
+      as [|xs''] eqn:?; simplify_equality'.
+    destruct (to_enum_typed Γn Γ Γf m τi xs yces 0 xs'') as [? Hxs'']; eauto.
+    rewrite <-Hxs''.
+    apply (IH (<[x:tag:=EnumType τi]> Γn) Γ Γf δ m xs''); eauto with congruence.
+  * repeat case_error_guard; simplify_equality'.
     destruct (to_type _ _ _ _ _ _ _) as [τ|] eqn:?; simplify_equality'.
-    destruct (IH Γn Γ Γf δ m xs2) as (?&?&?&?&?&?); eauto.
-    split_ands; auto. constructor; simpl; eauto using to_type_valid.
-  * destruct (to_envs_go Θ)
-      as [|[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]]; simplify_equality'.
-    repeat case_error_guard; simplify_equality'.
+    apply (IH Γn Γ Γf δ m ((x, TypeDef t) :: xs)); auto.
+    constructor; simpl; eauto using to_type_valid.
+  * repeat case_error_guard; simplify_equality'.
     destruct (to_type _ _ _ _ _ _ _) as [|τ] eqn:?; simplify_equality'.
-    destruct (alloc_global _ _ _ _ _ _ _ _) as [|[??]] eqn:?; simplify_equality'.
-    destruct (IH Γn Γ Γf δ m2 xs2) as (?&?&?&?&?&?); eauto.
-    destruct (alloc_global_typed Γn Γ Γf m2 xs2 x τ mce m xs)
-      as (?&?&?&<-); eauto 7 using funenv_pretyped_weaken, to_type_valid.
-  * destruct (to_envs_go Θ)
-      as [|[[[[[Γn2 Γ2] Γf2] δ2] m2] xs2]]; simplify_equality'.
-    destruct (mapM _ _) as [|τs] eqn:?; simplify_equality'.
-    destruct (IH Γn2 Γ2 Γf2 δ2 m2 xs2) as (?&?&?&?&?&?Hxs2); eauto.
+    destruct (alloc_global _ _ _ _ _ _ _ _)
+      as [|[m'' xs'']] eqn:?; simplify_equality'.
+    destruct (alloc_global_typed Γn Γ Γf m xs x τ mce m'' xs'')
+      as (?&?&?&Hxs''); eauto using to_type_valid.
+    rewrite Hxs''. apply (IH Γn Γ Γf δ m'' xs'');
+      eauto using funenv_pretyped_weaken with congruence.
+  * destruct (mapM _ _) as [|τs] eqn:?; simplify_equality'.
+    assert (✓{Γ}* τs) by eauto using to_types_valid.
     repeat case_error_guard; simplify_equality'.
     destruct (to_type _ _ _ _ _ _ _) as [|σ] eqn:?; simplify_equality'.
-    destruct (extend_funtypes _ _ _ _ _) as [|Γf3] eqn:?; simplify_equality'.
-    destruct (extend_funtypes_typed Γ2 m2 x τs σ Γf2 Γf3) as (?&?&?&?);
-      eauto using to_types_valid, to_type_valid.
+    assert (✓{Γ} σ) by eauto using to_type_valid.
+    destruct (extend_funtypes _ _ _ _ _) as [|Γf''] eqn:?; simplify_equality'.
+    destruct (extend_funtypes_typed Γ m x τs σ Γf Γf'') as (?&?&?&?); eauto.
     destruct mcs as [cs|]; simplify_equality';
-      [|split_ands; eauto using funenv_pretyped_weaken].
+      [|by eapply IH; eauto using funenv_pretyped_weaken].
     destruct (to_stmt _ _ _ _ _ _ _ _ _ _)
-      as [|[[m3 s] cmσ]] eqn:?; simplify_error_equality.
+      as [|[[m'' s] cmσ]] eqn:?; simplify_error_equality.
     assert (length (fst <$> cτys) = length τs).
     { by erewrite <-(error_mapM_length _ _ τs), !fmap_length by eauto. }
-    destruct (to_stmt_typed Γn Γ Γf σ m2
+    destruct (to_stmt_typed Γn Γ Γf'' σ m
       (zip_with (λ y τ, (y, Local τ)) (fst <$> cτys) τs ++ xs)
-      (labels cs) None None cs m s cmσ) as (Hs&?&?); auto.
+      (labels cs) None None cs m'' s cmσ) as (Hs&?&?); auto.
     { eauto using Forall_app_2, var_env_valid_locals, to_types_valid. }
-    rewrite var_env_stack_types_app,
-      var_env_stack_types_locals, Hxs2, (right_id_L [] (++)) in Hs by done.
-    split_ands; eauto using funenv_pretyped_weaken,
-      funenv_pretyped_insert, to_types_valid, to_type_valid.
+    rewrite var_env_stack_types_app, var_env_stack_types_locals,
+      Hxs, (right_id_L [] (++)) in Hs by done.
+    eapply IH; eauto.
+    eauto using funenv_pretyped_weaken, funenv_pretyped_insert.
 Qed.
 Lemma to_envs_typed Θ Γ Γf δ m :
   to_envs Θ = inr (Γ,Γf,δ,m) → ✓ Γ ∧ (Γ,'{m}) ⊢ δ : Γf ∧ ✓{Γ} m.
 Proof.
-  unfold to_envs. intros. destruct (to_envs_go _)
-    as [|[[[[[Γn Γ2] Γf2] δ2] m2] xs]] eqn:?; simplify_error_equality.
-  destruct (to_envs_go_typed Θ Γn Γ Γf δ m xs) as (?&?&?&?&?); auto.
+  unfold to_envs. intros. destruct (to_envs_go _ _ _ _ _ _ _)
+    as [|[[[[[Γn ?] ?] ?] ?] xs]] eqn:?; simplify_error_equality.
+  destruct (to_envs_go_typed Θ ∅ ∅ ∅ ∅ ∅ [] Γn Γ Γf δ m xs)
+    as (?&?&?&?&?); eauto using env_empty_valid,
+    cmap_empty_valid, funtypes_valid_empty, funenv_pretyped_empty.
 Qed.
 End properties.
