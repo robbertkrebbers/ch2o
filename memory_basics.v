@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export fin_map_dom.
+Require Export fin_map_dom types.
 Require Import nmap natmap mapset.
 
 (** * Indexes into the memory *)
@@ -35,6 +35,30 @@ Instance index_lexico_order : StrictOrder (@lexico index _) := _.
 Instance index_trichotomy: TrichotomyT (@lexico index _) := _.
 Typeclasses Opaque index indexmap.
 
+(** * Memory environments *)
+Notation memenv Ti :=
+  (indexmap (type Ti * bool (* false = alive, true = freed *))).
+Instance index_typed {Ti} : Typed (memenv Ti) (type Ti) index := λ Γm o τ,
+  ∃ β, Γm !! o = Some (τ,β).
+Instance index_typecheck {Ti} : TypeCheck (memenv Ti) (type Ti) index := λ Γm o,
+  fst <$> Γm !! o.
+Definition index_alive {Ti} (Γm : memenv Ti) (o : index) : Prop :=
+  ∃ τ, Γm !! o = Some (τ,false).
+Instance: TypeCheckSpec (memenv Ti) (type Ti) index (λ _, True).
+Proof.
+  intros ? Γm o τ. split; unfold type_check, typed, index_typecheck, index_typed.
+  * destruct (Γm !! o) as [[??]|]; naive_solver.
+  * by intros [? ->].
+Qed.
+Instance index_alive_dec {Ti} (Γm : memenv Ti) o : Decision (index_alive Γm o).
+ refine
+  match Γm !! o as mβτ return Decision (∃ τ, mβτ = Some (τ,false)) with
+  | Some (_,β) => match β with true => right _ | false => left _ end
+  | None => right _
+  end; abstract naive_solver.
+Defined.
+
+(** * Locked locations *)
 Definition lockset : Set :=
   dsigS (map_Forall (λ _, (≠ ∅)) : indexmap natset → Prop).
 Instance lockset_eq_dec (Ω1 Ω2 : lockset) : Decision (Ω1 = Ω2) | 1 := _.

@@ -26,12 +26,11 @@ Instance addr_eq_dec `{Ti : Set, ∀ k1 k2 : Ti, Decision (k1 = k2)}
 Proof. solve_decision. Defined.
 
 Section address_operations.
-  Context `{TypeCheck M (type Ti) index, Refine Ti M, IndexAlive M,
-    Env Ti, ∀ m x, Decision (index_alive m x)}.
+  Context `{Env Ti}.
 
-  Inductive addr_typed' (Γ : env Ti) (m : M) : addr Ti → type Ti → Prop :=
+  Inductive addr_typed' (Γ : env Ti) (Γm : memenv Ti) : addr Ti → type Ti → Prop :=
     Addr_typed o r i τ σ σc :
-      m ⊢ o : τ →
+      Γm ⊢ o : τ →
       ✓{Γ} τ →
       int_typed (size_of Γ τ) sptrT →
       Γ ⊢ r : τ ↣ σ →
@@ -39,18 +38,18 @@ Section address_operations.
       i ≤ size_of Γ σ * ref_size r →
       i `mod` size_of Γ σc = 0 →
       σ >*> σc →
-      addr_typed' Γ m (Addr o r i τ σ σc) σc.
+      addr_typed' Γ Γm (Addr o r i τ σ σc) σc.
   Global Instance addr_typed :
-    Typed (env Ti * M) (type Ti) (addr Ti) := curry addr_typed'.
+    Typed (env Ti * memenv Ti) (type Ti) (addr Ti) := curry addr_typed'.
   Global Instance addr_freeze : Freeze (addr Ti) := λ β a,
     let 'Addr x r i τ σ σc := a in Addr x (freeze β <$> r) i τ σ σc.
 
   Global Instance type_of_addr: TypeOf (type Ti) (addr Ti) := addr_type.
   Global Instance addr_type_check:
-      TypeCheck (env Ti * M) (type Ti) (addr Ti) := λ Γm a,
-    let (Γ,m) := Γm in
+      TypeCheck (env Ti * memenv Ti) (type Ti) (addr Ti) := λ ΓΓm a,
+    let (Γ,Γm) := ΓΓm in
     let 'Addr o r i τ σ σc := a in
-    guard (m ⊢ o : τ);
+    guard (Γm ⊢ o : τ);
     guard (✓{Γ} τ);
     guard (int_typed (size_of Γ τ) sptrT);
     guard (Γ ⊢ r : τ ↣ σ);
@@ -95,8 +94,9 @@ Section address_operations.
     | Addr_is_top_array o σ n σc :
        addr_is_top_array (Addr o [RArray 0 σ n] 0 (σ.[n]) σ σc).
 
-  Definition addr_plus_ok (Γ : env Ti) (m : M) (j : Z) (a : addr Ti) : Prop :=
-    index_alive m (addr_index a) ∧
+  Definition addr_plus_ok (Γ : env Ti) (Γm : memenv Ti)
+      (j : Z) (a : addr Ti) : Prop :=
+    index_alive Γm (addr_index a) ∧
     (0 ≤ addr_byte a + j * size_of' Γ a
        ≤ size_of Γ (addr_type_base a) * ref_size (addr_ref_base a))%Z.
   Global Arguments addr_plus_ok _ _ _ !_ /.
@@ -105,8 +105,8 @@ Section address_operations.
     in Addr x r (Z.to_nat (i + j * size_of Γ σc)) τ σ σc.
   Global Arguments addr_plus _ _ !_ /.
 
-  Definition addr_minus_ok (m : M) (a1 a2 : addr Ti) : Prop :=
-    index_alive m (addr_index a1) ∧
+  Definition addr_minus_ok (Γm : memenv Ti) (a1 a2 : addr Ti) : Prop :=
+    index_alive Γm (addr_index a1) ∧
     addr_index a1 = addr_index a2 ∧
     freeze true <$> addr_ref_base a1 = freeze true <$> addr_ref_base a2.
   Global Arguments addr_minus_ok _ !_ !_ /.
@@ -114,9 +114,9 @@ Section address_operations.
     ((addr_byte a1 - addr_byte a2) `div` size_of' Γ a1)%Z.
   Global Arguments addr_minus _ !_ !_ /.
 
-  Definition addr_cast_ok (Γ : env Ti) (m : M)
+  Definition addr_cast_ok (Γ : env Ti) (Γm : memenv Ti)
       (σc : type Ti) (a : addr Ti) : Prop :=
-    index_alive m (addr_index a) ∧
+    index_alive Γm (addr_index a) ∧
     addr_type_base a >*> σc ∧
     addr_byte a `mod` size_of Γ σc = 0.
   Global Arguments addr_cast_ok _ _ _ !_ /.
@@ -136,13 +136,13 @@ Section address_operations.
        ref_refine r' sz [] i (ref_base r') (i + sz * ref_offset r')
     | ref_refine_ne_nil rs r i :
        ref_refine r' sz (rs :: r) i (rs :: r ++ r') i.
-  Inductive addr_refine' (Γ : env Ti) (f : mem_inj Ti) (m1 m2 : M) :
+  Inductive addr_refine' (Γ : env Ti) (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
        addr Ti → addr Ti → type Ti → Prop :=
     | Addr_refine' o o' r r' r'' i i'' τ τ' σ σc :
        f !! o = Some (o',r') →
-       m1 ⊢ o : τ →
-       m2 ⊢ o' : τ' →
-       (index_alive m1 o → index_alive m2 o') →
+       Γm1 ⊢ o : τ →
+       Γm2 ⊢ o' : τ' →
+       (index_alive Γm1 o → index_alive Γm2 o') →
        ✓{Γ} τ' →
        int_typed (size_of Γ τ') sptrT →
        Γ ⊢ r' : τ' ↣ τ → Γ ⊢ r : τ ↣ σ →
@@ -151,16 +151,16 @@ Section address_operations.
        i `mod` size_of Γ σc = 0 →
        σ >*> σc →
        ref_refine (freeze true <$> r') (size_of Γ σ) r i r'' i'' →
-       addr_refine' Γ f m1 m2 (Addr o r i τ σ σc) (Addr o' r'' i'' τ' σ σc) σc.
-  Global Instance addr_refine: RefineT Ti M (addr Ti) (type Ti) := addr_refine'.
+       addr_refine' Γ f Γm1 Γm2 (Addr o r i τ σ σc) (Addr o' r'' i'' τ' σ σc) σc.
+  Global Instance addr_refine: RefineT Ti (addr Ti) (type Ti) := addr_refine'.
 End address_operations.
 
 Typeclasses Opaque addr_strict addr_is_obj addr_disjoint.
 
 Section addresses.
-Context `{MemSpec Ti M}.
+Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
-Implicit Types m : M.
+Implicit Types Γm : memenv Ti.
 Implicit Types τ σ : type Ti.
 Implicit Types r : ref Ti.
 Implicit Types a : addr Ti.
@@ -168,9 +168,9 @@ Implicit Types a : addr Ti.
 (** ** Typing and general properties *)
 Lemma addr_freeze_freeze β1 β2 a : freeze β1 (freeze β2 a) = freeze β1 a.
 Proof. destruct a; f_equal'; auto using ref_freeze_freeze. Qed.
-Lemma addr_typed_alt Γ m a σ :
-  (Γ,m) ⊢ a : σ ↔
-    m ⊢ addr_index a: addr_type_object a ∧
+Lemma addr_typed_alt Γ Γm a σ :
+  (Γ,Γm) ⊢ a : σ ↔
+    Γm ⊢ addr_index a: addr_type_object a ∧
     ✓{Γ} (addr_type_object a) ∧
     int_typed (size_of Γ (addr_type_object a)) sptrT ∧
     Γ ⊢ addr_ref_base a : addr_type_object a ↣ addr_type_base a ∧
@@ -183,50 +183,50 @@ Proof.
   split; [destruct 1; naive_solver|intros (?&?&?&?&?&?&?&?&?)].
   by destruct a; simplify_equality; constructor.
 Qed.
-Lemma addr_typed_index Γ m a σ :
-  (Γ,m) ⊢ a : σ → m ⊢ addr_index a : addr_type_object a.
+Lemma addr_typed_index Γ Γm a σ :
+  (Γ,Γm) ⊢ a : σ → Γm ⊢ addr_index a : addr_type_object a.
 Proof. by destruct 1. Qed.
-Lemma addr_typed_offset Γ m a σ :
-  (Γ,m) ⊢ a : σ → ref_offset (addr_ref_base a) = 0.
+Lemma addr_typed_offset Γ Γm a σ :
+  (Γ,Γm) ⊢ a : σ → ref_offset (addr_ref_base a) = 0.
 Proof. by destruct 1. Qed.
-Lemma addr_typed_type_object_valid Γ m a σ :
-  (Γ,m) ⊢ a : σ → ✓{Γ} (addr_type_object a).
+Lemma addr_typed_type_object_valid Γ Γm a σ :
+  (Γ,Γm) ⊢ a : σ → ✓{Γ} (addr_type_object a).
 Proof. by destruct 1. Qed.
-Lemma addr_typed_ref_base_typed Γ m a σ :
-  (Γ,m) ⊢ a : σ → Γ ⊢ addr_ref_base a : addr_type_object a ↣ addr_type_base a.
+Lemma addr_typed_ref_base_typed Γ Γm a σ :
+  (Γ,Γm) ⊢ a : σ → Γ ⊢ addr_ref_base a : addr_type_object a ↣ addr_type_base a.
 Proof. by destruct 1. Qed.
-Lemma addr_typed_type_base_valid Γ m a σ :
-  ✓ Γ → (Γ,m) ⊢ a : σ → ✓{Γ} (addr_type_base a).
+Lemma addr_typed_type_base_valid Γ Γm a σ :
+  ✓ Γ → (Γ,Γm) ⊢ a : σ → ✓{Γ} (addr_type_base a).
 Proof.
   eauto using ref_typed_type_valid,
     addr_typed_ref_base_typed, addr_typed_type_object_valid.
 Qed.
-Lemma addr_typed_ref_typed Γ m a σ :
-  ✓ Γ → (Γ,m) ⊢ a : σ → addr_strict Γ a →
+Lemma addr_typed_ref_typed Γ Γm a σ :
+  ✓ Γ → (Γ,Γm) ⊢ a : σ → addr_strict Γ a →
   Γ ⊢ addr_ref Γ a : addr_type_object a ↣ addr_type_base a.
 Proof.
   intros. apply ref_set_offset_typed; eauto using addr_typed_ref_base_typed.
   apply Nat.div_lt_upper_bound;
     eauto using size_of_ne_0, addr_typed_type_base_valid.
 Qed.
-Lemma addr_typed_cast Γ m a σ : (Γ,m) ⊢ a : σ → addr_type_base a >*> σ.
+Lemma addr_typed_cast Γ Γm a σ : (Γ,Γm) ⊢ a : σ → addr_type_base a >*> σ.
 Proof. by destruct 1. Qed.
-Lemma addr_offset_aligned Γ m a σ :
-  (Γ,m) ⊢ a : σ → addr_byte a `mod` size_of Γ σ = 0.
+Lemma addr_offset_aligned Γ Γm a σ :
+  (Γ,Γm) ⊢ a : σ → addr_byte a `mod` size_of Γ σ = 0.
 Proof. by destruct 1. Qed.
-Lemma addr_typed_type_valid Γ m a σ : ✓ Γ → (Γ,m) ⊢ a : σ → ✓{Γ} σ.
+Lemma addr_typed_type_valid Γ Γm a σ : ✓ Γ → (Γ,Γm) ⊢ a : σ → ✓{Γ} σ.
 Proof. destruct 2; eauto using castable_type_valid, ref_typed_type_valid. Qed.
-Lemma addr_offset_aligned_alt Γ m a σ :
-   ✓ Γ → (Γ,m) ⊢ a : σ → (size_of Γ σ | addr_byte a).
+Lemma addr_offset_aligned_alt Γ Γm a σ :
+   ✓ Γ → (Γ,Γm) ⊢ a : σ → (size_of Γ σ | addr_byte a).
 Proof.
   intros. apply Nat.mod_divide;
     eauto using addr_offset_aligned, size_of_ne_0, addr_typed_type_valid.
 Qed.
-Global Instance: TypeOfSpec (env Ti * M) (type Ti) (addr Ti).
+Global Instance: TypeOfSpec (env Ti * memenv Ti) (type Ti) (addr Ti).
 Proof. by intros [??]; destruct 1. Qed.
-Global Instance: TypeCheckSpec (env Ti * M) (type Ti) (addr Ti) (λ _, True).
+Global Instance: TypeCheckSpec (env Ti * memenv Ti) (type Ti) (addr Ti) (λ _, True).
 Proof.
-  intros [Γ m] a σ _. split.
+  intros [Γ Γm] a σ _. split.
   * destruct a; intros; simplify_option_equality; constructor; auto.
   * by destruct 1; simplify_option_equality.
 Qed.
@@ -241,10 +241,10 @@ Proof.
   by erewrite <-size_of_weaken
     by eauto using castable_type_valid, ref_typed_type_valid.
 Qed.
-Lemma addr_dead_weaken Γ m1 m2 a σ :
-  (Γ,m1) ⊢ a : σ → index_alive m2 (addr_index a) →
-  (∀ o τ, m1 ⊢ o : τ → index_alive m2 o → index_alive m1 o) →
-  index_alive m1 (addr_index a).
+Lemma addr_dead_weaken Γ Γm1 Γm2 a σ :
+  (Γ,Γm1) ⊢ a : σ → index_alive Γm2 (addr_index a) →
+  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm2 o → index_alive Γm1 o) →
+  index_alive Γm1 (addr_index a).
 Proof. destruct 1; simpl; eauto. Qed.
 Global Instance addr_strict_dec Γ a : Decision (addr_strict Γ a).
 Proof. unfold addr_strict; apply _. Defined.
@@ -252,8 +252,8 @@ Global Instance addr_is_obj_dec a : Decision (addr_is_obj a).
 Proof. unfold addr_is_obj; apply _. Defined.
 Global Instance addr_disjoint_dec Γ a1 a2 : Decision (a1 ⊥{Γ} a2).
 Proof. unfold disjointE, addr_disjoint; apply _. Defined.
-Lemma addr_offset_representable Γ m a σc :
-  ✓ Γ → (Γ,m) ⊢ a : σc → int_typed (addr_offset Γ a) sptrT.
+Lemma addr_offset_representable Γ Γm a σc :
+  ✓ Γ → (Γ,Γm) ⊢ a : σc → int_typed (addr_offset Γ a) sptrT.
 Proof.
   intros ? Ha. assert (0 < size_of Γ σc)%Z.
   { apply (Nat2Z.inj_lt 0); eauto using size_of_pos, addr_typed_type_valid. }
@@ -304,42 +304,41 @@ Lemma addr_ref_byte_freeze Γ β a :
 Proof.
   unfold addr_ref_byte. by rewrite addr_byte_freeze, addr_type_base_freeze.
 Qed.
-Lemma addr_typed_freeze Γ m β a σ : (Γ,m) ⊢ freeze β a : σ ↔ (Γ,m) ⊢ a : σ.
+Lemma addr_typed_freeze Γ Γm β a σ : (Γ,Γm) ⊢ freeze β a : σ ↔ (Γ,Γm) ⊢ a : σ.
 Proof.
   rewrite !addr_typed_alt; destruct a; simpl. by rewrite ref_offset_freeze,
     ref_size_freeze; setoid_rewrite ref_typed_freeze.
 Qed.
-Lemma addr_type_check_freeze Γm β a :
-  type_check Γm (freeze β a) = type_check Γm a.
+Lemma addr_type_check_freeze Γ Γm β a :
+  type_check (Γ,Γm) (freeze β a) = type_check (Γ,Γm) a.
 Proof.
-  destruct Γm. apply option_eq; intros.
-  by rewrite !type_check_correct, addr_typed_freeze.
+  apply option_eq; intros. by rewrite !type_check_correct, addr_typed_freeze.
 Qed.
-Lemma addr_is_obj_ref_byte Γ m a σ :
-  (Γ,m) ⊢ a : σ → addr_is_obj a → addr_ref_byte Γ a = 0.
+Lemma addr_is_obj_ref_byte Γ Γm a σ :
+  (Γ,Γm) ⊢ a : σ → addr_is_obj a → addr_ref_byte Γ a = 0.
 Proof. by destruct 1; intros; simplify_equality'. Qed.
-Lemma addr_is_obj_type_base Γ m a σ :
-  (Γ,m) ⊢ a : σ → addr_is_obj a → addr_type_base a = σ.
+Lemma addr_is_obj_type_base Γ Γm a σ :
+  (Γ,Γm) ⊢ a : σ → addr_is_obj a → addr_type_base a = σ.
 Proof. by destruct 1. Qed.
-Lemma addr_not_obj_type Γ m a σ :
-  (Γ,m) ⊢ a : σ → ¬addr_is_obj a → σ ≠ voidT → σ = ucharT.
+Lemma addr_not_obj_type Γ Γm a σ :
+  (Γ,Γm) ⊢ a : σ → ¬addr_is_obj a → σ ≠ voidT → σ = ucharT.
 Proof.
   intros [o r i τ σ' σc] ??. destruct (proj1 (castable_alt σ' σc))
     as [?|[?|?]]; simplify_equality'; auto.
 Qed.
-Lemma addr_not_obj_size_of Γ m a σ :
-  (Γ,m) ⊢ a : σ → ¬addr_is_obj a → size_of Γ σ = 1.
+Lemma addr_not_obj_size_of Γ Γm a σ :
+  (Γ,Γm) ⊢ a : σ → ¬addr_is_obj a → size_of Γ σ = 1.
 Proof.
   intros. destruct (decide (σ = voidT)) as [->|]; auto using size_of_void.
   by erewrite (addr_not_obj_type _ _ a σ), size_of_uchar by eauto.
 Qed.
-Lemma addr_not_obj_bit_size_of Γ m a σ :
-  (Γ,m) ⊢ a : σ → ¬addr_is_obj a → bit_size_of Γ σ = char_bits.
+Lemma addr_not_obj_bit_size_of Γ Γm a σ :
+  (Γ,Γm) ⊢ a : σ → ¬addr_is_obj a → bit_size_of Γ σ = char_bits.
 Proof.
   intros. unfold bit_size_of. erewrite addr_not_obj_size_of by eauto; lia.
 Qed.
-Lemma addr_byte_range Γ m a σ :
-  ✓ Γ → (Γ,m) ⊢ a : σ → addr_strict Γ a →
+Lemma addr_byte_range Γ Γm a σ :
+  ✓ Γ → (Γ,Γm) ⊢ a : σ → addr_strict Γ a →
   addr_ref_byte Γ a < size_of Γ (addr_type_base a).
 Proof.
   intros. apply Nat.mod_bound_pos; auto with lia.
@@ -375,8 +374,8 @@ Proof.
   intros ? [] ?; simpl.
   by erewrite size_of_weaken by eauto using ref_typed_type_valid.
 Qed.
-Lemma addr_object_offset_alt Γ m a σ :
-  ✓ Γ → (Γ,m) ⊢ a : σ → addr_strict Γ a → addr_object_offset Γ a
+Lemma addr_object_offset_alt Γ Γm a σ :
+  ✓ Γ → (Γ,Γm) ⊢ a : σ → addr_strict Γ a → addr_object_offset Γ a
   = ref_object_offset Γ (addr_ref Γ a) + addr_ref_byte Γ a * char_bits.
 Proof.
   intros ? [o r i τ σ' σc' Hor] ?; simpl in *.
@@ -385,8 +384,8 @@ Proof.
   rewrite (Nat.div_mod i (size_of Γ σ')) at 1
     by eauto using size_of_ne_0,ref_typed_type_valid; unfold bit_size_of; lia.
 Qed.
-Lemma addr_object_offset_lt Γ m a σ :
-  ✓ Γ → (Γ,m) ⊢ a : σ → addr_strict Γ a →
+Lemma addr_object_offset_lt Γ Γm a σ :
+  ✓ Γ → (Γ,Γm) ⊢ a : σ → addr_strict Γ a →
   addr_object_offset Γ a + bit_size_of Γ σ
     ≤ bit_size_of Γ (addr_type_object a).
 Proof.
@@ -402,9 +401,9 @@ Proof.
 Qed.
 
 (** ** Operations *)
-Lemma addr_top_typed Γ m o τ :
-  ✓ Γ → m ⊢ o : τ → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
-  (Γ,m) ⊢ addr_top o τ : τ.
+Lemma addr_top_typed Γ Γm o τ :
+  ✓ Γ → Γm ⊢ o : τ → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
+  (Γ,Γm) ⊢ addr_top o τ : τ.
 Proof.
   constructor; simpl; eauto using Nat.mod_0_l, size_of_ne_0; [|lia].
   by apply ref_typed_nil.
@@ -414,9 +413,9 @@ Proof.
   unfold addr_strict, addr_top; simpl. rewrite Nat.mul_1_r.
   eauto using size_of_pos.
 Qed.
-Lemma addr_top_array_typed Γ m o τ (n : Z) :
-  ✓ Γ → m ⊢ o : τ.[Z.to_nat n] → ✓{Γ} τ → (0 < n)%Z →
-  int_typed (n * size_of Γ τ) sptrT → (Γ,m) ⊢ addr_top_array o τ n : τ.
+Lemma addr_top_array_typed Γ Γm o τ (n : Z) :
+  ✓ Γ → Γm ⊢ o : τ.[Z.to_nat n] → ✓{Γ} τ → (0 < n)%Z →
+  int_typed (n * size_of Γ τ) sptrT → (Γ,Γm) ⊢ addr_top_array o τ n : τ.
 Proof.
   intros. assert (0 < Z.to_nat n) by (apply (Z2Nat.inj_lt 0); lia).
   constructor; simpl; auto.
@@ -432,8 +431,8 @@ Proof.
   intros. apply Nat.mul_pos_pos; simpl; eauto using size_of_pos.
   apply (Z2Nat.inj_lt 0); lia.
 Qed.
-Lemma addr_is_top_array_alt Γ m a τ :
-  ✓ Γ → (Γ,m) ⊢ a : τ → addr_is_top_array a ↔ ∃ τ' n, addr_strict Γ a ∧
+Lemma addr_is_top_array_alt Γ Γm a τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : τ → addr_is_top_array a ↔ ∃ τ' n, addr_strict Γ a ∧
     addr_ref Γ a = [RArray 0 τ' n] ∧ addr_ref_byte Γ a = 0.
 Proof.
   rewrite addr_typed_alt; intros ? (_&?&_&Hr&?&?&?&_&?); split.
@@ -457,8 +456,8 @@ Proof.
   end; abstract first [by inversion 1 | subst; constructor].
 Defined.
 
-Lemma addr_plus_typed Γ m a σ j :
-  ✓ Γ → (Γ,m) ⊢ a : σ → addr_plus_ok Γ m j a → (Γ,m) ⊢ addr_plus Γ j a : σ.
+Lemma addr_plus_typed Γ Γm a σ j :
+  ✓ Γ → (Γ,Γm) ⊢ a : σ → addr_plus_ok Γ Γm j a → (Γ,Γm) ⊢ addr_plus Γ j a : σ.
 Proof.
   intros ? [o r i τ σ' σc ??????] (?&?&?);
     constructor; simpl in *; split_ands; auto.
@@ -506,24 +505,24 @@ Proof. by destruct a. Qed.
 Lemma addr_ref_base_plus Γ a j :
   addr_ref_base (addr_plus Γ j a) = addr_ref_base a.
 Proof. by destruct a. Qed.
-Lemma addr_minus_alt Γ m a1 a2 σ :
-  ✓ Γ → (Γ,m) ⊢ a1 : σ → (Γ,m) ⊢ a2 : σ →
+Lemma addr_minus_alt Γ Γm a1 a2 σ :
+  ✓ Γ → (Γ,Γm) ⊢ a1 : σ → (Γ,Γm) ⊢ a2 : σ →
   addr_minus Γ a1 a2 = (addr_offset Γ a1 - addr_offset Γ a2)%Z.
 Proof.
   intros. unfold addr_minus, addr_offset; simplify_type_equality.
   assert (size_of Γ σ ≠ 0) by eauto using size_of_ne_0, addr_typed_type_valid.
-  destruct (addr_offset_aligned_alt Γ m a1 σ) as [z1 ->]; auto.
-  destruct (addr_offset_aligned_alt Γ m a2 σ) as [z2 ->]; auto.
+  destruct (addr_offset_aligned_alt Γ Γm a1 σ) as [z1 ->]; auto.
+  destruct (addr_offset_aligned_alt Γ Γm a2 σ) as [z2 ->]; auto.
   rewrite !Z2Nat_inj_div, !Nat2Z.inj_mul, <-Z.mul_sub_distr_r.
   by rewrite !Z.div_mul by lia.
 Qed.
-Lemma addr_minus_typed Γ m a1 a2 σ :
-  ✓ Γ → (Γ,m) ⊢ a1 : σ → (Γ,m) ⊢ a2 : σ →
+Lemma addr_minus_typed Γ Γm a1 a2 σ :
+  ✓ Γ → (Γ,Γm) ⊢ a1 : σ → (Γ,Γm) ⊢ a2 : σ →
   int_typed (addr_minus Γ a1 a2) sptrT.
 Proof.
   intros HΓ Ha1 Ha2. erewrite addr_minus_alt by eauto.
-  destruct (addr_offset_representable Γ m a1 σ HΓ Ha1),
-    (addr_offset_representable Γ m a2 σ HΓ Ha2).
+  destruct (addr_offset_representable Γ Γm a1 σ HΓ Ha1),
+    (addr_offset_representable Γ Γm a2 σ HΓ Ha2).
   red; change (int_lower sptrT) with (-int_upper sptrT)%Z; lia.
 Qed.
 Lemma addr_minus_ok_weaken m1 m2 a1 a2:
@@ -537,8 +536,8 @@ Proof.
   intros. unfold addr_minus; simplify_type_equality.
   by erewrite (size_of_weaken Γ1 Γ2) by eauto using addr_typed_type_valid.
 Qed.
-Lemma addr_cast_typed Γ m a σ σc :
-  (Γ,m) ⊢ a : σ → addr_cast_ok Γ m σc a → (Γ,m) ⊢ addr_cast σc a : σc.
+Lemma addr_cast_typed Γ Γm a σ σc :
+  (Γ,Γm) ⊢ a : σ → addr_cast_ok Γ Γm σc a → (Γ,Γm) ⊢ addr_cast σc a : σc.
 Proof. intros [] (?&?&?); constructor; naive_solver. Qed.
 Lemma addr_cast_ok_weaken Γ1 Γ2 m1 m2 a σ σc :
   ✓ Γ1 → (Γ1,m1) ⊢ a : σ → (∀ o, index_alive m1 o → index_alive m2 o) →
@@ -556,13 +555,13 @@ Proof. by destruct a. Qed.
 Lemma addr_ref_byte_cast Γ a σc :
   addr_ref_byte Γ (addr_cast σc a) = addr_ref_byte Γ a.
 Proof. by destruct a. Qed.
-Lemma addr_cast_self Γ m a σ : (Γ,m) ⊢ a : σ → addr_cast σ a = a.
+Lemma addr_cast_self Γ Γm a σ : (Γ,Γm) ⊢ a : σ → addr_cast σ a = a.
 Proof. by destruct 1. Qed.
 Lemma addr_is_obj_cast a σc :
   addr_is_obj (addr_cast σc a) ↔ σc = addr_type_base a.
 Proof. by destruct a. Qed.
-Lemma addr_ref_plus_char_cast Γ m a σ j :
-  ✓ Γ → (Γ,m) ⊢ a : σ → addr_is_obj a → j < size_of Γ σ →
+Lemma addr_ref_plus_char_cast Γ Γm a σ j :
+  ✓ Γ → (Γ,Γm) ⊢ a : σ → addr_is_obj a → j < size_of Γ σ →
   addr_ref Γ (addr_plus Γ j (addr_cast ucharT a)) = addr_ref Γ a.
 Proof.
   destruct 2 as [o r i τ σ σc ?????]; intros ??; simplify_equality'; f_equal.
@@ -571,8 +570,8 @@ Proof.
   by rewrite Nat.add_assoc, <-Nat.div_mod
     by eauto using ref_typed_type_valid, size_of_ne_0.
 Qed.
-Lemma addr_ref_byte_plus_char_cast Γ m a σ j :
-  ✓ Γ → (Γ,m) ⊢ a : σ → addr_is_obj a → j < size_of Γ σ →
+Lemma addr_ref_byte_plus_char_cast Γ Γm a σ j :
+  ✓ Γ → (Γ,Γm) ⊢ a : σ → addr_is_obj a → j < size_of Γ σ →
   addr_ref_byte Γ (addr_plus Γ j (addr_cast ucharT a)) = j.
 Proof.
   destruct 2 as [o r i τ σ σc ?????? Hiσ]; intros; simplify_equality'.
@@ -582,8 +581,8 @@ Proof.
     by eauto using ref_typed_type_valid, size_of_ne_0.
   rewrite Hiσ, Nat.add_0_l. by apply Nat.mod_small.
 Qed.
-Lemma addr_byte_lt_size_char_cast Γ m a σ j :
-  ✓ Γ → (Γ,m) ⊢ a : σ → addr_is_obj a → j < size_of Γ σ →
+Lemma addr_byte_lt_size_char_cast Γ Γm a σ j :
+  ✓ Γ → (Γ,Γm) ⊢ a : σ → addr_is_obj a → j < size_of Γ σ →
   addr_byte a < size_of Γ (addr_type_base a) * ref_size (addr_ref_base a) →
   addr_byte (addr_plus Γ j (addr_cast ucharT a))
     < size_of Γ (addr_type_base a) * ref_size (addr_ref_base a).
@@ -596,9 +595,9 @@ Proof.
   apply Nat.div_lt_upper_bound;
     eauto using ref_typed_type_valid, size_of_ne_0.
 Qed.
-Lemma addr_elt_typed Γ m a rs σ σ' :
-  ✓ Γ → (Γ,m) ⊢ a : σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' →
-  ref_seg_offset rs = 0 → (Γ,m) ⊢ addr_elt Γ rs a : σ'.
+Lemma addr_elt_typed Γ Γm a rs σ σ' :
+  ✓ Γ → (Γ,Γm) ⊢ a : σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' →
+  ref_seg_offset rs = 0 → (Γ,Γm) ⊢ addr_elt Γ rs a : σ'.
 Proof.
   rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) ? Hrs ?.
   destruct a as [o r i τ σ'' σc]; simplify_equality'.
@@ -612,8 +611,8 @@ Proof.
   * by rewrite Nat.mod_0_l by eauto using size_of_ne_0, ref_typed_type_valid,
       ref_seg_typed_type_valid, castable_type_valid.
 Qed.
-Lemma addr_elt_strict Γ m a rs σ σ' :
-  ✓ Γ → (Γ,m) ⊢ a : σ → Γ ⊢ rs : σ ↣ σ' → addr_strict Γ (addr_elt Γ rs a).
+Lemma addr_elt_strict Γ Γm a rs σ σ' :
+  ✓ Γ → (Γ,Γm) ⊢ a : σ → Γ ⊢ rs : σ ↣ σ' → addr_strict Γ (addr_elt Γ rs a).
 Proof.
   rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) Hrs.
   destruct a as [o r i τ σ'' σc]; simplify_equality'.
@@ -633,9 +632,9 @@ Proof.
 Qed.
 
 (** ** Disjointness *)
-Lemma addr_disjoint_cases Γ m a1 a2 σ1 σ2 :
-  ✓ Γ → (Γ,m) ⊢ a1 : σ1 → frozen a1 → addr_is_obj a1 →
-  (Γ,m) ⊢ a2 : σ2 → frozen a2 → addr_is_obj a2 →
+Lemma addr_disjoint_cases Γ Γm a1 a2 σ1 σ2 :
+  ✓ Γ → (Γ,Γm) ⊢ a1 : σ1 → frozen a1 → addr_is_obj a1 →
+  (Γ,Γm) ⊢ a2 : σ2 → frozen a2 → addr_is_obj a2 →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
@@ -667,15 +666,15 @@ Proof. intros -> ->. by constructor. Qed.
 Lemma ref_refine_ne_nil_alt r' sz rs r r'' i :
   r'' = rs :: r ++ r' → ref_refine r' sz (rs :: r) i r'' i.
 Proof. intros ->. by constructor. Qed.
-Lemma addr_refine_eq Γ m a1 a2 σ : a1 ⊑{Γ@m} a2 : σ → a1 = a2.
+Lemma addr_refine_eq Γ Γm a1 a2 σ : a1 ⊑{Γ@Γm} a2 : σ → a1 = a2.
 Proof.
   destruct 1 as [o o' r' r r'' i i'' τ τ' σ σc ???????????? []];
     simplify_type_equality'.
   * by rewrite Nat.mul_0_r, Nat.add_0_r.
   * by rewrite (right_id_L [] (++)).
 Qed.
-Lemma addr_refine_typed_l Γ f m1 m2 a1 a2 σ :
-  ✓ Γ → a1 ⊑{Γ,f@m1↦m2} a2 : σ → (Γ,m1) ⊢ a1 : σ.
+Lemma addr_refine_typed_l Γ f Γm1 Γm2 a1 a2 σ :
+  ✓ Γ → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → (Γ,Γm1) ⊢ a1 : σ.
 Proof.
   intros ?. assert (∀ r τ1 τ2, ✓{Γ} τ1 → Γ ⊢ r : τ1 ↣ τ2 →
     int_typed (size_of Γ τ1) sptrT → int_typed (size_of Γ τ2) sptrT).
@@ -685,8 +684,8 @@ Proof.
     eauto using size_of_ref'. }
   destruct 1; constructor; eauto using ref_typed_type_valid.
 Qed.
-Lemma addr_refine_typed_r Γ f m1 m2 a1 a2 σ :
-  ✓ Γ → a1 ⊑{Γ,f@m1↦m2} a2 : σ → (Γ,m2) ⊢ a2 : σ.
+Lemma addr_refine_typed_r Γ f Γm1 Γm2 a1 a2 σ :
+  ✓ Γ → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → (Γ,Γm2) ⊢ a2 : σ.
 Proof.
   destruct 2 as [o o' r r' r'' i i'' τ τ' σ σc ???????????? Hr''].
   assert (ref_offset (freeze true <$> r') < ref_size (freeze true <$> r')).
@@ -707,14 +706,14 @@ Proof.
       Nat.mod_add by eauto using size_of_ne_0,
       castable_type_valid, ref_typed_type_valid.
 Qed.
-Lemma addr_refine_type_of_l Γ f m1 m2 a1 a2 σ :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ → type_of a1 = σ.
+Lemma addr_refine_type_of_l Γ f Γm1 Γm2 a1 a2 σ :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → type_of a1 = σ.
 Proof. by destruct 1. Qed.
-Lemma addr_refine_type_of_r Γ f m1 m2 a1 a2 σ :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ → type_of a2 = σ.
+Lemma addr_refine_type_of_r Γ f Γm1 Γm2 a1 a2 σ :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → type_of a2 = σ.
 Proof. by destruct 1. Qed.
-Lemma addr_refine_frozen Γ f m1 m2 a1 a2 σ :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ → frozen a1 ↔ frozen a2.
+Lemma addr_refine_frozen Γ f Γm1 Γm2 a1 a2 σ :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → frozen a1 ↔ frozen a2.
 Proof.
   unfold frozen.
   destruct 1 as [o o' r' r r'' i i'' τ τ' σ σc ???????????? []]; csimpl.
@@ -722,16 +721,16 @@ Proof.
   * rewrite fmap_app, ref_freeze_freeze.
     by split; intro; simplify_list_equality'; repeat f_equal.
 Qed.
-Lemma addr_refine_id Γ m a σ : (Γ,m) ⊢ a : σ → a ⊑{Γ@m} a : σ.
+Lemma addr_refine_id Γ Γm a σ : (Γ,Γm) ⊢ a : σ → a ⊑{Γ@Γm} a : σ.
 Proof.
   destruct 1 as [o r i τ σ σc].
   eexists []; csimpl; auto; [by apply ref_typed_nil|].
   destruct r as [|rs r]; [apply ref_refine_nil_alt; csimpl; auto with lia|].
   apply ref_refine_ne_nil_alt. by rewrite (right_id_L [] (++)).
 Qed.
-Lemma addr_refine_compose Γ f g m1 m2 m3 a1 a2 a3 σ :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ → a2 ⊑{Γ,g@m2↦m3} a3 : σ →
-  a1 ⊑{Γ,f ◎ g@m1↦m3} a3 : σ.
+Lemma addr_refine_compose Γ f g Γm1 Γm2 Γm3 a1 a2 a3 σ :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → a2 ⊑{Γ,g@Γm2↦Γm3} a3 : σ →
+  a1 ⊑{Γ,f ◎ g@Γm1↦Γm3} a3 : σ.
 Proof.
   destruct 1 as [o o2 r r2 r3 i i3 τ τ2 σ σc ???????????? Hr3];
     inversion 1 as [? o4 ? r4 r5 ? i5 ? τ3 ?????????????? Hr5]; subst.
@@ -744,12 +743,12 @@ Proof.
     by apply ref_refine_nil_alt; rewrite ?fmap_cons, ?fmap_app.
   * apply ref_refine_ne_nil_alt. by rewrite fmap_app, (associative_L (++)).
 Qed.
-Lemma addr_refine_weaken Γ Γ' f f' m1 m2 m1' m2' a1 a2 σ :
-  ✓ Γ → a1 ⊑{Γ,f@m1↦m2} a2 : σ → Γ ⊆ Γ' →
-  (∀ o o2 r τ, m1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
-  (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
-  (∀ o1 o2 r, f !! o1 = Some (o2,r) → index_alive m1' o1 → index_alive m2' o2) →
-  a1 ⊑{Γ',f'@m1'↦m2'} a2 : σ.
+Lemma addr_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' a1 a2 σ :
+  ✓ Γ → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → Γ ⊆ Γ' →
+  (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
+  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
+  (∀ o1 o2 r, f !! o1 = Some (o2,r) → index_alive Γm1' o1 → index_alive Γm2' o2) →
+  a1 ⊑{Γ',f'@Γm1'↦Γm2'} a2 : σ.
 Proof.
   destruct 2 as [o o2 r r2 r3 i i3 τ τ2 σ σc ?????????? Hsz];
     intros; econstructor; eauto using type_valid_weaken, ref_typed_weaken.
@@ -759,15 +758,15 @@ Proof.
       by eauto using ref_typed_type_valid, castable_type_valid.
   * by erewrite <-size_of_weaken by eauto using ref_typed_type_valid.
 Qed.
-Lemma addr_refine_unique Γ f m1 m2 a1 a2 a3 σ2 σ3 :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ2 → a1 ⊑{Γ,f@m1↦m2} a3 : σ3 → a2 = a3.
+Lemma addr_refine_unique Γ f Γm1 Γm2 a1 a2 a3 σ2 σ3 :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ2 → a1 ⊑{Γ,f@Γm1↦Γm2} a3 : σ3 → a2 = a3.
 Proof.
   destruct 1 as [??????????????????????? []];
     inversion 1 as [??????????????????????? Hr2]; inversion Hr2;
     simplify_type_equality'; naive_solver.
 Qed.
-Lemma addr_freeze_refine Γ f m1 m2 a1 a2 σ :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ → freeze true a1 ⊑{Γ,f@m1↦m2} freeze true a2 : σ.
+Lemma addr_freeze_refine Γ f Γm1 Γm2 a1 a2 σ :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → freeze true a1 ⊑{Γ,f@Γm1↦Γm2} freeze true a2 : σ.
 Proof.
   intros Ha. destruct Ha as [o o' r r' r'' i i'' τ τ' σ σc ???????????? Hr''];
     csimpl; econstructor; eauto;
@@ -778,8 +777,8 @@ Proof.
   * eapply ref_refine_ne_nil_alt; eauto.
     by rewrite fmap_app, ref_freeze_freeze.
 Qed.
-Lemma addr_ref_refine Γ f m1 m2 a1 a2 σ :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ → addr_strict Γ a1 →
+Lemma addr_ref_refine Γ f Γm1 Γm2 a1 a2 σ :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → addr_strict Γ a1 →
   ∃ r, f !! addr_index a1 = Some (addr_index a2, r)
     ∧ addr_ref Γ a2 = addr_ref Γ a1 ++ freeze true <$> r.
 Proof.
@@ -788,24 +787,24 @@ Proof.
   rewrite Nat.mul_comm, Nat.div_add, Nat.div_small, Nat.add_0_l by lia.
   by rewrite ref_set_offset_set_offset, ref_set_offset_offset.
 Qed.
-Lemma addr_ref_byte_refine Γ f m1 m2 a1 a2 σ :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ → addr_strict Γ a1 →
+Lemma addr_ref_byte_refine Γ f Γm1 Γm2 a1 a2 σ :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → addr_strict Γ a1 →
   addr_ref_byte Γ a1 = addr_ref_byte Γ a2.
 Proof.
   intros [?? r r' r'' i i'' τ τ' σ' ????????????? Hr''] ?;
     simplify_equality'; destruct Hr''; simplify_equality'; auto.
   by rewrite Nat.mul_comm, Nat.mod_add by lia.
 Qed.
-Lemma addr_is_obj_refine Γ f m1 m2 a1 a2 σ :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ → addr_is_obj a1 ↔ addr_is_obj a2.
+Lemma addr_is_obj_refine Γ f Γm1 Γm2 a1 a2 σ :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → addr_is_obj a1 ↔ addr_is_obj a2.
 Proof. by destruct 1. Qed.
-Lemma addr_disjoint_refine Γ f m1 m2 a1 a2 a3 a4 σ1 σ3 :
+Lemma addr_disjoint_refine Γ f Γm1 Γm2 a1 a2 a3 a4 σ1 σ3 :
   ✓ Γ → mem_inj_injective f → addr_strict Γ a1 → addr_strict Γ a3 →
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ1 → a3 ⊑{Γ,f@m1↦m2} a4 : σ3 → a1 ⊥{Γ} a3 → a2 ⊥{Γ} a4.
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ1 → a3 ⊑{Γ,f@Γm1↦Γm2} a4 : σ3 → a1 ⊥{Γ} a3 → a2 ⊥{Γ} a4.
 Proof.
   intros ??????.
-  destruct (addr_ref_refine Γ f m1 m2 a1 a2 σ1) as (r1&Hf1&Hr1); auto.
-  destruct (addr_ref_refine Γ f m1 m2 a3 a4 σ3) as (r2&Hf2&Hr2); auto.
+  destruct (addr_ref_refine Γ f Γm1 Γm2 a1 a2 σ1) as (r1&Hf1&Hr1); auto.
+  destruct (addr_ref_refine Γ f Γm1 Γm2 a3 a4 σ3) as (r2&Hf2&Hr2); auto.
   intros [?|[[Hidx ?]|(Hidx&Ha&?&?&?)]].
   * edestruct (mem_inj_injective_ne f (addr_index a1) (addr_index a2))
       as [|[??]]; eauto; [by left|].
@@ -820,13 +819,13 @@ Proof.
       <-!(addr_is_obj_refine _ _ _ _ a1 a2),
       <-!(addr_is_obj_refine _ _ _ _ a3 a4) by eauto.
 Qed.
-Lemma addr_disjoint_refine_inv Γ f m1 m2 a1 a2 a3 a4 σ1 σ3 :
+Lemma addr_disjoint_refine_inv Γ f Γm1 Γm2 a1 a2 a3 a4 σ1 σ3 :
   ✓ Γ → addr_strict Γ a1 → addr_strict Γ a3 →
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ1 → a3 ⊑{Γ,f@m1↦m2} a4 : σ3 → a2 ⊥{Γ} a4 → a1 ⊥{Γ} a3.
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ1 → a3 ⊑{Γ,f@Γm1↦Γm2} a4 : σ3 → a2 ⊥{Γ} a4 → a1 ⊥{Γ} a3.
 Proof.
   intros ?????.
-  destruct (addr_ref_refine Γ f m1 m2 a1 a2 σ1) as (r1&Hf1&Hr1); auto.
-  destruct (addr_ref_refine Γ f m1 m2 a3 a4 σ3) as (r2&Hf2&Hr2); auto.
+  destruct (addr_ref_refine Γ f Γm1 Γm2 a1 a2 σ1) as (r1&Hf1&Hr1); auto.
+  destruct (addr_ref_refine Γ f Γm1 Γm2 a3 a4 σ3) as (r2&Hf2&Hr2); auto.
   destruct (decide (addr_index a1 = addr_index a3)) as [Hidx|]; [|by left].
   intros [?|[[Hidx' ?]|(Hidx'&Ha&?&?&?)]]; [congruence| |].
   * right; left; split; [done|]. rewrite Hidx in Hf1; simplify_equality.
@@ -839,8 +838,8 @@ Proof.
     apply (injective (++ freeze true <$> freeze true <$> r1)).
     rewrite <-!fmap_app. congruence.
 Qed.
-Lemma addr_byte_refine_help Γ f m1 m2 a1 a2 σ :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ →
+Lemma addr_byte_refine_help Γ f Γm1 Γm2 a1 a2 σ :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ →
   ∃ i, i + size_of Γ (addr_type_base a1) * ref_size (addr_ref_base a1)
     ≤ size_of Γ (addr_type_base a2) * ref_size (addr_ref_base a2)
   ∧ addr_byte a2 = i + addr_byte a1.
@@ -852,20 +851,20 @@ Proof.
   rewrite <-Nat.mul_add_distr_l, Nat.add_comm. eapply Nat.mul_le_mono_l,
     Nat.le_succ_l, ref_typed_size, ref_typed_freeze; eauto.
 Qed.
-Lemma addr_strict_refine Γ f m1 m2 a1 a2 σ :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ → addr_strict Γ a1 → addr_strict Γ a2.
+Lemma addr_strict_refine Γ f Γm1 Γm2 a1 a2 σ :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → addr_strict Γ a1 → addr_strict Γ a2.
 Proof.
-  intros. destruct (addr_byte_refine_help Γ f m1 m2 a1 a2 σ) as (i&?&?); auto.
+  intros. destruct (addr_byte_refine_help Γ f Γm1 Γm2 a1 a2 σ) as (i&?&?); auto.
   unfold addr_strict in *; lia.
 Qed.
-Lemma addr_alive_refine Γ f m1 m2 a1 a2 σ :
-  index_alive m1 (addr_index a1) → a1 ⊑{Γ,f@m1↦m2} a2 : σ →
-  index_alive m2 (addr_index a2).
+Lemma addr_alive_refine Γ f Γm1 Γm2 a1 a2 σ :
+  index_alive Γm1 (addr_index a1) → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ →
+  index_alive Γm2 (addr_index a2).
 Proof. destruct 2; auto. Qed.
-Lemma addr_top_refine Γ f m1 m2 o1 o2 τ :
-  ✓ Γ → m1 ⊢ o1 : τ → m2 ⊢ o2 : τ → (index_alive m1 o1 → index_alive m2 o2) →
+Lemma addr_top_refine Γ f Γm1 Γm2 o1 o2 τ :
+  ✓ Γ → Γm1 ⊢ o1 : τ → Γm2 ⊢ o2 : τ → (index_alive Γm1 o1 → index_alive Γm2 o2) →
   ✓{Γ} τ → int_typed (size_of Γ τ) sptrT → f !! o1 = Some (o2,[]) →
-  addr_top o1 τ ⊑{Γ,f@m1↦m2} addr_top o2 τ : τ.
+  addr_top o1 τ ⊑{Γ,f@Γm1↦Γm2} addr_top o2 τ : τ.
 Proof.
   econstructor; eauto using Nat.mod_0_l, size_of_ne_0.
   * by constructor.
@@ -873,16 +872,16 @@ Proof.
   * simpl; lia.
   * apply ref_refine_nil_alt; simpl; auto with lia.
 Qed.
-Lemma addr_plus_ok_refine Γ f m1 m2 a1 a2 σ j :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ → addr_plus_ok Γ m1 j a1 → addr_plus_ok Γ m2 j a2.
+Lemma addr_plus_ok_refine Γ f Γm1 Γm2 a1 a2 σ j :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → addr_plus_ok Γ Γm1 j a1 → addr_plus_ok Γ Γm2 j a2.
 Proof.
   unfold addr_plus_ok. intros Ha (?&?&?).
-  destruct (addr_byte_refine_help Γ f m1 m2 a1 a2 σ) as (i&?&?); auto.
+  destruct (addr_byte_refine_help Γ f Γm1 Γm2 a1 a2 σ) as (i&?&?); auto.
   destruct Ha; simplify_equality'. split; eauto with lia.
 Qed.
-Lemma addr_plus_refine Γ f m1 m2 a1 a2 σ j :
-  ✓ Γ → addr_plus_ok Γ m1 j a1 →
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ → addr_plus Γ j a1 ⊑{Γ,f@m1↦m2} addr_plus Γ j a2 : σ.
+Lemma addr_plus_refine Γ f Γm1 Γm2 a1 a2 σ j :
+  ✓ Γ → addr_plus_ok Γ Γm1 j a1 →
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → addr_plus Γ j a1 ⊑{Γ,f@Γm1↦Γm2} addr_plus Γ j a2 : σ.
 Proof.
   intros ? Ha' Ha. destruct Ha' as (_&?&?), Ha as
     [o o' r r' r'' i i'' τ τ' σ σc ???????????? Hr'']; simplify_equality'.
@@ -900,26 +899,26 @@ Proof.
   by rewrite Z2Nat.inj_add, Z2Nat.inj_mul, !Nat2Z.id
     by auto using Z.mul_nonneg_nonneg with lia.
 Qed.
-Lemma addr_minus_ok_refine Γ f m1 m2 a1 a2 a3 a4 σ :
-  a1 ⊑{Γ,f@m1↦m2} a2 : σ → a3 ⊑{Γ,f@m1↦m2} a4 : σ →
-  addr_minus_ok m1 a1 a3 → addr_minus_ok m2 a2 a4.
+Lemma addr_minus_ok_refine Γ f Γm1 Γm2 a1 a2 a3 a4 σ :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → a3 ⊑{Γ,f@Γm1↦Γm2} a4 : σ →
+  addr_minus_ok Γm1 a1 a3 → addr_minus_ok Γm2 a2 a4.
 Proof.
   destruct 1 as [??????????????????????? []], 1 as
     [??????????????????????? []]; intros (?&?&Hr); simplify_equality'; eauto.
   rewrite !fmap_app, !ref_freeze_freeze by eauto. intuition congruence.
 Qed.
-Lemma addr_minus_refine Γ f m1 m2 a1 a2 a3 a4 σ :
-  addr_minus_ok m1 a1 a3 → a1 ⊑{Γ,f@m1↦m2} a2 : σ →
-  a3 ⊑{Γ,f@m1↦m2} a4 : σ → addr_minus Γ a1 a3 = addr_minus Γ a2 a4.
+Lemma addr_minus_refine Γ f Γm1 Γm2 a1 a2 a3 a4 σ :
+  addr_minus_ok Γm1 a1 a3 → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ →
+  a3 ⊑{Γ,f@Γm1↦Γm2} a4 : σ → addr_minus Γ a1 a3 = addr_minus Γ a2 a4.
 Proof.
   intros (?&?&?).
   destruct 1 as [o1 o2 r1 r2 r3 i1 i3 τ1 τ2 σ1 σc ???????????? Hr3],
     1 as [o4 o5 r4 r5 r6 i4 i6 τ4 τ5 σ3 σc4 ???????????? Hr6].
   destruct Hr3, Hr6; simplify_type_equality'; f_equal; lia.
 Qed.
-Lemma addr_cast_ok_refine Γ f m1 m2 a1 a2 σ σc :
-  ✓ Γ → a1 ⊑{Γ,f@m1↦m2} a2 : σ →
-  addr_cast_ok Γ m1 σc a1 → addr_cast_ok Γ m2 σc a2.
+Lemma addr_cast_ok_refine Γ f Γm1 Γm2 a1 a2 σ σc :
+  ✓ Γ → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ →
+  addr_cast_ok Γ Γm1 σc a1 → addr_cast_ok Γ Γm2 σc a2.
 Proof.
   destruct 2 as [o o' r r' r'' i i'' τ τ' σ σc' ???????????? []];
     intros (?&?&?); simplify_equality'; split_ands; eauto.
@@ -927,13 +926,13 @@ Proof.
   destruct (decide (size_of Γ σc = 0)) as [->|?]; [done|].
   by rewrite !(Nat.mul_comm (_ * size_of _ _)), Nat.mul_assoc, Nat.mod_add.
 Qed.
-Lemma addr_cast_refine Γ f m1 m2 a1 a2 σ σc :
-  addr_cast_ok Γ m1 σc a1 → a1 ⊑{Γ,f@m1↦m2} a2 : σ →
-  addr_cast σc a1 ⊑{Γ,f@m1↦m2} addr_cast σc a2 : σc.
+Lemma addr_cast_refine Γ f Γm1 Γm2 a1 a2 σ σc :
+  addr_cast_ok Γ Γm1 σc a1 → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ →
+  addr_cast σc a1 ⊑{Γ,f@Γm1↦Γm2} addr_cast σc a2 : σc.
 Proof. intros (?&?&?). destruct 1; simplify_equality'; econstructor; eauto. Qed.
-Lemma addr_elt_refine Γ f m1 m2 a1 a2 rs σ σ' :
-  ✓ Γ → a1 ⊑{Γ,f@m1↦m2} a2 : σ → addr_strict Γ a1 → Γ ⊢ rs : σ ↣ σ' →
-  ref_seg_offset rs = 0 → addr_elt Γ rs a1 ⊑{Γ,f@m1↦m2} addr_elt Γ rs a2 : σ'.
+Lemma addr_elt_refine Γ f Γm1 Γm2 a1 a2 rs σ σ' :
+  ✓ Γ → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → addr_strict Γ a1 → Γ ⊢ rs : σ ↣ σ' →
+  ref_seg_offset rs = 0 → addr_elt Γ rs a1 ⊑{Γ,f@Γm1↦Γm2} addr_elt Γ rs a2 : σ'.
 Proof.
   intros ? [o o' r r' r'' i i'' τ τ' σ'' ???????????? Hcst Hr''] ? Hrs ?; simpl.
   apply castable_alt in Hcst; destruct Hcst as [<-|[?|?]];

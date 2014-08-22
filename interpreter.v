@@ -19,7 +19,7 @@ Definition interpreter (Θ : list (N * decl Ti))
   '(Γ,Γf,δ,m) ← to_envs Θ;
   '(σs,_) ← error_of_option (Γf !! f)
     "interpreter called with function that does not exists";
-  σs' ← error_of_option (mapM (type_check (Γ,m)) vs)
+  σs' ← error_of_option (mapM (type_check (Γ,memenv_of m)) vs)
     "interpreter called with values that cannot be typed";
   guard (σs' = (σs : list (type Ti)))
     with "interpreter called with values of incorrect type";

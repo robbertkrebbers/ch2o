@@ -138,7 +138,7 @@ Fixpoint lookup_var (m : mem Ti) (x : N)
   | [] => None
   | (y,Global o) :: xs =>
      if decide (x = y)
-     then τ ← type_check m o; Some (% (addr_top o τ), inl τ)
+     then τ ← type_check (memenv_of m) o; Some (% (addr_top o τ), inl τ)
      else lookup_var m x i xs
   | (y,Local τ) :: xs =>
      if decide (x = y) then Some (var{τ} i, inl τ)
@@ -690,8 +690,8 @@ Lemma var_env_stack_types_valid Γ xs :
 Proof. induction 1 as [|[? []]]; simpl; auto. Qed.
 
 Lemma to_R_typed Γ Γf m τs e τlr e' τ' :
-  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
-  to_R (e,τlr) = (e',τ') → (Γ,Γf,m,τs) ⊢ e : τlr → (Γ,Γf,m,τs) ⊢ e' : inr τ'.
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs → to_R (e,τlr) = (e',τ') →
+  (Γ,Γf,memenv_of m,τs) ⊢ e : τlr → (Γ,Γf,memenv_of m,τs) ⊢ e' : inr τ'.
 Proof.
   unfold to_R; intros; destruct τlr as [τl|τr]; simplify_equality'; auto.
   destruct (maybe_TArray τl) as [[τ n]|] eqn:Hτ; simplify_equality'.
@@ -703,22 +703,23 @@ Qed.
 Lemma to_R_NULL_typed Γ Γf m τs σ e τlr e' τ' :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
   to_R_NULL σ (e,τlr) = (e',τ') → ptr_type_valid Γ σ →
-  (Γ,Γf,m,τs) ⊢ e : τlr → (Γ,Γf,m,τs) ⊢ e' : inr τ'.
+  (Γ,Γf,memenv_of m,τs) ⊢ e : τlr → (Γ,Γf,memenv_of m,τs) ⊢ e' : inr τ'.
 Proof.
   unfold to_R_NULL. destruct (to_R (e,τlr)) as [e'' τ''] eqn:?.
   destruct 5 as [σb Hσb| |]; simplify_equality'; eauto 2 using to_R_typed.
   destruct Hσb; repeat case_match; simplify_equality'; eauto 2 using to_R_typed.
   by repeat typed_constructor.
 Qed.
+
 Lemma var_lookup_typed Γ Γf m xs x e τlr :
   ✓ Γ → ✓{Γ} m → var_env_valid Γ xs → lookup_var m x 0 xs = Some (e,τlr) →
-  (Γ,Γf,m,var_env_stack_types xs) ⊢ e : τlr.
+  (Γ,Γf,memenv_of m,var_env_stack_types xs) ⊢ e : τlr.
 Proof.
   intros ?? Hxs. cut (∀ τs', lookup_var m x (length τs') xs = Some (e,τlr) →
-    (Γ,Γf,m,τs' ++ var_env_stack_types xs) ⊢ e : τlr).
+    (Γ,Γf,memenv_of m,τs' ++ var_env_stack_types xs) ⊢ e : τlr).
   { intros help. apply (help []). }
   induction Hxs as [|[x' [o|τ|τi z|]] ? xs ? IH];
-    intros τs' ?; simplify_option_equality; eauto 2.
+    intros τs' ?; simplify_option_equality; simplify_type_equality; eauto 2.
   * typed_constructor; eauto using addr_top_typed, addr_top_strict,
       index_typed_valid, index_typed_representable.
   * typed_constructor. by rewrite list_lookup_middle.
@@ -729,8 +730,8 @@ Qed.
 Lemma convert_ptrs_typed Γ Γf m τs e1 τ1 e2 τ2 e1' e2' τ' :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
   convert_ptrs (e1,τ1) (e2,τ2) = Some (e1', e2', τ') →
-  (Γ,Γf,m,τs) ⊢ e1 : inr τ1 → (Γ,Γf,m,τs) ⊢ e2 : inr τ2 →
-  (Γ,Γf,m,τs) ⊢ e1' : inr τ' ∧ (Γ,Γf,m,τs) ⊢ e2' : inr τ'.
+  (Γ,Γf,memenv_of m,τs) ⊢ e1 : inr τ1 → (Γ,Γf,memenv_of m,τs) ⊢ e2 : inr τ2 →
+  (Γ,Γf,memenv_of m,τs) ⊢ e1' : inr τ' ∧ (Γ,Γf,memenv_of m,τs) ⊢ e2' : inr τ'.
 Proof.
   unfold convert_ptrs; destruct τ1 as [[|τp1|]| |], τ2 as [[|τp2|]| |]; intros;
     simplify_option_equality; split; repeat typed_constructor;
@@ -739,8 +740,9 @@ Qed.
 Lemma to_if_expr_typed Γ Γf m τs e1 τb e2 τ2 e3 τ3 e τlr :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
   to_if_expr e1 (e2,τ2) (e3,τ3) = Some (e,τlr) →
-  (Γ,Γf,m,τs) ⊢ e1 : inr (baseT τb) → (Γ,Γf,m,τs) ⊢ e2 : inr τ2 →
-  (Γ,Γf,m,τs) ⊢ e3 : inr τ3 → (Γ,Γf,m,τs) ⊢ e : τlr.
+  (Γ,Γf,memenv_of m,τs) ⊢ e1 : inr (baseT τb) →
+  (Γ,Γf,memenv_of m,τs) ⊢ e2 : inr τ2 →
+  (Γ,Γf,memenv_of m,τs) ⊢ e3 : inr τ3 → (Γ,Γf,memenv_of m,τs) ⊢ e : τlr.
 Proof.
   unfold to_if_expr; intros;
     repeat match goal with
@@ -754,8 +756,8 @@ Qed.
 Lemma to_binop_expr_typed Γ Γf m τs op e1 τ1 e2 τ2 e τlr :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
   to_binop_expr op (e1,τ1) (e2,τ2) = Some (e,τlr) →
-  (Γ,Γf,m,τs) ⊢ e1 : inr τ1 → (Γ,Γf,m,τs) ⊢ e2 : inr τ2 →
-  (Γ,Γf,m,τs) ⊢ e : τlr.
+  (Γ,Γf,memenv_of m,τs) ⊢ e1 : inr τ1 → (Γ,Γf,memenv_of m,τs) ⊢ e2 : inr τ2 →
+  (Γ,Γf,memenv_of m,τs) ⊢ e : τlr.
 Proof.
   unfold to_binop_expr; intros;
     repeat match goal with
@@ -769,7 +771,7 @@ Qed.
 Lemma to_expr_type_typed Γn Γ Γf m xs :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ xs →
   (∀ ce e τlr, to_expr Γn Γ Γf m xs ce = inr (e,τlr) →
-    (Γ,Γf,m,var_env_stack_types xs) ⊢ e : τlr) ∧
+    (Γ,Γf,memenv_of m,var_env_stack_types xs) ⊢ e : τlr) ∧
   (∀ cτ,
     (∀ τ, to_type Γn Γ Γf m xs false cτ = inr τ → ✓{Γ} τ) ∧
     (∀ τ, to_type Γn Γ Γf m xs true cτ = inr τ → ptr_type_valid Γ τ)).
@@ -777,10 +779,10 @@ Proof.
   intros ????. assert (∀ f ces τs τ eτlrs,
      Γf !! f = Some (τs, τ) →
      Forall (λ ce, ∀ e τlr, to_expr Γn Γ Γf m xs ce = inr (e,τlr) →
-       (Γ,Γf,m,var_env_stack_types xs) ⊢ e : τlr) ces →
+       (Γ,Γf,memenv_of m,var_env_stack_types xs) ⊢ e : τlr) ces →
      Forall2 (cast_typed Γ) (snd <$> zip_with to_R_NULL τs eτlrs) τs →
      mapM (to_expr Γn Γ Γf m xs) ces = inr eτlrs →
-     (Γ,Γf,m,var_env_stack_types xs) ⊢*
+     (Γ,Γf,memenv_of m,var_env_stack_types xs) ⊢*
        cast{τs}* (fst <$> zip_with to_R_NULL τs eτlrs) :* inr <$> τs).
   { intros f ces τs τ eτlrs. rewrite mapM_inr. intros Hf ? Hcast Hces.
     assert (Forall (ptr_type_valid Γ) τs) as Hτs by eauto using Forall_impl,
@@ -799,8 +801,10 @@ Proof.
     | _ : maybe_TPtr ?τb = Some _ |- _ => is_var τb; destruct τb
     | _ : maybe_TInt ?τb = Some _ |- _ => is_var τb; destruct τb
     | _ : maybe_TCompound ?τ = Some _ |- _ => is_var τ; destruct τ
-    | H : ∀ _, inr _ = inr _ → _ |- _ => specialize (H _ eq_refl)
-    | H : ∀ _ _, inr _ = inr _ → _ |- _ => specialize (H _ _ eq_refl)
+    | IH : ∀ _ _, to_expr _ _ _ _ _ ?ce = inr _ → _,
+       H : to_expr _ _ _ _ _ ?ce = inr _ |- _ => specialize (IH _ _ H)
+    | IH : ∀ _, to_type _ _ _ _ _ _ ?cτ = inr _ → _,
+       H : to_type _ _ _ _ _ _ ?cτ = inr _ |- _ => specialize (IH _ H)
     | H: assign_type_of _ _ _ _ = Some _ |- _ =>
        apply assign_type_of_correct in H
     | H: unop_type_of _ _ = Some _ |- _ => apply unop_type_of_correct in H
@@ -808,18 +812,17 @@ Proof.
     | H: to_R_NULL _ _ = _ |- _ =>
        first_of ltac:(eapply to_R_NULL_typed in H) idtac
          ltac:(by eauto using type_valid_ptr_type_valid)
-    | _ => progress simplify_error_equality
-    | _ => progress (simplify_option_equality by fail)
-    | _ => progress case_match
     | x : (_ * _)%type |- _ => destruct x
+    | _ => progress simplify_error_equality
     | _ : _ ⊢ _ : ?τlr |- _ =>
        unless (✓{Γ} (lrtype_type τlr)) by assumption;
        assert (✓{Γ} (lrtype_type τlr)) by eauto using expr_typed_type_valid
     | _ : context [to_R ?eτlr] |- _ => 
        let H := fresh in destruct (to_R eτlr) eqn:H;
        first_of ltac:(eapply to_R_typed in H) idtac ltac:(by eauto)
+    | _ => progress case_match
     end;
-    try match goal with
+    match goal with
     | |- _ ⊢ _ : _ =>
        repeat typed_constructor; eauto using to_binop_expr_typed,
          to_if_expr_typed, var_lookup_typed, type_valid_ptr_type_valid
@@ -833,7 +836,7 @@ Qed.
 Lemma to_expr_typed Γn Γ Γf m xs ce e τlr :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ xs →
   to_expr Γn Γ Γf m xs ce = inr (e,τlr) →
-  (Γ,Γf,m,var_env_stack_types xs) ⊢ e : τlr.
+  (Γ,Γf,memenv_of m,var_env_stack_types xs) ⊢ e : τlr.
 Proof. intros. eapply to_expr_type_typed; eauto. Qed.
 Lemma to_type_valid Γn Γ Γf m xs cτ τ :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ xs →
@@ -848,7 +851,7 @@ Lemma alloc_global_typed Γn Γ m xs x τ mce m' xs' :
   ✓ Γ → alloc_global Γn Γ m xs x τ mce = inr (m',xs') →
   ✓{Γ} m → var_env_valid Γ xs → ✓{Γ} τ →
   (**i 1.) *) ✓{Γ} m' ∧
-  (**i 2.) *) (∀ o σ, m ⊢ o : σ → m' ⊢ o : σ) ∧
+  (**i 2.) *) (∀ o σ, memenv_of m ⊢ o : σ → memenv_of m' ⊢ o : σ) ∧
   (**i 3.) *) var_env_valid Γ xs' ∧
   (**i 4.) *) var_env_stack_types xs = var_env_stack_types xs'.
 Proof.
@@ -861,7 +864,7 @@ Proof.
     repeat case_error_guard; simplify_equality'.
     destruct (⟦ e' ⟧ Γ ∅ [] m) as [[?|v]|] eqn:?; simplify_equality'.
     repeat case_option_guard; simplify_equality'.
-    assert ((Γ,m) ⊢ inr v : inr τ'); [|typed_inversion_all].
+    assert ((Γ,memenv_of m) ⊢ inr v : inr τ'); [|typed_inversion_all].
     { eapply (expr_eval_typed_aux Γ ∅ [] (var_env_stack_types xs) ∅);
         eauto using to_R_NULL_typed, type_valid_ptr_type_valid, to_expr_typed,
         prefix_of_nil, funtypes_valid_empty, var_env_stack_types_valid.
@@ -875,16 +878,13 @@ Qed.
 Lemma to_stmt_typed Γn Γ Γf τret m xs Ls mLc mLb cs m' s cmτ :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ xs →
   to_stmt Γn Γ Γf τret m xs Ls mLc mLb cs = inr (m',s,cmτ) →
-  (**i 1.) *) (Γ,Γf,m',var_env_stack_types xs) ⊢ s : cmτ ∧
+  (**i 1.) *) (Γ,Γf,memenv_of m',var_env_stack_types xs) ⊢ s : cmτ ∧
   (**i 2.) *) ✓{Γ} m' ∧
-  (**i 3.) *) (∀ o σ, m ⊢ o : σ → m' ⊢ o : σ).
+  (**i 3.) *) (∀ o σ, memenv_of m ⊢ o : σ → memenv_of m' ⊢ o : σ).
 Proof.
   intros ??. revert m m' s cmτ xs Ls mLc mLb. induction cs; intros;
     repeat match goal with
     | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
-    | _ => progress simplify_error_equality
-    | _ => progress (simplify_option_equality by fail)
-    | x : (_ * _)%type |- _ => destruct x
     | IH : ∀ _ _ _ _ _ _ _ _,
         ✓{_} _ → _ → to_stmt _ _ _ _ _ _ _ _ _ ?cs = inr _ → _,
       H : to_stmt _ _ _ _ _ _ _ _ _ ?cs = inr _ |- _ =>
@@ -900,6 +900,8 @@ Proof.
     | H : alloc_global _ _ _ _ _ _ _ = inr _ |- _ =>
        first_of ltac:(apply alloc_global_typed in H) idtac ltac:(by auto);
        destruct H as (?&?&?&?)
+    | x : (_ * _)%type |- _ => destruct x
+    | _ => progress simplify_error_equality
     | _ => case_match
     end; try solve [split_ands; eauto using to_R_typed, to_expr_typed].
   * split_ands; eauto with congruence.
@@ -907,14 +909,14 @@ Proof.
     repeat typed_constructor; eauto using expr_typed_weaken, subseteq_empty.
     by constructor.
   * split_ands; eauto using stmt_typed_weaken.
-  * split_ands; repeat typed_constructor;
-      eauto using expr_typed_weaken, rettype_union_l.
-  * split_ands; repeat typed_constructor;
-      eauto using expr_typed_weaken, rettype_union_l.
-  * split_ands; repeat typed_constructor;
-      eauto using expr_typed_weaken, rettype_union_l.
-  * split_ands; repeat typed_constructor;
-      eauto using stmt_typed_weaken, expr_typed_weaken.
+  * split_ands; repeat (progress eauto 2 using expr_typed_weaken,
+      rettype_union_l || typed_constructor).
+  * split_ands; repeat (progress eauto 2 using expr_typed_weaken,
+      rettype_union_l || typed_constructor).
+  * split_ands; repeat (progress eauto 2 using expr_typed_weaken,
+      rettype_union_l || typed_constructor).
+  * split_ands; repeat (progress eauto using expr_typed_weaken,
+      stmt_typed_weaken || typed_constructor).
 Qed.
 Lemma extend_funtypes_typed Γ m f τs τ Γf Γf' :
   ✓{Γ} Γf → extend_funtypes Γ f τs τ Γf = inr Γf' → ✓{Γ}* τs → ✓{Γ} τ →
@@ -932,7 +934,7 @@ Lemma to_envs_go_typed Θ Γn Γ Γf δ m xs :
   to_envs_go Θ = inr (Γn,Γ,Γf,δ,m,xs) →
   (**i 1.) *) ✓ Γ ∧
   (**i 2.) *) ✓{Γ} Γf ∧
-  (**i 3.) *) funenv_pretyped Γ m δ Γf ∧
+  (**i 3.) *) funenv_pretyped Γ (memenv_of m) δ Γf ∧
   (**i 4.) *) ✓{Γ} m ∧
   (**i 5.) *) var_env_valid Γ xs ∧
   (**i 6.) *) var_env_stack_types xs = [].
@@ -949,7 +951,7 @@ Proof.
     simpl in *; split_ands; auto.
     + eauto using funtypes_valid_weaken, insert_subseteq.
     + eauto using funenv_pretyped_weaken, insert_subseteq.
-    + eauto using cmap_valid_weaken, insert_subseteq.
+    + eauto using cmap_valid'_weaken, insert_subseteq.
     + eauto using Forall_impl, var_decl_valid_weaken, insert_subseteq.
   * destruct (to_envs_go Θ) as [|[[[[[Γn2 ?] ?] ?] ?] xs2]]; simplify_equality'.
     repeat case_error_guard; simplify_equality'.
@@ -995,7 +997,7 @@ Proof.
       funenv_pretyped_insert, to_types_valid, to_type_valid.
 Qed.
 Lemma to_envs_typed Θ Γ Γf δ m :
-  to_envs Θ = inr (Γ,Γf,δ,m) → ✓ Γ ∧ (Γ,m) ⊢ δ : Γf ∧ ✓{Γ} m.
+  to_envs Θ = inr (Γ,Γf,δ,m) → ✓ Γ ∧ (Γ,memenv_of m) ⊢ δ : Γf ∧ ✓{Γ} m.
 Proof.
   unfold to_envs. intros. destruct (to_envs_go _)
     as [|[[[[[Γn Γ2] Γf2] δ2] m2] xs]] eqn:?; simplify_error_equality.

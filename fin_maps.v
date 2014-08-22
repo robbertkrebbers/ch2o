@@ -1342,6 +1342,7 @@ Tactic Notation "simpl_map" "by" tactic3(tac) := repeat
     rewrite lookup_delete in H || rewrite lookup_delete_ne in H by tac
   | H : context[ {[ _ ]} !! _ ] |- _ =>
     rewrite lookup_singleton in H || rewrite lookup_singleton_ne in H by tac
+  | H : context[ (_ <$> _) !! _ ] |- _ => rewrite lookup_fmap in H
   | H : context[ lookup (A:=?A) ?i (?m1 ∪ ?m2) ] |- _ =>
     let x := fresh in evar (x:A);
     let x' := eval unfold x in x in clear x;
@@ -1357,6 +1358,7 @@ Tactic Notation "simpl_map" "by" tactic3(tac) := repeat
     rewrite lookup_delete || rewrite lookup_delete_ne by tac
   | |- context[ {[ _ ]} !! _ ] =>
     rewrite lookup_singleton || rewrite lookup_singleton_ne by tac
+  | |- context[ (_ <$> _) !! _ ] => rewrite lookup_fmap
   | |- context [ lookup (A:=?A) ?i ?m ] =>
     let x := fresh in evar (x:A);
     let x' := eval unfold x in x in clear x;
@@ -1398,6 +1400,9 @@ Tactic Notation "simplify_map_equality" "by" tactic3(tac) :=
     apply map_union_cancel_r in H; [|by tac|by tac]
   | H : {[?i,?x]} = ∅ |- _ => by destruct (map_non_empty_singleton i x)
   | H : ∅ = {[?i,?x]} |- _ => by destruct (map_non_empty_singleton i x)
+  | H : ?m !! ?i = Some _, H2 : ?m !! ?j = None |- _ =>
+     unless (i ≠ j) by done;
+     assert (i ≠ j) by (by intros ?; simplify_equality)
   end.
 Tactic Notation "simplify_map_equality'" "by" tactic3(tac) :=
   repeat (progress csimpl in * || simplify_map_equality by tac).

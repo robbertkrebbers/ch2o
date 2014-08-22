@@ -12,6 +12,8 @@ Proof. firstorder. Qed.
 
 Lemma Is_true_reflect (b : bool) : reflect b b.
 Proof. destruct b. by left. right. intros []. Qed.
+Instance: Injective (=) (↔) Is_true.
+Proof. intros [] []; simpl; intuition. Qed.
 
 (** We introduce [decide_rel] to avoid inefficienct computation due to eager
 evaluation of propositions by [vm_compute]. This inefficiency occurs if
@@ -105,10 +107,12 @@ Tactic Notation "case_bool_decide" "as" ident (Hd) :=
 Tactic Notation "case_bool_decide" :=
   let H := fresh in case_bool_decide as H.
 
+Lemma bool_decide_spec (P : Prop) {dec : Decision P} : bool_decide P ↔ P.
+Proof. unfold bool_decide. by destruct dec. Qed.
 Lemma bool_decide_unpack (P : Prop) {dec : Decision P} : bool_decide P → P.
-Proof. unfold bool_decide. by destruct dec. Qed.
+Proof. by rewrite bool_decide_spec. Qed.
 Lemma bool_decide_pack (P : Prop) {dec : Decision P} : P → bool_decide P.
-Proof. unfold bool_decide. by destruct dec. Qed.
+Proof. by rewrite bool_decide_spec. Qed.
 
 (** * Decidable Sigma types *)
 (** Leibniz equality on Sigma types requires the equipped proofs to be

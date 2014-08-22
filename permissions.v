@@ -6,21 +6,18 @@ Local Open Scope Qc_scope.
 
 (**
 Concrete permissions are built from more primitive combinators:
-- [freeable]: [Available] describes that the object is alive, and [Freed]
-  describes that the object has been freed.
 - [lockable]: [Locked] describes that the object has been locked due to
   a sequenced write, and [Unlocked] means that it is not locked
 - [counter] is to account for tokens to keep track of parts of the memory
   that are addresseble.
 *)
-Definition perm := freeable (lockable (counter Qcanon.Qc)).
+Definition perm := lockable (counter Qcanon.Qc).
 Instance perm_sep_ops : SeparationOps perm := _.
 Instance perm_sep : Separation perm := _.
 Typeclasses Opaque perm.
 
-Definition perm_freed : perm := Freed.
-Definition perm_full : perm := Available (LUnlocked (Counter 0 1)).
-Definition perm_token : perm := Available (LUnlocked (Counter (-1) ∅)).
+Definition perm_full : perm := LUnlocked (Counter 0 1).
+Definition perm_token : perm := LUnlocked (Counter (-1) ∅).
 
 Inductive pkind :=
   Freeable | Writable | Readable | Locked | Existing.
@@ -50,56 +47,42 @@ Proof. by repeat split; repeat intros []. Qed.
 
 Definition perm_kind (x : perm) : option pkind :=
   match x with
-  | Freed => None
-  | Available (LUnlocked (Counter x' y')) =>
+  | LUnlocked (Counter x' y') =>
      if decide (y' = ∅) then
        if decide (x' = 0) then None else Some Existing
      else if decide (y' = 1) then
        if decide (x' = 0) then Some Freeable else Some Writable
      else Some Readable
-  | Available (LLocked _) => Some Locked
+  | LLocked _ => Some Locked
   end.
 Definition perm_locked (x : perm) : bool :=
-  match x with Available (LLocked _) => true | _ => false end.
+  match x with LLocked _ => true | _ => false end.
 Definition perm_lock (x : perm) : perm :=
-  match x with
-  | Available (LUnlocked x') => Available (LLocked x') | _ => x
-  end.
+  match x with LUnlocked x' => LLocked x' | _ => x end.
 Definition perm_unlock (x : perm) : perm :=
-  match x with
-  | Available (LLocked x') => Available (LUnlocked x') | _ => x
-  end.
+  match x with LLocked x' => LUnlocked x' | _ => x end.
 
 Inductive perm_kind_view : perm → option pkind → Prop :=
-  | perm_kind_None : perm_kind_view Freed None
-  | perm_kind_None' :
-     perm_kind_view (Available (LUnlocked (Counter ∅ 0))) None
-  | perm_kind_Locked x' :
-     perm_kind_view (Available (LLocked x')) (Some Locked)
+  | perm_kind_None' : perm_kind_view (LUnlocked (Counter ∅ 0)) None
+  | perm_kind_Locked x' : perm_kind_view (LLocked x') (Some Locked)
   | perm_kind_Existing x' :
-     x' ≠ 0 →
-     perm_kind_view (Available (LUnlocked (Counter x' ∅))) (Some Existing)
+     x' ≠ 0 → perm_kind_view (LUnlocked (Counter x' ∅)) (Some Existing)
   | perm_kind_Readable x' y' :
      y' ≠ ∅ → y' ≠ 1 →
-     perm_kind_view (Available (LUnlocked (Counter x' y'))) (Some Readable)
+     perm_kind_view (LUnlocked (Counter x' y')) (Some Readable)
   | perm_kind_Freeable :
-     perm_kind_view (Available (LUnlocked (Counter 0 1))) (Some Freeable)
+     perm_kind_view (LUnlocked (Counter 0 1)) (Some Freeable)
   | perm_kind_Writable x' :
-     perm_kind_view (Available (LUnlocked (Counter x' 1))) (Some Writable)
+     perm_kind_view (LUnlocked (Counter x' 1)) (Some Writable)
   | perm_kind_Writable' x' :
-     x' ≠ 0 →
-     perm_kind_view (Available (LUnlocked (Counter x' 1))) (Some Writable).
+     x' ≠ 0 → perm_kind_view (LUnlocked (Counter x' 1)) (Some Writable).
 Lemma perm_kind_spec x : perm_kind_view x (perm_kind x).
 Proof.
-  destruct x as [[[]|[]]|]; simpl; repeat case_decide;
+  destruct x as [[]|[]]; simpl; repeat case_decide;
     intuition; simplify_equality'; constructor; auto.
 Qed.
 Arguments perm_kind _ : simpl never.
 
-Lemma perm_freed_valid : sep_valid perm_freed.
-Proof. done. Qed.
-Lemma perm_kind_Some_not_freed k x : Some k ⊆ perm_kind x → x ≠ perm_freed.
-Proof. intros Hk ->; inversion Hk. Qed.
 Lemma perm_full_valid : sep_valid perm_full.
 Proof. done. Qed.
 Lemma perm_token_valid : sep_valid perm_token.
@@ -108,24 +91,24 @@ Lemma perm_lock_valid x :
   sep_valid x → Some Writable ⊆ perm_kind x → sep_valid (perm_lock x).
 Proof. destruct (perm_kind_spec x); repeat sep_unfold; intuition. Qed.
 Lemma perm_lock_mapped x : sep_unmapped (perm_lock x) → sep_unmapped x.
-Proof. destruct x as [[[]|[]]|]; repeat sep_unfold; intuition. Qed.
+Proof. destruct x as [[]|[]]; repeat sep_unfold; intuition. Qed.
 Lemma perm_lock_unshared x : sep_unshared x → sep_unshared (perm_lock x).
-Proof. destruct x as [[[]|[]]|]; repeat sep_unfold; intuition. Qed.
+Proof. destruct x as [[]|[]]; repeat sep_unfold; intuition. Qed.
 Lemma perm_unlock_lock x :
   sep_valid x → Some Writable ⊆ perm_kind x → perm_unlock (perm_lock x) = x.
 Proof. by destruct (perm_kind_spec x). Qed.
 Lemma perm_unlock_valid x : sep_valid x → sep_valid (perm_unlock x).
-Proof. destruct x as [[[]|[]]|]; repeat sep_unfold; naive_solver. Qed.
+Proof. destruct x as [[]|[]]; repeat sep_unfold; naive_solver. Qed.
 Lemma perm_unlock_unmapped x : sep_unmapped x → sep_unmapped (perm_unlock x).
-Proof. destruct x as [[[]|[]]|]; repeat sep_unfold; intuition. Qed.
+Proof. destruct x as [[]|[]]; repeat sep_unfold; intuition. Qed.
 Lemma perm_unlock_mapped x :
   sep_valid x → sep_unmapped (perm_unlock x) → sep_unmapped x.
-Proof. destruct x as [[[]|[]]|]; repeat sep_unfold; intuition. Qed.
+Proof. destruct x as [[]|[]]; repeat sep_unfold; intuition. Qed.
 Lemma perm_unlock_unshared x : sep_unshared x → sep_unshared (perm_unlock x).
-Proof. destruct x as [[[]|[]]|]; repeat sep_unfold; intuition. Qed.
+Proof. destruct x as [[]|[]]; repeat sep_unfold; intuition. Qed.
 Lemma perm_unlock_shared x :
   sep_valid x → sep_unshared (perm_unlock x) → sep_unshared x.
-Proof. destruct x as [[[]|[]]|]; repeat sep_unfold; intuition. Qed.
+Proof. destruct x as [[]|[]]; repeat sep_unfold; intuition. Qed.
 Lemma perm_unshared x :
   sep_valid x → Some Locked ⊆ perm_kind x → sep_unshared x.
 Proof. destruct (perm_kind_spec x); repeat sep_unfold; intuition. Qed.
@@ -183,7 +166,7 @@ Lemma perm_kind_difference_token x :
                                end.
 Proof.
   rewrite strict_spec_alt.
-  destruct (perm_kind_spec x) as [| | |y| | |y|y]; repeat sep_unfold;
+  destruct (perm_kind_spec x) as [| |y| | |y|y]; repeat sep_unfold;
     unfold perm_kind; simpl; intros [? Hneq]; auto.
   * assert (¬0 ≤ -1) by (by intros []); intuition.
   * assert (y ≤ -1 → y ≤ 0) by (by intros; transitivity (-1)). 

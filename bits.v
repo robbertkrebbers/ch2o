@@ -19,14 +19,14 @@ Definition maybe_BPtr {Ti}  (b : bit Ti) : option (ptr_bit Ti) :=
   match b with BPtr pb => Some pb | _ => None end.
 
 Section operations.
-  Context `{TypeCheck M (type Ti) index, Refine Ti M, IndexAlive M,
-    Env Ti, ∀ m x, Decision (index_alive m x)}.
+  Context `{Env Ti}.
 
-  Inductive bit_valid' (Γ : env Ti) (m : M) : bit Ti → Prop :=
-    | BIndet_valid' : bit_valid' Γ m BIndet
-    | BBit_valid' β : bit_valid' Γ m (BBit β)
-    | BPtr_valid' pb : ✓{Γ,m} pb → bit_valid' Γ m (BPtr pb).
-  Global Instance bit_valid: Valid (env Ti * M) (bit Ti) := curry bit_valid'.
+  Inductive bit_valid' (Γ : env Ti) (Γm : memenv Ti) : bit Ti → Prop :=
+    | BIndet_valid' : bit_valid' Γ Γm BIndet
+    | BBit_valid' β : bit_valid' Γ Γm (BBit β)
+    | BPtr_valid' pb : ✓{Γ,Γm} pb → bit_valid' Γ Γm (BPtr pb).
+  Global Instance bit_valid:
+    Valid (env Ti * memenv Ti) (bit Ti) := curry bit_valid'.
 
   Inductive bit_weak_refine : relation (bit Ti) :=
     | bit_weak_refine_refl b : bit_weak_refine b b
@@ -51,22 +51,22 @@ Section operations.
     | bs :: bss => bits_list_join sz bss ≫= bits_join (resize sz BIndet bs)
     end.
 
-  Inductive bit_refine' (Γ : env Ti) (f : mem_inj Ti) (m1 m2 : M) :
+  Inductive bit_refine' (Γ : env Ti) (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
        relation (bit Ti) :=
-    | BIndet_refine' b2 : ✓{Γ,m2} b2 → bit_refine' Γ f m1 m2 BIndet b2
-    | BBit_refine' β : bit_refine' Γ f m1 m2 (BBit β) (BBit β)
+    | BIndet_refine' b2 : ✓{Γ,Γm2} b2 → bit_refine' Γ f Γm1 Γm2 BIndet b2
+    | BBit_refine' β : bit_refine' Γ f Γm1 Γm2 (BBit β) (BBit β)
     | BPtr_refine' pb1 pb2 :
-       pb1 ⊑{Γ,f@m1↦m2} pb2 → bit_refine' Γ f m1 m2 (BPtr pb1) (BPtr pb2)
+       pb1 ⊑{Γ,f@Γm1↦Γm2} pb2 → bit_refine' Γ f Γm1 Γm2 (BPtr pb1) (BPtr pb2)
     | BPtr_BIndet_refine' pb1 b2 :
-       ✓{Γ,m1} pb1 → ¬ptr_alive m1 (fragmented.frag_item pb1) →
-       ✓{Γ,m2} b2 → bit_refine' Γ f m1 m2 (BPtr pb1) b2.
-  Global Instance bit_refine: Refine Ti M (bit Ti) := bit_refine'.
+       ✓{Γ,Γm1} pb1 → ¬ptr_alive Γm1 (fragmented.frag_item pb1) →
+       ✓{Γ,Γm2} b2 → bit_refine' Γ f Γm1 Γm2 (BPtr pb1) b2.
+  Global Instance bit_refine: Refine Ti (bit Ti) := bit_refine'.
 End operations.
 
 Section properties.
-Context `{MemSpec Ti M}.
+Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
-Implicit Types m : M.
+Implicit Types Γm : memenv Ti.
 Implicit Types β : bool.
 Implicit Types βs : list bool.
 Implicit Types pb : ptr_bit Ti.
@@ -78,35 +78,36 @@ Local Infix "⊑*" := (Forall2 bit_weak_refine) (at level 70).
 Hint Extern 0 (_ ⊑ _) => reflexivity.
 Hint Extern 0 (_ ⊑* _) => reflexivity.
 
-Global Instance bit_valid_dec Γm (b : bit Ti) : Decision (✓{Γm} b).
+Global Instance bit_valid_dec ΓΓm (b : bit Ti) : Decision (✓{ΓΓm} b).
 Proof.
  refine
   match b with
-  | BIndet | BBit _ => left _ | BPtr pb => cast_if (decide (✓{Γm} pb))
-  end; destruct Γm; first [by constructor | abstract by inversion 1].
+  | BIndet | BBit _ => left _ | BPtr pb => cast_if (decide (✓{ΓΓm} pb))
+  end; destruct ΓΓm; first [by constructor | abstract by inversion 1].
 Defined.
 Global Instance: Injective (=) (=) (@BBit Ti).
 Proof. by injection 1. Qed.
 Global Instance: Injective (=) (=) (@BPtr Ti).
 Proof. by injection 1. Qed.
-Lemma BIndet_valid Γ m : ✓{Γ,m} BIndet.
+Lemma BIndet_valid Γ Γm : ✓{Γ,Γm} BIndet.
 Proof. constructor. Qed.
-Lemma BIndets_valid Γ m bs : Forall (BIndet =) bs → ✓{Γ,m}* bs.
+Lemma BIndets_valid Γ Γm bs : Forall (BIndet =) bs → ✓{Γ,Γm}* bs.
 Proof. by induction 1; simplify_equality'; repeat constructor. Qed.
-Lemma BBit_valid Γ m β : ✓{Γ,m} (BBit β).
+Lemma BBit_valid Γ Γm β : ✓{Γ,Γm} (BBit β).
 Proof. constructor. Qed.
-Lemma BPtr_valid Γ m pb : ✓{Γ,m} pb → ✓{Γ,m} (BPtr pb).
+Lemma BPtr_valid Γ Γm pb : ✓{Γ,Γm} pb → ✓{Γ,Γm} (BPtr pb).
 Proof. by constructor. Qed.
-Lemma BPtrs_valid Γ m pbs : ✓{Γ,m}* pbs → ✓{Γ,m}* (BPtr <$> pbs).
+Lemma BPtrs_valid Γ Γm pbs : ✓{Γ,Γm}* pbs → ✓{Γ,Γm}* (BPtr <$> pbs).
 Proof. induction 1; csimpl; auto using BPtr_valid. Qed.
-Lemma BPtr_valid_inv Γ m pb : ✓{Γ,m} (BPtr pb) → ✓{Γ,m} pb.
+Lemma BPtr_valid_inv Γ Γm pb : ✓{Γ,Γm} (BPtr pb) → ✓{Γ,Γm} pb.
 Proof. by inversion 1. Qed.
-Lemma BPtrs_valid_inv Γ m pbs : ✓{Γ,m}* (BPtr <$> pbs) → ✓{Γ,m}* pbs.
+Lemma BPtrs_valid_inv Γ Γm pbs : ✓{Γ,Γm}* (BPtr <$> pbs) → ✓{Γ,Γm}* pbs.
 Proof.
   induction pbs; inversion_clear 1; constructor; auto using BPtr_valid_inv.
 Qed.
-Lemma bit_valid_weaken Γ1 Γ2 m1 m2 b :
-  ✓ Γ1 → ✓{Γ1,m1} b → Γ1 ⊆ Γ2 → (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) → ✓{Γ2,m2} b.
+Lemma bit_valid_weaken Γ1 Γ2 Γm1 Γm2 b :
+  ✓ Γ1 → ✓{Γ1,Γm1} b → Γ1 ⊆ Γ2 →
+  (∀ o σ, Γm1 ⊢ o : σ → Γm2 ⊢ o : σ) → ✓{Γ2,Γm2} b.
 Proof. destruct 2; econstructor; eauto using ptr_bit_valid_weaken. Qed.
 
 Lemma maybe_BBits_spec bs βs : mapM maybe_BBit bs = Some βs ↔ bs = BBit <$> βs.
@@ -134,105 +135,107 @@ Proof.
 Defined.
 
 (** ** Refinements *)
-Lemma bit_refine_valid_l Γ f m1 m2 b1 b2 :
-  ✓ Γ → b1 ⊑{Γ,f@m1↦m2} b2 → ✓{Γ,m1} b1.
+Lemma bit_refine_valid_l Γ f Γm1 Γm2 b1 b2 :
+  ✓ Γ → b1 ⊑{Γ,f@Γm1↦Γm2} b2 → ✓{Γ,Γm1} b1.
 Proof. destruct 2; constructor; eauto using ptr_bit_refine_valid_l. Qed.
-Lemma bits_refine_valid_l Γ f m1 m2 bs1 bs2 :
-  ✓ Γ → bs1 ⊑{Γ,f@m1↦m2}* bs2 → ✓{Γ,m1}* bs1.
+Lemma bits_refine_valid_l Γ f Γm1 Γm2 bs1 bs2 :
+  ✓ Γ → bs1 ⊑{Γ,f@Γm1↦Γm2}* bs2 → ✓{Γ,Γm1}* bs1.
 Proof. induction 2; eauto using bit_refine_valid_l. Qed.
-Lemma bit_refine_valid_r Γ f m1 m2 b1 b2 :
-  ✓ Γ → b1 ⊑{Γ,f@m1↦m2} b2 → ✓{Γ,m2} b2.
+Lemma bit_refine_valid_r Γ f Γm1 Γm2 b1 b2 :
+  ✓ Γ → b1 ⊑{Γ,f@Γm1↦Γm2} b2 → ✓{Γ,Γm2} b2.
 Proof. destruct 2; try constructor; eauto using ptr_bit_refine_valid_r. Qed.
-Lemma bits_refine_valid_r Γ f m1 m2 bs1 bs2 :
-  ✓ Γ → bs1 ⊑{Γ,f@m1↦m2}* bs2 → ✓{Γ,m2}* bs2.
+Lemma bits_refine_valid_r Γ f Γm1 Γm2 bs1 bs2 :
+  ✓ Γ → bs1 ⊑{Γ,f@Γm1↦Γm2}* bs2 → ✓{Γ,Γm2}* bs2.
 Proof. induction 2; eauto using bit_refine_valid_r. Qed.
-Lemma bit_refine_id Γ m b : ✓{Γ,m} b → b ⊑{Γ@m} b.
+Lemma bit_refine_id Γ Γm b : ✓{Γ,Γm} b → b ⊑{Γ@Γm} b.
 Proof.
   destruct 1; constructor; eauto using ptr_bit_refine_id, BIndet_valid.
 Qed.
-Lemma bits_refine_id Γ m bs : ✓{Γ,m}* bs → bs ⊑{Γ@m}* bs.
+Lemma bits_refine_id Γ Γm bs : ✓{Γ,Γm}* bs → bs ⊑{Γ@Γm}* bs.
 Proof. induction 1; eauto using bit_refine_id. Qed.
-Lemma bit_refine_compose Γ f g m1 m2 m3 b1 b2 b3 :
-  ✓ Γ → b1 ⊑{Γ,f@m1↦m2} b2 → b2 ⊑{Γ,g@m2↦m3} b3 → b1 ⊑{Γ,f ◎ g@m1↦m3} b3.
+Lemma bit_refine_compose Γ f g Γm1 Γm2 Γm3 b1 b2 b3 :
+  ✓ Γ → b1 ⊑{Γ,f@Γm1↦Γm2} b2 → b2 ⊑{Γ,g@Γm2↦Γm3} b3 → b1 ⊑{Γ,f ◎ g@Γm1↦Γm3} b3.
 Proof.
   destruct 2 as [| |pb1 pb2 Hpb|]; inversion 1; simplify_equality';
     try constructor (by eauto using ptr_bit_refine_compose, bit_refine_valid_r).
   constructor; eauto using ptr_bit_refine_valid_l.
   destruct Hpb as (?&?&?&?); eauto using ptr_alive_refine.
 Qed.
-Lemma bits_refine_compose Γ f g m1 m2 m3 bs1 bs2 bs3 :
-  ✓ Γ → bs1 ⊑{Γ,f@m1↦m2}* bs2 → bs2 ⊑{Γ,g@m2↦m3}* bs3 →
-  bs1 ⊑{Γ,f ◎ g@m1↦m3}* bs3.
+Lemma bits_refine_compose Γ f g Γm1 Γm2 Γm3 bs1 bs2 bs3 :
+  ✓ Γ → bs1 ⊑{Γ,f@Γm1↦Γm2}* bs2 → bs2 ⊑{Γ,g@Γm2↦Γm3}* bs3 →
+  bs1 ⊑{Γ,f ◎ g@Γm1↦Γm3}* bs3.
 Proof.
   intros ? Hbs. revert bs3. induction Hbs; inversion_clear 1;
     constructor; eauto using bit_refine_compose.
 Qed.
 Global Instance:
-  PropHolds (✓ Γ) → Transitive (refine Γ mem_inj_id m m : relation (bit Ti)).
-Proof. intros Γ m ? b1 b2 b3. by apply bit_refine_compose. Qed.
-Lemma bit_refine_weaken Γ Γ' f f' m1 m2 m1' m2' b1 b2 :
-  ✓ Γ → b1 ⊑{Γ,f@m1↦m2} b2 → Γ ⊆ Γ' →
-  (∀ o o2 r τ, m1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
-  (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
-  (∀ o τ, m1 ⊢ o : τ → index_alive m1' o → index_alive m1 o) →
-  (∀ o1 o2 r, f !! o1 = Some (o2,r) → index_alive m1' o1 → index_alive m2' o2) →
-  b1 ⊑{Γ',f'@m1'↦m2'} b2.
+  PropHolds (✓ Γ) → Transitive (refine Γ mem_inj_id Γm Γm : relation (bit Ti)).
+Proof. intros Γ Γm ? b1 b2 b3. by apply bit_refine_compose. Qed.
+Lemma bit_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' b1 b2 :
+  ✓ Γ → b1 ⊑{Γ,f@Γm1↦Γm2} b2 → Γ ⊆ Γ' →
+  (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
+  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
+  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  (∀ o1 o2 r,
+    f !! o1 = Some (o2,r) → index_alive Γm1' o1 → index_alive Γm2' o2) →
+  b1 ⊑{Γ',f'@Γm1'↦Γm2'} b2.
 Proof.
   destruct 2 as [| | |pb1 b2 Hpb]; constructor; eauto using bit_valid_weaken,
     ptr_bit_refine_weaken, ptr_bit_valid_weaken, ptr_dead_weaken.
   destruct Hpb as (?&?&?&?); eauto using ptr_dead_weaken.
 Qed.
-Lemma BIndet_refine Γ m1 m2 f b : ✓{Γ,m2} b → BIndet ⊑{Γ,f@m1↦m2} b.
+Lemma BIndet_refine Γ Γm1 Γm2 f b : ✓{Γ,Γm2} b → BIndet ⊑{Γ,f@Γm1↦Γm2} b.
 Proof. by constructor. Qed.
-Lemma BIndets_refine Γ m1 m2 f bs1 bs2 :
-  Forall (BIndet =) bs1 → ✓{Γ,m2}* bs2 →
-  length bs1 = length bs2 → bs1 ⊑{Γ,f@m1↦m2}* bs2.
+Lemma BIndets_refine Γ Γm1 Γm2 f bs1 bs2 :
+  Forall (BIndet =) bs1 → ✓{Γ,Γm2}* bs2 →
+  length bs1 = length bs2 → bs1 ⊑{Γ,f@Γm1↦Γm2}* bs2.
 Proof.
   rewrite <-Forall2_same_length.
   induction 3; decompose_Forall_hyps; repeat constructor; auto.
 Qed.
-Lemma BIndet_BIndet_refine Γ f m1 m2 : BIndet ⊑{Γ,f@m1↦m2} BIndet.
+Lemma BIndet_BIndet_refine Γ f Γm1 Γm2 : BIndet ⊑{Γ,f@Γm1↦Γm2} BIndet.
 Proof. repeat constructor. Qed.
-Lemma BBit_refine Γ f m1 m2 β : BBit β ⊑{Γ,f@m1↦m2} BBit β.
+Lemma BBit_refine Γ f Γm1 Γm2 β : BBit β ⊑{Γ,f@Γm1↦Γm2} BBit β.
 Proof. by constructor. Qed.
-Lemma BPtr_refine Γ f m1 m2 pb1 pb2 :
-  pb1 ⊑{Γ,f@m1↦m2} pb2 → BPtr pb1 ⊑{Γ,f@m1↦m2} BPtr pb2.
+Lemma BPtr_refine Γ f Γm1 Γm2 pb1 pb2 :
+  pb1 ⊑{Γ,f@Γm1↦Γm2} pb2 → BPtr pb1 ⊑{Γ,f@Γm1↦Γm2} BPtr pb2.
 Proof. by constructor. Qed.
-Lemma BBits_refine Γ f m1 m2 βs : BBit <$> βs ⊑{Γ,f@m1↦m2}* BBit <$> βs.
+Lemma BBits_refine Γ f Γm1 Γm2 βs : BBit <$> βs ⊑{Γ,f@Γm1↦Γm2}* BBit <$> βs.
 Proof. induction βs; constructor; auto using BBit_refine. Qed.
-Lemma BPtrs_refine Γ f m1 m2 pbs1 pbs2 :
-  pbs1 ⊑{Γ,f@m1↦m2}* pbs2 → BPtr <$> pbs1 ⊑{Γ,f@m1↦m2}* BPtr <$> pbs2.
+Lemma BPtrs_refine Γ f Γm1 Γm2 pbs1 pbs2 :
+  pbs1 ⊑{Γ,f@Γm1↦Γm2}* pbs2 → BPtr <$> pbs1 ⊑{Γ,f@Γm1↦Γm2}* BPtr <$> pbs2.
 Proof. induction 1; constructor; auto using BPtr_refine. Qed.
-Lemma BIndets_refine_l_inv Γ f m1 m2 bs1 bs2 :
-  Forall (BIndet =) bs1 → bs1 ⊑{Γ,f@m1↦m2}* bs2 → ✓{Γ,m2}* bs2.
+Lemma BIndets_refine_l_inv Γ f Γm1 Γm2 bs1 bs2 :
+  Forall (BIndet =) bs1 → bs1 ⊑{Γ,f@Γm1↦Γm2}* bs2 → ✓{Γ,Γm2}* bs2.
 Proof. induction 2 as [|???? []]; decompose_Forall_hyps; eauto. Qed.
-Lemma BPtrs_BIndets_refine Γ f m1 m2 pbs1 bs2 :
-  ✓{Γ,m1}* pbs1 → Forall (λ pb, ¬ptr_alive m1 (fragmented.frag_item pb)) pbs1 →
-  ✓{Γ,m2}* bs2 → length pbs1 = length bs2 → BPtr <$> pbs1 ⊑{Γ,f@m1↦m2}* bs2.
+Lemma BPtrs_BIndets_refine Γ f Γm1 Γm2 pbs1 bs2 :
+  ✓{Γ,Γm1}* pbs1 →
+  Forall (λ pb, ¬ptr_alive Γm1 (fragmented.frag_item pb)) pbs1 →
+  ✓{Γ,Γm2}* bs2 → length pbs1 = length bs2 → BPtr <$> pbs1 ⊑{Γ,f@Γm1↦Γm2}* bs2.
 Proof.
   rewrite <-Forall2_same_length.
   induction 4; decompose_Forall_hyps; repeat constructor; auto.
 Qed.
-Lemma BIndet_refine_r_inv Γ f m1 m2 b1 b3 :
-  b1 ⊑{Γ,f@m1↦m2} BIndet → ✓{Γ,m2} b3 → b1 ⊑{Γ,f@m1↦m2} b3.
+Lemma BIndet_refine_r_inv Γ f Γm1 Γm2 b1 b3 :
+  b1 ⊑{Γ,f@Γm1↦Γm2} BIndet → ✓{Γ,Γm2} b3 → b1 ⊑{Γ,f@Γm1↦Γm2} b3.
 Proof. inversion 1; constructor; auto. Qed.
-Lemma BIndets_refine_r_inv Γ f m1 m2 bs1 bs2 bs3 :
-  bs1 ⊑{Γ,f@m1↦m2}* bs2 → Forall (BIndet =) bs2 →
-  ✓{Γ,m2}* bs3 → length bs1 = length bs3 → bs1 ⊑{Γ,f@m1↦m2}* bs3.
+Lemma BIndets_refine_r_inv Γ f Γm1 Γm2 bs1 bs2 bs3 :
+  bs1 ⊑{Γ,f@Γm1↦Γm2}* bs2 → Forall (BIndet =) bs2 →
+  ✓{Γ,Γm2}* bs3 → length bs1 = length bs3 → bs1 ⊑{Γ,f@Γm1↦Γm2}* bs3.
 Proof.
   rewrite <-Forall2_same_length. intros Hbs Hbs2. revert bs3.
   induction Hbs; intros; decompose_Forall_hyps; auto using BIndet_refine_r_inv.
 Qed.
-Lemma BBits_refine_inv_l Γ f m1 m2 βs bs :
-  BBit <$> βs ⊑{Γ,f@m1↦m2}* bs → bs = BBit <$> βs.
+Lemma BBits_refine_inv_l Γ f Γm1 Γm2 βs bs :
+  BBit <$> βs ⊑{Γ,f@Γm1↦Γm2}* bs → bs = BBit <$> βs.
 Proof.
   rewrite Forall2_fmap_l.
   induction 1 as [|???? Hb]; [|inversion Hb]; simplify_equality'; auto.
 Qed.
-Lemma BPtrs_refine_inv_l Γ f m1 m2 pbs1 bs2 :
-  BPtr <$> pbs1 ⊑{Γ,f@m1↦m2}* bs2 →
-  Forall (λ pb, ptr_alive m1 (fragmented.frag_item pb)) pbs1 →
-  ∃ pbs2, bs2 = BPtr <$> pbs2 ∧ pbs1 ⊑{Γ,f@m1↦m2}* pbs2.
+Lemma BPtrs_refine_inv_l Γ f Γm1 Γm2 pbs1 bs2 :
+  BPtr <$> pbs1 ⊑{Γ,f@Γm1↦Γm2}* bs2 →
+  Forall (λ pb, ptr_alive Γm1 (fragmented.frag_item pb)) pbs1 →
+  ∃ pbs2, bs2 = BPtr <$> pbs2 ∧ pbs1 ⊑{Γ,f@Γm1↦Γm2}* pbs2.
 Proof.
   rewrite Forall2_fmap_l. induction 1 as [|pb1 b2 pbs1 bs2 Hb ? IH];
     intros; decompose_Forall_hyps.
@@ -240,9 +243,9 @@ Proof.
   destruct IH as (pbs2&->&?); auto. inversion Hb; simplify_equality'; try done.
   eexists (_ :: _); csimpl; eauto.
 Qed.
-Lemma BPtrs_refine_inv_r Γ f m1 m2 bs1 pbs2 :
-  ¬(∃ pbs, bs1 = BPtr <$> pbs) → bs1 ⊑{Γ,f@m1↦m2}* BPtr <$> pbs2 →
-  Exists (✓{Γ,m2}) pbs2.
+Lemma BPtrs_refine_inv_r Γ f Γm1 Γm2 bs1 pbs2 :
+  ¬(∃ pbs, bs1 = BPtr <$> pbs) → bs1 ⊑{Γ,f@Γm1↦Γm2}* BPtr <$> pbs2 →
+  Exists (✓{Γ,Γm2}) pbs2.
 Proof.
   intros Hbps. rewrite Forall2_fmap_r. induction 1 as [|???? Hb ? IH].
   { destruct Hbps. by eexists []. }
@@ -258,10 +261,10 @@ Proof.
   * destruct 1. done. constructor.
   * by destruct 1; inversion 1.
 Qed.
-Lemma bit_subseteq_refine Γ m b1 b2 : ✓{Γ,m} b2 → b1 ⊑ b2 → b1 ⊑{Γ@m} b2.
+Lemma bit_subseteq_refine Γ Γm b1 b2 : ✓{Γ,Γm} b2 → b1 ⊑ b2 → b1 ⊑{Γ@Γm} b2.
 Proof. destruct 2; eauto using BIndet_refine, bit_refine_id. Qed.
-Lemma bits_subseteq_refine Γ m bs1 bs2 :
-  ✓{Γ,m}* bs2 → bs1 ⊑* bs2 → bs1 ⊑{Γ@m}* bs2.
+Lemma bits_subseteq_refine Γ Γm bs1 bs2 :
+  ✓{Γ,Γm}* bs2 → bs1 ⊑* bs2 → bs1 ⊑{Γ@Γm}* bs2.
 Proof.
   induction 2; decompose_Forall_hyps; eauto using bit_subseteq_refine.
 Qed.
@@ -274,8 +277,8 @@ Proof.
   intros Hbs. induction 1 as [|????[]];
     rewrite ?elem_of_cons in Hbs |- *; naive_solver.
 Qed.
-Lemma bit_join_valid Γ m b1 b2 b3 :
-  bit_join b1 b2 = Some b3 → ✓{Γ,m} b1 → ✓{Γ,m} b2 → ✓{Γ,m} b3.
+Lemma bit_join_valid Γ Γm b1 b2 b3 :
+  bit_join b1 b2 = Some b3 → ✓{Γ,Γm} b1 → ✓{Γ,Γm} b2 → ✓{Γ,Γm} b3.
 Proof. destruct 2,1; simplify_option_equality; constructor; auto. Qed.
 Global Instance: Commutative (@eq (option (bit Ti))) bit_join.
 Proof. intros [] []; intros; simplify_option_equality; auto. Qed.
@@ -295,9 +298,9 @@ Proof.
   destruct 1; inversion_clear 1; eauto using
     bit_join_diag, bit_join_indet_l, bit_join_indet_r, BIndet_weak_refine.
 Qed.
-Lemma bit_join_refine Γ f m1 m2 b1 b2 b3 b1' b2' b3' :
+Lemma bit_join_refine Γ f Γm1 Γm2 b1 b2 b3 b1' b2' b3' :
   bit_join b1 b2 = Some b3 → bit_join b1' b2' = Some b3' →
-  b1 ⊑{Γ,f@m1↦m2} b1' → b2 ⊑{Γ,f@m1↦m2} b2' → b3 ⊑{Γ,f@m1↦m2} b3'.
+  b1 ⊑{Γ,f@Γm1↦Γm2} b1' → b2 ⊑{Γ,f@Γm1↦Γm2} b2' → b3 ⊑{Γ,f@Γm1↦Γm2} b3'.
 Proof.
   destruct 3, 1; repeat
     match goal with
@@ -307,8 +310,8 @@ Proof.
     end; constructor (by eauto using bit_join_valid).
 Qed.
 
-Lemma bits_join_valid Γ m bs1 bs2 bs3 :
-  bits_join bs1 bs2 = Some bs3 → ✓{Γ,m}* bs1 → ✓{Γ,m}* bs2 → ✓{Γ,m}* bs3.
+Lemma bits_join_valid Γ Γm bs1 bs2 bs3 :
+  bits_join bs1 bs2 = Some bs3 → ✓{Γ,Γm}* bs1 → ✓{Γ,Γm}* bs2 → ✓{Γ,Γm}* bs3.
 Proof.
   intros Hbs Hbs1. revert bs2 bs3 Hbs. induction Hbs1; destruct 2;
     simplify_option_equality; constructor; eauto using bit_join_valid.
@@ -357,9 +360,10 @@ Qed.
 Lemma bits_join_length_r bs1 bs2 bs3 :
   bits_join bs1 bs2 = Some bs3 → length bs3 = length bs2.
 Proof. rewrite (commutative bits_join). apply bits_join_length_l. Qed.
-Lemma bits_join_refine Γ f m1 m2 bs1 bs2 bs3 bs1' bs2' bs3' :
+Lemma bits_join_refine Γ f Γm1 Γm2 bs1 bs2 bs3 bs1' bs2' bs3' :
   bits_join bs1 bs2 = Some bs3 → bits_join bs1' bs2' = Some bs3' →
-  bs1 ⊑{Γ,f@m1↦m2}* bs1' → bs2 ⊑{Γ,f@m1↦m2}* bs2' → bs3 ⊑{Γ,f@m1↦m2}* bs3'.
+  bs1 ⊑{Γ,f@Γm1↦Γm2}* bs1' → bs2 ⊑{Γ,f@Γm1↦Γm2}* bs2' →
+  bs3 ⊑{Γ,f@Γm1↦Γm2}* bs3'.
 Proof.
   intros Hbs Hbs' Hbs1. revert bs2 bs2' bs3 bs3' Hbs Hbs'.
   induction Hbs1; destruct 3; simplify_option_equality;
@@ -373,8 +377,8 @@ Proof.
   * by rewrite replicate_length.
   * erewrite bits_join_length_r by eauto; eauto.
 Qed.
-Lemma bits_list_join_valid Γ m sz bss bs :
-  bits_list_join sz bss = Some bs → Forall (✓{Γ,m}*) bss → ✓{Γ,m}* bs.
+Lemma bits_list_join_valid Γ Γm sz bss bs :
+  bits_list_join sz bss = Some bs → Forall (✓{Γ,Γm}*) bss → ✓{Γ,Γm}* bs.
 Proof.
   intros Hbs Hbss. revert bs Hbs.
   induction Hbss as [|bs' bss IH]; intros bs Hbs; simplify_equality'.
@@ -410,9 +414,9 @@ Proof.
   induction Hbss; intros; simplify_option_equality; eauto using
     Forall2_replicate_l, Forall_true, BIndet_weak_refine, bits_join_min.
 Qed.
-Lemma bits_list_join_refine Γ f m1 m2 sz bss1 bss2 bs1 bs2 :
+Lemma bits_list_join_refine Γ f Γm1 Γm2 sz bss1 bss2 bs1 bs2 :
   bits_list_join sz bss1 = Some bs1 → bits_list_join sz bss2 = Some bs2 →
-  Forall2 (Forall2 (refine Γ f m1 m2 )) bss1 bss2 → bs1 ⊑{Γ,f@m1↦m2}* bs2.
+  Forall2 (Forall2 (refine Γ f Γm1 Γm2)) bss1 bss2 → bs1 ⊑{Γ,f@Γm1↦Γm2}* bs2.
 Proof.
   intros Hbs1 Hbs2 Hbss. revert bs1 bs2 Hbs1 Hbs2.
   induction Hbss; intros; simplify_option_equality; eauto using

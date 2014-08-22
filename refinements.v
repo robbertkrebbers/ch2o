@@ -126,27 +126,17 @@ Qed.
 End mem_inj.
 
 Class RefineM Ti A := refineM: env Ti → mem_inj Ti → relation A.
-Class Refine Ti M A :=
-  refine: env Ti → mem_inj Ti → M → M → A → A → Prop.
-Class RefineT Ti M A T :=
-  refineT: env Ti → mem_inj Ti → M → M → A → A → T → Prop.
-Instance: Params (@refineM) 3.
-Instance: Params (@refine) 4.
-Instance: Params (@refineT) 5.
+Class Refine Ti A :=
+  refine: env Ti → mem_inj Ti → memenv Ti → memenv Ti → A → A → Prop.
+Class RefineT Ti A T :=
+  refineT: env Ti → mem_inj Ti → memenv Ti → memenv Ti → A → A → T → Prop.
+Instance: Params (@refine) 3.
+Instance: Params (@refineT) 4.
 
 Notation "X ⊑{ Γ , f } Y" := (refineM Γ f X Y)
   (at level 70, format "X  ⊑{ Γ , f }  Y") : C_scope.
-Notation "Xs ⊑{ Γ , f }* Ys" := (Forall2 (refineM Γ f) Xs Ys)
-  (at level 70, format "Xs  ⊑{ Γ , f }*  Ys") : C_scope.
-Notation "Xss ⊑{ Γ , f }2** Yss" :=
-  (Forall2 (λ Xs Ys, Xs.2 ⊑{Γ,f}* Ys.2) Xss Yss)
-  (at level 70, format "Xss  ⊑{ Γ , f }2**  Yss") : C_scope.
 Notation "X ⊑{ Γ } Y" := (X ⊑{Γ,mem_inj_id} Y)
   (at level 70, format "X  ⊑{ Γ }  Y") : C_scope.
-Notation "Xs ⊑{ Γ }* Ys" := (Xs ⊑{Γ,mem_inj_id}* Ys)
-  (at level 70, format "Xs  ⊑{ Γ }*  Ys") : C_scope.
-Notation "Xss ⊑{ Γ }2** Yss" := (Xss ⊑{Γ,mem_inj_id}2** Yss)
-  (at level 70, format "Xss  ⊑{ Γ }2**  Yss") : C_scope.
 
 Notation "X ⊑{ Γ , f @ m1 ↦ m2 } Y" := (refine Γ f m1 m2 X Y)
   (at level 70, format "X  ⊑{ Γ , f  @  m1 ↦ m2 }  Y") : C_scope.
@@ -197,13 +187,39 @@ Ltac refine_constructor :=
     econstructor; change H' with (refineT (RefineT:=H) Γ f m1 m2)
   end.
 
-Class IndexAlive (M : Type) :=
-  index_alive : M → index → Prop.
-Instance index_typed {Ti : Set} {M} `{TypeCheck M (type Ti) index} :
-  Typed M (type Ti) index := λ m o τ, type_check m o  = Some τ.
-Instance index_type_check_spec {Ti : Set} {M} `{TypeCheck M (type Ti) index} :
-  TypeCheckSpec M (type Ti) index (λ _, True).
-Proof. done. Qed.
+Instance memenv_refine `{Env Ti} : RefineM Ti (memenv Ti) := λ Γ f Γm1 Γm2,
+  (**i 1.) *) mem_inj_injective f ∧
+  (**i 2.) *) (∀ o1 o2 r τ1, f !! o1 = Some (o2,r) →
+    Γm1 ⊢ o1 : τ1 → ∃ τ2, Γm2 ⊢ o2 : τ2 ∧ Γ ⊢ r : τ2 ↣ τ1) ∧
+  (**i 3.) *) (∀ o1 o2 r, f !! o1 = Some (o2,r) →
+    index_alive Γm1 o1 → index_alive Γm2 o2).
 
-Class MemSpec (Ti : Set) M `{TypeCheck M (type Ti) index, IndexAlive M,
-  Env Ti, ∀ m o, Decision (index_alive m o), !EnvSpec Ti} := {}.
+Section memenv_refine.
+Context `{EnvSpec Ti}.
+Lemma memenv_refine_injective Γ f Γm1 Γm2: Γm1 ⊑{Γ,f} Γm2 → mem_inj_injective f.
+Proof. by intros [??]. Qed.
+Lemma memenv_refine_id Γ Γm : Γm ⊑{Γ} Γm.
+Proof.
+  repeat split; intros; simplify_equality;
+    try setoid_rewrite ref_typed_nil; eauto using mem_inj_id_injective.
+Qed.
+Lemma memenv_refine_compose Γ f1 f2 Γm1 Γm2 Γm3 :
+  ✓ Γ → Γm1 ⊑{Γ,f1} Γm2 → Γm2 ⊑{Γ,f2} Γm3 → Γm1 ⊑{Γ,f1 ◎ f2} Γm3.
+Proof.
+  intros ? (?&?&?) (?&?&?); repeat split; eauto using mem_inj_compose_injective.
+  * intros o1 o3 r τ1; rewrite lookup_mem_inj_compose_Some;
+      intros (o2&r2&r3&?&?&->) ?; setoid_rewrite ref_typed_app; naive_solver.
+  * intros o1 o3 r; rewrite lookup_mem_inj_compose_Some; naive_solver.
+Qed.
+Lemma memenv_refine_weaken Γ Γ' f f' Γm1 Γm2 :
+  ✓ Γ → Γm1 ⊑{Γ,f} Γm2 → Γ ⊆ Γ' → (∀ o τ, Γm1 ⊢ o : τ → f !! o = f' !! o) →
+  mem_inj_injective f' → Γm1 ⊑{Γ',f'} Γm2.
+Proof.
+  intros ? (?&?&?) ? Hf ?; split; split_ands; auto.
+  * intros o1 o2 r τ1 Hfo ?. erewrite <-Hf in Hfo by eauto.
+    naive_solver eauto using ref_typed_weaken.
+  * intros o1 o2 r Hfo Halive. assert (∃ τ, Γm1 ⊢ o1 : τ) as [τ ?].
+    { by destruct Halive as [τ ?]; exists τ false. }
+    erewrite <-Hf in Hfo by eauto; eauto.
+Qed.
+End memenv_refine.

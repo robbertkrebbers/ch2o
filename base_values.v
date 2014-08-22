@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export memory_map.
+Require Export bits.
 Local Open Scope cbase_type_scope.
 
 Inductive base_val (Ti : Set) : Set :=
@@ -37,29 +37,29 @@ Section operations.
   Context `{Env Ti}.
 
   Record char_byte_valid (Γ : env Ti)
-      (m : mem Ti) (bs : list (bit Ti)) : Prop := {
+      (Γm : memenv Ti) (bs : list (bit Ti)) : Prop := {
     char_byte_valid_indet : ¬Forall (BIndet =) bs;
     char_byte_valid_bit : ¬(∃ βs, bs = BBit <$> βs);
-    char_byte_valid_bits_valid : ✓{Γ,m}* bs;
+    char_byte_valid_bits_valid : ✓{Γ,Γm}* bs;
     char_byte_valid_bits : length bs = char_bits
   }.
-  Global Instance char_byte_valid_dec Γ m bs :
-    Decision (char_byte_valid Γ m bs).
+  Global Instance char_byte_valid_dec Γ Γm bs :
+    Decision (char_byte_valid Γ Γm bs).
   Proof.
    refine (cast_if (decide (¬Forall (BIndet =) bs ∧
-     ¬(∃ βs, bs = BBit <$> βs) ∧ ✓{Γ,m}* bs ∧ length bs = char_bits)));
+     ¬(∃ βs, bs = BBit <$> βs) ∧ ✓{Γ,Γm}* bs ∧ length bs = char_bits)));
      abstract (constructor||intros[]; intuition).
   Defined.
-  Inductive base_typed' (Γ : env Ti) (m : mem Ti) :
+  Inductive base_typed' (Γ : env Ti) (Γm : memenv Ti) :
        base_val Ti → base_type Ti → Prop :=
-    | VIndet_typed τb : ✓{Γ} τb → τb ≠ voidT → base_typed' Γ m (VIndet τb) τb
-    | VVoid_typed : base_typed' Γ m VVoid voidT
-    | VInt_typed x τi : int_typed x τi → base_typed' Γ m (VInt τi x) (intT τi)
-    | VPtr_typed p τ : (Γ,m) ⊢ p : τ → base_typed' Γ m (VPtr p) (τ.*)
+    | VIndet_typed τb : ✓{Γ} τb → τb ≠ voidT → base_typed' Γ Γm (VIndet τb) τb
+    | VVoid_typed : base_typed' Γ Γm VVoid voidT
+    | VInt_typed x τi : int_typed x τi → base_typed' Γ Γm (VInt τi x) (intT τi)
+    | VPtr_typed p τ : (Γ,Γm) ⊢ p : τ → base_typed' Γ Γm (VPtr p) (τ.*)
     | VByte_typed bs :
-       char_byte_valid Γ m bs → base_typed' Γ m (VByte bs) ucharT.
-  Global Instance base_typed:
-    Typed (env Ti * mem Ti) (base_type Ti) (base_val Ti) := curry base_typed'.
+       char_byte_valid Γ Γm bs → base_typed' Γ Γm (VByte bs) ucharT.
+  Global Instance base_typed: Typed (env Ti * memenv Ti)
+    (base_type Ti) (base_val Ti) := curry base_typed'.
   Global Instance type_of_base_val: TypeOf (base_type Ti) (base_val Ti) := λ v,
     match v with
     | VIndet τb => τb
@@ -69,13 +69,13 @@ Section operations.
     | VByte _ => ucharT
     end.
   Global Instance base_type_check:
-    TypeCheck (env Ti * mem Ti) (base_type Ti) (base_val Ti) := λ Γm v,
+    TypeCheck (env Ti * memenv Ti) (base_type Ti) (base_val Ti) := λ ΓΓm v,
     match v with
-    | VIndet τb => guard (✓{Γm.1} τb); guard (τb ≠ voidT); Some τb
+    | VIndet τb => guard (✓{ΓΓm.1} τb); guard (τb ≠ voidT); Some τb
     | VVoid => Some voidT
     | VInt τi x => guard (int_typed x τi); Some (intT τi)
-    | VPtr p => TPtr <$> type_check Γm p
-    | VByte bs => guard (char_byte_valid (Γm.1) (Γm.2) bs); Some ucharT
+    | VPtr p => TPtr <$> type_check ΓΓm p
+    | VByte bs => guard (char_byte_valid (ΓΓm.1) (ΓΓm.2) bs); Some ucharT
     end.
   Global Instance base_val_freeze : Freeze (base_val Ti) := λ β v,
     match v with VPtr p => VPtr (freeze β p) | _ => v end.
@@ -102,40 +102,41 @@ Section operations.
     | τ.* => default (VIndet τb) (mapM maybe_BPtr bs ≫= ptr_of_bits Γ τ) VPtr
     end.
 
-  Inductive base_val_refine' (Γ : env Ti) (f : mem_inj Ti) (m1 m2 : mem Ti) :
+  Inductive base_val_refine' (Γ : env Ti)
+        (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
         base_val Ti → base_val Ti → base_type Ti → Prop :=
     | VIndet_refine' τb vb :
-       (Γ,m2) ⊢ vb : τb → τb ≠ voidT →
-       base_val_refine' Γ f m1 m2 (VIndet τb) vb τb
-    | VVoid_refine' : base_val_refine' Γ f m1 m2 VVoid VVoid voidT
+       (Γ,Γm2) ⊢ vb : τb → τb ≠ voidT →
+       base_val_refine' Γ f Γm1 Γm2 (VIndet τb) vb τb
+    | VVoid_refine' : base_val_refine' Γ f Γm1 Γm2 VVoid VVoid voidT
     | VInt_refine' x τi :
        int_typed x τi →
-       base_val_refine' Γ f m1 m2 (VInt τi x) (VInt τi x) (intT τi)
+       base_val_refine' Γ f Γm1 Γm2 (VInt τi x) (VInt τi x) (intT τi)
     | VPtr_refine' p1 p2 σ :
-       p1 ⊑{Γ,f@m1↦m2} p2 : σ →
-       base_val_refine' Γ f m1 m2 (VPtr p1) (VPtr p2) (σ.*)
+       p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ →
+       base_val_refine' Γ f Γm1 Γm2 (VPtr p1) (VPtr p2) (σ.*)
     | VPtr_VIndet_refine p1 vb2 σ :
-       (Γ,m1) ⊢ p1 : σ → ¬ptr_alive m1 p1 →
-       (Γ,m2) ⊢ vb2 : σ.* → base_val_refine' Γ f m1 m2 (VPtr p1) vb2 (σ.*)
+       (Γ,Γm1) ⊢ p1 : σ → ¬ptr_alive Γm1 p1 →
+       (Γ,Γm2) ⊢ vb2 : σ.* → base_val_refine' Γ f Γm1 Γm2 (VPtr p1) vb2 (σ.*)
     | VByte_refine' bs1 bs2 :
-       bs1 ⊑{Γ,f@m1↦m2}* bs2 →
-       char_byte_valid Γ m1 bs1 → char_byte_valid Γ m2 bs2 →
-       base_val_refine' Γ f m1 m2 (VByte bs1) (VByte bs2) ucharT
+       bs1 ⊑{Γ,f@Γm1↦Γm2}* bs2 →
+       char_byte_valid Γ Γm1 bs1 → char_byte_valid Γ Γm2 bs2 →
+       base_val_refine' Γ f Γm1 Γm2 (VByte bs1) (VByte bs2) ucharT
     | VByte_Vint_refine' bs1 x2 :
-       bs1 ⊑{Γ,f@m1↦m2}* BBit <$> int_to_bits ucharT x2 →
-       char_byte_valid Γ m1 bs1 → int_typed x2 ucharT →
-       base_val_refine' Γ f m1 m2 (VByte bs1) (VInt ucharT x2) ucharT
+       bs1 ⊑{Γ,f@Γm1↦Γm2}* BBit <$> int_to_bits ucharT x2 →
+       char_byte_valid Γ Γm1 bs1 → int_typed x2 ucharT →
+       base_val_refine' Γ f Γm1 Γm2 (VByte bs1) (VInt ucharT x2) ucharT
     | VByte_VIndet_refine' bs1 bs2 vb2 :
-       bs1 ⊑{Γ,f@m1↦m2}* bs2 → char_byte_valid Γ m1 bs1 →
-       Forall (BIndet =) bs2 → (Γ,m2) ⊢ vb2 : ucharT →
-       base_val_refine' Γ f m1 m2 (VByte bs1) vb2 ucharT.
+       bs1 ⊑{Γ,f@Γm1↦Γm2}* bs2 → char_byte_valid Γ Γm1 bs1 →
+       Forall (BIndet =) bs2 → (Γ,Γm2) ⊢ vb2 : ucharT →
+       base_val_refine' Γ f Γm1 Γm2 (VByte bs1) vb2 ucharT.
   Global Instance base_val_refine:
-    RefineT Ti (mem Ti) (base_val Ti) (base_type Ti) := base_val_refine'.
+    RefineT Ti (base_val Ti) (base_type Ti) := base_val_refine'.
 
-  Definition base_val_true (m : mem Ti) (vb : base_val Ti) : Prop :=
+  Definition base_val_true (Γm : memenv Ti) (vb : base_val Ti) : Prop :=
     match vb with
     | VInt _ x => x ≠ 0
-    | VPtr (Ptr a) => index_alive m (addr_index a)
+    | VPtr (Ptr a) => index_alive Γm (addr_index a)
     | _ => False
     end.
   Definition base_val_false (vb : base_val Ti) : Prop :=
@@ -161,12 +162,12 @@ Section operations.
     | τ.*, NotOp => Some sintT
     | _, _ => None
     end.
-  Definition base_val_unop_ok (m : mem Ti)
+  Definition base_val_unop_ok (Γm : memenv Ti)
       (op : unop) (vb : base_val Ti) : Prop :=
     match vb, op with
     | VInt τi x, NegOp => int_arithop_ok MinusOp 0 τi x τi
     | VInt τi x, _ => True
-    | VPtr p, NotOp => ptr_alive m p
+    | VPtr p, NotOp => ptr_alive Γm p
     | _, _ => False
     end.
   Global Arguments base_val_unop_ok _ !_ !_ /.
@@ -220,18 +221,18 @@ Section operations.
     | τ1.*, τ2.*, ArithOp MinusOp => guard (τ1 = τ2); Some sptrT
     | _, _, _ => None
     end.
-  Definition base_val_binop_ok (Γ : env Ti) (m : mem Ti)
+  Definition base_val_binop_ok (Γ : env Ti) (Γm : memenv Ti)
       (op : binop) (vb1 vb2 : base_val Ti) : Prop :=
     match vb1, vb2, op with
     | VInt τi1 x1, VInt τi2 x2, (CompOp _ | BitOp _) => True
     | VInt τi1 x1, VInt τi2 x2, ArithOp op => int_arithop_ok op x1 τi1 x2 τi2
     | VInt τi1 x1, VInt τi2 x2, ShiftOp op => int_shiftop_ok op x1 τi1 x2 τi2
-    | VPtr p1, VPtr p2, CompOp c => ptr_compare_ok m c p1 p2
-    | VPtr p, VInt _ x, ArithOp PlusOp => ptr_plus_ok Γ m x p
-    | VInt _ x, VPtr p, ArithOp PlusOp => ptr_plus_ok Γ m x p
-    | VPtr p, VInt _ x, ArithOp MinusOp => ptr_plus_ok Γ m (-x) p
-    | VInt _ x, VPtr p, ArithOp MinusOp => ptr_plus_ok Γ m (-x) p
-    | VPtr p1, VPtr p2, ArithOp MinusOp => ptr_minus_ok m p1 p2
+    | VPtr p1, VPtr p2, CompOp c => ptr_compare_ok Γm c p1 p2
+    | VPtr p, VInt _ x, ArithOp PlusOp => ptr_plus_ok Γ Γm x p
+    | VInt _ x, VPtr p, ArithOp PlusOp => ptr_plus_ok Γ Γm x p
+    | VPtr p, VInt _ x, ArithOp MinusOp => ptr_plus_ok Γ Γm (-x) p
+    | VInt _ x, VPtr p, ArithOp MinusOp => ptr_plus_ok Γ Γm (-x) p
+    | VPtr p1, VPtr p2, ArithOp MinusOp => ptr_minus_ok Γm p1 p2
     | _, _, _ => False
     end.
   Global Arguments base_val_binop_ok _ _ !_ !_ !_ /.
@@ -270,12 +271,12 @@ Section operations.
        ptr_type_valid Γ τ → base_cast_typed Γ (voidT.*) (τ.*)
     | TPtr_of_uchar_cast_typed τ :
        ptr_type_valid Γ τ → base_cast_typed Γ (ucharT.*) (τ.*).
-  Definition base_val_cast_ok (Γ : env Ti) (m : mem Ti)
+  Definition base_val_cast_ok (Γ : env Ti) (Γm : memenv Ti)
       (τb : base_type Ti) (vb : base_val Ti) : Prop :=
     match vb, τb with
     | _, voidT => True
     | VInt _ x, intT τi => int_cast_ok τi x
-    | VPtr p, τ.* => ptr_cast_ok Γ m τ p
+    | VPtr p, τ.* => ptr_cast_ok Γ Γm τ p
     | VByte _, intT τi => τi = ucharT%IT
     | VIndet τi, intT τi' => τi = ucharT ∧ τi' = ucharT%IT
     | _, _ => False
@@ -297,7 +298,7 @@ Arguments base_val_unflatten _ _ _ _ _ : simpl never.
 Section properties.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
-Implicit Types m : mem Ti.
+Implicit Types Γm : memenv Ti.
 Implicit Types τb : base_type Ti.
 Implicit Types vb : base_val Ti.
 Implicit Types bs : list (bit Ti).
@@ -307,63 +308,63 @@ Local Infix "⊑*" := (Forall2 bit_weak_refine) (at level 70).
 Hint Extern 0 (_ ⊑* _) => reflexivity.
 
 (** ** General properties of the typing judgment *)
-Lemma base_val_typed_type_valid Γ m v τb : ✓ Γ → (Γ,m) ⊢ v : τb → ✓{Γ} τb.
+Lemma base_val_typed_type_valid Γ Γm v τb : ✓ Γ → (Γ,Γm) ⊢ v : τb → ✓{Γ} τb.
 Proof. destruct 2; try econstructor; eauto using ptr_typed_type_valid. Qed.
-Global Instance: TypeOfSpec (env Ti * mem Ti) (base_type Ti) (base_val Ti).
+Global Instance: TypeOfSpec (env Ti * memenv Ti) (base_type Ti) (base_val Ti).
 Proof.
   intros [??]. destruct 1; f_equal'; auto. eapply type_of_correct; eauto.
 Qed.
 Global Instance:
-  TypeCheckSpec (env Ti * mem Ti) (base_type Ti) (base_val Ti) (λ _, True).
+  TypeCheckSpec (env Ti * memenv Ti) (base_type Ti) (base_val Ti) (λ _, True).
 Proof.
-  intros [Γ mm] vb τb _. split.
+  intros [Γ Γmm] vb τb _. split.
   * destruct vb; intros; simplify_option_equality;
       constructor; auto; eapply type_check_sound; eauto.
   * by destruct 1; simplify_option_equality;
       erewrite ?type_check_complete by eauto.
 Qed.
-Lemma char_byte_valid_weaken Γ1 Γ2 m1 m2 bs :
-  ✓ Γ1 → char_byte_valid Γ1 m1 bs → Γ1 ⊆ Γ2 → (∀ o τ, m1 ⊢ o : τ → m2 ⊢ o : τ) →
-  char_byte_valid Γ2 m2 bs.
+Lemma char_byte_valid_weaken Γ1 Γ2 Γm1 Γm2 bs :
+  ✓ Γ1 → char_byte_valid Γ1 Γm1 bs → Γ1 ⊆ Γ2 →
+  (∀ o τ, Γm1 ⊢ o : τ → Γm2 ⊢ o : τ) → char_byte_valid Γ2 Γm2 bs.
 Proof. destruct 2; constructor; eauto using Forall_impl, bit_valid_weaken. Qed.
-Lemma base_val_typed_weaken Γ1 Γ2 m1 m2 vb τb :
-  ✓ Γ1 → (Γ1,m1) ⊢ vb : τb → Γ1 ⊆ Γ2 → (∀ o τ, m1 ⊢ o : τ → m2 ⊢ o : τ) →
-  (Γ2,m2) ⊢ vb : τb.
+Lemma base_val_typed_weaken Γ1 Γ2 Γm1 Γm2 vb τb :
+  ✓ Γ1 → (Γ1,Γm1) ⊢ vb : τb → Γ1 ⊆ Γ2 → (∀ o τ, Γm1 ⊢ o : τ → Γm2 ⊢ o : τ) →
+  (Γ2,Γm2) ⊢ vb : τb.
 Proof.
   destruct 2; econstructor; eauto using ptr_typed_weaken,
     char_byte_valid_weaken, base_type_valid_weaken.
 Qed.
-Lemma base_val_frozen_int Γ m v τi : (Γ,m) ⊢ v : intT τi → frozen v.
+Lemma base_val_frozen_int Γ Γm v τi : (Γ,Γm) ⊢ v : intT τi → frozen v.
 Proof. inversion 1; constructor. Qed.
 Lemma base_val_freeze_freeze β1 β2 vb : freeze β1 (freeze β2 vb) = freeze β1 vb.
 Proof. destruct vb; f_equal'; auto using ptr_freeze_freeze. Qed.
 Lemma base_val_freeze_type_of β vb : type_of (freeze β vb) = type_of vb.
 Proof. by destruct vb; simpl; rewrite ?ptr_freeze_type_of. Qed.
-Lemma base_typed_freeze Γ m β vb τb :
-  (Γ,m) ⊢ freeze β vb : τb ↔ (Γ,m) ⊢ vb : τb.
+Lemma base_typed_freeze Γ Γm β vb τb :
+  (Γ,Γm) ⊢ freeze β vb : τb ↔ (Γ,Γm) ⊢ vb : τb.
 Proof.
   split.
   * destruct vb; inversion 1; constructor; auto.
     by apply (ptr_typed_freeze _ _ β).
   * destruct 1; constructor; auto. by apply ptr_typed_freeze.
 Qed.
-Lemma base_typed_int_frozen Γ m vb τi : (Γ,m) ⊢ vb : intT τi → frozen vb.
+Lemma base_typed_int_frozen Γ Γm vb τi : (Γ,Γm) ⊢ vb : intT τi → frozen vb.
 Proof. inversion_clear 1; constructor. Qed.
 
 (** ** Properties of the [base_val_flatten] function *)
-Lemma base_val_flatten_valid Γ m vb τb :
-  (Γ,m) ⊢ vb : τb → ✓{Γ,m}* (base_val_flatten Γ vb).
+Lemma base_val_flatten_valid Γ Γm vb τb :
+  (Γ,Γm) ⊢ vb : τb → ✓{Γ,Γm}* (base_val_flatten Γ vb).
 Proof.
   destruct 1; simpl.
   * apply Forall_replicate, BIndet_valid.
   * apply Forall_replicate, BIndet_valid.
   * apply Forall_fmap, Forall_true. constructor.
-  * apply Forall_fmap; eapply (Forall_impl (✓{Γ,m}));
+  * apply Forall_fmap; eapply (Forall_impl (✓{Γ,Γm}));
       eauto using ptr_to_bits_valid, BPtr_valid.
   * eauto using char_byte_valid_bits_valid.
 Qed.
-Lemma base_val_flatten_weaken Γ1 Γ2 m τb vb :
-  ✓ Γ1 → (Γ1,m) ⊢ vb : τb → Γ1 ⊆ Γ2 →
+Lemma base_val_flatten_weaken Γ1 Γ2 Γm τb vb :
+  ✓ Γ1 → (Γ1,Γm) ⊢ vb : τb → Γ1 ⊆ Γ2 →
   base_val_flatten Γ1 vb = base_val_flatten Γ2 vb.
 Proof.
   by destruct 2; intros; simpl; erewrite ?ptr_to_bits_weaken,
@@ -372,8 +373,8 @@ Qed.
 Lemma base_val_flatten_freeze Γ β vb :
   base_val_flatten Γ (freeze β vb) = base_val_flatten Γ vb.
 Proof. by destruct vb; simpl; rewrite ?ptr_to_bits_freeze. Qed.
-Lemma base_val_flatten_length Γ m vb τb :
-  (Γ,m) ⊢ vb : τb → length (base_val_flatten Γ vb) = bit_size_of Γ τb.
+Lemma base_val_flatten_length Γ Γm vb τb :
+  (Γ,Γm) ⊢ vb : τb → length (base_val_flatten Γ vb) = bit_size_of Γ τb.
 Proof.
   destruct 1; simplify_equality'.
   * by rewrite replicate_length.
@@ -510,9 +511,9 @@ Proof.
     rewrite ?elem_of_list_fmap; naive_solver.
 Qed.
 
-Lemma base_val_unflatten_typed Γ m τb bs :
-  ✓{Γ} τb → ✓{Γ,m}* bs → length bs = bit_size_of Γ τb →
-  (Γ,m) ⊢ base_val_unflatten Γ τb bs : τb.
+Lemma base_val_unflatten_typed Γ Γm τb bs :
+  ✓{Γ} τb → ✓{Γ,Γm}* bs → length bs = bit_size_of Γ τb →
+  (Γ,Γm) ⊢ base_val_unflatten Γ τb bs : τb.
 Proof.
   intros. feed destruct (base_val_unflatten_spec Γ τb bs);
     auto; constructor; auto.
@@ -527,8 +528,8 @@ Proof.
   destruct τb; repeat (simplify_option_equality || case_match || intuition).
   f_equal; eauto using ptr_of_bits_type_of.
 Qed.
-Lemma base_val_unflatten_flatten Γ m vb τb :
-  (Γ,m) ⊢ vb : τb →
+Lemma base_val_unflatten_flatten Γ Γm vb τb :
+  (Γ,Γm) ⊢ vb : τb →
   base_val_unflatten Γ τb (base_val_flatten Γ vb) = freeze true vb.
 Proof.
   destruct 1 as [τb| |x|p τ|bs []]; simpl.
@@ -540,25 +541,25 @@ Proof.
   * by erewrite base_val_unflatten_ptr by eauto using ptr_of_to_bits_typed.
   * by rewrite base_val_unflatten_byte by done.
 Qed.
-Lemma base_val_unflatten_frozen Γ m τb bs :
-  ✓{Γ,m}* bs → frozen (base_val_unflatten Γ τb bs).
+Lemma base_val_unflatten_frozen Γ Γm τb bs :
+  ✓{Γ,Γm}* bs → frozen (base_val_unflatten Γ τb bs).
 Proof.
   intros. unfold base_val_unflatten, default, frozen.
   destruct τb; repeat (simplify_option_equality || case_match); f_equal'.
   efeed pose proof (λ bs pbs, proj1 (maybe_BPtrs_spec bs pbs)); eauto.
   subst. eapply ptr_of_bits_frozen; eauto using BPtrs_valid_inv.
 Qed.
-Lemma base_val_flatten_inj Γ m β vb1 vb2 τb :
-  (Γ,m) ⊢ vb1 : τb → (Γ,m) ⊢ vb2 : τb →
+Lemma base_val_flatten_inj Γ Γm β vb1 vb2 τb :
+  (Γ,Γm) ⊢ vb1 : τb → (Γ,Γm) ⊢ vb2 : τb →
   base_val_flatten Γ vb1 = base_val_flatten Γ vb2 → freeze β vb1 = freeze β vb2.
 Proof.
   intros ?? Hv. by rewrite <-(base_val_freeze_freeze _ true vb1),
     <-(base_val_freeze_freeze _ true vb2),
-    <-(base_val_unflatten_flatten Γ m vb1 τb),
-    <-(base_val_unflatten_flatten Γ m vb2 τb), Hv by done.
+    <-(base_val_unflatten_flatten Γ Γm vb1 τb),
+    <-(base_val_unflatten_flatten Γ Γm vb2 τb), Hv by done.
 Qed.
-Lemma base_val_flatten_unflatten Γ m τb bs :
-  ✓{Γ,m}* bs → length bs = bit_size_of Γ τb →
+Lemma base_val_flatten_unflatten Γ Γm τb bs :
+  ✓{Γ,Γm}* bs → length bs = bit_size_of Γ τb →
   base_val_flatten Γ (base_val_unflatten Γ τb bs) ⊑* bs.
 Proof.
   intros. cut (base_val_flatten Γ (base_val_unflatten Γ τb bs) = bs
@@ -600,9 +601,9 @@ Proof.
 Qed.
 
 (** ** Refinements *)
-Lemma base_val_flatten_refine Γ f m1 m2 vb1 vb2 τb :
-  vb1 ⊑{Γ,f@m1↦m2} vb2 : τb →
-  base_val_flatten Γ vb1 ⊑{Γ,f@m1↦m2}* base_val_flatten Γ vb2.
+Lemma base_val_flatten_refine Γ f Γm1 Γm2 vb1 vb2 τb :
+  vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb →
+  base_val_flatten Γ vb1 ⊑{Γ,f@Γm1↦Γm2}* base_val_flatten Γ vb2.
 Proof.
   destruct 1; simpl.
   * apply Forall2_replicate_l; eauto using base_val_flatten_length,
@@ -619,36 +620,36 @@ Proof.
     by erewrite base_val_flatten_length, char_byte_valid_bits,
       bit_size_of_int, int_bits_char by eauto.
 Qed.
-Lemma base_val_refine_typed_l Γ f m1 m2 vb1 vb2 τb :
-  ✓ Γ → vb1 ⊑{Γ,f@m1↦m2} vb2 : τb → (Γ,m1) ⊢ vb1 : τb.
+Lemma base_val_refine_typed_l Γ f Γm1 Γm2 vb1 vb2 τb :
+  ✓ Γ → vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → (Γ,Γm1) ⊢ vb1 : τb.
 Proof.
   destruct 2; constructor;
     eauto using ptr_refine_typed_l, base_val_typed_type_valid.
 Qed.
-Lemma base_val_refine_typed_r Γ f m1 m2 vb1 vb2 τb :
-  ✓ Γ → vb1 ⊑{Γ,f@m1↦m2} vb2 : τb → (Γ,m2) ⊢ vb2 : τb.
+Lemma base_val_refine_typed_r Γ f Γm1 Γm2 vb1 vb2 τb :
+  ✓ Γ → vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → (Γ,Γm2) ⊢ vb2 : τb.
 Proof.
   destruct 2; try constructor; eauto using ptr_refine_typed_r, TInt_valid.
 Qed.
-Lemma base_val_refine_type_of_l Γ f m1 m2 vb1 vb2 τb :
-  vb1 ⊑{Γ,f@m1↦m2} vb2 : τb → type_of vb1 = τb.
+Lemma base_val_refine_type_of_l Γ f Γm1 Γm2 vb1 vb2 τb :
+  vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → type_of vb1 = τb.
 Proof.
   destruct 1; simplify_type_equality';
     f_equal'; eauto using ptr_refine_type_of_l.
 Qed.
-Lemma base_val_refine_type_of_r Γ f m1 m2 vb1 vb2 τb :
-  vb1 ⊑{Γ,f@m1↦m2} vb2 : τb → type_of vb2 = τb.
+Lemma base_val_refine_type_of_r Γ f Γm1 Γm2 vb1 vb2 τb :
+  vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → type_of vb2 = τb.
 Proof.
   destruct 1; f_equal'; eauto using ptr_refine_type_of_r, type_of_correct.
 Qed.
-Lemma base_val_refine_id Γ m vb τb : (Γ,m) ⊢ vb : τb → vb ⊑{Γ@m} vb : τb.
+Lemma base_val_refine_id Γ Γm vb τb : (Γ,Γm) ⊢ vb : τb → vb ⊑{Γ@Γm} vb : τb.
 Proof.
   destruct 1; constructor; eauto using ptr_refine_id,
     bits_refine_id, char_byte_valid_bits_valid; constructor; eauto.
 Qed.
-Lemma base_val_refine_compose Γ f g m1 m2 m3 vb1 vb2 vb3 τb :
-  ✓ Γ → vb1 ⊑{Γ,f@m1↦m2} vb2 : τb → vb2 ⊑{Γ,g@m2↦m3} vb3 : τb →
-  vb1 ⊑{Γ,f ◎ g@m1↦m3} vb3 : τb.
+Lemma base_val_refine_compose Γ f g Γm1 Γm2 Γm3 vb1 vb2 vb3 τb :
+  ✓ Γ → vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → vb2 ⊑{Γ,g@Γm2↦Γm3} vb3 : τb →
+  vb1 ⊑{Γ,f ◎ g@Γm1↦Γm3} vb3 : τb.
 Proof.
   destruct 2.
   * refine_constructor; eauto using base_val_refine_typed_r.
@@ -663,35 +664,37 @@ Proof.
   * refine_constructor; eauto using base_val_refine_typed_r,
       bits_refine_compose, BIndets_refine, BIndets_valid.
 Qed.
-Lemma base_val_refine_weaken Γ Γ' f f' m1 m2 m1' m2' vb1 vb2 τb :
-  ✓ Γ → vb1 ⊑{Γ,f@m1↦m2} vb2 : τb → Γ ⊆ Γ' →
-  (∀ o o2 r τ, m1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
-  (∀ o τ, m1 ⊢ o : τ → m1' ⊢ o : τ) → (∀ o τ, m2 ⊢ o : τ → m2' ⊢ o : τ) →
-  (∀ o τ, m1 ⊢ o : τ → index_alive m1' o → index_alive m1 o) →
-  (∀ o1 o2 r, f !! o1 = Some (o2,r) → index_alive m1' o1 → index_alive m2' o2) →
-  vb1 ⊑{Γ',f'@m1'↦m2'} vb2 : τb.
+Lemma base_val_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' vb1 vb2 τb :
+  ✓ Γ → vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → Γ ⊆ Γ' →
+  (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
+  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
+  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  (∀ o1 o2 r,
+    f !! o1 = Some (o2,r) → index_alive Γm1' o1 → index_alive Γm2' o2) →
+  vb1 ⊑{Γ',f'@Γm1'↦Γm2'} vb2 : τb.
 Proof.
   destruct 2; refine_constructor; eauto using base_val_typed_weaken,
     ptr_refine_weaken, ptr_typed_weaken, char_byte_valid_weaken,
     ptr_dead_weaken, Forall2_impl, bit_refine_weaken.
 Qed.
-Lemma base_val_unflatten_refine Γ f m1 m2 τb bs1 bs2 :
-  ✓ Γ → ✓{Γ} τb → bs1 ⊑{Γ,f@m1↦m2}* bs2 → length bs1 = bit_size_of Γ τb →
-  base_val_unflatten Γ τb bs1 ⊑{Γ,f@m1↦m2} base_val_unflatten Γ τb bs2 : τb.
+Lemma base_val_unflatten_refine Γ f Γm1 Γm2 τb bs1 bs2 :
+  ✓ Γ → ✓{Γ} τb → bs1 ⊑{Γ,f@Γm1↦Γm2}* bs2 → length bs1 = bit_size_of Γ τb →
+  base_val_unflatten Γ τb bs1 ⊑{Γ,f@Γm1↦Γm2} base_val_unflatten Γ τb bs2 : τb.
 Proof.
   intros ?? Hbs Hbs1. assert (length bs2 = bit_size_of Γ τb) as Hbs2.
   { eauto using Forall2_length_l. }
   feed destruct (base_val_unflatten_spec Γ τb bs1)
     as [|τi βs1|τ p1 pbs1|bs1|bs1|τi bs1|τ pbs1|τ bs1]; auto.
   * constructor.
-  * rewrite (BBits_refine_inv_l Γ f m1 m2 βs1 bs2),
+  * rewrite (BBits_refine_inv_l Γ f Γm1 Γm2 βs1 bs2),
       base_val_unflatten_int by done.
     constructor. by apply int_of_bits_typed.
-  * destruct (decide (ptr_alive m1 p1)).
-    { destruct (BPtrs_refine_inv_l Γ f m1 m2 pbs1 bs2) as (pbs2&->&?); auto.
+  * destruct (decide (ptr_alive Γm1 p1)).
+    { destruct (BPtrs_refine_inv_l Γ f Γm1 Γm2 pbs1 bs2) as (pbs2&->&?); auto.
       { erewrite <-ptr_to_of_bits by eauto using BPtrs_valid_inv,
           bits_refine_valid_l; eauto using ptr_to_bits_alive. }
-      destruct (ptr_of_bits_refine Γ f m1 m2 τ pbs1 pbs2 p1) as (p2&?&?); eauto.
+      destruct (ptr_of_bits_refine Γ f Γm1 Γm2 τ pbs1 pbs2 p1)
+        as (p2&?&?); eauto.
       erewrite base_val_unflatten_ptr by eauto. by constructor. }
     constructor; eauto using ptr_of_bits_typed, BPtrs_valid_inv,
       bits_refine_valid_l, bits_refine_valid_r, base_val_unflatten_typed.
@@ -736,35 +739,36 @@ Proof.
 Qed.
 
 (** ** Properties of unary/binary operations and casts *)
-Definition base_val_true_false_dec m vb :
-  { base_val_true m vb ∧ ¬base_val_false vb }
-  + { ¬base_val_true m vb ∧ base_val_false vb }
-  + { ¬base_val_true m vb ∧ ¬base_val_false vb }.
+Definition base_val_true_false_dec Γm vb :
+  { base_val_true Γm vb ∧ ¬base_val_false vb }
+  + { ¬base_val_true Γm vb ∧ base_val_false vb }
+  + { ¬base_val_true Γm vb ∧ ¬base_val_false vb }.
 Proof.
  refine
   match vb with
   | VInt _ x => inleft (cast_if_not (decide (x = 0)))
   | VPtr (Ptr a) =>
-    if decide (index_alive m (addr_index a)) then inleft (left _) else inright _
+    if decide (index_alive Γm (addr_index a))
+    then inleft (left _) else inright _
   | VPtr (NULL _) => inleft (right _)
   | _ => inright _
   end; abstract naive_solver.
 Defined.
-Lemma base_val_true_weaken Γ m1 m2 vb :
-  base_val_true m1 vb → (∀ o, index_alive m1 o → index_alive m2 o) →
-  base_val_true m2 vb.
+Lemma base_val_true_weaken Γ Γm1 Γm2 vb :
+  base_val_true Γm1 vb → (∀ o, index_alive Γm1 o → index_alive Γm2 o) →
+  base_val_true Γm2 vb.
 Proof. destruct vb as [| | |[]|]; simpl; auto. Qed.
 
-Global Instance base_val_unop_ok_dec m op vb :
-  Decision (base_val_unop_ok m op vb).
+Global Instance base_val_unop_ok_dec Γm op vb :
+  Decision (base_val_unop_ok Γm op vb).
 Proof. destruct vb, op; try apply _. Defined.
-Global Instance base_val_binop_ok_dec Γ m op vb1 vb2 :
-  Decision (base_val_binop_ok Γ m op vb1 vb2).
+Global Instance base_val_binop_ok_dec Γ Γm op vb1 vb2 :
+  Decision (base_val_binop_ok Γ Γm op vb1 vb2).
 Proof.
   destruct vb1, vb2, op as [|op| |]; try apply _; destruct op; apply _.
 Defined.
-Global Instance base_val_cast_ok_dec Γ m σb vb :
-  Decision (base_val_cast_ok Γ m σb vb).
+Global Instance base_val_cast_ok_dec Γ Γm σb vb :
+  Decision (base_val_cast_ok Γ Γm σb vb).
 Proof. destruct vb, σb; apply _. Defined.
 
 Lemma base_unop_typed_type_valid Γ op τb σb :
@@ -805,17 +809,17 @@ Lemma base_cast_typed_weaken Γ1 Γ2 τb σb :
   base_cast_typed Γ1 τb σb → Γ1 ⊆ Γ2 → base_cast_typed Γ2 τb σb.
 Proof. destruct 1; constructor; eauto using ptr_type_valid_weaken. Qed.
 
-Lemma base_val_0_typed Γ m τb : ✓{Γ} τb → (Γ,m) ⊢ base_val_0 τb : τb.
+Lemma base_val_0_typed Γ Γm τb : ✓{Γ} τb → (Γ,Γm) ⊢ base_val_0 τb : τb.
 Proof.
   destruct 1; simpl; constructor. by apply int_typed_small. by constructor.
 Qed.
-Lemma base_val_unop_ok_weaken m1 m2 op vb :
-  base_val_unop_ok m1 op vb → (∀ o, index_alive m1 o → index_alive m2 o) →
-  base_val_unop_ok m2 op vb.
+Lemma base_val_unop_ok_weaken Γm1 Γm2 op vb :
+  base_val_unop_ok Γm1 op vb → (∀ o, index_alive Γm1 o → index_alive Γm2 o) →
+  base_val_unop_ok Γm2 op vb.
 Proof. destruct vb, op; simpl; eauto using ptr_alive_weaken. Qed.
-Lemma base_val_unop_typed Γ m op vb τb σb :
-  (Γ,m) ⊢ vb : τb → base_unop_typed op τb σb →
-  base_val_unop_ok m op vb → (Γ,m) ⊢ base_val_unop op vb : σb.
+Lemma base_val_unop_typed Γ Γm op vb τb σb :
+  (Γ,Γm) ⊢ vb : τb → base_unop_typed op τb σb →
+  base_val_unop_ok Γm op vb → (Γ,Γm) ⊢ base_val_unop op vb : σb.
 Proof.
   unfold base_val_unop_ok, base_val_unop. intros Hvτb Hσ Hop.
   destruct Hσ as [τi|?|?|?]; inversion Hvτb; simplify_equality'; try done.
@@ -826,27 +830,27 @@ Proof.
   * typed_constructor. by apply int_typed_small; case_decide.
   * typed_constructor. by apply int_typed_small; case_match.
 Qed.
-Lemma base_val_binop_ok_weaken Γ1 Γ2 m1 m2 op vb1 vb2 τb1 τb2 :
-  ✓ Γ1 → (Γ1,m1) ⊢ vb1 : τb1 → (Γ1,m1) ⊢ vb2 : τb2 →
-  base_val_binop_ok Γ1 m1 op vb1 vb2 → Γ1 ⊆ Γ2 →
-  (∀ o, index_alive m1 o → index_alive m2 o) →
-  base_val_binop_ok Γ2 m2 op vb1 vb2.
+Lemma base_val_binop_ok_weaken Γ1 Γ2 Γm1 Γm2 op vb1 vb2 τb1 τb2 :
+  ✓ Γ1 → (Γ1,Γm1) ⊢ vb1 : τb1 → (Γ1,Γm1) ⊢ vb2 : τb2 →
+  base_val_binop_ok Γ1 Γm1 op vb1 vb2 → Γ1 ⊆ Γ2 →
+  (∀ o, index_alive Γm1 o → index_alive Γm2 o) →
+  base_val_binop_ok Γ2 Γm2 op vb1 vb2.
 Proof.
   destruct 2, 1, op as [|[]| |]; simpl; auto; eauto 2 using
     ptr_plus_ok_weaken, ptr_minus_ok_weaken, ptr_compare_ok_weaken.
 Qed.
-Lemma base_val_binop_weaken Γ1 Γ2 m1 op vb1 vb2 τb1 τb2 :
-  ✓ Γ1 → (Γ1,m1) ⊢ vb1 : τb1 → (Γ1,m1) ⊢ vb2 : τb2 → Γ1 ⊆ Γ2 →
+Lemma base_val_binop_weaken Γ1 Γ2 Γm1 op vb1 vb2 τb1 τb2 :
+  ✓ Γ1 → (Γ1,Γm1) ⊢ vb1 : τb1 → (Γ1,Γm1) ⊢ vb2 : τb2 → Γ1 ⊆ Γ2 →
   base_val_binop Γ1 op vb1 vb2 = base_val_binop Γ2 op vb1 vb2.
 Proof.
   destruct 2, 1, op as [|[]| |]; intros; f_equal';
     eauto 2 using ptr_plus_weaken, ptr_minus_weaken.
   by erewrite ptr_compare_weaken by eauto.
 Qed.
-Lemma base_val_binop_typed Γ m op vb1 vb2 τb1 τb2 σb :
-  ✓ Γ → (Γ,m) ⊢ vb1 : τb1 → (Γ,m) ⊢ vb2 : τb2 →
-  base_binop_typed op τb1 τb2 σb → base_val_binop_ok Γ m op vb1 vb2 →
-  (Γ,m) ⊢ base_val_binop Γ op vb1 vb2 : σb.
+Lemma base_val_binop_typed Γ Γm op vb1 vb2 τb1 τb2 σb :
+  ✓ Γ → (Γ,Γm) ⊢ vb1 : τb1 → (Γ,Γm) ⊢ vb2 : τb2 →
+  base_binop_typed op τb1 τb2 σb → base_val_binop_ok Γ Γm op vb1 vb2 →
+  (Γ,Γm) ⊢ base_val_binop Γ op vb1 vb2 : σb.
 Proof.
   unfold base_val_binop_ok, base_val_binop. intros HΓ Hv1τb Hv2τb Hσ Hop.
   revert Hv1τb Hv2τb.
@@ -865,14 +869,14 @@ Proof.
 Qed.
 Lemma base_cast_typed_self Γ τb : base_cast_typed Γ τb τb.
 Proof. destruct τb; constructor. Qed.
-Lemma base_val_cast_ok_weaken Γ1 Γ2 m1 m2 vb τb σb :
-  ✓ Γ1 → (Γ1,m1) ⊢ vb : τb → base_val_cast_ok Γ1 m1 σb vb →
-  Γ1 ⊆ Γ2 → (∀ o : index, index_alive m1 o → index_alive m2 o) →
-  base_val_cast_ok Γ2 m2 σb vb.
+Lemma base_val_cast_ok_weaken Γ1 Γ2 Γm1 Γm2 vb τb σb :
+  ✓ Γ1 → (Γ1,Γm1) ⊢ vb : τb → base_val_cast_ok Γ1 Γm1 σb vb →
+  Γ1 ⊆ Γ2 → (∀ o : index, index_alive Γm1 o → index_alive Γm2 o) →
+  base_val_cast_ok Γ2 Γm2 σb vb.
 Proof. destruct 2, σb; simpl; eauto using ptr_cast_ok_weaken. Qed.
-Lemma base_val_cast_typed Γ m vb τb σb :
-  ✓ Γ → (Γ,m) ⊢ vb : τb → base_cast_typed Γ τb σb →
-  base_val_cast_ok Γ m σb vb → (Γ,m) ⊢ base_val_cast σb vb : σb.
+Lemma base_val_cast_typed Γ Γm vb τb σb :
+  ✓ Γ → (Γ,Γm) ⊢ vb : τb → base_cast_typed Γ τb σb →
+  base_val_cast_ok Γ Γm σb vb → (Γ,Γm) ⊢ base_val_cast σb vb : σb.
 Proof.
   unfold base_val_cast_ok, base_val_cast. intros ? Hvτb Hσb Hok. revert Hvτb.
   destruct Hσb; inversion 1; simplify_equality'; try (done || by constructor).
@@ -887,21 +891,21 @@ Proof.
   * constructor. eapply ptr_cast_typed; eauto.
   * constructor. eapply ptr_cast_typed; eauto.
 Qed.
-Lemma base_val_cast_ok_void Γ m vb : base_val_cast_ok Γ m voidT vb.
+Lemma base_val_cast_ok_void Γ Γm vb : base_val_cast_ok Γ Γm voidT vb.
 Proof. by destruct vb. Qed.
 Lemma base_val_cast_void vb : base_val_cast voidT vb = VVoid.
 Proof. by destruct vb. Qed.
 
-Lemma base_val_unop_ok_refine Γ f m1 m2 op vb1 vb2 τb :
-  vb1 ⊑{Γ,f@m1↦m2} vb2 : τb →
-  base_val_unop_ok m1 op vb1 → base_val_unop_ok m2 op vb2.
+Lemma base_val_unop_ok_refine Γ f Γm1 Γm2 op vb1 vb2 τb :
+  vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb →
+  base_val_unop_ok Γm1 op vb1 → base_val_unop_ok Γm2 op vb2.
 Proof. by destruct op, 1; simpl; eauto using ptr_alive_refine. Qed.
-Lemma base_val_unop_refine Γ f m1 m2 op vb1 vb2 τb σb :
-  ✓ Γ → base_unop_typed op τb σb → base_val_unop_ok m1 op vb1 →
-  vb1 ⊑{Γ,f@m1↦m2} vb2 : τb →
-  base_val_unop op vb1 ⊑{Γ,f@m1↦m2} base_val_unop op vb2 : σb.
+Lemma base_val_unop_refine Γ f Γm1 Γm2 op vb1 vb2 τb σb :
+  ✓ Γ → base_unop_typed op τb σb → base_val_unop_ok Γm1 op vb1 →
+  vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb →
+  base_val_unop op vb1 ⊑{Γ,f@Γm1↦Γm2} base_val_unop op vb2 : σb.
 Proof.
-  intros ? Hvτb ? Hvb. assert ((Γ,m2) ⊢ base_val_unop op vb2 : σb) as Hvb2.
+  intros ? Hvτb ? Hvb. assert ((Γ,Γm2) ⊢ base_val_unop op vb2 : σb) as Hvb2.
   { eauto using base_val_unop_typed,
       base_val_refine_typed_r, base_val_unop_ok_refine. }
   destruct Hvτb; inversion Hvb as [| | |p1 p2 ? Hp| | | |];
@@ -913,23 +917,22 @@ Proof.
   * refine_constructor. by apply int_typed_small; case_decide.
   * destruct Hp; refine_constructor; by apply int_typed_small.
 Qed.
-Lemma base_val_binop_ok_refine Γ f m1 m2 op vb1 vb2 vb3 vb4 τb1 τb3 σb :
-  ✓ Γ → m1 ⊑{Γ,f} m2 → base_binop_typed op τb1 τb3 σb →
-  vb1 ⊑{Γ,f@m1↦m2} vb2 : τb1 → vb3 ⊑{Γ,f@m1↦m2} vb4 : τb3 →
-  base_val_binop_ok Γ m1 op vb1 vb3 → base_val_binop_ok Γ m2 op vb2 vb4.
+Lemma base_val_binop_ok_refine Γ f Γm1 Γm2 op vb1 vb2 vb3 vb4 τb1 τb3 σb :
+  ✓ Γ → base_binop_typed op τb1 τb3 σb →
+  vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb1 → vb3 ⊑{Γ,f@Γm1↦Γm2} vb4 : τb3 →
+  base_val_binop_ok Γ Γm1 op vb1 vb3 → base_val_binop_ok Γ Γm2 op vb2 vb4.
 Proof.
-  intros ?? Hσ. destruct 1, 1; try done; inversion Hσ;
+  intros ? Hσ. destruct 1, 1; try done; inversion Hσ;
    try naive_solver eauto using ptr_minus_ok_alive_l, ptr_minus_ok_alive_r,
     ptr_plus_ok_alive, ptr_plus_ok_refine, ptr_minus_ok_refine,
     ptr_compare_ok_refine, ptr_compare_ok_alive_l, ptr_compare_ok_alive_r.
 Qed.
-Lemma base_val_binop_refine Γ f m1 m2 op vb1 vb2 vb3 vb4 τb1 τb3 σb :
-  ✓ Γ → m1 ⊑{Γ,f} m2 → base_binop_typed op τb1 τb3 σb →
-  base_val_binop_ok Γ m1 op vb1 vb3 →
-  vb1 ⊑{Γ,f@m1↦m2} vb2 : τb1 → vb3 ⊑{Γ,f@m1↦m2} vb4 : τb3 →
-  base_val_binop Γ op vb1 vb3 ⊑{Γ,f@m1↦m2} base_val_binop Γ op vb2 vb4 : σb.
+Lemma base_val_binop_refine Γ f Γm1 Γm2 op vb1 vb2 vb3 vb4 τb1 τb3 σb :
+  ✓ Γ → base_binop_typed op τb1 τb3 σb → base_val_binop_ok Γ Γm1 op vb1 vb3 →
+  vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb1 → vb3 ⊑{Γ,f@Γm1↦Γm2} vb4 : τb3 →
+  base_val_binop Γ op vb1 vb3 ⊑{Γ,f@Γm1↦Γm2} base_val_binop Γ op vb2 vb4 : σb.
 Proof.
-  intros ?? Hσ ?; destruct 1, 1; try done; inversion Hσ; simplify_equality';
+  intros ? Hσ ?; destruct 1, 1; try done; inversion Hσ; simplify_equality';
     try first
     [ by refine_constructor; eauto using int_arithop_typed,
         int_arithop_typed, int_shiftop_typed, ptr_plus_refine
@@ -943,22 +946,22 @@ Proof.
   * erewrite ptr_minus_refine by eauto. refine_constructor.
     eapply ptr_minus_typed; eauto using ptr_refine_typed_l, ptr_refine_typed_r.
 Qed.
-Lemma base_val_cast_ok_refine Γ f m1 m2 vb1 vb2 τb σb :
-  ✓ Γ → vb1 ⊑{Γ,f@m1↦m2} vb2 : τb →
-  base_val_cast_ok Γ m1 σb vb1 → base_val_cast_ok Γ m2 σb vb2.
+Lemma base_val_cast_ok_refine Γ f Γm1 Γm2 vb1 vb2 τb σb :
+  ✓ Γ → vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb →
+  base_val_cast_ok Γ Γm1 σb vb1 → base_val_cast_ok Γ Γm2 σb vb2.
 Proof.
-  assert (∀ vb, (Γ,m2) ⊢ vb : ucharT → base_val_cast_ok Γ m2 ucharT vb).
+  assert (∀ vb, (Γ,Γm2) ⊢ vb : ucharT → base_val_cast_ok Γ Γm2 ucharT vb).
   { inversion 1; simpl; eauto using int_unsigned_pre_cast_ok,int_cast_ok_more. }
   destruct σb, 2; simpl; try naive_solver eauto using
     ptr_cast_ok_refine, ptr_cast_ok_alive, base_val_cast_ok_void,
     int_unsigned_pre_cast_ok, int_cast_ok_more.
 Qed.
-Lemma base_val_cast_refine Γ f m1 m2 vb1 vb2 τb σb :
-  ✓ Γ → base_cast_typed Γ τb σb → base_val_cast_ok Γ m1 σb vb1 →
-  vb1 ⊑{Γ,f@m1↦m2} vb2 : τb →
-  base_val_cast σb vb1 ⊑{Γ,f@m1↦m2} base_val_cast σb vb2 : σb.
+Lemma base_val_cast_refine Γ f Γm1 Γm2 vb1 vb2 τb σb :
+  ✓ Γ → base_cast_typed Γ τb σb → base_val_cast_ok Γ Γm1 σb vb1 →
+  vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb →
+  base_val_cast σb vb1 ⊑{Γ,f@Γm1↦Γm2} base_val_cast σb vb2 : σb.
 Proof.
-  assert (∀ vb, (Γ,m2) ⊢ vb : ucharT → base_val_cast ucharT vb = vb) as help.
+  assert (∀ vb, (Γ,Γm2) ⊢ vb : ucharT → base_val_cast ucharT vb = vb) as help.
   { inversion 1; f_equal'. by rewrite int_cast_spec, int_typed_pre_cast
       by eauto using int_unsigned_pre_cast_ok,int_cast_ok_more. }
   destruct 2; inversion 2; simplify_equality'; intuition; simplify_equality'; try first
