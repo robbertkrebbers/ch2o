@@ -203,10 +203,9 @@ Proof.
     split; [|eauto using funenv_typed_weaken].
     eexists; simpl; split_ands;
       repeat typed_constructor; eauto using ctx_typed_weaken.
-    + erewrite Fun_type_stack_types, (right_id_L [] (++)) by eauto.
-      rewrite snd_zip by (erewrite <-Forall2_length by eauto; lia).
-      eauto using stmt_typed_weaken.
-    + symmetry. erewrite <-(Forall2_length _ vs) by eauto; lia.
+    erewrite Fun_type_stack_types, (right_id_L [] (++)) by eauto.
+    rewrite snd_zip by (erewrite <-Forall2_length by eauto; lia).
+    eauto using stmt_typed_weaken.
   * intros m k oσs s (τf&HS&?&?) ?. typed_inversion_all.
     split; [|eauto using funenv_typed_weaken, index_typed_foldr_free].
     case_match; simplify_equality; try done.

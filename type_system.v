@@ -288,35 +288,31 @@ Global Instance esctx_item_typed: PathTyped envs (type Ti)
   (rettype Ti) (esctx_item Ti) := curry4 esctx_item_typed'.
 
 Inductive ctx_item_typed'
-      (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti) (k : ctx Ti) :
+      (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti) (τs : list (type Ti)) :
       ctx_item Ti → focus_type Ti → focus_type Ti → Prop :=
   | CStmt_typed Es cmσ1 cmσ2 :
-     (Γ,Γf,Γm,get_stack_types k) ⊢ Es : cmσ1 ↣ cmσ2 →
-     ctx_item_typed' Γ Γf Γm k (CStmt Es) (Stmt_type cmσ1) (Stmt_type cmσ2)
+     (Γ,Γf,Γm,τs) ⊢ Es : cmσ1 ↣ cmσ2 →
+     ctx_item_typed' Γ Γf Γm τs (CStmt Es) (Stmt_type cmσ1) (Stmt_type cmσ2)
   | CBlock_typed o τ c mσ :
      Γm ⊢ o : τ →
-     ctx_item_typed' Γ Γf Γm k (CBlock o τ) (Stmt_type (c,mσ)) (Stmt_type (c,mσ))
+     ctx_item_typed' Γ Γf Γm τs (CBlock o τ) (Stmt_type (c,mσ)) (Stmt_type (c,mσ))
   | CExpr_typed e Ee τ cmσ :
-     (Γ,Γf,Γm,get_stack_types k) ⊢ e : inr τ →
-     (Γ,Γf,Γm,get_stack_types k) ⊢ Ee : τ ↣ cmσ →
-     ctx_item_typed' Γ Γf Γm k (CExpr e Ee) (Expr_type τ) (Stmt_type cmσ)
-  | CFun_typed E f τs τ σ :
-     Γf !! f = Some (τs,τ) →
-     (Γ,Γf,Γm,get_stack_types k) ⊢ E : inr τ ↣ inr σ →
-     ctx_item_typed' Γ Γf Γm k (CFun E) (Fun_type f) (Expr_type σ)
-  | CParams_typed f τs os cmσ σ :
-     Γf !! f = Some (τs, σ) → length os = length τs →
-     Γm ⊢* os :* τs → rettype_match cmσ σ →
-     ctx_item_typed'
-       Γ Γf Γm k (CParams (zip os τs)) (Stmt_type cmσ) (Fun_type f).
-Global Instance ctx_item_typed:
-  PathTyped (env Ti * funtypes Ti * memenv Ti * ctx Ti)
-    (focus_type Ti) (focus_type Ti) (ctx_item Ti) := curry4 ctx_item_typed'.
+     (Γ,Γf,Γm,τs) ⊢ e : inr τ → (Γ,Γf,Γm,τs) ⊢ Ee : τ ↣ cmσ →
+     ctx_item_typed' Γ Γf Γm τs (CExpr e Ee) (Expr_type τ) (Stmt_type cmσ)
+  | CFun_typed E f σs τ σ :
+     Γf !! f = Some (σs,τ) → (Γ,Γf,Γm,τs) ⊢ E : inr τ ↣ inr σ →
+     ctx_item_typed' Γ Γf Γm τs (CFun E) (Fun_type f) (Expr_type σ)
+  | CParams_typed f σs os cmσ σ :
+     Γf !! f = Some (σs, σ) → Γm ⊢* os :* σs →
+     rettype_match cmσ σ → ctx_item_typed'
+       Γ Γf Γm τs (CParams (zip os σs)) (Stmt_type cmσ) (Fun_type f).
+Global Instance ctx_item_typed: PathTyped envs (focus_type Ti)
+  (focus_type Ti) (ctx_item Ti) := curry4 ctx_item_typed'.
 Inductive ctx_typed' (Γs : env Ti * funtypes Ti * memenv Ti) :
      ctx Ti → focus_type Ti → focus_type Ti → Prop :=
   | ctx_nil_typed_2 τf : ctx_typed' Γs [] τf τf
   | ctx_cons_typed_2 Ek k τf1 τf2 τf3 :
-     (Γs,k) ⊢ Ek : τf1 ↣ τf2 →
+     (Γs,get_stack_types k) ⊢ Ek : τf1 ↣ τf2 →
      ctx_typed' Γs k τf2 τf3 → ctx_typed' Γs (Ek :: k) τf1 τf3.
 Global Instance ctx_typed: PathTyped (env Ti * funtypes Ti * memenv Ti)
   (focus_type Ti) (focus_type Ti) (ctx Ti) := ctx_typed'.
@@ -498,9 +494,9 @@ Lemma esctx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 τs1 τs2 Ee τ mσ :
   (∀ o σ, Γm1 ⊢ o : σ → Γm2 ⊢ o : σ) → τs1 `prefix_of` τs2 →
   (Γ2,Γf2,Γm2,τs2) ⊢ Ee : τ ↣ mσ.
 Proof. destruct 2; typed_constructor; eauto using stmt_typed_weaken. Qed.
-Lemma ctx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 k Ek τf σf :
-  ✓ Γ1 → (Γ1,Γf1,Γm1,k) ⊢ Ek : τf ↣ σf → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →
-  (∀ o σ, Γm1 ⊢ o : σ → Γm2 ⊢ o : σ) → (Γ2,Γf2,Γm2,k) ⊢ Ek : τf ↣ σf.
+Lemma ctx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 τs Ek τf σf :
+  ✓ Γ1 → (Γ1,Γf1,Γm1,τs) ⊢ Ek : τf ↣ σf → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →
+  (∀ o σ, Γm1 ⊢ o : σ → Γm2 ⊢ o : σ) → (Γ2,Γf2,Γm2,τs) ⊢ Ek : τf ↣ σf.
 Proof.
   destruct 2; typed_constructor; eauto using sctx_item_typed_weaken,
     ectx_typed_weaken, esctx_item_typed_weaken, expr_typed_weaken,
@@ -581,9 +577,12 @@ Qed.
 Lemma ctx_typed_stack_typed Γ Γf Γm k τf σf :
   (Γ,Γf,Γm) ⊢ k : τf ↣ σf → Γm ⊢* get_stack k :* get_stack_types k.
 Proof.
-  revert τf. induction k as [|Ek k IH]; intros; typed_inversion_all;
+  revert τf. induction k as [|Ek k IH]; intros; typed_inversion_all; eauto;
     repeat match goal with
     | H : (_,_,_,_) ⊢ Ek : _ ↣ _ |- _ => typed_inversion H
+    | H : Forall2 _ ?l ?l' |- _ =>
+       unless (length l = length l') by done;
+       assert (length l = length l') by eauto using Forall2_length
     end; rewrite ?fst_zip, ?snd_zip by lia; eauto using Forall2_app.
 Qed.
 Lemma ectx_item_subst_typed Γ Γf Γm τs Ei e τlr σlr :
