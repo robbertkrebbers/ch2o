@@ -105,14 +105,14 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
        {[ State k (Stmt ↗ (if{e} s else s2)) m ]}
     | CStmt (if{e} s1 else □) :: k =>
        {[ State k (Stmt ↗ (if{e} s1 else s)) m ]}
-    | CParams oτs :: k =>
-       {[ State k (Return voidV) (foldr mem_free m (fst <$> oτs)) ]}
+    | CParams f oτs :: k =>
+       {[ State k (Return f voidV) (foldr mem_free m (fst <$> oτs)) ]}
     | _ => ∅
     end
   | Stmt (⇈ v) s =>
     match k with
-    | CParams oτs :: k =>
-       {[ State k (Return v) (foldr mem_free m (fst <$> oτs)) ]}
+    | CParams f oτs :: k =>
+       {[ State k (Return f v) (foldr mem_free m (fst <$> oτs)) ]}
     | CBlock o τ :: k => {[ State k (Stmt (⇈ v) (blk{τ} s)) (mem_free o m) ]}
     | CStmt E :: k => {[ State k (Stmt (⇈ v) (subst E s)) m ]}
     | _ => ∅
@@ -148,8 +148,8 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
      s ← of_option (δ !! f);
      let os := fresh_list (length vs) (dom indexset m) in
      let m2 := mem_alloc_val_list Γ (zip os vs) m in
-     {[ State (CParams (zip os (type_of <$> vs)) :: k) (Stmt ↘ s) m2 ]}
-  | Return v =>
+     {[ State (CParams f (zip os (type_of <$> vs)) :: k) (Stmt ↘ s) m2 ]}
+  | Return f v =>
     match k with
     | CFun E :: k => {[ State k (Expr (subst E (# v)%E)) m ]}
     | _ => ∅

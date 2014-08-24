@@ -1841,23 +1841,29 @@ Proof.
   destruct 1; eauto using TBase_valid, TVoid_valid, TBase_valid,
     TBase_valid_inv, base_cast_typed_type_valid.
 Qed.
-Lemma unop_type_of_correct op τ σ :
-  unop_typed op τ σ ↔ unop_type_of op τ = Some σ.
+Lemma unop_type_of_sound op τ σ :
+  unop_type_of op τ = Some σ → unop_typed op τ σ.
 Proof.
-  split.
-  * destruct 1; simplify_option_equality.
-    by erewrite (proj1 (base_unop_type_of_correct _ _ _)) by eauto.
-  * destruct τ; intros; simplify_option_equality; constructor.
-    by apply base_unop_type_of_correct.
+  destruct τ; intros; simplify_option_equality; constructor.
+  auto using base_unop_type_of_sound.
 Qed.
-Lemma binop_type_of_correct op τ1 τ2 σ :
-  binop_typed op τ1 τ2 σ ↔ binop_type_of op τ1 τ2 = Some σ.
+Lemma unop_type_of_complete op τ σ :
+  unop_typed op τ σ → unop_type_of op τ = Some σ.
 Proof.
-  split.
-  * destruct 1; simplify_option_equality.
-    by erewrite (proj1 (base_binop_type_of_correct _ _ _ _)) by eauto.
-  * destruct τ1, τ2; intros; simplify_option_equality; constructor.
-    by apply base_binop_type_of_correct.
+  destruct 1; simplify_option_equality.
+  by erewrite base_unop_type_of_complete by eauto.
+Qed.
+Lemma binop_type_of_sound op τ1 τ2 σ :
+  binop_type_of op τ1 τ2 = Some σ → binop_typed op τ1 τ2 σ.
+Proof.
+  destruct τ1, τ2; intros; simplify_option_equality; constructor.
+  by apply base_binop_type_of_sound.
+Qed.
+Lemma binop_type_of_complete op τ1 τ2 σ :
+  binop_typed op τ1 τ2 σ → binop_type_of op τ1 τ2 = Some σ.
+Proof.
+  destruct 1; simplify_option_equality.
+  by erewrite base_binop_type_of_complete by eauto.
 Qed.
 Global Instance cast_typed_dec Γ τ σ : Decision (cast_typed Γ τ σ).
 Proof.

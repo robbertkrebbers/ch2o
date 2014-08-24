@@ -26,7 +26,8 @@ Section operations.
   Definition pbit_unlock_if (xb : pbit Ti) (β : bool) : pbit Ti :=
     if β then pbit_unlock xb else xb.
 
-  Global Instance pbit_refine: Refine Ti (pbit Ti) := λ Γ f Γm1 Γm2 xb1 xb2,
+  Global Instance pbit_refine:
+      Refine Ti (env Ti) (pbit Ti) := λ Γ f Γm1 Γm2 xb1 xb2,
     tagged_tag xb1 ⊑{Γ,f@Γm1↦Γm2} tagged_tag xb2 ∧
     tagged_perm xb1 = tagged_perm xb2 ∧
     sep_valid (tagged_perm xb1) ∧

@@ -9,10 +9,10 @@ Notation lrtype Ti := (type Ti + type Ti)%type.
 Definition lrtype_type {Ti} (τlr : lrtype Ti) : type Ti :=
   match τlr with inl τ | inr τ => τ end.
 Notation rettype Ti := (bool * option (type Ti))%type.
-Inductive focus_type (Ti : Set) :=
-  | Stmt_type : rettype Ti → focus_type Ti
-  | Expr_type : type Ti → focus_type Ti
-  | Fun_type : funname → focus_type Ti.
+Inductive focustype (Ti : Set) :=
+  | Stmt_type : rettype Ti → focustype Ti
+  | Expr_type : type Ti → focustype Ti
+  | Fun_type : funname → focustype Ti.
 Arguments Stmt_type {_} _.
 Arguments Expr_type {_} _.
 Arguments Fun_type {_} _.
@@ -33,6 +33,7 @@ Global Instance lrval_typed: Typed (env Ti * memenv Ti) (lrtype Ti)
 Global Instance funtypes_valid : Valid (env Ti) (funtypes Ti) := λ Γ,
   map_Forall (λ _ τsσ, ✓{Γ}* (τsσ.1) ∧
     Forall (λ τ, int_typed (size_of Γ τ) sptrT) (τsσ.1) ∧ ✓{Γ} (τsσ.2)).
+
 Inductive assign_typed (Γ : env Ti) (τ1 : type Ti) :
      type Ti → assign → type Ti → Prop :=
   | Assign_typed τ2 : cast_typed Γ τ2 τ1 → assign_typed Γ τ1 τ2 Assign τ1
@@ -42,13 +43,6 @@ Inductive assign_typed (Γ : env Ti) (τ1 : type Ti) :
   | PostOp_typed op τ2 σ :
      binop_typed op τ1 τ2 σ → cast_typed Γ σ τ1 →
      assign_typed Γ τ1 τ2 (PostOp op) τ1.
-Definition assign_type_of (Γ : env Ti)
-    (τ1 τ2 : type Ti) (ass : assign) : option (type Ti) :=
-  match ass with
-  | Assign => guard (cast_typed Γ τ2 τ1); Some τ1
-  | PreOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed Γ σ τ1); Some τ1
-  | PostOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed Γ σ τ1); Some τ1
-  end.
 
 Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
      (τs : list (type Ti)) : expr Ti → lrtype Ti → Prop :=
@@ -289,7 +283,7 @@ Global Instance esctx_item_typed: PathTyped envs (type Ti)
 
 Inductive ctx_item_typed'
       (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti) (τs : list (type Ti)) :
-      ctx_item Ti → focus_type Ti → focus_type Ti → Prop :=
+      ctx_item Ti → focustype Ti → focustype Ti → Prop :=
   | CStmt_typed Es cmσ1 cmσ2 :
      (Γ,Γf,Γm,τs) ⊢ Es : cmσ1 ↣ cmσ2 →
      ctx_item_typed' Γ Γf Γm τs (CStmt Es) (Stmt_type cmσ1) (Stmt_type cmσ2)
@@ -305,17 +299,17 @@ Inductive ctx_item_typed'
   | CParams_typed f σs os cmσ σ :
      Γf !! f = Some (σs, σ) → Γm ⊢* os :* σs →
      rettype_match cmσ σ → ctx_item_typed'
-       Γ Γf Γm τs (CParams (zip os σs)) (Stmt_type cmσ) (Fun_type f).
-Global Instance ctx_item_typed: PathTyped envs (focus_type Ti)
-  (focus_type Ti) (ctx_item Ti) := curry4 ctx_item_typed'.
+       Γ Γf Γm τs (CParams f (zip os σs)) (Stmt_type cmσ) (Fun_type f).
+Global Instance ctx_item_typed: PathTyped envs (focustype Ti)
+  (focustype Ti) (ctx_item Ti) := curry4 ctx_item_typed'.
 Inductive ctx_typed' (Γs : env Ti * funtypes Ti * memenv Ti) :
-     ctx Ti → focus_type Ti → focus_type Ti → Prop :=
+     ctx Ti → focustype Ti → focustype Ti → Prop :=
   | ctx_nil_typed_2 τf : ctx_typed' Γs [] τf τf
   | ctx_cons_typed_2 Ek k τf1 τf2 τf3 :
      (Γs,get_stack_types k) ⊢ Ek : τf1 ↣ τf2 →
      ctx_typed' Γs k τf2 τf3 → ctx_typed' Γs (Ek :: k) τf1 τf3.
 Global Instance ctx_typed: PathTyped (env Ti * funtypes Ti * memenv Ti)
-  (focus_type Ti) (focus_type Ti) (ctx Ti) := ctx_typed'.
+  (focustype Ti) (focustype Ti) (ctx Ti) := ctx_typed'.
 
 Inductive direction_typed' (Γ : env Ti) (Γm : memenv Ti) :
     direction Ti → rettype Ti → Prop :=
@@ -327,7 +321,7 @@ Global Instance direction_typed: Typed (env Ti * memenv Ti)
   (rettype Ti) (direction Ti) := curry direction_typed'.
 
 Inductive focus_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
-    (τs : list (type Ti)) : focus Ti → focus_type Ti → Prop :=
+    (τs : list (type Ti)) : focus Ti → focustype Ti → Prop :=
   | Stmt_typed d s cmσ :
      (Γ,Γf,Γm,τs) ⊢ s : cmσ → (Γ,Γm) ⊢ d : cmσ →
      focus_typed' Γ Γf Γm τs (Stmt d s) (Stmt_type cmσ)
@@ -338,7 +332,7 @@ Inductive focus_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
      focus_typed' Γ Γf Γm τs (Call f vs) (Fun_type f)
   | Return_typed f σs σ v :
      Γf !! f = Some (σs, σ) →
-     (Γ,Γm) ⊢ v : σ → focus_typed' Γ Γf Γm τs (Return v) (Fun_type f)
+     (Γ,Γm) ⊢ v : σ → focus_typed' Γ Γf Γm τs (Return f v) (Fun_type f)
   | UndefExpr_typed E e τlr τ :
      (Γ,Γf,Γm,τs) ⊢ e : τlr → (Γ,Γf,Γm,τs) ⊢ E : τlr ↣ inr τ →
      focus_typed' Γ Γf Γm τs (Undef (UndefExpr E e)) (Expr_type τ)
@@ -346,7 +340,7 @@ Inductive focus_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
      (Γ,Γm) ⊢ v : τ → (Γ,Γf,Γm,τs) ⊢ e : inr τ → (Γ,Γf,Γm,τs) ⊢ Es : τ ↣ mσ →
      focus_typed' Γ Γf Γm τs (Undef (UndefBranch e Es Ω v)) (Stmt_type mσ).
 Global Instance focus_typed:
-  Typed envs (focus_type Ti) (focus Ti) := curry4 focus_typed'.
+  Typed envs (focustype Ti) (focus Ti) := curry4 focus_typed'.
 
 Global Instance state_typed :
     Typed (env Ti * funtypes Ti) funname (state Ti) := λ ΓΓf S f, ∃ τf,
@@ -365,6 +359,231 @@ Definition funenv_pretyped (Γ : env Ti) (Γm : memenv Ti)
 Global Instance funenv_typed:
     Typed (env Ti * memenv Ti) (funtypes Ti) (funenv Ti) := λ Γm δ Γf,
   curry funenv_pretyped Γm δ Γf ∧ dom funset Γf ⊆ dom funset δ.
+
+Definition assign_type_of (Γ : env Ti)
+    (τ1 τ2 : type Ti) (ass : assign) : option (type Ti) :=
+  match ass with
+  | Assign => guard (cast_typed Γ τ2 τ1); Some τ1
+  | PreOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed Γ σ τ1); Some τ1
+  | PostOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed Γ σ τ1); Some τ1
+  end.
+Global Instance expr_type_check: TypeCheck envs (lrtype Ti) (expr Ti) :=
+  fix go Γs e {struct e} := let _ : TypeCheck envs _ _ := @go in
+  let '(Γ,Γf,Γm,τs) := Γs in
+  match e with
+  | var{τ} n => τ' ← τs !! n; guard (τ = τ'); Some (inl τ)
+  | #{Ω} v => inr <$> type_check (Γ,Γm) v
+  | %{Ω} a => guard (addr_strict Γ a); inl <$> type_check (Γ,Γm) a
+  | .* e =>
+     τ ← type_check Γs e ≫= maybe_inr;
+     τp ← maybe_TBase τ ≫= maybe_TPtr;
+     guard (✓{Γ} τp); Some (inl τp)
+  | & e =>
+     τ ← type_check Γs e ≫= maybe_inl;
+     Some (inr (τ.*))
+  | e1 ::={ass} e2 =>
+     τ1 ← type_check Γs e1 ≫= maybe_inl;
+     τ2 ← type_check Γs e2 ≫= maybe_inr;
+     inr <$> assign_type_of Γ τ1 τ2 ass
+  | call f @ es =>
+     '(τs,τ) ← Γf !! f;
+     τs' ← mapM (λ e, type_check Γs e ≫= maybe_inr) es;
+     guard ((τs' : list (type Ti)) = τs); Some (inr τ)
+  | load e => inr <$> type_check Γs e ≫= maybe_inl
+  | e %> rs =>
+     τ ← type_check Γs e ≫= maybe_inl;
+     guard (ref_seg_offset rs = 0);
+     inl <$> τ !!{Γ} rs
+  | e #> rs =>
+     τ ← type_check Γs e ≫= maybe_inr;
+     guard (ref_seg_offset rs = 0);
+     inr <$> τ !!{Γ} rs
+  | alloc{τ} e =>
+     τ' ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ' ≫= maybe_TInt;
+     guard (✓{Γ} τ); Some (inl τ)
+  | free e =>
+     τ' ← type_check Γs e ≫= maybe_inl;
+     Some (inr voidT)
+  | @{op} e =>
+     τ ← type_check Γs e ≫= maybe_inr;
+     inr <$> unop_type_of op τ
+  | e1 @{op} e2 =>
+     τ1 ← type_check Γs e1 ≫= maybe_inr;
+     τ2 ← type_check Γs e2 ≫= maybe_inr;
+     inr <$> binop_type_of op τ1 τ2
+  | if{e1} e2 else e3 =>
+     τ1 ← type_check Γs e1 ≫= maybe_inr; _ ← maybe_TBase τ1;
+     τ2 ← type_check Γs e2 ≫= maybe_inr;
+     τ3 ← type_check Γs e3 ≫= maybe_inr;
+     guard (τ2 = τ3); Some (inr τ2)
+  | e1,, e2 =>
+     _ ← type_check Γs e1 ≫= maybe_inr;
+     inr <$> type_check Γs e2 ≫= maybe_inr
+  | cast{σ} e =>
+     τ ← type_check Γs e ≫= maybe_inr;
+     guard (cast_typed Γ τ σ); Some (inr σ)
+  end.
+Global Instance ectx_item_lookup :
+    LookupE envs (ectx_item Ti) (lrtype Ti) (lrtype Ti) := λ Γs Ei τlr,
+  let '(Γ,Γf,Γm,τs) := Γs in
+  match Ei, τlr with
+  | .* □, inr τ =>
+    τp ← maybe_TBase τ ≫= maybe_TPtr;
+    guard (✓{Γ} τp); Some (inl τp)
+  | & □, inl τ => Some (inr (τ.*))
+  | □ ::={ass} e2, inl τ1 =>
+     τ2 ← type_check Γs e2 ≫= maybe_inr;
+     inr <$> assign_type_of Γ τ1 τ2 ass
+  | e1 ::={ass} □, inr τ2 =>
+     τ1 ← type_check Γs e1 ≫= maybe_inl;
+     inr <$> assign_type_of Γ τ1 τ2 ass
+  | call f @ es1 □ es2, inr τ =>
+     '(τs,σ) ← Γf !! f;
+     τs1 ← mapM (λ e, type_check Γs e ≫= maybe_inr) (reverse es1);
+     τs2 ← mapM (λ e, type_check Γs e ≫= maybe_inr) es2;
+     guard ((τs : list (type Ti)) = τs1 ++ τ :: τs2);
+     Some (inr σ)
+  | load □, inl τ => Some (inr τ)
+  | □ %> rs, inl τ =>
+     guard (ref_seg_offset rs = 0);
+     inl <$> τ !!{Γ} rs
+  | □ #> rs, inr τ =>
+     guard (ref_seg_offset rs = 0);
+     inr <$> τ !!{Γ} rs
+  | alloc{τ} □, inr τ' =>
+     _ ← maybe_TBase τ' ≫= maybe_TInt; guard (✓{Γ} τ); Some (inl τ)
+  | free □, inl τ => Some (inr voidT)
+  | @{op} □, inr τ => inr <$> unop_type_of op τ
+  | □ @{op} e2, inr τ1 =>
+     τ2 ← type_check Γs e2 ≫= maybe_inr;
+     inr <$> binop_type_of op τ1 τ2
+  | e1 @{op} □, inr τ2 =>
+     τ1 ← type_check Γs e1 ≫= maybe_inr;
+     inr <$> binop_type_of op τ1 τ2
+  | if{□} e2 else e3, inr τ1 =>
+     _ ← maybe_TBase τ1;
+     τ2 ← type_check Γs e2 ≫= maybe_inr;
+     τ3 ← type_check Γs e3 ≫= maybe_inr;
+     guard (τ2 = τ3); Some (inr τ2)
+  | □ ,, e2, inr τ1 => inr <$> type_check Γs e2 ≫= maybe_inr
+  | cast{σ} □, inr τ => guard (cast_typed Γ τ σ); Some (inr σ)
+  | _, _ => None
+  end.
+Global Instance ectx_lookup :
+    LookupE envs (ectx Ti) (lrtype Ti) (lrtype Ti) :=
+  fix go Γs E τlr := let _ : LookupE _ _ _ _ := @go in
+  match E with [] => Some τlr | Ei :: E => τlr !!{Γs} Ei ≫= lookupE Γs E end.
+Global Instance stmt_type_check: TypeCheck envs (rettype Ti) (stmt Ti) :=
+  fix go Γs s {struct s} := let _ : TypeCheck envs _ _ := @go in
+  let '(Γ,Γf,Γm,τs) := Γs in
+  match s with
+  | skip => Some (false,None)
+  | ! e => _ ← type_check Γs e ≫= maybe_inr; Some (false,None)
+  | goto _ => Some (true,None)
+  | ret e => τ ← type_check Γs e ≫= maybe_inr; Some (true,Some τ)
+  | blk{τ} s =>
+     guard (✓{Γ} τ); guard (int_typed (size_of Γ τ) sptrT);
+     type_check (Γ,Γf,Γm,τ :: τs) s
+  | s1 ;; s2 =>
+     '(c1,mσ1) ← type_check Γs s1;
+     '(c2,mσ2) ← type_check Γs s2;
+     mσ ← rettype_union mσ1 mσ2; Some (c2,mσ)
+  | label _ => Some (false,None)
+  | while{e} s =>
+     τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
+     '(c,mσ) ← type_check Γs s; Some (false,mσ)
+  | if{e} s1 else s2 =>
+     τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
+     '(c1,mσ1) ← type_check Γs s1;
+     '(c2,mσ2) ← type_check Γs s2;
+     mσ ← rettype_union mσ1 mσ2; Some (c1 && c2,mσ)
+  end%S.
+Global Instance sctx_item_lookup :
+    LookupE envs (sctx_item Ti) (rettype Ti) (rettype Ti) := λ Γs Es τlr,
+  match Es, τlr with
+  | □ ;; s2, (c1,mσ1) =>
+     '(c2,mσ2) ← type_check Γs s2;
+     mσ ← rettype_union mσ1 mσ2; Some (c2,mσ)
+  | s1 ;; □, (c2,mσ2) =>
+     '(c1,mσ1) ← type_check Γs s1;
+     mσ ← rettype_union mσ1 mσ2; Some (c2,mσ)
+  | while{e} □, (c,mσ) =>
+     τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
+     Some (false,mσ)
+  | if{e} □ else s2, (c1,mσ1) =>
+     τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
+     '(c2,mσ2) ← type_check Γs s2;
+     mσ ← rettype_union mσ1 mσ2; Some (c1&&c2,mσ)
+  | if{e} s1 else □, (c2,mσ2) =>
+     τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
+     '(c1,mσ1) ← type_check Γs s1;
+     mσ ← rettype_union mσ1 mσ2; Some (c1&&c2,mσ)
+  end%S.
+Global Instance esctx_item_lookup :
+    LookupE envs (esctx_item Ti) (rettype Ti) (type Ti) := λ Γs Ee τlr,
+  match Ee, τlr with
+  | ! □, _ => Some (false,None)
+  | ret □, _ => Some (true,Some τlr)
+  | while{□} s, baseT τb => '(c,mσ) ← type_check Γs s; Some (false,mσ)
+  | if{□} s1 else s2, baseT τb =>
+     '(c1,mσ1) ← type_check Γs s1;
+     '(c2,mσ2) ← type_check Γs s2;
+     mσ ← rettype_union mσ1 mσ2; Some (c1 && c2,mσ)
+  | _, _ => None
+  end%S.
+Global Instance rettype_match_dec cmσ σ : Decision (rettype_match cmσ σ) :=
+  match cmσ with
+  | (true,Some σ') => decide (σ' = σ)
+  | (false,Some _) => right (@id False)
+  | (_,None) => decide (σ = voidT)
+  end.
+Global Instance ctx_item_lookup :
+    LookupE envs (ctx_item Ti) (focustype Ti) (focustype Ti) := λ Γs Ek τlr,
+  let '(Γ,Γf,Γm,τs) := Γs in
+  match Ek, τlr with
+  | CStmt Es, Stmt_type cmσ1 => Stmt_type <$> cmσ1 !!{Γs} Es
+  | CBlock o τ, Stmt_type cmσ => guard (Γm ⊢ o : τ); Some (Stmt_type cmσ)
+  | CExpr e Ee, Expr_type τ =>
+     τ' ← type_check Γs e ≫= maybe_inr;
+     guard (τ = τ'); Stmt_type <$> τ !!{Γs} Ee
+  | CFun E, Fun_type f =>
+     '(σs,τ) ← Γf !! f; Expr_type <$> inr τ !!{Γs} E ≫= maybe_inr
+  | CParams f oσs, Stmt_type cmσ =>
+     '(σs,σ) ← Γf !! f;
+     let os := fst <$> oσs in let σs' := snd <$> oσs in
+     guard (σs' = σs); guard (Γm ⊢* os :* σs); guard (rettype_match cmσ σ);
+     Some (Fun_type f)
+  | _, _ => None
+  end.
+Global Instance focus_type_check:
+    TypeCheck envs (focustype Ti) (focus Ti) := λ Γs φ,
+  let '(Γ,Γf,Γm,τs) := Γs in
+  match φ with
+  | Stmt d s =>
+     cmσ ← type_check Γs s;
+     match d, cmσ with
+     | ⇈ v, (c,Some τ) =>
+        τ' ← type_check (Γ,Γm) v;
+        guard ((τ : type Ti) = τ'); Some (Stmt_type cmσ)
+     | ↘, _ | ↗, (false,_) | ↷ _, _ => Some (Stmt_type cmσ)
+     | _, _ => None
+     end
+  | Expr e => Expr_type <$> type_check Γs e ≫= maybe_inr
+  | Call f vs =>
+     '(σs,_) ← Γf !! f;
+     σs' ← mapM (type_check (Γ,Γm)) vs;
+     guard ((σs : list (type Ti)) = σs'); Some (Fun_type f)
+  | Return f v =>
+     '(_,σ) ← Γf !! f;
+     σ' ← type_check (Γ,Γm) v;
+     guard ((σ : type Ti) = σ'); Some (Fun_type f)
+  | Undef (UndefExpr E e) =>
+     Expr_type <$> (type_check Γs e ≫= lookupE Γs E) ≫= maybe_inr
+  | Undef (UndefBranch e Es Ω v) =>
+     τ ← type_check (Γ,Γm) v;
+     τ' ← type_check Γs e ≫= maybe_inr;
+     guard ((τ : type Ti) = τ'); Stmt_type <$> τ !!{Γs} Es
+  end.
 End typing.
 
 Section properties.
@@ -386,29 +605,15 @@ Implicit Types Ee : esctx_item Ti.
 Implicit Types Ek : ctx_item Ti.
 Implicit Types k : ctx Ti.
 
+Notation envs := (env Ti * funtypes Ti * memenv Ti * list (type Ti))%type.
+
 Lemma SBlock_typed Γ Γf Γm τs τ s c mσ :
   ✓{Γ} τ →int_typed (size_of Γ τ) sptrT →
   (Γ,Γf,Γm,τ :: τs) ⊢ s : (c,mσ) → (Γ,Γf,Γm,τs) ⊢ blk{τ} s : (c,mσ).
 Proof. by constructor. Qed.
-Global Instance rettype_match_dec cmσ σ : Decision (rettype_match cmσ σ) :=
-  match cmσ with
-  | (true,Some σ') => decide (σ' = σ)
-  | (false,Some _) => right (@id False)
-  | (_,None) => decide (σ = voidT)
-  end.
 Lemma assign_typed_type_valid Γ τ1 τ2 ass σ :
   assign_typed Γ τ1 τ2 ass σ → ✓{Γ} τ1 → ✓{Γ} σ.
 Proof. destruct 1; eauto using cast_typed_type_valid. Qed.
-Lemma assign_type_of_correct Γ ass τ1 τ2 σ :
-  assign_typed Γ τ1 τ2 ass σ ↔ assign_type_of Γ τ1 τ2 ass = Some σ.
-Proof.
-  split.
-  * by destruct 1; simplify_option_equality;
-      erewrite ?(proj1 (binop_type_of_correct _ _ _ _)) by eauto;
-      simplify_option_equality.
-  * destruct ass; intros; simplify_option_equality; econstructor; eauto;
-      eapply binop_type_of_correct; eauto.
-Qed.
 Lemma funtypes_valid_args_valid Γ Γf f τs τ :
   ✓{Γ} Γf → Γf !! f = Some (τs,τ) → ✓{Γ}* τs.
 Proof. intros HΓf ?. by apply (HΓf f (τs,τ)). Qed.
@@ -652,4 +857,148 @@ Lemma Fun_type_labels Γ Γf Γm k f τf :
 Proof. by destruct k as [|[]]; intros; typed_inversion_all. Qed.
 Lemma rettype_union_l mσ : rettype_union mσ None = Some mσ.
 Proof. by destruct mσ. Qed.
+
+Ltac simplify :=
+  repeat match goal with
+  | _ : maybe_inl ?τlr = Some _ |- _ => is_var τlr; destruct τlr
+  | _ : maybe_inr ?τlr = Some _ |- _ => is_var τlr; destruct τlr
+  | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
+  | _ : maybe_TPtr ?τb = Some _ |- _ => is_var τb; destruct τb
+  | _ : maybe_TInt ?τb = Some _ |- _ => is_var τb; destruct τb
+  | mcτ : rettype _ |- _ => destruct mcτ
+  | _ => progress simplify_option_equality
+  | _ => case_match
+  end.
+Hint Resolve (type_check_sound (V:=val Ti)) (type_check_sound (V:=addr Ti)).
+Hint Resolve (mapM_type_check_sound (V:=val Ti)).
+Hint Immediate (path_type_check_sound (R:=ref_seg _)).
+Hint Immediate unop_type_of_sound binop_type_of_sound.
+Arguments rettype_match _ _ _ : simpl never.
+Arguments rettype_match_dec _ _ _ _ : simpl never.
+Lemma assign_type_of_sound Γ ass τ1 τ2 σ :
+  assign_type_of Γ τ1 τ2 ass = Some σ → assign_typed Γ τ1 τ2 ass σ.
+Proof.
+  destruct ass; intros; simplify_option_equality;
+    econstructor; eauto using binop_type_of_sound.
+Qed.
+Hint Immediate assign_type_of_sound.
+Lemma assign_type_of_complete Γ ass τ1 τ2 σ :
+  assign_typed Γ τ1 τ2 ass σ → assign_type_of Γ τ1 τ2 ass = Some σ.
+Proof.
+  by destruct 1; simplify_option_equality;
+    erewrite ?binop_type_of_complete by eauto; simplify_option_equality.
+Qed.
+Global Instance: TypeCheckSpec envs (lrtype Ti) (expr Ti) (✓ ∘ fst ∘ fst ∘ fst).
+Proof.
+  intros [[[Γ Γf] Γm] τs] e τlr; simpl; split.
+  * assert (∀ es σs,
+      Forall (λ e, ∀ τlr, type_check (Γ,Γf,Γm,τs) e = Some τlr →
+        (Γ,Γf,Γm,τs) ⊢ e : τlr) es →
+      mapM (λ e, type_check (Γ,Γf,Γm,τs) e ≫= maybe_inr) es = Some σs →
+      (Γ,Γf,Γm,τs) ⊢* es :* inr <$> σs).
+    { intros ??. rewrite mapM_Some.
+      induction 2; decompose_Forall_hyps; simplify; constructor; eauto. }
+    revert τlr; induction e using @expr_ind_alt; intros; simplify;
+      typed_constructor; eauto.
+  * assert (∀ es σs,
+      Forall2 (λ e τlr, type_check (Γ,Γf,Γm,τs) e = Some τlr) es (inr <$> σs) →
+      mapM (λ e, type_check (Γ,Γf,Γm,τs) e ≫= maybe_inr) es = Some σs) as help.
+    { intros es σs. rewrite Forall2_fmap_r, mapM_Some.
+      induction 1; constructor; simplify_option_equality; eauto. }
+    induction 1 using @expr_typed_ind; simplify_option_equality;
+      erewrite ?type_check_complete, ?path_type_check_complete,
+        ?assign_type_of_complete, ?unop_type_of_complete,
+        ?binop_type_of_complete, ?help by eauto; eauto.
+Qed.
+Hint Resolve (type_check_sound (V:=expr Ti)).
+Global Instance: PathTypeCheckSpec envs
+  (lrtype Ti) (lrtype Ti) (ectx_item Ti) (✓ ∘ fst ∘ fst ∘ fst).
+Proof.
+  intros [[[Γ Γf] Γm] τs] Ei τlr; simpl; split.
+  * assert (∀ es σs,
+      mapM (λ e, type_check (Γ,Γf,Γm,τs) e ≫= maybe_inr) es = Some σs →
+      (Γ,Γf,Γm,τs) ⊢* es :* inr <$> σs).
+    { intros es σs. rewrite mapM_Some. induction 1; simplify; eauto. }
+    destruct τlr, Ei; intros; simplify; typed_constructor; eauto.
+  * assert (∀ es σs, (Γ,Γf,Γm,τs) ⊢* es :* inr <$> σs →
+      mapM (λ e, type_check (Γ,Γf,Γm,τs) e ≫= maybe_inr) es = Some σs) as help.
+    { intros es σs. rewrite Forall2_fmap_r, mapM_Some.
+      induction 1; constructor; erewrite ?type_check_complete by eauto; eauto. }
+    destruct 1; simplify_option_equality;
+      erewrite ?type_check_complete by eauto; simpl;
+      erewrite ?path_type_check_complete, ?assign_type_of_complete,
+        ?unop_type_of_complete, ?binop_type_of_complete by eauto;
+      simplify_option_equality; eauto.
+Qed.
+Hint Immediate (path_type_check_sound (R:=ectx_item _)).
+Global Instance: PathTypeCheckSpec envs
+  (lrtype Ti) (lrtype Ti) (ectx Ti) (✓ ∘ fst ∘ fst ∘ fst).
+Proof.
+  intros Γs Ei τlr τlr'; split.
+  * unfold lookupE. revert τlr.
+    induction Ei; intros; simplify; typed_constructor; eauto.
+  * unfold lookupE. induction 1; simplify_option_equality;
+      erewrite ?path_type_check_complete by eauto; eauto.
+Qed.
+Hint Immediate (path_type_check_sound (R:=ectx _)).
+Global Instance:
+  TypeCheckSpec envs (rettype Ti) (stmt Ti) (✓ ∘ fst ∘ fst ∘ fst).
+Proof.
+  intros [[[Γ Γf] Γm] τs] s mcτ; simpl; split.
+  * revert τs mcτ.
+    induction s; intros; simplify; typed_constructor; naive_solver.
+  * induction 1; simplify_option_equality;
+      erewrite ?type_check_complete by eauto; eauto.
+Qed.
+Hint Resolve (type_check_sound (V:=stmt Ti)).
+Global Instance: PathTypeCheckSpec envs
+  (type Ti) (rettype Ti) (esctx_item Ti) (✓ ∘ fst ∘ fst ∘ fst).
+Proof.
+  intros [[[Γ Γf] Γm] τs] Ee τlr; simpl; split.
+  * destruct τlr, Ee; intros; simplify; typed_constructor; eauto.
+  * destruct 1; simplify_option_equality;
+      erewrite ?type_check_complete by eauto; simplify_option_equality; eauto.
+Qed.
+Hint Immediate (path_type_check_sound (R:=esctx_item _)).
+Global Instance: PathTypeCheckSpec envs
+  (rettype Ti) (rettype Ti) (sctx_item Ti) (✓ ∘ fst ∘ fst ∘ fst).
+Proof.
+  intros [[[Γ Γf] Γm] τs] Es mcτ; simpl; split.
+  * destruct mcτ, Es; intros; simplify; typed_constructor; eauto.
+  * destruct 1; simplify_option_equality;
+      erewrite ?type_check_complete by eauto; simplify_option_equality; eauto.
+Qed.
+Hint Immediate (path_type_check_sound (R:=sctx_item _)).
+Global Instance: PathTypeCheckSpec envs
+  (focustype Ti) (focustype Ti) (ctx_item Ti) (✓ ∘ fst ∘ fst ∘ fst).
+Proof.
+  intros [[[Γ Γf] Γm] τs] Ek τf; simpl; split.
+  * unfold lookupE; destruct τf, Ek; intros; simplify;
+      try match goal with
+      | |- context [CParams _ ?oσs] => is_var oσs; rewrite <-(zip_fst_snd oσs)
+      end; typed_constructor; eauto.
+  * destruct 1;
+      repeat match goal with
+      | _ => simpl; erewrite fst_zip, snd_zip
+         by eauto using Nat.eq_le_incl, Forall2_length, eq_sym
+      | _ => progress simplify_option_equality
+      | _ => erewrite type_check_complete by eauto
+      | _ => erewrite path_type_check_complete by eauto
+      end; eauto.
+Qed.
+Global Instance:
+  TypeCheckSpec envs (focustype Ti) (focus Ti) (✓ ∘ fst ∘ fst ∘ fst).
+Proof.
+  intros [[[Γ Γf] Γm] τs] φ τf; simpl; split.
+  * unfold type_check; destruct φ, τf;
+      intros; simplify; repeat typed_constructor; eauto.
+  * destruct 1;
+      repeat match goal with
+      | _ => progress simplify_option_equality
+      | _ => case_match; typed_inversion_all
+      | _ => erewrite mapM_type_check_complete by eauto
+      | _ => erewrite type_check_complete by eauto
+      | _ => erewrite path_type_check_complete by eauto
+      end; eauto.
+Qed.
 End properties.

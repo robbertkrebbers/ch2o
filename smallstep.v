@@ -191,16 +191,16 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
   | cstep_call m k f s os vs :
      δ !! f = Some s → mem_allocable_list m os → length os = length vs →
      Γ\ δ ⊢ₛ State k (Call f vs) m ⇒
-             State (CParams (zip os (type_of <$> vs)) :: k)
+             State (CParams f (zip os (type_of <$> vs)) :: k)
                (Stmt ↘ s) (mem_alloc_val_list Γ (zip os vs) m)
-  | cstep_free_params m k oτs s :
-     Γ\ δ ⊢ₛ State (CParams oτs :: k) (Stmt ↗ s) m ⇒
-             State k (Return voidV) (foldr mem_free m (fst <$> oτs))
-  | cstep_free_params_top m k oτs v s :
-     Γ\ δ ⊢ₛ State (CParams oτs :: k) (Stmt (⇈ v) s) m ⇒
-             State k (Return v) (foldr mem_free m (fst <$> oτs))
-  | cstep_return m k E v :
-     Γ\ δ ⊢ₛ State (CFun E :: k) (Return v) m ⇒
+  | cstep_free_params m k f oτs s :
+     Γ\ δ ⊢ₛ State (CParams f oτs :: k) (Stmt ↗ s) m ⇒
+             State k (Return f voidV) (foldr mem_free m (fst <$> oτs))
+  | cstep_free_params_top m k f oτs v s :
+     Γ\ δ ⊢ₛ State (CParams f oτs :: k) (Stmt (⇈ v) s) m ⇒
+             State k (Return f v) (foldr mem_free m (fst <$> oτs))
+  | cstep_return m k f E v :
+     Γ\ δ ⊢ₛ State (CFun E :: k) (Return f v) m ⇒
              State k (Expr (subst E (#v)%E)) m
 
   (**i For non-local control flow: *)
@@ -236,7 +236,7 @@ where "Γ \ δ  ⊢ₛ S1 ⇒ S2" := (@cstep _ _ Γ δ S1%S S2%S) : C_scope.
 Definition initial_state {Ti} (m : mem Ti)
   (f : funname) (vs : list (val Ti)) : state Ti := State [] (Call f vs) m.
 Inductive final_state {Ti} (v : val Ti) : state Ti → Prop :=
-  | Return_final m : final_state v (State [] (Return v) m).
+  | Return_final f m : final_state v (State [] (Return f v) m).
 Inductive undef_state {Ti} : state Ti → Prop :=
   | Undef_undef k Su m : undef_state (State k (Undef Su) m).
 
@@ -333,7 +333,7 @@ Section inversion.
          e = subst E e1 → is_redex e1 → ¬Γ\ get_stack k ⊢ₕ safe e1, m →
          P (State k (Undef (UndefExpr E e1)) m)) →
        P S2
-    | Return v =>
+    | Return f v =>
        (∀ k' E,
          k = CFun E :: k' →
          P (State k' (Expr (subst E (#v)%E)) m)) →
@@ -365,20 +365,20 @@ Section inversion.
        (∀ k' e s1,
          k = CStmt (if{e} s1 else □) :: k' →
          P (State k' (Stmt ↗ (if{e} s1 else s)) m)) →
-       (∀ k' oτs,
-         k = CParams oτs :: k' →
-         P (State k' (Return voidV) (foldr mem_free m (fst <$> oτs)))) →
+       (∀ k' f oτs,
+         k = CParams f oτs :: k' →
+         P (State k' (Return f voidV) (foldr mem_free m (fst <$> oτs)))) →
        P S2
     | Call f vs =>
        (∀ s os,
          δ !! f = Some s → mem_allocable_list m os → length os = length vs →
-         P (State (CParams (zip os (type_of <$> vs)) :: k)
+         P (State (CParams f (zip os (type_of <$> vs)) :: k)
            (Stmt ↘ s) (mem_alloc_val_list Γ (zip os vs) m))) →
        P S2
     | Stmt (⇈ v) s =>
-       (∀ k' oτs,
-         k = CParams oτs :: k' →
-         P (State k' (Return v) (foldr mem_free m (fst <$> oτs)))) →
+       (∀ k' f oτs,
+         k = CParams f oτs :: k' →
+         P (State k' (Return f v) (foldr mem_free m (fst <$> oτs)))) →
        (∀ k' o τ,
          k = CBlock o τ :: k' →
          P (State k' (Stmt (⇈ v) (blk{τ} s)) (mem_free o m))) →
@@ -446,8 +446,8 @@ Section inversion.
     | CStmt (if{e} □ else s2) => P (State k (Stmt ↗ (if{e} s else s2)) m) → P S2
     | CStmt (if{e} s1 else □) => P (State k (Stmt ↗ (if{e} s1 else s)) m) → P S2
     | CBlock o τ => P (State k (Stmt ↗ (blk{τ} s)) (mem_free o m)) → P S2
-    | CParams oτs =>
-       P (State k (Return voidV) (foldr mem_free m (fst <$> oτs))) → P S2
+    | CParams f oτs =>
+       P (State k (Return f voidV) (foldr mem_free m (fst <$> oτs))) → P S2
     | _ => P S2
     end.
   Proof.
@@ -458,8 +458,8 @@ Section inversion.
     Γ\ δ ⊢ₛ State (Ek :: k) (Stmt (⇈ v) s) m ⇒ S2 →
     match Ek with
     | CStmt Es => P (State k (Stmt (⇈ v) (subst Es s)) m) → P S2
-    | CParams oτs =>
-       P (State k (Return v) (foldr mem_free m (fst <$> oτs))) → P S2
+    | CParams f oτs =>
+       P (State k (Return f v) (foldr mem_free m (fst <$> oτs))) → P S2
     | CBlock o τ => P (State k (Stmt (⇈ v) (blk{τ} s)) (mem_free o m)) → P S2
     | _ => P S2
     end.
@@ -795,7 +795,7 @@ Lemma cstep_call_fresh m k f s vs :
   δ !! f = Some s →
   let os := fresh_list (length vs) (dom indexset m) in
   Γ\ δ ⊢ₛ State k (Call f vs) m ⇒
-          State (CParams (zip os (type_of <$> vs)) :: k)
+          State (CParams f (zip os (type_of <$> vs)) :: k)
             (Stmt ↘ s) (mem_alloc_val_list Γ (zip os vs) m).
 Proof.
   constructor; auto using fresh_list_length.
@@ -924,9 +924,9 @@ Lemma cstep_call_inv (P : state Ti → Prop) E E' l k1 φ1 m1 S' :
      Γ\ δ ⊢ₛ State (k1 ++ [CFun E'] ++ l) φ1 m1 ⇒{l}
           State (k2 ++ [CFun E'] ++ l) φ2 m2 →
      P (State (k2 ++ [CFun E] ++ l) φ2 m2)) →
-  (∀ v,
-     k1 = [] → φ1 = Return v →
-     Γ\ δ ⊢ₛ State (CFun E' :: l) (Return v) m1 ⇒{l}
+  (∀ f v,
+     k1 = [] → φ1 = Return f v →
+     Γ\ δ ⊢ₛ State (CFun E' :: l) (Return f v) m1 ⇒{l}
           State l (Expr (subst E' (# v)%E)) m1 →
      P (State l (Expr (subst E (# v)%E)) m1)) →
   P S'.
@@ -936,7 +936,7 @@ Proof.
   * apply HP1. split; [| simpl; solve_suffix_of].
     by apply cstep_ctx_irrel with (CFun E :: l).
   * inv_cstep p; destruct k1; try solve_suffix_of; simplify_list_equality.
-    apply HP2; trivial. do_cstep.
+    eapply HP2; trivial. do_cstep.
 Qed.
 
 (** ** Cutting reduction paths *)
@@ -1140,4 +1140,3 @@ Hint Resolve estep_if_true_no_locks estep_if_false_no_locks
   estep_comma_no_locks : cstep.
 Hint Resolve estep_alloc_fresh cstep_in_block_fresh
   cstep_label_block_down_fresh cstep_call_fresh : cstep.
- 

@@ -347,14 +347,14 @@ Inductive ctx_item (Ti : Set) : Set :=
   | CBlock : index → type Ti → ctx_item Ti
   | CExpr : expr Ti → esctx_item Ti → ctx_item Ti
   | CFun : ectx Ti → ctx_item Ti
-  | CParams : list (index * type Ti) → ctx_item Ti.
+  | CParams : funname → list (index * type Ti) → ctx_item Ti.
 Notation ctx Ti := (list (ctx_item Ti)).
 
 Arguments CStmt {_} _.
 Arguments CBlock {_} _ _.
 Arguments CExpr {_} _ _.
 Arguments CFun {_} _.
-Arguments CParams {_} _.
+Arguments CParams {_} _ _.
 
 Instance ctx_item_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (Ek1 Ek2 : ctx_item Ti) : Decision (Ek1 = Ek2).
@@ -382,7 +382,7 @@ Fixpoint get_stack {Ti} (k : ctx Ti) : stack :=
   | CStmt _ :: k | CExpr _ _ :: k => get_stack k
   | CBlock o τ :: k => o :: get_stack k
   | CFun _ :: _ => []
-  | CParams oτs :: k => (fst <$> oτs) ++ get_stack k
+  | CParams _ oτs :: k => (fst <$> oτs) ++ get_stack k
   end.
 Fixpoint get_stack_types {Ti} (k : ctx Ti) : list (type Ti) :=
   match k with
@@ -390,7 +390,7 @@ Fixpoint get_stack_types {Ti} (k : ctx Ti) : list (type Ti) :=
   | CStmt _ :: k | CExpr _ _ :: k => get_stack_types k
   | CBlock o τ :: k => τ :: get_stack_types k
   | CFun _ :: _ => []
-  | CParams oτs :: k => (snd <$> oτs) ++ get_stack_types k
+  | CParams _ oτs :: k => (snd <$> oτs) ++ get_stack_types k
   end.
 Instance ctx_free_gotos {Ti} : Gotos (ctx Ti) :=
   fix go k := let _ : Gotos _ := @go in

@@ -206,19 +206,19 @@ Proof.
     erewrite Fun_type_stack_types, (right_id_L [] (++)) by eauto.
     rewrite snd_zip by (erewrite <-Forall2_length by eauto; lia).
     eauto using stmt_typed_weaken.
-  * intros m k oσs s (τf&HS&?&?) ?. typed_inversion_all.
+  * intros m k g oσs s (τf&HS&?&?) ?. typed_inversion_all.
     split; [|eauto using funenv_typed_weaken, index_typed_foldr_free].
     case_match; simplify_equality; try done.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, index_typed_foldr_free,
       mem_foldr_free_valid.
-  * intros m k oσs v s (τf&HS&?&?) ?; typed_inversion_all.
+  * intros m k g oσs v s (τf&HS&?&?) ?; typed_inversion_all.
     split; [|eauto using funenv_typed_weaken, index_typed_foldr_free].
     case_match; simplify_equality; try done.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, index_typed_foldr_free,
       mem_foldr_free_valid, val_typed_weaken.
-  * intros m k E v (τf&HS&?&?) ?; typed_inversion_all; split; auto.
+  * intros m k g E v (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ectx_subst_typed.
   * intros m k o τ v s (τf&HS&?&?) ?; typed_inversion_all.

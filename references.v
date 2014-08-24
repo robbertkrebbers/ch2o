@@ -217,15 +217,17 @@ Proof.
 Qed.
 Lemma ref_typed_type_valid Γ r τ σ : ✓ Γ → Γ ⊢ r : τ ↣ σ → ✓{Γ} τ → ✓{Γ} σ.
 Proof. intro. induction 1; eauto using ref_seg_typed_type_valid. Qed.
-Global Instance: PathTypeCheckSpec (env Ti) (type Ti) (type Ti) (ref_seg Ti).
+Global Instance:
+  PathTypeCheckSpecUnique (env Ti) (type Ti) (type Ti) (ref_seg Ti) (λ _, True).
 Proof.
   split.
-  * intros Γ rs τ σ. split; [|by destruct 1; simplify_option_equality].
+  * intros Γ rs τ σ _. split; [|by destruct 1; simplify_option_equality].
     destruct rs, τ as [| |[]]; intros;
       simplify_option_equality; econstructor; eauto.
-  * by destruct 1; inversion 1.
+  * by destruct 2; inversion 1.
 Qed.
-Global Instance: PathTypeCheckSpec (env Ti) (type Ti) (type Ti) (ref Ti).
+Global Instance:
+  PathTypeCheckSpecUnique (env Ti) (type Ti) (type Ti) (ref Ti) (λ _, True).
 Proof.
   split.
   * intros Γ r τ σ. split.
@@ -236,7 +238,7 @@ Proof.
       eexists; split; eauto. by apply path_type_check_correct.
     + induction 1; [done|rewrite ref_lookup_cons].
       simplify_option_equality. by apply path_type_check_complete.
-  * intros Γ r τ1 τ2 σ Hr. revert τ2.
+  * intros Γ r τ1 τ2 σ _ Hr. revert τ2.
     induction Hr as [|r rs σ1 σ2 σ3 ?? IH] using @ref_typed_ind; intros τ1.
     { by rewrite ref_typed_nil. }
     rewrite ref_typed_cons; intros (τ2&?&?); apply IH.
@@ -252,7 +254,7 @@ Proof.
 Qed.
 Lemma ref_lookup_weaken Γ1 Γ2 r τ σ :
   τ !!{Γ1} r = Some σ → Γ1 ⊆ Γ2 → τ !!{Γ2} r = Some σ.
-Proof. rewrite !path_type_check_correct. by apply ref_typed_weaken. Qed.
+Proof. rewrite !path_type_check_correct by done. by apply ref_typed_weaken. Qed.
 Lemma ref_seg_typed_inv_base Γ τb rs σ : ¬Γ ⊢ rs : baseT τb ↣ σ.
 Proof. inversion 1. Qed.
 Lemma ref_typed_inv_base Γ τb r σ :

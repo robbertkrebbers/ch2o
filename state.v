@@ -101,7 +101,7 @@ Inductive focus (Ti : Set) : Set :=
   | Stmt : direction Ti → stmt Ti → focus Ti
   | Expr : expr Ti → focus Ti
   | Call : funname → list (val Ti) → focus Ti
-  | Return : val Ti → focus Ti
+  | Return : funname → val Ti → focus Ti
   | Undef : undef_state Ti → focus Ti.
 Record state (Ti : Set) : Set :=
   State { SCtx : ctx Ti; SFoc : focus Ti; SMem : mem Ti }.
@@ -112,7 +112,7 @@ Arguments UndefBranch {_} _ _ _ _.
 Arguments Stmt {_} _ _.
 Arguments Expr {_} _.
 Arguments Call {_} _ _.
-Arguments Return {_} _.
+Arguments Return {_} _ _.
 Arguments Undef {_} _.
 Arguments State {_} _ _ _.
 Arguments SCtx {_} _.

@@ -782,19 +782,21 @@ Proof. destruct 1; constructor; eauto using TPtr_valid_inv. Qed.
 Lemma base_cast_typed_type_valid Γ τb σb :
   base_cast_typed Γ τb σb → ✓{Γ} τb → ✓{Γ} σb.
 Proof. destruct 1; repeat constructor; eauto using TPtr_valid_inv. Qed.
-Lemma base_unop_type_of_correct op τb σb :
-  base_unop_typed op τb σb ↔ base_unop_type_of op τb = Some σb.
+Lemma base_unop_type_of_sound op τb σb :
+  base_unop_type_of op τb = Some σb → base_unop_typed op τb σb.
+Proof. destruct τb, op; intros; simplify_option_equality; constructor. Qed.
+Lemma base_unop_type_of_complete op τb σb :
+  base_unop_typed op τb σb → base_unop_type_of op τb = Some σb.
+Proof. by destruct 1; simplify_option_equality. Qed.
+Lemma base_binop_type_of_sound op τb1 τb2 σb :
+  base_binop_type_of op τb1 τb2 = Some σb → base_binop_typed op τb1 τb2 σb.
 Proof.
-  split; [by destruct 1; simplify_option_equality|].
-  destruct τb, op; intros; simplify_option_equality; constructor.
-Qed.
-Lemma base_binop_type_of_correct op τb1 τb2 σb :
-  base_binop_typed op τb1 τb2 σb ↔ base_binop_type_of op τb1 τb2 = Some σb.
-Proof.
-  split; [by destruct 1; simplify_option_equality|].
   destruct τb1, τb2, op; intros;
     repeat (case_match || simplify_option_equality); constructor.
 Qed.
+Lemma base_binop_type_of_complete op τb1 τb2 σb :
+  base_binop_typed op τb1 τb2 σb → base_binop_type_of op τb1 τb2 = Some σb.
+Proof. by destruct 1; simplify_option_equality. Qed.
 Global Instance base_cast_typed_dec Γ τb σb: Decision (base_cast_typed Γ τb σb).
 Proof.
  refine

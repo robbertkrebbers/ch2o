@@ -50,11 +50,15 @@ Class TypeOf (T V : Type) := type_of: V → T.
 Arguments type_of {_ _ _} !_ / : simpl nomatch.
 Class TypeOfSpec (E T V : Type) `{Typed E T V, TypeOf T V} :=
   type_of_correct Γ x τ : Γ ⊢ x : τ → type_of x = τ.
-Class PathTypeCheckSpec (E T1 T2 R : Type)
+Class PathTypeCheckSpec (E T1 T2 R : Type) (P : E → Prop)
+    `{PathTyped E T1 T2 R, LookupE E R T2 T1} :=
+  path_type_check_correct Γ p τ σ : P Γ → τ !!{Γ} p = Some σ ↔ Γ ⊢ p : τ ↣ σ.
+
+Class PathTypeCheckSpecUnique (E T1 T2 R : Type) (P : E → Prop)
     `{PathTyped E T1 T2 R, LookupE E R T2 T1} := {
-  path_type_check_correct Γ p τ σ : τ !!{Γ} p = Some σ ↔ Γ ⊢ p : τ ↣ σ;
+  path_typed_unique_spec :>> PathTypeCheckSpec E T1 T2 R P;
   path_typed_unique_l Γ r τ1 τ2 σ :
-    Γ ⊢ r : τ1 ↣ σ → Γ ⊢ r : τ2 ↣ σ → τ1 = τ2
+    P Γ → Γ ⊢ r : τ1 ↣ σ → Γ ⊢ r : τ2 ↣ σ → τ1 = τ2
 }.
 
 Ltac valid_constructor :=
@@ -114,6 +118,12 @@ Section type_check.
   Proof. intro. by rewrite type_check_correct by done. Qed.
   Lemma typed_unique Γ x τ1 τ2 : P Γ → Γ ⊢ x : τ1 → Γ ⊢ x : τ2 → τ1 = τ2.
   Proof. intro. rewrite <-!type_check_correct by done. congruence. Qed.
+  Lemma mapM_type_check_sound Γ xs τs :
+    P Γ → mapM (type_check Γ) xs = Some τs → Γ ⊢* xs :* τs.
+  Proof. rewrite mapM_Some. induction 2; eauto using type_check_sound. Qed.
+  Lemma mapM_type_check_complete Γ xs τs :
+    P Γ → Γ ⊢* xs :* τs → mapM (type_check Γ) xs = Some τs.
+  Proof. rewrite mapM_Some. induction 2; eauto using type_check_complete. Qed.
 End type_check.
 
 Section type_of.
@@ -131,15 +141,16 @@ End type_of.
 
 Section path_type_check.
   Context `{PathTypeCheckSpec E T1 T2 R}.
-  Lemma path_type_check_None Γ r τ σ : τ !!{Γ} r = None → ¬Γ ⊢ r : τ ↣ σ.
-  Proof. rewrite <-path_type_check_correct. congruence. Qed.
-  Lemma path_type_check_sound Γ r τ σ : τ !!{Γ} r = Some σ → Γ ⊢ r : τ ↣ σ.
-  Proof. by rewrite path_type_check_correct. Qed.
-  Lemma path_type_check_complete Γ r τ σ : Γ ⊢ r : τ ↣ σ → τ !!{Γ} r = Some σ.
-  Proof. by rewrite path_type_check_correct. Qed.
+  Lemma path_type_check_None Γ r τ σ : P Γ → τ !!{Γ} r = None → ¬Γ ⊢ r : τ ↣ σ.
+  Proof. intros ?. rewrite <-path_type_check_correct by done. congruence. Qed.
+  Lemma path_type_check_sound Γ r τ σ : P Γ → τ !!{Γ} r = Some σ → Γ ⊢ r : τ ↣ σ.
+  Proof. intros ?. by rewrite path_type_check_correct. Qed.
+  Lemma path_type_check_complete Γ r τ σ :
+    P Γ → Γ ⊢ r : τ ↣ σ → τ !!{Γ} r = Some σ.
+  Proof. intros ?. by rewrite path_type_check_correct. Qed.
   Lemma path_typed_unique_r Γ r τ σ1 σ2 :
-    Γ ⊢ r : τ ↣ σ1 → Γ ⊢ r : τ ↣ σ2 → σ1 = σ2.
-  Proof. rewrite <-!path_type_check_correct. congruence. Qed.
+    P Γ → Γ ⊢ r : τ ↣ σ1 → Γ ⊢ r : τ ↣ σ2 → σ1 = σ2.
+  Proof. intros ?. rewrite <-!path_type_check_correct by done. congruence. Qed.
 End path_type_check.
 
 Instance typed_dec `{TypeCheckSpec E T V (λ _, True)}
@@ -151,7 +162,7 @@ Proof.
   | inright _ => right _
   end; abstract (rewrite <-type_check_correct by done; congruence).
 Defined.
-Instance path_typed_dec `{PathTypeCheckSpec E T1 T2 R}
+Instance path_typed_dec `{PathTypeCheckSpec E T1 T2 R (λ _, True)}
   `{∀ τ1 τ2 : T2, Decision (τ1 = τ2)} Γ p τ σ : Decision (Γ ⊢ p : τ ↣ σ).
 Proof.
  refine (cast_if (decide (τ !!{Γ} p = Some σ)));
@@ -181,11 +192,11 @@ Ltac simplify_type_equality := repeat
   | H : _ ⊢ [] : _ ↣ _ |- _ => inversion H; clear H (* hack *)
   | H : _ ⊢ ?p : ?τ ↣ ?σ1, H2 : _ ⊢ ?p : ?τ ↣ ?σ2 |- _ =>
     unless (σ1 = σ2) by done;
-    pose proof (path_typed_unique_r _ p τ σ1 σ2 H H2);
+    pose proof (path_typed_unique_r _ p τ σ1 σ2 I H H2);
     first [subst σ2 | subst σ1]; clear H2
   | H : _ ⊢ ?p : ?τ1 ↣ ?σ, H2 : _ ⊢ ?p : ?τ2 ↣ ?σ |- _ =>
     unless (τ1 = τ2) by done;
-    pose proof (path_typed_unique_l _ p τ1 τ2 σ H H2);
+    pose proof (path_typed_unique_l _ p τ1 τ2 σ I H H2);
     first [subst τ2 | subst τ1]; clear H2
   end.
 Ltac simplify_type_equality' :=

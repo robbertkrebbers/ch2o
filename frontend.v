@@ -766,7 +766,7 @@ Proof.
     repeat match goal with
     | _ => progress simplify_option_equality
     | x : (_ * _)%type |- _ => destruct x
-    | H: binop_type_of _ _ _ = Some _ |- _ => apply binop_type_of_correct in H
+    | H: binop_type_of _ _ _ = Some _ |- _ => apply binop_type_of_sound in H
     | H : convert_ptrs _ _ = Some _ |- _ =>
        eapply convert_ptrs_typed in H; eauto; destruct H
     end; typed_constructor; eauto.
@@ -808,10 +808,9 @@ Proof.
        H : to_expr _ _ _ _ _ ?ce = inr _ |- _ => specialize (IH _ _ H)
     | IH : ∀ _, to_type _ _ _ _ _ _ ?cτ = inr _ → _,
        H : to_type _ _ _ _ _ _ ?cτ = inr _ |- _ => specialize (IH _ H)
-    | H: assign_type_of _ _ _ _ = Some _ |- _ =>
-       apply assign_type_of_correct in H
-    | H: unop_type_of _ _ = Some _ |- _ => apply unop_type_of_correct in H
-    | H: binop_type_of _ _ _ = Some _ |- _ => apply binop_type_of_correct in H
+    | H: assign_type_of _ _ _ _ = Some _ |- _ => apply assign_type_of_sound in H
+    | H: unop_type_of _ _ = Some _ |- _ => apply unop_type_of_sound in H
+    | H: binop_type_of _ _ _ = Some _ |- _ => apply binop_type_of_sound in H
     | H: to_R_NULL _ _ = _ |- _ =>
        first_of ltac:(eapply to_R_NULL_typed in H) idtac
          ltac:(by eauto using type_valid_ptr_type_valid)
