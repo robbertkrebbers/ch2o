@@ -131,7 +131,7 @@ Section operations.
        Forall (BIndet =) bs2 → (Γ,Γm2) ⊢ vb2 : ucharT →
        base_val_refine' Γ f Γm1 Γm2 (VByte bs1) vb2 ucharT.
   Global Instance base_val_refine:
-    RefineT Ti (base_val Ti) (base_type Ti) := base_val_refine'.
+    RefineT Ti (env Ti) (base_type Ti) (base_val Ti) := base_val_refine'.
 
   Definition base_val_true (Γm : memenv Ti) (vb : base_val Ti) : Prop :=
     match vb with
@@ -647,19 +647,21 @@ Proof.
   destruct 1; constructor; eauto using ptr_refine_id,
     bits_refine_id, char_byte_valid_bits_valid; constructor; eauto.
 Qed.
-Lemma base_val_refine_compose Γ f g Γm1 Γm2 Γm3 vb1 vb2 vb3 τb :
-  ✓ Γ → vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → vb2 ⊑{Γ,g@Γm2↦Γm3} vb3 : τb →
+Lemma base_val_refine_compose Γ f g Γm1 Γm2 Γm3 vb1 vb2 vb3 τb τb' :
+  ✓ Γ → vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → vb2 ⊑{Γ,g@Γm2↦Γm3} vb3 : τb' →
   vb1 ⊑{Γ,f ◎ g@Γm1↦Γm3} vb3 : τb.
 Proof.
-  destruct 2.
+  intros ? Hvb1 Hvb2. assert (τb = τb') as <- by (eapply (typed_unique _ vb2);
+    eauto using base_val_refine_typed_r, base_val_refine_typed_l).
+  destruct Hvb1.
   * refine_constructor; eauto using base_val_refine_typed_r.
-  * inversion_clear 1; refine_constructor.
-  * by inversion_clear 1; refine_constructor.
-  * inversion_clear 1; refine_constructor;
+  * inversion_clear Hvb2; refine_constructor.
+  * by inversion_clear Hvb2; refine_constructor.
+  * inversion_clear Hvb2; refine_constructor;
       eauto using ptr_refine_compose, ptr_alive_refine, ptr_refine_typed_l.
   * refine_constructor; eauto using base_val_refine_typed_r.
-  * inversion_clear 1; refine_constructor; eauto using bits_refine_compose.
-  * inversion_clear 1; refine_constructor;
+  * inversion_clear Hvb2; refine_constructor; eauto using bits_refine_compose.
+  * inversion_clear Hvb2; refine_constructor;
       eauto using BBits_refine, bits_refine_compose.
   * refine_constructor; eauto using base_val_refine_typed_r,
       bits_refine_compose, BIndets_refine, BIndets_valid.

@@ -60,7 +60,7 @@ Section operations.
     | BPtr_BIndet_refine' pb1 b2 :
        ✓{Γ,Γm1} pb1 → ¬ptr_alive Γm1 (fragmented.frag_item pb1) →
        ✓{Γ,Γm2} b2 → bit_refine' Γ f Γm1 Γm2 (BPtr pb1) b2.
-  Global Instance bit_refine: Refine Ti (bit Ti) := bit_refine'.
+  Global Instance bit_refine: Refine Ti (env Ti) (bit Ti) := bit_refine'.
 End operations.
 
 Section properties.

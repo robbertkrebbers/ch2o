@@ -152,7 +152,8 @@ Section address_operations.
        σ >*> σc →
        ref_refine (freeze true <$> r') (size_of Γ σ) r i r'' i'' →
        addr_refine' Γ f Γm1 Γm2 (Addr o r i τ σ σc) (Addr o' r'' i'' τ' σ σc) σc.
-  Global Instance addr_refine: RefineT Ti (addr Ti) (type Ti) := addr_refine'.
+  Global Instance addr_refine:
+    RefineT Ti (env Ti) (type Ti) (addr Ti) := addr_refine'.
 End address_operations.
 
 Typeclasses Opaque addr_strict addr_is_obj addr_disjoint.
@@ -728,8 +729,8 @@ Proof.
   destruct r as [|rs r]; [apply ref_refine_nil_alt; csimpl; auto with lia|].
   apply ref_refine_ne_nil_alt. by rewrite (right_id_L [] (++)).
 Qed.
-Lemma addr_refine_compose Γ f g Γm1 Γm2 Γm3 a1 a2 a3 σ :
-  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → a2 ⊑{Γ,g@Γm2↦Γm3} a3 : σ →
+Lemma addr_refine_compose Γ f g Γm1 Γm2 Γm3 a1 a2 a3 σ σ' :
+  a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → a2 ⊑{Γ,g@Γm2↦Γm3} a3 : σ' →
   a1 ⊑{Γ,f ◎ g@Γm1↦Γm3} a3 : σ.
 Proof.
   destruct 1 as [o o2 r r2 r3 i i3 τ τ2 σ σc ???????????? Hr3];

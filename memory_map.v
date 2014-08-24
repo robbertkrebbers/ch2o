@@ -41,7 +41,7 @@ Section operations.
              else ctree_alter_byte Γ g (addr_ref_byte Γ a) in
     CMap $
       alter (cmap_elem_map (ctree_alter Γ G (addr_ref Γ a))) (addr_index a) m.
-  Global Instance cmap_refine: Refine Ti (mem Ti) := λ Γ f Γm1 Γm2 m1 m2,
+  Global Instance cmap_refine: Refine Ti (env Ti) (mem Ti) := λ Γ f Γm1 Γm2 m1 m2,
     (**i 1.) *) ✓{Γ,Γm1} m1 ∧
     (**i 2.) *) ✓{Γ,Γm2} m2 ∧
     (**i 3.) *) Γm1 ⊑{Γ,f} Γm2 ∧
@@ -51,7 +51,7 @@ Section operations.
         cmap_car m2 !! o2 = Some (Obj w2 malloc) ∧
         w2 !!{Γ} (freeze true <$> r) = Some w2' ∧
         w1 ⊑{Γ,f@Γm1↦Γm2} w2' : τ ∧ (malloc → r = [])).
-  Global Instance cmap_refine': RefineM Ti (mem Ti) := λ Γ f m1 m2,
+  Global Instance cmap_refine': RefineM Ti (env Ti) (mem Ti) := λ Γ f m1 m2,
     m1 ⊑{Γ,f@memenv_of m1↦memenv_of m2} m2.
 End operations.
 

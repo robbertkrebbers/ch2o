@@ -91,7 +91,8 @@ Section pointer_operations.
        ptr_type_valid Γ τ → ptr_refine' Γ f Γm1 Γm2 (NULL τ) (NULL τ) τ
     | Ptr_refine a1 a2 τ :
        a1 ⊑{Γ,f@Γm1↦Γm2} a2 : τ → ptr_refine' Γ f Γm1 Γm2 (Ptr a1) (Ptr a2) τ.
-  Global Instance ptr_refine: RefineT Ti (ptr Ti) (type Ti) := ptr_refine'.
+  Global Instance ptr_refine:
+    RefineT Ti (env Ti) (type Ti) (ptr Ti) := ptr_refine'.
 End pointer_operations.
 
 Section pointers.
@@ -249,8 +250,8 @@ Proof.
 Qed.
 Lemma ptr_refine_id Γ Γm p σ : (Γ,Γm) ⊢ p : σ → p ⊑{Γ@Γm} p : σ.
 Proof. destruct 1; constructor; eauto using addr_refine_id. Qed.
-Lemma ptr_refine_compose Γ f g Γm1 Γm2 Γm3 p1 p2 p3 σ :
-  p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → p2 ⊑{Γ,g@Γm2↦Γm3} p3 : σ →
+Lemma ptr_refine_compose Γ f g Γm1 Γm2 Γm3 p1 p2 p3 σ σ' :
+  p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → p2 ⊑{Γ,g@Γm2↦Γm3} p3 : σ' →
   p1 ⊑{Γ,f ◎ g@Γm1↦Γm3} p3 : σ.
 Proof.
   destruct 1; inversion_clear 1; constructor; eauto using addr_refine_compose.

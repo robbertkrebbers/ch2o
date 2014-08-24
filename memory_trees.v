@@ -361,7 +361,7 @@ Section operations.
        ctree_refine' Γ f Γm1 Γm2
          (MUnion s i w1 xbs1) (MUnionAll s xbs2) (unionT s).
   Global Instance ctree_refine:
-    RefineT Ti (mtree Ti) (type Ti) := ctree_refine'.
+    RefineT Ti (env Ti) (type Ti) (mtree Ti) := ctree_refine'.
 
   Lemma ctree_refine_inv_l (Γ : env Ti)
       (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) (P : mtree Ti → Prop) w1 w2 τ :

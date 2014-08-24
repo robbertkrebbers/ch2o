@@ -125,18 +125,30 @@ Proof.
 Qed.
 End mem_inj.
 
-Class RefineM Ti A := refineM: env Ti → mem_inj Ti → relation A.
-Class Refine Ti A :=
-  refine: env Ti → mem_inj Ti → memenv Ti → memenv Ti → A → A → Prop.
-Class RefineT Ti A T :=
-  refineT: env Ti → mem_inj Ti → memenv Ti → memenv Ti → A → A → T → Prop.
-Instance: Params (@refine) 3.
-Instance: Params (@refineT) 4.
+Class RefineM Ti E A := refineM: E → mem_inj Ti → relation A.
+Class Refine Ti E A :=
+  refine: E → mem_inj Ti → memenv Ti → memenv Ti → A → A → Prop.
+Class RefineTM Ti E T A := refineTM: E → mem_inj Ti → A → A → T → Prop.
+Class RefineT Ti E T A :=
+  refineT: E → mem_inj Ti → memenv Ti → memenv Ti → A → A → T → Prop.
+Class PathRefine Ti E T1 T2 A :=
+  path_refine: E → mem_inj Ti → memenv Ti → memenv Ti → A → A → T1 → T2 → Prop.
+Instance: Params (@refineM) 4.
+Instance: Params (@refine) 4.
+Instance: Params (@refineTM) 5.
+Instance: Params (@refineT) 5.
+Instance: Params (@path_refine) 6.
 
 Notation "X ⊑{ Γ , f } Y" := (refineM Γ f X Y)
   (at level 70, format "X  ⊑{ Γ , f }  Y") : C_scope.
 Notation "X ⊑{ Γ } Y" := (X ⊑{Γ,mem_inj_id} Y)
   (at level 70, format "X  ⊑{ Γ }  Y") : C_scope.
+
+Notation "X ⊑{ Γ , f } Y : τ" := (refineTM Γ f X Y τ)
+  (at level 70, Y at next level,
+   format "X  ⊑{ Γ , f }  Y  :  τ") : C_scope.
+Notation "X ⊑{ Γ } Y : τ" := (X ⊑{Γ,mem_inj_id} Y : τ)
+  (at level 70, Y at next level, format "X  ⊑{ Γ }  Y  :  τ") : C_scope.
 
 Notation "X ⊑{ Γ , f @ m1 ↦ m2 } Y" := (refine Γ f m1 m2 X Y)
   (at level 70, format "X  ⊑{ Γ , f  @  m1 ↦ m2 }  Y") : C_scope.
@@ -173,21 +185,44 @@ Notation "X ⊑{ Γ @ m } Y : τ" := (X ⊑{Γ,mem_inj_id @ m↦m} Y : τ)
 Notation "Xs ⊑{ Γ @ m }* Ys : τ" := (Xs ⊑{Γ,mem_inj_id @ m↦m}* Ys : τ)
   (at level 70, Ys at next level,
    format "Xs  ⊑{ Γ  @  m }*  Ys  :  τ") : C_scope.
-Notation "Xs ⊑{ Γ @ m }* Ys :* τs" := (Xs ⊑{Γ,mem_inj_id @ m↦m}* Ys : τs)
+Notation "Xs ⊑{ Γ @ m }* Ys :* τs" := (Xs ⊑{Γ,mem_inj_id @ m↦m}* Ys :* τs)
   (at level 70, Ys at next level,
    format "Xs  ⊑{ Γ  @  m }*  Ys  :*  τs") : C_scope.
 Notation "Xs ⊑{ Γ @ m }1* Ys :* τs" := (Xs ⊑{Γ,mem_inj_id @ m↦m}1* Ys :* τs)
   (at level 70, Ys at next level,
    format "Xs  ⊑{ Γ  @  m }1*  Ys  :*  τs") : C_scope.
 
+Notation "X ⊑{ Γ , f @ m1 ↦ m2 } Y : τ ↣ σ" := (path_refine Γ f m1 m2 X Y τ σ)
+  (at level 70, Y at next level, τ at next level, σ at next level,
+   format "X  ⊑{ Γ , f  @  m1 ↦ m2 }  Y  :  τ  ↣  σ") : C_scope.
+Notation "X ⊑{ Γ @ m } Y : τ ↣ σ" := (X ⊑{ Γ , mem_inj_id @ m ↦ m } Y : τ ↣ σ)
+  (at level 70, Y at next level, τ at next level, σ at next level,
+   format "X  ⊑{ Γ  @  m }  Y  :  τ  ↣  σ") : C_scope.
+
 Ltac refine_constructor :=
   intros; match goal with
-  |- refineT (RefineT:=?H) ?Γ ?f ?m1 ?m2 _ _ _ =>
+  | |- refineT (RefineT:=?H) ?Γ ?f ?m1 ?m2 _ _ _ =>
     let H' := eval hnf in (H Γ f m1 m2) in
     econstructor; change H' with (refineT (RefineT:=H) Γ f m1 m2)
+  | |- path_refine (PathRefine:=?H) ?Γ ?f ?m1 ?m2 _ _ _ _ =>
+    let H' := eval hnf in (H Γ f m1 m2) in
+    econstructor; change H' with (path_refine (PathRefine:=H) Γ f m1 m2)
   end.
 
-Instance memenv_refine `{Env Ti} : RefineM Ti (memenv Ti) := λ Γ f Γm1 Γm2,
+Ltac refine_inversion H :=
+  match type of H with
+  | refineT (RefineT:=?T) ?Γ ?f ?m1 ?m2 _ _ _ =>
+    let T' := eval hnf in (T Γ f m1 m2) in
+    inversion H; clear H; simplify_equality';
+    try change T' with (refineT (RefineT:=T) Γ f m1 m2) in *
+  | path_refine (PathRefine:=?T) ?Γ ?f ?m1 ?m2 _ _ _ _ =>
+    let T' := eval hnf in (T Γ f m1 m2) in
+    inversion H; clear H; simplify_equality';
+    try change T' with (path_refine (PathRefine:=T) Γ f m1 m2) in *
+  end.
+
+Instance memenv_refine `{Env Ti} :
+    RefineM Ti (env Ti) (memenv Ti) := λ Γ f Γm1 Γm2,
   (**i 1.) *) mem_inj_injective f ∧
   (**i 2.) *) (∀ o1 o2 r τ1, f !! o1 = Some (o2,r) →
     Γm1 ⊢ o1 : τ1 → ∃ τ2, Γm2 ⊢ o2 : τ2 ∧ Γ ⊢ r : τ2 ↣ τ1) ∧

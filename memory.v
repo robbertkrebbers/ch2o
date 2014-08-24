@@ -88,7 +88,8 @@ Section memory_operations.
     if decide (ω ≠ ∅) then dexist {[ addr_index a, ω ]} _ else ∅.
   Next Obligation. by intros o ω ?; simplify_map_equality'. Qed.
 
-  Global Instance locks_refine: Refine Ti lockset := λ Γ f Γm1 Γm2 Ω1 Ω2,
+  Global Instance locks_refine:
+      Refine Ti (env Ti) lockset := λ Γ f Γm1 Γm2 Ω1 Ω2,
     (**i 1.) *) Γm1 ⊑{Γ,f} Γm2 ∧
     (**i 2.) *) (∀ o1 o2 r τ1 i,
       f !! o1 = Some (o2,r) → Γm1 ⊢ o1 : τ1 → index_alive Γm1 o1 →

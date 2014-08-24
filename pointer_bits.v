@@ -22,7 +22,7 @@ Section pointer_bit_operations.
     guard (type_of p = τ); Some p.
 
   Global Instance ptr_bit_refine:
-      Refine Ti (ptr_bit Ti) := λ Γ f Γm1 Γm2 pb1 pb2, ∃ τ,
+      Refine Ti (env Ti) (ptr_bit Ti) := λ Γ f Γm1 Γm2 pb1 pb2, ∃ τ,
     frag_item pb1 ⊑{Γ,f@Γm1↦Γm2} frag_item pb2 : τ ∧
     frag_index pb1 = frag_index pb2 ∧
     frozen (frag_item pb1) ∧
