@@ -213,10 +213,8 @@ Section int_coding.
   Proof. unfold int_pre_cast_ok. destruct (sign σ); apply _. Defined.
 
   Definition int_promote (τ : int_type Ti) : int_type Ti :=
-    if decide (rank_size (rank τ) < rank_size int_rank) then sintT%IT
-    else if decide (rank_size (rank τ) = rank_size int_rank)
-      then IntType (sign τ) int_rank
-    else τ.
+    if decide (rank_size (rank τ) < rank_size int_rank)
+    then sintT%IT else τ.
   Global Instance int_union : Union (int_type Ti) := λ τ1 τ2,
     if decide (rank_size (rank τ1) < rank_size (rank τ2)) then τ2
     else if decide (rank_size (rank τ2) < rank_size (rank τ1)) then τ1
@@ -582,9 +580,7 @@ Lemma int_promote_typed x σ : int_typed x σ → int_typed x (int_promote σ).
 Proof.
   destruct σ as [[] k]; simpl in *; repeat case_decide; auto.
   * apply int_typed_rank_le; simpl; auto with lia.
-  * by replace k with int_rank by (by apply (injective rank_size)).
   * by apply int_typed_rank_lt.
-  * apply int_typed_rank_le; simpl; auto with lia.
 Qed.
 Global Instance: Commutative (=) (@union (int_type Ti) _).
 Proof.
