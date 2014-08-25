@@ -25,14 +25,17 @@ Definition csteps_exec (Γ : env Ti) (δ : funenv Ti) :
   let reds := listset_normalize hash (Sss ≫= snd) in
   (nfs,reds) :.: go reds.
 Definition interpreter (Θ : list (N * decl Ti))
-    (f : funname) (vs : list (val Ti)) :
+    (f : funname) (ces : list (cexpr Ti)) :
     string + stream (listset (state Ti) * listset (state Ti)) :=
-  '(Γ,Γf,δ,m) ← to_envs Θ;
+  '(Γn,Γ,Γf,δ,m,xs) ← to_envs Θ;
   '(σs,_) ← error_of_option (Γf !! f)
-    "interpreter called with function that does not exists";
-  σs' ← error_of_option (mapM (type_check (Γ,'{m})) vs)
-    "interpreter called with values that cannot be typed";
-  guard (σs' = (σs : list (type Ti)))
-    with "interpreter called with values of incorrect type";
+    "interpreter called for undeclared function";
+  eσlrs ← mapM (to_expr Γn Γ Γf m xs) ces;
+  let σes := zip_with to_R_NULL σs eσlrs in 
+  guard (Forall2 (cast_typed Γ) (snd <$> σes) σs)
+    with "interpreter called with arguments of incorrect type";
+  let es := (cast{σs}* (fst <$> σes))%E in
+  vs ← error_of_option (mapM (λ e, ⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr) es)
+    "interpreter called with non-constant expressions";
   inr (csteps_exec Γ δ {[ initial_state m f vs ]}).
 End interpreter.
