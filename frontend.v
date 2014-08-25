@@ -358,7 +358,7 @@ with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
        "array with non-constant size expression";
      '(_,x) ← error_of_option (maybe_VBase v ≫= maybe_VInt)
-       "array non-integer size expression";
+       "array with non-integer size expression";
      let n := Z.to_nat x in
      guard (n ≠ 0) with "array with negative or zero size expression";
      inr (τ.[n])
@@ -378,12 +378,12 @@ Context `{Env Ti}.
 Global Instance cstmt_labels : Labels (cstmt Ti) :=
   fix go cs := let _ : Labels _ := @go in
   match cs with
-  | CSBlock _ _ _ _ cs => labels cs
+  | CSDo _ | CSSkip | CSGoto _ | CSBreak | CSContinue | CSReturn _ => ∅
+  | CSBlock _ _ _ _ cs | CSTypeDef _ _ cs => labels cs
   | CSComp cs1 cs2 => labels cs1 ∪ labels cs2
   | CSLabel l cs => {[ l ]} ∪ labels cs
-  | CSWhile _ cs => labels cs
+  | CSWhile _ cs | CSFor _ _ _ cs | CSDoWhile cs _ => labels cs
   | CSIf _ cs1 cs2 => labels cs1 ∪ labels cs2
-  | _ => ∅
   end.
 Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti) (x : N) (τ : type Ti)
