@@ -415,22 +415,20 @@ Proof.
   eauto using size_of_pos.
 Qed.
 Lemma addr_top_array_typed Γ Γm o τ (n : Z) :
-  ✓ Γ → Γm ⊢ o : τ.[Z.to_nat n] → ✓{Γ} τ → (0 < n)%Z →
+  ✓ Γ → Γm ⊢ o : τ.[Z.to_nat n] → ✓{Γ} τ → Z.to_nat n ≠ 0 →
   int_typed (n * size_of Γ τ) sptrT → (Γ,Γm) ⊢ addr_top_array o τ n : τ.
 Proof.
-  intros. assert (0 < Z.to_nat n) by (apply (Z2Nat.inj_lt 0); lia).
-  constructor; simpl; auto.
+  intros. assert (0 ≤ n)%Z by (by destruct n). constructor; simpl; auto.
   * apply TArray_valid; auto with lia.
-  * by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id by lia.
-  * by repeat typed_constructor. 
+  * by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id by done.
+  * repeat typed_constructor; lia. 
   * lia.
   * eauto using Nat.mod_0_l, size_of_ne_0.
 Qed.
 Lemma addr_top_array_strict Γ o τ n :
-  ✓ Γ → ✓{Γ} τ → (0 < n)%Z → addr_strict Γ (addr_top_array o τ n).
+  ✓ Γ → ✓{Γ} τ → Z.to_nat n ≠ 0 → addr_strict Γ (addr_top_array o τ n).
 Proof.
-  intros. apply Nat.mul_pos_pos; simpl; eauto using size_of_pos.
-  apply (Z2Nat.inj_lt 0); lia.
+  intros. apply Nat.mul_pos_pos; simpl; eauto using size_of_pos with lia.
 Qed.
 Lemma addr_is_top_array_alt Γ Γm a τ :
   ✓ Γ → (Γ,Γm) ⊢ a : τ → addr_is_top_array a ↔ ∃ τ' n, addr_strict Γ a ∧
@@ -872,6 +870,21 @@ Proof.
   * by constructor.
   * simpl; lia.
   * apply ref_refine_nil_alt; simpl; auto with lia.
+Qed.
+Lemma addr_top_array_refine Γ f Γm1 Γm2 o1 o2 τ (n : Z) :
+  ✓ Γ → Γm1 ⊢ o1 : τ.[Z.to_nat n] → Γm2 ⊢ o2 : τ.[Z.to_nat n] →
+  (index_alive Γm1 o1 → index_alive Γm2 o2) → f !! o1 = Some (o2,[]) →
+  ✓{Γ} τ → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
+  addr_top_array o1 τ n ⊑{Γ,f@Γm1↦Γm2} addr_top_array o2 τ n : τ.
+Proof.
+  intros. assert (0 ≤ n)%Z by (by destruct n). econstructor; simpl; eauto. 
+  * apply TArray_valid; auto with lia.
+  * by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id by done.
+  * by repeat typed_constructor. 
+  * repeat typed_constructor; lia.
+  * lia.
+  * eauto using Nat.mod_0_l, size_of_ne_0.
+  * constructor.
 Qed.
 Lemma addr_plus_ok_refine Γ f Γm1 Γm2 a1 a2 σ j :
   a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → addr_plus_ok Γ Γm1 j a1 → addr_plus_ok Γ Γm2 j a2.

@@ -35,6 +35,10 @@ Section simple_collection.
   Qed.
   Lemma collection_positive_l_alt X Y : X ≢ ∅ → X ∪ Y ≢ ∅.
   Proof. eauto using collection_positive_l. Qed.
+  Lemma elem_of_singleton_1 x y : x ∈ {[y]} → x = y.
+  Proof. by rewrite elem_of_singleton. Qed.
+  Lemma elem_of_singleton_2 x y : x = y → x ∈ {[y]}.
+  Proof. by rewrite elem_of_singleton. Qed.
   Lemma elem_of_subseteq_singleton x X : x ∈ X ↔ {[ x ]} ⊆ X.
   Proof.
     split.

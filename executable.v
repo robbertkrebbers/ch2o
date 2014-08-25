@@ -47,9 +47,10 @@ Definition ehstep_exec (Γ : env Ti) (ρ : stack)
   | #{Ω} v #> rs => v' ← v !! rs; Some (#{Ω} v', m)
   | alloc{τ} (#{Ω} (intV{_} n)) =>
      let o := fresh (dom indexset m) in
-     guard (0 < n)%Z;
+     let n' := Z.to_nat n in
+     guard (n' ≠ 0);
      guard (int_typed (n * size_of Γ τ) sptrT);
-     Some (%{Ω}(addr_top_array o τ n), mem_alloc Γ o true (τ.[Z.to_nat n]) m)
+     Some (%{Ω}(addr_top_array o τ n), mem_alloc Γ o true (τ.[n']) m)
   | free (%{Ω} a) =>
      guard (mem_freeable a m);
      Some (#{Ω} voidV, mem_free (addr_index a) m)

@@ -1038,6 +1038,12 @@ Proof.
     eauto using bit_size_of_pos, addr_typed_type_valid).
   by simplify_type_equality.
 Qed.
+Lemma lock_singleton_valid Γ Γm a τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : τ → ✓{Γm} (lock_singleton Γ a).
+Proof.
+  intros ?? o i. rewrite elem_of_lock_singleton_typed by eauto.
+  intros (->&?&?); eauto using addr_typed_index.
+Qed.
 Lemma locks_refine_id Γ Γm Ω : Ω ⊑{Γ@Γm} Ω.
 Proof. split; intros; simplify_equality'; eauto using memenv_refine_id. Qed.
 Lemma locks_refine_compose Γ f g Γm1 Γm2 Γm3 Ω1 Ω2 Ω3 :

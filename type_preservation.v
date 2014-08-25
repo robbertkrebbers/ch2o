@@ -49,41 +49,41 @@ Proof.
   intros ? [] ???.
   * typed_inversion_all; decompose_Forall_hyps; split_ands; auto.
     typed_constructor; eauto using addr_top_typed, addr_top_strict,
-      index_typed_valid, index_typed_representable.
+      index_typed_valid, index_typed_representable, lockset_empty_valid.
   * typed_inversion_all; auto.
   * typed_inversion_all; auto 7.
-  * typed_inversion_all; split_ands.
+  * typed_inversion_all.
+    rewrite <-and_assoc; apply and_wlog_l; intros; split_ands.
     + eapply mem_lock_valid'; eauto using mem_insert_writable,
         mem_insert_valid', assign_preservation_2.
-    + typed_constructor.
-      eapply val_typed_weaken; eauto using assign_preservation_1.
-      eauto 9 using index_typed_lock, index_typed_insert,
-        mem_insert_writable, mem_insert_valid', assign_preservation_2.
+    + typed_constructor; eauto using lockset_union_valid, lockset_valid_weaken,
+        lock_singleton_valid, val_typed_weaken, assign_preservation_1.
     + intros. eapply index_typed_lock; eauto using mem_insert_writable,
         mem_insert_valid', index_typed_insert, assign_preservation_2.
   * typed_inversion_all; split_ands.
     + eauto using mem_force_valid'.
-    + eauto 6 using val_typed_weaken, index_typed_force, mem_lookup_typed.
+    + typed_constructor; eauto using lockset_valid_weaken, index_typed_force.
+      eauto 6 using val_typed_weaken, index_typed_force, mem_lookup_typed.
     + eauto using mem_lookup_typed, index_typed_force.
   * typed_inversion_all.
     split_ands; eauto 7 using addr_elt_typed, addr_elt_strict.
   * typed_inversion_all; split_ands; eauto using val_lookup_seg_typed.
-  * typed_inversion_all; split_ands.
-    + eapply mem_alloc_valid'; eauto.
-      - apply TArray_valid; auto. rewrite (Z2Nat.inj_iff _ 0); lia.
-      - by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id by lia.
-    + typed_constructor; eauto using addr_top_array_strict.
-      apply addr_top_array_typed; eauto. apply index_typed_alloc_eq; auto.
-      apply TArray_valid; auto. rewrite (Z2Nat.inj_iff _ 0); lia.
-    + intros. eapply index_typed_alloc; auto.
-      apply TArray_valid; auto. rewrite (Z2Nat.inj_iff _ 0); lia.
-  * typed_inversion_all; eauto 7 using mem_free_valid', index_typed_free.
+  * typed_inversion_all.
+    rewrite <-and_assoc; apply and_wlog_l; intros; split_ands.
+    + eapply mem_alloc_valid'; eauto using TArray_valid.
+      by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id
+        by auto using Z_to_nat_neq_0_nonneg.
+    + typed_constructor; eauto using addr_top_array_strict, TArray_valid,
+        addr_top_array_typed, index_typed_alloc_eq, lockset_valid_weaken.
+    + eauto using index_typed_alloc, TArray_valid.
+  * typed_inversion_all; eauto 10 using lockset_valid_weaken,
+      mem_free_valid', index_typed_free.
   * typed_inversion_all;
       repeat match goal with H : unop_typed _ _ _ |- _ => by inversion H end;
       eauto using val_unop_typed.
   * typed_inversion_all;
       repeat match goal with H : binop_typed _ _ _ _ |- _ => by inversion H end;
-      eauto using val_binop_typed.
+      eauto 8 using val_binop_typed, lockset_union_valid.
   * typed_inversion_all; split_ands;
        eauto using mem_unlock_valid', expr_typed_weaken, index_typed_unlock.
   * typed_inversion_all; split_ands;
@@ -220,7 +220,7 @@ Proof.
       mem_foldr_free_valid, val_typed_weaken.
   * intros m k g E v (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using ectx_subst_typed.
+      eauto using ectx_subst_typed, lockset_empty_valid.
   * intros m k o τ v s (τf&HS&?&?) ?; typed_inversion_all.
     split; [|eauto using funenv_typed_weaken, index_typed_free].
     eexists; simpl; split_ands; repeat typed_constructor;

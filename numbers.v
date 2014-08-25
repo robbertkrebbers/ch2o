@@ -264,7 +264,11 @@ Arguments Z.modulo _ _ : simpl never.
 Arguments Z.quot _ _ : simpl never.
 Arguments Z.rem _ _ : simpl never.
 
-Lemma Z_mod_pos a b : 0 < b → 0 ≤ a `mod` b.
+Lemma Z_to_nat_neq_0_pos x : Z.to_nat x ≠ 0%nat → 0 < x.
+Proof. by destruct x. Qed.
+Lemma Z_to_nat_neq_0_nonneg x : Z.to_nat x ≠ 0%nat → 0 ≤ x.
+Proof. by destruct x. Qed.
+Lemma Z_mod_pos x y : 0 < y → 0 ≤ x `mod` y.
 Proof. apply Z.mod_pos_bound. Qed.
 
 Hint Resolve Z.lt_le_incl : zpos.

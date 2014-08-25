@@ -25,10 +25,11 @@ Inductive expr_refine' (Γ : env Ti) (Γf : funtypes Ti)
      τs !! n = Some τ →
      expr_refine' Γ Γf τs f Γm1 Γm2 (var{τ} n) (var{τ} n) (inl τ)
   | EVal_refine Ω1 Ω2 v1 v2 τ :
-     Ω1 ⊑{Γ,f@Γm1↦Γm2} Ω2 → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ →
+     ✓{Γm1} Ω1 → ✓{Γm2} Ω2 → Ω1 ⊑{Γ,f@Γm1↦Γm2} Ω2 → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ →
      expr_refine' Γ Γf τs f Γm1 Γm2 (#{Ω1} v1) (#{Ω2} v2) (inr τ)
   | EAddr_refine Ω1 Ω2 a1 a2 τ :
-     Ω1 ⊑{Γ,f@Γm1↦Γm2} Ω2 → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : τ → addr_strict Γ a1 →
+     ✓{Γm1} Ω1 → ✓{Γm2} Ω2 → Ω1 ⊑{Γ,f@Γm1↦Γm2} Ω2 →
+     a1 ⊑{Γ,f@Γm1↦Γm2} a2 : τ → addr_strict Γ a1 →
      expr_refine' Γ Γf τs f Γm1 Γm2 (%{Ω1} a1) (%{Ω2} a2) (inl τ)
   | ERtoL_refine e1 e2 τ :
      expr_refine' Γ Γf τs f Γm1 Γm2 e1 e2 (inr (τ.*)) → ✓{Γ} τ →
@@ -93,11 +94,11 @@ Section expr_refine_ind.
   Context (Pvar : ∀ τ n,
     τs !! n = Some τ → P (var{τ} n) (var{τ} n) (inl τ)).
   Context (Pval : ∀ Ω1 Ω2 v1 v2 τ,
-    Ω1 ⊑{Γ,f@Γm1↦Γm2} Ω2 → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ →
+    ✓{Γm1} Ω1 → ✓{Γm2} Ω2 → Ω1 ⊑{Γ,f@Γm1↦Γm2} Ω2 → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ →
     P (#{Ω1} v1) (#{Ω2} v2) (inr τ)).
   Context (Paddr : ∀ Ω1 Ω2 a1 a2 τ,
-    Ω1 ⊑{Γ,f@Γm1↦Γm2} Ω2 → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : τ → addr_strict Γ a1 →
-    P (%{Ω1} a1) (%{Ω2} a2) (inl τ)).
+    ✓{Γm1} Ω1 → ✓{Γm2} Ω2 → Ω1 ⊑{Γ,f@Γm1↦Γm2} Ω2 → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : τ →
+    addr_strict Γ a1 → P (%{Ω1} a1) (%{Ω2} a2) (inl τ)).
   Context (Prtol : ∀ e1 e2 τ,
     e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inr (τ.*) →
     P e1 e2 (inr (τ.* )) → ✓{Γ} τ → P (.* e1) (.* e2) (inl τ)).

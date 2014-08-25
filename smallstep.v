@@ -57,7 +57,7 @@ Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
   | estep_eltr m Ω v rs v' :
      v !! rs = Some v' → Γ\ ρ ⊢ₕ #{Ω} v #> rs, m ⇒ #{Ω} v', m
   | estep_alloc m Ω o τi τ n :
-     mem_allocable o m → (0 < n)%Z → int_typed (n * size_of Γ τ) sptrT →
+     mem_allocable o m → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
      Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒
              %{Ω} (addr_top_array o τ n), mem_alloc Γ o true (τ.[Z.to_nat n]) m
   | estep_free m Ω a :
@@ -776,7 +776,7 @@ lemmas, that are useful to automatically perform reduction steps, pick a fully
 determined one. *)
 Lemma estep_alloc_fresh ρ m Ω τ τi n :
   let o := fresh (dom indexset m) in
-  (0 < n)%Z → int_typed (n * size_of Γ τ) sptrT →
+  Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
   Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒
           %{Ω} (addr_top_array o τ n), mem_alloc Γ o true (τ.[Z.to_nat n]) m.
 Proof. constructor; auto. eapply mem_allocable_alt, is_fresh. Qed.

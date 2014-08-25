@@ -187,3 +187,28 @@ Proof.
 Qed.
 Instance: PartialOrder (@subseteq lockset _).
 Proof. split; try apply _. intros ????. apply lockset_eq. intuition. Qed.
+
+Instance lockset_valid {Ti} : Valid (memenv Ti) lockset := λ Γm Ω,
+  ∀ o r, (o,r) ∈ Ω → ∃ τ, Γm ⊢ o : τ.
+Lemma lockset_valid_alt {Ti} (Γm : memenv Ti) (Ω : lockset) :
+  ✓{Γm} Ω ↔ dom indexset (`Ω) ⊆ dom indexset Γm.
+Proof.
+  rewrite elem_of_subseteq; setoid_rewrite elem_of_dom; split.
+  * intros HΩ o [ω ?].
+    destruct (collection_choose_L ω) as [i ?]; [by apply (proj2_dsig Ω o ω)|].
+    destruct (HΩ o i) as (τ&β&?); [by exists ω|by exists (τ,β)].
+  * intros HΩ o r (ω&?&_). destruct (HΩ o) as [[τ β] ?]; eauto. by exists τ β.
+Qed.
+Instance lockset_valid_dec {Ti} (Γm : memenv Ti) Ω : Decision (✓{Γm} Ω).
+Proof.
+ refine (cast_if (decide (dom indexset (`Ω) ⊆ dom _ Γm)));
+  by rewrite lockset_valid_alt.
+Defined.
+Lemma lockset_valid_weaken {Ti} (Γm1 Γm2 : memenv Ti) Ω :
+  ✓{Γm1} Ω → (∀ o σ, Γm1 ⊢ o : σ → Γm2 ⊢ o : σ) → ✓{Γm2} Ω.
+Proof. intros HΩ ? o r ?; destruct (HΩ o r); eauto. Qed.
+Lemma lockset_empty_valid {Ti} (Γm : memenv Ti) : ✓{Γm} ∅.
+Proof. intros o r; solve_elem_of. Qed.
+Lemma lockset_union_valid {Ti} (Γm : memenv Ti) Ω1 Ω2 :
+  ✓{Γm} Ω1 → ✓{Γm} Ω2 → ✓{Γm} (Ω1 ∪ Ω2).
+Proof. intros HΩ1 HΩ2 o r; rewrite elem_of_union; naive_solver. Qed.

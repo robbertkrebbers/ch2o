@@ -49,9 +49,9 @@ Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
   | EVar_typed τ n :
      τs !! n = Some τ → expr_typed' Γ Γf Γm τs (var{τ} n) (inl τ)
   | EVal_typed Ω v τ :
-     (Γ,Γm) ⊢ v : τ → expr_typed' Γ Γf Γm τs (#{Ω} v) (inr τ)
+     ✓{Γm} Ω → (Γ,Γm) ⊢ v : τ → expr_typed' Γ Γf Γm τs (#{Ω} v) (inr τ)
   | EAddr_typed Ω a τ :
-     (Γ,Γm) ⊢ a : τ → addr_strict Γ a →
+     ✓{Γm} Ω → (Γ,Γm) ⊢ a : τ → addr_strict Γ a →
      expr_typed' Γ Γf Γm τs (%{Ω} a) (inl τ)
   | ERtoL_typed e τ :
      expr_typed' Γ Γf Γm τs e (inr (τ.*)) →
@@ -106,9 +106,9 @@ Section expr_typed_ind.
   Context (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti) (τs : list (type Ti)).
   Context (P : expr Ti → lrtype Ti → Prop).
   Context (Pvar : ∀ τ n, τs !! n = Some τ → P (var{τ} n) (inl τ)).
-  Context (Pval : ∀ Ω v τ, (Γ,Γm) ⊢ v : τ → P (#{Ω} v) (inr τ)).
+  Context (Pval : ∀ Ω v τ, ✓{Γm} Ω → (Γ,Γm) ⊢ v : τ → P (#{Ω} v) (inr τ)).
   Context (Paddr : ∀ Ω a τ,
-    (Γ,Γm) ⊢ a : τ → addr_strict Γ a → P (%{Ω} a) (inl τ)).
+    ✓{Γm} Ω → (Γ,Γm) ⊢ a : τ → addr_strict Γ a → P (%{Ω} a) (inl τ)).
   Context (Prtol : ∀ e τ,
     (Γ,Γf,Γm,τs) ⊢ e : inr (τ.*) → P e (inr (τ.*)) → ✓{Γ} τ → P (.* e) (inl τ)).
   Context (Profl : ∀ e τ,
@@ -372,8 +372,9 @@ Global Instance expr_type_check: TypeCheck envs (lrtype Ti) (expr Ti) :=
   let '(Γ,Γf,Γm,τs) := Γs in
   match e with
   | var{τ} n => τ' ← τs !! n; guard (τ = τ'); Some (inl τ)
-  | #{Ω} v => inr <$> type_check (Γ,Γm) v
-  | %{Ω} a => guard (addr_strict Γ a); inl <$> type_check (Γ,Γm) a
+  | #{Ω} v => guard (✓{Γm} Ω); inr <$> type_check (Γ,Γm) v
+  | %{Ω} a =>
+     guard (✓{Γm} Ω); guard (addr_strict Γ a); inl <$> type_check (Γ,Γm) a
   | .* e =>
      τ ← type_check Γs e ≫= maybe_inr;
      τp ← maybe_TBase τ ≫= maybe_TPtr;
@@ -656,7 +657,7 @@ Proof.
     erewrite <-1?size_of_weaken by eauto; eauto using val_typed_weaken,
     assign_typed_weaken, addr_typed_weaken, addr_strict_weaken,
     type_valid_weaken, lookup_weaken, lookup_app_l_Some, cast_typed_weaken,
-    ref_seg_typed_weaken.
+    ref_seg_typed_weaken, lockset_valid_weaken.
 Qed.
 Lemma ectx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 τs1 τs2 Ei τlr σlr :
   ✓ Γ1 → (Γ1,Γf1,Γm1,τs1) ⊢ Ei : τlr ↣ σlr → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →

@@ -721,7 +721,7 @@ Proof.
   unfold to_R_NULL. destruct (to_R (e,τlr)) as [e'' τ''] eqn:?.
   destruct 5 as [σb Hσb| |]; simplify_equality'; eauto 2 using to_R_typed.
   destruct Hσb; repeat case_match; simplify_equality'; eauto 2 using to_R_typed.
-  by repeat typed_constructor.
+  repeat typed_constructor; eauto using lockset_empty_valid.
 Qed.
 
 Lemma var_lookup_typed Γ Γf m xs x e τlr :
@@ -734,11 +734,11 @@ Proof.
   induction Hxs as [|[x' [o|τ|τi z|]] ? xs ? IH];
     intros τs' ?; simplify_option_equality; simplify_type_equality; eauto 2.
   * typed_constructor; eauto using addr_top_typed, addr_top_strict,
-      index_typed_valid, index_typed_representable.
+      index_typed_valid, index_typed_representable, lockset_empty_valid.
   * typed_constructor. by rewrite list_lookup_middle.
   * rewrite cons_middle, (associative_L (++)). apply (IH (τs' ++ [τ])).
     rewrite app_length; simpl. by rewrite Nat.add_comm.
-  * by repeat typed_constructor.
+  * repeat typed_constructor; auto using lockset_empty_valid.
 Qed.
 Lemma convert_ptrs_typed Γ Γf m τs e1 τ1 e2 τ2 e1' e2' τ' :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
@@ -748,7 +748,8 @@ Lemma convert_ptrs_typed Γ Γf m τs e1 τ1 e2 τ2 e1' e2' τ' :
 Proof.
   unfold convert_ptrs; destruct τ1 as [[|τp1|]| |], τ2 as [[|τp2|]| |]; intros;
     simplify_option_equality; split; repeat typed_constructor;
-    eauto using TPtr_valid_inv, TBase_valid_inv, expr_inr_typed_type_valid.
+    eauto using TPtr_valid_inv, TBase_valid_inv, expr_inr_typed_type_valid,
+    lockset_empty_valid.
 Qed.
 Lemma to_if_expr_typed Γ Γf m τs e1 τb e2 τ2 e3 τ3 e τlr :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
@@ -838,7 +839,8 @@ Proof.
     match goal with
     | |- _ ⊢ _ : _ =>
        repeat typed_constructor; eauto using to_binop_expr_typed,
-         to_if_expr_typed, var_lookup_typed, type_valid_ptr_type_valid
+         to_if_expr_typed, var_lookup_typed, type_valid_ptr_type_valid,
+         lockset_empty_valid
     | |- ✓{_} _ =>
        repeat constructor; eauto using typedef_lookup_valid, TBase_valid_inv
     | |- ptr_type_valid _ _ =>
@@ -922,8 +924,9 @@ Proof.
     | x : (_ * _)%type |- _ => destruct x
     | _ => progress simplify_error_equality
     | _ => case_match
-    end; try solve [split_ands; eauto using to_R_typed, to_expr_typed].
-  * split_ands; eauto with congruence.
+    end; try solve
+    [split_ands; eauto using to_R_typed, to_expr_typed, lockset_empty_valid].
+  * split_ands; eauto using lockset_empty_valid with congruence.
   * split_ands; eauto 2. eapply SBlock_typed; eauto 2.
     repeat typed_constructor; eauto using expr_typed_weaken, subseteq_empty.
     by constructor.
@@ -932,8 +935,8 @@ Proof.
       rettype_union_l || typed_constructor).
   * split_ands; repeat (progress eauto 2 using expr_typed_weaken,
       rettype_union_l || typed_constructor).
-  * split_ands; repeat (progress eauto 6 using expr_typed_weaken, 
-      rettype_union_l || typed_constructor).
+  * split_ands; repeat (progress eauto 6 using expr_typed_weaken,
+      lockset_empty_valid, rettype_union_l || typed_constructor).
   * split_ands; repeat (progress eauto using expr_typed_weaken,
       stmt_typed_weaken || typed_constructor).
 Qed.

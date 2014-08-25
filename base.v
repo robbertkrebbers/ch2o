@@ -815,6 +815,10 @@ Section prod_relation.
 End prod_relation.
 
 (** ** Other *)
+Lemma and_wlog_l (P Q : Prop) : (Q → P) → Q → (P ∧ Q).
+Proof. tauto. Qed.
+Lemma and_wlog_r (P Q : Prop) : P → (P → Q) → (P ∧ Q).
+Proof. tauto. Qed.
 Instance: ∀ A B (x : B), Commutative (=) (λ _ _ : A, x).
 Proof. red. trivial. Qed.
 Instance: ∀ A (x : A), Associative (=) (λ _ _ : A, x).
