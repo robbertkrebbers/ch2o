@@ -220,6 +220,10 @@ Definition to_binop_expr (op : binop)
 End frontend.
 
 (* not in the section because of bug #3488 *)
+Inductive to_type_kind := to_Ptr | to_Type (can_be_void : bool).
+Instance to_type_kind_dec (k1 k2 : to_type_kind) : Decision (k1 = k2).
+Proof. solve_decision. Defined.
+
 Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
     (ce : cexpr Ti) : string + expr Ti * lrtype Ti :=
@@ -230,7 +234,7 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      guard (int_typed x τi) with "integer constant not in range";
      inr (# (intV{τi} x), inr (intT τi))
   | CESizeOf cτ =>
-     τ ← to_type Γn Γ Γf m xs false cτ;
+     τ ← to_type Γn Γ Γf m xs (to_Type false) cτ;
      let sz := size_of Γ τ in
      guard (int_typed sz sptrT) with "argument of size of not in range";
      inr (# (intV{sptrT} sz), inr sptrT)
@@ -261,7 +265,7 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
        with "function applied to arguments of incorrect type";
      inr (call f @ cast{τs}* (fst <$> τes), inr σ)
   | CEAlloc cτ ce =>
-     τ ← to_type Γn Γ Γf m xs false cτ;
+     τ ← to_type Γn Γ Γf m xs (to_Type false) cτ;
      '(e,τe) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      _ ← error_of_option (maybe_TBase τe ≫= maybe_TInt)
        "alloc applied to argument of non-integer type";
@@ -306,7 +310,7 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      inr (if{e1} #(intV{sintT} 0)
            else (if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)), inr sintT)
   | CECast cσ ce =>
-     σ ← to_type Γn Γ Γf m xs true cσ;
+     σ ← to_type Γn Γ Γf m xs to_Ptr cσ;
      '(e,τ) ← to_R_NULL σ <$> to_expr Γn Γ Γf m xs ce;
      guard (maybe_TCompound σ = None) with "cannot cast to struct/union";
      guard (cast_typed Γ τ σ) with "cast cannot be typed";
@@ -333,19 +337,23 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
   end
 with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
-    (ptr : bool) (cτ : ctype Ti) : string + type Ti :=
+    (kind : to_type_kind) (cτ : ctype Ti) : string + type Ti :=
   match cτ with
-  | CTVoid => inr voidT
+  | CTVoid =>
+     guard (kind ≠ to_Type false) with "non-void type expected";
+     inr voidT
   | CTDef x =>
-     error_of_option (lookup_typedef x xs) "typedef not found"
+     τ ← error_of_option (lookup_typedef x xs) "typedef not found";
+     guard (τ = voidT → kind ≠ to_Type false) with "non-void type expected";
+     inr τ
   | CTEnum s =>
      let s : tag := s in
      τi ← error_of_option (Γn !! s ≫= maybe_EnumType) "enum not found";
      inr (intT τi)
   | CTInt τi => inr (intT τi)
-  | CTPtr cτ => τ ← to_type Γn Γ Γf m xs true cτ; inr (τ.* )
+  | CTPtr cτ => τ ← to_type Γn Γ Γf m xs to_Ptr cτ; inr (τ.* )
   | CTArray cτ ce =>
-     τ ← to_type Γn Γ Γf m xs false cτ;
+     τ ← to_type Γn Γ Γf m xs (to_Type false) cτ;
      '(e,_) ← to_expr Γn Γ Γf m xs ce;
      v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
        "array with non-constant size expression";
@@ -356,7 +364,8 @@ with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      inr (τ.[n])
   | CTCompound c s =>
      let s : tag := s in
-     guard (¬ptr → is_Some (Γ !! s)) with "complete compound type expected";
+     guard (kind ≠ to_Ptr → is_Some (Γ !! s))
+       with "complete compound type expected";
      inr (compoundT{c} s)
   | CTTypeOf ce =>
      '(_,τ) ← to_expr Γn Γ Γf m xs ce;
@@ -420,23 +429,23 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti)
      inr (m, ret (cast{τret} e), (true, Some τret))
   | CSReturn None => inr (m, ret (#voidV), (true, Some voidT))
   | CSBlock false x cτ None cs =>
-     τ ← to_type Γn Γ Γf m xs false cτ;
+     τ ← to_type Γn Γ Γf m xs (to_Type false) cτ;
      guard (int_typed (size_of Γ τ) sptrT) with "block with out of range type";
      '(m,s,cmσ) ← go m ((x,Local τ) :: xs) Ls mLc mLb cs;
      inr (m, blk{τ} s, cmσ)
   | CSBlock false x cτ (Some ce) cs =>
-     τ ← to_type Γn Γ Γf m xs false cτ;
+     τ ← to_type Γn Γ Γf m xs (to_Type false) cτ;
      guard (int_typed (size_of Γ τ) sptrT) with "block with out of range type";
      '(e,τ') ← to_R <$> to_expr Γn Γ Γf m ((x,Local τ) :: xs) ce;
      guard (cast_typed Γ τ' τ) with "block with initializer of incorrect type";
      '(m,s,cmσ) ← go m ((x,Local τ) :: xs) Ls mLc mLb cs;
      inr (m, blk{τ} (var{τ} 0 ::= e ;; s), cmσ)
   | CSBlock true x cτ mce cs =>
-     τ ← to_type Γn Γ Γf m xs false cτ;
+     τ ← to_type Γn Γ Γf m xs (to_Type false) cτ;
      '(m,xs) ← alloc_global Γn Γ Γf m xs x τ mce;
      go m xs Ls mLc mLb cs
   | CSTypeDef x cτ cs =>
-     τ ← to_type Γn Γ Γf m xs false cτ;
+     τ ← to_type Γn Γ Γf m xs (to_Type true) cτ;
      go m ((x,TypeDef τ) :: xs) Ls mLc mLb cs
   | CSComp cs1 cs2 =>
      '(m,s1,cmσ1) ← go m xs Ls mLc mLb cs1;
@@ -524,7 +533,7 @@ Fixpoint to_envs_go (Γn : compound_env Ti)
   | (s,CompoundDecl c cτys) :: Θ =>
      let s : tag := s in
      let ys := fst <$> cτys in
-     τs ← mapM (to_type Γn Γ Γf m xs false) (snd <$> cτys);
+     τs ← mapM (to_type Γn Γ Γf m xs (to_Type false)) (snd <$> cτys);
      guard (Γ !! s = None) with "compound type with previously declared name";
      guard (NoDup ys) with "compound type with non-unique fields";
      guard (τs ≠ []) with "compound type should have atleast 1 field";
@@ -536,20 +545,20 @@ Fixpoint to_envs_go (Γn : compound_env Ti)
      to_envs_go (<[s:=EnumType τi]>Γn) Γ Γf δ m xs' Θ
   | (x,TypeDefDecl cτ) :: Θ =>
      guard (var_fresh x xs) with "typedef with previously declared name";
-     τ ← to_type Γn Γ Γf m xs false cτ;
+     τ ← to_type Γn Γ Γf m xs (to_Type true) cτ;
      to_envs_go Γn Γ Γf δ m ((x,TypeDef τ) :: xs) Θ
   | (x,GlobDecl cτ me) :: Θ =>
      guard (var_fresh x xs) with "global with previously declared name";
-     τ ← to_type Γn Γ Γf m xs false cτ;
+     τ ← to_type Γn Γ Γf m xs (to_Type false) cτ;
      '(m,xs) ← alloc_global Γn Γ Γf m xs x τ me;
      to_envs_go Γn Γ Γf δ m xs Θ
   | (f,FunDecl cτys cσ mcs) :: Θ =>
      (* todo: functions and globals cannot have the same name *)
      let f : funname := f in
      let ys := fst <$> cτys in
-     τs ← mapM (to_type Γn Γ Γf m xs false) (snd <$> cτys);
+     τs ← mapM (to_type Γn Γ Γf m xs (to_Type false)) (snd <$> cτys);
      guard (NoDup ys) with "function with non-unique arguments";
-     σ ← to_type Γn Γ Γf m xs false cσ;
+     σ ← to_type Γn Γ Γf m xs (to_Type true) cσ;
      Γf ← extend_funtypes Γ f τs σ Γf;
      match mcs with
      | Some cs =>
@@ -776,8 +785,8 @@ Lemma to_expr_type_typed Γn Γ Γf m xs :
   (∀ ce e τlr, to_expr Γn Γ Γf m xs ce = inr (e,τlr) →
     (Γ,Γf,'{m},var_env_stack_types xs) ⊢ e : τlr) ∧
   (∀ cτ,
-    (∀ τ, to_type Γn Γ Γf m xs false cτ = inr τ → ✓{Γ} τ) ∧
-    (∀ τ, to_type Γn Γ Γf m xs true cτ = inr τ → ptr_type_valid Γ τ)).
+    (∀ τ void, to_type Γn Γ Γf m xs (to_Type void) cτ = inr τ → ✓{Γ} τ) ∧
+    (∀ τ, to_type Γn Γ Γf m xs to_Ptr cτ = inr τ → ptr_type_valid Γ τ)).
 Proof.
   intros ????. assert (∀ f ces τs τ eτlrs,
      Γf !! f = Some (τs, τ) →
@@ -808,6 +817,8 @@ Proof.
        H : to_expr _ _ _ _ _ ?ce = inr _ |- _ => specialize (IH _ _ H)
     | IH : ∀ _, to_type _ _ _ _ _ _ ?cτ = inr _ → _,
        H : to_type _ _ _ _ _ _ ?cτ = inr _ |- _ => specialize (IH _ H)
+    | IH : ∀ _ _, to_type _ _ _ _ _ _ ?cτ = inr _ → _,
+       H : to_type _ _ _ _ _ _ ?cτ = inr _ |- _ => specialize (IH _ _ H)
     | H: assign_type_of _ _ _ _ = Some _ |- _ => apply assign_type_of_sound in H
     | H: unop_type_of _ _ = Some _ |- _ => apply unop_type_of_sound in H
     | H: binop_type_of _ _ _ = Some _ |- _ => apply binop_type_of_sound in H
@@ -840,13 +851,13 @@ Lemma to_expr_typed Γn Γ Γf m xs ce e τlr :
   to_expr Γn Γ Γf m xs ce = inr (e,τlr) →
   (Γ,Γf,'{m},var_env_stack_types xs) ⊢ e : τlr.
 Proof. intros. eapply to_expr_type_typed; eauto. Qed.
-Lemma to_type_valid Γn Γ Γf m xs cτ τ :
+Lemma to_type_valid Γn Γ Γf m xs void cτ τ :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ ('{m}) xs →
-  to_type Γn Γ Γf m xs false cτ = inr τ → ✓{Γ} τ.
+  to_type Γn Γ Γf m xs (to_Type void) cτ = inr τ → ✓{Γ} τ.
 Proof. intros. eapply to_expr_type_typed; eauto. Qed.
-Lemma to_types_valid Γn Γ Γf m xs cτs τs :
+Lemma to_types_valid Γn Γ Γf m xs void cτs τs :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ ('{m}) xs →
-  mapM (to_type Γn Γ Γf m xs false) cτs = inr τs → ✓{Γ}* τs.
+  mapM (to_type Γn Γ Γf m xs (to_Type void)) cτs = inr τs → ✓{Γ}* τs.
 Proof. rewrite mapM_inr. induction 5; eauto using to_type_valid. Qed.
 
 Lemma alloc_global_typed Γn Γ Γf m xs x τ mce m' xs' :
