@@ -408,61 +408,61 @@ Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti)
   end.
 Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (τret : type Ti) :
-    mem Ti → var_env Ti → labelset → option labelname → option labelname →
-    cstmt Ti → string + mem Ti * stmt Ti * rettype Ti :=
-  fix go m xs Ls mLc mLb cs {struct cs} :=
+    mem Ti → var_env Ti → labelset → option (labelname * labelname) →
+    cstmt Ti → string + mem Ti * labelset * stmt Ti * rettype Ti :=
+  fix go m xs Ls mLcb cs {struct cs} :=
   match cs with
   | CSDo ce =>
      '(e,_) ← to_R <$> to_expr Γn Γ Γf m xs ce;
-     inr (m, !e, (false, None))
-  | CSSkip => inr (m, skip, (false, None))
-  | CSGoto l => inr (m, goto l, (true, None))
+     inr (m, Ls, !e, (false, None))
+  | CSSkip => inr (m, Ls, skip, (false, None))
+  | CSGoto l => inr (m, Ls, goto l, (true, None))
   | CSContinue =>
-     Lc ← error_of_option mLc "continue not allowed";
-     inr (m, goto Lc, (true, None))
+     '(Lc,_) ← error_of_option mLcb "continue not allowed";
+     inr (m, Ls, goto Lc, (true, None))
   | CSBreak =>
-     Lb ← error_of_option mLb "break not allowed";
-     inr (m, goto Lb, (true, None))
+     '(_,Lb) ← error_of_option mLcb "break not allowed";
+     inr (m, Ls, goto Lb, (true, None))
   | CSReturn (Some ce) =>
      '(e,τ') ← to_R <$> to_expr Γn Γ Γf m xs ce;
      guard (cast_typed Γ τ' τret) with "return expression of incorrect type";
-     inr (m, ret (cast{τret} e), (true, Some τret))
-  | CSReturn None => inr (m, ret (#voidV), (true, Some voidT))
+     inr (m, Ls, ret (cast{τret} e), (true, Some τret))
+  | CSReturn None => inr (m, Ls, ret (#voidV), (true, Some voidT))
   | CSBlock false x cτ None cs =>
      τ ← to_type Γn Γ Γf m xs (to_Type false) cτ;
      guard (int_typed (size_of Γ τ) sptrT) with "block with out of range type";
-     '(m,s,cmσ) ← go m ((x,Local τ) :: xs) Ls mLc mLb cs;
-     inr (m, blk{τ} s, cmσ)
+     '(m,Ls,s,cmσ) ← go m ((x,Local τ) :: xs) Ls mLcb cs;
+     inr (m, Ls, blk{τ} s, cmσ)
   | CSBlock false x cτ (Some ce) cs =>
      τ ← to_type Γn Γ Γf m xs (to_Type false) cτ;
      guard (int_typed (size_of Γ τ) sptrT) with "block with out of range type";
      '(e,τ') ← to_R <$> to_expr Γn Γ Γf m ((x,Local τ) :: xs) ce;
      guard (cast_typed Γ τ' τ) with "block with initializer of incorrect type";
-     '(m,s,cmσ) ← go m ((x,Local τ) :: xs) Ls mLc mLb cs;
-     inr (m, blk{τ} (var{τ} 0 ::= e ;; s), cmσ)
+     '(m,Ls,s,cmσ) ← go m ((x,Local τ) :: xs) Ls mLcb cs;
+     inr (m, Ls, blk{τ} (var{τ} 0 ::= e ;; s), cmσ)
   | CSBlock true x cτ mce cs =>
      τ ← to_type Γn Γ Γf m xs (to_Type false) cτ;
      '(m,xs) ← alloc_global Γn Γ Γf m xs x τ mce;
-     go m xs Ls mLc mLb cs
+     go m xs Ls mLcb cs
   | CSTypeDef x cτ cs =>
      τ ← to_type Γn Γ Γf m xs (to_Type true) cτ;
-     go m ((x,TypeDef τ) :: xs) Ls mLc mLb cs
+     go m ((x,TypeDef τ) :: xs) Ls mLcb cs
   | CSComp cs1 cs2 =>
-     '(m,s1,cmσ1) ← go m xs Ls mLc mLb cs1;
-     '(m,s2,cmσ2) ← go m xs Ls mLc mLb cs2;
+     '(m,Ls,s1,cmσ1) ← go m xs Ls mLcb cs1;
+     '(m,Ls,s2,cmσ2) ← go m xs Ls mLcb cs2;
      mσ ← error_of_option (rettype_union (cmσ1.2) (cmσ2.2))
        "composition with non-matching return types";
-     inr (m, s1 ;; s2, (cmσ2.1, mσ))
+     inr (m, Ls, s1 ;; s2, (cmσ2.1, mσ))
   | CSLabel l cs =>
-     '(m,s,cmσ) ← go m xs Ls mLc mLb cs; inr (m, l :; s, cmσ)
+     '(m,Ls,s,cmσ) ← go m xs Ls mLcb cs; inr (m, Ls, l :; s, cmσ)
   | CSWhile ce cs =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      _ ← error_of_option (maybe_TBase τ)
        "while loop with conditional expression of non-base type";
      let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
      let Ls := {[ LC ; LB ]} ∪ Ls in
-     '(m,s,cmσ) ← go m xs Ls (Some LC) (Some LB) cs;
-     inr (m, while{e} (s;; label LC);; label LB, (false, cmσ.2))
+     '(m,Ls,s,cmσ) ← go m xs Ls (Some (LC,LB)) cs;
+     inr (m, Ls, while{e} (s;; label LC);; label LB, (false, cmσ.2))
   | CSFor ce1 ce2 ce3 cs =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1;
      '(e2,τ2) ← to_R <$> to_expr Γn Γ Γf m xs ce2;
@@ -471,25 +471,26 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti)
      '(e3,τ3) ← to_R <$> to_expr Γn Γ Γf m xs ce3;
      let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
      let Ls := {[ LC ; LB ]} ∪ Ls in
-     '(m,s,cmσ) ← go m xs Ls (Some LC) (Some LB) cs;
-     inr (m, !e1 ;; while{e2} (s;; label LC;; !e3);; label LB, (false, cmσ.2))
+     '(m,Ls,s,cmσ) ← go m xs Ls (Some (LC,LB)) cs;
+     inr (m, Ls, !e1 ;; while{e2}
+       (s;; label LC;; !e3);; label LB, (false, cmσ.2))
   | CSDoWhile cs ce =>
      let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
      let Ls := {[ LC ; LB ]} ∪ Ls in
-     '(m,s,cmσ) ← go m xs Ls (Some LC) (Some LB) cs;
+     '(m,Ls,s,cmσ) ← go m xs Ls (Some (LC,LB)) cs;
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      _ ← error_of_option (maybe_TBase τ)
        "do-while loop with conditional expression of non-base type";
-     inr (m, while{#intV{sintT} 1}
+     inr (m, Ls, while{#intV{sintT} 1}
        (s;; label LC;; if{e} skip else goto LB);; label LB, (false, cmσ.2))
   | CSIf ce cs1 cs2 =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      _ ← error_of_option (maybe_TBase τ) "if with expression of non-base type";
-     '(m,s1,cmσ1) ← go m xs Ls mLc mLb cs1;
-     '(m,s2,cmσ2) ← go m xs Ls mLc mLb cs2;
+     '(m,Ls,s1,cmσ1) ← go m xs Ls mLcb cs1;
+     '(m,Ls,s2,cmσ2) ← go m xs Ls mLcb cs2;
      mσ ← error_of_option (rettype_union (cmσ1.2) (cmσ2.2))
        "if statement with non-matching return types";
-     inr (m, if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S
+     inr (m, Ls, if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S
   end%T.
 
 Definition extend_funtypes (Γ : env Ti) (f : funname) (τs : list (type Ti))
@@ -564,7 +565,7 @@ Fixpoint to_envs_go (Γn : compound_env Ti)
      | Some cs =>
         guard (δ !! f = None) with "function previously declared";
         let xs' := zip_with (λ y τ, (y, Local τ)) ys τs ++ xs in
-        '(m,s,cmσ) ← to_stmt Γn Γ Γf σ m xs' (labels cs) None None cs;
+        '(m,_,s,cmσ) ← to_stmt Γn Γ Γf σ m xs' (labels cs) None cs;
         guard (gotos s ⊆ labels s) with "function with unbound gotos";
         guard (rettype_match cmσ σ) with "function with incorrect return type";
         to_envs_go Γn Γ Γf (<[f:=s]>δ) m xs Θ
@@ -894,19 +895,19 @@ Proof.
     constructor; simpl; eauto 6 using index_typed_alloc_val_free,
       Forall_impl, var_decl_valid_weaken, index_typed_alloc_val, val_0_typed.
 Qed.
-Lemma to_stmt_typed Γn Γ Γf τret m xs Ls mLc mLb cs m' s cmτ :
+Lemma to_stmt_typed Γn Γ Γf τret m xs Ls mLcb cs m' Ls' s cmτ :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ ('{m}) xs →
-  to_stmt Γn Γ Γf τret m xs Ls mLc mLb cs = inr (m',s,cmτ) →
+  to_stmt Γn Γ Γf τret m xs Ls mLcb cs = inr (m',Ls', s,cmτ) →
   (**i 1.) *) (Γ,Γf,'{m'},var_env_stack_types xs) ⊢ s : cmτ ∧
   (**i 2.) *) ✓{Γ} m' ∧
   (**i 3.) *) (∀ o σ, '{m} ⊢ o : σ → '{m'} ⊢ o : σ).
 Proof.
-  intros ??. revert m m' s cmτ xs Ls mLc mLb. induction cs; intros;
+  intros ??. revert m m' s cmτ xs Ls Ls' mLcb. induction cs; intros;
     repeat match goal with
     | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
     | IH : ∀ _ _ _ _ _ _ _ _,
-        ✓{_} _ → _ → to_stmt _ _ _ _ _ _ _ _ _ ?cs = inr _ → _,
-      H : to_stmt _ _ _ _ _ _ _ _ _ ?cs = inr _ |- _ =>
+        ✓{_} _ → _ → to_stmt _ _ _ _ _ _ _ _ ?cs = inr _ → _,
+      H : to_stmt _ _ _ _ _ _ _ _ ?cs = inr _ |- _ =>
        destruct (λ Hm Hxs, IH _ _ _ _ _ _ _ _ Hm Hxs H) as (?&?&?); clear IH;
          simpl; [by eauto
                 |by eauto using Forall_impl, var_decl_valid_weaken|]
@@ -1017,13 +1018,13 @@ Proof.
     destruct (extend_funtypes_typed Γ m x τs σ Γf Γf'') as (?&?&?&?); eauto.
     destruct mcs as [cs|]; simplify_equality';
       [|by eapply IH; eauto using funenv_pretyped_weaken].
-    destruct (to_stmt _ _ _ _ _ _ _ _ _ _)
-      as [|[[m'' s] cmσ]] eqn:?; simplify_error_equality.
+    destruct (to_stmt _ _ _ _ _ _ _ _ _)
+      as [|[[[m'' Ls] s] cmσ]] eqn:?; simplify_error_equality.
     assert (length (fst <$> cτys) = length τs).
     { by erewrite <-(error_mapM_length _ _ τs), !fmap_length by eauto. }
     destruct (to_stmt_typed Γn Γ Γf'' σ m
       (zip_with (λ y τ, (y, Local τ)) (fst <$> cτys) τs ++ xs)
-      (labels cs) None None cs m'' s cmσ) as (Hs&?&?); auto.
+      (labels cs) None cs m'' Ls s cmσ) as (Hs&?&?); auto.
     { eauto using Forall_app_2, var_env_valid_locals, to_types_valid. }
     rewrite var_env_stack_types_app, var_env_stack_types_locals,
       Hxs, (right_id_L [] (++)) in Hs by done.
