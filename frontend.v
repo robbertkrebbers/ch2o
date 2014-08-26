@@ -356,7 +356,7 @@ with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      τ ← to_type Γn Γ Γf m xs (to_Type false) cτ;
      '(e,_) ← to_expr Γn Γ Γf m xs ce;
      v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
-       "array with non-constant size expression";
+       "array with non-constant or undefined size expression";
      '(_,x) ← error_of_option (maybe_VBase v ≫= maybe_VInt)
        "array with non-integer size expression";
      let n := Z.to_nat x in
@@ -396,7 +396,7 @@ Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti)
      guard (cast_typed Γ τ' τ)
        with "global/static with initializer of incorrect type";
      v ← error_of_option (⟦ cast{τ} e ⟧ Γ ∅ [] m ≫= maybe_inr)
-       "global/static with non-constant initializer";
+       "global/static with non-constant or undefined initializer";
      let o := fresh (dom _ m) in
      inr (<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o false τ m), (x,Global o τ) :: xs)
   | None =>
@@ -519,7 +519,7 @@ Definition to_enum (Γn : compound_env Ti)
      guard (var_fresh x xs) with "enum field previously declared";
      '(e,_) ← to_expr Γn Γ Γf m xs ce;
      v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
-       "enum field with non-constant value";
+       "enum field with non-constant or undefined value";
      '(_,z') ← error_of_option (maybe_VBase v ≫= maybe_VInt)
        "enum field with non-integer value";
      guard (int_typed z' τi) with "enum field with value out of range";
