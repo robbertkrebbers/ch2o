@@ -161,16 +161,9 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
              State k (Undef (UndefBranch e (if{□} s1 else s2) Ω v)) m
 
   (**i For compound statements: *)
-  | cstep_in_block m k o τ s :
-     mem_allocable o m →
-     Γ\ δ ⊢ₛ State k (Stmt ↘ (blk{τ} s)) m ⇒
-             State (CBlock o τ :: k) (Stmt ↘ s) (mem_alloc Γ o false τ m)
   | cstep_in_comp m k s1 s2 :
      Γ\ δ ⊢ₛ State k (Stmt ↘ (s1 ;; s2)) m ⇒
              State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m
-  | cstep_out_block m k o τ s :
-     Γ\ δ ⊢ₛ State (CBlock o τ :: k) (Stmt ↗ s) m ⇒
-             State k (Stmt ↗ (blk{τ} s)) (mem_free o m)
   | cstep_out_comp1 m k s1 s2 :
      Γ\ δ ⊢ₛ State (CStmt (□ ;; s2) :: k) (Stmt ↗ s1) m ⇒
              State (CStmt (s1 ;; □) :: k) (Stmt ↘ s2) m
@@ -204,25 +197,12 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
              State k (Expr (subst E (#v)%E)) m
 
   (**i For non-local control flow: *)
-  | cstep_top_block m k o τ v s :
-     Γ\ δ ⊢ₛ State (CBlock o τ :: k) (Stmt (⇈ v) s) m ⇒
-             State k (Stmt (⇈ v) (blk{τ} s)) (mem_free o m)
   | cstep_top_item m k E v s :
      Γ\ δ ⊢ₛ State (CStmt E :: k) (Stmt (⇈ v) s) m ⇒
              State k (Stmt (⇈ v) (subst E s)) m
   | cstep_label_here m k l :
      Γ\ δ ⊢ₛ State k (Stmt (↷ l) (label l)) m ⇒
              State k (Stmt ↗ (label l)) m
-  | cstep_label_block_down m k l o τ s :
-     l ∈ labels s → mem_allocable o m →
-     Γ\ δ ⊢ₛ State k (Stmt (↷ l) (blk{τ} s)) m ⇒
-             State (CBlock o τ :: k) (Stmt (↷ l) s) (mem_alloc Γ o false τ m)
-  | cstep_label_block_up m k l o τ s : 
-     (**i Not [l ∈ labels k] so as to avoid it going back and forth between 
-     double occurrences of labels. *)
-     l ∉ labels s →
-     Γ\ δ ⊢ₛ State (CBlock o τ :: k) (Stmt (↷ l) s) m ⇒
-             State k (Stmt (↷l) (blk{τ} s)) (mem_free o m)
   | cstep_label_down m k Es l s :
      l ∈ labels s →
      Γ\ δ ⊢ₛ State k (Stmt (↷ l) (subst Es s)) m ⇒
@@ -231,6 +211,16 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
      l ∉ labels s →
      Γ\ δ ⊢ₛ State (CStmt Es :: k) (Stmt (↷ l) s) m ⇒
              State k (Stmt (↷ l) (subst Es s)) m
+
+  (**i For block scopes: *)
+  | cstep_in_block m k d o τ s :
+     mem_allocable o m → down d s →
+     Γ\ δ ⊢ₛ State k (Stmt d (blk{τ} s)) m ⇒
+             State (CBlock o τ :: k) (Stmt d s) (mem_alloc Γ o false τ m)
+  | cstep_out_block m k d o τ s :
+     up d s →
+     Γ\ δ ⊢ₛ State (CBlock o τ :: k) (Stmt d s) m ⇒
+             State k (Stmt d (blk{τ} s)) (mem_free o m)
 where "Γ \ δ  ⊢ₛ S1 ⇒ S2" := (@cstep _ _ Γ δ S1%S S2%S) : C_scope.
 
 Definition initial_state {Ti} (m : mem Ti)
@@ -404,7 +394,12 @@ Section inversion.
        P S2
     | Undef _ => P S2
     end.
-  Proof. intros p. case p; eauto 2. intros ?? [] ?; simpl; eauto. Qed.
+  Proof.
+    intros p; case p; eauto 2.
+    * intros ?? [] ?; simpl; eauto.
+    * by intros ?? []; simpl; eauto.
+    * by intros ?? []; simpl; eauto.
+ Qed.
   Lemma cstep_expr_inv (P : state Ti → Prop) m k Ek Ω v S2 :
     Γ\ δ ⊢ₛ State (Ek :: k) (Expr (#{Ω} v)) m ⇒ S2 →
     match Ek with
@@ -516,7 +511,10 @@ automatically pick the most suitable inversion scheme. It also performs the
 necessary generalization of assumptions. *)
 Ltac fast_inv_cstep H :=
   match type of H with
-  | _\ _ ⊢ₛ _ ⇒ ?S2 =>
+  | _\ _ ⊢ₛ ?S1 ⇒ ?S2 =>
+    try match S1 with
+    | State _ (Stmt ?d _) _ => is_var d; destruct d; try done
+    end;
     is_var S2;
     block_goal;
     repeat match goal with
@@ -784,13 +782,13 @@ Lemma cstep_in_block_fresh m k τ s :
   let o := fresh (dom indexset m) in
   Γ\ δ ⊢ₛ State k (Stmt ↘ (blk{τ} s)) m ⇒
           State (CBlock o τ :: k) (Stmt ↘ s) (mem_alloc Γ o false τ m).
-Proof. constructor. eapply mem_allocable_alt, is_fresh. Qed.
+Proof. constructor. eapply mem_allocable_alt, is_fresh. done. Qed.
 Lemma cstep_label_block_down_fresh m k l τ s :
   l ∈ labels s →
   let o := fresh (dom indexset m) in
   Γ\ δ ⊢ₛ State k (Stmt (↷l) (blk{τ} s)) m ⇒
           State (CBlock o τ :: k) (Stmt (↷l) s) (mem_alloc Γ o false τ m).
-Proof. constructor. done. eapply mem_allocable_alt, is_fresh. Qed.
+Proof. constructor. eapply mem_allocable_alt, is_fresh. done. Qed.
 Lemma cstep_call_fresh m k f s vs :
   δ !! f = Some s →
   let os := fresh_list (length vs) (dom indexset m) in

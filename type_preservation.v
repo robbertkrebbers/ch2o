@@ -171,19 +171,8 @@ Proof.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, expr_typed_weaken,
       stmt_typed_weaken, index_typed_unlock, mem_unlock_valid.
-  * intros m k o τ s ? (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, index_typed_alloc].
-    eexists; simpl; split_ands;
-      eauto 10 using mem_alloc_valid', index_typed_alloc,
-      stmt_typed_weaken, ctx_typed_weaken, index_typed_alloc_eq.
   * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eexists; simpl; split_ands; eauto; repeat typed_constructor; eauto.
-  * intros m k o τ s (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, index_typed_free].
-    eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using ctx_typed_weaken, index_typed_free, mem_free_valid',
-      index_typed_valid, index_typed_representable.
-    eapply stmt_typed_weaken; eauto using index_typed_free.
   * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eexists; simpl; split_ands; repeat typed_constructor; eauto.
   * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; split; auto.
@@ -221,29 +210,12 @@ Proof.
   * intros m k g E v (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ectx_subst_typed, lockset_empty_valid.
-  * intros m k o τ v s (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, index_typed_free].
-    eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using ctx_typed_weaken, index_typed_free, mem_free_valid',
-      val_typed_weaken, index_typed_valid, index_typed_representable.
-    eapply stmt_typed_weaken; eauto using index_typed_free.
   * intros m k Es v s (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     edestruct (sctx_item_typed_Some_l Γ Γf ('{m})
       (get_stack_types k) Es) as [??]; eauto; simplify_equality'.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using sctx_item_subst_typed.
   * intros m k l (τf&HS&?&?) ?; typed_inversion_all; split; auto.
-  * intros m k l o τ s ?? (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, index_typed_alloc].
-    eexists; simpl; split_ands;
-      eauto 10 using mem_alloc_valid', index_typed_alloc,
-      stmt_typed_weaken, ctx_typed_weaken, index_typed_alloc_eq.
-  * intros m k l o τ s ? (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, index_typed_free].
-    eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using index_typed_valid, index_typed_representable,
-      ctx_typed_weaken, index_typed_free, mem_free_valid'.
-    eapply stmt_typed_weaken; eauto using index_typed_free.
   * intros m k Es l s ? (τf&HS&?&?) ?; typed_inversion HS; split; auto.
     edestruct (sctx_item_subst_typed_rev Γ Γf ('{m})
       (get_stack_types k) Es s) as (mτ&?&?); eauto.
@@ -251,6 +223,17 @@ Proof.
   * intros m k E l s ? (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using sctx_item_subst_typed.
+  * intros m k d o τ s ?? (τf&HS&?&?) ?; typed_inversion_all.
+    split; [|eauto using funenv_typed_weaken, index_typed_alloc].
+    eexists; simpl; split_ands;
+      eauto 6 using mem_alloc_valid', index_typed_alloc, stmt_typed_weaken,
+      direction_typed_weaken, ctx_typed_weaken, index_typed_alloc_eq.
+  * intros m k d o τ s ? (τf&HS&?&?) ?; typed_inversion_all.
+    split; [|eauto using funenv_typed_weaken, index_typed_free].
+    eexists; simpl; split_ands; repeat typed_constructor;
+      eauto using ctx_typed_weaken, direction_typed_weaken, index_typed_free,
+      mem_free_valid', index_typed_valid, index_typed_representable.
+    eapply stmt_typed_weaken; eauto using index_typed_free.
 Qed.
 Lemma csteps_preservation Γ Γf δ S1 S2 f :
   ✓ Γ → Γ\ δ ⊢ₛ S1 ⇒* S2 → (Γ,Γf) ⊢ S1 : f → (Γ,'{SMem S1}) ⊢ δ : Γf →

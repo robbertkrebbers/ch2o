@@ -605,6 +605,7 @@ Implicit Types Es : sctx_item Ti.
 Implicit Types Ee : esctx_item Ti.
 Implicit Types Ek : ctx_item Ti.
 Implicit Types k : ctx Ti.
+Implicit Types d : direction Ti.
 
 Notation envs := (env Ti * funtypes Ti * memenv Ti * list (type Ti))%type.
 
@@ -715,6 +716,10 @@ Proof.
   intros ? Hk ???. revert τf Hk. induction k; intros; typed_inversion_all;
     typed_constructor; eauto using ctx_item_typed_weaken.
 Qed.
+Lemma direction_typed_weaken Γ1 Γ2 Γm1 Γm2 d τf :
+  ✓ Γ1 → (Γ1,Γm1) ⊢ d : τf → Γ1 ⊆ Γ2 →
+  (∀ o σ, Γm1 ⊢ o : σ → Γm2 ⊢ o : σ) → (Γ2,Γm2) ⊢ d : τf.
+Proof. destruct 2; typed_constructor; eauto using val_typed_weaken. Qed.
 Lemma funenv_pretyped_weaken Γ1 Γ2 Γm1 Γm2 δ Γf1 Γf2 :
   ✓ Γ1 → funenv_pretyped Γ1 Γm1 δ Γf1 → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →
   (∀ o σ, Γm1 ⊢ o : σ → Γm2 ⊢ o : σ) → funenv_pretyped Γ2 Γm2 δ Γf2.
