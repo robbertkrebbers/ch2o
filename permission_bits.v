@@ -9,9 +9,7 @@ Section operations.
   Context `{Env Ti}.
 
   Global Instance pbit_valid: Valid (env Ti * memenv Ti) (pbit Ti) := λ ΓΓm xb,
-    sep_valid (tagged_perm xb) ∧
-    ✓{ΓΓm} (tagged_tag xb) ∧
-    (sep_unmapped (tagged_perm xb) → tagged_tag xb = BIndet).
+    ✓{ΓΓm} (tagged_tag xb) ∧ sep_valid xb.
 
   Definition pbit_indetify (xb : pbit Ti) : pbit Ti :=
     PBit (tagged_perm xb) BIndet.
@@ -30,9 +28,7 @@ Section operations.
       Refine Ti (env Ti) (pbit Ti) := λ Γ f Γm1 Γm2 xb1 xb2,
     tagged_tag xb1 ⊑{Γ,f@Γm1↦Γm2} tagged_tag xb2 ∧
     tagged_perm xb1 = tagged_perm xb2 ∧
-    sep_valid (tagged_perm xb1) ∧
-    (sep_unmapped (tagged_perm xb1) → tagged_tag xb1 = BIndet) ∧
-    (sep_unmapped (tagged_perm xb2) → tagged_tag xb2 = BIndet).
+    sep_valid xb1 ∧ sep_valid xb2.
 End operations.
 
 Section properties.
@@ -98,7 +94,7 @@ Lemma pbits_valid_sep_valid Γ Γm xbs  : ✓{Γ,Γm}* xbs → Forall sep_valid 
 Proof. induction 1; eauto using pbit_valid_sep_valid. Qed.
 Lemma pbit_unlock_valid Γ Γm xb : ✓{Γ,Γm} xb → ✓{Γ,Γm} (pbit_unlock xb).
 Proof.
-  unfold pbit_unlock; intros (?&?&?); split; naive_solver
+  unfold pbit_unlock; intros (?&?&?); repeat split; naive_solver
     auto using perm_unlock_valid, perm_unlock_mapped.
 Qed.
 Lemma pbit_unlock_unshared xb :
@@ -136,7 +132,7 @@ Lemma PBits_indetify xs :
   pbit_indetify <$> flip PBit (@BIndet Ti) <$> xs = flip PBit BIndet <$> xs.
 Proof. induction xs; f_equal'; auto. Qed.
 Lemma pbit_indetify_valid Γ Γm xb : ✓{Γ,Γm} xb → ✓{Γ,Γm} (pbit_indetify xb).
-Proof. destruct xb; intros (?&?&?); split; eauto using BIndet_valid. Qed.
+Proof. destruct xb; intros (?&?&?); repeat split; eauto using BIndet_valid. Qed.
 Lemma pbits_indetify_valid Γ Γm xbs :
   ✓{Γ,Γm}* xbs → ✓{Γ,Γm}* (pbit_indetify <$> xbs).
 Proof. induction 1; csimpl; auto using pbit_indetify_valid. Qed.
@@ -192,7 +188,7 @@ Proof. by intros [??]. Qed.
 Lemma pbit_disjoint_typed Γ Γm xb1 xb2 :
   xb1 ⊥ xb2 → ✓{Γ,Γm} xb1 → sep_unmapped xb2 → ✓{Γ,Γm} xb2.
 Proof.
-  destruct xb1, xb2; intros (?&?&?&?) (?&?&?) [??]; split;
+  destruct xb1, xb2; intros (?&?&?&?) (?&?&?) [??]; repeat split;
     naive_solver eauto using sep_unmapped_valid, BIndet_valid.
 Qed.
 Lemma pbits_disjoint_typed Γ Γm xbs1 xbs2 :
@@ -353,7 +349,7 @@ Lemma pbits_refine_valid_r Γ f Γm1 Γm2 xbs1 xbs2 :
   ✓ Γ → xbs1 ⊑{Γ,f@Γm1↦Γm2}* xbs2 → ✓{Γ,Γm2}* xbs2.
 Proof. induction 2; eauto using pbit_refine_valid_r. Qed.
 Lemma pbit_refine_id Γ Γm xb : ✓{Γ,Γm} xb → xb ⊑{Γ@Γm} xb.
-Proof. intros (?&?&?); split; eauto using bit_refine_id. Qed.
+Proof. intros (?&?&?); repeat split; eauto using bit_refine_id. Qed.
 Lemma pbits_refine_id Γ Γm xbs : ✓{Γ,Γm}* xbs → xbs ⊑{Γ@Γm}* xbs.
 Proof. induction 1; eauto using pbit_refine_id. Qed.
 Lemma pbit_refine_compose Γ f1 f2 Γm1 Γm2 Γm3 xb1 xb2 xb3 :
@@ -381,13 +377,15 @@ Lemma pbit_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' xb1 xb2 :
   (∀ o1 o2 r,
     f !! o1 = Some (o2,r) → index_alive Γm1' o1 → index_alive Γm2' o2) →
   xb1 ⊑{Γ',f'@Γm1'↦Γm2'} xb2.
-Proof. intros ? (?&?&?&?&?); repeat split; eauto using bit_refine_weaken. Qed.
+Proof.
+  intros ? (?&?&[??]&[??]); repeat split; eauto using bit_refine_weaken.
+Qed.
 Lemma pbits_refine_perm Γ f Γm1 Γm2 xbs1 xbs2 :
   xbs1 ⊑{Γ,f@Γm1↦Γm2}* xbs2 → tagged_perm <$> xbs1 = tagged_perm <$> xbs2.
 Proof. induction 1 as [|???? (?&?&?&?)]; f_equal'; auto. Qed.
 Lemma pbit_refine_unmapped Γ f Γm1 Γm2 xb1 xb2 :
   sep_unmapped xb1 → xb1 ⊑{Γ,f@Γm1↦Γm2} xb2 → sep_unmapped xb2.
-Proof. destruct xb1, xb2; intros [??] (?&?&?); split; naive_solver. Qed.
+Proof. destruct xb1, xb2; intros [??] (?&?&[??]&[??]); split; naive_solver. Qed.
 Lemma pbits_refine_unmapped Γ f Γm1 Γm2 xbs1 xbs2 :
   Forall sep_unmapped xbs1 → xbs1 ⊑{Γ,f@Γm1↦Γm2}* xbs2 →
   Forall sep_unmapped xbs2.
@@ -396,7 +394,7 @@ Proof.
 Qed.
 Lemma pbit_refine_mapped Γ f Γm1 Γm2 xb1 xb2 :
   sep_unmapped xb2 → xb1 ⊑{Γ,f@Γm1↦Γm2} xb2 → sep_unmapped xb1.
-Proof. intros [??] (?&?&?&?&?); split; eauto with congruence. Qed.
+Proof. intros [??] (?&?&[??]&[??]); split; eauto with congruence. Qed.
 Lemma pbits_refine_mapped Γ f Γm1 Γm2 xbs1 xbs2 :
   Forall sep_unmapped xbs2 → xbs1 ⊑{Γ,f@Γm1↦Γm2}* xbs2 →
   Forall sep_unmapped xbs1.
@@ -407,7 +405,7 @@ Qed.
 Lemma pbit_refine_unshared Γ f Γm1 Γm2 xb1 xb2 :
   sep_unshared xb1 → xb1 ⊑{Γ,f@Γm1↦Γm2} xb2 → sep_unshared xb2.
 Proof.
-  destruct xb1, xb2. intros [??] (?&?&?); split;
+  destruct xb1, xb2. intros [??] (?&?&[??]&[??]); split;
     naive_solver eauto using sep_unshared_valid.
 Qed.
 Lemma pbits_refine_unshared Γ f Γm1 Γm2 xbs1 xbs2 :
@@ -417,7 +415,7 @@ Proof. induction 2;decompose_Forall_hyps; eauto using pbit_refine_unshared. Qed.
 Lemma pbit_refine_shared Γ f Γm1 Γm2 xb1 xb2 :
   sep_unshared xb2 → xb1 ⊑{Γ,f@Γm1↦Γm2} xb2 → sep_unshared xb1.
 Proof.
-  destruct xb1, xb2; intros [??] (?&?&?&?); split;
+  destruct xb1, xb2; intros [??] (?&?&[??]&[??]); split;
     naive_solver eauto using BIndet_refine_r_inv.
 Qed.
 Lemma pbits_refine_shared Γ f Γm1 Γm2 xbs1 xbs2 :
@@ -425,11 +423,13 @@ Lemma pbits_refine_shared Γ f Γm1 Γm2 xbs1 xbs2 :
   xbs2 → Forall sep_unshared xbs1.
 Proof. induction 2; decompose_Forall_hyps; eauto using pbit_refine_shared. Qed.
 Lemma pbit_empty_refine Γ f Γm1 Γm2 : (∅ : pbit Ti) ⊑{Γ,f@Γm1↦Γm2} ∅.
-Proof. split; simpl; auto using BIndet_BIndet_refine, sep_empty_valid. Qed.
+Proof.
+  repeat split; simpl; auto using BIndet_BIndet_refine, sep_empty_valid.
+Qed.
 Lemma PBit_refine Γ f Γm1 Γm2 x b1 b2 :
   sep_valid x → ¬sep_unmapped x →
   b1 ⊑{Γ,f@Γm1↦Γm2} b2 → PBit x b1 ⊑{Γ,f@Γm1↦Γm2} PBit x b2.
-Proof. split; naive_solver eauto using BBit_refine. Qed.
+Proof. repeat split; naive_solver eauto using BBit_refine. Qed.
 Lemma PBits_refine Γ f Γm1 Γm2 xs bs1 bs2 :
   Forall sep_valid xs → Forall (not ∘ sep_unmapped) xs →
   bs1 ⊑{Γ,f@Γm1↦Γm2}* bs2 →
@@ -447,7 +447,9 @@ Lemma PBits_BIndet_refine Γ f Γm1 Γm2 xs :
 Proof. induction 1; csimpl; auto using PBit_BIndet_refine. Qed.
 Lemma PBit_BIndet_refine_l Γ Γm xb :
   ✓{Γ,Γm} xb → PBit (tagged_perm xb) BIndet ⊑{Γ@Γm} xb.
-Proof. intros (?&?&?); split; naive_solver eauto using BIndet_refine. Qed.
+Proof.
+  intros (?&?&?); repeat split; naive_solver eauto using BIndet_refine.
+Qed.
 Lemma PBits_BIndet_refine_l Γ Γm xbs :
   ✓{Γ,Γm}* xbs → flip PBit BIndet <$> tagged_perm <$> xbs ⊑{Γ@Γm}* xbs.
 Proof. induction 1; csimpl; eauto using PBit_BIndet_refine_l. Qed.
@@ -471,14 +473,14 @@ Proof. induction 1; constructor; auto using pbit_tag_refine. Qed.
 Lemma pbit_unlock_refine Γ f Γm1 Γm2 xb1 xb2 :
   xb1 ⊑{Γ,f@Γm1↦Γm2} xb2 → pbit_unlock xb1 ⊑{Γ,f@Γm1↦Γm2} pbit_unlock xb2.
 Proof.
-  destruct xb1, xb2; intros (?&?&?&?); split;
+  destruct xb1, xb2; intros (?&?&[??]&[??]); repeat split;
     try naive_solver eauto using perm_unlock_valid, perm_unlock_mapped.
 Qed.
 Lemma pbit_lock_refine Γ f Γm1 Γm2 xb1 xb2 :
   Some Writable ⊆ pbit_kind xb1 →
   xb1 ⊑{Γ,f@Γm1↦Γm2} xb2 → pbit_lock xb1 ⊑{Γ,f@Γm1↦Γm2} pbit_lock xb2.
 Proof.
-  destruct xb1, xb2; intros ? (?&?&?&?); split;
+  destruct xb1, xb2; intros ? (?&?&[??]&[??]); repeat split;
     try naive_solver eauto using perm_lock_mapped, perm_lock_valid.
 Qed.
 Lemma pbits_lock_refine Γ f Γm1 Γm2 xbs1 xbs2 :
@@ -489,7 +491,8 @@ Proof. induction 2; decompose_Forall_hyps; auto using pbit_lock_refine. Qed.
 Lemma pbit_indetify_refine Γ f Γm1 Γm2 xb1 xb2 :
   xb1 ⊑{Γ,f@Γm1↦Γm2} xb2 → pbit_indetify xb1 ⊑{Γ,f@Γm1↦Γm2} pbit_indetify xb2.
 Proof.
-  destruct xb1, xb2; intros (?&?&?&?); split; eauto using BIndet_BIndet_refine.
+  destruct xb1, xb2; intros (?&?&[??]&[??]);
+    repeat split; eauto using BIndet_BIndet_refine.
 Qed.
 Lemma pbits_indetify_refine Γ f Γm1 Γm2 xbs1 xbs2 :
   xbs1 ⊑{Γ,f@Γm1↦Γm2}* xbs2 →
