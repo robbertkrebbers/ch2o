@@ -390,19 +390,18 @@ Hint Resolve int_lower_nonpos int_upper_pos.
 Lemma int_mod_lower_upper x τ :
   int_lower τ ≤ x `mod` int_upper τ < int_upper τ.
 Proof.
-  split.
-  * transitivity 0; auto. apply Z.mod_pos_bound; auto.
-  * apply Z.mod_pos_bound; auto.
+  split; [transitivity 0; auto; apply Z.mod_pos_bound; auto|].
+  apply Z.mod_pos_bound; auto.
 Qed.
 Hint Resolve int_mod_lower_upper.
 Lemma int_upper_lower τ : int_upper τ = 2 ^ int_bits τ + int_lower τ.
 Proof.
-  unfold int_upper, int_lower. destruct τ as [[] k]; simpl.
-  * apply (Z.mul_cancel_l _ _ 2); [done |]. rewrite Z.mul_add_distr_l,
-      Z.mul_opp_r, !Z.sub_1_r, !Z_pow_pred_r; auto with zpos.
-  * lia.
+  unfold int_upper, int_lower. destruct τ as [[] k]; simpl; [|lia].
+  apply (Z.mul_cancel_l _ _ 2); [done |]. rewrite Z.mul_add_distr_l,
+    Z.mul_opp_r, !Z.sub_1_r, !Z_pow_pred_r; auto with zpos.
 Qed.
-
+Lemma int_lower_upper_signed τ : sign τ = Signed → int_lower τ = -int_upper τ.
+Proof. by intros; destruct τ; simplify_equality'. Qed.
 Lemma int_typed_spec_alt x τ :
   int_typed x τ ↔
     match sign τ with
