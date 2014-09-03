@@ -32,6 +32,10 @@ Definition from_option {A} (a : A) (x : option A) : A :=
 data type. This theorem is useful to prove that two options are the same. *)
 Lemma option_eq {A} (x y : option A) : x = y ↔ ∀ a, x = Some a ↔ y = Some a.
 Proof. split; [by intros; by subst |]. destruct x, y; naive_solver. Qed.
+Lemma option_eq_1 {A} (x y : option A) a : x = y → x = Some a → y = Some a.
+Proof. congruence. Qed.
+Lemma option_eq_1_alt {A} (x y : option A) a : x = y → y = Some a → x = Some a.
+Proof. congruence. Qed.
 
 Definition is_Some {A} (x : option A) := ∃ y, x = Some y.
 Lemma mk_is_Some {A} (x : option A) y : x = Some y → is_Some x.
