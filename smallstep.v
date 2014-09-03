@@ -42,7 +42,7 @@ Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
      ρ !! x = Some o →
      Γ\ ρ ⊢ₕ var{τ} x, m ⇒ %(addr_top o τ), m
   | estep_rtol m Ω a :
-     addr_strict Γ a →
+     addr_strict Γ a → index_alive ('{m}) (addr_index a) →
      Γ\ ρ ⊢ₕ .* (#{Ω} (ptrV (Ptr a))), m ⇒ %{Ω} a, m
   | estep_rofl m Ω a :
      Γ\ ρ ⊢ₕ & (%{Ω} a), m ⇒ #{Ω} (ptrV (Ptr a)), m

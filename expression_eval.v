@@ -34,6 +34,7 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
      a ← (maybe_VBase v ≫= maybe_VPtr) ≫= maybe_Ptr;
      guard (addr_strict Γ a);
+     guard (index_alive ('{m}) (addr_index a));
      Some (inl a)
   | & e =>
      a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inl;
@@ -100,8 +101,8 @@ Context (Pvar : ∀ τ x o, ρ !! x = Some o → P (var{τ} x) (inl (addr_top o 
 Context (Pval : ∀ v, P (# v) (inr v)).
 Context (Paddr : ∀ a, P (% a) (inl a)).
 Context (Prtol : ∀ e a,
-  ⟦ e ⟧ Γ fs ρ m = Some (inr (ptrV (Ptr a))) →
-  P e (inr (ptrV (Ptr a))) → addr_strict Γ a → P (.* e) (inl a)).
+  ⟦ e ⟧ Γ fs ρ m = Some (inr (ptrV (Ptr a))) → P e (inr (ptrV (Ptr a))) →
+  addr_strict Γ a → index_alive ('{m}) (addr_index a) → P (.* e) (inl a)).
 Context (Profl : ∀ e a,
   ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) → P (&e) (inr (ptrV (Ptr a)))).
 Context (Peltl : ∀ e rs a,
