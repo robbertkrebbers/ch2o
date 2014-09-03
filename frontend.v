@@ -242,7 +242,8 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      τp ← error_of_option (maybe_TBase τ ≫= maybe_TPtr)
        "dereferencing non-pointer type";
-     guard (✓{Γ} τp) with "dereferencing incomplete pointer type";
+     guard (τp ≠ voidT) with "dereferencing pointer with void type";
+     guard (✓{Γ} τp) with "dereferencing pointer with incomplete type";
      inr (.* e, inl τp)
   | CEAddrOf ce =>
      '(e,τlr) ← to_expr Γn Γ Γf m xs ce;
@@ -312,7 +313,7 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
   | CECast cσ ce =>
      σ ← to_type Γn Γ Γf m xs to_Ptr cσ;
      '(e,τ) ← to_R_NULL σ <$> to_expr Γn Γ Γf m xs ce;
-     guard (maybe_TCompound σ = None) with "cannot cast to struct/union";
+     guard (maybe_TCompound σ = None) with "cast to struct/union";
      guard (cast_typed Γ τ σ) with "cast cannot be typed";
      inr (cast{σ} e, inr σ)
   | CEField ce x =>
@@ -332,7 +333,11 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
        | Struct_kind => RStruct i s | Union_kind => RUnion i s false
        end in
      match τrl with
-     | inl _ => inr (e %> rs, inl σ) | inr _ => inr (e #> rs, inr σ)
+     | inl _ => inr (e %> rs, inl σ)
+     | inr _ =>
+        guard (maybe_TArray σ = None) with
+          "indexing array field of r-value struct/union not supported";
+        inr (e #> rs, inr σ)
      end
   end
 with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
@@ -886,14 +891,14 @@ Proof.
         prefix_of_nil, funtypes_valid_empty, var_env_stack_types_valid.
       by intros ?; destruct (Γf !! _); simpl_map. }
     split_ands; eauto using mem_alloc_val_valid,
-      index_typed_alloc_val, val_cast_typed.
-    constructor; simpl; eauto 6 using index_typed_alloc_val_free,
-      Forall_impl, var_decl_valid_weaken, index_typed_alloc_val, val_cast_typed.
+      mem_alloc_val_index_typed, val_cast_typed.
+    constructor; simpl; eauto 6 using mem_alloc_val_index_typed, Forall_impl,
+      var_decl_valid_weaken, mem_alloc_val_index_typed_eq, val_cast_typed.
   * repeat case_error_guard; simplify_equality'.
     split_ands; eauto using mem_alloc_val_valid,
-      index_typed_alloc_val, val_0_typed.
-    constructor; simpl; eauto 6 using index_typed_alloc_val_free,
-      Forall_impl, var_decl_valid_weaken, index_typed_alloc_val, val_0_typed.
+      mem_alloc_val_index_typed, val_0_typed.
+    constructor; simpl; eauto 6 using mem_alloc_val_index_typed_eq,
+      Forall_impl, var_decl_valid_weaken, mem_alloc_val_index_typed, val_0_typed.
 Qed.
 Lemma to_stmt_typed Γn Γ Γf τret m xs Ls mLcb cs m' Ls' s cmτ :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ ('{m}) xs →
