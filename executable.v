@@ -185,7 +185,7 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
       match ehstep_exec Γ (get_stack k) e' m with
       | Some (e2,m2) => {[ State k (Expr (subst E e2)) m2 ]}
       | None =>
-        match maybe_CCall_redex e' with
+        match maybe_ECall_redex e' with
         | Some (f, Ωs, vs) =>
            {[ State (CFun E :: k) (Call f vs) (mem_unlock (⋃ Ωs) m) ]}
         | _ => {[ State k (Undef (UndefExpr E e')) m ]}
@@ -230,11 +230,11 @@ Lemma cstep_exec_sound Γ δ S1 S2 :
   S2 ∈ cstep_exec Γ δ S1 → Γ\ δ ⊢ₛ S1 ⇒ S2.
 Proof.
   intros. assert (∀ (k : ctx Ti) e m,
-    ehstep_exec Γ (get_stack k) e m = None → maybe_CCall_redex e = None →
+    ehstep_exec Γ (get_stack k) e m = None → maybe_ECall_redex e = None →
     is_redex e → ¬Γ\ get_stack k ⊢ₕ safe e, m).
   { intros k e m He. rewrite eq_None_not_Some.
     intros Hmaybe Hred Hsafe; apply Hmaybe; destruct Hsafe.
-    * eexists; apply maybe_CCall_redex_Some; eauto.
+    * eexists; apply maybe_ECall_redex_Some; eauto.
     * edestruct ehstep_exec_weak_complete; eauto. }
   destruct S1;
     repeat match goal with
@@ -243,8 +243,8 @@ Proof.
     | H : _ ∈ expr_redexes _ |- _ =>
       apply expr_redexes_correct in H; destruct H
     | H : maybe_EVal _ = Some _ |- _ => apply maybe_EVal_Some in H
-    | H : maybe_CCall_redex _ = Some _ |- _ =>
-      apply maybe_CCall_redex_Some in H; destruct H
+    | H : maybe_ECall_redex _ = Some _ |- _ =>
+      apply maybe_ECall_redex_Some in H; destruct H
     | _ => progress decompose_elem_of
     | _ => case_decide
     | _ => destruct (val_true_false_dec _) as [[[??]|[??]]|[??]]

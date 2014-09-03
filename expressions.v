@@ -604,7 +604,7 @@ Definition maybe_EVal {Ti} (e : expr Ti) : option (lockset * val Ti) :=
   match e with #{Ω} v => Some (Ω,v) | _ => None end.
 Definition maybe_ECall {Ti} (e : expr Ti) : option (funname * list (expr Ti)) :=
   match e with call f @ es => Some (f,es) | _ => None end.
-Definition maybe_CCall_redex {Ti} (e : expr Ti) :
+Definition maybe_ECall_redex {Ti} (e : expr Ti) :
     option (funname * list lockset * list (val Ti)) :=
   '(f,es) ← maybe_ECall e;
   vΩs ← mapM maybe_EVal es;
@@ -616,18 +616,25 @@ Proof. split. by destruct e; intros; simplify_equality'. by intros ->. Qed.
 Lemma maybe_ECall_Some {Ti} (e : expr Ti) f es :
   maybe_ECall e = Some (f, es) ↔ e = call f @ es.
 Proof. split. by destruct e; intros; simplify_equality'. by intros ->. Qed.
-Lemma maybe_CCall_redex_Some {Ti} (e : expr Ti) f Ωs vs :
-  maybe_CCall_redex e = Some (f, Ωs, vs) ↔
+Lemma maybe_ECall_redex_Some_2 {Ti} f Ωs (vs : list (val Ti)) :
+  length Ωs = length vs →
+  maybe_ECall_redex (call f @ #{Ωs}* vs) = Some (f, Ωs, vs).
+Proof.
+  intros; unfold maybe_ECall_redex; csimpl.
+  rewrite zip_with_zip, mapM_fmap_Some by (by intros []); csimpl.
+  by rewrite fst_zip, snd_zip by lia.
+Qed.
+Lemma maybe_ECall_redex_Some {Ti} (e : expr Ti) f Ωs vs :
+  maybe_ECall_redex e = Some (f, Ωs, vs) ↔
     e = call f @ zip_with EVal Ωs vs ∧ length Ωs = length vs.
 Proof.
-  unfold maybe_CCall_redex. split; [intros|intros [-> ?]; csimpl].
-  * destruct (maybe_ECall e) as [[f' es]|] eqn:?; simplify_option_equality.
-    rewrite !fmap_length; split; auto.
-    apply maybe_ECall_Some. rewrite zip_with_fst_snd.
-    erewrite <-(mapM_fmap_Some_inv maybe_EVal (curry EVal)); eauto.
-    by intros [??] [] ?; simplify_equality'.
-  * rewrite zip_with_zip, mapM_fmap_Some by (by intros []); csimpl.
-    by rewrite fst_zip, snd_zip by lia.
+  split; [|intros [-> ?]; eauto using maybe_ECall_redex_Some_2].
+  unfold maybe_ECall_redex; csimpl; intros.
+  destruct (maybe_ECall e) as [[f' es]|] eqn:?; simplify_option_equality.
+  rewrite !fmap_length; split; auto.
+  apply maybe_ECall_Some. rewrite zip_with_fst_snd.
+  erewrite <-(mapM_fmap_Some_inv maybe_EVal (curry EVal)); eauto.
+  by intros [??] [] ?; simplify_equality'.
 Qed.
 
 (** * Contexts with one hole *)
