@@ -28,6 +28,7 @@ Global Instance stream_fmap : FMap stream := λ A B f,
 
 Fixpoint stake {A} (n : nat) (s : stream A) :=
   match n with 0 => [] | S n => shead s :: stake n (stail s) end.
+CoFixpoint srepeat {A} (x : A) : stream A := x :.: srepeat x.
 
 Section stream_properties.
 Context {A : Type}.
