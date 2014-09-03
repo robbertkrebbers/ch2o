@@ -514,19 +514,17 @@ Proof.
   eauto using ctree_lookup_byte_refine.
 Qed.
 Lemma cmap_refine_weaken Γ Γ' f f' Γm1 Γm2 m1 m2 :
-  ✓ Γ → m1 ⊑{Γ,f@Γm1↦Γm2} m2 → Γ ⊆ Γ' → (∀ o τ, Γm1 ⊢ o : τ → f!!o = f'!!o) →
-  mem_inj_injective f' → m1 ⊑{Γ',f'@Γm1↦Γm2} m2.
+  ✓ Γ → m1 ⊑{Γ,f@Γm1↦Γm2} m2 → Γ ⊆ Γ' → Γm1 ⊑{Γ',f'} Γm2 → 
+  (∀ o τ, Γm1 ⊢ o : τ → f' !! o = f !! o) → m1 ⊑{Γ',f'@Γm1↦Γm2} m2.
 Proof.
-  intros ? (Hm1&?&HΓm&Hm) ? Hf ?; split; split_ands;
-    eauto using cmap_valid_weaken, memenv_refine_weaken.
-  assert (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) →
-    f' !! o = Some (o2,r)) by (by intros; erewrite <-Hf by eauto).
-  assert (∀ o o2 r τ, Γm1 ⊢ o : τ → f' !! o = Some (o2,r) →
-    f !! o = Some (o2,r)) by (by intros; erewrite Hf by eauto).
+  intros ? (Hm1&?&HΓm&Hm) ?? Hf.
+  split; split_ands; eauto using cmap_valid_weaken.
   intros o1 o2 r w1 malloc ??.
   destruct HΓm as (?&?&?), (proj2 Hm1 o1 w1 malloc) as (τ&?&_); auto.
-  destruct (Hm o1 o2 r w1 malloc) as (w2&w2'&τ'&?&?&?&?); eauto.
-  exists w2 w2' τ'; eauto 7 using ctree_refine_weaken, ctree_lookup_weaken.
+  destruct (Hm o1 o2 r w1 malloc)
+    as (w2&w2'&τ'&?&?&?&?); eauto using option_eq_1.
+  exists w2 w2' τ'; split_ands;
+    eauto using ctree_refine_weaken, ctree_lookup_weaken, option_eq_1_alt.
 Qed.
 Lemma cmap_alter_refine Γ f Γm1 Γm2 g1 g2 m1 m2 a1 a2 w1 w2 τ :
   ✓ Γ → m1 ⊑{Γ,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : τ →

@@ -1409,17 +1409,22 @@ Proof.
     constructor; eauto using val_refine_compose.
 Qed.
 Lemma val_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' v1 v2 τ :
-  ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → Γ ⊆ Γ' →
+  ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → 
   (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
   (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
   (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
-  (∀ o1 o2 r,
-    f !! o1 = Some (o2,r) → index_alive Γm1' o1 → index_alive Γm2' o2) →
   v1 ⊑{Γ',f'@Γm1'↦Γm2'} v2 : τ.
 Proof.
   intros ? Hv; intros. induction Hv using @val_refine_ind; refine_constructor;
     eauto using base_val_refine_weaken, lookup_weaken, vals_representable_weaken.
 Qed.
+Lemma vals_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' vs1 vs2 τs :
+  ✓ Γ → vs1 ⊑{Γ,f@Γm1↦Γm2}* vs2 :* τs → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → 
+  (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
+  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
+  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  vs1 ⊑{Γ',f'@Γm1'↦Γm2'}* vs2 :* τs.
+Proof. induction 2; constructor; eauto using val_refine_weaken. Qed.
 Lemma val_flatten_refine Γ f Γm1 Γm2 v1 v2 τ :
   ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ →
   val_flatten Γ v1 ⊑{Γ,f@Γm1↦Γm2}* val_flatten Γ v2.

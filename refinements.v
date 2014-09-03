@@ -208,7 +208,6 @@ Ltac refine_constructor :=
     let H' := eval hnf in (H Γ f m1 m2) in
     econstructor; change H' with (path_refine (PathRefine:=H) Γ f m1 m2)
   end.
-
 Ltac refine_inversion H :=
   match type of H with
   | refineT (RefineT:=?T) ?Γ ?f ?m1 ?m2 _ _ _ =>
@@ -226,7 +225,9 @@ Instance memenv_refine `{Env Ti} :
   (**i 1.) *) mem_inj_injective f ∧
   (**i 2.) *) (∀ o1 o2 r τ1, f !! o1 = Some (o2,r) →
     Γm1 ⊢ o1 : τ1 → ∃ τ2, Γm2 ⊢ o2 : τ2 ∧ Γ ⊢ r : τ2 ↣ τ1) ∧
-  (**i 3.) *) (∀ o1 o2 r, f !! o1 = Some (o2,r) →
+  (**i 3.) *) (∀ o1 o2 r τ2, f !! o1 = Some (o2,r) →
+    Γm2 ⊢ o2 : τ2 → ∃ τ1, Γm1 ⊢ o1 : τ1 ∧ Γ ⊢ r : τ2 ↣ τ1) ∧
+  (**i 4.) *) (∀ o1 o2 r, f !! o1 = Some (o2,r) →
     index_alive Γm1 o1 → index_alive Γm2 o2).
 
 Section memenv_refine.
@@ -241,20 +242,18 @@ Qed.
 Lemma memenv_refine_compose Γ f1 f2 Γm1 Γm2 Γm3 :
   ✓ Γ → Γm1 ⊑{Γ,f1} Γm2 → Γm2 ⊑{Γ,f2} Γm3 → Γm1 ⊑{Γ,f1 ◎ f2} Γm3.
 Proof.
-  intros ? (?&?&?) (?&?&?); repeat split; eauto using mem_inj_compose_injective.
+  intros ? (?&?&?&?) (?&?&?&?);
+    repeat split; eauto using mem_inj_compose_injective.
   * intros o1 o3 r τ1; rewrite lookup_mem_inj_compose_Some;
+      intros (o2&r2&r3&?&?&->) ?; setoid_rewrite ref_typed_app; naive_solver.
+  * intros o1 o3 r τ2; rewrite lookup_mem_inj_compose_Some;
       intros (o2&r2&r3&?&?&->) ?; setoid_rewrite ref_typed_app; naive_solver.
   * intros o1 o3 r; rewrite lookup_mem_inj_compose_Some; naive_solver.
 Qed.
-Lemma memenv_refine_weaken Γ Γ' f f' Γm1 Γm2 :
-  ✓ Γ → Γm1 ⊑{Γ,f} Γm2 → Γ ⊆ Γ' → (∀ o τ, Γm1 ⊢ o : τ → f !! o = f' !! o) →
-  mem_inj_injective f' → Γm1 ⊑{Γ',f'} Γm2.
+Lemma memenv_refine_weaken Γ Γ' f Γm1 Γm2 :
+  ✓ Γ → Γm1 ⊑{Γ,f} Γm2 → Γ ⊆ Γ' → Γm1 ⊑{Γ',f} Γm2.
 Proof.
-  intros ? (?&?&?) ? Hf ?; split; split_ands; auto.
-  * intros o1 o2 r τ1 Hfo ?. erewrite <-Hf in Hfo by eauto.
+  intros ? (?&Htyped&Htyped'&?) ?; split;
     naive_solver eauto using ref_typed_weaken.
-  * intros o1 o2 r Hfo Halive. assert (∃ τ, Γm1 ⊢ o1 : τ) as [τ ?].
-    { by destruct Halive as [τ ?]; exists τ false. }
-    erewrite <-Hf in Hfo by eauto; eauto.
 Qed.
 End memenv_refine.

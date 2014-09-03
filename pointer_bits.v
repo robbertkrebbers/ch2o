@@ -152,25 +152,22 @@ Qed.
 Lemma ptr_bit_refine_id Γ Γm pb : ✓{Γ,Γm} pb → pb ⊑{Γ@Γm} pb.
 Proof. intros (σ&?&?&?); exists σ; eauto using ptr_refine_id. Qed.
 Lemma ptr_bit_refine_compose Γ f g Γm1 Γm2 Γm3 pb1 pb2 pb3 :
+  ✓ Γ →
   pb1 ⊑{Γ,f@Γm1↦Γm2} pb2 → pb2 ⊑{Γ,g@Γm2↦Γm3} pb3 → pb1 ⊑{Γ,f ◎ g@Γm1↦Γm3} pb3.
 Proof.
-  intros (τ1&?&?&?&?) (τ2&?&?&?&?); exists τ1.
+  intros ? (τ1&?&?&?&?) (τ2&?&?&?&?); exists τ1.
   assert (τ1 = τ2) by (by erewrite <-(ptr_refine_type_of_r _ _ _ _ _ _ τ1),
     <-(ptr_refine_type_of_l _ _ _ _ _ _ τ2) by eauto); subst.
   eauto using ptr_refine_compose with congruence.
 Qed.
 Lemma ptr_bit_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' pb1 pb2 :
-  ✓ Γ → pb1 ⊑{Γ,f@Γm1↦Γm2} pb2 → Γ ⊆ Γ' →
+  ✓ Γ → pb1 ⊑{Γ,f@Γm1↦Γm2} pb2 → Γ ⊆ Γ' → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → 
   (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o1 o2 r,
-    f !! o1 = Some (o2,r) → index_alive Γm1' o1 → index_alive Γm2' o2) →
-  pb1 ⊑{Γ',f'@Γm1'↦Γm2'} pb2.
+  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → pb1 ⊑{Γ',f'@Γm1'↦Γm2'} pb2.
 Proof.
   intros ? (τ&?&?&?&?) ??. exists τ.
   erewrite <-bit_size_of_weaken by eauto using TBase_valid, TPtr_valid,
-    ptr_refine_typed_l, ptr_typed_type_valid.
-  eauto using ptr_refine_weaken.
+    ptr_refine_typed_l, ptr_typed_type_valid; eauto using ptr_refine_weaken.
 Qed.
 Lemma ptr_bit_refine_valid_l Γ f Γm1 Γm2 pb1 pb2 :
   ✓ Γ → pb1 ⊑{Γ,f@Γm1↦Γm2} pb2 → ✓{Γ,Γm1} pb1.

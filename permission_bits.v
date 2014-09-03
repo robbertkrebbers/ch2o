@@ -370,12 +370,10 @@ Global Instance:
   PropHolds (✓ Γ) → Transitive (refine Γ mem_inj_id Γm Γm : relation (pbit Ti)).
 Proof. intros Γ ?????. eapply @pbit_refine_compose; eauto; apply _. Qed.
 Lemma pbit_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' xb1 xb2 :
-  ✓ Γ → xb1 ⊑{Γ,f@Γm1↦Γm2} xb2 → Γ ⊆ Γ' →
+  ✓ Γ → xb1 ⊑{Γ,f@Γm1↦Γm2} xb2 → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → 
   (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
   (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
   (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
-  (∀ o1 o2 r,
-    f !! o1 = Some (o2,r) → index_alive Γm1' o1 → index_alive Γm2' o2) →
   xb1 ⊑{Γ',f'@Γm1'↦Γm2'} xb2.
 Proof.
   intros ? (?&?&[??]&[??]); repeat split; eauto using bit_refine_weaken.

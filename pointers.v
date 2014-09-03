@@ -251,17 +251,15 @@ Qed.
 Lemma ptr_refine_id Γ Γm p σ : (Γ,Γm) ⊢ p : σ → p ⊑{Γ@Γm} p : σ.
 Proof. destruct 1; constructor; eauto using addr_refine_id. Qed.
 Lemma ptr_refine_compose Γ f g Γm1 Γm2 Γm3 p1 p2 p3 σ σ' :
-  p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → p2 ⊑{Γ,g@Γm2↦Γm3} p3 : σ' →
+  ✓ Γ → p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → p2 ⊑{Γ,g@Γm2↦Γm3} p3 : σ' →
   p1 ⊑{Γ,f ◎ g@Γm1↦Γm3} p3 : σ.
 Proof.
-  destruct 1; inversion_clear 1; constructor; eauto using addr_refine_compose.
+  destruct 2; inversion_clear 1; constructor; eauto using addr_refine_compose.
 Qed.
 Lemma ptr_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' p1 p2 σ :
-  ✓ Γ → p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → Γ ⊆ Γ' →
+  ✓ Γ → p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → 
   (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o1 o2 r, f !! o1 = Some (o2,r) → index_alive Γm1' o1 → index_alive Γm2' o2) →
-  p1 ⊑{Γ',f'@Γm1'↦Γm2'} p2 : σ.
+  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → p1 ⊑{Γ',f'@Γm1'↦Γm2'} p2 : σ.
 Proof.
   destruct 2; constructor;
     eauto using ptr_type_valid_weaken, addr_refine_weaken.
