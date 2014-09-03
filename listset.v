@@ -24,6 +24,16 @@ Proof.
   * by apply elem_of_list_singleton.
   * intros [?] [?]. apply elem_of_app.
 Qed.
+Lemma listset_empty_alt X : X ≡ ∅ ↔ listset_car X = [].
+Proof.
+  destruct X as [l]; split; [|by intros; simplify_equality'].
+  intros [Hl _]; destruct l as [|x l]; [done|]. feed inversion (Hl x); left.
+Qed. 
+Global Instance listset_empty_dec (X : listset A) : Decision (X ≡ ∅).
+Proof.
+ refine (cast_if (decide (listset_car X = [])));
+  abstract (by rewrite listset_empty_alt).
+Defined.
 
 Context `{∀ x y : A, Decision (x = y)}.
 
