@@ -597,6 +597,8 @@ Tactic Notation "last_cstep" hyp(H) :=
 
 (** * Step tactics *)
 Hint Constructors assign_sem ehstep ehsafe cstep : cstep.
+Hint Immediate mem_allocable_fresh mem_allocable_list_fresh : cstep.
+Hint Immediate fresh_list_length : cstep.
 Ltac do_ehstep :=
   match goal with
   | |- _ \ _ ⊢ₕ _, _ ⇒ _, _ => constructor (solve [eauto with cstep])
@@ -767,40 +769,6 @@ Lemma estep_if_false_no_locks ρ v e2 e3 m :
 Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
 Lemma estep_comma_no_locks ρ m v e2 : Γ\ ρ ⊢ₕ # v ,, e2, m ⇒ e2, m.
 Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
-
-(** The small step semantics is non-deterministic when entering a block or
-function scope as variables are given an arbitrary memory index. The following
-lemmas, that are useful to automatically perform reduction steps, pick a fully
-determined one. *)
-Lemma estep_alloc_fresh ρ m Ω τ τi n :
-  let o := fresh (dom indexset m) in
-  Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
-  Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒
-          %{Ω} (addr_top_array o τ n), mem_alloc Γ o true (τ.[Z.to_nat n]) m.
-Proof. constructor; auto. eapply mem_allocable_alt, is_fresh. Qed.
-Lemma cstep_in_block_fresh m k τ s :
-  let o := fresh (dom indexset m) in
-  Γ\ δ ⊢ₛ State k (Stmt ↘ (blk{τ} s)) m ⇒
-          State (CBlock o τ :: k) (Stmt ↘ s) (mem_alloc Γ o false τ m).
-Proof. constructor. eapply mem_allocable_alt, is_fresh. done. Qed.
-Lemma cstep_label_block_down_fresh m k l τ s :
-  l ∈ labels s →
-  let o := fresh (dom indexset m) in
-  Γ\ δ ⊢ₛ State k (Stmt (↷l) (blk{τ} s)) m ⇒
-          State (CBlock o τ :: k) (Stmt (↷l) s) (mem_alloc Γ o false τ m).
-Proof. constructor. eapply mem_allocable_alt, is_fresh. done. Qed.
-Lemma cstep_call_fresh m k f s vs :
-  δ !! f = Some s →
-  let os := fresh_list (length vs) (dom indexset m) in
-  Γ\ δ ⊢ₛ State k (Call f vs) m ⇒
-          State (CParams f (zip os (type_of <$> vs)) :: k)
-            (Stmt ↘ s) (mem_alloc_val_list Γ (zip os vs) m).
-Proof.
-  constructor; auto using fresh_list_length.
-  apply mem_allocable_list_alt; split; [apply fresh_list_nodup|].
-  apply Forall_forall. intros o; simpl. rewrite mem_allocable_alt.
-  apply fresh_list_is_fresh.
-Qed.
 
 Global Instance cstep_subrel_suffix_of δ k1 k2 :
   PropHolds (k1 `suffix_of` k2) →
@@ -1136,5 +1104,3 @@ End smallstep_properties.
 
 Hint Resolve estep_if_true_no_locks estep_if_false_no_locks
   estep_comma_no_locks : cstep.
-Hint Resolve estep_alloc_fresh cstep_in_block_fresh
-  cstep_label_block_down_fresh cstep_call_fresh : cstep.
