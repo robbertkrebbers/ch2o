@@ -2341,6 +2341,10 @@ End Forall2_order.
 
 Section Forall3.
   Context {A B C} (P : A → B → C → Prop).
+  Lemma Forall3_app l1 k1 k1' l2 k2 k2' :
+    Forall3 P l1 k1 k1' → Forall3 P l2 k2 k2' →
+    Forall3 P (l1 ++ l2) (k1 ++ k2) (k1' ++ k2').
+  Proof. induction 1; simpl; [done|constructor]; auto. Qed.
   Lemma Forall3_impl (Q : A → B → C → Prop) l l' k :
     Forall3 P l l' k → (∀ x y z, P x y z → Q x y z) → Forall3 Q l l' k.
   Proof. intros Hl ?. induction Hl; constructor; auto. Defined.
