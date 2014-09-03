@@ -182,6 +182,7 @@ Ltac unfold_elem_of :=
     | context [ _ ∈ mret _ ] => setoid_rewrite elem_of_ret in H
     | context [ _ ∈ _ ≫= _ ] => setoid_rewrite elem_of_bind in H
     | context [ _ ∈ mjoin _ ] => setoid_rewrite elem_of_join in H
+    | context [ _ ∈ guard _; _ ] => setoid_rewrite elem_of_guard in H
     end);
   repeat match goal with
   | |- context [ _ ⊆ _ ] => setoid_rewrite elem_of_subseteq
@@ -199,6 +200,7 @@ Ltac unfold_elem_of :=
   | |- context [ _ ∈ mret _ ] => setoid_rewrite elem_of_ret
   | |- context [ _ ∈ _ ≫= _ ] => setoid_rewrite elem_of_bind
   | |- context [ _ ∈ mjoin _ ] => setoid_rewrite elem_of_join
+  | |- context [ _ ∈ guard _; _ ] => setoid_rewrite elem_of_guard
   end.
 
 (** The tactic [solve_elem_of tac] composes the above tactic with [intuition].
