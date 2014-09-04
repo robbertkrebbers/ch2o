@@ -781,9 +781,7 @@ Global Instance cstep_subrel_nil δ :
 Proof. intros S1 S2 ?. split. done. solve_suffix_of. Qed.
 Lemma cstep_in_ctx_rtc k S1 S2 :
   Γ\ δ ⊢ₛ S1 ⇒{k}* S2 → k `suffix_of` SCtx S2 ∨ S1 = S2.
-Proof.
-  revert S1 S2. apply rtc_ind_r; [by right|]. intros ??? _ [??] _. by left.
-Qed.
+Proof. revert S2. apply rtc_ind_r; [by right|]. intros ?? _ [??] _. by left. Qed.
 Lemma cstep_in_ctx_bsteps n k S1 S2 :
   Γ\ δ ⊢ₛ S1 ⇒{k}^n S2 → k `suffix_of` SCtx S2 ∨ S1 = S2.
 Proof. intros p. apply bsteps_rtc in p. eapply cstep_in_ctx_rtc; eauto. Qed.

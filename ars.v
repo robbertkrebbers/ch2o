@@ -61,19 +61,22 @@ Section rtc.
 
   Lemma rtc_inv x z : rtc R x z → x = z ∨ ∃ y, R x y ∧ rtc R y z.
   Proof. inversion_clear 1; eauto. Qed.
-
-  Lemma rtc_ind_r (P : A → A → Prop)
-    (Prefl : ∀ x, P x x)
-    (Pstep : ∀ x y z, rtc R x y → R y z → P x y → P x z) :
+  Lemma rtc_ind_r_weak (P : A → A → Prop)
+    (Prefl : ∀ x, P x x) (Pstep : ∀ x y z, rtc R x y → R y z → P x y → P x z) :
     ∀ x z, rtc R x z → P x z.
   Proof.
     cut (∀ y z, rtc R y z → ∀ x, rtc R x y → P x y → P x z).
     { eauto using rtc_refl. }
     induction 1; eauto using rtc_r.
   Qed.
-
+  Lemma rtc_ind_r (P : A → Prop) (x : A)
+    (Prefl : P x) (Pstep : ∀ y z, rtc R x y → R y z → P y → P z) :
+    ∀ z, rtc R x z → P z.
+  Proof.
+    intros z p. revert x z p Prefl Pstep. refine (rtc_ind_r_weak _ _ _); eauto.
+  Qed.
   Lemma rtc_inv_r x z : rtc R x z → x = z ∨ ∃ y, rtc R x y ∧ R y z.
-  Proof. revert x z. apply rtc_ind_r; eauto. Qed.
+  Proof. revert z. apply rtc_ind_r; eauto. Qed.
 
   Lemma nsteps_once x y : R x y → nsteps R 1 x y.
   Proof. eauto with ars. Qed.
