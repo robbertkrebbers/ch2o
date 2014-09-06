@@ -37,28 +37,35 @@ Section definitions.
     | tc_once x y : R x y → tc x y
     | tc_l x y z : R x y → tc y z → tc x z.
 
-  (** An element [x] is looping if all paths starting at [x] are infinite. *)
-  CoInductive looping : A → Prop :=
-    | looping_do_step x : red x → (∀ y, R x y → looping y) → looping x.
-End definitions.
+  (** An element [x] is universally looping if all paths starting at [x]
+  are infinite. *)
+  CoInductive all_loop : A → Prop :=
+    | all_loop_do_step x : red x → (∀ y, R x y → all_loop y) → all_loop x.
 
-Hint Constructors rtc nsteps bsteps tc : ars.
+  (** An element [x] is existentally looping if some path starting at [x]
+  is infinite. *)
+  CoInductive ex_loop : A → Prop :=
+    | ex_loop_do_step x y : R x y → ex_loop y → ex_loop x.
+End definitions.
 
 (** * General theorems *)
 Section rtc.
   Context `{R : relation A}.
 
+  Hint Constructors rtc nsteps bsteps tc.
+
   Global Instance rtc_reflexive: Reflexive (rtc R).
-  Proof. red. apply rtc_refl. Qed.
-  Global Instance rtc_transitive: Transitive (rtc R).
-  Proof. red. induction 1; eauto with ars. Qed.
+  Proof. exact (@rtc_refl A R). Qed.
+  Lemma rtc_transitive x y z : rtc R x y → rtc R y z → rtc R x z.
+  Proof. induction 1; eauto. Qed.
+  Global Instance: Transitive (rtc R).
+  Proof. exact rtc_transitive. Qed.
   Lemma rtc_once x y : R x y → rtc R x y.
-  Proof. eauto with ars. Qed.
+  Proof. eauto. Qed.
   Instance rtc_once_subrel: subrelation R (rtc R).
   Proof. exact @rtc_once. Qed.
   Lemma rtc_r x y z : rtc R x y → R y z → rtc R x z.
-  Proof. intros. etransitivity; eauto with ars. Qed.
-
+  Proof. intros. etransitivity; eauto. Qed.
   Lemma rtc_inv x z : rtc R x z → x = z ∨ ∃ y, R x y ∧ rtc R y z.
   Proof. inversion_clear 1; eauto. Qed.
   Lemma rtc_ind_r_weak (P : A → A → Prop)
@@ -79,22 +86,22 @@ Section rtc.
   Proof. revert z. apply rtc_ind_r; eauto. Qed.
 
   Lemma nsteps_once x y : R x y → nsteps R 1 x y.
-  Proof. eauto with ars. Qed.
+  Proof. eauto. Qed.
   Lemma nsteps_trans n m x y z :
     nsteps R n x y → nsteps R m y z → nsteps R (n + m) x z.
-  Proof. induction 1; simpl; eauto with ars. Qed.
+  Proof. induction 1; simpl; eauto. Qed.
   Lemma nsteps_r n x y z : nsteps R n x y → R y z → nsteps R (S n) x z.
-  Proof. induction 1; eauto with ars. Qed.
+  Proof. induction 1; eauto. Qed.
   Lemma nsteps_rtc n x y : nsteps R n x y → rtc R x y.
-  Proof. induction 1; eauto with ars. Qed.
+  Proof. induction 1; eauto. Qed.
   Lemma rtc_nsteps x y : rtc R x y → ∃ n, nsteps R n x y.
-  Proof. induction 1; firstorder eauto with ars. Qed.
+  Proof. induction 1; firstorder eauto. Qed.
 
   Lemma bsteps_once n x y : R x y → bsteps R (S n) x y.
-  Proof. eauto with ars. Qed.
+  Proof. eauto. Qed.
   Lemma bsteps_plus_r n m x y :
     bsteps R n x y → bsteps R (n + m) x y.
-  Proof. induction 1; simpl; eauto with ars. Qed.
+  Proof. induction 1; simpl; eauto. Qed.
   Lemma bsteps_weaken n m x y :
     n ≤ m → bsteps R n x y → bsteps R m x y.
   Proof.
@@ -107,62 +114,57 @@ Section rtc.
   Proof. apply bsteps_weaken. lia. Qed.
   Lemma bsteps_trans n m x y z :
     bsteps R n x y → bsteps R m y z → bsteps R (n + m) x z.
-  Proof. induction 1; simpl; eauto using bsteps_plus_l with ars. Qed.
+  Proof. induction 1; simpl; eauto using bsteps_plus_l. Qed.
   Lemma bsteps_r n x y z : bsteps R n x y → R y z → bsteps R (S n) x z.
-  Proof. induction 1; eauto with ars. Qed.
+  Proof. induction 1; eauto. Qed.
   Lemma bsteps_rtc n x y : bsteps R n x y → rtc R x y.
-  Proof. induction 1; eauto with ars. Qed.
+  Proof. induction 1; eauto. Qed.
   Lemma rtc_bsteps x y : rtc R x y → ∃ n, bsteps R n x y.
-  Proof.
-    induction 1.
-    * exists 0. constructor.
-    * naive_solver eauto with ars.
-  Qed.
-
+  Proof. induction 1; [exists 0; constructor|]. naive_solver eauto. Qed.
   Lemma bsteps_ind_r (P : nat → A → Prop) (x : A)
     (Prefl : ∀ n, P n x)
     (Pstep : ∀ n y z, bsteps R n x y → R y z → P n y → P (S n) z) :
     ∀ n z, bsteps R n x z → P n z.
   Proof.
     cut (∀ m y z, bsteps R m y z → ∀ n,
-      bsteps R n x y →
-      (∀ m', n ≤ m' ∧ m' ≤ n + m → P m' y) →
-      P (n + m) z).
-    { intros help ?. change n with (0 + n). eauto with ars. }
+      bsteps R n x y → (∀ m', n ≤ m' ∧ m' ≤ n + m → P m' y) → P (n + m) z).
+    { intros help ?. change n with (0 + n). eauto. }
     induction 1 as [|m x' y z p2 p3 IH]; [by eauto with arith|].
     intros n p1 H. rewrite <-plus_n_Sm.
     apply (IH (S n)); [by eauto using bsteps_r |].
-    intros [|m'] [??]; [lia |].
-    apply Pstep with x'.
+    intros [|m'] [??]; [lia |]. apply Pstep with x'.
     * apply bsteps_weaken with n; intuition lia.
     * done.
     * apply H; intuition lia.
   Qed.
 
-  Global Instance tc_trans: Transitive (tc R).
-  Proof. red; induction 1; eauto with ars. Qed.
+  Lemma tc_transitive x y z : tc R x y → tc R y z → tc R x z.
+  Proof. induction 1; eauto. Qed.
+  Global Instance: Transitive (tc R).
+  Proof. exact tc_transitive. Qed.
   Lemma tc_r x y z : tc R x y → R y z → tc R x z.
-  Proof. intros. etransitivity; eauto with ars. Qed.
+  Proof. intros. etransitivity; eauto. Qed.
+  Lemma tc_rtc_l x y z : rtc R x y → tc R y z → tc R x z.
+  Proof. induction 1; eauto. Qed.
+  Lemma tc_rtc_r x y z : tc R x y → rtc R y z → tc R x z.
+  Proof. intros Hxy Hyz. revert x Hxy. induction Hyz; eauto using tc_r. Qed.
   Lemma tc_rtc x y : tc R x y → rtc R x y.
-  Proof. induction 1; eauto with ars. Qed.
+  Proof. induction 1; eauto. Qed.
   Instance tc_once_subrel: subrelation (tc R) (rtc R).
   Proof. exact @tc_rtc. Qed.
 
-  Lemma looping_red x : looping R x → red R x.
+  Lemma all_loop_red x : all_loop R x → red R x.
   Proof. destruct 1; auto. Qed.
-  Lemma looping_step x y : looping R x → R x y → looping R y.
+  Lemma all_loop_step x y : all_loop R x → R x y → all_loop R y.
   Proof. destruct 1; auto. Qed.
-  Lemma looping_rtc x y : looping R x → rtc R x y → looping R y.
-  Proof. induction 2; eauto using looping_step. Qed.
-
-  Lemma looping_alt x :
-    looping R x ↔ ∀ y, rtc R x y → red R y.
+  Lemma all_loop_rtc x y : all_loop R x → rtc R x y → all_loop R y.
+  Proof. induction 2; eauto using all_loop_step. Qed.
+  Lemma all_loop_alt x :
+    all_loop R x ↔ ∀ y, rtc R x y → red R y.
   Proof.
-    split.
-    * eauto using looping_red, looping_rtc.
-    * intros H. cut (∀ z, rtc R x z → looping R z).
-      { eauto with ars. }
-      cofix FIX. constructor; eauto using rtc_r with ars.
+    split; [eauto using all_loop_red, all_loop_rtc|].
+    intros H. cut (∀ z, rtc R x z → all_loop R z); [eauto|].
+    cofix FIX. constructor; eauto using rtc_r.
   Qed.
 End rtc.
 
@@ -172,9 +174,9 @@ Hint Extern 5 (subrelation _ (rtc _)) =>
 Hint Extern 5 (subrelation _ (tc _)) =>
   eapply @tc_once_subrel : typeclass_instances.
 
-Hint Resolve
-  rtc_once rtc_r tc_r
-  bsteps_once bsteps_r bsteps_refl bsteps_trans : ars.
+Hint Constructors rtc nsteps bsteps tc : ars.
+Hint Resolve rtc_once rtc_r tc_r rtc_transitive tc_rtc_l tc_rtc_r
+  tc_rtc bsteps_once bsteps_r bsteps_refl bsteps_trans : ars.
 
 (** * Theorems on sub relations *)
 Section subrel.
