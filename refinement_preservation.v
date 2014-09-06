@@ -40,7 +40,7 @@ Hint Immediate locks_refine_valid_l locks_refine_valid_r.
 Hint Immediate stmt_refine_typed_l stmt_refine_typed_r.
 Hint Resolve down_refine_r up_refine_r.
 Hint Immediate Undef_undef.
-Hint Immediate mem_inj_extend_reflexive.
+Hint Immediate meminj_extend_reflexive.
 
 Lemma assign_refine_1 Γ f m1 m2 ass a1 a2 v1 v2 v1' va1' τ τ' σ :
   ✓ Γ → m1 ⊑{Γ,f} m2 → assign_typed Γ τ τ' ass σ →
@@ -91,7 +91,7 @@ Lemma ehstep_refine Γ Γf f m1 m2 m1' m2' ρ1 ρ2 τs e1 e2 e1' e2' τlr :
   Forall2 (λ o1 o2, f !! o1 = Some (o2,[])) ρ1 ρ2 → ∃ f',
   (**i 1.) *) m1' ⊑{Γ,f'} m2' ∧
   (**i 2.) *) e1' ⊑{(Γ,Γf,τs),f'@'{m1'}↦'{m2'}} e2' : τlr ∧
-  (**i 3.) *) mem_inj_extend f f' ('{m1}) ('{m2}).
+  (**i 3.) *) meminj_extend f f' ('{m1}) ('{m2}).
 Proof.
   intros ? [] p2 ?????.
   * refine_inversion_all; inv_ehstep; decompose_Forall_hyps.
@@ -155,7 +155,7 @@ Lemma ehstep_refine_l Γ Γf f m1 m2 m1' ρ1 ρ2 τs e1 e2 e1' τlr :
   (**i 1.) *) Γ\ ρ2 ⊢ₕ e2, m2 ⇒ e2', m2' ∧
   (**i 2.) *) m1' ⊑{Γ,f'} m2' ∧
   (**i 3.) *) e1' ⊑{(Γ,Γf,τs),f'@'{m1'}↦'{m2'}} e2' : τlr ∧
-  (**i 4.) *) mem_inj_extend f f' ('{m1}) ('{m2}).
+  (**i 4.) *) meminj_extend f f' ('{m1}) ('{m2}).
 Proof.
   intros ? p ?????. cut (∃ m2' e2', Γ\ ρ2 ⊢ₕ e2, m2 ⇒ e2', m2').
   { intros (m2'&e2'&?). destruct (ehstep_refine Γ Γf f m1 m2 m1' m2'
@@ -176,7 +176,7 @@ Lemma ehstep_refine_r Γ Γf f m1 m2 m2' ρ1 ρ2 τs e1 e2 e2' τlr :
     (**i 1.) *) Γ\ ρ1 ⊢ₕ e1, m1 ⇒ e1', m1' ∧
     (**i 2.) *) m1' ⊑{Γ,f'} m2' ∧
     (**i 3.) *) e1' ⊑{(Γ,Γf,τs),f'@'{m1'}↦'{m2'}} e2' : τlr ∧
-    (**i 4.) *) mem_inj_extend f f' ('{m1}) ('{m2}))
+    (**i 4.) *) meminj_extend f f' ('{m1}) ('{m2}))
   ∨ is_redex e1 ∧ ¬Γ \ ρ1 ⊢ₕ safe e1, m1.
 Proof.
   intros ? p ?????. destruct (ehexec Γ ρ1 e1 m1) as [[e1' m1']|] eqn:p'.
@@ -224,7 +224,7 @@ Lemma cstep_refine_r Γ Γf δ1 δ2 f S1 S2 S2' g :
   δ1 ⊑{Γ,f@'{SMem S1}↦'{SMem S2}} δ2 : Γf → ∃ f' S1',
   (**i 1.) *) Γ\ δ1 ⊢ₛ S1 ⇒ S1' ∧
   (**i 2.) *) S1' ⊑{(Γ,Γf),f'} S2' : g ∧
-  (**i 3.) *) mem_inj_extend f f' ('{SMem S1}) ('{SMem S2}).
+  (**i 3.) *) meminj_extend f f' ('{SMem S1}) ('{SMem S2}).
 Proof.
   intros ? p Hundef HS Hδ.
   destruct (cstep_preservation Γ Γf δ2 S2 S2' g) as [HS2' _];

@@ -10,7 +10,7 @@ Local Opaque singleton.
 Ltac solve_length := simplify_equality'; repeat
   match goal with H : Forall2 _ _ _ |- _ => apply Forall2_length in H end; lia.
 Hint Resolve cmap_refine_memenv_refine.
-Hint Immediate mem_inj_extend_reflexive.
+Hint Immediate meminj_extend_reflexive.
 Hint Immediate ctx_typed_stack_typed.
 Hint Resolve (elem_of_singleton_2 (C:=listset (state Ti))).
 
@@ -20,7 +20,7 @@ Lemma ehexec_complete Γ Γf m1 m2 ρ τs e1 e2 τlr :
   (**i 1.) *) ehexec Γ ρ e1 m1 = Some (e2', m2') ∧
   (**i 2.) *) e2' ⊑{(Γ,Γf,τs),f@'{m2'}↦'{m2}} e2 : τlr ∧
   (**i 3.) *) m2' ⊑{Γ,f} m2 ∧
-  (**i 4.) *) mem_inj_extend mem_inj_id f ('{m1}) ('{m1}).
+  (**i 4.) *) meminj_extend meminj_id f ('{m1}) ('{m1}).
 Proof.
   intros ? Hm1 Hρ He1 p. destruct (ehstep_preservation Γ Γf m1 m2 ρ
     τs e1 e2 τlr) as (Hm2&He2&Hm); auto.
@@ -30,16 +30,16 @@ Proof.
        apply assign_exec_correct in H
     | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]; try done
     | _ => progress simplify_option_equality
-    end; eexists mem_inj_id, _, _; split_ands;
+    end; eexists meminj_id, _, _; split_ands;
       eauto using cmap_refine_id', expr_refine_id).
   intros m Ω o τi τ n ?????????; simplify_option_equality; typed_inversion_all.
   set (o' := fresh (dom indexset m)) in *.
   assert (mem_allocable o' m) by (apply mem_allocable_fresh).
-  destruct (mem_alloc_refine' Γ mem_inj_id m m true (τ.[Z.to_nat n])
+  destruct (mem_alloc_refine' Γ meminj_id m m true (τ.[Z.to_nat n])
     (fresh (dom indexset m)) o) as (f&?&?&?); auto using cmap_refine_id'.
   eexists f, _, _; split_ands; eauto.
   refine_constructor; eauto using lockset_valid_weaken, mem_alloc_extend.
-  * eapply locks_refine_weaken with mem_inj_id ('{m}) ('{m});
+  * eapply locks_refine_weaken with meminj_id ('{m}) ('{m});
       eauto using locks_refine_id, mem_alloc_extend', option_eq_1.
   * eapply addr_top_array_refine; eauto using mem_alloc_index_typed'.
 Qed.
@@ -47,16 +47,16 @@ Lemma cexec_complete Γ Γf δ S1 S2 g :
   ✓ Γ → (Γ,'{SMem S1}) ⊢ δ : Γf → (Γ,Γf) ⊢ S1 : g → Γ\ δ ⊢ₛ S1 ⇒ S2 → ∃ f S2',
   (**i 1.) *) Γ\ δ ⊢ₛ S1 ⇒ₑ S2' ∧
   (**i 2.) *) S2' ⊑{(Γ,Γf),f} S2 : g ∧
-  (**i 3.) *) mem_inj_extend mem_inj_id f ('{SMem S1}) ('{SMem S1}).
+  (**i 3.) *) meminj_extend meminj_id f ('{SMem S1}) ('{SMem S1}).
 Proof.
   intros ? Hδ1 HS1 p.
   destruct (cstep_preservation Γ Γf δ S1 S2 g) as [HS2 Hδ2]; auto.
   revert Hδ1 HS1 Hδ2 HS2. case p; clear p; try by (
     intros; simpl; repeat match goal with
     | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]; try done
-    end; eexists mem_inj_id, _; split_ands; eauto using state_refine_id).
+    end; eexists meminj_id, _; split_ands; eauto using state_refine_id).
   * intros m k Ei e ????.
-    eexists mem_inj_id, _; split_ands; eauto using state_refine_id.
+    eexists meminj_id, _; split_ands; eauto using state_refine_id.
     destruct Ei; simpl; eauto.
   * intros m1 m2 k E e1 e2 ?? (τlr&Heτlr&?&?) ? _; simpl in *.
     typed_inversion Heτlr; edestruct (ectx_subst_typed_rev Γ Γf ('{m1})
@@ -76,14 +76,14 @@ Proof.
     + eauto 10 using ctx_refine_weaken,
         ctx_refine_id, ehstep_extend, ehexec_sound.
   * intros m k f E Ωs vs ?????; simpl.
-    eexists mem_inj_id, _; split_ands; eauto using state_refine_id.
+    eexists meminj_id, _; split_ands; eauto using state_refine_id.
     assert (maybe_EVal (subst E (call f @ #{Ωs}* vs)%E) = None) as ->.
     { by destruct E as [|[] E] using rev_ind; rewrite ?subst_app. }
     apply elem_of_bind; exists (E, call f @ #{Ωs}* vs)%E.
     split; [|apply expr_redexes_complete; constructor; apply EVals_nf]; simpl.
     rewrite maybe_ECall_redex_Some_2 by done; eauto.
   * intros m k E e He Hsafe ????; simpl.
-    eexists mem_inj_id, _; split_ands; eauto using state_refine_id.
+    eexists meminj_id, _; split_ands; eauto using state_refine_id.
     assert (maybe_EVal (subst E e) = None) as ->.
     { destruct E as [|Ei] using rev_ind; [by destruct He|].
       by destruct Ei; by rewrite ?subst_app. }
@@ -99,7 +99,7 @@ Proof.
     assert (length os' = length vs) by (by apply fresh_list_length).
     edestruct (funenv_lookup Γ ('{m}) Γf δ h)
       as (?&?&?&?&?&?&?&?&?); eauto; simplify_equality'.
-    edestruct (mem_alloc_val_list_refine' Γ mem_inj_id m m os' os vs vs) as
+    edestruct (mem_alloc_val_list_refine' Γ meminj_id m m os' os vs vs) as
       (f&?&?&?); eauto using cmap_refine_id', vals_refine_id.
     exists f (State (CParams h (zip os' (type_of <$> vs)) :: k)
       (Stmt ↘ s) (mem_alloc_val_list Γ (zip os' vs) m)).
@@ -110,21 +110,21 @@ Proof.
       eauto using mem_alloc_val_list_index_typed.
     + rewrite snd_zip by solve_length.
       erewrite Fun_type_stack_types, (right_id_L [] (++)) by eauto.
-      eapply (stmt_refine_weaken _ _ mem_inj_id _ ('{m}));
+      eapply (stmt_refine_weaken _ _ meminj_id _ ('{m}));
         eauto using stmt_refine_id, mem_alloc_val_list_extend.
     + eauto 8 using ctx_refine_weaken, ctx_refine_id, mem_alloc_val_list_extend.
   * intros m k l ????; simpl; rewrite decide_True by solve_elem_of.
-    eexists mem_inj_id, _; split_ands; eauto using state_refine_id.
+    eexists meminj_id, _; split_ands; eauto using state_refine_id.
   * intros m k Es l s ?????; simpl.
     rewrite sctx_item_subst_labels, decide_True by solve_elem_of.
-    eexists mem_inj_id, _; split_ands; eauto using state_refine_id.
+    eexists meminj_id, _; split_ands; eauto using state_refine_id.
     destruct Es; simpl; solve_elem_of.
   * intros m k Es l s ?????; simpl; rewrite decide_False by done.
-    eexists mem_inj_id, _; split_ands; eauto using state_refine_id.
+    eexists meminj_id, _; split_ands; eauto using state_refine_id.
   * intros m k d o τ s ??? (τf&?&?&?) _ _; simpl in *; typed_inversion_all.
     assert (mem_allocable (fresh (dom indexset m)) m).
     { eapply mem_allocable_alt, is_fresh. }
-    destruct (mem_alloc_refine' Γ mem_inj_id m m false τ
+    destruct (mem_alloc_refine' Γ meminj_id m m false τ
       (fresh (dom indexset m)) o) as (f&?&?&?); auto using cmap_refine_id'.
     eexists f, (State (CBlock (fresh (dom indexset m)) τ :: k) (Stmt d s)
       (mem_alloc Γ (fresh (dom indexset m)) false τ m)).
@@ -132,13 +132,13 @@ Proof.
     { by destruct d; simplify_option_equality; try case_match; eauto. }
     eleft; split_ands; simpl; repeat refine_constructor;
       eauto using mem_alloc_index_typed'.
-    + eapply (stmt_refine_weaken _ _ mem_inj_id _ ('{m}));
+    + eapply (stmt_refine_weaken _ _ meminj_id _ ('{m}));
         eauto using stmt_refine_id, mem_alloc_extend'.
-    + eapply (direction_refine_weaken _ mem_inj_id _ ('{m})); eauto using
+    + eapply (direction_refine_weaken _ meminj_id _ ('{m})); eauto using
         direction_refine_id, mem_alloc_extend', option_eq_1_alt.
     + eauto 8 using ctx_refine_weaken, ctx_refine_id, mem_alloc_extend'.
   * intros m k d o τ s ?????.
-    eexists mem_inj_id, _; split_ands; eauto using state_refine_id.
+    eexists meminj_id, _; split_ands; eauto using state_refine_id.
     by destruct d; simpl; try case_match; eauto.
 Qed.
 Lemma cexec_complete_steps Γ Γf δ S1 S2 g :
@@ -146,10 +146,10 @@ Lemma cexec_complete_steps Γ Γf δ S1 S2 g :
   ∃ f S2',
   (**i 1.) *) Γ\ δ ⊢ₛ S1 ⇒ₑ* S2' ∧
   (**i 2.) *) S2' ⊑{(Γ,Γf),f} S2 : g ∧
-  (**i 3.) *) mem_inj_extend mem_inj_id f ('{SMem S1}) ('{SMem S1}).
+  (**i 3.) *) meminj_extend meminj_id f ('{SMem S1}) ('{SMem S1}).
 Proof.
   intros ???; revert S2. apply rtc_ind_r.
-  { eexists mem_inj_id, S1.
+  { eexists meminj_id, S1.
     repeat constructor (by eauto using state_refine_id). }
   intros S2' S3' ?? (f&S2&?&?&?).
   destruct (csteps_preservation Γ Γf δ S1 S2 g),
@@ -164,6 +164,6 @@ Proof.
   destruct (cexec_complete Γ Γf δ S2 S3 g) as (f''&S3''&?&?&?);
     eauto using state_refine_typed_l, funenv_typed_weaken.
   exists (f'' ◎ f') S3''; eauto 7 using state_refine_compose, rtc_r,
-    mem_inj_extend_compose, mem_inj_extend_transitive.
+    meminj_extend_compose, meminj_extend_transitive.
 Qed.
 End executable_complete.

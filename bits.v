@@ -51,7 +51,7 @@ Section operations.
     | bs :: bss => bits_list_join sz bss ≫= bits_join (resize sz BIndet bs)
     end.
 
-  Inductive bit_refine' (Γ : env Ti) (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+  Inductive bit_refine' (Γ : env Ti) (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
        relation (bit Ti) :=
     | BIndet_refine' b2 : ✓{Γ,Γm2} b2 → bit_refine' Γ f Γm1 Γm2 BIndet b2
     | BBit_refine' β : bit_refine' Γ f Γm1 Γm2 (BBit β) (BBit β)
@@ -168,11 +168,11 @@ Proof.
     constructor; eauto using bit_refine_compose.
 Qed.
 Global Instance:
-  PropHolds (✓ Γ) → Transitive (refine Γ mem_inj_id Γm Γm : relation (bit Ti)).
+  PropHolds (✓ Γ) → Transitive (refine Γ meminj_id Γm Γm : relation (bit Ti)).
 Proof. intros Γ Γm ? b1 b2 b3. by apply bit_refine_compose. Qed.
 Lemma bit_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' b1 b2 :
   ✓ Γ → b1 ⊑{Γ,f@Γm1↦Γm2} b2 → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⊆{⇒} Γm1' →
-  Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 → b1 ⊑{Γ',f'@Γm1'↦Γm2'} b2.
+  Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 → b1 ⊑{Γ',f'@Γm1'↦Γm2'} b2.
 Proof.
   destruct 2 as [| | |pb1 b2 Hpb]; constructor; eauto using bit_valid_weaken,
     ptr_bit_refine_weaken, ptr_bit_valid_weaken, ptr_dead_weaken.

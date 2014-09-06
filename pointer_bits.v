@@ -161,7 +161,7 @@ Proof.
 Qed.
 Lemma ptr_bit_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' pb1 pb2 :
   ✓ Γ → pb1 ⊑{Γ,f@Γm1↦Γm2} pb2 → Γ ⊆ Γ' → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → mem_inj_extend f f' Γm1 Γm2 → pb1 ⊑{Γ',f'@Γm1'↦Γm2'} pb2.
+  Γm1 ⊆{⇒} Γm1' → meminj_extend f f' Γm1 Γm2 → pb1 ⊑{Γ',f'@Γm1'↦Γm2'} pb2.
 Proof.
   intros ? (τ&?&?&?&?) ??. exists τ.
   erewrite <-bit_size_of_weaken by eauto using TBase_valid, TPtr_valid,

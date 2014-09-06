@@ -68,7 +68,7 @@ Implicit Types w : mtree Ti.
 Implicit Types rs : ref_seg Ti.
 Implicit Types r : ref Ti.
 Implicit Types a : addr Ti.
-Implicit Types f : mem_inj Ti.
+Implicit Types f : meminj Ti.
 Implicit Types g : mtree Ti → mtree Ti.
 Implicit Types β : bool.
 Local Opaque nmap.Nempty.
@@ -438,7 +438,7 @@ Proof. by intros (?&?&?&?). Qed.
 Lemma cmap_refine_memenv_refine' Γ f m1 m2 : m1 ⊑{Γ,f} m2 → '{m1} ⊑{Γ,f} '{m2}.
 Proof. by apply cmap_refine_memenv_refine. Qed.
 Lemma cmap_refine_injective Γ f Γm1 Γm2 m1 m2 :
-  m1 ⊑{Γ,f@Γm1↦Γm2} m2 → mem_inj_injective f.
+  m1 ⊑{Γ,f@Γm1↦Γm2} m2 → meminj_injective f.
 Proof. eauto using cmap_refine_memenv_refine, memenv_refine_injective. Qed.
 Lemma cmap_refine_valid_l Γ f Γm1 Γm2 m1 m2: m1 ⊑{Γ,f@Γm1↦Γm2} m2 → ✓{Γ,Γm1} m1.
 Proof. by intros (?&?&?&?). Qed.
@@ -466,7 +466,7 @@ Proof.
   intros ? (?&?&?&Hm12) (?&Hm3&?&Hm23);
     split; split_ands; eauto 2 using memenv_refine_compose.
   intros o1 o3 r w1 malloc.
-  rewrite lookup_mem_inj_compose_Some; intros (o2&r2&r3&?&?&->) Hw1.
+  rewrite lookup_meminj_compose_Some; intros (o2&r2&r3&?&?&->) Hw1.
   destruct (Hm12 o1 o2 r2 w1 malloc) as (w2&w2'&τ2&?&?&?&?); auto.
   destruct (Hm23 o2 o3 r3 w2 malloc) as (w3&w3'&τ3&->&?&?&?); auto.
   destruct (ctree_lookup_refine Γ f2 Γm2 Γm3 w2 w3' τ3
@@ -517,14 +517,14 @@ Proof.
 Qed.
 Lemma cmap_refine_weaken Γ Γ' f f' Γm1 Γm2 m1 m2 :
   ✓ Γ → m1 ⊑{Γ,f@Γm1↦Γm2} m2 → Γ ⊆ Γ' → Γm1 ⊑{Γ',f'} Γm2 →
-  mem_inj_extend f f' Γm1 Γm2 → m1 ⊑{Γ',f'@Γm1↦Γm2} m2.
+  meminj_extend f f' Γm1 Γm2 → m1 ⊑{Γ',f'@Γm1↦Γm2} m2.
 Proof.
   intros ? (Hm1&?&HΓm&Hm) ?? Hf.
   split; split_ands; eauto using cmap_valid_weaken.
   intros o1 o2 r w1 malloc ??.
   destruct HΓm as (?&?&?), (proj2 Hm1 o1 w1 malloc) as (τ&?&_); auto.
   destruct (Hm o1 o2 r w1 malloc)
-    as (w2&w2'&τ'&?&?&?&?); eauto using option_eq_1, mem_inj_extend_left.
+    as (w2&w2'&τ'&?&?&?&?); eauto using option_eq_1, meminj_extend_left.
   exists w2 w2' τ'; split_ands;
     eauto using ctree_refine_weaken, ctree_lookup_weaken, option_eq_1_alt.
 Qed.
@@ -571,7 +571,7 @@ Proof.
     eapply ctree_alter_refine; eauto using ctree_alter_byte_refine.
     contradict Hgw1. eapply (ctree_alter_byte_unmapped _ _ _ w1'');
       eauto using ctree_alter_lookup_Forall, ctree_refine_typed_l.
-  * destruct (mem_inj_injective_ne f (addr_index a1)
+  * destruct (meminj_injective_ne f (addr_index a1)
       (addr_index a2) o3 o4 r2 r4) as [?|[??]];
       eauto using memenv_refine_injective; simplify_map_equality'; [eauto|].
     destruct (Hm o3 (addr_index a2) r4 w3 malloc)

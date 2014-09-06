@@ -133,7 +133,7 @@ Section address_operations.
        ref_refine r' sz [] i (ref_base r') (i + sz * ref_offset r')
     | ref_refine_ne_nil rs r i :
        ref_refine r' sz (rs :: r) i (rs :: r ++ r') i.
-  Inductive addr_refine' (Γ : env Ti) (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+  Inductive addr_refine' (Γ : env Ti) (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
        addr Ti → addr Ti → type Ti → Prop :=
     | Addr_refine' o o' r r' r'' i i'' τ τ' σ σc :
        Γm1 ⊑{Γ,f} Γm2 →
@@ -703,7 +703,7 @@ Proof.
   destruct 2 as [o o2 r r2 r3 i i3 τ τ2 σ σc ??????????? Hr3];
     inversion 1 as [? o4 ? r4 r5 ? i5 ? τ3 ????????????? Hr5]; subst.
   exists (r2 ++ r4); eauto using memenv_refine_compose.
-  { by rewrite lookup_mem_inj_compose; simplify_option_equality. }
+  { by rewrite lookup_meminj_compose; simplify_option_equality. }
   { rewrite ref_typed_app; eauto. }
   destruct Hr3 as [?|rs r i]; inversion Hr5; subst.
   * destruct r2; simplify_equality'. apply ref_refine_nil_alt; auto with lia.
@@ -713,7 +713,7 @@ Proof.
 Qed.
 Lemma addr_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' a1 a2 σ :
   ✓ Γ → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → mem_inj_extend f f' Γm1 Γm2 → a1 ⊑{Γ',f'@Γm1'↦Γm2'} a2 : σ.
+  Γm1 ⊆{⇒} Γm1' → meminj_extend f f' Γm1 Γm2 → a1 ⊑{Γ',f'@Γm1'↦Γm2'} a2 : σ.
 Proof.
   destruct 2 as [o o2 r r2 r3 i i3 τ τ2 σ σc]; intros ?? [??] [??];
     econstructor; eauto using type_valid_weaken, ref_typed_weaken.
@@ -765,14 +765,14 @@ Lemma addr_is_obj_refine Γ f Γm1 Γm2 a1 a2 σ :
   a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → addr_is_obj a1 ↔ addr_is_obj a2.
 Proof. by destruct 1. Qed.
 Lemma addr_disjoint_refine Γ f Γm1 Γm2 a1 a2 a3 a4 σ1 σ3 :
-  ✓ Γ → mem_inj_injective f → addr_strict Γ a1 → addr_strict Γ a3 →
+  ✓ Γ → meminj_injective f → addr_strict Γ a1 → addr_strict Γ a3 →
   a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ1 → a3 ⊑{Γ,f@Γm1↦Γm2} a4 : σ3 → a1 ⊥{Γ} a3 → a2 ⊥{Γ} a4.
 Proof.
   intros ??????.
   destruct (addr_ref_refine Γ f Γm1 Γm2 a1 a2 σ1) as (r1&Hf1&Hr1); auto.
   destruct (addr_ref_refine Γ f Γm1 Γm2 a3 a4 σ3) as (r2&Hf2&Hr2); auto.
   intros [?|[[Hidx ?]|(Hidx&Ha&?&?&?)]].
-  * edestruct (mem_inj_injective_ne f (addr_index a1) (addr_index a2))
+  * edestruct (meminj_injective_ne f (addr_index a1) (addr_index a2))
       as [|[??]]; eauto; [by left|].
     right; left; split; [done|]. rewrite Hr1, Hr2.
     by apply ref_disjoint_app, ref_disjoint_freeze_l, ref_disjoint_freeze_r.

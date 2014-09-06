@@ -348,7 +348,7 @@ Section operations.
     end); clear go; abstract first [by constructor | by inversion 1].
   Defined.
 
-  Inductive val_refine' (Γ : env Ti) (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+  Inductive val_refine' (Γ : env Ti) (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
        val Ti → val Ti → type Ti → Prop :=
     | VBase_refine vb1 vb2 τb :
        vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb →
@@ -375,7 +375,7 @@ Section operations.
     RefineT Ti (env Ti) (type Ti) (val Ti) := val_refine'.
 
   Section val_refine_ind.
-    Context (Γ : env Ti) (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti).
+    Context (Γ : env Ti) (f : meminj Ti) (Γm1 Γm2 : memenv Ti).
     Context (P : val Ti → val Ti → type Ti → Prop).
     Context (Pbase : ∀ vb1 vb2 τb,
       vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → P (VBase vb1) (VBase vb2) (baseT τb)).
@@ -1409,14 +1409,14 @@ Proof.
 Qed.
 Lemma val_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' v1 v2 τ :
   ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⊆{⇒} Γm1' →
-  Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 → v1 ⊑{Γ',f'@Γm1'↦Γm2'} v2 : τ.
+  Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 → v1 ⊑{Γ',f'@Γm1'↦Γm2'} v2 : τ.
 Proof.
   intros ? Hv; intros. induction Hv using @val_refine_ind; refine_constructor;
     eauto using base_val_refine_weaken, lookup_weaken, vals_representable_weaken.
 Qed.
 Lemma vals_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' vs1 vs2 τs :
   ✓ Γ → vs1 ⊑{Γ,f@Γm1↦Γm2}* vs2 :* τs → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 → 
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 → 
   vs1 ⊑{Γ',f'@Γm1'↦Γm2'}* vs2 :* τs.
 Proof. induction 2; constructor; eauto using val_refine_weaken. Qed.
 Lemma val_flatten_refine Γ f Γm1 Γm2 v1 v2 τ :
@@ -1441,7 +1441,7 @@ Proof.
     destruct (vals_representable_as_bits Γ Γm2 (bit_size_of Γ (unionT s)) vs2
       τs) as (bs2&Hbs2&?&?&?); eauto using bit_size_of_union.
     rewrite Hbs2; simplify_equality'.
-    rewrite <-(right_id_L mem_inj_id (◎) f). apply bits_refine_compose with
+    rewrite <-(right_id_L meminj_id (◎) f). apply bits_refine_compose with
       Γm2 (resize (bit_size_of Γ (unionT s)) BIndet (val_flatten Γ v2)); auto.
     rewrite list_lookup_fmap, Hτ in Hv2; simplify_equality'.
     eapply bits_subseteq_refine, bits_weakly_refine_resize_l;
@@ -1646,7 +1646,7 @@ Lemma of_val_to_val_refine_unflatten_flatten Γ Γm x w τ :
   ⊑{Γ@Γm} ctree_unflatten Γ τ (ctree_flatten w) : τ.
 Proof.
   intros. erewrite ctree_unflatten_flatten by eauto.
-  apply (ctree_refine_compose _ mem_inj_id mem_inj_id Γm Γm) with w;
+  apply (ctree_refine_compose _ meminj_id meminj_id Γm Γm) with w;
     eauto using of_val_to_val_refine, union_reset_above, ctree_refine_id.
 Qed.
 

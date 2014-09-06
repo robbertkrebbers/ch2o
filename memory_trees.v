@@ -318,7 +318,7 @@ Section operations.
       sublist_alter (ctree_flatten ∘ f ∘ ctree_unflatten Γ ucharT)
                     (i * char_bits) char_bits (ctree_flatten w).
 
-  Inductive ctree_refine' (Γ : env Ti) (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+  Inductive ctree_refine' (Γ : env Ti) (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
        mtree Ti → mtree Ti → type Ti → Prop :=
     | MBase_refine τb xbs1 xbs2 :
        ✓{Γ} τb → xbs1 ⊑{Γ,f@Γm1↦Γm2}* xbs2 →
@@ -364,7 +364,7 @@ Section operations.
     RefineT Ti (env Ti) (type Ti) (mtree Ti) := ctree_refine'.
 
   Lemma ctree_refine_inv_l (Γ : env Ti)
-      (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) (P : mtree Ti → Prop) w1 w2 τ :
+      (f : meminj Ti) (Γm1 Γm2 : memenv Ti) (P : mtree Ti → Prop) w1 w2 τ :
     w1 ⊑{Γ,f@Γm1↦Γm2} w2 : τ →
     match w1 with
     | MBase τb xbs1 =>
@@ -390,7 +390,7 @@ Section operations.
     end.
   Proof. destruct 1; eauto. Qed.
   Section ctree_refine_ind.
-    Context (Γ : env Ti) (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti).
+    Context (Γ : env Ti) (f : meminj Ti) (Γm1 Γm2 : memenv Ti).
     Context (P : mtree Ti → mtree Ti → type Ti → Prop).
     Context (Pbase : ∀ τb xbs1 xbs2,
       ✓{Γ} τb → xbs1 ⊑{Γ,f@Γm1↦Γm2}* xbs2 →
@@ -451,7 +451,7 @@ Implicit Types wxbs : mtree Ti * list (pbit Ti).
 Implicit Types wxbss : list (mtree Ti * list (pbit Ti)).
 Implicit Types rs : ref_seg Ti.
 Implicit Types r : ref Ti.
-Implicit Types f : mem_inj Ti.
+Implicit Types f : meminj Ti.
 Implicit Types g : mtree Ti → mtree Ti.
 
 Local Arguments union _ _ !_ !_ /.
@@ -2585,7 +2585,7 @@ Proof.
 Qed.
 Lemma ctree_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' w1 w2 τ :
   ✓ Γ → w1 ⊑{Γ,f@Γm1↦Γm2} w2 : τ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⊆{⇒} Γm1' →
-  Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 → w1 ⊑{Γ',f'@Γm1'↦Γm2'} w2 : τ.
+  Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 → w1 ⊑{Γ',f'@Γm1'↦Γm2'} w2 : τ.
 Proof.
   intros ? Hw; intros. induction Hw using @ctree_refine_ind;
     refine_constructor; try (eapply Forall2_impl; [eassumption|]); simpl;

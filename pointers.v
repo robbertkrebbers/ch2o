@@ -85,7 +85,7 @@ Section pointer_operations.
     match p with NULL _ => NULL σc | Ptr a => Ptr (addr_cast σc a) end.
   Global Arguments ptr_cast _ !_ /.
 
-  Inductive ptr_refine' (Γ : env Ti) (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+  Inductive ptr_refine' (Γ : env Ti) (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
        ptr Ti → ptr Ti → type Ti → Prop :=
     | NULL_refine τ :
        ptr_type_valid Γ τ → ptr_refine' Γ f Γm1 Γm2 (NULL τ) (NULL τ) τ
@@ -256,7 +256,7 @@ Proof.
 Qed.
 Lemma ptr_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' p1 p2 σ :
   ✓ Γ → p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⊆{⇒} Γm1' →
-  mem_inj_extend f f' Γm1 Γm2 → p1 ⊑{Γ',f'@Γm1'↦Γm2'} p2 : σ.
+  meminj_extend f f' Γm1 Γm2 → p1 ⊑{Γ',f'@Γm1'↦Γm2'} p2 : σ.
 Proof.
   destruct 2; constructor;
     eauto using ptr_type_valid_weaken, addr_refine_weaken.

@@ -103,7 +103,7 @@ Section operations.
     end.
 
   Inductive base_val_refine' (Γ : env Ti)
-        (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+        (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
         base_val Ti → base_val Ti → base_type Ti → Prop :=
     | VIndet_refine' τb vb :
        (Γ,Γm2) ⊢ vb : τb → τb ≠ voidT →
@@ -667,7 +667,7 @@ Proof.
 Qed.
 Lemma base_val_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' vb1 vb2 τb :
   ✓ Γ → vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
   vb1 ⊑{Γ',f'@Γm1'↦Γm2'} vb2 : τb.
 Proof.
   destruct 2; refine_constructor; eauto using base_val_typed_weaken,

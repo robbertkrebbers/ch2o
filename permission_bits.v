@@ -366,11 +366,11 @@ Proof.
     decompose_Forall_hyps; eauto using pbit_refine_compose.
 Qed.
 Global Instance:
-  PropHolds (✓ Γ) → Transitive (refine Γ mem_inj_id Γm Γm : relation (pbit Ti)).
+  PropHolds (✓ Γ) → Transitive (refine Γ meminj_id Γm Γm : relation (pbit Ti)).
 Proof. intros Γ ?????. eapply @pbit_refine_compose; eauto; apply _. Qed.
 Lemma pbit_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' xb1 xb2 :
   ✓ Γ → xb1 ⊑{Γ,f@Γm1↦Γm2} xb2 → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⊆{⇒} Γm1' →
-  Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 → xb1 ⊑{Γ',f'@Γm1'↦Γm2'} xb2.
+  Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 → xb1 ⊑{Γ',f'@Γm1'↦Γm2'} xb2.
 Proof. intros ? (?&?&[]&[]); repeat split; eauto using bit_refine_weaken. Qed.
 Lemma pbits_refine_perm Γ f Γm1 Γm2 xbs1 xbs2 :
   xbs1 ⊑{Γ,f@Γm1↦Γm2}* xbs2 → tagged_perm <$> xbs1 = tagged_perm <$> xbs2.

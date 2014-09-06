@@ -7,7 +7,7 @@ Local Open Scope ctype_scope.
 Section refinements.
 Context `{Env Ti}.
 
-Inductive lrval_refine' (Γ : env Ti) (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+Inductive lrval_refine' (Γ : env Ti) (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
     addr Ti + val Ti → addr Ti + val Ti → lrtype Ti → Prop :=
   | lval_refine a1 a2 τ :
      a1 ⊑{Γ,f@Γm1↦Γm2} a2 : τ → addr_strict Γ a1 →
@@ -19,7 +19,7 @@ Global Instance lrval_refine:
   RefineT Ti (env Ti) (lrtype Ti) (addr Ti + val Ti) := lrval_refine'.
 
 Inductive expr_refine' (Γ : env Ti) (Γf : funtypes Ti)
-     (τs : list (type Ti)) (f : mem_inj Ti)
+     (τs : list (type Ti)) (f : meminj Ti)
      (Γm1 Γm2 : memenv Ti) : expr Ti → expr Ti → lrtype Ti → Prop :=
   | EVar_refine τ n :
      τs !! n = Some τ →
@@ -88,7 +88,7 @@ Global Instance expr_refine:
 
 Section expr_refine_ind.
   Context (Γ : env Ti) (Γf : funtypes Ti) (τs : list (type Ti)).
-  Context (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti).
+  Context (f : meminj Ti) (Γm1 Γm2 : memenv Ti).
   Context (P : expr Ti → expr Ti → lrtype Ti → Prop).
   Context (Pvar : ∀ τ n,
     τs !! n = Some τ → P (var{τ} n) (var{τ} n) (inl τ)).
@@ -156,7 +156,7 @@ Section expr_refine_ind.
 End expr_refine_ind.
 
 Inductive ectx_item_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs: list (type Ti))
-     (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+     (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
      ectx_item Ti → ectx_item Ti → lrtype Ti → lrtype Ti → Prop :=
   | CRtoL_refine τ :
      ✓{Γ} τ →
@@ -216,7 +216,7 @@ Global Instance ectx_item_refine:
   PathRefine Ti (env Ti * funtypes Ti * list (type Ti)) (lrtype Ti)
     (lrtype Ti) (ectx_item Ti) := curry3 ectx_item_refine'.
 Inductive ectx_refine' (Γs : env Ti * funtypes Ti * list (type Ti))
-     (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+     (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
      ectx Ti → ectx Ti → lrtype Ti → lrtype Ti → Prop :=
   | ectx_nil_refine_2 τ : ectx_refine' Γs f Γm1 Γm2 [] [] τ τ
   | ectx_cons_refine_2 Ei1 Ei2 E1 E2 τ τ' τ'' :
@@ -228,7 +228,7 @@ Global Instance ectx_refine:
     (lrtype Ti) (ectx Ti) := ectx_refine'.
 
 Inductive stmt_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs : list (type Ti))
-     (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+     (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
      stmt Ti → stmt Ti → rettype Ti → Prop :=
   | SSkip_refine : stmt_refine' Γ Γf τs f Γm1 Γm2 skip skip (false,None)
   | SDo_refine e1 e2 τ :
@@ -266,7 +266,7 @@ Global Instance stmt_refine:
    (rettype Ti) (stmt Ti) := curry3 stmt_refine'.
 
 Inductive sctx_item_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs: list (type Ti))
-     (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+     (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
      sctx_item Ti → sctx_item Ti → relation (rettype Ti) :=
   | CCompL_refine s1' s2' c mσ c' mσ' mσr :
      s1' ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2' : (c',mσ') →
@@ -297,7 +297,7 @@ Global Instance sctx_refine:
     (rettype Ti) (sctx_item Ti) := curry3 sctx_item_refine'.
 
 Inductive esctx_item_refine' (Γ : env Ti) (Γf: funtypes Ti) (τs: list (type Ti))
-     (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+     (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
      esctx_item Ti → esctx_item Ti → type Ti → rettype Ti → Prop :=
   | CDoE_refine τ :
      esctx_item_refine' Γ Γf τs f Γm1 Γm2 (! □) (! □) τ (false,None)
@@ -318,7 +318,7 @@ Global Instance esctx_item_refine:
     (rettype Ti) (esctx_item Ti) := curry3 esctx_item_refine'.
 
 Inductive ctx_item_refine' (Γ : env Ti) (Γf: funtypes Ti) (τs: list (type Ti))
-     (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+     (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
      ctx_item Ti → ctx_item Ti → focustype Ti → focustype Ti → Prop :=
   | CStmt_refine Es1 Es2 cmσ cmσ' :
      Es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Es2 : cmσ ↣ cmσ' →
@@ -349,7 +349,7 @@ Global Instance ctx_item_refine:
   PathRefine Ti (env Ti * funtypes Ti * list (type Ti))
     (focustype Ti) (focustype Ti) (ctx_item Ti) := curry3 ctx_item_refine'.
 Inductive ctx_refine' (Γs : env Ti * funtypes Ti)
-     (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+     (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
      ctx Ti → ctx Ti → focustype Ti → focustype Ti → Prop :=
   | ctx_nil_refine_2 τf : ctx_refine' Γs f Γm1 Γm2 [] [] τf τf
   | ctx_cons_refine_2 Ek1 Ek2 k1 k2 τf τf' τf'' :
@@ -359,7 +359,7 @@ Inductive ctx_refine' (Γs : env Ti * funtypes Ti)
 Global Instance ctx_refine: PathRefine Ti (env Ti * funtypes Ti)
   (focustype Ti) (focustype Ti) (ctx Ti) := ctx_refine'.
 
-Inductive direction_refine' (Γ : env Ti) (f : mem_inj Ti) (Γm1 Γm2: memenv Ti) :
+Inductive direction_refine' (Γ : env Ti) (f : meminj Ti) (Γm1 Γm2: memenv Ti) :
      direction Ti → direction Ti → rettype Ti → Prop :=
   | Down_refine cmτ : direction_refine' Γ f Γm1 Γm2 ↘ ↘ cmτ
   | Up_refine mτ : direction_refine' Γ f Γm1 Γm2 ↗ ↗ (false,mτ)
@@ -371,7 +371,7 @@ Global Instance direction_refine: RefineT Ti (env Ti)
   (rettype Ti) (direction Ti) := direction_refine'.
 
 Inductive focus_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs : list (type Ti))
-     (f : mem_inj Ti) (Γm1 Γm2 : memenv Ti) :
+     (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
      focus Ti → focus Ti → focustype Ti → Prop :=
   | Stmt_refine d1 d2 s1 s2 cmσ :
      s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : cmσ →
@@ -403,7 +403,7 @@ Global Instance focus_refine:
   RefineT Ti (env Ti * funtypes Ti * list (type Ti))
     (focustype Ti) (focus Ti) := curry3 focus_refine'.
 
-Inductive state_refine' (Γ : env Ti) (Γf : funtypes Ti) (f : mem_inj Ti) :
+Inductive state_refine' (Γ : env Ti) (Γf : funtypes Ti) (f : meminj Ti) :
      state Ti → state Ti → funname → Prop :=
   | State_refine k1 φ1 m1 k2 φ2 m2 τf g :
      φ1 ⊑{(Γ,Γf,get_stack_types k1),f@'{m1}↦'{m2}} φ2 : τf →
@@ -809,7 +809,7 @@ Proof. destruct 1; refine_constructor; eauto using stmt_refine_id. Qed.
 Lemma ctx_item_refine_id Γ Γm Γf τs Ek τf τf' :
   (Γ,Γf,Γm,τs) ⊢ Ek : τf ↣ τf' → Ek ⊑{(Γ,Γf,τs)@Γm} Ek : τf ↣ τf'.
 Proof.
-  assert (∀ os, Forall2 (λ o1 o2, @mem_inj_id Ti !! o1 = Some (o2, [])) os os).
+  assert (∀ os, Forall2 (λ o1 o2, @meminj_id Ti !! o1 = Some (o2, [])) os os).
   { induction os; auto. }
   destruct 1; refine_constructor; eauto using sctx_item_refine_id,
     expr_refine_id, ectx_refine_id, esctx_item_refine_id.
@@ -927,7 +927,7 @@ Lemma ctx_item_refine_compose Γ Γf τs f g Γm1 Γm2 Γm3 Ek1 Ek2 Ek3 τf τf'
 Proof.
   assert (∀ o1 o2 o3, f !! o1 = Some (o2,[]) → g !! o2 = Some (o3,[]) →
     (f ◎ g) !! o1 = Some (o3,[])).
-  { intros o1 o2 o3. rewrite lookup_mem_inj_compose_Some. naive_solver. }
+  { intros o1 o2 o3. rewrite lookup_meminj_compose_Some. naive_solver. }
   assert (∀ os1 os2 os2' os3 (σs : list (type Ti)),
     Γm2 ⊢* os2 :* σs → Γm2 ⊢* os2' :* σs → zip os2' σs = zip os2 σs →
     Forall2 (λ o1 o2, f !! o1 = Some (o2, [])) os1 os2 →
@@ -1018,7 +1018,7 @@ Qed.
 
 Lemma expr_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs e1 e2 τlr :
   ✓ Γ → e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : τlr → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
   e1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} e2 : τlr.
 Proof.
   intros ? He; intros. induction He using @expr_refine_ind;
@@ -1027,12 +1027,12 @@ Proof.
 Qed.
 Lemma exprs_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs es1 es2 τlrs :
   ✓ Γ → es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2}* es2 :* τlrs → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
   es1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'}* es2 :* τlrs.
 Proof. induction 2; constructor; eauto using expr_refine_weaken. Qed.
 Lemma ectx_item_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs Ei1 Ei2 τlr τlr' :
   ✓ Γ → Ei1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ei2 : τlr ↣ τlr' → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
   Ei1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} Ei2 : τlr ↣ τlr'.
 Proof.
   destruct 2; refine_constructor;
@@ -1040,12 +1040,12 @@ Proof.
 Qed.
 Lemma ectx_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs E1 E2 τlr τlr' :
   ✓ Γ → E1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} E2 : τlr ↣ τlr' → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
   E1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} E2 : τlr ↣ τlr'.
 Proof. induction 2; refine_constructor;eauto using ectx_item_refine_weaken. Qed.
 Lemma stmt_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs s1 s2 mcτ :
   ✓ Γ → s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
   s1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} s2 : mcτ.
 Proof.
   intros ? Hs; intros. induction Hs;
@@ -1053,7 +1053,7 @@ Proof.
 Qed.
 Lemma sctx_item_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs Es1 Es2 mcτ mcτ' :
   ✓ Γ → Es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Es2 : mcτ ↣ mcτ' → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
   Es1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} Es2 : mcτ ↣ mcτ'.
 Proof.
   destruct 2; refine_constructor;
@@ -1061,12 +1061,12 @@ Proof.
 Qed.
 Lemma esctx_item_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs Ee1 Ee2 τ mcτ' :
   ✓ Γ → Ee1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ee2 : τ ↣ mcτ' → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
   Ee1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} Ee2 : τ ↣ mcτ'.
 Proof. destruct 2; refine_constructor; eauto using stmt_refine_weaken. Qed.
 Lemma ctx_item_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs Ek1 Ek2 τf τf' :
   ✓ Γ → Ek1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ek2 : τf ↣ τf' → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
   Ek1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} Ek2 : τf ↣ τf'.
 Proof.
   intros ? HEk ????. assert (∀ os1 os2 σs, Γm1 ⊢* os1 :* σs →
@@ -1074,23 +1074,23 @@ Proof.
     Forall2 (λ o1 o2, f' !! o1 = Some (o2, [])) os1 os2).
   { intros os1 os2 σs Hos. revert os2.
     induction Hos; intros; decompose_Forall_hyps;
-      eauto using option_eq_1_alt, mem_inj_extend_left. }
+      eauto using option_eq_1_alt, meminj_extend_left. }
   destruct HEk; refine_constructor; eauto using esctx_item_refine_weaken,
     sctx_item_refine_weaken, expr_refine_weaken, ectx_refine_weaken,
-    Forall2_impl, memenv_extend_typed, mem_inj_extend_left, option_eq_1_alt.
+    Forall2_impl, memenv_extend_typed, meminj_extend_left, option_eq_1_alt.
 Qed.
 Lemma ctx_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' k1 k2 τf τf' :
   ✓ Γ → k1 ⊑{(Γ,Γf),f@Γm1↦Γm2} k2 : τf ↣ τf' → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
   k1 ⊑{(Γ,Γf),f'@Γm1'↦Γm2'} k2 : τf ↣ τf'.
 Proof. induction 2; refine_constructor; eauto using ctx_item_refine_weaken. Qed.
 Lemma direction_refine_weaken Γ f f' Γm1 Γm2 Γm1' Γm2' d1 d2 mcτ :
   ✓ Γ → d1 ⊑{Γ,f@Γm1↦Γm2} d2 : mcτ → Γm1' ⊑{Γ,f'} Γm2' → Γm1 ⊆{⇒} Γm1' →
-  Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 → d1 ⊑{Γ,f'@Γm1'↦Γm2'} d2 : mcτ.
+  Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 → d1 ⊑{Γ,f'@Γm1'↦Γm2'} d2 : mcτ.
 Proof. destruct 2; refine_constructor; eauto using val_refine_weaken. Qed.
 Lemma focus_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs φ1 φ2 τf :
   ✓ Γ → φ1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} φ2 : τf → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
   φ1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} φ2 : τf.
 Proof.
   destruct 2; refine_constructor; eauto using direction_refine_weaken,
@@ -1100,7 +1100,7 @@ Proof.
 Qed.
 Lemma funenv_refine_weaken Γ f f' Γm1 Γm2 Γm1' Γm2' δ1 δ2 Γf :
   ✓ Γ → δ1 ⊑{Γ,f@Γm1↦Γm2} δ2 : Γf → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
   δ1 ⊑{Γ,f'@Γm1'↦Γm2'} δ2 : Γf.
 Proof.
   intros ? Hδ ???? h; specialize (Hδ h); destruct (δ1 !! h) as [s1|],
