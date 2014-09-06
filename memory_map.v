@@ -89,7 +89,7 @@ Proof.
     eauto using type_valid_weaken.
   * intros o w malloc ?. destruct (Hm2 o w malloc) as (τ&?&?&?&?); auto.
     exists τ. erewrite <-size_of_weaken by eauto using ctree_typed_type_valid.
-    eauto using ctree_typed_weaken. 
+    eauto using ctree_typed_weaken.
 Qed.
 Lemma cmap_valid'_weaken Γ1 Γ2 m : ✓ Γ1 → ✓{Γ1} m → Γ1 ⊆ Γ2 → ✓{Γ2} m.
 Proof. by apply cmap_valid_weaken. Qed.
@@ -435,6 +435,8 @@ Qed.
 Lemma cmap_refine_memenv_refine Γ f Γm1 Γm2 m1 m2 :
   m1 ⊑{Γ,f@Γm1↦Γm2} m2 → Γm1 ⊑{Γ,f} Γm2.
 Proof. by intros (?&?&?&?). Qed.
+Lemma cmap_refine_memenv_refine' Γ f m1 m2 : m1 ⊑{Γ,f} m2 → '{m1} ⊑{Γ,f} '{m2}.
+Proof. by apply cmap_refine_memenv_refine. Qed.
 Lemma cmap_refine_injective Γ f Γm1 Γm2 m1 m2 :
   m1 ⊑{Γ,f@Γm1↦Γm2} m2 → mem_inj_injective f.
 Proof. eauto using cmap_refine_memenv_refine, memenv_refine_injective. Qed.
@@ -514,15 +516,15 @@ Proof.
   eauto using ctree_lookup_byte_refine.
 Qed.
 Lemma cmap_refine_weaken Γ Γ' f f' Γm1 Γm2 m1 m2 :
-  ✓ Γ → m1 ⊑{Γ,f@Γm1↦Γm2} m2 → Γ ⊆ Γ' → Γm1 ⊑{Γ',f'} Γm2 → 
-  (∀ o τ, Γm1 ⊢ o : τ → f' !! o = f !! o) → m1 ⊑{Γ',f'@Γm1↦Γm2} m2.
+  ✓ Γ → m1 ⊑{Γ,f@Γm1↦Γm2} m2 → Γ ⊆ Γ' → Γm1 ⊑{Γ',f'} Γm2 →
+  mem_inj_extend f f' Γm1 Γm2 → m1 ⊑{Γ',f'@Γm1↦Γm2} m2.
 Proof.
   intros ? (Hm1&?&HΓm&Hm) ?? Hf.
   split; split_ands; eauto using cmap_valid_weaken.
   intros o1 o2 r w1 malloc ??.
   destruct HΓm as (?&?&?), (proj2 Hm1 o1 w1 malloc) as (τ&?&_); auto.
   destruct (Hm o1 o2 r w1 malloc)
-    as (w2&w2'&τ'&?&?&?&?); eauto using option_eq_1.
+    as (w2&w2'&τ'&?&?&?&?); eauto using option_eq_1, mem_inj_extend_left.
   exists w2 w2' τ'; split_ands;
     eauto using ctree_refine_weaken, ctree_lookup_weaken, option_eq_1_alt.
 Qed.

@@ -201,23 +201,39 @@ Notation "X ⊑{ Γ @ m } Y : τ ↣ σ" := (X ⊑{ Γ , mem_inj_id @ m ↦ m } 
 
 Ltac refine_constructor :=
   intros; match goal with
-  | |- refineT (RefineT:=?H) ?Γ ?f ?m1 ?m2 _ _ _ =>
-    let H' := eval hnf in (H Γ f m1 m2) in
-    econstructor; change H' with (refineT (RefineT:=H) Γ f m1 m2)
-  | |- path_refine (PathRefine:=?H) ?Γ ?f ?m1 ?m2 _ _ _ _ =>
-    let H' := eval hnf in (H Γ f m1 m2) in
-    econstructor; change H' with (path_refine (PathRefine:=H) Γ f m1 m2)
+  | |- refineTM (RefineTM:=?T) ?Γ ?f _ _ _ =>
+    let T' := eval hnf in (T Γ f) in
+    econstructor; change T' with (refineTM (RefineTM:=T) Γ f)
+  | |- refineT (RefineT:=?T) ?Γ ?f ?m1 ?m2 _ _ _ =>
+    let T' := eval hnf in (T Γ f m1 m2) in
+    econstructor; change T' with (refineT (RefineT:=T) Γ f m1 m2)
+  | |- path_refine (PathRefine:=?T) ?Γ ?f ?m1 ?m2 _ _ _ _ =>
+    let T' := eval hnf in (T Γ f m1 m2) in
+    econstructor; change T' with (path_refine (PathRefine:=T) Γ f m1 m2)
   end.
 Ltac refine_inversion H :=
   match type of H with
+  | refineTM (RefineTM:=?T) ?Γ ?f _ _ _ =>
+    let T' := eval hnf in (T Γ f) in
+    inversion H; clear H; simplify_equality'; try contradiction;
+    try change T' with (refineTM (RefineTM:=T) Γ f) in *
   | refineT (RefineT:=?T) ?Γ ?f ?m1 ?m2 _ _ _ =>
     let T' := eval hnf in (T Γ f m1 m2) in
-    inversion H; clear H; simplify_equality';
+    inversion H; clear H; simplify_equality'; try contradiction;
     try change T' with (refineT (RefineT:=T) Γ f m1 m2) in *
   | path_refine (PathRefine:=?T) ?Γ ?f ?m1 ?m2 _ _ _ _ =>
     let T' := eval hnf in (T Γ f m1 m2) in
-    inversion H; clear H; simplify_equality';
+    inversion H; clear H; simplify_equality'; try contradiction;
     try change T' with (path_refine (PathRefine:=T) Γ f m1 m2) in *
+  end.
+Ltac refine_inversion_all :=
+  repeat match goal with
+  | H : ?X ⊑{_,_} ?Y : _ |- _ =>
+     first [is_var X; is_var Y; fail 1|refine_inversion H]
+  | H : ?X ⊑{_,_@_↦_} ?Y : _ |- _ =>
+     first [is_var X; is_var Y; fail 1|refine_inversion H]
+  | H : ?X ⊑{_,_@_↦_} ?Y : _ ↣ _ |- _ =>
+     first [is_var X; is_var Y; fail 1|refine_inversion H]
   end.
 
 Instance memenv_refine `{Env Ti} :
@@ -229,9 +245,15 @@ Instance memenv_refine `{Env Ti} :
     Γm2 ⊢ o2 : τ2 → ∃ τ1, Γm1 ⊢ o1 : τ1 ∧ Γ ⊢ r : τ2 ↣ τ1) ∧
   (**i 4.) *) (∀ o1 o2 r, f !! o1 = Some (o2,r) →
     index_alive Γm1 o1 → index_alive Γm2 o2).
+Record mem_inj_extend {Ti} (f f' : mem_inj Ti) (Γm1 Γm2 : memenv Ti) := {
+  mem_inj_extend_left o τ : Γm1 ⊢ o : τ → f' !! o = f !! o;
+  mem_inj_extend_right o o' r τ :
+    Γm2 ⊢ o' : τ → f' !! o = Some (o',r) → f !! o = Some (o',r)
+}.
 
 Section memenv_refine.
 Context `{EnvSpec Ti}.
+Implicit Types f : mem_inj Ti.
 Lemma memenv_refine_injective Γ f Γm1 Γm2: Γm1 ⊑{Γ,f} Γm2 → mem_inj_injective f.
 Proof. by intros [??]. Qed.
 Lemma memenv_refine_id Γ Γm : Γm ⊑{Γ} Γm.
@@ -255,5 +277,24 @@ Lemma memenv_refine_weaken Γ Γ' f Γm1 Γm2 :
 Proof.
   intros ? (?&Htyped&Htyped'&?) ?; split;
     naive_solver eauto using ref_typed_weaken.
+Qed.
+Lemma mem_inj_extend_reflexive f Γm1 Γm2 : mem_inj_extend f f Γm1 Γm2.
+Proof. by split. Qed.
+Lemma mem_inj_extend_transitive f f' f'' Γm1 Γm2 Γm1' Γm2' :
+  mem_inj_extend f f' Γm1 Γm2 → mem_inj_extend f' f'' Γm1' Γm2' →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f'' Γm1 Γm2.
+Proof. intros [??] [??] [? _] [? _]; split; eauto using eq_trans. Qed.
+Lemma mem_inj_extend_compose f g Γm1 Γm2 :
+  mem_inj_extend mem_inj_id f Γm1 Γm1 →
+  mem_inj_extend mem_inj_id g Γm2 Γm2 → Γm1 ⊆{⇒} Γm2 →
+  mem_inj_extend mem_inj_id (g ◎ f) Γm1 Γm1.
+Proof.
+  intros [Hf Hf'] [Hg Hg'] ?; split.
+  * intros o τ ?; apply lookup_mem_inj_compose_Some.
+    eexists o, [], []; eauto 8 using memenv_extend_typed.
+  * intros o o'' r τ ?; rewrite lookup_mem_inj_compose_Some.
+    intros (o'&r'&r''&Ho&Ho'&->).
+    eapply Hf' in Ho'; eauto; simplify_equality.
+    rewrite (right_id_L [] (++)); eauto using memenv_extend_typed.
 Qed.
 End memenv_refine.

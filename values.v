@@ -737,7 +737,7 @@ Proof.
 Qed.
 Lemma vals_representable_weaken Γ1 Γ2 Γm1 Γm2 vs τs :
   ✓ Γ1 → ✓{Γ1}* τs → vals_representable Γ1 Γm1 vs τs → Γ1 ⊆ Γ2 →
-  (∀ o σ, Γm1 ⊢ o : σ → Γm2 ⊢ o : σ) → vals_representable Γ2 Γm2 vs τs.
+  Γm1 ⊆{⇒} Γm2 → vals_representable Γ2 Γm2 vs τs.
 Proof.
   intros ? Hτs [bs ? Hlen Hvs]. exists bs.
   * eauto using Forall_impl, bit_valid_weaken.
@@ -746,8 +746,7 @@ Proof.
   * by erewrite <-vals_unflatten_weaken by eauto.
 Qed.
 Lemma val_typed_weaken Γ1 Γ2 Γm1 Γm2 v τ :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ v : τ → Γ1 ⊆ Γ2 → (∀ o σ, Γm1 ⊢ o : σ → Γm2 ⊢ o : σ) →
-  (Γ2,Γm2) ⊢ v : τ.
+  ✓ Γ1 → (Γ1,Γm1) ⊢ v : τ → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → (Γ2,Γm2) ⊢ v : τ.
 Proof.
   intros ? Hvτ ??. induction Hvτ using @val_typed_ind; econstructor;
     erewrite <-1?vals_unflatten_weaken;
@@ -1409,20 +1408,15 @@ Proof.
     constructor; eauto using val_refine_compose.
 Qed.
 Lemma val_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' v1 v2 τ :
-  ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → 
-  (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
-  v1 ⊑{Γ',f'@Γm1'↦Γm2'} v2 : τ.
+  ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⊆{⇒} Γm1' →
+  Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 → v1 ⊑{Γ',f'@Γm1'↦Γm2'} v2 : τ.
 Proof.
   intros ? Hv; intros. induction Hv using @val_refine_ind; refine_constructor;
     eauto using base_val_refine_weaken, lookup_weaken, vals_representable_weaken.
 Qed.
 Lemma vals_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' vs1 vs2 τs :
-  ✓ Γ → vs1 ⊑{Γ,f@Γm1↦Γm2}* vs2 :* τs → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → 
-  (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  ✓ Γ → vs1 ⊑{Γ,f@Γm1↦Γm2}* vs2 :* τs → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 → 
   vs1 ⊑{Γ',f'@Γm1'↦Γm2'}* vs2 :* τs.
 Proof. induction 2; constructor; eauto using val_refine_weaken. Qed.
 Lemma val_flatten_refine Γ f Γm1 Γm2 v1 v2 τ :
@@ -1788,6 +1782,15 @@ Proof.
   * intros s τs i v1 v2 τ vs2 ???? _ _ ?; destruct rs; simplify_option_equality.
     decompose_Forall_hyps. erewrite val_refine_type_of_l by eauto; eauto.
 Qed.
+Lemma val_lookup_seg_refine_alt Γ f Γm1 Γm2 v1 v2 τ rs v3 σ :
+  ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → v1 !! rs = Some v3 →
+  Γ ⊢ rs : τ ↣ σ → ∃ v4, v2 !! rs = Some v4 ∧ v3 ⊑{Γ,f@Γm1↦Γm2} v4 : σ.
+Proof.
+  intros. assert ((Γ,Γm1) ⊢ v3 : σ)
+    by eauto using val_lookup_seg_typed, val_refine_typed_l.
+  destruct (val_lookup_seg_refine Γ f Γm1 Γm2 v1 v2 τ rs v3) as (v4&?&?); auto.
+  simplify_type_equality'; eauto.
+Qed.
 Lemma val_lookup_refine Γ f Γm1 Γm2 v1 v2 τ r v3 :
   ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → v1 !! r = Some v3 →
   ∃ v4, v2 !! r = Some v4 ∧ v3 ⊑{Γ,f@Γm1↦Γm2} v4 : type_of v3.
@@ -1938,6 +1941,38 @@ Proof.
 Qed.
 
 (** ** Refinements of unary/binary operations and casts *)
+Lemma val_true_refine Γ f Γm1 Γm2 v1 v2 τ :
+  v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → val_true Γm1 v1 → val_true Γm2 v2.
+Proof. destruct 1; simpl; eauto using base_val_true_refine. Qed.
+Lemma val_false_refine Γ f Γm1 Γm2 v1 v2 τ :
+  v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → val_false v1 → val_false v2.
+Proof. destruct 1; simpl; eauto using base_val_false_refine. Qed.
+Lemma val_true_false_refine Γ f Γm1 Γm2 v1 v2 τ :
+  val_true Γm1 v1 → val_false v2 → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → False.
+Proof.
+  intros. by destruct (val_true_false_dec Γm2 v2)
+    as [[[??]|[??]]|[??]]; eauto using val_true_refine.
+Qed.
+Lemma val_false_true_refine Γ f Γm1 Γm2 v1 v2 τ :
+  val_false v1 → val_true Γm2 v2 → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → False.
+Proof.
+  intros. by destruct (val_true_false_dec Γm2 v2)
+    as [[[??]|[??]]|[??]]; eauto using val_false_refine.
+Qed.
+Lemma val_true_refine_inv Γ f Γm1 Γm2 v1 v2 τ :
+  v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → val_true Γm2 v2 →
+  val_true Γm1 v1 ∨ ¬val_true Γm1 v1 ∧ ¬val_false v1.
+Proof.
+  intros. destruct (val_true_false_dec Γm1 v1)
+    as [[[??]|[??]]|[??]]; eauto using val_false_true_refine.
+Qed.
+Lemma val_false_refine_inv Γ f Γm1 Γm2 v1 v2 τ :
+  v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → val_false v2 →
+  val_false v1 ∨ ¬val_true Γm1 v1 ∧ ¬val_false v1.
+Proof.
+  intros. destruct (val_true_false_dec Γm1 v1)
+    as [[[??]|[??]]|[??]]; eauto using val_true_false_refine.
+Qed.
 Lemma val_unop_ok_refine Γ f Γm1 Γm2 op v1 v2 τ :
   v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → val_unop_ok Γm1 op v1 → val_unop_ok Γm2 op v2.
 Proof. destruct op, 1; simpl; eauto using base_val_unop_ok_refine. Qed.

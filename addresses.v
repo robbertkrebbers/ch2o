@@ -219,11 +219,10 @@ Proof.
   * destruct a; intros; simplify_option_equality; constructor; auto.
   * by destruct 1; simplify_option_equality.
 Qed.
-Lemma addr_typed_weaken Γ1 Γ2 m1 m2 a σ :
-  ✓ Γ1 → (Γ1,m1) ⊢ a : σ → Γ1 ⊆ Γ2 → (∀ o σ, m1 ⊢ o : σ → m2 ⊢ o : σ) →
-  (Γ2,m2) ⊢ a : σ.
+Lemma addr_typed_weaken Γ1 Γ2 Γm1 Γm2 a σ :
+  ✓ Γ1 → (Γ1,Γm1) ⊢ a : σ → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → (Γ2,Γm2) ⊢ a : σ.
 Proof.
-  intros ? [o r i τ σ' σc'] ??. constructor; simpl; split_ands;
+  intros ? [o r i τ σ' σc'] ? [??]. constructor; simpl; split_ands;
     eauto using type_valid_weaken, ref_typed_weaken.
   { by erewrite <-size_of_weaken by eauto. }
   { by erewrite <-size_of_weaken by eauto using ref_typed_type_valid. }
@@ -231,10 +230,9 @@ Proof.
     by eauto using castable_type_valid, ref_typed_type_valid.
 Qed.
 Lemma addr_dead_weaken Γ Γm1 Γm2 a σ :
-  (Γ,Γm1) ⊢ a : σ → index_alive Γm2 (addr_index a) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm2 o → index_alive Γm1 o) →
+  (Γ,Γm1) ⊢ a : σ → index_alive Γm2 (addr_index a) → Γm1 ⊆{⇒} Γm2 →
   index_alive Γm1 (addr_index a).
-Proof. destruct 1; simpl; eauto. Qed.
+Proof. intros [] ? []; naive_solver. Qed.
 Global Instance addr_strict_dec Γ a : Decision (addr_strict Γ a).
 Proof. unfold addr_strict; apply _. Defined.
 Global Instance addr_is_obj_dec a : Decision (addr_is_obj a).
@@ -494,9 +492,9 @@ Proof.
   split; [|apply Z.div_lt_upper_bound; lia].
   apply Z.div_le_lower_bound; auto. rewrite int_lower_upper_signed by done; lia.
 Qed.
-Lemma addr_minus_ok_weaken m1 m2 a1 a2:
-  addr_minus_ok m1 a1 a2 → (∀ o, index_alive m1 o → index_alive m2 o) →
-  addr_minus_ok m2 a1 a2.
+Lemma addr_minus_ok_weaken Γm1 Γm2 a1 a2:
+  addr_minus_ok Γm1 a1 a2 → (∀ o, index_alive Γm1 o → index_alive Γm2 o) →
+  addr_minus_ok Γm2 a1 a2.
 Proof. intros [??]; split; eauto. Qed.
 Lemma addr_minus_weaken Γ1 Γ2 mm1 a1 a2 σ1 :
   ✓ Γ1 → (Γ1,mm1) ⊢ a1 : σ1 →
@@ -591,8 +589,8 @@ Proof.
       ref_seg_typed_type_valid, castable_type_valid.
   * destruct Hrs; simpl; lia.
 Qed.
-Lemma addr_elt_weaken Γ1 Γ2 mm1 a rs σ σ' :
-  ✓ Γ1 → (Γ1,mm1) ⊢ a : σ → Γ1 ⊢ rs : σ ↣ σ' → Γ1 ⊆ Γ2 →
+Lemma addr_elt_weaken Γ1 Γ2 Γm1 a rs σ σ' :
+  ✓ Γ1 → (Γ1,Γm1) ⊢ a : σ → Γ1 ⊢ rs : σ ↣ σ' → Γ1 ⊆ Γ2 →
   addr_elt Γ1 rs a = addr_elt Γ2 rs a.
 Proof.
   intros. unfold addr_elt; simplify_type_equality.
@@ -714,12 +712,12 @@ Proof.
   * apply ref_refine_ne_nil_alt. by rewrite fmap_app, (associative_L (++)).
 Qed.
 Lemma addr_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' a1 a2 σ :
-  ✓ Γ → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → 
-  (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → a1 ⊑{Γ',f'@Γm1'↦Γm2'} a2 : σ.
+  ✓ Γ → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' →
+  Γm1 ⊆{⇒} Γm1' → mem_inj_extend f f' Γm1 Γm2 → a1 ⊑{Γ',f'@Γm1'↦Γm2'} a2 : σ.
 Proof.
-  destruct 2 as [o o2 r r2 r3 i i3 τ τ2 σ σc ?????????? Hsz];
-    intros; econstructor; eauto using type_valid_weaken, ref_typed_weaken.
+  destruct 2 as [o o2 r r2 r3 i i3 τ τ2 σ σc]; intros ?? [??] [??];
+    econstructor; eauto using type_valid_weaken, ref_typed_weaken.
+  * eauto using option_eq_1_alt.
   * by erewrite <-size_of_weaken by eauto.
   * by erewrite <-size_of_weaken by eauto using ref_typed_type_valid.
   * by erewrite <-size_of_weaken

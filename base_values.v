@@ -324,12 +324,11 @@ Proof.
       erewrite ?type_check_complete by eauto.
 Qed.
 Lemma char_byte_valid_weaken Γ1 Γ2 Γm1 Γm2 bs :
-  ✓ Γ1 → char_byte_valid Γ1 Γm1 bs → Γ1 ⊆ Γ2 →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm2 ⊢ o : τ) → char_byte_valid Γ2 Γm2 bs.
+  ✓ Γ1 → char_byte_valid Γ1 Γm1 bs → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 →
+  char_byte_valid Γ2 Γm2 bs.
 Proof. destruct 2; constructor; eauto using Forall_impl, bit_valid_weaken. Qed.
 Lemma base_val_typed_weaken Γ1 Γ2 Γm1 Γm2 vb τb :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ vb : τb → Γ1 ⊆ Γ2 → (∀ o τ, Γm1 ⊢ o : τ → Γm2 ⊢ o : τ) →
-  (Γ2,Γm2) ⊢ vb : τb.
+  ✓ Γ1 → (Γ1,Γm1) ⊢ vb : τb → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → (Γ2,Γm2) ⊢ vb : τb.
 Proof.
   destruct 2; econstructor; eauto using ptr_typed_weaken,
     char_byte_valid_weaken, base_type_valid_weaken.
@@ -667,10 +666,8 @@ Proof.
       bits_refine_compose, BIndets_refine, BIndets_valid.
 Qed.
 Lemma base_val_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' vb1 vb2 τb :
-  ✓ Γ → vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → 
-  (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  ✓ Γ → vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
   vb1 ⊑{Γ',f'@Γm1'↦Γm2'} vb2 : τb.
 Proof.
   destruct 2; refine_constructor; eauto using base_val_typed_weaken,
@@ -898,6 +895,16 @@ Proof. by destruct vb. Qed.
 Lemma base_val_cast_void vb : base_val_cast voidT vb = VVoid.
 Proof. by destruct vb. Qed.
 
+(** ** Refinements of unary/binary operations and casts *)
+Lemma base_val_true_refine Γ f Γm1 Γm2 vb1 vb2 τb :
+  vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → base_val_true Γm1 vb1 → base_val_true Γm2 vb2.
+Proof.
+   by destruct 1 as [| | |??? []|??? []| | |];
+     simpl; eauto using addr_alive_refine.
+Qed.
+Lemma base_val_false_refine Γ f Γm1 Γm2 vb1 vb2 τb :
+  vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → base_val_false vb1 → base_val_false vb2.
+Proof. by destruct 1 as [| | |??? []|??? []| | |]. Qed.
 Lemma base_val_unop_ok_refine Γ f Γm1 Γm2 op vb1 vb2 τb :
   vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb →
   base_val_unop_ok Γm1 op vb1 → base_val_unop_ok Γm2 op vb2.

@@ -403,12 +403,26 @@ Global Instance focus_refine:
   RefineT Ti (env Ti * funtypes Ti * list (type Ti))
     (focustype Ti) (focus Ti) := curry3 focus_refine'.
 
+Inductive state_refine' (Γ : env Ti) (Γf : funtypes Ti) (f : mem_inj Ti) :
+     state Ti → state Ti → funname → Prop :=
+  | State_refine k1 φ1 m1 k2 φ2 m2 τf g :
+     φ1 ⊑{(Γ,Γf,get_stack_types k1),f@'{m1}↦'{m2}} φ2 : τf →
+     k1 ⊑{(Γ,Γf),f@'{m1}↦'{m2}} k2 : τf ↣ Fun_type g →
+     m1 ⊑{Γ,f} m2 →
+     state_refine' Γ Γf f (State k1 φ1 m1) (State k2 φ2 m2) g
+  | Undef_State_refine S1 S2 g :
+     (Γ,Γf) ⊢ S1 : g → (Γ,Γf) ⊢ S2 : g → is_undef_state S1 →
+     state_refine' Γ Γf f S1 S2 g.
 Global Instance state_refine : RefineTM Ti (env Ti * funtypes Ti)
-    funname (state Ti) := λ ΓΓf f S1 S2 g, ∃ τf,
-  let 'State k1 φ1 m1 := S1 in let 'State k2 φ2 m2 := S2 in
-  φ1 ⊑{(ΓΓf,get_stack_types k1),f@'{m1}↦'{m2}} φ2 : τf ∧
-  k1 ⊑{ΓΓf,f@'{m1}↦'{m2}} k2 : τf ↣ Fun_type g ∧
-  m1 ⊑{ΓΓf.1,f} m2.
+    funname (state Ti) := curry state_refine'.
+
+Global Instance funenv_refine:
+    RefineT Ti (env Ti) (funtypes Ti) (funenv Ti) := λ Γ f Γm1 Γm2 δ1 δ2 Γf,
+  map_Forall3 (λ s1 s2 τsτ, let '(τs,τ) := τsτ in ∃ cmτ,
+    ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
+    s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : cmτ ∧
+    gotos s1 ⊆ labels s1 ∧ rettype_match cmτ τ
+  ) δ1 δ2 Γf.
 End refinements.
 
 Section properties.
@@ -425,6 +439,7 @@ Implicit Types τ σ : type Ti.
 Implicit Types a : addr Ti.
 Implicit Types v : val Ti.
 Implicit Types av : addr Ti + val Ti.
+Implicit Types d : direction Ti.
 Implicit Types Ei : ectx_item Ti.
 Implicit Types E : ectx Ti.
 Implicit Types Es : sctx_item Ti.
@@ -432,6 +447,158 @@ Implicit Types Ee : esctx_item Ti.
 Implicit Types Ek : ctx_item Ti.
 Implicit Types k : ctx Ti.
 Implicit Types φ : focus Ti.
+
+Ltac solve_length := simplify_equality'; repeat
+  match goal with H : Forall2 _ _ _ |- _ => apply Forall2_length in H end; lia.
+
+Lemma EVal_refine_inv_l Γ Γf f Γm1 Γm2 τs Ωs1 vs1 es2 σs :
+  #{Ωs1}* vs1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2}* es2 :* inr <$> σs → length vs1 = length Ωs1 →
+  ∃ Ωs2 vs2, es2 = #{Ωs2}* vs2 ∧ Ωs1 ⊑{Γ,f@Γm1↦Γm2}* Ωs2 ∧
+    length Ωs2 = length vs2 ∧ vs1 ⊑{Γ,f@Γm1↦Γm2}* vs2 :* σs.
+Proof.
+  rewrite <-Forall2_same_length.
+  revert Ωs1 vs1 σs. induction es2 as [|?? IH]; intros ?? [|??];
+    inversion 1; destruct 1; intros; simplify_equality'; refine_inversion_all.
+  { eexists [], []; repeat constructor. }
+  edestruct IH as (?&?&?&?&?&?); eauto. subst.
+  eexists (_ :: _), (_ :: _);
+    split_ands; simpl; eauto using Forall3_cons with arith.
+Qed.
+Lemma EVal_refine_inv_r Γ Γf f Γm1 Γm2 τs es1 Ωs2 vs2 σs :
+  es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2}* #{Ωs2}* vs2 :* inr <$> σs → length vs2 = length Ωs2 →
+  ∃ Ωs1 vs1, es1 = #{Ωs1}* vs1 ∧ Ωs1 ⊑{Γ,f@Γm1↦Γm2}* Ωs2 ∧
+    length Ωs1 = length vs1 ∧ vs1 ⊑{Γ,f@Γm1↦Γm2}* vs2 :* σs.
+Proof.
+  rewrite <-Forall2_same_length.
+  revert Ωs2 vs2 σs. induction es1 as [|?? IH]; intros ?? [|??];
+    inversion 1; destruct 1; intros; simplify_equality'; refine_inversion_all.
+  { eexists [], []; repeat constructor. }
+  edestruct IH as (?&?&?&?&?&?); eauto. subst.
+  eexists (_ :: _), (_ :: _);
+    split_ands; simpl; eauto using Forall3_cons with arith.
+Qed.
+Lemma ectx_item_subst_refine Γ Γf f Γm1 Γm2 τs Ei1 Ei2 e1 e2 τlr τlr' :
+  Ei1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ei2 : τlr ↣ τlr' →
+  e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : τlr →
+  subst Ei1 e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} subst Ei2 e2 : τlr'.
+Proof.
+  destruct 1; simpl; refine_constructor; eauto.
+  rewrite ?fmap_app; eauto using Forall3_app, Forall3_cons.
+Qed.
+Lemma ectx_subst_refine Γ Γf f Γm1 Γm2 τs E1 E2 e1 e2 τlr τlr' :
+  E1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} E2 : τlr ↣ τlr' →
+  e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : τlr →
+  subst E1 e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} subst E2 e2 : τlr'.
+Proof.
+  intros HE. revert e1 e2.
+  induction HE; simpl; eauto using ectx_item_subst_refine.
+Qed.
+Lemma sctx_item_subst_refine Γ Γf f Γm1 Γm2 τs Es1 Es2 s1 s2 mcτ mcτ' :
+  Es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Es2 : mcτ ↣ mcτ' →
+  s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ →
+  subst Es1 s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} subst Es2 s2 : mcτ'.
+Proof. destruct 1; simpl; refine_constructor; eauto. Qed.
+Lemma ectx_item_subst_refine_inv_r Γ Γf f Γm1 Γm2 τs e1 Ei2 e2 τlr' :
+  e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} subst Ei2 e2 : τlr' →
+  ∃ e1' Ei1 τlr, e1 = subst Ei1 e1' ∧
+    Ei1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ei2 : τlr ↣ τlr' ∧
+    e1' ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : τlr.
+Proof.
+  intros He; destruct Ei2; refine_inversion He; decompose_Forall_hyps;
+    try match goal with
+    | H : ?E ⊑{_,_@_↦_}* reverse _ :* _ |- _ =>
+       rewrite <-(reverse_involutive E) in H
+    end; by do 3 eexists; split_ands;
+     repeat refine_constructor; simpl; eauto; rewrite ?reverse_involutive.
+Qed.
+Lemma ectx_subst_refine_inv_r Γ Γf f Γm1 Γm2 τs e1 E2 e2 τlr' :
+  e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} subst E2 e2 : τlr' →
+  ∃ e1' E1 τlr, e1 = subst E1 e1' ∧
+    E1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} E2 : τlr ↣ τlr' ∧
+    e1' ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : τlr.
+Proof.
+  revert e2. induction E2 as [|Ei2 E2 IH]; intros e2 He; simpl in *.
+  { by eexists e1, [], τlr'; split_ands; repeat refine_constructor. }
+  destruct (IH (subst Ei2 e2)) as (e1'&E1&τlr&->&?&?); auto.
+  destruct (ectx_item_subst_refine_inv_r Γ Γf f Γm1 Γm2 τs e1' Ei2 e2 τlr)
+    as (e1&Ee1&τlr''&->&?&?); auto.
+  exists e1 (Ee1 :: E1) τlr''; split_ands; repeat refine_constructor; eauto.
+Qed.
+Lemma esctx_item_subst_refine_inv_r Γ Γf f Γm1 Γm2 τs s1 Ee2 e2 mcτ :
+  s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} subst Ee2 e2 : mcτ →
+  ∃ e1' Ee1 τ, s1 = subst Ee1 e1' ∧
+    Ee1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ee2 : τ ↣ mcτ ∧
+    e1' ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inr τ.
+Proof.
+  by destruct Ee2; inversion 1; subst;
+    do 3 eexists; split_ands; repeat refine_constructor; eauto.
+Qed.
+Lemma sctx_item_subst_refine_inv_r Γ Γf f Γm1 Γm2 τs s1 Es2 s2 mcτ' :
+  s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} subst Es2 s2 : mcτ' →
+  ∃ s1' Es1 mcτ, s1 = subst Es1 s1' ∧
+    Es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Es2 : mcτ ↣ mcτ' ∧
+    s1' ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ.
+Proof.
+  by destruct Es2; inversion 1; subst;
+    do 3 eexists; split_ands; repeat refine_constructor; eauto.
+Qed.
+
+Lemma expr_refine_nf_inv Γ Γf f Γm1 Γm2 τs e1 e2 τlr :
+  e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : τlr → is_nf e2 → is_nf e1.
+Proof. destruct 1; inversion_clear 1; constructor. Qed.
+Lemma exprs_refine_nf_inv Γ Γf f Γm1 Γm2 τs es1 es2 τlrs :
+  es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2}* es2 :* τlrs → Forall is_nf es2 → Forall is_nf es1.
+Proof. induction 1; inversion_clear 1; eauto using expr_refine_nf_inv. Qed.
+Lemma expr_refine_redex_inv Γ Γf f Γm1 Γm2 τs e1 e2 τlr :
+  e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : τlr → is_redex e2 → is_redex e1.
+Proof.
+  destruct 1; inversion_clear 1;
+    constructor; eauto using expr_refine_nf_inv, exprs_refine_nf_inv.
+Qed.
+Lemma stmt_refine_gotos Γ Γf f Γm1 Γm2 τs s1 s2 mcτ :
+  s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ → gotos s1 = gotos s2.
+Proof. induction 1; simpl; auto with f_equal. Qed.
+Lemma stmt_refine_labels Γ Γf f Γm1 Γm2 τs s1 s2 mcτ :
+  s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ → labels s1 = labels s2.
+Proof. induction 1; simpl; auto with f_equal. Qed.
+Lemma stmt_refine_labels_elem_of_r Γ Γf f Γm1 Γm2 τs s1 s2 mcτ :
+  s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ → labels s1 = labels s2.
+Proof. induction 1; simpl; auto with f_equal. Qed.
+Lemma ctx_refine_stack_types Γ f Γm1 Γm2 Γf k1 k2 τf τf' :
+  ✓ Γ → k1 ⊑{(Γ,Γf),f@Γm1↦Γm2} k2 : τf ↣ τf' →
+  get_stack_types k1 = get_stack_types k2.
+Proof.
+  assert (∀ (os1 os2 : list index) (σs : list (type Ti)) P,
+    Forall2 P os1 os2 → snd <$> zip os1 σs = snd <$> zip os2 σs).
+  { intros os1 os2 σs P Hos. revert σs.
+    induction Hos; intros [|??]; f_equal'; auto. }
+  induction 2 as [|??????? []]; simpl; eauto with f_equal.
+Qed.
+Lemma ctx_refine_stack Γ Γf f Γm1 Γm2 k1 k2 τf τf' :
+  ✓ Γ → k1 ⊑{(Γ,Γf),f@Γm1↦Γm2} k2 : τf ↣ τf' →
+  Forall2 (λ o1 o2, f !! o1 = Some (o2, [])) (get_stack k1) (get_stack k2).
+Proof.
+  induction 2 as [|??????? []]; simpl;
+    rewrite ?fst_zip by solve_length; auto using Forall2_app.
+Qed.
+Lemma down_refine_r Γ Γf τs f Γm1 Γm2 s1 s2 d1 d2 mcτ :
+  s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ →
+  d1 ⊑{Γ,f@Γm1↦Γm2} d2 : mcτ → down d2 s2 → down d1 s1.
+Proof. destruct 2; simpl; by erewrite <-?stmt_refine_labels by eauto. Qed.
+Lemma up_refine_r Γ Γf τs f Γm1 Γm2 s1 s2 d1 d2 mcτ :
+  s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ →
+  d1 ⊑{Γ,f@Γm1↦Γm2} d2 : mcτ → up d2 s2 → up d1 s1.
+Proof. destruct 2; simpl; by erewrite <-?stmt_refine_labels by eauto. Qed.
+Lemma funenv_lookup_refine_r Γ f Γm1 Γm2 δ1 δ2 Γf g s2 :
+  δ1 ⊑{Γ,f@Γm1↦Γm2} δ2 : Γf → δ2 !! g = Some s2 → ∃ s1 τs τ cmτ,
+    δ1 !! g = Some s1 ∧ Γf !! g = Some (τs,τ) ∧
+    ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
+    s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : cmτ ∧
+    gotos s1 ⊆ labels s1 ∧ rettype_match cmτ τ.
+Proof. intros Hδ ?; specialize (Hδ g); repeat case_match; naive_solver. Qed.
+Lemma state_refine_mem Γ Γf f S1 S2 g :
+  ¬is_undef_state S1 → S1 ⊑{(Γ,Γf),f} S2 : g → '{SMem S1} ⊑{Γ,f} '{SMem S2}.
+Proof. by destruct 2; eauto using cmap_refine_memenv_refine'. Qed.
 
 Lemma lrval_refine_typed_l Γ f Γm1 Γm2 av1 av2 τlr :
   ✓ Γ → av1 ⊑{Γ,f@Γm1↦Γm2} av2 : τlr → (Γ,Γm1) ⊢ av1 : τlr.
@@ -501,8 +668,19 @@ Qed.
 Lemma state_refine_typed_l Γ f Γf S1 S2 g :
   ✓ Γ → S1 ⊑{(Γ,Γf),f} S2 : g → (Γ,Γf) ⊢ S1 : g.
 Proof.
-  destruct S1, S2; intros ? (τf&?&?&?); exists τf; split_ands;
-    eauto using focus_refine_typed_l, ctx_refine_typed_l, cmap_refine_valid_l'.
+  destruct 2; do 2 red; eauto 10 using focus_refine_typed_l,
+    ctx_refine_typed_l, cmap_refine_valid_l'.
+Qed.
+Lemma funenv_refine_typed_l Γ f Γm1 Γm2 δ1 δ2 Γf :
+  ✓ Γ → δ1 ⊑{Γ,f@Γm1↦Γm2} δ2 : Γf → (Γ,Γm1) ⊢ δ1 : Γf.
+Proof.
+  intros ? Hδ; split.
+  * intros g s ?; specialize (Hδ g); destruct (δ2 !! _),
+      (Γf !! _) as [[τs τ]|]; simplify_option_equality; try done.
+    destruct Hδ as (cmτ&?&?&?&?&?&?); eauto 15 using stmt_refine_typed_l.
+  * rewrite elem_of_subseteq; intros g; rewrite !elem_of_dom.
+    intros [[τs τ] ?]; specialize (Hδ g); destruct (δ1 !! _),
+      (δ2 !! _); simplify_option_equality; naive_solver.
 Qed.
 
 Lemma lrval_refine_typed_r Γ f Γm1 Γm2 av1 av2 τlr :
@@ -557,16 +735,6 @@ Proof.
   destruct 2; typed_constructor; eauto using expr_refine_typed_r,
     esctx_item_refine_typed_r, sctx_item_refine_typed_r, ectx_refine_typed_r.
 Qed.
-Lemma ctx_refine_stack_types Γ f Γm1 Γm2 Γf k1 k2 τf τf' :
-  ✓ Γ → k1 ⊑{(Γ,Γf),f@Γm1↦Γm2} k2 : τf ↣ τf' →
-  get_stack_types k1 = get_stack_types k2.
-Proof.
-  assert (∀ (os1 os2 : list index) (σs : list (type Ti)) P,
-    Forall2 P os1 os2 → snd <$> zip os1 σs = snd <$> zip os2 σs).
-  { intros os1 os2 σs P Hos. revert σs.
-    induction Hos; intros [|??]; f_equal'; auto. }
-  induction 2 as [|??????? []]; simpl; eauto with f_equal.
-Qed.
 Lemma ctx_refine_typed_r Γ f Γm1 Γm2 Γf k1 k2 τf τf' :
   ✓ Γ → k1 ⊑{(Γ,Γf),f@Γm1↦Γm2} k2 : τf ↣ τf' → (Γ,Γf,Γm2) ⊢ k2 : τf ↣ τf'.
 Proof.
@@ -587,9 +755,22 @@ Qed.
 Lemma state_refine_typed_r Γ f Γf S1 S2 g :
   ✓ Γ → S1 ⊑{(Γ,Γf),f} S2 : g → (Γ,Γf) ⊢ S2 : g.
 Proof.
-  destruct S1, S2; intros ? (τf&?&?&?); exists τf; split_ands;
+  destruct 2; eauto. eexists; split_ands;
     erewrite <-?ctx_refine_stack_types by eauto;
     eauto using focus_refine_typed_r, ctx_refine_typed_r, cmap_refine_valid_r'.
+Qed.
+Lemma funenv_refine_typed_r Γ f Γm1 Γm2 δ1 δ2 Γf :
+  ✓ Γ → δ1 ⊑{Γ,f@Γm1↦Γm2} δ2 : Γf → (Γ,Γm2) ⊢ δ2 : Γf.
+Proof.
+  intros ? Hδ; split.
+  * intros g s ?; specialize (Hδ g); destruct (δ1 !! _),
+      (Γf !! _) as [[τs τ]|]; simplify_option_equality; try done.
+    destruct Hδ as (cmτ&?&?&?&?&?&?).
+    erewrite <-stmt_refine_labels, <-stmt_refine_gotos by eauto.
+    eauto 15 using stmt_refine_typed_r.
+  * rewrite elem_of_subseteq; intros g; rewrite !elem_of_dom.
+    intros [[τs τ] ?]; specialize (Hδ g); destruct (δ1 !! _),
+      (δ2 !! _); simplify_option_equality; naive_solver.
 Qed.
 
 Lemma lrval_refine_id Γ Γm av τlr : (Γ,Γm) ⊢ av : τlr → av ⊑{Γ@Γm} av : τlr.
@@ -645,11 +826,17 @@ Proof.
     direction_refine_id, expr_refine_id, val_refine_id, ectx_refine_id,
     esctx_item_refine_id, vals_refine_id, locks_refine_id.
 Qed.
-Lemma state_refine_id Γ Γf S g :
-  ✓ Γ → (Γ,Γf) ⊢ S : g → S ⊑{(Γ,Γf)} S : g.
+Lemma state_refine_id Γ Γf S g : ✓ Γ → (Γ,Γf) ⊢ S : g → S ⊑{(Γ,Γf)} S : g.
 Proof.
-  destruct S; intros ? (τf&?&?&?); exists τf; split_ands;
-    auto using cmap_refine_id', ctx_refine_id, focus_refine_id.
+  destruct S; intros ? (τf&?&?&?).
+  eleft; eauto using cmap_refine_id', ctx_refine_id, focus_refine_id.
+Qed.
+Lemma funenv_refine_id Γ Γm δ Γf : ✓ Γ → (Γ,Γm) ⊢ δ : Γf → δ ⊑{Γ@Γm} δ : Γf.
+Proof.
+  intros ? [Hδ Hdom] g; specialize (Hdom g); rewrite !elem_of_dom in Hdom.
+  destruct (δ !! g) eqn:?; auto.
+  * destruct (Hδ g s) as (τs&τ&?&->&?); naive_solver eauto using stmt_refine_id.
+  * destruct (Γf !! g). by destruct Hdom; eauto. done.
 Qed.
 
 Lemma lrval_refine_compose Γ f g Γm1 Γm2 Γm3 av1 av2 av3 τlr τlr' :
@@ -796,45 +983,56 @@ Proof.
     refine_constructor; eauto using val_refine_compose, expr_refine_compose,
       esctx_item_refine_compose, locks_refine_compose.
 Qed.
-Lemma state_refine_compose Γ Γf f g S1 S2 S3 h h' :
-  ✓ Γ → S1 ⊑{(Γ,Γf),f} S2 : h → S2 ⊑{(Γ,Γf),g} S3 : h' →
+Lemma state_refine_undef Γ Γf f S1 S2 h :
+  S1 ⊑{(Γ,Γf),f} S2 : h → is_undef_state S2 → is_undef_state S1.
+Proof.
+  destruct 1 as [k1 φ1 m1 k2 φ2 m2 τf|]; [|done].
+  inversion 1; subst; refine_inversion_all; constructor.
+Qed.
+Lemma state_refine_compose Γ Γf f g S1 S2 S3 h :
+  ✓ Γ → S1 ⊑{(Γ,Γf),f} S2 : h → S2 ⊑{(Γ,Γf),g} S3 : h →
   S1 ⊑{(Γ,Γf),f ◎ g} S3 : h.
 Proof.
-  destruct S1 as [k1 φ1 m1], S2 as [k2 φ2 m2], S3 as [k3 φ3 m3].
-  intros ? (τf&?&?&?) (τf'&Hk'&?&?); exists τf.
-  erewrite <-ctx_refine_stack_types in Hk' by eauto.
-  assert (τf = τf') as ->.
-  { by eapply (typed_unique _ φ2);
-      eauto using focus_refine_typed_l, focus_refine_typed_r. }
-  eauto 6 using cmap_refine_compose', focus_refine_compose, ctx_refine_compose.
+  intros ? HS HS'.
+  assert ((Γ,Γf) ⊢ S1 : h) by eauto using state_refine_typed_l.
+  assert ((Γ,Γf) ⊢ S3 : h) by eauto using state_refine_typed_r.
+  inversion HS as [k1 φ1 m1 k2 φ2 m2 τf|]; subst; [|right; eauto].
+  inversion HS' as [??? k3 φ3 m3 τf' ? Hk'|]; subst.
+  * erewrite <-ctx_refine_stack_types in Hk' by eauto.
+    left with τf; eauto using cmap_refine_compose', focus_refine_compose.
+    cut (τf = τf'); [intros ->;eauto using ctx_refine_compose|].
+    by eapply (typed_unique _ φ2);
+      eauto using focus_refine_typed_l, focus_refine_typed_r.
+  * right; eauto using state_refine_undef.
+Qed.
+Lemma funenv_refine_compose Γ f g Γm1 Γm2 Γm3 δ1 δ2 δ3 Γf :
+  ✓ Γ → δ1 ⊑{Γ,f@Γm1↦Γm2} δ2 : Γf → δ2 ⊑{Γ,g@Γm2↦Γm3} δ3 : Γf →
+  δ1 ⊑{Γ,f◎ g@Γm1↦Γm3} δ3 : Γf.
+Proof.
+  intros ? Hδ Hδ' h; specialize (Hδ h); specialize (Hδ' h).
+  destruct (δ1 !! h) as [s1|], (δ2 !! h) as [s2|], (δ3 !! h) as [s3|],
+    (Γf !! h) as [[τs τ]|]; try done.
+  destruct Hδ as (cmτ&?&?&?&?&?&?), Hδ' as (cmτ'&?&?&?&?&?&?).
+  eauto 15 using stmt_refine_compose.
 Qed.
 
 Lemma expr_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs e1 e2 τlr :
   ✓ Γ → e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : τlr → Γm1' ⊑{Γ,f'} Γm2' →
-  (∀ o τ, Γm1 ⊢ o : τ → f' !! o = f !! o) →
-  (∀ o o' r τ, Γm2 ⊢ o' : τ → f' !! o = Some (o',r) → f !! o = Some (o',r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
   e1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} e2 : τlr.
 Proof.
   intros ? He; intros. induction He using @expr_refine_ind;
-    refine_constructor; eauto using locks_refine_weaken, option_eq_1,
-    addr_refine_weaken, val_refine_weaken, option_eq_1_alt.
+    refine_constructor; eauto using locks_refine_weaken,
+    addr_refine_weaken, val_refine_weaken.
 Qed.
 Lemma exprs_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs es1 es2 τlrs :
   ✓ Γ → es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2}* es2 :* τlrs → Γm1' ⊑{Γ,f'} Γm2' →
-  (∀ o τ, Γm1 ⊢ o : τ → f' !! o = f !! o) →
-  (∀ o o' r τ, Γm2 ⊢ o' : τ → f' !! o = Some (o',r) → f !! o = Some (o',r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
   es1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'}* es2 :* τlrs.
 Proof. induction 2; constructor; eauto using expr_refine_weaken. Qed.
 Lemma ectx_item_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs Ei1 Ei2 τlr τlr' :
   ✓ Γ → Ei1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ei2 : τlr ↣ τlr' → Γm1' ⊑{Γ,f'} Γm2' →
-  (∀ o τ, Γm1 ⊢ o : τ → f' !! o = f !! o) →
-  (∀ o o' r τ, Γm2 ⊢ o' : τ → f' !! o = Some (o',r) → f !! o = Some (o',r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
   Ei1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} Ei2 : τlr ↣ τlr'.
 Proof.
   destruct 2; refine_constructor;
@@ -842,18 +1040,12 @@ Proof.
 Qed.
 Lemma ectx_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs E1 E2 τlr τlr' :
   ✓ Γ → E1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} E2 : τlr ↣ τlr' → Γm1' ⊑{Γ,f'} Γm2' →
-  (∀ o τ, Γm1 ⊢ o : τ → f' !! o = f !! o) →
-  (∀ o o' r τ, Γm2 ⊢ o' : τ → f' !! o = Some (o',r) → f !! o = Some (o',r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
   E1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} E2 : τlr ↣ τlr'.
 Proof. induction 2; refine_constructor;eauto using ectx_item_refine_weaken. Qed.
 Lemma stmt_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs s1 s2 mcτ :
   ✓ Γ → s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ → Γm1' ⊑{Γ,f'} Γm2' →
-  (∀ o τ, Γm1 ⊢ o : τ → f' !! o = f !! o) →
-  (∀ o o' r τ, Γm2 ⊢ o' : τ → f' !! o = Some (o',r) → f !! o = Some (o',r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
   s1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} s2 : mcτ.
 Proof.
   intros ? Hs; intros. induction Hs;
@@ -861,10 +1053,7 @@ Proof.
 Qed.
 Lemma sctx_item_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs Es1 Es2 mcτ mcτ' :
   ✓ Γ → Es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Es2 : mcτ ↣ mcτ' → Γm1' ⊑{Γ,f'} Γm2' →
-  (∀ o τ, Γm1 ⊢ o : τ → f' !! o = f !! o) →
-  (∀ o o' r τ, Γm2 ⊢ o' : τ → f' !! o = Some (o',r) → f !! o = Some (o',r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
   Es1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} Es2 : mcτ ↣ mcτ'.
 Proof.
   destruct 2; refine_constructor;
@@ -872,72 +1061,62 @@ Proof.
 Qed.
 Lemma esctx_item_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs Ee1 Ee2 τ mcτ' :
   ✓ Γ → Ee1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ee2 : τ ↣ mcτ' → Γm1' ⊑{Γ,f'} Γm2' →
-  (∀ o τ, Γm1 ⊢ o : τ → f' !! o = f !! o) →
-  (∀ o o' r τ, Γm2 ⊢ o' : τ → f' !! o = Some (o',r) → f !! o = Some (o',r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
   Ee1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} Ee2 : τ ↣ mcτ'.
 Proof. destruct 2; refine_constructor; eauto using stmt_refine_weaken. Qed.
 Lemma ctx_item_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs Ek1 Ek2 τf τf' :
   ✓ Γ → Ek1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ek2 : τf ↣ τf' → Γm1' ⊑{Γ,f'} Γm2' →
-  (∀ o τ, Γm1 ⊢ o : τ → f' !! o = f !! o) →
-  (∀ o o' r τ, Γm2 ⊢ o' : τ → f' !! o = Some (o',r) → f !! o = Some (o',r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
   Ek1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} Ek2 : τf ↣ τf'.
 Proof.
-  intros ? HEk ??????. assert (∀ os1 os2 σs, Γm1 ⊢* os1 :* σs →
+  intros ? HEk ????. assert (∀ os1 os2 σs, Γm1 ⊢* os1 :* σs →
     Forall2 (λ o1 o2, f !! o1 = Some (o2, [])) os1 os2 →
     Forall2 (λ o1 o2, f' !! o1 = Some (o2, [])) os1 os2).
   { intros os1 os2 σs Hos. revert os2.
-    induction Hos; intros; decompose_Forall_hyps; eauto using option_eq_1_alt. }
+    induction Hos; intros; decompose_Forall_hyps;
+      eauto using option_eq_1_alt, mem_inj_extend_left. }
   destruct HEk; refine_constructor; eauto using esctx_item_refine_weaken,
     sctx_item_refine_weaken, expr_refine_weaken, ectx_refine_weaken,
-    option_eq_1_alt, Forall2_impl.
+    Forall2_impl, memenv_extend_typed, mem_inj_extend_left, option_eq_1_alt.
 Qed.
 Lemma ctx_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' k1 k2 τf τf' :
   ✓ Γ → k1 ⊑{(Γ,Γf),f@Γm1↦Γm2} k2 : τf ↣ τf' → Γm1' ⊑{Γ,f'} Γm2' →
-  (∀ o τ, Γm1 ⊢ o : τ → f' !! o = f !! o) →
-  (∀ o o' r τ, Γm2 ⊢ o' : τ → f' !! o = Some (o',r) → f !! o = Some (o',r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
   k1 ⊑{(Γ,Γf),f'@Γm1'↦Γm2'} k2 : τf ↣ τf'.
 Proof. induction 2; refine_constructor; eauto using ctx_item_refine_weaken. Qed.
 Lemma direction_refine_weaken Γ f f' Γm1 Γm2 Γm1' Γm2' d1 d2 mcτ :
-  ✓ Γ → d1 ⊑{Γ,f@Γm1↦Γm2} d2 : mcτ → Γm1' ⊑{Γ,f'} Γm2' → 
-  (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
-  d1 ⊑{Γ,f'@Γm1'↦Γm2'} d2 : mcτ.
+  ✓ Γ → d1 ⊑{Γ,f@Γm1↦Γm2} d2 : mcτ → Γm1' ⊑{Γ,f'} Γm2' → Γm1 ⊆{⇒} Γm1' →
+  Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 → d1 ⊑{Γ,f'@Γm1'↦Γm2'} d2 : mcτ.
 Proof. destruct 2; refine_constructor; eauto using val_refine_weaken. Qed.
 Lemma focus_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs φ1 φ2 τf :
   ✓ Γ → φ1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} φ2 : τf → Γm1' ⊑{Γ,f'} Γm2' →
-  (∀ o τ, Γm1 ⊢ o : τ → f' !! o = f !! o) →
-  (∀ o o' r τ, Γm2 ⊢ o' : τ → f' !! o = Some (o',r) → f !! o = Some (o',r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → (∀ o τ, Γm2 ⊢ o : τ → Γm2' ⊢ o : τ) →
-  (∀ o τ, Γm1 ⊢ o : τ → index_alive Γm1' o → index_alive Γm1 o) →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
   φ1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} φ2 : τf.
 Proof.
   destruct 2; refine_constructor; eauto using direction_refine_weaken,
     stmt_refine_weaken, expr_refine_weaken, val_refine_weaken,
     vals_refine_weaken, locks_refine_weaken, ectx_refine_weaken,
-    esctx_item_refine_weaken, option_eq_1, option_eq_1_alt.
+    esctx_item_refine_weaken.
+Qed.
+Lemma funenv_refine_weaken Γ f f' Γm1 Γm2 Γm1' Γm2' δ1 δ2 Γf :
+  ✓ Γ → δ1 ⊑{Γ,f@Γm1↦Γm2} δ2 : Γf → Γm1' ⊑{Γ,f'} Γm2' →
+  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → mem_inj_extend f f' Γm1 Γm2 →
+  δ1 ⊑{Γ,f'@Γm1'↦Γm2'} δ2 : Γf.
+Proof.
+  intros ? Hδ ???? h; specialize (Hδ h); destruct (δ1 !! h) as [s1|],
+    (δ2 !! h) as [s2|], (Γf !! h) as [[τs τ]|]; eauto.
+  naive_solver eauto using stmt_refine_weaken.
 Qed.
 
-Lemma ectx_item_subst_refine Γ Γf f Γm1 Γm2 τs Ei1 Ei2 e1 e2 τlr τlr' :
-  Ei1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ei2 : τlr ↣ τlr' →
-  e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : τlr →
-  subst Ei1 e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} subst Ei2 e2 : τlr'.
+Lemma ctx_refine_stack_typed_l Γ f Γm1 Γm2 Γf k1 k2 τf τf' :
+  ✓ Γ → k1 ⊑{(Γ,Γf),f@Γm1↦Γm2} k2 : τf ↣ τf' →
+  Γm1 ⊢* get_stack k1 :* get_stack_types k1.
+Proof. eauto using ctx_typed_stack_typed, ctx_refine_typed_l. Qed.
+Lemma ctx_refine_stack_typed_r Γ f Γm1 Γm2 Γf k1 k2 τf τf' :
+  ✓ Γ → k1 ⊑{(Γ,Γf),f@Γm1↦Γm2} k2 : τf ↣ τf' →
+  Γm2 ⊢* get_stack k2 :* get_stack_types k1.
 Proof.
-  destruct 1; simpl; refine_constructor; eauto.
-  rewrite ?fmap_app; eauto using Forall3_app, Forall3_cons.
-Qed.
-Lemma ectx_subst_refine Γ Γf f Γm1 Γm2 τs E1 E2 e1 e2 τlr τlr' :
-  E1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} E2 : τlr ↣ τlr' →
-  e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : τlr →
-  subst E1 e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} subst E2 e2 : τlr'.
-Proof.
-  intros HE. revert e1 e2.
-  induction HE; simpl; eauto using ectx_item_subst_refine.
+  intros. erewrite ctx_refine_stack_types by eauto.
+  eauto using ctx_typed_stack_typed, ctx_refine_typed_r.
 Qed.
 End properties.

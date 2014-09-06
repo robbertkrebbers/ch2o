@@ -96,9 +96,8 @@ Ltac typed_inversion H :=
   end.
 Ltac typed_inversion_all :=
   repeat match goal with
-  | H : _ ⊢ ?x : _ |- _ =>
-     progress first [is_var x | typed_inversion H]
-  | H : _ ⊢ ?x : _ ↣ _ |- _ => progress first [is_var x | typed_inversion H]
+  | H : _ ⊢ ?x : _ |- _ => first [is_var x; fail 1|typed_inversion H]
+  | H : _ ⊢ ?x : _ ↣ _ |- _ => first [is_var x; fail 1|typed_inversion H]
   end.
 
 Section typed.

@@ -50,8 +50,7 @@ Proof.
   | by destruct 1 as (?&?&?&?); simplify_type_equality ]).
 Defined.
 Lemma ptr_bit_valid_weaken Γ1 Γ2 Γm1 Γm2 pb :
-  ✓ Γ1 → ✓{Γ1,Γm1} pb → Γ1 ⊆ Γ2 →
-  (∀ o σ, Γm1 ⊢ o : σ → Γm2 ⊢ o : σ) → ✓{Γ2,Γm2} pb.
+  ✓ Γ1 → ✓{Γ1,Γm1} pb → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → ✓{Γ2,Γm2} pb.
 Proof.
   intros ? (τ&?&?&?) ??. exists τ. erewrite <-bit_size_of_weaken
     by eauto using TBase_valid, TPtr_valid, ptr_typed_type_valid.
@@ -161,9 +160,8 @@ Proof.
   eauto using ptr_refine_compose with congruence.
 Qed.
 Lemma ptr_bit_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' pb1 pb2 :
-  ✓ Γ → pb1 ⊑{Γ,f@Γm1↦Γm2} pb2 → Γ ⊆ Γ' → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → 
-  (∀ o o2 r τ, Γm1 ⊢ o : τ → f !! o = Some (o2,r) → f' !! o = Some (o2,r)) →
-  (∀ o τ, Γm1 ⊢ o : τ → Γm1' ⊢ o : τ) → pb1 ⊑{Γ',f'@Γm1'↦Γm2'} pb2.
+  ✓ Γ → pb1 ⊑{Γ,f@Γm1↦Γm2} pb2 → Γ ⊆ Γ' → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' →
+  Γm1 ⊆{⇒} Γm1' → mem_inj_extend f f' Γm1 Γm2 → pb1 ⊑{Γ',f'@Γm1'↦Γm2'} pb2.
 Proof.
   intros ? (τ&?&?&?&?) ??. exists τ.
   erewrite <-bit_size_of_weaken by eauto using TBase_valid, TPtr_valid,

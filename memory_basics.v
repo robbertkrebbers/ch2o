@@ -46,7 +46,7 @@ Definition index_alive {Ti} (Γm : memenv Ti) (o : index) : Prop :=
   ∃ τ, Γm !! o = Some (τ,false).
 Instance: TypeCheckSpec (memenv Ti) (type Ti) index (λ _, True).
 Proof.
-  intros ? Γm o τ. split; unfold type_check, typed, index_typecheck, index_typed.
+  intros ? Γm o τ. split; unfold type_check, typed,index_typecheck, index_typed.
   * destruct (Γm !! o) as [[??]|]; naive_solver.
   * by intros [? ->].
 Qed.
@@ -57,6 +57,16 @@ Instance index_alive_dec {Ti} (Γm : memenv Ti) o : Decision (index_alive Γm o)
   | None => right _
   end; abstract naive_solver.
 Defined.
+
+Record memenv_extend {Ti} (Γm1 Γm2  : memenv Ti) := {
+  memenv_extend_typed o τ : Γm1 ⊢ o : τ → Γm2 ⊢ o : τ;
+  memenv_extend_alive o τ : Γm1 ⊢ o : τ → index_alive Γm2 o → index_alive Γm1 o
+}.
+Notation "Γm1 ⊆{⇒} Γm2" := (memenv_extend Γm1 Γm2)
+  (at level 70, format "Γm1  ⊆{⇒}  Γm2") : C_scope.
+Instance: PreOrder (@memenv_extend Ti).
+Proof. split; [|intros ??? [??] [??]]; split; naive_solver. Qed.
+Hint Extern 0 (?Γm1 ⊆{⇒} ?Γm2) => reflexivity.
 
 (** * Locked locations *)
 Definition lockset : Set :=
@@ -205,8 +215,8 @@ Proof.
   by rewrite lockset_valid_alt.
 Defined.
 Lemma lockset_valid_weaken {Ti} (Γm1 Γm2 : memenv Ti) Ω :
-  ✓{Γm1} Ω → (∀ o σ, Γm1 ⊢ o : σ → Γm2 ⊢ o : σ) → ✓{Γm2} Ω.
-Proof. intros HΩ ? o r ?; destruct (HΩ o r); eauto. Qed.
+  ✓{Γm1} Ω → Γm1 ⊆{⇒} Γm2 → ✓{Γm2} Ω.
+Proof. intros HΩ [??] o r ?; destruct (HΩ o r); eauto. Qed.
 Lemma lockset_empty_valid {Ti} (Γm : memenv Ti) : ✓{Γm} ∅.
 Proof. intros o r; solve_elem_of. Qed.
 Lemma lockset_union_valid {Ti} (Γm : memenv Ti) Ω1 Ω2 :

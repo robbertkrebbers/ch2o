@@ -680,9 +680,10 @@ Definition var_decl_valid (Γ : env Ti) (Γm : memenv Ti) (d : var_decl Ti) :=
   end.
 Notation var_env_valid Γ Γm := (Forall (var_decl_valid Γ Γm ∘ snd)).
 Lemma var_decl_valid_weaken Γ1 Γ2 Γm1 Γm2 d :
-  var_decl_valid Γ1 Γm1 d → Γ1 ⊆ Γ2 → (∀ o σ, Γm1 ⊢ o : σ → Γm2 ⊢ o : σ) →
-  var_decl_valid Γ2 Γm2 d.
-Proof. destruct d; simpl; eauto using type_valid_weaken. Qed.
+  var_decl_valid Γ1 Γm1 d → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → var_decl_valid Γ2 Γm2 d.
+Proof.
+  destruct d; simpl; eauto using type_valid_weaken, memenv_extend_typed.
+Qed.
 Lemma typedef_lookup_valid Γ Γm xs x τ :
   var_env_valid Γ Γm xs → lookup_typedef x xs = Some τ → ✓{Γ} τ.
 Proof. induction 1 as [|[? []]]; intros; simplify_option_equality; eauto. Qed.
@@ -872,7 +873,7 @@ Lemma alloc_global_typed Γn Γ Γf m xs x τ mce m' xs' :
   ✓ Γ → ✓{Γ} Γf → alloc_global Γn Γ Γf m xs x τ mce = inr (m',xs') →
   ✓{Γ} m → var_env_valid Γ ('{m}) xs → ✓{Γ} τ →
   (**i 1.) *) ✓{Γ} m' ∧
-  (**i 2.) *) (∀ o σ, '{m} ⊢ o : σ → '{m'} ⊢ o : σ) ∧
+  (**i 2.) *) '{m} ⊆{⇒} '{m'} ∧
   (**i 3.) *) var_env_valid Γ ('{m'}) xs' ∧
   (**i 4.) *) var_env_stack_types xs = var_env_stack_types xs'.
 Proof.
@@ -891,21 +892,22 @@ Proof.
         prefix_of_nil, funtypes_valid_empty, var_env_stack_types_valid.
       by intros ?; destruct (Γf !! _); simpl_map. }
     split_ands; eauto using mem_alloc_val_valid,
-      mem_alloc_val_index_typed, val_cast_typed.
-    constructor; simpl; eauto 6 using mem_alloc_val_index_typed, Forall_impl,
-      var_decl_valid_weaken, mem_alloc_val_index_typed_eq, val_cast_typed.
+      mem_alloc_val_extend, val_cast_typed.
+    constructor; simpl; eauto 6 using mem_alloc_val_extend, Forall_impl,
+      var_decl_valid_weaken, mem_alloc_val_index_typed, val_cast_typed.
   * repeat case_error_guard; simplify_equality'.
     split_ands; eauto using mem_alloc_val_valid,
-      mem_alloc_val_index_typed, val_0_typed.
-    constructor; simpl; eauto 6 using mem_alloc_val_index_typed_eq,
-      Forall_impl, var_decl_valid_weaken, mem_alloc_val_index_typed, val_0_typed.
+      mem_alloc_val_extend, val_0_typed.
+    constructor; simpl; eauto 6 using mem_alloc_val_index_typed, Forall_impl,
+      var_decl_valid_weaken, mem_alloc_val_extend, val_0_typed.
 Qed.
+Hint Immediate (transitivity (R:=@memenv_extend Ti)).
 Lemma to_stmt_typed Γn Γ Γf τret m xs Ls mLcb cs m' Ls' s cmτ :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ ('{m}) xs →
   to_stmt Γn Γ Γf τret m xs Ls mLcb cs = inr (m',Ls', s,cmτ) →
   (**i 1.) *) (Γ,Γf,'{m'},var_env_stack_types xs) ⊢ s : cmτ ∧
   (**i 2.) *) ✓{Γ} m' ∧
-  (**i 3.) *) (∀ o σ, '{m} ⊢ o : σ → '{m'} ⊢ o : σ).
+  (**i 3.) *) '{m} ⊆{⇒} '{m'}.
 Proof.
   intros ??. revert m m' s cmτ xs Ls Ls' mLcb. induction cs; intros;
     repeat match goal with
