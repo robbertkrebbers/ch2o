@@ -1,6 +1,7 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export refinement_system executable type_preservation.
+Require Export refinement_system executable.
+Require Import type_preservation refinement_preservation.
 
 Section executable_complete.
 Context `{EnvSpec Ti}.
@@ -141,5 +142,30 @@ Proof.
   * intros m k d o τ s ?????.
     eexists mem_inj_id, _; split_ands; eauto using state_refine_id.
     by destruct d; simpl; try case_match; eauto.
+Qed.
+Lemma cstep_exec_complete_steps Γ Γf δ S1 S2 g :
+  ✓ Γ → (Γ,'{SMem S1}) ⊢ δ : Γf → (Γ,Γf) ⊢ S1 : g → Γ\ δ ⊢ₛ S1 ⇒* S2 →
+  ∃ f S2',
+  (**i 1.) *) cstep_exec_rtc Γ δ S1 S2' ∧
+  (**i 2.) *) S2' ⊑{(Γ,Γf),f} S2 : g ∧
+  (**i 3.) *) mem_inj_extend mem_inj_id f ('{SMem S1}) ('{SMem S1}).
+Proof.
+  intros ???; revert S2. unfold cstep_exec_rtc. apply rtc_ind_r.
+  { eexists mem_inj_id, S1.
+    repeat constructor (by eauto using state_refine_id). }
+  intros S2' S3' ?? (f&S2&?&?&?).
+  destruct (csteps_preservation Γ Γf δ S1 S2 g),
+    (csteps_preservation Γ Γf δ S1 S2' g); auto using csteps_exec_sound.
+  destruct (decide (is_undef_state S2)).
+  { destruct (cstep_preservation Γ Γf δ S2' S3' g);
+      eauto using state_refine_typed_r, funenv_typed_weaken.
+    exists f S2; split_ands; eauto using funenv_refine_weaken; try done.
+    right; eauto using state_refine_typed_l. }
+  destruct (cstep_refine_r Γ Γf δ δ f S2 S2' S3' g) as (f'&S3&?&?&?); auto.
+  { eauto using funenv_refine_weaken, funenv_refine_id, state_refine_mem. }
+  destruct (cstep_exec_complete Γ Γf δ S2 S3 g) as (f''&S3''&?&?&?);
+    eauto using state_refine_typed_l, funenv_typed_weaken.
+  exists (f'' ◎ f') S3''; eauto 7 using state_refine_compose, rtc_r,
+    mem_inj_extend_compose, mem_inj_extend_transitive.
 Qed.
 End executable_complete.
