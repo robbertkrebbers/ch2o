@@ -227,8 +227,7 @@ Proof.
     | _ => case_match
     end; auto.
 Qed.
-Lemma cstep_exec_sound Γ δ S1 S2 :
-  S2 ∈ cstep_exec Γ δ S1 → Γ\ δ ⊢ₛ S1 ⇒ S2.
+Lemma cstep_exec_sound Γ δ S1 S2 : S2 ∈ cstep_exec Γ δ S1 → Γ\ δ ⊢ₛ S1 ⇒ S2.
 Proof.
   intros. assert (∀ (k : ctx Ti) e m,
     ehstep_exec Γ (get_stack k) e m = None → maybe_ECall_redex e = None →
@@ -253,4 +252,8 @@ Proof.
     | _ => progress simplify_equality'
     end; do_cstep.
 Qed.
+Definition cstep_exec_rtc Γ δ : relation (state Ti) :=
+  rtc (λ S1 S2, S2 ∈ cstep_exec Γ δ S1).
+Lemma csteps_exec_sound Γ δ S1 S2 : cstep_exec_rtc Γ δ S1 S2 → Γ\ δ ⊢ₛ S1 ⇒* S2.
+Proof. induction 1; econstructor; eauto using cstep_exec_sound. Qed.
 End exec.
