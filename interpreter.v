@@ -58,9 +58,9 @@ Definition csteps_exec_all (Γ : env Ti) (δ : funenv Ti) :
     stream (listset (istate Ti E) * listset (istate Ti E)) :=
   cofix go iSs :=
   let nexts := cstep_exec_all Γ δ <$> iSs in
-  let nfs := listset_normalize hash (nexts ≫= fst) in
-  let reds := listset_normalize hash (nexts ≫= snd) in
-  (nfs,reds) :.: go reds.
+  let reds := listset_normalize hash (nexts ≫= fst) in
+  let nfs := listset_normalize hash (nexts ≫= snd) in
+  (reds,nfs) :.: go reds.
 Definition interpreter_all
     (Θ : list (N * decl Ti)) (f : funname) (ces : list (cexpr Ti)) :
     string +
