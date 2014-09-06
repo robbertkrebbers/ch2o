@@ -94,7 +94,7 @@ execution state [state] equips a focus with a program context and memory.
 
 These focuses correspond to the five variants of execution states as described
 above. *)
-Inductive undef_state (Ti : Set) :=
+Inductive undef_state (Ti : Set) : Set :=
   | UndefExpr : ectx Ti → expr Ti → undef_state Ti
   | UndefBranch : expr Ti → esctx_item Ti → lockset → val Ti → undef_state Ti.
 Inductive focus (Ti : Set) : Set :=

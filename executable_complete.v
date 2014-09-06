@@ -14,10 +14,10 @@ Hint Immediate mem_inj_extend_reflexive.
 Hint Immediate ctx_typed_stack_typed.
 Hint Resolve (elem_of_singleton_2 (C:=listset (state Ti))).
 
-Lemma ehstep_exec_complete Γ Γf m1 m2 ρ τs e1 e2 τlr :
+Lemma ehexec_complete Γ Γf m1 m2 ρ τs e1 e2 τlr :
   ✓ Γ → ✓{Γ} m1 → '{m1} ⊢* ρ :* τs → (Γ,Γf,'{m1},τs) ⊢ e1 : τlr →
   Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → ∃ f e2' m2',
-  (**i 1.) *) ehstep_exec Γ ρ e1 m1 = Some (e2', m2') ∧
+  (**i 1.) *) ehexec Γ ρ e1 m1 = Some (e2', m2') ∧
   (**i 2.) *) e2' ⊑{(Γ,Γf,τs),f@'{m2'}↦'{m2}} e2 : τlr ∧
   (**i 3.) *) m2' ⊑{Γ,f} m2 ∧
   (**i 4.) *) mem_inj_extend mem_inj_id f ('{m1}) ('{m1}).
@@ -43,9 +43,9 @@ Proof.
       eauto using locks_refine_id, mem_alloc_extend', option_eq_1.
   * eapply addr_top_array_refine; eauto using mem_alloc_index_typed'.
 Qed.
-Lemma cstep_exec_complete Γ Γf δ S1 S2 g :
+Lemma cexec_complete Γ Γf δ S1 S2 g :
   ✓ Γ → (Γ,'{SMem S1}) ⊢ δ : Γf → (Γ,Γf) ⊢ S1 : g → Γ\ δ ⊢ₛ S1 ⇒ S2 → ∃ f S2',
-  (**i 1.) *) S2' ∈ cstep_exec Γ δ S1 ∧
+  (**i 1.) *) Γ\ δ ⊢ₛ S1 ⇒ₑ S2' ∧
   (**i 2.) *) S2' ⊑{(Γ,Γf),f} S2 : g ∧
   (**i 3.) *) mem_inj_extend mem_inj_id f ('{SMem S1}) ('{SMem S1}).
 Proof.
@@ -61,7 +61,7 @@ Proof.
   * intros m1 m2 k E e1 e2 ?? (τlr&Heτlr&?&?) ? _; simpl in *.
     typed_inversion Heτlr; edestruct (ectx_subst_typed_rev Γ Γf ('{m1})
       (get_stack_types k) E e1) as (τlr&?&?); eauto.
-    edestruct (ehstep_exec_complete Γ Γf m1 m2 (get_stack k) (get_stack_types k)
+    edestruct (ehexec_complete Γ Γf m1 m2 (get_stack k) (get_stack_types k)
       e1 e2) as (f&e2'&m2'&?&?&?&?); eauto using ctx_typed_stack_typed.
     exists f (State k (Expr (subst E e2')) m2'); split_ands; auto.
     { assert (is_redex e1) as He1 by eauto using ehstep_is_redex.
@@ -72,9 +72,9 @@ Proof.
       simplify_option_equality; eauto using expr_redexes_complete. }
     eleft; split_ands; repeat refine_constructor; eauto.
     + eapply ectx_subst_refine; eauto 10 using ectx_refine_weaken,
-        ectx_refine_id, ehstep_extend, ehstep_exec_sound.
+        ectx_refine_id, ehstep_extend, ehexec_sound.
     + eauto 10 using ctx_refine_weaken,
-        ctx_refine_id, ehstep_extend, ehstep_exec_sound.
+        ctx_refine_id, ehstep_extend, ehexec_sound.
   * intros m k f E Ωs vs ?????; simpl.
     eexists mem_inj_id, _; split_ands; eauto using state_refine_id.
     assert (maybe_EVal (subst E (call f @ #{Ωs}* vs)%E) = None) as ->.
@@ -88,8 +88,8 @@ Proof.
     { destruct E as [|Ei] using rev_ind; [by destruct He|].
       by destruct Ei; by rewrite ?subst_app. }
     apply elem_of_bind; exists (E, e); split; [|by apply expr_redexes_complete].
-    destruct (ehstep_exec _ _ _ _) as [[e2 m2]|] eqn:?.
-    { destruct Hsafe; econstructor (eauto using ehstep_exec_sound). }
+    destruct (ehexec _ _ _ _) as [[e2 m2]|] eqn:?.
+    { destruct Hsafe; econstructor (eauto using ehexec_sound). }
     destruct (maybe_ECall_redex e) as [[[f Ωs] vs]|] eqn:Hcall; eauto.
     apply maybe_ECall_redex_Some in Hcall; destruct Hcall as [-> ?].
     by destruct Hsafe; constructor.
@@ -112,8 +112,7 @@ Proof.
       erewrite Fun_type_stack_types, (right_id_L [] (++)) by eauto.
       eapply (stmt_refine_weaken _ _ mem_inj_id _ ('{m}));
         eauto using stmt_refine_id, mem_alloc_val_list_extend.
-    + eapply (ctx_refine_weaken _ _ mem_inj_id _ ('{m}));
-        eauto using ctx_refine_id, mem_alloc_val_list_extend.
+    + eauto 8 using ctx_refine_weaken, ctx_refine_id, mem_alloc_val_list_extend.
   * intros m k l ????; simpl; rewrite decide_True by solve_elem_of.
     eexists mem_inj_id, _; split_ands; eauto using state_refine_id.
   * intros m k Es l s ?????; simpl.
@@ -137,25 +136,24 @@ Proof.
         eauto using stmt_refine_id, mem_alloc_extend'.
     + eapply (direction_refine_weaken _ mem_inj_id _ ('{m})); eauto using
         direction_refine_id, mem_alloc_extend', option_eq_1_alt.
-    + eapply (ctx_refine_weaken _ _ mem_inj_id _ ('{m}));
-        eauto using ctx_refine_id, mem_alloc_extend'.
+    + eauto 8 using ctx_refine_weaken, ctx_refine_id, mem_alloc_extend'.
   * intros m k d o τ s ?????.
     eexists mem_inj_id, _; split_ands; eauto using state_refine_id.
     by destruct d; simpl; try case_match; eauto.
 Qed.
-Lemma cstep_exec_complete_steps Γ Γf δ S1 S2 g :
+Lemma cexec_complete_steps Γ Γf δ S1 S2 g :
   ✓ Γ → (Γ,'{SMem S1}) ⊢ δ : Γf → (Γ,Γf) ⊢ S1 : g → Γ\ δ ⊢ₛ S1 ⇒* S2 →
   ∃ f S2',
-  (**i 1.) *) cstep_exec_rtc Γ δ S1 S2' ∧
+  (**i 1.) *) Γ\ δ ⊢ₛ S1 ⇒ₑ* S2' ∧
   (**i 2.) *) S2' ⊑{(Γ,Γf),f} S2 : g ∧
   (**i 3.) *) mem_inj_extend mem_inj_id f ('{SMem S1}) ('{SMem S1}).
 Proof.
-  intros ???; revert S2. unfold cstep_exec_rtc. apply rtc_ind_r.
+  intros ???; revert S2. apply rtc_ind_r.
   { eexists mem_inj_id, S1.
     repeat constructor (by eauto using state_refine_id). }
   intros S2' S3' ?? (f&S2&?&?&?).
   destruct (csteps_preservation Γ Γf δ S1 S2 g),
-    (csteps_preservation Γ Γf δ S1 S2' g); auto using csteps_exec_sound.
+    (csteps_preservation Γ Γf δ S1 S2' g); auto using cexecs_sound.
   destruct (decide (is_undef_state S2)).
   { destruct (cstep_preservation Γ Γf δ S2' S3' g);
       eauto using state_refine_typed_r, funenv_typed_weaken.
@@ -163,7 +161,7 @@ Proof.
     right; eauto using state_refine_typed_l. }
   destruct (cstep_refine_r Γ Γf δ δ f S2 S2' S3' g) as (f'&S3&?&?&?); auto.
   { eauto using funenv_refine_weaken, funenv_refine_id, state_refine_mem. }
-  destruct (cstep_exec_complete Γ Γf δ S2 S3 g) as (f''&S3''&?&?&?);
+  destruct (cexec_complete Γ Γf δ S2 S3 g) as (f''&S3''&?&?&?);
     eauto using state_refine_typed_l, funenv_typed_weaken.
   exists (f'' ◎ f') S3''; eauto 7 using state_refine_compose, rtc_r,
     mem_inj_extend_compose, mem_inj_extend_transitive.

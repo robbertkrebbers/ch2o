@@ -26,7 +26,7 @@ Definition assign_exec (Γ : env Ti) (m : mem Ti) (a : addr Ti)
      guard (val_cast_ok Γ ('{m}) (type_of a) v');
      Some (va, val_cast (type_of a) v')
   end.
-Definition ehstep_exec (Γ : env Ti) (ρ : stack)
+Definition ehexec (Γ : env Ti) (ρ : stack)
     (e : expr Ti) (m : mem Ti) : option (expr Ti * mem Ti) :=
   match e with
   | var{τ} x =>
@@ -74,7 +74,7 @@ Definition ehstep_exec (Γ : env Ti) (ρ : stack)
      Some (#{Ω} (val_cast τ v), m)
   | _ => None
   end%E.
-Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
+Definition cexec (Γ : env Ti) (δ : funenv Ti)
     (S : state Ti) : listset (state Ti) :=
   let 'State k φ m := S in
   match φ with
@@ -183,7 +183,7 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
       end
     | None =>
       '(E,e') ← expr_redexes e;
-      match ehstep_exec Γ (get_stack k) e' m with
+      match ehexec Γ (get_stack k) e' m with
       | Some (e2,m2) => {[ State k (Expr (subst E e2)) m2 ]}
       | None =>
         match maybe_ECall_redex e' with
@@ -195,6 +195,15 @@ Definition cstep_exec (Γ : env Ti) (δ : funenv Ti)
     end
   | Undef _ => ∅
   end.
+End exec.
+
+Notation "Γ \ δ ⊢ₛ S1 ⇒ₑ S2" := (S2 ∈ cexec Γ δ S1)
+  (at level 74, format "Γ \  δ  ⊢ₛ '['  S1  '⇒ₑ' '/'  S2 ']'") : C_scope.
+Notation "Γ \ δ ⊢ₛ S1 ⇒ₑ* S2" := (rtc (λ S1' S2', Γ \ δ ⊢ₛ S1' ⇒ₑ S2') S1 S2)
+  (at level 74, format "Γ \  δ  ⊢ₛ '['  S1  '⇒ₑ*' '/'  S2 ']'") : C_scope.
+
+Section soundness.
+Context `{EnvSpec Ti}.
 
 Lemma assign_exec_correct Γ m a v ass v' va' :
   assign_exec Γ m a v ass = Some (v',va') ↔ assign_sem Γ m a v ass v' va'.
@@ -202,8 +211,8 @@ Proof.
   split; [|by destruct 1; simplify_option_equality].
   intros. destruct ass; simplify_option_equality; econstructor; eauto.
 Qed.
-Lemma ehstep_exec_sound Γ ρ m1 m2 e1 e2 :
-  ehstep_exec Γ ρ e1 m1 = Some (e2, m2) → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2.
+Lemma ehexec_sound Γ ρ m1 m2 e1 e2 :
+  ehexec Γ ρ e1 m1 = Some (e2, m2) → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
   intros. destruct e1;
     repeat match goal with
@@ -214,8 +223,8 @@ Proof.
     | _ => case_match
     end; do_ehstep.
 Qed.
-Lemma ehstep_exec_weak_complete Γ ρ e1 m1 e2 m2 :
-  ehstep_exec Γ ρ e1 m1 = None → ¬Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2.
+Lemma ehexec_weak_complete Γ ρ e1 m1 e2 m2 :
+  ehexec Γ ρ e1 m1 = None → ¬Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
   destruct 2; 
     repeat match goal with
@@ -227,19 +236,19 @@ Proof.
     | _ => case_match
     end; auto.
 Qed.
-Lemma cstep_exec_sound Γ δ S1 S2 : S2 ∈ cstep_exec Γ δ S1 → Γ\ δ ⊢ₛ S1 ⇒ S2.
+Lemma cexec_sound Γ δ S1 S2 : Γ\ δ ⊢ₛ S1 ⇒ₑ S2 → Γ\ δ ⊢ₛ S1 ⇒ S2.
 Proof.
   intros. assert (∀ (k : ctx Ti) e m,
-    ehstep_exec Γ (get_stack k) e m = None → maybe_ECall_redex e = None →
+    ehexec Γ (get_stack k) e m = None → maybe_ECall_redex e = None →
     is_redex e → ¬Γ\ get_stack k ⊢ₕ safe e, m).
   { intros k e m He. rewrite eq_None_not_Some.
     intros Hmaybe Hred Hsafe; apply Hmaybe; destruct Hsafe.
     * eexists; apply maybe_ECall_redex_Some; eauto.
-    * edestruct ehstep_exec_weak_complete; eauto. }
+    * edestruct ehexec_weak_complete; eauto. }
   destruct S1;
     repeat match goal with
-    | H : ehstep_exec _ _ _ _ = Some _ |- _ =>
-      apply ehstep_exec_sound in H
+    | H : ehexec _ _ _ _ = Some _ |- _ =>
+      apply ehexec_sound in H
     | H : _ ∈ expr_redexes _ |- _ =>
       apply expr_redexes_correct in H; destruct H
     | H : maybe_EVal _ = Some _ |- _ => apply maybe_EVal_Some in H
@@ -252,8 +261,12 @@ Proof.
     | _ => progress simplify_equality'
     end; do_cstep.
 Qed.
-Definition cstep_exec_rtc Γ δ : relation (state Ti) :=
-  rtc (λ S1 S2, S2 ∈ cstep_exec Γ δ S1).
-Lemma csteps_exec_sound Γ δ S1 S2 : cstep_exec_rtc Γ δ S1 S2 → Γ\ δ ⊢ₛ S1 ⇒* S2.
-Proof. induction 1; econstructor; eauto using cstep_exec_sound. Qed.
-End exec.
+Lemma cexecs_sound Γ δ S1 S2 : Γ\ δ ⊢ₛ S1 ⇒ₑ* S2 → Γ\ δ ⊢ₛ S1 ⇒* S2.
+Proof. induction 1; econstructor; eauto using cexec_sound. Qed.
+Lemma cexec_ex_loop Γ δ S :
+  ex_loop (λ S1 S2, Γ\ δ ⊢ₛ S1 ⇒ₑ S2) S → ex_loop (cstep Γ δ) S.
+Proof.
+  revert S; cofix COH; intros S; destruct 1 as [S1 S2 p].
+  econstructor; eauto using cexec_sound.
+Qed.
+End soundness.

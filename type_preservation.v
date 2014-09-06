@@ -283,15 +283,15 @@ Proof.
       ctx_inversion Hk; left; try solve_cred;
         destruct (val_true_false_dec ('{m}) v)
         as [[[??]|[??]]|[??]]; solve_cred. }
-    destruct (ehstep_exec Γ (get_stack k) e' m) as [[e'' m']|] eqn:He''.
-    { apply ehstep_exec_sound in He''. left; solve_cred. }
+    destruct (ehexec Γ (get_stack k) e' m) as [[e'' m']|] eqn:He''.
+    { apply ehexec_sound in He''. left; solve_cred. }
     destruct (maybe_ECall_redex e') as [[[f' Ωs] vs]|] eqn:Hf.
     { apply maybe_ECall_redex_Some in Hf; destruct Hf as [-> ?].
       left; solve_cred. }
     assert (¬Γ \ get_stack k ⊢ₕ safe e', m).
     { rewrite eq_None_not_Some in Hf; contradict Hf; destruct Hf.
       * eexists; apply maybe_ECall_redex_Some; eauto.
-      * edestruct ehstep_exec_weak_complete; eauto. }
+      * edestruct ehexec_weak_complete; eauto. }
     left; solve_cred.
   * destruct (funenv_lookup Γ ('{m}) Γf δ f' σs σ) as (s&cmτ&?&_); auto.
     left; solve_cred.

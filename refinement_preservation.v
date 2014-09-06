@@ -179,14 +179,13 @@ Lemma ehstep_refine_r Γ Γf f m1 m2 m2' ρ1 ρ2 τs e1 e2 e2' τlr :
     (**i 4.) *) mem_inj_extend f f' ('{m1}) ('{m2}))
   ∨ is_redex e1 ∧ ¬Γ \ ρ1 ⊢ₕ safe e1, m1.
 Proof.
-  intros ? p ?????. destruct (ehstep_exec Γ ρ1 e1 m1) as [[e1' m1']|] eqn:p'.
-  * left. eapply ehstep_exec_sound in p'; eauto.
-    destruct (ehstep_refine Γ Γf f m1 m2 m1' m2'
-      ρ1 ρ2 τs e1 e2 e1' e2' τlr); naive_solver.
+  intros ? p ?????. destruct (ehexec Γ ρ1 e1 m1) as [[e1' m1']|] eqn:p'.
+  * left. eapply ehexec_sound in p'; eauto. destruct (ehstep_refine Γ Γf f
+      m1 m2 m1' m2' ρ1 ρ2 τs e1 e2 e1' e2' τlr); naive_solver.
   * right; split.
     { destruct p; refine_inversion_all; repeat constructor. }
     destruct 1; [refine_inversion_all; inv_ehstep|].
-    edestruct ehstep_exec_weak_complete; eauto.
+    edestruct ehexec_weak_complete; eauto.
 Qed.
 Lemma ehsafe_refine Γ Γf f m1 m2 ρ1 ρ2 τs e1 e2 τlr :
   ✓ Γ → Γ\ ρ1 ⊢ₕ safe e1, m1 → m1 ⊑{Γ,f} m2 →
