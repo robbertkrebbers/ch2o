@@ -261,8 +261,8 @@ Ltac ctx_inversion Hk :=
 Lemma cstep_progress Γ Γf δ S f :
   ✓ Γ → (Γ,Γf) ⊢ S : f → (Γ,'{SMem S}) ⊢ δ : Γf →
   (**i 1.) *) red (cstep Γ δ) S ∨
-  (**i 2.) *) (∃ v, final_state v S) ∨
-  (**i 3.) *) undef_state S ∨
+  (**i 2.) *) (∃ v, is_final_state v S) ∨
+  (**i 3.) *) is_undef_state S ∨
   (**i 4.) *) (∃ l s, SFoc S = Stmt (↷ l) s ∧ l ∉ labels s ∪ labels (SCtx S)).
 Proof.
   destruct S as [k φ m]. intros ? (τf&Hφ&Hk&?) ?; simpl in *.
@@ -303,8 +303,8 @@ Lemma csteps_initial_progress Γ Γf δ m f vs S σs σ :
   Γf !! f = Some (σs,σ) → (Γ,'{m}) ⊢* vs :* σs →
   Γ\ δ ⊢ₛ initial_state m f vs ⇒* S →
   (**i 1.) *) red (cstep Γ δ) S ∨
-  (**i 2.) *) (∃ v, final_state v S) ∨
-  (**i 3.) *) undef_state S.
+  (**i 2.) *) (∃ v, is_final_state v S) ∨
+  (**i 3.) *) is_undef_state S.
 Proof.
   intros. assert ((Γ,Γf) ⊢ S : f ∧ (Γ,'{SMem S}) ⊢ δ : Γf) as [??].
   { eauto using csteps_preservation, initial_state_typed. }

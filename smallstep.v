@@ -223,13 +223,6 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
              State k (Stmt d (blk{τ} s)) (mem_free o m)
 where "Γ \ δ  ⊢ₛ S1 ⇒ S2" := (@cstep _ _ Γ δ S1%S S2%S) : C_scope.
 
-Definition initial_state {Ti} (m : mem Ti)
-  (f : funname) (vs : list (val Ti)) : state Ti := State [] (Call f vs) m.
-Inductive final_state {Ti} (v : val Ti) : state Ti → Prop :=
-  | Return_final f m : final_state v (State [] (Return f v) m).
-Inductive undef_state {Ti} : state Ti → Prop :=
-  | Undef_undef k Su m : undef_state (State k (Undef Su) m).
-
 (** The reflexive transitive closure. *)
 Notation "Γ \ δ ⊢ₛ S1 ⇒* S2" := (rtc (cstep Γ δ) S1 S2)
   (at level 74, format "Γ \  δ  ⊢ₛ '['  S1  '⇒*' '/'  S2 ']'") : C_scope.

@@ -128,6 +128,27 @@ Proof. solve_decision. Defined.
 Instance state_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (S1 S2 : state Ti) : Decision (S1 = S2).
 Proof. solve_decision. Defined.
-
 Instance focus_locks {Ti} : Locks (focus Ti) := λ φ,
   match φ with Stmt _ s => locks s | Expr e => locks e | _ => ∅ end.
+
+Definition initial_state {Ti} (m : mem Ti)
+  (f : funname) (vs : list (val Ti)) : state Ti := State [] (Call f vs) m.
+Inductive is_final_state {Ti} (v : val Ti) : state Ti → Prop :=
+  | Return_final f m : is_final_state v (State [] (Return f v) m).
+Inductive is_undef_state {Ti} : state Ti → Prop :=
+  | Undef_undef k Su m : is_undef_state (State k (Undef Su) m).
+
+Instance is_final_state_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
+  (v : val Ti) S : Decision (is_final_state v S).
+Proof.
+ refine
+  match S with
+  | State [] (Return _ v') _ => cast_if (decide (v = v'))
+  | _ => right _
+  end; abstract first [subst; constructor|by inversion 1].
+Defined.
+Instance is_undef_state_dec {Ti} (S : state Ti) : Decision (is_undef_state S).
+Proof.
+ refine match S with State _ (Undef _) _ => left _ | _ => right _ end;
+    abstract first [constructor|by inversion 1].
+Defined.
