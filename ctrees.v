@@ -410,7 +410,6 @@ Hint Rewrite @take_app_alt @drop_app_alt
 Ltac simplifier :=
   repeat match goal with
   | |- _ => progress decompose_Forall_hyps
-  | |- _ => progress simplify_zip_equality
   | |- _ => progress autorewrite with simplifier
   | |- _ => progress autorewrite with simplifier in *
   | H : ?zs ∪* ?xs = ?zs ∪* _ |- _ => apply seps_cancel_l in H;
@@ -712,8 +711,8 @@ Proof.
     + eauto using ctree_merge_valid, seps_disjoint_lr.
     + intros [??]; destruct Hc; split; eauto using ctree_merge_mapped,
         seps_unmapped_union_l, seps_disjoint_lr.
-  * intros s i w1 xs1 xs2 ???? ys ??; simplifier. constructor;
-      eauto 6 using seps_disjoint_move_l, seps_unmapped_union, seps_disjoint_lr.
+  * intros s i w1 xs1 xs2 ???? ys ??; simplifier. constructor; eauto 6
+      using seps_disjoint_move_l, seps_unmapped_union with simplifier.
 Qed.
 Lemma ctree_disjoint_move_l w1 w2 w3 : w1 ⊥ w2 → w1 ∪ w2 ⊥ w3 → w1 ⊥ w2 ∪ w3.
 Proof.
@@ -983,7 +982,7 @@ Proof.
     simplifier. assert (length ys1 = length ys2).
     { erewrite <-(zip_with_length_same_r _ _ _ ys1),  <-(zip_with_length_same_r
         _ _ _ ys2), <-!(ctree_flatten_merge (∪) true) by eauto; congruence. }
-    simplify_list_equality'. f_equal; eauto.
+    simplify_list_equality. f_equal; eauto.
   * intros s wxss1 IH [| |s' wxss2| |]; simpl; try discriminate. cut (∀ ys1 ys2,
       wxss1 ≫= (λ wxs, ctree_flatten (wxs.1) ++ wxs.2) ⊥* ys1 →
       wxss2 ≫= (λ wxs, ctree_flatten (wxs.1) ++ wxs.2) ⊥* ys2 → ys1 = ys2 →
@@ -1000,7 +999,7 @@ Proof.
     assert (length ys1' = length ys2').
     { erewrite <-(zip_with_length_same_r _ _ _ ys1'),  <-(zip_with_length_same_r
         _ _ _ ys2') by eauto; f_equal; eauto. }
-    simplify_list_equality'; simplifier; repeat f_equal; eauto.
+    simplifier; repeat f_equal; eauto.
   * intros s i w xs1 IH [| | |s' i' w2 xs2|] ys1_; simpl; try discriminate.
     generalize (eq_refl ys1_); generalize ys1_ at 2 4 7 8; intros ys2_.
     rewrite !Forall2_app_inv_l;
@@ -1008,7 +1007,7 @@ Proof.
     assert (length ys1 = length ys2).
     { erewrite <-(zip_with_length_same_r _ _ _ ys1),  <-(zip_with_length_same_r
         _ _ _ ys2), <-!(ctree_flatten_merge (∪) true) by eauto; congruence. }
-    simplify_list_equality'; simplifier; f_equal; eauto.
+    simplifier; f_equal; eauto.
   * by intros s xs1 [] ys ???; simplifier.
 Qed.
 Lemma ctree_cancel_l w1 w2 w3 :
@@ -1049,8 +1048,7 @@ Proof.
     { erewrite <-(zip_with_length_same_r _ (⊥) _ xs3),
         <-(zip_with_length_same_r _ (⊥) _ xs4),
         <-!(ctree_flatten_merge (∪) true) by eauto; congruence. }
-    simplify_list_equality; simplifier.
-    f_equal; eauto using ctree_merge_cancel_2.
+    simplifier; f_equal; eauto using ctree_merge_cancel_2.
   * intros s i w3 xs3 xs1_; rewrite Forall2_app_inv_l;
       intros (xs1&xs1'&?&?&->) ??? w2 Hw2; pattern w2;
       apply (ctree_disjoint_inv_l _ _ _ Hw2); clear w2 Hw2; simpl.

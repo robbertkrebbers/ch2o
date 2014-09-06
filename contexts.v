@@ -3,7 +3,7 @@
 (** This development makes use of contexts to define the semantics of various
 constructs. This file collects some general purpose definitions, theorems, and
 tactics. *)
-Require Export tactics.
+Require Export list.
 
 (** * Contexts with one hole *)
 (** The most commonly used kind of context is the one with exactly one hole.
@@ -71,10 +71,10 @@ Tactic Notation "simplify_subst_equality" hyp(H) :=
     is_var a; let ssub := constr:(_ : DestructSubst sub) in
     destruct a; first [discriminate H | injection' H]
   end;
-  simplify_equality.
+  simplify_list_equality.
 Tactic Notation "simplify_subst_equality" :=
   repeat_on_hyps (fun H => simplify_subst_equality H);
-  simplify_equality.
+  simplify_list_equality.
 
 (** The tactic [simplify_list_subst_equality] behaves like the previous tactic,
 but then for the case of lists as contexts. *)
@@ -93,4 +93,4 @@ Tactic Notation "simplify_list_subst_equality" hyp(H) :=
   end.
 Tactic Notation "simplify_list_subst_equality" :=
   repeat_on_hyps (fun H => simplify_list_subst_equality H);
-  simplify_equality.
+  simplify_list_equality.

@@ -689,7 +689,7 @@ Proof.
   destruct 1 as [o o' r' r r'' i i'' τ τ' σ σc ??????????? []]; csimpl.
   * by rewrite ref_set_offset_freeze, ref_freeze_freeze.
   * rewrite fmap_app, ref_freeze_freeze.
-    by split; intro; simplify_list_equality'; repeat f_equal.
+    by split; intro; simplify_list_equality; repeat f_equal.
 Qed.
 Lemma addr_refine_id Γ Γm a σ : (Γ,Γm) ⊢ a : σ → a ⊑{Γ@Γm} a : σ.
 Proof.

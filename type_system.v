@@ -288,7 +288,8 @@ Inductive ctx_item_typed'
      ctx_item_typed' Γ Γf Γm τs (CStmt Es) (Stmt_type cmσ1) (Stmt_type cmσ2)
   | CBlock_typed o τ c mσ :
      Γm ⊢ o : τ →
-     ctx_item_typed' Γ Γf Γm τs (CBlock o τ) (Stmt_type (c,mσ)) (Stmt_type (c,mσ))
+     ctx_item_typed' Γ Γf Γm τs
+       (CBlock o τ) (Stmt_type (c,mσ)) (Stmt_type (c,mσ))
   | CExpr_typed e Ee τ cmσ :
      (Γ,Γf,Γm,τs) ⊢ e : inr τ → (Γ,Γf,Γm,τs) ⊢ Ee : τ ↣ cmσ →
      ctx_item_typed' Γ Γf Γm τs (CExpr e Ee) (Expr_type τ) (Stmt_type cmσ)
@@ -542,7 +543,8 @@ Proof. intros ? [Hδ _] ?. destruct (Hδ f s); naive_solver. Qed.
 Lemma funenv_lookup_gotos Γ Γm Γf δ f s :
   ✓ Γ → (Γ,Γm) ⊢ δ : Γf → δ !! f = Some s → gotos s ⊆ labels s.
 Proof.
-  intros. by destruct (funenv_lookup_inv Γ Γm Γf δ f s) as (?&?&?&?&?&?&?&?&?&?).
+  intros.
+  by destruct (funenv_lookup_inv Γ Γm Γf δ f s) as (?&?&?&?&?&?&?&?&?&?).
 Qed.
 Lemma funenv_typed_funtypes_valid Γ Γm δ Γf : ✓ Γ → (Γ,Γm) ⊢ δ : Γf → ✓{Γ} Γf.
 Proof.
@@ -586,8 +588,7 @@ Lemma ectx_item_subst_typed_rev Γ Γf Γm τs Ei e σlr :
     (Γ,Γf,Γm,τs) ⊢ e : τlr ∧ (Γ,Γf,Γm,τs) ⊢ Ei : τlr ↣ σlr.
 Proof.
   intros He. destruct Ei; simpl; typed_inversion He;
-    decompose_Forall_hyps; simplify_list_fmap_equality;
-    eexists; split; eauto; typed_constructor; eauto.
+    decompose_Forall_hyps; eexists; split_ands; repeat typed_constructor; eauto.
 Qed.
 Lemma ectx_subst_typed_rev Γ Γf Γm τs E e σlr :
   (Γ,Γf,Γm,τs) ⊢ subst E e : σlr → ∃ τlr,
@@ -608,7 +609,7 @@ Lemma sctx_item_subst_typed_rev Γ Γf Γm τs Es s cmσ :
     (Γ,Γf,Γm,τs) ⊢ s : cmτ ∧ (Γ,Γf,Γm,τs) ⊢ Es : cmτ ↣ cmσ.
 Proof.
   intros Hs. destruct Es; simpl; typed_inversion Hs;
-    eexists; split_ands; eauto; try typed_constructor; eauto; esolve_elem_of.
+    eexists; split_ands; repeat typed_constructor; eauto.
 Qed.
 Lemma esctx_item_subst_typed Γ Γf Γm τs Ee e τ cmσ :
   (Γ,Γf,Γm,τs) ⊢ Ee : τ ↣ cmσ → (Γ,Γf,Γm,τs) ⊢ e : inr τ →
@@ -619,7 +620,7 @@ Lemma esctx_item_subst_typed_rev Γ Γf Γm τs Ee e cmσ :
     (Γ,Γf,Γm,τs) ⊢ e : inr τ ∧ (Γ,Γf,Γm,τs) ⊢ Ee : τ ↣ cmσ.
 Proof.
   intros He. destruct Ee; simpl; typed_inversion He;
-    eexists; split_ands; eauto; typed_constructor; eauto.
+    eexists; split_ands; repeat typed_constructor; eauto.
 Qed.
 Lemma sctx_item_typed_Some_l Γ Γf Γm τs Es c1 τ cmτ :
   (Γ,Γf,Γm,τs) ⊢ Es : (c1,Some τ) ↣ cmτ → ∃ c2, cmτ = (c2, Some τ).

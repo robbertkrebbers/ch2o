@@ -438,8 +438,8 @@ Proof.
     destruct r1'' as [|rs1'' r1'' _] using @rev_ind;
       destruct r2'' as [|rs2'' r2'' _] using @rev_ind.
     + simplify_list_equality. by left.
-    + rewrite fmap_app in Hr''. by simplify_list_equality.
-    + rewrite fmap_app in Hr''. by simplify_list_equality.
+    + rewrite fmap_app in Hr''. by discriminate_list_equality.
+    + rewrite fmap_app in Hr''. by discriminate_list_equality.
     + rewrite !(associative_L (++)) in Hr1, Hr2.
       rewrite !fmap_app in Hr''; simplify_list_equality.
       right. split; auto. rewrite <-!(associative_L (++)).
@@ -451,12 +451,14 @@ Qed.
 Lemma ref_disjoint_singleton rs1 rs2 : [rs1] ⊥ [rs2] ↔ rs1 ⊥ rs2.
 Proof.
   rewrite ref_disjoint_alt. split.
-  * by intros ([]&?&?&[]&?&?&?&?&?&?); simplify_list_equality.
+  * by intros ([]&?&?&[]&?&?&?&?&?&?); simplify_list_equality;
+      try discriminate_list_equality.
   * intros. by eexists [], rs1, [], [], rs2, [].
 Qed.
 Lemma ref_disjoint_nil_inv_l r : ¬[] ⊥ r.
 Proof.
-  rewrite ref_disjoint_alt. intros (?&?&?&?&?&?&?&_); simplify_list_equality.
+  rewrite ref_disjoint_alt. intros (?&?&?&?&?&?&?&_); simplify_list_equality;
+    discriminate_list_equality.
 Qed.
 Lemma ref_disjoint_nil_inv_r r : ¬r ⊥ [].
 Proof. intros ?. by apply (ref_disjoint_nil_inv_l r). Qed.
@@ -683,7 +685,7 @@ Proof.
     destruct r2 as [|rs2 r2 _] using rev_ind; [by do 2 right; left|].
     rewrite ref_typed_snoc in Hr2; destruct Hr2 as (σ2'&Hrs2&Hr2).
     rewrite fmap_app in Hr2F. destruct Hrs1 as [? i1 n|s i1|s i1 ?];
-      inversion Hrs2 as [? i2|? i2|? i2 []]; simplify_list_equality'.
+      inversion Hrs2 as [? i2|? i2|? i2 []]; simplify_list_equality.
     * by right; left; exists i2 r2.
     * destruct (decide (i1 = i2)) as [->|]; [by right; left; exists 0 r2|].
       left. intros _ ?. destruct r2; simpl; [by repeat constructor|].

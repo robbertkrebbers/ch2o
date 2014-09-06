@@ -306,7 +306,7 @@ a list equality involving [(::)] and [(++)] of two lists that have a different
 length as one of its hypotheses. *)
 Tactic Notation "discriminate_list_equality" hyp(H) :=
   apply (f_equal length) in H;
-  repeat (simpl in H || rewrite app_length in H); exfalso; lia.
+  repeat (csimpl in H || rewrite app_length in H); exfalso; lia.
 Tactic Notation "discriminate_list_equality" :=
   match goal with
   | H : @eq (list _) _ _ |- _ => discriminate_list_equality H
@@ -324,19 +324,16 @@ Proof.
   intros ? Hl. apply app_injective_1; auto.
   apply (f_equal length) in Hl. rewrite !app_length in Hl. lia.
 Qed.
-Ltac simplify_list_equality :=
+Ltac simple_simplify_list_equality :=
   repeat match goal with
-  | _ => progress simplify_equality
+  | _ => progress simplify_equality'
   | H : _ ++ _ = _ ++ _ |- _ => first
     [ apply app_inv_head in H | apply app_inv_tail in H
     | apply app_injective_1 in H; [destruct H|done]
     | apply app_injective_2 in H; [destruct H|done] ]
   | H : [?x] !! ?i = Some ?y |- _ =>
     destruct i; [change (Some x = Some y) in H | discriminate]
-  end;
-  try discriminate_list_equality.
-Ltac simplify_list_equality' :=
-  repeat (progress simpl in * || simplify_list_equality).
+  end.
 
 (** * General theorems *)
 Section general_properties.
@@ -1358,7 +1355,7 @@ Proof. by rewrite prefix_suffix_reverse, !reverse_involutive. Qed.
 Lemma suffix_of_nil l : [] `suffix_of` l.
 Proof. exists l. by rewrite (right_id_L [] (++)). Qed.
 Lemma suffix_of_nil_inv l : l `suffix_of` [] → l = [].
-Proof. by intros [[|?] ?]; simplify_list_equality. Qed.
+Proof. by intros [[|?] ?]; simple_simplify_list_equality. Qed.
 Lemma suffix_of_cons_nil_inv x l : ¬x :: l `suffix_of` [].
 Proof. by intros [[] ?]. Qed.
 Lemma suffix_of_snoc l1 l2 x :
@@ -1375,19 +1372,20 @@ Proof. intros ->. apply suffix_of_app. Qed.
 Lemma suffix_of_snoc_inv_1 x y l1 l2 :
   l1 ++ [x] `suffix_of` l2 ++ [y] → x = y.
 Proof.
-  intros [k' E]. rewrite (associative_L (++)) in E. by simplify_list_equality.
+  intros [k' E]. rewrite (associative_L (++)) in E.
+  by simple_simplify_list_equality.
 Qed.
 Lemma suffix_of_snoc_inv_2 x y l1 l2 :
   l1 ++ [x] `suffix_of` l2 ++ [y] → l1 `suffix_of` l2.
 Proof.
   intros [k' E]. exists k'. rewrite (associative_L (++)) in E.
-  by simplify_list_equality.
+  by simple_simplify_list_equality.
 Qed.
 Lemma suffix_of_app_inv l1 l2 k :
   l1 ++ k `suffix_of` l2 ++ k → l1 `suffix_of` l2.
 Proof.
   intros [k' E]. exists k'. rewrite (associative_L (++)) in E.
-  by simplify_list_equality.
+  by simple_simplify_list_equality.
 Qed.
 Lemma suffix_of_cons_l l1 l2 x : x :: l1 `suffix_of` l2 → l1 `suffix_of` l2.
 Proof. intros [k ->]. exists (k ++ [x]). by rewrite <-(associative_L (++)). Qed.
@@ -1550,7 +1548,7 @@ Proof.
   { by rewrite <-!(associative_L (++)). }
   rewrite sublist_app_l in Hl12. destruct Hl12 as (k1&k2&E&?&Hk2).
   destruct k2 as [|z k2] using rev_ind; [inversion Hk2|].
-  rewrite (associative_L (++)) in E. simplify_list_equality.
+  rewrite (associative_L (++)) in E; simple_simplify_list_equality.
   eauto using sublist_inserts_r.
 Qed.
 Global Instance: PartialOrder (@sublist A).
@@ -2341,14 +2339,30 @@ End Forall2_order.
 
 Section Forall3.
   Context {A B C} (P : A → B → C → Prop).
+  Hint Extern 0 (Forall3 _ _ _ _) => constructor.
   Lemma Forall3_app l1 k1 k1' l2 k2 k2' :
     Forall3 P l1 k1 k1' → Forall3 P l2 k2 k2' →
     Forall3 P (l1 ++ l2) (k1 ++ k2) (k1' ++ k2').
-  Proof. induction 1; simpl; [done|constructor]; auto. Qed.
+  Proof. induction 1; simpl; auto. Qed.
+  Lemma Forall3_cons_inv_m l y l2' k :
+    Forall3 P l (y :: l2') k → ∃ x l2 z k2,
+      l = x :: l2 ∧ k = z :: k2 ∧ P x y z ∧ Forall3 P l2 l2' k2.
+  Proof. inversion_clear 1; naive_solver. Qed.
+  Lemma Forall3_app_inv_m l l1' l2' k :
+    Forall3 P l (l1' ++ l2') k → ∃ l1 l2 k1 k2,
+      l = l1 ++ l2 ∧ k = k1 ++ k2 ∧ Forall3 P l1 l1' k1 ∧ Forall3 P l2 l2' k2.
+  Proof.
+    revert l k. induction l1' as [|x l1' IH]; simpl; inversion_clear 1.
+    * by repeat eexists; eauto.
+    * by repeat eexists; eauto.
+    * edestruct IH as (?&?&?&?&?&?&?&?); eauto; naive_solver.
+  Qed.
   Lemma Forall3_impl (Q : A → B → C → Prop) l l' k :
     Forall3 P l l' k → (∀ x y z, P x y z → Q x y z) → Forall3 Q l l' k.
-  Proof. intros Hl ?. induction Hl; constructor; auto. Defined.
+  Proof. intros Hl ?. induction Hl; auto. Defined.
   Lemma Forall3_length_lm l l' k : Forall3 P l l' k → length l = length l'.
+  Proof. by induction 1; f_equal'. Qed.
+  Lemma Forall3_length_lr l l' k : Forall3 P l l' k → length l = length k.
   Proof. by induction 1; f_equal'. Qed.
   Lemma Forall3_lookup_lmr l l' k i x y z :
     Forall3 P l l' k →
@@ -2379,7 +2393,7 @@ Section Forall3.
     (∀ x y z, l !! i = Some x → l' !! i = Some y → k !! i = Some z →
       P x y z → P (f x) (g y) z) →
     Forall3 P (alter f i l) (alter g i l') k.
-  Proof. intros Hl. revert i. induction Hl; intros [|]; constructor; auto. Qed.
+  Proof. intros Hl. revert i. induction Hl; intros [|]; auto. Qed.
 End Forall3.
 
 (** * Properties of the monadic operations *)
@@ -3080,9 +3094,9 @@ Ltac decompose_elem_of_list := repeat
   | H : _ ∈ _ :: _ |- _ => apply elem_of_cons in H; destruct H
   | H : _ ∈ _ ++ _ |- _ => apply elem_of_app in H; destruct H
   end.
-Ltac simplify_list_fmap_equality := repeat
+Ltac simplify_list_equality := repeat
   match goal with
-  | _ => progress simplify_equality
+  | _ => progress simple_simplify_list_equality
   | H : _ <$> _ = [] |- _ => apply fmap_nil_inv in H
   | H : [] = _ <$> _ |- _ => symmetry in H; apply fmap_nil_inv in H
   | H : _ <$> _ = _ :: _ |- _ =>
@@ -3091,10 +3105,6 @@ Ltac simplify_list_fmap_equality := repeat
   | H : _ <$> _ = _ ++ _ |- _ =>
     apply fmap_app_inv in H; destruct H as (?&?&?&?&?)
   | H : _ ++ _ = _ <$> _ |- _ => symmetry in H
-  end.
-Ltac simplify_zip_equality := repeat
-  match goal with
-  | _ => progress simplify_equality
   | H : zip_with _ _ _ = [] |- _ => apply zip_with_nil_inv in H; destruct H
   | H : [] = zip_with _ _ _ |- _ => symmetry in H
   | H : zip_with _ _ _ = _ :: _ |- _ =>
@@ -3116,15 +3126,17 @@ Ltac decompose_Forall_hyps := repeat
   | H : Forall2 _ ?l [] |- _ => apply Forall2_nil_inv_r in H; subst l
   | H : Forall2 _ (_ :: _) (_ :: _) |- _ =>
     apply Forall2_cons_inv in H; destruct H
-  | _ => progress simplify_equality'
-  | H : Forall2 _ (_ :: _) ?k |- _ =>
-    let k_hd := fresh k "_hd" in let k_tl := fresh k "_tl" in
-    apply Forall2_cons_inv_l in H; destruct H as (k_hd&k_tl&?&?&->);
-    rename k_tl into k
-  | H : Forall2 _ ?l (_ :: _) |- _ =>
-    let l_hd := fresh l "_hd" in let l_tl := fresh l "_tl" in
-    apply Forall2_cons_inv_r in H; destruct H as (l_hd&l_tl&?&?&->);
-    rename l_tl into l
+  | _ => progress simplify_list_equality
+  | H : Forall2 _ (_ :: _) ?k |- _ => first
+    [ let k_hd := fresh k "_hd" in let k_tl := fresh k "_tl" in
+      apply Forall2_cons_inv_l in H; destruct H as (k_hd&k_tl&?&?&->);
+      rename k_tl into k
+    | apply Forall2_cons_inv_l in H; destruct H as (?&?&?&?&?)]
+  | H : Forall2 _ ?l (_ :: _) |- _ => first
+    [ let l_hd := fresh l "_hd" in let l_tl := fresh l "_tl" in
+      apply Forall2_cons_inv_r in H; destruct H as (l_hd&l_tl&?&?&->);
+      rename l_tl into l
+    | apply Forall2_cons_inv_r in H; destruct H as (?&?&?&?&?)]
   | H : Forall2 _ (_ ++ _) (_ ++ _) |- _ =>
     apply Forall2_app_inv in H; [destruct H | first 
       [by eauto using Forall2_length | by symmetry; eauto using Forall2_length]]
@@ -3136,6 +3148,10 @@ Ltac decompose_Forall_hyps := repeat
     [ let l1 := fresh l "_1" in let l2 := fresh l "_2" in
       apply Forall2_app_inv_r in H; destruct H as (l1&l2&?&?&->)
     | apply Forall2_app_inv_r in H; destruct H as (?&?&?&?&?) ]
+  | H : Forall3 _ _ (_ :: _) _ |- _ =>
+    apply Forall3_cons_inv_m in H; destruct H as (?&?&?&?&?&?&?&?)
+  | H : Forall3 _ _ (_ ++ _) _ |- _ =>
+    apply Forall3_app_inv_m in H; destruct H as (?&?&?&?&?&?&?&?)
   | H : Forall ?P ?l, H1 : ?l !! _ = Some ?x |- _ =>
     (* to avoid some stupid loops, not fool proof *)
     unless (P x) by auto using Forall_app_2, Forall_nil_2;

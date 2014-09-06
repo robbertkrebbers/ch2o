@@ -224,8 +224,8 @@ Proof.
     intros [|i] pos al ?; simplify_equality'.
   { rewrite Nat.add_0_r. auto using Nat.divide_0_r. }
   rewrite Nat.add_assoc, (Nat.add_comm pos). apply IH; auto.
-  clear IH. destruct τs as [|τ2 τs]; simplify_list_equality'.
+  clear IH. destruct Hτs as [|τ2 τs]; simplify_list_equality.
   rewrite <-Nat.add_assoc, (Nat.add_comm _ pos), Nat.add_assoc.
-  decompose_Forall. by apply natural_padding_divide, natural_align_ne_0.
+  by apply natural_padding_divide, natural_align_ne_0.
 Qed.
 End natural_type_environment.

@@ -848,14 +848,13 @@ Proof.
   apply (cstep_focus_inv _ _ _ _ _ p); simpl; try solve_suffix_of.
   * intros E e1 v2 m2 Hvs ? _ _ _.
     simplify_list_subst_equality Hvs; [by inv_ehstep |].
-    simplify_zip_equality; simplify_list_subst_equality. inv_ehstep.
+    simplify_list_subst_equality. inv_ehstep.
   * intros E f' Ωs' vs' Hvs ? _ HP1 _; simplify_list_subst_equality Hvs.
     { edestruct (zip_with_inj EVal Ωs Ωs' vs vs'); eauto with congruence. }
-    simplify_zip_equality; simplify_list_subst_equality.
+    simplify_list_subst_equality.
   * intros E e1 Hvs ?? _ _ HP2.
     simplify_list_subst_equality Hvs; [eauto |].
-    simplify_zip_equality; simplify_list_subst_equality.
-    edestruct @is_redex_nf; eauto. constructor.
+    simplify_list_subst_equality. edestruct @is_redex_nf; eauto. constructor.
 Qed.
 Lemma cstep_ctx_irrel l l' k1 φ1 m1 k2 φ2 m2 :
   Γ\ δ ⊢ₛ State (k1 ++ l) φ1 m1 ⇒ State (k2 ++ l) φ2 m2 →
@@ -870,7 +869,8 @@ Proof.
     | H : ¬_\ get_stack (_ ++ _) ⊢ₕ safe _, _ |- _ =>
        erewrite get_stack_app in H by eapply Hstack
     | _ => do_cstep
-    | _ => destruct k2, k1; simplify_list_equality'
+    | H : _ :: _ = ?k ++ _ |- _ =>
+       destruct k; simplify_list_equality; try discriminate_list_equality
     end.
 Qed.
 Lemma cred_ctx_irrel l l' k φ m :
@@ -995,7 +995,7 @@ Lemma in_fun_ctx_r_inv k1 k2 Ek :
   k1 `suffix_of` k2 → in_fun_ctx k1 (Ek :: k2) → in_fun_ctx k1 k2.
 Proof.
   intros ? [l1 ->] [l2 [Hc1 Hc2]].
-  rewrite app_comm_cons in Hc2; simplify_list_equality; decompose_Forall_hyps.
+  rewrite app_comm_cons in Hc2; apply app_inv_tail in Hc2; decompose_Forall_hyps.
   by exists l1.
 Qed.
 Lemma in_fun_ctx_change k1 k2 Ek1 Ek2 :
@@ -1004,13 +1004,13 @@ Lemma in_fun_ctx_change k1 k2 Ek1 Ek2 :
 Proof.
   intros ? [[|Ek2' l1] ?] [l2 [Hc1 Hc2]]; [by eexists []|].
   destruct l2 as [|? l2]; decompose_Forall_hyps; [discriminate_list_equality|].
-  exists (Ek2' :: l2); auto.
+  exists (Ek2' :: l1); auto.
 Qed.
 Lemma in_fun_ctx_not_item_or_block k1 k2 Ek :
   ¬is_CStmt_or_CBlock Ek → k1 `suffix_of` k2 → ¬in_fun_ctx k1 (Ek :: k2).
 Proof.
-  intros ? [l1 ->] [l2 [Hc1 Hc2]].
-  rewrite app_comm_cons in Hc2; simplify_list_equality; by inversion Hc1.
+  intros ? [l1 ->] [l2 [Hc1 Hc2]]. by rewrite app_comm_cons in Hc2;
+    apply app_inv_tail in Hc2; decompose_Forall_hyps.
 Qed.
 Lemma cstep_bsteps_preserves_stmt_help n k1 d1 s1 m1 k2 d2 s2 m2 :
   Γ\ δ ⊢ₛ State k1 (Stmt d1 s1) m1 ⇒{k2}^n State k2 (Stmt d2 s2) m2 →
@@ -1030,7 +1030,7 @@ Proof.
   destruct (cstep_bsteps_subctx_cut_alt _ _ _ _ _ _ p2)
     as [p|(?&?&_&?&p3)]; clear p2.
   * destruct (cstep_in_ctx_bsteps _ _ _ _ p)
-      as [[??]|?]; by simplify_list_equality.
+      as [[??]|?]; by simplify_list_equality; discriminate_list_equality.
   * inv_csteps p3 as [| n4 ??? p4h p4]; [discriminate_list_equality|].
     inv_cstep p4h; try solve_cnf; first
     [ apply (IH _ (Nat_lt_succ_succ n4) _ _ _ _ p4);
