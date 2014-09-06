@@ -84,6 +84,13 @@ Definition map_Forall2 `{∀ A, Lookup K A (M A)} {A B}
   | None, Some y => Q y
   | None, None => True
   end.
+Definition map_Forall3 `{∀ A, Lookup K A (M A)} {A B C}
+    (R : A → B → C → Prop) (m1 : M A) (m2 : M B) (m3 : M C): Prop := ∀ i,
+  match m1 !! i, m2 !! i, m3 !! i with
+  | Some x, Some y, Some z => R x y z
+  | None, None, None => True
+  | _, _, _ => False
+  end.
 
 Instance map_disjoint `{∀ A, Lookup K A (M A)} {A} : Disjoint (M A) :=
   map_Forall2 (λ _ _, False) (λ _, True) (λ _, True).
