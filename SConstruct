@@ -2,9 +2,7 @@
 # This file is distributed under the terms of the BSD license.
 import os, glob, string
 
-env = DefaultEnvironment(
-	ENV = os.environ, tools=['default', 'Coq', 'Ocaml']
-)
+env = DefaultEnvironment(ENV = os.environ, tools=['default', 'Coq'])
 
 # Coq dependencies
 vs = glob.glob('*.v')
@@ -12,8 +10,13 @@ if os.system('coqdep ' + ' '.join(map(str, vs)) + ' -R . "" > deps'): Exit(2)
 ParseDepends('deps')
 
 # coq2html
-env.OcamlLex('utils/coq2html')
-env.OcamlProg('utils/coq2html', OCAMLFLAGS='str.cma')
+env.Command('./utils/coq2html.ml', 'utils/coq2html.mll',
+  'ocamllex -q $SOURCE -o $TARGET')
+t = env.Command('utils/coq2html', 'utils/coq2html.ml',
+  'ocamlopt -o $TARGET str.cmxa $SOURCE')
+Clean(t, 'utils/coq2html.o')
+Clean(t, 'utils/coq2html.cmi')
+Clean(t, 'utils/coq2html.cmx')
 
 # Coq files
 for v in vs:
