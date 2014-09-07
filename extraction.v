@@ -2,7 +2,6 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Import interpreter ExtrOcamlBasic ExtrOcamlString.
 
-Cd "extraction".
 Extraction Blacklist list.
-Recursive Extraction Library interpreter.
-Cd "..".
+Extraction "parser/Extraction.ml"
+  interpreter.interpreter_all interpreter.interpreter_rand.

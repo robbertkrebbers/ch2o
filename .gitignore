@@ -18,9 +18,11 @@ doc/*.html
 *.broken
 broken/*
 *.patch
-extraction/*.ml
-extraction/*.mli
+parser/Extraction.ml
+parser/Extraction.mli
 parser/Lexer.ml
 parser/Parser.ml
 parser/Parser.mli
+_build/
+ch2o
 
