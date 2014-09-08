@@ -28,7 +28,7 @@ for v in vs:
 
 # Parser
 main = env.Command('Main.native', '', 'ocamlbuild -j 2 -libs nums\
-  -I parser parser/Main.native && mv Main.native ch2o')
+  -pp \'grep -v "^#"\' -I parser parser/Main.native && mv Main.native ch2o')
 env.Depends(main, 'extraction.vo')
 
 # Coqidescript

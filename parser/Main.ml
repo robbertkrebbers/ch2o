@@ -1,5 +1,13 @@
 (* Copyright (c) 2012-2014, Freek Wiedijk. *)
 (* This file is distributed under the terms of the BSD license. *)
+#load "nums.cma";;
+#load "Cerrors.cmo";;
+#load "Cabs.cmo";;
+#load "Cabshelper.cmo";;
+#load "Parse_aux.cmo";;
+#load "Parser.cmo";;
+#load "Lexer.cmo";;
+#load "Extraction.cmo";;
 open Num
 open Format
 open Extraction
@@ -126,14 +134,12 @@ let pp_print_z fmt x =
       pp_print_string fmt "\"))"));
   pp_close_box fmt ()
 
-let print_nat x = pp_print_nat std_formatter x
-let print_n x = pp_print_n std_formatter x
-let print_z x = pp_print_z std_formatter x
-(*
+let print_nat = pp_print_nat std_formatter;;
 #install_printer print_nat;;
+let print_n = pp_print_n std_formatter;;
 #install_printer print_n;;
+let print_z = pp_print_z std_formatter;;
 #install_printer print_z;;
-*)
 
 let time f x =
   let start_time = Sys.time() in
