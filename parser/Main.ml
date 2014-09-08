@@ -12,6 +12,13 @@ open Num
 open Format
 open Extraction
 
+let col = ref 0
+let trace_width = ref 72
+let trace_printfs = ref true
+let choose_randomly = ref true
+let break_on_undef = ref false
+let printf_returns_int = ref true
+
 let cabs_of_file name =
   Cerrors.reset();
   let ic = open_in name in
@@ -176,7 +183,9 @@ let string_of_chars l =
   init 0 l; s
 
 let chars_of_string s =
-  let rec chars n = try String.get s n::chars (n + 1) with _ -> [] in
+  let l = String.length s in
+  let rec chars n =
+    if n < l then String.get s n::chars (n + 1) else [] in
   chars 0
 
 exception Unknown_expression of Cabs.expression
@@ -253,13 +262,31 @@ let split_sizeof x =
   | None -> (CTInt uchar,y)
   | Some t' -> (t',y)
 
+let length_of_format s =
+  let n = String.length s in
+  let rec length m =
+    if m >= n then 0 else
+    let c = String.get s m in if c <> '%' then 1 + length (m + 1) else
+    if m + 1 < n && String.get s (m + 1) = 'd' then length (m + 2) else
+    failwith "length_of_format" in 
+  length 0
+
+let printf_body i =
+  let len = nindex "len-%d" in
+  let rec body n a =
+    match a with
+    | [] -> CSReturn (Some (CEVar i))
+    | x::a' -> CSComp (CSDo (CEAssign (PreOp (ArithOp PlusOp), CEVar i,
+        CECall (len,[CEVar (n_of_int n)]))),body (n + 1) a') in
+  body 1
+
 let args_of_format s =
   let rec args_of_format' n m =
     try if String.get s n = '%' && String.get s (n + 1) = 'd' then
         (n_of_int m,CTInt int32_signed)::args_of_format' (n + 2) (m + 1)
       else args_of_format' (n + 1) m
     with Invalid_argument _ -> [] in
-  args_of_format' 0 0
+  args_of_format' 0 1
 
 let rec add_compound k0 n l =
    let k = CompoundDecl (k0,
@@ -323,6 +350,7 @@ and ctype_of_specifier x =
 and ctype_of_decl_type t x =
   match x with
   | Cabs.JUSTBASE -> t
+  | Cabs.PROTO (y,_,false) -> ctype_of_decl_type t y
   | Cabs.ARRAY (y,[],n) ->
       ctype_of_decl_type (CTArray (t,cexpr_of_expression n)) y
   | Cabs.PTR ([],y) ->
@@ -417,8 +445,15 @@ and cexpr_of_expression x =
   | Cabs.CALL (Cabs.VARIABLE "printf",
         Cabs.CONSTANT (Cabs.CONST_STRING s)::l) ->
       let f = nindex ("printf-"^s) in
+      let a = args_of_format s in
       the_printfs := !the_printfs@
-        [(f,FunDecl(args_of_format s,CTVoid,Some (CSSkip)))];
+        [(f,if !printf_returns_int then
+          let i = n_of_int 0 in
+          FunDecl (a,CTInt int32_signed,
+            Some (CSBlock (false,i,CTInt int32_signed,
+              Some (CEConst (int32_signed,z_of_int (length_of_format s))),
+            printf_body i a))) else
+          FunDecl (a,CTVoid,Some (CSSkip)))];
       the_formats := !the_formats@[(f,s)];
       CECall (f,List.map cexpr_of_expression l)
   | Cabs.CALL (Cabs.VARIABLE s,l) ->
@@ -503,6 +538,14 @@ let rec cstmt_of_statements l =
   | Cabs.NOP _::l' -> cstmt_of_statements l'
   | _ -> raise (Unknown_statement (List.hd l))
 
+let rec args_of_decl_type x =
+  match x with
+  | Cabs.PROTO (Cabs.JUSTBASE,a,false) -> a
+  | Cabs.ARRAY (y,[],_) -> args_of_decl_type y
+  | Cabs.PTR ([],y) -> args_of_decl_type y
+  | Cabs.PARENTYPE ([],y,[]) -> args_of_decl_type y
+  | _ -> failwith "args_of_decl_type"
+
 let args_of a =
   match a with
   | [([Cabs.SpecType Cabs.Tvoid],("",Cabs.JUSTBASE,[],_))] -> []
@@ -523,10 +566,10 @@ let decls_of_definition x =
                GlobDecl (ctype_of_specifier_decl_type t t',
                  decl_of_init_expression z))
         | _ -> failwith "decls_of_definition 1") l
-  | Cabs.FUNDEF ((t,(s,Cabs.PROTO (t',a,false),[],_)),
+  | Cabs.FUNDEF ((t,(s,t',[],_)),
         {Cabs.bstmts = l},_,_) ->
       [(nindex s,
-        FunDecl (args_of a,
+        FunDecl (args_of (args_of_decl_type t'),
           ctype_of_specifier_decl_type t t',
           Some (cstmt_of_statements l)))]
   | Cabs.ONLYTYPEDEF (t,_) ->
@@ -540,12 +583,30 @@ let decls_of_definition x =
         | _ -> failwith "decls_of_definition 1") l
   | _ -> raise (Unknown_definition x)
 
+let printf_prelude () =
+  try let len = nindex "len-%d" in
+    let i = n_of_int 0 and n = n_of_int 1 in [(len,
+    FunDecl ([(i, CTInt int32_signed)],CTInt int32_signed,Some
+     (CSBlock (false,n,CTInt int32_signed,Some econst0,
+      CSComp (CSIf (CEBinOp (CompOp EqOp,CEVar i,econst0),
+        CSReturn (Some econst1),CSSkip),
+      CSComp (CSIf (CEBinOp (CompOp LtOp,CEVar i,econst0),
+        CSComp (CSDo (CEAssign (PostOp (ArithOp PlusOp),CEVar n,econst1)),
+        CSDo (CEAssign (PreOp (ArithOp MultOp),CEVar i,econst (Int (-1))))),
+        CSSkip),
+      CSComp (CSWhile (CEBinOp (CompOp LtOp,econst0,CEVar i),
+        CSComp (CSDo (CEAssign (PostOp (ArithOp PlusOp),CEVar n,econst1)),
+        CSDo (CEAssign (PreOp (ArithOp DivOp),CEVar i,econst (Int 10))))),
+      CSReturn (Some (CEVar n)))))))))]
+  with Not_found -> []
+
 let decls_of_cabs x =
   the_ids := [];
   the_formats := [];
   the_compound_decls := [];
   the_printfs := [];
   let decls = List.flatten (List.map decls_of_definition x) in
+  (the_printfs := printf_prelude ()@ !the_printfs);
   (!the_ids,(nindex "main",!the_compound_decls@ !the_printfs@decls))
 
 let decls_of_file x =
@@ -558,27 +619,28 @@ exception CH2O_exited of num
 let rec align_base x =
   match x with
   | TInt {rank = n} -> shiftl0 (S O) n
-  | TPtr _ -> nat_of_int 4
+  | TPtr _  -> nat_of_int 4
   | TVoid -> nat_of_int 1
 
-let string_of_format s l =
-  let rec string_of_format' n l =
+let chars_of_format s l =
+  let rec chars_of_format' n l =
     try let c = String.get s n in
       if c = '%' && String.get s (n + 1) = 'd' then
-        string_of_num (List.hd l)^string_of_format' (n + 2) (List.tl l)
-      else String.make 1 c^string_of_format' (n + 1) l
-    with Invalid_argument _ -> "" in
-  string_of_format' 0 l
+        chars_of_string (string_of_num (List.hd l))@
+        chars_of_format' (n + 2) (List.tl l)
+      else c::chars_of_format' (n + 1) l
+    with Invalid_argument _ -> [] in
+  chars_of_format' 0 l
 
 let event_of_state x =
   match x.sFoc with
   | Call (f,l) ->
      (try let fmt = List.assoc f !the_formats in
-        [string_of_format fmt
+        chars_of_format fmt
           (List.map (fun y ->
              match y with
              | VBase (VInt (_,n)) -> num_of_z n
-             | _ -> failwith "event_of_state") l)]
+             | _ -> failwith "event_of_state") l)
       with Not_found -> [])
   | _ -> []
 
@@ -594,9 +656,10 @@ let graph_of_cabs x =
 let graph_of_file x =
   graph_of_decls (decls_of_file x)
 
-let rand_nat x = nat_of_int (Random.int (int_of_nat x))
-let first_nat x = nat_of_int 0
-let choose = ref rand_nat
+let choose =
+  ref (fun x -> if !choose_randomly
+    then nat_of_int (Random.int (int_of_nat x))
+    else nat_of_int 0)
 
 let stream_of_decls (ids,(m,x)) =
   match interpreter_rand true (nat_of_int 8) (fun x -> nat_of_int 4) align_base
@@ -610,18 +673,13 @@ let stream_of_cabs x =
 let stream_of_file x =
   stream_of_decls (decls_of_file x)
 
-let col = ref 0
-let break_on_undef = ref false
-let trace_printfs = ref true
-let trace_width = 72
-
 let rec print_states ids l =
   match l with
   | [] -> print_string "\n"; col := 0
   | {events_all = e; sem_state = s}::l' ->
       (match s.sFoc with
        | Return (f,VBase (VInt (_,y))) ->
-           let e' = String.escaped (List.fold_right (^) e "") in
+           let e' = String.escaped (string_of_chars e) in
            print_string "\"";
            print_string e';
            print_string "\" ";
@@ -671,14 +729,14 @@ let trace_graph (ids,x) =
         (if !col > 0 then print_string "\n"; print_states ids s2; col := 0));
       (if s1 <> [] then
         let c = find_symbol (List.length s1) symbols in
-        (if !col >= trace_width then (print_string "\n"; col := 0));
+        (if !col >= !trace_width then (print_string "\n"; col := 0));
         print_string c; col := !col + 1;
         let e = uniq (List.filter ((<>) "") (List.map (fun x ->
-          String.escaped (List.fold_right (^) x.events_new "")) s1)) in
+          String.escaped (string_of_chars x.events_new)) s1)) in
         if !trace_printfs && e <> [] then
           (let s = "<"^string_of_events e^">" in
            let n = String.length s in
-           (if !col + n > trace_width then (print_string "\n"; col := 0));
+           (if !col + n > !trace_width then (print_string "\n"; col := 0));
            print_string s; col := !col + n));
       print_flush ();
       flush stdout;
@@ -699,8 +757,8 @@ let run_stream (ids,x) =
     while true do
       let Scons (s,x') = Lazy.force !h in
      (match s with
-      | Inl {events_new = e} -> print_string (List.fold_right (^) e "")
-      | Inr {events_all = e; sem_state = s} ->
+      | Inl {events_new = e} -> print_string (string_of_chars e)
+      | Inr {sem_state = s} ->
          (match s.sFoc with
           | Return (f,VBase (VInt (_,y))) -> raise (CH2O_exited (num_of_z y))
           | Undef y -> raise (CH2O_undef y)
@@ -721,15 +779,18 @@ let main () =
   try if Array.length Sys.argv < 2 then raise Not_found else
     if Sys.argv.(1) = "-t" then
       if Array.length Sys.argv <> 3 then raise Not_found else
-      (trace_file Sys.argv.(2); 0)
+      (trace_printfs := false; trace_file Sys.argv.(2); 0)
+    else if Sys.argv.(1) = "-T" then
+      if Array.length Sys.argv <> 3 then raise Not_found else
+      (trace_printfs := true; trace_file Sys.argv.(2); 0)
     else if Sys.argv.(1) = "-r" then
       if Array.length Sys.argv <> 3 then raise Not_found else
-      (choose := rand_nat; run_file Sys.argv.(2))
+      (choose_randomly := true; run_file Sys.argv.(2))
     else
       if Array.length Sys.argv <> 2 then raise Not_found else
-      (choose := first_nat; run_file Sys.argv.(1))
+      (choose_randomly := false; run_file Sys.argv.(1))
   with Not_found -> output_string stderr
-    ("Usage: " ^ Filename.basename(Sys.argv.(0)) ^ " [-r | -t] filename\n");
+    ("Usage: "^Filename.basename(Sys.argv.(0))^" [-r | -t | -T] filename\n");
     64
 
 let interactive () =
