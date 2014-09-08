@@ -22,7 +22,7 @@ Inductive cexpr : Set :=
   | CEAddrOf : cexpr → cexpr
   | CEDeref : cexpr → cexpr
   | CEAssign : assign → cexpr → cexpr → cexpr
-  | CECall : N → list (cexpr) → cexpr
+  | CECall : N → list cexpr → cexpr
   | CEAlloc : ctype → cexpr → cexpr
   | CEFree : cexpr → cexpr
   | CEUnOp : unop → cexpr → cexpr
@@ -280,7 +280,7 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
   | CEComma ce1 ce2 =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1;
      '(e2,τ2) ← to_R <$> to_expr Γn Γ Γf m xs ce2;
-     inr (e1,, e2, inr τ2)
+     inr (cast{voidT} e1,, e2, inr τ2)
   | CEAnd ce1 ce2 =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ Γf m xs ce1;
      _ ← error_of_option (maybe_TBase τ1) "first argument of && of non-base type";
@@ -404,7 +404,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti)
   match cs with
   | CSDo ce =>
      '(e,_) ← to_R <$> to_expr Γn Γ Γf m xs ce;
-     inr (m, Ls, !e, (false, None))
+     inr (m, Ls, !(cast{voidT} e), (false, None))
   | CSSkip => inr (m, Ls, skip, (false, None))
   | CSGoto l => inr (m, Ls, goto l, (true, None))
   | CSContinue =>
@@ -462,7 +462,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti)
      let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
      let Ls := {[ LC ; LB ]} ∪ Ls in
      '(m,Ls,s,cmσ) ← go m xs Ls (Some (LC,LB)) cs;
-     inr (m, Ls, !e1 ;; while{e2}
+     inr (m, Ls, !(cast{voidT} e1) ;; while{e2}
        (s;; label LC;; !e3);; label LB, (false, cmσ.2))
   | CSDoWhile cs ce =>
      let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in

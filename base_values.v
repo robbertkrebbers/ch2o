@@ -274,7 +274,9 @@ Section operations.
   Definition base_val_cast_ok (Γ : env Ti) (Γm : memenv Ti)
       (τb : base_type Ti) (vb : base_val Ti) : Prop :=
     match vb, τb with
-    | _, voidT => True
+    | (VVoid | VInt _ _ | VByte _), voidT => True
+    | VIndet τi, voidT => τi = ucharT
+    | VPtr p, voidT => ptr_alive Γm p
     | VInt _ x, intT τi => int_cast_ok τi x
     | VPtr p, τ.* => ptr_cast_ok Γ Γm τ p
     | VByte _, intT τi => τi = ucharT%IT
@@ -872,7 +874,9 @@ Lemma base_val_cast_ok_weaken Γ1 Γ2 Γm1 Γm2 vb τb σb :
   ✓ Γ1 → (Γ1,Γm1) ⊢ vb : τb → base_val_cast_ok Γ1 Γm1 σb vb →
   Γ1 ⊆ Γ2 → (∀ o : index, index_alive Γm1 o → index_alive Γm2 o) →
   base_val_cast_ok Γ2 Γm2 σb vb.
-Proof. destruct 2, σb; simpl; eauto using ptr_cast_ok_weaken. Qed.
+Proof.
+  destruct 2, σb; simpl; eauto using ptr_cast_ok_weaken, ptr_alive_weaken.
+Qed.
 Lemma base_val_cast_typed Γ Γm vb τb σb :
   ✓ Γ → (Γ,Γm) ⊢ vb : τb → base_cast_typed Γ τb σb →
   base_val_cast_ok Γ Γm σb vb → (Γ,Γm) ⊢ base_val_cast σb vb : σb.
@@ -890,8 +894,9 @@ Proof.
   * constructor. eapply ptr_cast_typed; eauto.
   * constructor. eapply ptr_cast_typed; eauto.
 Qed.
-Lemma base_val_cast_ok_void Γ Γm vb : base_val_cast_ok Γ Γm voidT vb.
-Proof. by destruct vb. Qed.
+Lemma base_val_cast_ok_void Γ Γm vb :
+  (Γ,Γm) ⊢ vb : ucharT → base_val_cast_ok Γ Γm voidT vb.
+Proof. by inversion 1. Qed.
 Lemma base_val_cast_void vb : base_val_cast voidT vb = VVoid.
 Proof. by destruct vb. Qed.
 
@@ -963,7 +968,7 @@ Proof.
   { inversion 1; simpl; eauto using int_unsigned_pre_cast_ok,int_cast_ok_more. }
   destruct σb, 2; simpl; try naive_solver eauto using
     ptr_cast_ok_refine, ptr_cast_ok_alive, base_val_cast_ok_void,
-    int_unsigned_pre_cast_ok, int_cast_ok_more.
+    int_unsigned_pre_cast_ok, int_cast_ok_more, ptr_alive_refine.
 Qed.
 Lemma base_val_cast_refine Γ f Γm1 Γm2 vb1 vb2 τb σb :
   ✓ Γ → base_cast_typed Γ τb σb → base_val_cast_ok Γ Γm1 σb vb1 →
