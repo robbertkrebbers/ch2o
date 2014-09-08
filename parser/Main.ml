@@ -7,10 +7,10 @@
 #load "Parse_aux.cmo";;
 #load "Parser.cmo";;
 #load "Lexer.cmo";;
-#load "Extraction.cmo";;
+#load "Extracted.cmo";;
 open Num
 open Format
-open Extraction
+open Extracted
 
 let col = ref 0
 let trace_width = ref 72

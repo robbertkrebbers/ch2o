@@ -18,8 +18,8 @@ doc/*.html
 *.broken
 broken/*
 *.patch
-parser/Extraction.ml
-parser/Extraction.mli
+parser/Extracted.ml
+parser/Extracted.mli
 parser/Lexer.ml
 parser/Parser.ml
 parser/Parser.mli

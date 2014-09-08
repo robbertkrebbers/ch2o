@@ -3,5 +3,5 @@
 Require Import interpreter ExtrOcamlBasic ExtrOcamlString.
 
 Extraction Blacklist list.
-Extraction "parser/Extraction.ml"
+Extraction "parser/Extracted.ml"
   interpreter.interpreter_all interpreter.interpreter_rand.
