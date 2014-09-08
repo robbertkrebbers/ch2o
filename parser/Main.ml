@@ -364,6 +364,19 @@ and ctype_of_specifier_decl_type x y =
 and cexpr_of_expression x =
   match x with
   | Cabs.CONSTANT (Cabs.CONST_INT s) -> econst (num_of_string s)
+  | Cabs.VARIABLE "CHAR_BITS" -> CEBits uchar
+  | Cabs.VARIABLE "SCHAR_MIN" -> CEMin {sign = Signed; rank = nat_of_int 0}
+  | Cabs.VARIABLE "SCHAR_MAX" -> CEMax {sign = Signed; rank = nat_of_int 0}
+  | Cabs.VARIABLE "UCHAR_MAX" -> CEMax {sign = Unsigned; rank = nat_of_int 0}
+  | Cabs.VARIABLE "SHRT_MIN" -> CEMin {sign = Signed; rank = nat_of_int 1}
+  | Cabs.VARIABLE "SHRT_MAX" -> CEMax {sign = Signed; rank = nat_of_int 1}
+  | Cabs.VARIABLE "USHRT_MAX" -> CEMax {sign = Unsigned; rank = nat_of_int 1}
+  | Cabs.VARIABLE "INT_MIN" -> CEMin {sign = Signed; rank = nat_of_int 2}
+  | Cabs.VARIABLE "INT_MAX" -> CEMax {sign = Signed; rank = nat_of_int 2}
+  | Cabs.VARIABLE "UINT_MAX" -> CEMax {sign = Unsigned; rank = nat_of_int 2}
+  | Cabs.VARIABLE "LONG_MIN" -> CEMin {sign = Signed; rank = nat_of_int 2}
+  | Cabs.VARIABLE "LONG_MAX" -> CEMax {sign = Signed; rank = nat_of_int 2}
+  | Cabs.VARIABLE "ULONG_MAX" -> CEMax {sign = Unsigned; rank = nat_of_int 2}
   | Cabs.VARIABLE s -> CEVar (nindex s)
   | Cabs.UNARY (Cabs.MEMOF,y) ->
       CEDeref (cexpr_of_expression y)

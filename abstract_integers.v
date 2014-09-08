@@ -478,7 +478,24 @@ Qed.
 Lemma int_to_bits_signed_unsigned k x :
   0 ≤ x → int_to_bits (IntType Signed k) x = int_to_bits (IntType Unsigned k) x.
 Proof. unfold int_to_bits; simpl; case_decide; auto with lia. Qed.
-
+Lemma int_lower_lt_upper τi : int_lower τi < int_upper τi.
+Proof.
+  rewrite int_upper_lower. assert (0 < 2 ^ int_bits τi) by auto with zpos; lia.
+Qed.
+Lemma int_lower_typed τi : int_typed (int_lower τi) τi.
+Proof. pose proof (int_lower_lt_upper τi). split; lia. Qed.
+Lemma int_upper_typed τi : int_typed (int_upper τi - 1) τi.
+Proof. pose proof (int_lower_lt_upper τi). split; lia. Qed.
+Lemma int_bits_typed τi : int_typed (int_bits τi) τi.
+Proof.
+  split; [transitivity 0; auto with zpos|].
+  unfold int_upper; destruct (sign _); [|apply Z.pow_gt_lin_r; lia].
+  pose proof (int_bits_ge_8 τi) as Hτi; replace (int_bits τi : Z)
+    with (Z.succ (Z.succ (Z.succ (int_bits τi - 3)%nat))) by lia; clear Hτi.
+  rewrite Z.sub_1_r, Z.pred_succ.
+  induction (int_bits τi - 3)%nat as [|n IH]; [done|].
+  rewrite !Nat2Z.inj_succ, Z.pow_succ_r by auto with zpos; lia.
+Qed.
 Lemma int_pre_arithop_typed op x y τ :
   int_typed x τ → int_typed y τ →
   int_pre_arithop_ok op x y τ → int_typed (int_pre_arithop op x y τ) τ.

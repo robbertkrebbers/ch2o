@@ -11,6 +11,9 @@ Inductive cexpr (Ti : Set) : Set :=
   | CEVar : N → cexpr Ti
   | CEConst : int_type Ti → Z → cexpr Ti
   | CESizeOf : ctype Ti → cexpr Ti
+  | CEMin : int_type Ti → cexpr Ti
+  | CEMax : int_type Ti → cexpr Ti
+  | CEBits : int_type Ti → cexpr Ti
   | CEAddrOf : cexpr Ti → cexpr Ti
   | CEDeref : cexpr Ti → cexpr Ti
   | CEAssign : assign → cexpr Ti → cexpr Ti → cexpr Ti
@@ -37,6 +40,9 @@ with ctype (Ti : Set) : Set :=
 Arguments CEVar {_} _.
 Arguments CEConst {_} _ _.
 Arguments CESizeOf {_} _.
+Arguments CEMin {_} _.
+Arguments CEMax {_} _.
+Arguments CEBits {_} _.
 Arguments CEAddrOf {_} _.
 Arguments CEDeref {_} _.
 Arguments CEAssign {_} _ _ _.
@@ -238,6 +244,9 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      let sz := size_of Γ τ in
      guard (int_typed sz sptrT) with "argument of size of not in range";
      inr (# (intV{sptrT} sz), inr sptrT)
+  | CEMin τi => inr (#(intV{τi} (int_lower τi)), inr (intT τi))
+  | CEMax τi => inr (#(intV{τi} (int_upper τi - 1)), inr (intT τi))
+  | CEBits τi => inr (#(intV{τi} (int_bits τi)), inr (intT τi))
   | CEDeref ce =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      τp ← error_of_option (maybe_TBase τ ≫= maybe_TPtr)
@@ -507,7 +516,7 @@ Definition extend_funtypes (Γ : env Ti) (f : funname) (τs : list (type Ti))
      inr Γf
   | None =>
      guard (Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs)
-       with "function with argument of out of range type";
+       with "function with argument type that is out of range";
      inr (<[f:=(τs,τ)]>Γf)
   end.
 Definition to_enum (Γn : compound_env Ti)
@@ -590,6 +599,9 @@ Context {Ti : Set} (P : cexpr Ti → Prop) (Q : ctype Ti → Prop).
 Context (Pvar : ∀ x, P (CEVar x)).
 Context (Pconst : ∀ τi x, P (CEConst τi x)).
 Context (Psizeof : ∀ cτ, Q cτ → P (CESizeOf cτ)).
+Context (Pmin : ∀ τi, P (CEMin τi)).
+Context (Pmax : ∀ τi, P (CEMax τi)).
+Context (Pbits : ∀ τi, P (CEBits τi)).
 Context (Paddrof : ∀ ce, P ce → P (CEAddrOf ce)).
 Context (Pderef : ∀ ce, P ce → P (CEDeref ce)).
 Context (Passign : ∀ ass ce1 ce2, P ce1 → P ce2 → P (CEAssign ass ce1 ce2)).
@@ -618,6 +630,9 @@ Fixpoint cexpr_ind_alt ce : P ce :=
   | CEVar _ => Pvar _
   | CEConst _ _ => Pconst _ _
   | CESizeOf cτ => Psizeof _ (ctype_ind_alt cτ)
+  | CEMin _ => Pmin _
+  | CEMax _ => Pmax _
+  | CEBits _ => Pbits _
   | CEAddrOf ce => Paddrof _ (cexpr_ind_alt ce)
   | CEDeref ce => Pderef _ (cexpr_ind_alt ce)
   | CEAssign _ ce1 ce2 => Passign _ _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
@@ -846,7 +861,7 @@ Proof.
     | |- _ ⊢ _ : _ =>
        repeat typed_constructor; eauto using to_binop_expr_typed,
          to_if_expr_typed, var_lookup_typed, type_valid_ptr_type_valid,
-         lockset_empty_valid
+         lockset_empty_valid, int_lower_typed, int_upper_typed, int_bits_typed
     | |- ✓{_} _ =>
        repeat constructor; eauto using typedef_lookup_valid, TBase_valid_inv
     | |- ptr_type_valid _ _ =>
