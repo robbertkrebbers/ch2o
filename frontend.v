@@ -7,106 +7,65 @@ Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 Local Open Scope list_scope.
 
-Inductive cexpr (Ti : Set) : Set :=
-  | CEVar : N → cexpr Ti
-  | CEConst : int_type Ti → Z → cexpr Ti
-  | CESizeOf : ctype Ti → cexpr Ti
-  | CEMin : int_type Ti → cexpr Ti
-  | CEMax : int_type Ti → cexpr Ti
-  | CEBits : int_type Ti → cexpr Ti
-  | CEAddrOf : cexpr Ti → cexpr Ti
-  | CEDeref : cexpr Ti → cexpr Ti
-  | CEAssign : assign → cexpr Ti → cexpr Ti → cexpr Ti
-  | CECall : N → list (cexpr Ti) → cexpr Ti
-  | CEAlloc : ctype Ti → cexpr Ti → cexpr Ti
-  | CEFree : cexpr Ti → cexpr Ti
-  | CEUnOp : unop → cexpr Ti → cexpr Ti
-  | CEBinOp : binop → cexpr Ti → cexpr Ti → cexpr Ti
-  | CEIf : cexpr Ti → cexpr Ti → cexpr Ti → cexpr Ti
-  | CEComma : cexpr Ti → cexpr Ti → cexpr Ti
-  | CEAnd : cexpr Ti → cexpr Ti → cexpr Ti
-  | CEOr : cexpr Ti → cexpr Ti → cexpr Ti
-  | CECast : ctype Ti → cexpr Ti → cexpr Ti
-  | CEField : cexpr Ti → N → cexpr Ti
-with ctype (Ti : Set) : Set :=
-  | CTVoid : ctype Ti
-  | CTDef : N → ctype Ti
-  | CTEnum : N → ctype Ti
-  | CTInt : int_type Ti → ctype Ti
-  | CTPtr : ctype Ti → ctype Ti
-  | CTArray : ctype Ti → cexpr Ti → ctype Ti
-  | CTCompound : compound_kind → N → ctype Ti
-  | CTTypeOf : cexpr Ti → ctype Ti.
-Arguments CEVar {_} _.
-Arguments CEConst {_} _ _.
-Arguments CESizeOf {_} _.
-Arguments CEMin {_} _.
-Arguments CEMax {_} _.
-Arguments CEBits {_} _.
-Arguments CEAddrOf {_} _.
-Arguments CEDeref {_} _.
-Arguments CEAssign {_} _ _ _.
-Arguments CECall {_} _ _.
-Arguments CEAlloc {_} _ _.
-Arguments CEFree {_} _.
-Arguments CEUnOp {_} _ _.
-Arguments CEBinOp {_} _ _ _.
-Arguments CEIf {_} _ _ _.
-Arguments CEComma {_} _ _.
-Arguments CEAnd {_} _ _.
-Arguments CEOr {_} _ _.
-Arguments CECast {_} _ _.
-Arguments CEField {_} _ _.
-Arguments CTArray {_} _ _.
-Arguments CTCompound {_} _ _.
-Arguments CTVoid {_}.
-Arguments CTDef {_} _.
-Arguments CTEnum {_} _.
-Arguments CTInt {_} _.
-Arguments CTPtr {_} _.
-Arguments CTTypeOf {_} _.
+Inductive cint_rank : Set :=
+  | CCharRank | CShortRank | CIntRank | CLongRank : nat → cint_rank | CPtrRank.
+Inductive cint_type :=
+  CIntType { csign : signedness; crank : cint_rank }.
 
-Inductive cstmt (Ti : Set) : Set :=
-  | CSDo : cexpr Ti → cstmt Ti
-  | CSSkip : cstmt Ti
-  | CSGoto : labelname → cstmt Ti
-  | CSBreak : cstmt Ti
-  | CSContinue : cstmt Ti
-  | CSReturn : option (cexpr Ti) → cstmt Ti
+Inductive cexpr : Set :=
+  | CEVar : N → cexpr
+  | CEConst : cint_type → Z → cexpr
+  | CESizeOf : ctype → cexpr
+  | CEMin : cint_type → cexpr
+  | CEMax : cint_type → cexpr
+  | CEBits : cint_type → cexpr
+  | CEAddrOf : cexpr → cexpr
+  | CEDeref : cexpr → cexpr
+  | CEAssign : assign → cexpr → cexpr → cexpr
+  | CECall : N → list (cexpr) → cexpr
+  | CEAlloc : ctype → cexpr → cexpr
+  | CEFree : cexpr → cexpr
+  | CEUnOp : unop → cexpr → cexpr
+  | CEBinOp : binop → cexpr → cexpr → cexpr
+  | CEIf : cexpr → cexpr → cexpr → cexpr
+  | CEComma : cexpr → cexpr → cexpr
+  | CEAnd : cexpr → cexpr → cexpr
+  | CEOr : cexpr → cexpr → cexpr
+  | CECast : ctype → cexpr → cexpr
+  | CEField : cexpr → N → cexpr
+with ctype : Set :=
+  | CTVoid : ctype
+  | CTDef : N → ctype
+  | CTEnum : N → ctype
+  | CTInt : cint_type → ctype
+  | CTPtr : ctype → ctype
+  | CTArray : ctype → cexpr → ctype
+  | CTCompound : compound_kind → N → ctype
+  | CTTypeOf : cexpr → ctype.
+
+Inductive cstmt : Set :=
+  | CSDo : cexpr → cstmt
+  | CSSkip : cstmt
+  | CSGoto : labelname → cstmt
+  | CSBreak : cstmt
+  | CSContinue : cstmt
+  | CSReturn : option cexpr → cstmt
   (* true = static, false = not static *)
-  | CSBlock : bool → N → ctype Ti → option (cexpr Ti) → cstmt Ti → cstmt Ti
-  | CSTypeDef : N → ctype Ti → cstmt Ti → cstmt Ti
-  | CSComp : cstmt Ti → cstmt Ti → cstmt Ti
-  | CSLabel : labelname → cstmt Ti → cstmt Ti
-  | CSWhile : cexpr Ti → cstmt Ti → cstmt Ti
-  | CSFor : cexpr Ti → cexpr Ti → cexpr Ti → cstmt Ti → cstmt Ti
-  | CSDoWhile : cstmt Ti → cexpr Ti → cstmt Ti
-  | CSIf : cexpr Ti → cstmt Ti → cstmt Ti → cstmt Ti.
-Arguments CSDo {_} _.
-Arguments CSSkip {_}.
-Arguments CSGoto {_} _.
-Arguments CSBreak {_}.
-Arguments CSContinue {_}.
-Arguments CSReturn {_} _.
-Arguments CSBlock {_} _ _ _ _ _.
-Arguments CSTypeDef {_} _ _ _.
-Arguments CSComp {_} _ _.
-Arguments CSLabel {_} _ _.
-Arguments CSWhile {_} _ _.
-Arguments CSFor {_} _ _ _ _.
-Arguments CSDoWhile {_} _ _.
-Arguments CSIf {_} _ _ _.
+  | CSBlock : bool → N → ctype → option cexpr → cstmt → cstmt
+  | CSTypeDef : N → ctype → cstmt → cstmt
+  | CSComp : cstmt → cstmt → cstmt
+  | CSLabel : labelname → cstmt → cstmt
+  | CSWhile : cexpr → cstmt → cstmt
+  | CSFor : cexpr → cexpr → cexpr → cstmt → cstmt
+  | CSDoWhile : cstmt → cexpr → cstmt
+  | CSIf : cexpr → cstmt → cstmt → cstmt.
 
-Inductive decl (Ti : Set) : Set :=
-  | CompoundDecl : compound_kind → list (N * ctype Ti) → decl Ti
-  | EnumDecl : int_type Ti → list (N * option (cexpr Ti)) → decl Ti
-  | TypeDefDecl : ctype Ti → decl Ti
-  | GlobDecl : ctype Ti → option (cexpr Ti) → decl Ti
-  | FunDecl : list (N * ctype Ti) → ctype Ti → option (cstmt Ti) → decl Ti.
-Arguments CompoundDecl {_} _ _.
-Arguments TypeDefDecl {_} _.
-Arguments GlobDecl {_} _ _.
-Arguments FunDecl {_} _ _ _.
+Inductive decl : Set :=
+  | CompoundDecl : compound_kind → list (N * ctype) → decl
+  | EnumDecl : cint_type → list (N * option cexpr) → decl
+  | TypeDefDecl : ctype → decl
+  | GlobDecl : ctype → option cexpr → decl
+  | FunDecl : list (N * ctype) → ctype → option cstmt → decl.
 
 Inductive var_decl (Ti : Set) : Set :=
   | Global : index → type Ti → var_decl Ti
@@ -223,6 +182,16 @@ Definition to_binop_expr (op : binop)
     '(e1,e2,τ) ← convert_ptrs eτ1 eτ2;
     σ ← binop_type_of (CompOp EqOp) τ τ;
     Some (e1 @{op} e2, inr σ)).
+
+Definition to_inttype (cτi : cint_type) : int_type Ti :=
+  let (s,k) := cτi in
+  match k with
+  | CCharRank => IntType s char_rank
+  | CShortRank => IntType s short_rank
+  | CIntRank => IntType s int_rank
+  | CLongRank n => IntType s (long_rank n)
+  | CPtrRank => IntType s ptr_rank
+  end.
 End frontend.
 
 (* not in the section because of bug #3488 *)
@@ -232,11 +201,12 @@ Proof. solve_decision. Defined.
 
 Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
-    (ce : cexpr Ti) : string + expr Ti * lrtype Ti :=
+    (ce : cexpr) : string + expr Ti * lrtype Ti :=
   match ce with
   | CEVar x =>
      error_of_option (lookup_var x 0 xs) "variable not found"
-  | CEConst τi x =>
+  | CEConst cτi x =>
+     let τi := to_inttype cτi in
      guard (int_typed x τi) with "integer constant not in range";
      inr (# (intV{τi} x), inr (intT τi))
   | CESizeOf cτ =>
@@ -244,9 +214,15 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      let sz := size_of Γ τ in
      guard (int_typed sz sptrT) with "argument of size of not in range";
      inr (# (intV{sptrT} sz), inr sptrT)
-  | CEMin τi => inr (#(intV{τi} (int_lower τi)), inr (intT τi))
-  | CEMax τi => inr (#(intV{τi} (int_upper τi - 1)), inr (intT τi))
-  | CEBits τi => inr (#(intV{τi} (int_bits τi)), inr (intT τi))
+  | CEMin cτi =>
+     let τi := to_inttype cτi in
+     inr (#(intV{τi} (int_lower τi)), inr (intT τi))
+  | CEMax cτi =>
+     let τi := to_inttype cτi in
+     inr (#(intV{τi} (int_upper τi - 1)), inr (intT τi))
+  | CEBits cτi =>
+     let τi := to_inttype cτi in
+     inr (#(intV{τi} (int_bits τi)), inr (intT τi))
   | CEDeref ce =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      τp ← error_of_option (maybe_TBase τ ≫= maybe_TPtr)
@@ -351,7 +327,7 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
   end
 with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti)
-    (kind : to_type_kind) (cτ : ctype Ti) : string + type Ti :=
+    (kind : to_type_kind) (cτ : ctype) : string + type Ti :=
   match cτ with
   | CTVoid =>
      guard (kind ≠ to_Type false) with "non-void type expected";
@@ -364,7 +340,7 @@ with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      let s : tag := s in
      τi ← error_of_option (Γn !! s ≫= maybe_EnumType) "enum not found";
      inr (intT τi)
-  | CTInt τi => inr (intT τi)
+  | CTInt cτi => inr (intT (to_inttype cτi))
   | CTPtr cτ => τ ← to_type Γn Γ Γf m xs to_Ptr cτ; inr (τ.* )
   | CTArray cτ ce =>
      τ ← to_type Γn Γ Γf m xs (to_Type false) cτ;
@@ -389,7 +365,7 @@ with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
 Section frontend_more.
 Context `{Env Ti}.
 
-Global Instance cstmt_labels : Labels (cstmt Ti) :=
+Global Instance cstmt_labels : Labels cstmt :=
   fix go cs := let _ : Labels _ := @go in
   match cs with
   | CSDo _ | CSSkip | CSGoto _ | CSBreak | CSContinue | CSReturn _ => ∅
@@ -401,7 +377,7 @@ Global Instance cstmt_labels : Labels (cstmt Ti) :=
   end.
 Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (m : mem Ti) (xs : var_env Ti) (x : N) (τ : type Ti)
-    (mce : option (cexpr Ti)) : string + mem Ti * var_env Ti :=
+    (mce : option cexpr) : string + mem Ti * var_env Ti :=
   match mce with
   | Some ce =>
      guard (int_typed (size_of Γ τ) sptrT)
@@ -423,7 +399,7 @@ Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti)
 Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti)
     (Γf : funtypes Ti) (τret : type Ti) :
     mem Ti → var_env Ti → labelset → option (labelname * labelname) →
-    cstmt Ti → string + mem Ti * labelset * stmt Ti * rettype Ti :=
+    cstmt → string + mem Ti * labelset * stmt Ti * rettype Ti :=
   fix go m xs Ls mLcb cs {struct cs} :=
   match cs with
   | CSDo ce =>
@@ -521,7 +497,7 @@ Definition extend_funtypes (Γ : env Ti) (f : funname) (τs : list (type Ti))
   end.
 Definition to_enum (Γn : compound_env Ti)
     (Γ : env Ti) (Γf : funtypes Ti) (m : mem Ti) (τi : int_type Ti) :
-    var_env Ti → list (N * option (cexpr Ti)) → Z → string + var_env Ti :=
+    var_env Ti → list (N * option cexpr) → Z → string + var_env Ti :=
   fix go xs xces z :=
   match xces with
   | [] => inr xs
@@ -541,7 +517,7 @@ Definition to_enum (Γn : compound_env Ti)
   end.
 Fixpoint to_envs_go (Γn : compound_env Ti)
     (Γ : env Ti) (Γf : funtypes Ti) (δ : funenv Ti) (m : mem Ti) (xs : var_env Ti)
-    (Θ : list (N * decl Ti)) : string +
+    (Θ : list (N * decl)) : string +
     compound_env Ti * env Ti * funtypes Ti * funenv Ti * mem Ti * var_env Ti :=
   match Θ with
   | [] => inr (Γn,Γ,Γf,δ,m,xs)
@@ -553,8 +529,9 @@ Fixpoint to_envs_go (Γn : compound_env Ti)
      guard (NoDup ys) with "compound type with non-unique fields";
      guard (τs ≠ []) with "compound type should have atleast 1 field";
      to_envs_go (<[s:=CompoundType c ys]>Γn) (<[s:=τs]>Γ) Γf δ m xs Θ
-  | (s,EnumDecl τi yces) :: Θ =>
+  | (s,EnumDecl cτi yces) :: Θ =>
      let s : tag := s in
+     let τi := to_inttype cτi in
      guard (Γn !! s = None) with "enum type with previously declared name";
      xs' ← to_enum Γn Γ Γf m τi xs yces 0;
      to_envs_go (<[s:=EnumType τi]>Γn) Γ Γf δ m xs' Θ
@@ -586,7 +563,7 @@ Fixpoint to_envs_go (Γn : compound_env Ti)
      | None => to_envs_go Γn Γ Γf δ m xs Θ
      end
   end.
-Definition to_envs (Θ : list (N * decl Ti)) :  string +
+Definition to_envs (Θ : list (N * decl)) :  string +
     compound_env Ti * env Ti * funtypes Ti * funenv Ti * mem Ti * var_env Ti :=
   '(Γn,Γ,Γf,δ,m,xs) ← to_envs_go ∅ ∅ ∅ ∅ ∅ [] Θ;
   guard (dom funset Γf ⊆ dom funset δ)
@@ -595,7 +572,7 @@ Definition to_envs (Θ : list (N * decl Ti)) :  string +
 End frontend_more.
 
 Section cexpr_ind.
-Context {Ti : Set} (P : cexpr Ti → Prop) (Q : ctype Ti → Prop).
+Context (P : cexpr → Prop) (Q : ctype → Prop).
 Context (Pvar : ∀ x, P (CEVar x)).
 Context (Pconst : ∀ τi x, P (CEConst τi x)).
 Context (Psizeof : ∀ cτ, Q cτ → P (CESizeOf cτ)).
@@ -672,11 +649,11 @@ Implicit Types Γf : funtypes Ti.
 Implicit Types o : index.
 Implicit Types m : mem Ti.
 Implicit Types e : expr Ti.
-Implicit Types ce : cexpr Ti.
+Implicit Types ce : cexpr.
 Implicit Types s : stmt Ti.
 Implicit Types τi : int_type Ti.
 Implicit Types τ σ : type Ti.
-Implicit Types cτ : ctype Ti.
+Implicit Types cτ : ctype.
 Implicit Types τlr : lrtype Ti.
 
 Arguments to_R _ _ : simpl never.
@@ -1006,7 +983,7 @@ Lemma to_envs_go_typed Θ Γn Γ Γf δ m xs Γn' Γ' Γf' δ' m' xs' :
   (**i 5.) *) var_env_valid Γ' ('{m'}) xs'.
 Proof.
   revert Γn Γ Γf δ m xs.
-  induction Θ as [|[x [c cτys|τi yces|cτ|cτ mce|cτys cσ mcs]] Θ IH];
+  induction Θ as [|[x [c cτys|cτi yces|cτ|cτ mce|cτys cσ mcs]] Θ IH];
     intros Γn Γ Γf δ m xs ????? Hxs ?; simplify_equality'.
   * done.
   * destruct (mapM _ _) as [|τs] eqn:?; simplify_error_equality.
@@ -1018,10 +995,11 @@ Proof.
     + eauto using cmap_valid'_weaken, insert_subseteq.
     + eauto using Forall_impl, var_decl_valid_weaken, insert_subseteq.
   * repeat case_error_guard; simplify_equality'.
-    destruct (to_enum Γn Γ Γf m τi xs yces 0)
+    destruct (to_enum Γn Γ Γf m (to_inttype cτi) xs yces 0)
       as [|xs''] eqn:?; simplify_equality'.
-    destruct (to_enum_typed Γn Γ Γf m τi xs yces 0 xs''); eauto.
-    apply (IH (<[x:tag:=EnumType τi]> Γn) Γ Γf δ m xs''); eauto with congruence.
+    destruct (to_enum_typed Γn Γ Γf m (to_inttype cτi) xs yces 0 xs''); eauto.
+    apply (IH (<[x:tag:=EnumType (to_inttype cτi)]> Γn) Γ Γf δ m xs'');
+      eauto with congruence.
   * repeat case_error_guard; simplify_equality'.
     destruct (to_type _ _ _ _ _ _ _) as [τ|] eqn:?; simplify_equality'.
     apply (IH Γn Γ Γf δ m ((x, TypeDef t) :: xs)); auto.

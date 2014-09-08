@@ -19,7 +19,9 @@ Proof. solve_decision. Defined.
 
 Local Instance: IntCoding (irank be Csz) := {
   char_rank := IKind be Csz 0;
+  short_rank := IKind be Csz 1;
   int_rank := IKind be Csz 2;
+  long_rank n := IKind be Csz (2 + n);
   ptr_rank := IKind be Csz 3;
   char_bits := Csz;
   rank_size := λ k, 2 ^ ibytes_log2 k;

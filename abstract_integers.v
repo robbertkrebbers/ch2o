@@ -88,7 +88,9 @@ implementation's endianness. The function [deendianize] performs the inverse. *)
 Local Unset Elimination Schemes.
 Class IntCoding (Ti : Set) := {
   char_rank : Ti;
+  short_rank : Ti;
   int_rank : Ti;
+  long_rank : nat → Ti;
   ptr_rank : Ti;
   char_bits : nat;
   rank_size : Ti → nat;
@@ -98,7 +100,9 @@ Class IntCoding (Ti : Set) := {
 }.
 
 Arguments char_rank _ _ : simpl never.
+Arguments short_rank _ _ : simpl never.
 Arguments int_rank _ _ : simpl never.
+Arguments long_rank _ _ _ : simpl never.
 Arguments ptr_rank _ _ : simpl never.
 Arguments char_bits _ _ : simpl never.
 Arguments rank_size _ _ _ : simpl never.
@@ -243,7 +247,7 @@ wrap (as for example GCC with the -fno-strict-overflow flag does). When an
 operation is allowed by the C standard, the result of [int_binop τ op x y]
 should correspond to its specification by the standard. *)
 Class IntEnv (Ti : Set) := {
-  int_coding :>> IntCoding Ti;
+  int_coding :> IntCoding Ti;
   int_arithop_ok : arithop → Z → int_type Ti → Z → int_type Ti → Prop;
   int_arithop : arithop → Z → int_type Ti → Z → int_type Ti → Z;
   int_shiftop_ok : shiftop → Z → int_type Ti → Z → int_type Ti → Prop;

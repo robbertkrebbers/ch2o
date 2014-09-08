@@ -20,10 +20,13 @@ Proof. solve_decision. Defined.
 Section interpreter.
 Context (be : bool) (Csz : nat).
 Notation Ti := (irank be Csz).
-Context (ptr_size : type Ti → nat) (align_base : base_type Ti → nat).
-Context {E : Set} `{∀ ε1 ε2 : E, Decision (ε1 = ε2)}.
-Context (e : state Ti → list E).
+Context {E : Set} `{∀ ε1 ε2 : E, Decision (ε1 = ε2)} (e : state Ti → list E).
 
+Definition ptr_size (_ : type Ti) := rank_size (ptr_rank : Ti).
+Definition align_base (τb : base_type Ti) :=
+  match τb with
+  | voidT => 1 | intT τi => rank_size (rank τi) | τ.* => ptr_size τ
+  end%BT.
 Let interpreter_env := (natural_env ptr_size align_base).
 Existing Instance interpreter_env.
 
@@ -34,7 +37,7 @@ Definition cexec' (Γ : env Ti) (δ : funenv Ti)
     let εs_new := e S_new in IState εs_new (εs ++ εs_new) S_new
   ) <$> cexec Γ δ S.
 Definition interpreter_initial
-    (Θ : list (N * decl Ti)) (f : funname) (ces : list (cexpr Ti)) :
+    (Θ : list (N * decl)) (f : funname) (ces : list cexpr) :
     string + (env Ti * funenv Ti * istate Ti E) :=
   '(Γn,Γ,Γf,δ,m,xs) ← to_envs Θ;
   '(σs,_) ← error_of_option (Γf !! f)
@@ -62,7 +65,7 @@ Definition csteps_exec_all (Γ : env Ti) (δ : funenv Ti) :
   let nfs := listset_normalize hash (nexts ≫= snd) in
   (reds,nfs) :.: go reds.
 Definition interpreter_all
-    (Θ : list (N * decl Ti)) (f : funname) (ces : list (cexpr Ti)) :
+    (Θ : list (N * decl)) (f : funname) (ces : list cexpr) :
     string +
     stream (listset (istate Ti E) * listset (istate Ti E)) :=
   '(Γ,δ,iS) ← interpreter_initial Θ f ces;
@@ -80,7 +83,7 @@ Definition csteps_exec_rand (Γ : env Ti) (δ : funenv Ti) :
      inl next :.: go next
   end.
 Definition interpreter_rand
-    (Θ : list (N * decl Ti)) (f : funname) (ces : list (cexpr Ti)) :
+    (Θ : list (N * decl)) (f : funname) (ces : list cexpr) :
     string + stream (istate Ti E + istate Ti E) :=
   '(Γ,δ,iS) ← interpreter_initial Θ f ces;
   inr (csteps_exec_rand Γ δ iS).

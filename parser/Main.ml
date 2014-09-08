@@ -192,11 +192,11 @@ exception Unknown_expression of Cabs.expression
 exception Unknown_statement of Cabs.statement
 exception Unknown_spec_elem of Cabs.spec_elem
 exception Unknown_definition of Cabs.definition
-exception Incompatible_compound of n * irank decl * irank decl
+exception Incompatible_compound of n * decl * decl
 
 let the_ids = ref ([]:string list)
-let the_compound_decls = ref ([]:(n * irank decl) list)
-let the_printfs = ref ([]:(n * irank decl) list)
+let the_compound_decls = ref ([]:(n * decl) list)
+let the_printfs = ref ([]:(n * decl) list)
 let the_formats = ref ([]:(n * string) list)
 
 let nindex s =
@@ -206,10 +206,10 @@ let nindex s =
     the_ids := ids@[s];
     List.length ids)
 
-let int32_signed = {sign = Signed; rank = nat_of_int 2}
-let uchar = {sign = Unsigned; rank = nat_of_int 0}
+let int_signed = {csign = Signed; crank = CIntRank }
+let uchar = {csign = Unsigned; crank = CCharRank }
 
-let econst n = CEConst (int32_signed,z_of_num n)
+let econst n = CEConst (int_signed,z_of_num n)
 let econst0 = econst (Int 0)
 let econst1 = econst (Int 1)
 
@@ -283,7 +283,7 @@ let printf_body i =
 let args_of_format s =
   let rec args_of_format' n m =
     try if String.get s n = '%' && String.get s (n + 1) = 'd' then
-        (n_of_int m,CTInt int32_signed)::args_of_format' (n + 2) (m + 1)
+        (n_of_int m,CTInt int_signed)::args_of_format' (n + 2) (m + 1)
       else args_of_format' (n + 1) m
     with Invalid_argument _ -> [] in
   args_of_format' 0 1
@@ -306,16 +306,16 @@ and ctype_of_spec_elem x ty =
   match x with
   | Cabs.SpecType Cabs.Tvoid -> CTVoid
   | Cabs.SpecType Cabs.Tsigned ->
-      CTInt {sign = Signed; rank = (int_type_of ty).rank}
+      CTInt {csign = Signed; crank = (int_type_of ty).crank}
   | Cabs.SpecType Cabs.Tunsigned ->
-      CTInt {sign = Unsigned; rank = (int_type_of ty).rank}
+      CTInt {csign = Unsigned; crank = (int_type_of ty).crank}
   | Cabs.SpecType Cabs.Tchar ->
-      CTInt {sign = (int_type_of ty).sign; rank = nat_of_int 0}
+      CTInt {csign = (int_type_of ty).csign; crank = CCharRank }
   | Cabs.SpecType Cabs.Tshort ->
-      CTInt {sign = (int_type_of ty).sign; rank = nat_of_int 1}
+      CTInt {csign = (int_type_of ty).csign; crank = CShortRank}
   | Cabs.SpecType Cabs.Tint -> ty
   | Cabs.SpecType Cabs.Tlong ->
-      CTInt {sign = (int_type_of ty).sign; rank = nat_of_int 2}
+      CTInt {csign = (int_type_of ty).csign; crank = CLongRank (nat_of_int 0)}
   | Cabs.SpecType (Cabs.Tstruct (s,None,[])) ->
       CTCompound (Struct_kind,nindex s)
   | Cabs.SpecType (Cabs.Tunion (s,None,[])) ->
@@ -332,7 +332,7 @@ and ctype_of_spec_elem x ty =
       CTCompound (Union_kind,n)
   | Cabs.SpecType (Cabs.Tenum (s,Some l,[])) ->
       let n = nindex s in
-      let k = EnumDecl (int32_signed,List.map (fun (s,x,_) ->
+      let k = EnumDecl (int_signed,List.map (fun (s,x,_) ->
          (nindex s,
           match x with
           | Cabs.NOTHING -> None
@@ -345,7 +345,7 @@ and ctype_of_spec_elem x ty =
   | _ -> raise (Unknown_spec_elem x)
 
 and ctype_of_specifier x =
-  List.fold_right ctype_of_spec_elem x (CTInt int32_signed)
+  List.fold_right ctype_of_spec_elem x (CTInt int_signed)
 
 and ctype_of_decl_type t x =
   match x with
@@ -364,19 +364,23 @@ and ctype_of_specifier_decl_type x y =
 and cexpr_of_expression x =
   match x with
   | Cabs.CONSTANT (Cabs.CONST_INT s) -> econst (num_of_string s)
+  | Cabs.VARIABLE "NULL" -> CECast (CTPtr CTVoid,econst0)
   | Cabs.VARIABLE "CHAR_BITS" -> CEBits uchar
-  | Cabs.VARIABLE "SCHAR_MIN" -> CEMin {sign = Signed; rank = nat_of_int 0}
-  | Cabs.VARIABLE "SCHAR_MAX" -> CEMax {sign = Signed; rank = nat_of_int 0}
-  | Cabs.VARIABLE "UCHAR_MAX" -> CEMax {sign = Unsigned; rank = nat_of_int 0}
-  | Cabs.VARIABLE "SHRT_MIN" -> CEMin {sign = Signed; rank = nat_of_int 1}
-  | Cabs.VARIABLE "SHRT_MAX" -> CEMax {sign = Signed; rank = nat_of_int 1}
-  | Cabs.VARIABLE "USHRT_MAX" -> CEMax {sign = Unsigned; rank = nat_of_int 1}
-  | Cabs.VARIABLE "INT_MIN" -> CEMin {sign = Signed; rank = nat_of_int 2}
-  | Cabs.VARIABLE "INT_MAX" -> CEMax {sign = Signed; rank = nat_of_int 2}
-  | Cabs.VARIABLE "UINT_MAX" -> CEMax {sign = Unsigned; rank = nat_of_int 2}
-  | Cabs.VARIABLE "LONG_MIN" -> CEMin {sign = Signed; rank = nat_of_int 2}
-  | Cabs.VARIABLE "LONG_MAX" -> CEMax {sign = Signed; rank = nat_of_int 2}
-  | Cabs.VARIABLE "ULONG_MAX" -> CEMax {sign = Unsigned; rank = nat_of_int 2}
+  | Cabs.VARIABLE "SCHAR_MIN" -> CEMin { csign = Signed; crank = CCharRank }
+  | Cabs.VARIABLE "SCHAR_MAX" -> CEMax { csign = Signed; crank = CCharRank }
+  | Cabs.VARIABLE "UCHAR_MAX" -> CEMax { csign = Unsigned; crank = CCharRank }
+  | Cabs.VARIABLE "SHRT_MIN" -> CEMin { csign = Signed; crank = CShortRank }
+  | Cabs.VARIABLE "SHRT_MAX" -> CEMax { csign = Signed; crank = CShortRank }
+  | Cabs.VARIABLE "USHRT_MAX" -> CEMax { csign = Unsigned; crank = CShortRank }
+  | Cabs.VARIABLE "INT_MIN" -> CEMin { csign = Signed; crank = CIntRank }
+  | Cabs.VARIABLE "INT_MAX" -> CEMax { csign = Signed; crank = CIntRank }
+  | Cabs.VARIABLE "UINT_MAX" -> CEMax { csign = Unsigned; crank = CIntRank }
+  | Cabs.VARIABLE "LONG_MIN" ->
+     CEMin { csign = Signed; crank = CLongRank (nat_of_int 0) }
+  | Cabs.VARIABLE "LONG_MAX" ->
+     CEMax { csign = Signed; crank = CLongRank (nat_of_int 0) }
+  | Cabs.VARIABLE "ULONG_MAX" ->
+     CEMax { csign = Unsigned; crank = CLongRank (nat_of_int 0) }
   | Cabs.VARIABLE s -> CEVar (nindex s)
   | Cabs.UNARY (Cabs.MEMOF,y) ->
       CEDeref (cexpr_of_expression y)
@@ -462,9 +466,9 @@ and cexpr_of_expression x =
       the_printfs := !the_printfs@
         [(f,if !printf_returns_int then
           let i = n_of_int 0 in
-          FunDecl (a,CTInt int32_signed,
-            Some (CSBlock (false,i,CTInt int32_signed,
-              Some (CEConst (int32_signed,z_of_int (length_of_format s))),
+          FunDecl (a,CTInt int_signed,
+            Some (CSBlock (false,i,CTInt int_signed,
+              Some (CEConst (int_signed,z_of_int (length_of_format s))),
             printf_body i a))) else
           FunDecl (a,CTVoid,Some (CSSkip)))];
       the_formats := !the_formats@[(f,s)];
@@ -599,8 +603,8 @@ let decls_of_definition x =
 let printf_prelude () =
   try let len = nindex "len-%d" in
     let i = n_of_int 0 and n = n_of_int 1 in [(len,
-    FunDecl ([(i, CTInt int32_signed)],CTInt int32_signed,Some
-     (CSBlock (false,n,CTInt int32_signed,Some econst0,
+    FunDecl ([(i, CTInt int_signed)],CTInt int_signed,Some
+     (CSBlock (false,n,CTInt int_signed,Some econst0,
       CSComp (CSIf (CEBinOp (CompOp EqOp,CEVar i,econst0),
         CSReturn (Some econst1),CSSkip),
       CSComp (CSIf (CEBinOp (CompOp LtOp,CEVar i,econst0),
@@ -629,12 +633,6 @@ exception CH2O_error of string
 exception CH2O_undef of irank undef_state
 exception CH2O_exited of num
 
-let rec align_base x =
-  match x with
-  | TInt {rank = n} -> shiftl0 (S O) n
-  | TPtr _  -> nat_of_int 4
-  | TVoid -> nat_of_int 1
-
 let chars_of_format s l =
   let rec chars_of_format' n l =
     try let c = String.get s n in
@@ -658,7 +656,7 @@ let event_of_state x =
   | _ -> []
 
 let graph_of_decls (ids,(m,x)) =
-  match interpreter_all true (nat_of_int 8) (fun x -> nat_of_int 4) align_base
+  match interpreter_all true (nat_of_int 8)
     (=) event_of_state (fun x -> z_of_int (Hashtbl.hash x)) x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> (ids,y)
@@ -675,8 +673,7 @@ let choose =
     else nat_of_int 0)
 
 let stream_of_decls (ids,(m,x)) =
-  match interpreter_rand true (nat_of_int 8) (fun x -> nat_of_int 4) align_base
-    event_of_state !choose x m [] with
+  match interpreter_rand true (nat_of_int 8) event_of_state !choose x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> (ids,y)
 
