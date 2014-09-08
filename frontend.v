@@ -441,7 +441,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti)
   | CSBlock false x cτ (Some ce) cs =>
      τ ← to_type Γn Γ Γf m xs (to_Type false) cτ;
      guard (int_typed (size_of Γ τ) sptrT) with "block with out of range type";
-     '(e,τ') ← to_R <$> to_expr Γn Γ Γf m ((x,Local τ) :: xs) ce;
+     '(e,τ') ← to_R_NULL τ <$> to_expr Γn Γ Γf m ((x,Local τ) :: xs) ce;
      guard (cast_typed Γ τ' τ) with "block with initializer of incorrect type";
      '(m,Ls,s,cmσ) ← go m ((x,Local τ) :: xs) Ls mLcb cs;
      inr (m, Ls, blk{τ} (var{τ} 0 ::= e ;; s), cmσ)
@@ -710,8 +710,8 @@ Lemma var_env_stack_types_valid Γ Γm xs :
 Proof. induction 1 as [|[? []]]; simpl; auto. Qed.
 
 Lemma to_R_typed Γ Γf m τs e τlr e' τ' :
-  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs → to_R (e,τlr) = (e',τ') →
-  (Γ,Γf,'{m},τs) ⊢ e : τlr → (Γ,Γf,'{m},τs) ⊢ e' : inr τ'.
+  ✓ Γ → ✓{Γ} Γf → to_R (e,τlr) = (e',τ') → (Γ,Γf,'{m},τs) ⊢ e : τlr →
+  ✓{Γ}* τs → (Γ,Γf,'{m},τs) ⊢ e' : inr τ'.
 Proof.
   unfold to_R; intros; destruct τlr as [τl|τr]; simplify_equality'; auto.
   destruct (maybe_TArray τl) as [[τ n]|] eqn:Hτ; simplify_equality'.
@@ -721,12 +721,11 @@ Proof.
   by typed_constructor.
 Qed.
 Lemma to_R_NULL_typed Γ Γf m τs σ e τlr e' τ' :
-  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs →
-  to_R_NULL σ (e,τlr) = (e',τ') → ptr_type_valid Γ σ →
-  (Γ,Γf,'{m},τs) ⊢ e : τlr → (Γ,Γf,'{m},τs) ⊢ e' : inr τ'.
+  ✓ Γ → ✓{Γ} Γf → to_R_NULL σ (e,τlr) = (e',τ') → (Γ,Γf,'{m},τs) ⊢ e : τlr →
+  ✓{Γ}* τs → ptr_type_valid Γ σ → (Γ,Γf,'{m},τs) ⊢ e' : inr τ'.
 Proof.
   unfold to_R_NULL. destruct (to_R (e,τlr)) as [e'' τ''] eqn:?.
-  destruct 5 as [σb Hσb| |]; simplify_equality'; eauto 2 using to_R_typed.
+  destruct 6 as [σb Hσb| |]; simplify_equality'; eauto 2 using to_R_typed.
   destruct Hσb; repeat case_match; simplify_equality'; eauto 2 using to_R_typed.
   repeat typed_constructor; eauto using lockset_empty_valid.
 Qed.
@@ -926,6 +925,10 @@ Proof.
     | H: to_R _ = _, _ : (_,_,_,?τs) ⊢ _ : _ |- _ =>
        first_of ltac:(eapply (to_R_typed _ _ _ τs) in H) idtac
          ltac:(by eauto using var_env_stack_types_valid)
+    | H: to_R_NULL _ _ = _ |- _ =>
+       first_of ltac:(eapply to_R_NULL_typed in H) idtac
+         ltac:(by eauto using type_valid_ptr_type_valid,
+           var_env_stack_types_valid)
     | H : alloc_global _ _ _ _ _ _ _ _ = inr _ |- _ =>
        first_of ltac:(apply alloc_global_typed in H) idtac ltac:(by auto);
        destruct H as (?&?&?&?)
