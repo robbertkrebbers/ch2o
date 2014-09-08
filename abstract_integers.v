@@ -168,9 +168,9 @@ Section int_coding.
     | MultOp, Unsigned => True
       (* Can still overflow, e.g. [-10 `quot` -1 = 10]. Maybe a tighter
          condition is possible. *)
-    | DivOp, Signed => y ≠ 0 ∧ int_lower τ ≤ x `quot` y < int_upper τ
-    | DivOp, Unsigned => y ≠ 0
-    | ModOp, _ => y ≠ 0
+    | (DivOp | ModOp), Signed =>
+       y ≠ 0 ∧ int_lower τ ≤ x `quot` y < int_upper τ
+    | (DivOp | ModOp), Unsigned => y ≠ 0
     end.
   Definition int_pre_arithop (op : arithop) (x y : Z) (τ : int_type Ti) : Z :=
     match op, sign τ with
@@ -512,7 +512,7 @@ Proof.
   * intros Hy. unfold int_lower, int_upper in *. destruct (sign τ); [lia|].
     apply Z_quot_range_nonneg; auto with lia.
   * intros Hy. unfold int_lower, int_upper in *. destruct (sign τ).
-    + generalize (Z.rem_bound_abs x y Hy). destruct (decide (0 < y)).
+    + generalize (Z.rem_bound_abs x y (proj1 Hy)). destruct (decide (0 < y)).
       - rewrite (Z.abs_eq y), Z.abs_lt by lia. lia.
       - rewrite (Z.abs_neq y), Z.abs_lt by lia. lia.
     + split; [apply Z.rem_bound_pos; lia|].
