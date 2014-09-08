@@ -14,9 +14,9 @@ env.Command('./utils/coq2html.ml', 'utils/coq2html.mll',
   'ocamllex -q $SOURCE -o $TARGET')
 t = env.Command('utils/coq2html', 'utils/coq2html.ml',
   'ocamlopt -o $TARGET str.cmxa $SOURCE')
-Clean(t, 'utils/coq2html.o')
-Clean(t, 'utils/coq2html.cmi')
-Clean(t, 'utils/coq2html.cmx')
+env.Clean(t, 'utils/coq2html.o')
+env.Clean(t, 'utils/coq2html.cmi')
+env.Clean(t, 'utils/coq2html.cmx')
 
 # Coq files
 for v in vs:
@@ -30,6 +30,8 @@ for v in vs:
 main = env.Command('Main.native', '', 'ocamlbuild -j 2 -libs nums\
   -pp \'grep -v "^#"\' -I parser parser/Main.native parser/Main.byte &&\
   mv Main.native ch2o && mv Main.byte ch2o.byte')
+env.Clean('extraction.vo', 'parser/Extracted.ml')
+env.Clean('extraction.vo', 'parser/Extracted.mli')
 env.Depends(main, 'extraction.vo')
 
 # Coqidescript
