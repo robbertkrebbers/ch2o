@@ -492,17 +492,19 @@ and cexpr_of_expression x =
       CEFree (cexpr_of_expression y)
   | Cabs.CALL (Cabs.VARIABLE "printf",
         Cabs.CONSTANT (Cabs.CONST_STRING s)::l) ->
-      let f = nindex ("printf-"^s) in
+      let fs = "printf-"^s in
+      let fresh = not (List.mem fs !the_ids) in
+      let f = nindex fs in
       let a = args_of_format s in
-      the_printfs := !the_printfs@
+      (if fresh then (the_printfs := !the_printfs@
         [(f,if !printf_returns_int then
-          let i = n_of_int 0 in
-          FunDecl (a,ctint_signed,
-            Some (CSBlock (false,i,ctint_signed,
-              Some (CEConst (int_signed,z_of_int (length_of_format s))),
-            printf_body i a))) else
-          FunDecl (a,CTVoid,Some (CSSkip)))];
-      the_formats := !the_formats@[(f,s)];
+           (let i = n_of_int 0 in
+            FunDecl (a,ctint_signed,
+              Some (CSBlock (false,i,ctint_signed,
+                Some (CEConst (int_signed,z_of_int (length_of_format s))),
+              printf_body i a)))) else
+            FunDecl (a,CTVoid,Some (CSSkip)))];
+        the_formats := !the_formats@[(f,s)]));
       CECall (f,List.map cexpr_of_expression l)
   | Cabs.CALL (Cabs.VARIABLE s,l) ->
       CECall (nindex s,List.map cexpr_of_expression l)
