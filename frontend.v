@@ -228,7 +228,7 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      τp ← error_of_option (maybe_TBase τ ≫= maybe_TPtr)
        "dereferencing non-pointer type";
      guard (τp ≠ voidT) with "dereferencing pointer with void type";
-     guard (✓{Γ} τp) with "dereferencing pointer with incomplete type";
+     guard (type_complete Γ τp) with "dereferencing pointer with incomplete type";
      inr (.* e, inl τp)
   | CEAddrOf ce =>
      '(e,τlr) ← to_expr Γn Γ Γf m xs ce;
@@ -260,7 +260,8 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
      τp ← error_of_option (maybe_TBase τ ≫= maybe_TPtr)
        "free applied to argument of non-pointer type";
-     guard (✓{Γ} τp) with "free applied to argument of incomplete pointer type";
+     guard (type_complete Γ τp)
+       with "free applied to argument of incomplete pointer type";
      inr (free (.* e), inr voidT)
   | CEUnOp op ce =>
      '(e,τ) ← to_R <$> to_expr Γn Γ Γf m xs ce;
@@ -334,7 +335,8 @@ with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      inr voidT
   | CTDef x =>
      τ ← error_of_option (lookup_typedef x xs) "typedef not found";
-     guard (τ = voidT → kind ≠ to_Type false) with "non-void type expected";
+     guard (kind ≠ to_Ptr → type_complete Γ τ) with "complete typedef expected";
+     guard (τ = voidT → kind ≠ to_Type false) with "non-void typedef expected";
      inr τ
   | CTEnum s =>
      let s : tag := s in
@@ -435,7 +437,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti)
      '(m,xs) ← alloc_global Γn Γ Γf m xs x τ mce;
      go m xs Ls mLcb cs
   | CSTypeDef x cτ cs =>
-     τ ← to_type Γn Γ Γf m xs (to_Type true) cτ;
+     τ ← to_type Γn Γ Γf m xs to_Ptr cτ;
      go m ((x,TypeDef τ) :: xs) Ls mLcb cs
   | CSComp cs1 cs2 =>
      '(m,Ls,s1,cmσ1) ← go m xs Ls mLcb cs1;
@@ -537,7 +539,7 @@ Fixpoint to_envs_go (Γn : compound_env Ti)
      to_envs_go (<[s:=EnumType τi]>Γn) Γ Γf δ m xs' Θ
   | (x,TypeDefDecl cτ) :: Θ =>
      guard (var_fresh x xs) with "typedef with previously declared name";
-     τ ← to_type Γn Γ Γf m xs (to_Type true) cτ;
+     τ ← to_type Γn Γ Γf m xs to_Ptr cτ;
      to_envs_go Γn Γ Γf δ m ((x,TypeDef τ) :: xs) Θ
   | (x,GlobDecl cτ me) :: Θ =>
      guard (var_fresh x xs) with "global with previously declared name";
@@ -668,16 +670,17 @@ Definition var_decl_valid (Γ : env Ti) (Γm : memenv Ti) (d : var_decl Ti) :=
   | Global o τ => Γm ⊢ o : τ
   | Local τ => ✓{Γ} τ
   | EnumVal τi z => int_typed z τi
-  | TypeDef τ => ✓{Γ} τ
+  | TypeDef τ => ptr_type_valid Γ τ
   end.
 Notation var_env_valid Γ Γm := (Forall (var_decl_valid Γ Γm ∘ snd)).
 Lemma var_decl_valid_weaken Γ1 Γ2 Γm1 Γm2 d :
   var_decl_valid Γ1 Γm1 d → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → var_decl_valid Γ2 Γm2 d.
 Proof.
-  destruct d; simpl; eauto using type_valid_weaken, memenv_extend_typed.
+  destruct d; simpl; eauto using ptr_type_valid_weaken,
+    type_valid_weaken, memenv_extend_typed.
 Qed.
 Lemma typedef_lookup_valid Γ Γm xs x τ :
-  var_env_valid Γ Γm xs → lookup_typedef x xs = Some τ → ✓{Γ} τ.
+  var_env_valid Γ Γm xs → lookup_typedef x xs = Some τ → ptr_type_valid Γ τ.
 Proof. induction 1 as [|[? []]]; intros; simplify_option_equality; eauto. Qed.
 Lemma var_env_valid_locals Γ Γm (ys : list N) (τs : list (type Ti)) :
   ✓{Γ}* τs → var_env_valid Γ Γm (zip_with (λ y τ, (y, Local τ)) ys τs).
@@ -838,12 +841,14 @@ Proof.
     | |- _ ⊢ _ : _ =>
        repeat typed_constructor; eauto using to_binop_expr_typed,
          to_if_expr_typed, var_lookup_typed, type_valid_ptr_type_valid,
-         lockset_empty_valid, int_lower_typed, int_upper_typed, int_bits_typed
+         lockset_empty_valid, int_lower_typed, int_upper_typed, int_bits_typed,
+         type_complete_valid, TBase_valid_inv, TPtr_valid_inv
     | |- ✓{_} _ =>
-       repeat constructor; eauto using typedef_lookup_valid, TBase_valid_inv
+       repeat constructor; eauto using typedef_lookup_valid,
+         TBase_valid_inv, TPtr_valid_inv, type_complete_valid
     | |- ptr_type_valid _ _ =>
        repeat constructor; eauto using type_valid_ptr_type_valid,
-         typedef_lookup_valid
+         typedef_lookup_valid, TBase_valid_inv, TPtr_valid_inv
     end.
 Qed.
 Lemma to_expr_typed Γn Γ Γf m xs ce e τlr :
@@ -854,6 +859,10 @@ Proof. intros. eapply to_expr_type_typed; eauto. Qed.
 Lemma to_type_valid Γn Γ Γf m xs void cτ τ :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ ('{m}) xs →
   to_type Γn Γ Γf m xs (to_Type void) cτ = inr τ → ✓{Γ} τ.
+Proof. intros. eapply to_expr_type_typed; eauto. Qed.
+Lemma to_ptr_type_valid Γn Γ Γf m xs cτ τ :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ ('{m}) xs →
+  to_type Γn Γ Γf m xs to_Ptr cτ = inr τ → ptr_type_valid Γ τ.
 Proof. intros. eapply to_expr_type_typed; eauto. Qed.
 Lemma to_types_valid Γn Γ Γf m xs void cτs τs :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ} m → var_env_valid Γ ('{m}) xs →
@@ -914,6 +923,8 @@ Proof.
          ltac:(by eauto using Forall_impl, var_decl_valid_weaken)
     | H : to_type _ _ _ _ _ _ _ = inr _ |- _ =>
        first_of ltac:(apply to_type_valid in H; simpl) idtac ltac:(by auto)
+    | H : to_type _ _ _ _ _ _ _ = inr _ |- _ =>
+       first_of ltac:(apply to_ptr_type_valid in H; simpl) idtac ltac:(by auto)
     | H: to_R _ = _, _ : (_,_,_,?τs) ⊢ _ : _ |- _ =>
        first_of ltac:(eapply (to_R_typed _ _ _ τs) in H) idtac
          ltac:(by eauto using var_env_stack_types_valid)
@@ -1003,7 +1014,7 @@ Proof.
   * repeat case_error_guard; simplify_equality'.
     destruct (to_type _ _ _ _ _ _ _) as [τ|] eqn:?; simplify_equality'.
     apply (IH Γn Γ Γf δ m ((x, TypeDef t) :: xs)); auto.
-    constructor; simpl; eauto using to_type_valid.
+    constructor; simpl; eauto using to_ptr_type_valid.
   * repeat case_error_guard; simplify_equality'.
     destruct (to_type _ _ _ _ _ _ _) as [|τ] eqn:?; simplify_equality'.
     destruct (alloc_global _ _ _ _ _ _ _ _)

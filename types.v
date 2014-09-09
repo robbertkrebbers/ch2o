@@ -243,9 +243,24 @@ Section types.
     | compoundT{c} s => (is_Some (Γ !! s) → P) → P
     end%T.
   Proof. destruct 1; eauto. Qed.
-
   Lemma type_valid_ptr_type_valid Γ τ : ✓{Γ} τ → ptr_type_valid Γ τ.
   Proof. by destruct 1; constructor. Qed.
+
+  Inductive type_complete (Γ : env Ti) : type Ti → Prop :=
+    | TBase_complete τb : type_complete Γ (baseT τb)
+    | TArray_complete τ n : type_complete Γ (τ.[n])
+    | TCompound_complete c s :
+       is_Some (Γ !! s) → type_complete Γ (compoundT{c} s).
+  Global Instance type_complete_dec Γ τ : Decision (type_complete Γ τ).
+  Proof.
+   refine
+    match τ with
+    | compoundT{_} s => cast_if (decide (is_Some (Γ !! s))) | _ => left _
+    end%T; abstract first [by constructor|by inversion 1].
+  Defined.
+  Lemma type_complete_valid Γ τ :
+    ptr_type_valid Γ τ → type_complete Γ τ → ✓{Γ} τ.
+  Proof. by destruct 1; inversion 1; constructor. Qed.
 
   Inductive env_valid : Valid () (env Ti) :=
     | env_empty_valid : ✓ ∅
