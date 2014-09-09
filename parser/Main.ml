@@ -583,6 +583,8 @@ let rec cstmt_of_statements l =
   | Cabs.RETURN (y,_)::l' ->
       cscomp (CSReturn (Some (cexpr_of_expression y)))
         (cstmt_of_statements l')
+  | Cabs.BREAK _ :: l' -> cscomp CSBreak (cstmt_of_statements l')
+  | Cabs.CONTINUE _ :: l' -> cscomp CSContinue (cstmt_of_statements l')
   | Cabs.NOP _::l' -> cstmt_of_statements l'
   | _ -> raise (Unknown_statement (List.hd l));;
 
