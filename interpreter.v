@@ -1,7 +1,7 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Import String hashset streams.
-Require Export executable frontend natural_type_environment two_complement.
+Require Export executable frontend architecture_spec.
 Local Open Scope string_scope.
 Local Open Scope list_scope.
 
@@ -18,17 +18,9 @@ Instance istate_dec {Ti E : Set}
 Proof. solve_decision. Defined.
 
 Section interpreter.
-Context (be : bool) (Csz : nat).
-Notation Ti := (irank be Csz).
+Context (A : architecture).
+Notation Ti := (irank A).
 Context {E : Set} `{∀ ε1 ε2 : E, Decision (ε1 = ε2)} (e : state Ti → list E).
-
-Definition ptr_size (_ : type Ti) := rank_size (ptr_rank : Ti).
-Definition align_base (τb : base_type Ti) :=
-  match τb with
-  | voidT => 1 | intT τi => rank_size (rank τi) | τ.* => ptr_size τ
-  end%BT.
-Let interpreter_env := (natural_env ptr_size align_base).
-Existing Instance interpreter_env.
 
 Definition cexec' (Γ : env Ti) (δ : funenv Ti)
     (iS : istate Ti E) : listset (istate Ti E) :=

@@ -88,6 +88,7 @@ implementation's endianness. The function [deendianize] performs the inverse. *)
 Local Unset Elimination Schemes.
 Class IntCoding (Ti : Set) := {
   char_rank : Ti;
+  char_signedness : signedness;
   short_rank : Ti;
   int_rank : Ti;
   long_rank : nat → Ti;
@@ -100,6 +101,7 @@ Class IntCoding (Ti : Set) := {
 }.
 
 Arguments char_rank _ _ : simpl never.
+Arguments char_signedness _ _ : simpl never.
 Arguments short_rank _ _ : simpl never.
 Arguments int_rank _ _ : simpl never.
 Arguments long_rank _ _ _ : simpl never.

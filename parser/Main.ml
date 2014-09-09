@@ -1,5 +1,6 @@
 (* Copyright (c) 2012-2014, Freek Wiedijk and Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
+
 #load "nums.cma";;
 #load "Cerrors.cmo";;
 #load "Cabs.cmo";;
@@ -13,13 +14,11 @@ open Num;;
 open Format;;
 open Extracted;;
 
-let col = ref 0;;
 let trace_width = ref 72;;
 let trace_printfs = ref true;;
 let choose_randomly = ref true;;
 let break_on_undef = ref false;;
 let printf_returns_int = ref true;;
-let char_signedness = ref Unsigned;;
 
 let cabs_of_file name =
   Cerrors.reset();
@@ -196,7 +195,9 @@ exception Unknown_specifier of Cabs.specifier;;
 exception Unknown_definition of Cabs.definition;;
 exception Incompatible_compound of n * decl * decl;;
 
+let col = ref 0;;
 let the_ids = ref ([]:string list);;
+let the_anon = ref 0;;
 let the_compound_decls = ref ([]:(n * decl) list);;
 let the_printfs = ref ([]:(n * decl) list);;
 let the_formats = ref ([]:(n * string) list);;
@@ -208,8 +209,8 @@ let nindex s =
     the_ids := ids@[s];
     List.length ids);;
 
-let uchar = {csign = Unsigned; crank = CCharRank };;
-let int_signed = {csign = Signed; crank = CIntRank };;
+let uchar = {csign = Some Unsigned; crank = CCharRank};;
+let int_signed = {csign = Some Signed; crank = CIntRank};;
 let ctint_signed = CTInt int_signed;;
 
 let econst n = CEConst (int_signed,z_of_num n);;
@@ -291,6 +292,10 @@ let args_of_format s =
     with Invalid_argument _ -> [] in
   args_of_format' 0 1;;
 
+let name_of s = if s <> "" then s else
+  let s = "anon-"^string_of_int !the_anon in
+  the_anon := !the_anon + 1; s;;
+
 let rec add_compound k0 n l =
    let k = CompoundDecl (k0,
      List.flatten (List.map (fun (t,l') -> List.map (fun f ->
@@ -302,53 +307,56 @@ let rec add_compound k0 n l =
    with Not_found -> the_compound_decls := !the_compound_decls@[(n,k)]
 
 and ctype_of_specifier x =
-  let rec cint_of_specifier has_char has_short has_int maybe_sign long_count x =
+  let longrank x =
     match x with
-    | [] ->
-        let s = match maybe_sign with
-                | Some r' -> r'
-                | _ -> if has_char then !char_signedness else Signed in
-        let r = if has_char then CCharRank
-                else if has_short then CShortRank
-                else if 0 <= long_count then CLongRank (nat_of_int long_count)
-                else CIntRank in
-        { csign = s; crank = r }
-    | Cabs.SpecType Cabs.Tchar :: y
-         when not has_char && not has_short && not has_int && long_count = -1 ->
-       cint_of_specifier true has_short has_int maybe_sign long_count y
-    | Cabs.SpecType Cabs.Tshort :: y
-         when not has_char && not has_short && long_count = -1 ->
-       cint_of_specifier has_char true has_int maybe_sign long_count y
-    | Cabs.SpecType Cabs.Tint :: y when not has_char && not has_int ->
-       cint_of_specifier has_char has_short true maybe_sign long_count y
-    | Cabs.SpecType Cabs.Tlong :: y when not has_char && not has_short ->
-       cint_of_specifier has_char has_short has_int maybe_sign (1+long_count) y
-    | Cabs.SpecType Cabs.Tsigned :: y when maybe_sign = None ->
-       cint_of_specifier has_char has_short has_int (Some Signed) long_count y
-    | Cabs.SpecType Cabs.Tunsigned :: y when maybe_sign = None ->
-       cint_of_specifier has_char has_short has_int (Some Unsigned) long_count y
+    | None -> 0
+    | Some (CLongRank n) -> int_of_nat n
+    | _ -> failwith "longrank" in
+  let rec cint_of_specifier has_int sign rank x =
+    match x with
+    | [] -> {csign = sign;
+        crank = (match rank with None -> CIntRank | Some y -> y)}
+    | Cabs.SpecType Cabs.Tsigned::y when sign = None ->
+        cint_of_specifier has_int (Some Signed) rank y
+    | Cabs.SpecType Cabs.Tunsigned::y when sign = None ->
+        cint_of_specifier has_int (Some Unsigned) rank y
+    | Cabs.SpecType Cabs.Tchar::y when rank = None && not has_int ->
+        cint_of_specifier has_int sign (Some CCharRank) y
+    | Cabs.SpecType Cabs.Tshort::y when rank = None ->
+        cint_of_specifier has_int sign (Some CShortRank) y
+    | Cabs.SpecType Cabs.Tint::y when not has_int && rank <> Some CCharRank ->
+        cint_of_specifier true sign None y
+    | Cabs.SpecType Cabs.Tlong::y ->
+        cint_of_specifier has_int sign
+          (Some (CLongRank (nat_of_int (longrank rank + 1)))) y
     | _ -> failwith "cint_of_specifier" in
   match x with
   | [Cabs.SpecType Cabs.Tvoid] -> CTVoid
   | Cabs.SpecType Cabs.Tchar::_ | Cabs.SpecType Cabs.Tshort::_
   | Cabs.SpecType Cabs.Tint::_ | Cabs.SpecType Cabs.Tlong::_
-  | Cabs.SpecType Cabs.Tsigned::_ | Cabs.SpecType Cabs.Tunsigned :: _ ->
-      CTInt (cint_of_specifier false false false None (-1) x)
+  | Cabs.SpecType Cabs.Tsigned::_ | Cabs.SpecType Cabs.Tunsigned::_ ->
+      CTInt (cint_of_specifier false None None x)
   | [Cabs.SpecType (Cabs.Tstruct (s,None,[]))] ->
+      let s = name_of s in
       CTCompound (Struct_kind,nindex s)
   | [Cabs.SpecType (Cabs.Tunion (s,None,[]))] ->
+      let s = name_of s in
       CTCompound (Union_kind,nindex s)
   | [Cabs.SpecType (Cabs.Tenum (s,None,[]))] ->
+      let s = name_of s in
       CTEnum (nindex s)
   | [Cabs.SpecType (Cabs.Tstruct (s,Some l,[]))] ->
+      let s = name_of s in
       let n = nindex s in
       add_compound Struct_kind n l;
       CTCompound (Struct_kind,n)
   | [Cabs.SpecType (Cabs.Tunion (s,Some l,[]))] ->
+      let s = name_of s in
       let n = nindex s in
       add_compound Union_kind n l;
       CTCompound (Union_kind,n)
   | [Cabs.SpecType (Cabs.Tenum (s,Some l,[]))] ->
+      let s = name_of s in
       let n = nindex s in
       let k = EnumDecl (int_signed,List.map (fun (s,x,_) ->
          (nindex s,
@@ -381,31 +389,29 @@ and cexpr_of_expression x =
   | Cabs.CONSTANT (Cabs.CONST_INT s) -> econst (num_of_string s)
   | Cabs.VARIABLE "NULL" -> CECast (CTPtr CTVoid,econst0)
   | Cabs.VARIABLE "CHAR_BITS" -> CEBits uchar
-  | Cabs.VARIABLE "CHAR_MIN" ->
-     CEMin { csign = !char_signedness; crank = CCharRank }
-  | Cabs.VARIABLE "CHAR_MAX" ->
-     CEMax { csign = !char_signedness; crank = CCharRank }
-  | Cabs.VARIABLE "SCHAR_MIN" -> CEMin { csign = Signed; crank = CCharRank }
-  | Cabs.VARIABLE "SCHAR_MAX" -> CEMax { csign = Signed; crank = CCharRank }
-  | Cabs.VARIABLE "UCHAR_MAX" -> CEMax { csign = Unsigned; crank = CCharRank }
-  | Cabs.VARIABLE "SHRT_MIN" -> CEMin { csign = Signed; crank = CShortRank }
-  | Cabs.VARIABLE "SHRT_MAX" -> CEMax { csign = Signed; crank = CShortRank }
-  | Cabs.VARIABLE "USHRT_MAX" -> CEMax { csign = Unsigned; crank = CShortRank }
-  | Cabs.VARIABLE "INT_MIN" -> CEMin { csign = Signed; crank = CIntRank }
-  | Cabs.VARIABLE "INT_MAX" -> CEMax { csign = Signed; crank = CIntRank }
-  | Cabs.VARIABLE "UINT_MAX" -> CEMax { csign = Unsigned; crank = CIntRank }
+  | Cabs.VARIABLE "CHAR_MIN" -> CEMin {csign = None; crank = CCharRank}
+  | Cabs.VARIABLE "CHAR_MAX" -> CEMax {csign = None; crank = CCharRank}
+  | Cabs.VARIABLE "SCHAR_MIN" -> CEMin {csign = Some Signed; crank = CCharRank}
+  | Cabs.VARIABLE "SCHAR_MAX" -> CEMax {csign = Some Signed; crank = CCharRank}
+  | Cabs.VARIABLE "UCHAR_MAX" -> CEMax {csign = Some Unsigned; crank = CCharRank}
+  | Cabs.VARIABLE "SHRT_MIN" -> CEMin {csign = Some Signed; crank = CShortRank}
+  | Cabs.VARIABLE "SHRT_MAX" -> CEMax {csign = Some Signed; crank = CShortRank}
+  | Cabs.VARIABLE "USHRT_MAX" -> CEMax {csign = Some Unsigned; crank = CShortRank}
+  | Cabs.VARIABLE "INT_MIN" -> CEMin {csign = Some Signed; crank = CIntRank}
+  | Cabs.VARIABLE "INT_MAX" -> CEMax {csign = Some Signed; crank = CIntRank}
+  | Cabs.VARIABLE "UINT_MAX" -> CEMax {csign = Some Unsigned; crank = CIntRank}
   | Cabs.VARIABLE "LONG_MIN" ->
-     CEMin { csign = Signed; crank = CLongRank (nat_of_int 0) }
+     CEMin {csign = Some Signed; crank = CLongRank (nat_of_int 0)}
   | Cabs.VARIABLE "LONG_MAX" ->
-     CEMax { csign = Signed; crank = CLongRank (nat_of_int 0) }
+     CEMax {csign = Some Signed; crank = CLongRank (nat_of_int 0)}
   | Cabs.VARIABLE "ULONG_MAX" ->
-     CEMax { csign = Unsigned; crank = CLongRank (nat_of_int 0) }
+     CEMax {csign = Some Unsigned; crank = CLongRank (nat_of_int 0)}
   | Cabs.VARIABLE "LLONG_MIN" ->
-     CEMin { csign = Signed; crank = CLongRank (nat_of_int 1) }
+     CEMin {csign = Some Signed; crank = CLongRank (nat_of_int 1)}
   | Cabs.VARIABLE "LLONG_MAX" ->
-     CEMax { csign = Signed; crank = CLongRank (nat_of_int 1) }
+     CEMax {csign = Some Signed; crank = CLongRank (nat_of_int 1)}
   | Cabs.VARIABLE "ULLONG_MAX" ->
-     CEMax { csign = Unsigned; crank = CLongRank (nat_of_int 1) }
+     CEMax {csign = Some Unsigned; crank = CLongRank (nat_of_int 1)}
   | Cabs.VARIABLE s -> CEVar (nindex s)
   | Cabs.UNARY (Cabs.MEMOF,y) ->
       CEDeref (cexpr_of_expression y)
@@ -608,6 +614,7 @@ let args_of a =
 
 let decls_of_definition x =
   match x with
+  | Cabs.DECDEF (((Cabs.SpecStorage Cabs.EXTERN::_),_),_) -> []
   | Cabs.DECDEF ((t,l),_) ->
       List.map (fun z ->
         match z with
@@ -615,7 +622,8 @@ let decls_of_definition x =
              (nindex s,
                GlobDecl (ctype_of_specifier_decl_type t t',
                  decl_of_init_expression z))
-        | _ -> failwith "decls_of_definition 1") l
+        | _ -> raise (Unknown_definition x)) l
+  | Cabs.FUNDEF (((Cabs.SpecStorage Cabs.EXTERN::_),_),_,_,_) -> []
   | Cabs.FUNDEF ((t,(s,t',[],_)),
         {Cabs.bstmts = l},_,_) ->
       let t = if s = "main" && t = [] then [Cabs.SpecType Cabs.Tint] else t in
@@ -630,10 +638,10 @@ let decls_of_definition x =
   | Cabs.TYPEDEF ((Cabs.SpecTypedef::t,l),_) ->
       List.map (fun z ->
         match z with
-        | (s,t',[],_) ->
+        | (s,t',_,_) ->
              (nindex s,
                TypeDefDecl (ctype_of_specifier_decl_type t t'))
-        | _ -> failwith "decls_of_definition 1") l
+        | _ -> raise (Unknown_definition x)) l
   | _ -> raise (Unknown_definition x);;
 
 let printf_prelude () =
@@ -657,6 +665,7 @@ let printf_prelude () =
 
 let decls_of_cabs x =
   the_ids := [];
+  the_anon := 0;
   the_formats := [];
   the_compound_decls := [];
   the_printfs := [];
@@ -693,7 +702,7 @@ let event_of_state x =
   | _ -> [];;
 
 let initial_of_decls (_,(m,x)) =
-  match interpreter_initial true (nat_of_int 8) x m [] with
+  match interpreter_initial x86 x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
@@ -701,7 +710,7 @@ let initial_of_cabs x = initial_of_decls (decls_of_cabs x);;
 let initial_of_file x = initial_of_decls (decls_of_file x);;
 
 let graph_of_decls (ids,(m,x)) =
-  match interpreter_all true (nat_of_int 8)
+  match interpreter_all x86
     (=) event_of_state (fun x -> z_of_int (Hashtbl.hash x)) x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> (ids,y);;
@@ -715,7 +724,7 @@ let choose =
     else nat_of_int 0);;
 
 let stream_of_decls (ids,(m,x)) =
-  match interpreter_rand true (nat_of_int 8) event_of_state !choose x m [] with
+  match interpreter_rand x86 event_of_state !choose x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> (ids,y);;
 

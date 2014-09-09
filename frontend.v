@@ -10,7 +10,7 @@ Local Open Scope list_scope.
 Inductive cint_rank : Set :=
   | CCharRank | CShortRank | CIntRank | CLongRank : nat → cint_rank | CPtrRank.
 Inductive cint_type :=
-  CIntType { csign : signedness; crank : cint_rank }.
+  CIntType { csign : option signedness; crank : cint_rank }.
 
 Inductive cexpr : Set :=
   | CEVar : N → cexpr
@@ -184,13 +184,13 @@ Definition to_binop_expr (op : binop)
     Some (e1 @{op} e2, inr σ)).
 
 Definition to_inttype (cτi : cint_type) : int_type Ti :=
-  let (s,k) := cτi in
+  let (ms,k) := cτi in
   match k with
-  | CCharRank => IntType s char_rank
-  | CShortRank => IntType s short_rank
-  | CIntRank => IntType s int_rank
-  | CLongRank n => IntType s (long_rank n)
-  | CPtrRank => IntType s ptr_rank
+  | CCharRank => IntType (from_option char_signedness ms) char_rank
+  | CShortRank => IntType (from_option Signed ms) short_rank
+  | CIntRank => IntType (from_option Signed ms) int_rank
+  | CLongRank n => IntType (from_option Signed ms) (long_rank n)
+  | CPtrRank => IntType (from_option Signed ms) ptr_rank
   end.
 End frontend.
 
