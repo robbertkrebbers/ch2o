@@ -19,6 +19,7 @@ let trace_printfs = ref true;;
 let choose_randomly = ref true;;
 let break_on_undef = ref false;;
 let printf_returns_int = ref true;;
+let char_signedness = ref Unsigned;;
 
 let cabs_of_file name =
   Cerrors.reset();
@@ -304,7 +305,9 @@ and ctype_of_specifier x =
   let rec cint_of_specifier has_char has_short has_int maybe_sign long_count x =
     match x with
     | [] ->
-        let s = match maybe_sign with Some r' -> r' | _ -> Signed in
+        let s = match maybe_sign with
+                | Some r' -> r'
+                | _ -> if has_char then !char_signedness else Signed in
         let r = if has_char then CCharRank
                 else if has_short then CShortRank
                 else if 0 <= long_count then CLongRank (nat_of_int long_count)
@@ -378,6 +381,10 @@ and cexpr_of_expression x =
   | Cabs.CONSTANT (Cabs.CONST_INT s) -> econst (num_of_string s)
   | Cabs.VARIABLE "NULL" -> CECast (CTPtr CTVoid,econst0)
   | Cabs.VARIABLE "CHAR_BITS" -> CEBits uchar
+  | Cabs.VARIABLE "CHAR_MIN" ->
+     CEMin { csign = !char_signedness; crank = CCharRank }
+  | Cabs.VARIABLE "CHAR_MAX" ->
+     CEMax { csign = !char_signedness; crank = CCharRank }
   | Cabs.VARIABLE "SCHAR_MIN" -> CEMin { csign = Signed; crank = CCharRank }
   | Cabs.VARIABLE "SCHAR_MAX" -> CEMax { csign = Signed; crank = CCharRank }
   | Cabs.VARIABLE "UCHAR_MAX" -> CEMax { csign = Unsigned; crank = CCharRank }
