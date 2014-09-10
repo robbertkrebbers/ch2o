@@ -325,7 +325,7 @@ and ctype_of_specifier x =
     | Cabs.SpecType Cabs.Tshort::y when rank = None ->
         cint_of_specifier has_int sign (Some CShortRank) y
     | Cabs.SpecType Cabs.Tint::y when not has_int && rank <> Some CCharRank ->
-        cint_of_specifier true sign None y
+        cint_of_specifier true sign rank y
     | Cabs.SpecType Cabs.Tlong::y ->
         cint_of_specifier has_int sign
           (Some (CLongRank (nat_of_int (longrank rank + 1)))) y
