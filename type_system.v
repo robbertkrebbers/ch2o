@@ -491,11 +491,8 @@ Lemma funenv_pretyped_weaken Γ1 Γ2 Γm1 Γm2 δ Γf1 Γf2 :
   funenv_pretyped Γ2 Γm2 δ Γf2.
 Proof.
   intros ? Hδ ??? f s ?.
-  destruct (Hδ f s) as (τs&τ&cmτ&Hf&Hτs&?&?&Hs&?&?); auto.
-  exists τs τ cmτ; split_ands; eauto using stmt_typed_weaken,
-    types_valid_weaken, type_valid_weaken, lookup_weaken.
-  clear Hf Hs. induction Hτs; decompose_Forall_hyps; constructor;
-    simpl; erewrite <-1?size_of_weaken by eauto; eauto.
+  destruct (Hδ f s); naive_solver eauto using stmt_typed_weaken,
+    types_valid_weaken, type_valid_weaken, lookup_weaken, sizes_of_weaken.
 Qed.
 Lemma funenv_typed_weaken Γ1 Γ2 Γm1 Γm2 δ Γf :
   ✓ Γ1 → (Γ1,Γm1) ⊢ δ : Γf → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → (Γ2,Γm2) ⊢ δ : Γf.

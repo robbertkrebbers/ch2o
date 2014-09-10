@@ -500,7 +500,7 @@ and cexpr_of_expression x =
         [(f,if !printf_returns_int then
            (let i = n_of_int 0 in
             FunDecl (a,ctint_signed,
-              Some (CSBlock (false,i,ctint_signed,
+              Some (CSBlock (AutoStorage,i,ctint_signed,
                 Some (CEConst (int_signed,z_of_int (length_of_format s))),
               printf_body i a)))) else
             FunDecl (a,CTVoid,Some (CSSkip)))];
@@ -551,10 +551,14 @@ let rec cstmt_of_statements l =
   | Cabs.BLOCK ({Cabs.bstmts = y},_)::l' ->
       cscomp (cstmt_of_statements y) (cstmt_of_statements l')
   | Cabs.DEFINITION (Cabs.DECDEF ((t,l),_))::l' ->
-      let h,t = match t with
-        | Cabs.SpecStorage Cabs.STATIC::t -> true,t
-        | _ -> false,t in
-      fold_defs h t l l'
+      let rec split_storage t =
+        match t with
+        | [] -> (AutoStorage,[])
+        | Cabs.SpecStorage Cabs.AUTO::t -> AutoStorage,t
+        | Cabs.SpecStorage Cabs.STATIC::t -> StaticStorage,t
+        | Cabs.SpecStorage Cabs.EXTERN::t -> ExternStorage,t
+        | h :: t -> let (sto,t) = split_storage t in sto,h::t in
+      let (sto,t) = split_storage t in fold_defs sto t l l'
   | Cabs.COMPUTATION (y,_)::l' ->
       cscomp (CSDo (cexpr_of_expression y))
         (cstmt_of_statements l')
@@ -571,7 +575,8 @@ let rec cstmt_of_statements l =
           cstmt_of_statements [y]))
         (cstmt_of_statements l')
   | Cabs.FOR (Cabs.FC_DECL (Cabs.DECDEF ((t,l),_)),e2,e3,y,z)::l' ->
-      fold_defs false t l (Cabs.FOR (Cabs.FC_EXP Cabs.NOTHING,e2,e3,y,z)::l')
+      fold_defs AutoStorage t l
+        (Cabs.FOR (Cabs.FC_EXP Cabs.NOTHING,e2,e3,y,z)::l')
   | Cabs.DOWHILE (e,y,_)::l' ->
       cscomp (CSDoWhile (cstmt_of_statements [y],
           cexpr_of_expression e))
@@ -654,7 +659,7 @@ let printf_prelude () =
     let i = n_of_int 0 and n = n_of_int 1 in
     [(n_of_int (index s !the_ids),
       FunDecl ([(i, ctint_signed)],ctint_signed,Some
-       (CSBlock (false,n,ctint_signed,Some econst0,
+       (CSBlock (AutoStorage,n,ctint_signed,Some econst0,
         CSComp (CSIf (CEBinOp (CompOp EqOp,CEVar i,econst0),
           CSReturn (Some econst1),CSSkip),
         CSComp (CSIf (CEBinOp (CompOp LtOp,CEVar i,econst0),

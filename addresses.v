@@ -379,6 +379,13 @@ Proof.
   unfold addr_strict, addr_top; simpl. rewrite Nat.mul_1_r.
   eauto using size_of_pos.
 Qed.
+Lemma addr_top_disjoint Γ Γm o1 o2 τ1 τ2 :
+  Γm ⊢ o1 : τ1 → Γm ⊢ o2 : τ2 → 
+  addr_top o1 τ1 = addr_top o2 τ2 ∨ addr_top o1 τ1 ⊥{Γ} addr_top o2 τ2.
+Proof.
+  intros. destruct (decide (o1 = o2)); simplify_type_equality; auto.
+  by right; left.
+Qed.
 Lemma addr_top_array_typed Γ Γm o τ (n : Z) :
   ✓ Γ → Γm ⊢ o : τ.[Z.to_nat n] → ✓{Γ} τ → Z.to_nat n ≠ 0 →
   int_typed (n * size_of Γ τ) sptrT → (Γ,Γm) ⊢ addr_top_array o τ n : τ.

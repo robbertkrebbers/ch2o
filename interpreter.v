@@ -31,17 +31,17 @@ Definition cexec' (Γ : env Ti) (δ : funenv Ti)
 Definition interpreter_initial
     (Θ : list (N * decl)) (f : funname) (ces : list cexpr) :
     string + (env Ti * funenv Ti * istate Ti E) :=
-  '(Γn,Γ,Γf,δ,m,xs) ← to_envs Θ;
-  '(σs,_) ← error_of_option (Γf !! f)
+  '(Γn,Γ,m,Δg) ← to_envs Θ;
+  '(σs,_,_) ← error_of_option (Δg !! (f:N) ≫= maybe_Fun)
     "interpreter called with undeclared function";
-  eσlrs ← mapM (to_expr Γn Γ Γf m xs) ces;
+  eσlrs ← mapM (to_expr Γn Γ m Δg []) ces;
   let σes := zip_with to_R_NULL σs eσlrs in 
   guard (Forall2 (cast_typed Γ) (snd <$> σes) σs)
     with "interpreter called with arguments of incorrect type";
   let es := (cast{σs}* (fst <$> σes))%E in
   vs ← error_of_option (mapM (λ e, ⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr) es)
     "interpreter called with non-constant expressions";
-  inr (Γ, δ, IState [] [] (initial_state m f vs)).
+  inr (Γ, to_funenv Δg, IState [] [] (initial_state m f vs)).
 
 Context (hash : istate Ti E → Z).
 Definition cexec_all (Γ : env Ti) (δ : funenv Ti) (iS : istate Ti E) :

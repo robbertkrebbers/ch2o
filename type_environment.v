@@ -84,6 +84,14 @@ Qed.
 Lemma size_of_union_singleton Γ s τ :
   ✓ Γ → Γ !! s = Some [τ] → size_of Γ τ ≤ size_of Γ (unionT s).
 Proof. intros. by apply (size_of_union_lookup Γ s [τ] 0). Qed.
+Lemma sizes_of_weaken Γ1 Γ2 τs :
+  ✓ Γ1 → ✓{Γ1}* τs → Γ1 ⊆ Γ2 →
+  Forall (λ τ', int_typed (size_of Γ1 τ') sptrT) τs →
+  Forall (λ τ', int_typed (size_of Γ2 τ') sptrT) τs.
+Proof.
+  induction 4; decompose_Forall_hyps; constructor; simpl;
+    erewrite <-1?size_of_weaken by eauto; eauto.
+Qed.
 
 Lemma bit_size_of_weaken Γ1 Γ2 τ :
   ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊆ Γ2 → bit_size_of Γ1 τ = bit_size_of Γ2 τ.

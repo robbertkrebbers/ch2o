@@ -99,6 +99,8 @@ Section memory_operations.
 End memory_operations.
 
 Notation mem_unlock_all m := (mem_unlock (mem_locks m) m).
+Notation mem_writable_all Γ m := (∀ o τ,
+  '{m} ⊢ o : τ → mem_writable Γ (addr_top o τ) m).
 
 Section memory.
 Context `{EnvSpec Ti}.
@@ -137,6 +139,18 @@ Ltac solve_length := repeat first
 Hint Extern 0 (length _ = _) => solve_length.
 Hint Extern 0 (_ ≤ length _) => solve_length.
 Hint Extern 0 (length _ ≤ _) => solve_length.
+
+Lemma mem_writable_weaken Γ1 Γ2 Γm m a σ :
+  ✓ Γ1 → (Γ1,Γm) ⊢ a : σ → mem_writable Γ1 a m → Γ1 ⊆ Γ2 → mem_writable Γ2 a m.
+Proof. intros ?? (w&?&?) ?; exists w; eauto using cmap_lookup_weaken. Qed.
+Lemma mem_writable_all_weaken Γ1 Γ2 m :
+  ✓ Γ1 → ✓{Γ1} m → mem_writable_all Γ1 m → Γ1 ⊆ Γ2 → mem_writable_all Γ2 m.
+Proof.
+  intros ? Hm ?? o τ ?; eapply mem_writable_weaken; eauto using
+    addr_top_typed, index_typed_representable, index_typed_valid.
+Qed.
+Lemma mem_empty_writable_all Γ : mem_writable_all Γ ∅.
+Proof. intros ?? [??]; simplify_map_equality'. Qed.
 
 (** ** Properties of the [alloc] function *)
 Lemma mem_allocable_alt m o : mem_allocable o m ↔ o ∉ dom indexset m.
@@ -223,6 +237,10 @@ Hint Extern 10 => erewrite mem_alloc_memenv_of by eauto.
 Lemma mem_alloc_index_typed' Γ m o malloc τ :
   ✓ Γ → ✓{Γ} τ → '{mem_alloc Γ o malloc τ m} ⊢ o : τ.
 Proof. eauto using mem_alloc_index_typed. Qed.
+Lemma mem_alloc_index_typed_inv' Γ m o malloc τ o' τ' :
+  ✓ Γ → ✓{Γ} τ → o ≠ o' →
+  '{mem_alloc Γ o malloc τ m} ⊢ o' : τ' → '{m} ⊢ o' : τ'.
+Proof. eauto using mem_alloc_index_typed_inv. Qed.
 Lemma mem_alloc_extend' Γ m o malloc τ :
   ✓ Γ → ✓{Γ} τ → mem_allocable o m → '{m} ⊆{⇒} '{mem_alloc Γ o malloc τ m}.
 Proof. eauto using mem_alloc_extend, mem_allocable_memenv_of. Qed.
@@ -245,6 +263,16 @@ Proof.
   case_option_guard; simplify_equality'.
   destruct (m !! addr_index a) as [w'|] eqn:?; simplify_equality'.
   by destruct (decide (o = addr_index a)); simplify_map_equality.
+Qed.
+Lemma mem_alloc_writable_all Γ m o malloc τ :
+  ✓ Γ → ✓{Γ} τ → mem_allocable o m →
+  mem_writable_all Γ m → mem_writable_all Γ (mem_alloc Γ o malloc τ m).
+Proof.
+  intros ???? o' τ' ?. destruct (decide (o = o')) as [<-|].
+  * assert ('{mem_alloc Γ o malloc τ m} ⊢ o : τ)
+      by eauto using mem_alloc_index_typed'; simplify_type_equality.
+    eauto using mem_alloc_writable_top.
+  * eauto using mem_alloc_writable, mem_alloc_index_typed_inv'.
 Qed.
 Lemma mem_alloc_allocable Γ m o malloc o' τ :
   mem_allocable o' m → o ≠ o' → mem_allocable o' (mem_alloc Γ o malloc τ m).
@@ -551,7 +579,6 @@ Proof.
   destruct (m !!{Γ} a2) as [w2|] eqn:?; simplify_equality'.
   eapply cmap_alter_commute; eauto using of_val_flatten_typed.
 Qed.
-(** Horrible premises, should be able to prove this without some. *)
 Lemma mem_insert_writable Γ Γm m a1 a2 v2 τ2 :
   ✓ Γ → ✓{Γ,Γm} m → a1 = a2 ∨ a1 ⊥{Γ} a2 →
   (Γ,Γm) ⊢ a2 : τ2 → mem_writable Γ a2 m → (Γ,Γm) ⊢ v2 : τ2 →
@@ -569,6 +596,15 @@ Proof.
   erewrite cmap_lookup_alter_not_obj
     by eauto using of_val_flatten_unshared, of_val_flatten_typed.
   eauto using ctree_lookup_byte_after_Forall.
+Qed.
+Lemma mem_insert_top_writable_all Γ m o2 v2 τ2 :
+  ✓ Γ → ✓{Γ} m → '{m} ⊢ o2 : τ2 → (Γ,'{m}) ⊢ v2 : τ2 →
+  mem_writable_all Γ m → mem_writable_all Γ (<[addr_top o2 τ2:=v2]{Γ}>m).
+Proof.
+  intros ????? o τ; erewrite mem_insert_memenv_of by eauto using
+    addr_top_typed, index_typed_representable; intros.
+  eapply mem_insert_writable; eauto using addr_top_typed, index_typed_representable.
+  eauto using mem_insert_writable, addr_top_disjoint.
 Qed.
 Lemma mem_insert_allocable Γ m a v o :
   mem_allocable o (<[a:=v]{Γ}>m) ↔ mem_allocable o m.
@@ -636,6 +672,15 @@ Lemma mem_alloc_val_allocable Γ m o malloc v τ o' :
   mem_allocable o' m → o ≠ o' →
   mem_allocable o' (<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o malloc τ m)).
 Proof. intros. by apply mem_insert_allocable, mem_alloc_allocable. Qed.
+Lemma mem_alloc_val_writable_all Γ m o malloc v τ :
+  ✓ Γ → ✓{Γ} m → mem_allocable o m → (Γ,'{m}) ⊢ v : τ →
+  int_typed (size_of Γ τ) sptrT → mem_writable_all Γ m →
+  mem_writable_all Γ (<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o malloc τ m)).
+Proof.
+  intros. eapply mem_insert_top_writable_all; eauto using mem_alloc_valid',
+    addr_top_typed, mem_alloc_index_typed', mem_alloc_writable_top,
+    val_typed_weaken, mem_alloc_extend', mem_alloc_writable_all.
+Qed.
 Lemma mem_alloc_val_list_valid Γ m os vs τs :
   ✓ Γ → ✓{Γ} m → mem_allocable_list m os → length os = length vs →
   (Γ,'{m}) ⊢* vs :* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →

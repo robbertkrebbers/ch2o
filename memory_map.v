@@ -113,6 +113,16 @@ Proof. intros; eapply index_typed_valid_representable; eauto. Qed.
 Lemma index_typed_representable Γ Γm m o τ :
   ✓ Γ → ✓{Γ,Γm} m → '{m} ⊢ o : τ → int_typed (size_of Γ τ) sptrT.
 Proof. intros; eapply index_typed_valid_representable; eauto. Qed.
+Lemma cmap_lookup_weaken Γ1 Γ2 Γm m a w σ :
+  ✓ Γ1 → (Γ1,Γm) ⊢ a : σ → m !!{Γ1} a = Some w → Γ1 ⊆ Γ2 → m !!{Γ2} a = Some w.
+Proof.
+  destruct m as [m]; simpl; intros. case_option_guard; simplify_equality'.
+  rewrite option_guard_True by eauto using addr_strict_weaken.
+  destruct (m !! addr_index a) as [[|w' β]|]; simplify_equality'.
+  destruct (w' !!{Γ1} addr_ref Γ1 a) as [w''|] eqn:?; simplify_equality'.
+  by erewrite <-addr_ref_weaken, <-addr_ref_byte_weaken,
+    ctree_lookup_weaken by eauto.
+Qed.
 Lemma cmap_lookup_unfreeze Γ m a w :
   m !!{Γ} a = Some w → m !!{Γ} (freeze false a) = Some w.
 Proof.
