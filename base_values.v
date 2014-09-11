@@ -240,7 +240,9 @@ Section operations.
       (op : binop) (v1 v2 : base_val Ti) : base_val Ti :=
     match v1, v2, op with
     | VInt τi1 x1, VInt τi2 x2, CompOp op =>
-       VInt sintT (if Z_comp op x1 x2 then 1 else 0)
+       let τi' := int_promote τi1 ∪ int_promote τi2 in
+       let x1' := int_cast τi' x1 in let x2' := int_cast τi' x2 in
+       VInt sintT (if Z_comp op x1' x2' then 1 else 0)
     | VInt τi1 x1, VInt τi2 x2, ArithOp op =>
        VInt (int_promote τi1 ∪ int_promote τi2) (int_arithop op x1 τi1 x2 τi2)
     | VInt τi1 x1, VInt τi2 x2, ShiftOp op =>
