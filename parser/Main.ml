@@ -287,7 +287,7 @@ let printf_body i =
 let args_of_format s =
   let rec args_of_format' n m =
     try if String.get s n = '%' && String.get s (n + 1) = 'd' then
-        (n_of_int m,ctint_signed)::args_of_format' (n + 2) (m + 1)
+        (Some(n_of_int m),ctint_signed)::args_of_format' (n + 2) (m + 1)
       else args_of_format' (n + 1) m
     with Invalid_argument _ -> [] in
   args_of_format' 0 1;;
@@ -373,7 +373,6 @@ and ctype_of_specifier x =
 and ctype_of_decl_type t x =
   match x with
   | Cabs.JUSTBASE -> t
-  | Cabs.PROTO (y,_,false) -> ctype_of_decl_type t y
   | Cabs.ARRAY (y,[],n) ->
       ctype_of_decl_type (CTArray (t,cexpr_of_expression n)) y
   | Cabs.PTR ([],y) ->
@@ -605,21 +604,31 @@ let rec no_int_return x =
 
 let rec args_of_decl_type x =
   match x with
-  | Cabs.PROTO (Cabs.JUSTBASE,a,false) -> a
+  | Cabs.PROTO (Cabs.JUSTBASE,
+      [([Cabs.SpecType Cabs.Tvoid],("",Cabs.JUSTBASE,[],_))],false) -> []
+  | Cabs.PROTO (Cabs.JUSTBASE,a,false) ->
+      List.map (fun y ->
+        match y with
+        | (t,("",t',[],_)) ->
+            (None,ctype_of_specifier_decl_type t t')
+        | (t,(s,t',[],_)) ->
+            (Some(nindex s),ctype_of_specifier_decl_type t t')
+        | _ -> failwith "args_of") a
   | Cabs.ARRAY (y,[],_) -> args_of_decl_type y
   | Cabs.PTR ([],y) -> args_of_decl_type y
   | Cabs.PARENTYPE ([],y,[]) -> args_of_decl_type y
   | _ -> failwith "args_of_decl_type";;
 
-let args_of a =
-  match a with
-  | [([Cabs.SpecType Cabs.Tvoid],("",Cabs.JUSTBASE,[],_))] -> []
-  | _ ->
-      List.map (fun y ->
-        match y with
-        | (t,(s,t',[],_)) ->
-            (nindex s,ctype_of_specifier_decl_type t t')
-        | _ -> failwith "args_of") a;;
+let rec return_of_decl_type t x =
+  match x with
+  | Cabs.JUSTBASE -> None
+  | Cabs.PROTO (Cabs.JUSTBASE,_,false) -> Some t
+  | Cabs.ARRAY (y,[],n) ->
+      return_of_decl_type (CTArray (t,cexpr_of_expression n)) y
+  | Cabs.PTR ([],y) ->
+      return_of_decl_type (CTPtr t) y
+  | Cabs.PARENTYPE ([],y,[]) -> return_of_decl_type t y
+  | _ -> failwith "return_of_decl_type";;
 
 let decls_of_definition x =
   match x with
@@ -628,9 +637,12 @@ let decls_of_definition x =
       List.map (fun z ->
         match z with
         | ((s,t',[],_),z) ->
-             (nindex s,
-               GlobDecl (ctype_of_specifier_decl_type t t',
-                 decl_of_init_expression z))
+            (match return_of_decl_type (ctype_of_specifier t) t' with
+            | Some ret -> (nindex s, FunDecl (args_of_decl_type t', ret, None))
+            | _ ->
+                (nindex s,
+                 GlobDecl (ctype_of_specifier_decl_type t t',
+                   decl_of_init_expression z)))
         | _ -> raise (Unknown_definition x)) l
   | Cabs.FUNDEF (((Cabs.SpecStorage Cabs.EXTERN::_),_),_,_,_) -> []
   | Cabs.FUNDEF ((t,(s,t',[],_)),
@@ -639,9 +651,9 @@ let decls_of_definition x =
       let b = cstmt_of_statements l in
       let b = if s = "main" && no_int_return b then
         CSComp(b,CSReturn (Some (econst0))) else b in
-      [(nindex s,
-        FunDecl (args_of (args_of_decl_type t'),
-          ctype_of_specifier_decl_type t t',Some b))]
+      (match return_of_decl_type (ctype_of_specifier t) t' with
+      | Some ret -> [(nindex s, FunDecl (args_of_decl_type t', ret, Some b))]
+      | None -> raise (Unknown_definition x))
   | Cabs.ONLYTYPEDEF (t,_) ->
       let _ = ctype_of_specifier t in []
   | Cabs.TYPEDEF ((Cabs.SpecTypedef::t,l),_) ->
@@ -658,7 +670,7 @@ let printf_prelude () =
   try let s = "len-%d" in
     let i = n_of_int 0 and n = n_of_int 1 in
     [(n_of_int (index s !the_ids),
-      FunDecl ([(i, ctint_signed)],ctint_signed,Some
+      FunDecl ([(Some i, ctint_signed)],ctint_signed,Some
        (CSBlock (AutoStorage,n,ctint_signed,Some econst0,
         CSComp (CSIf (CEBinOp (CompOp EqOp,CEVar i,econst0),
           CSReturn (Some econst1),CSSkip),

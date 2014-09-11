@@ -66,7 +66,7 @@ Inductive decl : Set :=
   | EnumDecl : cint_type → list (N * option cexpr) → decl
   | TypeDefDecl : ctype → decl
   | GlobDecl : ctype → option cexpr → decl
-  | FunDecl : list (N * ctype) → ctype → option cstmt → decl.
+  | FunDecl : list (option N * ctype) → ctype → option cstmt → decl.
 
 Inductive global_decl (Ti : Set): Set :=
   | Global : index → type Ti → bool → global_decl Ti
@@ -564,8 +564,9 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
   end.
 Definition to_fun_stmt (Γn : compound_env Ti) (Γ : env Ti)
      (m : mem Ti) (Δg : global_env Ti)
-     (ys : list N) (τs : list (type Ti)) (σ : type Ti) (cs : cstmt) :
+     (mys : list (option N)) (τs : list (type Ti)) (σ : type Ti) (cs : cstmt) :
      string + mem Ti * global_env Ti * stmt Ti :=
+  ys ← error_of_option (mapM id mys) "function with unnamed arguments";
   let Δl := zip_with (λ y τ, (y, Local τ)) ys τs in
   '(m,Δg,_,s,cmσ) ← to_stmt Γn Γ σ m Δg Δl (labels cs) None cs;
   guard (gotos s ⊆ labels s) with "function with unbound gotos";
@@ -573,11 +574,11 @@ Definition to_fun_stmt (Γn : compound_env Ti) (Γ : env Ti)
   inr (m,Δg,s).
 Definition alloc_fun (Γn : compound_env Ti) (Γ : env Ti)
     (m : mem Ti) (Δg : global_env Ti)
-    (f : N) (ys : list N) (cτs : list ctype) (cσ : ctype)
+    (f : N) (mys : list (option N)) (cτs : list ctype) (cσ : ctype)
     (mcs : option cstmt)  : string + mem Ti * global_env Ti :=
   τs ← mapM (to_type Γn Γ m Δg [] (to_Type false)) cτs;
   σ ← to_type Γn Γ m Δg [] (to_Type true) cσ;
-  guard (NoDup ys) with "function with duplicate argument names";
+  guard (NoDup (omap id mys)) with "function with duplicate argument names";
   match Δg !! f with
   | Some (Fun τs' σ' ms) =>
      guard (τs' = τs) with "arguments do not match prototype";
@@ -585,7 +586,7 @@ Definition alloc_fun (Γn : compound_env Ti) (Γ : env Ti)
      match mcs with
      | Some cs =>
         guard (ms = None) with "function previously completed";
-        '(m,Δg,s) ← to_fun_stmt Γn Γ m Δg ys τs σ cs;
+        '(m,Δg,s) ← to_fun_stmt Γn Γ m Δg mys τs σ cs;
         inr (m,<[f:=Fun τs σ (Some s)]>Δg)
      | None => inr (m,Δg)
      end
@@ -598,7 +599,7 @@ Definition alloc_fun (Γn : compound_env Ti) (Γ : env Ti)
      match mcs with
      | Some cs => 
         let Δg := <[f:=Fun τs σ None]>Δg in
-        '(m,Δg,s) ← to_fun_stmt Γn Γ m Δg ys τs σ cs;
+        '(m,Δg,s) ← to_fun_stmt Γn Γ m Δg mys τs σ cs;
         inr (m,<[f:=Fun τs σ (Some s)]>Δg)
      | None => inr (m,<[f:=Fun τs σ None]>Δg)
      end
@@ -1244,10 +1245,10 @@ Proof.
   * split_ands; repeat (progress eauto using expr_typed_weaken,
       stmt_typed_weaken || typed_constructor).
 Qed.
-Lemma to_fun_stmt_typed Γn Γ m Δg ys τs σ cs m' Δg' s :
+Lemma to_fun_stmt_typed Γn Γ m Δg mys τs σ cs m' Δg' s :
   ✓ Γ → ✓{Γ} m → mem_writable_all Γ m →
-  global_env_valid Γ ('{m}) Δg → ✓{Γ} σ → ✓{Γ}* τs → length ys = length τs →
-  to_fun_stmt Γn Γ m Δg ys τs σ cs = inr (m',Δg',s) → ∃ cmτ,
+  global_env_valid Γ ('{m}) Δg → ✓{Γ} σ → ✓{Γ}* τs → length mys = length τs →
+  to_fun_stmt Γn Γ m Δg mys τs σ cs = inr (m',Δg',s) → ∃ cmτ,
   (**i 1.) *) (Γ,to_funtypes Δg','{m'},τs) ⊢ s : cmτ ∧
   (**i 2.) *) gotos s ⊆ labels s ∧
   (**i 3.) *) rettype_match cmτ σ ∧
@@ -1258,17 +1259,19 @@ Lemma to_fun_stmt_typed Γn Γ m Δg ys τs σ cs m' Δg' s :
   (**i 8.) *) to_funtypes Δg ⊆ to_funtypes Δg'.
 Proof.
   unfold to_fun_stmt; intros.
+  destruct (mapM id mys) as [ys|] eqn:?; simplify_equality'.
+  assert (length ys = length τs) by (by erewrite <-mapM_length by eauto).
   destruct (to_stmt _ _ _ _ _ _ _ _ _)
     as [|[[[[m'' Δg''] Ls] ?] cmτ]] eqn:?; simplify_error_equality.
   destruct (to_stmt_typed Γn Γ σ m Δg (zip_with (λ y τ, (y, Local τ)) ys τs)
     (labels cs) None cs m' Δg' Ls s cmτ) as (Hs&?&?&?&?&?);
-    eauto using local_env_valid_params.
+    eauto using local_env_valid_params, type_valid_ptr_type_valid.
   rewrite local_env_stack_types_params in Hs by done; eauto 10.
 Qed.
-Lemma alloc_fun_typed Γn Γ m Δg x ys cτs cτ mcs m' Δg' :
+Lemma alloc_fun_typed Γn Γ m Δg x mys cτs cτ mcs m' Δg' :
   ✓ Γ → ✓{Γ} m → mem_writable_all Γ m → global_env_valid Γ ('{m}) Δg →
-  length ys = length cτs →
-  alloc_fun Γn Γ m Δg x ys cτs cτ mcs = inr (m',Δg') →
+  length mys = length cτs →
+  alloc_fun Γn Γ m Δg x mys cτs cτ mcs = inr (m',Δg') →
   (**i 1.) *) ✓{Γ} m' ∧
   (**i 2.) *) mem_writable_all Γ m' ∧
   (**i 3.) *) global_env_valid Γ ('{m'}) Δg' ∧
@@ -1277,7 +1280,7 @@ Proof.
   unfold alloc_fun; intros ??? HΔg ??.
   destruct (mapM _ _) as [|τs] eqn:?; simplify_equality'.
   assert (✓{Γ}* τs) by eauto using to_types_valid.
-  assert (length ys = length τs).
+  assert (length mys = length τs).
   { eauto 3 using error_mapM_length, eq_trans. }
   destruct (to_type _ _ _ _ _ _ _) as [|σ] eqn:?; simplify_equality'.
   assert (✓{Γ} σ) by eauto using to_type_valid.
@@ -1287,7 +1290,7 @@ Proof.
     destruct mcs as [cs|]; repeat case_error_guard; simplify_equality; eauto.
     destruct (to_fun_stmt _ _ _ _ _ _ _ _)
       as [|[[m'' Δg''] s]] eqn:?; simplify_equality'.
-    destruct (to_fun_stmt_typed Γn Γ m Δg ys τs σ cs m' Δg'' s)
+    destruct (to_fun_stmt_typed Γn Γ m Δg mys τs σ cs m' Δg'' s)
       as (mcσ&?&?&?&?&?&?&?&?); auto.
     destruct (lookup_to_funtypes_1 Δg'' x τs σ); eauto using lookup_weaken.
     assert (to_funtypes Δg'' ⊆ to_funtypes (<[x:=Fun τs σ (Some s)]> Δg''))
@@ -1302,7 +1305,7 @@ Proof.
     set (Δg':=<[x:=Fun τs σ None]> Δg) in *.
     assert (to_funtypes Δg ⊆ to_funtypes Δg').
       by eauto 10 using to_funtypes_insert.
-    destruct (to_fun_stmt_typed Γn Γ m Δg' ys τs σ cs m' Δg'' s)
+    destruct (to_fun_stmt_typed Γn Γ m Δg' mys τs σ cs m' Δg'' s)
       as (mcσ&?&?&?&?&?&?&?&?); eauto 10 using global_env_insert_valid.
     destruct (lookup_to_funtypes_1 Δg'' x τs σ).
     { eapply lookup_weaken; eauto.
