@@ -485,7 +485,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      '(_,Lb) ← error_of_option mLcb "break not allowed";
      inr (m, Δg, Ls, goto Lb, (true, None))
   | CSReturn (Some ce) =>
-     '(e,τ') ← to_R <$> to_expr Γn Γ m Δg Δl ce;
+     '(e,τ') ← to_R_NULL τret <$> to_expr Γn Γ m Δg Δl ce;
      guard (cast_typed Γ τ' τret) with "return expression of incorrect type";
      inr (m, Δg, Ls, ret (cast{τret} e), (true, Some τret))
   | CSReturn None => inr (m, Δg, Ls, ret (#voidV), (true, Some voidT))
@@ -1187,8 +1187,8 @@ Proof.
       mem_alloc_val_writable_all, mem_alloc_val_index_typed.
 Qed.
 Lemma to_stmt_typed Γn Γ τret m Δg Δl Ls mLcb cs m' Δg' Ls' s cmτ :
-  ✓ Γ → ✓{Γ} m → mem_writable_all Γ m →
-  global_env_valid Γ ('{m}) Δg → local_env_valid Γ ('{m}) Δl →
+  ✓ Γ → ✓{Γ} m → mem_writable_all Γ m → global_env_valid Γ ('{m}) Δg →
+  local_env_valid Γ ('{m}) Δl → ptr_type_valid Γ τret →
   to_stmt Γn Γ τret m Δg Δl Ls mLcb cs = inr (m',Δg',Ls', s,cmτ) →
   (**i 1.) *) (Γ,to_funtypes Δg','{m'},local_env_stack_types Δl) ⊢ s : cmτ ∧
   (**i 2.) *) ✓{Γ} m' ∧
@@ -1197,7 +1197,7 @@ Lemma to_stmt_typed Γn Γ τret m Δg Δl Ls mLcb cs m' Δg' Ls' s cmτ :
   (**i 5.) *) global_env_valid Γ ('{m'}) Δg' ∧
   (**i 6.) *) to_funtypes Δg ⊆ to_funtypes Δg'.
 Proof.
-  intros ? Hm Hm' Hg Hl Hs.
+  intros ? Hm Hm' Hg Hl Hτret Hs.
   revert m m' s cmτ Δl Δg Δg' Ls Ls' mLcb Hs Hm Hm' Hg Hl.
   induction cs; intros;
     repeat match goal with
@@ -1246,7 +1246,7 @@ Proof.
 Qed.
 Lemma to_fun_stmt_typed Γn Γ m Δg ys τs σ cs m' Δg' s :
   ✓ Γ → ✓{Γ} m → mem_writable_all Γ m →
-  global_env_valid Γ ('{m}) Δg → ✓{Γ}* τs → length ys = length τs →
+  global_env_valid Γ ('{m}) Δg → ✓{Γ} σ → ✓{Γ}* τs → length ys = length τs →
   to_fun_stmt Γn Γ m Δg ys τs σ cs = inr (m',Δg',s) → ∃ cmτ,
   (**i 1.) *) (Γ,to_funtypes Δg','{m'},τs) ⊢ s : cmτ ∧
   (**i 2.) *) gotos s ⊆ labels s ∧
