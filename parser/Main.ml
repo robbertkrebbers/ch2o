@@ -296,6 +296,16 @@ let name_of s = if s <> "" then s else
   let s = "anon-"^string_of_int !the_anon in
   the_anon := !the_anon + 1; s;;
 
+let const_of_string s =
+  let rec go n sign longs =
+    match String.get s (n - 1) with
+    | 'u' | 'U' when sign = Signed -> go (n - 1) Unsigned longs
+    | 'l' | 'L' -> go (n - 1) sign (longs + 1)
+    | _ -> ({csign = Some sign;
+        crank = if 0 <= longs then CLongRank (nat_of_int longs) else CIntRank},
+        num_of_string (String.sub s 0 n)) in
+  go (String.length s) Signed (-1);;
+
 let rec add_compound k0 n l =
    let k = CompoundDecl (k0,
      List.flatten (List.map (fun (t,l') -> List.map (fun f ->
@@ -385,7 +395,8 @@ and ctype_of_specifier_decl_type x y =
 
 and cexpr_of_expression x =
   match x with
-  | Cabs.CONSTANT (Cabs.CONST_INT s) -> econst (num_of_string s)
+  | Cabs.CONSTANT (Cabs.CONST_INT s) ->
+     let x,n = const_of_string s in CEConst (x,z_of_num n)
   | Cabs.VARIABLE "NULL" -> CECast (CTPtr CTVoid,econst0)
   | Cabs.VARIABLE "CHAR_BITS" -> CEBits uchar
   | Cabs.VARIABLE "CHAR_MIN" -> CEMin {csign = None; crank = CCharRank}
