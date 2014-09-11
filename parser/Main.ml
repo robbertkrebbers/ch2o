@@ -309,7 +309,7 @@ let rec add_compound k0 n l =
 and ctype_of_specifier x =
   let longrank x =
     match x with
-    | None -> 0
+    | None -> -1
     | Some (CLongRank n) -> int_of_nat n
     | _ -> failwith "longrank" in
   let rec cint_of_specifier has_int sign rank x =
