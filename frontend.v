@@ -14,7 +14,7 @@ Inductive cint_type :=
 
 Inductive cexpr : Set :=
   | CEVar : N → cexpr
-  | CEConst : cint_type → Z → cexpr
+  | CEConst : signedness → nat → Z → cexpr
   | CESizeOf : ctype → cexpr
   | CEMin : cint_type → cexpr
   | CEMax : cint_type → cexpr
@@ -216,6 +216,19 @@ Definition to_binop_expr (op : binop)
     σ ← binop_type_of (CompOp EqOp) τ τ;
     Some (e1 @{op} e2, inr σ)).
 
+Definition int_const_types (s : signedness) (n : nat) : list (int_type Ti) :=
+  match n with
+  | 0 => [IntType s int_rank; IntType s (long_rank 0); IntType s (long_rank 1)]
+  | 1 => [IntType s (long_rank 0); IntType s (long_rank 1)]
+  | S n => [IntType s (long_rank n)]
+  end.
+Definition to_int_const (x : Z) : list (int_type Ti) → option (int_type Ti) :=
+  fix go τis :=
+  match τis with
+  | [] => None
+  | τi :: τis => if decide (int_typed x τi) then Some τi else go τis
+  end.
+
 Definition to_inttype (cτi : cint_type) : int_type Ti :=
   let (ms,k) := cτi in
   match k with
@@ -237,9 +250,9 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
     (ce : cexpr) : string + expr Ti * lrtype Ti :=
   match ce with
   | CEVar x => error_of_option (lookup_var' x Δg Δl) "variable not found"
-  | CEConst cτi x =>
-     let τi := to_inttype cτi in
-     guard (int_typed x τi) with "integer constant not in range";
+  | CEConst s longs x =>
+     let cτis := int_const_types s longs in
+     τi ← error_of_option (to_int_const x cτis) "integer constant too large";
      inr (# (intV{τi} x), inr (intT τi))
   | CESizeOf cτ =>
      τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
@@ -665,7 +678,7 @@ End frontend_more.
 Section cexpr_ind.
 Context (P : cexpr → Prop) (Q : ctype → Prop).
 Context (Pvar : ∀ x, P (CEVar x)).
-Context (Pconst : ∀ τi x, P (CEConst τi x)).
+Context (Pconst : ∀ s n x, P (CEConst s n x)).
 Context (Psizeof : ∀ cτ, Q cτ → P (CESizeOf cτ)).
 Context (Pmin : ∀ τi, P (CEMin τi)).
 Context (Pmax : ∀ τi, P (CEMax τi)).
@@ -696,7 +709,7 @@ Context (Qtypeof : ∀ ce, P ce → Q (CTTypeOf ce)).
 Fixpoint cexpr_ind_alt ce : P ce :=
   match ce return P ce with
   | CEVar _ => Pvar _
-  | CEConst _ _ => Pconst _ _
+  | CEConst _ _ _ => Pconst _ _ _
   | CESizeOf cτ => Psizeof _ (ctype_ind_alt cτ)
   | CEMin _ => Pmin _
   | CEMax _ => Pmax _
@@ -937,6 +950,9 @@ Proof.
   by apply (HΔg x _ Hd).
 Qed.
 
+Lemma to_int_const_typed x cτis τi :
+  to_int_const x cτis = Some τi → int_typed x τi.
+Proof. intros; induction cτis; simplify_option_equality; auto. Qed.
 Lemma to_R_typed Γ Γf m τs e τlr e' τ' :
   ✓ Γ → ✓{Γ} Γf → to_R (e,τlr) = (e',τ') → (Γ,Γf,'{m},τs) ⊢ e : τlr →
   ✓{Γ}* τs → (Γ,Γf,'{m},τs) ⊢ e' : inr τ'.
@@ -1056,7 +1072,7 @@ Proof.
        repeat typed_constructor; eauto using to_binop_expr_typed,
          to_if_expr_typed, lookup_var_typed', type_valid_ptr_type_valid,
          lockset_empty_valid, int_lower_typed, int_upper_typed, int_bits_typed,
-         type_complete_valid, TBase_valid_inv, TPtr_valid_inv
+         type_complete_valid, TBase_valid_inv, TPtr_valid_inv, to_int_const_typed
     | |- ✓{_} _ =>
        repeat constructor; eauto using lookup_typedef_valid',
          TBase_valid_inv, TPtr_valid_inv, type_complete_valid

@@ -213,7 +213,7 @@ let uchar = {csign = Some Unsigned; crank = CCharRank};;
 let int_signed = {csign = Some Signed; crank = CIntRank};;
 let ctint_signed = CTInt int_signed;;
 
-let econst n = CEConst (int_signed,z_of_num n);;
+let econst n = CEConst (Signed,nat_of_int 0,z_of_num n);;
 let econst0 = econst (Int 0);;
 let econst1 = econst (Int 1);;
 
@@ -301,10 +301,8 @@ let const_of_string s =
     match String.get s (n - 1) with
     | 'u' | 'U' when sign = Signed -> go (n - 1) Unsigned longs
     | 'l' | 'L' -> go (n - 1) sign (longs + 1)
-    | _ -> ({csign = Some sign;
-        crank = if 0 <= longs then CLongRank (nat_of_int longs) else CIntRank},
-        num_of_string (String.sub s 0 n)) in
-  go (String.length s) Signed (-1);;
+    | _ -> (sign, nat_of_int longs, num_of_string (String.sub s 0 n)) in
+  go (String.length s) Signed 0;;
 
 let rec add_compound k0 n l =
    let k = CompoundDecl (k0,
@@ -396,7 +394,7 @@ and ctype_of_specifier_decl_type x y =
 and cexpr_of_expression x =
   match x with
   | Cabs.CONSTANT (Cabs.CONST_INT s) ->
-     let x,n = const_of_string s in CEConst (x,z_of_num n)
+     let s,ls,n = const_of_string s in CEConst (s,ls,z_of_num n)
   | Cabs.VARIABLE "NULL" -> CECast (CTPtr CTVoid,econst0)
   | Cabs.VARIABLE "CHAR_BITS" -> CEBits uchar
   | Cabs.VARIABLE "CHAR_MIN" -> CEMin {csign = None; crank = CCharRank}
@@ -511,7 +509,7 @@ and cexpr_of_expression x =
            (let i = n_of_int 0 in
             FunDecl (a,ctint_signed,
               Some (CSBlock (AutoStorage,i,ctint_signed,
-                Some (CEConst (int_signed,z_of_int (length_of_format s))),
+                Some (econst (Int (length_of_format s))),
               printf_body i a)))) else
             FunDecl (a,CTVoid,Some (CSSkip)))];
         the_formats := !the_formats@[(f,s)]));
