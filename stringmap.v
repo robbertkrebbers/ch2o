@@ -7,8 +7,7 @@ and guarantees logarithmic-time operations. *)
 Require Export fin_maps.
 Require Import Ascii String list pmap mapset.
 
-Instance assci_eq_dec (a1 a2 : ascii) : Decision (a1 = a2).
-Proof. solve_decision. Defined.
+Instance assci_eq_dec : ∀ a1 a2, Decision (a1 = a2) := ascii_dec.
 Instance string_eq_dec (s1 s2 : string) : Decision (s1 = s2).
 Proof. solve_decision. Defined.
 
