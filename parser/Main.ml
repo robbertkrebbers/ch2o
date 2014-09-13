@@ -359,7 +359,7 @@ and cexpr_of_expression x =
   | Cabs.CONSTANT (Cabs.CONST_INT s) ->
      let s,ls,n = const_of_string s in CEConst (s,ls,z_of_num n)
   | Cabs.VARIABLE "NULL" -> CECast (CTPtr CTVoid,econst0)
-  | Cabs.VARIABLE "CHAR_BITS" -> CEBits uchar
+  | Cabs.VARIABLE "CHAR_BIT" -> CEBits uchar
   | Cabs.VARIABLE "CHAR_MIN" -> CEMin {csign = None; crank = CCharRank}
   | Cabs.VARIABLE "CHAR_MAX" -> CEMax {csign = None; crank = CCharRank}
   | Cabs.VARIABLE "SCHAR_MIN" -> CEMin {csign = Some Signed; crank = CCharRank}
