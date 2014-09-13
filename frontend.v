@@ -248,7 +248,8 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
     (m : mem Ti) (Δg : global_env Ti) (Δl : local_env Ti)
     (ce : cexpr) : string + expr Ti * lrtype Ti :=
   match ce with
-  | CEVar x => error_of_option (lookup_var' x Δg Δl) "variable not found"
+  | CEVar x => error_of_option (lookup_var' x Δg Δl)
+      ("variable `" +:+ x +:+ "` not found")
   | CEConst s longs x =>
      let cτis := int_const_types s longs in
      τi ← error_of_option (to_int_const x cτis) "integer constant too large";
@@ -285,13 +286,14 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      σ ← error_of_option (assign_type_of Γ τ1 τ2 ass) "assignment cannot be typed";
      inr (e1 ::={ass} e2, inr σ)
   | CECall f ces =>
-     '(τs,σ,_) ← error_of_option (Δg !! f ≫= maybe_Fun) "function not declared";
-     guard (length ces = length τs)
-       with "function applied to wrong number of arguments";
+     '(τs,σ,_) ← error_of_option (Δg !! f ≫= maybe_Fun)
+       ("function `" +:+ f +:+ "` not declared");
+     guard (length ces = length τs) with
+       ("function `" +:+ f +:+ "` applied to wrong number of arguments");
      eτlrs ← mapM (to_expr Γn Γ m Δg Δl) ces;
      let τes := zip_with to_R_NULL τs eτlrs in 
-     guard (Forall2 (cast_typed Γ) (snd <$> τes) τs)
-       with "function applied to arguments of incorrect type";
+     guard (Forall2 (cast_typed Γ) (snd <$> τes) τs) with
+       ("function `" +:+ f +:+ "` applied to arguments of incorrect type");
      inr (call f @ cast{τs}* (fst <$> τes), inr σ)
   | CEAlloc cτ ce =>
      τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
@@ -354,7 +356,7 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      '(_,xs) ← error_of_option (Γn !! s ≫= maybe_CompoundType)
        "please report: incompatible environments at field operator";
      i ← error_of_option (list_find (x =) xs)
-       "field operator used with invalid index";
+       ("field operator used with unknown index `" +:+ x +:+ "`");
      σ ← error_of_option (σs !! i)
        "please report: incompatible environments at field operator";
      let rs :=
@@ -377,13 +379,15 @@ with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      guard (kind ≠ to_Type false) with "non-void type expected";
      inr voidT
   | CTDef x =>
-     τ ← error_of_option (lookup_typedef' x Δg Δl) "typedef not found";
+     τ ← error_of_option (lookup_typedef' x Δg Δl)
+       ("typedef `" +:+ x +:+ "` not found");
      guard (kind ≠ to_Ptr → type_complete Γ τ) with "complete typedef expected";
      guard (τ = voidT → kind ≠ to_Type false) with "non-void typedef expected";
      inr τ
   | CTEnum s =>
      let s : tag := s in
-     τi ← error_of_option (Γn !! s ≫= maybe_EnumType) "enum not found";
+     τi ← error_of_option (Γn !! s ≫= maybe_EnumType)
+       ("enum `" +:+ s +:+ "`not found");
      inr (intT τi)
   | CTInt cτi => inr (intT (to_inttype cτi))
   | CTPtr cτ => τ ← to_type Γn Γ m Δg Δl to_Ptr cτ; inr (τ.* )
@@ -424,20 +428,25 @@ Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
   τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
   match Δg !! x with
   | Some (Global o τ' init) =>
-     guard (τ = τ') with "global previously defined with different type";
+     guard (τ = τ') with
+       ("global `" +:+ x +:+ "` previously defined with different type");
      match mce with
      | Some ce =>
-        guard (init = false) with "global already initialized";
+        guard (init = false) with
+          ("global `" +:+ x +:+ "` already initialized");
         v ← to_val Γn Γ m Δg Δl ce τ;
         inr (<[addr_top o τ:=v]{Γ}>m, <[x:=Global o τ true]>Δg, o, τ)
      | None => inr (m, Δg, o, τ)
      end
-  | Some (Fun _ _ _) => inl "global previously defined as function"
-  | Some (GlobalTypeDef _) => inl "global previously defined as typedef"
-  | Some (EnumVal _ _) => inl "global previously defined as enum tag"
+  | Some (Fun _ _ _) =>
+     inl ("global `" +:+ x +:+ "` previously declared as function")
+  | Some (GlobalTypeDef _) =>
+     inl ("global `" +:+ x +:+ "` previously declared as typedef")
+  | Some (EnumVal _ _) =>
+     inl ("global `" +:+ x +:+ "` previously declared as enum tag")
   | None =>
-     guard (int_typed (size_of Γ τ) sptrT)
-       with "global whose type that is too large";
+     guard (int_typed (size_of Γ τ) sptrT) with
+       ("global `" +:+ x +:+ "` whose type that is too large");
      match mce with
      | Some ce =>
         let o := fresh (dom _ m) in
@@ -455,8 +464,8 @@ Definition alloc_static (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
     (Δg : global_env Ti) (Δl : local_env Ti) (x : string) (cτ : ctype)
     (mce : option cexpr) : string + mem Ti * index * type Ti :=
   τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
-  guard (int_typed (size_of Γ τ) sptrT)
-    with "static whose type that is too large";
+  guard (int_typed (size_of Γ τ) sptrT) with
+    ("static `" +:+ x +:+ "` whose type that is too large");
   match mce with
   | Some ce =>
      let o := fresh (dom _ m) in
@@ -499,7 +508,8 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      let Δl := (x,Local τ) :: Δl in
      '(e,τ') ← to_R_NULL τ <$> to_expr Γn Γ m Δg Δl ce;
      guard (cast_typed Γ τ' τ) with
-       "block scope declaration with initializer of incorrect type";
+       ("block scope `" +:+ x +:+
+                      "` declaration with initializer of incorrect type");
      '(m,Δg,s,cmσ) ← go m Δg Δl cs;
      inr (m, Δg, block{τ} (var{τ} 0 ::= e ;; s), cmσ)
   | CSBlock StaticStorage x cτ mce cs =>
@@ -507,7 +517,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      go m Δg ((x,Static o τ) :: Δl) cs
   | CSBlock ExternStorage x cτ mce cs =>
      guard (mce = None) with
-       "extern block scope declaration with an initializer";
+       ("extern block scope declaration `" +:+ x +:+ "` with an initializer");
      '(m,Δg,o,τ) ← alloc_global Γn Γ m Δg Δl x cτ None;
      go m Δg ((x,Static o τ) :: Δl) cs
   | CSTypeDef x cτ cs =>
@@ -517,7 +527,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      '(m,Δg,s1,cmσ1) ← go m Δg Δl cs1;
      '(m,Δg,s2,cmσ2) ← go m Δg Δl cs2;
      mσ ← error_of_option (rettype_union (cmσ1.2) (cmσ2.2))
-       "composition with non-matching return types";
+       "composition of statements with non-matching return types";
      inr (m, Δg, s1 ;; s2, (cmσ2.1, mσ))
   | CSLabel l cs =>
      '(m,Δg,s,cmσ) ← go m Δg Δl cs;
@@ -539,7 +549,9 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      '(m,Δg,s,cmσ) ← go m Δg Δl cs;
      inr (m, Δg,
        !(cast{voidT} e1) ;;
-       breakto (loop (if{e2} skip else break 0 ;; breakto s ;; !(cast{voidT} e3))),
+       breakto (loop (
+         if{e2} skip else break 0 ;; breakto s ;; !(cast{voidT} e3)
+       )),
        (false, cmσ.2))
   | CSDoWhile cs ce =>
      '(m,Δg,s,cmσ) ← go m Δg Δl cs;
@@ -559,15 +571,19 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      inr (m, Δg, if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S
   end.
 Definition to_fun_stmt (Γn : compound_env Ti) (Γ : env Ti)
-     (m : mem Ti) (Δg : global_env Ti) (mys : list (option string))
+     (m : mem Ti) (Δg : global_env Ti) (f : string) (mys : list (option string))
      (τs : list (type Ti)) (σ : type Ti) (cs : cstmt) :
      string + mem Ti * global_env Ti * stmt Ti :=
-  ys ← error_of_option (mapM id mys) "function with unnamed arguments";
+  ys ← error_of_option (mapM id mys)
+    ("function `" +:+ f +:+ "` has unnamed arguments");
   let Δl := zip_with (λ y τ, (y, Local τ)) ys τs in
   '(m,Δg,s,cmσ) ← to_stmt Γn Γ σ m Δg Δl cs;
-  guard (gotos s ⊆ labels s) with "function with unbound gotos";
-  guard (breaks_valid 0 s) with "function with unbound breaks/continues";
-  guard (rettype_match cmσ σ) with "function with incorrect return type";
+  guard (gotos s ⊆ labels s) with
+    ("function `" +:+ f +:+ "` has unbound gotos");
+  guard (breaks_valid 0 s) with
+    ("function `" +:+ f +:+ "` has unbound breaks/continues");
+  guard (rettype_match cmσ σ) with
+    ("function `" +:+ f +:+ "` has incorrect return type");
   inr (m,Δg,s).
 Definition alloc_fun (Γn : compound_env Ti) (Γ : env Ti)
     (m : mem Ti) (Δg : global_env Ti) (f : string)
@@ -575,28 +591,37 @@ Definition alloc_fun (Γn : compound_env Ti) (Γ : env Ti)
     (mcs : option cstmt)  : string + mem Ti * global_env Ti :=
   τs ← mapM (to_type Γn Γ m Δg [] (to_Type false)) cτs;
   σ ← to_type Γn Γ m Δg [] (to_Type true) cσ;
-  guard (NoDup (omap id mys)) with "function with duplicate argument names";
+  guard (NoDup (omap id mys)) with
+    ("function `" +:+ f +:+ "` has duplicate argument names");
   match Δg !! f with
   | Some (Fun τs' σ' ms) =>
-     guard (τs' = τs) with "arguments do not match prototype";
-     guard (σ' = σ) with "return type does not match prototype";
+     guard (τs' = τs) with
+       ("arguments of function `" +:+ f
+         +:+ "` do not match previously declared prototype");
+     guard (σ' = σ) with
+       ("return type of function `" +:+ f
+         +:+ "` does not match previously declared prototype");
      match mcs with
      | Some cs =>
-        guard (ms = None) with "function previously completed";
-        '(m,Δg,s) ← to_fun_stmt Γn Γ m Δg mys τs σ cs;
+        guard (ms = None) with
+          ("function `" +:+ f +:+ "` previously completed");
+        '(m,Δg,s) ← to_fun_stmt Γn Γ m Δg f mys τs σ cs;
         inr (m,<[f:=Fun τs σ (Some s)]>Δg)
      | None => inr (m,Δg)
      end
-  | Some (Global _ _ _) => inl "function previously defined as global"
-  | Some (GlobalTypeDef _) => inl "function previously defined as typedef"
-  | Some (EnumVal _ _) => inl "function previously defined as enum tag"
+  | Some (Global _ _ _) =>
+     inl ("function `" +:+ f +:+ "` previously declared as global")
+  | Some (GlobalTypeDef _) =>
+     inl ("function `" +:+ f +:+ "` previously declared as typedef")
+  | Some (EnumVal _ _) =>
+     inl ("function `" +:+ f +:+ "` previously declared as enum tag")
   | None =>
-     guard (Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs)
-       with "function with argument whose type is too large";
+     guard (Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs) with
+       ("function `" +:+ f +:+ "` has arguments whose type is too large");
      match mcs with
      | Some cs => 
         let Δg := <[f:=Fun τs σ None]>Δg in
-        '(m,Δg,s) ← to_fun_stmt Γn Γ m Δg mys τs σ cs;
+        '(m,Δg,s) ← to_fun_stmt Γn Γ m Δg f mys τs σ cs;
         inr (m,<[f:=Fun τs σ (Some s)]>Δg)
      | None => inr (m,<[f:=Fun τs σ None]>Δg)
      end
@@ -608,16 +633,19 @@ Definition to_enum (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
   match xces with
   | [] => inr Δg
   | (x,None) :: xces =>
-     guard (Δg !! x = None) with "enum field with previously declared name";
-     guard (int_typed z τi) with "enum field with value out of range";
+     guard (Δg !! x = None) with
+       ("enum field `" +:+ x +:+ "` previously declared");
+     guard (int_typed z τi) with
+       ("enum field `" +:+ x +:+ "` has value out of range");
      go (<[x:=EnumVal τi z]>Δg) xces (z + 1)%Z
   | (x,Some ce) :: xces =>
-     guard (Δg !! x = None) with "enum field with previously declared name";
+     guard (Δg !! x = None) with
+       ("enum field `" +:+ x +:+ "` previously declared");
      '(e,_) ← to_expr Γn Γ m Δg [] ce;
      v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
-       "enum field with non-constant or undefined value";
+       ("enum field `" +:+ x +:+ "` has non-constant or undefined value");
      '(_,z') ← error_of_option (maybe_VBase v ≫= maybe_VInt)
-       "enum field with non-integer value";
+       ("enum field `" +:+ x +:+ "` has non-integer value");
      guard (int_typed z' τi) with "enum field with value out of range";
      go (<[x:=EnumVal τi z']>Δg) xces (z' + 1)%Z
   end.
@@ -630,18 +658,23 @@ Fixpoint to_envs_go (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
      let s : tag := s in
      let ys := fst <$> cτys in
      τs ← mapM (to_type Γn Γ m Δg [] (to_Type false)) (snd <$> cτys);
-     guard (Γ !! s = None) with "compound type with previously declared name";
-     guard (NoDup ys) with "compound type with non-unique fields";
-     guard (τs ≠ []) with "compound type should have atleast 1 field";
+     guard (Γ !! s = None) with
+       ("compound type `" +:+ s +:+ "`  previously declared");
+     guard (NoDup ys) with
+       ("compound type `" +:+ s +:+ "` has non-unique fields");
+     guard (τs ≠ []) with
+       ("compound type `" +:+ s +:+ "` declared without any fields");
      to_envs_go (<[s:=CompoundType c ys]>Γn) (<[s:=τs]>Γ) m Δg Θ
   | (s,EnumDecl cτi yces) :: Θ =>
      let s : tag := s in
      let τi := to_inttype cτi in
-     guard (Γn !! s = None) with "enum type with previously declared name";
+     guard (Γn !! s = None) with
+       ("enum type `" +:+ s +:+ "` previously declared");
      Δg ← to_enum Γn Γ m τi Δg yces 0;
      to_envs_go (<[s:=EnumType τi]>Γn) Γ m Δg Θ
   | (x,TypeDefDecl cτ) :: Θ =>
-     guard (Δg !! x = None) with "typedef with previously declared name";
+     guard (Δg !! x = None) with
+       ("typedef `" +:+ x +:+ "` previously declared");
      τ ← to_type Γn Γ m Δg [] to_Ptr cτ;
      to_envs_go Γn Γ m (<[x:=GlobalTypeDef τ]>Δg) Θ
   | (x,GlobDecl cτ me) :: Θ =>
@@ -1245,10 +1278,10 @@ Proof.
   * split_ands; eauto 3. repeat typed_constructor; eauto using
       stmt_typed_weaken, expr_typed_weaken, rettype_union_l, rettype_union_r.
 Qed.
-Lemma to_fun_stmt_typed Γn Γ m Δg mys τs σ cs m' Δg' s :
+Lemma to_fun_stmt_typed Γn Γ m Δg f mys τs σ cs m' Δg' s :
   ✓ Γ → ✓{Γ} m → mem_writable_all Γ m →
   global_env_valid Γ ('{m}) Δg → ✓{Γ} σ → ✓{Γ}* τs → length mys = length τs →
-  to_fun_stmt Γn Γ m Δg mys τs σ cs = inr (m',Δg',s) → ∃ cmτ,
+  to_fun_stmt Γn Γ m Δg f mys τs σ cs = inr (m',Δg',s) → ∃ cmτ,
   (**i 1.) *) (Γ,to_funtypes Δg','{m'},τs) ⊢ s : cmτ ∧
   (**i 2.) *) rettype_match cmτ σ ∧
   (**i 3.) *) gotos s ⊆ labels s ∧
@@ -1269,10 +1302,10 @@ Proof.
     eauto using local_env_valid_params, type_valid_ptr_type_valid.
   rewrite local_env_stack_types_params in Hs by done; eauto 10.
 Qed.
-Lemma alloc_fun_typed Γn Γ m Δg x mys cτs cτ mcs m' Δg' :
+Lemma alloc_fun_typed Γn Γ m Δg f mys cτs cτ mcs m' Δg' :
   ✓ Γ → ✓{Γ} m → mem_writable_all Γ m → global_env_valid Γ ('{m}) Δg →
   length mys = length cτs →
-  alloc_fun Γn Γ m Δg x mys cτs cτ mcs = inr (m',Δg') →
+  alloc_fun Γn Γ m Δg f mys cτs cτ mcs = inr (m',Δg') →
   (**i 1.) *) ✓{Γ} m' ∧
   (**i 2.) *) mem_writable_all Γ m' ∧
   (**i 3.) *) global_env_valid Γ ('{m'}) Δg' ∧
@@ -1286,32 +1319,32 @@ Proof.
   destruct (to_type _ _ _ _ _ _ _) as [|σ] eqn:?; simplify_equality'.
   assert (✓{Γ} σ) by eauto using to_type_valid.
   case_error_guard; simplify_equality'.
-  destruct (Δg !! x) as [[|τs' σ' ms| |]|] eqn:?; simplify_equality'.
+  destruct (Δg !! f) as [[|τs' σ' ms| |]|] eqn:?; simplify_equality'.
   * repeat case_error_guard; simplify_equality'.
     destruct mcs as [cs|]; repeat case_error_guard; simplify_equality; eauto.
-    destruct (to_fun_stmt _ _ _ _ _ _ _ _)
+    destruct (to_fun_stmt _ _ _ _ _ _ _ _ _)
       as [|[[m'' Δg''] s]] eqn:?; simplify_equality'.
-    destruct (to_fun_stmt_typed Γn Γ m Δg mys τs σ cs m' Δg'' s)
+    destruct (to_fun_stmt_typed Γn Γ m Δg f mys τs σ cs m' Δg'' s)
       as (mcσ&?&?&?&?&?&?&?&?&?); auto.
-    destruct (lookup_to_funtypes_1 Δg'' x τs σ); eauto using lookup_weaken.
-    assert (to_funtypes Δg'' ⊆ to_funtypes (<[x:=Fun τs σ (Some s)]> Δg''))
+    destruct (lookup_to_funtypes_1 Δg'' f τs σ); eauto using lookup_weaken.
+    assert (to_funtypes Δg'' ⊆ to_funtypes (<[f:=Fun τs σ (Some s)]> Δg''))
       by eauto using to_funtypes_insert_Some.
-    destruct (HΔg x (Fun τs σ None)) as (?&?&?);
+    destruct (HΔg f (Fun τs σ None)) as (?&?&?);
       eauto 19 using global_env_insert_valid_Some, stmt_typed_weaken.
   * case_error_guard; simplify_equality'.
     destruct mcs as [cs|]; simplify_equality;
       eauto 15 using to_funtypes_insert, global_env_insert_valid.
-    destruct (to_fun_stmt _ _ _ _ _ _ _ _)
+    destruct (to_fun_stmt _ _ _ _ _ _ _ _ _)
       as [|[[m'' Δg''] s]] eqn:?; simplify_equality'.
-    set (Δg':=<[x:=Fun τs σ None]> Δg) in *.
+    set (Δg':=<[f:=Fun τs σ None]> Δg) in *.
     assert (to_funtypes Δg ⊆ to_funtypes Δg').
       by eauto 10 using to_funtypes_insert.
-    destruct (to_fun_stmt_typed Γn Γ m Δg' mys τs σ cs m' Δg'' s)
+    destruct (to_fun_stmt_typed Γn Γ m Δg' f mys τs σ cs m' Δg'' s)
       as (mcσ&?&?&?&?&?&?&?&?&?); eauto 10 using global_env_insert_valid.
-    destruct (lookup_to_funtypes_1 Δg'' x τs σ).
+    destruct (lookup_to_funtypes_1 Δg'' f τs σ).
     { eapply lookup_weaken; eauto.
       by unfold Δg'; eapply lookup_to_funtypes_2; simpl_map. }
-    assert (to_funtypes Δg'' ⊆ to_funtypes (<[x:=Fun τs σ (Some s)]> Δg''))
+    assert (to_funtypes Δg'' ⊆ to_funtypes (<[f:=Fun τs σ (Some s)]> Δg''))
       by eauto using to_funtypes_insert_Some.
     eauto 19 using stmt_typed_weaken, global_env_insert_valid_Some.
 Qed.

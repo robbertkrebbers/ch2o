@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Import String hashset streams.
+Require Import String hashset streams stringmap.
 Require Export executable frontend architecture_spec.
 Local Open Scope string_scope.
 Local Open Scope list_scope.
@@ -33,7 +33,7 @@ Definition interpreter_initial
     string + (env Ti * funenv Ti * istate Ti E) :=
   '(Γn,Γ,m,Δg) ← to_envs Θ;
   '(σs,_,_) ← error_of_option (Δg !! f ≫= maybe_Fun)
-    "interpreter called with undeclared function";
+    ("interpreter called with undeclared function `" +:+ f +:+ "`");
   eσlrs ← mapM (to_expr Γn Γ m Δg []) ces;
   let σes := zip_with to_R_NULL σs eσlrs in 
   guard (Forall2 (cast_typed Γ) (snd <$> σes) σs)
