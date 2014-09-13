@@ -236,24 +236,28 @@ Inductive stmt_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs : list (type Ti))
      stmt_refine' Γ Γf τs f Γm1 Γm2 (! e1) (! e2) (false,None)
   | SGoto_refine l :
      stmt_refine' Γ Γf τs f Γm1 Γm2 (goto l) (goto l) (true,None)
+  | SBreak_refine n :
+     stmt_refine' Γ Γf τs f Γm1 Γm2 (break n) (break n) (true,None)
   | SReturn_refine e1 e2 τ :
      e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inr τ →
      stmt_refine' Γ Γf τs f Γm1 Γm2 (ret e1) (ret e2) (true,Some τ)
+  | SLabel_refine l :
+     stmt_refine' Γ Γf τs f Γm1 Γm2 (label l) (label l) (false,None)
   | SBlock_refine' τ s1 s2 c mσ :
      ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
      stmt_refine' Γ Γf (τ :: τs) f Γm1 Γm2 s1 s2 (c,mσ) →
-     stmt_refine' Γ Γf τs f Γm1 Γm2 (blk{τ} s1) (blk{τ} s2) (c,mσ)
+     stmt_refine' Γ Γf τs f Γm1 Γm2 (block{τ} s1) (block{τ} s2) (c,mσ)
   | SComp_refine s1 s2 s1' s2' c1 mσ1 c2 mσ2 mσ :
      stmt_refine' Γ Γf τs f Γm1 Γm2 s1 s2 (c1,mσ1) →
      stmt_refine' Γ Γf τs f Γm1 Γm2 s1' s2' (c2,mσ2) →
      rettype_union mσ1 mσ2 = Some mσ →
      stmt_refine' Γ Γf τs f Γm1 Γm2 (s1 ;; s1') (s2 ;; s2') (c2,mσ)
-  | SLabel_refine l :
-     stmt_refine' Γ Γf τs f Γm1 Γm2 (label l) (label l) (false,None)
-  | SWhile_refine e1 e2 τb s1 s2 c mσ :
-     e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inr (baseT τb) →
+  | SBreakTo_refine s1 s2 c mσ :
      stmt_refine' Γ Γf τs f Γm1 Γm2 s1 s2 (c,mσ) →
-     stmt_refine' Γ Γf τs f Γm1 Γm2 (while{e1} s1) (while{e2} s2) (false,mσ)
+     stmt_refine' Γ Γf τs f Γm1 Γm2 (breakto s1) (breakto s2) (false,mσ)
+  | SLoop_refine s1 s2 c mσ :
+     stmt_refine' Γ Γf τs f Γm1 Γm2 s1 s2 (c,mσ) →
+     stmt_refine' Γ Γf τs f Γm1 Γm2 (loop s1) (loop s2) (true,mσ)
   | SIf_refine e1 e2 τb s1 s2 s1' s2' c1 mσ1 c2 mσ2 mσ :
      e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inr (baseT τb) →
      stmt_refine' Γ Γf τs f Γm1 Γm2 s1 s2 (c1,mσ1) →
@@ -276,10 +280,11 @@ Inductive sctx_item_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs: list (type T
      s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : (c,mσ) →
      rettype_union mσ mσ' = Some mσr →
      sctx_item_refine' Γ Γf τs f Γm1 Γm2 (s1 ;; □) (s2 ;; □) (c',mσ') (c',mσr)
-  | CWhile_refine e1 e2 τb c mσ :
-     e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inr (baseT τb) →
+  | CBreakTo_refine c mσ :
      sctx_item_refine' Γ Γf τs f Γm1 Γm2
-       (while{e1} □) (while{e2} □) (c,mσ) (false,mσ)
+       (breakto □) (breakto □) (c,mσ) (false,mσ)
+  | CWhile_refine c mσ :
+     sctx_item_refine' Γ Γf τs f Γm1 Γm2 (loop □) (loop □) (c,mσ) (true,mσ)
   | CIfL_refine e1 e2 τb s1' s2' c mσ c' mσ' mσr :
      e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inr (baseT τb) →
      s1' ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2' : (c',mσ') →
@@ -303,10 +308,6 @@ Inductive esctx_item_refine' (Γ : env Ti) (Γf: funtypes Ti) (τs: list (type T
      esctx_item_refine' Γ Γf τs f Γm1 Γm2 (! □) (! □) τ (false,None)
   | CReturnE_refine τ :
      esctx_item_refine' Γ Γf τs f Γm1 Γm2 (ret □) (ret □) τ (true,Some τ)
-  | CWhileE_refine τb s1 s2 c mσ :
-     s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : (c,mσ) →
-     esctx_item_refine' Γ Γf τs f Γm1 Γm2
-       (while{□} s1) (while{□} s2) (baseT τb) (false,mσ)
   | CIfE_refine τb s1 s2 s1' s2' c mσ c' mσ' mσr :
      s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : (c,mσ) →
      s1' ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2' : (c',mσ') →
@@ -366,7 +367,8 @@ Inductive direction_refine' (Γ : env Ti) (f : meminj Ti) (Γm1 Γm2: memenv Ti)
   | Top_refine c v1 v2 τ :
      v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ →
      direction_refine' Γ f Γm1 Γm2 (⇈ v1) (⇈ v2) (c,Some τ)
-  | Jump_refine l cmτ : direction_refine' Γ f Γm1 Γm2 (↷ l) (↷ l) cmτ.
+  | Goto_refine l cmτ : direction_refine' Γ f Γm1 Γm2 (↷ l) (↷ l) cmτ
+  | Break_refine n cmτ : direction_refine' Γ f Γm1 Γm2 (↑ n) (↑ n) cmτ.
 Global Instance direction_refine: RefineT Ti (env Ti)
   (rettype Ti) (direction Ti) := direction_refine'.
 
@@ -420,8 +422,8 @@ Global Instance funenv_refine:
     RefineT Ti (env Ti) (funtypes Ti) (funenv Ti) := λ Γ f Γm1 Γm2 δ1 δ2 Γf,
   map_Forall3 (λ s1 s2 τsτ, let '(τs,τ) := τsτ in ∃ cmτ,
     ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
-    s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : cmτ ∧
-    gotos s1 ⊆ labels s1 ∧ rettype_match cmτ τ
+    s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : cmτ ∧ rettype_match cmτ τ ∧
+    gotos s1 ⊆ labels s1 ∧ breaks_valid 0 s1
   ) δ1 δ2 Γf.
 End refinements.
 
@@ -564,6 +566,9 @@ Proof. induction 1; simpl; auto with f_equal. Qed.
 Lemma stmt_refine_labels_elem_of_r Γ Γf f Γm1 Γm2 τs s1 s2 mcτ :
   s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ → labels s1 = labels s2.
 Proof. induction 1; simpl; auto with f_equal. Qed.
+Lemma stmt_refine_breaks_valid Γ Γf f Γm1 Γm2 τs s1 s2 mcτ n :
+  s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ → breaks_valid n s1 → breaks_valid n s2.
+Proof. intros Hs. revert n. induction Hs; naive_solver. Qed.
 Lemma ctx_refine_stack_types Γ f Γm1 Γm2 Γf k1 k2 τf τf' :
   ✓ Γ → k1 ⊑{(Γ,Γf),f@Γm1↦Γm2} k2 : τf ↣ τf' →
   get_stack_types k1 = get_stack_types k2.
@@ -581,20 +586,24 @@ Proof.
   induction 2 as [|??????? []]; simpl;
     rewrite ?fst_zip by solve_length; auto using Forall2_app.
 Qed.
-Lemma down_refine_r Γ Γf τs f Γm1 Γm2 s1 s2 d1 d2 mcτ :
+Lemma sctx_item_breakto_refine Γ Γf f Γm1 Γm2 τs Es1 Es2 s1 s2 mcτ mcτ' :
+  Es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Es2 : mcτ ↣ mcτ' →
+  Es1 = breakto □ → Es2 = breakto □.
+Proof. by destruct 1. Qed.  
+Lemma direction_in_refine_r Γ Γf τs f Γm1 Γm2 s1 s2 d1 d2 mcτ :
   s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ →
-  d1 ⊑{Γ,f@Γm1↦Γm2} d2 : mcτ → down d2 s2 → down d1 s1.
-Proof. destruct 2; simpl; by erewrite <-?stmt_refine_labels by eauto. Qed.
-Lemma up_refine_r Γ Γf τs f Γm1 Γm2 s1 s2 d1 d2 mcτ :
+  d1 ⊑{Γ,f@Γm1↦Γm2} d2 : mcτ → direction_in d2 s2 → direction_in d1 s1.
+Proof. by destruct 2; simpl; erewrite <-?stmt_refine_labels by eauto. Qed.
+Lemma direction_out_refine_r Γ Γf τs f Γm1 Γm2 s1 s2 d1 d2 mcτ :
   s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ →
-  d1 ⊑{Γ,f@Γm1↦Γm2} d2 : mcτ → up d2 s2 → up d1 s1.
-Proof. destruct 2; simpl; by erewrite <-?stmt_refine_labels by eauto. Qed.
+  d1 ⊑{Γ,f@Γm1↦Γm2} d2 : mcτ → direction_out d2 s2 → direction_out d1 s1.
+Proof. by destruct 2; simpl; erewrite <-?stmt_refine_labels by eauto. Qed.
 Lemma funenv_lookup_refine_r Γ f Γm1 Γm2 δ1 δ2 Γf g s2 :
   δ1 ⊑{Γ,f@Γm1↦Γm2} δ2 : Γf → δ2 !! g = Some s2 → ∃ s1 τs τ cmτ,
     δ1 !! g = Some s1 ∧ Γf !! g = Some (τs,τ) ∧
     ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
-    s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : cmτ ∧
-    gotos s1 ⊆ labels s1 ∧ rettype_match cmτ τ.
+    s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : cmτ ∧ rettype_match cmτ τ ∧
+    gotos s1 ⊆ labels s1 ∧ breaks_valid 0 s1.
 Proof. intros Hδ ?; specialize (Hδ g); repeat case_match; naive_solver. Qed.
 Lemma state_refine_mem Γ Γf f S1 S2 g :
   ¬is_undef_state S1 → S1 ⊑{(Γ,Γf),f} S2 : g → '{SMem S1} ⊑{Γ,f} '{SMem S2}.
@@ -677,7 +686,7 @@ Proof.
   intros ? Hδ; split.
   * intros g s ?; specialize (Hδ g); destruct (δ2 !! _),
       (Γf !! _) as [[τs τ]|]; simplify_option_equality; try done.
-    destruct Hδ as (cmτ&?&?&?&?&?&?); eauto 15 using stmt_refine_typed_l.
+    destruct Hδ as (cmτ&?&?&?&?&?&?&?); eauto 15 using stmt_refine_typed_l.
   * rewrite elem_of_subseteq; intros g; rewrite !elem_of_dom.
     intros [[τs τ] ?]; specialize (Hδ g); destruct (δ1 !! _),
       (δ2 !! _); simplify_option_equality; naive_solver.
@@ -765,9 +774,9 @@ Proof.
   intros ? Hδ; split.
   * intros g s ?; specialize (Hδ g); destruct (δ1 !! _),
       (Γf !! _) as [[τs τ]|]; simplify_option_equality; try done.
-    destruct Hδ as (cmτ&?&?&?&?&?&?).
+    destruct Hδ as (cmτ&?&?&?&?&?&?&?).
     erewrite <-stmt_refine_labels, <-stmt_refine_gotos by eauto.
-    eauto 15 using stmt_refine_typed_r.
+    eauto 15 using stmt_refine_typed_r, stmt_refine_breaks_valid.
   * rewrite elem_of_subseteq; intros g; rewrite !elem_of_dom.
     intros [[τs τ] ?]; specialize (Hδ g); destruct (δ1 !! _),
       (δ2 !! _); simplify_option_equality; naive_solver.
@@ -859,7 +868,7 @@ Proof.
   { intros ?? es3 ? τlrs' Hes. revert es3 τlrs'.
     induction Hes; inversion_clear 1; constructor; eauto. }
   intros ? He; revert e3 τlr'.
-  induction He using @expr_refine_ind;  intros ?? He';
+  induction He using @expr_refine_ind; intros ?? He';
     refine_inversion He'; simplify_type_equality'; refine_constructor;
     eauto using locks_refine_compose, val_refine_compose, addr_refine_compose.
 Qed.

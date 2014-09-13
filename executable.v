@@ -2,8 +2,8 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export smallstep.
 
-Section exec.
-Context `{EnvSpec Ti}.
+Section executable.
+Context `{Env Ti}.
 
 Definition assign_exec (Γ : env Ti) (m : mem Ti) (a : addr Ti)
     (v : val Ti) (ass : assign) : option (val Ti * val Ti) :=
@@ -81,15 +81,17 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
   | Stmt ↘ s =>
     match s with
     | skip => {[ State k (Stmt ↗ skip) m ]}
-    | label l => {[ State k (Stmt ↗ (label l)) m ]}
     | goto l => {[ State k (Stmt (↷ l) (goto l)) m ]}
+    | break n => {[ State k (Stmt (↑ n) (break n)) m ]}
+    | label l => {[ State k (Stmt ↗ (label l)) m ]}
     | ! e => {[ State (CExpr e (! □) :: k) (Expr e) m ]}
     | ret e => {[ State (CExpr e (ret □) :: k) (Expr e) m ]}
-    | while{e} s => {[ State (CExpr e (while{□} s) :: k) (Expr e) m ]}
+    | loop s => {[ State (CStmt (loop □) :: k) (Stmt ↘ s) m ]}
     | if{e} s1 else s2 =>
        {[ State (CExpr e (if{□} s1 else s2) :: k) (Expr e) m ]}
     | s1 ;; s2 => {[ State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m ]}
-    | blk{τ} s =>
+    | breakto s => {[ State (CStmt (breakto □) :: k) (Stmt ↘ s) m ]}
+    | block{τ} s =>
        let o := fresh (dom indexset m) in
        {[ State (CBlock o τ :: k) (Stmt ↘ s)
             (mem_alloc Γ o false τ m) ]}
@@ -97,11 +99,12 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
   | Stmt ↗ s =>
     match k with
     | CBlock o τ :: k =>
-       {[ State k (Stmt ↗ (blk{τ} s)) (mem_free o m) ]}
+       {[ State k (Stmt ↗ (block{τ} s)) (mem_free o m) ]}
     | CStmt (□ ;; s2) :: k =>
        {[ State (CStmt (s ;; □) :: k) (Stmt ↘ s2) m ]}
     | CStmt (s1 ;; □) :: k => {[ State k (Stmt ↗ (s1 ;; s)) m ]}
-    | CStmt (while{e} □) :: k => {[ State k (Stmt ↘ (while{e} s)) m ]}
+    | CStmt (breakto □) :: k => {[ State k (Stmt ↗ (breakto s)) m ]}
+    | CStmt (loop □) :: k => {[ State k (Stmt ↘ (loop s)) m ]}
     | CStmt (if{e} □ else s2) :: k =>
        {[ State k (Stmt ↗ (if{e} s else s2)) m ]}
     | CStmt (if{e} s1 else □) :: k =>
@@ -114,7 +117,7 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
     match k with
     | CParams f oτs :: k =>
        {[ State k (Return f v) (foldr mem_free m (fst <$> oτs)) ]}
-    | CBlock o τ :: k => {[ State k (Stmt (⇈ v) (blk{τ} s)) (mem_free o m) ]}
+    | CBlock o τ :: k => {[ State k (Stmt (⇈ v) (block{τ} s)) (mem_free o m) ]}
     | CStmt E :: k => {[ State k (Stmt (⇈ v) (subst E s)) m ]}
     | _ => ∅
     end
@@ -122,16 +125,17 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
     if decide (l ∈ labels s) then
       match s with
       | label l' => {[ State k (Stmt ↗ s) m ]}
-      | blk{τ} s =>
+      | block{τ} s =>
          let o := fresh (dom indexset m) in
          {[ State (CBlock o τ :: k) (Stmt (↷ l) s)
              (mem_alloc Γ o false τ m) ]}
+      | breakto s => {[ State (CStmt (breakto □) :: k) (Stmt (↷ l) s) m ]}
       | s1 ;; s2 =>
          (guard (l ∈ labels s1);
             {[ State (CStmt (□ ;; s2) :: k) (Stmt (↷ l) s1) m ]})
          ∪ (guard (l ∈ labels s2);
             {[ State (CStmt (s1 ;; □) :: k) (Stmt (↷ l) s2) m ]})
-      | while{e} s => {[ State (CStmt (while{e} □) :: k) (Stmt (↷ l) s) m ]}
+      | loop s => {[ State (CStmt (loop □) :: k) (Stmt (↷ l) s) m ]}
       | if{e} s1 else s2 =>
          (guard (l ∈ labels s1);
              {[ State (CStmt (if{e} □ else s2) :: k) (Stmt (↷ l) s1) m ]})
@@ -141,15 +145,27 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
       end
     else
       match k with
-      | CBlock o τ :: k => {[ State k (Stmt (↷l) (blk{τ} s)) (mem_free o m) ]}
-      | CStmt E :: k => {[ State k (Stmt (↷ l) (subst E s)) m ]}
+      | CBlock o τ :: k => {[ State k (Stmt (↷ l) (block{τ} s)) (mem_free o m) ]}
+      | CStmt Es :: k => {[ State k (Stmt (↷ l) (subst Es s)) m ]}
       | _ => ∅
       end
+  | Stmt (↑ n) s =>
+    match k with
+    | CBlock o τ :: k => {[ State k (Stmt (↑ n) (block{τ} s)) (mem_free o m) ]}
+    | CStmt Es :: k =>
+       if decide (Es = breakto □) then
+         match n with
+         | 0 => {[ State k (Stmt ↗ (breakto s)) m ]}
+         | S n => {[ State k (Stmt (↑ n) (breakto s)) m ]}
+         end
+       else {[ State k (Stmt (↑ n) (subst Es s)) m ]}
+    | _ => ∅
+    end
   | Call f vs =>
-     s ← of_option (δ !! f);
-     let os := fresh_list (length vs) (dom indexset m) in
-     let m2 := mem_alloc_val_list Γ (zip os vs) m in
-     {[ State (CParams f (zip os (type_of <$> vs)) :: k) (Stmt ↘ s) m2 ]}
+    s ← of_option (δ !! f);
+    let os := fresh_list (length vs) (dom indexset m) in
+    let m2 := mem_alloc_val_list Γ (zip os vs) m in
+    {[ State (CParams f (zip os (type_of <$> vs)) :: k) (Stmt ↘ s) m2 ]}
   | Return f v =>
     match k with
     | CFun E :: k => {[ State k (Expr (subst E (# v)%E)) m ]}
@@ -162,14 +178,6 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
       | CExpr e (! □) :: k => {[ State k (Stmt ↗ (! e)) (mem_unlock Ω m) ]}
       | CExpr e (ret □) :: k =>
          {[ State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m) ]}
-      | CExpr e (while{□} s) :: k =>
-        match val_true_false_dec ('{m}) v with
-        | inleft (left _) =>
-           {[ State (CStmt (while{e} □) :: k) (Stmt ↘ s) (mem_unlock Ω m) ]}
-        | inleft (right _) =>
-           {[ State k (Stmt ↗ (while{e} s)) (mem_unlock Ω m) ]}
-        | inright _ => {[ State k (Undef (UndefBranch e (while{□} s) Ω v)) m ]}
-         end
       | CExpr e (if{□} s1 else s2) :: k =>
         match val_true_false_dec ('{m}) v with
         | inleft (left _) =>
@@ -195,7 +203,7 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
     end
   | Undef _ => ∅
   end.
-End exec.
+End executable.
 
 Notation "Γ \ δ ⊢ₛ S1 ⇒ₑ S2" := (S2 ∈ cexec Γ δ S1)
   (at level 74, format "Γ \  δ  ⊢ₛ '['  S1  '⇒ₑ' '/'  S2 ']'") : C_scope.
@@ -236,6 +244,7 @@ Proof.
     | _ => case_match
     end; auto.
 Qed.
+
 Lemma cexec_sound Γ δ S1 S2 : Γ\ δ ⊢ₛ S1 ⇒ₑ S2 → Γ\ δ ⊢ₛ S1 ⇒ S2.
 Proof.
   intros. assert (∀ (k : ctx Ti) e m,

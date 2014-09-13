@@ -38,9 +38,6 @@ let rec positive_of_int n =
   let n' = positive_of_int (n/2) in
   if n mod 2 = 1 then XI n' else XO n';;
 
-let n_of_int n =
-  if n = 0 then N0 else Npos (positive_of_int n);;
-
 let z_of_int i =
   if i = 0 then Z0 else if i > 0 then Zpos (positive_of_int i) else
   Zneg (positive_of_int (-i));;
@@ -51,9 +48,6 @@ let rec int_of_nat n =
 let rec int_of_positive n =
   match n with XI n' -> 2*(int_of_positive n') + 1 |
     XO n' -> 2*(int_of_positive n') | XH -> 1;;
-
-let int_of_n n =
-  match n with N0 -> 0 | Npos n' -> int_of_positive n';;
 
 let int_of_z i =
   match i with Z0 -> 0 | Zpos n' -> int_of_positive n'
@@ -67,9 +61,6 @@ let rec positive_of_num n =
   let n' = positive_of_num (quo_num n (Int 2)) in
   if mod_num n (Int 2) = Int 1 then XI n' else XO n';;
 
-let n_of_num n =
-  if n = Int 0 then N0 else Npos (positive_of_num n);;
-
 let z_of_num i =
   if i = Int 0 then Z0 else if i >/ Int 0 then Zpos (positive_of_num i) else
   Zneg (positive_of_num (minus_num i));;
@@ -80,9 +71,6 @@ let rec num_of_nat n =
 let rec num_of_positive n =
   match n with XI n' -> Int 2*/(num_of_positive n') +/ Int 1 |
     XO n' -> Int 2*/(num_of_positive n') | XH -> Int 1;;
-
-let num_of_n n =
-  match n with N0 -> Int 0 | Npos n' -> num_of_positive n';;
 
 let num_of_z i =
   match i with Z0 -> Int 0 | Zpos n' -> num_of_positive n'
@@ -98,24 +86,6 @@ let pp_print_nat fmt x =
       pp_print_string fmt ")")
   | y ->
      (pp_print_string fmt "(nat_of_num";
-      pp_print_space fmt ();
-      pp_print_string fmt "(num_of_string";
-      pp_print_space fmt ();
-      pp_print_string fmt "\"";
-      pp_print_string fmt (string_of_num y);
-      pp_print_string fmt "\"))"));
-  pp_close_box fmt ();;
-
-let pp_print_n fmt x =
-  pp_open_box fmt 2;
- (match num_of_n x with
-  | Int y ->
-     (pp_print_string fmt "(n_of_int";
-      pp_print_space fmt ();
-      pp_print_int fmt y;
-      pp_print_string fmt ")")
-  | y ->
-     (pp_print_string fmt "(n_of_num";
       pp_print_space fmt ();
       pp_print_string fmt "(num_of_string";
       pp_print_space fmt ();
@@ -144,8 +114,6 @@ let pp_print_z fmt x =
 
 let print_nat = pp_print_nat std_formatter;;
 #install_printer print_nat;;
-let print_n = pp_print_n std_formatter;;
-#install_printer print_n;;
 let print_z = pp_print_z std_formatter;;
 #install_printer print_z;;
 
@@ -189,25 +157,19 @@ let chars_of_string s =
     if n < l then String.get s n::chars (n + 1) else [] in
   chars 0;;
 
+let chars_of_int n = chars_of_string (string_of_int n)
+
 exception Unknown_expression of Cabs.expression;;
 exception Unknown_statement of Cabs.statement;;
 exception Unknown_specifier of Cabs.specifier;;
 exception Unknown_definition of Cabs.definition;;
-exception Incompatible_compound of n * decl * decl;;
+exception Incompatible_compound of char list * decl * decl;;
 
 let col = ref 0;;
-let the_ids = ref ([]:string list);;
 let the_anon = ref 0;;
-let the_compound_decls = ref ([]:(n * decl) list);;
-let the_printfs = ref ([]:(n * decl) list);;
-let the_formats = ref ([]:(n * string) list);;
-
-let nindex s =
-  n_of_int (try index s !the_ids with
-  Not_found ->
-    let ids = !the_ids in
-    the_ids := ids@[s];
-    List.length ids);;
+let the_compound_decls = ref ([]:(char list * decl) list);;
+let the_printfs = ref ([]:(char list * decl) list);;
+let the_formats = ref ([]:(char list * string) list);;
 
 let uchar = {csign = Some Unsigned; crank = CCharRank};;
 let int_signed = {csign = Some Signed; crank = CIntRank};;
@@ -276,18 +238,18 @@ let length_of_format s =
   length 0;;
 
 let printf_body i =
-  let len = nindex "len-%d" in
+  let len = chars_of_string "len-%d" in
   let rec body n a =
     match a with
     | [] -> CSReturn (Some (CEVar i))
     | x::a' -> CSComp (CSDo (CEAssign (PreOp (ArithOp PlusOp), CEVar i,
-        CECall (len,[CEVar (n_of_int n)]))),body (n + 1) a') in
+        CECall (len,[CEVar (chars_of_int n)]))),body (n + 1) a') in
   body 1;;
 
 let args_of_format s =
   let rec args_of_format' n m =
     try if String.get s n = '%' && String.get s (n + 1) = 'd' then
-        (Some(n_of_int m),ctint_signed)::args_of_format' (n + 2) (m + 1)
+        (Some(chars_of_int m),ctint_signed)::args_of_format' (n + 2) (m + 1)
       else args_of_format' (n + 1) m
     with Invalid_argument _ -> [] in
   args_of_format' 0 1;;
@@ -308,7 +270,8 @@ let rec add_compound k0 n l =
    let k = CompoundDecl (k0,
      List.flatten (List.map (fun (t,l') -> List.map (fun f ->
        match f with
-       | ((s',t',[],_),None) -> (nindex s',ctype_of_specifier_decl_type t t')
+       | ((s',t',[],_),None) ->
+           (chars_of_string s',ctype_of_specifier_decl_type t t')
        | _ -> failwith "add_compound") l') l)) in
    try let k' = List.assoc n !the_compound_decls in
      if k' <> k then raise (Incompatible_compound (n,k',k))
@@ -346,28 +309,28 @@ and ctype_of_specifier x =
       CTInt (cint_of_specifier false None None x)
   | [Cabs.SpecType (Cabs.Tstruct (s,None,[]))] ->
       let s = name_of s in
-      CTCompound (Struct_kind,nindex s)
+      CTCompound (Struct_kind,chars_of_string s)
   | [Cabs.SpecType (Cabs.Tunion (s,None,[]))] ->
       let s = name_of s in
-      CTCompound (Union_kind,nindex s)
+      CTCompound (Union_kind,chars_of_string s)
   | [Cabs.SpecType (Cabs.Tenum (s,None,[]))] ->
       let s = name_of s in
-      CTEnum (nindex s)
+      CTEnum (chars_of_string s)
   | [Cabs.SpecType (Cabs.Tstruct (s,Some l,[]))] ->
       let s = name_of s in
-      let n = nindex s in
+      let n = chars_of_string s in
       add_compound Struct_kind n l;
       CTCompound (Struct_kind,n)
   | [Cabs.SpecType (Cabs.Tunion (s,Some l,[]))] ->
       let s = name_of s in
-      let n = nindex s in
+      let n = chars_of_string s in
       add_compound Union_kind n l;
       CTCompound (Union_kind,n)
   | [Cabs.SpecType (Cabs.Tenum (s,Some l,[]))] ->
       let s = name_of s in
-      let n = nindex s in
+      let n = chars_of_string s in
       let k = EnumDecl (int_signed,List.map (fun (s,x,_) ->
-         (nindex s,
+         (chars_of_string s,
           match x with
           | Cabs.NOTHING -> None
           | _ -> Some (cexpr_of_expression x))) l) in
@@ -375,7 +338,7 @@ and ctype_of_specifier x =
         if k' <> k then raise (Incompatible_compound (n,k',k))
       with Not_found -> the_compound_decls := !the_compound_decls@[(n,k)]);
       CTEnum n
-  | [Cabs.SpecType (Cabs.Tnamed s)] -> CTDef (nindex s)
+  | [Cabs.SpecType (Cabs.Tnamed s)] -> CTDef (chars_of_string s)
   | _ -> raise (Unknown_specifier x)
 
 and ctype_of_decl_type t x =
@@ -420,7 +383,7 @@ and cexpr_of_expression x =
      CEMax {csign = Some Signed; crank = CLongRank (nat_of_int 1)}
   | Cabs.VARIABLE "ULLONG_MAX" ->
      CEMax {csign = Some Unsigned; crank = CLongRank (nat_of_int 1)}
-  | Cabs.VARIABLE s -> CEVar (nindex s)
+  | Cabs.VARIABLE s -> CEVar (chars_of_string s)
   | Cabs.UNARY (Cabs.MEMOF,y) ->
       CEDeref (cexpr_of_expression y)
   | Cabs.UNARY (Cabs.ADDROF,y) ->
@@ -501,12 +464,13 @@ and cexpr_of_expression x =
   | Cabs.CALL (Cabs.VARIABLE "printf",
         Cabs.CONSTANT (Cabs.CONST_STRING s)::l) ->
       let fs = "printf-"^s in
-      let fresh = not (List.mem fs !the_ids) in
-      let f = nindex fs in
+      let f = chars_of_string fs in
+      let fresh =
+        try let _ = List.assoc f !the_printfs in false with Not_found -> true in
       let a = args_of_format s in
       (if fresh then (the_printfs := !the_printfs@
         [(f,if !printf_returns_int then
-           (let i = n_of_int 0 in
+           (let i = chars_of_int 0 in
             FunDecl (a,ctint_signed,
               Some (CSBlock (AutoStorage,i,ctint_signed,
                 Some (econst (Int (length_of_format s))),
@@ -515,7 +479,7 @@ and cexpr_of_expression x =
         the_formats := !the_formats@[(f,s)]));
       CECall (f,List.map cexpr_of_expression l)
   | Cabs.CALL (Cabs.VARIABLE s,l) ->
-      CECall (nindex s,List.map cexpr_of_expression l)
+      CECall (chars_of_string s,List.map cexpr_of_expression l)
   | Cabs.COMMA (h::t) ->
       List.fold_left (fun y1 y2 -> CEComma (y1,cexpr_of_expression y2))
         (cexpr_of_expression h) t
@@ -526,9 +490,9 @@ and cexpr_of_expression x =
   | Cabs.INDEX (y1,y2) ->
       CEDeref (CEBinOp (ArithOp PlusOp,
         cexpr_of_expression y1,cexpr_of_expression y2))
-  | Cabs.MEMBEROF (y,f) -> CEField (cexpr_of_expression y,nindex f)
+  | Cabs.MEMBEROF (y,f) -> CEField (cexpr_of_expression y,chars_of_string f)
   | Cabs.MEMBEROFPTR (y,f) ->
-      CEDeref (CEField (cexpr_of_expression y,nindex f))
+      CEDeref (CEField (cexpr_of_expression y,chars_of_string f))
   | Cabs.NOTHING -> econst1
   | _ -> raise (Unknown_expression x);;
 
@@ -546,7 +510,7 @@ let rec cstmt_of_statements l =
     match l with
     | [] -> cstmt_of_statements b
     | ((s,t',[],_),z)::l' ->
-        CSBlock (h,nindex s,
+        CSBlock (h,chars_of_string s,
           ctype_of_specifier_decl_type t t',
           decl_of_init_expression z,
           fold_defs h t l' b)
@@ -554,7 +518,7 @@ let rec cstmt_of_statements l =
   match l with
   | [] -> CSSkip
   | Cabs.LABEL (s,y,_)::l' ->
-      cscomp (CSLabel (nindex s,cstmt_of_statements [y]))
+      cscomp (CSLabel (chars_of_string s,cstmt_of_statements [y]))
         (cstmt_of_statements l')
   | Cabs.BLOCK ({Cabs.bstmts = y},_)::l' ->
       cscomp (cstmt_of_statements y) (cstmt_of_statements l')
@@ -590,7 +554,7 @@ let rec cstmt_of_statements l =
           cexpr_of_expression e))
         (cstmt_of_statements l')
   | Cabs.GOTO (s,_)::l' ->
-      cscomp (CSGoto (nindex s))
+      cscomp (CSGoto (chars_of_string s))
         (cstmt_of_statements l')
   | Cabs.RETURN (Cabs.NOTHING,_)::l' ->
       cscomp (CSReturn None)
@@ -621,7 +585,7 @@ let rec args_of_decl_type x =
         | (t,("",t',[],_)) ->
             (None,ctype_of_specifier_decl_type t t')
         | (t,(s,t',[],_)) ->
-            (Some(nindex s),ctype_of_specifier_decl_type t t')
+            (Some(chars_of_string s),ctype_of_specifier_decl_type t t')
         | _ -> failwith "args_of") a
   | Cabs.ARRAY (y,[],_) -> args_of_decl_type y
   | Cabs.PTR ([],y) -> args_of_decl_type y
@@ -647,9 +611,9 @@ let decls_of_definition x =
         match z with
         | ((s,t',[],_),z) ->
             (match return_of_decl_type (ctype_of_specifier t) t' with
-            | Some ret -> (nindex s, FunDecl (args_of_decl_type t', ret, None))
+            | Some ret -> (chars_of_string s, FunDecl (args_of_decl_type t', ret, None))
             | _ ->
-                (nindex s,
+                (chars_of_string s,
                  GlobDecl (ctype_of_specifier_decl_type t t',
                    decl_of_init_expression z)))
         | _ -> raise (Unknown_definition x)) l
@@ -661,7 +625,7 @@ let decls_of_definition x =
       let b = if s = "main" && no_int_return b then
         CSComp(b,CSReturn (Some (econst0))) else b in
       (match return_of_decl_type (ctype_of_specifier t) t' with
-      | Some ret -> [(nindex s, FunDecl (args_of_decl_type t', ret, Some b))]
+      | Some ret -> [(chars_of_string s, FunDecl (args_of_decl_type t', ret, Some b))]
       | None -> raise (Unknown_definition x))
   | Cabs.ONLYTYPEDEF (t,_) ->
       let _ = ctype_of_specifier t in []
@@ -669,7 +633,7 @@ let decls_of_definition x =
       List.map (fun z ->
         match z with
         | (s,t',_,_) ->
-             (nindex s,
+             (chars_of_string s,
                TypeDefDecl (ctype_of_specifier_decl_type t t'))
         | _ -> raise (Unknown_definition x)) l
   | _ -> raise (Unknown_definition x);;
@@ -677,8 +641,8 @@ let decls_of_definition x =
 let printf_prelude () =
   if !the_printfs = [] then [] else
   try let s = "len-%d" in
-    let i = n_of_int 0 and n = n_of_int 1 in
-    [(n_of_int (index s !the_ids),
+    let i = chars_of_int 0 and n = chars_of_int 1 in
+    [(chars_of_string s,
       FunDecl ([(Some i, ctint_signed)],ctint_signed,Some
        (CSBlock (AutoStorage,n,ctint_signed,Some econst0,
         CSComp (CSIf (CEBinOp (CompOp EqOp,CEVar i,econst0),
@@ -694,14 +658,13 @@ let printf_prelude () =
   with Not_found -> [];;
 
 let decls_of_cabs x =
-  the_ids := [];
   the_anon := 0;
   the_formats := [];
   the_compound_decls := [];
   the_printfs := [];
   let decls = List.flatten (List.map decls_of_definition x) in
   (the_printfs := printf_prelude ()@ !the_printfs);
-  (!the_ids,(nindex "main",!the_compound_decls@ !the_printfs@decls));;
+  (chars_of_string "main",!the_compound_decls@ !the_printfs@decls);;
 
 let decls_of_file x = decls_of_cabs (cabs_of_file x);;
 
@@ -731,7 +694,7 @@ let event_of_state x =
       with Not_found -> [])
   | _ -> [];;
 
-let initial_of_decls (_,(m,x)) =
+let initial_of_decls (m,x) =
   match interpreter_initial x86 x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
@@ -739,11 +702,11 @@ let initial_of_decls (_,(m,x)) =
 let initial_of_cabs x = initial_of_decls (decls_of_cabs x);;
 let initial_of_file x = initial_of_decls (decls_of_file x);;
 
-let graph_of_decls (ids,(m,x)) =
+let graph_of_decls (m,x) =
   match interpreter_all x86
     (=) event_of_state (fun x -> z_of_int (Hashtbl.hash x)) x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
-  | Inr y -> (ids,y);;
+  | Inr y -> y;;
 
 let graph_of_cabs x = graph_of_decls (decls_of_cabs x);;
 let graph_of_file x = graph_of_decls (decls_of_file x);;
@@ -753,15 +716,15 @@ let choose =
     then nat_of_int (Random.int (int_of_nat x))
     else nat_of_int 0);;
 
-let stream_of_decls (ids,(m,x)) =
+let stream_of_decls (m,x) =
   match interpreter_rand x86 event_of_state !choose x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
-  | Inr y -> (ids,y);;
+  | Inr y -> y;;
 
 let stream_of_cabs x = stream_of_decls (decls_of_cabs x);;
 let stream_of_file x = stream_of_decls (decls_of_file x);;
 
-let rec print_states ids l =
+let rec print_states l =
   match l with
   | [] -> print_string "\n"; col := 0
   | {events_all = e; sem_state = s}::l' ->
@@ -776,7 +739,7 @@ let rec print_states ids l =
            if !break_on_undef then raise (CH2O_undef y) else
            print_string "undef"
        | _ -> failwith "print_states");
-      (if l' <> [] then print_string "\n"); print_states ids l';;
+      (if l' <> [] then print_string "\n"); print_states l';;
 
 let rec string_of_events l =
   match l with
@@ -807,14 +770,14 @@ let rec find_symbol n l =
   | [(_,c)] -> c
   | (m,c)::l' -> if n <= m then c else find_symbol n l';;
 
-let trace_graph (ids,x) =
+let trace_graph x =
   let h = ref x in
   try
     while true do
       let Scons ((s1,s2),x') = Lazy.force !h in
       (if s1 = [] && s2 = [] then raise Not_found);
       (if s2 <> [] then
-        (if !col > 0 then print_string "\n"; print_states ids s2; col := 0));
+        (if !col > 0 then print_string "\n"; print_states s2; col := 0));
       (if s1 <> [] then
         let c = find_symbol (List.length s1) symbols in
         (if !col >= !trace_width then (print_string "\n"; col := 0));
@@ -836,7 +799,7 @@ let trace_decls x = trace_graph (graph_of_decls x);;
 let trace_cabs x = trace_graph (graph_of_cabs x);;
 let trace_file x = trace_graph (graph_of_file x);;
 
-let run_stream (ids,x) =
+let run_stream x =
   Random.self_init ();
   let h = ref x in
   try

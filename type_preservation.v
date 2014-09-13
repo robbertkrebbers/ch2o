@@ -107,6 +107,7 @@ Proof.
   intros ? p. case p; clear p.
   * intros m k (τf&HS&?&?) ?; typed_inversion_all; split; auto.
   * intros m k l (τf&HS&?&?) ?; typed_inversion_all; split; auto.
+  * intros m k n (τf&HS&?&?) ?; typed_inversion_all; split; auto.
   * intros m k l (τf&HS&?&?) ?; typed_inversion_all; split; auto.
   * intros m k Ee e (τf&HS&?&?) ?; typed_inversion HS; split; auto.
     edestruct (esctx_item_subst_typed_rev Γ Γf ('{m})
@@ -147,21 +148,6 @@ Proof.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, mem_unlock_extend, val_typed_weaken,
       mem_unlock_valid', expr_typed_weaken.
-  * intros m k e Ω v s ?  (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, mem_unlock_extend].
-    eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using ctx_typed_weaken, expr_typed_weaken,
-      stmt_typed_weaken, mem_unlock_extend, mem_unlock_valid'.
-  * intros m k e Ω v s ?  (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, mem_unlock_extend].
-    eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using ctx_typed_weaken, expr_typed_weaken,
-      stmt_typed_weaken, mem_unlock_extend, mem_unlock_valid'.
-  * intros m k e Ω v s ?? (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, mem_unlock_extend].
-    eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using ctx_typed_weaken, expr_typed_weaken,
-      stmt_typed_weaken, mem_unlock_extend, mem_unlock_valid.
   * intros m k e Ω v s1 s2 ? (τf&HS&?&?) ?; typed_inversion_all.
     split; [|eauto using funenv_typed_weaken, mem_unlock_extend].
     eexists; simpl; split_ands; repeat typed_constructor;
@@ -177,16 +163,14 @@ Proof.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, expr_typed_weaken,
       stmt_typed_weaken, mem_unlock_extend, mem_unlock_valid.
-  * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; split; auto.
-    eexists; simpl; split_ands; eauto; repeat typed_constructor; eauto.
-  * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; split; auto.
-    eexists; simpl; split_ands; repeat typed_constructor; eauto.
-  * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; split; auto.
-    eexists; simpl; split_ands; repeat typed_constructor; eauto.
-  * intros m k e s (τf&HS&?&?) ?; typed_inversion_all; split; auto.
-    eexists; simpl; split_ands; repeat typed_constructor; eauto.
-  * intros m k e s1 s2 (τf&HS&?&?) ?; typed_inversion_all; split; auto.
-    eexists; simpl; split_ands; repeat typed_constructor; eauto.
+  * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
+  * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
+  * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
+  * intros m k s (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
+  * intros m k s (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
+  * intros m k s (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
+  * intros m k s (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
+  * intros m k e s1 s2 (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
   * intros m k e s1 s2 (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eexists; simpl; split_ands; repeat typed_constructor; eauto.
     by rewrite andb_false_r.
@@ -213,21 +197,21 @@ Proof.
       eauto using ctx_typed_weaken, mem_foldr_free_extend,
       mem_foldr_free_valid, val_typed_weaken.
   * intros m k g E v (τf&HS&?&?) ?; typed_inversion_all; split; auto.
-    eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using ectx_subst_typed, lockset_empty_valid.
+    eauto 10 using ectx_subst_typed, lockset_empty_valid.
+  * intros m k l (τf&HS&?&?) ?; typed_inversion_all; auto.
+  * intros m k s (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
+  * intros m k s n (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
+  * intros m k Es l s ? (τf&HS&?&?) ?; typed_inversion HS; split; auto.
+    edestruct (sctx_item_subst_typed_rev Γ Γf ('{m})
+      (get_stack_types k) Es s) as (mτ&?&?); eauto 10.
   * intros m k Es v s (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     edestruct (sctx_item_typed_Some_l Γ Γf ('{m})
       (get_stack_types k) Es) as [??]; eauto; simplify_equality'.
-    eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using sctx_item_subst_typed.
-  * intros m k l (τf&HS&?&?) ?; typed_inversion_all; split; auto.
-  * intros m k Es l s ? (τf&HS&?&?) ?; typed_inversion HS; split; auto.
-    edestruct (sctx_item_subst_typed_rev Γ Γf ('{m})
-      (get_stack_types k) Es s) as (mτ&?&?); eauto.
-    eexists; simpl; split_ands; repeat typed_constructor; eauto.
-  * intros m k E l s ? (τf&HS&?&?) ?; typed_inversion_all; split; auto.
-    eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using sctx_item_subst_typed.
+    eauto 10 using sctx_item_subst_typed.
+  * intros m k Es l s ? (τf&HS&?&?) ?; typed_inversion_all; split; auto.
+    eauto 10 using sctx_item_subst_typed.
+  * intros m k Es n s ? (τf&HS&?&?) ?; typed_inversion_all; split; auto.
+    eauto 10 using sctx_item_subst_typed.
   * intros m k d o τ s ?? (τf&HS&?&?) ?; typed_inversion_all.
     split; [|eauto using funenv_typed_weaken, mem_alloc_extend'].
     eexists; simpl; split_ands; eauto 6 using
@@ -266,18 +250,23 @@ Lemma cstep_progress Γ Γf δ S f :
   (**i 1.) *) red (cstep Γ δ) S ∨
   (**i 2.) *) (∃ v, is_final_state v S) ∨
   (**i 3.) *) is_undef_state S ∨
-  (**i 4.) *) (∃ l s, SFoc S = Stmt (↷ l) s ∧ l ∉ labels s ∪ labels (SCtx S)).
+  (**i 4.) *) match SFoc S with
+              | Stmt (↷ l) s => l ∉ labels s ∪ labels (SCtx S)
+              | Stmt (↑ n) s => ¬n < ctx_breaks (SCtx S)
+              | _ => False
+              end.
 Proof.
   destruct S as [k φ m]. intros ? (τf&Hφ&Hk&?) ?; simpl in *.
   destruct Hφ as [d s cmσ Hs Hd|e τ|f' vs σs σ|f' σs σ v| |]; simpl.
-  * destruct Hd as [cmτ|mτ|c v τ|l cmτ]; simpl.
+  * destruct Hd as [cmτ|mτ|c v τ|l cmτ|n cmτ]; simpl.
     + destruct Hs; left; solve_cred.
     + ctx_inversion Hk; left; solve_cred.
     + ctx_inversion Hk; left; solve_cred.
     + destruct (decide (l ∈ labels s)).
       { destruct Hs; simplify_equality'; decompose_elem_of; left; solve_cred. }
-      ctx_inversion Hk; try (left; solve_cred).
-      do 3 right; exists l s. erewrite Fun_type_labels by eauto. solve_elem_of.
+      ctx_inversion Hk; try (left; solve_cred); solve_elem_of.
+    + destruct (decide (n < ctx_breaks k)); [|by auto].
+      left. destruct n; ctx_inversion Hk; try lia || solve_cred.
   * destruct (is_nf_or_redex e) as [Hnf|(E&e'&?&->)].
     { destruct Hnf as [Ω v|]; typed_inversion_all.
       ctx_inversion Hk; left; try solve_cred;
@@ -312,8 +301,9 @@ Proof.
   intros. assert ((Γ,Γf) ⊢ S : f ∧ (Γ,'{SMem S}) ⊢ δ : Γf) as [??].
   { destruct (csteps_preservation Γ Γf δ (initial_state m f vs) S f);
       eauto using initial_state_typed, funenv_typed_weaken. }
-  destruct (cstep_progress Γ Γf δ S f) as [?|[[v ?]|[?|(l&s&?&[])]]]; eauto.
-  destruct S as [k φ m2]; simplify_equality'.
-  eauto using csteps_initial_gotos, funenv_lookup_gotos.
+  destruct (cstep_progress Γ Γf δ S f) as [?|[[v ?]|[?|?]]]; eauto.
+  destruct S as [k [[]| | | |] m2]; simplify_equality';
+    naive_solver eauto using csteps_initial_gotos, funenv_lookup_gotos,
+    csteps_initial_breaks, funenv_lookup_breaks.
 Qed.
 End type_preservation.

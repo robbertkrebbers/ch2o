@@ -4,35 +4,28 @@
 to define the operational semantics in the file [smallstep], we define
 corresponding evaluation contexts. Notations for expressions are declared in the
 scope [expr_scope]. *)
-Require Import nmap mapset natmap listset.
+Require Import String stringmap mapset natmap listset.
 Require Export values contexts.
 
 (** * Function names *)
-(** We use the type [N] of binary natural numbers for function names, and the
-implementation [Nmap] for efficient finite maps over function names. *)
-Definition funname := N.
-Definition funmap := Nmap.
+Definition funname := string.
+Definition funmap := stringmap.
 Notation funset := (mapset (funmap unit)).
 
 Instance funname_eq_dec: ∀ i1 i2: funname, Decision (i1 = i2) := decide_rel (=).
-Instance funname_fresh `{FinCollection funname C} : Fresh funname C := _.
-Instance funname_fresh_spec `{FinCollection funname C} :
-  FreshSpec funname C := _.
-
 Instance funmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
   ∀ m1 m2 : funmap A, Decision (m1 = m2) := decide_rel (=).
-Instance funmap_empty {A} : Empty (funmap A) := @empty (Nmap A) _.
+Instance funmap_empty {A} : Empty (funmap A) := @empty (stringmap A) _.
 Instance funmap_lookup {A} : Lookup funname A (funmap A) :=
-  @lookup _ _ (Nmap A) _.
+  @lookup _ _ (stringmap A) _.
 Instance funmap_partial_alter {A} : PartialAlter funname A (funmap A) :=
-  @partial_alter _ _ (Nmap A) _.
+  @partial_alter _ _ (stringmap A) _.
 Instance funmap_to_list {A} : FinMapToList funname A (funmap A) :=
   @map_to_list _ _ (funmap A) _.
-Instance funmap_omap: OMap funmap := @omap Nmap _.
-Instance funmap_merge : Merge funmap := @merge Nmap _.
-Instance funmap_fmap: FMap funmap := @fmap Nmap _.
+Instance funmap_omap: OMap funmap := @omap stringmap _.
+Instance funmap_merge : Merge funmap := @merge stringmap _.
+Instance funmap_fmap: FMap funmap := @fmap stringmap _.
 Instance: FinMap funname funmap := _.
-
 Instance funmap_dom {A} : Dom (funmap A) funset := mapset_dom.
 Instance: FinMapDom funname funmap funset := mapset_dom_spec.
 
@@ -112,7 +105,7 @@ Arguments EAddr {_} _ _.
 Arguments ERtoL {_} _%expr_scope.
 Arguments ERofL {_} _%expr_scope.
 Arguments EAssign {_} _ _%expr_scope _%expr_scope.
-Arguments ECall {_} _%N _%expr_scope.
+Arguments ECall {_} _%string _%expr_scope.
 Arguments ELoad {_} _%expr_scope.
 Arguments EEltL {_} _%expr_scope _.
 Arguments EEltR {_} _%expr_scope _.
@@ -667,7 +660,7 @@ Arguments CRtoL {_}.
 Arguments CLtoR {_}.
 Arguments CAssignL {_} _ _.
 Arguments CAssignR {_} _ _.
-Arguments CCall {_} _ _ _.
+Arguments CCall {_} _%string _ _.
 Arguments CLoad {_}.
 Arguments CEltL {_} _.
 Arguments CEltR {_} _.
@@ -892,7 +885,7 @@ Arguments DCAddr {_} _ _.
 Arguments DCRtoL {_}.
 Arguments DCLtoR {_}.
 Arguments DCAssign {_} _.
-Arguments DCCall {_ _} _.
+Arguments DCCall {_ _} _%string.
 Arguments DCLoad {_}.
 Arguments DCEltL {_} _.
 Arguments DCEltR {_} _.

@@ -33,8 +33,7 @@ calculate the required allocations and deallocations. *)
 or looks up, the statement and continuation corresponding to the target label.
 However, it is not very natural to reconstruct the required allocations and
 deallocations from the current and target continuations. *)
-
-Require Import nmap mapset.
+Require Import String stringmap mapset.
 Require Export expressions.
 
 (** * Labels and gotos *)
@@ -42,30 +41,25 @@ Require Export expressions.
 implementation [Nmap] for efficient finite sets, and finite maps indexed by
 labels. We define type classes [Gotos] and [Labels] to collect the labels of
 gotos respectively the labels of labeled statements. *)
-Definition labelname := N.
-Definition labelmap := Nmap.
+Definition labelname := string.
+Definition labelmap := stringmap.
 Notation labelset := (mapset (labelmap unit)).
 
 Instance labelname_dec: ∀ i1 i2 : labelname, Decision (i1 = i2) := decide_rel (=).
-Instance labelname_fresh_`{FinCollection labelname C} : Fresh labelname C := _.
-Instance labelname_fresh_spec `{FinCollection labelname C} :
-  FreshSpec labelname C := _.
-Instance labelname_inhabited: Inhabited labelname := populate 0%N.
-
+Instance labelname_inhabited: Inhabited labelname := populate ""%string.
 Instance labelmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
   ∀ m1 m2 : labelmap A, Decision (m1 = m2) := decide_rel (=).
-Instance labelmap_empty {A} : Empty (labelmap A) := @empty (Nmap A) _.
+Instance labelmap_empty {A} : Empty (labelmap A) := @empty (stringmap A) _.
 Instance labelmap_lookup {A} : Lookup labelname A (labelmap A) :=
-  @lookup _ _ (Nmap A) _.
+  @lookup _ _ (stringmap A) _.
 Instance labelmap_partial_alter {A} : PartialAlter labelname A (labelmap A) :=
-  @partial_alter _ _ (Nmap A) _.
+  @partial_alter _ _ (stringmap A) _.
 Instance labelmap_to_list {A} : FinMapToList labelname A (labelmap A) :=
-  @map_to_list _ _ (Nmap A) _.
-Instance labelmap_omap: OMap labelmap := @omap Nmap _.
-Instance labelmap_merge: Merge labelmap := @merge Nmap _.
-Instance labelmap_fmap: FMap labelmap := @fmap Nmap _.
+  @map_to_list _ _ (stringmap A) _.
+Instance labelmap_omap: OMap labelmap := @omap stringmap _.
+Instance labelmap_merge: Merge labelmap := @merge stringmap _.
+Instance labelmap_fmap: FMap labelmap := @fmap stringmap _.
 Instance: FinMap labelname labelmap := _.
-
 Instance labelmap_dom {A} : Dom (labelmap A) labelset := mapset_dom.
 Instance: FinMapDom labelname labelmap labelset := mapset_dom_spec.
 
@@ -84,11 +78,13 @@ Inductive stmt (Ti : Set) : Set :=
   | SDo : expr Ti → stmt Ti
   | SSkip : stmt Ti
   | SGoto : labelname → stmt Ti
+  | SBreak : nat → stmt Ti
   | SReturn : expr Ti → stmt Ti
-  | SBlock : type Ti → stmt Ti → stmt Ti
-  | SComp : stmt Ti → stmt Ti → stmt Ti
   | SLabel : labelname → stmt Ti
-  | SWhile : expr Ti → stmt Ti → stmt Ti
+  | SBlock : type Ti → stmt Ti → stmt Ti
+  | SBreakTo : stmt Ti → stmt Ti
+  | SComp : stmt Ti → stmt Ti → stmt Ti
+  | SLoop : stmt Ti → stmt Ti
   | SIf : expr Ti → stmt Ti → stmt Ti → stmt Ti.
 Notation funenv Ti := (funmap (stmt Ti)).
 
@@ -103,31 +99,34 @@ Open Scope stmt_scope.
 
 Arguments SDo {_} _.
 Arguments SSkip {_}.
-Arguments SGoto {_} _%N.
+Arguments SGoto {_} _%string.
+Arguments SBreak {_} _.
 Arguments SReturn {_} _.
+Arguments SLabel {_} _.
 Arguments SBlock {_} _ _%S.
+Arguments SBreakTo {_} _.
 Arguments SComp {_}_%S _%S.
-Arguments SLabel {_} _%N.
-Arguments SWhile {_}_ _%S.
+Arguments SLoop {_} _%S.
 Arguments SIf {_} _ _%S _%S.
 
 Notation "! e" := (SDo e) (at level 10) : stmt_scope.
 Notation "'skip'" := SSkip : stmt_scope.
 Notation "'goto' l" := (SGoto l) (at level 10) : stmt_scope.
+Notation "'break' n" := (SBreak n) (at level 10) : stmt_scope.
 Notation "'ret' e" := (SReturn e) (at level 10) : stmt_scope.
-Notation "'blk{' τ } s" := (SBlock τ s)
-  (at level 10, format "'blk{' τ }  s") : stmt_scope.
+Notation "'label' l" := (SLabel l) (at level 10) : stmt_scope.
+Notation "'block{' τ } s" := (SBlock τ s)
+  (at level 10, format "'block{' τ }  s") : stmt_scope.
+Notation "'breakto' s" := (SBreakTo s) (at level 10) : stmt_scope.
 Notation "s1 ;; s2" := (SComp s1 s2)
   (at level 80, right associativity,
    format "'[' s1  ;;  '/' s2 ']'") : stmt_scope.
-Notation "'label' l" := (SLabel l) (at level 10) : stmt_scope.
-Notation "l :; s" := (label l ;; s)
-  (at level 80, format "l  :;  s") : stmt_scope.
-Notation "'while{' e } s" := (SWhile e s)
-  (at level 10, format "'while{' e }  s") : stmt_scope.
+Notation "'loop' s" := (SLoop s)
+  (at level 10, format "'loop'  s") : stmt_scope.
 Notation "'if{' e } s1 'else' s2" := (SIf e s1 s2)
   (at level 56, format "if{ e }  s1  'else'  s2") : stmt_scope.
-
+Notation "l :; s" := (label l ;; s)
+  (at level 80, format "l  :;  s") : stmt_scope.
 Notation "e1 ::={ ass } e2" := (!(e1 ::={ass} e2))
   (at level 54, format "e1  ::={ ass }  e2", right associativity) : stmt_scope.
 Notation "e1 ::= e2" := (!(e1 ::= e2))
@@ -148,43 +147,58 @@ Proof. by injection 1. Qed.
 Instance stmt_gotos {Ti} : Gotos (stmt Ti) :=
   fix go s := let _ : Gotos _ := @go in
   match s with
+  | ! _ | skip | break _ | ret _ | label _ => ∅
   | goto l => {[ l ]}
-  | blk{_} s => gotos s
-  | s1 ;; s2 => gotos s1 ∪ gotos s2
-  | while{_} s => gotos s
-  | if{_} s1 else s2 => gotos s1 ∪ gotos s2
-  | _ => ∅
+  | block{_} s | breakto s | loop s => gotos s
+  | s1 ;; s2 | if{_} s1 else s2 => gotos s1 ∪ gotos s2
   end.
 Instance stmt_labels {Ti} : Labels (stmt Ti) :=
   fix go s := let _ : Labels _ := @go in
   match s with
-  | blk{_} s => labels s
-  | s1 ;; s2 => labels s1 ∪ labels s2
+  | ! _ | skip | goto _ | break _ | ret _ => ∅
   | label l => {[ l ]}
-  | while{_} s => labels s
-  | if{_} s1 else s2 => labels s1 ∪ labels s2
-  | _ => ∅
+  | breakto s | block{_} s | loop s => labels s
+  | s1 ;; s2 | if{_} s1 else s2 => labels s1 ∪ labels s2
   end.
 Instance stmt_locks {Ti} : Locks (stmt Ti) :=
   fix go s := let _ : Locks _ := @go in
   match s with
-  | ! e => locks e
-  | skip | goto _ | label _ => ∅
-  | ret e => locks e
-  | blk{_} s => locks s
+  | ! e | ret e => locks e
+  | skip | break _ | goto _ | label _=> ∅
+  | breakto s | block{_} s | loop s => locks s
   | s1 ;; s2 => locks s1 ∪ locks s2
-  | while{e} s => locks e ∪ locks s
   | if{e} s1 else s2 => locks e ∪ locks s1 ∪ locks s2
   end.
+Fixpoint breaks_valid {Ti} (n : nat) (s : stmt Ti) : Prop :=
+  match s with
+  | !_ | ret _ | skip | goto _ | label _ => True
+  | break i => i < n
+  | block{_} s | loop s => breaks_valid n s
+  | breakto s => breaks_valid (S n) s
+  | s1 ;; s2 | if{_} s1 else s2 => breaks_valid n s1 ∧ breaks_valid n s2
+  end.
+Instance breaks_valid_dec {Ti} : ∀ n (s : stmt Ti), Decision (breaks_valid n s).
+Proof.
+ refine (
+  fix go n s :=
+  match s return Decision (breaks_valid n s) with
+  | !_ | ret _ | skip | goto _ | label _ => left _
+  | break i => cast_if (decide (i < n))
+  | block{_} s | loop s => go n s
+  | breakto s => go (S n) s
+  | s1 ;; s2 | if{_} s1 else s2 => cast_if_and (go n s1) (go n s2)
+  end); clear go; abstract naive_solver.
+Defined.
 
 (** * Program contexts *)
 (** We first define the data type [sctx_item] of singular statement contexts. A
 pair [(E, s)] consisting of a list of singular statement contexts [E] and a
 statement [s] forms a zipper for statements without block scope variables. *)
 Inductive sctx_item (Ti : Set) : Set :=
+  | CBreakTo : sctx_item Ti
   | CCompL : stmt Ti → sctx_item Ti
   | CCompR : stmt Ti → sctx_item Ti
-  | CWhile : expr Ti → sctx_item Ti
+  | CLoop : sctx_item Ti
   | CIfL : expr Ti → stmt Ti → sctx_item Ti
   | CIfR : expr Ti → stmt Ti → sctx_item Ti.
 
@@ -192,17 +206,19 @@ Instance sctx_item_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (E1 E2 : sctx_item Ti) : Decision (E1 = E2).
 Proof. solve_decision. Defined.
 
+Arguments CBreakTo {_}.
 Arguments CCompL {_} _.
 Arguments CCompR {_} _.
-Arguments CWhile {_} _.
+Arguments CLoop {_}.
 Arguments CIfL {_} _ _.
 Arguments CIfR {_} _ _.
 
 Bind Scope stmt_scope with sctx_item.
+Notation "'breakto' □" :=
+  CBreakTo (at level 10, format "breakto  □") : stmt_scope.
 Notation "□ ;; s" := (CCompL s) (at level 80, format "□  ;;  s") : stmt_scope.
 Notation "s ;; □" := (CCompR s) (at level 80, format "s  ;;  □") : stmt_scope.
-Notation "'while{' e } □" := (CWhile e)
-  (at level 10, format "'while{' e }  □") : stmt_scope.
+Notation "'loop' □" := CLoop (at level 10, format "'loop'  □") : stmt_scope.
 Notation "'if{' e } □ 'else' s2" := (CIfL e s2)
   (at level 56, format "if{ e }  □  'else'  s2") : stmt_scope.
 Notation "'if{' e } s1 'else' □" := (CIfR e s1)
@@ -211,9 +227,10 @@ Notation "'if{' e } s1 'else' □" := (CIfR e s1)
 Instance sctx_item_subst {Ti} :
     Subst (sctx_item Ti) (stmt Ti) (stmt Ti) := λ Es s,
   match Es with
+  | breakto □ => breakto s
   | □ ;; s2 => s ;; s2
   | s1 ;; □ => s1 ;; s
-  | while{e} □ => while{e} s
+  | loop □ => loop s
   | if{e} □ else s2 => if{e} s else s2
   | if{e} s1 else □ => if{e} s1 else s
   end.
@@ -224,27 +241,19 @@ Proof. destruct Es; repeat intro; simpl in *; by simplify_equality. Qed.
 
 Instance sctx_item_gotos {Ti} : Gotos (sctx_item Ti) := λ Es,
   match Es with
-  | s2 ;; □ => gotos s2
-  | □ ;; s1 => gotos s1
-  | while{_} □ => ∅
-  | if{_} □ else s2 => gotos s2
-  | if{_} s1 else □ => gotos s1
+  | breakto □ | loop □ => ∅
+  | s ;; □ | □ ;; s  | if{_} □ else s | if{_} s else □ => gotos s
   end.
 Instance sctx_item_labels {Ti} : Labels (sctx_item Ti) := λ Es,
   match Es with
-  | s2 ;; □ => labels s2
-  | □ ;; s1 => labels s1
-  | while{_} □ => ∅
-  | if{_} □ else s2 => labels s2
-  | if{_} s1 else □ => labels s1
+  | breakto □ | loop □ => ∅
+  | s ;; □ | □ ;; s | if{_} □ else s | if{_} s else □ => labels s
   end.
 Instance sctx_item_locks {Ti} : Locks (sctx_item Ti) := λ Es,
   match Es with
-  | □ ;; s2 => locks s2
-  | s1 ;; □ => locks s1
-  | while{e} □ => locks e
-  | if{e} □ else s2 => locks e ∪ locks s2
-  | if{e} s1 else □ => locks e ∪ locks s1
+  | □ ;; s | s ;; □ => locks s
+  | breakto □ | loop □ => ∅
+  | if{e} □ else s | if{e} s else □ => locks e ∪ locks s
   end.
 
 Lemma sctx_item_subst_gotos {Ti} (Es : sctx_item Ti) (s : stmt Ti) :
@@ -263,7 +272,6 @@ that is being executed belongs to. *)
 Inductive esctx_item (Ti : Set) : Set :=
   | CDoE : esctx_item Ti
   | CReturnE : esctx_item Ti
-  | CWhileE : stmt Ti → esctx_item Ti
   | CIfE : stmt Ti → stmt Ti → esctx_item Ti.
 
 Instance esctx_item_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
@@ -272,12 +280,9 @@ Proof. solve_decision. Defined.
 
 Arguments CDoE {_}.
 Arguments CReturnE {_}.
-Arguments CWhileE {_} _.
 Arguments CIfE {_} _ _.
 Notation "! □" := CDoE (at level 10, format "!  □") : stmt_scope.
 Notation "'ret' □" := CReturnE (at level 10, format "'ret'  □") : stmt_scope.
-Notation "'while{' □ } s" := (CWhileE s)
-  (at level 10, format "'while{' □ }  s") : stmt_scope.
 Notation "'if{' □ } s1 'else' s2" := (CIfE s1 s2)
   (at level 56, format "if{ □ }  s1  'else'  s2") : stmt_scope.
 
@@ -286,7 +291,6 @@ Instance esctx_item_subst {Ti} :
   match Ee with
   | ! □ => ! e
   | ret □ => ret e
-  | while{□} s => while{e} s
   | if{□} s1 else s2 => if{e} s1 else s2
   end.
 Instance: DestructSubst (@esctx_item_subst Ti).
@@ -297,19 +301,16 @@ Proof. destruct Ee; intros ???; simpl in *; by simplify_equality. Qed.
 Instance esctx_item_gotos {Ti} : Gotos (esctx_item Ti) := λ Ee,
   match Ee with
   | ! □ | ret □ => ∅
-  | while{□} s => gotos s
   | if{□} s1 else s2 => gotos s1 ∪ gotos s2
   end.
 Instance esctx_item_labels {Ti} : Labels (esctx_item Ti) := λ Ee,
   match Ee with
   | ! □ | ret □ => ∅
-  | while{□} s => labels s
   | if{□} s1 else s2 => labels s1 ∪ labels s2
   end.
 Instance esctx_item_locks {Ti} : Locks (esctx_item Ti) := λ Ee,
   match Ee with
   | ! □  | ret □ => ∅
-  | while{□} s => locks s
   | if{□} s1 else s2 => locks s1 ∪ locks s2
   end.
 
@@ -367,10 +368,6 @@ Instance ctx_item_locks {Ti} : Locks (ctx_item Ti) := λ Ek,
   | CFun E => locks E
   | _ => ∅
   end.
-Instance ctx_item_free_gotos {Ti} : Gotos (ctx_item Ti) := λ Ek,
-  match Ek with CStmt Es => gotos Es | CExpr _ Ee => gotos Ee | _ => ∅ end.
-Instance ctx_item_free_labels {Ti} : Labels (ctx_item Ti) := λ Ek,
-  match Ek with CStmt Es => labels Es | CExpr _ Ee => labels Ee | _ => ∅ end.
 
 (** Given a context, we can construct a stack using the following erasure
 function. We define [get_stack (CFun _ :: k)] as [[]] instead of [getstack k],
@@ -394,10 +391,26 @@ Fixpoint get_stack_types {Ti} (k : ctx Ti) : list (type Ti) :=
   end.
 Instance ctx_free_gotos {Ti} : Gotos (ctx Ti) :=
   fix go k := let _ : Gotos _ := @go in
-  match k with [] => ∅ | CFun _ :: _ => ∅ | Ek :: k => gotos Ek ∪ gotos k end.
+  match k with
+  | CStmt Es :: k => gotos Es ∪ gotos k
+  | CBlock _ _ :: k => gotos k
+  | CExpr _ E :: k => gotos E ∪ gotos k
+  | _ => ∅
+  end.
 Instance ctx_free_labels {Ti} : Labels (ctx Ti) :=
   fix go k := let _ : Labels _ := @go in
-  match k with [] => ∅ | CFun _ :: _ => ∅ | Ek :: k => labels Ek ∪ labels k end.
+  match k with
+  | CStmt Es :: k => labels Es ∪ labels k
+  | CBlock _ _ :: k => labels k
+  | CExpr _ E :: k => labels E ∪ labels k
+  | _ => ∅
+  end.
+Fixpoint ctx_breaks {Ti} (k : ctx Ti) : nat :=
+  match k with
+  | CStmt (breakto □) :: k => S (ctx_breaks k)
+  | (CStmt _ | CBlock _ _) :: k => ctx_breaks k
+  | _ => 0
+  end.
 
 Lemma get_stack_app {Ti} (k1 k2 k3 : ctx Ti) :
   get_stack k2 = get_stack k3 → get_stack (k1 ++ k2) = get_stack (k1 ++ k3).

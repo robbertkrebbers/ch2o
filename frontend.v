@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Import String nmap.
+Require Import String stringmap.
 Require Export type_system_decidable expression_eval error.
 Local Open Scope string_scope.
 Local Open Scope expr_scope.
@@ -13,7 +13,7 @@ Inductive cint_type :=
   CIntType { csign : option signedness; crank : cint_rank }.
 
 Inductive cexpr : Set :=
-  | CEVar : N → cexpr
+  | CEVar : string → cexpr
   | CEConst : signedness → nat → Z → cexpr
   | CESizeOf : ctype → cexpr
   | CEMin : cint_type → cexpr
@@ -22,7 +22,7 @@ Inductive cexpr : Set :=
   | CEAddrOf : cexpr → cexpr
   | CEDeref : cexpr → cexpr
   | CEAssign : assign → cexpr → cexpr → cexpr
-  | CECall : N → list cexpr → cexpr
+  | CECall : string → list cexpr → cexpr
   | CEAlloc : ctype → cexpr → cexpr
   | CEFree : cexpr → cexpr
   | CEUnOp : unop → cexpr → cexpr
@@ -32,15 +32,15 @@ Inductive cexpr : Set :=
   | CEAnd : cexpr → cexpr → cexpr
   | CEOr : cexpr → cexpr → cexpr
   | CECast : ctype → cexpr → cexpr
-  | CEField : cexpr → N → cexpr
+  | CEField : cexpr → string → cexpr
 with ctype : Set :=
   | CTVoid : ctype
-  | CTDef : N → ctype
-  | CTEnum : N → ctype
+  | CTDef : string → ctype
+  | CTEnum : string → ctype
   | CTInt : cint_type → ctype
   | CTPtr : ctype → ctype
   | CTArray : ctype → cexpr → ctype
-  | CTCompound : compound_kind → N → ctype
+  | CTCompound : compound_kind → string → ctype
   | CTTypeOf : cexpr → ctype.
 
 Inductive cstorage := StaticStorage | ExternStorage | AutoStorage.
@@ -48,25 +48,25 @@ Inductive cstorage := StaticStorage | ExternStorage | AutoStorage.
 Inductive cstmt : Set :=
   | CSDo : cexpr → cstmt
   | CSSkip : cstmt
-  | CSGoto : labelname → cstmt
+  | CSGoto : string → cstmt
   | CSBreak : cstmt
   | CSContinue : cstmt
   | CSReturn : option cexpr → cstmt
-  | CSBlock : cstorage → N → ctype → option cexpr → cstmt → cstmt
-  | CSTypeDef : N → ctype → cstmt → cstmt
+  | CSBlock : cstorage → string → ctype → option cexpr → cstmt → cstmt
+  | CSTypeDef : string → ctype → cstmt → cstmt
   | CSComp : cstmt → cstmt → cstmt
-  | CSLabel : labelname → cstmt → cstmt
+  | CSLabel : string → cstmt → cstmt
   | CSWhile : cexpr → cstmt → cstmt
   | CSFor : cexpr → cexpr → cexpr → cstmt → cstmt
   | CSDoWhile : cstmt → cexpr → cstmt
   | CSIf : cexpr → cstmt → cstmt → cstmt.
 
 Inductive decl : Set :=
-  | CompoundDecl : compound_kind → list (N * ctype) → decl
-  | EnumDecl : cint_type → list (N * option cexpr) → decl
+  | CompoundDecl : compound_kind → list (string * ctype) → decl
+  | EnumDecl : cint_type → list (string * option cexpr) → decl
   | TypeDefDecl : ctype → decl
   | GlobDecl : ctype → option cexpr → decl
-  | FunDecl : list (option N * ctype) → ctype → option cstmt → decl.
+  | FunDecl : list (option string * ctype) → ctype → option cstmt → decl.
 
 Inductive global_decl (Ti : Set): Set :=
   | Global : index → type Ti → bool → global_decl Ti
@@ -82,7 +82,7 @@ Definition maybe_Fun {Ti} (d : global_decl Ti) :
   match d with Fun τs τ ms => Some (τs,τ,ms) | _ => None end.
 Definition maybe_GlobalTypeDef {Ti} (d : global_decl Ti) : option (type Ti) :=
   match d with GlobalTypeDef τ => Some τ | _ => None end.
-Notation global_env Ti := (Nmap (global_decl Ti)).
+Notation global_env Ti := (stringmap (global_decl Ti)).
 
 Inductive local_decl (Ti : Set) : Set :=
   | Static : index → type Ti → local_decl Ti
@@ -93,15 +93,15 @@ Arguments Local {_} _.
 Arguments TypeDef {_} _.
 Definition maybe_TypeDef {Ti} (d : local_decl Ti) : option (type Ti) :=
   match d with TypeDef τ => Some τ | _ => None end.
-Notation local_env Ti := (list (N * local_decl Ti))%type.
+Notation local_env Ti := (list (string * local_decl Ti))%type.
 
 Inductive compound_type (Ti : Set) : Set :=
-  | CompoundType : compound_kind → list N → compound_type Ti
+  | CompoundType : compound_kind → list string → compound_type Ti
   | EnumType : int_type Ti → compound_type Ti.
 Arguments CompoundType {_} _ _.
 Arguments EnumType {_} _.
 Definition maybe_CompoundType {Ti}
-    (t : compound_type Ti) : option (compound_kind * list N) :=
+    (t : compound_type Ti) : option (compound_kind * list string) :=
   match t with CompoundType c xs => Some (c,xs) | _ => None end.
 Definition maybe_EnumType {Ti} (t : compound_type Ti) : option (int_type Ti) :=
   match t with EnumType τi => Some τi | _ => None end.
@@ -119,7 +119,7 @@ Definition global_decl_complete (d : global_decl Ti) : bool :=
 Definition global_env_complete : global_env Ti → Prop :=
   map_Forall (λ _, global_decl_complete).
 
-Fixpoint lookup_var (x : N) (i : nat)
+Fixpoint lookup_var (x : string) (i : nat)
     (Δl : local_env Ti) : option (expr Ti * type Ti) :=
   match Δl with
   | [] => None
@@ -130,14 +130,13 @@ Fixpoint lookup_var (x : N) (i : nat)
   | (y,TypeDef _) :: Δl =>
      if decide (x = y) then None else lookup_var x i Δl
   end.
-Fixpoint lookup_typedef (x : N)
-    (Δl : list (N * local_decl Ti)) : option (type Ti) :=
+Fixpoint lookup_typedef (x : string) (Δl : local_env Ti) : option (type Ti) :=
   match Δl with
   | [] => None
   | (y,d) :: Δl =>
      if decide (x = y) then maybe_TypeDef d else lookup_typedef x Δl
   end.
-Definition lookup_var' (x : N)
+Definition lookup_var' (x : string)
     (Δg : global_env Ti) (Δl : local_env Ti) : option (expr Ti * lrtype Ti) :=
   match lookup_var x 0 Δl with
   | Some (e,τ) => Some (e,inl τ)
@@ -148,7 +147,7 @@ Definition lookup_var' (x : N)
      | _ => None
      end
   end.
-Definition lookup_typedef' (x : N)
+Definition lookup_typedef' (x : string)
     (Δg : global_env Ti) (Δl : local_env Ti) : option (type Ti) :=
   match lookup_typedef x Δl with
   | Some τ => Some τ | None => Δg !! x ≫= maybe_GlobalTypeDef
@@ -411,16 +410,6 @@ with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
 Section frontend_more.
 Context `{Env Ti}.
 
-Global Instance cstmt_labels : Labels cstmt :=
-  fix go cs := let _ : Labels _ := @go in
-  match cs with
-  | CSDo _ | CSSkip | CSGoto _ | CSBreak | CSContinue | CSReturn _ => ∅
-  | CSBlock _ _ _ _ cs | CSTypeDef _ _ cs => labels cs
-  | CSComp cs1 cs2 => labels cs1 ∪ labels cs2
-  | CSLabel l cs => {[ l ]} ∪ labels cs
-  | CSWhile _ cs | CSFor _ _ _ cs | CSDoWhile cs _ => labels cs
-  | CSIf _ cs1 cs2 => labels cs1 ∪ labels cs2
-  end.
 Definition to_val (Γn : compound_env Ti) (Γ : env Ti)
     (m : mem Ti) (Δg : global_env Ti) (Δl : local_env Ti)
     (ce : cexpr) (τ : type Ti) : string + val Ti :=
@@ -429,8 +418,8 @@ Definition to_val (Γn : compound_env Ti) (Γ : env Ti)
      with "constant expression of incorrect type";
    error_of_option (⟦ cast{τ} e ⟧ Γ ∅ [] m ≫= maybe_inr)
      "undefined constant expression".
-Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti)
-    (m : mem Ti) (Δg : global_env Ti) (Δl : local_env Ti) (x : N) (cτ : ctype)
+Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
+    (Δg : global_env Ti) (Δl : local_env Ti) (x : string) (cτ : ctype)
     (mce : option cexpr) : string + mem Ti * global_env Ti * index * type Ti :=
   τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
   match Δg !! x with
@@ -462,8 +451,8 @@ Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti)
              <[x:=Global o τ false]>Δg, o, τ)
      end
   end.
-Definition alloc_static (Γn : compound_env Ti) (Γ : env Ti)
-    (m : mem Ti) (Δg : global_env Ti) (Δl : local_env Ti) (x : N) (cτ : ctype)
+Definition alloc_static (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
+    (Δg : global_env Ti) (Δl : local_env Ti) (x : string) (cτ : ctype)
     (mce : option cexpr) : string + mem Ti * index * type Ti :=
   τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
   guard (int_typed (size_of Γ τ) sptrT)
@@ -482,32 +471,27 @@ Definition alloc_static (Γn : compound_env Ti) (Γ : env Ti)
   end.
 Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
     mem Ti → global_env Ti → local_env Ti →
-    labelset → option (labelname * labelname) →
-    cstmt → string + mem Ti * global_env Ti * labelset * stmt Ti * rettype Ti :=
-  fix go m Δg Δl Ls mLcb cs {struct cs} :=
+    cstmt → string + mem Ti * global_env Ti * stmt Ti * rettype Ti :=
+  fix go m Δg Δl cs {struct cs} :=
   match cs with
   | CSDo ce =>
      '(e,_) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
-     inr (m, Δg, Ls, !(cast{voidT} e), (false, None))
-  | CSSkip => inr (m, Δg, Ls, skip, (false, None))
-  | CSGoto l => inr (m, Δg, Ls, goto l, (true, None))
-  | CSContinue =>
-     '(Lc,_) ← error_of_option mLcb "continue not allowed";
-     inr (m, Δg, Ls, goto Lc, (true, None))
-  | CSBreak =>
-     '(_,Lb) ← error_of_option mLcb "break not allowed";
-     inr (m, Δg, Ls, goto Lb, (true, None))
+     inr (m, Δg, !(cast{voidT} e), (false, None))
+  | CSSkip => inr (m, Δg, skip, (false, None))
+  | CSGoto l => inr (m, Δg, goto l, (true, None))
+  | CSContinue => inr (m, Δg, break 0, (true, None))
+  | CSBreak => inr (m, Δg, break 1, (true, None))
   | CSReturn (Some ce) =>
      '(e,τ') ← to_R_NULL τret <$> to_expr Γn Γ m Δg Δl ce;
      guard (cast_typed Γ τ' τret) with "return expression of incorrect type";
-     inr (m, Δg, Ls, ret (cast{τret} e), (true, Some τret))
-  | CSReturn None => inr (m, Δg, Ls, ret (#voidV), (true, Some voidT))
+     inr (m, Δg, ret (cast{τret} e), (true, Some τret))
+  | CSReturn None => inr (m, Δg, ret (#voidV), (true, Some voidT))
   | CSBlock AutoStorage x cτ None cs =>
      τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
      guard (int_typed (size_of Γ τ) sptrT)
        with "block scope declaration whose type is too large";
-     '(m,Δg,Ls,s,cmσ) ← go m Δg ((x,Local τ) :: Δl) Ls mLcb cs;
-     inr (m, Δg, Ls, blk{τ} s, cmσ)
+     '(m,Δg,s,cmσ) ← go m Δg ((x,Local τ) :: Δl) cs;
+     inr (m, Δg, block{τ} s, cmσ)
   | CSBlock AutoStorage x cτ (Some ce) cs =>
      τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
      guard (int_typed (size_of Γ τ) sptrT) with
@@ -516,78 +500,78 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      '(e,τ') ← to_R_NULL τ <$> to_expr Γn Γ m Δg Δl ce;
      guard (cast_typed Γ τ' τ) with
        "block scope declaration with initializer of incorrect type";
-     '(m,Δg,Ls,s,cmσ) ← go m Δg Δl Ls mLcb cs;
-     inr (m, Δg, Ls, blk{τ} (var{τ} 0 ::= e ;; s), cmσ)
+     '(m,Δg,s,cmσ) ← go m Δg Δl cs;
+     inr (m, Δg, block{τ} (var{τ} 0 ::= e ;; s), cmσ)
   | CSBlock StaticStorage x cτ mce cs =>
      '(m,o,τ) ← alloc_static Γn Γ m Δg Δl x cτ mce;
-     go m Δg ((x,Static o τ) :: Δl) Ls mLcb cs
+     go m Δg ((x,Static o τ) :: Δl) cs
   | CSBlock ExternStorage x cτ mce cs =>
      guard (mce = None) with
        "extern block scope declaration with an initializer";
      '(m,Δg,o,τ) ← alloc_global Γn Γ m Δg Δl x cτ None;
-     go m Δg ((x,Static o τ) :: Δl) Ls mLcb cs
+     go m Δg ((x,Static o τ) :: Δl) cs
   | CSTypeDef x cτ cs =>
      τ ← to_type Γn Γ m Δg Δl to_Ptr cτ;
-     go m Δg ((x,TypeDef τ) :: Δl) Ls mLcb cs
+     go m Δg ((x,TypeDef τ) :: Δl) cs
   | CSComp cs1 cs2 =>
-     '(m,Δg,Ls,s1,cmσ1) ← go m Δg Δl Ls mLcb cs1;
-     '(m,Δg,Ls,s2,cmσ2) ← go m Δg Δl Ls mLcb cs2;
+     '(m,Δg,s1,cmσ1) ← go m Δg Δl cs1;
+     '(m,Δg,s2,cmσ2) ← go m Δg Δl cs2;
      mσ ← error_of_option (rettype_union (cmσ1.2) (cmσ2.2))
        "composition with non-matching return types";
-     inr (m, Δg, Ls, s1 ;; s2, (cmσ2.1, mσ))
+     inr (m, Δg, s1 ;; s2, (cmσ2.1, mσ))
   | CSLabel l cs =>
-     '(m,Δg,Ls,s,cmσ) ← go m Δg Δl Ls mLcb cs;
-     inr (m, Δg, Ls, l :; s, cmσ)
+     '(m,Δg,s,cmσ) ← go m Δg Δl cs;
+     inr (m, Δg, l :; s, cmσ)
   | CSWhile ce cs =>
      '(e,τ) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
      _ ← error_of_option (maybe_TBase τ)
        "while loop with conditional expression of non-base type";
-     let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
-     let Ls := {[ LC ; LB ]} ∪ Ls in
-     '(m,Δg,Ls,s,cmσ) ← go m Δg Δl Ls (Some (LC,LB)) cs;
-     inr (m, Δg, Ls, while{e} (s;; label LC);; label LB, (false, cmσ.2))
+     '(m,Δg,s,cmσ) ← go m Δg Δl cs;
+     inr (m, Δg,
+       breakto (loop (if{e} skip else break 0 ;; breakto s)),
+       (false, cmσ.2))
   | CSFor ce1 ce2 ce3 cs =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ m Δg Δl ce1;
      '(e2,τ2) ← to_R <$> to_expr Γn Γ m Δg Δl ce2;
      _ ← error_of_option (maybe_TBase τ2)
        "for loop with conditional expression of non-base type";
      '(e3,τ3) ← to_R <$> to_expr Γn Γ m Δg Δl ce3;
-     let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
-     let Ls := {[ LC ; LB ]} ∪ Ls in
-     '(m,Δg,Ls,s,cmσ) ← go m Δg Δl Ls (Some (LC,LB)) cs;
-     inr (m, Δg, Ls, !(cast{voidT} e1) ;; while{e2}
-       (s;; label LC;; !e3);; label LB, (false, cmσ.2))
+     '(m,Δg,s,cmσ) ← go m Δg Δl cs;
+     inr (m, Δg,
+       !(cast{voidT} e1) ;;
+       breakto (loop (if{e2} skip else break 0 ;; breakto s ;; !(cast{voidT} e3))),
+       (false, cmσ.2))
   | CSDoWhile cs ce =>
-     let LC := fresh Ls in let LB := fresh ({[ LC ]} ∪ Ls) in
-     let Ls := {[ LC ; LB ]} ∪ Ls in
-     '(m,Δg,Ls,s,cmσ) ← go m Δg Δl Ls (Some (LC,LB)) cs;
+     '(m,Δg,s,cmσ) ← go m Δg Δl cs;
      '(e,τ) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
      _ ← error_of_option (maybe_TBase τ)
        "do-while loop with conditional expression of non-base type";
-     inr (m, Δg, Ls, while{#intV{sintT} 1}
-       (s;; label LC;; if{e} skip else goto LB);; label LB, (false, cmσ.2))
+     inr (m, Δg,
+       breakto (loop (breakto s ;; if{e} skip else break 0)),
+       (false, cmσ.2))
   | CSIf ce cs1 cs2 =>
      '(e,τ) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
      _ ← error_of_option (maybe_TBase τ) "if with expression of non-base type";
-     '(m,Δg,Ls,s1,cmσ1) ← go m Δg Δl Ls mLcb cs1;
-     '(m,Δg,Ls,s2,cmσ2) ← go m Δg Δl Ls mLcb cs2;
+     '(m,Δg,s1,cmσ1) ← go m Δg Δl cs1;
+     '(m,Δg,s2,cmσ2) ← go m Δg Δl cs2;
      mσ ← error_of_option (rettype_union (cmσ1.2) (cmσ2.2))
        "if statement with non-matching return types";
-     inr (m, Δg, Ls, if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S
+     inr (m, Δg, if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S
   end.
 Definition to_fun_stmt (Γn : compound_env Ti) (Γ : env Ti)
-     (m : mem Ti) (Δg : global_env Ti)
-     (mys : list (option N)) (τs : list (type Ti)) (σ : type Ti) (cs : cstmt) :
+     (m : mem Ti) (Δg : global_env Ti) (mys : list (option string))
+     (τs : list (type Ti)) (σ : type Ti) (cs : cstmt) :
      string + mem Ti * global_env Ti * stmt Ti :=
   ys ← error_of_option (mapM id mys) "function with unnamed arguments";
   let Δl := zip_with (λ y τ, (y, Local τ)) ys τs in
-  '(m,Δg,_,s,cmσ) ← to_stmt Γn Γ σ m Δg Δl (labels cs) None cs;
+  '(m,Δg,s,cmσ) ← to_stmt Γn Γ σ m Δg Δl cs;
   guard (gotos s ⊆ labels s) with "function with unbound gotos";
+  guard (breaks_valid 0 s) with "function with unbound breaks/continues";
   guard (rettype_match cmσ σ) with "function with incorrect return type";
   inr (m,Δg,s).
 Definition alloc_fun (Γn : compound_env Ti) (Γ : env Ti)
-    (m : mem Ti) (Δg : global_env Ti)
-    (f : N) (mys : list (option N)) (cτs : list ctype) (cσ : ctype)
+    (m : mem Ti) (Δg : global_env Ti) (f : string)
+    (mys : list (option string)) (cτs : list ctype) (cσ : ctype)
     (mcs : option cstmt)  : string + mem Ti * global_env Ti :=
   τs ← mapM (to_type Γn Γ m Δg [] (to_Type false)) cτs;
   σ ← to_type Γn Γ m Δg [] (to_Type true) cσ;
@@ -618,7 +602,7 @@ Definition alloc_fun (Γn : compound_env Ti) (Γ : env Ti)
      end
   end.
 Definition to_enum (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
-    (τi : int_type Ti) : global_env Ti → list (N * option cexpr) → Z →
+    (τi : int_type Ti) : global_env Ti → list (string * option cexpr) → Z →
     string + global_env Ti :=
   fix go Δg xces z {struct xces} :=
   match xces with
@@ -638,7 +622,7 @@ Definition to_enum (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
      go (<[x:=EnumVal τi z']>Δg) xces (z' + 1)%Z
   end.
 Fixpoint to_envs_go (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
-    (Δg : global_env Ti) (Θ : list (N * decl)) : string +
+    (Δg : global_env Ti) (Θ : list (string * decl)) : string +
     compound_env Ti * env Ti * mem Ti * global_env Ti :=
   match Θ with
   | [] => inr (Γn,Γ,m,Δg)
@@ -667,7 +651,7 @@ Fixpoint to_envs_go (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
      '(m,Δg) ← alloc_fun Γn Γ m Δg f (fst <$> cτys) (snd <$> cτys) cσ mcs;
      to_envs_go Γn Γ m Δg Θ
   end.
-Definition to_envs (Θ : list (N * decl)) :  string +
+Definition to_envs (Θ : list (string * decl)) :  string +
     compound_env Ti * env Ti * mem Ti * global_env Ti :=
   '(Γn,Γ,m,Δg) ← to_envs_go ∅ ∅ ∅ ∅ Θ;
   guard (global_env_complete Δg)
@@ -783,7 +767,7 @@ Proof.
   destruct d; simpl; eauto using ptr_type_valid_weaken,
     type_valid_weaken, memenv_extend_typed.
 Qed.
-Lemma local_env_valid_params Γ Γm (ys : list N) (τs : list (type Ti)) :
+Lemma local_env_valid_params Γ Γm (ys : list string) (τs : list (type Ti)) :
   ✓{Γ}* τs → local_env_valid Γ Γm (zip_with (λ y τ, (y, Local τ)) ys τs).
 Proof. intros Hτs. revert ys. induction Hτs; intros [|??]; simpl; auto. Qed.
 
@@ -793,7 +777,7 @@ Fixpoint local_env_stack_types (Δl : local_env Ti) : list (type Ti) :=
   | (_,Local τ) :: Δl => τ :: local_env_stack_types Δl
   | (_,_) :: Δl => local_env_stack_types Δl
   end.
-Lemma local_env_stack_types_params (ys : list N) (τs : list (type Ti)) :
+Lemma local_env_stack_types_params (ys : list string) (τs : list (type Ti)) :
   length ys = length τs →
   local_env_stack_types (zip_with (λ y τ, (y, Local τ)) ys τs) = τs.
 Proof. rewrite <-Forall2_same_length. induction 1; f_equal'; auto. Qed.
@@ -827,7 +811,8 @@ Definition global_decl_valid (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
      ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ
   | Fun τs τ (Some s) => ∃ cmτ,
      ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
-     (Γ,Γf,Γm,τs) ⊢ s : cmτ ∧ gotos s ⊆ labels s ∧ rettype_match cmτ τ
+     (Γ,Γf,Γm,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
+     gotos s ⊆ labels s ∧ breaks_valid 0 s
   | GlobalTypeDef τ => ptr_type_valid Γ τ
   | EnumVal τi z => int_typed z τi
   end.
@@ -849,18 +834,18 @@ Proof. unfold map_Forall; eauto using global_decl_valid_weaken. Qed.
 Lemma global_env_empty_valid Γ Γm : global_env_valid Γ Γm ∅.
 Proof. by intros ??; simpl_map. Qed.
 
-Lemma lookup_to_funtypes Δg (x : N) τs τ :
+Lemma lookup_to_funtypes Δg (x : string) τs τ :
   to_funtypes Δg !! (x:funname) = Some (τs,τ) ↔
     ∃ ms, Δg !! x = Some (Fun τs τ ms).
 Proof.
   unfold to_funtypes; rewrite lookup_omap, !bind_Some.
   split; [intros [[] ?]|]; naive_solver.
 Qed.
-Lemma lookup_to_funtypes_1 Δg (x : N) τs τ :
+Lemma lookup_to_funtypes_1 Δg (x : string) τs τ :
   to_funtypes Δg !! (x:funname) = Some (τs,τ) →
   ∃ ms, Δg !! x = Some (Fun τs τ ms).
 Proof. by rewrite lookup_to_funtypes. Qed.
-Lemma lookup_to_funtypes_2 Δg (x : N) τs τ ms :
+Lemma lookup_to_funtypes_2 Δg (x : string) τs τ ms :
   Δg !! x = Some (Fun τs τ ms) → to_funtypes Δg !! (x:funname) = Some (τs,τ).
 Proof. rewrite lookup_to_funtypes; eauto. Qed.
 Hint Immediate lookup_to_funtypes_2.
@@ -875,7 +860,7 @@ Lemma to_funtypes_insert Δg x d :
   Δg !! x = None → to_funtypes Δg ⊆ to_funtypes (<[x:=d]> Δg).
 Proof.
   rewrite !map_subseteq_spec; intros ? f [τs τ]; rewrite !lookup_to_funtypes.
-  assert (x = f ∨ x ≠ f) as [] by lia; simplify_map_equality; naive_solver.
+  destruct (decide_rel (=) x f) as []; simplify_map_equality; naive_solver.
 Qed.
 Definition global_decl_extend (d' d : global_decl Ti) : Prop :=
   match d', d with
@@ -888,7 +873,7 @@ Lemma to_funtypes_insert_Some Δg x d' d :
   to_funtypes Δg ⊆ to_funtypes (<[x:=d]> Δg).
 Proof.
   rewrite !map_subseteq_spec; intros ?? f [τs τ]; rewrite !lookup_to_funtypes.
-  intros [??]; assert (x = f ∨ x ≠ f) as [] by lia; simplify_map_equality;
+  intros [??]; destruct (decide_rel (=) x f) as []; simplify_map_equality;
     destruct d; naive_solver.
 Qed.
 Lemma global_env_insert_valid Γ Γm Δg x d :
@@ -1203,10 +1188,10 @@ Proof.
       mem_alloc_val_extend, val_0_typed, mem_allocable_fresh,
       mem_alloc_val_writable_all, mem_alloc_val_index_typed.
 Qed.
-Lemma to_stmt_typed Γn Γ τret m Δg Δl Ls mLcb cs m' Δg' Ls' s cmτ :
+Lemma to_stmt_typed Γn Γ τret m Δg Δl cs m' Δg' s cmτ :
   ✓ Γ → ✓{Γ} m → mem_writable_all Γ m → global_env_valid Γ ('{m}) Δg →
   local_env_valid Γ ('{m}) Δl → ptr_type_valid Γ τret →
-  to_stmt Γn Γ τret m Δg Δl Ls mLcb cs = inr (m',Δg',Ls', s,cmτ) →
+  to_stmt Γn Γ τret m Δg Δl cs = inr (m',Δg', s,cmτ) →
   (**i 1.) *) (Γ,to_funtypes Δg','{m'},local_env_stack_types Δl) ⊢ s : cmτ ∧
   (**i 2.) *) ✓{Γ} m' ∧
   (**i 3.) *) mem_writable_all Γ m' ∧
@@ -1215,7 +1200,7 @@ Lemma to_stmt_typed Γn Γ τret m Δg Δl Ls mLcb cs m' Δg' Ls' s cmτ :
   (**i 6.) *) to_funtypes Δg ⊆ to_funtypes Δg'.
 Proof.
   intros ? Hm Hm' Hg Hl Hτret Hs.
-  revert m m' s cmτ Δl Δg Δg' Ls Ls' mLcb Hs Hm Hm' Hg Hl.
+  revert m m' s cmτ Δl Δg Δg' Hs Hm Hm' Hg Hl.
   induction cs; intros;
     repeat match goal with
     | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
@@ -1225,10 +1210,9 @@ Proof.
     | H : alloc_global _ _ _ _ _ _ _ _ = inr _ |- _ =>
        first_of ltac:(apply alloc_global_typed in H) idtac ltac:(by auto);
        destruct H as (?&?&?&?&?&?)
-    | IH : ∀ _ _ _ _ _ _ _ _ _ _,
-        to_stmt _ _ _ _ _ _ _ _ ?cs = inr _ → _,
-      H : to_stmt _ _ _ _ _ _ _ _ ?cs = inr _ |- _ =>
-       last_of ltac:(destruct (IH _ _ _ _ _ _ _ _ _ _ H) as (?&?&?&?&?&?))
+    | IH : ∀ _ _ _ _ _ _ _, to_stmt _ _ _ _ _ _ ?cs = inr _ → _,
+      H : to_stmt _ _ _ _ _ _ ?cs = inr _ |- _ =>
+       last_of ltac:(destruct (IH _ _ _ _ _ _ _ H) as (?&?&?&?&?&?))
          ltac:(by eauto using Forall_impl, local_decl_valid_weaken,
            global_env_valid_weaken) ltac:(clear IH H)
     | H : to_expr _ _ _ _ _ _ = inr _ |- _ =>
@@ -1252,35 +1236,36 @@ Proof.
     repeat typed_constructor; eauto using expr_typed_weaken, subseteq_empty.
     by constructor.
   * split_ands; eauto using stmt_typed_weaken.
-  * split_ands; repeat (progress eauto 3 using expr_typed_weaken,
-      rettype_union_l || typed_constructor).
-  * split_ands; repeat (progress eauto 3 using expr_typed_weaken,
-      rettype_union_l || typed_constructor).
-  * split_ands; repeat (progress eauto 6 using expr_typed_weaken,
-      lockset_empty_valid, rettype_union_l || typed_constructor).
-  * split_ands; repeat (progress eauto using expr_typed_weaken,
-      stmt_typed_weaken || typed_constructor).
+  * split_ands; eauto 1.
+    repeat typed_constructor; eauto using expr_typed_weaken, rettype_union_l.
+  * split_ands; eauto 1. repeat typed_constructor;
+     eauto using expr_typed_weaken, rettype_union_l, rettype_union_r.
+  * split_ands; eauto 1. repeat typed_constructor;
+     eauto using expr_typed_weaken, rettype_union_l, rettype_union_r.
+  * split_ands; eauto 3. repeat typed_constructor; eauto using
+      stmt_typed_weaken, expr_typed_weaken, rettype_union_l, rettype_union_r.
 Qed.
 Lemma to_fun_stmt_typed Γn Γ m Δg mys τs σ cs m' Δg' s :
   ✓ Γ → ✓{Γ} m → mem_writable_all Γ m →
   global_env_valid Γ ('{m}) Δg → ✓{Γ} σ → ✓{Γ}* τs → length mys = length τs →
   to_fun_stmt Γn Γ m Δg mys τs σ cs = inr (m',Δg',s) → ∃ cmτ,
   (**i 1.) *) (Γ,to_funtypes Δg','{m'},τs) ⊢ s : cmτ ∧
-  (**i 2.) *) gotos s ⊆ labels s ∧
-  (**i 3.) *) rettype_match cmτ σ ∧
-  (**i 4.) *) ✓{Γ} m' ∧
-  (**i 5.) *) mem_writable_all Γ m' ∧
-  (**i 6.) *) '{m} ⊆{⇒} '{m'} ∧
-  (**i 7.) *) global_env_valid Γ ('{m'}) Δg' ∧
-  (**i 8.) *) to_funtypes Δg ⊆ to_funtypes Δg'.
+  (**i 2.) *) rettype_match cmτ σ ∧
+  (**i 3.) *) gotos s ⊆ labels s ∧
+  (**i 4.) *) breaks_valid 0 s ∧
+  (**i 5.) *) ✓{Γ} m' ∧
+  (**i 6.) *) mem_writable_all Γ m' ∧
+  (**i 7.) *) '{m} ⊆{⇒} '{m'} ∧
+  (**i 8.) *) global_env_valid Γ ('{m'}) Δg' ∧
+  (**i 9.) *) to_funtypes Δg ⊆ to_funtypes Δg'.
 Proof.
   unfold to_fun_stmt; intros.
   destruct (mapM id mys) as [ys|] eqn:?; simplify_equality'.
   assert (length ys = length τs) by (by erewrite <-mapM_length by eauto).
-  destruct (to_stmt _ _ _ _ _ _ _ _ _)
-    as [|[[[[m'' Δg''] Ls] ?] cmτ]] eqn:?; simplify_error_equality.
-  destruct (to_stmt_typed Γn Γ σ m Δg (zip_with (λ y τ, (y, Local τ)) ys τs)
-    (labels cs) None cs m' Δg' Ls s cmτ) as (Hs&?&?&?&?&?);
+  destruct (to_stmt _ _ _ _ _ _ _)
+    as [|[[[m'' Δg''] ?] cmτ]] eqn:?; simplify_error_equality.
+  destruct (to_stmt_typed Γn Γ σ m Δg
+    (zip_with (λ y τ, (y, Local τ)) ys τs) cs m' Δg' s cmτ) as (Hs&?&?&?&?&?);
     eauto using local_env_valid_params, type_valid_ptr_type_valid.
   rewrite local_env_stack_types_params in Hs by done; eauto 10.
 Qed.
@@ -1307,7 +1292,7 @@ Proof.
     destruct (to_fun_stmt _ _ _ _ _ _ _ _)
       as [|[[m'' Δg''] s]] eqn:?; simplify_equality'.
     destruct (to_fun_stmt_typed Γn Γ m Δg mys τs σ cs m' Δg'' s)
-      as (mcσ&?&?&?&?&?&?&?&?); auto.
+      as (mcσ&?&?&?&?&?&?&?&?&?); auto.
     destruct (lookup_to_funtypes_1 Δg'' x τs σ); eauto using lookup_weaken.
     assert (to_funtypes Δg'' ⊆ to_funtypes (<[x:=Fun τs σ (Some s)]> Δg''))
       by eauto using to_funtypes_insert_Some.
@@ -1322,7 +1307,7 @@ Proof.
     assert (to_funtypes Δg ⊆ to_funtypes Δg').
       by eauto 10 using to_funtypes_insert.
     destruct (to_fun_stmt_typed Γn Γ m Δg' mys τs σ cs m' Δg'' s)
-      as (mcσ&?&?&?&?&?&?&?&?); eauto 10 using global_env_insert_valid.
+      as (mcσ&?&?&?&?&?&?&?&?&?); eauto 10 using global_env_insert_valid.
     destruct (lookup_to_funtypes_1 Δg'' x τs σ).
     { eapply lookup_weaken; eauto.
       by unfold Δg'; eapply lookup_to_funtypes_2; simpl_map. }

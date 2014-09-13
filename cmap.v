@@ -98,7 +98,8 @@ Instance cmap_sep {Ti A : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2),
 Proof.
   split.
   * destruct (sep_inhabited A) as (x&?&?).
-    eexists (CMap {[fresh ∅, Obj (MUnionAll (fresh ∅) [x]) false]}).
+    generalize (String.EmptyString : tag); intros s.
+    eexists (CMap {[fresh ∅, Obj (MUnionAll s [x]) false]}).
     split; [|by intro]. intros o w ?; simplify_map_equality'. split.
     + by constructor; rewrite Forall_singleton.
     + by inversion_clear 1; decompose_Forall_hyps.
@@ -191,8 +192,8 @@ Proof.
     by rewrite (left_id_L ∅ (union_with _)).
   * sep_unfold; intros [m]. split; [done|].
     intros [? Hm]. destruct (sep_inhabited A) as (x&?&?).
-    specialize (Hm (CMap {[fresh (dom _ m),
-      Obj (MUnionAll (fresh ∅) [x]) false]}));
+    generalize (String.EmptyString : tag); intros s.
+    specialize (Hm (CMap {[fresh (dom _ m), Obj (MUnionAll s [x]) false]}));
       feed specialize Hm; [|simplify_map_equality'].
     intros o. destruct (m !! o) eqn:Hw; simplify_map_equality'.
     { rewrite lookup_singleton_ne; eauto. intros <-.

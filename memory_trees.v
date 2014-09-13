@@ -508,7 +508,7 @@ Lemma ctree_typed_weaken Γ1 Γ2 Γm1 Γm2 w τ :
 Proof.
   intros ? Hw ??. induction Hw using @ctree_typed_ind; typed_constructor;
     eauto using base_type_valid_weaken,
-      lookup_weaken, Forall_impl, pbit_valid_weaken;
+      @lookup_weaken, Forall_impl, pbit_valid_weaken;
     by erewrite <-?(bit_size_of_weaken Γ1 Γ2),
       <-?(field_bit_padding_weaken Γ1 Γ2)
       by eauto using TBase_valid, TCompound_valid.
@@ -1229,7 +1229,7 @@ Lemma ctree_lookup_seg_weaken Γ1 Γ2 rs w w' :
 Proof.
   intros ?? Hrs. by destruct w, rs; pattern w';
     apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); intros;
-    simplify_option_equality by eauto using lookup_weaken;
+    simplify_option_equality by eauto using @lookup_weaken;
     erewrite <-?(bit_size_of_weaken Γ1 Γ2),
       <-?(ctree_unflatten_weaken Γ1 Γ2) by eauto.
 Qed.
@@ -2590,7 +2590,7 @@ Proof.
   intros ? Hw; intros. induction Hw using @ctree_refine_ind;
     refine_constructor; try (eapply Forall2_impl; [eassumption|]); simpl;
     eauto using base_type_valid_weaken,
-      lookup_weaken, pbit_refine_weaken, ctree_typed_weaken;
+      @lookup_weaken, pbit_refine_weaken, ctree_typed_weaken;
     erewrite <-?(bit_size_of_weaken Γ Γ'), <-?(field_bit_padding_weaken Γ Γ')
       by eauto using TBase_valid, TCompound_valid; auto.
   simpl; eauto using Forall2_impl, pbit_refine_weaken.

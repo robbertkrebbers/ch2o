@@ -30,50 +30,45 @@ When a [goto l] statement is executed, the direction is changed to [↷l], and
 the semantics performs a non-deterministic small step traversal through the
 zipper until the label [l] is found. *)
 Inductive direction (Ti : Set) : Set :=
-  Down | Up | Top (v : val Ti) | Jump (l : labelname).
+  Down | Up | Top (v : val Ti) | Goto (l : labelname) | Break (n : nat).
 Arguments Down {_}.
 Arguments Up {_}.
 Arguments Top {_} _.
-Arguments Jump {_} _%N.
+Arguments Goto {_} _.
+Arguments Break {_} _.
 
 Notation "↘" := Down : C_scope.
 Notation "↗" := Up : C_scope.
 Notation "⇈ v" := (Top v) (at level 20) : C_scope.
-Notation "↷ l" := (Jump l) (at level 20) : C_scope.
+Notation "↷ l" := (Goto l) (at level 20) : C_scope.
+Notation "↑ n" := (Break n) (at level 20) : C_scope.
 
 Instance direction_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (d1 d2 : direction Ti) : Decision (d1 = d2).
 Proof. solve_decision. Defined.
 
-Definition down {Ti} (d : direction Ti) (s : stmt Ti) : Prop :=
+Definition direction_in {Ti} (d : direction Ti) (s : stmt Ti) : Prop :=
   match d with ↘ => True | ↷ l => l ∈ labels s | _ => False end.
-Definition up {Ti} (d : direction Ti) (s : stmt Ti) : Prop :=
-  match d with ↗ => True | ⇈ _ => True | ↷ l => l ∉ labels s | _ => False end.
-
-Hint Extern 0 (down _ _) => simpl.
-Hint Extern 0 (up _ _) => simpl.
-Lemma not_down_up {Ti} d (s : stmt Ti) : ¬down d s → up d s.
-Proof. destruct d; intuition. Qed.
-Definition down_up_dec {Ti} d (s : stmt Ti) : {down d s} + {up d s} :=
+Definition direction_out {Ti} (d : direction Ti) (s : stmt Ti) : Prop :=
   match d with
-  | ↘ => left I | ↗ => right I | ⇈ _ => right I
-  | ↷ l => decide_rel (∈) l (labels s)
+  | ↗ | ⇈ _ => True | ↷ l => l ∉ labels s | ↑ _ => True | _ => False
   end.
+Arguments direction_in _ _ _ : simpl nomatch.
+Arguments direction_out _ _ _ : simpl nomatch.
+Hint Unfold direction_in direction_out.
 
-Tactic Notation "discriminate_down_up" hyp(H) := repeat
-  match type of H with
-  | up _ _ => progress simpl in H
-  | down _ _ => progress simpl in H
-  | True => clear H
-  | False => destruct H
-(*  | ?l ∉ _ => destruct H; solve_stmt_elem_of *)
-  | ?l ∈ _ => solve [decompose_elem_of H]
-  end.
-Tactic Notation "discriminate_down_up" := repeat
-  match goal with
-  | H : up _ _ |- _ => discriminate_down_up H
-  | H : down _ _ |- _ => discriminate_down_up H
-  end.
+Definition direction_in_out_dec {Ti} (d : direction Ti) s :
+  { direction_in d s ∧ ¬direction_out d s } +
+  { ¬direction_in d s ∧ direction_out d s }.
+Proof.
+ refine
+  match d with
+  | ↘ => left _ | ↷ l => cast_if (decide (l ∈ labels s)) | _ => right _
+  end; abstract naive_solver.
+Defined.
+Lemma direction_in_out {Ti} (d : direction Ti) s :
+  direction_in d s → direction_out d s → False.
+Proof. destruct (direction_in_out_dec d s); naive_solver. Qed.
 
 (** The data type [focus] describes the part of the program that is focused. An
 execution state [state] equips a focus with a program context and memory.
@@ -152,3 +147,4 @@ Proof.
  refine match S with State _ (Undef _) _ => left _ | _ => right _ end;
     abstract first [constructor|by inversion 1].
 Defined.
+ 

@@ -128,19 +128,18 @@ Global Instance stmt_type_check: TypeCheck envs (rettype Ti) (stmt Ti) :=
   match s with
   | skip => Some (false,None)
   | ! e => _ ← type_check Γs e ≫= maybe_inr; Some (false,None)
-  | goto _ => Some (true,None)
+  | goto _ | break _ => Some (true,None)
   | ret e => τ ← type_check Γs e ≫= maybe_inr; Some (true,Some τ)
-  | blk{τ} s =>
+  | label _ => Some (false,None)
+  | block{τ} s =>
      guard (✓{Γ} τ); guard (int_typed (size_of Γ τ) sptrT);
      type_check (Γ,Γf,Γm,τ :: τs) s
   | s1 ;; s2 =>
      '(c1,mσ1) ← type_check Γs s1;
      '(c2,mσ2) ← type_check Γs s2;
      mσ ← rettype_union mσ1 mσ2; Some (c2,mσ)
-  | label _ => Some (false,None)
-  | while{e} s =>
-     τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
-     '(c,mσ) ← type_check Γs s; Some (false,mσ)
+  | breakto s => '(c,mσ) ← type_check Γs s; Some (false,mσ)
+  | loop s => '(_,mσ) ← type_check Γs s; Some (true,mσ)
   | if{e} s1 else s2 =>
      τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
      '(c1,mσ1) ← type_check Γs s1;
@@ -156,9 +155,8 @@ Global Instance sctx_item_lookup :
   | s1 ;; □, (c2,mσ2) =>
      '(c1,mσ1) ← type_check Γs s1;
      mσ ← rettype_union mσ1 mσ2; Some (c2,mσ)
-  | while{e} □, (c,mσ) =>
-     τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
-     Some (false,mσ)
+  | breakto □, (c,mσ) => Some (false,mσ)
+  | loop □, (c,mσ) => Some (true,mσ)
   | if{e} □ else s2, (c1,mσ1) =>
      τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
      '(c2,mσ2) ← type_check Γs s2;
@@ -173,7 +171,6 @@ Global Instance esctx_item_lookup :
   match Ee, τlr with
   | ! □, _ => Some (false,None)
   | ret □, _ => Some (true,Some τlr)
-  | while{□} s, baseT τb => '(c,mσ) ← type_check Γs s; Some (false,mσ)
   | if{□} s1 else s2, baseT τb =>
      '(c1,mσ1) ← type_check Γs s1;
      '(c2,mσ2) ← type_check Γs s2;
@@ -215,7 +212,7 @@ Global Instance focus_type_check:
      | ⇈ v, (c,Some τ) =>
         τ' ← type_check (Γ,Γm) v;
         guard ((τ : type Ti) = τ'); Some (Stmt_type cmσ)
-     | ↘, _ | ↗, (false,_) | ↷ _, _ => Some (Stmt_type cmσ)
+     | ↘, _ | ↗, (false,_) | ↷ _, _ | ↑ _, _ => Some (Stmt_type cmσ)
      | _, _ => None
      end
   | Expr e => Expr_type <$> type_check Γs e ≫= maybe_inr

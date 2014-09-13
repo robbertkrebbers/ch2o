@@ -3,7 +3,7 @@
 (** This file describes a subset of the C type system. This subset includes
 pointer, array, struct, and union types, but omits qualifiers as volatile and
 const. Also variable length arrays are omitted from the formalization. *)
-Require Import nmap mapset.
+Require Import String stringmap mapset.
 Require Export type_classes abstract_integers fin_maps.
 
 (** * Tags *)
@@ -12,37 +12,26 @@ Require Export type_classes abstract_integers fin_maps.
 of structs and unions, and which assigns a list of types corresponding to the
 fields of these structs and unions. We use the same namespace for structs and
 unions. *)
-(** We define tags as binary naturals and use the [Nmap] implementation to
-obtain efficient finite maps and finite sets with these indexes as keys. *)
-Definition tag := N.
-Definition tagmap := Nmap.
+Definition tag := String.string.
+Definition tagmap := stringmap.
 Notation tagset := (mapset (tagmap unit)).
 
 Instance tag_eq_dec: ∀ i1 i2: tag, Decision (i1 = i2) := decide_rel (=).
-Instance tag_fresh `{FinCollection tag C} : Fresh tag C := _.
-Instance tag_fresh_spec `{FinCollection tag C} :
-  FreshSpec tag C := _.
-
 Instance tagmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
   ∀ m1 m2 : tagmap A, Decision (m1 = m2) := decide_rel (=).
-Instance tagmap_empty {A} : Empty (tagmap A) := @empty (Nmap A) _.
+Instance tagmap_empty {A} : Empty (tagmap A) := @empty (stringmap A) _.
 Instance tagmap_lookup {A} : Lookup tag A (tagmap A) :=
-  @lookup _ _ (Nmap A) _.
+  @lookup _ _ (stringmap A) _.
 Instance tagmap_partial_alter {A} : PartialAlter tag A (tagmap A) :=
-  @partial_alter _ _ (Nmap A) _.
+  @partial_alter _ _ (stringmap A) _.
 Instance tagmap_to_list {A} : FinMapToList tag A (tagmap A) :=
   @map_to_list _ _ (tagmap A) _.
-Instance tagmap_omap: OMap tagmap := @omap Nmap _.
-Instance tagmap_merge : Merge tagmap := @merge Nmap _.
-Instance tagmap_fmap: FMap tagmap := @fmap Nmap _.
+Instance tagmap_omap: OMap tagmap := @omap stringmap _.
+Instance tagmap_merge : Merge tagmap := @merge stringmap _.
+Instance tagmap_fmap: FMap tagmap := @fmap stringmap _.
 Instance: FinMap tag tagmap := _.
-
 Instance tagmap_dom {A} : Dom (tagmap A) tagset := mapset_dom.
 Instance: FinMapDom tag tagmap tagset := mapset_dom_spec.
-
-Instance tag_lexico : Lexico tag := @lexico N _.
-Instance tag_lexico_order : StrictOrder (@lexico tag _) := _.
-Instance tag_trichotomy: TrichotomyT (@lexico tag _) := _.
 
 Typeclasses Opaque tag tagmap.
 
@@ -71,7 +60,7 @@ Bind Scope cbase_type_scope with base_type.
 Arguments TBase {_} _%BT.
 Arguments TVoid {_}.
 Arguments TArray {_} _ _.
-Arguments TCompound {_} _ _.
+Arguments TCompound {_} _ _%string.
 Arguments TInt {_} _%IT.
 Arguments TPtr {_} _%T.
 

@@ -751,7 +751,7 @@ Proof.
   intros ? Hvτ ??. induction Hvτ using @val_typed_ind; econstructor;
     erewrite <-1?vals_unflatten_weaken;
     erewrite <-1?bit_size_of_weaken by eauto using TCompound_valid;
-    eauto using base_val_typed_weaken, lookup_weaken, vals_representable_weaken,
+    eauto using base_val_typed_weaken, @lookup_weaken, vals_representable_weaken,
       Forall_impl, bit_valid_weaken, val_typed_types_valid.
 Qed.
 Lemma val_freeze_freeze β1 β2 v :
@@ -1412,7 +1412,7 @@ Lemma val_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' v1 v2 τ :
   Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 → v1 ⊑{Γ',f'@Γm1'↦Γm2'} v2 : τ.
 Proof.
   intros ? Hv; intros. induction Hv using @val_refine_ind; refine_constructor;
-    eauto using base_val_refine_weaken, lookup_weaken, vals_representable_weaken.
+    eauto using base_val_refine_weaken,@lookup_weaken,vals_representable_weaken.
 Qed.
 Lemma vals_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' vs1 vs2 τs :
   ✓ Γ → vs1 ⊑{Γ,f@Γm1↦Γm2}* vs2 :* τs → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' →

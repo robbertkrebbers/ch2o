@@ -223,19 +223,23 @@ Inductive stmt_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
   | SDo_typed e τ :
      (Γ,Γf,Γm,τs) ⊢ e : inr τ → stmt_typed' Γ Γf Γm τs (! e) (false,None)
   | SGoto_typed l : stmt_typed' Γ Γf Γm τs (goto l) (true,None)
+  | SBreak_typed n : stmt_typed' Γ Γf Γm τs (break n) (true,None)
   | SReturn_typed e τ :
      (Γ,Γf,Γm,τs) ⊢ e : inr τ → stmt_typed' Γ Γf Γm τs (ret e) (true,Some τ)
+  | SLabel_typed l : stmt_typed' Γ Γf Γm τs (label l) (false,None)
   | SBlock_typed' τ s c mσ :
      ✓{Γ} τ →int_typed (size_of Γ τ) sptrT →
      stmt_typed' Γ Γf Γm (τ :: τs) s (c,mσ) →
-     stmt_typed' Γ Γf Γm τs (blk{τ} s) (c,mσ)
+     stmt_typed' Γ Γf Γm τs (block{τ} s) (c,mσ)
   | SComp_typed s1 s2 c1 mσ1 c2 mσ2 mσ :
      stmt_typed' Γ Γf Γm τs s1 (c1,mσ1) → stmt_typed' Γ Γf Γm τs s2 (c2,mσ2) →
      rettype_union mσ1 mσ2 = Some mσ → stmt_typed' Γ Γf Γm τs (s1 ;; s2) (c2,mσ)
-  | SLabel_typed l : stmt_typed' Γ Γf Γm τs (label l) (false,None)
-  | SWhile_typed e τb s c mσ :
-     (Γ,Γf,Γm,τs) ⊢ e : inr (baseT τb) → stmt_typed' Γ Γf Γm τs s (c,mσ) →
-     stmt_typed' Γ Γf Γm τs (while{e} s) (false,mσ)
+  | SBreakTo_typed s c mσ :
+     stmt_typed' Γ Γf Γm τs s (c,mσ) →
+     stmt_typed' Γ Γf Γm τs (breakto s) (false,mσ)
+  | SLoop_typed s c mσ :
+     stmt_typed' Γ Γf Γm τs s (c,mσ) →
+     stmt_typed' Γ Γf Γm τs (loop s) (true,mσ)
   | SIf_typed e τb s1 s2 c1 mσ1 c2 mσ2 mσ :
      (Γ,Γf,Γm,τs) ⊢ e : inr (baseT τb) →
      stmt_typed' Γ Γf Γm τs s1 (c1,mσ1) → stmt_typed' Γ Γf Γm τs s2 (c2,mσ2) →
@@ -252,9 +256,10 @@ Inductive sctx_item_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
   | CCompR_typed s1 c1 mσ1 c2 mσ2 mσ :
      (Γ,Γf,Γm,τs) ⊢ s1 : (c1,mσ1) → rettype_union mσ1 mσ2 = Some mσ →
      sctx_item_typed' Γ Γf Γm τs (s1 ;; □) (c2,mσ2) (c2,mσ)
-  | CWhile_typed e τb c mσ :
-     (Γ,Γf,Γm,τs) ⊢ e : inr (baseT τb) →
-     sctx_item_typed' Γ Γf Γm τs (while{e} □) (c,mσ) (false,mσ)
+  | CBreakTo_typed c mσ :
+     sctx_item_typed' Γ Γf Γm τs (breakto □) (c,mσ) (false,mσ)
+  | CLoop_typed c mσ :
+     sctx_item_typed' Γ Γf Γm τs (loop □) (c,mσ) (true,mσ)
   | CIfL_typed e τb s2 c1 mσ1 c2 mσ2 mσ :
      (Γ,Γf,Γm,τs) ⊢ e : inr (baseT τb) → (Γ,Γf,Γm,τs) ⊢ s2 : (c2,mσ2) →
      rettype_union mσ1 mσ2 = Some mσ →
@@ -270,9 +275,6 @@ Inductive esctx_item_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
      (τs : list (type Ti)) : esctx_item Ti → type Ti → rettype Ti → Prop :=
   | CDoE_typed τ : esctx_item_typed' Γ Γf Γm τs (! □) τ (false,None)
   | CReturnE_typed τ : esctx_item_typed' Γ Γf Γm τs (ret □) τ (true,Some τ)
-  | CWhileE_typed τb s c mσ :
-     (Γ,Γf,Γm,τs) ⊢ s : (c,mσ) →
-     esctx_item_typed' Γ Γf Γm τs (while{□} s) (baseT τb) (false,mσ)
   | CIfE_typed τb s1 s2 c1 mσ1 c2 mσ2 mσ :
      (Γ,Γf,Γm,τs) ⊢ s1 : (c1,mσ1) → (Γ,Γf,Γm,τs) ⊢ s2 : (c2,mσ2) →
      rettype_union mσ1 mσ2 = Some mσ →
@@ -316,7 +318,8 @@ Inductive direction_typed' (Γ : env Ti) (Γm : memenv Ti) :
   | Down_typed cmτ : direction_typed' Γ Γm ↘ cmτ
   | Up_typed mτ : direction_typed' Γ Γm ↗ (false,mτ)
   | Top_typed c v τ : (Γ,Γm) ⊢ v : τ → direction_typed' Γ Γm (⇈ v) (c,Some τ)
-  | Jump_typed l cmτ : direction_typed' Γ Γm (↷ l) cmτ.
+  | Goto_typed l cmτ : direction_typed' Γ Γm (↷ l) cmτ
+  | Break_typed n cmτ : direction_typed' Γ Γm (↑ n) cmτ.
 Global Instance direction_typed: Typed (env Ti * memenv Ti)
   (rettype Ti) (direction Ti) := curry direction_typed'.
 
@@ -355,7 +358,8 @@ Definition funenv_pretyped (Γ : env Ti) (Γm : memenv Ti)
   map_Forall (λ f s, ∃ τs τ cmτ,
     Γf !! f = Some (τs, τ) ∧
     ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
-    (Γ,Γf,Γm,τs) ⊢ s : cmτ ∧ gotos s ⊆ labels s ∧ rettype_match cmτ τ
+    (Γ,Γf,Γm,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
+    gotos s ⊆ labels s ∧ breaks_valid 0 s
   ) δ.
 Global Instance funenv_typed:
     Typed (env Ti * memenv Ti) (funtypes Ti) (funenv Ti) := λ Γm δ Γf,
@@ -384,7 +388,7 @@ Implicit Types d : direction Ti.
 
 Lemma SBlock_typed Γ Γf Γm τs τ s c mσ :
   ✓{Γ} τ →int_typed (size_of Γ τ) sptrT →
-  (Γ,Γf,Γm,τ :: τs) ⊢ s : (c,mσ) → (Γ,Γf,Γm,τs) ⊢ blk{τ} s : (c,mσ).
+  (Γ,Γf,Γm,τ :: τs) ⊢ s : (c,mσ) → (Γ,Γf,Γm,τs) ⊢ block{τ} s : (c,mσ).
 Proof. by constructor. Qed.
 Lemma assign_typed_type_valid Γ τ1 τ2 ass σ :
   assign_typed Γ τ1 τ2 ass σ → ✓{Γ} τ1 → ✓{Γ} σ.
@@ -510,14 +514,15 @@ Proof. by intros ??; simpl_map. Qed.
 Lemma funenv_pretyped_insert Γ Γm δ Γf f s τ τs cmτ :
   funenv_pretyped Γ Γm δ Γf → Γf !! f = Some (τs, τ) →
   ✓{Γ}* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs → ✓{Γ} τ →
-  (Γ,Γf,Γm,τs) ⊢ s : cmτ → gotos s ⊆ labels s → rettype_match cmτ τ →
-  funenv_pretyped Γ Γm (<[f:=s]> δ) Γf.
-Proof. intros ???????? f' s'; rewrite lookup_insert_Some; naive_solver. Qed.
+  (Γ,Γf,Γm,τs) ⊢ s : cmτ → rettype_match cmτ τ → gotos s ⊆ labels s →
+  breaks_valid 0 s → funenv_pretyped Γ Γm (<[f:=s]> δ) Γf.
+Proof. intros ????????? f' s'; rewrite lookup_insert_Some; naive_solver. Qed.
 Lemma funenv_lookup Γ Γm Γf δ f τs τ :
   ✓ Γ → (Γ,Γm) ⊢ δ : Γf → Γf !! f = Some (τs,τ) → ∃ s cmτ,
     δ !! f = Some s ∧
     ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧ ✓{Γ} τ ∧
-    (Γ,Γf,Γm,τs) ⊢ s : cmτ ∧ gotos s ⊆ labels s ∧ rettype_match cmτ τ.
+    (Γ,Γf,Γm,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
+    gotos s ⊆ labels s ∧ breaks_valid 0 s.
 Proof.
   intros ? [Hδ HΓf] ?; simpl in *. assert (∃ s, δ !! f = Some s) as [s ?].
   { apply elem_of_dom, HΓf, elem_of_dom; eauto. }
@@ -527,13 +532,20 @@ Lemma funenv_lookup_inv Γ Γm Γf δ f s :
   ✓ Γ → (Γ,Γm) ⊢ δ : Γf → δ !! f = Some s → ∃ τs τ cmτ,
     Γf !! f = Some (τs,τ) ∧
     ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧ ✓{Γ} τ ∧
-    (Γ,Γf,Γm,τs) ⊢ s : cmτ ∧ gotos s ⊆ labels s ∧ rettype_match cmτ τ.
+    (Γ,Γf,Γm,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
+    gotos s ⊆ labels s ∧ breaks_valid 0 s.
 Proof. intros ? [Hδ _] ?. destruct (Hδ f s); naive_solver. Qed.
 Lemma funenv_lookup_gotos Γ Γm Γf δ f s :
   ✓ Γ → (Γ,Γm) ⊢ δ : Γf → δ !! f = Some s → gotos s ⊆ labels s.
 Proof.
   intros.
-  by destruct (funenv_lookup_inv Γ Γm Γf δ f s) as (?&?&?&?&?&?&?&?&?&?).
+  by destruct (funenv_lookup_inv Γ Γm Γf δ f s) as (?&?&?&?&?&?&?&?&?&?&?).
+Qed.
+Lemma funenv_lookup_breaks Γ Γm Γf δ f s :
+  ✓ Γ → (Γ,Γm) ⊢ δ : Γf → δ !! f = Some s → breaks_valid 0 s.
+Proof.
+  intros.
+  by destruct (funenv_lookup_inv Γ Γm Γf δ f s) as (?&?&?&?&?&?&?&?&?&?&?).
 Qed.
 Lemma funenv_typed_funtypes_valid Γ Γm δ Γf : ✓ Γ → (Γ,Γm) ⊢ δ : Γf → ✓{Γ} Γf.
 Proof.
@@ -620,9 +632,8 @@ Qed.
 Lemma Fun_type_stack_types Γ Γf Γm k f τf :
   (Γ,Γf,Γm) ⊢ k : Fun_type f ↣ τf → get_stack_types k = [].
 Proof. by destruct k as [|[]]; intros; typed_inversion_all. Qed.
-Lemma Fun_type_labels Γ Γf Γm k f τf :
-  (Γ,Γf,Γm) ⊢ k : Fun_type f ↣ τf → labels k = ∅.
-Proof. by destruct k as [|[]]; intros; typed_inversion_all. Qed.
 Lemma rettype_union_l mσ : rettype_union mσ None = Some mσ.
+Proof. by destruct mσ. Qed.
+Lemma rettype_union_r mσ : rettype_union None mσ = Some mσ.
 Proof. by destruct mσ. Qed.
 End properties.

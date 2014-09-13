@@ -29,10 +29,10 @@ Definition cexec' (Γ : env Ti) (δ : funenv Ti)
     let εs_new := e S_new in IState εs_new (εs ++ εs_new) S_new
   ) <$> cexec Γ δ S.
 Definition interpreter_initial
-    (Θ : list (N * decl)) (f : funname) (ces : list cexpr) :
+    (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
     string + (env Ti * funenv Ti * istate Ti E) :=
   '(Γn,Γ,m,Δg) ← to_envs Θ;
-  '(σs,_,_) ← error_of_option (Δg !! (f:N) ≫= maybe_Fun)
+  '(σs,_,_) ← error_of_option (Δg !! f ≫= maybe_Fun)
     "interpreter called with undeclared function";
   eσlrs ← mapM (to_expr Γn Γ m Δg []) ces;
   let σes := zip_with to_R_NULL σs eσlrs in 
@@ -57,9 +57,8 @@ Definition csteps_exec_all (Γ : env Ti) (δ : funenv Ti) :
   let nfs := listset_normalize hash (nexts ≫= snd) in
   (reds,nfs) :.: go reds.
 Definition interpreter_all
-    (Θ : list (N * decl)) (f : funname) (ces : list cexpr) :
-    string +
-    stream (listset (istate Ti E) * listset (istate Ti E)) :=
+    (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
+    string + stream (listset (istate Ti E) * listset (istate Ti E)) :=
   '(Γ,δ,iS) ← interpreter_initial Θ f ces;
   inr (csteps_exec_all Γ δ {[ iS ]}).
 
@@ -75,7 +74,7 @@ Definition csteps_exec_rand (Γ : env Ti) (δ : funenv Ti) :
      inl next :.: go next
   end.
 Definition interpreter_rand
-    (Θ : list (N * decl)) (f : funname) (ces : list cexpr) :
+    (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
     string + stream (istate Ti E + istate Ti E) :=
   '(Γ,δ,iS) ← interpreter_initial Θ f ces;
   inr (csteps_exec_rand Γ δ iS).

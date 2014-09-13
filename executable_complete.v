@@ -121,11 +121,12 @@ Proof.
     destruct Es; simpl; solve_elem_of.
   * intros m k Es l s ?????; simpl; rewrite decide_False by done.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
-  * intros m k d o τ s ??? (τf&?&?&?) _ _; simpl in *; typed_inversion_all.
-    assert (mem_allocable (fresh (dom indexset m)) m).
-    { eapply mem_allocable_alt, is_fresh. }
+  * intros m k Es l s ?????; simpl; rewrite decide_False by done.
+    eexists meminj_id, _; split_ands; eauto using state_refine_id.
+  * intros m k d o τ s ??? (τf&?&?&?) _ _; typed_inversion_all.
     destruct (mem_alloc_refine' Γ meminj_id m m false τ
-      (fresh (dom indexset m)) o) as (f&?&?&?); auto using cmap_refine_id'.
+      (fresh (dom indexset m)) o) as (f&?&?&?);
+      auto using cmap_refine_id', mem_allocable_fresh.
     eexists f, (State (CBlock (fresh (dom indexset m)) τ :: k) (Stmt d s)
       (mem_alloc Γ (fresh (dom indexset m)) false τ m)).
     split_ands; auto.
@@ -133,13 +134,14 @@ Proof.
     eleft; split_ands; simpl; repeat refine_constructor;
       eauto using mem_alloc_index_typed'.
     + eapply (stmt_refine_weaken _ _ meminj_id _ ('{m}));
-        eauto using stmt_refine_id, mem_alloc_extend'.
+        eauto using stmt_refine_id, mem_alloc_extend', mem_allocable_fresh.
     + eapply (direction_refine_weaken _ meminj_id _ ('{m})); eauto using
-        direction_refine_id, mem_alloc_extend', option_eq_1_alt.
-    + eauto 8 using ctx_refine_weaken, ctx_refine_id, mem_alloc_extend'.
+        direction_refine_id, mem_alloc_extend', mem_allocable_fresh.
+    + eauto 8 using ctx_refine_weaken, ctx_refine_id,
+        mem_alloc_extend', mem_allocable_fresh.
   * intros m k d o τ s ?????.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
-    by destruct d; simpl; try case_match; eauto.
+    by destruct d; simplify_option_equality; try case_match; eauto.
 Qed.
 Lemma cexec_complete_steps Γ Γf δ S1 S2 g :
   ✓ Γ → (Γ,'{SMem S1}) ⊢ δ : Γf → (Γ,Γf) ⊢ S1 : g → Γ\ δ ⊢ₛ S1 ⇒* S2 →
