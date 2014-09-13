@@ -168,8 +168,7 @@ exception Incompatible_compound of char list * decl * decl;;
 let col = ref 0;;
 let the_anon = ref 0;;
 let the_compound_decls = ref ([]:(char list * decl) list);;
-let the_printfs = ref ([]:(char list * decl) list);;
-let the_formats = ref ([]:(char list * string) list);;
+let the_printfs = ref ([]:(char list * (string * decl)) list);;
 
 let uchar = {csign = Some Unsigned; crank = CCharRank};;
 let int_signed = {csign = Some Signed; crank = CIntRank};;
@@ -469,14 +468,13 @@ and cexpr_of_expression x =
         try let _ = List.assoc f !the_printfs in false with Not_found -> true in
       let a = args_of_format s in
       (if fresh then (the_printfs := !the_printfs@
-        [(f,if !printf_returns_int then
+        [(f,(s,if !printf_returns_int then
            (let i = chars_of_int 0 in
             FunDecl (a,ctint_signed,
               Some (CSBlock (AutoStorage,i,ctint_signed,
                 Some (econst (Int (length_of_format s))),
               printf_body i a)))) else
-            FunDecl (a,CTVoid,Some (CSSkip)))];
-        the_formats := !the_formats@[(f,s)]));
+            FunDecl (a,CTVoid,Some (CSSkip))))]));
       CECall (f,List.map cexpr_of_expression l)
   | Cabs.CALL (Cabs.VARIABLE s,l) ->
       CECall (chars_of_string s,List.map cexpr_of_expression l)
@@ -655,12 +653,15 @@ let printf_prelude () =
 
 let decls_of_cabs x =
   the_anon := 0;
-  the_formats := [];
   the_compound_decls := [];
   the_printfs := [];
   let decls = List.flatten (List.map decls_of_definition x) in
-  (the_printfs := printf_prelude ()@ !the_printfs);
-  (chars_of_string "main",!the_compound_decls@ !the_printfs@decls);;
+  let printfs = List.map (fun (x,(_,d)) -> (x,d)) !the_printfs in
+  (chars_of_string "main",
+    !the_compound_decls@
+    printf_prelude()@
+    printfs@
+    decls);;
 
 let decls_of_file x = decls_of_cabs (cabs_of_file x);;
 
@@ -681,7 +682,7 @@ let chars_of_format s l =
 let event_of_state x =
   match x.sFoc with
   | Call (f,l) ->
-     (try let fmt = List.assoc f !the_formats in
+     (try let (fmt,_) = List.assoc f !the_printfs in
         chars_of_format fmt
           (List.map (fun y ->
              match y with
