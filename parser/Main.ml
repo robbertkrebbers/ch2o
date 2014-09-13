@@ -630,12 +630,8 @@ let decls_of_definition x =
   | Cabs.ONLYTYPEDEF (t,_) ->
       let _ = ctype_of_specifier t in []
   | Cabs.TYPEDEF ((Cabs.SpecTypedef::t,l),_) ->
-      List.map (fun z ->
-        match z with
-        | (s,t',_,_) ->
-             (chars_of_string s,
-               TypeDefDecl (ctype_of_specifier_decl_type t t'))
-        | _ -> raise (Unknown_definition x)) l
+      List.map (fun (s,t',_,_) ->
+        (chars_of_string s,TypeDefDecl (ctype_of_specifier_decl_type t t'))) l
   | _ -> raise (Unknown_definition x);;
 
 let printf_prelude () =
