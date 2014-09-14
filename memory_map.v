@@ -405,41 +405,6 @@ Proof.
   simplify_equality. eapply ctree_alter_union; intuition eauto 3 using
    ctree_alter_byte_disjoint, ctree_alter_byte_union, ctree_alter_byte_unmapped.
 Qed.
-Lemma cmap_non_aliasing Γ Γm m a1 a2 σ1 σ2 :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : σ1 → frozen a1 → addr_is_obj a1 →
-  (Γ,Γm) ⊢ a2 : σ2 → frozen a2 → addr_is_obj a2 →
-  (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
-  (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
-  (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
-  (**i 4.) *) ∀ g j1 j2,
-    cmap_alter Γ g (addr_plus Γ j1 a1) m !!{Γ} addr_plus Γ j2 a2 = None ∧
-    cmap_alter Γ g (addr_plus Γ j2 a2) m !!{Γ} addr_plus Γ j1 a1 = None.
-Proof.
-  intros ? Hm ??????. destruct (addr_disjoint_cases Γ Γm a1 a2 σ1 σ2)
-    as [Ha12|[?|[?|(Hidx&s&r1'&i1&r2'&i2&r'&Ha1&Ha2&?)]]]; auto.
-  do 3 right. intros g j1 j2.
-  assert (Γm ⊢ addr_index a1 : addr_type_object a1)
-    by eauto using addr_typed_index.
-  assert (Γm ⊢ addr_index a1 : addr_type_object a2)
-    by (rewrite Hidx; eauto using addr_typed_index).
-  destruct m as [m]; unfold insertE, cmap_alter, lookupE, cmap_lookup;
-    simpl in *; rewrite !addr_index_plus, <-!Hidx; simplify_map_equality'.
-  destruct (m !! addr_index a1) as [[|w β]|] eqn:?;
-    [by simplify_option_equality| |by simplify_option_equality].
-  destruct (proj2 Hm (addr_index a1) w β)
-    as (τ&?&_&?&_); auto; simplify_type_equality'.
-  assert (Γ ⊢ r1' ++ RUnion i1 s true :: r' :
-    addr_type_object a2 ↣ addr_type_base a1).
-  { erewrite <-Ha1, <-(typed_unique _ (addr_index a1)
-      (addr_type_object a1) (addr_type_object a2)) by eauto.
-    eauto using addr_typed_ref_base_typed. }
-  assert (Γ ⊢ r2' ++ RUnion i2 s true :: r' :
-    addr_type_object a2 ↣ addr_type_base a2).
-  { rewrite <-Ha2. eauto using addr_typed_ref_base_typed. }
-  unfold addr_ref; rewrite !addr_ref_base_plus, Ha1, Ha2.
-  by split; case_option_guard; simplify_equality;
-    erewrite ?ctree_lookup_non_aliasing by eauto.
-Qed.
 
 (** ** Refinements *)
 Lemma cmap_refine_memenv_refine Γ f Γm1 Γm2 m1 m2 :

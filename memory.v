@@ -22,13 +22,6 @@ Section memory_operations.
       InsertE (env Ti) (addr Ti) (val Ti) (mem Ti) := λ Γ a v,
     cmap_alter Γ (λ w, of_val Γ (tagged_perm <$> ctree_flatten w) v) a.
 
-  Fixpoint mem_insert_array (Γ : env Ti) (a : addr Ti)
-      (vs : list (val Ti)) (m : mem Ti) : mem Ti :=
-    match vs with
-    | [] => m
-    | v :: vs => <[a:=v]{Γ}>(mem_insert_array Γ (addr_plus Γ 1 a) vs m)
-    end.
-
   Definition mem_allocable (o : index) (m : mem Ti) : Prop :=
     cmap_car m !! o = None.
   Definition mem_alloc (Γ : env Ti) (o : index)
@@ -712,26 +705,6 @@ Lemma mem_alloc_val_list_extend Γ m os vs τs :
   (Γ,'{m}) ⊢* vs :* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
   '{m} ⊆{⇒} '{mem_alloc_val_list Γ (zip os vs) m}.
 Proof. intros. eapply mem_alloc_val_list_valid; eauto. Qed.
-
-(** ** Non-aliassing results *)
-Lemma mem_non_aliasing Γ Γm m a1 a2 τ1 τ2 :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : τ1 → frozen a1 → addr_is_obj a1 →
-  (Γ,Γm) ⊢ a2 : τ2 → frozen a2 → addr_is_obj a2 →
-  (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
-  (**i 2.) *) τ1 ⊆{Γ} τ2 ∨
-  (**i 3.) *) τ2 ⊆{Γ} τ1 ∨
-  (**i 4.) *) ∀ j1 j2,
-    (∀ v1, <[addr_plus Γ j1 a1:=v1]{Γ}>m !!{Γ} addr_plus Γ j2 a2 = None) ∧
-    mem_force Γ (addr_plus Γ j1 a1) m !!{Γ} addr_plus Γ j2 a2 = None ∧
-    (∀ v2, <[addr_plus Γ j2 a2:=v2]{Γ}>m !!{Γ} addr_plus Γ j1 a1 = None) ∧
-    mem_force Γ (addr_plus Γ j2 a2) m !!{Γ} addr_plus Γ j1 a1 = None.
-Proof.
-  intros.
-  destruct (cmap_non_aliasing Γ Γm m a1 a2 τ1 τ2) as [?|[?|[?|Ha]]]; auto.
-  unfold lookupE, mem_lookup, insertE, mem_insert, mem_force.
-  by do 3 right; repeat split; intros;
-    rewrite ?(proj1 (Ha _ _ _)), ?(proj2 (Ha _ _ _)).
-Qed.
 
 (** ** Refinements *)
 Lemma mem_lookup_refine Γ f Γm1 Γm2 m1 m2 a1 a2 v1 τ :

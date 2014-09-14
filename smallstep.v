@@ -5,7 +5,7 @@ and computation is defined as the reflexive transitive closure of this
 reduction relation. This file also defines tactics to automatically perform and
 invert reduction steps. These tactics use the hint database [cstep] to solve
 side-conditions. *)
-Require Export state.
+Require Export operations state.
 
 (** * Semantics of assignments *)
 (** The judgment [assign_sem Γ m a v ass v' va'] describes the resulting value
