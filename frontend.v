@@ -261,7 +261,8 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
       ("variable `" +:+ x +:+ "` not found")
   | CEConst s longs x =>
      let cτis := int_const_types s longs in
-     τi ← error_of_option (to_int_const x cτis) "integer constant too large";
+     τi ← error_of_option (to_int_const x cτis)
+       ("integer constant " +:+ pretty x +:+ " too large");
      inr (# (intV{τi} x), inr (intT τi))
   | CESizeOf cτ =>
      τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
