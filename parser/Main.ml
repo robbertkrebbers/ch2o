@@ -519,7 +519,7 @@ let rec cstmt_of_statements l =
       cscomp (CSLabel (chars_of_string s,cstmt_of_statements [y]))
         (cstmt_of_statements l')
   | Cabs.BLOCK ({Cabs.bstmts = y},_)::l' ->
-      cscomp (cstmt_of_statements y) (cstmt_of_statements l')
+      cscomp (CSScope (cstmt_of_statements y)) (cstmt_of_statements l')
   | Cabs.DEFINITION (Cabs.DECDEF ((t,l),_))::l' ->
       let rec split_storage t =
         match t with
@@ -545,8 +545,9 @@ let rec cstmt_of_statements l =
           cstmt_of_statements [y]))
         (cstmt_of_statements l')
   | Cabs.FOR (Cabs.FC_DECL (Cabs.DECDEF ((t,l),_)),e2,e3,y,z)::l' ->
-      fold_defs AutoStorage t l
-        (Cabs.FOR (Cabs.FC_EXP Cabs.NOTHING,e2,e3,y,z)::l')
+      cscomp (CSScope (fold_defs AutoStorage t l
+          [Cabs.FOR (Cabs.FC_EXP Cabs.NOTHING,e2,e3,y,z)]))
+        (cstmt_of_statements l')
   | Cabs.DOWHILE (e,y,_)::l' ->
       cscomp (CSDoWhile (cstmt_of_statements [y],
           cexpr_of_expression e))
