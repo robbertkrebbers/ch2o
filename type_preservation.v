@@ -270,7 +270,7 @@ Proof.
   * destruct (is_nf_or_redex e) as [Hnf|(E&e'&?&->)].
     { destruct Hnf as [Ω v|]; typed_inversion_all.
       ctx_inversion Hk; left; try solve_cred;
-        destruct (val_true_false_dec ('{m}) v)
+        destruct (val_true_false_dec m v)
         as [[[??]|[??]]|[??]]; solve_cred. }
     destruct (ehexec Γ (get_stack k) e' m) as [[e'' m']|] eqn:He''.
     { apply ehexec_sound in He''. left; solve_cred. }

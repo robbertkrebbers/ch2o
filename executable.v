@@ -9,21 +9,21 @@ Definition assign_exec (Γ : env Ti) (m : mem Ti) (a : addr Ti)
     (v : val Ti) (ass : assign) : option (val Ti * val Ti) :=
   match ass with
   | Assign =>
-     guard (val_cast_ok Γ ('{m}) (type_of a) v);
+     guard (val_cast_ok Γ m (type_of a) v);
      let v' := val_cast (type_of a) v in
      Some (v',v')
   | PreOp op =>
      va ← m !!{Γ} a;
-     guard (val_binop_ok Γ ('{m}) op va v);
+     guard (val_binop_ok Γ m op va v);
      let v' := val_binop Γ op va v in
-     guard (val_cast_ok Γ ('{m}) (type_of a) v');
+     guard (val_cast_ok Γ m (type_of a) v');
      let v'' := val_cast (type_of a) v' in
      Some (v'', v'')
   | PostOp op =>
      va ← m !!{Γ} a;
-     guard (val_binop_ok Γ ('{m}) op va v);
+     guard (val_binop_ok Γ m op va v);
      let v' := val_binop Γ op va v in
-     guard (val_cast_ok Γ ('{m}) (type_of a) v');
+     guard (val_cast_ok Γ m (type_of a) v');
      Some (va, val_cast (type_of a) v')
   end.
 Definition ehexec (Γ : env Ti) (ρ : stack)
@@ -56,13 +56,13 @@ Definition ehexec (Γ : env Ti) (ρ : stack)
      guard (mem_freeable a m);
      Some (#{Ω} voidV, mem_free (addr_index a) m)
   | @{op} #{Ω} v =>
-     guard (val_unop_ok ('{m}) op v);
+     guard (val_unop_ok m op v);
      Some (#{Ω} (val_unop op v), m)
   | #{Ωl} vl @{op} #{Ωr} vr =>
-     guard (val_binop_ok Γ ('{m}) op vl vr);
+     guard (val_binop_ok Γ m op vl vr);
      Some (#{Ωl ∪ Ωr} (val_binop Γ op vl vr), m)
   | if{#{Ω} v} e2 else e3 =>
-     match val_true_false_dec ('{m}) v with
+     match val_true_false_dec m v with
      | inleft (left _) => Some (e2, mem_unlock Ω m)
      | inleft (right _) => Some (e3, mem_unlock Ω m)
      | inright _ => None
@@ -70,7 +70,7 @@ Definition ehexec (Γ : env Ti) (ρ : stack)
   | #{Ω} v,, er =>
      Some (er, mem_unlock Ω m)
   | cast{τ} (#{Ω} v) =>
-     guard (val_cast_ok Γ ('{m}) τ v);
+     guard (val_cast_ok Γ m τ v);
      Some (#{Ω} (val_cast τ v), m)
   | _ => None
   end%E.
@@ -179,7 +179,7 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
       | CExpr e (ret □) :: k =>
          {[ State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m) ]}
       | CExpr e (if{□} s1 else s2) :: k =>
-        match val_true_false_dec ('{m}) v with
+        match val_true_false_dec m v with
         | inleft (left _) =>
            {[State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m)]}
         | inleft (right _) =>

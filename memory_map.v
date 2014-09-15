@@ -26,6 +26,8 @@ Section operations.
     f <$> m.
   Global Instance cmap_valid': Valid (env Ti) (mem Ti) := λ Γ m,
     ✓{Γ,memenv_of m} m.
+  Definition index_alive' (m : mem Ti) (o : index) : Prop :=
+    match cmap_car m !! o with Some (Obj _ _) => True | _ => False end.
 
   Global Instance cmap_lookup:
       LookupE (env Ti) (addr Ti) (mtree Ti) (mem Ti) := λ Γ a m,
@@ -76,6 +78,27 @@ Local Opaque nmap.Nempty.
 Arguments lookupE _ _ _ _ _ _ _ !_ /.
 Arguments cmap_lookup _ _ _ _ !_ /.
 Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
+
+Lemma index_alive_spec' m o : index_alive' m o ↔ index_alive ('{m}) o.
+Proof.
+  unfold index_alive'; destruct m as [m]; simpl; split.
+  * intros. destruct (m !! o) as [[|w]|] eqn:?; try done.
+    by exists (type_of w); simplify_map_equality'.
+  * intros [τ ?]; simplify_map_equality'.
+    by destruct (m !! o) as [[|w []]|] eqn:?.
+Qed.
+Lemma index_alive_1' m o : index_alive' m o → index_alive ('{m}) o.
+Proof. by rewrite index_alive_spec'. Qed.
+Lemma index_alive_2' m o : index_alive ('{m}) o → index_alive' m o.
+Proof. by rewrite index_alive_spec'. Qed.
+Global Instance index_alive_dec' m o : Decision (index_alive' m o).
+Proof.
+  refine
+    match cmap_car m !! o as mw' return Decision (match mw' with
+       Some (Obj _ _) => True | _ => False end) with
+    | Some (Obj _ _) => left _ | _ => right _
+    end; tauto.
+Defined.
 
 Lemma cmap_empty_valid Γ Γm : ✓{Γ,Γm} (∅ : mem Ti).
 Proof. by split; intros until 0; simplify_map_equality'. Qed.

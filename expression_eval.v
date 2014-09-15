@@ -48,12 +48,12 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
      Some (inr v')
   | @{op} e =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
-     guard (val_unop_ok ('{m}) op v);
+     guard (val_unop_ok m op v);
      Some (inr (val_unop op v))
   | e1 @{op} e2 =>
      v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe_inr;
      v2 ← ⟦ e2 ⟧ Γ fs ρ m ≫= maybe_inr;
-     guard (val_binop_ok Γ ('{m}) op v1 v2);
+     guard (val_binop_ok Γ m op v1 v2);
      Some (inr (val_binop Γ op v1 v2))
   | call f @ es =>
      F ← fs !! f;
@@ -63,7 +63,7 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
      v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe_inr;
      av2 ← ⟦ e2 ⟧ Γ fs ρ m;
      av3 ← ⟦ e3 ⟧ Γ fs ρ m;
-     match val_true_false_dec ('{m}) v1 with
+     match val_true_false_dec m v1 with
      | inleft (left _) => Some av2
      | inleft (right _) => Some av3
      | inright _ => None
@@ -73,7 +73,7 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
      ⟦ e2 ⟧ Γ fs ρ m
   | cast{τ} e =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
-     guard (val_cast_ok Γ ('{m}) τ v);
+     guard (val_cast_ok Γ m τ v);
      Some (inr (val_cast τ v))
   | _ => None
   end
@@ -113,11 +113,11 @@ Context (Peltr : ∀ e rs v v',
   v !! rs = Some v' → P (e #> rs) (inr v')).
 Context (Punop : ∀ op e v,
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
-  val_unop_ok ('{m}) op v → P (@{op} e) (inr (val_unop op v))).
+  val_unop_ok m op v → P (@{op} e) (inr (val_unop op v))).
 Context (Pbinop : ∀ op e1 e2 v1 v2,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e2 ⟧ Γ fs ρ m = Some (inr v2) → P e2 (inr v2) →
-  val_binop_ok Γ ('{m}) op v1 v2 →
+  val_binop_ok Γ m op v1 v2 →
   P (e1 @{op} e2) (inr (val_binop Γ op v1 v2))).
 Context (Pcall : ∀ f F es vs v,
   fs !! f = Some F →
@@ -128,7 +128,7 @@ Context (Pif1 : ∀ e1 e2 e3 v1 av2 av3,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 →
   ⟦ e3 ⟧ Γ fs ρ m = Some av3 → P e3 av3 →
-  val_true ('{m}) v1 → P (if{e1} e2 else e3) av2).
+  val_true m v1 → P (if{e1} e2 else e3) av2).
 Context (Pif2 : ∀ e1 e2 e3 v1 av2 av3,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 →
@@ -139,7 +139,7 @@ Context (Pcomma : ∀ e1 e2 v1 av2,
   ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 → P (e1,, e2) av2).
 Context (Pcast : ∀ τ e v,
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
-  val_cast_ok Γ ('{m}) τ v → P (cast{τ} e) (inr (val_cast τ v))).
+  val_cast_ok Γ m τ v → P (cast{τ} e) (inr (val_cast τ v))).
 Lemma expr_eval_ind : ∀ e av, ⟦ e ⟧ Γ fs ρ m = Some av → P e av.
 Proof.
   assert (∀ f F es vs v,
