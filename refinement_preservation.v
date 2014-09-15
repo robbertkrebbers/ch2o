@@ -38,7 +38,7 @@ Hint Immediate vals_refine_typed_l vals_refine_typed_r.
 Hint Immediate locks_refine_valid_l locks_refine_valid_r.
 Hint Immediate stmt_refine_typed_l stmt_refine_typed_r.
 Hint Resolve direction_out_refine_r direction_in_refine_r.
-Hint Resolve sctx_item_breakto_refine.
+Hint Resolve sctx_item_catch_refine.
 Hint Immediate Undef_undef.
 Hint Immediate meminj_extend_reflexive.
 Hint Immediate sctx_item_subst_refine.

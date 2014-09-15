@@ -227,16 +227,16 @@ Inductive stmt_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
   | SReturn_typed e τ :
      (Γ,Γf,Γm,τs) ⊢ e : inr τ → stmt_typed' Γ Γf Γm τs (ret e) (true,Some τ)
   | SLabel_typed l : stmt_typed' Γ Γf Γm τs (label l) (false,None)
-  | SBlock_typed' τ s c mσ :
+  | SLocal_typed' τ s c mσ :
      ✓{Γ} τ →int_typed (size_of Γ τ) sptrT →
      stmt_typed' Γ Γf Γm (τ :: τs) s (c,mσ) →
-     stmt_typed' Γ Γf Γm τs (block{τ} s) (c,mσ)
+     stmt_typed' Γ Γf Γm τs (local{τ} s) (c,mσ)
   | SComp_typed s1 s2 c1 mσ1 c2 mσ2 mσ :
      stmt_typed' Γ Γf Γm τs s1 (c1,mσ1) → stmt_typed' Γ Γf Γm τs s2 (c2,mσ2) →
      rettype_union mσ1 mσ2 = Some mσ → stmt_typed' Γ Γf Γm τs (s1 ;; s2) (c2,mσ)
-  | SBreakTo_typed s c mσ :
+  | SCatch_typed s c mσ :
      stmt_typed' Γ Γf Γm τs s (c,mσ) →
-     stmt_typed' Γ Γf Γm τs (breakto s) (false,mσ)
+     stmt_typed' Γ Γf Γm τs (catch s) (false,mσ)
   | SLoop_typed s c mσ :
      stmt_typed' Γ Γf Γm τs s (c,mσ) →
      stmt_typed' Γ Γf Γm τs (loop s) (true,mσ)
@@ -256,8 +256,8 @@ Inductive sctx_item_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
   | CCompR_typed s1 c1 mσ1 c2 mσ2 mσ :
      (Γ,Γf,Γm,τs) ⊢ s1 : (c1,mσ1) → rettype_union mσ1 mσ2 = Some mσ →
      sctx_item_typed' Γ Γf Γm τs (s1 ;; □) (c2,mσ2) (c2,mσ)
-  | CBreakTo_typed c mσ :
-     sctx_item_typed' Γ Γf Γm τs (breakto □) (c,mσ) (false,mσ)
+  | Ccatch_typed c mσ :
+     sctx_item_typed' Γ Γf Γm τs (catch □) (c,mσ) (false,mσ)
   | CLoop_typed c mσ :
      sctx_item_typed' Γ Γf Γm τs (loop □) (c,mσ) (true,mσ)
   | CIfL_typed e τb s2 c1 mσ1 c2 mσ2 mσ :
@@ -288,10 +288,10 @@ Inductive ctx_item_typed'
   | CStmt_typed Es cmσ1 cmσ2 :
      (Γ,Γf,Γm,τs) ⊢ Es : cmσ1 ↣ cmσ2 →
      ctx_item_typed' Γ Γf Γm τs (CStmt Es) (Stmt_type cmσ1) (Stmt_type cmσ2)
-  | CBlock_typed o τ c mσ :
+  | CLocal_typed o τ c mσ :
      Γm ⊢ o : τ →
      ctx_item_typed' Γ Γf Γm τs
-       (CBlock o τ) (Stmt_type (c,mσ)) (Stmt_type (c,mσ))
+       (CLocal o τ) (Stmt_type (c,mσ)) (Stmt_type (c,mσ))
   | CExpr_typed e Ee τ cmσ :
      (Γ,Γf,Γm,τs) ⊢ e : inr τ → (Γ,Γf,Γm,τs) ⊢ Ee : τ ↣ cmσ →
      ctx_item_typed' Γ Γf Γm τs (CExpr e Ee) (Expr_type τ) (Stmt_type cmσ)
@@ -386,9 +386,9 @@ Implicit Types Ek : ctx_item Ti.
 Implicit Types k : ctx Ti.
 Implicit Types d : direction Ti.
 
-Lemma SBlock_typed Γ Γf Γm τs τ s c mσ :
+Lemma SLocal_typed Γ Γf Γm τs τ s c mσ :
   ✓{Γ} τ →int_typed (size_of Γ τ) sptrT →
-  (Γ,Γf,Γm,τ :: τs) ⊢ s : (c,mσ) → (Γ,Γf,Γm,τs) ⊢ block{τ} s : (c,mσ).
+  (Γ,Γf,Γm,τ :: τs) ⊢ s : (c,mσ) → (Γ,Γf,Γm,τs) ⊢ local{τ} s : (c,mσ).
 Proof. by constructor. Qed.
 Lemma assign_typed_type_valid Γ τ1 τ2 ass σ :
   assign_typed Γ τ1 τ2 ass σ → ✓{Γ} τ1 → ✓{Γ} σ.

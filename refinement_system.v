@@ -243,18 +243,18 @@ Inductive stmt_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs : list (type Ti))
      stmt_refine' Γ Γf τs f Γm1 Γm2 (ret e1) (ret e2) (true,Some τ)
   | SLabel_refine l :
      stmt_refine' Γ Γf τs f Γm1 Γm2 (label l) (label l) (false,None)
-  | SBlock_refine' τ s1 s2 c mσ :
+  | SLocal_refine' τ s1 s2 c mσ :
      ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
      stmt_refine' Γ Γf (τ :: τs) f Γm1 Γm2 s1 s2 (c,mσ) →
-     stmt_refine' Γ Γf τs f Γm1 Γm2 (block{τ} s1) (block{τ} s2) (c,mσ)
+     stmt_refine' Γ Γf τs f Γm1 Γm2 (local{τ} s1) (local{τ} s2) (c,mσ)
   | SComp_refine s1 s2 s1' s2' c1 mσ1 c2 mσ2 mσ :
      stmt_refine' Γ Γf τs f Γm1 Γm2 s1 s2 (c1,mσ1) →
      stmt_refine' Γ Γf τs f Γm1 Γm2 s1' s2' (c2,mσ2) →
      rettype_union mσ1 mσ2 = Some mσ →
      stmt_refine' Γ Γf τs f Γm1 Γm2 (s1 ;; s1') (s2 ;; s2') (c2,mσ)
-  | SBreakTo_refine s1 s2 c mσ :
+  | SCatch_refine s1 s2 c mσ :
      stmt_refine' Γ Γf τs f Γm1 Γm2 s1 s2 (c,mσ) →
-     stmt_refine' Γ Γf τs f Γm1 Γm2 (breakto s1) (breakto s2) (false,mσ)
+     stmt_refine' Γ Γf τs f Γm1 Γm2 (catch s1) (catch s2) (false,mσ)
   | SLoop_refine s1 s2 c mσ :
      stmt_refine' Γ Γf τs f Γm1 Γm2 s1 s2 (c,mσ) →
      stmt_refine' Γ Γf τs f Γm1 Γm2 (loop s1) (loop s2) (true,mσ)
@@ -280,9 +280,9 @@ Inductive sctx_item_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs: list (type T
      s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : (c,mσ) →
      rettype_union mσ mσ' = Some mσr →
      sctx_item_refine' Γ Γf τs f Γm1 Γm2 (s1 ;; □) (s2 ;; □) (c',mσ') (c',mσr)
-  | CBreakTo_refine c mσ :
+  | Ccatch_refine c mσ :
      sctx_item_refine' Γ Γf τs f Γm1 Γm2
-       (breakto □) (breakto □) (c,mσ) (false,mσ)
+       (catch □) (catch □) (c,mσ) (false,mσ)
   | CWhile_refine c mσ :
      sctx_item_refine' Γ Γf τs f Γm1 Γm2 (loop □) (loop □) (c,mσ) (true,mσ)
   | CIfL_refine e1 e2 τb s1' s2' c mσ c' mσ' mσr :
@@ -325,10 +325,10 @@ Inductive ctx_item_refine' (Γ : env Ti) (Γf: funtypes Ti) (τs: list (type Ti)
      Es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Es2 : cmσ ↣ cmσ' →
      ctx_item_refine' Γ Γf τs f Γm1 Γm2
        (CStmt Es1) (CStmt Es2) (Stmt_type cmσ) (Stmt_type cmσ')
-  | CBlock_refine o1 o2 τ c mσ :
+  | CLocal_refine o1 o2 τ c mσ :
      Γm1 ⊢ o1 : τ → Γm2 ⊢ o2 : τ → f !! o1 = Some (o2,[]) →
      ctx_item_refine' Γ Γf τs f Γm1 Γm2
-       (CBlock o1 τ) (CBlock o2 τ) (Stmt_type (c,mσ)) (Stmt_type (c,mσ))
+       (CLocal o1 τ) (CLocal o2 τ) (Stmt_type (c,mσ)) (Stmt_type (c,mσ))
   | CExpr_refine e1 e2 Ee1 Ee2 τ cmσ :
      e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inr τ →
      Ee1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ee2 : τ ↣ cmσ →
@@ -586,9 +586,9 @@ Proof.
   induction 2 as [|??????? []]; simpl;
     rewrite ?fst_zip by solve_length; auto using Forall2_app.
 Qed.
-Lemma sctx_item_breakto_refine Γ Γf f Γm1 Γm2 τs Es1 Es2 s1 s2 mcτ mcτ' :
+Lemma sctx_item_catch_refine Γ Γf f Γm1 Γm2 τs Es1 Es2 s1 s2 mcτ mcτ' :
   Es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Es2 : mcτ ↣ mcτ' →
-  Es1 = breakto □ → Es2 = breakto □.
+  Es1 = catch □ → Es2 = catch □.
 Proof. by destruct 1. Qed.  
 Lemma direction_in_refine_r Γ Γf τs f Γm1 Γm2 s1 s2 d1 d2 mcτ :
   s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ →

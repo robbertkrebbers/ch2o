@@ -471,7 +471,7 @@ and cexpr_of_expression x =
         [(f,(s,if !printf_returns_int then
            (let i = chars_of_int 0 in
             FunDecl (a,ctint_signed,
-              Some (CSBlock (AutoStorage,i,ctint_signed,
+              Some (CSLocal (AutoStorage,i,ctint_signed,
                 Some (econst (Int (length_of_format s))),
               printf_body i a)))) else
             FunDecl (a,CTVoid,Some (CSSkip))))]));
@@ -508,7 +508,7 @@ let rec cstmt_of_statements l =
     match l with
     | [] -> cstmt_of_statements b
     | ((s,t',[],_),z)::l' ->
-        CSBlock (h,chars_of_string s,
+        CSLocal (h,chars_of_string s,
           ctype_of_specifier_decl_type t t',
           decl_of_init_expression z,
           fold_defs h t l' b)
@@ -638,7 +638,7 @@ let printf_prelude () =
     let i = chars_of_int 0 and n = chars_of_int 1 in
     [(chars_of_string s,
       FunDecl ([(Some i, ctint_signed)],ctint_signed,Some
-       (CSBlock (AutoStorage,n,ctint_signed,Some econst0,
+       (CSLocal (AutoStorage,n,ctint_signed,Some econst0,
         CSComp (CSIf (CEBinOp (CompOp EqOp,CEVar i,econst0),
           CSReturn (Some econst1),CSSkip),
         CSComp (CSIf (CEBinOp (CompOp LtOp,CEVar i,econst0),

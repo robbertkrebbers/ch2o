@@ -72,8 +72,9 @@ Arguments labels {_ _} !_ / : simpl nomatch.
 
 (** * Statements *)
 (** The construct [SDo e] executes the expression [e] and ignores the result.
-The construct [SBlock s] opens a new scope with one variable. Since we use De
-Bruijn indexes for variables, it does not contain the name of the variable. *)
+The construct [SLocal τ s] opens a new scope with one variable of type τ. Since
+we use De Bruijn indexes for variables, it does not contain the name of the
+variable. *)
 Inductive stmt (Ti : Set) : Set :=
   | SDo : expr Ti → stmt Ti
   | SSkip : stmt Ti
@@ -81,8 +82,8 @@ Inductive stmt (Ti : Set) : Set :=
   | SBreak : nat → stmt Ti
   | SReturn : expr Ti → stmt Ti
   | SLabel : labelname → stmt Ti
-  | SBlock : type Ti → stmt Ti → stmt Ti
-  | SBreakTo : stmt Ti → stmt Ti
+  | SLocal : type Ti → stmt Ti → stmt Ti
+  | SCatch : stmt Ti → stmt Ti
   | SComp : stmt Ti → stmt Ti → stmt Ti
   | SLoop : stmt Ti → stmt Ti
   | SIf : expr Ti → stmt Ti → stmt Ti → stmt Ti.
@@ -103,8 +104,8 @@ Arguments SGoto {_} _%string.
 Arguments SBreak {_} _.
 Arguments SReturn {_} _.
 Arguments SLabel {_} _.
-Arguments SBlock {_} _ _%S.
-Arguments SBreakTo {_} _.
+Arguments SLocal {_} _ _%S.
+Arguments SCatch {_} _.
 Arguments SComp {_}_%S _%S.
 Arguments SLoop {_} _%S.
 Arguments SIf {_} _ _%S _%S.
@@ -115,9 +116,9 @@ Notation "'goto' l" := (SGoto l) (at level 10) : stmt_scope.
 Notation "'break' n" := (SBreak n) (at level 10) : stmt_scope.
 Notation "'ret' e" := (SReturn e) (at level 10) : stmt_scope.
 Notation "'label' l" := (SLabel l) (at level 10) : stmt_scope.
-Notation "'block{' τ } s" := (SBlock τ s)
-  (at level 10, format "'block{' τ }  s") : stmt_scope.
-Notation "'breakto' s" := (SBreakTo s) (at level 10) : stmt_scope.
+Notation "'local{' τ } s" := (SLocal τ s)
+  (at level 10, format "'local{' τ }  s") : stmt_scope.
+Notation "'catch' s" := (SCatch s) (at level 10) : stmt_scope.
 Notation "s1 ;; s2" := (SComp s1 s2)
   (at level 80, right associativity,
    format "'[' s1  ;;  '/' s2 ']'") : stmt_scope.
@@ -141,7 +142,7 @@ Instance: Injective (=) (=) (@SGoto Ti).
 Proof. by injection 1. Qed.
 Instance: Injective (=) (=) (@SReturn Ti).
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@SBlock Ti).
+Instance: Injective2 (=) (=) (=) (@SLocal Ti).
 Proof. by injection 1. Qed.
 
 Instance stmt_gotos {Ti} : Gotos (stmt Ti) :=
@@ -149,7 +150,7 @@ Instance stmt_gotos {Ti} : Gotos (stmt Ti) :=
   match s with
   | ! _ | skip | break _ | ret _ | label _ => ∅
   | goto l => {[ l ]}
-  | block{_} s | breakto s | loop s => gotos s
+  | local{_} s | catch s | loop s => gotos s
   | s1 ;; s2 | if{_} s1 else s2 => gotos s1 ∪ gotos s2
   end.
 Instance stmt_labels {Ti} : Labels (stmt Ti) :=
@@ -157,7 +158,7 @@ Instance stmt_labels {Ti} : Labels (stmt Ti) :=
   match s with
   | ! _ | skip | goto _ | break _ | ret _ => ∅
   | label l => {[ l ]}
-  | breakto s | block{_} s | loop s => labels s
+  | catch s | local{_} s | loop s => labels s
   | s1 ;; s2 | if{_} s1 else s2 => labels s1 ∪ labels s2
   end.
 Instance stmt_locks {Ti} : Locks (stmt Ti) :=
@@ -165,7 +166,7 @@ Instance stmt_locks {Ti} : Locks (stmt Ti) :=
   match s with
   | ! e | ret e => locks e
   | skip | break _ | goto _ | label _=> ∅
-  | breakto s | block{_} s | loop s => locks s
+  | catch s | local{_} s | loop s => locks s
   | s1 ;; s2 => locks s1 ∪ locks s2
   | if{e} s1 else s2 => locks e ∪ locks s1 ∪ locks s2
   end.
@@ -173,8 +174,8 @@ Fixpoint breaks_valid {Ti} (n : nat) (s : stmt Ti) : Prop :=
   match s with
   | !_ | ret _ | skip | goto _ | label _ => True
   | break i => i < n
-  | block{_} s | loop s => breaks_valid n s
-  | breakto s => breaks_valid (S n) s
+  | local{_} s | loop s => breaks_valid n s
+  | catch s => breaks_valid (S n) s
   | s1 ;; s2 | if{_} s1 else s2 => breaks_valid n s1 ∧ breaks_valid n s2
   end.
 Instance breaks_valid_dec {Ti} : ∀ n (s : stmt Ti), Decision (breaks_valid n s).
@@ -184,8 +185,8 @@ Proof.
   match s return Decision (breaks_valid n s) with
   | !_ | ret _ | skip | goto _ | label _ => left _
   | break i => cast_if (decide (i < n))
-  | block{_} s | loop s => go n s
-  | breakto s => go (S n) s
+  | local{_} s | loop s => go n s
+  | catch s => go (S n) s
   | s1 ;; s2 | if{_} s1 else s2 => cast_if_and (go n s1) (go n s2)
   end); clear go; abstract naive_solver.
 Defined.
@@ -195,7 +196,7 @@ Defined.
 pair [(E, s)] consisting of a list of singular statement contexts [E] and a
 statement [s] forms a zipper for statements without block scope variables. *)
 Inductive sctx_item (Ti : Set) : Set :=
-  | CBreakTo : sctx_item Ti
+  | CCatch : sctx_item Ti
   | CCompL : stmt Ti → sctx_item Ti
   | CCompR : stmt Ti → sctx_item Ti
   | CLoop : sctx_item Ti
@@ -206,7 +207,7 @@ Instance sctx_item_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (E1 E2 : sctx_item Ti) : Decision (E1 = E2).
 Proof. solve_decision. Defined.
 
-Arguments CBreakTo {_}.
+Arguments CCatch {_}.
 Arguments CCompL {_} _.
 Arguments CCompR {_} _.
 Arguments CLoop {_}.
@@ -214,8 +215,7 @@ Arguments CIfL {_} _ _.
 Arguments CIfR {_} _ _.
 
 Bind Scope stmt_scope with sctx_item.
-Notation "'breakto' □" :=
-  CBreakTo (at level 10, format "breakto  □") : stmt_scope.
+Notation "'catch' □" := CCatch (at level 10, format "catch  □") : stmt_scope.
 Notation "□ ;; s" := (CCompL s) (at level 80, format "□  ;;  s") : stmt_scope.
 Notation "s ;; □" := (CCompR s) (at level 80, format "s  ;;  □") : stmt_scope.
 Notation "'loop' □" := CLoop (at level 10, format "'loop'  □") : stmt_scope.
@@ -227,7 +227,7 @@ Notation "'if{' e } s1 'else' □" := (CIfR e s1)
 Instance sctx_item_subst {Ti} :
     Subst (sctx_item Ti) (stmt Ti) (stmt Ti) := λ Es s,
   match Es with
-  | breakto □ => breakto s
+  | catch □ => catch s
   | □ ;; s2 => s ;; s2
   | s1 ;; □ => s1 ;; s
   | loop □ => loop s
@@ -241,18 +241,18 @@ Proof. destruct Es; repeat intro; simpl in *; by simplify_equality. Qed.
 
 Instance sctx_item_gotos {Ti} : Gotos (sctx_item Ti) := λ Es,
   match Es with
-  | breakto □ | loop □ => ∅
+  | catch □ | loop □ => ∅
   | s ;; □ | □ ;; s  | if{_} □ else s | if{_} s else □ => gotos s
   end.
 Instance sctx_item_labels {Ti} : Labels (sctx_item Ti) := λ Es,
   match Es with
-  | breakto □ | loop □ => ∅
+  | catch □ | loop □ => ∅
   | s ;; □ | □ ;; s | if{_} □ else s | if{_} s else □ => labels s
   end.
 Instance sctx_item_locks {Ti} : Locks (sctx_item Ti) := λ Es,
   match Es with
   | □ ;; s | s ;; □ => locks s
-  | breakto □ | loop □ => ∅
+  | catch □ | loop □ => ∅
   | if{e} □ else s | if{e} s else □ => locks e ∪ locks s
   end.
 
@@ -327,9 +327,9 @@ Proof. apply elem_of_equiv_L. destruct Ee; esolve_elem_of. Qed.
 (** Finally, we define the type [ctx_item] to extends [sctx_item] with some
 additional singular contexts. These contexts will be used as follows.
 
-- When entering a block, [block s], the context [CBlock b] is appended to the
-  head of the program context. It associates the block scope variable with its
-  corresponding memory index [b].
+- When entering a block, [local{τ} s], the context [CLocal b τ] is appended to
+  the head of the program context. It associates the block scope variable with
+  its corresponding memory index [b].
 - To execute a statement [subst E e] containing an expression [e], the context
   [CExpr e E] is appended to the head of the program context. It stores the
   expression [e] itself and its location [E]. The expression itself is needed
@@ -345,14 +345,14 @@ additional singular contexts. These contexts will be used as follows.
 Program contexts [ctx] are then defined as lists of singular contexts. *)
 Inductive ctx_item (Ti : Set) : Set :=
   | CStmt : sctx_item Ti → ctx_item Ti
-  | CBlock : index → type Ti → ctx_item Ti
+  | CLocal : index → type Ti → ctx_item Ti
   | CExpr : expr Ti → esctx_item Ti → ctx_item Ti
   | CFun : ectx Ti → ctx_item Ti
   | CParams : funname → list (index * type Ti) → ctx_item Ti.
 Notation ctx Ti := (list (ctx_item Ti)).
 
 Arguments CStmt {_} _.
-Arguments CBlock {_} _ _.
+Arguments CLocal {_} _ _.
 Arguments CExpr {_} _ _.
 Arguments CFun {_} _.
 Arguments CParams {_} _ _.
@@ -377,7 +377,7 @@ Fixpoint get_stack {Ti} (k : ctx Ti) : stack :=
   match k with
   | [] => []
   | CStmt _ :: k | CExpr _ _ :: k => get_stack k
-  | CBlock o τ :: k => o :: get_stack k
+  | CLocal o τ :: k => o :: get_stack k
   | CFun _ :: _ => []
   | CParams _ oτs :: k => (fst <$> oτs) ++ get_stack k
   end.
@@ -385,7 +385,7 @@ Fixpoint get_stack_types {Ti} (k : ctx Ti) : list (type Ti) :=
   match k with
   | [] => []
   | CStmt _ :: k | CExpr _ _ :: k => get_stack_types k
-  | CBlock o τ :: k => τ :: get_stack_types k
+  | CLocal o τ :: k => τ :: get_stack_types k
   | CFun _ :: _ => []
   | CParams _ oτs :: k => (snd <$> oτs) ++ get_stack_types k
   end.
@@ -393,7 +393,7 @@ Instance ctx_free_gotos {Ti} : Gotos (ctx Ti) :=
   fix go k := let _ : Gotos _ := @go in
   match k with
   | CStmt Es :: k => gotos Es ∪ gotos k
-  | CBlock _ _ :: k => gotos k
+  | CLocal _ _ :: k => gotos k
   | CExpr _ E :: k => gotos E ∪ gotos k
   | _ => ∅
   end.
@@ -401,14 +401,14 @@ Instance ctx_free_labels {Ti} : Labels (ctx Ti) :=
   fix go k := let _ : Labels _ := @go in
   match k with
   | CStmt Es :: k => labels Es ∪ labels k
-  | CBlock _ _ :: k => labels k
+  | CLocal _ _ :: k => labels k
   | CExpr _ E :: k => labels E ∪ labels k
   | _ => ∅
   end.
 Fixpoint ctx_breaks {Ti} (k : ctx Ti) : nat :=
   match k with
-  | CStmt (breakto □) :: k => S (ctx_breaks k)
-  | (CStmt _ | CBlock _ _) :: k => ctx_breaks k
+  | CStmt (catch □) :: k => S (ctx_breaks k)
+  | (CStmt _ | CLocal _ _) :: k => ctx_breaks k
   | _ => 0
   end.
 

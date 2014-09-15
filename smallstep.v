@@ -161,12 +161,12 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
   | cstep_out_comp2 m k s1 s2 :
      Γ\ δ ⊢ₛ State (CStmt (s1 ;; □) :: k) (Stmt ↗ s2) m ⇒
              State k (Stmt ↗ (s1 ;; s2)) m
-  | cstep_in_breakto m k s :
-     Γ\ δ ⊢ₛ State k (Stmt ↘ (breakto s)) m ⇒
-             State (CStmt (breakto □) :: k) (Stmt ↘ s) m
-  | cstep_out_breakto m k s :
-     Γ\ δ ⊢ₛ State (CStmt (breakto □) :: k) (Stmt ↗ s) m ⇒
-             State k (Stmt ↗ (breakto s)) m
+  | cstep_in_catch m k s :
+     Γ\ δ ⊢ₛ State k (Stmt ↘ (catch s)) m ⇒
+             State (CStmt (catch □) :: k) (Stmt ↘ s) m
+  | cstep_out_catch m k s :
+     Γ\ δ ⊢ₛ State (CStmt (catch □) :: k) (Stmt ↗ s) m ⇒
+             State k (Stmt ↗ (catch s)) m
   | cstep_in_loop m k s :
      Γ\ δ ⊢ₛ State k (Stmt ↘ (loop s)) m ⇒
              State (CStmt (loop □) :: k) (Stmt ↘ s) m
@@ -201,11 +201,11 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
      Γ\ δ ⊢ₛ State k (Stmt (↷ l) (label l)) m ⇒
              State k (Stmt ↗ (label l)) m
   | cstep_break_here m k s :
-     Γ\ δ ⊢ₛ State (CStmt (breakto □) :: k) (Stmt (↑ 0) s) m ⇒
-             State k (Stmt ↗ (breakto s)) m
+     Γ\ δ ⊢ₛ State (CStmt (catch □) :: k) (Stmt (↑ 0) s) m ⇒
+             State k (Stmt ↗ (catch s)) m
   | cstep_break_further m k s n :
-     Γ\ δ ⊢ₛ State (CStmt (breakto □) :: k) (Stmt (↑ (S n)) s) m ⇒
-             State k (Stmt (↑ n) (breakto s)) m
+     Γ\ δ ⊢ₛ State (CStmt (catch □) :: k) (Stmt (↑ (S n)) s) m ⇒
+             State k (Stmt (↑ n) (catch s)) m
   | cstep_in m k Es l s :
      l ∈ labels s →
      Γ\ δ ⊢ₛ State k (Stmt (↷ l) (subst Es s)) m ⇒
@@ -218,19 +218,19 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
      Γ\ δ ⊢ₛ State (CStmt Es :: k) (Stmt (↷ l) s) m ⇒
              State k (Stmt (↷ l) (subst Es s)) m
   | cstep_out_break m k Es n s :
-     Es ≠ breakto □ →
+     Es ≠ catch □ →
      Γ\ δ ⊢ₛ State (CStmt Es :: k) (Stmt (↑ n) s) m ⇒
              State k (Stmt (↑ n) (subst Es s)) m
 
   (**i For block scopes: *)
   | cstep_in_block m k d o τ s :
      direction_in d s → mem_allocable o m →
-     Γ\ δ ⊢ₛ State k (Stmt d (block{τ} s)) m ⇒
-             State (CBlock o τ :: k) (Stmt d s) (mem_alloc Γ o false τ m)
+     Γ\ δ ⊢ₛ State k (Stmt d (local{τ} s)) m ⇒
+             State (CLocal o τ :: k) (Stmt d s) (mem_alloc Γ o false τ m)
   | cstep_out_block m k d o τ s :
      direction_out d s →
-     Γ\ δ ⊢ₛ State (CBlock o τ :: k) (Stmt d s) m ⇒
-             State k (Stmt d (block{τ} s)) (mem_free o m)
+     Γ\ δ ⊢ₛ State (CLocal o τ :: k) (Stmt d s) m ⇒
+             State k (Stmt d (local{τ} s)) (mem_free o m)
 where "Γ \ δ  ⊢ₛ S1 ⇒ S2" := (@cstep _ _ Γ δ S1%S S2%S) : C_scope.
 
 (** The reflexive transitive closure. *)
@@ -313,25 +313,25 @@ Section inversion.
        (∀ k' E,
          k = CFun E :: k' → P (State k' (Expr (subst E (#v)%E)) m)) →
        P S2
-    | Stmt ↘ (block{τ} s) =>
+    | Stmt ↘ (local{τ} s) =>
        (∀ o,
          mem_allocable o m →
-         P (State (CBlock o τ :: k) (Stmt ↘ s) (mem_alloc Γ o false τ m))) →
+         P (State (CLocal o τ :: k) (Stmt ↘ s) (mem_alloc Γ o false τ m))) →
        P S2
     | Stmt ↘ (s1 ;; s2) => P (State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m) → P S2
-    | Stmt ↘ (breakto s) =>
-       P (State (CStmt (breakto □) :: k) (Stmt ↘ s) m) → P S2
+    | Stmt ↘ (catch s) =>
+       P (State (CStmt (catch □) :: k) (Stmt ↘ s) m) → P S2
     | Stmt ↗ s =>
        (∀ k' o τ,
-         k = CBlock o τ :: k' →
-         P (State k' (Stmt ↗ (block{τ} s)) (mem_free o m))) →
+         k = CLocal o τ :: k' →
+         P (State k' (Stmt ↗ (local{τ} s)) (mem_free o m))) →
        (∀ k' s2,
          k = CStmt (□ ;; s2) :: k' →
          P (State (CStmt (s ;; □) :: k') (Stmt ↘ s2) m)) →
        (∀ k' s1,
          k = CStmt (s1 ;; □) :: k' → P (State k' (Stmt ↗ (s1 ;; s)) m)) →
        (∀ k',
-         k = CStmt (breakto □) :: k' → P (State k' (Stmt ↗ (breakto s)) m)) →
+         k = CStmt (catch □) :: k' → P (State k' (Stmt ↗ (catch s)) m)) →
        (∀ k',
          k = CStmt (loop □) :: k' → P (State k' (Stmt ↘ (loop s)) m)) →
        (∀ k' e s2,
@@ -355,34 +355,34 @@ Section inversion.
          k = CParams f oτs :: k' →
          P (State k' (Return f v) (foldr mem_free m (fst <$> oτs)))) →
        (∀ k' o τ,
-         k = CBlock o τ :: k' →
-         P (State k' (Stmt (⇈ v) (block{τ} s)) (mem_free o m))) →
+         k = CLocal o τ :: k' →
+         P (State k' (Stmt (⇈ v) (local{τ} s)) (mem_free o m))) →
        (∀ k' Es,
          k = CStmt Es :: k' → P (State k' (Stmt (⇈ v) (subst Es s)) m)) →
        P S2
     | Stmt (↑ n) s =>
        (∀ k',
-         k = CStmt (breakto □) :: k' → n = 0 → 
-         P (State k' (Stmt ↗ (breakto s)) m)) →
+         k = CStmt (catch □) :: k' → n = 0 → 
+         P (State k' (Stmt ↗ (catch s)) m)) →
        (∀ k' n',
-         k = CStmt (breakto □) :: k' → n = S n' →
-         P (State k' (Stmt (↑ n') (breakto s)) m)) →
+         k = CStmt (catch □) :: k' → n = S n' →
+         P (State k' (Stmt (↑ n') (catch s)) m)) →
        (∀ k' o τ,
-         k = CBlock o τ :: k' →
-         P (State k' (Stmt (↑ n) (block{τ} s)) (mem_free o m))) →
+         k = CLocal o τ :: k' →
+         P (State k' (Stmt (↑ n) (local{τ} s)) (mem_free o m))) →
        (∀ k' Es,
-         k = CStmt Es :: k' → Es ≠ breakto □ →
+         k = CStmt Es :: k' → Es ≠ catch □ →
          P (State k' (Stmt (↑ n) (subst Es s)) m)) →
        P S2
     | Stmt (↷ l) s =>
        (s = label l → P (State k (Stmt ↗ s) m)) →
        (∀ s' o τ,
-         s = block{τ} s' → l ∈ labels s → mem_allocable o m →
-         P (State (CBlock o τ :: k) (Stmt (↷ l) s')
+         s = local{τ} s' → l ∈ labels s → mem_allocable o m →
+         P (State (CLocal o τ :: k) (Stmt (↷ l) s')
            (mem_alloc Γ o false τ m))) →
        (∀ k' o τ,
-         k = CBlock o τ :: k' → l ∉ labels s →
-         P (State k' (Stmt (↷ l) (block{τ} s)) (mem_free o m))) →
+         k = CLocal o τ :: k' → l ∉ labels s →
+         P (State k' (Stmt (↷ l) (local{τ} s)) (mem_free o m))) →
        (∀ s' Es,
          s = subst Es s' → l ∈ labels s' →
          P (State (CStmt Es :: k) (Stmt (↷ l) s') m)) →
@@ -428,11 +428,11 @@ Section inversion.
     match Ek with
     | CStmt (□ ;; s2) => P (State (CStmt (s ;; □) :: k) (Stmt ↘ s2) m) → P S2
     | CStmt (s1 ;; □) => P (State k (Stmt ↗ (s1 ;; s)) m) → P S2
-    | CStmt (breakto □) => P (State k (Stmt ↗ (breakto s)) m) → P S2
+    | CStmt (catch □) => P (State k (Stmt ↗ (catch s)) m) → P S2
     | CStmt (loop □) => P (State k (Stmt ↘ (loop s)) m) → P S2
     | CStmt (if{e} □ else s2) => P (State k (Stmt ↗ (if{e} s else s2)) m) → P S2
     | CStmt (if{e} s1 else □) => P (State k (Stmt ↗ (if{e} s1 else s)) m) → P S2
-    | CBlock o τ => P (State k (Stmt ↗ (block{τ} s)) (mem_free o m)) → P S2
+    | CLocal o τ => P (State k (Stmt ↗ (local{τ} s)) (mem_free o m)) → P S2
     | CParams f oτs =>
        P (State k (Return f voidV) (foldr mem_free m (fst <$> oτs))) → P S2
     | _ => P S2
@@ -447,7 +447,7 @@ Section inversion.
     | CStmt Es => P (State k (Stmt (⇈ v) (subst Es s)) m) → P S2
     | CParams f oτs =>
        P (State k (Return f v) (foldr mem_free m (fst <$> oτs))) → P S2
-    | CBlock o τ => P (State k (Stmt (⇈ v) (block{τ} s)) (mem_free o m)) → P S2
+    | CLocal o τ => P (State k (Stmt (⇈ v) (local{τ} s)) (mem_free o m)) → P S2
     | _ => P S2
     end.
   Proof.
@@ -567,7 +567,7 @@ Ltac quote_stmt s :=
   | ret ?e => constr:[subst (ret □) e]
   | ?s1 ;; ?s2 => constr:[subst (s1 ;; □) s2; subst (□ ;; s2) s1]
   | loop ?s => constr:[subst (loop □) s]
-  | breakto ?s => constr:[subst (breakto □) s]
+  | catch ?s => constr:[subst (catch □) s]
   | if{?e} ?s1 else ?s2 =>
     constr:[subst (if{e} s1 else □) s2;
             subst (if{e} □ else s2) s1; subst (if{□} s1 else s2) e]
@@ -912,30 +912,30 @@ to execution of that expression. *)
 Instance ctx_item_subst {Ti} :
     Subst (ctx_item Ti) (stmt Ti) (stmt Ti) := λ Ek s,
   match Ek with
-  | CStmt E => subst E s | CBlock _ τ => block{τ} s
+  | CStmt E => subst E s | CLocal _ τ => local{τ} s
   | _ => s (* dummy *)
   end.
-Definition is_CStmt_or_CBlock (Ek : ctx_item Ti) : Prop :=
-  match Ek with CStmt _ | CBlock _ _ => True | _ => False end.
+Definition is_CStmt_or_CLocal (Ek : ctx_item Ti) : Prop :=
+  match Ek with CStmt _ | CLocal _ _ => True | _ => False end.
 Definition in_fun_ctx (k1 k2 : ctx Ti) : Prop := ∃ l,
-  Forall is_CStmt_or_CBlock l ∧ k2 = l ++ k1.
+  Forall is_CStmt_or_CLocal l ∧ k2 = l ++ k1.
 
 Instance: ∀ Ek : ctx_item Ti, Injective (=) (=) (subst Ek).
 Proof.
   destruct Ek; intros ???; auto.
   * eapply (injective (subst (CStmt _))); eauto.
-  * eapply (injective (SBlock _)); eauto.
+  * eapply (injective (SLocal _)); eauto.
 Qed.
 Instance: Reflexive in_fun_ctx.
 Proof. intros k. eexists []. intuition trivial. Qed.
 Lemma in_fun_ctx_r k1 k2 Ek :
-  is_CStmt_or_CBlock Ek → in_fun_ctx k1 k2 → in_fun_ctx k1 (Ek :: k2).
+  is_CStmt_or_CLocal Ek → in_fun_ctx k1 k2 → in_fun_ctx k1 (Ek :: k2).
 Proof. intros ? [l [??]]. subst. exists (Ek :: l). intuition. Qed.
 Lemma in_fun_ctx_app_r k1 k2 k :
-  Forall is_CStmt_or_CBlock k → in_fun_ctx k1 k2 → in_fun_ctx k1 (k ++ k2).
+  Forall is_CStmt_or_CLocal k → in_fun_ctx k1 k2 → in_fun_ctx k1 (k ++ k2).
 Proof. induction 1; simpl; auto using in_fun_ctx_r. Qed.
 Lemma in_fun_ctx_r_inv k1 k2 Ek :
-  is_CStmt_or_CBlock Ek →
+  is_CStmt_or_CLocal Ek →
   k1 `suffix_of` k2 → in_fun_ctx k1 (Ek :: k2) → in_fun_ctx k1 k2.
 Proof.
   intros ? [l1 ->] [l2 [Hc1 Hc2]].
@@ -943,7 +943,7 @@ Proof.
   by exists l1.
 Qed.
 Lemma in_fun_ctx_change k1 k2 Ek1 Ek2 :
-  is_CStmt_or_CBlock Ek2 → k1 `suffix_of` Ek2 :: k2 →
+  is_CStmt_or_CLocal Ek2 → k1 `suffix_of` Ek2 :: k2 →
   in_fun_ctx k1 (Ek1 :: k2) → in_fun_ctx k1 (Ek2 :: k2).
 Proof.
   intros ? [[|Ek2' l1] ?] [l2 [Hc1 Hc2]]; [by eexists []|].
@@ -951,7 +951,7 @@ Proof.
   exists (Ek2' :: l1); auto.
 Qed.
 Lemma in_fun_ctx_not_item_or_block k1 k2 Ek :
-  ¬is_CStmt_or_CBlock Ek → k1 `suffix_of` k2 → ¬in_fun_ctx k1 (Ek :: k2).
+  ¬is_CStmt_or_CLocal Ek → k1 `suffix_of` k2 → ¬in_fun_ctx k1 (Ek :: k2).
 Proof.
   intros ? [l1 ->] [l2 [Hc1 Hc2]]. by rewrite app_comm_cons in Hc2;
     apply app_inv_tail in Hc2; decompose_Forall_hyps.

@@ -127,7 +127,7 @@ Proof.
     destruct (mem_alloc_refine' Γ meminj_id m m false τ
       (fresh (dom indexset m)) o) as (f&?&?&?);
       auto using cmap_refine_id', mem_allocable_fresh.
-    eexists f, (State (CBlock (fresh (dom indexset m)) τ :: k) (Stmt d s)
+    eexists f, (State (CLocal (fresh (dom indexset m)) τ :: k) (Stmt d s)
       (mem_alloc Γ (fresh (dom indexset m)) false τ m)).
     split_ands; auto.
     { by destruct d; simplify_option_equality; try case_match; eauto. }

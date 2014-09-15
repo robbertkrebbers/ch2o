@@ -52,7 +52,7 @@ Inductive cstmt : Set :=
   | CSBreak : cstmt
   | CSContinue : cstmt
   | CSReturn : option cexpr → cstmt
-  | CSBlock : cstorage → string → ctype → option cexpr → cstmt → cstmt
+  | CSLocal : cstorage → string → ctype → option cexpr → cstmt → cstmt
   | CSTypeDef : string → ctype → cstmt → cstmt
   | CSComp : cstmt → cstmt → cstmt
   | CSLabel : string → cstmt → cstmt
@@ -495,13 +495,13 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      guard (cast_typed Γ τ' τret) with "return expression of incorrect type";
      inr (m, Δg, ret (cast{τret} e), (true, Some τret))
   | CSReturn None => inr (m, Δg, ret (#voidV), (true, Some voidT))
-  | CSBlock AutoStorage x cτ None cs =>
+  | CSLocal AutoStorage x cτ None cs =>
      τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
      guard (int_typed (size_of Γ τ) sptrT)
        with "block scope declaration whose type is too large";
      '(m,Δg,s,cmσ) ← go m Δg ((x,Local τ) :: Δl) cs;
-     inr (m, Δg, block{τ} s, cmσ)
-  | CSBlock AutoStorage x cτ (Some ce) cs =>
+     inr (m, Δg, local{τ} s, cmσ)
+  | CSLocal AutoStorage x cτ (Some ce) cs =>
      τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
      guard (int_typed (size_of Γ τ) sptrT) with
        "block scope declaration whose type is too large";
@@ -511,11 +511,11 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
        ("block scope `" +:+ x +:+
                       "` declaration with initializer of incorrect type");
      '(m,Δg,s,cmσ) ← go m Δg Δl cs;
-     inr (m, Δg, block{τ} (var{τ} 0 ::= e ;; s), cmσ)
-  | CSBlock StaticStorage x cτ mce cs =>
+     inr (m, Δg, local{τ} (var{τ} 0 ::= e ;; s), cmσ)
+  | CSLocal StaticStorage x cτ mce cs =>
      '(m,o,τ) ← alloc_static Γn Γ m Δg Δl x cτ mce;
      go m Δg ((x,Static o τ) :: Δl) cs
-  | CSBlock ExternStorage x cτ mce cs =>
+  | CSLocal ExternStorage x cτ mce cs =>
      guard (mce = None) with
        ("extern block scope declaration `" +:+ x +:+ "` with an initializer");
      '(m,Δg,o,τ) ← alloc_global Γn Γ m Δg Δl x cτ None;
@@ -538,7 +538,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
        "while loop with conditional expression of non-base type";
      '(m,Δg,s,cmσ) ← go m Δg Δl cs;
      inr (m, Δg,
-       breakto (loop (if{e} skip else break 0 ;; breakto s)),
+       catch (loop (if{e} skip else break 0 ;; catch s)),
        (false, cmσ.2))
   | CSFor ce1 ce2 ce3 cs =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ m Δg Δl ce1;
@@ -549,8 +549,8 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      '(m,Δg,s,cmσ) ← go m Δg Δl cs;
      inr (m, Δg,
        !(cast{voidT} e1) ;;
-       breakto (loop (
-         if{e2} skip else break 0 ;; breakto s ;; !(cast{voidT} e3)
+       catch (loop (
+         if{e2} skip else break 0 ;; catch s ;; !(cast{voidT} e3)
        )),
        (false, cmσ.2))
   | CSDoWhile cs ce =>
@@ -559,7 +559,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      _ ← error_of_option (maybe_TBase τ)
        "do-while loop with conditional expression of non-base type";
      inr (m, Δg,
-       breakto (loop (breakto s ;; if{e} skip else break 0)),
+       catch (loop (catch s ;; if{e} skip else break 0)),
        (false, cmσ.2))
   | CSIf ce cs1 cs2 =>
      '(e,τ) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
@@ -1265,7 +1265,7 @@ Proof.
     | _ => case_match
     end; try by (split_ands; eauto using to_R_typed,
       to_expr_typed, lockset_empty_valid).
-  * split_ands; eauto 2. eapply SBlock_typed; eauto 2.
+  * split_ands; eauto 2. eapply SLocal_typed; eauto 2.
     repeat typed_constructor; eauto using expr_typed_weaken, subseteq_empty.
     by constructor.
   * split_ands; eauto using stmt_typed_weaken.

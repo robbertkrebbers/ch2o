@@ -131,14 +131,14 @@ Global Instance stmt_type_check: TypeCheck envs (rettype Ti) (stmt Ti) :=
   | goto _ | break _ => Some (true,None)
   | ret e => τ ← type_check Γs e ≫= maybe_inr; Some (true,Some τ)
   | label _ => Some (false,None)
-  | block{τ} s =>
+  | local{τ} s =>
      guard (✓{Γ} τ); guard (int_typed (size_of Γ τ) sptrT);
      type_check (Γ,Γf,Γm,τ :: τs) s
   | s1 ;; s2 =>
      '(c1,mσ1) ← type_check Γs s1;
      '(c2,mσ2) ← type_check Γs s2;
      mσ ← rettype_union mσ1 mσ2; Some (c2,mσ)
-  | breakto s => '(c,mσ) ← type_check Γs s; Some (false,mσ)
+  | catch s => '(c,mσ) ← type_check Γs s; Some (false,mσ)
   | loop s => '(_,mσ) ← type_check Γs s; Some (true,mσ)
   | if{e} s1 else s2 =>
      τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
@@ -155,7 +155,7 @@ Global Instance sctx_item_lookup :
   | s1 ;; □, (c2,mσ2) =>
      '(c1,mσ1) ← type_check Γs s1;
      mσ ← rettype_union mσ1 mσ2; Some (c2,mσ)
-  | breakto □, (c,mσ) => Some (false,mσ)
+  | catch □, (c,mσ) => Some (false,mσ)
   | loop □, (c,mσ) => Some (true,mσ)
   | if{e} □ else s2, (c1,mσ1) =>
      τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
@@ -189,7 +189,7 @@ Global Instance ctx_item_lookup :
   let '(Γ,Γf,Γm,τs) := Γs in
   match Ek, τlr with
   | CStmt Es, Stmt_type cmσ1 => Stmt_type <$> cmσ1 !!{Γs} Es
-  | CBlock o τ, Stmt_type cmσ => guard (Γm ⊢ o : τ); Some (Stmt_type cmσ)
+  | CLocal o τ, Stmt_type cmσ => guard (Γm ⊢ o : τ); Some (Stmt_type cmσ)
   | CExpr e Ee, Expr_type τ =>
      τ' ← type_check Γs e ≫= maybe_inr;
      guard (τ = τ'); Stmt_type <$> τ !!{Γs} Ee

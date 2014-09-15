@@ -90,20 +90,20 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
     | if{e} s1 else s2 =>
        {[ State (CExpr e (if{□} s1 else s2) :: k) (Expr e) m ]}
     | s1 ;; s2 => {[ State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m ]}
-    | breakto s => {[ State (CStmt (breakto □) :: k) (Stmt ↘ s) m ]}
-    | block{τ} s =>
+    | catch s => {[ State (CStmt (catch □) :: k) (Stmt ↘ s) m ]}
+    | local{τ} s =>
        let o := fresh (dom indexset m) in
-       {[ State (CBlock o τ :: k) (Stmt ↘ s)
+       {[ State (CLocal o τ :: k) (Stmt ↘ s)
             (mem_alloc Γ o false τ m) ]}
     end
   | Stmt ↗ s =>
     match k with
-    | CBlock o τ :: k =>
-       {[ State k (Stmt ↗ (block{τ} s)) (mem_free o m) ]}
+    | CLocal o τ :: k =>
+       {[ State k (Stmt ↗ (local{τ} s)) (mem_free o m) ]}
     | CStmt (□ ;; s2) :: k =>
        {[ State (CStmt (s ;; □) :: k) (Stmt ↘ s2) m ]}
     | CStmt (s1 ;; □) :: k => {[ State k (Stmt ↗ (s1 ;; s)) m ]}
-    | CStmt (breakto □) :: k => {[ State k (Stmt ↗ (breakto s)) m ]}
+    | CStmt (catch □) :: k => {[ State k (Stmt ↗ (catch s)) m ]}
     | CStmt (loop □) :: k => {[ State k (Stmt ↘ (loop s)) m ]}
     | CStmt (if{e} □ else s2) :: k =>
        {[ State k (Stmt ↗ (if{e} s else s2)) m ]}
@@ -117,7 +117,7 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
     match k with
     | CParams f oτs :: k =>
        {[ State k (Return f v) (foldr mem_free m (fst <$> oτs)) ]}
-    | CBlock o τ :: k => {[ State k (Stmt (⇈ v) (block{τ} s)) (mem_free o m) ]}
+    | CLocal o τ :: k => {[ State k (Stmt (⇈ v) (local{τ} s)) (mem_free o m) ]}
     | CStmt E :: k => {[ State k (Stmt (⇈ v) (subst E s)) m ]}
     | _ => ∅
     end
@@ -125,11 +125,11 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
     if decide (l ∈ labels s) then
       match s with
       | label l' => {[ State k (Stmt ↗ s) m ]}
-      | block{τ} s =>
+      | local{τ} s =>
          let o := fresh (dom indexset m) in
-         {[ State (CBlock o τ :: k) (Stmt (↷ l) s)
+         {[ State (CLocal o τ :: k) (Stmt (↷ l) s)
              (mem_alloc Γ o false τ m) ]}
-      | breakto s => {[ State (CStmt (breakto □) :: k) (Stmt (↷ l) s) m ]}
+      | catch s => {[ State (CStmt (catch □) :: k) (Stmt (↷ l) s) m ]}
       | s1 ;; s2 =>
          (guard (l ∈ labels s1);
             {[ State (CStmt (□ ;; s2) :: k) (Stmt (↷ l) s1) m ]})
@@ -145,18 +145,18 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
       end
     else
       match k with
-      | CBlock o τ :: k => {[ State k (Stmt (↷ l) (block{τ} s)) (mem_free o m) ]}
+      | CLocal o τ :: k => {[ State k (Stmt (↷ l) (local{τ} s)) (mem_free o m) ]}
       | CStmt Es :: k => {[ State k (Stmt (↷ l) (subst Es s)) m ]}
       | _ => ∅
       end
   | Stmt (↑ n) s =>
     match k with
-    | CBlock o τ :: k => {[ State k (Stmt (↑ n) (block{τ} s)) (mem_free o m) ]}
+    | CLocal o τ :: k => {[ State k (Stmt (↑ n) (local{τ} s)) (mem_free o m) ]}
     | CStmt Es :: k =>
-       if decide (Es = breakto □) then
+       if decide (Es = catch □) then
          match n with
-         | 0 => {[ State k (Stmt ↗ (breakto s)) m ]}
-         | S n => {[ State k (Stmt (↑ n) (breakto s)) m ]}
+         | 0 => {[ State k (Stmt ↗ (catch s)) m ]}
+         | S n => {[ State k (Stmt (↑ n) (catch s)) m ]}
          end
        else {[ State k (Stmt (↑ n) (subst Es s)) m ]}
     | _ => ∅
