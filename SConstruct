@@ -27,12 +27,13 @@ for v in vs:
     'utils/coq2html -o '+h+' '+glo+' '+v)
 
 # Parser
-main = env.Command('Main.native', '', 'ocamlbuild -j 2 -libs nums\
+main = env.Command(['ch2o','ch2o.byte'], '', 'ocamlbuild -j 2 -libs nums\
   -pp \'grep -v "^#"\' -I parser parser/Main.native parser/Main.byte &&\
   mv Main.native ch2o && mv Main.byte ch2o.byte')
 env.Clean('extraction.vo', 'parser/Extracted.ml')
 env.Clean('extraction.vo', 'parser/Extracted.mli')
 env.Depends(main, 'extraction.vo')
+env.Clean(main, '_build')
 
 # Coqidescript
 env.CoqIdeScript('coqidescript', [], COQFLAGS='-R . ""')
