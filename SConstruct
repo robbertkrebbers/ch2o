@@ -30,6 +30,7 @@ for v in vs:
 main = env.Command(['ch2o','ch2o.byte'], '', 'ocamlbuild -j 2 -libs nums\
   -pp \'grep -v "^#"\' -I parser parser/Main.native parser/Main.byte &&\
   mv Main.native ch2o && mv Main.byte ch2o.byte')
+AlwaysBuild(main)
 env.Clean('extraction.vo', 'parser/Extracted.ml')
 env.Clean('extraction.vo', 'parser/Extracted.mli')
 env.Depends(main, 'extraction.vo')
