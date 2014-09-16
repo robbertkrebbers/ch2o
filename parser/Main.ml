@@ -157,12 +157,6 @@ let time f x =
         (string_of_float(finish_time -. start_time))^": \n");
       raise e;;
 
-let index x l =
-  let rec index' n l =
-    if l = [] then raise Not_found else
-    if x = List.hd l then n else index' (n + 1) (List.tl l) in
-  index' 0 l;;
-
 let uniq l =
   let rec uniq' l k =
     match l with
