@@ -395,12 +395,11 @@ Inductive focus_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs : list (type Ti))
      E1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} E2 : τlr ↣ inr τ →
      focus_refine' Γ Γf τs f Γm1 Γm2
        (Undef (UndefExpr E1 e1)) (Undef (UndefExpr E2 e2)) (Expr_type τ)
-  | UndefBranch_refine e1 e2 Es1 Es2 Ω1 Ω2 v1 v2 τ mσ :
+  | UndefBranch_refine Es1 Es2 Ω1 Ω2 v1 v2 τ mσ :
      v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ →
-     e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inr τ →
      Es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Es2 : τ ↣ mσ → Ω1 ⊑{Γ,f@Γm1↦Γm2} Ω2 →
-     focus_refine' Γ Γf τs f Γm1 Γm2 (Undef (UndefBranch e1 Es1 Ω1 v1))
-       (Undef (UndefBranch e2 Es2 Ω2 v2)) (Stmt_type mσ).
+     focus_refine' Γ Γf τs f Γm1 Γm2 (Undef (UndefBranch Es1 Ω1 v1))
+       (Undef (UndefBranch Es2 Ω2 v2)) (Stmt_type mσ).
 Global Instance focus_refine:
   RefineT Ti (env Ti * funtypes Ti * list (type Ti))
     (focustype Ti) (focus Ti) := curry3 focus_refine'.
@@ -974,8 +973,8 @@ Lemma focus_refine_compose Γ Γf τs f g Γm1 Γm2 Γm3 φ1 φ2 φ3 τf τf' :
   φ2 ⊑{(Γ,Γf,τs),g@Γm2↦Γm3} φ3 : τf' →
   φ1 ⊑{(Γ,Γf,τs),f ◎ g@Γm1↦Γm3} φ3 : τf.
 Proof.
-  destruct 2 as [| | | |E1 E2 e1 e2 τlr τ|e1 e2 Es1 Es2 ?? v1 v2 τ mτ];
-    inversion 1 as [| | | |? E3 ? e3 τlr' τ'|? e3 ? Es3 ?? ? v3 τ' mτ'];
+  destruct 2 as [| | | |E1 E2 e1 e2 τlr τ|e1 e2 Es1 Es2 v1 v2 τ mτ];
+    inversion 1 as [| | | |? E3 ? e3 τlr' τ'|? e3 ? Es3 ? v3 τ' mτ'];
     simplify_equality'.
   * refine_constructor;
       eauto using stmt_refine_compose, direction_refine_compose.

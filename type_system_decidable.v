@@ -226,11 +226,8 @@ Global Instance focus_type_check:
      guard ((σ : type Ti) = σ'); Some (Fun_type f)
   | Undef (UndefExpr E e) =>
      Expr_type <$> (type_check Γs e ≫= lookupE Γs E) ≫= maybe_inr
-  | Undef (UndefBranch e Es Ω v) =>
-     guard (✓{Γm} Ω);
-     τ ← type_check (Γ,Γm) v;
-     τ' ← type_check Γs e ≫= maybe_inr;
-     guard ((τ : type Ti) = τ'); Stmt_type <$> τ !!{Γs} Es
+  | Undef (UndefBranch Es Ω v) =>
+     guard (✓{Γm} Ω); τ ← type_check (Γ,Γm) v; Stmt_type <$> τ !!{Γs} Es
   end.
 End deciders.
 

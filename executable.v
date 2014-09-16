@@ -185,7 +185,7 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
         | inleft (right _) =>
            {[State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)]}
         | inright _ =>
-           {[ State k (Undef (UndefBranch e (if{□} s1 else s2) Ω v)) m ]}
+           {[ State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m ]}
          end
       | _ => ∅
       end

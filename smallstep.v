@@ -149,7 +149,7 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
   | cstep_expr_if_indet m k e Ω v s1 s2 :
      ¬val_true m v → ¬val_false v →
      Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
-             State k (Undef (UndefBranch e (if{□} s1 else s2) Ω v)) m
+             State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m
 
   (**i For compound statements: *)
   | cstep_in_comp m k s1 s2 :
@@ -297,7 +297,7 @@ Section inversion.
        (∀ Ω v k' e' s1 s2,
          e = (#{Ω} v)%E → ¬val_true m v → ¬val_false v →
          k = CExpr e' (if{□} s1 else s2) :: k' →
-         P (State k' (Undef (UndefBranch e' (if{□} s1 else s2) Ω v)) m)) →
+         P (State k' (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m)) →
        (∀ (E : ectx Ti) e1 e2 m2,
          e = subst E e1 → Γ\ get_stack k ⊢ₕ e1, m ⇒ e2, m2 →
          P (State k (Expr (subst E e2)) m2)) →
@@ -411,7 +411,7 @@ Section inversion.
       (val_false v →
         P (State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m))) →
       (¬val_true m v → ¬val_false v →
-        P (State k (Undef (UndefBranch e (if{□} s1 else s2) Ω v)) m)) → P S2
+        P (State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m)) → P S2
     | _ => P S2
     end.
   Proof.

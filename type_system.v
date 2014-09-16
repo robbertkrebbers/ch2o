@@ -339,10 +339,9 @@ Inductive focus_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
   | UndefExpr_typed E e τlr τ :
      (Γ,Γf,Γm,τs) ⊢ e : τlr → (Γ,Γf,Γm,τs) ⊢ E : τlr ↣ inr τ →
      focus_typed' Γ Γf Γm τs (Undef (UndefExpr E e)) (Expr_type τ)
-  | UndefBranch_typed e Es Ω v τ mσ :
-     ✓{Γm} Ω → (Γ,Γm) ⊢ v : τ →
-     (Γ,Γf,Γm,τs) ⊢ e : inr τ → (Γ,Γf,Γm,τs) ⊢ Es : τ ↣ mσ →
-     focus_typed' Γ Γf Γm τs (Undef (UndefBranch e Es Ω v)) (Stmt_type mσ).
+  | UndefBranch_typed Es Ω v τ mσ :
+     ✓{Γm} Ω → (Γ,Γm) ⊢ v : τ → (Γ,Γf,Γm,τs) ⊢ Es : τ ↣ mσ →
+     focus_typed' Γ Γf Γm τs (Undef (UndefBranch Es Ω v)) (Stmt_type mσ).
 Global Instance focus_typed:
   Typed envs (focustype Ti) (focus Ti) := curry4 focus_typed'.
 
