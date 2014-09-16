@@ -174,7 +174,7 @@ let uchar = {csign = Some Unsigned; crank = CCharRank};;
 let int_signed = {csign = Some Signed; crank = CIntRank};;
 let ctint_signed = CTInt int_signed;;
 
-let econst n = CEConst (Signed,nat_of_int 0,z_of_num n);;
+let econst n = CEConst (int_signed, z_of_num n);;
 let econst0 = econst (Int 0);;
 let econst1 = econst (Int 1);;
 
@@ -258,12 +258,14 @@ let name_of s = if s <> "" then s else
   the_anon := !the_anon + 1; s;;
 
 let const_of_string s =
-  let rec go n sign longs =
+  let rec go n sign rank =
     match String.get s (n - 1) with
-    | 'u' | 'U' when sign = Signed -> go (n - 1) Unsigned longs
-    | 'l' | 'L' -> go (n - 1) sign (longs + 1)
-    | _ -> (sign, nat_of_int longs, num_of_string (String.sub s 0 n)) in
-  go (String.length s) Signed 0;;
+    | 'u' | 'U' when sign = Signed -> go (n - 1) Unsigned rank
+    | 'l' | 'L' when rank = CIntRank -> go (n - 1) sign CLongRank
+    | 'l' | 'L' when rank = CLongRank -> go (n - 1) sign CLongLongRank
+    | _ ->
+        ({csign = Some sign; crank = rank},num_of_string (String.sub s 0 n)) in
+  go (String.length s) Signed CIntRank;;
 
 let rec add_compound k0 n l =
    let k = CompoundDecl (k0,
@@ -277,11 +279,6 @@ let rec add_compound k0 n l =
    with Not_found -> the_compound_decls := !the_compound_decls@[(n,k)]
 
 and ctype_of_specifier x =
-  let longrank x =
-    match x with
-    | None -> -1
-    | Some (CLongRank n) -> int_of_nat n
-    | _ -> failwith "longrank" in
   let rec cint_of_specifier has_int sign rank x =
     match x with
     | [] -> {csign = sign;
@@ -296,9 +293,10 @@ and ctype_of_specifier x =
         cint_of_specifier has_int sign (Some CShortRank) y
     | Cabs.SpecType Cabs.Tint::y when not has_int && rank <> Some CCharRank ->
         cint_of_specifier true sign rank y
-    | Cabs.SpecType Cabs.Tlong::y ->
-        cint_of_specifier has_int sign
-          (Some (CLongRank (nat_of_int (longrank rank + 1)))) y
+    | Cabs.SpecType Cabs.Tlong::y when rank = None->
+        cint_of_specifier has_int sign (Some CLongRank) y
+    | Cabs.SpecType Cabs.Tlong::y when rank = Some CLongRank ->
+        cint_of_specifier has_int sign (Some CLongLongRank) y
     | _ -> failwith "cint_of_specifier" in
   match x with
   | [Cabs.SpecType Cabs.Tvoid] -> CTVoid
@@ -356,7 +354,7 @@ and ctype_of_specifier_decl_type x y =
 and cexpr_of_expression x =
   match x with
   | Cabs.CONSTANT (Cabs.CONST_INT s) ->
-     let s,ls,n = const_of_string s in CEConst (s,ls,z_of_num n)
+     let t,n = const_of_string s in CEConst (t,z_of_num n)
   | Cabs.VARIABLE "NULL" -> CECast (CTPtr CTVoid,econst0)
   | Cabs.VARIABLE "CHAR_BIT" -> CEBits uchar
   | Cabs.VARIABLE "CHAR_MIN" -> CEMin {csign = None; crank = CCharRank}
@@ -370,18 +368,12 @@ and cexpr_of_expression x =
   | Cabs.VARIABLE "INT_MIN" -> CEMin {csign = Some Signed; crank = CIntRank}
   | Cabs.VARIABLE "INT_MAX" -> CEMax {csign = Some Signed; crank = CIntRank}
   | Cabs.VARIABLE "UINT_MAX" -> CEMax {csign = Some Unsigned; crank = CIntRank}
-  | Cabs.VARIABLE "LONG_MIN" ->
-     CEMin {csign = Some Signed; crank = CLongRank (nat_of_int 0)}
-  | Cabs.VARIABLE "LONG_MAX" ->
-     CEMax {csign = Some Signed; crank = CLongRank (nat_of_int 0)}
-  | Cabs.VARIABLE "ULONG_MAX" ->
-     CEMax {csign = Some Unsigned; crank = CLongRank (nat_of_int 0)}
-  | Cabs.VARIABLE "LLONG_MIN" ->
-     CEMin {csign = Some Signed; crank = CLongRank (nat_of_int 1)}
-  | Cabs.VARIABLE "LLONG_MAX" ->
-     CEMax {csign = Some Signed; crank = CLongRank (nat_of_int 1)}
-  | Cabs.VARIABLE "ULLONG_MAX" ->
-     CEMax {csign = Some Unsigned; crank = CLongRank (nat_of_int 1)}
+  | Cabs.VARIABLE "LONG_MIN" -> CEMin {csign = Some Signed; crank = CLongRank}
+  | Cabs.VARIABLE "LONG_MAX" -> CEMax {csign = Some Signed; crank = CLongRank}
+  | Cabs.VARIABLE "ULONG_MAX" -> CEMax {csign = Some Unsigned; crank = CLongRank}
+  | Cabs.VARIABLE "LLONG_MIN" -> CEMin {csign = Some Signed; crank = CLongLongRank}
+  | Cabs.VARIABLE "LLONG_MAX" -> CEMax {csign = Some Signed; crank = CLongLongRank}
+  | Cabs.VARIABLE "ULLONG_MAX" -> CEMax {csign = Some Unsigned; crank = CLongLongRank}
   | Cabs.VARIABLE s -> CEVar (chars_of_string s)
   | Cabs.UNARY (Cabs.MEMOF,y) ->
       CEDeref (cexpr_of_expression y)

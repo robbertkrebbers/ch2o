@@ -8,7 +8,8 @@ Definition x86 := {|
   char_signedness := Signed;
   short_bytes_log2 := 1;
   int_bytes_log2 := 2;
-  long_bytes_log2 n := 2 + n;
+  long_bytes_log2 := 2;
+  longlong_bytes_log2 := 3;
   ptr_bytes_log2 := 2;
   align_minus n := n - 2
 |}.
@@ -19,7 +20,8 @@ Definition x86_64 := {|
   char_signedness := Signed;
   short_bytes_log2 := 1;
   int_bytes_log2 := 2;
-  long_bytes_log2 n := 2 + n;
+  long_bytes_log2 := 2;
+  longlong_bytes_log2 := 3;
   ptr_bytes_log2 := 3;
   align_minus n := n - 3
 |}.

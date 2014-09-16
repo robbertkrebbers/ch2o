@@ -9,7 +9,8 @@ Record architecture := Architecture {
   char_signedness : signedness;
   short_bytes_log2 : nat;
   int_bytes_log2 : nat;
-  long_bytes_log2 : nat → nat;
+  long_bytes_log2 : nat;
+  longlong_bytes_log2 : nat;
   ptr_bytes_log2 : nat;
   align_minus : nat → nat
 }.
@@ -27,7 +28,8 @@ Instance: IntCoding (irank A) := {
   char_signedness := char_signedness A;
   short_rank := IKind A (short_bytes_log2 A);
   int_rank := IKind A (int_bytes_log2 A);
-  long_rank n := IKind A (long_bytes_log2 A n);
+  long_rank := IKind A (long_bytes_log2 A);
+  longlong_rank := IKind A (longlong_bytes_log2 A);
   ptr_rank := IKind A (ptr_bytes_log2 A);
   char_bits := char_bits_minus8 A + 8;
   rank_size := λ k, 2 ^ ibytes_log2 k;

@@ -8,13 +8,13 @@ Local Open Scope ctype_scope.
 Local Open Scope list_scope.
 
 Inductive cint_rank : Set :=
-  | CCharRank | CShortRank | CIntRank | CLongRank : nat → cint_rank | CPtrRank.
+  | CCharRank | CShortRank | CIntRank | CLongRank | CLongLongRank |CPtrRank.
 Inductive cint_type :=
   CIntType { csign : option signedness; crank : cint_rank }.
 
 Inductive cexpr : Set :=
   | CEVar : string → cexpr
-  | CEConst : signedness → nat → Z → cexpr
+  | CEConst : cint_type → Z → cexpr
   | CESizeOf : ctype → cexpr
   | CEMin : cint_type → cexpr
   | CEMax : cint_type → cexpr
@@ -224,11 +224,13 @@ Definition to_binop_expr (op : binop)
     σ ← binop_type_of (CompOp EqOp) τ τ;
     Some (e1 @{op} e2, inr σ)).
 
-Definition int_const_types (s : signedness) (n : nat) : list (int_type Ti) :=
-  match n with
-  | 0 => [IntType s int_rank; IntType s (long_rank 0); IntType s (long_rank 1)]
-  | 1 => [IntType s (long_rank 0); IntType s (long_rank 1)]
-  | S n => [IntType s (long_rank n)]
+Definition int_const_types (cτi : cint_type) : list (int_type Ti) :=
+  let (ms,k) := cτi in
+  let s := from_option Signed ms in
+  match k with
+  | CLongLongRank => [IntType s longlong_rank]
+  | CLongRank => [IntType s long_rank; IntType s longlong_rank]
+  | _ => [IntType s int_rank; IntType s long_rank; IntType s longlong_rank]
   end.
 Definition to_int_const (x : Z) : list (int_type Ti) → option (int_type Ti) :=
   fix go τis :=
@@ -236,14 +238,14 @@ Definition to_int_const (x : Z) : list (int_type Ti) → option (int_type Ti) :=
   | [] => None
   | τi :: τis => if decide (int_typed x τi) then Some τi else go τis
   end.
-
 Definition to_inttype (cτi : cint_type) : int_type Ti :=
   let (ms,k) := cτi in
   match k with
   | CCharRank => IntType (from_option char_signedness ms) char_rank
   | CShortRank => IntType (from_option Signed ms) short_rank
   | CIntRank => IntType (from_option Signed ms) int_rank
-  | CLongRank n => IntType (from_option Signed ms) (long_rank n)
+  | CLongRank => IntType (from_option Signed ms) long_rank
+  | CLongLongRank => IntType (from_option Signed ms) longlong_rank
   | CPtrRank => IntType (from_option Signed ms) ptr_rank
   end.
 End frontend.
@@ -259,11 +261,10 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
   match ce with
   | CEVar x => error_of_option (lookup_var' x Δg Δl)
       ("variable `" +:+ x +:+ "` not found")
-  | CEConst s longs x =>
-     let cτis := int_const_types s longs in
-     τi ← error_of_option (to_int_const x cτis)
-       ("integer constant " +:+ pretty x +:+ " too large");
-     inr (# (intV{τi} x), inr (intT τi))
+  | CEConst cτi z =>
+     τi ← error_of_option (to_int_const z (int_const_types cτi))
+       ("integer constant " +:+ pretty z +:+ " too large");
+     inr (# (intV{τi} z), inr (intT τi))
   | CESizeOf cτ =>
      τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
      let sz := size_of Γ τ in
@@ -714,7 +715,7 @@ End frontend_more.
 Section cexpr_ind.
 Context (P : cexpr → Prop) (Q : ctype → Prop).
 Context (Pvar : ∀ x, P (CEVar x)).
-Context (Pconst : ∀ s n x, P (CEConst s n x)).
+Context (Pconst : ∀ τi x, P (CEConst τi x)).
 Context (Psizeof : ∀ cτ, Q cτ → P (CESizeOf cτ)).
 Context (Pmin : ∀ τi, P (CEMin τi)).
 Context (Pmax : ∀ τi, P (CEMax τi)).
@@ -745,7 +746,7 @@ Context (Qtypeof : ∀ ce, P ce → Q (CTTypeOf ce)).
 Fixpoint cexpr_ind_alt ce : P ce :=
   match ce return P ce with
   | CEVar _ => Pvar _
-  | CEConst _ _ _ => Pconst _ _ _
+  | CEConst _ _ => Pconst _ _
   | CESizeOf cτ => Psizeof _ (ctype_ind_alt cτ)
   | CEMin _ => Pmin _
   | CEMax _ => Pmax _

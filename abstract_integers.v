@@ -91,7 +91,8 @@ Class IntCoding (Ti : Set) := {
   char_signedness : signedness;
   short_rank : Ti;
   int_rank : Ti;
-  long_rank : nat → Ti;
+  long_rank : Ti;
+  longlong_rank : Ti;
   ptr_rank : Ti;
   char_bits : nat;
   rank_size : Ti → nat;
@@ -104,7 +105,8 @@ Arguments char_rank _ _ : simpl never.
 Arguments char_signedness _ _ : simpl never.
 Arguments short_rank _ _ : simpl never.
 Arguments int_rank _ _ : simpl never.
-Arguments long_rank _ _ _ : simpl never.
+Arguments long_rank _ _ : simpl never.
+Arguments longlong_rank _ _ : simpl never.
 Arguments ptr_rank _ _ : simpl never.
 Arguments char_bits _ _ : simpl never.
 Arguments rank_size _ _ _ : simpl never.
