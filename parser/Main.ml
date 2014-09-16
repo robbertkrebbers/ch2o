@@ -272,6 +272,19 @@ let const_of_string s =
         ({csign = Some sign; crank = rank},num_of_string (String.sub s 0 n)) in
   go (String.length s) Signed CIntRank;;
 
+let rec split_storage t =
+  let rec ensure_no_storage t =
+    match t with
+    | [] -> []
+    | Cabs.SpecStorage _::t -> failwith "split_storage"
+    | h :: t -> h :: ensure_no_storage t in
+  match t with
+  | [] -> (AutoStorage,[])
+  | Cabs.SpecStorage Cabs.AUTO::t -> AutoStorage,ensure_no_storage t
+  | Cabs.SpecStorage Cabs.STATIC::t -> StaticStorage,ensure_no_storage t
+  | Cabs.SpecStorage Cabs.EXTERN::t -> ExternStorage,ensure_no_storage t
+  | h :: t -> let (sto,t) = split_storage t in sto,h::t
+
 let rec add_compound k0 n l =
    let k = CompoundDecl (k0,
      List.flatten (List.map (fun (t,l') -> List.map (fun f ->
@@ -518,13 +531,6 @@ let rec cstmt_of_statements l =
   | Cabs.BLOCK ({Cabs.bstmts = y},_)::l' ->
       cscomp (CSScope (cstmt_of_statements y)) (cstmt_of_statements l')
   | Cabs.DEFINITION (Cabs.DECDEF ((t,l),_))::l' ->
-      let rec split_storage t =
-        match t with
-        | [] -> (AutoStorage,[])
-        | Cabs.SpecStorage Cabs.AUTO::t -> AutoStorage,t
-        | Cabs.SpecStorage Cabs.STATIC::t -> StaticStorage,t
-        | Cabs.SpecStorage Cabs.EXTERN::t -> ExternStorage,t
-        | h :: t -> let (sto,t) = split_storage t in sto,h::t in
       let (sto,t) = split_storage t in fold_defs sto t l l'
   | Cabs.COMPUTATION (y,_)::l' ->
       cscomp (CSDo (cexpr_of_expression y))
@@ -601,8 +607,8 @@ let rec return_of_decl_type t x =
 
 let decls_of_definition x =
   match x with
-  | Cabs.DECDEF (((Cabs.SpecStorage Cabs.EXTERN::_),_),_) -> []
   | Cabs.DECDEF ((t,l),_) ->
+      let (_,t) = split_storage t in
       List.map (fun z ->
         match z with
         | ((s,t',[],_),z) ->
@@ -613,9 +619,9 @@ let decls_of_definition x =
                  GlobDecl (ctype_of_specifier_decl_type t t',
                    decl_of_init_expression z)))
         | _ -> raise (Unknown_definition x)) l
-  | Cabs.FUNDEF (((Cabs.SpecStorage Cabs.EXTERN::_),_),_,_,_) -> []
   | Cabs.FUNDEF ((t,(s,t',[],_)),
         {Cabs.bstmts = l},_,_) ->
+      let (_,t) = split_storage t in
       let t = if s = "main" && t = [] then [Cabs.SpecType Cabs.Tint] else t in
       let b = cstmt_of_statements l in
       let b = if s = "main" && no_int_return b then
