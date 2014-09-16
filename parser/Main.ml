@@ -76,6 +76,22 @@ let num_of_z i =
   match i with Z0 -> Int 0 | Zpos n' -> num_of_positive n'
     | Zneg n' -> minus_num (num_of_positive n');;
 
+let string_of_chars l =
+  let s = String.make (List.length l) ' ' in
+  let rec init n l =
+    match l with
+    | [] -> ()
+    | x::l' -> String.set s n x; init (n + 1) l' in
+  init 0 l; s;;
+
+let chars_of_string s =
+  let l = String.length s in
+  let rec chars n =
+    if n < l then String.get s n::chars (n + 1) else [] in
+  chars 0;;
+
+let chars_of_int n = chars_of_string (string_of_int n)
+
 let pp_print_nat fmt x =
   pp_open_box fmt 2;
  (match num_of_nat x with
@@ -112,10 +128,21 @@ let pp_print_z fmt x =
       pp_print_string fmt "\"))"));
   pp_close_box fmt ();;
 
+let pp_print_chars fmt l =
+  pp_open_box fmt 2;
+  pp_print_string fmt "(chars_of_string";
+  pp_print_space fmt ();
+  pp_print_string fmt "\"";
+  pp_print_string fmt (string_of_chars l);
+  pp_print_string fmt "\")";
+  pp_close_box fmt ();;
+
 let print_nat = pp_print_nat std_formatter;;
 #install_printer print_nat;;
 let print_z = pp_print_z std_formatter;;
 #install_printer print_z;;
+let print_chars = pp_print_chars std_formatter;;
+#install_printer print_chars;;
 
 let time f x =
   let start_time = Sys.time() in
@@ -142,22 +169,6 @@ let uniq l =
     | [] -> k
     | x::l' -> uniq' l' (if List.mem x k then k else x::k) in
   List.rev (uniq' l []);;
-
-let string_of_chars l =
-  let s = String.make (List.length l) ' ' in
-  let rec init n l =
-    match l with
-    | [] -> ()
-    | x::l' -> String.set s n x; init (n + 1) l' in
-  init 0 l; s;;
-
-let chars_of_string s =
-  let l = String.length s in
-  let rec chars n =
-    if n < l then String.get s n::chars (n + 1) else [] in
-  chars 0;;
-
-let chars_of_int n = chars_of_string (string_of_int n)
 
 exception Unknown_expression of Cabs.expression;;
 exception Unknown_statement of Cabs.statement;;
