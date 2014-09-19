@@ -45,6 +45,8 @@ Inductive expr_refine' (Γ : env Ti) (Γf : funtypes Ti)
      Γf !! g = Some (σs,σ) →
      Forall3 (expr_refine' Γ Γf τs f Γm1 Γm2) es1 es2 (inr <$> σs) →
      expr_refine' Γ Γf τs f Γm1 Γm2 (call g @ es1) (call g @ es2) (inr σ)
+  | EAbort_refine τ :
+     ✓{Γ} τ → expr_refine' Γ Γf τs f Γm1 Γm2 (abort τ) (abort τ) (inr τ)
   | ELoad_refine e1 e2 τ :
      expr_refine' Γ Γf τs f Γm1 Γm2 e1 e2 (inl τ) →
      expr_refine' Γ Γf τs f Γm1 Γm2 (load e1) (load e2) (inr τ)
@@ -119,6 +121,7 @@ Section expr_refine_ind.
     Γf !! g = Some (σs,σ) →
     es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2}* es2 :* inr <$> σs →
     Forall3 P es1 es2 (inr <$> σs) → P (call g @ es1) (call g @ es2) (inr σ)).
+  Context (Pabort : ∀ τ, ✓{Γ} τ → P (abort τ) (abort τ) (inr τ)).
   Context (Pload : ∀ e1 e2 τ,
     e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inl τ →
     P e1 e2 (inl τ) → P (load e1) (load e2) (inr τ)).

@@ -79,6 +79,7 @@ Inductive expr (Ti : Set) : Set :=
   | ERofL : expr Ti → expr Ti
   | EAssign : assign → expr Ti → expr Ti → expr Ti
   | ECall : funname → list (expr Ti) → expr Ti
+  | EAbort : type Ti → expr Ti
   | ELoad : expr Ti → expr Ti
   | EEltL : expr Ti → ref_seg Ti → expr Ti
   | EEltR : expr Ti → ref_seg Ti → expr Ti
@@ -107,6 +108,7 @@ Arguments ERtoL {_} _%expr_scope.
 Arguments ERofL {_} _%expr_scope.
 Arguments EAssign {_} _ _%expr_scope _%expr_scope.
 Arguments ECall {_} _%string _%expr_scope.
+Arguments EAbort {_} _.
 Arguments ELoad {_} _%expr_scope.
 Arguments EEltL {_} _%expr_scope _.
 Arguments EEltR {_} _%expr_scope _.
@@ -138,6 +140,7 @@ Notation "e1 ::={ ass } e2" := (EAssign ass e1 e2)
 Infix "::=" := (EAssign Assign) (at level 54, right associativity) : expr_scope.
 Notation "'call' f @ es" := (ECall f es)
   (at level 10, es at level 66) : expr_scope.
+Notation "'abort' τ" := (EAbort τ) (at level 10) : expr_scope.
 Notation "'load' e" := (ELoad e) (at level 10) : expr_scope.
 Notation "e %> rs" := (EEltL e rs) (at level 22) : expr_scope.
 Notation "e #> rs" := (EEltR e rs) (at level 22) : expr_scope.
@@ -201,6 +204,7 @@ Proof.
        (decide_rel (=) e3 e4)
   | call f1 @ es1, call f2 @ es2 => cast_if_and (decide_rel (=) f1 f2)
      (decide_rel (=) es1 es2)
+  | abort τ1, abort τ2 => cast_if (decide_rel (=) τ1 τ2)
   | load e1, load e2 => cast_if (decide_rel (=) e1 e2)
   | e1 %> rs1, e2 %> rs2 | e1 #> rs1, e2 #> rs2 =>
      cast_if_and (decide_rel (=) e1 e2) (decide_rel (=) rs1 rs2)
@@ -239,6 +243,7 @@ Section expr_ind.
   Context (Profl : ∀ e, P e → P (& e)).
   Context (Passign : ∀ ass e1 e2, P e1 → P e2 → P (e1 ::={ ass } e2)).
   Context (Pcall : ∀ f es, Forall P es → P (call f @ es)).
+  Context (Pabort : ∀ τ, P (abort τ)).
   Context (Pload : ∀ e, P e → P (load e)).
   Context (Peltl : ∀ e rs, P e → P (e %> rs)).
   Context (Peltr : ∀ e rs, P e → P (e #> rs)).
@@ -262,6 +267,7 @@ Section expr_ind.
     | call f @ es => Pcall f es $ list_ind (Forall P)
        (Forall_nil_2 _) (λ e _, Forall_cons_2 _ _ _ (go e)) es
     | load e => Pload _ (go e)
+    | abort _ => Pabort _
     | e %> rs => Peltl _ _ (go e)
     | e #> rs => Peltr _ _ (go e)
     | alloc{_} e => Palloc _ _ (go e)
@@ -280,7 +286,7 @@ measure can be used for well-founded induction on expressions. *)
 Instance expr_size {Ti} : Size (expr Ti) :=
   fix go e : nat := let _ : Size _ := go in
   match e with
-  | var{_} _ | #{_} _ | %{_} _ => 0
+  | var{_} _ | #{_} _ | %{_} _ | abort _ => 0
   | .* e | & e => S (size e)
   | e1 ::={_} e2 => S (size e1 + size e2)
   | call _ @ es => S (sum_list_with size es)
@@ -309,6 +315,7 @@ Inductive load_free {Ti} : expr Ti → Prop :=
   | EAssign_load_free ass e1 e2 :
      load_free e1 → load_free e2 → load_free (e1 ::={ass} e2)
   | ECall_load_free f es : Forall load_free es → load_free (call f @ es)
+  | EAbort_load_free τ : load_free (abort τ)
   | EEltL_load_free e rs : load_free e → load_free (e %> rs)
   | EEltR_load_free e rs : load_free e → load_free (e #> rs)
   | EAlloc_load_free τ e : load_free e → load_free (alloc{τ} e)
@@ -335,6 +342,7 @@ Section load_free_ind.
   Context (Passign : ∀ ass e1 e2,
     load_free e1 → P e1 → load_free e2 → P e2 → P (e1 ::={ass} e2)).
   Context (Pcall : ∀ f es, Forall load_free es → Forall P es → P (call f @ es)).
+  Context (Pabort : ∀ τ, P (abort τ)).
   Context (Peltl : ∀ e rs, load_free e → P e → P (e %> rs)).
   Context (Peltr : ∀ e rs, load_free e → P e → P (e #> rs)).
   Context (Palloc : ∀ τ e, P e → P (alloc{τ} e)).
@@ -359,7 +367,7 @@ Proof.
  refine (
   fix go e :=
   match e return Decision (load_free e) with
-  | var{_} _ | #{_} _ | %{_} _ => left _
+  | var{_} _ | #{_} _ | %{_} _ | abort _ => left _
   | .* e | & e => cast_if (decide (load_free e))
   | e1 ::={_} e2 => cast_if_and (decide (load_free e1)) (decide (load_free e2))
   | call f @ es => cast_if (decide (Forall load_free es))
@@ -379,7 +387,7 @@ Instance expr_free_vars {Ti} : Vars (expr Ti) :=
   fix go e := let _ : Vars _ := @go in
   match e with
   | var{_} n => {[ n ]}
-  | #{_} _ | %{_} _ => ∅
+  | #{_} _ | %{_} _ | abort _ => ∅
   | .* e | & e | cast{_} e => vars e
   | call _ @ es => ⋃ (vars <$> es)
   | alloc{_} e | load e | e %> _ | e #> _ | free e | @{_} e => vars e
@@ -389,7 +397,7 @@ Instance expr_free_vars {Ti} : Vars (expr Ti) :=
 Instance expr_free_funs {Ti} : Funs (expr Ti) :=
   fix go e := let _ : Funs _ := @go in
   match e with
-  | var{_} _ | #{_} _ | %{_} _ => ∅
+  | var{_} _ | #{_} _ | %{_} _ | abort _ => ∅
   | .* e | & e | cast{_} e => funs e
   | call f @ es => {[ f ]} ∪ ⋃ (funs <$> es)
   | alloc{_} e | load e | e %> _ | e #> _ | free e | @{_} e => funs e
@@ -426,7 +434,7 @@ Proof. rewrite locks_app. simpl. by rewrite (right_id_L ∅ (∪)). Qed.
 Instance expr_locks {Ti} : Locks (expr Ti) :=
   fix go e : lockset := let _ : Locks _ := @go in
   match e with
-  | var{_} _ => ∅
+  | var{_} _ | abort _ => ∅
   | #{Ω} _ | %{Ω} _ => Ω
   | .* e | & e | cast{_} e => locks e
   | call _ @ es => ⋃ (locks <$> es)
@@ -450,6 +458,7 @@ Inductive is_pure {Ti} (fs : funset) : (expr Ti) → Prop :=
   | ERtoL_pure e : is_pure fs e → is_pure fs (.* e)
   | ERofL_pure e : is_pure fs e → is_pure fs (& e)
   | ECall_pure f es : f ∈ fs → Forall (is_pure fs) es → is_pure fs (call f @ es)
+  | EAbort_pure τ : is_pure fs (abort τ)
   | EEltR_pure e rs : is_pure fs e → is_pure fs (e %> rs)
   | EEltL_pure e rs : is_pure fs e → is_pure fs (e #> rs)
   | EUnOp_pure op e : is_pure fs e → is_pure fs (@{op} e)
@@ -473,6 +482,7 @@ Section is_pure_ind.
   Context (Profl : ∀ e, is_pure fs e → P e → P (& e)).
   Context (Pcall : ∀ f es,
     f ∈ fs → Forall (is_pure fs) es → Forall P es → P (call f @ es)).
+  Context (Pabort : ∀ τ, P (abort τ)).
   Context (Peltl : ∀ e rs, is_pure fs e → P e → P (e %> rs)).
   Context (Peltr : ∀ e rs, is_pure fs e → P e → P (e #> rs)).
   Context (Punop : ∀ op e, is_pure fs e → P e → P (@{op} e)).
@@ -495,7 +505,7 @@ Proof.
  refine (
   fix go e :=
   match e return Decision (is_pure fs e) with
-  | var{_} x => left _
+  | var{_} _ | abort _ => left _
   | #{Ω} _ | %{Ω} _ => cast_if (decide (Ω = ∅))
   | .* e | & e | e %> _ | e #> _ | cast{_} e => cast_if (decide (is_pure fs e))
   | call f @ es =>
@@ -530,6 +540,7 @@ Fixpoint expr_lift {Ti} (e : expr Ti) : expr Ti :=
   | & e => & (e↑)
   | e1 ::={ass} e2 => e1↑ ::={ass} e2↑
   | call f @ es => call f @ expr_lift <$> es
+  | abort τ => abort τ
   | load e => load (e↑)
   | e %> rs => e↑ %> rs
   | e #> rs => e↑ #> rs
@@ -557,6 +568,7 @@ Inductive is_redex {Ti} : expr Ti → Prop :=
   | EAssign_redex ass e1 e2 :
      is_nf e1 → is_nf e2 → is_redex (e1 ::={ass} e2)
   | ECall_redex f es : Forall is_nf es → is_redex (call f @ es)
+  | EAbort_redex τ : is_redex (abort τ)
   | ELoad_redex e : is_nf e → is_redex (load e)
   | EEltL_redex e rs : is_nf e → is_redex (e %> rs)
   | EEltR_redex e rs : is_nf e → is_redex (e #> rs)
@@ -580,7 +592,7 @@ Instance is_redex_dec {Ti} (e : expr Ti) : Decision (is_redex e).
 Proof.
  refine
   match e with
-  | var{_} _ => left _
+  | var{_} _ | abort _ => left _
   | .* e | & e | cast{_} e | load e | e %> _ | e #> _ | alloc{_} e | free e
     | @{_} e | if{e} _ else _ | e ,, _ => cast_if (decide (is_nf e))
   | call _ @ es => cast_if (decide (Forall is_nf es))
@@ -822,6 +834,7 @@ Section ectx_expr_ind.
   Context (Pcall : ∀ E f es,
     zipped_Forall (λ esl esr, P ((call f @ esl □ esr) :: E)) [] es →
     P E (call f @ es)).
+  Context (Pabort : ∀ E τ, P E (abort τ)).
   Context (Pload : ∀ E e, P ((load □) :: E) e → P E (load e)).
   Context (Peltl : ∀ E e rs, P ((□ %> rs) :: E) e → P E (e %> rs)).
   Context (Peltr : ∀ E e rs, P ((□ #> rs) :: E) e → P E (e #> rs)).
@@ -850,6 +863,7 @@ Section ectx_expr_ind.
     | call f @ es => Pcall E f es $
        zipped_list_ind _ zipped_Forall_nil
         (λ _ _ e, @zipped_Forall_cons _ (λ _ _, P _) _ _ _ (go _ e)) [] es
+    | abort _ => Pabort _ _
     | load e => Pload _ _ (go _ e)
     | e %> rs => Peltl _ _ _ (go _ e)
     | e #> rs => Peltr _ _ _ (go _ e)
@@ -882,6 +896,7 @@ Inductive ectx_full (Ti : Set) : nat → Set :=
   | DCLtoR : ectx_full Ti 1
   | DCAssign : assign → ectx_full Ti 2
   | DCCall {n} : funname → ectx_full Ti n
+  | DCAbort : type Ti → ectx_full Ti 0
   | DCLoad : ectx_full Ti 1
   | DCEltL : ref_seg Ti → ectx_full Ti 1
   | DCEltR : ref_seg Ti → ectx_full Ti 1
@@ -901,6 +916,7 @@ Arguments DCRtoL {_}.
 Arguments DCLtoR {_}.
 Arguments DCAssign {_} _.
 Arguments DCCall {_ _} _%string.
+Arguments DCAbort {_} _.
 Arguments DCLoad {_}.
 Arguments DCEltL {_} _.
 Arguments DCEltR {_} _.
@@ -923,6 +939,7 @@ Instance ectx_full_subst {Ti} :
   | DCLtoR => λ es, & (es !!! 0)
   | DCAssign ass => λ es, es !!! 0 ::={ass} es !!! 1
   | DCCall _ f => λ es, call f @ es
+  | DCAbort τ => λ _, abort τ
   | DCLoad => λ es, load (es !!! 0)
   | DCEltL rs => λ es, es !!! 0 %> rs
   | DCEltR rs => λ es, es !!! 0 #> rs
@@ -961,7 +978,7 @@ Qed.
 Definition ectx_full_to_item {Ti n} (E : ectx_full Ti n)
     (es : vec (expr Ti) n) (i : fin n) : ectx_item Ti :=
   match E in ectx_full _ n return fin n → vec (expr Ti) n → ectx_item Ti with
-  | DCVar _ _  | DCVal _ _ | DCAddr _ _ => fin_0_inv _
+  | DCVar _ _  | DCVal _ _ | DCAddr _ _ | DCAbort _ => fin_0_inv _
   | DCRtoL => fin_S_inv _ (λ _, .* □) $ fin_0_inv _
   | DCLtoR => fin_S_inv _ (λ _, & □) $ fin_0_inv _
   | DCAssign ass =>
@@ -1037,7 +1054,7 @@ Section expr_split.
     fix go E e {struct e} :=
     if decide (is_redex e) then {[ (E, e) ]} else
     match e with
-    | var{_} x => ∅ (* impossible *)
+    | var{_} _ | abort _ => ∅ (* impossible *)
     | #{_} _ | %{_} _ => ∅
     | .* e => go (.* □ :: E) e
     | & e => go (& □ :: E) e

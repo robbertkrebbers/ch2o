@@ -67,6 +67,8 @@ Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
      Γf !! f = Some (σs,σ) →
      Forall2 (expr_typed' Γ Γf Γm τs) es (inr <$> σs) →
      expr_typed' Γ Γf Γm τs (call f @ es) (inr σ)
+  | EAbort_typed τ :
+     ✓{Γ} τ → expr_typed' Γ Γf Γm τs (abort τ) (inr τ)
   | ELoad_typed e τ :
      expr_typed' Γ Γf Γm τs e (inl τ) → expr_typed' Γ Γf Γm τs (load e) (inr τ)
   | EEltL_typed e rs τ σ  :
@@ -122,6 +124,7 @@ Section expr_typed_ind.
   Context (Pcall : ∀ f es σ σs,
     Γf !! f = Some (σs,σ) → (Γ,Γf,Γm,τs) ⊢* es :* inr <$> σs →
     Forall2 P es (inr <$> σs) → P (call f @ es) (inr σ)).
+  Context (Pabort : ∀ τ, ✓{Γ} τ → P (abort τ) (inr τ)).
   Context (Pload : ∀ e τ,
     (Γ,Γf,Γm,τs) ⊢ e : inl τ → P e (inl τ) → P (load e) (inr τ)).
   Context (Peltl : ∀ e rs τ σ,

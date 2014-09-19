@@ -467,8 +467,8 @@ and cexpr_of_expression x =
   | Cabs.CALL (Cabs.VARIABLE "malloc",[y]) ->
       let (t,y') = split_sizeof (cexpr_of_expression y) in
       CEAlloc (t,y')
-  | Cabs.CALL (Cabs.VARIABLE "free",[y]) ->
-      CEFree (cexpr_of_expression y)
+  | Cabs.CALL (Cabs.VARIABLE "free",[y]) -> CEFree (cexpr_of_expression y)
+  | Cabs.CALL (Cabs.VARIABLE "abort",[]) -> CEAbort
   | Cabs.CALL (Cabs.VARIABLE "printf",
         Cabs.CONSTANT (Cabs.CONST_STRING s)::l) ->
       let fs = "printf-"^s in

@@ -38,6 +38,7 @@ Global Instance expr_type_check: TypeCheck envs (lrtype Ti) (expr Ti) :=
      '(τs,τ) ← Γf !! f;
      τs' ← mapM (λ e, type_check Γs e ≫= maybe_inr) es;
      guard ((τs' : list (type Ti)) = τs); Some (inr τ)
+  | abort τ => guard (✓{Γ} τ); Some (inr τ)
   | load e => inr <$> type_check Γs e ≫= maybe_inl
   | e %> rs =>
      τ ← type_check Γs e ≫= maybe_inl;

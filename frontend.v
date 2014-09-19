@@ -25,6 +25,7 @@ Inductive cexpr : Set :=
   | CEDeref : cexpr → cexpr
   | CEAssign : assign → cexpr → cexpr → cexpr
   | CECall : string → list cexpr → cexpr
+  | CEAbort : cexpr
   | CEAlloc : ctype → cexpr → cexpr
   | CEFree : cexpr → cexpr
   | CEUnOp : unop → cexpr → cexpr
@@ -386,6 +387,7 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      guard (Forall2 (cast_typed Γ) (snd <$> τes) τs) with
        ("function `" +:+ f +:+ "` applied to arguments of incorrect type");
      inr (call f @ cast{τs}* (fst <$> τes), inr σ)
+  | CEAbort => inr (abort voidT, inr voidT)
   | CEAlloc cτ ce =>
      τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
      '(e,τe) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
@@ -812,6 +814,7 @@ Context (Paddrof : ∀ ce, P ce → P (CEAddrOf ce)).
 Context (Pderef : ∀ ce, P ce → P (CEDeref ce)).
 Context (Passign : ∀ ass ce1 ce2, P ce1 → P ce2 → P (CEAssign ass ce1 ce2)).
 Context (Pcall : ∀ f ces, Forall P ces → P (CECall f ces)).
+Context (Pabort : P CEAbort).
 Context (Palloc : ∀ cτ ce, R cτ → P ce → P (CEAlloc cτ ce)).
 Context (Pfree : ∀ ce, P ce → P (CEFree ce)).
 Context (Punop : ∀ op ce, P ce → P (CEUnOp op ce)).
@@ -855,6 +858,7 @@ Fixpoint cexpr_ind_alt ce : P ce :=
   | CEAssign _ ce1 ce2 => Passign _ _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
   | CECall f ces => Pcall _ ces $ list_ind (Forall P)
       (Forall_nil_2 _) (λ ce _, Forall_cons_2 _ _ _ (cexpr_ind_alt ce)) ces
+  | CEAbort => Pabort
   | CEAlloc cτ ce => Palloc _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
   | CEFree ce => Pfree _ (cexpr_ind_alt ce)
   | CEUnOp _ ce => Punop _ _ (cexpr_ind_alt ce)
@@ -1273,7 +1277,7 @@ Proof.
          to_if_expr_typed, lookup_var_typed', type_valid_ptr_type_valid,
          lockset_empty_valid, int_lower_typed, int_upper_typed, int_bits_typed,
          type_complete_valid, TBase_valid_inv, TPtr_valid_inv,
-         to_int_const_typed, val_0_typed
+         to_int_const_typed, val_0_typed, TBase_valid, TVoid_valid
     | |- ✓{_} _ =>
        repeat constructor; eauto using lookup_typedef_valid',
          TBase_valid_inv, TPtr_valid_inv, type_complete_valid
