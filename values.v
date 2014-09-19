@@ -306,6 +306,17 @@ Section operations.
   Global Instance val_lookup: Lookup (ref Ti) (val Ti) (val Ti) :=
     fix go r v := let _ : Lookup _ _ _ := @go in
     match r with [] => Some v | rs :: r => v !! r ≫= (!! rs) end.
+  Definition val_alter_seg (g : val Ti → val Ti)
+      (rs : ref_seg Ti) (v : val Ti) : val Ti :=
+    match rs, v with
+    | RArray i _ _, VArray τ vs => VArray τ (alter g i vs)
+    | RStruct i _, VStruct s vs => VStruct s (alter g i vs)
+    | RUnion _ _ _, VUnion s i v => VUnion s i (g v)
+    | RUnion i s _, VUnionAll _ vs => default v (vs !! i) (VUnion s i ∘ g)
+    | _, _ => v
+    end.
+  Fixpoint val_alter (g : val Ti → val Ti) (r : ref Ti) : val Ti → val Ti :=
+    match r with [] => g | rs :: r => val_alter (val_alter_seg g rs) r end.
 
   Inductive val_union_free : val Ti → Prop :=
     | VBase_union_free vb : val_union_free (VBase vb)
@@ -1698,5 +1709,148 @@ Proof.
   intros v1 v2 τ. rewrite !val_lookup_snoc; intros; simplify_option_equality.
   edestruct (val_lookup_seg_refine Γ f Γm1 Γm2 v1 v2 τ rs) as [? [??]];
     simplify_option_equality; eauto.
+Qed.
+Lemma val_lookup_is_Some_refine Γ f Γm1 Γm2 v1 v2 τ r :
+  ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → is_Some (v1 !! r) → is_Some (v2 !! r).
+Proof.
+  intros ?? [v3 ?].
+  destruct (val_lookup_refine Γ f Γm1 Γm2 v1 v2 τ r v3) as (?&?&?); eauto.
+Qed.
+
+(** ** Properties of alter *)
+Implicit Types g : val Ti → val Ti.
+Lemma val_alter_nil g : val_alter g [] = g.
+Proof. done. Qed.
+Lemma val_alter_cons g rs r :
+  val_alter g (rs :: r) = val_alter (val_alter_seg g rs) r.
+Proof. done. Qed.
+Lemma val_alter_singleton g rs : val_alter g [rs] = val_alter_seg g rs.
+Proof. done. Qed.
+Lemma val_alter_app g v r1 r2 :
+  val_alter g (r1 ++ r2) v = val_alter (val_alter g r1) r2 v.
+Proof.
+  revert g. induction r1; simpl; intros; rewrite ?val_alter_cons; auto.
+Qed.
+Lemma val_alter_snoc g v r rs :
+  val_alter g (r ++ [rs]) v = val_alter_seg (val_alter g r) rs v.
+Proof. apply val_alter_app. Qed.
+Lemma val_alter_seg_freeze q g rs :
+  val_alter_seg g (freeze q rs) = val_alter_seg g rs.
+Proof. by destruct rs. Qed.
+Lemma val_alter_freeze q g r : val_alter g (freeze q <$> r) = val_alter g r.
+Proof.
+  revert g. induction r as [|rs r IH]; intros g; simpl; [done |].
+  by rewrite IH, val_alter_seg_freeze.
+Qed.
+Lemma val_alter_seg_ext g1 g2 v rs :
+  (∀ v', g1 v' = g2 v') → val_alter_seg g1 rs v = val_alter_seg g2 rs v.
+Proof.
+  intros. destruct rs, v; simpl; unfold default; simplify_option_equality;
+    repeat case_match; f_equal; auto using list_fmap_ext, list_alter_ext.
+Qed.
+Lemma val_alter_ext g1 g2 v r :
+  (∀ v', g1 v' = g2 v') → val_alter g1 r v = val_alter g2 r v.
+Proof.
+  intros. revert v. induction r as [|rs r IH] using rev_ind; intros v; [done|].
+  rewrite !val_alter_snoc. by apply val_alter_seg_ext.
+Qed.
+Lemma val_alter_seg_compose g1 g2 v rs :
+  val_alter_seg (g1 ∘ g2) rs v = val_alter_seg g1 rs (val_alter_seg g2 rs v).
+Proof.
+  destruct v, rs; simpl; unfold default;
+    repeat (simplify_option_equality || case_match);
+    f_equal; auto using list_alter_compose.
+Qed.
+Lemma val_alter_compose g1 g2 v r :
+  val_alter (g1 ∘ g2) r v = val_alter g1 r (val_alter g2 r v).
+Proof.
+  intros. revert v. induction r as [|rs r IH] using rev_ind; intros w; [done|].
+  rewrite !val_alter_snoc, <-val_alter_seg_compose. by apply val_alter_seg_ext.
+Qed.
+Lemma val_alter_seg_commute g1 g2 v rs1 rs2 :
+  rs1 ⊥ rs2 → val_alter_seg g1 rs1 (val_alter_seg g2 rs2 v)
+  = val_alter_seg g2 rs2 (val_alter_seg g1 rs1 v).
+Proof.
+  destruct 1, v; intros; simplify_option_equality;
+    f_equal; auto using list_alter_commute.
+Qed.
+Lemma val_alter_commute Γ g1 g2 v r1 r2 :
+  r1 ⊥ r2 →
+  val_alter g1 r1 (val_alter g2 r2 v) = val_alter g2 r2 (val_alter g1 r1 v).
+Proof.
+  rewrite ref_disjoint_alt. intros (r1'&rs1'&r1''&r2'&rs2'&r2''&->&->&?&Hr).
+  rewrite !val_alter_app, !val_alter_singleton.
+  rewrite <-!(val_alter_freeze true _ r1''), !Hr, !val_alter_freeze.
+  rewrite <-!val_alter_compose. apply val_alter_ext; intros w'; simpl; auto.
+  by apply val_alter_seg_commute.
+Qed.
+Lemma val_alter_seg_typed Γ Γm g v rs τ v' :
+  ✓ Γ → (Γ,Γm) ⊢ v : τ → v !! rs = Some v' →
+  (Γ,Γm) ⊢ g v' : type_of v' → (Γ,Γm) ⊢ val_alter_seg g rs v : τ.
+Proof.
+  intros HΓ Hv Hrs.
+  destruct rs, Hv; change (val_typed' Γ Γm) with (typed (Γ,Γm)) in *; intros;
+    simplify_option_equality; decompose_Forall_hyps; simplify_type_equality;
+    typed_constructor; eauto using alter_length.
+  * apply Forall_alter; naive_solver.
+  * apply Forall2_alter_l; naive_solver.
+Qed.
+Lemma val_alter_typed Γ Γm g v r τ v' :
+  ✓ Γ → (Γ,Γm) ⊢ v : τ → v !! r = Some v' →
+  (Γ,Γm) ⊢ g v' : type_of v' → (Γ,Γm) ⊢ val_alter g r v : τ.
+Proof.
+  intros HΓ. revert g τ v. induction r as [|rs r IH] using @rev_ind.
+  { by intros; simplify_type_equality'. }
+  intros g τ v; rewrite val_alter_snoc, val_lookup_snoc; intros.
+  destruct (v !! rs) as [v''|] eqn:?; simplify_equality'.
+  destruct (val_lookup_seg_Some Γ Γm v τ rs v'') as (?&_&?); eauto.
+  eapply val_alter_seg_typed; eauto using val_lookup_seg_typed, type_of_typed.
+Qed.
+Lemma val_alter_const_typed Γ Γm v r τ v' σ :
+  ✓ Γ → (Γ,Γm) ⊢ v : τ → Γ ⊢ r : τ ↣ σ → is_Some (v !! r) →
+  (Γ,Γm) ⊢ v' : σ → (Γ,Γm) ⊢ val_alter (λ _, v') r v : τ.
+Proof.
+  intros ??? [v'' ?] ?; eapply val_alter_typed; eauto.
+  by erewrite type_of_correct by eauto using val_lookup_typed. 
+Qed.
+Lemma val_alter_seg_refine Γ f Γm1 Γm2 g1 g2 v1 v2 τ rs v3 v4 :
+  ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → v1 !! rs = Some v3 → v2 !! rs = Some v4 →
+  g1 v3 ⊑{Γ,f@Γm1↦Γm2} g2 v4 : type_of v3 →
+  val_alter_seg g1 rs v1 ⊑{Γ,f@Γm1↦Γm2} val_alter_seg g2 rs v2 : τ.
+Proof.
+  destruct 2, rs;
+    change (val_refine' Γ f Γm1 Γm2) with (refineT Γ f Γm1 Γm2) in *; intros;
+    simplify_option_equality; decompose_Forall_hyps;
+    repeat match goal with
+    | H : _ ⊑{_,_@_↦_} _ : type_of _ |- _ =>
+       erewrite val_refine_type_of_l in H by eauto
+    end; refine_constructor; eauto using alter_length.
+  * apply Forall2_alter; naive_solver.
+  * apply Forall3_alter_lm; naive_solver.
+Qed.
+Lemma val_alter_refine Γ f Γm1 Γm2 g1 g2 v1 v2 τ r v3 v4 :
+  ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → v1 !! r = Some v3 → v2 !! r = Some v4 →
+  g1 v3 ⊑{Γ,f@Γm1↦Γm2} g2 v4 : type_of v3 →
+  val_alter g1 r v1 ⊑{Γ,f@Γm1↦Γm2} val_alter g2 r v2 : τ.
+Proof.
+  intros ?. revert g1 g2 v1 v2 τ.
+  induction r as [|rs r IH] using rev_ind; simpl; intros g1 g2 v1 v2 τ.
+  { rewrite !val_lookup_nil; intros ???; simplify_equality.
+    erewrite val_refine_type_of_l by eauto; eauto. }
+  rewrite !val_lookup_snoc, !val_alter_snoc; intros.
+  destruct (v1 !! rs) as [v1'|] eqn:?; simplify_equality'.
+  destruct (v2 !! rs) as [v2'|] eqn:?; simplify_equality'.
+  destruct (val_lookup_seg_refine Γ f Γm1 Γm2 v1 v2 τ rs v1')
+    as (?&?&?); auto; simplify_equality'; eauto using val_alter_seg_refine.
+Qed.
+Lemma ctree_alter_const_refine Γ f Γm1 Γm2 g1 g2 v1 v2 τ r v3 v4 σ :
+  ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → Γ ⊢ r : τ ↣ σ → is_Some (v1 !! r) →
+  v3 ⊑{Γ,f@Γm1↦Γm2} v4 : σ →
+  val_alter (λ _, v3) r v1 ⊑{Γ,f@Γm1↦Γm2} val_alter (λ _, v4) r v2 : τ.
+Proof.
+  intros ??? [v3' ?] ?.
+  destruct (val_lookup_refine Γ f Γm1 Γm2 v1 v2 τ r v3') as (v4'&?&?); auto.
+  eapply val_alter_refine; eauto. by erewrite (type_of_correct _ _ σ)
+    by eauto using val_lookup_typed, val_refine_typed_l.
 Qed.
 End val.

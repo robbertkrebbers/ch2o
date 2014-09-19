@@ -95,6 +95,8 @@ Proof.
   * typed_inversion_all;
       repeat match goal with H : cast_typed _ _ _ |- _ => by inversion H end;
       split_ands; eauto using val_cast_typed.
+  * typed_inversion_all; split_ands;
+      eauto using lockset_union_valid, val_alter_const_typed.
 Qed.
 Lemma ehstep_extend Γ Γf m1 m2 ρ τs e1 e2 τlr :
   ✓ Γ → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → ✓{Γ} m1 → (Γ,Γf,'{m1},τs) ⊢ e1 : τlr →

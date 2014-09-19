@@ -373,7 +373,7 @@ and cexpr_of_expression x =
   match x with
   | Cabs.CONSTANT (Cabs.CONST_INT s) ->
      let t,n = const_of_string s in CEConst (t,z_of_num n)
-  | Cabs.VARIABLE "NULL" -> CECast (CTPtr CTVoid,econst0)
+  | Cabs.VARIABLE "NULL" -> CECast (CTPtr CTVoid,CSingleInit econst0)
   | Cabs.VARIABLE "CHAR_BIT" -> CEBits uchar
   | Cabs.VARIABLE "CHAR_MIN" -> CEMin {csign = None; crank = CCharRank}
   | Cabs.VARIABLE "CHAR_MAX" -> CEMax {csign = None; crank = CCharRank}
@@ -462,9 +462,8 @@ and cexpr_of_expression x =
   | Cabs.QUESTION (y1,y2,y3) ->
       CEIf (cexpr_of_expression y1,
         cexpr_of_expression y2,cexpr_of_expression y3)
-  | Cabs.CAST ((t1,t2),Cabs.SINGLE_INIT y) ->
-      CECast(ctype_of_specifier_decl_type t1 t2,
-        cexpr_of_expression y)
+  | Cabs.CAST ((t1,t2),y) ->
+      CECast(ctype_of_specifier_decl_type t1 t2, cinit_of_init_expression y)
   | Cabs.CALL (Cabs.VARIABLE "malloc",[y]) ->
       let (t,y') = split_sizeof (cexpr_of_expression y) in
       CEAlloc (t,y')
@@ -482,7 +481,7 @@ and cexpr_of_expression x =
            (let i = chars_of_int 0 in
             FunDecl (a,ctint_signed,
               Some (CSLocal (AutoStorage,i,ctint_signed,
-                Some (econst (Int (length_of_format s))),
+                Some (CSingleInit (econst (Int (length_of_format s)))),
               printf_body i a)))) else
             FunDecl (a,CTVoid,Some (CSSkip))))]));
       CECall (f,List.map cexpr_of_expression l)
@@ -502,13 +501,28 @@ and cexpr_of_expression x =
   | Cabs.MEMBEROFPTR (y,f) ->
       CEDeref (CEField (cexpr_of_expression y,chars_of_string f))
   | Cabs.NOTHING -> econst1
-  | _ -> raise (Unknown_expression x);;
+  | _ -> raise (Unknown_expression x)
 
-let decl_of_init_expression x =
+and ref_of_initwhat iw =
+  match iw with
+  | Cabs.NEXT_INIT -> []
+  | Cabs.INFIELD_INIT (s,iw) -> Inl (chars_of_string s)::ref_of_initwhat iw
+  | Cabs.ATINDEX_INIT (x,iw) -> Inr (cexpr_of_expression x)::ref_of_initwhat iw
+  | _ -> failwith "ref_of_initwhat"
+
+and cinit_of_init_expression x =
+  match x with
+  | Cabs.NO_INIT -> failwith "expr_of_init_expression"
+  | Cabs.SINGLE_INIT y -> CSingleInit (cexpr_of_expression y)
+  | Cabs.COMPOUND_INIT l ->
+     CCompoundInit (List.map (fun (iw,x) ->
+       ref_of_initwhat iw, cinit_of_init_expression x
+     ) l);;
+
+let cinit_of_init_expression_option x =
   match x with
   | Cabs.NO_INIT -> None
-  | Cabs.SINGLE_INIT y -> Some (cexpr_of_expression y)
-  | _ -> failwith "expr_of_init_expression";;
+  | _ -> Some (cinit_of_init_expression x);;
 
 let cscomp x y =
   if y = CSSkip then x else CSComp (x,y);;
@@ -518,10 +532,8 @@ let rec cstmt_of_statements l =
     match l with
     | [] -> cstmt_of_statements b
     | ((s,t',[],_),z)::l' ->
-        CSLocal (h,chars_of_string s,
-          ctype_of_specifier_decl_type t t',
-          decl_of_init_expression z,
-          fold_defs h t l' b)
+        CSLocal (h,chars_of_string s, ctype_of_specifier_decl_type t t',
+          cinit_of_init_expression_option z, fold_defs h t l' b)
     | _ -> failwith "cstmt_of_statements 1" in
   match l with
   | [] -> CSSkip
@@ -613,11 +625,11 @@ let decls_of_definition x =
         match z with
         | ((s,t',[],_),z) ->
             (match return_of_decl_type (ctype_of_specifier t) t' with
-            | Some ret -> (chars_of_string s, FunDecl (args_of_decl_type t', ret, None))
+            | Some ret ->
+                (chars_of_string s, FunDecl (args_of_decl_type t', ret, None))
             | _ ->
-                (chars_of_string s,
-                 GlobDecl (ctype_of_specifier_decl_type t t',
-                   decl_of_init_expression z)))
+                (chars_of_string s,GlobDecl (ctype_of_specifier_decl_type t t',
+                  cinit_of_init_expression_option z)))
         | _ -> raise (Unknown_definition x)) l
   | Cabs.FUNDEF ((t,(s,t',[],_)),
         {Cabs.bstmts = l},_,_) ->
@@ -642,7 +654,7 @@ let printf_prelude () =
     let i = chars_of_int 0 and n = chars_of_int 1 in
     [(chars_of_string s,
       FunDecl ([(Some i, ctint_signed)],ctint_signed,Some
-       (CSLocal (AutoStorage,n,ctint_signed,Some econst0,
+       (CSLocal (AutoStorage,n,ctint_signed,Some (CSingleInit econst0),
         CSComp (CSIf (CEBinOp (CompOp EqOp,CEVar i,econst0),
           CSReturn (Some econst1),CSSkip),
         CSComp (CSIf (CEBinOp (CompOp LtOp,CEVar i,econst0),

@@ -97,7 +97,11 @@ Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
      expr_typed' Γ Γf Γm τs (e1 ,, e2) (inr τ2)
   | ECast_typed e τ σ :
      expr_typed' Γ Γf Γm τs e (inr τ) → cast_typed Γ τ σ → 
-     expr_typed' Γ Γf Γm τs (cast{σ} e) (inr σ).
+     expr_typed' Γ Γf Γm τs (cast{σ} e) (inr σ)
+  | EInsert_typed r e1 e2 τ σ :
+     Γ ⊢ r : τ ↣ σ →
+     expr_typed' Γ Γf Γm τs e1 (inr σ) → expr_typed' Γ Γf Γm τs e2 (inr τ) →
+     expr_typed' Γ Γf Γm τs (#[r:=e1]e2) (inr τ).
 Global Instance expr_typed:
   Typed envs (lrtype Ti) (expr Ti) := curry4 expr_typed'.
 
@@ -147,6 +151,9 @@ Section expr_typed_ind.
   Context (Pcast : ∀ e τ σ,
     (Γ,Γf,Γm,τs) ⊢ e : inr τ → P e (inr τ) → cast_typed Γ τ σ →
     P (cast{σ} e) (inr σ)).
+  Context (Pinsert : ∀ r e1 e2 τ σ,
+     Γ ⊢ r : τ ↣ σ → (Γ,Γf,Γm,τs) ⊢ e1 : inr σ → P e1 (inr σ) →
+     (Γ,Γf,Γm,τs) ⊢ e2 : inr τ → P e2 (inr τ) → P (#[r:=e1]e2) (inr τ)).
   Lemma expr_typed_ind : ∀ e τ, expr_typed' Γ Γf Γm τs e τ → P e τ.
   Proof. fix 3; destruct 1; eauto using Forall2_impl. Qed.
 End expr_typed_ind.
@@ -192,7 +199,14 @@ Inductive ectx_item_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
      (Γ,Γf,Γm,τs) ⊢ e2 : inr τ2 →
      ectx_item_typed' Γ Γf Γm τs (□ ,, e2) (inr τ1) (inr τ2)
   | CCast_typed τ σ :
-     cast_typed Γ τ σ → ectx_item_typed' Γ Γf Γm τs (cast{σ} □) (inr τ) (inr σ).
+     cast_typed Γ τ σ → ectx_item_typed' Γ Γf Γm τs (cast{σ} □) (inr τ) (inr σ)
+  | CInsertL_typed r e2 τ σ :
+     Γ ⊢ r : τ ↣ σ → (Γ,Γf,Γm,τs) ⊢ e2 : inr τ →
+     ectx_item_typed' Γ Γf Γm τs (#[r:=□] e2) (inr σ) (inr τ)
+  | CInsertR_typed r e1 τ σ :
+     Γ ⊢ r : τ ↣ σ → (Γ,Γf,Γm,τs) ⊢ e1 : inr σ →
+     ectx_item_typed' Γ Γf Γm τs (#[r:=e1] □) (inr τ) (inr τ).
+
 Global Instance ectx_item_typed: PathTyped envs
   (lrtype Ti) (lrtype Ti) (ectx_item Ti) := curry4 ectx_item_typed'.
 Inductive ectx_typed' (Γs : envs) : ectx Ti → lrtype Ti → lrtype Ti → Prop :=
@@ -433,7 +447,7 @@ Proof.
     erewrite <-1?size_of_weaken by eauto; eauto using val_typed_weaken,
     assign_typed_weaken, addr_typed_weaken, addr_strict_weaken,
     type_valid_weaken, lookup_weaken, lookup_app_l_Some, cast_typed_weaken,
-    ref_seg_typed_weaken, lockset_valid_weaken.
+    ref_seg_typed_weaken, lockset_valid_weaken, ref_typed_weaken.
 Qed.
 Lemma ectx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 τs1 τs2 Ei τlr σlr :
   ✓ Γ1 → (Γ1,Γf1,Γm1,τs1) ⊢ Ei : τlr ↣ σlr → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →
@@ -442,7 +456,7 @@ Proof.
   destruct 2; typed_constructor;
     eauto using type_valid_weaken, addr_strict_weaken, assign_typed_weaken,
     expr_typed_weaken, lookup_weaken, cast_typed_weaken, Forall2_impl,
-    ref_seg_typed_weaken.
+    ref_seg_typed_weaken, ref_typed_weaken.
 Qed.
 Lemma ectx_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 τs1 τs2 E τlr σlr :
   ✓ Γ1 → (Γ1,Γf1,Γm1,τs1) ⊢ E : τlr ↣ σlr → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →

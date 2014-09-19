@@ -72,6 +72,9 @@ Definition ehexec (Γ : env Ti) (ρ : stack)
   | cast{τ} (#{Ω} v) =>
      guard (val_cast_ok Γ m τ v);
      Some (#{Ω} (val_cast τ v), m)
+  | #[r:=#{Ω1} v1] (#{Ω2} v2) =>
+     guard (is_Some (v2 !! r));
+     Some (#{Ω1 ∪ Ω2} (val_alter (λ _, v1) r v2), m)
   | _ => None
   end%E.
 Definition cexec (Γ : env Ti) (δ : funenv Ti)
@@ -242,7 +245,7 @@ Proof.
     | _ => progress simplify_option_equality
     | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]
     | _ => case_match
-    end; auto.
+    end; eauto.
 Qed.
 
 Lemma cexec_sound Γ δ S1 S2 : Γ\ δ ⊢ₛ S1 ⇒ₑ S2 → Γ\ δ ⊢ₛ S1 ⇒ S2.

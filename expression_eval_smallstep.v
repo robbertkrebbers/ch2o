@@ -24,7 +24,7 @@ Proof.
   { induction 1; intros; decompose_Forall_hyps;
       repeat match goal with H : is_nf _ |- _ => destruct H end;
       simplify_option_equality; f_equal; auto. }
-  rapply (expr_eval_ind Γ fs ρ m); intros;
+  apply (expr_eval_ind Γ fs ρ m (λ e _, is_redex e → (_:Prop))); intros;
     repeat match goal with
     | H : is_redex _ |- _ => inversion H; clear H
     | H : is_nf _ |- _ => inversion H; clear H

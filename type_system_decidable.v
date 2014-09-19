@@ -71,6 +71,11 @@ Global Instance expr_type_check: TypeCheck envs (lrtype Ti) (expr Ti) :=
   | cast{σ} e =>
      τ ← type_check Γs e ≫= maybe_inr;
      guard (cast_typed Γ τ σ); Some (inr σ)
+  | #[r:=e1] e2 =>
+     σ ← type_check Γs e1 ≫= maybe_inr;
+     τ ← type_check Γs e2 ≫= maybe_inr;
+     σ' ← τ !!{Γ} r;
+     guard ((σ':type Ti) = σ); Some (inr τ)
   end.
 Global Instance ectx_item_lookup :
     LookupE envs (ectx_item Ti) (lrtype Ti) (lrtype Ti) := λ Γs Ei τlr,
@@ -116,6 +121,14 @@ Global Instance ectx_item_lookup :
      guard (τ2 = τ3); Some (inr τ2)
   | □ ,, e2, inr τ1 => inr <$> type_check Γs e2 ≫= maybe_inr
   | cast{σ} □, inr τ => guard (cast_typed Γ τ σ); Some (inr σ)
+  | #[r:=□] e2, inr σ =>
+     τ ← type_check Γs e2 ≫= maybe_inr;
+     σ' ← τ !!{Γ} r;
+     guard ((σ':type Ti) = σ); Some (inr τ)
+  | #[r:=e1] □, inr τ =>
+     σ ← type_check Γs e1 ≫= maybe_inr;
+     σ' ← τ !!{Γ} r;
+     guard ((σ':type Ti) = σ); Some (inr τ)
   | _, _ => None
   end.
 Global Instance ectx_lookup :
@@ -266,6 +279,7 @@ Ltac simplify :=
 Hint Resolve (type_check_sound (V:=val Ti)) (type_check_sound (V:=addr Ti)).
 Hint Resolve (mapM_type_check_sound (V:=val Ti)).
 Hint Immediate (path_type_check_sound (R:=ref_seg _)).
+Hint Immediate (path_type_check_sound (R:=ref _)).
 Hint Immediate unop_type_of_sound binop_type_of_sound.
 Arguments rettype_match _ _ _ : simpl never.
 Arguments rettype_match_dec _ _ _ _ : simpl never.
@@ -299,10 +313,10 @@ Proof.
       mapM (λ e, type_check (Γ,Γf,Γm,τs) e ≫= maybe_inr) es = Some σs) as help.
     { intros es σs. rewrite Forall2_fmap_r, mapM_Some.
       induction 1; constructor; simplify_option_equality; eauto. }
-    induction 1 using @expr_typed_ind; simplify_option_equality;
+    by induction 1 using @expr_typed_ind; simplify_option_equality;
       erewrite ?type_check_complete, ?path_type_check_complete,
         ?assign_type_of_complete, ?unop_type_of_complete,
-        ?binop_type_of_complete, ?help by eauto; eauto.
+        ?binop_type_of_complete,?help by eauto; eauto; simplify_option_equality.
 Qed.
 Hint Resolve (type_check_sound (V:=expr Ti)).
 Global Instance: PathTypeCheckSpec envs

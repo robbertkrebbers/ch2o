@@ -80,6 +80,10 @@ Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
   | estep_cast m τ Ω v :
      val_cast_ok Γ m τ v →
      Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} (val_cast τ v), m
+  | ehstep_insert m r v1 Ω1 v2 Ω2 :
+     is_Some (v2 !! r) →
+     Γ\ ρ ⊢ₕ #[r:=#{Ω1} v1] (#{Ω2} v2), m ⇒
+             #{Ω1 ∪ Ω2} (val_alter (λ _, v1) r v2), m
 where "Γ \ ρ  ⊢ₕ e1 , m1 '⇒' e2 , m2" :=
   (@ehstep _ _ Γ ρ e1%E m1 e2%E m2) : C_scope.
 

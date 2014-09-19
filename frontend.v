@@ -7,6 +7,8 @@ Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 Local Open Scope list_scope.
 
+Arguments String.append _ _ : simpl never.
+
 Inductive cint_rank : Set :=
   | CCharRank | CShortRank | CIntRank | CLongRank | CLongLongRank |CPtrRank.
 Inductive cint_type :=
@@ -31,8 +33,11 @@ Inductive cexpr : Set :=
   | CEComma : cexpr → cexpr → cexpr
   | CEAnd : cexpr → cexpr → cexpr
   | CEOr : cexpr → cexpr → cexpr
-  | CECast : ctype → cexpr → cexpr
+  | CECast : ctype → cinit → cexpr
   | CEField : cexpr → string → cexpr
+with cinit : Set :=
+  | CSingleInit : cexpr → cinit
+  | CCompoundInit : list (list (string + cexpr) * cinit) → cinit
 with ctype : Set :=
   | CTVoid : ctype
   | CTDef : string → ctype
@@ -53,7 +58,7 @@ Inductive cstmt : Set :=
   | CSContinue : cstmt
   | CSReturn : option cexpr → cstmt
   | CSScope : cstmt → cstmt
-  | CSLocal : cstorage → string → ctype → option cexpr → cstmt → cstmt
+  | CSLocal : cstorage → string → ctype → option cinit → cstmt → cstmt
   | CSTypeDef : string → ctype → cstmt → cstmt
   | CSComp : cstmt → cstmt → cstmt
   | CSLabel : string → cstmt → cstmt
@@ -66,7 +71,7 @@ Inductive decl : Set :=
   | CompoundDecl : compound_kind → list (string * ctype) → decl
   | EnumDecl : cint_type → list (string * option cexpr) → decl
   | TypeDefDecl : ctype → decl
-  | GlobDecl : ctype → option cexpr → decl
+  | GlobDecl : ctype → option cinit → decl
   | FunDecl : list (option string * ctype) → ctype → option cstmt → decl.
 
 Inductive global_decl (Ti : Set): Set :=
@@ -248,6 +253,81 @@ Definition to_inttype (cτi : cint_type) : int_type Ti :=
   | CLongLongRank => IntType (from_option Signed ms) longlong_rank
   | CPtrRank => IntType (from_option Signed ms) ptr_rank
   end.
+
+Definition first_init_ref (Γ : env Ti)
+    (τ : type Ti) : option (ref Ti * type Ti) :=
+  match τ with
+  | τ.[n] => Some ([RArray 0 τ n], τ)
+  | structT s => τ ← Γ !! s ≫= (!! 0); Some ([RStruct 0 s],τ)
+  | unionT s => τ ← Γ !! s ≫= (!! 0); Some ([RUnion 0 s false],τ)
+  | _ => None
+  end.
+Fixpoint next_init_ref (Γ : env Ti)
+    (r : ref Ti) : option (ref Ti * type Ti) :=
+  match r with
+  | RArray i τ n :: r =>
+     if decide (S i < n)
+     then Some (RArray (S i) τ n :: r, τ) else next_init_ref Γ r
+  | RStruct i s :: r =>
+     match Γ !! s ≫= (!! (S i)) with
+     | Some τ => Some (RStruct (S i) s :: r,τ) | None => next_init_ref Γ r
+     end
+  | RUnion _ _ _ :: r => next_init_ref Γ r
+  | _ => None
+  end.
+Definition to_ref (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
+    (to_expr : cexpr → string + expr Ti * lrtype Ti) :
+    ref Ti → type Ti → list (string + cexpr) → string + ref Ti * type Ti :=
+  fix go r τ xces {struct xces} :=
+  match xces with
+  | [] => inr (r,τ)
+  | inl x :: xces =>
+     '(c,s) ← error_of_option (maybe_TCompound τ)
+       "struct/union initializer used for non-compound type";
+     σs ← error_of_option (Γ !! s)
+       "struct/union initializer used for incomplete type";
+     '(_,xs) ← error_of_option (Γn !! s ≫= maybe_CompoundType)
+       "please report: incompatible environments at struct/union initializer";
+     i ← error_of_option (list_find (x =) xs)
+       ("struct/union initializer with unknown index `" +:+ x +:+ "`");
+     σ ← error_of_option (σs !! i)
+       "please report: incompatible environments at struct/union initializer";
+     let rs :=
+       match c with
+       | Struct_kind => RStruct i s | Union_kind => RUnion i s false
+       end in
+     go (rs :: r) σ xces
+  | inr ce :: xces =>
+     '(σ,n) ← error_of_option (maybe_TArray τ)
+       "array initializer used for non-array type";
+     '(e,_) ← to_expr ce;
+     v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
+       "array initializer with non-constant or undefined index";
+     '(_,x) ← error_of_option (maybe_VBase v ≫= maybe_VInt)
+       "array initializer with non-integer index";
+     let i := Z.to_nat x in
+     guard (i < n) with "array initializer with index out of bounds";
+     go (RArray i σ n :: r) σ xces
+  end.
+Definition to_init_expr_go (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
+    (to_expr : cexpr → string + expr Ti * lrtype Ti)
+    (to_init_expr : type Ti → cinit → string + expr Ti)
+    (τ : type Ti) : expr Ti → list (ref Ti) →
+    list (list (string + cexpr) * cinit) → string + expr Ti :=
+  fix go e seen inits {struct inits} :=
+  match inits with
+  | [] => inr e
+  | (xces,ci) :: inits =>
+     '(r,σ) ← if decide (xces = [])
+        then error_of_option
+               match seen with
+               | [] => first_init_ref Γ τ | r :: _ => next_init_ref Γ r
+               end "excess elements in compound initializer"
+        else to_ref Γn Γ m to_expr [] τ xces;
+     guard (Forall (r ⊥.) seen) with "element initialized before";
+     e1 ← to_init_expr σ ci;
+     go (#[r:=e1] e) (r :: seen) inits
+  end.
 End frontend.
 
 (* not in the section because of bug #3488 *)
@@ -352,12 +432,12 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      _ ← error_of_option (maybe_TBase τ2) "second argument of || of non-base type";
      inr (if{e1} #(intV{sintT} 0)
            else (if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)), inr sintT)
-  | CECast cσ ce =>
+  | CECast cσ ci =>
      σ ← to_type Γn Γ m Δg Δl to_Ptr cσ;
-     '(e,τ) ← to_R_NULL σ <$> to_expr Γn Γ m Δg Δl ce;
-     guard (maybe_TCompound σ = None) with "cast to struct/union";
-     guard (cast_typed Γ τ σ) with "cast cannot be typed";
-     inr (cast{σ} e, inr σ)
+     guard (maybe_TArray σ = None) with "array compound literals not supported";
+     guard (maybe_TCompound σ = None) with "cast to struct/union not allowed";
+     e ← to_init_expr Γn Γ m Δg Δl σ ci;
+     inr (e, inr σ)
   | CEField ce x =>
      '(e,τrl) ← to_expr Γn Γ m Δg Δl ce;
      '(c,s) ← error_of_option (maybe_TCompound (lrtype_type τrl))
@@ -381,6 +461,19 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
           "indexing array field of r-value struct/union not supported";
         inr (e #> rs, inr σ)
      end
+  end
+with to_init_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
+    (m : mem Ti) (Δg : global_env Ti) (Δl : local_env Ti)
+    (σ : type Ti) (ci : cinit) : string + expr Ti :=
+  match ci with
+  | CSingleInit ce =>
+     '(e,τ) ← to_R_NULL σ <$> to_expr Γn Γ m Δg Δl ce;
+     guard (cast_typed Γ τ σ) with "cast or initialiser cannot be typed";
+     inr (cast{σ} e)
+  | CCompoundInit inits =>
+     guard (type_complete Γ σ) with "initializer with incomplete type";
+     to_init_expr_go Γn Γ m (to_expr Γn Γ m Δg Δl)
+       (to_init_expr Γn Γ m Δg Δl) σ (#(val_0 Γ σ)) [] inits
   end
 with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
     (m : mem Ti) (Δg : global_env Ti) (Δl : local_env Ti)
@@ -425,27 +518,25 @@ with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
 Section frontend_more.
 Context `{Env Ti}.
 
-Definition to_val (Γn : compound_env Ti) (Γ : env Ti)
+Definition to_init_val (Γn : compound_env Ti) (Γ : env Ti)
     (m : mem Ti) (Δg : global_env Ti) (Δl : local_env Ti)
-    (ce : cexpr) (τ : type Ti) : string + val Ti :=
-  '(e,τ') ← to_R_NULL τ <$> to_expr Γn Γ m Δg Δl ce;
-   guard (cast_typed Γ τ' τ)
-     with "constant expression of incorrect type";
-   error_of_option (⟦ cast{τ} e ⟧ Γ ∅ [] m ≫= maybe_inr)
+    (τ : type Ti) (ci : cinit) : string + val Ti :=
+   e ← to_init_expr Γn Γ m Δg Δl τ ci;
+   error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
      "undefined constant expression".
 Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
     (Δg : global_env Ti) (Δl : local_env Ti) (x : string) (cτ : ctype)
-    (mce : option cexpr) : string + mem Ti * global_env Ti * index * type Ti :=
+    (mci : option cinit) : string + mem Ti * global_env Ti * index * type Ti :=
   τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
   match Δg !! x with
   | Some (Global o τ' init) =>
      guard (τ = τ') with
        ("global `" +:+ x +:+ "` previously defined with different type");
-     match mce with
-     | Some ce =>
+     match mci with
+     | Some ci =>
         guard (init = false) with
           ("global `" +:+ x +:+ "` already initialized");
-        v ← to_val Γn Γ m Δg Δl ce τ;
+        v ← to_init_val Γn Γ m Δg Δl τ ci;
         inr (<[addr_top o τ:=v]{Γ}>m, <[x:=Global o τ true]>Δg, o, τ)
      | None => inr (m, Δg, o, τ)
      end
@@ -458,12 +549,12 @@ Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
   | None =>
      guard (int_typed (size_of Γ τ) sptrT) with
        ("global `" +:+ x +:+ "` whose type that is too large");
-     match mce with
-     | Some ce =>
+     match mci with
+     | Some ci =>
         let o := fresh (dom _ m) in
         let m := mem_alloc Γ o false τ m in
         let Δg := <[x:=Global o τ true]>Δg in
-        v ← to_val Γn Γ m Δg Δl ce τ;
+        v ← to_init_val Γn Γ m Δg Δl τ ci;
         inr (<[addr_top o τ:=v]{Γ}>m, Δg, o, τ)
      | None =>
         let o := fresh (dom _ m) in
@@ -473,16 +564,16 @@ Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
   end.
 Definition alloc_static (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
     (Δg : global_env Ti) (Δl : local_env Ti) (x : string) (cτ : ctype)
-    (mce : option cexpr) : string + mem Ti * index * type Ti :=
+    (mci : option cinit) : string + mem Ti * index * type Ti :=
   τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
   guard (int_typed (size_of Γ τ) sptrT) with
     ("static `" +:+ x +:+ "` whose type that is too large");
-  match mce with
-  | Some ce =>
+  match mci with
+  | Some ci =>
      let o := fresh (dom _ m) in
      let m := mem_alloc Γ o false τ m in
      let Δl := Some (x,Local τ) :: Δl in
-     v ← to_val Γn Γ m Δg Δl ce τ;
+     v ← to_init_val Γn Γ m Δg Δl τ ci;
      inr (<[addr_top o τ:=v]{Γ}>m, o, τ)
   | None =>
      let o := fresh (dom _ m) in
@@ -522,10 +613,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      guard (int_typed (size_of Γ τ) sptrT) with
        ("block scope variable `" +:+ x +:+ "` whose type is too large");
      let Δl := Some (x,Local τ) :: Δl in
-     '(e,τ') ← to_R_NULL τ <$> to_expr Γn Γ m Δg Δl ce;
-     guard (cast_typed Γ τ' τ) with
-       ("block scope variable `" +:+ x +:+
-                      "` has an initializer of incorrect type");
+     e ← to_init_expr Γn Γ m Δg Δl τ ce;
      '(m,Δg,s,cmσ) ← go m Δg Δl cs;
      inr (m, Δg, local{τ} (var{τ} 0 ::= e ;; s), cmσ)
   | CSLocal StaticStorage x cτ mce cs =>
@@ -713,10 +801,10 @@ Definition to_envs (Θ : list (string * decl)) :  string +
 End frontend_more.
 
 Section cexpr_ind.
-Context (P : cexpr → Prop) (Q : ctype → Prop).
+Context (P : cexpr → Prop) (Q : cinit → Prop) (R : ctype → Prop).
 Context (Pvar : ∀ x, P (CEVar x)).
 Context (Pconst : ∀ τi x, P (CEConst τi x)).
-Context (Psizeof : ∀ cτ, Q cτ → P (CESizeOf cτ)).
+Context (Psizeof : ∀ cτ, R cτ → P (CESizeOf cτ)).
 Context (Pmin : ∀ τi, P (CEMin τi)).
 Context (Pmax : ∀ τi, P (CEMax τi)).
 Context (Pbits : ∀ τi, P (CEBits τi)).
@@ -724,7 +812,7 @@ Context (Paddrof : ∀ ce, P ce → P (CEAddrOf ce)).
 Context (Pderef : ∀ ce, P ce → P (CEDeref ce)).
 Context (Passign : ∀ ass ce1 ce2, P ce1 → P ce2 → P (CEAssign ass ce1 ce2)).
 Context (Pcall : ∀ f ces, Forall P ces → P (CECall f ces)).
-Context (Palloc : ∀ cτ ce, Q cτ → P ce → P (CEAlloc cτ ce)).
+Context (Palloc : ∀ cτ ce, R cτ → P ce → P (CEAlloc cτ ce)).
 Context (Pfree : ∀ ce, P ce → P (CEFree ce)).
 Context (Punop : ∀ op ce, P ce → P (CEUnOp op ce)).
 Context (Pbinop : ∀ op ce1 ce2, P ce1 → P ce2 → P (CEBinOp op ce1 ce2)).
@@ -732,17 +820,28 @@ Context (Pif : ∀ ce1 ce2 ce3, P ce1 → P ce2 → P ce3 → P (CEIf ce1 ce2 ce
 Context (Pcomma : ∀ ce1 ce2, P ce1 → P ce2 → P (CEComma ce1 ce2)).
 Context (Pand : ∀ ce1 ce2, P ce1 → P ce2 → P (CEAnd ce1 ce2)).
 Context (Por : ∀ ce1 ce2, P ce1 → P ce2 → P (CEOr ce1 ce2)).
-Context (Pcast : ∀ cτ ce, Q cτ → P ce → P (CECast cτ ce)).
+Context (Pcast : ∀ cτ ci, R cτ → Q ci → P (CECast cτ ci)).
 Context (Pfield : ∀ ce i, P ce → P (CEField ce i)).
-Context (Qvoid : Q CTVoid).
-Context (Qdef : ∀ x, Q (CTDef x)).
-Context (Qenum : ∀ s, Q (CTEnum s)).
-Context (Qint : ∀ τi, Q (CTInt τi)).
-Context (Qptr : ∀ cτ, Q cτ → Q (CTPtr cτ)).
-Context (Qarray : ∀ cτ ce, Q cτ → P ce → Q (CTArray cτ ce)).
-Context (Qcompound : ∀ c s, Q (CTCompound c s)).
-Context (Qtypeof : ∀ ce, P ce → Q (CTTypeOf ce)).
+Context (Qsingle : ∀ ce, P ce → Q (CSingleInit ce)).
+Context (Qcompound : ∀ inits,
+  Forall (λ i, Forall (sum_rect _ (λ _, True) P) (i.1) ∧ Q (i.2)) inits →
+  Q (CCompoundInit inits)).
+Context (Rvoid : R CTVoid).
+Context (Rdef : ∀ x, R (CTDef x)).
+Context (Renum : ∀ s, R (CTEnum s)).
+Context (Rint : ∀ τi, R (CTInt τi)).
+Context (Rptr : ∀ cτ, R cτ → R (CTPtr cτ)).
+Context (Rarray : ∀ cτ ce, R cτ → P ce → R (CTArray cτ ce)).
+Context (Rcompound : ∀ c s, R (CTCompound c s)).
+Context (Rtypeof : ∀ ce, P ce → R (CTTypeOf ce)).
 
+Let help (cexpr_ind_alt : ∀ ce, P ce) (cinit_ind_alt : ∀ ci, Q ci)
+    (inits : list (list (string + cexpr) * cinit)) :
+  Forall (λ i, Forall (sum_rect _ (λ _, True) P) (i.1) ∧ Q (i.2)) inits.
+Proof.
+  induction inits as [|[xces ?]]; repeat constructor; auto.
+  induction xces as [|[]]; constructor; simpl; auto.
+Defined.
 Fixpoint cexpr_ind_alt ce : P ce :=
   match ce return P ce with
   | CEVar _ => Pvar _
@@ -765,22 +864,27 @@ Fixpoint cexpr_ind_alt ce : P ce :=
   | CEComma ce1 ce2 => Pcomma _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
   | CEAnd ce1 ce2 => Pand _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
   | CEOr ce1 ce2 => Por _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
-  | CECast cτ ce => Pcast _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
+  | CECast cτ ci => Pcast _ _ (ctype_ind_alt cτ) (cinit_ind_alt ci)
   | CEField ce _ => Pfield _ _ (cexpr_ind_alt ce)
   end
-with ctype_ind_alt cτ : Q cτ :=
+with cinit_ind_alt ci : Q ci :=
+  match ci with
+  | CSingleInit ce => Qsingle _ (cexpr_ind_alt ce)
+  | CCompoundInit inits => Qcompound _ (help cexpr_ind_alt cinit_ind_alt inits)
+  end
+with ctype_ind_alt cτ : R cτ :=
   match cτ with
-  | CTVoid => Qvoid
-  | CTDef _ => Qdef _
-  | CTEnum _ => Qenum _
-  | CTInt _ => Qint _
-  | CTPtr cτ => Qptr _ (ctype_ind_alt cτ)
-  | CTArray cτ ce => Qarray _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
-  | CTCompound _ _ => Qcompound _ _
-  | CTTypeOf ce => Qtypeof _ (cexpr_ind_alt ce)
+  | CTVoid => Rvoid
+  | CTDef _ => Rdef _
+  | CTEnum _ => Renum _
+  | CTInt _ => Rint _
+  | CTPtr cτ => Rptr _ (ctype_ind_alt cτ)
+  | CTArray cτ ce => Rarray _ _ (ctype_ind_alt cτ) (cexpr_ind_alt ce)
+  | CTCompound _ _ => Rcompound _ _
+  | CTTypeOf ce => Rtypeof _ (cexpr_ind_alt ce)
   end.
-Lemma cexpr_ctype_ind : (∀ ce, P ce) ∧ (∀ cτ, Q cτ).
-Proof. auto using cexpr_ind_alt, ctype_ind_alt. Qed.
+Lemma cexpr_cinit_ctype_ind : (∀ ce, P ce) ∧  (∀ ci, Q ci) ∧ (∀ cτ, R cτ).
+Proof. auto using cexpr_ind_alt, cinit_ind_alt, ctype_ind_alt. Qed.
 End cexpr_ind.
 
 Section properties.
@@ -802,6 +906,7 @@ Implicit Types Δg : global_env Ti.
 Arguments to_R _ _ : simpl never.
 Arguments convert_ptrs _ _ _ _ : simpl never.
 Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
+Hint Extern 0 (_ ⊢ _ : _ ↣ _) => typed_constructor.
 Hint Extern 1 (int_typed _ _) => by apply int_typed_small.
 Hint Extern 10 (cast_typed _ _ _) => constructor.
 Hint Extern 10 (base_cast_typed _ _ _) => constructor.
@@ -1057,10 +1162,39 @@ Proof.
        eapply convert_ptrs_typed in H; eauto; destruct H
     end; typed_constructor; eauto.
 Qed.
+Lemma first_init_ref_typed Γ τ r σ :
+  ✓{Γ} τ → first_init_ref Γ τ = Some (r,σ) → Γ ⊢ r : τ ↣ σ.
+Proof.
+  destruct 1 as [| |[]]; intros; simplify_option_equality;
+    repeat econstructor; eauto with lia.
+Qed.
+Fixpoint next_init_ref_typed Γ τ r σ r' σ' :
+  Γ ⊢ r : τ ↣ σ → next_init_ref Γ r = Some (r',σ') → Γ ⊢ r' : τ ↣ σ'.
+Proof.
+  induction 1 as [|????? []]; intros;
+    repeat (case_match || simplify_option_equality);
+    repeat econstructor; eauto.
+Qed.
+Lemma to_ref_typed Γn Γ m to_expr r τ xces σ r' σ' :
+  to_ref Γn Γ m to_expr r σ xces = inr (r',σ') →
+  Γ ⊢ r : τ ↣ σ → Γ ⊢ r' : τ ↣ σ'.
+Proof.
+  revert r σ. induction xces as [|[x|ce] xces IH];
+    intros r σ ??; simplify_equality'; auto.
+  * destruct σ as [| |c s]; simplify_equality'.
+    destruct (Γ !! s) as [τs|] eqn:Hs; simplify_equality'.
+    destruct (Γn !! s) as [[c' xs|]|], c; simplify_error_equality; eauto.
+  * destruct σ as [|σ n|]; simplify_equality'.
+    destruct (to_expr ce) as [|[e τlr]] eqn:?; simplify_equality'.
+    destruct (⟦ e ⟧ Γ ∅ [] m)
+      as [[|[[| |τi x| |]| | | |]]|] eqn:?; simplify_error_equality; eauto.
+Qed.
 Lemma to_expr_type_typed Γn Γ m Δg Δl :
   ✓ Γ → ✓{Γ} m → global_env_valid Γ ('{m}) Δg → local_env_valid Γ ('{m}) Δl →
   (∀ ce e τlr, to_expr Γn Γ m Δg Δl ce = inr (e,τlr) →
     (Γ,to_funtypes Δg,'{m},local_env_stack_types Δl) ⊢ e : τlr) ∧
+  (∀ ci τ e, to_init_expr Γn Γ m Δg Δl τ ci = inr e → ptr_type_valid Γ τ →
+    (Γ,to_funtypes Δg,'{m},local_env_stack_types Δl) ⊢ e : inr τ) ∧
   (∀ cτ,
     (∀ τ void, to_type Γn Γ m Δg Δl (to_Type void) cτ = inr τ → ✓{Γ} τ) ∧
     (∀ τ, to_type Γn Γ m Δg Δl to_Ptr cτ = inr τ → ptr_type_valid Γ τ)).
@@ -1079,7 +1213,30 @@ Proof.
     revert τs Hτs Hcast.
     induction Hces as [|? [??]]; intros [|??] ??; decompose_Forall_hyps;
       constructor; eauto using ECast_typed,to_R_NULL_typed,surjective_pairing. }
-  apply cexpr_ctype_ind; intros; split_ands; intros;
+  assert (∀ τ e seen inits e', ✓{Γ} τ →
+    Forall (λ i, Forall (sum_rect _ (λ _, True) (λ ce, ∀ e τlr,
+        to_expr Γn Γ m Δg Δl ce = inr (e, τlr) →
+        (Γ,to_funtypes Δg,'{m},local_env_stack_types Δl) ⊢ e : τlr)) (i.1) ∧
+      (∀ τ e, to_init_expr Γn Γ m Δg Δl τ (i.2) = inr e → ptr_type_valid Γ τ →
+        (Γ,to_funtypes Δg,'{m},local_env_stack_types Δl) ⊢ e : inr τ)) inits →
+    to_init_expr_go Γn Γ m (to_expr Γn Γ m Δg Δl)
+      (to_init_expr Γn Γ m Δg Δl) τ e seen inits = inr e' →
+    Forall (λ r, ∃ σ, Γ ⊢ r : τ ↣ σ) seen →
+    (Γ,to_funtypes Δg,'{m},local_env_stack_types Δl) ⊢ e : inr τ →
+    (Γ,to_funtypes Δg,'{m},local_env_stack_types Δl) ⊢ e' : inr τ).
+  { intros τ e seen inits e' ? IH. revert e seen e'.
+    induction IH as [|[xces ci] inits [IHi IHe] _ IH];
+      intros e seen e' ? Hseen ?; simplify_equality'; auto.
+    case_decide; subst.
+    * destruct Hseen as [|r ? [??]];
+        repeat (simplify_error_equality || case_match);
+        match goal with
+        | H: first_init_ref _ _ = Some _ |- _ => apply first_init_ref_typed in H
+        | H: next_init_ref _ _ = Some _ |- _ => eapply next_init_ref_typed in H
+        end; eauto 10 using type_valid_ptr_type_valid, ref_typed_type_valid.
+    * repeat (simplify_error_equality || case_match); eauto 12 using to_ref_typed,
+        type_valid_ptr_type_valid, ref_typed_type_valid. }
+  apply cexpr_cinit_ctype_ind; intros; split_ands; intros;
     repeat match goal with
     | H : _ ∧ _ |- _ => destruct H
     | _ : maybe_inl ?τlr = Some _ |- _ => is_var τlr; destruct τlr
@@ -1112,10 +1269,11 @@ Proof.
     end;
     match goal with
     | |- _ ⊢ _ : _ =>
-       repeat typed_constructor; eauto using to_binop_expr_typed,
+       repeat typed_constructor; eauto 6 using to_binop_expr_typed,
          to_if_expr_typed, lookup_var_typed', type_valid_ptr_type_valid,
          lockset_empty_valid, int_lower_typed, int_upper_typed, int_bits_typed,
-         type_complete_valid, TBase_valid_inv, TPtr_valid_inv, to_int_const_typed
+         type_complete_valid, TBase_valid_inv, TPtr_valid_inv,
+         to_int_const_typed, val_0_typed
     | |- ✓{_} _ =>
        repeat constructor; eauto using lookup_typedef_valid',
          TBase_valid_inv, TPtr_valid_inv, type_complete_valid
@@ -1129,6 +1287,11 @@ Lemma to_expr_typed Γn Γ m Δg Δl ce e τlr :
   to_expr Γn Γ m Δg Δl ce = inr (e,τlr) →
   (Γ,to_funtypes Δg,'{m},local_env_stack_types Δl) ⊢ e : τlr.
 Proof. intros. eapply to_expr_type_typed; eauto. Qed.
+Lemma to_init_expr_typed Γn Γ m Δg Δl τ ci e :
+  ✓ Γ → ✓{Γ} m → global_env_valid Γ ('{m}) Δg → local_env_valid Γ ('{m}) Δl →
+  to_init_expr Γn Γ m Δg Δl τ ci = inr e → ptr_type_valid Γ τ →
+  (Γ,to_funtypes Δg,'{m},local_env_stack_types Δl) ⊢ e : inr τ.
+Proof. intros. eapply to_expr_type_typed; eauto. Qed.
 Lemma to_type_valid Γn Γ m Δg Δl void cτ τ :
   ✓ Γ → ✓{Γ} m → global_env_valid Γ ('{m}) Δg → local_env_valid Γ ('{m}) Δl →
   to_type Γn Γ m Δg Δl (to_Type void) cτ = inr τ → ✓{Γ} τ.
@@ -1141,26 +1304,22 @@ Lemma to_types_valid Γn Γ m Δg Δl void cτs τs :
   ✓ Γ → ✓{Γ} m → global_env_valid Γ ('{m}) Δg → local_env_valid Γ ('{m}) Δl →
   mapM (to_type Γn Γ m Δg Δl (to_Type void)) cτs = inr τs → ✓{Γ}* τs.
 Proof. rewrite mapM_inr. induction 5; eauto using to_type_valid. Qed.
-Lemma to_val_typed Γn Γ m Δg Δl ce τ v :
+Lemma to_init_val_typed Γn Γ m Δg Δl τ ci v :
   ✓ Γ → global_env_valid Γ ('{m}) Δg → ✓{Γ} m → local_env_valid Γ ('{m}) Δl →
-  ✓{Γ} τ → to_val Γn Γ m Δg Δl ce τ = inr v → (Γ,'{m}) ⊢ v : τ.
+  ✓{Γ} τ → to_init_val Γn Γ m Δg Δl τ ci = inr v → (Γ,'{m}) ⊢ v : τ.
 Proof.
-  unfold to_val; intros.
-  destruct (to_expr Γn Γ m Δg Δl ce) as [|[e τlr]] eqn:?; simplify_equality'.
-  destruct (to_R_NULL τ (e, τlr)) as [e' τ'] eqn:?.
-  repeat case_error_guard; simplify_equality'.
-  destruct (⟦ e' ⟧ Γ ∅ [] m) as [[?|v']|] eqn:?; simplify_option_equality.
-  cut ((Γ,'{m}) ⊢ inr v' : inr τ').
-  { intros; typed_inversion_all; eauto using val_cast_typed. }
+  unfold to_init_val; intros.
+  destruct (to_init_expr Γn Γ m Δg Δl τ ci) as [|e] eqn:?; simplify_equality'.
+  destruct (⟦ e ⟧ Γ ∅ [] m) as [[]|] eqn:?; simplify_equality'.
+  cut ((Γ,'{m}) ⊢ inr v : inr τ); [by intros; typed_inversion_all|].
   eapply (expr_eval_typed_aux Γ (to_funtypes Δg) [] (local_env_stack_types Δl));
-    eauto using to_R_NULL_typed, type_valid_ptr_type_valid, to_expr_typed,
-    prefix_of_nil, funtypes_valid_empty.
+    eauto using type_valid_ptr_type_valid, to_init_expr_typed, prefix_of_nil.
   by intro; destruct (to_funtypes _ !! _); simpl_map.
 Qed.
-Lemma alloc_global_typed Γn Γ m Δg Δl x cτ mce m' Δg' o τ :
+Lemma alloc_global_typed Γn Γ m Δg Δl x cτ mci m' Δg' o τ :
   ✓ Γ → ✓{Γ} m → mem_writable_all Γ m →
   global_env_valid Γ ('{m}) Δg → local_env_valid Γ ('{m}) Δl →
-  alloc_global Γn Γ m Δg Δl x cτ mce = inr (m',Δg',o,τ) →
+  alloc_global Γn Γ m Δg Δl x cτ mci = inr (m',Δg',o,τ) →
   (**i 1.) *) ✓{Γ} m' ∧
   (**i 2.) *) mem_writable_all Γ m' ∧
   (**i 3.) *) '{m} ⊆{⇒} '{m'} ∧
@@ -1174,21 +1333,22 @@ Proof.
   assert (✓{Γ} τ') by eauto using to_type_valid.
   destruct (Δg !! x) as [[o' τ'' init| | |]|] eqn:Hx; simplify_equality.
   { pose proof (HΔg _ _ Hx); repeat case_error_guard; simplify_equality'.
-    destruct mce as [ce|]; simplify_equality'; [|by auto 10].
+    destruct mci as [ci|]; simplify_equality'; [|by auto 10].
     repeat case_error_guard; simplify_equality'.
-    destruct (to_val Γn Γ m Δg Δl ce τ'') as [v|] eqn:?; simplify_equality'.
+    destruct (to_init_val Γn Γ m Δg Δl τ'' ci) as [v|] eqn:?; simplify_equality'.
     assert ('{m} ⊆{⇒} '{<[addr_top o τ:=v]{Γ}> m}).
-    { eapply mem_insert_extend; eauto using to_val_typed,
+    { eapply mem_insert_extend; eauto using to_init_val_typed,
         addr_top_typed, index_typed_representable. }
-    split_ands; eauto 8 using mem_insert_valid', to_val_typed, addr_top_typed,
-      index_typed_representable, mem_insert_top_writable_all,
+    split_ands; eauto 8 using mem_insert_valid', to_init_val_typed,
+      addr_top_typed, index_typed_representable, mem_insert_top_writable_all,
       global_env_insert_valid_Some, global_decl_valid_weaken,
       memenv_extend_typed, to_funtypes_insert_Some, global_env_valid_weaken. }
   repeat case_error_guard; simplify_equality'.
-  destruct mce as [ce|]; simplify_equality'.
+  destruct mci as [ci|]; simplify_equality'.
   * set (m'':=mem_alloc Γ (fresh (dom indexset m)) false τ' m) in *.
     set (Δg'':=<[x:=Global (fresh (dom indexset m)) τ' true]> Δg) in *.
-    destruct (to_val Γn Γ m'' Δg'' Δl ce τ') as [v|] eqn:?; simplify_equality'.
+    destruct (to_init_val Γn Γ m'' Δg'' Δl τ' ci)
+      as [v|] eqn:?; simplify_equality'.
     set (o:=fresh (dom indexset m)) in *.
     assert (✓{Γ} m'' ∧ mem_writable_all Γ m'') as [??] by eauto using
       mem_alloc_valid', mem_allocable_fresh, mem_alloc_writable_all.
@@ -1200,10 +1360,10 @@ Proof.
     { eapply global_env_insert_valid; simpl; eauto using
         global_decl_valid_weaken, global_env_valid_weaken. }
     assert ('{m''} ⊆{⇒} '{<[addr_top o τ':=v]{Γ}> m''}).
-    { eapply mem_insert_extend; eauto using to_val_typed, addr_top_typed,
+    { eapply mem_insert_extend; eauto using to_init_val_typed, addr_top_typed,
         index_typed_representable, local_env_valid_weaken. }
-    split_ands; eauto 8 using mem_insert_valid', to_val_typed, addr_top_typed,
-      index_typed_representable, mem_insert_top_writable_all,
+    split_ands; eauto 8 using mem_insert_valid', to_init_val_typed,
+      addr_top_typed, index_typed_representable, mem_insert_top_writable_all,
       memenv_extend_typed, to_funtypes_insert,
       global_env_valid_weaken, local_env_valid_weaken.
   * split_ands; eauto 9 using global_env_insert_valid, mem_alloc_val_valid,
@@ -1211,10 +1371,10 @@ Proof.
       val_0_typed, mem_allocable_fresh, to_funtypes_insert,
       mem_alloc_val_writable_all.
 Qed.
-Lemma alloc_static_typed Γn Γ m Δg Δl x cτ mce m' o τ :
+Lemma alloc_static_typed Γn Γ m Δg Δl x cτ mci m' o τ :
   ✓ Γ → ✓{Γ} m → mem_writable_all Γ m →
   global_env_valid Γ ('{m}) Δg → local_env_valid Γ ('{m}) Δl →
-  alloc_static Γn Γ m Δg Δl x cτ mce = inr (m',o,τ) →
+  alloc_static Γn Γ m Δg Δl x cτ mci = inr (m',o,τ) →
   (**i 1.) *) ✓{Γ} m' ∧
   (**i 2.) *) mem_writable_all Γ m' ∧
   (**i 3.) *) '{m} ⊆{⇒} '{m'} ∧
@@ -1225,8 +1385,8 @@ Proof.
     as [|τ'] eqn:?; simpl in *; simplify_equality.
   assert (✓{Γ} τ') by eauto using to_type_valid.
   repeat case_error_guard; simplify_equality'.
-  destruct mce as [ce|]; simplify_equality'.
-  * destruct (to_val Γn Γ _ Δg _ ce τ') as [v|] eqn:?; simplify_equality'.
+  destruct mci as [ci|]; simplify_equality'.
+  * destruct (to_init_val Γn Γ _ Δg _ τ' ci) as [v|] eqn:?; simplify_equality'.
     set (m'':=mem_alloc Γ (fresh (dom indexset m)) false τ m) in *.
     set (Δl'':=Some (x, Local τ) :: Δl) in *.
     set (o:=fresh (dom indexset m)) in *.
@@ -1238,10 +1398,11 @@ Proof.
     assert (local_env_valid Γ ('{m''}) Δl'').
     { constructor; eauto using local_env_valid_weaken. }
     assert ('{m''} ⊆{⇒} '{<[addr_top o τ:=v]{Γ}> m''}).
-    { eapply mem_insert_extend; eauto using to_val_typed, addr_top_typed,
+    { eapply mem_insert_extend; eauto using to_init_val_typed, addr_top_typed,
         index_typed_representable, global_env_valid_weaken. }
-    split_ands; eauto 8 using mem_insert_valid', to_val_typed, addr_top_typed,
-      mem_insert_top_writable_all, memenv_extend_typed, global_env_valid_weaken.
+    split_ands; eauto 8 using mem_insert_valid',
+      to_init_val_typed, addr_top_typed, mem_insert_top_writable_all,
+      memenv_extend_typed, global_env_valid_weaken.
   * split_ands; eauto 8 using global_env_insert_valid, mem_alloc_val_valid,
       mem_alloc_val_extend, val_0_typed, mem_allocable_fresh,
       mem_alloc_val_writable_all, mem_alloc_val_index_typed.
@@ -1276,6 +1437,9 @@ Proof.
     | H : to_expr _ _ _ _ _ _ = inr _ |- _ =>
        first_of ltac:(apply to_expr_typed in H; simpl) idtac
          ltac:(by eauto using local_env_valid_weaken)
+    | H : to_init_expr _ _ _ _ _ _ _ = inr _ |- _ =>
+       first_of ltac:(apply to_init_expr_typed in H; simpl) idtac
+         ltac:(by eauto using local_env_valid_weaken, type_valid_ptr_type_valid)
     | H : to_type _ _ _ _ _ _ _ = inr _ |- _ =>
        first_of ltac:(apply to_type_valid in H; simpl) idtac ltac:(by auto)
     | H : to_type _ _ _ _ _ _ _ = inr _ |- _ =>
@@ -1291,7 +1455,7 @@ Proof.
     end; try by (split_ands; eauto using lockset_empty_valid).
   * split_ands; eauto 2. eapply SLocal_typed; eauto 2.
     repeat typed_constructor; eauto using expr_typed_weaken, subseteq_empty.
-    by constructor.
+    repeat constructor.
   * split_ands; eauto using stmt_typed_weaken.
   * split_ands; eauto 1.
     repeat typed_constructor; eauto using expr_typed_weaken, rettype_union_l.

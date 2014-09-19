@@ -26,6 +26,7 @@ Hint Resolve cmap_refine_memenv_refine'.
 Hint Resolve addr_alive_refine addr_strict_refine mem_writable_refine.
 Hint Resolve val_unop_ok_refine val_binop_ok_refine val_cast_ok_refine.
 Hint Resolve val_true_refine val_false_refine mem_freeable_refine.
+Hint Resolve val_lookup_is_Some_refine.
 Hint Immediate cmap_refine_valid_l' cmap_refine_valid_l.
 Hint Immediate cmap_refine_valid_r' cmap_refine_valid_r.
 Hint Immediate addr_refine_typed_l val_refine_typed_l.
@@ -147,6 +148,8 @@ Proof.
       eauto 10 using mem_unlock_refine', expr_refine_weaken, mem_unlock_extend.
   * refine_inversion_all; inv_ehstep. exists f; split_ands; eauto.
     refine_constructor; eauto using val_cast_refine.
+  * refine_inversion_all; inv_ehstep. exists f; split_ands; eauto.
+    refine_constructor; eauto using locks_union_refine,ctree_alter_const_refine.
 Qed.
 Lemma ehstep_refine_l Γ Γf f m1 m2 m1' ρ1 ρ2 τs e1 e2 e1' τlr :
   ✓ Γ → Γ\ ρ1 ⊢ₕ e1, m1 ⇒ e1', m1' →

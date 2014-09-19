@@ -81,7 +81,13 @@ Inductive expr_refine' (Γ : env Ti) (Γf : funtypes Ti)
      expr_refine' Γ Γf τs f Γm1 Γm2 (e1 ,, e1') (e2 ,, e2') (inr τ2)
   | ECast_refine e1 e2 τ σ :
      expr_refine' Γ Γf τs f Γm1 Γm2 e1 e2 (inr τ) → cast_typed Γ τ σ → 
-     expr_refine' Γ Γf τs f Γm1 Γm2 (cast{σ} e1) (cast{σ} e2) (inr σ).
+     expr_refine' Γ Γf τs f Γm1 Γm2 (cast{σ} e1) (cast{σ} e2) (inr σ)
+  | EInsert_refine r e1 e2 e1' e2' τ σ :
+     Γ ⊢ r : τ ↣ σ →
+     expr_refine' Γ Γf τs f Γm1 Γm2 e1 e2 (inr σ) →
+     expr_refine' Γ Γf τs f Γm1 Γm2 e1' e2' (inr τ) →
+     expr_refine' Γ Γf τs f Γm1 Γm2 (#[r:=e1]e1') (#[r:=e2]e2') (inr τ).
+
 Global Instance expr_refine:
   RefineT Ti (env Ti * funtypes Ti * list (type Ti))
     (lrtype Ti) (expr Ti) := curry3 expr_refine'.
@@ -150,6 +156,11 @@ Section expr_refine_ind.
   Context (Pcast : ∀ e1 e2 τ σ,
     e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inr τ → P e1 e2 (inr τ) →
     cast_typed Γ τ σ → P (cast{σ} e1) (cast{σ} e2) (inr σ)).
+  Context (Pinsert : ∀ r e1 e2 e1' e2' τ σ,
+    Γ ⊢ r : τ ↣ σ →
+    e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inr σ→ P e1 e2 (inr σ) →
+    e1' ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2' : inr τ → P e1' e2' (inr τ) →
+    P (#[r:=e1]e1') (#[r:=e2]e2') (inr τ)).
   Lemma expr_refine_ind : ∀ e1 e2 τ,
     expr_refine' Γ Γf τs f Γm1 Γm2 e1 e2 τ → P e1 e2 τ.
   Proof. fix 4; destruct 1; eauto using Forall2_impl, Forall3_impl. Qed.
@@ -211,7 +222,15 @@ Inductive ectx_item_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs: list (type T
      ectx_item_refine' Γ Γf τs f Γm1 Γm2 (□ ,, e1') (□ ,, e2') (inr τ) (inr τ')
   | CCast_refine τ σ :
      cast_typed Γ τ σ → ectx_item_refine' Γ Γf τs f Γm1 Γm2
-       (cast{σ} □) (cast{σ} □) (inr τ) (inr σ).
+       (cast{σ} □) (cast{σ} □) (inr τ) (inr σ)
+  | CInsertL_refine r e1' e2' τ σ :
+     Γ ⊢ r : τ ↣ σ → e1' ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2' : inr τ →
+     ectx_item_refine' Γ Γf τs f Γm1 Γm2
+       (#[r:=□]e1') (#[r:=□]e2') (inr σ) (inr τ)
+  | CInsertR_refine r e1 e2 τ σ :
+     Γ ⊢ r : τ ↣ σ → e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inr σ →
+     ectx_item_refine' Γ Γf τs f Γm1 Γm2
+       (#[r:=e1]□) (#[r:=e2]□) (inr τ) (inr τ).
 Global Instance ectx_item_refine:
   PathRefine Ti (env Ti * funtypes Ti * list (type Ti)) (lrtype Ti)
     (lrtype Ti) (ectx_item Ti) := curry3 ectx_item_refine'.
@@ -885,8 +904,8 @@ Lemma ectx_item_refine_compose
   Ei2 ⊑{(Γ,Γf,τs),g@Γm2↦Γm3} Ei3 : τlr ↣ τlr'' →
   Ei1 ⊑{(Γ,Γf,τs),f ◎ g@Γm1↦Γm3} Ei3 : τlr ↣ τlr'.
 Proof.
-  destruct 2; intros HEi'; refine_inversion HEi'; refine_constructor;
-    eauto using expr_refine_compose, exprs_refine_compose.
+  destruct 2; intros HEi'; refine_inversion HEi'; simplify_type_equality;
+    refine_constructor; eauto using expr_refine_compose, exprs_refine_compose.
 Qed.
 Lemma ectx_refine_compose Γ Γf τs f g Γm1 Γm2 Γm3 E1 E2 E3 τlr τlr' τlr'' :
   ✓ Γ → E1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} E2 : τlr ↣ τlr' →

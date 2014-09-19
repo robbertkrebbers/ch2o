@@ -104,7 +104,6 @@ Section operations.
     match τb with
     | voidT => VVoid | intT τi => VInt τi 0 | τ.* => VPtr (NULL τ)
     end%BT.
-
   Inductive base_unop_typed : unop → base_type Ti → base_type Ti → Prop :=
     | TInt_NegOp_typed τi :
        base_unop_typed NegOp (intT τi) (intT (int_promote τi))
@@ -1156,7 +1155,6 @@ Proof.
     eauto using base_val_cast_typed, TVoid_cast_typed, base_cast_typed_self.
 Qed.
 
-(** ** Refinements of unary/binary operations and casts *)
 Lemma val_true_refine Γ f m1 m2 v1 v2 τ :
   v1 ⊑{Γ,f@'{m1}↦'{m2}} v2 : τ → val_true m1 v1 → val_true m2 v2.
 Proof. destruct 1; simpl; eauto using base_val_true_refine. Qed.
