@@ -1,6 +1,7 @@
 (* Copyright (c) 2012-2014, Freek Wiedijk and Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 
+#load "str.cma";;
 #load "nums.cma";;
 #load "Cerrors.cmo";;
 #load "Cabs.cmo";;
@@ -170,18 +171,150 @@ exception Unknown_specifier of Cabs.specifier;;
 exception Unknown_definition of Cabs.definition;;
 exception Incompatible_compound of char list * decl * decl;;
 
+type format =
+  | Format of string * int * string * string
+  | StringLit of char list
+
 let col = ref 0;;
 let the_anon = ref 0;;
 let the_compound_decls = ref ([]:(char list * decl) list);;
-let the_printfs = ref ([]:(char list * (string * decl)) list);;
+let the_printfs = ref ([]:(char list * (format list * decl)) list);;
 
 let uchar = {csign = Some Unsigned; crank = CCharRank};;
 let int_signed = {csign = Some Signed; crank = CIntRank};;
-let ctint_signed = CTInt int_signed;;
 
 let econst n = CEConst (int_signed, z_of_num n);;
 let econst0 = econst (Int 0);;
 let econst1 = econst (Int 1);;
+
+let printf_conversion = Str.regexp (
+  (* Not supported: alternative form '#' *)
+  "\\([-+0 ]*\\)"
+^ "\\([0-9]*\\)"
+  (* Not supported: precision since we do not have floats *)
+  (* Not supported: L, j, z, t *)
+^ "\\(\\|[lh]\\|hh\\|ll\\)"
+  (* Not supported: o, u, x, X, a, A, e, E, f, F, g, G, p, n *)
+^ "\\([cdisu%]\\)"
+)
+
+let parse_printf fmt =
+  let singleton s = if s = [] then [] else [StringLit (List.rev s)] in
+  let len = String.length fmt in
+  let rec scan leftover pos =
+    if pos = len then singleton leftover
+    else if String.get fmt pos = '%' then
+      if Str.string_match printf_conversion fmt (pos + 1) then
+        let pos' = Str.match_end()
+        and flags = Str.matched_group 1 fmt
+        and width = try int_of_string (Str.matched_group 2 fmt) with _ -> 0
+        and length = Str.matched_group 3 fmt
+        and conv = Str.matched_group 4 fmt in
+        if conv = "%" then scan ('%' :: leftover) pos' else begin
+          singleton leftover @ Format(flags,width,length,conv) :: scan [] pos'
+        end
+      else failwith "parse_printf"
+    else scan (String.get fmt pos :: leftover) (pos + 1)
+  in scan [] 0;;
+
+let do_printf_int flags width x =
+  let x' = if Int 0 <=/ x then x else x */ Int (-1) in
+  let s = chars_of_string (string_of_num x') in
+  let len = List.length s
+  and prefix =
+    if Int 0 <=/ x then
+      if String.contains flags '+' then ['+']
+      else if String.contains flags ' ' then [' '] else []
+    else ['-'] in
+  let padding_sym = if String.contains flags '0' then '0' else ' '
+  and padding_len = width - len - List.length prefix in
+  let rec pad n = if n <= 0 then [] else padding_sym :: pad (n - 1) in
+  if String.contains flags '-'
+  then prefix @ s @ pad padding_len
+  else prefix @ pad padding_len @ s;;
+
+let rec do_printf fmts vs =
+  match fmts, vs with
+  | StringLit s :: fmts, _ -> s @ do_printf fmts vs
+  | Format(flags,width,_,_) :: fmts, VBase (VInt (_,n)) :: vs ->
+     do_printf_int flags width (num_of_z n) @ do_printf fmts vs
+  | _, _ -> [];;
+
+let type_arg_of_printf length conv =
+  let sign = if String.contains conv 'u' then Unsigned else Signed
+  and rank =
+    match length with
+    | "ll" -> CLongLongRank | "l" -> CLongRank
+    | "h" -> CShortRank | "hh" -> CCharRank | _ -> CIntRank in
+  CTInt {csign = Some sign; crank = rank}
+
+let rec args_of_printf n fmts =
+  match fmts with
+  | [] -> []
+  | StringLit _ :: fmts -> args_of_printf n fmts
+  | Format(_,_,length,conv) :: fmts ->
+     (Some (chars_of_int n), type_arg_of_printf length conv) ::
+     args_of_printf (1 + n) fmts;;
+
+let printf_prelude () =
+  if !the_printfs = [] && !printf_returns_int then [] else
+  let i = chars_of_string "i" and width = chars_of_string "width"
+  and n = chars_of_string "n" in
+  [(chars_of_string "len_core-%d",
+    FunDecl ([(Some n, CTInt int_signed);
+              (Some i, CTInt {csign = Some Unsigned; crank = CLongLongRank});
+              (Some width, CTInt int_signed)],
+             CTInt int_signed,Some
+     (CSComp (CSIf (CEBinOp (CompOp EqOp,CEVar i,econst0),
+        CSDo (CEAssign (Assign,CEVar n,econst1)),
+        CSSkip),
+      CSComp (CSWhile (CEBinOp (CompOp LtOp,econst0,CEVar i),
+        CSComp (CSDo (CEAssign (PostOp (ArithOp PlusOp),CEVar n,econst1)),
+        CSDo (CEAssign (PreOp (ArithOp DivOp),CEVar i,econst (Int 10))))),
+      CSIf (CEBinOp (CompOp LtOp,CEVar n,CEVar width),
+        CSReturn (Some (CEVar width)),
+        CSReturn (Some (CEVar n))))))));
+   (chars_of_string "len_core_signed-%d",
+    FunDecl ([(Some n, CTInt int_signed);
+              (Some i, CTInt {csign = Some Signed; crank = CLongLongRank});
+              (Some width, CTInt int_signed)],
+             CTInt int_signed,Some
+     (CSReturn (Some (CEIf (CEBinOp (CompOp LtOp,CEVar i,econst0),
+       CEIf (CEBinOp (CompOp EqOp,CEVar i,
+         CEMin {csign = Some Signed; crank = CLongLongRank}),
+       CECall (chars_of_string "len_core-%d",
+         [econst1;CEVar i;CEVar width]),
+       CECall (chars_of_string "len_core-%d",
+         [econst1;CEBinOp (ArithOp MultOp,CEVar i,econst (Int (-1)));
+          CEVar width])),
+       CECall (chars_of_string "len_core-%d",
+         [CEVar n;CEVar i;CEVar width])))))))];;
+
+let rec length_of_printf fmts =
+  match fmts with
+  | [] -> 0
+  | StringLit s :: fmts -> List.length s + length_of_printf fmts
+  | Format _ :: fmts -> length_of_printf fmts;;
+
+let printf_stmt fmts =
+  let n = chars_of_string "n" in
+  let rec body i fmts =
+    match fmts with
+    | [] -> CSReturn (Some (CEVar n))
+    | StringLit _ :: fmts -> body i fmts
+    | Format (flags,width,_,conv) :: fmts ->
+        let has_prefix =
+          if String.contains flags '+' || String.contains flags ' '
+          then econst1 else econst0 in
+        let f =
+          if String.contains conv 'u'
+          then "len_core-%d" else "len_core_signed-%d" in
+        CSComp (CSDo (CEAssign (PreOp (ArithOp PlusOp), CEVar n,
+          CECall (chars_of_string f,
+            [has_prefix; CEVar (chars_of_int i); econst (Int (width))]))),
+          body (1 + i) fmts) in
+  CSLocal (AutoStorage,n,CTInt int_signed,
+    Some (CSingleInit (econst (Int (length_of_printf fmts)))),body 0 fmts);;
 
 let unop_of_unary_operator x =
   match x with
@@ -231,32 +364,6 @@ let split_sizeof x =
   match t with
   | None -> (CTInt uchar,y)
   | Some t' -> (t',y);;
-
-let length_of_format s =
-  let n = String.length s in
-  let rec length m =
-    if m >= n then 0 else
-    let c = String.get s m in if c <> '%' then 1 + length (m + 1) else
-    if m + 1 < n && String.get s (m + 1) = 'd' then length (m + 2) else
-    failwith "length_of_format" in
-  length 0;;
-
-let printf_body i =
-  let len = chars_of_string "len-%d" in
-  let rec body n a =
-    match a with
-    | [] -> CSReturn (Some (CEVar i))
-    | x::a' -> CSComp (CSDo (CEAssign (PreOp (ArithOp PlusOp), CEVar i,
-        CECall (len,[CEVar (chars_of_int n)]))),body (n + 1) a') in
-  body 1;;
-
-let args_of_format s =
-  let rec args_of_format' n m =
-    try if String.get s n = '%' && String.get s (n + 1) = 'd' then
-        (Some(chars_of_int m),ctint_signed)::args_of_format' (n + 2) (m + 1)
-      else args_of_format' (n + 1) m
-    with Invalid_argument _ -> [] in
-  args_of_format' 0 1;;
 
 let name_of s = if s <> "" then s else
   let s = "anon-"^string_of_int !the_anon in
@@ -469,21 +576,18 @@ and cexpr_of_expression x =
       CEAlloc (t,y')
   | Cabs.CALL (Cabs.VARIABLE "free",[y]) -> CEFree (cexpr_of_expression y)
   | Cabs.CALL (Cabs.VARIABLE "abort",[]) -> CEAbort
-  | Cabs.CALL (Cabs.VARIABLE "printf",
-        Cabs.CONSTANT (Cabs.CONST_STRING s)::l) ->
-      let fs = "printf-"^s in
+  | Cabs.CALL (Cabs.VARIABLE "printf", Cabs.CONSTANT(Cabs.CONST_STRING s)::l) ->
+      let fs = "printf-"^String.escaped s in
       let f = chars_of_string fs in
-      let fresh =
-        try let _ = List.assoc f !the_printfs in false with Not_found -> true in
-      let a = args_of_format s in
-      (if fresh then (the_printfs := !the_printfs@
-        [(f,(s,if !printf_returns_int then
-           (let i = chars_of_int 0 in
-            FunDecl (a,ctint_signed,
-              Some (CSLocal (AutoStorage,i,ctint_signed,
-                Some (CSingleInit (econst (Int (length_of_format s)))),
-              printf_body i a)))) else
-            FunDecl (a,CTVoid,Some (CSSkip))))]));
+      begin try let _ = List.assoc f !the_printfs in ()
+      with Not_found ->
+        let fmts = parse_printf s in
+        let args = args_of_printf 0 fmts in
+        let decl =
+          if !printf_returns_int
+          then FunDecl (args,CTInt int_signed,Some (printf_stmt fmts))
+          else FunDecl (args,CTVoid,Some CSSkip) in
+        the_printfs := !the_printfs @ [(f,(fmts,decl))] end;
       CECall (f,List.map cexpr_of_expression l)
   | Cabs.CALL (Cabs.VARIABLE s,l) ->
       CECall (chars_of_string s,List.map cexpr_of_expression l)
@@ -648,25 +752,6 @@ let decls_of_definition x =
         (chars_of_string s,TypeDefDecl (ctype_of_specifier_decl_type t t'))) l
   | _ -> raise (Unknown_definition x);;
 
-let printf_prelude () =
-  if !the_printfs = [] then [] else
-  try let s = "len-%d" in
-    let i = chars_of_int 0 and n = chars_of_int 1 in
-    [(chars_of_string s,
-      FunDecl ([(Some i, ctint_signed)],ctint_signed,Some
-       (CSLocal (AutoStorage,n,ctint_signed,Some (CSingleInit econst0),
-        CSComp (CSIf (CEBinOp (CompOp EqOp,CEVar i,econst0),
-          CSReturn (Some econst1),CSSkip),
-        CSComp (CSIf (CEBinOp (CompOp LtOp,CEVar i,econst0),
-          CSComp (CSDo (CEAssign (PostOp (ArithOp PlusOp),CEVar n,econst1)),
-          CSDo (CEAssign (PreOp (ArithOp MultOp),CEVar i,econst (Int (-1))))),
-          CSSkip),
-        CSComp (CSWhile (CEBinOp (CompOp LtOp,econst0,CEVar i),
-          CSComp (CSDo (CEAssign (PostOp (ArithOp PlusOp),CEVar n,econst1)),
-          CSDo (CEAssign (PreOp (ArithOp DivOp),CEVar i,econst (Int 10))))),
-        CSReturn (Some (CEVar n)))))))))]
-  with Not_found -> [];;
-
 let decls_of_cabs x =
   the_anon := 0;
   the_compound_decls := [];
@@ -697,13 +782,8 @@ let chars_of_format s l =
 
 let event_of_state x =
   match x.sFoc with
-  | Call (f,l) ->
-     (try let (fmt,_) = List.assoc f !the_printfs in
-        chars_of_format fmt
-          (List.map (fun y ->
-             match y with
-             | VBase (VInt (_,n)) -> num_of_z n
-             | _ -> failwith "event_of_state") l)
+  | Call (f,vs) ->
+     (try let (fmts,_) = List.assoc f !the_printfs in do_printf fmts vs
       with Not_found -> [])
   | _ -> [];;
 
