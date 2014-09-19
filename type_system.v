@@ -21,6 +21,8 @@ Section typing.
 Context `{Env Ti}.
 Notation envs := (env Ti * funtypes Ti * memenv Ti * list (type Ti))%type.
 
+Global Instance rettype_valid : Valid (env Ti) (rettype Ti) := λ Γ mcτ,
+  match mcτ.2 with Some τ => ✓{Γ} τ | _ => True end.
 Inductive lrval_typed' (Γ : env Ti) (Γm : memenv Ti) :
     addr Ti + val Ti → lrtype Ti → Prop :=
   | lval_typed a τ :
@@ -431,6 +433,18 @@ Proof. by apply expr_typed_type_valid. Qed.
 Lemma expr_inr_typed_type_valid Γ Γf Γm τs e τ :
   ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs → (Γ,Γf,Γm,τs) ⊢ e : inr τ → ✓{Γ} τ.
 Proof. by apply expr_typed_type_valid. Qed.
+Lemma rettype_true_Some_valid Γ β σ : ✓{Γ} σ → ✓{Γ} (β, Some σ).
+Proof. done. Qed.
+Lemma rettype_union_type_valid Γ mσ1 mσ2 c1 c2 mσ :
+  rettype_union mσ1 mσ2 = Some mσ →
+  ✓{Γ} (c1, mσ1) → ✓{Γ} (c2, mσ2) → ✓{Γ} (c2, mσ).
+Proof. destruct mσ1, mσ2; intros; simplify_option_equality; eauto. Qed.
+Lemma stmt_typed_type_valid Γ Γf Γm τs s mcτ :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs → (Γ,Γf,Γm,τs) ⊢ s : mcτ → ✓{Γ} mcτ.
+Proof.
+  by induction 4; eauto; eauto using expr_inr_typed_type_valid,
+     rettype_union_type_valid, rettype_true_Some_valid.
+Qed.
 Lemma funtypes_valid_weaken Γ1 Γ2 Γf : ✓ Γ1 → ✓{Γ1} Γf → Γ1 ⊆ Γ2 → ✓{Γ2} Γf.
 Proof.
   intros ? HΓf ? f [τs τ] Hf. destruct (HΓf f (τs,τ)) as (Hτs&?&?); simpl in *;
@@ -652,4 +666,6 @@ Lemma rettype_union_l mσ : rettype_union mσ None = Some mσ.
 Proof. by destruct mσ. Qed.
 Lemma rettype_union_r mσ : rettype_union None mσ = Some mσ.
 Proof. by destruct mσ. Qed.
+Lemma rettype_union_idempotent mσ : rettype_union mσ mσ = Some mσ.
+Proof. by destruct mσ; simplify_option_equality. Qed.
 End properties.

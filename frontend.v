@@ -680,6 +680,15 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
        "if statement with non-matching return types";
      inr (m, Δg, if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S
   end.
+Definition stmt_fix_return (σ : type Ti) (s : stmt Ti)
+    (cmτ : rettype Ti) : stmt Ti * rettype Ti :=
+  match cmτ with
+  | (false, None) =>
+     if decide (σ = voidT) then (s,cmτ) else (s;; ret (abort σ), (true, Some σ))
+  | (false, Some τ) =>
+     if decide (τ = voidT) then (s,cmτ) else (s;; ret (abort τ), (true, Some τ))
+  | _ => (s,cmτ)
+  end.
 Definition to_fun_stmt (Γn : compound_env Ti) (Γ : env Ti)
      (m : mem Ti) (Δg : global_env Ti) (f : string) (mys : list (option string))
      (τs : list (type Ti)) (σ : type Ti) (cs : cstmt) :
@@ -688,6 +697,7 @@ Definition to_fun_stmt (Γn : compound_env Ti) (Γ : env Ti)
     ("function `" +:+ f +:+ "` has unnamed arguments");
   let Δl := zip_with (λ y τ, Some (y, Local τ)) ys τs in
   '(m,Δg,s,cmσ) ← to_stmt Γn Γ σ m Δg Δl cs;
+  let (s,cmσ) := stmt_fix_return σ s cmσ in
   guard (gotos s ⊆ labels s) with
     ("function `" +:+ f +:+ "` has unbound gotos");
   guard (breaks_valid 0 s) with
@@ -1470,6 +1480,15 @@ Proof.
   * split_ands; eauto 3. repeat typed_constructor; eauto using
       stmt_typed_weaken, expr_typed_weaken, rettype_union_l, rettype_union_r.
 Qed.
+Lemma stmt_fix_return_typed Γ Γf Γm τs σ s cmτ s' cmτ' :
+  ✓ Γ → ✓{Γ} Γf → ✓{Γ}* τs → ✓{Γ} σ → stmt_fix_return σ s cmτ = (s',cmτ') →
+  (Γ,Γf,Γm,τs) ⊢ s : cmτ → (Γ,Γf,Γm,τs) ⊢ s' : cmτ'.
+Proof.
+  destruct cmτ as [[][τ|]]; intros; simplify_option_equality; auto.
+  * assert (✓{Γ} (false,Some τ)) by eauto using stmt_typed_type_valid.
+    by repeat typed_constructor; eauto using rettype_union_idempotent.
+  * by repeat typed_constructor; eauto.
+Qed.
 Lemma to_fun_stmt_typed Γn Γ m Δg f mys τs σ cs m' Δg' s :
   ✓ Γ → ✓{Γ} m → mem_writable_all Γ m →
   global_env_valid Γ ('{m}) Δg → ✓{Γ} σ → ✓{Γ}* τs → length mys = length τs →
@@ -1488,11 +1507,14 @@ Proof.
   destruct (mapM id mys) as [ys|] eqn:?; simplify_equality'.
   assert (length ys = length τs) by (by erewrite <-mapM_length by eauto).
   destruct (to_stmt _ _ _ _ _ _ _)
-    as [|[[[m'' Δg''] ?] cmτ]] eqn:?; simplify_error_equality.
+    as [|[[[m'' Δg''] s'] cmτ']] eqn:?; simplify_error_equality.
   destruct (to_stmt_typed Γn Γ σ m Δg (zip_with
-    (λ y τ, Some (y, Local τ)) ys τs) cs m' Δg' s cmτ) as (Hs&?&?&?&?&?);
+    (λ y τ, Some (y, Local τ)) ys τs) cs m'' Δg'' s' cmτ') as (Hs&?&?&?&?&?);
     eauto using local_env_valid_params, type_valid_ptr_type_valid.
-  rewrite local_env_stack_types_params in Hs by done; eauto 10.
+  destruct (stmt_fix_return _ s' _) as [? cmτ] eqn:?; simplify_error_equality.
+  rewrite local_env_stack_types_params in Hs by done.
+  eauto 14 using stmt_fix_return_typed,
+    (local_env_stack_types_valid _ ('{m})), local_env_valid_params.
 Qed.
 Lemma alloc_fun_typed Γn Γ m Δg f mys cτs cτ mcs m' Δg' :
   ✓ Γ → ✓{Γ} m → mem_writable_all Γ m → global_env_valid Γ ('{m}) Δg →
