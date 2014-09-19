@@ -179,6 +179,7 @@ let col = ref 0;;
 let the_anon = ref 0;;
 let the_compound_decls = ref ([]:(char list * decl) list);;
 let the_printfs = ref ([]:(char list * (format list * decl)) list);;
+let the_strings = ref ([]:(char list * decl) list);;
 
 let uchar = {csign = Some Unsigned; crank = CCharRank};;
 let int_signed = {csign = Some Signed; crank = CIntRank};;
@@ -233,11 +234,22 @@ let do_printf_int flags width x =
   then prefix @ s @ pad padding_len
   else prefix @ pad padding_len @ s;;
 
-let rec do_printf fmts vs =
+let rec do_printf_string env tenv m a =
+  match mem_lookup env tenv a m with
+  | Some (VBase (VInt (_,n))) when int_of_z n <> 0 ->
+     Char.chr (int_of_z n) ::
+       do_printf_string env tenv m (addr_plus env tenv (z_of_int 1) a)
+  | _ -> [];;
+
+let rec do_printf env tenv m fmts vs =
   match fmts, vs with
-  | StringLit s :: fmts, _ -> s @ do_printf fmts vs
+  | StringLit s :: fmts, _ -> s @ do_printf env tenv m fmts vs
+  | Format(flags,width,_,"c") :: fmts, VBase (VInt (_,n)) :: vs ->
+     Char.chr (int_of_z n) :: do_printf env tenv m fmts vs
+  | Format(flags,width,_,"s") :: fmts, VBase (VPtr (Ptr a)) :: vs ->
+     do_printf_string env tenv m a @ do_printf env tenv m fmts vs
   | Format(flags,width,_,_) :: fmts, VBase (VInt (_,n)) :: vs ->
-     do_printf_int flags width (num_of_z n) @ do_printf fmts vs
+     do_printf_int flags width (num_of_z n) @ do_printf env tenv m fmts vs
   | _, _ -> [];;
 
 let type_arg_of_printf length conv =
@@ -252,12 +264,18 @@ let rec args_of_printf n fmts =
   match fmts with
   | [] -> []
   | StringLit _ :: fmts -> args_of_printf n fmts
+  | Format(_,_,length,"c") :: fmts ->
+     (Some (chars_of_int n), CTInt {csign = None; crank = CCharRank}) ::
+     args_of_printf (1 + n) fmts
+  | Format(_,_,length,"s") :: fmts ->
+     (Some (chars_of_int n), CTPtr (CTInt {csign = None;crank = CCharRank})) ::
+     args_of_printf (1 + n) fmts
   | Format(_,_,length,conv) :: fmts ->
      (Some (chars_of_int n), type_arg_of_printf length conv) ::
      args_of_printf (1 + n) fmts;;
 
 let printf_prelude () =
-  if !the_printfs = [] && !printf_returns_int then [] else
+  if !the_printfs = [] || not !printf_returns_int then [] else
   let i = chars_of_string "i" and width = chars_of_string "width"
   and n = chars_of_string "n" in
   [(chars_of_string "len_core-%d",
@@ -288,7 +306,16 @@ let printf_prelude () =
          [econst1;CEBinOp (ArithOp MultOp,CEVar i,econst (Int (-1)));
           CEVar width])),
        CECall (chars_of_string "len_core-%d",
-         [CEVar n;CEVar i;CEVar width])))))))];;
+         [CEVar n;CEVar i;CEVar width])))))));
+   (chars_of_string "len_core_str-%d",
+    FunDecl ([(Some n, CTInt int_signed);
+              (Some i, CTPtr (CTInt {csign = None;crank = CCharRank}))],
+             CTInt int_signed,Some
+     (CSComp (CSWhile (CEUnOp
+          (NotOp,CEBinOp (CompOp EqOp,CEDeref (CEVar i),econst0)),
+        CSComp (CSDo (CEAssign (PostOp (ArithOp PlusOp),CEVar n,econst1)),
+        CSDo (CEAssign (PreOp (ArithOp PlusOp),CEVar i,econst (Int 1))))),
+      CSReturn (Some (CEVar n))))))];;
 
 let rec length_of_printf fmts =
   match fmts with
@@ -302,6 +329,14 @@ let printf_stmt fmts =
     match fmts with
     | [] -> CSReturn (Some (CEVar n))
     | StringLit _ :: fmts -> body i fmts
+    | Format (flags,width,_,"c") :: fmts ->
+        CSComp (CSDo (CEAssign (PreOp (ArithOp PlusOp), CEVar n,econst1)),
+          body (1 + i) fmts)
+    | Format (flags,width,_,"s") :: fmts ->
+        CSComp (CSDo (CEAssign (PreOp (ArithOp PlusOp), CEVar n,
+          CECall (chars_of_string "len_core_str-%d",
+            [econst0; CEVar (chars_of_int i)]))),
+          body (1 + i) fmts)
     | Format (flags,width,_,conv) :: fmts ->
         let has_prefix =
           if String.contains flags '+' || String.contains flags ' '
@@ -479,7 +514,21 @@ and ctype_of_specifier_decl_type x y =
 and cexpr_of_expression x =
   match x with
   | Cabs.CONSTANT (Cabs.CONST_INT s) ->
-     let t,n = const_of_string s in CEConst (t,z_of_num n)
+      let t,n = const_of_string s in CEConst (t,z_of_num n)
+  | Cabs.CONSTANT (Cabs.CONST_STRING s) ->
+      let x = "string-"^String.escaped s in
+      let a = chars_of_string x in
+      begin try let _ = List.assoc a !the_strings in ()
+      with Not_found ->
+        let decl = GlobDecl (
+          CTArray (CTInt {csign = None; crank = CCharRank},
+            econst (Int (String.length s + 1))),
+          Some (CCompoundInit (List.map (fun c ->
+             ([], CSingleInit (econst (Int (Char.code c))))
+          ) (chars_of_string s) @ [[], CSingleInit econst0]))) in
+        the_strings := !the_strings @ [(a,decl)] end;
+      CEVar a
+  | Cabs.CONSTANT (Cabs.CONST_CHAR [c]) -> econst (Int (Int64.to_int c))
   | Cabs.VARIABLE "NULL" -> CECast (CTPtr CTVoid,CSingleInit econst0)
   | Cabs.VARIABLE "CHAR_BIT" -> CEBits uchar
   | Cabs.VARIABLE "CHAR_MIN" -> CEMin {csign = None; crank = CCharRank}
@@ -757,11 +806,11 @@ let decls_of_cabs x =
   the_compound_decls := [];
   the_printfs := [];
   let decls = List.flatten (List.map decls_of_definition x) in
-  let printfs = List.map (fun (x,(_,d)) -> (x,d)) !the_printfs in
   (chars_of_string "main",
+    !the_strings@
     !the_compound_decls@
     printf_prelude()@
-    printfs@
+    List.map (fun (x,(_,d)) -> (x,d)) !the_printfs@
     decls);;
 
 let decls_of_file x = decls_of_cabs (cabs_of_file x);;
@@ -770,20 +819,11 @@ exception CH2O_error of string;;
 exception CH2O_undef of irank undef_state;;
 exception CH2O_exited of num;;
 
-let chars_of_format s l =
-  let rec chars_of_format' n l =
-    try let c = String.get s n in
-      if c = '%' && String.get s (n + 1) = 'd' then
-        chars_of_string (string_of_num (List.hd l))@
-        chars_of_format' (n + 2) (List.tl l)
-      else c::chars_of_format' (n + 1) l
-    with Invalid_argument _ -> [] in
-  chars_of_format' 0 l;;
-
-let event_of_state x =
+let event_of_state env tenv x =
   match x.sFoc with
   | Call (f,vs) ->
-     (try let (fmts,_) = List.assoc f !the_printfs in do_printf fmts vs
+     (try let fmts,_ =
+        List.assoc f !the_printfs in do_printf env tenv x.sMem fmts vs
       with Not_found -> [])
   | _ -> [];;
 

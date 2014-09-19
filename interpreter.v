@@ -20,13 +20,14 @@ Proof. solve_decision. Defined.
 Section interpreter.
 Context (A : architecture).
 Notation Ti := (irank A).
-Context {E : Set} `{∀ ε1 ε2 : E, Decision (ε1 = ε2)} (e : state Ti → list E).
+Context {E : Set} `{∀ ε1 ε2 : E, Decision (ε1 = ε2)}.
+Context (e : ∀ `{Env Ti}, env Ti → state Ti → list E).
 
 Definition cexec' (Γ : env Ti) (δ : funenv Ti)
     (iS : istate Ti E) : listset (istate Ti E) :=
   let (_,εs,S) := iS in
   (λ S_new,
-    let εs_new := e S_new in IState εs_new (εs ++ εs_new) S_new
+    let εs_new := e _ Γ S_new in IState εs_new (εs ++ εs_new) S_new
   ) <$> cexec Γ δ S.
 Definition interpreter_initial
     (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
