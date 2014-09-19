@@ -405,10 +405,10 @@ Instance ctx_free_labels {Ti} : Labels (ctx Ti) :=
   | CExpr _ E :: k => labels E ∪ labels k
   | _ => ∅
   end.
-Fixpoint ctx_breaks {Ti} (k : ctx Ti) : nat :=
+Fixpoint ctx_catches {Ti} (k : ctx Ti) : nat :=
   match k with
-  | CStmt (catch □) :: k => S (ctx_breaks k)
-  | (CStmt _ | CLocal _ _) :: k => ctx_breaks k
+  | CStmt (catch □) :: k => S (ctx_catches k)
+  | (CStmt _ | CLocal _ _) :: k => ctx_catches k
   | _ => 0
   end.
 

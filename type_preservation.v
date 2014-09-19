@@ -254,7 +254,7 @@ Lemma cstep_progress Γ Γf δ S f :
   (**i 3.) *) is_undef_state S ∨
   (**i 4.) *) match SFoc S with
               | Stmt (↷ l) s => l ∉ labels s ∪ labels (SCtx S)
-              | Stmt (↑ n) s => ¬n < ctx_breaks (SCtx S)
+              | Stmt (↑ n) s => ¬n < ctx_catches (SCtx S)
               | _ => False
               end.
 Proof.
@@ -267,7 +267,7 @@ Proof.
     + destruct (decide (l ∈ labels s)).
       { destruct Hs; simplify_equality'; decompose_elem_of; left; solve_cred. }
       ctx_inversion Hk; try (left; solve_cred); solve_elem_of.
-    + destruct (decide (n < ctx_breaks k)); [|by auto].
+    + destruct (decide (n < ctx_catches k)); [|by auto].
       left. destruct n; ctx_inversion Hk; try lia || solve_cred.
   * destruct (is_nf_or_redex e) as [Hnf|(E&e'&?&->)].
     { destruct Hnf as [Ω v|]; typed_inversion_all.

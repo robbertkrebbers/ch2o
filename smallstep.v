@@ -1042,24 +1042,24 @@ Proof.
     (State k (Stmt (↷ l) s) m2)); solve_elem_of.
 Qed.
 
-Fixpoint ctx_breaks_valid (k : ctx Ti) : Prop :=
+Fixpoint ctx_catches_valid (k : ctx Ti) : Prop :=
   match k with
   | [] => True
   | CExpr _ (if{□} s1 else s2) :: k =>
-     breaks_valid (ctx_breaks k) s1 ∧
-     breaks_valid (ctx_breaks k) s2 ∧ ctx_breaks_valid k
+     breaks_valid (ctx_catches k) s1 ∧
+     breaks_valid (ctx_catches k) s2 ∧ ctx_catches_valid k
   | CStmt (□ ;; s | s ;; □ | if{_} □ else s | if{_} s else □) :: k =>
-     breaks_valid (ctx_breaks k) s ∧ ctx_breaks_valid k
-  | _ :: k => ctx_breaks_valid k
+     breaks_valid (ctx_catches k) s ∧ ctx_catches_valid k
+  | _ :: k => ctx_catches_valid k
   end.
 Definition direction_breaks_valid (n : nat) (d : direction Ti) :=
   match d with ↑ i => i < n | _ => True end.
 Definition state_breaks_valid (S : state Ti) : Prop :=
   let (k,φ,m) := S in
   match φ with
-  | Stmt d s => breaks_valid (ctx_breaks k) s ∧
-      direction_breaks_valid (ctx_breaks k) d ∧ ctx_breaks_valid k
-  | _ => ctx_breaks_valid k
+  | Stmt d s => breaks_valid (ctx_catches k) s ∧
+      direction_breaks_valid (ctx_catches k) d ∧ ctx_catches_valid k
+  | _ => ctx_catches_valid k
   end.
 Lemma cstep_breaks S1 S2 :
   (∀ f s, δ !! f = Some s → breaks_valid 0 s) →
@@ -1075,7 +1075,7 @@ Proof. induction 2; eauto using cstep_breaks. Qed.
 Lemma csteps_initial_breaks m1 m2 f vs k s n :
   (∀ f s, δ !! f = Some s → breaks_valid 0 s) →
   Γ\ δ ⊢ₛ initial_state m1 f vs ⇒* State k (Stmt (↑ n) s) m2 →
-  n < ctx_breaks k.
+  n < ctx_catches k.
 Proof.
   intros. destruct (csteps_breaks (initial_state m1 f vs)
     (State k (Stmt (↑ n) s) m2)); naive_solver.
