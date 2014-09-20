@@ -178,6 +178,7 @@ type format =
 let col = ref 0;;
 let the_anon = ref 0;;
 let the_compound_decls = ref ([]:(char list * decl) list);;
+let the_local_compound_decls = ref ([]:(char list * decl) list);;
 let the_printfs = ref ([]:(char list * (format list * decl)) list);;
 let the_strings = ref ([]:(char list * decl) list);;
 
@@ -436,7 +437,9 @@ let rec add_compound k0 n l =
        | _ -> failwith "add_compound") l') l)) in
    try let k' = List.assoc n !the_compound_decls in
      if k' <> k then raise (Incompatible_compound (n,k',k))
-   with Not_found -> the_compound_decls := !the_compound_decls@[(n,k)]
+   with Not_found ->
+     the_compound_decls := !the_compound_decls@[(n,k)];
+     the_local_compound_decls := !the_local_compound_decls@[(n,k)]
 
 and ctype_of_specifier x =
   let rec cint_of_specifier has_int sign rank x =
@@ -491,9 +494,11 @@ and ctype_of_specifier x =
           match x with
           | Cabs.NOTHING -> None
           | _ -> Some (cexpr_of_expression x))) l) in
-     (try let k' = List.assoc n !the_compound_decls in
+      begin try let k' = List.assoc n !the_compound_decls in
         if k' <> k then raise (Incompatible_compound (n,k',k))
-      with Not_found -> the_compound_decls := !the_compound_decls@[(n,k)]);
+      with Not_found ->
+        the_compound_decls := !the_compound_decls@[(n,k)];
+        the_local_compound_decls := !the_local_compound_decls@[(n,k)] end;
       CTEnum n
   | [Cabs.SpecType (Cabs.Tnamed s)] -> CTDef (chars_of_string s)
   | _ -> raise (Unknown_specifier x)
@@ -803,12 +808,14 @@ let decls_of_definition x =
 
 let decls_of_cabs x =
   the_anon := 0;
-  the_compound_decls := [];
   the_printfs := [];
-  let decls = List.flatten (List.map decls_of_definition x) in
+  the_compound_decls := [];
+  let decls = List.flatten (List.map (fun d ->
+    the_local_compound_decls := [];
+    !the_local_compound_decls @ decls_of_definition d
+  ) x) in
   (chars_of_string "main",
     !the_strings@
-    !the_compound_decls@
     printf_prelude()@
     List.map (fun (x,(_,d)) -> (x,d)) !the_printfs@
     decls);;
