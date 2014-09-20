@@ -197,7 +197,7 @@ let printf_conversion = Str.regexp (
   (* Not supported: L, j, z, t *)
 ^ "\\(\\|[lh]\\|hh\\|ll\\)"
   (* Not supported: o, u, x, X, a, A, e, E, f, F, g, G, p, n *)
-^ "\\([cdisu%]\\)"
+^ "\\([cdisu]\\)"
 )
 
 let parse_printf fmt =
@@ -205,6 +205,8 @@ let parse_printf fmt =
   let len = String.length fmt in
   let rec scan leftover pos =
     if pos = len then singleton leftover
+    else if Str.string_match (Str.regexp "%%") fmt pos then
+      scan ('%' :: leftover) (pos + 2)
     else if String.get fmt pos = '%' then
       if Str.string_match printf_conversion fmt (pos + 1) then
         let pos' = Str.match_end()
@@ -212,67 +214,68 @@ let parse_printf fmt =
         and width = try int_of_string (Str.matched_group 2 fmt) with _ -> 0
         and length = Str.matched_group 3 fmt
         and conv = Str.matched_group 4 fmt in
-        if conv = "%" then scan ('%' :: leftover) pos' else begin
-          singleton leftover @ Format(flags,width,length,conv) :: scan [] pos'
-        end
+        singleton leftover @ Format(flags,width,length,conv) :: scan [] pos'
       else failwith "parse_printf"
     else scan (String.get fmt pos :: leftover) (pos + 1)
   in scan [] 0;;
 
+let rec replicate n x = if n <= 0 then [] else x :: replicate (n - 1) x;;
+
 let do_printf_int flags width x =
   let x' = if Int 0 <=/ x then x else x */ Int (-1) in
-  let s = chars_of_string (string_of_num x') in
-  let len = List.length s
+  let s = chars_of_string (string_of_num x')
+  (* for unsigned, neither + nor ' ' is allowed *)
   and prefix =
-    if Int 0 <=/ x then
-      if String.contains flags '+' then ['+']
-      else if String.contains flags ' ' then [' '] else []
-    else ['-'] in
-  let padding_sym = if String.contains flags '0' then '0' else ' '
-  and padding_len = width - len - List.length prefix in
-  let rec pad n = if n <= 0 then [] else padding_sym :: pad (n - 1) in
-  if String.contains flags '-'
-  then prefix @ s @ pad padding_len
-  else prefix @ pad padding_len @ s;;
+    if x </ Int 0 then ['-']
+    else if String.contains flags '+' then ['+']
+    else if String.contains flags ' ' then [' '] else [] in
+  let pad_sym = if String.contains flags '0' then '0' else ' '
+  and pad_len = width - List.length s - List.length prefix in
+  if String.contains flags '-' then prefix @ s @ replicate pad_len pad_sym
+  else prefix @ replicate pad_len pad_sym @ s;;
 
-let rec do_printf_string env tenv m a =
+let do_printf_chars flags width s = 
+  if String.contains flags '-' then s @ replicate (width - List.length s) ' '
+  else replicate (width - List.length s) ' ' @ s;;
+
+let rec lookup_string env tenv m a =
   match mem_lookup env tenv a m with
   | Some (VBase (VInt (_,n))) when int_of_z n <> 0 ->
      Char.chr (int_of_z n) ::
-       do_printf_string env tenv m (addr_plus env tenv (z_of_int 1) a)
+       lookup_string env tenv m (addr_plus env tenv (z_of_int 1) a)
   | _ -> [];;
 
 let rec do_printf env tenv m fmts vs =
   match fmts, vs with
   | StringLit s :: fmts, _ -> s @ do_printf env tenv m fmts vs
   | Format(flags,width,_,"c") :: fmts, VBase (VInt (_,n)) :: vs ->
-     Char.chr (int_of_z n) :: do_printf env tenv m fmts vs
+     do_printf_chars flags width [Char.chr (int_of_z n)] @
+       do_printf env tenv m fmts vs
   | Format(flags,width,_,"s") :: fmts, VBase (VPtr (Ptr a)) :: vs ->
-     do_printf_string env tenv m a @ do_printf env tenv m fmts vs
+     do_printf_chars flags width (lookup_string env tenv m a) @
+       do_printf env tenv m fmts vs
   | Format(flags,width,_,_) :: fmts, VBase (VInt (_,n)) :: vs ->
      do_printf_int flags width (num_of_z n) @ do_printf env tenv m fmts vs
   | _, _ -> [];;
 
-let type_arg_of_printf length conv =
-  let sign = if String.contains conv 'u' then Unsigned else Signed
-  and rank =
-    match length with
-    | "ll" -> CLongLongRank | "l" -> CLongRank
-    | "h" -> CShortRank | "hh" -> CCharRank | _ -> CIntRank in
-  CTInt {csign = Some sign; crank = rank}
+let arg_of_printf length conv =
+  match conv with
+  | "c" -> CTInt {csign = None; crank = CCharRank}
+  | "s" -> CTPtr (CTInt {csign = None;crank = CCharRank})
+  | _ ->
+    let sign = if String.contains conv 'u' then Unsigned else Signed
+    and rank =
+      match length with
+      | "ll" -> CLongLongRank | "l" -> CLongRank
+      | "h" -> CShortRank | "hh" -> CCharRank | _ -> CIntRank in
+    CTInt {csign = Some sign; crank = rank};;
 
 let rec args_of_printf n fmts =
   match fmts with
   | [] -> []
   | StringLit _ :: fmts -> args_of_printf n fmts
-  | Format(_,_,length,"c") :: fmts ->
-     (Some (chars_of_int n), CTInt {csign = None; crank = CCharRank}) ::
-     args_of_printf (1 + n) fmts
-  | Format(_,_,length,"s") :: fmts ->
-     (Some (chars_of_int n), CTPtr (CTInt {csign = None;crank = CCharRank})) ::
-     args_of_printf (1 + n) fmts
   | Format(_,_,length,conv) :: fmts ->
-     (Some (chars_of_int n), type_arg_of_printf length conv) ::
+     (Some (chars_of_int n), arg_of_printf length conv) ::
      args_of_printf (1 + n) fmts;;
 
 let printf_prelude () =
@@ -310,13 +313,16 @@ let printf_prelude () =
          [CEVar n;CEVar i;CEVar width])))))));
    (chars_of_string "len_core_str-%d",
     FunDecl ([(Some n, CTInt int_signed);
-              (Some i, CTPtr (CTInt {csign = None;crank = CCharRank}))],
+              (Some i, CTPtr (CTInt {csign = None; crank = CCharRank}));
+              (Some width, CTInt int_signed)],
              CTInt int_signed,Some
      (CSComp (CSWhile (CEUnOp
           (NotOp,CEBinOp (CompOp EqOp,CEDeref (CEVar i),econst0)),
         CSComp (CSDo (CEAssign (PostOp (ArithOp PlusOp),CEVar n,econst1)),
         CSDo (CEAssign (PreOp (ArithOp PlusOp),CEVar i,econst (Int 1))))),
-      CSReturn (Some (CEVar n))))))];;
+       CSIf (CEBinOp (CompOp LtOp,CEVar n,CEVar width),
+        CSReturn (Some (CEVar width)),
+        CSReturn (Some (CEVar n)))))))];;
 
 let rec length_of_printf fmts =
   match fmts with
@@ -331,12 +337,13 @@ let printf_stmt fmts =
     | [] -> CSReturn (Some (CEVar n))
     | StringLit _ :: fmts -> body i fmts
     | Format (flags,width,_,"c") :: fmts ->
-        CSComp (CSDo (CEAssign (PreOp (ArithOp PlusOp), CEVar n,econst1)),
+        CSComp (CSDo (CEAssign (PreOp (ArithOp PlusOp), CEVar n,
+          econst (Int (if 1 < width then width else 1)))),
           body (1 + i) fmts)
     | Format (flags,width,_,"s") :: fmts ->
         CSComp (CSDo (CEAssign (PreOp (ArithOp PlusOp), CEVar n,
           CECall (chars_of_string "len_core_str-%d",
-            [econst0; CEVar (chars_of_int i)]))),
+            [econst0; CEVar (chars_of_int i); econst (Int (width))]))),
           body (1 + i) fmts)
     | Format (flags,width,_,conv) :: fmts ->
         let has_prefix =
