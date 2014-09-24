@@ -709,6 +709,9 @@ Proof.
       apply is_pure_locks in H; simpl in H; rewrite H
     end; solve_elem_of.
 Qed.
+Lemma ehstep_size ρ e1 m1 e2 m2 :
+  Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → size e2 < size e1.
+Proof. destruct 1; simpl; lia. Qed.
 Lemma estep_if_true_no_locks ρ m v e2 e3 :
   val_true m v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e2, m.
 Proof. rewrite <-(mem_unlock_empty m) at 3. by constructor. Qed.

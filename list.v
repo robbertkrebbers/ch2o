@@ -752,6 +752,14 @@ Proof.
   intros l1 l2 Hl.
   by rewrite <-(reverse_involutive l1), <-(reverse_involutive l2), Hl.
 Qed.
+Lemma sum_list_with_app (f : A → nat) l k :
+  sum_list_with f (l ++ k) = sum_list_with f l + sum_list_with f k.
+Proof. induction l; simpl; lia. Qed.
+Lemma sum_list_with_reverse (f : A → nat) l :
+  sum_list_with f (reverse l) = sum_list_with f l.
+Proof.
+  induction l; simpl; rewrite ?reverse_cons, ?sum_list_with_app; simpl; lia.
+Qed.
 
 (** ** Properties of the [last] function *)
 Lemma last_snoc x l : last (l ++ [x]) = Some x.

@@ -286,15 +286,13 @@ measure can be used for well-founded induction on expressions. *)
 Instance expr_size {Ti} : Size (expr Ti) :=
   fix go e : nat := let _ : Size _ := go in
   match e with
-  | var{_} _ | #{_} _ | %{_} _ | abort _ => 0
-  | .* e | & e => S (size e)
-  | e1 ::={_} e2 => S (size e1 + size e2)
+  | var{_} _ | abort _ => 1
+  | #{_} _ | %{_} _ => 0
+  | .* e | & e | cast{_} e => S (size e)
+  | e1 ::={_} e2 | e1 @{_} e2 | e1,, e2 | #[_:=e1] e2 => S (size e1 + size e2)
   | call _ @ es => S (sum_list_with size es)
   | load e | e %> _ | e #> _ | alloc{_} e | free e | @{_} e => S (size e)
-  | e1 @{_} e2 => S (size e1 + size e2)
   | if{e1} e2 else e3 => S (size e1 + size e2 + size e3)
-  | e1,, e2 | #[_:=e1] e2 => S (size e1 + size e2)
-  | cast{_} e => S (go e)
   end.
 Lemma expr_wf_ind {Ti} (P : expr Ti → Prop)
   (Pind : ∀ e, (∀ e', size e' < size e → P e')%nat → P e) : ∀ e, P e.
@@ -815,6 +813,28 @@ Proof.
   * intros. rewrite IH, ectx_item_subst_locks. solve_elem_of.
 Qed.
 
+Instance ectx_item_size {Ti} : Size (ectx_item Ti) := λ Ei,
+  match Ei with
+  | .* □ | & □ | load □ | □ %> _ | □ #> _ | alloc{_} □
+    | free □ | @{_} □ | cast{_} □ => 1
+  | □ ::={_} e | e ::={_} □ | □ @{_} e | e @{_} □
+    | □,, e | #[_:=□] e | #[_:=e] □  => S (size e)
+  | call _ @ es1 □ es2 => S (sum_list_with size es1 + sum_list_with size es2)
+  | if{□} e2 else e3 => S (size e2 + size e3)
+  end.
+Lemma ectx_item_subst_size {Ti} (Ei : ectx_item Ti) e :
+  size (subst Ei e) = (size Ei + size e)%nat.
+Proof.
+  destruct Ei; simpl; auto with lia.
+  rewrite sum_list_with_app, sum_list_with_reverse; simpl; lia.
+Qed.
+Lemma ectx_subst_size {Ti} (E : ectx Ti) e :
+  size (subst E e) = (sum_list_with size E + size e)%nat.
+Proof.
+  revert e. induction E as [|Ei E IH]; intros e; simpl; [done|].
+  rewrite IH, ectx_item_subst_size; lia.
+Qed.
+  
 (** The induction principle [ectx_expr_ind] is used to perform simultaneous
 induction on an expression [e] and context [E]. Although a similar result can
 be obtained by generalizing over [E] before doing the induction on [e], this
