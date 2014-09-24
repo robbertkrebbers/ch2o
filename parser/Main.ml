@@ -196,7 +196,7 @@ let printf_conversion = Str.regexp (
   (* Not supported: precision since we do not have floats *)
   (* Not supported: L, j, z, t *)
 ^ "\\(\\|[lh]\\|hh\\|ll\\)"
-  (* Not supported: o, u, x, X, a, A, e, E, f, F, g, G, p, n *)
+  (* Not supported: o, x, X, a, A, e, E, f, F, g, G, p, n *)
 ^ "\\([cdisu]\\)"
 )
 
@@ -393,12 +393,10 @@ let rec split_sizeof' x =
   match x with
   | CESizeOf (t) -> (Some t,[])
   | CEBinOp (ArithOp MultOp,x1,x2) ->
-      let (t,l2) = split_sizeof' x2 in
-     (match t with
-      | None ->
-          let (t',l1) = split_sizeof' x1 in
-          (t',l1@l2)
-      | _ -> (t,x1::l2))
+      let (t,l2) = split_sizeof' x2 in begin
+      match t with
+      | None -> let (t',l1) = split_sizeof' x1 in (t',l1@l2)
+      | _ -> (t,x1::l2) end
   | _ -> (None,[x]);;
 
 let split_sizeof x =
@@ -412,6 +410,15 @@ let name_of s = if s <> "" then s else
   let s = "anon-"^string_of_int !the_anon in
   the_anon := !the_anon + 1; s;;
 
+let num_of_string' base s =
+  let chars = "0123456789abcdef" in
+  let rec scan i =
+    if i = 0 then Int 0 else
+    try let n = String.index chars (Char.lowercase (String.get s (i - 1))) in
+      Int n +/ Int base */ scan (i - 1)
+    with _ -> failwith "num_of_string'" in
+  scan (String.length s);;
+
 let const_of_string s =
   let rec go n sign rank =
     match String.get s (n - 1) with
@@ -419,7 +426,13 @@ let const_of_string s =
     | 'l' | 'L' when rank = CIntRank -> go (n - 1) sign CLongRank
     | 'l' | 'L' when rank = CLongRank -> go (n - 1) sign CLongLongRank
     | _ ->
-        ({csign = Some sign; crank = rank},num_of_string (String.sub s 0 n)) in
+       let x =
+         if Str.string_match (Str.regexp "0x[0-9]+") s 0 then
+           num_of_string' 16 (String.sub s 2 (n-2))
+         else if Str.string_match (Str.regexp "0[0-9]+") s 0 then
+           num_of_string' 8 (String.sub s 1 (n-1))
+         else num_of_string (String.sub s 0 n) in
+       ({csign = Some sign; crank = rank},x) in
   go (String.length s) Signed CIntRank;;
 
 let rec split_storage t =
