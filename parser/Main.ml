@@ -677,7 +677,7 @@ and cexpr_of_expression x =
         cexpr_of_expression y1,cexpr_of_expression y2))
   | Cabs.MEMBEROF (y,f) -> CEField (cexpr_of_expression y,chars_of_string f)
   | Cabs.MEMBEROFPTR (y,f) ->
-      CEDeref (CEField (cexpr_of_expression y,chars_of_string f))
+      CEField (CEDeref (cexpr_of_expression y),chars_of_string f)
   | Cabs.NOTHING -> econst1
   | _ -> raise (Unknown_expression x)
 
