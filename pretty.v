@@ -4,6 +4,8 @@ Require Export numbers option.
 Require Import Ascii String ars.
 
 Infix "+:+" := String.append (at level 60, right associativity) : C_scope.
+Arguments String.append _ _ : simpl never.
+
 Instance assci_eq_dec : ∀ a1 a2, Decision (a1 = a2) := ascii_dec.
 Instance string_eq_dec (s1 s2 : string) : Decision (s1 = s2).
 Proof. solve_decision. Defined.

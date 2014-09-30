@@ -283,7 +283,7 @@ let printf_prelude () =
   let i = chars_of_string "i" and width = chars_of_string "width"
   and n = chars_of_string "n" in
   [(chars_of_string "len_core-%d",
-    FunDecl ([(Some n, CTInt int_signed);
+    FunDecl ([], [(Some n, CTInt int_signed);
               (Some i, CTInt {csign = Some Unsigned; crank = CLongLongRank});
               (Some width, CTInt int_signed)],
              CTInt int_signed,Some
@@ -297,7 +297,7 @@ let printf_prelude () =
         CSReturn (Some (CEVar width)),
         CSReturn (Some (CEVar n))))))));
    (chars_of_string "len_core_signed-%d",
-    FunDecl ([(Some n, CTInt int_signed);
+    FunDecl ([], [(Some n, CTInt int_signed);
               (Some i, CTInt {csign = Some Signed; crank = CLongLongRank});
               (Some width, CTInt int_signed)],
              CTInt int_signed,Some
@@ -312,7 +312,7 @@ let printf_prelude () =
        CECall (chars_of_string "len_core-%d",
          [CEVar n;CEVar i;CEVar width])))))));
    (chars_of_string "len_core_str-%d",
-    FunDecl ([(Some n, CTInt int_signed);
+    FunDecl ([], [(Some n, CTInt int_signed);
               (Some i, CTPtr (CTInt {csign = None; crank = CCharRank}));
               (Some width, CTInt int_signed)],
              CTInt int_signed,Some
@@ -356,7 +356,7 @@ let printf_stmt fmts =
           CECall (chars_of_string f,
             [has_prefix; CEVar (chars_of_int i); econst (Int (width))]))),
           body (1 + i) fmts) in
-  CSLocal (AutoStorage,n,CTInt int_signed,
+  CSLocal ([],n,CTInt int_signed,
     Some (CSingleInit (econst (Int (length_of_printf fmts)))),body 0 fmts);;
 
 let unop_of_unary_operator x =
@@ -435,18 +435,19 @@ let const_of_string s =
        ({csign = Some sign; crank = rank},x) in
   go (String.length s) Signed CIntRank;;
 
+let cstorage_of_storage x =
+  match x with
+  | Cabs.STATIC -> StaticStorage
+  | Cabs.EXTERN -> ExternStorage
+  | Cabs.AUTO -> AutoStorage
+  | _ -> failwith "cstorage_of_storage";;
+
 let rec split_storage t =
-  let rec ensure_no_storage t =
-    match t with
-    | [] -> []
-    | Cabs.SpecStorage _::t -> failwith "split_storage"
-    | h :: t -> h :: ensure_no_storage t in
   match t with
-  | [] -> (AutoStorage,[])
-  | Cabs.SpecStorage Cabs.AUTO::t -> AutoStorage,ensure_no_storage t
-  | Cabs.SpecStorage Cabs.STATIC::t -> StaticStorage,ensure_no_storage t
-  | Cabs.SpecStorage Cabs.EXTERN::t -> ExternStorage,ensure_no_storage t
-  | h :: t -> let (sto,t) = split_storage t in sto,h::t
+  | [] -> ([],[])
+  | Cabs.SpecStorage x::t ->
+     let stos,t = split_storage t in cstorage_of_storage x::stos,t
+  | h :: t -> let sto,t = split_storage t in sto,h::t;;
 
 let rec add_compound k0 n l =
    let k = CompoundDecl (k0,
@@ -545,7 +546,7 @@ and cexpr_of_expression x =
       let a = chars_of_string x in
       begin try let _ = List.assoc a !the_strings in ()
       with Not_found ->
-        let decl = GlobDecl (
+        let decl = GlobDecl ([],
           CTArray (CTInt {csign = None; crank = CCharRank},
             econst (Int (String.length s + 1))),
           Some (CCompoundInit (List.map (fun c ->
@@ -659,8 +660,8 @@ and cexpr_of_expression x =
         let args = args_of_printf 0 fmts in
         let decl =
           if !printf_returns_int
-          then FunDecl (args,CTInt int_signed,Some (printf_stmt fmts))
-          else FunDecl (args,CTVoid,Some CSSkip) in
+          then FunDecl ([],args,CTInt int_signed,Some (printf_stmt fmts))
+          else FunDecl ([],args,CTVoid,Some CSSkip) in
         the_printfs := !the_printfs @ [(f,(fmts,decl))] end;
       CECall (f,List.map cexpr_of_expression l)
   | Cabs.CALL (Cabs.VARIABLE s,l) ->
@@ -705,12 +706,12 @@ let cscomp x y =
   if y = CSSkip then x else CSComp (x,y);;
 
 let rec cstmt_of_statements l =
-  let rec fold_defs h t l b =
+  let rec fold_defs stos t l b =
     match l with
     | [] -> cstmt_of_statements b
     | ((s,t',[],_),z)::l' ->
-        CSLocal (h,chars_of_string s, ctype_of_specifier_decl_type t t',
-          cinit_of_init_expression_option z, fold_defs h t l' b)
+        CSLocal (stos,chars_of_string s, ctype_of_specifier_decl_type t t',
+          cinit_of_init_expression_option z, fold_defs stos t l' b)
     | _ -> failwith "cstmt_of_statements 1" in
   match l with
   | [] -> CSSkip
@@ -720,7 +721,7 @@ let rec cstmt_of_statements l =
   | Cabs.BLOCK ({Cabs.bstmts = y},_)::l' ->
       cscomp (CSScope (cstmt_of_statements y)) (cstmt_of_statements l')
   | Cabs.DEFINITION (Cabs.DECDEF ((t,l),_))::l' ->
-      let (sto,t) = split_storage t in fold_defs sto t l l'
+      let (stos,t) = split_storage t in fold_defs stos t l l'
   | Cabs.COMPUTATION (y,_)::l' ->
       cscomp (CSDo (cexpr_of_expression y))
         (cstmt_of_statements l')
@@ -737,7 +738,7 @@ let rec cstmt_of_statements l =
           cstmt_of_statements [y]))
         (cstmt_of_statements l')
   | Cabs.FOR (Cabs.FC_DECL (Cabs.DECDEF ((t,l),_)),e2,e3,y,z)::l' ->
-      cscomp (CSScope (fold_defs AutoStorage t l
+      cscomp (CSScope (fold_defs [] t l
           [Cabs.FOR (Cabs.FC_EXP Cabs.NOTHING,e2,e3,y,z)]))
         (cstmt_of_statements l')
   | Cabs.DOWHILE (e,y,_)::l' ->
@@ -797,26 +798,28 @@ let rec return_of_decl_type t x =
 let decls_of_definition x =
   match x with
   | Cabs.DECDEF ((t,l),_) ->
-      let (_,t) = split_storage t in
+      let (stos,t) = split_storage t in
       List.map (fun z ->
         match z with
         | ((s,t',[],_),z) ->
             (match return_of_decl_type (ctype_of_specifier t) t' with
             | Some ret ->
-                (chars_of_string s, FunDecl (args_of_decl_type t', ret, None))
+                (chars_of_string s,FunDecl (stos,args_of_decl_type t',ret,None))
             | _ ->
-                (chars_of_string s,GlobDecl (ctype_of_specifier_decl_type t t',
+                (chars_of_string s,GlobDecl (stos,
+                  ctype_of_specifier_decl_type t t',
                   cinit_of_init_expression_option z)))
         | _ -> raise (Unknown_definition x)) l
   | Cabs.FUNDEF ((t,(s,t',[],_)),
         {Cabs.bstmts = l},_,_) ->
-      let (_,t) = split_storage t in
+      let (stos,t) = split_storage t in
       let t = if s = "main" && t = [] then [Cabs.SpecType Cabs.Tint] else t in
       let b = cstmt_of_statements l in
       let b = if s = "main" && no_int_return b then
         CSComp(b,CSReturn (Some (econst0))) else b in
       (match return_of_decl_type (ctype_of_specifier t) t' with
-      | Some ret -> [(chars_of_string s, FunDecl (args_of_decl_type t', ret, Some b))]
+      | Some ret ->
+          [(chars_of_string s, FunDecl (stos,args_of_decl_type t',ret,Some b))]
       | None -> raise (Unknown_definition x))
   | Cabs.ONLYTYPEDEF (t,_) ->
       let _ = ctype_of_specifier t in []

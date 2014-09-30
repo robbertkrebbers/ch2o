@@ -33,7 +33,7 @@ Definition interpreter_initial
     (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
     string + (env Ti * funenv Ti * istate Ti E) :=
   '(Γn,Γ,m,Δg) ← to_envs Θ;
-  '(σs,_,_) ← error_of_option (Δg !! f ≫= maybe_Fun)
+  '(_,σs,_,_) ← error_of_option (Δg !! f ≫= maybe_Fun)
     ("interpreter called with undeclared function `" +:+ f +:+ "`");
   eσlrs ← mapM (to_expr Γn Γ m Δg []) ces;
   let σes := zip_with to_R_NULL σs eσlrs in 
