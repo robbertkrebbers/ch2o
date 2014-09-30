@@ -171,10 +171,10 @@ Proof.
   * intros (i'&?&Hi'). subst. revert i' j Hi'.
     induction l as [|[y|] l IH]; intros i j ?; simpl.
     + done.
-    + destruct i as [|i]; simplify_equality; [left|].
-      right. rewrite Nat.add_succ_comm. by apply (IH i (S j)).
-    + destruct i as [|i]; simplify_equality.
-      rewrite Nat.add_succ_comm. by apply (IH i (S j)).
+    + destruct i as [|i]; simplify_equality'; [left|].
+      right. rewrite <-Nat.add_succ_r. by apply (IH i (S j)).
+    + destruct i as [|i]; simplify_equality'.
+      rewrite <-Nat.add_succ_r. by apply (IH i (S j)).
 Qed.
 Lemma natmap_elem_of_to_list_raw {A} (l : natmap_raw A) i x :
   (i,x) ∈ natmap_to_list_raw 0 l ↔ mjoin (l !! i) = Some x.

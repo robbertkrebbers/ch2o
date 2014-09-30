@@ -183,7 +183,7 @@ Instance counter_separation {A : Set} `{Separation A} :
 Proof.
   split.
   * destruct (sep_inhabited A) as (x&?&?). exists (Counter 0 x).
-    split. done. intro; simplify_equality.
+    sep_unfold; naive_solver.
   * intros x y (Hxy&Hx&Hy&Hxy').
     repeat split; eauto using sep_disjoint_valid_l. intros Hx'.
     rewrite <-(Qcplus_0_r (x.1)). transitivity (x.1 + y.1).
@@ -353,7 +353,8 @@ Instance lockable_separation {A : Set} `{Separation A} :
   Separation (lockable A).
 Proof.
   split.
-  * destruct (sep_inhabited A) as (x&?&?). exists (LUnlocked x). naive_solver.
+  * destruct (sep_inhabited A) as (x&?&?). exists (LUnlocked x).
+    sep_unfold; naive_solver.
   * sep_unfold; intros [][]; naive_solver
       eauto using sep_unmapped_valid, sep_disjoint_valid_l.
   * sep_unfold; intros [][]; naive_solver eauto using

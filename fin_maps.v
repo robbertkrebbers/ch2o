@@ -734,7 +734,7 @@ Proof.
   split.
   * intros Hm i P'; rewrite lookup_merge by done; intros.
     specialize (Hm i). destruct (m1 !! i), (m2 !! i);
-      simplify_equality; auto using bool_decide_pack.
+      simplify_equality'; auto using bool_decide_pack.
   * intros Hm i. specialize (Hm i). rewrite lookup_merge in Hm by done.
     destruct (m1 !! i), (m2 !! i); simplify_equality'; auto;
       by eapply bool_decide_unpack, Hm.

@@ -63,10 +63,9 @@ Proof.
   * intros ? t i x. unfold map_to_list. split.
     + destruct t as [[y|] t]; simpl.
       - rewrite elem_of_cons, elem_of_list_fmap.
-        intros [? | [[??] [??]]]; simplify_equality; simpl; [done |].
+        intros [? | [[??] [??]]]; simplify_equality'; [done |].
         by apply elem_of_map_to_list.
-      - rewrite elem_of_list_fmap.
-        intros [[??] [??]]; simplify_equality; simpl.
+      - rewrite elem_of_list_fmap; intros [[??] [??]]; simplify_equality'.
         by apply elem_of_map_to_list.
     + destruct t as [[y|] t]; simpl.
       - rewrite elem_of_cons, elem_of_list_fmap.

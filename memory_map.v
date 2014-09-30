@@ -451,7 +451,7 @@ Lemma cmap_refine_id Γ Γm m : ✓ Γ → ✓{Γ,Γm} m → m ⊑{Γ@Γm} m.
 Proof.
   destruct m as [m]; intros ? Hm.
   do 2 red; split_ands; simpl; auto using memenv_refine_id.
-  intros ? o r w malloc ??; simplify_equality'.
+  intros ? o r w malloc; rewrite lookup_meminj_id; intros; simplify_equality'.
   destruct (proj2 Hm o w malloc) as (τ&?&_&?&_); auto.
   exists w w; eauto 6 using ctree_refine_id, type_of_typed.
 Qed.

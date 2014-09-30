@@ -1253,7 +1253,7 @@ Lemma ctree_lookup_union_free Γ w r w' :
 Proof.
   intros HΓ. revert w. induction r using rev_ind; intros w Hw Hr;
     rewrite ?ctree_lookup_snoc in Hr; simplify_option_equality;
-    eauto using ctree_lookup_seg_union_free.
+    simplify_type_equality; eauto using ctree_lookup_seg_union_free.
 Qed.
 Lemma ctree_lookup_seg_Some Γ Γm w τ rs w' :
   ✓ Γ → (Γ,Γm) ⊢ w : τ → w !!{Γ} rs = Some w' →
@@ -1280,7 +1280,7 @@ Lemma ctree_lookup_Some Γ Γm w τ r w' :
 Proof.
   intros HΓ. revert w τ.
   induction r as [|rs r IH] using rev_ind; intros w τ Hvτ Hr.
-  { simplify_equality'. eexists; split; [econstructor |]; eauto. }
+  { simplify_type_equality'. eexists; split; [econstructor |]; eauto. }
   rewrite ctree_lookup_snoc in Hr. simplify_option_equality.
   edestruct ctree_lookup_seg_Some as (?&?&?); eauto.
   edestruct IH as (?&?&?); eauto.
@@ -1315,7 +1315,7 @@ Lemma ctree_lookup_Forall (P : pbit Ti → Prop) Γ w r w' :
 Proof.
   intros HΓ ?. revert w. induction r as [|rs r] using rev_ind;
     intros w; rewrite ?ctree_lookup_snoc; intros; simplify_option_equality;
-    eauto using ctree_lookup_seg_Forall.
+    simplify_type_equality; eauto using ctree_lookup_seg_Forall.
 Qed.
 Lemma ctree_new_lookup_seg Γ τ x rs σ :
   ✓ Γ → sep_unshared x → ✓{Γ} τ →
@@ -1552,7 +1552,7 @@ Lemma ctree_lookup_disjoint Γ Γm1 Γm2 w1 w2 τ r w1' w2' :
   w1 !!{Γ} r = Some w1' → w2 !!{Γ} r = Some w2' → w1' ⊥ w2'.
 Proof.
   intros ??. revert w1' w2'. induction r as [|rs r]; intros w1'' w2''.
-  { by intros; simplify_equality'. }
+  { by intros; simplify_type_equality'. }
   rewrite !ctree_lookup_cons; intros. destruct (w1 !!{Γ} r) as [w1'|] eqn:?,
     (w2 !!{Γ} r) as [w2'|] eqn:?; simplify_equality'.
   destruct (ctree_lookup_Some Γ Γm1 w1 τ r w1') as (σ1&?&?); auto.
@@ -1582,7 +1582,7 @@ Lemma ctree_lookup_subseteq Γ w1 w2 r w1' :
   ∃ w2', w2 !!{Γ} r = Some w2' ∧ w1' ⊆ w2'.
 Proof.
   intros ?. revert w1'. induction r as [|rs r IH]; intros w1'' w2''.
-  { intros; simplify_equality'. by exists w2. }
+  { intros; simplify_type_equality'. by exists w2. }
   rewrite !ctree_lookup_cons; intros.
   destruct (w1 !!{Γ} r) as [w1'|] eqn:?; simplify_equality'.
   destruct (IH w1') as (?&->&?);
@@ -1849,7 +1849,7 @@ Lemma ctree_lookup_alter_inv Γ Γm g w r τ σ w' :
 Proof.
   intros ? Hw Hr. revert g w w' Hw.
   induction Hr as [|r rs ????? IH] using @ref_typed_ind.
-  { intros ? w ???; simplify_equality. by exists w. }
+  { intros ? w ???; simplify_type_equality. by exists w. }
   intros g w w' Hw'. rewrite ctree_alter_cons, ctree_lookup_cons; intros.
   destruct (ctree_alter Γ (ctree_alter_seg Γ g rs) r w !!{Γ} r)
     as [w''|] eqn:Hw''; simplify_equality'.
@@ -1890,7 +1890,7 @@ Lemma ctree_alter_ext_lookup Γ g1 g2 w r w' :
   ctree_alter Γ g1 r w = ctree_alter Γ g2 r w.
 Proof.
   revert g1 g2 w'. induction r as [|rs r]; simpl; intros g1 g2 w'.
-  { by intros; simplify_equality'. }
+  { by intros; simplify_type_equality'. }
   rewrite ctree_lookup_cons; intros; simplify_option_equality;
     eauto using ctree_alter_seg_ext_lookup.
 Qed.
@@ -1968,7 +1968,7 @@ Lemma ctree_alter_disjoint Γ Γm g w1 w2 τ r w1' :
   (∀ w2', w1' ⊥ w2' → g w1' ⊥ w2') → ctree_alter Γ g r w1 ⊥ w2.
 Proof.
   intros ??. revert g w1'. induction r as [|rs r]; intros g w1''.
-  { intros; simplify_equality'; eauto. }
+  { intros; simplify_type_equality'; eauto. }
   rewrite !ctree_lookup_cons; intros.
   destruct (w1 !!{Γ} r) as [w1'|] eqn:?; simplify_equality'.
   destruct (ctree_lookup_Some Γ Γm w1 τ r w1') as (σ1&?&?);
@@ -2061,7 +2061,7 @@ Lemma ctree_alter_union Γ Γm g w1 w2 τ r w1' :
   ctree_alter Γ g r (w1 ∪ w2) = ctree_alter Γ g r w1 ∪ w2.
 Proof.
   intros ??. revert g w1'. induction r as [|rs r IH]; intros g w1''.
-  { intros; simplify_equality'; eauto. }
+  { intros; simplify_type_equality'; eauto. }
   rewrite !ctree_lookup_cons; intros.
   destruct (w1 !!{Γ} r) as [w1'|] eqn:?; simplify_equality'.
   destruct (ctree_lookup_Some Γ Γm w1 τ r w1') as (σ1&?&?); auto.
@@ -2326,7 +2326,7 @@ Lemma ctree_alter_byte_disjoint Γ Γm g w1 w2 τ i c1 :
   (∀ c2, c1 ⊥ c2 → g c1 ⊥ c2) → ctree_alter_byte Γ g i w1 ⊥ w2.
 Proof.
   unfold lookupE, ctree_alter_byte, ctree_lookup_byte; intros ???? Hw1 ?.
-  destruct (sublist_lookup _ _ _) as [xbs1|] eqn:?; simplify_type_equality.
+  destruct (sublist_lookup _ _ _) as [xbs1|] eqn:?; simplify_type_equality'.
   assert (ctree_unmapped w2) by eauto using @ctree_unshared_unmapped.
   assert ((Γ,Γm) ⊢ w2 : τ) by eauto using ctree_disjoint_typed.
   assert (union_free w2)
@@ -2350,7 +2350,7 @@ Lemma ctree_alter_byte_union Γ Γm g w1 w2 τ i c1 :
 Proof.
   unfold lookupE, ctree_alter_byte, ctree_lookup_byte; intros ????? Hg Hg'.
   rewrite ctree_union_type_of by done.
-  destruct (sublist_lookup _ _ _) as [xbs1|] eqn:?; simplify_type_equality.
+  destruct (sublist_lookup _ _ _) as [xbs1|] eqn:?; simplify_type_equality'.
   assert (ctree_unmapped w2) by eauto using @ctree_unshared_unmapped.
   assert ((Γ,Γm) ⊢ w2 : τ) by eauto using ctree_disjoint_typed.
   assert (union_free w2)
@@ -2681,7 +2681,7 @@ Lemma ctree_lookup_refine Γ f Γm1 Γm2 w1 w2 τ r w3 :
   ∃ w4, w2 !!{Γ} r = Some w4 ∧ w3 ⊑{Γ,f@Γm1↦Γm2} w4 : type_of w3.
 Proof.
   intros HΓ. revert w1 w2 τ. induction r as [|rs r IH] using rev_ind; simpl.
-  { intros. rewrite ctree_lookup_nil. simplify_equality.
+  { intros. rewrite ctree_lookup_nil. simplify_type_equality.
     erewrite ctree_refine_type_of_l by eauto; eauto. }
   intros w1 w2. rewrite !ctree_lookup_snoc. intros. simplify_option_equality.
   edestruct (ctree_lookup_seg_refine Γ f Γm1 Γm2 w1 w2 τ rs) as (?&?&?);

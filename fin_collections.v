@@ -49,7 +49,7 @@ Qed.
 Lemma size_singleton_inv X x y : size X = 1 → x ∈ X → y ∈ X → x = y.
 Proof.
   unfold size, collection_size. simpl. rewrite <-!elem_of_elements.
-  generalize (elements X). intros [|? l]; intro; simplify_equality.
+  generalize (elements X). intros [|? l]; intro; simplify_equality'.
   rewrite (nil_length_inv l), !elem_of_list_singleton by done. congruence.
 Qed.
 Lemma collection_choose_or_empty X : (∃ x, x ∈ X) ∨ X ≡ ∅.

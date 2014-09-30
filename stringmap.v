@@ -141,7 +141,7 @@ Proof.
     apply bool_decide_unpack, map_Forall_to_list in Hm; revert Hm.
     induction (NoDup_map_to_list m) as [|[p x] l Hpx];
       inversion 1 as [|??? Hm']; simplify_equality'; constructor; eauto.
-    rewrite elem_of_list_fmap; intros ([p' x']&?&?); simplify_equality.
+    rewrite elem_of_list_fmap; intros ([p' x']&?&?); simplify_equality'.
     cut (string_to_pos (string_of_pos p') = p'); [congruence|].
     rewrite Forall_forall in Hm'. eapply (Hm' (_,_)); eauto.
   * intros A [m Hm] s x; unfold map_to_list, lookup; simpl.

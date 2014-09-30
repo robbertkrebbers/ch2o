@@ -170,6 +170,8 @@ Implicit Types r : ref Ti.
 
 Lemma ref_typed_nil Γ τ1 τ2 : Γ ⊢ @nil (ref_seg Ti) : τ1 ↣ τ2 ↔ τ1 = τ2.
 Proof. split. by intros; simplify_type_equality. intros <-. constructor. Qed.
+Lemma ref_typed_nil_2 Γ τ : Γ ⊢ @nil (ref_seg Ti) : τ ↣ τ.
+Proof. constructor. Qed.
 Lemma ref_typed_cons Γ rs r τ1 τ3 :
   Γ ⊢ rs :: r : τ1 ↣ τ3 ↔ ∃ τ2, Γ ⊢ r : τ1 ↣ τ2 ∧ Γ ⊢ rs : τ2 ↣ τ3.
 Proof.
@@ -231,11 +233,10 @@ Global Instance:
 Proof.
   split.
   * intros Γ r τ σ. split.
-    + revert σ. induction r; intros σ;
-        [intros;simplify_equality; constructor|].
-      rewrite ref_lookup_cons, ref_typed_cons.
-      intros. simplify_option_equality.
-      eexists; split; eauto. by apply path_type_check_correct.
+    + revert σ. induction r as [|rs r IH]; intros σ.
+      { rewrite ref_lookup_nil; intros; simplify_equality'; constructor. }
+      rewrite ref_lookup_cons, ref_typed_cons, bind_Some.
+      intros (σ'&?&?). exists σ'; split; auto. by apply path_type_check_correct.
     + induction 1; [done|rewrite ref_lookup_cons].
       simplify_option_equality. by apply path_type_check_complete.
   * intros Γ r τ1 τ2 σ _ Hr. revert τ2.
@@ -401,7 +402,7 @@ Lemma ref_disjoint_freeze_l β r1 r2 : freeze β <$> r1 ⊥ r2 ↔ r1 ⊥ r2.
 Proof.
   split.
   * intros Hr. remember (freeze β <$> r1) as r1' eqn:Hr1'. revert r1 Hr1'.
-    induction Hr; intros [|??] ?; simplify_equality.
+    induction Hr; intros [|??] ?; simplify_equality'.
     + rewrite ref_freeze_freeze in *. constructor; auto.
       eapply ref_seg_disjoint_freeze_l; eauto.
     + constructor (by auto).

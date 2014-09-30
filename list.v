@@ -1253,7 +1253,7 @@ Lemma prefix_of_cons_inv_1 x y l1 l2 : x :: l1 `prefix_of` y :: l2 → x = y.
 Proof. by intros [k ?]; simplify_equality'. Qed.
 Lemma prefix_of_cons_inv_2 x y l1 l2 :
   x :: l1 `prefix_of` y :: l2 → l1 `prefix_of` l2.
-Proof. intros [k ?]; simplify_equality. by exists k. Qed.
+Proof. intros [k ?]; simplify_equality'. by exists k. Qed.
 Lemma prefix_of_app k l1 l2 : l1 `prefix_of` l2 → k ++ l1 `prefix_of` k ++ l2.
 Proof. intros [k' ->]. exists k'. by rewrite (associative_L (++)). Qed.
 Lemma prefix_of_app_alt k1 k2 l1 l2 :
@@ -1407,7 +1407,7 @@ Lemma suffix_of_cons_inv l1 l2 x y :
   x :: l1 `suffix_of` y :: l2 → x :: l1 = y :: l2 ∨ x :: l1 `suffix_of` l2.
 Proof.
   intros [[|? k] E]; [by left|].
-  right. simplify_equality. by apply suffix_of_app_r.
+  right. simplify_equality'. by apply suffix_of_app_r.
 Qed.
 Lemma suffix_of_length l1 l2 : l1 `suffix_of` l2 → length l1 ≤ length l2.
 Proof. intros [? ->]. rewrite app_length. lia. Qed.
@@ -2463,7 +2463,7 @@ Section fmap.
     (f <$> l) !! i = Some x → ∃ y, x = f y ∧ l !! i = Some y.
   Proof.
     intros Hi. rewrite list_lookup_fmap in Hi.
-    destruct (l !! i) eqn:?; simplify_equality; eauto.
+    destruct (l !! i) eqn:?; simplify_equality'; eauto.
   Qed.
   Lemma list_alter_fmap (g : A → A) (h : B → B) l i :
     Forall (λ x, f (g x) = h (f x)) l → f <$> alter g i l = alter h i (f <$> l).
@@ -2652,8 +2652,7 @@ Section mapM.
   Proof.
     revert k. induction l as [|x l]; intros [|y k]; simpl; try done.
     * destruct (f x); simpl; [|discriminate]. by destruct (mapM f l).
-    * destruct (f x) eqn:?; simpl; [|discriminate].
-      destruct (mapM f l); intros; simplify_equality. constructor; auto.
+    * destruct (f x) eqn:?; intros; simplify_option_equality; auto.
   Qed.
   Lemma mapM_Some_2 l k : Forall2 (λ x y, f x = Some y) l k → mapM f l = Some k.
   Proof.
@@ -3229,7 +3228,7 @@ Ltac simplify_suffix_of := repeat
   | H : suffix_of ?x ?x |- _ => clear H
   | H : suffix_of ?x (_ :: ?x) |- _ => clear H
   | H : suffix_of ?x (_ ++ ?x) |- _ => clear H
-  | _ => progress simplify_equality
+  | _ => progress simplify_equality'
   end.
 
 (** The [solve_suffix_of] tactic tries to solve goals involving [suffix_of]. It

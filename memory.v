@@ -927,7 +927,7 @@ Proof.
   destruct Ha as (τ'&n&?&Ha1&?).
   destruct (addr_ref_refine Γ f Γm1 Γm2 a1 a2 τ) as (r&?&Ha2); auto.
   destruct (Hm (addr_index a1) (addr_index a2) r w1 true)
-    as (?&w2&τ''&?&?&?&Hr); auto; specialize (Hr I); simplify_equality'.
+    as (?&w2&τ''&?&?&?&Hr); auto; specialize (Hr I); simplify_type_equality'.
   exists w2. rewrite addr_is_top_array_alt by eauto using addr_refine_typed_r.
   erewrite <-addr_ref_byte_refine, Ha2, (right_id_L [] (++)), Ha1 by eauto.
   split_ands; eauto using pbits_refine_kind_subseteq, ctree_flatten_refine.
@@ -1193,7 +1193,8 @@ Qed.
 
 Lemma locks_refine_id Γ Γm Ω : ✓{Γm} Ω → Ω ⊑{Γ@Γm} Ω.
 Proof.
-  split; split_ands; intros; simplify_equality'; eauto using memenv_refine_id.
+  split; split_ands; intros until 0; rewrite ?lookup_meminj_id; intros;
+    simplify_type_equality'; eauto using memenv_refine_id.
 Qed.
 Lemma locks_refine_compose Γ f g Γm1 Γm2 Γm3 Ω1 Ω2 Ω3 :
   ✓ Γ → Ω1 ⊑{Γ,f@Γm1↦Γm2} Ω2 → Ω2 ⊑{Γ,g@Γm2↦Γm3} Ω3 → Ω1 ⊑{Γ,f ◎ g@Γm1↦Γm3} Ω3.

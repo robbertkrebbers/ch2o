@@ -940,3 +940,4 @@ Section sig_map.
     apply (injective f) in Hxy; subst. rewrite (proof_irrel _ Hy). auto.
   Qed.
 End sig_map.
+Arguments sig_map _ _ _ _ _ _ !_ /.

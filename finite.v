@@ -164,7 +164,7 @@ Section enc_finite.
   Next Obligation.
     apply NoDup_alt. intros i j x. rewrite !list_lookup_fmap. intros Hi Hj.
     destruct (seq _ _ !! i) as [i'|] eqn:Hi',
-      (seq _ _ !! j) as [j'|] eqn:Hj'; simplify_equality.
+      (seq _ _ !! j) as [j'|] eqn:Hj'; simplify_equality'.
     destruct (lookup_seq_inv _ _ _ _ Hi'), (lookup_seq_inv _ _ _ _ Hj'); subst.
     rewrite <-(to_of_nat i), <-(to_of_nat j) by done. by f_equal.
   Qed.
@@ -272,10 +272,10 @@ Next Obligation.
   apply NoDup_app; split_ands.
   * by apply (NoDup_fmap_2 _).
   * intros [k1 Hk1]. clear Hxs IH. rewrite elem_of_list_fmap.
-    intros ([k2 Hk2]&?&?) Hxk2; simplify_equality. destruct Hx. revert Hxk2.
+    intros ([k2 Hk2]&?&?) Hxk2; simplify_equality'. destruct Hx. revert Hxk2.
     induction xs as [|x' xs IH]; simpl in *; [by rewrite elem_of_nil |].
     rewrite elem_of_app, elem_of_list_fmap, elem_of_cons.
-    intros [([??]&?&?)|?]; simplify_equality; auto.
+    intros [([??]&?&?)|?]; simplify_equality'; auto.
   * apply IH.
 Qed.
 Next Obligation.

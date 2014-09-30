@@ -408,8 +408,8 @@ Lemma ref_refine_ne_nil_alt r' sz rs r r'' i :
 Proof. intros ->. by constructor. Qed.
 Lemma addr_refine_eq Γ Γm a1 a2 σ : a1 ⊑{Γ@Γm} a2 : σ → a1 = a2.
 Proof.
-  destruct 1 as [o o' r' r r'' i i'' τ τ' σ σc ??????????? []];
-    simplify_type_equality'.
+  destruct 1 as [o o' r' r r'' i i'' τ τ' σ σc ? Ho' ????????? []];
+    rewrite lookup_meminj_id in Ho'; simplify_type_equality'.
   * by rewrite Nat.mul_0_r, Nat.add_0_r.
   * by rewrite (right_id_L [] (++)).
 Qed.

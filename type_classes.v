@@ -189,6 +189,8 @@ Ltac simplify_type_equality := repeat
     pose proof (typed_unique_alt _ x τ1 τ2 H H2);
     first [subst τ2 | subst τ1]; clear H2
   | H : _ ⊢ [] : _ ↣ _ |- _ => inversion H; clear H (* hack *)
+  | H : _ !!{_} [] = Some _ |- _ => injection' H (* hack *)
+  | H : _ !! [] = Some _ |- _ => injection' H (* hack *)
   | H : _ ⊢ ?p : ?τ ↣ ?σ1, H2 : _ ⊢ ?p : ?τ ↣ ?σ2 |- _ =>
     unless (σ1 = σ2) by done;
     pose proof (path_typed_unique_r _ p τ σ1 σ2 I H H2);

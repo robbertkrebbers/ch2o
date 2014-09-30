@@ -41,6 +41,9 @@ Tactic Notation "case_error_guard" :=
 Tactic Notation "simplify_error_equality" :=
   repeat match goal with
   | _ => progress simplify_equality'
+  | H : appcontext [@mret (sum ?E) _ ?A] |- _ =>
+     change (@mret (sum E) _ A) with (@inr E A) in H
+  | |- appcontext [@mret (sum ?E) _ ?A] => change (@mret _ _ A) with (@inr E A)
   | H : error_of_option ?o ?e = ?x |- _ => apply error_of_option_inr in H
   | H : mbind (M:=sum _) ?f ?o = ?x |- _ =>
     apply bind_inr in H; destruct H as (?&?&?)
@@ -71,8 +74,7 @@ Section mapM.
   Proof.
     revert k. induction l as [|x l]; intros [|y k]; simpl; try done.
     * destruct (f x); simpl; [discriminate|]. by destruct (mapM f l).
-    * destruct (f x) eqn:?; simpl; [discriminate|].
-      destruct (mapM f l); intros; simplify_equality. constructor; auto.
+    * destruct (f x) eqn:?; intros; simplify_error_equality; auto.
   Qed.
   Lemma mapM_inr_2 l k : Forall2 (λ x y, f x = inr y) l k → mapM f l = inr k.
   Proof.

@@ -1045,7 +1045,7 @@ Lemma ectx_full_item_subst {Ti n} (E : ectx_full Ti n) (es : vec _ n)
   depsubst E es = subst Ei e →
     ∃ i, e = es !!! i ∧ Ei = ectx_full_to_item E es i.
 Proof.
-  intros H. destruct E, Ei; simpl; simplify_equality; eauto.
+  intros H. destruct E, Ei; simpl; simplify_equality'; eauto.
   edestruct (vec_to_list_lookup_middle es) as (i&H1&?&H2); eauto.
   exists i. subst. by rewrite <-H1, reverse_involutive.
 Qed.

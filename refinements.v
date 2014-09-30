@@ -51,7 +51,7 @@ Lemma lookup_meminj_id o : @meminj_id Ti !! o = Some (o, []).
 Proof. done. Qed.
 Lemma lookup_meminj_id_Some o1 o2 r :
   meminj_id !! o1 = Some (o2,r) ↔ o2 = o1 ∧ r = [].
-Proof. naive_solver. Qed.
+Proof. rewrite lookup_meminj_id; naive_solver. Qed.
 Lemma lookup_meminj_compose f g o :
   (f ◎ g) !! o = '(y1,r1) ← f !! o; '(y2,r2) ← g !! y1; Some (y2,r1 ++ r2).
 Proof.
@@ -89,7 +89,7 @@ Lemma meminj_positive_r f g : f ◎ g = meminj_id → g = meminj_id.
 Proof. by destruct f, g. Qed.
 
 Lemma meminj_id_injective : meminj_injective (@meminj_id Ti).
-Proof. intros x1 x2 y r1 r2 ??; simplify_equality'; auto. Qed.
+Proof. intros x1 x2 y r1 r2; rewrite !lookup_meminj_id; naive_solver. Qed.
 Lemma meminj_compose_injective f g :
   meminj_injective f → meminj_injective g → meminj_injective (f ◎ g).
 Proof.
@@ -258,8 +258,8 @@ Lemma memenv_refine_injective Γ f Γm1 Γm2: Γm1 ⊑{Γ,f} Γm2 → meminj_inj
 Proof. by intros [??]. Qed.
 Lemma memenv_refine_id Γ Γm : Γm ⊑{Γ} Γm.
 Proof.
-  repeat split; intros; simplify_equality;
-    try setoid_rewrite ref_typed_nil; eauto using meminj_id_injective.
+  repeat split; intros until 0; rewrite ?lookup_meminj_id;
+    naive_solver eauto using meminj_id_injective, ref_typed_nil_2.
 Qed.
 Lemma memenv_refine_compose Γ f1 f2 Γm1 Γm2 Γm3 :
   ✓ Γ → Γm1 ⊑{Γ,f1} Γm2 → Γm2 ⊑{Γ,f2} Γm3 → Γm1 ⊑{Γ,f1 ◎ f2} Γm3.
@@ -293,8 +293,8 @@ Proof.
   * intros o τ ?; apply lookup_meminj_compose_Some.
     eexists o, [], []; eauto 8 using memenv_extend_typed.
   * intros o o'' r τ ?; rewrite lookup_meminj_compose_Some.
-    intros (o'&r'&r''&Ho&Ho'&->).
-    eapply Hf' in Ho'; eauto; simplify_equality.
+    intros (o'&r'&r''&Ho&Ho'&->). eapply Hf' in Ho'; eauto.
+    rewrite lookup_meminj_id in Ho'; simplify_equality.
     rewrite (right_id_L [] (++)); eauto using memenv_extend_typed.
 Qed.
 End memenv_refine.

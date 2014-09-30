@@ -31,6 +31,10 @@ Section operations.
     sep_valid xb1 ∧ sep_valid xb2.
 End operations.
 
+Arguments pbit_indetify _ !_ /.
+Arguments pbit_lock _ !_ /.
+Arguments pbit_unlock _ !_ /.
+
 Section properties.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
@@ -282,9 +286,10 @@ Lemma pbits_unlock_empty_inv xbs βs :
 Proof.
   assert (∀ x, sep_valid x → perm_unlock x = ∅ → x = ∅).
   { intros [[]|]; repeat sep_unfold; naive_solver. }
-  intros Hxbs Hxbs'. revert βs Hxbs. induction Hxbs' as [|[] ? []];
-    intros [|[] ?] ??; decompose_Forall_hyps; constructor; eauto.
-  sep_unfold; f_equal; eauto using eq_sym.
+  intros Hxbs Hxbs'. revert βs Hxbs.
+  induction Hxbs' as [|[] ? []]; intros [|[] ?]; sep_unfold;
+    intros; decompose_Forall_hyps; constructor; eauto.
+  f_equal; eauto using eq_sym.
 Qed.
 Lemma pbits_unlock_mapped xbs βs :
   Forall sep_unmapped (zip_with pbit_unlock_if xbs βs) → Forall sep_valid xbs →

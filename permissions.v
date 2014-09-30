@@ -124,7 +124,7 @@ Lemma perm_token_subseteq x :
 Proof.
   assert (∀ x', x' - 0 = 0 → x' = 0).
   { intros x'. change (x' - 0) with (x' + 0). by rewrite Qcplus_0_r. }
-  rewrite strict_spec_alt.
+  rewrite strict_spec_alt. unfold perm_token.
   destruct (perm_kind_spec x); repeat sep_unfold; (split; [|intro]);
     simplify_equality'; intuition; exfalso; auto.
 Qed.

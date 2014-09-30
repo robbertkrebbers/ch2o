@@ -1601,7 +1601,7 @@ Lemma val_lookup_Some Γ Γm v τ r v' :
 Proof.
   intros ?. revert v τ.
   induction r as [|rs r IH] using rev_ind; intros v τ Hvτ Hr.
-  { simplify_equality. exists τ; split; [econstructor |]; eauto. }
+  { simplify_type_equality. exists τ; split; [econstructor |]; eauto. }
   rewrite val_lookup_snoc in Hr.
   destruct (v !! rs) as [v''|] eqn:Hv''; simplify_equality'.
   destruct (val_lookup_seg_Some Γ Γm v τ rs v'') as (σ''&?&?); auto.
@@ -1704,7 +1704,7 @@ Lemma val_lookup_refine Γ f Γm1 Γm2 v1 v2 τ r v3 :
   ∃ v4, v2 !! r = Some v4 ∧ v3 ⊑{Γ,f@Γm1↦Γm2} v4 : type_of v3.
 Proof.
   intros ?. revert v1 v2 τ. induction r as [|rs r IH] using rev_ind; simpl.
-  { intros v1 v2 τ ??; simplify_equality'. exists v2.
+  { intros v1 v2 τ ??; simplify_type_equality'. exists v2.
     by erewrite val_refine_type_of_l by eauto. }
   intros v1 v2 τ. rewrite !val_lookup_snoc; intros; simplify_option_equality.
   edestruct (val_lookup_seg_refine Γ f Γm1 Γm2 v1 v2 τ rs) as [? [??]];

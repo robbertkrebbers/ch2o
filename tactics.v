@@ -205,7 +205,12 @@ Ltac simplify_equality := repeat
   | H : ?f _ = ?f _ |- _ => apply (injective f) in H
   | H : ?f _ _ = ?f _ _ |- _ => apply (injective2 f) in H; destruct H
     (* before [injection'] to circumvent bug #2939 in some situations *)
-  | H : _ = _ |- _ => injection' H
+  | H : ?f _ = ?f _ |- _ => injection' H
+  | H : ?f _ _ = ?f _ _ |- _ => injection' H
+  | H : ?f _ _ _ = ?f _ _ _ |- _ => injection' H
+  | H : ?f _ _ _ _ = ?f _ _ _ _ |- _ => injection' H
+  | H : ?f _ _ _ _ _ = ?f _ _ _ _ _ |- _ => injection' H
+  | H : ?f _ _ _ _ _ _ = ?f _ _ _ _ _ _ |- _ => injection' H
   | H : ?x = ?x |- _ => clear H
     (* unclear how to generalize the below *)
   | H1 : ?o = Some ?x, H2 : ?o = Some ?y |- _ =>
