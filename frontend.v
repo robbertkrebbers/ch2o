@@ -596,7 +596,8 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
   | CSBreak => inr (m, Δg, break 1, (true, None))
   | CSReturn (Some ce) =>
      '(e,τ') ← to_R_NULL τret <$> to_expr Γn Γ m Δg Δl ce;
-     guard (cast_typed Γ τ' τret) with "return expression of incorrect type";
+     guard (τ' ≠ voidT) with "return expression has type void";
+     guard (cast_typed Γ τ' τret) with "return expression has incorrect type";
      inr (m, Δg, ret (cast{τret} e), (true, Some τret))
   | CSReturn None => inr (m, Δg, ret (#voidV), (true, Some voidT))
   | CSScope cs => go m Δg (None :: Δl) cs
