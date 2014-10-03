@@ -61,11 +61,9 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
      inr <$> F vs
   | if{e1} e2 else e3 =>
      v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe_inr;
-     av2 ← ⟦ e2 ⟧ Γ fs ρ m;
-     av3 ← ⟦ e3 ⟧ Γ fs ρ m;
      match val_true_false_dec m v1 with
-     | inleft (left _) => Some av2
-     | inleft (right _) => Some av3
+     | inleft (left _) => ⟦ e2 ⟧ Γ fs ρ m
+     | inleft (right _) => ⟦ e3 ⟧ Γ fs ρ m
      | inright _ => None
      end
   | e1 ,, e2 =>
@@ -129,14 +127,12 @@ Context (Pcall : ∀ f F es vs v,
   Forall2 (λ e v, ⟦ e ⟧ Γ fs ρ m = Some (inr v)) es vs →
   Forall2 (λ e v, P e (inr v)) es vs →
   F vs = Some v → P (call f @ es) (inr v)).
-Context (Pif1 : ∀ e1 e2 e3 v1 av2 av3,
+Context (Pif1 : ∀ e1 e2 e3 v1 av2,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 →
-  ⟦ e3 ⟧ Γ fs ρ m = Some av3 → P e3 av3 →
   val_true m v1 → P (if{e1} e2 else e3) av2).
-Context (Pif2 : ∀ e1 e2 e3 v1 av2 av3,
+Context (Pif2 : ∀ e1 e2 e3 v1 av3,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
-  ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 →
   ⟦ e3 ⟧ Γ fs ρ m = Some av3 → P e3 av3 →
   val_false v1 → P (if{e1} e2 else e3) av3).
 Context (Pcomma : ∀ e1 e2 v1 av2,
@@ -234,18 +230,6 @@ Lemma expr_eval_typed Γ Γf τs fs ρ m e av τlr :
   (Γ,Γf,'{m},τs) ⊢ e : τlr → (Γ,'{m}) ⊢ av : τlr.
 Proof. intros. eapply expr_eval_typed_aux; eauto. Qed.
 
-(** We prove that only pure expressions are given a semantics. The converse
-of this property is not true, as pure expressions may still exhibit undefined
-behavior, in which case [⟦ e ⟧ Γ fs ρ m] yields [None]. *)
-Lemma expr_eval_is_pure Γ fs ρ m e :
-  is_Some (⟦ e ⟧ Γ fs ρ m) → is_pure (dom _ fs) e.
-Proof.
-  intros (av&Hav); revert e av Hav. 
-  apply (expr_eval_ind Γ fs ρ m); intros; simpl; constructor; eauto.
-  * apply elem_of_dom; eauto.
-  * decompose_Forall; eauto.
-Qed.
-
 Lemma expr_eval_weaken Γ1 Γ2 Γf τs fs ρ1 ρ2 m1 m2 e av τlr :
   ✓ Γ1 → ✓{Γ1,'{m1}} m1 → (Γ1,'{m1}) ⊢ fs : Γf → '{m1} ⊢* ρ1 :* τs → 
   (Γ1,Γf,'{m1},τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 m1 = Some av → 
@@ -281,7 +265,7 @@ Proof.
     destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]];
       naive_solver eauto using val_true_weaken.
   * simplify_option_equality.
-    by destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]].
+    by destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]; eauto.
   * simplify_option_equality; eauto.
   * by simplify_option_equality by eauto using val_cast_ok_weaken.
   * simplify_option_equality; eauto.

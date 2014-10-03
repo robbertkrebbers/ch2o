@@ -50,9 +50,9 @@ Proof.
     by rewrite expr_eval_lrval.
   * right; eexists f, F, Ωs, vs, v; eauto.
 Qed.
-Lemma expr_eval_csteps Γ δ m k e av :
+Lemma expr_eval_sound Γ δ m k e av :
   ⟦ e ⟧ Γ ∅ (get_stack k) m = Some av →
-  Γ\ δ ⊢ₛ State k (Expr e) m ⇒* State k (Expr (lrval_to_expr av)) m.
+  Γ\ δ ⊢ₛ State k (Expr e) m ⇒{k}* State k (Expr (lrval_to_expr av)) m.
 Proof.
   induction e as [e IH] using expr_wf_ind; intros He.
   destruct (is_nf_or_redex e) as [He'|(E&e1&?&->)].
@@ -61,6 +61,32 @@ Proof.
     as [(e2&?&?)|(?&?&?&?&?&?&?&?&?&?)]; simplify_map_equality; auto.
   econstructor; [do_cstep|]. apply IH; auto.
   rewrite !ectx_subst_size, <-Nat.add_lt_mono_l; eauto using ehstep_size.
+Qed.
+Lemma ehstep_expr_eval Γ ρ m1 m2 e1 e2 :
+  Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → is_pure ∅ e1 → ⟦ e1 ⟧ Γ ∅ ρ m1 = ⟦ e2 ⟧ Γ ∅ ρ m1.
+Proof.
+  destruct 1; inversion 1;
+    repeat match goal with
+    | H : is_pure ∅ (#{_} _) |- _ => inversion H; clear H
+    end; try solve_elem_of; simplify_option_equality;
+    by try destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]].
+Qed.
+Lemma expr_eval_complete Γ δ m k e av :
+  Γ\ δ ⊢ₛ State k (Expr e) m ⇒{k}* State k (Expr (lrval_to_expr av)) m →
+  is_pure ∅ e → ⟦ e ⟧ Γ ∅ (get_stack k) m = Some av.
+Proof.
+  remember (State k (Expr e) m) as S eqn:He; intros p; revert S p e He.
+  refine (rtc_ind_l _ _ _ _); [naive_solver eauto using expr_eval_lrval|].
+  intros S1 S2 [p Hk] p' IH e -> Hsafe. revert p' Hk Hsafe IH. pattern S2.
+  apply (cstep_focus_inv _ _ _ _ _ p); try (intros; solve_suffix_of); clear p.
+  * intros E e1 e2 m2 -> p' p _ Hpure IH.
+    assert (is_pure ∅ e1) as Hpure' by eauto using ectx_is_pure.
+    erewrite <-IH by eauto using ehstep_pure_mem,
+      eq_sym, f_equal, ectx_subst_is_pure, ehstep_pure_pure.
+    eauto using subst_preserves_expr_eval, ehstep_expr_eval.
+  * intros E f Ωs vs -> _ _ _ Hsafe.
+    apply ectx_is_pure in Hsafe; inversion Hsafe; solve_elem_of.
+  * intros E e1 -> ?? p'. inv_csteps p'; inv_cstep.
 Qed.
 Lemma expr_eval_subst_ehsafe Γ fs ρ m E e av :
   ⟦ subst E e ⟧ Γ fs ρ m = Some av → is_redex e → Γ\ ρ ⊢ₕ safe e, m.

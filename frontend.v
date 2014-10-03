@@ -306,8 +306,10 @@ Definition to_ref (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
      '(σ,n) ← error_of_option (maybe_TArray τ)
        "array initializer used for non-array type";
      '(e,_) ← to_expr ce;
+     guard (is_pure ∅ e) with
+       "array initializer with non-constant index";
      v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
-       "array initializer with non-constant or undefined index";
+       "array initializer with undefined index";
      '(_,x) ← error_of_option (maybe_VBase v ≫= maybe_VInt)
        "array initializer with non-integer index";
      let i := Z.to_nat x in
@@ -504,8 +506,10 @@ with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
   | CTArray cτ ce =>
      τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
      '(e,_) ← to_expr Γn Γ m Δg Δl ce;
+     guard (is_pure ∅ e) with
+       "array with non-constant size expression";
      v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
-       "array with non-constant or undefined size expression";
+       "array with undefined size expression";
      '(_,x) ← error_of_option (maybe_VBase v ≫= maybe_VInt)
        "array with non-integer size expression";
      let n := Z.to_nat x in
@@ -528,8 +532,10 @@ Definition to_init_val (Γn : compound_env Ti) (Γ : env Ti)
     (m : mem Ti) (Δg : global_env Ti) (Δl : local_env Ti)
     (τ : type Ti) (ci : cinit) : string + val Ti :=
    e ← to_init_expr Γn Γ m Δg Δl τ ci;
+   guard (is_pure ∅ e) with
+     "initializer with non-constant expression";
    error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
-     "undefined constant expression".
+     "initializer with undefined expression".
 Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
     (Δg : global_env Ti) (Δl : local_env Ti)
     (x : string) (sto : cstorage) (cτ : ctype)
@@ -776,8 +782,10 @@ Definition to_enum (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
      guard (Δg !! x = None) with
        ("enum field `" +:+ x +:+ "` previously declared");
      '(e,_) ← to_expr Γn Γ m Δg [] ce;
+     guard (is_pure ∅ e) with
+       ("enum field `" +:+ x +:+ "` has non-constant value"); 
      v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
-       ("enum field `" +:+ x +:+ "` has non-constant or undefined value");
+       ("enum field `" +:+ x +:+ "` has undefined value");
      '(_,z') ← error_of_option (maybe_VBase v ≫= maybe_VInt)
        ("enum field `" +:+ x +:+ "` has non-integer value");
      guard (int_typed z' τi) with "enum field with value out of range";
@@ -1355,6 +1363,7 @@ Lemma to_init_val_typed Γn Γ m Δg Δl τ ci v :
 Proof.
   unfold to_init_val; intros.
   destruct (to_init_expr Γn Γ m Δg Δl τ ci) as [|e] eqn:?; simplify_equality'.
+  case_error_guard; simplify_equality'.
   destruct (⟦ e ⟧ Γ ∅ [] m) as [[]|] eqn:?; simplify_equality'.
   cut ((Γ,'{m}) ⊢ inr v : inr τ); [by intros; typed_inversion_all|].
   eapply (expr_eval_typed_aux Γ (to_funtypes Δg) [] (local_env_stack_types Δl));
@@ -1605,6 +1614,7 @@ Proof.
     intros z Δg ???; simplify_equality'; auto.
   * case_error_guard; simplify_equality'.
     destruct (to_expr Γn Γ m Δg [] ce) as [|[e τlr]] eqn:?; simplify_equality'.
+    case_error_guard; simplify_equality'.
     destruct (⟦ e ⟧ Γ ∅ [] m)
       as [[?|[[| |τi' z'| |]| | | |]]|] eqn:?; simplify_equality'.
     repeat case_error_guard; simplify_equality'.

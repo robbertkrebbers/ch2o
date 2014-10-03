@@ -797,6 +797,17 @@ Lemma ectx_is_pure {Ti} fs (E : ectx Ti) (e : expr Ti) :
 Proof.
   induction E using rev_ind; rewrite ?subst_snoc; eauto using ectx_item_is_pure.
 Qed.
+Lemma ectx_item_subst_is_pure {Ti} fs (Ei : ectx_item Ti) (e1 e2 : expr Ti) :
+  is_pure fs e2 → is_pure fs (subst Ei e1) → is_pure fs (subst Ei e2).
+Proof.
+  destruct Ei; simpl; inversion_clear 2; constructor; decompose_Forall; eauto.
+Qed.
+Lemma ectx_subst_is_pure {Ti} fs (E : ectx Ti) (e1 e2 : expr Ti) :
+  is_pure fs e2 → is_pure fs (subst E e1) → is_pure fs (subst E e2).
+Proof.
+  induction E using rev_ind; rewrite ?subst_snoc;
+    eauto using ectx_item_subst_is_pure, ectx_item_is_pure.
+Qed.
 Lemma ectx_item_subst_locks {Ti} (Ei : ectx_item Ti) e :
   locks (subst Ei e) = locks Ei ∪ locks e.
 Proof.

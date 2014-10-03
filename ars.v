@@ -68,6 +68,10 @@ Section rtc.
   Proof. intros. etransitivity; eauto. Qed.
   Lemma rtc_inv x z : rtc R x z → x = z ∨ ∃ y, R x y ∧ rtc R y z.
   Proof. inversion_clear 1; eauto. Qed.
+  Lemma rtc_ind_l (P : A → Prop) (z : A)
+    (Prefl : P z) (Pstep : ∀ x y, R x y → rtc R y z → P y → P x) :
+    ∀ x, rtc R x z → P x.
+  Proof. induction 1; eauto. Qed.
   Lemma rtc_ind_r_weak (P : A → A → Prop)
     (Prefl : ∀ x, P x x) (Pstep : ∀ x y z, rtc R x y → R y z → P x y → P x z) :
     ∀ x z, rtc R x z → P x z.
