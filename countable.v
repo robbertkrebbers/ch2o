@@ -68,7 +68,7 @@ Lemma surjective_cancel `{Countable A} `{∀ x y : B, Decision (x = y)}
   (f : A → B) `{!Surjective (=) f} : { g : B → A & Cancel (=) f g }.
 Proof.
   exists (λ y, choose (λ x, f x = y) (surjective f y)).
-  intros y. by rewrite (choose_correct _ (surjective f y)).
+  intros y. by rewrite (choose_correct (λ _, _) (surjective f y)).
 Qed.
 
 (** ** Instances *)
