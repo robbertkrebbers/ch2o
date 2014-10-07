@@ -30,18 +30,18 @@ When a [goto l] statement is executed, the direction is changed to [↷l], and
 the semantics performs a non-deterministic small step traversal through the
 zipper until the label [l] is found. *)
 Inductive direction (Ti : Set) : Set :=
-  Down | Up | Top (v : val Ti) | Goto (l : labelname) | Break (n : nat).
+  Down | Up | Top (v : val Ti) | Goto (l : labelname) | Throw (n : nat).
 Arguments Down {_}.
 Arguments Up {_}.
 Arguments Top {_} _.
 Arguments Goto {_} _.
-Arguments Break {_} _.
+Arguments Throw {_} _.
 
 Notation "↘" := Down : C_scope.
 Notation "↗" := Up : C_scope.
 Notation "⇈ v" := (Top v) (at level 20) : C_scope.
 Notation "↷ l" := (Goto l) (at level 20) : C_scope.
-Notation "↑ n" := (Break n) (at level 20) : C_scope.
+Notation "↑ n" := (Throw n) (at level 20) : C_scope.
 
 Instance direction_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (d1 d2 : direction Ti) : Decision (d1 = d2).

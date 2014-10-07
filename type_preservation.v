@@ -306,6 +306,6 @@ Proof.
   destruct (cstep_progress Γ Γf δ S f) as [?|[[v ?]|[?|?]]]; eauto.
   destruct S as [k [[]| | | |] m2]; simplify_equality';
     naive_solver eauto using csteps_initial_gotos, funenv_lookup_gotos,
-    csteps_initial_breaks, funenv_lookup_breaks.
+    csteps_initial_throws, funenv_lookup_throws.
 Qed.
 End type_preservation.

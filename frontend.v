@@ -607,8 +607,8 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      inr (m, Δg, !(cast{voidT} e), (false, None))
   | CSSkip => inr (m, Δg, skip, (false, None))
   | CSGoto l => inr (m, Δg, goto l, (true, None))
-  | CSContinue => inr (m, Δg, break 0, (true, None))
-  | CSBreak => inr (m, Δg, break 1, (true, None))
+  | CSContinue => inr (m, Δg, throw 0, (true, None))
+  | CSBreak => inr (m, Δg, throw 1, (true, None))
   | CSReturn (Some ce) =>
      '(e,τ') ← to_R_NULL τret <$> to_expr Γn Γ m Δg Δl ce;
      guard (τ' ≠ voidT) with "return expression has type void";
@@ -664,7 +664,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
        "while loop with conditional expression of non-base type";
      '(m,Δg,s,cmσ) ← go m Δg Δl cs;
      inr (m, Δg,
-       catch (loop (if{e} skip else break 0 ;; catch s)),
+       catch (loop (if{e} skip else throw 0 ;; catch s)),
        (false, cmσ.2))
   | CSFor ce1 ce2 ce3 cs =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ m Δg Δl ce1;
@@ -676,7 +676,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      inr (m, Δg,
        !(cast{voidT} e1) ;;
        catch (loop (
-         if{e2} skip else break 0 ;; catch s ;; !(cast{voidT} e3)
+         if{e2} skip else throw 0 ;; catch s ;; !(cast{voidT} e3)
        )),
        (false, cmσ.2))
   | CSDoWhile cs ce =>
@@ -685,7 +685,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      _ ← error_of_option (maybe_TBase τ)
        "do-while loop with conditional expression of non-base type";
      inr (m, Δg,
-       catch (loop (catch s ;; if{e} skip else break 0)),
+       catch (loop (catch s ;; if{e} skip else throw 0)),
        (false, cmσ.2))
   | CSIf ce cs1 cs2 =>
      '(e,τ) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
@@ -716,7 +716,7 @@ Definition to_fun_stmt (Γn : compound_env Ti) (Γ : env Ti)
   let (s,cmσ) := stmt_fix_return σ s cmσ in
   guard (gotos s ⊆ labels s) with
     ("function `" +:+ f +:+ "` has unbound gotos");
-  guard (breaks_valid 0 s) with
+  guard (throws_valid 0 s) with
     ("function `" +:+ f +:+ "` has unbound breaks/continues");
   guard (rettype_match cmσ σ) with
     ("function `" +:+ f +:+ "` has incorrect return type");
@@ -1025,7 +1025,7 @@ Definition global_decl_valid (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
   | Fun _ τs τ (Some s) => ∃ cmτ,
      ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
      (Γ,Γf,Γm,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
-     gotos s ⊆ labels s ∧ breaks_valid 0 s
+     gotos s ⊆ labels s ∧ throws_valid 0 s
   | GlobalTypeDef τ => ptr_type_valid Γ τ
   | EnumVal τi z => int_typed z τi
   end.
@@ -1536,7 +1536,7 @@ Lemma to_fun_stmt_typed Γn Γ m Δg f mys τs σ cs m' Δg' s :
   (**i 1.) *) (Γ,to_funtypes Δg','{m'},τs) ⊢ s : cmτ ∧
   (**i 2.) *) rettype_match cmτ σ ∧
   (**i 3.) *) gotos s ⊆ labels s ∧
-  (**i 4.) *) breaks_valid 0 s ∧
+  (**i 4.) *) throws_valid 0 s ∧
   (**i 5.) *) ✓{Γ} m' ∧
   (**i 6.) *) mem_writable_all Γ m' ∧
   (**i 7.) *) '{m} ⊆{⇒} '{m'} ∧

@@ -111,9 +111,9 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
   | cstep_goto m k l :
      Γ\ δ ⊢ₛ State k (Stmt ↘ (goto l)) m ⇒
              State k (Stmt (↷ l) (goto l)) m
-  | cstep_break m k n :
-     Γ\ δ ⊢ₛ State k (Stmt ↘ (break n)) m ⇒
-             State k (Stmt (↑ n) (break n)) m
+  | cstep_throw m k n :
+     Γ\ δ ⊢ₛ State k (Stmt ↘ (throw n)) m ⇒
+             State k (Stmt (↑ n) (throw n)) m
   | cstep_in_label m k l :
      Γ\ δ ⊢ₛ State k (Stmt ↘ (label l)) m ⇒
              State k (Stmt ↗ (label l)) m
@@ -204,10 +204,10 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
   | cstep_label_here m k l :
      Γ\ δ ⊢ₛ State k (Stmt (↷ l) (label l)) m ⇒
              State k (Stmt ↗ (label l)) m
-  | cstep_break_here m k s :
+  | cstep_throw_here m k s :
      Γ\ δ ⊢ₛ State (CStmt (catch □) :: k) (Stmt (↑ 0) s) m ⇒
              State k (Stmt ↗ (catch s)) m
-  | cstep_break_further m k s n :
+  | cstep_throw_further m k s n :
      Γ\ δ ⊢ₛ State (CStmt (catch □) :: k) (Stmt (↑ (S n)) s) m ⇒
              State k (Stmt (↑ n) (catch s)) m
   | cstep_in m k Es l s :
@@ -221,7 +221,7 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
      l ∉ labels s →
      Γ\ δ ⊢ₛ State (CStmt Es :: k) (Stmt (↷ l) s) m ⇒
              State k (Stmt (↷ l) (subst Es s)) m
-  | cstep_out_break m k Es n s :
+  | cstep_out_throw m k Es n s :
      Es ≠ catch □ →
      Γ\ δ ⊢ₛ State (CStmt Es :: k) (Stmt (↑ n) s) m ⇒
              State k (Stmt (↑ n) (subst Es s)) m
@@ -274,7 +274,7 @@ Section inversion.
     match φ with
     | Stmt ↘ skip => P (State k (Stmt ↗ skip) m) → P S2
     | Stmt ↘ (goto l) => P (State k (Stmt (↷ l) (goto l)) m) → P S2
-    | Stmt ↘ (break n) => P (State k (Stmt (↑ n) (break n)) m) → P S2
+    | Stmt ↘ (throw n) => P (State k (Stmt (↑ n) (throw n)) m) → P S2
     | Stmt ↘ (label l) => P (State k (Stmt ↗ (label l)) m) → P S2
     | Stmt ↘ (! e) => P (State (CExpr e (! □) :: k) (Expr e) m) → P S2
     | Stmt ↘ (ret e) => P (State (CExpr e (ret □) :: k) (Expr e) m) → P S2
@@ -1049,38 +1049,38 @@ Fixpoint ctx_catches_valid (k : ctx Ti) : Prop :=
   match k with
   | [] => True
   | CExpr _ (if{□} s1 else s2) :: k =>
-     breaks_valid (ctx_catches k) s1 ∧
-     breaks_valid (ctx_catches k) s2 ∧ ctx_catches_valid k
+     throws_valid (ctx_catches k) s1 ∧
+     throws_valid (ctx_catches k) s2 ∧ ctx_catches_valid k
   | CStmt (□ ;; s | s ;; □ | if{_} □ else s | if{_} s else □) :: k =>
-     breaks_valid (ctx_catches k) s ∧ ctx_catches_valid k
+     throws_valid (ctx_catches k) s ∧ ctx_catches_valid k
   | _ :: k => ctx_catches_valid k
   end.
-Definition direction_breaks_valid (n : nat) (d : direction Ti) :=
+Definition direction_throws_valid (n : nat) (d : direction Ti) :=
   match d with ↑ i => i < n | _ => True end.
-Definition state_breaks_valid (S : state Ti) : Prop :=
+Definition state_throws_valid (S : state Ti) : Prop :=
   let (k,φ,m) := S in
   match φ with
-  | Stmt d s => breaks_valid (ctx_catches k) s ∧
-      direction_breaks_valid (ctx_catches k) d ∧ ctx_catches_valid k
+  | Stmt d s => throws_valid (ctx_catches k) s ∧
+      direction_throws_valid (ctx_catches k) d ∧ ctx_catches_valid k
   | _ => ctx_catches_valid k
   end.
-Lemma cstep_breaks S1 S2 :
-  (∀ f s, δ !! f = Some s → breaks_valid 0 s) →
-  Γ\ δ ⊢ₛ S1 ⇒ S2 → state_breaks_valid S1 → state_breaks_valid S2.
+Lemma cstep_throws S1 S2 :
+  (∀ f s, δ !! f = Some s → throws_valid 0 s) →
+  Γ\ δ ⊢ₛ S1 ⇒ S2 → state_throws_valid S1 → state_throws_valid S2.
 Proof.
   destruct 2; repeat (case_match || simplify_equality');
     intuition eauto with lia.
 Qed.
-Lemma csteps_breaks S1 S2 :
-  (∀ f s, δ !! f = Some s → breaks_valid 0 s) →
-  Γ\ δ ⊢ₛ S1 ⇒* S2 → state_breaks_valid S1 → state_breaks_valid S2.
-Proof. induction 2; eauto using cstep_breaks. Qed.
-Lemma csteps_initial_breaks m1 m2 f vs k s n :
-  (∀ f s, δ !! f = Some s → breaks_valid 0 s) →
+Lemma csteps_throws S1 S2 :
+  (∀ f s, δ !! f = Some s → throws_valid 0 s) →
+  Γ\ δ ⊢ₛ S1 ⇒* S2 → state_throws_valid S1 → state_throws_valid S2.
+Proof. induction 2; eauto using cstep_throws. Qed.
+Lemma csteps_initial_throws m1 m2 f vs k s n :
+  (∀ f s, δ !! f = Some s → throws_valid 0 s) →
   Γ\ δ ⊢ₛ initial_state m1 f vs ⇒* State k (Stmt (↑ n) s) m2 →
   n < ctx_catches k.
 Proof.
-  intros. destruct (csteps_breaks (initial_state m1 f vs)
+  intros. destruct (csteps_throws (initial_state m1 f vs)
     (State k (Stmt (↑ n) s) m2)); naive_solver.
 Qed.
 End smallstep_properties.

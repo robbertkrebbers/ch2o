@@ -258,8 +258,8 @@ Inductive stmt_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs : list (type Ti))
      stmt_refine' Γ Γf τs f Γm1 Γm2 (! e1) (! e2) (false,None)
   | SGoto_refine l :
      stmt_refine' Γ Γf τs f Γm1 Γm2 (goto l) (goto l) (true,None)
-  | SBreak_refine n :
-     stmt_refine' Γ Γf τs f Γm1 Γm2 (break n) (break n) (true,None)
+  | SThrow_refine n :
+     stmt_refine' Γ Γf τs f Γm1 Γm2 (throw n) (throw n) (true,None)
   | SReturn_refine e1 e2 τ :
      e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : inr τ →
      stmt_refine' Γ Γf τs f Γm1 Γm2 (ret e1) (ret e2) (true,Some τ)
@@ -390,7 +390,7 @@ Inductive direction_refine' (Γ : env Ti) (f : meminj Ti) (Γm1 Γm2: memenv Ti)
      v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ →
      direction_refine' Γ f Γm1 Γm2 (⇈ v1) (⇈ v2) (c,Some τ)
   | Goto_refine l cmτ : direction_refine' Γ f Γm1 Γm2 (↷ l) (↷ l) cmτ
-  | Break_refine n cmτ : direction_refine' Γ f Γm1 Γm2 (↑ n) (↑ n) cmτ.
+  | Throw_refine n cmτ : direction_refine' Γ f Γm1 Γm2 (↑ n) (↑ n) cmτ.
 Global Instance direction_refine: RefineT Ti (env Ti)
   (rettype Ti) (direction Ti) := direction_refine'.
 
@@ -444,7 +444,7 @@ Global Instance funenv_refine:
   map_Forall3 (λ s1 s2 τsτ, let '(τs,τ) := τsτ in ∃ cmτ,
     ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
     s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : cmτ ∧ rettype_match cmτ τ ∧
-    gotos s1 ⊆ labels s1 ∧ breaks_valid 0 s1
+    gotos s1 ⊆ labels s1 ∧ throws_valid 0 s1
   ) δ1 δ2 Γf.
 End refinements.
 
@@ -587,8 +587,8 @@ Proof. induction 1; simpl; auto with f_equal. Qed.
 Lemma stmt_refine_labels_elem_of_r Γ Γf f Γm1 Γm2 τs s1 s2 mcτ :
   s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ → labels s1 = labels s2.
 Proof. induction 1; simpl; auto with f_equal. Qed.
-Lemma stmt_refine_breaks_valid Γ Γf f Γm1 Γm2 τs s1 s2 mcτ n :
-  s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ → breaks_valid n s1 → breaks_valid n s2.
+Lemma stmt_refine_throws_valid Γ Γf f Γm1 Γm2 τs s1 s2 mcτ n :
+  s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ → throws_valid n s1 → throws_valid n s2.
 Proof. intros Hs. revert n. induction Hs; naive_solver. Qed.
 Lemma ctx_refine_stack_types Γ f Γm1 Γm2 Γf k1 k2 τf τf' :
   ✓ Γ → k1 ⊑{(Γ,Γf),f@Γm1↦Γm2} k2 : τf ↣ τf' →
@@ -624,7 +624,7 @@ Lemma funenv_lookup_refine_r Γ f Γm1 Γm2 δ1 δ2 Γf g s2 :
     δ1 !! g = Some s1 ∧ Γf !! g = Some (τs,τ) ∧
     ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
     s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : cmτ ∧ rettype_match cmτ τ ∧
-    gotos s1 ⊆ labels s1 ∧ breaks_valid 0 s1.
+    gotos s1 ⊆ labels s1 ∧ throws_valid 0 s1.
 Proof. intros Hδ ?; specialize (Hδ g); repeat case_match; naive_solver. Qed.
 Lemma state_refine_mem Γ Γf f S1 S2 g :
   ¬is_undef_state S1 → S1 ⊑{(Γ,Γf),f} S2 : g → '{SMem S1} ⊑{Γ,f} '{SMem S2}.
@@ -797,7 +797,7 @@ Proof.
       (Γf !! _) as [[τs τ]|]; simplify_option_equality; try done.
     destruct Hδ as (cmτ&?&?&?&?&?&?&?).
     erewrite <-stmt_refine_labels, <-stmt_refine_gotos by eauto.
-    eauto 15 using stmt_refine_typed_r, stmt_refine_breaks_valid.
+    eauto 15 using stmt_refine_typed_r, stmt_refine_throws_valid.
   * rewrite elem_of_subseteq; intros g; rewrite !elem_of_dom.
     intros [[τs τ] ?]; specialize (Hδ g); destruct (δ1 !! _),
       (δ2 !! _); simplify_option_equality; naive_solver.

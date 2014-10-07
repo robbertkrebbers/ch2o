@@ -79,7 +79,7 @@ Inductive stmt (Ti : Set) : Set :=
   | SDo : expr Ti → stmt Ti
   | SSkip : stmt Ti
   | SGoto : labelname → stmt Ti
-  | SBreak : nat → stmt Ti
+  | SThrow : nat → stmt Ti
   | SReturn : expr Ti → stmt Ti
   | SLabel : labelname → stmt Ti
   | SLocal : type Ti → stmt Ti → stmt Ti
@@ -101,7 +101,7 @@ Open Scope stmt_scope.
 Arguments SDo {_} _.
 Arguments SSkip {_}.
 Arguments SGoto {_} _%string.
-Arguments SBreak {_} _.
+Arguments SThrow {_} _.
 Arguments SReturn {_} _.
 Arguments SLabel {_} _.
 Arguments SLocal {_} _ _%S.
@@ -113,7 +113,7 @@ Arguments SIf {_} _ _%S _%S.
 Notation "! e" := (SDo e) (at level 10) : stmt_scope.
 Notation "'skip'" := SSkip : stmt_scope.
 Notation "'goto' l" := (SGoto l) (at level 10) : stmt_scope.
-Notation "'break' n" := (SBreak n) (at level 10) : stmt_scope.
+Notation "'throw' n" := (SThrow n) (at level 10) : stmt_scope.
 Notation "'ret' e" := (SReturn e) (at level 10) : stmt_scope.
 Notation "'label' l" := (SLabel l) (at level 10) : stmt_scope.
 Notation "'local{' τ } s" := (SLocal τ s)
@@ -148,7 +148,7 @@ Proof. by injection 1. Qed.
 Instance stmt_gotos {Ti} : Gotos (stmt Ti) :=
   fix go s := let _ : Gotos _ := @go in
   match s with
-  | ! _ | skip | break _ | ret _ | label _ => ∅
+  | ! _ | skip | throw _ | ret _ | label _ => ∅
   | goto l => {[ l ]}
   | local{_} s | catch s | loop s => gotos s
   | s1 ;; s2 | if{_} s1 else s2 => gotos s1 ∪ gotos s2
@@ -156,7 +156,7 @@ Instance stmt_gotos {Ti} : Gotos (stmt Ti) :=
 Instance stmt_labels {Ti} : Labels (stmt Ti) :=
   fix go s := let _ : Labels _ := @go in
   match s with
-  | ! _ | skip | goto _ | break _ | ret _ => ∅
+  | ! _ | skip | goto _ | throw _ | ret _ => ∅
   | label l => {[ l ]}
   | catch s | local{_} s | loop s => labels s
   | s1 ;; s2 | if{_} s1 else s2 => labels s1 ∪ labels s2
@@ -165,26 +165,26 @@ Instance stmt_locks {Ti} : Locks (stmt Ti) :=
   fix go s := let _ : Locks _ := @go in
   match s with
   | ! e | ret e => locks e
-  | skip | break _ | goto _ | label _=> ∅
+  | skip | throw _ | goto _ | label _=> ∅
   | catch s | local{_} s | loop s => locks s
   | s1 ;; s2 => locks s1 ∪ locks s2
   | if{e} s1 else s2 => locks e ∪ locks s1 ∪ locks s2
   end.
-Fixpoint breaks_valid {Ti} (n : nat) (s : stmt Ti) : Prop :=
+Fixpoint throws_valid {Ti} (n : nat) (s : stmt Ti) : Prop :=
   match s with
   | !_ | ret _ | skip | goto _ | label _ => True
-  | break i => i < n
-  | local{_} s | loop s => breaks_valid n s
-  | catch s => breaks_valid (S n) s
-  | s1 ;; s2 | if{_} s1 else s2 => breaks_valid n s1 ∧ breaks_valid n s2
+  | throw i => i < n
+  | local{_} s | loop s => throws_valid n s
+  | catch s => throws_valid (S n) s
+  | s1 ;; s2 | if{_} s1 else s2 => throws_valid n s1 ∧ throws_valid n s2
   end.
-Instance breaks_valid_dec {Ti} : ∀ n (s : stmt Ti), Decision (breaks_valid n s).
+Instance throws_valid_dec {Ti} : ∀ n (s : stmt Ti), Decision (throws_valid n s).
 Proof.
  refine (
   fix go n s :=
-  match s return Decision (breaks_valid n s) with
+  match s return Decision (throws_valid n s) with
   | !_ | ret _ | skip | goto _ | label _ => left _
-  | break i => cast_if (decide (i < n))
+  | throw i => cast_if (decide (i < n))
   | local{_} s | loop s => go n s
   | catch s => go (S n) s
   | s1 ;; s2 | if{_} s1 else s2 => cast_if_and (go n s1) (go n s2)

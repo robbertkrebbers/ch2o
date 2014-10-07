@@ -85,7 +85,7 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
     match s with
     | skip => {[ State k (Stmt ↗ skip) m ]}
     | goto l => {[ State k (Stmt (↷ l) (goto l)) m ]}
-    | break n => {[ State k (Stmt (↑ n) (break n)) m ]}
+    | throw n => {[ State k (Stmt (↑ n) (throw n)) m ]}
     | label l => {[ State k (Stmt ↗ (label l)) m ]}
     | ! e => {[ State (CExpr e (! □) :: k) (Expr e) m ]}
     | ret e => {[ State (CExpr e (ret □) :: k) (Expr e) m ]}

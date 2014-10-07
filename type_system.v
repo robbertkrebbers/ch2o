@@ -242,7 +242,7 @@ Inductive stmt_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
   | SDo_typed e τ :
      (Γ,Γf,Γm,τs) ⊢ e : inr τ → stmt_typed' Γ Γf Γm τs (! e) (false,None)
   | SGoto_typed l : stmt_typed' Γ Γf Γm τs (goto l) (true,None)
-  | SBreak_typed n : stmt_typed' Γ Γf Γm τs (break n) (true,None)
+  | SThrow_typed n : stmt_typed' Γ Γf Γm τs (throw n) (true,None)
   | SReturn_typed e τ :
      (Γ,Γf,Γm,τs) ⊢ e : inr τ → stmt_typed' Γ Γf Γm τs (ret e) (true,Some τ)
   | SLabel_typed l : stmt_typed' Γ Γf Γm τs (label l) (false,None)
@@ -338,7 +338,7 @@ Inductive direction_typed' (Γ : env Ti) (Γm : memenv Ti) :
   | Up_typed mτ : direction_typed' Γ Γm ↗ (false,mτ)
   | Top_typed c v τ : (Γ,Γm) ⊢ v : τ → direction_typed' Γ Γm (⇈ v) (c,Some τ)
   | Goto_typed l cmτ : direction_typed' Γ Γm (↷ l) cmτ
-  | Break_typed n cmτ : direction_typed' Γ Γm (↑ n) cmτ.
+  | Throw_typed n cmτ : direction_typed' Γ Γm (↑ n) cmτ.
 Global Instance direction_typed: Typed (env Ti * memenv Ti)
   (rettype Ti) (direction Ti) := curry direction_typed'.
 
@@ -377,7 +377,7 @@ Definition funenv_pretyped (Γ : env Ti) (Γm : memenv Ti)
     Γf !! f = Some (τs, τ) ∧
     ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
     (Γ,Γf,Γm,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
-    gotos s ⊆ labels s ∧ breaks_valid 0 s
+    gotos s ⊆ labels s ∧ throws_valid 0 s
   ) δ.
 Global Instance funenv_typed:
     Typed (env Ti * memenv Ti) (funtypes Ti) (funenv Ti) := λ Γm δ Γf,
@@ -545,14 +545,14 @@ Lemma funenv_pretyped_insert Γ Γm δ Γf f s τ τs cmτ :
   funenv_pretyped Γ Γm δ Γf → Γf !! f = Some (τs, τ) →
   ✓{Γ}* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs → ✓{Γ} τ →
   (Γ,Γf,Γm,τs) ⊢ s : cmτ → rettype_match cmτ τ → gotos s ⊆ labels s →
-  breaks_valid 0 s → funenv_pretyped Γ Γm (<[f:=s]> δ) Γf.
+  throws_valid 0 s → funenv_pretyped Γ Γm (<[f:=s]> δ) Γf.
 Proof. intros ????????? f' s'; rewrite lookup_insert_Some; naive_solver. Qed.
 Lemma funenv_lookup Γ Γm Γf δ f τs τ :
   ✓ Γ → (Γ,Γm) ⊢ δ : Γf → Γf !! f = Some (τs,τ) → ∃ s cmτ,
     δ !! f = Some s ∧
     ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧ ✓{Γ} τ ∧
     (Γ,Γf,Γm,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
-    gotos s ⊆ labels s ∧ breaks_valid 0 s.
+    gotos s ⊆ labels s ∧ throws_valid 0 s.
 Proof.
   intros ? [Hδ HΓf] ?; simpl in *. assert (∃ s, δ !! f = Some s) as [s ?].
   { apply elem_of_dom, HΓf, elem_of_dom; eauto. }
@@ -563,7 +563,7 @@ Lemma funenv_lookup_inv Γ Γm Γf δ f s :
     Γf !! f = Some (τs,τ) ∧
     ✓{Γ}* τs ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧ ✓{Γ} τ ∧
     (Γ,Γf,Γm,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
-    gotos s ⊆ labels s ∧ breaks_valid 0 s.
+    gotos s ⊆ labels s ∧ throws_valid 0 s.
 Proof. intros ? [Hδ _] ?. destruct (Hδ f s); naive_solver. Qed.
 Lemma funenv_lookup_gotos Γ Γm Γf δ f s :
   ✓ Γ → (Γ,Γm) ⊢ δ : Γf → δ !! f = Some s → gotos s ⊆ labels s.
@@ -571,8 +571,8 @@ Proof.
   intros.
   by destruct (funenv_lookup_inv Γ Γm Γf δ f s) as (?&?&?&?&?&?&?&?&?&?&?).
 Qed.
-Lemma funenv_lookup_breaks Γ Γm Γf δ f s :
-  ✓ Γ → (Γ,Γm) ⊢ δ : Γf → δ !! f = Some s → breaks_valid 0 s.
+Lemma funenv_lookup_throws Γ Γm Γf δ f s :
+  ✓ Γ → (Γ,Γm) ⊢ δ : Γf → δ !! f = Some s → throws_valid 0 s.
 Proof.
   intros.
   by destruct (funenv_lookup_inv Γ Γm Γf δ f s) as (?&?&?&?&?&?&?&?&?&?&?).

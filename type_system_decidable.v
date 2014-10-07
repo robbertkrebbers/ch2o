@@ -142,7 +142,7 @@ Global Instance stmt_type_check: TypeCheck envs (rettype Ti) (stmt Ti) :=
   match s with
   | skip => Some (false,None)
   | ! e => _ ← type_check Γs e ≫= maybe_inr; Some (false,None)
-  | goto _ | break _ => Some (true,None)
+  | goto _ | throw _ => Some (true,None)
   | ret e => τ ← type_check Γs e ≫= maybe_inr; Some (true,Some τ)
   | label _ => Some (false,None)
   | local{τ} s =>
