@@ -739,7 +739,8 @@ let rec cstmt_of_statements l =
         (cstmt_of_statements l')
   | Cabs.FOR (Cabs.FC_DECL (Cabs.DECDEF ((t,l),_)),e2,e3,y,z)::l' ->
       cscomp (CSScope (fold_defs [] t l
-          [Cabs.FOR (Cabs.FC_EXP Cabs.NOTHING,e2,e3,y,z)]))
+          [Cabs.FOR (Cabs.FC_EXP (Cabs.CONSTANT (Cabs.CONST_INT "0")),
+           e2,e3,y,z)]))
         (cstmt_of_statements l')
   | Cabs.DOWHILE (e,y,_)::l' ->
       cscomp (CSDoWhile (cstmt_of_statements [y],
