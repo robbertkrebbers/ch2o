@@ -58,15 +58,19 @@ Instance index_alive_dec {Ti} (Γm : memenv Ti) o : Decision (index_alive Γm o)
   end; abstract naive_solver.
 Defined.
 
-Record memenv_extend {Ti} (Γm1 Γm2  : memenv Ti) := {
-  memenv_extend_typed o τ : Γm1 ⊢ o : τ → Γm2 ⊢ o : τ;
-  memenv_extend_alive o τ : Γm1 ⊢ o : τ → index_alive Γm2 o → index_alive Γm1 o
+(** During the execution of the semantics, the memory environments should only
+grow, i.e. new objects may be allocated and current objects may be freed. We
+prove that the step relation of the semantics is monotone with respect to the
+forward relation below. *)
+Record memenv_forward {Ti} (Γm1 Γm2  : memenv Ti) := {
+  memenv_forward_typed o τ : Γm1 ⊢ o : τ → Γm2 ⊢ o : τ;
+  memenv_forward_alive o τ : Γm1 ⊢ o : τ → index_alive Γm2 o → index_alive Γm1 o
 }.
-Notation "Γm1 ⊆{⇒} Γm2" := (memenv_extend Γm1 Γm2)
-  (at level 70, format "Γm1  ⊆{⇒}  Γm2") : C_scope.
-Instance: PreOrder (@memenv_extend Ti).
+Notation "Γm1 ⇒ₘ Γm2" := (memenv_forward Γm1 Γm2)
+  (at level 70, format "Γm1  ⇒ₘ  Γm2") : C_scope.
+Instance: PreOrder (@memenv_forward Ti).
 Proof. split; [|intros ??? [??] [??]]; split; naive_solver. Qed.
-Hint Extern 0 (?Γm1 ⊆{⇒} ?Γm2) => reflexivity.
+Hint Extern 0 (?Γm1 ⇒ₘ ?Γm2) => reflexivity.
 
 (** * Locked locations *)
 Definition lockset : Set :=
@@ -215,7 +219,7 @@ Proof.
   by rewrite lockset_valid_alt.
 Defined.
 Lemma lockset_valid_weaken {Ti} (Γm1 Γm2 : memenv Ti) Ω :
-  ✓{Γm1} Ω → Γm1 ⊆{⇒} Γm2 → ✓{Γm2} Ω.
+  ✓{Γm1} Ω → Γm1 ⇒ₘ Γm2 → ✓{Γm2} Ω.
 Proof. intros HΩ [??] o r ?; destruct (HΩ o r); eauto. Qed.
 Lemma lockset_empty_valid {Ti} (Γm : memenv Ti) : ✓{Γm} ∅.
 Proof. intros o r; solve_elem_of. Qed.

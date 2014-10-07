@@ -1048,7 +1048,7 @@ Qed.
 
 Lemma expr_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs e1 e2 τlr :
   ✓ Γ → e1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} e2 : τlr → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 →
   e1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} e2 : τlr.
 Proof.
   intros ? He; intros. induction He using @expr_refine_ind;
@@ -1057,12 +1057,12 @@ Proof.
 Qed.
 Lemma exprs_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs es1 es2 τlrs :
   ✓ Γ → es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2}* es2 :* τlrs → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 →
   es1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'}* es2 :* τlrs.
 Proof. induction 2; constructor; eauto using expr_refine_weaken. Qed.
 Lemma ectx_item_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs Ei1 Ei2 τlr τlr' :
   ✓ Γ → Ei1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ei2 : τlr ↣ τlr' → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 →
   Ei1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} Ei2 : τlr ↣ τlr'.
 Proof.
   destruct 2; refine_constructor;
@@ -1070,12 +1070,12 @@ Proof.
 Qed.
 Lemma ectx_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs E1 E2 τlr τlr' :
   ✓ Γ → E1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} E2 : τlr ↣ τlr' → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 →
   E1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} E2 : τlr ↣ τlr'.
 Proof. induction 2; refine_constructor;eauto using ectx_item_refine_weaken. Qed.
 Lemma stmt_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs s1 s2 mcτ :
   ✓ Γ → s1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} s2 : mcτ → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 →
   s1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} s2 : mcτ.
 Proof.
   intros ? Hs; intros. induction Hs;
@@ -1083,7 +1083,7 @@ Proof.
 Qed.
 Lemma sctx_item_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs Es1 Es2 mcτ mcτ' :
   ✓ Γ → Es1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Es2 : mcτ ↣ mcτ' → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 →
   Es1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} Es2 : mcτ ↣ mcτ'.
 Proof.
   destruct 2; refine_constructor;
@@ -1091,12 +1091,12 @@ Proof.
 Qed.
 Lemma esctx_item_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs Ee1 Ee2 τ mcτ' :
   ✓ Γ → Ee1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ee2 : τ ↣ mcτ' → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 →
   Ee1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} Ee2 : τ ↣ mcτ'.
 Proof. destruct 2; refine_constructor; eauto using stmt_refine_weaken. Qed.
 Lemma ctx_item_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs Ek1 Ek2 τf τf' :
   ✓ Γ → Ek1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} Ek2 : τf ↣ τf' → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 →
   Ek1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} Ek2 : τf ↣ τf'.
 Proof.
   intros ? HEk ????. assert (∀ os1 os2 σs, Γm1 ⊢* os1 :* σs →
@@ -1107,20 +1107,20 @@ Proof.
       eauto using option_eq_1_alt, meminj_extend_left. }
   destruct HEk; refine_constructor; eauto using esctx_item_refine_weaken,
     sctx_item_refine_weaken, expr_refine_weaken, ectx_refine_weaken,
-    Forall2_impl, memenv_extend_typed, meminj_extend_left, option_eq_1_alt.
+    Forall2_impl, memenv_forward_typed, meminj_extend_left, option_eq_1_alt.
 Qed.
 Lemma ctx_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' k1 k2 τf τf' :
   ✓ Γ → k1 ⊑{(Γ,Γf),f@Γm1↦Γm2} k2 : τf ↣ τf' → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 →
   k1 ⊑{(Γ,Γf),f'@Γm1'↦Γm2'} k2 : τf ↣ τf'.
 Proof. induction 2; refine_constructor; eauto using ctx_item_refine_weaken. Qed.
 Lemma direction_refine_weaken Γ f f' Γm1 Γm2 Γm1' Γm2' d1 d2 mcτ :
-  ✓ Γ → d1 ⊑{Γ,f@Γm1↦Γm2} d2 : mcτ → Γm1' ⊑{Γ,f'} Γm2' → Γm1 ⊆{⇒} Γm1' →
-  Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 → d1 ⊑{Γ,f'@Γm1'↦Γm2'} d2 : mcτ.
+  ✓ Γ → d1 ⊑{Γ,f@Γm1↦Γm2} d2 : mcτ → Γm1' ⊑{Γ,f'} Γm2' → Γm1 ⇒ₘ Γm1' →
+  Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 → d1 ⊑{Γ,f'@Γm1'↦Γm2'} d2 : mcτ.
 Proof. destruct 2; refine_constructor; eauto using val_refine_weaken. Qed.
 Lemma focus_refine_weaken Γ Γf f f' Γm1 Γm2 Γm1' Γm2' τs φ1 φ2 τf :
   ✓ Γ → φ1 ⊑{(Γ,Γf,τs),f@Γm1↦Γm2} φ2 : τf → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 →
   φ1 ⊑{(Γ,Γf,τs),f'@Γm1'↦Γm2'} φ2 : τf.
 Proof.
   destruct 2; refine_constructor; eauto using direction_refine_weaken,
@@ -1130,7 +1130,7 @@ Proof.
 Qed.
 Lemma funenv_refine_weaken Γ f f' Γm1 Γm2 Γm1' Γm2' δ1 δ2 Γf :
   ✓ Γ → δ1 ⊑{Γ,f@Γm1↦Γm2} δ2 : Γf → Γm1' ⊑{Γ,f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 →
   δ1 ⊑{Γ,f'@Γm1'↦Γm2'} δ2 : Γf.
 Proof.
   intros ? Hδ ???? h; specialize (Hδ h); destruct (δ1 !! h) as [s1|],

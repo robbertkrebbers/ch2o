@@ -38,9 +38,9 @@ Proof.
   destruct (mem_alloc_refine' Γ meminj_id m m true (τ.[Z.to_nat n])
     (fresh (dom indexset m)) o) as (f&?&?&?); auto using cmap_refine_id'.
   eexists f, _, _; split_ands; eauto.
-  refine_constructor; eauto using lockset_valid_weaken, mem_alloc_extend.
+  refine_constructor; eauto using lockset_valid_weaken, mem_alloc_forward.
   * eapply locks_refine_weaken with meminj_id ('{m}) ('{m});
-      eauto using locks_refine_id, mem_alloc_extend', option_eq_1.
+      eauto using locks_refine_id, mem_alloc_forward', option_eq_1.
   * eapply addr_top_array_refine; eauto using mem_alloc_index_typed'.
 Qed.
 Lemma cexec_complete Γ Γf δ S1 S2 g :
@@ -72,9 +72,9 @@ Proof.
       simplify_option_equality; eauto using expr_redexes_complete. }
     eleft; split_ands; repeat refine_constructor; eauto.
     + eapply ectx_subst_refine; eauto 10 using ectx_refine_weaken,
-        ectx_refine_id, ehstep_extend, ehexec_sound.
+        ectx_refine_id, ehstep_forward, ehexec_sound.
     + eauto 10 using ctx_refine_weaken,
-        ctx_refine_id, ehstep_extend, ehexec_sound.
+        ctx_refine_id, ehstep_forward, ehexec_sound.
   * intros m k f E Ωs vs ?????; simpl.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
     assert (maybe_EVal (subst E (call f @ #{Ωs}* vs)%E) = None) as ->.
@@ -111,8 +111,8 @@ Proof.
     + rewrite snd_zip by solve_length.
       erewrite Fun_type_stack_types, (right_id_L [] (++)) by eauto.
       eapply (stmt_refine_weaken _ _ meminj_id _ ('{m}));
-        eauto using stmt_refine_id, mem_alloc_val_list_extend.
-    + eauto 8 using ctx_refine_weaken, ctx_refine_id, mem_alloc_val_list_extend.
+        eauto using stmt_refine_id, mem_alloc_val_list_forward.
+    + eauto 8 using ctx_refine_weaken, ctx_refine_id,mem_alloc_val_list_forward.
   * intros m k l ????; simpl; rewrite decide_True by solve_elem_of.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
   * intros m k Es l s ?????; simpl.
@@ -134,11 +134,11 @@ Proof.
     eleft; split_ands; simpl; repeat refine_constructor;
       eauto using mem_alloc_index_typed'.
     + eapply (stmt_refine_weaken _ _ meminj_id _ ('{m}));
-        eauto using stmt_refine_id, mem_alloc_extend', mem_allocable_fresh.
+        eauto using stmt_refine_id, mem_alloc_forward', mem_allocable_fresh.
     + eapply (direction_refine_weaken _ meminj_id _ ('{m})); eauto using
-        direction_refine_id, mem_alloc_extend', mem_allocable_fresh.
+        direction_refine_id, mem_alloc_forward', mem_allocable_fresh.
     + eauto 8 using ctx_refine_weaken, ctx_refine_id,
-        mem_alloc_extend', mem_allocable_fresh.
+        mem_alloc_forward', mem_allocable_fresh.
   * intros m k d o τ s ?????.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
     by destruct d; simplify_option_equality; try case_match; eauto.

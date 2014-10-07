@@ -961,7 +961,7 @@ Hint Extern 1 (int_typed _ _) => by apply int_typed_small.
 Hint Extern 10 (cast_typed _ _ _) => constructor.
 Hint Extern 10 (base_cast_typed _ _ _) => constructor.
 Hint Extern 2 (to_funtypes _ ⊆ _) => etransitivity; [|by eassumption].
-Hint Extern 2 (_ ⊆{⇒} _) => etransitivity; [|by eassumption].
+Hint Extern 2 (_ ⇒ₘ _) => etransitivity; [|by eassumption].
 
 Definition local_decl_valid (Γ : env Ti) (Γm : memenv Ti) (d : local_decl Ti) :=
   match d with
@@ -972,13 +972,13 @@ Definition local_decl_valid (Γ : env Ti) (Γm : memenv Ti) (d : local_decl Ti) 
 Notation local_env_valid Γ Γm := (Forall (λ xmd,
   match xmd with Some (_,d) => local_decl_valid Γ Γm d | None => True end)).
 Lemma local_decl_valid_weaken Γ1 Γ2 Γm1 Γm2 d :
-  local_decl_valid Γ1 Γm1 d → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → local_decl_valid Γ2 Γm2 d.
+  local_decl_valid Γ1 Γm1 d → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → local_decl_valid Γ2 Γm2 d.
 Proof.
   destruct d; simpl; eauto using ptr_type_valid_weaken,
-    type_valid_weaken, memenv_extend_typed.
+    type_valid_weaken, memenv_forward_typed.
 Qed.
 Lemma local_env_valid_weaken Γ1 Γ2 Γm1 Γm2 Δl :
-  local_env_valid Γ1 Γm1 Δl → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → local_env_valid Γ2 Γm2 Δl.
+  local_env_valid Γ1 Γm1 Δl → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → local_env_valid Γ2 Γm2 Δl.
 Proof. induction 1 as [|[[]|]]; eauto using local_decl_valid_weaken. Qed.
 Lemma local_env_valid_params Γ Γm (ys : list string) (τs : list (type Ti)) :
   ✓{Γ}* τs → local_env_valid Γ Γm (zip_with (λ y τ, Some (y, Local τ)) ys τs).
@@ -1034,15 +1034,15 @@ Notation global_env_valid Γ Γm Δg :=
   (map_Forall (λ _, global_decl_valid Γ (to_funtypes Δg) Γm) Δg).
 Lemma global_decl_valid_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 d :
   ✓ Γ1 → global_decl_valid Γ1 Γf1 Γm1 d → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →
-  Γm1 ⊆{⇒} Γm2 → global_decl_valid Γ2 Γf2 Γm2 d.
+  Γm1 ⇒ₘ Γm2 → global_decl_valid Γ2 Γf2 Γm2 d.
 Proof.
   destruct d as [|??? []| |]; naive_solver eauto using
-    ptr_type_valid_weaken, type_valid_weaken, memenv_extend_typed,
+    ptr_type_valid_weaken, type_valid_weaken, memenv_forward_typed,
     stmt_typed_weaken, types_valid_weaken, sizes_of_weaken.
 Qed.
 Lemma global_env_valid_weaken Γ1 Γ2 Γm1 Γm2 Δg :
   ✓ Γ1 → global_env_valid Γ1 Γm1 Δg → Γ1 ⊆ Γ2 →
-  Γm1 ⊆{⇒} Γm2 → global_env_valid Γ2 Γm2 Δg.
+  Γm1 ⇒ₘ Γm2 → global_env_valid Γ2 Γm2 Δg.
 Proof. unfold map_Forall; eauto using global_decl_valid_weaken. Qed.
 Lemma global_env_empty_valid Γ Γm : global_env_valid Γ Γm ∅.
 Proof. by intros ??; simpl_map. Qed.
@@ -1376,7 +1376,7 @@ Lemma alloc_global_typed Γn Γ m Δg Δl x sto cτ mci m' Δg' o τ :
   alloc_global Γn Γ m Δg Δl x sto cτ mci = inr (m',Δg',o,τ) →
   (**i 1.) *) ✓{Γ} m' ∧
   (**i 2.) *) mem_writable_all Γ m' ∧
-  (**i 3.) *) '{m} ⊆{⇒} '{m'} ∧
+  (**i 3.) *) '{m} ⇒ₘ '{m'} ∧
   (**i 4.) *) global_env_valid Γ ('{m'}) Δg' ∧
   (**i 5.) *) to_funtypes Δg ⊆ to_funtypes Δg' ∧
   (**i 6.) *) '{m'} ⊢ o : τ.
@@ -1390,13 +1390,13 @@ Proof.
     destruct mci as [ci|]; simplify_equality'; [|by auto 10].
     repeat case_error_guard; simplify_equality'.
     destruct (to_init_val Γn Γ m Δg Δl τ'' ci) as [v|] eqn:?; simplify_equality'.
-    assert ('{m} ⊆{⇒} '{<[addr_top o τ:=v]{Γ}> m}).
-    { eapply mem_insert_extend; eauto using to_init_val_typed,
+    assert ('{m} ⇒ₘ '{<[addr_top o τ:=v]{Γ}> m}).
+    { eapply mem_insert_forward; eauto using to_init_val_typed,
         addr_top_typed, index_typed_representable. }
     split_ands; eauto 8 using mem_insert_valid', to_init_val_typed,
       addr_top_typed, index_typed_representable, mem_insert_top_writable_all,
       global_env_insert_valid_Some, global_decl_valid_weaken,
-      memenv_extend_typed, to_funtypes_insert_Some, global_env_valid_weaken. }
+      memenv_forward_typed, to_funtypes_insert_Some, global_env_valid_weaken. }
   repeat case_error_guard; simplify_equality'.
   destruct mci as [ci|]; simplify_equality'.
   * set (m'':=mem_alloc Γ (fresh (dom indexset m)) false τ' m) in *.
@@ -1407,21 +1407,21 @@ Proof.
     assert (✓{Γ} m'' ∧ mem_writable_all Γ m'') as [??] by eauto using
       mem_alloc_valid', mem_allocable_fresh, mem_alloc_writable_all.
     assert ('{m''} ⊢ o : τ') by eauto using mem_alloc_index_typed'.
-    assert ('{m} ⊆{⇒} '{m''}).
-    { eauto using mem_alloc_extend', mem_allocable_fresh. }
+    assert ('{m} ⇒ₘ '{m''}).
+    { eauto using mem_alloc_forward', mem_allocable_fresh. }
     assert (global_env_valid Γ ('{m''})
       (<[x:=Global sto (fresh (dom indexset m)) τ' true]>Δg)).
     { eapply global_env_insert_valid; simpl; eauto using
         global_decl_valid_weaken, global_env_valid_weaken. }
-    assert ('{m''} ⊆{⇒} '{<[addr_top o τ':=v]{Γ}> m''}).
-    { eapply mem_insert_extend; eauto using to_init_val_typed, addr_top_typed,
+    assert ('{m''} ⇒ₘ '{<[addr_top o τ':=v]{Γ}> m''}).
+    { eapply mem_insert_forward; eauto using to_init_val_typed, addr_top_typed,
         index_typed_representable, local_env_valid_weaken. }
     split_ands; eauto 8 using mem_insert_valid', to_init_val_typed,
       addr_top_typed, index_typed_representable, mem_insert_top_writable_all,
-      memenv_extend_typed, to_funtypes_insert,
+      memenv_forward_typed, to_funtypes_insert,
       global_env_valid_weaken, local_env_valid_weaken.
   * split_ands; eauto 9 using global_env_insert_valid, mem_alloc_val_valid,
-      global_env_valid_weaken, mem_alloc_val_index_typed, mem_alloc_val_extend,
+      global_env_valid_weaken, mem_alloc_val_index_typed, mem_alloc_val_forward,
       val_0_typed, mem_allocable_fresh, to_funtypes_insert,
       mem_alloc_val_writable_all.
 Qed.
@@ -1431,7 +1431,7 @@ Lemma alloc_static_typed Γn Γ m Δg Δl x cτ mci m' o τ :
   alloc_static Γn Γ m Δg Δl x cτ mci = inr (m',o,τ) →
   (**i 1.) *) ✓{Γ} m' ∧
   (**i 2.) *) mem_writable_all Γ m' ∧
-  (**i 3.) *) '{m} ⊆{⇒} '{m'} ∧
+  (**i 3.) *) '{m} ⇒ₘ '{m'} ∧
   (**i 4.) *) '{m'} ⊢ o : τ.
 Proof.
   unfold alloc_static; intros.
@@ -1447,18 +1447,18 @@ Proof.
     assert (✓{Γ} m'' ∧ mem_writable_all Γ m'') as [??] by eauto using
       mem_alloc_valid', mem_allocable_fresh, mem_alloc_writable_all.
     assert ('{m''} ⊢ o : τ) by eauto using mem_alloc_index_typed'.
-    assert ('{m} ⊆{⇒} '{m''}).
-    { eauto using mem_alloc_extend', mem_allocable_fresh. }
+    assert ('{m} ⇒ₘ '{m''}).
+    { eauto using mem_alloc_forward', mem_allocable_fresh. }
     assert (local_env_valid Γ ('{m''}) Δl'').
     { constructor; eauto using local_env_valid_weaken. }
-    assert ('{m''} ⊆{⇒} '{<[addr_top o τ:=v]{Γ}> m''}).
-    { eapply mem_insert_extend; eauto using to_init_val_typed, addr_top_typed,
+    assert ('{m''} ⇒ₘ '{<[addr_top o τ:=v]{Γ}> m''}).
+    { eapply mem_insert_forward; eauto using to_init_val_typed, addr_top_typed,
         index_typed_representable, global_env_valid_weaken. }
     split_ands; eauto 8 using mem_insert_valid',
       to_init_val_typed, addr_top_typed, mem_insert_top_writable_all,
-      memenv_extend_typed, global_env_valid_weaken.
+      memenv_forward_typed, global_env_valid_weaken.
   * split_ands; eauto 8 using global_env_insert_valid, mem_alloc_val_valid,
-      mem_alloc_val_extend, val_0_typed, mem_allocable_fresh,
+      mem_alloc_val_forward, val_0_typed, mem_allocable_fresh,
       mem_alloc_val_writable_all, mem_alloc_val_index_typed.
 Qed.
 Lemma to_stmt_typed Γn Γ τret m Δg Δl cs m' Δg' s cmτ :
@@ -1468,7 +1468,7 @@ Lemma to_stmt_typed Γn Γ τret m Δg Δl cs m' Δg' s cmτ :
   (**i 1.) *) (Γ,to_funtypes Δg','{m'},local_env_stack_types Δl) ⊢ s : cmτ ∧
   (**i 2.) *) ✓{Γ} m' ∧
   (**i 3.) *) mem_writable_all Γ m' ∧
-  (**i 4.) *) '{m} ⊆{⇒} '{m'} ∧
+  (**i 4.) *) '{m} ⇒ₘ '{m'} ∧
   (**i 5.) *) global_env_valid Γ ('{m'}) Δg' ∧
   (**i 6.) *) to_funtypes Δg ⊆ to_funtypes Δg'.
 Proof.
@@ -1539,7 +1539,7 @@ Lemma to_fun_stmt_typed Γn Γ m Δg f mys τs σ cs m' Δg' s :
   (**i 4.) *) throws_valid 0 s ∧
   (**i 5.) *) ✓{Γ} m' ∧
   (**i 6.) *) mem_writable_all Γ m' ∧
-  (**i 7.) *) '{m} ⊆{⇒} '{m'} ∧
+  (**i 7.) *) '{m} ⇒ₘ '{m'} ∧
   (**i 8.) *) global_env_valid Γ ('{m'}) Δg' ∧
   (**i 9.) *) to_funtypes Δg ⊆ to_funtypes Δg'.
 Proof.

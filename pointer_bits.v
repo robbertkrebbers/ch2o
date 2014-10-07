@@ -50,7 +50,7 @@ Proof.
   | by destruct 1 as (?&?&?&?); simplify_type_equality ]).
 Defined.
 Lemma ptr_bit_valid_weaken Γ1 Γ2 Γm1 Γm2 pb :
-  ✓ Γ1 → ✓{Γ1,Γm1} pb → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → ✓{Γ2,Γm2} pb.
+  ✓ Γ1 → ✓{Γ1,Γm1} pb → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → ✓{Γ2,Γm2} pb.
 Proof.
   intros ? (τ&?&?&?) ??. exists τ. erewrite <-bit_size_of_weaken
     by eauto using TBase_valid, TPtr_valid, ptr_typed_type_valid.
@@ -161,7 +161,7 @@ Proof.
 Qed.
 Lemma ptr_bit_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' pb1 pb2 :
   ✓ Γ → pb1 ⊑{Γ,f@Γm1↦Γm2} pb2 → Γ ⊆ Γ' → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → meminj_extend f f' Γm1 Γm2 → pb1 ⊑{Γ',f'@Γm1'↦Γm2'} pb2.
+  Γm1 ⇒ₘ Γm1' → meminj_extend f f' Γm1 Γm2 → pb1 ⊑{Γ',f'@Γm1'↦Γm2'} pb2.
 Proof.
   intros ? (τ&?&?&?&?) ??. exists τ.
   erewrite <-bit_size_of_weaken by eauto using TBase_valid, TPtr_valid,

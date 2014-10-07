@@ -184,7 +184,7 @@ Proof.
   * by destruct 1; simplify_option_equality.
 Qed.
 Lemma addr_typed_weaken Γ1 Γ2 Γm1 Γm2 a σ :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ a : σ → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → (Γ2,Γm2) ⊢ a : σ.
+  ✓ Γ1 → (Γ1,Γm1) ⊢ a : σ → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → (Γ2,Γm2) ⊢ a : σ.
 Proof.
   intros ? [o r i τ σ' σc'] ? [??]. constructor; simpl; split_ands;
     eauto using type_valid_weaken, ref_typed_weaken.
@@ -194,7 +194,7 @@ Proof.
     by eauto using castable_type_valid, ref_typed_type_valid.
 Qed.
 Lemma addr_dead_weaken Γ Γm1 Γm2 a σ :
-  (Γ,Γm1) ⊢ a : σ → index_alive Γm2 (addr_index a) → Γm1 ⊆{⇒} Γm2 →
+  (Γ,Γm1) ⊢ a : σ → index_alive Γm2 (addr_index a) → Γm1 ⇒ₘ Γm2 →
   index_alive Γm1 (addr_index a).
 Proof. intros [] ? []; naive_solver. Qed.
 Global Instance addr_strict_dec Γ a : Decision (addr_strict Γ a).
@@ -486,7 +486,7 @@ Proof.
 Qed.
 Lemma addr_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' a1 a2 σ :
   ✓ Γ → a1 ⊑{Γ,f@Γm1↦Γm2} a2 : σ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → meminj_extend f f' Γm1 Γm2 → a1 ⊑{Γ',f'@Γm1'↦Γm2'} a2 : σ.
+  Γm1 ⇒ₘ Γm1' → meminj_extend f f' Γm1 Γm2 → a1 ⊑{Γ',f'@Γm1'↦Γm2'} a2 : σ.
 Proof.
   destruct 2 as [o o2 r r2 r3 i i3 τ τ2 σ σc]; intros ?? [??] [??];
     econstructor; eauto using type_valid_weaken, ref_typed_weaken.

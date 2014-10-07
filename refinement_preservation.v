@@ -105,7 +105,7 @@ Proof.
   * refine_inversion_all; inv_ehstep. edestruct assign_refine; eauto.
     exists f; split_ands; eauto.
     + eapply mem_lock_refine'; eauto using mem_insert_refine',
-        mem_insert_writable, addr_refine_weaken, mem_insert_extend.
+        mem_insert_writable, addr_refine_weaken, mem_insert_forward.
     + erewrite !mem_lock_memenv_of, !mem_insert_memenv_of
         by eauto using mem_insert_writable, mem_insert_valid'.
       refine_constructor; eauto using locks_union_refine, lock_singleton_refine.
@@ -127,25 +127,25 @@ Proof.
     refine_constructor; eauto using addr_top_array_refine,
       mem_alloc_index_typed', addr_top_array_strict, TArray_valid.
     eapply locks_refine_weaken;
-      eauto using mem_alloc_extend', TArray_valid, option_eq_1.
+      eauto using mem_alloc_forward', TArray_valid, option_eq_1.
   * refine_inversion_all; inv_ehstep. exists f; split_ands; eauto.
     + eauto using mem_free_refine', mem_freeable_index_refine.
     + repeat refine_constructor; eauto 10 using locks_refine_weaken,
-        mem_free_extend', mem_free_refine', mem_freeable_index_refine.
+        mem_free_forward', mem_free_refine', mem_freeable_index_refine.
   * refine_inversion_all; inv_ehstep. exists f; split_ands; eauto.
     refine_constructor; eauto using val_unop_refine.
   * refine_inversion_all; inv_ehstep. exists f; split_ands; eauto.
     refine_constructor; eauto using val_binop_refine, locks_union_refine.
   * refine_inversion_all; inv_ehstep.
     + exists f; eauto 10 using mem_unlock_refine',
-        expr_refine_weaken, mem_unlock_extend.
+        expr_refine_weaken, mem_unlock_forward.
     + exfalso; eauto using val_true_false_refine.
   * refine_inversion_all; inv_ehstep.
     + exfalso; eauto using val_false_true_refine.
     + exists f; eauto 10 using mem_unlock_refine',
-        expr_refine_weaken, mem_unlock_extend.
+        expr_refine_weaken, mem_unlock_forward.
   * refine_inversion_all; inv_ehstep. exists f;
-      eauto 10 using mem_unlock_refine', expr_refine_weaken, mem_unlock_extend.
+      eauto 10 using mem_unlock_refine', expr_refine_weaken, mem_unlock_forward.
   * refine_inversion_all; inv_ehstep. exists f; split_ands; eauto.
     refine_constructor; eauto using val_cast_refine.
   * refine_inversion_all; inv_ehstep. exists f; split_ands; eauto.
@@ -244,33 +244,33 @@ Proof.
     edestruct ehstep_refine_r as [(f'&?&?&?&?&?&?)|[??]];
       eauto using ctx_refine_stack.
     { go f'. repeat refine_constructor; eauto 9 using ctx_refine_weaken,
-       ehstep_extend, ectx_subst_refine, ectx_refine_weaken. }
+       ehstep_forward, ectx_subst_refine, ectx_refine_weaken. }
     go f. right; auto. eexists; split_ands; repeat typed_constructor; eauto.
   * intros m k h E Ωs vs ?????; invert. go f.
     repeat refine_constructor; eauto 8 using mem_unlock_refine',
       locks_union_list_refine, ectx_refine_weaken, vals_refine_weaken,
-      ctx_refine_weaken, mem_unlock_extend, option_eq_1_alt.
+      ctx_refine_weaken, mem_unlock_forward, option_eq_1_alt.
   * intros; invert. eexists f, _; split_ands; [| |auto].
     { apply cstep_expr_undef; eauto 10 using ehsafe_refine,
         ctx_refine_stack, expr_refine_redex_inv. }
     repeat refine_constructor; eauto using mem_unlock_refine',
-      expr_refine_weaken, ctx_refine_weaken, mem_unlock_extend.
+      expr_refine_weaken, ctx_refine_weaken, mem_unlock_forward.
   * intros; invert. go f.
-    repeat refine_constructor; eauto using mem_unlock_extend, val_refine_weaken,
+    repeat refine_constructor; eauto using mem_unlock_forward,val_refine_weaken,
       expr_refine_weaken, ctx_refine_weaken, mem_unlock_refine'.
   * intros; invert. go f.
-    repeat refine_constructor; eauto using mem_unlock_extend, val_refine_weaken,
+    repeat refine_constructor; eauto using mem_unlock_forward,val_refine_weaken,
       expr_refine_weaken, ctx_refine_weaken, mem_unlock_refine'.
   * intros; invert. edestruct val_true_refine_inv as [|[??]]; eauto.
     + go f. repeat refine_constructor;
         eauto using mem_unlock_refine', ctx_refine_weaken,
-        expr_refine_weaken, stmt_refine_weaken, mem_unlock_extend.
+        expr_refine_weaken, stmt_refine_weaken, mem_unlock_forward.
     + go f. right; auto.
       eexists; split_ands; eauto; repeat typed_constructor; eauto.
   * intros; invert. edestruct val_false_refine_inv as [|[??]]; eauto.
     + go f. repeat refine_constructor;
         eauto using mem_unlock_refine', ctx_refine_weaken,
-        expr_refine_weaken, stmt_refine_weaken, mem_unlock_extend.
+        expr_refine_weaken, stmt_refine_weaken, mem_unlock_forward.
     + go f. right; auto.
       eexists; split_ands; eauto; repeat typed_constructor; eauto.
   * intros; invert. go f; eauto.
@@ -293,20 +293,20 @@ Proof.
     go f'. erewrite !fmap_type_of by eauto.
     repeat refine_constructor; eauto 8 using mem_alloc_val_list_index_typed,
       mem_allocable_list_fresh, fresh_list_length,
-      ctx_refine_weaken, mem_alloc_val_list_extend; simpl.
+      ctx_refine_weaken, mem_alloc_val_list_forward; simpl.
     rewrite snd_zip by (rewrite fresh_list_length;
       eauto using eq_sym, Nat.eq_le_incl, Forall3_length_lr).
     erewrite Fun_type_stack_types, (right_id_L [] (++)) by eauto.
     eauto 7 using stmt_refine_weaken, mem_alloc_val_list_refine',
-      mem_alloc_val_list_extend, mem_allocable_list_fresh, fresh_list_length.
+      mem_alloc_val_list_forward, mem_allocable_list_fresh, fresh_list_length.
   * intros m k h oσs s ????; invert; case_match; simplify_equality'; try done.
     go f. rewrite !fst_zip by solve_length.
     repeat refine_constructor; eauto using ctx_refine_weaken,
-      mem_foldr_free_extend, mem_foldr_free_refine.
+      mem_foldr_free_forward, mem_foldr_free_refine.
   * intros m k h oσs s ????; invert; case_match; simplify_equality'; try done.
     go f. rewrite !fst_zip by solve_length.
     repeat refine_constructor; eauto using ctx_refine_weaken,
-      val_refine_weaken, mem_foldr_free_extend, mem_foldr_free_refine.
+      val_refine_weaken, mem_foldr_free_forward, mem_foldr_free_refine.
   * intros; invert. go f.
     eauto 10 using ectx_subst_refine, locks_empty_refine.
   * intros; invert; go f; eauto 10.
@@ -322,12 +322,12 @@ Proof.
       (fresh (dom _ m1))) as (f'&?&?&?); eauto 1 using mem_allocable_fresh.
     go f'. repeat refine_constructor; eauto 7 using
       mem_alloc_index_typed', direction_refine_weaken, stmt_refine_weaken,
-      ctx_refine_weaken, mem_alloc_extend', mem_allocable_fresh,option_eq_1_alt.
+      ctx_refine_weaken, mem_alloc_forward',mem_allocable_fresh,option_eq_1_alt.
   * intros m k d o τ s ?????; invert. go f.
     repeat refine_constructor; eauto 7 using
       direction_refine_weaken, mem_free_refine',
-      ctx_refine_weaken, mem_free_extend', option_eq_1_alt,
+      ctx_refine_weaken, mem_free_forward', option_eq_1_alt,
       index_typed_representable, index_typed_valid.
-    eapply stmt_refine_weaken; eauto using mem_free_extend', mem_free_refine'.
+    eapply stmt_refine_weaken; eauto using mem_free_forward', mem_free_refine'.
 Qed.
 End refinement_preservation.

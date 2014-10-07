@@ -106,7 +106,7 @@ Proof.
   induction pbs; inversion_clear 1; constructor; auto using BPtr_valid_inv.
 Qed.
 Lemma bit_valid_weaken Γ1 Γ2 Γm1 Γm2 b :
-  ✓ Γ1 → ✓{Γ1,Γm1} b → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → ✓{Γ2,Γm2} b.
+  ✓ Γ1 → ✓{Γ1,Γm1} b → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → ✓{Γ2,Γm2} b.
 Proof. destruct 2; econstructor; eauto using ptr_bit_valid_weaken. Qed.
 
 Lemma maybe_BBits_spec bs βs : mapM maybe_BBit bs = Some βs ↔ bs = BBit <$> βs.
@@ -171,8 +171,8 @@ Global Instance:
   PropHolds (✓ Γ) → Transitive (refine Γ meminj_id Γm Γm : relation (bit Ti)).
 Proof. intros Γ Γm ? b1 b2 b3. by apply bit_refine_compose. Qed.
 Lemma bit_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' b1 b2 :
-  ✓ Γ → b1 ⊑{Γ,f@Γm1↦Γm2} b2 → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⊆{⇒} Γm1' →
-  Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 → b1 ⊑{Γ',f'@Γm1'↦Γm2'} b2.
+  ✓ Γ → b1 ⊑{Γ,f@Γm1↦Γm2} b2 → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⇒ₘ Γm1' →
+  Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 → b1 ⊑{Γ',f'@Γm1'↦Γm2'} b2.
 Proof.
   destruct 2 as [| | |pb1 b2 Hpb]; constructor; eauto using bit_valid_weaken,
     ptr_bit_refine_weaken, ptr_bit_valid_weaken, ptr_dead_weaken.

@@ -80,7 +80,7 @@ Proof.
       erewrite ?type_check_complete by eauto.
 Qed.
 Lemma ptr_typed_weaken Γ1 Γ2 Γm1 Γm2 p τ :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ p : τ → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → (Γ2,Γm2) ⊢ p : τ.
+  ✓ Γ1 → (Γ1,Γm1) ⊢ p : τ → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → (Γ2,Γm2) ⊢ p : τ.
 Proof.
   destruct 2; constructor;
     eauto using ptr_type_valid_weaken, addr_typed_weaken.
@@ -110,7 +110,7 @@ Lemma ptr_alive_weaken Γm1 Γm2 p :
   ptr_alive Γm1 p → (∀ o, index_alive Γm1 o → index_alive Γm2 o) → ptr_alive Γm2 p.
 Proof. destruct p; simpl; auto. Qed.
 Lemma ptr_dead_weaken Γ Γm1 Γm2 p σ :
-  (Γ,Γm1) ⊢ p : σ → ptr_alive Γm2 p → Γm1 ⊆{⇒} Γm2 → ptr_alive Γm1 p.
+  (Γ,Γm1) ⊢ p : σ → ptr_alive Γm2 p → Γm1 ⇒ₘ Γm2 → ptr_alive Γm1 p.
 Proof. destruct 1; simpl; eauto using addr_dead_weaken. Qed.
 Global Instance ptr_alive_dec Γm p : Decision (ptr_alive Γm p).
 Proof. destruct p; apply _. Defined.
@@ -143,7 +143,7 @@ Proof.
   destruct 2; inversion_clear 1; constructor; eauto using addr_refine_compose.
 Qed.
 Lemma ptr_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' p1 p2 σ :
-  ✓ Γ → p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⊆{⇒} Γm1' →
+  ✓ Γ → p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⇒ₘ Γm1' →
   meminj_extend f f' Γm1 Γm2 → p1 ⊑{Γ',f'@Γm1'↦Γm2'} p2 : σ.
 Proof.
   destruct 2; constructor;

@@ -504,7 +504,7 @@ Proof.
       end.
 Qed.
 Lemma ctree_typed_weaken Γ1 Γ2 Γm1 Γm2 w τ :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ w : τ → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → (Γ2,Γm2) ⊢ w : τ.
+  ✓ Γ1 → (Γ1,Γm1) ⊢ w : τ → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → (Γ2,Γm2) ⊢ w : τ.
 Proof.
   intros ? Hw ??. induction Hw using @ctree_typed_ind; typed_constructor;
     eauto using base_type_valid_weaken,
@@ -2584,8 +2584,8 @@ Proof.
     constructor; eauto using pbits_refine_compose, pbits_refine_unshared.
 Qed.
 Lemma ctree_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' w1 w2 τ :
-  ✓ Γ → w1 ⊑{Γ,f@Γm1↦Γm2} w2 : τ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⊆{⇒} Γm1' →
-  Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 → w1 ⊑{Γ',f'@Γm1'↦Γm2'} w2 : τ.
+  ✓ Γ → w1 ⊑{Γ,f@Γm1↦Γm2} w2 : τ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⇒ₘ Γm1' →
+  Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 → w1 ⊑{Γ',f'@Γm1'↦Γm2'} w2 : τ.
 Proof.
   intros ? Hw; intros. induction Hw using @ctree_refine_ind;
     refine_constructor; try (eapply Forall2_impl; [eassumption|]); simpl;

@@ -165,11 +165,11 @@ Proof.
       erewrite ?type_check_complete by eauto.
 Qed.
 Lemma char_byte_valid_weaken Γ1 Γ2 Γm1 Γm2 bs :
-  ✓ Γ1 → char_byte_valid Γ1 Γm1 bs → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 →
+  ✓ Γ1 → char_byte_valid Γ1 Γm1 bs → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 →
   char_byte_valid Γ2 Γm2 bs.
 Proof. destruct 2; constructor; eauto using Forall_impl, bit_valid_weaken. Qed.
 Lemma base_val_typed_weaken Γ1 Γ2 Γm1 Γm2 vb τb :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ vb : τb → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → (Γ2,Γm2) ⊢ vb : τb.
+  ✓ Γ1 → (Γ1,Γm1) ⊢ vb : τb → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → (Γ2,Γm2) ⊢ vb : τb.
 Proof.
   destruct 2; econstructor; eauto using ptr_typed_weaken,
     char_byte_valid_weaken, base_type_valid_weaken.
@@ -508,7 +508,7 @@ Proof.
 Qed.
 Lemma base_val_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' vb1 vb2 τb :
   ✓ Γ → vb1 ⊑{Γ,f@Γm1↦Γm2} vb2 : τb → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 →
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 →
   vb1 ⊑{Γ',f'@Γm1'↦Γm2'} vb2 : τb.
 Proof.
   destruct 2; refine_constructor; eauto using base_val_typed_weaken,

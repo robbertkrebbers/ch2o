@@ -44,7 +44,7 @@ Lemma ehstep_preservation Γ Γf m1 m2 ρ τs e1 e2 τlr :
   ✓{Γ} m1 → (Γ,Γf,'{m1},τs) ⊢ e1 : τlr → '{m1} ⊢* ρ :* τs →
   (**i 1.) *) ✓{Γ} m2 ∧
   (**i 2.) *) (Γ,Γf,'{m2},τs) ⊢ e2 : τlr ∧
-  (**i 3.) *) '{m1} ⊆{⇒} '{m2}.
+  (**i 3.) *) '{m1} ⇒ₘ '{m2}.
 Proof.
   intros ? [] ???.
   * typed_inversion_all; decompose_Forall_hyps; split_ands; auto.
@@ -60,13 +60,13 @@ Proof.
         lock_singleton_valid, val_typed_weaken, assign_preservation_1.
     + intros. erewrite mem_lock_memenv_of by eauto using mem_insert_writable,
         mem_insert_valid', assign_preservation_2.
-      eauto using mem_insert_extend, assign_preservation_2.
+      eauto using mem_insert_forward, assign_preservation_2.
   * typed_inversion_all.
     rewrite <-and_assoc; apply and_wlog_l; intros; split_ands.
     + eauto using mem_force_valid'.
     + typed_constructor; eauto using lockset_valid_weaken,
         val_typed_weaken,  mem_lookup_typed.
-    + eauto using mem_lookup_typed, mem_force_extend.
+    + eauto using mem_lookup_typed, mem_force_forward.
   * typed_inversion_all.
     split_ands; eauto 7 using addr_elt_typed, addr_elt_strict.
   * typed_inversion_all; split_ands; eauto using val_lookup_seg_typed.
@@ -77,9 +77,9 @@ Proof.
         by auto using Z_to_nat_neq_0_nonneg.
     + typed_constructor; eauto using addr_top_array_strict, TArray_valid,
         addr_top_array_typed, mem_alloc_index_typed', lockset_valid_weaken.
-    + eauto using mem_alloc_extend', TArray_valid.
+    + eauto using mem_alloc_forward', TArray_valid.
   * typed_inversion_all; split_ands; eauto using
-      lockset_valid_weaken, mem_free_valid', mem_free_extend'.
+      lockset_valid_weaken, mem_free_valid', mem_free_forward'.
   * typed_inversion_all;
       repeat match goal with H : unop_typed _ _ _ |- _ => by inversion H end;
       split_ands; eauto using val_unop_typed.
@@ -87,24 +87,24 @@ Proof.
       repeat match goal with H : binop_typed _ _ _ _ |- _ => by inversion H end;
       split_ands; eauto using val_binop_typed, lockset_union_valid.
   * typed_inversion_all; split_ands; eauto using mem_unlock_valid',
-      expr_typed_weaken, mem_unlock_extend.
+      expr_typed_weaken, mem_unlock_forward.
   * typed_inversion_all; split_ands; eauto using mem_unlock_valid',
-      expr_typed_weaken, mem_unlock_extend.
+      expr_typed_weaken, mem_unlock_forward.
   * typed_inversion_all; split_ands; eauto using mem_unlock_valid',
-      expr_typed_weaken, mem_unlock_extend.
+      expr_typed_weaken, mem_unlock_forward.
   * typed_inversion_all;
       repeat match goal with H : cast_typed _ _ _ |- _ => by inversion H end;
       split_ands; eauto using val_cast_typed.
   * typed_inversion_all; split_ands;
       eauto using lockset_union_valid, val_alter_const_typed.
 Qed.
-Lemma ehstep_extend Γ Γf m1 m2 ρ τs e1 e2 τlr :
+Lemma ehstep_forward Γ Γf m1 m2 ρ τs e1 e2 τlr :
   ✓ Γ → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → ✓{Γ} m1 → (Γ,Γf,'{m1},τs) ⊢ e1 : τlr →
-  '{m1} ⊢* ρ :* τs → '{m1} ⊆{⇒} '{m2}.
+  '{m1} ⊢* ρ :* τs → '{m1} ⇒ₘ '{m2}.
 Proof. intros. eapply ehstep_preservation; eauto. Qed.
 Lemma cstep_preservation Γ Γf δ S1 S2 f :
   ✓ Γ → Γ\ δ ⊢ₛ S1 ⇒ S2 → (Γ,Γf) ⊢ S1 : f → (Γ,'{SMem S1}) ⊢ δ : Γf →
-  (Γ,Γf) ⊢ S2 : f ∧ '{SMem S1} ⊆{⇒} '{SMem S2}.
+  (Γ,Γf) ⊢ S2 : f ∧ '{SMem S1} ⇒ₘ '{SMem S2}.
 Proof.
   intros ? p. case p; clear p.
   * intros m k (τf&HS&?&?) ?; typed_inversion_all; split; auto.
@@ -127,44 +127,44 @@ Proof.
     edestruct (ectx_subst_typed_rev Γ Γf ('{m})
       (get_stack_types k) E (call f' @ #{Ωs}* vs)) as (τrl&Hcall&?); eauto.
     typed_inversion Hcall.
-    split; [|eauto using funenv_typed_weaken, mem_unlock_extend].
+    split; [|eauto using funenv_typed_weaken, mem_unlock_forward].
     eexists (Fun_type f'); simpl; split_ands; eauto using mem_unlock_valid'.
     + typed_constructor; eauto.
       eapply (EVals_typed_inv Γ Γf _ (get_stack_types k));
         eauto using funenv_typed_funtypes_valid, funtypes_valid_args_valid,
-        Forall2_impl, expr_typed_weaken, mem_unlock_extend.
+        Forall2_impl, expr_typed_weaken, mem_unlock_forward.
     + repeat typed_constructor;
-        eauto using ectx_typed_weaken, ctx_typed_weaken, mem_unlock_extend.
+        eauto using ectx_typed_weaken, ctx_typed_weaken, mem_unlock_forward.
   * intros m k E e ?? (τf&HS&?&?) ?; typed_inversion HS; split; auto.
     edestruct (ectx_subst_typed_rev Γ Γf ('{m})
       (get_stack_types k) E e) as (τrl&?&?); eauto.
   * intros m k e Ω v (τf&HS&?&?) ?; typed_inversion HS.
-    split; [|eauto using funenv_typed_weaken, mem_unlock_extend].
+    split; [|eauto using funenv_typed_weaken, mem_unlock_forward].
     typed_inversion_all.
     eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using ctx_typed_weaken, mem_unlock_extend,
+      eauto using ctx_typed_weaken, mem_unlock_forward,
       mem_unlock_valid', expr_typed_weaken.
   * intros m k e Ω v (τf&HS&?&?) ?; typed_inversion HS.
-    split; [|eauto using funenv_typed_weaken, mem_unlock_extend].
+    split; [|eauto using funenv_typed_weaken, mem_unlock_forward].
     typed_inversion_all.
     eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using ctx_typed_weaken, mem_unlock_extend, val_typed_weaken,
+      eauto using ctx_typed_weaken, mem_unlock_forward, val_typed_weaken,
       mem_unlock_valid', expr_typed_weaken.
   * intros m k e Ω v s1 s2 ? (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, mem_unlock_extend].
+    split; [|eauto using funenv_typed_weaken, mem_unlock_forward].
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, expr_typed_weaken,
-      stmt_typed_weaken, mem_unlock_extend, mem_unlock_valid'.
+      stmt_typed_weaken, mem_unlock_forward, mem_unlock_valid'.
   * intros m k e Ω v s1 s2 ? (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, mem_unlock_extend].
+    split; [|eauto using funenv_typed_weaken, mem_unlock_forward].
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, expr_typed_weaken,
-      stmt_typed_weaken, mem_unlock_extend, mem_unlock_valid'.
+      stmt_typed_weaken, mem_unlock_forward, mem_unlock_valid'.
   * intros m k e Ω v s1 s2 ?? (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, mem_unlock_extend].
+    split; [|eauto using funenv_typed_weaken, mem_unlock_forward].
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, expr_typed_weaken,
-      stmt_typed_weaken, mem_unlock_extend, mem_unlock_valid.
+      stmt_typed_weaken, mem_unlock_forward, mem_unlock_valid.
   * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
   * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
   * intros m k s1 s2 (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
@@ -188,15 +188,15 @@ Proof.
     rewrite snd_zip by (erewrite <-Forall2_length by eauto; lia).
     eauto using stmt_typed_weaken.
   * intros m k g oσs s (τf&HS&?&?) ?. typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, mem_foldr_free_extend].
+    split; [|eauto using funenv_typed_weaken, mem_foldr_free_forward].
     case_match; simplify_equality; try done.
     eexists; simpl; split_ands; repeat typed_constructor; eauto using
-      ctx_typed_weaken, mem_foldr_free_extend, mem_foldr_free_valid.
+      ctx_typed_weaken, mem_foldr_free_forward, mem_foldr_free_valid.
   * intros m k g oσs v s (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, mem_foldr_free_extend].
+    split; [|eauto using funenv_typed_weaken, mem_foldr_free_forward].
     case_match; simplify_equality; try done.
     eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using ctx_typed_weaken, mem_foldr_free_extend,
+      eauto using ctx_typed_weaken, mem_foldr_free_forward,
       mem_foldr_free_valid, val_typed_weaken.
   * intros m k g E v (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eauto 10 using ectx_subst_typed, lockset_empty_valid.
@@ -215,29 +215,29 @@ Proof.
   * intros m k Es n s ? (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eauto 10 using sctx_item_subst_typed.
   * intros m k d o τ s ?? (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, mem_alloc_extend'].
+    split; [|eauto using funenv_typed_weaken, mem_alloc_forward'].
     eexists; simpl; split_ands; eauto 6 using
-      mem_alloc_valid', stmt_typed_weaken, mem_alloc_extend',
+      mem_alloc_valid', stmt_typed_weaken, mem_alloc_forward',
       direction_typed_weaken, ctx_typed_weaken, mem_alloc_index_typed'.
   * intros m k d o τ s ? (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, mem_free_extend'].
+    split; [|eauto using funenv_typed_weaken, mem_free_forward'].
     eexists; simpl; split_ands; repeat typed_constructor; eauto using
-      ctx_typed_weaken, direction_typed_weaken, mem_free_extend',
+      ctx_typed_weaken, direction_typed_weaken, mem_free_forward',
       mem_free_valid', index_typed_valid, index_typed_representable.
-    eapply stmt_typed_weaken; eauto using mem_free_extend'.
+    eapply stmt_typed_weaken; eauto using mem_free_forward'.
 Qed.
 Lemma csteps_preservation Γ Γf δ S1 S2 f :
   ✓ Γ → Γ\ δ ⊢ₛ S1 ⇒* S2 → (Γ,Γf) ⊢ S1 : f → (Γ,'{SMem S1}) ⊢ δ : Γf →
-  (Γ,Γf) ⊢ S2 : f ∧ '{SMem S1} ⊆{⇒} '{SMem S2}.
+  (Γ,Γf) ⊢ S2 : f ∧ '{SMem S1} ⇒ₘ '{SMem S2}.
 Proof.
   induction 2 as [|S1 S2 S3 ?? IH]; intros; [done|].
   destruct (cstep_preservation Γ Γf δ S1 S2 f) as (?&?); auto.
   destruct IH as (?&?); split_ands; eauto using funenv_typed_weaken.
   etransitivity; eauto.
 Qed.
-Lemma csteps_extend Γ Γf δ S1 S2 f :
+Lemma csteps_forward Γ Γf δ S1 S2 f :
   ✓ Γ → Γ\ δ ⊢ₛ S1 ⇒* S2 → (Γ,Γf) ⊢ S1 : f → (Γ,'{SMem S1}) ⊢ δ : Γf →
-  '{SMem S1} ⊆{⇒} '{SMem S2}.
+  '{SMem S1} ⇒ₘ '{SMem S2}.
 Proof. intros. eapply csteps_preservation; eauto. Qed.
 
 Ltac ctx_inversion Hk :=

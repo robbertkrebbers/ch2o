@@ -282,19 +282,19 @@ Lemma meminj_extend_reflexive f Γm1 Γm2 : meminj_extend f f Γm1 Γm2.
 Proof. by split. Qed.
 Lemma meminj_extend_transitive f f' f'' Γm1 Γm2 Γm1' Γm2' :
   meminj_extend f f' Γm1 Γm2 → meminj_extend f' f'' Γm1' Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f'' Γm1 Γm2.
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f'' Γm1 Γm2.
 Proof. intros [??] [??] [? _] [? _]; split; eauto using eq_trans. Qed.
 Lemma meminj_extend_compose f g Γm1 Γm2 :
   meminj_extend meminj_id f Γm1 Γm1 →
-  meminj_extend meminj_id g Γm2 Γm2 → Γm1 ⊆{⇒} Γm2 →
+  meminj_extend meminj_id g Γm2 Γm2 → Γm1 ⇒ₘ Γm2 →
   meminj_extend meminj_id (g ◎ f) Γm1 Γm1.
 Proof.
   intros [Hf Hf'] [Hg Hg'] ?; split.
   * intros o τ ?; apply lookup_meminj_compose_Some.
-    eexists o, [], []; eauto 8 using memenv_extend_typed.
+    eexists o, [], []; eauto 8 using memenv_forward_typed.
   * intros o o'' r τ ?; rewrite lookup_meminj_compose_Some.
     intros (o'&r'&r''&Ho&Ho'&->). eapply Hf' in Ho'; eauto.
     rewrite lookup_meminj_id in Ho'; simplify_equality.
-    rewrite (right_id_L [] (++)); eauto using memenv_extend_typed.
+    rewrite (right_id_L [] (++)); eauto using memenv_forward_typed.
 Qed.
 End memenv_refine.

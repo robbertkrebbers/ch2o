@@ -456,7 +456,7 @@ Lemma assign_typed_weaken Γ1 Γ2 ass τ1 τ2 σ :
   ✓ Γ1 → assign_typed Γ1 τ1 τ2 ass σ → Γ1 ⊆ Γ2 → assign_typed Γ2 τ1 τ2 ass σ.
 Proof. destruct 2; econstructor; eauto using cast_typed_weaken. Qed.
 Lemma expr_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 τs1 τs2 e τlr :
-  ✓ Γ1 → (Γ1,Γf1,Γm1,τs1) ⊢ e : τlr → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⊆{⇒} Γm2 →
+  ✓ Γ1 → (Γ1,Γf1,Γm1,τs1) ⊢ e : τlr → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⇒ₘ Γm2 →
   τs1 `prefix_of` τs2 → (Γ2,Γf2,Γm2,τs2) ⊢ e : τlr.
 Proof.
   intros ? He ??? [σs ->].
@@ -468,7 +468,7 @@ Proof.
 Qed.
 Lemma ectx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 τs1 τs2 Ei τlr σlr :
   ✓ Γ1 → (Γ1,Γf1,Γm1,τs1) ⊢ Ei : τlr ↣ σlr → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →
-  Γm1 ⊆{⇒} Γm2 → τs1 `prefix_of` τs2 → (Γ2,Γf2,Γm2,τs2) ⊢ Ei : τlr ↣ σlr.
+  Γm1 ⇒ₘ Γm2 → τs1 `prefix_of` τs2 → (Γ2,Γf2,Γm2,τs2) ⊢ Ei : τlr ↣ σlr.
 Proof.
   destruct 2; typed_constructor;
     eauto using type_valid_weaken, addr_strict_weaken, assign_typed_weaken,
@@ -477,13 +477,13 @@ Proof.
 Qed.
 Lemma ectx_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 τs1 τs2 E τlr σlr :
   ✓ Γ1 → (Γ1,Γf1,Γm1,τs1) ⊢ E : τlr ↣ σlr → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 →
-  Γm1 ⊆{⇒} Γm2 → τs1 `prefix_of` τs2 → (Γ2,Γf2,Γm2,τs2) ⊢ E : τlr ↣ σlr.
+  Γm1 ⇒ₘ Γm2 → τs1 `prefix_of` τs2 → (Γ2,Γf2,Γm2,τs2) ⊢ E : τlr ↣ σlr.
 Proof.
   intros ? HE ???. revert τlr HE. induction E; intros; typed_inversion_all;
     typed_constructor; eauto using ectx_item_typed_weaken.
 Qed.
 Lemma stmt_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 τs1 τs2 s mτ :
-  ✓ Γ1 → (Γ1,Γf1,Γm1,τs1) ⊢ s : mτ → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⊆{⇒} Γm2 →
+  ✓ Γ1 → (Γ1,Γf1,Γm1,τs1) ⊢ s : mτ → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⇒ₘ Γm2 →
   τs1 `prefix_of` τs2 → (Γ2,Γf2,Γm2,τs2) ⊢ s : mτ.
 Proof.
   intros ? Hs ???. revert τs2. induction Hs; typed_constructor;
@@ -492,36 +492,36 @@ Proof.
     unfold typed, stmt_typed in *; simpl in *; eauto using prefix_of_cons.
 Qed.
 Lemma sctx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 τs1 τs2 Es mτ mσ :
-  ✓ Γ1 → (Γ1,Γf1,Γm1,τs1) ⊢ Es : mτ ↣ mσ → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⊆{⇒} Γm2 →
+  ✓ Γ1 → (Γ1,Γf1,Γm1,τs1) ⊢ Es : mτ ↣ mσ → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⇒ₘ Γm2 →
   τs1 `prefix_of` τs2 → (Γ2,Γf2,Γm2,τs2) ⊢ Es : mτ ↣ mσ.
 Proof.
   destruct 2; typed_constructor;
     eauto using stmt_typed_weaken, expr_typed_weaken.
 Qed.
 Lemma esctx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 τs1 τs2 Ee τ mσ :
-  ✓ Γ1 → (Γ1,Γf1,Γm1,τs1) ⊢ Ee : τ ↣ mσ → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⊆{⇒} Γm2 →
+  ✓ Γ1 → (Γ1,Γf1,Γm1,τs1) ⊢ Ee : τ ↣ mσ → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⇒ₘ Γm2 →
   τs1 `prefix_of` τs2 → (Γ2,Γf2,Γm2,τs2) ⊢ Ee : τ ↣ mσ.
 Proof. destruct 2; typed_constructor; eauto using stmt_typed_weaken. Qed.
 Lemma ctx_item_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 τs Ek τf σf :
-  ✓ Γ1 → (Γ1,Γf1,Γm1,τs) ⊢ Ek : τf ↣ σf → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⊆{⇒} Γm2 →
+  ✓ Γ1 → (Γ1,Γf1,Γm1,τs) ⊢ Ek : τf ↣ σf → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⇒ₘ Γm2 →
   (Γ2,Γf2,Γm2,τs) ⊢ Ek : τf ↣ σf.
 Proof.
   destruct 2; typed_constructor; eauto using sctx_item_typed_weaken,
     ectx_typed_weaken, esctx_item_typed_weaken, expr_typed_weaken,
-    Forall2_impl, lookup_weaken, memenv_extend_typed.
+    Forall2_impl, lookup_weaken, memenv_forward_typed.
 Qed.
 Lemma ctx_typed_weaken Γ1 Γ2 Γf1 Γf2 Γm1 Γm2 k τf σf :
-  ✓ Γ1 → (Γ1,Γf1,Γm1) ⊢ k : τf ↣ σf → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⊆{⇒} Γm2 →
+  ✓ Γ1 → (Γ1,Γf1,Γm1) ⊢ k : τf ↣ σf → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⇒ₘ Γm2 →
   (Γ2,Γf2,Γm2) ⊢ k : τf ↣ σf.
 Proof.
   intros ? Hk ???. revert τf Hk. induction k; intros; typed_inversion_all;
     typed_constructor; eauto using ctx_item_typed_weaken.
 Qed.
 Lemma direction_typed_weaken Γ1 Γ2 Γm1 Γm2 d τf :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ d : τf → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → (Γ2,Γm2) ⊢ d : τf.
+  ✓ Γ1 → (Γ1,Γm1) ⊢ d : τf → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → (Γ2,Γm2) ⊢ d : τf.
 Proof. destruct 2; typed_constructor; eauto using val_typed_weaken. Qed.
 Lemma funenv_pretyped_weaken Γ1 Γ2 Γm1 Γm2 δ Γf1 Γf2 :
-  ✓ Γ1 → funenv_pretyped Γ1 Γm1 δ Γf1 → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⊆{⇒} Γm2 →
+  ✓ Γ1 → funenv_pretyped Γ1 Γm1 δ Γf1 → Γ1 ⊆ Γ2 → Γf1 ⊆ Γf2 → Γm1 ⇒ₘ Γm2 →
   funenv_pretyped Γ2 Γm2 δ Γf2.
 Proof.
   intros ? Hδ ??? f s ?.
@@ -529,7 +529,7 @@ Proof.
     types_valid_weaken, type_valid_weaken, lookup_weaken, sizes_of_weaken.
 Qed.
 Lemma funenv_typed_weaken Γ1 Γ2 Γm1 Γm2 δ Γf :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ δ : Γf → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → (Γ2,Γm2) ⊢ δ : Γf.
+  ✓ Γ1 → (Γ1,Γm1) ⊢ δ : Γf → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → (Γ2,Γm2) ⊢ δ : Γf.
 Proof. destruct 2; split; simpl in *; eauto using funenv_pretyped_weaken. Qed.
 Lemma funtypes_valid_empty Γ : ✓{Γ} ∅.
 Proof. by intros ??; simpl_map. Qed.

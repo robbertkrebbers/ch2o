@@ -681,7 +681,7 @@ Proof.
 Qed.
 Lemma vals_representable_weaken Γ1 Γ2 Γm1 Γm2 vs τs :
   ✓ Γ1 → ✓{Γ1}* τs → vals_representable Γ1 Γm1 vs τs → Γ1 ⊆ Γ2 →
-  Γm1 ⊆{⇒} Γm2 → vals_representable Γ2 Γm2 vs τs.
+  Γm1 ⇒ₘ Γm2 → vals_representable Γ2 Γm2 vs τs.
 Proof.
   intros ? Hτs [bs ? Hlen Hvs]. exists bs.
   * eauto using Forall_impl, bit_valid_weaken.
@@ -690,7 +690,7 @@ Proof.
   * by erewrite <-vals_unflatten_weaken by eauto.
 Qed.
 Lemma val_typed_weaken Γ1 Γ2 Γm1 Γm2 v τ :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ v : τ → Γ1 ⊆ Γ2 → Γm1 ⊆{⇒} Γm2 → (Γ2,Γm2) ⊢ v : τ.
+  ✓ Γ1 → (Γ1,Γm1) ⊢ v : τ → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → (Γ2,Γm2) ⊢ v : τ.
 Proof.
   intros ? Hvτ ??. induction Hvτ using @val_typed_ind; econstructor;
     erewrite <-1?vals_unflatten_weaken;
@@ -1316,15 +1316,15 @@ Proof.
     constructor; eauto using val_refine_compose.
 Qed.
 Lemma val_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' v1 v2 τ :
-  ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⊆{⇒} Γm1' →
-  Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 → v1 ⊑{Γ',f'@Γm1'↦Γm2'} v2 : τ.
+  ✓ Γ → v1 ⊑{Γ,f@Γm1↦Γm2} v2 : τ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⇒ₘ Γm1' →
+  Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 → v1 ⊑{Γ',f'@Γm1'↦Γm2'} v2 : τ.
 Proof.
   intros ? Hv; intros. induction Hv using @val_refine_ind; refine_constructor;
     eauto using base_val_refine_weaken,@lookup_weaken,vals_representable_weaken.
 Qed.
 Lemma vals_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' vs1 vs2 τs :
   ✓ Γ → vs1 ⊑{Γ,f@Γm1↦Γm2}* vs2 :* τs → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' →
-  Γm1 ⊆{⇒} Γm1' → Γm2 ⊆{⇒} Γm2' → meminj_extend f f' Γm1 Γm2 → 
+  Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f' Γm1 Γm2 → 
   vs1 ⊑{Γ',f'@Γm1'↦Γm2'}* vs2 :* τs.
 Proof. induction 2; constructor; eauto using val_refine_weaken. Qed.
 Lemma val_flatten_refine Γ f Γm1 Γm2 v1 v2 τ :
