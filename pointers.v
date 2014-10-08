@@ -41,12 +41,13 @@ Section pointer_operations.
   Definition ptr_alive (Γm : memenv Ti) (p : ptr Ti) : Prop :=
     match p with NULL _ => True | Ptr a => index_alive Γm (addr_index a) end.
 
-  Inductive ptr_refine' (Γ : env Ti) (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
-       ptr Ti → ptr Ti → type Ti → Prop :=
+  Inductive ptr_refine' (Γ : env Ti) (α : bool) (f : meminj Ti)
+       (Γm1 Γm2 : memenv Ti) : ptr Ti → ptr Ti → type Ti → Prop :=
     | NULL_refine τ :
-       ptr_type_valid Γ τ → ptr_refine' Γ f Γm1 Γm2 (NULL τ) (NULL τ) τ
+       ptr_type_valid Γ τ → ptr_refine' Γ α f Γm1 Γm2 (NULL τ) (NULL τ) τ
     | Ptr_refine a1 a2 τ :
-       a1 ⊑{Γ,f@Γm1↦Γm2} a2 : τ → ptr_refine' Γ f Γm1 Γm2 (Ptr a1) (Ptr a2) τ.
+       a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : τ →
+       ptr_refine' Γ α f Γm1 Γm2 (Ptr a1) (Ptr a2) τ.
   Global Instance ptr_refine:
     RefineT Ti (env Ti) (type Ti) (ptr Ti) := ptr_refine'.
 End pointer_operations.
@@ -116,50 +117,55 @@ Global Instance ptr_alive_dec Γm p : Decision (ptr_alive Γm p).
 Proof. destruct p; apply _. Defined.
 
 (** ** Refinements *)
-Lemma ptr_refine_typed_l Γ f Γm1 Γm2 p1 p2 σ :
-  ✓ Γ → p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → (Γ,Γm1) ⊢ p1 : σ.
+Lemma ptr_refine_typed_l Γ α f Γm1 Γm2 p1 p2 σ :
+  ✓ Γ → p1 ⊑{Γ,α,f@Γm1↦Γm2} p2 : σ → (Γ,Γm1) ⊢ p1 : σ.
 Proof. destruct 2; constructor; eauto using addr_refine_typed_l. Qed.
-Lemma ptr_refine_typed_r Γ f Γm1 Γm2 p1 p2 σ :
-  ✓ Γ → p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → (Γ,Γm2) ⊢ p2 : σ.
+Lemma ptr_refine_typed_r Γ α f Γm1 Γm2 p1 p2 σ :
+  ✓ Γ → p1 ⊑{Γ,α,f@Γm1↦Γm2} p2 : σ → (Γ,Γm2) ⊢ p2 : σ.
 Proof. destruct 2; constructor; eauto using addr_refine_typed_r. Qed.
-Lemma ptr_refine_type_of_l Γ f Γm1 Γm2 p1 p2 σ :
-  p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → type_of p1 = σ.
+Lemma ptr_refine_type_of_l Γ α f Γm1 Γm2 p1 p2 σ :
+  p1 ⊑{Γ,α,f@Γm1↦Γm2} p2 : σ → type_of p1 = σ.
 Proof. destruct 1; simpl; eauto using addr_refine_type_of_l. Qed.
-Lemma ptr_refine_type_of_r Γ f Γm1 Γm2 p1 p2 σ :
-  p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → type_of p2 = σ.
+Lemma ptr_refine_type_of_r Γ α f Γm1 Γm2 p1 p2 σ :
+  p1 ⊑{Γ,α,f@Γm1↦Γm2} p2 : σ → type_of p2 = σ.
 Proof. destruct 1; simpl; eauto using addr_refine_type_of_r. Qed.
-Lemma ptr_refine_frozen Γ f Γm1 Γm2 p1 p2 σ :
-  p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → frozen p1 ↔ frozen p2.
+Lemma ptr_refine_frozen Γ α f Γm1 Γm2 p1 p2 σ :
+  p1 ⊑{Γ,α,f@Γm1↦Γm2} p2 : σ → frozen p1 ↔ frozen p2.
 Proof.
   unfold frozen. destruct 1; simpl; auto.
-  rewrite !(injective_iff Ptr). eapply (addr_refine_frozen Γ f); eauto.
+  rewrite !(injective_iff Ptr). eapply (addr_refine_frozen Γ α f); eauto.
 Qed.
-Lemma ptr_refine_id Γ Γm p σ : (Γ,Γm) ⊢ p : σ → p ⊑{Γ@Γm} p : σ.
+Lemma ptr_refine_id Γ α Γm p σ : (Γ,Γm) ⊢ p : σ → p ⊑{Γ,α@Γm} p : σ.
 Proof. destruct 1; constructor; eauto using addr_refine_id. Qed.
-Lemma ptr_refine_compose Γ f g Γm1 Γm2 Γm3 p1 p2 p3 σ σ' :
-  ✓ Γ → p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → p2 ⊑{Γ,g@Γm2↦Γm3} p3 : σ' →
-  p1 ⊑{Γ,f ◎ g@Γm1↦Γm3} p3 : σ.
+Lemma ptr_refine_compose Γ α1 α2 f g Γm1 Γm2 Γm3 p1 p2 p3 σ σ' :
+  ✓ Γ → p1 ⊑{Γ,α1,f@Γm1↦Γm2} p2 : σ → p2 ⊑{Γ,α2,g@Γm2↦Γm3} p3 : σ' →
+  p1 ⊑{Γ,α1||α2,f ◎ g@Γm1↦Γm3} p3 : σ.
 Proof.
   destruct 2; inversion_clear 1; constructor; eauto using addr_refine_compose.
 Qed.
-Lemma ptr_refine_weaken Γ Γ' f f' Γm1 Γm2 Γm1' Γm2' p1 p2 σ :
-  ✓ Γ → p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → Γ ⊆ Γ' → Γm1' ⊑{Γ',f'} Γm2' → Γm1 ⇒ₘ Γm1' →
-  meminj_extend f f' Γm1 Γm2 → p1 ⊑{Γ',f'@Γm1'↦Γm2'} p2 : σ.
+Lemma ptr_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' p1 p2 σ :
+  ✓ Γ → p1 ⊑{Γ,α,f@Γm1↦Γm2} p2 : σ → Γ ⊆ Γ' →
+  Γm1' ⊑{Γ',α',f'} Γm2' → Γm1 ⇒ₘ Γm1' →
+  meminj_extend f f' Γm1 Γm2 → p1 ⊑{Γ',α',f'@Γm1'↦Γm2'} p2 : σ.
 Proof.
   destruct 2; constructor;
     eauto using ptr_type_valid_weaken, addr_refine_weaken.
 Qed.
-Lemma ptr_refine_eq Γ Γm p1 p2 σ : p1 ⊑{Γ@Γm} p2 : σ → p1 = p2.
-Proof. destruct 1; f_equal; eauto using addr_refine_eq. Qed.
-Lemma ptr_refine_unique Γ f Γm1 Γm2 p1 p2 p3 σ2 σ3 :
-  p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ2 → p1 ⊑{Γ,f@Γm1↦Γm2} p3 : σ3 → p2 = p3.
+Lemma ptr_refine_unique_l Γ f Γm1 Γm2 p1 p2 p3 σ2 σ3 :
+  p1 ⊑{Γ,false,f@Γm1↦Γm2} p3 : σ2 → p2 ⊑{Γ,false,f@Γm1↦Γm2} p3 : σ3 → p1 = p2.
 Proof.
-  destruct 1; inversion_clear 1; f_equal; eauto using addr_refine_unique.
+  destruct 1; inversion_clear 1; f_equal; eauto using addr_refine_unique_l.
 Qed.
-Lemma ptr_freeze_refine Γ f Γm1 Γm2 p1 p2 σ :
-  p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → freeze true p1 ⊑{Γ,f@Γm1↦Γm2} freeze true p2 : σ.
+Lemma ptr_refine_unique_r Γ α f Γm1 Γm2 p1 p2 p3 σ2 σ3 :
+  p1 ⊑{Γ,α,f@Γm1↦Γm2} p2 : σ2 → p1 ⊑{Γ,α,f@Γm1↦Γm2} p3 : σ3 → p2 = p3.
+Proof.
+  destruct 1; inversion_clear 1; f_equal; eauto using addr_refine_unique_r.
+Qed.
+Lemma ptr_freeze_refine Γ α f Γm1 Γm2 p1 p2 σ :
+  p1 ⊑{Γ,α,f@Γm1↦Γm2} p2 : σ →
+  freeze true p1 ⊑{Γ,α,f@Γm1↦Γm2} freeze true p2 : σ.
 Proof. destruct 1; simpl; constructor; eauto using addr_freeze_refine. Qed.
-Lemma ptr_alive_refine Γ f Γm1 Γm2 p1 p2 σ :
-  ptr_alive Γm1 p1 → p1 ⊑{Γ,f@Γm1↦Γm2} p2 : σ → ptr_alive Γm2 p2.
+Lemma ptr_alive_refine Γ α f Γm1 Γm2 p1 p2 σ :
+  ptr_alive Γm1 p1 → p1 ⊑{Γ,α,f@Γm1↦Γm2} p2 : σ → ptr_alive Γm2 p2.
 Proof. destruct 2; simpl in *; eauto using addr_alive_refine. Qed.
 End pointers.
