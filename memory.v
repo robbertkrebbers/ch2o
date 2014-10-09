@@ -1207,7 +1207,7 @@ Proof.
 Qed.
 Lemma locks_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 Ω1 Ω2 Ω3 :
   ✓ Γ → Ω1 ⊑{Γ,α1,f1@Γm1↦Γm2} Ω2 → Ω2 ⊑{Γ,α2,f2@Γm2↦Γm3} Ω3 →
-  Ω1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3} Ω3.
+  Ω1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} Ω3.
 Proof.
   intros ? (?&?&HΓm12&HΩ12) (?&?&HΓm23&HΩ23);
     split; split_ands; eauto using memenv_refine_compose.

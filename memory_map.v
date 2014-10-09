@@ -463,7 +463,7 @@ Lemma cmap_refine_id' Γ α m : ✓ Γ → ✓{Γ} m → m ⊑{Γ,α} m.
 Proof. by apply cmap_refine_id. Qed.
 Lemma cmap_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 m1 m2 m3 :
   ✓ Γ → m1 ⊑{Γ,α1,f1@Γm1↦Γm2} m2 → m2 ⊑{Γ,α2,f2@Γm2↦Γm3} m3 →
-  m1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3} m3.
+  m1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} m3.
 Proof.
   intros ? (?&?&?&Hm12) (?&Hm3&?&Hm23);
     split; split_ands; eauto 2 using memenv_refine_compose.
@@ -478,7 +478,7 @@ Proof.
   naive_solver eauto using ctree_refine_compose.
 Qed.
 Lemma cmap_refine_compose' Γ α1 α2 f1 f2 m1 m2 m3 :
-  ✓ Γ → m1 ⊑{Γ,α1,f1} m2 → m2 ⊑{Γ,α2,f2} m3 → m1 ⊑{Γ,α1||α2,f1 ◎ f2} m3.
+  ✓ Γ → m1 ⊑{Γ,α1,f1} m2 → m2 ⊑{Γ,α2,f2} m3 → m1 ⊑{Γ,α1||α2,f2 ◎ f1} m3.
 Proof. by apply cmap_refine_compose. Qed.
 Lemma cmap_lookup_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 w1 τ :
   ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 →

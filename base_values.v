@@ -493,9 +493,9 @@ Proof.
   destruct 1; constructor; eauto using ptr_refine_id,
     bits_refine_id, char_byte_valid_bits_valid; constructor; eauto.
 Qed.
-Lemma base_val_refine_compose Γ α1 α2 f g Γm1 Γm2 Γm3 vb1 vb2 vb3 τb τb' :
-  ✓ Γ → vb1 ⊑{Γ,α1,f@Γm1↦Γm2} vb2 : τb → vb2 ⊑{Γ,α2,g@Γm2↦Γm3} vb3 : τb' →
-  vb1 ⊑{Γ,α1||α2,f ◎ g@Γm1↦Γm3} vb3 : τb.
+Lemma base_val_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 vb1 vb2 vb3 τb τb' :
+  ✓ Γ → vb1 ⊑{Γ,α1,f1@Γm1↦Γm2} vb2 : τb → vb2 ⊑{Γ,α2,f2@Γm2↦Γm3} vb3 : τb' →
+  vb1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} vb3 : τb.
 Proof.
   intros ? Hvb1 Hvb2. assert (τb = τb') as <- by (eapply (typed_unique _ vb2);
     eauto using base_val_refine_typed_r, base_val_refine_typed_l).

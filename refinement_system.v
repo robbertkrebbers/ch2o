@@ -875,10 +875,9 @@ Proof.
   * destruct (Hδ g s) as (τs&τ&?&->&?); naive_solver eauto using stmt_refine_id.
   * destruct (Γf !! g). by destruct Hdom; eauto. done.
 Qed.
-
 Lemma lrval_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 av1 av2 av3 τlr τlr' :
   ✓ Γ → av1 ⊑{Γ,α1,f1@Γm1↦Γm2} av2 : τlr → av2 ⊑{Γ,α2,f2@Γm2↦Γm3} av3 : τlr' →
-  av1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3} av3 : τlr.
+  av1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} av3 : τlr.
 Proof.
   destruct 2; inversion_clear 1; refine_constructor;
     eauto using val_refine_compose, addr_refine_compose.
@@ -886,13 +885,13 @@ Qed.
 Lemma expr_refine_compose Γ Γf τs α1 α2 f1 f2 Γm1 Γm2 Γm3 e1 e2 e3 τlr τlr' :
   ✓ Γ → e1 ⊑{(Γ,Γf,τs),α1,f1@Γm1↦Γm2} e2 : τlr →
   e2 ⊑{(Γ,Γf,τs),α2,f2@Γm2↦Γm3} e3 : τlr' →
-  e1 ⊑{(Γ,Γf,τs),α1||α2,f1 ◎ f2@Γm1↦Γm3} e3 : τlr.
+  e1 ⊑{(Γ,Γf,τs),α1||α2,f2 ◎ f1@Γm1↦Γm3} e3 : τlr.
 Proof.
   assert (∀ es1 es2 es3 τlrs τlrs',
     Forall3 (λ e1 e2 τlr, ∀ e3 τlr', e2 ⊑{(Γ,Γf,τs),α2,f2@ Γm2↦Γm3} e3 : τlr' →
-      e1 ⊑{(Γ,Γf,τs),α1||α2,f1 ◎ f2 @ Γm1↦Γm3} e3 : τlr) es1 es2 τlrs →
+      e1 ⊑{(Γ,Γf,τs),α1||α2,f2 ◎ f1 @ Γm1↦Γm3} e3 : τlr) es1 es2 τlrs →
     es2 ⊑{(Γ,Γf,τs),α2,f2@ Γm2↦Γm3}* es3 :* τlrs' →
-    es1 ⊑{(Γ, Γf, τs),α1||α2,f1 ◎ f2 @ Γm1↦Γm3}* es3 :* τlrs).
+    es1 ⊑{(Γ, Γf, τs),α1||α2,f2 ◎ f1 @ Γm1↦Γm3}* es3 :* τlrs).
   { intros ?? es3 ? τlrs' Hes. revert es3 τlrs'.
     induction Hes; inversion_clear 1; constructor; eauto. }
   intros ? He; revert e3 τlr'.
@@ -904,7 +903,7 @@ Lemma exprs_refine_compose
     Γ Γf τs α1 α2 f1 f2 Γm1 Γm2 Γm3 es1 es2 es3 τlrs τlrs' :
   ✓ Γ → es1 ⊑{(Γ,Γf,τs),α1,f1@Γm1↦Γm2}* es2 :* τlrs →
   es2 ⊑{(Γ,Γf,τs),α2,f2@Γm2↦Γm3}* es3 :* τlrs' →
-  es1 ⊑{(Γ,Γf,τs),α1||α2,f1 ◎ f2@Γm1↦Γm3}* es3 :* τlrs.
+  es1 ⊑{(Γ,Γf,τs),α1||α2,f2 ◎ f1@Γm1↦Γm3}* es3 :* τlrs.
 Proof.
   intros ? Hes. revert es3 τlrs'. induction Hes; inversion_clear 1;
     constructor; eauto using expr_refine_compose.
@@ -913,7 +912,7 @@ Lemma ectx_item_refine_compose
     Γ Γf τs α1 α2 f1 f2 Γm1 Γm2 Γm3 Ei1 Ei2 Ei3 τlr τlr' τlr'' :
   ✓ Γ → Ei1 ⊑{(Γ,Γf,τs),α1,f1@Γm1↦Γm2} Ei2 : τlr ↣ τlr' →
   Ei2 ⊑{(Γ,Γf,τs),α2,f2@Γm2↦Γm3} Ei3 : τlr ↣ τlr'' →
-  Ei1 ⊑{(Γ,Γf,τs),α1||α2,f1 ◎ f2@Γm1↦Γm3} Ei3 : τlr ↣ τlr'.
+  Ei1 ⊑{(Γ,Γf,τs),α1||α2,f2 ◎ f1@Γm1↦Γm3} Ei3 : τlr ↣ τlr'.
 Proof.
   destruct 2; intros HEi'; refine_inversion HEi'; simplify_type_equality;
     refine_constructor; eauto using expr_refine_compose, exprs_refine_compose.
@@ -922,7 +921,7 @@ Lemma ectx_refine_compose
     Γ Γf τs α1 α2 f1 f2 Γm1 Γm2 Γm3 E1 E2 E3 τlr τlr' τlr'' :
   ✓ Γ → E1 ⊑{(Γ,Γf,τs),α1,f1@Γm1↦Γm2} E2 : τlr ↣ τlr' →
   E2 ⊑{(Γ,Γf,τs),α2,f2@Γm2↦Γm3} E3 : τlr ↣ τlr'' →
-  E1 ⊑{(Γ,Γf,τs),α1||α2,f1 ◎ f2@Γm1↦Γm3} E3 : τlr ↣ τlr'.
+  E1 ⊑{(Γ,Γf,τs),α1||α2,f2 ◎ f1@Γm1↦Γm3} E3 : τlr ↣ τlr'.
 Proof.
   intros ? HE. revert E3 τlr''.
   induction HE as [|Ei1 Ei2 E1 E2 τlr1 τlr2 τlr3];
@@ -935,7 +934,7 @@ Qed.
 Lemma stmt_refine_compose Γ Γf τs α1 α2 f1 f2 Γm1 Γm2 Γm3 s1 s2 s3 mcτ mcτ' :
   ✓ Γ → s1 ⊑{(Γ,Γf,τs),α1,f1@Γm1↦Γm2} s2 : mcτ →
   s2 ⊑{(Γ,Γf,τs),α2,f2@Γm2↦Γm3} s3 : mcτ' →
-  s1 ⊑{(Γ,Γf,τs),α1||α2,f1 ◎ f2@Γm1↦Γm3} s3 : mcτ.
+  s1 ⊑{(Γ,Γf,τs),α1||α2,f2 ◎ f1@Γm1↦Γm3} s3 : mcτ.
 Proof.
   intros ? Hs. revert s3 mcτ'.
   induction Hs; intros ?? Hs'; refine_inversion Hs';
@@ -945,7 +944,7 @@ Lemma sctx_item_refine_compose
     Γ Γf τs α1 α2 f1 f2 Γm1 Γm2 Γm3 Es1 Es2 Es3 mcτ mcτ' mcτ'' :
   ✓ Γ → Es1 ⊑{(Γ,Γf,τs),α1,f1@Γm1↦Γm2} Es2 : mcτ ↣ mcτ' →
   Es2 ⊑{(Γ,Γf,τs),α2,f2@Γm2↦Γm3} Es3 : mcτ ↣ mcτ'' →
-  Es1 ⊑{(Γ,Γf,τs),α1||α2,f1 ◎ f2@Γm1↦Γm3} Es3 : mcτ ↣ mcτ'.
+  Es1 ⊑{(Γ,Γf,τs),α1||α2,f2 ◎ f1@Γm1↦Γm3} Es3 : mcτ ↣ mcτ'.
 Proof.
   destruct 2; intros HEs'; refine_inversion HEs'; refine_constructor;
     eauto using expr_refine_compose, stmt_refine_compose.
@@ -954,7 +953,7 @@ Lemma esctx_item_refine_compose
     Γ Γf τs α1 α2 f1 f2 Γm1 Γm2 Γm3 Ee1 Ee2 Ee3 τlr mcτ' mcτ'' :
   ✓ Γ → Ee1 ⊑{(Γ,Γf,τs),α1,f1@Γm1↦Γm2} Ee2 : τlr ↣ mcτ' →
   Ee2 ⊑{(Γ,Γf,τs),α2,f2@Γm2↦Γm3} Ee3 : τlr ↣ mcτ'' →
-  Ee1 ⊑{(Γ,Γf,τs),α1||α2,f1 ◎ f2@Γm1↦Γm3} Ee3 : τlr ↣ mcτ'.
+  Ee1 ⊑{(Γ,Γf,τs),α1||α2,f2 ◎ f1@Γm1↦Γm3} Ee3 : τlr ↣ mcτ'.
 Proof.
   destruct 2; intros HEe'; refine_inversion HEe';
      refine_constructor; eauto using stmt_refine_compose.
@@ -963,16 +962,16 @@ Lemma ctx_item_refine_compose
     Γ Γf τs α1 α2 f1 f2 Γm1 Γm2 Γm3 Ek1 Ek2 Ek3 τf τf' τf'' :
   ✓ Γ → Ek1 ⊑{(Γ,Γf,τs),α1,f1@Γm1↦Γm2} Ek2 : τf ↣ τf' →
   Ek2 ⊑{(Γ,Γf,τs),α2,f2@Γm2↦Γm3} Ek3 : τf ↣ τf'' →
-  Ek1 ⊑{(Γ,Γf,τs),α1||α2,f1 ◎ f2@Γm1↦Γm3} Ek3 : τf ↣ τf'.
+  Ek1 ⊑{(Γ,Γf,τs),α1||α2,f2 ◎ f1@Γm1↦Γm3} Ek3 : τf ↣ τf'.
 Proof.
   assert (∀ o1 o2 o3, f1 !! o1 = Some (o2,[]) → f2 !! o2 = Some (o3,[]) →
-    (f1 ◎ f2) !! o1 = Some (o3,[])).
+    (f2 ◎ f1) !! o1 = Some (o3,[])).
   { intros o1 o2 o3. rewrite lookup_meminj_compose_Some. naive_solver. }
   assert (∀ os1 os2 os2' os3 (σs : list (type Ti)),
     Γm2 ⊢* os2 :* σs → Γm2 ⊢* os2' :* σs → zip os2' σs = zip os2 σs →
     Forall2 (λ o1 o2, f1 !! o1 = Some (o2, [])) os1 os2 →
     Forall2 (λ o1 o2, f2 !! o1 = Some (o2, [])) os2' os3 →
-    Forall2 (λ o1 o2, (f1 ◎ f2) !! o1 = Some (o2, [])) os1 os3).
+    Forall2 (λ o1 o2, (f2 ◎ f1) !! o1 = Some (o2, [])) os1 os3).
   { induction os1; intros; decompose_Forall_hyps; eauto. }
   destruct 2; intros HEk'; refine_inversion HEk'; try refine_constructor;
      eauto using expr_refine_compose, ectx_refine_compose,
@@ -981,7 +980,7 @@ Qed.
 Lemma ctx_refine_compose Γ Γf α1 α2 f1 f2 Γm1 Γm2 Γm3 k1 k2 k3 τf τf' τf'' :
   ✓ Γ → k1 ⊑{(Γ,Γf),α1,f1@Γm1↦Γm2} k2 : τf ↣ τf' →
   k2 ⊑{(Γ,Γf),α2,f2@Γm2↦Γm3} k3 : τf ↣ τf'' →
-  k1 ⊑{(Γ,Γf),α1||α2,f1 ◎ f2@Γm1↦Γm3} k3 : τf ↣ τf'.
+  k1 ⊑{(Γ,Γf),α1||α2,f2 ◎ f1@Γm1↦Γm3} k3 : τf ↣ τf'.
 Proof.
   intros ? Hk. revert k3 τf''.
   induction Hk as [|Ek1 Ek2 k1 k2 τf1 τf2 τf3];
@@ -995,7 +994,7 @@ Proof.
 Qed.
 Lemma direction_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 d1 d2 d3 mcτ mcτ' :
   ✓ Γ → d1 ⊑{Γ,α1,f1@Γm1↦Γm2} d2 : mcτ → d2 ⊑{Γ,α2,f2@Γm2↦Γm3} d3 : mcτ' →
-  d1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3} d3 : mcτ.
+  d1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} d3 : mcτ.
 Proof.
   destruct 2; inversion_clear 1; refine_constructor;
     eauto using val_refine_compose.
@@ -1003,7 +1002,7 @@ Qed.
 Lemma focus_refine_compose Γ Γf τs α1 α2 f1 f2 Γm1 Γm2 Γm3 φ1 φ2 φ3 τf τf' :
   ✓ Γ → φ1 ⊑{(Γ,Γf,τs),α1,f1@Γm1↦Γm2} φ2 : τf →
   φ2 ⊑{(Γ,Γf,τs),α2,f2@Γm2↦Γm3} φ3 : τf' →
-  φ1 ⊑{(Γ,Γf,τs),α1||α2,f1 ◎ f2@Γm1↦Γm3} φ3 : τf.
+  φ1 ⊑{(Γ,Γf,τs),α1||α2,f2 ◎ f1@Γm1↦Γm3} φ3 : τf.
 Proof.
   destruct 2 as [| | | |E1 E2 e1 e2 τlr τ|e1 e2 Es1 Es2 v1 v2 τ mτ];
     inversion 1 as [| | | |? E3 ? e3 τlr' τ'|? e3 ? Es3 ? v3 τ' mτ'];
@@ -1031,7 +1030,7 @@ Proof.
 Qed.
 Lemma state_refine_compose Γ Γf α1 α2 f1 f2 S1 S2 S3 h :
   ✓ Γ → S1 ⊑{(Γ,Γf),α1,f1} S2 : h → S2 ⊑{(Γ,Γf),α2,f2} S3 : h →
-  S1 ⊑{(Γ,Γf),α1||α2,f1 ◎ f2} S3 : h.
+  S1 ⊑{(Γ,Γf),α1||α2,f2 ◎ f1} S3 : h.
 Proof.
   intros ? HS HS'.
   assert ((Γ,Γf) ⊢ S1 : h) by eauto using state_refine_typed_l.
@@ -1047,7 +1046,7 @@ Proof.
 Qed.
 Lemma funenv_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 δ1 δ2 δ3 Γf :
   ✓ Γ → δ1 ⊑{Γ,α1,f1@Γm1↦Γm2} δ2 : Γf → δ2 ⊑{Γ,α2,f2@Γm2↦Γm3} δ3 : Γf →
-  δ1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3} δ3 : Γf.
+  δ1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} δ3 : Γf.
 Proof.
   intros ? Hδ Hδ' h; specialize (Hδ h); specialize (Hδ' h).
   destruct (δ1 !! h) as [s1|], (δ2 !! h) as [s2|], (δ3 !! h) as [s3|],

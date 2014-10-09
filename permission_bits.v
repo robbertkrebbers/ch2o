@@ -359,14 +359,14 @@ Lemma pbits_refine_id Γ α Γm xbs : ✓{Γ,Γm}* xbs → xbs ⊑{Γ,α@Γm}* x
 Proof. induction 1; eauto using pbit_refine_id. Qed.
 Lemma pbit_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 xb1 xb2 xb3 :
   ✓ Γ → xb1 ⊑{Γ,α1,f1@Γm1↦Γm2} xb2 → xb2 ⊑{Γ,α2,f2@Γm2↦Γm3} xb3 →
-  xb1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3} xb3.
+  xb1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} xb3.
 Proof.
   destruct xb1, xb2, xb3; intros ? (?&?&?) (?&?&?); split;
     naive_solver eauto using bit_refine_compose.
 Qed.
 Lemma pbits_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 xbs1 xbs2 xbs3 :
   ✓ Γ → xbs1 ⊑{Γ,α1,f1@Γm1↦Γm2}* xbs2 → xbs2 ⊑{Γ,α2,f2@Γm2↦Γm3}* xbs3 →
-  xbs1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3}* xbs3.
+  xbs1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3}* xbs3.
 Proof.
   intros ? Hxbs. revert xbs3. induction Hxbs; intros;
     decompose_Forall_hyps; eauto using pbit_refine_compose.

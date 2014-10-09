@@ -1294,22 +1294,22 @@ Proof. induction 1; constructor; eauto using val_refine_id. Qed.
 
 Lemma val_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 v1 v2 v3 τ τ' :
   ✓ Γ → v1 ⊑{Γ,α1,f1@Γm1↦Γm2} v2 : τ → v2 ⊑{Γ,α2,f2@Γm2↦Γm3} v3 : τ' →
-  v1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3} v3 : τ.
+  v1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} v3 : τ.
 Proof.
   intros HΓ. assert (∀ vs1 vs2 vs3 τs τs',
     Forall3 (λ v1 v2 τ, ∀ v3 τ',
       v2 ⊑{Γ,α2,f2@Γm2↦Γm3} v3 : τ' →
-      v1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3} v3 : τ) vs1 vs2 τs →
+      v1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} v3 : τ) vs1 vs2 τs →
     vs2 ⊑{Γ,α2,f2@Γm2↦Γm3}* vs3 :* τs' →
-    vs1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3}* vs3 :* τs).
+    vs1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3}* vs3 :* τs).
   { intros vs1 ws2 vs3 τs τs' Hvs. revert vs3 τs'.
     induction Hvs; inversion_clear 1; constructor; eauto. }
   assert (∀ vs1 vs2 vs3 τ τ',
     Forall2 (λ v1 v2, ∀ v3 τ',
       v2 ⊑{Γ,α2,f2@Γm2↦Γm3} v3 : τ' →
-      v1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3} v3 : τ) vs1 vs2 →
+      v1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} v3 : τ) vs1 vs2 →
     vs2 ⊑{Γ,α2,f2@Γm2↦Γm3}* vs3 : τ' →
-    vs1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3}* vs3 : τ).
+    vs1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3}* vs3 : τ).
   { intros vs1 ws2 vs3 τ'' τ''' Hvs. revert vs3.
     induction Hvs; inversion_clear 1; try constructor; eauto. }
   intros Hv; revert v3 τ'. induction Hv using @val_refine_ind;
@@ -1319,7 +1319,7 @@ Qed.
 Lemma vals_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 vs1 vs2 vs3 τs τs' :
   ✓ Γ → vs1 ⊑{Γ,α1,f1@Γm1↦Γm2}* vs2 :* τs →
   vs2 ⊑{Γ,α2,f2@Γm2↦Γm3}* vs3 :* τs' →
-  vs1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3}* vs3 :* τs.
+  vs1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3}* vs3 :* τs.
 Proof.
   intros ? Hvs. revert vs3 τs'. induction Hvs; inversion_clear 1;
     constructor; eauto using val_refine_compose.
@@ -1359,7 +1359,7 @@ Proof.
     destruct (vals_representable_as_bits Γ Γm2 (bit_size_of Γ (unionT s)) vs2
       τs) as (bs2&Hbs2&?&?&?); eauto using bit_size_of_union.
     rewrite Hbs2; simplify_equality'.
-    rewrite <-(right_id_L meminj_id (◎) f), <-(orb_diag true).
+    rewrite <-(left_id_L meminj_id (◎) f), <-(orb_diag true).
     apply bits_refine_compose with
       Γm2 (resize (bit_size_of Γ (unionT s)) BIndet (val_flatten Γ v2)); auto.
     rewrite list_lookup_fmap, Hτ in Hv2; simplify_equality'.
@@ -1424,7 +1424,7 @@ Proof.
       intros (xbs2&xbs2'&?&?&?) ?; decompose_Forall_hyps.
     erewrite val_unflatten_compound by eauto.
     refine_constructor; eauto; [by rewrite list_lookup_fmap, Hτ| |].
-    { destruct α; [|done]. rewrite <-(left_id_L _ (◎) f), <-(orb_diag true).
+    { destruct α; [|done]. rewrite <-(right_id_L _ (◎) f), <-(orb_diag true).
       apply val_refine_compose with
         Γm1 (val_unflatten Γ τ (tagged_tag <$> ctree_flatten w)) τ; auto.
       { erewrite <-to_val_unflatten,
@@ -1493,7 +1493,7 @@ Proof.
     apply PBits_refine; auto using seps_unshared_valid.
     destruct α; [|done]. apply Forall2_app_l;
       [|apply Forall2_replicate_l; eauto using Forall_impl, BIndet_refine].
-    rewrite <-(right_id_L _ (◎) f), <-(orb_diag true).
+    rewrite <-(left_id_L _ (◎) f), <-(orb_diag true).
     eapply bits_refine_compose,
       bits_subseteq_refine; eauto using val_flatten_refine.
     erewrite val_flatten_length by eauto.

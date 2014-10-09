@@ -463,9 +463,9 @@ Proof.
   destruct r as [|rs r]; [apply ref_refine_nil_alt; csimpl; auto with lia|].
   apply ref_refine_ne_nil_alt. by rewrite (right_id_L [] (++)).
 Qed.
-Lemma addr_refine_compose Γ α1 α2 f g Γm1 Γm2 Γm3 a1 a2 a3 σ σ' :
-  ✓ Γ → a1 ⊑{Γ,α1,f@Γm1↦Γm2} a2 : σ → a2 ⊑{Γ,α2,g@Γm2↦Γm3} a3 : σ' →
-  a1 ⊑{Γ,α1||α2,f ◎ g@Γm1↦Γm3} a3 : σ.
+Lemma addr_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 a1 a2 a3 σ σ' :
+  ✓ Γ → a1 ⊑{Γ,α1,f1@Γm1↦Γm2} a2 : σ → a2 ⊑{Γ,α2,f2@Γm2↦Γm3} a3 : σ' →
+  a1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} a3 : σ.
 Proof.
   destruct 2 as [o o2 r r2 r3 i i3 τ τ2 σ σc ??????????? Hr3];
     inversion 1 as [? o4 ? r4 r5 ? i5 ? τ3 ????????????? Hr5]; subst.

@@ -154,9 +154,9 @@ Proof.
 Qed.
 Lemma bits_refine_id Γ α Γm bs : ✓{Γ,Γm}* bs → bs ⊑{Γ,α@Γm}* bs.
 Proof. induction 1; eauto using bit_refine_id. Qed.
-Lemma bit_refine_compose Γ α1 α2 f g Γm1 Γm2 Γm3 b1 b2 b3 :
-  ✓ Γ → b1 ⊑{Γ,α1,f@Γm1↦Γm2} b2 → b2 ⊑{Γ,α2,g@Γm2↦Γm3} b3 →
-  b1 ⊑{Γ,α1||α2,f ◎ g@Γm1↦Γm3} b3.
+Lemma bit_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 b1 b2 b3 :
+  ✓ Γ → b1 ⊑{Γ,α1,f1@Γm1↦Γm2} b2 → b2 ⊑{Γ,α2,f2@Γm2↦Γm3} b3 →
+  b1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} b3.
 Proof.
   destruct 2 as [| | |pb1 pb2 Hpb|].
   * inversion 1; simplify_equality; constructor; auto.
@@ -167,9 +167,9 @@ Proof.
     destruct Hpb as (?&?&?&?); eauto using ptr_alive_refine.
   * constructor; eauto using bit_refine_valid_r.
 Qed.
-Lemma bits_refine_compose Γ α1 α2 f g Γm1 Γm2 Γm3 bs1 bs2 bs3 :
-  ✓ Γ → bs1 ⊑{Γ,α1,f@Γm1↦Γm2}* bs2 → bs2 ⊑{Γ,α2,g@Γm2↦Γm3}* bs3 →
-  bs1 ⊑{Γ,α1||α2,f ◎ g@Γm1↦Γm3}* bs3.
+Lemma bits_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 bs1 bs2 bs3 :
+  ✓ Γ → bs1 ⊑{Γ,α1,f1@Γm1↦Γm2}* bs2 → bs2 ⊑{Γ,α2,f2@Γm2↦Γm3}* bs3 →
+  bs1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3}* bs3.
 Proof.
   intros ? Hbs. revert bs3. induction Hbs; inversion_clear 1;
     constructor; eauto using bit_refine_compose.

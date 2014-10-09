@@ -167,7 +167,7 @@ Proof.
   { eauto using funenv_refine_weaken, funenv_refine_id, state_refine_mem. }
   destruct (cexec_complete Γ Γf δ S2 S3 g) as (f''&S3''&?&?&?);
     eauto using state_refine_typed_l, funenv_typed_weaken.
-  exists (f'' ◎ f') S3''. rewrite <-(orb_diag false).
+  exists (f' ◎ f'') S3''. rewrite <-(orb_diag false).
   split_ands; eauto using state_refine_compose,
     rtc_r, meminj_extend_compose, meminj_extend_transitive.
 Qed.

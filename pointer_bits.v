@@ -150,9 +150,9 @@ Qed.
 (** ** Refinements *)
 Lemma ptr_bit_refine_id Γ α Γm pb : ✓{Γ,Γm} pb → pb ⊑{Γ,α@Γm} pb.
 Proof. intros (σ&?&?&?); exists σ; eauto using ptr_refine_id. Qed.
-Lemma ptr_bit_refine_compose Γ α1 α2 f g Γm1 Γm2 Γm3 pb1 pb2 pb3 :
-  ✓ Γ → pb1 ⊑{Γ,α1,f@Γm1↦Γm2} pb2 → pb2 ⊑{Γ,α2,g@Γm2↦Γm3} pb3 →
-  pb1 ⊑{Γ,α1||α2,f ◎ g@Γm1↦Γm3} pb3.
+Lemma ptr_bit_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 pb1 pb2 pb3 :
+  ✓ Γ → pb1 ⊑{Γ,α1,f1@Γm1↦Γm2} pb2 → pb2 ⊑{Γ,α2,f2@Γm2↦Γm3} pb3 →
+  pb1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} pb3.
 Proof.
   intros ? (τ1&?&?&?&?) (τ2&?&?&?&?); exists τ1.
   assert (τ1 = τ2) by (by erewrite <-(ptr_refine_type_of_r _ _ _ _ _ _ _ τ1),

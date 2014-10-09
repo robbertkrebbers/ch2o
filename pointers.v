@@ -137,9 +137,9 @@ Proof.
 Qed.
 Lemma ptr_refine_id Γ α Γm p σ : (Γ,Γm) ⊢ p : σ → p ⊑{Γ,α@Γm} p : σ.
 Proof. destruct 1; constructor; eauto using addr_refine_id. Qed.
-Lemma ptr_refine_compose Γ α1 α2 f g Γm1 Γm2 Γm3 p1 p2 p3 σ σ' :
-  ✓ Γ → p1 ⊑{Γ,α1,f@Γm1↦Γm2} p2 : σ → p2 ⊑{Γ,α2,g@Γm2↦Γm3} p3 : σ' →
-  p1 ⊑{Γ,α1||α2,f ◎ g@Γm1↦Γm3} p3 : σ.
+Lemma ptr_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 p1 p2 p3 σ σ' :
+  ✓ Γ → p1 ⊑{Γ,α1,f1@Γm1↦Γm2} p2 : σ → p2 ⊑{Γ,α2,f2@Γm2↦Γm3} p3 : σ' →
+  p1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} p3 : σ.
 Proof.
   destruct 2; inversion_clear 1; constructor; eauto using addr_refine_compose.
 Qed.

@@ -19,7 +19,7 @@ Definition meminj_compose {Ti} (f g : meminj Ti) : meminj Ti :=
   | meminj_id, meminj_map m => meminj_map m
   | meminj_map m1, meminj_map m2 => meminj_map $
      merge (λ yr _ : option (index * ref Ti),
-       '(y1,r1) ← yr; '(y2,r2) ← m2 !! y1; Some (y2, r1 ++ r2)) m1 ∅
+       '(y1,r1) ← yr; '(y2,r2) ← m1 !! y1; Some (y2, r1 ++ r2)) m2 ∅
   end.
 Arguments meminj_compose _ !_ !_ /.
 Infix "◎" := meminj_compose (at level 40, left associativity) : C_scope.
@@ -53,21 +53,21 @@ Lemma lookup_meminj_id_Some o1 o2 r :
   meminj_id !! o1 = Some (o2,r) ↔ o2 = o1 ∧ r = [].
 Proof. rewrite lookup_meminj_id; naive_solver. Qed.
 Lemma lookup_meminj_compose f g o :
-  (f ◎ g) !! o = '(y1,r1) ← f !! o; '(y2,r2) ← g !! y1; Some (y2,r1 ++ r2).
+  (f ◎ g) !! o = '(y1,r1) ← g !! o; '(y2,r2) ← f !! y1; Some (y2,r1 ++ r2).
 Proof.
   unfold lookup; destruct f as [|m1], g as [|m2]; csimpl.
   * done.
-  * by destruct (_ !! o) as [[??]|].
   * by destruct (_ !! o) as [[??]|]; csimpl; rewrite ?(right_id_L [] (++)).
+  * by destruct (_ !! o) as [[??]|].
   * by rewrite lookup_merge by done.
 Qed.
 Lemma lookup_meminj_compose_Some f g o1 o3 r :
   (f ◎ g) !! o1 = Some (o3,r) ↔
-  ∃ o2 r2 r3, f !! o1 = Some (o2,r2) ∧ g !! o2 = Some (o3,r3) ∧ r = r2 ++ r3.
+  ∃ o2 r2 r3, g !! o1 = Some (o2,r2) ∧ f !! o2 = Some (o3,r3) ∧ r = r2 ++ r3.
 Proof.
   rewrite lookup_meminj_compose. split.
-  * intros. destruct (f !! o1) as [[o2 r2]|] eqn:?; simplify_equality'.
-    destruct (g !! o2) as [[??]|] eqn:?; naive_solver.
+  * intros. destruct (g !! o1) as [[o2 r2]|] eqn:?; simplify_equality'.
+    destruct (f !! o2) as [[??]|] eqn:?; naive_solver.
   * by intros (?&?&?&?&?&?); simplify_option_equality.
 Qed.
 
@@ -78,10 +78,10 @@ Proof. by intros []. Qed.
 Global Instance: Associative (@eq (meminj Ti)) (◎).
 Proof.
   intros f g h. apply meminj_eq. intros o1. rewrite !lookup_meminj_compose.
-  destruct (f !! o1) as [[o2 r2]|]; csimpl; [|done].
+  destruct (h !! o1) as [[o2 r2]|]; csimpl; [|done].
   rewrite !lookup_meminj_compose.
   destruct (g !! o2) as [[o3 r3]|]; csimpl; [|done].
-  by destruct (h !! o3) as [[??]|]; csimpl; rewrite ?(associative_L (++)).
+  by destruct (f !! o3) as [[??]|]; csimpl; rewrite ?(associative_L (++)).
 Qed.
 Lemma meminj_positive_l f g : f ◎ g = meminj_id → f = meminj_id.
 Proof. by destruct f, g. Qed.
@@ -96,8 +96,8 @@ Proof.
   intros Hf Hg o1 o2 o r1 r2; rewrite !lookup_meminj_compose_Some.
   intros (o1'&r1'&r1''&?&?&->) (o2'&r2'&r2''&?&?&->).
   destruct (decide (o1 = o2)); [by left|].
-  destruct (Hg o1' o2' o r1'' r2'') as [->|?]; simplify_equality'; auto.
-  { destruct (Hf o1 o2 o2' r1' r2') as [->|?]; auto.
+  destruct (Hf o1' o2' o r1'' r2'') as [->|?]; simplify_equality'; auto.
+  { destruct (Hg o1 o2 o2' r1' r2') as [->|?]; auto.
     right. by apply ref_disjoint_here_app_1. }
   right. by apply ref_disjoint_app_l, ref_disjoint_app_r.
 Qed.
@@ -276,7 +276,7 @@ Proof.
 Qed.
 Lemma memenv_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 :
   ✓ Γ → Γm1 ⊑{Γ,α1,f1} Γm2 → Γm2 ⊑{Γ,α2,f2} Γm3 →
-  Γm1 ⊑{Γ,α1||α2,f1 ◎ f2} Γm3.
+  Γm1 ⊑{Γ,α1||α2,f2 ◎ f1} Γm3.
 Proof.
   intros ? (?&?&?&?) (?&?&?&?);
     repeat split; eauto using meminj_compose_injective.
@@ -299,10 +299,10 @@ Lemma meminj_extend_transitive f f' f'' Γm1 Γm2 Γm1' Γm2' :
   meminj_extend f f' Γm1 Γm2 → meminj_extend f' f'' Γm1' Γm2' →
   Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' → meminj_extend f f'' Γm1 Γm2.
 Proof. intros [??] [??] [? _] [? _]; split; eauto using eq_trans. Qed.
-Lemma meminj_extend_compose f g Γm1 Γm2 :
-  meminj_extend meminj_id f Γm1 Γm1 →
-  meminj_extend meminj_id g Γm2 Γm2 → Γm1 ⇒ₘ Γm2 →
-  meminj_extend meminj_id (g ◎ f) Γm1 Γm1.
+Lemma meminj_extend_compose f1 f2 Γm1 Γm2 :
+  meminj_extend meminj_id f1 Γm1 Γm1 →
+  meminj_extend meminj_id f2 Γm2 Γm2 → Γm1 ⇒ₘ Γm2 →
+  meminj_extend meminj_id (f1 ◎ f2) Γm1 Γm1.
 Proof.
   intros [Hf Hf'] [Hg Hg'] ?; split.
   * intros o τ ?; apply lookup_meminj_compose_Some.

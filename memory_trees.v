@@ -2557,7 +2557,7 @@ Proof.
 Qed.
 Lemma ctree_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 w1 w2 w3 τ :
   ✓ Γ → w1 ⊑{Γ,α1,f1@Γm1↦Γm2} w2 : τ → w2 ⊑{Γ,α2,f2@Γm2↦Γm3} w3 : τ →
-  w1 ⊑{Γ,α1||α2,f1 ◎ f2@Γm1↦Γm3} w3 : τ.
+  w1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} w3 : τ.
 Proof.
   intros ? Hw Hw3. apply ctree_leaf_refine_refine; eauto.
   revert w1 w2 τ Hw w3 Hw3.
@@ -2645,7 +2645,7 @@ Lemma ctree_flatten_unflatten_refine Γ f Γm1 Γm2 w xbs τ :
   ctree_flatten w ⊑{Γ,true,f@Γm1↦Γm2}* xbs →
   w ⊑{Γ,true,f@Γm1↦Γm2} ctree_unflatten Γ τ xbs : τ.
 Proof.
-  intros. rewrite <-(left_id_L _ (◎) f), <-(orb_diag true).
+  intros. rewrite <-(right_id_L _ (◎) f), <-(orb_diag true).
   apply ctree_refine_compose
     with Γm1 (ctree_unflatten Γ τ (ctree_flatten w)); auto.
   { erewrite ctree_unflatten_flatten by eauto.
