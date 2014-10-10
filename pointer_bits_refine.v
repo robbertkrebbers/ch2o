@@ -30,6 +30,13 @@ Proof.
     <-(ptr_refine_type_of_l _ _ _ _ _ _ _ τ2) by eauto); subst.
   eauto using ptr_refine_compose with congruence.
 Qed.
+Lemma ptr_bit_refine_inverse Γ f Γm1 Γm2 pb1 pb2 :
+  pb1 ⊑{Γ,false,f@Γm1↦Γm2} pb2 → pb2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} pb1.
+Proof.
+  intros (τ&?&?&?&?); exists τ; split_ands; eauto using ptr_refine_inverse.
+  * by erewrite <-ptr_refine_frozen by eauto.
+  * congruence.
+Qed.
 Lemma ptr_bit_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' pb1 pb2 :
   ✓ Γ → pb1 ⊑{Γ,α,f@Γm1↦Γm2} pb2 → Γ ⊆ Γ' → Γ ⊆ Γ' → Γm1' ⊑{Γ',α',f'} Γm2' →
   Γm1 ⇒ₘ Γm1' → meminj_extend f f' Γm1 Γm2 → pb1 ⊑{Γ',α',f'@Γm1'↦Γm2'} pb2.

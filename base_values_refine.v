@@ -116,6 +116,13 @@ Proof.
     by destruct α1; simpl; eauto using (bits_refine_compose _ true true),
       BIndets_refine, BIndets_valid.
 Qed.
+Lemma base_val_refine_inverse Γ f Γm1 Γm2 vb1 vb2 τb :
+  vb1 ⊑{Γ,false,f@Γm1↦Γm2} vb2 : τb →
+  vb2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} vb1 : τb.
+Proof.
+  destruct 1; try done; constructor;
+    eauto using ptr_refine_inverse, bits_refine_inverse.
+Qed.
 Lemma base_val_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' vb1 vb2 τb :
   ✓ Γ → vb1 ⊑{Γ,α,f@Γm1↦Γm2} vb2 : τb → Γ ⊆ Γ' → (α → α') →
   Γm1' ⊑{Γ',α',f'} Γm2' → Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' →

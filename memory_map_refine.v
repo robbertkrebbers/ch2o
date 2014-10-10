@@ -84,6 +84,22 @@ Qed.
 Lemma cmap_refine_compose' Γ α1 α2 f1 f2 m1 m2 m3 :
   ✓ Γ → m1 ⊑{Γ,α1,f1} m2 → m2 ⊑{Γ,α2,f2} m3 → m1 ⊑{Γ,α1||α2,f2 ◎ f1} m3.
 Proof. by apply cmap_refine_compose. Qed.
+Lemma cmap_refine_inverse' Γ f m1 m2 :
+  m1 ⊑{Γ,false,f} m2 → m2 ⊑{Γ,false,meminj_inverse f} m1.
+Proof.
+  intros (?&Hm2&?&Hm); split; split_ands; eauto using memenv_refine_inverse.
+  intros o2 o1 r w2 malloc ??.
+  destruct (proj2 Hm2 o2 w2 malloc) as (τ&?&?&?&_); auto.
+  destruct (lookup_meminj_inverse_1 Γ f ('{m1}) ('{m2}) o1 o2 r τ)
+    as (?&?&->); auto.
+  assert (index_alive' m1 o1) as help; [|unfold index_alive' in help].
+  { apply index_alive_spec'; eauto using memenv_refine_alive_r. }
+  destruct (index_typed_lookup_cmap m1 o1 τ) as ([|w1 malloc']&?&?);
+    simplify_map_equality; try done.
+  destruct (Hm o1 o2 [] w1 malloc') as (?&w1'&τ'&?&?&?&?);
+    simplify_type_equality'; auto.
+  exists w1 w1 τ'; split_ands; auto using ctree_refine_inverse.
+Qed.
 Lemma cmap_lookup_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 w1 τ :
   ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 →
   a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : τ → m1 !!{Γ} a1 = Some w1 →
@@ -129,7 +145,7 @@ Proof.
   intros ? (Hm1&?&HΓm&Hm) ?? Hf.
   split; split_ands; eauto using cmap_valid_weaken.
   intros o1 o2 r w1 malloc ??.
-  destruct HΓm as (?&?&?), (proj2 Hm1 o1 w1 malloc) as (τ&?&_); auto.
+  destruct (proj2 Hm1 o1 w1 malloc) as (τ&?&_); auto.
   destruct (Hm o1 o2 r w1 malloc)
     as (w2&w2'&τ'&?&?&?&?); eauto using option_eq_1, meminj_extend_left.
   exists w2 w2' τ'; split_ands;

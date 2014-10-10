@@ -56,6 +56,13 @@ Proof.
   intros ? Hxbs. revert xbs3. induction Hxbs; intros;
     decompose_Forall_hyps; eauto using pbit_refine_compose.
 Qed.
+Lemma pbit_refine_inverse Γ f Γm1 Γm2 xb1 xb2 :
+  xb1 ⊑{Γ,false,f@Γm1↦Γm2} xb2 → xb2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} xb1.
+Proof. intros (?&?&?&?); split; eauto using bit_refine_inverse. Qed.
+Lemma pbits_refine_inverse Γ f Γm1 Γm2 xbs1 xbs2 :
+  xbs1 ⊑{Γ,false,f@Γm1↦Γm2}* xbs2 →
+  xbs2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1}* xbs1.
+Proof. induction 1; eauto using pbit_refine_inverse. Qed.
 Lemma pbit_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' xb1 xb2 :
   ✓ Γ → xb1 ⊑{Γ,α,f@Γm1↦Γm2} xb2 → Γ ⊆ Γ' → (α → α') →
   Γm1' ⊑{Γ',α',f'} Γm2' → Γm1 ⇒ₘ Γm1' →

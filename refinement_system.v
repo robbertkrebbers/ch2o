@@ -436,7 +436,7 @@ Inductive state_refine' (Γ : env Ti) (Γf : funtypes Ti) (α : bool)
      m1 ⊑{Γ,α,f} m2 →
      state_refine' Γ Γf α f (State k1 φ1 m1) (State k2 φ2 m2) g
   | Undef_State_refine S1 S2 g :
-     (Γ,Γf) ⊢ S1 : g → (Γ,Γf) ⊢ S2 : g → is_undef_state S1 →
+     α → (Γ,Γf) ⊢ S1 : g → (Γ,Γf) ⊢ S2 : g → is_undef_state S1 →
      state_refine' Γ Γf α f S1 S2 g.
 Global Instance state_refine : RefineTM Ti (env Ti * funtypes Ti)
     funname (state Ti) := curry state_refine'.
@@ -1053,6 +1053,116 @@ Proof.
     (Γf !! h) as [[τs τ]|]; try done.
   destruct Hδ as (cmτ&?&?&?&?&?&?), Hδ' as (cmτ'&?&?&?&?&?&?).
   eauto 15 using stmt_refine_compose.
+Qed.
+
+Lemma lrval_refine_inverse Γ f Γm1 Γm2 av1 av2 τlr :
+  av1 ⊑{Γ,false,f@Γm1↦Γm2} av2 : τlr →
+  av2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} av1 : τlr.
+Proof.
+  destruct 1; constructor; eauto using val_refine_inverse,
+    addr_refine_inverse, addr_strict_refine.
+Qed.
+Lemma expr_refine_inverse Γ Γf τs f Γm1 Γm2 e1 e2 τlr :
+  e1 ⊑{(Γ,Γf,τs),false,f@Γm1↦Γm2} e2 : τlr →
+  e2 ⊑{(Γ,Γf,τs),false,meminj_inverse f@Γm2↦Γm1} e1 : τlr.
+Proof.
+  assert (∀ es1 es2 τlrs,
+    Forall3 (λ e1 e2 τlr,
+      e2 ⊑{(Γ,Γf,τs),false,meminj_inverse f@ Γm2↦Γm1} e1 : τlr) es1 es2 τlrs →
+    es2 ⊑{(Γ,Γf,τs),false,meminj_inverse f@ Γm2↦Γm1}* es1 :* τlrs).
+  { induction 1; constructor; eauto. }
+  induction 1 using @expr_refine_ind; refine_constructor;
+    eauto using val_refine_inverse, addr_refine_inverse,
+    locks_refine_inverse, addr_strict_refine.
+Qed.
+Lemma exprs_refine_inverse Γ Γf τs f Γm1 Γm2 es1 es2 τlrs :
+  es1 ⊑{(Γ,Γf,τs),false,f@Γm1↦Γm2}* es2 :* τlrs →
+  es2 ⊑{(Γ,Γf,τs),false,meminj_inverse f@Γm2↦Γm1}* es1 :* τlrs.
+Proof. induction 1; constructor; eauto using expr_refine_inverse. Qed.
+Lemma ectx_item_refine_inverse Γ Γf τs f Γm1 Γm2 Ei1 Ei2 τlr τlr' :
+  Ei1 ⊑{(Γ,Γf,τs),false,f@Γm1↦Γm2} Ei2 : τlr ↣ τlr' →
+  Ei2 ⊑{(Γ,Γf,τs),false,meminj_inverse f@Γm2↦Γm1} Ei1 : τlr ↣ τlr'.
+Proof.
+  destruct 1; refine_constructor;
+    eauto using expr_refine_inverse, exprs_refine_inverse.
+Qed.
+Lemma ectx_refine_inverse Γ Γf τs f Γm1 Γm2 E1 E2 τlr τlr' :
+  E1 ⊑{(Γ,Γf,τs),false,f@Γm1↦Γm2} E2 : τlr ↣ τlr' →
+  E2 ⊑{(Γ,Γf,τs),false,meminj_inverse f@Γm2↦Γm1} E1 : τlr ↣ τlr'.
+Proof. induction 1; econstructor; eauto using ectx_item_refine_inverse. Qed.
+Lemma stmt_refine_inverse Γ Γf τs f Γm1 Γm2 s1 s2 mcτ :
+  s1 ⊑{(Γ,Γf,τs),false,f@Γm1↦Γm2} s2 : mcτ →
+  s2 ⊑{(Γ,Γf,τs),false,meminj_inverse f@Γm2↦Γm1} s1 : mcτ.
+Proof.
+  remember false as α. induction 1; subst;
+    refine_constructor; naive_solver eauto using expr_refine_inverse.
+Qed.
+Lemma sctx_item_refine_inverse Γ Γf τs f Γm1 Γm2 Es1 Es2 mcτ mcτ' :
+  Es1 ⊑{(Γ,Γf,τs),false,f@Γm1↦Γm2} Es2 : mcτ ↣ mcτ' →
+  Es2 ⊑{(Γ,Γf,τs),false,meminj_inverse f@Γm2↦Γm1} Es1 : mcτ ↣ mcτ'.
+Proof.
+  destruct 1; refine_constructor;
+    eauto using stmt_refine_inverse, expr_refine_inverse.
+Qed.
+Lemma esctx_item_refine_inverse Γ Γf τs f Γm1 Γm2 Ee1 Ee2 τlr mcτ' :
+  Ee1 ⊑{(Γ,Γf,τs),false,f@Γm1↦Γm2} Ee2 : τlr ↣ mcτ' →
+  Ee2 ⊑{(Γ,Γf,τs),false,meminj_inverse f@Γm2↦Γm1} Ee1 : τlr ↣ mcτ'.
+Proof. destruct 1; refine_constructor; eauto using stmt_refine_inverse. Qed.
+Lemma ctx_item_refine_inverse Γ Γf τs f Γm1 Γm2 Ek1 Ek2 τf τf' :
+  Γm1 ⊑{Γ,false,f} Γm2 → Ek1 ⊑{(Γ,Γf,τs),false,f@Γm1↦Γm2} Ek2 : τf ↣ τf' →
+  Ek2 ⊑{(Γ,Γf,τs),false,meminj_inverse f@Γm2↦Γm1} Ek1 : τf ↣ τf'.
+Proof.
+  intros ?. assert (∀ os1 os2 σs, Γm1 ⊢* os1 :* σs →
+    Forall2 (λ o1 o2, f !! o1 = Some (o2, [])) os1 os2 →
+    Forall2 (λ o1 o2, meminj_inverse f !! o1 = Some (o2, [])) os2 os1).
+  { intros os1 os2 σs Hos1. revert os2.
+    induction Hos1; intros; decompose_Forall_hyps;
+      constructor; eauto using lookup_meminj_inverse_2. } 
+  destruct 1; refine_constructor; eauto using expr_refine_inverse,
+    ectx_refine_inverse, esctx_item_refine_inverse,
+    sctx_item_refine_inverse, lookup_meminj_inverse_2.
+Qed.
+Lemma ctx_refine_inverse Γ Γf f Γm1 Γm2 k1 k2 τf τf' :
+  ✓ Γ → Γm1 ⊑{Γ,false,f} Γm2 → k1 ⊑{(Γ,Γf),false,f@Γm1↦Γm2} k2 : τf ↣ τf' →
+  k2 ⊑{(Γ,Γf),false,meminj_inverse f@Γm2↦Γm1} k1 : τf ↣ τf'.
+Proof.
+  induction 3; refine_constructor; eauto.
+  erewrite <-ctx_refine_stack_types by eauto.
+  eauto using ctx_item_refine_inverse.
+Qed.
+Lemma direction_refine_inverse Γ f Γm1 Γm2 d1 d2 mcτ :
+  d1 ⊑{Γ,false,f@Γm1↦Γm2} d2 : mcτ →
+  d2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} d1 : mcτ.
+Proof. destruct 1; refine_constructor; eauto using val_refine_inverse. Qed.
+Lemma focus_refine_inverse Γ Γf τs f Γm1 Γm2 φ1 φ2 τf :
+  φ1 ⊑{(Γ,Γf,τs),false,f@Γm1↦Γm2} φ2 : τf →
+  φ2 ⊑{(Γ,Γf,τs),false,meminj_inverse f@Γm2↦Γm1} φ1 : τf.
+Proof.
+  destruct 1; refine_constructor; eauto using stmt_refine_inverse,
+    direction_refine_inverse, expr_refine_inverse, val_refine_inverse,
+    vals_refine_inverse, ectx_refine_inverse,
+    esctx_item_refine_inverse, locks_refine_inverse.
+Qed.
+Lemma state_refine_inverse Γ Γf f S1 S2 h :
+  ✓ Γ → S1 ⊑{(Γ,Γf),false,f} S2 : h →
+  S2 ⊑{(Γ,Γf),false,meminj_inverse f} S1 : h.
+Proof.
+  intros ? [k1 φ1 m1 k2 φ2 m2 τf h' ???|]; [left with τf|done].
+  * erewrite <-ctx_refine_stack_types by eauto.
+    eauto using focus_refine_inverse.
+  * eauto using ctx_refine_inverse, cmap_refine_memenv_refine.
+  * eauto using cmap_refine_inverse'.
+Qed.
+Lemma funenv_refine_inverse Γ f Γm1 Γm2 δ1 δ2 Γf :
+  δ1 ⊑{Γ,false,f@Γm1↦Γm2} δ2 : Γf →
+  δ2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} δ1 : Γf.
+Proof.
+  intros Hδ h; specialize (Hδ h); destruct (δ1 !! h) as [s1|],
+    (δ2 !! h) as [s2|], (Γf !! h) as [[τs τ]|]; try done.
+  destruct Hδ as (cmτ&?&?&?&?&?&?&?); exists cmτ; split_ands; auto.
+  * auto using stmt_refine_inverse.
+  * by erewrite <-stmt_refine_gotos, <-stmt_refine_labels by eauto.
+  * eauto using stmt_refine_throws_valid.
 Qed.
 
 Lemma expr_refine_weaken Γ Γf α α' f f' Γm1 Γm2 Γm1' Γm2' τs e1 e2 τlr :

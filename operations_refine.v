@@ -25,8 +25,7 @@ Proof.
   unfold addr_plus_ok. intros Ha (?&?&?).
   destruct (addr_byte_refine_help Γ α f
     ('{m1}) ('{m2}) a1 a2 σ) as (i&?&?); auto.
-  destruct Ha as [??????????? (?&?&?&?&?)];
-    simplify_equality'; split; eauto; lia.
+  destruct Ha as [??????????? []]; simplify_equality'; split; eauto; lia.
 Qed.
 Lemma addr_plus_refine Γ α f m1 m2 a1 a2 σ j :
   ✓ Γ → addr_plus_ok Γ m1 j a1 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σ →
@@ -52,8 +51,8 @@ Lemma addr_minus_ok_refine Γ α f m1 m2 a1 a2 a3 a4 σ :
   a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σ → a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σ →
   addr_minus_ok m1 a1 a3 → addr_minus_ok m2 a2 a4.
 Proof.
-  destruct 1 as [??????????? (?&?&?&?&?) ?????????? []],
-    1 as [??????????? (?&?&?&?&?) ?????????? []];
+  destruct 1 as [??????????? [] ?????????? []],
+    1 as [??????????? [] ?????????? []];
     intros (?&?&Hr); simplify_equality'; eauto.
   rewrite !fmap_app, !ref_freeze_freeze by eauto; eauto with congruence.
 Qed.
@@ -70,7 +69,7 @@ Lemma addr_cast_ok_refine Γ α f m1 m2 a1 a2 σ σc :
   ✓ Γ → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σ →
   addr_cast_ok Γ m1 σc a1 → addr_cast_ok Γ m2 σc a2.
 Proof.
-  destruct 2 as [o o' r r' r'' i i'' τ τ' σ σc' (?&?&?&?&?) ?????????? []];
+  destruct 2 as [o o' r r' r'' i i'' τ τ' σ σc' [] ?????????? []];
     intros (?&?&?); simplify_equality'; split_ands; eauto.
   destruct (castable_divide Γ σ σc) as [z ->]; auto. rewrite ref_offset_freeze.
   destruct (decide (size_of Γ σc = 0)) as [->|?]; [done|].
@@ -258,17 +257,21 @@ Proof.
 Qed.
 Lemma val_true_refine_inv Γ α f m1 m2 v1 v2 τ :
   v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → val_true m2 v2 →
-  val_true m1 v1 ∨ ¬val_true m1 v1 ∧ ¬val_false v1.
+  val_true m1 v1 ∨ (α ∧ ¬val_true m1 v1 ∧ ¬val_false v1).
 Proof.
-  intros. destruct (val_true_false_dec m1 v1)
-    as [[[??]|[??]]|[??]]; eauto using val_false_true_refine.
+  intros. destruct α.
+  * destruct (val_true_false_dec m1 v1) as [[[??]|[??]]|[??]];
+      naive_solver eauto using val_false_true_refine.
+  * eauto using val_true_refine, val_refine_inverse.
 Qed.
 Lemma val_false_refine_inv Γ α f m1 m2 v1 v2 τ :
   v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → val_false v2 →
-  val_false v1 ∨ ¬val_true m1 v1 ∧ ¬val_false v1.
+  val_false v1 ∨ (α ∧ ¬val_true m1 v1 ∧ ¬val_false v1).
 Proof.
-  intros. destruct (val_true_false_dec m1 v1)
-    as [[[??]|[??]]|[??]]; eauto using val_true_false_refine.
+  intros. destruct α.
+  * destruct (val_true_false_dec m1 v1) as [[[??]|[??]]|[??]];
+      naive_solver eauto using val_true_false_refine.
+  * eauto using val_false_refine, val_refine_inverse.
 Qed.
 Lemma val_unop_ok_refine Γ α f m1 m2 op v1 v2 τ :
   v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ →

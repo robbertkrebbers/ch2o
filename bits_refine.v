@@ -63,6 +63,14 @@ Proof.
   intros ? Hbs. revert bs3. induction Hbs; inversion_clear 1;
     constructor; eauto using bit_refine_compose.
 Qed.
+Lemma bit_refine_inverse Γ f Γm1 Γm2 b1 b2 :
+  b1 ⊑{Γ,false,f@Γm1↦Γm2} b2 → b2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} b1.
+Proof.
+  destruct 1; try done; constructor; eauto using ptr_bit_refine_inverse.
+Qed.
+Lemma bits_refine_inverse Γ f Γm1 Γm2 bs1 bs2 :
+  bs1 ⊑{Γ,false,f@Γm1↦Γm2}* bs2 → bs2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1}* bs1.
+Proof. induction 1; eauto using bit_refine_inverse. Qed.
 Lemma bit_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' b1 b2 :
   ✓ Γ → b1 ⊑{Γ,α,f@Γm1↦Γm2} b2 → Γ ⊆ Γ' → (α → α') ->
   Γm1' ⊑{Γ',α',f'} Γm2' → Γm1 ⇒ₘ Γm1' →

@@ -109,13 +109,20 @@ Proof.
   destruct (proj2 Hm o w malloc) as (?&?&?&?&?&?); simpl;
     eauto using ctree_typed_sep_valid.
 Qed.
+Lemma index_typed_lookup_cmap m o τ :
+  '{m} ⊢ o : τ → ∃ x, cmap_car m !! o = Some x ∧
+  match x with Freed τ' => τ' = τ | Obj w _ => type_of w = τ end.
+Proof.
+  intros [β Hβ]. destruct m as [m]; simplify_map_equality'.
+  by destruct (m !! o) as [[]|]; simplify_equality'; do 2 eexists; eauto.
+Qed.
 Lemma index_typed_valid_representable Γ Γm m o τ :
   ✓ Γ → ✓{Γ,Γm} m → '{m} ⊢ o : τ → ✓{Γ} τ ∧ int_typed (size_of Γ τ) sptrT.
 Proof.
-  intros ? [Hm1 Hm2] [β Hβ]. destruct m as [m]; simplify_map_equality'.
-  destruct (m !! o) as [[τ'|w malloc]|] eqn:?; simplify_equality'.
-  * destruct (Hm1 o τ) as (?&?&?&?); eauto.
-  * destruct (Hm2 o w malloc) as (?&?&?&?&?&?);
+  intros ? Hm ?.
+  destruct (index_typed_lookup_cmap m o τ) as ([τ'|w malloc]&?&?); auto.
+  * destruct (proj1 Hm o τ') as (?&?&?&?); simplify_equality'; eauto.
+  * destruct (proj2 Hm o w malloc) as (?&?&?&?&?&?);
       simplify_type_equality; eauto using ctree_typed_type_valid.
 Qed.
 Lemma index_typed_valid Γ Γm m o τ : ✓ Γ → ✓{Γ,Γm} m → '{m} ⊢ o : τ → ✓{Γ} τ.

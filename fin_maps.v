@@ -444,14 +444,23 @@ Lemma map_to_list_unique {A} (m : M A) i x y :
 Proof. rewrite !elem_of_map_to_list. congruence. Qed.
 Lemma NoDup_fst_map_to_list {A} (m : M A) : NoDup (fst <$> map_to_list m).
 Proof. eauto using NoDup_fmap_fst, map_to_list_unique, NoDup_map_to_list. Qed.
+Lemma elem_of_map_of_list_1_help {A} (l : list (K * A)) i x :
+  (i,x) ∈ l → (∀ y, (i,y) ∈ l → y = x) → map_of_list l !! i = Some x.
+Proof.
+  induction l as [|[j y] l IH]; csimpl; [by rewrite elem_of_nil|].
+  setoid_rewrite elem_of_cons.
+  intros [?|?] Hdup; simplify_equality; [by rewrite lookup_insert|].
+  destruct (decide (i = j)) as [->|].
+  * rewrite lookup_insert; f_equal; eauto.
+  * rewrite lookup_insert_ne by done; eauto.
+Qed.
 Lemma elem_of_map_of_list_1 {A} (l : list (K * A)) i x :
   NoDup (fst <$> l) → (i,x) ∈ l → map_of_list l !! i = Some x.
 Proof.
-  induction l as [|[j y] l IH]; csimpl; [by rewrite elem_of_nil|].
-  rewrite NoDup_cons, elem_of_cons, elem_of_list_fmap.
-  intros [Hl ?] [?|?]; simplify_equality; [by rewrite lookup_insert|].
-  destruct (decide (i = j)) as [->|]; [|rewrite lookup_insert_ne; auto].
-  destruct Hl. by exists (j,x).
+  intros ? Hx; apply elem_of_map_of_list_1_help; eauto using NoDup_fmap_fst.
+  intros y; revert Hx. rewrite !elem_of_list_lookup; intros [i' Hi'] [j' Hj'].
+  cut (i' = j'); [naive_solver|]. apply NoDup_lookup with (fst <$> l) i;
+    by rewrite ?list_lookup_fmap, ?Hi', ?Hj'.
 Qed.
 Lemma elem_of_map_of_list_2 {A} (l : list (K * A)) i x :
   map_of_list l !! i = Some x → (i,x) ∈ l.

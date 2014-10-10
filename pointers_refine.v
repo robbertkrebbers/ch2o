@@ -47,6 +47,10 @@ Lemma ptr_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 p1 p2 p3 σ σ' :
 Proof.
   destruct 2; inversion_clear 1; constructor; eauto using addr_refine_compose.
 Qed.
+Lemma ptr_refine_inverse Γ f Γm1 Γm2 p1 p2 σ :
+  p1 ⊑{Γ,false,f@Γm1↦Γm2} p2 : σ →
+  p2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} p1 : σ.
+Proof. destruct 1; constructor; eauto using addr_refine_inverse. Qed.
 Lemma ptr_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' p1 p2 σ :
   ✓ Γ → p1 ⊑{Γ,α,f@Γm1↦Γm2} p2 : σ → Γ ⊆ Γ' →
   Γm1' ⊑{Γ',α',f'} Γm2' → Γm1 ⇒ₘ Γm1' →

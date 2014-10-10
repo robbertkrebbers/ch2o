@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export ctrees refinements.
+Require Export ctrees memory_basics.
 
 (** We pack the memory into a record so as to avoid ambiguity with already
 existing type class instances for finite maps. *)

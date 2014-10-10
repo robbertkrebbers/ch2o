@@ -1,7 +1,6 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export separation.
-Require Import refinements.
+Require Export separation memory_basics.
 
 Record flat_cmap (A : Set) := FlatCMap { flat_cmap_car : indexmap (list A) }.
 Arguments FlatCMap {_} _.

@@ -48,6 +48,8 @@ Section definitions.
     | ex_loop_do_step x y : R x y → ex_loop y → ex_loop x.
 End definitions.
 
+Hint Unfold nf red.
+
 (** * General theorems *)
 Section rtc.
   Context `{R : relation A}.

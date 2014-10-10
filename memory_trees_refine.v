@@ -370,6 +370,21 @@ Proof.
       apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ _ Hw3); clear w3 Hw3.
     constructor; eauto using pbits_refine_compose, pbits_refine_unshared.
 Qed.
+Lemma ctree_refine_inverse Γ f Γm1 Γm2 w1 w2 τ :
+  w1 ⊑{Γ,false,f@Γm1↦Γm2} w2 : τ →
+  w2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} w1 : τ.
+Proof.
+  revert w1 w2 τ. refine (ctree_refine_ind _ _ _ _ _ _ _ _ _ _ _ _); simpl.
+  * refine_constructor; eauto using pbits_refine_inverse.
+  * refine_constructor; auto. by apply Forall2_flip.
+  * intros ?????? IH Hxbss ?? Hlen; refine_constructor; eauto.
+    + elim IH; constructor; eauto.
+    + elim Hxbss; eauto using pbits_refine_inverse.
+    + rewrite <-Hlen. elim Hxbss; intros; f_equal'; auto.
+  * refine_constructor; eauto using pbits_refine_inverse; solve_length.
+  * refine_constructor; eauto using pbits_refine_inverse.
+  * done.
+Qed.
 Lemma ctree_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' w1 w2 τ :
   ✓ Γ → w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : τ → Γ ⊆ Γ' → (α → α') →
   Γm1' ⊑{Γ',α',f'} Γm2' → Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' →

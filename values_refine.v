@@ -200,6 +200,23 @@ Proof.
   intros ? Hvs. revert vs3 τs'. induction Hvs; inversion_clear 1;
     constructor; eauto using val_refine_compose.
 Qed.
+Lemma val_refine_inverse Γ f Γm1 Γm2 v1 v2 τ :
+  v1 ⊑{Γ,false,f@Γm1↦Γm2} v2 : τ →
+  v2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} v1 : τ.
+Proof.
+  revert v1 v2 τ. refine (val_refine_ind _ _ _ _ _ _ _ _ _ _ _ _); simpl.
+  * refine_constructor; eauto using base_val_refine_inverse.
+  * refine_constructor; eauto using Forall2_length_l, eq_sym.
+    by apply Forall2_flip.
+  * intros ?????? IH; refine_constructor; eauto. elim IH; constructor; eauto.
+  * refine_constructor; eauto.
+  * intros ?????? IH; refine_constructor; eauto. elim IH; constructor; eauto.
+  * done.
+Qed.
+Lemma vals_refine_inverse Γ f Γm1 Γm2 vs1 vs2 τs :
+  vs1 ⊑{Γ,false,f@Γm1↦Γm2}* vs2 :* τs →
+  vs2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1}* vs1 :* τs.
+Proof. induction 1; constructor; eauto using val_refine_inverse. Qed.
 Lemma val_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' v1 v2 τ :
   ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → Γ ⊆ Γ' → (α → α') →
   Γm1' ⊑{Γ',α',f'} Γm2' → Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' →

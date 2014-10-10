@@ -58,11 +58,12 @@ Qed.
 Lemma addr_refine_typed_r Γ α f Γm1 Γm2 a1 a2 σ :
   ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ → (Γ,Γm2) ⊢ a2 : σ.
 Proof.
-  destruct 2 as [o o' r r' r'' i i'' τ τ' σ σc (_&HΓm&_) ?????????? Hr''].
+  destruct 2 as [o o' r r' r'' i i'' τ τ' σ σc HΓm ?????????? Hr''].
   assert (ref_offset (freeze true <$> r') < ref_size (freeze true <$> r')).
   { intros. eapply ref_typed_size, ref_typed_freeze; eauto. }
   constructor; auto.
-  * by destruct (HΓm o o' r' τ) as (?&?&?); simplify_type_equality'.
+  * by destruct (memenv_refine_typed_l HΓm o o' r' τ) 
+      as (?&?&?); simplify_type_equality'.
   * destruct Hr''; simplify_type_equality'.
     + apply ref_set_offset_typed, ref_typed_freeze; auto with lia.
     + rewrite app_comm_cons, ref_typed_app.
@@ -115,6 +116,23 @@ Proof.
     by apply ref_refine_nil_alt; rewrite ?fmap_cons, ?fmap_app.
   * apply ref_refine_ne_nil_alt. by rewrite fmap_app, (associative_L (++)).
 Qed.
+Lemma addr_refine_inverse Γ f Γm1 Γm2 a1 a2 σ :
+  a1 ⊑{Γ,false,f@Γm1↦Γm2} a2 : σ →
+  a2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} a1 : σ.
+Proof.
+  destruct 1 as [o o' r r' r'' i i'' τ τ' σ σc ??????????? Hr].
+  destruct (memenv_refine_perm_l Γ f Γm1 Γm2 o τ)
+    as (?&?&?); auto; simplify_type_equality'.
+  inversion Hr; simplify_equality'.
+  * refine_constructor; eauto using lookup_meminj_inverse_2,
+      memenv_refine_inverse, ref_typed_nil_2; simpl;
+      rewrite Nat.mul_0_r, Nat.add_0_r; auto.
+    apply ref_refine_nil_alt; simpl; auto with lia.
+  * rewrite (right_id_L [] (++)).
+    refine_constructor; eauto using lookup_meminj_inverse_2,
+      memenv_refine_inverse, ref_typed_nil_2.
+    apply ref_refine_ne_nil_alt; simpl. by rewrite (right_id_L [] (++)).
+Qed.
 Lemma addr_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' a1 a2 σ :
   ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ → Γ ⊆ Γ' → Γm1' ⊑{Γ',α',f'} Γm2' →
   Γm1 ⇒ₘ Γm1' → meminj_extend f f' Γm1 Γm2 → a1 ⊑{Γ',α',f'@Γm1'↦Γm2'} a2 : σ.
@@ -132,12 +150,14 @@ Qed.
 Lemma addr_refine_unique_l Γ f Γm1 Γm2 a1 a2 a3 σ2 σ3 :
   a1 ⊑{Γ,false,f@Γm1↦Γm2} a3 : σ2 → a2 ⊑{Γ,false,f@Γm1↦Γm2} a3 : σ3 → a1 = a2.
 Proof.
-  destruct 1 as [o1 o2 r r2 r3 i i3 τ τ2 σ σc
-    (Hinj&_&_&_&?) ?? _ _ _ _ _ _ _ _ Hr];
+  destruct 1 as [o1 o2 r r2 r3 i i3 τ τ2 σ σc ??? _ _ _ _ _ _ _ _ Hr];
     inversion 1 as [o1' ? r' r2' ? i' ? τ' ??? _ ?? _ _ _ _ _ _ _ _ Hr'];
     simplify_equality'.
-  assert (r2 = [] ∧ r2' = []) as [-> ->] by eauto 6.
-  destruct (Hinj o1 o1' o2 [] []); auto; simplify_type_equality;
+  destruct (memenv_refine_perm_l Γ f Γm1 Γm2 o1 τ) as (?&?&_),
+    (memenv_refine_perm_l Γ f Γm1 Γm2 o1' τ') as (?&?&_); auto;
+    simplify_equality.
+  destruct (meminj_injective_alt f o1 o1' o2 [] [])
+    as [?|[_ ?]]; eauto using memenv_refine_injective; simplify_type_equality;
     [|by destruct (ref_disjoint_nil_inv_l (@nil (ref_seg Ti)))].
   inversion Hr; inversion Hr'; simplify_list_equality; f_equal; lia.
 Qed.
@@ -246,7 +266,7 @@ Qed.
 Lemma addr_alive_refine Γ α f Γm1 Γm2 a1 a2 σ :
   index_alive Γm1 (addr_index a1) → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ →
   index_alive Γm2 (addr_index a2).
-Proof. destruct 2 as [??????????? (?&?&?&?&?)]; eauto. Qed.
+Proof. destruct 2 as [??????????? []]; eauto. Qed.
 Lemma addr_top_refine Γ α f Γm1 Γm2 o1 o2 τ :
   ✓ Γ → Γm1 ⊑{Γ,α,f} Γm2 → Γm1 ⊢ o1 : τ → f !! o1 = Some (o2,[]) →
   ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →

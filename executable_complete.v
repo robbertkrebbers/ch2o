@@ -157,12 +157,10 @@ Proof.
   intros S2' S3' ?? (f&S2&?&?&?).
   destruct (csteps_preservation Γ Γf δ S1 S2 g),
     (csteps_preservation Γ Γf δ S1 S2' g); auto using cexecs_sound.
-  destruct (decide (is_undef_state S2)).
-  { destruct (cstep_preservation Γ Γf δ S2' S3' g);
-      eauto using state_refine_typed_r, funenv_typed_weaken.
-    exists f S2; split_ands; eauto using funenv_refine_weaken; try done.
-    right; eauto using state_refine_typed_l. }
-  destruct (cstep_refine_r Γ Γf δ δ false f S2 S2' S3' g)
+  assert (¬is_undef_state S2).
+  { intros ?. destruct (cnf_undef_state Γ δ S2');
+      eauto using state_refine_undef, state_refine_inverse. }
+  destruct (cstep_refine Γ Γf δ δ false f S2 S2' S3' g)
     as (f'&S3&?&?&?); auto.
   { eauto using funenv_refine_weaken, funenv_refine_id, state_refine_mem. }
   destruct (cexec_complete Γ Γf δ S2 S3 g) as (f''&S3''&?&?&?);
