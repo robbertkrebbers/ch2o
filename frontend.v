@@ -721,11 +721,14 @@ Definition to_fun_stmt (Γn : compound_env Ti) (Γ : env Ti)
   guard (rettype_match cmσ σ) with
     ("function `" +:+ f +:+ "` has incorrect return type");
   inr (m,Δg,s).
+Definition convert_fun_type (τ : type Ti) : type Ti :=
+  match τ with τ.[_] => τ.* | _ => τ end.
 Definition alloc_fun (Γn : compound_env Ti) (Γ : env Ti)
     (m : mem Ti) (Δg : global_env Ti) (f : string) (sto : cstorage)
     (mys : list (option string)) (cτs : list ctype) (cσ : ctype)
     (mcs : option cstmt)  : string + mem Ti * global_env Ti :=
-  τs ← mapM (to_type Γn Γ m Δg [] (to_Type false)) cτs;
+  τs ← fmap convert_fun_type <$>
+    mapM (to_type Γn Γ m Δg [] (to_Type false)) cτs;
   σ ← to_type Γn Γ m Δg [] (to_Type true) cσ;
   guard (NoDup (omap id mys)) with
     ("function `" +:+ f +:+ "` has duplicate argument names");
@@ -1556,6 +1559,10 @@ Proof.
   eauto 14 using stmt_fix_return_typed,
     (local_env_stack_types_valid _ ('{m})), local_env_valid_params.
 Qed.
+Lemma convert_fun_type_valid Γ τ : ✓{Γ} τ → ✓{Γ} (convert_fun_type τ).
+Proof.
+  destruct 1; repeat constructor; auto using type_valid_ptr_type_valid.
+Qed.
 Lemma alloc_fun_typed Γn Γ m Δg f sto mys cτs cτ mcs m' Δg' :
   ✓ Γ → ✓{Γ} m → mem_writable_all Γ m → global_env_valid Γ ('{m}) Δg →
   length mys = length cτs →
@@ -1565,11 +1572,13 @@ Lemma alloc_fun_typed Γn Γ m Δg f sto mys cτs cτ mcs m' Δg' :
   (**i 3.) *) global_env_valid Γ ('{m'}) Δg' ∧
   (**i 4.) *) to_funtypes Δg ⊆ to_funtypes Δg'.
 Proof.
-  unfold alloc_fun; intros ??? HΔg ??.
-  destruct (mapM _ _) as [|τs] eqn:?; simplify_equality'.
-  assert (✓{Γ}* τs) by eauto using to_types_valid.
-  assert (length mys = length τs).
-  { eauto 3 using error_mapM_length, eq_trans. }
+  unfold alloc_fun. intros ??? HΔg ? Halloc.
+  destruct (fmap _ <$> mapM _ _) as [|τs] eqn:?; simplify_equality'.
+  assert (✓{Γ}* τs ∧ length mys = length τs) as [].
+  { clear Halloc. destruct (mapM _ _) as [|σs] eqn:?; simplify_equality'. split.
+    * eapply Forall_fmap, Forall_impl, to_types_valid;
+        eauto using convert_fun_type_valid.
+    * rewrite fmap_length. eauto 3 using error_mapM_length, eq_trans. }
   destruct (to_type _ _ _ _ _ _ _) as [|σ] eqn:?; simplify_equality'.
   assert (✓{Γ} σ) by eauto using to_type_valid.
   case_error_guard; simplify_equality'.
