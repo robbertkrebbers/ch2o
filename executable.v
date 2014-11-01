@@ -26,11 +26,19 @@ Definition assign_exec (Γ : env Ti) (m : mem Ti) (a : addr Ti)
      guard (val_cast_ok Γ m (type_of a) v');
      Some (va, val_cast (type_of a) v')
   end.
-Definition ehexec (Γ : env Ti) (ρ : stack)
+Fixpoint ctx_lookup (x : nat) (k : ctx Ti) : option index :=
+  match k with
+  | (CStmt _ | CExpr _ _) :: k => ctx_lookup x k
+  | CLocal o _ :: k =>
+     match x with 0 => Some o | S x => ctx_lookup x k end
+  | CParams _ oτs :: _ => fst <$> oτs !! x
+  | _ => None
+  end.
+Definition ehexec (Γ : env Ti) (k : ctx Ti)
     (e : expr Ti) (m : mem Ti) : option (expr Ti * mem Ti) :=
   match e with
   | var{τ} x =>
-     o ← ρ !! x;
+     o ← ctx_lookup x k;
      Some (%(addr_top o τ), m)
   | .* (#{Ω} (ptrV (Ptr a))) =>
      guard (addr_strict Γ a);
@@ -194,7 +202,7 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
       end
     | None =>
       '(E,e') ← expr_redexes e;
-      match ehexec Γ (get_stack k) e' m with
+      match ehexec Γ k e' m with
       | Some (e2,m2) => {[ State k (Expr (subst E e2)) m2 ]}
       | None =>
         match maybe_ECall_redex e' with
@@ -222,8 +230,13 @@ Proof.
   split; [|by destruct 1; simplify_option_equality].
   intros. destruct ass; simplify_option_equality; econstructor; eauto.
 Qed.
-Lemma ehexec_sound Γ ρ m1 m2 e1 e2 :
-  ehexec Γ ρ e1 m1 = Some (e2, m2) → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2.
+Lemma ctx_lookup_correct (k : ctx Ti) x : ctx_lookup x k = get_stack k !! x.
+Proof.
+  revert x.
+  induction k as [|[]]; intros [|x]; f_equal'; rewrite ?list_lookup_fmap; auto.
+Qed.
+Lemma ehexec_sound Γ k m1 m2 e1 e2 :
+  ehexec Γ k e1 m1 = Some (e2, m2) → Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
   intros. destruct e1;
     repeat match goal with
@@ -231,11 +244,12 @@ Proof.
       apply assign_exec_correct in H
     | _ => progress simplify_option_equality
     | _ => destruct (val_true_false_dec _) as [[[??]|[??]]|[??]]
+    | H : ctx_lookup _ _ = _ |- _ => rewrite ctx_lookup_correct in H
     | _ => case_match
     end; do_ehstep.
 Qed.
-Lemma ehexec_weak_complete Γ ρ e1 m1 e2 m2 :
-  ehexec Γ ρ e1 m1 = None → ¬Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2.
+Lemma ehexec_weak_complete Γ k e1 m1 e2 m2 :
+  ehexec Γ k e1 m1 = None → ¬Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
   destruct 2; 
     repeat match goal with
@@ -244,6 +258,7 @@ Proof.
     | H : is_Some _ |- _ => destruct H as [??]
     | _ => progress simplify_option_equality
     | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]
+    | H : ctx_lookup _ _ = _ |- _ => rewrite ctx_lookup_correct in H
     | _ => case_match
     end; eauto.
 Qed.
@@ -251,7 +266,7 @@ Qed.
 Lemma cexec_sound Γ δ S1 S2 : Γ\ δ ⊢ₛ S1 ⇒ₑ S2 → Γ\ δ ⊢ₛ S1 ⇒ S2.
 Proof.
   intros. assert (∀ (k : ctx Ti) e m,
-    ehexec Γ (get_stack k) e m = None → maybe_ECall_redex e = None →
+    ehexec Γ k e m = None → maybe_ECall_redex e = None →
     is_redex e → ¬Γ\ get_stack k ⊢ₕ safe e, m).
   { intros k e m He. rewrite eq_None_not_Some.
     intros Hmaybe Hred Hsafe; apply Hmaybe; destruct Hsafe.

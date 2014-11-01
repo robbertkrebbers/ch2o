@@ -372,14 +372,14 @@ Instance ctx_item_locks {Ti} : Locks (ctx_item Ti) := λ Ek,
 (** Given a context, we can construct a stack using the following erasure
 function. We define [get_stack (CFun _ :: k)] as [[]] instead of [getstack k],
 as otherwise it would be possible to refer to the local variables of the
-calling function. *)
+caller. *)
 Fixpoint get_stack {Ti} (k : ctx Ti) : stack :=
   match k with
   | [] => []
   | CStmt _ :: k | CExpr _ _ :: k => get_stack k
   | CLocal o τ :: k => o :: get_stack k
   | CFun _ :: _ => []
-  | CParams _ oτs :: k => (fst <$> oτs) ++ get_stack k
+  | CParams _ oτs :: _ => fst <$> oτs
   end.
 Fixpoint get_stack_types {Ti} (k : ctx Ti) : list (type Ti) :=
   match k with
@@ -387,7 +387,7 @@ Fixpoint get_stack_types {Ti} (k : ctx Ti) : list (type Ti) :=
   | CStmt _ :: k | CExpr _ _ :: k => get_stack_types k
   | CLocal o τ :: k => τ :: get_stack_types k
   | CFun _ :: _ => []
-  | CParams _ oτs :: k => (snd <$> oτs) ++ get_stack_types k
+  | CParams _ oτs :: _ => snd <$> oτs
   end.
 Instance ctx_free_gotos {Ti} : Gotos (ctx Ti) :=
   fix go k := let _ : Gotos _ := @go in

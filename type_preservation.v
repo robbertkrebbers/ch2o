@@ -184,7 +184,6 @@ Proof.
     split; [|eauto using funenv_typed_weaken].
     eexists; simpl; split_ands;
       repeat typed_constructor; eauto using ctx_typed_weaken.
-    erewrite Fun_type_stack_types, (right_id_L [] (++)) by eauto.
     rewrite snd_zip by (erewrite <-Forall2_length by eauto; lia).
     eauto using stmt_typed_weaken.
   * intros m k g oσs s (τf&HS&?&?) ?. typed_inversion_all.
@@ -274,7 +273,7 @@ Proof.
       ctx_inversion Hk; left; try solve_cred;
         destruct (val_true_false_dec m v)
         as [[[??]|[??]]|[??]]; solve_cred. }
-    destruct (ehexec Γ (get_stack k) e' m) as [[e'' m']|] eqn:He''.
+    destruct (ehexec Γ k e' m) as [[e'' m']|] eqn:He''.
     { apply ehexec_sound in He''. left; solve_cred. }
     destruct (maybe_ECall_redex e') as [[[f' Ωs] vs]|] eqn:Hf.
     { apply maybe_ECall_redex_Some in Hf; destruct Hf as [-> ?].

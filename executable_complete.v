@@ -14,25 +14,26 @@ Hint Immediate meminj_extend_reflexive.
 Hint Immediate ctx_typed_stack_typed.
 Hint Resolve (elem_of_singleton_2 (C:=listset (state Ti))).
 
-Lemma ehexec_complete Γ Γf m1 m2 ρ τs e1 e2 τlr :
-  ✓ Γ → ✓{Γ} m1 → '{m1} ⊢* ρ :* τs → (Γ,Γf,'{m1},τs) ⊢ e1 : τlr →
-  Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → ∃ f e2' m2',
-  (**i 1.) *) ehexec Γ ρ e1 m1 = Some (e2', m2') ∧
+Lemma ehexec_complete Γ Γf m1 m2 k τs e1 e2 τlr :
+  ✓ Γ → ✓{Γ} m1 → '{m1} ⊢* get_stack k :* τs → (Γ,Γf,'{m1},τs) ⊢ e1 : τlr →
+  Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2 → ∃ f e2' m2',
+  (**i 1.) *) ehexec Γ k e1 m1 = Some (e2', m2') ∧
   (**i 2.) *) e2' ⊑{(Γ,Γf,τs),false,f@'{m2'}↦'{m2}} e2 : τlr ∧
   (**i 3.) *) m2' ⊑{Γ,false,f} m2 ∧
   (**i 4.) *) meminj_extend meminj_id f ('{m1}) ('{m1}).
 Proof.
-  intros ? Hm1 Hρ He1 p. destruct (ehstep_preservation Γ Γf m1 m2 ρ
-    τs e1 e2 τlr) as (Hm2&He2&Hm); auto.
+  intros ? Hm1 Hρ He1 p. destruct (ehstep_preservation Γ Γf m1 m2
+    (get_stack k) τs e1 e2 τlr) as (Hm2&He2&Hm); auto.
   revert Hm1 Hρ He1 Hm2 He2 Hm. case p; clear p; try by (
     intros; repeat match goal with
     | H : assign_sem _ _ _ _ _ _ _ |- _ =>
        apply assign_exec_correct in H
     | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]; try done
     | _ => progress simplify_option_equality
+    | H : get_stack _ !! _ = _ |- _ => rewrite <-ctx_lookup_correct in H
     end; eexists meminj_id, _, _; split_ands;
       eauto using cmap_refine_id', expr_refine_id).
-  intros m Ω o τi τ n ?????????; simplify_option_equality; typed_inversion_all.
+  intros m Ω o τi τ n ???????s??; simplify_option_equality; typed_inversion_all.
   set (o' := fresh (dom indexset m)) in *.
   assert (mem_allocable o' m) by (apply mem_allocable_fresh).
   destruct (mem_alloc_refine' Γ false meminj_id m m true (τ.[Z.to_nat n])
@@ -61,7 +62,7 @@ Proof.
   * intros m1 m2 k E e1 e2 ?? (τlr&Heτlr&?&?) ? _; simpl in *.
     typed_inversion Heτlr; edestruct (ectx_subst_typed_rev Γ Γf ('{m1})
       (get_stack_types k) E e1) as (τlr&?&?); eauto.
-    edestruct (ehexec_complete Γ Γf m1 m2 (get_stack k) (get_stack_types k)
+    edestruct (ehexec_complete Γ Γf m1 m2 k (get_stack_types k)
       e1 e2) as (f&e2'&m2'&?&?&?&?); eauto using ctx_typed_stack_typed.
     exists f (State k (Expr (subst E e2')) m2'); split_ands; auto.
     { assert (is_redex e1) as He1 by eauto using ehstep_is_redex.
@@ -109,7 +110,6 @@ Proof.
     eleft; split_ands; simpl; repeat refine_constructor;
       eauto using mem_alloc_val_list_index_typed.
     + rewrite snd_zip by solve_length.
-      erewrite Fun_type_stack_types, (right_id_L [] (++)) by eauto.
       eapply (stmt_refine_weaken _ _ false false meminj_id _ ('{m}));
         eauto using stmt_refine_id, mem_alloc_val_list_forward.
     + eauto 8 using ctx_refine_weaken, ctx_refine_id,mem_alloc_val_list_forward.

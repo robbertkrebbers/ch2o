@@ -185,13 +185,17 @@ Lemma ehstep_refine_backward Γ Γf α f m1 m2 m2' ρ1 ρ2 τs e1 e2 e2' τlr :
     (**i 4.) *) meminj_extend f f' ('{m1}) ('{m2}))
   ∨ is_redex e1 ∧ ¬Γ \ ρ1 ⊢ₕ safe e1, m1.
 Proof.
-  intros ? p ?????. destruct (ehexec Γ ρ1 e1 m1) as [[e1' m1']|] eqn:p'.
-  * left. eapply ehexec_sound in p'; eauto. destruct (ehstep_refine Γ Γf α f
+  intros ? p ?? Hρ1 ??. set (k1:=zip_with CLocal ρ1 τs).
+  assert (get_stack k1 = ρ1) as Hk1.
+  { unfold k1. elim Hρ1; intros; f_equal'; auto. }
+  destruct (ehexec Γ k1 e1 m1) as [[e1' m1']|] eqn:p'.
+  * left. eapply ehexec_sound in p'; eauto. rewrite Hk1 in p'.
+    destruct (ehstep_refine Γ Γf α f
       m1 m2 m1' m2' ρ1 ρ2 τs e1 e2 e1' e2' τlr); naive_solver.
   * right; split.
     { destruct p; refine_inversion_all; repeat constructor. }
     destruct 1; [refine_inversion_all; inv_ehstep|].
-    edestruct ehexec_weak_complete; eauto.
+    edestruct (ehexec_weak_complete Γ k1); rewrite ?Hk1; eauto.
 Qed.
 Lemma ehsafe_refine Γ Γf α f m1 m2 ρ1 ρ2 τs e1 e2 τlr :
   ✓ Γ → Γ\ ρ1 ⊢ₕ safe e1, m1 → m1 ⊑{Γ,α,f} m2 →
@@ -308,7 +312,6 @@ Proof.
       ctx_refine_weaken, mem_alloc_val_list_forward; simpl.
     rewrite snd_zip by (rewrite fresh_list_length;
       eauto using eq_sym, Nat.eq_le_incl, Forall3_length_lr).
-    erewrite Fun_type_stack_types, (right_id_L [] (++)) by eauto.
     eauto 7 using stmt_refine_weaken, mem_alloc_val_list_refine',
       mem_alloc_val_list_forward, mem_allocable_list_fresh, fresh_list_length.
   * intros m k h oσs s ????; invert; case_match; simplify_equality'; try done.
