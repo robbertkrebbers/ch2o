@@ -185,6 +185,11 @@ Proof. by injection 1. Qed.
 Instance: Injective (=) (=) (@EFree Ti).
 Proof. by injection 1. Qed.
 
+Instance maybe_EVal {Ti} : Maybe2 (@EVal Ti) := λ e,
+  match e with #{Ω} v => Some (Ω,v) | _ => None end.
+Instance maybe_ECall {Ti} : Maybe2 (@ECall Ti) := λ e,
+  match e with call f @ es => Some (f,es) | _ => None end.
+
 Instance assign_eq_dec: ∀ ass1 ass2 : assign, Decision (ass1 = ass2).
 Proof. solve_decision. Defined.
 Instance expr_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)} :
@@ -610,21 +615,17 @@ Lemma EVals_nf_alt {Ti} es Ωs (vs : list (val Ti)) :
   es = #{Ωs}* vs → Forall is_nf es.
 Proof. intros ->. by apply EVals_nf. Qed.
 
-Definition maybe_EVal {Ti} (e : expr Ti) : option (lockset * val Ti) :=
-  match e with #{Ω} v => Some (Ω,v) | _ => None end.
-Definition maybe_ECall {Ti} (e : expr Ti) : option (funname * list (expr Ti)) :=
-  match e with call f @ es => Some (f,es) | _ => None end.
 Definition maybe_ECall_redex {Ti} (e : expr Ti) :
     option (funname * list lockset * list (val Ti)) :=
-  '(f,es) ← maybe_ECall e;
-  vΩs ← mapM maybe_EVal es;
+  '(f,es) ← maybe2 ECall e;
+  vΩs ← mapM (maybe2 EVal) es;
   Some (f, fst <$> vΩs, snd <$> vΩs).
 
 Lemma maybe_EVal_Some {Ti} (e : expr Ti) Ω v :
-  maybe_EVal e = Some (Ω, v) ↔ e = #{Ω} v.
+  maybe2 EVal e = Some (Ω, v) ↔ e = #{Ω} v.
 Proof. split. by destruct e; intros; simplify_equality'. by intros ->. Qed.
 Lemma maybe_ECall_Some {Ti} (e : expr Ti) f es :
-  maybe_ECall e = Some (f, es) ↔ e = call f @ es.
+  maybe2 ECall e = Some (f, es) ↔ e = call f @ es.
 Proof. split. by destruct e; intros; simplify_equality'. by intros ->. Qed.
 Lemma maybe_ECall_redex_Some_2 {Ti} f Ωs (vs : list (val Ti)) :
   length Ωs = length vs →
@@ -640,11 +641,11 @@ Lemma maybe_ECall_redex_Some {Ti} (e : expr Ti) f Ωs vs :
 Proof.
   split; [|intros [-> ?]; eauto using maybe_ECall_redex_Some_2].
   unfold maybe_ECall_redex; csimpl; intros.
-  destruct (maybe_ECall e) as [[f' es]|] eqn:?; simplify_option_equality.
+  destruct (maybe2 ECall e) as [[f' es]|] eqn:?; simplify_option_equality.
   rewrite !fmap_length; split; auto.
   apply maybe_ECall_Some. rewrite zip_with_fst_snd.
-  erewrite <-(mapM_fmap_Some_inv maybe_EVal (curry EVal)); eauto.
-  by intros [??] [] ?; simplify_equality'.
+  by erewrite <-(mapM_fmap_Some_inv (maybe2 EVal) (curry EVal))
+    by (by eauto; intros [??] [] ?; simplify_equality').
 Qed.
 
 (** * Contexts with one hole *)

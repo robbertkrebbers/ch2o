@@ -38,7 +38,7 @@ Proof. by injection 1. Qed.
 Instance: Injective (=) (=) (@VUnionAll Ti s).
 Proof. by injection 1. Qed.
 
-Definition maybe_VBase {Ti} (v : val Ti) : option (base_val Ti) :=
+Instance maybe_VBase {Ti} : Maybe (@VBase Ti) := λ v,
   match v with VBase vb => Some vb | _ => None end.
 Instance val_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)} :
   ∀ v1 v2 : val Ti, Decision (v1 = v2).

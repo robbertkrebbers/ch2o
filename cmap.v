@@ -10,7 +10,7 @@ Inductive cmap_elem (Ti A : Set) :=
 Arguments Freed {_ _} _.
 Arguments Obj {_ _} _ _.
 
-Definition maybe_Obj {Ti A} (x : cmap_elem Ti A) : option (ctree Ti A * bool) :=
+Instance maybe_Obj {Ti A} : Maybe2 (@Obj Ti A) := λ x,
   match x with Obj w β => Some (w,β) | _ => None end.
 Definition cmap_elem_Forall {Ti A} (P : Prop) (Q : ctree Ti A → Prop)
     (x : cmap_elem Ti A) : Prop :=
@@ -60,7 +60,7 @@ Instance cmap_ops {Ti A : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2),
   sep_difference m1 m2 :=
     let (m1) := m1 in let (m2) := m2 in
     CMap (difference_with (λ x y,
-      '(w1,β) ← maybe_Obj x; '(w2,_) ← maybe_Obj y;
+      '(w1,β) ← maybe2 Obj x; '(w2,_) ← maybe2 Obj y;
       let w := w1 ∖ w2 in guard (¬ctree_empty w); Some (Obj w β)) m1 m2);
   sep_half m := let (m) := m in CMap (cmap_elem_map ½ <$> m);
   sep_valid m :=

@@ -44,6 +44,10 @@ Tactic Notation "simplify_error_equality" :=
   | H : appcontext [@mret (sum ?E) _ ?A] |- _ =>
      change (@mret (sum E) _ A) with (@inr E A) in H
   | |- appcontext [@mret (sum ?E) _ ?A] => change (@mret _ _ A) with (@inr E A)
+  | _ : maybe _ ?x = Some _ |- _ => is_var x; destruct x
+  | _ : maybe2 _ ?x = Some _ |- _ => is_var x; destruct x
+  | _ : maybe3 _ ?x = Some _ |- _ => is_var x; destruct x
+  | _ : maybe4 _ ?x = Some _ |- _ => is_var x; destruct x
   | H : error_of_option ?o ?e = ?x |- _ => apply error_of_option_inr in H
   | H : mbind (M:=sum _) ?f ?o = ?x |- _ =>
     apply bind_inr in H; destruct H as (?&?&?)

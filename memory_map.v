@@ -32,7 +32,7 @@ Section operations.
   Global Instance cmap_lookup:
       LookupE (env Ti) (addr Ti) (mtree Ti) (mem Ti) := λ Γ a m,
     guard (addr_strict Γ a);
-    '(w',_) ← cmap_car m !! addr_index a ≫= maybe_Obj;
+    '(w',_) ← cmap_car m !! addr_index a ≫= maybe2 Obj;
     w ← lookupE Γ (addr_ref Γ a) w';
     if decide (addr_is_obj a) then Some w else
       guard (ctree_unshared w ∧ type_of a ≠ voidT); w !!{Γ} (addr_ref_byte Γ a).

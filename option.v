@@ -100,10 +100,6 @@ Instance option_join: MJoin option := λ A x,
 Instance option_fmap: FMap option := @option_map.
 Instance option_guard: MGuard option := λ P dec A x,
   match dec with left H => x H | _ => None end.
-Definition maybe_inl {A B} (xy : A + B) : option A :=
-  match xy with inl x => Some x | _ => None end.
-Definition maybe_inr {A B} (xy : A + B) : option B :=
-  match xy with inr y => Some y | _ => None end.
 
 Lemma fmap_is_Some {A B} (f : A → B) x : is_Some (f <$> x) ↔ is_Some x.
 Proof. unfold is_Some; destruct x; naive_solver. Qed.
@@ -140,6 +136,31 @@ Proof.
 Qed.
 Lemma bind_with_Some {A} (x : option A) : x ≫= Some = x.
 Proof. by destruct x. Qed.
+
+(** ** Inverses of constructors *)
+(** We can do this in a fancy way using dependent types, but rewrite does
+not particularly like type level reductions. *)
+Class Maybe {A B : Type} (c : A → B) :=
+  maybe : B → option A.
+Arguments maybe {_ _} _ {_} !_ /.
+Class Maybe2 {A1 A2 B : Type} (c : A1 → A2 → B) :=
+  maybe2 : B → option (A1 * A2).
+Arguments maybe2 {_ _ _} _ {_} !_ /.
+Class Maybe3 {A1 A2 A3 B : Type} (c : A1 → A2 → A3 → B) :=
+  maybe3 : B → option (A1 * A2 * A3).
+Arguments maybe3 {_ _ _ _} _ {_} !_ /.
+Class Maybe4 {A1 A2 A3 A4 B : Type} (c : A1 → A2 → A3 → A4 → B) :=
+  maybe4 : B → option (A1 * A2 * A3 * A4).
+Arguments maybe4 {_ _ _ _ _} _ {_} !_ /.
+
+Instance maybe_comp `{Maybe B C c1, Maybe A B c2} : Maybe (c1 ∘ c2) := λ x,
+  maybe c1 x ≫= maybe c2.
+Arguments maybe_comp _ _ _ _ _ _ _ !_ /.
+
+Instance maybe_inl {A B} : Maybe (@inl A B) := λ xy,
+  match xy with inl x => Some x | _ => None end.
+Instance maybe_inr {A B} : Maybe (@inr A B) := λ xy,
+  match xy with inr y => Some y | _ => None end.
 
 (** * Union, intersection and difference *)
 Instance option_union_with {A} : UnionWith A (option A) := λ f x y,
@@ -245,6 +266,10 @@ Tactic Notation "simplify_option_equality" "by" tactic3(tac) :=
   repeat match goal with
   | _ => progress simplify_equality'
   | _ => progress simpl_option_monad by tac
+  | _ : maybe _ ?x = Some _ |- _ => is_var x; destruct x
+  | _ : maybe2 _ ?x = Some _ |- _ => is_var x; destruct x
+  | _ : maybe3 _ ?x = Some _ |- _ => is_var x; destruct x
+  | _ : maybe4 _ ?x = Some _ |- _ => is_var x; destruct x
   | H : _ ∪ _ = Some _ |- _ => apply option_union_Some in H; destruct H
   | H : mbind (M:=option) ?f ?o = ?x |- _ =>
     match o with Some _ => fail 1 | None => fail 1 | _ => idtac end;

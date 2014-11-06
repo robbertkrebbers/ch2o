@@ -25,9 +25,9 @@ Notation "'intV{' τi } x" := (VInt τi x)
 Notation "'ptrV' p" := (VPtr p) (at level 10) : base_val_scope.
 Notation "'byteV' bs" := (VByte bs) (at level 10) : base_val_scope.
 
-Definition maybe_VInt {Ti} (vb : base_val Ti) : option (int_type Ti * Z) :=
+Instance maybe_VInt {Ti} : Maybe2 (@VInt Ti) := λ vb,
   match vb with VInt τi x => Some (τi,x) | _ => None end.
-Definition maybe_VPtr {Ti} (vb : base_val Ti) : option (ptr Ti) :=
+Instance maybe_VPtr {Ti} : Maybe (@VPtr Ti) := λ vb,
   match vb with VPtr p => Some p | _ => None end.
 Instance base_val_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (v1 v2 : base_val Ti) : Decision (v1 = v2).
@@ -93,13 +93,13 @@ Section operations.
     match τb with
     | voidT => VVoid
     | intT τi =>
-       match mapM maybe_BBit bs with
+       match mapM (maybe BBit) bs with
        | Some βs => VInt τi (int_of_bits τi βs)
        | None =>
           if decide (τi = ucharT%IT ∧ ¬Forall (BIndet =) bs)
           then VByte bs else VIndet τb
        end
-    | τ.* => default (VIndet τb) (mapM maybe_BPtr bs ≫= ptr_of_bits Γ τ) VPtr
+    | τ.* => default (VIndet τb) (mapM (maybe BPtr) bs ≫= ptr_of_bits Γ τ) VPtr
     end.
 End operations.
 
@@ -228,18 +228,18 @@ Proof.
   intros Hbs. unfold base_val_unflatten. destruct τb as [|τi|τ].
   * constructor.
   * rewrite bit_size_of_int in Hbs.
-    destruct (mapM maybe_BBit bs) as [βs|] eqn:Hβs.
+    destruct (mapM (maybe BBit) bs) as [βs|] eqn:Hβs.
     { rewrite maybe_BBits_spec in Hβs; subst. rewrite fmap_length in Hbs.
       by constructor. }
     assert (¬∃ βs, bs = BBit <$> βs).
-    { setoid_rewrite <-maybe_BBits_spec. intros [??]; simplify_equality. }
+    { setoid_rewrite <-maybe_BBits_spec. intros [??]; simpl in *; congruence. }
     destruct (decide _) as [[-> ?]|Hτbs].
     { rewrite int_bits_char in Hbs. by constructor. }
     destruct (decide (τi = ucharT%IT)) as [->|?].
     { rewrite int_bits_char in Hbs.
       constructor; auto. apply dec_stable; naive_solver. }
     by constructor.
-  * destruct (mapM maybe_BPtr bs) as [pbs|] eqn:Hpbs; csimpl.
+  * destruct (mapM (maybe BPtr) bs) as [pbs|] eqn:Hpbs; csimpl.
     { rewrite maybe_BPtrs_spec in Hpbs; subst. rewrite fmap_length in Hbs.
       by destruct (ptr_of_bits Γ τ pbs) as [p|] eqn:?; constructor. }
     constructor; auto.

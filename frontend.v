@@ -86,10 +86,9 @@ Arguments Global {_} _ _ _ _.
 Arguments Fun {_} _ _ _ _.
 Arguments GlobalTypeDef {_} _.
 Arguments EnumVal {_} _ _.
-Definition maybe_Fun {Ti} (d : global_decl Ti) :
-    option (cstorage * list (type Ti) * type Ti * option (stmt Ti)) :=
+Instance maybe_Fun {Ti} : Maybe4 (@Fun Ti) := λ d,
   match d with Fun sto τs τ ms => Some (sto,τs,τ,ms) | _ => None end.
-Definition maybe_GlobalTypeDef {Ti} (d : global_decl Ti) : option (type Ti) :=
+Instance maybe_GlobalTypeDef {Ti} : Maybe (@GlobalTypeDef Ti) := λ d,
   match d with GlobalTypeDef τ => Some τ | _ => None end.
 Notation global_env Ti := (stringmap (global_decl Ti)).
 
@@ -100,7 +99,7 @@ Inductive local_decl (Ti : Set) : Set :=
 Arguments Static {_} _ _.
 Arguments Local {_} _.
 Arguments TypeDef {_} _.
-Definition maybe_TypeDef {Ti} (d : local_decl Ti) : option (type Ti) :=
+Instance maybe_TypeDef {Ti} : Maybe (@TypeDef Ti) := λ d,
   match d with TypeDef τ => Some τ | _ => None end.
 (* A [None] delimits a new scope *)
 Notation local_env Ti := (list (option (string * local_decl Ti)))%type.
@@ -110,10 +109,9 @@ Inductive compound_type (Ti : Set) : Set :=
   | EnumType : int_type Ti → compound_type Ti.
 Arguments CompoundType {_} _ _.
 Arguments EnumType {_} _.
-Definition maybe_CompoundType {Ti}
-    (t : compound_type Ti) : option (compound_kind * list string) :=
+Instance maybe_CompoundType {Ti} : Maybe2 (@CompoundType Ti) := λ t,
   match t with CompoundType c xs => Some (c,xs) | _ => None end.
-Definition maybe_EnumType {Ti} (t : compound_type Ti) : option (int_type Ti) :=
+Instance maybe_EnumType {Ti} : Maybe (@EnumType Ti) := λ t,
   match t with EnumType τi => Some τi | _ => None end.
 Notation compound_env Ti := (tagmap (compound_type Ti)).
 
@@ -121,9 +119,9 @@ Section frontend.
 Context `{Env Ti}.
 
 Definition to_funtypes : global_env Ti → funtypes Ti :=
-  omap (λ d, '(_,τs,τ,_) ← maybe_Fun d; Some (τs,τ)).
+  omap (λ d, '(_,τs,τ,_) ← maybe4 Fun d; Some (τs,τ)).
 Definition to_funenv : global_env Ti → funenv Ti :=
-  omap (λ d, '(_,_,ms) ← maybe_Fun d; ms).
+  omap (λ d, '(_,_,ms) ← maybe4 Fun d; ms).
 Definition incomplete_fun_decls : global_env Ti → stringset :=
   mapset.mapset_dom_with (λ d,
     match d with Fun _ _ _ None => true | _ => false end).
@@ -152,7 +150,7 @@ Fixpoint lookup_typedef (x : string) (Δl : local_env Ti) : option (type Ti) :=
   match Δl with
   | [] => None
   | Some (y,d) :: Δl =>
-     if decide (x = y) then maybe_TypeDef d else lookup_typedef x Δl
+     if decide (x = y) then maybe TypeDef d else lookup_typedef x Δl
   | None :: Δl => lookup_typedef x Δl
   end.
 Definition lookup_var' (x : string)
@@ -169,7 +167,7 @@ Definition lookup_var' (x : string)
 Definition lookup_typedef' (x : string)
     (Δg : global_env Ti) (Δl : local_env Ti) : option (type Ti) :=
   match lookup_typedef x Δl with
-  | Some τ => Some τ | None => Δg !! x ≫= maybe_GlobalTypeDef
+  | Some τ => Some τ | None => Δg !! x ≫= maybe GlobalTypeDef
   end.
 
 Definition is_pseudo_NULL (e : expr Ti) : bool :=
@@ -177,7 +175,7 @@ Definition is_pseudo_NULL (e : expr Ti) : bool :=
 Definition to_R (eτlr : expr Ti * lrtype Ti) : expr Ti * type Ti :=
   match eτlr with
   | (e, inl τ) =>
-    match maybe_TArray τ with
+    match maybe2 TArray τ with
     | Some (τ',n) => (& (e %> RArray 0 τ' n), τ'.*) | None => (load e, τ)
     end
   | (e, inr τ) => (e,τ)
@@ -287,11 +285,11 @@ Definition to_ref (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
   match xces with
   | [] => inr (r,τ)
   | inl x :: xces =>
-     '(c,s) ← error_of_option (maybe_TCompound τ)
+     '(c,s) ← error_of_option (maybe2 TCompound τ)
        "struct/union initializer used for non-compound type";
      σs ← error_of_option (Γ !! s)
        "struct/union initializer used for incomplete type";
-     '(_,xs) ← error_of_option (Γn !! s ≫= maybe_CompoundType)
+     '(_,xs) ← error_of_option (Γn !! s ≫= maybe2 CompoundType)
        "please report: incompatible environments at struct/union initializer";
      i ← error_of_option (list_find (x =) xs)
        ("struct/union initializer with unknown index `" +:+ x +:+ "`");
@@ -303,14 +301,14 @@ Definition to_ref (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
        end in
      go (rs :: r) σ xces
   | inr ce :: xces =>
-     '(σ,n) ← error_of_option (maybe_TArray τ)
+     '(σ,n) ← error_of_option (maybe2 TArray τ)
        "array initializer used for non-array type";
      '(e,_) ← to_expr ce;
      guard (is_pure ∅ e) with
        "array initializer with non-constant index";
-     v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
+     v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe inr)
        "array initializer with undefined index";
-     '(_,x) ← error_of_option (maybe_VBase v ≫= maybe_VInt)
+     '(_,x) ← error_of_option (maybe VBase v ≫= maybe2 VInt)
        "array initializer with non-integer index";
      let i := Z.to_nat x in
      guard (i < n) with "array initializer with index out of bounds";
@@ -368,23 +366,23 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      inr (#(intV{τi} (int_bits τi)), inr (intT τi))
   | CEDeref ce =>
      '(e,τ) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
-     τp ← error_of_option (maybe_TBase τ ≫= maybe_TPtr)
+     τp ← error_of_option (maybe (TBase ∘ TPtr) τ)
        "dereferencing non-pointer type";
      guard (τp ≠ voidT) with "dereferencing pointer with void type";
      guard (type_complete Γ τp) with "dereferencing pointer with incomplete type";
      inr (.* e, inl τp)
   | CEAddrOf ce =>
      '(e,τlr) ← to_expr Γn Γ m Δg Δl ce;
-     τ ← error_of_option (maybe_inl τlr) "taking address of r-value";
+     τ ← error_of_option (maybe inl τlr) "taking address of r-value";
      inr (& e, inr (τ.*))
   | CEAssign ass ce1 ce2 =>
      '(e1,τlr1) ← to_expr Γn Γ m Δg Δl ce1;
-     τ1 ← error_of_option (maybe_inl τlr1) "assigning to r-value";
+     τ1 ← error_of_option (maybe inl τlr1) "assigning to r-value";
      '(e2,τ2) ← to_R_NULL τ1 <$> to_expr Γn Γ m Δg Δl ce2;
      σ ← error_of_option (assign_type_of Γ τ1 τ2 ass) "assignment cannot be typed";
      inr (e1 ::={ass} e2, inr σ)
   | CECall f ces =>
-     '(_,τs,σ,_) ← error_of_option (Δg !! f ≫= maybe_Fun)
+     '(_,τs,σ,_) ← error_of_option (Δg !! f ≫= maybe4 Fun)
        ("function `" +:+ f +:+ "` not declared");
      guard (length ces = length τs) with
        ("function `" +:+ f +:+ "` applied to wrong number of arguments");
@@ -396,13 +394,13 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
   | CEAbort => inr (abort voidT, inr voidT)
   | CEAlloc cτ ce =>
      τ ← to_type Γn Γ m Δg Δl (to_Type false) cτ;
-     '(e,τe) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
-     _ ← error_of_option (maybe_TBase τe ≫= maybe_TInt)
+     '(e,τ) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
+     _ ← error_of_option (maybe (TBase ∘ TInt) τ)
        "alloc applied to argument of non-integer type";
      inr (& (alloc{τ} e), inr (τ.* ))
   | CEFree ce =>
      '(e,τ) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
-     τp ← error_of_option (maybe_TBase τ ≫= maybe_TPtr)
+     τp ← error_of_option (maybe (TBase ∘ TPtr) τ)
        "free applied to argument of non-pointer type";
      guard (type_complete Γ τp)
        with "free applied to argument of incomplete pointer type";
@@ -417,7 +415,7 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      error_of_option (to_binop_expr op eτ1 eτ2) "binary operator cannot be typed"
   | CEIf ce1 ce2 ce3 =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ m Δg Δl ce1;
-     _ ← error_of_option (maybe_TBase τ1)
+     _ ← error_of_option (maybe TBase τ1)
        "conditional argument of if expression of non-base type";
      eτ2 ← to_R <$> to_expr Γn Γ m Δg Δl ce2;
      eτ3 ← to_R <$> to_expr Γn Γ m Δg Δl ce3;
@@ -428,31 +426,31 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      inr (cast{voidT} e1,, e2, inr τ2)
   | CEAnd ce1 ce2 =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ m Δg Δl ce1;
-     _ ← error_of_option (maybe_TBase τ1) "first argument of && of non-base type";
+     _ ← error_of_option (maybe TBase τ1) "first argument of && of non-base type";
      '(e2,τ2) ← to_R <$> to_expr Γn Γ m Δg Δl ce2;
-     _ ← error_of_option (maybe_TBase τ2) "second argument of && of non-base type";
+     _ ← error_of_option (maybe TBase τ2) "second argument of && of non-base type";
      inr (if{e1} if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)
            else #(intV{sintT} 0), inr sintT)
   | CEOr ce1 ce2 =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ m Δg Δl ce1;
-     _ ← error_of_option (maybe_TBase τ1) "first argument of || of non-base type";
+     _ ← error_of_option (maybe TBase τ1) "first argument of || of non-base type";
      '(e2,τ2) ← to_R <$> to_expr Γn Γ m Δg Δl ce2;
-     _ ← error_of_option (maybe_TBase τ2) "second argument of || of non-base type";
+     _ ← error_of_option (maybe TBase τ2) "second argument of || of non-base type";
      inr (if{e1} #(intV{sintT} 0)
            else (if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)), inr sintT)
   | CECast cσ ci =>
      σ ← to_type Γn Γ m Δg Δl to_Ptr cσ;
-     guard (maybe_TArray σ = None) with "array compound literals not supported";
-     guard (maybe_TCompound σ = None) with "cast to struct/union not allowed";
+     guard (maybe2 TArray σ = None) with "array compound literals not supported";
+     guard (maybe2 TCompound σ = None) with "cast to struct/union not allowed";
      e ← to_init_expr Γn Γ m Δg Δl σ ci;
      inr (e, inr σ)
   | CEField ce x =>
      '(e,τrl) ← to_expr Γn Γ m Δg Δl ce;
-     '(c,s) ← error_of_option (maybe_TCompound (lrtype_type τrl))
+     '(c,s) ← error_of_option (maybe2 TCompound (lrtype_type τrl))
        "field operator applied to argument of non-compound type";
      σs ← error_of_option (Γ !! s)
        "field operator applied to argument of incomplete compound type";
-     '(_,xs) ← error_of_option (Γn !! s ≫= maybe_CompoundType)
+     '(_,xs) ← error_of_option (Γn !! s ≫= maybe2 CompoundType)
        "please report: incompatible environments at field operator";
      i ← error_of_option (list_find (x =) xs)
        ("field operator used with unknown index `" +:+ x +:+ "`");
@@ -465,7 +463,7 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      match τrl with
      | inl _ => inr (e %> rs, inl σ)
      | inr _ =>
-        guard (maybe_TArray σ = None) with
+        guard (maybe2 TArray σ = None) with
           "indexing array field of r-value struct/union not supported";
         inr (e #> rs, inr σ)
      end
@@ -498,7 +496,7 @@ with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      inr τ
   | CTEnum s =>
      let s : tag := s in
-     τi ← error_of_option (Γn !! s ≫= maybe_EnumType)
+     τi ← error_of_option (Γn !! s ≫= maybe EnumType)
        ("enum `" +:+ s +:+ "` not found");
      inr (intT τi)
   | CTInt cτi => inr (intT (to_inttype cτi))
@@ -508,9 +506,9 @@ with to_type `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      '(e,_) ← to_expr Γn Γ m Δg Δl ce;
      guard (is_pure ∅ e) with
        "array with non-constant size expression";
-     v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
+     v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe inr)
        "array with undefined size expression";
-     '(_,x) ← error_of_option (maybe_VBase v ≫= maybe_VInt)
+     '(_,x) ← error_of_option (maybe VBase v ≫= maybe2 VInt)
        "array with non-integer size expression";
      let n := Z.to_nat x in
      guard (n ≠ 0) with "array with negative or zero size expression";
@@ -534,7 +532,7 @@ Definition to_init_val (Γn : compound_env Ti) (Γ : env Ti)
    e ← to_init_expr Γn Γ m Δg Δl τ ci;
    guard (is_pure ∅ e) with
      "initializer with non-constant expression";
-   error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
+   error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe inr)
      "initializer with undefined expression".
 Definition alloc_global (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
     (Δg : global_env Ti) (Δl : local_env Ti)
@@ -660,7 +658,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
      inr (m, Δg, l :; s, cmσ)
   | CSWhile ce cs =>
      '(e,τ) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
-     _ ← error_of_option (maybe_TBase τ)
+     _ ← error_of_option (maybe TBase τ)
        "while loop with conditional expression of non-base type";
      '(m,Δg,s,cmσ) ← go m Δg Δl cs;
      inr (m, Δg,
@@ -669,7 +667,7 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
   | CSFor ce1 ce2 ce3 cs =>
      '(e1,τ1) ← to_R <$> to_expr Γn Γ m Δg Δl ce1;
      '(e2,τ2) ← to_R <$> to_expr Γn Γ m Δg Δl ce2;
-     _ ← error_of_option (maybe_TBase τ2)
+     _ ← error_of_option (maybe TBase τ2)
        "for loop with conditional expression of non-base type";
      '(e3,τ3) ← to_R <$> to_expr Γn Γ m Δg Δl ce3;
      '(m,Δg,s,cmσ) ← go m Δg Δl cs;
@@ -682,14 +680,14 @@ Definition to_stmt (Γn : compound_env Ti) (Γ : env Ti) (τret : type Ti) :
   | CSDoWhile cs ce =>
      '(m,Δg,s,cmσ) ← go m Δg Δl cs;
      '(e,τ) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
-     _ ← error_of_option (maybe_TBase τ)
+     _ ← error_of_option (maybe TBase τ)
        "do-while loop with conditional expression of non-base type";
      inr (m, Δg,
        catch (loop (catch s ;; if{e} skip else throw 0)),
        (false, cmσ.2))
   | CSIf ce cs1 cs2 =>
      '(e,τ) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
-     _ ← error_of_option (maybe_TBase τ) "if with expression of non-base type";
+     _ ← error_of_option (maybe TBase τ) "if with expression of non-base type";
      '(m,Δg,s1,cmσ1) ← go m Δg Δl cs1;
      '(m,Δg,s2,cmσ2) ← go m Δg Δl cs2;
      mσ ← error_of_option (rettype_union (cmσ1.2) (cmσ2.2))
@@ -787,9 +785,9 @@ Definition to_enum (Γn : compound_env Ti) (Γ : env Ti) (m : mem Ti)
      '(e,_) ← to_expr Γn Γ m Δg [] ce;
      guard (is_pure ∅ e) with
        ("enum field `" +:+ x +:+ "` has non-constant value"); 
-     v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr)
+     v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe inr)
        ("enum field `" +:+ x +:+ "` has undefined value");
-     '(_,z') ← error_of_option (maybe_VBase v ≫= maybe_VInt)
+     '(_,z') ← error_of_option (maybe VBase v ≫= maybe2 VInt)
        ("enum field `" +:+ x +:+ "` has non-integer value");
      guard (int_typed z' τi) with "enum field with value out of range";
      go (<[x:=EnumVal τi z']>Δg) xces (z' + 1)%Z
@@ -1162,7 +1160,7 @@ Lemma to_R_typed Γ Γf m τs e τlr e' τ' :
   ✓{Γ}* τs → (Γ,Γf,'{m},τs) ⊢ e' : inr τ'.
 Proof.
   unfold to_R; intros; destruct τlr as [τl|τr]; simplify_equality'; auto.
-  destruct (maybe_TArray τl) as [[τ n]|] eqn:Hτ; simplify_equality'.
+  destruct (maybe2 TArray τl) as [[τ n]|] eqn:Hτ; simplify_equality'.
   { destruct τl; simplify_equality'. repeat typed_constructor; eauto.
     apply Nat.neq_0_lt_0.
     eauto using TArray_valid_inv_size, expr_inl_typed_type_valid. }
@@ -1295,12 +1293,6 @@ Proof.
   apply cexpr_cinit_ctype_ind; intros; split_ands; intros;
     repeat match goal with
     | H : _ ∧ _ |- _ => destruct H
-    | _ : maybe_inl ?τlr = Some _ |- _ => is_var τlr; destruct τlr
-    | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
-    | _ : maybe_TPtr ?τb = Some _ |- _ => is_var τb; destruct τb
-    | _ : maybe_TInt ?τb = Some _ |- _ => is_var τb; destruct τb
-    | _ : maybe_TCompound ?τ = Some _ |- _ => is_var τ; destruct τ
-    | _ : maybe_Fun ?d = Some _ |- _ => is_var d; destruct d
     | IH : ∀ _ _, to_expr _ _ _ _ _ ?ce = inr _ → _,
        H : to_expr _ _ _ _ _ ?ce = inr _ |- _ => specialize (IH _ _ H)
     | IH : ∀ _, to_type _ _ _ _ _ _ ?cτ = inr _ → _,
@@ -1479,7 +1471,6 @@ Proof.
   revert m m' s cmτ Δl Δg Δg' Hs Hm Hm' Hg Hl.
   induction cs; intros;
     repeat match goal with
-    | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
     | H : alloc_static _ _ _ _ _ _ _ _ = inr _ |- _ =>
        first_of ltac:(apply alloc_static_typed in H) idtac ltac:(by auto);
        destruct H as (?&?&?&?)

@@ -13,9 +13,9 @@ Instance bit_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (b1 b2 : bit Ti) : Decision (b1 = b2).
 Proof. solve_decision. Defined.
 
-Definition maybe_BBit {Ti} (b : bit Ti) : option bool :=
+Instance maybe_BBit {Ti} : Maybe (@BBit Ti) := λ b,
   match b with BBit b => Some b | _ => None end.
-Definition maybe_BPtr {Ti}  (b : bit Ti) : option (ptr_bit Ti) :=
+Instance maybe_BPtr {Ti} : Maybe (@BPtr Ti) := λ b,
   match b with BPtr pb => Some pb | _ => None end.
 
 Section operations.
@@ -98,7 +98,7 @@ Lemma bit_valid_weaken Γ1 Γ2 Γm1 Γm2 b :
   ✓ Γ1 → ✓{Γ1,Γm1} b → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → ✓{Γ2,Γm2} b.
 Proof. destruct 2; econstructor; eauto using ptr_bit_valid_weaken. Qed.
 
-Lemma maybe_BBits_spec bs βs : mapM maybe_BBit bs = Some βs ↔ bs = BBit <$> βs.
+Lemma maybe_BBits_spec bs βs : mapM (maybe BBit) bs = Some βs ↔ bs = BBit <$> βs.
 Proof.
   split.
   * apply mapM_fmap_Some_inv. by intros ? [] ?; simplify_equality'.
@@ -106,11 +106,11 @@ Proof.
 Qed.
 Global Instance BBits_dec bs : Decision (∃ βs, bs = BBit <$> βs).
 Proof.
- refine (cast_if (decide (is_Some (mapM maybe_BBit bs))));
+ refine (cast_if (decide (is_Some (mapM (maybe BBit) bs))));
   abstract (by setoid_rewrite <-maybe_BBits_spec).
 Defined.
 Lemma maybe_BPtrs_spec bs pbs :
-  mapM maybe_BPtr bs = Some pbs ↔ bs = BPtr <$> pbs.
+  mapM (maybe BPtr) bs = Some pbs ↔ bs = BPtr <$> pbs.
 Proof.
   split.
   * apply mapM_fmap_Some_inv. by intros ? [] ?; simplify_equality'.
@@ -118,7 +118,7 @@ Proof.
 Qed.
 Global Instance BPtrs_dec bs : Decision (∃ pbs, bs = BPtr <$> pbs).
 Proof.
- refine (cast_if (decide (is_Some (mapM maybe_BPtr bs))));
+ refine (cast_if (decide (is_Some (mapM (maybe BPtr) bs))));
   abstract (by setoid_rewrite <-maybe_BPtrs_spec).
 Defined.
 

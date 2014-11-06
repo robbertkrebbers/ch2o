@@ -54,7 +54,7 @@ Section memory_operations.
   Program Definition mem_locks (m : mem Ti) : lockset :=
     let (m) := m in
     dexist (omap (λ x,
-      '(w,_) ← maybe_Obj x;
+      '(w,_) ← maybe2 Obj x;
       let βs := of_bools (pbit_locked <$> ctree_flatten w) in
       guard (βs ≠ ∅); Some βs
     ) m) _.

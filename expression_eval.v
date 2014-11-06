@@ -31,51 +31,51 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
   | %{Ω} a =>
      guard (Ω = ∅); Some (inl a)
   | .* e =>
-     v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
-     a ← (maybe_VBase v ≫= maybe_VPtr) ≫= maybe_Ptr;
+     v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inr;
+     a ← maybe (VBase ∘ VPtr ∘ Ptr) v;
      guard (addr_strict Γ a);
      guard (index_alive ('{m}) (addr_index a));
      Some (inl a)
   | & e =>
-     a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inl;
+     a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inl;
      Some (inr (ptrV (Ptr a)))
   | e %> rs =>
-     a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inl;
+     a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inl;
      Some (inl (addr_elt Γ rs a))
   | e #> rs =>
-     v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
+     v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inr;
      v' ← v !! rs;
      Some (inr v')
   | @{op} e =>
-     v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
+     v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inr;
      guard (val_unop_ok m op v);
      Some (inr (val_unop op v))
   | e1 @{op} e2 =>
-     v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe_inr;
-     v2 ← ⟦ e2 ⟧ Γ fs ρ m ≫= maybe_inr;
+     v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe inr;
+     v2 ← ⟦ e2 ⟧ Γ fs ρ m ≫= maybe inr;
      guard (val_binop_ok Γ m op v1 v2);
      Some (inr (val_binop Γ op v1 v2))
   | call f @ es =>
      F ← fs !! f;
-     vs ← mapM (λ e, ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr) es;
+     vs ← mapM (λ e, ⟦ e ⟧ Γ fs ρ m ≫= maybe inr) es;
      inr <$> F vs
   | if{e1} e2 else e3 =>
-     v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe_inr;
+     v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe inr;
      match val_true_false_dec m v1 with
      | inleft (left _) => ⟦ e2 ⟧ Γ fs ρ m
      | inleft (right _) => ⟦ e3 ⟧ Γ fs ρ m
      | inright _ => None
      end
   | e1 ,, e2 =>
-     _ ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe_inr;
+     _ ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe inr;
      ⟦ e2 ⟧ Γ fs ρ m
   | cast{τ} e =>
-     v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr;
+     v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inr;
      guard (val_cast_ok Γ m τ v);
      Some (inr (val_cast τ v))
   | #[r:=e1] e2 =>
-     v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe_inr;
-     v2 ← ⟦ e2 ⟧ Γ fs ρ m ≫= maybe_inr;
+     v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe inr;
+     v2 ← ⟦ e2 ⟧ Γ fs ρ m ≫= maybe inr;
      guard (is_Some (v2 !! r));
      Some (inr (val_alter (λ _, v1) r v2))
   | _ => None
@@ -149,22 +149,14 @@ Lemma expr_eval_ind : ∀ e av, ⟦ e ⟧ Γ fs ρ m = Some av → P e av.
 Proof.
   assert (∀ f F es vs v,
     Forall (λ e, ∀ av, ⟦ e ⟧ Γ fs ρ m = Some av → P e av) es →
-    mapM (λ e, ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr) es = Some vs →
+    mapM (λ e, ⟦ e ⟧ Γ fs ρ m ≫= maybe inr) es = Some vs →
     fs !! f = Some F → F vs = Some v → P (call f @ es) (inr v)).
   { intros f F es vs v Hes Hvs Hf Hv. apply mapM_Some in Hvs.
-    eapply Pcall; eauto; clear Hf Hv; induction Hvs; decompose_Forall_hyps;
-      repeat match goal with
-      | _ => progress simplify_option_equality
-      | _ : maybe_inr ?va = Some _ |- _ => is_var va; destruct va
-      end; eauto. }
+    eapply Pcall; eauto; clear Hf Hv; induction Hvs;
+      decompose_Forall_hyps; simplify_option_equality; eauto. }
   induction e using @expr_ind_alt; intros;
     repeat match goal with
     | _ => progress simplify_option_equality
-    | _ : maybe_inl ?va = Some _ |- _ => is_var va; destruct va
-    | _ : maybe_inr ?va = Some _ |- _ => is_var va; destruct va
-    | _ : maybe_VBase ?v = Some _ |- _ => is_var v; destruct v
-    | _ : maybe_VPtr ?vb = Some _ |- _ => is_var vb; destruct vb
-    | _ : maybe_Ptr ?p = Some _ |- _ => is_var p; destruct p
     | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]
     end; eauto.
 Qed.
@@ -180,14 +172,14 @@ Lemma EVal_expr_eval Γ fs ρ m v : ⟦ #v ⟧ Γ fs ρ m = Some (inr v).
 Proof. done. Qed.
 Lemma EVals_expr_eval Γ fs ρ m Ωs vs :
   length Ωs = length vs →
-  ⋃ Ωs = ∅ → mapM (λ e, ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr) (#{Ωs}* vs) = Some vs.
+  ⋃ Ωs = ∅ → mapM (λ e, ⟦ e ⟧ Γ fs ρ m ≫= maybe inr) (#{Ωs}* vs) = Some vs.
 Proof.
   rewrite empty_union_list_L. rewrite <-Forall2_same_length.
   induction 1; intros; decompose_Forall; simplify_option_equality; auto.
 Qed.
 Lemma Forall2_expr_eval_val_inv Γ fs ρ m Ωs vs vs' :
   length Ωs = length vs →
-  Forall2 (λ e v, ⟦ e ⟧ Γ fs ρ m ≫= maybe_inr = Some v) (#{Ωs}* vs) vs' →
+  Forall2 (λ e v, ⟦ e ⟧ Γ fs ρ m ≫= maybe inr = Some v) (#{Ωs}* vs) vs' →
   vs = vs'.
 Proof.
   rewrite <-Forall2_same_length. intros HΩvs. revert vs'.
@@ -240,7 +232,7 @@ Proof.
     Forall2 (λ e v, ∀ τlr, (Γ1,Γf,'{m1},τs) ⊢ e : τlr →
       ⟦ e ⟧ Γ2 fs (ρ1 ++ ρ3) m2 = Some (inr v)) es vs →
     (Γ1,Γf,'{m1},τs) ⊢* es :* inr <$> σs →
-    mapM (λ e, ⟦ e ⟧ Γ2 fs (ρ1 ++ ρ3) m2 ≫= maybe_inr) es = Some vs). 
+    mapM (λ e, ⟦ e ⟧ Γ2 fs (ρ1 ++ ρ3) m2 ≫= maybe inr) es = Some vs). 
   { intros es vs σs Hes Hes'. apply mapM_Some. revert σs Hes'.
     induction Hes; intros [|??] ?; decompose_Forall_hyps; constructor;
       simplify_option_equality; eauto. }
@@ -280,8 +272,8 @@ Proof.
     Forall (λ e, (∀ f, f ∈ funs e → fs1 !! f = fs2 !! f) →
       ⟦ e ⟧ Γ fs1 ρ m = ⟦ e ⟧ Γ fs2 ρ m) es →
     (∀ f, f ∈ ⋃ (funs <$> es) → fs1 !! f = fs2 !! f) →
-    mapM (λ e, ⟦ e ⟧ Γ fs1 ρ m ≫= maybe_inr) es
-    = mapM (λ e, ⟦ e ⟧ Γ fs2 ρ m ≫= maybe_inr) es) as help.
+    mapM (λ e, ⟦ e ⟧ Γ fs1 ρ m ≫= maybe inr) es
+    = mapM (λ e, ⟦ e ⟧ Γ fs2 ρ m ≫= maybe inr) es) as help.
   { intros es Hes ?. apply Forall_mapM_ext.
     induction Hes as [|e' es He']; csimpl in *; auto.
     constructor; [|solve_elem_of]. by rewrite He' by solve_elem_of. }

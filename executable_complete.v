@@ -66,7 +66,7 @@ Proof.
       e1 e2) as (f&e2'&m2'&?&?&?&?); eauto using ctx_typed_stack_typed.
     exists f (State k (Expr (subst E e2')) m2'); split_ands; auto.
     { assert (is_redex e1) as He1 by eauto using ehstep_is_redex.
-      assert (maybe_EVal (subst E e1) = None) as ->.
+      assert (maybe2 EVal (subst E e1) = None) as ->.
       { destruct E as [|Ei] using rev_ind; [by destruct He1|].
         by destruct Ei; by rewrite ?subst_app. }
       apply elem_of_bind; exists (E, e1).
@@ -78,14 +78,14 @@ Proof.
         ctx_refine_id, ehstep_forward, ehexec_sound.
   * intros m k f E Ωs vs ?????; simpl.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
-    assert (maybe_EVal (subst E (call f @ #{Ωs}* vs)%E) = None) as ->.
+    assert (maybe2 EVal (subst E (call f @ #{Ωs}* vs)%E) = None) as ->.
     { by destruct E as [|[] E] using rev_ind; rewrite ?subst_app. }
     apply elem_of_bind; exists (E, call f @ #{Ωs}* vs)%E.
     split; [|apply expr_redexes_complete; constructor; apply EVals_nf]; simpl.
     rewrite maybe_ECall_redex_Some_2 by done; eauto.
   * intros m k E e He Hsafe ????; simpl.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
-    assert (maybe_EVal (subst E e) = None) as ->.
+    assert (maybe2 EVal (subst E e) = None) as ->.
     { destruct E as [|Ei] using rev_ind; [by destruct He|].
       by destruct Ei; by rewrite ?subst_app. }
     apply elem_of_bind; exists (E, e); split; [|by apply expr_redexes_complete].

@@ -24,57 +24,57 @@ Global Instance expr_type_check: TypeCheck envs (lrtype Ti) (expr Ti) :=
   | %{Ω} a =>
      guard (✓{Γm} Ω); guard (addr_strict Γ a); inl <$> type_check (Γ,Γm) a
   | .* e =>
-     τ ← type_check Γs e ≫= maybe_inr;
-     τp ← maybe_TBase τ ≫= maybe_TPtr;
+     τ ← type_check Γs e ≫= maybe inr;
+     τp ← maybe (TBase ∘ TPtr) τ;
      guard (✓{Γ} τp); Some (inl τp)
   | & e =>
-     τ ← type_check Γs e ≫= maybe_inl;
+     τ ← type_check Γs e ≫= maybe inl;
      Some (inr (τ.*))
   | e1 ::={ass} e2 =>
-     τ1 ← type_check Γs e1 ≫= maybe_inl;
-     τ2 ← type_check Γs e2 ≫= maybe_inr;
+     τ1 ← type_check Γs e1 ≫= maybe inl;
+     τ2 ← type_check Γs e2 ≫= maybe inr;
      inr <$> assign_type_of Γ τ1 τ2 ass
   | call f @ es =>
      '(τs,τ) ← Γf !! f;
-     τs' ← mapM (λ e, type_check Γs e ≫= maybe_inr) es;
+     τs' ← mapM (λ e, type_check Γs e ≫= maybe inr) es;
      guard ((τs' : list (type Ti)) = τs); Some (inr τ)
   | abort τ => guard (✓{Γ} τ); Some (inr τ)
-  | load e => inr <$> type_check Γs e ≫= maybe_inl
+  | load e => inr <$> type_check Γs e ≫= maybe inl
   | e %> rs =>
-     τ ← type_check Γs e ≫= maybe_inl;
+     τ ← type_check Γs e ≫= maybe inl;
      guard (ref_seg_offset rs = 0);
      inl <$> τ !!{Γ} rs
   | e #> rs =>
-     τ ← type_check Γs e ≫= maybe_inr;
+     τ ← type_check Γs e ≫= maybe inr;
      guard (ref_seg_offset rs = 0);
      inr <$> τ !!{Γ} rs
   | alloc{τ} e =>
-     τ' ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ' ≫= maybe_TInt;
+     _ ← type_check Γs e ≫= maybe (inr ∘ TBase ∘ TInt);
      guard (✓{Γ} τ); Some (inl τ)
   | free e =>
-     τ' ← type_check Γs e ≫= maybe_inl;
+     τ' ← type_check Γs e ≫= maybe inl;
      Some (inr voidT)
   | @{op} e =>
-     τ ← type_check Γs e ≫= maybe_inr;
+     τ ← type_check Γs e ≫= maybe inr;
      inr <$> unop_type_of op τ
   | e1 @{op} e2 =>
-     τ1 ← type_check Γs e1 ≫= maybe_inr;
-     τ2 ← type_check Γs e2 ≫= maybe_inr;
+     τ1 ← type_check Γs e1 ≫= maybe inr;
+     τ2 ← type_check Γs e2 ≫= maybe inr;
      inr <$> binop_type_of op τ1 τ2
   | if{e1} e2 else e3 =>
-     τ1 ← type_check Γs e1 ≫= maybe_inr; _ ← maybe_TBase τ1;
-     τ2 ← type_check Γs e2 ≫= maybe_inr;
-     τ3 ← type_check Γs e3 ≫= maybe_inr;
+     _ ← type_check Γs e1 ≫= maybe (inr ∘ TBase);
+     τ2 ← type_check Γs e2 ≫= maybe inr;
+     τ3 ← type_check Γs e3 ≫= maybe inr;
      guard (τ2 = τ3); Some (inr τ2)
   | e1,, e2 =>
-     _ ← type_check Γs e1 ≫= maybe_inr;
-     inr <$> type_check Γs e2 ≫= maybe_inr
+     _ ← type_check Γs e1 ≫= maybe inr;
+     inr <$> type_check Γs e2 ≫= maybe inr
   | cast{σ} e =>
-     τ ← type_check Γs e ≫= maybe_inr;
+     τ ← type_check Γs e ≫= maybe inr;
      guard (cast_typed Γ τ σ); Some (inr σ)
   | #[r:=e1] e2 =>
-     σ ← type_check Γs e1 ≫= maybe_inr;
-     τ ← type_check Γs e2 ≫= maybe_inr;
+     σ ← type_check Γs e1 ≫= maybe inr;
+     τ ← type_check Γs e2 ≫= maybe inr;
      σ' ← τ !!{Γ} r;
      guard ((σ':type Ti) = σ); Some (inr τ)
   end.
@@ -83,19 +83,19 @@ Global Instance ectx_item_lookup :
   let '(Γ,Γf,Γm,τs) := Γs in
   match Ei, τlr with
   | .* □, inr τ =>
-    τp ← maybe_TBase τ ≫= maybe_TPtr;
+    τp ← maybe (TBase ∘ TPtr) τ;
     guard (✓{Γ} τp); Some (inl τp)
   | & □, inl τ => Some (inr (τ.*))
   | □ ::={ass} e2, inl τ1 =>
-     τ2 ← type_check Γs e2 ≫= maybe_inr;
+     τ2 ← type_check Γs e2 ≫= maybe inr;
      inr <$> assign_type_of Γ τ1 τ2 ass
   | e1 ::={ass} □, inr τ2 =>
-     τ1 ← type_check Γs e1 ≫= maybe_inl;
+     τ1 ← type_check Γs e1 ≫= maybe inl;
      inr <$> assign_type_of Γ τ1 τ2 ass
   | call f @ es1 □ es2, inr τ =>
      '(τs,σ) ← Γf !! f;
-     τs1 ← mapM (λ e, type_check Γs e ≫= maybe_inr) (reverse es1);
-     τs2 ← mapM (λ e, type_check Γs e ≫= maybe_inr) es2;
+     τs1 ← mapM (λ e, type_check Γs e ≫= maybe inr) (reverse es1);
+     τs2 ← mapM (λ e, type_check Γs e ≫= maybe inr) es2;
      guard ((τs : list (type Ti)) = τs1 ++ τ :: τs2);
      Some (inr σ)
   | load □, inl τ => Some (inr τ)
@@ -106,28 +106,28 @@ Global Instance ectx_item_lookup :
      guard (ref_seg_offset rs = 0);
      inr <$> τ !!{Γ} rs
   | alloc{τ} □, inr τ' =>
-     _ ← maybe_TBase τ' ≫= maybe_TInt; guard (✓{Γ} τ); Some (inl τ)
+     _ ← maybe (TBase ∘ TInt) τ'; guard (✓{Γ} τ); Some (inl τ)
   | free □, inl τ => Some (inr voidT)
   | @{op} □, inr τ => inr <$> unop_type_of op τ
   | □ @{op} e2, inr τ1 =>
-     τ2 ← type_check Γs e2 ≫= maybe_inr;
+     τ2 ← type_check Γs e2 ≫= maybe inr;
      inr <$> binop_type_of op τ1 τ2
   | e1 @{op} □, inr τ2 =>
-     τ1 ← type_check Γs e1 ≫= maybe_inr;
+     τ1 ← type_check Γs e1 ≫= maybe inr;
      inr <$> binop_type_of op τ1 τ2
   | if{□} e2 else e3, inr τ1 =>
-     _ ← maybe_TBase τ1;
-     τ2 ← type_check Γs e2 ≫= maybe_inr;
-     τ3 ← type_check Γs e3 ≫= maybe_inr;
+     _ ← maybe TBase τ1;
+     τ2 ← type_check Γs e2 ≫= maybe inr;
+     τ3 ← type_check Γs e3 ≫= maybe inr;
      guard (τ2 = τ3); Some (inr τ2)
-  | □ ,, e2, inr τ1 => inr <$> type_check Γs e2 ≫= maybe_inr
+  | □ ,, e2, inr τ1 => inr <$> type_check Γs e2 ≫= maybe inr
   | cast{σ} □, inr τ => guard (cast_typed Γ τ σ); Some (inr σ)
   | #[r:=□] e2, inr σ =>
-     τ ← type_check Γs e2 ≫= maybe_inr;
+     τ ← type_check Γs e2 ≫= maybe inr;
      σ' ← τ !!{Γ} r;
      guard ((σ':type Ti) = σ); Some (inr τ)
   | #[r:=e1] □, inr τ =>
-     σ ← type_check Γs e1 ≫= maybe_inr;
+     σ ← type_check Γs e1 ≫= maybe inr;
      σ' ← τ !!{Γ} r;
      guard ((σ':type Ti) = σ); Some (inr τ)
   | _, _ => None
@@ -141,9 +141,9 @@ Global Instance stmt_type_check: TypeCheck envs (rettype Ti) (stmt Ti) :=
   let '(Γ,Γf,Γm,τs) := Γs in
   match s with
   | skip => Some (false,None)
-  | ! e => _ ← type_check Γs e ≫= maybe_inr; Some (false,None)
+  | ! e => _ ← type_check Γs e ≫= maybe inr; Some (false,None)
   | goto _ | throw _ => Some (true,None)
-  | ret e => τ ← type_check Γs e ≫= maybe_inr; Some (true,Some τ)
+  | ret e => τ ← type_check Γs e ≫= maybe inr; Some (true,Some τ)
   | label _ => Some (false,None)
   | local{τ} s =>
      guard (✓{Γ} τ); guard (int_typed (size_of Γ τ) sptrT);
@@ -155,7 +155,7 @@ Global Instance stmt_type_check: TypeCheck envs (rettype Ti) (stmt Ti) :=
   | catch s => '(c,mσ) ← type_check Γs s; Some (false,mσ)
   | loop s => '(_,mσ) ← type_check Γs s; Some (true,mσ)
   | if{e} s1 else s2 =>
-     τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
+     _ ← type_check Γs e ≫= maybe (inr ∘ TBase);
      '(c1,mσ1) ← type_check Γs s1;
      '(c2,mσ2) ← type_check Γs s2;
      mσ ← rettype_union mσ1 mσ2; Some (c1 && c2,mσ)
@@ -172,11 +172,11 @@ Global Instance sctx_item_lookup :
   | catch □, (c,mσ) => Some (false,mσ)
   | loop □, (c,mσ) => Some (true,mσ)
   | if{e} □ else s2, (c1,mσ1) =>
-     τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
+     _ ← type_check Γs e ≫= maybe (inr ∘ TBase);
      '(c2,mσ2) ← type_check Γs s2;
      mσ ← rettype_union mσ1 mσ2; Some (c1&&c2,mσ)
   | if{e} s1 else □, (c2,mσ2) =>
-     τ ← type_check Γs e ≫= maybe_inr; _ ← maybe_TBase τ;
+     _ ← type_check Γs e ≫= maybe (inr ∘ TBase);
      '(c1,mσ1) ← type_check Γs s1;
      mσ ← rettype_union mσ1 mσ2; Some (c1&&c2,mσ)
   end%S.
@@ -205,10 +205,10 @@ Global Instance ctx_item_lookup :
   | CStmt Es, Stmt_type cmσ1 => Stmt_type <$> cmσ1 !!{Γs} Es
   | CLocal o τ, Stmt_type cmσ => guard (Γm ⊢ o : τ); Some (Stmt_type cmσ)
   | CExpr e Ee, Expr_type τ =>
-     τ' ← type_check Γs e ≫= maybe_inr;
+     τ' ← type_check Γs e ≫= maybe inr;
      guard (τ = τ'); Stmt_type <$> τ !!{Γs} Ee
   | CFun E, Fun_type f =>
-     '(σs,τ) ← Γf !! f; Expr_type <$> inr τ !!{Γs} E ≫= maybe_inr
+     '(σs,τ) ← Γf !! f; Expr_type <$> inr τ !!{Γs} E ≫= maybe inr
   | CParams f oσs, Stmt_type cmσ =>
      '(σs,σ) ← Γf !! f;
      let os := fst <$> oσs in let σs' := snd <$> oσs in
@@ -229,7 +229,7 @@ Global Instance focus_type_check:
      | ↘, _ | ↗, (false,_) | ↷ _, _ | ↑ _, _ => Some (Stmt_type cmσ)
      | _, _ => None
      end
-  | Expr e => Expr_type <$> type_check Γs e ≫= maybe_inr
+  | Expr e => Expr_type <$> type_check Γs e ≫= maybe inr
   | Call f vs =>
      '(σs,_) ← Γf !! f;
      σs' ← mapM (type_check (Γ,Γm)) vs;
@@ -239,7 +239,7 @@ Global Instance focus_type_check:
      σ' ← type_check (Γ,Γm) v;
      guard ((σ : type Ti) = σ'); Some (Fun_type f)
   | Undef (UndefExpr E e) =>
-     Expr_type <$> (type_check Γs e ≫= lookupE Γs E) ≫= maybe_inr
+     Expr_type <$> (type_check Γs e ≫= lookupE Γs E) ≫= maybe inr
   | Undef (UndefBranch Es Ω v) =>
      guard (✓{Γm} Ω); τ ← type_check (Γ,Γm) v; Stmt_type <$> τ !!{Γs} Es
   end.
@@ -268,11 +268,6 @@ Notation envs := (env Ti * funtypes Ti * memenv Ti * list (type Ti))%type.
 
 Ltac simplify :=
   repeat match goal with
-  | _ : maybe_inl ?τlr = Some _ |- _ => is_var τlr; destruct τlr
-  | _ : maybe_inr ?τlr = Some _ |- _ => is_var τlr; destruct τlr
-  | _ : maybe_TBase ?τ = Some _ |- _ => is_var τ; destruct τ
-  | _ : maybe_TPtr ?τb = Some _ |- _ => is_var τb; destruct τb
-  | _ : maybe_TInt ?τb = Some _ |- _ => is_var τb; destruct τb
   | mcτ : rettype _ |- _ => destruct mcτ
   | _ => progress simplify_option_equality
   | _ => case_match
@@ -303,15 +298,15 @@ Proof.
   * assert (∀ es σs,
       Forall (λ e, ∀ τlr, type_check (Γ,Γf,Γm,τs) e = Some τlr →
         (Γ,Γf,Γm,τs) ⊢ e : τlr) es →
-      mapM (λ e, type_check (Γ,Γf,Γm,τs) e ≫= maybe_inr) es = Some σs →
+      mapM (λ e, type_check (Γ,Γf,Γm,τs) e ≫= maybe inr) es = Some σs →
       (Γ,Γf,Γm,τs) ⊢* es :* inr <$> σs).
     { intros ??. rewrite mapM_Some.
       induction 2; decompose_Forall_hyps; simplify; constructor; eauto. }
-    revert τlr; induction e using @expr_ind_alt; intros; simplify;
-      typed_constructor; eauto.
+    revert τlr; induction e using @expr_ind_alt;
+      intros; simplify; typed_constructor; eauto.
   * assert (∀ es σs,
       Forall2 (λ e τlr, type_check (Γ,Γf,Γm,τs) e = Some τlr) es (inr <$> σs) →
-      mapM (λ e, type_check (Γ,Γf,Γm,τs) e ≫= maybe_inr) es = Some σs) as help.
+      mapM (λ e, type_check (Γ,Γf,Γm,τs) e ≫= maybe inr) es = Some σs) as help.
     { intros es σs. rewrite Forall2_fmap_r, mapM_Some.
       induction 1; constructor; simplify_option_equality; eauto. }
     by induction 1 using @expr_typed_ind; simplify_option_equality;
@@ -325,12 +320,12 @@ Global Instance: PathTypeCheckSpec envs
 Proof.
   intros [[[Γ Γf] Γm] τs] Ei τlr; simpl; split.
   * assert (∀ es σs,
-      mapM (λ e, type_check (Γ,Γf,Γm,τs) e ≫= maybe_inr) es = Some σs →
+      mapM (λ e, type_check (Γ,Γf,Γm,τs) e ≫= maybe inr) es = Some σs →
       (Γ,Γf,Γm,τs) ⊢* es :* inr <$> σs).
     { intros es σs. rewrite mapM_Some. induction 1; simplify; eauto. }
     destruct τlr, Ei; intros; simplify; typed_constructor; eauto.
   * assert (∀ es σs, (Γ,Γf,Γm,τs) ⊢* es :* inr <$> σs →
-      mapM (λ e, type_check (Γ,Γf,Γm,τs) e ≫= maybe_inr) es = Some σs) as help.
+      mapM (λ e, type_check (Γ,Γf,Γm,τs) e ≫= maybe inr) es = Some σs) as help.
     { intros es σs. rewrite Forall2_fmap_r, mapM_Some.
       induction 1; constructor; erewrite ?type_check_complete by eauto; eauto. }
     destruct 1; simplify_option_equality;

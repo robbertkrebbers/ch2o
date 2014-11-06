@@ -12,9 +12,9 @@ Instance ptr_eq_dec `{Ti : Set, ∀ k1 k2 : Ti, Decision (k1 = k2)}
   (p1 p2 : ptr Ti) : Decision (p1 = p2).
 Proof. solve_decision. Defined.
 
-Definition maybe_NULL {Ti} (p : ptr Ti) : option (type Ti) :=
+Instance maybe_NULL {Ti} : Maybe (@NULL Ti) := λ p,
   match p with NULL τ => Some τ | _ => None end.
-Definition maybe_Ptr {Ti} (p : ptr Ti) : option (addr Ti) :=
+Instance maybe_Ptr {Ti} : Maybe (@Ptr Ti) := λ p,
   match p with Ptr a => Some a | _ => None end.
 
 Section pointer_operations.

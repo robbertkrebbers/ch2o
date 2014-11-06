@@ -104,15 +104,12 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
     | catch s => {[ State (CStmt (catch □) :: k) (Stmt ↘ s) m ]}
     | local{τ} s =>
        let o := fresh (dom indexset m) in
-       {[ State (CLocal o τ :: k) (Stmt ↘ s)
-            (mem_alloc Γ o false τ m) ]}
+       {[ State (CLocal o τ :: k) (Stmt ↘ s) (mem_alloc Γ o false τ m) ]}
     end
   | Stmt ↗ s =>
     match k with
-    | CLocal o τ :: k =>
-       {[ State k (Stmt ↗ (local{τ} s)) (mem_free o m) ]}
-    | CStmt (□ ;; s2) :: k =>
-       {[ State (CStmt (s ;; □) :: k) (Stmt ↘ s2) m ]}
+    | CLocal o τ :: k => {[ State k (Stmt ↗ (local{τ} s)) (mem_free o m) ]}
+    | CStmt (□ ;; s2) :: k => {[ State (CStmt (s ;; □) :: k) (Stmt ↘ s2) m ]}
     | CStmt (s1 ;; □) :: k => {[ State k (Stmt ↗ (s1 ;; s)) m ]}
     | CStmt (catch □) :: k => {[ State k (Stmt ↗ (catch s)) m ]}
     | CStmt (loop □) :: k => {[ State k (Stmt ↘ (loop s)) m ]}
@@ -138,8 +135,7 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
       | label l' => {[ State k (Stmt ↗ s) m ]}
       | local{τ} s =>
          let o := fresh (dom indexset m) in
-         {[ State (CLocal o τ :: k) (Stmt (↷ l) s)
-             (mem_alloc Γ o false τ m) ]}
+         {[ State (CLocal o τ :: k) (Stmt (↷ l) s) (mem_alloc Γ o false τ m) ]}
       | catch s => {[ State (CStmt (catch □) :: k) (Stmt (↷ l) s) m ]}
       | s1 ;; s2 =>
          (guard (l ∈ labels s1);
@@ -183,7 +179,7 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
     | _ => ∅
     end
   | Expr e =>
-    match maybe_EVal e with
+    match maybe2 EVal e with
     | Some (Ω,v) =>
       match k with
       | CExpr e (! □) :: k => {[ State k (Stmt ↗ (! e)) (mem_unlock Ω m) ]}
@@ -278,7 +274,7 @@ Proof.
       apply ehexec_sound in H
     | H : _ ∈ expr_redexes _ |- _ =>
       apply expr_redexes_correct in H; destruct H
-    | H : maybe_EVal _ = Some _ |- _ => apply maybe_EVal_Some in H
+    | H : maybe2 EVal _ = Some _ |- _ => apply maybe_EVal_Some in H
     | H : maybe_ECall_redex _ = Some _ |- _ =>
       apply maybe_ECall_redex_Some in H; destruct H
     | _ => progress decompose_elem_of

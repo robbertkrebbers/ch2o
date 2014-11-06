@@ -119,15 +119,15 @@ Defined.
 Existing Instance type_eq_dec.
 Existing Instance base_type_eq_dec.
 
-Definition maybe_TInt {Ti} (τb : base_type Ti) : option (int_type Ti) :=
+Instance maybe_TInt {Ti} : Maybe (@TInt Ti) := λ τb,
   match τb with intT τi => Some τi | _ => None end%BT.
-Definition maybe_TPtr {Ti} (τb : base_type Ti) : option (type Ti) :=
+Instance maybe_TPtr {Ti} : Maybe (@TPtr Ti) := λ τb,
   match τb with τ.* => Some τ | _ => None end%BT.
-Definition maybe_TBase {Ti} (τ : type Ti) : option (base_type Ti) :=
+Instance maybe_TBase {Ti} : Maybe (@TBase Ti) := λ τ,
   match τ with baseT τb => Some τb | _ => None end%T.
-Definition maybe_TArray {Ti} (τ : type Ti) : option (type Ti * nat) :=
+Instance maybe_TArray {Ti} : Maybe2 (@TArray Ti) := λ τ,
   match τ with τ.[n] => Some (τ,n) | _ => None end%T.
-Definition maybe_TCompound {Ti} (τ : type Ti) : option (compound_kind * tag) :=
+Instance maybe_TCompound {Ti} : Maybe2 (@TCompound Ti) := λ τ,
   match τ with compoundT{c} s => Some (c,s) | _ => None end%T.
 
 (** * Well-formed types *)
