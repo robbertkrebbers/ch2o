@@ -96,7 +96,7 @@ Qed.
 Lemma bit_size_of_weaken Γ1 Γ2 τ :
   ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊆ Γ2 → bit_size_of Γ1 τ = bit_size_of Γ2 τ.
 Proof. intros. unfold bit_size_of. f_equal. by apply size_of_weaken. Qed.
-Lemma bit_size_of_int Γ τi : bit_size_of Γ (intT τi) = int_bits τi.
+Lemma bit_size_of_int Γ τi : bit_size_of Γ (intT τi) = int_width τi.
 Proof. unfold bit_size_of. by rewrite size_of_int. Qed.
 Lemma bit_size_of_int_same_kind Γ τi1 τi2 :
   rank τi1 = rank τi2 → bit_size_of Γ (intT τi1) = bit_size_of Γ (intT τi2).

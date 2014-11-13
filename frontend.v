@@ -363,7 +363,7 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      inr (#(intV{τi} (int_upper τi - 1)), inr (intT τi))
   | CEBits cτi =>
      let τi := to_inttype cτi in
-     inr (#(intV{τi} (int_bits τi)), inr (intT τi))
+     inr (#(intV{τi} (int_width τi)), inr (intT τi))
   | CEDeref ce =>
      '(e,τ) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
      τp ← error_of_option (maybe (TBase ∘ TPtr) τ)
@@ -1319,7 +1319,7 @@ Proof.
     | |- _ ⊢ _ : _ =>
        repeat typed_constructor; eauto 6 using to_binop_expr_typed,
          to_if_expr_typed, lookup_var_typed', type_valid_ptr_type_valid,
-         lockset_empty_valid, int_lower_typed, int_upper_typed, int_bits_typed,
+         lockset_empty_valid, int_lower_typed, int_upper_typed, int_width_typed,
          type_complete_valid, TBase_valid_inv, TPtr_valid_inv,
          to_int_const_typed, val_0_typed, TBase_valid, TVoid_valid
     | |- ✓{_} _ =>

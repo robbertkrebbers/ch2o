@@ -640,7 +640,7 @@ Ltac solve_length := simplify_equality'; repeat first
   [ rewrite take_length | rewrite drop_length | rewrite app_length
   | rewrite fmap_length | erewrite ctree_flatten_length by eauto
   | rewrite type_mask_length by eauto | rewrite replicate_length
-  | rewrite bit_size_of_int | rewrite int_bits_char | rewrite resize_length
+  | rewrite bit_size_of_int | rewrite int_width_char | rewrite resize_length
   | erewrite sublist_lookup_length by eauto
   | erewrite sublist_alter_length by eauto
   | match goal with

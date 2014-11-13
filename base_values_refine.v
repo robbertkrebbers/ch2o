@@ -65,7 +65,7 @@ Proof.
   * done.
   * eapply BIndets_refine_r_inv; eauto using base_val_flatten_valid.
     by erewrite base_val_flatten_length, char_byte_valid_bits,
-      bit_size_of_int, int_bits_char by eauto.
+      bit_size_of_int, int_width_char by eauto.
 Qed.
 Lemma base_val_refine_typed_l Γ α f Γm1 Γm2 vb1 vb2 τb :
   ✓ Γ → vb1 ⊑{Γ,α,f@Γm1↦Γm2} vb2 : τb → (Γ,Γm1) ⊢ vb1 : τb.
@@ -152,7 +152,7 @@ Proof.
       erewrite base_val_unflatten_ptr by eauto; by constructor.
     * assert (¬(∃ βs, bs2 = BBit <$> βs))
         by naive_solver eauto using BBits_refine_inv_r.
-      rewrite bit_size_of_int, int_bits_char in Hbs1, Hbs2.
+      rewrite bit_size_of_int, int_width_char in Hbs1, Hbs2.
       erewrite base_val_unflatten_byte by eauto using BIndets_refine_r_inv'.
       repeat constructor; eauto using bits_refine_valid_l,
         bits_refine_valid_r, BIndets_refine_r_inv', BIndets_refine_l_inv'.

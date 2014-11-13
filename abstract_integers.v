@@ -128,36 +128,37 @@ functions to relate binary operations and casts to its specification. *)
 Section int_coding.
   Context `{IntCoding Ti}.
 
-  Definition int_bits (τ : int_type Ti) : nat :=
+  Definition int_width (τ : int_type Ti) : nat :=
     (rank_size (rank τ) * char_bits)%nat.
-  Definition int_lower (τ : int_type Ti) : Z :=
-    match sign τ with Signed => -2 ^ (int_bits τ - 1) | Unsigned => 0 end.
-  Definition int_upper (τ : int_type Ti) : Z :=
+  Definition int_precision (τ : int_type Ti) : nat :=
     match sign τ with
-    | Signed => 2 ^ (int_bits τ - 1) | Unsigned => 2 ^ int_bits τ
-    end.
+    | Signed => int_width τ - 1 | Unsigned => int_width τ
+    end%nat.
+  Definition int_lower (τ : int_type Ti) : Z :=
+    match sign τ with Signed => -2 ^ int_precision τ | Unsigned => 0 end.
+  Definition int_upper (τ : int_type Ti) : Z := 2 ^ int_precision τ.
   Definition int_typed (x : Z) (τ : int_type Ti) : Prop :=
     int_lower τ ≤ x < int_upper τ.
   Global Instance int_typed_dec x τ : Decision (int_typed x τ) := _.
-
   Fixpoint Z_to_bits (n : nat) (x : Z) : list bool :=
     match n with
-    | O => [] | S n => bool_decide (x `mod` 2 = 1) :: Z_to_bits n (x `div` 2)
+    | O => []
+    | S n => let (q,r) := Z.div_eucl x 2 in bool_decide (r = 1) :: Z_to_bits n q
     end.
   Fixpoint Z_of_bits (bs : list bool) : Z :=
     match bs with [] => 0 | b :: bs => Z.b2z b + 2 * Z_of_bits bs end.
 
   Definition int_to_bits (τ : int_type Ti) (x : Z) : list bool :=
-    endianize (rank τ) $ Z_to_bits (int_bits τ) $
+    endianize (rank τ) $ Z_to_bits (int_width τ) $
       match sign τ with
-      | Signed => if decide (0 ≤ x) then x else x + 2 ^ int_bits τ
+      | Signed => if decide (0 ≤ x) then x else x + 2 ^ int_width τ
       | Unsigned => x
       end.
   Definition int_of_bits (τ : int_type Ti) (bs : list bool) : Z :=
     let x := Z_of_bits (deendianize (rank τ) bs) in
     match sign τ with
     | Signed =>
-       if decide (2 * x < 2 ^ int_bits τ) then x else x - 2 ^ int_bits τ
+       if decide (2 * x < 2 ^ int_width τ) then x else x - 2 ^ int_width τ
     | Unsigned => x
     end.
 
@@ -190,10 +191,10 @@ Section int_coding.
   Definition int_pre_shiftop_ok
       (op : shiftop) (x y : Z) (τ : int_type Ti) : Prop :=
     match op, sign τ with
-    | ShiftLOp, Signed => 0 ≤ x ∧ 0 ≤ y < int_bits τ ∧ x ≪ y < int_upper τ
-    | ShiftLOp, Unsigned => 0 ≤ y < int_bits τ
-    | ShiftROp, Signed => 0 ≤ x ∧ 0 ≤ y < int_bits τ
-    | ShiftROp, Unsigned => 0 ≤ y < int_bits τ
+    | ShiftLOp, Signed => 0 ≤ x ∧ 0 ≤ y < int_width τ ∧ x ≪ y < int_upper τ
+    | ShiftLOp, Unsigned => 0 ≤ y < int_width τ
+    | ShiftROp, Signed => 0 ≤ x ∧ 0 ≤ y < int_width τ
+    | ShiftROp, Unsigned => 0 ≤ y < int_width τ
     end.
   Definition int_pre_shiftop (op : shiftop) (x y : Z) (τ : int_type Ti) : Z :=
     match op, sign τ with
@@ -306,14 +307,15 @@ Class IntEnvSpec Ti `{IntEnv Ti} := {
 
 (** * Theorems *)
 Lemma Z_to_bits_length n x : length (Z_to_bits n x) = n.
-Proof. revert x. induction n; simpl; auto. Qed.
+Proof. revert x. by induction n; intros; simpl; try case_match; f_equal'. Qed.
 Lemma Z_to_of_bits bs : Z_to_bits (length bs) (Z_of_bits bs) = bs.
 Proof.
-  induction bs as [|[] bs IH]; simpl; try case_bool_decide as Hb; auto.
-  * f_equal. by rewrite (Z.mul_comm 2), Z.div_add.
-  * by rewrite (Z.mul_comm 2), Z.mod_add in Hb.
-  * by rewrite (Z.mul_comm 2), Z.mod_add in Hb.
-  * f_equal. by rewrite (Z.mul_comm 2), Z.div_add.
+  induction bs as [|b bs IH]; f_equal'.
+  feed pose proof (Z_div_mod (Z.b2z b + 2 * Z_of_bits bs) 2); [lia|].
+  destruct (Z.div_eucl _ _) as [q r].
+  assert (0 ≤ Z.b2z b ≤ 1 ∧ bool_decide (Z.b2z b = 1) = b) by (by destruct b).
+  replace r with (Z.b2z b) by lia; replace q with (Z_of_bits bs) by lia.
+  f_equal; naive_solver.
 Qed.
 Lemma Z_of_bits_range bs : 0 ≤ Z_of_bits bs < 2 ^ length bs.
 Proof.
@@ -325,11 +327,9 @@ Proof.
   revert x.
   induction n as [|n IH]; intros x; simpl; rewrite ?Zpos_P_of_succ_nat.
   { rewrite Z.pow_0_r; lia. }
-  rewrite Z.pow_succ_r by auto with zpos. intros [??].
-  rewrite IH by auto using Z.div_pos, Z.div_lt_upper_bound with lia.
-  case_bool_decide as Hb; revert Hb; simpl.
-  * rewrite Z.mod_eq by done; lia.
-  * generalize (Z.mod_pos_bound x 2). rewrite Z.mod_eq; lia.
+  rewrite Z.pow_succ_r by auto with zpos; intros [??].
+  feed pose proof (Z_div_mod x 2); [lia|]; destruct (Z.div_eucl _ _) as [q r].
+  case_bool_decide; simpl; rewrite IH by lia; lia.
 Qed.
 Lemma Z_of_zero_bits n : Z_of_bits (replicate n false) = 0.
 Proof. induction n; simpl; lia. Qed.
@@ -360,27 +360,27 @@ Proof. by rewrite deendianize_permutation. Qed.
 
 Lemma rank_size_ne_0 k : (rank_size k ≠ 0)%nat.
 Proof. apply Nat.neq_0_lt_0, rank_size_pos. Qed.
-Lemma int_bits_char si : int_bits (IntType si char_rank) = char_bits.
-Proof. unfold int_bits; simpl. by rewrite rank_size_char, Nat.mul_1_l. Qed.
+Lemma int_width_char si : int_width (IntType si char_rank) = char_bits.
+Proof. unfold int_width; simpl. by rewrite rank_size_char, Nat.mul_1_l. Qed.
 Lemma char_bits_pos : (0 < char_bits)%nat.
 Proof. pose proof char_bits_ge_8; lia. Qed.
 Lemma char_bits_ne_0 : char_bits ≠ 0%nat.
 Proof. pose proof char_bits_ge_8; lia. Qed.
-Lemma int_bits_ge_8 τ : (8 ≤ int_bits τ)%nat.
+Lemma int_width_ge_8 τ : (8 ≤ int_width τ)%nat.
 Proof.
-  unfold int_bits. transitivity (1 * char_bits)%nat.
+  unfold int_width. transitivity (1 * char_bits)%nat.
   * by rewrite char_bits_ge_8, Nat.mul_1_l.
   * apply Nat.mul_le_mono_r. generalize (rank_size_pos (rank τ)); lia.
 Qed.
-Lemma int_bits_ge_8_alt τ : 8 ≤ int_bits τ.
-Proof. apply (Nat2Z.inj_le 8), int_bits_ge_8. Qed.
-Lemma int_bits_pos τ : (0 < int_bits τ)%nat.
-Proof. pose proof (int_bits_ge_8 τ); lia. Qed.
-Lemma int_bits_pos_alt τ : 0 < int_bits τ.
-Proof. apply (Nat2Z.inj_lt 0), int_bits_pos. Qed.
-Lemma int_bits_pred_nonneg τ : 0 ≤ int_bits τ - 1.
-Proof. pose proof (int_bits_pos_alt τ); lia. Qed.
-Hint Resolve int_bits_pos_alt int_bits_pred_nonneg.
+Lemma int_width_ge_8_alt τ : 8 ≤ int_width τ.
+Proof. apply (Nat2Z.inj_le 8), int_width_ge_8. Qed.
+Lemma int_width_pos τ : (0 < int_width τ)%nat.
+Proof. pose proof (int_width_ge_8 τ); lia. Qed.
+Lemma int_width_pos_alt τ : 0 < int_width τ.
+Proof. apply (Nat2Z.inj_lt 0), int_width_pos. Qed.
+Lemma int_width_pred_nonneg τ : 0 ≤ int_width τ - 1.
+Proof. pose proof (int_width_pos_alt τ); lia. Qed.
+Hint Resolve int_width_pos_alt int_width_pred_nonneg.
 Lemma int_typed_lower x τ : int_typed x τ → int_lower τ ≤ x.
 Proof. by intros [??]. Qed.
 Lemma int_typed_upper x τ : int_typed x τ → x < int_upper τ.
@@ -402,42 +402,43 @@ Proof.
   apply Z.mod_pos_bound; auto.
 Qed.
 Hint Resolve int_mod_lower_upper.
-Lemma int_upper_lower τ : int_upper τ = 2 ^ int_bits τ + int_lower τ.
+Lemma int_upper_lower τ : int_upper τ = 2 ^ int_width τ + int_lower τ.
 Proof.
-  unfold int_upper, int_lower. destruct τ as [[] k]; simpl; [|lia].
-  apply (Z.mul_cancel_l _ _ 2); [done |]. rewrite Z.mul_add_distr_l,
-    Z.mul_opp_r, !Z.sub_1_r, !Z_pow_pred_r; auto with zpos.
+  unfold int_upper, int_lower, int_precision; destruct (sign τ); simpl; [|lia].
+  apply (Z.mul_cancel_l _ _ 2); [done |]. pose proof (int_width_pos τ).
+  rewrite Z.mul_add_distr_l, Z.mul_opp_r, Nat2Z.inj_sub,
+    !Z.sub_1_r, !Z_pow_pred_r; auto with zpos.
 Qed.
 Lemma int_lower_upper_signed τ : sign τ = Signed → int_lower τ = -int_upper τ.
 Proof. by intros; destruct τ; simplify_equality'. Qed.
 Lemma int_typed_spec_alt x τ :
   int_typed x τ ↔
     match sign τ with
-    | Signed => -2 ^ int_bits τ ≤ 2 * x < 2 ^ int_bits τ
-    | Unsigned => 0 ≤ x < 2 ^ int_bits τ
+    | Signed => -2 ^ int_width τ ≤ 2 * x < 2 ^ int_width τ
+    | Unsigned => 0 ≤ x < 2 ^ int_width τ
     end.
 Proof.
-  unfold int_typed, int_lower, int_upper.
-  destruct τ as [[] k]; simpl; [|done].
+  unfold int_typed, int_lower, int_upper, int_precision.
+  destruct (sign τ); simpl; [|done]. pose proof (int_width_pos τ).
   rewrite (Z.mul_lt_mono_pos_l 2 x), (Z.mul_le_mono_pos_l _ _ 2) by done.
-  by rewrite Z.mul_opp_r, Z.sub_1_r, Z_pow_pred_r by auto.
+  by rewrite Nat2Z.inj_sub, Z.mul_opp_r, Z.sub_1_r, Z_pow_pred_r by auto.
 Qed.
 Lemma int_typed_nonneg_signed x τ :
-  0 ≤ 2 * x < 2 ^ int_bits τ → int_typed x τ.
+  0 ≤ 2 * x < 2 ^ int_width τ → int_typed x τ.
 Proof. rewrite int_typed_spec_alt. destruct (sign _); lia. Qed.
 Lemma int_typed_small x τ : 0 ≤ x < 128 → int_typed x τ.
 Proof.
   intros [??]. apply int_typed_nonneg_signed. split; [lia|].
   apply Z.lt_le_trans with (2 ^ 8); [lia |].
-  by apply Z.pow_le_mono_r; auto using int_bits_ge_8_alt.
+  by apply Z.pow_le_mono_r; auto using int_width_ge_8_alt.
 Qed.
-Lemma int_to_bits_length τ x : length (int_to_bits τ x) = int_bits τ.
+Lemma int_to_bits_length τ x : length (int_to_bits τ x) = int_width τ.
 Proof.
-  unfold int_to_bits, int_bits. rewrite endianize_permutation.
+  unfold int_to_bits, int_width. rewrite endianize_permutation.
   by destruct τ as [[] k]; simpl; rewrite Z_to_bits_length.
 Qed.
 Lemma int_to_of_bits τ bs :
-  length bs = int_bits τ → int_to_bits τ (int_of_bits τ bs) = bs.
+  length bs = int_width τ → int_to_bits τ (int_of_bits τ bs) = bs.
 Proof.
   intros Hlen. unfold int_to_bits, int_of_bits.
   rewrite <-!Hlen, <-!(deendianize_length (rank τ) bs); clear Hlen.
@@ -450,16 +451,16 @@ Proof.
   * by rewrite Z_to_of_bits, endianize_deendianize.
 Qed.
 Lemma int_of_bits_inj τ bs1 bs2 :
-  length bs1 = int_bits τ → length bs2 = int_bits τ →
+  length bs1 = int_width τ → length bs2 = int_width τ →
   int_of_bits τ bs1 = int_of_bits τ bs2 →  bs1 = bs2.
 Proof.
   intros. rewrite <-(int_to_of_bits τ bs1),
     <-(int_to_of_bits τ bs2) by done; congruence.
 Qed.
 Lemma int_of_bits_typed τ bs :
-  length bs = int_bits τ → int_typed (int_of_bits τ bs) τ.
+  length bs = int_width τ → int_typed (int_of_bits τ bs) τ.
 Proof.
-  intros Hlen. unfold int_of_bits. generalize (int_bits_pos τ).
+  intros Hlen. unfold int_of_bits. generalize (int_width_pos τ).
   generalize (Z_of_bits_range (deendianize (rank τ) bs)).
   rewrite int_typed_spec_alt, <-!Hlen, <-!(deendianize_length (rank τ) bs).
   destruct τ as [[] k]; simpl; repeat case_decide; auto with lia.
@@ -473,7 +474,7 @@ Proof.
       rewrite deendianize_endianize, Z_of_to_bits; lia.
   * intros [??]. by rewrite deendianize_endianize, Z_of_to_bits.
 Qed.
-Lemma int_of_zero_bits τ : int_of_bits τ (replicate (int_bits τ) false) = 0.
+Lemma int_of_zero_bits τ : int_of_bits τ (replicate (int_width τ) false) = 0.
 Proof.
   assert (∀ k n b, deendianize k (replicate n b) = replicate n b) as Hrepl.
   { intros k n b. symmetry. apply replicate_Permutation.
@@ -488,20 +489,21 @@ Lemma int_to_bits_signed_unsigned k x :
 Proof. unfold int_to_bits; simpl; case_decide; auto with lia. Qed.
 Lemma int_lower_lt_upper τi : int_lower τi < int_upper τi.
 Proof.
-  rewrite int_upper_lower. assert (0 < 2 ^ int_bits τi) by auto with zpos; lia.
+  rewrite int_upper_lower. assert (0 < 2 ^ int_width τi) by auto with zpos; lia.
 Qed.
 Lemma int_lower_typed τi : int_typed (int_lower τi) τi.
 Proof. pose proof (int_lower_lt_upper τi). split; lia. Qed.
 Lemma int_upper_typed τi : int_typed (int_upper τi - 1) τi.
 Proof. pose proof (int_lower_lt_upper τi). split; lia. Qed.
-Lemma int_bits_typed τi : int_typed (int_bits τi) τi.
+Lemma int_width_typed τi : int_typed (int_width τi) τi.
 Proof.
-  split; [transitivity 0; auto with zpos|].
-  unfold int_upper; destruct (sign _); [|apply Z.pow_gt_lin_r; lia].
-  pose proof (int_bits_ge_8 τi) as Hτi; replace (int_bits τi : Z)
-    with (Z.succ (Z.succ (Z.succ (int_bits τi - 3)%nat))) by lia; clear Hτi.
-  rewrite Z.sub_1_r, Z.pred_succ.
-  induction (int_bits τi - 3)%nat as [|n IH]; [done|].
+  split; [transitivity 0; auto with zpos|]. unfold int_upper, int_precision;
+    destruct (sign _); [|apply Z.pow_gt_lin_r; lia].
+  pose proof (int_width_ge_8 τi); rewrite Nat2Z.inj_sub by lia.
+  replace (int_width τi : Z)
+    with (Z.succ (Z.succ (Z.succ (int_width τi - 3)%nat))) by lia.
+  rewrite Z.sub_1_r, Z.pred_succ by lia.
+  induction (int_width τi - 3)%nat as [|n IH]; [done|].
   rewrite !Nat2Z.inj_succ, Z.pow_succ_r by auto with zpos; lia.
 Qed.
 Lemma int_pre_arithop_typed op x y τ :
@@ -533,12 +535,12 @@ Proof.
   * intros ?. assert (0 ≤ x ∧ 0 ≤ y) as [??].
     { unfold int_lower, int_upper in *. destruct (sign τ); auto with lia. }
     rewrite Z.shiftr_div_pow2 by done. split.
-    + transitivity 0; auto. apply Z.div_pos; auto with zpos.
-    + apply Z.le_lt_trans with x; auto.
-      apply Z.div_le_upper_bound; auto with zpos.
-      transitivity (1 * x); auto with lia.
-      apply Z.mul_le_mono_nonneg_r; auto with zpos.
-      assert (0 < 2 ^ y); auto with zpos.
+    { transitivity 0; auto. apply Z.div_pos; auto with zpos. }
+    apply Z.le_lt_trans with x; auto.
+    apply Z.div_le_upper_bound; auto with zpos.
+    transitivity (1 * x); auto with lia.
+    apply Z.mul_le_mono_nonneg_r; auto with zpos.
+    assert (0 < 2 ^ y); auto with zpos.
 Qed.
 Lemma int_pre_cast_typed x σ :
   int_pre_cast_ok σ x → int_typed (int_pre_cast σ x) σ.
@@ -557,15 +559,15 @@ Lemma int_unsigned_pre_cast_ok x σ : sign σ = Unsigned → int_pre_cast_ok σ 
 Proof. unfold int_pre_cast_ok. by intros ->. Qed.
 
 Lemma int_rank_bits_le τ σ :
-  rank_size (rank τ) ≤ rank_size (rank σ) → int_bits τ ≤ int_bits σ.
+  rank_size (rank τ) ≤ rank_size (rank σ) → int_width τ ≤ int_width σ.
 Proof.
-  intros. unfold int_bits. rewrite !Nat2Z.inj_mul.
+  intros. unfold int_width. rewrite !Nat2Z.inj_mul.
   apply Z.mul_le_mono_nonneg_r; lia.
 Qed.
 Lemma int_rank_bits_lt τ σ :
-  rank_size (rank τ) < rank_size (rank σ) → int_bits τ < int_bits σ.
+  rank_size (rank τ) < rank_size (rank σ) → int_width τ < int_width σ.
 Proof.
-  intros. unfold int_bits. rewrite !Nat2Z.inj_mul.
+  intros. unfold int_width. rewrite !Nat2Z.inj_mul.
   apply Z.mul_lt_mono_pos_r; auto. apply (Nat2Z.inj_lt 0), char_bits_pos.
 Qed.
 Lemma int_typed_rank_le x τ σ :
@@ -574,12 +576,12 @@ Lemma int_typed_rank_le x τ σ :
 Proof.
   rewrite !int_typed_spec_alt; intros <-; destruct (sign τ).
   * intros ? [??]; split.
-    + transitivity (- 2 ^ int_bits τ); [|done]. rewrite <-Z.opp_le_mono.
+    + transitivity (- 2 ^ int_width τ); [|done]. rewrite <-Z.opp_le_mono.
       by apply Z.pow_le_mono_r; auto using int_rank_bits_le.
-    + apply Z.lt_le_trans with (2 ^ int_bits τ); [done|].
+    + apply Z.lt_le_trans with (2 ^ int_width τ); [done|].
       by apply Z.pow_le_mono_r; auto using int_rank_bits_le.
   * intros ? [??]; split; [done|].
-    apply Z.lt_le_trans with (2 ^ int_bits τ); [done|].
+    apply Z.lt_le_trans with (2 ^ int_width τ); [done|].
     by apply Z.pow_le_mono_r; auto using int_rank_bits_le.
 Qed.
 Lemma int_typed_rank_lt x τ σ :
@@ -591,7 +593,7 @@ Proof.
   intros -> ? [??]; split.
   * transitivity (-0); [|lia]. rewrite <-Z.opp_le_mono. by apply Z.pow_nonneg.
   * rewrite <-Z_pow_pred_r, <-Z.mul_lt_mono_pos_l by (by auto).
-    apply Z.lt_le_trans with (2 ^ int_bits τ); [done|].
+    apply Z.lt_le_trans with (2 ^ int_width τ); [done|].
     by apply Z.pow_le_mono_r, Z.lt_le_pred; auto using int_rank_bits_lt.
 Qed.
 

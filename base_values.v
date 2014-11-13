@@ -191,7 +191,7 @@ Proof.
   * by rewrite replicate_length.
   * by rewrite fmap_length, bit_size_of_int, int_to_bits_length.
   * by erewrite fmap_length, ptr_to_bits_length_alt, type_of_correct by eauto.
-  * by erewrite bit_size_of_int, int_bits_char, char_byte_valid_bits by eauto.
+  * by erewrite bit_size_of_int, int_width_char, char_byte_valid_bits by eauto.
 Qed.
 
 (** ** Properties of the [base_val_unflatten] function *)
@@ -199,7 +199,7 @@ Inductive base_val_unflatten_view Γ :
      base_type Ti → list (bit Ti) → base_val Ti → Prop :=
   | base_val_of_void bs : base_val_unflatten_view Γ voidT bs VVoid
   | base_val_of_int τi βs :
-     length βs = int_bits τi → base_val_unflatten_view Γ (intT τi)
+     length βs = int_width τi → base_val_unflatten_view Γ (intT τi)
        (BBit <$> βs) (VInt τi (int_of_bits τi βs))
   | base_val_of_ptr τ p pbs :
      ptr_of_bits Γ τ pbs = Some p →
@@ -213,7 +213,7 @@ Inductive base_val_unflatten_view Γ :
      base_val_unflatten_view Γ ucharT bs (VIndet ucharT)
   | base_val_of_int_indet τi bs :
      τi ≠ ucharT%IT →
-     length bs = int_bits τi → ¬(∃ βs, bs = BBit <$> βs) →
+     length bs = int_width τi → ¬(∃ βs, bs = BBit <$> βs) →
      base_val_unflatten_view Γ (intT τi) bs (VIndet (intT τi))
   | base_val_of_ptr_indet_1 τ pbs :
      length pbs = bit_size_of Γ (τ.*) → ptr_of_bits Γ τ pbs = None →
@@ -234,9 +234,9 @@ Proof.
     assert (¬∃ βs, bs = BBit <$> βs).
     { setoid_rewrite <-maybe_BBits_spec. intros [??]; simpl in *; congruence. }
     destruct (decide _) as [[-> ?]|Hτbs].
-    { rewrite int_bits_char in Hbs. by constructor. }
+    { rewrite int_width_char in Hbs. by constructor. }
     destruct (decide (τi = ucharT%IT)) as [->|?].
-    { rewrite int_bits_char in Hbs.
+    { rewrite int_width_char in Hbs.
       constructor; auto. apply dec_stable; naive_solver. }
     by constructor.
   * destruct (mapM (maybe BPtr) bs) as [pbs|] eqn:Hpbs; csimpl.
@@ -258,7 +258,7 @@ Proof.
     end; auto.
 Qed.
 Lemma base_val_unflatten_int Γ τi βs :
-  length βs = int_bits τi →
+  length βs = int_width τi →
   base_val_unflatten Γ (intT τi) (BBit <$> βs) = VInt τi (int_of_bits τi βs).
 Proof. intro. unfold base_val_unflatten. by rewrite mapM_fmap_Some by done. Qed.
 Lemma base_val_unflatten_ptr Γ τ pbs p :
@@ -275,15 +275,15 @@ Lemma base_val_unflatten_byte Γ bs :
   length bs = char_bits → base_val_unflatten Γ ucharT bs = VByte bs.
 Proof.
   intros. feed inversion (base_val_unflatten_spec Γ ucharT bs);
-    simplify_equality'; rewrite ?bit_size_of_int, ?int_bits_char; naive_solver.
+    simplify_equality'; rewrite ?bit_size_of_int, ?int_width_char; naive_solver.
 Qed.
 Lemma base_val_unflatten_indet Γ τb bs :
   τb ≠ voidT → Forall (BIndet =) bs → length bs = bit_size_of Γ τb →
   base_val_unflatten Γ τb bs = VIndet τb.
 Proof.
   intros. assert (∀ τi βs,
-    Forall (@BIndet Ti =) (BBit <$> βs) → length βs ≠ int_bits τi).
-  { intros τi βs ??. pose proof (int_bits_pos τi).
+    Forall (@BIndet Ti =) (BBit <$> βs) → length βs ≠ int_width τi).
+  { intros τi βs ??. pose proof (int_width_pos τi).
     destruct βs; decompose_Forall_hyps; lia. }
   assert (∀ τ pbs p,
     Forall (BIndet =) (BPtr <$> pbs) → ptr_of_bits Γ τ pbs ≠ Some p).
@@ -293,7 +293,7 @@ Proof.
   feed inversion (base_val_unflatten_spec Γ τb bs); naive_solver.
 Qed.
 Lemma base_val_unflatten_int_indet Γ τi bs :
-  τi ≠ ucharT%IT → length bs = int_bits τi → ¬(∃ βs, bs = BBit <$> βs) →
+  τi ≠ ucharT%IT → length bs = int_width τi → ¬(∃ βs, bs = BBit <$> βs) →
   base_val_unflatten Γ (intT τi) bs = VIndet (intT τi).
 Proof.
   intros. feed inversion (base_val_unflatten_spec Γ (intT τi) bs);
