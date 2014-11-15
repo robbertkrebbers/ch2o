@@ -4,7 +4,7 @@
 pointer, array, struct, and union types, but omits qualifiers as volatile and
 const. Also variable length arrays are omitted from the formalization. *)
 Require Import String stringmap mapset.
-Require Export type_classes abstract_integers fin_maps.
+Require Export type_classes integers fin_maps.
 
 (** * Tags *)
 (** We use a named approach to represent unions and structs. We consider an
