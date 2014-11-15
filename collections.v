@@ -18,7 +18,9 @@ Section simple_collection.
   Proof. intros. apply elem_of_union. auto. Qed.
   Lemma elem_of_union_r x X Y : x ∈ Y → x ∈ X ∪ Y.
   Proof. intros. apply elem_of_union. auto. Qed.
-  Global Instance: BoundedJoinSemiLattice C.
+  Global Instance: EmptySpec C.
+  Proof. firstorder auto. Qed.
+  Global Instance: JoinSemiLattice C.
   Proof. firstorder auto. Qed.
   Lemma elem_of_subseteq X Y : X ⊆ Y ↔ ∀ x, x ∈ X → x ∈ Y.
   Proof. done. Qed.
@@ -229,9 +231,8 @@ Tactic Notation "esolve_elem_of" := esolve_elem_of eauto.
 Section collection.
   Context `{Collection A C}.
 
-  Global Instance: LowerBoundedLattice C.
+  Global Instance: Lattice C.
   Proof. split. apply _. firstorder auto. solve_elem_of. Qed.
-
   Lemma intersection_singletons x : {[x]} ∩ {[x]} ≡ {[x]}.
   Proof. esolve_elem_of. Qed.
   Lemma difference_twice X Y : (X ∖ Y) ∖ Y ≡ X ∖ Y.
@@ -484,14 +485,12 @@ Section collection_monad.
   Lemma collection_mapM_length {A B} (f : A → M B) l k :
     l ∈ mapM f k → length l = length k.
   Proof. revert l; induction k; esolve_elem_of. Qed.
-
   Lemma elem_of_mapM_fmap {A B} (f : A → B) (g : B → M A) l k :
     Forall (λ x, ∀ y, y ∈ g x → f y = x) l → k ∈ mapM g l → fmap f k = l.
   Proof.
     intros Hl. revert k. induction Hl; simpl; intros;
       decompose_elem_of; f_equal'; auto.
   Qed.
-
   Lemma elem_of_mapM_Forall {A B} (f : A → M B) (P : B → Prop) l k :
     l ∈ mapM f k → Forall (λ x, ∀ y, y ∈ f x → P y) k → Forall P l.
   Proof. rewrite elem_of_mapM. apply Forall2_Forall_l. Qed.

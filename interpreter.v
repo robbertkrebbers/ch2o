@@ -19,7 +19,7 @@ Proof. solve_decision. Defined.
 
 Section interpreter.
 Context (A : architecture).
-Notation Ti := (irank A).
+Notation Ti := (arch_rank A).
 Context {E : Set} `{∀ ε1 ε2 : E, Decision (ε1 = ε2)}.
 Context (e : ∀ `{Env Ti}, env Ti → state Ti → list E).
 

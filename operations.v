@@ -694,7 +694,7 @@ Lemma base_val_unop_typed Γ m op vb τb σb :
 Proof.
   unfold base_val_unop_ok, base_val_unop. intros Hvτb Hσ Hop.
   destruct Hσ as [τi|?|?|?]; inversion Hvτb; simplify_equality'; try done.
-  * typed_constructor. rewrite <-(idempotent (∪) (int_promote τi)).
+  * typed_constructor. rewrite <-(idempotent_L (∪) (int_promote τi)).
     apply int_arithop_typed; auto. by apply int_typed_small.
   * typed_constructor. apply int_of_bits_typed.
     by rewrite fmap_length, int_to_bits_length.

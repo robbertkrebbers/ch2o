@@ -122,17 +122,18 @@ Proof.
   unfold subseteq, map_subseteq, map_Forall2. split; intros Hm i;
     specialize (Hm i); destruct (m1 !! i), (m2 !! i); naive_solver.
 Qed.
-Global Instance: BoundedPreOrder (M A).
+Global Instance: EmptySpec (M A).
+Proof.
+  intros A m. rewrite !map_subseteq_spec.
+  intros i x. by rewrite lookup_empty.
+Qed.
+Global Instance: PartialOrder ((⊆) : relation (M A)).
 Proof.
   repeat split.
-  * intros m. by rewrite map_subseteq_spec.
-  * intros m1 m2 m3. rewrite !map_subseteq_spec. naive_solver.
-  * intros m. rewrite !map_subseteq_spec. intros i x. by rewrite lookup_empty.
-Qed.
-Global Instance : PartialOrder (@subseteq (M A) _).
-Proof.
-  split; [apply _ |]. intros ??. rewrite !map_subseteq_spec.
-  intros ??. apply map_eq; intros i. apply option_eq. naive_solver.
+  * intros m; rewrite !map_subseteq_spec; naive_solver.
+  * intros m1 m2 m3; rewrite !map_subseteq_spec; naive_solver.
+  * intros m1 m2; rewrite !map_subseteq_spec.
+    intros; apply map_eq; intros i; apply option_eq; naive_solver.
 Qed.
 Lemma lookup_weaken {A} (m1 m2 : M A) i x :
   m1 !! i = Some x → m1 ⊆ m2 → m2 !! i = Some x.

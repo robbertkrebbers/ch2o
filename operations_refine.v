@@ -169,7 +169,7 @@ Proof.
       base_val_refine_typed_r, base_val_unop_ok_refine. }
   destruct Hvτb; inversion Hvb as [| | | |p1 p2 ? Hp| | | |];
     simplify_equality'; try done.
-  * refine_constructor. rewrite <-(idempotent (∪) (int_promote τi)).
+  * refine_constructor. rewrite <-(idempotent_L (∪) (int_promote τi)).
     apply int_arithop_typed; auto. by apply int_typed_small.
   * refine_constructor. apply int_of_bits_typed.
     by rewrite fmap_length, int_to_bits_length.

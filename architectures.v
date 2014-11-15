@@ -2,26 +2,42 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export architecture_spec.
 
-Definition x86 := {|
-  big_endian := false;
-  char_bits_minus8 := 0;
-  char_signedness := Signed;
-  short_bytes_log2 := 1;
-  int_bytes_log2 := 2;
-  long_bytes_log2 := 2;
-  longlong_bytes_log2 := 3;
-  ptr_bytes_log2 := 2;
-  align_minus n := n - 2
-|}.
+Definition x86 : architecture.
+Proof.
+ refine {|
+  arch_big_endian := false;
+  arch_char_bits := 8;
+  arch_char_signedness := Signed;
+  arch_size k :=
+    match k with
+    | CharRank => 1 | ShortRank => 2 | IntRank | LongRank => 4
+    | LongLongRank => 8
+    end;
+  arch_align k :=
+    match k with
+    | CharRank => 1 | ShortRank => 2 | IntRank | LongRank => 4
+    | LongLongRank => 4
+    end;
+  arch_ptr_rank := LongRank
+ |}; by apply (bool_decide_unpack _); vm_compute.
+Defined.
 
-Definition x86_64 := {|
-  big_endian := false;
-  char_bits_minus8 := 0;
-  char_signedness := Signed;
-  short_bytes_log2 := 1;
-  int_bytes_log2 := 2;
-  long_bytes_log2 := 2;
-  longlong_bytes_log2 := 3;
-  ptr_bytes_log2 := 3;
-  align_minus n := n - 3
-|}.
+Definition x86_64 : architecture.
+Proof.
+ refine {|
+  arch_big_endian := false;
+  arch_char_bits := 8;
+  arch_char_signedness := Signed;
+  arch_size k :=
+    match k with
+    | CharRank => 1 | ShortRank => 2 | IntRank => 4
+    | LongRank | LongLongRank => 8
+    end;
+  arch_align k :=
+    match k with
+    | CharRank => 1 | ShortRank => 2 | IntRank => 4
+    | LongRank | LongLongRank => 8
+    end;
+  arch_ptr_rank := LongRank
+ |}; by apply (bool_decide_unpack _); vm_compute.
+Defined.

@@ -1,80 +1,116 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export type_system.
-Require Import natural_type_environment.
+Require Export type_environment.
+Require Import finite natural_type_environment.
+
+Inductive c_rank :=
+  CharRank | ShortRank | IntRank | LongRank | LongLongRank.
+Instance c_rank_subseteq : SubsetEq c_rank := λ k1 k2,
+  match k1, k2 return bool with
+  | CharRank, _ => true
+  | ShortRank, (ShortRank | IntRank | LongRank | LongLongRank) => true
+  | IntRank, (IntRank | LongRank | LongLongRank) => true
+  | LongRank, (LongRank | LongLongRank) => true
+  | LongLongRank, LongLongRank => true
+  | _, _ => false
+  end.
+Instance c_rank_eq_dec (k1 k2 : c_rank) : Decision (k1 = k2).
+Proof. solve_decision. Defined.
+Program Instance c_rank_finite : Finite c_rank := {
+  enum := [ CharRank ; ShortRank ; IntRank ; LongRank ; LongLongRank ]
+}.
+Next Obligation. by apply (bool_decide_unpack _). Qed.
+Next Obligation. by intros []; apply (bool_decide_unpack _). Qed.
+Instance c_rank_subseteq_dec (k1 k2 : c_rank) : Decision (k1 ⊆ k2).
+Proof. solve_decision. Defined.
+Instance c_rank_totalorder : TotalOrder ((⊆) : relation c_rank).
+Proof. by repeat split; red; apply (bool_decide_unpack _); vm_compute. Qed.
 
 Record architecture := Architecture {
-  big_endian : bool;
-  char_bits_minus8 : nat;
-  char_signedness : signedness;
-  short_bytes_log2 : nat;
-  int_bytes_log2 : nat;
-  long_bytes_log2 : nat;
-  longlong_bytes_log2 : nat;
-  ptr_bytes_log2 : nat;
-  align_minus : nat → nat
+  arch_big_endian : bool;
+  arch_char_bits : nat;
+  arch_char_signedness : signedness;
+  arch_size : c_rank → nat; (* size in bytes *)
+  arch_align : c_rank → nat; (* align in bytes *)
+  arch_ptr_rank : c_rank;
+  arch_char_bits_ge_8 : 8 ≤ arch_char_bits;
+  arch_size_char : arch_size CharRank = 1;
+  arch_size_preserving k1 k2 : k1 ⊆ k2 → arch_size k1 ≤ arch_size k2;
+  arch_align_size k : (arch_align k | arch_size k)
 }.
 
-Inductive irank (A : architecture) : Set := IKind { ibytes_log2 : nat }.
-Arguments ibytes_log2 {_} _.
-Instance irank_eq_dec {A} (k1 k2 : irank A) : Decision (k1 = k2).
+Inductive arch_rank (A : architecture) := ARank { arch_rank_car :> c_rank }.
+Arguments ARank {_} _.
+Instance arch_rank_eq_dec {A} (k1 k2 : arch_rank A) : Decision (k1 = k2).
 Proof. solve_decision. Defined.
+Program Instance arch_rank_finite {A} : Finite (arch_rank A) := {
+  enum := ARank <$> enum c_rank
+}.
+Next Obligation. by intros; apply (bool_decide_unpack _). Qed.
+Next Obligation. by intros ? []; apply (bool_decide_unpack _). Qed.
 
 Section architecture.
 Context (A : architecture).
 
-Instance: IntCoding (irank A) := {
-  char_rank := IKind A 0;
-  char_signedness := char_signedness A;
-  short_rank := IKind A (short_bytes_log2 A);
-  int_rank := IKind A (int_bytes_log2 A);
-  long_rank := IKind A (long_bytes_log2 A);
-  longlong_rank := IKind A (longlong_bytes_log2 A);
-  ptr_rank := IKind A (ptr_bytes_log2 A);
-  char_bits := char_bits_minus8 A + 8;
-  rank_size := λ k, 2 ^ ibytes_log2 k;
-  endianize := λ _, if big_endian A then reverse else id;
-  deendianize := λ _, if big_endian A then reverse else id
+Instance arch_int_coding: IntCoding (arch_rank A) := {
+  char_rank := ARank CharRank;
+  char_signedness := arch_char_signedness A;
+  short_rank := ARank ShortRank;
+  int_rank := ARank IntRank;
+  long_rank := ARank LongRank;
+  longlong_rank := ARank LongLongRank;
+  ptr_rank := ARank (arch_ptr_rank A);
+  char_bits := arch_char_bits A;
+  rank_size := arch_size A;
+  rank_subseteq k1 k2 := (k1:c_rank) ⊆ (k2:c_rank);
+  endianize := λ _, if arch_big_endian A then reverse else id;
+  deendianize := λ _, if arch_big_endian A then reverse else id
 }.
-Instance: IntEnv (irank A) := {
-  int_arithop_ok op x τ1 y τ2 :=
-    let τ' := int_promote τ1 ∪ int_promote τ2 in
-    int_pre_arithop_ok op (int_pre_cast τ' x) (int_pre_cast τ' y) τ';
-  int_arithop op x τ1 y τ2 :=
-    let τ' := int_promote τ1 ∪ int_promote τ2 in
-    int_pre_arithop op (int_pre_cast τ' x) (int_pre_cast τ' y) τ';
-  int_shiftop_ok op x τ1 y τ2 :=
-    let τ' := int_promote τ1 in int_pre_shiftop_ok op (int_pre_cast τ' x) y τ';
-  int_shiftop op x τ1 y τ2 :=
-    let τ' := int_promote τ1 in int_pre_shiftop op (int_pre_cast τ' x) y τ';
+Instance arch_int_env: IntEnv (arch_rank A) := {
+  int_arithop_ok op x τi1 y τi2 :=
+    let τi := int_promote τi1 ∪ int_promote τi2 in
+    int_pre_arithop_ok op (int_pre_cast τi x) (int_pre_cast τi y) τi;
+  int_arithop op x τi1 y τi2 :=
+    let τi := int_promote τi1 ∪ int_promote τi2 in
+    int_pre_arithop op (int_pre_cast τi x) (int_pre_cast τi y) τi;
+  int_shiftop_ok op x τi1 y τi2 :=
+    let τi := int_promote τi1 in
+    int_pre_shiftop_ok op (int_pre_cast τi x) y τi;
+  int_shiftop op x τi1 y τi2 :=
+    let τi := int_promote τi1 in
+    int_pre_shiftop op (int_pre_cast τi x) y τi;
   int_cast_ok := int_pre_cast_ok;
   int_cast := int_pre_cast
 }.
-Instance: IntCodingSpec (irank A).
+Instance: IntCodingSpec (arch_rank A).
 Proof.
   split.
-  * unfold char_bits; simpl; lia.
-  * done.
-  * unfold rank_size; simpl. intros. by apply Nat.neq_0_lt_0, Nat.pow_nonzero.
-  * unfold rank_size; intros [i] [j] ?; simplify_equality'; f_equal.
-    apply Nat.pow_inj_r with 2; lia.
+  * by apply arch_char_bits_ge_8.
+  * by apply arch_size_char.
+  * intros [k1] [k2] ?. by apply Nat2Z.inj_le, arch_size_preserving.
+  * by repeat split; red; apply (bool_decide_unpack _); vm_compute.
+  * by intros [].
+  * by apply (bool_decide_unpack _).
+  * by apply (bool_decide_unpack _).
+  * by apply (bool_decide_unpack _).
+  * by apply (bool_decide_unpack _).
   * intros. unfold endianize; simpl.
-    by destruct (big_endian _); simpl; rewrite ?reverse_Permutation.
+    by destruct (arch_big_endian _); simpl; rewrite ?reverse_Permutation.
   * intros. unfold deendianize, endianize; simpl.
-    by destruct (big_endian _); simpl; rewrite ?reverse_involutive.
+    by destruct (arch_big_endian _); simpl; rewrite ?reverse_involutive.
   * intros. unfold deendianize, endianize; simpl.
-    by destruct (big_endian _); simpl; rewrite ?reverse_involutive.
+    by destruct (arch_big_endian _); simpl; rewrite ?reverse_involutive.
 Qed.
-Instance: IntEnvSpec (irank A).
+Instance: IntEnvSpec (arch_rank A).
 Proof.
   split.
   * apply _.
   * done.
   * intros. apply int_pre_arithop_typed; auto.
-    + apply int_pre_cast_typed; auto.
-      by apply int_union_pre_cast_ok_l, int_promote_typed.
-    + apply int_pre_cast_typed; auto.
-      by apply int_union_pre_cast_ok_r, int_promote_typed.
+    + eapply int_pre_cast_typed, int_pre_cast_ok_subseteq,
+        union_subseteq_l; eauto using int_promote_typed.
+    + eapply int_pre_cast_typed, int_pre_cast_ok_subseteq,
+        union_subseteq_r; eauto using int_promote_typed.
   * done.
   * done.
   * intros. eapply int_pre_shiftop_typed; eauto.
@@ -87,44 +123,31 @@ Proof.
   * done.
 Qed.
 
-Let ptr_size (_ : type (irank A)) : nat := 2 ^ ptr_bytes_log2 A.
-Let align_base (τb : base_type (irank A)) : nat :=
+Let ptr_size (_ : type (arch_rank A)) : nat := rank_size ptr_rank.
+Let align_base (τb : base_type (arch_rank A)) : nat :=
   match τb with
   | voidT => 1
-  | intT τi => let n := ibytes_log2 (rank τi) in 2 ^ (n - align_minus A n)
-  | τ.* => let n := ptr_bytes_log2 A in 2 ^ (n - align_minus A n)
+  | intT τi => arch_align A (rank τi)
+  | τ.* => arch_align A (arch_ptr_rank A)
   end%BT.
-Definition align_of : env (irank A) → type (irank A) → nat :=
+Definition align_of : env (arch_rank A) → type (arch_rank A) → nat :=
   natural_align_of align_base.
-Global Instance architecture_env : Env (irank A) :=
+Global Instance arch_env : Env (arch_rank A) :=
   natural_env ptr_size align_base.
 
 Let ptr_size_ne_0 τ : ptr_size τ ≠ 0.
-Proof. by apply Nat.pow_nonzero. Qed.
+Proof. apply rank_size_ne_0. Qed.
 Let align_void : align_base voidT = 1.
 Proof. done. Qed.
 Let align_int_divide τi : (align_base (intT τi) | rank_size (rank τi)).
-Proof.
-  unfold rank_size; simpl. set (n:=ibytes_log2 (rank τi)).
-  destruct (decide (align_minus A n ≤ n)).
-  { rewrite <-(Nat.sub_add (align_minus A n) n) at 3 by done.
-    rewrite Nat.pow_add_r. by apply Nat.divide_factor_l. }
-  rewrite not_le_minus_0 by done; apply Nat.divide_1_l.
-Qed.
-Let align_ptr_divide τ : (align_base (τ.*) | ptr_size τ).
-Proof.
-  unfold ptr_size; simpl. set (n:=ptr_bytes_log2 A).
-  destruct (decide (align_minus A n ≤ n)).
-  { rewrite <-(Nat.sub_add (align_minus A n) n) at 3 by done.
-    rewrite Nat.pow_add_r. by apply Nat.divide_factor_l. }
-  rewrite not_le_minus_0 by done; apply Nat.divide_1_l.
-Qed.
-
-Global Instance: EnvSpec (irank A).
+Proof. by apply arch_align_size. Qed.
+Let align_ptr_divide τ : (align_base (τ.* ) | ptr_size τ).
+Proof. by apply arch_align_size. Qed.
+Global Instance: EnvSpec (arch_rank A).
 Proof. by apply natural_env_spec. Qed.
 Lemma align_of_divide Γ τ : ✓ Γ → ✓{Γ} τ → (align_of Γ τ | size_of Γ τ).
 Proof. by apply natural_align_of_divide. Qed.
-Lemma architecture_field_offset Γ τs i τ :
+Lemma arch_field_offset Γ τs i τ :
   ✓ Γ → ✓{Γ}* τs → τs !! i = Some τ → (align_of Γ τ | field_offset Γ τs i).
 Proof. by apply natural_field_offset. Qed.
 End architecture.

@@ -77,6 +77,10 @@ Proof. intros. destruct (Nat_mul_split_l n x2 x1 y2 y1); auto with lia. Qed.
 Notation lcm := Nat.lcm.
 Notation divide := Nat.divide.
 Notation "( x | y )" := (divide x y) : nat_scope.
+Instance divide_dec x y : Decision (x | y).
+Proof.
+  refine (cast_if (decide (lcm x y = y))); by rewrite Nat.divide_lcm_iff.
+Defined.
 Instance: PartialOrder divide.
 Proof.
   repeat split; try apply _. intros ??. apply Nat.divide_antisym_nonneg; lia.

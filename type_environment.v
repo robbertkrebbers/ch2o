@@ -15,7 +15,7 @@ Class Env (Ti : Set) := {
 Class EnvSpec (Ti : Set) `{Env Ti} := {
   int_env_spec :>> IntEnvSpec Ti;
   size_of_ptr_ne_0 Γ τ : size_of Γ (τ.*) ≠ 0;
-  size_of_int Γ τ : size_of Γ (intT τ) = rank_size (rank τ);
+  size_of_int Γ τi : size_of Γ (intT τi) = rank_size (rank τi);
   size_of_void Γ : size_of Γ voidT = 1;
   size_of_array Γ τ n : size_of Γ (τ.[n]) = n * size_of Γ τ;
   size_of_struct Γ s τs :

@@ -846,7 +846,7 @@ let decls_of_cabs x =
 let decls_of_file x = decls_of_cabs (cabs_of_file x);;
 
 exception CH2O_error of string;;
-exception CH2O_undef of irank undef_state;;
+exception CH2O_undef of arch_rank undef_state;;
 exception CH2O_exited of num;;
 
 let event_of_state env tenv x =

@@ -177,8 +177,8 @@ Section enc_finite.
 End enc_finite.
 
 Section bijective_finite.
-  Context `{Finite A} `{∀ x y : B, Decision (x = y)} (f : A → B) (g : B → A).
-  Context `{!Injective (=) (=) f} `{!Cancel (=) f g}.
+  Context `{Finite A, ∀ x y : B, Decision (x = y)} (f : A → B) (g : B → A).
+  Context `{!Injective (=) (=) f, !Cancel (=) f g}.
 
   Program Instance bijective_finite: Finite B := {| enum := f <$> enum A |}.
   Next Obligation. apply (NoDup_fmap_2 _), NoDup_enum. Qed.
@@ -215,7 +215,7 @@ Next Obligation. intros [|]. left. right; left. Qed.
 Lemma bool_card : card bool = 2.
 Proof. done. Qed.
 
-Program Instance sum_finite `{Finite A} `{Finite B} : Finite (A + B)%type :=
+Program Instance sum_finite `{Finite A, Finite B} : Finite (A + B)%type :=
   {| enum := (inl <$> enum A) ++ (inr <$> enum B) |}.
 Next Obligation.
   intros. apply NoDup_app; split_ands.
@@ -227,10 +227,10 @@ Next Obligation.
   intros ?????? [x|y]; rewrite elem_of_app, !elem_of_list_fmap;
     eauto using @elem_of_enum.
 Qed.
-Lemma sum_card `{Finite A} `{Finite B} : card (A + B) = card A + card B.
+Lemma sum_card `{Finite A, Finite B} : card (A + B) = card A + card B.
 Proof. unfold card. simpl. by rewrite app_length, !fmap_length. Qed.
 
-Program Instance prod_finite `{Finite A} `{Finite B} : Finite (A * B)%type :=
+Program Instance prod_finite `{Finite A, Finite B} : Finite (A * B)%type :=
   {| enum := foldr (λ x, (pair x <$> enum B ++)) [] (enum A) |}.
 Next Obligation.
   intros ??????. induction (NoDup_enum A) as [|x xs Hx Hxs IH]; simpl.
