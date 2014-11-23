@@ -68,8 +68,6 @@ Definition Some_dec {A} (x : option A) : { a | x = Some a } + { x = None } :=
   | Some a => inleft (a ↾ eq_refl _)
   | None => inright eq_refl
   end.
-Instance None_dec {A} (x : option A) : Decision (x = None) :=
-  match x with Some x => right (Some_ne_None x) | None => left eq_refl end.
 
 Lemma eq_None_not_Some {A} (x : option A) : x = None ↔ ¬is_Some x.
 Proof. destruct x; unfold is_Some; naive_solver. Qed.
