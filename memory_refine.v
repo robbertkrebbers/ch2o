@@ -299,7 +299,7 @@ Proof.
     as (?&w2&τ''&?&?&?&Hr); auto; specialize (Hr I); simplify_type_equality'.
   exists w2. rewrite addr_is_top_array_alt by eauto using addr_refine_typed_r.
   erewrite <-addr_ref_byte_refine, Ha2, (right_id_L [] (++)), Ha1 by eauto.
-  split_ands; eauto using pbits_refine_kind_subseteq, ctree_flatten_refine.
+  split_ands; eauto using pbits_refine_perm_1, ctree_flatten_refine.
   exists τ' n; split_ands; eauto using addr_strict_refine.
 Qed.
 Lemma mem_freeable_index_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 τ :

@@ -71,6 +71,13 @@ Proof. intros ? (?&?&[]&[]); repeat split; eauto using bit_refine_weaken. Qed.
 Lemma pbits_refine_perm Γ α f Γm1 Γm2 xbs1 xbs2 :
   xbs1 ⊑{Γ,α,f@Γm1↦Γm2}* xbs2 → tagged_perm <$> xbs1 = tagged_perm <$> xbs2.
 Proof. induction 1 as [|???? (?&?&?&?)]; f_equal'; auto. Qed.
+Lemma pbits_refine_perm_1 Γ α f Γm1 Γm2 x xbs1 xbs2 :
+  xbs1 ⊑{Γ,α,f@Γm1↦Γm2}* xbs2 → Forall (λ xb, tagged_perm xb = x) xbs1 →
+  Forall (λ xb, tagged_perm xb = x) xbs2.
+Proof.
+  induction 1 as [|[??] [??] ?? (?&?&?&?)]; intros;
+    decompose_Forall_hyps; constructor; auto.
+Qed.
 Lemma pbit_refine_unmapped Γ α f Γm1 Γm2 xb1 xb2 :
   sep_unmapped xb1 → xb1 ⊑{Γ,α,f@Γm1↦Γm2} xb2 → sep_unmapped xb2.
 Proof. destruct xb1, xb2; intros [??] (?&?&[??]&[??]); split; naive_solver. Qed.

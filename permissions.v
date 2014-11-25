@@ -20,13 +20,12 @@ Definition perm_full : perm := inl (LUnlocked (Counter 0 1)).
 Definition perm_token : perm := inl (LUnlocked (Counter (-1) ∅)).
 
 Inductive pkind :=
-  Freeable | Writable | Readable | Locked | Existing.
+  Writable | Readable | Locked | Existing.
 Instance pkind_dec (k1 k2 : pkind) : Decision (k1 = k2).
 Proof. solve_decision. Defined.
 Instance pkind_subseteq : SubsetEq pkind := λ k1 k2,
   match k1, k2 with
-  | _, Freeable => True
-  | (Existing | Readable | Writable | Locked), Writable => True
+  | _, Writable => True
   | (Existing | Readable), Readable => True
   | Existing, Existing => True
   | (Existing | Locked), Locked => True
@@ -50,9 +49,7 @@ Definition perm_kind (x : perm) : option pkind :=
   | inl (LUnlocked (Counter x' y')) =>
      if decide (y' = ∅) then
        if decide (x' = 0) then None else Some Existing
-     else if decide (y' = 1) then
-       if decide (x' = 0) then Some Freeable else Some Writable
-     else Some Readable
+     else if decide (y' = 1) then Some Writable else Some Readable
   | inl (LLocked _) => Some Locked
   | inr x' => if decide (x' = ∅) then None else Some Readable
   end.
@@ -71,8 +68,6 @@ Inductive perm_kind_view : perm → option pkind → Prop :=
   | perm_kind_Readable x' y' :
      y' ≠ ∅ → y' ≠ 1 →
      perm_kind_view (inl (LUnlocked (Counter x' y'))) (Some Readable)
-  | perm_kind_Freeable :
-     perm_kind_view (inl (LUnlocked (Counter 0 1))) (Some Freeable)
   | perm_kind_Writable x' :
      perm_kind_view (inl (LUnlocked (Counter x' 1))) (Some Writable)
   | perm_kind_Writable' x' :
@@ -138,18 +133,17 @@ Lemma perm_splittable_existing x :
   sep_valid x → perm_kind x = Some Existing → sep_splittable x.
 Proof. by destruct (perm_kind_spec x); repeat sep_unfold. Qed.
 
-Lemma perm_kind_full : perm_kind perm_full = Some Freeable.
+Lemma perm_kind_full : perm_kind perm_full = Some Writable.
 Proof. done. Qed.
 Lemma perm_kind_lock x :
   sep_valid x → Some Writable ⊆ perm_kind x →
   perm_kind (perm_lock x) = Some Locked.
 Proof. by destruct (perm_kind_spec x). Qed.
 Lemma perm_kind_half x :
-  sep_valid x →
-  perm_kind (½ x) = match perm_kind x with
-                    | Some (Writable | Freeable) => Some Readable
-                    | _ => perm_kind x
-                    end.
+  sep_valid x → perm_kind (½ x) =
+    match perm_kind x with 
+    | Some Writable => Some Readable | _ => perm_kind x
+    end.
 Proof.
   assert (∀ x', x' / 2 = 0 → x' = 0).
   { intros. by apply Qcmult_integral_l with (/2); rewrite 1?Qcmult_comm. }
@@ -162,28 +156,21 @@ Qed.
 Lemma perm_kind_token : perm_kind perm_token = Some Existing.
 Proof. done. Qed.
 Lemma perm_kind_difference_token x :
-  perm_token ⊂ x →
-  perm_kind (x ∖ perm_token) = match perm_kind x with
-                               | Some Freeable => Some Writable
-                               | _ => perm_kind x
-                               end.
+  perm_token ⊂ x → perm_kind (x ∖ perm_token) =
+    match perm_kind x with
+    | Some Writable => Some Writable | _ => perm_kind x
+    end.
 Proof.
   rewrite strict_spec_alt.
-  destruct (perm_kind_spec x) as [| |y| | |y|y| |]; repeat sep_unfold;
+  destruct (perm_kind_spec x) as [| |y| | |y| |]; repeat sep_unfold;
     unfold perm_kind; simpl; intros [? Hneq]; auto.
   * assert (¬0 ≤ -1) by (by intros []); intuition.
-  * assert (y ≤ -1 → y ≤ 0) by (by intros; transitivity (-1)). 
+  * assert (y ≤ -1 → y ≤ 0) by (by intros; transitivity (-1)).
     assert (y --1 ≠ 0).
     { change 0 with (-1 + 1); rewrite Qcopp_involutive,
         (injective_iff (λ x, x + 1)); contradict Hneq.
       symmetry. unfold perm_token; repeat f_equal; intuition. }
     by rewrite decide_False by done.
   * by change (-0) with 0; rewrite Qcplus_0_r, !decide_False by done.
-  * assert (y --1 = 0 → 0 ≤ y → False).
-    { rewrite (Qcplus_le_mono_r _ _ (--1)). by intros -> []. }
-    by rewrite decide_False by intuition eauto.
-  * assert (y --1 = 0 → 0 ≤ y → False).
-    { rewrite (Qcplus_le_mono_r _ _ (--1)). by intros -> []. }
-    by rewrite decide_False by intuition eauto.
   * by rewrite decide_False by done.
 Qed.

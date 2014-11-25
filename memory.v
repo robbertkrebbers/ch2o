@@ -35,7 +35,7 @@ Section memory_operations.
   Definition mem_freeable (a : addr Ti) (m : mem Ti) : Prop := ∃ w,
     (**i 1.) *) addr_is_top_array a ∧
     (**i 2.) *) cmap_car m !! addr_index a = Some (Obj w true) ∧
-    (**i 3.) *) ctree_Forall (λ xb, Some Freeable ⊆ pbit_kind xb) w.
+    (**i 3.) *) ctree_Forall (λ xb, tagged_perm xb = perm_full) w.
 
   Inductive mem_allocable_list (m : mem Ti) : list index → Prop :=
     | mem_allocable_nil : mem_allocable_list m []
@@ -275,11 +275,11 @@ Proof.
   refine
    match cmap_car m !! addr_index a as x return Decision (∃ w,
      addr_is_top_array a ∧ x = Some (Obj w true)
-     ∧ ctree_Forall (λ xb, Some Freeable ⊆ pbit_kind xb) w)
+     ∧ ctree_Forall (λ xb, tagged_perm xb = perm_full) w)
    with
    | Some (Obj w true) => cast_if_and
       (decide (addr_is_top_array a))
-      (decide (ctree_Forall (λ xb, Some Freeable ⊆ pbit_kind xb) w))
+      (decide (ctree_Forall (λ xb, tagged_perm xb = perm_full) w))
    | _ => right _
    end; abstract naive_solver.
 Defined.
