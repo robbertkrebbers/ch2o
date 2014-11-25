@@ -45,7 +45,7 @@ Ltac sep_unfold :=
   sep_union, difference, sep_difference, half, sep_half; simpl.
 
 Class Separation (A : Type) `{SeparationOps A} : Prop := {
-  sep_inhabited : ∃ x : A, sep_valid x ∧ x ≠ ∅;
+  sep_inhabited : ∃ x : A, sep_valid x ∧ ¬sep_unmapped x;
   sep_disjoint_valid_l (x y : A) : x ⊥ y → sep_valid x;
   sep_union_valid (x y : A) : x ⊥ y → sep_valid (x ∪ y);
   sep_disjoint_empty_l (x : A) : sep_valid x → ∅ ⊥ x;
@@ -139,6 +139,16 @@ Qed.
 Lemma sep_cancel_r' x y z : x ⊥ z → y ⊥ z → x ∪ z = y ∪ z → x = y.
 Proof.
   intros ??. rewrite !(sep_commutative' _ z) by done. by apply sep_cancel_l'.
+Qed.
+Lemma sep_cancel_empty_l x y : x ⊥ y → x ∪ y = y → x = ∅.
+Proof.
+  intros. apply sep_cancel_r' with y;
+    rewrite ?sep_left_id by eauto using sep_disjoint_valid_l;
+    eauto using sep_disjoint_empty_l, sep_disjoint_valid_l.
+Qed.
+Lemma sep_cancel_empty_r x y : x ⊥ y → x ∪ y = x → y = ∅.
+Proof.
+  intro. rewrite sep_commutative' by done. by apply sep_cancel_empty_l.
 Qed.
 Lemma sep_associative_rev x y z : x ⊥ y → x ∪ y ⊥ z → x ∪ y ∪ z = x ∪ (y ∪ z).
 Proof.
@@ -315,6 +325,13 @@ Lemma sep_unmapped_difference_2 x y :
 Proof. intros. by apply (sep_unmapped_difference x y). Qed.
 
 (** ** Properties of the [sep_unshared] predicate *)
+Lemma sep_unshared_empty : ¬sep_unshared ∅.
+Proof.
+  rewrite sep_unshared_spec'; intros [??].
+  destruct (sep_inhabited A) as (x&?&[]); eauto using sep_disjoint_empty_l.
+Qed.
+Lemma sep_unshared_ne_empty x : sep_unshared x → x ≠ ∅.
+Proof. intros ? ->. by apply sep_unshared_empty. Qed.
 Lemma sep_unshared_valid x : sep_unshared x → sep_valid x.
 Proof. rewrite sep_unshared_spec'. by intros [??]. Qed.
 Lemma sep_unshared_unmapped x y : x ⊥ y → sep_unshared x → sep_unmapped y.
@@ -752,15 +769,9 @@ Proof.
     f_equal; eauto using sep_cancel_r'.
 Qed.
 Lemma seps_cancel_empty_l xs ys : xs ⊥* ys → xs ∪* ys = ys → Forall (∅ =) xs.
-Proof.
-  induction 1 as [|x y]; intros; simplify_equality'; constructor; auto.
-  apply sep_cancel_r' with y; rewrite ?sep_left_id;
-    eauto using sep_disjoint_empty_l, sep_disjoint_valid_l.
-Qed.
+Proof. induction 1; naive_solver eauto using sep_cancel_empty_l, eq_sym. Qed.
 Lemma seps_cancel_empty_r xs ys : xs ⊥* ys → xs ∪* ys = xs → Forall (∅ =) ys.
-Proof.
-  intros ?. rewrite seps_commutative by done. by apply seps_cancel_empty_l.
-Qed.
+Proof. induction 1; naive_solver eauto using sep_cancel_empty_r, eq_sym. Qed.
 Lemma seps_reflexive xs : Forall sep_valid xs → xs ⊆* xs.
 Proof. induction 1; simpl; auto using sep_reflexive. Qed.
 Lemma seps_union_subseteq_l xs ys : xs ⊥* ys → xs ⊆* xs ∪* ys.

@@ -102,7 +102,7 @@ Proof.
     eexists (CMap {[fresh ∅, Obj (MUnionAll s [x]) false]}).
     split; [|by intro]. intros o w ?; simplify_map_equality'. split.
     + by constructor; rewrite Forall_singleton.
-    + by inversion_clear 1; decompose_Forall_hyps.
+    + inversion_clear 1; decompose_Forall_hyps; eauto using sep_unmapped_empty.
   * sep_unfold; intros [m1] [m2] Hm o w1; specialize (Hm o); simpl in *.
     intros Hx. rewrite Hx in Hm.
     destruct w1, (m2 !! o) as [[]|]; simpl in *;
@@ -200,5 +200,5 @@ Proof.
       eapply (is_fresh (dom indexset m)), fin_map_dom.elem_of_dom_2; eauto. }
     destruct ({[_]} !! _) eqn:?; simplify_map_equality; split.
     + by constructor; rewrite Forall_singleton.
-    + by inversion_clear 1; decompose_Forall_hyps.
+    + inversion_clear 1; decompose_Forall_hyps; eauto using sep_unmapped_empty.
 Qed.

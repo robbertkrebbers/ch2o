@@ -266,7 +266,7 @@ Lemma pbits_locked_unmapped xbs :
   Forall sep_unmapped xbs → Forall sep_unmapped (pbit_locked <$> xbs).
 Proof.
   assert (∀ x, sep_unmapped x → sep_unmapped (perm_locked x)).
-  { intros [[[]]|]; repeat sep_unfold; naive_solver. }
+  { intros [[[[]]|]|]; repeat sep_unfold; naive_solver. }
   unfold pbit_locked. induction 1 as [|?? []]; csimpl; auto.
 Qed.
 Lemma pbits_locks_unlock βs xbs :

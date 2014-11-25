@@ -18,7 +18,6 @@ Instance bool_separation_ops : SeparationOps bool := {
 }.
 Instance bool_separation : Separation bool.
 Proof.
-  assert (∃ x, x ≠ false) by (by exists true).
   assert (∀ x y : bool, x ⊆ y ↔ ∃ z, y = z ∪ x ∧ z ⊥ x).
   { intros x y. split.
     * exists (if x then false else y).
@@ -29,7 +28,8 @@ Proof.
     intros [_ Hu]; apply (Hu true); compute; intuition. }
   split; unfold Symmetric; auto 1;
     repeat match goal with |- ∀ x : bool, _ => intros [|] end;
-    compute; first [by intuition | naive_solver].
+    compute; try by intuition.
+  exists true; simpl; tauto.
 Qed.
 
 Instance prod_separation_ops `{SeparationOps A, SeparationOps B} :
@@ -79,6 +79,120 @@ Proof.
     intros [[??] Hxy]; split_ands; auto.
     + intros z ?. apply (Hxy (z,∅)); simpl; eauto using @sep_disjoint_empty_r.
     + intros z ?. apply (Hxy (∅,z)); simpl; eauto using @sep_disjoint_empty_r.
+Qed.
+
+Instance sum_separation_ops `{SeparationOps A, SeparationOps B} :
+    SeparationOps (A + B) := {
+  sep_valid x :=
+    match x with inl x => sep_valid x | inr x => sep_valid x ∧ x ≠ ∅ end;
+  sep_subseteq x y :=
+    match x, y with
+    | inl x, inl y => x ⊆ y
+    | inr x, inr y => x ⊆ y ∧ x ≠ ∅
+    | inl x, inr y => x = ∅ ∧ sep_valid y ∧ y ≠ ∅
+    | _, _ => False
+    end;
+  sep_empty := inl ∅;
+  sep_disjoint x y :=
+    match x, y with
+    | inl x, inl y => x ⊥ y
+    | inr x, inr y => x ⊥ y ∧ x ≠ ∅ ∧ y ≠ ∅
+    | inl x, inr y => x = ∅ ∧ sep_valid y ∧ y ≠ ∅
+    | inr x, inl y => sep_valid x ∧ x ≠ ∅ ∧ y = ∅
+    end;
+  sep_union x y :=
+    match x, y with
+    | inl x, inl y => inl (x ∪ y)
+    | inr x, inr y => inr (x ∪ y)
+    | inl x, inr y => inr y
+    | inr x, inl y => inr x
+    end;
+  sep_difference x y :=
+    match x, y with
+    | inl x, inl y => inl (x ∖ y)
+    | inr x, inr y => if decide (x = y) then inl ∅ else inr (x ∖ y)
+    | inl x, inr y => inr y
+    | inr x, inl y => inr x
+    end;
+  sep_splittable x :=
+    match x with
+    | inl x => sep_splittable x | inr x => sep_splittable x ∧ x ≠ ∅
+    end;
+  sep_half x :=
+    match x with inl x => inl (½ x) | inr x => inr (½ x) end;
+  sep_unmapped x :=
+    match x with
+    | inl x => sep_unmapped x | inr x => sep_unmapped x ∧ x ≠ ∅
+    end;
+  sep_unshared x :=
+    match x with inl x => sep_unshared x | inr x => sep_unshared x end
+}.
+Proof.
+  * intros []; apply _.
+  * intros [] []; apply _.
+  * intros [] []; apply _.
+  * intros []; apply _.
+  * intros []; apply _.
+  * intros []; apply _.
+Defined.
+
+Instance sum_separation {A B : Set}
+  `{Separation A, Separation B} : Separation (A + B).
+Proof.
+  split; sep_unfold.
+  * destruct (sep_inhabited A) as (x&?&?). eexists (inl x). naive_solver.
+  * intros [] []; naive_solver
+      eauto using @sep_disjoint_valid_l, @sep_empty_valid.
+  * intros [] []; naive_solver eauto using @sep_union_valid, @sep_positive_l'.
+  * intros []; naive_solver eauto using @sep_disjoint_empty_l.
+  * intros [] ?; f_equal; naive_solver eauto using @sep_left_id.
+  * intros [] []; naive_solver.
+  * intros [] [] ?; f_equal; naive_solver eauto using @sep_commutative'.
+  * intros [] [] []; naive_solver
+      eauto using @sep_disjoint_ll, @sep_positive_l',
+      @sep_disjoint_empty_l, @sep_empty_valid, @sep_disjoint_valid_l.
+  * intros [] [] []; naive_solver
+      eauto using @sep_disjoint_move_l, @sep_positive_l', @sep_disjoint_lr,
+      @sep_left_id, @sep_empty_valid, @sep_union_valid.
+  * intros [] [] [] ??; f_equal; naive_solver eauto using @sep_associative'.
+  * intros [][] ??; f_equal; naive_solver eauto using @sep_positive_l'.
+  * intros [][][] ???; f_equal;
+      naive_solver eauto using @sep_cancel_l', @sep_cancel_empty_r.
+  * intros [] []; naive_solver
+      eauto using @sep_union_subseteq_l', @sep_reflexive.
+  * intros [] [] ?; repeat case_decide; naive_solver
+      eauto using @sep_disjoint_difference', @sep_subseteq_valid_l,
+      @sep_difference_empty_rev, eq_sym.
+  * intros [] [] ?; repeat case_decide; f_equal;
+      naive_solver eauto using @sep_union_difference.
+  * intros []; naive_solver
+      eauto using @sep_splittable_union', @sep_positive_l'.
+  * intros [] []; naive_solver
+      eauto using @sep_splittable_weaken, @sep_splittable_empty.
+  * intros []; naive_solver
+      eauto using @sep_disjoint_half', @sep_half_empty_rev.
+  * intros [] ?; f_equal; naive_solver eauto using @sep_union_half.
+  * intros [] [] ??; f_equal; naive_solver eauto using @sep_union_half_distr'.
+  * intros []; naive_solver auto using @sep_unmapped_valid.
+  * by apply sep_unmapped_empty.
+  * intros [] []; naive_solver
+      eauto using @sep_unmapped_weaken, @sep_unmapped_empty.
+  * intros [] []; naive_solver
+      eauto using @sep_unmapped_union_2', @sep_positive_l'.
+  * intros [x|x].
+    { split.
+      + intros ?; split; auto using @sep_unshared_valid.
+        intros [y|y]; eauto using @sep_unshared_unmapped.
+        by intros [-> ?]; destruct (@sep_unshared_empty A _ _).
+      + rewrite !sep_unshared_spec'; intros [? Hx]; split; intros; auto.
+        by apply (Hx (inl y)). }
+    split.
+    + intros ?; split; auto using @sep_unshared_valid, @sep_unshared_ne_empty.
+      intros []; naive_solver
+        eauto using @sep_unmapped_empty, @sep_unshared_unmapped.
+    + rewrite !sep_unshared_spec'; intros [[] Hx]; split_ands; auto; intros y ?.
+      destruct (decide (y = ∅)) as [->|?]; auto using sep_unmapped_empty.
+      by apply (Hx (inr y)).
 Qed.
 
 Instance Qc_ops: SeparationOps Qc := {
