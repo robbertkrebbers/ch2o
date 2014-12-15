@@ -644,11 +644,14 @@ Proof.
   destruct (memenv_refine_typed_l HΓm (addr_index a1) (addr_index a2)
     r' (addr_type_object a1)) as (?&?&?); eauto using addr_typed_index.
   simplify_type_equality.
-  assert (addr_object_offset Γ a1 + bit_size_of Γ σ ≤ bit_size_of Γ
-    (addr_type_object a1)) as Hlen by eauto using addr_object_offset_lt.
-  erewrite addr_object_offset_alt in Hlen by eauto.
+  assert (ref_object_offset Γ (addr_ref Γ a1) + addr_ref_byte Γ a1 * char_bits +
+    bit_size_of Γ σ ≤ bit_size_of Γ (addr_type_object a1)).
+  { transitivity
+      (ref_object_offset Γ (addr_ref Γ a1) + bit_size_of Γ (addr_type_base a1));
+    eauto using ref_object_offset_size, addr_typed_ref_typed.
+    rewrite <-Nat.add_assoc, <-Nat.add_le_mono_l; eauto using addr_bit_range. }
   destruct (ref_disjoint_object_offset Γ τ' r r' τ
-    (addr_type_object a1)); intuition lia.
+    (addr_type_object a1)); auto; lia.
 Qed.
 Lemma locks_union_refine Γ α f Γm1 Γm2 Ω1 Ω2 Ω1' Ω2' :
   Ω1 ⊑{Γ,α,f@Γm1↦Γm2} Ω2 → Ω1' ⊑{Γ,α,f@Γm1↦Γm2} Ω2' →

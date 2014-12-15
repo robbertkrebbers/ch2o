@@ -203,7 +203,7 @@ Proof.
   simplify_option_equality; naive_solver
     eauto 3 using ctree_lookup_byte_disjoint, ctree_lookup_disjoint.
 Qed.
-Lemma cmap_lookup_subseteq Γ m1 m2 a w1 w2 :
+Lemma cmap_lookup_subseteq Γ m1 m2 a w1 :
   ✓ Γ → m1 ⊆ m2 → m1 !!{Γ} a = Some w1 → ¬ctree_Forall sep_unmapped w1 →
   ∃ w2, m2 !!{Γ} a = Some w2 ∧ w1 ⊆ w2.
 Proof.

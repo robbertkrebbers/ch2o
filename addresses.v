@@ -173,12 +173,14 @@ Lemma addr_dead_weaken Γ Γm1 Γm2 a σ :
   (Γ,Γm1) ⊢ a : σ → index_alive Γm2 (addr_index a) → Γm1 ⇒ₘ Γm2 →
   index_alive Γm1 (addr_index a).
 Proof. intros [] ? []; naive_solver. Qed.
+Lemma addr_type_object_eq Γ Γm a1 a2 σ1 σ2 :
+  (Γ,Γm) ⊢ a1 : σ1 → (Γ,Γm) ⊢ a2 : σ2 → addr_index a1 = addr_index a2 →
+  addr_type_object a1 = addr_type_object a2.
+Proof. by destruct 1, 1; intros; simplify_type_equality'. Qed.
 Global Instance addr_strict_dec Γ a : Decision (addr_strict Γ a).
 Proof. unfold addr_strict; apply _. Defined.
 Global Instance addr_is_obj_dec a : Decision (addr_is_obj a).
 Proof. unfold addr_is_obj; apply _. Defined.
-Global Instance addr_disjoint_dec Γ a1 a2 : Decision (a1 ⊥{Γ} a2).
-Proof. unfold disjointE, addr_disjoint; apply _. Defined.
 Lemma addr_index_freeze β a : addr_index (freeze β a) = addr_index a.
 Proof. by destruct a. Qed.
 Lemma addr_ref_base_freeze β a :
@@ -251,10 +253,23 @@ Proof.
 Qed.
 Lemma addr_byte_range Γ Γm a σ :
   ✓ Γ → (Γ,Γm) ⊢ a : σ → addr_strict Γ a →
-  addr_ref_byte Γ a < size_of Γ (addr_type_base a).
+  addr_ref_byte Γ a + size_of Γ σ ≤ size_of Γ (addr_type_base a).
 Proof.
-  intros. apply Nat.mod_bound_pos; auto with lia.
+  intros. destruct (decide (addr_is_obj a)).
+  { erewrite addr_is_obj_type_base, addr_is_obj_ref_byte by eauto; lia. }
+  erewrite addr_not_obj_size_of by eauto.
+  cut (addr_ref_byte Γ a < size_of Γ (addr_type_base a)); [lia|].
+  apply Nat.mod_bound_pos; auto with lia.
   eapply size_of_pos, addr_typed_type_base_valid; eauto.
+Qed.
+Lemma addr_bit_range Γ Γm a σ :
+  ✓ Γ → (Γ,Γm) ⊢ a : σ → addr_strict Γ a →
+  addr_ref_byte Γ a * char_bits + bit_size_of Γ σ
+    ≤ bit_size_of Γ (addr_type_base a).
+Proof.
+  intros. unfold bit_size_of. rewrite <-Nat.mul_add_distr_r,
+    <-Nat.mul_le_mono_pos_r by auto using char_bits_pos.
+  eauto using addr_byte_range.
 Qed.
 Lemma addr_size_of_weaken Γ1 Γ2 m1 a σ :
   ✓ Γ1 → (Γ1,m1) ⊢ a : σ → Γ1 ⊆ Γ2 → size_of' Γ1 a = size_of' Γ2 a.
@@ -290,21 +305,6 @@ Proof.
   rewrite (Nat.div_mod i (size_of Γ σ')) at 1
     by eauto using size_of_ne_0,ref_typed_type_valid; unfold bit_size_of; lia.
 Qed.
-Lemma addr_object_offset_lt Γ Γm a σ :
-  ✓ Γ → (Γ,Γm) ⊢ a : σ → addr_strict Γ a →
-  addr_object_offset Γ a + bit_size_of Γ σ
-    ≤ bit_size_of Γ (addr_type_object a).
-Proof.
-  intros. erewrite addr_object_offset_alt by eauto. transitivity
-    (ref_object_offset Γ (addr_ref Γ a) + bit_size_of Γ (addr_type_base a));
-    eauto using ref_object_offset_size, addr_typed_ref_typed.
-  rewrite <-Nat.add_assoc, <-Nat.add_le_mono_l.
-  destruct (decide (addr_is_obj a)).
-  * by erewrite addr_is_obj_ref_byte,
-      Nat.mul_0_l, Nat.add_0_l, addr_is_obj_type_base by eauto.
-  * erewrite addr_not_obj_bit_size_of, <-Nat.mul_succ_l by eauto.
-    eapply Nat.mul_le_mono_r, Nat.le_succ_l, addr_byte_range; eauto.
-Qed.
 Lemma addr_top_typed Γ Γm o τ :
   ✓ Γ → Γm ⊢ o : τ → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
   (Γ,Γm) ⊢ addr_top o τ : τ.
@@ -316,13 +316,6 @@ Lemma addr_top_strict Γ o τ : ✓ Γ → ✓{Γ} τ → addr_strict Γ (addr_t
 Proof.
   unfold addr_strict, addr_top; simpl. rewrite Nat.mul_1_r.
   eauto using size_of_pos.
-Qed.
-Lemma addr_top_disjoint Γ Γm o1 o2 τ1 τ2 :
-  Γm ⊢ o1 : τ1 → Γm ⊢ o2 : τ2 → 
-  addr_top o1 τ1 = addr_top o2 τ2 ∨ addr_top o1 τ1 ⊥{Γ} addr_top o2 τ2.
-Proof.
-  intros. destruct (decide (o1 = o2)); simplify_type_equality; auto.
-  by right; left.
 Qed.
 Lemma addr_top_array_typed Γ Γm o τ (n : Z) :
   ✓ Γ → Γm ⊢ o : τ.[Z.to_nat n] → ✓{Γ} τ → Z.to_nat n ≠ 0 →
@@ -366,11 +359,47 @@ Proof.
 Defined.
 
 (** ** Disjointness *)
+Global Instance addr_disjoint_dec Γ a1 a2 : Decision (a1 ⊥{Γ} a2).
+Proof. unfold disjointE, addr_disjoint; apply _. Defined.
 Lemma addr_disjoint_weaken Γ1 Γ2 m1 a1 a2 σ1 σ2 :
   ✓ Γ1 → (Γ1,m1) ⊢ a1 : σ1 → (Γ1,m1) ⊢ a2 : σ2 →
   a1 ⊥{Γ1} a2 → Γ1 ⊆ Γ2 → a1 ⊥{Γ2} a2.
 Proof.
   unfold disjointE, addr_disjoint. intros. by erewrite
     <-!(addr_ref_weaken Γ1 Γ2), <-!(addr_ref_byte_weaken Γ1 Γ2) by eauto.
+Qed.
+Lemma addr_top_disjoint Γ Γm o1 o2 τ1 τ2 :
+  Γm ⊢ o1 : τ1 → Γm ⊢ o2 : τ2 → 
+  addr_top o1 τ1 = addr_top o2 τ2 ∨ addr_top o1 τ1 ⊥{Γ} addr_top o2 τ2.
+Proof.
+  intros. destruct (decide (o1 = o2)); simplify_type_equality; auto.
+  by right; left.
+Qed.
+Lemma addr_disjoint_object_offset Γ Γm a1 a2 σ1 σ2 :
+  ✓ Γ → (Γ,Γm) ⊢ a1 : σ1 → addr_strict Γ a1 →
+  (Γ,Γm) ⊢ a2 : σ2 → addr_strict Γ a2 → a1 ⊥{Γ} a2 →
+  (** 1.) *) addr_index a1 ≠ addr_index a2 ∨
+  (** 2.) *)
+    addr_object_offset Γ a1 + bit_size_of Γ σ1 ≤ addr_object_offset Γ a2 ∨
+  (** 3.) *)
+    addr_object_offset Γ a2 + bit_size_of Γ σ2 ≤ addr_object_offset Γ a1.
+Proof.
+  intros ?????. erewrite !addr_object_offset_alt by eauto.
+  intros [?|[[??]|(?&Hr&?&?&?)]]; auto.
+  { destruct (ref_disjoint_object_offset Γ (addr_type_object a1)
+      (addr_ref Γ a1) (addr_ref Γ a2) (addr_type_base a1) (addr_type_base a2));
+      eauto using addr_typed_ref_typed;
+      erewrite ?(addr_type_object_eq _ _ a1 a2) by eauto;
+      eauto using addr_typed_ref_typed.
+    * feed pose proof (addr_bit_range Γ Γm a1 σ1); auto. right; left; lia.
+    * feed pose proof (addr_bit_range Γ Γm a2 σ2); auto. do 2 right; lia. }
+  erewrite ?addr_not_obj_bit_size_of,
+    <-(ref_object_offset_freeze Γ true (addr_ref Γ a1)), Hr,
+    ref_object_offset_freeze by eauto.
+  destruct (decide (addr_ref_byte Γ a1 < addr_ref_byte Γ a2)).
+  * right; left. rewrite <-Nat.add_assoc, <-Nat.mul_succ_l.
+    apply Nat.add_le_mono_l, Nat.mul_le_mono_nonneg_r; lia.
+  * do 2 right. rewrite <-Nat.add_assoc, <-Nat.mul_succ_l.
+    apply Nat.add_le_mono_l, Nat.mul_le_mono_nonneg_r; lia.
 Qed.
 End addresses.

@@ -881,4 +881,14 @@ Proof.
   intros ?? o i. rewrite elem_of_lock_singleton_typed by eauto.
   intros (->&?&?); eauto using addr_typed_index.
 Qed.
+Lemma lock_singleton_disjoint Γ Γm a1 a2 τ1 τ2 :
+  ✓ Γ → (Γ,Γm) ⊢ a1 : τ1 → addr_strict Γ a1 →
+  (Γ,Γm) ⊢ a2 : τ2 → addr_strict Γ a2 →
+  a1 ⊥{Γ} a2 → lock_singleton Γ a1 ∩ lock_singleton Γ a2 = ∅.
+Proof.
+  intros. apply equiv_empty_L. intros [o i].
+  rewrite elem_of_intersection, !elem_of_lock_singleton_typed by eauto.
+  intros [(->&?&?) (?&?&?)].
+  destruct (addr_disjoint_object_offset Γ Γm a1 a2 τ1 τ2); try done; lia.
+Qed.
 End memory.
