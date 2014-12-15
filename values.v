@@ -947,6 +947,29 @@ Proof.
         rewrite <-?fmap_drop, <-?fmap_take; f_equal'; auto. }
     by erewrite val_unflatten_compound by eauto.
 Qed.
+Lemma to_val_subseteq Γ Γm w1 w2 τ :
+  ✓ Γ → (Γ,Γm) ⊢ w1 : τ → w1 ⊆ w2 →
+  ctree_Forall (not ∘ sep_unmapped) w1 → to_val Γ w1 = to_val Γ w2.
+Proof.
+  intros ? Hw1 Hw. revert w1 w2 Hw τ Hw1.
+  refine (ctree_subseteq_ind_alt _ _ _ _ _ _ _); simpl.
+  * intros; by erewrite pbits_tag_subseteq by eauto.
+  * intros τ ws1 ws2 _ IH τ' Hw1; apply (ctree_typed_inv_l _ _ _ _ _ Hw1);
+      clear τ' Hw1; intros Hws1 _ ?; f_equal.
+    induction IH; decompose_Forall_hyps; f_equal; eauto.
+  * intros s wxbs1 wxbs2 _ IH _ τ' Hw1; apply (ctree_typed_inv_l _ _ _ _ _ Hw1);
+      clear τ' Hw1; intros τs _ Hws1 _ _ _ ?; f_equal.
+    revert τs Hws1; induction IH; intros; decompose_Forall_hyps; f_equal; eauto.
+  * intros s i w1 w2 xbs1 xbs2 _ ? _ _ τ' Hw1;
+      apply (ctree_typed_inv_l _ _ _ _ _ Hw1); clear τ' Hw1.
+    intros; decompose_Forall_hyps; f_equal'; eauto.
+  * intros; by erewrite pbits_tag_subseteq by eauto.
+  * intros s i xs1 w2 xs2 _ Hxs _ _ τ' Hw1;
+      apply (ctree_typed_inv_l _ _ _ _ _ Hw1); clear τ' Hw1.
+    intros. assert (bit_size_of Γ (unionT s) ≠ 0)
+      by eauto using bit_size_of_ne_0, TCompound_valid.
+    destruct Hxs; decompose_Forall_hyps.
+Qed.
 
 (** ** Properties of the [of_val] function *)
 Lemma ctree_flatten_of_val Γ Γm xs v τ :

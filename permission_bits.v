@@ -147,15 +147,6 @@ Proof. induction 1; csimpl; auto using pbit_indetify_valid. Qed.
 Lemma pbits_indetify_idempotent xbs :
   pbit_indetify <$> pbit_indetify <$> xbs = pbit_indetify <$> xbs.
 Proof. by induction xbs; f_equal'. Qed.
-Lemma pbit_indetified_subseteq xb1 xb2 :
-  pbit_indetify xb2 = xb2 → xb1 ⊆ xb2 → pbit_indetify xb1 = xb1.
-Proof. destruct xb1, xb2; intros ? (?&?&?&?); naive_solver. Qed.
-Lemma pbits_indetified_subseteq xbs1 xbs2 :
-  pbit_indetify <$> xbs2 = xbs2 → xbs1 ⊆* xbs2 → pbit_indetify <$> xbs1 = xbs1.
-Proof.
-  induction 2; simplify_equality';
-    f_equal'; eauto using pbit_indetified_subseteq.
-Qed.
 Lemma pbit_indetify_unmapped xb : sep_unmapped xb → pbit_indetify xb = xb.
 Proof. destruct xb; intros [??]; naive_solver. Qed.
 Lemma pbit_unmapped_indetify xb :
@@ -337,4 +328,43 @@ Qed.
 Lemma pbits_locked_mask βs xbs :
   pbit_locked <$> mask pbit_indetify βs xbs = pbit_locked <$> xbs.
 Proof. revert βs. induction xbs; intros [|[] ?]; f_equal'; auto. Qed.
+
+Lemma pbit_tag_subseteq xb1 xb2 :
+  xb1 ⊆ xb2 → ¬sep_unmapped xb1 → tagged_tag xb1 = tagged_tag xb2.
+Proof. intros (?&[[??]|]&?&?); auto; by destruct 1. Qed.
+Lemma pbits_tag_subseteq xbs1 xbs2 :
+  xbs1 ⊆* xbs2 → Forall (not ∘ sep_unmapped) xbs1 →
+  tagged_tag <$> xbs1 = tagged_tag <$> xbs2.
+Proof.
+  induction 1; intros; decompose_Forall_hyps;
+    f_equal'; auto using pbit_tag_subseteq.
+Qed.
+Lemma pbit_kind_subseteq xb1 xb2 : xb1 ⊆ xb2 → pbit_kind xb1 ⊆ pbit_kind xb2.
+Proof. intros [??]; eauto using perm_kind_subseteq. Qed.
+Lemma pbits_kind_subseteq xbs1 xbs2 k :
+  Forall (λ xb, k ⊆ pbit_kind xb) xbs1 → xbs1 ⊆* xbs2 →
+  Forall (λ xb, k ⊆ pbit_kind xb) xbs2.
+Proof.
+  induction 2; decompose_Forall_hyps; constructor; auto.
+  etransitivity; eauto using pbit_kind_subseteq.
+Qed.
+Lemma pbit_indetified_subseteq xb1 xb2 :
+  pbit_indetify xb2 = xb2 → xb1 ⊆ xb2 → pbit_indetify xb1 = xb1.
+Proof. destruct xb1, xb2; intros ? (?&?&?&?); naive_solver. Qed.
+Lemma pbits_indetified_subseteq xbs1 xbs2 :
+  pbit_indetify <$> xbs2 = xbs2 → xbs1 ⊆* xbs2 → pbit_indetify <$> xbs1 = xbs1.
+Proof.
+  induction 2; simplify_equality';
+    f_equal'; eauto using pbit_indetified_subseteq.
+Qed.
+Lemma pbit_lock_disjoint xb1 xb2 :
+  Some Writable ⊆ pbit_kind xb1 → xb1 ⊥ xb2 → pbit_lock xb1 ⊥ xb2.
+Proof.
+  destruct xb1 as [x1 b1], xb2 as [x2 b2]; intros ? (?&?&?&?);
+    split_ands'; simplify_equality'; intuition auto using
+    perm_lock_disjoint, perm_lock_mapped.
+  destruct (perm_mapped x1); auto. by transitivity (Some Writable).
+Qed.
+Lemma pbit_lock_union xb1 xb2 : pbit_lock (xb1 ∪ xb2) = pbit_lock xb1 ∪ xb2.
+Proof. sep_unfold. destruct xb1, xb2; f_equal'; auto using perm_lock_union. Qed.
 End permission_bits.

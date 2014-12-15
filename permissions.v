@@ -156,10 +156,7 @@ Qed.
 Lemma perm_kind_token : perm_kind perm_token = Some Existing.
 Proof. done. Qed.
 Lemma perm_kind_difference_token x :
-  perm_token ⊂ x → perm_kind (x ∖ perm_token) =
-    match perm_kind x with
-    | Some Writable => Some Writable | _ => perm_kind x
-    end.
+  perm_token ⊂ x → perm_kind (x ∖ perm_token) = perm_kind x.
 Proof.
   rewrite strict_spec_alt.
   destruct (perm_kind_spec x) as [| |y| | |y| |]; repeat sep_unfold;
@@ -174,3 +171,25 @@ Proof.
   * by change (-0) with 0; rewrite Qcplus_0_r, !decide_False by done.
   * by rewrite decide_False by done.
 Qed.
+Lemma perm_kind_subseteq x1 x2 : x1 ⊆ x2 → perm_kind x1 ⊆ perm_kind x2.
+Proof.
+  destruct x1 as [[[x1 y1]|[x1 y1]]|x1], x2 as [[[x2 y2]|[x2 y2]]|x2];
+    unfold perm_kind; repeat sep_unfold;
+    repeat case_decide; naive_solver eauto using Qcle_antisym.
+Qed.
+Lemma perm_lock_disjoint x1 x2 :
+  Some Writable ⊆ perm_kind x1 → x1 ⊥ x2 → perm_lock x1 ⊥ x2.
+Proof.
+  assert (¬2 ≤ 1) by (by intros []).
+  assert (∀ x, 0 ≤ x → 1 + x ≤ 1 → x = 0).
+  { intros x ? Hx. apply (Qcplus_le_mono_l x 0 1) in Hx.
+    auto using Qcle_antisym. }
+  destruct (perm_kind_spec x1), x2 as [[[x2 y2]|[x2 y2]]|];
+    repeat sep_unfold; intuition; simplify_equality'; try done.
+  * assert (y2 = 0) as -> by auto.
+    rewrite (Qcplus_le_mono_r _ _ x2), Qcplus_0_l. eauto using Qcle_trans.
+  * assert (y2 = 0) as -> by auto.
+    rewrite (Qcplus_le_mono_r _ _ x2), Qcplus_0_l. eauto using Qcle_trans.
+Qed.
+Lemma perm_lock_union x1 x2 : perm_lock (x1 ∪ x2) = perm_lock x1 ∪ x2.
+Proof. by destruct x1 as [[]|], x2 as [[]|]. Qed.

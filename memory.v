@@ -367,6 +367,17 @@ Proof.
   destruct (m !!{Γ} a) as [w|] eqn:?; simplify_option_equality.
   eapply to_val_frozen, cmap_lookup_Some; eauto.
 Qed.
+Lemma mem_lookup_subseteq Γ Γm m1 m2 a v1 :
+  ✓ Γ → ✓{Γ,Γm} m1 → m1 ⊆ m2 → m1 !!{Γ} a = Some v1 → m2 !!{Γ} a = Some v1.
+Proof.
+  unfold lookupE, mem_lookup; intros.
+  destruct (m1 !!{Γ} a) as [w1|] eqn:?; simplify_option_equality.
+  destruct (cmap_lookup_subseteq Γ m1 m2 a w1) as (w2&->&?); simpl; auto.
+  { eapply ctree_Forall_not; eauto using cmap_lookup_Some, pbits_mapped. }
+  by erewrite option_guard_True, (to_val_subseteq _ _ w1 w2)
+    by eauto using cmap_lookup_Some, pbits_mapped,
+    pbits_kind_subseteq, @ctree_flatten_subseteq.
+Qed.
 
 (** Properties of the [force] function *)
 Lemma mem_force_memenv_of Γ Γm m a :
@@ -428,10 +439,18 @@ Proof.
   destruct (m1 !!{Γ} a1) as [w1|] eqn:?; simplify_option_equality.
   eapply cmap_alter_disjoint; eauto using ctree_Forall_not, pbits_mapped.
 Qed.
+Lemma mem_force_disjoint_le Γ Γm m ms a v τ :
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : τ → is_Some (m !!{Γ} a) →
+  m :: ms ⊆⊥ mem_force Γ a m :: ms.
+Proof.
+  intros. apply sep_disjoint_cons_le_inj; intros m'.
+  rewrite !sep_disjoint_list_double, !(symmetry_iff _ m').
+  eauto using mem_force_disjoint.
+Qed.
 Lemma mem_force_union Γ Γm1 m1 m2 a1 v1 τ1 :
   ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
   (Γ,Γm1) ⊢ a1 : τ1 → is_Some (m1 !!{Γ} a1) →
-  mem_force Γ a1 (m1 ∪ m2) =  mem_force Γ a1 m1 ∪ m2.
+  mem_force Γ a1 (m1 ∪ m2) = mem_force Γ a1 m1 ∪ m2.
 Proof.
   unfold lookupE, mem_lookup, mem_force. intros ???? [??].
   destruct (m1 !!{Γ} a1) as [w1|] eqn:?; simplify_option_equality.
@@ -459,6 +478,15 @@ Proof.
    | inright _ => right _
    end; abstract (unfold mem_writable; naive_solver).
 Defined.
+Lemma mem_writable_subseteq Γ Γm m1 m2 a v1 :
+  ✓ Γ → ✓{Γ,Γm} m1 → m1 ⊆ m2 → mem_writable Γ a m1 → mem_writable Γ a m2.
+Proof.
+  intros ??? (w1&?&?).
+  destruct (cmap_lookup_subseteq Γ m1 m2 a w1) as (w2&?&?); auto.
+  { eauto using ctree_Forall_not,
+      cmap_lookup_Some, pbits_mapped, pbits_kind_weaken. }
+  exists w2; eauto using pbits_kind_subseteq, @ctree_flatten_subseteq.
+Qed.
 Lemma of_val_flatten_typed Γ Γm w v τ :
   ✓ Γ → (Γ,Γm) ⊢ w : τ → (Γ,Γm) ⊢ v : τ →
   ctree_Forall (λ xb, Some Writable ⊆ pbit_kind xb) w →
@@ -609,6 +637,14 @@ Proof.
   { eapply pbits_mapped; eauto using pbits_kind_weaken. }
   eapply cmap_alter_disjoint; eauto using of_val_flatten_typed,
     of_val_flatten_mapped, of_val_disjoint, ctree_Forall_not.
+Qed.
+Lemma mem_insert_disjoint_le Γ Γm m ms a v τ :
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
+  m :: ms ⊆⊥ <[a:=v]{Γ}>m :: ms.
+Proof.
+  intros. apply sep_disjoint_cons_le_inj; intros m'.
+  rewrite !sep_disjoint_list_double, !(symmetry_iff _ m').
+  eauto using mem_insert_disjoint.
 Qed.
 Lemma mem_insert_union Γ Γm1 m1 m2 a1 v1 τ1 :
   ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
