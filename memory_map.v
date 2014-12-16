@@ -35,12 +35,12 @@ Section operations.
     '(w',_) ← cmap_car m !! addr_index a ≫= maybe2 Obj;
     w ← lookupE Γ (addr_ref Γ a) w';
     if decide (addr_is_obj a) then Some w else
-      guard (ctree_unshared w ∧ type_of a ≠ voidT); w !!{Γ} (addr_ref_byte Γ a).
+    guard (ctree_unshared w); w !!{Γ} (addr_ref_byte Γ a).
   Definition cmap_alter (Γ : env Ti) (g : mtree Ti → mtree Ti)
       (a : addr Ti) (m : mem Ti) : mem Ti :=
     let (m) := m in
-    let G := if decide (addr_is_obj a) then g
-             else ctree_alter_byte Γ g (addr_ref_byte Γ a) in
+    let G := if decide (addr_is_obj a) then g else
+             ctree_alter_byte Γ g (addr_ref_byte Γ a) in
     CMap $
       alter (cmap_elem_map (ctree_alter Γ G (addr_ref Γ a))) (addr_index a) m.
 End operations.
@@ -150,12 +150,13 @@ Proof.
   destruct (m !! addr_index a) as [[|w' β]|]; simplify_equality'.
   destruct (w' !!{Γ} addr_ref Γ a) as [w''|] eqn:?; simplify_equality'.
   erewrite ctree_lookup_le by eauto using ref_freeze_le_r; csimpl.
-  by rewrite (decide_iff _ _ _ _ (addr_is_obj_freeze _ _)), addr_type_of_freeze.
+  by rewrite (decide_iff _ _ _ _ (addr_is_obj_freeze _ _)).
 Qed.
 Lemma cmap_lookup_typed Γ Γm m a w σ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : σ → m !!{Γ} a = Some w → (Γ,Γm) ⊢ w : σ.
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : σ → σ ≠ voidT →
+  m !!{Γ} a = Some w → (Γ,Γm) ⊢ w : σ.
 Proof.
-  destruct m as [m]; simpl; intros ? Hm Ha ?.
+  destruct m as [m]; simpl; intros ? Hm Ha ??.
   case_option_guard; simplify_equality'.
   destruct (m !! addr_index a) as [[|w' β]|] eqn:Hw; simplify_equality'.
   destruct (w' !!{Γ} addr_ref Γ a) as [w''|] eqn:?; simplify_equality'.
@@ -168,8 +169,7 @@ Proof.
     assert (Γm ⊢ addr_index a : addr_type_object a)
       by eauto using addr_typed_index; simplify_type_equality.
     eauto using ref_set_offset_typed_unique, addr_typed_ref_base_typed.
-  * erewrite addr_not_obj_type by intuition eauto.
-    eauto using ctree_lookup_byte_typed.
+  * erewrite addr_not_obj_type by eauto. eauto using ctree_lookup_byte_typed.
 Qed.
 Lemma cmap_lookup_strict Γ m a w : m !!{Γ} a = Some w → addr_strict Γ a.
 Proof. by destruct m as [m]; intros; simplify_option_equality. Qed.
@@ -213,10 +213,10 @@ Proof.
   destruct (m1 !! (addr_index a)) as [[|w1' β]|] eqn:?,
     (m2 !! (addr_index a)) as [[|w2' β']|] eqn:?; simplify_equality'; try done.
   destruct (w1' !!{Γ} addr_ref Γ a) as [w1''|] eqn:?; simplify_equality'.
-  destruct (ctree_lookup_subseteq Γ w1' w2' (addr_ref Γ a) w1'')
-    as (w2''&?&?); simplify_option_equality; intuition eauto using
-    ctree_lookup_byte_Forall, pbit_unmapped_indetify,ctree_lookup_byte_subseteq.
-  exfalso; eauto using @ctree_unshared_weaken.
+  destruct (ctree_lookup_subseteq Γ w1' w2' (addr_ref Γ a) w1'') as (w2''&?&?);
+    simplify_option_equality by eauto using @ctree_unshared_weaken;
+    intuition eauto using ctree_lookup_byte_Forall,
+    pbit_unmapped_indetify, ctree_lookup_byte_subseteq.
 Qed.
 Lemma cmap_alter_memenv_of Γ Γm m g a w :
   ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} a = Some w → type_of (g w) = type_of w →
@@ -261,13 +261,13 @@ Proof.
 Qed.
 Lemma cmap_alter_commute Γ Γm g1 g2 m a1 a2 w1 w2 τ1 τ2 :
   ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 → 
-  (Γ,Γm) ⊢ a1 : τ1 → m !!{Γ} a1 = Some w1 → (Γ,Γm) ⊢ g1 w1 : τ1 →
-  (Γ,Γm) ⊢ a2 : τ2 → m !!{Γ} a2 = Some w2 → (Γ,Γm) ⊢ g2 w2 : τ2 →
+  (Γ,Γm) ⊢ a1 : τ1 → τ1 ≠ voidT → m !!{Γ} a1 = Some w1 → (Γ,Γm) ⊢ g1 w1 : τ1 →
+  (Γ,Γm) ⊢ a2 : τ2 → τ2 ≠ voidT → m !!{Γ} a2 = Some w2 → (Γ,Γm) ⊢ g2 w2 : τ2 →
   cmap_alter Γ g1 a1 (cmap_alter Γ g2 a2 m)
   = cmap_alter Γ g2 a2 (cmap_alter Γ g1 a1 m).
 Proof.
   destruct m as [m]; simpl;
-    intros ? Hm [?|[[-> ?]|(->&Ha&?&?&?)]] ? Hw1 ?? Hw2?; f_equal.
+    intros ? Hm [?|[[-> ?]|(->&Ha&?&?&?)]] ?? Hw1 ??? Hw2?; f_equal.
   { by rewrite alter_commute. }
   { rewrite <-!alter_compose.
     apply alter_ext; intros [|??] ?; f_equal'; auto using ctree_alter_commute. }
@@ -280,8 +280,8 @@ Proof.
     <-!ctree_alter_compose by eauto using ref_freeze_le_l.
   destruct (w !!{Γ} addr_ref Γ a1) as [w1'|] eqn:Hw1',
     (w !!{Γ} addr_ref Γ a2) as [w2'|] eqn:Hw2'; simplify_option_equality.
-  assert (τ1 = ucharT) by intuition eauto using addr_not_obj_type.
-  assert (τ2 = ucharT) by intuition eauto using addr_not_obj_type.
+  assert (τ1 = ucharT) by eauto using addr_not_obj_type.
+  assert (τ2 = ucharT) by eauto using addr_not_obj_type.
   destruct (proj2 Hm (addr_index a2) w β)
     as (τ&?&_&?&_); auto; simplify_equality'.
   assert (w1' = w2') by eauto using ctree_lookup_freeze_proper; subst.
@@ -301,19 +301,13 @@ Proof.
     by eauto using ctree_lookup_le, ref_freeze_le_r; simpl.
   by case_decide; simplify_equality'.
 Qed.
-Lemma cmap_lookup_not_obj_ne_void Γ Γm m a w τ :
-  ¬addr_is_obj a → (Γ,Γm) ⊢ a : τ → m !!{Γ} a = Some w → τ ≠ voidT.
-Proof.
-  destruct m as [m]; intros; simplify_option_equality;
-    simplify_type_equality; tauto.
-Qed.
 Lemma cmap_lookup_alter_not_obj Γ Γm g m a w τ :
-  ✓ Γ → ✓{Γ,Γm} m → ¬addr_is_obj a →
-  (Γ,Γm) ⊢ a : τ → m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : τ → ctree_unshared (g w) →
+  ✓ Γ → ✓{Γ,Γm} m → ¬addr_is_obj a → (Γ,Γm) ⊢ a : τ → τ ≠ voidT →
+  m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : τ → ctree_unshared (g w) →
   cmap_alter Γ g a m !!{Γ} a =
   Some (ctree_lookup_byte_after Γ (addr_type_base a) (addr_ref_byte Γ a) (g w)).
 Proof.
-  destruct m as [m]; simpl; intros ? Hm ?????.
+  destruct m as [m]; simpl; intros ? Hm ??????.
   case_option_guard; simplify_map_equality'.
   assert (Γm ⊢ addr_index a : addr_type_object a)
     by eauto using addr_typed_index.
@@ -328,18 +322,18 @@ Proof.
   erewrite ctree_lookup_alter
     by eauto using ctree_lookup_le, ref_freeze_le_r; simpl.
   case_decide; [done|]; case_option_guard; simplify_equality'.
-  assert (τ = ucharT) by (intuition eauto using addr_not_obj_type); subst.
+  assert (τ = ucharT) by eauto using addr_not_obj_type; subst.
   erewrite option_guard_True, ctree_lookup_alter_byte
-    by intuition eauto using ctree_alter_byte_Forall, pbit_indetify_unshared.
+    by eauto using ctree_alter_byte_Forall, pbit_indetify_unshared.
   by simplify_option_equality.
 Qed.
 Lemma cmap_lookup_alter_disjoint Γ Γm g m a1 a2 w1 w2 τ2 :
   ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 → m !!{Γ} a1 = Some w1 →
-  (Γ,Γm) ⊢ a2 : τ2 → m !!{Γ} a2 = Some w2 → (Γ,Γm) ⊢ g w2 : τ2 →
+  (Γ,Γm) ⊢ a2 : τ2 → τ2 ≠ voidT → m !!{Γ} a2 = Some w2 → (Γ,Γm) ⊢ g w2 : τ2 →
   (ctree_unshared w2 → ctree_unshared (g w2)) →
   cmap_alter Γ g a2 m !!{Γ} a1 = Some w1.
 Proof.
-  destruct m as [m]; simpl; intros ? Hm [?|[[-> ?]|(->&Ha&?&?&?)]] ?? Hw2 ??;
+  destruct m as [m]; simpl; intros ? Hm [?|[[-> ?]|(->&Ha&?&?&?)]] ??? Hw2 ??;
     simplify_map_equality; auto.
   { repeat case_option_guard; simplify_equality'; try contradiction.
     destruct (m !! _) as [[|w2' β]|]; simplify_equality'.
@@ -359,19 +353,19 @@ Proof.
   erewrite ctree_lookup_alter
     by eauto using ctree_lookup_le, ref_freeze_le_r; csimpl.
   assert (ctree_unshared (g w2))
-    by intuition eauto using ctree_lookup_byte_Forall, pbit_indetify_unshared.
+    by eauto using ctree_lookup_byte_Forall, pbit_indetify_unshared.
   by erewrite option_guard_True, ctree_lookup_alter_byte_ne
-    by intuition eauto using ctree_alter_byte_Forall, pbit_indetify_unshared.
+    by eauto using ctree_alter_byte_Forall, pbit_indetify_unshared.
 Qed.
 Lemma cmap_alter_disjoint Γ Γm1 m1 m2 g a w1 τ1 :
   ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
-  (Γ,Γm1) ⊢ a : τ1 → m1 !!{Γ} a = Some w1 → (Γ,Γm1) ⊢ g w1 : τ1 →
+  (Γ,Γm1) ⊢ a : τ1 → τ1 ≠ voidT → m1 !!{Γ} a = Some w1 → (Γ,Γm1) ⊢ g w1 : τ1 →
   ¬ctree_unmapped (g w1) →
   (∀ w2, w1 ⊥ w2 → g w1 ⊥ w2) → cmap_alter Γ g a m1 ⊥ m2.
 Proof.
   assert (∀ w', ctree_empty w' → ctree_unmapped w').
   { eauto using Forall_impl, @sep_unmapped_empty_alt. }
-  destruct m1 as [m1], m2 as [m2]; simpl. intros ? Hm1 Hm ????? o.
+  destruct m1 as [m1], m2 as [m2]; simpl. intros ? Hm1 Hm ?????? o.
   specialize (Hm o). case_option_guard; simplify_type_equality'.
   destruct (decide (o = addr_index a)); simplify_map_equality'; [|apply Hm].
   destruct (m1 !! addr_index a) as [[|w1' β]|] eqn:?; simplify_equality'.
@@ -383,7 +377,7 @@ Proof.
   destruct (m2 !! addr_index a) as [[|w2' ?]|] eqn:?; try done.
   * destruct Hm as [(?&?&?)?]; case_decide; simplify_option_equality.
     { split_ands; eauto using ctree_alter_disjoint, ctree_alter_lookup_Forall. }
-    assert (τ1 = ucharT) by intuition eauto using addr_not_obj_type.
+    assert (τ1 = ucharT) by eauto using addr_not_obj_type.
     simplify_equality; split_ands; auto.
     { eapply ctree_alter_disjoint; intuition eauto 3
         using ctree_alter_byte_unmapped, ctree_alter_byte_disjoint. }
@@ -401,13 +395,13 @@ Proof.
 Qed.
 Lemma cmap_alter_union Γ Γm1 m1 m2 g a w1 τ1 :
   ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
-  (Γ,Γm1) ⊢ a : τ1 → m1 !!{Γ} a = Some w1 → (Γ,Γm1) ⊢ g w1 : τ1 →
+  (Γ,Γm1) ⊢ a : τ1 → τ1 ≠ voidT → m1 !!{Γ} a = Some w1 → (Γ,Γm1) ⊢ g w1 : τ1 →
   ¬ctree_unmapped (g w1) →
   (∀ w2, w1 ⊥ w2 → g w1 ⊥ w2) → (∀ w2, w1 ⊥ w2 → g (w1 ∪ w2) = g w1 ∪ w2) →
   cmap_alter Γ g a (m1 ∪ m2) = cmap_alter Γ g a m1 ∪ m2.
 Proof.
   destruct m1 as [m1], m2 as [m2]; unfold union, sep_union; simpl.
-  intros ? Hm1 Hm ??????; f_equal; apply map_eq; intros o.
+  intros ? Hm1 Hm ???????; f_equal; apply map_eq; intros o.
   case_option_guard; simplify_type_equality'.
   destruct (decide (addr_index a = o)) as [<-|?]; rewrite !lookup_union_with,
     ?lookup_alter, ?lookup_alter_ne, ?lookup_union_with by done; auto.
@@ -417,10 +411,10 @@ Proof.
   destruct (w1' !!{Γ} addr_ref Γ a) as [w1''|] eqn:?; simplify_equality'.
   destruct (proj2 Hm1 (addr_index a) w1' β)
     as (τ&?&_&?&_); auto; simplify_equality'.
-  destruct (ctree_lookup_Some Γ Γm1 w1' τ (addr_ref Γ a) w1'') as (τ'&_&?); auto.
+  destruct (ctree_lookup_Some Γ Γm1 w1' τ (addr_ref Γ a) w1'') as (?&_&?); auto.
   destruct Hm as [(?&?&?)?]; case_decide; simplify_option_equality.
   { eauto using ctree_alter_union. }
-  assert (τ1 = ucharT) by intuition eauto using addr_not_obj_type.
+  assert (τ1 = ucharT) by eauto using addr_not_obj_type.
   simplify_equality. eapply ctree_alter_union; intuition eauto 3 using
    ctree_alter_byte_disjoint, ctree_alter_byte_union, ctree_alter_byte_unmapped.
 Qed.

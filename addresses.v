@@ -312,7 +312,7 @@ Proof.
   eauto using size_of_pos.
 Qed.
 Lemma addr_top_array_typed Γ Γm o τ (n : Z) :
-  ✓ Γ → Γm ⊢ o : τ.[Z.to_nat n] → ✓{Γ} τ → Z.to_nat n ≠ 0 →
+  ✓ Γ → Γm ⊢ o : τ.[Z.to_nat n] → ✓{Γ} τ → τ ≠ voidT → Z.to_nat n ≠ 0 →
   int_typed (n * size_of Γ τ) sptrT → (Γ,Γm) ⊢ addr_top_array o τ n : τ.
 Proof.
   intros. assert (0 ≤ n)%Z by (by destruct n). constructor; simpl; auto.

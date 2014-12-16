@@ -100,7 +100,7 @@ Proof.
   exists w1 w1 τ'; split_ands; auto using ctree_refine_inverse.
 Qed.
 Lemma cmap_lookup_alter_refine Γ Γm g m a w τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : τ →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : τ → τ ≠ voidT →
   m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : τ → ctree_unshared (g w) →
   ∃ w', cmap_alter Γ g a m !!{Γ} a = Some w' ∧ w' ⊑{Γ,true@Γm} g w : τ.
 Proof.
@@ -109,16 +109,15 @@ Proof.
     eauto using ctree_refine_id. }
   exists (ctree_lookup_byte_after Γ (addr_type_base a)
     (addr_ref_byte Γ a) (g w)); split; eauto using cmap_lookup_alter_not_obj.
-  assert (τ = ucharT) by eauto using addr_not_obj_type,
-    cmap_lookup_not_obj_ne_void; subst.
+  assert (τ = ucharT) by eauto using addr_not_obj_type; subst.
   eauto using ctree_lookup_byte_alter_refine.
 Qed.
 Lemma cmap_lookup_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 w1 τ :
   ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 →
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : τ → m1 !!{Γ} a1 = Some w1 →
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : τ → τ ≠ voidT → m1 !!{Γ} a1 = Some w1 →
   ∃ w2, m2 !!{Γ} a2 = Some w2 ∧ w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : τ.
 Proof.
-  destruct m1 as [m1], m2 as [m2]; simpl; intros ? (Hm1&_&_&Hm) Ha Hw1.
+  destruct m1 as [m1], m2 as [m2]; simpl; intros ? (Hm1&_&_&Hm) Ha ? Hw1.
   assert ((Γ,Γm1) ⊢ a1 : τ) by eauto using addr_refine_typed_l.
   assert ((Γ,Γm2) ⊢ a2 : τ) by eauto using addr_refine_typed_r.
   case_option_guard; simplify_type_equality'.
@@ -148,9 +147,8 @@ Proof.
   case_option_guard; simplify_equality'.
   rewrite decide_False by (by erewrite <-addr_is_obj_refine by eauto).
   rewrite option_guard_True
-    by intuition eauto using pbits_refine_unshared, ctree_flatten_refine.
-  assert (τ = ucharT) by (intuition eauto using
-    addr_not_obj_type, addr_refine_typed_l); subst.
+    by eauto using pbits_refine_unshared, ctree_flatten_refine.
+  assert (τ = ucharT) by eauto using addr_not_obj_type; subst.
   erewrite <-addr_ref_byte_refine by eauto.
   eauto using ctree_lookup_byte_refine.
 Qed.
@@ -169,12 +167,12 @@ Proof.
     eauto using ctree_refine_weaken, ctree_lookup_weaken, option_eq_1_alt.
 Qed.
 Lemma cmap_alter_refine Γ α f Γm1 Γm2 g1 g2 m1 m2 a1 a2 w1 w2 τ :
-  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : τ →
+  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : τ → τ ≠ voidT →
   m1 !!{Γ} a1 = Some w1 → m2 !!{Γ} a2 = Some w2 → ¬ctree_unmapped w1 →
   g1 w1 ⊑{Γ,α,f@Γm1↦Γm2} g2 w2 : τ → ¬ctree_unmapped (g1 w1) →
   cmap_alter Γ g1 a1 m1 ⊑{Γ,α,f@Γm1↦Γm2} cmap_alter Γ g2 a2 m2.
 Proof.
-  intros ? (Hm1&Hm2&?&Hm) Ha Hw1 Hw2 Hw1' ? Hgw1.
+  intros ? (Hm1&Hm2&?&Hm) Ha ? Hw1 Hw2 Hw1' ? Hgw1.
   assert ((Γ,Γm1) ⊢ a1 : τ) by eauto using addr_refine_typed_l.
   assert ((Γ,Γm2) ⊢ a2 : τ) by eauto using addr_refine_typed_r.
   assert ((Γ,Γm1) ⊢ w1 : τ) by eauto using cmap_lookup_typed.
@@ -207,7 +205,7 @@ Proof.
     simplify_option_equality; try tauto.
     { eapply ctree_alter_refine; eauto; simplify_type_equality; eauto using
         ctree_Forall_not, ctree_refine_typed_l, ctree_refine_typed_r. }
-    assert (τ = ucharT) by (intuition eauto using addr_not_obj_type); subst.
+    assert (τ = ucharT) by eauto using addr_not_obj_type; subst.
     erewrite addr_ref_byte_refine in Hw1 |- * by eauto.
     eapply ctree_alter_refine; eauto using ctree_alter_byte_refine.
     contradict Hgw1. eapply (ctree_alter_byte_unmapped _ _ _ w1'');

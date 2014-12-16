@@ -11,20 +11,21 @@ Ltac solve_length := simplify_equality'; repeat
   match goal with H : Forall2 _ _ _ |- _ => apply Forall2_length in H end; lia.
 Hint Resolve cmap_refine_memenv_refine.
 Hint Immediate meminj_extend_reflexive.
-Hint Immediate ctx_typed_stack_typed.
+Hint Immediate get_stack_typed.
 Hint Resolve (elem_of_singleton_2 (C:=listset (state Ti))).
 
 Lemma ehexec_complete Γ Γf m1 m2 k τs e1 e2 τlr :
-  ✓ Γ → ✓{Γ} m1 → '{m1} ⊢* get_stack k :* τs → (Γ,Γf,'{m1},τs) ⊢ e1 : τlr →
+  ✓ Γ → ✓{Γ} m1 → '{m1} ⊢* get_stack k :* τs → Forall (≠ voidT)%T τs →
+  (Γ,Γf,'{m1},τs) ⊢ e1 : τlr →
   Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2 → ∃ f e2' m2',
   (**i 1.) *) ehexec Γ k e1 m1 = Some (e2', m2') ∧
   (**i 2.) *) e2' ⊑{(Γ,Γf,τs),false,f@'{m2'}↦'{m2}} e2 : τlr ∧
   (**i 3.) *) m2' ⊑{Γ,false,f} m2 ∧
   (**i 4.) *) meminj_extend meminj_id f ('{m1}) ('{m1}).
 Proof.
-  intros ? Hm1 Hρ He1 p. destruct (ehstep_preservation Γ Γf m1 m2
+  intros ? Hm1 Hρ Hvoids He1 p. destruct (ehstep_preservation Γ Γf m1 m2
     (get_stack k) τs e1 e2 τlr) as (Hm2&He2&Hm); auto.
-  revert Hm1 Hρ He1 Hm2 He2 Hm. case p; clear p; try by (
+  revert Hm1 Hρ Hvoids He1 Hm2 He2 Hm. case p; clear p; try by (
     intros; repeat match goal with
     | H : assign_sem _ _ _ _ _ _ _ |- _ =>
        apply assign_exec_correct in H
@@ -63,7 +64,8 @@ Proof.
     typed_inversion Heτlr; edestruct (ectx_subst_typed_rev Γ Γf ('{m1})
       (get_stack_types k) E e1) as (τlr&?&?); eauto.
     edestruct (ehexec_complete Γ Γf m1 m2 k (get_stack_types k)
-      e1 e2) as (f&e2'&m2'&?&?&?&?); eauto using ctx_typed_stack_typed.
+      e1 e2) as (f&e2'&m2'&?&?&?&?);
+      eauto using get_stack_types_ne_void, funenv_typed_funtypes_valid.
     exists f (State k (Expr (subst E e2')) m2'); split_ands; auto.
     { assert (is_redex e1) as He1 by eauto using ehstep_is_redex.
       assert (maybe2 EVal (subst E e1) = None) as ->.
@@ -73,9 +75,11 @@ Proof.
       simplify_option_equality; eauto using expr_redexes_complete. }
     eleft; split_ands; repeat refine_constructor; eauto.
     + eapply ectx_subst_refine; eauto 10 using ectx_refine_weaken,
-        ectx_refine_id, ehstep_forward, ehexec_sound.
+        ectx_refine_id, ehstep_forward, ehexec_sound,
+        get_stack_types_ne_void, funenv_typed_funtypes_valid.
     + eauto 10 using ctx_refine_weaken,
-        ctx_refine_id, ehstep_forward, ehexec_sound.
+        ctx_refine_id, ehstep_forward, ehexec_sound,
+        get_stack_types_ne_void, funenv_typed_funtypes_valid.
   * intros m k f E Ωs vs ?????; simpl.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
     assert (maybe2 EVal (subst E (call f @ #{Ωs}* vs)%E) = None) as ->.
@@ -99,7 +103,7 @@ Proof.
     assert (mem_allocable_list m os') by (by apply mem_allocable_list_fresh).
     assert (length os' = length vs) by (by apply fresh_list_length).
     edestruct (funenv_lookup Γ ('{m}) Γf δ h)
-      as (?&?&?&?&?&?&?&?&?); eauto; simplify_equality'.
+      as (?&?&?&?&?&?&?&?&?&?); eauto; simplify_equality'.
     edestruct (mem_alloc_val_list_refine' Γ false meminj_id m m os' os vs vs) as
       (f&?&?&?); eauto using cmap_refine_id', vals_refine_id.
     exists f (State (CParams h (zip os' (type_of <$> vs)) :: k)
@@ -112,7 +116,8 @@ Proof.
     + rewrite snd_zip by solve_length.
       eapply (stmt_refine_weaken _ _ false false meminj_id _ ('{m}));
         eauto using stmt_refine_id, mem_alloc_val_list_forward.
-    + eauto 8 using ctx_refine_weaken, ctx_refine_id,mem_alloc_val_list_forward.
+    + eauto 8 using ctx_refine_weaken, ctx_refine_id,
+        mem_alloc_val_list_forward.
   * intros m k l ????; simpl; rewrite decide_True by solve_elem_of.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
   * intros m k Es l s ?????; simpl.

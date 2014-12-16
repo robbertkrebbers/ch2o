@@ -800,9 +800,9 @@ Proof.
   intros HΓ. revert τ. refine (type_env_ind _ HΓ _ _ _ _).
   * intros τb. rewrite val_0_base.
     typed_constructor; auto using base_val_0_typed.
-  * intros τ n ???. rewrite val_0_array.
+  * intros τ n ????. rewrite val_0_array.
     typed_constructor; auto using replicate_length, Forall_replicate.
-  * intros [] s τs Hs _ IH ?; erewrite val_0_compound by eauto.
+  * intros [] s τs Hs _ IH _ ?; erewrite val_0_compound by eauto.
     { typed_constructor; eauto. elim IH; csimpl; auto. }
     by destruct IH; simplify_equality'; typed_constructor; eauto.
 Qed.

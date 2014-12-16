@@ -22,11 +22,13 @@ Global Instance expr_type_check: TypeCheck envs (lrtype Ti) (expr Ti) :=
   | var{τ} n => τ' ← τs !! n; guard (τ = τ'); Some (inl τ)
   | #{Ω} v => guard (✓{Γm} Ω); inr <$> type_check (Γ,Γm) v
   | %{Ω} a =>
-     guard (✓{Γm} Ω); guard (addr_strict Γ a); inl <$> type_check (Γ,Γm) a
+     guard (✓{Γm} Ω); guard (addr_strict Γ a);
+     τ ← type_check (Γ,Γm) a;
+     guard (τ ≠ voidT); Some (inl τ)
   | .* e =>
      τ ← type_check Γs e ≫= maybe inr;
      τp ← maybe (TBase ∘ TPtr) τ;
-     guard (✓{Γ} τp); Some (inl τp)
+     guard (✓{Γ} τp); guard (τp ≠ voidT); Some (inl τp)
   | & e =>
      τ ← type_check Γs e ≫= maybe inl;
      Some (inr (τ.*))
@@ -50,7 +52,7 @@ Global Instance expr_type_check: TypeCheck envs (lrtype Ti) (expr Ti) :=
      inr <$> τ !!{Γ} rs
   | alloc{τ} e =>
      _ ← type_check Γs e ≫= maybe (inr ∘ TBase ∘ TInt);
-     guard (✓{Γ} τ); Some (inl τ)
+     guard (✓{Γ} τ); guard (τ ≠ voidT); Some (inl τ)
   | free e =>
      τ' ← type_check Γs e ≫= maybe inl;
      Some (inr voidT)
@@ -84,7 +86,7 @@ Global Instance ectx_item_lookup :
   match Ei, τlr with
   | .* □, inr τ =>
     τp ← maybe (TBase ∘ TPtr) τ;
-    guard (✓{Γ} τp); Some (inl τp)
+    guard (✓{Γ} τp); guard (τp ≠ voidT); Some (inl τp)
   | & □, inl τ => Some (inr (τ.*))
   | □ ::={ass} e2, inl τ1 =>
      τ2 ← type_check Γs e2 ≫= maybe inr;
@@ -106,7 +108,8 @@ Global Instance ectx_item_lookup :
      guard (ref_seg_offset rs = 0);
      inr <$> τ !!{Γ} rs
   | alloc{τ} □, inr τ' =>
-     _ ← maybe (TBase ∘ TInt) τ'; guard (✓{Γ} τ); Some (inl τ)
+     _ ← maybe (TBase ∘ TInt) τ';
+     guard (✓{Γ} τ); guard (τ ≠ voidT); Some (inl τ)
   | free □, inl τ => Some (inr voidT)
   | @{op} □, inr τ => inr <$> unop_type_of op τ
   | □ @{op} e2, inr τ1 =>
@@ -146,7 +149,7 @@ Global Instance stmt_type_check: TypeCheck envs (rettype Ti) (stmt Ti) :=
   | ret e => τ ← type_check Γs e ≫= maybe inr; Some (true,Some τ)
   | label _ => Some (false,None)
   | local{τ} s =>
-     guard (✓{Γ} τ); guard (int_typed (size_of Γ τ) sptrT);
+     guard (✓{Γ} τ); guard (τ ≠ voidT); guard (int_typed (size_of Γ τ) sptrT);
      type_check (Γ,Γf,Γm,τ :: τs) s
   | s1 ;; s2 =>
      '(c1,mσ1) ← type_check Γs s1;
@@ -203,7 +206,8 @@ Global Instance ctx_item_lookup :
   let '(Γ,Γf,Γm,τs) := Γs in
   match Ek, τlr with
   | CStmt Es, Stmt_type cmσ1 => Stmt_type <$> cmσ1 !!{Γs} Es
-  | CLocal o τ, Stmt_type cmσ => guard (Γm ⊢ o : τ); Some (Stmt_type cmσ)
+  | CLocal o τ, Stmt_type cmσ =>
+     guard (Γm ⊢ o : τ); guard (τ ≠ voidT); Some (Stmt_type cmσ)
   | CExpr e Ee, Expr_type τ =>
      τ' ← type_check Γs e ≫= maybe inr;
      guard (τ = τ'); Stmt_type <$> τ !!{Γs} Ee

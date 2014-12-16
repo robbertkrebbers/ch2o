@@ -12,7 +12,8 @@ Inductive ctree_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
   | MArray_refine τ n ws1 ws2 :
      n = length ws1 →
      Forall2 (λ w1 w2, ctree_refine' Γ α f Γm1 Γm2 w1 w2 τ) ws1 ws2 →
-     n ≠ 0 → ctree_refine' Γ α f Γm1 Γm2 (MArray τ ws1) (MArray τ ws2) (τ.[n])
+     τ ≠ voidT → n ≠ 0 →
+     ctree_refine' Γ α f Γm1 Γm2 (MArray τ ws1) (MArray τ ws2) (τ.[n])
   | MStruct_refine s wxbss1 wxbss2 τs :
      Γ !! s = Some τs → Forall3 (λ wxbs1 wxbs2 τ,
        ctree_refine' Γ α f Γm1 Γm2 (wxbs1.1) (wxbs2.1) τ) wxbss1 wxbss2 τs →
@@ -55,7 +56,8 @@ Lemma ctree_refine_inv_l `{Env Ti} (Γ : env Ti) (α : bool)
   | MBase τb xbs1 =>
      (∀ xbs2, xbs1 ⊑{Γ,α,f@Γm1↦Γm2}* xbs2 → P (MBase τb xbs2)) → P w2
   | MArray τ ws1 =>
-     (∀ ws2, ws1 ⊑{Γ,α,f@Γm1↦Γm2}* ws2 : τ → P (MArray τ ws2)) → P w2
+     (∀ ws2, ws1 ⊑{Γ,α,f@Γm1↦Γm2}* ws2 : τ →
+       τ ≠ voidT → P (MArray τ ws2)) → P w2
   | MStruct s wxbss1 => (∀ τs wxbss2,
      Γ !! s = Some τs → wxbss1 ⊑{Γ,α,f@Γm1↦Γm2}1* wxbss2 :* τs →
      Forall (λ wxbs, pbit_indetify <$> wxbs.2 = wxbs.2) wxbss1 →
@@ -83,7 +85,7 @@ Section ctree_refine_ind.
     P (MBase τb xbs1) (MBase τb xbs2) (baseT τb)).
   Context (Parray : ∀ τ n ws1 ws2,
     n = length ws1 → ws1 ⊑{Γ,α,f@Γm1↦Γm2}* ws2 : τ →
-    Forall2 (λ w1 w2, P w1 w2 τ) ws1 ws2 →
+    Forall2 (λ w1 w2, P w1 w2 τ) ws1 ws2 → τ ≠ voidT →
     n ≠ 0 → P (MArray τ ws1) (MArray τ ws2) (τ.[n])).
   Context (Pstruct : ∀ s τs wxbss1 wxbss2,
     Γ !! s = Some τs → wxbss1 ⊑{Γ,α,f@Γm1↦Γm2}1* wxbss2 :* τs →
@@ -227,8 +229,8 @@ Proof.
     by refine_constructor.
   * intros τ ws1 ws2 _ IH τ' Hw1; pattern τ';
       apply (ctree_typed_inv_l _ _ _ _ _ Hw1); clear τ' Hw1;
-      intros Hws1 Hlen Hw2; apply (ctree_typed_inv _ _ _ _ _ Hw2); clear Hw2;
-      intros _ _ Hws2 _; refine_constructor; eauto.
+      intros Hws1 ? Hlen Hw2; apply (ctree_typed_inv _ _ _ _ _ Hw2); clear Hw2;
+      intros _ _ _ Hws2 _; refine_constructor; auto 1.
     clear Hlen. induction IH; decompose_Forall_hyps; auto.
   * intros s wxbss1 wxbss2 _ IH Hxbs τ' Hw1; pattern τ';
       apply (ctree_typed_inv_l _ _ _ _ _ Hw1); clear τ' Hw1;
@@ -265,9 +267,9 @@ Lemma ctree_unflatten_leaf_refine Γ α f Γm1 Γm2 τ xbs1 xbs2 :
 Proof.
   intros HΓ Hτ. revert τ Hτ xbs1 xbs2. refine (type_env_ind _ HΓ _ _ _ _).
   * intros. rewrite !ctree_unflatten_base. by constructor.
-  * intros τ n _ IH _ xbs1 xbs2 Hxbs. rewrite !ctree_unflatten_array.
+  * intros τ n _ IH _ _ xbs1 xbs2 Hxbs. rewrite !ctree_unflatten_array.
     constructor. revert xbs1 xbs2 Hxbs. induction n; simpl; auto.
-  * intros [] s τs Hs _ IH _ xbs1 xbs2 Hxbs; erewrite
+  * intros [] s τs Hs _ IH _ _ xbs1 xbs2 Hxbs; erewrite
       !ctree_unflatten_compound by eauto; simpl; clear Hs; [|by constructor].
     unfold struct_unflatten; constructor.
     + revert xbs1 xbs2 Hxbs. induction (bit_size_of_fields _ τs HΓ);
@@ -307,8 +309,8 @@ Lemma ctree_refine_typed_r Γ α f Γm1 Γm2 w1 w2 τ :
 Proof.
   intros ?. revert w1 w2 τ. refine (ctree_refine_ind _ _ _ _ _ _ _ _ _ _ _ _).
   * typed_constructor; eauto using Forall2_length_l, pbits_refine_valid_r.
-  * intros τ n ws1 ws2 -> _ IH Hn;
-      typed_constructor; eauto using Forall2_length.
+  * intros τ n ws1 ws2 -> _ IH ? Hn;
+      typed_constructor; eauto 1 using Forall2_length.
     clear Hn. induction IH; auto.
   * intros s τs wxbss1 wxbss2 Hs _ IH Hxbs _ ? Hlen. typed_constructor; eauto.
     + elim IH; eauto.
@@ -348,7 +350,7 @@ Proof.
   * intros τb xbs1 xbs2 ??? w3 Hw3; pattern w3;
       apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ _ Hw3).
     constructor; eauto using pbits_refine_compose.
-  * intros τ n ws1 ws2 -> _ IH _ w3 Hw3; pattern w3;
+  * intros τ n ws1 ws2 -> _ IH _ w3 ? Hw3; pattern w3;
       apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ _ Hw3); clear w3 Hw3.
     intros ws3 Hws3; constructor. revert ws3 Hws3.
     induction IH; intros; decompose_Forall_hyps; constructor; auto.
@@ -403,7 +405,7 @@ Lemma union_free_refine Γ α f Γm1 Γm2 w1 w2 τ :
 Proof.
   intros Hw1 Hw. revert w1 w2 τ Hw Hw1.
   refine (ctree_refine_ind _ _ _ _ _ _ _ _ _ _ _ _); simpl; try by constructor.
-  * intros τ n ws1 ws2 _ _ IH _; inversion_clear 1; constructor.
+  * intros τ n ws1 ws2 _ _ IH _ _; inversion_clear 1; constructor.
     induction IH; decompose_Forall_hyps; auto.
   * intros s τs wxbss1 wxnss2 _ _ IH _ _ _ _; inversion_clear 1; constructor.
     induction IH; decompose_Forall_hyps; auto.
@@ -624,7 +626,7 @@ Proof.
   clear Hh. revert w1 w2 τ Hw Hw'.
   refine (ctree_refine_ind _ _ _ _ _ _ _ _ _ _ _ _); simpl.
   * by constructor.
-  * intros τ n ws1 ws2 _ ? IH _ Hws; constructor. revert Hws.
+  * intros τ n ws1 ws2 _ ? IH ? _ Hws; constructor. revert Hws.
     induction IH; simpl; rewrite ?fmap_app; intros; decompose_Forall_hyps; auto.
   * intros s τs wxbss1 wxbss2 _ Hws' IH Hxbs _ _ _ Hws; constructor.
     + revert Hws' Hxbs Hws. induction IH as [|[][]]; csimpl;

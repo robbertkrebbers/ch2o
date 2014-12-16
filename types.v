@@ -56,6 +56,7 @@ Delimit Scope ctype_scope with T.
 Delimit Scope cbase_type_scope with BT.
 Bind Scope ctype_scope with type.
 Bind Scope cbase_type_scope with base_type.
+Local Open Scope ctype_scope.
 
 Arguments TBase {_} _%BT.
 Arguments TVoid {_}.
@@ -107,7 +108,7 @@ Proof.
   | compoundT{c1} s1, compoundT{c2} s2 =>
      cast_if_and (decide_rel (=) c1 c2) (decide_rel (=) s1 s2)
   | _, _ => right _
-  end%T; clear base_type_eq_dec type_eq_dec; abstract congruence.
+  end; clear base_type_eq_dec type_eq_dec; abstract congruence.
  refine
   match τ1, τ2 with
   | voidT, voidT => left _
@@ -124,11 +125,11 @@ Instance maybe_TInt {Ti} : Maybe (@TInt Ti) := λ τb,
 Instance maybe_TPtr {Ti} : Maybe (@TPtr Ti) := λ τb,
   match τb with τ.* => Some τ | _ => None end%BT.
 Instance maybe_TBase {Ti} : Maybe (@TBase Ti) := λ τ,
-  match τ with baseT τb => Some τb | _ => None end%T.
+  match τ with baseT τb => Some τb | _ => None end.
 Instance maybe_TArray {Ti} : Maybe2 (@TArray Ti) := λ τ,
-  match τ with τ.[n] => Some (τ,n) | _ => None end%T.
+  match τ with τ.[n] => Some (τ,n) | _ => None end.
 Instance maybe_TCompound {Ti} : Maybe2 (@TCompound Ti) := λ τ,
-  match τ with compoundT{c} s => Some (c,s) | _ => None end%T.
+  match τ with compoundT{c} s => Some (c,s) | _ => None end.
 
 (** * Well-formed types *)
 (** Our definition of types still allows invalid types; in particular circular
@@ -138,7 +139,7 @@ unions and structs. For example [struct s { struct s x; }]. The predicate
 by a pointer. The predicate [env_valid] describes that an environment is
 valid. *)
 Section types.
-  Context {Ti : Set}.
+  Context {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}.
   Implicit Types Γ Σ : env Ti.
   Implicit Types τ : type Ti.
   Implicit Types τb : base_type Ti.
@@ -146,11 +147,13 @@ Section types.
 
   Inductive type_valid' Γ : type Ti → Prop :=
     | TBase_valid' τb : base_type_valid' Γ τb → type_valid' Γ (baseT τb)
-    | TArray_valid' τ n : type_valid' Γ τ → n ≠ 0 → type_valid' Γ (τ.[n])
+    | TArray_valid' τ n :
+       type_valid' Γ τ → τ ≠ voidT → n ≠ 0 → type_valid' Γ (τ.[n])
     | TCompound_valid' c s : is_Some (Γ !! s) → type_valid' Γ (compoundT{c} s)
   with ptr_type_valid Γ : type Ti → Prop :=
     | TBase_ptr_valid' τb : base_type_valid' Γ τb → ptr_type_valid Γ (baseT τb)
-    | TArray_ptr_valid' τ n : type_valid' Γ τ → n ≠ 0 → ptr_type_valid Γ (τ.[n])
+    | TArray_ptr_valid' τ n :
+       type_valid' Γ τ → τ ≠ voidT → n ≠ 0 → ptr_type_valid Γ (τ.[n])
     | TCompound_ptr_valid c s : ptr_type_valid Γ (compoundT{c} s)
   with base_type_valid' Γ : base_type Ti → Prop :=
     | TVoid_valid' : base_type_valid' Γ voidT
@@ -160,15 +163,16 @@ Section types.
   Global Instance base_type_valid :
     Valid (env Ti) (base_type Ti) := base_type_valid'.
 
-  Lemma TBase_valid Γ τb : ✓{Γ} τb → ✓{Γ} (baseT τb)%T.
+  Lemma TBase_valid Γ τb : ✓{Γ} τb → ✓{Γ} (baseT τb).
   Proof. by constructor. Qed.
-  Lemma TArray_valid Γ τ n : ✓{Γ} τ → n ≠ 0 → ✓{Γ} (τ.[n])%T.
+  Lemma TArray_valid Γ τ n : ✓{Γ} τ → τ ≠ voidT → n ≠ 0 → ✓{Γ} (τ.[n]).
   Proof. by constructor. Qed.
-  Lemma TCompound_valid Γ c s : is_Some (Γ !! s) → ✓{Γ} (compoundT{c} s)%T.
+  Lemma TCompound_valid Γ c s : is_Some (Γ !! s) → ✓{Γ} (compoundT{c} s).
   Proof. by constructor. Qed.
-  Lemma TBase_ptr_valid Γ τb : ✓{Γ} τb → ptr_type_valid Γ (baseT τb)%T.
+  Lemma TBase_ptr_valid Γ τb : ✓{Γ} τb → ptr_type_valid Γ (baseT τb).
   Proof. by constructor. Qed.
-  Lemma TArray_ptr_valid Γ τ n : ✓{Γ} τ → n ≠ 0 → ptr_type_valid Γ (τ.[n]).
+  Lemma TArray_ptr_valid Γ τ n :
+    ✓{Γ} τ → τ ≠ voidT → n ≠ 0 → ptr_type_valid Γ (τ.[n]).
   Proof. by constructor. Qed.
   Lemma TVoid_valid Γ : ✓{Γ} voidT%BT.
   Proof. by constructor. Qed.
@@ -177,17 +181,17 @@ Section types.
   Lemma TPtr_valid Γ τ : ptr_type_valid Γ τ → ✓{Γ} (τ.*)%BT.
   Proof. by constructor. Qed.
 
-  Lemma TBase_valid_inv Γ τb : ✓{Γ} (baseT τb)%T → ✓{Γ} τb.
+  Lemma TBase_valid_inv Γ τb : ✓{Γ} (baseT τb) → ✓{Γ} τb.
   Proof. by inversion_clear 1. Qed.
-  Lemma TArray_valid_inv Γ τ n : ✓{Γ} (τ.[n])%T → ✓{Γ} τ ∧ n ≠ 0.
+  Lemma TArray_valid_inv Γ τ n : ✓{Γ} (τ.[n]) → ✓{Γ} τ ∧ n ≠ 0.
   Proof. by inversion_clear 1. Qed.
-  Lemma TArray_valid_inv_type Γ τ n : ✓{Γ} (τ.[n])%T → ✓{Γ} τ.
+  Lemma TArray_valid_inv_type Γ τ n : ✓{Γ} (τ.[n]) → ✓{Γ} τ.
   Proof. by inversion_clear 1. Qed.
-  Lemma TArray_valid_inv_size Γ τ n : ✓{Γ} (τ.[n])%T → n ≠ 0.
+  Lemma TArray_valid_inv_size Γ τ n : ✓{Γ} (τ.[n]) → n ≠ 0.
   Proof. by inversion_clear 1. Qed.
-  Lemma TCompound_valid_inv Γ c s : ✓{Γ} (compoundT{c} s)%T → is_Some (Γ !! s).
+  Lemma TCompound_valid_inv Γ c s : ✓{Γ} (compoundT{c} s) → is_Some (Γ !! s).
   Proof. by inversion_clear 1. Qed.
-  Lemma TBase_ptr_valid_inv Γ τb : ptr_type_valid Γ (baseT τb)%T → ✓{Γ} τb.
+  Lemma TBase_ptr_valid_inv Γ τb : ptr_type_valid Γ (baseT τb) → ✓{Γ} τb.
   Proof. by inversion_clear 1. Qed.
   Lemma TArray_ptr_valid_inv_type Γ τ n : ptr_type_valid Γ (τ.[n]) → ✓{Γ} τ.
   Proof. by inversion_clear 1. Qed.
@@ -201,16 +205,18 @@ Section types.
    refine
     match τ with
     | baseT τb => cast_if (base_type_valid_dec Γ τb)
-    | τ.[n] => cast_if_and (decide (n ≠ 0)) (type_valid_dec Γ τ)
+    | τ.[n] =>
+       cast_if_and3 (decide (n ≠ 0)) (decide (τ ≠ voidT)) (type_valid_dec Γ τ)
     | compoundT{c} s => cast_if (decide (is_Some (Γ !! s)))
-    end%T; clear type_valid_dec ptr_type_valid_dec base_type_valid_dec;
+    end; clear type_valid_dec ptr_type_valid_dec base_type_valid_dec;
       abstract first [by constructor | by inversion 1].
    refine
     match τ with
     | baseT τb => cast_if (base_type_valid_dec Γ τb)
-    | τ.[n] => cast_if_and (decide (n ≠ 0)) (type_valid_dec Γ τ)
+    | τ.[n] =>
+       cast_if_and3 (decide (n ≠ 0)) (decide (τ ≠ voidT)) (type_valid_dec Γ τ)
     | compoundT{_} _ => left _
-    end%T; clear type_valid_dec ptr_type_valid_dec base_type_valid_dec;
+    end; clear type_valid_dec ptr_type_valid_dec base_type_valid_dec;
       abstract first [by constructor | by inversion 1].
    refine
     match τb with
@@ -228,9 +234,9 @@ Section types.
     ✓{Γ} τ →
     match τ with
     | baseT τ => (✓{Γ} τ → P) → P
-    | τ.[n] => (✓{Γ} τ → n ≠ 0 → P) → P
+    | τ.[n] => (✓{Γ} τ → τ ≠ voidT → n ≠ 0 → P) → P
     | compoundT{c} s => (is_Some (Γ !! s) → P) → P
-    end%T.
+    end.
   Proof. destruct 1; eauto. Qed.
   Lemma type_valid_ptr_type_valid Γ τ : ✓{Γ} τ → ptr_type_valid Γ τ.
   Proof. by destruct 1; constructor. Qed.
@@ -245,7 +251,7 @@ Section types.
    refine
     match τ with
     | compoundT{_} s => cast_if (decide (is_Some (Γ !! s))) | _ => left _
-    end%T; abstract first [by constructor|by inversion 1].
+    end; abstract first [by constructor|by inversion 1].
   Defined.
   Lemma type_complete_valid Γ τ :
     ptr_type_valid Γ τ → type_complete Γ τ → ✓{Γ} τ.
@@ -254,7 +260,8 @@ Section types.
   Inductive env_valid : Valid () (env Ti) :=
     | env_empty_valid : ✓ ∅
     | env_add_valid Γ s τs :
-       ✓ Γ → ✓{Γ}* τs → τs ≠ [] → Γ !! s = None → ✓ (<[s:=τs]>Γ).
+       ✓ Γ → ✓{Γ}* τs → Forall (≠ voidT) τs → τs ≠ [] →
+       Γ !! s = None → ✓ (<[s:=τs]>Γ).
   Global Existing Instance env_valid.
 
   Lemma type_valid_weaken Γ Σ τ : ✓{Γ} τ → Γ ⊆ Σ → ✓{Σ} τ
@@ -282,19 +289,21 @@ Section types.
     ✓{Γ}* τs → Γ ⊂ Σ → ✓{Σ}* τs.
   Proof. eauto using Forall_impl, type_valid_weaken_subset. Qed.
   Lemma env_valid_delete Γ s τs :
-    ✓ Γ → Γ !! s = Some τs → ∃ Σ, Σ ⊆ delete s Γ ∧ ✓{Σ}* τs ∧ τs ≠ [] ∧ ✓ Σ.
+    ✓ Γ → Γ !! s = Some τs →
+    ∃ Σ, Σ ⊆ delete s Γ ∧ ✓{Σ}* τs ∧ Forall (≠ voidT) τs ∧ τs ≠ [] ∧ ✓ Σ.
   Proof.
     intros HΓ Hs. induction HΓ as [|Γ s' τs' HΓ IH Hτs' Hs']; [by simpl_map|].
     destruct (decide (s = s')); simplify_map_equality.
     * exists Γ. by rewrite delete_insert.
-    * destruct (IH Hs) as (Σ&?&?&?&?). exists Σ. split_ands; auto.
+    * destruct (IH Hs) as (Σ&?&?&?&?&?). exists Σ. split_ands; auto.
       rewrite delete_insert_ne by done. transitivity (delete s Γ); [done |].
       apply insert_subseteq. by rewrite lookup_delete_ne.
   Qed.
   Lemma env_valid_lookup_subset Γ s τs :
-    ✓ Γ → Γ !! s = Some τs → ∃ Σ, Σ ⊂ Γ ∧ ✓{Σ}* τs ∧ τs ≠ [] ∧ ✓ Σ.
+    ✓ Γ → Γ !! s = Some τs →
+    ∃ Σ, Σ ⊂ Γ ∧ ✓{Σ}* τs ∧ Forall (≠ voidT) τs ∧ τs ≠ [] ∧ ✓ Σ.
   Proof.
-    intros. destruct (env_valid_delete Γ s τs) as (Σ&?&?&?&?); auto.
+    intros. destruct (env_valid_delete Γ s τs) as (Σ&?&?&?&?&?); auto.
     exists Σ. split_ands; auto.
     apply strict_transitive_r with (delete s Γ); eauto using delete_subset_alt.
   Qed.
@@ -307,7 +316,7 @@ Section types.
   Qed.
   Lemma env_valid_lookup_length Γ s τs : ✓ Γ → Γ !! s = Some τs → τs ≠ [].
   Proof.
-    intros. by destruct (env_valid_lookup_subset Γ s τs) as (?&?&?&?&?).
+    intros. by destruct (env_valid_lookup_subset Γ s τs) as (?&?&?&?&?&?).
   Qed.
   Lemma env_valid_lookup Γ s τs : ✓ Γ → Γ !! s = Some τs → ✓{Γ}* τs.
   Proof.
@@ -315,10 +324,16 @@ Section types.
       eauto using types_valid_weaken_subset.
   Qed.
   Lemma env_valid_lookup_lookup Γ s τs i τ : 
-    ✓ Γ →Γ !! s = Some τs → τs !! i = Some τ → ✓{Γ} τ.
+    ✓ Γ → Γ !! s = Some τs → τs !! i = Some τ → ✓{Γ} τ.
   Proof.
     intros ? Hs ?.
     apply env_valid_lookup in Hs; auto. eapply Forall_lookup; eauto.
+  Qed.
+  Lemma env_valid_lookup_lookup_ne_void Γ s τs i τ : 
+    ✓ Γ → Γ !! s = Some τs → τs !! i = Some τ → τ ≠ voidT.
+  Proof.
+    intros. destruct (env_valid_lookup_subset Γ s τs) as (?&?&?&?&_); auto.
+    by decompose_Forall_hyps.
   Qed.
   Lemma env_valid_lookup_singleton Γ s τ : ✓ Γ → Γ !! s = Some [τ] → ✓{Γ} τ.
   Proof. intros. by apply (env_valid_lookup_lookup Γ s [τ] 0 τ). Qed.
@@ -328,12 +343,12 @@ End types.
 It checks wellformedness by trying all permutations of the environment. This
 decision procedure is not intended to be used for computation. *)
 Section env_valid_dec.
-  Context {Ti : Set}.
+  Context {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}.
 
   Inductive list_env_valid : list (tag * list (type Ti)) → Prop :=
     | env_nil_valid : list_env_valid []
     | env_cons_valid Γ s τs :
-       list_env_valid Γ → ✓{map_of_list Γ}* τs →
+       list_env_valid Γ → ✓{map_of_list Γ}* τs → Forall (≠ voidT) τs →
        τs ≠ [] → map_of_list Γ !! s = None →
        list_env_valid ((s,τs) :: Γ).
   Lemma list_env_valid_nodup Γ : list_env_valid Γ → NoDup (fst <$> Γ).
@@ -346,8 +361,9 @@ Section env_valid_dec.
     fix go Γ :=
     match Γ return Decision (list_env_valid Γ) with
     | [] => left _
-    | (s,τs) :: Γ => cast_if_and4
+    | (s,τs) :: Γ => cast_if_and5
        (decide (✓{map_of_list Γ}* τs))
+       (decide (Forall (≠ voidT) τs))
        (decide (τs ≠ []))
        (decide (map_of_list Γ !! s = None))
        (go Γ)
@@ -395,9 +411,9 @@ Section type_env_ind.
 
   Context (P : type Ti → Prop).
   Context (Pbase : ∀ τb, ✓{Γ} τb → P (baseT τb)).
-  Context (Parray : ∀ τ n, ✓{Γ} τ → P τ → n ≠ 0 → P (τ.[n])).
+  Context (Parray : ∀ τ n, ✓{Γ} τ → P τ → τ ≠ voidT → n ≠ 0 → P (τ.[n])).
   Context (Pcompound : ∀ c s τs,
-    Γ !! s = Some τs → ✓{Γ}* τs → Forall P τs →
+    Γ !! s = Some τs → ✓{Γ}* τs → Forall P τs → Forall (≠ voidT) τs →
     τs ≠ [] → P (compoundT{c} s)).
 
   Lemma type_env_ind: ∀ τ : type Ti, ✓{Γ} τ → P τ.
@@ -409,12 +425,13 @@ Section type_env_ind.
     * by apply Pbase, (base_type_valid_weaken Σ).
     * apply Parray; eauto. by apply (type_valid_weaken Σ).
     * inversion Hs as [τs Hτs].
-      destruct (env_valid_lookup_subset Σ s τs) as (Σ'&?&Hτs'&Hlen&?); auto.
+      destruct (env_valid_lookup_subset Σ s τs)
+        as (Σ'&?&Hτs'&Hvoids&Hlen&?); auto.
       assert (Σ' ⊂ Γ) by eauto using (strict_transitive_l (R:=(⊆))).
       apply Pcompound with τs; eauto using lookup_weaken.
       + apply Forall_impl with (✓{Σ'}); auto.
         intros. eapply type_valid_weaken_subset; eauto.
-      + clear Hτs Hlen. induction Hτs'; constructor; auto.
+      + clear Hτs Hvoids Hlen. induction Hτs'; constructor; auto.
         apply (IH Σ'); eauto using (strict_include (R:=(⊆):relation (env _))).
   Qed.
 End type_env_ind.
@@ -434,7 +451,7 @@ Section weak_type_env_ind.
   Proof.
     intros. induction τ as [τb|τ n|c s]; auto.
     destruct (Γ !! s) as [τs|] eqn:Hs; auto.
-    destruct (env_valid_lookup_subset Γ s τs) as (Σ'&?&Hτs&_&?); auto.
+    destruct (env_valid_lookup_subset Γ s τs) as (Σ'&?&Hτs&_&_&?); auto.
     apply Pcompound with τs; auto.
     clear Hs. induction Hτs as [|τ τs]; constructor; auto.
     apply (type_env_ind Γ); eauto using type_valid_weaken,
@@ -461,7 +478,7 @@ Section type_iter.
       | baseT τb => fb τb
       | τ.[n] => fa τ n (go τ)
       | compoundT{c} s => let (τs,h) := g s in fc c s τs h
-      end%T.
+      end.
     Definition type_iter_accF (Γ : env Ti) (go : ∀ Σ, Σ ⊂ Γ → type Ti → A)
         (s : tag) : list (type Ti) * (type Ti → A) :=
       match Some_dec (Γ !! s) with
@@ -494,10 +511,10 @@ Section type_iter.
     generalize (acc1 _ (delete_subset_alt Σ1 s τs1 Hs1)),
       (acc2 _ (delete_subset_alt Σ2 s τs2 Hs2)); intros acc1' acc2'.
     simplify_map_equality.
-    destruct (env_valid_delete Γ s τs) as (Γ'&?&Hτs&Hlen&?); trivial.
+    destruct (env_valid_delete Γ s τs) as (Γ'&?&Hτs&Hvoids&Hlen&?); trivial.
     assert (Γ' ⊆ Γ) by (transitivity (delete s Γ); auto using delete_subseteq).
     apply Hcompound; eauto using types_valid_weaken.
-    assert (is_Some (Γ !! s)) by eauto. clear Hs Hlen acc1 acc2.
+    assert (is_Some (Γ !! s)) by eauto. clear Hs Hvoids Hlen acc1 acc2.
     induction Hτs as [|τ τs]; constructor; auto. apply (IH Γ').
     * eauto using (strict_transitive_r (R:=(⊆))),
         delete_subset, lookup_weaken_is_Some.
@@ -539,10 +556,10 @@ Section type_iter.
     destruct (Some_dec (Γ !! s)) as [[τs' Hs']|?]; [|congruence].
     generalize (accΓ _ (delete_subset_alt Γ s τs' Hs')). intros accΓ'.
     simplify_map_equality.
-    destruct (env_valid_delete Γ s τs) as (Γ'&?&Hτs&Hlen&?); trivial.
+    destruct (env_valid_delete Γ s τs) as (Γ'&?&Hτs&Hvoids&Hlen&?); trivial.
     assert (Γ' ⊆ Γ) by (transitivity (delete s Γ); auto using delete_subseteq).
     apply Hcompound; eauto using types_valid_weaken.
-    clear Hs Hlen. induction Hτs; constructor; auto.
+    clear Hs Hvoids Hlen. induction Hτs; constructor; auto.
     by apply (type_iter_acc_weaken _ _ _ _ _ _ Γ');
       eauto using lookup_weaken, type_valid_weaken, types_valid_weaken.
   Qed.

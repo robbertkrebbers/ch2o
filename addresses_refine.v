@@ -303,7 +303,7 @@ Proof.
 Qed.
 Lemma addr_top_array_refine Γ α f Γm1 Γm2 o1 o2 τ (n : Z) :
   ✓ Γ → Γm1 ⊑{Γ,α,f} Γm2 → Γm1 ⊢ o1 : τ.[Z.to_nat n] → f !! o1 = Some (o2,[]) →
-  ✓{Γ} τ → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
+  ✓{Γ} τ → τ ≠ voidT → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
   addr_top_array o1 τ n ⊑{Γ,α,f@Γm1↦Γm2} addr_top_array o2 τ n : τ.
 Proof.
   intros. assert (0 ≤ n)%Z by (by destruct n). econstructor; simpl; eauto. 

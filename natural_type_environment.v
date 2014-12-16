@@ -186,9 +186,9 @@ Proof.
   intros HΓ. revert τ. refine (type_env_ind _ HΓ _ _ _ _).
   * intros τb. rewrite natural_align_of_base, natural_size_of_base.
     destruct 1; auto. by rewrite align_void.
-  * intros τ n ? ? _. rewrite natural_align_of_array, size_of_array.
+  * intros τ n ? ? _ _. rewrite natural_align_of_array, size_of_array.
     by apply Nat.divide_mul_r.
-  * intros c s τs Hs Hτs IH Hlen.
+  * intros c s τs Hs Hτs IH _ Hlen.
     erewrite natural_align_of_compound, natural_size_of_compound by eauto.
     assert (natural_fields_align Γ τs ≠ 0) as Hne_0.
     { clear Hs Hlen. unfold natural_fields_align.
