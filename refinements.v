@@ -248,6 +248,8 @@ Ltac refine_inversion_all :=
 Record memenv_refine' `{Env Ti} (Γ : env Ti)
     (α : bool) (f : meminj Ti) (Γm1 Γm2 : memenv Ti) := {
   memenv_refine_injective' : meminj_injective f;
+  memenv_refine_frozen o1 o2 r :
+    f !! o1 = Some (o2,r) → freeze true <$> r = r;
   memenv_refine_typed_l o1 o2 r τ1 :
     f !! o1 = Some (o2,r) → Γm1 ⊢ o1 : τ1 →
     ∃ τ2, Γm2 ⊢ o2 : τ2 ∧ Γ ⊢ r : τ2 ↣ τ1;
@@ -297,14 +299,14 @@ Lemma memenv_refine_perm_l Γ f Γm1 Γm2 o1 τ :
   Γm1 ⊑{Γ,false,f} Γm2 → Γm1 ⊢ o1 : τ →
   ∃ o2, f !! o1 = Some (o2,[]) ∧ Γm2 ⊢ o2 : τ.
 Proof.
-  intros [_ Hl _ _ _ Hl' _] ?. destruct (Hl' o1 τ) as [o2 ?]; auto.
+  intros [_ _ Hl _ _ _ Hl' _] ?. destruct (Hl' o1 τ) as [o2 ?]; auto.
   destruct (Hl o1 o2 [] τ) as (?&?&?); simplify_type_equality; eauto.
 Qed.
 Lemma memenv_refine_perm_r Γ f Γm1 Γm2 o2 τ :
   Γm1 ⊑{Γ,false,f} Γm2 → Γm2 ⊢ o2 : τ →
   ∃ o1, f !! o1 = Some (o2,[]) ∧ Γm1 ⊢ o1 : τ.
 Proof.
-  intros [_ _ Hr _ _ _ Hr'] ?. destruct (Hr' o2 τ) as [o1 ?]; auto.
+  intros [_ _ _ Hr _ _ _ Hr'] ?. destruct (Hr' o2 τ) as [o1 ?]; auto.
   destruct (Hr o1 o2 [] τ) as (τ2&?&?); simplify_type_equality; eauto.
 Qed.
 Lemma lookup_meminj_inverse_1_help Γ f Γm1 Γm2 o1 o2 r1 :
@@ -351,6 +353,8 @@ Proof.
   * intros o2 o2' o1 r1 r1' ??.
     destruct (lookup_meminj_inverse_1_help Γ f Γm1 Γm2 o1 o2 r1); auto.
     destruct (lookup_meminj_inverse_1_help Γ f Γm1 Γm2 o1 o2' r1');naive_solver.
+  * intros o2 o1 r ?.
+    destruct (lookup_meminj_inverse_1_help Γ f Γm1 Γm2 o1 o2 r); naive_solver.
   * intros o2 o1 r τ ??.
     destruct (lookup_meminj_inverse_1 Γ f Γm1 Γm2 o1 o2 r τ) as (?&?&->); auto.
     eauto using ref_typed_nil_2.
@@ -394,6 +398,9 @@ Lemma memenv_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 :
 Proof.
   intros ? HΓm12 HΓm23; repeat split.
   * eauto using meminj_compose_injective, memenv_refine_injective.
+  * intros o1 o3 r; rewrite lookup_meminj_compose_Some.
+    intros (o2&r2&r3&?&?&->); rewrite fmap_app;
+      f_equal; eauto using memenv_refine_frozen.
   * intros o1 o3 r τ1; rewrite lookup_meminj_compose_Some.
     intros (o2&r2&r3&?&?&->) ?; setoid_rewrite ref_typed_app.
     destruct (memenv_refine_typed_l HΓm12 o1 o2 r2 τ1) as (τ2&?&?); auto.

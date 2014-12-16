@@ -132,20 +132,23 @@ Proof.
     apply option_eq; intros [o2' r]; simpl.
     rewrite lookup_map_of_collection, elem_of_dom; naive_solver. }
   exists f'; repeat split; auto.
-  * intros o3 o3' o4 r1 r2. destruct HΓm as [??? _ _ _ _].
+  * intros o3 o3' o4 r1 r2. destruct HΓm as [? _ ?? _ _ _ _].
     unfold typed, index_typed in *; unfold lookup, f'; simpl.
     rewrite !lookup_insert_Some, !lookup_map_of_collection, !elem_of_dom.
     intros [[??]|(?&[[??]?]&?)] [[??]|(?&[[??]?]&?)]; naive_solver.
-  * intros o3 o4 r τ Hf' ?; erewrite help2 in Hf' by eauto.
-    eauto using memenv_refine_typed_l.
-  * intros o3 o4 r τ. destruct HΓm as [_ _ ? _ _ _ _].
-    unfold lookup, f'; simpl; unfold typed, index_typed in *.
+  * intros o3 o4 r. destruct HΓm as [_ ? _ _ _ _ _ _]. unfold lookup, f'; simpl.
     rewrite lookup_insert_Some, lookup_map_of_collection, elem_of_dom.
     intros [[??]|(?&[[??]?]&?)]; simplify_map_equality'; naive_solver. 
+  * intros o3 o4 r τ Hf' ?; erewrite help2 in Hf' by eauto.
+    eauto using memenv_refine_typed_l.
+  * intros o3 o4 r τ. destruct HΓm as [_ _ _ ? _ _ _ _].
+    unfold lookup, f'; simpl; unfold typed, index_typed in *.
+    rewrite lookup_insert_Some, lookup_map_of_collection, elem_of_dom.
+    intros [[??]|(?&[[??]?]&?)]; simplify_map_equality'; naive_solver.
   * intros o3 o4 r Hf' Ho3.
     assert (∃ τ, Γm1 ⊢ o3 : τ) as [τ ?] by (destruct Ho3; do 2 eexists; eauto).
     erewrite help2 in Hf' by eauto; eauto using memenv_refine_alive_l.
-  * intros o3 o4 r ?. destruct HΓm as [_ _ _ _ ? _ _].
+  * intros o3 o4 r ?. destruct HΓm as [_ _ _ _ _ ? _ _].
     unfold lookup, f'; simpl; unfold index_alive in *.
     rewrite lookup_insert_Some, lookup_map_of_collection, elem_of_dom.
     intros [[??]|(?&[[??]?]&?)]; simplify_map_equality'; naive_solver. 
@@ -167,6 +170,7 @@ Lemma mem_alloc_refine_env Γ α f Γm1 Γm2 τ o1 o2 :
   <[o1:=(τ,false)]> Γm1 ⊑{Γ,α,f} <[o2:=(τ,false)]> Γm2.
 Proof.
   intros HΓm; split; eauto using memenv_refine_injective.
+  * eauto using memenv_refine_frozen.
   * intros o3 o4 r τ3 ? Ho3. destruct (decide (o1 = o3)) as [->|?].
     + destruct Ho3; simplify_map_equality'.
       setoid_rewrite ref_typed_nil; eauto using mem_alloc_index_typed.
@@ -298,7 +302,10 @@ Proof.
   destruct (Hm (addr_index a1) (addr_index a2) r w1 true)
     as (?&w2&τ''&?&?&?&Hr); auto; specialize (Hr I); simplify_type_equality'.
   exists w2. rewrite addr_is_top_array_alt by eauto using addr_refine_typed_r.
-  erewrite <-addr_ref_byte_refine, Ha2, (right_id_L [] (++)), Ha1 by eauto.
+  assert (addr_ref Γ a2 = [RArray 0 τ' n]) as ->.
+  { by rewrite Ha1 in Ha2;
+      inversion Ha2 as [|???? Harr]; inversion Harr; decompose_Forall_hyps. }
+  erewrite <-addr_ref_byte_refine by eauto.
   split_ands; eauto using pbits_refine_perm_1, ctree_flatten_refine.
   exists τ' n; split_ands; eauto using addr_strict_refine.
 Qed.
@@ -317,6 +324,7 @@ Lemma mem_free_refine_env Γ α f Γm1 Γm2 o1 o2 :
     ⊑{Γ,α,f} alter (prod_map id (λ _, true)) o2 Γm2.
 Proof.
   intros HΓm ?; split; eauto using memenv_refine_injective.
+  * eauto using memenv_refine_frozen.
   * intros o3 o4 r τ3 ??.
     destruct (memenv_refine_typed_l HΓm o3 o4 r τ3) as (τ4&?&?); eauto
       using mem_free_index_typed_inv, mem_free_forward, memenv_forward_typed.
@@ -489,7 +497,7 @@ Proof.
   erewrite !elem_of_mem_locks_alt, <-!list_lookup_fmap by eauto.
   erewrite pbits_refine_locked; eauto using ctree_flatten_refine.
   rewrite <-(ctree_lookup_flatten Γ ('{m2}) w2' τ' r w2 σ1)
-    by eauto using ctree_refine_typed_r, ctree_lookup_freeze.
+    by eauto using ctree_refine_typed_r, ctree_lookup_le, ref_freeze_le_l.
   by rewrite pbits_locked_mask, fmap_take, fmap_drop, lookup_take, lookup_drop.
 Qed.
 Lemma mem_lock_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 τ : 
@@ -573,22 +581,21 @@ Proof.
   assert ((Γ,Γm2) ⊢ w2' : τ1) by eauto using ctree_refine_typed_r.
   destruct (proj2 Hm1 o1 w1' β')as (?&?&?&?&_),
     (proj2 Hm2 o2 w2 β') as (τ2&?&?&?&_); auto; simplify_type_equality.
-  destruct (ctree_lookup_Some Γ Γm2 w2 τ2 (freeze true <$> r) w2')
+  destruct (ctree_lookup_Some Γ Γm2 w2 τ2 r w2')
     as (τ1'&?&?); auto; simplify_type_equality.
-  assert (ref_object_offset Γ (freeze true <$> r) + bit_size_of Γ τ1
+  assert (ref_object_offset Γ r + bit_size_of Γ τ1
     ≤ bit_size_of Γ τ2) by eauto using ref_object_offset_size.
   erewrite Ho2, ctree_flatten_length by eauto.
   destruct (Ω1 !! o1) as [ω1|] eqn:?; simplify_equality'.
   { erewrite ctree_flatten_length by eauto. destruct (Ω2 !! o2) as [ω2|] eqn:?.
-    * assert (take (bit_size_of Γ τ1) (drop (ref_object_offset Γ
-        (freeze true <$> r)) (to_bools (bit_size_of Γ τ2) ω2))
-        = to_bools (bit_size_of Γ τ1) ω1) as Hω2.
+    * assert (take (bit_size_of Γ τ1) (drop (ref_object_offset Γ r) (to_bools
+        (bit_size_of Γ τ2) ω2)) = to_bools (bit_size_of Γ τ1) ω1) as Hω2.
       { apply list_eq_same_length with (bit_size_of Γ τ1); try done.
         intros i β1 β2 ?.
         specialize (HΩ o1 o2 r τ1 i); feed specialize HΩ; auto.
         assert (i ∈ ω1 ↔ ref_object_offset Γ r + i ∈ ω2) as Hi by naive_solver.
         rewrite lookup_take, lookup_drop, !lookup_to_bools, Hi by omega.
-        rewrite ref_object_offset_freeze. destruct β1, β2; intuition.   }
+        destruct β1, β2; intuition.   }
       do 3 eexists; split_ands; eauto using ctree_lookup_merge.
       rewrite Hω2; eauto using ctree_unlock_refine.
     * assert (to_bools (bit_size_of Γ τ1) ω1
@@ -602,14 +609,13 @@ Proof.
       do 3 eexists; split_ands; eauto.
       rewrite Hω, ctree_merge_id by auto; eauto. }
   destruct (Ω2 !! o2) as [ω2|] eqn:?; [|by eauto 7].
-  assert (take (bit_size_of Γ τ1) (drop (ref_object_offset Γ 
-    (freeze true <$> r)) (to_bools (bit_size_of Γ τ2) ω2))
-    = replicate (bit_size_of Γ τ1) false) as Hω2.
+  assert (take (bit_size_of Γ τ1) (drop (ref_object_offset Γ r) (to_bools
+    (bit_size_of Γ τ2) ω2)) = replicate (bit_size_of Γ τ1) false) as Hω2.
   { apply list_eq_same_length with (bit_size_of Γ τ1); try done.
     intros i β1 β2 ?.
     rewrite lookup_take, lookup_drop, lookup_replicate by done.
     intros Hβ1 ?; destruct β1; simplify_equality'; try done.
-    rewrite lookup_to_bools_true, ref_object_offset_freeze in Hβ1 by omega.
+    rewrite lookup_to_bools_true in Hβ1 by omega.
     specialize (HΩ o1 o2 r τ1 i); feed specialize HΩ; auto.
     destruct (proj2 HΩ) as (?&?&?); simplify_equality; eauto. }
   do 3 eexists; split_ands; eauto using ctree_lookup_merge.
@@ -633,8 +639,9 @@ Proof.
   intros o1 o2 r τ i ????. rewrite !elem_of_lock_singleton_typed by eauto.
   erewrite !addr_object_offset_alt by eauto using addr_strict_refine.
   destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 σ) as (r'&?&Ha2); auto.
-  erewrite Ha2, <-(addr_ref_byte_refine _ _ _ _ _ a1 a2) by eauto.
-  rewrite !ref_object_offset_app, ref_object_offset_freeze.
+  erewrite <-(addr_ref_byte_refine _ _ _ _ _ a1 a2) by eauto.
+  erewrite <-(ref_object_offset_le _ _ (addr_ref _ a2)) by eauto.
+  rewrite !ref_object_offset_app.
   split; [intros (->&?&?); simplify_equality'; intuition lia|intros (->&?&?)].
   destruct (meminj_injective_alt f o1 (addr_index a1) (addr_index a2) r r')
     as [->|[??]]; simplify_equality'; eauto using memenv_refine_injective.

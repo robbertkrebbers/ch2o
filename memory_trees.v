@@ -1042,31 +1042,18 @@ Qed.
 Lemma ctree_lookup_snoc Γ r rs w :
   w !!{Γ} (r ++ [rs]) = (w !!{Γ} rs) ≫= lookupE Γ r.
 Proof. apply ctree_lookup_app. Qed.
-Lemma ctree_lookup_seg_freeze Γ w rs w' :
-  w !!{Γ} freeze true rs = Some w' → w !!{Γ} rs = Some w'.
+Lemma ctree_lookup_seg_le Γ w rs1 rs2 w' :
+  w !!{Γ} rs1 = Some w' → rs1 ⊆ rs2 → w !!{Γ} rs2 = Some w'.
 Proof.
-  intros. destruct rs as [| |i s q]; auto.
-  by destruct w, q; simplify_option_equality.
+  destruct 2 as [| |?? [][]]; simpl in *; intuition.
+  destruct w; simplify_option_equality; auto.
 Qed.
-Lemma ctree_lookup_freeze Γ w r w' :
-  w !!{Γ} (freeze true <$> r) = Some w' → w !!{Γ} r = Some w'.
+Lemma ctree_lookup_le Γ w r1 r2 w' :
+  w !!{Γ} r1 = Some w' → r1 ⊆* r2 → w !!{Γ} r2 = Some w'.
 Proof.
-  revert w'. induction r; intros w'; csimpl; [by rewrite ctree_lookup_nil|].
-  rewrite !ctree_lookup_cons. intros.
-  simplify_option_equality; eauto using ctree_lookup_seg_freeze.
-Qed.
-Lemma ctree_lookup_seg_unfreeze Γ w rs w' :
-  w !!{Γ} rs = Some w' → w !!{Γ} freeze false rs = Some w'.
-Proof.
-  intros. destruct rs as [| |i s q]; auto.
-  by destruct w, q; simplify_option_equality.
-Qed.
-Lemma ctree_lookup_unfreeze Γ w r w' :
-  w !!{Γ} r = Some w' → w !!{Γ} (freeze false <$> r) = Some w'.
-Proof.
-  revert w'. induction r; intros w'; csimpl; [by rewrite ctree_lookup_nil|].
-  rewrite !ctree_lookup_cons. intros.
-  simplify_option_equality; eauto using ctree_lookup_seg_unfreeze.
+  intros Hw Hr; revert w' Hw. induction Hr; intros w'; [done|].
+  rewrite !ctree_lookup_cons, !bind_Some; intros (?&?&?);
+    eauto using ctree_lookup_seg_le.
 Qed.
 Lemma ctree_lookup_seg_freeze_proper Γ q1 q2 w rs1 rs2 w1 w2 :
   w !!{Γ} rs1 = Some w1 → w !!{Γ} rs2 = Some w2 →
@@ -1241,8 +1228,8 @@ Proof.
   rewrite ref_typed_snoc in Hr; destruct Hr as (σ'&?&?).
   destruct (ctree_lookup_seg_unfreeze_exists Γ Γm w τ rs σ') as (w'&?); auto.
   destruct (IH w' σ') as (w''&?); eauto using ctree_lookup_seg_union_free,
-    ctree_lookup_seg_Forall, ctree_lookup_seg_typed,
-    ref_seg_typed_freeze_2, pbit_indetify_unshared.
+    ctree_lookup_seg_Forall, ctree_lookup_seg_typed, pbit_indetify_unshared,
+    ref_seg_typed_le, ref_seg_freeze_le_r.
   exists w''. rewrite fmap_app; csimpl.
   rewrite ctree_lookup_snoc. by simplify_option_equality.
 Qed.
@@ -1491,14 +1478,15 @@ Qed.
 Lemma ctree_alter_snoc Γ g w r rs :
   ctree_alter Γ g (r ++ [rs]) w = ctree_alter_seg Γ (ctree_alter Γ g r) rs w.
 Proof. apply ctree_alter_app. Qed.
-Lemma ctree_alter_seg_freeze Γ q g rs :
-  ctree_alter_seg Γ g (freeze q rs) = ctree_alter_seg Γ g rs.
-Proof. by destruct rs. Qed.
-Lemma ctree_alter_freeze Γ q g r :
-  ctree_alter Γ g (freeze q <$> r) = ctree_alter Γ g r.
+Lemma ctree_alter_seg_le Γ g rs1 rs2 :
+  rs1 ⊆ rs2 → ctree_alter_seg Γ g rs1 = ctree_alter_seg Γ g rs2.
+Proof. by destruct 1. Qed.
+Lemma ctree_alter_le Γ g r1 r2 :
+  r1 ⊆* r2 → ctree_alter Γ g r1 = ctree_alter Γ g r2.
 Proof.
-  revert g. induction r as [|rs r IH]; intros g; simpl; [done |].
-  by rewrite IH, ctree_alter_seg_freeze.
+  intros Hr. revert g.
+  induction Hr as [|rs1 rs2 r1 r2 ?? IH]; intros g; simpl; auto.
+  by erewrite IH, ctree_alter_seg_le by eauto.
 Qed.
 Lemma ctree_alter_seg_ext Γ g1 g2 w rs :
   (∀ w', g1 w' = g2 w') → ctree_alter_seg Γ g1 rs w = ctree_alter_seg Γ g2 rs w.
@@ -1542,7 +1530,9 @@ Lemma ctree_alter_commute Γ g1 g2 w r1 r2 :
 Proof.
   rewrite ref_disjoint_alt. intros (r1'&rs1'&r1''&r2'&rs2'&r2''&->&->&?&Hr).
   rewrite !ctree_alter_app, !ctree_alter_singleton.
-  rewrite <-!(ctree_alter_freeze _ true _ r1''), !Hr, !ctree_alter_freeze.
+  erewrite <-!(ctree_alter_le _ _ (freeze true <$> r1'')), Hr,
+    !(ctree_alter_le _ _ (freeze true <$> r2'') r2'')
+    by eauto using ref_freeze_le_l.
   rewrite <-!ctree_alter_compose. apply ctree_alter_ext; intros w'; simpl; auto.
   by apply ctree_alter_seg_commute.
 Qed.
@@ -1703,8 +1693,10 @@ Lemma ctree_lookup_alter Γ g w r1 r2 w' :
   freeze true <$> r1 = freeze true <$> r2 →
   ctree_alter Γ g r2 w !!{Γ} r1 = Some (g w').
 Proof.
-  intros ?? Hr. apply ctree_lookup_freeze; rewrite Hr.
-  eapply ctree_lookup_alter_freeze; eauto using ctree_lookup_unfreeze.
+  intros ?? Hr. apply ctree_lookup_le with (freeze true <$> r1);
+    auto using ref_freeze_le_l; rewrite Hr.
+  eapply ctree_lookup_alter_freeze;
+    eauto using ctree_lookup_le, ref_freeze_le_r.
   by rewrite <-(ref_freeze_freeze _ true), <-Hr, ref_freeze_freeze.
 Qed.
 Lemma ctree_lookup_alter_seg_inv Γ Γm g w rs τ σ w' :
@@ -1756,8 +1748,8 @@ Proof.
     !ctree_alter_singleton, !ctree_lookup_singleton; intros.
   destruct (w !!{_} r) as [w1'|] eqn:Hw1'; simplify_equality'.
   destruct (w1' !!{_} rs1) as [w2'|] eqn:Hw2'; simplify_equality'.
-  erewrite ctree_lookup_alter by eauto using ctree_lookup_unfreeze; csimpl.
-  by rewrite ctree_lookup_alter_seg_disjoint, Hw2' by done.
+  erewrite ctree_lookup_alter by eauto using ctree_lookup_le, ref_freeze_le_r.
+  by csimpl; rewrite ctree_lookup_alter_seg_disjoint, Hw2' by done.
 Qed.
 Lemma ctree_alter_seg_ext_lookup Γ g1 g2 w rs w' :
   w !!{Γ} rs = Some w' → g1 w' = g2 w' →

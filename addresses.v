@@ -210,8 +210,7 @@ Proof.
   unfold addr_strict. by rewrite addr_byte_freeze, addr_type_base_freeze,
     addr_ref_base_freeze, ref_size_freeze.
 Qed.
-Lemma addr_strict_freeze_2 Γ β a :
-  addr_strict Γ a → addr_strict Γ (freeze β a).
+Lemma addr_strict_freeze_2 Γ β a : addr_strict Γ a → addr_strict Γ (freeze β a).
 Proof. by rewrite addr_strict_freeze. Qed.
 Lemma addr_ref_byte_freeze Γ β a :
   addr_ref_byte Γ (freeze β a) = addr_ref_byte Γ a.
@@ -222,11 +221,6 @@ Lemma addr_typed_freeze Γ Γm β a σ : (Γ,Γm) ⊢ freeze β a : σ ↔ (Γ,�
 Proof.
   rewrite !addr_typed_alt; destruct a; simpl. by rewrite ref_offset_freeze,
     ref_size_freeze; setoid_rewrite ref_typed_freeze.
-Qed.
-Lemma addr_type_check_freeze Γ Γm β a :
-  type_check (Γ,Γm) (freeze β a) = type_check (Γ,Γm) a.
-Proof.
-  apply option_eq; intros. by rewrite !type_check_correct, addr_typed_freeze.
 Qed.
 Lemma addr_is_obj_ref_byte Γ Γm a σ :
   (Γ,Γm) ⊢ a : σ → addr_is_obj a → addr_ref_byte Γ a = 0.

@@ -27,39 +27,6 @@ Proof.
   | _, _ => right _
   end; abstract congruence.
 Defined.
-(*
-Instance ref_seg_lexico : Lexico ref_seg := λ rs1 rs2,
-  match rs1, rs2 with
-  | RArray i1 n1, RArray i2 n2 => lexico (i1,n1) (i2,n2)
-  | RArray _ _, (RStruct _ _ | RUnion _ _ _) => True
-  | RStruct i1 s1, RStruct i2 s2 => lexico (i1,s1) (i2,s2)
-  | RStruct _ _, RUnion _ _ _ => True
-  | RUnion i1 s1 β1, RUnion i2 s2 β2 => lexico (i1,s1,β1) (i2,s2,β2)
-  | _, _ => False
-  end.
-Instance ref_seg_lexico_po: StrictOrder (@lexico ref_seg _).
-Proof.
-  unfold lexico, ref_seg_lexico. repeat split.
-  * intros [??|??|???] ?; simplify_order.
-  * by intros [] [] [] ??; simplify_order.
-Qed.
-Instance ref_seg_trichotomy: TrichotomyT (@lexico ref_seg _).
-Proof.
- red; refine (λ rs1 rs2,
-  match rs1, rs2 with
-  | RArray i1 n1, RArray i2 n2 =>
-     cast_trichotomy (trichotomyT lexico (i1,n1) (i2,n2))
-  | RArray _ _, (RStruct _ _ | RUnion _ _ _) => inleft (left _)
-  | RStruct i1 s1, RStruct i2 s2 =>
-     cast_trichotomy (trichotomyT lexico (i1,s1) (i2,s2))
-  | RStruct _ _, RUnion _ _ _ => inleft (left _)
-  | RUnion i1 s1 β1, RUnion i2 s2 β2 =>
-     cast_trichotomy (trichotomyT lexico (i1,s1,β1) (i2,s2,β2))
-  | _, _ => inright _
-  end);
-  abstract (repeat (done || constructor || congruence || by inversion 1)).
-Defined.
-*)
 
 Inductive ref_seg_typed' `{Env Ti} (Γ : env Ti) :
      ref_seg Ti → type Ti → type Ti → Prop :=
@@ -100,7 +67,7 @@ Instance ref_lookup {Ti : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)} :
 
 Class Freeze A := freeze: bool → A → A.
 Arguments freeze {_ _} _ !_ /.
-Definition frozen `{Freeze A} (x : A) : Prop := freeze true x = x.
+Definition frozen `{Freeze A} (x : A) := freeze true x = x.
 
 Instance ref_seg_freeze {Ti} : Freeze (ref_seg Ti) := λ β rs,
   match rs with
@@ -151,6 +118,13 @@ Definition ref_seg_object_offset `{Env Ti}
   end.
 Definition ref_object_offset `{Env Ti} (Γ : env Ti)
   (r : ref Ti) : nat := sum_list (ref_seg_object_offset Γ <$> r).
+
+Inductive ref_seg_le {Ti} : SubsetEq (ref_seg Ti) :=
+  | RArray_refine i τ n : @RArray Ti i τ n ⊆ RArray i τ n
+  | RStruct_refine i s : @RStruct Ti i s ⊆ RStruct i s
+  | RUnion_refine i s (β1 β2 : bool) :
+     (β2 → β1) → @RUnion Ti i s β1 ⊆ RUnion i s β2.
+Existing Instance ref_seg_le.
 
 Section ref_typed_ind.
   Context `{Env Ti} (Γ : env Ti) (P : ref Ti → type Ti → type Ti → Prop).
@@ -329,29 +303,6 @@ Qed.
 Lemma subtype_weaken Γ Σ σ τ : σ ⊆{Γ} τ → Γ ⊆ Σ → σ ⊆{Σ} τ.
 Proof. intros (r&?); exists r; eauto using ref_typed_weaken. Qed.
 
-Lemma ref_seg_lookup_freeze Γ β rs : lookupE Γ (freeze β rs) = lookupE Γ rs.
-Proof. by destruct rs. Qed.
-Lemma ref_seg_typed_freeze Γ β τ rs σ :
-  Γ ⊢ freeze β rs : τ ↣ σ ↔ Γ ⊢ rs : τ ↣ σ.
-Proof. by rewrite <-!path_type_check_correct, ref_seg_lookup_freeze. Qed.
-Lemma ref_seg_typed_freeze_1 Γ β τ rs σ :
-  Γ ⊢ freeze β rs : τ ↣ σ → Γ ⊢ rs : τ ↣ σ.
-Proof. by rewrite ref_seg_typed_freeze. Qed.
-Lemma ref_seg_typed_freeze_2 Γ β τ rs σ :
-  Γ ⊢ rs : τ ↣ σ → Γ ⊢ freeze β rs : τ ↣ σ.
-Proof. by rewrite ref_seg_typed_freeze. Qed.
-Lemma ref_lookup_freeze Γ β r : lookupE Γ (freeze β <$> r) = lookupE Γ r.
-Proof.
-  induction r as [|rs r IH]; [done|].
-  by rewrite fmap_cons, !ref_lookup_cons, ref_seg_lookup_freeze, IH.
-Qed.
-Lemma ref_typed_freeze Γ β τ r σ : Γ ⊢ freeze β <$> r : τ ↣ σ ↔ Γ ⊢ r : τ ↣ σ.
-Proof. by rewrite <-!path_type_check_correct, ref_lookup_freeze. Qed.
-Lemma ref_typed_freeze_1 Γ β τ r σ : Γ ⊢ freeze β <$> r : τ ↣ σ → Γ ⊢ r : τ ↣ σ.
-Proof. by rewrite ref_typed_freeze. Qed.
-Lemma ref_typed_freeze_2 Γ β τ r σ : Γ ⊢ r : τ ↣ σ → Γ ⊢ freeze β <$> r : τ ↣ σ.
-Proof. by rewrite ref_typed_freeze. Qed.
-
 Lemma ref_seg_freeze_freeze β1 β2 rs : freeze β1 (freeze β2 rs) = freeze β1 rs.
 Proof. by destruct rs. Qed.
 Lemma ref_freeze_freeze β1 β2 r :
@@ -360,6 +311,69 @@ Proof.
   rewrite <-list_fmap_compose.
   apply list_fmap_ext; simpl; auto using ref_seg_freeze_freeze.
 Qed.
+Lemma ref_seg_freeze_le_l rs : freeze true rs ⊆ rs.
+Proof. by destruct rs; constructor. Qed.
+Lemma ref_freeze_le_l r : freeze true <$> r ⊆* r.
+Proof. induction r; simpl; auto using ref_seg_freeze_le_l. Qed.
+Lemma ref_seg_freeze_le_r rs : rs ⊆ freeze false rs.
+Proof. by destruct rs; constructor. Qed.
+Lemma ref_freeze_le_r r : r ⊆* freeze false <$> r.
+Proof. induction r; simpl; auto using ref_seg_freeze_le_r. Qed.
+Lemma ref_seg_freeze_le β rs1 rs2 : rs1 ⊆ rs2 → freeze β rs1 = freeze β rs2.
+Proof. by destruct 1. Qed.
+Lemma ref_freeze_le β r1 r2 : r1 ⊆* r2 → freeze β <$> r1 = freeze β <$> r2.
+Proof. induction 1; f_equal'; eauto using ref_seg_freeze_le. Qed.
+Global Instance: PartialOrder (@subseteq (ref_seg Ti) _).
+Proof.
+  repeat split; [by intros []; constructor| |].
+  * destruct 1; inversion 1; constructor; auto.
+  * destruct 1; inversion 1; f_equal. by apply eq_bool_prop_intro.
+Qed.
+Lemma ref_seg_typed_le Γ rs1 rs2 τ σ :
+  Γ ⊢ rs1 : τ ↣ σ → rs1 ⊆ rs2 → Γ ⊢ rs2 : τ ↣ σ.
+Proof. destruct 1; inversion 1; econstructor; eauto. Qed.
+Lemma ref_typed_le Γ r1 r2 τ σ : Γ ⊢ r1 : τ ↣ σ → r1 ⊆* r2 → Γ ⊢ r2 : τ ↣ σ.
+Proof.
+  intros Hr1; revert r2. induction Hr1 using @ref_typed_ind; intros;
+    decompose_Forall_hyps; typed_constructor; eauto using ref_seg_typed_le.
+Qed.
+Lemma ref_seg_typed_ge Γ rs1 rs2 τ σ :
+  Γ ⊢ rs2 : τ ↣ σ → rs1 ⊆ rs2 → Γ ⊢ rs1 : τ ↣ σ.
+Proof. destruct 1; inversion 1; econstructor; eauto. Qed.
+Lemma ref_typed_ge Γ r1 r2 τ σ : Γ ⊢ r2 : τ ↣ σ → r1 ⊆* r2 → Γ ⊢ r1 : τ ↣ σ.
+Proof.
+  intros Hr2; revert r1. induction Hr2 using @ref_typed_ind; intros;
+    decompose_Forall_hyps; typed_constructor; eauto using ref_seg_typed_ge.
+Qed.
+Lemma ref_typed_freeze Γ β τ r σ : Γ ⊢ freeze β <$> r : τ ↣ σ ↔ Γ ⊢ r : τ ↣ σ.
+Proof.
+  destruct β; split; eauto using ref_typed_ge,
+    ref_typed_le, ref_freeze_le_l, ref_freeze_le_r.
+Qed.
+Lemma ref_offset_le r1 r2 : r1 ⊆* r2 → ref_offset r1 = ref_offset r2.
+Proof. by destruct 1 as [|???? []]. Qed.
+Lemma ref_size_le r1 r2 : r1 ⊆* r2 → ref_size r1 = ref_size r2.
+Proof. by destruct 1 as [|???? []]. Qed.
+Lemma ref_frozen_le r1 r2 :
+  r1 ⊆* r2 → freeze true <$> r2 = r2 → freeze true <$> r1 = r1.
+Proof.
+  induction 1 as [|???? [| |?? []]]; intros; simplify_equality'; f_equal; tauto.
+Qed.
+Lemma ref_le_unique r1 r2 r3 :
+  r1 ⊆* r2 → r1 ⊆* r3 → freeze true <$> r2 = freeze true <$> r3.
+Proof.
+  intros. transitivity (freeze true <$> r1); auto using ref_freeze_le, eq_sym.
+Qed.
+Lemma ref_le_unique_alt r1 r2 r3 :
+  r1 ⊆* r2 → r1 ⊆* r3 →
+  freeze true <$> r2 = r2 → freeze true <$> r3 = r3 → r2 = r3.
+Proof. intros ?? <- <-; eauto using ref_le_unique. Qed.
+Lemma ref_seg_set_offset_le rs1 rs2 i :
+  rs1 ⊆ rs2 → ref_seg_set_offset i rs1 ⊆ ref_seg_set_offset i rs2.
+Proof. by destruct 1; constructor. Qed.
+Lemma ref_set_offset_le r1 r2 i :
+  r1 ⊆* r2 → ref_set_offset i r1 ⊆* ref_set_offset i r2.
+Proof. destruct 1; constructor; auto using ref_seg_set_offset_le. Qed.
 Lemma ref_seg_offset_freeze β rs :
   ref_seg_offset (freeze β rs) = ref_seg_offset rs.
 Proof. by destruct rs. Qed.
@@ -375,6 +389,21 @@ Lemma ref_seg_size_freeze β rs : ref_seg_size (freeze β rs) = ref_seg_size rs.
 Proof. by destruct rs. Qed.
 Lemma ref_size_freeze β r : ref_size (freeze β <$> r) = ref_size r.
 Proof. destruct r; simpl; auto using ref_seg_size_freeze. Qed.
+Lemma ref_seg_object_offset_freeze Γ β rs :
+  ref_seg_object_offset Γ (freeze β rs) = ref_seg_object_offset Γ rs.
+Proof. by destruct rs. Qed.
+Lemma ref_object_offset_freeze Γ β r :
+  ref_object_offset Γ (freeze β <$> r) = ref_object_offset Γ r.
+Proof.
+  unfold ref_object_offset.
+  induction r; f_equal'; auto using ref_seg_object_offset_freeze.
+Qed.
+Lemma ref_object_offset_le Γ r1 r2 :
+  r1 ⊆* r2 → ref_object_offset Γ r1 = ref_object_offset Γ r2.
+Proof.
+  intros. rewrite <-(ref_object_offset_freeze Γ false r1),
+    <-(ref_object_offset_freeze Γ false r2); f_equal; auto using ref_freeze_le.
+Qed.
 
 Lemma ref_disjoint_app_l r1 r1' r2' : r1' ⊥ r2' → r1 ++ r1' ⊥ r2'.
 Proof. induction r1; simpl; auto using ref_disjoint_cons_l. Qed.
@@ -391,29 +420,6 @@ Global Instance: Symmetric (@disjoint (ref_seg Ti) _).
 Proof. destruct 1; constructor; auto. Qed.
 Global Instance: Symmetric (@disjoint (ref Ti) _).
 Proof. induction 1; constructor (by auto). Qed.
-Lemma ref_seg_disjoint_freeze_l β rs1 rs2 : freeze β rs1 ⊥ rs2 ↔ rs1 ⊥ rs2.
-Proof.
-  split; [|by destruct 1; constructor].
-  by destruct rs1; inversion_clear 1; constructor.
-Qed.
-Lemma ref_seg_disjoint_freeze_r β rs1 rs2 : rs1 ⊥ freeze β rs2 ↔ rs1 ⊥ rs2.
-Proof. by rewrite !(symmetry_iff (⊥) rs1), ref_seg_disjoint_freeze_l. Qed.
-Lemma ref_disjoint_freeze_l β r1 r2 : freeze β <$> r1 ⊥ r2 ↔ r1 ⊥ r2.
-Proof.
-  split.
-  * intros Hr. remember (freeze β <$> r1) as r1' eqn:Hr1'. revert r1 Hr1'.
-    induction Hr; intros [|??] ?; simplify_equality'.
-    + rewrite ref_freeze_freeze in *. constructor; auto.
-      eapply ref_seg_disjoint_freeze_l; eauto.
-    + constructor (by auto).
-    + constructor (by auto).
-    + constructor (by auto).
-  * induction 1; csimpl; try constructor (by auto). constructor.
-    + by rewrite ref_freeze_freeze.
-    + by rewrite ref_seg_disjoint_freeze_l.
-Qed.
-Lemma ref_disjoint_freeze_r β r1 r2 : r1 ⊥ freeze β <$> r2 ↔ r1 ⊥ r2.
-Proof. by rewrite !(symmetry_iff (⊥) r1), ref_disjoint_freeze_l. Qed.
 Lemma ref_disjoint_alt r1 r2 :
   r1 ⊥ r2 ↔ ∃ r1' rs1 r1'' r2' rs2 r2'',
     r1 = r1' ++ [rs1] ++ r1'' ∧ r2 = r2' ++ [rs2] ++ r2'' ∧
@@ -477,7 +483,6 @@ Lemma ref_disjoint_app_inv_r r1 r2 : ¬r2 ⊥ r1 ++ r2.
 Proof. intros ?. by destruct (ref_disjoint_app_inv_l r1 r2). Qed.
 Global Instance: Irreflexive (@disjoint (ref Ti) _).
 Proof. intros r ?. by destruct (ref_disjoint_app_inv_l [] r). Qed.
-
 Lemma ref_disjoint_here_app_2 r1 r2 r : r1 ++ r ⊥ r2 ++ r → r1 ⊥ r2.
 Proof.
   induction r as [|rs r IH] using rev_ind; [by rewrite !(right_id_L [] (++)) |].
@@ -486,10 +491,32 @@ Proof.
 Qed.
 Lemma ref_disjoint_here_app r1 r2 r : r1 ⊥ r2 ↔ r1 ++ r ⊥ r2 ++ r.
 Proof.
-  split.
-  + intros. by apply ref_disjoint_here_app_1.
-  + eauto using ref_disjoint_here_app_2.
+  split; eauto using ref_disjoint_here_app_2.
+  intros. by apply ref_disjoint_here_app_1.
 Qed.
+Lemma ref_seg_disjoint_le rs1 rs2 rs3 rs4 :
+  rs1 ⊥ rs2 → rs1 ⊆ rs3 → rs2 ⊆ rs4 → rs3 ⊥ rs4.
+Proof. by destruct 1; do 2 inversion 1; constructor. Qed.
+Lemma ref_disjoint_le r1 r2 r3 r4 : r1 ⊥ r2 → r1 ⊆* r3 → r2 ⊆* r4 → r3 ⊥ r4.
+Proof.
+  rewrite ref_disjoint_alt; intros (r1'&rs1&r1''&r2'&rs2&r2''&->&->&?&?) ??.
+  decompose_Forall_hyps.
+  apply ref_disjoint_app, ref_disjoint_here; eauto using ref_seg_disjoint_le.
+  transitivity (freeze true <$> r1''); auto using ref_freeze_le, eq_sym.
+  transitivity (freeze true <$> r2''); auto using ref_freeze_le, eq_sym.
+Qed.
+Lemma ref_seg_disjoint_ge rs1 rs2 rs3 rs4 :
+  rs3 ⊥ rs4 → rs1 ⊆ rs3 → rs2 ⊆ rs4 → rs1 ⊥ rs2.
+Proof. by destruct 1; do 2 inversion 1; constructor. Qed.
+Lemma ref_disjoint_ge r1 r2 r3 r4 : r3 ⊥ r4 → r1 ⊆* r3 → r2 ⊆* r4 → r1 ⊥ r2.
+Proof.
+  rewrite ref_disjoint_alt; intros (r3'&rs3&r3''&r4'&rs4&r4''&->&->&?&?) ??.
+  decompose_Forall_hyps.
+  apply ref_disjoint_app, ref_disjoint_here; eauto using ref_seg_disjoint_ge.
+  transitivity (freeze true <$> r3''); auto using ref_freeze_le, eq_sym.
+  transitivity (freeze true <$> r4''); auto using ref_freeze_le, eq_sym.
+Qed.
+
 Global Instance ref_seg_disjoint_dec rs1 rs2 : Decision (rs1 ⊥ rs2).
 Proof.
  refine
@@ -500,7 +527,6 @@ Proof.
   | _, _ => right _
   end; abstract first [intuition; subst; by constructor|inversion 1; intuition].
 Defined.
-
 Inductive ref_disjoint_rev: ref Ti → ref Ti → Prop :=
   | ref_disjoint_rev_here rs1 rs2 r1' r2' :
      rs1 ⊥ rs2 → ref_disjoint_rev (rs1 :: r1') (rs2 :: r2')
@@ -579,15 +605,6 @@ Proof.
   destruct (decide (i = j)) as [->|]; auto. by left; repeat constructor.
 Qed.
 
-Lemma ref_seg_object_offset_freeze Γ β rs :
-  ref_seg_object_offset Γ (freeze β rs) = ref_seg_object_offset Γ rs.
-Proof. by destruct rs. Qed.
-Lemma ref_object_offset_freeze Γ β r :
-  ref_object_offset Γ (freeze β <$> r) = ref_object_offset Γ r.
-Proof.
-  unfold ref_object_offset.
-  induction r; f_equal'; auto using ref_seg_object_offset_freeze.
-Qed.
 Lemma ref_object_offset_app Γ r1 r2 :
   ref_object_offset Γ (r1 ++ r2)
   = ref_object_offset Γ r1 + ref_object_offset Γ r2.
@@ -640,12 +657,13 @@ Lemma ref_disjoint_object_offset Γ τ r1 r2 σ1 σ2 :
 Proof.
   rewrite ref_disjoint_alt; intros ? (r1''&rs1&r1'&r2''&rs2&r2'&->&->&?&Hr').
   repeat setoid_rewrite ref_typed_app; setoid_rewrite ref_typed_singleton.
-  intros (σ1'&(τ'&Hτ'&?)&?) (σ2'&(?&?&?)&?);
-    rewrite <-(ref_typed_freeze _ true), Hr', ref_typed_freeze in Hτ';
-    simplify_type_equality.
+  intros (σ1'&(τ'&?&?)&?) (σ2'&(τ''&?&?)&?).
+  assert (Γ ⊢ r2' : τ ↣ τ'); simplify_type_equality.
+  { apply ref_typed_le with (freeze true <$> r2'); auto using ref_freeze_le_l.
+    rewrite <-Hr'. eauto using ref_typed_ge, ref_freeze_le_l. }
   rewrite !ref_object_offset_app, !ref_object_offset_singleton,
     <-(ref_object_offset_freeze _ true r1'), Hr', !ref_object_offset_freeze.
-  destruct (ref_seg_disjoint_object_offset Γ τ' rs1 rs2 σ1' σ2'); auto.
+  destruct (ref_seg_disjoint_object_offset Γ τ'' rs1 rs2 σ1' σ2'); auto.
   * efeed pose proof (ref_object_offset_size Γ σ1'); eauto; lia.
   * efeed pose proof (ref_object_offset_size Γ σ2'); eauto; lia.
 Qed.

@@ -149,7 +149,7 @@ Proof.
   rewrite option_guard_True by auto using addr_strict_freeze_2.
   destruct (m !! addr_index a) as [[|w' β]|]; simplify_equality'.
   destruct (w' !!{Γ} addr_ref Γ a) as [w''|] eqn:?; simplify_equality'.
-  erewrite ctree_lookup_unfreeze by eauto; csimpl.
+  erewrite ctree_lookup_le by eauto using ref_freeze_le_r; csimpl.
   by rewrite (decide_iff _ _ _ _ (addr_is_obj_freeze _ _)), addr_type_of_freeze.
 Qed.
 Lemma cmap_lookup_typed Γ Γm m a w σ :
@@ -259,14 +259,6 @@ Proof.
   contradict Hgw; eapply (ctree_alter_byte_unmapped _ _ _ w'');
     eauto using ctree_alter_lookup_Forall, @ctree_empty_unmapped.
 Qed.
-Lemma cmap_alter_freeze Γ q g m a :
-  cmap_alter Γ g (freeze q a) m = cmap_alter Γ g a m.
-Proof.
-  destruct m as [m]; f_equal'. rewrite addr_index_freeze,
-    addr_ref_freeze, addr_ref_byte_freeze, ctree_alter_freeze.
-  apply alter_ext; intros [|??] ?; f_equal'; apply ctree_alter_ext; intros.
-  by rewrite (decide_iff _ _ _ _ (addr_is_obj_freeze q a)).
-Qed.
 Lemma cmap_alter_commute Γ Γm g1 g2 m a1 a2 w1 w2 τ1 τ2 :
   ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 → 
   (Γ,Γm) ⊢ a1 : τ1 → m !!{Γ} a1 = Some w1 → (Γ,Γm) ⊢ g1 w1 : τ1 →
@@ -283,8 +275,9 @@ Proof.
   apply alter_ext; intros [|w β] Hw; f_equal'; simplify_type_equality'.
   repeat case_option_guard; simplify_equality'.
   rewrite Hw in Hw1, Hw2; simplify_equality'.
-  rewrite <-!(ctree_alter_freeze _ true _ (addr_ref Γ a1)), !Ha,
-    !ctree_alter_freeze, <-!ctree_alter_compose.
+  rewrite <-!(ctree_alter_le _ _ (freeze true <$> addr_ref Γ a1)), !Ha,
+    !(ctree_alter_le _ _ (freeze true <$> addr_ref Γ a2) (addr_ref Γ a2)),
+    <-!ctree_alter_compose by eauto using ref_freeze_le_l.
   destruct (w !!{Γ} addr_ref Γ a1) as [w1'|] eqn:Hw1',
     (w !!{Γ} addr_ref Γ a2) as [w2'|] eqn:Hw2'; simplify_option_equality.
   assert (τ1 = ucharT) by intuition eauto using addr_not_obj_type.
@@ -304,8 +297,15 @@ Proof.
   destruct m as [m]; simpl; intros. case_option_guard; simplify_map_equality'.
   destruct (m !! addr_index a) as [[|w' β]|] eqn:?; simplify_equality'.
   destruct (w' !!{Γ} addr_ref Γ a) as [w''|] eqn:?; simplify_equality'.
-  erewrite ctree_lookup_alter by eauto using ctree_lookup_unfreeze; simpl.
+  erewrite ctree_lookup_alter
+    by eauto using ctree_lookup_le, ref_freeze_le_r; simpl.
   by case_decide; simplify_equality'.
+Qed.
+Lemma cmap_lookup_not_obj_ne_void Γ Γm m a w τ :
+  ¬addr_is_obj a → (Γ,Γm) ⊢ a : τ → m !!{Γ} a = Some w → τ ≠ voidT.
+Proof.
+  destruct m as [m]; intros; simplify_option_equality;
+    simplify_type_equality; tauto.
 Qed.
 Lemma cmap_lookup_alter_not_obj Γ Γm g m a w τ :
   ✓ Γ → ✓{Γ,Γm} m → ¬addr_is_obj a →
@@ -325,7 +325,8 @@ Proof.
   destruct (w' !!{Γ} addr_ref Γ a) as [w''|] eqn:?; simplify_equality'.
   destruct (ctree_lookup_Some Γ Γm w' (addr_type_object a)
     (addr_ref Γ a) w'') as (τ''&?&?); auto; simplify_type_equality.
-  erewrite ctree_lookup_alter by eauto using ctree_lookup_unfreeze; simpl.
+  erewrite ctree_lookup_alter
+    by eauto using ctree_lookup_le, ref_freeze_le_r; simpl.
   case_decide; [done|]; case_option_guard; simplify_equality'.
   assert (τ = ucharT) by (intuition eauto using addr_not_obj_type); subst.
   erewrite option_guard_True, ctree_lookup_alter_byte
@@ -355,7 +356,8 @@ Proof.
   destruct (ctree_lookup_Some Γ Γm w τ (addr_ref Γ a2) w2') as (τ'&_&?); auto.
   simplify_option_equality.
   assert (τ2 = ucharT) by (intuition eauto using addr_not_obj_type); subst.
-  erewrite ctree_lookup_alter by eauto using ctree_lookup_unfreeze; csimpl.
+  erewrite ctree_lookup_alter
+    by eauto using ctree_lookup_le, ref_freeze_le_r; csimpl.
   assert (ctree_unshared (g w2))
     by intuition eauto using ctree_lookup_byte_Forall, pbit_indetify_unshared.
   by erewrite option_guard_True, ctree_lookup_alter_byte_ne

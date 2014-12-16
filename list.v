@@ -324,7 +324,7 @@ Proof.
   intros ? Hl. apply app_injective_1; auto.
   apply (f_equal length) in Hl. rewrite !app_length in Hl. lia.
 Qed.
-Ltac simple_simplify_list_equality :=
+Ltac simplify_list_equality :=
   repeat match goal with
   | _ => progress simplify_equality'
   | H : _ ++ _ = _ ++ _ |- _ => first
@@ -1363,7 +1363,7 @@ Proof. by rewrite prefix_suffix_reverse, !reverse_involutive. Qed.
 Lemma suffix_of_nil l : [] `suffix_of` l.
 Proof. exists l. by rewrite (right_id_L [] (++)). Qed.
 Lemma suffix_of_nil_inv l : l `suffix_of` [] → l = [].
-Proof. by intros [[|?] ?]; simple_simplify_list_equality. Qed.
+Proof. by intros [[|?] ?]; simplify_list_equality. Qed.
 Lemma suffix_of_cons_nil_inv x l : ¬x :: l `suffix_of` [].
 Proof. by intros [[] ?]. Qed.
 Lemma suffix_of_snoc l1 l2 x :
@@ -1381,19 +1381,19 @@ Lemma suffix_of_snoc_inv_1 x y l1 l2 :
   l1 ++ [x] `suffix_of` l2 ++ [y] → x = y.
 Proof.
   intros [k' E]. rewrite (associative_L (++)) in E.
-  by simple_simplify_list_equality.
+  by simplify_list_equality.
 Qed.
 Lemma suffix_of_snoc_inv_2 x y l1 l2 :
   l1 ++ [x] `suffix_of` l2 ++ [y] → l1 `suffix_of` l2.
 Proof.
   intros [k' E]. exists k'. rewrite (associative_L (++)) in E.
-  by simple_simplify_list_equality.
+  by simplify_list_equality.
 Qed.
 Lemma suffix_of_app_inv l1 l2 k :
   l1 ++ k `suffix_of` l2 ++ k → l1 `suffix_of` l2.
 Proof.
   intros [k' E]. exists k'. rewrite (associative_L (++)) in E.
-  by simple_simplify_list_equality.
+  by simplify_list_equality.
 Qed.
 Lemma suffix_of_cons_l l1 l2 x : x :: l1 `suffix_of` l2 → l1 `suffix_of` l2.
 Proof. intros [k ->]. exists (k ++ [x]). by rewrite <-(associative_L (++)). Qed.
@@ -1556,7 +1556,7 @@ Proof.
   { by rewrite <-!(associative_L (++)). }
   rewrite sublist_app_l in Hl12. destruct Hl12 as (k1&k2&E&?&Hk2).
   destruct k2 as [|z k2] using rev_ind; [inversion Hk2|].
-  rewrite (associative_L (++)) in E; simple_simplify_list_equality.
+  rewrite (associative_L (++)) in E; simplify_list_equality.
   eauto using sublist_inserts_r.
 Qed.
 Global Instance: PartialOrder (@sublist A).
@@ -3101,9 +3101,15 @@ Ltac decompose_elem_of_list := repeat
   | H : _ ∈ _ :: _ |- _ => apply elem_of_cons in H; destruct H
   | H : _ ∈ _ ++ _ |- _ => apply elem_of_app in H; destruct H
   end.
-Ltac simplify_list_equality := repeat
+Ltac simplify_list_equality ::= repeat
   match goal with
-  | _ => progress simple_simplify_list_equality
+  | _ => progress simplify_equality'
+  | H : _ ++ _ = _ ++ _ |- _ => first
+    [ apply app_inv_head in H | apply app_inv_tail in H
+    | apply app_injective_1 in H; [destruct H|by rewrite ?fmap_length]
+    | apply app_injective_2 in H; [destruct H|by rewrite ?fmap_length]]
+  | H : [?x] !! ?i = Some ?y |- _ =>
+    destruct i; [change (Some x = Some y) in H | discriminate]
   | H : _ <$> _ = [] |- _ => apply fmap_nil_inv in H
   | H : [] = _ <$> _ |- _ => symmetry in H; apply fmap_nil_inv in H
   | H : _ <$> _ = _ :: _ |- _ =>
@@ -3120,6 +3126,7 @@ Ltac simplify_list_equality := repeat
   | H : zip_with _ _ _ = _ ++ _ |- _ =>
     apply zip_with_app_inv in H; destruct H as (?&?&?&?&?&?&?&?&?)
   | H : _ ++ _ = zip_with _ _ _ |- _ => symmetry in H
+  | H : _ |- _ => rewrite (right_id_L [] (++)) in H
   end.
 Ltac decompose_Forall_hyps := repeat
   match goal with

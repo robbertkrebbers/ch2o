@@ -465,6 +465,19 @@ Proof.
   apply (ctree_refine_compose _ true true meminj_id meminj_id Γm Γm) with w;
     eauto using of_val_to_val_refine, union_reset_above, ctree_refine_id.
 Qed.
+Lemma val_freeze_refine_l Γ Γm v τ :
+  ✓ Γ → (Γ,Γm) ⊢ v : τ → val_map (freeze true) v ⊑{Γ,true@Γm} v : τ.
+Proof.
+  intros ?. revert v τ. refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
+  * intros. refine_constructor; eauto using base_val_freeze_refine_l.
+  * intros vs τ _ IH ?. refine_constructor; eauto. elim IH; csimpl; auto.
+  * intros s vs τs ? _ IH. refine_constructor; eauto.
+    elim IH; constructor; auto.
+  * intros. refine_constructor; eauto.
+  * intros s vs τs ? _ IH ?.
+    refine_constructor; eauto using vals_representable_freeze.
+    elim IH; constructor; auto.
+Qed.
 Lemma val_lookup_seg_refine Γ α f Γm1 Γm2 v1 v2 τ rs v3 :
   ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → v1 !! rs = Some v3 →
   ∃ v4, v2 !! rs = Some v4 ∧ v3 ⊑{Γ,α,f@Γm1↦Γm2} v4 : type_of v3.

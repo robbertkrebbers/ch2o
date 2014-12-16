@@ -224,4 +224,10 @@ Proof.
     rewrite base_val_unflatten_ptr_indet_2 by done.
     by constructor; auto; constructor.
 Qed.
+Lemma base_val_freeze_refine_l Γ Γm vb τb :
+  (Γ,Γm) ⊢ vb : τb → freeze true vb ⊑{Γ,true@Γm} vb : τb.
+Proof.
+  destruct 1; refine_constructor; eauto using ptr_freeze_refine_l,
+    bits_refine_id, char_byte_valid_bits_valid.
+Qed.
 End base_values.

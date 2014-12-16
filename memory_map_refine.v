@@ -11,8 +11,7 @@ Instance cmap_refine `{Env Ti} :
   (**i 4.) *) (∀ o1 o2 r w1 malloc,
     f !! o1 = Some (o2,r) → cmap_car m1 !! o1 = Some (Obj w1 malloc) →
     ∃ w2 w2' τ,
-      cmap_car m2 !! o2 = Some (Obj w2 malloc) ∧
-      w2 !!{Γ} (freeze true <$> r) = Some w2' ∧
+      cmap_car m2 !! o2 = Some (Obj w2 malloc) ∧ w2 !!{Γ} r = Some w2' ∧
       w1 ⊑{Γ,α,f@Γm1↦Γm2} w2' : τ ∧ (malloc → r = [])).
 Instance cmap_refine' `{Env Ti} : RefineM Ti (env Ti) (mem Ti) := λ Γ α f m1 m2,
   m1 ⊑{Γ,α,f@memenv_of m1↦memenv_of m2} m2.
@@ -75,10 +74,10 @@ Proof.
   rewrite lookup_meminj_compose_Some; intros (o2&r2&r3&?&?&->) Hw1.
   destruct (Hm12 o1 o2 r2 w1 malloc) as (w2&w2'&τ2&?&?&?&?); auto.
   destruct (Hm23 o2 o3 r3 w2 malloc) as (w3&w3'&τ3&->&?&?&?); auto.
-  destruct (ctree_lookup_refine Γ α2 f2 Γm2 Γm3 w2 w3' τ3
-    (freeze true <$> r2) w2') as (w3''&?&Hw23); auto.
+  destruct (ctree_lookup_refine Γ α2 f2 Γm2 Γm3 w2 w3' τ3 r2 w2')
+    as (w3''&?&Hw23); auto.
   erewrite ctree_refine_type_of_r in Hw23 by eauto. exists w3 w3'' τ2.
-  rewrite fmap_app, ctree_lookup_app; simplify_option_equality.
+  rewrite ctree_lookup_app; simplify_option_equality.
   naive_solver eauto using ctree_refine_compose.
 Qed.
 Lemma cmap_refine_compose' Γ α1 α2 f1 f2 m1 m2 m3 :
@@ -100,6 +99,20 @@ Proof.
     simplify_type_equality'; auto.
   exists w1 w1 τ'; split_ands; auto using ctree_refine_inverse.
 Qed.
+Lemma cmap_lookup_alter_refine Γ Γm g m a w τ :
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : τ →
+  m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : τ → ctree_unshared (g w) →
+  ∃ w', cmap_alter Γ g a m !!{Γ} a = Some w' ∧ w' ⊑{Γ,true@Γm} g w : τ.
+Proof.
+  intros. destruct (decide (addr_is_obj a)).
+  { exists (g w). erewrite cmap_lookup_alter by eauto.
+    eauto using ctree_refine_id. }
+  exists (ctree_lookup_byte_after Γ (addr_type_base a)
+    (addr_ref_byte Γ a) (g w)); split; eauto using cmap_lookup_alter_not_obj.
+  assert (τ = ucharT) by eauto using addr_not_obj_type,
+    cmap_lookup_not_obj_ne_void; subst.
+  eauto using ctree_lookup_byte_alter_refine.
+Qed.
 Lemma cmap_lookup_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 w1 τ :
   ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 →
   a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : τ → m1 !!{Γ} a1 = Some w1 →
@@ -112,17 +125,19 @@ Proof.
   rewrite option_guard_True by eauto using addr_strict_refine.
   destruct (m1 !! addr_index a1) as [[|w1' β]|] eqn:?; simplify_equality'.
   destruct (w1' !!{Γ} addr_ref Γ a1) as [w1''|] eqn:?; simplify_equality'.
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 τ) as (r&?&->); auto.
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 τ) as (r&?&?); auto.
   destruct (Hm (addr_index a1) (addr_index a2) r w1' β)
     as (w2&w2'&τ2&->&Hr&?&_); auto; csimpl.
   destruct (ctree_lookup_Some Γ Γm1 w1' τ2
     (addr_ref Γ a1) w1'') as (σ'&?&?); eauto using ctree_refine_typed_l.
-  rewrite ctree_lookup_app, Hr; csimpl.
   destruct (ctree_lookup_refine Γ α f Γm1 Γm2 w1' w2' τ2
-    (addr_ref Γ a1) w1'') as (w2''&->&?); auto; csimpl.
-  rewrite <-(decide_iff _ _ _ _ (addr_is_obj_refine _ _ _ _ _ _ _ _ Ha));
-    case_decide; simplify_equality'.
-  { cut (τ = σ'); [intros; simplify_type_equality; eauto|].
+    (addr_ref Γ a1) w1'') as (w2''&?&?); auto; simplify_type_equality.
+  assert (w2 !!{Γ} (addr_ref Γ a2) = Some w2'') as ->; simpl.
+  { eapply ctree_lookup_le with (addr_ref Γ a1 ++ r); eauto.
+    by rewrite ctree_lookup_app; simplify_option_equality. }
+  destruct (decide (addr_is_obj a1)).
+  { rewrite decide_True by (by erewrite <-addr_is_obj_refine by eauto).
+    cut (τ = σ'); [intros; simplify_type_equality; eauto|].
     erewrite <-(addr_is_obj_type_base _ _ a1 τ) by eauto.
     assert ((Γ,Γm1) ⊢ w1' : τ2) by eauto using ctree_refine_typed_l.
     assert (Γm1 ⊢ addr_index a1 : addr_type_object a1)
@@ -130,7 +145,9 @@ Proof.
     destruct (proj2 Hm1 (addr_index a1) w1' β)
       as (?&?&_&?&_); auto; simplify_type_equality'.
     eauto using ref_set_offset_typed_unique, addr_typed_ref_base_typed. }
-  case_option_guard; simplify_equality'; rewrite option_guard_True
+  case_option_guard; simplify_equality'.
+  rewrite decide_False by (by erewrite <-addr_is_obj_refine by eauto).
+  rewrite option_guard_True
     by intuition eauto using pbits_refine_unshared, ctree_flatten_refine.
   assert (τ = ucharT) by (intuition eauto using
     addr_not_obj_type, addr_refine_typed_l); subst.
@@ -172,19 +189,20 @@ Proof.
   intros o3 o4 r4 w3 malloc ? Hw3. destruct m1 as [m1], m2 as [m2]; simpl in *.
   repeat case_option_guard; simplify_type_equality'.
   destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 τ) as (r2&?&Hr2); auto.
-  rewrite Hr2 in Hw2 |- *; clear Hr2.
-  destruct (m1 !! addr_index a1) as [[|w1' ?]|] eqn:?; simplify_equality'.
-  destruct (m2 !! addr_index a2) as [[|w2' ?]|] eqn:?; simplify_equality'.
-  rewrite ctree_lookup_app in Hw2.
+  destruct (m1 !! addr_index a1) as [[|w1' malloc']|] eqn:?; simplify_equality'.
   destruct (w1' !!{Γ} addr_ref Γ a1) as [w1''|] eqn:?; simplify_equality'.
+  destruct (Hm (addr_index a1) (addr_index a2) r2 w1' malloc')
+    as (w2'&w2''&τ2&?&?&?&?); auto.
+  destruct (ctree_lookup_refine Γ α f Γm1 Γm2 w1' w2'' τ2
+    (addr_ref Γ a1) w1'') as (w2'''&?&?); auto; simplify_equality'.
+  assert (w2' !!{Γ} (addr_ref Γ a2) = Some w2'''); simplify_map_equality'.
+  { eapply ctree_lookup_le with (addr_ref Γ a1 ++ r2); eauto.
+    rewrite ctree_lookup_app, bind_Some; eauto. }
+  erewrite <-(ctree_alter_le _ _ (addr_ref Γ a1 ++ r2)) by eauto.
   destruct (decide (o3 = addr_index a1)); simplify_map_equality'.
-  * destruct (Hm (addr_index a1) (addr_index a2) r2 w1' malloc)
-      as (?&w2''&τ2&?&?&?&?); auto.
-    destruct (ctree_lookup_refine Γ α f Γm1 Γm2 w1' w2'' τ2
-      (addr_ref Γ a1) w1'') as (w2'''&?&?); auto; simplify_map_equality'.
-    eexists _, (ctree_alter Γ _ (addr_ref Γ a1) w2''), τ2; split_ands; eauto.
+  * eexists _, (ctree_alter Γ _ (addr_ref Γ a1) w2''), τ2; split_ands; eauto.
     { by erewrite ctree_alter_app, ctree_lookup_alter
-        by eauto using ctree_lookup_unfreeze. }
+        by eauto using ctree_lookup_le, ref_freeze_le_r. }
     assert (addr_is_obj a1 ↔ addr_is_obj a2) by eauto using addr_is_obj_refine.
     simplify_option_equality; try tauto.
     { eapply ctree_alter_refine; eauto; simplify_type_equality; eauto using

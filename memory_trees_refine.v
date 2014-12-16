@@ -144,7 +144,7 @@ Hint Immediate env_valid_lookup env_valid_lookup_lookup.
 
 Ltac solve_length := simplify_equality'; repeat first 
   [ rewrite take_length | rewrite drop_length | rewrite app_length
-  | rewrite fmap_length | erewrite ctree_flatten_length by eauto
+  | rewrite fmap_length | rewrite mask_length | erewrite ctree_flatten_length by eauto
   | rewrite type_mask_length by eauto | rewrite replicate_length
   | rewrite bit_size_of_int | rewrite int_width_char | rewrite resize_length
   | erewrite sublist_lookup_length by eauto
@@ -576,6 +576,15 @@ Proof.
     eauto using ctree_flatten_refine.
   exists (ctree_unflatten Γ ucharT xbs1); simplify_option_equality; split; auto.
   apply ctree_unflatten_refine; auto using TBase_valid, TInt_valid.
+Qed.
+Lemma ctree_lookup_byte_alter_refine Γ Γm w τ i :
+  ✓ Γ → (Γ,Γm) ⊢ w : ucharT →
+  ctree_lookup_byte_after Γ τ i w ⊑{Γ,true@Γm} w : ucharT.
+Proof.
+  intros. rewrite <-(union_free_reset w) at 2 by eauto using union_free_base.
+  erewrite <-ctree_unflatten_flatten by eauto.
+  apply ctree_unflatten_refine; eauto using TBase_valid, TInt_valid.
+  apply pbits_indetify_refine_l; eauto using ctree_flatten_valid.
 Qed.
 Lemma ctree_alter_byte_refine Γ α f Γm1 Γm2 g1 g2 w1 w2 τ i c1 c2 :
   ✓ Γ → w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : τ → w1 !!{Γ} i = Some c1 → w2 !!{Γ} i = Some c2 →

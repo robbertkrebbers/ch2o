@@ -7,13 +7,14 @@ Instance ptr_bit_refine `{Env Ti} :
     Refine Ti (env Ti) (ptr_bit Ti) := λ Γ α f Γm1 Γm2 pb1 pb2, ∃ τ,
   frag_item pb1 ⊑{Γ,α,f@Γm1↦Γm2} frag_item pb2 : τ ∧
   frag_index pb1 = frag_index pb2 ∧
-  frozen (frag_item pb1) ∧
+  frozen (frag_item pb2) ∧
   frag_index pb1 < bit_size_of Γ (τ.*).
 
 Section pointer_bits.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
 Implicit Types Γm : memenv Ti.
+Implicit Types α : bool.
 Implicit Types τ : type Ti.
 Implicit Types p : ptr Ti.
 Implicit Types pb : ptr_bit Ti.
@@ -33,12 +34,11 @@ Qed.
 Lemma ptr_bit_refine_inverse Γ f Γm1 Γm2 pb1 pb2 :
   pb1 ⊑{Γ,false,f@Γm1↦Γm2} pb2 → pb2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} pb1.
 Proof.
-  intros (τ&?&?&?&?); exists τ; split_ands; eauto using ptr_refine_inverse.
-  * by erewrite <-ptr_refine_frozen by eauto.
-  * congruence.
+  intros (τ&?&?&?&?); exists τ; split_ands; eauto using ptr_refine_inverse,
+    ptr_refine_frozen with congruence.
 Qed.
 Lemma ptr_bit_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' pb1 pb2 :
-  ✓ Γ → pb1 ⊑{Γ,α,f@Γm1↦Γm2} pb2 → Γ ⊆ Γ' → Γ ⊆ Γ' → Γm1' ⊑{Γ',α',f'} Γm2' →
+  ✓ Γ → pb1 ⊑{Γ,α,f@Γm1↦Γm2} pb2 → Γ ⊆ Γ' → (α → α') → Γm1' ⊑{Γ',α',f'} Γm2' →
   Γm1 ⇒ₘ Γm1' → meminj_extend f f' Γm1 Γm2 → pb1 ⊑{Γ',α',f'@Γm1'↦Γm2'} pb2.
 Proof.
   intros ? (τ&?&?&?&?) ??. exists τ.
@@ -47,11 +47,14 @@ Proof.
 Qed.
 Lemma ptr_bit_refine_valid_l Γ α f Γm1 Γm2 pb1 pb2 :
   ✓ Γ → pb1 ⊑{Γ,α,f@Γm1↦Γm2} pb2 → ✓{Γ,Γm1} pb1.
-Proof. intros ? (τ&?&?&?&?). exists τ; eauto using ptr_refine_typed_l. Qed.
+Proof.
+  intros ? (τ&?&?&?&?).
+  exists τ; eauto using ptr_refine_typed_l, ptr_refine_frozen.
+Qed.
 Lemma ptr_bit_refine_valid_r Γ α Γm1 Γm2 f pb1 pb2 :
   ✓ Γ → pb1 ⊑{Γ,α,f@Γm1↦Γm2} pb2 → ✓{Γ,Γm2} pb2.
 Proof.
-  intros ? (τ&?&?&?&?); exists τ; erewrite <-ptr_refine_frozen by eauto;
+  intros ? (τ&?&?&?&?); exists τ;
     eauto using ptr_refine_typed_r with congruence.
 Qed.
 Lemma ptr_bits_refine_valid_l Γ α f Γm1 Γm2 pbs1 pbs2 :
@@ -100,7 +103,7 @@ Lemma ptr_of_bits_refine Γ α f Γm1 Γm2 σ pbs1 pbs2 p1 :
   ∃ p2, ptr_of_bits Γ σ pbs2 = Some p2 ∧ p1 ⊑{Γ,α,f@Γm1↦Γm2} p2 : σ.
 Proof.
   revert pbs1 pbs2 p1. assert (∀ p1 p2 pbs1 pbs2,
-    p1 ⊑{Γ,α,f@Γm1↦Γm2} p2 : σ → frozen p1 → pbs1 ⊑{Γ,α,f@Γm1↦Γm2}* pbs2 →
+    p1 ⊑{Γ,α,f@Γm1↦Γm2} p2 : σ → frozen p2 → pbs1 ⊑{Γ,α,f@Γm1↦Γm2}* pbs2 →
     fragmented (bit_size_of Γ (σ.*)) p1 1 pbs1 →
     fragmented (bit_size_of Γ (σ.*)) p2 1 pbs2).
   { intros p1 p2 pbs1 pbs2 ??? ->.
@@ -122,7 +125,7 @@ Lemma ptr_of_bits_refine_None Γ f Γm1 Γm2 σ pbs1 pbs2 :
   ptr_of_bits Γ σ pbs2 = None.
 Proof.
   revert pbs1 pbs2. assert (∀ p1 p2 pbs1 pbs2,
-    p1 ⊑{Γ,false,f@Γm1↦Γm2} p2 : σ → frozen p1 →
+    p1 ⊑{Γ,false,f@Γm1↦Γm2} p2 : σ → frozen p2 →
     pbs1 ⊑{Γ,false,f@Γm1↦Γm2}* pbs2 →
     fragmented (bit_size_of Γ (σ.* )) p2 1 pbs2 →
     fragmented (bit_size_of Γ (σ.* )) p1 1 pbs1).

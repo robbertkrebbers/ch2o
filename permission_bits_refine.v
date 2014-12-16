@@ -200,11 +200,28 @@ Proof.
   induction 1 as [|[??] [??] ?? (?&?&?&?)]; intros;
     decompose_Forall_hyps; constructor; auto; by destruct k.
 Qed.
+Lemma pbits_refine_kind_subseteq_inv Γ α f Γm1 Γm2 k xbs1 xbs2 :
+  xbs1 ⊑{Γ,α,f@Γm1↦Γm2}* xbs2 → Forall (λ xb, k ⊆ pbit_kind xb) xbs2 →
+  Forall (λ xb, k ⊆ pbit_kind xb) xbs1.
+Proof.
+  induction 1 as [|[??] [??] ?? (?&?&?&?)]; intros;
+    decompose_Forall_hyps; constructor; auto; by destruct k.
+Qed.
 Lemma pbits_unlock_refine Γ α f Γm1 Γm2 xbs1 xbs2 βs :
   xbs1 ⊑{Γ,α,f@Γm1↦Γm2}* xbs2 → zip_with pbit_unlock_if xbs1 βs
   ⊑{Γ,α,f@Γm1↦Γm2}* zip_with pbit_unlock_if xbs2 βs.
 Proof.
   intros Hxbs; revert βs. induction Hxbs; intros [|[]?];
     constructor; simpl; auto using pbit_unlock_refine.
+Qed.
+Lemma pbit_indetify_refine_l Γ Γm xb :
+  ✓{Γ,Γm} xb → pbit_indetify xb ⊑{Γ,true@Γm} xb.
+Proof. intros (?&?&?); split_ands'; auto. by destruct xb; constructor. Qed.
+Lemma pbits_indetify_refine_l Γ Γm xbs βs :
+  ✓{Γ,Γm}* xbs → mask pbit_indetify βs xbs ⊑{Γ,true@Γm}* xbs.
+Proof.
+  intros Hxbs. revert βs.
+  induction Hxbs; intros [|[] ?]; simpl; constructor;
+    auto using pbit_refine_id, pbits_refine_id, pbit_indetify_refine_l.
 Qed.
 End permission_bits.

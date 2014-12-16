@@ -31,19 +31,20 @@ Lemma addr_plus_refine Γ α f m1 m2 a1 a2 σ j :
   ✓ Γ → addr_plus_ok Γ m1 j a1 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σ →
   addr_plus Γ j a1 ⊑{Γ,α,f@'{m1}↦'{m2}} addr_plus Γ j a2 : σ.
 Proof.
-  intros ? Ha' Ha. destruct Ha' as (_&?&?), Ha as
-    [o o' r r' r'' i i'' τ τ' σ σc ??????????? Hr'']; simplify_equality'.
-  econstructor; eauto.
+  intros ? Ha' Ha. unfold addr_plus; simpl.
+  destruct Ha' as (_&?&?), Ha as
+    [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σc ??????????? Hr]; simplify_equality'.
+  refine_constructor; eauto.
   { apply Nat2Z.inj_le. by rewrite Nat2Z.inj_mul, Z2Nat.id by done. }
   { apply Nat2Z.inj. rewrite Z2Nat_inj_mod, Z2Nat.id by done.
     rewrite Z.mod_add, <-Z2Nat_inj_mod; auto with f_equal.
     rewrite (Nat2Z.inj_iff _ 0).
     eauto using size_of_ne_0, ref_typed_type_valid, castable_type_valid. }
-  destruct Hr'' as [i|r i]; simplify_equality'; [|by constructor].
-  apply ref_refine_nil_alt; auto. rewrite ref_offset_freeze.
-  rewrite Nat2Z.inj_add, Nat2Z.inj_mul. 
-  transitivity (Z.to_nat ((i + j * size_of Γ σc) +
-    size_of Γ σ * ref_offset r')); [f_equal; lia |].
+  destruct Hr as [|r1 i1 r2 i2 Hr|r1' r1 r2 i];
+    simplify_type_equality'; constructor; auto.
+  rewrite Nat2Z.inj_add, Nat2Z.inj_mul.
+  transitivity (Z.to_nat ((i1 + j * size_of Γ σc) +
+    size_of Γ σ * ref_offset r1)); [f_equal; lia |].
   by rewrite Z2Nat.inj_add, Z2Nat.inj_mul, !Nat2Z.id
     by auto using Z.mul_nonneg_nonneg with lia.
 Qed.
@@ -51,19 +52,25 @@ Lemma addr_minus_ok_refine Γ α f m1 m2 a1 a2 a3 a4 σ :
   a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σ → a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σ →
   addr_minus_ok m1 a1 a3 → addr_minus_ok m2 a2 a4.
 Proof.
-  destruct 1 as [??????????? [] ?????????? []],
-    1 as [??????????? [] ?????????? []];
-    intros (?&?&Hr); simplify_equality'; eauto.
-  rewrite !fmap_app, !ref_freeze_freeze by eauto; eauto with congruence.
+  assert (∀ r1 r2 r3 r4 r : ref Ti,
+    r1 ++ r ⊆* r2 → r3 ++ r ⊆* r4 → freeze true <$> r1 = freeze true <$> r3 →
+    freeze true <$> r2 = freeze true <$> r4).
+  { intros r1 r2 r3 r4 r ???.
+    erewrite <-(ref_freeze_le _ _ r2), <-(ref_freeze_le _ _ r4) by eauto.
+    rewrite !fmap_app. by f_equal. }
+  destruct 1 as [??????????? [] ?????????? Hr1],
+    1 as [??????????? [] ?????????? Hr2]; destruct Hr1; inversion Hr2;
+    intros (?&?&?); simplify_list_equality; split_ands; eauto using ref_le_unique.
 Qed.
 Lemma addr_minus_refine Γ α f m1 m2 a1 a2 a3 a4 σ :
   addr_minus_ok m1 a1 a3 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σ →
   a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σ → addr_minus Γ a1 a3 = addr_minus Γ a2 a4.
 Proof.
   intros (?&?&?).
-  destruct 1 as [o1 o2 r1 r2 r3 i1 i3 τ1 τ2 σ1 σc ??????????? Hr3],
-    1 as [o4 o5 r4 r5 r6 i4 i6 τ4 τ5 σ3 σc4 ??????????? Hr6].
-  destruct Hr3, Hr6; simplify_type_equality'; f_equal; lia.
+  destruct 1 as [o1 o2 r1 r2 r3 i1 i3 τ1 τ2 σ1 σc ??????????? Hr],
+    1 as [o4 o5 r4 r5 r6 i4 i6 τ4 τ5 σ3 σc4 ??????????? Hr'].
+  destruct Hr, Hr'; simplify_list_equality;
+    simplify_type_equality; f_equal; lia.
 Qed.
 Lemma addr_cast_ok_refine Γ α f m1 m2 a1 a2 σ σc :
   ✓ Γ → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σ →
@@ -71,7 +78,7 @@ Lemma addr_cast_ok_refine Γ α f m1 m2 a1 a2 σ σc :
 Proof.
   destruct 2 as [o o' r r' r'' i i'' τ τ' σ σc' [] ?????????? []];
     intros (?&?&?); simplify_equality'; split_ands; eauto.
-  destruct (castable_divide Γ σ σc) as [z ->]; auto. rewrite ref_offset_freeze.
+  destruct (castable_divide Γ σ σc) as [z ->]; auto.
   destruct (decide (size_of Γ σc = 0)) as [->|?]; [done|].
   by rewrite !(Nat.mul_comm (_ * size_of _ _)), Nat.mul_assoc, Nat.mod_add.
 Qed.
@@ -84,7 +91,7 @@ Lemma addr_elt_refine Γ α f Γm1 Γm2 a1 a2 rs σ σ' :
   ref_seg_offset rs = 0 →
   addr_elt Γ rs a1 ⊑{Γ,α,f@Γm1↦Γm2} addr_elt Γ rs a2 : σ'.
 Proof.
-  intros ? [o o' r r' r'' i i'' τ τ' σ'' ??????????? Hcst Hr''] ? Hrs ?; simpl.
+  intros ? [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ'' ??????????? Hcst Hr] ? Hrs ?; simpl.
   apply castable_alt in Hcst; destruct Hcst as [<-|[?|?]];
     simplify_equality'; try solve [inversion Hrs].
   erewrite path_type_check_complete by eauto; simpl. econstructor; eauto.
@@ -94,10 +101,15 @@ Proof.
   * lia.
   * by rewrite Nat.mod_0_l by eauto using size_of_ne_0, ref_typed_type_valid,
       ref_seg_typed_type_valid, castable_type_valid.
-  * destruct Hr'' as [i''|]; simplify_equality'; [|by constructor].
-    apply ref_refine_ne_nil_alt.
-    by rewrite ref_set_offset_set_offset, (Nat.mul_comm (size_of _ _)),
-      Nat.div_add, Nat.div_small, Nat.add_0_l, ref_set_offset_offset by lia.
+  * destruct Hr as [|r1 i1 r2 i2 Hr|r1' r1 r2 i];
+      simplify_type_equality'; constructor; simpl; auto.
+    { constructor; auto. rewrite (Nat.mul_comm (size_of _ _)),
+        Nat.div_add, Nat.div_small, Nat.add_0_l by lia.
+      rewrite <-(ref_set_offset_offset r1) at 1.
+      rewrite <-(ref_set_offset_set_offset r1 _ 0).
+      eauto using ref_set_offset_le. }
+    constructor; auto. destruct r1; decompose_Forall_hyps;
+     auto using Forall2_app, ref_seg_set_offset_le.
 Qed.
 
 (** ** Refinements of operations on pointers *)
