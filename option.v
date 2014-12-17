@@ -86,7 +86,7 @@ Proof.
   match x, y with
   | Some a, Some b => cast_if (decide (a = b))
   | None, None => left _ | _, _ => right _
-  end; abstract congruence.
+  end; clear dec; abstract congruence.
 Defined.
 
 (** * Monadic operations *)
@@ -159,6 +159,8 @@ Instance maybe_inl {A B} : Maybe (@inl A B) := λ xy,
   match xy with inl x => Some x | _ => None end.
 Instance maybe_inr {A B} : Maybe (@inr A B) := λ xy,
   match xy with inr y => Some y | _ => None end.
+Instance maybe_Some {A} : Maybe (@Some A) := id.
+Arguments maybe_Some _ !_ /.
 
 (** * Union, intersection and difference *)
 Instance option_union_with {A} : UnionWith A (option A) := λ f x y,
