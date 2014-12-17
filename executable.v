@@ -78,8 +78,8 @@ Definition ehexec (Γ : env Ti) (k : ctx Ti)
   | #{Ω} v,, er =>
      Some (er, mem_unlock Ω m)
   | cast{τ} (#{Ω} v) =>
-     guard (val_cast_ok Γ m τ v);
-     Some (#{Ω} (val_cast τ v), m)
+     guard (val_cast_ok Γ m (Some τ) v);
+     Some (#{Ω} (val_cast (Some τ) v), m)
   | #[r:=#{Ω1} v1] (#{Ω2} v2) =>
      guard (is_Some (v2 !! r));
      Some (#{Ω1 ∪ Ω2} (val_alter (λ _, v1) r v2), m)

@@ -230,12 +230,6 @@ Qed.
 Lemma ref_lookup_weaken Γ1 Γ2 r τ σ :
   τ !!{Γ1} r = Some σ → Γ1 ⊆ Γ2 → τ !!{Γ2} r = Some σ.
 Proof. rewrite !path_type_check_correct by done. by apply ref_typed_weaken. Qed.
-Lemma ref_seg_typed_ne_void Γ τ rs σ :
-  ✓ Γ → ✓{Γ} τ → Γ ⊢ rs : τ ↣ σ → σ ≠ voidT.
-Proof.
-  destruct 2; inversion 1; simplify_equality;
-    eauto using env_valid_lookup_lookup_ne_void.
-Qed.
 Lemma ref_seg_typed_inv_base Γ τb rs σ : ¬Γ ⊢ rs : baseT τb ↣ σ.
 Proof. inversion 1. Qed.
 Lemma ref_typed_inv_base Γ τb r σ :

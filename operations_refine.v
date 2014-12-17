@@ -10,6 +10,7 @@ Implicit Types Γ : env Ti.
 Implicit Types Γm : memenv Ti.
 Implicit Types τb σb : base_type Ti.
 Implicit Types τ σ : type Ti.
+Implicit Types τp σp : ptr_type Ti.
 Implicit Types a : addr Ti.
 Implicit Types vb : base_val Ti.
 Implicit Types v : val Ti.
@@ -18,38 +19,38 @@ Hint Immediate index_alive_1'.
 Hint Resolve ptr_alive_1' index_alive_2'.
 
 (** ** Refinements of operations on addresses *)
-Lemma addr_plus_ok_refine Γ α f m1 m2 a1 a2 σ j :
-  a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σ →
+Lemma addr_plus_ok_refine Γ α f m1 m2 a1 a2 σp j :
+  a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp →
   addr_plus_ok Γ m1 j a1 → addr_plus_ok Γ m2 j a2.
 Proof.
   unfold addr_plus_ok. intros Ha (?&?&?).
   destruct (addr_byte_refine_help Γ α f
-    ('{m1}) ('{m2}) a1 a2 σ) as (i&?&?); auto.
+    ('{m1}) ('{m2}) a1 a2 σp) as (i&?&?); auto.
   destruct Ha as [??????????? []]; simplify_equality'; split; eauto; lia.
 Qed.
-Lemma addr_plus_refine Γ α f m1 m2 a1 a2 σ j :
-  ✓ Γ → addr_plus_ok Γ m1 j a1 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σ →
-  addr_plus Γ j a1 ⊑{Γ,α,f@'{m1}↦'{m2}} addr_plus Γ j a2 : σ.
+Lemma addr_plus_refine Γ α f m1 m2 a1 a2 σp j :
+  ✓ Γ → addr_plus_ok Γ m1 j a1 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp →
+  addr_plus Γ j a1 ⊑{Γ,α,f@'{m1}↦'{m2}} addr_plus Γ j a2 : σp.
 Proof.
   intros ? Ha' Ha. unfold addr_plus; simpl.
   destruct Ha' as (_&?&?), Ha as
-    [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σc ??????????? Hr]; simplify_equality'.
+    [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σp ??????????? Hr]; simplify_equality'.
   refine_constructor; eauto.
   { apply Nat2Z.inj_le. by rewrite Nat2Z.inj_mul, Z2Nat.id by done. }
   { apply Nat2Z.inj. rewrite Z2Nat_inj_mod, Z2Nat.id by done.
     rewrite Z.mod_add, <-Z2Nat_inj_mod; auto with f_equal.
-    rewrite (Nat2Z.inj_iff _ 0).
+    rewrite (Nat2Z.inj_iff _ 0). destruct σp as [σ'|]; simpl; auto.
     eauto using size_of_ne_0, ref_typed_type_valid, castable_type_valid. }
   destruct Hr as [|r1 i1 r2 i2 Hr|r1' r1 r2 i];
     simplify_type_equality'; constructor; auto.
   rewrite Nat2Z.inj_add, Nat2Z.inj_mul.
-  transitivity (Z.to_nat ((i1 + j * size_of Γ σc) +
+  transitivity (Z.to_nat ((i1 + j * ptr_size_of Γ σp) +
     size_of Γ σ * ref_offset r1)); [f_equal; lia |].
   by rewrite Z2Nat.inj_add, Z2Nat.inj_mul, !Nat2Z.id
     by auto using Z.mul_nonneg_nonneg with lia.
 Qed.
-Lemma addr_minus_ok_refine Γ α f m1 m2 a1 a2 a3 a4 σ :
-  a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σ → a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σ →
+Lemma addr_minus_ok_refine Γ α f m1 m2 a1 a2 a3 a4 σp :
+  a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp → a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σp →
   addr_minus_ok m1 a1 a3 → addr_minus_ok m2 a2 a4.
 Proof.
   assert (∀ r1 r2 r3 r4 r : ref Ti,
@@ -62,45 +63,46 @@ Proof.
     1 as [??????????? [] ?????????? Hr2]; destruct Hr1; inversion Hr2;
     intros (?&?&?); simplify_list_equality; split_ands; eauto using ref_le_unique.
 Qed.
-Lemma addr_minus_refine Γ α f m1 m2 a1 a2 a3 a4 σ :
-  addr_minus_ok m1 a1 a3 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σ →
-  a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σ → addr_minus Γ a1 a3 = addr_minus Γ a2 a4.
+Lemma addr_minus_refine Γ α f m1 m2 a1 a2 a3 a4 σp :
+  addr_minus_ok m1 a1 a3 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp →
+  a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σp → addr_minus Γ a1 a3 = addr_minus Γ a2 a4.
 Proof.
   intros (?&?&?).
-  destruct 1 as [o1 o2 r1 r2 r3 i1 i3 τ1 τ2 σ1 σc ??????????? Hr],
-    1 as [o4 o5 r4 r5 r6 i4 i6 τ4 τ5 σ3 σc4 ??????????? Hr'].
+  destruct 1 as [o1 o2 r1 r2 r3 i1 i3 τ1 τ2 σ1 σp ??????????? Hr],
+    1 as [o4 o5 r4 r5 r6 i4 i6 τ4 τ5 σ3 σp4 ??????????? Hr'].
   destruct Hr, Hr'; simplify_list_equality;
     simplify_type_equality; f_equal; lia.
 Qed.
-Lemma addr_cast_ok_refine Γ α f m1 m2 a1 a2 σ σc :
-  ✓ Γ → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σ →
-  addr_cast_ok Γ m1 σc a1 → addr_cast_ok Γ m2 σc a2.
+Lemma addr_cast_ok_refine Γ α f m1 m2 a1 a2 σp τp :
+  ✓ Γ → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp →
+  addr_cast_ok Γ m1 τp a1 → addr_cast_ok Γ m2 τp a2.
 Proof.
-  destruct 2 as [o o' r r' r'' i i'' τ τ' σ σc' [] ?????????? []];
+  destruct 2 as [o o' r r' r'' i i'' τ τ' σ σp' [] ?????????? []];
     intros (?&?&?); simplify_equality'; split_ands; eauto.
-  destruct (castable_divide Γ σ σc) as [z ->]; auto.
-  destruct (decide (size_of Γ σc = 0)) as [->|?]; [done|].
-  by rewrite !(Nat.mul_comm (_ * size_of _ _)), Nat.mul_assoc, Nat.mod_add.
+  destruct (castable_divide Γ σ τp) as [z ->]; auto.
+  destruct (decide (ptr_size_of Γ τp = 0)) as [->|?]; [done|].
+  by rewrite !(Nat.mul_comm (_ * ptr_size_of _ _)), Nat.mul_assoc, Nat.mod_add.
 Qed.
-Lemma addr_cast_refine Γ α f m1 m2 a1 a2 σ σc :
-  addr_cast_ok Γ m1 σc a1 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σ →
-  addr_cast σc a1 ⊑{Γ,α,f@'{m1}↦'{m2}} addr_cast σc a2 : σc.
+Lemma addr_cast_refine Γ α f m1 m2 a1 a2 σp τp :
+  addr_cast_ok Γ m1 τp a1 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp →
+  addr_cast τp a1 ⊑{Γ,α,f@'{m1}↦'{m2}} addr_cast τp a2 : τp.
 Proof. intros (?&?&?). destruct 1; simplify_equality'; econstructor; eauto. Qed.
 Lemma addr_elt_refine Γ α f Γm1 Γm2 a1 a2 rs σ σ' :
-  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ → addr_strict Γ a1 → Γ ⊢ rs : σ ↣ σ' →
+  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some σ → addr_strict Γ a1 → Γ ⊢ rs : σ ↣ σ' →
   ref_seg_offset rs = 0 →
-  addr_elt Γ rs a1 ⊑{Γ,α,f@Γm1↦Γm2} addr_elt Γ rs a2 : σ'.
+  addr_elt Γ rs a1 ⊑{Γ,α,f@Γm1↦Γm2} addr_elt Γ rs a2 : Some σ'.
 Proof.
-  intros ? [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ'' ??????????? Hcst Hr] ? Hrs ?; simpl.
-  apply castable_alt in Hcst; destruct Hcst as [<-|[?|?]];
-    simplify_equality'; try solve [inversion Hrs].
+  inversion 2 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ'' ??????????? Hcst Hr];
+    intros ? Hrs ?; simplify_equality'.
+  inversion Hcst; simplify_equality'; try solve [inversion Hrs].
   erewrite path_type_check_complete by eauto; simpl. econstructor; eauto.
-  * apply ref_typed_cons; exists σ''; split; auto.
+  * apply ref_typed_cons; exists σ; split; auto.
     apply ref_set_offset_typed; auto.
     apply Nat.div_lt_upper_bound; eauto using size_of_ne_0,ref_typed_type_valid.
   * lia.
   * by rewrite Nat.mod_0_l by eauto using size_of_ne_0, ref_typed_type_valid,
       ref_seg_typed_type_valid, castable_type_valid.
+  * constructor.
   * destruct Hr as [|r1 i1 r2 i2 Hr|r1' r1 r2 i];
       simplify_type_equality'; constructor; simpl; auto.
     { constructor; auto. rewrite (Nat.mul_comm (size_of _ _)),
@@ -113,47 +115,46 @@ Proof.
 Qed.
 
 (** ** Refinements of operations on pointers *)
-Lemma ptr_alive_refine' Γ α f m1 m2 p1 p2 σ :
-  ptr_alive' m1 p1 → p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σ → ptr_alive' m2 p2.
+Lemma ptr_alive_refine' Γ α f m1 m2 p1 p2 σp :
+  ptr_alive' m1 p1 → p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp → ptr_alive' m2 p2.
 Proof. destruct 2; simpl in *; eauto using addr_alive_refine. Qed.
-Lemma ptr_compare_ok_refine Γ α f m1 m2 c p1 p2 p3 p4 σ :
-  p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σ → p3 ⊑{Γ,α,f@'{m1}↦'{m2}} p4 : σ →
+Lemma ptr_compare_ok_refine Γ α f m1 m2 c p1 p2 p3 p4 σp :
+  p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp → p3 ⊑{Γ,α,f@'{m1}↦'{m2}} p4 : σp →
   ptr_compare_ok m1 c p1 p3 → ptr_compare_ok m2 c p2 p4.
 Proof.
   destruct 1, 1, c; simpl; eauto using addr_minus_ok_refine, addr_alive_refine.
 Qed.
-Lemma ptr_compare_refine Γ α f m1 m2 c p1 p2 p3 p4 σ :
+Lemma ptr_compare_refine Γ α f m1 m2 c p1 p2 p3 p4 σp :
   ✓ Γ → ptr_compare_ok m1 c p1 p3 →
-  p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σ → p3 ⊑{Γ,α,f@'{m1}↦'{m2}} p4 : σ →
+  p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp → p3 ⊑{Γ,α,f@'{m1}↦'{m2}} p4 : σp →
   ptr_compare Γ c p1 p3 = ptr_compare Γ c p2 p4.
 Proof.
   destruct 3, 1, c; simpl; done || by erewrite addr_minus_refine by eauto.
 Qed.
-Lemma ptr_plus_ok_refine Γ α f m1 m2 p1 p2 σ j :
-  p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σ →
+Lemma ptr_plus_ok_refine Γ α f m1 m2 p1 p2 σp j :
+  p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp →
   ptr_plus_ok Γ m1 j p1 → ptr_plus_ok Γ m2 j p2.
 Proof. destruct 1; simpl; eauto using addr_plus_ok_refine. Qed.
-Lemma ptr_plus_refine Γ α f m1 m2 p1 p2 σ j :
-  ✓ Γ → ptr_plus_ok Γ m1 j p1 → p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σ →
-  ptr_plus Γ j p1 ⊑{Γ,α,f@'{m1}↦'{m2}} ptr_plus Γ j p2 : σ.
+Lemma ptr_plus_refine Γ α f m1 m2 p1 p2 σp j :
+  ✓ Γ → ptr_plus_ok Γ m1 j p1 → p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp →
+  ptr_plus Γ j p1 ⊑{Γ,α,f@'{m1}↦'{m2}} ptr_plus Γ j p2 : σp.
 Proof. destruct 3; simpl; constructor; eauto using addr_plus_refine. Qed.
-Lemma ptr_minus_ok_refine Γ α f m1 m2 p1 p2 p3 p4 σ :
-  p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σ → p3 ⊑{Γ,α,f@'{m1}↦'{m2}} p4 : σ →
+Lemma ptr_minus_ok_refine Γ α f m1 m2 p1 p2 p3 p4 σp :
+  p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp → p3 ⊑{Γ,α,f@'{m1}↦'{m2}} p4 : σp →
   ptr_minus_ok m1 p1 p3 → ptr_minus_ok m2 p2 p4.
 Proof. destruct 1, 1; simpl; eauto using addr_minus_ok_refine. Qed.
-Lemma ptr_minus_refine Γ α f m1 m2 p1 p2 p3 p4 σ :
+Lemma ptr_minus_refine Γ α f m1 m2 p1 p2 p3 p4 σp :
   ✓ Γ → ptr_minus_ok m1 p1 p3 →
-  p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σ → p3 ⊑{Γ,α,f@'{m1}↦'{m2}} p4 : σ →
+  p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp → p3 ⊑{Γ,α,f@'{m1}↦'{m2}} p4 : σp →
   ptr_minus Γ p1 p3 = ptr_minus Γ p2 p4.
 Proof. destruct 3, 1; simpl; eauto using addr_minus_refine. Qed.
-Lemma ptr_cast_ok_refine Γ α f m1 m2 p1 p2 σ σc :
-  ✓ Γ → p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σ →
-  ptr_cast_ok Γ m1 σc p1 → ptr_cast_ok Γ m2 σc p2.
+Lemma ptr_cast_ok_refine Γ α f m1 m2 p1 p2 σp τp :
+  ✓ Γ → p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp →
+  ptr_cast_ok Γ m1 τp p1 → ptr_cast_ok Γ m2 τp p2.
 Proof. destruct 2; simpl; eauto using addr_cast_ok_refine. Qed.
-Lemma ptr_cast_refine Γ α f m1 m2 p1 p2 σ σc :
-  ptr_cast_ok Γ m1 σc p1 → ptr_type_valid Γ σc →
-  p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σ →
-  ptr_cast σc p1 ⊑{Γ,α,f@'{m1}↦'{m2}} ptr_cast σc p2 : σc.
+Lemma ptr_cast_refine Γ α f m1 m2 p1 p2 σp τp :
+  ptr_cast_ok Γ m1 τp p1 → ✓{Γ} τp → p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp →
+  ptr_cast τp p1 ⊑{Γ,α,f@'{m1}↦'{m2}} ptr_cast τp p2 : τp.
 Proof. destruct 3; constructor; eauto using addr_cast_refine. Qed.
 
 (** ** Refinements of operations on base values *)
@@ -245,7 +246,8 @@ Proof.
         by eauto using int_unsigned_pre_cast_ok,int_cast_ok_more;
       by refine_constructor; eauto using ptr_cast_refine, int_cast_typed,
         ptr_cast_refine, TVoid_valid, TBase_ptr_valid, TInt_valid,
-        TPtr_valid_inv, base_val_typed_type_valid, base_val_refine_typed_l ].
+        TPtr_valid_inv, None_ptr_valid,
+        base_val_typed_type_valid, base_val_refine_typed_l ].
 Qed.
 
 (** ** Refinements of operations on values *)
@@ -315,14 +317,14 @@ Proof.
 Qed.
 Lemma val_cast_ok_refine Γ α f m1 m2 v1 v2 τ σ :
   ✓ Γ → v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ →
-  val_cast_ok Γ m1 σ v1 → val_cast_ok Γ m2 σ v2.
+  val_cast_ok Γ m1 (Some σ) v1 → val_cast_ok Γ m2 (Some σ) v2.
 Proof.
   unfold val_cast_ok; destruct σ, 2; eauto using base_val_cast_ok_refine.
 Qed.
 Lemma val_cast_refine Γ α f m1 m2 v1 v2 τ σ :
-  ✓ Γ → cast_typed Γ τ σ → val_cast_ok Γ m1 σ v1 →
+  ✓ Γ → cast_typed Γ τ σ → val_cast_ok Γ m1 (Some σ) v1 →
   v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ →
-  val_cast σ v1 ⊑{Γ,α,f@'{m1}↦'{m2}} val_cast σ v2 : σ.
+  val_cast (Some σ) v1 ⊑{Γ,α,f@'{m1}↦'{m2}} val_cast (Some σ) v2 : σ.
 Proof.
   destruct 2; inversion 2; simplify_equality; repeat refine_constructor;
     eauto using base_val_cast_refine, TVoid_cast_typed, base_cast_typed_self.

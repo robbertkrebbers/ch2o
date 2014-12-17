@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export operations memory.
+Require Export operations memory pointer_casts.
 
 Section aliasing.
 Context `{EnvSpec Ti}.
@@ -107,8 +107,8 @@ Proof.
   * by do 3 right; eexists s, (rs1 :: r1'), i1, (rs2 :: r2'), i2, r'.
 Qed.
 Lemma addr_disjoint_cases Γ Γm a1 a2 σ1 σ2 :
-  ✓ Γ → (Γ,Γm) ⊢ a1 : σ1 → frozen a1 → addr_is_obj a1 →
-  (Γ,Γm) ⊢ a2 : σ2 → frozen a2 → addr_is_obj a2 →
+  ✓ Γ → (Γ,Γm) ⊢ a1 : Some σ1 → frozen a1 → addr_is_obj a1 →
+  (Γ,Γm) ⊢ a2 : Some σ2 → frozen a2 → addr_is_obj a2 →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
@@ -116,8 +116,8 @@ Lemma addr_disjoint_cases Γ Γm a1 a2 σ1 σ2 :
     addr_ref_base a1 = r1' ++ RUnion i1 s true :: r' ∧
     addr_ref_base a2 = r2' ++ RUnion i2 s true :: r' ∧ i1 ≠ i2).
 Proof.
-  unfold frozen. intros ? [o1 r1 i1 τ1 σ1' σc1] ??
-    [o2 r2 i2 τ2 σ2' σc2] ??; simplify_equality'.
+  unfold frozen. inversion 2 as [o1 r1 i1 τ1 σ1'];
+    inversion 3 as [o2 r2 i2 τ2 σ2']; intros; simplify_equality'.
   destruct (decide (o1 = o2)); [simplify_type_equality|by do 2 left].
   destruct (ref_disjoint_cases Γ τ2 r1 r2 σ1' σ2')
     as [?|[?|[?|(s&r1'&i1'&r2'&i2'&r'&->&->&?)]]]; auto.
@@ -125,8 +125,8 @@ Proof.
   * do 3 right; split; [done|]. by eexists s, r1', i1', r2', i2', r'.
 Qed.
 Lemma cmap_non_aliasing Γ Γm m a1 a2 σ1 σ2 :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : σ1 → frozen a1 → addr_is_obj a1 →
-  (Γ,Γm) ⊢ a2 : σ2 → frozen a2 → addr_is_obj a2 →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : Some σ1 → frozen a1 → addr_is_obj a1 →
+  (Γ,Γm) ⊢ a2 : Some σ2 → frozen a2 → addr_is_obj a2 →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
@@ -162,8 +162,8 @@ Proof.
     erewrite ?ctree_lookup_non_aliasing by eauto.
 Qed.
 Lemma mem_non_aliasing Γ Γm m a1 a2 τ1 τ2 :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : τ1 → frozen a1 → addr_is_obj a1 →
-  (Γ,Γm) ⊢ a2 : τ2 → frozen a2 → addr_is_obj a2 →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : Some τ1 → frozen a1 → addr_is_obj a1 →
+  (Γ,Γm) ⊢ a2 : Some τ2 → frozen a2 → addr_is_obj a2 →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) τ1 ⊆{Γ} τ2 ∨
   (**i 3.) *) τ2 ⊆{Γ} τ1 ∨

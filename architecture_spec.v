@@ -123,12 +123,12 @@ Proof.
   * done.
 Qed.
 
-Let ptr_size (_ : type (arch_rank A)) : nat := rank_size ptr_rank.
+Let ptr_size (_ : ptr_type (arch_rank A)) : nat := rank_size ptr_rank.
 Let align_base (τb : base_type (arch_rank A)) : nat :=
   match τb with
   | voidT => 1
   | intT τi => arch_align A (rank τi)
-  | τ.* => arch_align A (arch_ptr_rank A)
+  | τp.* => arch_align A (arch_ptr_rank A)
   end%BT.
 Definition align_of : env (arch_rank A) → type (arch_rank A) → nat :=
   natural_align_of align_base.
@@ -141,7 +141,7 @@ Let align_void : align_base voidT = 1.
 Proof. done. Qed.
 Let align_int_divide τi : (align_base (intT τi) | rank_size (rank τi)).
 Proof. by apply arch_align_size. Qed.
-Let align_ptr_divide τ : (align_base (τ.* ) | ptr_size τ).
+Let align_ptr_divide τp : (align_base (τp.* ) | ptr_size τp).
 Proof. by apply arch_align_size. Qed.
 Global Instance: EnvSpec (arch_rank A).
 Proof. by apply natural_env_spec. Qed.

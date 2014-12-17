@@ -19,7 +19,7 @@ Delimit Scope base_val_scope with B.
 Bind Scope base_val_scope with base_val.
 Open Scope base_val_scope.
 Notation "'voidV'" := VVoid : base_val_scope.
-Notation "'indetV' τ" := (VIndet τ) (at level 10) : base_val_scope.
+Notation "'indetV' τb" := (VIndet τb) (at level 10) : base_val_scope.
 Notation "'intV{' τi } x" := (VInt τi x)
   (at level 10, format "intV{ τi }  x") : base_val_scope.
 Notation "'ptrV' p" := (VPtr p) (at level 10) : base_val_scope.
@@ -55,7 +55,7 @@ Section operations.
     | VIndet_typed τb : ✓{Γ} τb → τb ≠ voidT → base_typed' Γ Γm (VIndet τb) τb
     | VVoid_typed : base_typed' Γ Γm VVoid voidT
     | VInt_typed x τi : int_typed x τi → base_typed' Γ Γm (VInt τi x) (intT τi)
-    | VPtr_typed p τ : (Γ,Γm) ⊢ p : τ → base_typed' Γ Γm (VPtr p) (τ.*)
+    | VPtr_typed p τp : (Γ,Γm) ⊢ p : τp → base_typed' Γ Γm (VPtr p) (τp.*)
     | VByte_typed bs :
        char_byte_valid Γ Γm bs → base_typed' Γ Γm (VByte bs) ucharT.
   Global Instance base_typed: Typed (env Ti * memenv Ti)
@@ -99,7 +99,8 @@ Section operations.
           if decide (τi = ucharT%IT ∧ ¬Forall (BIndet =) bs)
           then VByte bs else VIndet τb
        end
-    | τ.* => default (VIndet τb) (mapM (maybe BPtr) bs ≫= ptr_of_bits Γ τ) VPtr
+    | τp.* =>
+       default (VIndet τb) (mapM (maybe BPtr) bs ≫= ptr_of_bits Γ τp) VPtr
     end.
 End operations.
 
@@ -111,6 +112,7 @@ Implicit Types Γ : env Ti.
 Implicit Types Γm : memenv Ti.
 Implicit Types α : bool.
 Implicit Types τb : base_type Ti.
+Implicit Types τp : ptr_type Ti.
 Implicit Types vb : base_val Ti.
 Implicit Types bs : list (bit Ti).
 Implicit Types βs : list bool.
@@ -120,7 +122,10 @@ Hint Extern 0 (_ ⊑* _) => reflexivity.
 
 (** ** General properties of the typing judgment *)
 Lemma base_val_typed_type_valid Γ Γm v τb : ✓ Γ → (Γ,Γm) ⊢ v : τb → ✓{Γ} τb.
-Proof. destruct 2; try econstructor; eauto using ptr_typed_type_valid. Qed.
+Proof.
+  destruct 2;
+    eauto using TVoid_valid, TInt_valid, TPtr_valid, ptr_typed_type_valid.
+Qed.
 Global Instance: TypeOfSpec (env Ti * memenv Ti) (base_type Ti) (base_val Ti).
 Proof.
   intros [??]. destruct 1; f_equal'; auto. eapply type_of_correct; eauto.
@@ -148,8 +153,6 @@ Lemma base_val_frozen_int Γ Γm v τi : (Γ,Γm) ⊢ v : intT τi → frozen v.
 Proof. inversion 1; constructor. Qed.
 Lemma base_val_freeze_freeze β1 β2 vb : freeze β1 (freeze β2 vb) = freeze β1 vb.
 Proof. destruct vb; f_equal'; auto using ptr_freeze_freeze. Qed.
-Lemma base_val_freeze_type_of β vb : type_of (freeze β vb) = type_of vb.
-Proof. by destruct vb; simpl; rewrite ?ptr_freeze_type_of. Qed.
 Lemma base_typed_freeze Γ Γm β vb τb :
   (Γ,Γm) ⊢ freeze β vb : τb ↔ (Γ,Γm) ⊢ vb : τb.
 Proof.
@@ -201,9 +204,9 @@ Inductive base_val_unflatten_view Γ :
   | base_val_of_int τi βs :
      length βs = int_width τi → base_val_unflatten_view Γ (intT τi)
        (BBit <$> βs) (VInt τi (int_of_bits τi βs))
-  | base_val_of_ptr τ p pbs :
-     ptr_of_bits Γ τ pbs = Some p →
-     base_val_unflatten_view Γ (τ.*) (BPtr <$> pbs) (VPtr p)
+  | base_val_of_ptr τp p pbs :
+     ptr_of_bits Γ τp pbs = Some p →
+     base_val_unflatten_view Γ (τp.*) (BPtr <$> pbs) (VPtr p)
   | base_val_of_byte bs :
      length bs = char_bits → ¬Forall (BIndet =) bs →
      ¬(∃ βs, bs = BBit <$> βs) →
@@ -215,17 +218,17 @@ Inductive base_val_unflatten_view Γ :
      τi ≠ ucharT%IT →
      length bs = int_width τi → ¬(∃ βs, bs = BBit <$> βs) →
      base_val_unflatten_view Γ (intT τi) bs (VIndet (intT τi))
-  | base_val_of_ptr_indet_1 τ pbs :
-     length pbs = bit_size_of Γ (τ.*) → ptr_of_bits Γ τ pbs = None →
-     base_val_unflatten_view Γ (τ.*) (BPtr <$> pbs) (VIndet (τ.*))
-  | base_val_of_ptr_indet_2 τ bs :
-     length bs = bit_size_of Γ (τ.*) → ¬(∃ pbs, bs = BPtr <$> pbs) →
-     base_val_unflatten_view Γ (τ.*) bs (VIndet (τ.*)).
+  | base_val_of_ptr_indet_1 τp pbs :
+     length pbs = bit_size_of Γ (τp.*) → ptr_of_bits Γ τp pbs = None →
+     base_val_unflatten_view Γ (τp.*) (BPtr <$> pbs) (VIndet (τp.*))
+  | base_val_of_ptr_indet_2 τp bs :
+     length bs = bit_size_of Γ (τp.*) → ¬(∃ pbs, bs = BPtr <$> pbs) →
+     base_val_unflatten_view Γ (τp.*) bs (VIndet (τp.*)).
 Lemma base_val_unflatten_spec Γ τb bs :
   length bs = bit_size_of Γ τb →
   base_val_unflatten_view Γ τb bs (base_val_unflatten Γ τb bs).
 Proof.
-  intros Hbs. unfold base_val_unflatten. destruct τb as [|τi|τ].
+  intros Hbs. unfold base_val_unflatten. destruct τb as [|τi|τp].
   * constructor.
   * rewrite bit_size_of_int in Hbs.
     destruct (mapM (maybe BBit) bs) as [βs|] eqn:Hβs.
@@ -241,7 +244,7 @@ Proof.
     by constructor.
   * destruct (mapM (maybe BPtr) bs) as [pbs|] eqn:Hpbs; csimpl.
     { rewrite maybe_BPtrs_spec in Hpbs; subst. rewrite fmap_length in Hbs.
-      by destruct (ptr_of_bits Γ τ pbs) as [p|] eqn:?; constructor. }
+      by destruct (ptr_of_bits Γ τp pbs) as [p|] eqn:?; constructor. }
     constructor; auto.
     setoid_rewrite <-maybe_BPtrs_spec. intros [??]; simplify_equality.
 Qed.
@@ -261,11 +264,11 @@ Lemma base_val_unflatten_int Γ τi βs :
   length βs = int_width τi →
   base_val_unflatten Γ (intT τi) (BBit <$> βs) = VInt τi (int_of_bits τi βs).
 Proof. intro. unfold base_val_unflatten. by rewrite mapM_fmap_Some by done. Qed.
-Lemma base_val_unflatten_ptr Γ τ pbs p :
-  ptr_of_bits Γ τ pbs = Some p →
-  base_val_unflatten Γ (τ.*) (BPtr <$> pbs) = VPtr p.
+Lemma base_val_unflatten_ptr Γ τp pbs p :
+  ptr_of_bits Γ τp pbs = Some p →
+  base_val_unflatten Γ (τp.*) (BPtr <$> pbs) = VPtr p.
 Proof.
-  intros. feed inversion (base_val_unflatten_spec Γ (τ.*) (BPtr <$> pbs));
+  intros. feed inversion (base_val_unflatten_spec Γ (τp.*) (BPtr <$> pbs));
     simplify_equality'; auto.
   * by erewrite fmap_length, ptr_of_bits_length by eauto.
   * naive_solver (apply Forall_fmap, Forall_true; simpl; eauto).
@@ -285,9 +288,9 @@ Proof.
     Forall (@BIndet Ti =) (BBit <$> βs) → length βs ≠ int_width τi).
   { intros τi βs ??. pose proof (int_width_pos τi).
     destruct βs; decompose_Forall_hyps; lia. }
-  assert (∀ τ pbs p,
-    Forall (BIndet =) (BPtr <$> pbs) → ptr_of_bits Γ τ pbs ≠ Some p).
-  { intros τ pbs p ??. assert (length pbs ≠ 0).
+  assert (∀ τp pbs p,
+    Forall (BIndet =) (BPtr <$> pbs) → ptr_of_bits Γ τp pbs ≠ Some p).
+  { intros τp pbs p ??. assert (length pbs ≠ 0).
     { erewrite ptr_of_bits_length by eauto. by apply bit_size_of_base_ne_0. }
     destruct pbs; decompose_Forall_hyps; lia. }
   feed inversion (base_val_unflatten_spec Γ τb bs); naive_solver.
@@ -299,18 +302,18 @@ Proof.
   intros. feed inversion (base_val_unflatten_spec Γ (intT τi) bs);
     simplify_equality'; rewrite ?bit_size_of_int; naive_solver.
 Qed.
-Lemma base_val_unflatten_ptr_indet_1 Γ τ pbs :
-  length pbs = bit_size_of Γ (τ.*) → ptr_of_bits Γ τ pbs = None →
-  base_val_unflatten Γ (τ.*) (BPtr <$> pbs) = VIndet (τ.*).
+Lemma base_val_unflatten_ptr_indet_1 Γ τp pbs :
+  length pbs = bit_size_of Γ (τp.*) → ptr_of_bits Γ τp pbs = None →
+  base_val_unflatten Γ (τp.*) (BPtr <$> pbs) = VIndet (τp.*).
 Proof.
-  intros. feed inversion (base_val_unflatten_spec Γ (τ.*) (BPtr <$> pbs));
+  intros. feed inversion (base_val_unflatten_spec Γ (τp.*) (BPtr <$> pbs));
     simplify_equality'; rewrite ?fmap_length; naive_solver.
 Qed.
-Lemma base_val_unflatten_ptr_indet_2 Γ τ bs :
-  length bs = bit_size_of Γ (τ.*) → ¬(∃ pbs, bs = BPtr <$> pbs) →
-  base_val_unflatten Γ (τ.*) bs = VIndet (τ.*).
+Lemma base_val_unflatten_ptr_indet_2 Γ τp bs :
+  length bs = bit_size_of Γ (τp.*) → ¬(∃ pbs, bs = BPtr <$> pbs) →
+  base_val_unflatten Γ (τp.*) bs = VIndet (τp.*).
 Proof.
-  intros. feed inversion (base_val_unflatten_spec Γ (τ.*) bs);
+  intros. feed inversion (base_val_unflatten_spec Γ (τp.*) bs);
     simplify_equality'; naive_solver.
 Qed.
 Lemma base_val_unflatten_indet_elem_of Γ τb bs :

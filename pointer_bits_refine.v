@@ -4,18 +4,18 @@ Require Import fragmented.
 Require Export pointer_bits pointers_refine.
 
 Instance ptr_bit_refine `{Env Ti} :
-    Refine Ti (env Ti) (ptr_bit Ti) := λ Γ α f Γm1 Γm2 pb1 pb2, ∃ τ,
-  frag_item pb1 ⊑{Γ,α,f@Γm1↦Γm2} frag_item pb2 : τ ∧
+    Refine Ti (env Ti) (ptr_bit Ti) := λ Γ α f Γm1 Γm2 pb1 pb2, ∃ τp,
+  frag_item pb1 ⊑{Γ,α,f@Γm1↦Γm2} frag_item pb2 : τp ∧
   frag_index pb1 = frag_index pb2 ∧
   frozen (frag_item pb2) ∧
-  frag_index pb1 < bit_size_of Γ (τ.*).
+  frag_index pb1 < bit_size_of Γ (τp.*).
 
 Section pointer_bits.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
 Implicit Types Γm : memenv Ti.
 Implicit Types α : bool.
-Implicit Types τ : type Ti.
+Implicit Types τp : ptr_type Ti.
 Implicit Types p : ptr Ti.
 Implicit Types pb : ptr_bit Ti.
 Implicit Types pbs : list (ptr_bit Ti).
@@ -26,35 +26,35 @@ Lemma ptr_bit_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 pb1 pb2 pb3 :
   ✓ Γ → pb1 ⊑{Γ,α1,f1@Γm1↦Γm2} pb2 → pb2 ⊑{Γ,α2,f2@Γm2↦Γm3} pb3 →
   pb1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} pb3.
 Proof.
-  intros ? (τ1&?&?&?&?) (τ2&?&?&?&?); exists τ1.
-  assert (τ1 = τ2) by (by erewrite <-(ptr_refine_type_of_r _ _ _ _ _ _ _ τ1),
-    <-(ptr_refine_type_of_l _ _ _ _ _ _ _ τ2) by eauto); subst.
+  intros ? (τp1&?&?&?&?) (τp2&?&?&?&?); exists τp1.
+  assert (τp1 = τp2) by (by erewrite <-(ptr_refine_type_of_r _ _ _ _ _ _ _ τp1),
+    <-(ptr_refine_type_of_l _ _ _ _ _ _ _ τp2) by eauto); subst.
   eauto using ptr_refine_compose with congruence.
 Qed.
 Lemma ptr_bit_refine_inverse Γ f Γm1 Γm2 pb1 pb2 :
   pb1 ⊑{Γ,false,f@Γm1↦Γm2} pb2 → pb2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} pb1.
 Proof.
-  intros (τ&?&?&?&?); exists τ; split_ands; eauto using ptr_refine_inverse,
+  intros (τp&?&?&?&?); exists τp; split_ands; eauto using ptr_refine_inverse,
     ptr_refine_frozen with congruence.
 Qed.
 Lemma ptr_bit_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' pb1 pb2 :
   ✓ Γ → pb1 ⊑{Γ,α,f@Γm1↦Γm2} pb2 → Γ ⊆ Γ' → (α → α') → Γm1' ⊑{Γ',α',f'} Γm2' →
   Γm1 ⇒ₘ Γm1' → meminj_extend f f' Γm1 Γm2 → pb1 ⊑{Γ',α',f'@Γm1'↦Γm2'} pb2.
 Proof.
-  intros ? (τ&?&?&?&?) ??. exists τ.
+  intros ? (τp&?&?&?&?) ??. exists τp.
   erewrite <-bit_size_of_weaken by eauto using TBase_valid, TPtr_valid,
     ptr_refine_typed_l, ptr_typed_type_valid; eauto using ptr_refine_weaken.
 Qed.
 Lemma ptr_bit_refine_valid_l Γ α f Γm1 Γm2 pb1 pb2 :
   ✓ Γ → pb1 ⊑{Γ,α,f@Γm1↦Γm2} pb2 → ✓{Γ,Γm1} pb1.
 Proof.
-  intros ? (τ&?&?&?&?).
-  exists τ; eauto using ptr_refine_typed_l, ptr_refine_frozen.
+  intros ? (τp&?&?&?&?).
+  exists τp; eauto using ptr_refine_typed_l, ptr_refine_frozen.
 Qed.
 Lemma ptr_bit_refine_valid_r Γ α Γm1 Γm2 f pb1 pb2 :
   ✓ Γ → pb1 ⊑{Γ,α,f@Γm1↦Γm2} pb2 → ✓{Γ,Γm2} pb2.
 Proof.
-  intros ? (τ&?&?&?&?); exists τ;
+  intros ? (τp&?&?&?&?); exists τp;
     eauto using ptr_refine_typed_r with congruence.
 Qed.
 Lemma ptr_bits_refine_valid_l Γ α f Γm1 Γm2 pbs1 pbs2 :
@@ -66,7 +66,7 @@ Proof. induction 2; eauto using ptr_bit_refine_valid_r. Qed.
 Lemma ptr_bit_refine_unique_l Γ f Γm1 Γm2 pb1 pb2 pb3 :
   pb1 ⊑{Γ,false,f@Γm1↦Γm2} pb3 → pb2 ⊑{Γ,false,f@Γm1↦Γm2} pb3 → pb1 = pb2.
 Proof.
-  destruct pb1, pb2; intros (τ1&?&?&?&?) (τ2&?&?&?&?);
+  destruct pb1, pb2; intros (τp1&?&?&?&?) (τp2&?&?&?&?);
     f_equal'; eauto using ptr_refine_unique_l with congruence.
 Qed.
 Lemma ptr_bits_refine_unique_l Γ f Γm1 Γm2 pbs1 pbs2 pbs3 :
@@ -79,7 +79,7 @@ Qed.
 Lemma ptr_bit_refine_unique_r Γ α f Γm1 Γm2 pb1 pb2 pb3 :
   pb1 ⊑{Γ,α,f@Γm1↦Γm2} pb2 → pb1 ⊑{Γ,α,f@Γm1↦Γm2} pb3 → pb2 = pb3.
 Proof.
-  destruct pb2, pb3; intros (τ1&?&?&?&?) (τ2&?&?&?&?);
+  destruct pb2, pb3; intros (τp1&?&?&?&?) (τp2&?&?&?&?);
     f_equal'; eauto using ptr_refine_unique_r with congruence.
 Qed.
 Lemma ptr_bits_refine_unique_r Γ α f Γm1 Γm2 pbs1 pbs2 pbs3 :

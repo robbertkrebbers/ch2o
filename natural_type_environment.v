@@ -4,11 +4,11 @@ Require Export type_environment.
 
 Section natural_type_environment.
 Context `{IntEnvSpec Ti}.
-Context (ptr_size : type Ti → nat) (align_base : base_type Ti → nat).
+Context (ptr_size : option (type Ti) → nat) (align_base : base_type Ti → nat).
 Context (ptr_size_ne_0 : ∀ τ, ptr_size τ ≠ 0).
 Context (align_void : align_base voidT = 1).
 Context (align_int_divide : ∀ τi, (align_base (intT τi) | rank_size (rank τi))).
-Context (align_ptr_divide : ∀ τ, (align_base (τ.*) | ptr_size τ)).
+Context (align_ptr_divide : ∀ τp, (align_base (τp.*) | ptr_size τp)).
 
 Definition natural_align_of (Γ : env Ti) : type Ti → nat := type_iter
   (**i TBase =>     *) align_base
@@ -34,7 +34,7 @@ Definition natural_size_of (Γ : env Ti) : type Ti → nat :=
   type_iter
   (**i TBase =>     *) (λ τb,
     match τb with
-    | voidT => 1 | intT τi => rank_size (rank τi) | τ.* => ptr_size τ
+    | voidT => 1 | intT τi => rank_size (rank τi) | τp.* => ptr_size τp
     end%BT)
   (**i TArray =>    *) (λ _, mult)
   (**i TCompound => *) (λ c s τs go,
@@ -129,7 +129,7 @@ Qed.
 Lemma natural_size_of_base Γ τb :
   size_of Γ (baseT τb) =
     match τb with
-    | voidT => 1 | intT τi => rank_size (rank τi) | τ.* => ptr_size τ
+    | voidT => 1 | intT τi => rank_size (rank τi) | τp.* => ptr_size τp
     end%BT.
 Proof. done. Qed.
 Lemma natural_size_of_compound Γ c s τs :
@@ -186,9 +186,9 @@ Proof.
   intros HΓ. revert τ. refine (type_env_ind _ HΓ _ _ _ _).
   * intros τb. rewrite natural_align_of_base, natural_size_of_base.
     destruct 1; auto. by rewrite align_void.
-  * intros τ n ? ? _ _. rewrite natural_align_of_array, size_of_array.
+  * intros τ n ? ? _. rewrite natural_align_of_array, size_of_array.
     by apply Nat.divide_mul_r.
-  * intros c s τs Hs Hτs IH _ Hlen.
+  * intros c s τs Hs Hτs IH Hlen.
     erewrite natural_align_of_compound, natural_size_of_compound by eauto.
     assert (natural_fields_align Γ τs ≠ 0) as Hne_0.
     { clear Hs Hlen. unfold natural_fields_align.

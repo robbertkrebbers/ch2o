@@ -14,9 +14,9 @@ Class Env (Ti : Set) := {
 }.
 Class EnvSpec (Ti : Set) `{Env Ti} := {
   int_env_spec :>> IntEnvSpec Ti;
-  size_of_ptr_ne_0 Γ τ : size_of Γ (τ.*) ≠ 0;
+  size_of_ptr_ne_0 Γ τp : size_of Γ (τp.*) ≠ 0;
   size_of_int Γ τi : size_of Γ (intT τi) = rank_size (rank τi);
-  size_of_void Γ : size_of Γ voidT = 1;
+  size_of_void_ne_0 Γ : size_of Γ voidT ≠ 0;
   size_of_array Γ τ n : size_of Γ (τ.[n]) = n * size_of Γ τ;
   size_of_struct Γ s τs :
     ✓ Γ → Γ !! s = Some τs →
@@ -36,10 +36,14 @@ End env.
 Arguments size_of _ _ _ _ : simpl never.
 Arguments field_sizes _ _ _ _ : simpl never.
 
+Definition ptr_size_of `{Env Ti} (Γ : env Ti) (τp : ptr_type Ti) : nat :=
+  match τp with Some τ => size_of Γ τ | None => 1 end.
 Definition field_offset `{Env Ti} (Γ : env Ti) (τs : list (type Ti))
   (i : nat) : nat := sum_list $ take i $ field_sizes Γ τs.
 Definition bit_size_of `{Env Ti} (Γ : env Ti)
   (τ : type Ti) : nat := size_of Γ τ * char_bits.
+Definition ptr_bit_size_of `{Env Ti} (Γ : env Ti) (τp : ptr_type Ti) : nat :=
+  match τp with Some τ => bit_size_of Γ τ | None => char_bits end.
 Definition field_bit_sizes `{Env Ti} (Γ : env Ti)
     (τs : list (type Ti)) : list nat :=
   (λ sz, sz * char_bits) <$> field_sizes Γ τs.
@@ -49,9 +53,6 @@ Definition field_bit_padding `{Env Ti}
 Definition field_bit_offset `{Env Ti}
     (Γ : env Ti) (τs : list (type Ti)) (i : nat) : nat :=
   sum_list $ take i $ field_bit_sizes Γ τs.
-
-Notation size_of' Γ v := (size_of Γ (type_of v)).
-Notation bit_size_of' Γ v := (bit_size_of Γ (type_of v)).
 
 Section env_spec.
 Context `{EnvSpec Ti}.
@@ -98,13 +99,13 @@ Lemma bit_size_of_weaken Γ1 Γ2 τ :
 Proof. intros. unfold bit_size_of. f_equal. by apply size_of_weaken. Qed.
 Lemma bit_size_of_int Γ τi : bit_size_of Γ (intT τi) = int_width τi.
 Proof. unfold bit_size_of. by rewrite size_of_int. Qed.
+Lemma bit_size_of_uchar Γ : bit_size_of Γ ucharT = char_bits.
+Proof. rewrite bit_size_of_int. by apply int_width_char. Qed.
 Lemma bit_size_of_int_same_kind Γ τi1 τi2 :
   rank τi1 = rank τi2 → bit_size_of Γ (intT τi1) = bit_size_of Γ (intT τi2).
 Proof.
   destruct τi1, τi2; intros; simplify_equality'. by rewrite !bit_size_of_int.
 Qed.
-Lemma bit_size_of_void Γ : bit_size_of Γ voidT = char_bits.
-Proof. unfold bit_size_of. by rewrite size_of_void, Nat.mul_1_l. Qed.
 Lemma bit_size_of_array Γ τ n : bit_size_of Γ (τ.[n]) = n * bit_size_of Γ τ.
 Proof. unfold bit_size_of. by rewrite !size_of_array, Nat.mul_assoc. Qed.
 Lemma bit_size_of_struct Γ s τs :
@@ -192,10 +193,8 @@ Qed.
 
 Lemma size_of_base_ne_0 Γ τb : size_of Γ (baseT τb) ≠ 0.
 Proof.
-  destruct τb.
-  * by rewrite size_of_void. 
-  * rewrite size_of_int. apply rank_size_ne_0.
-  * apply size_of_ptr_ne_0.
+  destruct τb; auto using size_of_void_ne_0, size_of_ptr_ne_0.
+  rewrite size_of_int. apply rank_size_ne_0.
 Qed.
 Lemma bit_size_of_base_ne_0 Γ τb : bit_size_of Γ (baseT τb) ≠ 0.
 Proof. apply Nat.neq_mul_0. auto using char_bits_ne_0, size_of_base_ne_0. Qed.

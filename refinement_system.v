@@ -11,7 +11,7 @@ Inductive lrval_refine' (Γ : env Ti) (α : bool)
     (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
     addr Ti + val Ti → addr Ti + val Ti → lrtype Ti → Prop :=
   | lval_refine a1 a2 τ :
-     a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : τ → addr_strict Γ a1 →
+     a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ → addr_strict Γ a1 →
      lrval_refine' Γ α f Γm1 Γm2 (inl a1) (inl a2) (inl τ)
   | rval_refine v1 v2 τ :
      v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ →
@@ -29,15 +29,15 @@ Inductive expr_refine' (Γ : env Ti) (Γf : funtypes Ti)
      Ω1 ⊑{Γ,α,f@Γm1↦Γm2} Ω2 → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ →
      expr_refine' Γ Γf τs α f Γm1 Γm2 (#{Ω1} v1) (#{Ω2} v2) (inr τ)
   | EAddr_refine Ω1 Ω2 a1 a2 τ :
-     Ω1 ⊑{Γ,α,f@Γm1↦Γm2} Ω2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : τ →
-     τ ≠ voidT → addr_strict Γ a1 →
+     Ω1 ⊑{Γ,α,f@Γm1↦Γm2} Ω2 →
+     a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ → addr_strict Γ a1 →
      expr_refine' Γ Γf τs α f Γm1 Γm2 (%{Ω1} a1) (%{Ω2} a2) (inl τ)
   | ERtoL_refine e1 e2 τ :
-     expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inr (τ.*)) → ✓{Γ} τ → τ ≠ voidT →
+     expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inr (Some τ.*)) → ✓{Γ} τ →
      expr_refine' Γ Γf τs α f Γm1 Γm2 (.* e1) (.* e2) (inl τ)
   | ERofL_refine e1 e2 τ :
      expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inl τ) →
-     expr_refine' Γ Γf τs α f Γm1 Γm2 (& e1) (& e2) (inr (τ.*))
+     expr_refine' Γ Γf τs α f Γm1 Γm2 (& e1) (& e2) (inr (Some τ.*))
   | EAssign_refine ass e1 e2 e1' e2' τ τ' σ :
      assign_typed Γ τ τ' ass σ →
      expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inl τ) →
@@ -62,8 +62,7 @@ Inductive expr_refine' (Γ : env Ti) (Γf : funtypes Ti)
      Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
      expr_refine' Γ Γf τs α f Γm1 Γm2 (e1 #> rs) (e2 #> rs) (inr σ)
   | EAlloc_refine τ e1 e2 τi :
-     ✓{Γ} τ → τ ≠ voidT →
-     expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inr (intT τi)) →
+     ✓{Γ} τ → expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inr (intT τi)) →
      expr_refine' Γ Γf τs α f Γm1 Γm2 (alloc{τ} e1) (alloc{τ} e2) (inl τ)
   | EFree_refine e1 e2 τ :
      expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inl τ) →
@@ -108,14 +107,14 @@ Section expr_refine_ind.
     Ω1 ⊑{Γ,α,f@Γm1↦Γm2} Ω2 → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ →
     P (#{Ω1} v1) (#{Ω2} v2) (inr τ)).
   Context (Paddr : ∀ Ω1 Ω2 a1 a2 τ,
-    Ω1 ⊑{Γ,α,f@Γm1↦Γm2} Ω2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : τ → τ ≠ voidT →
+    Ω1 ⊑{Γ,α,f@Γm1↦Γm2} Ω2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ →
     addr_strict Γ a1 → P (%{Ω1} a1) (%{Ω2} a2) (inl τ)).
   Context (Prtol : ∀ e1 e2 τ,
-    e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inr (τ.*) →
-    P e1 e2 (inr (τ.* )) → ✓{Γ} τ → τ ≠ voidT → P (.* e1) (.* e2) (inl τ)).
+    e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inr (Some τ.*) →
+    P e1 e2 (inr (Some τ.*)) → ✓{Γ} τ → P (.* e1) (.* e2) (inl τ)).
   Context (Profl : ∀ e1 e2 τ,
     e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inl τ →
-    P e1 e2 (inl τ) → P (& e1) (& e2) (inr (τ.*))).
+    P e1 e2 (inl τ) → P (& e1) (& e2) (inr (Some τ.*))).
   Context (Passign : ∀ ass e1 e2 e1' e2' τ τ' σ,
     assign_typed Γ τ τ' ass σ →
     e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inl τ → P e1 e2 (inl τ) →
@@ -138,7 +137,7 @@ Section expr_refine_ind.
     Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
     P (e1 #> rs) (e2 #> rs) (inr σ)).
   Context (Palloc : ∀ τ e1 e2 τi,
-    ✓{Γ} τ → τ ≠ voidT → e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inr (intT τi) →
+    ✓{Γ} τ → e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inr (intT τi) →
     P e1 e2 (inr (intT τi)) → P (alloc{τ} e1) (alloc{τ} e2) (inl τ)).
   Context (Pfree : ∀ e1 e2 τ,
     e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inl τ → P e1 e2 (inl τ) →
@@ -177,10 +176,11 @@ Inductive ectx_item_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs: list (type T
      (α : bool) (f : meminj Ti) (Γm1 Γm2 : memenv Ti) :
      ectx_item Ti → ectx_item Ti → lrtype Ti → lrtype Ti → Prop :=
   | CRtoL_refine τ :
-     ✓{Γ} τ → τ ≠ voidT →
-     ectx_item_refine' Γ Γf τs α f Γm1 Γm2 (.* □) (.* □) (inr (τ.*)) (inl τ)
+     ✓{Γ} τ →
+     ectx_item_refine' Γ Γf τs α f Γm1 Γm2
+       (.* □) (.* □) (inr (Some τ.*)) (inl τ)
   | CLtoR_refine τ :
-     ectx_item_refine' Γ Γf τs α f Γm1 Γm2 (& □) (& □) (inl τ) (inr (τ.*))
+     ectx_item_refine' Γ Γf τs α f Γm1 Γm2 (& □) (& □) (inl τ) (inr (Some τ.*))
   | CAssignL_refine ass e1' e2' τ τ' σ :
      assign_typed Γ τ τ' ass σ → e1' ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2' : inr τ' →
      ectx_item_refine' Γ Γf τs α f Γm1 Γm2
@@ -204,7 +204,7 @@ Inductive ectx_item_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs: list (type T
      Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
      ectx_item_refine' Γ Γf τs α f Γm1 Γm2 (□ #> rs) (□ #> rs) (inr τ) (inr σ)
   | CAlloc_refine τ τi :
-     ✓{Γ} τ → τ ≠ voidT → ectx_item_refine' Γ Γf τs α f Γm1 Γm2
+     ✓{Γ} τ → ectx_item_refine' Γ Γf τs α f Γm1 Γm2
        (alloc{τ} □) (alloc{τ} □) (inr (intT τi)) (inl τ)
   | CFree_refine τ :
      ectx_item_refine' Γ Γf τs α f Γm1 Γm2 (free □) (free □) (inl τ) (inr voidT)
@@ -270,7 +270,7 @@ Inductive stmt_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs : list (type Ti))
   | SLabel_refine l :
      stmt_refine' Γ Γf τs α f Γm1 Γm2 (label l) (label l) (false,None)
   | SLocal_refine' τ s1 s2 c mσ :
-     ✓{Γ} τ → τ ≠ voidT → int_typed (size_of Γ τ) sptrT →
+     ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
      stmt_refine' Γ Γf (τ :: τs) α f Γm1 Γm2 s1 s2 (c,mσ) →
      stmt_refine' Γ Γf τs α f Γm1 Γm2 (local{τ} s1) (local{τ} s2) (c,mσ)
   | SComp_refine s1 s2 s1' s2' c1 mσ1 c2 mσ2 mσ :
@@ -352,7 +352,7 @@ Inductive ctx_item_refine' (Γ : env Ti) (Γf: funtypes Ti) (τs: list (type Ti)
      ctx_item_refine' Γ Γf τs α f Γm1 Γm2
        (CStmt Es1) (CStmt Es2) (Stmt_type cmσ) (Stmt_type cmσ')
   | CLocal_refine o1 o2 τ c mσ :
-     Γm1 ⊢ o1 : τ → Γm2 ⊢ o2 : τ → τ ≠ voidT → f !! o1 = Some (o2,[]) →
+     Γm1 ⊢ o1 : τ → Γm2 ⊢ o2 : τ → f !! o1 = Some (o2,[]) →
      ctx_item_refine' Γ Γf τs α f Γm1 Γm2
        (CLocal o1 τ) (CLocal o2 τ) (Stmt_type (c,mσ)) (Stmt_type (c,mσ))
   | CExpr_refine e1 e2 Ee1 Ee2 τ cmσ :
@@ -446,8 +446,7 @@ Global Instance state_refine : RefineTM Ti (env Ti * funtypes Ti)
 Global Instance funenv_refine:
     RefineT Ti (env Ti) (funtypes Ti) (funenv Ti) := λ Γ α f Γm1 Γm2 δ1 δ2 Γf,
   map_Forall3 (λ s1 s2 τsτ, let '(τs,τ) := τsτ in ∃ cmτ,
-    ✓{Γ}* τs ∧ Forall (≠ voidT) τs ∧
-    Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
+    ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
     s1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} s2 : cmτ ∧ rettype_match cmτ τ ∧
     gotos s1 ⊆ labels s1 ∧ throws_valid 0 s1
   ) δ1 δ2 Γf.
@@ -631,8 +630,7 @@ Proof. by destruct 2; simpl; erewrite <-?stmt_refine_labels by eauto. Qed.
 Lemma funenv_lookup_refine_r Γ α f Γm1 Γm2 δ1 δ2 Γf g s2 :
   δ1 ⊑{Γ,α,f@Γm1↦Γm2} δ2 : Γf → δ2 !! g = Some s2 → ∃ s1 τs τ cmτ,
     δ1 !! g = Some s1 ∧ Γf !! g = Some (τs,τ) ∧
-    ✓{Γ}* τs ∧ Forall (≠ voidT) τs ∧
-    Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
+    ✓{Γ}* τs ∧ Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧ ✓{Γ} τ ∧
     s1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} s2 : cmτ ∧ rettype_match cmτ τ ∧
     gotos s1 ⊆ labels s1 ∧ throws_valid 0 s1.
 Proof. intros Hδ ?; specialize (Hδ g); repeat case_match; naive_solver. Qed.
@@ -806,7 +804,7 @@ Proof.
   intros ? Hδ; split.
   * intros g s ?; specialize (Hδ g); destruct (δ1 !! _),
       (Γf !! _) as [[τs τ]|]; simplify_option_equality; try done.
-    destruct Hδ as (cmτ&?&?&?&?&?&?&?&?).
+    destruct Hδ as (cmτ&?&?&?&?&?&?&?).
     erewrite <-stmt_refine_labels, <-stmt_refine_gotos by eauto.
     eauto 15 using stmt_refine_typed_r, stmt_refine_throws_valid.
   * rewrite elem_of_subseteq; intros g; rewrite !elem_of_dom.
@@ -1163,7 +1161,7 @@ Lemma funenv_refine_inverse Γ f Γm1 Γm2 δ1 δ2 Γf :
 Proof.
   intros Hδ h; specialize (Hδ h); destruct (δ1 !! h) as [s1|],
     (δ2 !! h) as [s2|], (Γf !! h) as [[τs τ]|]; try done.
-  destruct Hδ as (cmτ&?&?&?&?&?&?&?&?); exists cmτ; split_ands; auto.
+  destruct Hδ as (cmτ&?&?&?&?&?&?&?); exists cmτ; split_ands; auto.
   * auto using stmt_refine_inverse.
   * by erewrite <-stmt_refine_gotos, <-stmt_refine_labels by eauto.
   * eauto using stmt_refine_throws_valid.
@@ -1267,15 +1265,15 @@ Proof.
   naive_solver eauto using stmt_refine_weaken.
 Qed.
 
-Lemma get_stack_typed_l Γ α f Γm1 Γm2 Γf k1 k2 τf τf' :
+Lemma ctx_refine_stack_typed_l Γ α f Γm1 Γm2 Γf k1 k2 τf τf' :
   ✓ Γ → k1 ⊑{(Γ,Γf),α,f@Γm1↦Γm2} k2 : τf ↣ τf' →
   Γm1 ⊢* get_stack k1 :* get_stack_types k1.
-Proof. eauto using get_stack_typed, ctx_refine_typed_l. Qed.
-Lemma get_stack_typed_r Γ α f Γm1 Γm2 Γf k1 k2 τf τf' :
+Proof. eauto using ctx_typed_stack_typed, ctx_refine_typed_l. Qed.
+Lemma ctx_refine_stack_typed_r Γ α f Γm1 Γm2 Γf k1 k2 τf τf' :
   ✓ Γ → k1 ⊑{(Γ,Γf),α,f@Γm1↦Γm2} k2 : τf ↣ τf' →
   Γm2 ⊢* get_stack k2 :* get_stack_types k1.
 Proof.
   intros. erewrite ctx_refine_stack_types by eauto.
-  eauto using get_stack_typed, ctx_refine_typed_r.
+  eauto using ctx_typed_stack_typed, ctx_refine_typed_r.
 Qed.
 End properties.

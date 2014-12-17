@@ -4,10 +4,10 @@ Require Export memory_refine.
 
 Lemma mem_constant_prop `{EnvSpec Ti} Γ Γm m a v τ :
   ✓ Γ → ✓{Γ,Γm} m →
-  (Γ,Γm) ⊢ a : τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ → τ ≠ voidT%T →
+  (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
   ∃ v', <[a:=v]{Γ}>m !!{Γ} a = Some v' ∧ v' ⊑{Γ,true@Γm} v : τ.
 Proof.
-  unfold insertE, lookupE, mem_insert, mem_lookup. intros ??? (w&?&Hw) ??.
+  unfold insertE, lookupE, mem_insert, mem_lookup. intros ??? (w&?&Hw) ?.
   assert (ctree_Forall (λ xb, Some Writable ⊆ pbit_kind xb)
     (of_val Γ (tagged_perm <$> ctree_flatten w) v)).
   { erewrite ctree_flatten_of_val by (rewrite ?fmap_length;

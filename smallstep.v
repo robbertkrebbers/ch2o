@@ -78,8 +78,8 @@ Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
   | estep_comma m Ω v e2 :
      Γ\ ρ ⊢ₕ #{Ω} v,,e2, m ⇒ e2, mem_unlock Ω m
   | estep_cast m τ Ω v :
-     val_cast_ok Γ m τ v →
-     Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} (val_cast τ v), m
+     val_cast_ok Γ m (Some τ) v →
+     Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} (val_cast (Some τ) v), m
   | ehstep_insert m r v1 Ω1 v2 Ω2 :
      is_Some (v2 !! r) →
      Γ\ ρ ⊢ₕ #[r:=#{Ω1} v1] (#{Ω2} v2), m ⇒

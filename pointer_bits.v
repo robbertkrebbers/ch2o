@@ -9,17 +9,17 @@ Section pointer_bit_operations.
   Context `{Env Ti}.
 
   Global Instance ptr_bit_valid:
-      Valid (env Ti * memenv Ti) (ptr_bit Ti) := λ Γm pb, ∃ τ,
+      Valid (env Ti * memenv Ti) (ptr_bit Ti) := λ Γm pb, ∃ τp,
     let (Γ,Γm) := Γm in
-    (Γ,Γm) ⊢ frag_item pb : τ ∧
+    (Γ,Γm) ⊢ frag_item pb : τp ∧
     frozen (frag_item pb) ∧
-    frag_index pb < bit_size_of Γ (τ.*).
+    frag_index pb < bit_size_of Γ (τp.*).
   Definition ptr_to_bits (Γ : env Ti) (p : ptr Ti) : list (ptr_bit Ti) :=
     to_fragments (bit_size_of Γ (type_of p.*)) (freeze true p).
-  Definition ptr_of_bits (Γ : env Ti) (τ : type Ti)
+  Definition ptr_of_bits (Γ : env Ti) (τp : ptr_type Ti)
       (pbs : list (ptr_bit Ti)) : option (ptr Ti) :=
-    p ← of_fragments (bit_size_of Γ (τ.*)) pbs;
-    guard (type_of p = τ); Some p.
+    p ← of_fragments (bit_size_of Γ (τp.*)) pbs;
+    guard (type_of p = τp); Some p.
 End pointer_bit_operations.
 
 Section pointer_bits.
@@ -27,6 +27,7 @@ Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
 Implicit Types Γm : memenv Ti.
 Implicit Types τ : type Ti.
+Implicit Types τp : ptr_type Ti.
 Implicit Types p : ptr Ti.
 Implicit Types pb : ptr_bit Ti.
 Implicit Types pbs : list (ptr_bit Ti).
@@ -50,21 +51,21 @@ Proof.
   eauto using ptr_typed_weaken.
 Qed.
 Lemma ptr_to_bits_freeze Γ q p : ptr_to_bits Γ (freeze q p) = ptr_to_bits Γ p.
-Proof. unfold ptr_to_bits. by rewrite ptr_freeze_type_of,ptr_freeze_freeze. Qed.
+Proof. unfold ptr_to_bits. by rewrite ptr_type_of_freeze,ptr_freeze_freeze. Qed.
 Lemma ptr_to_bits_length_alt Γ p :
   length (ptr_to_bits Γ p) = bit_size_of Γ (type_of p.* ).
 Proof. unfold ptr_to_bits. by rewrite (to_fragments_length _). Qed.
-Lemma ptr_to_bits_length Γ Γm p τ :
-  (Γ,Γm) ⊢ p : τ → length (ptr_to_bits Γ p) = bit_size_of Γ (τ.* ).
+Lemma ptr_to_bits_length Γ Γm p τp :
+  (Γ,Γm) ⊢ p : τp → length (ptr_to_bits Γ p) = bit_size_of Γ (τp.*).
 Proof. intros. erewrite ptr_to_bits_length_alt, type_of_correct; eauto. Qed.
-Lemma ptr_to_bits_valid Γ Γm p τ : (Γ,Γm) ⊢ p : τ → ✓{Γ,Γm}* (ptr_to_bits Γ p).
+Lemma ptr_to_bits_valid Γ Γm p τp : (Γ,Γm) ⊢ p : τp → ✓{Γ,Γm}* (ptr_to_bits Γ p).
 Proof.
   intros. apply (Forall_to_fragments _).
-  intros i. erewrite type_of_correct by eauto. exists τ; simpl.
+  intros i. erewrite type_of_correct by eauto. exists τp; simpl.
   rewrite ptr_typed_freeze. unfold frozen. by rewrite ptr_freeze_freeze.
 Qed.
-Lemma ptr_of_bits_Exists_Forall_typed Γ Γm τ pbs :
-  is_Some (ptr_of_bits Γ τ pbs) → Exists ✓{Γ,Γm} pbs → ✓{Γ,Γm}* pbs.
+Lemma ptr_of_bits_Exists_Forall_typed Γ Γm τp pbs :
+  is_Some (ptr_of_bits Γ τp pbs) → Exists ✓{Γ,Γm} pbs → ✓{Γ,Γm}* pbs.
 Proof.
   unfold ptr_of_bits; intros [p ?]; simplify_option_equality.
   rewrite <-(of_to_fragments_1 _ p pbs) by eauto; unfold to_fragments at 1.
@@ -72,25 +73,25 @@ Proof.
   intros (i&?&?&?&?&?); simplify_type_equality'.
   apply (Forall_to_fragments _); eexists; eauto.
 Qed.
-Lemma ptr_of_bits_typed_frozen Γ Γm p τ pbs :
-  ptr_of_bits Γ τ pbs = Some p → ✓{Γ,Γm}* pbs → (Γ,Γm) ⊢ p : τ ∧ frozen p.
+Lemma ptr_of_bits_typed_frozen Γ Γm p τp pbs :
+  ptr_of_bits Γ τp pbs = Some p → ✓{Γ,Γm}* pbs → (Γ,Γm) ⊢ p : τp ∧ frozen p.
 Proof.
   unfold ptr_of_bits; intros; simplify_option_equality.
   destruct (Forall_of_fragments (bit_size_of Γ (type_of p.* ))
     (✓{Γ,Γm}) p pbs 0) as (?&?&?&?); eauto using type_of_typed.
   by apply Nat.neq_0_lt_0, bit_size_of_base_ne_0.
 Qed.
-Lemma ptr_of_bits_typed Γ Γm p τ pbs :
-  ptr_of_bits Γ τ pbs = Some p → ✓{Γ,Γm}* pbs → (Γ,Γm) ⊢ p : τ.
+Lemma ptr_of_bits_typed Γ Γm p τp pbs :
+  ptr_of_bits Γ τp pbs = Some p → ✓{Γ,Γm}* pbs → (Γ,Γm) ⊢ p : τp.
 Proof. intros. eapply ptr_of_bits_typed_frozen; eauto. Qed.
-Lemma ptr_of_bits_frozen Γ Γm p τ pbs :
-  ptr_of_bits Γ τ pbs = Some p → ✓{Γ,Γm}* pbs → frozen p.
+Lemma ptr_of_bits_frozen Γ Γm p τp pbs :
+  ptr_of_bits Γ τp pbs = Some p → ✓{Γ,Γm}* pbs → frozen p.
 Proof. intros. eapply ptr_of_bits_typed_frozen; eauto. Qed.
-Lemma ptr_of_bits_type_of Γ p τ pbs :
-  ptr_of_bits Γ τ pbs = Some p → type_of p = τ.
+Lemma ptr_of_bits_type_of Γ p τp pbs :
+  ptr_of_bits Γ τp pbs = Some p → type_of p = τp.
 Proof. by unfold ptr_of_bits; intros; simplify_option_equality. Qed.
-Lemma ptr_to_of_bits Γ Γm p τ pbs :
-  ptr_of_bits Γ τ pbs = Some p → ✓{Γ,Γm}* pbs → ptr_to_bits Γ p = pbs.
+Lemma ptr_to_of_bits Γ Γm p τp pbs :
+  ptr_of_bits Γ τp pbs = Some p → ✓{Γ,Γm}* pbs → ptr_to_bits Γ p = pbs.
 Proof.
   intros. assert (frozen p) as Hp by eauto using ptr_of_bits_frozen.
   unfold ptr_of_bits, ptr_to_bits in *.
@@ -101,26 +102,25 @@ Lemma ptr_of_to_bits Γ p :
   ptr_of_bits Γ (type_of p) (ptr_to_bits Γ p) = Some (freeze true p).
 Proof.
   unfold ptr_of_bits, ptr_to_bits. rewrite (of_to_fragments_2 _); csimpl.
-  rewrite ptr_freeze_type_of. by simplify_option_equality.
+  rewrite ptr_type_of_freeze. by simplify_option_equality.
 Qed.
-Lemma ptr_of_to_bits_typed Γ Γm p τ :
-  (Γ,Γm) ⊢ p : τ → ptr_of_bits Γ τ (ptr_to_bits Γ p) = Some (freeze true p).
+Lemma ptr_of_to_bits_typed Γ Γm p τp :
+  (Γ,Γm) ⊢ p : τp → ptr_of_bits Γ τp (ptr_to_bits Γ p) = Some (freeze true p).
 Proof. intros. by erewrite <-(ptr_of_to_bits Γ), type_of_correct by eauto. Qed.
-Lemma ptr_of_bits_length Γ τ pbs p :
-  ptr_of_bits Γ τ pbs = Some p → length pbs = bit_size_of Γ (τ.*).
+Lemma ptr_of_bits_length Γ τp pbs p :
+  ptr_of_bits Γ τp pbs = Some p → length pbs = bit_size_of Γ (τp.*).
 Proof.
   unfold ptr_of_bits. intros. simplify_option_equality.
   by erewrite <-(of_to_fragments_1 _ _ pbs), to_fragments_length by eauto.
 Qed.
-Lemma ptr_to_bits_weaken Γ1 Γ2 Γm p τ :
-  ✓ Γ1 → (Γ1,Γm) ⊢ p : τ → Γ1 ⊆ Γ2 → ptr_to_bits Γ1 p = ptr_to_bits Γ2 p.
+Lemma ptr_to_bits_weaken Γ1 Γ2 Γm p τp :
+  ✓ Γ1 → (Γ1,Γm) ⊢ p : τp → Γ1 ⊆ Γ2 → ptr_to_bits Γ1 p = ptr_to_bits Γ2 p.
 Proof.
   intros. unfold ptr_to_bits. by erewrite !type_of_correct, bit_size_of_weaken
     by eauto using TBase_valid, TPtr_valid, ptr_typed_type_valid.
 Qed.
-Lemma ptr_of_bits_weaken Γ1 Γ2 τ pbs :
-  ✓ Γ1 → ptr_type_valid Γ1 τ → Γ1 ⊆ Γ2 →
-  ptr_of_bits Γ1 τ pbs = ptr_of_bits Γ2 τ pbs.
+Lemma ptr_of_bits_weaken Γ1 Γ2 τp pbs :
+  ✓ Γ1 → ✓{Γ1} τp → Γ1 ⊆ Γ2 → ptr_of_bits Γ1 τp pbs = ptr_of_bits Γ2 τp pbs.
 Proof.
   intros. unfold ptr_of_bits. by erewrite bit_size_of_weaken
     by eauto using TBase_valid, TPtr_valid.

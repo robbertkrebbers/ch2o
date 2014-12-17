@@ -15,8 +15,8 @@ Inductive ref_refine `{Env Ti} (sz : nat) :
      r1 ++ r1' ⊆* r2 → r1 ≠ [] →
      ref_refine sz true r1' r1 i r2 i.
 Inductive addr_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
-      (Γm1 Γm2 : memenv Ti) : addr Ti → addr Ti → type Ti → Prop :=
-  | Addr_refine' o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σc :
+      (Γm1 Γm2 : memenv Ti) : addr Ti → addr Ti → ptr_type Ti → Prop :=
+  | Addr_refine' o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σp :
      Γm1 ⊑{Γ,α,f} Γm2 →
      f !! o1 = Some (o2,r') →
      Γm1 ⊢ o1 : τ1 →
@@ -25,25 +25,26 @@ Inductive addr_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
      Γ ⊢ r' : τ2 ↣ τ1 → Γ ⊢ r1 : τ1 ↣ σ →
      ref_offset r1 = 0 →
      i1 ≤ size_of Γ σ * ref_size r1 →
-     i1 `mod` size_of Γ σc = 0 →
-     σ >*> σc →
+     i1 `mod` ptr_size_of Γ σp = 0 →
+     σ >*> σp →
      ref_refine (size_of Γ σ) α r' r1 i1 r2 i2 →
      addr_refine' Γ α f Γm1 Γm2
-       (Addr o1 r1 i1 τ1 σ σc) (Addr o2 r2 i2 τ2 σ σc) σc.
+       (Addr o1 r1 i1 τ1 σ σp) (Addr o2 r2 i2 τ2 σ σp) σp.
 Instance addr_refine `{Env Ti} :
-  RefineT Ti (env Ti) (type Ti) (addr Ti) := addr_refine'.
+  RefineT Ti (env Ti) (ptr_type Ti) (addr Ti) := addr_refine'.
 
 Section addresses.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
 Implicit Types Γm : memenv Ti.
 Implicit Types τ σ : type Ti.
+Implicit Types τp σp : ptr_type Ti.
 Implicit Types r : ref Ti.
 Implicit Types a : addr Ti.
 Implicit Types α : bool.
 
-Lemma addr_refine_typed_l Γ α f Γm1 Γm2 a1 a2 σ :
-  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ → (Γ,Γm1) ⊢ a1 : σ.
+Lemma addr_refine_typed_l Γ α f Γm1 Γm2 a1 a2 σp :
+  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → (Γ,Γm1) ⊢ a1 : σp.
 Proof.
   intros ?. assert (∀ r τ1 τ2, ✓{Γ} τ1 → Γ ⊢ r : τ1 ↣ τ2 →
     int_typed (size_of Γ τ1) sptrT → int_typed (size_of Γ τ2) sptrT).
@@ -53,10 +54,10 @@ Proof.
     eauto using size_of_ref'. }
   destruct 1; constructor; eauto using ref_typed_type_valid.
 Qed.
-Lemma addr_refine_typed_r Γ α f Γm1 Γm2 a1 a2 σ :
-  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ → (Γ,Γm2) ⊢ a2 : σ.
+Lemma addr_refine_typed_r Γ α f Γm1 Γm2 a1 a2 σp :
+  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → (Γ,Γm2) ⊢ a2 : σp.
 Proof.
-  destruct 2 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σc HΓm ?????????? Hr].
+  destruct 2 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σp HΓm ?????????? Hr].
   assert (ref_offset r' < ref_size r') by eauto using ref_typed_size.
   constructor; auto.
   * by destruct (memenv_refine_typed_l HΓm o1 o2 r' τ1) 
@@ -73,21 +74,22 @@ Proof.
       apply Nat.mul_le_mono_l; lia.
     + erewrite <-ref_size_le by eauto. by destruct r1.
   * destruct Hr as [|r1 i1 r2 i2|r1' r1 r2 i]; simplify_equality'; auto.
-    destruct (castable_divide Γ σ σc) as [z ->]; auto.
+    destruct (castable_divide Γ σ σp) as [z ->]; auto.
+    destruct σp as [σ'|]; auto.
     by rewrite <-Nat.mul_assoc,
-      (Nat.mul_comm (size_of _ _)), Nat.mul_assoc, Nat.mod_add
+      (Nat.mul_comm (ptr_size_of _ _)), Nat.mul_assoc, Nat.mod_add
       by eauto using size_of_ne_0, castable_type_valid, ref_typed_type_valid.
 Qed.
-Lemma addr_refine_type_of_l Γ α f Γm1 Γm2 a1 a2 σ :
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ → type_of a1 = σ.
+Lemma addr_refine_type_of_l Γ α f Γm1 Γm2 a1 a2 σp :
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → type_of a1 = σp.
 Proof. by destruct 1. Qed.
-Lemma addr_refine_type_of_r Γ α f Γm1 Γm2 a1 a2 σ :
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ → type_of a2 = σ.
+Lemma addr_refine_type_of_r Γ α f Γm1 Γm2 a1 a2 σp :
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → type_of a2 = σp.
 Proof. by destruct 1. Qed.
-Lemma addr_refine_frozen Γ α f Γm1 Γm2 a1 a2 σ :
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ → frozen a2 → frozen a1.
+Lemma addr_refine_frozen Γ α f Γm1 Γm2 a1 a2 σp :
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → frozen a2 → frozen a1.
 Proof.
-  unfold frozen. destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σc ??????????? Hr];
+  unfold frozen. destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σp ??????????? Hr];
     destruct Hr as [|r1 i1 r2 i2|]; intros; decompose_Forall_hyps;
     f_equal; eauto using ref_frozen_le, ref_freeze_freeze.
 Qed.
@@ -97,17 +99,17 @@ Proof.
   destruct (decide (r = [])) as [->|];
     constructor; csimpl; rewrite ?(right_id_L [] (++)); auto with lia.
 Qed.
-Lemma addr_refine_id Γ α Γm a σ : (Γ,Γm) ⊢ a : σ → a ⊑{Γ,α@Γm} a : σ.
+Lemma addr_refine_id Γ α Γm a σp : (Γ,Γm) ⊢ a : σp → a ⊑{Γ,α@Γm} a : σp.
 Proof.
-  destruct 1 as [o r i τ σ σc].
+  destruct 1 as [o r i τ σ σp].
   eexists []; csimpl; auto using memenv_refine_id, ref_refine_id.
   by apply ref_typed_nil.
 Qed.
-Lemma addr_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 a1 a2 a3 σ σ' :
-  ✓ Γ → a1 ⊑{Γ,α1,f1@Γm1↦Γm2} a2 : σ → a2 ⊑{Γ,α2,f2@Γm2↦Γm3} a3 : σ' →
-  a1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} a3 : σ.
+Lemma addr_refine_compose Γ α1 α2 f1 f2 Γm1 Γm2 Γm3 a1 a2 a3 σp σp' :
+  ✓ Γ → a1 ⊑{Γ,α1,f1@Γm1↦Γm2} a2 : σp → a2 ⊑{Γ,α2,f2@Γm2↦Γm3} a3 : σp' →
+  a1 ⊑{Γ,α1||α2,f2 ◎ f1@Γm1↦Γm3} a3 : σp.
 Proof.
-  destruct 2 as [o1 o2 r1 r1' r2 i1 i2 τ1 τ2 σ σc ??????????? Hr3];
+  destruct 2 as [o1 o2 r1 r1' r2 i1 i2 τ1 τ2 σ σp ??????????? Hr3];
     inversion 1 as [? o3 ? r2' r3 ? i3 ? τ3 ????????????? Hr5]; subst.
   exists (r1' ++ r2'); eauto using memenv_refine_compose.
   { by rewrite lookup_meminj_compose; simplify_option_equality. }
@@ -122,53 +124,54 @@ Proof.
   * constructor; auto. transitivity (r2 ++ r2'); auto.
     by rewrite (associative_L (++)); apply Forall2_app.
 Qed.
-Lemma addr_refine_inverse Γ f Γm1 Γm2 a1 a2 σ :
-  a1 ⊑{Γ,false,f@Γm1↦Γm2} a2 : σ →
-  a2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} a1 : σ.
+Lemma addr_refine_inverse Γ f Γm1 Γm2 a1 a2 σp :
+  a1 ⊑{Γ,false,f@Γm1↦Γm2} a2 : σp →
+  a2 ⊑{Γ,false,meminj_inverse f@Γm2↦Γm1} a1 : σp.
 Proof.
-  destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σc ??????????? Hr].
+  destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σp ??????????? Hr].
   inversion Hr; destruct (memenv_refine_perm_l Γ f Γm1 Γm2 o1 τ1)
     as (?&?&?); auto; simplify_type_equality'.
   refine_constructor; eauto using lookup_meminj_inverse_2,
     memenv_refine_inverse, ref_typed_nil_2.
 Qed.
-Lemma addr_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' a1 a2 σ :
-  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ → Γ ⊆ Γ' → (α → α') → Γm1' ⊑{Γ',α',f'} Γm2' →
-  Γm1 ⇒ₘ Γm1' → meminj_extend f f' Γm1 Γm2 → a1 ⊑{Γ',α',f'@Γm1'↦Γm2'} a2 : σ.
+Lemma addr_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' a1 a2 σp :
+  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp →
+  Γ ⊆ Γ' → (α → α') → Γm1' ⊑{Γ',α',f'} Γm2' →
+  Γm1 ⇒ₘ Γm1' → meminj_extend f f' Γm1 Γm2 → a1 ⊑{Γ',α',f'@Γm1'↦Γm2'} a2 : σp.
 Proof.
-  destruct 2 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σc ??????????? Hr];
+  destruct 2 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σp ??????????? Hr];
     intros ??? [??] [??];
     refine_constructor; eauto using type_valid_weaken, ref_typed_weaken.
   * eauto using option_eq_1_alt.
   * by erewrite <-size_of_weaken by eauto.
   * by erewrite <-size_of_weaken by eauto using ref_typed_type_valid.
-  * by erewrite <-size_of_weaken
+  * destruct σp as [σ'|]; simpl; auto. by erewrite <-size_of_weaken
       by eauto using ref_typed_type_valid, castable_type_valid.
   * erewrite <-size_of_weaken by eauto using ref_typed_type_valid.
     destruct Hr, α'; csimpl in *; try tauto || constructor (done).
     apply ref_refine_id.
 Qed.
 (* only holds for renamings because of end-of-array pointers *)
-Lemma addr_refine_unique_l Γ f Γm1 Γm2 a1 a2 a3 σ2 σ3 :
-  a1 ⊑{Γ,false,f@Γm1↦Γm2} a3 : σ2 → a2 ⊑{Γ,false,f@Γm1↦Γm2} a3 : σ3 → a1 = a2.
+Lemma addr_refine_unique_l Γ f Γm1 Γm2 a1 a2 a3 σp2 σp3 :
+  a1 ⊑{Γ,false,f@Γm1↦Γm2} a3 : σp2 → a2 ⊑{Γ,false,f@Γm1↦Γm2} a3 : σp3 → a1 = a2.
 Proof.
-  destruct 1 as [o1 o2 r r2 r3 i i3 τ τ2 σ σc ??? _ _ _ _ _ _ _ _ Hr];
+  destruct 1 as [o1 o2 r r2 r3 i i3 τ τ2 σ σp ??? _ _ _ _ _ _ _ _ Hr];
     inversion 1 as [o1' o2' r' r2' ? i' ? τ' ??? _ ?? _ _ _ _ _ _ _ _ Hr'];
     inversion Hr; inversion Hr'; simplify_equality.
   destruct (meminj_injective_alt f o1 o1' o2 [] []) as [?|[_ ?]];
     eauto using memenv_refine_injective; simplify_type_equality; auto.
   by destruct (ref_disjoint_nil_inv_l (@nil (ref_seg Ti))).
 Qed.
-Lemma addr_refine_unique_r Γ α f Γm1 Γm2 a1 a2 a3 σ2 σ3 :
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a3 : σ3 →
+Lemma addr_refine_unique_r Γ α f Γm1 Γm2 a1 a2 a3 σp2 σp3 :
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a3 : σp3 →
   frozen a2 → frozen a3 → a2 = a3.
 Proof.
   unfold frozen; destruct 1 as [?????????????????????? Hr1];
     inversion 1 as [?????????????????????? Hr2]; destruct Hr1; inversion Hr2;
     intros; simplify_type_equality'; f_equal; eauto using ref_le_unique_alt.
 Qed.
-Lemma addr_freeze_refine_l Γ Γm a σ :
-  (Γ,Γm) ⊢ a : σ → freeze true a ⊑{Γ,true@Γm} a : σ.
+Lemma addr_freeze_refine_l Γ Γm a σp :
+  (Γ,Γm) ⊢ a : σp → freeze true a ⊑{Γ,true@Γm} a : σp.
 Proof.
   destruct 1. eexists []; csimpl; auto using memenv_refine_id.
   * by apply ref_typed_nil.
@@ -179,11 +182,11 @@ Proof.
     constructor. rewrite (right_id_L [] (++)); auto using ref_freeze_le_l.
     by destruct r.
 Qed.
-Lemma addr_freeze_refine Γ α f Γm1 Γm2 a1 a2 σ :
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ →
-  freeze true a1 ⊑{Γ,α,f@Γm1↦Γm2} freeze true a2 : σ.
+Lemma addr_freeze_refine Γ α f Γm1 Γm2 a1 a2 σp :
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp →
+  freeze true a1 ⊑{Γ,α,f@Γm1↦Γm2} freeze true a2 : σp.
 Proof.
-  destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σc HΓm ?????????? Hr];
+  destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σp HΓm ?????????? Hr];
     csimpl; refine_constructor; eauto.
   { by apply ref_typed_freeze. }
   { by rewrite ref_offset_freeze. }
@@ -191,12 +194,12 @@ Proof.
   destruct Hr as [|r1 i1 r2 i2|r1' r1 r2 i]; constructor; auto.
   * erewrite <-(memenv_refine_frozen _ _ _ _ _ HΓm _ _ r1) by eauto.
     by erewrite ref_set_offset_freeze, ref_freeze_le by eauto.
-  * erewrite <-(memenv_refine_frozen _ _ _ _ _ HΓm _ _ r1'), <-fmap_app by eauto.
+  * erewrite <-(memenv_refine_frozen _ _ _ _ _ HΓm _ _ r1'),<-fmap_app by eauto.
     by erewrite ref_freeze_le by eauto.
   * by destruct r1.
 Qed.
-Lemma addr_ref_refine Γ α f Γm1 Γm2 a1 a2 σ :
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ → addr_strict Γ a1 →
+Lemma addr_ref_refine Γ α f Γm1 Γm2 a1 a2 σp :
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → addr_strict Γ a1 →
   ∃ r, f !! addr_index a1 = Some (addr_index a2, r) ∧
     addr_ref Γ a1 ++ r ⊆* addr_ref Γ a2.
 Proof.
@@ -210,25 +213,25 @@ Proof.
   * destruct r1; decompose_Forall_hyps.
     constructor; auto using Forall2_app, ref_seg_set_offset_le.
 Qed.
-Lemma addr_ref_byte_refine Γ α f Γm1 Γm2 a1 a2 σ :
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ → addr_strict Γ a1 →
+Lemma addr_ref_byte_refine Γ α f Γm1 Γm2 a1 a2 σp :
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → addr_strict Γ a1 →
   addr_ref_byte Γ a1 = addr_ref_byte Γ a2.
 Proof.
   destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ' ???????????? Hr];
     intros; destruct Hr; simplify_equality'; auto.
   by rewrite Nat.mul_comm, Nat.mod_add by lia.
 Qed.
-Lemma addr_is_obj_refine Γ α f Γm1 Γm2 a1 a2 σ :
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ → addr_is_obj a1 ↔ addr_is_obj a2.
+Lemma addr_is_obj_refine Γ α f Γm1 Γm2 a1 a2 σp :
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → addr_is_obj a1 ↔ addr_is_obj a2.
 Proof. by destruct 1. Qed.
-Lemma addr_disjoint_refine Γ α α' f Γm1 Γm2 a1 a2 a3 a4 σ1 σ3 :
+Lemma addr_disjoint_refine Γ α α' f Γm1 Γm2 a1 a2 a3 a4 σp1 σp3 :
   ✓ Γ → meminj_injective f → addr_strict Γ a1 → addr_strict Γ a3 →
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ1 → a3 ⊑{Γ,α',f@Γm1↦Γm2} a4 : σ3 →
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp1 → a3 ⊑{Γ,α',f@Γm1↦Γm2} a4 : σp3 →
   a1 ⊥{Γ} a3 → a2 ⊥{Γ} a4.
 Proof.
   intros ??????.
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 σ1) as (r1&Hf1&Hr1); auto.
-  destruct (addr_ref_refine Γ α' f Γm1 Γm2 a3 a4 σ3) as (r2&Hf2&Hr2); auto.
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 σp1) as (r1&Hf1&Hr1); auto.
+  destruct (addr_ref_refine Γ α' f Γm1 Γm2 a3 a4 σp3) as (r2&Hf2&Hr2); auto.
   intros [?|[[Hidx ?]|(Hidx&Ha&?&?&?)]].
   * edestruct (meminj_injective_ne f (addr_index a1) (addr_index a2))
       as [|[??]]; eauto; [by left|].
@@ -244,14 +247,14 @@ Proof.
       auto using ref_freeze_le, eq_sym.
     rewrite fmap_app, Ha, <-fmap_app; auto using ref_freeze_le.
 Qed.
-Lemma addr_disjoint_refine_inv Γ α α' f Γm1 Γm2 a1 a2 a3 a4 σ1 σ3 :
+Lemma addr_disjoint_refine_inv Γ α α' f Γm1 Γm2 a1 a2 a3 a4 σp1 σp3 :
   ✓ Γ → addr_strict Γ a1 → addr_strict Γ a3 →
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ1 → a3 ⊑{Γ,α',f@Γm1↦Γm2} a4 : σ3 →
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp1 → a3 ⊑{Γ,α',f@Γm1↦Γm2} a4 : σp3 →
   a2 ⊥{Γ} a4 → a1 ⊥{Γ} a3.
 Proof.
   intros ?????.
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 σ1) as (r1&Hf1&Hr1); auto.
-  destruct (addr_ref_refine Γ α' f Γm1 Γm2 a3 a4 σ3) as (r2&Hf2&Hr2); auto.
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 σp1) as (r1&Hf1&Hr1); auto.
+  destruct (addr_ref_refine Γ α' f Γm1 Γm2 a3 a4 σp3) as (r2&Hf2&Hr2); auto.
   destruct (decide (addr_index a1 = addr_index a3)) as [Hidx|]; [|by left].
   intros [?|[[Hidx' ?]|(Hidx'&Ha&?&?&?)]]; [congruence| |].
   * right; left; split; [done|]. rewrite Hidx in Hf1; simplify_equality.
@@ -265,13 +268,13 @@ Proof.
     erewrite ref_freeze_le by eauto. rewrite Ha.
     eauto using ref_freeze_le, eq_sym.
 Qed.
-Lemma addr_byte_refine_help Γ α f Γm1 Γm2 a1 a2 σ :
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ →
+Lemma addr_byte_refine_help Γ α f Γm1 Γm2 a1 a2 σp :
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp →
   ∃ i, i + size_of Γ (addr_type_base a1) * ref_size (addr_ref_base a1)
     ≤ size_of Γ (addr_type_base a2) * ref_size (addr_ref_base a2)
   ∧ addr_byte a2 = i + addr_byte a1.
 Proof.
-  destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σc ??????????? Hr].
+  destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σp ??????????? Hr].
   destruct Hr as [|r1 i1 r2 i2 Hr|r1' r1 r2 i]; simplify_type_equality'.
   * by exists 0.
   * exists (size_of Γ σ * ref_offset r1); split; [|lia].
@@ -281,30 +284,28 @@ Proof.
   * exists 0; split; auto. erewrite <-(ref_size_le _ r2) by eauto.
     by destruct r1.
 Qed.
-Lemma addr_strict_refine Γ α f Γm1 Γm2 a1 a2 σ :
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ → addr_strict Γ a1 → addr_strict Γ a2.
+Lemma addr_strict_refine Γ α f Γm1 Γm2 a1 a2 σp :
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → addr_strict Γ a1 → addr_strict Γ a2.
 Proof.
-  intros. destruct (addr_byte_refine_help Γ α f Γm1 Γm2 a1 a2 σ)
+  intros. destruct (addr_byte_refine_help Γ α f Γm1 Γm2 a1 a2 σp)
     as (i&?&?); auto; unfold addr_strict in *; lia.
 Qed.
-Lemma addr_alive_refine Γ α f Γm1 Γm2 a1 a2 σ :
-  index_alive Γm1 (addr_index a1) → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σ →
+Lemma addr_alive_refine Γ α f Γm1 Γm2 a1 a2 σp :
+  index_alive Γm1 (addr_index a1) → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp →
   index_alive Γm2 (addr_index a2).
 Proof. destruct 2 as [??????????? []]; eauto. Qed.
 Lemma addr_top_refine Γ α f Γm1 Γm2 o1 o2 τ :
   ✓ Γ → Γm1 ⊑{Γ,α,f} Γm2 → Γm1 ⊢ o1 : τ → f !! o1 = Some (o2,[]) →
   ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
-  addr_top o1 τ ⊑{Γ,α,f@Γm1↦Γm2} addr_top o2 τ : τ.
+  addr_top o1 τ ⊑{Γ,α,f@Γm1↦Γm2} addr_top o2 τ : Some τ.
 Proof.
-  econstructor; eauto using Nat.mod_0_l, size_of_ne_0, ref_refine_id.
-  * by constructor.
-  * by constructor.
-  * simpl; lia.
+  eexists []; eauto using Nat.mod_0_l, size_of_ne_0, ref_refine_id;
+    by constructor || simpl; lia.
 Qed.
 Lemma addr_top_array_refine Γ α f Γm1 Γm2 o1 o2 τ (n : Z) :
   ✓ Γ → Γm1 ⊑{Γ,α,f} Γm2 → Γm1 ⊢ o1 : τ.[Z.to_nat n] → f !! o1 = Some (o2,[]) →
-  ✓{Γ} τ → τ ≠ voidT → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
-  addr_top_array o1 τ n ⊑{Γ,α,f@Γm1↦Γm2} addr_top_array o2 τ n : τ.
+  ✓{Γ} τ → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
+  addr_top_array o1 τ n ⊑{Γ,α,f@Γm1↦Γm2} addr_top_array o2 τ n : Some τ.
 Proof.
   intros. assert (0 ≤ n)%Z by (by destruct n). econstructor; simpl; eauto. 
   * apply TArray_valid; auto with lia.
@@ -313,6 +314,7 @@ Proof.
   * repeat typed_constructor; lia.
   * lia.
   * eauto using Nat.mod_0_l, size_of_ne_0.
+  * constructor.
   * apply ref_refine_id.
 Qed.
 End addresses.

@@ -10,7 +10,7 @@ Inductive val_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
      val_refine' Γ α f Γm1 Γm2 (VBase vb1) (VBase vb2) (baseT τb)
   | VArray_refine τ n vs1 vs2 :
      n = length vs1 →
-     Forall2 (λ v1 v2, val_refine' Γ α f Γm1 Γm2 v1 v2 τ) vs1 vs2 → τ ≠ voidT →
+     Forall2 (λ v1 v2, val_refine' Γ α f Γm1 Γm2 v1 v2 τ) vs1 vs2 →
      n ≠ 0 → val_refine' Γ α f Γm1 Γm2 (VArray τ vs1) (VArray τ vs2) (τ.[n])
   | VStruct_refine s τs vs1 vs2 :
      Γ !! s = Some τs → Forall3 (val_refine' Γ α f Γm1 Γm2) vs1 vs2 τs →
@@ -36,7 +36,7 @@ Section val_refine_ind.
     vb1 ⊑{Γ,α,f@Γm1↦Γm2} vb2 : τb → P (VBase vb1) (VBase vb2) (baseT τb)).
   Context (Parray : ∀ τ n vs1 vs2,
     length vs1 = n → vs1 ⊑{Γ,α,f@Γm1↦Γm2}* vs2 : τ →
-    Forall2 (λ v1 v2, P v1 v2 τ) vs1 vs2 → τ ≠ voidT → n ≠ 0 →
+    Forall2 (λ v1 v2, P v1 v2 τ) vs1 vs2 → n ≠ 0 →
     P (VArray τ vs1) (VArray τ vs2) (τ.[n])).
   Context (Pstruct : ∀ s τs vs1 vs2,
     Γ !! s = Some τs →
@@ -237,7 +237,7 @@ Proof.
   intros ?. revert v1 v2 τ.
   refine (val_refine_ind _ _ _ _ _ _ _ _ _ _ _ _); simpl.
   * eauto using base_val_flatten_refine.
-  * intros τ n vs1 vs2 <- _ ? _ _. by apply Forall2_bind.
+  * intros τ n vs1 vs2 <- _ ? _. by apply Forall2_bind.
   * intros s τs vs1 vs2 -> _ IH; simpl. generalize (field_bit_sizes Γ τs).
     induction IH; intros [|?]; decompose_Forall_hyps; auto.
   * eauto.
@@ -266,11 +266,10 @@ Proof.
   intros HΓ Hτ. revert τ Hτ bs1 bs2. refine (type_env_ind _ HΓ _ _ _ _).
   * intros ? τb bs1 bs2 ??. rewrite !val_unflatten_base.
     refine_constructor. by apply base_val_unflatten_refine.
-  * intros τ n _ IH ? Hn bs1 bs2.
-    rewrite !val_unflatten_array, bit_size_of_array.
+  * intros τ n _ IH Hn bs1 bs2; rewrite !val_unflatten_array, bit_size_of_array.
     intros Hbs Hbs'. refine_constructor; auto using array_unflatten_length.
     revert bs1 bs2 Hbs Hbs'. clear Hn. induction n; simpl; auto.
-  * intros [] s τs Hs _ IH _ _ bs1 bs2; erewrite !val_unflatten_compound,
+  * intros [] s τs Hs _ IH _ bs1 bs2; erewrite !val_unflatten_compound,
       ?bit_size_of_struct by eauto; intros Hbs Hbs'.
     { refine_constructor; eauto.
       clear Hs. unfold struct_unflatten. revert bs1 bs2 Hbs Hbs'.
@@ -302,7 +301,7 @@ Proof.
   * intros τb xbs ??? f Γm2 w2 Hw2; pattern w2;
       apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ _ Hw2); simpl; clear w2 Hw2.
     refine_constructor; eauto using base_val_unflatten_refine, pbits_tag_refine.
-  * intros ws1 τ _ IH ? Hlen f Γm2 w2 Hw2; pattern w2;
+  * intros ws1 τ _ IH Hlen f Γm2 w2 Hw2; pattern w2;
       apply (ctree_refine_inv_l _ _ _ _ _ _ _ _ _ Hw2); simpl; clear w2 Hw2.
     intros ws2 Hws. refine_constructor; auto. clear Hlen.
     induction Hws; decompose_Forall_hyps; constructor; auto.
@@ -351,7 +350,7 @@ Proof.
     erewrite base_val_refine_type_of_l, base_val_refine_type_of_r by eauto.
     constructor; eauto using PBits_refine,
       base_val_flatten_refine, seps_unshared_valid, base_val_typed_type_valid.
-  * intros τ n vs1 vs2 <- ? IH ? _ xs Hxs Hxs'; simpl.
+  * intros τ n vs1 vs2 <- ? IH _ xs Hxs Hxs'; simpl.
     rewrite bit_size_of_array; intros Hxs''. constructor.
     revert xs Hxs Hxs' Hxs''. induction IH; intros; decompose_Forall_hyps;
       erewrite ?val_refine_type_of_l, ?val_refine_type_of_r by eauto; auto.
@@ -417,7 +416,7 @@ Proof.
     constructor. pattern xbs at 3; rewrite <-(PBits_perm_tag xbs).
     eapply PBits_refine, bits_subseteq_refine;
       eauto using pbits_tag_valid, base_val_flatten_unflatten.
-  * intros ws τ Hws IH ? Hlen ?. constructor.
+  * intros ws τ Hws IH Hlen ?. constructor.
     clear Hlen. induction IH; decompose_Forall_hyps;
       erewrite ?type_of_correct, ?fmap_app, ?take_app_alt, ?drop_app_alt
       by eauto using to_val_typed; auto.
@@ -467,7 +466,7 @@ Proof.
     eauto using of_val_to_val_refine, union_reset_above, ctree_refine_id.
 Qed.
 Lemma val_freeze_refine_l Γ Γm v τ :
-  ✓ Γ → (Γ,Γm) ⊢ v : τ → val_freeze true v ⊑{Γ,true@Γm} v : τ.
+  ✓ Γ → (Γ,Γm) ⊢ v : τ → val_map (freeze true) v ⊑{Γ,true@Γm} v : τ.
 Proof.
   intros ?. revert v τ. refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
   * intros. refine_constructor; eauto using base_val_freeze_refine_l.
@@ -485,7 +484,7 @@ Lemma val_lookup_seg_refine Γ α f Γm1 Γm2 v1 v2 τ rs v3 :
 Proof.
   intros ?. revert v1 v2 τ. refine (val_refine_ind _ _ _ _ _ _ _ _ _ _ _ _).
   * by destruct rs.
-  * intros τ n vs1 vs2 <- ? _ ???; destruct rs; simplify_option_equality
+  * intros τ n vs1 vs2 <- ? _ ??; destruct rs; simplify_option_equality
       by eauto using Forall2_length; decompose_Forall_hyps.
     erewrite val_refine_type_of_l by eauto; eauto.
   * intros s τs vs1 vs2 ?? _ ?; destruct rs; simplify_option_equality.

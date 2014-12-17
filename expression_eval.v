@@ -71,8 +71,8 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
      ⟦ e2 ⟧ Γ fs ρ m
   | cast{τ} e =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inr;
-     guard (val_cast_ok Γ m τ v);
-     Some (inr (val_cast τ v))
+     guard (val_cast_ok Γ m (Some τ) v);
+     Some (inr (val_cast (Some τ) v))
   | #[r:=e1] e2 =>
      v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe inr;
      v2 ← ⟦ e2 ⟧ Γ fs ρ m ≫= maybe inr;
@@ -140,7 +140,7 @@ Context (Pcomma : ∀ e1 e2 v1 av2,
   ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 → P (e1,, e2) av2).
 Context (Pcast : ∀ τ e v,
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
-  val_cast_ok Γ m τ v → P (cast{τ} e) (inr (val_cast τ v))).
+  val_cast_ok Γ m (Some τ) v → P (cast{τ} e) (inr (val_cast (Some τ) v))).
 Context (Pinsert : ∀ r e1 e2 v1 v2,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e2 ⟧ Γ fs ρ m = Some (inr v2) → P e2 (inr v2) → is_Some (v2 !! r) →

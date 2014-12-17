@@ -5,40 +5,31 @@ Local Open Scope ctype_scope.
 
 (** * Pointer casts *)
 Reserved Infix ">*>" (at level 70).
-Inductive castable `{Env Ti} : type Ti → type Ti → Prop :=
-  | castable_void τ : τ >*> voidT
-  | castable_uchar τ : τ >*> ucharT
-  | castable_refl τ : τ >*> τ
-where "τ >*> σ" := (@castable _ _ τ σ) : C_scope.
+Inductive castable `{Env Ti} : type Ti → ptr_type Ti → Prop :=
+  | castable_None τ : τ >*> None
+  | castable_uchar τ : τ >*> Some ucharT
+  | castable_Some τ : τ >*> Some τ
+where "τ >*> τp" := (@castable _ _ τ τp) : C_scope.
 Notation "(>*>)" := castable (only parsing) : C_scope.
 Hint Extern 0 (_ >*> _) => reflexivity.
 
 Section castable.
 Context `{EnvSpec Ti}.
-
-Lemma castable_alt τ1 τ2 : τ1 >*> τ2 ↔ τ1 = τ2 ∨ τ2 = ucharT ∨ τ2 = voidT.
-Proof. split. destruct 1; auto. intros [-> |[->| ->]]; constructor. Qed.
-Global Instance castable_dec (τ1 τ2 : type Ti) : Decision (τ1 >*> τ2).
+Global Instance castable_dec (τ : type Ti) τp : Decision (τ >*> τp).
 Proof.
- refine (cast_if (decide (τ1 = τ2 ∨ τ2 = ucharT ∨ τ2 = voidT)));
-  abstract by rewrite castable_alt.
+ refine
+  match τp with
+  | None => left _ | Some τ' => cast_if (decide (τ' = ucharT ∨ τ = τ'))
+  end; abstract (try inversion 1; naive_solver constructor).
 Defined.
-Global Instance: Reflexive (>*>).
-Proof. constructor. Qed.
-Lemma castable_divide Γ τ1 τ2 : τ1 >*> τ2 → (size_of Γ τ2 | size_of Γ τ1).
+Lemma castable_divide Γ τ τp : τ >*> τp → (ptr_size_of Γ τp | size_of Γ τ).
 Proof.
-  rewrite castable_alt. intros [->|[->| ->]];
-    rewrite ?size_of_void, ?size_of_uchar; auto using Nat.divide_1_l.
+  destruct 1; simpl; rewrite ?size_of_uchar; auto using Nat.divide_1_l.
 Qed.
-Lemma castable_type_valid Γ τ σ : ✓{Γ} τ → τ >*> σ → ✓{Γ} σ.
-Proof. by destruct 2; repeat constructor. Qed.
-Lemma castable_ptr_type_valid Γ τ σ :
-  ptr_type_valid Γ τ → τ >*> σ → ptr_type_valid Γ σ.
-Proof. destruct 2; auto; repeat constructor. Qed.
-Lemma castable_size_of Γ τ σ :
-  ✓ Γ → ✓{Γ} τ → τ >*> σ → size_of Γ σ ≤ size_of Γ τ.
+Lemma castable_type_valid Γ τ1 τ2 : ✓{Γ} τ1 → τ1 >*> Some τ2 → ✓{Γ} τ2.
+Proof. by inversion 2; subst; repeat constructor. Qed.
+Lemma castable_ptr_type_valid Γ τp1 τp2 : ✓{Γ} τp1 → τp1 >*> τp2 → ✓{Γ} τp2.
 Proof.
-  intros HΓ Hτ. pose proof (size_of_pos _ _ HΓ Hτ). rewrite castable_alt.
-  intros [->|[->| ->]]; rewrite ?size_of_uchar, ?size_of_void; lia.
+  destruct 2; repeat constructor; auto using type_valid_ptr_type_valid.
 Qed.
 End castable.

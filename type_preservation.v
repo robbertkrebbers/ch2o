@@ -25,29 +25,28 @@ Lemma initial_state_typed Γ Γf δ m f vs σs σ :
 Proof. eexists (Fun_type f); simpl; eauto. Qed.
 Lemma assign_preservation_1 Γ m ass a v v' va' τ1 τ2 σ :
   ✓ Γ → ✓{Γ} m → assign_typed Γ τ1 τ2 ass σ →
-  (Γ,'{m}) ⊢ a : τ1 → τ1 ≠ voidT → (Γ,'{m}) ⊢ v : τ2 →
+  (Γ,'{m}) ⊢ a : Some τ1 → (Γ,'{m}) ⊢ v : τ2 →
   assign_sem Γ m a v ass v' va' → (Γ,'{m}) ⊢ v' : σ.
 Proof.
-  destruct 3; inversion 4; simplify_type_equality';
+  destruct 3; inversion 3; simplify_type_equality';
     eauto using val_cast_typed, val_binop_typed, mem_lookup_typed.
 Qed.
 Lemma assign_preservation_2 Γ m ass a v v' va' τ1 τ2 σ :
   ✓ Γ → ✓{Γ} m → assign_typed Γ τ1 τ2 ass σ →
-  (Γ,'{m}) ⊢ a : τ1 → τ1 ≠ voidT → (Γ,'{m}) ⊢ v : τ2 →
+  (Γ,'{m}) ⊢ a : Some τ1 → (Γ,'{m}) ⊢ v : τ2 →
   assign_sem Γ m a v ass v' va' → (Γ,'{m}) ⊢ va' : τ1.
 Proof.
-  destruct 3; inversion 4; simplify_type_equality';
+  destruct 3; inversion 3; simplify_type_equality';
     eauto using val_cast_typed, val_binop_typed, mem_lookup_typed.
 Qed.
 Lemma ehstep_preservation Γ Γf m1 m2 ρ τs e1 e2 τlr :
   ✓ Γ → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 →
-  ✓{Γ} m1 → (Γ,Γf,'{m1},τs) ⊢ e1 : τlr →
-  '{m1} ⊢* ρ :* τs → Forall (≠ voidT) τs →
+  ✓{Γ} m1 → (Γ,Γf,'{m1},τs) ⊢ e1 : τlr → '{m1} ⊢* ρ :* τs →
   (**i 1.) *) ✓{Γ} m2 ∧
   (**i 2.) *) (Γ,Γf,'{m2},τs) ⊢ e2 : τlr ∧
   (**i 3.) *) '{m1} ⇒ₘ '{m2}.
 Proof.
-  intros ? [] ????.
+  intros ? [] ???.
   * typed_inversion_all; decompose_Forall_hyps; split_ands; auto.
     typed_constructor; eauto using addr_top_typed, addr_top_strict,
       index_typed_valid, index_typed_representable, lockset_empty_valid.
@@ -69,8 +68,7 @@ Proof.
         val_typed_weaken,  mem_lookup_typed.
     + eauto using mem_lookup_typed, mem_force_forward.
   * typed_inversion_all.
-    split_ands; eauto 8 using addr_elt_typed,
-      addr_elt_strict, ref_seg_typed_ne_void, addr_typed_type_valid.
+    split_ands; eauto 7 using addr_elt_typed, addr_elt_strict.
   * typed_inversion_all; split_ands; eauto using val_lookup_seg_typed.
   * typed_inversion_all.
     rewrite <-and_assoc; apply and_wlog_l; intros; split_ands.
@@ -102,7 +100,7 @@ Proof.
 Qed.
 Lemma ehstep_forward Γ Γf m1 m2 ρ τs e1 e2 τlr :
   ✓ Γ → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → ✓{Γ} m1 → (Γ,Γf,'{m1},τs) ⊢ e1 : τlr →
-  '{m1} ⊢* ρ :* τs → Forall (≠ voidT) τs → '{m1} ⇒ₘ '{m2}.
+  '{m1} ⊢* ρ :* τs → '{m1} ⇒ₘ '{m2}.
 Proof. intros. eapply ehstep_preservation; eauto. Qed.
 Lemma cstep_preservation Γ Γf δ S1 S2 f :
   ✓ Γ → Γ\ δ ⊢ₛ S1 ⇒ S2 → (Γ,Γf) ⊢ S1 : f → (Γ,'{SMem S1}) ⊢ δ : Γf →
@@ -121,8 +119,7 @@ Proof.
     edestruct (ectx_subst_typed_rev Γ Γf ('{m1})
       (get_stack_types k) E e1) as (τrl&?&?); eauto.
     destruct (ehstep_preservation Γ Γf m1 m2 (get_stack k) (get_stack_types k)
-      e1 e2 τrl) as (?&?&?); eauto using get_stack_typed,
-      get_stack_types_ne_void, funenv_typed_funtypes_valid.
+      e1 e2 τrl) as (?&?&?); eauto using ctx_typed_stack_typed.
     split; [|eauto using funenv_typed_weaken].
     eexists; simpl; split_ands; eauto using ctx_typed_weaken,
       ectx_subst_typed, ectx_typed_weaken.
@@ -181,7 +178,7 @@ Proof.
     by rewrite andb_false_r.
   * intros m k f' s os vs ??? (τf&HS&?&?) ?; typed_inversion_all.
     edestruct (funenv_lookup Γ ('{m}) Γf δ f')
-      as (s'&mτ&?&?&?&?&?&?&?&?); eauto.
+      as (s'&mτ&?&?&?&?&?&?&?); eauto.
     erewrite fmap_type_of by eauto; simplify_equality.
     edestruct (mem_alloc_val_list_valid Γ m) as (?&?&?); eauto.
     split; [|eauto using funenv_typed_weaken].
