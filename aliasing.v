@@ -107,8 +107,8 @@ Proof.
   * by do 3 right; eexists s, (rs1 :: r1'), i1, (rs2 :: r2'), i2, r'.
 Qed.
 Lemma addr_disjoint_cases Γ Γm a1 a2 σ1 σ2 :
-  ✓ Γ → (Γ,Γm) ⊢ a1 : Some σ1 → frozen a1 → addr_is_obj a1 →
-  (Γ,Γm) ⊢ a2 : Some σ2 → frozen a2 → addr_is_obj a2 →
+  ✓ Γ → (Γ,Γm) ⊢ a1 : Some σ1 → frozen a1 → σ1 ≠ ucharT%T →
+  (Γ,Γm) ⊢ a2 : Some σ2 → frozen a2 → σ2 ≠ ucharT%T →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
@@ -116,25 +116,28 @@ Lemma addr_disjoint_cases Γ Γm a1 a2 σ1 σ2 :
     addr_ref_base a1 = r1' ++ RUnion i1 s true :: r' ∧
     addr_ref_base a2 = r2' ++ RUnion i2 s true :: r' ∧ i1 ≠ i2).
 Proof.
-  unfold frozen. inversion 2 as [o1 r1 i1 τ1 σ1'];
-    inversion 3 as [o2 r2 i2 τ2 σ2']; intros; simplify_equality'.
+  unfold frozen. intros ? Ha1 ?? Ha2 ??.
+  assert (addr_is_obj a1 ∧ addr_is_obj a2) as [].
+  { split; apply dec_stable; intuition eauto using addr_not_is_obj_type. }
+  inversion Ha1 as [o1 r1 i1 τ1 σp1];
+    inversion Ha2 as [o2 r2 i2 τ2 σp2]; intros; simplify_equality'.
   destruct (decide (o1 = o2)); [simplify_type_equality|by do 2 left].
-  destruct (ref_disjoint_cases Γ τ2 r1 r2 σ1' σ2')
+  destruct (ref_disjoint_cases Γ τ2 r1 r2 σp1 σp2)
     as [?|[?|[?|(s&r1'&i1'&r2'&i2'&r'&->&->&?)]]]; auto.
   * left; intros j1 j2; right; left; split; simpl; auto.
   * do 3 right; split; [done|]. by eexists s, r1', i1', r2', i2', r'.
 Qed.
 Lemma cmap_non_aliasing Γ Γm m a1 a2 σ1 σ2 :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : Some σ1 → frozen a1 → addr_is_obj a1 →
-  (Γ,Γm) ⊢ a2 : Some σ2 → frozen a2 → addr_is_obj a2 →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : Some σ1 → frozen a1 → σ1 ≠ ucharT%T →
+  (Γ,Γm) ⊢ a2 : Some σ2 → frozen a2 → σ2 ≠ ucharT%T →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
   (**i 4.) *) ∀ g j1 j2,
-    cmap_alter Γ g (addr_plus Γ j1 a1) m !!{Γ} addr_plus Γ j2 a2 
-    = @None (mtree _) ∧
-    cmap_alter Γ g (addr_plus Γ j2 a2) m !!{Γ} addr_plus Γ j1 a1
-    = @None (mtree _).
+    cmap_alter Γ g (addr_plus Γ j1 a1) m
+      !!{Γ} addr_plus Γ j2 a2 = @None (mtree _) ∧
+    cmap_alter Γ g (addr_plus Γ j2 a2) m
+      !!{Γ} addr_plus Γ j1 a1 = @None (mtree _).
 Proof.
   intros ? Hm ??????. destruct (addr_disjoint_cases Γ Γm a1 a2 σ1 σ2)
     as [Ha12|[?|[?|(Hidx&s&r1'&i1&r2'&i2&r'&Ha1&Ha2&?)]]]; auto.
@@ -161,12 +164,12 @@ Proof.
   by split; case_option_guard; simplify_equality;
     erewrite ?ctree_lookup_non_aliasing by eauto.
 Qed.
-Lemma mem_non_aliasing Γ Γm m a1 a2 τ1 τ2 :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : Some τ1 → frozen a1 → addr_is_obj a1 →
-  (Γ,Γm) ⊢ a2 : Some τ2 → frozen a2 → addr_is_obj a2 →
+Lemma mem_non_aliasing Γ Γm m a1 a2 σ1 σ2 :
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : Some σ1 → frozen a1 → σ1 ≠ ucharT%T →
+  (Γ,Γm) ⊢ a2 : Some σ2 → frozen a2 → σ2 ≠ ucharT%T →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
-  (**i 2.) *) τ1 ⊆{Γ} τ2 ∨
-  (**i 3.) *) τ2 ⊆{Γ} τ1 ∨
+  (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
+  (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
   (**i 4.) *) ∀ j1 j2,
     (∀ v1, <[addr_plus Γ j1 a1:=v1]{Γ}>m !!{Γ} addr_plus Γ j2 a2 = None) ∧
     mem_force Γ (addr_plus Γ j1 a1) m !!{Γ} addr_plus Γ j2 a2 = None ∧
@@ -174,7 +177,7 @@ Lemma mem_non_aliasing Γ Γm m a1 a2 τ1 τ2 :
     mem_force Γ (addr_plus Γ j2 a2) m !!{Γ} addr_plus Γ j1 a1 = None.
 Proof.
   intros.
-  destruct (cmap_non_aliasing Γ Γm m a1 a2 τ1 τ2) as [?|[?|[?|Ha]]]; auto.
+  destruct (cmap_non_aliasing Γ Γm m a1 a2 σ1 σ2) as [?|[?|[?|Ha]]]; auto.
   unfold lookupE, mem_lookup, insertE, mem_insert, mem_force.
   by do 3 right; repeat split; intros;
     rewrite ?(proj1 (Ha _ _ _)), ?(proj2 (Ha _ _ _)).
