@@ -295,25 +295,25 @@ Lemma mem_freeable_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 τ :
   ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 →
   a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ → mem_freeable a1 m1 → mem_freeable a2 m2.
 Proof.
-  intros ? (_&_&_&Hm) ? (w1&Ha&?&?).
+  intros ? (_&_&_&Hm) ? (Ha&w1&?&?).
   rewrite addr_is_top_array_alt in Ha by eauto using addr_refine_typed_l.
   destruct Ha as (τ'&n&?&Ha1&?).
   destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ)) as (r&?&Ha2); auto.
   destruct (Hm (addr_index a1) (addr_index a2) r w1 true)
     as (?&w2&τ''&?&?&?&Hr); auto; specialize (Hr I); simplify_type_equality'.
-  exists w2. rewrite addr_is_top_array_alt by eauto using addr_refine_typed_r.
+  split; [|exists w2; eauto using pbits_refine_perm_1, ctree_flatten_refine].
+  rewrite addr_is_top_array_alt by eauto using addr_refine_typed_r.
   assert (addr_ref Γ a2 = [RArray 0 τ' n]) as ->.
   { by rewrite Ha1 in Ha2;
       inversion Ha2 as [|???? Harr]; inversion Harr; decompose_Forall_hyps. }
   erewrite <-addr_ref_byte_refine by eauto.
-  split_ands; eauto using pbits_refine_perm_1, ctree_flatten_refine.
   exists τ' n; split_ands; eauto using addr_strict_refine.
 Qed.
 Lemma mem_freeable_index_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 τ :
   ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ →
   mem_freeable a1 m1 → f !! addr_index a1 = Some (addr_index a2, []).
 Proof.
-  intros ? (_&_&_&Hm) ? (w1&Ha&?&?).
+  intros ? (_&_&_&Hm) ? (Ha&w1&?&?).
   rewrite addr_is_top_array_alt in Ha by eauto using addr_refine_typed_l.
   destruct Ha as (τ'&n&?&Ha1&?), (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ))
     as (r&?&Ha2); naive_solver.

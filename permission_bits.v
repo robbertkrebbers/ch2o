@@ -367,4 +367,19 @@ Proof.
 Qed.
 Lemma pbit_lock_union xb1 xb2 : pbit_lock (xb1 ∪ xb2) = pbit_lock xb1 ∪ xb2.
 Proof. sep_unfold. destruct xb1, xb2; f_equal'; auto using perm_lock_union. Qed.
+Lemma pbit_disjoint_full xb1 xb2 :
+  xb1 ⊥ xb2 → tagged_perm xb1 = perm_full → xb2 = ∅.
+Proof.
+  assert (¬sep_unmapped perm_full) by (by intros []).
+  assert (sep_unshared perm_full) by done.
+  destruct xb1, xb2; intros (?&?&?&?) ?; sep_unfold; naive_solver
+    eauto using perm_disjoint_full, sep_unshared_unmapped with f_equal.
+Qed.
+Lemma pbits_disjoint_full xbs1 xbs2 :
+  xbs1 ⊥* xbs2 → Forall (λ xb, tagged_perm xb = perm_full) xbs1 →
+  Forall (∅ =) xbs2.
+Proof.
+  induction 1; constructor; decompose_Forall_hyps;
+    eauto using pbit_disjoint_full, eq_sym.
+Qed.
 End permission_bits.

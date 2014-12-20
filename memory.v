@@ -32,10 +32,12 @@ Section memory_operations.
     let (m) := m in
     CMap (alter (λ x,
       match x with Obj w _ => Freed (type_of w) | _ => x end) o m).
-  Definition mem_freeable (a : addr Ti) (m : mem Ti) : Prop := ∃ w,
+  Definition mem_freeable_perm (o : index) (m : mem Ti) : Prop := ∃ w,
+    (**i 1.) *) cmap_car m !! o = Some (Obj w true) ∧
+    (**i 2.) *) ctree_Forall (λ xb, tagged_perm xb = perm_full) w.
+  Definition mem_freeable (a : addr Ti) (m : mem Ti) : Prop :=
     (**i 1.) *) addr_is_top_array a ∧
-    (**i 2.) *) cmap_car m !! addr_index a = Some (Obj w true) ∧
-    (**i 3.) *) ctree_Forall (λ xb, tagged_perm xb = perm_full) w.
+    (**i 2.) *) mem_freeable_perm (addr_index a) m.
 
   Inductive mem_allocable_list (m : mem Ti) : list index → Prop :=
     | mem_allocable_nil : mem_allocable_list m []
@@ -269,21 +271,37 @@ Proof.
   induction 1; rewrite ?elem_of_cons; constructor;
     naive_solver auto using mem_alloc_allocable.
 Qed.
+Lemma mem_alloc_disjoint Γ m1 m2 o1 malloc τ1 :
+  ✓ Γ → ✓{Γ} τ1 → m1 ⊥ m2 → mem_allocable o1 m2 →
+  mem_alloc Γ o1 malloc τ1 m1 ⊥ m2.
+Proof.
+  destruct m1 as [m1], m2 as [m2]; simpl; intros ?? Hm ? o; specialize (Hm o).
+  destruct (decide (o = o1));
+    simplify_map_equality'; [|by destruct (m1 !! o), (m2 !! o)].
+  eauto 10 using (ctree_Forall_not _ _ ('{CMap m1})), ctree_typed_sep_valid,
+    (ctree_new_typed _ ('{CMap m1})), pbit_full_valid, ctree_new_Forall.
+Qed.
+Lemma mem_alloc_union Γ m1 m2 o1 malloc τ1 :
+  mem_allocable o1 m2 →
+  mem_alloc Γ o1 malloc τ1 (m1 ∪ m2) = mem_alloc Γ o1 malloc τ1 m1 ∪ m2.
+Proof.
+  destruct m1 as [m1], m2 as [m2]; intros; sep_unfold; f_equal'.
+  by apply insert_union_with_l.
+Qed.
 
 (** ** Properties of the [mem_free] fucntion *)
-Global Instance mem_freeable_dec a m : Decision (mem_freeable a m).
+Global Instance mem_freeable_perm_dec o m : Decision (mem_freeable_perm o m).
 Proof.
   refine
-   match cmap_car m !! addr_index a as x return Decision (∃ w,
-     addr_is_top_array a ∧ x = Some (Obj w true)
+   match cmap_car m !! o as x return Decision (∃ w, x = Some (Obj w true)
      ∧ ctree_Forall (λ xb, tagged_perm xb = perm_full) w)
    with
-   | Some (Obj w true) => cast_if_and
-      (decide (addr_is_top_array a))
+   | Some (Obj w true) => cast_if
       (decide (ctree_Forall (λ xb, tagged_perm xb = perm_full) w))
    | _ => right _
    end; abstract naive_solver.
 Defined.
+Global Instance mem_freeable_dec a m : Decision (mem_freeable a m) := _.
 Lemma mem_free_memenv_of m o :
   '{mem_free o m} = alter (prod_map id (λ _, true)) o ('{m}).
 Proof.
@@ -353,6 +371,24 @@ Proof.
 Qed.
 Lemma mem_foldr_free_valid Γ m os : ✓ Γ → ✓{Γ} m → ✓{Γ} (foldr mem_free m os).
 Proof. induction os; simpl; auto using mem_free_valid'. Qed.
+Lemma mem_free_disjoint Γ m1 m2 o1 :
+  m1 ⊥ m2 → mem_freeable_perm o1 m1 → mem_free o1 m1 ⊥ m2.
+Proof.
+  destruct m1 as [m1], m2 as [m2]; intros Hm (w1&?&?) o; specialize (Hm o).
+  destruct (decide (o = o1));
+    simplify_map_equality'; [|by destruct (m1 !! o), (m2 !! o)].
+  destruct (m2 !! o1) as [[|w2]|];
+    intuition; eauto using pbits_disjoint_full, @ctree_flatten_disjoint.
+Qed.
+Lemma mem_free_union m1 m2 o1 :
+  m1 ⊥ m2 → mem_freeable_perm o1 m1 → mem_free o1 (m1 ∪ m2) = mem_free o1 m1 ∪ m2.
+Proof.
+  destruct m1 as [m1], m2 as [m2]; intros Hm (w1&?&?); sep_unfold; f_equal'.
+  apply alter_union_with_l.
+  * intros [] [] ??; do 2 f_equal'. specialize (Hm o1); simplify_map_equality'.
+    intuition eauto using ctree_union_type_of.
+  * intros [] ??; naive_solver.
+Qed.
 
 (** ** Properties of the [lookup] function *)
 Lemma mem_lookup_typed Γ Γm m a v τ :
@@ -488,6 +524,13 @@ Proof.
       cmap_lookup_Some, pbits_mapped, pbits_kind_weaken. }
   exists w2; eauto using pbits_kind_subseteq, @ctree_flatten_subseteq.
 Qed.
+Lemma mem_writable_lookup Γ m a : mem_writable Γ a m → ∃ v, m !!{Γ} a = Some v.
+Proof.
+  unfold lookupE, mem_lookup; intros (w&->&?); simpl; exists (to_val Γ w).
+  by rewrite option_guard_True by eauto using pbits_kind_weaken.
+Qed.
+Lemma mem_lookup_writable Γ m a : m !!{Γ} a = None → ¬mem_writable Γ a m.
+Proof. intros ??. destruct (mem_writable_lookup Γ m a); naive_solver. Qed.
 Lemma of_val_flatten_typed Γ Γm w v τ :
   ✓ Γ → (Γ,Γm) ⊢ w : τ → (Γ,Γm) ⊢ v : τ →
   ctree_Forall (λ xb, Some Writable ⊆ pbit_kind xb) w →

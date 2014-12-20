@@ -193,3 +193,11 @@ Proof.
 Qed.
 Lemma perm_lock_union x1 x2 : perm_lock (x1 ∪ x2) = perm_lock x1 ∪ x2.
 Proof. by destruct x1 as [[]|], x2 as [[]|]. Qed.
+Lemma perm_disjoint_full x : perm_full ⊥ x → x = ∅.
+Proof.
+  destruct x as [[[x y]|[x y]]|];
+    repeat sep_unfold; intuition; simplify_equality'.
+  assert (y = 0) as ->.
+  { apply Qcle_antisym; auto. by apply (Qcplus_le_mono_l y 0 1). }
+  repeat f_equal; apply Qcle_antisym; auto; rewrite <-(Qcplus_0_l x); auto.
+Qed.
