@@ -15,7 +15,7 @@ h3 { font-size: 18px; }
 
 p, td, th, li {
   font-weight: normal;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 18px;
 }
 a {
@@ -97,3 +97,5 @@ div.footer {
 span.id a {
   font-family: monospace;
 }
+.publinks { font-size: 10px }
+.publinks a { text-decoration: none; }
