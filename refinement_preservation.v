@@ -1,7 +1,7 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export refinement_system smallstep.
-Require Import executable type_preservation operations_refine.
+Require Import executable_sound type_preservation operations_refine.
 Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 

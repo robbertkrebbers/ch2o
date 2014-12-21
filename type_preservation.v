@@ -1,7 +1,7 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export type_system smallstep.
-Require Import executable.
+Require Import executable_sound.
 Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 
