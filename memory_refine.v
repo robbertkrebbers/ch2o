@@ -212,8 +212,7 @@ Proof.
   destruct m1 as [m1], m2 as [m2]; intros o3 o4 r w3 malloc' ?; simpl in *.
   rewrite lookup_insert_Some; intros [[??]|[??]]; simplify_map_equality.
   { exists (ctree_new Γ pbit_full τ) (ctree_new Γ pbit_full τ) τ.
-    split_ands; auto. rewrite <-ctree_unflatten_replicate by done.
-    apply ctree_unflatten_refine; auto.
+    split_ands; auto. apply ctree_unflatten_refine; auto.
     apply Forall2_replicate, PBit_BIndet_refine; auto using perm_full_valid. }
   destruct (meminj_injective_ne f o1 o2 o3 o4 [] r)
     as [|[??]]; simplify_map_equality; eauto using memenv_refine_injective.

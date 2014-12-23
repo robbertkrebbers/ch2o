@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export refinement_system executable.
+Require Export refinement_system executable_sound.
 Require Import type_preservation refinement_preservation.
 
 Section executable_complete.

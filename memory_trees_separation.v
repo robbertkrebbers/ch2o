@@ -200,7 +200,6 @@ Qed.
 Lemma ctree_new_disjoint Γ Γm w τ : ✓ Γ → (Γ,Γm) ⊢ w : τ → ctree_new Γ ∅ τ ⊥ w.
 Proof.
   intros.
-  rewrite <-ctree_unflatten_replicate by eauto using ctree_typed_type_valid.
   eapply ctree_flatten_unflatten_disjoint; eauto using @sep_unmapped_empty.
   eapply Forall2_replicate_l, Forall_impl; eauto using ctree_flatten_valid.
   eauto using @sep_disjoint_empty_l, pbit_valid_sep_valid.

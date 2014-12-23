@@ -248,16 +248,8 @@ Section operations.
       | Union_kind => MUnionAll s xbs
       end) Γ.
 
-  Definition ctree_new (Γ : env Ti) (xb : pbit Ti) : type Ti → mtree Ti :=
-    type_iter
-    (**i TBase     *) (λ τb, MBase τb (replicate (bit_size_of Γ τb) xb))
-    (**i TArray    *) (λ τ n x, MArray τ (replicate n x))
-    (**i TCompound *) (λ c s τs go,
-      match c with
-      | Struct_kind => MStruct s (zip (go <$> τs)
-         (flip replicate (pbit_indetify xb) <$> field_bit_padding Γ τs))
-      | Union_kind => MUnionAll s (replicate (bit_size_of Γ (unionT s)) xb)
-      end) Γ.
+  Definition ctree_new (Γ : env Ti) (xb : pbit Ti) (τ : type Ti) : mtree Ti :=
+    ctree_unflatten Γ τ (replicate (bit_size_of Γ τ) xb).
 
   Global Instance ctree_lookup_seg:
       LookupE (env Ti) (ref_seg Ti) (mtree Ti) (mtree Ti) := λ Γ rs w,
@@ -763,10 +755,13 @@ Qed.
 (** ** Properties of the [ctree_new] function *)
 Lemma ctree_new_base Γ xb τb :
   ctree_new Γ xb τb = MBase τb (replicate (bit_size_of Γ τb) xb).
-Proof. unfold ctree_new. by rewrite type_iter_base. Qed.
+Proof. done. Qed.
 Lemma ctree_new_array Γ xb τ n :
   ctree_new Γ xb (τ.[n]) = MArray τ (replicate n (ctree_new Γ xb τ)).
-Proof. unfold ctree_new. by rewrite type_iter_array. Qed.
+Proof.
+  unfold ctree_new; rewrite ctree_unflatten_array, bit_size_of_array; f_equal.
+  by induction n; f_equal'; rewrite ?take_replicate_plus, ?drop_replicate_plus.
+Qed.
 Lemma ctree_new_compound Γ xb c s τs :
   ✓ Γ → Γ !! s = Some τs → ctree_new Γ xb (compoundT{c} s)
   = match c with
@@ -775,65 +770,34 @@ Lemma ctree_new_compound Γ xb c s τs :
     | Union_kind => MUnionAll s (replicate (bit_size_of Γ (unionT s)) xb)
     end.
 Proof.
-  intros HΓ Hs. unfold ctree_new; erewrite (type_iter_compound (=)); try done.
-  { by intros ????? ->. }
-  intros ?? [] ?????; do 2 f_equal'. by apply Forall_fmap_ext.
-Qed.
-Lemma ctree_unflatten_replicate Γ xb τ :
-  ✓ Γ → ✓{Γ} τ →
-  ctree_unflatten Γ τ (replicate (bit_size_of Γ τ) xb) = ctree_new Γ xb τ.
-Proof.
-  intros HΓ Hτ. revert τ Hτ. refine (type_env_ind _ HΓ _ _ _ _).
-  * intros. by rewrite ctree_unflatten_base.
-  * intros τ n _ IH _. rewrite ctree_unflatten_array,
-      ctree_new_array, bit_size_of_array; f_equal; induction n; simpl;
-      rewrite ?take_replicate_plus, ?drop_replicate_plus; f_equal; auto.
-  * intros [] s τs Hs _ IH _; erewrite ctree_unflatten_compound,
-      ctree_new_compound, ?bit_size_of_struct by eauto; clear Hs; f_equal'.
-    unfold field_bit_padding, struct_unflatten.
-    induction (bit_size_of_fields _ τs HΓ); decompose_Forall_hyps;
-      rewrite ?take_replicate_plus, ?drop_replicate_plus, ?take_replicate,
-      ?drop_replicate, ?Min.min_l, ?fmap_replicate by done;
-      repeat f_equal; auto.
+  intros HΓ Hs; unfold ctree_new; erewrite ctree_unflatten_compound by eauto.
+  destruct c; f_equal. erewrite ?bit_size_of_struct by eauto; clear Hs.
+  unfold struct_unflatten, field_bit_padding.
+  by induction (bit_size_of_fields _ τs HΓ); decompose_Forall_hyps;
+    rewrite ?take_replicate_plus, ?drop_replicate_plus, ?take_replicate,
+    ?drop_replicate, ?Min.min_l, ?fmap_replicate by done; repeat f_equal.
 Qed.
 Lemma ctree_new_weaken Γ1 Γ2 xb τ :
   ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊆ Γ2 → ctree_new Γ1 xb τ = ctree_new Γ2 xb τ.
 Proof.
-  intros. apply (type_iter_weaken (=)); try done.
-  { intros. by erewrite bit_size_of_weaken by eauto using TBase_valid. }
-  { by intros ????? ->. }
-  intros f g [] s τs Hs Hτs ?; do 2 f_equal; [by apply Forall_fmap_ext| |].
-  * by erewrite field_bit_padding_weaken by eauto.
-  * by erewrite bit_size_of_weaken by eauto using TCompound_valid.
+  intros. unfold ctree_new.
+  by erewrite ctree_unflatten_weaken, bit_size_of_weaken by eauto.
 Qed.
-Lemma ctrees_new_weaken Γ1 Γ2 xb τs :
-  ✓ Γ1 → ✓{Γ1}* τs → Γ1 ⊆ Γ2 → ctree_new Γ1 xb <$> τs = ctree_new Γ2 xb <$> τs.
-Proof. induction 2; intros; f_equal'; auto using ctree_new_weaken. Qed.
 Lemma ctree_new_Forall (P : pbit Ti → Prop) Γ xb τ :
   ✓ Γ → ✓{Γ} τ → P xb → P (pbit_indetify xb) → ctree_Forall P (ctree_new Γ xb τ).
 Proof.
-  intros.
-  rewrite <-ctree_unflatten_replicate, ctree_flatten_unflatten_le by done.
+  intros. unfold ctree_new. rewrite ctree_flatten_unflatten_le by done.
   generalize (type_mask Γ τ).
   induction (bit_size_of Γ τ); intros [|[]?]; simpl; constructor; auto.
 Qed.
 Lemma ctree_new_type_of Γ xb τ :
   ✓ Γ → ✓{Γ} τ → type_of (ctree_new Γ xb τ) = τ.
-Proof.
-  intros. by rewrite <-ctree_unflatten_replicate,
-    ctree_unflatten_type_of by done.
-Qed.
+Proof. by apply ctree_unflatten_type_of. Qed.
 Lemma ctree_new_typed Γ Γm xb τ :
   ✓ Γ → ✓{Γ} τ → ✓{Γ,Γm} xb → (Γ,Γm) ⊢ ctree_new Γ xb τ : τ.
-Proof.
-  intros. rewrite <-ctree_unflatten_replicate by done.
-  apply ctree_unflatten_typed; auto using replicate_length.
-Qed.
-Lemma ctree_new_union_free Γ xb τ: ✓ Γ → ✓{Γ} τ → union_free (ctree_new Γ xb τ).
-Proof.
-  intros. rewrite <-ctree_unflatten_replicate by done.
-  auto using ctree_unflatten_union_free.
-Qed.
+Proof. intros; apply ctree_unflatten_typed; auto using replicate_length. Qed.
+Lemma ctree_new_union_free Γ xb τ: ✓ Γ → union_free (ctree_new Γ xb τ).
+Proof. by apply ctree_unflatten_union_free. Qed.
 
 (** ** The map operation *)
 Lemma ctree_map_typed Γ Γm h w τ :
@@ -1040,8 +1004,7 @@ Proof.
     by rewrite <-list_lookup_fmap, fst_zip, list_lookup_fmap, Hτs
       by (by rewrite !fmap_length, field_bit_padding_length).
   * erewrite ctree_new_compound by eauto; simplify_option_equality by eauto.
-    by rewrite take_replicate, Min.min_l, ctree_unflatten_replicate
-      by eauto using bit_size_of_union_lookup.
+    by rewrite take_replicate,Min.min_l by eauto using bit_size_of_union_lookup.
 Qed.
 Lemma ctree_new_lookup Γ x τ r σ :
   ✓ Γ → sep_unshared x → ✓{Γ} τ →
