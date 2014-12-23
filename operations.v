@@ -8,6 +8,13 @@ Section operations_definitions.
   Context `{Env Ti}.
 
   (** ** Operations on addresses *)
+  Definition addr_eq_ok (Γ : env Ti) (m : mem Ti) (a1 a2 : addr Ti) : Prop :=
+    index_alive' m (addr_index a1) ∧ index_alive' m (addr_index a2) ∧
+    (addr_index a1 ≠ addr_index a2 → addr_strict Γ a1 ∧ addr_strict Γ a2).
+  Definition addr_eq (Γ : env Ti) (a1 a2 : addr Ti) : bool :=
+    if decide (addr_index a1 = addr_index a2)
+    then bool_decide (addr_object_offset Γ a1 = addr_object_offset Γ a2)
+    else false.
   Definition addr_plus_ok (Γ : env Ti) (m : mem Ti)
       (j : Z) (a : addr Ti) : Prop :=
     index_alive' m (addr_index a) ∧
@@ -18,7 +25,6 @@ Section operations_definitions.
     let 'Addr x r i τ σ σp := a
     in Addr x r (Z.to_nat (i + j * ptr_size_of Γ σp)) τ σ σp.
   Global Arguments addr_plus _ _ !_ /.
-
   Definition addr_minus_ok (m : mem Ti) (a1 a2 : addr Ti) : Prop :=
     index_alive' m (addr_index a1) ∧
     addr_index a1 = addr_index a2 ∧
@@ -27,7 +33,6 @@ Section operations_definitions.
   Definition addr_minus (Γ : env Ti) (a1 a2 : addr Ti) : Z :=
     ((addr_byte a1 - addr_byte a2) `div` ptr_size_of Γ (type_of a1))%Z.
   Global Arguments addr_minus _ !_ !_ /.
-
   Definition addr_cast_ok (Γ : env Ti) (m : mem Ti)
       (σp : ptr_type Ti) (a : addr Ti) : Prop :=
     index_alive' m (addr_index a) ∧
@@ -37,7 +42,6 @@ Section operations_definitions.
   Definition addr_cast (σp : ptr_type Ti) (a : addr Ti) : addr Ti :=
     let 'Addr o r i τ σ _ := a in Addr o r i τ σ σp.
   Global Arguments addr_cast _ !_ /.
-
   Definition addr_elt (Γ : env Ti) (rs : ref_seg Ti) (a : addr Ti) : addr Ti :=
     from_option a $
      σ ← type_of a ≫= lookupE Γ rs;
@@ -48,21 +52,24 @@ Section operations_definitions.
   (** ** Operations on pointers *)
   Definition ptr_alive' (m : mem Ti) (p : ptr Ti) : Prop :=
     match p with Ptr a => index_alive' m (addr_index a) | NULL _ => True end.
-  Definition ptr_compare_ok (m : mem Ti) (c : compop) (p1 p2 : ptr Ti) : Prop :=
-    match p1, p2 with
-    | Ptr a1, Ptr a2 => addr_minus_ok m a1 a2
-    | NULL _, Ptr a2 =>
-       match c with EqOp => index_alive' m (addr_index a2) | _ => False end
-    | Ptr a1, NULL _ =>
-       match c with EqOp => index_alive' m (addr_index a1) | _ => False end
-    | NULL _, NULL _ => True
+  Definition ptr_compare_ok (Γ : env Ti)  (m : mem Ti)
+      (c : compop) (p1 p2 : ptr Ti) : Prop :=
+    match p1, p2, c with
+    | Ptr a1, Ptr a2, EqOp => addr_eq_ok Γ m a1 a2
+    | Ptr a1, Ptr a2, _ => addr_minus_ok m a1 a2
+    | NULL _, Ptr a2, EqOp => index_alive' m (addr_index a2)
+    | Ptr a1, NULL _, EqOp => index_alive' m (addr_index a1)
+    | NULL _, NULL _, _ => True
+    | _, _, _ => False
     end.
   Definition ptr_compare (Γ : env Ti) (c : compop) (p1 p2 : ptr Ti) : bool :=
-    match p1, p2 with
-    | Ptr a1, Ptr a2 => Z_comp c (addr_minus Γ a1 a2) 0
-    | NULL _, Ptr a2 => false (* only allowed for EqOp *)
-    | Ptr a1, NULL _ => false (* only allowed for EqOp *)
-    | NULL _, NULL _ => match c with EqOp | LeOp => true | LtOp => false end
+    match p1, p2, c with
+    | Ptr a1, Ptr a2, EqOp => addr_eq Γ a1 a2
+    | Ptr a1, Ptr a2, _ => Z_comp c (addr_minus Γ a1 a2) 0
+    | NULL _, Ptr a2, _ => false
+    | Ptr a1, NULL _, _ => false
+    | NULL _, NULL _, (EqOp | LeOp) => true
+    | NULL _, NULL _, LtOp => false
     end.
   Definition ptr_plus_ok (Γ : env Ti) (m : mem Ti) (j : Z) (p : ptr Ti) :=
     match p with NULL _ => j = 0 | Ptr a => addr_plus_ok Γ m j a end.
@@ -186,7 +193,7 @@ Section operations_definitions.
     | VInt τi1 x1, VInt τi2 x2, (CompOp _ | BitOp _) => True
     | VInt τi1 x1, VInt τi2 x2, ArithOp op => int_arithop_ok op x1 τi1 x2 τi2
     | VInt τi1 x1, VInt τi2 x2, ShiftOp op => int_shiftop_ok op x1 τi1 x2 τi2
-    | VPtr p1, VPtr p2, CompOp c => ptr_compare_ok m c p1 p2
+    | VPtr p1, VPtr p2, CompOp c => ptr_compare_ok Γ m c p1 p2
     | VPtr p, VInt _ x, ArithOp PlusOp => ptr_plus_ok Γ m x p
     | VInt _ x, VPtr p, ArithOp PlusOp => ptr_plus_ok Γ m x p
     | VPtr p, VInt _ x, ArithOp MinusOp => ptr_plus_ok Γ m (-x) p
@@ -339,6 +346,18 @@ Hint Immediate index_alive_1'.
 Hint Resolve index_alive_2'.
 
 (** ** Properties of operations on addresses *)
+Lemma addr_eq_ok_weaken Γ1 Γ2 m1 m2 a1 a2 τp1 τp2 :
+  ✓ Γ1 → (Γ1,('{m1})) ⊢ a1 : τp1 → (Γ1,('{m1})) ⊢ a2 : τp2 →
+  Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  addr_eq_ok Γ1 m1 a1 a2 → Γ1 ⊆ Γ2 → addr_eq_ok Γ2 m2 a1 a2.
+Proof. unfold addr_eq_ok. intuition eauto using addr_strict_weaken. Qed.
+Lemma addr_eq_weaken Γ1 Γ2 Γm a1 a2 τp1 τp2 :
+  ✓ Γ1 → (Γ1,Γm) ⊢ a1 : τp1 → (Γ1,Γm) ⊢ a2 : τp2 →
+  Γ1 ⊆ Γ2 → addr_eq Γ1 a1 a2 = addr_eq Γ2 a1 a2.
+Proof.
+  unfold addr_eq; intros.
+  by erewrite !(addr_object_offset_weaken Γ1 Γ2) by eauto.
+Qed.
 Lemma addr_plus_typed Γ m a σp j :
   ✓ Γ → (Γ,'{m}) ⊢ a : σp → addr_plus_ok Γ m j a →
   (Γ,'{m}) ⊢ addr_plus Γ j a : σp.
@@ -535,8 +554,8 @@ Proof. destruct p; simpl; auto. Qed.
 Lemma ptr_alive_1' m p : ptr_alive' m p → ptr_alive ('{m}) p.
 Proof. destruct p; simpl; eauto. Qed.
 Hint Resolve ptr_alive_1'.
-Global Instance ptr_compare_ok_dec m c p1 p2 :
-  Decision (ptr_compare_ok m c p1 p2).
+Global Instance ptr_compare_ok_dec Γ m c p1 p2 :
+  Decision (ptr_compare_ok Γ m c p1 p2).
 Proof. destruct p1, p2, c; apply _. Defined.
 Global Instance ptr_plus_ok_dec Γ m j p : Decision (ptr_plus_ok Γ m j p).
 Proof. destruct p; apply _. Defined.
@@ -560,16 +579,20 @@ Lemma ptr_cast_typed Γ m p τp σp :
   ✓{Γ} σp → (Γ,'{m}) ⊢ ptr_cast σp p : σp.
 Proof. destruct 1; simpl; constructor; eauto using addr_cast_typed. Qed.
 
-Lemma ptr_compare_ok_weaken m1 m2 c p1 p2 :
-  ptr_compare_ok m1 c p1 p2 →
-  (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
-  ptr_compare_ok m2 c p1 p2.
-Proof. destruct p1, p2, c; simpl; eauto using addr_minus_ok_weaken. Qed.
+Lemma ptr_compare_ok_weaken Γ1 Γ2 m1 m2 c p1 p2 τp1 τp2 :
+  ✓ Γ1 → (Γ1,'{m1}) ⊢ p1 : τp1 → (Γ1,'{m1}) ⊢ p2 : τp2 →
+  ptr_compare_ok Γ1 m1 c p1 p2 →
+  Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  ptr_compare_ok Γ2 m2 c p1 p2.
+Proof.
+  destruct 2, 1, c; simpl; eauto using addr_minus_ok_weaken, addr_eq_ok_weaken.
+Qed.
 Lemma ptr_compare_weaken Γ1 Γ2 Γm1 c p1 p2 τp1 τp2 :
   ✓ Γ1 → (Γ1,Γm1) ⊢ p1 : τp1 → (Γ1,Γm1) ⊢ p2 : τp2 →
   Γ1 ⊆ Γ2 → ptr_compare Γ1 c p1 p2 = ptr_compare Γ2 c p1 p2.
 Proof.
-  destruct 2,1,c; simpl; intros; done || by erewrite addr_minus_weaken by eauto.
+  destruct 2,1,c; simpl; intros; eauto 2 using addr_eq_weaken;
+    by erewrite addr_minus_weaken by eauto.
 Qed.
 Lemma ptr_plus_ok_weaken Γ1 Γ2 m1 m2 p τp j :
   ✓ Γ1 → (Γ1,'{m1}) ⊢ p : τp → ptr_plus_ok Γ1 m1 j p →
@@ -593,12 +616,16 @@ Lemma ptr_cast_ok_weaken Γ1 Γ2 m1 m2 p τp σp :
   (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
   ptr_cast_ok Γ2 m2 σp p.
 Proof. destruct 2; simpl; eauto using addr_cast_ok_weaken. Qed.
-Lemma ptr_compare_ok_alive_l m c p1 p2 :
-  ptr_compare_ok m c p1 p2 → ptr_alive ('{m}) p1.
-Proof. destruct p1, p2, c; simpl; unfold addr_minus_ok; naive_solver. Qed.
-Lemma ptr_compare_ok_alive_r m c p1 p2 :
-  ptr_compare_ok m c p1 p2 → ptr_alive ('{m}) p2.
-Proof. by destruct p1, p2, c; simpl; try intros (?&<-&?); eauto. Qed.
+Lemma ptr_compare_ok_alive_l Γ m c p1 p2 :
+  ptr_compare_ok Γ m c p1 p2 → ptr_alive ('{m}) p1.
+Proof.
+  destruct p1, p2, c; simpl; unfold addr_minus_ok, addr_eq_ok; naive_solver.
+Qed.
+Lemma ptr_compare_ok_alive_r Γ m c p1 p2 :
+  ptr_compare_ok Γ m c p1 p2 → ptr_alive ('{m}) p2.
+Proof.
+  destruct p1 as [|[]], p2 as [|[]], c; csimpl; unfold addr_eq_ok; naive_solver.
+Qed.
 Lemma ptr_plus_ok_alive Γ m p j : ptr_plus_ok Γ m j p → ptr_alive ('{m}) p.
 Proof. destruct p. done. intros [??]; simpl; eauto. Qed.
 Lemma ptr_minus_ok_alive_l m p1 p2 : ptr_minus_ok m p1 p2 → ptr_alive ('{m}) p1.

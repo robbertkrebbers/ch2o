@@ -164,6 +164,12 @@ Proof.
   intros. unfold field_bit_padding.
   rewrite zip_with_length, field_bit_sizes_length by done; lia.
 Qed.
+Lemma field_bit_offset_weaken Γ1 Γ2 τs i :
+  ✓ Γ1 → ✓{Γ1}* τs → Γ1 ⊆ Γ2 →
+  field_bit_offset Γ1 τs i = field_bit_offset Γ2 τs i.
+Proof.
+  unfold field_bit_offset. eauto using field_bit_sizes_weaken with f_equal.
+Qed.
 Lemma field_bit_offset_alt Γ τs i :
   field_bit_offset Γ τs i = field_offset Γ τs i * char_bits.
 Proof.

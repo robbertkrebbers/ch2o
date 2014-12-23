@@ -17,8 +17,48 @@ Implicit Types v : val Ti.
 Implicit Types m : mem Ti.
 Hint Immediate index_alive_1'.
 Hint Resolve ptr_alive_1' index_alive_2'.
+Hint Immediate addr_refine_typed_l addr_refine_typed_r.
 
 (** ** Refinements of operations on addresses *)
+Lemma addr_alive_refine' Γ α f m1 m2 a1 a2 σp :
+  index_alive' m1 (addr_index a1) → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp →
+  index_alive' m2 (addr_index a2).
+Proof. eauto using addr_alive_refine. Qed.
+Lemma addr_eq_ok_refine Γ α f m1 m2 a1 a2 a3 a4 σp :
+  a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp → a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σp →
+  addr_eq_ok Γ m1 a1 a3 → addr_eq_ok Γ m2 a2 a4.
+Proof.
+  intros Ha1 Ha2 (?&?&?); split_ands'; eauto using addr_alive_refine'; intros.
+  destruct (decide (addr_index a1 = addr_index a3));
+    [destruct Ha1, Ha2; naive_solver|intuition eauto using addr_strict_refine].
+Qed.
+Lemma addr_eq_refine Γ α f m1 m2 a1 a2 a3 a4 σp :
+  ✓ Γ → addr_eq_ok Γ m1 a1 a3 →
+  a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp → a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σp →
+  addr_eq Γ a1 a3 = addr_eq Γ a2 a4.
+Proof.
+  intros ? (_&_&Hstrict) Ha1 Ha2; unfold addr_eq.
+  assert ('{m1} ⊑{Γ,α,f} '{m2}) as HΓm by eauto using addr_refine_memenv_refine.
+  destruct (addr_object_offset_refine Γ α f
+    ('{m1}) ('{m2}) a1 a2 σp) as (r1&?&?&->); auto.
+  destruct (addr_object_offset_refine Γ α f
+    ('{m1}) ('{m2}) a3 a4 σp) as (r3&?&?&->); auto.
+  destruct (decide (addr_index a1 = addr_index a3)); [|destruct Hstrict; auto].
+  { rewrite decide_True by congruence. replace r1 with r3 by congruence.
+    apply bool_decide_iff; omega. }
+  destruct (decide (addr_index a2 = addr_index a4)) as [Ha|]; [|done].
+  apply eq_sym, bool_decide_false. destruct (meminj_injective_alt f
+    (addr_index a1) (addr_index a3) (addr_index a2) r1 r3) as [|[_ ?]];
+    eauto using memenv_refine_injective with congruence.
+  assert (addr_object_offset Γ a1 < bit_size_of Γ (addr_type_object a1) ∧
+    addr_object_offset Γ a3 < bit_size_of Γ (addr_type_object a3)) as []
+    by eauto using addr_object_offset_strict.
+  assert (addr_type_object a2 = addr_type_object a4).
+  { eapply typed_unique; eauto using addr_typed_index.
+    rewrite Ha; eauto using addr_typed_index. }
+  destruct (ref_disjoint_object_offset Γ (addr_type_object a2) r1 r3
+    (addr_type_object a1) (addr_type_object a3)); auto with congruence lia.
+Qed.
 Lemma addr_plus_ok_refine Γ α f m1 m2 a1 a2 σp j :
   a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp →
   addr_plus_ok Γ m1 j a1 → addr_plus_ok Γ m2 j a2.
@@ -120,16 +160,18 @@ Lemma ptr_alive_refine' Γ α f m1 m2 p1 p2 σp :
 Proof. destruct 2; simpl in *; eauto using addr_alive_refine. Qed.
 Lemma ptr_compare_ok_refine Γ α f m1 m2 c p1 p2 p3 p4 σp :
   p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp → p3 ⊑{Γ,α,f@'{m1}↦'{m2}} p4 : σp →
-  ptr_compare_ok m1 c p1 p3 → ptr_compare_ok m2 c p2 p4.
+  ptr_compare_ok Γ m1 c p1 p3 → ptr_compare_ok Γ m2 c p2 p4.
 Proof.
-  destruct 1, 1, c; simpl; eauto using addr_minus_ok_refine, addr_alive_refine.
+  destruct 1, 1, c; simpl; eauto using addr_minus_ok_refine,
+    addr_alive_refine, addr_eq_ok_refine.
 Qed.
 Lemma ptr_compare_refine Γ α f m1 m2 c p1 p2 p3 p4 σp :
-  ✓ Γ → ptr_compare_ok m1 c p1 p3 →
+  ✓ Γ → ptr_compare_ok Γ m1 c p1 p3 →
   p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp → p3 ⊑{Γ,α,f@'{m1}↦'{m2}} p4 : σp →
   ptr_compare Γ c p1 p3 = ptr_compare Γ c p2 p4.
 Proof.
-  destruct 3, 1, c; simpl; done || by erewrite addr_minus_refine by eauto.
+  destruct 3, 1, c; simpl; eauto 2 using addr_eq_refine;
+    by erewrite addr_minus_refine by eauto.
 Qed.
 Lemma ptr_plus_ok_refine Γ α f m1 m2 p1 p2 σp j :
   p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp →

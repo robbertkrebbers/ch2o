@@ -1120,7 +1120,7 @@ Proof.
   destruct (ctree_lookup_seg_Some Γ Γm w' τ' rs w'') as (?&?&?); auto.
   simplify_type_equality'.
   assert (ref_seg_object_offset Γ rs + bit_size_of Γ τ'' ≤ bit_size_of Γ τ')
-    by eauto using ref_seg_object_offset_size.
+    by eauto using ref_seg_object_offset_size'.
   rewrite Nat.add_comm, <-drop_drop, <-(Min.min_l (bit_size_of Γ τ'')
     (bit_size_of Γ τ' - ref_seg_object_offset Γ rs)), <-take_take,
     take_drop_commute, le_plus_minus_r by lia.
@@ -1199,9 +1199,9 @@ Proof.
   destruct (ctree_lookup_seg_Some Γ Γm w' τ' rs w'') as (?&?&?); auto.
   erewrite IH by eauto; simplify_type_equality'.
   assert (sum_list (ref_seg_object_offset Γ <$> r) + bit_size_of Γ τ'
-    ≤ bit_size_of Γ τ) by (by apply ref_object_offset_size).
+    ≤ bit_size_of Γ τ) by (by apply ref_object_offset_size').
   assert (ref_seg_object_offset Γ rs + bit_size_of Γ τ'' ≤ bit_size_of Γ τ')
-    by eauto using ref_seg_object_offset_size.
+    by eauto using ref_seg_object_offset_size'.
   erewrite ctree_lookup_seg_merge by eauto; do 2 f_equal.
   rewrite <-drop_drop, !take_drop_commute, !drop_drop, take_take.
   repeat (lia || f_equal).

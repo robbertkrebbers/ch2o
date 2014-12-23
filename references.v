@@ -116,8 +116,8 @@ Definition ref_seg_object_offset `{Env Ti}
   | RStruct i s => default 0 (Γ !! s) $ λ τs, field_bit_offset Γ τs i
   | RUnion i _ _ => 0
   end.
-Definition ref_object_offset `{Env Ti} (Γ : env Ti)
-  (r : ref Ti) : nat := sum_list (ref_seg_object_offset Γ <$> r).
+Definition ref_object_offset `{Env Ti} (Γ : env Ti) (r : ref Ti) : nat :=
+  sum_list (ref_seg_object_offset Γ <$> r).
 
 Inductive ref_seg_le {Ti} : SubsetEq (ref_seg Ti) :=
   | RArray_refine i τ n : @RArray Ti i τ n ⊆ RArray i τ n
@@ -239,8 +239,11 @@ Proof.
   rewrite ref_typed_snoc; intros (?&Hrs&_).
   edestruct ref_seg_typed_inv_base; eauto.
 Qed.
+Lemma ref_seg_typed_size Γ τ rs σ :
+  Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs < ref_seg_size rs.
+Proof. destruct 1; auto with lia. Qed.
 Lemma ref_typed_size Γ τ r σ : Γ ⊢ r : τ ↣ σ → ref_offset r < ref_size r.
-Proof. destruct 1 as [|????? []]; auto with lia. Qed.
+Proof. destruct 1; csimpl; eauto using ref_seg_typed_size. Qed.
 Lemma ref_set_offset_length r i : length (ref_set_offset i r) = length r.
 Proof. by destruct r. Qed.
 Lemma ref_size_set_offset i r : ref_size (ref_set_offset i r) = ref_size r.
@@ -605,6 +608,22 @@ Proof.
   destruct (decide (i = j)) as [->|]; auto. by left; repeat constructor.
 Qed.
 
+Lemma ref_seg_object_offset_weaken Γ1 Γ2 rs τ σ :
+  ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊢ rs : τ ↣ σ → Γ1 ⊆ Γ2 →
+  ref_seg_object_offset Γ1 rs = ref_seg_object_offset Γ2 rs.
+Proof.
+  destruct 3; intros; simplify_option_equality by eauto using lookup_weaken;
+    eauto using bit_size_of_weaken, TArray_valid_inv_type,
+    field_bit_offset_weaken, env_valid_lookup with f_equal.
+Qed.
+Lemma ref_object_offset_weaken Γ1 Γ2 r τ σ :
+  ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊢ r : τ ↣ σ → Γ1 ⊆ Γ2 →
+  ref_object_offset Γ1 r = ref_object_offset Γ2 r.
+Proof.
+  unfold ref_object_offset.
+  induction 3 using @ref_typed_ind; intros; f_equal';
+    eauto using ref_seg_object_offset_weaken, ref_typed_type_valid.
+Qed.
 Lemma ref_object_offset_app Γ r1 r2 :
   ref_object_offset Γ (r1 ++ r2)
   = ref_object_offset Γ r1 + ref_object_offset Γ r2.
@@ -626,19 +645,47 @@ Proof.
 Qed.
 Lemma ref_seg_object_offset_size Γ τ rs σ :
   ✓ Γ → Γ ⊢ rs : τ ↣ σ →
-  ref_seg_object_offset Γ rs + bit_size_of Γ σ ≤ bit_size_of Γ τ.
+  ref_seg_object_offset Γ rs +
+    (ref_seg_size rs - ref_seg_offset rs) * bit_size_of Γ σ ≤ bit_size_of Γ τ.
 Proof.
   destruct 2; simplify_option_equality.
-  * rewrite bit_size_of_array, <-Nat.mul_succ_l. apply Nat.mul_le_mono_r; lia.
-  * eauto using field_bit_offset_size.
-  * eauto using bit_size_of_union_lookup.
+  * rewrite bit_size_of_array. rewrite <-Nat.mul_add_distr_r.
+    apply Nat.mul_le_mono_r; lia.
+  * rewrite Nat.add_0_r; eauto using field_bit_offset_size.
+  * rewrite Nat.add_0_r; eauto using bit_size_of_union_lookup.
+Qed.
+Lemma ref_seg_object_offset_size' Γ τ rs σ :
+  ✓ Γ → Γ ⊢ rs : τ ↣ σ →
+  ref_seg_object_offset Γ rs + bit_size_of Γ σ ≤ bit_size_of Γ τ.
+Proof.
+  intros. feed pose proof (ref_seg_object_offset_size Γ τ rs σ); auto.
+  feed pose proof (ref_seg_typed_size Γ τ rs σ); auto.
+  cut (1 * bit_size_of Γ σ ≤
+    (ref_seg_size rs - ref_seg_offset rs) * bit_size_of Γ σ); [lia|].
+  apply Nat.mul_le_mono_r; lia.
 Qed.
 Lemma ref_object_offset_size Γ τ r σ :
   ✓ Γ → Γ ⊢ r : τ ↣ σ →
+  ref_object_offset Γ r +
+    (ref_size r - ref_offset r) * bit_size_of Γ σ ≤ bit_size_of Γ τ.
+Proof.
+  unfold ref_object_offset.
+  induction 2 as [|r rs τ1 τ2 τ3] using @ref_typed_ind; csimpl; [lia|].
+  feed pose proof (ref_seg_object_offset_size Γ τ2 rs τ3); auto.
+  feed pose proof (ref_typed_size Γ τ1 r τ2); auto.
+  cut (1 * bit_size_of Γ τ2 ≤
+    (ref_size r - ref_offset r) * bit_size_of Γ τ2); [lia|].
+  apply Nat.mul_le_mono_r; lia.
+Qed.
+Lemma ref_object_offset_size' Γ τ r σ :
+  ✓ Γ → Γ ⊢ r : τ ↣ σ →
   ref_object_offset Γ r + bit_size_of Γ σ ≤ bit_size_of Γ τ.
 Proof.
-  unfold ref_object_offset. induction 2 using @ref_typed_ind; csimpl; [done|].
-  efeed pose proof ref_seg_object_offset_size; eauto; lia.
+  intros. feed pose proof (ref_object_offset_size Γ τ r σ); auto.
+  feed pose proof (ref_typed_size Γ τ r σ); auto.
+  cut (1 * bit_size_of Γ σ ≤
+    (ref_size r - ref_offset r) * bit_size_of Γ σ); [lia|].
+  apply Nat.mul_le_mono_r; lia.
 Qed.
 Lemma ref_seg_disjoint_object_offset Γ τ rs1 rs2 σ1 σ2 :
   ✓ Γ → rs1 ⊥ rs2 → Γ ⊢ rs1 : τ ↣ σ1 → Γ ⊢ rs2 : τ ↣ σ2 →
@@ -651,7 +698,7 @@ Proof.
   * assert (i < j ∨ j < i) as [|] by lia; eauto using field_bit_offset_lt.
 Qed.
 Lemma ref_disjoint_object_offset Γ τ r1 r2 σ1 σ2 :
-   ✓ Γ → r1 ⊥ r2 → Γ ⊢ r1 : τ ↣ σ1 → Γ ⊢ r2 : τ ↣ σ2 →
+  ✓ Γ → r1 ⊥ r2 → Γ ⊢ r1 : τ ↣ σ1 → Γ ⊢ r2 : τ ↣ σ2 →
   ref_object_offset Γ r1 + bit_size_of Γ σ1 ≤ ref_object_offset Γ r2 ∨
   ref_object_offset Γ r2 + bit_size_of Γ σ2 ≤ ref_object_offset Γ r1.
 Proof.
@@ -664,7 +711,7 @@ Proof.
   rewrite !ref_object_offset_app, !ref_object_offset_singleton,
     <-(ref_object_offset_freeze _ true r1'), Hr', !ref_object_offset_freeze.
   destruct (ref_seg_disjoint_object_offset Γ τ'' rs1 rs2 σ1' σ2'); auto.
-  * efeed pose proof (ref_object_offset_size Γ σ1'); eauto; lia.
-  * efeed pose proof (ref_object_offset_size Γ σ2'); eauto; lia.
+  * efeed pose proof (ref_object_offset_size' Γ σ1'); eauto. lia.
+  * efeed pose proof (ref_object_offset_size' Γ σ2'); eauto; lia.
 Qed.
 End references.

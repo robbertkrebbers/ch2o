@@ -43,6 +43,9 @@ Implicit Types r : ref Ti.
 Implicit Types a : addr Ti.
 Implicit Types α : bool.
 
+Lemma addr_refine_memenv_refine Γ α f Γm1 Γm2 a1 a2 σp :
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → Γm1 ⊑{Γ,α,f} Γm2.
+Proof. by destruct 1. Qed.
 Lemma addr_refine_typed_l Γ α f Γm1 Γm2 a1 a2 σp :
   ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → (Γ,Γm1) ⊢ a1 : σp.
 Proof.
@@ -201,10 +204,11 @@ Qed.
 Lemma addr_ref_refine Γ α f Γm1 Γm2 a1 a2 σp :
   a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → addr_strict Γ a1 →
   ∃ r, f !! addr_index a1 = Some (addr_index a2, r) ∧
+    Γ ⊢ r : addr_type_object a2 ↣ addr_type_object a1 ∧
     addr_ref Γ a1 ++ r ⊆* addr_ref Γ a2.
 Proof.
   destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ' ???????????? Hr];
-    intros; simplify_equality'; exists r'; split; auto.
+    intros; simplify_equality'; exists r'; split_ands; auto.
   destruct Hr as [|r1 i1 r2 i2|r1' r1 r2 i]; simplify_type_equality'; auto.
   * by rewrite (right_id_L [] (++)).
   * rewrite Nat.mul_comm, Nat.div_add, Nat.div_small, Nat.add_0_l by lia.
@@ -230,8 +234,8 @@ Lemma addr_disjoint_refine Γ α α' f Γm1 Γm2 a1 a2 a3 a4 σp1 σp3 :
   a1 ⊥{Γ} a3 → a2 ⊥{Γ} a4.
 Proof.
   intros ??????.
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 σp1) as (r1&Hf1&Hr1); auto.
-  destruct (addr_ref_refine Γ α' f Γm1 Γm2 a3 a4 σp3) as (r2&Hf2&Hr2); auto.
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 σp1) as (r1&Hf1&_&Hr1); auto.
+  destruct (addr_ref_refine Γ α' f Γm1 Γm2 a3 a4 σp3) as (r2&Hf2&_&Hr2); auto.
   intros [?|[[Hidx ?]|(Hidx&Ha&?&?&?)]].
   * edestruct (meminj_injective_ne f (addr_index a1) (addr_index a2))
       as [|[??]]; eauto; [by left|].
@@ -253,8 +257,8 @@ Lemma addr_disjoint_refine_inv Γ α α' f Γm1 Γm2 a1 a2 a3 a4 σp1 σp3 :
   a2 ⊥{Γ} a4 → a1 ⊥{Γ} a3.
 Proof.
   intros ?????.
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 σp1) as (r1&Hf1&Hr1); auto.
-  destruct (addr_ref_refine Γ α' f Γm1 Γm2 a3 a4 σp3) as (r2&Hf2&Hr2); auto.
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 σp1) as (r1&Hf1&_&Hr1); auto.
+  destruct (addr_ref_refine Γ α' f Γm1 Γm2 a3 a4 σp3) as (r2&Hf2&_&Hr2); auto.
   destruct (decide (addr_index a1 = addr_index a3)) as [Hidx|]; [|by left].
   intros [?|[[Hidx' ?]|(Hidx'&Ha&?&?&?)]]; [congruence| |].
   * right; left; split; [done|]. rewrite Hidx in Hf1; simplify_equality.
@@ -294,6 +298,22 @@ Lemma addr_alive_refine Γ α f Γm1 Γm2 a1 a2 σp :
   index_alive Γm1 (addr_index a1) → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp →
   index_alive Γm2 (addr_index a2).
 Proof. destruct 2 as [??????????? []]; eauto. Qed.
+Lemma addr_object_offset_refine Γ α f Γm1 Γm2 a1 a2 σp :
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp →
+  ∃ r, f !! addr_index a1 = Some (addr_index a2, r) ∧
+    Γ ⊢ r : addr_type_object a2 ↣ addr_type_object a1 ∧
+    addr_object_offset Γ a2 = addr_object_offset Γ a1 + ref_object_offset Γ r.
+Proof.
+  destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ' ???????????? Hr];
+    intros; simplify_equality'; exists r'; split_ands; auto.
+  destruct Hr as [|r1 i1 r2 i2|r1' r1 r2 i]; simplify_type_equality'; auto.
+  * erewrite <-ref_object_offset_le by eauto.
+    cut (ref_object_offset Γ (ref_base r1) + ref_offset r1 * bit_size_of Γ σ'
+      = ref_object_offset Γ r1); [unfold bit_size_of; lia|].
+    assert (ref_offset r1 < ref_size r1) by eauto using ref_typed_size.
+    erewrite ref_object_offset_set_offset by eauto with lia; lia.
+  * erewrite <-ref_object_offset_le, ref_object_offset_app by eauto; lia.
+Qed.
 Lemma addr_top_refine Γ α f Γm1 Γm2 o1 o2 τ :
   ✓ Γ → Γm1 ⊑{Γ,α,f} Γm2 → Γm1 ⊢ o1 : τ → f !! o1 = Some (o2,[]) →
   ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →

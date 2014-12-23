@@ -124,7 +124,7 @@ Proof.
   rewrite option_guard_True by eauto using addr_strict_refine.
   destruct (m1 !! addr_index a1) as [[|w1' β]|] eqn:?; simplify_equality'.
   destruct (w1' !!{Γ} addr_ref Γ a1) as [w1''|] eqn:?; simplify_equality'.
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ)) as (r&?&?); auto.
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ)) as (r&?&_&?); auto.
   destruct (Hm (addr_index a1) (addr_index a2) r w1' β)
     as (w2&w2'&τ2&->&Hr&?&_); auto; csimpl.
   destruct (ctree_lookup_Some Γ Γm1 w1' τ2
@@ -178,7 +178,7 @@ Proof.
   assert ((Γ,Γm1) ⊢ w1 : τ) by eauto using cmap_lookup_typed.
   assert ((Γ,Γm2) ⊢ w2 : τ) by eauto using cmap_lookup_typed.
   assert (¬ctree_unmapped (g2 w2)) as Hgw2
-    by eauto using pbits_refine_mapped, ctree_flatten_refine. 
+    by eauto using pbits_refine_mapped, ctree_flatten_refine.
   split; split_ands; auto.
   { eapply cmap_alter_valid; eauto.
     simplify_type_equality; eauto using ctree_refine_typed_l. }
@@ -186,7 +186,7 @@ Proof.
     simplify_type_equality; eauto using ctree_refine_typed_r. }
   intros o3 o4 r4 w3 malloc ? Hw3. destruct m1 as [m1], m2 as [m2]; simpl in *.
   repeat case_option_guard; simplify_type_equality'.
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ)) as (r2&?&Hr2); auto.
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ)) as (r2&?&_&Hr2); auto.
   destruct (m1 !! addr_index a1) as [[|w1' malloc']|] eqn:?; simplify_equality'.
   destruct (w1' !!{Γ} addr_ref Γ a1) as [w1''|] eqn:?; simplify_equality'.
   destruct (Hm (addr_index a1) (addr_index a2) r2 w1' malloc')

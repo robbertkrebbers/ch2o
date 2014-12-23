@@ -284,6 +284,13 @@ Proof.
   intros ? [] ?; simpl.
   by erewrite size_of_weaken by eauto using ref_typed_type_valid.
 Qed.
+Lemma addr_object_offset_weaken Γ1 Γ2 Γm a σp :
+  ✓ Γ1 → (Γ1,Γm) ⊢ a : σp → Γ1 ⊆ Γ2 →
+  addr_object_offset Γ1 a = addr_object_offset Γ2 a.
+Proof.
+  intros. unfold addr_object_offset; eauto using ref_object_offset_weaken,
+    addr_typed_ref_base_typed, addr_typed_type_object_valid.
+Qed.
 Lemma addr_object_offset_alt Γ Γm a σp :
   ✓ Γ → (Γ,Γm) ⊢ a : σp → addr_strict Γ a → addr_object_offset Γ a
   = ref_object_offset Γ (addr_ref Γ a) + addr_ref_byte Γ a * char_bits.
@@ -293,6 +300,16 @@ Proof.
     by eauto using Nat.div_lt_upper_bound, size_of_ne_0, ref_typed_type_valid.
   rewrite (Nat.div_mod i (size_of Γ σ')) at 1
     by eauto using size_of_ne_0,ref_typed_type_valid; unfold bit_size_of; lia.
+Qed.
+Lemma addr_object_offset_strict Γ Γm a σp :
+  ✓ Γ → (Γ,Γm) ⊢ a : σp → addr_strict Γ a →
+  addr_object_offset Γ a < bit_size_of Γ (addr_type_object a).
+Proof.
+  destruct 2 as [o r i τ σ σp ???? Hoff]; intros; simplify_equality'.
+  eapply Nat.lt_le_trans; [|eapply ref_object_offset_size; eauto].
+  unfold bit_size_of; rewrite <-Nat.add_lt_mono_l, Nat.mul_assoc,
+    <-Nat.mul_lt_mono_pos_r, Hoff, Nat.sub_0_r
+    by auto using char_bits_pos; lia.
 Qed.
 Lemma addr_top_typed Γ Γm o τ :
   ✓ Γ → Γm ⊢ o : τ → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →

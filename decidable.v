@@ -113,6 +113,13 @@ Lemma bool_decide_unpack (P : Prop) {dec : Decision P} : bool_decide P → P.
 Proof. by rewrite bool_decide_spec. Qed.
 Lemma bool_decide_pack (P : Prop) {dec : Decision P} : P → bool_decide P.
 Proof. by rewrite bool_decide_spec. Qed.
+Lemma bool_decide_true (P : Prop) `{Decision P} : P → bool_decide P = true.
+Proof. by case_bool_decide. Qed.
+Lemma bool_decide_false (P : Prop) `{Decision P} : ¬P → bool_decide P = false.
+Proof. by case_bool_decide. Qed.
+Lemma bool_decide_iff (P Q : Prop) `{Decision P, Decision Q} :
+  (P ↔ Q) → bool_decide P = bool_decide Q.
+Proof. repeat case_bool_decide; tauto. Qed.
 
 (** * Decidable Sigma types *)
 (** Leibniz equality on Sigma types requires the equipped proofs to be

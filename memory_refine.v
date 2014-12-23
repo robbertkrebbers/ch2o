@@ -297,7 +297,7 @@ Proof.
   intros ? (_&_&_&Hm) ? (Ha&w1&?&?).
   rewrite addr_is_top_array_alt in Ha by eauto using addr_refine_typed_l.
   destruct Ha as (τ'&n&?&Ha1&?).
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ)) as (r&?&Ha2); auto.
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ)) as (r&?&_&Ha2); auto.
   destruct (Hm (addr_index a1) (addr_index a2) r w1 true)
     as (?&w2&τ''&?&?&?&Hr); auto; specialize (Hr I); simplify_type_equality'.
   split; [|exists w2; eauto using pbits_refine_perm_1, ctree_flatten_refine].
@@ -442,7 +442,7 @@ Proof.
   assert (ref_object_offset Γ r2 + i < bit_size_of Γ τ2).
   { apply Nat.lt_le_trans with
       (ref_object_offset Γ r2 + bit_size_of Γ τ1); [lia|].
-    eauto using ref_object_offset_size. }
+    eauto using ref_object_offset_size'. }
   rewrite HΩ12, HΩ23 by eauto using memenv_refine_alive_l.
   by rewrite ref_object_offset_app, Nat.add_assoc,
     (Nat.add_comm (ref_object_offset Γ r2)).
@@ -583,7 +583,7 @@ Proof.
   destruct (ctree_lookup_Some Γ Γm2 w2 τ2 r w2')
     as (τ1'&?&?); auto; simplify_type_equality.
   assert (ref_object_offset Γ r + bit_size_of Γ τ1
-    ≤ bit_size_of Γ τ2) by eauto using ref_object_offset_size.
+    ≤ bit_size_of Γ τ2) by eauto using ref_object_offset_size'.
   erewrite Ho2, ctree_flatten_length by eauto.
   destruct (Ω1 !! o1) as [ω1|] eqn:?; simplify_equality'.
   { erewrite ctree_flatten_length by eauto. destruct (Ω2 !! o2) as [ω2|] eqn:?.
@@ -628,36 +628,32 @@ Proof.
   eauto using mem_unlock_refine.
 Qed.
 Lemma lock_singleton_refine Γ α f Γm1 Γm2 a1 a2 σ :
-  ✓ Γ → Γm1 ⊑{Γ,α,f} Γm2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some σ → addr_strict Γ a1 →
+  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some σ → addr_strict Γ a1 →
   lock_singleton Γ a1 ⊑{Γ,α,f@Γm1↦Γm2} lock_singleton Γ a2.
 Proof.
-  intros ? HΓm Ha ?.
+  intros ? Ha ?.
+  assert (Γm1 ⊑{Γ,α,f} Γm2) as HΓm by eauto using addr_refine_memenv_refine.
   assert ((Γ,Γm1) ⊢ a1 : Some σ) by eauto using addr_refine_typed_l.
   assert ((Γ,Γm2) ⊢ a2 : Some σ) by eauto using addr_refine_typed_r.
   split; split_ands; eauto using lock_singleton_valid.
   intros o1 o2 r τ i ????. rewrite !elem_of_lock_singleton_typed by eauto.
-  erewrite !addr_object_offset_alt by eauto using addr_strict_refine.
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some σ)) as (r'&?&Ha2); auto.
-  erewrite <-(addr_ref_byte_refine _ _ _ _ _ a1 a2) by eauto.
-  erewrite <-(ref_object_offset_le _ _ (addr_ref _ a2)) by eauto.
-  rewrite !ref_object_offset_app.
+  destruct (addr_object_offset_refine Γ α f
+    Γm1 Γm2 a1 a2 (Some σ)) as (r'&?&?&->); auto.
   split; [intros (->&?&?); simplify_equality'; intuition lia|intros (->&?&?)].
   destruct (meminj_injective_alt f o1 (addr_index a1) (addr_index a2) r r')
-    as [->|[??]]; simplify_equality'; eauto using memenv_refine_injective.
+    as [|[??]]; simplify_equality'; eauto using memenv_refine_injective.
   { intuition lia. }
-  exfalso. destruct (memenv_refine_typed_l HΓm o1 (addr_index a2) r τ)
-    as (τ'&?&?); auto.
-  destruct (memenv_refine_typed_l HΓm (addr_index a1) (addr_index a2)
-    r' (addr_type_object a1)) as (?&?&?); eauto using addr_typed_index.
-  simplify_type_equality.
-  assert (ref_object_offset Γ (addr_ref Γ a1) + addr_ref_byte Γ a1 * char_bits +
-    bit_size_of Γ σ ≤ bit_size_of Γ (addr_type_object a1)).
-  { transitivity
+  destruct (memenv_refine_typed_r HΓm o1 (addr_index a2) r
+    (addr_type_object a2)) as (?&?&?); eauto using addr_typed_index;
+    simplify_type_equality'.
+  assert (addr_object_offset Γ a1 + bit_size_of Γ σ
+    ≤ bit_size_of Γ (addr_type_object a1)).
+  { erewrite addr_object_offset_alt by eauto. transitivity
       (ref_object_offset Γ (addr_ref Γ a1) + bit_size_of Γ (addr_type_base a1));
-    eauto using ref_object_offset_size, addr_typed_ref_typed.
+    eauto using ref_object_offset_size', addr_typed_ref_typed.
     rewrite <-Nat.add_assoc, <-Nat.add_le_mono_l; eauto using addr_bit_range. }
-  destruct (ref_disjoint_object_offset Γ τ' r r' τ
-    (addr_type_object a1)); auto; lia.
+  destruct (ref_disjoint_object_offset Γ (addr_type_object a2) r r'
+    τ (addr_type_object a1)); auto; lia.
 Qed.
 Lemma locks_union_refine Γ α f Γm1 Γm2 Ω1 Ω2 Ω1' Ω2' :
   Ω1 ⊑{Γ,α,f@Γm1↦Γm2} Ω2 → Ω1' ⊑{Γ,α,f@Γm1↦Γm2} Ω2' →
