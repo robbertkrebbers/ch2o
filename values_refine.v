@@ -285,10 +285,7 @@ Proof.
 Qed.
 Lemma val_new_refine Γ α f Γm1 Γm2 τ :
   ✓ Γ → ✓{Γ} τ → val_new Γ τ ⊑{Γ,α,f@Γm1↦Γm2} val_new Γ τ : τ.
-Proof.
-  intros. rewrite val_new_unflatten by done.
-  eauto using val_unflatten_refine, replicate_length.
-Qed.
+Proof. intros. apply val_unflatten_refine; auto. Qed.
 Lemma to_val_refine Γ α f Γm1 Γm2 w1 w2 τ :
   ✓ Γ → w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : τ →
   to_val Γ w1 ⊑{Γ,α,f@Γm1↦Γm2} to_val Γ w2 : τ.

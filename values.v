@@ -196,15 +196,8 @@ Section operations.
     | VUnion s _ _ | VUnionAll s _ => unionT s
     end.
 
-  Definition val_new (Γ : env Ti) : type Ti → val Ti := type_iter
-    (**i TBase     *) (λ τb,
-      VBase (if decide (τb = voidT%BT) then VVoid else VIndet τb))
-    (**i TArray    *) (λ τ n x, VArray τ (replicate n x))
-    (**i TCompound *) (λ c s τs rec,
-      match c with
-      | Struct_kind => VStruct s (rec <$> τs)
-      | Union_kind => VUnionAll s (rec <$> τs)
-      end) Γ.
+  Definition val_new (Γ : env Ti) (τ : type Ti) : val Ti :=
+    val_unflatten Γ τ (replicate (bit_size_of Γ τ) BIndet).
   Definition val_flatten (Γ : env Ti) : val Ti → list (bit Ti) :=
     fix go v :=
     match v with
@@ -810,10 +803,16 @@ Qed.
 (** ** Properties of the [val_new] function *)
 Lemma val_new_base Γ τb :
   val_new Γ τb = VBase (if decide (τb = voidT%BT) then VVoid else VIndet τb).
-Proof. unfold val_new. by rewrite type_iter_base. Qed.
+Proof.
+  unfold val_new; rewrite val_unflatten_base. case_decide; subst; [done|].
+  by rewrite base_val_unflatten_indet by auto.
+Qed.
 Lemma val_new_array Γ τ n :
   val_new Γ (τ.[n]) = VArray τ (replicate n (val_new Γ τ)).
-Proof. unfold val_new. by rewrite type_iter_array. Qed.
+Proof.
+  unfold val_new; rewrite val_unflatten_array, bit_size_of_array; f_equal.
+  by induction n; f_equal'; rewrite ?take_replicate_plus, ?drop_replicate_plus.
+Qed.
 Lemma val_new_compound Γ c s τs :
   ✓ Γ → Γ !! s = Some τs → val_new Γ (compoundT{c} s) =
     match c with
@@ -821,60 +820,34 @@ Lemma val_new_compound Γ c s τs :
     | Union_kind => VUnionAll s (val_new Γ <$> τs)
     end.
 Proof.
-  intros HΓ Hs. unfold val_new; erewrite (type_iter_compound (=)); try done.
-  { by intros ????? ->. }
-  clear s τs Hs. intros ?? [] ? τs ???; f_equal'; by apply Forall_fmap_ext.
+  intros HΓ Hs; unfold val_new; erewrite val_unflatten_compound by eauto.
+  destruct c; f_equal.
+  * erewrite ?bit_size_of_struct by eauto; clear Hs.
+    unfold struct_unflatten, field_bit_padding.
+    by induction (bit_size_of_fields _ τs HΓ); decompose_Forall_hyps;
+      rewrite ?take_replicate_plus, ?drop_replicate_plus, ?take_replicate,
+      ?drop_replicate, ?Min.min_l, ?fmap_replicate by done; repeat f_equal.
+  * eapply Forall_fmap_ext, Forall_impl; [eapply bit_size_of_union; eauto|].
+    intros. by rewrite take_replicate, Min.min_l by done.
 Qed.
 Lemma val_new_weaken Γ1 Γ2 τ :
   ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊆ Γ2 → val_new Γ1 τ = val_new Γ2 τ.
 Proof.
-  intros. apply (type_iter_weaken (=)); try done; [by intros ????? ->|].
-  intros go1 go2 [] s τs Hs Hτs ?; f_equal'; by apply Forall_fmap_ext.
-Qed.
-Lemma val_new_unflatten Γ τ :
-  ✓ Γ → ✓{Γ} τ →
-  val_new Γ τ = val_unflatten Γ τ (replicate (bit_size_of Γ τ) BIndet).
-Proof.
-  intros HΓ. revert τ. refine (type_env_ind _ HΓ _ _ _ _).
-  * intros τb ?. rewrite val_new_base, val_unflatten_base.
-    case_decide; subst; [done|].
-    by rewrite base_val_unflatten_indet by auto using Forall_replicate_eq.
-  * intros τ n _ IH _.
-    rewrite val_new_array, val_unflatten_array, bit_size_of_array. f_equal.
-    induction n as [|n IHn]; f_equal'.
-    + rewrite take_replicate, IH. do 2 f_equal; lia.
-    + rewrite drop_replicate, IHn. do 2 f_equal; lia.
-  * intros [] s τs Hs _ IH _;  erewrite val_new_compound,
-      val_unflatten_compound, ?bit_size_of_struct by eauto; f_equal.
-    { unfold struct_unflatten. clear Hs.
-      induction (bit_size_of_fields _ τs HΓ); decompose_Forall_hyps; f_equal.
-      + rewrite replicate_plus, take_app_alt,
-          take_replicate, Min.min_l by auto; auto.
-      + rewrite replicate_plus, drop_app_alt by auto; auto. }
-    pose proof (bit_size_of_union _ _ _ HΓ Hs); clear Hs.
-    induction IH as [|τ τs Hτ IH]; decompose_Forall_hyps; f_equal; auto.
-    rewrite take_replicate, Hτ. do 2 f_equal; lia.
+  intros. unfold val_new.
+  by erewrite val_unflatten_weaken, bit_size_of_weaken by eauto.
 Qed.
 Lemma val_new_typed Γ Γm τ : ✓ Γ → ✓{Γ} τ → (Γ,Γm) ⊢ val_new Γ τ : τ.
-Proof.
-  intros. rewrite val_new_unflatten by done.
-  apply val_unflatten_typed; auto using replicate_length.
-Qed.
+Proof. intros; apply val_unflatten_typed; auto using replicate_length. Qed.
+Lemma vals_new_typed Γ Γm τs :
+  ✓ Γ → ✓{Γ}* τs → (Γ,Γm) ⊢* val_new Γ <$> τs :* τs.
+Proof. induction 2; simpl; eauto using val_new_typed. Qed.
 Lemma val_new_type_of Γ τ : ✓ Γ → ✓{Γ} τ → type_of (val_new Γ τ) = τ.
-Proof.
-  intros. rewrite val_new_unflatten by done. by apply val_unflatten_type_of.
-Qed.
+Proof. by apply val_unflatten_type_of. Qed.
 Lemma val_new_frozen Γ τ :
   ✓ Γ → ✓{Γ} τ → val_freeze true (val_new Γ τ) = val_new Γ τ.
-Proof.
-  intros. rewrite val_new_unflatten by done.
-  apply (val_unflatten_frozen Γ ∅); auto.
-Qed.
-Lemma val_new_union_free Γ τ : ✓ Γ → ✓{Γ} τ → val_union_free (val_new Γ τ).
-Proof.
-  intros. rewrite val_new_unflatten by done.
-  eauto using val_unflatten_union_free.
-Qed.
+Proof. intros. apply (val_unflatten_frozen Γ ∅); auto. Qed.
+Lemma val_new_union_free Γ τ : ✓ Γ → val_union_free (val_new Γ τ).
+Proof. intros. by apply val_unflatten_union_free. Qed.
 
 (** ** Properties of the [to_val] function *)
 Lemma to_val_typed Γ Γm w τ :
@@ -939,7 +912,6 @@ Proof.
         rewrite <-?fmap_drop, <-?fmap_take; f_equal'; auto. }
     by erewrite val_unflatten_compound by eauto.
 Qed.
-
 
 (** ** Properties of the [of_val] function *)
 Lemma ctree_flatten_of_val Γ Γm xs v τ :
