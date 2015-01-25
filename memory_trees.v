@@ -1557,6 +1557,84 @@ Proof.
   rewrite ctree_lookup_cons; intros; simplify_option_equality;
     eauto using ctree_alter_seg_ext_lookup.
 Qed.
+Lemma ctree_alter_seg_perm_flatten Γ Γm g w τ rs w' τ' :
+  ✓ Γ → (Γ,Γm) ⊢ w : τ → w !!{Γ} rs = Some w' → (Γ,Γm) ⊢ w' : τ' →
+  tagged_perm <$> ctree_flatten (ctree_alter_seg Γ g rs w) = tagged_perm <$>
+    take (ref_seg_object_offset Γ rs) (ctree_flatten w) ++
+    ctree_flatten (g w') ++
+    drop (ref_seg_object_offset Γ rs + bit_size_of Γ τ') (ctree_flatten w).
+Proof.
+  intros HΓ Hw Hrs Hw'. rewrite <-(type_of_correct (Γ,Γm) w' τ') by done.
+  clear Hw'. revert w τ Hw Hrs. refine (ctree_typed_ind _ _ _ _ _ _ _ _).
+  * by destruct rs.
+  * intros ws τ Hws _ _ Hrs; destruct rs as [i| |]; pattern w';
+      apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear w' Hrs; simpl.
+    intros w'' <- ->. revert i w''.
+    induction Hws as [|w ws ?? IH]; intros [|i] w'' ?;
+      decompose_Forall_hyps; simplify_type_equality.
+    { by rewrite drop_app_alt by done. }
+    erewrite fmap_app, IH, !fmap_app by eauto; simplify_type_equality.
+    rewrite take_plus_app, fmap_app, <-!(associative_L (++)) by done.
+    by rewrite <-Nat.add_assoc, drop_plus_app by done.
+  * intros s wxbss τs Hs Hws _ _ Hindet Hlen Hrs; destruct rs as [|i|];
+      pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
+    intros w xs -> Hi; destruct (Forall2_lookup_l (typed (Γ,Γm) ∘ fst)
+      wxbss τs i (w,xs)) as (τ&Hi'&Hw); auto;
+      simplify_option_equality; simplify_type_equality'.
+    assert (field_bit_offset Γ τs i =
+      length (take i wxbss ≫= λ wxs, ctree_flatten (wxs.1) ++ wxs.2)) as help2.
+    { clear Hs Hi' Hw Hindet. apply lookup_lt_Some in Hi.
+      unfold field_bit_padding, field_bit_offset in *.
+      revert i wxbss Hi Hlen Hws. induction (bit_size_of_fields _ τs HΓ);
+        intros [|?] ????; decompose_Forall_hyps;
+        rewrite ?app_length; f_equal; auto; solve_length. }
+    rewrite <-(take_drop_middle wxbss i (w,xs)), bind_app by done; csimpl.
+    erewrite take_app_alt, drop_plus_app,
+      <-(associative_L (++)), drop_app_alt, alter_app_r_alt by done.
+    rewrite take_length_le by eauto using Nat.lt_le_incl, lookup_lt_Some.
+    rewrite Nat.sub_diag; simpl; rewrite bind_app, bind_cons; simpl.
+    by rewrite !(associative_L (++)).
+  * intros s i τs w xs τ Hs Hτ ? _ _ Hindet ? _ Hrs; destruct rs as [| |i'];
+      pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
+    { intros -> ->; simplify_option_equality; simplify_type_equality.
+      by rewrite drop_app_alt by done. }
+    intros ? τ'' -> ? -> ?? _ _; simplify_option_equality.
+    by rewrite ctree_unflatten_type_of, !fmap_app, <-list_fmap_compose by eauto.
+  * intros s τs xs ? _ ? Hrs; destruct rs as [| |i'];
+      pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
+    intros ?? -> ?? _; simplify_option_equality.
+    by rewrite ctree_unflatten_type_of, !fmap_app, <-list_fmap_compose by eauto.
+Qed.
+Lemma ctree_alter_perm_flatten Γ Γm g w τ r w' τ' :
+  ✓ Γ → (Γ,Γm) ⊢ w : τ → w !!{Γ} r = Some w' → (Γ,Γm) ⊢ w' : τ' →
+  tagged_perm <$> ctree_flatten (ctree_alter Γ g r w) = tagged_perm <$>
+    take (ref_object_offset Γ r) (ctree_flatten w) ++
+    ctree_flatten (g w') ++
+    drop (ref_object_offset Γ r + bit_size_of Γ τ') (ctree_flatten w).
+Proof.
+  intros HΓ ?. unfold ref_object_offset.
+  revert g w' τ'. induction r as [|rs r IH]; intros g w'' τ''.
+  { intros; simplify_type_equality'.
+    by rewrite drop_ge, (right_id_L [] (++)) by auto. }
+  rewrite ctree_lookup_cons; intros.
+  destruct (w !!{Γ} r) as [w'|] eqn:?; simplify_equality'.
+  destruct (ctree_lookup_Some Γ Γm w τ r w') as (τ'&?&?); auto.
+  destruct (ctree_lookup_seg_Some Γ Γm w' τ' rs w'') as (?&?&?); auto.
+  simplify_type_equality'.
+  assert (ref_seg_object_offset Γ rs + bit_size_of Γ τ'' ≤ bit_size_of Γ τ')
+    by eauto using ref_seg_object_offset_size'.
+  erewrite !fmap_app, IH, !fmap_app, ctree_alter_seg_perm_flatten by eauto.
+  rewrite !fmap_app, <-!(associative_L (++)), (associative_L (++)).
+  repeat f_equal.
+  { erewrite <-(ctree_lookup_flatten _ _ w _ _ w'), !fmap_take,
+      pbits_perm_mask by eauto using ctree_lookup_typed.
+    rewrite fmap_take, fmap_drop, take_take, Min.min_l by lia.
+    by rewrite take_take_drop, Nat.add_comm. }
+  erewrite <-(ctree_lookup_flatten _ _ w _ _ w'), !fmap_drop,
+    pbits_perm_mask by eauto using ctree_lookup_typed; unfold ref_object_offset.
+  rewrite fmap_take, fmap_drop, take_drop_commute, drop_drop.
+  rewrite drop_take_drop by lia; f_equal; lia.
+Qed.
 
 (** ** Non-aliasing resuls *)
 Lemma ctree_lookup_non_aliasing_help Γ Γm g w τ s τs r τ1 i1 τ2 i2 :
@@ -1675,6 +1753,13 @@ Proof.
   intros szs ? Hwτ. unfold lookupE at 1, ctree_lookup_byte. unfold szs.
   by rewrite sublist_lookup_reshape
     by (erewrite ?ctree_flatten_length by eauto; eauto using char_bits_pos).
+Qed.
+Lemma ctree_lookup_byte_flatten Γ w i w' :
+  w !!{Γ} i = Some w' →
+  take (char_bits) (drop (i * char_bits) (ctree_flatten w)) = ctree_flatten w'.
+Proof.
+  unfold lookupE, ctree_lookup_byte, sublist_lookup; intros.
+  by simplify_option_equality.
 Qed.
 
 (** ** Altering individual bytes *)
