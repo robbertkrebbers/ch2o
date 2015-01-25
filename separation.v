@@ -654,6 +654,9 @@ Proof.
 Qed.
 
 (** ** Properties lifted to lists *)
+Lemma seps_subseteq_empty xs n :
+  length xs = n → Forall sep_valid xs → replicate n ∅ ⊆* xs.
+Proof. eauto using Forall2_replicate_l, Forall_impl, sep_subseteq_empty. Qed.
 Lemma seps_left_id xs ys : xs ⊥* ys → Forall (∅ =) xs → xs ∪* ys = ys.
 Proof.
   induction 1; intros; decompose_Forall_hyps;

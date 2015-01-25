@@ -1041,6 +1041,56 @@ Proof.
   intros. erewrite <-(val_union_free_freeze true),
     <-(to_of_val _ _ xs) by eauto. by apply to_val_union_free.
 Qed.
+Lemma to_val_new Γ τ :
+  ✓ Γ → ✓{Γ} τ → to_val Γ (ctree_new Γ pbit_full τ) = val_new Γ τ.
+Proof.
+  intros. unfold ctree_new. by rewrite to_val_unflatten, fmap_replicate.
+Qed.
+Lemma of_val_new Γ τ x :
+  ✓ Γ → ✓{Γ} τ →
+  of_val Γ (replicate (bit_size_of Γ τ) x) (val_new Γ τ)
+  = ctree_new Γ (PBit x BIndet) τ.
+Proof.
+  intros HΓ. revert τ. refine (type_env_ind _ HΓ _ _ _ _).
+  * intros. rewrite ctree_new_base, val_new_base.
+    by case_decide; simplify_equality'; rewrite zip_with_replicate.
+  * intros τ n ? IH _.
+    rewrite bit_size_of_array, val_new_array, ctree_new_array; f_equal'.
+    induction n; simpl; rewrite ?val_new_type_of, ?take_replicate,
+      ?Min.min_l, ?drop_replicate_plus by (auto with lia); f_equal; auto.
+  * intros [] s τs Hs Hτs IH _; erewrite val_new_compound,
+      ctree_new_compound, ?bit_size_of_struct by eauto; f_equal'.
+    { clear Hs. erewrite fmap_type_of by eauto using (vals_new_typed _ ∅).
+      unfold field_bit_padding.
+      induction (bit_size_of_fields _ τs HΓ) as [|τ sz τs szs ?? IH'];
+        decompose_Forall_hyps; auto.
+      rewrite val_new_type_of, !drop_replicate, !take_replicate, !Min.min_l,
+        fmap_replicate, <-IH' by auto with lia; repeat f_equal; auto with lia. }
+    destruct (bits_list_join_exists (bit_size_of Γ (unionT s))
+      (val_flatten Γ <$> val_new Γ <$> τs)
+      (replicate (bit_size_of Γ (unionT s)) BIndet)) as (bs'&->&?); auto.
+    { apply Forall_fmap, Forall_fmap; apply (Forall_impl ✓{Γ}); auto.
+      intros τ ?; simpl. unfold val_new.
+      by rewrite (val_flatten_unflatten _ ∅), resize_replicate by eauto. }
+    erewrite (bits_subseteq_indets bs') by eauto using Forall_replicate_eq.
+    apply zip_with_replicate.
+Qed.
+Lemma ctree_map_of_val Γ f g xs v :
+  (∀ x b, f (PBit x b) = PBit (g x) b) →
+  ctree_map f (of_val Γ xs v) = of_val Γ (g <$> xs) v.
+Proof.
+  intros ?. revert xs. assert (∀ xs bs,
+    f <$> zip_with PBit xs bs = zip_with PBit (g <$> xs) bs).
+  { induction xs; intros [|??]; f_equal'; auto. }
+  assert (∀ xs, f <$> flip PBit BIndet <$> xs = flip PBit BIndet <$> g <$> xs).
+  { intros. rewrite <-!list_fmap_compose. apply list_fmap_ext; simpl; auto. }
+  induction v as [|τ vs IH|s vs IH| |] using @val_ind_alt; simpl;
+    intros xs; rewrite <-?fmap_drop, <-?fmap_take; f_equal'; revert xs; auto.
+  * induction IH; intros; f_equal'; rewrite <-?fmap_take, <-?fmap_drop; auto.
+  * generalize (field_bit_padding Γ (type_of <$> vs)).
+    induction IH; intros [|??] ?; f_equal';
+      rewrite <-?fmap_drop, <-?fmap_take; auto with f_equal.
+Qed.
 
 (** ** Decidable typing *)
 Local Arguments type_check _ _ _ _ _ !_ /.

@@ -52,6 +52,10 @@ Section memory_operations.
        let τ := type_of v in let a := addr_top o τ in
        mem_alloc_val_list Γ ovs (<[a:=v]{Γ}>(mem_alloc Γ o false τ m))
     end.
+  Definition mem_singleton (Γ : env Ti) (a : addr Ti)
+      (malloc : bool) (x : perm) (v : val Ti) : mem Ti :=
+    let w := of_val Γ (replicate (bit_size_of Γ (type_of v)) x) v in
+    cmap_singleton Γ a malloc w.
 
   Program Definition mem_locks (m : mem Ti) : lockset :=
     let (m) := m in
@@ -651,6 +655,58 @@ Lemma mem_alloc_val_list_forward Γ m os vs τs :
   (Γ,'{m}) ⊢* vs :* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
   '{m} ⇒ₘ '{mem_alloc_val_list Γ (zip os vs) m}.
 Proof. intros. eapply mem_alloc_val_list_valid; eauto. Qed.
+
+(** ** Properties of the [singleton] memory *)
+Lemma mem_singleton_freeze Γ Γm β a malloc x v τ :
+  mem_singleton Γ (freeze β a) malloc x v = mem_singleton Γ a malloc x v.
+Proof. apply cmap_singleton_freeze. Qed.
+Lemma mem_singleton_valid Γ Γm a malloc x v τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some τ →
+  index_alive Γm (addr_index a) → addr_is_obj a → addr_strict Γ a →
+  (Γ,Γm) ⊢ v : τ → sep_valid x → ¬sep_unmapped x →
+  ✓{Γ,Γm} (mem_singleton Γ a malloc x v).
+Proof.
+  intros. assert ((Γ,Γm) ⊢ of_val Γ (replicate (bit_size_of Γ τ) x) v : τ).
+  { apply of_val_typed; eauto using Forall_replicate, replicate_length. }
+  eapply cmap_singleton_valid; simplify_type_equality; eauto.
+  eapply ctree_Forall_not, of_val_mapped; eauto using Forall_replicate.
+Qed.
+Lemma mem_lookup_singleton Γ Γm a malloc x v τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
+  (Γ,Γm) ⊢ v : τ → Some Readable ⊆ perm_kind x →
+  mem_singleton Γ a malloc x v !!{Γ} a = Some (val_freeze true v).
+Proof.
+  intros. unfold mem_singleton, lookupE, mem_lookup; simplify_type_equality.
+  erewrite cmap_lookup_singleton by eauto; simpl.
+  rewrite option_guard_True by (erewrite ctree_flatten_of_val,
+    zip_with_replicate_l, Forall_fmap by eauto; by apply Forall_true).
+  by erewrite to_of_val by eauto.
+Qed.
+Lemma mem_writable_singleton Γ Γm a malloc x v τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
+  (Γ,Γm) ⊢ v : τ → Some Writable ⊆ perm_kind x →
+  mem_writable Γ a (mem_singleton Γ a malloc x v).
+Proof.
+  intros; unfold mem_singleton; simplify_type_equality.
+  eexists (of_val _ _ _); split; eauto using cmap_lookup_singleton.
+  erewrite ctree_flatten_of_val, zip_with_replicate_l, Forall_fmap by eauto.
+  by apply Forall_true.
+Qed.
+Lemma mem_force_singleton Γ Γm a malloc x v τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
+  mem_force Γ a (mem_singleton Γ a malloc x v)
+  = mem_singleton Γ a malloc x v.
+Proof. by apply (cmap_alter_singleton _ Γm id _ _ _ τ). Qed.
+Lemma mem_insert_singleton Γ Γm a malloc x v1 v2 τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
+  (Γ,Γm) ⊢ v1 : τ → (Γ,Γm) ⊢ v2 : τ →
+  <[a:=v2]{Γ}>(mem_singleton Γ a malloc x v1)
+  = mem_singleton Γ a malloc x v2.
+Proof.
+  unfold insertE, mem_insert, mem_singleton; intros; simplify_type_equality.
+  by erewrite cmap_alter_singleton,
+    ctree_flatten_of_val, fmap_zip_with_l by eauto.
+Qed.
 
 (** ** Locks *)
 Lemma elem_of_mem_locks m o i :

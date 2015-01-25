@@ -124,6 +124,9 @@ Proof.
   split; [destruct 1; naive_solver|intros (?&?&?&?&?&?&?&?&?)].
   by destruct a; simplify_equality; constructor.
 Qed.
+Lemma addr_typed_representable Γ Γm a σp :
+  (Γ,Γm) ⊢ a : σp → int_typed (size_of Γ (addr_type_object a)) sptrT.
+Proof. by destruct 1. Qed.
 Lemma addr_typed_index Γ Γm a σp :
   (Γ,Γm) ⊢ a : σp → Γm ⊢ addr_index a : addr_type_object a.
 Proof. by destruct 1. Qed.

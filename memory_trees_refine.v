@@ -642,4 +642,36 @@ Proof.
   * intros s i τs w1 xbs1 xbs2 τ; rewrite fmap_app; intros.
     constructor; rewrite ?ctree_flatten_map; auto.
 Qed.
+Lemma ctree_singleton_seg_refine Γ α f Γm1 Γm2 τ rs w1 w2 σ :
+  ✓ Γ → Γ ⊢ rs : τ ↣ σ → w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : σ → ¬ctree_unmapped w1 →
+  ctree_singleton_seg Γ rs w1 ⊑{Γ,α,f@Γm1↦Γm2} ctree_singleton_seg Γ rs w2 : τ.
+Proof.
+  intros ? Hrs ??. apply ctree_leaf_refine_refine; eauto 8 using
+    ctree_singleton_seg_typed, pbits_refine_mapped, ctree_flatten_refine.
+  destruct Hrs as [τ i n|s i τs|s i ? τs]; simpl.
+  * constructor. rewrite !list_insert_alter. apply Forall2_alter; eauto.
+    apply Forall2_replicate, ctree_unflatten_leaf_refine;
+      eauto using ctree_refine_typed_l, ctree_typed_type_valid.
+    apply Forall2_replicate, pbit_empty_refine.
+  * assert (length (field_bit_padding Γ τs) = length τs) as Hlen
+      by eauto using field_bit_padding_length.
+    simplify_option_equality; constructor.
+    + apply Forall2_fmap. rewrite !fst_zip, !list_insert_alter by solve_length.
+      apply Forall2_alter; [|naive_solver].
+      eapply Forall2_fmap, Forall2_Forall, Forall_impl; eauto; intros.
+      apply ctree_unflatten_leaf_refine; auto.
+      apply Forall2_replicate, pbit_empty_refine.
+    + apply Forall2_fmap. rewrite !snd_zip by solve_length.
+      apply Forall2_fmap, Forall2_Forall, Forall_true; intros n.
+      apply Forall2_replicate, pbit_empty_refine.
+  * simplify_option_equality; constructor; eauto.
+    apply Forall2_replicate, pbit_empty_refine.
+Qed.
+Lemma ctree_singleton_refine Γ α f Γm1 Γm2 τ r w1 w2 σ :
+  ✓ Γ → Γ ⊢ r : τ ↣ σ → w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : σ → ¬ctree_unmapped w1 →
+  ctree_singleton Γ r w1 ⊑{Γ,α,f@Γm1↦Γm2} ctree_singleton Γ r w2 : τ.
+Proof.
+  intros ? Hr. revert w1 w2. induction Hr using @ref_typed_ind;
+    eauto 10 using ctree_singleton_seg_refine, ctree_singleton_seg_Forall_inv.
+Qed.
 End memory_trees.

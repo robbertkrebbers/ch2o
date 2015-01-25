@@ -206,6 +206,13 @@ Proof.
   eapply Forall2_replicate_l, Forall_impl; eauto using ctree_flatten_valid.
   eauto using @sep_disjoint_empty_l, pbit_valid_sep_valid.
 Qed.
+Lemma ctree_new_union Γ Γm w τ : ✓ Γ → (Γ,Γm) ⊢ w : τ → ctree_new Γ ∅ τ ∪ w = w.
+Proof. eauto using @ctree_left_id, ctree_new_disjoint, ctree_new_Forall. Qed.
+Lemma ctree_new_subseteq Γ Γm w τ : ✓ Γ → (Γ,Γm) ⊢ w : τ → ctree_new Γ ∅ τ ⊆ w.
+Proof.
+  intros. erewrite <-(ctree_new_union _ _ w) by eauto.
+  eauto using @ctree_union_subseteq_l, ctree_new_disjoint.
+Qed.
 Lemma ctree_lookup_seg_disjoint Γ Γm1 Γm2 w1 w2 τ rs w1' w2' :
   ✓ Γ → (Γ,Γm1) ⊢ w1 : τ → (Γ,Γm2) ⊢ w2 : τ → w1 ⊥ w2 →
   w1 !!{Γ} rs = Some w1' → w2 !!{Γ} rs = Some w2' → w1' ⊥ w2'.
@@ -511,5 +518,69 @@ Proof.
   by rewrite ctree_unflatten_union, Hg', ctree_flatten_union,
     ctree_flatten_unflatten, type_mask_base, mask_false by eauto using
     ctree_unflatten_disjoint, TBase_valid, TInt_valid.
+Qed.
+Lemma ctree_singleton_seg_disjoint Γ τ rs w1 w2 σ :
+  ✓ Γ → ✓{Γ} τ → Γ ⊢ rs : τ ↣ σ → ¬ctree_unmapped w1 → ¬ctree_unmapped w2 →
+  w1 ⊥ w2 → ctree_singleton_seg Γ rs w1 ⊥ ctree_singleton_seg Γ rs w2.
+Proof.
+  intros ?? Hrs ???.
+  assert (∀ τ, ✓{Γ} τ → ctree_new Γ ∅ τ ⊥ ctree_new Γ ∅ τ).
+  { intros. apply ctree_new_disjoint with ∅;
+      eauto using ctree_new_typed, pbit_empty_valid. }
+  destruct Hrs as [τ i n _|s i τs τ Hs _|s i]; simplify_option_equality.
+  * constructor. apply Forall2_insert; eauto using Forall2_replicate.
+  * constructor.
+    + apply Forall2_fmap; rewrite !fst_zip by auto.
+      eauto using Forall2_insert, Forall2_fmap_2, Forall2_Forall, Forall_impl.
+    + apply Forall2_fmap; rewrite !snd_zip by auto.
+      apply Forall2_fmap_2, Forall2_Forall, Forall_true; simpl.
+      auto using Forall2_replicate, @sep_disjoint_empty_l, @sep_empty_valid.
+  * constructor; naive_solver auto using Forall2_replicate,
+      @sep_disjoint_empty_l, @sep_empty_valid.
+Qed.
+Lemma ctree_singleton_disjoint Γ τ r w1 w2 σ :
+  ✓ Γ → ✓{Γ} τ → Γ ⊢ r : τ ↣ σ → ¬ctree_unmapped w1 → ¬ctree_unmapped w2 →
+  w1 ⊥ w2 → ctree_singleton Γ r w1 ⊥ ctree_singleton Γ r w2.
+Proof.
+  intros ?? Hr. revert w1 w2. induction Hr using @ref_typed_ind;
+    eauto 10 using ctree_singleton_seg_disjoint, ref_typed_type_valid,
+    ctree_singleton_seg_Forall_inv.
+Qed.
+Lemma ctree_singleton_seg_union Γ τ rs w1 w2 σ :
+  ✓ Γ → ✓{Γ} τ → Γ ⊢ rs : τ ↣ σ →
+  ctree_singleton_seg Γ rs (w1 ∪ w2)
+  = ctree_singleton_seg Γ rs w1 ∪ ctree_singleton_seg Γ rs w2.
+Proof.
+  intros ?? Hrs.
+  assert (∀ n, replicate n (∅ : pbit Ti) ∪* replicate n ∅ = replicate n ∅).
+  { intros. by rewrite zip_with_replicate_l, fmap_replicate by solve_length. }
+  assert (∀ τ, ✓{Γ} τ → ctree_new Γ ∅ τ = ctree_new Γ ∅ τ ∪ ctree_new Γ ∅ τ).
+  { intros. symmetry. eapply ctree_new_union with ∅;
+      eauto using ctree_new_typed, pbit_empty_valid. }
+  destruct Hrs as [τ i n _|s i τs τ Hs _|s i]; simplify_option_equality; f_equal.
+  * revert i.
+    induction (Forall_replicate (ctree_new Γ ∅ τ =) n _ eq_refl)
+      as [|w ws ? Hws]; subst; intros [|?]; f_equal'; eauto.
+    elim Hws; intros; simplify_equality'; f_equal'; eauto.
+  * assert (Forall2 (λ _ τ, ✓{Γ} τ) (field_bit_padding Γ τs) τs) as Hτs.
+    { cut (✓{Γ}* τs); [clear Hs|by eauto].
+      assert (Forall2 (λ _ _, True) (field_bit_padding Γ τs) τs) as Hτs.
+      { apply Forall2_same_length; auto using field_bit_padding_length. }
+      induction Hτs; intros; decompose_Forall_hyps; auto. }
+    clear Hs. revert i.
+    induction Hτs as [|? τ' ? τs ? Hτs]; intros [|i]; repeat f_equal';
+      decompose_Forall_hyps; auto.
+    elim Hτs; intros; repeat f_equal'; auto.
+  * f_equal'; auto.
+Qed.
+Lemma ctree_singleton_union Γ τ r w1 w2 σ :
+  ✓ Γ → ✓{Γ} τ → Γ ⊢ r : τ ↣ σ →
+  ctree_singleton Γ r (w1 ∪ w2)
+  = ctree_singleton Γ r w1 ∪ ctree_singleton Γ r w2.
+Proof.
+  intros ?? Hr; revert w1 w2.
+  induction Hr as [|r rs τ1 τ2 τ3] using @ref_typed_ind; intros; simpl; auto.
+  erewrite (ctree_singleton_seg_union _ τ2) by eauto using ref_typed_type_valid.
+  eauto.
 Qed.
 End memory_trees.

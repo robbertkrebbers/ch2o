@@ -64,6 +64,54 @@ Proof.
       by eauto using bit_size_of_ne_0, TCompound_valid.
     destruct Hxs; decompose_Forall_hyps.
 Qed.
+Lemma of_val_disjoint Γ Γm xs1 xs2 v τ :
+  ✓ Γ → (Γ,Γm) ⊢ v : τ → length xs1 = bit_size_of Γ τ → xs1 ⊥* xs2 →
+  Forall (not ∘ sep_unmapped) xs1 → Forall (not ∘ sep_unmapped) xs2 →
+  of_val Γ xs1 v ⊥ of_val Γ xs2 v.
+Proof.
+  intros HΓ Hv. revert v τ Hv xs1 xs2.
+  assert (∀ xs (bs : list (bit Ti)),
+    Forall sep_unmapped (zip_with PBit xs bs) →
+    length xs ≠ 0 → length bs = length xs → Forall (not ∘ sep_unmapped) xs →
+    False).
+  { unfold sep_unmapped at 1; simpl.
+    intros ????; rewrite <-Forall2_same_length;
+      destruct 1; intros; decompose_Forall_hyps; naive_solver. }
+  refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
+  * constructor; auto using PBits_disjoint.
+  * intros vs τ Hvs IH _ xs1 xs2 Hlen Hxs Hxs1 Hxs2; constructor.
+    rewrite bit_size_of_array in Hlen. revert xs1 xs2 Hlen Hxs Hxs1 Hxs2.
+    induction IH; decompose_Forall_hyps; simplify_type_equality';
+      constructor; rewrite ?zip_with_take,?zip_with_drop; auto.
+  * intros s vs τs Hs Hvs IH xs1 xs2 Hlen Hxs Hxs1 Hxs2.
+    erewrite bit_size_of_struct in Hlen by eauto; clear Hs.
+    erewrite fmap_type_of by eauto; unfold field_bit_padding.
+    constructor; revert vs xs1 xs2 Hvs IH Hlen Hxs Hxs1 Hxs2;
+      induction (bit_size_of_fields _ τs HΓ); intros; decompose_Forall_hyps;
+      simplify_type_equality; constructor; simpl;
+      rewrite ?zip_with_drop, ?zip_with_take; auto using PBits_BIndet_disjoint.
+  * intros; simplify_type_equality.
+    assert (bit_size_of Γ τ ≠ 0) by eauto using bit_size_of_ne_0.
+    constructor;
+      erewrite ?zip_with_take, ?zip_with_drop, ?ctree_flatten_of_val by eauto;
+      auto using PBits_BIndet_disjoint; intros [??]; eauto.
+  * constructor; auto using PBits_disjoint.
+Qed.
+Lemma of_val_union Γ xs1 xs2 v :
+  of_val Γ (xs1 ∪* xs2) v = of_val Γ xs1 v ∪ of_val Γ xs2 v.
+Proof.
+  revert v xs1 xs2. refine (val_ind_alt _ _ _ _ _ _); simpl.
+  * intros; f_equal; auto using PBits_union.
+  * intros τ vs IH xs1 xs2; f_equal. revert xs1 xs2.
+    induction IH; intros; f_equal'; rewrite ?zip_with_take,?zip_with_drop; auto.
+  * intros s vs IH xs1 xs2; f_equal. revert xs1 xs2.
+    generalize (field_bit_padding Γ (type_of <$> vs)).
+    induction IH; intros [|??] ??; repeat f_equal';
+      rewrite ?zip_with_drop, ?zip_with_take; auto using PBits_BIndet_union.
+  * intros; f_equal;
+      rewrite ?zip_with_take, ?zip_with_drop; auto using PBits_BIndet_union.
+  * intros; f_equal; auto using PBits_union.
+Qed.
 Lemma of_val_flatten_disjoint Γ Γm w1 w2 v τ :
   ✓ Γ → (Γ,Γm) ⊢ w1 : τ → ctree_unshared w1 →
   ctree_Forall (not ∘ sep_unmapped) w1 → (Γ,Γm) ⊢ v : τ → w1 ⊥ w2 →

@@ -43,6 +43,9 @@ Section operations.
              else ctree_alter_byte Γ g (addr_ref_byte Γ a) in
     CMap $
       alter (cmap_elem_map (ctree_alter Γ G (addr_ref Γ a))) (addr_index a) m.
+  Definition cmap_singleton (Γ : env Ti) (a : addr Ti)
+      (malloc : bool) (w : mtree Ti) : mem Ti :=
+    CMap {[ addr_index a, Obj (ctree_singleton Γ (addr_ref Γ a) w) malloc ]}.
 End operations.
 
 Notation "'{ m }" := (memenv_of m) (at level 20, format "''{' m }").
@@ -324,5 +327,43 @@ Proof.
     by eauto using ctree_lookup_byte_Forall, pbit_indetify_unshared.
   by erewrite option_guard_True, ctree_lookup_alter_byte_ne
     by eauto using ctree_alter_byte_Forall, pbit_indetify_unshared.
+Qed.
+Lemma cmap_singleton_freeze Γ β a malloc w :
+  cmap_singleton Γ (freeze β a) malloc w = cmap_singleton Γ a malloc w.
+Proof.
+  unfold cmap_singleton. rewrite addr_index_freeze, addr_ref_freeze.
+  destruct β.
+  * by erewrite ctree_singleton_le by eauto using ref_freeze_le_l.
+  * by erewrite <-ctree_singleton_le by eauto using ref_freeze_le_r.
+Qed.
+Lemma cmap_singleton_valid Γ Γm a malloc w τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some τ →
+  index_alive Γm (addr_index a) → addr_is_obj a → addr_strict Γ a →
+  (Γ,Γm) ⊢ w : τ → ¬ctree_unmapped w → ✓{Γ,Γm} (cmap_singleton Γ a malloc w).
+Proof.
+  intros ?????? Hperm; constructor; intros; simplify_map_equality'.
+  assert (τ = addr_type_base a) by eauto using addr_is_obj_type; subst.
+  exists (addr_type_object a); split_ands; eauto using addr_typed_index,
+    addr_typed_representable, ctree_singleton_typed, addr_typed_ref_typed.
+  contradict Hperm; eapply Forall_impl with (∅ =); eauto using
+    @sep_unmapped_empty_alt, ctree_singleton_Forall_inv, addr_typed_ref_typed.
+Qed.
+Lemma cmap_lookup_singleton Γ Γm a malloc w τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
+  cmap_singleton Γ a malloc w !!{Γ} a = Some w.
+Proof.
+  intros. unfold lookupE, cmap_lookup.
+  rewrite option_guard_True by done; simplify_map_equality'.
+  erewrite ctree_lookup_singleton by eauto using addr_typed_ref_typed; simpl.
+  by rewrite decide_True by done.
+Qed.
+Lemma cmap_alter_singleton Γ Γm g a malloc w τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
+  cmap_alter Γ g a (cmap_singleton Γ a malloc w)
+  = cmap_singleton Γ a malloc (g w).
+Proof.
+  intros; unfold cmap_singleton; f_equal'; rewrite alter_singleton; simpl.
+  by erewrite decide_True, ctree_alter_singleton
+    by eauto using addr_typed_ref_typed.
 Qed.
 End memory_map.

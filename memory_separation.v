@@ -285,4 +285,41 @@ Proof.
     mem_unlock_union, sep_commutative', mem_unlock_union
     by auto using mem_unlock_disjoint.
 Qed.
+Lemma mem_singleton_disjoint Γ Γm a malloc x1 x2 v τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a → (Γ,Γm) ⊢ v : τ →
+  x1 ⊥ x2 → ¬sep_unmapped x1 → ¬sep_unmapped x2 →
+  mem_singleton Γ a malloc x1 v ⊥ mem_singleton Γ a malloc x2 v.
+Proof.
+  intros. assert (bit_size_of Γ τ ≠ 0) by eauto using bit_size_of_ne_0.
+  eapply cmap_singleton_disjoint; simplify_type_equality; eauto.
+  * eapply of_val_disjoint; eauto using Forall2_replicate, Forall_replicate.
+  * erewrite ctree_flatten_of_val, zip_with_replicate_l, Forall_fmap by eauto.
+    apply Forall_not, Forall_true; auto; by destruct 1.
+  * erewrite ctree_flatten_of_val, zip_with_replicate_l, Forall_fmap by eauto.
+    apply Forall_not, Forall_true; auto; by destruct 1.
+Qed.
+Lemma mem_singleton_union Γ Γm a malloc x1 x2 v τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a →
+  mem_singleton Γ a malloc (x1 ∪ x2) v
+  = mem_singleton Γ a malloc x1 v ∪ mem_singleton Γ a malloc x2 v.
+Proof.
+  intros. unfold mem_singleton. by erewrite <-zip_with_replicate,
+    of_val_union, cmap_singleton_union by eauto.
+Qed.
+Lemma mem_alloc_empty_singleton Γ o malloc τ :
+  ✓ Γ → ✓{Γ} τ →
+  mem_alloc Γ o malloc τ ∅
+  = mem_singleton Γ (addr_top o τ) malloc perm_full (val_new Γ τ).
+Proof.
+  intros; unfold mem_singleton, cmap_singleton; f_equal'.
+  by rewrite val_new_type_of, of_val_new by done.
+Qed.
+Lemma mem_alloc_singleton Γ o malloc τ m :
+  ✓ Γ → ✓{Γ} τ → mem_allocable o m → sep_valid m →
+  mem_alloc Γ o malloc τ m
+  = mem_singleton Γ (addr_top o τ) malloc perm_full (val_new Γ τ) ∪ m.
+Proof.
+  intros. by rewrite <-mem_alloc_empty_singleton,
+    <-mem_alloc_union, sep_left_id by done.
+Qed.
 End memory.

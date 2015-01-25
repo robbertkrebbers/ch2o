@@ -15,6 +15,7 @@ Implicit Types g : mtree Ti → mtree Ti.
 Arguments lookupE _ _ _ _ _ _ _ !_ /.
 Arguments cmap_lookup _ _ _ _ !_ /.
 Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
+Local Opaque nmap.Nempty.
 
 Lemma cmap_lookup_disjoint Γ Γm m1 m2 a w1 w2 :
   ✓ Γ → ✓{Γ,Γm} m1 → ✓{Γ,Γm} m2 → m1 ⊥ m2 →
@@ -108,5 +109,27 @@ Proof.
   assert (τ1 = ucharT%T) by eauto using addr_not_is_obj_type.
   simplify_equality. eapply ctree_alter_union; intuition eauto 3 using
    ctree_alter_byte_disjoint, ctree_alter_byte_union, ctree_alter_byte_unmapped.
+Qed.
+Lemma cmap_singleton_disjoint Γ Γm a malloc w1 w2 τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a →
+  w1 ⊥ w2 → ¬ctree_unmapped w1 → ¬ctree_unmapped w2 →
+  cmap_singleton Γ a malloc w1 ⊥ cmap_singleton Γ a malloc w2.
+Proof.
+  intros ???? Hperm1 Hperm2 o.
+  destruct (decide (o = addr_index a)); simplify_map_equality'; auto.
+  split_ands; eauto 10 using ctree_singleton_disjoint, addr_typed_ref_typed,
+    addr_typed_type_object_valid, Forall_impl,
+    @sep_unmapped_empty_alt, ctree_singleton_Forall_inv.
+Qed.
+Lemma cmap_singleton_union Γ Γm a malloc w1 w2 τ :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a →
+  cmap_singleton Γ a malloc (w1 ∪ w2)
+  = cmap_singleton Γ a malloc w1 ∪ cmap_singleton Γ a malloc w2.
+Proof.
+  intros. unfold union at 2; unfold sep_union,
+    cmap_singleton, singleton, map_singleton; f_equal'.
+  erewrite <-insert_union_with, (left_id_L ∅ _) by done.
+  by erewrite ctree_singleton_union
+    by eauto using addr_typed_ref_typed, addr_typed_type_object_valid.
 Qed.
 End memory_map.

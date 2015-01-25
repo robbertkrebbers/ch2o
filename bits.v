@@ -139,6 +139,9 @@ Proof.
   intros Hbs. induction 1 as [|????[]];
     rewrite ?elem_of_cons in Hbs |- *; naive_solver.
 Qed.
+Lemma bits_subseteq_indets bs1 bs2 :
+  Forall (BIndet =) bs2 → bs1 ⊑* bs2 → bs1 = bs2.
+Proof. induction 2 as [|???? []]; decompose_Forall_hyps; f_equal; auto. Qed.
 Lemma bit_join_valid Γ Γm b1 b2 b3 :
   bit_join b1 b2 = Some b3 → ✓{Γ,Γm} b1 → ✓{Γ,Γm} b2 → ✓{Γ,Γm} b3.
 Proof. destruct 2,1; simplify_option_equality; constructor; auto. Qed.
