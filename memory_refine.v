@@ -493,7 +493,8 @@ Proof.
   assert ((Γ,'{m1}) ⊢ w1 : τ2) by eauto.
   destruct (proj2 Hm1 o1 w1 malloc) as (?&?&?&?&_),
    (proj2 Hm2 o2 w2' malloc) as (τ'&?&?&?&_); auto; simplify_type_equality'.
-  erewrite !elem_of_mem_locks_alt, <-!list_lookup_fmap by eauto.
+  rewrite !elem_of_mem_locks; simplify_option_equality.
+  rewrite <-!list_lookup_fmap.
   erewrite pbits_refine_locked; eauto using ctree_flatten_refine.
   rewrite <-(ctree_lookup_flatten Γ ('{m2}) w2' τ' r w2 σ1)
     by eauto using ctree_refine_typed_r, ctree_lookup_le, ref_freeze_le_l.
@@ -503,15 +504,15 @@ Lemma mem_lock_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 τ :
   ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ →
   mem_writable Γ a1 m1 → mem_lock Γ a1 m1 ⊑{Γ,α,f@Γm1↦Γm2} mem_lock Γ a2 m2.
 Proof.
-  intros ??? (w1&?&?). assert (∀ xb, pbit_indetify xb = xb →
-    pbit_indetify (pbit_lock xb) = pbit_lock xb) by (by intros ? <-).
+  intros ??? (w1&?&?).
   destruct (cmap_lookup_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 w1 τ) as (w2&?&?); auto.
   eapply cmap_alter_refine; eauto 1.
   * eapply ctree_Forall_not, pbits_mapped; eauto using pbits_kind_weaken.
-  * apply ctree_map_refine; eauto using pbit_lock_unshared,
-      pbits_lock_refine, ctree_flatten_refine. 
-  * eapply ctree_Forall_not; eauto using ctree_map_typed,
-      pbits_lock_valid, ctree_flatten_valid. rewrite ctree_flatten_map.
+  * apply ctree_map_refine; eauto using pbit_lock_unshared, pbit_lock_indetified,
+      pbits_lock_refine, ctree_flatten_refine, pbit_lock_mapped.
+  * eapply ctree_Forall_not; eauto 8 using ctree_map_typed, pbit_lock_indetified,
+      pbits_lock_valid, ctree_flatten_valid, pbit_lock_mapped.
+    rewrite ctree_flatten_map.
     eauto using pbits_lock_mapped, pbits_mapped, pbits_kind_weaken.
 Qed.
 Lemma mem_lock_refine' Γ α f m1 m2 a1 a2 τ : 
@@ -600,7 +601,7 @@ Proof.
     * assert (to_bools (bit_size_of Γ τ1) ω1
         = replicate (bit_size_of Γ τ1) false) as Hω.
       { apply list_eq_same_length with (bit_size_of Γ τ1); try done.
-        intros i β1 β2 ?. rewrite lookup_replicate by done.
+        intros i β1 β2 ?. rewrite lookup_replicate_2 by done.
         intros Hβ1 ?; destruct β1; simplify_equality'; try done.
         rewrite lookup_to_bools_true in Hβ1 by omega.
         specialize (HΩ o1 o2 r τ1 i); feed specialize HΩ; auto.
@@ -612,7 +613,7 @@ Proof.
     (bit_size_of Γ τ2) ω2)) = replicate (bit_size_of Γ τ1) false) as Hω2.
   { apply list_eq_same_length with (bit_size_of Γ τ1); try done.
     intros i β1 β2 ?.
-    rewrite lookup_take, lookup_drop, lookup_replicate by done.
+    rewrite lookup_take, lookup_drop, lookup_replicate_2 by done.
     intros Hβ1 ?; destruct β1; simplify_equality'; try done.
     rewrite lookup_to_bools_true in Hβ1 by omega.
     specialize (HΩ o1 o2 r τ1 i); feed specialize HΩ; auto.

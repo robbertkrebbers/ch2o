@@ -28,13 +28,15 @@ Hint Resolve Forall2_take Forall2_drop Forall2_app.
 Hint Immediate env_valid_lookup env_valid_lookup_lookup.
 Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
 Hint Immediate ctree_typed_type_valid.
+Hint Immediate TArray_valid_inv_type.
 
 Ltac solve_length := simplify_equality'; repeat first 
   [ rewrite take_length | rewrite drop_length | rewrite app_length
   | rewrite fmap_length | erewrite ctree_flatten_length by eauto
   | rewrite type_mask_length by eauto | rewrite replicate_length
   | rewrite bit_size_of_int | rewrite int_width_char | rewrite resize_length
-  | erewrite sublist_lookup_length by eauto
+  | rewrite zip_with_length | erewrite sublist_lookup_length by eauto
+  | rewrite insert_length | rewrite field_bit_padding_length by done
   | erewrite sublist_alter_length by eauto
   | match goal with
     | |- context [ bit_size_of ?Γ ?τ ] =>

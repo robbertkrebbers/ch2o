@@ -93,7 +93,7 @@ Lemma addr_refine_frozen Γ α f Γm1 Γm2 a1 a2 σp :
   a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → frozen a2 → frozen a1.
 Proof.
   unfold frozen. destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σp ??????????? Hr];
-    destruct Hr as [|r1 i1 r2 i2|]; intros; decompose_Forall_hyps;
+    destruct Hr as [|r1 i1 r2 i2|]; intros; list_simplifier;
     f_equal; eauto using ref_frozen_le, ref_freeze_freeze.
 Qed.
 Lemma ref_refine_id sz α r i : ref_refine sz α [] r i r i.

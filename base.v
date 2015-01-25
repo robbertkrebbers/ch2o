@@ -806,6 +806,10 @@ Section prod_relation.
 End prod_relation.
 
 (** ** Other *)
+Lemma or_l P Q : ¬Q → P ∨ Q ↔ P.
+Proof. tauto. Qed.
+Lemma or_r P Q : ¬P → P ∨ Q ↔ Q.
+Proof. tauto. Qed.
 Lemma and_wlog_l (P Q : Prop) : (Q → P) → Q → (P ∧ Q).
 Proof. tauto. Qed.
 Lemma and_wlog_r (P Q : Prop) : P → (P → Q) → (P ∧ Q).

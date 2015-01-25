@@ -85,8 +85,20 @@ Lemma perm_full_valid : sep_valid perm_full.
 Proof. done. Qed.
 Lemma perm_token_valid : sep_valid perm_token.
 Proof. done. Qed.
+Lemma perm_locked_mapped x : perm_locked x = true → ¬sep_unmapped x.
+Proof. destruct x as [[[]|]|[]]; repeat sep_unfold; naive_solver. Qed.
+Lemma perm_Readable_locked x : Some Readable ⊆ perm_kind x → perm_locked x = false.
+Proof. by destruct (perm_kind_spec x). Qed.
+Lemma perm_locked_lock x :
+  Some Writable ⊆ perm_kind x → perm_locked (perm_lock x) = true.
+Proof. by destruct (perm_kind_spec x). Qed.
+Lemma perm_locked_unlock x : perm_locked (perm_unlock x) = false.
+Proof. by destruct x as [[]|[]]. Qed.
 Lemma perm_lock_valid x :
   sep_valid x → Some Writable ⊆ perm_kind x → sep_valid (perm_lock x).
+Proof. destruct (perm_kind_spec x); repeat sep_unfold; intuition. Qed.
+Lemma perm_lock_unmapped x :
+  Some Writable ⊆ perm_kind x → sep_unmapped x → sep_unmapped (perm_lock x).
 Proof. destruct (perm_kind_spec x); repeat sep_unfold; intuition. Qed.
 Lemma perm_lock_mapped x : sep_unmapped (perm_lock x) → sep_unmapped x.
 Proof. destruct x as [[]|[]]; repeat sep_unfold; intuition. Qed.
@@ -95,6 +107,8 @@ Proof. destruct x as [[]|[]]; repeat sep_unfold; intuition. Qed.
 Lemma perm_unlock_lock x :
   sep_valid x → Some Writable ⊆ perm_kind x → perm_unlock (perm_lock x) = x.
 Proof. by destruct (perm_kind_spec x). Qed.
+Lemma perm_unlock_unlock x : perm_unlock (perm_unlock x) = perm_unlock x.
+Proof. by destruct x as [[]|]. Qed.
 Lemma perm_unlock_valid x : sep_valid x → sep_valid (perm_unlock x).
 Proof. destruct x as [[[]|[]]|]; repeat sep_unfold; naive_solver. Qed.
 Lemma perm_unlock_unmapped x : sep_unmapped x → sep_unmapped (perm_unlock x).
@@ -192,6 +206,11 @@ Proof.
     rewrite (Qcplus_le_mono_r _ _ x2), Qcplus_0_l. eauto using Qcle_trans.
 Qed.
 Lemma perm_lock_union x1 x2 : perm_lock (x1 ∪ x2) = perm_lock x1 ∪ x2.
+Proof. by destruct x1 as [[]|], x2 as [[]|]. Qed.
+Lemma perm_unlock_disjoint x1 x2 : x1 ⊥ x2 → perm_unlock x1 ⊥ x2.
+Proof. destruct x1 as [[]|], x2 as [[]|]; repeat sep_unfold; naive_solver. Qed.
+Lemma perm_unlock_union x1 x2 :
+  x1 ⊥ x2 → perm_locked x1 → perm_unlock (x1 ∪ x2) = perm_unlock x1 ∪ x2.
 Proof. by destruct x1 as [[]|], x2 as [[]|]. Qed.
 Lemma perm_disjoint_full x : perm_full ⊥ x → x = ∅.
 Proof.

@@ -956,7 +956,7 @@ Lemma in_fun_ctx_change k1 k2 Ek1 Ek2 :
   in_fun_ctx k1 (Ek1 :: k2) → in_fun_ctx k1 (Ek2 :: k2).
 Proof.
   intros ? [[|Ek2' l1] ?] [l2 [Hc1 Hc2]]; [by eexists []|].
-  destruct l2 as [|? l2]; decompose_Forall_hyps; [discriminate_list_equality|].
+  destruct l2 as [|? l2]; list_simplifier; [discriminate_list_equality|].
   exists (Ek2' :: l1); auto.
 Qed.
 Lemma in_fun_ctx_not_item_or_block k1 k2 Ek :

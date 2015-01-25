@@ -145,7 +145,8 @@ Hint Immediate env_valid_lookup env_valid_lookup_lookup.
 Ltac solve_length := simplify_equality'; repeat first 
   [ rewrite take_length | rewrite drop_length | rewrite app_length
   | rewrite fmap_length | rewrite mask_length | erewrite ctree_flatten_length by eauto
-  | rewrite type_mask_length by eauto | rewrite replicate_length
+  | rewrite type_mask_length by eauto
+  | rewrite insert_length | rewrite replicate_length
   | rewrite bit_size_of_int | rewrite int_width_char | rewrite resize_length
   | erewrite sublist_lookup_length by eauto
   | erewrite sublist_alter_length by eauto
@@ -611,11 +612,13 @@ Lemma ctree_map_refine Γ α f Γm1 Γm2 h1 h2 w1 w2 τ :
   ✓ Γ → w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : τ →
   h1 <$> ctree_flatten w1 ⊑{Γ,α,f@Γm1↦Γm2}* h2 <$> ctree_flatten w2 →
   (∀ xb, sep_unshared xb → sep_unshared (h2 xb)) →
+  (∀ xb, ✓{Γ,Γm1} xb → sep_unmapped (h1 xb) → sep_unmapped xb) →
+  (∀ xb, ✓{Γ,Γm2} xb → sep_unmapped (h2 xb) → sep_unmapped xb) →
   (∀ xb, pbit_indetify xb = xb → pbit_indetify (h1 xb) = h1 xb) →
   (∀ xb, pbit_indetify xb = xb → pbit_indetify (h2 xb) = h2 xb) →
   ctree_map h1 w1 ⊑{Γ,α,f@Γm1↦Γm2} ctree_map h2 w2 : τ.
 Proof.
-  intros ? Hw Hw' ? Hh.
+  intros ? Hw Hw' ? Hh ??.
   assert (∀ xbs, Forall sep_unshared xbs → Forall sep_unshared (h2 <$> xbs)).
   { induction 1; simpl; auto. }
   cut (ctree_leaf_refine Γ α f Γm1 Γm2 (ctree_map h1 w1) (ctree_map h2 w2)).
@@ -634,14 +637,9 @@ Proof.
       induction Hws' as [|[][]]; csimpl; rewrite ?fmap_app,
         <-?(associative_L (++)); intros; decompose_Forall_hyps; eauto.
   * intros s τs i w1 w2 xbs1 xbs2 τ; rewrite !fmap_app; intros.
-    unfold MUnion'. decompose_Forall_hyps. rewrite !ctree_flatten_map.
-    destruct (decide (_ ∧ Forall sep_unmapped (h1 <$> xbs1))) as [[??]|?].
-    + rewrite decide_True by intuition eauto using pbits_refine_unmapped.
-      constructor; rewrite ?ctree_flatten_map; auto.
-    + rewrite decide_False by intuition eauto using pbits_refine_mapped.
-      constructor; rewrite ?ctree_flatten_map; auto.
+    decompose_Forall_hyps; constructor; auto.
   * by constructor.
   * intros s i τs w1 xbs1 xbs2 τ; rewrite fmap_app; intros.
-    unfold MUnion'; case_decide; constructor; rewrite ?ctree_flatten_map; auto.
+    constructor; rewrite ?ctree_flatten_map; auto.
 Qed.
 End memory_trees.

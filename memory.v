@@ -114,7 +114,8 @@ Ltac solve_length := repeat first
   [ rewrite take_length | rewrite drop_length | rewrite app_length
   | rewrite zip_with_length | rewrite replicate_length | rewrite resize_length
   | rewrite fmap_length | erewrite ctree_flatten_length by eauto
-  | rewrite to_bools_length ]; lia.
+  | erewrite val_flatten_length by eauto | rewrite to_bools_length
+  | rewrite bit_size_of_uchar ]; lia.
 Hint Extern 0 (length _ = _) => solve_length.
 Hint Extern 0 (_ ≤ length _) => solve_length.
 Hint Extern 0 (length _ ≤ _) => solve_length.
@@ -456,6 +457,7 @@ Proof.
   * eapply pbits_perm_mapped, pbits_mapped; eauto using pbits_kind_weaken,
       pbits_valid_sep_valid, ctree_flatten_valid.
 Qed.
+Hint Resolve of_val_flatten_typed.
 Lemma of_val_flatten_mapped Γ Γm w v τ :
   ✓ Γ → (Γ,Γm) ⊢ w : τ → (Γ,Γm) ⊢ v : τ →
   ctree_Forall (λ xb, Some Writable ⊆ pbit_kind xb) w →
@@ -495,8 +497,7 @@ Lemma mem_insert_valid Γ Γm m a v τ :
 Proof.
   intros ??? (w&?&?) ?. assert ((Γ,Γm) ⊢ w : τ) by eauto.
   eapply cmap_alter_valid; eauto; simplify_type_equality;
-    eauto using of_val_flatten_typed, of_val_flatten_mapped,
-    ctree_Forall_not, ctree_lookup_Some.
+    eauto using of_val_flatten_mapped, ctree_Forall_not, ctree_lookup_Some.
 Qed.
 Lemma mem_insert_valid' Γ m a v τ :
   ✓ Γ → ✓{Γ} m → (Γ,'{m}) ⊢ a : Some τ → mem_writable Γ a m →
@@ -511,7 +512,7 @@ Lemma mem_lookup_insert Γ Γm m a v τ :
   (Γ,Γm) ⊢ v : τ → <[a:=v]{Γ}>m !!{Γ} a = Some (val_map (freeze true) v).
 Proof.
   unfold insertE, lookupE, mem_insert, mem_lookup. intros ??? (w&?&Hw) ??.
-  erewrite cmap_lookup_alter by eauto using of_val_flatten_typed; csimpl.
+  erewrite cmap_lookup_alter by eauto; csimpl.
   assert (ctree_Forall (λ xb, Some Readable ⊆ pbit_kind xb)
     (of_val Γ (tagged_perm <$> ctree_flatten w) v)).
   { erewrite ctree_flatten_of_val by eauto. generalize (val_flatten Γ v).
@@ -526,18 +527,14 @@ Lemma mem_lookup_insert_disjoint Γ Γm m a1 a2 v1 v2 τ2 :
 Proof.
   unfold insertE, lookupE, mem_insert, mem_lookup. intros ????? (w2&?&Hw2) ?.
   destruct (m !!{Γ} a1) as [w1|] eqn:?; simplify_equality'.
-  by erewrite cmap_lookup_alter_disjoint
-    by eauto using of_val_flatten_typed, of_val_flatten_unshared.
+  by erewrite cmap_lookup_alter_disjoint by eauto using of_val_flatten_unshared.
 Qed.
 Lemma mem_insert_commute Γ Γm m a1 a2 v1 v2 τ1 τ2 :
   ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 →
   (Γ,Γm) ⊢ a1 : Some τ1 → mem_writable Γ a1 m → (Γ,Γm) ⊢ v1 : τ1 →
   (Γ,Γm) ⊢ a2 : Some τ2 → mem_writable Γ a2 m → (Γ,Γm) ⊢ v2 : τ2 →
   <[a1:=v1]{Γ}>(<[a2:=v2]{Γ}>m) = <[a2:=v2]{Γ}>(<[a1:=v1]{Γ}>m).
-Proof.
-  intros ???? (?&?&?) ?? (?&?&?) ?.
-  eapply cmap_alter_commute; eauto using of_val_flatten_typed.
-Qed.
+Proof. intros ???? (?&?&?) ?? (?&?&?) ?. eapply cmap_alter_commute; eauto. Qed.
 Lemma mem_insert_force_commute Γ Γm m a1 a2 v1 τ1 τ2 :
   ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 →
   (Γ,Γm) ⊢ a1 : Some τ1 → mem_writable Γ a1 m → (Γ,Γm) ⊢ v1 : τ1 →
@@ -546,7 +543,7 @@ Lemma mem_insert_force_commute Γ Γm m a1 a2 v1 τ1 τ2 :
 Proof.
   unfold lookupE, mem_lookup, mem_force. intros ???? (?&?&?) ?? [??].
   destruct (m !!{Γ} a2) as [w2|] eqn:?; simplify_equality'.
-  eapply cmap_alter_commute; eauto using of_val_flatten_typed.
+  eapply cmap_alter_commute; eauto.
 Qed.
 Lemma mem_insert_writable Γ Γm m a1 a2 v2 τ2 :
   ✓ Γ → ✓{Γ,Γm} m → a1 = a2 ∨ a1 ⊥{Γ} a2 →
@@ -555,15 +552,14 @@ Lemma mem_insert_writable Γ Γm m a1 a2 v2 τ2 :
 Proof.
   intros ?? Ha ? (w2&?&Hw2) ? (w1&?&Hw1). red. unfold insertE, mem_insert.
   destruct Ha as [<-|?]; [|erewrite cmap_lookup_alter_disjoint
-    by eauto using of_val_flatten_unshared, of_val_flatten_typed; eauto].
+    by eauto using of_val_flatten_unshared; eauto].
   assert (ctree_Forall (λ xb, Some Writable ⊆ pbit_kind xb)
     (of_val Γ (tagged_perm <$> ctree_flatten w2) v2)).
   { erewrite ctree_flatten_of_val by eauto. generalize (val_flatten Γ v2).
     induction Hw2; intros [|??]; simpl; constructor; auto. }
   destruct (decide (addr_is_obj a1)).
   { erewrite cmap_lookup_alter by eauto; eauto. }
-  erewrite cmap_lookup_alter_not_obj
-    by eauto using of_val_flatten_unshared, of_val_flatten_typed.
+  erewrite cmap_lookup_alter_not_obj by eauto using of_val_flatten_unshared.
   eauto using ctree_lookup_byte_after_Forall.
 Qed.
 Lemma mem_insert_top_writable_all Γ m o2 v2 τ2 :
@@ -658,26 +654,25 @@ Proof. intros. eapply mem_alloc_val_list_valid; eauto. Qed.
 
 (** ** Locks *)
 Lemma elem_of_mem_locks m o i :
-  (o,i) ∈ mem_locks m ↔ ∃ w β, cmap_car m !! o = Some (Obj w β)
-    ∧ pbit_locked <$> ctree_flatten w !! i = Some true.
+  (o,i) ∈ mem_locks m ↔
+    match cmap_car m !! o with
+    | Some (Obj w β) => pbit_locked <$> ctree_flatten w !! i = Some true
+    | _ => False
+    end.
 Proof.
-  destruct m as [m]; simpl; split.
-  { intros (ω&Hω&?); simplify_equality'; rewrite lookup_omap in Hω.
-    destruct (m !! o) as [[|w β]|]; simplify_option_equality.
-    exists w β. by rewrite <-list_lookup_fmap, <-elem_of_of_bools. }
-  intros (w&β&?&Hi). exists (of_bools (pbit_locked <$> ctree_flatten w));
-    simpl; rewrite lookup_omap; simplify_map_equality'.
+  destruct m as [m]; unfold elem_of, lockset_elem_of; simpl; rewrite lookup_omap.
+  destruct (m !! o) as [[|w β]|]; simplify_equality'; try naive_solver; split.
+  { intros (ω&Hω&?); simplify_option_equality.
+    by rewrite <-list_lookup_fmap, <-elem_of_of_bools. }
+  intros Hi. exists (of_bools (pbit_locked <$> ctree_flatten w)).
   rewrite <-list_lookup_fmap, <-elem_of_of_bools in Hi.
   by rewrite option_guard_True by esolve_elem_of.
 Qed.
-Lemma elem_of_mem_locks_alt m o i w β :
-  cmap_car m !! o = Some (Obj w β) →
-  (o,i) ∈ mem_locks m ↔ pbit_locked <$> ctree_flatten w !! i = Some true.
-Proof. rewrite !elem_of_mem_locks. naive_solver. Qed.
 Lemma mem_locks_valid m : ✓{'{m}} (mem_locks m).
 Proof.
-  intros o i; rewrite elem_of_mem_locks; intros (w&β&?&?).
-  exists (type_of w) false. by destruct m; simplify_map_equality'.
+  intros o i; rewrite elem_of_mem_locks. unfold typed, index_typed.
+  destruct m as [m]; simpl; rewrite lookup_fmap.
+  destruct (m !! o) as [[]|]; naive_solver.
 Qed.
 Lemma mem_locks_empty : mem_locks ∅ = ∅.
 Proof. apply dsig_eq; unfold mem_locks; simpl. by rewrite omap_empty. Qed.
@@ -699,8 +694,8 @@ Lemma mem_lock_valid Γ Γm m a :
   ✓ Γ → ✓{Γ,Γm} m → mem_writable Γ a m → ✓{Γ,Γm} (mem_lock Γ a m).
 Proof.
   intros ?? (w&?&?). assert ((Γ,Γm) ⊢ ctree_map pbit_lock w : type_of w).
-  { eapply ctree_map_typed; eauto using cmap_lookup_Some,
-      pbits_lock_valid, ctree_flatten_valid; by intros [??] <-. }
+  { eapply ctree_map_typed; eauto using cmap_lookup_Some, pbits_lock_valid,
+      pbit_lock_indetified, ctree_flatten_valid, pbit_lock_mapped. }
   eapply cmap_alter_valid, ctree_Forall_not; eauto. rewrite ctree_flatten_map.
   eauto using pbits_lock_mapped, pbits_mapped, pbits_kind_weaken.
 Qed.
@@ -781,37 +776,37 @@ Proof.
   rewrite mem_unlock_memenv_of. eauto using mem_unlock_valid.
 Qed.
 Lemma elem_of_lock_singleton Γ a o i :
-  0 < ptr_bit_size_of Γ (type_of a) →
-  (o,i) ∈ lock_singleton Γ a ↔ o = addr_index a ∧
-    addr_object_offset Γ a ≤ i
+  (o,i) ∈ lock_singleton Γ a ↔
+    o = addr_index a ∧ addr_object_offset Γ a ≤ i
     < addr_object_offset Γ a + ptr_bit_size_of Γ (type_of a).
 Proof.
-  intros. assert (of_bools (replicate (addr_object_offset Γ a) false
+  destruct (decide (ptr_bit_size_of Γ (type_of a) = 0)) as [Hsz|].
+  { split; [|lia]. unfold lock_singleton.
+    destruct (decide _) as [[]|]; [|solve_elem_of].
+    rewrite Hsz; simpl; rewrite (right_id_L [] (++)).
+    apply elem_of_equiv_empty_L; intros j.
+    by rewrite elem_of_of_bools, lookup_replicate; intros []. }
+  assert (of_bools (replicate (addr_object_offset Γ a) false
     ++ replicate (ptr_bit_size_of Γ (type_of a)) true) ≠ ∅).
   { rewrite elem_of_equiv_empty_L.
     intros Hx; destruct (Hx (addr_object_offset Γ a)).
     by rewrite elem_of_of_bools,
-      lookup_app_minus_r, lookup_replicate by solve_length. }
+      lookup_app_r, lookup_replicate_2 by solve_length. }
   unfold lock_singleton; case_decide; [split|done].
   * intros (?&?&Hi); simplify_map_equality'; split; auto.
     rewrite elem_of_of_bools in Hi.
     destruct (decide (i < addr_object_offset Γ a)).
-    { by rewrite lookup_app_l, lookup_replicate in Hi by solve_length. }
-    rewrite lookup_app_minus_r in Hi by solve_length.
-    apply lookup_replicate_inv in Hi;
-      destruct Hi as [_ Hi]; revert Hi; solve_length.
+    { by rewrite lookup_app_l, lookup_replicate_2 in Hi by solve_length. }
+    rewrite lookup_app_r, lookup_replicate in Hi by solve_length.
+    destruct Hi as [_ Hi]; revert Hi; solve_length.
   * intros (->&?&?); eexists; simplify_map_equality'; split; auto.
     by rewrite elem_of_of_bools,
-      lookup_app_minus_r, lookup_replicate by solve_length.
+      lookup_app_r, lookup_replicate_2 by solve_length.
 Qed.
 Lemma elem_of_lock_singleton_typed Γ Γm a τ o i :
   ✓ Γ → (Γ,Γm) ⊢ a : Some τ → (o,i) ∈ lock_singleton Γ a ↔ o = addr_index a ∧
     addr_object_offset Γ a ≤ i < addr_object_offset Γ a + bit_size_of Γ τ.
-Proof.
-  intros. rewrite elem_of_lock_singleton by (simplify_type_equality;
-    eauto using bit_size_of_pos, addr_typed_type_valid).
-  by simplify_type_equality.
-Qed.
+Proof. intros. rewrite elem_of_lock_singleton; by simplify_type_equality. Qed.
 Lemma lock_singleton_valid Γ Γm a τ :
   ✓ Γ → (Γ,Γm) ⊢ a : Some τ → ✓{Γm} (lock_singleton Γ a).
 Proof.

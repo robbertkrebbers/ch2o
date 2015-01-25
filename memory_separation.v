@@ -1,6 +1,7 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export memory memory_map_separation values_separation.
+Require Import natmap.
 
 Section memory.
 Context `{EnvSpec Ti}.
@@ -16,6 +17,16 @@ Implicit Types Ω : lockset.
 Local Arguments union _ _ !_ !_ /.
 Hint Immediate cmap_lookup_typed val_typed_type_valid.
 Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
+
+Ltac solve_length := repeat first 
+  [ rewrite take_length | rewrite drop_length | rewrite app_length
+  | rewrite zip_with_length | rewrite replicate_length | rewrite resize_length
+  | rewrite fmap_length | erewrite ctree_flatten_length by eauto
+  | erewrite val_flatten_length by eauto | rewrite to_bools_length
+  | rewrite bit_size_of_uchar ]; lia.
+Hint Extern 0 (length _ = _) => solve_length.
+Hint Extern 0 (length _ ≤ _) => solve_length.
+Hint Extern 0 (length _ ≠ _) => solve_length.
 
 Lemma mem_lookup_subseteq Γ Γm m1 m2 a v1 :
   ✓ Γ → ✓{Γ,Γm} m1 → m1 ⊆ m2 → m1 !!{Γ} a = Some v1 → m2 !!{Γ} a = Some v1.
@@ -108,7 +119,7 @@ Proof.
   assert (ctree_Forall (not ∘ sep_unmapped) w1).
   { eapply pbits_mapped; eauto using pbits_kind_weaken. }
   eapply cmap_alter_disjoint; eauto using of_val_flatten_typed,
-    of_val_flatten_mapped, of_val_disjoint, ctree_Forall_not.
+    of_val_flatten_mapped, of_val_flatten_disjoint, ctree_Forall_not.
 Qed.
 Lemma mem_insert_disjoint_le Γ Γm m ms a v τ :
   ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
@@ -128,8 +139,51 @@ Proof.
       pbits_valid_sep_valid, ctree_flatten_valid. }
   assert (ctree_Forall (not ∘ sep_unmapped) w1).
   { eapply pbits_mapped; eauto using pbits_kind_weaken. }
-  eapply cmap_alter_union; eauto using of_val_flatten_typed,
-    of_val_flatten_mapped, of_val_disjoint, of_val_union, ctree_Forall_not.
+  eapply cmap_alter_union; eauto using of_val_flatten_typed, ctree_Forall_not,
+    of_val_flatten_mapped, of_val_flatten_disjoint, of_val_flatten_union.
+Qed.
+Lemma mem_lock_disjoint Γ Γm1 m1 m2 a1 τ1 :
+  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
+  (Γ,Γm1) ⊢ a1 : Some τ1 → mem_writable Γ a1 m1 → mem_lock Γ a1 m1 ⊥ m2.
+Proof.
+  intros ???? (w1&?&Hw1).
+  assert ((Γ,Γm1) ⊢ ctree_map pbit_lock w1 : τ1).
+  { eapply ctree_map_typed; eauto using cmap_lookup_Some, pbits_lock_valid,
+      pbit_lock_indetified, ctree_flatten_valid, pbit_lock_mapped. }
+  eapply cmap_alter_disjoint; eauto.
+  { eapply ctree_Forall_not; eauto; rewrite ctree_flatten_map.
+    apply Forall_fmap; apply (Forall_impl (not ∘ sep_unmapped));
+      eauto using pbits_mapped, pbits_kind_weaken, pbit_lock_mapped. }
+  eauto 8 using @ctree_map_disjoint, @ctree_flatten_disjoint, Forall_true,
+    pbit_lock_mapped, Forall_impl, pbit_lock_unmapped, pbits_lock_disjoint.
+Qed.
+Lemma mem_lock_disjoint_le Γ Γm m ms a τ :
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m →
+  m :: ms ⊆⊥ mem_lock Γ a m :: ms.
+Proof.
+  intros. apply sep_disjoint_cons_le_inj; intros m'.
+  rewrite !sep_disjoint_list_double, !(symmetry_iff _ m').
+  eauto using mem_lock_disjoint.
+Qed.
+Lemma mem_lock_union Γ Γm1 m1 m2 a1 τ1 :
+  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
+  (Γ,Γm1) ⊢ a1 : Some τ1 → mem_writable Γ a1 m1 →
+  mem_lock Γ a1 (m1 ∪ m2) = mem_lock Γ a1 m1 ∪ m2.
+Proof.
+  intros ???? (w1&?&Hw1).
+  assert ((Γ,Γm1) ⊢ ctree_map pbit_lock w1 : τ1).
+  { eapply ctree_map_typed; eauto using cmap_lookup_Some, pbits_lock_valid,
+      pbit_lock_indetified, ctree_flatten_valid, pbit_lock_mapped. }
+  eapply cmap_alter_union; eauto.
+  * eapply ctree_Forall_not; eauto; rewrite ctree_flatten_map.
+    apply Forall_fmap; apply (Forall_impl (not ∘ sep_unmapped));
+      eauto using pbits_mapped, pbits_kind_weaken, pbit_lock_mapped.
+  * eauto 8 using @ctree_map_disjoint, @ctree_flatten_disjoint, Forall_true,
+      pbit_lock_mapped, Forall_impl, pbit_lock_unmapped, pbits_lock_disjoint.
+  * intros w2 Hw; apply ctree_map_union;
+      eauto using pbits_lock_disjoint, @ctree_flatten_disjoint.
+    apply ctree_flatten_disjoint in Hw.
+    elim Hw; intros; f_equal'; auto; apply pbit_lock_union.
 Qed.
 Lemma mem_locks_union m1 m2 :
   m1 ⊥ m2 → mem_locks (m1 ∪ m2) = mem_locks m1 ∪ mem_locks m2.
@@ -156,5 +210,79 @@ Lemma mem_locks_subseteq m1 m2 : m1 ⊆ m2 → mem_locks m1 ⊆ mem_locks m2.
 Proof.
   rewrite !sep_subseteq_spec'; intros (m3&->&?).
   rewrite mem_locks_union by done. esolve_elem_of.
+Qed.
+Lemma ctree_unlock_disjoint w1 w2 βs :
+  w1 ⊥ w2 → βs =.>* pbit_locked <$> ctree_flatten w1 →
+  ctree_merge true pbit_unlock_if w1 βs ⊥ w2.
+Proof.
+  intros Hw Hβs. apply ctree_merge_disjoint; auto.
+  * list.solve_length.
+  * rewrite Forall2_fmap_r in Hβs.
+    cut (Forall sep_valid (ctree_flatten w1));
+      eauto using @ctree_valid_Forall, @ctree_disjoint_valid_l.
+    induction Hβs as [|[] ?]; intros;
+      decompose_Forall_hyps; auto using pbit_unlock_mapped.
+  * rewrite Forall2_fmap_r in Hβs.
+    induction Hβs as [|[] ?];
+      constructor; csimpl; auto using pbit_unlock_unmapped.
+  * eauto using pbits_unlock_disjoint, @ctree_flatten_disjoint.
+Qed.
+Lemma mem_unlock_disjoint m1 m2 Ω :
+  m1 ⊥ m2 → Ω ⊆ mem_locks m1 → mem_unlock Ω m1 ⊥ m2.
+Proof.
+  intros Hm HΩm'.
+  pose proof (λ o, mem_locks_subseteq_inv _ _ o HΩm') as HΩm; clear HΩm'.
+  destruct m1 as [m1], m2 as [m2], Ω as [Ω ?]; intros o; simpl in *.
+  specialize (Hm o); specialize (HΩm o). rewrite !lookup_merge by done.
+  destruct (m1 !! o) as [[|w1 β1]|], (m2 !! o) as [[|w2 β2]|],
+   (Ω !! o) as [ω|]; simplify_equality'; rewrite ?ctree_flatten_merge; try done.
+  { intuition eauto using ctree_unlock_disjoint, pbits_unlock_empty_inv,
+      to_bools_length, @ctree_disjoint_valid_l, @ctree_valid_Forall. }
+  assert (Forall sep_valid (ctree_flatten w1))
+    by intuition eauto using @ctree_disjoint_valid_l, @ctree_valid_Forall.
+  intuition eauto using ctree_unlock_disjoint,
+    pbits_unlock_empty_inv, to_bools_length.
+  apply ctree_merge_valid; auto using to_bools_length, pbits_unlock_sep_valid.
+  apply Forall2_lookup_2; auto using to_bools_length.
+  intros ?? [] ??; decompose_Forall_hyps; eauto using pbit_unlock_mapped.
+Qed.
+Lemma mem_unlock_disjoint_le m ms Ω :
+  Ω ⊆ mem_locks m → m :: ms ⊆⊥ mem_unlock Ω m :: ms.
+Proof.
+  intros. apply sep_disjoint_cons_le_inj; intros m'.
+  rewrite !sep_disjoint_list_double, !(symmetry_iff _ m').
+  eauto using mem_unlock_disjoint.
+Qed.
+Lemma ctree_unlock_union w1 w2 βs :
+  w1 ⊥ w2 → βs =.>* pbit_locked <$> ctree_flatten w1 →
+  ctree_merge true pbit_unlock_if (w1 ∪ w2) βs =
+    ctree_merge true pbit_unlock_if w1 βs ∪ w2.
+Proof.
+  intros. apply ctree_merge_union; eauto using pbits_unlock_disjoint,
+    pbits_unlock_union, @ctree_flatten_disjoint; list.solve_length.
+Qed.
+Lemma mem_unlock_union m1 m2 Ω :
+  m1 ⊥ m2 → Ω ⊆ mem_locks m1 →
+  mem_unlock Ω (m1 ∪ m2) = mem_unlock Ω m1 ∪ m2.
+Proof.
+  intros Hm HΩm'.
+  pose proof (λ o, mem_locks_subseteq_inv _ _ o HΩm') as HΩm; clear HΩm'.
+  destruct m1 as [m1], m2 as [m2], Ω as [Ω ?]; sep_unfold; f_equal'.
+  apply map_eq; intros o; simpl in *; specialize (Hm o); specialize (HΩm o).
+  rewrite lookup_merge, !lookup_union_with, lookup_merge by done.
+  destruct (m1 !! o) as [[|w1 β1]|], (m2 !! o) as [[|w2 β2]|],
+    (Ω !! o) as [ω|]; do 2 f_equal'; try done.
+  rewrite ctree_flatten_union, zip_with_length_l_eq
+    by naive_solver eauto using Forall2_length, @ctree_flatten_disjoint.
+  intuition auto using ctree_unlock_union.
+Qed.
+Lemma mem_unlock_all_union m1 m2 :
+  m1 ⊥ m2 → mem_unlock_all (m1 ∪ m2) = mem_unlock_all m1 ∪ mem_unlock_all m2.
+Proof.
+  intros. assert (m1 ⊥ mem_unlock_all m2).
+  { symmetry. by apply mem_unlock_disjoint. }
+  by rewrite mem_locks_union, mem_unlock_union_locks, sep_commutative',
+    mem_unlock_union, sep_commutative', mem_unlock_union
+    by auto using mem_unlock_disjoint.
 Qed.
 End memory.

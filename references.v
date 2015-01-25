@@ -450,10 +450,8 @@ Proof.
     + simplify_list_equality. by left.
     + rewrite fmap_app in Hr''. by discriminate_list_equality.
     + rewrite fmap_app in Hr''. by discriminate_list_equality.
-    + rewrite !(associative_L (++)) in Hr1, Hr2.
-      rewrite !fmap_app in Hr''; simplify_list_equality.
-      right. split; auto. rewrite <-!(associative_L (++)).
-      apply ref_disjoint_app. by constructor.
+    + simplify_list_equality.
+      right; split. by apply ref_disjoint_app; constructor. done.
   * intros [?|[? Hr]].
     + rewrite ref_disjoint_alt. naive_solver.
     + by apply ref_disjoint_here_app_1; f_equal'.
@@ -461,14 +459,14 @@ Qed.
 Lemma ref_disjoint_singleton rs1 rs2 : [rs1] ⊥ [rs2] ↔ rs1 ⊥ rs2.
 Proof.
   rewrite ref_disjoint_alt. split.
-  * by intros ([]&?&?&[]&?&?&?&?&?&?); simplify_list_equality;
-      try discriminate_list_equality.
+  * by intros ([]&?&?&[]&?&?&?&?&?&?);
+      simplify_list_equality; try discriminate_list_equality.
   * intros. by eexists [], rs1, [], [], rs2, [].
 Qed.
 Lemma ref_disjoint_nil_inv_l r : ¬[] ⊥ r.
 Proof.
-  rewrite ref_disjoint_alt. intros (?&?&?&?&?&?&?&_); simplify_list_equality;
-    discriminate_list_equality.
+  rewrite ref_disjoint_alt. intros (?&?&?&?&?&?&?&_);
+    simplify_list_equality; discriminate_list_equality.
 Qed.
 Lemma ref_disjoint_nil_inv_r r : ¬r ⊥ [].
 Proof. intros ?. by apply (ref_disjoint_nil_inv_l r). Qed.
@@ -477,10 +475,7 @@ Proof. by inversion 1. Qed.
 Lemma ref_disjoint_app_inv_l r1 r2 : ¬r1 ++ r2 ⊥ r2.
 Proof.
   rewrite ref_disjoint_alt. intros (r1'&rs1&r1''&r2'&rs2&r2''&Hr&->&Hrs&Hr').
-  destruct (irreflexivity (⊥) rs1). rewrite !(associative_L (++)) in Hr.
-  apply app_injective_2 in Hr;
-    [|by rewrite <-(fmap_length (freeze true) r1''), Hr', fmap_length].
-  by destruct Hr; simplify_list_equality.
+  simplify_list_equality. by destruct (irreflexivity (⊥) rs1).
 Qed.
 Lemma ref_disjoint_app_inv_r r1 r2 : ¬r2 ⊥ r1 ++ r2.
 Proof. intros ?. by destruct (ref_disjoint_app_inv_l r1 r2). Qed.

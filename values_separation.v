@@ -13,7 +13,7 @@ Implicit Types w : mtree Ti.
 Implicit Types v : val Ti.
 Implicit Types vs : list (val Ti).
 
-Hint Resolve Forall_take Forall_drop Forall_app_2
+Hint Resolve Forall2_take Forall2_drop Forall_take Forall_drop Forall_app_2
   Forall_replicate Forall_resize.
 Hint Immediate env_valid_lookup env_valid_lookup_lookup.
 Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
@@ -25,6 +25,7 @@ Ltac solve_length := repeat first
   | erewrite ctree_flatten_length by eauto|erewrite val_flatten_length by eauto
   | rewrite zip_with_length | erewrite base_val_flatten_length by eauto
   | match goal with
+    | H : Forall2 _ _ _ |- _ => apply Forall2_length in H
     | |- context [ bit_size_of ?Γ ?τ ] =>
       match goal with
       | H : Γ !! ?s = Some ?τs, H2 : ?τs !! _ = Some τ |- _ =>
@@ -38,6 +39,7 @@ Ltac solve_length := repeat first
       end
     end]; lia.
 Hint Extern 0 (length _ = _) => solve_length.
+Hint Extern 0 (length _ ≠ _) => solve_length.
 
 Lemma to_val_subseteq Γ Γm w1 w2 τ :
   ✓ Γ → (Γ,Γm) ⊢ w1 : τ → w1 ⊆ w2 →
@@ -62,7 +64,7 @@ Proof.
       by eauto using bit_size_of_ne_0, TCompound_valid.
     destruct Hxs; decompose_Forall_hyps.
 Qed.
-Lemma of_val_disjoint Γ Γm w1 w2 v τ :
+Lemma of_val_flatten_disjoint Γ Γm w1 w2 v τ :
   ✓ Γ → (Γ,Γm) ⊢ w1 : τ → ctree_unshared w1 →
   ctree_Forall (not ∘ sep_unmapped) w1 → (Γ,Γm) ⊢ v : τ → w1 ⊥ w2 →
   of_val Γ (tagged_perm <$> ctree_flatten w1) v ⊥ w2.
@@ -80,7 +82,7 @@ Proof.
   symmetry; erewrite ctree_flatten_of_val by eauto.
   eauto using PBits_perm_disjoint, @ctree_flatten_disjoint.
 Qed.
-Lemma of_val_union_help Γ Γm xs1 xs2 v τ :
+Lemma ctree_merge_union_of_val Γ Γm xs1 xs2 v τ :
   ✓ Γ → (Γ,Γm) ⊢ v : τ →
   Forall sep_valid xs1 → Forall (not ∘ sep_unmapped) xs1 →
   length xs1 = bit_size_of Γ τ → of_val Γ (xs1 ∪* xs2) v
@@ -88,7 +90,7 @@ Lemma of_val_union_help Γ Γm xs1 xs2 v τ :
 Proof.
   intros HΓ Hv. revert v τ Hv xs1 xs2.
   refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
-  * intros; f_equal; auto using PBits_union.
+  * intros; f_equal; auto using PBits_BIndet_union_r.
   * intros vs τ Hvs IH _ xs1 xs2 Hxs1 Hxs1'. rewrite bit_size_of_array.
     intros Hlen; f_equal. revert xs1 xs2 Hxs1 Hxs1' Hlen.
     induction IH; intros; decompose_Forall_hyps; simplify_type_equality; auto.
@@ -107,9 +109,9 @@ Proof.
   * intros s i τs v τ ??? IH xs1 xs2 ???; simplify_type_equality'.
     by erewrite zip_with_take, zip_with_drop, <-fmap_take, <-fmap_drop, IH,
       ctree_flatten_length, PBits_BIndet_union by eauto using of_val_typed.
-  * intros; f_equal; auto using PBits_union.
+  * intros; f_equal; auto using PBits_BIndet_union_r.
 Qed.
-Lemma of_val_union Γ Γm w1 w2 v τ :
+Lemma of_val_flatten_union Γ Γm w1 w2 v τ :
   ✓ Γ → (Γ,Γm) ⊢ w1 : τ → ctree_unshared w1 →
   ctree_Forall (not ∘ sep_unmapped) w1 → (Γ,Γm) ⊢ v : τ → w1 ⊥ w2 →
   of_val Γ (tagged_perm <$> ctree_flatten (w1 ∪ w2)) v
@@ -121,7 +123,8 @@ Proof.
   { apply pbits_perm_mapped; eauto using
       Forall_impl, ctree_flatten_valid, pbit_valid_sep_valid. }
   rewrite ctree_flatten_union, pbits_perm_union by done.
-  by erewrite of_val_union_help, PBits_BIndet_tag, ctree_merge_flatten
-    by eauto using of_val_disjoint, pbits_valid_perm_valid, ctree_flatten_valid.
+  by erewrite ctree_merge_union_of_val, PBits_BIndet_tag, ctree_merge_flatten
+    by eauto using of_val_flatten_disjoint,
+    pbits_valid_perm_valid, ctree_flatten_valid.
 Qed.
 End values.

@@ -393,6 +393,8 @@ Proof.
   * by rewrite lookup_fmap, !lookup_insert.
   * by rewrite lookup_fmap, !lookup_insert_ne, lookup_fmap by done.
 Qed.
+Lemma insert_empty {A} i (x : A) : <[i:=x]>∅ = {[i,x]}.
+Proof. done. Qed.
 
 (** ** Properties of the singleton maps *)
 Lemma lookup_singleton_Some {A} i j (x y : A) :
@@ -637,17 +639,9 @@ Qed.
 End map_Forall.
 
 (** ** Properties of the [merge] operation *)
-Lemma merge_Some {A B C} (f : option A → option B → option C)
-    `{!PropHolds (f None None = None)} m1 m2 m :
-  (∀ i, m !! i = f (m1 !! i) (m2 !! i)) ↔ merge f m1 m2 = m.
-Proof.
-  split; [|intros <-; apply (lookup_merge _) ].
-  intros Hlookup. apply map_eq; intros. rewrite Hlookup. apply (lookup_merge _).
-Qed.
-
 Section merge.
 Context {A} (f : option A → option A → option A).
-
+Context `{!PropHolds (f None None = None)}.
 Global Instance: LeftId (=) None f → LeftId (=) ∅ (merge f).
 Proof.
   intros ??. apply map_eq. intros.
@@ -658,9 +652,6 @@ Proof.
   intros ??. apply map_eq. intros.
   by rewrite !(lookup_merge f), lookup_empty, (right_id_L None f).
 Qed.
-
-Context `{!PropHolds (f None None = None)}.
-
 Lemma merge_commutative m1 m2 :
   (∀ i, f (m1 !! i) (m2 !! i) = f (m2 !! i) (m1 !! i)) →
   merge f m1 m2 = merge f m2 m1.
@@ -683,8 +674,20 @@ Lemma merge_idempotent m1 :
 Proof. intros. apply map_eq. intros. by rewrite !(lookup_merge f). Qed.
 Global Instance: Idempotent (=) f → Idempotent (=) (merge f).
 Proof. intros ??. apply merge_idempotent. intros. by apply (idempotent f). Qed.
+End merge.
 
-Lemma partial_alter_merge (g g1 g2 : option A → option A) m1 m2 i :
+Section more_merge.
+Context {A B C} (f : option A → option B → option C).
+Context `{!PropHolds (f None None = None)}.
+Lemma merge_Some m1 m2 m :
+  (∀ i, m !! i = f (m1 !! i) (m2 !! i)) ↔ merge f m1 m2 = m.
+Proof.
+  split; [|intros <-; apply (lookup_merge _) ].
+  intros Hlookup. apply map_eq; intros. rewrite Hlookup. apply (lookup_merge _).
+Qed.
+Lemma merge_empty : merge f ∅ ∅ = ∅.
+Proof. apply map_eq. intros. by rewrite !(lookup_merge f), !lookup_empty. Qed.
+Lemma partial_alter_merge g g1 g2 m1 m2 i :
   g (f (m1 !! i) (m2 !! i)) = f (g1 (m1 !! i)) (g2 (m2 !! i)) →
   partial_alter g i (merge f m1 m2) =
     merge f (partial_alter g1 i m1) (partial_alter g2 i m2).
@@ -693,7 +696,7 @@ Proof.
   * by rewrite (lookup_merge _), !lookup_partial_alter, !(lookup_merge _).
   * by rewrite (lookup_merge _), !lookup_partial_alter_ne, (lookup_merge _).
 Qed.
-Lemma partial_alter_merge_l (g g1 : option A → option A) m1 m2 i :
+Lemma partial_alter_merge_l g g1 m1 m2 i :
   g (f (m1 !! i) (m2 !! i)) = f (g1 (m1 !! i)) (m2 !! i) →
   partial_alter g i (merge f m1 m2) = merge f (partial_alter g1 i m1) m2.
 Proof.
@@ -701,7 +704,7 @@ Proof.
   * by rewrite (lookup_merge _), !lookup_partial_alter, !(lookup_merge _).
   * by rewrite (lookup_merge _), !lookup_partial_alter_ne, (lookup_merge _).
 Qed.
-Lemma partial_alter_merge_r (g g2 : option A → option A) m1 m2 i :
+Lemma partial_alter_merge_r g g2 m1 m2 i :
   g (f (m1 !! i) (m2 !! i)) = f (m1 !! i) (g2 (m2 !! i)) →
   partial_alter g i (merge f m1 m2) = merge f m1 (partial_alter g2 i m2).
 Proof.
@@ -709,22 +712,25 @@ Proof.
   * by rewrite (lookup_merge _), !lookup_partial_alter, !(lookup_merge _).
   * by rewrite (lookup_merge _), !lookup_partial_alter_ne, (lookup_merge _).
 Qed.
-
-Lemma insert_merge_l m1 m2 i x :
-  f (Some x) (m2 !! i) = Some x →
-  <[i:=x]>(merge f m1 m2) = merge f (<[i:=x]>m1) m2.
+Lemma insert_merge m1 m2 i x y z :
+  f (Some y) (Some z) = Some x →
+  <[i:=x]>(merge f m1 m2) = merge f (<[i:=y]>m1) (<[i:=z]>m2).
+Proof. by intros; apply partial_alter_merge. Qed.
+Lemma merge_singleton i x y z :
+  f (Some y) (Some z) = Some x → merge f {[i,y]} {[i,z]} = {[i,x]}.
 Proof.
-  intros. unfold insert, map_insert, alter, map_alter.
-  by apply partial_alter_merge_l.
+  intros. unfold singleton, map_singleton; simpl.
+  by erewrite <-insert_merge, merge_empty by eauto.
 Qed.
-Lemma insert_merge_r m1 m2 i x :
-  f (m1 !! i) (Some x) = Some x →
-  <[i:=x]>(merge f m1 m2) = merge f m1 (<[i:=x]>m2).
-Proof.
-  intros. unfold insert, map_insert, alter, map_alter.
-  by apply partial_alter_merge_r.
-Qed.
-End merge.
+Lemma insert_merge_l m1 m2 i x y :
+  f (Some y) (m2 !! i) = Some x →
+  <[i:=x]>(merge f m1 m2) = merge f (<[i:=y]>m1) m2.
+Proof. by intros; apply partial_alter_merge_l. Qed.
+Lemma insert_merge_r m1 m2 i x z :
+  f (m1 !! i) (Some z) = Some x →
+  <[i:=x]>(merge f m1 m2) = merge f m1 (<[i:=z]>m2).
+Proof. by intros; apply partial_alter_merge_r. Qed.
+End more_merge.
 
 (** ** Properties on the [map_Forall2] relation *)
 Section Forall2.
@@ -905,21 +911,21 @@ Lemma foldr_delete_union_with (m1 m2 : M A) is :
   foldr delete (union_with f m1 m2) is =
     union_with f (foldr delete m1 is) (foldr delete m2 is).
 Proof. induction is; simpl. done. by rewrite IHis, delete_union_with. Qed.
-Lemma insert_union_with m1 m2 i x :
-  (∀ x, f x x = Some x) →
-  <[i:=x]>(union_with f m1 m2) = union_with f (<[i:=x]>m1) (<[i:=x]>m2).
-Proof. intros. apply (partial_alter_merge _). simpl. auto. Qed.
+Lemma insert_union_with m1 m2 i x y z :
+  f x y = Some z →
+  <[i:=z]>(union_with f m1 m2) = union_with f (<[i:=x]>m1) (<[i:=y]>m2).
+Proof. by intros; apply (partial_alter_merge _). Qed.
 Lemma insert_union_with_l m1 m2 i x :
   m2 !! i = None → <[i:=x]>(union_with f m1 m2) = union_with f (<[i:=x]>m1) m2.
 Proof.
   intros Hm2. unfold union_with, map_union_with.
-  rewrite (insert_merge_l _). done. by rewrite Hm2.
+  by erewrite (insert_merge_l _) by (by rewrite Hm2).
 Qed.
 Lemma insert_union_with_r m1 m2 i x :
   m1 !! i = None → <[i:=x]>(union_with f m1 m2) = union_with f m1 (<[i:=x]>m2).
 Proof.
   intros Hm1. unfold union_with, map_union_with.
-  rewrite (insert_merge_r _). done. by rewrite Hm1.
+  by erewrite (insert_merge_r _) by (by rewrite Hm1).
 Qed.
 End union_with.
 
@@ -1360,6 +1366,7 @@ Tactic Notation "simpl_map" "by" tactic3(tac) := repeat
   | H : context[ {[ _ ]} !! _ ] |- _ =>
     rewrite lookup_singleton in H || rewrite lookup_singleton_ne in H by tac
   | H : context[ (_ <$> _) !! _ ] |- _ => rewrite lookup_fmap in H
+  | H : context[ (omap _ _) !! _ ] |- _ => rewrite lookup_omap in H
   | H : context[ lookup (A:=?A) ?i (?m1 ∪ ?m2) ] |- _ =>
     let x := fresh in evar (x:A);
     let x' := eval unfold x in x in clear x;
@@ -1376,6 +1383,7 @@ Tactic Notation "simpl_map" "by" tactic3(tac) := repeat
   | |- context[ {[ _ ]} !! _ ] =>
     rewrite lookup_singleton || rewrite lookup_singleton_ne by tac
   | |- context[ (_ <$> _) !! _ ] => rewrite lookup_fmap
+  | |- context[ (omap _ _) !! _ ] => rewrite lookup_omap
   | |- context [ lookup (A:=?A) ?i ?m ] =>
     let x := fresh in evar (x:A);
     let x' := eval unfold x in x in clear x;

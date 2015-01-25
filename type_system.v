@@ -620,8 +620,8 @@ Lemma ectx_item_subst_typed_rev Γ Γf Γm τs Ei e σlr :
   (Γ,Γf,Γm,τs) ⊢ subst Ei e : σlr → ∃ τlr,
     (Γ,Γf,Γm,τs) ⊢ e : τlr ∧ (Γ,Γf,Γm,τs) ⊢ Ei : τlr ↣ σlr.
 Proof.
-  intros He. destruct Ei; simpl; typed_inversion He;
-    decompose_Forall_hyps; eexists; split_ands; repeat typed_constructor; eauto.
+  intros He. destruct Ei; typed_inversion He;
+    list_simplifier; eexists; split_ands; repeat typed_constructor; eauto.
 Qed.
 Lemma ectx_subst_typed_rev Γ Γf Γm τs E e σlr :
   (Γ,Γf,Γm,τs) ⊢ subst E e : σlr → ∃ τlr,

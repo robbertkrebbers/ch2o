@@ -71,10 +71,10 @@ Tactic Notation "simplify_subst_equality" hyp(H) :=
     is_var a; let ssub := constr:(_ : DestructSubst sub) in
     destruct a; first [discriminate H | injection' H]
   end;
-  simplify_list_equality.
+  list_simplifier.
 Tactic Notation "simplify_subst_equality" :=
   repeat_on_hyps (fun H => simplify_subst_equality H);
-  simplify_list_equality.
+  list_simplifier.
 
 (** The tactic [simplify_list_subst_equality] behaves like the previous tactic,
 but then for the case of lists as contexts. *)
@@ -93,4 +93,4 @@ Tactic Notation "simplify_list_subst_equality" hyp(H) :=
   end.
 Tactic Notation "simplify_list_subst_equality" :=
   repeat_on_hyps (fun H => simplify_list_subst_equality H);
-  simplify_list_equality.
+  list_simplifier.

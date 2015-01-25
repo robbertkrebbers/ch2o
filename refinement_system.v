@@ -534,7 +534,7 @@ Lemma ectx_item_subst_refine_inv_r Γ Γf α f Γm1 Γm2 τs e1 Ei2 e2 τlr' :
     Ei1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} Ei2 : τlr ↣ τlr' ∧
     e1' ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : τlr.
 Proof.
-  intros He; destruct Ei2; refine_inversion He; decompose_Forall_hyps;
+  intros He; destruct Ei2; refine_inversion He; list_simplifier;
     try match goal with
     | H : ?E ⊑{_,_,_@_↦_}* reverse _ :* _ |- _ =>
        rewrite <-(reverse_involutive E) in H

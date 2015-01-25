@@ -87,14 +87,13 @@ Definition MUnion' {Ti A : Set} `{SeparationOps A}
     (s : tag) (i : nat) (w : ctree Ti A) (xs : list A) : ctree Ti A :=
   if decide (ctree_unmapped w ∧ Forall sep_unmapped xs)
   then MUnionAll s (ctree_flatten w ++ xs) else MUnion s i w xs.
-Definition ctree_map {Ti A B : Set} `{SeparationOps B}
-    (f : A → B) : ctree Ti A → ctree Ti B :=
+Definition ctree_map {Ti A B : Set} (f : A → B) : ctree Ti A → ctree Ti B :=
   fix go w :=
   match w with
   | MBase τb xs => MBase τb (f <$> xs)
   | MArray τ ws => MArray τ (go <$> ws)
   | MStruct s wxss => MStruct s (prod_map go (fmap (M:=list) f) <$> wxss)
-  | MUnion s i w xs => MUnion' s i (go w) (f <$> xs)
+  | MUnion s i w xs => MUnion s i (go w) (f <$> xs)
   | MUnionAll s xs => MUnionAll s (f <$> xs)
   end.
 Definition ctree_merge_array {Ti A B C : Set}
@@ -398,24 +397,19 @@ Local Arguments union _ _ !_ !_ /.
 Local Arguments difference _ _ !_ !_ /.
 Local Arguments half _ _ !_ /.
 
-Hint Resolve Forall_app_2.
-Hint Resolve Forall2_app.
-Hint Immediate seps_disjoint_ll seps_disjoint_lr : simplifier.
-Hint Immediate seps_disjoint_rl seps_disjoint_rr : simplifier.
-Hint Immediate seps_disjoint_move_r seps_disjoint_move_l : simplifier.
-Hint Resolve (Forall2_length ((⊥) : relation A)) : simplifier.
-Hint Rewrite <-(associative_L ((++) : list A → list A → list A)) : simplifier.
-Hint Rewrite @take_app_alt @drop_app_alt
-  @zip_with_app using by eauto with simplifier : simplifier.
+Hint Resolve Forall_app_2 Forall2_app.
+Hint Immediate seps_disjoint_lr seps_disjoint_ll.
+Hint Immediate seps_disjoint_rl seps_disjoint_rr.
+
 Ltac simplifier :=
   repeat match goal with
-  | |- _ => progress decompose_Forall_hyps
+  | |- _ => progress list_simplifier
   | |- _ => progress autorewrite with simplifier
   | |- _ => progress autorewrite with simplifier in *
-  | H : ?zs ∪* ?xs = ?zs ∪* _ |- _ => apply seps_cancel_l in H;
-      [subst xs|by eauto with simplifier|by eauto with simplifier]
-  | H : ?xs ∪* ?zs = _ ∪* ?zs |- _ => apply seps_cancel_r in H;
-      [subst xs|by eauto with simplifier|by eauto with simplifier]
+  | H : ?zs ∪* ?xs = ?zs ∪* _ |- _ =>
+     apply seps_cancel_l in H; [subst xs|by eauto|by eauto]
+  | H : ?xs ∪* ?zs = _ ∪* ?zs |- _ =>
+     apply seps_cancel_r in H; [subst xs|by eauto|by eauto]
   end.
 
 Lemma ctree_valid_Forall w : ctree_valid w → ctree_Forall sep_valid w.
@@ -423,20 +417,48 @@ Proof.
   induction 1 as [|? ws ? IH|? ws ? IH| |]
     using @ctree_valid_ind_alt; simpl; auto; induction IH; simplifier; auto.
 Qed.
-Lemma ctree_flatten_merge {B C : Set} `{SeparationOps C}
-    (f : A → B → C) unchecked w ys :
-  ctree_flatten (ctree_merge unchecked f w ys)= zip_with f (ctree_flatten w) ys.
+Hint Immediate ctree_valid_Forall.
+
+Section merge.
+Context {B C : Set} `{SeparationOps C}.
+Lemma ctree_flatten_merge (f : A → B → C) uncheckd w ys :
+  ctree_flatten (ctree_merge uncheckd f w ys) = zip_with f (ctree_flatten w) ys.
 Proof.
   revert w ys. refine (ctree_ind_alt _ _ _ _ _ _); simpl.
   * done.
   * induction 2; csimpl; intros; rewrite ?zip_with_app_l; f_equal'; auto.
-  * induction 2 as [|[]]; csimpl in *; intros;
+  * induction 2 as [|[]]; intros; simplifier;
       rewrite <-?(associative_L (++)), ?zip_with_app_l; repeat f_equal; auto.
-  * intros. unfold MUnion'; destruct unchecked; repeat case_decide;
+  * intros. unfold MUnion'; destruct uncheckd; repeat case_decide;
       rewrite zip_with_app_l; f_equal'; auto.
   * done.
 Qed.
+Lemma ctree_merge_valid (f : A → B → C) (unchecked : bool) w ys :
+  ctree_valid w → length (ctree_flatten w) = length ys →
+  Forall2 (λ x y, unchecked →
+    sep_unmapped (f x y) → sep_unmapped x) (ctree_flatten w) ys →
+  Forall sep_valid (zip_with f (ctree_flatten w) ys) →
+  ctree_valid (ctree_merge unchecked f w ys).
+Proof.
+  intros Hw. rewrite <-Forall2_same_length. revert w Hw ys.
+  assert (∀ xs ys, unchecked →
+    Forall2 (λ x y, unchecked → sep_unmapped (f x y) → sep_unmapped x) xs ys →
+    Forall sep_unmapped (zip_with f xs ys) → Forall sep_unmapped xs).
+  { induction 2; intros; simplifier; constructor; auto. }
+  refine (ctree_valid_ind_alt _ _ _ _ _ _); simpl.
+  * by constructor.
+  * intros τ ws _ IH ys Hys Hys' Hys''; constructor; revert ys Hys Hys' Hys''.
+    induction IH; intros; simplifier; auto.
+  * intros s ? _ IH ? ys Hys Hys' Hys''; constructor; revert ys Hys Hys' Hys'';
+      induction IH as [|[]]; intros; simplifier; constructor; simpl; eauto.
+  * intros s i w xs ? IH ? Hun ys Hys Hys' Hys''; simplifier.
+    unfold MUnion'; repeat case_match; constructor; eauto;
+      rewrite ctree_flatten_merge; intuition eauto 10.
+  * by constructor.
+Qed.
+End merge.
 Hint Rewrite @ctree_flatten_merge : simplifier.
+
 Lemma ctree_flatten_disjoint w1 w2 :
   w1 ⊥ w2 → ctree_flatten w1 ⊥* ctree_flatten w2.
 Proof.
@@ -444,7 +466,12 @@ Proof.
     simpl; auto 2 using Forall2_bind.
   intros _ wxss1 wxss2 _ IH ?. induction IH; simplifier; auto.
 Qed.
-Hint Resolve ctree_flatten_disjoint : simplifier.
+Ltac list.solve_length ::=
+  repeat rewrite app_length;
+  repeat match goal with
+  | H : _ ⊥ _ |- _ => apply ctree_flatten_disjoint in H
+  | H : Forall2 _ _ _ |- _ => apply Forall2_length in H
+  end; assumption || congruence.
 Lemma ctree_flatten_union w1 w2 :
   w1 ⊥ w2 → ctree_flatten (w1 ∪ w2) = ctree_flatten w1 ∪* ctree_flatten w2.
 Proof.
@@ -462,7 +489,232 @@ Proof.
   intros ?. rewrite ctree_flatten_union by done.
   eauto using seps_disjoint_lr, ctree_flatten_disjoint.
 Qed.
-Hint Immediate ctree_flatten_disjoint_l : simplifier.
+Global Instance ctree_symmetric : Symmetric (@disjoint (ctree Ti A) _).
+Proof.
+  induction 1 using @ctree_disjoint_ind_alt; constructor;
+    done || apply Forall2_flip; eauto using Forall2_impl.
+Qed.
+Lemma ctree_disjoint_valid_l w1 w2 : w1 ⊥ w2 → ctree_valid w1.
+Proof.
+  induction 1 as [|τ ws1 ws2 _ IH|s wxss1 wxss2 _ IH Hwxss| | | |]
+    using @ctree_disjoint_ind_alt; simplifier;
+    constructor; eauto using seps_disjoint_valid_l.
+  * induction IH; auto.
+  * clear Hwxss. induction IH; auto.
+  * clear IH. induction Hwxss; eauto using seps_disjoint_valid_l.
+Qed.
+Lemma ctree_disjoint_valid_r w1 w2 : w1 ⊥ w2 → ctree_valid w2.
+Proof. intros. by apply ctree_disjoint_valid_l with w1. Qed.
+Lemma ctree_disjoint_difference w1 w2 : w1 ⊆ w2 → w1 ⊥ w2 ∖ w1.
+Proof.
+  revert w1 w2. refine (ctree_subseteq_ind_alt _ _ _ _ _ _ _); simpl.
+  * constructor; auto using seps_disjoint_difference.
+  * intros τ ws1 ws2 _ IH; constructor. induction IH; simpl; auto.
+  * intros s wxss1 wxss2 _ IH Hwxss; constructor.
+    + clear Hwxss. induction IH; simpl; auto.
+    + clear IH. induction Hwxss as [|[] []]; constructor;
+        simpl; auto using seps_disjoint_difference.
+  * intros; unfold MUnion'; case_decide; constructor;
+      intuition eauto using seps_disjoint_difference,
+      ctree_disjoint_valid_l, ctree_flatten_disjoint.
+  * constructor; auto using seps_disjoint_difference.
+  * intros s i xs1 w2 xs2 ????; unfold MUnion'; case_decide;
+      constructor; simplifier; auto using seps_disjoint_difference.
+    apply ctree_merge_valid;
+      eauto using seps_difference_valid, Forall2_length, eq_sym.
+    by apply Forall2_true; eauto using Forall2_length, eq_sym.
+Qed.
+Ltac list.solve_length ::=
+  rewrite ?ctree_flatten_union by done;
+  repeat match goal with
+  | H : ?w1 ⊆ ?w2 |- _ =>
+    unless (w1 ⊥ w2 ∖ w1) by assumption;
+    assert (w1 ⊥ w2 ∖ w1) by (by apply ctree_disjoint_difference)
+  | H : ?xs1 ⊆* ?xs2 |- _ =>
+    unless (xs1 ⊥* xs2 ∖* xs1) by assumption;
+    assert (xs1 ⊥* xs2 ∖* xs1) by (by apply seps_disjoint_difference)
+  end;
+  repeat match goal with
+  | H : _ ⊥* _ |- _ => apply ctree_flatten_disjoint_l in H; [|done]
+  | H : _ ⊥* _ |- _ => apply seps_disjoint_lr in H; [|done]
+  | H : _ ⊥* _ |- _ => apply seps_disjoint_rr in H; [|done]
+  | H : _ ⊥ _ |- _ => apply ctree_flatten_disjoint in H
+  end;
+  repeat match goal with
+  | H : Forall2 _ _ _ |- _ => apply Forall2_length in H
+  | |- _ => rewrite zip_with_length_l_eq
+  | |- _ => rewrite replicate_length
+  | |- _ => rewrite app_length
+  | |- _ => rewrite fmap_length
+  | |- _ => rewrite app_length
+  end;
+  assumption || congruence.
+
+Section merge_merge.
+Context {B C D : Set}.
+Context (f :A → B → A) (g : A → C → A) (h1 : A → D → A) (h2 : C → B → D).
+Lemma ctree_merge_merge w ys1 ys2 :
+  length (ctree_flatten w) = length ys1 →
+  length (ctree_flatten w) = length ys2 →
+  zip_with f (zip_with g (ctree_flatten w) ys1) ys2
+  = zip_with h1 (ctree_flatten w) (zip_with h2 ys1 ys2) →
+  ctree_merge true f (ctree_merge true g w ys1) ys2
+  = ctree_merge true h1 w (zip_with h2 ys1 ys2).
+Proof.
+  rewrite <-!Forall2_same_length. revert ys1 ys2.
+  induction w as [|τ ws IH|s wxs IH| |] using @ctree_ind_alt; simpl.
+  * intros; simplifier; f_equal; auto.
+  * intros ys1 ys2 Hys1 Hys2 Hys3; f_equal. revert ys1 ys2 Hys1 Hys2 Hys3.
+    induction IH; intros; simplifier; f_equal; auto.
+  * intros ys1 ys2 Hys1 Hys2 Hys3; f_equal. revert ys1 ys2 Hys1 Hys2 Hys3.
+    induction IH as [|[]]; intros; simplifier; repeat f_equal; auto.
+  * intros; simplifier; f_equal; auto.
+  * intros; simplifier; f_equal; auto.
+Qed.
+End merge_merge.
+
+Section merge_union.
+Context {B : Set} (f : A → B → A).
+Lemma ctree_merge_disjoint w1 w2 ys :
+  w1 ⊥ w2 → length (ctree_flatten w1) = length ys →
+  Forall2 (λ x y, sep_unmapped (f x y) → sep_unmapped x) (ctree_flatten w1) ys →
+  Forall2 (λ x y, sep_unmapped x → sep_unmapped (f x y)) (ctree_flatten w1) ys →
+  zip_with f (ctree_flatten w1) ys ⊥* ctree_flatten w2 →
+  ctree_merge true f w1 ys ⊥ w2.
+Proof.
+  intros Hw. rewrite <-Forall2_same_length. revert w1 w2 Hw ys.
+  assert (∀ xs ys,
+    Forall2 (λ x y, sep_unmapped (f x y) → sep_unmapped x) xs ys →
+    Forall sep_unmapped (zip_with f xs ys) → Forall sep_unmapped xs).
+  { induction 1; intros; simplifier; constructor; auto. }
+  assert (∀ xs ys,
+    Forall2 (λ x y, sep_unmapped x → sep_unmapped (f x y)) xs ys →
+    Forall sep_unmapped xs → Forall sep_unmapped (zip_with f xs ys)).
+  { induction 1; intros; simplifier; constructor; auto. }
+  refine (ctree_disjoint_ind_alt _ _ _ _ _ _ _ _); simpl.
+  * by constructor.
+  * intros τ ws1 ws2 ? IH ys Hys1 Hys2 Hys3 Hys4. constructor.
+    revert ys Hys1 Hys2 Hys3 Hys4.
+    induction IH; intros; simplifier; constructor; auto.
+  * intros s wxss1 wxss2 ? IH ? ys Hys1 Hys2 Hys3 Hys4; constructor;
+      revert ys Hys1 Hys2 Hys3 Hys4; induction IH as [|[][]];
+      intros; simplifier; constructor; simpl; eauto.
+  * intros; simplifier. constructor; auto.
+    rewrite ctree_flatten_merge; intuition eauto 10.
+  * by constructor.
+  * intros; simplifier; constructor; eauto.
+  * intros; simplifier.
+    constructor; rewrite ?ctree_flatten_merge; intuition eauto using
+      ctree_merge_valid, Forall2_impl, seps_disjoint_valid_l, @Forall2_length.
+Qed.
+Lemma ctree_merge_union_commute w xs ys :
+  length (ctree_flatten w) = length xs →
+  length (ctree_flatten w) = length ys →
+  zip_with f (ctree_flatten w ∪* xs) ys
+  = zip_with f (ctree_flatten w) ys ∪* xs →
+  ctree_merge true f (ctree_merge true (∪) w xs) ys
+  = ctree_merge true (∪) (ctree_merge true f w ys) xs.
+Proof.
+  rewrite <-!Forall2_same_length. revert xs ys.
+  induction w as [|τ ws IH|s wxs IH| |] using @ctree_ind_alt; simpl.
+  * intros; simplifier; f_equal; auto.
+  * intros ys1 ys2 Hys1 Hys2 Hys3; f_equal. revert ys1 ys2 Hys1 Hys2 Hys3.
+    induction IH; intros; simplifier; f_equal; auto.
+  * intros ys1 ys2 Hys1 Hys2 Hys3; f_equal. revert ys1 ys2 Hys1 Hys2 Hys3.
+    induction IH as [|[]]; intros; simplifier; repeat f_equal; auto.
+  * intros; simplifier; f_equal; auto.
+  * intros; simplifier; f_equal; auto.
+Qed.
+Lemma ctree_merge_union w1 w2 ys :
+  w1 ⊥ w2 → length (ctree_flatten w1) = length ys →
+  zip_with f (ctree_flatten w1) ys ⊥* ctree_flatten w2 →
+  zip_with f (ctree_flatten w1 ∪* ctree_flatten w2) ys =
+    zip_with f (ctree_flatten w1) ys ∪* ctree_flatten w2 →
+  ctree_merge true f (w1 ∪ w2) ys = ctree_merge true f w1 ys ∪ w2.
+Proof.
+  intros Hw. rewrite <-Forall2_same_length. revert w1 w2 Hw ys.
+  refine (ctree_disjoint_ind_alt _ _ _ _ _ _ _ _); simpl.
+  * intros; by f_equal.
+  * intros τ ws1 ws2 ? IH ys Hys1 Hys2 Hys3; f_equal.
+    revert ys Hys1 Hys2 Hys3. induction IH; intros; simplifier; f_equal; auto.
+  * intros s wxss1 wxss2 ? IH ? ys Hys1 Hys2 Hys3; f_equal;
+      revert ys Hys1 Hys2 Hys3; induction IH as [|[][]];
+      intros; simplifier; repeat f_equal; simpl; eauto.
+  * intros; simplifier; f_equal; auto.
+  * intros; by f_equal.
+  * intros; simplifier; f_equal; auto.
+    { rewrite (ctree_merge_merge f (∪) (∪) f); auto; try list.solve_length.
+      rewrite seps_commutative by done; etransitivity; [eassumption|].
+      by rewrite seps_commutative by done. }
+    rewrite seps_commutative by done; etransitivity; [eassumption|].
+    by rewrite seps_commutative by done.
+  * intros; simplifier; f_equal; auto.
+    apply ctree_merge_union_commute; list.solve_length.
+Qed.
+Lemma ctree_merge_map (g : A → A) w ys :
+  length (ctree_flatten w) = length ys →
+  zip_with f (ctree_flatten w) ys = g <$> ctree_flatten w →
+  ctree_merge true f w ys = ctree_map g w.
+Proof.
+  rewrite <-Forall2_same_length. revert ys.
+  induction w as [|τ ws IH|s wxss IH| |]
+    using @ctree_ind_alt; intros ys Hys Hys'; simplifier; f_equal'; auto.
+  * revert ys Hys Hys'. induction IH; intros; simplifier; f_equal'; auto.
+  * revert ys Hys Hys'.
+    induction IH as [|[]]; intros; simplifier; repeat f_equal'; auto.
+Qed.
+End merge_union.
+
+Section map_union.
+Context (f : A → A).
+Hint Rewrite (@app_length A) (@replicate_plus ()) : simplifier.
+Lemma ctree_merge_replicate w :
+  ctree_merge true (λ x _, f x) w (replicate (length (ctree_flatten w)) ())
+  = ctree_map f w.
+Proof.
+  apply ctree_merge_map; auto using replicate_length.
+  by rewrite zip_with_replicate_r.
+Qed.
+Lemma ctree_map_merge w :
+  ctree_map f w
+  = ctree_merge true (λ x _, f x) w (replicate (length (ctree_flatten w)) ()).
+Proof.
+  induction w as [|τ ws IH|s wxss IH| |] using @ctree_ind_alt; f_equal'.
+  * by rewrite zip_with_replicate_r_eq by done.
+  * induction IH; simplifier; f_equal'; auto.
+  * induction IH as [|[]]; simplifier; repeat f_equal';
+      rewrite ?zip_with_replicate_r_eq by done; auto.
+  * by simplifier.
+  * simplifier. by rewrite zip_with_replicate_r_eq by done.
+  * by rewrite zip_with_replicate_r_eq by done.
+Qed.
+Lemma ctree_map_disjoint w1 w2 :
+  w1 ⊥ w2 →
+  Forall (λ x, sep_unmapped (f x) → sep_unmapped x) (ctree_flatten w1) →
+  Forall (λ x, sep_unmapped x → sep_unmapped (f x)) (ctree_flatten w1) →
+  f <$> ctree_flatten w1 ⊥* ctree_flatten w2 →
+  ctree_map f w1 ⊥ w2.
+Proof.
+  intros ? Hf1 Hf2 Hf3. rewrite ctree_map_merge.
+  apply ctree_merge_disjoint; auto using replicate_length.
+  * elim Hf1; simpl; auto.
+  * elim Hf2; simpl; auto.
+  * rewrite Forall2_fmap_l in Hf3; elim Hf3; simplifier; auto.
+Qed.
+Lemma ctree_map_union w1 w2 :
+  w1 ⊥ w2 → f <$> ctree_flatten w1 ⊥* ctree_flatten w2 →
+  f <$> ctree_flatten w1 ∪* ctree_flatten w2 =
+     (f <$> ctree_flatten w1) ∪* ctree_flatten w2 →
+  ctree_map f (w1 ∪ w2) = ctree_map f w1 ∪ w2.
+Proof.
+  intros ? Hf1 Hf2. rewrite !ctree_map_merge, ctree_flatten_union by done.
+  rewrite zip_with_length_l_eq by list.solve_length.
+  apply ctree_merge_union; auto using replicate_length.
+  * rewrite Forall2_fmap_l in Hf1; elim Hf1; simplifier; auto.
+  * by rewrite !zip_with_replicate_r_eq by list.solve_length.
+Qed.
+End map_union.
+
 Lemma ctree_merge_unmapped w ys :
   ctree_flatten w ⊥* ys → ctree_unmapped w → Forall sep_unmapped ys →
   ctree_unmapped (ctree_merge true (∪) w ys).
@@ -475,21 +727,12 @@ Lemma ctree_merge_mapped w ys :
 Proof.
   rewrite ctree_flatten_merge by done. eauto using seps_unmapped_union_l.
 Qed.
-Lemma ctree_merge_valid w ys :
+Lemma ctree_merge_union_valid w ys :
   ctree_valid w → ctree_flatten w ⊥* ys → Forall sep_unmapped ys →
   ctree_valid (ctree_merge true (∪) w ys).
 Proof.
-  intros Hw. revert w Hw ys. refine (ctree_valid_ind_alt _ _ _ _ _ _); simpl.
-  * constructor; eauto using seps_union_valid.
-  * intros τ ws _ IH ys Hys Hys'. constructor.
-    revert ys Hys Hys'. induction IH; intros; simplifier; auto.
-  * intros s wxss _ IH ? ys Hys Hys'.
-    constructor; revert ys Hys Hys'; induction IH as [|[]]; intros;
-      simplifier; constructor; simpl; eauto using seps_union_valid.
-  * intros s i w xs ? IH ?? ys Hys Hys'; simplifier.
-    constructor; eauto using seps_union_valid.
-    intuition eauto using ctree_merge_mapped, seps_unmapped_union_l.
-  * constructor; eauto using seps_union_valid.
+  eauto 10 using ctree_merge_valid, seps_union_valid,
+    Forall2_length, Forall2_impl, sep_unmapped_union_l'.
 Qed.
 Lemma ctree_merge_flatten w1 w2 :
   w1 ⊥ w2 → ctree_unmapped w2 →
@@ -529,24 +772,6 @@ Proof.
   intros ?. rewrite ctree_flatten_union by done.
   eauto using seps_positive_l, ctree_flatten_disjoint.
 Qed.
-Global Instance ctree_symmetric : Symmetric (@disjoint (ctree Ti A) _).
-Proof.
-  induction 1 using @ctree_disjoint_ind_alt; constructor; try done.
-  * by apply Forall2_flip.
-  * by apply Forall2_flip.
-  * by eapply Forall2_flip, Forall2_impl; eauto.
-Qed.
-Lemma ctree_disjoint_valid_l w1 w2 : w1 ⊥ w2 → ctree_valid w1.
-Proof.
-  induction 1 as [|τ ws1 ws2 _ IH|s wxss1 wxss2 _ IH Hwxss| | | |]
-    using @ctree_disjoint_ind_alt; simplifier;
-    constructor; eauto using seps_disjoint_valid_l.
-  * induction IH; auto.
-  * clear Hwxss. induction IH; auto.
-  * clear IH. induction Hwxss; eauto using seps_disjoint_valid_l.
-Qed.
-Lemma ctree_disjoint_valid_r w1 w2 : w1 ⊥ w2 → ctree_valid w2.
-Proof. intros. by apply ctree_disjoint_valid_l with w1. Qed.
 Lemma ctree_union_valid w1 w2 : w1 ⊥ w2 → ctree_valid (w1 ∪ w2).
 Proof.
   revert w1 w2. refine (ctree_disjoint_ind_alt _ _ _ _ _ _ _ _); simpl.
@@ -560,10 +785,10 @@ Proof.
       ctree_unmapped_union_l, seps_unmapped_union_l.
   * constructor; eauto using seps_union_valid.
   * intros; simplifier.
-    constructor; eauto using seps_union_valid, ctree_merge_valid.
+    constructor; eauto using seps_union_valid, ctree_merge_union_valid.
     intuition eauto using ctree_merge_mapped, seps_unmapped_union_l.
   * intros; simplifier.
-    constructor; eauto using seps_union_valid, ctree_merge_valid.
+    constructor; eauto using seps_union_valid, ctree_merge_union_valid.
     intuition eauto using ctree_merge_mapped, seps_unmapped_union_l.
 Qed.
 Lemma ctree_commutative w1 w2 : w1 ⊥ w2 → w1 ∪ w2 = w2 ∪ w1.
@@ -571,32 +796,32 @@ Proof.
   induction 1 as [|τ ws1 ws2 _ IH|s wxss1 wxss2 _ IH Hwxss| | | |]
     using @ctree_disjoint_ind_alt; f_equal'; auto using seps_commutative.
   * induction IH; f_equal'; auto.
-  * induction IH as [|[] []]; decompose_Forall_hyps;
+  * induction IH as [|[] []]; simplifier;
       auto using seps_commutative with f_equal.
 Qed.
-Section hide_hint.
-Hint Extern 0 (length _ = _) => simplify_equality'; repeat first 
-  [ rewrite take_length | rewrite drop_length | rewrite zip_with_length ]; lia.
 Lemma ctree_merge_id {B : Set} (h : A → B → A) w ys :
   length (ctree_flatten w) = length ys →
   zip_with h (ctree_flatten w) ys = ctree_flatten w →
   ctree_merge true h w ys = w.
 Proof.
+  rewrite <-Forall2_same_length.
   revert w ys. refine (ctree_ind_alt _ _ _ _ _ _); simpl.
   * by intros; f_equal.
   * intros τ ws IH ys Hys Hys'; f_equal; revert ys Hys Hys'.
-    induction IH as [|w ws ? IH]; intros ys; csimpl; [done|].
-    rewrite app_length, zip_with_app_l; intros; simplify_list_equality.
-    f_equal; auto.
+    induction IH; intros; simplifier; f_equal; eauto.
   * intros s wxbss IH ys Hys Hys'; f_equal; revert ys Hys Hys'.
-    induction IH as [|[w xbs] wxbss ? IH]; intros ys; csimpl; [done|].
-    rewrite <-!(associative_L (++)), !app_length, !zip_with_app_l.
-    intros; simplify_list_equality; repeat f_equal; auto.
-  * intros s i w xbs ? ys. rewrite app_length, zip_with_app_l.
-    intros; simplify_list_equality; f_equal; auto.
+    induction IH as [|[]]; intros; simplifier; repeat f_equal; auto.
+  * intros; simplifier; f_equal; auto.
   * by intros; f_equal.
 Qed.
-End hide_hint.
+Lemma ctree_flatten_map {B : Set} (h : A → B) w :
+  ctree_flatten (ctree_map h w) = h <$> ctree_flatten w.
+Proof.
+  induction w as [|? ws IH|? wxss IH| |] using @ctree_ind_alt; simpl; auto.
+  * induction IH; csimpl; rewrite ?fmap_app; f_equal; auto.
+  * induction IH; csimpl; rewrite ?fmap_app; repeat f_equal; auto.
+  * rewrite fmap_app; f_equal; auto.
+Qed.
 Lemma ctree_merge_empty w ys :
   ctree_flatten w ⊥* ys → Forall (∅ =) ys → ctree_merge true (∪) w ys = w.
 Proof. eauto using ctree_merge_id, seps_right_id, Forall2_length. Qed.
@@ -622,7 +847,7 @@ Proof.
   intros Hw1. revert w1 Hw1 w2 ys.
   refine (ctree_valid_ind_alt _ _ _ _ _ _); simpl.
   * intros τb xs1 _ w2 ys Hys Hw2. apply (ctree_disjoint_inv_l _ _ _ Hw2).
-    constructor; eauto using seps_disjoint_ll.
+    constructor; eauto.
   * intros τ ws1 _ IH w2 ys Hys Hw2. apply (ctree_disjoint_inv_l _ _ _ Hw2).
     clear w2 Hw2. intros ws2 Hws2. constructor. revert ws2 ys Hys Hws2.
     induction IH; intros; simplifier; eauto.
@@ -631,50 +856,48 @@ Proof.
     clear w2 Hw2. intros wxss2 Hwxss Hwxss'. constructor.
      + clear Hwxss'. revert wxss2 ys Hys Hwxss.
       induction IH as [|[]]; intros; simplifier; eauto.
-     + clear IH Hwxss. revert wxss2 ys Hys Hwxss'. induction wxss as [|[]];
-        intros; simplifier; eauto using seps_disjoint_ll.
+     + clear IH Hwxss. revert wxss2 ys Hys Hwxss'.
+       induction wxss as [|[]]; intros; simplifier; eauto.
   * intros s i w1 xs1 Hw1 IH _ ? w2 ys Hys Hw2; simplifier.
     apply (ctree_disjoint_inv_l _ _ _ Hw2); clear w2 Hw2.
-    + intros w2 xs2 ????. constructor; eauto using seps_disjoint_ll.
-    + intros xs2 ???; simplifier. constructor; eauto using seps_disjoint_ll.
+    + intros w2 xs2 ????. constructor; eauto.
+    + intros xs2 ???; simplifier; constructor; eauto.
   * intros s xs1 _ w2 ys Hys Hw2; apply (ctree_disjoint_inv_l _ _ _ Hw2);
-      constructor; eauto using seps_disjoint_ll, seps_unmapped_union_l.
+      constructor; eauto using seps_unmapped_union_l.
 Qed.
 Lemma ctree_disjoint_ll w1 w2 w3 : w1 ⊥ w2 → w1 ∪ w2 ⊥ w3 → w1 ⊥ w3.
 Proof.
   intros Hw12. revert w1 w2 Hw12 w3.
   refine (ctree_disjoint_ind_alt _ _ _ _ _ _ _ _); simpl.
   * intros τb xs1 xs2 ? w3 Hw3; apply (ctree_disjoint_inv_l _ _ _ Hw3).
-    constructor; eauto using seps_disjoint_ll.
+    constructor; eauto.
   * intros τ ws1 ws2 _ IH w3 Hw3; apply (ctree_disjoint_inv_l _ _ _ Hw3).
     clear w3 Hw3. intros ws3 Hws3. constructor. revert ws3 Hws3.
-    induction IH; intros; decompose_Forall_hyps; auto.
+    induction IH; intros; simplifier; auto.
   * intros s wxss1 wxss2 _ IH Hwxss w3 Hw3.
     apply (ctree_disjoint_inv_l _ _ _ Hw3). clear w3 Hw3.
     intros wxss3 Hwxss3 Hwxss3'. constructor.
     + clear Hwxss Hwxss3'. revert wxss3 Hwxss3.
-      induction IH; intros; decompose_Forall_hyps; auto.
-    + clear IH Hwxss3. revert wxss3 Hwxss3'. induction Hwxss; intros;
-        decompose_Forall_hyps; eauto using seps_disjoint_ll.
+      induction IH; intros; simplifier; auto.
+    + clear IH Hwxss3. revert wxss3 Hwxss3'.
+      induction Hwxss; intros; simplifier; eauto.
   * intros s i w1 w2 xs1 xs2 ? IH Hxs ?? w3 Hw3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3.
-    { constructor; eauto using seps_disjoint_ll. }
-    intros xs3. rewrite ctree_flatten_union by done. intros Hxs3 ? _ ?.
-    constructor; eauto using ctree_disjoint_valid_l; simplifier.
-    eauto using seps_disjoint_ll, ctree_flatten_disjoint.
-  * intros s xs1 xs2 Hxs w3 Hw3;
-      apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3.
-    { constructor; eauto using seps_disjoint_ll. }
-    constructor; eauto using seps_disjoint_ll, seps_unmapped_union_l.
+    { constructor; eauto. }
+    intros xs3. rewrite ctree_flatten_union by done.
+    intros Hxs3 ? _ ?; simplifier.
+    constructor; eauto using ctree_disjoint_valid_l,
+      seps_disjoint_ll, ctree_flatten_disjoint.
+  * intros s xs1 xs2 Hxs w3 Hw3; apply (ctree_disjoint_inv_l _ _ _ Hw3);
+      constructor; eauto using seps_unmapped_union_l.
   * intros s i xs1 w2 xs2 ???? w3 Hw3.
     simplifier. apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3.
     { intros w3 xs3 Hw3 ???. constructor; eauto using ctree_disjoint_valid_r.
-      apply ctree_flatten_disjoint in Hw3; simplifier.
-      eauto using seps_disjoint_lr. }
-    constructor; simplifier; eauto using seps_disjoint_lr.
+      apply ctree_flatten_disjoint in Hw3; simplifier; eauto. }
+    constructor; simplifier; eauto.
   * intros s i w1 xs1 xs2 ???? w3 Hw3; simplifier.
-    apply (ctree_disjoint_inv_l _ _ _ Hw3); constructor; simplifier;
-      eauto using seps_disjoint_ll, ctree_merge_disjoint_l.
+    apply (ctree_disjoint_inv_l _ _ _ Hw3);
+      constructor; simplifier; eauto using ctree_merge_disjoint_l.
 Qed.
 Lemma ctree_disjoint_lr w1 w2 w3 : w1 ⊥ w2 → w1 ∪ w2 ⊥ w3 → w2 ⊥ w3.
 Proof.
@@ -708,11 +931,10 @@ Proof.
     simplifier. rewrite seps_commutative in Hys2 by done. constructor.
     + simplifier. eauto using seps_disjoint_move_l.
     + eauto.
-    + eauto using ctree_merge_valid, seps_disjoint_lr.
-    + intros [??]; destruct Hc; split; eauto using ctree_merge_mapped,
-        seps_unmapped_union_l, seps_disjoint_lr.
-  * intros s i w1 xs1 xs2 ???? ys ??; simplifier. constructor; eauto 6
-      using seps_disjoint_move_l, seps_unmapped_union with simplifier.
+    + eauto using ctree_merge_union_valid.
+    + intuition eauto using ctree_merge_mapped, seps_unmapped_union_l.
+  * intros s i w1 xs1 xs2 ???? ys ??; simplifier.
+    constructor; eauto using seps_disjoint_move_l, seps_unmapped_union.
 Qed.
 Lemma ctree_disjoint_move_l w1 w2 w3 : w1 ⊥ w2 → w1 ∪ w2 ⊥ w3 → w1 ⊥ w2 ∪ w3.
 Proof.
@@ -724,28 +946,26 @@ Proof.
   * intros τ ws1 ws2 _ IH w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3.
     intros ws3 Hws3. constructor. revert ws3 Hws3.
-    induction IH; intros; decompose_Forall_hyps; auto.
+    induction IH; intros; simplifier; auto.
   * intros s wxss1 wxss2 _ IH Hwxss w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3.
     intros wxss3 Hwxss3 Hwxss3'. constructor.
     + clear Hwxss Hwxss3'. revert wxss3 Hwxss3.
-      induction IH; intros; decompose_Forall_hyps; constructor; simpl; auto.
+      induction IH; intros; simplifier; constructor; simpl; auto.
     + clear IH Hwxss3. revert wxss3 Hwxss3'.
-      induction Hwxss; intros; decompose_Forall_hyps;
+      induction Hwxss; intros; simplifier;
         constructor; simpl; eauto using seps_disjoint_move_l.
   * intros s i w1 w2 xs1 xs2 ? IH Hxs ? Hc2 w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     { intros w3 xs3 ????. constructor; eauto using seps_disjoint_move_l.
       assert (w2 ⊥ w3) by eauto using ctree_disjoint_lr.
-      assert (xs2 ⊥* xs3) by eauto using seps_disjoint_lr.
       intuition eauto using seps_unmapped_union_l, ctree_unmapped_union_l. }
     intros xs3_; rewrite Forall2_app_inv_l; intros (xs3&xs3'&?&?&->).
     rewrite Forall_app; intros [??] ? _. assert (ctree_flatten w2 ⊥* xs3).
     { apply seps_disjoint_lr with (ctree_flatten w1);
         rewrite <-?ctree_flatten_union; eauto using ctree_flatten_disjoint. }
     simplifier. constructor; eauto using ctree_merge_move, seps_disjoint_move_l.
-    intros [??]; destruct Hc2; split; eauto using
-      ctree_merge_mapped, seps_unmapped_union_l, seps_disjoint_lr.
+    intuition eauto using ctree_merge_mapped, seps_unmapped_union_l.
   * intros s xs1 xs2 Hxs w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     { constructor; eauto using seps_disjoint_move_l. }
@@ -754,11 +974,11 @@ Proof.
       destruct Hxs3 as (xs3&xs3'&xs4&xs4'&->&->&->&->&?); intros; simplifier.
     assert (xs3' ⊥* ctree_flatten w2) by eauto using seps_disjoint_lr.
     assert (xs4' ⊥* zs) by eauto using seps_disjoint_lr.
-    decompose_Forall_hyps. constructor.
+    simplifier. constructor.
     + simplifier. apply Forall2_app; rewrite
         seps_commutative by done; eauto using seps_disjoint_move_l.
     + eauto using seps_unmapped_union_l.
-    + eauto using ctree_merge_valid, seps_unmapped_union_r.
+    + eauto using ctree_merge_union_valid, seps_unmapped_union_r.
     + intuition eauto using seps_unmapped_union_l, ctree_merge_mapped.
   * intros s i xs1_ w2 xs2; rewrite Forall2_app_inv_r.
     intros (xs1&xs1'&Hxs1&Hxs2&->) ??? w3 Hw3; simplifier. symmetry in Hxs2.
@@ -770,17 +990,14 @@ Proof.
         rewrite ctree_flatten_union by done. apply seps_disjoint_move_l; auto.
         rewrite seps_commutative, <-(ctree_flatten_merge _ true) by done.
         eauto using ctree_flatten_disjoint.
-      + intuition eauto using seps_unmapped_union_l,
-          ctree_unmapped_union_l, seps_disjoint_lr. }
+      + intuition eauto using seps_unmapped_union_l, ctree_unmapped_union_l. }
     intros xs3_. rewrite ctree_flatten_merge, (seps_commutative _ xs1),
       (seps_commutative _ xs1'), Forall2_app_inv_l by done.
     intros (xs3&xs3'&?&?&->); rewrite Forall_app; intros [??] ??; simplifier.
-    assert (ctree_flatten w2 ⊥* xs3) by eauto using seps_disjoint_lr.
-    assert (xs2 ⊥* xs3') by eauto using seps_disjoint_lr.
     constructor.
     + simplifier. eauto using seps_disjoint_move_l.
     + eauto.
-    + eauto using ctree_merge_valid.
+    + eauto using ctree_merge_union_valid.
     + intuition eauto using seps_unmapped_union_l, ctree_merge_mapped.
   * intros s i w1 xs1 xs2_; rewrite Forall2_app_inv_l.
     intros (xs2&xs2'&Hxs2&Hxs2'&->) ??? w3 Hw3; simplifier.
@@ -789,6 +1006,7 @@ Proof.
       { apply seps_disjoint_ll with (ctree_flatten w1); auto.
         rewrite seps_commutative, <-(ctree_flatten_merge _ true) by auto.
         eauto using ctree_flatten_disjoint. }
+      assert (xs3 ⊥* xs2') by eauto.
       simplifier. rewrite seps_commutative. constructor; eauto.
       + eapply ctree_merge_move; eauto using ctree_merge_disjoint_l.
         rewrite ctree_flatten_union by eauto using ctree_merge_disjoint_l.
@@ -796,12 +1014,10 @@ Proof.
         rewrite seps_commutative, <-(ctree_flatten_merge _ true) by done.
         eauto using ctree_flatten_disjoint.
       + eauto using seps_disjoint_move_l.
-      + intuition eauto using ctree_merge_mapped,
-          seps_unmapped_union_r, seps_disjoint_lr.
-      + symmetry; eauto using seps_disjoint_lr. }
-    intros xs3 ????; simplifier. constructor; eauto.
-    + eauto using seps_disjoint_move_l.
-    + eauto 6 using seps_unmapped_union, seps_disjoint_lr.
+      + intuition eauto using ctree_merge_mapped, seps_unmapped_union_r.
+      + eauto. }
+    intros xs3 ????; simplifier.
+    constructor; eauto using seps_disjoint_move_l, seps_unmapped_union.
 Qed.
 Lemma ctree_merge_associative_1 w ys1 ys2 :
   ctree_valid w → ys1 ⊥* ys2 → ctree_flatten w ⊥* ys1 ∪* ys2 →
@@ -836,15 +1052,14 @@ Proof.
   * intros s i xs1_ w2 xs2; rewrite Forall2_app_inv_r.
     intros (xs1&xs1'&Hxs1&Hxs1'&->); rewrite Forall_app; intros [??] ? _ ys.
     simplifier; rewrite Forall2_app_inv_l; intros (ys1&ys2&Hys1&Hys2&->).
-    assert (ctree_flatten w2 ⊥* ys1) by eauto with simplifier.
+    assert (xs1 ⊥* ys1) by eauto.
     assert (ctree_flatten w2 ∪* ys1 ⊥* xs1).
-    { apply seps_disjoint_move_r; [eauto with simplifier|].
-      rewrite seps_commutative by eauto with simplifier.
+    { apply seps_disjoint_move_r; auto. rewrite seps_commutative by done.
       by apply seps_disjoint_move_l. }
     simplifier. by rewrite seps_permute, <-!ctree_merge_associative_1,
-      (seps_commutative xs1) by eauto with simplifier.
+      (seps_commutative xs1) by eauto using seps_disjoint_move_l.
   * intros; simplifier. by rewrite ctree_merge_associative_1,
-      seps_associative_rev by eauto with simplifier.
+      seps_associative_rev by eauto using seps_disjoint_move_l.
 Qed.
 Lemma ctree_associative_2 w1 w2 w3 :
   w1 ⊥ w2 → w1 ∪ w2 ⊥ w3 → (w1 ∪ w2) ∪ w3 = w1 ∪ (w2 ∪ w3).
@@ -857,12 +1072,12 @@ Proof.
   * intros τ ws1 ws2 _ IH w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     intros ws3 Hws3; f_equal. revert ws3 Hws3.
-    induction IH; intros; decompose_Forall_hyps; f_equal; auto.
+    induction IH; intros; simplifier; f_equal; auto.
   * intros s wxss1 wxss2 _ IH Hwxss w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     intros wxss3 Hwxss3 Hwxss3'. f_equal.
     revert wxss3 Hwxss3 Hwxss3'. induction IH as [|[][]];
-      intros [|[]] ??; decompose_Forall_hyps; f_equal;
+      intros [|[]] ??; simplifier; f_equal;
       auto using seps_associative_rev with f_equal.
   * intros s i w1 w2 xs1 xs2 ? IH Hxs ?? w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
@@ -874,13 +1089,14 @@ Proof.
     { intros; f_equal; auto using seps_associative_rev. }
     intros i w3 xs3; rewrite Forall2_app_inv_r.
     intros (xs12&xs12'&?&?&Hxs12) _ ? _. apply zip_with_app_inv in Hxs12.
-    destruct Hxs12 as (xs1&xs2&xs1'&xs2'&->&->&->&->&?); decompose_Forall_hyps.
-    assert (ctree_flatten w3 ⊥* xs2) by eauto with simplifier.
+    destruct Hxs12 as (xs1&xs2&xs1'&xs2'&->&->&->&->&?); simplifier.
+    assert (xs2 ⊥* ctree_flatten w3) by eauto.
     assert (ctree_flatten w3 ∪* xs2 ⊥* xs1).
     { apply seps_disjoint_move_r; auto. by rewrite seps_commutative. }
     assert (xs3 ⊥* xs2' ∪* xs1') by (by rewrite seps_commutative).
-    simplifier. by rewrite <-ctree_merge_associative_1, seps_associative_rev,
-      (seps_commutative xs1), (seps_commutative xs1') by eauto with simplifier.
+    simplifier. rewrite <-ctree_merge_associative_1, seps_associative_rev,
+      (seps_commutative xs1), (seps_commutative xs1');
+      eauto using seps_disjoint_move_l, seps_disjoint_move_r.
   * intros s i xs1_ w2 xs2; rewrite Forall2_app_inv_r;
       intros (xs1&xs1'&?&?&->) _ ? _ w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
@@ -891,16 +1107,15 @@ Proof.
       { rewrite ctree_flatten_union by done. apply seps_disjoint_move_r; auto.
         rewrite <-(ctree_flatten_merge _ true) by done.
         eauto using ctree_flatten_disjoint. }
-      simplifier. by rewrite seps_permute, ctree_merge_associative_2,
-        ctree_commutative by eauto with simplifier. }
+      simplifier. by rewrite seps_permute,
+        ctree_merge_associative_2, ctree_commutative by eauto. }
     intros xs3_; simplifier;
       rewrite Forall2_app_inv_l; intros (xs3&xs3'&?&?&->) _ _ _.
-    assert (ctree_flatten w2 ⊥* xs3) by eauto with simplifier.
+    assert (ctree_flatten w2 ⊥* xs3) by eauto.
     assert (ctree_flatten w2 ∪* xs3 ⊥* xs1).
-    { rewrite seps_commutative by eauto with simplifier.
-      eauto with simplifier. }
-    simplifier. by rewrite <-!ctree_merge_associative_1, (seps_commutative xs1),
-      seps_permute by eauto with simplifier.
+    { rewrite seps_commutative by eauto; eauto using seps_disjoint_move_r. }
+    simplifier. by rewrite <-!ctree_merge_associative_1,
+      (seps_commutative xs1), seps_permute by eauto using seps_disjoint_move_l.
   * intros s i w1 xs1 xs2_; rewrite Forall2_app_inv_l;
       intros (xs2&xs2'&?&?&->) _ ? _ w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
@@ -917,9 +1132,9 @@ Proof.
       assert (ctree_flatten (w1 ∪ w3) ⊥* xs2) by (by rewrite ctree_commutative).
       simplifier. by rewrite seps_associative_rev, (seps_commutative xs2'),
         (ctree_commutative _ w3), <-!ctree_merge_associative_2,
-        (ctree_commutative w3) by eauto with simplifier. }
+        (ctree_commutative w3) by eauto. }
     intros; simplifier; by rewrite ctree_merge_associative_1,
-      seps_associative_rev by eauto with simplifier.
+      seps_associative_rev by eauto using seps_disjoint_move_l.
 Qed.
 Lemma ctree_associative w1 w2 w3 :
   w2 ⊥ w3 → w1 ⊥ w2 ∪ w3 → w1 ∪ (w2 ∪ w3) = (w1 ∪ w2) ∪ w3.
@@ -982,7 +1197,7 @@ Proof.
     simplifier. assert (length ys1 = length ys2).
     { erewrite <-(zip_with_length_same_r _ _ _ ys1),  <-(zip_with_length_same_r
         _ _ _ ys2), <-!(ctree_flatten_merge (∪) true) by eauto; congruence. }
-    simplify_list_equality. f_equal; eauto.
+    simplifier; f_equal; eauto.
   * intros s wxss1 IH [| |s' wxss2| |]; simpl; try discriminate. cut (∀ ys1 ys2,
       wxss1 ≫= (λ wxs, ctree_flatten (wxs.1) ++ wxs.2) ⊥* ys1 →
       wxss2 ≫= (λ wxs, ctree_flatten (wxs.1) ++ wxs.2) ⊥* ys2 → ys1 = ys2 →
@@ -1074,10 +1289,11 @@ Proof.
   * intros; simplifier; constructor; auto using seps_union_subseteq_l.
   * constructor; auto using seps_union_subseteq_l.
 Qed.
+Hint Immediate seps_disjoint_difference.
+Hint Extern 5 => symmetry; apply seps_disjoint_difference.
+(*
 Hint Immediate ctree_merge_subseteq : simplifier.
-Hint Extern 0 => apply eq_sym, (Forall2_length ((⊆) : relation A)) : simplifier.
-Hint Immediate seps_disjoint_difference : simplifier.
-Hint Extern 5 => symmetry; apply seps_disjoint_difference : simplifier.
+*)
 Lemma seps_reflexive xs : Forall sep_valid xs → xs ⊆* xs.
 Proof. induction 1; auto using sep_reflexive. Qed.
 Lemma ctree_subseteq_reflexive w : ctree_valid w → w ⊆ w.
@@ -1093,7 +1309,7 @@ Proof.
 Qed.
 Lemma ctree_union_subseteq_l w1 w2 : w1 ⊥ w2 → w1 ⊆ w1 ∪ w2.
 Proof.
-  revert w1 w2.  refine (ctree_disjoint_ind_alt _ _ _ _ _ _ _ _); simpl.
+  revert w1 w2. refine (ctree_disjoint_ind_alt _ _ _ _ _ _ _ _); simpl.
   * constructor; auto using seps_union_subseteq_l.
   * intros τ ws1 ws2 _ IH; constructor. induction IH; simpl; auto.
   * intros s wxss1 wxss2 _ IH Hwxss; constructor.
@@ -1105,126 +1321,14 @@ Proof.
   * intros s i xs1 w2 xs2 ????; simplifier; constructor.
     + simplifier. auto using seps_union_subseteq_r.
     + auto.
-    + eauto using ctree_merge_valid.
+    + eauto using ctree_merge_union_valid.
     + intuition eauto using ctree_merge_mapped, seps_unmapped_union_l.
   * intros; simplifier; constructor;
       auto using seps_union_subseteq_l, ctree_merge_subseteq.
 Qed.
-Lemma MUnion'_MUnion s i w xs :
-  ¬(ctree_unmapped w ∧ Forall sep_unmapped xs) →
-  MUnion' s i w xs = MUnion s i w xs.
-Proof. by unfold MUnion'; case_decide. Qed.
-Lemma MUnion'_valid s i w xs :
-  ctree_valid w → Forall sep_valid xs → ctree_valid (MUnion' s i w xs).
-Proof.
-  unfold MUnion'. case_decide; constructor; intuition
-    auto using Forall_app_2, ctree_valid_Forall.
-Qed.
 Lemma MUnion'_flatten s i w xs :
   ctree_flatten (MUnion' s i w xs) = ctree_flatten w ++ xs.
 Proof. by unfold MUnion'; case_decide. Qed.
-Lemma MUnion'_disjoint s i w1 w2 xs1 xs2 :
-  w1 ⊥ w2 → xs1 ⊥* xs2 → MUnion' s i w1 xs1 ⊥ MUnion' s i w2 xs2.
-Proof.
-  intros; unfold MUnion'; repeat case_decide; constructor;
-    intuition eauto using ctree_flatten_disjoint,
-    ctree_disjoint_valid_l, ctree_disjoint_valid_r.
-Qed.
-Lemma MUnion'_MUnionAll_disjoint s i w1 xs1 xs2 :
-  Forall sep_unmapped xs2 → ctree_valid w1 →
-  ctree_flatten w1 ++ xs1 ⊥* xs2 → MUnion' s i w1 xs1 ⊥ MUnionAll s xs2.
-Proof. by unfold MUnion'; case_decide; constructor. Qed.
-Lemma MUnionAll_MUnion'_disjoint s i xs1 w2 xs2 :
-  Forall sep_unmapped xs1 → ctree_valid w2 →
-  xs1 ⊥* ctree_flatten w2 ++ xs2 → MUnionAll s xs1 ⊥ MUnion' s i w2 xs2.
-Proof. by unfold MUnion'; case_decide; constructor. Qed.
-Lemma MUnion'_union s i w1 w2 xs1 xs2 :
-  w1 ⊥ w2 → xs1 ⊥* xs2 →
-  MUnion' s i w1 xs1 ∪ MUnion' s i w2 xs2 = MUnion' s i (w1 ∪ w2) (xs1 ∪* xs2).
-Proof.
-  intros. unfold MUnion'.
-  destruct (decide (ctree_unmapped (_ ∪ _) ∧ _)) as [[??]|].
-  { rewrite !decide_True by eauto using ctree_unmapped_union_l,
-      seps_unmapped_union_l, ctree_unmapped_union_r, seps_unmapped_union_r.
-     rewrite ctree_flatten_union by done. by simplifier. }
-  repeat case_decide; simplifier; auto.
-  * exfalso; intuition eauto using ctree_unmapped_union, seps_unmapped_union.
-  * by rewrite ctree_merge_flatten, ctree_commutative,
-      seps_commutative by intuition eauto with simplifier.
-  * by rewrite ctree_merge_flatten by intuition eauto with simplifier.
-Qed.
-Lemma MUnion'_merge s i w xs ys :
-  ctree_flatten w ++ xs ⊥* ys → Forall sep_unmapped ys →
-  ctree_merge true (∪) (MUnion' s i w xs) ys
-  = let sz := length (ctree_flatten w) in
-    let w' := ctree_merge true (∪) w (take sz ys) in
-    let xs' := xs ∪* drop sz ys in MUnion' s i w' xs'.
-Proof.
-  intros. unfold MUnion'. repeat case_decide; simplifier; auto.
-  * exfalso; intuition eauto using seps_unmapped_union, ctree_merge_unmapped.
-  * exfalso;
-      intuition eauto using ctree_merge_mapped, seps_unmapped_union_l.
-Qed.
-Lemma MUnion'_MUnionAll_union s i w1 xs1 xs2 :
-  ctree_flatten w1 ++ xs1 ⊥* xs2 → Forall sep_unmapped xs2 →
-  MUnion' s i w1 xs1 ∪ MUnionAll s xs2
-  = let sz := length (ctree_flatten w1) in
-    let w' := ctree_merge true (∪) w1 (take sz xs2) in
-    let xs' := xs1 ∪* drop sz xs2 in MUnion' s i w' xs'.
-Proof.
-  intros. rewrite <-MUnion'_merge by done. by unfold MUnion'; case_decide.
-Qed.
-Lemma MUnionAll_MUnion'_union s i xs1 w2 xs2 :
-  xs1 ⊥* ctree_flatten w2 ++ xs2 → Forall sep_unmapped xs1 →
-  MUnionAll s xs1 ∪ MUnion' s i w2 xs2
-  = let sz := length (ctree_flatten w2) in
-    let w' := ctree_merge true (∪) w2 (take sz xs1) in
-    let xs' := xs2 ∪* drop sz xs1 in MUnion' s i w' xs'.
-Proof.
-  intros. rewrite <-MUnion'_merge by done.
-  unfold MUnion'; case_decide; f_equal'; auto using seps_commutative.
-Qed.
-Lemma ctree_flatten_map h w :
-  ctree_flatten (ctree_map h w) = h <$> ctree_flatten w.
-Proof.
-  induction w as [|? ws IH|? wxss IH| |] using @ctree_ind_alt; simpl; auto.
-  * induction IH; csimpl; rewrite ?fmap_app; f_equal; auto.
-  * induction IH; csimpl; rewrite ?fmap_app; repeat f_equal; auto.
-  * rewrite MUnion'_flatten, fmap_app; f_equal; auto.
-Qed.
-Section ctree_map_id.
-Hint Extern 0 (length _ = _) => by rewrite fmap_length.
-Lemma ctree_map_id (h : A → A) w :
-  ctree_valid w → h <$> ctree_flatten w = ctree_flatten w → ctree_map h w = w.
-Proof.
-  revert w. refine (ctree_valid_ind_alt _ _ _ _ _ _); simpl.
-  * by intros; f_equal.
-  * intros τ ws _ IH Hh; f_equal; revert Hh. induction IH; csimpl;
-      rewrite ?fmap_app; intros; simplify_list_equality; f_equal'; eauto.
-  * intros s wsxss _ IH _ Hh; f_equal; revert Hh.
-    induction IH as [|[]]; csimpl; rewrite ?(associative_L (++)), ?fmap_app;
-      intros; simplify_list_equality; repeat f_equal'; eauto.
-  * intros s i w xs _ ??? Hh; rewrite fmap_app in Hh; simplify_list_equality.
-    unfold MUnion'. rewrite decide_False
-      by (rewrite ctree_flatten_map; congruence); f_equal; auto.
-  * by intros; f_equal.
-Qed.
-End ctree_map_id.
-
-Lemma ctree_merge_difference_valid w ys :
-  ys ⊆* ctree_flatten w → ctree_valid (ctree_merge false (∖) w ys).
-Proof.
-  revert w ys. refine (ctree_ind_alt _ _ _ _ _ _); simpl.
-  * constructor; auto using seps_difference_valid.
-  * intros τ ws IH ys Hys; constructor; revert ys Hys.
-    induction IH; intros; simplifier; auto.
-  * intros s wxss IH ys Hys; constructor; revert ys Hys.
-    + induction IH as [|[]]; intros; constructor; simplifier; auto.
-    + induction IH as [|[]]; intros;
-        constructor; simplifier; auto using seps_difference_valid.
-  * intros; simplifier. apply MUnion'_valid; auto using seps_difference_valid.
-  * constructor; auto using seps_difference_valid.
-Qed.
 Lemma ctree_merge_difference_unmapped_1 w ys :
   ys ⊆* ctree_flatten w → Forall sep_unmapped ys →
   ctree_unmapped (ctree_merge false (∖) w ys) → ctree_unmapped w.
@@ -1239,43 +1343,14 @@ Proof.
   intros ?. rewrite ctree_flatten_merge by done.
   eauto using seps_unmapped_difference_2.
 Qed.
-Lemma MUnion'_merge_difference s i w xs ys :
-  ys ⊆* ctree_flatten w ++ xs →
-  ctree_merge false (∖) (MUnion' s i w xs) ys
-  = let sz := length (ctree_flatten w) in
-    let w' := ctree_merge false (∖) w (take sz ys) in
-    let xs' := xs ∖* drop sz ys in MUnion' s i w' xs'.
-Proof.
-  intros. unfold MUnion'. repeat case_decide; simplifier; auto.
-  * exfalso. intuition eauto using ctree_merge_difference_unmapped_2,
-      seps_unmapped_difference_2.
-  * unfold MUnion'. rewrite ctree_flatten_merge. by case_decide.
-  * by rewrite MUnion'_MUnion by (by rewrite ctree_flatten_merge).
-Qed.
-Lemma ctree_disjoint_difference w1 w2 : w1 ⊆ w2 → w1 ⊥ w2 ∖ w1.
-Proof.
-  revert w1 w2. refine (ctree_subseteq_ind_alt _ _ _ _ _ _ _); simpl.
-  * constructor; auto using seps_disjoint_difference.
-  * intros τ ws1 ws2 _ IH; constructor. induction IH; simpl; auto.
-  * intros s wxss1 wxss2 _ IH Hwxss; constructor.
-    + clear Hwxss. induction IH; simpl; auto.
-    + clear IH. induction Hwxss as [|[] []]; constructor;
-        simpl; auto using seps_disjoint_difference.
-  * intros; rewrite <-MUnion'_MUnion by done;
-      apply MUnion'_disjoint; auto using seps_disjoint_difference.
-  * constructor; auto using seps_disjoint_difference.
-  * intros s i xs1 w2 xs2 ????; simplifier; apply MUnionAll_MUnion'_disjoint;
-      simplifier;
-      auto using seps_disjoint_difference, ctree_merge_difference_valid.
-Qed.
-Hint Immediate ctree_disjoint_difference : simplifier.
-Hint Extern 5 => symmetry; apply ctree_disjoint_difference : simplifier.
+Hint Immediate ctree_disjoint_difference.
+Hint Extern 5 => symmetry; apply ctree_disjoint_difference.
 Lemma ctree_merge_difference w ys :
   ctree_valid w → ys ⊆* ctree_flatten w → Forall sep_unmapped ys →
   ctree_merge true (∪) (ctree_merge false (∖) w ys) ys = w.
 Proof.
   assert (∀ xs ys, ys ⊆* xs → xs ∖* ys ∪* ys = xs).
-  { intros. rewrite seps_commutative by eauto with simplifier.
+  { intros. rewrite seps_commutative by eauto.
     auto using seps_union_difference. }
   intros Hw. revert w Hw ys. refine (ctree_valid_ind_alt _ _ _ _ _ _); simpl.
   * intros; f_equal; auto.
@@ -1285,7 +1360,7 @@ Proof.
     induction IH as [|[]]; intros; simplifier; f_equal; auto with f_equal.
   * intros; simplifier;
       unfold MUnion'; case_decide; simplifier; [|f_equal; auto].
-    exfalso; intuition eauto using seps_unmapped_difference_1,
+    naive_solver eauto using seps_unmapped_difference_1,
       ctree_merge_difference_unmapped_1.
   * intros; f_equal; auto.
 Qed.
@@ -1295,15 +1370,15 @@ Proof.
   * intros; f_equal; auto using seps_union_difference.
   * intros τ ws1 ws2 _ IH; f_equal. induction IH; f_equal'; auto.
   * intros s wxss1 wxss2 _ IH Hwxss; f_equal. induction IH as [|[][]];
-      decompose_Forall_hyps; repeat f_equal; auto using seps_union_difference.
+      simplifier; repeat f_equal; auto using seps_union_difference.
   * intros; unfold MUnion'; case_decide; simplifier;
       f_equal'; auto using seps_union_difference.
-    by rewrite ctree_merge_flatten by intuition eauto with simplifier.
+    by rewrite ctree_merge_flatten by intuition eauto.
   * intros; f_equal; auto using seps_union_difference.
   * intros; simplifier. unfold MUnion'; rewrite decide_False by intuition eauto
       using seps_unmapped_difference_1, ctree_merge_difference_unmapped_1.
     simplifier. by rewrite ctree_merge_difference, seps_commutative,
-      seps_union_difference by eauto with simplifier.
+      seps_union_difference by eauto.
 Qed.
 Lemma ctree_difference_empty_rev w1 w2 :
   w1 ⊆ w2 → ctree_empty (w2 ∖ w1) → w1 = w2.
@@ -1368,7 +1443,6 @@ Proof.
   * intros s i xs1 w2 xs2 ?????; simplifier.
     eauto using seps_splittable_weaken.
 Qed.
-Hint Rewrite @fmap_app : simplifier.
 Lemma ctree_flatten_half w : ctree_flatten (½ w) = ½* (ctree_flatten w).
 Proof.
   revert w. refine (ctree_ind_alt _ _ _ _ _ _); simpl; try done.
@@ -1406,9 +1480,6 @@ Proof.
   * intros; simplifier; f_equal; auto using seps_union_half.
   * intros; f_equal; auto using seps_union_half.
 Qed.
-Hint Rewrite <-@fmap_take : simplifier.
-Hint Rewrite <-@fmap_drop : simplifier.
-Hint Rewrite @fmap_length : simplifier.
 Lemma ctree_merge_half w ys :
   ctree_flatten w ⊥* ys → Forall sep_splittable (ctree_flatten w ∪* ys) →
   ½ (ctree_merge true (∪) w ys) = ctree_merge true (∪) (½ w) (½* ys).
