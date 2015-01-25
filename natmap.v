@@ -287,6 +287,8 @@ Proof.
 Qed.
 Lemma to_bools_length (X : natset) sz : length (to_bools sz X) = sz.
 Proof. apply resize_length. Qed.
+Lemma lookup_to_bools_ge sz X i : sz ≤ i → to_bools sz X !! i = None.
+Proof. by apply lookup_resize_old. Qed.
 Lemma lookup_to_bools sz X i β :
   i < sz → to_bools sz X !! i = Some β ↔ (i ∈ X ↔ β = true).
 Proof.
@@ -302,6 +304,32 @@ Qed.
 Lemma lookup_to_bools_true sz X i :
   i < sz → to_bools sz X !! i = Some true ↔ i ∈ X.
 Proof. intros. rewrite lookup_to_bools by done. intuition. Qed.
+Lemma lookup_to_bools_false sz X i :
+  i < sz → to_bools sz X !! i = Some false ↔ i ∉ X.
+Proof. intros. rewrite lookup_to_bools by done. naive_solver. Qed.
+Lemma to_bools_union sz X1 X2 :
+  to_bools sz (X1 ∪ X2) = to_bools sz X1 ||* to_bools sz X2.
+Proof.
+  apply list_eq; intros i; rewrite lookup_zip_with.
+  destruct (decide (i < sz)); [|by rewrite !lookup_to_bools_ge by lia].
+  apply option_eq; intros β.
+  rewrite lookup_to_bools, elem_of_union by done; intros.
+  destruct (decide (i ∈ X1)), (decide (i ∈ X2)); repeat first
+    [ rewrite (λ X H, proj2 (lookup_to_bools_true sz X i H)) by done
+    | rewrite (λ X H, proj2 (lookup_to_bools_false sz X i H)) by done];
+    destruct β; naive_solver.
+Qed.
+Lemma to_of_bools βs sz : to_bools sz (of_bools βs) = resize sz false βs.
+Proof.
+  apply list_eq; intros i. destruct (decide (i < sz));
+    [|by rewrite lookup_to_bools_ge, lookup_resize_old by lia].
+  apply option_eq; intros β.
+  rewrite lookup_to_bools, elem_of_of_bools by done.
+  destruct (decide (i < length βs)).
+  { rewrite lookup_resize by done.
+    destruct (lookup_lt_is_Some_2 βs i) as [[]]; destruct β; naive_solver. }
+  rewrite lookup_resize_new, lookup_ge_None_2 by lia. destruct β; naive_solver.
+Qed.
 
 (** A [natmap A] forms a stack with elements of type [A] and possible holes *)
 Definition natmap_push {A} (o : option A) (m : natmap A) : natmap A :=
