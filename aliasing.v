@@ -150,7 +150,7 @@ Proof.
     simpl in *; rewrite !addr_index_plus, <-!Hidx; simplify_map_equality'.
   destruct (m !! addr_index a1) as [[|w malloc]|] eqn:?;
     [by simplify_option_equality| |by simplify_option_equality].
-  destruct (proj2 Hm (addr_index a1) w malloc)
+  destruct (cmap_valid_Obj Γ Γm (CMap m) (addr_index a1) w malloc)
     as (τ&?&_&?&_); auto; simplify_type_equality'.
   assert (Γ ⊢ r1' ++ RUnion i1 s true :: r' :
     addr_type_object a2 ↣ addr_type_base a1).

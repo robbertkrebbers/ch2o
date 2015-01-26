@@ -102,7 +102,8 @@ Proof.
   * refine_inversion_all; inv_ehstep; decompose_Forall_hyps.
     exists f; split_ands; eauto.
     refine_constructor; eauto using addr_top_strict, addr_top_refine,
-      index_typed_valid, index_typed_representable, locks_empty_refine.
+      cmap_index_typed_valid, cmap_index_typed_representable,
+      locks_empty_refine.
   * refine_inversion_all; inv_ehstep.
     { exists f; eauto. }
     exfalso; eauto using index_alive_1'.
@@ -346,7 +347,7 @@ Proof.
     repeat refine_constructor; eauto 7 using
       direction_refine_weaken, mem_free_refine',
       ctx_refine_weaken, mem_free_forward', option_eq_1_alt,
-      index_typed_representable, index_typed_valid.
+      cmap_index_typed_representable, cmap_index_typed_valid.
     eapply stmt_refine_weaken; eauto using mem_free_forward', mem_free_refine'.
 Qed.
 End refinement_preservation.

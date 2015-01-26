@@ -128,11 +128,11 @@ Lemma mem_writable_weaken Γ1 Γ2 Γm m a σ :
   ✓ Γ1 → (Γ1,Γm) ⊢ a : Some σ → mem_writable Γ1 a m →
   Γ1 ⊆ Γ2 → mem_writable Γ2 a m.
 Proof. intros ?? (w&?&?) ?; exists w; eauto using cmap_lookup_weaken. Qed.
-Lemma mem_writable_all_weaken Γ1 Γ2 m :
-  ✓ Γ1 → ✓{Γ1} m → mem_writable_all Γ1 m → Γ1 ⊆ Γ2 → mem_writable_all Γ2 m.
+Lemma mem_writable_all_weaken Γ1 Γ2 Γm1 m :
+  ✓ Γ1 → ✓{Γ1,Γm1} m → mem_writable_all Γ1 m → Γ1 ⊆ Γ2 → mem_writable_all Γ2 m.
 Proof.
-  intros ? Hm ?? o τ ?; eapply mem_writable_weaken; eauto using
-    addr_top_typed, index_typed_representable, index_typed_valid.
+  intros ???? o τ ?; eapply mem_writable_weaken; eauto 10 using addr_top_typed,
+    cmap_index_typed, cmap_index_typed_representable, cmap_index_typed_valid.
 Qed.
 Lemma mem_writable_all_empty Γ : mem_writable_all Γ ∅.
 Proof. intros ?? [??]; simplify_map_equality'. Qed.
@@ -191,21 +191,31 @@ Proof.
   * by intros ?? [β' ?]; exists β'; simplify_map_equality'.
   * by intros ? τ' [??] [??]; exists τ'; simplify_map_equality'.
 Qed.
+Lemma mem_alloc_memenv_valid Γ Γm o τ β :
+  ✓{Γ} Γm → Γm !! o = None → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
+  ✓{Γ}(<[o:=(τ,β)]>Γm).
+Proof.
+  intros HΓm ??? o' τ' [??].
+  destruct (decide (o = o')); simplify_map_equality'; eauto.
+  eapply HΓm; do 2 red; eauto.
+Qed.
 Lemma mem_alloc_valid Γ Γm m o malloc τ :
   ✓ Γ → ✓{Γ,Γm} m → ✓{Γ} τ → Γm !! o = None → int_typed (size_of Γ τ) sptrT →
   ✓{Γ,<[o:=(τ,false)]>Γm} (mem_alloc Γ o malloc τ m).
 Proof.
-  destruct m as [m]; intros HΓ Hm Hx Hτ Hsz; split; simpl.
+  destruct m as [m]; intros HΓ Hm Hx Hτ Hsz; split_ands'; simpl.
+  { eauto using mem_alloc_memenv_valid, cmap_valid_memenv_valid. }
   { intros o' τ'; rewrite lookup_insert_Some;
       intros [[??]|[??]]; simplify_equality'.
-    destruct (proj1 Hm o' τ') as (?&?&?&?); simplify_map_equality'; eauto 10
+    destruct (cmap_valid_Freed Γ Γm (CMap m) o' τ')
+      as (?&?&?&?); simplify_map_equality'; eauto 10
       using mem_alloc_forward, memenv_forward_typed, memenv_forward_alive. }
   intros o' w malloc'; rewrite lookup_insert_Some;
     intros [[??]|[??]]; simplify_equality'.
   { exists τ; split_ands; eauto 7 using (ctree_Forall_not _ _ Γm),
      ctree_new_typed, pbit_full_valid, ctree_new_Forall,
      mem_alloc_index_typed, mem_alloc_index_alive. }
-  destruct (proj2 Hm o' w malloc')
+  destruct (cmap_valid_Obj Γ Γm (CMap m) o' w malloc')
     as (τ'&?&?&?&?&?); simplify_map_equality'; eauto.
   exists τ'; split_ands; eauto using ctree_typed_weaken, mem_alloc_forward,
     memenv_forward_typed, memenv_forward_alive, mem_alloc_index_alive_neq.
@@ -338,22 +348,33 @@ Proof.
   * by exists true; simplify_map_equality'.
   * by exists β; simplify_map_equality'.
 Qed.
+Lemma mem_free_env_valid Γ Γm o :
+  ✓{Γ} Γm → ✓{Γ}(alter (prod_map id (λ _, true)) o Γm).
+Proof.
+  intros HΓm o' τ' [??]; specialize (HΓm o' τ').
+  destruct (decide (o = o')); simplify_map_equality';
+    [destruct (Γm !! o') as [[]|] eqn:?; simplify_map_equality'|];
+    eapply HΓm; do 2 red; eauto.
+Qed.
 Lemma mem_free_valid Γ Γm m o :
   ✓ Γ → ✓{Γ,Γm} m → ✓{Γ,alter (prod_map id (λ _, true)) o Γm} (mem_free o m).
 Proof.
-  destruct m as [m]; intros HΓ Hm; split; simpl.
+  destruct m as [m]; intros HΓ Hm; split_ands'; simpl.
+  { eauto using mem_free_env_valid, cmap_valid_memenv_valid. }
   { intros o' τ; rewrite lookup_alter_Some;
       intros [(?&[τ'|w malloc']&?&?)|[??]]; simplify_equality'.
-    * destruct (proj1 Hm o' τ') as (?&?&?&?); eauto 10 using
-        mem_free_forward, memenv_forward_typed, memenv_forward_alive.
-    * destruct (proj2 Hm o' w malloc') as (?&?&?&?&?&?);simplify_type_equality';
+    * destruct (cmap_valid_Freed Γ Γm (CMap m) o' τ') as (?&?&?&?); eauto 10
+        using mem_free_forward, memenv_forward_typed, memenv_forward_alive.
+    * destruct (cmap_valid_Obj Γ Γm (CMap m) o' w malloc')
+        as (?&?&?&?&?&?);simplify_type_equality';
         eauto 11 using ctree_typed_type_valid, mem_free_index_alive,
         mem_free_forward, memenv_forward_typed, memenv_forward_alive.
-    * destruct (proj1 Hm o' τ) as (?&?&?&?); eauto 10 using
+    * destruct (cmap_valid_Freed Γ Γm (CMap m) o' τ)
+        as (?&?&?&?); eauto 10 using
         mem_free_forward, memenv_forward_typed, memenv_forward_alive. }
   intros o' w malloc; rewrite lookup_alter_Some;
     intros [(?&[]&?&?)|[??]]; simplify_map_equality'.
-  destruct (proj2 Hm o' w malloc) as (τ'&?&?&?&?&?); eauto.
+  destruct (cmap_valid_Obj Γ Γm (CMap m) o' w malloc) as (τ'&?&?&?&?&?); eauto.
   exists τ'; split_ands; eauto using
     ctree_typed_weaken, mem_free_index_alive_neq, mem_free_forward,
      mem_free_forward, memenv_forward_typed, memenv_forward_alive.
@@ -456,7 +477,7 @@ Proof.
   assert ((Γ,Γm) ⊢ w : type_of w) by eauto using cmap_lookup_Some.
   unfold lookupE, cmap_lookup in *; case_option_guard; simplify_equality'.
   destruct (cmap_car m !! addr_index a) as [[|w' β]|] eqn:?; simplify_equality'.
-  destruct (proj2 Hm (addr_index a) w' β) as (τ&?&?&?); auto.
+  destruct (cmap_valid_Obj Γ Γm m (addr_index a) w' β) as (τ&?&?&?); auto.
 Qed.
 Global Instance mem_writable_dec Γ a m : Decision (mem_writable Γ a m).
 Proof.
@@ -597,8 +618,9 @@ Lemma mem_insert_top_writable_all Γ m o2 v2 τ2 :
   mem_writable_all Γ m → mem_writable_all Γ (<[addr_top o2 τ2:=v2]{Γ}>m).
 Proof.
   intros ????? o τ; erewrite mem_insert_memenv_of by eauto using
-    addr_top_typed, index_typed_representable; intros.
-  eapply mem_insert_writable; eauto using addr_top_typed, index_typed_representable.
+    addr_top_typed, cmap_index_typed_representable; intros.
+  eapply mem_insert_writable;
+    eauto using addr_top_typed, cmap_index_typed_representable.
   eauto using mem_insert_writable, addr_top_disjoint.
 Qed.
 Lemma mem_insert_allocable Γ m a v o :
@@ -687,7 +709,7 @@ Lemma mem_singleton_freeze Γ Γm β a malloc x v τ :
   mem_singleton Γ (freeze β a) malloc x v = mem_singleton Γ a malloc x v.
 Proof. apply cmap_singleton_freeze. Qed.
 Lemma mem_singleton_valid Γ Γm a malloc x v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ →
+  ✓ Γ → ✓{Γ} Γm → (Γ,Γm) ⊢ a : Some τ →
   index_alive Γm (addr_index a) → addr_is_obj a → addr_strict Γ a →
   (Γ,Γm) ⊢ v : τ → sep_valid x → ¬sep_unmapped x →
   ✓{Γ,Γm} (mem_singleton Γ a malloc x v).
@@ -848,13 +870,14 @@ Lemma mem_unlock_forward m Ω : '{m} ⇒ₘ '{mem_unlock Ω m}.
 Proof. by rewrite mem_unlock_memenv_of. Qed.
 Lemma mem_unlock_valid Γ Γm m Ω : ✓ Γ → ✓{Γ,Γm} m → ✓{Γ,Γm} (mem_unlock Ω m).
 Proof.
-  destruct m as [m], Ω as [Ω HΩ']; intros ? [Hm1 Hm2]; split; simpl in *.
+  destruct m as [m], Ω as [Ω HΩ'];
+    intros ? (HΓm&Hm1&Hm2); split_ands'; simpl in *; auto.
   { intros o τ; rewrite lookup_merge by done; intros.
     destruct (Ω !! o), (m !! o) as [[]|] eqn:?; simplify_equality'; eauto. }
   intros o w β; rewrite lookup_merge by done; intros.
   destruct (m !! o) as [[|w' ?]|] eqn:Hw',
     (Ω !! o) as [ω|] eqn:Hω; simplify_equality'; eauto.
-  destruct (Hm2 o w' β) as (τ&?&?&?&Hemp&?); auto.
+  destruct (Hm2 o w' β) as (τ&?&?&?&Hemp); auto.
   exists τ; split_ands; auto using ctree_unlock_typed, to_bools_length.
   rewrite ctree_flatten_merge; contradict Hemp.
   eapply pbits_unlock_empty_inv;
@@ -969,7 +992,7 @@ Proof.
   case_option_guard; simplify_equality'.
   erewrite addr_object_offset_alt by eauto.
   destruct (cmap_car m !! addr_index a) as [[|w' β]|] eqn:?; simplify_equality'.
-  destruct (proj2 Hm (addr_index a) w' β) as (τ'&?&_&?&_); auto.
+  destruct (cmap_valid_Obj Γ Γm m (addr_index a) w' β) as (τ'&?&_&?&_); auto.
   assert (Γm ⊢ addr_index a : addr_type_object a)
     by eauto using addr_typed_index; simplify_type_equality.
   destruct (w' !!{Γ} addr_ref Γ a) as [w''|] eqn:?; simplify_equality'.
@@ -1040,7 +1063,7 @@ Proof.
   destruct (cmap_car m !! _) as [[|w' β]|] eqn:?; simplify_equality'; try done.
   assert (Γm ⊢ addr_index a : addr_type_object a)
     by eauto using addr_typed_index.
-  destruct (proj2 Hm (addr_index a) w' β)
+  destruct (cmap_valid_Obj Γ Γm m (addr_index a) w' β)
     as (?&?&_&?&_); auto; simplify_type_equality'.
   destruct (w' !!{Γ} addr_ref Γ a) as [w''|] eqn:Hw''; simplify_equality'.
   assert ((Γ,Γm) ⊢ w'' : addr_type_base a)

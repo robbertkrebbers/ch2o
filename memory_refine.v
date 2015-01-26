@@ -405,7 +405,7 @@ Proof.
   simpl; intros ? Hf (Hm1&?&?&Hm).
   split; split_ands; auto using mem_free_valid, mem_free_refine_env_r.
   destruct m1 as [m1], m2 as [m2]; simpl in *; intros o1 o2 r w1 malloc ??.
-  destruct (proj2 Hm1 o1 w1 malloc) as (τ1&?&?&_); auto.
+  destruct (cmap_valid_Obj Γ Γm1 (CMap m1) o1 w1 malloc) as (τ1&?&?&_); auto.
   destruct (decide (o2 = o)) as [->|?]; [by destruct (Hf o1 r)|].
   destruct (Hm o1 o2 r w1 malloc) as (w2&w2'&τ2&?&?&?&?); auto.
   exists w2 w2' τ2; simplify_map_equality; eauto 7 using ctree_refine_weaken,
@@ -491,8 +491,9 @@ Proof.
     destruct (m1 !! o1) as [[]|]; naive_solver. }
   destruct (Hm o1 o2 r w1 malloc) as (w2'&w2&τ2&?&?&?&?); auto; clear Hm.
   assert ((Γ,'{m1}) ⊢ w1 : τ2) by eauto.
-  destruct (proj2 Hm1 o1 w1 malloc) as (?&?&?&?&_),
-   (proj2 Hm2 o2 w2' malloc) as (τ'&?&?&?&_); auto; simplify_type_equality'.
+  destruct (cmap_valid_Obj Γ ('{m1}) m1 o1 w1 malloc) as (?&?&?&?&_),
+    (cmap_valid_Obj Γ ('{m2}) m2 o2 w2' malloc) as (τ'&?&?&?&_);
+    simplify_type_equality'; auto.
   rewrite !elem_of_mem_locks; simplify_option_equality.
   rewrite <-!list_lookup_fmap.
   erewrite pbits_refine_locked; eauto using ctree_flatten_refine.
@@ -579,8 +580,9 @@ Proof.
   destruct (Hm o1 o2 r w1' β') as (w2&w2'&τ1&Ho2&?&?&?); auto; clear Hm.
   assert ((Γ,Γm1) ⊢ w1' : τ1) by eauto using ctree_refine_typed_l.
   assert ((Γ,Γm2) ⊢ w2' : τ1) by eauto using ctree_refine_typed_r.
-  destruct (proj2 Hm1 o1 w1' β')as (?&?&?&?&_),
-    (proj2 Hm2 o2 w2 β') as (τ2&?&?&?&_); auto; simplify_type_equality.
+  destruct (cmap_valid_Obj Γ Γm1 (CMap m1) o1 w1' β')as (?&?&?&?&_),
+    (cmap_valid_Obj Γ Γm2 (CMap m2) o2 w2 β') as (τ2&?&?&?&_);
+    simplify_type_equality; auto.
   destruct (ctree_lookup_Some Γ Γm2 w2 τ2 r w2')
     as (τ1'&?&?); auto; simplify_type_equality.
   assert (ref_object_offset Γ r + bit_size_of Γ τ1

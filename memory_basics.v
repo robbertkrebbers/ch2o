@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export fin_map_dom types.
+Require Export fin_map_dom type_environment.
 Require Import nmap natmap mapset.
 
 (** * Indexes into the memory *)
@@ -40,10 +40,13 @@ Notation memenv Ti :=
   (indexmap (type Ti * bool (* false = alive, true = freed *))).
 Instance index_typed {Ti} : Typed (memenv Ti) (type Ti) index := λ Γm o τ,
   ∃ β, Γm !! o = Some (τ,β).
-Instance index_typecheck {Ti} : TypeCheck (memenv Ti) (type Ti) index := λ Γm o,
-  fst <$> Γm !! o.
 Definition index_alive {Ti} (Γm : memenv Ti) (o : index) : Prop :=
   ∃ τ, Γm !! o = Some (τ,false).
+Instance memenv_valid `{Env Ti} : Valid (env Ti) (memenv Ti) := λ Γ Γm, ∀ o τ,
+  Γm ⊢ o : τ → ✓{Γ} τ ∧ int_typed (size_of Γ τ) sptrT.
+
+Instance index_typecheck {Ti} : TypeCheck (memenv Ti) (type Ti) index := λ Γm o,
+  fst <$> Γm !! o.
 Instance: TypeCheckSpec (memenv Ti) (type Ti) index (λ _, True).
 Proof.
   intros ? Γm o τ. split; unfold type_check, typed,index_typecheck, index_typed.
@@ -57,6 +60,20 @@ Instance index_alive_dec {Ti} (Γm : memenv Ti) o : Decision (index_alive Γm o)
   | None => right _
   end; abstract naive_solver.
 Defined.
+Lemma memenv_empty_valid `{Env Ti} Γ : ✓{Γ} (∅ : memenv Ti).
+Proof. intros ?? [??]; simplify_map_equality. Qed.
+Lemma memenv_valid_weaken `{EnvSpec Ti} Γ1 Γ2 (Γm : memenv Ti) :
+  ✓ Γ1 → ✓{Γ1} Γm → Γ1 ⊆ Γ2 → ✓{Γ2} Γm.
+Proof.
+  intros ? HΓm ? o τ ?; destruct (HΓm o τ); auto.
+  erewrite <-size_of_weaken by eauto; eauto using type_valid_weaken.
+Qed.
+Lemma index_typed_valid `{EnvSpec Ti} Γ (Γm : memenv Ti) o τ :
+  ✓{Γ} Γm → Γm ⊢ o : τ → ✓{Γ} τ.
+Proof. intros Ho; eapply Ho; eauto. Qed.
+Lemma index_typed_representable `{EnvSpec Ti} Γ (Γm : memenv Ti) o τ :
+  ✓{Γ} Γm → Γm ⊢ o : τ → int_typed (size_of Γ τ) sptrT.
+Proof. intros Ho; eapply Ho; eauto. Qed.
 
 (** During the execution of the semantics, the memory environments should only
 grow, i.e. new objects may be allocated and current objects may be freed. We

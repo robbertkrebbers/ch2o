@@ -59,7 +59,7 @@ Proof.
   destruct m as [m]; intros ? Hm.
   do 2 red; split_ands; simpl; auto using memenv_refine_id.
   intros ? o r w malloc; rewrite lookup_meminj_id; intros; simplify_equality'.
-  destruct (proj2 Hm o w malloc) as (τ&?&_&?&_); auto.
+  destruct (cmap_valid_Obj Γ Γm (CMap m) o w malloc) as (τ&?&_&?&_); auto.
   exists w w; eauto 6 using ctree_refine_id, type_of_typed.
 Qed.
 Lemma cmap_refine_id' Γ α m : ✓ Γ → ✓{Γ} m → m ⊑{Γ,α} m.
@@ -88,7 +88,7 @@ Lemma cmap_refine_inverse' Γ f m1 m2 :
 Proof.
   intros (?&Hm2&?&Hm); split; split_ands; eauto using memenv_refine_inverse.
   intros o2 o1 r w2 malloc ??.
-  destruct (proj2 Hm2 o2 w2 malloc) as (τ&?&?&?&_); auto.
+  destruct (cmap_valid_Obj Γ ('{m2}) m2 o2 w2 malloc) as (τ&?&?&?&_); auto.
   destruct (lookup_meminj_inverse_1 Γ f ('{m1}) ('{m2}) o1 o2 r τ)
     as (?&?&->); auto.
   assert (index_alive' m1 o1) as help; [|unfold index_alive' in help].
@@ -141,7 +141,7 @@ Proof.
     assert ((Γ,Γm1) ⊢ w1' : τ2) by eauto using ctree_refine_typed_l.
     assert (Γm1 ⊢ addr_index a1 : addr_type_object a1)
       by eauto using addr_typed_index, addr_refine_typed_l.
-    destruct (proj2 Hm1 (addr_index a1) w1' β)
+    destruct (cmap_valid_Obj Γ Γm1 (CMap m1) (addr_index a1) w1' β)
       as (?&?&_&?&_); auto; simplify_type_equality'.
     eauto using ref_set_offset_typed_unique, addr_typed_ref_base_typed. }
   case_option_guard; simplify_equality'.
@@ -160,7 +160,7 @@ Proof.
   intros ? (Hm1&?&HΓm&Hm) ?? Hf.
   split; split_ands; eauto using cmap_valid_weaken.
   intros o1 o2 r w1 malloc ??.
-  destruct (proj2 Hm1 o1 w1 malloc) as (τ&?&_); auto.
+  destruct (cmap_valid_Obj Γ Γm1 m1 o1 w1 malloc) as (τ&?&_); auto.
   destruct (Hm o1 o2 r w1 malloc)
     as (w2&w2'&τ'&?&?&?&?); eauto using option_eq_1, meminj_extend_left.
   exists w2 w2' τ'; split_ands;

@@ -186,15 +186,15 @@ Proof.
   induction HΩvs; simpl; intros; decompose_Forall;
     simplify_option_equality; f_equal; eauto.
 Qed.
-Lemma expr_eval_typed_aux Γ Γf τs τs' fs ρ m e av τlr :
-  ✓ Γ → ✓{Γ,'{m} } m → ⟦ e ⟧ Γ fs ρ m = Some av →
-  (Γ,'{m}) ⊢ fs : Γf → '{m} ⊢* ρ :* τs →
-  τs `prefix_of` τs' → (Γ,Γf,'{m},τs') ⊢ e : τlr → (Γ,'{m}) ⊢ av : τlr.
+Lemma expr_eval_typed_aux Γ Γm Γf τs τs' fs ρ m e av τlr :
+  ✓ Γ → ✓{Γ,Γm} m → ⟦ e ⟧ Γ fs ρ m = Some av →
+  (Γ,Γm) ⊢ fs : Γf → Γm ⊢* ρ :* τs →
+  τs `prefix_of` τs' → (Γ,Γf,Γm,τs') ⊢ e : τlr → (Γ,Γm) ⊢ av : τlr.
 Proof.
   intros ?? Hav Hfs ? [τs'' ->] He. revert e av Hav τlr He. assert (∀ es vs σs,
     Forall2 (λ e v, ∀ τlr,
-      (Γ,Γf,'{m},τs ++ τs'') ⊢ e : τlr → (Γ,'{m}) ⊢ inr v : τlr) es vs →
-    (Γ,Γf,'{m},τs ++ τs'') ⊢* es :* inr <$> σs → (Γ,'{m}) ⊢* vs :* σs).
+      (Γ,Γf,Γm,τs ++ τs'') ⊢ e : τlr → (Γ,Γm) ⊢ inr v : τlr) es vs →
+    (Γ,Γf,Γm,τs ++ τs'') ⊢* es :* inr <$> σs → (Γ,Γm) ⊢* vs :* σs).
   { intros es vs σs Hes. revert σs.
     induction Hes; intros [|??] ?; decompose_Forall_hyps;
       repeat match goal with
@@ -211,27 +211,27 @@ Proof.
     | H : _ ⊢ ?e : _, H2 : ∀ _, _ ⊢ ?e : _  → _ |- _ => specialize (H2 _ H)
     end; try typed_constructor; eauto using
       val_unop_typed, val_binop_typed, val_cast_typed, addr_top_typed,
-      index_typed_valid, index_typed_representable, addr_top_strict,
+      cmap_index_typed_valid, cmap_index_typed_representable, addr_top_strict,
       addr_elt_typed, addr_elt_strict, addr_elt_typed, addr_elt_strict,
       val_lookup_seg_typed, val_alter_const_typed.
   eapply purefuns_typed_lookup; eauto.
 Qed.
-Lemma expr_eval_typed Γ Γf τs fs ρ m e av τlr :
-  ✓ Γ → ✓{Γ,'{m}} m → ⟦ e ⟧ Γ fs ρ m = Some av →
-  (Γ,'{m}) ⊢ fs : Γf → '{m} ⊢* ρ :* τs →
-  (Γ,Γf,'{m},τs) ⊢ e : τlr → (Γ,'{m}) ⊢ av : τlr.
+Lemma expr_eval_typed Γ Γm Γf τs fs ρ m e av τlr :
+  ✓ Γ → ✓{Γ,Γm} m → ⟦ e ⟧ Γ fs ρ m = Some av →
+  (Γ,Γm) ⊢ fs : Γf → Γm ⊢* ρ :* τs →
+  (Γ,Γf,Γm,τs) ⊢ e : τlr → (Γ,Γm) ⊢ av : τlr.
 Proof. intros. eapply expr_eval_typed_aux; eauto. Qed.
 
-Lemma expr_eval_weaken Γ1 Γ2 Γf τs fs ρ1 ρ2 m1 m2 e av τlr :
-  ✓ Γ1 → ✓{Γ1} m1 → (Γ1,'{m1}) ⊢ fs : Γf → '{m1} ⊢* ρ1 :* τs → 
-  (Γ1,Γf,'{m1},τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 m1 = Some av → 
+Lemma expr_eval_weaken Γ1 Γ2 Γm1 Γf τs fs ρ1 ρ2 m1 m2 e av τlr :
+  ✓ Γ1 → ✓{Γ1,Γm1} m1 → (Γ1,Γm1) ⊢ fs : Γf → Γm1 ⊢* ρ1 :* τs → 
+  (Γ1,Γf,Γm1,τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 m1 = Some av → 
   Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
   ρ1 `prefix_of` ρ2 → ⟦ e ⟧ Γ2 fs ρ2 m2 = Some av.
 Proof.
   intros ???? He Hav ?? [ρ3 ->]. revert Hav τlr He. assert (∀ es vs σs,
-    Forall2 (λ e v, ∀ τlr, (Γ1,Γf,'{m1},τs) ⊢ e : τlr →
+    Forall2 (λ e v, ∀ τlr, (Γ1,Γf,Γm1,τs) ⊢ e : τlr →
       ⟦ e ⟧ Γ2 fs (ρ1 ++ ρ3) m2 = Some (inr v)) es vs →
-    (Γ1,Γf,'{m1},τs) ⊢* es :* inr <$> σs →
+    (Γ1,Γf,Γm1,τs) ⊢* es :* inr <$> σs →
     mapM (λ e, ⟦ e ⟧ Γ2 fs (ρ1 ++ ρ3) m2 ≫= maybe inr) es = Some vs). 
   { intros es vs σs Hes Hes'. apply mapM_Some. revert σs Hes'.
     induction Hes; intros [|??] ?; decompose_Forall_hyps; constructor;
@@ -239,8 +239,8 @@ Proof.
   revert e av. apply (expr_eval_ind Γ1 fs ρ1 m1
     (λ e _, ∀ τlr, _ ⊢ e : τlr → (_:Prop))); simpl; intros; typed_inversion_all;
     repeat match goal with
-    | H: ⟦ ?e ⟧ Γ1 fs ρ1 m1 = Some ?av,  _: (Γ1,Γf,'{m1},τs) ⊢ ?e : ?τlr |- _ =>
-      feed pose proof (expr_eval_typed Γ1 Γf τs fs ρ1 m1 e av τlr); auto;
+    | H: ⟦ ?e ⟧ Γ1 fs ρ1 m1 = Some ?av,  _: (Γ1,Γf,Γm1,τs) ⊢ ?e : ?τlr |- _ =>
+      feed pose proof (expr_eval_typed Γ1 Γm1 Γf τs fs ρ1 m1 e av τlr); auto;
       clear H
     end; typed_inversion_all; auto.
   * rewrite lookup_app_l by eauto using lookup_lt_Some.

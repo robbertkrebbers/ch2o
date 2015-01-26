@@ -19,12 +19,13 @@ Local Opaque nmap.Nempty.
 
 Lemma cmap_valid_subseteq Γ Γm m1 m2 : ✓ Γ → ✓{Γ,Γm} m2 → m1 ⊆ m2 → ✓{Γ,Γm} m1.
 Proof.
-  destruct m1 as [m1], m2 as [m2]; intros ? [Hm2 Hm2'] Hm; split.
+  destruct m1 as [m1], m2 as [m2]; intros ? (?&Hm2&Hm2') Hm; split_ands'.
+  * done.
   * intros o τ ?; specialize (Hm o); simplify_option_equality.
     destruct (m2 !! o) as [[]|] eqn:?; destruct Hm; subst; eauto.
   * intros o w malloc ?; specialize (Hm o); simplify_option_equality.
     destruct (m2 !! o) as [[|w' malloc']|] eqn:?; try done.
-    destruct Hm as [[??]?], (Hm2' o w' malloc') as (τ'&?&?&?&?&?);
+    destruct Hm as [[??]?], (Hm2' o w' malloc') as (τ'&?&?&?&?);
       eauto 10 using ctree_typed_subseteq.
 Qed.
 Lemma cmap_lookup_disjoint Γ Γm m1 m2 a w1 w2 :
@@ -38,8 +39,8 @@ Proof.
   destruct (m2 !! addr_index a) as [[|w2' β']|] eqn:Hw2; simplify_equality'.
   destruct (w1' !!{Γ} addr_ref Γ a) as [w1''|] eqn:?; simplify_equality'.
   destruct (w2' !!{Γ} addr_ref Γ a) as [w2''|] eqn:?; simplify_equality'.
-  destruct (proj2 Hm1 (addr_index a) w1' β) as (τ&?&?&?&_),
-    (proj2 Hm2 (addr_index a) w2' β') as (?&?&?&?&_);
+  destruct (cmap_valid_Obj Γ Γm (CMap m1) (addr_index a) w1' β) as (τ&?&?&?&_),
+    (cmap_valid_Obj Γ Γm (CMap m2) (addr_index a) w2' β') as (?&?&?&?&_);
     auto; simplify_type_equality'.
   simplify_option_equality; naive_solver
     eauto 3 using ctree_lookup_byte_disjoint, ctree_lookup_disjoint.
@@ -72,7 +73,7 @@ Proof.
   destruct (decide (o = addr_index a)); simplify_map_equality'; [|apply Hm].
   destruct (m1 !! addr_index a) as [[|w1' β]|] eqn:?; simplify_equality'.
   destruct (w1' !!{Γ} addr_ref Γ a) as [w1''|] eqn:?; simplify_equality'.
-  destruct (proj2 Hm1 (addr_index a) w1' β)
+  destruct (cmap_valid_Obj Γ Γm1 (CMap m1) (addr_index a) w1' β)
     as (τ&?&_&?&_); auto; simplify_equality'.
   destruct (ctree_lookup_Some Γ Γm1 w1' τ (addr_ref Γ a) w1'')
     as (τ'&_&?); auto.
@@ -111,7 +112,7 @@ Proof.
   destruct (m1 !! addr_index a) as [[|w1' β]|] eqn:?,
     (m2 !! addr_index a) as [[|w2' ?]|]; simplify_equality'; do 2 f_equal.
   destruct (w1' !!{Γ} addr_ref Γ a) as [w1''|] eqn:?; simplify_equality'.
-  destruct (proj2 Hm1 (addr_index a) w1' β)
+  destruct (cmap_valid_Obj Γ Γm1 (CMap m1) (addr_index a) w1' β)
     as (τ&?&_&?&_); auto; simplify_equality'.
   destruct (ctree_lookup_Some Γ Γm1 w1' τ (addr_ref Γ a) w1'') as (τ'&_&?); auto.
   destruct Hm as [(?&?&?)?]; case_decide; simplify_option_equality.

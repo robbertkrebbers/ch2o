@@ -49,7 +49,8 @@ Proof.
   intros ? [] ???.
   * typed_inversion_all; decompose_Forall_hyps; split_ands; auto.
     typed_constructor; eauto using addr_top_typed, addr_top_strict,
-      index_typed_valid, index_typed_representable, lockset_empty_valid.
+      cmap_index_typed_valid, cmap_index_typed_representable,
+      lockset_empty_valid.
   * typed_inversion_all; auto.
   * typed_inversion_all; auto 7.
   * typed_inversion_all.
@@ -222,7 +223,7 @@ Proof.
     split; [|eauto using funenv_typed_weaken, mem_free_forward'].
     eexists; simpl; split_ands; repeat typed_constructor; eauto using
       ctx_typed_weaken, direction_typed_weaken, mem_free_forward',
-      mem_free_valid', index_typed_valid, index_typed_representable.
+      mem_free_valid', cmap_index_typed_valid, cmap_index_typed_representable.
     eapply stmt_typed_weaken; eauto using mem_free_forward'.
 Qed.
 Lemma csteps_preservation Γ Γf δ S1 S2 f :

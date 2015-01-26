@@ -1015,7 +1015,8 @@ Proof.
   intros ?? HΔl. revert τs. induction HΔl as [|[[x' [o|τ'|]]|] ? Δl ? IH];
     intros τs' ?; simplify_option_equality; simplify_type_equality; eauto 2.
   * typed_constructor; eauto using addr_top_typed, addr_top_strict,
-      index_typed_valid, index_typed_representable, lockset_empty_valid.
+      cmap_index_typed_valid, cmap_index_typed_representable,
+      lockset_empty_valid.
   * typed_constructor. by rewrite list_lookup_middle.
   * rewrite cons_middle, (associative_L (++)). apply (IH (τs' ++ [τ'])).
     rewrite app_length; simpl. by rewrite Nat.add_comm.
@@ -1145,7 +1146,8 @@ Proof.
   destruct (Δg !! x) as [d|] eqn:Hd; simplify_equality; specialize (HΔg x d Hd).
   destruct d; simplify_equality'.
   * typed_constructor; eauto using addr_top_typed, addr_top_strict,
-      index_typed_valid, index_typed_representable, lockset_empty_valid.
+      cmap_index_typed_valid, cmap_index_typed_representable,
+      lockset_empty_valid.
   * typed_constructor; eauto using lockset_empty_valid.
 Qed.
 Lemma lookup_typedef_valid' Γ Γm Δg Δl x τ :
@@ -1369,7 +1371,7 @@ Proof.
   case_error_guard; simplify_equality'.
   destruct (⟦ e ⟧ Γ ∅ [] m) as [[]|] eqn:?; simplify_equality'.
   cut ((Γ,'{m}) ⊢ inr v : inr τ); [by intros; typed_inversion_all|].
-  eapply (expr_eval_typed_aux Γ (to_funtypes Δg) [] (local_env_stack_types Δl));
+  eapply (expr_eval_typed_aux Γ _ (to_funtypes Δg) [] (local_env_stack_types Δl));
     eauto using type_valid_ptr_type_valid, to_init_expr_typed, prefix_of_nil.
   by intro; destruct (to_funtypes _ !! _); simpl_map.
 Qed.
@@ -1395,11 +1397,12 @@ Proof.
     destruct (to_init_val Γn Γ m Δg Δl τ'' ci) as [v|] eqn:?; simplify_equality'.
     assert ('{m} ⇒ₘ '{<[addr_top o τ:=v]{Γ}> m}).
     { eapply mem_insert_forward; eauto using to_init_val_typed,
-        addr_top_typed, index_typed_representable. }
+        addr_top_typed, cmap_index_typed_representable. }
     split_ands; eauto 8 using mem_insert_valid', to_init_val_typed,
-      addr_top_typed, index_typed_representable, mem_insert_top_writable_all,
-      global_env_insert_valid_Some, global_decl_valid_weaken,
-      memenv_forward_typed, to_funtypes_insert_Some, global_env_valid_weaken. }
+      addr_top_typed, cmap_index_typed_representable,
+      mem_insert_top_writable_all, global_env_insert_valid_Some,
+      global_decl_valid_weaken, memenv_forward_typed, to_funtypes_insert_Some,
+      global_env_valid_weaken. }
   repeat case_error_guard; simplify_equality'.
   destruct mci as [ci|]; simplify_equality'.
   * set (m'':=mem_alloc Γ (fresh (dom indexset m)) false τ' m) in *.
