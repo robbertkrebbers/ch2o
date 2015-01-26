@@ -34,7 +34,7 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inr;
      a ← maybe (VBase ∘ VPtr ∘ Ptr) v;
      guard (addr_strict Γ a);
-     guard (index_alive ('{m}) (addr_index a));
+     guard (index_alive' m (addr_index a));
      Some (inl a)
   | & e =>
      a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inl;
@@ -105,7 +105,7 @@ Context (Pval : ∀ v, P (# v) (inr v)).
 Context (Paddr : ∀ a, P (% a) (inl a)).
 Context (Prtol : ∀ e a,
   ⟦ e ⟧ Γ fs ρ m = Some (inr (ptrV (Ptr a))) → P e (inr (ptrV (Ptr a))) →
-  addr_strict Γ a → index_alive ('{m}) (addr_index a) → P (.* e) (inl a)).
+  addr_strict Γ a → index_alive' m (addr_index a) → P (.* e) (inl a)).
 Context (Profl : ∀ e a,
   ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) → P (&e) (inr (ptrV (Ptr a)))).
 Context (Peltl : ∀ e rs a,
@@ -223,7 +223,7 @@ Lemma expr_eval_typed Γ Γf τs fs ρ m e av τlr :
 Proof. intros. eapply expr_eval_typed_aux; eauto. Qed.
 
 Lemma expr_eval_weaken Γ1 Γ2 Γf τs fs ρ1 ρ2 m1 m2 e av τlr :
-  ✓ Γ1 → ✓{Γ1,'{m1}} m1 → (Γ1,'{m1}) ⊢ fs : Γf → '{m1} ⊢* ρ1 :* τs → 
+  ✓ Γ1 → ✓{Γ1} m1 → (Γ1,'{m1}) ⊢ fs : Γf → '{m1} ⊢* ρ1 :* τs → 
   (Γ1,Γf,'{m1},τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 m1 = Some av → 
   Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
   ρ1 `prefix_of` ρ2 → ⟦ e ⟧ Γ2 fs ρ2 m2 = Some av.
@@ -245,7 +245,8 @@ Proof.
     end; typed_inversion_all; auto.
   * rewrite lookup_app_l by eauto using lookup_lt_Some.
     by simplify_option_equality.
-  * by simplify_option_equality by eauto using addr_strict_weaken.
+  * by simplify_option_equality
+      by eauto using addr_strict_weaken, index_alive_1', index_alive_2'.
   * by simplify_option_equality.
   * simplify_option_equality. by erewrite <-addr_elt_weaken by eauto.
   * by simplify_option_equality.
@@ -261,6 +262,24 @@ Proof.
   * simplify_option_equality; eauto.
   * by simplify_option_equality by eauto using val_cast_ok_weaken.
   * simplify_option_equality; eauto.
+Qed.
+Lemma expr_eval_erase Γ fs ρ m e : ⟦ e ⟧ Γ fs ρ (cmap_erase m) = ⟦ e ⟧ Γ fs ρ m.
+Proof.
+  destruct e using @expr_ind_alt; simpl;
+    repeat match goal with
+    | H : ⟦ _ ⟧ _ _ _ _ = _ |- _ => rewrite H
+    | H : appcontext [index_alive'] |- _ => rewrite index_alive_erase' in H
+    | H : appcontext [val_true] |- _ => rewrite val_true_erase in H
+    | H : appcontext [val_unop_ok] |- _ => rewrite val_unop_ok_erase in H
+    | H : appcontext [val_binop_ok] |- _ => rewrite val_binop_ok_erase in H
+    | H : appcontext [val_cast_ok] |- _ => rewrite val_cast_ok_erase in H
+    | _ => apply option_bind_ext_fun; intros
+    | _ => case_option_guard; try done
+    | _ => destruct (val_true_false_dec (cmap_erase m) _) as [[[]|[]]|[]]
+    | _ => destruct (val_true_false_dec m _) as [[[]|[]]|[]]
+    end; try done.
+  apply option_bind_ext; auto.
+  apply Forall_mapM_ext; decompose_Forall; f_equal'; auto.
 Qed.
 
 (** Only the denotations of functions that actually appear in an expression

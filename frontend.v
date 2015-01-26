@@ -1692,7 +1692,7 @@ Proof.
   unfold to_envs. intros. destruct (to_envs_go _ _ _ _ _)
     as [|[[[??] ?] ?]] eqn:?; simplify_error_equality.
   destruct (to_envs_go_typed Θ ∅ ∅ ∅ ∅ Γn Γ m Δg)
-    as (?&?&?&?&?); eauto 6 using env_empty_valid, mem_empty_writable_all,
+    as (?&?&?&?&?); eauto 6 using env_empty_valid, mem_writable_all_empty,
     cmap_empty_valid, to_funenv_typed, global_env_empty_valid.
 Qed.
 End properties.

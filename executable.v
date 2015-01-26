@@ -42,7 +42,7 @@ Definition ehexec (Γ : env Ti) (k : ctx Ti)
      Some (%(addr_top o τ), m)
   | .* (#{Ω} (ptrV (Ptr a))) =>
      guard (addr_strict Γ a);
-     guard (index_alive ('{m}) (addr_index a));
+     guard (index_alive' m (addr_index a));
      Some (%{Ω} a, m)
   | & (%{Ω} a) =>
      Some (#{Ω} (ptrV (Ptr a)), m)

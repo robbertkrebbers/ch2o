@@ -27,7 +27,11 @@ Definition cmap_elem_Forall2 {Ti A} (P : Prop)
   end.
 Definition cmap_elem_map2 {Ti A} (f : ctree Ti A → ctree Ti A → ctree Ti A)
     (x y : cmap_elem Ti A) : cmap_elem Ti A :=
-  match x, y with Obj w1 β, Obj w2 _ => Obj (f w1 w2) β | _, _ => x end.
+  match x, y with
+  | Obj w1 β, Obj w2 _ => Obj (f w1 w2) β
+  | Obj w β, _ | _, Obj w β => Obj w β
+  | Freed τ, _ => Freed τ
+ end.
 Instance cmap_elem_eq_dec {Ti A : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2),
   ∀ w1 w2 : A, Decision (w1 = w2)} (x y : cmap_elem Ti A) : Decision (x = y).
 Proof. solve_decision. Defined.
@@ -92,6 +96,10 @@ Proof.
   * solve_decision.
   * intros []; apply _.
 Defined.
+
+Definition cmap_erase {Ti A : Set} (m : cmap Ti A) : cmap Ti A :=
+  let (m) := m in
+  CMap (omap (λ x, '(w,β) ← maybe_Obj x; Some (Obj w β)) m).
 
 Instance cmap_sep {Ti A : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2),
   Separation A} : Separation (cmap Ti A).
@@ -202,3 +210,43 @@ Proof.
     + by constructor; rewrite Forall_singleton.
     + inversion_clear 1; decompose_Forall_hyps; eauto using sep_unmapped_empty.
 Qed.
+
+Section cmap_erase.
+Context {Ti A : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2), SeparationOps A}.
+Implicit Types m : cmap Ti A.
+Local Opaque nmap.Nempty.
+
+Lemma cmap_erase_empty : cmap_erase (∅ : cmap Ti A) = ∅.
+Proof. simpl. by rewrite omap_empty. Qed.
+Lemma dmap_erase_disjoint m1 m2 : m1 ⊥ m2 → cmap_erase m1 ⊥ cmap_erase m2.
+Proof.
+  destruct m1 as [m1], m2 as [m2]; intros Hm o; specialize (Hm o).
+  rewrite !lookup_omap. by destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|].
+Qed.
+Lemma cmap_erase_union m1 m2 :
+  cmap_erase (m1 ∪ m2) = cmap_erase m1 ∪ cmap_erase m2.
+Proof.
+  sep_unfold; destruct m1 as [m1], m2 as [m2]; f_equal'; apply map_eq; intros o.
+  rewrite lookup_omap, !lookup_union_with, !lookup_omap.
+  destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|]; naive_solver.
+Qed.
+Lemma dmap_erase_subseteq m1 m2 : m1 ⊆ m2 → cmap_erase m1 ⊆ cmap_erase m2.
+Proof.
+  destruct m1 as [m1], m2 as [m2]; intros Hm o; specialize (Hm o).
+  rewrite !lookup_omap. by destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|].
+Qed.
+Lemma cmap_erase_difference m1 m2 :
+  m2 ⊆ m1 → cmap_erase (m1 ∖ m2) = cmap_erase m1 ∖ cmap_erase m2.
+Proof.
+  sep_unfold; destruct m1 as [m1], m2 as [m2]; intros Hm; f_equal'.
+  apply map_eq; intros o; specialize (Hm o).
+  rewrite lookup_omap, !lookup_difference_with, !lookup_omap.
+  destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|];
+    simplify_option_equality; naive_solver.
+Qed.
+Lemma cmap_erase_erase m : cmap_erase (cmap_erase m) = cmap_erase m.
+Proof.
+  destruct m as [m]; f_equal'; apply map_eq; intros o.
+  rewrite !lookup_omap. by destruct (m !! o) as [[]|].
+Qed.
+End cmap_erase.

@@ -134,8 +134,11 @@ Proof.
   intros ? Hm ?? o τ ?; eapply mem_writable_weaken; eauto using
     addr_top_typed, index_typed_representable, index_typed_valid.
 Qed.
-Lemma mem_empty_writable_all Γ : mem_writable_all Γ ∅.
+Lemma mem_writable_all_empty Γ : mem_writable_all Γ ∅.
 Proof. intros ?? [??]; simplify_map_equality'. Qed.
+Lemma mem_erase_writable Γ m a :
+  mem_writable Γ a (cmap_erase m) = mem_writable Γ a m.
+Proof. unfold mem_writable; simpl. by rewrite cmap_lookup_erase. Qed.
 
 (** ** Properties of the [alloc] function *)
 Lemma mem_allocable_alt m o : mem_allocable o m ↔ o ∉ dom indexset m.
@@ -271,6 +274,12 @@ Proof.
   induction 1; rewrite ?elem_of_cons; constructor;
     naive_solver auto using mem_alloc_allocable.
 Qed.
+Lemma mem_erase_alloc Γ m o malloc τ :
+  cmap_erase (mem_alloc Γ o malloc τ m) = mem_alloc Γ o malloc τ (cmap_erase m).
+Proof.
+  destruct m as [m]; f_equal'; apply map_eq; intros o'.
+  by destruct (decide (o' = o)); simplify_map_equality.
+Qed.
 
 (** ** Properties of the [mem_free] fucntion *)
 Global Instance mem_freeable_perm_dec o m : Decision (mem_freeable_perm o m).
@@ -294,6 +303,14 @@ Proof.
     by destruct (m !! o') as [[]|]. }
   by rewrite lookup_fmap, !lookup_alter_ne, lookup_fmap by done.
 Qed.
+Lemma mem_erase_freeable_perm m o :
+  mem_freeable_perm o (cmap_erase m) ↔ mem_freeable_perm o m.
+Proof.
+  destruct m as [m]; unfold mem_freeable_perm; simpl. rewrite lookup_omap.
+  destruct (m !! o) as [[]|]; naive_solver.
+Qed.
+Lemma mem_erase_freeable m o : mem_freeable o (cmap_erase m) ↔ mem_freeable o m.
+Proof. unfold mem_freeable. by rewrite mem_erase_freeable_perm. Qed.
 Lemma mem_free_index_typed_inv Γm o o' τ' :
   alter (prod_map id (λ _, true)) o Γm ⊢ o' : τ' → Γm ⊢ o' : τ'.
 Proof.
@@ -369,6 +386,9 @@ Proof.
   destruct (m !!{Γ} a) as [w|] eqn:?; simplify_option_equality.
   eapply to_val_frozen, cmap_lookup_Some; eauto.
 Qed.
+Lemma mem_lookup_erase Γ m a :
+  (cmap_erase m !!{Γ} a : option (val Ti)) = m !!{Γ} a.
+Proof. unfold lookupE, mem_lookup. by rewrite cmap_lookup_erase. Qed.
 
 (** Properties of the [force] function *)
 Lemma mem_force_memenv_of Γ Γm m a :
@@ -395,6 +415,9 @@ Proof.
   unfold valid at 2 3, cmap_valid'; intros.
   erewrite mem_force_memenv_of by eauto; eauto using mem_force_valid.
 Qed.
+Lemma mem_erase_force Γ m a :
+  cmap_erase (mem_force Γ a m) = mem_force Γ a (cmap_erase m).
+Proof. apply cmap_erase_alter. Qed.
 Lemma mem_lookup_force Γ Γm m a v τ :
   ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → m !!{Γ} a = Some v → addr_is_obj a →
   mem_force Γ a m !!{Γ} a = Some v.
@@ -510,6 +533,9 @@ Proof.
   unfold valid at 2 3, cmap_valid'; intros.
   erewrite mem_insert_memenv_of by eauto; eauto using mem_insert_valid.
 Qed.
+Lemma mem_erase_insert Γ m a v :
+  cmap_erase (<[a:=v]{Γ}>m) = <[a:=v]{Γ}>(cmap_erase m).
+Proof. apply cmap_erase_alter. Qed.
 (** We need [addr_is_obj a] because writes at padding bytes are ignored *)
 Lemma mem_lookup_insert Γ Γm m a v τ :
   ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m → addr_is_obj a →
@@ -732,6 +758,11 @@ Proof.
 Qed.
 Lemma mem_locks_empty : mem_locks ∅ = ∅.
 Proof. apply dsig_eq; unfold mem_locks; simpl. by rewrite omap_empty. Qed.
+Lemma mem_locks_erase m : mem_locks (cmap_erase m) = mem_locks m.
+Proof.
+  destruct m as [m]; f_equal'; apply dsig_eq; simpl; apply map_eq; intros o.
+  rewrite !lookup_omap. by destruct (m !! o) as [[]|].
+Qed.
 Lemma mem_unlock_empty m : mem_unlock ∅ m = m.
 Proof.
   destruct m as [m]; unfold mem_unlock; sep_unfold; f_equal.
@@ -761,6 +792,9 @@ Proof.
   unfold valid at 2 3, cmap_valid'; intros.
   erewrite mem_lock_memenv_of by eauto. eauto using mem_lock_valid.
 Qed.
+Lemma mem_erase_lock Γ m a :
+  cmap_erase (mem_lock Γ a m) = mem_lock Γ a (cmap_erase m).
+Proof. apply cmap_erase_alter. Qed.
 Lemma ctree_unlock_typed Γ Γm w τ βs :
   ✓ Γ → (Γ,Γm) ⊢ w : τ → length βs = bit_size_of Γ τ →
   (Γ,Γm) ⊢ ctree_merge true pbit_unlock_if w βs : τ.
@@ -830,6 +864,13 @@ Lemma mem_unlock_valid' Γ m Ω : ✓ Γ → ✓{Γ} m → ✓{Γ} (mem_unlock �
 Proof.
   unfold valid at 2 3, cmap_valid'; intros.
   rewrite mem_unlock_memenv_of. eauto using mem_unlock_valid.
+Qed.
+Lemma mem_erase_unlock m Ω :
+  cmap_erase (mem_unlock Ω m) = mem_unlock Ω (cmap_erase m).
+Proof.
+  destruct m as [m], Ω as [Ω]; f_equal'; apply map_eq; intros o.
+  rewrite !lookup_omap, !lookup_merge, lookup_omap by done.
+  by destruct (m !! o) as [[]|], (Ω !! o).
 Qed.
 Lemma elem_of_lock_singleton Γ a o i :
   (o,i) ∈ lock_singleton Γ a ↔

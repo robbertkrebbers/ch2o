@@ -45,6 +45,7 @@ Hint Immediate Undef_undef.
 Hint Immediate meminj_extend_reflexive.
 Hint Immediate sctx_item_subst_refine.
 Hint Resolve meminj_extend_inverse cmap_refine_inverse'.
+Hint Immediate addr_alive_refine'.
 
 Lemma assign_refine Γ α f m1 m2 ass a1 a2 v1 v2 v1' va1' τ τ' σ :
   ✓ Γ → m1 ⊑{Γ,α,f} m2 → assign_typed Γ τ τ' ass σ →
@@ -102,7 +103,9 @@ Proof.
     exists f; split_ands; eauto.
     refine_constructor; eauto using addr_top_strict, addr_top_refine,
       index_typed_valid, index_typed_representable, locks_empty_refine.
-  * refine_inversion_all; inv_ehstep. exists f; eauto.
+  * refine_inversion_all; inv_ehstep.
+    { exists f; eauto. }
+    exfalso; eauto using index_alive_1'.
   * refine_inversion_all; inv_ehstep; exists f; eauto 10.
   * refine_inversion_all; inv_ehstep. edestruct assign_refine_both; eauto.
     exists f; split_ands; eauto.
@@ -168,6 +171,7 @@ Proof.
       ρ1 ρ2 τs e1 e2 e1' e2' τlr); naive_solver. }
   destruct p; refine_inversion_all; decompose_Forall_hyps;
     try by (eexists _, _; do_ehstep).
+  * exfalso; eauto using index_alive_1'.
   * edestruct assign_refine as (?&?&?&?&?); eauto. eexists _, _; do_ehstep.
   * edestruct mem_lookup_refine as (?&?&?); eauto. eexists _, _; do_ehstep.
   * edestruct val_lookup_seg_refine_alt as (?&?&?); eauto.

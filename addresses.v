@@ -127,6 +127,13 @@ Qed.
 Lemma addr_typed_representable Γ Γm a σp :
   (Γ,Γm) ⊢ a : σp → int_typed (size_of Γ (addr_type_object a)) sptrT.
 Proof. by destruct 1. Qed.
+Lemma addr_byte_representable Γ Γm a σp :
+  ✓ Γ → (Γ,Γm) ⊢ a : σp → int_typed (addr_byte a) sptrT.
+Proof.
+  destruct 2 as [o r i τ σ σp ?? [_ ?]]; simpl; split.
+  { transitivity 0; auto using int_lower_nonpos with zpos. }
+  cut (size_of Γ σ * ref_size r ≤ size_of Γ τ); [lia|eauto using size_of_ref].
+Qed.
 Lemma addr_typed_index Γ Γm a σp :
   (Γ,Γm) ⊢ a : σp → Γm ⊢ addr_index a : addr_type_object a.
 Proof. by destruct 1. Qed.

@@ -89,6 +89,12 @@ Proof.
     | Some (Obj _ _) => left _ | _ => right _
     end; tauto.
 Defined.
+Lemma index_alive_erase' m o :
+  index_alive' (cmap_erase m) o = index_alive' m o.
+Proof.
+  unfold index_alive'; destruct m as [m]; simpl.
+  rewrite lookup_omap. by destruct (m !! o) as [[]|].
+Qed.
 
 Lemma cmap_empty_valid Γ Γm : ✓{Γ,Γm} (∅ : mem Ti).
 Proof. by split; intros until 0; simplify_map_equality'. Qed.
@@ -133,6 +139,18 @@ Proof. intros; eapply index_typed_valid_representable; eauto. Qed.
 Lemma index_typed_representable Γ Γm m o τ :
   ✓ Γ → ✓{Γ,Γm} m → '{m} ⊢ o : τ → int_typed (size_of Γ τ) sptrT.
 Proof. intros; eapply index_typed_valid_representable; eauto. Qed.
+Lemma cmap_erase_typed Γ Γm m : ✓{Γ,Γm} m →  ✓{Γ,Γm} (cmap_erase m).
+Proof.
+  destruct m as [m]; unfold lookupE; intros [??]; split; simpl in *.
+  * intros o τ. rewrite lookup_omap. by destruct (m !! o) as [[]|].
+  * intros o w maloc. rewrite lookup_omap.
+    destruct (m !! o) as [[]|] eqn:?; intros; simplify_equality'; eauto.
+Qed.
+Lemma cmap_lookup_erase Γ m a : cmap_erase m !!{Γ} a = m !!{Γ} a.
+Proof.
+  unfold lookupE, cmap_lookup; destruct m as [m]; simpl.
+  rewrite lookup_omap. by destruct (m !! addr_index a) as [[]|].
+Qed.
 Lemma cmap_lookup_weaken Γ1 Γ2 Γm m a w σ :
   ✓ Γ1 → (Γ1,Γm) ⊢ a : Some σ → m !!{Γ1} a = Some w → Γ1 ⊆ Γ2 →
   m !!{Γ2} a = Some w.
@@ -188,6 +206,13 @@ Proof.
   destruct (ctree_lookup_Some Γ Γm w' τ (addr_ref Γ a) w'')
     as (σ'&?&?); auto; simplify_option_equality;
     eauto using ctree_lookup_byte_typed, type_of_typed.
+Qed.
+Lemma cmap_erase_alter Γ g m a :
+  cmap_erase (cmap_alter Γ g a m) = cmap_alter Γ g a (cmap_erase m).
+Proof.
+  unfold lookupE, cmap_lookup; destruct m as [m]; f_equal'; apply map_eq.
+  intros o; destruct (decide (o = addr_index a)); simplify_map_equality; auto.
+  by destruct (m !! addr_index a) as [[]|].
 Qed.
 Lemma cmap_alter_memenv_of Γ Γm m g a w :
   ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} a = Some w → type_of (g w) = type_of w →

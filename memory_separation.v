@@ -66,13 +66,14 @@ Proof.
     intuition; eauto using pbits_disjoint_full, @ctree_flatten_disjoint.
 Qed.
 Lemma mem_free_union m1 m2 o1 :
-  m1 ⊥ m2 → mem_freeable_perm o1 m1 → mem_free o1 (m1 ∪ m2) = mem_free o1 m1 ∪ m2.
+  m1 ⊥ m2 → mem_freeable_perm o1 m1 →
+  mem_free o1 (m1 ∪ m2) = mem_free o1 m1 ∪ m2.
 Proof.
   destruct m1 as [m1], m2 as [m2]; intros Hm (w1&?&?); sep_unfold; f_equal'.
-  apply alter_union_with_l.
-  * intros [] [] ??; do 2 f_equal'. specialize (Hm o1); simplify_map_equality'.
-    intuition eauto using ctree_union_type_of.
-  * intros [] ??; naive_solver.
+  apply alter_union_with_l; [|intros [] ??; naive_solver].
+  intros [] [|w2 ?] ??; do 2 f_equal';
+    specialize (Hm o1); simplify_map_equality';
+    naive_solver eauto using pbits_disjoint_full, @ctree_flatten_disjoint.
 Qed.
 Lemma mem_force_disjoint Γ Γm1 m1 m2 a1 τ1 :
   ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
@@ -321,5 +322,23 @@ Lemma mem_alloc_singleton Γ o malloc τ m :
 Proof.
   intros. by rewrite <-mem_alloc_empty_singleton,
     <-mem_alloc_union, sep_left_id by done.
+Qed.
+Lemma mem_free_singleton Γ o a malloc x v :
+  addr_index a = o → cmap_erase (mem_free o (mem_singleton Γ a malloc x v)) = ∅.
+Proof.
+  intros <-; sep_unfold; f_equal'; apply map_empty; intros o.
+  by destruct (decide (o = addr_index a)); simplify_map_equality'.
+Qed.
+Lemma mem_free_singleton_union Γ o a malloc x v m :
+  addr_index a = o →
+  cmap_erase (mem_free o (mem_singleton Γ a malloc x v) ∪ m) = cmap_erase m.
+Proof.
+  destruct m as [m]; intros <-; sep_unfold; f_equal'; apply map_eq; intros o.
+  destruct (decide (o = addr_index a)) as [->|].
+  * rewrite !lookup_omap, lookup_union_with, lookup_alter, lookup_singleton.
+    by destruct (m !! addr_index a) as [[]|].
+  * rewrite !lookup_omap, lookup_union_with,
+      lookup_alter_ne, lookup_singleton_ne by done.
+    by destruct (m !! o) as [[]|].
 Qed.
 End memory.
