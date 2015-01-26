@@ -17,6 +17,16 @@ Arguments cmap_lookup _ _ _ _ !_ /.
 Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
 Local Opaque nmap.Nempty.
 
+Lemma cmap_valid_subseteq Γ Γm m1 m2 : ✓ Γ → ✓{Γ,Γm} m2 → m1 ⊆ m2 → ✓{Γ,Γm} m1.
+Proof.
+  destruct m1 as [m1], m2 as [m2]; intros ? [Hm2 Hm2'] Hm; split.
+  * intros o τ ?; specialize (Hm o); simplify_option_equality.
+    destruct (m2 !! o) as [[]|] eqn:?; destruct Hm; subst; eauto.
+  * intros o w malloc ?; specialize (Hm o); simplify_option_equality.
+    destruct (m2 !! o) as [[|w' malloc']|] eqn:?; try done.
+    destruct Hm as [[??]?], (Hm2' o w' malloc') as (τ'&?&?&?&?&?);
+      eauto 10 using ctree_typed_subseteq.
+Qed.
 Lemma cmap_lookup_disjoint Γ Γm m1 m2 a w1 w2 :
   ✓ Γ → ✓{Γ,Γm} m1 → ✓{Γ,Γm} m2 → m1 ⊥ m2 →
   m1 !!{Γ} a = Some w1 → m2 !!{Γ} a = Some w2 → w1 ⊥ w2.
