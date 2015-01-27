@@ -16,8 +16,6 @@ open Format;;
 open Extracted;;
 
 let trace_width = ref 72;;
-let trace_printfs = ref true;;
-let choose_randomly = ref true;;
 let break_on_undef = ref false;;
 let printf_returns_int = ref true;;
 
@@ -857,35 +855,34 @@ let event_of_state env tenv x =
       with Not_found -> [])
   | _ -> [];;
 
-let initial_of_decls (m,x) =
-  match interpreter_initial (x86 true) x m [] with
+let initial_of_decls arch (m,x) =
+  match interpreter_initial arch x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
-let initial_of_cabs x = initial_of_decls (decls_of_cabs x);;
-let initial_of_file x = initial_of_decls (decls_of_file x);;
+let initial_of_cabs arch x = initial_of_decls arch (decls_of_cabs x);;
+let initial_of_file arch x = initial_of_decls arch (decls_of_file x);;
 
-let graph_of_decls (m,x) =
-  match interpreter_all (x86 true)
+let graph_of_decls arch (m,x) =
+  match interpreter_all arch
     (=) event_of_state (fun x -> z_of_int (Hashtbl.hash x)) x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
-let graph_of_cabs x = graph_of_decls (decls_of_cabs x);;
-let graph_of_file x = graph_of_decls (decls_of_file x);;
+let graph_of_cabs arch x = graph_of_decls arch (decls_of_cabs x);;
+let graph_of_file arch x = graph_of_decls arch (decls_of_file x);;
 
-let choose =
-  ref (fun x -> if !choose_randomly
-    then nat_of_int (Random.int (int_of_nat x))
-    else nat_of_int 0);;
-
-let stream_of_decls (m,x) =
-  match interpreter_rand (x86 true) event_of_state !choose x m [] with
+let stream_of_decls arch rand (m,x) =
+  let choose =
+    if rand
+    then fun x -> nat_of_int (Random.int (int_of_nat x))
+    else fun x -> nat_of_int 0 in
+  match interpreter_rand arch event_of_state choose x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
-let stream_of_cabs x = stream_of_decls (decls_of_cabs x);;
-let stream_of_file x = stream_of_decls (decls_of_file x);;
+let stream_of_cabs arch rand x = stream_of_decls arch rand (decls_of_cabs x);;
+let stream_of_file arch rand x = stream_of_decls arch rand (decls_of_file x);;
 
 let rec print_states l =
   match l with
@@ -933,7 +930,7 @@ let rec find_symbol n l =
   | [(_,c)] -> c
   | (m,c)::l' -> if n <= m then c else find_symbol n l';;
 
-let trace_graph x =
+let trace_graph trace_printfs x =
   let h = ref x in
   try
     while true do
@@ -947,7 +944,7 @@ let trace_graph x =
         print_string c; col := !col + 1;
         let e = uniq (List.filter ((<>) "") (List.map (fun x ->
           String.escaped (string_of_chars x.events_new)) s1)) in
-        if !trace_printfs && e <> [] then
+        if trace_printfs && e <> [] then
           (let s = "<"^string_of_events e^">" in
            let n = String.length s in
            (if !col + n > !trace_width then (print_string "\n"; col := 0));
@@ -958,9 +955,12 @@ let trace_graph x =
     done
   with Not_found -> ();;
 
-let trace_decls x = trace_graph (graph_of_decls x);;
-let trace_cabs x = trace_graph (graph_of_cabs x);;
-let trace_file x = trace_graph (graph_of_file x);;
+let trace_decls arch trace_printfs x =
+  trace_graph trace_printfs (graph_of_decls arch x);;
+let trace_cabs arch trace_printfs x =
+  trace_graph trace_printfs (graph_of_cabs arch x);;
+let trace_file arch trace_printfs x =
+  trace_graph trace_printfs (graph_of_file arch x);;
 
 let run_stream x =
   Random.self_init ();
@@ -981,27 +981,39 @@ let run_stream x =
     done; 0
   with CH2O_exited y -> int_of_num y;;
 
-let run_decls x = run_stream (stream_of_decls x);;
-let run_cabs x = run_stream (stream_of_cabs x);;
-let run_file x = run_stream (stream_of_file x);;
+let run_decls arch rand x = run_stream (stream_of_decls arch rand x);;
+let run_cabs arch rand x = run_stream (stream_of_cabs arch rand x);;
+let run_file arch rand x = run_stream (stream_of_file arch rand x);;
+
+type mode = Run of bool | Trace of bool
 
 let main () =
-  try if Array.length Sys.argv < 2 then raise Not_found else
-    if Sys.argv.(1) = "-t" then
-      if Array.length Sys.argv <> 3 then raise Not_found else
-      (trace_printfs := false; trace_file Sys.argv.(2); 0)
-    else if Sys.argv.(1) = "-T" then
-      if Array.length Sys.argv <> 3 then raise Not_found else
-      (trace_printfs := true; trace_file Sys.argv.(2); 0)
-    else if Sys.argv.(1) = "-r" then
-      if Array.length Sys.argv <> 3 then raise Not_found else
-      (choose_randomly := true; run_file Sys.argv.(2))
-    else
-      if Array.length Sys.argv <> 2 then raise Not_found else
-      (choose_randomly := false; run_file Sys.argv.(1))
-  with Not_found -> output_string stderr
-    ("Usage: "^Filename.basename(Sys.argv.(0))^" [-r | -t | -T] filename\n");
-    64;;
+  let mode = ref (Run false) in
+  let filename = ref "" in
+  let arch = ref "x86" in
+  let malloc_can_fail = ref false in
+  let speclist =
+    [("-r", Arg.Unit (fun _ -> mode := Run true), "run a random execution");
+     ("-t", Arg.Unit (fun _ -> mode := Trace false),
+        "trace all executions (do not include prinfs in trace)");
+     ("-T", Arg.Unit (fun _ -> mode := Trace true),
+        "trace all executions (include prinfs in trace)");
+     ("-a", Arg.Symbol (["x86"; "x86_64"], fun x -> arch := x),
+        "architecture (default x86)");
+     ("-m", Arg.Set (malloc_can_fail),
+        "malloc non-deterministically returns 0 (default it always succeeds)");
+    ] in
+  let usage_msg =
+    "Usage: "^Filename.basename(Sys.argv.(0))^" [options] filename" in
+  Arg.parse speclist (fun x -> filename := x) usage_msg;
+  let a =
+    match !arch with
+    | "x86_64" -> x86_64 !malloc_can_fail
+    | _ -> x86 !malloc_can_fail in
+  match !mode with
+  | Run rand -> run_file a rand !filename
+  | Trace trace_printfs -> trace_file a trace_printfs !filename;
+  64;;
 
 let interactive () =
   try
