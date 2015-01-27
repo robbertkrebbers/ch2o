@@ -858,7 +858,7 @@ let event_of_state env tenv x =
   | _ -> [];;
 
 let initial_of_decls (m,x) =
-  match interpreter_initial x86 x m [] with
+  match interpreter_initial (x86 true) x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
@@ -866,7 +866,7 @@ let initial_of_cabs x = initial_of_decls (decls_of_cabs x);;
 let initial_of_file x = initial_of_decls (decls_of_file x);;
 
 let graph_of_decls (m,x) =
-  match interpreter_all x86
+  match interpreter_all (x86 true)
     (=) event_of_state (fun x -> z_of_int (Hashtbl.hash x)) x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
@@ -880,7 +880,7 @@ let choose =
     else nat_of_int 0);;
 
 let stream_of_decls (m,x) =
-  match interpreter_rand x86 event_of_state !choose x m [] with
+  match interpreter_rand (x86 true) event_of_state !choose x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 

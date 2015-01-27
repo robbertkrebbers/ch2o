@@ -71,12 +71,13 @@ Proof.
   * typed_inversion_all.
     split_ands; eauto 7 using addr_elt_typed, addr_elt_strict.
   * typed_inversion_all; split_ands; eauto using val_lookup_seg_typed.
+  * typed_inversion_all; split_ands; eauto 9 using type_valid_ptr_type_valid.
   * typed_inversion_all.
     rewrite <-and_assoc; apply and_wlog_l; intros; split_ands.
     + eapply mem_alloc_valid'; eauto using TArray_valid.
       by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id
         by auto using Z_to_nat_neq_0_nonneg.
-    + typed_constructor; eauto using addr_top_array_strict, TArray_valid,
+    + typed_constructor; eauto 10 using addr_top_array_strict, TArray_valid,
         addr_top_array_typed, mem_alloc_index_typed', lockset_valid_weaken.
     + eauto using mem_alloc_forward', TArray_valid.
   * typed_inversion_all; split_ands; eauto using
@@ -274,15 +275,15 @@ Proof.
       ctx_inversion Hk; left; try solve_cred;
         destruct (val_true_false_dec m v)
         as [[[??]|[??]]|[??]]; solve_cred. }
-    destruct (ehexec Γ k e' m) as [[e'' m']|] eqn:He''.
-    { apply ehexec_sound in He''. left; solve_cred. }
+    destruct (ehstep_dec Γ (get_stack k) e' m) as [(e''&m''&?)|He''].
+    { left; solve_cred. }
     destruct (maybe_ECall_redex e') as [[[f' Ωs] vs]|] eqn:Hf.
     { apply maybe_ECall_redex_Some in Hf; destruct Hf as [-> ?].
       left; solve_cred. }
     assert (¬Γ \ get_stack k ⊢ₕ safe e', m).
-    { rewrite eq_None_not_Some in Hf; contradict Hf; destruct Hf.
-      * eexists; apply maybe_ECall_redex_Some; eauto.
-      * edestruct ehexec_weak_complete; eauto. }
+    { rewrite eq_None_not_Some in Hf;
+        contradict Hf; destruct Hf; [|naive_solver].
+      eexists; apply maybe_ECall_redex_Some; eauto. }
     left; solve_cred.
   * destruct (funenv_lookup Γ ('{m}) Γf δ f' σs σ) as (s&cmτ&?&_); auto.
     left; solve_cred.

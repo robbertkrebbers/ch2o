@@ -79,84 +79,7 @@ Proof.
       eauto using val_binop_ok_refine, val_cast_ok_refine,
       val_binop_refine, val_cast_refine.
 Qed.
-Lemma assign_refine_both Γ α f m1 m2 ass a1 a2 v1 v2 v1' v2' va1' va2' τ τ' σ :
-  ✓ Γ → m1 ⊑{Γ,α,f} m2 → assign_typed Γ τ τ' ass σ →
-  a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : Some τ → v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ' →
-  assign_sem Γ m1 a1 v1 ass v1' va1' → assign_sem Γ m2 a2 v2 ass v2' va2' →
-  v1' ⊑{Γ,α,f@'{m1}↦'{m2}} v2' : σ ∧ va1' ⊑{Γ,α,f@'{m1}↦'{m2}} va2' : τ.
-Proof.
-  intros ?????? Hass2. destruct (assign_refine Γ α f m1 m2
-    ass a1 a2 v1 v2 v1' va1' τ τ' σ) as (?&?&Hass2'&?); auto.
-  by rewrite <-assign_exec_correct in Hass2, Hass2'; simplify_equality.
-Qed.
-Lemma ehstep_refine Γ Γf α f m1 m2 m1' m2' ρ1 ρ2 τs e1 e2 e1' e2' τlr :
-  ✓ Γ → Γ\ ρ1 ⊢ₕ e1, m1 ⇒ e1', m1' → Γ\ ρ2 ⊢ₕ e2, m2 ⇒ e2', m2' →
-  m1 ⊑{Γ,α,f} m2 → e1 ⊑{(Γ,Γf,τs),α,f@'{m1}↦'{m2}} e2 : τlr →
-  '{m1} ⊢* ρ1 :* τs → '{m2} ⊢* ρ2 :* τs →
-  Forall2 (λ o1 o2, f !! o1 = Some (o2,[])) ρ1 ρ2 → ∃ f',
-  (**i 1.) *) m1' ⊑{Γ,α,f'} m2' ∧
-  (**i 2.) *) e1' ⊑{(Γ,Γf,τs),α,f'@'{m1'}↦'{m2'}} e2' : τlr ∧
-  (**i 3.) *) meminj_extend f f' ('{m1}) ('{m2}).
-Proof.
-  intros ? [] p2 ?????.
-  * refine_inversion_all; inv_ehstep; decompose_Forall_hyps.
-    exists f; split_ands; eauto.
-    refine_constructor; eauto using addr_top_strict, addr_top_refine,
-      cmap_index_typed_valid, cmap_index_typed_representable,
-      locks_empty_refine.
-  * refine_inversion_all; inv_ehstep.
-    { exists f; eauto. }
-    exfalso; eauto using index_alive_1'.
-  * refine_inversion_all; inv_ehstep; exists f; eauto 10.
-  * refine_inversion_all; inv_ehstep. edestruct assign_refine_both; eauto.
-    exists f; split_ands; eauto.
-    + eapply mem_lock_refine'; eauto using mem_insert_refine',
-        mem_insert_writable, addr_refine_weaken, mem_insert_forward.
-    + erewrite !mem_lock_memenv_of, !mem_insert_memenv_of
-        by eauto using mem_insert_writable, mem_insert_valid'.
-      refine_constructor; eauto using locks_union_refine, lock_singleton_refine.
-  * refine_inversion_all; inv_ehstep.
-    edestruct mem_lookup_refine as (?&?&?); eauto; simplify_equality.
-    exists f; split_ands; eauto using mem_force_refine'.
-    erewrite !mem_force_memenv_of by eauto; eauto.
-  * refine_inversion_all; inv_ehstep. exists f; split_ands; eauto.
-    refine_constructor; eauto using addr_elt_strict, addr_elt_refine.
-  * refine_inversion_all; inv_ehstep.
-     edestruct val_lookup_seg_refine_alt as (?&?&?); eauto; simplify_equality.
-    exists f; eauto.
-  * refine_inversion_all; inv_ehstep.
-    edestruct (λ Γ f m1 m2 τ n, mem_alloc_refine' Γ α f m1 m2 true (τ.[n]))
-      as (f'&?&?&?); eauto using index_typed_representable, TArray_valid.
-    { by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id
-        by auto using Z_to_nat_neq_0_nonneg. }
-    exists f'; split_ands; eauto.
-    refine_constructor; eauto using addr_top_array_refine,
-      mem_alloc_index_typed', addr_top_array_strict, TArray_valid.
-    eapply locks_refine_weaken;
-      eauto using mem_alloc_forward', TArray_valid, option_eq_1.
-  * refine_inversion_all; inv_ehstep. exists f; split_ands; eauto.
-    + eauto using mem_free_refine', mem_freeable_index_refine.
-    + repeat refine_constructor; eauto 10 using locks_refine_weaken,
-        mem_free_forward', mem_free_refine', mem_freeable_index_refine.
-  * refine_inversion_all; inv_ehstep. exists f; split_ands; eauto.
-    refine_constructor; eauto using val_unop_refine.
-  * refine_inversion_all; inv_ehstep. exists f; split_ands; eauto.
-    refine_constructor; eauto using val_binop_refine, locks_union_refine.
-  * refine_inversion_all; inv_ehstep.
-    + exists f; eauto 10 using mem_unlock_refine',
-        expr_refine_weaken, mem_unlock_forward.
-    + exfalso; eauto using val_true_false_refine.
-  * refine_inversion_all; inv_ehstep.
-    + exfalso; eauto using val_false_true_refine.
-    + exists f; eauto 10 using mem_unlock_refine',
-        expr_refine_weaken, mem_unlock_forward.
-  * refine_inversion_all; inv_ehstep. exists f;
-      eauto 10 using mem_unlock_refine', expr_refine_weaken, mem_unlock_forward.
-  * refine_inversion_all; inv_ehstep. exists f; split_ands; eauto.
-    refine_constructor; eauto using val_cast_refine.
-  * refine_inversion_all; inv_ehstep. exists f; split_ands; eauto.
-    refine_constructor; eauto using locks_union_refine,ctree_alter_const_refine.
-Qed.
+Ltac go f := eexists f, _, _; split_ands; [do_ehstep| | |by auto].
 Lemma ehstep_refine_forward Γ Γf α f m1 m2 m1' ρ1 ρ2 τs e1 e2 e1' τlr :
   ✓ Γ → Γ\ ρ1 ⊢ₕ e1, m1 ⇒ e1', m1' →
   m1 ⊑{Γ,α,f} m2 → e1 ⊑{(Γ,Γf,τs),α,f@'{m1}↦'{m2}} e2 : τlr →
@@ -167,16 +90,62 @@ Lemma ehstep_refine_forward Γ Γf α f m1 m2 m1' ρ1 ρ2 τs e1 e2 e1' τlr :
   (**i 3.) *) e1' ⊑{(Γ,Γf,τs),α,f'@'{m1'}↦'{m2'}} e2' : τlr ∧
   (**i 4.) *) meminj_extend f f' ('{m1}) ('{m2}).
 Proof.
-  intros ? p ?????. cut (∃ m2' e2', Γ\ ρ2 ⊢ₕ e2, m2 ⇒ e2', m2').
-  { intros (m2'&e2'&?). destruct (ehstep_refine Γ Γf α f m1 m2 m1' m2'
-      ρ1 ρ2 τs e1 e2 e1' e2' τlr); naive_solver. }
-  destruct p; refine_inversion_all; decompose_Forall_hyps;
-    try by (eexists _, _; do_ehstep).
-  * exfalso; eauto using index_alive_1'.
-  * edestruct assign_refine as (?&?&?&?&?); eauto. eexists _, _; do_ehstep.
-  * edestruct mem_lookup_refine as (?&?&?); eauto. eexists _, _; do_ehstep.
-  * edestruct val_lookup_seg_refine_alt as (?&?&?); eauto.
-    eexists _, _; do_ehstep.
+  destruct 2; intros.
+  * refine_inversion_all; decompose_Forall_hyps.
+    go f; auto.
+    refine_constructor; eauto using addr_top_strict, addr_top_refine,
+      cmap_index_typed_valid, cmap_index_typed_representable,
+      locks_empty_refine.
+  * refine_inversion_all; [go f; auto|].
+    exfalso; eauto using index_alive_1'.
+  * refine_inversion_all; go f; eauto.
+  * refine_inversion_all.
+    edestruct assign_refine as (?&?&?&?&?); eauto.
+    go f.
+    + eapply mem_lock_refine'; eauto using mem_insert_refine',
+        mem_insert_writable, addr_refine_weaken, mem_insert_forward.
+    + erewrite !mem_lock_memenv_of, !mem_insert_memenv_of
+        by eauto using mem_insert_writable, mem_insert_valid'.
+      refine_constructor; eauto using locks_union_refine, lock_singleton_refine.
+  * refine_inversion_all.
+    edestruct mem_lookup_refine as (?&?&?); eauto; simplify_equality.
+    go f; eauto using mem_force_refine'.
+    erewrite !mem_force_memenv_of by eauto; eauto.
+  * refine_inversion_all; go f; eauto.
+    refine_constructor; eauto using addr_elt_strict, addr_elt_refine.
+  * refine_inversion_all.
+    edestruct val_lookup_seg_refine_alt as (?&?&?); eauto; simplify_equality.
+    go f; eauto.
+  * refine_inversion_all; go f; eauto 10 using type_valid_ptr_type_valid.
+  * refine_inversion_all.
+    edestruct (λ Γ f m1 m2 τ n, mem_alloc_refine' Γ α f m1 m2 true (τ.[n]))
+      as (f'&?&?&?); eauto using mem_allocable_fresh,
+      index_typed_representable, TArray_valid.
+    { by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id
+        by auto using Z_to_nat_neq_0_nonneg. }
+    go f'; eauto.
+    refine_constructor; eauto 8 using addr_top_array_refine,
+      mem_alloc_index_typed', addr_top_array_strict, TArray_valid.
+    eapply locks_refine_weaken; eauto using mem_alloc_forward',
+      TArray_valid, option_eq_1, mem_allocable_fresh. 
+  * refine_inversion_all; go f.
+    + eauto using mem_free_refine', mem_freeable_index_refine.
+    + repeat refine_constructor; eauto 10 using locks_refine_weaken,
+        mem_free_forward', mem_free_refine', mem_freeable_index_refine.
+  * refine_inversion_all; go f; eauto.
+    refine_constructor; eauto using val_unop_refine.
+  * refine_inversion_all; go f; eauto.
+    refine_constructor; eauto using val_binop_refine, locks_union_refine.
+  * refine_inversion_all; go f;
+      eauto 10 using mem_unlock_refine', expr_refine_weaken, mem_unlock_forward.
+  * refine_inversion_all; go f;
+      eauto 10 using mem_unlock_refine', expr_refine_weaken, mem_unlock_forward.
+  * refine_inversion_all; go f;
+      eauto 10 using mem_unlock_refine', expr_refine_weaken, mem_unlock_forward.
+  * refine_inversion_all; go f; eauto.
+    refine_constructor; eauto using val_cast_refine.
+  * refine_inversion_all; go f; eauto.
+    refine_constructor; eauto using locks_union_refine,ctree_alter_const_refine.
 Qed.
 Lemma ehstep_refine_backward Γ Γf α f m1 m2 m2' ρ1 ρ2 τs e1 e2 e2' τlr :
   ✓ Γ → Γ\ ρ2 ⊢ₕ e2, m2 ⇒ e2', m2' →
@@ -190,17 +159,28 @@ Lemma ehstep_refine_backward Γ Γf α f m1 m2 m2' ρ1 ρ2 τs e1 e2 e2' τlr :
     (**i 4.) *) meminj_extend f f' ('{m1}) ('{m2}))
   ∨ is_redex e1 ∧ ¬Γ \ ρ1 ⊢ₕ safe e1, m1.
 Proof.
-  intros ? p ?? Hρ1 ??. set (k1:=zip_with CLocal ρ1 τs).
-  assert (get_stack k1 = ρ1) as Hk1.
-  { unfold k1. elim Hρ1; intros; f_equal'; auto. }
-  destruct (ehexec Γ k1 e1 m1) as [[e1' m1']|] eqn:p'.
-  * left. eapply ehexec_sound in p'; eauto. rewrite Hk1 in p'.
-    destruct (ehstep_refine Γ Γf α f
-      m1 m2 m1' m2' ρ1 ρ2 τs e1 e2 e1' e2' τlr); naive_solver.
-  * right; split.
-    { destruct p; refine_inversion_all; repeat constructor. }
-    destruct 1; [refine_inversion_all; inv_ehstep|].
-    edestruct (ehexec_weak_complete Γ k1); rewrite ?Hk1; eauto.
+  intros. destruct (Some_dec (maybe2 EAlloc e2)) as [[[τ e]?]|].
+  { simplify_option_equality; refine_inversion_all; inv_ehstep;
+      refine_inversion_all;
+      try by (right; repeat constructor; inversion 1; inv_ehstep).
+    { left; go f; eauto 10 using type_valid_ptr_type_valid. }
+    edestruct (λ Γ f m1 m2 τ n, mem_alloc_refine' Γ α f m1 m2 true (τ.[n]))
+      as (f'&?&?&?); eauto using mem_allocable_fresh,
+      index_typed_representable, TArray_valid.
+    { by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id
+        by auto using Z_to_nat_neq_0_nonneg. }
+    left; go f'; eauto.
+    refine_constructor; eauto 8 using addr_top_array_refine,
+      mem_alloc_index_typed', addr_top_array_strict, TArray_valid.
+    eapply locks_refine_weaken; eauto using mem_alloc_forward',
+      TArray_valid, option_eq_1, mem_allocable_fresh. }
+  destruct (ehstep_dec Γ ρ1 e1 m1) as [(e1'&m1'&?)|?].
+  * left. destruct (ehstep_refine_forward Γ Γf α f
+      m1 m2 m1' ρ1 ρ2 τs e1 e2 e1' τlr) as (f'&m2''&e2''&?&?&?&?); auto.
+    destruct (ehstep_deterministic Γ ρ2 e2 m2 e2' m2' e2'' m2'');
+      simplify_equality; eauto 10.
+  * right; split; eauto using expr_refine_redex_inv, ehstep_is_redex.
+    destruct 1; [refine_inversion_all; inv_ehstep|naive_solver].
 Qed.
 Lemma ehsafe_refine Γ Γf α f m1 m2 ρ1 ρ2 τs e1 e2 τlr :
   ✓ Γ → Γ\ ρ1 ⊢ₕ safe e1, m1 → m1 ⊑{Γ,α,f} m2 →
@@ -234,7 +214,7 @@ Ltac invert :=
   | H : ?X ⊑{_,_,_@_↦_} ?Y : _ ↣ _ |- _ =>
      first [is_var X; is_var Y; fail 1|refine_inversion H]
   end.
-Ltac go f := eexists f, _; split_ands; [do_cstep| |by auto].
+Ltac go f ::= eexists f, _; split_ands; [do_cstep| |by auto].
 Lemma cstep_refine Γ Γf δ1 δ2 α f S1 S2 S2' g :
   ✓ Γ → Γ\ δ2 ⊢ₛ S2 ⇒ S2' → ¬is_undef_state S1 →
   S1 ⊑{(Γ,Γf),α,f} S2 : g →

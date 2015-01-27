@@ -1,6 +1,7 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export smallstep executable.
+Local Opaque listset_singleton.
 
 Section soundness.
 Context `{EnvSpec Ti}.
@@ -17,37 +18,48 @@ Proof.
   induction k as [|[]]; intros [|x]; f_equal'; rewrite ?list_lookup_fmap; auto.
 Qed.
 Lemma ehexec_sound Γ k m1 m2 e1 e2 :
-  ehexec Γ k e1 m1 = Some (e2, m2) → Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2.
+  (e2,m2) ∈ ehexec Γ k e1 m1 → Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
   intros. destruct e1;
     repeat match goal with
     | H : assign_exec _ _ _ _ _ = Some _ |- _ =>
       apply assign_exec_correct in H
-    | _ => progress simplify_option_equality
+    | _ => progress decompose_elem_of
     | _ => destruct (val_true_false_dec _) as [[[??]|[??]]|[??]]
     | H : ctx_lookup _ _ = _ |- _ => rewrite ctx_lookup_correct in H
+    | _ => progress simplify_equality'
     | _ => case_match
     end; do_ehstep.
 Qed.
 Lemma ehexec_weak_complete Γ k e1 m1 e2 m2 :
-  ehexec Γ k e1 m1 = None → ¬Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2.
+  ehexec Γ k e1 m1 ≡ ∅ → ¬Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
   destruct 2; 
     repeat match goal with
     | H : assign_sem _ _ _ _ _ _ _ |- _ =>
       apply assign_exec_correct in H
     | H : is_Some _ |- _ => destruct H as [??]
-    | _ => progress simplify_option_equality
+    | _ => progress decompose_empty
     | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]
-    | H : ctx_lookup _ _ = _ |- _ => rewrite ctx_lookup_correct in H
+    | H : get_stack _ !! _ = Some _ |- _ => rewrite <-ctx_lookup_correct in H
+    | H : of_option ?o ≫= _ ≡ _, Ho : ?o = Some _ |- _ =>
+       rewrite Ho in H; csimpl in H; rewrite collection_bind_singleton in H
+    | _ => progress simplify_option_equality
     | _ => case_match
     end; eauto.
 Qed.
-
+Lemma ehstep_dec Γ ρ e1 m1 :
+  (∃ e2 m2, Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2) ∨ ∀ e2 m2, ¬Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2.
+Proof.
+  set (k:=(λ o, @CLocal Ti o voidT) <$> ρ).
+  replace ρ with (get_stack k) by (induction ρ; f_equal'; auto).
+  destruct (collection_choose_or_empty (ehexec Γ k e1 m1)) as [[[e2 m2]?]|];
+    eauto using ehexec_sound, ehexec_weak_complete.
+Qed.
 Lemma cexec_sound Γ δ S1 S2 : Γ\ δ ⊢ₛ S1 ⇒ₑ S2 → Γ\ δ ⊢ₛ S1 ⇒ S2.
 Proof.
   intros. assert (∀ (k : ctx Ti) e m,
-    ehexec Γ k e m = None → maybe_ECall_redex e = None →
+    ehexec Γ k e m ≡ ∅ → maybe_ECall_redex e = None →
     is_redex e → ¬Γ\ get_stack k ⊢ₕ safe e, m).
   { intros k e m He. rewrite eq_None_not_Some.
     intros Hmaybe Hred Hsafe; apply Hmaybe; destruct Hsafe.
@@ -55,8 +67,7 @@ Proof.
     * edestruct ehexec_weak_complete; eauto. }
   destruct S1;
     repeat match goal with
-    | H : ehexec _ _ _ _ = Some _ |- _ =>
-      apply ehexec_sound in H
+    | H : _ ∈ ehexec _ _ _ _ |- _ => apply ehexec_sound in H
     | H : _ ∈ expr_redexes _ |- _ =>
       apply expr_redexes_correct in H; destruct H
     | H : maybe2 EVal _ = Some _ |- _ => apply maybe_EVal_Some in H

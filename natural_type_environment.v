@@ -9,6 +9,7 @@ Context (ptr_size_ne_0 : ∀ τ, ptr_size τ ≠ 0).
 Context (align_void : align_base voidT = 1).
 Context (align_int_divide : ∀ τi, (align_base (intT τi) | rank_size (rank τi))).
 Context (align_ptr_divide : ∀ τp, (align_base (τp.*) | ptr_size τp)).
+Context (alloc_can_fail : bool).
 
 Definition natural_align_of (Γ : env Ti) : type Ti → nat := type_iter
   (**i TBase =>     *) align_base
@@ -49,7 +50,8 @@ Definition natural_size_of (Γ : env Ti) : type Ti → nat :=
 Instance natural_env : Env Ti := {
   size_of := natural_size_of;
   field_sizes Γ τs :=
-    natural_field_sizes (natural_size_of Γ) Γ (natural_fields_align Γ τs) 0 τs
+    natural_field_sizes (natural_size_of Γ) Γ (natural_fields_align Γ τs) 0 τs;
+  alloc_can_fail := alloc_can_fail
 }.
 
 Lemma natural_padding_divide pos al :

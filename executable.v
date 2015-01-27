@@ -35,55 +35,60 @@ Fixpoint ctx_lookup (x : nat) (k : ctx Ti) : option index :=
   | _ => None
   end.
 Definition ehexec (Γ : env Ti) (k : ctx Ti)
-    (e : expr Ti) (m : mem Ti) : option (expr Ti * mem Ti) :=
+    (e : expr Ti) (m : mem Ti) : listset (expr Ti * mem Ti) :=
   match e with
   | var{τ} x =>
-     o ← ctx_lookup x k;
-     Some (%(addr_top o τ), m)
+     o ← of_option (ctx_lookup x k);
+     {[ %(addr_top o τ), m ]}
   | .* (#{Ω} (ptrV (Ptr a))) =>
      guard (addr_strict Γ a);
      guard (index_alive' m (addr_index a));
-     Some (%{Ω} a, m)
+     {[ %{Ω} a, m ]}
   | & (%{Ω} a) =>
-     Some (#{Ω} (ptrV (Ptr a)), m)
+     {[ #{Ω} (ptrV (Ptr a)), m ]}
   | %{Ωl} a ::={ass} #{Ωr} v =>
      guard (mem_writable Γ a m);
-     '(v',va) ← assign_exec Γ m a v ass;
-     Some (#{lock_singleton Γ a ∪ Ωl ∪ Ωr} v',
-           mem_lock Γ a (<[a:=va]{Γ}>m))
-  | load (%{Ω} a) => v ← m !!{Γ} a; Some (#{Ω} v, mem_force Γ a m)
-  | %{Ω} a %> rs => Some (%{Ω} (addr_elt Γ rs a), m)
-  | #{Ω} v #> rs => v' ← v !! rs; Some (#{Ω} v', m)
+     '(v',va) ← of_option (assign_exec Γ m a v ass);
+     {[ #{lock_singleton Γ a ∪ Ωl ∪ Ωr} v',
+        mem_lock Γ a (<[a:=va]{Γ}>m) ]}
+  | load (%{Ω} a) =>
+     v ← of_option (m !!{Γ} a);
+     {[ #{Ω} v, mem_force Γ a m ]}
+  | %{Ω} a %> rs => {[ %{Ω} (addr_elt Γ rs a), m ]}
+  | #{Ω} v #> rs =>
+     v' ← of_option (v !! rs);
+     {[ #{Ω} v', m ]}
   | alloc{τ} (#{Ω} (intV{_} n)) =>
      let o := fresh (dom indexset m) in
      let n' := Z.to_nat n in
      guard (n' ≠ 0);
      guard (int_typed (n * size_of Γ τ) sptrT);
-     Some (%{Ω}(addr_top_array o τ n), mem_alloc Γ o true (τ.[n']) m)
+     {[ #{Ω}(ptrV (Ptr (addr_top_array o τ n))), mem_alloc Γ o true (τ.[n']) m ]}
+     ∪  (if alloc_can_fail then {[ #{Ω}(ptrV (NULL (Some τ))), m ]} else ∅)
   | free (%{Ω} a) =>
      guard (mem_freeable a m);
-     Some (#{Ω} voidV, mem_free (addr_index a) m)
+     {[ #{Ω} voidV, mem_free (addr_index a) m ]}
   | @{op} #{Ω} v =>
      guard (val_unop_ok m op v);
-     Some (#{Ω} (val_unop op v), m)
+     {[ #{Ω} (val_unop op v), m ]}
   | #{Ωl} vl @{op} #{Ωr} vr =>
      guard (val_binop_ok Γ m op vl vr);
-     Some (#{Ωl ∪ Ωr} (val_binop Γ op vl vr), m)
+     {[ #{Ωl ∪ Ωr} (val_binop Γ op vl vr), m ]}
   | if{#{Ω} v} e2 else e3 =>
      match val_true_false_dec m v with
-     | inleft (left _) => Some (e2, mem_unlock Ω m)
-     | inleft (right _) => Some (e3, mem_unlock Ω m)
-     | inright _ => None
+     | inleft (left _) => {[ e2, mem_unlock Ω m ]}
+     | inleft (right _) => {[ e3, mem_unlock Ω m ]}
+     | inright _ => ∅
      end
   | #{Ω} v,, er =>
-     Some (er, mem_unlock Ω m)
+     {[ er, mem_unlock Ω m ]}
   | cast{τ} (#{Ω} v) =>
      guard (val_cast_ok Γ m (Some τ) v);
-     Some (#{Ω} (val_cast (Some τ) v), m)
+     {[ #{Ω} (val_cast (Some τ) v), m ]}
   | #[r:=#{Ω1} v1] (#{Ω2} v2) =>
      guard (is_Some (v2 !! r));
-     Some (#{Ω1 ∪ Ω2} (val_alter (λ _, v1) r v2), m)
-  | _ => None
+     {[ #{Ω1 ∪ Ω2} (val_alter (λ _, v1) r v2), m ]}
+  | _ => ∅
   end%E.
 Definition cexec (Γ : env Ti) (δ : funenv Ti)
     (S : state Ti) : listset (state Ti) :=
@@ -198,15 +203,14 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
       end
     | None =>
       '(E,e') ← expr_redexes e;
-      match ehexec Γ k e' m with
-      | Some (e2,m2) => {[ State k (Expr (subst E e2)) m2 ]}
-      | None =>
+      let es := ehexec Γ k e' m in
+      if decide (es ≡ ∅) then
         match maybe_ECall_redex e' with
         | Some (f, Ωs, vs) =>
            {[ State (CFun E :: k) (Call f vs) (mem_unlock (⋃ Ωs) m) ]}
         | _ => {[ State k (Undef (UndefExpr E e')) m ]}
         end
-      end
+      else '(e2,m2) ← es; {[ State k (Expr (subst E e2)) m2 ]}
     end
   | Undef _ => ∅
   end.

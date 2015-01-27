@@ -95,6 +95,7 @@ End simple_collection.
 
 Definition of_option `{Singleton A C} `{Empty C} (x : option A) : C :=
   match x with None => ∅ | Some a => {[ a ]} end.
+
 Lemma elem_of_of_option `{SimpleCollection A C} (x : A) o :
   x ∈ of_option o ↔ o = Some x.
 Proof.
@@ -103,12 +104,27 @@ Qed.
 
 Global Instance collection_guard `{CollectionMonad M} : MGuard M :=
   λ P dec A x, match dec with left H => x H | _ => ∅ end.
-Lemma elem_of_guard `{CollectionMonad M} `{Decision P} {A} (x : A) (X : M A) :
-  x ∈ guard P; X ↔ P ∧ x ∈ X.
-Proof.
-  unfold mguard, collection_guard; simpl; case_match;
-    rewrite ?elem_of_empty; naive_solver.
-Qed.
+
+Section collection_monad_base.
+  Context `{CollectionMonad M}.
+  Lemma elem_of_guard `{Decision P} {A} (x : A) (X : M A) :
+    x ∈ guard P; X ↔ P ∧ x ∈ X.
+  Proof.
+    unfold mguard, collection_guard; simpl; case_match;
+      rewrite ?elem_of_empty; naive_solver.
+  Qed.
+  Lemma guard_empty `{Decision P} {A} (X : M A) : guard P; X ≡ ∅ ↔ ¬P ∨ X ≡ ∅.
+  Proof.
+    rewrite !elem_of_equiv_empty; setoid_rewrite elem_of_guard.
+    destruct (decide P); naive_solver.
+  Qed.
+  Lemma bind_empty {A B} (f : A → M B) X :
+    X ≫= f ≡ ∅ ↔ X ≡ ∅ ∨ ∀ x, x ∈ X → f x ≡ ∅.
+  Proof.
+    setoid_rewrite elem_of_equiv_empty; setoid_rewrite elem_of_bind.
+    naive_solver.
+  Qed.
+End collection_monad_base.
 
 (** * Tactics *)
 (** Given a hypothesis [H : _ ∈ _], the tactic [destruct_elem_of H] will
@@ -160,6 +176,7 @@ Ltac decompose_empty := repeat
   | H : _ ∪ _ = ∅ |- _ => apply empty_union_L in H; destruct H
   | H : _ ∪ _ ≠ ∅ |- _ => apply non_empty_union_L in H; destruct H
   | H : {[ _ ]} = ∅ |- _ => destruct (non_empty_singleton_L _ H)
+  | H : guard _ ; _ ≡ ∅ |- _ => apply guard_empty in H; destruct H
   end.
 
 (** The first pass of our collection tactic consists of eliminating all
@@ -462,6 +479,10 @@ Section collection_monad.
     Proper ((≡) ==> (≡)) (@mjoin M _ A).
   Proof. intros X Y E. esolve_elem_of. Qed.
 
+  Lemma collection_bind_singleton {A B} (f : A → M B) x : {[ x ]} ≫= f ≡ f x.
+  Proof. esolve_elem_of. Qed.
+  Lemma collection_guard_True {A} `{Decision P} (X : M A) : P → guard P; X ≡ X.
+  Proof. esolve_elem_of. Qed.
   Lemma collection_fmap_compose {A B C} (f : A → B) (g : B → C) X :
     g ∘ f <$> X ≡ g <$> (f <$> X).
   Proof. esolve_elem_of. Qed.

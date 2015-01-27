@@ -82,7 +82,7 @@ Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
      expr_typed' Γ Γf Γm τs (e #> rs) (inr σ)
   | EAlloc_typed τ e τi :
      ✓{Γ} τ → expr_typed' Γ Γf Γm τs e (inr (intT τi)) →
-     expr_typed' Γ Γf Γm τs (alloc{τ} e) (inl τ)
+     expr_typed' Γ Γf Γm τs (alloc{τ} e) (inr (Some τ.*))
   | EFree_typed e τ :
      expr_typed' Γ Γf Γm τs e (inl τ) →
      expr_typed' Γ Γf Γm τs (free e) (inr voidT)
@@ -139,7 +139,7 @@ Section expr_typed_ind.
     Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 → P (e #> rs) (inr σ)).
   Context (Palloc : ∀ τ e τi,
     ✓{Γ} τ → (Γ,Γf,Γm,τs) ⊢ e : inr (intT τi) →
-    P e (inr (intT τi)) → P (alloc{τ} e) (inl τ)).
+    P e (inr (intT τi)) → P (alloc{τ} e) (inr (Some τ.*))).
   Context (Pfree : ∀ e τ,
     (Γ,Γf,Γm,τs) ⊢ e : inl τ → P e (inl τ) → P (free e) (inr voidT)).
   Context (Punop : ∀ op e τ σ,
@@ -189,7 +189,8 @@ Inductive ectx_item_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
      Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
      ectx_item_typed' Γ Γf Γm τs (□ #> rs) (inr τ) (inr σ)
   | CAlloc_typed τ τi :
-     ✓{Γ} τ → ectx_item_typed' Γ Γf Γm τs (alloc{τ} □) (inr (intT τi)) (inl τ)
+     ✓{Γ} τ → ectx_item_typed' Γ Γf Γm τs
+       (alloc{τ} □) (inr (intT τi)) (inr (Some τ.*))
   | CFree_typed τ : ectx_item_typed' Γ Γf Γm τs (free □) (inl τ) (inr voidT)
   | CUnOp_typed op τ σ :
      unop_typed op τ σ → ectx_item_typed' Γ Γf Γm τs (@{op} □) (inr τ) (inr σ)

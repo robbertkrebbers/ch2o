@@ -10,7 +10,8 @@ Local Unset Elimination Schemes.
 Class Env (Ti : Set) := {
   env_type_env :> IntEnv Ti;
   size_of : env Ti → type Ti → nat;
-  field_sizes : env Ti → list (type Ti) → list nat
+  field_sizes : env Ti → list (type Ti) → list nat;
+  alloc_can_fail : bool
 }.
 Class EnvSpec (Ti : Set) `{Env Ti} := {
   int_env_spec :>> IntEnvSpec Ti;

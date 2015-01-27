@@ -734,6 +734,7 @@ Class FreshSpec A C `{ElemOf A C,
 (** The following coercion allows us to use Booleans as propositions. *)
 Coercion Is_true : bool >-> Sortclass.
 Hint Unfold Is_true.
+Hint Immediate Is_true_eq_left.
 Hint Resolve orb_prop_intro andb_prop_intro.
 Notation "(&&)" := andb (only parsing).
 Notation "(||)" := orb (only parsing).

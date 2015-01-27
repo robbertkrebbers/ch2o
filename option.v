@@ -239,6 +239,8 @@ Tactic Notation "simpl_option_monad" "by" tactic3(tac) :=
     let Hx := fresh in assert_Some_None A o Hx; rewrite Hx in H; clear Hx
   | H : context [default (A:=?A) _ ?o _] |- _ =>
     let Hx := fresh in assert_Some_None A o Hx; rewrite Hx in H; clear Hx
+  | H : context [from_option (A:=?A) _ ?o] |- _ =>
+    let Hx := fresh in assert_Some_None A o Hx; rewrite Hx in H; clear Hx
   | H : context [ match ?o with _ => _ end ] |- _ =>
     match type of o with
     | option ?A =>

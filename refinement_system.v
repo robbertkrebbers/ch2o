@@ -63,7 +63,8 @@ Inductive expr_refine' (Γ : env Ti) (Γf : funtypes Ti)
      expr_refine' Γ Γf τs α f Γm1 Γm2 (e1 #> rs) (e2 #> rs) (inr σ)
   | EAlloc_refine τ e1 e2 τi :
      ✓{Γ} τ → expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inr (intT τi)) →
-     expr_refine' Γ Γf τs α f Γm1 Γm2 (alloc{τ} e1) (alloc{τ} e2) (inl τ)
+     expr_refine' Γ Γf τs α f Γm1 Γm2
+       (alloc{τ} e1) (alloc{τ} e2) (inr (Some τ.*))
   | EFree_refine e1 e2 τ :
      expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inl τ) →
      expr_refine' Γ Γf τs α f Γm1 Γm2 (free e1) (free e2) (inr voidT)
@@ -138,7 +139,7 @@ Section expr_refine_ind.
     P (e1 #> rs) (e2 #> rs) (inr σ)).
   Context (Palloc : ∀ τ e1 e2 τi,
     ✓{Γ} τ → e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inr (intT τi) →
-    P e1 e2 (inr (intT τi)) → P (alloc{τ} e1) (alloc{τ} e2) (inl τ)).
+    P e1 e2 (inr (intT τi)) → P (alloc{τ} e1) (alloc{τ} e2) (inr (Some τ.*))).
   Context (Pfree : ∀ e1 e2 τ,
     e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inl τ → P e1 e2 (inl τ) →
     P (free e1) (free e2) (inr voidT)).
@@ -205,7 +206,7 @@ Inductive ectx_item_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs: list (type T
      ectx_item_refine' Γ Γf τs α f Γm1 Γm2 (□ #> rs) (□ #> rs) (inr τ) (inr σ)
   | CAlloc_refine τ τi :
      ✓{Γ} τ → ectx_item_refine' Γ Γf τs α f Γm1 Γm2
-       (alloc{τ} □) (alloc{τ} □) (inr (intT τi)) (inl τ)
+       (alloc{τ} □) (alloc{τ} □) (inr (intT τi)) (inr (Some τ.*))
   | CFree_refine τ :
      ectx_item_refine' Γ Γf τs α f Γm1 Γm2 (free □) (free □) (inl τ) (inr voidT)
   | CUnOp_refine op τ σ :

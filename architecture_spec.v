@@ -36,7 +36,8 @@ Record architecture := Architecture {
   arch_char_bits_ge_8 : 8 ≤ arch_char_bits;
   arch_size_char : arch_size CharRank = 1;
   arch_size_preserving k1 k2 : k1 ⊆ k2 → arch_size k1 ≤ arch_size k2;
-  arch_align_size k : (arch_align k | arch_size k)
+  arch_align_size k : (arch_align k | arch_size k);
+  arch_alloc_can_fail : bool
 }.
 
 Inductive arch_rank (A : architecture) := ARank { arch_rank_car :> c_rank }.
@@ -133,7 +134,7 @@ Let align_base (τb : base_type (arch_rank A)) : nat :=
 Definition align_of : env (arch_rank A) → type (arch_rank A) → nat :=
   natural_align_of align_base.
 Global Instance arch_env : Env (arch_rank A) :=
-  natural_env ptr_size align_base.
+  natural_env ptr_size align_base (arch_alloc_can_fail A).
 
 Let ptr_size_ne_0 τ : ptr_size τ ≠ 0.
 Proof. apply rank_size_ne_0. Qed.

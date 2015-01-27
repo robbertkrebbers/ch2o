@@ -185,6 +185,8 @@ Proof. by injection 1. Qed.
 Instance: Injective (=) (=) (@EFree Ti).
 Proof. by injection 1. Qed.
 
+Instance maybe_EAlloc {Ti} : Maybe2 (@EAlloc Ti) := λ e,
+  match e with alloc{τ} e => Some (τ,e) | _ => None end.
 Instance maybe_EVal {Ti} : Maybe2 (@EVal Ti) := λ e,
   match e with #{Ω} v => Some (Ω,v) | _ => None end.
 Instance maybe_ECall {Ti} : Maybe2 (@ECall Ti) := λ e,
@@ -621,6 +623,9 @@ Definition maybe_ECall_redex {Ti} (e : expr Ti) :
   vΩs ← mapM (maybe2 EVal) es;
   Some (f, fst <$> vΩs, snd <$> vΩs).
 
+Lemma maybe_EAlloc_Some {Ti} (e : expr Ti) τ e' :
+  maybe2 EAlloc e = Some (τ,e') ↔ e = alloc{τ} e'.
+Proof. split. by destruct e; intros; simplify_equality'. by intros ->. Qed.
 Lemma maybe_EVal_Some {Ti} (e : expr Ti) Ω v :
   maybe2 EVal e = Some (Ω, v) ↔ e = #{Ω} v.
 Proof. split. by destruct e; intros; simplify_equality'. by intros ->. Qed.

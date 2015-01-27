@@ -38,46 +38,50 @@ Reserved Notation "Γ \ ρ ⊢ₕ e1 , m1 ⇒ e2 , m2"
   (at level 74, format "Γ \  ρ  '⊢ₕ' '['  e1 ,  m1  ⇒ '/'  e2 ,  m2 ']'").
 Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
      expr Ti → mem Ti → expr Ti → mem Ti → Prop :=
-  | estep_var x τ o m :
+  | ehstep_var x τ o m :
      ρ !! x = Some o →
      Γ\ ρ ⊢ₕ var{τ} x, m ⇒ %(addr_top o τ), m
-  | estep_rtol m Ω a :
+  | ehstep_rtol m Ω a :
      addr_strict Γ a → index_alive' m (addr_index a) →
      Γ\ ρ ⊢ₕ .* (#{Ω} (ptrV (Ptr a))), m ⇒ %{Ω} a, m
-  | estep_rofl m Ω a :
+  | ehstep_rofl m Ω a :
      Γ\ ρ ⊢ₕ & (%{Ω} a), m ⇒ #{Ω} (ptrV (Ptr a)), m
-  | estep_assign m ass Ω1 Ω2 a v v' va :
+  | ehstep_assign m ass Ω1 Ω2 a v v' va :
      mem_writable Γ a m → assign_sem Γ m a v ass v' va →
      Γ\ ρ ⊢ₕ %{Ω1} a ::={ass} #{Ω2} v, m ⇒
              #{lock_singleton Γ a ∪ Ω1 ∪ Ω2} v', mem_lock Γ a (<[a:=va]{Γ}>m)
-  | estep_load m Ω a v :
+  | ehstep_load m Ω a v :
      m !!{Γ} a = Some v → Γ\ ρ ⊢ₕ load (%{Ω} a), m ⇒ #{Ω} v, mem_force Γ a m
-  | estep_eltl m Ω a rs :
+  | ehstep_eltl m Ω a rs :
      Γ\ ρ ⊢ₕ %{Ω} a %> rs, m ⇒ %{Ω} (addr_elt Γ rs a), m
-  | estep_eltr m Ω v rs v' :
+  | ehstep_eltr m Ω v rs v' :
      v !! rs = Some v' → Γ\ ρ ⊢ₕ #{Ω} v #> rs, m ⇒ #{Ω} v', m
-  | estep_alloc m Ω o τi τ n :
+  | ehstep_alloc_NULL m Ω τi τ n :
+     alloc_can_fail → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
+     Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒ #{Ω} (ptrV (NULL (Some τ))), m
+  | ehstep_alloc m Ω o τi τ n :
      mem_allocable o m → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
      Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒
-             %{Ω} (addr_top_array o τ n), mem_alloc Γ o true (τ.[Z.to_nat n]) m
-  | estep_free m Ω a :
+             #{Ω} (ptrV (Ptr (addr_top_array o τ n))),
+             mem_alloc Γ o true (τ.[Z.to_nat n]) m
+  | ehstep_free m Ω a :
      mem_freeable a m →
      Γ\ ρ ⊢ₕ free (%{Ω} a), m ⇒ #{Ω} voidV, mem_free (addr_index a) m
-  | estep_unop op Ω v m :
+  | ehstep_unop op Ω v m :
      val_unop_ok m op v →
      Γ\ ρ ⊢ₕ @{op} #{Ω} v, m ⇒ #{Ω} (val_unop op v), m
-  | estep_binop op m Ω1 Ω2 v1 v2 :
+  | ehstep_binop op m Ω1 Ω2 v1 v2 :
      val_binop_ok Γ m op v1 v2 →
      Γ\ ρ ⊢ₕ #{Ω1} v1 @{op} #{Ω2} v2, m ⇒ #{Ω1 ∪ Ω2} (val_binop Γ op v1 v2), m
-  | estep_if_true m Ω v e1 e2 :
+  | ehstep_if_true m Ω v e1 e2 :
      val_true m v →
      Γ\ ρ ⊢ₕ if{#{Ω} v} e1 else e2, m ⇒ e1, mem_unlock Ω m
-  | estep_if_false m Ω v e1 e2 :
+  | ehstep_if_false m Ω v e1 e2 :
      val_false v →
      Γ\ ρ ⊢ₕ if{#{Ω} v} e1 else e2, m ⇒ e2, mem_unlock Ω m
-  | estep_comma m Ω v e2 :
+  | ehstep_comma m Ω v e2 :
      Γ\ ρ ⊢ₕ #{Ω} v,,e2, m ⇒ e2, mem_unlock Ω m
-  | estep_cast m τ Ω v :
+  | ehstep_cast m τ Ω v :
      val_cast_ok Γ m (Some τ) v →
      Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} (val_cast (Some τ) v), m
   | ehstep_insert m r v1 Ω1 v2 Ω2 :
@@ -712,15 +716,28 @@ Qed.
 Lemma ehstep_size ρ e1 m1 e2 m2 :
   Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → size e2 < size e1.
 Proof. destruct 1; simpl; lia. Qed.
-Lemma estep_if_true_no_locks ρ m v e2 e3 :
+Lemma ehstep_if_true_no_locks ρ m v e2 e3 :
   val_true m v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e2, m.
 Proof. rewrite <-(mem_unlock_empty m) at 3. by constructor. Qed.
-Lemma estep_if_false_no_locks ρ v e2 e3 m :
+Lemma ehstep_if_false_no_locks ρ v e2 e3 m :
   val_false v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e3, m.
 Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
-Lemma estep_comma_no_locks ρ m v e2 : Γ\ ρ ⊢ₕ # v ,, e2, m ⇒ e2, m.
+Lemma ehstep_comma_no_locks ρ m v e2 : Γ\ ρ ⊢ₕ # v ,, e2, m ⇒ e2, m.
 Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
-
+Lemma assign_sem_deterministic m a v ass v1 v2 va1 va2 :
+  assign_sem Γ m a v ass v1 va1 → assign_sem Γ m a v ass v2 va2 →
+  v1 = v2 ∧ va1 = va2.
+Proof. destruct 1; inversion 1; simplify_option_equality; auto. Qed.
+Lemma ehstep_deterministic ρ e m e1 m1 e2 m2 :
+  maybe2 EAlloc e = None →
+  Γ\ ρ ⊢ₕ e, m ⇒ e1, m1 → Γ\ ρ ⊢ₕ e, m ⇒ e2, m2 → e1 = e2 ∧ m1 = m2.
+Proof.
+  destruct 2; inversion 1; simplify_option_equality;
+    try match goal with
+    | H1 : assign_sem _ _ _ _ _ _ _, H2 : assign_sem _ _ _ _ _ _ _ |- _ =>
+       destruct (assign_sem_deterministic _ _ _ _ _ _ _ _ H1 H2); subst
+    end; auto; exfalso; eauto using val_true_false.
+Qed.
 Global Instance cstep_subrel_suffix_of δ k1 k2 :
   PropHolds (k1 `suffix_of` k2) →
   subrelation (cstep_in_ctx Γ δ k2) (cstep_in_ctx Γ δ k1).
@@ -1087,5 +1104,5 @@ Proof.
 Qed.
 End smallstep_properties.
 
-Hint Resolve estep_if_true_no_locks estep_if_false_no_locks
-  estep_comma_no_locks : cstep.
+Hint Resolve ehstep_if_true_no_locks ehstep_if_false_no_locks
+  ehstep_comma_no_locks : cstep.

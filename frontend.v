@@ -393,10 +393,10 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
   | CEAlloc cτ ce =>
      τ ← to_type Γn Γ m Δg Δl to_Type cτ;
      guard (τ ≠ voidT) with "alloc of void type";
-     '(e,τ') ← to_R <$> to_expr Γn Γ m Δg Δl ce;
-     _ ← error_of_option (maybe (TBase ∘ TInt) τ')
+     '(e,τn) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
+     _ ← error_of_option (maybe (TBase ∘ TInt) τn)
        "alloc applied to argument of non-integer type";
-     inr (& (alloc{τ} e), inr (Some τ.*))
+     inr (alloc{τ} e, inr (Some τ.*))
   | CEFree ce =>
      '(e,τ) ← to_R <$> to_expr Γn Γ m Δg Δl ce;
      τ' ← error_of_option (maybe (TBase ∘ TPtr ∘ Some) τ)

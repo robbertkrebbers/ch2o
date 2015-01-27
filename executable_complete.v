@@ -17,7 +17,7 @@ Hint Resolve (elem_of_singleton_2 (C:=listset (state Ti))).
 Lemma ehexec_complete Γ Γf m1 m2 k τs e1 e2 τlr :
   ✓ Γ → ✓{Γ} m1 → '{m1} ⊢* get_stack k :* τs → (Γ,Γf,'{m1},τs) ⊢ e1 : τlr →
   Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2 → ∃ f e2' m2',
-  (**i 1.) *) ehexec Γ k e1 m1 = Some (e2', m2') ∧
+  (**i 1.) *) (e2', m2') ∈ ehexec Γ k e1 m1 ∧
   (**i 2.) *) e2' ⊑{(Γ,Γf,τs),false,f@'{m2'}↦'{m2}} e2 : τlr ∧
   (**i 3.) *) m2' ⊑{Γ,false,f} m2 ∧
   (**i 4.) *) meminj_extend meminj_id f ('{m1}) ('{m1}).
@@ -25,24 +25,30 @@ Proof.
   intros ? Hm1 Hρ He1 p. destruct (ehstep_preservation Γ Γf m1 m2
     (get_stack k) τs e1 e2 τlr) as (Hm2&He2&Hm); auto.
   revert Hm1 Hρ He1 Hm2 He2 Hm. case p; clear p; try by (
-    intros; repeat match goal with
+    intros; eexists meminj_id, _, _; repeat match goal with
     | H : assign_sem _ _ _ _ _ _ _ |- _ =>
        apply assign_exec_correct in H
     | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]; try done
-    | _ => progress simplify_option_equality
-    | H : get_stack _ !! _ = _ |- _ => rewrite <-ctx_lookup_correct in H
-    end; eexists meminj_id, _, _; split_ands;
-      eauto using cmap_refine_id', expr_refine_id).
-  intros m Ω o τi τ n ???????s??; simplify_option_equality; typed_inversion_all.
+    | H : ?o = Some _ |- context [of_option ?o] => rewrite H
+    | _ => rewrite ctx_lookup_correct
+    | _ => progress simplify_equality'
+    | _ => rewrite collection_bind_singleton
+    | _ => rewrite elem_of_singleton
+    | _ => rewrite elem_of_union
+    | _ => rewrite collection_guard_True by done
+    | _ => case_match; [|done]
+    end; split_ands; eauto using cmap_refine_id', expr_refine_id).
+  intros m Ω o τi τ n ??????? s ?; typed_inversion_all.
   set (o' := fresh (dom indexset m)) in *.
   assert (mem_allocable o' m) by (apply mem_allocable_fresh).
-  destruct (mem_alloc_refine' Γ false meminj_id m m true (τ.[Z.to_nat n])
-    (fresh (dom indexset m)) o) as (f&?&?&?); auto using cmap_refine_id'.
-  eexists f, _, _; split_ands; eauto.
+  edestruct (λ τ, mem_alloc_refine' Γ false meminj_id m m true (τ.[Z.to_nat n])
+    (fresh (dom indexset m)) o) as (f&?&?&?); eauto using cmap_refine_id'.
+  eexists f, _, _; split_ands; [solve_elem_of| | |]; eauto.
   refine_constructor; eauto using lockset_valid_weaken, mem_alloc_forward.
   * eapply locks_refine_weaken with false meminj_id ('{m}) ('{m});
       eauto using locks_refine_id, mem_alloc_forward', option_eq_1.
-  * eapply addr_top_array_refine; eauto using mem_alloc_index_typed'.
+  * do 3 refine_constructor.
+    eapply addr_top_array_refine; eauto using mem_alloc_index_typed'.
 Qed.
 Lemma cexec_complete Γ Γf δ S1 S2 g :
   ✓ Γ → (Γ,'{SMem S1}) ⊢ δ : Γf → (Γ,Γf) ⊢ S1 : g → Γ\ δ ⊢ₛ S1 ⇒ S2 → ∃ f S2',
@@ -70,7 +76,9 @@ Proof.
       { destruct E as [|Ei] using rev_ind; [by destruct He1|].
         by destruct Ei; by rewrite ?subst_app. }
       apply elem_of_bind; exists (E, e1).
-      simplify_option_equality; eauto using expr_redexes_complete. }
+      split; eauto using expr_redexes_complete.
+      rewrite decide_False by esolve_elem_of.
+      apply elem_of_bind; eexists; split; eauto; esolve_elem_of. }
     eleft; split_ands; repeat refine_constructor; eauto.
     + eapply ectx_subst_refine; eauto 10 using ectx_refine_weaken,
         ectx_refine_id, ehstep_forward, ehexec_sound.
@@ -89,8 +97,9 @@ Proof.
     { destruct E as [|Ei] using rev_ind; [by destruct He|].
       by destruct Ei; by rewrite ?subst_app. }
     apply elem_of_bind; exists (E, e); split; [|by apply expr_redexes_complete].
-    destruct (ehexec _ _ _ _) as [[e2 m2]|] eqn:?.
+    destruct (collection_choose_or_empty (ehexec Γ k e m)) as [[[e2 m2]?]|].
     { destruct Hsafe; econstructor (eauto using ehexec_sound). }
+    rewrite decide_True by done.
     destruct (maybe_ECall_redex e) as [[[f Ωs] vs]|] eqn:Hcall; eauto.
     apply maybe_ECall_redex_Some in Hcall; destruct Hcall as [-> ?].
     by destruct Hsafe; constructor.
