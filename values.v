@@ -1213,36 +1213,38 @@ Proof.
     simplify_option_equality; simplify_list_equality.
   erewrite val_lookup_snoc, to_val_lookup_seg by eauto; eauto.
 Qed.
-(*
 Lemma to_val_lookup_seg_inv Γ Γm w1 τ rs v1 :
-  ✓ Γ → (Γ,Γm) ⊢ w1 : τ → mval_is_full w1 → to_val Γ w1 !! rs = Some v1 →
+  ✓ Γ → (Γ,Γm) ⊢ w1 : τ → ctree_Forall sep_unshared w1 →
+  to_val Γ w1 !! rs = Some v1 →
   ∃ w2, w1 !!{Γ} rs = Some w2 ∧ to_val Γ w2 = v1.
 Proof.
-  destruct 2 using @mtyped_case; inversion_clear 1; destruct rs; intros;
+  destruct 2 using @ctree_typed_ind; destruct rs; intros ? Hrs;
     repeat match goal with
     | _ => done
     | H: (_ <$> _) !! _ = Some _ |- _ => rewrite list_lookup_fmap in H
-    | H: context [length (_ <$> _) ] |- _ => rewrite fmap_length in H
-    | H : context [val_unflatten _ (unionT ?s) _], _ : _ !! ?s = Some ?τs |- _ =>
-       rewrite (val_unflatten_compound _ _ _ τs) in H by done
+    | H : context [ val_unflatten _ (unionT ?s) _ ],
+      _ : _ !! ?s = Some ?τs |- _ =>
+      rewrite (val_unflatten_compound _ _ _ τs) in H by done
+    | _ => rewrite <-fmap_take
     | _ => progress simplify_option_equality
     end; eauto using to_val_unflatten.
 Qed.
 Lemma to_val_lookup_inv Γ Γm w1 τ r v1 :
-  ✓ Γ → (Γ,Γm) ⊢ w1 : τ → mval_is_full w1 → to_val Γ w1 !! r = Some v1 →
+  ✓ Γ → (Γ,Γm) ⊢ w1 : τ → ctree_Forall sep_unshared w1 →
+  to_val Γ w1 !! r = Some v1 →
   ∃ w2, w1 !!{Γ} r = Some w2 ∧ to_val Γ w2 = v1.
 Proof.
-  intros ?. revert w1 τ.
+  intros ?; revert w1 τ.
   induction r as [|rs r IH] using rev_ind; intros w1 τ ??.
   { rewrite val_lookup_nil; intros; simplify_equality. by exists w1. }
   rewrite val_lookup_snoc; intros.
   destruct (to_val Γ w1 !! rs) as [v|] eqn:Hv; simplify_equality'.
   destruct (to_val_lookup_seg_inv Γ Γm w1 τ rs v) as (w2&?&<-); auto.
-  destruct (mval_lookup_seg_Some Γ Γm w1 τ rs w2) as (τ2&?&?); auto.
-  destruct (IH w2 τ2) as (w3&?&?); eauto using mval_lookup_seg_perm_full.
-  exists w3. rewrite mval_lookup_snoc. by simplify_option_equality.
+  destruct (ctree_lookup_seg_Some Γ Γm w1 τ rs w2) as (τ2&?&?); auto.
+  destruct (IH w2 τ2) as (w3&?&?);
+    eauto using ctree_lookup_seg_Forall, pbit_indetify_unshared.
+  exists w3. by rewrite ctree_lookup_snoc; simplify_option_equality.
 Qed.
-*)
 
 (** ** Properties of alter *)
 Implicit Types g : val Ti → val Ti.
