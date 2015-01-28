@@ -314,6 +314,32 @@ Proof.
     erewrite ref_object_offset_set_offset by eauto with lia; lia.
   * erewrite <-ref_object_offset_le, ref_object_offset_app by eauto; lia.
 Qed.
+Lemma addr_elt_refine Γ α f Γm1 Γm2 a1 a2 rs σ σ' :
+  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some σ → addr_strict Γ a1 → Γ ⊢ rs : σ ↣ σ' →
+  ref_seg_offset rs = 0 →
+  addr_elt Γ rs a1 ⊑{Γ,α,f@Γm1↦Γm2} addr_elt Γ rs a2 : Some σ'.
+Proof.
+  inversion 2 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ'' ??????????? Hcst Hr];
+    intros ? Hrs ?; simplify_equality'.
+  inversion Hcst; simplify_equality'; try solve [inversion Hrs].
+  erewrite path_type_check_complete by eauto; simpl. econstructor; eauto.
+  * apply ref_typed_cons; exists σ; split; auto.
+    apply ref_set_offset_typed; auto.
+    apply Nat.div_lt_upper_bound; eauto using size_of_ne_0,ref_typed_type_valid.
+  * lia.
+  * by rewrite Nat.mod_0_l by eauto using size_of_ne_0, ref_typed_type_valid,
+      ref_seg_typed_type_valid, castable_type_valid.
+  * constructor.
+  * destruct Hr as [|r1 i1 r2 i2 Hr|r1' r1 r2 i];
+      simplify_type_equality'; constructor; simpl; auto.
+    { constructor; auto. rewrite (Nat.mul_comm (size_of _ _)),
+        Nat.div_add, Nat.div_small, Nat.add_0_l by lia.
+      rewrite <-(ref_set_offset_offset r1) at 1.
+      rewrite <-(ref_set_offset_set_offset r1 _ 0).
+      eauto using ref_set_offset_le. }
+    constructor; auto. destruct r1; decompose_Forall_hyps;
+     auto using Forall2_app, ref_seg_set_offset_le.
+Qed.
 Lemma addr_top_refine Γ α f Γm1 Γm2 o1 o2 τ :
   ✓ Γ → Γm1 ⊑{Γ,α,f} Γm2 → Γm1 ⊢ o1 : τ → f !! o1 = Some (o2,[]) →
   ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
@@ -327,14 +353,11 @@ Lemma addr_top_array_refine Γ α f Γm1 Γm2 o1 o2 τ (n : Z) :
   ✓{Γ} τ → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
   addr_top_array o1 τ n ⊑{Γ,α,f@Γm1↦Γm2} addr_top_array o2 τ n : Some τ.
 Proof.
-  intros. assert (0 ≤ n)%Z by (by destruct n). econstructor; simpl; eauto. 
-  * apply TArray_valid; auto with lia.
-  * by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id by done.
-  * by repeat typed_constructor. 
-  * repeat typed_constructor; lia.
-  * lia.
-  * eauto using Nat.mod_0_l, size_of_ne_0.
-  * constructor.
-  * apply ref_refine_id.
+  intros. rewrite !(addr_top_array_alt Γ) by done.
+  assert (0 ≤ n)%Z by (by destruct n).
+  assert (int_typed (size_of Γ (τ.[Z.to_nat n])) sptrT).
+  { by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id by done. }
+  eapply addr_elt_refine; eauto using addr_top_strict, addr_top_refine,
+    TArray_valid; constructor; lia.
 Qed.
 End addresses.

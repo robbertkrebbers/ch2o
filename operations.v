@@ -42,12 +42,6 @@ Section operations_definitions.
   Definition addr_cast (σp : ptr_type Ti) (a : addr Ti) : addr Ti :=
     let 'Addr o r i τ σ _ := a in Addr o r i τ σ σp.
   Global Arguments addr_cast _ !_ /.
-  Definition addr_elt (Γ : env Ti) (rs : ref_seg Ti) (a : addr Ti) : addr Ti :=
-    from_option a $
-     σ ← type_of a ≫= lookupE Γ rs;
-     Some (Addr (addr_index a)
-       (rs :: addr_ref Γ a) 0 (addr_type_object a) σ (Some σ)).
-  Global Arguments addr_elt _ _ !_ /.
 
   (** ** Operations on pointers *)
   Definition ptr_alive' (m : mem Ti) (p : ptr Ti) : Prop :=
@@ -507,41 +501,6 @@ Proof.
   rewrite Hiσ, <-Nat.mul_succ_r. apply Nat.mul_le_mono_l, Nat.le_succ_l.
   apply Nat.div_lt_upper_bound;
     eauto using ref_typed_type_valid, size_of_ne_0.
-Qed.
-Lemma addr_elt_typed Γ Γm a rs σ σ' :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' →
-  ref_seg_offset rs = 0 → (Γ,Γm) ⊢ addr_elt Γ rs a : Some σ'.
-Proof.
-  rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) ? Hrs ?.
-  destruct a as [o r i τ σ'' σp]; simplify_equality'.
-  inversion Hcast; simplify_equality'; try solve [inversion Hrs].
-  erewrite path_type_check_complete by eauto; simpl; constructor; auto.
-  * apply ref_typed_cons; exists σ; split; auto.
-    apply ref_set_offset_typed; auto.
-    apply Nat.div_lt_upper_bound; eauto using size_of_ne_0,ref_typed_type_valid.
-  * lia.
-  * by rewrite Nat.mod_0_l by eauto using size_of_ne_0, ref_typed_type_valid,
-      ref_seg_typed_type_valid, castable_type_valid.
-  * constructor.
-Qed.
-Lemma addr_elt_strict Γ Γm a rs σ σ' :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → Γ ⊢ rs : σ ↣ σ' → addr_strict Γ (addr_elt Γ rs a).
-Proof.
-  rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) Hrs.
-  destruct a as [o r i τ σ'' σp]; simplify_equality'.
-  erewrite path_type_check_complete by eauto; simpl.
-  apply Nat.mul_pos_pos.
-  * eauto using size_of_pos, ref_typed_type_valid,
-      ref_seg_typed_type_valid, castable_type_valid.
-  * destruct Hrs; simpl; lia.
-Qed.
-Lemma addr_elt_weaken Γ1 Γ2 Γm1 a rs σ σ' :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ a : Some σ → Γ1 ⊢ rs : σ ↣ σ' → Γ1 ⊆ Γ2 →
-  addr_elt Γ1 rs a = addr_elt Γ2 rs a.
-Proof.
-  intros. unfold addr_elt; simplify_type_equality'.
-  by erewrite addr_ref_weaken, !path_type_check_complete
-    by eauto using ref_seg_typed_weaken.
 Qed.
 
 (** ** Properties of operations on pointers *)

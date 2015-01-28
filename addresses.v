@@ -85,6 +85,13 @@ Section address_operations.
       freeze true <$> addr_ref Γ a1 = freeze true <$> addr_ref Γ a2 ∧
       ¬addr_is_obj a1 ∧ ¬addr_is_obj a2 ∧
       addr_ref_byte Γ a1 ≠ addr_ref_byte Γ a2).
+
+  Definition addr_elt (Γ : env Ti) (rs : ref_seg Ti) (a : addr Ti) : addr Ti :=
+    from_option a $
+     σ ← type_of a ≫= lookupE Γ rs;
+     Some (Addr (addr_index a)
+       (rs :: addr_ref Γ a) 0 (addr_type_object a) σ (Some σ)).
+  Global Arguments addr_elt _ _ !_ /.
   Definition addr_top (o : index) (σ : type Ti) : addr Ti :=
     Addr o [] 0 σ σ (Some σ).
   Definition addr_top_array (o : index) (σ : type Ti) (n : Z) : addr Ti :=
@@ -321,6 +328,41 @@ Proof.
     <-Nat.mul_lt_mono_pos_r, Hoff, Nat.sub_0_r
     by auto using char_bits_pos; lia.
 Qed.
+Lemma addr_elt_typed Γ Γm a rs σ σ' :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' →
+  ref_seg_offset rs = 0 → (Γ,Γm) ⊢ addr_elt Γ rs a : Some σ'.
+Proof.
+  rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) ? Hrs ?.
+  destruct a as [o r i τ σ'' σp]; simplify_equality'.
+  inversion Hcast; simplify_equality'; try solve [inversion Hrs].
+  erewrite path_type_check_complete by eauto; simpl; constructor; auto.
+  * apply ref_typed_cons; exists σ; split; auto.
+    apply ref_set_offset_typed; auto.
+    apply Nat.div_lt_upper_bound; eauto using size_of_ne_0,ref_typed_type_valid.
+  * lia.
+  * by rewrite Nat.mod_0_l by eauto using size_of_ne_0, ref_typed_type_valid,
+      ref_seg_typed_type_valid, castable_type_valid.
+  * constructor.
+Qed.
+Lemma addr_elt_strict Γ Γm a rs σ σ' :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → Γ ⊢ rs : σ ↣ σ' → addr_strict Γ (addr_elt Γ rs a).
+Proof.
+  rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) Hrs.
+  destruct a as [o r i τ σ'' σp]; simplify_equality'.
+  erewrite path_type_check_complete by eauto; simpl.
+  apply Nat.mul_pos_pos.
+  * eauto using size_of_pos, ref_typed_type_valid,
+      ref_seg_typed_type_valid, castable_type_valid.
+  * destruct Hrs; simpl; lia.
+Qed.
+Lemma addr_elt_weaken Γ1 Γ2 Γm1 a rs σ σ' :
+  ✓ Γ1 → (Γ1,Γm1) ⊢ a : Some σ → Γ1 ⊢ rs : σ ↣ σ' → Γ1 ⊆ Γ2 →
+  addr_elt Γ1 rs a = addr_elt Γ2 rs a.
+Proof.
+  intros. unfold addr_elt; simplify_type_equality'.
+  by erewrite addr_ref_weaken, !path_type_check_complete
+    by eauto using ref_seg_typed_weaken.
+Qed.
 Lemma addr_top_typed Γ Γm o τ :
   ✓ Γ → Γm ⊢ o : τ → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
   (Γ,Γm) ⊢ addr_top o τ : Some τ.
@@ -333,17 +375,20 @@ Proof.
   unfold addr_strict, addr_top; simpl. rewrite Nat.mul_1_r.
   eauto using size_of_pos.
 Qed.
+Lemma addr_top_array_alt Γ o τ n :
+  Z.to_nat n ≠ 0 → let n' := Z.to_nat n in
+  addr_top_array o τ n = addr_elt Γ (RArray 0 τ n') (addr_top o (τ.[n'])).
+Proof. unfold addr_elt; simplify_option_equality; auto with lia. Qed.
 Lemma addr_top_array_typed Γ Γm o τ (n : Z) :
   ✓ Γ → Γm ⊢ o : τ.[Z.to_nat n] → ✓{Γ} τ → Z.to_nat n ≠ 0 →
   int_typed (n * size_of Γ τ) sptrT → (Γ,Γm) ⊢ addr_top_array o τ n : Some τ.
 Proof.
-  intros. assert (0 ≤ n)%Z by (by destruct n). constructor; simpl; auto.
-  * apply TArray_valid; auto with lia.
-  * by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id by done.
-  * repeat typed_constructor; lia. 
-  * lia.
-  * eauto using Nat.mod_0_l, size_of_ne_0.
-  * by apply castable_Some.
+  intros. rewrite (addr_top_array_alt Γ) by done.
+  assert (0 ≤ n)%Z by (by destruct n).
+  assert (int_typed (size_of Γ (τ.[Z.to_nat n])) sptrT).
+  { by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id by done. }
+  eapply addr_elt_typed; eauto using addr_top_strict, addr_top_typed,
+    TArray_valid; constructor; lia.
 Qed.
 Lemma addr_top_array_strict Γ o τ n :
   ✓ Γ → ✓{Γ} τ → Z.to_nat n ≠ 0 → addr_strict Γ (addr_top_array o τ n).
