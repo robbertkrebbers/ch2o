@@ -12,8 +12,7 @@ Record istate (Ti E : Set) := IState {
   sem_state : state Ti
 }.
 Arguments IState {_ _} _ _ _.
-Instance istate_dec {Ti E : Set}
-  `{∀ k1 k2 : Ti, Decision (k1 = k2), ∀ ε1 ε2 : E, Decision (ε1 = ε2)}
+Instance istate_dec {Ti E : Set} `{Env Ti, ∀ ε1 ε2 : E, Decision (ε1 = ε2)}
   (iS1 iS2 : istate Ti E) : Decision (iS1 = iS2).
 Proof. solve_decision. Defined.
 

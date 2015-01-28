@@ -1653,7 +1653,7 @@ Proof.
     assert (✓ (<[x:tag:=τs]> Γ)) by (constructor; eauto using to_types_valid).
     apply (IH (<[(x:tag):=CompoundType c (fst <$> cτys)]>Γn)
       (<[(x:tag):=τs]>Γ) m Δg); simpl in *; auto.
-    + eauto using cmap_valid'_weaken, insert_subseteq.
+    + eauto using cmap_valid_weaken', insert_subseteq.
     + eauto using mem_writable_all_weaken, insert_subseteq.
     + eauto using global_env_valid_weaken, insert_subseteq.
   * repeat case_error_guard; simplify_equality'.

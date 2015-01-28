@@ -120,7 +120,7 @@ Proof. solve_decision. Defined.
 Instance focus_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
   (φ1 φ2 : focus Ti) : Decision (φ1 = φ2).
 Proof. solve_decision. Defined.
-Instance state_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
+Instance state_eq_dec {Ti : Set} `{Env Ti}
   (S1 S2 : state Ti) : Decision (S1 = S2).
 Proof. solve_decision. Defined.
 Instance focus_locks {Ti} : Locks (focus Ti) := λ φ,

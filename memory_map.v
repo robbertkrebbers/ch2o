@@ -3,7 +3,10 @@
 Require Export memory_trees cmap.
 Local Open Scope ctype_scope.
 
-Notation mem Ti := (cmap Ti (pbit Ti)).
+Definition mem Ti := (cmap Ti (pbit Ti)).
+Instance mem_sep_ops `{Env Ti} : SeparationOps (mem Ti) := _.
+Instance mem_sep `{Env Ti} : Separation (mem Ti) := _.
+Typeclasses Opaque mem.
 
 Section operations.
   Context `{Env Ti}.
@@ -27,6 +30,8 @@ Section operations.
     ✓{Γ,memenv_of m} m.
   Definition index_alive' (m : mem Ti) (o : index) : Prop :=
     match cmap_car m !! o with Some (Obj _ _) => True | _ => False end.
+  Definition cmap_erase (m : mem Ti) : mem Ti :=
+    let (m) := m in CMap (omap (λ x, '(w,β) ← maybe_Obj x; Some (Obj w β)) m).
 
   Global Instance cmap_lookup:
       LookupE (env Ti) (addr Ti) (mtree Ti) (mem Ti) := λ Γ a m,
@@ -125,7 +130,7 @@ Proof.
   intros o w malloc ?; destruct (Hm2 o w malloc)
     as (τ&?&?&?&?); eauto 10 using ctree_typed_weaken.
 Qed.
-Lemma cmap_valid'_weaken Γ1 Γ2 m : ✓ Γ1 → ✓{Γ1} m → Γ1 ⊆ Γ2 → ✓{Γ2} m.
+Lemma cmap_valid_weaken' Γ1 Γ2 m : ✓ Γ1 → ✓{Γ1} m → Γ1 ⊆ Γ2 → ✓{Γ2} m.
 Proof. by apply cmap_valid_weaken. Qed.
 Lemma cmap_valid_sep_valid Γ Γm m : ✓{Γ,Γm} m → sep_valid m.
 Proof.
@@ -148,6 +153,40 @@ Proof.
   * by destruct (cmap_valid_Obj Γ Γm m o w malloc)
       as (τ&?&?&?&?&_); simplify_type_equality.
 Qed.
+
+Lemma cmap_erase_empty : cmap_erase (∅ : mem Ti) = ∅.
+Proof. simpl. by rewrite omap_empty. Qed.
+Lemma dmap_erase_disjoint m1 m2 : m1 ⊥ m2 → cmap_erase m1 ⊥ cmap_erase m2.
+Proof.
+  destruct m1 as [m1], m2 as [m2]; intros Hm o; specialize (Hm o).
+  rewrite !lookup_omap. by destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|].
+Qed.
+Lemma cmap_erase_union m1 m2 :
+  cmap_erase (m1 ∪ m2) = cmap_erase m1 ∪ cmap_erase m2.
+Proof.
+  sep_unfold; destruct m1 as [m1], m2 as [m2]; f_equal'; apply map_eq; intros o.
+  rewrite lookup_omap, !lookup_union_with, !lookup_omap.
+  destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|]; naive_solver.
+Qed.
+Lemma dmap_erase_subseteq m1 m2 : m1 ⊆ m2 → cmap_erase m1 ⊆ cmap_erase m2.
+Proof.
+  destruct m1 as [m1], m2 as [m2]; intros Hm o; specialize (Hm o).
+  rewrite !lookup_omap. by destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|].
+Qed.
+Lemma cmap_erase_difference m1 m2 :
+  m2 ⊆ m1 → cmap_erase (m1 ∖ m2) = cmap_erase m1 ∖ cmap_erase m2.
+Proof.
+  sep_unfold; destruct m1 as [m1], m2 as [m2]; intros Hm; f_equal'.
+  apply map_eq; intros o; specialize (Hm o).
+  rewrite lookup_omap, !lookup_difference_with, !lookup_omap.
+  destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|];
+    simplify_option_equality; naive_solver.
+Qed.
+Lemma cmap_erase_erase m : cmap_erase (cmap_erase m) = cmap_erase m.
+Proof.
+  destruct m as [m]; f_equal'; apply map_eq; intros o.
+  rewrite !lookup_omap. by destruct (m !! o) as [[]|].
+Qed.
 Lemma cmap_erase_typed Γ Γm m : ✓{Γ,Γm} m →  ✓{Γ,Γm} (cmap_erase m).
 Proof.
   destruct m as [m]; unfold lookupE; intros (?&?&?); split_ands'; simpl in *.
@@ -156,6 +195,7 @@ Proof.
   * intros o w maloc. rewrite lookup_omap.
     destruct (m !! o) as [[]|] eqn:?; intros; simplify_equality'; eauto.
 Qed.
+
 Lemma cmap_lookup_erase Γ m a : cmap_erase m !!{Γ} a = m !!{Γ} a.
 Proof.
   unfold lookupE, cmap_lookup; destruct m as [m]; simpl.
