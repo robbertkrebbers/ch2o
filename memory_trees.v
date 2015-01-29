@@ -1047,6 +1047,14 @@ Proof.
     intros w; rewrite ?ctree_lookup_snoc; intros; simplify_option_equality;
     simplify_type_equality; eauto using ctree_lookup_seg_Forall.
 Qed.
+Lemma ctree_lookup_Forall_typed (P : pbit Ti → Prop) Γ Γm w τ r w' :
+  ✓ Γ → (Γ,Γm) ⊢ w : τ → (∀ xb, ✓{Γ,Γm} xb → P xb → P (pbit_indetify xb)) →
+  ctree_Forall P w → w !!{Γ} r = Some w' → ctree_Forall P w'.
+Proof.
+  intros. eapply Forall_and_l with ✓{Γ,Γm}, ctree_lookup_Forall; eauto.
+  * intros ? [??]; eauto using pbit_indetify_valid.
+  * rewrite Forall_and; eauto using ctree_flatten_valid.
+Qed.
 Lemma ctree_new_lookup_seg Γ τ x rs σ :
   ✓ Γ → sep_unshared x → ✓{Γ} τ →
   Γ ⊢ rs : τ ↣ σ → ctree_new Γ x τ !!{Γ} rs = Some (ctree_new Γ x σ).

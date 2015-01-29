@@ -44,7 +44,7 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
      Some (inl (addr_elt Γ rs a))
   | e #> rs =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inr;
-     v' ← v !! rs;
+     v' ← v !!{Γ} rs;
      Some (inr v')
   | @{op} e =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inr;
@@ -76,8 +76,8 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
   | #[r:=e1] e2 =>
      v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe inr;
      v2 ← ⟦ e2 ⟧ Γ fs ρ m ≫= maybe inr;
-     guard (is_Some (v2 !! r));
-     Some (inr (val_alter (λ _, v1) r v2))
+     guard (is_Some (v2 !!{Γ} r));
+     Some (inr (val_alter Γ (λ _, v1) r v2))
   | _ => None
   end
 where "⟦ e ⟧" := (expr_eval e) : C_scope.
@@ -113,7 +113,7 @@ Context (Peltl : ∀ e rs a,
   P (e %> rs) (inl (addr_elt Γ rs a))).
 Context (Peltr : ∀ e rs v v',
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
-  v !! rs = Some v' → P (e #> rs) (inr v')).
+  v !!{Γ} rs = Some v' → P (e #> rs) (inr v')).
 Context (Punop : ∀ op e v,
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
   val_unop_ok m op v → P (@{op} e) (inr (val_unop op v))).
@@ -143,8 +143,8 @@ Context (Pcast : ∀ τ e v,
   val_cast_ok Γ m (Some τ) v → P (cast{τ} e) (inr (val_cast (Some τ) v))).
 Context (Pinsert : ∀ r e1 e2 v1 v2,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
-  ⟦ e2 ⟧ Γ fs ρ m = Some (inr v2) → P e2 (inr v2) → is_Some (v2 !! r) →
-  P (#[r:=e1] e2) (inr (val_alter (λ _, v1) r v2))).
+  ⟦ e2 ⟧ Γ fs ρ m = Some (inr v2) → P e2 (inr v2) → is_Some (v2 !!{Γ} r) →
+  P (#[r:=e1] e2) (inr (val_alter Γ (λ _, v1) r v2))).
 Lemma expr_eval_ind : ∀ e av, ⟦ e ⟧ Γ fs ρ m = Some av → P e av.
 Proof.
   assert (∀ f F es vs v,
@@ -249,7 +249,7 @@ Proof.
       by eauto using addr_strict_weaken, index_alive_1', index_alive_2'.
   * by simplify_option_equality.
   * simplify_option_equality. by erewrite <-addr_elt_weaken by eauto.
-  * by simplify_option_equality.
+  * by simplify_option_equality by eauto using val_lookup_seg_weaken.
   * by simplify_option_equality by eauto using val_unop_ok_weaken.
   * simplify_option_equality by eauto using val_binop_ok_weaken.
     by erewrite <-val_binop_weaken by eauto.
@@ -261,7 +261,8 @@ Proof.
     by destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]; eauto.
   * simplify_option_equality; eauto.
   * by simplify_option_equality by eauto using val_cast_ok_weaken.
-  * simplify_option_equality; eauto.
+  * simplify_option_equality by eauto using val_lookup_weaken_is_Some.
+    by erewrite <-val_alter_weaken by eauto.
 Qed.
 Lemma expr_eval_erase Γ fs ρ m e : ⟦ e ⟧ Γ fs ρ (cmap_erase m) = ⟦ e ⟧ Γ fs ρ m.
 Proof.

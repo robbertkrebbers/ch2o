@@ -56,7 +56,7 @@ Definition ehexec (Γ : env Ti) (k : ctx Ti)
      {[ #{Ω} v, mem_force Γ a m ]}
   | %{Ω} a %> rs => {[ %{Ω} (addr_elt Γ rs a), m ]}
   | #{Ω} v #> rs =>
-     v' ← of_option (v !! rs);
+     v' ← of_option (v !!{Γ} rs);
      {[ #{Ω} v', m ]}
   | alloc{τ} (#{Ω} (intV{_} n)) =>
      let o := fresh (dom indexset m) in
@@ -86,8 +86,8 @@ Definition ehexec (Γ : env Ti) (k : ctx Ti)
      guard (val_cast_ok Γ m (Some τ) v);
      {[ #{Ω} (val_cast (Some τ) v), m ]}
   | #[r:=#{Ω1} v1] (#{Ω2} v2) =>
-     guard (is_Some (v2 !! r));
-     {[ #{Ω1 ∪ Ω2} (val_alter (λ _, v1) r v2), m ]}
+     guard (is_Some (v2 !!{Γ} r));
+     {[ #{Ω1 ∪ Ω2} (val_alter Γ (λ _, v1) r v2), m ]}
   | _ => ∅
   end%E.
 Definition cexec (Γ : env Ti) (δ : funenv Ti)

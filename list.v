@@ -1972,6 +1972,15 @@ Section Forall_Exists.
   Proof. intros H. apply Forall_proper. red; apply H. done. Qed.
   Lemma Forall_not l : length l ≠ 0 → Forall (not ∘ P) l → ¬Forall P l.
   Proof. by destruct 2; inversion 1. Qed.
+  Lemma Forall_and {Q} l : Forall (λ x, P x ∧ Q x) l ↔ Forall P l ∧ Forall Q l.
+  Proof.
+    split; [induction 1; constructor; naive_solver|].
+    intros [Hl Hl']; revert Hl'; induction Hl; inversion_clear 1; auto.
+  Qed.
+  Lemma Forall_and_l {Q} l : Forall (λ x, P x ∧ Q x) l → Forall P l.
+  Proof. rewrite Forall_and; tauto. Qed.
+  Lemma Forall_and_r {Q} l : Forall (λ x, P x ∧ Q x) l → Forall Q l.
+  Proof. rewrite Forall_and; tauto. Qed.
   Lemma Forall_delete l i : Forall P l → Forall P (delete i l).
   Proof. intros H. revert i. by induction H; intros [|i]; try constructor. Qed.
   Lemma Forall_lookup l : Forall P l ↔ ∀ i x, l !! i = Some x → P x.
@@ -2275,25 +2284,38 @@ Section Forall2.
     intros. rewrite !resize_spec, (Forall2_length l k) by done.
     auto using Forall2_app, Forall2_take, Forall2_replicate.
   Qed.
-  Lemma Forall2_resize_ge_l l k x y n m :
-    P x y → Forall (flip P y) l → n ≤ m →
+  Lemma Forall2_resize_l l k x y n m :
+    P x y → Forall (flip P y) l →
     Forall2 P (resize n x l) k → Forall2 P (resize m x l) (resize m y k).
   Proof.
-    intros. assert (n = length k) as ->.
+    intros. destruct (decide (m ≤ n)).
+    { rewrite <-(resize_resize l m n) by done. by apply Forall2_resize. }
+    intros. assert (n = length k); subst.
     { by rewrite <-(Forall2_length (resize n x l) k), resize_length. }
-    rewrite (le_plus_minus (length k) m), !resize_plus, resize_all,
-      drop_all, resize_nil by done; auto using Forall2_app, Forall2_replicate_r,
+    rewrite (le_plus_minus (length k) m), !resize_plus,
+      resize_all, drop_all, resize_nil by lia.
+    auto using Forall2_app, Forall2_replicate_r,
       Forall_resize, Forall_drop, resize_length.
   Qed.
-  Lemma Forall2_resize_ge_r l k x y n m :
-    P x y → Forall (P x) k → n ≤ m →
+  Lemma Forall2_resize_r l k x y n m :
+    P x y → Forall (P x) k →
     Forall2 P l (resize n y k) → Forall2 P (resize m x l) (resize m y k).
   Proof.
-    intros. assert (n = length l) as ->.
+    intros. destruct (decide (m ≤ n)).
+    { rewrite <-(resize_resize k m n) by done. by apply Forall2_resize. }
+    assert (n = length l); subst.
     { by rewrite (Forall2_length l (resize n y k)), resize_length. }
-    rewrite (le_plus_minus (length l) m), !resize_plus, resize_all,
-      drop_all, resize_nil by done; auto using Forall2_app, Forall2_replicate_l,
+    rewrite (le_plus_minus (length l) m), !resize_plus,
+      resize_all, drop_all, resize_nil by lia.
+    auto using Forall2_app, Forall2_replicate_l,
       Forall_resize, Forall_drop, resize_length.
+  Qed.
+  Lemma Forall2_resize_r_flip l k x y n m :
+    P x y → Forall (P x) k →
+    length k = m → Forall2 P l (resize n y k) → Forall2 P (resize m x l) k.
+  Proof.
+    intros ?? <- ?. rewrite <-(resize_all k y) at 2.
+    apply Forall2_resize_r with n; auto using Forall_true.
   Qed.
   Lemma Forall2_sublist_lookup_l l k n i l' :
     Forall2 P l k → sublist_lookup n i l = Some l' →
@@ -3243,14 +3265,16 @@ Ltac decompose_Forall_hyps :=
     let E := fresh in
     assert (P x) as E by (apply (Forall_lookup_1 P _ _ _ H H1)); lazy beta in E
   | H : Forall2 ?P ?l ?k |- _ =>
-    lazymatch goal with
+    match goal with
     | H1 : l !! ?i = Some ?x, H2 : k !! ?i = Some ?y |- _ =>
       unless (P x y) by done; let E := fresh in
       assert (P x y) as E by (by apply (Forall2_lookup_lr P l k i x y));
       lazy beta in E
-    | H1 : l !! _ = Some ?x |- _ =>
+    | H1 : l !! ?i = Some ?x |- _ =>
+      try (match goal with _ : k !! i = Some _ |- _ => fail 2 end);
       destruct (Forall2_lookup_l P _ _ _ _ H H1) as (?&?&?)
-    | H2 : k !! _ = Some ?y |- _ =>
+    | H2 : k !! ?i = Some ?y |- _ =>
+      try (match goal with _ : l !! i = Some _ |- _ => fail 2 end);
       destruct (Forall2_lookup_r P _ _ _ _ H H2) as (?&?&?)
     end
   | H : Forall3 ?P ?l ?l' ?k |- _ =>

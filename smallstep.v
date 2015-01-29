@@ -55,7 +55,7 @@ Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
   | ehstep_eltl m Ω a rs :
      Γ\ ρ ⊢ₕ %{Ω} a %> rs, m ⇒ %{Ω} (addr_elt Γ rs a), m
   | ehstep_eltr m Ω v rs v' :
-     v !! rs = Some v' → Γ\ ρ ⊢ₕ #{Ω} v #> rs, m ⇒ #{Ω} v', m
+     v !!{Γ} rs = Some v' → Γ\ ρ ⊢ₕ #{Ω} v #> rs, m ⇒ #{Ω} v', m
   | ehstep_alloc_NULL m Ω τi τ n :
      alloc_can_fail → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
      Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒ #{Ω} (ptrV (NULL (Some τ))), m
@@ -85,9 +85,9 @@ Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
      val_cast_ok Γ m (Some τ) v →
      Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} (val_cast (Some τ) v), m
   | ehstep_insert m r v1 Ω1 v2 Ω2 :
-     is_Some (v2 !! r) →
+     is_Some (v2 !!{Γ} r) →
      Γ\ ρ ⊢ₕ #[r:=#{Ω1} v1] (#{Ω2} v2), m ⇒
-             #{Ω1 ∪ Ω2} (val_alter (λ _, v1) r v2), m
+             #{Ω1 ∪ Ω2} (val_alter Γ (λ _, v1) r v2), m
 where "Γ \ ρ  ⊢ₕ e1 , m1 '⇒' e2 , m2" :=
   (@ehstep _ _ Γ ρ e1%E m1 e2%E m2) : C_scope.
 

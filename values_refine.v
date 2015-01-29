@@ -256,8 +256,9 @@ Proof.
     apply bits_refine_compose with
       Γm2 (resize (bit_size_of Γ (unionT s)) BIndet (val_flatten Γ v2)); auto.
     rewrite list_lookup_fmap, Hτ in Hv2; simplify_equality'.
-    eapply bits_subseteq_refine, bits_weakly_refine_resize_l;
-      eauto using val_flatten_unflatten, bit_size_of_union_lookup.
+    rewrite <-?(resize_le _ _ BIndet) by done.
+    eauto 8 using bits_subseteq_refine,
+      Forall2_resize_r_flip, Forall_true, val_flatten_unflatten.
 Qed.
 Lemma val_unflatten_refine Γ α f Γm1 Γm2 τ bs1 bs2 :
   ✓ Γ → ✓{Γ} τ → bs1 ⊑{Γ,α,f@Γm1↦Γm2}* bs2 → length bs1 = bit_size_of Γ τ →
@@ -283,9 +284,6 @@ Proof.
     + apply vals_unflatten_representable; eauto using bits_refine_valid_r.
       by erewrite <-Forall2_length by eauto.
 Qed.
-Lemma val_new_refine Γ α f Γm1 Γm2 τ :
-  ✓ Γ → ✓{Γ} τ → val_new Γ τ ⊑{Γ,α,f@Γm1↦Γm2} val_new Γ τ : τ.
-Proof. intros. apply val_unflatten_refine; auto. Qed.
 Lemma to_val_refine Γ α f Γm1 Γm2 w1 w2 τ :
   ✓ Γ → w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : τ →
   to_val Γ w1 ⊑{Γ,α,f@Γm1↦Γm2} to_val Γ w2 : τ.
@@ -389,7 +387,7 @@ Proof.
     erewrite val_flatten_length by eauto.
     eapply val_flatten_unflatten; eauto using val_typed_type_valid.
 Qed.
-Lemma of_val_to_val_refine Γ Γm x w τ :
+Lemma of_val_to_val_refine Γ Γm w τ :
   ✓ Γ → (Γ,Γm) ⊢ w : τ → ctree_Forall (not ∘ sep_unmapped) w →
   of_val Γ (tagged_perm <$> ctree_flatten w) (to_val Γ w) ⊑{Γ,true@Γm} w : τ.
 Proof.
@@ -448,9 +446,10 @@ Proof.
       eauto using resize_length.
     assert (✓{Γ}* τs) as Hτs_valid by eauto.
     apply bit_size_of_union in Hs; auto. clear Hbs'.
-    induction Hτs_valid; decompose_Forall_hyps; constructor;
-      eauto using bits_weakly_refine_resize_l,
-      val_flatten_unflatten, pbits_tag_valid.
+    induction Hτs_valid; decompose_Forall_hyps; constructor; eauto.
+    rewrite <-?(resize_le _ _ BIndet) by done.
+    eauto 8 using Forall2_resize_r_flip,
+      Forall_true, val_flatten_unflatten, pbits_tag_valid.
 Qed.
 Lemma of_val_to_val_refine_unflatten_flatten Γ Γm x w τ :
   ✓ Γ → (Γ,Γm) ⊢ w : τ →
@@ -475,9 +474,23 @@ Proof.
     refine_constructor; eauto using vals_representable_freeze.
     elim IH; constructor; auto.
 Qed.
+Lemma val_new_refine_l Γ f Γm1 Γm2 v τ :
+  ✓ Γ → (Γ,Γm2) ⊢ v : τ → val_union_free v →
+  val_new Γ τ ⊑{Γ,true,f@Γm1↦Γm2} v : τ.
+Proof.
+  intros. rewrite <-(left_id_L meminj_id (◎) f).
+  eapply (val_refine_compose Γ true true); eauto using val_freeze_refine_l.
+  erewrite <-val_unflatten_flatten by eauto.
+  apply val_unflatten_refine; eauto using val_typed_type_valid.
+  apply BIndets_refine; eauto using val_flatten_valid.
+Qed.
+Lemma val_new_refine Γ α f Γm1 Γm2 τ :
+  ✓ Γ → ✓{Γ} τ → val_new Γ τ ⊑{Γ,α,f@Γm1↦Γm2} val_new Γ τ : τ.
+Proof. intros. apply val_unflatten_refine; auto. Qed.
+
 Lemma val_lookup_seg_refine Γ α f Γm1 Γm2 v1 v2 τ rs v3 :
-  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → v1 !! rs = Some v3 →
-  ∃ v4, v2 !! rs = Some v4 ∧ v3 ⊑{Γ,α,f@Γm1↦Γm2} v4 : type_of v3.
+  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → v1 !!{Γ} rs = Some v3 →
+  ∃ v4, v2 !!{Γ} rs = Some v4 ∧ v3 ⊑{Γ,α,f@Γm1↦Γm2} v4 : type_of v3.
 Proof.
   intros ?. revert v1 v2 τ. refine (val_refine_ind _ _ _ _ _ _ _ _ _ _ _ _).
   * by destruct rs.
@@ -487,15 +500,30 @@ Proof.
   * intros s τs vs1 vs2 ?? _ ?; destruct rs; simplify_option_equality.
     decompose_Forall_hyps. erewrite val_refine_type_of_l by eauto; eauto.
   * intros s τs i v1 v2 τ ??? _ ?; destruct rs; simplify_option_equality.
-    erewrite val_refine_type_of_l by eauto; eauto.
+    { erewrite val_refine_type_of_l by eauto; eauto. }
+    eexists; split; eauto. erewrite val_unflatten_type_of by eauto.
+    eauto using val_unflatten_refine, val_flatten_refine.
   * intros s τs vs1 vs2 ?? _ _ _ ?; destruct rs; simplify_option_equality.
     decompose_Forall_hyps. erewrite val_refine_type_of_l by eauto; eauto.
-  * intros s τs i v1 v2 τ vs2 ????? _ _ ?; destruct rs; simplify_option_equality.
-    decompose_Forall_hyps. erewrite val_refine_type_of_l by eauto; eauto.
+  * intros s τs i v1 v2 τ vs ?? Hi Hv2 Hv _ [bs ?? ->] ?;
+      destruct rs as [| |i' ??]; simplify_equality'.
+    case_option_guard; simplify_equality'; case_decide; simplify_equality'.
+    { erewrite val_refine_type_of_l by eauto; eauto. }
+    case_option_guard; simpl_option_monad by eauto; simplify_equality'.
+    destruct (τs !! i') as [τ'|] eqn:Hi'; decompose_Forall_hyps.
+    rewrite list_lookup_fmap, Hi', val_unflatten_type_of by eauto;
+      rewrite list_lookup_fmap, Hi in Hv2; simplify_equality'.
+    destruct α; try done; eexists; split; eauto.
+    eapply val_unflatten_refine; eauto. rewrite <-(left_id_L meminj_id (◎) f).
+    eapply (bits_refine_compose _ true true f meminj_id);
+      eauto using val_unflatten_refine, val_flatten_refine.
+    apply bits_subseteq_refine; auto. erewrite <-!resize_le by eauto.
+    apply Forall2_resize_r with (bit_size_of Γ τ);
+      eauto using Forall_true, val_flatten_unflatten.
 Qed.
 Lemma val_lookup_seg_refine_alt Γ α f Γm1 Γm2 v1 v2 τ rs v3 σ :
-  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → v1 !! rs = Some v3 →
-  Γ ⊢ rs : τ ↣ σ → ∃ v4, v2 !! rs = Some v4 ∧ v3 ⊑{Γ,α,f@Γm1↦Γm2} v4 : σ.
+  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → v1 !!{Γ} rs = Some v3 →
+  Γ ⊢ rs : τ ↣ σ → ∃ v4, v2 !!{Γ} rs = Some v4 ∧ v3 ⊑{Γ,α,f@Γm1↦Γm2} v4 : σ.
 Proof.
   intros. assert ((Γ,Γm1) ⊢ v3 : σ)
     by eauto using val_lookup_seg_typed, val_refine_typed_l.
@@ -503,8 +531,8 @@ Proof.
   simplify_type_equality'; eauto.
 Qed.
 Lemma val_lookup_refine Γ α f Γm1 Γm2 v1 v2 τ r v3 :
-  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → v1 !! r = Some v3 →
-  ∃ v4, v2 !! r = Some v4 ∧ v3 ⊑{Γ,α,f@Γm1↦Γm2} v4 : type_of v3.
+  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → v1 !!{Γ} r = Some v3 →
+  ∃ v4, v2 !!{Γ} r = Some v4 ∧ v3 ⊑{Γ,α,f@Γm1↦Γm2} v4 : type_of v3.
 Proof.
   intros ?. revert v1 v2 τ. induction r as [|rs r IH] using rev_ind; simpl.
   { intros v1 v2 τ ??; simplify_type_equality'. exists v2.
@@ -514,45 +542,106 @@ Proof.
     simplify_option_equality; eauto.
 Qed.
 Lemma val_lookup_is_Some_refine Γ α f Γm1 Γm2 v1 v2 τ r :
-  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → is_Some (v1 !! r) → is_Some (v2 !! r).
+  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → is_Some (v1 !!{Γ} r) → is_Some (v2 !!{Γ} r).
 Proof.
   intros ?? [v3 ?].
   destruct (val_lookup_refine Γ α f Γm1 Γm2 v1 v2 τ r v3) as (?&?&?); eauto.
 Qed.
+Lemma to_val_lookup_seg_inv Γ Γm w1 τ rs v1 :
+  ✓ Γ → (Γ,Γm) ⊢ w1 : τ →
+  ctree_Forall sep_unshared w1 → ctree_Forall (not ∘ sep_unmapped) w1 →
+  to_val Γ w1 !!{Γ} rs = Some v1 →
+  ∃ w2, w1 !!{Γ} rs = Some w2 ∧ v1 ⊑{Γ,true@Γm} to_val Γ w2 : type_of v1.
+Proof.
+  intros ?. revert w1 τ v1. assert (∀ s τs i i' w xbs τ τ',
+    Γ !! s = Some τs → τs !! i = Some τ → τs !! i' = Some τ' →
+    (Γ,Γm) ⊢ w : τ → ctree_Forall (not ∘ sep_unmapped) w → ✓{Γ,Γm}* xbs →
+    bit_size_of Γ (unionT s) = bit_size_of Γ τ + length xbs →
+    val_unflatten Γ τ'
+      (resize (bit_size_of Γ τ') BIndet (val_flatten Γ (to_val Γ w)))
+    ⊑{Γ,true @ Γm} to_val Γ (ctree_unflatten Γ τ'
+      (take (bit_size_of Γ τ') (ctree_flatten w ++ xbs))) : τ').
+  { intros s τs i i' w xbs τ τ' ???????; erewrite to_val_unflatten by eauto.
+    erewrite fmap_take, fmap_app,
+      <-(ctree_flatten_of_val' _ _ (tagged_perm <$> ctree_flatten w))
+      by eauto using to_val_typed; eapply val_unflatten_refine; eauto.
+    rewrite <-!(resize_le _ _ BIndet) by auto.
+    apply Forall2_resize_r with (bit_size_of Γ τ); eauto 9 using
+      Forall_impl, ctree_flatten_valid, pbits_tag_valid, BIndet_refine.
+    rewrite resize_app by auto.
+    eauto using pbits_tag_refine, ctree_flatten_refine, of_val_to_val_refine. }
+  destruct 1 using @ctree_typed_ind; destruct rs; intros;
+    repeat match goal with
+    | _ => done
+    | H: (_ <$> _) !! _ = Some _ |- _ => rewrite list_lookup_fmap in H
+    | H : context [ val_unflatten _ (unionT ?s) _ ],
+      _ : _ !! ?s = Some ?τs |- _ =>
+      rewrite (val_unflatten_compound _ _ _ τs) in H by done
+    | _ => rewrite <-fmap_take
+    | _ => progress decompose_Forall_hyps
+    | _ => progress simplify_option_equality
+    | _ => erewrite val_unflatten_type_of by eauto
+    | _ => erewrite <-to_val_unflatten by eauto
+    | _ => erewrite type_of_correct by eauto using to_val_typed
+    end; eauto 9 using val_refine_id, to_val_typed, ctree_unflatten_typed.
+Qed.
+Lemma to_val_lookup_inv Γ Γm w1 τ r v1 :
+  ✓ Γ → (Γ,Γm) ⊢ w1 : τ →
+  ctree_Forall sep_unshared w1 → ctree_Forall (not ∘ sep_unmapped) w1 →
+  to_val Γ w1 !!{Γ} r = Some v1 →
+  ∃ w2, w1 !!{Γ} r = Some w2 ∧ v1 ⊑{Γ,true@Γm} to_val Γ w2 : type_of v1.
+Proof.
+  intros ????; revert v1. induction r as [|rs r IH]; intros v1.
+  { rewrite val_lookup_nil; intros; simplify_equality.
+    erewrite type_of_correct by eauto using to_val_typed.
+    exists w1; eauto using val_refine_id, to_val_typed. }
+  rewrite val_lookup_cons, ctree_lookup_cons, bind_Some; intros (v2'&?&?).
+  destruct (IH v2') as (w2'&Hr&?); auto. rewrite Hr; simpl.
+  destruct (val_lookup_seg_refine Γ true meminj_id Γm Γm v2'
+    (to_val Γ w2') (type_of v2') rs v1) as (v2''&?&?); auto.
+  destruct (to_val_lookup_seg_inv Γ Γm w2' (type_of w2') rs v2'')
+    as (w2''&?&?); eauto using ctree_lookup_Some_type_of,
+    ctree_lookup_Forall_typed, pbit_indetify_unshared.
+  { eapply ctree_lookup_Forall_typed; eauto; simpl;
+      eauto using pbit_unmapped_indetify_inv, pbit_valid_sep_valid. }
+  exists w2''; split; auto.
+  eapply (val_refine_compose _ true true meminj_id meminj_id); eauto.
+Qed.
 Lemma val_alter_seg_refine Γ α f Γm1 Γm2 g1 g2 v1 v2 τ rs v3 v4 :
-  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → v1 !! rs = Some v3 → v2 !! rs = Some v4 →
-  g1 v3 ⊑{Γ,α,f@Γm1↦Γm2} g2 v4 : type_of v3 →
-  val_alter_seg g1 rs v1 ⊑{Γ,α,f@Γm1↦Γm2} val_alter_seg g2 rs v2 : τ.
+  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → v1 !!{Γ} rs = Some v3 →
+  v2 !!{Γ} rs = Some v4 → g1 v3 ⊑{Γ,α,f@Γm1↦Γm2} g2 v4 : type_of v3 →
+  val_alter_seg Γ g1 rs v1 ⊑{Γ,α,f@Γm1↦Γm2} val_alter_seg Γ g2 rs v2 : τ.
 Proof.
   destruct 2, rs;
     change (val_refine' Γ α f Γm1 Γm2) with (refineT Γ α f Γm1 Γm2) in *; intros;
     simplify_option_equality; decompose_Forall_hyps;
     repeat match goal with
     | H : _ ⊑{_,_,_@_↦_} _ : type_of _ |- _ =>
-       erewrite val_refine_type_of_l in H by eauto
+       erewrite ?val_refine_type_of_l, ?val_unflatten_type_of in H by eauto
+    | _ => rewrite resize_resize by eauto using bit_size_of_union_lookup
     end; refine_constructor; eauto using alter_length.
   * apply Forall2_alter; naive_solver.
   * apply Forall3_alter_lm; naive_solver.
 Qed.
 Lemma val_alter_refine Γ α f Γm1 Γm2 g1 g2 v1 v2 τ r v3 v4 :
-  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → v1 !! r = Some v3 → v2 !! r = Some v4 →
-  g1 v3 ⊑{Γ,α,f@Γm1↦Γm2} g2 v4 : type_of v3 →
-  val_alter g1 r v1 ⊑{Γ,α,f@Γm1↦Γm2} val_alter g2 r v2 : τ.
+  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → v1 !!{Γ} r = Some v3 →
+  v2 !!{Γ} r = Some v4 → g1 v3 ⊑{Γ,α,f@Γm1↦Γm2} g2 v4 : type_of v3 →
+  val_alter Γ g1 r v1 ⊑{Γ,α,f@Γm1↦Γm2} val_alter Γ g2 r v2 : τ.
 Proof.
   intros ?. revert g1 g2 v1 v2 τ.
   induction r as [|rs r IH] using rev_ind; simpl; intros g1 g2 v1 v2 τ.
   { rewrite !val_lookup_nil; intros ???; simplify_equality.
     erewrite val_refine_type_of_l by eauto; eauto. }
   rewrite !val_lookup_snoc, !val_alter_snoc; intros.
-  destruct (v1 !! rs) as [v1'|] eqn:?; simplify_equality'.
-  destruct (v2 !! rs) as [v2'|] eqn:?; simplify_equality'.
+  destruct (v1 !!{Γ} rs) as [v1'|] eqn:?; simplify_equality'.
+  destruct (v2 !!{Γ} rs) as [v2'|] eqn:?; simplify_equality'.
   destruct (val_lookup_seg_refine Γ α f Γm1 Γm2 v1 v2 τ rs v1')
     as (?&?&?); auto; simplify_equality'; eauto using val_alter_seg_refine.
 Qed.
 Lemma ctree_alter_const_refine Γ α f Γm1 Γm2 v1 v2 τ r v3 v4 σ :
-  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → Γ ⊢ r : τ ↣ σ → is_Some (v1 !! r) →
+  ✓ Γ → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → Γ ⊢ r : τ ↣ σ → is_Some (v1 !!{Γ} r) →
   v3 ⊑{Γ,α,f@Γm1↦Γm2} v4 : σ →
-  val_alter (λ _, v3) r v1 ⊑{Γ,α,f@Γm1↦Γm2} val_alter (λ _, v4) r v2 : τ.
+  val_alter Γ (λ _, v3) r v1 ⊑{Γ,α,f@Γm1↦Γm2} val_alter Γ (λ _, v4) r v2 : τ.
 Proof.
   intros ??? [v3' ?] ?.
   destruct (val_lookup_refine Γ α f Γm1 Γm2 v1 v2 τ r v3') as (v4'&?&?); auto.
