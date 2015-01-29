@@ -44,11 +44,9 @@ Global Instance expr_type_check: TypeCheck envs (lrtype Ti) (expr Ti) :=
   | load e => inr <$> type_check Γs e ≫= maybe inl
   | e %> rs =>
      τ ← type_check Γs e ≫= maybe inl;
-     guard (ref_seg_offset rs = 0);
      inl <$> τ !!{Γ} rs
   | e #> rs =>
      τ ← type_check Γs e ≫= maybe inr;
-     guard (ref_seg_offset rs = 0);
      inr <$> τ !!{Γ} rs
   | alloc{τ} e =>
      _ ← type_check Γs e ≫= maybe (inr ∘ TBase ∘ TInt);
@@ -101,12 +99,8 @@ Global Instance ectx_item_lookup :
      guard ((τs : list (type Ti)) = τs1 ++ τ :: τs2);
      Some (inr σ)
   | load □, inl τ => Some (inr τ)
-  | □ %> rs, inl τ =>
-     guard (ref_seg_offset rs = 0);
-     inl <$> τ !!{Γ} rs
-  | □ #> rs, inr τ =>
-     guard (ref_seg_offset rs = 0);
-     inr <$> τ !!{Γ} rs
+  | □ %> rs, inl τ => inl <$> τ !!{Γ} rs
+  | □ #> rs, inr τ => inr <$> τ !!{Γ} rs
   | alloc{τ} □, inr τ' =>
      _ ← maybe (TBase ∘ TInt) τ'; guard (✓{Γ} τ); Some (inr (Some τ.*))
   | free □, inl τ => Some (inr voidT)

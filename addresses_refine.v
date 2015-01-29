@@ -316,19 +316,23 @@ Proof.
 Qed.
 Lemma addr_elt_refine Γ α f Γm1 Γm2 a1 a2 rs σ σ' :
   ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some σ → addr_strict Γ a1 → Γ ⊢ rs : σ ↣ σ' →
-  ref_seg_offset rs = 0 →
   addr_elt Γ rs a1 ⊑{Γ,α,f@Γm1↦Γm2} addr_elt Γ rs a2 : Some σ'.
 Proof.
-  inversion 2 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ'' ??????????? Hcst Hr];
-    intros ? Hrs ?; simplify_equality'.
-  inversion Hcst; simplify_equality'; try solve [inversion Hrs].
-  erewrite path_type_check_complete by eauto; simpl. econstructor; eauto.
-  * apply ref_typed_cons; exists σ; split; auto.
-    apply ref_set_offset_typed; auto.
-    apply Nat.div_lt_upper_bound; eauto using size_of_ne_0,ref_typed_type_valid.
-  * lia.
-  * by rewrite Nat.mod_0_l by eauto using size_of_ne_0, ref_typed_type_valid,
-      ref_seg_typed_type_valid, castable_type_valid.
+  inversion 2 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ'' ??????????? Hcast Hr];
+    intros ? Hrs; simplify_equality'.
+  inversion Hcast; simplify_equality'; try solve [inversion Hrs].
+  assert (ref_seg_offset rs < ref_seg_size rs)
+    by eauto using ref_seg_typed_size.
+  erewrite path_type_check_complete by eauto; econstructor; simpl; eauto.
+  * apply ref_typed_cons; exists σ; split.
+    + apply ref_set_offset_typed; auto.
+      apply Nat.div_lt_upper_bound;
+        eauto using size_of_ne_0, ref_typed_type_valid.
+    + apply ref_seg_set_offset_typed; auto with lia.
+  * by rewrite ref_seg_offset_set_offset by lia.
+  * rewrite ref_seg_size_set_offset. apply Nat.mul_le_mono_l; lia.
+  * rewrite Nat.mul_comm. apply Nat.mod_mul;
+      eauto using size_of_ne_0, ref_typed_type_valid, ref_seg_typed_type_valid.
   * constructor.
   * destruct Hr as [|r1 i1 r2 i2 Hr|r1' r1 r2 i];
       simplify_type_equality'; constructor; simpl; auto.

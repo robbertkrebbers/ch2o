@@ -88,9 +88,10 @@ Section address_operations.
 
   Definition addr_elt (Γ : env Ti) (rs : ref_seg Ti) (a : addr Ti) : addr Ti :=
     from_option a $
-     σ ← type_of a ≫= lookupE Γ rs;
-     Some (Addr (addr_index a)
-       (rs :: addr_ref Γ a) 0 (addr_type_object a) σ (Some σ)).
+      σ ← type_of a ≫= lookupE Γ rs;
+      Some (Addr (addr_index a)
+        (ref_seg_base rs :: addr_ref Γ a) (size_of Γ σ * ref_seg_offset rs)
+        (addr_type_object a) σ (Some σ)).
   Global Arguments addr_elt _ _ !_ /.
   Definition addr_top (o : index) (σ : type Ti) : addr Ti :=
     Addr o [] 0 σ σ (Some σ).
@@ -109,6 +110,7 @@ Implicit Types Γ : env Ti.
 Implicit Types Γm : memenv Ti.
 Implicit Types τ σ : type Ti.
 Implicit Types τp σp : ptr_type Ti.
+Implicit Types rs : ref_seg Ti.
 Implicit Types r : ref Ti.
 Implicit Types a : addr Ti.
 Hint Immediate ref_typed_type_valid.
@@ -330,18 +332,23 @@ Proof.
 Qed.
 Lemma addr_elt_typed Γ Γm a rs σ σ' :
   ✓ Γ → (Γ,Γm) ⊢ a : Some σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' →
-  ref_seg_offset rs = 0 → (Γ,Γm) ⊢ addr_elt Γ rs a : Some σ'.
+  (Γ,Γm) ⊢ addr_elt Γ rs a : Some σ'.
 Proof.
-  rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) ? Hrs ?.
-  destruct a as [o r i τ σ'' σp]; simplify_equality'.
+  rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) ? Hrs.
+  destruct a as [o r' i τ σ'' σp]; simplify_equality'.
   inversion Hcast; simplify_equality'; try solve [inversion Hrs].
-  erewrite path_type_check_complete by eauto; simpl; constructor; auto.
-  * apply ref_typed_cons; exists σ; split; auto.
-    apply ref_set_offset_typed; auto.
-    apply Nat.div_lt_upper_bound; eauto using size_of_ne_0,ref_typed_type_valid.
-  * lia.
-  * by rewrite Nat.mod_0_l by eauto using size_of_ne_0, ref_typed_type_valid,
-      ref_seg_typed_type_valid, castable_type_valid.
+  assert (ref_seg_offset rs < ref_seg_size rs)
+    by eauto using ref_seg_typed_size.
+  erewrite path_type_check_complete by eauto; constructor; simpl; auto.
+  * apply ref_typed_cons; exists σ; split.
+    + apply ref_set_offset_typed; auto.
+      apply Nat.div_lt_upper_bound;
+        eauto using size_of_ne_0, ref_typed_type_valid.
+    + apply ref_seg_set_offset_typed; auto with lia.
+  * by rewrite ref_seg_offset_set_offset by lia.
+  * rewrite ref_seg_size_set_offset. apply Nat.mul_le_mono_l; lia.
+  * rewrite Nat.mul_comm.
+    apply Nat.mod_mul; eauto using size_of_ne_0, ref_seg_typed_type_valid.
   * constructor.
 Qed.
 Lemma addr_elt_strict Γ Γm a rs σ σ' :
@@ -349,19 +356,51 @@ Lemma addr_elt_strict Γ Γm a rs σ σ' :
 Proof.
   rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) Hrs.
   destruct a as [o r i τ σ'' σp]; simplify_equality'.
+  inversion Hcast; simplify_equality'; try solve [inversion Hrs].
   erewrite path_type_check_complete by eauto; simpl.
-  apply Nat.mul_pos_pos.
-  * eauto using size_of_pos, ref_typed_type_valid,
-      ref_seg_typed_type_valid, castable_type_valid.
-  * destruct Hrs; simpl; lia.
+  rewrite ref_seg_size_set_offset, <-Nat.mul_lt_mono_pos_l
+    by eauto using size_of_pos, ref_typed_type_valid, ref_seg_typed_type_valid;
+    eauto using ref_seg_typed_size.
 Qed.
 Lemma addr_elt_weaken Γ1 Γ2 Γm1 a rs σ σ' :
   ✓ Γ1 → (Γ1,Γm1) ⊢ a : Some σ → Γ1 ⊢ rs : σ ↣ σ' → Γ1 ⊆ Γ2 →
   addr_elt Γ1 rs a = addr_elt Γ2 rs a.
 Proof.
   intros. unfold addr_elt; simplify_type_equality'.
-  by erewrite addr_ref_weaken, !path_type_check_complete
-    by eauto using ref_seg_typed_weaken.
+  erewrite !path_type_check_complete by eauto using ref_seg_typed_weaken; simpl.
+  by erewrite addr_ref_weaken, size_of_weaken
+    by eauto using addr_typed_type_valid, ref_seg_typed_type_valid.
+Qed.
+Lemma addr_ref_byte_is_obj_parent Γ Γm rs a σ σ' :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → Γ ⊢ rs : σ ↣ σ' → addr_is_obj a.
+Proof.
+  rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) Hrs.
+  destruct a as [o r i τ σ'' σp]; simplify_equality'.
+  by inversion Hcast; simplify_equality'; try solve [inversion Hrs].
+Qed.
+Lemma addr_ref_byte_is_obj Γ Γm rs a σ σ' :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → Γ ⊢ rs : σ ↣ σ' → addr_is_obj (addr_elt Γ rs a).
+Proof.
+  unfold addr_elt; intros; simplify_type_equality'.
+  by erewrite !path_type_check_complete by eauto.
+Qed.
+Lemma addr_index_elt Γ rs a : addr_index (addr_elt Γ rs a) = addr_index a.
+Proof. by destruct a; simpl; destruct (_ ≫= lookupE _ _). Qed.
+Lemma addr_ref_elt Γ Γm rs a σ σ' :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → Γ ⊢ rs : σ ↣ σ' → 
+  addr_ref Γ (addr_elt Γ rs a) = rs :: addr_ref Γ a.
+Proof.
+  unfold addr_elt; intros; simplify_type_equality'.
+  erewrite !path_type_check_complete by eauto; f_equal'.
+  rewrite Nat.mul_comm, Nat.div_mul by eauto using size_of_ne_0,
+    addr_typed_type_valid, ref_seg_typed_type_valid.
+  by destruct rs.
+Qed.
+Lemma addr_ref_byte_elt Γ Γm rs a σ σ' :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' →
+  addr_ref_byte Γ (addr_elt Γ rs a) = 0.
+Proof.
+  eauto using addr_is_obj_ref_byte, addr_ref_byte_is_obj, addr_elt_typed.
 Qed.
 Lemma addr_top_typed Γ Γm o τ :
   ✓ Γ → Γm ⊢ o : τ → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
@@ -378,7 +417,10 @@ Qed.
 Lemma addr_top_array_alt Γ o τ n :
   Z.to_nat n ≠ 0 → let n' := Z.to_nat n in
   addr_top_array o τ n = addr_elt Γ (RArray 0 τ n') (addr_top o (τ.[n'])).
-Proof. unfold addr_elt; simplify_option_equality; auto with lia. Qed.
+Proof.
+  unfold addr_elt, addr_top_array; simplify_option_equality;
+    auto with f_equal lia.
+Qed.
 Lemma addr_top_array_typed Γ Γm o τ (n : Z) :
   ✓ Γ → Γm ⊢ o : τ.[Z.to_nat n] → ✓{Γ} τ → Z.to_nat n ≠ 0 →
   int_typed (n * size_of Γ τ) sptrT → (Γ,Γm) ⊢ addr_top_array o τ n : Some τ.

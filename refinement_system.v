@@ -54,12 +54,10 @@ Inductive expr_refine' (Γ : env Ti) (Γf : funtypes Ti)
      expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inl τ) →
      expr_refine' Γ Γf τs α f Γm1 Γm2 (load e1) (load e2) (inr τ)
   | EEltL_refine e1 e2 rs τ σ  :
-     expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inl τ) →
-     Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
+     expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inl τ) → Γ ⊢ rs : τ ↣ σ →
      expr_refine' Γ Γf τs α f Γm1 Γm2 (e1 %> rs) (e2 %> rs) (inl σ)
   | EEltR_refine e1 e2 rs τ σ  :
-     expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inr τ) →
-     Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
+     expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inr τ) → Γ ⊢ rs : τ ↣ σ →
      expr_refine' Γ Γf τs α f Γm1 Γm2 (e1 #> rs) (e2 #> rs) (inr σ)
   | EAlloc_refine τ e1 e2 τi :
      ✓{Γ} τ → expr_refine' Γ Γf τs α f Γm1 Γm2 e1 e2 (inr (intT τi)) →
@@ -130,12 +128,10 @@ Section expr_refine_ind.
     e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inl τ →
     P e1 e2 (inl τ) → P (load e1) (load e2) (inr τ)).
   Context (Peltl : ∀ e1 e2 rs τ σ,
-    e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inl τ → P e1 e2 (inl τ) →
-    Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
+    e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inl τ → P e1 e2 (inl τ) → Γ ⊢ rs : τ ↣ σ →
     P (e1 %> rs) (e2 %> rs) (inl σ)).
   Context (Peltr : ∀ e1 e2 rs τ σ,
-    e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inr τ → P e1 e2 (inr τ) →
-    Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
+    e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inr τ → P e1 e2 (inr τ) → Γ ⊢ rs : τ ↣ σ →
     P (e1 #> rs) (e2 #> rs) (inr σ)).
   Context (Palloc : ∀ τ e1 e2 τi,
     ✓{Γ} τ → e1 ⊑{(Γ,Γf,τs),α,f@Γm1↦Γm2} e2 : inr (intT τi) →
@@ -199,10 +195,10 @@ Inductive ectx_item_refine' (Γ : env Ti) (Γf : funtypes Ti) (τs: list (type T
   | CLoad_refine τ :
      ectx_item_refine' Γ Γf τs α f Γm1 Γm2 (load □) (load □) (inl τ) (inr τ)
   | CEltL_refine rs τ σ :
-     Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
+     Γ ⊢ rs : τ ↣ σ →
      ectx_item_refine' Γ Γf τs α f Γm1 Γm2 (□ %> rs) (□ %> rs) (inl τ) (inl σ)
   | CEltR_refine rs τ σ :
-     Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
+     Γ ⊢ rs : τ ↣ σ →
      ectx_item_refine' Γ Γf τs α f Γm1 Γm2 (□ #> rs) (□ #> rs) (inr τ) (inr σ)
   | CAlloc_refine τ τi :
      ✓{Γ} τ → ectx_item_refine' Γ Γf τs α f Γm1 Γm2

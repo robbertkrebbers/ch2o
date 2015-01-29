@@ -75,10 +75,10 @@ Inductive expr_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
   | ELoad_typed e τ :
      expr_typed' Γ Γf Γm τs e (inl τ) → expr_typed' Γ Γf Γm τs (load e) (inr τ)
   | EEltL_typed e rs τ σ  :
-     expr_typed' Γ Γf Γm τs e (inl τ) → Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
+     expr_typed' Γ Γf Γm τs e (inl τ) → Γ ⊢ rs : τ ↣ σ →
      expr_typed' Γ Γf Γm τs (e %> rs) (inl σ)
   | EEltR_typed e rs τ σ  :
-     expr_typed' Γ Γf Γm τs e (inr τ) → Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
+     expr_typed' Γ Γf Γm τs e (inr τ) → Γ ⊢ rs : τ ↣ σ →
      expr_typed' Γ Γf Γm τs (e #> rs) (inr σ)
   | EAlloc_typed τ e τi :
      ✓{Γ} τ → expr_typed' Γ Γf Γm τs e (inr (intT τi)) →
@@ -133,10 +133,10 @@ Section expr_typed_ind.
     (Γ,Γf,Γm,τs) ⊢ e : inl τ → P e (inl τ) → P (load e) (inr τ)).
   Context (Peltl : ∀ e rs τ σ,
     (Γ,Γf,Γm,τs) ⊢ e : inl τ → P e (inl τ) →
-    Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 → P (e %> rs) (inl σ)).
+    Γ ⊢ rs : τ ↣ σ → P (e %> rs) (inl σ)).
   Context (Peltr : ∀ e rs τ σ,
     (Γ,Γf,Γm,τs) ⊢ e : inr τ → P e (inr τ) →
-    Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 → P (e #> rs) (inr σ)).
+    Γ ⊢ rs : τ ↣ σ → P (e #> rs) (inr σ)).
   Context (Palloc : ∀ τ e τi,
     ✓{Γ} τ → (Γ,Γf,Γm,τs) ⊢ e : inr (intT τi) →
     P e (inr (intT τi)) → P (alloc{τ} e) (inr (Some τ.*))).
@@ -183,11 +183,9 @@ Inductive ectx_item_typed' (Γ : env Ti) (Γf : funtypes Ti) (Γm : memenv Ti)
      ectx_item_typed' Γ Γf Γm τs (call f @ es1 □ es2) (inr τ) (inr σ)
   | CLoad_typed τ : ectx_item_typed' Γ Γf Γm τs (load □) (inl τ) (inr τ)
   | CEltL_typed rs τ σ :
-     Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
-     ectx_item_typed' Γ Γf Γm τs (□ %> rs) (inl τ) (inl σ)
+     Γ ⊢ rs : τ ↣ σ → ectx_item_typed' Γ Γf Γm τs (□ %> rs) (inl τ) (inl σ)
   | CEltR_typed rs τ σ :
-     Γ ⊢ rs : τ ↣ σ → ref_seg_offset rs = 0 →
-     ectx_item_typed' Γ Γf Γm τs (□ #> rs) (inr τ) (inr σ)
+     Γ ⊢ rs : τ ↣ σ → ectx_item_typed' Γ Γf Γm τs (□ #> rs) (inr τ) (inr σ)
   | CAlloc_typed τ τi :
      ✓{Γ} τ → ectx_item_typed' Γ Γf Γm τs
        (alloc{τ} □) (inr (intT τi)) (inr (Some τ.*))

@@ -79,6 +79,7 @@ Instance ref_seg_freeze {Ti} : Freeze (ref_seg Ti) := λ β rs,
 Definition ref_seg_set_offset {Ti} (i : nat) (rs : ref_seg Ti) : ref_seg Ti :=
   match rs with RArray _ τ n => RArray i τ n | _ => rs end.
 Arguments ref_seg_set_offset _ _ !_ /.
+Notation ref_seg_base := (ref_seg_set_offset 0).
 Definition ref_set_offset {Ti} (i : nat) (r : ref Ti) : ref Ti :=
   match r with rs :: r => ref_seg_set_offset i rs :: r | _ => r end.
 Arguments ref_set_offset _ _ !_ /.
@@ -246,20 +247,30 @@ Lemma ref_typed_size Γ τ r σ : Γ ⊢ r : τ ↣ σ → ref_offset r < ref_si
 Proof. destruct 1; csimpl; eauto using ref_seg_typed_size. Qed.
 Lemma ref_set_offset_length r i : length (ref_set_offset i r) = length r.
 Proof. by destruct r. Qed.
+Lemma ref_seg_size_set_offset i rs :
+  ref_seg_size (ref_seg_set_offset i rs) = ref_seg_size rs.
+Proof. by destruct rs. Qed.
 Lemma ref_size_set_offset i r : ref_size (ref_set_offset i r) = ref_size r.
-Proof. by destruct r as [|[]]. Qed.
+Proof. destruct r; simpl; auto using ref_seg_size_set_offset. Qed.
+Lemma ref_seg_offset_set_offset rs i :
+  i < ref_seg_size rs → ref_seg_offset (ref_seg_set_offset i rs) = i.
+Proof. destruct rs; simpl in *; auto with lia. Qed.
 Lemma ref_offset_set_offset r i :
   i < ref_size r → ref_offset (ref_set_offset i r) = i.
-Proof. destruct r as [|[]]; simpl in *; auto with lia. Qed.
+Proof. destruct r; simpl; auto using ref_seg_offset_set_offset with lia. Qed.
 Lemma ref_offset_base_nil r : ref_base r = [] → ref_offset r = 0.
 Proof. by destruct r. Qed.
+Lemma ref_seg_set_offset_typed Γ τ rs σ i :
+  i < ref_seg_size rs → Γ ⊢ rs : τ ↣ σ → Γ ⊢ ref_seg_set_offset i rs : τ ↣ σ.
+Proof. destruct 2; econstructor; eauto. Qed.
 Lemma ref_set_offset_typed Γ τ r σ i :
   i < ref_size r → Γ ⊢ r : τ ↣ σ → Γ ⊢ ref_set_offset i r : τ ↣ σ.
-Proof.
-  destruct 2 as [|r rs ??? [] Hr]; simpl; repeat econstructor; eauto.
-Qed.
+Proof. destruct 2; econstructor; eauto using ref_seg_set_offset_typed. Qed.
+Lemma ref_seg_set_offset_offset rs :
+  ref_seg_set_offset (ref_seg_offset rs) rs = rs.
+Proof. by destruct rs. Qed.
 Lemma ref_set_offset_offset r : ref_set_offset (ref_offset r) r = r.
-Proof. by destruct r as [|[]]. Qed.
+Proof. destruct r; f_equal'; auto using ref_seg_set_offset_offset. Qed.
 Lemma ref_set_offset_set_offset r i j :
   ref_set_offset i (ref_set_offset j r) = ref_set_offset i r.
 Proof. by destruct r as [|[]]. Qed.

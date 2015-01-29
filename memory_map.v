@@ -276,7 +276,28 @@ Proof.
     as (τ&σ'&?&?&?); auto; simplify_option_equality;
     eauto using ctree_lookup_byte_typed, type_of_typed.
 Qed.
-
+Lemma cmap_lookup_ref_cons Γ m o rs r :
+  m !!{Γ} (o,rs :: r) = m !!{Γ} (o,r) ≫= lookupE Γ rs.
+Proof. destruct m as [m]; simpl. by destruct (m !! o) as [[|w' β]|]. Qed.
+Lemma cmap_lookup_ref_app Γ m o r1 r2 :
+  m !!{Γ} (o,r1 ++ r2) = m !!{Γ} (o,r2) ≫= lookupE Γ r1.
+Proof.
+  destruct m as [m]; simpl.
+  destruct (m !! o) as [[|w' β]|] eqn:Hw; simplify_equality'; auto.
+  by rewrite ctree_lookup_app.
+Qed.
+Lemma cmap_lookup_elt Γ Γm m a rs σ σ' :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' → 
+  m !!{Γ} (addr_elt Γ rs a) = m !!{Γ} a ≫= lookupE Γ rs.
+Proof.
+  unfold lookupE at 1 3, cmap_lookup; intros; simpl.
+  rewrite !option_guard_True by eauto using addr_elt_strict.
+  erewrite addr_ref_elt, addr_ref_byte_elt, addr_index_elt by eauto.
+  rewrite cmap_lookup_ref_cons; destruct (m !!{Γ} _) as [w|]; simpl; auto.
+  rewrite decide_True by eauto using addr_ref_byte_is_obj_parent; simpl.
+  destruct (w !!{Γ} rs); simpl; auto.
+  by rewrite decide_True by eauto using addr_ref_byte_is_obj.
+Qed.
 Lemma cmap_alter_ref_le Γ g o r1 r2 m :
   r1 ⊆* r2 → cmap_alter_ref Γ g o r1 m = cmap_alter_ref Γ g o r2 m.
 Proof.
