@@ -907,6 +907,8 @@ Proof.
   eapply pbits_unlock_empty_inv;
     eauto using ctree_flatten_valid, pbits_valid_sep_valid.
 Qed.
+Lemma mem_unlock_all_valid Γ Γm m : ✓ Γ → ✓{Γ,Γm} m → ✓{Γ,Γm} (mem_unlock_all m).
+Proof. by apply mem_unlock_valid. Qed.
 Lemma mem_unlock_valid' Γ m Ω : ✓ Γ → ✓{Γ} m → ✓{Γ} (mem_unlock Ω m).
 Proof.
   unfold valid at 2 3, cmap_valid'; intros.

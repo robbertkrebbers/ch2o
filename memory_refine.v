@@ -495,9 +495,15 @@ Qed.
 Lemma locks_refine_valid_l Γ α f Γm1 Γm2 Ω1 Ω2 :
   Ω1 ⊑{Γ,α,f@Γm1↦Γm2} Ω2 → ✓{Γm1} Ω1.
 Proof. by intros (?&?&?&?). Qed.
+Lemma locks_list_refine_valid_l Γ α f Γm1 Γm2 Ωs1 Ωs2 :
+  Ωs1 ⊑{Γ,α,f@Γm1↦Γm2}* Ωs2 → ✓{Γm1}* Ωs1.
+Proof. induction 1; eauto using locks_refine_valid_l. Qed.
 Lemma locks_refine_valid_r Γ α f Γm1 Γm2 Ω1 Ω2 :
   Ω1 ⊑{Γ,α,f@Γm1↦Γm2} Ω2 → ✓{Γm2} Ω2.
 Proof. by intros (?&?&?&?). Qed.
+Lemma locks_list_refine_valid_r Γ α f Γm1 Γm2 Ωs1 Ωs2 :
+  Ωs1 ⊑{Γ,α,f@Γm1↦Γm2}* Ωs2 → ✓{Γm2}* Ωs2.
+Proof. induction 1; eauto using locks_refine_valid_r. Qed.
 Lemma locks_refine_weaken Γ α α' f f' Γm1 Γm2 Γm1' Γm2' Ω1 Ω2 :
   ✓ Γ → Ω1 ⊑{Γ,α,f@Γm1↦Γm2} Ω2 →
   Γm1' ⊑{Γ,α',f'} Γm2' → Γm1 ⇒ₘ Γm1' → Γm2 ⇒ₘ Γm2' →
