@@ -12,8 +12,6 @@ Implicit Types a : addr Ti.
 Implicit Types w : mtree Ti.
 Implicit Types v : val Ti.
 Implicit Types m : mem Ti.
-Arguments lookupE _ _ _ _ _ _ _ !_ /.
-Arguments cmap_lookup _ _ _ _ !_ /.
 
 Lemma ref_disjoint_cases Γ τ r1 r2 σ1 σ2 :
   ✓ Γ → Γ ⊢ r1 : τ ↣ σ1 → freeze true <$> r1 = r1 →
@@ -134,10 +132,12 @@ Lemma cmap_non_aliasing Γ Γm m a1 a2 σ1 σ2 :
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
   (**i 4.) *) ∀ g j1 j2,
-    cmap_alter Γ g (addr_plus Γ j1 a1) m
-      !!{Γ} addr_plus Γ j2 a2 = @None (mtree _) ∧
-    cmap_alter Γ g (addr_plus Γ j2 a2) m
-      !!{Γ} addr_plus Γ j1 a1 = @None (mtree _).
+    let a1' := addr_plus Γ j1 a1 in
+    let a2' := addr_plus Γ j2 a2 in
+    cmap_alter_ref Γ g (addr_index a1') (addr_ref Γ a1') m
+      !!{Γ} (addr_index a2', addr_ref Γ a2') = @None (mtree _) ∧
+    cmap_alter_ref Γ g (addr_index a2') (addr_ref Γ a2') m
+      !!{Γ} (addr_index a1', addr_ref Γ a1') = @None (mtree _).
 Proof.
   intros ? Hm ??????. destruct (addr_disjoint_cases Γ Γm a1 a2 σ1 σ2)
     as [Ha12|[?|[?|(Hidx&s&r1'&i1&r2'&i2&r'&Ha1&Ha2&?)]]]; auto.
@@ -161,8 +161,7 @@ Proof.
     addr_type_object a2 ↣ addr_type_base a2).
   { rewrite <-Ha2. eauto using addr_typed_ref_base_typed. }
   unfold addr_ref; rewrite !addr_ref_base_plus, Ha1, Ha2.
-  by split; case_option_guard; simplify_equality;
-    erewrite ?ctree_lookup_non_aliasing by eauto.
+  by erewrite !ctree_lookup_non_aliasing by eauto.
 Qed.
 Lemma mem_non_aliasing Γ Γm m a1 a2 σ1 σ2 :
   ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : Some σ1 → frozen a1 → σ1 ≠ ucharT%T →
@@ -178,8 +177,9 @@ Lemma mem_non_aliasing Γ Γm m a1 a2 σ1 σ2 :
 Proof.
   intros.
   destruct (cmap_non_aliasing Γ Γm m a1 a2 σ1 σ2) as [?|[?|[?|Ha]]]; auto.
-  unfold lookupE, mem_lookup, insertE, mem_insert, mem_force.
-  by do 3 right; repeat split; intros;
-    rewrite ?(proj1 (Ha _ _ _)), ?(proj2 (Ha _ _ _)).
+  unfold lookupE, mem_lookup, insertE, mem_insert, mem_force,
+    lookupE, cmap_alter, cmap_lookup.
+  by do 3 right; repeat split; intros; rewrite ?(proj1 (Ha _ _ _)),
+    ?(proj2 (Ha _ _ _)); simplify_option_equality.
 Qed.
 End aliasing.

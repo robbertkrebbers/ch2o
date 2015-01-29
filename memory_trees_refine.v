@@ -552,6 +552,39 @@ Proof.
     as (?&?&?); auto; simplify_equality'.
   eapply ctree_alter_seg_refine; eauto using ctree_alter_lookup_Forall.
 Qed.
+Lemma ctree_alter_seg_id_refine Γ Γm w τ rs w' :
+  ✓ Γ → (Γ,Γm) ⊢ w : τ → w !!{Γ} rs = Some w' → frozen rs → ¬ctree_unmapped w' →
+  ctree_alter_seg Γ id rs w ⊑{Γ,true@Γm} w : τ.
+Proof.
+  intros ? Hw Hw' ??.
+  apply ctree_leaf_refine_refine; eauto using ctree_alter_seg_typed,
+    ctree_lookup_seg_Some_type_of.
+  destruct Hw as [|?? ws ? Hws|s wxbss τs ? Hws Hxbs| |s τs xbs], rs;
+    change (ctree_typed' Γ Γm) with (typed (Γ,Γm)) in *;
+    pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hw'); simpl; clear Hw';
+    intros; simplify_option_equality;
+    rewrite ?list_alter_id by done; rewrite ?list_alter_id by (by intros []);
+    constructor; eauto using pbits_refine_id, ctree_refine_id, ctree_refine_leaf.
+  * elim Hws; eauto using ctree_refine_id, ctree_refine_leaf.
+  * elim Hws; eauto using ctree_refine_id, ctree_refine_leaf.
+  * elim Hxbs; eauto using pbits_refine_id.
+  * pattern xbs at 3; rewrite <-(take_drop (bit_size_of Γ τ) xbs),
+      ctree_flatten_unflatten by eauto;
+      eauto 10 using pbits_indetify_refine_l, pbits_mask_indetify_refine_l.
+Qed.
+Lemma ctree_alter_id_refine Γ Γm w τ r w' :
+  ✓ Γ → (Γ,Γm) ⊢ w : τ → w !!{Γ} r = Some w' → freeze true <$> r = r →
+  ¬ctree_unmapped w' → ctree_alter Γ id r w ⊑{Γ,true@Γm} w : τ.
+Proof.
+  intros ??. revert w'.
+  induction r as [|rs r]; intros w3; auto using ctree_refine_id.
+  rewrite ctree_lookup_cons,bind_Some; intros (w2&?&?) ? Hw; simplify_equality'.
+  eapply (ctree_refine_compose Γ true true meminj_id meminj_id _ Γm);
+    eauto 10 using ctree_lookup_seg_Forall, pbit_unmapped_indetify.
+  eapply ctree_alter_refine; eauto using ctree_alter_seg_id_refine,
+    ctree_refine_id, ctree_alter_lookup_seg_Forall, ctree_lookup_Some_type_of.
+  contradict Hw; eapply (ctree_alter_lookup_seg_Forall _ _ id); eauto.
+Qed.
 Lemma ctree_lookup_byte_refine Γ α f Γm1 Γm2 w1 w2 τ i c1 :
   ✓ Γ → w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : τ → w1 !!{Γ} i = Some c1 →
   ∃ c2, w2 !!{Γ} i = Some c2 ∧ c1 ⊑{Γ,α,f@Γm1↦Γm2} c2 : ucharT.
@@ -585,7 +618,7 @@ Proof.
   intros. rewrite <-(union_free_reset w) at 2 by eauto using union_free_base.
   erewrite <-ctree_unflatten_flatten by eauto.
   apply ctree_unflatten_refine; eauto using TBase_valid, TInt_valid.
-  apply pbits_indetify_refine_l; eauto using ctree_flatten_valid.
+  apply pbits_mask_indetify_refine_l; eauto using ctree_flatten_valid.
 Qed.
 Lemma ctree_alter_byte_refine Γ α f Γm1 Γm2 g1 g2 w1 w2 τ i c1 c2 :
   ✓ Γ → w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : τ → w1 !!{Γ} i = Some c1 → w2 !!{Γ} i = Some c2 →

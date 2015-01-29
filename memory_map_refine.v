@@ -31,9 +31,6 @@ Implicit Types f : meminj Ti.
 Implicit Types g : mtree Ti → mtree Ti.
 Implicit Types α β : bool.
 
-Arguments lookupE _ _ _ _ _ _ _ !_ /.
-Arguments cmap_lookup _ _ _ _ !_ /.
-
 Lemma cmap_refine_memenv_refine Γ α f Γm1 Γm2 m1 m2 :
   m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → Γm1 ⊑{Γ,α,f} Γm2.
 Proof. by intros (?&?&?&?). Qed.
@@ -99,59 +96,6 @@ Proof.
     simplify_type_equality'; auto.
   exists w1 w1 τ'; split_ands; auto using ctree_refine_inverse.
 Qed.
-Lemma cmap_lookup_alter_refine Γ Γm g m a w τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ →
-  m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : τ → ctree_unshared (g w) →
-  ∃ w', cmap_alter Γ g a m !!{Γ} a = Some w' ∧ w' ⊑{Γ,true@Γm} g w : τ.
-Proof.
-  intros. destruct (decide (addr_is_obj a)).
-  { exists (g w). erewrite cmap_lookup_alter by eauto.
-    eauto using ctree_refine_id. }
-  exists (ctree_lookup_byte_after Γ (addr_type_base a)
-    (addr_ref_byte Γ a) (g w)); split; eauto using cmap_lookup_alter_not_obj.
-  assert (τ = ucharT) by eauto using addr_not_is_obj_type; subst.
-  eauto using ctree_lookup_byte_alter_refine.
-Qed.
-Lemma cmap_lookup_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 w1 τ :
-  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 →
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ → m1 !!{Γ} a1 = Some w1 →
-  ∃ w2, m2 !!{Γ} a2 = Some w2 ∧ w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : τ.
-Proof.
-  destruct m1 as [m1], m2 as [m2]; simpl; intros ? (Hm1&_&_&Hm) Ha Hw1.
-  assert ((Γ,Γm1) ⊢ a1 : Some τ) by eauto using addr_refine_typed_l.
-  assert ((Γ,Γm2) ⊢ a2 : Some τ) by eauto using addr_refine_typed_r.
-  case_option_guard; simplify_type_equality'.
-  rewrite option_guard_True by eauto using addr_strict_refine.
-  destruct (m1 !! addr_index a1) as [[|w1' β]|] eqn:?; simplify_equality'.
-  destruct (w1' !!{Γ} addr_ref Γ a1) as [w1''|] eqn:?; simplify_equality'.
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ)) as (r&?&_&?); auto.
-  destruct (Hm (addr_index a1) (addr_index a2) r w1' β)
-    as (w2&w2'&τ2&->&Hr&?&_); auto; csimpl.
-  destruct (ctree_lookup_Some Γ Γm1 w1' τ2
-    (addr_ref Γ a1) w1'') as (σ'&?&?); eauto using ctree_refine_typed_l.
-  destruct (ctree_lookup_refine Γ α f Γm1 Γm2 w1' w2' τ2
-    (addr_ref Γ a1) w1'') as (w2''&?&?); auto; simplify_type_equality.
-  assert (w2 !!{Γ} (addr_ref Γ a2) = Some w2'') as ->; simpl.
-  { eapply ctree_lookup_le with (addr_ref Γ a1 ++ r); eauto.
-    by rewrite ctree_lookup_app; simplify_option_equality. }
-  destruct (decide (addr_is_obj a1)).
-  { rewrite decide_True by (by erewrite <-addr_is_obj_refine by eauto).
-    cut (τ = σ'); [intros; simplify_type_equality; eauto|].
-    erewrite (addr_is_obj_type _ _ a1 τ) by eauto.
-    assert ((Γ,Γm1) ⊢ w1' : τ2) by eauto using ctree_refine_typed_l.
-    assert (Γm1 ⊢ addr_index a1 : addr_type_object a1)
-      by eauto using addr_typed_index, addr_refine_typed_l.
-    destruct (cmap_valid_Obj Γ Γm1 (CMap m1) (addr_index a1) w1' β)
-      as (?&?&_&?&_); auto; simplify_type_equality'.
-    eauto using ref_set_offset_typed_unique, addr_typed_ref_base_typed. }
-  case_option_guard; simplify_equality'.
-  rewrite decide_False by (by erewrite <-addr_is_obj_refine by eauto).
-  rewrite option_guard_True
-    by eauto using pbits_refine_unshared, ctree_flatten_refine.
-  assert (τ = ucharT) by eauto using addr_not_is_obj_type; subst.
-  erewrite <-addr_ref_byte_refine by eauto.
-  eauto using ctree_lookup_byte_refine.
-Qed.
 Lemma cmap_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 m1 m2 :
   ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → Γ ⊆ Γ' → (α → α') →
   Γm1 ⊑{Γ',α',f'} Γm2 → meminj_extend f f' Γm1 Γm2 →
@@ -166,57 +110,113 @@ Proof.
   exists w2 w2' τ'; split_ands;
     eauto using ctree_refine_weaken, ctree_lookup_weaken, option_eq_1_alt.
 Qed.
+Lemma cmap_lookup_alter_refine Γ Γm g m a w τ :
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ →
+  m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : τ → ctree_unshared (g w) →
+  ∃ w', cmap_alter Γ g a m !!{Γ} a = Some w' ∧ w' ⊑{Γ,true@Γm} g w : τ.
+Proof.
+  intros. destruct (decide (addr_is_obj a)).
+  { exists (g w). erewrite cmap_lookup_alter by eauto.
+    eauto using ctree_refine_id. }
+  exists (ctree_lookup_byte_after Γ (addr_type_base a)
+    (addr_ref_byte Γ a) (g w)); split; eauto using cmap_lookup_alter_not_obj.
+  assert (τ = ucharT) by eauto using addr_not_is_obj_type; subst.
+  eauto using ctree_lookup_byte_alter_refine.
+Qed.
+Lemma cmap_lookup_ref_refine Γ α f Γm1 Γm2 m1 m2 o1 r1 o2 r2 w1 :
+  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → f !! o1 = Some (o2,r2) →
+  m1 !!{Γ} (o1,r1) = Some w1 →
+  ∃ w2, m2 !!{Γ} (o2,r1 ++ r2) = Some w2 ∧ w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : type_of w1.
+Proof.
+  destruct m1 as [m1], m2 as [m2]; simpl; intros ? (Hm1&_&_&Hm) Ha Hw1.
+  destruct (m1 !! o1) as [[|w1' β]|] eqn:?; simplify_equality'.
+  destruct (Hm o1 o2 r2 w1' β) as (w2&w2'&τ2&->&Hr&?&_); auto; csimpl.
+  rewrite ctree_lookup_app, Hr; csimpl; eauto using ctree_lookup_refine.
+Qed.
+Lemma cmap_lookup_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 w1 τ :
+  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 →
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ → m1 !!{Γ} a1 = Some w1 →
+  ∃ w2, m2 !!{Γ} a2 = Some w2 ∧ w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : τ.
+Proof.
+  intros. assert (type_of w1 = τ) by
+    eauto using type_of_correct, cmap_lookup_typed, addr_refine_typed_l.
+  unfold lookupE, cmap_lookup in *; case_option_guard; simplify_equality'.
+  rewrite option_guard_True by eauto using addr_strict_refine.
+  destruct (m1 !!{_} _) as [w1'|] eqn:?; simplify_equality'.
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some (type_of w1)))
+    as (r&?&_&?); auto.
+  destruct (cmap_lookup_ref_refine Γ α f Γm1 Γm2 m1 m2 (addr_index a1)
+    (addr_ref Γ a1) (addr_index a2) r w1') as (w2&?&?); auto.
+  erewrite cmap_lookup_ref_le by eauto; simpl.
+  destruct (decide (addr_is_obj a1)); simplify_equality'.
+  { rewrite decide_True by (by erewrite <-addr_is_obj_refine by eauto).
+    eauto. }
+  case_option_guard; simplify_equality'.
+  rewrite decide_False by (by erewrite <-addr_is_obj_refine by eauto).
+  rewrite option_guard_True
+    by eauto using pbits_refine_unshared, ctree_flatten_refine.
+  erewrite <-addr_ref_byte_refine by eauto.
+  assert (type_of w1 = ucharT) as ->
+    by eauto using addr_not_is_obj_type, addr_refine_typed_l.
+  eauto using ctree_lookup_byte_refine.
+Qed.
+Lemma cmap_alter_ref_refine Γ α f Γm1 Γm2 g1 g2 m1 m2 o1 r1 o2 r2 w1 w2 :
+  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → f !! o1 = Some (o2,r2) →
+  m1 !!{Γ} (o1,r1) = Some w1 → m2 !!{Γ} (o2,r1 ++ r2) = Some w2 →
+  g1 w1 ⊑{Γ,α,f@Γm1↦Γm2} g2 w2 : type_of w1 → ¬ctree_unmapped (g1 w1) →
+  cmap_alter_ref Γ g1 o1 r1 m1
+  ⊑{Γ,α,f@Γm1↦Γm2} cmap_alter_ref Γ g2 o2 (r1 ++ r2) m2.
+Proof.
+  intros ? Hm Hf Hw1 Hw2 Hg ?; split; split_ands; eauto using
+    cmap_refine_memenv_refine, cmap_alter_ref_valid, ctree_refine_typed_l.
+  { eapply cmap_alter_ref_valid;
+      eauto using pbits_refine_mapped, ctree_flatten_refine.
+    destruct (cmap_lookup_ref_refine Γ α f Γm1 Γm2 m1 m2 o1 r1 o2 r2 w1)
+      as (?&?&?); auto; simplify_equality'.
+    erewrite ctree_refine_type_of_r by eauto.
+    eauto using ctree_refine_typed_r. }
+  destruct m1 as [m1], m2 as [m2]; destruct Hm as (Hm1&_&?&Hm); simpl in *.
+  destruct (m1 !! o1) as [[|w1' malloc1]|] eqn:?; simplify_equality'.
+  destruct (Hm o1 o2 r2 w1' malloc1)
+    as (w2''&w2'&τ2&?&Hr&?&?); auto; simplify_option_equality.
+  rewrite ctree_lookup_app in Hw2; simplify_option_equality.
+  intros o3 o4 r4 w3 malloc3 ? Hw3.
+  destruct (decide (o3 = o1)); simplify_map_equality'.
+  { rewrite ctree_alter_app; eauto 10 using ctree_lookup_alter,
+      ctree_lookup_le, ref_freeze_le_r, ctree_alter_refine; eauto. }
+  destruct (meminj_injective_ne f o1 o2 o3 o4 r2 r4) as [?|[??]];
+    eauto using memenv_refine_injective; simplify_map_equality'; [eauto|].
+  destruct (Hm o3 o4 r4 w3 malloc3)
+    as (w4''&w4'&τ4&?&?&?&?); auto; simplify_map_equality'.
+  rewrite ctree_alter_app; eauto 10 using ctree_lookup_alter_disjoint.
+Qed.
 Lemma cmap_alter_refine Γ α f Γm1 Γm2 g1 g2 m1 m2 a1 a2 w1 w2 τ :
   ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ →
   m1 !!{Γ} a1 = Some w1 → m2 !!{Γ} a2 = Some w2 → ¬ctree_unmapped w1 →
   g1 w1 ⊑{Γ,α,f@Γm1↦Γm2} g2 w2 : τ → ¬ctree_unmapped (g1 w1) →
   cmap_alter Γ g1 a1 m1 ⊑{Γ,α,f@Γm1↦Γm2} cmap_alter Γ g2 a2 m2.
 Proof.
-  intros ? (Hm1&Hm2&?&Hm) Ha Hw1 Hw2 Hw1' ? Hgw1.
-  assert ((Γ,Γm1) ⊢ a1 : Some τ) by eauto using addr_refine_typed_l.
-  assert ((Γ,Γm2) ⊢ a2 : Some τ) by eauto using addr_refine_typed_r.
-  assert ((Γ,Γm1) ⊢ w1 : τ) by eauto using cmap_lookup_typed.
-  assert ((Γ,Γm2) ⊢ w2 : τ) by eauto using cmap_lookup_typed.
-  assert (¬ctree_unmapped (g2 w2)) as Hgw2
-    by eauto using pbits_refine_mapped, ctree_flatten_refine.
-  split; split_ands; auto.
-  { eapply cmap_alter_valid; eauto.
-    simplify_type_equality; eauto using ctree_refine_typed_l. }
-  { eapply cmap_alter_valid; eauto.
-    simplify_type_equality; eauto using ctree_refine_typed_r. }
-  intros o3 o4 r4 w3 malloc ? Hw3. destruct m1 as [m1], m2 as [m2]; simpl in *.
-  repeat case_option_guard; simplify_type_equality'.
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ)) as (r2&?&_&Hr2); auto.
-  destruct (m1 !! addr_index a1) as [[|w1' malloc']|] eqn:?; simplify_equality'.
-  destruct (w1' !!{Γ} addr_ref Γ a1) as [w1''|] eqn:?; simplify_equality'.
-  destruct (Hm (addr_index a1) (addr_index a2) r2 w1' malloc')
-    as (w2'&w2''&τ2&?&?&?&?); auto.
-  destruct (ctree_lookup_refine Γ α f Γm1 Γm2 w1' w2'' τ2
-    (addr_ref Γ a1) w1'') as (w2'''&?&?); auto; simplify_equality'.
-  assert (w2' !!{Γ} (addr_ref Γ a2) = Some w2'''); simplify_map_equality'.
-  { eapply ctree_lookup_le with (addr_ref Γ a1 ++ r2); eauto.
-    rewrite ctree_lookup_app, bind_Some; eauto. }
-  erewrite <-(ctree_alter_le _ _ (addr_ref Γ a1 ++ r2)) by eauto.
-  destruct (decide (o3 = addr_index a1)); simplify_map_equality'.
-  * eexists _, (ctree_alter Γ _ (addr_ref Γ a1) w2''), τ2; split_ands; eauto.
-    { by erewrite ctree_alter_app, ctree_lookup_alter
-        by eauto using ctree_lookup_le, ref_freeze_le_r. }
-    assert (addr_is_obj a1 ↔ addr_is_obj a2) by eauto using addr_is_obj_refine.
-    simplify_option_equality; try tauto.
-    { eapply ctree_alter_refine; eauto; simplify_type_equality; eauto using
-        ctree_Forall_not, ctree_refine_typed_l, ctree_refine_typed_r. }
-    assert (τ = ucharT) by eauto using addr_not_is_obj_type; subst.
-    erewrite addr_ref_byte_refine in Hw1 |- * by eauto.
-    eapply ctree_alter_refine; eauto using ctree_alter_byte_refine.
-    contradict Hgw1. eapply (ctree_alter_byte_unmapped _ _ _ w1'');
-      eauto using ctree_alter_lookup_Forall, ctree_refine_typed_l.
-  * destruct (meminj_injective_ne f (addr_index a1)
-      (addr_index a2) o3 o4 r2 r4) as [?|[??]];
-      eauto using memenv_refine_injective; simplify_map_equality'; [eauto|].
-    destruct (Hm o3 (addr_index a2) r4 w3 malloc)
-      as (w4''&w4'&τ4&?&?&?&?); auto; simplify_map_equality'.
-    eexists _, w4', τ4; split_ands; eauto.
-    by erewrite ctree_alter_app, ctree_lookup_alter_disjoint by
-      (eauto; by apply ref_disjoint_freeze_l, ref_disjoint_freeze_r).
+  intros. assert (type_of w1 = τ) by
+    eauto using type_of_correct, cmap_lookup_typed, addr_refine_typed_l.
+  unfold lookupE, cmap_lookup, cmap_alter in *;
+    do 2 case_option_guard; simplify_equality'.
+  destruct (m1 !!{_} _) as [w1'|] eqn:?,
+    (m2 !!{_} _) as [w2'|] eqn:?; simplify_equality'.
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some (type_of w1)))
+    as (r&?&_&?); auto.
+  erewrite <-(cmap_alter_ref_le _ _ _ _ (addr_ref Γ a2)) by eauto.
+  destruct (cmap_lookup_ref_refine Γ α f Γm1 Γm2 m1 m2 (addr_index a1)
+    (addr_ref Γ a1) (addr_index a2) r w1') as (w2''&?&?); auto.
+  assert (w2'' = w2'); subst.
+  { eapply cmap_lookup_ref_freeze_proper; eauto using (ref_freeze_le true). }
+  assert (addr_is_obj a1 ↔ addr_is_obj a2) by eauto using addr_is_obj_refine.
+  simplify_option_equality; try tauto; eauto using cmap_alter_ref_refine.
+  assert (w1' !!{Γ} addr_ref_byte Γ a2 = Some w1)
+    by (by erewrite <-(addr_ref_byte_refine _ _ _ _ _ _ a2) by eauto).
+  assert (type_of w1 = ucharT) as ->
+    by eauto using addr_not_is_obj_type, addr_refine_typed_l.
+  erewrite addr_ref_byte_refine by eauto.
+  eapply cmap_alter_ref_refine; eauto 9 using ctree_alter_byte_refine,
+    ctree_alter_byte_unmapped, ctree_refine_typed_l.
 Qed.
 End memory_map.

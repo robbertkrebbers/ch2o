@@ -58,12 +58,20 @@ Lemma mem_force_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 τ :
   ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ →
   is_Some (m1 !!{Γ} a1) → mem_force Γ a1 m1 ⊑{Γ,α,f@Γm1↦Γm2} mem_force Γ a2 m2.
 Proof.
-  unfold lookupE, mem_lookup, mem_force. intros ??? [v1 ?].
-  destruct (m1 !!{Γ} a1) as [w1|] eqn:?; simplify_option_equality.
-  destruct (cmap_lookup_refine Γ α f Γm1 Γm2
-    m1 m2 a1 a2 w1 τ) as (w2&?&?); auto.
-  eapply cmap_alter_refine; eauto using ctree_Forall_not, pbits_mapped,
-    pbits_refine_kind_subseteq, ctree_flatten_refine.
+  unfold lookupE, mem_lookup, mem_force, lookupE, cmap_lookup.
+  intros ??? [v1 ?]; case_option_guard; simplify_equality'.
+  destruct (m1 !!{Γ} _) as [w1|] eqn:?; simplify_equality'.
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ)) as (r&?&_&?); auto.
+  destruct (cmap_lookup_ref_refine Γ α f Γm1 Γm2 m1 m2 (addr_index a1)
+    (addr_ref Γ a1) (addr_index a2) r w1) as (w2&?&?); auto.
+  erewrite <-(cmap_alter_ref_le _ _ _ _ (addr_ref Γ a2)) by eauto.
+  eapply cmap_alter_ref_refine; eauto.
+  case_decide; simplify_equality'; case_option_guard; simplify_equality'.
+  { eapply ctree_Forall_not; eauto using pbits_mapped. }
+  destruct (w1 !!{Γ} _) as [w1'|] eqn:?; simplify_option_equality.
+  intros ?; eapply (ctree_Forall_not _ _ _ w1');
+    eauto using ctree_lookup_byte_Forall, pbit_unmapped_indetify,
+    pbits_mapped, ctree_lookup_byte_typed.
 Qed.
 Lemma mem_force_refine' Γ α f m1 m2 a1 a2 τ :
   ✓ Γ → m1 ⊑{Γ,α,f} m2 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : Some τ →
@@ -74,6 +82,35 @@ Proof.
     m1 m2 a1 a2 v1 τ) as (v2&?&?); eauto.
   erewrite !mem_force_memenv_of by eauto using cmap_refine_valid_l',
     cmap_refine_valid_r'; eauto using mem_force_refine.
+Qed.
+Lemma mem_force_refine_l Γ Γm m a :
+  ✓ Γ → ✓{Γ,Γm} m → is_Some (m !!{Γ} a) → frozen a →
+  mem_force Γ a m ⊑{Γ,true@Γm} m.
+Proof.
+  intros ?? [v ?] ?.
+  split; split_ands; eauto using mem_force_valid, memenv_refine_id.
+  intros ? o r w' malloc'; rewrite lookup_meminj_id.
+  destruct m as [m]; unfold lookupE, mem_lookup, lookupE, cmap_lookup in *;
+    intros; simplify_equality'; case_option_guard; simplify_equality'.
+  destruct (m !! addr_index a) as [[|w malloc]|] eqn:?; simplify_equality'.
+  destruct (w !!{Γ} addr_ref Γ a) as [w''|] eqn:?; simplify_equality'.
+  destruct (decide (o = addr_index a)); simplify_map_equality'.
+  { destruct (cmap_valid_Obj Γ Γm (CMap m) (addr_index a) w malloc')
+      as (τ&?&_&?&_); eauto.
+    assert (¬ctree_unmapped w'').
+    { case_decide; simplify_equality'; case_option_guard; simplify_equality'.
+      { eapply ctree_Forall_not;
+          eauto using pbits_mapped, ctree_lookup_Some_type_of. }
+      destruct (w'' !!{Γ} addr_ref_byte Γ a)
+        as [w'''|] eqn:?; simplify_option_equality.
+      intros ?; eapply (ctree_Forall_not _ _ _ w''');
+        eauto using ctree_lookup_byte_Forall, pbit_unmapped_indetify,
+        pbits_mapped, ctree_lookup_byte_typed, ctree_lookup_Some_type_of. }
+    assert (freeze true <$> addr_ref Γ a = addr_ref Γ a).
+    { rewrite <-addr_ref_freeze. by f_equal. }
+    eauto 10 using ctree_alter_id_refine. }
+  destruct (cmap_valid_Obj Γ Γm (CMap m) o w' malloc')
+    as (τ&?&_&?&_); eauto 10 using ctree_refine_id.
 Qed.
 Lemma mem_writable_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 τ :
   ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ →

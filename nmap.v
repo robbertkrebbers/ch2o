@@ -21,6 +21,7 @@ Proof.
   end; abstract congruence.
 Defined.
 Instance Nempty {A} : Empty (Nmap A) := NMap None ∅.
+Global Opaque Nempty.
 Instance Nlookup {A} : Lookup N A (Nmap A) := λ i t,
   match i with
   | N0 => Nmap_0 t

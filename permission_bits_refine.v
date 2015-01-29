@@ -217,7 +217,10 @@ Qed.
 Lemma pbit_indetify_refine_l Γ Γm xb :
   ✓{Γ,Γm} xb → pbit_indetify xb ⊑{Γ,true@Γm} xb.
 Proof. intros (?&?&?); split_ands'; auto. by destruct xb; constructor. Qed.
-Lemma pbits_indetify_refine_l Γ Γm xbs βs :
+Lemma pbits_indetify_refine_l Γ Γm xbs :
+  ✓{Γ,Γm}* xbs → pbit_indetify <$> xbs ⊑{Γ,true@Γm}* xbs.
+Proof. induction 1; constructor; eauto using pbit_indetify_refine_l. Qed.
+Lemma pbits_mask_indetify_refine_l Γ Γm xbs βs :
   ✓{Γ,Γm}* xbs → mask pbit_indetify βs xbs ⊑{Γ,true@Γm}* xbs.
 Proof.
   intros Hxbs. revert βs.

@@ -68,8 +68,9 @@ Proof.
   destruct 1; inversion 1;
     repeat match goal with
     | H : is_pure ∅ (#{_} _) |- _ => inversion H; clear H
-    end; try solve_elem_of; simplify_option_equality;
-    by try destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]].
+    | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]
+    | _ => progress simplify_option_equality
+    end; done || solve_elem_of.
 Qed.
 Lemma expr_eval_complete Γ δ m k e av :
   Γ\ δ ⊢ₛ State k (Expr e) m ⇒{k}* State k (Expr (lrval_to_expr av)) m →

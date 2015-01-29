@@ -13,7 +13,6 @@ Implicit Types w : mtree Ti.
 Implicit Types v : val Ti.
 Implicit Types m : mem Ti.
 Implicit Types Ω : lockset.
-
 Local Arguments union _ _ !_ !_ /.
 Hint Immediate cmap_lookup_typed val_typed_type_valid.
 Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
@@ -76,12 +75,19 @@ Proof.
     naive_solver eauto using pbits_disjoint_full, @ctree_flatten_disjoint.
 Qed.
 Lemma mem_force_disjoint Γ Γm1 m1 m2 a1 τ1 :
-  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
-  (Γ,Γm1) ⊢ a1 : Some τ1 → is_Some (m1 !!{Γ} a1) → mem_force Γ a1 m1 ⊥ m2.
+  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 → is_Some (m1 !!{Γ} a1) → mem_force Γ a1 m1 ⊥ m2.
 Proof.
-  unfold lookupE, mem_lookup, mem_force. intros ???? [??].
-  destruct (m1 !!{Γ} a1) as [w1|] eqn:?; simplify_option_equality.
-  eapply cmap_alter_disjoint; eauto using ctree_Forall_not, pbits_mapped.
+  unfold lookupE, mem_lookup, mem_force, lookupE, cmap_lookup; intros ??? [??].
+  destruct (m1 !!{Γ} _) as [w1|] eqn:?; case_option_guard; simplify_equality'.
+  destruct (cmap_lookup_ref_Some Γ Γm1 m1 (addr_index a1) (addr_ref Γ a1) w1)
+    as (τ&σ&?&?&?); auto.
+  eapply cmap_alter_ref_disjoint; eauto.
+  case_decide; simplify_equality'; case_option_guard; simplify_equality'.
+  { eapply ctree_Forall_not; eauto using pbits_mapped. }
+  destruct (w1 !!{Γ} _) as [w1'|] eqn:?; simplify_option_equality.
+  intros ?; eapply (ctree_Forall_not _ _ _ w1');
+    eauto using ctree_lookup_byte_Forall, pbit_unmapped_indetify,
+    pbits_mapped, ctree_lookup_byte_typed.
 Qed.
 Lemma mem_force_disjoint_le Γ Γm m ms a v τ :
   ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → is_Some (m !!{Γ} a) →
@@ -92,13 +98,20 @@ Proof.
   eauto using mem_force_disjoint.
 Qed.
 Lemma mem_force_union Γ Γm1 m1 m2 a1 v1 τ1 :
-  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
-  (Γ,Γm1) ⊢ a1 : Some τ1 → is_Some (m1 !!{Γ} a1) →
+  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 → is_Some (m1 !!{Γ} a1) →
   mem_force Γ a1 (m1 ∪ m2) = mem_force Γ a1 m1 ∪ m2.
 Proof.
-  unfold lookupE, mem_lookup, mem_force. intros ???? [??].
-  destruct (m1 !!{Γ} a1) as [w1|] eqn:?; simplify_option_equality.
-  eapply cmap_alter_union; eauto using ctree_Forall_not, pbits_mapped.
+  unfold lookupE, mem_lookup, mem_force, lookupE, cmap_lookup; intros ??? [??].
+  destruct (m1 !!{Γ} _) as [w1|] eqn:?; case_option_guard; simplify_equality'.
+  destruct (cmap_lookup_ref_Some Γ Γm1 m1 (addr_index a1) (addr_ref Γ a1) w1)
+    as (τ&σ&?&?&?); auto.
+  eapply cmap_alter_ref_union; eauto.
+  case_decide; simplify_equality'; case_option_guard; simplify_equality'.
+  { eapply ctree_Forall_not; eauto using pbits_mapped. }
+  destruct (w1 !!{Γ} _) as [w1'|] eqn:?; simplify_option_equality.
+  intros ?; eapply (ctree_Forall_not _ _ _ w1');
+    eauto using ctree_lookup_byte_Forall, pbit_unmapped_indetify,
+    pbits_mapped, ctree_lookup_byte_typed.
 Qed.
 Lemma mem_writable_subseteq Γ Γm m1 m2 a v1 :
   ✓ Γ → ✓{Γ,Γm} m1 → m1 ⊆ m2 → mem_writable Γ a m1 → mem_writable Γ a m2.

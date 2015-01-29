@@ -473,6 +473,8 @@ Proof.
   intros. assert (i = length l1 + (i - length l1)) as Hi by lia.
   rewrite Hi at 1. by apply alter_app_r.
 Qed.
+Lemma list_alter_id f l i : (∀ x, f x = x) → alter f i l = l.
+Proof. intros ?. revert i. induction l; intros [|?]; f_equal'; auto. Qed.
 Lemma list_alter_ext f g l k i :
   (∀ x, l !! i = Some x → f x = g x) → l = k → alter f i l = alter g i k.
 Proof. intros H ->. revert i H. induction k; intros [|?] ?; f_equal'; auto. Qed.

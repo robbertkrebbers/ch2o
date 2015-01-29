@@ -13,7 +13,7 @@ Section memory_operations.
     guard (ctree_Forall (λ xb, Some Readable ⊆ pbit_kind xb) w);
     Some (to_val Γ w).
   Definition mem_force (Γ : env Ti) (a : addr Ti) : mem Ti → mem Ti :=
-    cmap_alter Γ id a.
+    cmap_alter_ref Γ id (addr_index a) (addr_ref Γ a).
 
   Definition mem_writable (Γ : env Ti) (a : addr Ti) (m : mem Ti) : Prop :=
     ∃ w, m !!{Γ} a = Some w
@@ -106,9 +106,6 @@ Implicit Types βs : list bool.
 Implicit Types xb : pbit Ti.
 Implicit Types xbs : list (pbit Ti).
 Implicit Types Ω : lockset.
-
-Local Opaque nmap.Nempty.
-Arguments cmap_lookup _ _ _ !_ !_ /.
 
 Hint Resolve Forall_app_2 Forall2_app.
 Hint Immediate cmap_lookup_typed val_typed_type_valid.
@@ -247,7 +244,7 @@ Lemma mem_alloc_writable_top Γ m o malloc τ :
   mem_allocable o m → mem_writable Γ (addr_top o τ) (mem_alloc Γ o malloc τ m).
 Proof.
   unfold mem_allocable. intros. exists (ctree_new Γ pbit_full τ); split.
-  * unfold lookupE, cmap_lookup. 
+  * unfold lookupE, cmap_lookup.
     rewrite option_guard_True by eauto using addr_top_strict.
     by destruct m as [m]; simplify_map_equality'.
   * apply ctree_new_Forall; auto; by destruct alloc.
@@ -415,9 +412,9 @@ Proof. unfold lookupE, mem_lookup. by rewrite cmap_lookup_erase. Qed.
 Lemma mem_force_memenv_of Γ Γm m a :
   ✓ Γ → ✓{Γ,Γm} m → is_Some (m !!{Γ} a) → '{mem_force Γ a m} = '{m}.
 Proof.
-  unfold mem_force, lookupE, mem_lookup. intros ?? [v ?].
-  destruct (m !!{Γ} a) as [w|] eqn:?; simplify_equality'.
-  by erewrite cmap_alter_memenv_of by eauto.
+  unfold mem_force, lookupE, mem_lookup; simpl; unfold lookupE, cmap_lookup.
+  intros ?? [v ?]. by destruct (m !!{Γ} _) as [w|] eqn:?;
+    simplify_option_equality; eauto using cmap_alter_ref_memenv_of.
 Qed.
 Lemma mem_force_forward Γ Γm m a :
   ✓ Γ → ✓{Γ,Γm} m → is_Some (m !!{Γ} a) → '{m} ⇒ₘ '{mem_force Γ a m}.
@@ -425,10 +422,19 @@ Proof. intros. by erewrite mem_force_memenv_of by eauto. Qed.
 Lemma mem_force_valid Γ Γm m a :
   ✓ Γ → ✓{Γ,Γm} m → is_Some (m !!{Γ} a) → ✓{Γ,Γm} (mem_force Γ a m).
 Proof.
-  unfold mem_force, lookupE, mem_lookup. intros ?? [v ?].
-  destruct (m !!{Γ} a) as [w|] eqn:?; simplify_option_equality.
-  eapply cmap_alter_valid; eauto using cmap_lookup_Some,
-    ctree_Forall_not, cmap_lookup_Some, pbits_mapped.
+  unfold mem_force, lookupE, mem_lookup; simpl; unfold lookupE, cmap_lookup.
+  intros ?? [v ?]; case_option_guard; simplify_equality';
+    destruct (m !!{Γ} _) as [w|] eqn:?; simplify_equality'.
+  destruct (cmap_lookup_ref_Some Γ Γm m (addr_index a)
+    (addr_ref Γ a) w) as (?&?&?&?&?); eauto.
+  eapply cmap_alter_ref_valid; eauto.
+  { eapply type_of_typed; eauto. }
+  case_decide; simplify_equality'; case_option_guard; simplify_equality'.
+  { eapply ctree_Forall_not; eauto using pbits_mapped. }
+  destruct (w !!{Γ} _) as [w'|] eqn:?; simplify_option_equality.
+  intros ?; eapply (ctree_Forall_not _ _ _ w');
+    eauto using ctree_lookup_byte_Forall, pbit_unmapped_indetify,
+    pbits_mapped, ctree_lookup_byte_typed.
 Qed.
 Lemma mem_force_valid' Γ m a :
   ✓ Γ → ✓{Γ} m → is_Some (m !!{Γ} a) → ✓{Γ} (mem_force Γ a m).
@@ -438,33 +444,38 @@ Proof.
 Qed.
 Lemma mem_erase_force Γ m a :
   cmap_erase (mem_force Γ a m) = mem_force Γ a (cmap_erase m).
-Proof. apply cmap_erase_alter. Qed.
+Proof. apply cmap_erase_alter_ref. Qed.
 Lemma mem_lookup_force Γ Γm m a v τ :
   ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → m !!{Γ} a = Some v → addr_is_obj a →
   mem_force Γ a m !!{Γ} a = Some v.
 Proof.
-  unfold lookupE, mem_lookup, mem_force. intros.
-  destruct (m !!{Γ} a) as [w'|] eqn:?; simplify_equality'.
-  by erewrite cmap_lookup_alter by eauto; simplify_option_equality.
+  unfold mem_force, lookupE, mem_lookup; simpl; unfold lookupE, cmap_lookup.
+  intros; case_option_guard; simplify_equality';
+    destruct (m !!{Γ} _) as [w|] eqn:?; simplify_equality'.
+  by erewrite cmap_lookup_ref_alter by
+    eauto using cmap_lookup_ref_le, ref_freeze_le_r; simplify_option_equality.
 Qed.
 Lemma mem_lookup_force_disjoint Γ Γm m a1 a2 τ2 v1 :
-  ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 → m !!{Γ} a1 = Some v1 → (Γ,Γm) ⊢ a2 : Some τ2 →
-  is_Some (m !!{Γ} a2) → mem_force Γ a2 m !!{Γ} a1 = Some v1.
+  ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 → m !!{Γ} a1 = Some v1 →
+  mem_force Γ a2 m !!{Γ} a1 = Some v1.
 Proof.
-  unfold lookupE, mem_force, mem_lookup. intros ????? [??].
-  destruct (m !!{Γ} a1) as [w1|] eqn:?,
-    (m !!{Γ} a2) as [w2|] eqn:?; simplify_equality'.
-  by erewrite cmap_lookup_alter_disjoint by eauto.
+  unfold mem_force, lookupE, mem_lookup; simpl; unfold lookupE, cmap_lookup.
+  intros ?? Ha ?; case_option_guard; simplify_equality'.
+  destruct (m !!{Γ} (addr_index a1,_)) as [w1|] eqn:?; simplify_equality'.
+  destruct Ha as [|[[??]|(<-&?&?&?&?)]];
+    erewrite ?cmap_lookup_ref_alter_disjoint by eauto; auto.
+  by erewrite cmap_lookup_ref_alter
+    by eauto using cmap_lookup_ref_le, ref_freeze_le_r.
 Qed.
-Lemma mem_force_commute Γ Γm m a1 a2 τ1 τ2 :
-  ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 →
-  (Γ,Γm) ⊢ a1 : Some τ1 → is_Some (m !!{Γ} a1) →
-  (Γ,Γm) ⊢ a2 : Some τ2 → is_Some (m !!{Γ} a2) →
+Lemma mem_force_commute Γ m a1 a2 :
+  a1 ⊥{Γ} a2 →
   mem_force Γ a1 (mem_force Γ a2 m) = mem_force Γ a2 (mem_force Γ a1 m).
 Proof.
-  unfold lookupE, mem_lookup, mem_force. intros ???? [??] ? [??].
-  destruct (m !!{Γ} a1) as [w1|] eqn:?, (m !!{Γ} a2) as [w2|] eqn:?;
-    simplify_equality'; eauto using cmap_alter_commute.
+  unfold mem_force; intros [?|[[??]|(<-&Hr&?&?&?)]];
+    auto using cmap_alter_ref_commute.
+  by rewrite <-!(cmap_alter_ref_le _ _ _ _ (addr_ref Γ a1)), !Hr,
+    !(cmap_alter_ref_le _ _ _ (freeze true <$> addr_ref Γ a2) (addr_ref Γ a2)),
+    <-!cmap_alter_ref_compose by eauto using ref_freeze_le_l.
 Qed.
 
 (** Properties of the [insert] function *)
@@ -475,7 +486,8 @@ Lemma mem_writable_alive Γ Γm m a :
 Proof.
   intros ? Hm (w&?&?).
   assert ((Γ,Γm) ⊢ w : type_of w) by eauto using cmap_lookup_Some.
-  unfold lookupE, cmap_lookup in *; case_option_guard; simplify_equality'.
+  unfold lookupE, cmap_lookup, lookupE, cmap_lookup_ref in *;
+    case_option_guard; simplify_equality'.
   destruct (cmap_car m !! addr_index a) as [[|w' β]|] eqn:?; simplify_equality'.
   destruct (cmap_valid_Obj Γ Γm m (addr_index a) w' β) as (τ&?&?&?); auto.
 Qed.
@@ -586,15 +598,20 @@ Lemma mem_insert_commute Γ Γm m a1 a2 v1 v2 τ1 τ2 :
   (Γ,Γm) ⊢ a2 : Some τ2 → mem_writable Γ a2 m → (Γ,Γm) ⊢ v2 : τ2 →
   <[a1:=v1]{Γ}>(<[a2:=v2]{Γ}>m) = <[a2:=v2]{Γ}>(<[a1:=v1]{Γ}>m).
 Proof. intros ???? (?&?&?) ?? (?&?&?) ?. eapply cmap_alter_commute; eauto. Qed.
-Lemma mem_insert_force_commute Γ Γm m a1 a2 v1 τ1 τ2 :
-  ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 →
-  (Γ,Γm) ⊢ a1 : Some τ1 → mem_writable Γ a1 m → (Γ,Γm) ⊢ v1 : τ1 →
-  (Γ,Γm) ⊢ a2 : Some τ2 → is_Some (m !!{Γ} a2) →
+Lemma mem_insert_force_commute Γ m a1 a2 v1 :
+  a1 ⊥{Γ} a2 →
   <[a1:=v1]{Γ}>(mem_force Γ a2 m) = mem_force Γ a2 (<[a1:=v1]{Γ}>m).
 Proof.
-  unfold lookupE, mem_lookup, mem_force. intros ???? (?&?&?) ?? [??].
-  destruct (m !!{Γ} a2) as [w2|] eqn:?; simplify_equality'.
-  eapply cmap_alter_commute; eauto.
+  unfold mem_force, insertE, mem_insert, cmap_alter.
+  intros [?|[[??]|(<-&Hr&?&?&?)]]; auto using cmap_alter_ref_commute.
+  by rewrite <-!(cmap_alter_ref_le _ _ _ _ (addr_ref Γ a1)), !Hr,
+    !(cmap_alter_ref_le _ _ _ (freeze true <$> addr_ref Γ a2) (addr_ref Γ a2)),
+    <-!cmap_alter_ref_compose by eauto using ref_freeze_le_l.
+Qed.
+Lemma mem_insert_force Γ m a v : <[a:=v]{Γ}>(mem_force Γ a m) = <[a:=v]{Γ}>m.
+Proof.
+  unfold insertE, mem_insert, mem_force, cmap_alter.
+  by rewrite <-cmap_alter_ref_compose.
 Qed.
 Lemma mem_insert_writable Γ Γm m a1 a2 v2 τ2 :
   ✓ Γ → ✓{Γ,Γm} m → a1 = a2 ∨ a1 ⊥{Γ} a2 →
@@ -741,10 +758,10 @@ Proof.
   by apply Forall_true.
 Qed.
 Lemma mem_force_singleton Γ Γm a malloc x v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a →
   mem_force Γ a (mem_singleton Γ a malloc x v)
   = mem_singleton Γ a malloc x v.
-Proof. by apply (cmap_alter_singleton _ Γm id _ _ _ τ). Qed.
+Proof. apply (cmap_alter_ref_singleton _ Γm id _ _ _ τ). Qed.
 Lemma mem_insert_singleton Γ Γm a malloc x v1 v2 τ :
   ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
   (Γ,Γm) ⊢ v1 : τ → (Γ,Γm) ⊢ v2 : τ →
@@ -976,6 +993,40 @@ Proof.
   destruct (decide (o = o')); simplify_map_equality'; split; try done.
   rewrite fmap_Some; intros ([x b]&?&?); decompose_Forall_hyps.
 Qed.
+Lemma mem_locks_alter_ref Γ Γm g o r m w τ σ o' i :
+  ✓Γ → ✓{Γ,Γm} m → Γm ⊢ o : τ → Γ ⊢ r : τ ↣ σ →
+  m !!{Γ} (o,r) = Some w → (Γ,Γm) ⊢ g w : σ →
+  (o',i) ∈ mem_locks (cmap_alter_ref Γ g o r m) ↔
+    (o',i) ∈ mem_locks m ∧ o' ≠ o ∨
+    (o',i) ∈ mem_locks m ∧ o' = o ∧ i < ref_object_offset Γ r ∨
+    o' = o ∧
+      ref_object_offset Γ r ≤ i < ref_object_offset Γ r + bit_size_of Γ σ ∧
+      pbit_locked <$> ctree_flatten (g w)
+      !! (i - ref_object_offset Γ r) = Some true ∨
+    (o',i) ∈ mem_locks m ∧ o' = o ∧
+      ref_object_offset Γ r + bit_size_of Γ σ ≤ i.
+Proof.
+  unfold lookupE, cmap_lookup_ref; intros ? Hm ????; simplify_equality'.
+  destruct (cmap_car m !! o) as [[|w' β]|] eqn:?; simplify_equality'.
+  destruct (cmap_valid_Obj Γ Γm m o w' β) as (τ'&?&_&?&_); auto.
+  rewrite !elem_of_mem_locks; destruct m as [m]; simplify_equality'.
+  destruct (decide (o = o')); simplify_map_equality';
+    [rewrite or_r by tauto|destruct (m !! o) as [[]|]; naive_solver].
+  simplify_type_equality. unfold pbit_locked.
+  erewrite <-!list_lookup_fmap, !list_fmap_compose, ctree_alter_perm_flatten,
+    !list_lookup_fmap by eauto using ctree_lookup_typed.
+  assert (ref_object_offset Γ r + bit_size_of Γ σ ≤ bit_size_of Γ τ)
+    by eauto using ref_object_offset_size'.
+  destruct (le_lt_dec (ref_object_offset Γ r) i);
+    [|rewrite lookup_app_l, lookup_take by solve_length; intuition lia].
+  rewrite lookup_app_r, take_length_le by solve_length.
+  destruct (le_lt_dec (ref_object_offset Γ r + bit_size_of Γ σ) i);
+    [|rewrite lookup_app_l by auto; intuition omega].
+  erewrite lookup_app_r, ctree_flatten_length, lookup_drop by eauto.
+  replace (ref_object_offset Γ r + bit_size_of Γ σ
+    + (i - ref_object_offset Γ r - bit_size_of Γ σ)) with i by lia.
+  intuition lia.
+Qed.
 Lemma mem_locks_alter Γ Γm g a m w τ o i :
   ✓Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : τ →
   (o,i) ∈ mem_locks (cmap_alter Γ g a m) ↔
@@ -988,7 +1039,7 @@ Lemma mem_locks_alter Γ Γm g a m w τ o i :
     (o,i) ∈ mem_locks m ∧ o = addr_index a ∧
       addr_object_offset Γ a + bit_size_of Γ τ ≤ i.
 Proof.
-  unfold lookupE, cmap_lookup; intros ? Hm ???.
+  unfold lookupE, cmap_lookup, lookupE, cmap_lookup_ref; intros ? Hm ???.
   case_option_guard; simplify_equality'.
   erewrite addr_object_offset_alt by eauto.
   destruct (cmap_car m !! addr_index a) as [[|w' β]|] eqn:?; simplify_equality'.
@@ -1055,7 +1106,8 @@ Lemma mem_Readable_locks Γ Γm m a w τ i :
   (addr_index a,i) ∈ mem_locks m →
   i < addr_object_offset Γ a ∨ addr_object_offset Γ a + bit_size_of Γ τ ≤ i.
 Proof.
-  unfold lookupE, cmap_lookup. rewrite elem_of_mem_locks.
+  unfold lookupE, cmap_lookup, lookupE, cmap_lookup_ref.
+  rewrite elem_of_mem_locks.
   intros ? Hm Hw ???; case_option_guard; simplify_equality'.
   destruct (decide (addr_object_offset Γ a ≤ i
     < addr_object_offset Γ a + bit_size_of Γ τ)) as [Hi|]; [exfalso|lia].
@@ -1107,17 +1159,27 @@ Lemma mem_locks_force Γ Γm a m v τ :
   ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ →
   m !!{Γ} a = Some v → mem_locks (mem_force Γ a m) = mem_locks m.
 Proof.
-  unfold lookupE, mem_lookup, mem_force;
-    rewrite bind_Some; intros ??? (w&?&?); simplify_option_equality.
-  apply elem_of_equiv_L; intros [o i]; erewrite mem_locks_alter by eauto.
+  unfold lookupE, mem_lookup, mem_force, lookupE, cmap_lookup; intros.
+  case_option_guard; simplify_equality'.
+  destruct (m !!{Γ} _) as [w|] eqn:?; simplify_equality'.
+  destruct (cmap_lookup_ref_Some Γ Γm m (addr_index a)
+    (addr_ref Γ a) w) as (τ'&σ&?&?&?); eauto.
+  apply elem_of_equiv_L; intros [o i].
+  erewrite mem_locks_alter_ref
+    by eauto using addr_typed_index, addr_typed_ref_typed.
   destruct (decide (o = addr_index a)) as [->|]; [|tauto].
-  destruct (decide (addr_object_offset Γ a ≤ i
-    < addr_object_offset Γ a + bit_size_of Γ τ));
-    [|destruct (decide (i < addr_object_offset Γ a)); intuition omega].
-  rewrite pbits_Readable_locked by auto.
-  assert ((addr_index a,i) ∈ mem_locks m →
-    i < addr_object_offset Γ a ∨ addr_object_offset Γ a + bit_size_of Γ τ ≤ i)
-    by eauto using mem_Readable_locks; intuition congruence.
+  destruct (decide (ref_object_offset Γ (addr_ref Γ a) ≤ i
+    < ref_object_offset Γ (addr_ref Γ a) + bit_size_of Γ σ)).
+  { rewrite 2!or_r, or_l, elem_of_mem_locks by intuition lia.
+    unfold lookupE, cmap_lookup_ref in *; simplify_equality'.
+    destruct (cmap_car m !! _) as [[|w' malloc]|] eqn:?; simplify_equality'.
+    destruct (cmap_valid_Obj Γ Γm m (addr_index a) w' malloc)
+      as (?&?&_&?&_&_); simplify_type_equality'; eauto.
+    erewrite <-ctree_lookup_flatten by eauto.
+    rewrite <-list_lookup_fmap, pbits_locked_mask, list_lookup_fmap.
+    rewrite lookup_take, lookup_drop, le_plus_minus_r by lia.
+    intuition lia. }
+  destruct (decide (i < ref_object_offset Γ (addr_ref Γ a))); intuition omega.
 Qed.
 Lemma mem_locks_insert Γ Γm a m v τ :
   ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →

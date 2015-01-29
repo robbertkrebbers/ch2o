@@ -992,6 +992,12 @@ Proof.
   * intros ?? -> ???; simplify_equality'.
     exists τ; repeat econstructor; eauto using ctree_unflatten_typed.
 Qed.
+Lemma ctree_lookup_seg_Some_type_of Γ Γm w τ rs w' :
+  ✓ Γ → (Γ,Γm) ⊢ w : τ → w !!{Γ} rs = Some w' → (Γ,Γm) ⊢ w' : type_of w'.
+Proof.
+  intros. destruct (ctree_lookup_seg_Some Γ Γm w τ rs w')
+    as (?&?&?); eauto using type_of_typed.
+Qed.
 Lemma ctree_lookup_Some Γ Γm w τ r w' :
   ✓ Γ → (Γ,Γm) ⊢ w : τ → w !!{Γ} r = Some w' →
   ∃ σ, Γ ⊢ r : τ ↣ σ ∧ (Γ,Γm) ⊢ w' : σ.
@@ -1003,6 +1009,12 @@ Proof.
   edestruct ctree_lookup_seg_Some as (?&?&?); eauto.
   edestruct IH as (?&?&?); eauto.
   eexists; split; [eapply ref_typed_snoc |]; eauto.
+Qed.
+Lemma ctree_lookup_Some_type_of Γ Γm w τ r w' :
+  ✓ Γ → (Γ,Γm) ⊢ w : τ → w !!{Γ} r = Some w' → (Γ,Γm) ⊢ w' : type_of w'.
+Proof.
+  intros. destruct (ctree_lookup_Some Γ Γm w τ r w')
+    as (?&?&?); eauto using type_of_typed.
 Qed.
 Lemma ctree_lookup_seg_typed Γ Γm w τ rs w' σ :
   ✓ Γ → (Γ,Γm) ⊢ w : τ → w !!{Γ} rs = Some w' → Γ ⊢ rs : τ ↣ σ → (Γ,Γm) ⊢ w' :σ.
