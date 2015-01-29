@@ -507,6 +507,14 @@ Proof.
   contradict Hperm; eapply Forall_impl with (∅ =); eauto using
     @sep_unmapped_empty_alt, ctree_singleton_Forall_inv, addr_typed_ref_typed.
 Qed.
+Lemma cmap_singleton_weaken Γ1 Γ2 Γm a malloc w τ :
+  ✓ Γ1 → Γ1 ⊆ Γ2 → (Γ1,Γm) ⊢ a : Some τ → addr_strict Γ1 a →
+  cmap_singleton Γ1 a malloc w = cmap_singleton Γ2 a malloc w.
+Proof.
+  unfold cmap_singleton; intros; f_equal'.
+  by erewrite ctree_singleton_weaken, addr_ref_weaken
+    by eauto using addr_typed_ref_typed, addr_typed_type_object_valid.
+Qed.
 Lemma cmap_lookup_singleton Γ Γm a malloc w τ :
   ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
   cmap_singleton Γ a malloc w !!{Γ} a = Some w.

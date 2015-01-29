@@ -808,6 +808,9 @@ Proof.
   intros. unfold ctree_new.
   by erewrite ctree_unflatten_weaken, bit_size_of_weaken by eauto.
 Qed.
+Lemma ctree_news_weaken Γ1 Γ2 xb τs :
+  ✓ Γ1 → ✓{Γ1}* τs → Γ1 ⊆ Γ2 → ctree_new Γ1 xb <$> τs = ctree_new Γ2 xb <$> τs.
+Proof. induction 2; intros; f_equal'; eauto using ctree_new_weaken. Qed.
 Lemma ctree_new_Forall (P : pbit Ti → Prop) Γ xb τ :
   ✓ Γ → ✓{Γ} τ → P xb → P (pbit_indetify xb) → ctree_Forall P (ctree_new Γ xb τ).
 Proof.
@@ -2019,6 +2022,23 @@ Lemma ctree_singleton_typed Γ Γm τ r σ w :
 Proof.
   intros ? Hr. revert w. induction Hr using @ref_typed_ind; eauto 10 using
     ctree_singleton_seg_typed, ctree_singleton_seg_Forall_inv.
+Qed.
+Lemma ctree_singleton_seg_weaken Γ1 Γ2 τ rs w σ :
+  ✓ Γ1 → Γ1 ⊆ Γ2 → Γ1 ⊢ rs : τ ↣ σ → ✓{Γ1} τ → 
+  ctree_singleton_seg Γ1 rs w = ctree_singleton_seg Γ2 rs w.
+Proof.
+  destruct 3; intros;
+    simplify_option_equality by eauto using @lookup_weaken;
+    by erewrite ?ctree_new_weaken, ?ctree_news_weaken,
+    ?field_bit_padding_weaken, ?(bit_size_of_weaken Γ1 Γ2) by eauto.
+Qed.
+Lemma ctree_singleton_weaken Γ1 Γ2 τ r w σ :
+  ✓ Γ1 → Γ1 ⊆ Γ2 → Γ1 ⊢ r : τ ↣ σ → ✓{Γ1} τ →
+  ctree_singleton Γ1 r w = ctree_singleton Γ2 r w.
+Proof.
+  intros ?? Hr. revert w. induction Hr using @ref_typed_ind; intros; simpl;
+    erewrite ?ctree_singleton_seg_weaken by eauto using ref_typed_type_valid;
+    eauto.
 Qed.
 Lemma ctree_lookup_singleton_seg Γ τ rs w σ :
   ✓ Γ → Γ ⊢ rs : τ ↣ σ → ctree_singleton_seg Γ rs w !!{Γ} rs = Some w.

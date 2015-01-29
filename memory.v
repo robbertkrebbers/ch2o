@@ -736,6 +736,13 @@ Proof.
   eapply cmap_singleton_valid; simplify_type_equality; eauto.
   eapply ctree_Forall_not, of_val_mapped; eauto using Forall_replicate.
 Qed.
+Lemma mem_singleton_weaken Γ1 Γ2 Γm a malloc x v τ :
+  ✓ Γ1 → Γ1 ⊆ Γ2 → (Γ1,Γm) ⊢ a : Some τ → addr_strict Γ1 a → (Γ1,Γm) ⊢ v : τ →
+  mem_singleton Γ1 a malloc x v = mem_singleton Γ2 a malloc x v.
+Proof.
+  unfold mem_singleton; intros; simplify_type_equality.
+  by erewrite cmap_singleton_weaken, bit_size_of_weaken, of_val_weaken by eauto.
+Qed.
 Lemma mem_lookup_singleton Γ Γm a malloc x v τ :
   ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
   (Γ,Γm) ⊢ v : τ → Some Readable ⊆ perm_kind x →

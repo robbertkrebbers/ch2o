@@ -1018,6 +1018,27 @@ Proof.
       + erewrite zip_with_length, bits_list_join_length by eauto; auto; lia. }
     typed_constructor; eauto using PBits_valid.
 Qed.
+Lemma of_val_weaken Γ1 Γ2 Γm1 xs v τ :
+  ✓ Γ1 → Γ1 ⊆ Γ2 → (Γ1,Γm1) ⊢ v : τ → of_val Γ1 xs v = of_val Γ2 xs v.
+Proof.
+  intros HΓ ? Hv. revert v τ Hv xs. refine (val_typed_ind _ _ _ _ _ _ _ _).
+  * intros; f_equal'; eauto using base_val_flatten_weaken with f_equal.
+  * intros vs τ ? IH _ xs; f_equal'; revert xs.
+    induction IH; intros; decompose_Forall_hyps; simplify_type_equality;
+      erewrite ?(bit_size_of_weaken Γ1 Γ2) by eauto using val_typed_type_valid;
+      auto with f_equal.
+  * intros s vs τs Hs Hvs IH xs; f_equal'; revert xs.
+    erewrite fmap_type_of, field_bit_padding_weaken by eauto; clear Hs.
+    generalize (field_bit_padding Γ2 τs).
+    induction IH; intros [|??] ?; decompose_Forall_hyps; simplify_type_equality;
+      erewrite ?bit_size_of_weaken by eauto using val_typed_type_valid;
+      auto with f_equal.
+  * intros; simplify_type_equality'.
+    erewrite bit_size_of_weaken by eauto using val_typed_type_valid.
+    auto with f_equal.
+  * intros; unfold of_val; do 2 f_equal; eapply val_flatten_weaken; eauto.
+    econstructor; eauto.
+Qed.
 Lemma of_val_type_of Γ xs v : type_of (of_val Γ xs v) = type_of v.
 Proof.
   destruct v as [|? vs _| | |] using val_ind_alt;
