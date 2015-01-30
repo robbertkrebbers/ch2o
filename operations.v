@@ -107,55 +107,37 @@ Section operations_definitions.
     | voidT => VVoid | intT τi => VInt τi 0 | τ.* => VPtr (NULL τ)
     end%BT.
   Inductive base_unop_typed : unop → base_type Ti → base_type Ti → Prop :=
-    | TInt_NegOp_typed τi :
-       base_unop_typed NegOp (intT τi) (intT (int_promote τi))
-    | TInt_ComplOp_typed τi :
-       base_unop_typed ComplOp (intT τi) (intT (int_promote τi))
-    | TInt_NotOp_typed τi :
-       base_unop_typed NotOp (intT τi) sintT
+    | TInt_unop_typed op τi :
+       base_unop_typed op (intT τi) (intT (int_unop_type_of op τi))
     | TPtr_NotOp_typed τ : base_unop_typed NotOp (τ.*) sintT.
   Definition base_unop_type_of (op : unop)
       (τb : base_type Ti) : option (base_type Ti) :=
     match τb, op with
-    | intT τi, NotOp => Some sintT
-    | intT τi, _ => Some (intT (int_promote τi))
+    | intT τi, op => Some (intT (int_unop_type_of op τi))
     | τ.*, NotOp => Some sintT
     | _, _ => None
     end%BT.
   Definition base_val_unop_ok (m : mem Ti)
       (op : unop) (vb : base_val Ti) : Prop :=
     match vb, op with
-    | VInt τi x, NegOp => int_arithop_ok MinusOp 0 τi x τi
-    | VInt τi x, _ => True
+    | VInt τi x, op => int_unop_ok op x τi
     | VPtr p, NotOp => ptr_alive' m p
     | _, _ => False
     end.
   Global Arguments base_val_unop_ok _ !_ !_ /.
   Definition base_val_unop (op : unop) (vb : base_val Ti) : base_val Ti :=
     match vb, op with
-    | VInt τi x, NegOp => VInt (int_promote τi) (int_arithop MinusOp 0 τi x τi)
-    | VInt τi x, ComplOp =>
-       let τi' := int_promote τi in
-       VInt τi' (int_of_bits τi' (negb <$> int_to_bits τi' x))
-    | VInt τi x, NotOp => VInt sintT (if decide (x = 0) then 1 else 0)
+    | VInt τi x, op => VInt (int_unop_type_of op τi) (int_unop op x τi)
     | VPtr p, _ => VInt sintT (match p with NULL _ => 1 | Ptr _ => 0 end)
-    | _, _ => vb
+    | _, _ => vb (* dummy *)
     end.
   Global Arguments base_val_unop !_ !_ /.
 
   Inductive base_binop_typed :
         binop → base_type Ti → base_type Ti → base_type Ti → Prop :=
-    | CompOp_TInt_TInt_typed op τi1 τi2 :
-       base_binop_typed (CompOp op) (intT τi1) (intT τi2) sintT
-    | ArithOp_TInt_TInt_typed op τi1 τi2 :
-       base_binop_typed (ArithOp op) (intT τi1) (intT τi2)
-         (intT (int_promote τi1 ∪ int_promote τi2))
-    | ShiftOp_TInt_TInt_typed op τi1 τi2 :
-       base_binop_typed (ShiftOp op) (intT τi1) (intT τi2)
-         (intT (int_promote τi1))
-    | BitOp_TInt_TInt_typed op τi1 τi2 :
-       base_binop_typed (BitOp op) (intT τi1) (intT τi2)
-         (intT (int_promote τi1 ∪ int_promote τi2))
+    | TInt_binop_typed op τi1 τi2 :
+       base_binop_typed op (intT τi1) (intT τi2)
+         (intT (int_binop_type_of op τi1 τi2))
     | CompOp_TPtr_TPtr_typed c τp :
        base_binop_typed (CompOp c) (τp.*) (τp.*) sintT
     | PlusOp_TPtr_TInt_typed τ σ :
@@ -171,10 +153,7 @@ Section operations_definitions.
   Definition base_binop_type_of
       (op : binop) (τb1 τb2 : base_type Ti) : option (base_type Ti) :=
     match τb1, τb2, op with
-    | intT τi1, intT τi2, CompOp _ => Some sintT
-    | intT τi1, intT τi2, (ArithOp _ | BitOp _) =>
-       Some (intT (int_promote τi1 ∪ int_promote τi2))
-    | intT τi1, intT τi2, ShiftOp _ => Some (intT (int_promote τi1))
+    | intT τi1, intT τi2, op => Some (intT (int_binop_type_of op τi1 τi2))
     | τp1.*, τp2.*, CompOp _ => guard (τp1 = τp2); Some sintT
     | Some τ.*, intT σ, ArithOp (PlusOp | MinusOp) => Some (Some τ.*)
     | intT σ, Some τ.*, ArithOp (PlusOp | MinusOp) => Some (Some τ.*)
@@ -184,9 +163,7 @@ Section operations_definitions.
   Definition base_val_binop_ok (Γ : env Ti) (m : mem Ti)
       (op : binop) (vb1 vb2 : base_val Ti) : Prop :=
     match vb1, vb2, op with
-    | VInt τi1 x1, VInt τi2 x2, (CompOp _ | BitOp _) => True
-    | VInt τi1 x1, VInt τi2 x2, ArithOp op => int_arithop_ok op x1 τi1 x2 τi2
-    | VInt τi1 x1, VInt τi2 x2, ShiftOp op => int_shiftop_ok op x1 τi1 x2 τi2
+    | VInt τi1 x1, VInt τi2 x2, op => int_binop_ok op x1 τi1 x2 τi2
     | VPtr p1, VPtr p2, CompOp c => ptr_compare_ok Γ m c p1 p2
     | VPtr p, VInt _ x, ArithOp PlusOp => ptr_plus_ok Γ m x p
     | VInt _ x, VPtr p, ArithOp PlusOp => ptr_plus_ok Γ m x p
@@ -199,18 +176,8 @@ Section operations_definitions.
   Definition base_val_binop (Γ : env Ti)
       (op : binop) (v1 v2 : base_val Ti) : base_val Ti :=
     match v1, v2, op with
-    | VInt τi1 x1, VInt τi2 x2, CompOp op =>
-       let τi' := int_promote τi1 ∪ int_promote τi2 in
-       let x1' := int_cast τi' x1 in let x2' := int_cast τi' x2 in
-       VInt sintT (if Z_comp op x1' x2' then 1 else 0)
-    | VInt τi1 x1, VInt τi2 x2, ArithOp op =>
-       VInt (int_promote τi1 ∪ int_promote τi2) (int_arithop op x1 τi1 x2 τi2)
-    | VInt τi1 x1, VInt τi2 x2, ShiftOp op =>
-       VInt (int_promote τi1) (int_shiftop op x1 τi1 x2 τi2)
-    | VInt τi1 x1, VInt τi2 x2, BitOp op =>
-       let τi' := int_promote τi1 ∪ int_promote τi2 in
-       VInt τi' (int_of_bits τi'
-         (zip_with (bool_bitop op) (int_to_bits τi' x1) (int_to_bits τi' x2)))
+    | VInt τi1 x1, VInt τi2 x2, op =>
+       VInt (int_binop_type_of op τi1 τi2) (int_binop op x1 τi1 x2 τi2)
     | VPtr p1, VPtr p2, CompOp c =>
        VInt sintT (if ptr_compare Γ c p1 p2 then 1 else 0)
     | VPtr p, VInt _ i, ArithOp PlusOp => VPtr (ptr_plus Γ i p)
@@ -218,7 +185,7 @@ Section operations_definitions.
     | VPtr p, VInt _ i, ArithOp MinusOp => VPtr (ptr_plus Γ (-i) p)
     | VInt _ i, VPtr p, ArithOp MinusOp => VPtr (ptr_plus Γ (-i) p)
     | VPtr p1, VPtr p2, ArithOp MinusOp => VInt sptrT (ptr_minus Γ p1 p2)
-    | _, _, _ => VIndet (type_of v1)
+    | _, _, _ => v1 (* dummy *)
     end.
   Global Arguments base_val_binop _ !_ !_ !_ /.
 
@@ -714,12 +681,8 @@ Lemma base_val_unop_typed Γ Γm m op vb τb σb :
   base_val_unop_ok m op vb → (Γ,Γm) ⊢ base_val_unop op vb : σb.
 Proof.
   unfold base_val_unop_ok, base_val_unop. intros Hvτb Hσ Hop.
-  destruct Hσ as [τi|?|?|?]; inversion Hvτb; simplify_equality'; try done.
-  * typed_constructor. rewrite <-(idempotent_L (∪) (int_promote τi)).
-    apply int_arithop_typed; auto. by apply int_typed_small.
-  * typed_constructor. apply int_of_bits_typed.
-    by rewrite fmap_length, int_to_bits_length.
-  * typed_constructor. by apply int_typed_small; case_decide.
+  destruct Hσ; inversion Hvτb; simplify_equality'; try done.
+  * typed_constructor. by apply int_unop_typed.
   * typed_constructor. by apply int_typed_small; case_match.
 Qed.
 Lemma base_val_binop_ok_weaken Γ1 Γ2 Γm1 m1 m2 op vb1 vb2 τb1 τb2 :
@@ -751,20 +714,16 @@ Lemma base_val_binop_typed Γ Γm m op vb1 vb2 τb1 τb2 σb :
   base_binop_typed op τb1 τb2 σb → base_val_binop_ok Γ m op vb1 vb2 →
   (Γ,Γm) ⊢ base_val_binop Γ op vb1 vb2 : σb.
 Proof.
-  unfold base_val_binop_ok, base_val_binop. intros HΓ Hv1τb Hv2τb Hσ Hop.
-  revert Hv1τb Hv2τb.
-  destruct Hσ; inversion 1; inversion 1; simplify_equality'; try done.
-  * constructor. by case_match; apply int_typed_small.
-  * constructor. by apply int_arithop_typed.
-  * constructor. by apply int_shiftop_typed.
-  * constructor. apply int_of_bits_typed.
-    rewrite zip_with_length, !int_to_bits_length; lia.
-  * constructor. by case_match; apply int_typed_small.
-  * constructor. eapply ptr_plus_typed; eauto.
-  * constructor. eapply ptr_plus_typed; eauto.
-  * constructor. eapply ptr_plus_typed; eauto.
-  * constructor. eapply ptr_plus_typed; eauto.
-  * constructor. eapply ptr_minus_typed; eauto.
+  intros HΓ Hv1τb Hv2τb Hσ Hop. revert Hv1τb Hv2τb.
+  unfold base_val_binop_ok, base_val_binop in *;
+    destruct Hσ; inversion 1; inversion 1; simplify_equality'; try done.
+  * typed_constructor. by apply int_binop_typed.
+  * typed_constructor. by case_match; apply int_typed_small.
+  * typed_constructor. eapply ptr_plus_typed; eauto.
+  * typed_constructor. eapply ptr_plus_typed; eauto.
+  * typed_constructor. eapply ptr_plus_typed; eauto.
+  * typed_constructor. eapply ptr_plus_typed; eauto.
+  * typed_constructor. eapply ptr_minus_typed; eauto.
 Qed.
 Lemma base_cast_typed_self Γ τb : base_cast_typed Γ τb τb.
 Proof. destruct τb as [| |[]]; constructor. Qed.
@@ -786,15 +745,15 @@ Lemma base_val_cast_typed Γ Γm m vb τb σb :
 Proof.
   unfold base_val_cast_ok, base_val_cast. intros ? Hvτb Hσb Hok. revert Hvτb.
   destruct Hσb; inversion 1; simplify_equality'; try (done || by constructor).
-  * intuition; simplify_equality. by constructor.
-  * constructor. by apply int_cast_typed.
-  * constructor.
+  * intuition; simplify_equality. by typed_constructor.
+  * typed_constructor. by apply int_cast_typed.
+  * typed_constructor.
     eauto using ptr_cast_typed, TPtr_valid_inv, base_val_typed_type_valid.
-  * constructor.
+  * typed_constructor.
     eauto using ptr_cast_typed, TBase_ptr_valid, TVoid_valid, None_ptr_valid.
-  * constructor. eauto using ptr_cast_typed, TBase_ptr_valid, TInt_valid.
-  * constructor. eauto using ptr_cast_typed.
-  * constructor. eauto using ptr_cast_typed.
+  * typed_constructor. eauto using ptr_cast_typed, TBase_ptr_valid, TInt_valid.
+  * typed_constructor. eauto using ptr_cast_typed.
+  * typed_constructor. eauto using ptr_cast_typed.
 Qed.
 Lemma base_val_cast_ok_void Γ m vb :
   (Γ,'{m}) ⊢ vb : ucharT%BT → base_val_cast_ok Γ m voidT%BT vb.

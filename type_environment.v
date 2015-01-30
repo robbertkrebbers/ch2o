@@ -1,12 +1,10 @@
 (* Copyright (c) 2012-2014, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export types.
+Require Export types integer_operations.
 Local Open Scope ctype_scope.
 
-(** * Pointers environments *)
 Section env.
 Local Unset Elimination Schemes.
-
 Class Env (Ti : Set) := {
   env_type_env :> IntEnv Ti;
   size_of : env Ti → type Ti → nat;

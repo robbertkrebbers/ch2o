@@ -198,11 +198,7 @@ Proof.
       base_val_refine_typed_r, base_val_unop_ok_refine. }
   destruct Hvτb; inversion Hvb as [| | | |p1 p2 ? Hp| | | |];
     simplify_equality'; try done.
-  * refine_constructor. rewrite <-(idempotent_L (∪) (int_promote τi)).
-    apply int_arithop_typed; auto. by apply int_typed_small.
-  * refine_constructor. apply int_of_bits_typed.
-    by rewrite fmap_length, int_to_bits_length.
-  * refine_constructor. by apply int_typed_small; case_decide.
+  * refine_constructor. by apply int_unop_typed.
   * destruct Hp; refine_constructor; by apply int_typed_small.
   * naive_solver.
 Qed.
@@ -224,13 +220,9 @@ Lemma base_val_binop_refine Γ α f m1 m2 op vb1 vb2 vb3 vb4 τb1 τb3 σb :
 Proof.
   intros ? Hσ ?; destruct 1, 1; try done; inversion Hσ; simplify_equality';
     try first
-    [ by refine_constructor; eauto using int_arithop_typed,
-        int_arithop_typed, int_shiftop_typed, ptr_plus_refine
+    [ by refine_constructor; eauto using int_binop_typed, ptr_plus_refine
     | exfalso; by eauto using ptr_minus_ok_alive_l, ptr_minus_ok_alive_r,
         ptr_plus_ok_alive, ptr_compare_ok_alive_l, ptr_compare_ok_alive_r ].
-  * refine_constructor. by case_match; apply int_typed_small.
-  * refine_constructor. apply int_of_bits_typed.
-    rewrite zip_with_length, !int_to_bits_length; lia.
   * erewrite ptr_compare_refine by eauto.
     refine_constructor. by case_match; apply int_typed_small.
   * erewrite ptr_minus_refine by eauto. refine_constructor.
