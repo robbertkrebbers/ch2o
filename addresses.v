@@ -37,7 +37,7 @@ Section address_operations.
       Γ ⊢ r : τ ↣ σ →
       ref_offset r = 0 →
       i ≤ size_of Γ σ * ref_size r →
-      i `mod` ptr_size_of Γ σp = 0 →
+      (ptr_size_of Γ σp | i) →
       σ >*> σp →
       addr_typed' Γ Γm (Addr o r i τ σ σp) σp.
   Global Instance addr_typed :
@@ -57,7 +57,7 @@ Section address_operations.
     guard (σ >*> σp);
     guard (ref_offset r = 0);
     guard (i ≤ size_of Γ σ * ref_size r);
-    guard (i `mod` ptr_size_of Γ σp = 0);
+    guard (ptr_size_of Γ σp | i);
     Some σp.
   Global Arguments addr_type_check _ !_ /.
 
@@ -126,7 +126,7 @@ Lemma addr_typed_alt Γ Γm a σp :
     Γ ⊢ addr_ref_base a : addr_type_object a ↣ addr_type_base a ∧
     ref_offset (addr_ref_base a) = 0 ∧
     addr_byte a ≤ size_of Γ (addr_type_base a) * ref_size (addr_ref_base a) ∧
-    addr_byte a `mod` ptr_size_of Γ σp = 0 ∧
+    (ptr_size_of Γ σp | addr_byte a) ∧
     addr_type_base a >*> σp ∧
     type_of a = σp.
 Proof.
@@ -254,8 +254,11 @@ Proof.
     ref_size_freeze; setoid_rewrite ref_typed_freeze.
 Qed.
 Lemma addr_is_obj_ref_byte Γ Γm a σp :
-  (Γ,Γm) ⊢ a : σp → addr_is_obj a → addr_ref_byte Γ a = 0.
-Proof. by destruct 1; intros; simplify_equality'. Qed.
+  ✓ Γ → (Γ,Γm) ⊢ a : σp → addr_is_obj a → addr_ref_byte Γ a = 0.
+Proof.
+  destruct 2; intros; simplify_equality';
+    apply Nat.mod_divide; eauto using size_of_ne_0.
+Qed.
 Lemma addr_is_obj_type Γ Γm a σ :
   (Γ,Γm) ⊢ a : Some σ → addr_is_obj a → σ = addr_type_base a.
 Proof. inversion 1; naive_solver. Qed.
@@ -271,7 +274,7 @@ Lemma addr_byte_range Γ Γm a σ :
 Proof.
   intros. destruct (decide (addr_is_obj a)).
   { by erewrite <-addr_is_obj_type, addr_is_obj_ref_byte by eauto. }
-  erewrite (addr_not_is_obj_type _ _ _ σ), size_of_uchar by eauto.
+  erewrite (addr_not_is_obj_type _ _ _ σ), size_of_char by eauto.
   rewrite Nat.add_1_r, Nat.le_succ_l.
   apply Nat.mod_bound_pos; auto with lia.
   eapply size_of_pos, addr_typed_type_base_valid; eauto.
@@ -320,6 +323,14 @@ Proof.
   rewrite (Nat.div_mod i (size_of Γ σ')) at 1
     by eauto using size_of_ne_0,ref_typed_type_valid; unfold bit_size_of; lia.
 Qed.
+Lemma align_of_addr_object_offset Γ Γm a σ :
+  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → (bit_align_of Γ σ | addr_object_offset Γ a).
+Proof.
+  inversion_clear 2; simplify_equality'; apply Nat.divide_add_r;
+    eauto using Nat.mul_divide_mono_r, Nat.divide_trans,
+    bit_align_of_castable, align_of_divide, castable_type_valid,
+    size_of_ne_0, bit_align_of_ref_object_offset.
+Qed.
 Lemma addr_object_offset_strict Γ Γm a σp :
   ✓ Γ → (Γ,Γm) ⊢ a : σp → addr_strict Γ a →
   addr_object_offset Γ a < bit_size_of Γ (addr_type_object a).
@@ -347,8 +358,7 @@ Proof.
     + apply ref_seg_set_offset_typed; auto with lia.
   * by rewrite ref_seg_offset_set_offset by lia.
   * rewrite ref_seg_size_set_offset. apply Nat.mul_le_mono_l; lia.
-  * rewrite Nat.mul_comm.
-    apply Nat.mod_mul; eauto using size_of_ne_0, ref_seg_typed_type_valid.
+  * by apply Nat.divide_factor_l.
   * constructor.
 Qed.
 Lemma addr_elt_strict Γ Γm a rs σ σ' :
@@ -406,8 +416,8 @@ Lemma addr_top_typed Γ Γm o τ :
   ✓ Γ → Γm ⊢ o : τ → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
   (Γ,Γm) ⊢ addr_top o τ : Some τ.
 Proof.
-  constructor; simpl; eauto using Nat.mod_0_l, size_of_ne_0, castable_Some;
-    [by apply ref_typed_nil|lia].
+  constructor; simpl; rewrite ?ref_typed_nil;
+    eauto using Nat.divide_0_r, castable_Some with lia.
 Qed.
 Lemma addr_top_strict Γ o τ : ✓ Γ → ✓{Γ} τ → addr_strict Γ (addr_top o τ).
 Proof.
@@ -500,7 +510,7 @@ Proof.
     * feed pose proof (addr_bit_range Γ Γm a2 σ2); auto. do 2 right; lia. }
   erewrite (addr_not_is_obj_type _ _ _ σ1), (addr_not_is_obj_type _ _ _ σ2),
     <-(ref_object_offset_freeze Γ true (addr_ref Γ a1)), Hr,
-    ref_object_offset_freeze, !bit_size_of_uchar by eauto.
+    ref_object_offset_freeze, !bit_size_of_char by eauto.
   destruct (decide (addr_ref_byte Γ a1 < addr_ref_byte Γ a2)).
   * right; left. rewrite <-Nat.add_assoc, <-Nat.mul_succ_l.
     apply Nat.add_le_mono_l, Nat.mul_le_mono_nonneg_r; lia.

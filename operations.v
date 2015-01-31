@@ -37,7 +37,7 @@ Section operations_definitions.
       (σp : ptr_type Ti) (a : addr Ti) : Prop :=
     index_alive' m (addr_index a) ∧
     addr_type_base a >*> σp ∧
-    addr_byte a `mod` ptr_size_of Γ σp = 0.
+    (ptr_size_of Γ σp | addr_byte a).
   Global Arguments addr_cast_ok _ _ _ !_ /.
   Definition addr_cast (σp : ptr_type Ti) (a : addr Ti) : addr Ti :=
     let 'Addr o r i τ σ _ := a in Addr o r i τ σ σp.
@@ -329,9 +329,9 @@ Proof.
   destruct 2 as [o r i τ σ σp]; intros (?&?&?);
     constructor; simpl in *; split_ands; auto.
   { apply Nat2Z.inj_le. by rewrite Nat2Z.inj_mul, Z2Nat.id by done. }
-  apply Nat2Z.inj. rewrite Z2Nat_inj_mod, Z2Nat.id by done.
-  rewrite Z.mod_add, <-Z2Nat_inj_mod; auto; rewrite (Nat2Z.inj_iff _ 0).
-  eapply addr_size_of_ne_0; eauto; econstructor; eauto.
+  rewrite <-(Nat2Z.id (ptr_size_of Γ σp)) at 1.
+  rewrite Z2Nat_divide by auto with zpos.
+  apply Z.divide_add_r; [by apply Nat2Z_divide|by apply Z.divide_mul_r].
 Qed.
 Lemma addr_plus_ok_weaken Γ1 Γ2 Γm1 m1 m2 a σp j :
   ✓ Γ1 → (Γ1,Γm1) ⊢ a : σp → addr_plus_ok Γ1 m1 j a →
@@ -407,7 +407,7 @@ Proof.
 Qed.
 Lemma addr_cast_typed Γ Γm m a σp τp :
   (Γ,Γm) ⊢ a : σp → addr_cast_ok Γ m τp a → (Γ,Γm) ⊢ addr_cast τp a : τp.
-Proof. intros [] (?&?&?); constructor; naive_solver. Qed.
+Proof. intros [] (?&?&?); constructor; eauto. Qed.
 Lemma addr_cast_ok_weaken Γ1 Γ2 Γm1 m1 m2 a σp τp :
   ✓ Γ1 → (Γ1,Γm1) ⊢ a : σp →
   (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
@@ -439,8 +439,10 @@ Lemma addr_ref_plus_char_cast Γ Γm a σp j :
   addr_ref Γ (addr_plus Γ j (addr_cast (Some ucharT) a)) = addr_ref Γ a.
 Proof.
   destruct 2 as [o r i τ σ σp ?????]; intros ??; simplify_equality'; f_equal.
-  rewrite size_of_uchar, Z.mul_1_r,Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
-  symmetry. apply Nat.div_unique with (i `mod` size_of Γ σ + j); [lia|].
+  rewrite size_of_char, Z.mul_1_r, Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
+  symmetry. apply Nat.div_unique with (i `mod` size_of Γ σ + j).
+  { by rewrite (λ x y H, proj2 (Nat.mod_divide x y H))
+      by eauto using size_of_ne_0, ref_typed_type_valid. }
   by rewrite Nat.add_assoc, <-Nat.div_mod
     by eauto using ref_typed_type_valid, size_of_ne_0.
 Qed.
@@ -448,12 +450,11 @@ Lemma addr_ref_byte_plus_char_cast Γ Γm a σp j :
   ✓ Γ → (Γ,Γm) ⊢ a : σp → addr_is_obj a → j < ptr_size_of Γ σp →
   addr_ref_byte Γ (addr_plus Γ j (addr_cast (Some ucharT) a)) = j.
 Proof.
-  destruct 2 as [o r i τ σ σp ?????? Hiσ]; intros; simplify_equality'.
-  f_equal. rewrite size_of_uchar.
-  rewrite Z.mul_1_r, Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
-  rewrite <-Nat.add_mod_idemp_l
-    by eauto using ref_typed_type_valid, size_of_ne_0.
-  rewrite Hiσ, Nat.add_0_l. by apply Nat.mod_small.
+  destruct 2 as [o r i τ σ σp]; intros; simplify_equality'.
+  rewrite size_of_char, Z.mul_1_r, Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
+  rewrite <-Nat.add_mod_idemp_l, (λ y H, proj2 (Nat.mod_divide i y H)),
+    Nat.add_0_l by eauto using ref_typed_type_valid, size_of_ne_0.
+  by apply Nat.mod_small.
 Qed.
 Lemma addr_byte_lt_size_char_cast Γ Γm a σp j :
   ✓ Γ → (Γ,Γm) ⊢ a : σp → addr_is_obj a → j < ptr_size_of Γ σp →
@@ -461,13 +462,13 @@ Lemma addr_byte_lt_size_char_cast Γ Γm a σp j :
   addr_byte (addr_plus Γ j (addr_cast (Some ucharT) a))
     < size_of Γ (addr_type_base a) * ref_size (addr_ref_base a).
 Proof.
-  destruct 2 as [o r i τ σ σp ?????? Hiσ]; intros; simplify_equality'.
-  rewrite size_of_uchar, Z.mul_1_r,Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
+  destruct 2 as [o r i τ σ σp ?????? Hi]; intros; simplify_equality'.
+  rewrite size_of_char, Z.mul_1_r,Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
   apply Nat.lt_le_trans with (i + size_of Γ σ); [lia|].
-  apply Nat.div_exact in Hiσ; eauto using ref_typed_type_valid, size_of_ne_0.
-  rewrite Hiσ, <-Nat.mul_succ_r. apply Nat.mul_le_mono_l, Nat.le_succ_l.
-  apply Nat.div_lt_upper_bound;
-    eauto using ref_typed_type_valid, size_of_ne_0.
+  destruct Hi as [? ->].
+  rewrite <-Nat.mul_succ_l, Nat.mul_comm, <-Nat.mul_le_mono_pos_l,
+    Nat.le_succ_l, (Nat.mul_lt_mono_pos_r (size_of Γ σ))
+    by eauto using ref_typed_type_valid, size_of_pos; lia.
 Qed.
 
 (** ** Properties of operations on pointers *)

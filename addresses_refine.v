@@ -25,7 +25,7 @@ Inductive addr_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
      Γ ⊢ r' : τ2 ↣ τ1 → Γ ⊢ r1 : τ1 ↣ σ →
      ref_offset r1 = 0 →
      i1 ≤ size_of Γ σ * ref_size r1 →
-     i1 `mod` ptr_size_of Γ σp = 0 →
+     (ptr_size_of Γ σp | i1) →
      σ >*> σp →
      ref_refine (size_of Γ σ) α r' r1 i1 r2 i2 →
      addr_refine' Γ α f Γm1 Γm2
@@ -76,12 +76,10 @@ Proof.
       transitivity (size_of Γ σ * S (ref_offset r1)); [lia|].
       apply Nat.mul_le_mono_l; lia.
     + erewrite <-ref_size_le by eauto. by destruct r1.
-  * destruct Hr as [|r1 i1 r2 i2|r1' r1 r2 i]; simplify_equality'; auto.
-    destruct (castable_divide Γ σ σp) as [z ->]; auto.
-    destruct σp as [σ'|]; auto.
-    by rewrite <-Nat.mul_assoc,
-      (Nat.mul_comm (ptr_size_of _ _)), Nat.mul_assoc, Nat.mod_add
-      by eauto using size_of_ne_0, castable_type_valid, ref_typed_type_valid.
+  * destruct Hr as [|r1 i1 r2 i2|r1' r1 r2 i]; simplify_type_equality'; auto.
+    destruct σp as [σ'|]; simplify_equality';
+      eauto using Nat.divide_1_l, Nat.divide_add_r, Nat.divide_trans,
+      (size_of_castable _ _ (Some _)), Nat.divide_mul_l.
 Qed.
 Lemma addr_refine_type_of_l Γ α f Γm1 Γm2 a1 a2 σp :
   a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → type_of a1 = σp.
@@ -331,8 +329,7 @@ Proof.
     + apply ref_seg_set_offset_typed; auto with lia.
   * by rewrite ref_seg_offset_set_offset by lia.
   * rewrite ref_seg_size_set_offset. apply Nat.mul_le_mono_l; lia.
-  * rewrite Nat.mul_comm. apply Nat.mod_mul;
-      eauto using size_of_ne_0, ref_typed_type_valid, ref_seg_typed_type_valid.
+  * by apply Nat.divide_mul_l.
   * constructor.
   * destruct Hr as [|r1 i1 r2 i2 Hr|r1' r1 r2 i];
       simplify_type_equality'; constructor; simpl; auto.
@@ -349,8 +346,8 @@ Lemma addr_top_refine Γ α f Γm1 Γm2 o1 o2 τ :
   ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
   addr_top o1 τ ⊑{Γ,α,f@Γm1↦Γm2} addr_top o2 τ : Some τ.
 Proof.
-  eexists []; eauto using Nat.mod_0_l, size_of_ne_0, ref_refine_id;
-    by constructor || simpl; lia.
+  eexists []; csimpl; rewrite ?ref_typed_nil; auto using Nat.divide_0_r,
+    size_of_ne_0, ref_refine_id, castable_Some with lia.
 Qed.
 Lemma addr_top_array_refine Γ α f Γm1 Γm2 o1 o2 τ (n : Z) :
   ✓ Γ → Γm1 ⊑{Γ,α,f} Γm2 → Γm1 ⊢ o1 : τ.[Z.to_nat n] → f !! o1 = Some (o2,[]) →

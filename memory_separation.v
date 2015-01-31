@@ -11,7 +11,7 @@ Implicit Types τ : type Ti.
 Implicit Types a : addr Ti.
 Implicit Types w : mtree Ti.
 Implicit Types v : val Ti.
-Implicit Types m : mem Ti.
+Implicit  Types m : mem Ti.
 Implicit Types Ω : lockset.
 Local Arguments union _ _ !_ !_ /.
 Hint Immediate cmap_lookup_typed val_typed_type_valid.
@@ -22,7 +22,7 @@ Ltac solve_length := repeat first
   | rewrite zip_with_length | rewrite replicate_length | rewrite resize_length
   | rewrite fmap_length | erewrite ctree_flatten_length by eauto
   | erewrite val_flatten_length by eauto | rewrite to_bools_length
-  | rewrite bit_size_of_uchar ]; lia.
+  | rewrite bit_size_of_char ]; lia.
 Hint Extern 0 (length _ = _) => solve_length.
 Hint Extern 0 (length _ ≤ _) => solve_length.
 Hint Extern 0 (length _ ≠ _) => solve_length.

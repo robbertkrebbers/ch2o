@@ -16,6 +16,7 @@ Inductive cexpr : Set :=
   | CEVar : string → cexpr
   | CEConst : cint_type → Z → cexpr
   | CESizeOf : ctype → cexpr
+  | CEAlignOf : ctype → cexpr
   | CEMin : cint_type → cexpr
   | CEMax : cint_type → cexpr
   | CEBits : cint_type → cexpr
@@ -350,10 +351,16 @@ Fixpoint to_expr `{Env Ti} (Γn : compound_env Ti) (Γ : env Ti)
      inr (# (intV{τi} z), inr (intT τi))
   | CESizeOf cτ =>
      τ ← to_type Γn Γ m Δg Δl to_Type cτ;
-     guard (τ ≠ voidT) with "sizeof of void type";
+     guard (τ ≠ voidT) with "size_of of void type";
      let sz := size_of Γ τ in
-     guard (int_typed sz sptrT) with "argument of size of not in range";
+     guard (int_typed sz sptrT) with "argument of size_of not in range";
      inr (# (intV{sptrT} sz), inr sptrT)
+  | CEAlignOf cτ =>
+     τ ← to_type Γn Γ m Δg Δl to_Type cτ;
+     guard (τ ≠ voidT) with "align_of of void type";
+     let al := align_of Γ τ in
+     guard (int_typed al sptrT) with "argument of size_of not in range";
+     inr (# (intV{sptrT} al), inr sptrT)
   | CEMin cτi =>
      let τi := to_inttype cτi in
      inr (#(intV{τi} (int_lower τi)), inr (intT τi))
@@ -861,6 +868,7 @@ Context (P : cexpr → Prop) (Q : cinit → Prop) (R : ctype → Prop).
 Context (Pvar : ∀ x, P (CEVar x)).
 Context (Pconst : ∀ τi x, P (CEConst τi x)).
 Context (Psizeof : ∀ cτ, R cτ → P (CESizeOf cτ)).
+Context (Palignof : ∀ cτ, R cτ → P (CEAlignOf cτ)).
 Context (Pmin : ∀ τi, P (CEMin τi)).
 Context (Pmax : ∀ τi, P (CEMax τi)).
 Context (Pbits : ∀ τi, P (CEBits τi)).
@@ -904,6 +912,7 @@ Fixpoint cexpr_ind_alt ce : P ce :=
   | CEVar _ => Pvar _
   | CEConst _ _ => Pconst _ _
   | CESizeOf cτ => Psizeof _ (ctype_ind_alt cτ)
+  | CEAlignOf cτ => Palignof _ (ctype_ind_alt cτ)
   | CEMin _ => Pmin _
   | CEMax _ => Pmax _
   | CEBits _ => Pbits _

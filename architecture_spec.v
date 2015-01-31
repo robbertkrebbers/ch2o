@@ -131,8 +131,6 @@ Let align_base (τb : base_type (arch_rank A)) : nat :=
   | intT τi => arch_align A (rank τi)
   | τp.* => arch_align A (arch_ptr_rank A)
   end%BT.
-Definition align_of : env (arch_rank A) → type (arch_rank A) → nat :=
-  natural_align_of align_base.
 Global Instance arch_env : Env (arch_rank A) :=
   natural_env ptr_size align_base (arch_alloc_can_fail A).
 
@@ -146,9 +144,4 @@ Let align_ptr_divide τp : (align_base (τp.* ) | ptr_size τp).
 Proof. by apply arch_align_size. Qed.
 Global Instance: EnvSpec (arch_rank A).
 Proof. by apply natural_env_spec. Qed.
-Lemma align_of_divide Γ τ : ✓ Γ → ✓{Γ} τ → (align_of Γ τ | size_of Γ τ).
-Proof. by apply natural_align_of_divide. Qed.
-Lemma arch_field_offset Γ τs i τ :
-  ✓ Γ → ✓{Γ}* τs → τs !! i = Some τ → (align_of Γ τ | field_offset Γ τs i).
-Proof. by apply natural_field_offset. Qed.
 End architecture.

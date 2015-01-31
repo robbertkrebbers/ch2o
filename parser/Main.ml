@@ -667,10 +667,10 @@ and cexpr_of_expression x =
   | Cabs.COMMA (h::t) ->
       List.fold_left (fun y1 y2 -> CEComma (y1,cexpr_of_expression y2))
         (cexpr_of_expression h) t
-  | Cabs.EXPR_SIZEOF y ->
-      CESizeOf (CTTypeOf (cexpr_of_expression y))
-  | Cabs.TYPE_SIZEOF (y1,y2) ->
-      CESizeOf (ctype_of_specifier_decl_type y1 y2)
+  | Cabs.EXPR_SIZEOF y -> CESizeOf (CTTypeOf (cexpr_of_expression y))
+  | Cabs.TYPE_SIZEOF (y1,y2) -> CESizeOf (ctype_of_specifier_decl_type y1 y2)
+  | Cabs.EXPR_ALIGNOF y -> CEAlignOf (CTTypeOf (cexpr_of_expression y))
+  | Cabs.TYPE_ALIGNOF (y1,y2) -> CEAlignOf (ctype_of_specifier_decl_type y1 y2)
   | Cabs.INDEX (y1,y2) ->
       CEDeref (CEBinOp (ArithOp PlusOp,
         cexpr_of_expression y1,cexpr_of_expression y2))

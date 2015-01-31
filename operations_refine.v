@@ -77,10 +77,9 @@ Proof.
     [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σp ??????????? Hr]; simplify_equality'.
   refine_constructor; eauto.
   { apply Nat2Z.inj_le. by rewrite Nat2Z.inj_mul, Z2Nat.id by done. }
-  { apply Nat2Z.inj. rewrite Z2Nat_inj_mod, Z2Nat.id by done.
-    rewrite Z.mod_add, <-Z2Nat_inj_mod; auto with f_equal.
-    rewrite (Nat2Z.inj_iff _ 0). destruct σp as [σ'|]; simpl; auto.
-    eauto using size_of_ne_0, ref_typed_type_valid, castable_type_valid. }
+  { rewrite <-(Nat2Z.id (ptr_size_of Γ σp)) at 1.
+    rewrite Z2Nat_divide by auto with zpos.
+    apply Z.divide_add_r; [by apply Nat2Z_divide|by apply Z.divide_mul_r]. }
   destruct Hr as [|r1 i1 r2 i2 Hr|r1' r1 r2 i];
     simplify_type_equality'; constructor; auto.
   rewrite Nat2Z.inj_add, Nat2Z.inj_mul.
@@ -118,10 +117,8 @@ Lemma addr_cast_ok_refine Γ α f m1 m2 a1 a2 σp τp :
   addr_cast_ok Γ m1 τp a1 → addr_cast_ok Γ m2 τp a2.
 Proof.
   destruct 2 as [o o' r r' r'' i i'' τ τ' σ σp' [] ?????????? []];
-    intros (?&?&?); simplify_equality'; split_ands; eauto.
-  destruct (castable_divide Γ σ τp) as [z ->]; auto.
-  destruct (decide (ptr_size_of Γ τp = 0)) as [->|?]; [done|].
-  by rewrite !(Nat.mul_comm (_ * ptr_size_of _ _)), Nat.mul_assoc, Nat.mod_add.
+    intros (?&?&?); simplify_equality'; split_ands;
+    eauto using size_of_castable, Nat.divide_add_r, Nat.divide_mul_l.
 Qed.
 Lemma addr_cast_refine Γ α f m1 m2 a1 a2 σp τp :
   addr_cast_ok Γ m1 τp a1 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp →

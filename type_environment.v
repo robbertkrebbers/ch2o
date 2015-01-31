@@ -2,15 +2,40 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export types integer_operations.
 Local Open Scope ctype_scope.
-
-Section env.
 Local Unset Elimination Schemes.
+
 Class Env (Ti : Set) := {
   env_type_env :> IntEnv Ti;
   size_of : env Ti → type Ti → nat;
+  align_of : env Ti → type Ti → nat;
   field_sizes : env Ti → list (type Ti) → list nat;
   alloc_can_fail : bool
 }.
+
+Arguments size_of _ _ _ _ : simpl never.
+Arguments align_of _ _ _ _ : simpl never.
+Arguments field_sizes _ _ _ _ : simpl never.
+
+Definition ptr_size_of `{Env Ti} (Γ : env Ti) (τp : ptr_type Ti) : nat :=
+  match τp with Some τ => size_of Γ τ | None => 1 end.
+Definition field_offset `{Env Ti} (Γ : env Ti) (τs : list (type Ti))
+  (i : nat) : nat := sum_list $ take i $ field_sizes Γ τs.
+Definition bit_size_of `{Env Ti} (Γ : env Ti)
+  (τ : type Ti) : nat := size_of Γ τ * char_bits.
+Definition bit_align_of `{Env Ti} (Γ : env Ti)
+  (τ : type Ti) : nat := align_of Γ τ * char_bits.
+Definition ptr_bit_size_of `{Env Ti} (Γ : env Ti) (τp : ptr_type Ti) : nat :=
+  match τp with Some τ => bit_size_of Γ τ | None => char_bits end.
+Definition field_bit_sizes `{Env Ti} (Γ : env Ti)
+    (τs : list (type Ti)) : list nat :=
+  (λ sz, sz * char_bits) <$> field_sizes Γ τs.
+Definition field_bit_padding `{Env Ti}
+    (Γ : env Ti) (τs : list (type Ti)) : list nat :=
+  zip_with (λ sz τ, sz - bit_size_of Γ τ) (field_bit_sizes Γ τs) τs.
+Definition field_bit_offset `{Env Ti}
+    (Γ : env Ti) (τs : list (type Ti)) (i : nat) : nat :=
+  sum_list $ take i $ field_bit_sizes Γ τs.
+
 Class EnvSpec (Ti : Set) `{Env Ti} := {
   int_env_spec :>> IntEnvSpec Ti;
   size_of_ptr_ne_0 Γ τp : size_of Γ (τp.*) ≠ 0;
@@ -25,33 +50,21 @@ Class EnvSpec (Ti : Set) `{Env Ti} := {
   size_of_union Γ s τs :
     ✓ Γ → Γ !! s = Some τs →
     Forall (λ τ, size_of Γ τ ≤ size_of Γ (unionT s)) τs;
+  align_of_array Γ τ n : (align_of Γ τ | align_of Γ (τ.[n]));
+  align_of_compound Γ c s τs i τ :
+    ✓ Γ → Γ !! s = Some τs → τs !! i = Some τ →
+    (align_of Γ τ | align_of Γ (compoundT{c} s));
+  align_of_divide Γ τ :
+    ✓ Γ → ✓{Γ} τ → (align_of Γ τ | size_of Γ τ);
+  align_of_field_offset Γ τs i τ :
+    ✓ Γ → ✓{Γ}* τs → τs !! i = Some τ → (align_of Γ τ | field_offset Γ τs i);
   size_of_weaken Γ1 Γ2 τ :
     ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊆ Γ2 → size_of Γ1 τ = size_of Γ2 τ;
+  align_of_weaken Γ1 Γ2 τ :
+    ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊆ Γ2 → align_of Γ1 τ = align_of Γ2 τ;
   fields_sizes_weaken Γ1 Γ2 τs :
     ✓ Γ1 → ✓{Γ1}* τs → Γ1 ⊆ Γ2 → field_sizes Γ1 τs = field_sizes Γ2 τs
 }.
-End env.
-
-Arguments size_of _ _ _ _ : simpl never.
-Arguments field_sizes _ _ _ _ : simpl never.
-
-Definition ptr_size_of `{Env Ti} (Γ : env Ti) (τp : ptr_type Ti) : nat :=
-  match τp with Some τ => size_of Γ τ | None => 1 end.
-Definition field_offset `{Env Ti} (Γ : env Ti) (τs : list (type Ti))
-  (i : nat) : nat := sum_list $ take i $ field_sizes Γ τs.
-Definition bit_size_of `{Env Ti} (Γ : env Ti)
-  (τ : type Ti) : nat := size_of Γ τ * char_bits.
-Definition ptr_bit_size_of `{Env Ti} (Γ : env Ti) (τp : ptr_type Ti) : nat :=
-  match τp with Some τ => bit_size_of Γ τ | None => char_bits end.
-Definition field_bit_sizes `{Env Ti} (Γ : env Ti)
-    (τs : list (type Ti)) : list nat :=
-  (λ sz, sz * char_bits) <$> field_sizes Γ τs.
-Definition field_bit_padding `{Env Ti}
-    (Γ : env Ti) (τs : list (type Ti)) : list nat :=
-  zip_with (λ sz τ, sz - bit_size_of Γ τ) (field_bit_sizes Γ τs) τs.
-Definition field_bit_offset `{Env Ti}
-    (Γ : env Ti) (τs : list (type Ti)) (i : nat) : nat :=
-  sum_list $ take i $ field_bit_sizes Γ τs.
 
 Section env_spec.
 Context `{EnvSpec Ti}.
@@ -59,7 +72,7 @@ Implicit Types τ σ : type Ti.
 Implicit Types τs σs : list (type Ti).
 Implicit Types Γ : env Ti.
 
-Lemma size_of_uchar Γ : size_of Γ ucharT = 1.
+Lemma size_of_char Γ si : size_of Γ (intT (IntType si char_rank)) = 1.
 Proof. rewrite size_of_int. by apply rank_size_char. Qed.
 Lemma field_sizes_length Γ τs : ✓ Γ → length (field_sizes Γ τs) = length τs.
 Proof. symmetry. by eapply Forall2_length, size_of_fields. Qed.
@@ -98,7 +111,8 @@ Lemma bit_size_of_weaken Γ1 Γ2 τ :
 Proof. intros. unfold bit_size_of. f_equal. by apply size_of_weaken. Qed.
 Lemma bit_size_of_int Γ τi : bit_size_of Γ (intT τi) = int_width τi.
 Proof. unfold bit_size_of. by rewrite size_of_int. Qed.
-Lemma bit_size_of_uchar Γ : bit_size_of Γ ucharT = char_bits.
+Lemma bit_size_of_char Γ si :
+  bit_size_of Γ (intT (IntType si char_rank)) = char_bits.
 Proof. rewrite bit_size_of_int. by apply int_width_char. Qed.
 Lemma bit_size_of_int_same_kind Γ τi1 τi2 :
   rank τi1 = rank τi2 → bit_size_of Γ (intT τi1) = bit_size_of Γ (intT τi2).
@@ -196,6 +210,31 @@ Proof.
   specialize (IH i σ). intuition lia.
 Qed.
 
+Lemma align_of_char Γ si : ✓ Γ → align_of Γ (intT (IntType si char_rank)) = 1.
+Proof.
+  intros. apply Nat.divide_1_r; rewrite <-(size_of_char Γ si).
+  apply align_of_divide; repeat constructor; auto.
+Qed.
+Lemma bit_align_of_array Γ τ n : (bit_align_of Γ τ | bit_align_of Γ (τ.[n])).
+Proof. apply Nat.mul_divide_mono_r, align_of_array. Qed.
+Lemma bit_align_of_compound Γ c s τs i τ :
+  ✓ Γ → Γ !! s = Some τs → τs !! i = Some τ →
+  (bit_align_of Γ τ | bit_align_of Γ (compoundT{c} s)).
+Proof. eauto using Nat.mul_divide_mono_r, align_of_compound. Qed.
+Lemma bit_align_of_divide Γ τ :
+  ✓ Γ → ✓{Γ} τ → (bit_align_of Γ τ | bit_size_of Γ τ).
+Proof. eauto using Nat.mul_divide_mono_r, align_of_divide. Qed.
+Lemma bit_align_of_field_offset Γ τs i τ :
+  ✓ Γ → ✓{Γ}* τs → τs !! i = Some τ →
+  (bit_align_of Γ τ | field_bit_offset Γ τs i).
+Proof.
+  rewrite field_bit_offset_alt.
+  eauto using Nat.mul_divide_mono_r, align_of_field_offset.
+Qed.
+Lemma bit_align_of_weaken Γ1 Γ2 τ :
+  ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊆ Γ2 → bit_align_of Γ1 τ = bit_align_of Γ2 τ.
+Proof. unfold bit_align_of; auto using align_of_weaken, f_equal. Qed.
+
 Lemma size_of_base_ne_0 Γ τb : size_of Γ (baseT τb) ≠ 0.
 Proof.
   destruct τb; auto using size_of_void_ne_0, size_of_ptr_ne_0.
@@ -218,6 +257,8 @@ Proof.
     + apply size_of_union in Hs; auto.
       destruct Hs; decompose_Forall_hyps; auto with lia.
 Qed.
+Lemma align_of_ne_0 Γ τ : ✓ Γ → ✓{Γ} τ → align_of Γ τ ≠ 0.
+Proof. eauto using Nat_divide_ne_0, size_of_ne_0, align_of_divide. Qed.
 Lemma size_of_pos Γ τ : ✓ Γ → ✓{Γ} τ → 0 < size_of Γ τ.
 Proof. intros. by apply Nat.neq_0_lt_0, size_of_ne_0. Qed.
 Lemma bit_size_of_ne_0 Γ τ : ✓ Γ → ✓{Γ} τ → bit_size_of Γ τ ≠ 0.

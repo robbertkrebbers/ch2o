@@ -282,13 +282,26 @@ Hint Resolve Z.pow_pos_nonneg Z.pow_nonneg: zpos.
 Hint Resolve Z_mod_pos Z.div_pos : zpos.
 Hint Extern 1000 => lia : zpos.
 
+Lemma Z_to_nat_nonpos x : x ≤ 0 → Z.to_nat x = 0%nat.
+Proof. destruct x; simpl; auto using Z2Nat.inj_neg. by intros []. Qed.
 Lemma Z2Nat_inj_pow (x y : nat) : Z.of_nat (x ^ y) = x ^ y.
 Proof.
-  induction y as [|y IH].
-  * by rewrite Z.pow_0_r, Nat.pow_0_r.
-  * by rewrite Nat.pow_succ_r, Nat2Z.inj_succ, Z.pow_succ_r,
-      Nat2Z.inj_mul, IH by auto with zpos.
+  induction y as [|y IH]; [by rewrite Z.pow_0_r, Nat.pow_0_r|].
+  by rewrite Nat.pow_succ_r, Nat2Z.inj_succ, Z.pow_succ_r,
+    Nat2Z.inj_mul, IH by auto with zpos.
 Qed.
+Lemma Nat2Z_divide n m : (Z.of_nat n | Z.of_nat m) ↔ (n | m)%nat.
+Proof.
+  split.
+  * rewrite <-(Nat2Z.id m) at 2; intros [i ->]; exists (Z.to_nat i).
+    destruct (decide (0 ≤ i)%Z).
+    { by rewrite Z2Nat.inj_mul, Nat2Z.id by lia. }
+    by rewrite !Z_to_nat_nonpos by auto using Z.mul_nonpos_nonneg with lia.
+  * intros [i ->]. exists (Z.of_nat i). by rewrite Nat2Z.inj_mul.
+Qed.
+Lemma Z2Nat_divide n m :
+  0 ≤ n → 0 ≤ m → (Z.to_nat n | Z.to_nat m)%nat ↔ (n | m).
+Proof. intros. by rewrite <-Nat2Z_divide, !Z2Nat.id by done. Qed.
 Lemma Z2Nat_inj_div x y : Z.of_nat (x `div` y) = x `div` y.
 Proof.
   destruct (decide (y = 0%nat)); [by subst; destruct x |].
@@ -460,105 +473,3 @@ Proof.
   by rewrite !Qred_correct, <-inject_Z_opp, <-inject_Z_plus.
 Qed.
 Close Scope Qc_scope.
-
-(** * Conversions *)
-Lemma Z_to_nat_nonpos x : (x ≤ 0)%Z → Z.to_nat x = 0.
-Proof. destruct x; simpl; auto using Z2Nat.inj_neg. by intros []. Qed.
-
-(** The function [Z_to_option_N] converts an integer [x] into a natural number
-by giving [None] in case [x] is negative. *)
-Definition Z_to_option_N (x : Z) : option N :=
-  match x with
-  | Z0 => Some N0 | Zpos p => Some (Npos p) | Zneg _ => None
-  end.
-Definition Z_to_option_nat (x : Z) : option nat :=
-  match x with
-  | Z0 => Some 0 | Zpos p => Some (Pos.to_nat p) | Zneg _ => None
-  end.
-
-Lemma Z_to_option_N_Some x y :
-  Z_to_option_N x = Some y ↔ (0 ≤ x)%Z ∧ y = Z.to_N x.
-Proof.
-  split.
-  * intros. by destruct x; simpl in *; simplify_equality;
-      auto using Zle_0_pos.
-  * intros [??]. subst. destruct x; simpl; auto; lia.
-Qed.
-Lemma Z_to_option_N_Some_alt x y :
-  Z_to_option_N x = Some y ↔ (0 ≤ x)%Z ∧ x = Z.of_N y.
-Proof.
-  rewrite Z_to_option_N_Some.
-  split; intros [??]; subst; auto using N2Z.id, Z2N.id, eq_sym.
-Qed.
-
-Lemma Z_to_option_nat_Some x y :
-  Z_to_option_nat x = Some y ↔ (0 ≤ x)%Z ∧ y = Z.to_nat x.
-Proof.
-  split.
-  * intros. by destruct x; simpl in *; simplify_equality;
-      auto using Zle_0_pos.
-  * intros [??]. subst. destruct x; simpl; auto; lia.
-Qed.
-Lemma Z_to_option_nat_Some_alt x y :
-  Z_to_option_nat x = Some y ↔ (0 ≤ x)%Z ∧ x = Z.of_nat y.
-Proof.
-  rewrite Z_to_option_nat_Some.
-  split; intros [??]; subst; auto using Nat2Z.id, Z2Nat.id, eq_sym.
-Qed.
-Lemma Z_to_option_of_nat x : Z_to_option_nat (Z.of_nat x) = Some x.
-Proof. apply Z_to_option_nat_Some_alt. auto using Nat2Z.is_nonneg. Qed.
-
-(** Some correspondence lemmas between [nat] and [N] that are not part of the
-standard library. We declare a hint database [natify] to rewrite a goal
-involving [N] into a corresponding variant involving [nat]. *)
-Lemma N_to_nat_lt x y : N.to_nat x < N.to_nat y ↔ (x < y)%N.
-Proof. by rewrite <-N.compare_lt_iff, nat_compare_lt, N2Nat.inj_compare. Qed.
-Lemma N_to_nat_le x y : N.to_nat x ≤ N.to_nat y ↔ (x ≤ y)%N.
-Proof. by rewrite <-N.compare_le_iff, nat_compare_le, N2Nat.inj_compare. Qed.
-Lemma N_to_nat_0 : N.to_nat 0 = 0.
-Proof. done. Qed.
-Lemma N_to_nat_1 : N.to_nat 1 = 1.
-Proof. done. Qed.
-Lemma N_to_nat_div x y : N.to_nat (x `div` y) = N.to_nat x `div` N.to_nat y.
-Proof.
-  destruct (decide (y = 0%N)); [by subst; destruct x |].
-  apply Nat.div_unique with (N.to_nat (x `mod` y)).
-  { by apply N_to_nat_lt, N.mod_lt. }
-  rewrite (N.div_unique_exact (x * y) y x), N.div_mul by lia.
-  by rewrite <-N2Nat.inj_mul, <-N2Nat.inj_add, <-N.div_mod.
-Qed.
-(* We have [x `mod` 0 = 0] on [nat], and [x `mod` 0 = x] on [N]. *)
-Lemma N_to_nat_mod x y :
-  y ≠ 0%N → N.to_nat (x `mod` y) = N.to_nat x `mod` N.to_nat y.
-Proof.
-  intros. apply Nat.mod_unique with (N.to_nat (x `div` y)).
-  { by apply N_to_nat_lt, N.mod_lt. }
-  rewrite (N.div_unique_exact (x * y) y x), N.div_mul by lia.
-  by rewrite <-N2Nat.inj_mul, <-N2Nat.inj_add, <-N.div_mod.
-Qed.
-
-Hint Rewrite <-N2Nat.inj_iff : natify.
-Hint Rewrite <-N_to_nat_lt : natify.
-Hint Rewrite <-N_to_nat_le : natify.
-Hint Rewrite Nat2N.id : natify.
-Hint Rewrite N2Nat.inj_add : natify.
-Hint Rewrite N2Nat.inj_mul : natify.
-Hint Rewrite N2Nat.inj_sub : natify.
-Hint Rewrite N2Nat.inj_succ : natify.
-Hint Rewrite N2Nat.inj_pred : natify.
-Hint Rewrite N_to_nat_div : natify.
-Hint Rewrite N_to_nat_0 : natify.
-Hint Rewrite N_to_nat_1 : natify.
-Ltac natify := repeat autorewrite with natify in *.
-
-Hint Extern 100 (Nlt _ _) => natify : natify.
-Hint Extern 100 (Nle _ _) => natify : natify.
-Hint Extern 100 (@eq N _ _) => natify : natify.
-Hint Extern 100 (lt _ _) => natify : natify.
-Hint Extern 100 (le _ _) => natify : natify.
-Hint Extern 100 (@eq nat _ _) => natify : natify.
-
-Instance: ∀ x, PropHolds (0 < x)%N → PropHolds (0 < N.to_nat x).
-Proof. unfold PropHolds. intros. by natify. Qed.
-Instance: ∀ x, PropHolds (0 ≤ x)%N → PropHolds (0 ≤ N.to_nat x).
-Proof. unfold PropHolds. intros. by natify. Qed.

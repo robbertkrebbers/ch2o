@@ -720,4 +720,26 @@ Proof.
   * efeed pose proof (ref_object_offset_size' Γ σ1'); eauto. lia.
   * efeed pose proof (ref_object_offset_size' Γ σ2'); eauto; lia.
 Qed.
+Lemma ref_typed_align_of Γ τ rs σ :
+  ✓ Γ → ✓{Γ} τ → Γ ⊢ rs : τ ↣ σ → (align_of Γ σ | align_of Γ τ).
+Proof. destruct 3; simpl; eauto using align_of_compound, align_of_array. Qed.
+Lemma ref_typed_bit_align_of Γ τ rs σ :
+  ✓ Γ → ✓{Γ} τ → Γ ⊢ rs : τ ↣ σ → (bit_align_of Γ σ | bit_align_of Γ τ).
+Proof. eauto using Nat.mul_divide_mono_r, ref_typed_align_of. Qed.
+Lemma bit_align_of_ref_seg_object_offset Γ τ rs σ :
+  ✓ Γ → ✓{Γ} τ → Γ ⊢ rs : τ ↣ σ →
+  (bit_align_of Γ σ | ref_seg_object_offset Γ rs).
+Proof.
+  destruct 3; simplify_option_equality; eauto using Nat.divide_0_r,
+    bit_align_of_field_offset, Nat.divide_mul_r, bit_align_of_divide,
+    TArray_valid_inv_type, env_valid_lookup.
+Qed.
+Lemma bit_align_of_ref_object_offset Γ τ r σ :
+  ✓ Γ → ✓{Γ} τ → Γ ⊢ r : τ ↣ σ → (bit_align_of Γ σ | ref_object_offset Γ r).
+Proof.
+  unfold ref_object_offset.
+  induction 3 using @ref_typed_ind; csimpl; auto using Nat.divide_0_r.
+  apply Nat.divide_add_r; eauto using bit_align_of_ref_seg_object_offset,
+    ref_typed_type_valid, Nat.divide_trans, ref_typed_bit_align_of.
+Qed.
 End references.

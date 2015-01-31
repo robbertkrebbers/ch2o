@@ -116,7 +116,7 @@ Ltac solve_length := repeat first
   | rewrite zip_with_length | rewrite replicate_length | rewrite resize_length
   | rewrite fmap_length | erewrite ctree_flatten_length by eauto
   | erewrite val_flatten_length by eauto | rewrite to_bools_length
-  | rewrite bit_size_of_uchar ]; lia.
+  | rewrite bit_size_of_char ]; lia.
 Hint Extern 0 (length _ = _) => solve_length.
 Hint Extern 0 (_ ≤ length _) => solve_length.
 Hint Extern 0 (length _ ≤ _) => solve_length.
@@ -1084,7 +1084,7 @@ Proof.
          - bit_size_of Γ (addr_type_base a))) with i by lia.
     intuition lia. }
   assert (τ = ucharT) by eauto using addr_not_is_obj_type; subst.
-  rewrite bit_size_of_uchar; rewrite bit_size_of_uchar in Hbyte.
+  rewrite bit_size_of_char; rewrite bit_size_of_char in Hbyte.
   erewrite <-!list_lookup_fmap, !fmap_app, !ctree_alter_byte_perm_flatten,
     <-!list_fmap_compose, !fmap_app by eauto; fold (@pbit_locked Ti).  
   erewrite <-!(ctree_lookup_flatten _ _ w') by eauto.
@@ -1102,7 +1102,7 @@ Proof.
     + addr_ref_byte Γ a * char_bits + char_bits) i);
     [|rewrite lookup_app_l by solve_length; intuition omega].
   erewrite lookup_app_r, ctree_flatten_length,
-    bit_size_of_uchar, lookup_drop by eauto.
+    bit_size_of_char, lookup_drop by eauto.
   replace (ref_object_offset Γ (addr_ref Γ a)
     + (char_bits + addr_ref_byte Γ a * char_bits)
     + (i - ref_object_offset Γ (addr_ref Γ a) - addr_ref_byte Γ a * char_bits -
@@ -1143,7 +1143,7 @@ Proof.
     destruct (ctree_flatten w !! _) as [xb|] eqn:?; decompose_Forall_hyps.
     by rewrite pbit_Readable_locked in Hperm by done.
   * assert (τ = ucharT) by eauto using addr_not_is_obj_type; subst.
-    rewrite bit_size_of_uchar in Hi.
+    rewrite bit_size_of_char in Hi.
     assert (pbit_locked <$> ctree_flatten w
       !! (i - ref_object_offset Γ (addr_ref Γ a)
             - addr_ref_byte Γ a * char_bits) = Some true) as Hperm'.
