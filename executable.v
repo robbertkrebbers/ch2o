@@ -63,7 +63,8 @@ Definition ehexec (Γ : env Ti) (k : ctx Ti)
      let n' := Z.to_nat n in
      guard (n' ≠ 0);
      guard (int_typed (n * size_of Γ τ) sptrT);
-     {[ #{Ω}(ptrV (Ptr (addr_top_array o τ n))), mem_alloc Γ o true (τ.[n']) m ]}
+     {[ #{Ω}(ptrV (Ptr (addr_top_array o τ n))),
+        mem_alloc Γ o true perm_full (val_new Γ (τ.[n'])) m ]}
      ∪  (if alloc_can_fail then {[ #{Ω}(ptrV (NULL (Some τ))), m ]} else ∅)
   | free (%{Ω} a) =>
      guard (mem_freeable a m);
@@ -109,7 +110,8 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
     | catch s => {[ State (CStmt (catch □) :: k) (Stmt ↘ s) m ]}
     | local{τ} s =>
        let o := fresh (dom indexset m) in
-       {[ State (CLocal o τ :: k) (Stmt ↘ s) (mem_alloc Γ o false τ m) ]}
+       {[ State (CLocal o τ :: k) (Stmt ↘ s)
+                (mem_alloc Γ o false perm_full (val_new Γ τ) m) ]}
     end
   | Stmt ↗ s =>
     match k with
@@ -140,7 +142,8 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
       | label l' => {[ State k (Stmt ↗ s) m ]}
       | local{τ} s =>
          let o := fresh (dom indexset m) in
-         {[ State (CLocal o τ :: k) (Stmt (↷ l) s) (mem_alloc Γ o false τ m) ]}
+         {[ State (CLocal o τ :: k) (Stmt (↷ l) s)
+                  (mem_alloc Γ o false perm_full (val_new Γ τ) m) ]}
       | catch s => {[ State (CStmt (catch □) :: k) (Stmt (↷ l) s) m ]}
       | s1 ;; s2 =>
          (guard (l ∈ labels s1);
@@ -176,7 +179,7 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
   | Call f vs =>
     s ← of_option (δ !! f);
     let os := fresh_list (length vs) (dom indexset m) in
-    let m2 := mem_alloc_val_list Γ (zip os vs) m in
+    let m2 := mem_alloc_list Γ (zip os vs) m in
     {[ State (CParams f (zip os (type_of <$> vs)) :: k) (Stmt ↘ s) m2 ]}
   | Return f v =>
     match k with

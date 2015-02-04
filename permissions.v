@@ -83,6 +83,10 @@ Arguments perm_kind _ : simpl never.
 
 Lemma perm_full_valid : sep_valid perm_full.
 Proof. done. Qed.
+Lemma perm_full_mapped : ¬sep_unmapped perm_full.
+Proof. by apply (bool_decide_unpack _). Qed.
+Lemma perm_full_unshared : sep_unshared perm_full.
+Proof. by apply (bool_decide_unpack _). Qed.
 Lemma perm_token_valid : sep_valid perm_token.
 Proof. done. Qed.
 Lemma perm_locked_mapped x : perm_locked x = true → ¬sep_unmapped x.

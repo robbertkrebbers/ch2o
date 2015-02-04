@@ -25,8 +25,10 @@ Section memory_operations.
   Definition mem_allocable (o : index) (m : mem Ti) : Prop :=
     cmap_car m !! o = None.
   Definition mem_alloc (Γ : env Ti) (o : index)
-      (malloc : bool) (τ : type Ti) (m : mem Ti) : mem Ti :=
-    let (m) := m in CMap (<[o:=Obj (ctree_new Γ pbit_full τ) malloc]>m).
+      (malloc : bool) (x : perm) (v : val Ti) (m : mem Ti) : mem Ti :=
+    let τ := type_of v in
+    let xs := replicate (bit_size_of Γ τ) x in
+    let (m) := m in CMap (<[o:=Obj (of_val Γ xs v) malloc]>m).
 
   Definition mem_free (o : index) (m : mem Ti) : mem Ti :=
     let (m) := m in
@@ -44,13 +46,11 @@ Section memory_operations.
     | mem_allocable_cons o os :
        o ∉ os → mem_allocable o m →
        mem_allocable_list m os → mem_allocable_list m (o :: os).
-  Fixpoint mem_alloc_val_list (Γ : env Ti)
+  Fixpoint mem_alloc_list (Γ : env Ti)
       (ovs : list (index * val Ti)) (m : mem Ti) : mem Ti :=
     match ovs with
     | [] => m
-    | (o,v) :: ovs =>
-       let τ := type_of v in let a := addr_top o τ in
-       mem_alloc_val_list Γ ovs (<[a:=v]{Γ}>(mem_alloc Γ o false τ m))
+    | (o,v) :: ovs => mem_alloc_list Γ ovs (mem_alloc Γ o false perm_full v m)
     end.
   Definition mem_singleton (Γ : env Ti) (a : addr Ti)
       (malloc : bool) (x : perm) (v : val Ti) : mem Ti :=
@@ -89,8 +89,6 @@ Section memory_operations.
 End memory_operations.
 
 Notation mem_unlock_all m := (mem_unlock (mem_locks m) m).
-Notation mem_writable_all Γ m := (∀ o τ,
-  '{m} ⊢ o : τ → mem_writable Γ (addr_top o τ) m).
 
 Section memory.
 Context `{EnvSpec Ti}.
@@ -125,14 +123,6 @@ Lemma mem_writable_weaken Γ1 Γ2 Γm m a σ :
   ✓ Γ1 → (Γ1,Γm) ⊢ a : Some σ → mem_writable Γ1 a m →
   Γ1 ⊆ Γ2 → mem_writable Γ2 a m.
 Proof. intros ?? (w&?&?) ?; exists w; eauto using cmap_lookup_weaken. Qed.
-Lemma mem_writable_all_weaken Γ1 Γ2 Γm1 m :
-  ✓ Γ1 → ✓{Γ1,Γm1} m → mem_writable_all Γ1 m → Γ1 ⊆ Γ2 → mem_writable_all Γ2 m.
-Proof.
-  intros ???? o τ ?; eapply mem_writable_weaken; eauto 10 using addr_top_typed,
-    cmap_index_typed, cmap_index_typed_representable, cmap_index_typed_valid.
-Qed.
-Lemma mem_writable_all_empty Γ : mem_writable_all Γ ∅.
-Proof. intros ?? [??]; simplify_map_equality'. Qed.
 Lemma mem_erase_writable Γ m a :
   mem_writable Γ a (cmap_erase m) = mem_writable Γ a m.
 Proof. unfold mem_writable; simpl. by rewrite cmap_lookup_erase. Qed.
@@ -162,12 +152,23 @@ Proof.
 Qed.
 Lemma mem_empty_allocable o : mem_allocable o (∅ : mem Ti).
 Proof. by unfold mem_allocable; simplify_map_equality'. Qed.
-Lemma mem_alloc_memenv_of Γ m o malloc τ :
-  ✓ Γ → ✓{Γ} τ → '{mem_alloc Γ o malloc τ m} = <[o:=(τ,false)]>('{m}).
+Lemma mem_alloc_memenv_of Γ Γm m o malloc x v τ :
+  ✓ Γ → (Γ,Γm) ⊢ v : τ → '{mem_alloc Γ o malloc x v m} = <[o:=(τ,false)]>('{m}).
 Proof.
   intros. apply map_eq; intros o'; destruct m as [m]; simpl.
   destruct (decide (o = o')); simplify_map_equality'; f_equal.
-  by rewrite ctree_new_type_of by done.
+  by erewrite of_val_type_of, type_of_correct by eauto.
+Qed.
+Lemma mem_alloc_alive_memenv_of Γ Γm m o malloc x v τ :
+  ✓ Γ →'{m} ⊢ o : τ → index_alive ('{m}) o → (Γ,Γm) ⊢ v : τ →
+  '{mem_alloc Γ o malloc x v m} = '{m}.
+Proof.
+  rewrite <-index_alive_spec'; unfold index_alive'; intros.
+  destruct (index_typed_lookup_cmap m o τ) as ([|? w]&?&?);
+    simplify_option_equality; try done.
+  apply map_eq; intros o'; destruct m as [m]; simpl.
+  destruct (decide (o = o')); simplify_map_equality'; f_equal.
+  by erewrite of_val_type_of, type_of_correct by eauto.
 Qed.
 Lemma mem_alloc_index_typed_inv Γm o τ β o' τ' :
   o ≠ o' → <[o:=(τ,β)]>Γm ⊢ o' : τ' → Γm ⊢ o' : τ'.
@@ -196,97 +197,174 @@ Proof.
   destruct (decide (o = o')); simplify_map_equality'; eauto.
   eapply HΓm; do 2 red; eauto.
 Qed.
-Lemma mem_alloc_valid Γ Γm m o malloc τ :
-  ✓ Γ → ✓{Γ,Γm} m → ✓{Γ} τ → Γm !! o = None → int_typed (size_of Γ τ) sptrT →
-  ✓{Γ,<[o:=(τ,false)]>Γm} (mem_alloc Γ o malloc τ m).
+Lemma mem_alloc_valid Γ Γm m o malloc x v τ :
+  ✓ Γ → ✓{Γ,Γm} m → Γm !! o = None → sep_valid x → ¬sep_unmapped x →
+  (Γ,<[o:=(τ,false)]>Γm) ⊢ v : τ → int_typed (size_of Γ τ) sptrT →
+  ✓{Γ,<[o:=(τ,false)]>Γm} (mem_alloc Γ o malloc x v m).
 Proof.
-  destruct m as [m]; intros HΓ Hm Hx Hτ Hsz; split_ands'; simpl.
+  destruct m as [m]; intros HΓ Hm Ho Hx Hx' Hv Hsz; split_ands'; simpl.
   { eauto using mem_alloc_memenv_valid, cmap_valid_memenv_valid. }
   { intros o' τ'; rewrite lookup_insert_Some;
       intros [[??]|[??]]; simplify_equality'.
     destruct (cmap_valid_Freed Γ Γm (CMap m) o' τ')
       as (?&?&?&?); simplify_map_equality'; eauto 10
       using mem_alloc_forward, memenv_forward_typed, memenv_forward_alive. }
+  assert ((Γ, <[o:=(τ,false)]> Γm) ⊢
+    of_val Γ (replicate (bit_size_of Γ τ) x) v : τ)
+    by eauto using of_val_typed, Forall_replicate.
   intros o' w malloc'; rewrite lookup_insert_Some;
-    intros [[??]|[??]]; simplify_equality'.
-  { exists τ; split_ands; eauto 7 using (ctree_Forall_not _ _ Γm),
-     ctree_new_typed, pbit_full_valid, ctree_new_Forall,
-     mem_alloc_index_typed, mem_alloc_index_alive. }
+    intros [[??]|[??]]; simplify_type_equality'.
+  { exists τ; split_ands; eauto 9 using ctree_Forall_not,
+     mem_alloc_index_typed, mem_alloc_index_alive, Forall_replicate,
+     of_val_mapped, @sep_unmapped_empty_alt, Forall_impl. }
   destruct (cmap_valid_Obj Γ Γm (CMap m) o' w malloc')
     as (τ'&?&?&?&?&?); simplify_map_equality'; eauto.
   exists τ'; split_ands; eauto using ctree_typed_weaken, mem_alloc_forward,
     memenv_forward_typed, memenv_forward_alive, mem_alloc_index_alive_neq.
 Qed.
+Lemma mem_alloc_alive_valid Γ Γm m o malloc x v τ :
+  ✓ Γ → ✓{Γ,Γm} m → Γm ⊢ o : τ → index_alive Γm o → sep_valid x →
+  ¬sep_unmapped x → (Γ,Γm) ⊢ v : τ → int_typed (size_of Γ τ) sptrT →
+  ✓{Γ,Γm} (mem_alloc Γ o malloc x v m).
+Proof.
+  destruct m as [m]; intros HΓ Hm Ho Ho' Hx Hx' Hv Hsz; split_ands'; simpl.
+  { eauto using mem_alloc_memenv_valid, cmap_valid_memenv_valid. }
+  { intros o' τ'; rewrite lookup_insert_Some;
+      intros [[??]|[??]]; simplify_equality'.
+    destruct (cmap_valid_Freed Γ Γm (CMap m) o' τ') as (?&?&?&?); eauto. }
+  assert ((Γ,Γm) ⊢ of_val Γ (replicate (bit_size_of Γ τ) x) v : τ)
+    by eauto using of_val_typed, Forall_replicate.
+  intros o' w malloc'; rewrite lookup_insert_Some;
+    intros [[??]|[??]]; simplify_type_equality'.
+  { exists τ; split_ands; eauto 9 using ctree_Forall_not, Forall_replicate,
+     of_val_mapped, @sep_unmapped_empty_alt, Forall_impl. }
+  destruct (cmap_valid_Obj Γ Γm (CMap m) o' w malloc')
+    as (τ'&?&?&?&?&?); simplify_map_equality'; eauto.
+Qed.
 Lemma mem_allocable_memenv_of m o : mem_allocable o m → '{m} !! o = None.
 Proof.
   unfold mem_allocable. by intros; destruct m as [m]; simplify_map_equality'.
 Qed.
-Lemma mem_alloc_valid' Γ m o malloc τ :
-  ✓ Γ → ✓{Γ} m → ✓{Γ} τ → mem_allocable o m →
-  int_typed (size_of Γ τ) sptrT → ✓{Γ} (mem_alloc Γ o malloc τ m).
+Hint Extern 10 => erewrite mem_alloc_memenv_of by eauto.
+Lemma mem_alloc_valid' Γ m o malloc x v τ :
+  ✓ Γ → ✓{Γ} m → mem_allocable o m → sep_valid x → ¬sep_unmapped x →
+  (Γ,'{mem_alloc Γ o malloc x v m}) ⊢ v : τ → int_typed (size_of Γ τ) sptrT →
+  ✓{Γ} (mem_alloc Γ o malloc x v m).
 Proof.
-  unfold valid at 2 4, cmap_valid'; intros. rewrite mem_alloc_memenv_of by done.
+  unfold valid at 2 3, cmap_valid'; intros ????? Hv ?.
+  erewrite mem_alloc_memenv_of in Hv by eauto.
   eauto using mem_alloc_valid, mem_allocable_memenv_of.
 Qed.
-Hint Extern 10 => erewrite mem_alloc_memenv_of by eauto.
-Lemma mem_alloc_index_typed' Γ m o malloc τ :
-  ✓ Γ → ✓{Γ} τ → '{mem_alloc Γ o malloc τ m} ⊢ o : τ.
-Proof. eauto using mem_alloc_index_typed. Qed.
-Lemma mem_alloc_index_typed_inv' Γ m o malloc τ o' τ' :
-  ✓ Γ → ✓{Γ} τ → o ≠ o' →
-  '{mem_alloc Γ o malloc τ m} ⊢ o' : τ' → '{m} ⊢ o' : τ'.
-Proof. eauto using mem_alloc_index_typed_inv. Qed.
-Lemma mem_alloc_forward' Γ m o malloc τ :
-  ✓ Γ → ✓{Γ} τ → mem_allocable o m → '{m} ⇒ₘ '{mem_alloc Γ o malloc τ m}.
-Proof. eauto using mem_alloc_forward, mem_allocable_memenv_of. Qed.
-Lemma mem_alloc_writable_top Γ m o malloc τ :
-  ✓ Γ → ✓{Γ} τ → 
-  mem_allocable o m → mem_writable Γ (addr_top o τ) (mem_alloc Γ o malloc τ m).
+Lemma mem_alloc_alive_valid' Γ m o malloc x v τ :
+  ✓ Γ → ✓{Γ} m → '{m} ⊢ o : τ → index_alive ('{m}) o → sep_valid x →
+  ¬sep_unmapped x → (Γ,'{m}) ⊢ v : τ → ✓{Γ} (mem_alloc Γ o malloc x v m).
 Proof.
-  unfold mem_allocable. intros. exists (ctree_new Γ pbit_full τ); split.
+  unfold valid at 2 3, cmap_valid'; intros.
+  erewrite mem_alloc_alive_memenv_of by eauto.
+  eauto using mem_alloc_alive_valid, cmap_index_typed_representable.
+Qed.
+Lemma mem_alloc_new_valid' Γ m o malloc x τ :
+  ✓ Γ → ✓{Γ} m → mem_allocable o m → sep_valid x → ¬sep_unmapped x →
+  ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
+  ✓{Γ} (mem_alloc Γ o malloc x (val_new Γ τ) m).
+Proof. eauto using mem_alloc_valid', val_new_typed. Qed.
+Lemma mem_alloc_index_typed' Γ Γm m o malloc x v τ :
+  ✓ Γ → (Γ,Γm) ⊢ v : τ → '{mem_alloc Γ o malloc x v m} ⊢ o : τ.
+Proof. eauto using mem_alloc_index_typed. Qed.
+Lemma mem_alloc_index_alive' Γ Γm m o malloc x v τ :
+  ✓ Γ → (Γ,Γm) ⊢ v : τ → index_alive ('{mem_alloc Γ o malloc x v m}) o.
+Proof. eauto using mem_alloc_index_alive. Qed.
+Lemma mem_alloc_new_index_typed' Γ m o malloc x τ :
+  ✓ Γ → ✓{Γ} τ → '{mem_alloc Γ o malloc x (val_new Γ τ) m} ⊢ o : τ.
+Proof. eauto using mem_alloc_index_typed', (val_new_typed _ ∅). Qed.
+Lemma mem_alloc_new_index_alive' Γ m o malloc x τ :
+  ✓ Γ → ✓{Γ} τ → index_alive ('{mem_alloc Γ o malloc x (val_new Γ τ) m}) o.
+Proof. eauto using mem_alloc_index_alive', (val_new_typed _ ∅). Qed.
+Lemma mem_alloc_index_typed_inv' Γ Γm m o malloc x v τ o' τ' :
+  ✓ Γ → o ≠ o' → (Γ,Γm) ⊢ v : τ →
+  '{mem_alloc Γ o malloc x v m} ⊢ o' : τ' → '{m} ⊢ o' : τ'.
+Proof. eauto using mem_alloc_index_typed_inv. Qed.
+Lemma mem_alloc_forward' Γ Γm m o malloc x v τ :
+  ✓ Γ → mem_allocable o m → (Γ,Γm) ⊢ v : τ →
+  '{m} ⇒ₘ '{mem_alloc Γ o malloc x v m}.
+Proof. eauto using mem_alloc_forward, mem_allocable_memenv_of. Qed.
+Lemma mem_alloc_alive_forward' Γ Γm m o malloc x v τ :
+  ✓ Γ → '{m} ⊢ o : τ → index_alive ('{m}) o → (Γ, Γm) ⊢ v : τ →
+  '{m} ⇒ₘ '{mem_alloc Γ o malloc x v m}.
+Proof. intros. by erewrite mem_alloc_alive_memenv_of by eauto. Qed.
+Lemma mem_alloc_new_forward' Γ m o malloc x τ :
+  ✓ Γ → mem_allocable o m → ✓{Γ} τ →
+  '{m} ⇒ₘ '{mem_alloc Γ o malloc x (val_new Γ τ) m}.
+Proof. eauto using mem_alloc_forward', (val_new_typed _ ∅). Qed.
+Lemma mem_alloc_writable_top Γ Γm m o malloc x v τ :
+  ✓ Γ → (Γ,Γm) ⊢ v : τ → Some Writable ⊆ perm_kind x →
+  mem_writable Γ (addr_top o τ) (mem_alloc Γ o malloc x v m).
+Proof.
+  exists (of_val Γ (replicate (bit_size_of Γ τ) x) v); split.
   * unfold lookupE, cmap_lookup.
     rewrite option_guard_True by eauto using addr_top_strict.
-    by destruct m as [m]; simplify_map_equality'.
-  * apply ctree_new_Forall; auto; by destruct alloc.
+    by destruct m as [m]; simplify_map_equality'; simplify_type_equality.
+  * erewrite ctree_flatten_of_val by eauto. generalize (val_flatten Γ v).
+    induction (bit_size_of Γ τ); intros [|??]; simpl; constructor; auto.
 Qed.
-Lemma mem_alloc_writable Γ m o malloc a τ :
-  ✓ Γ → ✓{Γ} τ → mem_allocable o m →
-  mem_writable Γ a m → mem_writable Γ a (mem_alloc Γ o malloc τ m).
+Lemma mem_alloc_writable Γ m o malloc a x v τ :
+  mem_allocable o m →
+  mem_writable Γ a m → mem_writable Γ a (mem_alloc Γ o malloc x v m).
 Proof.
-  intros ??? (w&?&?); exists w; split; auto.
+  intros ? (w&?&?); exists w; split; auto.
   unfold mem_allocable, lookupE, cmap_lookup in *; destruct m as [m].
   case_option_guard; simplify_equality'.
   destruct (m !! addr_index a) as [w'|] eqn:?; simplify_equality'.
   by destruct (decide (o = addr_index a)); simplify_map_equality.
 Qed.
-Lemma mem_alloc_writable_all Γ m o malloc τ :
-  ✓ Γ → ✓{Γ} τ → mem_allocable o m →
-  mem_writable_all Γ m → mem_writable_all Γ (mem_alloc Γ o malloc τ m).
-Proof.
-  intros ???? o' τ' ?. destruct (decide (o = o')) as [<-|].
-  * assert ('{mem_alloc Γ o malloc τ m} ⊢ o : τ)
-      by eauto using mem_alloc_index_typed'; simplify_type_equality.
-    eauto using mem_alloc_writable_top.
-  * eauto using mem_alloc_writable, mem_alloc_index_typed_inv'.
-Qed.
-Lemma mem_alloc_allocable Γ m o malloc o' τ :
-  mem_allocable o' m → o ≠ o' → mem_allocable o' (mem_alloc Γ o malloc τ m).
+Lemma mem_alloc_allocable Γ m o malloc x v o' :
+  mem_allocable o' m → o ≠ o' → mem_allocable o' (mem_alloc Γ o malloc x v m).
 Proof.
   by destruct m as [m]; unfold mem_allocable; intros; simplify_map_equality'.
 Qed.
-Lemma mem_alloc_allocable_list Γ m o malloc os τ :
+Lemma mem_alloc_allocable_list Γ m o malloc x v os :
   mem_allocable_list m os → o ∉ os →
-  mem_allocable_list (mem_alloc Γ o malloc τ m) os.
+  mem_allocable_list (mem_alloc Γ o malloc x v m) os.
 Proof.
   induction 1; rewrite ?elem_of_cons; constructor;
     naive_solver auto using mem_alloc_allocable.
 Qed.
-Lemma mem_erase_alloc Γ m o malloc τ :
-  cmap_erase (mem_alloc Γ o malloc τ m) = mem_alloc Γ o malloc τ (cmap_erase m).
+Lemma mem_erase_alloc Γ m o malloc x v :
+  cmap_erase (mem_alloc Γ o malloc x v m)
+  = mem_alloc Γ o malloc x v (cmap_erase m).
 Proof.
   destruct m as [m]; f_equal'; apply map_eq; intros o'.
   by destruct (decide (o' = o)); simplify_map_equality.
 Qed.
+Lemma mem_alloc_list_valid Γ m os vs τs :
+  ✓ Γ → ✓{Γ} m → mem_allocable_list m os → length os = length vs →
+  (Γ,'{m}) ⊢* vs :* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
+  (**i 1.) *) ✓{Γ} (mem_alloc_list Γ (zip os vs) m) ∧
+  (**i 2.) *) '{mem_alloc_list Γ (zip os vs) m} ⊢* os :* τs ∧
+  (**i 3.) *) '{m} ⇒ₘ '{mem_alloc_list Γ (zip os vs) m}.
+Proof.
+  rewrite <-Forall2_same_length. intros ? Hm Hfree Hovs Hvs Hτs.
+  revert os vs m Hovs Hm Hvs Hfree.
+  induction Hτs as [|τ τs ?? IH];
+    intros ?? m [|o v os vs ??]; inversion_clear 3;
+    decompose_Forall_hyps; simplify_type_equality; auto.
+  destruct (IH os vs (mem_alloc Γ o false perm_full v m)) as (?&?&?); eauto
+    using mem_alloc_valid', perm_full_valid, perm_full_mapped, Forall2_impl,
+    val_typed_weaken, mem_alloc_forward', mem_alloc_allocable_list.
+  split_ands; eauto using mem_alloc_index_typed, memenv_forward_typed.
+  transitivity ('{mem_alloc Γ o false perm_full v m});
+    eauto using mem_alloc_forward'.
+Qed.
+Lemma mem_alloc_list_index_typed Γ m os vs τs :
+  ✓ Γ → ✓{Γ} m → mem_allocable_list m os → length os = length vs →
+  (Γ,'{m}) ⊢* vs :* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
+  '{mem_alloc_list Γ (zip os vs) m} ⊢* os :* τs.
+Proof. intros. eapply mem_alloc_list_valid; eauto. Qed.
+Lemma mem_alloc_list_forward Γ m os vs τs :
+  ✓ Γ → ✓{Γ} m → mem_allocable_list m os → length os = length vs →
+  (Γ,'{m}) ⊢* vs :* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
+  '{m} ⇒ₘ '{mem_alloc_list Γ (zip os vs) m}.
+Proof. intros. eapply mem_alloc_list_valid; eauto. Qed.
 
 (** ** Properties of the [mem_free] fucntion *)
 Global Instance mem_freeable_perm_dec o m : Decision (mem_freeable_perm o m).
@@ -407,6 +485,19 @@ Qed.
 Lemma mem_lookup_erase Γ m a :
   (cmap_erase m !!{Γ} a : option (val Ti)) = m !!{Γ} a.
 Proof. unfold lookupE, mem_lookup. by rewrite cmap_lookup_erase. Qed.
+Lemma mem_lookup_alloc Γ Γm m o malloc x v τ :
+  ✓ Γ → (Γ,Γm) ⊢ v : τ → Some Readable ⊆ perm_kind x →
+  mem_alloc Γ o malloc x v m !!{Γ} addr_top o τ = Some (val_freeze true v).
+Proof.
+  unfold lookupE, mem_lookup, lookupE, cmap_lookup; intros.
+  assert (ctree_Forall (λ xb, Some Readable ⊆ pbit_kind xb)
+    (of_val Γ (replicate (bit_size_of Γ τ) x) v)).
+  { erewrite ctree_flatten_of_val by eauto. generalize (val_flatten Γ v).
+    induction (bit_size_of Γ τ); intros [|??]; simpl; constructor; auto. }
+  rewrite option_guard_True by eauto using addr_top_strict.
+  destruct m as [m]; simplify_map_equality'; simplify_type_equality.
+  by erewrite option_guard_True, to_of_val by eauto.
+Qed.
 
 (** Properties of the [force] function *)
 Lemma mem_force_memenv_of Γ Γm m a :
@@ -630,16 +721,6 @@ Proof.
   erewrite cmap_lookup_alter_not_obj by eauto using of_val_flatten_unshared.
   eauto using ctree_lookup_byte_after_Forall.
 Qed.
-Lemma mem_insert_top_writable_all Γ m o2 v2 τ2 :
-  ✓ Γ → ✓{Γ} m → '{m} ⊢ o2 : τ2 → (Γ,'{m}) ⊢ v2 : τ2 →
-  mem_writable_all Γ m → mem_writable_all Γ (<[addr_top o2 τ2:=v2]{Γ}>m).
-Proof.
-  intros ????? o τ; erewrite mem_insert_memenv_of by eauto using
-    addr_top_typed, cmap_index_typed_representable; intros.
-  eapply mem_insert_writable;
-    eauto using addr_top_typed, cmap_index_typed_representable.
-  eauto using mem_insert_writable, addr_top_disjoint.
-Qed.
 Lemma mem_insert_allocable Γ m a v o :
   mem_allocable o (<[a:=v]{Γ}>m) ↔ mem_allocable o m.
 Proof. destruct m as [m]; apply lookup_alter_None. Qed.
@@ -649,77 +730,6 @@ Proof.
   rewrite !mem_allocable_list_alt; unfold flip.
   by setoid_rewrite mem_insert_allocable.
 Qed.
-Lemma mem_alloc_val_valid Γ m malloc o v τ :
-  ✓ Γ → ✓{Γ} m → mem_allocable o m →
-  (Γ,'{m}) ⊢ v : τ → int_typed (size_of Γ τ) sptrT →
-  ✓{Γ} (<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o malloc τ m)).
-Proof.
-  intros. eapply mem_insert_valid'; eauto using mem_alloc_valid',
-    addr_top_typed, mem_alloc_writable_top, val_typed_weaken,
-    mem_alloc_index_typed', mem_alloc_forward'.
-Qed.
-Lemma mem_alloc_val_index_typed Γ m malloc o v τ :
-  ✓ Γ → ✓{Γ} m → mem_allocable o m →
-  (Γ,'{m}) ⊢ v : τ → int_typed (size_of Γ τ) sptrT →
-  '{<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o malloc τ m)} ⊢ o : τ.
-Proof.
-  intros. erewrite mem_insert_memenv_of by eauto using mem_alloc_valid',
-    addr_top_typed, mem_alloc_index_typed', mem_alloc_writable_top,
-    val_typed_weaken, mem_alloc_forward'; eauto using mem_alloc_index_typed'.
-Qed.
-Lemma mem_alloc_val_forward Γ m malloc o v τ :
-  ✓ Γ → ✓{Γ} m → mem_allocable o m →
-  (Γ,'{m}) ⊢ v : τ → int_typed (size_of Γ τ) sptrT →
-  '{m} ⇒ₘ '{<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o malloc τ m)}.
-Proof.
-  intros. erewrite mem_insert_memenv_of by eauto using mem_alloc_valid',
-    addr_top_typed, mem_alloc_index_typed', mem_alloc_writable_top,
-    val_typed_weaken, mem_alloc_forward'; eauto using mem_alloc_forward'.
-Qed.
-Lemma mem_alloc_val_allocable Γ m o malloc v τ o' :
-  mem_allocable o' m → o ≠ o' →
-  mem_allocable o' (<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o malloc τ m)).
-Proof. intros. by apply mem_insert_allocable, mem_alloc_allocable. Qed.
-Lemma mem_alloc_val_writable_all Γ m o malloc v τ :
-  ✓ Γ → ✓{Γ} m → mem_allocable o m → (Γ,'{m}) ⊢ v : τ →
-  int_typed (size_of Γ τ) sptrT → mem_writable_all Γ m →
-  mem_writable_all Γ (<[addr_top o τ:=v]{Γ}>(mem_alloc Γ o malloc τ m)).
-Proof.
-  intros. eapply mem_insert_top_writable_all; eauto using mem_alloc_valid',
-    addr_top_typed, mem_alloc_index_typed', mem_alloc_writable_top,
-    val_typed_weaken, mem_alloc_forward', mem_alloc_writable_all.
-Qed.
-Lemma mem_alloc_val_list_valid Γ m os vs τs :
-  ✓ Γ → ✓{Γ} m → mem_allocable_list m os → length os = length vs →
-  (Γ,'{m}) ⊢* vs :* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
-  (**i 1.) *) ✓{Γ} (mem_alloc_val_list Γ (zip os vs) m) ∧
-  (**i 2.) *) '{mem_alloc_val_list Γ (zip os vs) m} ⊢* os :* τs ∧
-  (**i 3.) *) '{m} ⇒ₘ '{mem_alloc_val_list Γ (zip os vs) m}.
-Proof.
-  rewrite <-Forall2_same_length. intros ? Hm Hfree Hovs Hvs Hτs.
-  revert os vs m Hovs Hm Hvs Hfree.
-  induction Hτs as [|τ τs ?? IH];
-    intros ?? m [|o v os vs ??]; inversion_clear 3;
-    decompose_Forall_hyps; simplify_type_equality; auto.
-  destruct (IH os vs (<[addr_top o τ:=v]{Γ}> (mem_alloc Γ o false τ m))) as
-    (IH1&IH2&IH3); eauto using mem_alloc_val_valid.
-  { eauto using Forall2_impl, val_typed_weaken,
-      mem_alloc_val_forward, memenv_forward_typed. }
-  { by apply mem_insert_allocable_list, mem_alloc_allocable_list. }
-  split_ands; eauto using mem_alloc_val_index_typed, memenv_forward_typed.
-  transitivity ('{<[addr_top o τ:=v]{Γ}> (mem_alloc Γ o false τ m)});
-    eauto using mem_alloc_val_forward.
-Qed.
-Lemma mem_alloc_val_list_index_typed Γ m os vs τs :
-  ✓ Γ → ✓{Γ} m → mem_allocable_list m os → length os = length vs →
-  (Γ,'{m}) ⊢* vs :* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
-  '{mem_alloc_val_list Γ (zip os vs) m} ⊢* os :* τs.
-Proof. intros. eapply mem_alloc_val_list_valid; eauto. Qed.
-Lemma mem_alloc_val_list_forward Γ m os vs τs :
-  ✓ Γ → ✓{Γ} m → mem_allocable_list m os → length os = length vs →
-  (Γ,'{m}) ⊢* vs :* τs → Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
-  '{m} ⇒ₘ '{mem_alloc_val_list Γ (zip os vs) m}.
-Proof. intros. eapply mem_alloc_val_list_valid; eauto. Qed.
 
 (** ** Properties of the [singleton] memory *)
 Lemma mem_singleton_freeze Γ Γm β a malloc x v τ :
@@ -980,19 +990,17 @@ Proof.
     (ctree_merge_merge _ _ pbit_unlock_if orb), to_bools_union
     by auto using to_bools_length, pbits_unlock_orb.
 Qed.
-Lemma mem_locks_alloc Γ o malloc τ m :
-  ✓ Γ → ✓{Γ} τ →
-  mem_allocable o m → mem_locks (mem_alloc Γ o malloc τ m) = mem_locks m.
+Lemma mem_locks_alloc Γ Γm m o malloc x v τ :
+  ✓ Γ → (Γ,Γm) ⊢ v : τ → perm_locked x = false →
+  mem_allocable o m → mem_locks (mem_alloc Γ o malloc x v m) = mem_locks m.
 Proof.
   intros. apply elem_of_equiv_L; intros [o' i]. rewrite !elem_of_mem_locks.
-  unfold mem_allocable in *; destruct m as [m]; simplify_equality'.
+  unfold mem_allocable in *; destruct m as [m]; simplify_type_equality'.
   destruct (decide (o = o')); simplify_map_equality; split; try done.
-  unfold ctree_new; rewrite ctree_flatten_unflatten by done.
-  destruct (decide (type_mask Γ τ !! i = Some true)).
-  * rewrite lookup_mask, <-option_fmap_compose, fmap_Some by done.
-    intros (xb&Hxb&?); apply lookup_replicate in Hxb; naive_solver.
-  * rewrite lookup_mask_notin, fmap_Some by done.
-    intros (xb&Hxb&?); apply lookup_replicate in Hxb; naive_solver.
+  erewrite ctree_flatten_of_val by eauto.
+  unfold pbit_locked; rewrite <-list_lookup_fmap, list_fmap_compose,
+    fmap_zip_with_l, list_lookup_fmap, fmap_Some by auto.
+  setoid_rewrite lookup_replicate; intros (?&[??]&?); congruence.
 Qed.
 Lemma mem_locks_free Γ o m v :
   mem_freeable_perm o m → mem_locks (mem_free o m) = mem_locks m.

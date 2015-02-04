@@ -88,6 +88,18 @@ Notation "Γm1 ⇒ₘ Γm2" := (memenv_forward Γm1 Γm2)
 Instance: PreOrder (@memenv_forward Ti).
 Proof. split; [|intros ??? [??] [??]]; split; naive_solver. Qed.
 Hint Extern 0 (?Γm1 ⇒ₘ ?Γm2) => reflexivity.
+Lemma memenv_subseteq_forward {Ti} (Γm1 Γm2  : memenv Ti) :
+  Γm1 ⊆ Γm2 → Γm1 ⇒ₘ Γm2.
+Proof.
+  split.
+  * intros o τ [β ?]; exists β; eauto using lookup_weaken.
+  * intros o τ [β ?] [τ' ?]; exists τ.
+    assert (Γm2 !! o = Some (τ, β)) by eauto using lookup_weaken.
+    naive_solver.
+Qed.
+Lemma memenv_subseteq_alive {Ti} (Γm1 Γm2  : memenv Ti) o :
+  Γm1 ⊆ Γm2 → index_alive Γm1 o → index_alive Γm2 o.
+Proof. intros ? [β ?]; exists β; eauto using lookup_weaken. Qed.
 
 (** * Locked locations *)
 Definition lockset : Set :=

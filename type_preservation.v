@@ -74,12 +74,13 @@ Proof.
   * typed_inversion_all; split_ands; eauto 9 using type_valid_ptr_type_valid.
   * typed_inversion_all.
     rewrite <-and_assoc; apply and_wlog_l; intros; split_ands.
-    + eapply mem_alloc_valid'; eauto using TArray_valid.
+    + eapply mem_alloc_new_valid';
+        eauto using TArray_valid, perm_full_valid, perm_full_mapped.
       by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id
         by auto using Z_to_nat_neq_0_nonneg.
-    + typed_constructor; eauto 10 using addr_top_array_strict, TArray_valid,
-        addr_top_array_typed, mem_alloc_index_typed', lockset_valid_weaken.
-    + eauto using mem_alloc_forward', TArray_valid.
+    + typed_constructor; eauto 10 using TArray_valid,
+        addr_top_array_typed, mem_alloc_new_index_typed', lockset_valid_weaken.
+    + eauto using mem_alloc_new_forward', TArray_valid.
   * typed_inversion_all; split_ands; eauto using
       lockset_valid_weaken, mem_free_valid', mem_free_forward'.
   * typed_inversion_all;
@@ -182,7 +183,7 @@ Proof.
     edestruct (funenv_lookup Γ ('{m}) Γf δ f')
       as (s'&mτ&?&?&?&?&?&?&?); eauto.
     erewrite fmap_type_of by eauto; simplify_equality.
-    edestruct (mem_alloc_val_list_valid Γ m) as (?&?&?); eauto.
+    edestruct (mem_alloc_list_valid Γ m) as (?&?&?); eauto.
     split; [|eauto using funenv_typed_weaken].
     eexists; simpl; split_ands;
       repeat typed_constructor; eauto using ctx_typed_weaken.
@@ -216,10 +217,11 @@ Proof.
   * intros m k Es n s ? (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eauto 10 using sctx_item_subst_typed.
   * intros m k d o τ s ?? (τf&HS&?&?) ?; typed_inversion_all.
-    split; [|eauto using funenv_typed_weaken, mem_alloc_forward'].
-    eexists; simpl; split_ands; eauto 6 using
-      mem_alloc_valid', stmt_typed_weaken, mem_alloc_forward',
-      direction_typed_weaken, ctx_typed_weaken, mem_alloc_index_typed'.
+    split; [|eauto using funenv_typed_weaken, mem_alloc_new_forward'].
+    eexists; simpl; split_ands; eauto 7 using
+      mem_alloc_new_valid', stmt_typed_weaken, mem_alloc_new_forward',
+      direction_typed_weaken, ctx_typed_weaken, mem_alloc_new_index_typed',
+      perm_full_valid, perm_full_mapped.
   * intros m k d o τ s ? (τf&HS&?&?) ?; typed_inversion_all.
     split; [|eauto using funenv_typed_weaken, mem_free_forward'].
     eexists; simpl; split_ands; repeat typed_constructor; eauto using

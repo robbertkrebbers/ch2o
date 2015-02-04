@@ -63,7 +63,7 @@ Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
      mem_allocable o m → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
      Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒
              #{Ω} (ptrV (Ptr (addr_top_array o τ n))),
-             mem_alloc Γ o true (τ.[Z.to_nat n]) m
+             mem_alloc Γ o true perm_full (val_new Γ (τ.[Z.to_nat n])) m
   | ehstep_free m Ω a :
      mem_freeable a m →
      Γ\ ρ ⊢ₕ free (%{Ω} a), m ⇒ #{Ω} voidV, mem_free (addr_index a) m
@@ -193,7 +193,7 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
      δ !! f = Some s → mem_allocable_list m os → length os = length vs →
      Γ\ δ ⊢ₛ State k (Call f vs) m ⇒
              State (CParams f (zip os (type_of <$> vs)) :: k)
-               (Stmt ↘ s) (mem_alloc_val_list Γ (zip os vs) m)
+               (Stmt ↘ s) (mem_alloc_list Γ (zip os vs) m)
   | cstep_free_params m k f oτs s :
      Γ\ δ ⊢ₛ State (CParams f oτs :: k) (Stmt ↗ s) m ⇒
              State k (Return f voidV) (foldr mem_free m (fst <$> oτs))
@@ -234,7 +234,8 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
   | cstep_in_block m k d o τ s :
      direction_in d s → mem_allocable o m →
      Γ\ δ ⊢ₛ State k (Stmt d (local{τ} s)) m ⇒
-             State (CLocal o τ :: k) (Stmt d s) (mem_alloc Γ o false τ m)
+             State (CLocal o τ :: k) (Stmt d s)
+               (mem_alloc Γ o false perm_full (val_new Γ τ) m)
   | cstep_out_block m k d o τ s :
      direction_out d s →
      Γ\ δ ⊢ₛ State (CLocal o τ :: k) (Stmt d s) m ⇒
@@ -324,7 +325,8 @@ Section inversion.
     | Stmt ↘ (local{τ} s) =>
        (∀ o,
          mem_allocable o m →
-         P (State (CLocal o τ :: k) (Stmt ↘ s) (mem_alloc Γ o false τ m))) →
+         P (State (CLocal o τ :: k) (Stmt ↘ s)
+           (mem_alloc Γ o false perm_full (val_new Γ τ) m))) →
        P S2
     | Stmt ↘ (s1 ;; s2) => P (State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m) → P S2
     | Stmt ↘ (catch s) =>
@@ -356,7 +358,7 @@ Section inversion.
        (∀ s os,
          δ !! f = Some s → mem_allocable_list m os → length os = length vs →
          P (State (CParams f (zip os (type_of <$> vs)) :: k)
-           (Stmt ↘ s) (mem_alloc_val_list Γ (zip os vs) m))) →
+           (Stmt ↘ s) (mem_alloc_list Γ (zip os vs) m))) →
        P S2
     | Stmt (⇈ v) s =>
        (∀ k' f oτs,
@@ -387,7 +389,7 @@ Section inversion.
        (∀ s' o τ,
          s = local{τ} s' → l ∈ labels s → mem_allocable o m →
          P (State (CLocal o τ :: k) (Stmt (↷ l) s')
-           (mem_alloc Γ o false τ m))) →
+           (mem_alloc Γ o false perm_full (val_new Γ τ) m))) →
        (∀ k' o τ,
          k = CLocal o τ :: k' → l ∉ labels s →
          P (State k' (Stmt (↷ l) (local{τ} s)) (mem_free o m))) →

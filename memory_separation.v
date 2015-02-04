@@ -38,19 +38,20 @@ Proof.
     by eauto using cmap_lookup_Some, pbits_mapped,
     pbits_kind_subseteq, @ctree_flatten_subseteq.
 Qed.
-Lemma mem_alloc_disjoint Γ m1 m2 o1 malloc τ1 :
-  ✓ Γ → ✓{Γ} τ1 → m1 ⊥ m2 → mem_allocable o1 m2 →
-  mem_alloc Γ o1 malloc τ1 m1 ⊥ m2.
+Lemma mem_alloc_disjoint Γ Γm m1 m2 o1 malloc x v τ :
+  ✓ Γ → sep_valid x → ¬sep_unmapped x → (Γ,Γm) ⊢ v : τ → 
+  m1 ⊥ m2 → mem_allocable o1 m2 → mem_alloc Γ o1 malloc x v m1 ⊥ m2.
 Proof.
-  destruct m1 as [m1], m2 as [m2]; simpl; intros ?? Hm ? o; specialize (Hm o).
-  destruct (decide (o = o1));
-    simplify_map_equality'; [|by destruct (m1 !! o), (m2 !! o)].
-  eauto 10 using (ctree_Forall_not _ _ ('{CMap m1})), ctree_typed_sep_valid,
-    (ctree_new_typed _ ('{CMap m1})), pbit_full_valid, ctree_new_Forall.
+  destruct m1 as [m1], m2 as [m2]; simpl; intros ???? Hm ? o; specialize (Hm o).
+  destruct (decide (o = o1)); simplify_map_equality';
+    simplify_type_equality; [|by destruct (m1 !! o), (m2 !! o)].
+  split; eauto 12 using ctree_typed_sep_valid, of_val_typed, Forall_replicate,
+    ctree_Forall_not, Forall_impl, of_val_mapped, Forall_replicate,
+    @sep_unmapped_empty_alt.
 Qed.
-Lemma mem_alloc_union Γ m1 m2 o1 malloc τ1 :
+Lemma mem_alloc_union Γ m1 m2 o1 malloc x v :
   mem_allocable o1 m2 →
-  mem_alloc Γ o1 malloc τ1 (m1 ∪ m2) = mem_alloc Γ o1 malloc τ1 m1 ∪ m2.
+  mem_alloc Γ o1 malloc x v (m1 ∪ m2) = mem_alloc Γ o1 malloc x v m1 ∪ m2.
 Proof.
   destruct m1 as [m1], m2 as [m2]; intros; sep_unfold; f_equal'.
   by apply insert_union_with_l.
@@ -320,18 +321,13 @@ Proof.
   intros. unfold mem_singleton. by erewrite <-zip_with_replicate,
     of_val_union, cmap_singleton_union by eauto.
 Qed.
-Lemma mem_alloc_empty_singleton Γ o malloc τ :
-  ✓ Γ → ✓{Γ} τ →
-  mem_alloc Γ o malloc τ ∅
-  = mem_singleton Γ (addr_top o τ) malloc perm_full (val_new Γ τ).
-Proof.
-  intros; unfold mem_singleton, cmap_singleton; f_equal'.
-  by rewrite val_new_type_of, of_val_new by done.
-Qed.
-Lemma mem_alloc_singleton Γ o malloc τ m :
-  ✓ Γ → ✓{Γ} τ → mem_allocable o m → sep_valid m →
-  mem_alloc Γ o malloc τ m
-  = mem_singleton Γ (addr_top o τ) malloc perm_full (val_new Γ τ) ∪ m.
+Lemma mem_alloc_empty_singleton Γ o malloc x v τ :
+  mem_alloc Γ o malloc x v ∅ = mem_singleton Γ (addr_top o τ) malloc x v.
+Proof. done. Qed.
+Lemma mem_alloc_singleton Γ m o malloc x v τ :
+  mem_allocable o m → sep_valid m →
+  mem_alloc Γ o malloc x v m
+  = mem_singleton Γ (addr_top o τ) malloc x v ∪ m.
 Proof.
   intros. by rewrite <-mem_alloc_empty_singleton,
     <-mem_alloc_union, sep_left_id by done.

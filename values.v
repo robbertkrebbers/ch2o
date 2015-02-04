@@ -623,6 +623,7 @@ Proof.
   induction 2; intros; decompose_Forall_hyps; f_equal;
     eauto using val_unflatten_between.
 Qed.
+Global Opaque val_unflatten.
 
 (** ** General properties of the typing judgment *)
 Lemma val_typed_int_frozen Γ Γm v τi :
