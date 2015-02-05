@@ -1006,6 +1006,7 @@ let main () =
   let usage_msg =
     "Usage: "^Filename.basename(Sys.argv.(0))^" [options] filename" in
   Arg.parse speclist (fun x -> filename := x) usage_msg;
+  if !filename = "" then exit (Arg.usage speclist usage_msg; 1) else
   let a =
     match !arch with
     | "x86_64" -> x86_64 !malloc_can_fail
