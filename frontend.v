@@ -1,4 +1,4 @@
-(* Copyright (c) 2012-2014, Robbert Krebbers. *)
+(* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Import String stringmap.
 Require Export type_system_decidable expression_eval error.

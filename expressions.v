@@ -1,4 +1,4 @@
-(* Copyright (c) 2012-2014, Robbert Krebbers. *)
+(* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file defines expressions and some associated theory. Most importantly,
 to define the operational semantics in the file [smallstep], we define

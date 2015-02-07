@@ -1,4 +1,4 @@
-(* Copyright (c) 2012-2014, Robbert Krebbers. *)
+(* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** The small step reduction is a binary relation between execution states,
 and computation is defined as the reflexive transitive closure of this

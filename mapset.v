@@ -1,4 +1,4 @@
-(* Copyright (c) 2012-2014, Robbert Krebbers. *)
+(* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This files gives an implementation of finite sets using finite maps with
 elements of the unit type. Since maps enjoy extensional equality, the

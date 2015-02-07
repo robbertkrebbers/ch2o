@@ -1,4 +1,4 @@
-(* Copyright (c) 2012-2014, Robbert Krebbers. *)
+(* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects some trivial facts on the Coq types [nat] and [N] for
 natural numbers, and the type [Z] for integers. It also declares some useful

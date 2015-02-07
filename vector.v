@@ -1,4 +1,4 @@
-(* Copyright (c) 2012-2014, Robbert Krebbers. *)
+(* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file collects general purpose definitions and theorems on vectors
 (lists of fixed length) and the fin type (bounded naturals). It uses the

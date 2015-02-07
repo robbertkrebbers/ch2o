@@ -1,4 +1,4 @@
-(* Copyright (c) 2012-2014, Robbert Krebbers. *)
+(* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** An implementation of finite maps and finite sets using association lists
 ordered by keys. Although the lookup and insert operation are linear-time, the

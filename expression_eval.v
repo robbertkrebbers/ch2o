@@ -1,4 +1,4 @@
-(* Copyright (c) 2012-2014, Robbert Krebbers. *)
+(* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This file defines a denotational semantics [⟦ _ ⟧] for pure expressions as
 an expression evaluator. It is parametrized by a map of function names to
