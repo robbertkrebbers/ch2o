@@ -36,42 +36,42 @@ Instance index_trichotomy: TrichotomyT (@lexico index _) := _.
 Typeclasses Opaque index indexmap.
 
 (** * Memory environments *)
-Notation memenv Ti :=
-  (indexmap (type Ti * bool (* false = alive, true = freed *))).
-Instance index_typed {Ti} : Typed (memenv Ti) (type Ti) index := λ Δ o τ,
+Notation memenv K :=
+  (indexmap (type K * bool (* false = alive, true = freed *))).
+Instance index_typed {K} : Typed (memenv K) (type K) index := λ Δ o τ,
   ∃ β, Δ !! o = Some (τ,β).
-Definition index_alive {Ti} (Δ : memenv Ti) (o : index) : Prop :=
+Definition index_alive {K} (Δ : memenv K) (o : index) : Prop :=
   ∃ τ, Δ !! o = Some (τ,false).
-Instance memenv_valid `{Env Ti} : Valid (env Ti) (memenv Ti) := λ Γ Δ, ∀ o τ,
+Instance memenv_valid `{Env K} : Valid (env K) (memenv K) := λ Γ Δ, ∀ o τ,
   Δ ⊢ o : τ → ✓{Γ} τ ∧ int_typed (size_of Γ τ) sptrT.
 
-Instance index_typecheck {Ti} : TypeCheck (memenv Ti) (type Ti) index := λ Δ o,
+Instance index_typecheck {K} : TypeCheck (memenv K) (type K) index := λ Δ o,
   fst <$> Δ !! o.
-Instance: TypeCheckSpec (memenv Ti) (type Ti) index (λ _, True).
+Instance: TypeCheckSpec (memenv K) (type K) index (λ _, True).
 Proof.
   intros ? Δ o τ. split; unfold type_check, typed,index_typecheck, index_typed.
   * destruct (Δ !! o) as [[??]|]; naive_solver.
   * by intros [? ->].
 Qed.
-Instance index_alive_dec {Ti} (Δ : memenv Ti) o : Decision (index_alive Δ o).
+Instance index_alive_dec {K} (Δ : memenv K) o : Decision (index_alive Δ o).
  refine
   match Δ !! o as mβτ return Decision (∃ τ, mβτ = Some (τ,false)) with
   | Some (_,β) => match β with true => right _ | false => left _ end
   | None => right _
   end; abstract naive_solver.
 Defined.
-Lemma memenv_empty_valid `{Env Ti} Γ : ✓{Γ} (∅ : memenv Ti).
+Lemma memenv_empty_valid `{Env K} Γ : ✓{Γ} (∅ : memenv K).
 Proof. intros ?? [??]; simplify_map_equality. Qed.
-Lemma memenv_valid_weaken `{EnvSpec Ti} Γ1 Γ2 (Δ : memenv Ti) :
+Lemma memenv_valid_weaken `{EnvSpec K} Γ1 Γ2 (Δ : memenv K) :
   ✓ Γ1 → ✓{Γ1} Δ → Γ1 ⊆ Γ2 → ✓{Γ2} Δ.
 Proof.
   intros ? HΔ ? o τ ?; destruct (HΔ o τ); auto.
   erewrite <-size_of_weaken by eauto; eauto using type_valid_weaken.
 Qed.
-Lemma index_typed_valid `{EnvSpec Ti} Γ (Δ : memenv Ti) o τ :
+Lemma index_typed_valid `{EnvSpec K} Γ (Δ : memenv K) o τ :
   ✓{Γ} Δ → Δ ⊢ o : τ → ✓{Γ} τ.
 Proof. intros Ho; eapply Ho; eauto. Qed.
-Lemma index_typed_representable `{EnvSpec Ti} Γ (Δ : memenv Ti) o τ :
+Lemma index_typed_representable `{EnvSpec K} Γ (Δ : memenv K) o τ :
   ✓{Γ} Δ → Δ ⊢ o : τ → int_typed (size_of Γ τ) sptrT.
 Proof. intros Ho; eapply Ho; eauto. Qed.
 
@@ -79,16 +79,16 @@ Proof. intros Ho; eapply Ho; eauto. Qed.
 grow, i.e. new objects may be allocated and current objects may be freed. We
 prove that the step relation of the semantics is monotone with respect to the
 forward relation below. *)
-Record memenv_forward {Ti} (Δ1 Δ2  : memenv Ti) := {
+Record memenv_forward {K} (Δ1 Δ2  : memenv K) := {
   memenv_forward_typed o τ : Δ1 ⊢ o : τ → Δ2 ⊢ o : τ;
   memenv_forward_alive o τ : Δ1 ⊢ o : τ → index_alive Δ2 o → index_alive Δ1 o
 }.
 Notation "Δ1 ⇒ₘ Δ2" := (memenv_forward Δ1 Δ2)
   (at level 70, format "Δ1  ⇒ₘ  Δ2") : C_scope.
-Instance: PreOrder (@memenv_forward Ti).
+Instance: PreOrder (@memenv_forward K).
 Proof. split; [|intros ??? [??] [??]]; split; naive_solver. Qed.
 Hint Extern 0 (?Δ1 ⇒ₘ ?Δ2) => reflexivity.
-Lemma memenv_subseteq_forward {Ti} (Δ1 Δ2  : memenv Ti) :
+Lemma memenv_subseteq_forward {K} (Δ1 Δ2  : memenv K) :
   Δ1 ⊆ Δ2 → Δ1 ⇒ₘ Δ2.
 Proof.
   split.
@@ -97,7 +97,7 @@ Proof.
     assert (Δ2 !! o = Some (τ, β)) by eauto using lookup_weaken.
     naive_solver.
 Qed.
-Lemma memenv_subseteq_alive {Ti} (Δ1 Δ2  : memenv Ti) o :
+Lemma memenv_subseteq_alive {K} (Δ1 Δ2  : memenv K) o :
   Δ1 ⊆ Δ2 → index_alive Δ1 o → index_alive Δ2 o.
 Proof. intros ? [β ?]; exists β; eauto using lookup_weaken. Qed.
 
@@ -231,9 +231,9 @@ Qed.
 Instance: PartialOrder (@subseteq lockset _).
 Proof. split; try apply _. intros ????. apply lockset_eq. intuition. Qed.
 
-Instance lockset_valid {Ti} : Valid (memenv Ti) lockset := λ Δ Ω,
+Instance lockset_valid {K} : Valid (memenv K) lockset := λ Δ Ω,
   ∀ o r, (o,r) ∈ Ω → ∃ τ, Δ ⊢ o : τ.
-Lemma lockset_valid_alt {Ti} (Δ : memenv Ti) (Ω : lockset) :
+Lemma lockset_valid_alt {K} (Δ : memenv K) (Ω : lockset) :
   ✓{Δ} Ω ↔ dom indexset (`Ω) ⊆ dom indexset Δ.
 Proof.
   rewrite elem_of_subseteq; setoid_rewrite elem_of_dom; split.
@@ -242,16 +242,16 @@ Proof.
     destruct (HΩ o i) as (τ&β&?); [by exists ω|by exists (τ,β)].
   * intros HΩ o r (ω&?&_). destruct (HΩ o) as [[τ β] ?]; eauto. by exists τ β.
 Qed.
-Instance lockset_valid_dec {Ti} (Δ : memenv Ti) Ω : Decision (✓{Δ} Ω).
+Instance lockset_valid_dec {K} (Δ : memenv K) Ω : Decision (✓{Δ} Ω).
 Proof.
  refine (cast_if (decide (dom indexset (`Ω) ⊆ dom _ Δ)));
   by rewrite lockset_valid_alt.
 Defined.
-Lemma lockset_valid_weaken {Ti} (Δ1 Δ2 : memenv Ti) Ω :
+Lemma lockset_valid_weaken {K} (Δ1 Δ2 : memenv K) Ω :
   ✓{Δ1} Ω → Δ1 ⇒ₘ Δ2 → ✓{Δ2} Ω.
 Proof. intros HΩ [??] o r ?; destruct (HΩ o r); eauto. Qed.
-Lemma lockset_empty_valid {Ti} (Δ : memenv Ti) : ✓{Δ} ∅.
+Lemma lockset_empty_valid {K} (Δ : memenv K) : ✓{Δ} ∅.
 Proof. intros o r; solve_elem_of. Qed.
-Lemma lockset_union_valid {Ti} (Δ : memenv Ti) Ω1 Ω2 :
+Lemma lockset_union_valid {K} (Δ : memenv K) Ω1 Ω2 :
   ✓{Δ} Ω1 → ✓{Δ} Ω2 → ✓{Δ} (Ω1 ∪ Ω2).
 Proof. intros HΩ1 HΩ2 o r; rewrite elem_of_union; naive_solver. Qed.

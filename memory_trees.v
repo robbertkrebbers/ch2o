@@ -3,20 +3,20 @@
 Require Export permission_bits ctrees.
 Local Open Scope ctype_scope.
 
-Notation mtree Ti := (ctree Ti (pbit Ti)).
+Notation mtree K := (ctree K (pbit K)).
 
 Section operations.
-  Context `{Env Ti}.
+  Context `{Env K}.
 
-  Global Instance type_of_ctree : TypeOf (type Ti) (mtree Ti) := λ w,
+  Global Instance type_of_ctree : TypeOf (type K) (mtree K) := λ w,
     match w with
     | MBase τb _ => baseT τb
     | MArray τ ws => τ.[length ws]
     | MStruct s _ => structT s
     | MUnion s _ _ _ | MUnionAll s _ => unionT s
     end.
-  Inductive ctree_typed' (Γ : env Ti) (Δ : memenv Ti) :
-       mtree Ti → type Ti → Prop :=
+  Inductive ctree_typed' (Γ : env K) (Δ : memenv K) :
+       mtree K → type K → Prop :=
     | MBase_typed τb xbs :
        ✓{Γ} τb → ✓{Γ,Δ}* xbs → length xbs = bit_size_of Γ (baseT τb) →
        ctree_typed' Γ Δ (MBase τb xbs) (baseT τb)
@@ -39,9 +39,9 @@ Section operations.
        Γ !! s = Some τs → ✓{Γ,Δ}* xbs → length xbs = bit_size_of Γ (unionT s) →
        ctree_typed' Γ Δ (MUnionAll s xbs) (unionT s).
   Global Instance ctree_typed:
-    Typed (env Ti * memenv Ti) (type Ti) (mtree Ti) := curry ctree_typed'.
+    Typed (env K * memenv K) (type K) (mtree K) := curry ctree_typed'.
 
-  Lemma ctree_typed_inv_l Γ Δ (P : type Ti → Prop) w τ :
+  Lemma ctree_typed_inv_l Γ Δ (P : type K → Prop) w τ :
     (Γ,Δ) ⊢ w : τ →
     match w with
     | MBase τb xbs =>
@@ -63,7 +63,7 @@ Section operations.
          length xbs = bit_size_of Γ (unionT s) → P (unionT s)) → P τ
     end.
   Proof. destruct 1; simplify_equality'; eauto. Qed.
-  Lemma ctree_typed_inv_r Γ Δ (P : mtree Ti → Prop) w τ :
+  Lemma ctree_typed_inv_r Γ Δ (P : mtree K → Prop) w τ :
     (Γ,Δ) ⊢ w : τ →
     match τ with
     | baseT τb =>
@@ -113,7 +113,7 @@ Section operations.
     end.
   Proof. destruct 1; simplify_equality'; eauto. Qed.
   Section ctree_typed_ind.
-    Context (Γ : env Ti) (Δ : memenv Ti) (P : mtree Ti → type Ti → Prop).
+    Context (Γ : env K) (Δ : memenv K) (P : mtree K → type K → Prop).
     Context (Pbase : ∀ τb xbs,
       ✓{Γ} τb → ✓{Γ,Δ}* xbs →
       length xbs = bit_size_of Γ (baseT τb) → P (MBase τb xbs) (baseT τb)).
@@ -143,7 +143,7 @@ Section operations.
   End ctree_typed_ind.
 
   Global Instance mtree_check :
-      TypeCheck (env Ti * memenv Ti) (type Ti) (mtree Ti) :=
+      TypeCheck (env K * memenv K) (type K) (mtree K) :=
     fix go ΓΔ w {struct w} := let _ : TypeCheck _ _ _ := @go in
     match w with
     | MBase τb xbs =>
@@ -181,13 +181,13 @@ Section operations.
        Some (unionT s)
     end.
 
-  Inductive union_free : mtree Ti → Prop :=
+  Inductive union_free : mtree K → Prop :=
     | MBase_union_free τb xbs : union_free (MBase τb xbs)
     | MArray_union_free τ ws : Forall union_free ws → union_free (MArray τ ws)
     | MStruct_union_free s wxbss :
        Forall (union_free ∘ fst) wxbss → union_free (MStruct s wxbss)
     | MUnionAll_union_free s xbs : union_free (MUnionAll s xbs).
-  Definition union_reset : mtree Ti → mtree Ti :=
+  Definition union_reset : mtree K → mtree K :=
     fix go w :=
     match w with
     | MBase τb xbs => MBase τb xbs
@@ -197,7 +197,7 @@ Section operations.
     | MUnionAll s xbs => MUnionAll s xbs
     end.
   Section union_free_ind.
-    Context (P : mtree Ti → Prop).
+    Context (P : mtree K → Prop).
     Context (Pbase : ∀ τ xbs, P (MBase τ xbs)).
     Context (Parray : ∀ τ ws,
       Forall union_free ws → Forall P ws → P (MArray τ ws)).
@@ -208,7 +208,7 @@ Section operations.
     Definition union_free_ind_alt: ∀ w, union_free w → P w.
     Proof. fix 2; destruct 1; eauto using Forall_impl. Qed.
   End union_free_ind.
-  Global Instance union_free_dec: ∀ w : mtree Ti, Decision (union_free w).
+  Global Instance union_free_dec: ∀ w : mtree K, Decision (union_free w).
   Proof.
    refine (
     fix go w :=
@@ -221,21 +221,21 @@ Section operations.
     end); clear go; abstract first [by constructor | by inversion 1].
   Defined.
 
-  Definition array_unflatten {A B} (Γ : env Ti) (f : list A → B)
-      (τ : type Ti) : nat → list A → list B :=
+  Definition array_unflatten {A B} (Γ : env K) (f : list A → B)
+      (τ : type K) : nat → list A → list B :=
     let sz := bit_size_of Γ τ in fix go n bs :=
     match n with 0 => [] | S n => f (take sz bs) :: go n (drop sz bs) end.
   Definition struct_unflatten_aux {A B}
-      (f : type Ti → list A → B) : list (nat * type Ti) → list A → list B :=
+      (f : type K → list A → B) : list (nat * type K) → list A → list B :=
     fix go τs bs :=
     match τs with
     | [] => [] | (sz,τ) :: τs => f τ (take sz bs) :: go τs (drop sz bs)
     end.
-  Definition struct_unflatten {A B} (Γ : env Ti)
-      (f : type Ti → list A → B) (τs : list (type Ti)) : list A → list B :=
+  Definition struct_unflatten {A B} (Γ : env K)
+      (f : type K → list A → B) (τs : list (type K)) : list A → list B :=
     struct_unflatten_aux f (zip (field_bit_sizes Γ τs) τs).
-  Definition ctree_unflatten (Γ : env Ti) :
-      type Ti → list (pbit Ti) → mtree Ti := type_iter
+  Definition ctree_unflatten (Γ : env K) :
+      type K → list (pbit K) → mtree K := type_iter
     (**i TBase =>     *) (λ τb xbs, MBase τb xbs)
     (**i TArray =>    *) (λ τ n go xbs, MArray τ (array_unflatten Γ go τ n xbs))
     (**i TCompound => *) (λ c s τs go xbs,
@@ -248,11 +248,11 @@ Section operations.
       | Union_kind => MUnionAll s xbs
       end) Γ.
 
-  Definition ctree_new (Γ : env Ti) (xb : pbit Ti) (τ : type Ti) : mtree Ti :=
+  Definition ctree_new (Γ : env K) (xb : pbit K) (τ : type K) : mtree K :=
     ctree_unflatten Γ τ (replicate (bit_size_of Γ τ) xb).
 
   Global Instance ctree_lookup_seg:
-      LookupE (env Ti) (ref_seg Ti) (mtree Ti) (mtree Ti) := λ Γ rs w,
+      LookupE (env K) (ref_seg K) (mtree K) (mtree K) := λ Γ rs w,
     match rs, w with
     | RArray i τ n, MArray τ' ws =>
        guard (n = length ws); guard (τ = τ'); ws !! i
@@ -274,12 +274,12 @@ Section operations.
     | _, _ => None
     end.
   Global Instance ctree_lookup:
-      LookupE (env Ti) (ref Ti) (mtree Ti) (mtree Ti) :=
+      LookupE (env K) (ref K) (mtree K) (mtree K) :=
     fix go Γ r w := let _ : LookupE _ _ _ _ := @go in
     match r with [] => Some w | rs :: r => w !!{Γ} r ≫= lookupE Γ rs end.
 
-  Definition ctree_alter_seg (Γ : env Ti) (g : mtree Ti → mtree Ti)
-      (rs : ref_seg Ti) (w : mtree Ti) : mtree Ti :=
+  Definition ctree_alter_seg (Γ : env K) (g : mtree K → mtree K)
+      (rs : ref_seg K) (w : mtree K) : mtree K :=
     match rs, w with
     | RArray i _ _, MArray τ ws => MArray τ (alter g i ws)
     | RStruct i _, MStruct s wxbss => MStruct s (alter (prod_map g id) i wxbss)
@@ -294,24 +294,24 @@ Section operations.
                   (pbit_indetify <$> drop (bit_size_of Γ τ) xbs)
     | _, _ => w
     end.
-  Fixpoint ctree_alter (Γ : env Ti) (g : mtree Ti → mtree Ti)
-      (r : ref Ti) : mtree Ti → mtree Ti :=
+  Fixpoint ctree_alter (Γ : env K) (g : mtree K → mtree K)
+      (r : ref K) : mtree K → mtree K :=
     match r with
     | [] => g | rs :: r => ctree_alter Γ (ctree_alter_seg Γ g rs) r
     end.
 
   Global Instance ctree_lookup_byte:
-      LookupE (env Ti) nat (mtree Ti) (mtree Ti) :=
+      LookupE (env K) nat (mtree K) (mtree K) :=
     λ Γ i w, ctree_unflatten Γ ucharT <$>
       sublist_lookup (i * char_bits) char_bits (ctree_flatten w).
-  Definition ctree_alter_byte (Γ : env Ti) (f : mtree Ti → mtree Ti)
-      (i : nat) (w : mtree Ti) : mtree Ti :=
+  Definition ctree_alter_byte (Γ : env K) (f : mtree K → mtree K)
+      (i : nat) (w : mtree K) : mtree K :=
     ctree_unflatten Γ (type_of w) $
       sublist_alter (ctree_flatten ∘ f ∘ ctree_unflatten Γ ucharT)
                     (i * char_bits) char_bits (ctree_flatten w).
 
-  Definition ctree_singleton_seg (Γ : env Ti)
-    (rs : ref_seg Ti) (w : mtree Ti) : mtree Ti :=
+  Definition ctree_singleton_seg (Γ : env K)
+    (rs : ref_seg K) (w : mtree K) : mtree K :=
     match rs with
     | RArray i τ n => MArray τ (<[i:=w]>(replicate n (ctree_new Γ ∅ τ)))
     | RStruct i s =>
@@ -323,8 +323,8 @@ Section operations.
        let sz := bit_size_of Γ (unionT s) - bit_size_of Γ τ in
        MUnion s i w (replicate sz ∅)
     end.
-  Fixpoint ctree_singleton (Γ : env Ti)
-      (r : ref Ti) (w : mtree Ti) : mtree Ti :=
+  Fixpoint ctree_singleton (Γ : env K)
+      (r : ref K) (w : mtree K) : mtree K :=
     match r with
     | [] => w
     | rs :: r => ctree_singleton Γ r (ctree_singleton_seg Γ rs w)
@@ -332,28 +332,28 @@ Section operations.
 End operations.
 
 Section memory_trees.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
 Implicit Types α : bool.
-Implicit Types Δ : memenv Ti.
-Implicit Types τb : base_type Ti.
-Implicit Types τ σ : type Ti.
-Implicit Types τs σs : list (type Ti).
+Implicit Types Δ : memenv K.
+Implicit Types τb : base_type K.
+Implicit Types τ σ : type K.
+Implicit Types τs σs : list (type K).
 Implicit Types o : index.
-Implicit Types xb : pbit Ti.
-Implicit Types xbs : list (pbit Ti).
-Implicit Types w : mtree Ti.
-Implicit Types ws : list (mtree Ti).
-Implicit Types wxbs : mtree Ti * list (pbit Ti).
-Implicit Types wxbss : list (mtree Ti * list (pbit Ti)).
-Implicit Types rs : ref_seg Ti.
-Implicit Types r : ref Ti.
-Implicit Types g : mtree Ti → mtree Ti.
+Implicit Types xb : pbit K.
+Implicit Types xbs : list (pbit K).
+Implicit Types w : mtree K.
+Implicit Types ws : list (mtree K).
+Implicit Types wxbs : mtree K * list (pbit K).
+Implicit Types wxbss : list (mtree K * list (pbit K)).
+Implicit Types rs : ref_seg K.
+Implicit Types r : ref K.
+Implicit Types g : mtree K → mtree K.
 
 Hint Resolve Forall_take Forall_drop Forall_app_2 Forall_replicate.
 Hint Resolve Forall2_take Forall2_drop Forall2_app.
 Hint Immediate env_valid_lookup env_valid_lookup_lookup.
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
+Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 Hint Immediate TArray_valid_inv_type pbit_empty_valid.
 
 (** ** General properties of the typing judgment *)
@@ -365,7 +365,7 @@ Proof.
     end; eauto.
 Qed.
 Hint Immediate ctree_typed_type_valid.
-Global Instance: TypeOfSpec (env Ti * memenv Ti) (type Ti) (mtree Ti).
+Global Instance: TypeOfSpec (env K * memenv K) (type K) (mtree K).
 Proof.
   intros [Γ Δ]. induction 1 using @ctree_typed_ind; decompose_Forall_hyps;
     try match goal with
@@ -374,7 +374,7 @@ Proof.
 Qed.
 Local Arguments type_check _ _ _ _ _ !_ /.
 Global Instance:
-  TypeCheckSpec (env Ti * memenv Ti) (type Ti) (mtree Ti) (λ _, True).
+  TypeCheckSpec (env K * memenv K) (type K) (mtree K) (λ _, True).
 Proof.
   intros [Γ Δ]. assert (∀ ws τs,
     Forall (λ w, ∀ τ, type_check (Γ,Δ) w = Some τ → (Γ,Δ) ⊢ w : τ) ws →
@@ -496,7 +496,7 @@ Proof.
 Qed.
 
 (** ** The [type_mask] function *)
-Definition type_mask (Γ : env Ti) : type Ti → list bool := type_iter
+Definition type_mask (Γ : env K) : type K → list bool := type_iter
   (**i TBase =>     *) (λ τb, replicate (bit_size_of Γ τb) false)
   (**i TArray =>    *) (λ _ n go, mjoin (replicate n go))
   (**i TCompound => *) (λ c s τs go,
@@ -555,8 +555,8 @@ Section array_unflatten.
   Proof. revert xs. induction n; simpl; auto. Qed.
 End array_unflatten.
 Section struct_unflatten.
-  Context {A B} (f : type Ti → list A → B).
-  Lemma struct_unflatten_weaken (g : type Ti → list A → B) Γ1 Γ2 τs xs :
+  Context {A B} (f : type K → list A → B).
+  Lemma struct_unflatten_weaken (g : type K → list A → B) Γ1 Γ2 τs xs :
     ✓ Γ1 → ✓{Γ1}* τs → Γ1 ⊆ Γ2 →
     Forall (λ τ, ✓{Γ1} τ → ∀ xs, f τ xs = g τ xs) τs →
     struct_unflatten Γ1 f τs xs = struct_unflatten Γ2 g τs xs.
@@ -566,7 +566,7 @@ Section struct_unflatten.
     induction (bit_size_of_fields _ τs HΓ1); intros;
       decompose_Forall_hyps; f_equal'; eauto.
   Qed.
-  Lemma struct_unflatten_type_of `{TypeOf (type Ti) B} Γ τs xs :
+  Lemma struct_unflatten_type_of `{TypeOf (type K) B} Γ τs xs :
     ✓ Γ → (∀ τ xs, ✓{Γ} τ → type_of (f τ xs) = τ) → ✓{Γ}* τs →
     type_of <$> struct_unflatten Γ f τs xs = τs.
   Proof.
@@ -730,7 +730,7 @@ Proof.
   intros. by erewrite <-ctree_flatten_unflatten,
     ctree_unflatten_flatten, ctree_flatten_union_reset by eauto.
 Qed.
-Lemma ctree_unflatten_Forall_le (P : pbit Ti → Prop) Γ τ xbs :
+Lemma ctree_unflatten_Forall_le (P : pbit K → Prop) Γ τ xbs :
   ✓ Γ → ✓{Γ} τ → (∀ xb, P xb → P (pbit_indetify xb)) → Forall P xbs →
   length xbs ≤ bit_size_of Γ τ → ctree_Forall P (ctree_unflatten Γ τ xbs).
 Proof.
@@ -738,11 +738,11 @@ Proof.
   generalize (type_mask Γ τ). clear Hlen.
   induction Hxbs; intros [|[] ?]; simpl; auto.
 Qed.
-Lemma ctree_unflatten_Forall (P : pbit Ti → Prop) Γ τ xbs :
+Lemma ctree_unflatten_Forall (P : pbit K → Prop) Γ τ xbs :
   ✓ Γ → ✓{Γ} τ → (∀ xb, P xb → P (pbit_indetify xb)) → Forall P xbs →
   length xbs = bit_size_of Γ τ → ctree_Forall P (ctree_unflatten Γ τ xbs).
 Proof. intros. apply ctree_unflatten_Forall_le; auto with lia. Qed.
-Lemma ctree_merge_unflatten {B : Set} Γ (h : pbit Ti → B → pbit Ti) xbs ys τ :
+Lemma ctree_merge_unflatten {B : Set} Γ (h : pbit K → B → pbit K) xbs ys τ :
   ✓ Γ → ✓{Γ} τ → length xbs = bit_size_of Γ τ →
   zip_with h (pbit_indetify <$> xbs) ys = pbit_indetify <$> zip_with h xbs ys →
   ctree_merge true h (ctree_unflatten Γ τ xbs) ys
@@ -806,7 +806,7 @@ Qed.
 Lemma ctree_news_weaken Γ1 Γ2 xb τs :
   ✓ Γ1 → ✓{Γ1}* τs → Γ1 ⊆ Γ2 → ctree_new Γ1 xb <$> τs = ctree_new Γ2 xb <$> τs.
 Proof. induction 2; intros; f_equal'; eauto using ctree_new_weaken. Qed.
-Lemma ctree_new_Forall (P : pbit Ti → Prop) Γ xb τ :
+Lemma ctree_new_Forall (P : pbit K → Prop) Γ xb τ :
   ✓ Γ → ✓{Γ} τ → P xb → P (pbit_indetify xb) → ctree_Forall P (ctree_new Γ xb τ).
 Proof.
   intros. unfold ctree_new. rewrite ctree_flatten_unflatten_le by done.
@@ -873,10 +873,10 @@ Lemma ctree_map_type_of h w : type_of (ctree_map h w) = type_of w.
 Proof. destruct w; simpl; unfold MUnion'; repeat case_decide; auto. Qed.
 
 (** ** Lookup operation *)
-Lemma ctree_lookup_nil Γ : lookupE Γ (@nil (ref_seg Ti)) = (@Some (mtree Ti)).
+Lemma ctree_lookup_nil Γ : lookupE Γ (@nil (ref_seg K)) = (@Some (mtree K)).
 Proof. done. Qed.
 Lemma ctree_lookup_cons Γ rs r :
-  lookupE Γ (rs :: r) = λ w : mtree Ti, w !!{Γ} r ≫= lookupE Γ rs.
+  lookupE Γ (rs :: r) = λ w : mtree K, w !!{Γ} r ≫= lookupE Γ rs.
 Proof. done. Qed.
 Lemma ctree_lookup_app Γ r1 r2 w :
   w !!{Γ} (r1 ++ r2) = (w !!{Γ} r2) ≫= lookupE Γ r1.
@@ -1026,7 +1026,7 @@ Proof.
   intros HΓ Hvτ Hw' ?. by destruct (ctree_lookup_Some _ _ _ _ _ _ HΓ Hvτ Hw')
     as (σ'&Hrσ'&?); simplify_type_equality.
 Qed.
-Lemma ctree_lookup_seg_Forall (P : pbit Ti → Prop) Γ w rs w' :
+Lemma ctree_lookup_seg_Forall (P : pbit K → Prop) Γ w rs w' :
   ✓ Γ → (∀ xb, P xb → P (pbit_indetify xb)) →
   ctree_Forall P w → w !!{Γ} rs = Some w' → ctree_Forall P w'.
 Proof.
@@ -1037,7 +1037,7 @@ Proof.
     pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs;
     intros; decompose_Forall_hyps; eauto 7 using ctree_unflatten_Forall_le.
 Qed.
-Lemma ctree_lookup_Forall (P : pbit Ti → Prop) Γ w r w' :
+Lemma ctree_lookup_Forall (P : pbit K → Prop) Γ w r w' :
   ✓ Γ → (∀ xb, P xb → P (pbit_indetify xb)) →
   ctree_Forall P w → w !!{Γ} r = Some w' → ctree_Forall P w'.
 Proof.
@@ -1045,7 +1045,7 @@ Proof.
     intros w; rewrite ?ctree_lookup_snoc; intros; simplify_option_equality;
     simplify_type_equality; eauto using ctree_lookup_seg_Forall.
 Qed.
-Lemma ctree_lookup_Forall_typed (P : pbit Ti → Prop) Γ Δ w τ r w' :
+Lemma ctree_lookup_Forall_typed (P : pbit K → Prop) Γ Δ w τ r w' :
   ✓ Γ → (Γ,Δ) ⊢ w : τ → (∀ xb, ✓{Γ,Δ} xb → P xb → P (pbit_indetify xb)) →
   ctree_Forall P w → w !!{Γ} r = Some w' → ctree_Forall P w'.
 Proof.
@@ -1188,7 +1188,7 @@ Proof.
     IH, ctree_lookup_seg_flatten by eauto using type_mask_ref_seg.
 Qed.
 Lemma ctree_lookup_seg_merge {B : Set} Γ Δ
-    (h : pbit Ti → B → pbit Ti) w ys τ rs w' τ' :
+    (h : pbit K → B → pbit K) w ys τ rs w' τ' :
   ✓ Γ → (∀ xb y, h (pbit_indetify xb) y = pbit_indetify (h xb y)) →
   (∀ xb y, sep_unshared xb → sep_unshared (h xb y)) →
   (Γ,Δ) ⊢ w : τ → length ys = bit_size_of Γ τ →
@@ -1244,7 +1244,7 @@ Proof.
     by rewrite ctree_merge_unflatten, drop_0, zip_with_take by eauto.
 Qed.
 Lemma ctree_lookup_merge {B : Set} Γ Δ
-    (h : pbit Ti → B → pbit Ti) w ys τ r w' τ' :
+    (h : pbit K → B → pbit K) w ys τ r w' τ' :
   ✓ Γ → (∀ xb y, h (pbit_indetify xb) y = pbit_indetify (h xb y)) →
   (∀ xb y, sep_unshared xb → sep_unshared (h xb y)) →
   (Γ,Δ) ⊢ w : τ → length ys = bit_size_of Γ τ →
@@ -1341,7 +1341,7 @@ Proof.
   rewrite <-!ctree_alter_compose. apply ctree_alter_ext; intros w'; simpl; auto.
   by apply ctree_alter_seg_commute.
 Qed.
-Lemma ctree_alter_lookup_seg_Forall (P : pbit Ti → Prop) Γ g w rs w' :
+Lemma ctree_alter_lookup_seg_Forall (P : pbit K → Prop) Γ g w rs w' :
   ctree_Forall P (ctree_alter_seg Γ g rs w) →
   w !!{Γ} rs = Some w' → ctree_Forall P (g w').
 Proof.
@@ -1358,7 +1358,7 @@ Proof.
   * by intros; simplify_option_equality; decompose_Forall_hyps.
   * by intros; simplify_option_equality; decompose_Forall_hyps.
 Qed.
-Lemma ctree_alter_lookup_Forall (P : pbit Ti → Prop) Γ g w r w' :
+Lemma ctree_alter_lookup_Forall (P : pbit K → Prop) Γ g w r w' :
   ctree_Forall P (ctree_alter Γ g r w) →
   w !!{Γ} r = Some w' → ctree_Forall P (g w').
 Proof.
@@ -1368,7 +1368,7 @@ Proof.
   intros. destruct (w !!{Γ} rs) as [w''|] eqn:Hw''; simplify_equality'.
   eauto using ctree_alter_lookup_seg_Forall.
 Qed.
-Lemma ctree_alter_seg_Forall (P : pbit Ti → Prop) Γ g w rs w' :
+Lemma ctree_alter_seg_Forall (P : pbit K → Prop) Γ g w rs w' :
   (∀ xb, P xb → P (pbit_indetify xb)) →
   ctree_Forall P w → w !!{Γ} rs = Some w' → ctree_Forall P (g w') →
   ctree_Forall P (ctree_alter_seg Γ g rs w).
@@ -1385,7 +1385,7 @@ Proof.
   * intros; simplify_option_equality; decompose_Forall_hyps; auto.
   * intros; simplify_option_equality; decompose_Forall_hyps; auto.
 Qed.
-Lemma ctree_alter_Forall (P : pbit Ti → Prop) Γ g w r w' :
+Lemma ctree_alter_Forall (P : pbit K → Prop) Γ g w r w' :
   ✓ Γ → (∀ xb, P xb → P (pbit_indetify xb)) →
   ctree_Forall P w → w !!{Γ} r = Some w' → ctree_Forall P (g w') →
   ctree_Forall P (ctree_alter Γ g r w).
@@ -1705,7 +1705,7 @@ Proof.
   change (size_of Γ τ * char_bits) with (bit_size_of Γ τ).
   erewrite <-ctree_flatten_length by eauto. pose proof char_bits_pos; lia.
 Qed.
-Lemma ctree_lookup_byte_Forall (P : pbit Ti → Prop) Γ w i c :
+Lemma ctree_lookup_byte_Forall (P : pbit K → Prop) Γ w i c :
   ✓ Γ → (∀ xb, P xb → P (pbit_indetify xb)) →
   ctree_Forall P w → w !!{Γ} i = Some c → ctree_Forall P c.
 Proof.
@@ -1719,8 +1719,8 @@ Proof.
   intros. rewrite <-ctree_flatten_union_reset at 2.
   by erewrite <-ctree_unflatten_flatten, ctree_flatten_unflatten by eauto.
 Qed.
-Definition ctree_lookup_byte_after (Γ : env Ti)
-    (τ : type Ti) (i : nat) : mtree Ti → mtree Ti :=
+Definition ctree_lookup_byte_after (Γ : env K)
+    (τ : type K) (i : nat) : mtree K → mtree K :=
   ctree_unflatten Γ ucharT ∘
     mask pbit_indetify (take char_bits (drop (i * char_bits) (type_mask Γ τ))) ∘
     ctree_flatten.
@@ -1732,7 +1732,7 @@ Proof.
   unfold sublist_lookup in *; simplify_option_equality.
   by erewrite <-take_mask, <-drop_mask, ctree_flatten_mask by eauto.
 Qed.
-Lemma ctree_lookup_byte_after_Forall (P : pbit Ti → Prop) Γ τ i w :
+Lemma ctree_lookup_byte_after_Forall (P : pbit K → Prop) Γ τ i w :
   (∀ xb, P xb → P (pbit_indetify xb)) →
   ctree_Forall P w → ctree_Forall P (ctree_lookup_byte_after Γ τ i w).
 Proof.
@@ -1793,7 +1793,7 @@ Proof.
   apply ctree_unflatten_typed; eauto 2.
   eapply Forall_sublist_alter; unfold G; simpl; eauto using ctree_flatten_valid.
 Qed.
-Lemma ctree_alter_byte_Forall (P : pbit Ti → Prop) Γ Δ g w i c τ :
+Lemma ctree_alter_byte_Forall (P : pbit K → Prop) Γ Δ g w i c τ :
   ✓ Γ → (∀ xb, P xb → P (pbit_indetify xb)) →
   w !!{Γ} i = Some c → (Γ,Δ) ⊢ w : τ → (Γ,Δ) ⊢ g c : ucharT →
   ctree_Forall P w → ctree_Forall P (g c) →

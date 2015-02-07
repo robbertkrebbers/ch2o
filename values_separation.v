@@ -3,20 +3,20 @@
 Require Export values memory_trees_separation.
 
 Section values.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τ : type Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
+Implicit Types τ : type K.
 Implicit Types x : perm.
 Implicit Types xs : list perm.
-Implicit Types w : mtree Ti.
-Implicit Types v : val Ti.
-Implicit Types vs : list (val Ti).
+Implicit Types w : mtree K.
+Implicit Types v : val K.
+Implicit Types vs : list (val K).
 
 Hint Resolve Forall2_take Forall2_drop Forall_take Forall_drop Forall_app_2
   Forall_replicate Forall_resize.
 Hint Immediate env_valid_lookup env_valid_lookup_lookup.
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
+Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 Local Arguments union _ _ !_ !_ /.
 
 Ltac solve_length := repeat first
@@ -70,7 +70,7 @@ Lemma of_val_disjoint Γ Δ xs1 xs2 v τ :
   of_val Γ xs1 v ⊥ of_val Γ xs2 v.
 Proof.
   intros HΓ Hv. revert v τ Hv xs1 xs2.
-  assert (∀ xs (bs : list (bit Ti)),
+  assert (∀ xs (bs : list (bit K)),
     Forall sep_unmapped (zip_with PBit xs bs) →
     length xs ≠ 0 → length bs = length xs → Forall (not ∘ sep_unmapped) xs →
     False).

@@ -3,12 +3,12 @@
 Require Export bits.
 Local Open Scope cbase_type_scope.
 
-Inductive base_val (Ti : Set) : Set :=
-  | VIndet : base_type Ti → base_val Ti
-  | VVoid : base_val Ti
-  | VInt : int_type Ti → Z → base_val Ti
-  | VPtr : ptr Ti → base_val Ti
-  | VByte : list (bit Ti) → base_val Ti.
+Inductive base_val (K : Set) : Set :=
+  | VIndet : base_type K → base_val K
+  | VVoid : base_val K
+  | VInt : int_type K → Z → base_val K
+  | VPtr : ptr K → base_val K
+  | VByte : list (bit K) → base_val K.
 Arguments VIndet {_} _.
 Arguments VVoid {_}.
 Arguments VInt {_} _ _.
@@ -25,19 +25,19 @@ Notation "'intV{' τi } x" := (VInt τi x)
 Notation "'ptrV' p" := (VPtr p) (at level 10) : base_val_scope.
 Notation "'byteV' bs" := (VByte bs) (at level 10) : base_val_scope.
 
-Instance maybe_VInt {Ti} : Maybe2 (@VInt Ti) := λ vb,
+Instance maybe_VInt {K} : Maybe2 (@VInt K) := λ vb,
   match vb with VInt τi x => Some (τi,x) | _ => None end.
-Instance maybe_VPtr {Ti} : Maybe (@VPtr Ti) := λ vb,
+Instance maybe_VPtr {K} : Maybe (@VPtr K) := λ vb,
   match vb with VPtr p => Some p | _ => None end.
-Instance base_val_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (v1 v2 : base_val Ti) : Decision (v1 = v2).
+Instance base_val_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (v1 v2 : base_val K) : Decision (v1 = v2).
 Proof. solve_decision. Defined.
 
 Section operations.
-  Context `{Env Ti}.
+  Context `{Env K}.
 
-  Record char_byte_valid (Γ : env Ti)
-      (Δ : memenv Ti) (bs : list (bit Ti)) : Prop := {
+  Record char_byte_valid (Γ : env K)
+      (Δ : memenv K) (bs : list (bit K)) : Prop := {
     char_byte_valid_indet : ¬Forall (BIndet =) bs;
     char_byte_valid_bit : ¬(∃ βs, bs = BBit <$> βs);
     char_byte_valid_bits_valid : ✓{Γ,Δ}* bs;
@@ -50,17 +50,17 @@ Section operations.
      ¬(∃ βs, bs = BBit <$> βs) ∧ ✓{Γ,Δ}* bs ∧ length bs = char_bits)));
      abstract (constructor||intros[]; intuition).
   Defined.
-  Inductive base_typed' (Γ : env Ti) (Δ : memenv Ti) :
-       base_val Ti → base_type Ti → Prop :=
+  Inductive base_typed' (Γ : env K) (Δ : memenv K) :
+       base_val K → base_type K → Prop :=
     | VIndet_typed τb : ✓{Γ} τb → τb ≠ voidT → base_typed' Γ Δ (VIndet τb) τb
     | VVoid_typed : base_typed' Γ Δ VVoid voidT
     | VInt_typed x τi : int_typed x τi → base_typed' Γ Δ (VInt τi x) (intT τi)
     | VPtr_typed p τp : (Γ,Δ) ⊢ p : τp → base_typed' Γ Δ (VPtr p) (τp.*)
     | VByte_typed bs :
        char_byte_valid Γ Δ bs → base_typed' Γ Δ (VByte bs) ucharT.
-  Global Instance base_typed: Typed (env Ti * memenv Ti)
-    (base_type Ti) (base_val Ti) := curry base_typed'.
-  Global Instance type_of_base_val: TypeOf (base_type Ti) (base_val Ti) := λ v,
+  Global Instance base_typed: Typed (env K * memenv K)
+    (base_type K) (base_val K) := curry base_typed'.
+  Global Instance type_of_base_val: TypeOf (base_type K) (base_val K) := λ v,
     match v with
     | VIndet τb => τb
     | VVoid => voidT
@@ -69,7 +69,7 @@ Section operations.
     | VByte _ => ucharT
     end.
   Global Instance base_type_check:
-    TypeCheck (env Ti * memenv Ti) (base_type Ti) (base_val Ti) := λ ΓΔ v,
+    TypeCheck (env K * memenv K) (base_type K) (base_val K) := λ ΓΔ v,
     match v with
     | VIndet τb => guard (✓{ΓΔ.1} τb); guard (τb ≠ voidT); Some τb
     | VVoid => Some voidT
@@ -77,10 +77,10 @@ Section operations.
     | VPtr p => TPtr <$> type_check ΓΔ p
     | VByte bs => guard (char_byte_valid (ΓΔ.1) (ΓΔ.2) bs); Some ucharT
     end.
-  Global Instance base_val_freeze : Freeze (base_val Ti) := λ β v,
+  Global Instance base_val_freeze : Freeze (base_val K) := λ β v,
     match v with VPtr p => VPtr (freeze β p) | _ => v end.
 
-  Definition base_val_flatten (Γ : env Ti) (v : base_val Ti) : list (bit Ti) :=
+  Definition base_val_flatten (Γ : env K) (v : base_val K) : list (bit K) :=
     match v with
     | VIndet τb => replicate (bit_size_of Γ τb) BIndet
     | VVoid => replicate (bit_size_of Γ voidT) BIndet
@@ -88,8 +88,8 @@ Section operations.
     | VPtr p => BPtr <$> ptr_to_bits Γ p
     | VByte bs => bs
     end.
-  Definition base_val_unflatten (Γ : env Ti)
-      (τb : base_type Ti) (bs : list (bit Ti)) : base_val Ti :=
+  Definition base_val_unflatten (Γ : env K)
+      (τb : base_type K) (bs : list (bit K)) : base_val K :=
     match τb with
     | voidT => VVoid
     | intT τi =>
@@ -107,14 +107,14 @@ End operations.
 Arguments base_val_unflatten _ _ _ _ _ : simpl never.
 
 Section base_values.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
 Implicit Types α : bool.
-Implicit Types τb : base_type Ti.
-Implicit Types τp : ptr_type Ti.
-Implicit Types vb : base_val Ti.
-Implicit Types bs : list (bit Ti).
+Implicit Types τb : base_type K.
+Implicit Types τp : ptr_type K.
+Implicit Types vb : base_val K.
+Implicit Types bs : list (bit K).
 Implicit Types βs : list bool.
 
 Local Infix "⊑*" := (Forall2 bit_weak_refine) (at level 70).
@@ -126,12 +126,12 @@ Proof.
   destruct 2;
     eauto using TVoid_valid, TInt_valid, TPtr_valid, ptr_typed_type_valid.
 Qed.
-Global Instance: TypeOfSpec (env Ti * memenv Ti) (base_type Ti) (base_val Ti).
+Global Instance: TypeOfSpec (env K * memenv K) (base_type K) (base_val K).
 Proof.
   intros [??]. destruct 1; f_equal'; auto. eapply type_of_correct; eauto.
 Qed.
 Global Instance:
-  TypeCheckSpec (env Ti * memenv Ti) (base_type Ti) (base_val Ti) (λ _, True).
+  TypeCheckSpec (env K * memenv K) (base_type K) (base_val K) (λ _, True).
 Proof.
   intros [Γ Δm] vb τb _. split.
   * destruct vb; intros; simplify_option_equality;
@@ -199,7 +199,7 @@ Qed.
 
 (** ** Properties of the [base_val_unflatten] function *)
 Inductive base_val_unflatten_view Γ :
-     base_type Ti → list (bit Ti) → base_val Ti → Prop :=
+     base_type K → list (bit K) → base_val K → Prop :=
   | base_val_of_void bs : base_val_unflatten_view Γ voidT bs VVoid
   | base_val_of_int τi βs :
      length βs = int_width τi → base_val_unflatten_view Γ (intT τi)
@@ -285,7 +285,7 @@ Lemma base_val_unflatten_indet Γ τb bs :
   base_val_unflatten Γ τb bs = VIndet τb.
 Proof.
   intros. assert (∀ τi βs,
-    Forall (@BIndet Ti =) (BBit <$> βs) → length βs ≠ int_width τi).
+    Forall (@BIndet K =) (BBit <$> βs) → length βs ≠ int_width τi).
   { intros τi βs ??. pose proof (int_width_pos τi).
     destruct βs; decompose_Forall_hyps; lia. }
   assert (∀ τp pbs p,

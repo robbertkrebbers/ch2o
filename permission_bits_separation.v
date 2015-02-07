@@ -3,15 +3,15 @@
 Require Export permission_bits_refine.
 
 Section permission_bits.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types b : bit Ti.
-Implicit Types bs : list (bit Ti).
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
+Implicit Types b : bit K.
+Implicit Types bs : list (bit K).
 Implicit Types x : perm.
 Implicit Types xs : list perm.
-Implicit Types xb : pbit Ti.
-Implicit Types xbs : list (pbit Ti).
+Implicit Types xb : pbit K.
+Implicit Types xbs : list (pbit K).
 
 Hint Extern 0 (Separation _) => apply (_ : Separation perm).
 
@@ -83,7 +83,7 @@ Proof.
   intros Hxs. revert bs. induction Hxs; intros [|??] ??;
     decompose_Forall_hyps; constructor; sep_unfold; naive_solver.
 Qed.
-Lemma PBits_union xs1 xs2 (bs : list (bit Ti)) :
+Lemma PBits_union xs1 xs2 (bs : list (bit K)) :
   zip_with PBit (xs1 ∪* xs2) bs = zip_with PBit xs1 bs ∪* zip_with PBit xs2 bs.
 Proof.
   revert xs2 bs. unfold union at 2, sep_union at 2; simpl.
@@ -97,10 +97,10 @@ Proof.
   by unfold union at 2, sep_union at 2; simplify_option_equality.
 Qed.
 Lemma PBits_BIndet_disjoint xs1 xs2 :
-  xs1 ⊥* xs2 → (flip PBit (@BIndet Ti) <$> xs1) ⊥* (flip PBit BIndet <$> xs2).
+  xs1 ⊥* xs2 → (flip PBit (@BIndet K) <$> xs1) ⊥* (flip PBit BIndet <$> xs2).
 Proof. induction 1; constructor; sep_unfold; auto. Qed.
 Lemma PBits_BIndet_union xs1 xs2 :
-  flip PBit (@BIndet Ti) <$> xs1 ∪* xs2
+  flip PBit (@BIndet K) <$> xs1 ∪* xs2
   = (flip PBit BIndet <$> xs1) ∪* (flip PBit BIndet <$> xs2).
 Proof. revert xs2. induction xs1; intros [|??]; f_equal'; eauto. Qed.
 Lemma pbits_locked_union xbs1 xbs2 :

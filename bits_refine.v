@@ -2,8 +2,8 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export bits pointer_bits_refine.
 
-Inductive bit_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
-     (Δ1 Δ2 : memenv Ti) : relation (bit Ti) :=
+Inductive bit_refine' `{Env K} (Γ : env K) (α : bool) (f : meminj K)
+     (Δ1 Δ2 : memenv K) : relation (bit K) :=
   | BIndet_BIndet_refine' : bit_refine' Γ α f Δ1 Δ2 BIndet BIndet
   | BIndet_refine' b2 :
      α → ✓{Γ,Δ2} b2 → bit_refine' Γ α f Δ1 Δ2 BIndet b2
@@ -13,17 +13,17 @@ Inductive bit_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
   | BPtr_any_refine' pb1 b2 :
      α → ✓{Γ,Δ1} pb1 → ¬ptr_alive Δ1 (fragmented.frag_item pb1) →
      ✓{Γ,Δ2} b2 → bit_refine' Γ α f Δ1 Δ2 (BPtr pb1) b2.
-Instance bit_refine `{Env Ti} : Refine Ti (env Ti) (bit Ti) := bit_refine'.
+Instance bit_refine `{Env K} : Refine K (env K) (bit K) := bit_refine'.
 
 Section bits.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
 Implicit Types α β : bool.
 Implicit Types βs : list bool.
-Implicit Types pb : ptr_bit Ti.
-Implicit Types b : bit Ti.
-Implicit Types bs : list (bit Ti).
+Implicit Types pb : ptr_bit K.
+Implicit Types b : bit K.
+Implicit Types bs : list (bit K).
 
 Lemma bit_refine_valid_l Γ α f Δ1 Δ2 b1 b2 :
   ✓ Γ → b1 ⊑{Γ,α,f@Δ1↦Δ2} b2 → ✓{Γ,Δ1} b1.

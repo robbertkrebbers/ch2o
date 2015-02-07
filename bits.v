@@ -2,42 +2,42 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export pointer_bits.
 
-Inductive bit (Ti : Set) :=
-  | BIndet : bit Ti
-  | BBit : bool → bit Ti
-  | BPtr : ptr_bit Ti → bit Ti.
+Inductive bit (K : Set) :=
+  | BIndet : bit K
+  | BBit : bool → bit K
+  | BPtr : ptr_bit K → bit K.
 Arguments BIndet {_}.
 Arguments BBit {_} _.
 Arguments BPtr {_} _.
-Instance bit_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (b1 b2 : bit Ti) : Decision (b1 = b2).
+Instance bit_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (b1 b2 : bit K) : Decision (b1 = b2).
 Proof. solve_decision. Defined.
 
-Instance maybe_BBit {Ti} : Maybe (@BBit Ti) := λ b,
+Instance maybe_BBit {K} : Maybe (@BBit K) := λ b,
   match b with BBit b => Some b | _ => None end.
-Instance maybe_BPtr {Ti} : Maybe (@BPtr Ti) := λ b,
+Instance maybe_BPtr {K} : Maybe (@BPtr K) := λ b,
   match b with BPtr pb => Some pb | _ => None end.
 
 Section operations.
-  Context `{Env Ti}.
+  Context `{Env K}.
 
-  Inductive bit_valid' (Γ : env Ti) (Δ : memenv Ti) : bit Ti → Prop :=
+  Inductive bit_valid' (Γ : env K) (Δ : memenv K) : bit K → Prop :=
     | BIndet_valid' : bit_valid' Γ Δ BIndet
     | BBit_valid' β : bit_valid' Γ Δ (BBit β)
     | BPtr_valid' pb : ✓{Γ,Δ} pb → bit_valid' Γ Δ (BPtr pb).
   Global Instance bit_valid:
-    Valid (env Ti * memenv Ti) (bit Ti) := curry bit_valid'.
+    Valid (env K * memenv K) (bit K) := curry bit_valid'.
 
-  Inductive bit_weak_refine : relation (bit Ti) :=
+  Inductive bit_weak_refine : relation (bit K) :=
     | bit_weak_refine_refl b : bit_weak_refine b b
     | BIndet_weak_refine b : bit_weak_refine BIndet b.
-  Definition bit_join (b1 b2 : bit Ti) : option (bit Ti) :=
+  Definition bit_join (b1 b2 : bit K) : option (bit K) :=
     match b1, b2 with
     | BIndet, b2 => Some b2
     | b1, BIndet => Some b1
     | b1, b2 => guard (b1 = b2); Some b1
     end.
-  Fixpoint bits_join (bs1 bs2 : list (bit Ti)) : option (list (bit Ti)) :=
+  Fixpoint bits_join (bs1 bs2 : list (bit K)) : option (list (bit K)) :=
     match bs1, bs2 with
     | [], [] => Some []
     | b1 :: bs1, b2 :: bs2 =>
@@ -45,7 +45,7 @@ Section operations.
     | _, _ => None
     end.
   Fixpoint bits_list_join (sz : nat)
-      (bss : list (list (bit Ti))) : option (list (bit Ti)) :=
+      (bss : list (list (bit K))) : option (list (bit K)) :=
     match bss with
     | [] => Some (replicate sz BIndet)
     | bs :: bss => bits_list_join sz bss ≫= bits_join (resize sz BIndet bs)
@@ -53,30 +53,30 @@ Section operations.
 End operations.
 
 Section bits.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
 Implicit Types α β : bool.
 Implicit Types βs : list bool.
-Implicit Types pb : ptr_bit Ti.
-Implicit Types b : bit Ti.
-Implicit Types bs : list (bit Ti).
+Implicit Types pb : ptr_bit K.
+Implicit Types b : bit K.
+Implicit Types bs : list (bit K).
 
 Local Infix "⊑" := bit_weak_refine (at level 70).
 Local Infix "⊑*" := (Forall2 bit_weak_refine) (at level 70).
 Hint Extern 0 (_ ⊑ _) => reflexivity.
 Hint Extern 0 (_ ⊑* _) => reflexivity.
 
-Global Instance bit_valid_dec ΓΔ (b : bit Ti) : Decision (✓{ΓΔ} b).
+Global Instance bit_valid_dec ΓΔ (b : bit K) : Decision (✓{ΓΔ} b).
 Proof.
  refine
   match b with
   | BIndet | BBit _ => left _ | BPtr pb => cast_if (decide (✓{ΓΔ} pb))
   end; destruct ΓΔ; first [by constructor | abstract by inversion 1].
 Defined.
-Global Instance: Injective (=) (=) (@BBit Ti).
+Global Instance: Injective (=) (=) (@BBit K).
 Proof. by injection 1. Qed.
-Global Instance: Injective (=) (=) (@BPtr Ti).
+Global Instance: Injective (=) (=) (@BPtr K).
 Proof. by injection 1. Qed.
 Lemma BIndet_valid Γ Δ : ✓{Γ,Δ} BIndet.
 Proof. constructor. Qed.
@@ -123,7 +123,7 @@ Proof.
 Defined.
 
 (** ** Weak Refinements *)
-Global Instance: PartialOrder (@bit_weak_refine Ti).
+Global Instance: PartialOrder (@bit_weak_refine K).
 Proof.
   repeat split.
   * intros ?; constructor.
@@ -145,7 +145,7 @@ Proof. induction 2 as [|???? []]; decompose_Forall_hyps; f_equal; auto. Qed.
 Lemma bit_join_valid Γ Δ b1 b2 b3 :
   bit_join b1 b2 = Some b3 → ✓{Γ,Δ} b1 → ✓{Γ,Δ} b2 → ✓{Γ,Δ} b3.
 Proof. destruct 2,1; simplify_option_equality; constructor; auto. Qed.
-Global Instance: Commutative (@eq (option (bit Ti))) bit_join.
+Global Instance: Commutative (@eq (option (bit K))) bit_join.
 Proof. intros [] []; intros; simplify_option_equality; auto. Qed.
 Lemma bit_join_indet_l b : bit_join BIndet b = Some b.
 Proof. by destruct b; simplify_option_equality. Qed.
@@ -170,7 +170,7 @@ Proof.
   intros Hbs Hbs1. revert bs2 bs3 Hbs. induction Hbs1; destruct 2;
     simplify_option_equality; constructor; eauto using bit_join_valid.
 Qed.
-Global Instance: Commutative (@eq (option (list (bit Ti)))) bits_join.
+Global Instance: Commutative (@eq (option (list (bit K)))) bits_join.
 Proof.
   intros bs1. induction bs1 as [|b1 bs1 IH]; intros [|b2 bs2]; simpl; try done.
   rewrite (commutative bit_join). by destruct bit_join; simpl; rewrite ?IH.

@@ -4,11 +4,11 @@ Require Export types integer_operations.
 Local Open Scope ctype_scope.
 Local Unset Elimination Schemes.
 
-Class Env (Ti : Set) := {
-  env_type_env :> IntEnv Ti;
-  size_of : env Ti → type Ti → nat;
-  align_of : env Ti → type Ti → nat;
-  field_sizes : env Ti → list (type Ti) → list nat;
+Class Env (K : Set) := {
+  env_type_env :> IntEnv K;
+  size_of : env K → type K → nat;
+  align_of : env K → type K → nat;
+  field_sizes : env K → list (type K) → list nat;
   alloc_can_fail : bool
 }.
 
@@ -16,28 +16,28 @@ Arguments size_of _ _ _ _ : simpl never.
 Arguments align_of _ _ _ _ : simpl never.
 Arguments field_sizes _ _ _ _ : simpl never.
 
-Definition ptr_size_of `{Env Ti} (Γ : env Ti) (τp : ptr_type Ti) : nat :=
+Definition ptr_size_of `{Env K} (Γ : env K) (τp : ptr_type K) : nat :=
   match τp with TType τ => size_of Γ τ | _ => 1 end.
-Definition field_offset `{Env Ti} (Γ : env Ti) (τs : list (type Ti))
+Definition field_offset `{Env K} (Γ : env K) (τs : list (type K))
   (i : nat) : nat := sum_list $ take i $ field_sizes Γ τs.
-Definition bit_size_of `{Env Ti} (Γ : env Ti)
-  (τ : type Ti) : nat := size_of Γ τ * char_bits.
-Definition bit_align_of `{Env Ti} (Γ : env Ti)
-  (τ : type Ti) : nat := align_of Γ τ * char_bits.
-Definition ptr_bit_size_of `{Env Ti} (Γ : env Ti) (τp : ptr_type Ti) : nat :=
+Definition bit_size_of `{Env K} (Γ : env K)
+  (τ : type K) : nat := size_of Γ τ * char_bits.
+Definition bit_align_of `{Env K} (Γ : env K)
+  (τ : type K) : nat := align_of Γ τ * char_bits.
+Definition ptr_bit_size_of `{Env K} (Γ : env K) (τp : ptr_type K) : nat :=
   match τp with TType τ => bit_size_of Γ τ | _ => char_bits end.
-Definition field_bit_sizes `{Env Ti} (Γ : env Ti)
-    (τs : list (type Ti)) : list nat :=
+Definition field_bit_sizes `{Env K} (Γ : env K)
+    (τs : list (type K)) : list nat :=
   (λ sz, sz * char_bits) <$> field_sizes Γ τs.
-Definition field_bit_padding `{Env Ti}
-    (Γ : env Ti) (τs : list (type Ti)) : list nat :=
+Definition field_bit_padding `{Env K}
+    (Γ : env K) (τs : list (type K)) : list nat :=
   zip_with (λ sz τ, sz - bit_size_of Γ τ) (field_bit_sizes Γ τs) τs.
-Definition field_bit_offset `{Env Ti}
-    (Γ : env Ti) (τs : list (type Ti)) (i : nat) : nat :=
+Definition field_bit_offset `{Env K}
+    (Γ : env K) (τs : list (type K)) (i : nat) : nat :=
   sum_list $ take i $ field_bit_sizes Γ τs.
 
-Class EnvSpec (Ti : Set) `{Env Ti} := {
-  int_env_spec :>> IntEnvSpec Ti;
+Class EnvSpec (K : Set) `{Env K} := {
+  int_env_spec :>> IntEnvSpec K;
   size_of_ptr_ne_0 Γ τp : size_of Γ (τp.*) ≠ 0;
   size_of_int Γ τi : size_of Γ (intT τi) = rank_size (rank τi);
   size_of_void_ne_0 Γ : size_of Γ voidT ≠ 0;
@@ -67,10 +67,10 @@ Class EnvSpec (Ti : Set) `{Env Ti} := {
 }.
 
 Section env_spec.
-Context `{EnvSpec Ti}.
-Implicit Types τ σ : type Ti.
-Implicit Types τs σs : list (type Ti).
-Implicit Types Γ : env Ti.
+Context `{EnvSpec K}.
+Implicit Types τ σ : type K.
+Implicit Types τs σs : list (type K).
+Implicit Types Γ : env K.
 
 Lemma size_of_char Γ si : size_of Γ (intT (IntType si char_rank)) = 1.
 Proof. rewrite size_of_int. by apply rank_size_char. Qed.

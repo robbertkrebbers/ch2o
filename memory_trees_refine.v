@@ -3,8 +3,8 @@
 Require Export memory_trees permission_bits_refine.
 Local Open Scope ctype_scope.
 
-Inductive ctree_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
-     (Δ1 Δ2 : memenv Ti) : mtree Ti → mtree Ti → type Ti → Prop :=
+Inductive ctree_refine' `{Env K} (Γ : env K) (α : bool) (f : meminj K)
+     (Δ1 Δ2 : memenv K) : mtree K → mtree K → type K → Prop :=
   | MBase_refine τb xbs1 xbs2 :
      ✓{Γ} τb → xbs1 ⊑{Γ,α,f@Δ1↦Δ2}* xbs2 →
      length xbs1 = bit_size_of Γ (baseT τb) →
@@ -45,11 +45,11 @@ Inductive ctree_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
      ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xbs1) →
      ctree_refine' Γ α f Δ1 Δ2
        (MUnion s i w1 xbs1) (MUnionAll s xbs2) (unionT s).
-Instance ctree_refine `{Env Ti} :
-  RefineT Ti (env Ti) (type Ti) (mtree Ti) := ctree_refine'.
+Instance ctree_refine `{Env K} :
+  RefineT K (env K) (type K) (mtree K) := ctree_refine'.
 
-Lemma ctree_refine_inv_l `{Env Ti} (Γ : env Ti) (α : bool)
-    (f : meminj Ti) (Δ1 Δ2 : memenv Ti) (P : mtree Ti → Prop) w1 w2 τ :
+Lemma ctree_refine_inv_l `{Env K} (Γ : env K) (α : bool)
+    (f : meminj K) (Δ1 Δ2 : memenv K) (P : mtree K → Prop) w1 w2 τ :
   w1 ⊑{Γ,α,f@Δ1↦Δ2} w2 : τ →
   match w1 with
   | MBase τb xbs1 =>
@@ -75,8 +75,8 @@ Lemma ctree_refine_inv_l `{Env Ti} (Γ : env Ti) (α : bool)
   end.
 Proof. destruct 1; eauto. Qed.
 Section ctree_refine_ind.
-  Context `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti).
-  Context (Δ1 Δ2 : memenv Ti) (P : mtree Ti → mtree Ti → type Ti → Prop).
+  Context `{Env K} (Γ : env K) (α : bool) (f : meminj K).
+  Context (Δ1 Δ2 : memenv K) (P : mtree K → mtree K → type K → Prop).
   Context (Pbase : ∀ τb xbs1 xbs2,
     ✓{Γ} τb → xbs1 ⊑{Γ,α,f@Δ1↦Δ2}* xbs2 →
     length xbs1 = bit_size_of Γ (baseT τb) →
@@ -119,24 +119,24 @@ Section ctree_refine_ind.
 End ctree_refine_ind.
 
 Section memory_trees.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
 Implicit Types α : bool.
-Implicit Types Δ : memenv Ti.
-Implicit Types τb : base_type Ti.
-Implicit Types τ σ : type Ti.
-Implicit Types τs σs : list (type Ti).
+Implicit Types Δ : memenv K.
+Implicit Types τb : base_type K.
+Implicit Types τ σ : type K.
+Implicit Types τs σs : list (type K).
 Implicit Types o : index.
-Implicit Types xb : pbit Ti.
-Implicit Types xbs : list (pbit Ti).
-Implicit Types w : mtree Ti.
-Implicit Types ws : list (mtree Ti).
-Implicit Types wxbs : mtree Ti * list (pbit Ti).
-Implicit Types wxbss : list (mtree Ti * list (pbit Ti)).
-Implicit Types rs : ref_seg Ti.
-Implicit Types r : ref Ti.
-Implicit Types g : mtree Ti → mtree Ti.
-Implicit Types f : meminj Ti.
+Implicit Types xb : pbit K.
+Implicit Types xbs : list (pbit K).
+Implicit Types w : mtree K.
+Implicit Types ws : list (mtree K).
+Implicit Types wxbs : mtree K * list (pbit K).
+Implicit Types wxbss : list (mtree K * list (pbit K)).
+Implicit Types rs : ref_seg K.
+Implicit Types r : ref K.
+Implicit Types g : mtree K → mtree K.
+Implicit Types f : meminj K.
 
 Hint Resolve Forall_take Forall_drop Forall_app_2 Forall_replicate.
 Hint Resolve Forall2_take Forall2_drop Forall2_app.
@@ -163,7 +163,7 @@ Ltac solve_length := simplify_equality'; repeat first
 Hint Extern 0 (length _ = _) => solve_length.
 Hint Extern 0 (_ = length _) => solve_length.
 
-Inductive ctree_leaf_refine Γ α f Δ1 Δ2 : relation (mtree Ti) :=
+Inductive ctree_leaf_refine Γ α f Δ1 Δ2 : relation (mtree K) :=
   | MBase_shape τb xbs1 xbs2 :
      xbs1 ⊑{Γ,α,f@Δ1↦Δ2}* xbs2 →
      ctree_leaf_refine Γ α f Δ1 Δ2 (MBase τb xbs1) (MBase τb xbs2)
@@ -187,7 +187,7 @@ Inductive ctree_leaf_refine Γ α f Δ1 Δ2 : relation (mtree Ti) :=
      ctree_leaf_refine Γ α f Δ1 Δ2 (MUnion s i w1 xbs1) (MUnionAll s xbs2).
 
 Section ctree_leaf_refine.
-  Context Γ α f Δ1 Δ2 (P : mtree Ti → mtree Ti → Prop).
+  Context Γ α f Δ1 Δ2 (P : mtree K → mtree K → Prop).
   Context (Pbase : ∀ τb xbs1 xbs2,
     xbs1 ⊑{Γ,α,f@Δ1↦Δ2}* xbs2 → P (MBase τb xbs1) (MBase τb xbs2)).
   Context (Parray : ∀ τ ws1 ws2,

@@ -2,26 +2,26 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export permissions bits.
 
-Notation pbit Ti := (tagged perm (@BIndet Ti)).
+Notation pbit K := (tagged perm (@BIndet K)).
 Notation PBit := (Tagged (d:=BIndet)).
 
 Section operations.
-  Context `{Env Ti}.
+  Context `{Env K}.
 
-  Global Instance pbit_valid: Valid (env Ti * memenv Ti) (pbit Ti) := λ ΓΔ xb,
+  Global Instance pbit_valid: Valid (env K * memenv K) (pbit K) := λ ΓΔ xb,
     ✓{ΓΔ} (tagged_tag xb) ∧ sep_valid xb.
 
-  Definition pbit_indetify (xb : pbit Ti) : pbit Ti :=
+  Definition pbit_indetify (xb : pbit K) : pbit K :=
     PBit (tagged_perm xb) BIndet.
-  Definition pbit_kind : pbit Ti → option pkind := perm_kind ∘ tagged_perm.
-  Definition pbit_full : pbit Ti := PBit perm_full BIndet.
-  Definition pbit_token : pbit Ti := PBit perm_token BIndet.
-  Definition pbit_locked : pbit Ti → bool := perm_locked ∘ tagged_perm.
-  Definition pbit_lock (xb : pbit Ti) : pbit Ti :=
+  Definition pbit_kind : pbit K → option pkind := perm_kind ∘ tagged_perm.
+  Definition pbit_full : pbit K := PBit perm_full BIndet.
+  Definition pbit_token : pbit K := PBit perm_token BIndet.
+  Definition pbit_locked : pbit K → bool := perm_locked ∘ tagged_perm.
+  Definition pbit_lock (xb : pbit K) : pbit K :=
     PBit (perm_lock (tagged_perm xb)) (tagged_tag xb).
-  Definition pbit_unlock (xb : pbit Ti) : pbit Ti :=
+  Definition pbit_unlock (xb : pbit K) : pbit K :=
     PBit (perm_unlock (tagged_perm xb)) (tagged_tag xb).
-  Definition pbit_unlock_if (xb : pbit Ti) (β : bool) : pbit Ti :=
+  Definition pbit_unlock_if (xb : pbit K) (β : bool) : pbit K :=
     if β then pbit_unlock xb else xb.
 End operations.
 
@@ -32,23 +32,23 @@ Arguments pbit_lock _ !_ /.
 Arguments pbit_unlock _ !_ /.
 
 Section permission_bits.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
 Implicit Types α : bool.
-Implicit Types b : bit Ti.
-Implicit Types bs : list (bit Ti).
+Implicit Types b : bit K.
+Implicit Types bs : list (bit K).
 Implicit Types x : perm.
 Implicit Types xs : list perm.
-Implicit Types xb : pbit Ti.
-Implicit Types xbs : list (pbit Ti).
+Implicit Types xb : pbit K.
+Implicit Types xbs : list (pbit K).
 
 Lemma pbits_tag x bs : tagged_tag <$> PBit x <$> bs = bs.
 Proof. induction bs; f_equal'; auto. Qed.
 Lemma PBits_perm_tag xbs :
   zip_with PBit (tagged_perm <$> xbs) (tagged_tag <$> xbs) = xbs.
 Proof. by induction xbs as [|[]]; f_equal'. Qed.
-Lemma pbit_empty_valid Γ Δ : ✓{Γ,Δ} (∅ : pbit Ti).
+Lemma pbit_empty_valid Γ Δ : ✓{Γ,Δ} (∅ : pbit K).
 Proof. repeat split; auto using BIndet_valid, sep_empty_valid. Qed.
 Lemma PBit_valid Γ Δ x b :
   sep_valid x → ¬sep_unmapped x → ✓{Γ,Δ} b → ✓{Γ,Δ} (PBit x b).
@@ -97,7 +97,7 @@ Proof.
   unfold pbit_unlock; intros (?&?&?); repeat split; naive_solver
     auto using perm_unlock_valid, perm_unlock_mapped.
 Qed.
-Lemma pbit_unlock_if_empty β : pbit_unlock_if (∅ : pbit Ti) β = ∅.
+Lemma pbit_unlock_if_empty β : pbit_unlock_if (∅ : pbit K) β = ∅.
 Proof. by destruct β. Qed.
 Lemma pbit_unlock_unshared xb :
   sep_unshared xb → sep_unshared (pbit_unlock xb).
@@ -148,7 +148,7 @@ Proof.
     repeat constructor; auto using perm_unshared.
 Qed.
 Lemma PBits_indetify xs :
-  pbit_indetify <$> flip PBit (@BIndet Ti) <$> xs = flip PBit BIndet <$> xs.
+  pbit_indetify <$> flip PBit (@BIndet K) <$> xs = flip PBit BIndet <$> xs.
 Proof. induction xs; f_equal'; auto. Qed.
 Lemma pbit_indetify_valid Γ Δ xb : ✓{Γ,Δ} xb → ✓{Γ,Δ} (pbit_indetify xb).
 Proof. destruct xb; intros (?&?&?); repeat split; eauto using BIndet_valid. Qed.
@@ -187,7 +187,7 @@ Lemma pbit_indetify_unshared xb :
 Proof. by intros [??]. Qed.
 Lemma pbit_full_valid Γ Δ : ✓{Γ,Δ} pbit_full.
 Proof. by apply (bool_decide_unpack _). Qed.
-Lemma pbit_full_unshared : sep_unshared (@pbit_full Ti).
+Lemma pbit_full_unshared : sep_unshared (@pbit_full K).
 Proof. done. Qed.
 Lemma PBits_BIndet_tag xbs :
   Forall sep_unmapped xbs →

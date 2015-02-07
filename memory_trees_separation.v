@@ -4,29 +4,29 @@ Require Export permission_bits_separation memory_trees.
 Local Open Scope ctype_scope.
 
 Section memory_trees.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
 Implicit Types α : bool.
-Implicit Types Δ : memenv Ti.
-Implicit Types τb : base_type Ti.
-Implicit Types τ σ : type Ti.
-Implicit Types τs σs : list (type Ti).
+Implicit Types Δ : memenv K.
+Implicit Types τb : base_type K.
+Implicit Types τ σ : type K.
+Implicit Types τs σs : list (type K).
 Implicit Types o : index.
-Implicit Types xb : pbit Ti.
-Implicit Types xbs : list (pbit Ti).
-Implicit Types w : mtree Ti.
-Implicit Types ws : list (mtree Ti).
-Implicit Types wxbs : mtree Ti * list (pbit Ti).
-Implicit Types wxbss : list (mtree Ti * list (pbit Ti)).
-Implicit Types rs : ref_seg Ti.
-Implicit Types r : ref Ti.
-Implicit Types g : mtree Ti → mtree Ti.
+Implicit Types xb : pbit K.
+Implicit Types xbs : list (pbit K).
+Implicit Types w : mtree K.
+Implicit Types ws : list (mtree K).
+Implicit Types wxbs : mtree K * list (pbit K).
+Implicit Types wxbss : list (mtree K * list (pbit K)).
+Implicit Types rs : ref_seg K.
+Implicit Types r : ref K.
+Implicit Types g : mtree K → mtree K.
 
 Local Arguments union _ _ !_ !_ /.
 Hint Resolve Forall_take Forall_drop Forall_app_2 Forall_replicate.
 Hint Resolve Forall2_take Forall2_drop Forall2_app.
 Hint Immediate env_valid_lookup env_valid_lookup_lookup.
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
+Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 Hint Immediate ctree_typed_type_valid.
 Hint Immediate TArray_valid_inv_type.
 
@@ -552,7 +552,7 @@ Lemma ctree_singleton_seg_union Γ τ rs w1 w2 σ :
   = ctree_singleton_seg Γ rs w1 ∪ ctree_singleton_seg Γ rs w2.
 Proof.
   intros ?? Hrs.
-  assert (∀ n, replicate n (∅ : pbit Ti) ∪* replicate n ∅ = replicate n ∅).
+  assert (∀ n, replicate n (∅ : pbit K) ∪* replicate n ∅ = replicate n ∅).
   { intros. by rewrite zip_with_replicate_l, fmap_replicate by solve_length. }
   assert (∀ τ, ✓{Γ} τ → ctree_new Γ ∅ τ = ctree_new Γ ∅ τ ∪ ctree_new Γ ∅ τ).
   { intros. symmetry. eapply ctree_new_union with ∅;

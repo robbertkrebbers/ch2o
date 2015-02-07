@@ -5,17 +5,17 @@ Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 
 Section deciders.
-Context `{Env Ti}.
-Notation envs := (env Ti * memenv Ti * list (type Ti))%type.
+Context `{Env K}.
+Notation envs := (env K * memenv K * list (type K))%type.
 
-Definition assign_type_of (Γ : env Ti)
-    (τ1 τ2 : type Ti) (ass : assign) : option (type Ti) :=
+Definition assign_type_of (Γ : env K)
+    (τ1 τ2 : type K) (ass : assign) : option (type K) :=
   match ass with
   | Assign => guard (cast_typed Γ τ2 τ1); Some τ1
   | PreOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed Γ σ τ1); Some τ1
   | PostOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed Γ σ τ1); Some τ1
   end.
-Global Instance expr_type_check: TypeCheck envs (lrtype Ti) (expr Ti) :=
+Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
   fix go Γs e {struct e} := let _ : TypeCheck envs _ _ := @go in
   let '(Γ,Δ,τs) := Γs in
   match e with
@@ -39,7 +39,7 @@ Global Instance expr_type_check: TypeCheck envs (lrtype Ti) (expr Ti) :=
   | call e @ es =>
      '(σs,σ) ← (type_check Γs e ≫= maybe (inr ∘ TBase ∘ TPtr)) ≫= maybe2 TFun;
      σs' ← mapM (λ e, type_check Γs e ≫= maybe inr) es;
-     guard ((σs' : list (type Ti)) = σs); guard (type_complete Γ σ); Some (inr σ)
+     guard ((σs' : list (type K)) = σs); guard (type_complete Γ σ); Some (inr σ)
   | abort τ => guard (✓{Γ} τ); Some (inr τ)
   | load e => inr <$> type_check Γs e ≫= maybe inl
   | e %> rs =>
@@ -76,10 +76,10 @@ Global Instance expr_type_check: TypeCheck envs (lrtype Ti) (expr Ti) :=
      σ ← type_check Γs e1 ≫= maybe inr;
      τ ← type_check Γs e2 ≫= maybe inr;
      σ' ← τ !!{Γ} r;
-     guard ((σ':type Ti) = σ); Some (inr τ)
+     guard ((σ':type K) = σ); Some (inr τ)
   end.
 Global Instance ectx_item_lookup :
-    LookupE envs (ectx_item Ti) (lrtype Ti) (lrtype Ti) := λ Γs Ei τlr,
+    LookupE envs (ectx_item K) (lrtype K) (lrtype K) := λ Γs Ei τlr,
   let '(Γ,Δ,τs) := Γs in
   match Ei, τlr with
   | .* □, inr τ =>
@@ -95,13 +95,13 @@ Global Instance ectx_item_lookup :
   | call □ @ es, inr τ =>
      '(σs,σ) ← maybe (TBase ∘ TPtr) τ ≫= maybe2 TFun;
      σs' ← mapM (λ e, type_check Γs e ≫= maybe inr) es;
-     guard ((σs : list (type Ti)) = σs'); guard (type_complete Γ σ); Some (inr σ)
+     guard ((σs : list (type K)) = σs'); guard (type_complete Γ σ); Some (inr σ)
   | call e @ es1 □ es2, inr τ =>
      '(σs,σ) ←
        (type_check Γs e ≫= maybe (inr ∘ TBase ∘ TPtr)) ≫= maybe2 TFun;
      σs1 ← mapM (λ e, type_check Γs e ≫= maybe inr) (reverse es1);
      σs2 ← mapM (λ e, type_check Γs e ≫= maybe inr) es2;
-     guard ((σs : list (type Ti)) = σs1 ++ τ :: σs2);
+     guard ((σs : list (type K)) = σs1 ++ τ :: σs2);
      guard (type_complete Γ σ); Some (inr σ)
   | load □, inl τ => Some (inr τ)
   | □ %> rs, inl τ => inl <$> τ !!{Γ} rs
@@ -126,18 +126,18 @@ Global Instance ectx_item_lookup :
   | #[r:=□] e2, inr σ =>
      τ ← type_check Γs e2 ≫= maybe inr;
      σ' ← τ !!{Γ} r;
-     guard ((σ':type Ti) = σ); Some (inr τ)
+     guard ((σ':type K) = σ); Some (inr τ)
   | #[r:=e1] □, inr τ =>
      σ ← type_check Γs e1 ≫= maybe inr;
      σ' ← τ !!{Γ} r;
-     guard ((σ':type Ti) = σ); Some (inr τ)
+     guard ((σ':type K) = σ); Some (inr τ)
   | _, _ => None
   end.
 Global Instance ectx_lookup :
-    LookupE envs (ectx Ti) (lrtype Ti) (lrtype Ti) :=
+    LookupE envs (ectx K) (lrtype K) (lrtype K) :=
   fix go Γs E τlr := let _ : LookupE _ _ _ _ := @go in
   match E with [] => Some τlr | Ei :: E => τlr !!{Γs} Ei ≫= lookupE Γs E end.
-Global Instance stmt_type_check: TypeCheck envs (rettype Ti) (stmt Ti) :=
+Global Instance stmt_type_check: TypeCheck envs (rettype K) (stmt K) :=
   fix go Γs s {struct s} := let _ : TypeCheck envs _ _ := @go in
   let '(Γ,Δ,τs) := Γs in
   match s with
@@ -162,7 +162,7 @@ Global Instance stmt_type_check: TypeCheck envs (rettype Ti) (stmt Ti) :=
      mσ ← rettype_union mσ1 mσ2; Some (c1 && c2,mσ)
   end%S.
 Global Instance sctx_item_lookup :
-    LookupE envs (sctx_item Ti) (rettype Ti) (rettype Ti) := λ Γs Es τlr,
+    LookupE envs (sctx_item K) (rettype K) (rettype K) := λ Γs Es τlr,
   match Es, τlr with
   | □ ;; s2, (c1,mσ1) =>
      '(c2,mσ2) ← type_check Γs s2;
@@ -182,7 +182,7 @@ Global Instance sctx_item_lookup :
      mσ ← rettype_union mσ1 mσ2; Some (c1&&c2,mσ)
   end%S.
 Global Instance esctx_item_lookup :
-    LookupE envs (esctx_item Ti) (rettype Ti) (type Ti) := λ Γs Ee τlr,
+    LookupE envs (esctx_item K) (rettype K) (type K) := λ Γs Ee τlr,
   match Ee, τlr with
   | ! □, _ => Some (false,None)
   | ret □, _ => Some (true,Some τlr)
@@ -192,7 +192,7 @@ Global Instance esctx_item_lookup :
      mσ ← rettype_union mσ1 mσ2; Some (c1 && c2,mσ)
   | _, _ => None
   end%S.
-Global Instance rettype_match_dec (cmσ : rettype Ti) σ :
+Global Instance rettype_match_dec (cmσ : rettype K) σ :
     Decision (rettype_match cmσ σ) :=
   match cmσ with
   | (true,Some σ') => decide (σ' = σ)
@@ -200,7 +200,7 @@ Global Instance rettype_match_dec (cmσ : rettype Ti) σ :
   | (_,None) => decide (σ = voidT)
   end.
 Global Instance ctx_item_lookup :
-    LookupE envs (ctx_item Ti) (focustype Ti) (focustype Ti) := λ Γs Ek τlr,
+    LookupE envs (ctx_item K) (focustype K) (focustype K) := λ Γs Ek τlr,
   let '(Γ,Δ,τs) := Γs in
   match Ek, τlr with
   | CStmt Es, Stmt_type cmσ1 => Stmt_type <$> cmσ1 !!{Γs} Es
@@ -218,7 +218,7 @@ Global Instance ctx_item_lookup :
   | _, _ => None
   end.
 Global Instance focus_type_check:
-    TypeCheck envs (focustype Ti) (focus Ti) := λ Γs φ,
+    TypeCheck envs (focustype K) (focus K) := λ Γs φ,
   let '(Γ,Δ,τs) := Γs in
   match φ with
   | Stmt d s =>
@@ -226,7 +226,7 @@ Global Instance focus_type_check:
      match d, cmσ with
      | ⇈ v, (c,Some τ) =>
         τ' ← type_check (Γ,Δ) v;
-        guard ((τ : type Ti) = τ'); Some (Stmt_type cmσ)
+        guard ((τ : type K) = τ'); Some (Stmt_type cmσ)
      | ↘, _ | ↗, (false,_) | ↷ _, _ | ↑ _, _ => Some (Stmt_type cmσ)
      | _, _ => None
      end
@@ -234,11 +234,11 @@ Global Instance focus_type_check:
   | Call f vs =>
      '(σs,_) ← Γ !! f;
      σs' ← mapM (type_check (Γ,Δ)) vs;
-     guard ((σs : list (type Ti)) = σs'); Some (Fun_type f)
+     guard ((σs : list (type K)) = σs'); Some (Fun_type f)
   | Return f v =>
      '(_,σ) ← Γ !! f;
      σ' ← type_check (Γ,Δ) v;
-     guard ((σ : type Ti) = σ'); Some (Fun_type f)
+     guard ((σ : type K) = σ'); Some (Fun_type f)
   | Undef (UndefExpr E e) =>
      Expr_type <$> (type_check Γs e ≫= lookupE Γs E) ≫= maybe inr
   | Undef (UndefBranch Es Ω v) =>
@@ -247,24 +247,24 @@ Global Instance focus_type_check:
 End deciders.
 
 Section properties.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
 Implicit Types o : index.
-Implicit Types Δ : memenv Ti.
-Implicit Types m : mem Ti.
-Implicit Types e : expr Ti.
-Implicit Types s : stmt Ti.
-Implicit Types τ σ : type Ti.
-Implicit Types a : addr Ti.
-Implicit Types v : val Ti.
-Implicit Types Ei : ectx_item Ti.
-Implicit Types E : ectx Ti.
-Implicit Types Es : sctx_item Ti.
-Implicit Types Ee : esctx_item Ti.
-Implicit Types Ek : ctx_item Ti.
-Implicit Types k : ctx Ti.
-Implicit Types d : direction Ti.
-Notation envs := (env Ti * memenv Ti * list (type Ti))%type.
+Implicit Types Δ : memenv K.
+Implicit Types m : mem K.
+Implicit Types e : expr K.
+Implicit Types s : stmt K.
+Implicit Types τ σ : type K.
+Implicit Types a : addr K.
+Implicit Types v : val K.
+Implicit Types Ei : ectx_item K.
+Implicit Types E : ectx K.
+Implicit Types Es : sctx_item K.
+Implicit Types Ee : esctx_item K.
+Implicit Types Ek : ctx_item K.
+Implicit Types k : ctx K.
+Implicit Types d : direction K.
+Notation envs := (env K * memenv K * list (type K))%type.
 
 Ltac simplify :=
   repeat match goal with
@@ -272,8 +272,8 @@ Ltac simplify :=
   | _ => progress simplify_option_equality
   | _ => case_match
   end.
-Hint Resolve (type_check_sound (V:=val Ti)) (type_check_sound (V:=addr Ti)).
-Hint Resolve (mapM_type_check_sound (V:=val Ti)).
+Hint Resolve (type_check_sound (V:=val K)) (type_check_sound (V:=addr K)).
+Hint Resolve (mapM_type_check_sound (V:=val K)).
 Hint Immediate (path_type_check_sound (R:=ref_seg _)).
 Hint Immediate (path_type_check_sound (R:=ref _)).
 Hint Immediate unop_type_of_sound binop_type_of_sound.
@@ -292,7 +292,7 @@ Proof.
   by destruct 1; simplify_option_equality;
     erewrite ?binop_type_of_complete by eauto; simplify_option_equality.
 Qed.
-Global Instance: TypeCheckSpec envs (lrtype Ti) (expr Ti) (✓ ∘ fst ∘ fst).
+Global Instance: TypeCheckSpec envs (lrtype K) (expr K) (✓ ∘ fst ∘ fst).
 Proof.
   intros [[Γ Δ] τs] e τlr; simpl; split.
   * assert (∀ es σs,
@@ -314,9 +314,9 @@ Proof.
         ?assign_type_of_complete, ?unop_type_of_complete,
         ?binop_type_of_complete,?help by eauto; eauto; simplify_option_equality.
 Qed.
-Hint Resolve (type_check_sound (V:=expr Ti)).
+Hint Resolve (type_check_sound (V:=expr K)).
 Global Instance: PathTypeCheckSpec envs
-  (lrtype Ti) (lrtype Ti) (ectx_item Ti) (✓ ∘ fst ∘ fst).
+  (lrtype K) (lrtype K) (ectx_item K) (✓ ∘ fst ∘ fst).
 Proof.
   intros [[Γ Δ] τs] Ei τlr; simpl; split.
   * assert (∀ es σs,
@@ -336,7 +336,7 @@ Proof.
 Qed.
 Hint Immediate (path_type_check_sound (R:=ectx_item _)).
 Global Instance: PathTypeCheckSpec envs
-  (lrtype Ti) (lrtype Ti) (ectx Ti) (✓ ∘ fst ∘ fst).
+  (lrtype K) (lrtype K) (ectx K) (✓ ∘ fst ∘ fst).
 Proof.
   intros Γs Ei τlr τlr'; split.
   * unfold lookupE. revert τlr.
@@ -346,7 +346,7 @@ Proof.
 Qed.
 Hint Immediate (path_type_check_sound (R:=ectx _)).
 Global Instance:
-  TypeCheckSpec envs (rettype Ti) (stmt Ti) (✓ ∘ fst ∘ fst).
+  TypeCheckSpec envs (rettype K) (stmt K) (✓ ∘ fst ∘ fst).
 Proof.
   intros [[Γ Δ] τs] s mcτ; simpl; split.
   * revert τs mcτ.
@@ -354,9 +354,9 @@ Proof.
   * induction 1; simplify_option_equality;
       erewrite ?type_check_complete by eauto; eauto.
 Qed.
-Hint Resolve (type_check_sound (V:=stmt Ti)).
+Hint Resolve (type_check_sound (V:=stmt K)).
 Global Instance: PathTypeCheckSpec envs
-  (type Ti) (rettype Ti) (esctx_item Ti) (✓ ∘ fst ∘ fst).
+  (type K) (rettype K) (esctx_item K) (✓ ∘ fst ∘ fst).
 Proof.
   intros [[Γ Δ] τs] Ee τlr; simpl; split.
   * destruct τlr, Ee; intros; simplify; typed_constructor; eauto.
@@ -365,7 +365,7 @@ Proof.
 Qed.
 Hint Immediate (path_type_check_sound (R:=esctx_item _)).
 Global Instance: PathTypeCheckSpec envs
-  (rettype Ti) (rettype Ti) (sctx_item Ti) (✓ ∘ fst ∘ fst).
+  (rettype K) (rettype K) (sctx_item K) (✓ ∘ fst ∘ fst).
 Proof.
   intros [[Γ Δ] τs] Es mcτ; simpl; split.
   * destruct mcτ, Es; intros; simplify; typed_constructor; eauto.
@@ -374,7 +374,7 @@ Proof.
 Qed.
 Hint Immediate (path_type_check_sound (R:=sctx_item _)).
 Global Instance: PathTypeCheckSpec envs
-  (focustype Ti) (focustype Ti) (ctx_item Ti) (✓ ∘ fst ∘ fst).
+  (focustype K) (focustype K) (ctx_item K) (✓ ∘ fst ∘ fst).
 Proof.
   intros [[Γ Δ] τs] Ek τf; simpl; split.
   * unfold lookupE; destruct τf, Ek; intros; simplify;
@@ -391,7 +391,7 @@ Proof.
       end; eauto.
 Qed.
 Global Instance:
-  TypeCheckSpec envs (focustype Ti) (focus Ti) (✓ ∘ fst ∘ fst).
+  TypeCheckSpec envs (focustype K) (focus K) (✓ ∘ fst ∘ fst).
 Proof.
   intros [[Γ Δ] τs] φ τf; simpl; split.
   * unfold type_check; destruct φ, τf;

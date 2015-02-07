@@ -2,8 +2,8 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export refinement_classes.
 
-Record memenv_refine' `{Env Ti} (Γ : env Ti)
-    (α : bool) (f : meminj Ti) (Δ1 Δ2 : memenv Ti) := {
+Record memenv_refine' `{Env K} (Γ : env K)
+    (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) := {
   memenv_refine_injective' : meminj_injective f;
   memenv_refine_frozen o1 o2 r :
     f !! o1 = Some (o2,r) → freeze true <$> r = r;
@@ -27,16 +27,16 @@ Arguments memenv_refine_typed_r {_ _ _ _ _ _ _} _ _ _ _ _ _ _.
 Arguments memenv_refine_alive_l {_ _ _ _ _ _ _} _ _ _ _ _ _.
 Arguments memenv_refine_alive_r {_ _ _ _ _ _ _} _ _ _ _ _ _ _.
 
-Instance memenv_refine `{Env Ti} :
-  RefineM Ti (env Ti) (memenv Ti) := memenv_refine'.
+Instance memenv_refine `{Env K} :
+  RefineM K (env K) (memenv K) := memenv_refine'.
 
-Record meminj_extend {Ti} (f f' : meminj Ti) (Δ1 Δ2 : memenv Ti) := {
+Record meminj_extend {K} (f f' : meminj K) (Δ1 Δ2 : memenv K) := {
   meminj_extend_left o τ : Δ1 ⊢ o : τ → f' !! o = f !! o;
   meminj_extend_right o o' r τ :
     Δ2 ⊢ o' : τ → f' !! o = Some (o',r) → f !! o = Some (o',r)
 }.
 
-Definition meminj_inverse {Ti} (f : meminj Ti) : meminj Ti :=
+Definition meminj_inverse {K} (f : meminj K) : meminj K :=
   match f with
   | meminj_id => meminj_id
   | meminj_map f => meminj_map $ map_of_list $ (λ o1o2r,
@@ -44,9 +44,9 @@ Definition meminj_inverse {Ti} (f : meminj Ti) : meminj Ti :=
   end.
 
 Section memenv_refine.
-Context `{EnvSpec Ti}.
+Context `{EnvSpec K}.
 Implicit Types α : bool.
-Implicit Types f : meminj Ti.
+Implicit Types f : meminj K.
 Local Arguments lookup _ _ _ _ _ !_ /.
 
 Lemma memenv_refine_injective Γ α f Δ1 Δ2 :

@@ -3,15 +3,15 @@
 Require Export operations memory pointer_casts.
 
 Section aliasing.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τ σ : type Ti.
-Implicit Types r : ref Ti.
-Implicit Types a : addr Ti.
-Implicit Types w : mtree Ti.
-Implicit Types v : val Ti.
-Implicit Types m : mem Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
+Implicit Types τ σ : type K.
+Implicit Types r : ref K.
+Implicit Types a : addr K.
+Implicit Types w : mtree K.
+Implicit Types v : val K.
+Implicit Types m : mem K.
 
 Lemma ref_disjoint_cases Γ τ r1 r2 σ1 σ2 :
   ✓ Γ → Γ ⊢ r1 : τ ↣ σ1 → freeze true <$> r1 = r1 →

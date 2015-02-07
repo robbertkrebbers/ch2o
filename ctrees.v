@@ -3,32 +3,32 @@
 Require Export separation types.
 Local Open Scope ctype_scope.
 
-Inductive ctree (Ti A : Set) : Set :=
-  | MBase : base_type Ti → list A → ctree Ti A
-  | MArray : type Ti → list (ctree Ti A) → ctree Ti A
-  | MStruct : tag → list (ctree Ti A * list A) → ctree Ti A
-  | MUnion : tag → nat → ctree Ti A → list A → ctree Ti A
-  | MUnionAll : tag → list A → ctree Ti A.
+Inductive ctree (K A : Set) : Set :=
+  | MBase : base_type K → list A → ctree K A
+  | MArray : type K → list (ctree K A) → ctree K A
+  | MStruct : tag → list (ctree K A * list A) → ctree K A
+  | MUnion : tag → nat → ctree K A → list A → ctree K A
+  | MUnionAll : tag → list A → ctree K A.
 Arguments MBase {_ _} _ _.
 Arguments MArray {_ _} _ _.
 Arguments MStruct {_ _} _ _.
 Arguments MUnion {_ _} _ _ _ _.
 Arguments MUnionAll {_ _} _ _.
 
-Instance: Injective (=) (=) (@MBase Ti A τb).
+Instance: Injective (=) (=) (@MBase K A τb).
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@MArray Ti A).
+Instance: Injective2 (=) (=) (=) (@MArray K A).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@MStruct Ti A s).
+Instance: Injective (=) (=) (@MStruct K A s).
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@MUnion Ti A s i).
+Instance: Injective2 (=) (=) (=) (@MUnion K A s i).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@MUnionAll Ti A s).
+Instance: Injective (=) (=) (@MUnionAll K A s).
 Proof. by injection 1. Qed.
 
-Instance ctree_eq_dec {Ti A : Set}
-    `{∀ k1 k2 : Ti, Decision (k1 = k2), ∀ x1 x2 : A, Decision (x1 = x2)} :
-  ∀ w1 w2 : ctree Ti A, Decision (w1 = w2).
+Instance ctree_eq_dec {K A : Set}
+    `{∀ k1 k2 : K, Decision (k1 = k2), ∀ x1 x2 : A, Decision (x1 = x2)} :
+  ∀ w1 w2 : ctree K A, Decision (w1 = w2).
 Proof.
  refine (
   fix go w1 w2 : Decision (w1 = w2) :=
@@ -49,7 +49,7 @@ Proof.
 Defined.
 
 Section ctree_ind.
-  Context {Ti A} (P : ctree Ti A → Prop).
+  Context {K A} (P : ctree K A → Prop).
   Context (Pbase : ∀ τb xs, P (MBase τb xs)).
   Context (Parray : ∀ τ ws, Forall P ws → P (MArray τ ws)).
   Context (Pstruct : ∀ s wxss, Forall (P ∘ fst) wxss → P (MStruct s wxss)).
@@ -68,7 +68,7 @@ Section ctree_ind.
     end.
 End ctree_ind.
 
-Definition ctree_flatten {Ti A : Set} : ctree Ti A → list A :=
+Definition ctree_flatten {K A : Set} : ctree K A → list A :=
   fix go w :=
   match w with
   | MBase _ xs => xs
@@ -83,11 +83,11 @@ Notation ctree_unmapped w := (ctree_Forall sep_unmapped w).
 Notation ctree_splittable w := (ctree_Forall sep_splittable w).
 Notation ctree_unshared w := (ctree_Forall sep_unshared w).
 
-Definition MUnion' {Ti A : Set} `{SeparationOps A}
-    (s : tag) (i : nat) (w : ctree Ti A) (xs : list A) : ctree Ti A :=
+Definition MUnion' {K A : Set} `{SeparationOps A}
+    (s : tag) (i : nat) (w : ctree K A) (xs : list A) : ctree K A :=
   if decide (ctree_unmapped w ∧ Forall sep_unmapped xs)
   then MUnionAll s (ctree_flatten w ++ xs) else MUnion s i w xs.
-Definition ctree_map {Ti A B : Set} (f : A → B) : ctree Ti A → ctree Ti B :=
+Definition ctree_map {K A B : Set} (f : A → B) : ctree K A → ctree K B :=
   fix go w :=
   match w with
   | MBase τb xs => MBase τb (f <$> xs)
@@ -96,9 +96,9 @@ Definition ctree_map {Ti A B : Set} (f : A → B) : ctree Ti A → ctree Ti B :=
   | MUnion s i w xs => MUnion s i (go w) (f <$> xs)
   | MUnionAll s xs => MUnionAll s (f <$> xs)
   end.
-Definition ctree_merge_array {Ti A B C : Set}
-  (f : ctree Ti A → list B → ctree Ti C) :
-    list (ctree Ti A) → list B → list (ctree Ti C) :=
+Definition ctree_merge_array {K A B C : Set}
+  (f : ctree K A → list B → ctree K C) :
+    list (ctree K A) → list B → list (ctree K C) :=
   fix go ws ys :=
   match ws with
   | [] => []
@@ -106,9 +106,9 @@ Definition ctree_merge_array {Ti A B C : Set}
      let sz := length (ctree_flatten w) in
      f w (take sz ys) :: go ws (drop sz ys)
   end.
-Definition ctree_merge_struct {Ti A B C : Set} (f : A → B → C)
-  (g : ctree Ti A → list B → ctree Ti C) :
-    list (ctree Ti A * list A) → list B → list (ctree Ti C * list C) :=
+Definition ctree_merge_struct {K A B C : Set} (f : A → B → C)
+  (g : ctree K A → list B → ctree K C) :
+    list (ctree K A * list A) → list B → list (ctree K C * list C) :=
   fix go wxss ys :=
   match wxss with
   | [] => []
@@ -119,8 +119,8 @@ Definition ctree_merge_struct {Ti A B C : Set} (f : A → B → C)
      (g w (take sz_w ys), zip_with f xs (take sz_xs ys'))
      :: go wxss (drop sz_xs ys')
   end.
-Definition ctree_merge {Ti A B C : Set} `{SeparationOps C} (unchecked : bool)
-    (f : A → B → C) : ctree Ti A → list B → ctree Ti C :=
+Definition ctree_merge {K A B C : Set} `{SeparationOps C} (unchecked : bool)
+    (f : A → B → C) : ctree K A → list B → ctree K C :=
   fix go w ys :=
   match w with
   | MBase τb xs => MBase τb (zip_with f xs ys)
@@ -134,9 +134,9 @@ Definition ctree_merge {Ti A B C : Set} `{SeparationOps C} (unchecked : bool)
   end.
 
 Section operations.
-  Context {Ti A : Set} `{SeparationOps A}.
+  Context {K A : Set} `{SeparationOps A}.
 
-  Inductive ctree_valid : ctree Ti A → Prop :=
+  Inductive ctree_valid : ctree K A → Prop :=
     | MBase_valid τb xs : Forall sep_valid xs → ctree_valid (MBase τb xs)
     | MArray_valid τ ws : Forall ctree_valid ws → ctree_valid (MArray τ ws)
     | MStruct_valid s wxss :
@@ -148,7 +148,7 @@ Section operations.
        ctree_valid (MUnion s i w xs)
     | MUnionAll_valid s xs : Forall sep_valid xs → ctree_valid (MUnionAll s xs).
   Section ctree_valid_ind.
-    Context (P : ctree Ti A → Prop).
+    Context (P : ctree K A → Prop).
     Context (Pbase : ∀ τb xs, Forall sep_valid xs → P (MBase τb xs)).
     Context (Parray : ∀ τ ws,
       Forall ctree_valid ws → Forall P ws → P (MArray τ ws)).
@@ -179,7 +179,7 @@ Section operations.
     end); clear go; abstract first [by constructor|by inversion 1].
   Defined.
 
-  Inductive ctree_disjoint : Disjoint (ctree Ti A) :=
+  Inductive ctree_disjoint : Disjoint (ctree K A) :=
     | MBase_disjoint τb xs1 xs2 : xs1 ⊥* xs2 → MBase τb xs1 ⊥ MBase τb xs2
     | MArray_disjoint' τ ws1 ws2 : ws1 ⊥* ws2 → MArray τ ws1 ⊥ MArray τ ws2
     | MStruct_disjoint s wxss1 wxss2 :
@@ -201,7 +201,7 @@ Section operations.
        MUnion s i w1 xs1 ⊥  MUnionAll s xs2.
   Global Existing Instance ctree_disjoint.
   Section ctree_disjoint_ind.
-    Context (P : ctree Ti A → ctree Ti A → Prop).
+    Context (P : ctree K A → ctree K A → Prop).
     Context (Pbase: ∀ τb xs1 xs2, xs1 ⊥* xs2 → P (MBase τb xs1) (MBase τb xs2)).
     Context (Parray : ∀ τ ws1 ws2,
       ws1 ⊥* ws2 → Forall2 P ws1 ws2 → P (MArray τ ws1) (MArray τ ws2)).
@@ -226,7 +226,7 @@ Section operations.
     Definition ctree_disjoint_ind_alt : ∀ w1 w2, ctree_disjoint w1 w2 → P w1 w2.
     Proof. fix 3. destruct 1; eauto using Forall2_impl. Qed.
   End ctree_disjoint_ind.
-  Lemma ctree_disjoint_inv_l (P : ctree Ti A → Prop) w1 w2 :
+  Lemma ctree_disjoint_inv_l (P : ctree K A → Prop) w1 w2 :
     w1 ⊥ w2 →
     match w1 with
     | MBase τb xs1 => (∀ xs2, xs1 ⊥* xs2 → P (MBase τb xs2)) → P w2
@@ -251,7 +251,7 @@ Section operations.
          P (MUnion s i w2 xs2)) → P w2
     end.
   Proof. destruct 1; auto. Qed.
-  Global Instance ctree_disjoint_dec `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)} :
+  Global Instance ctree_disjoint_dec `{∀ k1 k2 : K, Decision (k1 = k2)} :
     ∀ w1 w2, Decision (w1 ⊥ w2).
   Proof.
    refine
@@ -283,7 +283,7 @@ Section operations.
     end); clear go; abstract first [by subst; constructor|by inversion 1;subst].
   Defined.
 
-  Inductive ctree_subseteq : SubsetEq (ctree Ti A) :=
+  Inductive ctree_subseteq : SubsetEq (ctree K A) :=
     | MBase_subseteq τb xs1 xs2 : xs1 ⊆* xs2 → MBase τb xs1 ⊆ MBase τb xs2
     | MArray_subseteq τ ws1 ws2 : ws1 ⊆* ws2 → MArray τ ws1 ⊆ MArray τ ws2
     | MStruct_subseteq s wxss1 wxss2 :
@@ -300,7 +300,7 @@ Section operations.
        MUnionAll s xs1 ⊆ MUnion s i w2 xs2.
   Global Existing Instance ctree_subseteq.
   Section ctree_subseteq_ind.
-    Context (P : ctree Ti A → ctree Ti A → Prop).
+    Context (P : ctree K A → ctree K A → Prop).
     Context (Pbase : ∀ τb xs1 xs2,
       xs1 ⊆* xs2 → P (MBase τb xs1) (MBase τb xs2)).
     Context (Parray : ∀ τ ws1 ws2,
@@ -321,7 +321,7 @@ Section operations.
     Definition ctree_subseteq_ind_alt : ∀ w1 w2, ctree_subseteq w1 w2 → P w1 w2.
     Proof. fix 3; destruct 1; eauto using Forall2_impl. Qed.
   End ctree_subseteq_ind.
-  Global Instance ctree_subseteq_dec `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)} :
+  Global Instance ctree_subseteq_dec `{∀ k1 k2 : K, Decision (k1 = k2)} :
     ∀ w1 w2, Decision (w1 ⊆ w2).
   Proof.
    refine
@@ -348,7 +348,7 @@ Section operations.
     end); clear go; abstract first [by subst; constructor|by inversion 1].
   Defined.
 
-  Global Instance ctree_union: Union (ctree Ti A) :=
+  Global Instance ctree_union: Union (ctree K A) :=
     fix go w1 w2 := let _ : Union _ := @go in
     match w1, w2 with
     | MBase τb xs1, MBase _ xs2 => MBase τb (xs1 ∪* xs2)
@@ -359,7 +359,7 @@ Section operations.
     | w, MUnionAll _ xs | MUnionAll _ xs, w => ctree_merge true (∪) w xs
     | _, _ => w1 (* dummy *)
     end.
-  Global Instance ctree_difference: Difference (ctree Ti A) :=
+  Global Instance ctree_difference: Difference (ctree K A) :=
     fix go w1 w2 := let _ : Difference _ := @go in
     match w1, w2 with
     | MBase τb xs1, MBase _ xs2 => MBase τb (xs1 ∖* xs2)
@@ -370,7 +370,7 @@ Section operations.
     | w, MUnionAll _ xs2 => ctree_merge false (∖) w xs2
     | _, _ => w1
     end.
-  Global Instance ctree_half: Half (ctree Ti A) :=
+  Global Instance ctree_half: Half (ctree K A) :=
     fix go w := let _ : Half _ := @go in
     match w with
     | MBase τb xs => MBase τb (½* xs)
@@ -382,17 +382,17 @@ Section operations.
 End operations.
 
 Section memory_trees.
-Context {Ti A : Set} `{Separation A}.
+Context {K A : Set} `{Separation A}.
 Implicit Types x : A.
 Implicit Types xs : list A.
 Implicit Types xss : list (list A).
-Implicit Types w : ctree Ti A.
-Implicit Types ws : list (ctree Ti A).
-Implicit Types wxs : ctree Ti A * list A.
-Implicit Types wxss : list (ctree Ti A * list A).
-Implicit Types τb : base_type Ti.
-Implicit Types τ : type Ti.
-Implicit Types τs : list (type Ti).
+Implicit Types w : ctree K A.
+Implicit Types ws : list (ctree K A).
+Implicit Types wxs : ctree K A * list A.
+Implicit Types wxss : list (ctree K A * list A).
+Implicit Types τb : base_type K.
+Implicit Types τ : type K.
+Implicit Types τs : list (type K).
 Local Arguments union _ _ !_ !_ /.
 Local Arguments difference _ _ !_ !_ /.
 Local Arguments half _ _ !_ /.
@@ -489,7 +489,7 @@ Proof.
   intros ?. rewrite ctree_flatten_union by done.
   eauto using seps_disjoint_lr, ctree_flatten_disjoint.
 Qed.
-Global Instance ctree_symmetric : Symmetric (@disjoint (ctree Ti A) _).
+Global Instance ctree_symmetric : Symmetric (@disjoint (ctree K A) _).
 Proof.
   induction 1 using @ctree_disjoint_ind_alt; constructor;
     done || apply Forall2_flip; eauto using Forall2_impl.

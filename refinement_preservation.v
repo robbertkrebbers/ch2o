@@ -6,15 +6,15 @@ Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 
 Section refinement_preservation.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
 Implicit Types α : bool.
 Implicit Types o : index.
-Implicit Types m : mem Ti.
-Implicit Types e : expr Ti.
-Implicit Types τ σ : type Ti.
-Implicit Types a : addr Ti.
-Implicit Types v : val Ti.
+Implicit Types m : mem K.
+Implicit Types e : expr K.
+Implicit Types τ σ : type K.
+Implicit Types a : addr K.
+Implicit Types v : val K.
 
 Ltac solve_length := simplify_equality'; repeat
   match goal with H : Forall2 _ _ _ |- _ => apply Forall2_length in H end; lia.

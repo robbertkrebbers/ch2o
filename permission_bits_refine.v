@@ -2,23 +2,23 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export permission_bits bits_refine.
 
-Instance pbit_refine `{Env Ti} :
-    Refine Ti (env Ti) (pbit Ti) := λ Γ α f Δ1 Δ2 xb1 xb2,
+Instance pbit_refine `{Env K} :
+    Refine K (env K) (pbit K) := λ Γ α f Δ1 Δ2 xb1 xb2,
   tagged_tag xb1 ⊑{Γ,α,f@Δ1↦Δ2} tagged_tag xb2 ∧
   tagged_perm xb1 = tagged_perm xb2 ∧
   sep_valid xb1 ∧ sep_valid xb2.
 
 Section permission_bits.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
 Implicit Types α : bool.
-Implicit Types b : bit Ti.
-Implicit Types bs : list (bit Ti).
+Implicit Types b : bit K.
+Implicit Types bs : list (bit K).
 Implicit Types x : perm.
 Implicit Types xs : list perm.
-Implicit Types xb : pbit Ti.
-Implicit Types xbs : list (pbit Ti).
+Implicit Types xb : pbit K.
+Implicit Types xbs : list (pbit K).
 
 Lemma pbit_refine_valid_l Γ α f Δ1 Δ2 xb1 xb2 :
   ✓ Γ → xb1 ⊑{Γ,α,f@Δ1↦Δ2} xb2 → ✓{Γ,Δ1} xb1.
@@ -117,7 +117,7 @@ Lemma pbits_refine_shared Γ α f Δ1 Δ2 xbs1 xbs2 :
   Forall sep_unshared xbs2 → xbs1 ⊑{Γ,α,f@Δ1↦Δ2}* xbs2 →
   Forall sep_unshared xbs1.
 Proof. induction 2; decompose_Forall_hyps; eauto using pbit_refine_shared. Qed.
-Lemma pbit_empty_refine Γ α f Δ1 Δ2 : (∅ : pbit Ti) ⊑{Γ,α,f@Δ1↦Δ2} ∅.
+Lemma pbit_empty_refine Γ α f Δ1 Δ2 : (∅ : pbit K) ⊑{Γ,α,f@Δ1↦Δ2} ∅.
 Proof.
   repeat split; simpl; auto using BIndet_BIndet_refine, sep_empty_valid.
 Qed.

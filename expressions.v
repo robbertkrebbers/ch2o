@@ -44,26 +44,26 @@ Inductive assign :=
      decrement, etc. *)
   | PostOp : binop → assign (**i postfix increment, decrement, etc. *).
 
-Inductive expr (Ti : Set) : Set :=
-  | EVar : type Ti → nat → expr Ti
-  | EVal : lockset → val Ti → expr Ti
-  | EAddr : lockset → addr Ti → expr Ti
-  | ERtoL : expr Ti → expr Ti
-  | ERofL : expr Ti → expr Ti
-  | EAssign : assign → expr Ti → expr Ti → expr Ti
-  | ECall : expr Ti → list (expr Ti) → expr Ti
-  | EAbort : type Ti → expr Ti
-  | ELoad : expr Ti → expr Ti
-  | EEltL : expr Ti → ref_seg Ti → expr Ti
-  | EEltR : expr Ti → ref_seg Ti → expr Ti
-  | EAlloc : type Ti → expr Ti → expr Ti
-  | EFree : expr Ti → expr Ti
-  | EUnOp : unop → expr Ti → expr Ti
-  | EBinOp : binop → expr Ti → expr Ti → expr Ti
-  | EIf : expr Ti → expr Ti → expr Ti → expr Ti
-  | EComma : expr Ti → expr Ti → expr Ti
-  | ECast : type Ti → expr Ti → expr Ti
-  | EInsert : ref Ti → expr Ti → expr Ti → expr Ti.
+Inductive expr (K : Set) : Set :=
+  | EVar : type K → nat → expr K
+  | EVal : lockset → val K → expr K
+  | EAddr : lockset → addr K → expr K
+  | ERtoL : expr K → expr K
+  | ERofL : expr K → expr K
+  | EAssign : assign → expr K → expr K → expr K
+  | ECall : expr K → list (expr K) → expr K
+  | EAbort : type K → expr K
+  | ELoad : expr K → expr K
+  | EEltL : expr K → ref_seg K → expr K
+  | EEltR : expr K → ref_seg K → expr K
+  | EAlloc : type K → expr K → expr K
+  | EFree : expr K → expr K
+  | EUnOp : unop → expr K → expr K
+  | EBinOp : binop → expr K → expr K → expr K
+  | EIf : expr K → expr K → expr K → expr K
+  | EComma : expr K → expr K → expr K
+  | ECast : type K → expr K → expr K
+  | EInsert : ref K → expr K → expr K → expr K.
 
 (** We use the scope [expr_scope] to declare notations for expressions. We
 overload some notations already in [value_scope], and define both general and
@@ -147,28 +147,28 @@ Infix "==" := (EBinOp (CompOp EqOp)) (at level 52) : expr_scope.
 Notation "- e" := (EUnOp NegOp e)
   (at level 35, right associativity) : expr_scope.
 
-Instance: Injective2 (=) (=) (=) (@EVar Ti).
+Instance: Injective2 (=) (=) (=) (@EVar K).
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@EVal Ti).
+Instance: Injective2 (=) (=) (=) (@EVal K).
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@EAddr Ti).
+Instance: Injective2 (=) (=) (=) (@EAddr K).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@ELoad Ti).
+Instance: Injective (=) (=) (@ELoad K).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@EFree Ti).
+Instance: Injective (=) (=) (@EFree K).
 Proof. by injection 1. Qed.
 
-Instance maybe_EAlloc {Ti} : Maybe2 (@EAlloc Ti) := λ e,
+Instance maybe_EAlloc {K} : Maybe2 (@EAlloc K) := λ e,
   match e with alloc{τ} e => Some (τ,e) | _ => None end.
-Instance maybe_EVal {Ti} : Maybe2 (@EVal Ti) := λ e,
+Instance maybe_EVal {K} : Maybe2 (@EVal K) := λ e,
   match e with #{Ω} v => Some (Ω,v) | _ => None end.
-Instance maybe_ECall {Ti} : Maybe2 (@ECall Ti) := λ e,
+Instance maybe_ECall {K} : Maybe2 (@ECall K) := λ e,
   match e with call e @ es => Some (e,es) | _ => None end.
 
 Instance assign_eq_dec: ∀ ass1 ass2 : assign, Decision (ass1 = ass2).
 Proof. solve_decision. Defined.
-Instance expr_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)} :
-  ∀ e1 e2 : expr Ti, Decision (e1 = e2).
+Instance expr_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} :
+  ∀ e1 e2 : expr K, Decision (e1 = e2).
 Proof.
   refine (fix go e1 e2 : Decision (e1 = e2) :=
   match e1, e2 with
@@ -215,7 +215,7 @@ too weak. For the case of expressions, the branch of [call e @ es] does not
 contain an induction hypothesis for the function arguments [es]. We therefore
 define an appropriate induction principle for expressions by hand. *)
 Section expr_ind.
-  Context {Ti} (P : expr Ti → Prop).
+  Context {K} (P : expr K → Prop).
   Context (Pvar : ∀ τ x, P (var{τ} x)).
   Context (Pval : ∀ Ω v, P (#{Ω} v)).
   Context (Paddr : ∀ Ω a, P (%{Ω} a)).
@@ -263,7 +263,7 @@ End expr_ind.
 
 (** We also define [size e] giving the number of nodes in an expression. This
 measure can be used for well-founded induction on expressions. *)
-Instance expr_size {Ti} : Size (expr Ti) :=
+Instance expr_size {K} : Size (expr K) :=
   fix go e : nat := let _ : Size _ := go in
   match e with
   | var{_} _ | abort _ => 1
@@ -274,7 +274,7 @@ Instance expr_size {Ti} : Size (expr Ti) :=
   | load e | e %> _ | e #> _ | alloc{_} e | free e | @{_} e => S (size e)
   | if{e1} e2 else e3 => S (size e1 + size e2 + size e3)
   end.
-Lemma expr_wf_ind {Ti} (P : expr Ti → Prop)
+Lemma expr_wf_ind {K} (P : expr K → Prop)
   (Pind : ∀ e, (∀ e', size e' < size e → P e')%nat → P e) : ∀ e, P e.
 Proof.
   assert (∀ n e, size e < n → P e)%nat as help by (induction n; auto with lia).
@@ -284,7 +284,7 @@ Qed.
 (** * Miscellaneous Operations and properties *)
 (** An expression is [load_free] if it does not contain any occurrences of the
 [load] operator. *)
-Inductive load_free {Ti} : expr Ti → Prop :=
+Inductive load_free {K} : expr K → Prop :=
   | EVar_load_free τ x : load_free (var{τ} x)
   | EVal_load_free Ω v : load_free (#{Ω} v)
   | EAddr_load_free Ω a : load_free (%{Ω} a)
@@ -312,7 +312,7 @@ Inductive load_free {Ti} : expr Ti → Prop :=
      load_free e1 → load_free e2 → load_free (#[r:=e1] e2).
 
 Section load_free_ind.
-  Context {Ti} (P : expr Ti → Prop).
+  Context {K} (P : expr K → Prop).
   Context (Pvar : ∀ τ x, P (var{τ} x)).
   Context (Pval : ∀ Ω v, P (#{Ω} v)).
   Context (Paddr : ∀ Ω a, P (%{Ω} a)).
@@ -342,7 +342,7 @@ Section load_free_ind.
   Proof. fix 2; destruct 1; eauto using Forall_impl. Qed.
 End load_free_ind.
 
-Instance load_free_dec {Ti} : ∀ e : expr Ti, Decision (load_free e).
+Instance load_free_dec {K} : ∀ e : expr K, Decision (load_free e).
 Proof.
  refine (
   fix go e :=
@@ -364,7 +364,7 @@ Proof.
   end); first [by constructor | by inversion 1].
 Defined.
 
-Instance expr_free_vars {Ti} : Vars (expr Ti) :=
+Instance expr_free_vars {K} : Vars (expr K) :=
   fix go e := let _ : Vars _ := @go in
   match e with
   | var{_} n => {[ n ]}
@@ -402,7 +402,7 @@ Lemma locks_snoc `{Locks A} (l1 : list A) a :
   locks (l1 ++ [a]) = locks l1 ∪ locks a.
 Proof. rewrite locks_app. simpl. by rewrite (right_id_L ∅ (∪)). Qed.
 
-Instance expr_locks {Ti} : Locks (expr Ti) :=
+Instance expr_locks {K} : Locks (expr K) :=
   fix go e : lockset := let _ : Locks _ := @go in
   match e with
   | var{_} _ | abort _ => ∅
@@ -419,7 +419,7 @@ memory. Although pure expressions may have sequence points (namely at the
 conditional and call expressions), these sequence points are not observable
 because pure expressions do not allow any locations to get locked in the
 first place. *)
-Inductive is_pure {Ti} : expr Ti → Prop :=
+Inductive is_pure {K} : expr K → Prop :=
   | EVar_pure τ x : is_pure (var{τ} x)
   | EVal_pure v : is_pure (# v)
   | EAddr_pure a : is_pure (% a)
@@ -437,7 +437,7 @@ Inductive is_pure {Ti} : expr Ti → Prop :=
   | EInsert_pure r e1 e2 : is_pure e1 → is_pure e2 → is_pure (#[r:=e1] e2).
 
 Section is_pure_ind.
-  Context {Ti} (fs : funset) (P : expr Ti → Prop).
+  Context {K} (fs : funset) (P : expr K → Prop).
   Context (Pvar : ∀ τ x, P (var{τ} x)).
   Context (Pval : ∀ v, P (# v)).
   Context (Paddr : ∀ a, P (% a)).
@@ -461,7 +461,7 @@ Section is_pure_ind.
   Proof. fix 2; destruct 1; eauto using Forall_impl. Qed.
 End is_pure_ind.
 
-Instance is_pure_dec {Ti} : ∀ e : expr Ti, Decision (is_pure e).
+Instance is_pure_dec {K} : ∀ e : expr K, Decision (is_pure e).
 Proof.
  refine (
   fix go e :=
@@ -478,9 +478,9 @@ Proof.
   end);
   clear go; first [by subst; constructor | abstract by inversion 1; subst].
 Defined.
-Lemma is_pure_locks {Ti} (e : expr Ti) : is_pure e → locks e = ∅.
+Lemma is_pure_locks {K} (e : expr K) : is_pure e → locks e = ∅.
 Proof.
-  assert (∀ (es : list (expr Ti)) oi,
+  assert (∀ (es : list (expr K)) oi,
     Forall (λ e, oi ∉ locks e) es → oi ∉ ⋃ (locks <$> es)).
   { induction 1; esolve_elem_of. }
   intros He. apply elem_of_equiv_empty_L. intros oi.
@@ -490,7 +490,7 @@ Qed.
 (** The operation [e↑] increases all De Bruijn indexes of variables in [e]
 by one. That means, each variable [var x] in [e] becomes [var (S x)]. *)
 Reserved Notation "e ↑" (at level 20, format "e ↑").
-Fixpoint expr_lift {Ti} (e : expr Ti) : expr Ti :=
+Fixpoint expr_lift {K} (e : expr K) : expr K :=
   match e with
   | var{τ} x => var{τ} (S x)
   | #{Ω} v => #{Ω} v
@@ -517,10 +517,10 @@ where "e ↑" := (expr_lift e) : expr_scope.
 (** The predicate [is_nf e] states that [e] is in normal form and [is_redex e]
 states that [e] is a head redex with respect to the semantics in the file
 [smallstep]. *)
-Inductive is_nf {Ti} : expr Ti → Prop :=
+Inductive is_nf {K} : expr K → Prop :=
   | EVal_nf Ω v : is_nf (#{Ω} v)
   | EAddr_nf Ω a : is_nf (%{Ω} a).
-Inductive is_redex {Ti} : expr Ti → Prop :=
+Inductive is_redex {K} : expr K → Prop :=
   | EVar_redex τ x : is_redex (var{τ} x)
   | ERtoL_redex e : is_nf e → is_redex (.* e)
   | ERofL_redex e : is_nf e → is_redex (& e)
@@ -542,12 +542,12 @@ Inductive is_redex {Ti} : expr Ti → Prop :=
   | EInsert_redex r e1 e2 :
      is_nf e1 → is_nf e2 → is_redex (#[r:=e1]e2).
 
-Instance is_nf_dec {Ti} (e : expr Ti) : Decision (is_nf e).
+Instance is_nf_dec {K} (e : expr K) : Decision (is_nf e).
 Proof.
  refine (match e with #{_} _ | %{_} _ => left _ | _ => right _ end);
   try constructor; abstract (inversion 1).
 Defined.
-Instance is_redex_dec {Ti} (e : expr Ti) : Decision (is_redex e).
+Instance is_redex_dec {K} (e : expr K) : Decision (is_redex e).
 Proof.
  refine
   match e with
@@ -561,35 +561,35 @@ Proof.
   end; first [by constructor | abstract (by inversion 1)].
 Defined.
 
-Lemma is_redex_nf {Ti} (e : expr Ti) : is_redex e → is_nf e → False.
+Lemma is_redex_nf {K} (e : expr K) : is_redex e → is_nf e → False.
 Proof. destruct 1; inversion 1. Qed.
-Lemma EVal_not_redex {Ti} Ω (v : val Ti) : ¬is_redex (#{Ω} v).
+Lemma EVal_not_redex {K} Ω (v : val K) : ¬is_redex (#{Ω} v).
 Proof. inversion 1. Qed.
-Lemma EVals_nf {Ti} Ωs (vs : list (val Ti)) : Forall is_nf (#{Ωs}* vs).
+Lemma EVals_nf {K} Ωs (vs : list (val K)) : Forall is_nf (#{Ωs}* vs).
 Proof. revert vs. induction Ωs; intros [|??]; repeat constructor; auto. Qed.
-Lemma EVals_nf_alt {Ti} es Ωs (vs : list (val Ti)) :
+Lemma EVals_nf_alt {K} es Ωs (vs : list (val K)) :
   es = #{Ωs}* vs → Forall is_nf es.
 Proof. intros ->. by apply EVals_nf. Qed.
 
-Definition maybe_ECall_redex {Ti} (e : expr Ti) :
-    option (lockset * funname * list (type Ti) * type Ti *
-            list lockset * list (val Ti)) :=
+Definition maybe_ECall_redex {K} (e : expr K) :
+    option (lockset * funname * list (type K) * type K *
+            list lockset * list (val K)) :=
   '(e,es) ← maybe2 ECall e;
   '(Ω,v) ← maybe2 EVal e;
   '(f,τs,τ) ← maybe (VBase ∘ VPtr) v ≫= maybe3 FunPtr;
   vΩs ← mapM (maybe2 EVal) es;
   Some (Ω, f, τs, τ, fst <$> vΩs, snd <$> vΩs).
 
-Lemma maybe_EAlloc_Some {Ti} (e : expr Ti) τ e' :
+Lemma maybe_EAlloc_Some {K} (e : expr K) τ e' :
   maybe2 EAlloc e = Some (τ,e') ↔ e = alloc{τ} e'.
 Proof. split. by destruct e; intros; simplify_equality'. by intros ->. Qed.
-Lemma maybe_EVal_Some {Ti} (e : expr Ti) Ω v :
+Lemma maybe_EVal_Some {K} (e : expr K) Ω v :
   maybe2 EVal e = Some (Ω, v) ↔ e = #{Ω} v.
 Proof. split. by destruct e; intros; simplify_equality'. by intros ->. Qed.
-Lemma maybe_ECall_Some {Ti} (e : expr Ti) e' es :
+Lemma maybe_ECall_Some {K} (e : expr K) e' es :
   maybe2 ECall e = Some (e', es) ↔ e = call e' @ es.
 Proof. split. by destruct e; intros; simplify_equality'. by intros ->. Qed.
-Lemma maybe_ECall_redex_Some_2 {Ti} Ω f τs τ Ωs (vs : list (val Ti)) :
+Lemma maybe_ECall_redex_Some_2 {K} Ω f τs τ Ωs (vs : list (val K)) :
   length Ωs = length vs →
   maybe_ECall_redex (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)
   = Some (Ω, f, τs, τ, Ωs, vs).
@@ -598,7 +598,7 @@ Proof.
   rewrite zip_with_zip, mapM_fmap_Some by (by intros []); csimpl.
   by rewrite fst_zip, snd_zip by lia.
 Qed.
-Lemma maybe_ECall_redex_Some {Ti} (e : expr Ti) Ω f τs τ Ωs vs :
+Lemma maybe_ECall_redex_Some {K} (e : expr K) Ω f τs τ Ωs vs :
   maybe_ECall_redex e = Some (Ω, f, τs, τ, Ωs, vs) ↔
     e = call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs ∧ length Ωs = length vs.
 Proof.
@@ -616,27 +616,27 @@ Qed.
 (evaluation) contexts [ectx] are lists of expression contexts. These expression
 contexts allow us to enforce an evaluation strategy. In particular, for the
 conditional we merely allow a hole for the first branch. *)
-Inductive ectx_item (Ti : Set) : Set :=
-  | CRtoL : ectx_item Ti
-  | CLtoR : ectx_item Ti
-  | CAssignL : assign → expr Ti → ectx_item Ti
-  | CAssignR : assign → expr Ti → ectx_item Ti
-  | CCallL : list (expr Ti) → ectx_item Ti
-  | CCallR : expr Ti → list (expr Ti) → list (expr Ti) → ectx_item Ti
-  | CLoad : ectx_item Ti
-  | CEltL : ref_seg Ti → ectx_item Ti
-  | CEltR : ref_seg Ti → ectx_item Ti
-  | CAlloc : type Ti → ectx_item Ti
-  | CFree : ectx_item Ti
-  | CUnOp : unop → ectx_item Ti
-  | CBinOpL : binop → expr Ti → ectx_item Ti
-  | CBinOpR : binop → expr Ti → ectx_item Ti
-  | CIf : expr Ti → expr Ti → ectx_item Ti
-  | CComma : expr Ti → ectx_item Ti
-  | CCast : type Ti → ectx_item Ti
-  | CInsertL : ref Ti → expr Ti → ectx_item Ti
-  | CInsertR : ref Ti → expr Ti → ectx_item Ti.
-Notation ectx Ti := (list (ectx_item Ti)).
+Inductive ectx_item (K : Set) : Set :=
+  | CRtoL : ectx_item K
+  | CLtoR : ectx_item K
+  | CAssignL : assign → expr K → ectx_item K
+  | CAssignR : assign → expr K → ectx_item K
+  | CCallL : list (expr K) → ectx_item K
+  | CCallR : expr K → list (expr K) → list (expr K) → ectx_item K
+  | CLoad : ectx_item K
+  | CEltL : ref_seg K → ectx_item K
+  | CEltR : ref_seg K → ectx_item K
+  | CAlloc : type K → ectx_item K
+  | CFree : ectx_item K
+  | CUnOp : unop → ectx_item K
+  | CBinOpL : binop → expr K → ectx_item K
+  | CBinOpR : binop → expr K → ectx_item K
+  | CIf : expr K → expr K → ectx_item K
+  | CComma : expr K → ectx_item K
+  | CCast : type K → ectx_item K
+  | CInsertL : ref K → expr K → ectx_item K
+  | CInsertR : ref K → expr K → ectx_item K.
+Notation ectx K := (list (ectx_item K)).
 
 Bind Scope expr_scope with ectx_item.
 
@@ -695,14 +695,14 @@ Notation "#[ r := □ ] e2" := (CInsertL r e2)
 Notation "#[ r := e1 ] □" := (CInsertR r e1)
   (at level 10, format "#[ r := e1 ]  □") : expr_scope.
 
-Instance ectx_item_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)} :
-  ∀ Ei1 Ei2 : ectx_item Ti, Decision (Ei1 = Ei2).
+Instance ectx_item_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} :
+  ∀ Ei1 Ei2 : ectx_item K, Decision (Ei1 = Ei2).
 Proof. solve_decision. Defined.
 
 (** Substitution is defined in a straightforward way. Using the type class
 instances in the file [contexts], it is lifted to full expression contexts. *)
-Instance ectx_item_subst {Ti} :
-    Subst (ectx_item Ti) (expr Ti) (expr Ti) := λ Ei e,
+Instance ectx_item_subst {K} :
+    Subst (ectx_item K) (expr K) (expr K) := λ Ei e,
   match Ei with
   | .* □ => .* e
   | & □ => & e
@@ -721,26 +721,26 @@ Instance ectx_item_subst {Ti} :
   | cast{τ} □ => cast{τ} e
   | #[r:=□] e2 => #[r:=e] e2 | #[r:=e1] □ => #[r:=e1] e
   end.
-Instance: DestructSubst (@ectx_item_subst Ti).
+Instance: DestructSubst (@ectx_item_subst K).
 
-Instance: ∀ Ei : ectx_item Ti, Injective (=) (=) (subst Ei).
+Instance: ∀ Ei : ectx_item K, Injective (=) (=) (subst Ei).
 Proof. by destruct Ei; intros ???; simplify_list_equality. Qed.
-Lemma is_nf_ectx_item {Ti} (Ei : ectx_item Ti) e : ¬is_nf (subst Ei e).
+Lemma is_nf_ectx_item {K} (Ei : ectx_item K) e : ¬is_nf (subst Ei e).
 Proof. destruct Ei; inversion 1. Qed.
-Lemma is_nf_ectx {Ti} (E : ectx Ti) e : is_nf (subst E e) → E = [].
+Lemma is_nf_ectx {K} (E : ectx K) e : is_nf (subst E e) → E = [].
 Proof.
   destruct E using rev_ind; auto.
   rewrite subst_snoc. intros; edestruct @is_nf_ectx_item; eauto.
 Qed.
-Lemma is_nf_redex_ectx {Ti} (E : ectx Ti) e : is_redex e → ¬is_nf (subst E e).
+Lemma is_nf_redex_ectx {K} (E : ectx K) e : is_redex e → ¬is_nf (subst E e).
 Proof.
   intros ? HEe. rewrite (is_nf_ectx E e) in HEe by done; simpl in HEe.
   eauto using is_redex_nf.
 Qed.
-Lemma is_redex_ectx_item {Ti} (Ei : ectx_item Ti) e :
+Lemma is_redex_ectx_item {K} (Ei : ectx_item K) e :
   is_redex (subst Ei e) → is_nf e.
 Proof. destruct Ei; inversion 1; decompose_Forall_hyps; auto. Qed.
-Lemma is_redex_ectx {Ti} (E : ectx Ti) e :
+Lemma is_redex_ectx {K} (E : ectx K) e :
   is_redex (subst E e) → (E = [] ∧ is_redex e) ∨ (∃ Ei, E = [Ei] ∧ is_nf e).
 Proof.
   destruct E as [|Ei E _] using rev_ind; [eauto|]; rewrite subst_snoc; intros.
@@ -748,7 +748,7 @@ Proof.
   feed pose proof (is_nf_ectx E e); subst; simpl in *; eauto.
 Qed.
 
-Instance ectx_locks {Ti} : Locks (ectx_item Ti) := λ Ei,
+Instance ectx_locks {K} : Locks (ectx_item K) := λ Ei,
   match Ei with
   | .* □ | & □ | cast{_} □ => ∅
   | □ ::={_} e | e ::={_} □ => locks e
@@ -759,25 +759,25 @@ Instance ectx_locks {Ti} : Locks (ectx_item Ti) := λ Ei,
   | if{□} e2 else e3 => locks e2 ∪ locks e3
   end.
 
-Lemma ectx_item_is_pure {Ti} (Ei : ectx_item Ti) (e : expr Ti) :
+Lemma ectx_item_is_pure {K} (Ei : ectx_item K) (e : expr K) :
   is_pure (subst Ei e) → is_pure e.
 Proof. destruct Ei; simpl; inversion_clear 1; decompose_Forall_hyps; eauto. Qed.
-Lemma ectx_is_pure {Ti} (E : ectx Ti) e : is_pure (subst E e) → is_pure e.
+Lemma ectx_is_pure {K} (E : ectx K) e : is_pure (subst E e) → is_pure e.
 Proof.
   induction E using rev_ind; rewrite ?subst_snoc; eauto using ectx_item_is_pure.
 Qed.
-Lemma ectx_item_subst_is_pure {Ti} (Ei : ectx_item Ti) (e1 e2 : expr Ti) :
+Lemma ectx_item_subst_is_pure {K} (Ei : ectx_item K) (e1 e2 : expr K) :
   is_pure e2 → is_pure (subst Ei e1) → is_pure (subst Ei e2).
 Proof.
   destruct Ei; simpl; inversion_clear 2; constructor; decompose_Forall; eauto.
 Qed.
-Lemma ectx_subst_is_pure {Ti} (E : ectx Ti) (e1 e2 : expr Ti) :
+Lemma ectx_subst_is_pure {K} (E : ectx K) (e1 e2 : expr K) :
   is_pure e2 → is_pure (subst E e1) → is_pure (subst E e2).
 Proof.
   induction E using rev_ind; rewrite ?subst_snoc;
     eauto using ectx_item_subst_is_pure, ectx_item_is_pure.
 Qed.
-Lemma ectx_item_subst_locks {Ti} (Ei : ectx_item Ti) e :
+Lemma ectx_item_subst_locks {K} (Ei : ectx_item K) e :
   locks (subst Ei e) = locks Ei ∪ locks e.
 Proof.
   apply elem_of_equiv_L. intro. destruct Ei; simpl; try solve_elem_of.
@@ -785,7 +785,7 @@ Proof.
   rewrite union_list_app_L, union_list_cons, union_list_reverse_L.
   solve_elem_of.
 Qed.
-Lemma ectx_subst_locks {Ti} (E : ectx Ti) e :
+Lemma ectx_subst_locks {K} (E : ectx K) e :
   locks (subst E e) = locks E ∪ locks e.
 Proof.
   apply elem_of_equiv_L. intros. revert e. induction E as [|Ei E IH]; simpl.
@@ -793,7 +793,7 @@ Proof.
   * intros. rewrite IH, ectx_item_subst_locks. solve_elem_of.
 Qed.
 
-Instance ectx_item_size {Ti} : Size (ectx_item Ti) := λ Ei,
+Instance ectx_item_size {K} : Size (ectx_item K) := λ Ei,
   match Ei with
   | .* □ | & □ | load □ | □ %> _ | □ #> _ | alloc{_} □
     | free □ | @{_} □ | cast{_} □ => 1
@@ -804,13 +804,13 @@ Instance ectx_item_size {Ti} : Size (ectx_item Ti) := λ Ei,
      S (size e + sum_list_with size es1 + sum_list_with size es2)
   | if{□} e2 else e3 => S (size e2 + size e3)
   end.
-Lemma ectx_item_subst_size {Ti} (Ei : ectx_item Ti) e :
+Lemma ectx_item_subst_size {K} (Ei : ectx_item K) e :
   size (subst Ei e) = (size Ei + size e)%nat.
 Proof.
   destruct Ei; simpl; auto with lia.
   rewrite sum_list_with_app, sum_list_with_reverse; simpl; lia.
 Qed.
-Lemma ectx_subst_size {Ti} (E : ectx Ti) e :
+Lemma ectx_subst_size {K} (E : ectx K) e :
   size (subst E e) = (sum_list_with size E + size e)%nat.
 Proof.
   revert e. induction E as [|Ei E IH]; intros e; simpl; [done|].
@@ -824,7 +824,7 @@ induction principle is more useful together with automation. Automation now
 does not have to instantiate the induction hypothesis with the appropriate
 context. *)
 Section ectx_expr_ind.
-  Context {Ti} (P : ectx Ti → expr Ti → Prop).
+  Context {K} (P : ectx K → expr K → Prop).
   Context (Pvar : ∀ E τ x, P E (var{τ} x)).
   Context (Pval : ∀ E Ω v, P E (#{Ω} v)).
   Context (Paddr : ∀ E Ω a, P E (%{Ω} a)).
@@ -891,26 +891,26 @@ Ltac ectx_expr_ind E e :=
 (** We define singular expression contexts indexed by the number of holes. These
 contexts are particularly useful to prove some of the Hoare rules in a more
 generic way. *)
-Inductive ectx_full (Ti : Set) : nat → Set :=
-  | DCVar : type Ti → nat → ectx_full Ti 0
-  | DCVal : lockset → val Ti → ectx_full Ti 0
-  | DCAddr : lockset → addr Ti → ectx_full Ti 0
-  | DCRtoL : ectx_full Ti 1
-  | DCLtoR : ectx_full Ti 1
-  | DCAssign : assign → ectx_full Ti 2
-  | DCCall {n} : ectx_full Ti (S n)
-  | DCAbort : type Ti → ectx_full Ti 0
-  | DCLoad : ectx_full Ti 1
-  | DCEltL : ref_seg Ti → ectx_full Ti 1
-  | DCEltR : ref_seg Ti → ectx_full Ti 1
-  | DCAlloc : type Ti → ectx_full Ti 1
-  | DCFree : ectx_full Ti 1
-  | DCUnOp : unop → ectx_full Ti 1
-  | DCBinOp : binop → ectx_full Ti 2
-  | DCIf : expr Ti → expr Ti → ectx_full Ti 1
-  | DCComma : expr Ti → ectx_full Ti 1
-  | DCCast : type Ti → ectx_full Ti 1
-  | DCInsert : ref Ti → ectx_full Ti 2.
+Inductive ectx_full (K : Set) : nat → Set :=
+  | DCVar : type K → nat → ectx_full K 0
+  | DCVal : lockset → val K → ectx_full K 0
+  | DCAddr : lockset → addr K → ectx_full K 0
+  | DCRtoL : ectx_full K 1
+  | DCLtoR : ectx_full K 1
+  | DCAssign : assign → ectx_full K 2
+  | DCCall {n} : ectx_full K (S n)
+  | DCAbort : type K → ectx_full K 0
+  | DCLoad : ectx_full K 1
+  | DCEltL : ref_seg K → ectx_full K 1
+  | DCEltR : ref_seg K → ectx_full K 1
+  | DCAlloc : type K → ectx_full K 1
+  | DCFree : ectx_full K 1
+  | DCUnOp : unop → ectx_full K 1
+  | DCBinOp : binop → ectx_full K 2
+  | DCIf : expr K → expr K → ectx_full K 1
+  | DCComma : expr K → ectx_full K 1
+  | DCCast : type K → ectx_full K 1
+  | DCInsert : ref K → ectx_full K 2.
 
 Arguments DCVar {_} _ _.
 Arguments DCVal {_} _ _.
@@ -932,8 +932,8 @@ Arguments DCComma {_} _.
 Arguments DCCast {_} _.
 Arguments DCInsert {_} _.
 
-Instance ectx_full_subst {Ti} :
-    DepSubst (ectx_full Ti) (vec (expr Ti)) (expr Ti) := λ _ E,
+Instance ectx_full_subst {K} :
+    DepSubst (ectx_full K) (vec (expr K)) (expr K) := λ _ E,
   match E with
   | DCVar τ x => λ _, var{τ} x
   | DCVal Ω v => λ _, #{Ω} v
@@ -955,7 +955,7 @@ Instance ectx_full_subst {Ti} :
   | DCCast τ => λ es, cast{τ} (es !!! 0)
   | DCInsert r => λ es, #[r:=es !!! 0] (es !!! 1)
   end.
-Instance ectx_full_locks {Ti n} : Locks (ectx_full Ti n) := λ E,
+Instance ectx_full_locks {K n} : Locks (ectx_full K n) := λ E,
   match E with
   | DCVal Ω _ | DCAddr Ω _ => Ω
   | DCIf e1 e2 => locks e1 ∪ locks e2
@@ -963,13 +963,13 @@ Instance ectx_full_locks {Ti n} : Locks (ectx_full Ti n) := λ E,
   | _ => ∅
   end.
 
-Lemma ectx_full_subst_inj {Ti n} (E : ectx_full Ti n) es1 es2 :
+Lemma ectx_full_subst_inj {K n} (E : ectx_full K n) es1 es2 :
   depsubst E es1 = depsubst E es2 → es1 = es2.
 Proof.
   destruct E; inv_all_vec_fin; simpl; intros; simplify_equality;
     f_equal'; auto using vec_to_list_inj2.
 Qed.
-Lemma ectx_full_subst_locks {Ti n} (E : ectx_full Ti n) (es : vec (expr Ti) n) :
+Lemma ectx_full_subst_locks {K n} (E : ectx_full K n) (es : vec (expr K) n) :
   locks (depsubst E es) = locks E ∪ ⋃ (locks <$> vec_to_list es).
 Proof.
   apply elem_of_equiv_L. intro. destruct E; inv_all_vec_fin; solve_elem_of.
@@ -978,9 +978,9 @@ Qed.
 (** Given expressions [es] for the holes of the context [E], the function
 [ectx_full_to_item E es i] yields a context with exactly one hole for the
 [i]th value. The [i]th value in [es] is ignored. *)
-Definition ectx_full_to_item {Ti n} (E : ectx_full Ti n)
-    (es : vec (expr Ti) n) (i : fin n) : ectx_item Ti :=
-  match E in ectx_full _ n return fin n → vec (expr Ti) n → ectx_item Ti with
+Definition ectx_full_to_item {K n} (E : ectx_full K n)
+    (es : vec (expr K) n) (i : fin n) : ectx_item K :=
+  match E in ectx_full _ n return fin n → vec (expr K) n → ectx_item K with
   | DCVar _ _  | DCVal _ _ | DCAddr _ _ | DCAbort _ => fin_0_inv _
   | DCRtoL => fin_S_inv _ (λ _, .* □) $ fin_0_inv _
   | DCLtoR => fin_S_inv _ (λ _, & □) $ fin_0_inv _
@@ -1006,26 +1006,26 @@ Definition ectx_full_to_item {Ti n} (E : ectx_full Ti n)
      fin_S_inv _ (λ es, #[r:=es !!! 0] □) $ fin_0_inv _
   end i es.
 
-Lemma ectx_full_to_item_insert {Ti n} (E : ectx_full Ti n) es i e :
+Lemma ectx_full_to_item_insert {K n} (E : ectx_full K n) es i e :
   ectx_full_to_item E (vinsert i e es) i = ectx_full_to_item E es i.
 Proof.
   destruct E; inv_all_vec_fin; simpl; try reflexivity.
   rewrite !vec_to_list_insert, take_insert, drop_insert; auto with arith.
 Qed.
-Lemma ectx_full_to_item_correct {Ti n} (E : ectx_full Ti n) es i :
+Lemma ectx_full_to_item_correct {K n} (E : ectx_full K n) es i :
   depsubst E es = subst (ectx_full_to_item E es i) (es !!! i).
 Proof.
   destruct E; inv_all_vec_fin; simpl; try reflexivity.
   by rewrite reverse_involutive, <-vec_to_list_take_drop_lookup.
 Qed.
-Lemma ectx_full_to_item_correct_alt {Ti n} (E : ectx_full Ti n) es i e :
+Lemma ectx_full_to_item_correct_alt {K n} (E : ectx_full K n) es i e :
   depsubst E (vinsert i e es) = subst (ectx_full_to_item E es i) e.
 Proof.
   rewrite (ectx_full_to_item_correct _ _ i).
   by rewrite vlookup_insert, ectx_full_to_item_insert.
 Qed.
-Lemma ectx_full_item_subst {Ti n} (E : ectx_full Ti n) (es : vec _ n)
-    (Ei : ectx_item Ti) (e : expr Ti) :
+Lemma ectx_full_item_subst {K n} (E : ectx_full K n) (es : vec _ n)
+    (Ei : ectx_item K) (e : expr K) :
   depsubst E es = subst Ei e →
     ∃ i, e = es !!! i ∧ Ei = ectx_full_to_item E es i.
 Proof.
@@ -1034,12 +1034,12 @@ Proof.
   edestruct (vec_to_list_lookup_middle es) as (i&H1&?&H2); eauto.
   exists (FS i); simplify_equality'. by rewrite <-H1, reverse_involutive.
 Qed.
-Lemma is_redex_ectx_full {Ti n} (E : ectx_full Ti n) (es : vec _ n) :
+Lemma is_redex_ectx_full {K n} (E : ectx_full K n) (es : vec _ n) :
   is_redex (depsubst E es) → Forall is_nf es.
 Proof.
   destruct E; inversion_clear 1; inv_all_vec_fin; repeat constructor; auto.
 Qed.
-Lemma ectx_full_to_item_locks {Ti n} (E : ectx_full Ti n) (es : vec _ n) i :
+Lemma ectx_full_to_item_locks {K n} (E : ectx_full K n) (es : vec _ n) i :
   locks (ectx_full_to_item E es i) =
     locks E ∪ ⋃ (locks <$> delete (fin_to_nat i) (vec_to_list es)).
 Proof.
@@ -1053,9 +1053,9 @@ Qed.
 expression [e]. Here, redexes are pairs [(E', e')] where [E'] is an expression
 evaluation context, and [e'] an expression with [is_redex e']. *)
 Section expr_split.
-  Context {Ti : Set}.
+  Context {K : Set}.
 
-  Definition expr_redexes_go: ectx Ti → expr Ti → listset (ectx Ti * expr Ti) :=
+  Definition expr_redexes_go: ectx K → expr K → listset (ectx K * expr K) :=
     fix go E e {struct e} :=
     if decide (is_redex e) then {[ (E, e) ]} else
     match e with
@@ -1079,13 +1079,13 @@ Section expr_split.
     | cast{τ} e => go ((cast{τ} □) :: E) e
     | #[r:=e1] e2 => go (#[r:=□] e2 :: E) e1 ∪ go (#[r:=e1] □ :: E) e2
     end.
-  Definition expr_redexes : expr Ti → listset (ectx Ti * expr Ti) :=
+  Definition expr_redexes : expr K → listset (ectx K * expr K) :=
     expr_redexes_go [].
 
   Lemma expr_redexes_go_is_redex E e E' e' :
     (E', e') ∈ expr_redexes_go E e → is_redex e'.
   Proof.
-    assert (∀ (f : list _ → list _ → expr Ti → listset (ectx Ti * expr Ti)) es,
+    assert (∀ (f : list _ → list _ → expr K → listset (ectx K * expr K)) es,
       (E', e') ∈ ⋃ zipped_map f [] es →
       zipped_Forall (λ esl esr e, (E', e') ∈ f esl esr e → is_redex e') [] es →
       is_redex e').
@@ -1099,8 +1099,8 @@ Section expr_split.
   Lemma expr_redexes_go_sound E e E' e' :
     (E', e') ∈ expr_redexes_go E e → subst E e = subst E' e'.
   Proof.
-    assert (∀ g (f : list _ → list _ → expr Ti → listset (ectx Ti * expr Ti))
-        (E : ectx Ti) es,
+    assert (∀ g (f : list _ → list _ → expr K → listset (ectx K * expr K))
+        (E : ectx K) es,
       (E', e') ∈ ⋃ zipped_map f [] es →
       zipped_Forall (λ esl esr e, (E', e') ∈ f esl esr e →
         subst E (g (reverse esl ++ [e] ++ esr)) = subst E' e') [] es →
@@ -1150,8 +1150,8 @@ Section expr_split.
   Qed.
   Lemma expr_redexes_go_is_nf E e : expr_redexes_go E e ≡ ∅ → is_nf e.
   Proof.
-    assert (∀ (f : list _ → list _ → expr Ti →
-        listset (ectx Ti * expr Ti)) es1 es2,
+    assert (∀ (f : list _ → list _ → expr K →
+        listset (ectx K * expr K)) es1 es2,
       ⋃ (zipped_map f es1 es2) ≡ ∅ →
       zipped_Forall (λ esl esr e, f esl esr e ≡ ∅ → is_nf e) es1 es2 →
       Forall is_nf es2).
@@ -1169,8 +1169,8 @@ Section expr_split.
   Proof. apply expr_redexes_go_is_nf. Qed.
 End expr_split.
 
-Lemma is_nf_or_redex {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)} e :
-  is_nf e ∨ ∃ (E' : ectx Ti) e', is_redex e' ∧ e = subst E' e'.
+Lemma is_nf_or_redex {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} e :
+  is_nf e ∨ ∃ (E' : ectx K) e', is_redex e' ∧ e = subst E' e'.
 Proof.
   destruct (collection_choose_or_empty (expr_redexes e)) as [[[E' e'] ?]|?].
   * right. exists E' e'. split.
@@ -1178,6 +1178,6 @@ Proof.
     + by apply expr_redexes_correct.
   * left. by apply expr_redexes_is_nf.
 Qed.
-Lemma is_nf_is_redex {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)} e :
-  ¬is_nf e → ∃ (E' : ectx Ti) e', is_redex e' ∧ e = subst E' e'.
+Lemma is_nf_is_redex {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} e :
+  ¬is_nf e → ∃ (E' : ectx K) e', is_redex e' ∧ e = subst E' e'.
 Proof. intros. by destruct (is_nf_or_redex e). Qed.

@@ -5,11 +5,11 @@ Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 
 Section refinements.
-Context `{Env Ti}.
+Context `{Env K}.
 
-Inductive lrval_refine' (Γ : env Ti) (α : bool)
-    (f : meminj Ti) (Δ1 Δ2 : memenv Ti) :
-    addr Ti + val Ti → addr Ti + val Ti → lrtype Ti → Prop :=
+Inductive lrval_refine' (Γ : env K) (α : bool)
+    (f : meminj K) (Δ1 Δ2 : memenv K) :
+    addr K + val K → addr K + val K → lrtype K → Prop :=
   | lval_refine a1 a2 τ :
      a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : TType τ → addr_strict Γ a1 →
      lrval_refine' Γ α f Δ1 Δ2 (inl a1) (inl a2) (inl τ)
@@ -17,11 +17,11 @@ Inductive lrval_refine' (Γ : env Ti) (α : bool)
      v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ →
      lrval_refine' Γ α f Δ1 Δ2 (inr v1) (inr v2) (inr τ).
 Global Instance lrval_refine:
-  RefineT Ti (env Ti) (lrtype Ti) (addr Ti + val Ti) := lrval_refine'.
+  RefineT K (env K) (lrtype K) (addr K + val K) := lrval_refine'.
 
-Inductive expr_refine' (Γ : env Ti)
-     (τs : list (type Ti)) (α : bool) (f : meminj Ti)
-     (Δ1 Δ2 : memenv Ti) : expr Ti → expr Ti → lrtype Ti → Prop :=
+Inductive expr_refine' (Γ : env K)
+     (τs : list (type K)) (α : bool) (f : meminj K)
+     (Δ1 Δ2 : memenv K) : expr K → expr K → lrtype K → Prop :=
   | EVar_refine τ n :
      τs !! n = Some τ →
      expr_refine' Γ τs α f Δ1 Δ2 (var{τ} n) (var{τ} n) (inl τ)
@@ -92,13 +92,13 @@ Inductive expr_refine' (Γ : env Ti)
      expr_refine' Γ τs α f Δ1 Δ2 e1' e2' (inr τ) →
      expr_refine' Γ τs α f Δ1 Δ2 (#[r:=e1]e1') (#[r:=e2]e2') (inr τ).
 
-Global Instance expr_refine: RefineT Ti (env Ti * list (type Ti))
-    (lrtype Ti) (expr Ti) := curry expr_refine'.
+Global Instance expr_refine: RefineT K (env K * list (type K))
+    (lrtype K) (expr K) := curry expr_refine'.
 
 Section expr_refine_ind.
-  Context (Γ : env Ti) (τs : list (type Ti)).
-  Context (α : bool) (f : meminj Ti) (Δ1 Δ2 : memenv Ti).
-  Context (P : expr Ti → expr Ti → lrtype Ti → Prop).
+  Context (Γ : env K) (τs : list (type K)).
+  Context (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K).
+  Context (P : expr K → expr K → lrtype K → Prop).
   Context (Pvar : ∀ τ n,
     τs !! n = Some τ → P (var{τ} n) (var{τ} n) (inl τ)).
   Context (Pval : ∀ Ω1 Ω2 v1 v2 τ,
@@ -170,9 +170,9 @@ Section expr_refine_ind.
   Proof. fix 4; destruct 1; eauto using Forall2_impl, Forall3_impl. Qed.
 End expr_refine_ind.
 
-Inductive ectx_item_refine' (Γ : env Ti) (τs: list (type Ti))
-     (α : bool) (f : meminj Ti) (Δ1 Δ2 : memenv Ti) :
-     ectx_item Ti → ectx_item Ti → lrtype Ti → lrtype Ti → Prop :=
+Inductive ectx_item_refine' (Γ : env K) (τs: list (type K))
+     (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
+     ectx_item K → ectx_item K → lrtype K → lrtype K → Prop :=
   | CRtoL_refine τ :
      type_complete Γ τ →
      ectx_item_refine' Γ τs α f Δ1 Δ2 (.* □) (.* □) (inr (TType τ.*)) (inl τ)
@@ -239,22 +239,22 @@ Inductive ectx_item_refine' (Γ : env Ti) (τs: list (type Ti))
      Γ ⊢ r : τ ↣ σ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr σ →
      ectx_item_refine' Γ τs α f Δ1 Δ2
        (#[r:=e1]□) (#[r:=e2]□) (inr τ) (inr τ).
-Global Instance ectx_item_refine: PathRefine Ti (env Ti * list (type Ti))
-  (lrtype Ti) (lrtype Ti) (ectx_item Ti) := curry ectx_item_refine'.
-Inductive ectx_refine' (Γs : env Ti * list (type Ti))
-     (α : bool) (f : meminj Ti) (Δ1 Δ2 : memenv Ti) :
-     ectx Ti → ectx Ti → lrtype Ti → lrtype Ti → Prop :=
+Global Instance ectx_item_refine: PathRefine K (env K * list (type K))
+  (lrtype K) (lrtype K) (ectx_item K) := curry ectx_item_refine'.
+Inductive ectx_refine' (Γs : env K * list (type K))
+     (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
+     ectx K → ectx K → lrtype K → lrtype K → Prop :=
   | ectx_nil_refine_2 τ : ectx_refine' Γs α f Δ1 Δ2 [] [] τ τ
   | ectx_cons_refine_2 Ei1 Ei2 E1 E2 τ τ' τ'' :
      Ei1 ⊑{Γs,α,f@Δ1↦Δ2} Ei2 : τ ↣ τ' →
      ectx_refine' Γs α f Δ1 Δ2 E1 E2 τ' τ'' →
      ectx_refine' Γs α f Δ1 Δ2 (Ei1 :: E1) (Ei2 :: E2) τ τ''.
-Global Instance ectx_refine: PathRefine Ti (env Ti * list (type Ti))
-  (lrtype Ti) (lrtype Ti) (ectx Ti) := ectx_refine'.
+Global Instance ectx_refine: PathRefine K (env K * list (type K))
+  (lrtype K) (lrtype K) (ectx K) := ectx_refine'.
 
-Inductive stmt_refine' (Γ : env Ti) (τs : list (type Ti))
-     (α : bool) (f : meminj Ti) (Δ1 Δ2 : memenv Ti) :
-     stmt Ti → stmt Ti → rettype Ti → Prop :=
+Inductive stmt_refine' (Γ : env K) (τs : list (type K))
+     (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
+     stmt K → stmt K → rettype K → Prop :=
   | SSkip_refine : stmt_refine' Γ τs α f Δ1 Δ2 skip skip (false,None)
   | SDo_refine e1 e2 τ :
      e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ →
@@ -290,12 +290,12 @@ Inductive stmt_refine' (Γ : env Ti) (τs : list (type Ti))
      rettype_union mσ1 mσ2 = Some mσ →
      stmt_refine' Γ τs α f Δ1 Δ2
        (if{e1} s1 else s1') (if{e2} s2 else s2') (c1 && c2, mσ).
-Global Instance stmt_refine: RefineT Ti (env Ti * list (type Ti))
-   (rettype Ti) (stmt Ti) := curry stmt_refine'.
+Global Instance stmt_refine: RefineT K (env K * list (type K))
+   (rettype K) (stmt K) := curry stmt_refine'.
 
-Inductive sctx_item_refine' (Γ : env Ti) (τs: list (type Ti))
-     (α : bool) (f : meminj Ti) (Δ1 Δ2 : memenv Ti) :
-     sctx_item Ti → sctx_item Ti → relation (rettype Ti) :=
+Inductive sctx_item_refine' (Γ : env K) (τs: list (type K))
+     (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
+     sctx_item K → sctx_item K → relation (rettype K) :=
   | CCompL_refine s1' s2' c mσ c' mσ' mσr :
      s1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2' : (c',mσ') →
      rettype_union mσ mσ' = Some mσr →
@@ -321,12 +321,12 @@ Inductive sctx_item_refine' (Γ : env Ti) (τs: list (type Ti))
      rettype_union mσ mσ' = Some mσr →
      sctx_item_refine' Γ τs α f Δ1 Δ2
        (if{e1} s1 else □) (if{e2} s2 else □) (c',mσ') (c&&c',mσr).
-Global Instance sctx_refine: PathRefine Ti (env Ti * list (type Ti))
-  (rettype Ti) (rettype Ti) (sctx_item Ti) := curry sctx_item_refine'.
+Global Instance sctx_refine: PathRefine K (env K * list (type K))
+  (rettype K) (rettype K) (sctx_item K) := curry sctx_item_refine'.
 
-Inductive esctx_item_refine' (Γ : env Ti) (τs: list (type Ti))
-     (α : bool) (f : meminj Ti) (Δ1 Δ2 : memenv Ti) :
-     esctx_item Ti → esctx_item Ti → type Ti → rettype Ti → Prop :=
+Inductive esctx_item_refine' (Γ : env K) (τs: list (type K))
+     (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
+     esctx_item K → esctx_item K → type K → rettype K → Prop :=
   | CDoE_refine τ :
      esctx_item_refine' Γ τs α f Δ1 Δ2 (! □) (! □) τ (false,None)
   | CReturnE_refine τ :
@@ -337,12 +337,12 @@ Inductive esctx_item_refine' (Γ : env Ti) (τs: list (type Ti))
      rettype_union mσ mσ' = Some mσr →
      esctx_item_refine' Γ τs α f Δ1 Δ2
        (if{□} s1 else s1')%S (if{□} s2 else s2')%S (baseT τb) (c&&c',mσr).
-Global Instance esctx_item_refine: PathRefine Ti (env Ti * list (type Ti))
-  (type Ti) (rettype Ti) (esctx_item Ti) := curry esctx_item_refine'.
+Global Instance esctx_item_refine: PathRefine K (env K * list (type K))
+  (type K) (rettype K) (esctx_item K) := curry esctx_item_refine'.
 
-Inductive ctx_item_refine' (Γ : env Ti) (τs: list (type Ti))
-     (α : bool) (f : meminj Ti) (Δ1 Δ2 : memenv Ti) :
-     ctx_item Ti → ctx_item Ti → focustype Ti → focustype Ti → Prop :=
+Inductive ctx_item_refine' (Γ : env K) (τs: list (type K))
+     (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
+     ctx_item K → ctx_item K → focustype K → focustype K → Prop :=
   | CStmt_refine Es1 Es2 cmσ cmσ' :
      Es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} Es2 : cmσ ↣ cmσ' →
      ctx_item_refine' Γ τs α f Δ1 Δ2
@@ -368,21 +368,21 @@ Inductive ctx_item_refine' (Γ : env Ti) (τs: list (type Ti))
      rettype_match cmσ σ →
      ctx_item_refine' Γ τs α f Δ1 Δ2 (CParams g (zip os1 σs))
        (CParams g (zip os2 σs)) (Stmt_type cmσ) (Fun_type g).
-Global Instance ctx_item_refine: PathRefine Ti (env Ti * list (type Ti))
-    (focustype Ti) (focustype Ti) (ctx_item Ti) := curry ctx_item_refine'.
-Inductive ctx_refine' (Γ : env Ti) (α : bool)
-     (f : meminj Ti) (Δ1 Δ2 : memenv Ti) :
-     ctx Ti → ctx Ti → focustype Ti → focustype Ti → Prop :=
+Global Instance ctx_item_refine: PathRefine K (env K * list (type K))
+    (focustype K) (focustype K) (ctx_item K) := curry ctx_item_refine'.
+Inductive ctx_refine' (Γ : env K) (α : bool)
+     (f : meminj K) (Δ1 Δ2 : memenv K) :
+     ctx K → ctx K → focustype K → focustype K → Prop :=
   | ctx_nil_refine_2 τf : ctx_refine' Γ α f Δ1 Δ2 [] [] τf τf
   | ctx_cons_refine_2 Ek1 Ek2 k1 k2 τf τf' τf'' :
      Ek1 ⊑{(Γ,get_stack_types k1),α,f@Δ1↦Δ2} Ek2 : τf ↣ τf' →
      ctx_refine' Γ α f Δ1 Δ2 k1 k2 τf' τf'' →
      ctx_refine' Γ α f Δ1 Δ2 (Ek1 :: k1) (Ek2 :: k2) τf τf''.
-Global Instance ctx_refine: PathRefine Ti (env Ti)
-  (focustype Ti) (focustype Ti) (ctx Ti) := ctx_refine'.
+Global Instance ctx_refine: PathRefine K (env K)
+  (focustype K) (focustype K) (ctx K) := ctx_refine'.
 
-Inductive direction_refine' (Γ : env Ti) (α : bool) (f : meminj Ti)
-     (Δ1 Δ2: memenv Ti) : direction Ti → direction Ti → rettype Ti → Prop :=
+Inductive direction_refine' (Γ : env K) (α : bool) (f : meminj K)
+     (Δ1 Δ2: memenv K) : direction K → direction K → rettype K → Prop :=
   | Down_refine cmτ : direction_refine' Γ α f Δ1 Δ2 ↘ ↘ cmτ
   | Up_refine mτ : direction_refine' Γ α f Δ1 Δ2 ↗ ↗ (false,mτ)
   | Top_refine c v1 v2 τ :
@@ -390,12 +390,12 @@ Inductive direction_refine' (Γ : env Ti) (α : bool) (f : meminj Ti)
      direction_refine' Γ α f Δ1 Δ2 (⇈ v1) (⇈ v2) (c,Some τ)
   | Goto_refine l cmτ : direction_refine' Γ α f Δ1 Δ2 (↷ l) (↷ l) cmτ
   | Throw_refine n cmτ : direction_refine' Γ α f Δ1 Δ2 (↑ n) (↑ n) cmτ.
-Global Instance direction_refine: RefineT Ti (env Ti)
-  (rettype Ti) (direction Ti) := direction_refine'.
+Global Instance direction_refine: RefineT K (env K)
+  (rettype K) (direction K) := direction_refine'.
 
-Inductive focus_refine' (Γ : env Ti) (τs : list (type Ti))
-     (α : bool) (f : meminj Ti) (Δ1 Δ2 : memenv Ti) :
-     focus Ti → focus Ti → focustype Ti → Prop :=
+Inductive focus_refine' (Γ : env K) (τs : list (type K))
+     (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
+     focus K → focus K → focustype K → Prop :=
   | Stmt_refine d1 d2 s1 s2 cmσ :
      s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : cmσ →
      d1 ⊑{Γ,α,f@Δ1↦Δ2} d2 : cmσ →
@@ -421,11 +421,11 @@ Inductive focus_refine' (Γ : env Ti) (τs : list (type Ti))
      Es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} Es2 : τ ↣ mσ → Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 →
      focus_refine' Γ τs α f Δ1 Δ2 (Undef (UndefBranch Es1 Ω1 v1))
        (Undef (UndefBranch Es2 Ω2 v2)) (Stmt_type mσ).
-Global Instance focus_refine: RefineT Ti (env Ti * list (type Ti))
-    (focustype Ti) (focus Ti) := curry focus_refine'.
+Global Instance focus_refine: RefineT K (env K * list (type K))
+    (focustype K) (focus K) := curry focus_refine'.
 
-Inductive state_refine' (Γ : env Ti) (α : bool)
-     (f : meminj Ti) : state Ti → state Ti → funname → Prop :=
+Inductive state_refine' (Γ : env K) (α : bool)
+     (f : meminj K) : state K → state K → funname → Prop :=
   | State_refine k1 φ1 m1 k2 φ2 m2 τf g :
      φ1 ⊑{(Γ,get_stack_types k1),α,f@'{m1}↦'{m2}} φ2 : τf →
      k1 ⊑{(Γ),α,f@'{m1}↦'{m2}} k2 : τf ↣ Fun_type g →
@@ -435,10 +435,10 @@ Inductive state_refine' (Γ : env Ti) (α : bool)
      α → Γ ⊢ S1 : g → Γ ⊢ S2 : g → is_undef_state S1 →
      state_refine' Γ α f S1 S2 g.
 Global Instance state_refine :
-  RefineTM Ti (env Ti) funname (state Ti) := state_refine'.
+  RefineTM K (env K) funname (state K) := state_refine'.
 
 Global Instance funenv_refine:
-    Refine Ti (env Ti) (funenv Ti) := λ Γ α f Δ1 Δ2 δ1 δ2, ∀ g,
+    Refine K (env K) (funenv K) := λ Γ α f Δ1 Δ2 δ1 δ2, ∀ g,
   match δ1 !! g, δ2 !! g, Γ !! g with
   | Some s1, Some s2, Some (τs,τ) => ∃ cmτ,
      Forall (type_complete Γ) τs ∧
@@ -451,27 +451,27 @@ Global Instance funenv_refine:
 End refinements.
 
 Section properties.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
 Implicit Types α : bool.
 Implicit Types o : index.
-Implicit Types Δ : memenv Ti.
-Implicit Types m : mem Ti.
-Implicit Types e : expr Ti.
-Implicit Types es : list (expr Ti).
-Implicit Types s : stmt Ti.
-Implicit Types τ σ : type Ti.
-Implicit Types a : addr Ti.
-Implicit Types v : val Ti.
-Implicit Types av : addr Ti + val Ti.
-Implicit Types d : direction Ti.
-Implicit Types Ei : ectx_item Ti.
-Implicit Types E : ectx Ti.
-Implicit Types Es : sctx_item Ti.
-Implicit Types Ee : esctx_item Ti.
-Implicit Types Ek : ctx_item Ti.
-Implicit Types k : ctx Ti.
-Implicit Types φ : focus Ti.
+Implicit Types Δ : memenv K.
+Implicit Types m : mem K.
+Implicit Types e : expr K.
+Implicit Types es : list (expr K).
+Implicit Types s : stmt K.
+Implicit Types τ σ : type K.
+Implicit Types a : addr K.
+Implicit Types v : val K.
+Implicit Types av : addr K + val K.
+Implicit Types d : direction K.
+Implicit Types Ei : ectx_item K.
+Implicit Types E : ectx K.
+Implicit Types Es : sctx_item K.
+Implicit Types Ee : esctx_item K.
+Implicit Types Ek : ctx_item K.
+Implicit Types k : ctx K.
+Implicit Types φ : focus K.
 
 Ltac solve_length := simplify_equality'; repeat
   match goal with H : Forall2 _ _ _ |- _ => apply Forall2_length in H end; lia.
@@ -599,7 +599,7 @@ Lemma ctx_refine_stack_types Γ α f Δ1 Δ2 k1 k2 τf τf' :
   ✓ Γ → k1 ⊑{Γ,α,f@Δ1↦Δ2} k2 : τf ↣ τf' →
   get_stack_types k1 = get_stack_types k2.
 Proof.
-  assert (∀ (os1 os2 : list index) (σs : list (type Ti)) P,
+  assert (∀ (os1 os2 : list index) (σs : list (type K)) P,
     Forall2 P os1 os2 → snd <$> zip os1 σs = snd <$> zip os2 σs).
   { intros os1 os2 σs P Hos. revert σs.
     induction Hos; intros [|??]; f_equal'; auto. }
@@ -845,7 +845,7 @@ Proof. destruct 1; refine_constructor; eauto using stmt_refine_id. Qed.
 Lemma ctx_item_refine_id Γ α Δ τs Ek τf τf' :
   (Γ,Δ,τs) ⊢ Ek : τf ↣ τf' → Ek ⊑{(Γ,τs),α@Δ} Ek : τf ↣ τf'.
 Proof.
-  assert (∀ os, Forall2 (λ o1 o2, @meminj_id Ti !! o1 = Some (o2, [])) os os).
+  assert (∀ os, Forall2 (λ o1 o2, @meminj_id K !! o1 = Some (o2, [])) os os).
   { induction os; auto. }
   destruct 1; refine_constructor; eauto using sctx_item_refine_id,
     expr_refine_id, ectx_refine_id, esctx_item_refine_id.
@@ -968,7 +968,7 @@ Proof.
   assert (∀ o1 o2 o3, f1 !! o1 = Some (o2,[]) → f2 !! o2 = Some (o3,[]) →
     (f2 ◎ f1) !! o1 = Some (o3,[])).
   { intros o1 o2 o3. rewrite lookup_meminj_compose_Some. naive_solver. }
-  assert (∀ os1 os2 os2' os3 (σs : list (type Ti)),
+  assert (∀ os1 os2 os2' os3 (σs : list (type K)),
     Δ2 ⊢* os2 :* σs → Δ2 ⊢* os2' :* σs → zip os2' σs = zip os2 σs →
     Forall2 (λ o1 o2, f1 !! o1 = Some (o2, [])) os1 os2 →
     Forall2 (λ o1 o2, f2 !! o1 = Some (o2, [])) os2' os3 →

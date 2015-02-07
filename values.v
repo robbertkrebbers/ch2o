@@ -3,12 +3,12 @@
 Require Export base_values memory_trees.
 Local Open Scope ctype_scope.
 
-Inductive val (Ti : Set) : Set :=
-  | VBase : base_val Ti → val Ti
-  | VArray : type Ti → list (val Ti) → val Ti
-  | VStruct : tag → list (val Ti) → val Ti
-  | VUnion : tag → nat → val Ti → val Ti
-  | VUnionAll : tag → list (val Ti) → val Ti.
+Inductive val (K : Set) : Set :=
+  | VBase : base_val K → val K
+  | VArray : type K → list (val K) → val K
+  | VStruct : tag → list (val K) → val K
+  | VUnion : tag → nat → val K → val K
+  | VUnionAll : tag → list (val K) → val K.
 
 Delimit Scope base_val with V.
 Bind Scope val_scope with val.
@@ -27,21 +27,21 @@ Notation "'intV{' τi } x" := (VBase (intV{τi} x))
 Notation "'ptrV' p" := (VBase (ptrV p)) (at level 10) : val_scope.
 Notation "'byteV' bs" := (VBase (byteV bs)) (at level 10) : val_scope.
 
-Instance: Injective (=) (=) (@VBase Ti).
+Instance: Injective (=) (=) (@VBase K).
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@VArray Ti).
+Instance: Injective2 (=) (=) (=) (@VArray K).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@VStruct Ti s).
+Instance: Injective (=) (=) (@VStruct K s).
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@VUnion Ti s).
+Instance: Injective2 (=) (=) (=) (@VUnion K s).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@VUnionAll Ti s).
+Instance: Injective (=) (=) (@VUnionAll K s).
 Proof. by injection 1. Qed.
 
-Instance maybe_VBase {Ti} : Maybe (@VBase Ti) := λ v,
+Instance maybe_VBase {K} : Maybe (@VBase K) := λ v,
   match v with VBase vb => Some vb | _ => None end.
-Instance val_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)} :
-  ∀ v1 v2 : val Ti, Decision (v1 = v2).
+Instance val_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} :
+  ∀ v1 v2 : val K, Decision (v1 = v2).
 Proof.
  refine (
   fix go v1 v2 : Decision (v1 = v2) :=
@@ -61,7 +61,7 @@ Proof.
 Defined.
 
 Section val_ind.
-  Context {Ti} (P : val Ti → Prop).
+  Context {K} (P : val K → Prop).
   Context (Pbase : ∀ vb, P (VBase vb)).
   Context (Parray : ∀ τ vs, Forall P vs → P (VArray τ vs)).
   Context (Pstruct : ∀ s vs, Forall P vs → P (VStruct s vs)).
@@ -81,7 +81,7 @@ Section val_ind.
     end.
 End val_ind.
 
-Definition val_map {Ti} (f : base_val Ti → base_val Ti) : val Ti → val Ti :=
+Definition val_map {K} (f : base_val K → base_val K) : val K → val K :=
   fix go v :=
   match v with
   | VBase vb => VBase (f vb)
@@ -93,9 +93,9 @@ Definition val_map {Ti} (f : base_val Ti → base_val Ti) : val Ti → val Ti :=
 Notation val_freeze β := (val_map (freeze β)).
 
 Section operations.
-  Context `{Env Ti}.
+  Context `{Env K}.
 
-  Definition val_unflatten (Γ : env Ti) : type Ti → list (bit Ti) → val Ti :=
+  Definition val_unflatten (Γ : env K) : type K → list (bit K) → val K :=
     type_iter
     (**i TBase =>     *) (λ τb bs, VBase (base_val_unflatten Γ τb bs))
     (**i TArray =>    *) (λ τ n rec bs, VArray τ (array_unflatten Γ rec τ n bs))
@@ -107,14 +107,14 @@ Section operations.
          VUnionAll s ((λ τ, rec τ (take (bit_size_of Γ τ) bs)) <$> τs)
       end) Γ.
 
-  Inductive vals_representable (Γ : env Ti) (Δ : memenv Ti)
-      (vs : list (val Ti)) (τs : list (type Ti)) : Prop :=
+  Inductive vals_representable (Γ : env K) (Δ : memenv K)
+      (vs : list (val K)) (τs : list (type K)) : Prop :=
     make_vals_representable bs :
       ✓{Γ,Δ}* bs →
       Forall (λ τ, bit_size_of Γ τ ≤ length bs) τs →
       vs = (λ τ, val_unflatten Γ τ (take (bit_size_of Γ τ) bs)) <$> τs →
       vals_representable Γ Δ vs τs.
-  Inductive val_typed' (Γ : env Ti) (Δ: memenv Ti) : val Ti → type Ti → Prop :=
+  Inductive val_typed' (Γ : env K) (Δ: memenv K) : val K → type K → Prop :=
     | VBase_typed vb τb :
        (Γ,Δ) ⊢ vb : τb → val_typed' Γ Δ (VBase vb) (baseT τb)
     | VArray_typed vs τ n :
@@ -131,9 +131,9 @@ Section operations.
        vals_representable Γ Δ vs τs →
        val_typed' Γ Δ (VUnionAll s vs) (unionT s).
   Global Instance val_typed:
-    Typed (env Ti * memenv Ti) (type Ti) (val Ti) := curry val_typed'.
+    Typed (env K * memenv K) (type K) (val K) := curry val_typed'.
 
-  Lemma val_typed_inv_l Γ Δ (P : type Ti → Prop) v τ :
+  Lemma val_typed_inv_l Γ Δ (P : type K → Prop) v τ :
     (Γ,Δ) ⊢ v : τ →
     match v with
     | VBase vb => (∀ τb, (Γ,Δ) ⊢ vb : τb → P (baseT τb)) → P τ
@@ -149,7 +149,7 @@ Section operations.
          vals_representable Γ Δ vs τs → P (unionT s)) → P τ
     end.
   Proof. destruct 1; simplify_equality; eauto. Qed.
-  Lemma val_typed_inv_r Γ Δ (P : val Ti → Prop) v τ :
+  Lemma val_typed_inv_r Γ Δ (P : val K → Prop) v τ :
     (Γ,Δ) ⊢ v : τ →
     match τ with
     | baseT τb => (∀ vb, (Γ,Δ) ⊢ vb : τb → P (VBase vb)) → P v
@@ -167,7 +167,7 @@ Section operations.
     end.
   Proof. destruct 1; simplify_equality; eauto. Qed.
   Section val_typed_ind.
-    Context (Γ : env Ti) (Δ : memenv Ti) (P : val Ti → type Ti → Prop).
+    Context (Γ : env K) (Δ : memenv K) (P : val K → type K → Prop).
     Context (Pbase : ∀ vb τb, (Γ,Δ) ⊢ vb : τb → P (VBase vb) (baseT τb)).
     Context (Parray : ∀ vs τ,
       (Γ,Δ) ⊢* vs : τ → Forall (λ v, P v τ) vs →
@@ -188,7 +188,7 @@ Section operations.
     Qed.
   End val_typed_ind.
 
-  Global Instance type_of_val: TypeOf (type Ti) (val Ti) := λ v,
+  Global Instance type_of_val: TypeOf (type K) (val K) := λ v,
     match v with
     | VBase vb => baseT (type_of vb)
     | VArray τ vs => τ.[length vs]
@@ -196,9 +196,9 @@ Section operations.
     | VUnion s _ _ | VUnionAll s _ => unionT s
     end.
 
-  Definition val_new (Γ : env Ti) (τ : type Ti) : val Ti :=
+  Definition val_new (Γ : env K) (τ : type K) : val K :=
     val_unflatten Γ τ (replicate (bit_size_of Γ τ) BIndet).
-  Definition val_flatten (Γ : env Ti) : val Ti → list (bit Ti) :=
+  Definition val_flatten (Γ : env K) : val K → list (bit K) :=
     fix go v :=
     match v with
     | VBase vb => base_val_flatten Γ vb
@@ -213,7 +213,7 @@ Section operations.
        from_option (replicate sz BIndet) (bits_list_join sz (go <$> vs))
     end.
 
-  Fixpoint to_val (Γ : env Ti) (w : mtree Ti) : val Ti :=
+  Fixpoint to_val (Γ : env K) (w : mtree K) : val K :=
     match w with
     | MBase τb bs => VBase (base_val_unflatten Γ τb (tagged_tag <$> bs))
     | MArray τ ws => VArray τ (to_val Γ <$> ws)
@@ -221,8 +221,8 @@ Section operations.
     | MUnion s i w _ => VUnion s i (to_val Γ w)
     | MUnionAll s bs => val_unflatten Γ (unionT s) (tagged_tag <$> bs)
     end.
-  Definition array_of_val (Γ : env Ti) (f : list perm → val Ti → mtree Ti) :
-      list perm → list (val Ti) → list (mtree Ti) :=
+  Definition array_of_val (Γ : env K) (f : list perm → val K → mtree K) :
+      list perm → list (val K) → list (mtree K) :=
     fix go xs vs :=
     match vs with
     | [] => []
@@ -230,8 +230,8 @@ Section operations.
        let sz := bit_size_of Γ (type_of v) in
        f (take sz xs) v :: go (drop sz xs) vs
     end.
-  Definition struct_of_val (Γ : env Ti) (f : list perm → val Ti → mtree Ti) :
-      list perm → list (val Ti) → list nat → list (mtree Ti * list (pbit Ti)) :=
+  Definition struct_of_val (Γ : env K) (f : list perm → val K → mtree K) :
+      list perm → list (val K) → list nat → list (mtree K * list (pbit K)) :=
     fix go xs vs pads :=
     match vs, pads with
     | v :: vs, pad :: pads =>
@@ -241,7 +241,7 @@ Section operations.
         flip PBit BIndet <$> take pad xs') :: go (drop pad xs') vs pads
     | _, _ => []
     end.
-  Fixpoint of_val (Γ : env Ti) (xs : list perm) (v : val Ti) : mtree Ti :=
+  Fixpoint of_val (Γ : env K) (xs : list perm) (v : val K) : mtree K :=
     match v with
     | VBase vb =>
        MBase (type_of vb) (zip_with PBit xs (base_val_flatten Γ vb))
@@ -257,7 +257,7 @@ Section operations.
     end.
 
   Global Instance vtype_check:
-      TypeCheck (env Ti * memenv Ti) (type Ti) (val Ti) :=
+      TypeCheck (env K * memenv K) (type K) (val K) :=
     fix go (ΓΔ : _ * _) v {struct v} := let _ : TypeCheck _ _ _ := @go in
     let (Γ,Δ) := ΓΔ in
     match v with
@@ -270,12 +270,12 @@ Section operations.
     | VStruct s vs =>
        τs ← Γ !! s;
        τs' ← mapM (type_check (Γ,Δ)) vs;
-       guard ((τs' : list (type Ti)) = τs);
+       guard ((τs' : list (type K)) = τs);
        Some (structT s)
     | VUnion s i v =>
        τ ← Γ !! s ≫= (!! i);
        τ' ← type_check (Γ,Δ) v;
-       guard ((τ' : type Ti) = τ);
+       guard ((τ' : type K) = τ);
        Some (unionT s)
     | VUnionAll s vs =>
        τs ← Γ !! s;
@@ -288,7 +288,7 @@ Section operations.
     end.
 
   Global Instance val_lookup_seg:
-      LookupE (env Ti) (ref_seg Ti) (val Ti) (val Ti) := λ Γ rs v,
+      LookupE (env K) (ref_seg K) (val K) (val K) := λ Γ rs v,
     match rs, v with
     | RArray i τ n, VArray τ' vs =>
        guard (n = length vs); guard (τ = τ'); vs !! i
@@ -303,11 +303,11 @@ Section operations.
     | RUnion i s _, VUnionAll s' vs => guard (s = s'); vs !! i
     | _, _ => None
     end.
-  Global Instance val_lookup: LookupE (env Ti) (ref Ti) (val Ti) (val Ti) :=
+  Global Instance val_lookup: LookupE (env K) (ref K) (val K) (val K) :=
     fix go Γ r v := let _ : LookupE _ _ _ _ := @go in
     match r with [] => Some v | rs :: r => v !!{Γ} r ≫= lookupE Γ rs end.
-  Definition val_alter_seg (Γ : env Ti) (g : val Ti → val Ti)
-      (rs : ref_seg Ti) (v : val Ti) : val Ti :=
+  Definition val_alter_seg (Γ : env K) (g : val K → val K)
+      (rs : ref_seg K) (v : val K) : val K :=
     match rs, v with
     | RArray i _ _, VArray τ vs => VArray τ (alter g i vs)
     | RStruct i _, VStruct s vs => VStruct s (alter g i vs)
@@ -319,11 +319,11 @@ Section operations.
     | RUnion i s _, VUnionAll _ vs => default v (vs !! i) (VUnion s i ∘ g)
     | _, _ => v
     end.
-  Fixpoint val_alter (Γ : env Ti) (g : val Ti → val Ti)
-      (r : ref Ti) : val Ti → val Ti :=
+  Fixpoint val_alter (Γ : env K) (g : val K → val K)
+      (r : ref K) : val K → val K :=
     match r with [] => g | rs :: r => val_alter Γ (val_alter_seg Γ g rs) r end.
 
-  Inductive val_union_free : val Ti → Prop :=
+  Inductive val_union_free : val K → Prop :=
     | VBase_union_free vb : val_union_free (VBase vb)
     | VArray_union_free τ vs :
        Forall (val_union_free) vs → val_union_free (VArray τ vs)
@@ -332,7 +332,7 @@ Section operations.
     | VUnionAll_union_free s vs :
        Forall val_union_free vs → val_union_free (VUnionAll s vs).
   Section val_union_free_ind.
-    Context (Γ : env Ti) (P : val Ti → Prop).
+    Context (Γ : env K) (P : val K → Prop).
     Context (Pbase : ∀ vb, P (VBase vb)).
     Context (Parray : ∀ τ vs,
       Forall val_union_free vs → Forall P vs → P (VArray τ vs)).
@@ -358,26 +358,26 @@ Section operations.
 End operations.
 
 Section values.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
 Implicit Types α : bool.
-Implicit Types Δ : memenv Ti.
-Implicit Types τb : base_type Ti.
-Implicit Types τ : type Ti.
-Implicit Types τs : list (type Ti).
-Implicit Types b : bit Ti.
-Implicit Types bs : list (bit Ti).
+Implicit Types Δ : memenv K.
+Implicit Types τb : base_type K.
+Implicit Types τ : type K.
+Implicit Types τs : list (type K).
+Implicit Types b : bit K.
+Implicit Types bs : list (bit K).
 Implicit Types x : perm.
 Implicit Types xs : list perm.
-Implicit Types xb : pbit Ti.
-Implicit Types xbs : list (pbit Ti).
-Implicit Types w : mtree Ti.
-Implicit Types ws : list (mtree Ti).
-Implicit Types rs : ref_seg Ti.
-Implicit Types r : ref Ti.
-Implicit Types vb : base_val Ti.
-Implicit Types v : val Ti.
-Implicit Types vs : list (val Ti).
+Implicit Types xb : pbit K.
+Implicit Types xbs : list (pbit K).
+Implicit Types w : mtree K.
+Implicit Types ws : list (mtree K).
+Implicit Types rs : ref_seg K.
+Implicit Types r : ref K.
+Implicit Types vb : base_val K.
+Implicit Types v : val K.
+Implicit Types vs : list (val K).
 Notation vals_unflatten Γ τs bs :=
   ((λ τ, val_unflatten Γ τ (take (bit_size_of Γ τ) bs)) <$> τs).
 
@@ -389,7 +389,7 @@ Hint Resolve Forall2_take Forall2_drop Forall2_app
   Forall2_replicate Forall2_resize.
 Hint Resolve BIndet_valid BIndet_weak_refine.
 Hint Immediate env_valid_lookup env_valid_lookup_lookup.
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
+Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 
 (** ** Properties of the [val_flatten] function *)
 Lemma val_flatten_length Γ Δ τ v :
@@ -479,7 +479,7 @@ Lemma val_unflatten_compound Γ c s τs bs :
     end.
 Proof.
   intros HΓ Hs. unfold val_unflatten. erewrite (type_iter_compound
-    (pointwise_relation (list (bit Ti)) (@eq (val Ti))) _ _ _ _); try done.
+    (pointwise_relation (list (bit K)) (@eq (val K))) _ _ _ _); try done.
   { intros ???????; f_equal. by apply array_unflatten_weaken. }
   clear s τs Hs bs. intros f g [] s τs Hs Hτs ? bs; f_equal.
   { eapply struct_unflatten_weaken, Forall_impl; eauto. }
@@ -639,7 +639,7 @@ Proof.
 Qed.
 Lemma val_typed_types_valid Γ Δ vs τs : ✓ Γ → (Γ,Δ) ⊢* vs :* τs → ✓{Γ}* τs.
 Proof. induction 2; constructor; eauto using val_typed_type_valid. Qed.
-Global Instance: TypeOfSpec (env Ti * memenv Ti) (type Ti) (val Ti).
+Global Instance: TypeOfSpec (env K * memenv K) (type K) (val K).
 Proof.
   intros [Γ Δ]. induction 1 using @val_typed_ind; decompose_Forall_hyps;
     f_equal; eauto; eapply type_of_correct; eauto.
@@ -1122,7 +1122,7 @@ Qed.
 (** ** Decidable typing *)
 Local Arguments type_check _ _ _ _ _ !_ /.
 Global Instance:
-  TypeCheckSpec (env Ti * memenv Ti) (type Ti) (val Ti) (✓ ∘ fst).
+  TypeCheckSpec (env K * memenv K) (type K) (val K) (✓ ∘ fst).
 Proof.
   intros [Γ Δ] v τ ?; revert v τ. assert (∀ vs τs,
     Forall (λ v, ∀ τ, type_check (Γ,Δ) v = Some τ → (Γ,Δ) ⊢ v : τ) vs →
@@ -1157,7 +1157,7 @@ Proof.
 Qed.
 
 (** ** Properties of lookup *)
-Lemma val_lookup_nil Γ : lookupE (A:=val Ti) Γ [] = Some.
+Lemma val_lookup_nil Γ : lookupE (A:=val K) Γ [] = Some.
 Proof. done. Qed.
 Lemma val_lookup_cons Γ rs r :
   lookupE Γ (rs :: r) = λ v, v !!{Γ} r ≫= lookupE Γ rs.
@@ -1262,7 +1262,7 @@ Proof.
 Qed.
 
 (** ** Properties of alter *)
-Implicit Types g : val Ti → val Ti.
+Implicit Types g : val K → val K.
 Lemma val_alter_nil Γ g : val_alter Γ g [] = g.
 Proof. done. Qed.
 Lemma val_alter_cons Γ g rs r :

@@ -40,25 +40,25 @@ Definition bool_bitop (op : bitop) : bool → bool → bool :=
   match op with AndOp => (&&) | OrOp => (||) | XorOp => xorb end.
 
 Section pre_operations.
-  Context `{IntCoding Ti}.
+  Context `{IntCoding K}.
 
-  Inductive int_subseteq : SubsetEq (int_type Ti) :=
-    | int_subseteq_same_sign si (k1 k2 : Ti) :
+  Inductive int_subseteq : SubsetEq (int_type K) :=
+    | int_subseteq_same_sign si (k1 k2 : K) :
        k1 ⊆ k2 → IntType si k1 ⊆ IntType si k2
-    | int_subseteq_Signed_Unsigned (k1 k2 : Ti) :
+    | int_subseteq_Signed_Unsigned (k1 k2 : K) :
        k1 ⊆ k2 → IntType Signed k1 ⊆ IntType Unsigned k2
-    | int_subseteq_Unsigned_Signed (k1 k2 : Ti) :
+    | int_subseteq_Unsigned_Signed (k1 k2 : K) :
        int_upper (IntType Unsigned k1) ≤ int_upper (IntType Signed k2) →
        IntType Unsigned k1 ⊆ IntType Signed k2.
   Global Existing Instance int_subseteq.
 
-  Definition int_promote (τi : int_type Ti) : int_type Ti :=
+  Definition int_promote (τi : int_type K) : int_type K :=
     if decide (rank τi ⊆ int_rank) then
       if decide (int_upper τi ≤ int_upper sintT) then sintT else uintT
     else τi.
-  Global Instance rank_union : Union Ti := λ k1 k2,
+  Global Instance rank_union : Union K := λ k1 k2,
     if decide (k1 ⊆ k2) then k2 else k1.
-  Global Instance int_union : Union (int_type Ti) := λ τi1 τi2,
+  Global Instance int_union : Union (int_type K) := λ τi1 τi2,
     match τi1, τi2 with
     | IntType Signed k1, IntType Signed k2 => IntType Signed (k1 ∪ k2)
     | IntType Unsigned k1, IntType Unsigned k2 => IntType Unsigned (k1 ∪ k2)
@@ -71,7 +71,7 @@ Section pre_operations.
     end.
 
   Definition int_pre_arithop_ok
-      (op : arithop) (x y : Z) (τi : int_type Ti) : Prop :=
+      (op : arithop) (x y : Z) (τi : int_type K) : Prop :=
     match op, sign τi with
     | PlusOp, Signed => int_lower τi ≤ x + y < int_upper τi
     | PlusOp, Unsigned => True
@@ -85,7 +85,7 @@ Section pre_operations.
        y ≠ 0 ∧ int_lower τi ≤ x `quot` y < int_upper τi
     | (DivOp | ModOp), Unsigned => y ≠ 0
     end.
-  Definition int_pre_arithop (op : arithop) (x y : Z) (τi : int_type Ti) : Z :=
+  Definition int_pre_arithop (op : arithop) (x y : Z) (τi : int_type K) : Z :=
     match op, sign τi with
     | PlusOp, Signed => x + y
     | PlusOp, Unsigned => (x + y) `mod` int_upper τi
@@ -97,26 +97,26 @@ Section pre_operations.
     | ModOp, _ => x `rem` y
     end.
   Definition int_pre_shiftop_ok
-      (op : shiftop) (x y : Z) (τi : int_type Ti) : Prop :=
+      (op : shiftop) (x y : Z) (τi : int_type K) : Prop :=
     match op, sign τi with
     | ShiftLOp, Signed => 0 ≤ x ∧ 0 ≤ y < int_width τi ∧ x ≪ y < int_upper τi
     | ShiftLOp, Unsigned => 0 ≤ y < int_width τi
     | ShiftROp, Signed => 0 ≤ x ∧ 0 ≤ y < int_width τi
     | ShiftROp, Unsigned => 0 ≤ y < int_width τi
     end.
-  Definition int_pre_shiftop (op : shiftop) (x y : Z) (τi : int_type Ti) : Z :=
+  Definition int_pre_shiftop (op : shiftop) (x y : Z) (τi : int_type K) : Z :=
     match op, sign τi with
     | ShiftLOp, Signed => x ≪ y
     | ShiftLOp, Unsigned => (x ≪ y) `mod` int_upper τi
     | ShiftROp, _ => x ≫ y
     end.
-  Definition int_pre_cast_ok (σi : int_type Ti) (x : Z) :=
+  Definition int_pre_cast_ok (σi : int_type K) (x : Z) :=
     match sign σi with
     | Signed => (**i actually implementation defined, see 6.3.1.3 *)
        int_lower σi ≤ x < int_upper σi
     | Unsigned => True
     end.
-  Definition int_pre_cast (σi : int_type Ti) (x : Z) :=
+  Definition int_pre_cast (σi : int_type K) (x : Z) :=
     match sign σi with Signed => x | Unsigned => x `mod` int_upper σi end.
 
   Global Instance int_pre_arithop_ok_dec op x y τi :
@@ -137,14 +137,14 @@ implementations that make integer overflow undefined, and those that let it
 wrap (as for example GCC with the -fno-strict-overflow flag does). When an
 operation is allowed by the C standard, the result of [int_binop τi op x y]
 should correspond to its specification by the standard. *)
-Class IntEnv (Ti : Set) := {
-  int_coding :> IntCoding Ti;
-  int_arithop_ok : arithop → Z → int_type Ti → Z → int_type Ti → Prop;
-  int_arithop : arithop → Z → int_type Ti → Z → int_type Ti → Z;
-  int_shiftop_ok : shiftop → Z → int_type Ti → Z → int_type Ti → Prop;
-  int_shiftop : shiftop → Z → int_type Ti → Z → int_type Ti → Z;
-  int_cast_ok : int_type Ti → Z → Prop;
-  int_cast : int_type Ti → Z → Z;
+Class IntEnv (K : Set) := {
+  int_coding :> IntCoding K;
+  int_arithop_ok : arithop → Z → int_type K → Z → int_type K → Prop;
+  int_arithop : arithop → Z → int_type K → Z → int_type K → Z;
+  int_shiftop_ok : shiftop → Z → int_type K → Z → int_type K → Prop;
+  int_shiftop : shiftop → Z → int_type K → Z → int_type K → Z;
+  int_cast_ok : int_type K → Z → Prop;
+  int_cast : int_type K → Z → Z;
   int_arithop_ok_dec op x τi1 y τi2 :> Decision (int_arithop_ok op x τi1 y τi2);
   int_shiftop_ok_dec op x τi1 y τi2 :> Decision (int_shiftop_ok op x τi1 y τi2);
   int_cast_ok_dec σi x :> Decision (int_cast_ok σi x)
@@ -156,8 +156,8 @@ Arguments int_shiftop _ _ _ _ _ _ _ : simpl never.
 Arguments int_cast_ok _ _ _ _ : simpl never.
 Arguments int_cast _ _ _ _ : simpl never.
 
-Class IntEnvSpec Ti `{IntEnv Ti} := {
-  int_coding_spec :>> IntCodingSpec Ti;
+Class IntEnvSpec K `{IntEnv K} := {
+  int_coding_spec :>> IntCodingSpec K;
   int_arithop_ok_more op x y τi1 τi2 :
     int_typed x τi1 → int_typed y τi2 →
     let τi' := int_promote τi1 ∪ int_promote τi2 in
@@ -192,13 +192,13 @@ Class IntEnvSpec Ti `{IntEnv Ti} := {
 }.
 
 Section int_operations.
-  Context `{IntEnv Ti}.
+  Context `{IntEnv K}.
 
-  Definition int_unop_type_of (op : unop) (τi : int_type Ti) : int_type Ti :=
+  Definition int_unop_type_of (op : unop) (τi : int_type K) : int_type K :=
     match op with NotOp => sintT | _ => int_promote τi end.
-  Definition int_unop_ok (op : unop) (x : Z) (τi : int_type Ti) : Prop :=
+  Definition int_unop_ok (op : unop) (x : Z) (τi : int_type K) : Prop :=
     match op with NegOp => int_arithop_ok MinusOp 0 τi x τi | _ => True end.
-  Definition int_unop (op : unop) (x : Z) (τi : int_type Ti) : Z :=
+  Definition int_unop (op : unop) (x : Z) (τi : int_type K) : Z :=
     match op with
     | NegOp => int_arithop MinusOp 0 τi x τi
     | ComplOp =>
@@ -207,21 +207,21 @@ Section int_operations.
     end.
 
   Definition int_binop_type_of (op : binop)
-      (τi1 τi2 : int_type Ti) : int_type Ti :=
+      (τi1 τi2 : int_type K) : int_type K :=
     match op with
     | CompOp _ => sintT
     | ArithOp _ | BitOp _ => int_promote τi1 ∪ int_promote τi2
     | ShiftOp _ => int_promote τi1
     end.
   Definition int_binop_ok (op : binop)
-      (x1 : Z) (τi1 : int_type Ti) (x2 : Z) (τi2 : int_type Ti) : Prop :=
+      (x1 : Z) (τi1 : int_type K) (x2 : Z) (τi2 : int_type K) : Prop :=
     match op with
     | (CompOp _ | BitOp _) => True
     | ArithOp op => int_arithop_ok op x1 τi1 x2 τi2
     | ShiftOp op => int_shiftop_ok op x1 τi1 x2 τi2
     end.
   Definition int_binop (op : binop)
-      (x1 : Z) (τi1 : int_type Ti) (x2 : Z) (τi2 : int_type Ti) : Z :=
+      (x1 : Z) (τi1 : int_type K) (x2 : Z) (τi2 : int_type K) : Z :=
     match op with
     | CompOp op =>
        let τi' := int_promote τi1 ∪ int_promote τi2 in
@@ -236,9 +236,9 @@ Section int_operations.
 End int_operations.
 
 Section pre_properties.
-Context `{IntCodingSpec Ti}.
-Implicit Types τi : int_type Ti.
-Implicit Types k : Ti.
+Context `{IntCodingSpec K}.
+Implicit Types τi : int_type K.
+Implicit Types k : K.
 Implicit Types x y : Z.
 Implicit Types n : nat.
 
@@ -280,12 +280,12 @@ Proof.
     naive_solver eauto using int_typed_rank_weaken,
     int_typed_rank_strict_weaken, int_upper_le_invert, rank_le_upper.
 Qed.
-Global Instance: PartialOrder ((⊆) : relation (int_type Ti)).
+Global Instance: PartialOrder ((⊆) : relation (int_type K)).
 Proof.
   repeat split.
   * by intros [[] ?]; constructor.
   * destruct 1; inversion 1; subst; constructor;
-      eauto using (transitivity (R:=@subseteq Ti _)),
+      eauto using (transitivity (R:=@subseteq K _)),
       Z.le_trans, rank_le_upper, int_upper_le_invert_alt.
   * destruct 1; inversion 1; subst.
     + by f_equal; apply (anti_symmetric (⊆)).
@@ -294,12 +294,12 @@ Proof.
     + destruct (irreflexivity (⊂) k2); eapply strict_transitive_r,
         rank_size_reflecting, int_upper_le_invert; eauto.
 Qed.
-Global Instance: JoinSemiLattice Ti.
+Global Instance: JoinSemiLattice K.
 Proof.
   split; try apply _;
     unfold union, rank_union; intros; case_decide; auto using total_not.
 Qed.
-Global Instance: JoinSemiLattice (int_type Ti).
+Global Instance: JoinSemiLattice (int_type K).
 Proof.
   split; try apply _.
   * intros [[] k1] [[] k2]; simpl.
@@ -389,8 +389,8 @@ Qed.
 End pre_properties.
 
 Section properties.
-Context `{IntEnvSpec Ti}.
-Implicit Types τi : int_type Ti.
+Context `{IntEnvSpec K}.
+Implicit Types τi : int_type K.
 Implicit Types x y : Z.
 
 Lemma int_unop_typed op x τi :

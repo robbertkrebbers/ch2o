@@ -3,8 +3,8 @@
 Require Export values base_values_refine memory_trees_refine.
 Local Open Scope ctype_scope.
 
-Inductive val_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
-     (Δ1 Δ2 : memenv Ti) : val Ti → val Ti → type Ti → Prop :=
+Inductive val_refine' `{Env K} (Γ : env K) (α : bool) (f : meminj K)
+     (Δ1 Δ2 : memenv K) : val K → val K → type K → Prop :=
   | VBase_refine vb1 vb2 τb :
      vb1 ⊑{Γ,α,f@Δ1↦Δ2} vb2 : τb →
      val_refine' Γ α f Δ1 Δ2 (VBase vb1) (VBase vb2) (baseT τb)
@@ -26,12 +26,12 @@ Inductive val_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
      α → Γ !! s = Some τs → τs !! i = Some τ → vs2 !! i = Some v2 →
      val_refine' Γ α f Δ1 Δ2 v1 v2 τ → vals_representable Γ Δ2 vs2 τs →
      val_refine' Γ α f Δ1 Δ2 (VUnion s i v1) (VUnionAll s vs2) (unionT s).
-Instance val_refine `{Env Ti} :
-  RefineT Ti (env Ti) (type Ti) (val Ti) := val_refine'.
+Instance val_refine `{Env K} :
+  RefineT K (env K) (type K) (val K) := val_refine'.
 
 Section val_refine_ind.
-  Context `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti).
-  Context (Δ1 Δ2 : memenv Ti) (P : val Ti → val Ti → type Ti → Prop).
+  Context `{Env K} (Γ : env K) (α : bool) (f : meminj K).
+  Context (Δ1 Δ2 : memenv K) (P : val K → val K → type K → Prop).
   Context (Pbase : ∀ vb1 vb2 τb,
     vb1 ⊑{Γ,α,f@Δ1↦Δ2} vb2 : τb → P (VBase vb1) (VBase vb2) (baseT τb)).
   Context (Parray : ∀ τ n vs1 vs2,
@@ -61,26 +61,26 @@ Section val_refine_ind.
 End val_refine_ind.
 
 Section values.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
 Implicit Types α : bool.
-Implicit Types Δ : memenv Ti.
-Implicit Types τb : base_type Ti.
-Implicit Types τ : type Ti.
-Implicit Types τs : list (type Ti).
-Implicit Types b : bit Ti.
-Implicit Types bs : list (bit Ti).
+Implicit Types Δ : memenv K.
+Implicit Types τb : base_type K.
+Implicit Types τ : type K.
+Implicit Types τs : list (type K).
+Implicit Types b : bit K.
+Implicit Types bs : list (bit K).
 Implicit Types x : perm.
 Implicit Types xs : list perm.
-Implicit Types xb : pbit Ti.
-Implicit Types xbs : list (pbit Ti).
-Implicit Types w : mtree Ti.
-Implicit Types ws : list (mtree Ti).
-Implicit Types rs : ref_seg Ti.
-Implicit Types r : ref Ti.
-Implicit Types vb : base_val Ti.
-Implicit Types v : val Ti.
-Implicit Types vs : list (val Ti).
+Implicit Types xb : pbit K.
+Implicit Types xbs : list (pbit K).
+Implicit Types w : mtree K.
+Implicit Types ws : list (mtree K).
+Implicit Types rs : ref_seg K.
+Implicit Types r : ref K.
+Implicit Types vb : base_val K.
+Implicit Types v : val K.
+Implicit Types vs : list (val K).
 
 Hint Resolve Forall_take Forall_drop Forall_app_2
   Forall_replicate Forall_resize.

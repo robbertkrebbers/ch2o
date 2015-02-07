@@ -29,8 +29,8 @@ a traversal to the top of the statement, and returns from the called function.
 When a [goto l] statement is executed, the direction is changed to [↷l], and
 the semantics performs a non-deterministic small step traversal through the
 zipper until the label [l] is found. *)
-Inductive direction (Ti : Set) : Set :=
-  Down | Up | Top (v : val Ti) | Goto (l : labelname) | Throw (n : nat).
+Inductive direction (K : Set) : Set :=
+  Down | Up | Top (v : val K) | Goto (l : labelname) | Throw (n : nat).
 Arguments Down {_}.
 Arguments Up {_}.
 Arguments Top {_} _.
@@ -43,13 +43,13 @@ Notation "⇈ v" := (Top v) (at level 20) : C_scope.
 Notation "↷ l" := (Goto l) (at level 20) : C_scope.
 Notation "↑ n" := (Throw n) (at level 20) : C_scope.
 
-Instance direction_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (d1 d2 : direction Ti) : Decision (d1 = d2).
+Instance direction_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (d1 d2 : direction K) : Decision (d1 = d2).
 Proof. solve_decision. Defined.
 
-Definition direction_in {Ti} (d : direction Ti) (s : stmt Ti) : Prop :=
+Definition direction_in {K} (d : direction K) (s : stmt K) : Prop :=
   match d with ↘ => True | ↷ l => l ∈ labels s | _ => False end.
-Definition direction_out {Ti} (d : direction Ti) (s : stmt Ti) : Prop :=
+Definition direction_out {K} (d : direction K) (s : stmt K) : Prop :=
   match d with
   | ↗ | ⇈ _ => True | ↷ l => l ∉ labels s | ↑ _ => True | _ => False
   end.
@@ -57,7 +57,7 @@ Arguments direction_in _ _ _ : simpl nomatch.
 Arguments direction_out _ _ _ : simpl nomatch.
 Hint Unfold direction_in direction_out.
 
-Definition direction_in_out_dec {Ti} (d : direction Ti) s :
+Definition direction_in_out_dec {K} (d : direction K) s :
   { direction_in d s ∧ ¬direction_out d s } +
   { ¬direction_in d s ∧ direction_out d s }.
 Proof.
@@ -66,7 +66,7 @@ Proof.
   | ↘ => left _ | ↷ l => cast_if (decide (l ∈ labels s)) | _ => right _
   end; abstract naive_solver.
 Defined.
-Lemma direction_in_out {Ti} (d : direction Ti) s :
+Lemma direction_in_out {K} (d : direction K) s :
   direction_in d s → direction_out d s → False.
 Proof. destruct (direction_in_out_dec d s); naive_solver. Qed.
 
@@ -89,17 +89,17 @@ execution state [state] equips a focus with a program context and memory.
 
 These focuses correspond to the five variants of execution states as described
 above. *)
-Inductive undef_state (Ti : Set) : Set :=
-  | UndefExpr : ectx Ti → expr Ti → undef_state Ti
-  | UndefBranch : esctx_item Ti → lockset → val Ti → undef_state Ti.
-Inductive focus (Ti : Set) : Set :=
-  | Stmt : direction Ti → stmt Ti → focus Ti
-  | Expr : expr Ti → focus Ti
-  | Call : funname → list (val Ti) → focus Ti
-  | Return : funname → val Ti → focus Ti
-  | Undef : undef_state Ti → focus Ti.
-Record state (Ti : Set) : Set :=
-  State { SCtx : ctx Ti; SFoc : focus Ti; SMem : mem Ti }.
+Inductive undef_state (K : Set) : Set :=
+  | UndefExpr : ectx K → expr K → undef_state K
+  | UndefBranch : esctx_item K → lockset → val K → undef_state K.
+Inductive focus (K : Set) : Set :=
+  | Stmt : direction K → stmt K → focus K
+  | Expr : expr K → focus K
+  | Call : funname → list (val K) → focus K
+  | Return : funname → val K → focus K
+  | Undef : undef_state K → focus K.
+Record state (K : Set) : Set :=
+  State { SCtx : ctx K; SFoc : focus K; SMem : mem K }.
 Add Printing Constructor state.
 
 Arguments UndefExpr {_} _ _.
@@ -114,27 +114,27 @@ Arguments SCtx {_} _.
 Arguments SFoc {_} _.
 Arguments SMem {_} _.
 
-Instance undef_state_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (S1 S2 : undef_state Ti) : Decision (S1 = S2).
+Instance undef_state_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (S1 S2 : undef_state K) : Decision (S1 = S2).
 Proof. solve_decision. Defined.
-Instance focus_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (φ1 φ2 : focus Ti) : Decision (φ1 = φ2).
+Instance focus_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (φ1 φ2 : focus K) : Decision (φ1 = φ2).
 Proof. solve_decision. Defined.
-Instance state_eq_dec {Ti : Set} `{Env Ti}
-  (S1 S2 : state Ti) : Decision (S1 = S2).
+Instance state_eq_dec {K : Set} `{Env K}
+  (S1 S2 : state K) : Decision (S1 = S2).
 Proof. solve_decision. Defined.
-Instance focus_locks {Ti} : Locks (focus Ti) := λ φ,
+Instance focus_locks {K} : Locks (focus K) := λ φ,
   match φ with Stmt _ s => locks s | Expr e => locks e | _ => ∅ end.
 
-Definition initial_state {Ti} (m : mem Ti)
-  (f : funname) (vs : list (val Ti)) : state Ti := State [] (Call f vs) m.
-Inductive is_final_state {Ti} (v : val Ti) : state Ti → Prop :=
+Definition initial_state {K} (m : mem K)
+  (f : funname) (vs : list (val K)) : state K := State [] (Call f vs) m.
+Inductive is_final_state {K} (v : val K) : state K → Prop :=
   | Return_final f m : is_final_state v (State [] (Return f v) m).
-Inductive is_undef_state {Ti} : state Ti → Prop :=
+Inductive is_undef_state {K} : state K → Prop :=
   | Undef_undef k Su m : is_undef_state (State k (Undef Su) m).
 
-Instance is_final_state_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (v : val Ti) S : Decision (is_final_state v S).
+Instance is_final_state_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (v : val K) S : Decision (is_final_state v S).
 Proof.
  refine
   match S with
@@ -142,7 +142,7 @@ Proof.
   | _ => right _
   end; abstract first [subst; constructor|by inversion 1].
 Defined.
-Instance is_undef_state_dec {Ti} (S : state Ti) : Decision (is_undef_state S).
+Instance is_undef_state_dec {K} (S : state K) : Decision (is_undef_state S).
 Proof.
  refine match S with State _ (Undef _) _ => left _ | _ => right _ end;
     abstract first [constructor|by inversion 1].

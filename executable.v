@@ -3,10 +3,10 @@
 Require Export state operations.
 
 Section executable.
-Context `{Env Ti}.
+Context `{Env K}.
 
-Definition assign_exec (Γ : env Ti) (m : mem Ti) (a : addr Ti)
-    (v : val Ti) (ass : assign) : option (val Ti * val Ti) :=
+Definition assign_exec (Γ : env K) (m : mem K) (a : addr K)
+    (v : val K) (ass : assign) : option (val K * val K) :=
   match ass with
   | Assign =>
      guard (val_cast_ok Γ m (type_of a) v);
@@ -26,7 +26,7 @@ Definition assign_exec (Γ : env Ti) (m : mem Ti) (a : addr Ti)
      guard (val_cast_ok Γ m (type_of a) v');
      Some (va, val_cast (type_of a) v')
   end.
-Fixpoint ctx_lookup (x : nat) (k : ctx Ti) : option index :=
+Fixpoint ctx_lookup (x : nat) (k : ctx K) : option index :=
   match k with
   | (CStmt _ | CExpr _ _) :: k => ctx_lookup x k
   | CLocal o _ :: k =>
@@ -34,8 +34,8 @@ Fixpoint ctx_lookup (x : nat) (k : ctx Ti) : option index :=
   | CParams _ oτs :: _ => fst <$> oτs !! x
   | _ => None
   end.
-Definition ehexec (Γ : env Ti) (k : ctx Ti)
-    (e : expr Ti) (m : mem Ti) : listset (expr Ti * mem Ti) :=
+Definition ehexec (Γ : env K) (k : ctx K)
+    (e : expr K) (m : mem K) : listset (expr K * mem K) :=
   match e with
   | var{τ} x =>
      o ← of_option (ctx_lookup x k);
@@ -91,8 +91,8 @@ Definition ehexec (Γ : env Ti) (k : ctx Ti)
      {[ #{Ω1 ∪ Ω2} (val_alter Γ (λ _, v1) r v2), m ]}
   | _ => ∅
   end%E.
-Definition cexec (Γ : env Ti) (δ : funenv Ti)
-    (S : state Ti) : listset (state Ti) :=
+Definition cexec (Γ : env K) (δ : funenv K)
+    (S : state K) : listset (state K) :=
   let 'State k φ m := S in
   match φ with
   | Stmt ↘ s =>

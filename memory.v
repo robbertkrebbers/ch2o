@@ -5,59 +5,59 @@ Require Import natmap.
 Local Open Scope ctype_scope.
 
 Section memory_operations.
-  Context `{Env Ti}.
+  Context `{Env K}.
 
   Global Instance mem_lookup:
-      LookupE (env Ti) (addr Ti) (val Ti) (mem Ti) := λ Γ a m,
+      LookupE (env K) (addr K) (val K) (mem K) := λ Γ a m,
     w ← m !!{Γ} a;
     guard (ctree_Forall (λ xb, Some Readable ⊆ pbit_kind xb) w);
     Some (to_val Γ w).
-  Definition mem_force (Γ : env Ti) (a : addr Ti) : mem Ti → mem Ti :=
+  Definition mem_force (Γ : env K) (a : addr K) : mem K → mem K :=
     cmap_alter_ref Γ id (addr_index a) (addr_ref Γ a).
 
-  Definition mem_writable (Γ : env Ti) (a : addr Ti) (m : mem Ti) : Prop :=
+  Definition mem_writable (Γ : env K) (a : addr K) (m : mem K) : Prop :=
     ∃ w, m !!{Γ} a = Some w
          ∧ ctree_Forall (λ xb, Some Writable ⊆ pbit_kind xb) w.
   Global Instance mem_insert:
-      InsertE (env Ti) (addr Ti) (val Ti) (mem Ti) := λ Γ a v,
+      InsertE (env K) (addr K) (val K) (mem K) := λ Γ a v,
     cmap_alter Γ (λ w, of_val Γ (tagged_perm <$> ctree_flatten w) v) a.
 
-  Definition mem_allocable (o : index) (m : mem Ti) : Prop :=
+  Definition mem_allocable (o : index) (m : mem K) : Prop :=
     cmap_car m !! o = None.
-  Definition mem_alloc (Γ : env Ti) (o : index)
-      (malloc : bool) (x : perm) (v : val Ti) (m : mem Ti) : mem Ti :=
+  Definition mem_alloc (Γ : env K) (o : index)
+      (malloc : bool) (x : perm) (v : val K) (m : mem K) : mem K :=
     let τ := type_of v in
     let xs := replicate (bit_size_of Γ τ) x in
     let (m) := m in CMap (<[o:=Obj (of_val Γ xs v) malloc]>m).
 
-  Definition mem_free (o : index) (m : mem Ti) : mem Ti :=
+  Definition mem_free (o : index) (m : mem K) : mem K :=
     let (m) := m in
     CMap (alter (λ x,
       match x with Obj w _ => Freed (type_of w) | _ => x end) o m).
-  Definition mem_freeable_perm (o : index) (m : mem Ti) : Prop := ∃ w,
+  Definition mem_freeable_perm (o : index) (m : mem K) : Prop := ∃ w,
     (**i 1.) *) cmap_car m !! o = Some (Obj w true) ∧
     (**i 2.) *) ctree_Forall (λ xb, tagged_perm xb = perm_full) w.
-  Definition mem_freeable (a : addr Ti) (m : mem Ti) : Prop :=
+  Definition mem_freeable (a : addr K) (m : mem K) : Prop :=
     (**i 1.) *) addr_is_top_array a ∧
     (**i 2.) *) mem_freeable_perm (addr_index a) m.
 
-  Inductive mem_allocable_list (m : mem Ti) : list index → Prop :=
+  Inductive mem_allocable_list (m : mem K) : list index → Prop :=
     | mem_allocable_nil : mem_allocable_list m []
     | mem_allocable_cons o os :
        o ∉ os → mem_allocable o m →
        mem_allocable_list m os → mem_allocable_list m (o :: os).
-  Fixpoint mem_alloc_list (Γ : env Ti)
-      (ovs : list (index * val Ti)) (m : mem Ti) : mem Ti :=
+  Fixpoint mem_alloc_list (Γ : env K)
+      (ovs : list (index * val K)) (m : mem K) : mem K :=
     match ovs with
     | [] => m
     | (o,v) :: ovs => mem_alloc_list Γ ovs (mem_alloc Γ o false perm_full v m)
     end.
-  Definition mem_singleton (Γ : env Ti) (a : addr Ti)
-      (malloc : bool) (x : perm) (v : val Ti) : mem Ti :=
+  Definition mem_singleton (Γ : env K) (a : addr K)
+      (malloc : bool) (x : perm) (v : val K) : mem K :=
     let w := of_val Γ (replicate (bit_size_of Γ (type_of v)) x) v in
     cmap_singleton Γ a malloc w.
 
-  Program Definition mem_locks (m : mem Ti) : lockset :=
+  Program Definition mem_locks (m : mem K) : lockset :=
     let (m) := m in
     dexist (omap (λ x,
       '(w,_) ← maybe2 Obj x;
@@ -68,9 +68,9 @@ Section memory_operations.
     by intros o ω; rewrite lookup_omap, bind_Some;
       intros ([]&?&?); simplify_option_equality.
   Qed.
-  Definition mem_lock (Γ : env Ti) : addr Ti → mem Ti → mem Ti :=
+  Definition mem_lock (Γ : env K) : addr K → mem K → mem K :=
     cmap_alter Γ (ctree_map pbit_lock).
-  Definition mem_unlock (Ω : lockset) (m : mem Ti) : mem Ti :=
+  Definition mem_unlock (Ω : lockset) (m : mem K) : mem K :=
     let (Ω,_) := Ω in let (m) := m in
     CMap $ merge (λ mω mx,
       match mω, mx with
@@ -79,7 +79,7 @@ Section memory_operations.
          Some (Obj (ctree_merge true pbit_unlock_if w (to_bools sz ω)) β)
       | _,_ => mx
       end) Ω m.
-  Program Definition lock_singleton (Γ : env Ti) (a : addr Ti) : lockset :=
+  Program Definition lock_singleton (Γ : env K) (a : addr K) : lockset :=
     let i := addr_object_offset Γ a in
     let n := ptr_bit_size_of Γ (type_of a) in
     let ω := of_bools (replicate i false ++ replicate n true) in
@@ -91,23 +91,23 @@ End memory_operations.
 Notation mem_unlock_all m := (mem_unlock (mem_locks m) m).
 
 Section memory.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τ : type Ti.
-Implicit Types a : addr Ti.
-Implicit Types w : mtree Ti.
-Implicit Types v : val Ti.
-Implicit Types m : mem Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
+Implicit Types τ : type K.
+Implicit Types a : addr K.
+Implicit Types w : mtree K.
+Implicit Types v : val K.
+Implicit Types m : mem K.
 Implicit Types α β : bool.
 Implicit Types βs : list bool.
-Implicit Types xb : pbit Ti.
-Implicit Types xbs : list (pbit Ti).
+Implicit Types xb : pbit K.
+Implicit Types xbs : list (pbit K).
 Implicit Types Ω : lockset.
 
 Hint Resolve Forall_app_2 Forall2_app.
 Hint Immediate cmap_lookup_typed val_typed_type_valid.
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
+Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 
 Ltac solve_length := repeat first 
   [ rewrite take_length | rewrite drop_length | rewrite app_length
@@ -150,7 +150,7 @@ Proof.
   apply Forall_forall. intros o; simpl. rewrite mem_allocable_alt.
   apply fresh_list_is_fresh.
 Qed.
-Lemma mem_empty_allocable o : mem_allocable o (∅ : mem Ti).
+Lemma mem_empty_allocable o : mem_allocable o (∅ : mem K).
 Proof. by unfold mem_allocable; simplify_map_equality'. Qed.
 Lemma mem_alloc_memenv_of Γ Δ m o malloc x v τ :
   ✓ Γ → (Γ,Δ) ⊢ v : τ → '{mem_alloc Γ o malloc x v m} = <[o:=(τ,false)]>('{m}).
@@ -483,7 +483,7 @@ Proof.
   eapply to_val_frozen, cmap_lookup_Some; eauto.
 Qed.
 Lemma mem_lookup_erase Γ m a :
-  (cmap_erase m !!{Γ} a : option (val Ti)) = m !!{Γ} a.
+  (cmap_erase m !!{Γ} a : option (val K)) = m !!{Γ} a.
 Proof. unfold lookupE, mem_lookup. by rewrite cmap_lookup_erase. Qed.
 Lemma mem_lookup_alloc Γ Δ m o malloc x v τ :
   ✓ Γ → (Γ,Δ) ⊢ v : τ → Some Readable ⊆ perm_kind x →
@@ -1094,7 +1094,7 @@ Proof.
   assert (τ = ucharT) by eauto using addr_not_is_obj_type; subst.
   rewrite bit_size_of_char; rewrite bit_size_of_char in Hbyte.
   erewrite <-!list_lookup_fmap, !fmap_app, !ctree_alter_byte_perm_flatten,
-    <-!list_fmap_compose, !fmap_app by eauto; fold (@pbit_locked Ti).  
+    <-!list_fmap_compose, !fmap_app by eauto; fold (@pbit_locked K).  
   erewrite <-!(ctree_lookup_flatten _ _ w') by eauto.
   rewrite take_mask, drop_mask, !pbits_locked_mask, <-!fmap_app.
   rewrite take_take, Min.min_l, (take_drop_commute _ (bit_size_of _ _)),

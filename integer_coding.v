@@ -9,7 +9,7 @@ Require Export prelude.
 Local Open Scope Z_scope.
 
 (** * Operations on machine integers *)
-(** The abstract interface for machine integers is parametrized by a type [Ti]
+(** The abstract interface for machine integers is parametrized by a type [K]
 of integer ranks (char, short, int). Integer types consist of a rank and its
 signedness (signed/unsigned), and machine integers are just arbitrary precision
 integers [Z] that should be within the range of the corresponding type. *)
@@ -17,7 +17,7 @@ Inductive signedness := Signed | Unsigned.
 Instance signedness_eq_dec (s1 s2 : signedness) : Decision (s1 = s2).
 Proof. solve_decision. Defined.
 
-Inductive int_type (Ti : Set) := IntType { sign : signedness; rank : Ti }.
+Inductive int_type (K : Set) := IntType { sign : signedness; rank : K }.
 Add Printing Constructor int_type.
 Delimit Scope int_type_scope with IT.
 Local Open Scope int_type_scope.
@@ -26,8 +26,8 @@ Arguments IntType {_} _ _.
 Arguments sign {_} _%IT.
 Arguments rank {_} _%IT.
 
-Instance int_type_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (τi1 τi2 : int_type Ti) : Decision (τi1 = τi2).
+Instance int_type_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (τi1 τi2 : int_type K) : Decision (τi1 = τi2).
 Proof. solve_decision. Defined.
 
 (** The class [IntCoding] describes functions related to representation and
@@ -45,21 +45,21 @@ and unsigned integers of rank [k] are between [0] (included) and
 in little endian order and permutes them according to the implementation's
 endianness. The function [deendianize] performs the inverse. *)
 Local Unset Elimination Schemes.
-Class IntCoding (Ti : Set) := {
-  char_rank : Ti;
+Class IntCoding (K : Set) := {
+  char_rank : K;
   char_signedness : signedness;
-  short_rank : Ti;
-  int_rank : Ti;
-  long_rank : Ti;
-  longlong_rank : Ti;
-  ptr_rank : Ti;
+  short_rank : K;
+  int_rank : K;
+  long_rank : K;
+  longlong_rank : K;
+  ptr_rank : K;
   char_bits : nat;
-  rank_size : Ti → nat;
-  endianize : Ti → list bool → list bool;
-  deendianize : Ti → list bool → list bool;
-  rank_subseteq :> SubsetEq Ti;
-  rank_eq_dec (k1 k2 : Ti) :> Decision (k1 = k2);
-  rank_subseteq_dec (k1 k2 : Ti) :> Decision (k1 ⊆ k2)
+  rank_size : K → nat;
+  endianize : K → list bool → list bool;
+  deendianize : K → list bool → list bool;
+  rank_subseteq :> SubsetEq K;
+  rank_eq_dec (k1 k2 : K) :> Decision (k1 = k2);
+  rank_subseteq_dec (k1 k2 : K) :> Decision (k1 ⊆ k2)
 }.
 
 Arguments char_rank _ _ : simpl never.
@@ -90,18 +90,18 @@ Notation "'sptrT'" := (IntType Signed ptr_rank) : int_type_scope.
 machine integers, we first define functions to encode and decode integers, and
 functions to relate binary operations and casts to its specification. *)
 Section int_coding.
-  Context `{IntCoding Ti}.
+  Context `{IntCoding K}.
 
-  Definition int_width (τi : int_type Ti) : nat :=
+  Definition int_width (τi : int_type K) : nat :=
     (rank_size (rank τi) * char_bits)%nat.
-  Definition int_precision (τi : int_type Ti) : nat :=
+  Definition int_precision (τi : int_type K) : nat :=
     match sign τi with
     | Signed => int_width τi - 1 | Unsigned => int_width τi
     end%nat.
-  Definition int_lower (τi : int_type Ti) : Z :=
+  Definition int_lower (τi : int_type K) : Z :=
     match sign τi with Signed => -2 ^ int_precision τi | Unsigned => 0 end.
-  Definition int_upper (τi : int_type Ti) : Z := 2 ^ int_precision τi.
-  Definition int_typed (x : Z) (τi : int_type Ti) : Prop :=
+  Definition int_upper (τi : int_type K) : Z := 2 ^ int_precision τi.
+  Definition int_typed (x : Z) (τi : int_type K) : Prop :=
     int_lower τi ≤ x < int_upper τi.
   Global Instance int_typed_dec x τi : Decision (int_typed x τi) := _.
   Fixpoint Z_to_bits (n : nat) (x : Z) : list bool :=
@@ -112,13 +112,13 @@ Section int_coding.
   Fixpoint Z_of_bits (βs : list bool) : Z :=
     match βs with [] => 0 | β :: βs => Z.b2z β + 2 * Z_of_bits βs end.
 
-  Definition int_to_bits (τi : int_type Ti) (x : Z) : list bool :=
+  Definition int_to_bits (τi : int_type K) (x : Z) : list bool :=
     endianize (rank τi) $ Z_to_bits (int_width τi) $
       match sign τi with
       | Signed => if decide (0 ≤ x) then x else x + 2 ^ int_width τi
       | Unsigned => x
       end.
-  Definition int_of_bits (τi : int_type Ti) (βs : list bool) : Z :=
+  Definition int_of_bits (τi : int_type K) (βs : list bool) : Z :=
     let x := Z_of_bits (deendianize (rank τi) βs) in
     match sign τi with
     | Signed =>
@@ -130,11 +130,11 @@ Typeclasses Opaque int_typed.
 
 (** The classes [IntCodingSpec] describe the laws that an implementation of
 machine integers should satisfy with respect to representatons. *)
-Class IntCodingSpec Ti `{IntCoding Ti} := {
+Class IntCodingSpec K `{IntCoding K} := {
   char_bits_ge_8 : (8 ≤ char_bits)%nat;
   rank_size_char : rank_size char_rank = 1%nat;
-  rank_size_preserving (k1 k2 : Ti) : k1 ⊆ k2 → rank_size k1 ≤ rank_size k2;
-  rank_total :> TotalOrder ((⊆) : relation Ti);
+  rank_size_preserving (k1 k2 : K) : k1 ⊆ k2 → rank_size k1 ≤ rank_size k2;
+  rank_total :> TotalOrder ((⊆) : relation K);
   char_least k : char_rank ⊆ k;
   char_short : char_rank ⊂ short_rank;
   short_int : short_rank ⊂ int_rank;
@@ -147,10 +147,10 @@ Class IntCodingSpec Ti `{IntCoding Ti} := {
 
 (** * Theorems *)
 Section properties.
-Context `{IntCodingSpec Ti}.
-Implicit Types τi : int_type Ti.
+Context `{IntCodingSpec K}.
+Implicit Types τi : int_type K.
 Implicit Types βs : list bool.
-Implicit Types k : Ti.
+Implicit Types k : K.
 Implicit Types x y : Z.
 Implicit Types n : nat.
 

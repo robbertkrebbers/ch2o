@@ -5,16 +5,16 @@ Require Import pointer_casts.
 Local Open Scope ctype_scope.
 
 Section operations.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τb σb : base_type Ti.
-Implicit Types τ σ : type Ti.
-Implicit Types τp σp : ptr_type Ti.
-Implicit Types a : addr Ti.
-Implicit Types vb : base_val Ti.
-Implicit Types v : val Ti.
-Implicit Types m : mem Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
+Implicit Types τb σb : base_type K.
+Implicit Types τ σ : type K.
+Implicit Types τp σp : ptr_type K.
+Implicit Types a : addr K.
+Implicit Types vb : base_val K.
+Implicit Types v : val K.
+Implicit Types m : mem K.
 Hint Immediate index_alive_1'.
 Hint Resolve ptr_alive_1' index_alive_2'.
 Hint Immediate addr_refine_typed_l addr_refine_typed_r.
@@ -92,7 +92,7 @@ Lemma addr_minus_ok_refine Γ α f m1 m2 a1 a2 a3 a4 σp :
   a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp → a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σp →
   addr_minus_ok m1 a1 a3 → addr_minus_ok m2 a2 a4.
 Proof.
-  assert (∀ r1 r2 r3 r4 r : ref Ti,
+  assert (∀ r1 r2 r3 r4 r : ref K,
     r1 ++ r ⊆* r2 → r3 ++ r ⊆* r4 → freeze true <$> r1 = freeze true <$> r3 →
     freeze true <$> r2 = freeze true <$> r4).
   { intros r1 r2 r3 r4 r ???.

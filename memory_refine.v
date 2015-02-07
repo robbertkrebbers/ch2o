@@ -4,8 +4,8 @@ Require Export memory memory_map_refine values_refine.
 Require Import natmap.
 Local Open Scope ctype_scope.
 
-Instance locks_refine `{Env Ti} :
-    Refine Ti (env Ti) lockset := λ Γ α f Δ1 Δ2 Ω1 Ω2,
+Instance locks_refine `{Env K} :
+    Refine K (env K) lockset := λ Γ α f Δ1 Δ2 Ω1 Ω2,
   (**i 1.) *) ✓{Δ1} Ω1 ∧ ✓{Δ2} Ω2 ∧
   (**i 2.) *) Δ1 ⊑{Γ,α,f} Δ2 ∧
   (**i 3.) *) (∀ o1 o2 r τ1 i,
@@ -14,21 +14,21 @@ Instance locks_refine `{Env Ti} :
     (o1,i) ∈ Ω1 ↔ (o2,ref_object_offset Γ r + i) ∈ Ω2).
 
 Section memory.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τ : type Ti.
-Implicit Types a : addr Ti.
-Implicit Types p : ptr Ti.
-Implicit Types w : mtree Ti.
-Implicit Types v : val Ti.
-Implicit Types m : mem Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
+Implicit Types τ : type K.
+Implicit Types a : addr K.
+Implicit Types p : ptr K.
+Implicit Types w : mtree K.
+Implicit Types v : val K.
+Implicit Types m : mem K.
 Implicit Types α β : bool.
 Implicit Types βs : list bool.
-Implicit Types xb : pbit Ti.
-Implicit Types xbs : list (pbit Ti).
+Implicit Types xb : pbit K.
+Implicit Types xbs : list (pbit K).
 Implicit Types Ω : lockset.
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
+Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 
 Hint Immediate ctree_refine_typed_l ctree_refine_typed_r.
 Hint Resolve Forall_app_2 Forall2_app.

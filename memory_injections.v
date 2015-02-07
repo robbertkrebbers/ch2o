@@ -2,39 +2,39 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export references memory_basics.
 
-Inductive meminj (Ti : Set) :=
-  | meminj_id : meminj Ti
-  | meminj_map : indexmap (index * ref Ti) → meminj Ti.
+Inductive meminj (K : Set) :=
+  | meminj_id : meminj K
+  | meminj_map : indexmap (index * ref K) → meminj K.
 Arguments meminj_id {_}.
 Arguments meminj_map {_} _.
-Instance meminj_dec {Ti : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)}
-  (f g : meminj Ti) : Decision (f = g).
+Instance meminj_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (f g : meminj K) : Decision (f = g).
 Proof. solve_decision. Defined.
-Instance meminj_lookup {Ti} : Lookup index (index * ref Ti) (meminj Ti) :=
+Instance meminj_lookup {K} : Lookup index (index * ref K) (meminj K) :=
   λ o f, match f with meminj_id => Some (o, []) | meminj_map m => m !! o end.
-Definition meminj_compose {Ti} (f g : meminj Ti) : meminj Ti :=
+Definition meminj_compose {K} (f g : meminj K) : meminj K :=
   match f, g with
   | meminj_id, meminj_id => meminj_id
   | meminj_map m, meminj_id => meminj_map m
   | meminj_id, meminj_map m => meminj_map m
   | meminj_map m1, meminj_map m2 => meminj_map $
-     merge (λ yr _ : option (index * ref Ti),
+     merge (λ yr _ : option (index * ref K),
        '(y1,r1) ← yr; '(y2,r2) ← m1 !! y1; Some (y2, r1 ++ r2)) m2 ∅
   end.
 Arguments meminj_compose _ !_ !_ /.
 Infix "◎" := meminj_compose (at level 40, left associativity) : C_scope.
 Notation "(◎)" := meminj_compose (only parsing) : C_scope.
 
-Definition meminj_injective {Ti} (f : meminj Ti) : Prop := ∀ o1 o2 o r1 r2,
+Definition meminj_injective {K} (f : meminj K) : Prop := ∀ o1 o2 o r1 r2,
   f !! o1 = Some (o,r1) → f !! o2 = Some (o,r2) → o1 = o2 ∨ r1 ⊥ r2.
-Instance meminj_subseteq {Ti} : SubsetEq (meminj Ti) := λ f1 f2,
+Instance meminj_subseteq {K} : SubsetEq (meminj K) := λ f1 f2,
   ∀ o o' r', f1 !! o = Some (o',r') → f2 !! o = Some (o',r').
 
 Section meminj.
-Context {Ti : Set}.
-Implicit Types f g : meminj Ti.
+Context {K : Set}.
+Implicit Types f g : meminj K.
 Implicit Types o : index.
-Implicit Types r : ref Ti.
+Implicit Types r : ref K.
 
 Lemma meminj_eq f g : (∀ o, f !! o = g !! o) → f = g.
 Proof.
@@ -47,7 +47,7 @@ Proof.
   * f_equal. apply map_eq, Hfg.
 Qed.
 
-Lemma lookup_meminj_id o : @meminj_id Ti !! o = Some (o, []).
+Lemma lookup_meminj_id o : @meminj_id K !! o = Some (o, []).
 Proof. done. Qed.
 Lemma lookup_meminj_id_Some o1 o2 r :
   meminj_id !! o1 = Some (o2,r) ↔ o2 = o1 ∧ r = [].
@@ -71,11 +71,11 @@ Proof.
   * by intros (?&?&?&?&?&?); simplify_option_equality.
 Qed.
 
-Global Instance: LeftId (@eq (meminj Ti)) meminj_id (◎).
+Global Instance: LeftId (@eq (meminj K)) meminj_id (◎).
 Proof. by intros []. Qed.
-Global Instance: RightId (@eq (meminj Ti)) meminj_id (◎).
+Global Instance: RightId (@eq (meminj K)) meminj_id (◎).
 Proof. by intros []. Qed.
-Global Instance: Associative (@eq (meminj Ti)) (◎).
+Global Instance: Associative (@eq (meminj K)) (◎).
 Proof.
   intros f g h. apply meminj_eq. intros o1. rewrite !lookup_meminj_compose.
   destruct (h !! o1) as [[o2 r2]|]; csimpl; [|done].
@@ -88,7 +88,7 @@ Proof. by destruct f, g. Qed.
 Lemma meminj_positive_r f g : f ◎ g = meminj_id → g = meminj_id.
 Proof. by destruct f, g. Qed.
 
-Lemma meminj_id_injective : meminj_injective (@meminj_id Ti).
+Lemma meminj_id_injective : meminj_injective (@meminj_id K).
 Proof. intros x1 x2 y r1 r2; rewrite !lookup_meminj_id; naive_solver. Qed.
 Lemma meminj_compose_injective f g :
   meminj_injective f → meminj_injective g → meminj_injective (f ◎ g).
@@ -115,7 +115,7 @@ Proof.
   intros Hf ???. destruct (decide (o2 = o4)) as [->|]; auto.
   destruct (Hf o1 o3 o4 r2 r4); auto.
 Qed.
-Global Instance: PartialOrder ((⊆) : relation (meminj Ti)).
+Global Instance: PartialOrder ((⊆) : relation (meminj K)).
 Proof.
   repeat split.
   * by intros f o o' r'.
@@ -124,4 +124,3 @@ Proof.
     apply meminj_eq. intros o. apply option_eq. intros [o' r']; naive_solver.
 Qed.
 End meminj.
-

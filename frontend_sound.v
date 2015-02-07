@@ -107,18 +107,18 @@ Proof. auto using cexpr_ind_alt, cinit_ind_alt, ctype_ind_alt. Qed.
 End cexpr_ind.
 
 Section properties.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
 Implicit Types o : index.
-Implicit Types m : mem Ti.
-Implicit Types e : expr Ti.
+Implicit Types m : mem K.
+Implicit Types e : expr K.
 Implicit Types ce : cexpr.
-Implicit Types s : stmt Ti.
-Implicit Types τi : int_type Ti.
-Implicit Types τ σ : type Ti.
+Implicit Types s : stmt K.
+Implicit Types τi : int_type K.
+Implicit Types τ σ : type K.
 Implicit Types cτ : ctype.
-Implicit Types τlr : lrtype Ti.
-Implicit Types Δl : local_env Ti.
+Implicit Types τlr : lrtype K.
+Implicit Types Δl : local_env K.
 
 Arguments to_R _ _ : simpl never.
 Arguments convert_ptrs _ _ _ : simpl never.
@@ -142,8 +142,8 @@ Hint Immediate cmap_index_typed_representable.
 Hint Extern 10 (_ ⊢ _ : _ ↣ _) => typed_constructor; try lia.
 Hint Resolve perm_full_valid perm_full_mapped.
 
-Definition fun_stmt_valid (Γ : env Ti) (Δ : memenv Ti)
-    (τs : list (type Ti)) (τ : type Ti) (ms : option (stmt Ti)) : Prop :=
+Definition fun_stmt_valid (Γ : env K) (Δ : memenv K)
+    (τs : list (type K)) (τ : type K) (ms : option (stmt K)) : Prop :=
   match ms with
   | Some s => ∃ cmτ,
      Forall (type_complete Γ) τs ∧
@@ -152,8 +152,8 @@ Definition fun_stmt_valid (Γ : env Ti) (Δ : memenv Ti)
      gotos s ⊆ labels s ∧ throws_valid 0 s
   | None => True
   end.
-Definition global_decl_valid (Γ : env Ti) (Δ : memenv Ti)
-    (x : string) (d : global_decl Ti) :=
+Definition global_decl_valid (Γ : env K) (Δ : memenv K)
+    (x : string) (d : global_decl K) :=
   match d with
   | Global _ o τ _ => Δ ⊢ o : τ ∧ index_alive Δ o
   | Fun _ τs τ ms =>
@@ -161,7 +161,7 @@ Definition global_decl_valid (Γ : env Ti) (Δ : memenv Ti)
   | GlobalTypeDef τp => ✓{Γ} τp
   | EnumVal τi z => int_typed z τi
   end.
-Record frontend_state_valid' (S : frontend_state Ti) := {
+Record frontend_state_valid' (S : frontend_state K) := {
   to_env_valid : ✓ (to_env S);
   to_mem_valid : ✓{to_env S} (to_mem S);
   to_globals_valid :
@@ -177,7 +177,7 @@ Record frontend_state_valid' (S : frontend_state Ti) := {
       to_globals S !! (f : string) = Some (Fun sto (τsτ.1) (τsτ.2) ms)
     ) (env_f (to_env S))
 }.
-Global Instance frontend_state_valid : Valid () (frontend_state Ti) :=
+Global Instance frontend_state_valid : Valid () (frontend_state K) :=
   λ _, frontend_state_valid'.
 Hint Extern 0 (✓ _) => eapply to_env_valid; eassumption.
 Hint Extern 0 (✓{_} _) => eapply to_mem_valid; eassumption.
@@ -192,7 +192,7 @@ Proof.
     env_valid_args_valid, lookup_fun_weaken, types_complete_weaken,
     (sizes_of_weaken (λ x, int_typed x sptrT)), types_complete_valid.
 Qed.
-Lemma frontend_state_empty_valid : ✓ (∅ : frontend_state Ti).
+Lemma frontend_state_empty_valid : ✓ (∅ : frontend_state K).
 Proof.
   split; simpl; auto using env_empty_valid, cmap_empty_valid, map_Forall_empty.
 Qed.
@@ -213,7 +213,7 @@ Proof.
   split. by apply to_funenv_pretyped. by apply empty_difference_subseteq_L.
 Qed.
 
-Definition global_decl_forward (d' d : global_decl Ti) : Prop :=
+Definition global_decl_forward (d' d : global_decl K) : Prop :=
   match d', d with
   | Global _ o1 τ1 _, Global _ o2 τ2 _=> o1 = o2 ∧ τ1 = τ2
   | Fun _ τs1 τ1 _, Fun _ τs2 τ2 _ => τs1 = τs2 ∧ τ1 = τ2
@@ -221,14 +221,14 @@ Definition global_decl_forward (d' d : global_decl Ti) : Prop :=
   | EnumVal τi1 x1, EnumVal τi2 x2 => τi1 = τi2 ∧ x1 = x2
   | _, _ => False
   end.
-Record frontend_state_subseteq' (S1 S2 : frontend_state Ti) := {
+Record frontend_state_subseteq' (S1 S2 : frontend_state K) := {
   to_env_forward : to_env S1 ⊆ to_env S2;
   to_mem_forward : '{to_mem S1} ⊆ '{to_mem S2};
   to_globals_forward :
     map_included global_decl_forward (to_globals S1) (to_globals S2)
 }.
 Global Instance frontend_state_subseteq :
-  SubsetEq (frontend_state Ti) := frontend_state_subseteq'.
+  SubsetEq (frontend_state K) := frontend_state_subseteq'.
 Lemma to_env_subseteq S1 S2 : S1 ⊆ S2 → to_env S1 ⊆ to_env S2.
 Proof. by intros []. Qed.
 Lemma to_mem_subseteq S1 S2 : S1 ⊆ S2 → '{to_mem S1} ⊆ '{to_mem S2}.
@@ -236,21 +236,21 @@ Proof. by intros []. Qed.
 Hint Immediate to_env_subseteq to_mem_subseteq.
 Instance: PreOrder global_decl_forward.
 Proof. split. by intros []. intros [] []; naive_solver. Qed.
-Global Instance: PreOrder ((⊆) : relation (frontend_state Ti)).
+Global Instance: PreOrder ((⊆) : relation (frontend_state K)).
 Proof. split; [by split|]. intros ??? [] []; split; etransitivity; eauto. Qed.
 Hint Extern 1 (_ ⊆ _) => etransitivity; [eassumption|].
 Hint Extern 1 (_ ⊆ _) => etransitivity; [|eassumption].
 Hint Extern 1 (map_included global_decl_forward ?S ?S) => reflexivity.
 
-Definition local_decl_valid (S : frontend_state Ti)
-    (x : string) (d : local_decl Ti) :=
+Definition local_decl_valid (S : frontend_state K)
+    (x : string) (d : local_decl K) :=
   match d with
   | Static (inl (o,τ)) => '{to_mem S} ⊢ o : τ
   | Static (inr (τs,τ)) => to_env S !! (x : funname) = Some (τs,τ)
   | Local τ => ✓{to_env S} τ
   | TypeDef τp => ✓{to_env S} τp
   end.
-Definition local_env_valid (S : frontend_state Ti) : local_env Ti → Prop :=
+Definition local_env_valid (S : frontend_state K) : local_env K → Prop :=
   Forall (λ xmd,
     match xmd with Some (x,d) => local_decl_valid S x d | None => True end).
 Hint Unfold local_env_valid.
@@ -267,7 +267,7 @@ Proof.
   unfold local_env_valid.
   induction 2 as [|[[]|]]; constructor; eauto using local_decl_valid_weaken.
 Qed.
-Lemma local_env_valid_params S (ys : list string) (τs : list (type Ti)) :
+Lemma local_env_valid_params S (ys : list string) (τs : list (type K)) :
   ✓{to_env S}* τs →
   local_env_valid S (zip_with (λ y τ, Some (y, Local τ)) ys τs).
 Proof.
@@ -283,13 +283,13 @@ Lemma local_env_valid_Some S Δl x d :
 Proof. by constructor. Qed.
 Hint Resolve local_env_valid_None local_env_valid_Some.
 
-Fixpoint to_stack_types (Δl : local_env Ti) : list (type Ti) :=
+Fixpoint to_stack_types (Δl : local_env K) : list (type K) :=
   match Δl with
   | [] => []
   | Some (_,Local τ) :: Δl => τ :: to_stack_types Δl
   | _ :: Δl => to_stack_types Δl
   end.
-Lemma to_stack_types_params (ys : list string) (τs : list (type Ti)) :
+Lemma to_stack_types_params (ys : list string) (τs : list (type K)) :
   length ys = length τs →
   to_stack_types (zip_with (λ y τ, Some (y, Local τ)) ys τs) = τs.
 Proof. rewrite <-Forall2_same_length. induction 1; f_equal'; auto. Qed.
@@ -429,7 +429,7 @@ Ltac weaken :=
        by eauto using local_env_valid_subseteq; clear H
   | H : int_typed (Z.of_nat (size_of (to_env ?S1) ?τi)) _, _ : ?S1 ⊆ ?S2 |- _ =>
      rewrite (size_of_weaken (to_env S1) (to_env S2) τi) in H by eauto 2
-  | H : Forall (λ τ : type Ti, int_typed _ ?τi) ?τs, _ : ?S1 ⊆ ?S2 |- _ =>
+  | H : Forall (λ τ : type K, int_typed _ ?τi) ?τs, _ : ?S1 ⊆ ?S2 |- _ =>
      apply (sizes_of_weaken (λ x, int_typed (Z.of_nat x) τi)
        (to_env S1) (to_env S2)) in H; auto; [idtac]
   | H : ✓{to_env ?S1} ?τp, H2 : ?S1 ⊆ ?S2  |- _ =>
@@ -663,7 +663,7 @@ Proof.
         as (?&?&?); eauto using ref_typed_type_valid; weaken.
       destruct (IH S3 S' (r :: rs) (#[r:=e''] e) e') as (?&?&?); eauto 10.
 Qed.
-Definition to_type_type_valid {k} (Γ : env Ti) : to_type_type k → Prop :=
+Definition to_type_type_valid {k} (Γ : env K) : to_type_type k → Prop :=
   match k with to_Type => ✓{Γ} | to_Ptr => ✓{Γ} end.
 Lemma convert_fun_arg_type_valid Γ τp τ :
   convert_fun_arg_type τp = Some τ → ✓{Γ} τp → ✓{Γ} (TType τ).

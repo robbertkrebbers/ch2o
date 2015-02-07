@@ -3,15 +3,15 @@
 Require Export memory_trees_separation memory_map.
 
 Section memory_map.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types m : mem Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τ σ : type Ti.
-Implicit Types w : mtree Ti.
-Implicit Types a : addr Ti.
-Implicit Types g : mtree Ti → mtree Ti.
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types m : mem K.
+Implicit Types Δ : memenv K.
+Implicit Types τ σ : type K.
+Implicit Types w : mtree K.
+Implicit Types a : addr K.
+Implicit Types g : mtree K → mtree K.
+Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 
 Lemma cmap_subseteq_index_alive m1 m2 o :
   index_alive ('{m1}) o → m1 ⊆ m2 → index_alive ('{m2}) o.

@@ -5,33 +5,33 @@ Require Export executable frontend architecture_spec.
 Local Open Scope string_scope.
 Local Open Scope list_scope.
 
-Record istate (Ti E : Set) := IState {
+Record istate (K E : Set) := IState {
   events_new : list E; (**i the events generated in the last step *)
   events_all : list E; (**i all previously generated events,
     including those in the last step *)
-  sem_state : state Ti
+  sem_state : state K
 }.
 Arguments IState {_ _} _ _ _.
-Instance istate_dec {Ti E : Set} `{Env Ti, ∀ ε1 ε2 : E, Decision (ε1 = ε2)}
-  (iS1 iS2 : istate Ti E) : Decision (iS1 = iS2).
+Instance istate_dec {K E : Set} `{Env K, ∀ ε1 ε2 : E, Decision (ε1 = ε2)}
+  (iS1 iS2 : istate K E) : Decision (iS1 = iS2).
 Proof. solve_decision. Defined.
 
 Local Notation M := (error (frontend_state _) string).
 
 Section interpreter.
 Context (A : architecture).
-Notation Ti := (arch_rank A).
+Notation K := (arch_rank A).
 Context {E : Set} `{∀ ε1 ε2 : E, Decision (ε1 = ε2)}.
-Context (e : ∀ `{Env Ti}, env Ti → state Ti → list E).
+Context (e : ∀ `{Env K}, env K → state K → list E).
 
-Definition cexec' (Γ : env Ti) (δ : funenv Ti)
-    (iS : istate Ti E) : listset (istate Ti E) :=
+Definition cexec' (Γ : env K) (δ : funenv K)
+    (iS : istate K E) : listset (istate K E) :=
   let (_,εs,S) := iS in
   (λ S_new,
     let εs_new := e _ Γ S_new in IState εs_new (εs ++ εs_new) S_new
   ) <$> cexec Γ δ S.
 Definition interpreter_initial (Θ : list (string * decl))
-    (f : string) (ces : list cexpr) : M (istate Ti E) :=
+    (f : string) (ces : list cexpr) : M (istate K E) :=
   _ ← alloc_program Θ;
   Δg ← gets to_globals;
   '(_,σs,_,_) ← error_of_option (Δg !! f ≫= maybe_Fun)
@@ -46,17 +46,17 @@ Definition interpreter_initial (Θ : list (string * decl))
     "interpreter called with non-constant expressions";
   mret (IState [] [] (initial_state m f vs)).
 Definition interpreter_initial_eval (Θ : list (string * decl))
-    (f : string) (ces : list cexpr) : string + istate Ti E :=
+    (f : string) (ces : list cexpr) : string + istate K E :=
   error_eval (interpreter_initial Θ f ces) ∅.
 
-Context (hash : istate Ti E → Z).
-Definition cexec_all (Γ : env Ti) (δ : funenv Ti) (iS : istate Ti E) :
-    listset (istate Ti E) * listset (istate Ti E) :=
+Context (hash : istate K E → Z).
+Definition cexec_all (Γ : env K) (δ : funenv K) (iS : istate K E) :
+    listset (istate K E) * listset (istate K E) :=
   let nexts := cexec' Γ δ iS in
   if decide (nexts ≡ ∅) then (∅, {[ iS ]}) else (nexts, ∅).
-Definition csteps_exec_all (Γ : env Ti) (δ : funenv Ti) :
-    listset (istate Ti E) →
-    stream (listset (istate Ti E) * listset (istate Ti E)) :=
+Definition csteps_exec_all (Γ : env K) (δ : funenv K) :
+    listset (istate K E) →
+    stream (listset (istate K E) * listset (istate K E)) :=
   cofix go iSs :=
   let nexts := cexec_all Γ δ <$> iSs in
   let reds := listset_normalize hash (nexts ≫= fst) in
@@ -64,18 +64,18 @@ Definition csteps_exec_all (Γ : env Ti) (δ : funenv Ti) :
   (reds,nfs) :.: go reds.
 Definition interpreter_all
     (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
-    M (stream (listset (istate Ti E) * listset (istate Ti E))) :=
+    M (stream (listset (istate K E) * listset (istate K E))) :=
   iS ← interpreter_initial Θ f ces;
   Γ ← gets to_env; δ ← gets to_funenv;
   mret (csteps_exec_all Γ δ {[ iS ]}).
 Definition interpreter_all_eval
     (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
-    string + stream (listset (istate Ti E) * listset (istate Ti E)) :=
+    string + stream (listset (istate K E) * listset (istate K E)) :=
   error_eval (interpreter_all Θ f ces) ∅.
 
 Context (rand : nat → nat).
-Definition csteps_exec_rand (Γ : env Ti) (δ : funenv Ti) :
-    istate Ti E → stream (istate Ti E + istate Ti E) :=
+Definition csteps_exec_rand (Γ : env K) (δ : funenv K) :
+    istate K E → stream (istate K E + istate K E) :=
   cofix go iS :=
   match listset_car (cexec' Γ δ iS) with
   | [] => srepeat (inr iS)
@@ -85,12 +85,12 @@ Definition csteps_exec_rand (Γ : env Ti) (δ : funenv Ti) :
   end.
 Definition interpreter_rand
     (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
-    M (stream (istate Ti E + istate Ti E)) :=
+    M (stream (istate K E + istate K E)) :=
   iS ← interpreter_initial Θ f ces;
   Γ ← gets to_env; δ ← gets to_funenv;
   mret (csteps_exec_rand Γ δ iS).
 Definition interpreter_rand_eval
     (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
-    string + stream (istate Ti E + istate Ti E) :=
+    string + stream (istate K E + istate K E) :=
   error_eval (interpreter_rand Θ f ces) ∅.
 End interpreter.

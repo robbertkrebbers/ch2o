@@ -85,47 +85,47 @@ Inductive decl : Set :=
   | GlobDecl : list cstorage → ctype → option cinit → decl
   | FunDecl : list cstorage → ctype → cstmt → decl.
 
-Inductive compound_type (Ti : Set) : Set :=
-  | CompoundType : compound_kind → list (string * type Ti) → compound_type Ti
-  | EnumType : int_type Ti → compound_type Ti.
+Inductive compound_type (K : Set) : Set :=
+  | CompoundType : compound_kind → list (string * type K) → compound_type K
+  | EnumType : int_type K → compound_type K.
 Arguments CompoundType {_} _ _.
 Arguments EnumType {_} _.
-Instance maybe_CompoundType {Ti} : Maybe2 (@CompoundType Ti) := λ t,
+Instance maybe_CompoundType {K} : Maybe2 (@CompoundType K) := λ t,
   match t with CompoundType c xs => Some (c,xs) | _ => None end.
-Instance maybe_EnumType {Ti} : Maybe (@EnumType Ti) := λ t,
+Instance maybe_EnumType {K} : Maybe (@EnumType K) := λ t,
   match t with EnumType τi => Some τi | _ => None end.
 
-Inductive global_decl (Ti : Set): Set :=
-  | Global : cstorage → index → type Ti → bool → global_decl Ti
-  | Fun: cstorage → list (type Ti) → type Ti → option (stmt Ti) → global_decl Ti
-  | GlobalTypeDef : ptr_type Ti → global_decl Ti
-  | EnumVal : int_type Ti → Z → global_decl Ti.
+Inductive global_decl (K : Set): Set :=
+  | Global : cstorage → index → type K → bool → global_decl K
+  | Fun: cstorage → list (type K) → type K → option (stmt K) → global_decl K
+  | GlobalTypeDef : ptr_type K → global_decl K
+  | EnumVal : int_type K → Z → global_decl K.
 Arguments Global {_} _ _ _ _.
 Arguments Fun {_} _ _ _ _.
 Arguments GlobalTypeDef {_} _.
 Arguments EnumVal {_} _ _.
-Instance maybe_Fun {Ti} : Maybe4 (@Fun Ti) := λ d,
+Instance maybe_Fun {K} : Maybe4 (@Fun K) := λ d,
   match d with Fun sto τs τ ms => Some (sto,τs,τ,ms) | _ => None end.
-Instance maybe_GlobalTypeDef {Ti} : Maybe (@GlobalTypeDef Ti) := λ d,
+Instance maybe_GlobalTypeDef {K} : Maybe (@GlobalTypeDef K) := λ d,
   match d with GlobalTypeDef τ => Some τ | _ => None end.
 
-Inductive local_decl (Ti : Set) : Set :=
-  | Static : (index * type Ti + list (type Ti) * type Ti) → local_decl Ti
-  | Local : type Ti → local_decl Ti
-  | TypeDef : ptr_type Ti → local_decl Ti.
+Inductive local_decl (K : Set) : Set :=
+  | Static : (index * type K + list (type K) * type K) → local_decl K
+  | Local : type K → local_decl K
+  | TypeDef : ptr_type K → local_decl K.
 Arguments Static {_} _.
 Arguments Local {_} _.
 Arguments TypeDef {_} _.
-Instance maybe_TypeDef {Ti} : Maybe (@TypeDef Ti) := λ d,
+Instance maybe_TypeDef {K} : Maybe (@TypeDef K) := λ d,
   match d with TypeDef τ => Some τ | _ => None end.
 (* [None] delimits scopes *)
-Notation local_env Ti := (list (option (string * local_decl Ti))). 
+Notation local_env K := (list (option (string * local_decl K))). 
 
-Record frontend_state (Ti : Set) : Set := FState {
-  to_compounds : tagmap (compound_type Ti);
-  to_env : env Ti;
-  to_mem : mem Ti;
-  to_globals : stringmap (global_decl Ti)
+Record frontend_state (K : Set) : Set := FState {
+  to_compounds : tagmap (compound_type K);
+  to_env : env K;
+  to_mem : mem K;
+  to_globals : stringmap (global_decl K)
 }.
 Arguments FState {_} _ _ _ _.
 Arguments to_compounds {_} _.
@@ -133,40 +133,40 @@ Arguments to_env {_} _.
 Arguments to_mem {_} _.
 Arguments to_globals {_} _.
 
-Inductive expr_type (Ti : Set) :=
-  | LT : type Ti → expr_type Ti
-  | RT : type Ti → expr_type Ti
-  | FT : list (type Ti) → type Ti → expr_type Ti.
+Inductive expr_type (K : Set) :=
+  | LT : type K → expr_type K
+  | RT : type K → expr_type K
+  | FT : list (type K) → type K → expr_type K.
 Arguments LT {_} _.
 Arguments RT {_} _.
 Arguments FT {_} _ _.
-Instance maybe_LT {Ti} : Maybe (@LT Ti) := λ τe,
+Instance maybe_LT {K} : Maybe (@LT K) := λ τe,
   match τe with LT τ => Some τ | _ => None end.
 
 Local Notation M := (error (frontend_state _) string).
 
 Section frontend.
-Context `{Env Ti}.
-Local Notation M := (error (frontend_state Ti) string).
+Context `{Env K}.
+Local Notation M := (error (frontend_state K) string).
 
-Global Instance empty_frontend_state : Empty (frontend_state Ti) :=
+Global Instance empty_frontend_state : Empty (frontend_state K) :=
   FState ∅ ∅ ∅ ∅.
 
-Definition to_lrtype (τe : expr_type Ti) : lrtype Ti :=
+Definition to_lrtype (τe : expr_type K) : lrtype K :=
   match τe with
   | LT τ => inl τ | RT τ => inr τ | FT τs τ => inr ((τs ~> τ).*)
   end.
 
-Definition to_funenv (S : frontend_state Ti) : funenv Ti :=
+Definition to_funenv (S : frontend_state K) : funenv K :=
   omap (λ d, '(_,_,ms) ← maybe4 Fun d; ms) (to_globals S).
-Definition incomplete_fun_decls (S : frontend_state Ti) : funset :=
+Definition incomplete_fun_decls (S : frontend_state K) : funset :=
   dom _ (env_f (to_env S)) ∖ dom _ (to_funenv S).
-Definition extern_global_decls (S : frontend_state Ti) : stringset :=
+Definition extern_global_decls (S : frontend_state K) : stringset :=
   mapset.mapset_dom_with (λ d,
     match d with Global ExternStorage _ _ _ => true | _ => false end)
     (to_globals S).
 
-Definition lookup_compound (s : tag) (x : string) : M (nat * type Ti) :=
+Definition lookup_compound (s : tag) (x : string) : M (nat * type K) :=
   Γn ← gets to_compounds;
   d ← error_of_option (Γn !! s)
     ("struct/union `" +:+ s +:+ "` undeclared");
@@ -176,14 +176,14 @@ Definition lookup_compound (s : tag) (x : string) : M (nat * type Ti) :=
     ("struct/union `" +:+ s +:+ "` does not have index `" +:+ x +:+ "`");
   mret (i,xτ.2).
 
-Fixpoint local_fresh (x : string) (Δl : local_env Ti) : bool :=
+Fixpoint local_fresh (x : string) (Δl : local_env K) : bool :=
   match Δl with
   | [] | None :: _ => true
   | Some (y,_) :: Δl => if decide (x = y) then false else local_fresh x Δl
   end.
 
-Fixpoint lookup_local_var (Δl : local_env Ti)
-    (x : string) (i : nat) : option (expr Ti * expr_type Ti) :=
+Fixpoint lookup_local_var (Δl : local_env K)
+    (x : string) (i : nat) : option (expr K * expr_type K) :=
   match Δl with
   | [] => None
   | Some (y, Static (inl (o,τ))) :: Δl =>
@@ -199,8 +199,8 @@ Fixpoint lookup_local_var (Δl : local_env Ti)
      if decide (x = y) then None else lookup_local_var Δl x i
   | None :: Δl => lookup_local_var Δl x i
   end.
-Definition lookup_var (Δl : local_env Ti)
-    (x : string) : M (expr Ti * expr_type Ti) :=
+Definition lookup_var (Δl : local_env K)
+    (x : string) : M (expr K * expr_type K) :=
   match lookup_local_var Δl x 0 with
   | Some (e,τe) => mret (e,τe)
   | None =>
@@ -213,15 +213,15 @@ Definition lookup_var (Δl : local_env Ti)
      end
   end.
 
-Fixpoint lookup_local_typedef (Δl : local_env Ti)
-    (x : string) : option (ptr_type Ti) :=
+Fixpoint lookup_local_typedef (Δl : local_env K)
+    (x : string) : option (ptr_type K) :=
   match Δl with
   | [] => None
   | Some (y,d) :: Δl =>
      if decide (x = y) then maybe TypeDef d else lookup_local_typedef Δl x
   | None :: Δl => lookup_local_typedef Δl x
   end.
-Definition lookup_typedef (Δl : local_env Ti) (x : string) : M (ptr_type Ti) :=
+Definition lookup_typedef (Δl : local_env K) (x : string) : M (ptr_type K) :=
   match lookup_local_typedef Δl x with
   | Some τp => mret τp
   | None =>
@@ -230,9 +230,9 @@ Definition lookup_typedef (Δl : local_env Ti) (x : string) : M (ptr_type Ti) :=
        ("typedef `" +:+ x +:+ "` not found")
   end.
 
-Definition is_pseudo_NULL (e : expr Ti) : bool :=
+Definition is_pseudo_NULL (e : expr K) : bool :=
   match e with #{_} (intV{_} 0) => true | _ => false end.
-Definition to_R (eτe : expr Ti * expr_type Ti) : expr Ti * type Ti :=
+Definition to_R (eτe : expr K * expr_type K) : expr K * type K :=
   match eτe with
   | (e, LT τ) =>
      match maybe2 TArray τ with
@@ -241,15 +241,15 @@ Definition to_R (eτe : expr Ti * expr_type Ti) : expr Ti * type Ti :=
   | (e, RT τ) => (e,τ)
   | (e, FT τs τ) => (e,(τs ~> τ).*)
   end.
-Definition to_R_NULL (σ : type Ti)
-    (eτe : expr Ti * expr_type Ti) : expr Ti * type Ti :=
+Definition to_R_NULL (σ : type K)
+    (eτe : expr K * expr_type K) : expr K * type K :=
   let (e,τ) := to_R eτe in
   match σ with
   | σp.* => if is_pseudo_NULL e then (# (ptrV (NULL σp)), σp.*) else (e,τ)
   | _ => (e,τ)
   end.
-Definition convert_ptrs (eτ1 eτ2 : expr Ti * type Ti) :
-    option (expr Ti * expr Ti * type Ti) :=
+Definition convert_ptrs (eτ1 eτ2 : expr K * type K) :
+    option (expr K * expr K * type K) :=
   let (e1,τ1) := eτ1 in let (e2,τ2) := eτ2 in
   match τ1, τ2 with
   | TAny.*, TType _.* => Some (e1, cast{TAny.*} e2, TAny.*)
@@ -260,8 +260,8 @@ Definition convert_ptrs (eτ1 eτ2 : expr Ti * type Ti) :
      guard (is_pseudo_NULL e1); Some (# (ptrV (NULL τp2)), e2, τp2.*)
   | _, _ => None
   end.
-Definition to_if_expr (e1 : expr Ti)
-    (eτ2 eτ3 : expr Ti * type Ti) : option (expr Ti * expr_type Ti) :=
+Definition to_if_expr (e1 : expr K)
+    (eτ2 eτ3 : expr K * type K) : option (expr K * expr_type K) :=
   (** 1.) *) (
     (** same types *)
     let (e2,τ2) := eτ2 in let (e3,τ3) := eτ3 in
@@ -280,7 +280,7 @@ Definition to_if_expr (e1 : expr Ti)
     '(e2,e3,τ) ← convert_ptrs eτ2 eτ3;
     Some (if{e1} e2 else e3, RT τ)).
 Definition to_binop_expr (op : binop)
-    (eτ1 eτ2 : expr Ti * type Ti) : option (expr Ti * expr_type Ti) :=
+    (eτ1 eτ2 : expr K * type K) : option (expr K * expr_type K) :=
   (** 1.) *) (
     let (e1,τ1) := eτ1 in let (e2,τ2) := eτ2 in
     σ ← binop_type_of op τ1 τ2; Some (e1 @{op} e2, RT σ)) ∪
@@ -291,7 +291,7 @@ Definition to_binop_expr (op : binop)
     σ ← binop_type_of (CompOp EqOp) τ τ;
     Some (e1 @{op} e2, RT σ)).
 
-Definition int_const_types (cτi : cint_type) : list (int_type Ti) :=
+Definition int_const_types (cτi : cint_type) : list (int_type K) :=
   let (ms,k) := cτi in
   let s := from_option Signed ms in
   match k with
@@ -299,13 +299,13 @@ Definition int_const_types (cτi : cint_type) : list (int_type Ti) :=
   | CLongRank => [IntType s long_rank; IntType s longlong_rank]
   | _ => [IntType s int_rank; IntType s long_rank; IntType s longlong_rank]
   end.
-Definition to_int_const (x : Z) : list (int_type Ti) → option (int_type Ti) :=
+Definition to_int_const (x : Z) : list (int_type K) → option (int_type K) :=
   fix go τis :=
   match τis with
   | [] => None
   | τi :: τis => if decide (int_typed x τi) then Some τi else go τis
   end.
-Definition to_inttype (cτi : cint_type) : int_type Ti :=
+Definition to_inttype (cτi : cint_type) : int_type K :=
   let (ms,k) := cτi in
   match k with
   | CCharRank => IntType (from_option char_signedness ms) char_rank
@@ -315,49 +315,49 @@ Definition to_inttype (cτi : cint_type) : int_type Ti :=
   | CLongLongRank => IntType (from_option Signed ms) longlong_rank
   | CPtrRank => IntType (from_option Signed ms) ptr_rank
   end.
-Definition to_string_const (zs : list Z) : option (val Ti * nat) :=
+Definition to_string_const (zs : list Z) : option (val K * nat) :=
   guard (Forall (λ z, int_typed z charT) zs);
   mret (VArray (intT charT)
     (VBase <$> VInt charT <$> (zs ++ [0%Z])), S (length zs)).
 
-Definition insert_object (x : perm) (v : val Ti) : M index :=
+Definition insert_object (x : perm) (v : val K) : M index :=
   m ← gets to_mem; Γ ← gets to_env;
   guard (int_typed (size_of Γ (type_of v)) sptrT) with
     ("global or static whose type is too large");
   let o := fresh (dom _ m) in
-  _ ← modify (λ S : frontend_state Ti,
+  _ ← modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in FState Γn Γ (mem_alloc Γ o false x v m) Δg);
   mret o.
-Definition update_object (o : index) (x : perm) (v : val Ti) : M () :=
-  modify (λ S : frontend_state Ti,
+Definition update_object (o : index) (x : perm) (v : val K) : M () :=
+  modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in FState Γn Γ (mem_alloc Γ o false x v m) Δg).
-Definition insert_global_decl (x : string) (d : global_decl Ti) : M () :=
-  modify (λ S : frontend_state Ti,
+Definition insert_global_decl (x : string) (d : global_decl K) : M () :=
+  modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in FState Γn Γ m (<[x:=d]>Δg)).
 Definition insert_fun (f : funname) (sto : cstorage)
-    (τs : list (type Ti)) (σ : type Ti) (ms : option (stmt Ti)) : M () :=
-  modify (λ S : frontend_state Ti,
+    (τs : list (type K)) (σ : type K) (ms : option (stmt K)) : M () :=
+  modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in
     FState Γn (<[f:=(τs,σ)]>Γ) m (<[(f:string):=Fun sto τs σ ms]>Δg)).
 Definition insert_compound (c : compound_kind) (s : tag)
-    (xτs : list (string * type Ti)) : M () :=
-  modify (λ S : frontend_state Ti,
+    (xτs : list (string * type K)) : M () :=
+  modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in
     FState (<[s:=CompoundType c xτs]>Γn) (<[s:=snd <$> xτs]>Γ) m Δg).
-Definition insert_enum (s : tag) (τi : int_type Ti) : M () :=
-  modify (λ S : frontend_state Ti,
+Definition insert_enum (s : tag) (τi : int_type K) : M () :=
+  modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in FState (<[s:=EnumType τi]>Γn) Γ m Δg).
 
-Definition first_init_ref (Γ : env Ti)
-    (τ : type Ti) : option (ref Ti * type Ti) :=
+Definition first_init_ref (Γ : env K)
+    (τ : type K) : option (ref K * type K) :=
   match τ with
   | τ.[n] => Some ([RArray 0 τ n], τ)
   | structT s => τ ← Γ !! s ≫= (!! 0); Some ([RStruct 0 s],τ)
   | unionT s => τ ← Γ !! s ≫= (!! 0); Some ([RUnion 0 s false],τ)
   | _ => None
   end.
-Fixpoint next_init_ref (Γ : env Ti)
-    (r : ref Ti) : option (ref Ti * type Ti) :=
+Fixpoint next_init_ref (Γ : env K)
+    (r : ref K) : option (ref K * type K) :=
   match r with
   | RArray i τ n :: r =>
      if decide (S i < n)
@@ -370,9 +370,9 @@ Fixpoint next_init_ref (Γ : env Ti)
   | _ => None
   end.
 Definition to_ref
-    (to_expr : cexpr → M (expr Ti * expr_type Ti)) :
-    ref Ti → type Ti → list (string + cexpr) → M (ref Ti * type Ti) :=
-  fix go r (τ : type Ti) xces {struct xces} :=
+    (to_expr : cexpr → M (expr K * expr_type K)) :
+    ref K → type K → list (string + cexpr) → M (ref K * type K) :=
+  fix go r (τ : type K) xces {struct xces} :=
   match xces with
   | [] => mret (r,τ)
   | inl x :: xces =>
@@ -401,10 +401,10 @@ Definition to_ref
   end.
 
 Definition to_compound_init
-    (to_expr : cexpr → M (expr Ti * expr_type Ti))
-    (to_init_expr : type Ti → cinit → M (expr Ti))
-    (τ : type Ti) : expr Ti → list (ref Ti) →
-    list (list (string + cexpr) * cinit) → M (expr Ti) :=
+    (to_expr : cexpr → M (expr K * expr_type K))
+    (to_init_expr : type K → cinit → M (expr K))
+    (τ : type K) : expr K → list (ref K) →
+    list (list (string + cexpr) * cinit) → M (expr K) :=
   fix go e seen inits {struct inits} :=
   match inits with
   | [] => mret e
@@ -421,8 +421,8 @@ Definition to_compound_init
      go (#[r:=e1] e) (r :: seen) inits
   end.
 Definition to_call_args
-    (to_expr : cexpr → M (expr Ti * expr_type Ti)) :
-    list cexpr → list (type Ti) → M (list (expr Ti)) :=
+    (to_expr : cexpr → M (expr K * expr_type K)) :
+    list cexpr → list (type K) → M (list (expr K)) :=
   fix go ces τs :=
   match ces, τs with
   | [], [] => mret []
@@ -434,22 +434,22 @@ Definition to_call_args
      (cast{τ} e ::) <$> go ces τs
   | _, _ => fail "function applied to the wrong number of arguments"
   end.
-Definition convert_fun_arg_type (τp : ptr_type Ti) : option (type Ti) :=
+Definition convert_fun_arg_type (τp : ptr_type K) : option (type K) :=
   match τp with
   | TType (τ.[_]) => Some (TType τ.*)
   | TType τ => Some τ
   | τs ~> τ => Some ((τs ~> τ).*)
   | TAny => None
   end.
-Definition convert_fun_ret_type (τp : ptr_type Ti) : option (type Ti) :=
+Definition convert_fun_ret_type (τp : ptr_type K) : option (type K) :=
   match τp with
   | TType τ => Some τ
   | TAny => Some voidT
   | _ => None
   end.
 Definition to_fun_type_args
-    (to_ptr_type : ctype → M (ptr_type Ti)) :
-    list (option string * ctype) → M (list (option string * type Ti)) :=
+    (to_ptr_type : ctype → M (ptr_type K)) :
+    list (option string * ctype) → M (list (option string * type K)) :=
   fix go cτs :=
   match cτs with
   | [] => mret []
@@ -461,9 +461,9 @@ Definition to_fun_type_args
   end.
 Definition fun_empty_args (xτs : list (option string * ctype)) : bool :=
   match xτs with [(None,CTVoid)] => true | _ => false end.
-Definition to_fun_type (to_ptr_type : ctype → M (ptr_type Ti))
+Definition to_fun_type (to_ptr_type : ctype → M (ptr_type K))
     (cτs : list (option string * ctype)) (cτ : ctype) :
-    M (list (option string * type Ti) * type Ti) :=
+    M (list (option string * type K) * type K) :=
   τp ← to_ptr_type cτ;
   τ ← error_of_option (convert_fun_ret_type τp)
     "function type returning function or array";
@@ -474,15 +474,15 @@ Definition to_fun_type (to_ptr_type : ctype → M (ptr_type Ti))
   mret (xτs,τ).
 
 Inductive to_type_kind := to_Type | to_Ptr.
-Definition to_type_type {Ti} (k : to_type_kind) :=
-  match k with to_Type => type Ti | to_Ptr => ptr_type Ti end.
-Definition to_type_ret {k} (τ : type Ti) : M (to_type_type k) :=
+Definition to_type_type {K} (k : to_type_kind) :=
+  match k with to_Type => type K | to_Ptr => ptr_type K end.
+Definition to_type_ret {k} (τ : type K) : M (to_type_type k) :=
   match k with to_Type => mret τ | to_Ptr => mret (TType τ) end.
 End frontend.
 
 (* not in the section because of bug #3488 *)
-Fixpoint to_expr `{Env Ti} (Δl : local_env Ti)
-    (ce : cexpr) : M (expr Ti * expr_type Ti) :=
+Fixpoint to_expr `{Env K} (Δl : local_env K)
+    (ce : cexpr) : M (expr K * expr_type K) :=
   match ce with
   | CEVar x => lookup_var Δl x
   | CEConst cτi z =>
@@ -630,8 +630,8 @@ Fixpoint to_expr `{Env Ti} (Δl : local_env Ti)
      | FT _ _ => fail "field operator applied to argument of function type"
      end
   end
-with to_init_expr `{Env Ti} (Δl : local_env Ti)
-    (σ : type Ti) (ci : cinit) : M (expr Ti) :=
+with to_init_expr `{Env K} (Δl : local_env K)
+    (σ : type K) (ci : cinit) : M (expr K) :=
   match ci with
   | CSingleInit ce =>
      match maybe CEConstString ce with
@@ -653,8 +653,8 @@ with to_init_expr `{Env Ti} (Δl : local_env Ti)
      Γ ← gets to_env;
      to_compound_init (to_expr Δl) (to_init_expr Δl) σ (#(val_0 Γ σ)) [] inits
   end
-with to_type `{Env Ti} (k : to_type_kind)
-    (Δl : local_env Ti) (cτ : ctype) : M (to_type_type k) :=
+with to_type `{Env K} (k : to_type_kind)
+    (Δl : local_env K) (cτ : ctype) : M (to_type_type k) :=
   match cτ with
   | CTVoid =>
      match k with to_Type => mret voidT | to_Ptr => mret TAny end
@@ -718,18 +718,18 @@ with to_type `{Env Ti} (k : to_type_kind)
   end.
 
 Section frontend_more.
-Context `{Env Ti}.
+Context `{Env K}.
 
-Definition to_init_val (Δl : local_env Ti)
-     (τ : type Ti) (ci : cinit) : M (val Ti) :=
+Definition to_init_val (Δl : local_env K)
+     (τ : type K) (ci : cinit) : M (val K) :=
    e ← to_init_expr Δl τ ci;
    Γ ← gets to_env; m ← gets to_mem;
    guard (is_pure e) with "initializer with non-constant expression";
    error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe inr)
      "initializer with undefined expression".
-Definition alloc_global (Δl : local_env Ti) (x : string) (sto : cstorage)
+Definition alloc_global (Δl : local_env K) (x : string) (sto : cstorage)
     (cτ : ctype) (mci : option cinit) :
-    M (index * type Ti + list (type Ti) * type Ti) :=
+    M (index * type K + list (type K) * type K) :=
   τp ← to_type to_Ptr Δl cτ;
   Δg ← gets to_globals;
   match Δg !! x with
@@ -790,8 +790,8 @@ Definition alloc_global (Δl : local_env Ti) (x : string) (sto : cstorage)
      | TAny => fail ("global `" +:+ x +:+ "` of void type")
      end
   end.
-Definition alloc_static (Δl : local_env Ti) (x : string) (cτ : ctype)
-    (mci : option cinit) : M (index * type Ti) :=
+Definition alloc_static (Δl : local_env K) (x : string) (cτ : ctype)
+    (mci : option cinit) : M (index * type K) :=
   τ ← to_type to_Type Δl cτ;
   guard (τ ≠ voidT) with ("static `" +:+ x +:+ "` of void type");
   Γ ← gets to_env;
@@ -805,8 +805,8 @@ Definition alloc_static (Δl : local_env Ti) (x : string) (cτ : ctype)
   end.
 Definition to_storage (stos : list cstorage) : option cstorage :=
   match stos with [] => Some AutoStorage | [sto] => Some sto | _ => None end.
-Definition to_stmt (τret : type Ti) :
-    local_env Ti → cstmt → M (stmt Ti * rettype Ti) :=
+Definition to_stmt (τret : type K) :
+    local_env K → cstmt → M (stmt K * rettype K) :=
   fix go Δl cs {struct cs} :=
   match cs with
   | CSDo ce =>
@@ -899,8 +899,8 @@ Definition to_stmt (τret : type Ti) :
        "if statement with non-matching return types";
      mret (if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S
   end.
-Definition stmt_fix_return (σ : type Ti) (s : stmt Ti)
-    (cmτ : rettype Ti) : stmt Ti * rettype Ti :=
+Definition stmt_fix_return (σ : type K) (s : stmt K)
+    (cmτ : rettype K) : stmt K * rettype K :=
   match cmτ with
   | (false, None) =>
      if decide (σ = voidT) then (s,cmτ) else (s;; ret (abort σ), (true, Some σ))
@@ -909,7 +909,7 @@ Definition stmt_fix_return (σ : type Ti) (s : stmt Ti)
   | _ => (s,cmτ)
   end.
 Definition to_fun_stmt (f : string) (mys : list (option string))
-     (τs : list (type Ti)) (σ : type Ti) (cs : cstmt) : M (stmt Ti) :=
+     (τs : list (type K)) (σ : type K) (cs : cstmt) : M (stmt K) :=
   ys ← error_of_option (mapM id mys)
     ("function `" +:+ f +:+ "` has unnamed arguments");
   '(s,cmσ) ← to_stmt σ (zip_with (λ y τ, Some (y, Local τ)) ys τs) cs;
@@ -964,7 +964,7 @@ Definition alloc_fun (f : string)
      insert_fun f sto τs τ (Some s)
   end.
 Fixpoint alloc_enum (xces : list (string * option cexpr))
-    (τi : int_type Ti) (z : Z) : M () :=
+    (τi : int_type K) (z : Z) : M () :=
   match xces return M () with
   | [] => mret ()
   | (x,None) :: xces =>
@@ -992,7 +992,7 @@ Fixpoint alloc_enum (xces : list (string * option cexpr))
      alloc_enum xces τi (z' + 1)%Z
   end.
 Definition to_compound_fields (s : tag) :
-    list (string * ctype) → M (list (string * type Ti)) :=
+    list (string * ctype) → M (list (string * type K)) :=
   fix go cτs :=
   match cτs with
   | [] => mret []

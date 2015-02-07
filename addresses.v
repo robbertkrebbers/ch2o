@@ -4,13 +4,13 @@ Require Export references memory_basics.
 Require Import pointer_casts.
 Local Open Scope ctype_scope.
 
-Record addr (Ti : Set) : Set := Addr {
+Record addr (K : Set) : Set := Addr {
   addr_index : index;
-  addr_ref_base : ref Ti;
+  addr_ref_base : ref K;
   addr_byte : nat;
-  addr_type_object : type Ti;
-  addr_type_base : type Ti;
-  addr_type : ptr_type Ti
+  addr_type_object : type K;
+  addr_type_base : type K;
+  addr_type : ptr_type K
 }.
 Add Printing Constructor addr.
 Arguments Addr {_} _ _ _ _ _ _.
@@ -21,15 +21,15 @@ Arguments addr_type_object {_} _.
 Arguments addr_type_base {_} _.
 Arguments addr_type {_} _.
 
-Instance addr_eq_dec `{Ti : Set, ∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (a1 a2 : addr Ti) : Decision (a1 = a2).
+Instance addr_eq_dec `{K : Set, ∀ k1 k2 : K, Decision (k1 = k2)}
+  (a1 a2 : addr K) : Decision (a1 = a2).
 Proof. solve_decision. Defined.
 
 Section address_operations.
-  Context `{Env Ti}.
+  Context `{Env K}.
 
-  Inductive addr_typed' (Γ : env Ti) (Δ : memenv Ti) :
-      addr Ti → ptr_type Ti → Prop :=
+  Inductive addr_typed' (Γ : env K) (Δ : memenv K) :
+      addr K → ptr_type K → Prop :=
     Addr_typed o r i τ σ σp :
       Δ ⊢ o : τ →
       ✓{Γ} τ →
@@ -41,13 +41,13 @@ Section address_operations.
       σ >*> σp →
       addr_typed' Γ Δ (Addr o r i τ σ σp) σp.
   Global Instance addr_typed :
-    Typed (env Ti * memenv Ti) (ptr_type Ti) (addr Ti) := curry addr_typed'.
-  Global Instance addr_freeze : Freeze (addr Ti) := λ β a,
+    Typed (env K * memenv K) (ptr_type K) (addr K) := curry addr_typed'.
+  Global Instance addr_freeze : Freeze (addr K) := λ β a,
     let 'Addr x r i τ σ σp := a in Addr x (freeze β <$> r) i τ σ σp.
 
-  Global Instance type_of_addr: TypeOf (ptr_type Ti) (addr Ti) := addr_type.
+  Global Instance type_of_addr: TypeOf (ptr_type K) (addr K) := addr_type.
   Global Instance addr_type_check:
-      TypeCheck (env Ti * memenv Ti) (ptr_type Ti) (addr Ti) := λ ΓΔ a,
+      TypeCheck (env K * memenv K) (ptr_type K) (addr K) := λ ΓΔ a,
     let (Γ,Δ) := ΓΔ in
     let 'Addr o r i τ σ σp := a in
     guard (Δ ⊢ o : τ);
@@ -61,24 +61,24 @@ Section address_operations.
     Some σp.
   Global Arguments addr_type_check _ !_ /.
 
-  Definition addr_strict (Γ : env Ti) (a : addr Ti) : Prop :=
+  Definition addr_strict (Γ : env K) (a : addr K) : Prop :=
     addr_byte a < size_of Γ (addr_type_base a) * ref_size (addr_ref_base a).
   Global Arguments addr_strict _ !_ /.
-  Definition addr_is_obj (a : addr Ti) : Prop :=
+  Definition addr_is_obj (a : addr K) : Prop :=
     type_of a = TType (addr_type_base a).
   Global Arguments addr_is_obj !_ /.
-  Definition addr_ref (Γ : env Ti) (a : addr Ti) : ref Ti :=
+  Definition addr_ref (Γ : env K) (a : addr K) : ref K :=
     ref_set_offset (addr_byte a `div` size_of Γ (addr_type_base a))
       (addr_ref_base a).
   Global Arguments addr_ref _ !_ /.
-  Definition addr_ref_byte (Γ : env Ti) (a : addr Ti) : nat :=
+  Definition addr_ref_byte (Γ : env K) (a : addr K) : nat :=
     addr_byte a `mod` size_of Γ (addr_type_base a).
   Global Arguments addr_ref_byte _ !_ /.
-  Definition addr_object_offset (Γ : env Ti) (a : addr Ti) : nat :=
+  Definition addr_object_offset (Γ : env K) (a : addr K) : nat :=
     ref_object_offset Γ (addr_ref_base a) + addr_byte a * char_bits.
 
   Global Arguments addr_object_offset _ !_ /.
-  Global Instance addr_disjoint: DisjointE (env Ti) (addr Ti) := λ Γ a1 a2,
+  Global Instance addr_disjoint: DisjointE (env K) (addr K) := λ Γ a1 a2,
     (addr_index a1 ≠ addr_index a2) ∨
     (addr_index a1 = addr_index a2 ∧ addr_ref Γ a1 ⊥ addr_ref Γ a2) ∨
     (addr_index a1 = addr_index a2 ∧
@@ -86,18 +86,18 @@ Section address_operations.
       ¬addr_is_obj a1 ∧ ¬addr_is_obj a2 ∧
       addr_ref_byte Γ a1 ≠ addr_ref_byte Γ a2).
 
-  Definition addr_elt (Γ : env Ti) (rs : ref_seg Ti) (a : addr Ti) : addr Ti :=
+  Definition addr_elt (Γ : env K) (rs : ref_seg K) (a : addr K) : addr K :=
     from_option a $
       σ ← maybe TType (type_of a) ≫= lookupE Γ rs;
       Some (Addr (addr_index a)
         (ref_seg_base rs :: addr_ref Γ a) (size_of Γ σ * ref_seg_offset rs)
         (addr_type_object a) σ (TType σ)).
   Global Arguments addr_elt _ _ !_ /.
-  Definition addr_top (o : index) (σ : type Ti) : addr Ti :=
+  Definition addr_top (o : index) (σ : type K) : addr K :=
     Addr o [] 0 σ σ (TType σ).
-  Definition addr_top_array (o : index) (σ : type Ti) (n : Z) : addr Ti :=
+  Definition addr_top_array (o : index) (σ : type K) (n : Z) : addr K :=
     let n' := Z.to_nat n in Addr o [RArray 0 σ n'] 0 (σ.[n']) σ (TType σ).
-  Inductive addr_is_top_array : addr Ti → Prop :=
+  Inductive addr_is_top_array : addr K → Prop :=
     | Addr_is_top_array o σ n σp :
        addr_is_top_array (Addr o [RArray 0 σ n] 0 (σ.[n]) σ σp).
 End address_operations.
@@ -105,14 +105,14 @@ End address_operations.
 Typeclasses Opaque addr_strict addr_is_obj addr_disjoint.
 
 Section addresses.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τ σ : type Ti.
-Implicit Types τp σp : ptr_type Ti.
-Implicit Types rs : ref_seg Ti.
-Implicit Types r : ref Ti.
-Implicit Types a : addr Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
+Implicit Types τ σ : type K.
+Implicit Types τp σp : ptr_type K.
+Implicit Types rs : ref_seg K.
+Implicit Types r : ref K.
+Implicit Types a : addr K.
 Hint Immediate ref_typed_type_valid.
 
 (** ** Typing and general properties *)
@@ -177,10 +177,10 @@ Lemma addr_typed_ptr_type_valid Γ Δ a σp : ✓ Γ → (Γ,Δ) ⊢ a : σp →
 Proof. destruct 2; eauto using castable_ptr_type_valid. Qed.
 Lemma addr_size_of_ne_0 Γ Δ a σp: ✓ Γ → (Γ,Δ) ⊢ a : σp → ptr_size_of Γ σp ≠ 0.
 Proof. destruct σp; eauto using size_of_ne_0, addr_typed_type_valid. Qed.
-Global Instance: TypeOfSpec (env Ti * memenv Ti) (ptr_type Ti) (addr Ti).
+Global Instance: TypeOfSpec (env K * memenv K) (ptr_type K) (addr K).
 Proof. by intros [??]; destruct 1. Qed.
 Global Instance:
-  TypeCheckSpec (env Ti * memenv Ti) (ptr_type Ti) (addr Ti) (λ _, True).
+  TypeCheckSpec (env K * memenv K) (ptr_type K) (addr K) (λ _, True).
 Proof.
   intros [Γ Δ] a σ _. split.
   * destruct a; intros; simplify_option_equality; constructor; auto.

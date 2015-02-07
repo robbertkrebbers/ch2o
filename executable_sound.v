@@ -4,7 +4,7 @@ Require Export smallstep executable.
 Local Opaque listset_singleton.
 
 Section soundness.
-Context `{EnvSpec Ti}.
+Context `{EnvSpec K}.
 
 Lemma assign_exec_correct Γ m a v ass v' va' :
   assign_exec Γ m a v ass = Some (v',va') ↔ assign_sem Γ m a v ass v' va'.
@@ -12,7 +12,7 @@ Proof.
   split; [|by destruct 1; simplify_option_equality].
   intros. destruct ass; simplify_option_equality; econstructor; eauto.
 Qed.
-Lemma ctx_lookup_correct (k : ctx Ti) x : ctx_lookup x k = get_stack k !! x.
+Lemma ctx_lookup_correct (k : ctx K) x : ctx_lookup x k = get_stack k !! x.
 Proof.
   revert x.
   induction k as [|[]]; intros [|x]; f_equal'; rewrite ?list_lookup_fmap; auto.
@@ -51,14 +51,14 @@ Qed.
 Lemma ehstep_dec Γ ρ e1 m1 :
   (∃ e2 m2, Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2) ∨ ∀ e2 m2, ¬Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
-  set (k:=(λ o, @CLocal Ti o voidT) <$> ρ).
+  set (k:=(λ o, @CLocal K o voidT) <$> ρ).
   replace ρ with (get_stack k) by (induction ρ; f_equal'; auto).
   destruct (collection_choose_or_empty (ehexec Γ k e1 m1)) as [[[e2 m2]?]|];
     eauto using ehexec_sound, ehexec_weak_complete.
 Qed.
 Lemma cexec_sound Γ δ S1 S2 : Γ\ δ ⊢ₛ S1 ⇒ₑ S2 → Γ\ δ ⊢ₛ S1 ⇒ S2.
 Proof.
-  intros. assert (∀ (k : ctx Ti) e m,
+  intros. assert (∀ (k : ctx K) e m,
     ehexec Γ k e m ≡ ∅ → maybe_ECall_redex e = None →
     is_redex e → ¬Γ\ get_stack k ⊢ₕ safe e, m).
   { intros k e m He. rewrite eq_None_not_Some.

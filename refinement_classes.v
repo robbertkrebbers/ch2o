@@ -6,16 +6,16 @@ Require Export memory_injections.
 and [true] in the case for example indeterminate bits may be refined into
 actual bits. We combine renamings and actual refinements to avoid the need for
 duplication. *)
-Class RefineM Ti E A := refineM: E → bool → meminj Ti → relation A.
-Class Refine Ti E A :=
-  refine: E → bool → meminj Ti → memenv Ti → memenv Ti → A → A → Prop.
-Class RefineTM Ti E T A :=
-  refineTM: E → bool → meminj Ti → A → A → T → Prop.
-Class RefineT Ti E T A :=
-  refineT: E → bool → meminj Ti → memenv Ti → memenv Ti → A → A → T → Prop.
-Class PathRefine Ti E T1 T2 A :=
+Class RefineM K E A := refineM: E → bool → meminj K → relation A.
+Class Refine K E A :=
+  refine: E → bool → meminj K → memenv K → memenv K → A → A → Prop.
+Class RefineTM K E T A :=
+  refineTM: E → bool → meminj K → A → A → T → Prop.
+Class RefineT K E T A :=
+  refineT: E → bool → meminj K → memenv K → memenv K → A → A → T → Prop.
+Class PathRefine K E T1 T2 A :=
   path_refine: E → bool →
-    meminj Ti → memenv Ti → memenv Ti → A → A → T1 → T2 → Prop.
+    meminj K → memenv K → memenv K → A → A → T1 → T2 → Prop.
 Instance: Params (@refineM) 5.
 Instance: Params (@refine) 5.
 Instance: Params (@refineTM) 6.

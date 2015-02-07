@@ -3,8 +3,8 @@
 Require Export pointers addresses_refine.
 Local Open Scope ctype_scope.
 
-Inductive ptr_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
-     (Δ1 Δ2 : memenv Ti) : ptr Ti → ptr Ti → ptr_type Ti → Prop :=
+Inductive ptr_refine' `{Env K} (Γ : env K) (α : bool) (f : meminj K)
+     (Δ1 Δ2 : memenv K) : ptr K → ptr K → ptr_type K → Prop :=
   | NULL_refine τp :
      ✓{Γ} τp → ptr_refine' Γ α f Δ1 Δ2 (NULL τp) (NULL τp) τp
   | Ptr_refine a1 a2 τp :
@@ -13,17 +13,17 @@ Inductive ptr_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
   | FunPtr_refine g τs τ :
      Γ !! g = Some (τs,τ) →
      ptr_refine' Γ α f Δ1 Δ2 (FunPtr g τs τ) (FunPtr g τs τ) (τs ~> τ).
-Instance ptr_refine `{Env Ti} :
-  RefineT Ti (env Ti) (ptr_type Ti) (ptr Ti) := ptr_refine'.
+Instance ptr_refine `{Env K} :
+  RefineT K (env K) (ptr_type K) (ptr K) := ptr_refine'.
 
 Section pointers.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
 Implicit Types α : bool.
-Implicit Types τp : ptr_type Ti.
-Implicit Types a : addr Ti.
-Implicit Types p : ptr Ti.
+Implicit Types τp : ptr_type K.
+Implicit Types a : addr K.
+Implicit Types p : ptr K.
 
 Lemma ptr_refine_typed_l Γ α f Δ1 Δ2 p1 p2 τp :
   ✓ Γ → p1 ⊑{Γ,α,f@Δ1↦Δ2} p2 : τp → (Γ,Δ1) ⊢ p1 : τp.

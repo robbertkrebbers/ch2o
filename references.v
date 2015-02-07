@@ -4,17 +4,17 @@ Require Export type_environment.
 Local Open Scope ctype_scope.
 
 (** * References *)
-Inductive ref_seg (Ti : Set) :=
-  | RArray : nat → type Ti → nat → ref_seg Ti
-  | RStruct : nat → tag → ref_seg Ti
-  | RUnion : nat → tag → bool → ref_seg Ti.
-Notation ref Ti := (list (ref_seg Ti)).
+Inductive ref_seg (K : Set) :=
+  | RArray : nat → type K → nat → ref_seg K
+  | RStruct : nat → tag → ref_seg K
+  | RUnion : nat → tag → bool → ref_seg K.
+Notation ref K := (list (ref_seg K)).
 Arguments RArray {_} _ _ _.
 Arguments RStruct {_} _ _.
 Arguments RUnion {_} _ _ _.
 
-Instance ref_seg_eq_dec {Ti : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)}
-  (r1 r2 : ref_seg Ti) : Decision (r1 = r2).
+Instance ref_seg_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (r1 r2 : ref_seg K) : Decision (r1 = r2).
 Proof.
  refine
   match r1, r2 with
@@ -28,8 +28,8 @@ Proof.
   end; abstract congruence.
 Defined.
 
-Inductive ref_seg_typed' `{Env Ti} (Γ : env Ti) :
-     ref_seg Ti → type Ti → type Ti → Prop :=
+Inductive ref_seg_typed' `{Env K} (Γ : env K) :
+     ref_seg K → type K → type K → Prop :=
   | RArray_typed τ i n :
      i < n → ref_seg_typed' Γ (RArray i τ n) (τ.[n]) τ
   | RStruct_typed s i τs τ :
@@ -38,21 +38,21 @@ Inductive ref_seg_typed' `{Env Ti} (Γ : env Ti) :
   | RUnion_typed s i β τs τ :
      Γ !! s = Some τs → τs !! i = Some τ →
      ref_seg_typed' Γ (RUnion i s β) (unionT s) τ.
-Instance ref_seg_typed `{Env Ti} :
-  PathTyped (env Ti) (type Ti) (type Ti) (ref_seg Ti) := ref_seg_typed'.
+Instance ref_seg_typed `{Env K} :
+  PathTyped (env K) (type K) (type K) (ref_seg K) := ref_seg_typed'.
 
-Inductive ref_typed' `{Env Ti} (Γ : env Ti) :
-     ref Ti → type Ti → type Ti → Prop :=
+Inductive ref_typed' `{Env K} (Γ : env K) :
+     ref K → type K → type K → Prop :=
   | ref_nil_typed' τ : ref_typed' Γ [] τ τ
   | ref_cons_typed' r rs τ1 τ2 τ3 :
      Γ ⊢ rs : τ2 ↣ τ3 → ref_typed' Γ r τ1 τ2 → ref_typed' Γ (rs :: r) τ1 τ3.
-Instance ref_typed `{Env Ti} :
-  PathTyped (env Ti) (type Ti) (type Ti) (ref Ti) := ref_typed'.
+Instance ref_typed `{Env K} :
+  PathTyped (env K) (type K) (type K) (ref K) := ref_typed'.
 
-Instance subtype `{Env Ti} : SubsetEqE (env Ti) (type Ti) :=
-  λ Γ τ1 τ2, ∃ r : ref Ti, Γ ⊢ r : τ2 ↣ τ1.
-Instance ref_seg_lookup {Ti : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)} :
-    LookupE (env Ti) (ref_seg Ti) (type Ti) (type Ti) := λ Γ rs τ,
+Instance subtype `{Env K} : SubsetEqE (env K) (type K) :=
+  λ Γ τ1 τ2, ∃ r : ref K, Γ ⊢ r : τ2 ↣ τ1.
+Instance ref_seg_lookup {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} :
+    LookupE (env K) (ref_seg K) (type K) (type K) := λ Γ rs τ,
   match rs, τ with
   | RArray i τ' n', τ.[n] =>
      guard (τ = τ'); guard (n = n'); guard (i < n); Some τ
@@ -60,8 +60,8 @@ Instance ref_seg_lookup {Ti : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)}
   | RUnion i s' _, unionT s => guard (s = s'); Γ !! s ≫= (!! i)
   | _, _ => None
   end.
-Instance ref_lookup {Ti : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2)} :
-    LookupE (env Ti) (ref Ti) (type Ti) (type Ti) :=
+Instance ref_lookup {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} :
+    LookupE (env K) (ref K) (type K) (type K) :=
   fix go Γ r τ := let _ : LookupE _ _ _ _ := @go in
   match r with [] => Some τ | rs :: r => τ !!{Γ} r ≫= lookupE Γ rs end.
 
@@ -69,66 +69,66 @@ Class Freeze A := freeze: bool → A → A.
 Arguments freeze {_ _} _ !_ /.
 Definition frozen `{Freeze A} (x : A) := freeze true x = x.
 
-Instance ref_seg_freeze {Ti} : Freeze (ref_seg Ti) := λ β rs,
+Instance ref_seg_freeze {K} : Freeze (ref_seg K) := λ β rs,
   match rs with
   | RArray i τ n => RArray i τ n
   | RStruct i s => RStruct i s
   | RUnion i s _ => RUnion i s β
   end.
 
-Definition ref_seg_set_offset {Ti} (i : nat) (rs : ref_seg Ti) : ref_seg Ti :=
+Definition ref_seg_set_offset {K} (i : nat) (rs : ref_seg K) : ref_seg K :=
   match rs with RArray _ τ n => RArray i τ n | _ => rs end.
 Arguments ref_seg_set_offset _ _ !_ /.
 Notation ref_seg_base := (ref_seg_set_offset 0).
-Definition ref_set_offset {Ti} (i : nat) (r : ref Ti) : ref Ti :=
+Definition ref_set_offset {K} (i : nat) (r : ref K) : ref K :=
   match r with rs :: r => ref_seg_set_offset i rs :: r | _ => r end.
 Arguments ref_set_offset _ _ !_ /.
 Notation ref_base := (ref_set_offset 0).
 
-Definition ref_seg_offset {Ti} (rs : ref_seg Ti) : nat :=
+Definition ref_seg_offset {K} (rs : ref_seg K) : nat :=
   match rs with RArray i _ _ => i | _ => 0 end.
 Arguments ref_seg_offset _ !_ /.
-Definition ref_offset {Ti} (r : ref Ti) : nat :=
+Definition ref_offset {K} (r : ref K) : nat :=
   match r with rs :: r => ref_seg_offset rs | _ => 0 end.
 Arguments ref_offset _ !_ /.
-Definition ref_seg_size {Ti} (rs : ref_seg Ti) : nat :=
+Definition ref_seg_size {K} (rs : ref_seg K) : nat :=
   match rs with RArray _ _ n => n | _ => 1 end.
 Arguments ref_seg_size _ !_ /.
-Definition ref_size {Ti} (r : ref Ti) : nat :=
+Definition ref_size {K} (r : ref K) : nat :=
   match r with rs :: _ => ref_seg_size rs | _ => 1 end.
 Arguments ref_size _ !_ /.
 
-Inductive ref_seg_disjoint {Ti} : Disjoint (ref_seg Ti) :=
-  | RArray_disjoint i1 i2 τ n : i1 ≠ i2 → @RArray Ti i1 τ n ⊥ RArray i2 τ n
-  | RStruct_disjoint i1 i2 s : i1 ≠ i2 → @RStruct Ti i1 s ⊥ RStruct i2 s.
+Inductive ref_seg_disjoint {K} : Disjoint (ref_seg K) :=
+  | RArray_disjoint i1 i2 τ n : i1 ≠ i2 → @RArray K i1 τ n ⊥ RArray i2 τ n
+  | RStruct_disjoint i1 i2 s : i1 ≠ i2 → @RStruct K i1 s ⊥ RStruct i2 s.
 Existing Instance ref_seg_disjoint.
-Inductive ref_disjoint {Ti : Set} : Disjoint (ref Ti) :=
-  | ref_disjoint_here rs1 rs2 (r1 r2 : ref Ti) :
+Inductive ref_disjoint {K : Set} : Disjoint (ref K) :=
+  | ref_disjoint_here rs1 rs2 (r1 r2 : ref K) :
      freeze true <$> r1 = freeze true <$> r2 →
      rs1 ⊥ rs2 → rs1 :: r1 ⊥ rs2 :: r2
-  | ref_disjoint_cons_l rs1 (r1 r2 : ref Ti) : r1 ⊥ r2 → rs1 :: r1 ⊥ r2
-  | ref_disjoint_cons_r rs2 (r1 r2 : ref Ti): r1 ⊥ r2 → r1 ⊥ rs2 :: r2.
+  | ref_disjoint_cons_l rs1 (r1 r2 : ref K) : r1 ⊥ r2 → rs1 :: r1 ⊥ r2
+  | ref_disjoint_cons_r rs2 (r1 r2 : ref K): r1 ⊥ r2 → r1 ⊥ rs2 :: r2.
 Existing Instance ref_disjoint.
 
-Definition ref_seg_object_offset `{Env Ti}
-    (Γ : env Ti) (rs : ref_seg Ti) : nat :=
+Definition ref_seg_object_offset `{Env K}
+    (Γ : env K) (rs : ref_seg K) : nat :=
   match rs with
   | RArray i τ _ => i * bit_size_of Γ τ
   | RStruct i s => default 0 (Γ !! s) $ λ τs, field_bit_offset Γ τs i
   | RUnion i _ _ => 0
   end.
-Definition ref_object_offset `{Env Ti} (Γ : env Ti) (r : ref Ti) : nat :=
+Definition ref_object_offset `{Env K} (Γ : env K) (r : ref K) : nat :=
   sum_list (ref_seg_object_offset Γ <$> r).
 
-Inductive ref_seg_le {Ti} : SubsetEq (ref_seg Ti) :=
-  | RArray_refine i τ n : @RArray Ti i τ n ⊆ RArray i τ n
-  | RStruct_refine i s : @RStruct Ti i s ⊆ RStruct i s
+Inductive ref_seg_le {K} : SubsetEq (ref_seg K) :=
+  | RArray_refine i τ n : @RArray K i τ n ⊆ RArray i τ n
+  | RStruct_refine i s : @RStruct K i s ⊆ RStruct i s
   | RUnion_refine i s (β1 β2 : bool) :
-     (β2 → β1) → @RUnion Ti i s β1 ⊆ RUnion i s β2.
+     (β2 → β1) → @RUnion K i s β1 ⊆ RUnion i s β2.
 Existing Instance ref_seg_le.
 
 Section ref_typed_ind.
-  Context `{Env Ti} (Γ : env Ti) (P : ref Ti → type Ti → type Ti → Prop).
+  Context `{Env K} (Γ : env K) (P : ref K → type K → type K → Prop).
   Context (Pnil : ∀ τ, P [] τ τ).
   Context (Pcons : ∀ r rs τ1 τ2 τ3,
     Γ ⊢ rs : τ2 ↣ τ3 → Γ ⊢ r : τ1 ↣ τ2 → P r τ1 τ2 → P (rs :: r) τ1 τ3).
@@ -137,15 +137,15 @@ Section ref_typed_ind.
 End ref_typed_ind.
 
 Section references.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types τ : type Ti.
-Implicit Types rs : ref_seg Ti.
-Implicit Types r : ref Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types τ : type K.
+Implicit Types rs : ref_seg K.
+Implicit Types r : ref K.
 
-Lemma ref_typed_nil Γ τ1 τ2 : Γ ⊢ @nil (ref_seg Ti) : τ1 ↣ τ2 ↔ τ1 = τ2.
+Lemma ref_typed_nil Γ τ1 τ2 : Γ ⊢ @nil (ref_seg K) : τ1 ↣ τ2 ↔ τ1 = τ2.
 Proof. split. by intros; simplify_type_equality. intros <-. constructor. Qed.
-Lemma ref_typed_nil_2 Γ τ : Γ ⊢ @nil (ref_seg Ti) : τ ↣ τ.
+Lemma ref_typed_nil_2 Γ τ : Γ ⊢ @nil (ref_seg K) : τ ↣ τ.
 Proof. constructor. Qed.
 Lemma ref_typed_cons Γ rs r τ1 τ3 :
   Γ ⊢ rs :: r : τ1 ↣ τ3 ↔ ∃ τ2, Γ ⊢ r : τ1 ↣ τ2 ∧ Γ ⊢ rs : τ2 ↣ τ3.
@@ -169,7 +169,7 @@ Proof. setoid_rewrite ref_typed_app. by setoid_rewrite ref_typed_singleton. Qed.
 Lemma ref_typed_snoc_2 Γ r rs τ1 τ2 τ3 :
   Γ ⊢ rs : τ1 ↣ τ2 ∧ Γ ⊢ r : τ2 ↣ τ3 → Γ ⊢ r ++ [rs] : τ1 ↣ τ3.
 Proof. rewrite ref_typed_snoc; eauto. Qed.
-Lemma ref_lookup_nil Γ : lookupE Γ (@nil (ref_seg Ti)) = Some.
+Lemma ref_lookup_nil Γ : lookupE Γ (@nil (ref_seg K)) = Some.
 Proof. done. Qed.
 Lemma ref_lookup_cons Γ rs r :
   lookupE Γ (rs :: r) = λ τ, τ !!{Γ} r ≫= lookupE Γ rs.
@@ -195,7 +195,7 @@ Qed.
 Lemma ref_typed_type_valid Γ r τ σ : ✓ Γ → Γ ⊢ r : τ ↣ σ → ✓{Γ} τ → ✓{Γ} σ.
 Proof. intro. induction 1; eauto using ref_seg_typed_type_valid. Qed.
 Global Instance:
-  PathTypeCheckSpecUnique (env Ti) (type Ti) (type Ti) (ref_seg Ti) (λ _, True).
+  PathTypeCheckSpecUnique (env K) (type K) (type K) (ref_seg K) (λ _, True).
 Proof.
   split.
   * intros Γ rs τ σ _. split; [|by destruct 1; simplify_option_equality].
@@ -204,7 +204,7 @@ Proof.
   * by destruct 2; inversion 1.
 Qed.
 Global Instance:
-  PathTypeCheckSpecUnique (env Ti) (type Ti) (type Ti) (ref Ti) (λ _, True).
+  PathTypeCheckSpecUnique (env K) (type K) (type K) (ref K) (λ _, True).
 Proof.
   split.
   * intros Γ r τ σ. split.
@@ -302,7 +302,7 @@ Proof.
   apply ref_typed_size in Hr; apply Nat.mul_le_mono_l; lia.
 Qed.
 
-Global Instance: PreOrder (@subseteqE (env Ti) (type Ti) _ Γ).
+Global Instance: PreOrder (@subseteqE (env K) (type K) _ Γ).
 Proof.
   intros Γ. repeat split.
   * eexists []. constructor.
@@ -337,7 +337,7 @@ Lemma ref_seg_freeze_le β rs1 rs2 : rs1 ⊆ rs2 → freeze β rs1 = freeze β r
 Proof. by destruct 1. Qed.
 Lemma ref_freeze_le β r1 r2 : r1 ⊆* r2 → freeze β <$> r1 = freeze β <$> r2.
 Proof. induction 1; f_equal'; eauto using ref_seg_freeze_le. Qed.
-Global Instance: PartialOrder (@subseteq (ref_seg Ti) _).
+Global Instance: PartialOrder (@subseteq (ref_seg K) _).
 Proof.
   repeat split; [by intros []; constructor| |].
   * destruct 1; inversion 1; constructor; auto.
@@ -430,9 +430,9 @@ Lemma ref_disjoint_here_app_1 r1 r2 r1' r2' :
 Proof.
   induction 1; simpl; constructor; rewrite ?fmap_app; auto with f_equal.
 Qed.
-Global Instance: Symmetric (@disjoint (ref_seg Ti) _).
+Global Instance: Symmetric (@disjoint (ref_seg K) _).
 Proof. destruct 1; constructor; auto. Qed.
-Global Instance: Symmetric (@disjoint (ref Ti) _).
+Global Instance: Symmetric (@disjoint (ref K) _).
 Proof. induction 1; constructor (by auto). Qed.
 Lemma ref_disjoint_alt r1 r2 :
   r1 ⊥ r2 ↔ ∃ r1' rs1 r1'' r2' rs2 r2'',
@@ -481,7 +481,7 @@ Proof.
 Qed.
 Lemma ref_disjoint_nil_inv_r r : ¬r ⊥ [].
 Proof. intros ?. by apply (ref_disjoint_nil_inv_l r). Qed.
-Global Instance: Irreflexive (@disjoint (ref_seg Ti) _).
+Global Instance: Irreflexive (@disjoint (ref_seg K) _).
 Proof. by inversion 1. Qed.
 Lemma ref_disjoint_app_inv_l r1 r2 : ¬r1 ++ r2 ⊥ r2.
 Proof.
@@ -490,7 +490,7 @@ Proof.
 Qed.
 Lemma ref_disjoint_app_inv_r r1 r2 : ¬r2 ⊥ r1 ++ r2.
 Proof. intros ?. by destruct (ref_disjoint_app_inv_l r1 r2). Qed.
-Global Instance: Irreflexive (@disjoint (ref Ti) _).
+Global Instance: Irreflexive (@disjoint (ref K) _).
 Proof. intros r ?. by destruct (ref_disjoint_app_inv_l [] r). Qed.
 Lemma ref_disjoint_here_app_2 r1 r2 r : r1 ++ r ⊥ r2 ++ r → r1 ⊥ r2.
 Proof.
@@ -536,7 +536,7 @@ Proof.
   | _, _ => right _
   end; abstract first [intuition; subst; by constructor|inversion 1; intuition].
 Defined.
-Inductive ref_disjoint_rev: ref Ti → ref Ti → Prop :=
+Inductive ref_disjoint_rev: ref K → ref K → Prop :=
   | ref_disjoint_rev_here rs1 rs2 r1' r2' :
      rs1 ⊥ rs2 → ref_disjoint_rev (rs1 :: r1') (rs2 :: r2')
   | ref_disjoint_rev_cons rs1 rs2 r1 r2 :

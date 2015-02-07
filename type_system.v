@@ -4,34 +4,34 @@ Require Export operations state.
 Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 
-Notation lrtype Ti := (type Ti + type Ti)%type.
-Definition lrtype_type {Ti} (τlr : lrtype Ti) : type Ti :=
+Notation lrtype K := (type K + type K)%type.
+Definition lrtype_type {K} (τlr : lrtype K) : type K :=
   match τlr with inl τ | inr τ => τ end.
-Notation rettype Ti := (bool * option (type Ti))%type.
-Inductive focustype (Ti : Set) :=
-  | Stmt_type : rettype Ti → focustype Ti
-  | Expr_type : type Ti → focustype Ti
-  | Fun_type : funname → focustype Ti.
+Notation rettype K := (bool * option (type K))%type.
+Inductive focustype (K : Set) :=
+  | Stmt_type : rettype K → focustype K
+  | Expr_type : type K → focustype K
+  | Fun_type : funname → focustype K.
 Arguments Stmt_type {_} _.
 Arguments Expr_type {_} _.
 Arguments Fun_type {_} _.
 
 Section typing.
-Context `{Env Ti}.
-Notation envs := (env Ti * memenv Ti * list (type Ti))%type.
+Context `{Env K}.
+Notation envs := (env K * memenv K * list (type K))%type.
 
-Global Instance rettype_valid : Valid (env Ti) (rettype Ti) := λ Γ mcτ,
+Global Instance rettype_valid : Valid (env K) (rettype K) := λ Γ mcτ,
   match mcτ.2 with Some τ => ✓{Γ} τ | _ => True end.
-Inductive lrval_typed' (Γ : env Ti) (Δ : memenv Ti) :
-    addr Ti + val Ti → lrtype Ti → Prop :=
+Inductive lrval_typed' (Γ : env K) (Δ : memenv K) :
+    addr K + val K → lrtype K → Prop :=
   | lval_typed a τ :
      (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → lrval_typed' Γ Δ (inl a) (inl τ)
   | rval_typed v τ : (Γ,Δ) ⊢ v : τ → lrval_typed' Γ Δ (inr v) (inr τ).
-Global Instance lrval_typed: Typed (env Ti * memenv Ti) (lrtype Ti)
-  (addr Ti + val Ti) := curry lrval_typed'.
+Global Instance lrval_typed: Typed (env K * memenv K) (lrtype K)
+  (addr K + val K) := curry lrval_typed'.
 
-Inductive assign_typed (Γ : env Ti) (τ1 : type Ti) :
-     type Ti → assign → type Ti → Prop :=
+Inductive assign_typed (Γ : env K) (τ1 : type K) :
+     type K → assign → type K → Prop :=
   | Assign_typed τ2 : cast_typed Γ τ2 τ1 → assign_typed Γ τ1 τ2 Assign τ1
   | PreOp_typed op τ2 σ :
      binop_typed op τ1 τ2 σ → cast_typed Γ σ τ1 →
@@ -40,8 +40,8 @@ Inductive assign_typed (Γ : env Ti) (τ1 : type Ti) :
      binop_typed op τ1 τ2 σ → cast_typed Γ σ τ1 →
      assign_typed Γ τ1 τ2 (PostOp op) τ1.
 
-Inductive expr_typed' (Γ : env Ti) (Δ : memenv Ti)
-     (τs : list (type Ti)) : expr Ti → lrtype Ti → Prop :=
+Inductive expr_typed' (Γ : env K) (Δ : memenv K)
+     (τs : list (type K)) : expr K → lrtype K → Prop :=
   | EVar_typed τ n :
      τs !! n = Some τ → expr_typed' Γ Δ τs (var{τ} n) (inl τ)
   | EVal_typed Ω v τ :
@@ -101,11 +101,11 @@ Inductive expr_typed' (Γ : env Ti) (Δ : memenv Ti)
      expr_typed' Γ Δ τs e1 (inr σ) → expr_typed' Γ Δ τs e2 (inr τ) →
      expr_typed' Γ Δ τs (#[r:=e1]e2) (inr τ).
 Global Instance expr_typed:
-  Typed envs (lrtype Ti) (expr Ti) := curry3 expr_typed'.
+  Typed envs (lrtype K) (expr K) := curry3 expr_typed'.
 
 Section expr_typed_ind.
-  Context (Γ : env Ti) (Δ : memenv Ti) (τs : list (type Ti)).
-  Context (P : expr Ti → lrtype Ti → Prop).
+  Context (Γ : env K) (Δ : memenv K) (τs : list (type K)).
+  Context (P : expr K → lrtype K → Prop).
   Context (Pvar : ∀ τ n, τs !! n = Some τ → P (var{τ} n) (inl τ)).
   Context (Pval : ∀ Ω v τ, ✓{Δ} Ω → (Γ,Δ) ⊢ v : τ → P (#{Ω} v) (inr τ)).
   Context (Paddr : ∀ Ω a τ,
@@ -157,8 +157,8 @@ Section expr_typed_ind.
   Proof. fix 3; destruct 1; eauto using Forall2_impl. Qed.
 End expr_typed_ind.
 
-Inductive ectx_item_typed' (Γ : env Ti) (Δ : memenv Ti)
-     (τs : list (type Ti)) : ectx_item Ti → lrtype Ti → lrtype Ti → Prop :=
+Inductive ectx_item_typed' (Γ : env K) (Δ : memenv K)
+     (τs : list (type K)) : ectx_item K → lrtype K → lrtype K → Prop :=
   | CRtoL_typed τ :
      type_complete Γ τ →
      ectx_item_typed' Γ Δ τs (.* □) (inr (TType τ.*)) (inl τ)
@@ -210,31 +210,31 @@ Inductive ectx_item_typed' (Γ : env Ti) (Δ : memenv Ti)
      ectx_item_typed' Γ Δ τs (#[r:=e1] □) (inr τ) (inr τ).
 
 Global Instance ectx_item_typed: PathTyped envs
-  (lrtype Ti) (lrtype Ti) (ectx_item Ti) := curry3 ectx_item_typed'.
-Inductive ectx_typed' (Γs : envs) : ectx Ti → lrtype Ti → lrtype Ti → Prop :=
+  (lrtype K) (lrtype K) (ectx_item K) := curry3 ectx_item_typed'.
+Inductive ectx_typed' (Γs : envs) : ectx K → lrtype K → lrtype K → Prop :=
   | ectx_nil_typed_2 τ : ectx_typed' Γs [] τ τ
   | ectx_cons_typed_2 Ei E τ1 τ2 τ3 :
      Γs ⊢ Ei : τ1 ↣ τ2 → ectx_typed' Γs E τ2 τ3 →
      ectx_typed' Γs (Ei :: E) τ1 τ3.
 Global Instance ectx_typed:
-  PathTyped envs (lrtype Ti) (lrtype Ti) (ectx Ti) := ectx_typed'.
+  PathTyped envs (lrtype K) (lrtype K) (ectx K) := ectx_typed'.
 
 Definition rettype_union
-    (mσ1 mσ2 : option (type Ti)) : option (option (type Ti)) :=
+    (mσ1 mσ2 : option (type K)) : option (option (type K)) :=
   match mσ1, mσ2 with
   | Some σ1, Some σ2 => guard (σ1 = σ2); Some (Some σ1)
   | None, _ => Some mσ2
   | _, None => Some mσ1
   end.
-Definition rettype_match (cmσ : rettype Ti) (σ : type Ti) : Prop :=
+Definition rettype_match (cmσ : rettype K) (σ : type K) : Prop :=
   match cmσ with
   | (true, Some σ') => σ' = σ
   | (false, Some _) => False
   | (_, None) => σ = voidT
   end.
 
-Inductive stmt_typed' (Γ : env Ti) (Δ : memenv Ti)
-     (τs : list (type Ti)) : stmt Ti → rettype Ti → Prop :=
+Inductive stmt_typed' (Γ : env K) (Δ : memenv K)
+     (τs : list (type K)) : stmt K → rettype K → Prop :=
   | SSkip_typed : stmt_typed' Γ Δ τs skip (false,None)
   | SDo_typed e τ :
      (Γ,Δ,τs) ⊢ e : inr τ → stmt_typed' Γ Δ τs (! e) (false,None)
@@ -262,10 +262,10 @@ Inductive stmt_typed' (Γ : env Ti) (Δ : memenv Ti)
      rettype_union mσ1 mσ2 = Some mσ →
      stmt_typed' Γ Δ τs (if{e} s1 else s2) (c1 && c2, mσ).
 Global Instance stmt_typed:
-  Typed envs (rettype Ti) (stmt Ti) := curry3 stmt_typed'.
+  Typed envs (rettype K) (stmt K) := curry3 stmt_typed'.
 
-Inductive sctx_item_typed' (Γ : env Ti) (Δ : memenv Ti)
-     (τs : list (type Ti)) : sctx_item Ti → relation (rettype Ti) :=
+Inductive sctx_item_typed' (Γ : env K) (Δ : memenv K)
+     (τs : list (type K)) : sctx_item K → relation (rettype K) :=
   | CCompL_typed s2 c1 mσ1 c2 mσ2 mσ :
      (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) → rettype_union mσ1 mσ2 = Some mσ →
      sctx_item_typed' Γ Δ τs (□ ;; s2) (c1,mσ1) (c2,mσ)
@@ -284,23 +284,23 @@ Inductive sctx_item_typed' (Γ : env Ti) (Δ : memenv Ti)
      (Γ,Δ,τs) ⊢ e : inr (baseT τb) → (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) →
      rettype_union mσ1 mσ2 = Some mσ →
      sctx_item_typed' Γ Δ τs (if{e} s1 else □) (c2,mσ2) (c1&&c2,mσ).
-Global Instance sctx_typed: PathTyped envs (rettype Ti)
-  (rettype Ti) (sctx_item Ti) := curry3 sctx_item_typed'.
+Global Instance sctx_typed: PathTyped envs (rettype K)
+  (rettype K) (sctx_item K) := curry3 sctx_item_typed'.
 
-Inductive esctx_item_typed' (Γ : env Ti) (Δ : memenv Ti)
-     (τs : list (type Ti)) : esctx_item Ti → type Ti → rettype Ti → Prop :=
+Inductive esctx_item_typed' (Γ : env K) (Δ : memenv K)
+     (τs : list (type K)) : esctx_item K → type K → rettype K → Prop :=
   | CDoE_typed τ : esctx_item_typed' Γ Δ τs (! □) τ (false,None)
   | CReturnE_typed τ : esctx_item_typed' Γ Δ τs (ret □) τ (true,Some τ)
   | CIfE_typed τb s1 s2 c1 mσ1 c2 mσ2 mσ :
      (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) →
      rettype_union mσ1 mσ2 = Some mσ →
      esctx_item_typed' Γ Δ τs (if{□} s1 else s2)%S (baseT τb) (c1&&c2,mσ).
-Global Instance esctx_item_typed: PathTyped envs (type Ti)
-  (rettype Ti) (esctx_item Ti) := curry3 esctx_item_typed'.
+Global Instance esctx_item_typed: PathTyped envs (type K)
+  (rettype K) (esctx_item K) := curry3 esctx_item_typed'.
 
 Inductive ctx_item_typed'
-      (Γ : env Ti) (Δ : memenv Ti) (τs : list (type Ti)) :
-      ctx_item Ti → focustype Ti → focustype Ti → Prop :=
+      (Γ : env K) (Δ : memenv K) (τs : list (type K)) :
+      ctx_item K → focustype K → focustype K → Prop :=
   | CStmt_typed Es cmσ1 cmσ2 :
      (Γ,Δ,τs) ⊢ Es : cmσ1 ↣ cmσ2 →
      ctx_item_typed' Γ Δ τs (CStmt Es) (Stmt_type cmσ1) (Stmt_type cmσ2)
@@ -318,29 +318,29 @@ Inductive ctx_item_typed'
      Γ !! f = Some (σs, σ) → Δ ⊢* os :* σs →
      rettype_match cmσ σ → ctx_item_typed'
        Γ Δ τs (CParams f (zip os σs)) (Stmt_type cmσ) (Fun_type f).
-Global Instance ctx_item_typed: PathTyped envs (focustype Ti)
-  (focustype Ti) (ctx_item Ti) := curry3 ctx_item_typed'.
-Inductive ctx_typed' (Γs : env Ti * memenv Ti) :
-     ctx Ti → focustype Ti → focustype Ti → Prop :=
+Global Instance ctx_item_typed: PathTyped envs (focustype K)
+  (focustype K) (ctx_item K) := curry3 ctx_item_typed'.
+Inductive ctx_typed' (Γs : env K * memenv K) :
+     ctx K → focustype K → focustype K → Prop :=
   | ctx_nil_typed_2 τf : ctx_typed' Γs [] τf τf
   | ctx_cons_typed_2 Ek k τf1 τf2 τf3 :
      (Γs,get_stack_types k) ⊢ Ek : τf1 ↣ τf2 →
      ctx_typed' Γs k τf2 τf3 → ctx_typed' Γs (Ek :: k) τf1 τf3.
-Global Instance ctx_typed: PathTyped (env Ti * memenv Ti)
-  (focustype Ti) (focustype Ti) (ctx Ti) := ctx_typed'.
+Global Instance ctx_typed: PathTyped (env K * memenv K)
+  (focustype K) (focustype K) (ctx K) := ctx_typed'.
 
-Inductive direction_typed' (Γ : env Ti) (Δ : memenv Ti) :
-    direction Ti → rettype Ti → Prop :=
+Inductive direction_typed' (Γ : env K) (Δ : memenv K) :
+    direction K → rettype K → Prop :=
   | Down_typed cmτ : direction_typed' Γ Δ ↘ cmτ
   | Up_typed mτ : direction_typed' Γ Δ ↗ (false,mτ)
   | Top_typed c v τ : (Γ,Δ) ⊢ v : τ → direction_typed' Γ Δ (⇈ v) (c,Some τ)
   | Goto_typed l cmτ : direction_typed' Γ Δ (↷ l) cmτ
   | Throw_typed n cmτ : direction_typed' Γ Δ (↑ n) cmτ.
-Global Instance direction_typed: Typed (env Ti * memenv Ti)
-  (rettype Ti) (direction Ti) := curry direction_typed'.
+Global Instance direction_typed: Typed (env K * memenv K)
+  (rettype K) (direction K) := curry direction_typed'.
 
-Inductive focus_typed' (Γ : env Ti) (Δ : memenv Ti)
-    (τs : list (type Ti)) : focus Ti → focustype Ti → Prop :=
+Inductive focus_typed' (Γ : env K) (Δ : memenv K)
+    (τs : list (type K)) : focus K → focustype K → Prop :=
   | Stmt_typed d s cmσ :
      (Γ,Δ,τs) ⊢ s : cmσ → (Γ,Δ) ⊢ d : cmσ →
      focus_typed' Γ Δ τs (Stmt d s) (Stmt_type cmσ)
@@ -359,45 +359,45 @@ Inductive focus_typed' (Γ : env Ti) (Δ : memenv Ti)
      ✓{Δ} Ω → (Γ,Δ) ⊢ v : τ → (Γ,Δ,τs) ⊢ Es : τ ↣ mσ →
      focus_typed' Γ Δ τs (Undef (UndefBranch Es Ω v)) (Stmt_type mσ).
 Global Instance focus_typed:
-  Typed envs (focustype Ti) (focus Ti) := curry3 focus_typed'.
+  Typed envs (focustype K) (focus K) := curry3 focus_typed'.
 
 Global Instance state_typed :
-    Typed (env Ti) funname (state Ti) := λ Γ S f, ∃ τf,
+    Typed (env K) funname (state K) := λ Γ S f, ∃ τf,
   let 'State k φ m := S in
   (Γ,'{m},get_stack_types k) ⊢ φ : τf ∧
   (Γ,'{m}) ⊢ k : τf ↣ Fun_type f ∧
   ✓{Γ} m.
 
-Definition funenv_prevalid (Γ : env Ti) (Δ : memenv Ti) (δ : funenv Ti) :=
+Definition funenv_prevalid (Γ : env K) (Δ : memenv K) (δ : funenv K) :=
   map_Forall (λ f s, ∃ τs τ cmτ,
     Γ !! f = Some (τs,τ) ∧ Forall (type_complete Γ) τs ∧
     Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧
     (Γ,Δ,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
     gotos s ⊆ labels s ∧ throws_valid 0 s
   ) δ.
-Global Instance funenv_valid: Valid (env Ti * memenv Ti) (funenv Ti) := λ ΓΔ δ,
+Global Instance funenv_valid: Valid (env K * memenv K) (funenv K) := λ ΓΔ δ,
   let (Γ,Δ) := ΓΔ in
   funenv_prevalid Γ Δ δ ∧ dom funset (env_f Γ) ⊆ dom funset δ.
 End typing.
 
 Section properties.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
 Implicit Types o : index.
-Implicit Types Δ : memenv Ti.
-Implicit Types m : mem Ti.
-Implicit Types e : expr Ti.
-Implicit Types s : stmt Ti.
-Implicit Types τ σ : type Ti.
-Implicit Types a : addr Ti.
-Implicit Types v : val Ti.
-Implicit Types Ei : ectx_item Ti.
-Implicit Types E : ectx Ti.
-Implicit Types Es : sctx_item Ti.
-Implicit Types Ee : esctx_item Ti.
-Implicit Types Ek : ctx_item Ti.
-Implicit Types k : ctx Ti.
-Implicit Types d : direction Ti.
+Implicit Types Δ : memenv K.
+Implicit Types m : mem K.
+Implicit Types e : expr K.
+Implicit Types s : stmt K.
+Implicit Types τ σ : type K.
+Implicit Types a : addr K.
+Implicit Types v : val K.
+Implicit Types Ei : ectx_item K.
+Implicit Types E : ectx K.
+Implicit Types Es : sctx_item K.
+Implicit Types Ee : esctx_item K.
+Implicit Types Ek : ctx_item K.
+Implicit Types k : ctx K.
+Implicit Types d : direction K.
 
 Lemma SLocal_typed Γ Δ τs τ s c mσ :
   ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →

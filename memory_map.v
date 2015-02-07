@@ -3,17 +3,17 @@
 Require Export memory_trees cmap.
 Local Open Scope ctype_scope.
 
-Definition mem Ti := (cmap Ti (pbit Ti)).
-Instance mem_sep_ops `{Env Ti} : SeparationOps (mem Ti) := _.
-Instance mem_sep `{Env Ti} : Separation (mem Ti) := _.
+Definition mem K := (cmap K (pbit K)).
+Instance mem_sep_ops `{Env K} : SeparationOps (mem K) := _.
+Instance mem_sep `{Env K} : Separation (mem K) := _.
 Typeclasses Opaque mem.
 
 Section operations.
-  Context `{Env Ti}.
+  Context `{Env K}.
 
-  Global Instance cmap_dom: Dom (mem Ti) indexset := λ m,
+  Global Instance cmap_dom: Dom (mem K) indexset := λ m,
     let (m) := m in dom _ m.
-  Global Instance cmap_valid: Valid (env Ti * memenv Ti) (mem Ti) := λ ΓΔ m,
+  Global Instance cmap_valid: Valid (env K * memenv K) (mem K) := λ ΓΔ m,
     let (Γ,Δ) := ΓΔ in
     (**i 1). *) ✓{Γ} Δ ∧
     (**i 2). *) (∀ o τ,
@@ -21,37 +21,37 @@ Section operations.
     (**i 3). *) (∀ o w malloc,
       cmap_car m !! o = Some (Obj w malloc) →
       ∃ τ, Δ ⊢ o : τ ∧ index_alive Δ o ∧ (Γ,Δ) ⊢ w : τ ∧ ¬ctree_empty w).
-  Definition memenv_of (m : mem Ti) : memenv Ti :=
+  Definition memenv_of (m : mem K) : memenv K :=
     let (m) := m in
-    let f x : type Ti * bool :=
+    let f x : type K * bool :=
       match x with Freed τ => (τ,true) | Obj w _ => (type_of w,false) end in
     f <$> m.
-  Global Instance cmap_valid': Valid (env Ti) (mem Ti) := λ Γ m,
+  Global Instance cmap_valid': Valid (env K) (mem K) := λ Γ m,
     ✓{Γ,memenv_of m} m.
-  Definition index_alive' (m : mem Ti) (o : index) : Prop :=
+  Definition index_alive' (m : mem K) (o : index) : Prop :=
     match cmap_car m !! o with Some (Obj _ _) => True | _ => False end.
-  Definition cmap_erase (m : mem Ti) : mem Ti :=
+  Definition cmap_erase (m : mem K) : mem K :=
     let (m) := m in CMap (omap (λ x, '(w,β) ← maybe_Obj x; Some (Obj w β)) m).
 
   Global Instance cmap_lookup_ref:
-      LookupE (env Ti) (index * ref Ti) (mtree Ti) (mem Ti) := λ Γ or m,
+      LookupE (env K) (index * ref K) (mtree K) (mem K) := λ Γ or m,
     (cmap_car m !! or.1 ≫= maybe2 Obj) ≫= lookupE Γ (or.2) ∘ fst.
   Global Instance cmap_lookup:
-      LookupE (env Ti) (addr Ti) (mtree Ti) (mem Ti) := λ Γ a m,
+      LookupE (env K) (addr K) (mtree K) (mem K) := λ Γ a m,
     guard (addr_strict Γ a);
     w ← m !!{Γ} (addr_index a, addr_ref Γ a);
     if decide (addr_is_obj a) then Some w
     else guard (ctree_unshared w); w !!{Γ} (addr_ref_byte Γ a).
-  Definition cmap_alter_ref (Γ : env Ti) (g : mtree Ti → mtree Ti)
-      (o : index) (r : ref Ti) (m : mem Ti) : mem Ti :=
+  Definition cmap_alter_ref (Γ : env K) (g : mtree K → mtree K)
+      (o : index) (r : ref K) (m : mem K) : mem K :=
     let (m) := m in CMap (alter (cmap_elem_map (ctree_alter Γ g r)) o m).
-  Definition cmap_alter (Γ : env Ti) (g : mtree Ti → mtree Ti)
-      (a : addr Ti) (m : mem Ti) : mem Ti :=
+  Definition cmap_alter (Γ : env K) (g : mtree K → mtree K)
+      (a : addr K) (m : mem K) : mem K :=
     let G := if decide (addr_is_obj a) then g
              else ctree_alter_byte Γ g (addr_ref_byte Γ a) in
     cmap_alter_ref Γ G (addr_index a) (addr_ref Γ a) m.
-  Definition cmap_singleton (Γ : env Ti) (a : addr Ti)
-      (malloc : bool) (w : mtree Ti) : mem Ti :=
+  Definition cmap_singleton (Γ : env K) (a : addr K)
+      (malloc : bool) (w : mtree K) : mem K :=
     CMap {[ addr_index a, Obj (ctree_singleton Γ (addr_ref Γ a) w) malloc ]}.
 End operations.
 
@@ -59,19 +59,19 @@ Arguments cmap_lookup_ref _ _ _ !_ !_ /.
 Notation "'{ m }" := (memenv_of m) (at level 20, format "''{' m }").
 
 Section memory_map.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types m : mem Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τ σ : type Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types m : mem K.
+Implicit Types Δ : memenv K.
+Implicit Types τ σ : type K.
 Implicit Types o : index.
-Implicit Types w : mtree Ti.
-Implicit Types rs : ref_seg Ti.
-Implicit Types r : ref Ti.
-Implicit Types a : addr Ti.
-Implicit Types g : mtree Ti → mtree Ti.
+Implicit Types w : mtree K.
+Implicit Types rs : ref_seg K.
+Implicit Types r : ref K.
+Implicit Types a : addr K.
+Implicit Types g : mtree K → mtree K.
 Implicit Types α β : bool.
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
+Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 
 Lemma index_alive_spec' m o : index_alive' m o ↔ index_alive ('{m}) o.
 Proof.
@@ -119,7 +119,7 @@ Proof. eauto using cmap_valid_memenv_valid, index_typed_valid. Qed.
 Lemma cmap_index_typed_representable Γ Δ m o τ :
   ✓{Γ,Δ} m → Δ ⊢ o : τ → int_typed (size_of Γ τ) sptrT.
 Proof. eauto using cmap_valid_memenv_valid, index_typed_representable. Qed.
-Lemma cmap_empty_valid Γ : ✓{Γ} (∅ : mem Ti).
+Lemma cmap_empty_valid Γ : ✓{Γ} (∅ : mem K).
 Proof.
   split; [apply memenv_empty_valid|].
   by split; intros until 0; simplify_map_equality'.
@@ -154,7 +154,7 @@ Proof.
       as (τ&?&?&?&?&_); simplify_type_equality.
 Qed.
 
-Lemma cmap_erase_empty : cmap_erase (∅ : mem Ti) = ∅.
+Lemma cmap_erase_empty : cmap_erase (∅ : mem K) = ∅.
 Proof. simpl. by rewrite omap_empty. Qed.
 Lemma dmap_erase_disjoint m1 m2 : m1 ⊥ m2 → cmap_erase m1 ⊥ cmap_erase m2.
 Proof.

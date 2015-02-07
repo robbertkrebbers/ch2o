@@ -5,49 +5,49 @@ Require Import pointer_casts.
 Local Open Scope ctype_scope.
 
 Section operations_definitions.
-  Context `{Env Ti}.
+  Context `{Env K}.
 
   (** ** Operations on addresses *)
-  Definition addr_eq_ok (Γ : env Ti) (m : mem Ti) (a1 a2 : addr Ti) : Prop :=
+  Definition addr_eq_ok (Γ : env K) (m : mem K) (a1 a2 : addr K) : Prop :=
     index_alive' m (addr_index a1) ∧ index_alive' m (addr_index a2) ∧
     (addr_index a1 ≠ addr_index a2 → addr_strict Γ a1 ∧ addr_strict Γ a2).
-  Definition addr_eq (Γ : env Ti) (a1 a2 : addr Ti) : bool :=
+  Definition addr_eq (Γ : env K) (a1 a2 : addr K) : bool :=
     if decide (addr_index a1 = addr_index a2)
     then bool_decide (addr_object_offset Γ a1 = addr_object_offset Γ a2)
     else false.
-  Definition addr_plus_ok (Γ : env Ti) (m : mem Ti)
-      (j : Z) (a : addr Ti) : Prop :=
+  Definition addr_plus_ok (Γ : env K) (m : mem K)
+      (j : Z) (a : addr K) : Prop :=
     index_alive' m (addr_index a) ∧
     (0 ≤ addr_byte a + j * ptr_size_of Γ (type_of a)
        ≤ size_of Γ (addr_type_base a) * ref_size (addr_ref_base a))%Z.
   Global Arguments addr_plus_ok _ _ _ !_ /.
-  Definition addr_plus (Γ : env Ti) (j : Z) (a : addr Ti): addr Ti :=
+  Definition addr_plus (Γ : env K) (j : Z) (a : addr K): addr K :=
     let 'Addr x r i τ σ σp := a
     in Addr x r (Z.to_nat (i + j * ptr_size_of Γ σp)) τ σ σp.
   Global Arguments addr_plus _ _ !_ /.
-  Definition addr_minus_ok (m : mem Ti) (a1 a2 : addr Ti) : Prop :=
+  Definition addr_minus_ok (m : mem K) (a1 a2 : addr K) : Prop :=
     index_alive' m (addr_index a1) ∧
     addr_index a1 = addr_index a2 ∧
     freeze true <$> addr_ref_base a1 = freeze true <$> addr_ref_base a2.
   Global Arguments addr_minus_ok _ !_ !_ /.
-  Definition addr_minus (Γ : env Ti) (a1 a2 : addr Ti) : Z :=
+  Definition addr_minus (Γ : env K) (a1 a2 : addr K) : Z :=
     ((addr_byte a1 - addr_byte a2) `div` ptr_size_of Γ (type_of a1))%Z.
   Global Arguments addr_minus _ !_ !_ /.
-  Definition addr_cast_ok (Γ : env Ti) (m : mem Ti)
-      (σp : ptr_type Ti) (a : addr Ti) : Prop :=
+  Definition addr_cast_ok (Γ : env K) (m : mem K)
+      (σp : ptr_type K) (a : addr K) : Prop :=
     index_alive' m (addr_index a) ∧
     addr_type_base a >*> σp ∧
     (ptr_size_of Γ σp | addr_byte a).
   Global Arguments addr_cast_ok _ _ _ !_ /.
-  Definition addr_cast (σp : ptr_type Ti) (a : addr Ti) : addr Ti :=
+  Definition addr_cast (σp : ptr_type K) (a : addr K) : addr K :=
     let 'Addr o r i τ σ _ := a in Addr o r i τ σ σp.
   Global Arguments addr_cast _ !_ /.
 
   (** ** Operations on pointers *)
-  Definition ptr_alive' (m : mem Ti) (p : ptr Ti) : Prop :=
+  Definition ptr_alive' (m : mem K) (p : ptr K) : Prop :=
     match p with Ptr a => index_alive' m (addr_index a) | _ => True end.
-  Definition ptr_compare_ok (Γ : env Ti)  (m : mem Ti)
-      (c : compop) (p1 p2 : ptr Ti) : Prop :=
+  Definition ptr_compare_ok (Γ : env K)  (m : mem K)
+      (c : compop) (p1 p2 : ptr K) : Prop :=
     match p1, p2, c with
     | Ptr a1, Ptr a2, EqOp => addr_eq_ok Γ m a1 a2
     | Ptr a1, Ptr a2, _ => addr_minus_ok m a1 a2
@@ -59,7 +59,7 @@ Section operations_definitions.
     | FunPtr _ _ _, NULL _, EqOp => True
     | _, _, _ => False
     end.
-  Definition ptr_compare (Γ : env Ti) (c : compop) (p1 p2 : ptr Ti) : bool :=
+  Definition ptr_compare (Γ : env K) (c : compop) (p1 p2 : ptr K) : bool :=
     match p1, p2, c with
     | Ptr a1, Ptr a2, EqOp => addr_eq Γ a1 a2
     | Ptr a1, Ptr a2, _ => Z_comp c (addr_minus Γ a1 a2) 0
@@ -70,29 +70,29 @@ Section operations_definitions.
     | (Ptr _ | FunPtr _ _ _), NULL _, _ => false
     | _, _, _ => false
     end.
-  Definition ptr_plus_ok (Γ : env Ti) (m : mem Ti) (j : Z) (p : ptr Ti) :=
+  Definition ptr_plus_ok (Γ : env K) (m : mem K) (j : Z) (p : ptr K) :=
     match p with
     | NULL _ => j = 0 | Ptr a => addr_plus_ok Γ m j a | _ => False
     end.
   Global Arguments ptr_plus_ok _ _ _ !_ /.
-  Definition ptr_plus (Γ : env Ti) (j : Z) (p : ptr Ti) : ptr Ti :=
+  Definition ptr_plus (Γ : env K) (j : Z) (p : ptr K) : ptr K :=
     match p with Ptr a => Ptr (addr_plus Γ j a) | _ => p end.
   Global Arguments ptr_plus _ _ !_ /.
-  Definition ptr_minus_ok (m : mem Ti) (p1 p2 : ptr Ti) : Prop :=
+  Definition ptr_minus_ok (m : mem K) (p1 p2 : ptr K) : Prop :=
     match p1, p2 with
     | NULL _, NULL _ => True
     | Ptr a1, Ptr a2 => addr_minus_ok m a1 a2
     | _, _ => False
     end.
   Global Arguments ptr_minus_ok _ !_ !_ /.
-  Definition ptr_minus (Γ : env Ti) (p1 p2 : ptr Ti) : Z :=
+  Definition ptr_minus (Γ : env K) (p1 p2 : ptr K) : Z :=
     match p1, p2 with
     | NULL _, NULL _ => 0
     | Ptr a1, Ptr a2 => addr_minus Γ a1 a2
     | _, _ => 0
     end.
   Global Arguments ptr_minus _ !_ !_ /.
-  Inductive ptr_cast_typed (Γ : env Ti) : ptr_type Ti → ptr_type Ti → Prop :=
+  Inductive ptr_cast_typed (Γ : env K) : ptr_type K → ptr_type K → Prop :=
     | TAny_to_TAny_cast_typed : ptr_cast_typed Γ TAny TAny
     | TType_to_TType_cast_typed τ : ptr_cast_typed Γ (TType τ) (TType τ)
     | TType_to_TAny_cast_typed τ : ptr_cast_typed Γ (TType τ) TAny
@@ -102,49 +102,49 @@ Section operations_definitions.
     | TChar_to_TType_cast_typed τ :
        ✓{Γ} (TType τ) → ptr_cast_typed Γ ucharT (TType τ)
     | TFun_to_TFun_cast_typed τs τ : ptr_cast_typed Γ (τs ~> τ) (τs ~> τ).
-  Definition ptr_cast_ok (Γ : env Ti) (m : mem Ti)
-      (σp : ptr_type Ti) (p : ptr Ti) : Prop :=
+  Definition ptr_cast_ok (Γ : env K) (m : mem K)
+      (σp : ptr_type K) (p : ptr K) : Prop :=
     match p with Ptr a => addr_cast_ok Γ m σp a | _ => True end.
   Global Arguments ptr_cast_ok _ _ _ !_ /.
-  Definition ptr_cast (σp : ptr_type Ti) (p : ptr Ti) : ptr Ti :=
+  Definition ptr_cast (σp : ptr_type K) (p : ptr K) : ptr K :=
     match p with
     | NULL _ => NULL σp | Ptr a => Ptr (addr_cast σp a) | _ => p
     end.
   Global Arguments ptr_cast _ !_ /.  
 
   (** ** Operations on base values *)
-  Definition base_val_true (m : mem Ti) (vb : base_val Ti) : Prop :=
+  Definition base_val_true (m : mem K) (vb : base_val K) : Prop :=
     match vb with
     | VInt _ x => x ≠ 0
     | VPtr (Ptr a) => index_alive' m (addr_index a)
     | _ => False
     end.
-  Definition base_val_false (vb : base_val Ti) : Prop :=
+  Definition base_val_false (vb : base_val K) : Prop :=
     match vb with VInt _ x => x = 0 | VPtr (NULL _) => True | _ => False end.
-  Definition base_val_0 (τb : base_type Ti) : base_val Ti :=
+  Definition base_val_0 (τb : base_type K) : base_val K :=
     match τb with
     | voidT => VVoid | intT τi => VInt τi 0 | τ.* => VPtr (NULL τ)
     end%BT.
-  Inductive base_unop_typed : unop → base_type Ti → base_type Ti → Prop :=
+  Inductive base_unop_typed : unop → base_type K → base_type K → Prop :=
     | TInt_unop_typed op τi :
        base_unop_typed op (intT τi) (intT (int_unop_type_of op τi))
     | TPtr_NotOp_typed τ : base_unop_typed NotOp (τ.*) sintT.
   Definition base_unop_type_of (op : unop)
-      (τb : base_type Ti) : option (base_type Ti) :=
+      (τb : base_type K) : option (base_type K) :=
     match τb, op with
     | intT τi, op => Some (intT (int_unop_type_of op τi))
     | τ.*, NotOp => Some sintT
     | _, _ => None
     end%BT.
-  Definition base_val_unop_ok (m : mem Ti)
-      (op : unop) (vb : base_val Ti) : Prop :=
+  Definition base_val_unop_ok (m : mem K)
+      (op : unop) (vb : base_val K) : Prop :=
     match vb, op with
     | VInt τi x, op => int_unop_ok op x τi
     | VPtr p, NotOp => ptr_alive' m p
     | _, _ => False
     end.
   Global Arguments base_val_unop_ok _ !_ !_ /.
-  Definition base_val_unop (op : unop) (vb : base_val Ti) : base_val Ti :=
+  Definition base_val_unop (op : unop) (vb : base_val K) : base_val K :=
     match vb, op with
     | VInt τi x, op => VInt (int_unop_type_of op τi) (int_unop op x τi)
     | VPtr p, NotOp => VInt sintT (match p with Ptr _ => 0 | _ => 1 end)
@@ -153,7 +153,7 @@ Section operations_definitions.
   Global Arguments base_val_unop !_ !_ /.
 
   Inductive base_binop_typed :
-        binop → base_type Ti → base_type Ti → base_type Ti → Prop :=
+        binop → base_type K → base_type K → base_type K → Prop :=
     | TInt_binop_typed op τi1 τi2 :
        base_binop_typed op (intT τi1) (intT τi2)
          (intT (int_binop_type_of op τi1 τi2))
@@ -170,7 +170,7 @@ Section operations_definitions.
     | MinusOp_TPtr_TPtr_typed τ  :
        base_binop_typed (ArithOp MinusOp) (TType τ.*) (TType τ.*) sptrT.
   Definition base_binop_type_of
-      (op : binop) (τb1 τb2 : base_type Ti) : option (base_type Ti) :=
+      (op : binop) (τb1 τb2 : base_type K) : option (base_type K) :=
     match τb1, τb2, op with
     | intT τi1, intT τi2, op => Some (intT (int_binop_type_of op τi1 τi2))
     | τp1.*, τp2.*, CompOp _ => guard (τp1 = τp2); Some sintT
@@ -179,8 +179,8 @@ Section operations_definitions.
     | TType τ1.*, TType τ2.*, ArithOp MinusOp => guard (τ1 = τ2); Some sptrT
     | _, _, _ => None
     end%BT.
-  Definition base_val_binop_ok (Γ : env Ti) (m : mem Ti)
-      (op : binop) (vb1 vb2 : base_val Ti) : Prop :=
+  Definition base_val_binop_ok (Γ : env K) (m : mem K)
+      (op : binop) (vb1 vb2 : base_val K) : Prop :=
     match vb1, vb2, op with
     | VInt τi1 x1, VInt τi2 x2, op => int_binop_ok op x1 τi1 x2 τi2
     | VPtr p1, VPtr p2, CompOp c => ptr_compare_ok Γ m c p1 p2
@@ -192,8 +192,8 @@ Section operations_definitions.
     | _, _, _ => False
     end.
   Global Arguments base_val_binop_ok _ _ !_ !_ !_ /.
-  Definition base_val_binop (Γ : env Ti)
-      (op : binop) (v1 v2 : base_val Ti) : base_val Ti :=
+  Definition base_val_binop (Γ : env K)
+      (op : binop) (v1 v2 : base_val K) : base_val K :=
     match v1, v2, op with
     | VInt τi1 x1, VInt τi2 x2, op =>
        VInt (int_binop_type_of op τi1 τi2) (int_binop op x1 τi1 x2 τi2)
@@ -208,13 +208,13 @@ Section operations_definitions.
     end.
   Global Arguments base_val_binop _ !_ !_ !_ /.
 
-  Inductive base_cast_typed (Γ : env Ti) : base_type Ti → base_type Ti → Prop :=
+  Inductive base_cast_typed (Γ : env K) : base_type K → base_type K → Prop :=
     | TVoid_cast_typed τb : base_cast_typed Γ τb voidT
     | TInt_cast_typed τi1 τi2 : base_cast_typed Γ (intT τi1) (intT τi2)
     | TPtr_to_TPtr_cast_typed τp1 τp2 :
        ptr_cast_typed Γ τp1 τp2 → base_cast_typed Γ (τp1.*) (τp2.*).
-  Definition base_val_cast_ok (Γ : env Ti) (m : mem Ti)
-      (τb : base_type Ti) (vb : base_val Ti) : Prop :=
+  Definition base_val_cast_ok (Γ : env K) (m : mem K)
+      (τb : base_type K) (vb : base_val K) : Prop :=
     match vb, τb with
     | (VVoid | VInt _ _ | VByte _), voidT => True
     | VIndet τi, voidT => τi = ucharT
@@ -226,8 +226,8 @@ Section operations_definitions.
     | _, _ => False
     end%BT.
   Global Arguments base_val_cast_ok _ _ !_ !_ /.
-  Definition base_val_cast (τb : base_type Ti)
-      (vb : base_val Ti) : base_val Ti :=
+  Definition base_val_cast (τb : base_type K)
+      (vb : base_val K) : base_val K :=
     match vb, τb with
     | _, voidT => VVoid
     | VInt _ x, intT τi => VInt τi (int_cast τi x)
@@ -237,7 +237,7 @@ Section operations_definitions.
   Global Arguments base_val_cast !_ !_ /.
 
   (** ** Operations on values *)
-  Definition val_0 (Γ : env Ti) : type Ti → val Ti := type_iter
+  Definition val_0 (Γ : env K) : type K → val K := type_iter
     (**i TBase     *) (λ τb, VBase (base_val_0 τb))
     (**i TArray    *) (λ τ n x, VArray τ (replicate n x))
     (**i TCompound *) (λ c s τs rec,
@@ -246,59 +246,59 @@ Section operations_definitions.
       | Union_kind => VUnion s 0 (default (VUnionAll s []) (τs !! 0) rec)
       end) Γ.
 
-  Definition val_true (m : mem Ti) (v : val Ti) : Prop :=
+  Definition val_true (m : mem K) (v : val K) : Prop :=
     match v with VBase vb => base_val_true m vb | _ => False end.
-  Definition val_false (v : val Ti) : Prop :=
+  Definition val_false (v : val K) : Prop :=
     match v with VBase vb => base_val_false vb | _ => False end.
 
-  Inductive unop_typed : unop → type Ti → type Ti → Prop :=
+  Inductive unop_typed : unop → type K → type K → Prop :=
     | TBase_unop_typed op τb σb :
        base_unop_typed op τb σb → unop_typed op (baseT τb) (baseT σb).
-  Definition unop_type_of (op : unop) (τ : type Ti) : option (type Ti) :=
+  Definition unop_type_of (op : unop) (τ : type K) : option (type K) :=
     match τ with
     | baseT τb => σb ← base_unop_type_of op τb; Some (baseT σb) | _ => None
     end.
-  Definition val_unop_ok (m : mem Ti) (op : unop) (v : val Ti) : Prop :=
+  Definition val_unop_ok (m : mem K) (op : unop) (v : val K) : Prop :=
     match v with VBase vb => base_val_unop_ok m op vb | _ => False end.
   Global Arguments val_unop_ok _ !_ !_ /.
-  Definition val_unop (op : unop) (v : val Ti) : val Ti :=
+  Definition val_unop (op : unop) (v : val K) : val K :=
     match v with VBase vb => VBase (base_val_unop op vb) | _ => v end.
   Global Arguments val_unop !_ !_ /.
 
-  Inductive binop_typed : binop → type Ti → type Ti → type Ti → Prop :=
+  Inductive binop_typed : binop → type K → type K → type K → Prop :=
     | TBase_binop_typed op τb1 τb2 σb :
        base_binop_typed op τb1 τb2 σb →
        binop_typed op (baseT τb1) (baseT τb2) (baseT σb).
-  Definition binop_type_of (op : binop) (τ1 τ2 : type Ti) : option (type Ti) :=
+  Definition binop_type_of (op : binop) (τ1 τ2 : type K) : option (type K) :=
     match τ1, τ2 with
     | baseT τb1, baseT τb2 =>
        σb ← base_binop_type_of op τb1 τb2; Some (baseT σb)
     | _, _ => None
     end.
-  Definition val_binop_ok (Γ : env Ti) (m : mem Ti)
-      (op : binop) (v1 v2 : val Ti) : Prop :=
+  Definition val_binop_ok (Γ : env K) (m : mem K)
+      (op : binop) (v1 v2 : val K) : Prop :=
     match v1, v2 with
     | VBase vb1, VBase vb2 => base_val_binop_ok Γ m op vb1 vb2 | _, _ => False
     end.
   Global Arguments val_binop_ok _ _ !_ !_ !_ /.
-  Definition val_binop (Γ : env Ti) (op : binop) (v1 v2 : val Ti) : val Ti :=
+  Definition val_binop (Γ : env K) (op : binop) (v1 v2 : val K) : val K :=
     match v1, v2 with
     | VBase vb1, VBase vb2 => VBase (base_val_binop Γ op vb1 vb2) | _, _ => v1
     end.
   Global Arguments val_binop _ !_ !_ !_ /.
 
-  Inductive cast_typed (Γ : env Ti) : type Ti → type Ti → Prop :=
+  Inductive cast_typed (Γ : env K) : type K → type K → Prop :=
     | cast_typed_self τ : cast_typed Γ τ τ
     | TBase_cast_typed τb1 τb2 :
        base_cast_typed Γ τb1 τb2 → cast_typed Γ (baseT τb1) (baseT τb2)
     | TBase_TVoid_cast_typed τ : cast_typed Γ τ voidT.
-  Definition val_cast_ok (Γ : env Ti) (m : mem Ti)
-      (τp : ptr_type Ti) (v : val Ti) : Prop :=
+  Definition val_cast_ok (Γ : env K) (m : mem K)
+      (τp : ptr_type K) (v : val K) : Prop :=
     match v, τp with
     | VBase vb, TType (baseT τb) => base_val_cast_ok Γ m τb vb | _, _ => True
     end.
   Global Arguments val_cast_ok _ _ !_ !_ /.
-  Definition val_cast (τp : ptr_type Ti) (v : val Ti) : val Ti :=
+  Definition val_cast (τp : ptr_type K) (v : val K) : val K :=
     match v, τp with
     | VBase vb, TType (baseT τb) => VBase (base_val_cast τb vb)
     | _, TType voidT => VBase VVoid | _ , _ => v
@@ -307,16 +307,16 @@ Section operations_definitions.
 End operations_definitions.
 
 Section operations.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τb σb : base_type Ti.
-Implicit Types τp σp : ptr_type Ti.
-Implicit Types τ σ : type Ti.
-Implicit Types a : addr Ti.
-Implicit Types vb : base_val Ti.
-Implicit Types v : val Ti.
-Implicit Types m : mem Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
+Implicit Types τb σb : base_type K.
+Implicit Types τp σp : ptr_type K.
+Implicit Types τ σ : type K.
+Implicit Types a : addr K.
+Implicit Types vb : base_val K.
+Implicit Types v : val K.
+Implicit Types m : mem K.
 Hint Immediate index_alive_1'.
 Hint Resolve index_alive_2'.
 

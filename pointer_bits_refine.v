@@ -3,22 +3,22 @@
 Require Import fragmented.
 Require Export pointer_bits pointers_refine.
 
-Instance ptr_bit_refine `{Env Ti} :
-    Refine Ti (env Ti) (ptr_bit Ti) := λ Γ α f Δ1 Δ2 pb1 pb2, ∃ τp,
+Instance ptr_bit_refine `{Env K} :
+    Refine K (env K) (ptr_bit K) := λ Γ α f Δ1 Δ2 pb1 pb2, ∃ τp,
   frag_item pb1 ⊑{Γ,α,f@Δ1↦Δ2} frag_item pb2 : τp ∧
   frag_index pb1 = frag_index pb2 ∧
   frozen (frag_item pb2) ∧
   frag_index pb1 < bit_size_of Γ (τp.*).
 
 Section pointer_bits.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
 Implicit Types α : bool.
-Implicit Types τp : ptr_type Ti.
-Implicit Types p : ptr Ti.
-Implicit Types pb : ptr_bit Ti.
-Implicit Types pbs : list (ptr_bit Ti).
+Implicit Types τp : ptr_type K.
+Implicit Types p : ptr K.
+Implicit Types pb : ptr_bit K.
+Implicit Types pbs : list (ptr_bit K).
 
 Lemma ptr_bit_refine_id Γ α Δ pb : ✓{Γ,Δ} pb → pb ⊑{Γ,α@Δ} pb.
 Proof. intros (σ&?&?&?); exists σ; eauto using ptr_refine_id. Qed.

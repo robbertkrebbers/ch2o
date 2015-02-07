@@ -5,7 +5,7 @@ Local Open Scope ctype_scope.
 
 (** * Pointer casts *)
 Reserved Infix ">*>" (at level 70).
-Inductive castable `{Env Ti} : type Ti → ptr_type Ti → Prop :=
+Inductive castable `{Env K} : type K → ptr_type K → Prop :=
   | castable_TAny τ : τ >*> TAny
   | castable_uchar τ : τ >*> TType ucharT
   | castable_TType τ : τ >*> TType τ
@@ -14,8 +14,8 @@ Notation "(>*>)" := castable (only parsing) : C_scope.
 Hint Extern 0 (_ >*> _) => reflexivity.
 
 Section castable.
-Context `{EnvSpec Ti}.
-Global Instance castable_dec (τ : type Ti) τp : Decision (τ >*> τp).
+Context `{EnvSpec K}.
+Global Instance castable_dec (τ : type K) τp : Decision (τ >*> τp).
 Proof.
  refine
   match τp with

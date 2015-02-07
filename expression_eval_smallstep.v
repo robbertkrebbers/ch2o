@@ -5,12 +5,12 @@ pure expressions and the small step operational semantics. *)
 Require Export smallstep expression_eval.
 
 Section expression_eval.
-Context `{EnvSpec Ti}.
-Implicit Types e : expr Ti.
-Implicit Types a : addr Ti.
-Implicit Types v : val Ti.
-Implicit Types av : addr Ti + val Ti.
-Implicit Types E : ectx Ti.
+Context `{EnvSpec K}.
+Implicit Types e : expr K.
+Implicit Types a : addr K.
+Implicit Types v : val K.
+Implicit Types av : addr K + val K.
+Implicit Types E : ectx K.
 
 Lemma expr_eval_ehstep Γ fs ρ e1 m av :
   ⟦ e1 ⟧ Γ fs ρ m = Some av → is_redex e1 →

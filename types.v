@@ -66,18 +66,18 @@ pointers). Structs and unions include a name that refers to their fields in the
 environment. *)
 Inductive compound_kind := Struct_kind | Union_kind.
 
-Inductive type (Ti : Set) : Set :=
-  | TBase :> base_type Ti → type Ti
-  | TArray : type Ti → nat → type Ti
-  | TCompound : compound_kind → tag → type Ti
-with ptr_type (Ti : Set) : Set :=
-  | TType : type Ti → ptr_type Ti
-  | TAny : ptr_type Ti
-  | TFun : list (type Ti) → type Ti → ptr_type Ti
-with base_type (Ti : Set) : Set :=
-  | TVoid : base_type Ti
-  | TInt : int_type Ti → base_type Ti
-  | TPtr : ptr_type Ti → base_type Ti.
+Inductive type (K : Set) : Set :=
+  | TBase :> base_type K → type K
+  | TArray : type K → nat → type K
+  | TCompound : compound_kind → tag → type K
+with ptr_type (K : Set) : Set :=
+  | TType : type K → ptr_type K
+  | TAny : ptr_type K
+  | TFun : list (type K) → type K → ptr_type K
+with base_type (K : Set) : Set :=
+  | TVoid : base_type K
+  | TInt : int_type K → base_type K
+  | TPtr : ptr_type K → base_type K.
 
 Delimit Scope ctype_scope with T.
 Delimit Scope cptr_type_scope with PT.
@@ -147,12 +147,12 @@ Notation "τs ~> τ" := (TFun τs τ) (at level 40) : ctype_scope.
 
 Instance compound_kind_eq_dec (c1 c2 : compound_kind) : Decision (c1 = c2).
 Proof. solve_decision. Defined.
-Fixpoint type_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (τ1 τ2 : type Ti) : Decision (τ1 = τ2)
-with ptr_type_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (τp1 τp2 : ptr_type Ti) : Decision (τp1 = τp2)
-with base_type_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (τb1 τb2 : base_type Ti) : Decision (τb1 = τb2).
+Fixpoint type_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (τ1 τ2 : type K) : Decision (τ1 = τ2)
+with ptr_type_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (τp1 τp2 : ptr_type K) : Decision (τp1 = τp2)
+with base_type_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (τb1 τb2 : base_type K) : Decision (τb1 = τb2).
 Proof.
  refine
   match τ1, τ2 with
@@ -184,48 +184,48 @@ Existing Instance type_eq_dec.
 Existing Instance ptr_type_eq_dec.
 Existing Instance base_type_eq_dec.
 
-Instance maybe_TInt {Ti} : Maybe (@TInt Ti) := λ τb,
+Instance maybe_TInt {K} : Maybe (@TInt K) := λ τb,
   match τb with intT τi => Some τi | _ => None end%BT.
-Instance maybe_TPtr {Ti} : Maybe (@TPtr Ti) := λ τb,
+Instance maybe_TPtr {K} : Maybe (@TPtr K) := λ τb,
   match τb with τp.* => Some τp | _ => None end%BT.
-Instance maybe_TBase {Ti} : Maybe (@TBase Ti) := λ τ,
+Instance maybe_TBase {K} : Maybe (@TBase K) := λ τ,
   match τ with baseT τb => Some τb | _ => None end.
-Instance maybe_TArray {Ti} : Maybe2 (@TArray Ti) := λ τ,
+Instance maybe_TArray {K} : Maybe2 (@TArray K) := λ τ,
   match τ with τ.[n] => Some (τ,n) | _ => None end.
-Instance maybe_TCompound {Ti} : Maybe2 (@TCompound Ti) := λ τ,
+Instance maybe_TCompound {K} : Maybe2 (@TCompound K) := λ τ,
   match τ with compoundT{c} s => Some (c,s) | _ => None end.
-Instance maybe_TType {Ti} : Maybe (@TType Ti) := λ τ,
+Instance maybe_TType {K} : Maybe (@TType K) := λ τ,
   match τ with TType τ => Some τ | _ => None end.
-Instance maybe_TFun {Ti} : Maybe2 (@TFun Ti) := λ τ,
+Instance maybe_TFun {K} : Maybe2 (@TFun K) := λ τ,
   match τ with τs ~> τ => Some (τs,τ) | _ => None end.
 
 (** * Environments *)
-Record env (Ti : Set) := mk_env {
-  env_t : tagmap (list (type Ti));
-  env_f : funmap (list (type Ti) * type Ti)
+Record env (K : Set) := mk_env {
+  env_t : tagmap (list (type K));
+  env_f : funmap (list (type K) * type K)
 }.
 Add Printing Constructor env.
 Arguments mk_env {_} _ _.
 Arguments env_t {_} _.
 Arguments env_f {_} _.
 
-Instance env_subseteq {Ti} : SubsetEq (env Ti) := λ Γ1 Γ2,
+Instance env_subseteq {K} : SubsetEq (env K) := λ Γ1 Γ2,
   env_t Γ1 ⊆ env_t Γ2 ∧ env_f Γ1 ⊆ env_f Γ2.
-Instance env_empty {Ti} : Empty (env Ti) := mk_env ∅ ∅.
-Instance env_lookup_compound {Ti} :
-  Lookup tag (list (type Ti)) (env Ti) := λ s Γ, env_t Γ !! s.
-Instance env_lookup_fun {Ti} :
-  Lookup funname (list (type Ti) * type Ti) (env Ti) := λ f Γ, env_f Γ !! f.
-Instance env_insert_compound {Ti} :
-    Insert tag (list (type Ti)) (env Ti) := λ s τs Γ,
+Instance env_empty {K} : Empty (env K) := mk_env ∅ ∅.
+Instance env_lookup_compound {K} :
+  Lookup tag (list (type K)) (env K) := λ s Γ, env_t Γ !! s.
+Instance env_lookup_fun {K} :
+  Lookup funname (list (type K) * type K) (env K) := λ f Γ, env_f Γ !! f.
+Instance env_insert_compound {K} :
+    Insert tag (list (type K)) (env K) := λ s τs Γ,
   mk_env (<[s:=τs]>(env_t Γ)) (env_f Γ).
-Instance env_insert_fun {Ti} :
-    Insert funname (list (type Ti) * type Ti) (env Ti) := λ f τsτ Γ,
+Instance env_insert_fun {K} :
+    Insert funname (list (type K) * type K) (env K) := λ f τsτ Γ,
   mk_env (env_t Γ) (<[f:=τsτ]>(env_f Γ)).
-Instance env_delete_compound {Ti} :
-  Delete tag (env Ti) := λ s Γ, mk_env (delete s (env_t Γ)) (env_f Γ).
-Instance env_delete_fun {Ti} :
-  Delete funname (env Ti) := λ f Γ, mk_env (env_t Γ) (delete f (env_f Γ)).
+Instance env_delete_compound {K} :
+  Delete tag (env K) := λ s Γ, mk_env (delete s (env_t Γ)) (env_f Γ).
+Instance env_delete_fun {K} :
+  Delete funname (env K) := λ f Γ, mk_env (env_t Γ) (delete f (env_f Γ)).
 
 (** * Well-formed types *)
 (** Not all pseudo-types are valid C types; in particular circular unions and
@@ -234,22 +234,22 @@ structs (like [struct s { struct s x; }]) are not excluded. The predicate
 recursive occurrences of unions and structs are always guarded by a pointer.
 The predicate [env_valid] describes that an environment is valid. *)
 Section types.
-  Context {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}.
-  Implicit Types Γ Σ : env Ti.
-  Implicit Types τ : type Ti.
-  Implicit Types τp : ptr_type Ti.
-  Implicit Types τs : list (type Ti).
-  Implicit Types τps : list (ptr_type Ti).
-  Implicit Types τb : base_type Ti.
-  Implicit Types τi : int_type Ti.
+  Context {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}.
+  Implicit Types Γ Σ : env K.
+  Implicit Types τ : type K.
+  Implicit Types τp : ptr_type K.
+  Implicit Types τs : list (type K).
+  Implicit Types τps : list (ptr_type K).
+  Implicit Types τb : base_type K.
+  Implicit Types τi : int_type K.
   Implicit Types s : tag.
   Implicit Types f : funname.
 
-  Inductive type_valid' Γ : type Ti → Prop :=
+  Inductive type_valid' Γ : type K → Prop :=
     | TBase_valid' τb : base_type_valid' Γ τb → type_valid' Γ (baseT τb)
     | TArray_valid' τ n : type_valid' Γ τ → n ≠ 0 → type_valid' Γ (τ.[n])
     | TCompound_valid' c s : is_Some (Γ !! s) → type_valid' Γ (compoundT{c} s)
-  with ptr_type_valid' Γ : ptr_type Ti → Prop :=
+  with ptr_type_valid' Γ : ptr_type K → Prop :=
     | TAny_ptr_valid' : ptr_type_valid' Γ TAny
     | TBase_ptr_valid' τb :
        base_type_valid' Γ τb → ptr_type_valid' Γ (baseT τb)
@@ -259,15 +259,15 @@ Section types.
     | TFun_ptr_valid' τs τ :
        Forall (ptr_type_valid' Γ) (TType <$> τs) → ptr_type_valid' Γ (TType τ) →
        ptr_type_valid' Γ (τs ~> τ)
-  with base_type_valid' Γ : base_type Ti → Prop :=
+  with base_type_valid' Γ : base_type K → Prop :=
     | TVoid_valid' : base_type_valid' Γ voidT
     | TInt_valid' τi : base_type_valid' Γ (intT τi)
     | TPtr_valid' τp : ptr_type_valid' Γ τp → base_type_valid' Γ (τp.*).
-  Global Instance type_valid : Valid (env Ti) (type Ti) := type_valid'.
+  Global Instance type_valid : Valid (env K) (type K) := type_valid'.
   Global Instance ptr_type_valid :
-    Valid (env Ti) (ptr_type Ti) := ptr_type_valid'.
+    Valid (env K) (ptr_type K) := ptr_type_valid'.
   Global Instance base_type_valid :
-    Valid (env Ti) (base_type Ti) := base_type_valid'.
+    Valid (env K) (base_type K) := base_type_valid'.
 
   Lemma TBase_valid Γ τb : ✓{Γ} τb → ✓{Γ} (baseT τb).
   Proof. by constructor. Qed.
@@ -371,7 +371,7 @@ Section types.
   Lemma types_valid_ptr_types_valid Γ τs : ✓{Γ}* τs → ✓{Γ}* (TType <$> τs).
   Proof. induction 1; csimpl; eauto using type_valid_ptr_type_valid. Qed.
 
-  Inductive type_complete (Γ : env Ti) : type Ti → Prop :=
+  Inductive type_complete (Γ : env K) : type K → Prop :=
     | TBase_complete τb : type_complete Γ (baseT τb)
     | TArray_complete τ n : type_complete Γ (τ.[n])
     | TCompound_complete c s :
@@ -389,14 +389,14 @@ Section types.
     ✓{Γ}* (TType <$> τs) → Forall (type_complete Γ) τs → ✓{Γ}* τs.
   Proof. induction 2; decompose_Forall; eauto using type_complete_valid. Qed.
 
-  Global Instance: PartialOrder ((⊆) : relation (env Ti)).
+  Global Instance: PartialOrder ((⊆) : relation (env K)).
   Proof.
     split; [split|].
     * done.
     * intros ??? [??] [??]; split; etransitivity; eauto.
     * by intros [??] [??] [??] [??]; f_equal; apply (anti_symmetric _).
   Qed.
-  Lemma env_wf : wf ((⊂) : relation (env Ti)).
+  Lemma env_wf : wf ((⊂) : relation (env K)).
   Proof.
     intros [Γc Γf]; revert Γf. induction (map_wf Γc) as [Γc _ IH]; intros Γf.
     induction (map_wf Γf) as [Γf _ IHf]; constructor; intros [Γc' Γf'] HΓ.
@@ -484,7 +484,7 @@ Section types.
     Forall (type_complete Γ) τs → Γ ⊆ Σ → Forall (type_complete Σ) τs.
   Proof. induction 1; eauto using type_complete_weaken. Qed.
 
-  Inductive env_valid : Valid () (env Ti) :=
+  Inductive env_valid : Valid () (env K) :=
     | env_empty_valid : ✓ ∅
     | env_insert_compound_valid Γ s τs :
        ✓ Γ → ✓{Γ}* τs → τs ≠ [] → Γ !! s = None → ✓ (<[s:=τs]>Γ)
@@ -551,12 +551,12 @@ End types.
 It checks wellformedness by trying all permutations of the environment. This
 decision procedure is not intended to be used for computation. *)
 Section env_valid_dec.
-  Context {Ti : Set}.
+  Context {K : Set}.
 
-  Definition env_f_valid (Γ : env Ti) : Prop :=
+  Definition env_f_valid (Γ : env K) : Prop :=
     map_Forall (λ _ τsτ,
       ✓{Γ}* (TType <$> τsτ.1) ∧ ✓{Γ} (TType (τsτ.2))) (env_f Γ).
-  Inductive env_c_valid : list (tag * list (type Ti)) → Prop :=
+  Inductive env_c_valid : list (tag * list (type K)) → Prop :=
     | env_nil_valid : env_c_valid []
     | env_cons_valid Γc s τs :
        env_c_valid Γc → ✓{mk_env (map_of_list Γc) ∅}* τs →
@@ -608,7 +608,7 @@ Section env_valid_dec.
     rewrite env_c_valid_correct, Exists_exists.
     by setoid_rewrite permutations_Permutation.
   Qed.
-  Global Instance env_valid_dec (Γ : env Ti) : Decision (✓ Γ).
+  Global Instance env_valid_dec (Γ : env K) : Decision (✓ Γ).
   Proof.
    refine (cast_if (decide (env_f_valid Γ ∧
      Exists env_c_valid (permutations (map_to_list (env_t Γ))))));
@@ -618,10 +618,10 @@ End env_valid_dec.
 
 (** A nice induction principle for wellformed types. *)
 Section type_env_ind.
-  Context {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}.
-  Context (Γ : env Ti) (HΓ : ✓ Γ).
+  Context {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}.
+  Context (Γ : env K) (HΓ : ✓ Γ).
 
-  Context (P : type Ti → Prop).
+  Context (P : type K → Prop).
   Context (Pbase : ∀ τb, ✓{Γ} τb → P (baseT τb)).
   Context (Parray : ∀ τ n, ✓{Γ} τ → P τ → n ≠ 0 → P (τ.[n])).
   Context (Pcompound : ∀ c s τs,
@@ -649,35 +649,35 @@ End type_env_ind.
 
 (** A nice iteration principle for well-formed types. *)
 Section type_iter.
-  Context {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}.
+  Context {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}.
   Context {A : Type} (R : relation A) `{!Equivalence R}.
   Local Infix "≡" := R.
-  Implicit Type τ : type Ti.
-  Implicit Type Γ Σ : env Ti.
+  Implicit Type τ : type K.
+  Implicit Type Γ Σ : env K.
 
   Section definition.
-    Context (fb : base_type Ti → A)
-      (fa : type Ti → nat → A → A)
-      (fc: compound_kind → tag → list (type Ti) → (type Ti → A) → A).
+    Context (fb : base_type K → A)
+      (fa : type K → nat → A → A)
+      (fc: compound_kind → tag → list (type K) → (type K → A) → A).
 
     Definition type_iter_inner
-        (g : tag → list (type Ti) * (type Ti → A)) : type Ti → A :=
+        (g : tag → list (type K) * (type K → A)) : type K → A :=
       fix go τ :=
       match τ with
       | baseT τb => fb τb
       | τ.[n] => fa τ n (go τ)
       | compoundT{c} s => let (τs,h) := g s in fc c s τs h
       end.
-    Definition type_iter_accF (Γ : env Ti) (go : ∀ Σ, Σ ⊂ Γ → type Ti → A)
-        (s : tag) : list (type Ti) * (type Ti → A) :=
+    Definition type_iter_accF (Γ : env K) (go : ∀ Σ, Σ ⊂ Γ → type K → A)
+        (s : tag) : list (type K) * (type K → A) :=
       match Some_dec (Γ !! s) with
       | inleft (τs↾Hτs) => (τs, go (delete s Γ)
           (delete_compound_subset_alt _ _ _ Hτs))
       | inright _ => ([], λ _, fb voidT) (**i dummy *)
       end.
-    Definition type_iter_acc : ∀ Γ : env Ti, Acc (⊂) Γ → type Ti → A :=
+    Definition type_iter_acc : ∀ Γ : env K, Acc (⊂) Γ → type K → A :=
       Fix_F _ (λ Γ go, type_iter_inner (type_iter_accF Γ go)).
-    Definition type_iter (Γ : env Ti) : type Ti → A :=
+    Definition type_iter (Γ : env K) : type K → A :=
       type_iter_acc _ (wf_guard 32 env_wf Γ).
   End definition.
 

@@ -3,8 +3,8 @@
 Require Export memory_map memory_trees_refine.
 Local Open Scope ctype_scope.
 
-Instance cmap_refine `{Env Ti} :
-    Refine Ti (env Ti) (mem Ti) := λ Γ α f Δ1 Δ2 m1 m2,
+Instance cmap_refine `{Env K} :
+    Refine K (env K) (mem K) := λ Γ α f Δ1 Δ2 m1 m2,
   (**i 1.) *) ✓{Γ,Δ1} m1 ∧
   (**i 2.) *) ✓{Γ,Δ2} m2 ∧
   (**i 3.) *) Δ1 ⊑{Γ,α,f} Δ2 ∧
@@ -13,22 +13,22 @@ Instance cmap_refine `{Env Ti} :
     ∃ w2 w2' τ,
       cmap_car m2 !! o2 = Some (Obj w2 malloc) ∧ w2 !!{Γ} r = Some w2' ∧
       w1 ⊑{Γ,α,f@Δ1↦Δ2} w2' : τ ∧ (malloc → r = [])).
-Instance cmap_refine' `{Env Ti} : RefineM Ti (env Ti) (mem Ti) := λ Γ α f m1 m2,
+Instance cmap_refine' `{Env K} : RefineM K (env K) (mem K) := λ Γ α f m1 m2,
   m1 ⊑{Γ,α,f@memenv_of m1↦memenv_of m2} m2.
 
 Section memory_map.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types m : mem Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τ σ : type Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types m : mem K.
+Implicit Types Δ : memenv K.
+Implicit Types τ σ : type K.
 Implicit Types o : index.
-Implicit Types w : mtree Ti.
-Implicit Types rs : ref_seg Ti.
-Implicit Types r : ref Ti.
-Implicit Types a : addr Ti.
-Implicit Types f : meminj Ti.
-Implicit Types g : mtree Ti → mtree Ti.
+Implicit Types w : mtree K.
+Implicit Types rs : ref_seg K.
+Implicit Types r : ref K.
+Implicit Types a : addr K.
+Implicit Types f : meminj K.
+Implicit Types g : mtree K → mtree K.
 Implicit Types α β : bool.
 
 Lemma cmap_refine_memenv_refine Γ α f Δ1 Δ2 m1 m2 :

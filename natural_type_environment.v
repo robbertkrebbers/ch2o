@@ -3,26 +3,26 @@
 Require Export type_environment.
 
 Section natural_type_environment.
-Context `{IntEnvSpec Ti}.
-Context (ptr_size : ptr_type Ti → nat) (align_base : base_type Ti → nat).
+Context `{IntEnvSpec K}.
+Context (ptr_size : ptr_type K → nat) (align_base : base_type K → nat).
 Context (ptr_size_ne_0 : ∀ τ, ptr_size τ ≠ 0).
 Context (align_void : align_base voidT = 1).
 Context (align_int_divide : ∀ τi, (align_base (intT τi) | rank_size (rank τi))).
 Context (align_ptr_divide : ∀ τp, (align_base (τp.*) | ptr_size τp)).
 Context (alloc_can_fail : bool).
 
-Definition natural_align_of (Γ : env Ti) : type Ti → nat := type_iter
+Definition natural_align_of (Γ : env K) : type K → nat := type_iter
   (**i TBase =>     *) align_base
   (**i TArray =>    *) (λ _ _ x, x)
   (**i TCompound => *) (λ c s τs rec, foldr lcm 1 (rec <$> τs)) Γ.
-Definition natural_fields_align (Γ : env Ti) (τs : list (type Ti)) : nat :=
+Definition natural_fields_align (Γ : env K) (τs : list (type K)) : nat :=
   foldr lcm 1 (natural_align_of Γ <$> τs).
 
 Definition natural_padding (pos al : nat) : nat :=
   let z := pos `mod` al in if decide (z = 0) then 0 else al - z.
 
-Definition natural_field_sizes (f : type Ti → nat) (Γ : env Ti)
-    (whole_align : nat) : nat → list (type Ti) → list nat :=
+Definition natural_field_sizes (f : type K → nat) (Γ : env K)
+    (whole_align : nat) : nat → list (type K) → list nat :=
   fix go pos τs :=
   match τs with
   | [] => []
@@ -31,7 +31,7 @@ Definition natural_field_sizes (f : type Ti → nat) (Γ : env Ti)
     let sz := f τ + natural_padding (f τ + pos) align in
     sz :: go (sz + pos) τs
   end.
-Definition natural_size_of (Γ : env Ti) : type Ti → nat :=
+Definition natural_size_of (Γ : env K) : type K → nat :=
   type_iter
   (**i TBase =>     *) (λ τb,
     match τb with
@@ -47,7 +47,7 @@ Definition natural_size_of (Γ : env Ti) : type Ti → nat :=
        sz + natural_padding sz (natural_fields_align Γ τs)
     end) Γ.
 
-Instance natural_env : Env Ti := {
+Instance natural_env : Env K := {
   size_of := natural_size_of;
   align_of := natural_align_of;
   field_sizes Γ τs :=
@@ -68,7 +68,7 @@ Proof.
 Qed.
 Lemma natural_align_of_compound_proper Γ :
   let fcompound c s τs rec := foldr lcm 1 (rec <$> τs) in
-  ∀ rec1 rec2 (c : compound_kind) s (τs : list (type Ti)),
+  ∀ rec1 rec2 (c : compound_kind) s (τs : list (type K)),
   Γ !! s = Some τs → Forall (λ τ, rec1 τ = rec2 τ) τs →
   fcompound c s τs rec1 = fcompound c s τs rec2.
 Proof.
@@ -170,7 +170,7 @@ Proof.
     induction IH; csimpl; rewrite ?Nat.lcm_eq_0; naive_solver.
 Qed.
 
-Instance natural_env_spec: EnvSpec Ti.
+Instance natural_env_spec: EnvSpec K.
 Proof.
   split.
   * apply _.

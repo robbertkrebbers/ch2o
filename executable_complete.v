@@ -4,7 +4,7 @@ Require Export refinement_system executable_sound.
 Require Import type_preservation refinement_preservation.
 
 Section executable_complete.
-Context `{EnvSpec Ti}.
+Context `{EnvSpec K}.
 Local Opaque singleton.
 
 Ltac solve_length := simplify_equality'; repeat
@@ -12,7 +12,7 @@ Ltac solve_length := simplify_equality'; repeat
 Hint Resolve cmap_refine_memenv_refine.
 Hint Immediate meminj_extend_reflexive.
 Hint Immediate ctx_typed_stack_typed.
-Hint Resolve (elem_of_singleton_2 (C:=listset (state Ti))).
+Hint Resolve (elem_of_singleton_2 (C:=listset (state K))).
 
 Lemma ehexec_complete Γ m1 m2 k τs e1 e2 τlr :
   ✓ Γ → ✓{Γ} m1 → '{m1} ⊢* get_stack k :* τs → (Γ,'{m1},τs) ⊢ e1 : τlr →

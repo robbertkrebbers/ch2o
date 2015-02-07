@@ -4,18 +4,18 @@ Require Export memory memory_map_separation values_separation.
 Require Import natmap.
 
 Section memory.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τ : type Ti.
-Implicit Types a : addr Ti.
-Implicit Types w : mtree Ti.
-Implicit Types v : val Ti.
-Implicit  Types m : mem Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
+Implicit Types τ : type K.
+Implicit Types a : addr K.
+Implicit Types w : mtree K.
+Implicit Types v : val K.
+Implicit  Types m : mem K.
 Implicit Types Ω : lockset.
 Local Arguments union _ _ !_ !_ /.
 Hint Immediate cmap_lookup_typed val_typed_type_valid.
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
+Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 
 Ltac solve_length := repeat first 
   [ rewrite take_length | rewrite drop_length | rewrite app_length

@@ -8,11 +8,11 @@ Require Export expressions type_system.
 Local Open Scope expr_scope.
 
 (** The type [purefun] represents denotations of pure functions. *)
-Definition purefun Ti := list (val Ti) → option (val Ti).
-Notation purefuns Ti := (funmap (purefun Ti)).
+Definition purefun K := list (val K) → option (val K).
+Notation purefuns K := (funmap (purefun K)).
 
-Instance purefuns_valid `{Env Ti} :
-    Valid (env Ti * memenv Ti) (purefuns Ti) := λ ΓΔ,
+Instance purefuns_valid `{Env K} :
+    Valid (env K * memenv K) (purefuns K) := λ ΓΔ,
   map_Forall (λ f F, ∃ τs τ,
     ΓΔ.1 !! f = Some (τs,τ) ∧
     ∀ vs v, F vs = Some v → ΓΔ ⊢* vs :* τs → ΓΔ ⊢ v : τ
@@ -21,8 +21,8 @@ Instance purefuns_valid `{Env Ti} :
 (** * Definition of the semantics *)
 Reserved Notation "⟦ e ⟧" (format "⟦  e  ⟧").
 
-Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
-    (fs : purefuns Ti) (ρ : stack) (m : mem Ti) : option (addr Ti + val Ti) :=
+Fixpoint expr_eval `{Env K} (e : expr K) (Γ : env K)
+    (fs : purefuns K) (ρ : stack) (m : mem K) : option (addr K + val K) :=
   match e with
   | var{τ} x =>
      o ← ρ !! x;
@@ -85,24 +85,24 @@ Fixpoint expr_eval `{Env Ti} (e : expr Ti) (Γ : env Ti)
   end
 where "⟦ e ⟧" := (expr_eval e) : C_scope.
 
-Definition lrval_to_expr {Ti} (av : addr Ti + val Ti) : expr Ti :=
+Definition lrval_to_expr {K} (av : addr K + val K) : expr K :=
   match av with inl a => %a | inr v => #v end.
 
 (** * Theorems *)
 Section expression_eval.
-Context `{EnvSpec Ti}.
-Implicit Types Δ : memenv Ti.
-Implicit Types e : expr Ti.
-Implicit Types a : addr Ti.
-Implicit Types v : val Ti.
-Implicit Types av : addr Ti + val Ti.
-Implicit Types E : ectx Ti.
+Context `{EnvSpec K}.
+Implicit Types Δ : memenv K.
+Implicit Types e : expr K.
+Implicit Types a : addr K.
+Implicit Types v : val K.
+Implicit Types av : addr K + val K.
+Implicit Types E : ectx K.
 
 Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
 
 Section expr_eval_ind.
-Context (Γ : env Ti) (fs : purefuns Ti) (ρ : stack) (m : mem Ti).
-Context (P : expr Ti → addr Ti + val Ti → Prop).
+Context (Γ : env K) (fs : purefuns K) (ρ : stack) (m : mem K).
+Context (P : expr K → addr K + val K → Prop).
 Context (Pvar : ∀ τ x o, ρ !! x = Some o → P (var{τ} x) (inl (addr_top o τ))).
 Context (Pval : ∀ v, P (# v) (inr v)).
 Context (Paddr : ∀ a, P (% a) (inl a)).

@@ -2,7 +2,7 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export memory_refine.
 
-Lemma mem_constant_prop `{EnvSpec Ti} Γ Δ m a v τ :
+Lemma mem_constant_prop `{EnvSpec K} Γ Δ m a v τ :
   ✓ Γ → ✓{Γ,Δ} m →
   (Γ,Δ) ⊢ a : TType τ → mem_writable Γ a m → (Γ,Δ) ⊢ v : τ →
   ∃ v', <[a:=v]{Γ}>m !!{Γ} a = Some v' ∧ v' ⊑{Γ,true@Δ} v : τ.

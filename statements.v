@@ -75,22 +75,22 @@ Arguments labels {_ _} !_ / : simpl nomatch.
 The construct [SLocal τ s] opens a new scope with one variable of type τ. Since
 we use De Bruijn indexes for variables, it does not contain the name of the
 variable. *)
-Inductive stmt (Ti : Set) : Set :=
-  | SDo : expr Ti → stmt Ti
-  | SSkip : stmt Ti
-  | SGoto : labelname → stmt Ti
-  | SThrow : nat → stmt Ti
-  | SReturn : expr Ti → stmt Ti
-  | SLabel : labelname → stmt Ti
-  | SLocal : type Ti → stmt Ti → stmt Ti
-  | SCatch : stmt Ti → stmt Ti
-  | SComp : stmt Ti → stmt Ti → stmt Ti
-  | SLoop : stmt Ti → stmt Ti
-  | SIf : expr Ti → stmt Ti → stmt Ti → stmt Ti.
-Notation funenv Ti := (funmap (stmt Ti)).
+Inductive stmt (K : Set) : Set :=
+  | SDo : expr K → stmt K
+  | SSkip : stmt K
+  | SGoto : labelname → stmt K
+  | SThrow : nat → stmt K
+  | SReturn : expr K → stmt K
+  | SLabel : labelname → stmt K
+  | SLocal : type K → stmt K → stmt K
+  | SCatch : stmt K → stmt K
+  | SComp : stmt K → stmt K → stmt K
+  | SLoop : stmt K → stmt K
+  | SIf : expr K → stmt K → stmt K → stmt K.
+Notation funenv K := (funmap (stmt K)).
 
-Instance stmt_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (s1 s2 : stmt Ti) : Decision (s1 = s2).
+Instance stmt_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (s1 s2 : stmt K) : Decision (s1 = s2).
 Proof. solve_decision. Defined.
 
 (** We use the scope [stmt_scope] for notations of statements. *)
@@ -136,16 +136,16 @@ Notation "'call' f @ es" := (!(call f @ es))
   (at level 10, es at level 66) : stmt_scope.
 Notation "'free' e" := (!(free e)) (at level 10) : stmt_scope.
 
-Instance: Injective (=) (=) (@SDo Ti).
+Instance: Injective (=) (=) (@SDo K).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@SGoto Ti).
+Instance: Injective (=) (=) (@SGoto K).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@SReturn Ti).
+Instance: Injective (=) (=) (@SReturn K).
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@SLocal Ti).
+Instance: Injective2 (=) (=) (=) (@SLocal K).
 Proof. by injection 1. Qed.
 
-Instance stmt_gotos {Ti} : Gotos (stmt Ti) :=
+Instance stmt_gotos {K} : Gotos (stmt K) :=
   fix go s := let _ : Gotos _ := @go in
   match s with
   | ! _ | skip | throw _ | ret _ | label _ => ∅
@@ -153,7 +153,7 @@ Instance stmt_gotos {Ti} : Gotos (stmt Ti) :=
   | local{_} s | catch s | loop s => gotos s
   | s1 ;; s2 | if{_} s1 else s2 => gotos s1 ∪ gotos s2
   end.
-Instance stmt_labels {Ti} : Labels (stmt Ti) :=
+Instance stmt_labels {K} : Labels (stmt K) :=
   fix go s := let _ : Labels _ := @go in
   match s with
   | ! _ | skip | goto _ | throw _ | ret _ => ∅
@@ -161,7 +161,7 @@ Instance stmt_labels {Ti} : Labels (stmt Ti) :=
   | catch s | local{_} s | loop s => labels s
   | s1 ;; s2 | if{_} s1 else s2 => labels s1 ∪ labels s2
   end.
-Instance stmt_locks {Ti} : Locks (stmt Ti) :=
+Instance stmt_locks {K} : Locks (stmt K) :=
   fix go s := let _ : Locks _ := @go in
   match s with
   | ! e | ret e => locks e
@@ -170,7 +170,7 @@ Instance stmt_locks {Ti} : Locks (stmt Ti) :=
   | s1 ;; s2 => locks s1 ∪ locks s2
   | if{e} s1 else s2 => locks e ∪ locks s1 ∪ locks s2
   end.
-Fixpoint throws_valid {Ti} (n : nat) (s : stmt Ti) : Prop :=
+Fixpoint throws_valid {K} (n : nat) (s : stmt K) : Prop :=
   match s with
   | !_ | ret _ | skip | goto _ | label _ => True
   | throw i => i < n
@@ -178,7 +178,7 @@ Fixpoint throws_valid {Ti} (n : nat) (s : stmt Ti) : Prop :=
   | catch s => throws_valid (S n) s
   | s1 ;; s2 | if{_} s1 else s2 => throws_valid n s1 ∧ throws_valid n s2
   end.
-Instance throws_valid_dec {Ti} : ∀ n (s : stmt Ti), Decision (throws_valid n s).
+Instance throws_valid_dec {K} : ∀ n (s : stmt K), Decision (throws_valid n s).
 Proof.
  refine (
   fix go n s :=
@@ -195,16 +195,16 @@ Defined.
 (** We first define the data type [sctx_item] of singular statement contexts. A
 pair [(E, s)] consisting of a list of singular statement contexts [E] and a
 statement [s] forms a zipper for statements without block scope variables. *)
-Inductive sctx_item (Ti : Set) : Set :=
-  | CCatch : sctx_item Ti
-  | CCompL : stmt Ti → sctx_item Ti
-  | CCompR : stmt Ti → sctx_item Ti
-  | CLoop : sctx_item Ti
-  | CIfL : expr Ti → stmt Ti → sctx_item Ti
-  | CIfR : expr Ti → stmt Ti → sctx_item Ti.
+Inductive sctx_item (K : Set) : Set :=
+  | CCatch : sctx_item K
+  | CCompL : stmt K → sctx_item K
+  | CCompR : stmt K → sctx_item K
+  | CLoop : sctx_item K
+  | CIfL : expr K → stmt K → sctx_item K
+  | CIfR : expr K → stmt K → sctx_item K.
 
-Instance sctx_item_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (E1 E2 : sctx_item Ti) : Decision (E1 = E2).
+Instance sctx_item_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (E1 E2 : sctx_item K) : Decision (E1 = E2).
 Proof. solve_decision. Defined.
 
 Arguments CCatch {_}.
@@ -224,8 +224,8 @@ Notation "'if{' e } □ 'else' s2" := (CIfL e s2)
 Notation "'if{' e } s1 'else' □" := (CIfR e s1)
   (at level 56, format "if{ e }  s1  'else'  □") : stmt_scope.
 
-Instance sctx_item_subst {Ti} :
-    Subst (sctx_item Ti) (stmt Ti) (stmt Ti) := λ Es s,
+Instance sctx_item_subst {K} :
+    Subst (sctx_item K) (stmt K) (stmt K) := λ Es s,
   match Es with
   | catch □ => catch s
   | □ ;; s2 => s ;; s2
@@ -234,48 +234,48 @@ Instance sctx_item_subst {Ti} :
   | if{e} □ else s2 => if{e} s else s2
   | if{e} s1 else □ => if{e} s1 else s
   end.
-Instance: DestructSubst (@sctx_item_subst Ti).
+Instance: DestructSubst (@sctx_item_subst K).
 
-Instance: ∀ Es : sctx_item Ti, Injective (=) (=) (subst Es).
+Instance: ∀ Es : sctx_item K, Injective (=) (=) (subst Es).
 Proof. destruct Es; repeat intro; simpl in *; by simplify_equality. Qed.
 
-Instance sctx_item_gotos {Ti} : Gotos (sctx_item Ti) := λ Es,
+Instance sctx_item_gotos {K} : Gotos (sctx_item K) := λ Es,
   match Es with
   | catch □ | loop □ => ∅
   | s ;; □ | □ ;; s  | if{_} □ else s | if{_} s else □ => gotos s
   end.
-Instance sctx_item_labels {Ti} : Labels (sctx_item Ti) := λ Es,
+Instance sctx_item_labels {K} : Labels (sctx_item K) := λ Es,
   match Es with
   | catch □ | loop □ => ∅
   | s ;; □ | □ ;; s | if{_} □ else s | if{_} s else □ => labels s
   end.
-Instance sctx_item_locks {Ti} : Locks (sctx_item Ti) := λ Es,
+Instance sctx_item_locks {K} : Locks (sctx_item K) := λ Es,
   match Es with
   | □ ;; s | s ;; □ => locks s
   | catch □ | loop □ => ∅
   | if{e} □ else s | if{e} s else □ => locks e ∪ locks s
   end.
 
-Lemma sctx_item_subst_gotos {Ti} (Es : sctx_item Ti) (s : stmt Ti) :
+Lemma sctx_item_subst_gotos {K} (Es : sctx_item K) (s : stmt K) :
   gotos (subst Es s) = gotos Es ∪ gotos s.
 Proof. apply elem_of_equiv_L. intros. destruct Es; solve_elem_of. Qed.
-Lemma sctx_item_subst_labels {Ti} (Es : sctx_item Ti) (s : stmt Ti) :
+Lemma sctx_item_subst_labels {K} (Es : sctx_item K) (s : stmt K) :
   labels (subst Es s) = labels Es ∪ labels s.
 Proof. apply elem_of_equiv_L. intros. destruct Es; solve_elem_of. Qed.
-Lemma sctx_item_subst_locks {Ti} (Es : sctx_item Ti) (s : stmt Ti) :
+Lemma sctx_item_subst_locks {K} (Es : sctx_item K) (s : stmt K) :
   locks (subst Es s) = locks Es ∪ locks s.
 Proof. apply elem_of_equiv_L. destruct Es; esolve_elem_of. Qed.
 
 (** Next, we define the data type [esctx_item] of expression in statement
 contexts. These contexts are used to store the statement to which an expression
 that is being executed belongs to. *)
-Inductive esctx_item (Ti : Set) : Set :=
-  | CDoE : esctx_item Ti
-  | CReturnE : esctx_item Ti
-  | CIfE : stmt Ti → stmt Ti → esctx_item Ti.
+Inductive esctx_item (K : Set) : Set :=
+  | CDoE : esctx_item K
+  | CReturnE : esctx_item K
+  | CIfE : stmt K → stmt K → esctx_item K.
 
-Instance esctx_item_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (Ee1 Ee2 : esctx_item Ti) : Decision (Ee1 = Ee2).
+Instance esctx_item_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (Ee1 Ee2 : esctx_item K) : Decision (Ee1 = Ee2).
 Proof. solve_decision. Defined.
 
 Arguments CDoE {_}.
@@ -286,41 +286,41 @@ Notation "'ret' □" := CReturnE (at level 10, format "'ret'  □") : stmt_scope
 Notation "'if{' □ } s1 'else' s2" := (CIfE s1 s2)
   (at level 56, format "if{ □ }  s1  'else'  s2") : stmt_scope.
 
-Instance esctx_item_subst {Ti} :
-    Subst (esctx_item Ti) (expr Ti) (stmt Ti) := λ Ee e,
+Instance esctx_item_subst {K} :
+    Subst (esctx_item K) (expr K) (stmt K) := λ Ee e,
   match Ee with
   | ! □ => ! e
   | ret □ => ret e
   | if{□} s1 else s2 => if{e} s1 else s2
   end.
-Instance: DestructSubst (@esctx_item_subst Ti).
+Instance: DestructSubst (@esctx_item_subst K).
 
-Instance: ∀ Ee : esctx_item Ti, Injective (=) (=) (subst Ee).
+Instance: ∀ Ee : esctx_item K, Injective (=) (=) (subst Ee).
 Proof. destruct Ee; intros ???; simpl in *; by simplify_equality. Qed.
 
-Instance esctx_item_gotos {Ti} : Gotos (esctx_item Ti) := λ Ee,
+Instance esctx_item_gotos {K} : Gotos (esctx_item K) := λ Ee,
   match Ee with
   | ! □ | ret □ => ∅
   | if{□} s1 else s2 => gotos s1 ∪ gotos s2
   end.
-Instance esctx_item_labels {Ti} : Labels (esctx_item Ti) := λ Ee,
+Instance esctx_item_labels {K} : Labels (esctx_item K) := λ Ee,
   match Ee with
   | ! □ | ret □ => ∅
   | if{□} s1 else s2 => labels s1 ∪ labels s2
   end.
-Instance esctx_item_locks {Ti} : Locks (esctx_item Ti) := λ Ee,
+Instance esctx_item_locks {K} : Locks (esctx_item K) := λ Ee,
   match Ee with
   | ! □  | ret □ => ∅
   | if{□} s1 else s2 => locks s1 ∪ locks s2
   end.
 
-Lemma esctx_item_subst_gotos {Ti} (Ee : esctx_item Ti) (e : expr Ti) :
+Lemma esctx_item_subst_gotos {K} (Ee : esctx_item K) (e : expr K) :
   gotos (subst Ee e) = gotos Ee.
 Proof. apply elem_of_equiv_L. intros. destruct Ee; solve_elem_of. Qed.
-Lemma esctx_item_subst_labels {Ti} (Ee : esctx_item Ti) (e : expr Ti) :
+Lemma esctx_item_subst_labels {K} (Ee : esctx_item K) (e : expr K) :
   labels (subst Ee e) = labels Ee.
 Proof. apply elem_of_equiv_L. intros. destruct Ee; solve_elem_of. Qed.
-Lemma esctx_item_subst_locks {Ti} (Ee : esctx_item Ti) (e : expr Ti) :
+Lemma esctx_item_subst_locks {K} (Ee : esctx_item K) (e : expr K) :
   locks (subst Ee e) = locks Ee ∪ locks e.
 Proof. apply elem_of_equiv_L. destruct Ee; esolve_elem_of. Qed.
 
@@ -343,13 +343,13 @@ additional singular contexts. These contexts will be used as follows.
   function parameters.
 
 Program contexts [ctx] are then defined as lists of singular contexts. *)
-Inductive ctx_item (Ti : Set) : Set :=
-  | CStmt : sctx_item Ti → ctx_item Ti
-  | CLocal : index → type Ti → ctx_item Ti
-  | CExpr : expr Ti → esctx_item Ti → ctx_item Ti
-  | CFun : ectx Ti → ctx_item Ti
-  | CParams : funname → list (index * type Ti) → ctx_item Ti.
-Notation ctx Ti := (list (ctx_item Ti)).
+Inductive ctx_item (K : Set) : Set :=
+  | CStmt : sctx_item K → ctx_item K
+  | CLocal : index → type K → ctx_item K
+  | CExpr : expr K → esctx_item K → ctx_item K
+  | CFun : ectx K → ctx_item K
+  | CParams : funname → list (index * type K) → ctx_item K.
+Notation ctx K := (list (ctx_item K)).
 
 Arguments CStmt {_} _.
 Arguments CLocal {_} _ _.
@@ -357,11 +357,11 @@ Arguments CExpr {_} _ _.
 Arguments CFun {_} _.
 Arguments CParams {_} _ _.
 
-Instance ctx_item_eq_dec {Ti : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (Ek1 Ek2 : ctx_item Ti) : Decision (Ek1 = Ek2).
+Instance ctx_item_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+  (Ek1 Ek2 : ctx_item K) : Decision (Ek1 = Ek2).
 Proof. solve_decision. Defined.
 
-Instance ctx_item_locks {Ti} : Locks (ctx_item Ti) := λ Ek,
+Instance ctx_item_locks {K} : Locks (ctx_item K) := λ Ek,
   match Ek with
   | CStmt Es => locks Es
   | CExpr e Ee => locks e ∪ locks Ee
@@ -373,7 +373,7 @@ Instance ctx_item_locks {Ti} : Locks (ctx_item Ti) := λ Ek,
 function. We define [get_stack (CFun _ :: k)] as [[]] instead of [getstack k],
 as otherwise it would be possible to refer to the local variables of the
 caller. *)
-Fixpoint get_stack {Ti} (k : ctx Ti) : stack :=
+Fixpoint get_stack {K} (k : ctx K) : stack :=
   match k with
   | [] => []
   | CStmt _ :: k | CExpr _ _ :: k => get_stack k
@@ -381,7 +381,7 @@ Fixpoint get_stack {Ti} (k : ctx Ti) : stack :=
   | CFun _ :: _ => []
   | CParams _ oτs :: _ => fst <$> oτs
   end.
-Fixpoint get_stack_types {Ti} (k : ctx Ti) : list (type Ti) :=
+Fixpoint get_stack_types {K} (k : ctx K) : list (type K) :=
   match k with
   | [] => []
   | CStmt _ :: k | CExpr _ _ :: k => get_stack_types k
@@ -389,7 +389,7 @@ Fixpoint get_stack_types {Ti} (k : ctx Ti) : list (type Ti) :=
   | CFun _ :: _ => []
   | CParams _ oτs :: _ => snd <$> oτs
   end.
-Instance ctx_free_gotos {Ti} : Gotos (ctx Ti) :=
+Instance ctx_free_gotos {K} : Gotos (ctx K) :=
   fix go k := let _ : Gotos _ := @go in
   match k with
   | CStmt Es :: k => gotos Es ∪ gotos k
@@ -397,7 +397,7 @@ Instance ctx_free_gotos {Ti} : Gotos (ctx Ti) :=
   | CExpr _ E :: k => gotos E ∪ gotos k
   | _ => ∅
   end.
-Instance ctx_free_labels {Ti} : Labels (ctx Ti) :=
+Instance ctx_free_labels {K} : Labels (ctx K) :=
   fix go k := let _ : Labels _ := @go in
   match k with
   | CStmt Es :: k => labels Es ∪ labels k
@@ -405,13 +405,13 @@ Instance ctx_free_labels {Ti} : Labels (ctx Ti) :=
   | CExpr _ E :: k => labels E ∪ labels k
   | _ => ∅
   end.
-Fixpoint ctx_catches {Ti} (k : ctx Ti) : nat :=
+Fixpoint ctx_catches {K} (k : ctx K) : nat :=
   match k with
   | CStmt (catch □) :: k => S (ctx_catches k)
   | (CStmt _ | CLocal _ _) :: k => ctx_catches k
   | _ => 0
   end.
 
-Lemma get_stack_app {Ti} (k1 k2 k3 : ctx Ti) :
+Lemma get_stack_app {K} (k1 k2 k3 : ctx K) :
   get_stack k2 = get_stack k3 → get_stack (k1 ++ k2) = get_stack (k1 ++ k3).
 Proof. induction k1 as [|[] ?]; intros; simpl; auto with f_equal. Qed.

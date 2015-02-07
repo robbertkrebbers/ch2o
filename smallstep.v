@@ -11,8 +11,8 @@ Require Export operations state.
 (** The judgment [assign_sem Γ m a v ass v' va'] describes the resulting value
 [v'] of an assignment [%{Ω1} a ::={ass} #{Ω2} v], and the value [va'] that needs
 to be stored at [a] in [m]. *)
-Inductive assign_sem `{Env Ti} (Γ : env Ti) (m : mem Ti)
-     (a : addr Ti) (v : val Ti) : assign → val Ti → val Ti → Prop :=
+Inductive assign_sem `{Env K} (Γ : env K) (m : mem K)
+     (a : addr K) (v : val K) : assign → val K → val K → Prop :=
   | Assign_sem :
      val_cast_ok Γ m (type_of a) v →
      let v' := val_cast (type_of a) v in assign_sem Γ m a v Assign v' v'
@@ -36,8 +36,8 @@ relation [cstep].*)
 (* The level is just below logical negation (whose level is 75). *)
 Reserved Notation "Γ \ ρ ⊢ₕ e1 , m1 ⇒ e2 , m2"
   (at level 74, format "Γ \  ρ  '⊢ₕ' '['  e1 ,  m1  ⇒ '/'  e2 ,  m2 ']'").
-Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
-     expr Ti → mem Ti → expr Ti → mem Ti → Prop :=
+Inductive ehstep `{Env K} (Γ : env K) (ρ : stack) :
+     expr K → mem K → expr K → mem K → Prop :=
   | ehstep_var x τ o m :
      ρ !! x = Some o →
      Γ\ ρ ⊢ₕ var{τ} x, m ⇒ %(addr_top o τ), m
@@ -96,7 +96,7 @@ is adapted from CompCert and is used to capture undefined behavior. If the
 whole expression contains a redex that is not safe, the semantics transitions
 to the [Undef] state. *)
 Reserved Notation "Γ \ ρ  '⊢ₕ' 'safe' e , m" (at level 74).
-Inductive ehsafe `{Env Ti} (Γ : env Ti) (ρ : stack) : expr Ti → mem Ti → Prop :=
+Inductive ehsafe `{Env K} (Γ : env K) (ρ : stack) : expr K → mem K → Prop :=
   | ehsafe_call Ω f τs τ Ωs vs m :
      length Ωs = length vs →
      Γ \ ρ ⊢ₕ safe (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs), m
@@ -108,7 +108,7 @@ where "Γ \ ρ  ⊢ₕ 'safe' e ,  m" := (@ehsafe _ _ Γ ρ e m) : C_scope.
 is executed, after which a transition to the next program state is performed. *)
 Reserved Notation "Γ \ δ ⊢ₛ S1 ⇒ S2"
   (at level 74, format "Γ \  δ  ⊢ₛ  '[' S1  ⇒ '/'  S2 ']'").
-Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :=
+Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
   (**i For simple statements: *)
   | cstep_skip m k :
      Γ\ δ ⊢ₛ State k (Stmt ↘ skip) m ⇒
@@ -127,7 +127,7 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
              State (CExpr e E :: k) (Expr e) m
 
   (**i For expressions: *)
-  | cstep_expr_head m1 m2 k (E : ectx Ti) e1 e2 :
+  | cstep_expr_head m1 m2 k (E : ectx K) e1 e2 :
      Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2 →
      Γ\ δ ⊢ₛ State k (Expr (subst E e1)) m1 ⇒
              State k (Expr (subst E e2)) m2
@@ -136,7 +136,7 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
      let e := (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)%E in
      Γ\ δ ⊢ₛ State k (Expr (subst E e)) m ⇒
              State (CFun E :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m)
-  | cstep_expr_undef m k (E : ectx Ti) e :
+  | cstep_expr_undef m k (E : ectx K) e :
      is_redex e → ¬Γ \ get_stack k ⊢ₕ safe e, m →
      Γ\ δ ⊢ₛ State k (Expr (subst E e)) m ⇒
              State k (Undef (UndefExpr E e)) m
@@ -256,7 +256,7 @@ Notation "Γ \ δ ⊢ₛ S1 ⇒^ n S2" := (bsteps (cstep Γ δ) n S1 S2)
 (** To give a model of our axiomatic semantics (see the file [axiomatic]) we
 need to restrict the traversal through the program context to remain below a
 certain context. *)
-Definition cstep_in_ctx `{Env Ti} Γ δ k : relation (state Ti) := λ S1 S2,
+Definition cstep_in_ctx `{Env K} Γ δ k : relation (state K) := λ S1 S2,
   Γ \ δ ⊢ₛ S1 ⇒ S2 ∧ k `suffix_of` SCtx S2.
 Notation "Γ \ δ ⊢ₛ S1 ⇒{ k } S2" := (cstep_in_ctx Γ δ k S1 S2)
   (at level 74,
@@ -273,9 +273,9 @@ Notation "Γ \ δ ⊢ₛ S1 ⇒{ k }^ n S2" := (bsteps (cstep_in_ctx Γ δ k) n 
 [cstep]). We therefore define some special purpose inversion schemes. The way
 of defining these schemes is based on small inversions (Monin, 2010). *)
 Section inversion.
-  Context `{Env Ti} (Γ : env Ti) (δ : funenv Ti).
+  Context `{Env K} (Γ : env K) (δ : funenv K).
 
-  Lemma cstep_focus_inv (P : state Ti → Prop) S1 S2 :
+  Lemma cstep_focus_inv (P : state K → Prop) S1 S2 :
     Γ\ δ ⊢ₛ S1 ⇒ S2 →
     let 'State k φ m := S1 in
     match φ with
@@ -309,15 +309,15 @@ Section inversion.
          e = (#{Ω} v)%E → ¬val_true m v → ¬val_false v →
          k = CExpr e' (if{□} s1 else s2) :: k' →
          P (State k' (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m)) →
-       (∀ (E : ectx Ti) e1 e2 m2,
+       (∀ (E : ectx K) e1 e2 m2,
          e = subst E e1 → Γ\ get_stack k ⊢ₕ e1, m ⇒ e2, m2 →
          P (State k (Expr (subst E e2)) m2)) →
-       (∀ (E : ectx Ti) Ω f τs τ Ωs vs,
+       (∀ (E : ectx K) Ω f τs τ Ωs vs,
          e = subst E (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)%E →
          length Ωs = length vs →
          P (State (CFun E :: k)
            (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m))) →
-       (∀ (E : ectx Ti) e1,
+       (∀ (E : ectx K) e1,
          e = subst E e1 → is_redex e1 → ¬Γ\ get_stack k ⊢ₕ safe e1, m →
          P (State k (Undef (UndefExpr E e1)) m)) →
        P S2
@@ -411,7 +411,7 @@ Section inversion.
     * by intros ?? []; simpl; eauto.
     * by intros ?? []; simpl; eauto.
   Qed.
-  Lemma cstep_expr_inv (P : state Ti → Prop) m k Ek Ω v S2 :
+  Lemma cstep_expr_inv (P : state K → Prop) m k Ek Ω v S2 :
     Γ\ δ ⊢ₛ State (Ek :: k) (Expr (#{Ω} v)) m ⇒ S2 →
     match Ek with
     | CExpr e (! □) =>
@@ -436,7 +436,7 @@ Section inversion.
     * intros Ee e1 Hv ? _. simplify_list_subst_equality Hv.
       by destruct (EVal_not_redex Ω v).
   Qed.
-  Lemma cstep_stmt_up_inv (P : state Ti → Prop) m k Ek s S2 :
+  Lemma cstep_stmt_up_inv (P : state K → Prop) m k Ek s S2 :
     Γ\ δ ⊢ₛ State (Ek :: k) (Stmt ↗ s) m ⇒ S2 →
     match Ek with
     | CStmt (□ ;; s2) => P (State (CStmt (s ;; □) :: k) (Stmt ↘ s2) m) → P S2
@@ -454,7 +454,7 @@ Section inversion.
     intros p. pattern S2. apply (cstep_focus_inv _ _ _ p);
       intros; simplify_equality; eauto.
   Qed.
-  Lemma cstep_stmt_top_inv (P : state Ti → Prop) m k Ek v s S2 :
+  Lemma cstep_stmt_top_inv (P : state K → Prop) m k Ek v s S2 :
     Γ\ δ ⊢ₛ State (Ek :: k) (Stmt (⇈ v) s) m ⇒ S2 →
     match Ek with
     | CStmt Es => P (State k (Stmt (⇈ v) (subst Es s)) m) → P S2
@@ -688,7 +688,7 @@ Ltac solve_cnf :=
 
 (** * Theorems *)
 Section smallstep_properties.
-Context `{Env Ti} (Γ : env Ti) (δ : funenv Ti).
+Context `{Env K} (Γ : env K) (δ : funenv K).
 
 Lemma ehstep_is_redex ρ e1 m1 v2 m2 : Γ\ ρ ⊢ₕ e1, m1 ⇒ v2, m2 → is_redex e1.
 Proof. destruct 1; repeat constructor. Qed.
@@ -766,13 +766,13 @@ Lemma cnf_in_ctx_undef m l k e : nf (cstep_in_ctx Γ δ l) (State k (Undef e) m)
 Proof. apply (nf_subrel _ (cstep Γ δ) _), cnf_undef. Qed.
 Lemma cnf_val m l Ω v : nf (cstep_in_ctx Γ δ l) (State l (Expr (#{Ω} v)) m).
 Proof. intros [S p]; inv_cstep p. Qed.
-Lemma cred_ectx (E : ectx Ti) k e m :
+Lemma cred_ectx (E : ectx K) k e m :
   red (cstep_in_ctx Γ δ k) (State k (Expr e) m) →
   red (cstep_in_ctx Γ δ k) (State k (Expr (subst E e)) m).
 Proof. intros [S p]. inv_cstep p; rewrite <-subst_app; eexists; do_cstep. Qed.
 
-Lemma cstep_expr_depsubst_inv {n} (P : state Ti → Prop)
-    m k (E : ectx_full Ti n) (es : vec (expr Ti) n) S' :
+Lemma cstep_expr_depsubst_inv {n} (P : state K → Prop)
+    m k (E : ectx_full K n) (es : vec (expr K) n) S' :
   Γ\ δ ⊢ₛ State k (Expr (depsubst E es)) m ⇒{k} S' →
   (∀ i e' m', Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k} State k (Expr e') m' →
     P (State k (Expr (depsubst E (vinsert i e' es))) m')) →
@@ -812,7 +812,7 @@ Proof.
     apply ectx_full_item_subst in HE. destruct HE as [i [HE1 ->]].
     apply HP4; auto. rewrite <-HE1. do_cstep.
 Qed.
-Lemma cstep_expr_call_inv (P : state Ti → Prop) k Ω f τs τ Ωs vs m S' :
+Lemma cstep_expr_call_inv (P : state K → Prop) k Ω f τs τ Ωs vs m S' :
   let e := (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)%E in
   Γ\ δ ⊢ₛ State k (Expr e) m ⇒{k} S' →
   length Ωs = length vs →
@@ -861,7 +861,7 @@ Proof.
   exists (State (k' ++ l') φ' m'). split; [|simpl; solve_suffix_of].
   by apply cstep_ctx_irrel with l.
 Qed.
-Lemma cstep_call_inv (P : state Ti → Prop) E E' l k1 φ1 m1 S' :
+Lemma cstep_call_inv (P : state K → Prop) E E' l k1 φ1 m1 S' :
   Γ\ δ ⊢ₛ State (k1 ++ [CFun E] ++ l) φ1 m1 ⇒{l} S' →
   (∀ k2 φ2 m2,
      Γ\ δ ⊢ₛ State (k1 ++ [CFun E'] ++ l) φ1 m1 ⇒{l}
@@ -944,18 +944,18 @@ That is, if [Γ\ δ ⊢ₛ State k (Stmt d1 s1) m1 ⇒{k}* State k (Stmt d2 s2) 
 then [s1 = s2]. This proven on the length of the reduction path. When a
 transition to the expression state occurs, we cut of the prefix corresponding
 to execution of that expression. *)
-Instance ctx_item_subst {Ti} :
-    Subst (ctx_item Ti) (stmt Ti) (stmt Ti) := λ Ek s,
+Instance ctx_item_subst {K} :
+    Subst (ctx_item K) (stmt K) (stmt K) := λ Ek s,
   match Ek with
   | CStmt E => subst E s | CLocal _ τ => local{τ} s
   | _ => s (* dummy *)
   end.
-Definition is_CStmt_or_CLocal (Ek : ctx_item Ti) : Prop :=
+Definition is_CStmt_or_CLocal (Ek : ctx_item K) : Prop :=
   match Ek with CStmt _ | CLocal _ _ => True | _ => False end.
-Definition in_fun_ctx (k1 k2 : ctx Ti) : Prop := ∃ l,
+Definition in_fun_ctx (k1 k2 : ctx K) : Prop := ∃ l,
   Forall is_CStmt_or_CLocal l ∧ k2 = l ++ k1.
 
-Instance: ∀ Ek : ctx_item Ti, Injective (=) (=) (subst Ek).
+Instance: ∀ Ek : ctx_item K, Injective (=) (=) (subst Ek).
 Proof.
   destruct Ek; intros ???; auto.
   * eapply (injective (subst (CStmt _))); eauto.
@@ -1026,15 +1026,15 @@ Proof.
 Qed.
 
 (** ** Preservation of validity of labels *)
-Fixpoint ctx_labels_valid (k : ctx Ti) : Prop :=
+Fixpoint ctx_labels_valid (k : ctx K) : Prop :=
   match k with
   | [] => True
   | CFun _ :: k => gotos k ⊆ labels k ∧ ctx_labels_valid k
   | _ :: k => ctx_labels_valid k
   end.
-Definition direction_gotos (d : direction Ti) : labelset :=
+Definition direction_gotos (d : direction K) : labelset :=
   match d with ↷ l => {[ l ]} | _ => ∅ end.
-Definition state_labels_valid (S : state Ti) : Prop :=
+Definition state_labels_valid (S : state K) : Prop :=
   let (k,φ,m) := S in
   match φ with
   | Stmt d s => gotos s ∪ gotos k ⊆ labels s ∪ labels k ∧
@@ -1073,7 +1073,7 @@ Proof.
     (State k (Stmt (↷ l) s) m2)); solve_elem_of.
 Qed.
 
-Fixpoint ctx_catches_valid (k : ctx Ti) : Prop :=
+Fixpoint ctx_catches_valid (k : ctx K) : Prop :=
   match k with
   | [] => True
   | CExpr _ (if{□} s1 else s2) :: k =>
@@ -1083,9 +1083,9 @@ Fixpoint ctx_catches_valid (k : ctx Ti) : Prop :=
      throws_valid (ctx_catches k) s ∧ ctx_catches_valid k
   | _ :: k => ctx_catches_valid k
   end.
-Definition direction_throws_valid (n : nat) (d : direction Ti) :=
+Definition direction_throws_valid (n : nat) (d : direction K) :=
   match d with ↑ i => i < n | _ => True end.
-Definition state_throws_valid (S : state Ti) : Prop :=
+Definition state_throws_valid (S : state K) : Prop :=
   let (k,φ,m) := S in
   match φ with
   | Stmt d s => throws_valid (ctx_catches k) s ∧

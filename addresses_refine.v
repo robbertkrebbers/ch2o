@@ -4,8 +4,8 @@ Require Export addresses refinements.
 Require Import pointer_casts.
 Local Open Scope ctype_scope.
 
-Inductive ref_refine `{Env Ti} (sz : nat) :
-     bool → ref Ti → ref Ti → nat → ref Ti → nat → Prop :=
+Inductive ref_refine `{Env K} (sz : nat) :
+     bool → ref K → ref K → nat → ref K → nat → Prop :=
   | ref_refine_perm r i :
      ref_refine sz false [] r i r i
   | ref_refine_nil r1 i1 r2 i2 :
@@ -14,8 +14,8 @@ Inductive ref_refine `{Env Ti} (sz : nat) :
   | ref_refine_ne_nil r1' r1 r2 i :
      r1 ++ r1' ⊆* r2 → r1 ≠ [] →
      ref_refine sz true r1' r1 i r2 i.
-Inductive addr_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
-      (Δ1 Δ2 : memenv Ti) : addr Ti → addr Ti → ptr_type Ti → Prop :=
+Inductive addr_refine' `{Env K} (Γ : env K) (α : bool) (f : meminj K)
+      (Δ1 Δ2 : memenv K) : addr K → addr K → ptr_type K → Prop :=
   | Addr_refine' o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σp :
      Δ1 ⊑{Γ,α,f} Δ2 →
      f !! o1 = Some (o2,r') →
@@ -30,17 +30,17 @@ Inductive addr_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
      ref_refine (size_of Γ σ) α r' r1 i1 r2 i2 →
      addr_refine' Γ α f Δ1 Δ2
        (Addr o1 r1 i1 τ1 σ σp) (Addr o2 r2 i2 τ2 σ σp) σp.
-Instance addr_refine `{Env Ti} :
-  RefineT Ti (env Ti) (ptr_type Ti) (addr Ti) := addr_refine'.
+Instance addr_refine `{Env K} :
+  RefineT K (env K) (ptr_type K) (addr K) := addr_refine'.
 
 Section addresses.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τ σ : type Ti.
-Implicit Types τp σp : ptr_type Ti.
-Implicit Types r : ref Ti.
-Implicit Types a : addr Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
+Implicit Types τ σ : type K.
+Implicit Types τp σp : ptr_type K.
+Implicit Types r : ref K.
+Implicit Types a : addr K.
 Implicit Types α : bool.
 
 Lemma addr_refine_memenv_refine Γ α f Δ1 Δ2 a1 a2 σp :
@@ -161,7 +161,7 @@ Proof.
     inversion Hr; inversion Hr'; simplify_equality.
   destruct (meminj_injective_alt f o1 o1' o2 [] []) as [?|[_ ?]];
     eauto using memenv_refine_injective; simplify_type_equality; auto.
-  by destruct (ref_disjoint_nil_inv_l (@nil (ref_seg Ti))).
+  by destruct (ref_disjoint_nil_inv_l (@nil (ref_seg K))).
 Qed.
 Lemma addr_refine_unique_r Γ α f Δ1 Δ2 a1 a2 a3 σp2 σp3 :
   a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : σp2 → a1 ⊑{Γ,α,f@Δ1↦Δ2} a3 : σp3 →

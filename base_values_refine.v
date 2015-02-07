@@ -3,9 +3,9 @@
 Require Export base_values bits_refine.
 Local Open Scope cbase_type_scope.
 
-Inductive base_val_refine' `{Env Ti} (Γ : env Ti)
-      (α : bool) (f : meminj Ti) (Δ1 Δ2 : memenv Ti) :
-      base_val Ti → base_val Ti → base_type Ti → Prop :=
+Inductive base_val_refine' `{Env K} (Γ : env K)
+      (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
+      base_val K → base_val K → base_type K → Prop :=
   | VIndet_VIndet_refine' τb :
      ✓{Γ} τb → τb ≠ voidT →
      base_val_refine' Γ α f Δ1 Δ2 (VIndet τb) (VIndet τb) τb
@@ -34,17 +34,17 @@ Inductive base_val_refine' `{Env Ti} (Γ : env Ti)
      α → bs1 ⊑{Γ,α,f@Δ1↦Δ2}* bs2 → char_byte_valid Γ Δ1 bs1 →
      Forall (BIndet =) bs2 → (Γ,Δ2) ⊢ vb2 : ucharT →
      base_val_refine' Γ α f Δ1 Δ2 (VByte bs1) vb2 ucharT.
-Instance base_val_refine `{Env Ti} :
-  RefineT Ti (env Ti) (base_type Ti) (base_val Ti) := base_val_refine'.
+Instance base_val_refine `{Env K} :
+  RefineT K (env K) (base_type K) (base_val K) := base_val_refine'.
 
 Section base_values.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
 Implicit Types α : bool.
-Implicit Types τb : base_type Ti.
-Implicit Types vb : base_val Ti.
-Implicit Types bs : list (bit Ti).
+Implicit Types τb : base_type K.
+Implicit Types vb : base_val K.
+Implicit Types bs : list (bit K).
 Implicit Types βs : list bool.
 
 Lemma base_val_flatten_refine Γ α f Δ1 Δ2 vb1 vb2 τb :

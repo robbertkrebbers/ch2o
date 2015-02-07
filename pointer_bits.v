@@ -3,36 +3,36 @@
 Require Import fragmented.
 Require Export pointers.
 
-Notation ptr_bit Ti := (fragment (ptr Ti)).
+Notation ptr_bit K := (fragment (ptr K)).
 
 Section pointer_bit_operations.
-  Context `{Env Ti}.
+  Context `{Env K}.
 
   Global Instance ptr_bit_valid:
-      Valid (env Ti * memenv Ti) (ptr_bit Ti) := λ Δ pb, ∃ τp,
+      Valid (env K * memenv K) (ptr_bit K) := λ Δ pb, ∃ τp,
     let (Γ,Δ) := Δ in
     (Γ,Δ) ⊢ frag_item pb : τp ∧
     frozen (frag_item pb) ∧
     frag_index pb < bit_size_of Γ (τp.*).
-  Definition ptr_to_bits (Γ : env Ti) (p : ptr Ti) : list (ptr_bit Ti) :=
+  Definition ptr_to_bits (Γ : env K) (p : ptr K) : list (ptr_bit K) :=
     to_fragments (bit_size_of Γ (type_of p.*)) (freeze true p).
-  Definition ptr_of_bits (Γ : env Ti) (τp : ptr_type Ti)
-      (pbs : list (ptr_bit Ti)) : option (ptr Ti) :=
+  Definition ptr_of_bits (Γ : env K) (τp : ptr_type K)
+      (pbs : list (ptr_bit K)) : option (ptr K) :=
     p ← of_fragments (bit_size_of Γ (τp.*)) pbs;
     guard (type_of p = τp); Some p.
 End pointer_bit_operations.
 
 Section pointer_bits.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τ : type Ti.
-Implicit Types τp : ptr_type Ti.
-Implicit Types p : ptr Ti.
-Implicit Types pb : ptr_bit Ti.
-Implicit Types pbs : list (ptr_bit Ti).
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
+Implicit Types τ : type K.
+Implicit Types τp : ptr_type K.
+Implicit Types p : ptr K.
+Implicit Types pb : ptr_bit K.
+Implicit Types pbs : list (ptr_bit K).
 
-Global Instance ptr_bit_valid_dec ΓΔ (pb : ptr_bit Ti) : Decision (✓{ΓΔ} pb).
+Global Instance ptr_bit_valid_dec ΓΔ (pb : ptr_bit K) : Decision (✓{ΓΔ} pb).
 Proof.
  refine
   match Some_dec (type_check ΓΔ (frag_item pb)) with

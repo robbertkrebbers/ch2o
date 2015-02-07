@@ -4,59 +4,59 @@ Require Export ctrees memory_basics.
 
 (** We pack the memory into a record so as to avoid ambiguity with already
 existing type class instances for finite maps. *)
-Inductive cmap_elem (Ti A : Set) :=
-  | Freed : type Ti → cmap_elem Ti A
-  | Obj : ctree Ti A → bool → cmap_elem Ti A.
+Inductive cmap_elem (K A : Set) :=
+  | Freed : type K → cmap_elem K A
+  | Obj : ctree K A → bool → cmap_elem K A.
 Arguments Freed {_ _} _.
 Arguments Obj {_ _} _ _.
 
-Instance maybe_Obj {Ti A} : Maybe2 (@Obj Ti A) := λ x,
+Instance maybe_Obj {K A} : Maybe2 (@Obj K A) := λ x,
   match x with Obj w β => Some (w,β) | _ => None end.
-Definition cmap_elem_Forall {Ti A} (P : Prop) (Q : ctree Ti A → Prop)
-    (x : cmap_elem Ti A) : Prop :=
+Definition cmap_elem_Forall {K A} (P : Prop) (Q : ctree K A → Prop)
+    (x : cmap_elem K A) : Prop :=
   match x with Freed _ => P | Obj w _ => Q w end.
-Definition cmap_elem_map {Ti A} (f : ctree Ti A → ctree Ti A)
-    (x : cmap_elem Ti A) : cmap_elem Ti A :=
+Definition cmap_elem_map {K A} (f : ctree K A → ctree K A)
+    (x : cmap_elem K A) : cmap_elem K A :=
   match x with Freed τ => Freed τ | Obj w β => Obj (f w) β end.
-Definition cmap_elem_Forall2 {Ti A} (P : Prop)
-    (Q : ctree Ti A → ctree Ti A → Prop) (x y : cmap_elem Ti A) : Prop :=
+Definition cmap_elem_Forall2 {K A} (P : Prop)
+    (Q : ctree K A → ctree K A → Prop) (x y : cmap_elem K A) : Prop :=
   match x, y with
   | Freed τ1, Freed τ2 => P ∧ τ1 = τ2
   | Obj w1 β1, Obj w2 β2 => Q w1 w2 ∧ β1 = β2
   | _, _ => False
   end.
-Definition cmap_elem_map2 {Ti A} (f : ctree Ti A → ctree Ti A → ctree Ti A)
-    (x y : cmap_elem Ti A) : cmap_elem Ti A :=
+Definition cmap_elem_map2 {K A} (f : ctree K A → ctree K A → ctree K A)
+    (x y : cmap_elem K A) : cmap_elem K A :=
   match x, y with
   | Obj w1 β, Obj w2 _ => Obj (f w1 w2) β
   | Obj w β, _ | _, Obj w β => Obj w β
   | Freed τ, _ => Freed τ
  end.
-Instance cmap_elem_eq_dec {Ti A : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2),
-  ∀ w1 w2 : A, Decision (w1 = w2)} (x y : cmap_elem Ti A) : Decision (x = y).
+Instance cmap_elem_eq_dec {K A : Set} `{∀ k1 k2 : K, Decision (k1 = k2),
+  ∀ w1 w2 : A, Decision (w1 = w2)} (x y : cmap_elem K A) : Decision (x = y).
 Proof. solve_decision. Defined.
-Instance cmap_elem_Forall_dec {Ti A : Set} `{Decision P, ∀ w, Decision (Q w)}
-  (x : cmap_elem Ti A) : Decision (cmap_elem_Forall P Q x).
+Instance cmap_elem_Forall_dec {K A : Set} `{Decision P, ∀ w, Decision (Q w)}
+  (x : cmap_elem K A) : Decision (cmap_elem_Forall P Q x).
 Proof. destruct x; apply _. Defined.
-Instance cmap_elem_Forall2_dec {Ti A : Set} `{∀ k1 k2 : Ti, Decision (k1 = k2),
+Instance cmap_elem_Forall2_dec {K A : Set} `{∀ k1 k2 : K, Decision (k1 = k2),
     Decision P, ∀ w1 w2, Decision (Q w1 w2)}
-  (x y : cmap_elem Ti A) : Decision (cmap_elem_Forall2 P Q x y).
+  (x y : cmap_elem K A) : Decision (cmap_elem_Forall2 P Q x y).
 Proof. destruct x, y; apply _. Defined.
-Instance: Injective (=) (=) (@Freed Ti A).
+Instance: Injective (=) (=) (@Freed K A).
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@Obj Ti A).
+Instance: Injective2 (=) (=) (=) (@Obj K A).
 Proof. by injection 1. Qed.
 
-Record cmap (Ti A : Set) : Set :=
-  CMap { cmap_car : indexmap (cmap_elem Ti A) }.
+Record cmap (K A : Set) : Set :=
+  CMap { cmap_car : indexmap (cmap_elem K A) }.
 Arguments CMap {_ _} _.
 Arguments cmap_car {_ _} _.
 Add Printing Constructor cmap.
-Instance: Injective (=) (=) (@CMap Ti A).
+Instance: Injective (=) (=) (@CMap K A).
 Proof. by injection 1. Qed.
 
-Instance cmap_ops {Ti A : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2),
-    SeparationOps A} : SeparationOps (cmap Ti A) := {
+Instance cmap_ops {K A : Set} `{∀ k1 k2 : K, Decision (k1 = k2),
+    SeparationOps A} : SeparationOps (cmap K A) := {
   sep_empty := CMap ∅;
   sep_union m1 m2 :=
     let (m1) := m1 in let (m2) := m2 in
@@ -97,8 +97,8 @@ Proof.
   * intros []; apply _.
 Defined.
 
-Instance cmap_sep {Ti A : Set} `{∀ τi1 τi2 : Ti, Decision (τi1 = τi2),
-  Separation A} : Separation (cmap Ti A).
+Instance cmap_sep {K A : Set} `{∀ k1 k2 : K, Decision (k1 = k2),
+  Separation A} : Separation (cmap K A).
 Proof.
   split.
   * destruct (sep_inhabited A) as (x&?&?).

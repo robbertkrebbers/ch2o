@@ -3,47 +3,47 @@
 Require Export addresses.
 Local Open Scope ctype_scope.
 
-Inductive ptr (Ti : Set) :=
-  | NULL : ptr_type Ti → ptr Ti
-  | Ptr : addr Ti → ptr Ti
-  | FunPtr : funname → list (type Ti) → type Ti → ptr Ti.
+Inductive ptr (K : Set) :=
+  | NULL : ptr_type K → ptr K
+  | Ptr : addr K → ptr K
+  | FunPtr : funname → list (type K) → type K → ptr K.
 Arguments NULL {_} _.
 Arguments Ptr {_} _.
 Arguments FunPtr {_} _ _ _.
 
-Instance ptr_eq_dec `{Ti : Set, ∀ k1 k2 : Ti, Decision (k1 = k2)}
-  (p1 p2 : ptr Ti) : Decision (p1 = p2).
+Instance ptr_eq_dec `{K : Set, ∀ k1 k2 : K, Decision (k1 = k2)}
+  (p1 p2 : ptr K) : Decision (p1 = p2).
 Proof. solve_decision. Defined.
 
-Instance maybe_NULL {Ti} : Maybe (@NULL Ti) := λ p,
+Instance maybe_NULL {K} : Maybe (@NULL K) := λ p,
   match p with NULL τ => Some τ | _ => None end.
-Instance maybe_Ptr {Ti} : Maybe (@Ptr Ti) := λ p,
+Instance maybe_Ptr {K} : Maybe (@Ptr K) := λ p,
   match p with Ptr a => Some a | _ => None end.
-Instance maybe_FunPtr {Ti} : Maybe3 (@FunPtr Ti) := λ p,
+Instance maybe_FunPtr {K} : Maybe3 (@FunPtr K) := λ p,
   match p with FunPtr f τs τ => Some (f,τs,τ) | _ => None end.
 
 Section pointer_operations.
-  Context `{Env Ti}.
+  Context `{Env K}.
 
-  Inductive ptr_typed' (Γ : env Ti) (Δ : memenv Ti) :
-      ptr Ti → ptr_type Ti → Prop :=
+  Inductive ptr_typed' (Γ : env K) (Δ : memenv K) :
+      ptr K → ptr_type K → Prop :=
     | NULL_typed τp : ✓{Γ} τp → ptr_typed' Γ Δ (NULL τp) τp
     | Ptr_typed a τp : (Γ,Δ) ⊢ a : τp → ptr_typed' Γ Δ (Ptr a) τp
     | FunPtr_typed f τs τ :
        Γ !! f = Some (τs,τ) → ptr_typed' Γ Δ (FunPtr f τs τ) (τs ~> τ).
   Global Instance ptr_typed:
-    Typed (env Ti * memenv Ti) (ptr_type Ti) (ptr Ti) := curry ptr_typed'.
-  Global Instance ptr_freeze : Freeze (ptr Ti) := λ β p,
+    Typed (env K * memenv K) (ptr_type K) (ptr K) := curry ptr_typed'.
+  Global Instance ptr_freeze : Freeze (ptr K) := λ β p,
     match p with Ptr a => Ptr (freeze β a) | _ => p end.
 
-  Global Instance type_of_ptr: TypeOf (ptr_type Ti) (ptr Ti) := λ p,
+  Global Instance type_of_ptr: TypeOf (ptr_type K) (ptr K) := λ p,
     match p with
     | NULL τp => τp
     | Ptr a => type_of a
     | FunPtr _ τs τ => τs ~> τ
     end.
    Global Instance ptr_type_check:
-      TypeCheck (env Ti * memenv Ti) (ptr_type Ti) (ptr Ti) := λ ΓΔ p,
+      TypeCheck (env K * memenv K) (ptr_type K) (ptr K) := λ ΓΔ p,
     let (Γ,Δ) := ΓΔ in
     match p with
     | NULL τp => guard (✓{Γ} τp); Some τp
@@ -51,32 +51,32 @@ Section pointer_operations.
     | FunPtr f τs τ =>
        '(τs',τ') ← Γ !! f; guard (τs' = τs); guard (τ' = τ); Some (τs ~> τ)
     end.
-  Inductive is_NULL : ptr Ti → Prop := mk_is_NULL τ : is_NULL (NULL τ).
-  Definition ptr_alive (Δ : memenv Ti) (p : ptr Ti) : Prop :=
+  Inductive is_NULL : ptr K → Prop := mk_is_NULL τ : is_NULL (NULL τ).
+  Definition ptr_alive (Δ : memenv K) (p : ptr K) : Prop :=
     match p with Ptr a => index_alive Δ (addr_index a) | _ => True end.
 End pointer_operations.
 
 Section pointers.
-Context `{EnvSpec Ti}.
-Implicit Types Γ : env Ti.
-Implicit Types Δ : memenv Ti.
-Implicit Types τp : ptr_type Ti.
-Implicit Types a : addr Ti.
-Implicit Types p : ptr Ti.
+Context `{EnvSpec K}.
+Implicit Types Γ : env K.
+Implicit Types Δ : memenv K.
+Implicit Types τp : ptr_type K.
+Implicit Types a : addr K.
+Implicit Types p : ptr K.
 
-Global Instance: Injective (=) (=) (@Ptr Ti).
+Global Instance: Injective (=) (=) (@Ptr K).
 Proof. by injection 1. Qed.
 Lemma ptr_typed_type_valid Γ Δ p τp : ✓ Γ → (Γ,Δ) ⊢ p : τp → ✓{Γ} τp.
 Proof.
   destruct 2; eauto using addr_typed_ptr_type_valid, TFun_ptr_valid,
     env_valid_args_valid, env_valid_ret_valid, type_valid_ptr_type_valid.
 Qed.
-Global Instance: TypeOfSpec (env Ti * memenv Ti) (ptr_type Ti) (ptr Ti).
+Global Instance: TypeOfSpec (env K * memenv K) (ptr_type K) (ptr K).
 Proof.
   intros [??]. by destruct 1; simpl; erewrite ?type_of_correct by eauto.
 Qed.
 Global Instance:
-  TypeCheckSpec (env Ti * memenv Ti) (ptr_type Ti) (ptr Ti) (λ _, True).
+  TypeCheckSpec (env K * memenv K) (ptr_type K) (ptr K) (λ _, True).
 Proof.
   intros [Γ Δm] p τ _. split.
   * destruct p; intros; repeat (case_match || simplify_option_equality);
