@@ -42,18 +42,18 @@ Class EnvSpec (K : Set) `{Env K} := {
   size_of_int Γ τi : size_of Γ (intT τi) = rank_size (rank τi);
   size_of_void_ne_0 Γ : size_of Γ voidT ≠ 0;
   size_of_array Γ τ n : size_of Γ (τ.[n]) = n * size_of Γ τ;
-  size_of_struct Γ s τs :
-    ✓ Γ → Γ !! s = Some τs →
-    size_of Γ (structT s) = sum_list (field_sizes Γ τs);
+  size_of_struct Γ t τs :
+    ✓ Γ → Γ !! t = Some τs →
+    size_of Γ (structT t) = sum_list (field_sizes Γ τs);
   size_of_fields Γ τs :
     ✓ Γ → Forall2 (λ τ sz, size_of Γ τ ≤ sz) τs (field_sizes Γ τs);
-  size_of_union Γ s τs :
-    ✓ Γ → Γ !! s = Some τs →
-    Forall (λ τ, size_of Γ τ ≤ size_of Γ (unionT s)) τs;
+  size_of_union Γ t τs :
+    ✓ Γ → Γ !! t = Some τs →
+    Forall (λ τ, size_of Γ τ ≤ size_of Γ (unionT t)) τs;
   align_of_array Γ τ n : (align_of Γ τ | align_of Γ (τ.[n]));
-  align_of_compound Γ c s τs i τ :
-    ✓ Γ → Γ !! s = Some τs → τs !! i = Some τ →
-    (align_of Γ τ | align_of Γ (compoundT{c} s));
+  align_of_compound Γ c t τs i τ :
+    ✓ Γ → Γ !! t = Some τs → τs !! i = Some τ →
+    (align_of Γ τ | align_of Γ (compoundT{c} t));
   align_of_divide Γ τ :
     ✓ Γ → ✓{Γ} τ → (align_of Γ τ | size_of Γ τ);
   align_of_field_offset Γ τs i τ :
@@ -78,25 +78,25 @@ Lemma field_sizes_length Γ τs : ✓ Γ → length (field_sizes Γ τs) = lengt
 Proof. symmetry. by eapply Forall2_length, size_of_fields. Qed.
 Lemma field_sizes_nil Γ : ✓ Γ → field_sizes Γ [] = [].
 Proof. intros. apply nil_length_inv. by rewrite field_sizes_length. Qed.
-Lemma size_of_union_lookup Γ s τs i τ :
-  ✓ Γ → Γ !! s = Some τs → τs !! i = Some τ →
-  size_of Γ τ ≤ size_of Γ (unionT s).
+Lemma size_of_union_lookup Γ t τs i τ :
+  ✓ Γ → Γ !! t = Some τs → τs !! i = Some τ →
+  size_of Γ τ ≤ size_of Γ (unionT t).
 Proof.
-  intros. assert (Forall (λ τ, size_of Γ τ ≤ size_of Γ (unionT s)) τs) as Hτs
+  intros. assert (Forall (λ τ, size_of Γ τ ≤ size_of Γ (unionT t)) τs) as Hτs
     by eauto using size_of_union; rewrite Forall_lookup in Hτs. eauto.
 Qed.
-Lemma size_of_struct_lookup Γ s τs i τ :
-  ✓ Γ → Γ !! s = Some τs → τs !! i = Some τ →
-  size_of Γ τ ≤ size_of Γ (structT s).
+Lemma size_of_struct_lookup Γ t τs i τ :
+  ✓ Γ → Γ !! t = Some τs → τs !! i = Some τ →
+  size_of Γ τ ≤ size_of Γ (structT t).
 Proof.
-  intros HΓ Hs Hτs. erewrite size_of_struct by eauto. clear Hs. revert i Hτs.
+  intros HΓ Ht Hτs. erewrite size_of_struct by eauto. clear Ht. revert i Hτs.
   induction (size_of_fields Γ τs HΓ) as [|σ sz σs szs]; intros [|?] ?;
     simplify_equality'; auto with lia.
   transitivity (sum_list szs); eauto with lia.
 Qed.
-Lemma size_of_union_singleton Γ s τ :
-  ✓ Γ → Γ !! s = Some [τ] → size_of Γ τ ≤ size_of Γ (unionT s).
-Proof. intros. by apply (size_of_union_lookup Γ s [τ] 0). Qed.
+Lemma size_of_union_singleton Γ t τ :
+  ✓ Γ → Γ !! t = Some [τ] → size_of Γ τ ≤ size_of Γ (unionT t).
+Proof. intros. by apply (size_of_union_lookup Γ t [τ] 0). Qed.
 Lemma sizes_of_weaken P Γ1 Γ2 τs :
   ✓ Γ1 → ✓{Γ1}* τs → Γ1 ⊆ Γ2 →
   Forall (λ τ', P (size_of Γ1 τ')) τs → Forall (λ τ', P (size_of Γ2 τ')) τs.
@@ -120,9 +120,9 @@ Proof.
 Qed.
 Lemma bit_size_of_array Γ τ n : bit_size_of Γ (τ.[n]) = n * bit_size_of Γ τ.
 Proof. unfold bit_size_of. by rewrite !size_of_array, Nat.mul_assoc. Qed.
-Lemma bit_size_of_struct Γ s τs :
-  ✓ Γ → Γ !! s = Some τs →
-  bit_size_of Γ (structT s) = sum_list (field_bit_sizes Γ τs).
+Lemma bit_size_of_struct Γ t τs :
+  ✓ Γ → Γ !! t = Some τs →
+  bit_size_of Γ (structT t) = sum_list (field_bit_sizes Γ τs).
 Proof.
   unfold bit_size_of, field_bit_sizes. intros.
   erewrite size_of_struct by eauto.
@@ -135,23 +135,23 @@ Proof.
   induction (size_of_fields Γ τs HΓ);
     simpl; constructor; auto using Nat.mul_le_mono_nonneg_r with lia.
 Qed.
-Lemma bit_size_of_union Γ s τs :
-  ✓ Γ → Γ !! s = Some τs →
-  Forall (λ τ, bit_size_of Γ τ ≤ bit_size_of Γ (unionT s)) τs.
+Lemma bit_size_of_union Γ t τs :
+  ✓ Γ → Γ !! t = Some τs →
+  Forall (λ τ, bit_size_of Γ τ ≤ bit_size_of Γ (unionT t)) τs.
 Proof.
   intros ? Hτs. apply size_of_union in Hτs; auto. unfold bit_size_of.
   induction Hτs; constructor; auto using Nat.mul_le_mono_nonneg_r with lia.
 Qed.
-Lemma bit_size_of_union_lookup Γ s τs i τ :
-  ✓ Γ → Γ !! s = Some τs → τs !! i = Some τ →
-  bit_size_of Γ τ ≤ bit_size_of Γ (unionT s).
+Lemma bit_size_of_union_lookup Γ t τs i τ :
+  ✓ Γ → Γ !! t = Some τs → τs !! i = Some τ →
+  bit_size_of Γ τ ≤ bit_size_of Γ (unionT t).
 Proof.
   intros. unfold bit_size_of. apply Nat.mul_le_mono_nonneg_r;
     eauto using size_of_union_lookup with lia.
 Qed.
-Lemma bit_size_of_union_singleton Γ s τ :
-  ✓ Γ → Γ !! s = Some [τ] → bit_size_of Γ τ ≤ bit_size_of Γ (unionT s).
-Proof. intros. by apply (bit_size_of_union_lookup Γ s [τ] 0). Qed.
+Lemma bit_size_of_union_singleton Γ t τ :
+  ✓ Γ → Γ !! t = Some [τ] → bit_size_of Γ τ ≤ bit_size_of Γ (unionT t).
+Proof. intros. by apply (bit_size_of_union_lookup Γ t [τ] 0). Qed.
 
 Lemma field_bit_sizes_weaken Γ1 Γ2 τs :
   ✓ Γ1 → ✓{Γ1}* τs → Γ1 ⊆ Γ2 → field_bit_sizes Γ1 τs = field_bit_sizes Γ2 τs.
@@ -199,11 +199,11 @@ Proof.
     intros [|i] [|j] σ ??; simplify_equality'; try lia.
   specialize (IH i j σ). intuition lia.
 Qed.
-Lemma field_bit_offset_size Γ s τs i σ :
-  ✓ Γ → Γ !! s = Some τs → τs !! i = Some σ →
-  field_bit_offset Γ τs i + bit_size_of Γ σ ≤ bit_size_of Γ (structT s).
+Lemma field_bit_offset_size Γ t τs i σ :
+  ✓ Γ → Γ !! t = Some τs → τs !! i = Some σ →
+  field_bit_offset Γ τs i + bit_size_of Γ σ ≤ bit_size_of Γ (structT t).
 Proof.
-  intros HΓ Hs. erewrite bit_size_of_struct by eauto; clear Hs.
+  intros HΓ Ht. erewrite bit_size_of_struct by eauto; clear Ht.
   revert i σ. unfold field_bit_offset. induction (bit_size_of_fields _ τs HΓ)
     as [|τ sz τs szs ?? IH]; intros [|i] σ ?; simplify_equality'; [lia|].
   specialize (IH i σ). intuition lia.
@@ -216,9 +216,9 @@ Proof.
 Qed.
 Lemma bit_align_of_array Γ τ n : (bit_align_of Γ τ | bit_align_of Γ (τ.[n])).
 Proof. apply Nat.mul_divide_mono_r, align_of_array. Qed.
-Lemma bit_align_of_compound Γ c s τs i τ :
-  ✓ Γ → Γ !! s = Some τs → τs !! i = Some τ →
-  (bit_align_of Γ τ | bit_align_of Γ (compoundT{c} s)).
+Lemma bit_align_of_compound Γ c t τs i τ :
+  ✓ Γ → Γ !! t = Some τs → τs !! i = Some τ →
+  (bit_align_of Γ τ | bit_align_of Γ (compoundT{c} t)).
 Proof. eauto using Nat.mul_divide_mono_r, align_of_compound. Qed.
 Lemma bit_align_of_divide Γ τ :
   ✓ Γ → ✓{Γ} τ → (bit_align_of Γ τ | bit_size_of Γ τ).
@@ -250,11 +250,11 @@ Proof.
   intros HΓ. revert τ. refine (type_env_ind _ HΓ _ _ _ _).
   * auto using size_of_base_ne_0.
   * intros. rewrite size_of_array. by apply Nat.neq_mul_0.
-  * intros [] s τs Hs Hτs Hsz Hlen.
-    + erewrite size_of_struct by eauto. clear Hs.
+  * intros [] t τs Ht Hτs IH Hlen.
+    + erewrite size_of_struct by eauto. clear Ht.
       destruct (size_of_fields Γ τs HΓ); decompose_Forall_hyps; auto with lia.
-    + apply size_of_union in Hs; auto.
-      destruct Hs; decompose_Forall_hyps; auto with lia.
+    + apply size_of_union in Ht; auto.
+      destruct Ht; decompose_Forall_hyps; auto with lia.
 Qed.
 Lemma align_of_ne_0 Γ τ : ✓ Γ → ✓{Γ} τ → align_of Γ τ ≠ 0.
 Proof. eauto using Nat_divide_ne_0, size_of_ne_0, align_of_divide. Qed.

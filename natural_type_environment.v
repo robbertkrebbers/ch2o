@@ -14,7 +14,7 @@ Context (alloc_can_fail : bool).
 Definition natural_align_of (Γ : env K) : type K → nat := type_iter
   (**i TBase =>     *) align_base
   (**i TArray =>    *) (λ _ _ x, x)
-  (**i TCompound => *) (λ c s τs rec, foldr lcm 1 (rec <$> τs)) Γ.
+  (**i TCompound => *) (λ c t τs rec, foldr lcm 1 (rec <$> τs)) Γ.
 Definition natural_fields_align (Γ : env K) (τs : list (type K)) : nat :=
   foldr lcm 1 (natural_align_of Γ <$> τs).
 
@@ -38,7 +38,7 @@ Definition natural_size_of (Γ : env K) : type K → nat :=
     | voidT => 1 | intT τi => rank_size (rank τi) | τp.* => ptr_size τp
     end%BT)
   (**i TArray =>    *) (λ _, mult)
-  (**i TCompound => *) (λ c s τs go,
+  (**i TCompound => *) (λ c t τs go,
     match c with
     | Struct_kind =>
        sum_list (natural_field_sizes go Γ (natural_fields_align Γ τs) 0 τs)
@@ -67,12 +67,12 @@ Proof.
   rewrite Nat.mod_eq by done. lia.
 Qed.
 Lemma natural_align_of_compound_proper Γ :
-  let fcompound c s τs rec := foldr lcm 1 (rec <$> τs) in
-  ∀ rec1 rec2 (c : compound_kind) s (τs : list (type K)),
-  Γ !! s = Some τs → Forall (λ τ, rec1 τ = rec2 τ) τs →
-  fcompound c s τs rec1 = fcompound c s τs rec2.
+  let fcompound c t τs rec := foldr lcm 1 (rec <$> τs) in
+  ∀ rec1 rec2 (c : compound_kind) t (τs : list (type K)),
+  Γ !! t = Some τs → Forall (λ τ, rec1 τ = rec2 τ) τs →
+  fcompound c t τs rec1 = fcompound c t τs rec2.
 Proof.
-  intros fcompound rec1 rec2 c s τs _.
+  intros fcompound rec1 rec2 c t τs _.
   unfold fcompound. induction 1; simpl; auto using f_equal.
 Qed.
 Lemma natural_align_of_base Γ τb : align_of Γ (baseT τb) = align_base τb.
@@ -81,9 +81,9 @@ Lemma natural_align_of_array Γ τ n : align_of Γ (τ.[n]) = align_of Γ τ.
 Proof.
   unfold align_of; simpl; unfold natural_align_of. by rewrite type_iter_array.
 Qed.
-Lemma natural_align_of_compound Γ c s τs :
-  ✓ Γ → Γ !! s = Some τs →
-  align_of Γ (compoundT{c} s) = natural_fields_align Γ τs.
+Lemma natural_align_of_compound Γ c t τs :
+  ✓ Γ → Γ !! t = Some τs →
+  align_of Γ (compoundT{c} t) = natural_fields_align Γ τs.
 Proof.
   intros. unfold align_of; simpl; unfold natural_align_of.
   by rewrite type_iter_compound by eauto
@@ -114,8 +114,8 @@ Proof.
   decompose_Forall. by erewrite natural_align_of_weaken by eauto.
 Qed.
 
-Lemma natural_size_of_compound_proper Γ1 Γ2 rec1 rec2 c s τs :
-  let fc Γ rec c (s : tag) τs :=
+Lemma natural_size_of_compound_proper Γ1 Γ2 rec1 rec2 c t τs :
+  let fc Γ rec c (t : tag) τs :=
     match c with
     | Struct_kind =>
        sum_list (natural_field_sizes rec Γ (natural_fields_align Γ τs) 0 τs)
@@ -123,8 +123,8 @@ Lemma natural_size_of_compound_proper Γ1 Γ2 rec1 rec2 c s τs :
        let sz := foldr max 1 (rec <$> τs) in
        sz + natural_padding sz (natural_fields_align Γ τs)
     end in
-  ✓ Γ1 → Γ1 ⊆ Γ2 → Γ1 !! s = Some τs → ✓{Γ1}* τs →
-  Forall (λ τ, rec1 τ = rec2 τ) τs → fc Γ1 rec1 c s τs = fc Γ2 rec2 c s τs.
+  ✓ Γ1 → Γ1 ⊆ Γ2 → Γ1 !! t = Some τs → ✓{Γ1}* τs →
+  Forall (λ τ, rec1 τ = rec2 τ) τs → fc Γ1 rec1 c t τs = fc Γ2 rec2 c t τs.
 Proof.
   intros fc ??. destruct c; simpl.
   * intros _ Hτs Hrec. erewrite natural_fields_align_weaken by eauto.
@@ -139,8 +139,8 @@ Lemma natural_size_of_base Γ τb :
 Proof. done. Qed.
 Lemma natural_size_of_array Γ τ n : size_of Γ (τ.[n]) = n * size_of Γ τ.
 Proof. unfold size_of; simpl. by apply type_iter_array. Qed.
-Lemma natural_size_of_compound Γ c s τs :
-  ✓ Γ → Γ !! s = Some τs → size_of Γ (compoundT{c} s) =
+Lemma natural_size_of_compound Γ c t τs :
+  ✓ Γ → Γ !! t = Some τs → size_of Γ (compoundT{c} t) =
     match c with
     | Struct_kind => sum_list (field_sizes Γ τs)
     | Union_kind =>
@@ -165,8 +165,8 @@ Proof.
   * intros τb _; rewrite natural_align_of_base; destruct τb;
       rewrite ?align_void; eauto using Nat_divide_ne_0, rank_size_ne_0.
   * intros. by rewrite natural_align_of_array.
-  * intros c s τs Hs _ IH _. erewrite natural_align_of_compound by eauto.
-    clear Hs. unfold natural_fields_align.
+  * intros c t τs Ht _ IH _. erewrite natural_align_of_compound by eauto.
+    clear Ht. unfold natural_fields_align.
     induction IH; csimpl; rewrite ?Nat.lcm_eq_0; naive_solver.
 Qed.
 
@@ -178,19 +178,19 @@ Proof.
   * done.
   * done.
   * by apply natural_size_of_array.
-  * intros Γ s τs ??. by erewrite natural_size_of_compound by eauto.
+  * intros Γ t τs ??. by erewrite natural_size_of_compound by eauto.
   * intros Γ τs ?. unfold field_sizes; simpl.
     change natural_size_of with size_of.
     generalize (natural_fields_align Γ τs), 0. intros align.
     induction τs; simpl; constructor; auto with lia.
-  * intros Γ s τs ? Hτs. erewrite natural_size_of_compound by eauto.
+  * intros Γ t τs ? Hτs. erewrite natural_size_of_compound by eauto.
     apply Forall_impl with (λ τ,
       size_of Γ τ ≤ foldr max 1 (size_of Γ <$> τs)); [|simpl; auto with lia].
     clear Hτs. induction τs; csimpl; constructor; [lia|].
     eapply Forall_impl; eauto with lia.
   * intros Γ τ n. by rewrite natural_align_of_array.
-  * intros Γ c s τs i τ ? Hs Hi. erewrite natural_align_of_compound by eauto.
-    clear Hs. revert i τ Hi. unfold natural_fields_align.
+  * intros Γ c t τs i τ ? Ht Hi. erewrite natural_align_of_compound by eauto.
+    clear Ht. revert i τ Hi. unfold natural_fields_align.
     induction τs; intros [|?] ??; simplify_equality';
       eauto 3 using Nat.divide_trans, Nat.divide_lcm_r, Nat.divide_lcm_l.
   * intros Γ τ HΓ. revert τ. unfold size_of; simpl.
@@ -199,15 +199,15 @@ Proof.
       destruct 1; auto. by rewrite align_void.
     + intros τ n ? ? _. rewrite natural_align_of_array, natural_size_of_array.
       by apply Nat.divide_mul_r.
-    + intros c s τs Hs Hτs IH Hlen.
+    + intros c t τs Ht Hτs IH Hlen.
       erewrite natural_align_of_compound, natural_size_of_compound by eauto.
       assert (natural_fields_align Γ τs ≠ 0) as Hne_0.
-      { clear Hs Hlen. unfold natural_fields_align.
+      { clear Ht Hlen. unfold natural_fields_align.
         induction IH as [|τ τs IHτ ? IH]; decompose_Forall; simpl; [done|].
         rewrite Nat.lcm_eq_0; intros [|?]; [|by destruct IH].
         by apply natural_align_ne_0. }
       destruct c; [|by apply natural_padding_divide].
-      clear Hs Hτs IH. unfold field_sizes; simpl. revert Hne_0.
+      clear Ht Hτs IH. unfold field_sizes; simpl. revert Hne_0.
       generalize (natural_fields_align Γ τs); intros whole_align ?.
       rewrite <-(Nat.add_0_l (sum_list _)). generalize 0.
       induction τs as [|τ1 τs IH]; intros pos; simpl; [done|].

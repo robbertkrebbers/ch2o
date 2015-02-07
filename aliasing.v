@@ -19,15 +19,15 @@ Lemma ref_disjoint_cases Γ τ r1 r2 σ1 σ2 :
   (**i 1.) *) (∀ j1 j2, ref_set_offset j1 r1 ⊥ ref_set_offset j2 r2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
-  (**i 4.) *) ∃ s r1' i1 r2' i2 r', r1 = r1' ++ RUnion i1 s true :: r' ∧
-    r2 = r2' ++ RUnion i2 s true :: r' ∧ i1 ≠ i2.
+  (**i 4.) *) ∃ t r1' i1 r2' i2 r', r1 = r1' ++ RUnion i1 t true :: r' ∧
+    r2 = r2' ++ RUnion i2 t true :: r' ∧ i1 ≠ i2.
 Proof.
   intros HΓ Hr1 Hr1F Hr2 Hr2F. cut (
     (**i 1.) *) (∀ j1 j2, ref_set_offset j1 r1 ⊥ ref_set_offset j2 r2) ∨
     (**i 2.) *) (∃ j r', r1 = r' ++ ref_set_offset j r2) ∨
     (**i 3.) *) (∃ j r', r2 = r' ++ ref_set_offset j r1) ∨
-    (**i 4.) *) ∃ s r1' i1 r2' i2 r', r1 = r1' ++ [RUnion i1 s true] ++ r' ∧
-      r2 = r2' ++ [RUnion i2 s true] ++ r' ∧ i1 ≠ i2).
+    (**i 4.) *) ∃ t r1' i1 r2' i2 r', r1 = r1' ++ [RUnion i1 t true] ++ r' ∧
+      r2 = r2' ++ [RUnion i2 t true] ++ r' ∧ i1 ≠ i2).
   { intros [?|[(j&r'&->)|[(j&r'&->)|(s&r1'&i1&r2'&i2&r'&Hr1'&Hr2'&?)]]].
     * by left.
     * rewrite ref_typed_app in Hr1; destruct Hr1 as (σ2'&?&?).
@@ -43,19 +43,19 @@ Proof.
     (* 1.) *) (∀ j1 j2, ref_set_offset j1 [rs1] ⊥ ref_set_offset j2 r2) ∨
     (* 2.) *) (∃ j r', r2 = r' ++ ref_set_offset j [rs1]) ∨
     (* 3.) *) r2 = [] ∨
-    (* 4.) *) ∃ s i1 r2' i2, rs1 = RUnion i1 s true ∧
-      r2 = r2' ++ [RUnion i2 s true] ∧ i1 ≠ i2) as aux.
+    (* 4.) *) ∃ t i1 r2' i2, rs1 = RUnion i1 t true ∧
+      r2 = r2' ++ [RUnion i2 t true] ∧ i1 ≠ i2) as aux.
   { intros τ rs1 r2 σ1 σ2 Hrs1 Hrs1F Hr2 Hr2F.
     destruct r2 as [|rs2 r2 _] using rev_ind; [by do 2 right; left|].
     rewrite ref_typed_snoc in Hr2; destruct Hr2 as (σ2'&Hrs2&Hr2).
-    rewrite fmap_app in Hr2F. destruct Hrs1 as [? i1 n|s i1|s i1 ?];
+    rewrite fmap_app in Hr2F. destruct Hrs1 as [? i1 n|t i1|t i1 ?];
       inversion Hrs2 as [? i2|? i2|? i2 []]; simplify_list_equality.
     * by right; left; exists i2 r2.
     * destruct (decide (i1 = i2)) as [->|]; [by right; left; exists 0 r2|].
       left. intros _ ?. destruct r2; simpl; [by repeat constructor|].
       rewrite app_comm_cons. apply ref_disjoint_app_r. by repeat constructor.
     * destruct (decide (i1 = i2)) as [->|]; [by right; left; exists 0 r2|].
-      do 3 right. by exists s i1 r2 i2. }
+      do 3 right. by exists t i1 r2 i2. }
   induction 1 as [τ|r1 rs1 τ τ1 σ1 Hrs1 Hr1 IH]
     using @ref_typed_ind; intros r2 σ2 Hr1F Hr2 Hr2F; simplify_equality'.
   { do 2 right; left; exists 0 r2. by rewrite (right_id_L [] (++)). }
@@ -110,9 +110,9 @@ Lemma addr_disjoint_cases Γ Δ a1 a2 σ1 σ2 :
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
-  (**i 4.) *) addr_index a1 = addr_index a2 ∧ (∃ s r1' i1 r2' i2 r',
-    addr_ref_base a1 = r1' ++ RUnion i1 s true :: r' ∧
-    addr_ref_base a2 = r2' ++ RUnion i2 s true :: r' ∧ i1 ≠ i2).
+  (**i 4.) *) addr_index a1 = addr_index a2 ∧ (∃ t r1' i1 r2' i2 r',
+    addr_ref_base a1 = r1' ++ RUnion i1 t true :: r' ∧
+    addr_ref_base a2 = r2' ++ RUnion i2 t true :: r' ∧ i1 ≠ i2).
 Proof.
   unfold frozen. intros ? Ha1 ?? Ha2 ??.
   assert (addr_is_obj a1 ∧ addr_is_obj a2) as [].
@@ -140,7 +140,7 @@ Lemma cmap_non_aliasing Γ Δ m a1 a2 σ1 σ2 :
       !!{Γ} (addr_index a1', addr_ref Γ a1') = @None (mtree _).
 Proof.
   intros ? Hm ??????. destruct (addr_disjoint_cases Γ Δ a1 a2 σ1 σ2)
-    as [Ha12|[?|[?|(Hidx&s&r1'&i1&r2'&i2&r'&Ha1&Ha2&?)]]]; auto.
+    as [Ha12|[?|[?|(Hidx&t&r1'&i1&r2'&i2&r'&Ha1&Ha2&?)]]]; auto.
   do 3 right. intros g j1 j2.
   assert (Δ ⊢ addr_index a1 : addr_type_object a1)
     by eauto using addr_typed_index.
@@ -152,12 +152,12 @@ Proof.
     [by simplify_option_equality| |by simplify_option_equality].
   destruct (cmap_valid_Obj Γ Δ (CMap m) (addr_index a1) w malloc)
     as (τ&?&_&?&_); auto; simplify_type_equality'.
-  assert (Γ ⊢ r1' ++ RUnion i1 s true :: r' :
+  assert (Γ ⊢ r1' ++ RUnion i1 t true :: r' :
     addr_type_object a2 ↣ addr_type_base a1).
   { erewrite <-Ha1, <-(typed_unique _ (addr_index a1)
       (addr_type_object a1) (addr_type_object a2)) by eauto.
     eauto using addr_typed_ref_base_typed. }
-  assert (Γ ⊢ r2' ++ RUnion i2 s true :: r' :
+  assert (Γ ⊢ r2' ++ RUnion i2 t true :: r' :
     addr_type_object a2 ↣ addr_type_base a2).
   { rewrite <-Ha2. eauto using addr_typed_ref_base_typed. }
   unfold addr_ref; rewrite !addr_ref_base_plus, Ha1, Ha2.

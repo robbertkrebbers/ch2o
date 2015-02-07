@@ -12,8 +12,8 @@ Section operations.
     match w with
     | MBase τb _ => baseT τb
     | MArray τ ws => τ.[length ws]
-    | MStruct s _ => structT s
-    | MUnion s _ _ _ | MUnionAll s _ => unionT s
+    | MStruct t _ => structT t
+    | MUnion t _ _ _ | MUnionAll t _ => unionT t
     end.
   Inductive ctree_typed' (Γ : env K) (Δ : memenv K) :
        mtree K → type K → Prop :=
@@ -23,21 +23,21 @@ Section operations.
     | MArray_typed τ n ws :
        n = length ws → Forall (λ w, ctree_typed' Γ Δ w τ) ws → n ≠ 0 →
        ctree_typed' Γ Δ (MArray τ ws) (τ.[n])
-    | MStruct_typed s wxbss τs :
-       Γ !! s = Some τs → Forall2 (ctree_typed' Γ Δ ∘ fst) wxbss τs →
+    | MStruct_typed t wxbss τs :
+       Γ !! t = Some τs → Forall2 (ctree_typed' Γ Δ ∘ fst) wxbss τs →
        ✓{Γ,Δ}2** wxbss →
        Forall (λ wxbs, pbit_indetify <$> wxbs.2 = wxbs.2) wxbss →
        length ∘ snd <$> wxbss = field_bit_padding Γ τs →
-       ctree_typed' Γ Δ (MStruct s wxbss) (structT s)
-    | MUnion_typed s i τs w xbs τ :
-       Γ !! s = Some τs → τs !! i = Some τ → ctree_typed' Γ Δ w τ →
+       ctree_typed' Γ Δ (MStruct t wxbss) (structT t)
+    | MUnion_typed t i τs w xbs τ :
+       Γ !! t = Some τs → τs !! i = Some τ → ctree_typed' Γ Δ w τ →
        ✓{Γ,Δ}* xbs → pbit_indetify <$> xbs = xbs →
-       bit_size_of Γ (unionT s) = bit_size_of Γ τ + length xbs →
+       bit_size_of Γ (unionT t) = bit_size_of Γ τ + length xbs →
        ¬(ctree_unmapped w ∧ Forall sep_unmapped xbs) →
-       ctree_typed' Γ Δ (MUnion s i w xbs) (unionT s)
-    | MUnionAll_typed s τs xbs :
-       Γ !! s = Some τs → ✓{Γ,Δ}* xbs → length xbs = bit_size_of Γ (unionT s) →
-       ctree_typed' Γ Δ (MUnionAll s xbs) (unionT s).
+       ctree_typed' Γ Δ (MUnion t i w xbs) (unionT t)
+    | MUnionAll_typed t τs xbs :
+       Γ !! t = Some τs → ✓{Γ,Δ}* xbs → length xbs = bit_size_of Γ (unionT t) →
+       ctree_typed' Γ Δ (MUnionAll t xbs) (unionT t).
   Global Instance ctree_typed:
     Typed (env K * memenv K) (type K) (mtree K) := curry ctree_typed'.
 
@@ -49,18 +49,18 @@ Section operations.
          ✓{Γ,Δ}* xbs → P (baseT τb)) → P τ
     | MArray τ' ws =>
        ((Γ,Δ) ⊢* ws : τ' → length ws ≠ 0 → P (τ'.[length ws])) → P τ
-    | MStruct s wxbss =>
-       (∀ τs, Γ !! s = Some τs → (Γ,Δ) ⊢1* wxbss :* τs → ✓{Γ,Δ}2** wxbss →
+    | MStruct t wxbss =>
+       (∀ τs, Γ !! t = Some τs → (Γ,Δ) ⊢1* wxbss :* τs → ✓{Γ,Δ}2** wxbss →
          Forall (λ wxbs, pbit_indetify <$> wxbs.2 = wxbs.2) wxbss →
-         length ∘ snd <$> wxbss = field_bit_padding Γ τs → P (structT s)) → P τ
-    | MUnion s i w xbs =>
-       (∀ τs τ, Γ !! s = Some τs → τs !! i = Some τ → (Γ,Δ) ⊢ w : τ →
+         length ∘ snd <$> wxbss = field_bit_padding Γ τs → P (structT t)) → P τ
+    | MUnion t i w xbs =>
+       (∀ τs τ, Γ !! t = Some τs → τs !! i = Some τ → (Γ,Δ) ⊢ w : τ →
          ✓{Γ,Δ}* xbs → pbit_indetify <$> xbs = xbs →
-         bit_size_of Γ (unionT s) = bit_size_of Γ τ + length xbs →
-         ¬(ctree_unmapped w ∧ Forall sep_unmapped xbs) → P (unionT s)) → P τ
-    | MUnionAll s xbs =>
-       (∀ τs, Γ !! s = Some τs → ✓{Γ,Δ}* xbs →
-         length xbs = bit_size_of Γ (unionT s) → P (unionT s)) → P τ
+         bit_size_of Γ (unionT t) = bit_size_of Γ τ + length xbs →
+         ¬(ctree_unmapped w ∧ Forall sep_unmapped xbs) → P (unionT t)) → P τ
+    | MUnionAll t xbs =>
+       (∀ τs, Γ !! t = Some τs → ✓{Γ,Δ}* xbs →
+         length xbs = bit_size_of Γ (unionT t) → P (unionT t)) → P τ
     end.
   Proof. destruct 1; simplify_equality'; eauto. Qed.
   Lemma ctree_typed_inv_r Γ Δ (P : mtree K → Prop) w τ :
@@ -71,20 +71,20 @@ Section operations.
          ✓{Γ,Δ}* xbs → P (MBase τb xbs)) → P w
     | τ.[n] =>
        (∀ ws, n = length ws → (Γ,Δ) ⊢* ws : τ → n ≠ 0 → P (MArray τ ws)) → P w
-    | structT s =>
-       (∀ wxbss τs, Γ !! s = Some τs → (Γ,Δ) ⊢1* wxbss :* τs →
+    | structT t =>
+       (∀ wxbss τs, Γ !! t = Some τs → (Γ,Δ) ⊢1* wxbss :* τs →
          ✓{Γ,Δ}2** wxbss →
          Forall (λ wxbs, pbit_indetify <$> wxbs.2 = wxbs.2) wxbss →
          length ∘ snd <$> wxbss = field_bit_padding Γ τs →
-         P (MStruct s wxbss)) → P w
-    | unionT s =>
-       (∀ i τs w xbs τ, Γ !! s = Some τs → τs !! i = Some τ → (Γ,Δ) ⊢ w : τ →
+         P (MStruct t wxbss)) → P w
+    | unionT t =>
+       (∀ i τs w xbs τ, Γ !! t = Some τs → τs !! i = Some τ → (Γ,Δ) ⊢ w : τ →
          ✓{Γ,Δ}* xbs → pbit_indetify <$> xbs = xbs →
-         bit_size_of Γ (unionT s) = bit_size_of Γ τ + length xbs →
+         bit_size_of Γ (unionT t) = bit_size_of Γ τ + length xbs →
          ¬(ctree_unmapped w ∧ Forall sep_unmapped xbs) →
-         P (MUnion s i w xbs)) →
-       (∀ τs xbs, Γ !! s = Some τs → ✓{Γ,Δ}* xbs →
-         length xbs = bit_size_of Γ (unionT s) → P (MUnionAll s xbs)) →
+         P (MUnion t i w xbs)) →
+       (∀ τs xbs, Γ !! t = Some τs → ✓{Γ,Δ}* xbs →
+         length xbs = bit_size_of Γ (unionT t) → P (MUnionAll t xbs)) →
        P w
     end.
   Proof. destruct 1; eauto. Qed.
@@ -96,19 +96,19 @@ Section operations.
          ✓{Γ,Δ}* xbs → P) → P
     | MArray τ' ws, τ''.[n] =>
        (τ'' = τ' → n = length ws → (Γ,Δ) ⊢* ws : τ' → length ws ≠ 0 → P) → P
-    | MStruct s wxbss, structT s' =>
-       (∀ τs, s' = s → Γ !! s = Some τs → (Γ,Δ) ⊢1* wxbss :* τs →
+    | MStruct t wxbss, structT t' =>
+       (∀ τs, t' = t → Γ !! t = Some τs → (Γ,Δ) ⊢1* wxbss :* τs →
          ✓{Γ,Δ}2** wxbss →
          Forall (λ wxbs, pbit_indetify <$> wxbs.2 = wxbs.2) wxbss →
          length ∘ snd <$> wxbss = field_bit_padding Γ τs → P) → P
-    | MUnion s i w xbs, unionT s' =>
-       (∀ τs τ, s' = s → Γ !! s = Some τs → τs !! i = Some τ → (Γ,Δ) ⊢ w : τ →
+    | MUnion t i w xbs, unionT t' =>
+       (∀ τs τ, t' = t → Γ !! t = Some τs → τs !! i = Some τ → (Γ,Δ) ⊢ w : τ →
          ✓{Γ,Δ}* xbs → pbit_indetify <$> xbs = xbs →
-         bit_size_of Γ (unionT s) = bit_size_of Γ τ + length xbs →
+         bit_size_of Γ (unionT t) = bit_size_of Γ τ + length xbs →
          ¬(ctree_unmapped w ∧ Forall sep_unmapped xbs) → P) → P
-    | MUnionAll s xbs, unionT s' =>
-       (∀ τs, s' = s → Γ !! s = Some τs → ✓{Γ,Δ}* xbs →
-         length xbs = bit_size_of Γ (unionT s) → P) → P
+    | MUnionAll t xbs, unionT t' =>
+       (∀ τs, t' = t → Γ !! t = Some τs → ✓{Γ,Δ}* xbs →
+         length xbs = bit_size_of Γ (unionT t) → P) → P
     | _, _ => P
     end.
   Proof. destruct 1; simplify_equality'; eauto. Qed.
@@ -120,21 +120,21 @@ Section operations.
     Context (Parray : ∀ ws τ,
       (Γ,Δ) ⊢* ws : τ → Forall (λ w, P w τ) ws →
       length ws ≠ 0 → P (MArray τ ws) (τ.[length ws])).
-    Context (Pstruct : ∀ s wxbss τs,
-      Γ !! s = Some τs → (Γ,Δ) ⊢1* wxbss :* τs → Forall2 (P ∘ fst) wxbss τs →
+    Context (Pstruct : ∀ t wxbss τs,
+      Γ !! t = Some τs → (Γ,Δ) ⊢1* wxbss :* τs → Forall2 (P ∘ fst) wxbss τs →
       ✓{Γ,Δ}2** wxbss →
       Forall (λ wxbs, pbit_indetify <$> wxbs.2 = wxbs.2) wxbss →
       length ∘ snd <$> wxbss = field_bit_padding Γ τs →
-      P (MStruct s wxbss) (structT s)).
-    Context (Punion : ∀ s i τs w xbs τ,
-      Γ !! s = Some τs → τs !! i = Some τ → (Γ,Δ) ⊢ w : τ → P w τ →
+      P (MStruct t wxbss) (structT t)).
+    Context (Punion : ∀ t i τs w xbs τ,
+      Γ !! t = Some τs → τs !! i = Some τ → (Γ,Δ) ⊢ w : τ → P w τ →
       ✓{Γ,Δ}* xbs → pbit_indetify <$> xbs = xbs →
-      bit_size_of Γ (unionT s) = bit_size_of Γ τ + length xbs →
+      bit_size_of Γ (unionT t) = bit_size_of Γ τ + length xbs →
       ¬(ctree_unmapped w ∧ Forall sep_unmapped xbs) →
-      P (MUnion s i w xbs) (unionT s)).
-    Context (Punion_all : ∀ s τs xbs,
-      Γ !! s = Some τs → ✓{Γ,Δ}* xbs → length xbs = bit_size_of Γ (unionT s) →
-      P (MUnionAll s xbs) (unionT s)).
+      P (MUnion t i w xbs) (unionT t)).
+    Context (Punion_all : ∀ t τs xbs,
+      Γ !! t = Some τs → ✓{Γ,Δ}* xbs → length xbs = bit_size_of Γ (unionT t) →
+      P (MUnionAll t xbs) (unionT t)).
     Definition ctree_typed_ind : ∀ w τ, ctree_typed' Γ Δ w τ → P w τ.
     Proof.
       fix 3; destruct 1; simplify_equality';
@@ -156,55 +156,55 @@ Section operations.
        guard (length ws ≠ 0);
        guard (Forall (τ =) τs);
        Some (τ.[length ws])
-    | MStruct s wxbss =>
-       τs ← ΓΔ.1 !! s;
+    | MStruct t wxbss =>
+       τs ← ΓΔ.1 !! t;
        τs' ← mapM (type_check ΓΔ ∘ fst) wxbss;
        guard (τs' = τs);
        guard (✓{ΓΔ}2** wxbss);
        guard (Forall (λ wxbs, pbit_indetify <$> wxbs.2 = wxbs.2) wxbss);
        guard (length ∘ snd <$> wxbss = field_bit_padding (ΓΔ.1) τs);
-       Some (structT s)
-    | MUnion s i w xbs =>
-       τ ← ΓΔ.1 !! s ≫= (!! i);
+       Some (structT t)
+    | MUnion t i w xbs =>
+       τ ← ΓΔ.1 !! t ≫= (!! i);
        τ' ← type_check ΓΔ w;
        guard (τ' = τ);
        guard (✓{ΓΔ}* xbs);
        guard (pbit_indetify <$> xbs = xbs);
-       guard (bit_size_of (ΓΔ.1) (unionT s)
+       guard (bit_size_of (ΓΔ.1) (unionT t)
          = bit_size_of (ΓΔ.1) τ + length xbs);
        guard (¬(ctree_unmapped w ∧ Forall sep_unmapped xbs));
-       Some (unionT s)
-    | MUnionAll s xbs =>
-       τs ← ΓΔ.1 !! s;
+       Some (unionT t)
+    | MUnionAll t xbs =>
+       τs ← ΓΔ.1 !! t;
        guard (✓{ΓΔ}* xbs);
-       guard (length xbs = bit_size_of (ΓΔ.1) (unionT s));
-       Some (unionT s)
+       guard (length xbs = bit_size_of (ΓΔ.1) (unionT t));
+       Some (unionT t)
     end.
 
   Inductive union_free : mtree K → Prop :=
     | MBase_union_free τb xbs : union_free (MBase τb xbs)
     | MArray_union_free τ ws : Forall union_free ws → union_free (MArray τ ws)
-    | MStruct_union_free s wxbss :
-       Forall (union_free ∘ fst) wxbss → union_free (MStruct s wxbss)
-    | MUnionAll_union_free s xbs : union_free (MUnionAll s xbs).
+    | MStruct_union_free t wxbss :
+       Forall (union_free ∘ fst) wxbss → union_free (MStruct t wxbss)
+    | MUnionAll_union_free t xbs : union_free (MUnionAll t xbs).
   Definition union_reset : mtree K → mtree K :=
     fix go w :=
     match w with
     | MBase τb xbs => MBase τb xbs
     | MArray τ ws => MArray τ (go <$> ws)
-    | MStruct s wxbss => MStruct s (prod_map go id <$> wxbss)
-    | MUnion s i w xbs => MUnionAll s (ctree_flatten w ++ xbs)
-    | MUnionAll s xbs => MUnionAll s xbs
+    | MStruct t wxbss => MStruct t (prod_map go id <$> wxbss)
+    | MUnion t i w xbs => MUnionAll t (ctree_flatten w ++ xbs)
+    | MUnionAll t xbs => MUnionAll t xbs
     end.
   Section union_free_ind.
     Context (P : mtree K → Prop).
     Context (Pbase : ∀ τ xbs, P (MBase τ xbs)).
     Context (Parray : ∀ τ ws,
       Forall union_free ws → Forall P ws → P (MArray τ ws)).
-    Context (Pstruct : ∀ s wxbss,
+    Context (Pstruct : ∀ t wxbss,
       Forall (union_free ∘ fst) wxbss → Forall (P ∘ fst) wxbss →
-      P (MStruct s wxbss)).
-    Context (Punion_bits : ∀ s xbs, P (MUnionAll s xbs)).
+      P (MStruct t wxbss)).
+    Context (Punion_bits : ∀ t xbs, P (MUnionAll t xbs)).
     Definition union_free_ind_alt: ∀ w, union_free w → P w.
     Proof. fix 2; destruct 1; eauto using Forall_impl. Qed.
   End union_free_ind.
@@ -238,14 +238,14 @@ Section operations.
       type K → list (pbit K) → mtree K := type_iter
     (**i TBase =>     *) (λ τb xbs, MBase τb xbs)
     (**i TArray =>    *) (λ τ n go xbs, MArray τ (array_unflatten Γ go τ n xbs))
-    (**i TCompound => *) (λ c s τs go xbs,
+    (**i TCompound => *) (λ c t τs go xbs,
       match c with
       | Struct_kind =>
-         MStruct s (struct_unflatten Γ (λ τ xbs,
+         MStruct t (struct_unflatten Γ (λ τ xbs,
            let τsz := bit_size_of Γ τ
            in (go τ (take τsz xbs), pbit_indetify <$> drop τsz xbs)
          ) τs xbs)
-      | Union_kind => MUnionAll s xbs
+      | Union_kind => MUnionAll t xbs
       end) Γ.
 
   Definition ctree_new (Γ : env K) (xb : pbit K) (τ : type K) : mtree K :=
@@ -256,19 +256,19 @@ Section operations.
     match rs, w with
     | RArray i τ n, MArray τ' ws =>
        guard (n = length ws); guard (τ = τ'); ws !! i
-    | RStruct i s, MStruct s' wxbss => guard (s = s'); fst <$> wxbss !! i
-    | RUnion i s β, MUnion s' j w xbs =>
-       guard (s = s');
+    | RStruct i t, MStruct t' wxbss => guard (t = t'); fst <$> wxbss !! i
+    | RUnion i t β, MUnion t' j w xbs =>
+       guard (t = t');
        if decide (i = j) then Some w else
        guard (β = false);
-       τ ← Γ !! s ≫= (!! i);
+       τ ← Γ !! t ≫= (!! i);
        guard (ctree_unshared w);
        guard (Forall sep_unshared xbs);
        let xbs' := ctree_flatten w ++ xbs in
        Some (ctree_unflatten Γ τ (take (bit_size_of Γ τ) xbs'))
-    | RUnion i s _, MUnionAll s' xbs =>
-       guard (s = s'); 
-       τ ← Γ !! s ≫= (!! i);
+    | RUnion i t _, MUnionAll t' xbs =>
+       guard (t = t'); 
+       τ ← Γ !! t ≫= (!! i);
        guard (Forall sep_unshared xbs);
        Some (ctree_unflatten Γ τ (take (bit_size_of Γ τ) xbs))
     | _, _ => None
@@ -282,15 +282,15 @@ Section operations.
       (rs : ref_seg K) (w : mtree K) : mtree K :=
     match rs, w with
     | RArray i _ _, MArray τ ws => MArray τ (alter g i ws)
-    | RStruct i _, MStruct s wxbss => MStruct s (alter (prod_map g id) i wxbss)
-    | RUnion i _ _, MUnion s j w' xbs' =>
-       if decide (i = j) then MUnion s i (g w') xbs'
-       else default w (Γ !! s ≫= (!! i)) $ λ τ,
+    | RStruct i _, MStruct t wxbss => MStruct t (alter (prod_map g id) i wxbss)
+    | RUnion i _ _, MUnion t j w' xbs' =>
+       if decide (i = j) then MUnion t i (g w') xbs'
+       else default w (Γ !! t ≫= (!! i)) $ λ τ,
          let xbs := ctree_flatten w' ++ xbs' in
-         MUnion s i (g (ctree_unflatten Γ τ (take (bit_size_of Γ τ) xbs)))
+         MUnion t i (g (ctree_unflatten Γ τ (take (bit_size_of Γ τ) xbs)))
                     (pbit_indetify <$> drop (bit_size_of Γ τ) xbs)
-    | RUnion i _ _, MUnionAll s xbs => default w (Γ !! s ≫= (!! i)) $ λ τ,
-       MUnion s i (g (ctree_unflatten Γ τ (take (bit_size_of Γ τ) xbs)))
+    | RUnion i _ _, MUnionAll t xbs => default w (Γ !! t ≫= (!! i)) $ λ τ,
+       MUnion t i (g (ctree_unflatten Γ τ (take (bit_size_of Γ τ) xbs)))
                   (pbit_indetify <$> drop (bit_size_of Γ τ) xbs)
     | _, _ => w
     end.
@@ -314,14 +314,14 @@ Section operations.
     (rs : ref_seg K) (w : mtree K) : mtree K :=
     match rs with
     | RArray i τ n => MArray τ (<[i:=w]>(replicate n (ctree_new Γ ∅ τ)))
-    | RStruct i s =>
-       default w (Γ !! s) $ λ τs,
-       MStruct s (zip (<[i:=w]>(ctree_new Γ ∅ <$> τs))
+    | RStruct i t =>
+       default w (Γ !! t) $ λ τs,
+       MStruct t (zip (<[i:=w]>(ctree_new Γ ∅ <$> τs))
          (flip replicate ∅ <$> field_bit_padding Γ τs))
-    | RUnion i s _ =>
-       default w (Γ !! s ≫= (!!i)) $ λ τ,
-       let sz := bit_size_of Γ (unionT s) - bit_size_of Γ τ in
-       MUnion s i w (replicate sz ∅)
+    | RUnion i t _ =>
+       default w (Γ !! t ≫= (!!i)) $ λ τ,
+       let sz := bit_size_of Γ (unionT t) - bit_size_of Γ τ in
+       MUnion t i w (replicate sz ∅)
     end.
   Fixpoint ctree_singleton (Γ : env K)
       (r : ref K) (w : mtree K) : mtree K :=
@@ -423,11 +423,11 @@ Proof.
   * done.
   * intros ws τ _ IH _; simpl. rewrite bit_size_of_array.
     induction IH; csimpl; rewrite ?app_length; f_equal; auto.
-  * intros s wxbss τs Hs _ IH _ _ Hxbss; erewrite bit_size_of_struct by eauto.
-    clear Hs. revert wxbss Hxbss IH. unfold field_bit_padding.
+  * intros t wxbss τs Ht _ IH _ _ Hxbss; erewrite bit_size_of_struct by eauto.
+    clear Ht. revert wxbss Hxbss IH. unfold field_bit_padding.
     induction (bit_size_of_fields _ τs HΓ); intros [|??] ??;
       decompose_Forall_hyps; rewrite ?app_length; f_equal; auto with lia.
-  * intros s i τs w xbs τ ?? _ <- _ _ ? _. by rewrite app_length.
+  * intros t i τs w xbs τ ?? _ <- _ _ ? _. by rewrite app_length.
   * done.
 Qed.
 Lemma ctree_flatten_valid Γ Δ w τ :
@@ -436,7 +436,7 @@ Proof.
   intros HΓ. revert w τ.
   refine (ctree_typed_ind _ _ _ _ _ _ _ _); simpl; auto 2.
   * intros ws τ _ IH _. induction IH; decompose_Forall_hyps; auto.
-  * intros s wxbss τs _ _ IH ? _ _. induction IH; decompose_Forall_hyps; auto.
+  * intros t wxbss τs _ _ IH ? _ _. induction IH; decompose_Forall_hyps; auto.
 Qed.
 Lemma ctree_flatten_union_reset w :
   ctree_flatten (union_reset w) = ctree_flatten w.
@@ -463,12 +463,12 @@ Proof.
   * intros ws τ Hws IH Hlen; typed_constructor; auto.
     + by rewrite fmap_length.
     + clear Hlen. induction IH; decompose_Forall_hyps; auto.
-  * intros s wxbss τs Hs Hws IH ? Hindet Hlen; typed_constructor; eauto.
-    + clear Hs Hlen Hindet. induction IH; decompose_Forall_hyps; auto.
+  * intros t wxbss τs Ht Hws IH ? Hindet Hlen; typed_constructor; eauto.
+    + clear Ht Hlen Hindet. induction IH; decompose_Forall_hyps; auto.
     + clear Hindet. eapply Forall_fmap, Forall_impl; eauto.
     + elim Hindet; intros; constructor; simpl; auto.
     + rewrite <-Hlen, <-list_fmap_compose. by apply list_fmap_ext.
-  * intros s i τs w xbs τ ??????? Hemp; simpl. typed_constructor; eauto.
+  * intros t i τs w xbs τ ??????? Hemp; simpl. typed_constructor; eauto.
     + eauto using ctree_flatten_valid.
     + by erewrite app_length, ctree_flatten_length by eauto.
   * typed_constructor; eauto.
@@ -499,30 +499,30 @@ Qed.
 Definition type_mask (Γ : env K) : type K → list bool := type_iter
   (**i TBase =>     *) (λ τb, replicate (bit_size_of Γ τb) false)
   (**i TArray =>    *) (λ _ n go, mjoin (replicate n go))
-  (**i TCompound => *) (λ c s τs go,
+  (**i TCompound => *) (λ c t τs go,
     match c with
     | Struct_kind =>
        let τszs := field_bit_sizes Γ τs in
        mjoin (zip_with (λ τ sz, resize sz true (go τ)) τs τszs)
-    | Union_kind => replicate (bit_size_of Γ (unionT s)) false
+    | Union_kind => replicate (bit_size_of Γ (unionT t)) false
    end) Γ.
 Lemma type_mask_base Γ τb : type_mask Γ τb = replicate (bit_size_of Γ τb) false.
 Proof. done. Qed.
 Lemma type_mask_array Γ τ n :
   type_mask Γ (τ.[n]) = mjoin (replicate n (type_mask Γ τ)).
 Proof. unfold type_mask. by rewrite type_iter_array. Qed.
-Lemma type_mask_compound Γ c s τs :
-  ✓ Γ → Γ !! s = Some τs → type_mask Γ (compoundT{c} s)
+Lemma type_mask_compound Γ c t τs :
+  ✓ Γ → Γ !! t = Some τs → type_mask Γ (compoundT{c} t)
   = match c with
     | Struct_kind =>
        let flds := field_bit_sizes Γ τs in
        mjoin (zip_with (λ τ sz, resize sz true (type_mask Γ τ)) τs flds)
-    | Union_kind => replicate (bit_size_of Γ (unionT s)) false
+    | Union_kind => replicate (bit_size_of Γ (unionT t)) false
     end.
 Proof.
-  intros HΓ Hs. unfold type_mask. erewrite (type_iter_compound (=)); try done.
+  intros HΓ Ht. unfold type_mask. erewrite (type_iter_compound (=)); try done.
   { by intros ????? ->. }
-  clear s τs Hs. intros f g [] s τs _ _ Hfg; f_equal.
+  clear t τs Ht. intros f g [] t τs _ _ Hfg; f_equal.
   induction (bit_size_of_fields Γ τs HΓ);
     decompose_Forall_hyps; f_equal; auto with congruence.
 Qed.
@@ -533,8 +533,8 @@ Proof.
   * intros τb _. by rewrite type_mask_base, replicate_length.
   * intros τ n _ IH _. rewrite type_mask_array, bit_size_of_array, <-IH.
     induction n; simpl; rewrite ?app_length; auto.
-  * intros [] s τs Hs _ _ _; erewrite !type_mask_compound by eauto; simpl.
-    { erewrite bit_size_of_struct by eauto. clear Hs.
+  * intros [] t τs Ht _ _ _; erewrite !type_mask_compound by eauto; simpl.
+    { erewrite bit_size_of_struct by eauto. clear Ht.
       induction (bit_size_of_fields _ τs HΓ); simpl; [done|].
       rewrite app_length, resize_length; auto. }
     by rewrite replicate_length.
@@ -582,21 +582,21 @@ Lemma ctree_unflatten_array Γ τ n xbs :
   ctree_unflatten Γ (τ.[n]) xbs =
     MArray τ (array_unflatten Γ (ctree_unflatten Γ τ) τ n xbs).
 Proof. unfold ctree_unflatten. by rewrite type_iter_array. Qed.
-Lemma ctree_unflatten_compound Γ c s τs xbs :
-  ✓ Γ → Γ !! s = Some τs → ctree_unflatten Γ (compoundT{c} s) xbs
+Lemma ctree_unflatten_compound Γ c t τs xbs :
+  ✓ Γ → Γ !! t = Some τs → ctree_unflatten Γ (compoundT{c} t) xbs
   = match c with
     | Struct_kind =>
-       MStruct s (struct_unflatten Γ (λ τ xbs,
+       MStruct t (struct_unflatten Γ (λ τ xbs,
         let τsz := bit_size_of Γ τ in
         (ctree_unflatten Γ τ (take τsz xbs), pbit_indetify <$> drop τsz xbs)
        ) τs xbs)
-    | Union_kind => MUnionAll s xbs
+    | Union_kind => MUnionAll t xbs
     end.
 Proof.
-  intros ? Hs. unfold ctree_unflatten.
+  intros ? Ht. unfold ctree_unflatten.
   erewrite (type_iter_compound (pointwise_relation _ (=))); try done.
   { intros ???????; f_equal. by apply array_unflatten_weaken. }
-  clear s τs Hs xbs. intros f g [] s τs Hs Hτs Hfg xbs; f_equal; auto.
+  clear t τs Ht xbs. intros f g [] t τs Ht Hτs Hfg xbs; f_equal; auto.
   eapply struct_unflatten_weaken, Forall_impl; eauto with f_equal.
 Qed.
 Lemma ctree_unflatten_weaken Γ1 Γ2 τ xbs :
@@ -605,7 +605,7 @@ Lemma ctree_unflatten_weaken Γ1 Γ2 τ xbs :
 Proof.
   intros. apply (type_iter_weaken (pointwise_relation _ (=))); try done.
   { intros ???????; f_equal. by apply array_unflatten_weaken. }
-  clear xbs. intros f g [] s τs Hs Hτs Hfg xbs; f_equal; auto.
+  clear xbs. intros f g [] t τs Ht Hτs Hfg xbs; f_equal; auto.
   eapply struct_unflatten_weaken, Forall_impl; eauto 1.
   auto using bit_size_of_weaken with f_equal.
 Qed.
@@ -620,9 +620,9 @@ Ltac solve_length := simplify_equality'; repeat first
   | match goal with
     | |- context [ bit_size_of ?Γ ?τ ] =>
       match goal with
-        | H : Γ !! ?s = Some ?τs, H2 : ?τs !! _ = Some τ |- _ =>
-          unless (bit_size_of Γ τ ≤ bit_size_of Γ (unionT s)) by done;
-          assert (bit_size_of Γ τ ≤ bit_size_of Γ (unionT s))
+        | H : Γ !! ?t = Some ?τs, H2 : ?τs !! _ = Some τ |- _ =>
+          unless (bit_size_of Γ τ ≤ bit_size_of Γ (unionT t)) by done;
+          assert (bit_size_of Γ τ ≤ bit_size_of Γ (unionT t))
             by eauto using bit_size_of_union_lookup
         end
     | H : Forall2 _ _ _ |- _ => apply Forall2_length in H
@@ -642,19 +642,19 @@ Proof.
     rewrite ctree_unflatten_array, bit_size_of_array.
     intros Hxbs'. typed_constructor; auto using array_unflatten_length.
     clear Hn. revert xbs Hxbs Hxbs'. induction n; simpl; auto.
-  * intros [] s τs Hs Hτs IH Hτs_len xbs Hxbs;
+  * intros [] t τs Ht Hτs IH Hτs_len xbs Hxbs;
       erewrite ctree_unflatten_compound, ?bit_size_of_struct by eauto;
       intros Hxbs'; simpl; typed_constructor; eauto.
-    + unfold struct_unflatten. clear Hs Hτs Hτs_len. revert xbs Hxbs Hxbs'.
+    + unfold struct_unflatten. clear Ht Hτs Hτs_len. revert xbs Hxbs Hxbs'.
       induction (bit_size_of_fields Γ τs HΓ);
         intros; decompose_Forall_hyps; constructor; eauto.
-    + clear Hs IH Hτs Hτs_len Hxbs'. unfold struct_unflatten. revert xbs Hxbs.
+    + clear Ht IH Hτs Hτs_len Hxbs'. unfold struct_unflatten. revert xbs Hxbs.
       induction (bit_size_of_fields _ τs HΓ); constructor;
         simpl; auto using pbits_indetify_valid.
-    + clear Hs IH Hτs Hτs_len Hxbs Hxbs'. unfold struct_unflatten. revert xbs.
+    + clear Ht IH Hτs Hτs_len Hxbs Hxbs'. unfold struct_unflatten. revert xbs.
       induction (bit_size_of_fields _ τs HΓ); constructor;
         simpl; auto using pbits_indetify_idempotent.
-    + clear Hs IH Hτs Hτs_len Hxbs.
+    + clear Ht IH Hτs Hτs_len Hxbs.
       unfold struct_unflatten, field_bit_padding. revert xbs Hxbs'.
       induction (bit_size_of_fields _ τs HΓ); intros; f_equal'; auto.
 Qed.
@@ -665,7 +665,7 @@ Proof.
   * done.
   * intros τ n _ IH ? xbs. rewrite ctree_unflatten_array; simpl.
     destruct n; simplify_equality'. by rewrite array_unflatten_length.
-  * by intros [] s τs ? _ _ _ xbs; erewrite ctree_unflatten_compound by eauto.
+  * by intros [] t τs ? _ _ _ xbs; erewrite ctree_unflatten_compound by eauto.
 Qed.
 Lemma ctree_unflatten_union_free Γ τ xbs :
   ✓ Γ → ✓{Γ} τ → union_free (ctree_unflatten Γ τ xbs).
@@ -674,9 +674,9 @@ Proof.
   * intros τb _ xbs. rewrite ctree_unflatten_base. constructor.
   * intros τ n _ IH _ xbs. rewrite ctree_unflatten_array. constructor.
     revert xbs. elim n; simpl; constructor; auto.
-  * intros [] s τs Hs _ IH _ xbs;
+  * intros [] t τs Ht _ IH _ xbs;
       erewrite !ctree_unflatten_compound by eauto; constructor.
-    clear Hs. unfold struct_unflatten. revert xbs.
+    clear Ht. unfold struct_unflatten. revert xbs.
     induction (bit_size_of_fields _ τs HΓ); intros;
       decompose_Forall_hyps; constructor; eauto.
 Qed.
@@ -688,8 +688,8 @@ Proof.
   * intros ws τ ? IH _. rewrite ctree_unflatten_array. f_equal.
     induction IH; [done |]; intros; decompose_Forall_hyps; auto.
     rewrite take_app_alt, drop_app_alt by auto. f_equal; auto.
-  * intros s wxbss τs Hs Hws IH _ Hindet Hlen.
-    erewrite ctree_unflatten_compound by eauto; f_equal'. clear Hs.
+  * intros t wxbss τs Ht Hws IH _ Hindet Hlen.
+    erewrite ctree_unflatten_compound by eauto; f_equal'. clear Ht.
     revert wxbss Hindet Hlen Hws IH. unfold struct_unflatten, field_bit_padding.
     induction (bit_size_of_fields _ τs HΓ);
       intros [|[] ?] ????; decompose_Forall_hyps; [done|].
@@ -709,9 +709,9 @@ Proof.
     revert xbs. induction n as [|n IHn]; intros xbs ?; simplify_equality'.
     { symmetry; apply nil_length_inv; lia. }
     by rewrite IH, IHn, mask_app, type_mask_length by auto.
-  * intros [] s τs Hs Hτs IH _ xbs; erewrite ctree_unflatten_compound,
+  * intros [] t τs Ht Hτs IH _ xbs; erewrite ctree_unflatten_compound,
       ?type_mask_compound, ?bit_size_of_struct, ?mask_false by eauto; eauto.
-    clear Hs; simpl. revert xbs IH. unfold struct_unflatten.
+    clear Ht; simpl. revert xbs IH. unfold struct_unflatten.
     induction (bit_size_of_fields _ τs HΓ) as [|τ sz τs szs ?? IHτ]; simpl.
     { intros [|??] _ ?; simpl in *; auto with lia. }
     intros xbs. rewrite Forall_cons. intros [IH ?] ?; decompose_Forall_hyps.
@@ -757,9 +757,9 @@ Proof.
       ?mask_length, ?take_length_le by auto; f_equal; auto.
     + apply IH; auto. by rewrite !fmap_take, <-!zip_with_take, fmap_take, Hh.
     + apply IHn; auto. by rewrite !fmap_drop, <-!zip_with_drop, fmap_drop, Hh.
-  * intros [] s τs Hs Hτs IH _ xbs ys; erewrite ?bit_size_of_struct,
+  * intros [] t τs Ht Hτs IH _ xbs ys; erewrite ?bit_size_of_struct,
       !ctree_unflatten_compound by eauto; intros Hxbs Hh; f_equal'.
-    clear Hs. revert xbs ys Hxbs Hh. unfold struct_unflatten. revert IH.
+    clear Ht. revert xbs ys Hxbs Hh. unfold struct_unflatten. revert IH.
     induction (bit_size_of_fields _ τs HΓ) as [|τ sz τs szs ?? IHτs]; [done|].
     rewrite Forall_cons; intros [IH ?]; intros; decompose_Forall_hyps;
       rewrite ?ctree_flatten_unflatten_le, ?zip_with_take, ?zip_with_drop,
@@ -782,16 +782,16 @@ Proof.
   unfold ctree_new; rewrite ctree_unflatten_array, bit_size_of_array; f_equal.
   by induction n; f_equal'; rewrite ?take_replicate_plus, ?drop_replicate_plus.
 Qed.
-Lemma ctree_new_compound Γ xb c s τs :
-  ✓ Γ → Γ !! s = Some τs → ctree_new Γ xb (compoundT{c} s)
+Lemma ctree_new_compound Γ xb c t τs :
+  ✓ Γ → Γ !! t = Some τs → ctree_new Γ xb (compoundT{c} t)
   = match c with
-    | Struct_kind => MStruct s (zip (ctree_new Γ xb <$> τs)
+    | Struct_kind => MStruct t (zip (ctree_new Γ xb <$> τs)
        (flip replicate (pbit_indetify xb) <$> field_bit_padding Γ τs))
-    | Union_kind => MUnionAll s (replicate (bit_size_of Γ (unionT s)) xb)
+    | Union_kind => MUnionAll t (replicate (bit_size_of Γ (unionT t)) xb)
     end.
 Proof.
-  intros HΓ Hs; unfold ctree_new; erewrite ctree_unflatten_compound by eauto.
-  destruct c; f_equal. erewrite ?bit_size_of_struct by eauto; clear Hs.
+  intros HΓ Ht; unfold ctree_new; erewrite ctree_unflatten_compound by eauto.
+  destruct c; f_equal. erewrite ?bit_size_of_struct by eauto; clear Ht.
   unfold struct_unflatten, field_bit_padding.
   by induction (bit_size_of_fields _ τs HΓ); decompose_Forall_hyps;
     rewrite ?take_replicate_plus, ?drop_replicate_plus, ?take_replicate,
@@ -856,7 +856,7 @@ Proof.
   * intros ws τ _ IH Hlen Hw'. typed_constructor; auto. clear Hlen.
     revert Hw'. induction IH; csimpl; rewrite ?fmap_app; intros;
       decompose_Forall_hyps; constructor; auto.
-  * intros s wxbss τs Hs _ IH Hxss Hindet Hlen Hw'.
+  * intros t wxbss τs Ht _ IH Hxss Hindet Hlen Hw'.
     typed_constructor; eauto.
     + revert Hw'. elim IH; [|intros [??] ???]; csimpl; rewrite ?fmap_app;
         intros; decompose_Forall_hyps; auto.
@@ -864,7 +864,7 @@ Proof.
         intros; decompose_Forall_hyps; auto.
     + elim Hindet; intros; constructor; simpl; auto.
     + rewrite <-Hlen. elim wxbss; intros; f_equal'; auto.
-  * intros s i τs w xbs τ; rewrite fmap_app; intros; decompose_Forall_hyps.
+  * intros t i τs w xbs τ; rewrite fmap_app; intros; decompose_Forall_hyps.
     typed_constructor; eauto using ctree_flatten_valid; try solve_length.
     rewrite ctree_flatten_map; intuition eauto using ctree_flatten_valid.
   * typed_constructor; eauto.
@@ -918,18 +918,18 @@ Lemma ctree_lookup_seg_inv P Γ rs w w' :
   match rs, w with
   | RArray i τ n, MArray τ' ws =>
      (∀ w'', τ' = τ → n = length ws → ws !! i = Some w'' → P w'') → P w'
-  | RStruct i s, MStruct s' wxbss =>
-     (∀ w'' xs, s = s' → wxbss !! i = Some (w'', xs) → P w'') → P w'
-  | RUnion i s q, MUnion s' j w'' xs =>
-     (s = s' → i = j → P w'') →
-     (∀ τs τ, s = s' → i ≠ j → q = false →
-       Γ !! s = Some τs → τs !! i = Some τ →
+  | RStruct i t, MStruct t' wxbss =>
+     (∀ w'' xs, t = t' → wxbss !! i = Some (w'', xs) → P w'') → P w'
+  | RUnion i t q, MUnion t' j w'' xs =>
+     (t = t' → i = j → P w'') →
+     (∀ τs τ, t = t' → i ≠ j → q = false →
+       Γ !! t = Some τs → τs !! i = Some τ →
        ctree_unshared w'' → Forall sep_unshared xs →
        P (ctree_unflatten Γ τ (take (bit_size_of Γ τ)
           (ctree_flatten w'' ++ xs)))) →
      P w'
-  | RUnion i s _, MUnionAll s' xs =>
-     (∀ τs τ, s = s' → Γ !! s = Some τs → τs !! i = Some τ →
+  | RUnion i t _, MUnionAll t' xs =>
+     (∀ τs τ, t = t' → Γ !! t = Some τs → τs !! i = Some τ →
        Forall sep_unshared xs →
        P (ctree_unflatten Γ τ (take (bit_size_of Γ τ) xs))) →
      P w'
@@ -1057,7 +1057,7 @@ Lemma ctree_new_lookup_seg Γ τ x rs σ :
   ✓ Γ → sep_unshared x → ✓{Γ} τ →
   Γ ⊢ rs : τ ↣ σ → ctree_new Γ x τ !!{Γ} rs = Some (ctree_new Γ x σ).
 Proof.
-  destruct 4 as [τ n i|s i τs τ Hs Hτs|s i q τs τ].
+  destruct 4 as [τ n i|s i τs τ Ht Hτs|s i q τs τ].
   * rewrite ctree_new_array; simplify_option_equality.
     by rewrite lookup_replicate by done.
   * erewrite ctree_new_compound by eauto; simplify_option_equality.
@@ -1103,13 +1103,13 @@ Lemma type_mask_ref_seg Γ τ rs σ :
   =.>* type_mask Γ σ.
 Proof.
   intros HΓ Hrs Hτ.
-  destruct Hrs as [τ i n Hin|s i τs τ Hs Hi|]; simplify_option_equality.
+  destruct Hrs as [τ i n Hin|s i τs τ Ht Hi|]; simplify_option_equality.
   * rewrite type_mask_array; apply reflexive_eq. revert i Hin.
     apply TArray_valid_inv_type in Hτ.
     induction n as [|n]; intros [|i] ?; simplify_equality'; rewrite ?drop_0,
       ?take_app_alt, <-?drop_drop, ?drop_app_alt by done; auto with lia.
   * erewrite type_mask_compound by eauto; simpl; apply reflexive_eq.
-    assert (✓{Γ}* τs) as Hτs by eauto; revert i Hi Hτs. clear Hs Hτ.
+    assert (✓{Γ}* τs) as Hτs by eauto; revert i Hi Hτs. clear Ht Hτ.
     unfold field_bit_offset.
     induction (bit_size_of_fields _ τs HΓ); intros [|i] ??;
       decompose_Forall_hyps; rewrite <-?drop_drop, ?drop_app_alt, ?drop_0,
@@ -1136,14 +1136,14 @@ Proof.
     rewrite drop_app_alt by (by rewrite help, take_length_le
       by eauto using Nat.lt_le_incl, lookup_lt_Some).
     by erewrite take_app_alt, ctree_mask_flatten by eauto.
-  * intros s wxbss τs Hs Hws _ _ Hindet Hlen Hrs; destruct rs as [|i|];
+  * intros t wxbss τs Ht Hws _ _ Hindet Hlen Hrs; destruct rs as [|i|];
       pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
     intros w xs -> Hi; destruct (Forall2_lookup_l (typed (Γ,Δ) ∘ fst)
       wxbss τs i (w,xs)) as (τ&Hi'&Hw); auto;
       simplify_option_equality; simplify_type_equality'.
     assert (field_bit_offset Γ τs i =
       length (take i wxbss ≫= λ wxs, ctree_flatten (wxs.1) ++ wxs.2)) as help2.
-    { clear Hs Hi' Hw Hindet. apply lookup_lt_Some in Hi.
+    { clear Ht Hi' Hw Hindet. apply lookup_lt_Some in Hi.
       unfold field_bit_padding, field_bit_offset in *.
       revert i wxbss Hi Hlen Hws. induction (bit_size_of_fields _ τs HΓ);
         intros [|?] ????; decompose_Forall_hyps;
@@ -1151,14 +1151,14 @@ Proof.
     rewrite <-(take_drop_middle wxbss i (w,xs)), bind_app by done; csimpl.
     by erewrite drop_app_alt, <-(associative_L (++)), take_app_alt,
       ctree_mask_flatten by eauto.
-  * intros s i τs w xs τ Hs Hτ ? _ _ Hindet ? _ Hrs; destruct rs as [| |i'];
+  * intros t i τs w xs τ Ht Hτ ? _ _ Hindet ? _ Hrs; destruct rs as [| |i'];
       pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
     { intros -> ->; simplify_option_equality; simplify_type_equality.
       by erewrite drop_0, take_app_alt, ctree_mask_flatten by eauto. }
     intros ? τ'' -> ? -> ?? _ _; simplify_option_equality.
     rewrite ctree_unflatten_type_of by eauto.
     by rewrite ctree_flatten_unflatten by eauto.
-  * intros s τs xs ? _ ? Hrs; destruct rs as [| |i'];
+  * intros t τs xs ? _ ? Hrs; destruct rs as [| |i'];
       pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
     intros ?? -> ?? _; simplify_option_equality.
     rewrite ctree_unflatten_type_of by eauto.
@@ -1217,19 +1217,19 @@ Proof.
       intros [|i] w' ys ?; simplify_equality'.
     { by erewrite ctree_flatten_length by eauto. }
     by erewrite IH, ctree_flatten_length, drop_drop by eauto.
-  * intros s wxbss τs Hs Hws _ _ _ Hlen _ Hrs; destruct rs as [|i|];
+  * intros t wxbss τs Ht Hws _ _ _ Hlen _ Hrs; destruct rs as [|i|];
       pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear w' Hrs.
     intros w xbs -> Hwxbs; destruct (Forall2_lookup_l (typed (Γ,Δ) ∘ fst)
       wxbss τs i (w,xbs)) as (τ&Hτ&Hw); auto;
       simplify_option_equality; simplify_type_equality'.
-    clear Hs Hw. revert wxbss i w xbs τ ys Hτ Hws Hlen Hwxbs.
+    clear Ht Hw. revert wxbss i w xbs τ ys Hτ Hws Hlen Hwxbs.
     unfold field_bit_padding, field_bit_offset.
     induction (bit_size_of_fields _ τs HΓ) as [|τ sz τs szs ?? IH];
       intros [|[w' xbs'] wxbss] [|i] ??? ys ????; decompose_Forall_hyps.
     { by erewrite ctree_flatten_length by eauto. }
     erewrite IH, ctree_flatten_length, !drop_drop by eauto.
     do 4 f_equal; lia.
-  * intros s i τs w xbs τ Hs Hτ ? _ _ Hindet ? _ ? Hrs; destruct rs as [| |i'];
+  * intros t i τs w xbs τ Ht Hτ ? _ _ Hindet ? _ ? Hrs; destruct rs as [| |i'];
       pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
     { intros -> ->; simplify_option_equality; simplify_type_equality.
       by erewrite ctree_flatten_length, drop_0 by eauto. }
@@ -1237,7 +1237,7 @@ Proof.
     rewrite ctree_flatten_merge; simplify_option_equality; f_equal.
     rewrite ctree_unflatten_type_of, ctree_merge_unflatten, drop_0 by eauto.
     by rewrite <-zip_with_app, zip_with_take, take_drop by auto.
-  * intros s τs xs ? _ ? _ Hrs; destruct rs as [| |i'];
+  * intros t τs xs ? _ ? _ Hrs; destruct rs as [| |i'];
       pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
     intros ?? -> ???; simplify_option_equality; f_equal.
     rewrite ctree_unflatten_type_of by eauto.
@@ -1594,14 +1594,14 @@ Proof.
     erewrite fmap_app, IH, !fmap_app by eauto; simplify_type_equality.
     rewrite take_plus_app, fmap_app, <-!(associative_L (++)) by done.
     by rewrite <-Nat.add_assoc, drop_plus_app by done.
-  * intros s wxbss τs Hs Hws _ _ Hindet Hlen Hrs; destruct rs as [|i|];
+  * intros t wxbss τs Ht Hws _ _ Hindet Hlen Hrs; destruct rs as [|i|];
       pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
     intros w xs -> Hi; destruct (Forall2_lookup_l (typed (Γ,Δ) ∘ fst)
       wxbss τs i (w,xs)) as (τ&Hi'&Hw); auto;
       simplify_option_equality; simplify_type_equality'.
     assert (field_bit_offset Γ τs i =
       length (take i wxbss ≫= λ wxs, ctree_flatten (wxs.1) ++ wxs.2)) as help2.
-    { clear Hs Hi' Hw Hindet. apply lookup_lt_Some in Hi.
+    { clear Ht Hi' Hw Hindet. apply lookup_lt_Some in Hi.
       unfold field_bit_padding, field_bit_offset in *.
       revert i wxbss Hi Hlen Hws. induction (bit_size_of_fields _ τs HΓ);
         intros [|?] ????; decompose_Forall_hyps;
@@ -1612,13 +1612,13 @@ Proof.
     rewrite take_length_le by eauto using Nat.lt_le_incl, lookup_lt_Some.
     rewrite Nat.sub_diag; simpl; rewrite bind_app, bind_cons; simpl.
     by rewrite !(associative_L (++)).
-  * intros s i τs w xs τ Hs Hτ ? _ _ Hindet ? _ Hrs; destruct rs as [| |i'];
+  * intros t i τs w xs τ Ht Hτ ? _ _ Hindet ? _ Hrs; destruct rs as [| |i'];
       pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
     { intros -> ->; simplify_option_equality; simplify_type_equality.
       by rewrite drop_app_alt by done. }
     intros ? τ'' -> ? -> ?? _ _; simplify_option_equality.
     by rewrite ctree_unflatten_type_of, !fmap_app, <-list_fmap_compose by eauto.
-  * intros s τs xs ? _ ? Hrs; destruct rs as [| |i'];
+  * intros t τs xs ? _ ? Hrs; destruct rs as [| |i'];
       pattern w'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
     intros ?? -> ?? _; simplify_option_equality.
     by rewrite ctree_unflatten_type_of, !fmap_app, <-list_fmap_compose by eauto.
@@ -1655,30 +1655,30 @@ Proof.
 Qed.
 
 (** ** Non-aliasing resuls *)
-Lemma ctree_lookup_non_aliasing_help Γ Δ g w τ s τs r τ1 i1 τ2 i2 :
-  let r1' := RUnion i1 s true :: r in
-  let r2' := RUnion i2 s true :: r in
-  ✓ Γ → (Γ,Δ) ⊢ w : τ → Γ ⊢ r : τ ↣ unionT s → Γ !! s = Some τs →
+Lemma ctree_lookup_non_aliasing_help Γ Δ g w τ t τs r τ1 i1 τ2 i2 :
+  let r1' := RUnion i1 t true :: r in
+  let r2' := RUnion i2 t true :: r in
+  ✓ Γ → (Γ,Δ) ⊢ w : τ → Γ ⊢ r : τ ↣ unionT t → Γ !! t = Some τs →
   τs !! i1 = Some τ1 → τs !! i2 = Some τ2 →
   i1 ≠ i2 → ctree_alter Γ g r1' w !!{Γ} r2' = None.
 Proof.
   intros r1' r2' ? Hwτ Hw Hr ?? Hi. unfold r1', r2'; clear r1' r2'.
   rewrite !ctree_alter_cons, !ctree_lookup_cons.
   destruct (ctree_alter Γ (ctree_alter_seg Γ g
-    (RUnion i1 s true)) r w !!{Γ} r) as [w'|] eqn:Hw'; simpl; [|done].
+    (RUnion i1 t true)) r w !!{Γ} r) as [w'|] eqn:Hw'; simpl; [|done].
   eapply ctree_lookup_alter_inv in Hw'; eauto. destruct Hw' as (w''&->&?).
-  by pattern w''; apply (ctree_typed_inv_r Γ Δ _ w'' (unionT s));
+  by pattern w''; apply (ctree_typed_inv_r Γ Δ _ w'' (unionT t));
     intros; simplify_option_equality.
 Qed.
-Lemma ctree_lookup_non_aliasing Γ Δ g w τ s r r1 j1 σ1 i1 r2 j2 σ2 i2 :
-  let r1' := r1 ++ RUnion i1 s true :: r in
-  let r2' := r2 ++ RUnion i2 s true :: r in
+Lemma ctree_lookup_non_aliasing Γ Δ g w τ t r r1 j1 σ1 i1 r2 j2 σ2 i2 :
+  let r1' := r1 ++ RUnion i1 t true :: r in
+  let r2' := r2 ++ RUnion i2 t true :: r in
   ✓ Γ → (Γ,Δ) ⊢ w : τ → Γ ⊢ r1' : τ ↣ σ1 → Γ ⊢ r2' : τ ↣ σ2 → i1 ≠ i2 →
   ctree_alter Γ g (ref_set_offset j1 r1') w
     !!{Γ} (ref_set_offset j2 r2') = None.
 Proof.
-  assert (∀ j r3 i3, ref_set_offset j (r3 ++ RUnion i3 s true :: r) =
-    ref_set_offset j r3 ++ RUnion i3 s true :: r) as Hrhelp.
+  assert (∀ j r3 i3, ref_set_offset j (r3 ++ RUnion i3 t true :: r) =
+    ref_set_offset j r3 ++ RUnion i3 t true :: r) as Hrhelp.
   { by intros ? [|??] ?. }
   intros r1' r2' HΓ; unfold r1', r2'; clear r1' r2'.
   rewrite !Hrhelp, !ref_typed_app; setoid_rewrite ref_typed_cons.
@@ -1928,7 +1928,7 @@ Lemma ctree_singleton_seg_flatten Γ τ rs w σ :
    ctree_flatten w ++
    replicate (bit_size_of Γ τ - ref_seg_object_offset Γ rs - bit_size_of Γ σ) ∅.
 Proof.
-  intros HΓ. destruct 1 as [τ i n Hi|s i τs τ Hs Hi|s i ? τs];
+  intros HΓ. destruct 1 as [τ i n Hi|s i τs τ Ht Hi|s i ? τs];
     intros Hτ; simplify_option_equality.
   * pattern n at 1; replace n with (i + S (n - i - 1)) by lia.
     rewrite replicate_plus; simpl.
@@ -1936,13 +1936,13 @@ Proof.
     rewrite bind_app, bind_cons, !ctree_flatten_replicate_new by eauto.
     by rewrite bit_size_of_array, !Nat.mul_sub_distr_r, Nat.mul_1_l.
   * erewrite bit_size_of_struct by eauto.
-    assert (✓{Γ}* τs) by eauto; clear Hs Hτ; revert i Hi.
+    assert (✓{Γ}* τs) by eauto; clear Ht Hτ; revert i Hi.
     unfold field_bit_offset, field_bit_padding.
-    induction (bit_size_of_fields _ τs HΓ) as [|τ' sz τs szs ? Hszs IH];
+    induction (bit_size_of_fields _ τs HΓ) as [|τ' sz τs szs ? Htzs IH];
       intros [|i] Hi; decompose_Forall_hyps.
     { rewrite Nat.sub_0_r, Nat.add_sub_swap, replicate_plus by done.
       rewrite !(associative_L (++)); f_equal. clear IH.
-      induction Hszs as [|τ' sz' τs szs ?? IH]; decompose_Forall_hyps; auto.
+      induction Htzs as [|τ' sz' τs szs ?? IH]; decompose_Forall_hyps; auto.
       rewrite ctree_flatten_new, IH, <-!replicate_plus by done; f_equal; lia. }
     rewrite IH, ctree_flatten_new, (associative_L (++)),
       <-!replicate_plus by done; do 2 f_equal; auto with f_equal lia.
@@ -1974,11 +1974,11 @@ Proof.
   * rewrite Forall_bind, Forall_lookup; intros Hw; apply (Hw i).
     by rewrite list_lookup_insert by auto.
   * rewrite Forall_bind, Forall_lookup; intros Hw; apply lookup_lt_Some in Hi.
-    destruct (lookup_lt_is_Some_2 (field_bit_padding Γ τs) i) as [sz Hsz].
+    destruct (lookup_lt_is_Some_2 (field_bit_padding Γ τs) i) as [sz Htz].
     { by rewrite field_bit_padding_length. }
     eapply (Forall_app _ _ (replicate _ _)), (Hw i (w,replicate sz ∅)).
     by rewrite lookup_zip_with,
-      list_lookup_insert, list_lookup_fmap, Hsz by auto.
+      list_lookup_insert, list_lookup_fmap, Htz by auto.
   * rewrite Forall_app; by intros [].
 Qed.
 Lemma ctree_singleton_Forall_inv P Γ τ r w σ :
@@ -2096,7 +2096,7 @@ Lemma ctree_merge_singleton_seg {B : Set} Γ Δ f τ rs w (ys : list B) σ :
   ctree_singleton_seg Γ rs (ctree_merge true f w
     (take (bit_size_of Γ σ) (drop (ref_seg_object_offset Γ rs) ys))).
 Proof.
-  intros ? HΓ. destruct 1 as [τ i n _|s i τs τ Hs Hi|s i ? τs];
+  intros ? HΓ. destruct 1 as [τ i n _|s i τs τ Ht Hi|s i ? τs];
     intros Hw Hys; simplify_option_equality; f_equal.
   * revert i ys Hys. rewrite bit_size_of_array.
     induction n; intros [|?] ??; f_equal';
@@ -2107,9 +2107,9 @@ Proof.
     elim n; intros; f_equal'; erewrite ?ctree_flatten_length,
       ?ctree_merge_new by eauto using (ctree_new_typed _ Δ); eauto.
   * revert i ys Hi Hys. erewrite bit_size_of_struct by eauto.
-    assert (✓{Γ}* τs) by eauto. clear Hs.
+    assert (✓{Γ}* τs) by eauto. clear Ht.
     unfold field_bit_sizes,field_bit_offset, field_bit_padding, field_bit_sizes.
-    induction (size_of_fields _ τs HΓ) as [|τ' sz τs szs ? Hszs IH];
+    induction (size_of_fields _ τs HΓ) as [|τ' sz τs szs ? Htzs IH];
       intros [|i] ys Hi Hlen; decompose_Forall_hyps.
     + erewrite ctree_flatten_length, replicate_length, drop_0,
         zip_with_replicate_l, const_fmap, take_length_le by eauto; f_equal.
@@ -2119,7 +2119,7 @@ Proof.
       cut (length (drop (sz * char_bits) ys)
         = sum_list ((λ sz, sz * char_bits) <$> szs)); [|solve_length].
       generalize (drop (sz * char_bits) ys); clear IH Hlen.
-      induction Hszs as [|τ' sz' ???? IH];
+      induction Htzs as [|τ' sz' ???? IH];
         decompose_Forall_hyps; intros ys' ?; auto.
       assert (bit_size_of Γ τ' ≤ sz' * char_bits).
       { by apply Nat.mul_le_mono_r. }

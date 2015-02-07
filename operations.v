@@ -240,10 +240,10 @@ Section operations_definitions.
   Definition val_0 (Γ : env K) : type K → val K := type_iter
     (**i TBase     *) (λ τb, VBase (base_val_0 τb))
     (**i TArray    *) (λ τ n x, VArray τ (replicate n x))
-    (**i TCompound *) (λ c s τs rec,
+    (**i TCompound *) (λ c t τs rec,
       match c with
-      | Struct_kind => VStruct s (rec <$> τs)
-      | Union_kind => VUnion s 0 (default (VUnionAll s []) (τs !! 0) rec)
+      | Struct_kind => VStruct t (rec <$> τs)
+      | Union_kind => VUnion t 0 (default (VUnionAll t []) (τs !! 0) rec)
       end) Γ.
 
   Definition val_true (m : mem K) (v : val K) : Prop :=
@@ -801,16 +801,16 @@ Proof. unfold val_0. by rewrite type_iter_base. Qed.
 Lemma val_0_array Γ τ n :
   val_0 Γ (τ.[n]) = VArray τ (replicate n (val_0 Γ τ)).
 Proof. unfold val_0. by rewrite type_iter_array. Qed.
-Lemma val_0_compound Γ c s τs :
-  ✓ Γ → Γ !! s = Some τs → val_0 Γ (compoundT{c} s) =
+Lemma val_0_compound Γ c t τs :
+  ✓ Γ → Γ !! t = Some τs → val_0 Γ (compoundT{c} t) =
     match c with
-    | Struct_kind => VStruct s (val_0 Γ <$> τs)
-    | Union_kind => VUnion s 0 (default (VUnionAll s []) (τs !! 0) (val_0 Γ))
+    | Struct_kind => VStruct t (val_0 Γ <$> τs)
+    | Union_kind => VUnion t 0 (default (VUnionAll t []) (τs !! 0) (val_0 Γ))
     end.
 Proof.
-  intros HΓ Hs. unfold val_0; erewrite (type_iter_compound (=)); try done.
+  intros HΓ Ht. unfold val_0; erewrite (type_iter_compound (=)); try done.
   { by intros ????? ->. }
-  clear s τs Hs. intros ?? [] ? τs ?? Hgo; f_equal'; [|by destruct Hgo].
+  clear t τs Ht. intros ?? [] ? τs ?? Hgo; f_equal'; [|by destruct Hgo].
   by apply Forall_fmap_ext.
 Qed.
 Lemma val_0_weaken Γ1 Γ2 τ :
@@ -827,7 +827,7 @@ Proof.
     typed_constructor; auto using base_val_0_typed.
   * intros τ n ???. rewrite val_0_array.
     typed_constructor; auto using replicate_length, Forall_replicate.
-  * intros [] s τs Hs _ IH ?; erewrite val_0_compound by eauto.
+  * intros [] t τs Ht _ IH ?; erewrite val_0_compound by eauto.
     { typed_constructor; eauto. elim IH; csimpl; auto. }
     by destruct IH; simplify_equality'; typed_constructor; eauto.
 Qed.

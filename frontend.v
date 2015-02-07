@@ -166,14 +166,14 @@ Definition extern_global_decls (S : frontend_state K) : stringset :=
     match d with Global ExternStorage _ _ _ => true | _ => false end)
     (to_globals S).
 
-Definition lookup_compound (s : tag) (x : string) : M (nat * type K) :=
+Definition lookup_compound (t : tag) (x : string) : M (nat * type K) :=
   Γn ← gets to_compounds;
-  d ← error_of_option (Γn !! s)
-    ("struct/union `" +:+ s +:+ "` undeclared");
+  d ← error_of_option (Γn !! t)
+    ("struct/union `" +:+ t +:+ "` undeclared");
   '(_,xτs) ← error_of_option (maybe2 CompoundType d)
-    ("struct/union `" +:+ s +:+ "` instead of enum expected");
+    ("struct/union `" +:+ t +:+ "` instead of enum expected");
   '(i,xτ) ← error_of_option (list_find ((x =) ∘ fst) xτs)
-    ("struct/union `" +:+ s +:+ "` does not have index `" +:+ x +:+ "`");
+    ("struct/union `" +:+ t +:+ "` does not have index `" +:+ x +:+ "`");
   mret (i,xτ.2).
 
 Fixpoint local_fresh (x : string) (Δl : local_env K) : bool :=
@@ -339,21 +339,21 @@ Definition insert_fun (f : funname) (sto : cstorage)
   modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in
     FState Γn (<[f:=(τs,σ)]>Γ) m (<[(f:string):=Fun sto τs σ ms]>Δg)).
-Definition insert_compound (c : compound_kind) (s : tag)
+Definition insert_compound (c : compound_kind) (t : tag)
     (xτs : list (string * type K)) : M () :=
   modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in
-    FState (<[s:=CompoundType c xτs]>Γn) (<[s:=snd <$> xτs]>Γ) m Δg).
-Definition insert_enum (s : tag) (τi : int_type K) : M () :=
+    FState (<[t:=CompoundType c xτs]>Γn) (<[t:=snd <$> xτs]>Γ) m Δg).
+Definition insert_enum (t : tag) (τi : int_type K) : M () :=
   modify (λ S : frontend_state K,
-    let (Γn,Γ,m,Δg) := S in FState (<[s:=EnumType τi]>Γn) Γ m Δg).
+    let (Γn,Γ,m,Δg) := S in FState (<[t:=EnumType τi]>Γn) Γ m Δg).
 
 Definition first_init_ref (Γ : env K)
     (τ : type K) : option (ref K * type K) :=
   match τ with
   | τ.[n] => Some ([RArray 0 τ n], τ)
-  | structT s => τ ← Γ !! s ≫= (!! 0); Some ([RStruct 0 s],τ)
-  | unionT s => τ ← Γ !! s ≫= (!! 0); Some ([RUnion 0 s false],τ)
+  | structT t => τ ← Γ !! t ≫= (!! 0); Some ([RStruct 0 t],τ)
+  | unionT t => τ ← Γ !! t ≫= (!! 0); Some ([RUnion 0 t false],τ)
   | _ => None
   end.
 Fixpoint next_init_ref (Γ : env K)
@@ -362,9 +362,9 @@ Fixpoint next_init_ref (Γ : env K)
   | RArray i τ n :: r =>
      if decide (S i < n)
      then Some (RArray (S i) τ n :: r, τ) else next_init_ref Γ r
-  | RStruct i s :: r =>
-     match Γ !! s ≫= (!! (S i)) with
-     | Some τ => Some (RStruct (S i) s :: r,τ) | None => next_init_ref Γ r
+  | RStruct i t :: r =>
+     match Γ !! t ≫= (!! (S i)) with
+     | Some τ => Some (RStruct (S i) t :: r,τ) | None => next_init_ref Γ r
      end
   | RUnion _ _ _ :: r => next_init_ref Γ r
   | _ => None
@@ -376,12 +376,12 @@ Definition to_ref
   match xces with
   | [] => mret (r,τ)
   | inl x :: xces =>
-     '(c,s) ← error_of_option (maybe2 TCompound τ)
+     '(c,t) ← error_of_option (maybe2 TCompound τ)
        "struct/union initializer used for non-compound type";
-     '(i,τ) ← lookup_compound s x;
+     '(i,τ) ← lookup_compound t x;
      let rs :=
        match c with
-       | Struct_kind => RStruct i s | Union_kind => RUnion i s false
+       | Struct_kind => RStruct i t | Union_kind => RUnion i t false
        end in
      go (rs :: r) τ xces
   | inr ce :: xces =>
@@ -614,12 +614,12 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
      mret (e, RT σ)
   | CEField ce x =>
      '(e,τe) ← to_expr Δl ce;
-     '(c,s) ← error_of_option (maybe2 TCompound (lrtype_type (to_lrtype τe)))
+     '(c,t) ← error_of_option (maybe2 TCompound (lrtype_type (to_lrtype τe)))
        "field operator applied to argument of non-compound type";
-     '(i,τ) ← lookup_compound s x;
+     '(i,τ) ← lookup_compound t x;
      let rs :=
        match c with
-       | Struct_kind => RStruct i s | Union_kind => RUnion i s false
+       | Struct_kind => RStruct i t | Union_kind => RUnion i t false
        end in
      match τe with
      | LT _ => mret (e %> rs, LT τ)
@@ -672,11 +672,11 @@ with to_type `{Env K} (k : to_type_kind)
         | _ => fail "complete typedef expected"
         end
      end
-  | CTEnum s =>
-     let s : tag := s in
+  | CTEnum x =>
+     let t : tag := x in
      Γn ← gets to_compounds;
-     τi ← error_of_option (Γn !! s ≫= maybe EnumType)
-       ("enum `" +:+ s +:+ "` not found");
+     τi ← error_of_option (Γn !! t ≫= maybe EnumType)
+       ("enum `" +:+ x +:+ "` not found");
      to_type_ret (intT τi)
   | CTInt cτi => to_type_ret (intT (to_inttype cτi))
   | CTPtr cτ => τp ← to_type to_Ptr Δl cτ; to_type_ret (τp.*)
@@ -693,14 +693,14 @@ with to_type `{Env K} (k : to_type_kind)
      let n := Z.to_nat x in
      guard (n ≠ 0) with "array with negative or zero size expression";
      to_type_ret (τ.[n])
-  | CTCompound c s =>
-     let s : tag := s in
+  | CTCompound c x =>
+     let t : tag := x in
      match k with
-     | to_Ptr => mret (compoundT{c} s)%PT
+     | to_Ptr => mret (compoundT{c} t)%PT
      | to_Type =>
         Γ ← gets to_env;
-        guard (is_Some (Γ !! s)) with "complete compound type expected";
-        mret (compoundT{c} s)
+        guard (is_Some (Γ !! t)) with "complete compound type expected";
+        mret (compoundT{c} t)
      end
   | CTFun cτs cτ =>
      match k with
@@ -991,7 +991,7 @@ Fixpoint alloc_enum (xces : list (string * option cexpr))
      _ ← insert_global_decl x (EnumVal τi z');
      alloc_enum xces τi (z' + 1)%Z
   end.
-Definition to_compound_fields (s : tag) :
+Definition to_compound_fields (t : tag) :
     list (string * ctype) → M (list (string * type K)) :=
   fix go cτs :=
   match cτs with
@@ -999,31 +999,31 @@ Definition to_compound_fields (s : tag) :
   | (x,cτ) :: cτs =>
      τ ← to_type to_Type [] cτ;
      guard (τ ≠ voidT) with
-      ("compound type `" +:+ s +:+ "` with field `" +:+ x +:+ "` of void type");
+      ("compound type `" +:+ t +:+ "` with field `" +:+ x +:+ "` of void type");
      ((x,τ) ::) <$> go cτs
   end.
 Fixpoint alloc_decls (Θ : list (string * decl)) : M () :=
   match Θ with
   | [] => mret ()
-  | (s,CompoundDecl c cτs) :: Θ =>
-     let s : tag := s in
-     xτs ← to_compound_fields s cτs;
+  | (x,CompoundDecl c cτs) :: Θ =>
+     let t : tag := x in
+     xτs ← to_compound_fields t cτs;
      Γ ← gets to_env;
-     guard (Γ !! s = None) with
-       ("compound type `" +:+ s +:+ "` previously declared");
+     guard (Γ !! t = None) with
+       ("compound type `" +:+ x +:+ "` previously declared");
      guard (NoDup (fst <$> xτs)) with
-       ("compound type `" +:+ s +:+ "` has field names that are not unique");
+       ("compound type `" +:+ x +:+ "` has field names that are not unique");
      guard (xτs ≠ []) with
-       ("compound type `" +:+ s +:+ "` declared without any fields");
-     _ ← insert_compound c s xτs;
+       ("compound type `" +:+ x +:+ "` declared without any fields");
+     _ ← insert_compound c t xτs;
      alloc_decls Θ
-  | (s,EnumDecl cτi yces) :: Θ =>
-     let s : tag := s in
+  | (x,EnumDecl cτi yces) :: Θ =>
+     let t : tag := x in
      let τi := to_inttype cτi in
      Γn ← gets to_compounds;
-     guard (Γn !! s = None) with
-       ("enum type `" +:+ s +:+ "` previously declared");
-     _ ← insert_enum s τi;
+     guard (Γn !! t = None) with
+       ("enum type `" +:+ x +:+ "` previously declared");
+     _ ← insert_enum t τi;
      _ ← alloc_enum yces τi 0;
      alloc_decls Θ
   | (x,TypeDefDecl cτ) :: Θ =>

@@ -102,8 +102,8 @@ Instance cmap_sep {K A : Set} `{∀ k1 k2 : K, Decision (k1 = k2),
 Proof.
   split.
   * destruct (sep_inhabited A) as (x&?&?).
-    generalize (String.EmptyString : tag); intros s.
-    eexists (CMap {[fresh ∅, Obj (MUnionAll s [x]) false]}).
+    generalize (String.EmptyString : tag); intros t.
+    eexists (CMap {[fresh ∅, Obj (MUnionAll t [x]) false]}).
     split; [|by intro]. intros o w ?; simplify_map_equality'. split.
     + by constructor; rewrite Forall_singleton.
     + inversion_clear 1; decompose_Forall_hyps; eauto using sep_unmapped_empty.
@@ -196,8 +196,8 @@ Proof.
     by rewrite (left_id_L ∅ (union_with _)).
   * sep_unfold; intros [m]. split; [done|].
     intros [? Hm]. destruct (sep_inhabited A) as (x&?&?).
-    generalize (String.EmptyString : tag); intros s.
-    specialize (Hm (CMap {[fresh (dom _ m), Obj (MUnionAll s [x]) false]}));
+    generalize (String.EmptyString : tag); intros t.
+    specialize (Hm (CMap {[fresh (dom _ m), Obj (MUnionAll t [x]) false]}));
       feed specialize Hm; [|simplify_map_equality'].
     intros o. destruct (m !! o) eqn:Hw; simplify_map_equality'.
     { rewrite lookup_singleton_ne; eauto. intros <-.

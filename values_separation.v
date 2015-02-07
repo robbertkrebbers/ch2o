@@ -28,13 +28,13 @@ Ltac solve_length := repeat first
     | H : Forall2 _ _ _ |- _ => apply Forall2_length in H
     | |- context [ bit_size_of ?Γ ?τ ] =>
       match goal with
-      | H : Γ !! ?s = Some ?τs, H2 : ?τs !! _ = Some τ |- _ =>
-        unless (bit_size_of Γ τ ≤ bit_size_of Γ (unionT s)) by done;
-        assert (bit_size_of Γ τ ≤ bit_size_of Γ (unionT s))
+      | H : Γ !! ?t = Some ?τs, H2 : ?τs !! _ = Some τ |- _ =>
+        unless (bit_size_of Γ τ ≤ bit_size_of Γ (unionT t)) by done;
+        assert (bit_size_of Γ τ ≤ bit_size_of Γ (unionT t))
           by eauto using bit_size_of_union_lookup
-      | H : Γ !! ?s = Some [?τ] |- _ =>
-        unless (bit_size_of Γ τ ≤ bit_size_of Γ (unionT s)) by done;
-        assert (bit_size_of Γ τ ≤ bit_size_of Γ (unionT s))
+      | H : Γ !! ?t = Some [?τ] |- _ =>
+        unless (bit_size_of Γ τ ≤ bit_size_of Γ (unionT t)) by done;
+        assert (bit_size_of Γ τ ≤ bit_size_of Γ (unionT t))
           by eauto using bit_size_of_union_singleton
       end
     end]; lia.
@@ -51,16 +51,16 @@ Proof.
   * intros τ ws1 ws2 _ IH τ' Hw1; apply (ctree_typed_inv_l _ _ _ _ _ Hw1);
       clear τ' Hw1; intros Hws1 _ ?; f_equal.
     induction IH; decompose_Forall_hyps; f_equal; eauto.
-  * intros s wxbs1 wxbs2 _ IH _ τ' Hw1; apply (ctree_typed_inv_l _ _ _ _ _ Hw1);
+  * intros t wxbs1 wxbs2 _ IH _ τ' Hw1; apply (ctree_typed_inv_l _ _ _ _ _ Hw1);
       clear τ' Hw1; intros τs _ Hws1 _ _ _ ?; f_equal.
     revert τs Hws1; induction IH; intros; decompose_Forall_hyps; f_equal; eauto.
-  * intros s i w1 w2 xbs1 xbs2 _ ? _ _ τ' Hw1;
+  * intros t i w1 w2 xbs1 xbs2 _ ? _ _ τ' Hw1;
       apply (ctree_typed_inv_l _ _ _ _ _ Hw1); clear τ' Hw1.
     intros; decompose_Forall_hyps; f_equal'; eauto.
   * intros; by erewrite pbits_tag_subseteq by eauto.
-  * intros s i xs1 w2 xs2 _ Hxs _ _ τ' Hw1;
+  * intros t i xs1 w2 xs2 _ Hxs _ _ τ' Hw1;
       apply (ctree_typed_inv_l _ _ _ _ _ Hw1); clear τ' Hw1.
-    intros. assert (bit_size_of Γ (unionT s) ≠ 0)
+    intros. assert (bit_size_of Γ (unionT t) ≠ 0)
       by eauto using bit_size_of_ne_0, TCompound_valid.
     destruct Hxs; decompose_Forall_hyps.
 Qed.
@@ -83,8 +83,8 @@ Proof.
     rewrite bit_size_of_array in Hlen. revert xs1 xs2 Hlen Hxs Hxs1 Hxs2.
     induction IH; decompose_Forall_hyps; simplify_type_equality';
       constructor; rewrite ?zip_with_take,?zip_with_drop; auto.
-  * intros s vs τs Hs Hvs IH xs1 xs2 Hlen Hxs Hxs1 Hxs2.
-    erewrite bit_size_of_struct in Hlen by eauto; clear Hs.
+  * intros t vs τs Ht Hvs IH xs1 xs2 Hlen Hxs Hxs1 Hxs2.
+    erewrite bit_size_of_struct in Hlen by eauto; clear Ht.
     erewrite fmap_type_of by eauto; unfold field_bit_padding.
     constructor; revert vs xs1 xs2 Hvs IH Hlen Hxs Hxs1 Hxs2;
       induction (bit_size_of_fields _ τs HΓ); intros; decompose_Forall_hyps;
@@ -144,17 +144,17 @@ Proof.
     induction IH; intros; decompose_Forall_hyps; simplify_type_equality; auto.
     erewrite zip_with_take, zip_with_drop, <-fmap_take, <-fmap_drop,
       ctree_flatten_length by eauto using of_val_typed. f_equal; auto.
-  * intros s vs τs Hs Hvs IH xs1 xs2 Hxs1 Hxs1'.
+  * intros t vs τs Ht Hvs IH xs1 xs2 Hxs1 Hxs1'.
     erewrite bit_size_of_struct by eauto; intros Hlen; f_equal.
     unfold field_bit_padding; erewrite fmap_type_of by eauto.
-    clear Hs. revert vs xs1 xs2 Hvs IH Hxs1 Hxs1' Hlen.
+    clear Ht. revert vs xs1 xs2 Hvs IH Hxs1 Hxs1' Hlen.
     induction (bit_size_of_fields _ τs HΓ); intros;
       decompose_Forall_hyps; simplify_type_equality; auto.
     erewrite !zip_with_drop, !zip_with_take, <-!fmap_drop, <-!fmap_take,
       ctree_flatten_length, fmap_length, take_length, drop_length,
       Min.min_l, PBits_BIndet_union by (eauto using of_val_typed; lia);
       repeat f_equal; eauto 6.
-  * intros s i τs v τ ??? IH xs1 xs2 ???; simplify_type_equality'.
+  * intros t i τs v τ ??? IH xs1 xs2 ???; simplify_type_equality'.
     by erewrite zip_with_take, zip_with_drop, <-fmap_take, <-fmap_drop, IH,
       ctree_flatten_length, PBits_BIndet_union by eauto using of_val_typed.
   * intros; f_equal; auto using PBits_BIndet_union_r.

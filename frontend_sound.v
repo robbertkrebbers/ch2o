@@ -40,11 +40,11 @@ Context (Qcompound : ∀ inits,
   Q (CCompoundInit inits)).
 Context (Rvoid : R CTVoid).
 Context (Rdef : ∀ x, R (CTDef x)).
-Context (Renum : ∀ s, R (CTEnum s)).
+Context (Renum : ∀ x, R (CTEnum x)).
 Context (Rint : ∀ τi, R (CTInt τi)).
 Context (Rptr : ∀ cτ, R cτ → R (CTPtr cτ)).
 Context (Rarray : ∀ cτ ce, R cτ → P ce → R (CTArray cτ ce)).
-Context (Rcompound : ∀ c s, R (CTCompound c s)).
+Context (Rcompound : ∀ c x, R (CTCompound c x)).
 Context (Rfun : ∀ csτs cτ, Forall (R ∘ snd) csτs → R cτ → R (CTFun csτs cτ)).
 Context (Rtypeof : ∀ ce, P ce → R (CTTypeOf ce)).
 

@@ -19,11 +19,11 @@ Instance: Injective (=) (=) (@MBase K A τb).
 Proof. by injection 1. Qed.
 Instance: Injective2 (=) (=) (=) (@MArray K A).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@MStruct K A s).
+Instance: Injective (=) (=) (@MStruct K A t).
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@MUnion K A s i).
+Instance: Injective2 (=) (=) (=) (@MUnion K A t i).
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@MUnionAll K A s).
+Instance: Injective (=) (=) (@MUnionAll K A t).
 Proof. by injection 1. Qed.
 
 Instance ctree_eq_dec {K A : Set}
@@ -37,13 +37,13 @@ Proof.
      cast_if_and (decide_rel (=) τb1 τb2) (decide_rel (=) xs1 xs2)
   | MArray τ1 ws1, MArray τ2 ws2 =>
      cast_if_and (decide_rel (=) τ1 τ2) (decide_rel (=) ws1 ws2)
-  | MStruct s1 wxss1, MStruct s2 wxss2 =>
-     cast_if_and (decide_rel (=) s1 s2) (decide_rel (=) wxss1 wxss2)
-  | MUnion s1 i1 w1 xs1, MUnion s2 i2 w2 xs2 =>
-     cast_if_and4 (decide_rel (=) s1 s2) (decide_rel (=) i1 i2)
+  | MStruct t1 wxss1, MStruct t2 wxss2 =>
+     cast_if_and (decide_rel (=) t1 t2) (decide_rel (=) wxss1 wxss2)
+  | MUnion t1 i1 w1 xs1, MUnion t2 i2 w2 xs2 =>
+     cast_if_and4 (decide_rel (=) t1 t2) (decide_rel (=) i1 i2)
        (decide_rel (=) w1 w2) (decide_rel (=) xs1 xs2)
-  | MUnionAll s1 bs1, MUnionAll s2 bs2 =>
-     cast_if_and (decide_rel (=) s1 s2) (decide_rel (=) bs1 bs2)
+  | MUnionAll t1 bs1, MUnionAll t2 bs2 =>
+     cast_if_and (decide_rel (=) t1 t2) (decide_rel (=) bs1 bs2)
   | _, _ => right _
   end); clear go; abstract congruence.
 Defined.
@@ -52,9 +52,9 @@ Section ctree_ind.
   Context {K A} (P : ctree K A → Prop).
   Context (Pbase : ∀ τb xs, P (MBase τb xs)).
   Context (Parray : ∀ τ ws, Forall P ws → P (MArray τ ws)).
-  Context (Pstruct : ∀ s wxss, Forall (P ∘ fst) wxss → P (MStruct s wxss)).
-  Context (Punion : ∀ s i w xs, P w → P (MUnion s i w xs)).
-  Context (Punion_all : ∀ s xs, P (MUnionAll s xs)).
+  Context (Pstruct : ∀ t wxss, Forall (P ∘ fst) wxss → P (MStruct t wxss)).
+  Context (Punion : ∀ t i w xs, P w → P (MUnion t i w xs)).
+  Context (Punion_all : ∀ t xs, P (MUnionAll t xs)).
   Definition ctree_ind_alt: ∀ w, P w :=
     fix go w :=
     match w return P w with
@@ -73,8 +73,8 @@ Definition ctree_flatten {K A : Set} : ctree K A → list A :=
   match w with
   | MBase _ xs => xs
   | MArray _ ws => ws ≫= go
-  | MStruct s wxss => wxss ≫= λ wxs, go (wxs.1) ++ wxs.2
-  | MUnion s i w xs => go w ++ xs
+  | MStruct t wxss => wxss ≫= λ wxs, go (wxs.1) ++ wxs.2
+  | MUnion t i w xs => go w ++ xs
   | MUnionAll _ xs => xs
   end.
 Notation ctree_Forall P w := (Forall P (ctree_flatten w)).
@@ -84,17 +84,17 @@ Notation ctree_splittable w := (ctree_Forall sep_splittable w).
 Notation ctree_unshared w := (ctree_Forall sep_unshared w).
 
 Definition MUnion' {K A : Set} `{SeparationOps A}
-    (s : tag) (i : nat) (w : ctree K A) (xs : list A) : ctree K A :=
+    (t : tag) (i : nat) (w : ctree K A) (xs : list A) : ctree K A :=
   if decide (ctree_unmapped w ∧ Forall sep_unmapped xs)
-  then MUnionAll s (ctree_flatten w ++ xs) else MUnion s i w xs.
+  then MUnionAll t (ctree_flatten w ++ xs) else MUnion t i w xs.
 Definition ctree_map {K A B : Set} (f : A → B) : ctree K A → ctree K B :=
   fix go w :=
   match w with
   | MBase τb xs => MBase τb (f <$> xs)
   | MArray τ ws => MArray τ (go <$> ws)
-  | MStruct s wxss => MStruct s (prod_map go (fmap (M:=list) f) <$> wxss)
-  | MUnion s i w xs => MUnion s i (go w) (f <$> xs)
-  | MUnionAll s xs => MUnionAll s (f <$> xs)
+  | MStruct t wxss => MStruct t (prod_map go (fmap (M:=list) f) <$> wxss)
+  | MUnion t i w xs => MUnion t i (go w) (f <$> xs)
+  | MUnionAll t xs => MUnionAll t (f <$> xs)
   end.
 Definition ctree_merge_array {K A B C : Set}
   (f : ctree K A → list B → ctree K C) :
@@ -125,12 +125,12 @@ Definition ctree_merge {K A B C : Set} `{SeparationOps C} (unchecked : bool)
   match w with
   | MBase τb xs => MBase τb (zip_with f xs ys)
   | MArray τ ws => MArray τ (ctree_merge_array go ws ys)
-  | MStruct s wxss => MStruct s (ctree_merge_struct f go wxss ys)
-  | MUnion s i w xs =>
+  | MStruct t wxss => MStruct t (ctree_merge_struct f go wxss ys)
+  | MUnion t i w xs =>
      let sz := length (ctree_flatten w) in
      let w' := go w (take sz ys) in let xs' := zip_with f xs (drop sz ys) in
-     if unchecked then MUnion s i w' xs' else MUnion' s i w' xs'
-  | MUnionAll s xs => MUnionAll s (zip_with f xs ys)
+     if unchecked then MUnion t i w' xs' else MUnion' t i w' xs'
+  | MUnionAll t xs => MUnionAll t (zip_with f xs ys)
   end.
 
 Section operations.
@@ -139,26 +139,26 @@ Section operations.
   Inductive ctree_valid : ctree K A → Prop :=
     | MBase_valid τb xs : Forall sep_valid xs → ctree_valid (MBase τb xs)
     | MArray_valid τ ws : Forall ctree_valid ws → ctree_valid (MArray τ ws)
-    | MStruct_valid s wxss :
+    | MStruct_valid t wxss :
        Forall (ctree_valid ∘ fst) wxss → Forall (Forall sep_valid ∘ snd) wxss →
-       ctree_valid (MStruct s wxss)
-    | MUnion_valid s i w xs :
+       ctree_valid (MStruct t wxss)
+    | MUnion_valid t i w xs :
        ctree_valid w → Forall sep_valid xs →
        ¬(ctree_unmapped w ∧ Forall sep_unmapped xs) →
-       ctree_valid (MUnion s i w xs)
-    | MUnionAll_valid s xs : Forall sep_valid xs → ctree_valid (MUnionAll s xs).
+       ctree_valid (MUnion t i w xs)
+    | MUnionAll_valid t xs : Forall sep_valid xs → ctree_valid (MUnionAll t xs).
   Section ctree_valid_ind.
     Context (P : ctree K A → Prop).
     Context (Pbase : ∀ τb xs, Forall sep_valid xs → P (MBase τb xs)).
     Context (Parray : ∀ τ ws,
       Forall ctree_valid ws → Forall P ws → P (MArray τ ws)).
-    Context (Pstruct : ∀ s wxss,
+    Context (Pstruct : ∀ t wxss,
       Forall (ctree_valid ∘ fst) wxss → Forall (P ∘ fst) wxss →
-      Forall (Forall sep_valid ∘ snd) wxss → P (MStruct s wxss)).
-    Context (Punion : ∀ s i w xs,
+      Forall (Forall sep_valid ∘ snd) wxss → P (MStruct t wxss)).
+    Context (Punion : ∀ t i w xs,
       ctree_valid w → P w → Forall sep_valid xs →
-      ¬(ctree_unmapped w ∧ Forall sep_unmapped xs) → P (MUnion s i w xs)).
-    Context (Punion_all : ∀ s xs, Forall sep_valid xs → P (MUnionAll s xs)).
+      ¬(ctree_unmapped w ∧ Forall sep_unmapped xs) → P (MUnion t i w xs)).
+    Context (Punion_all : ∀ t xs, Forall sep_valid xs → P (MUnionAll t xs)).
     Definition ctree_valid_ind_alt : ∀ w, ctree_valid w → P w.
     Proof. fix 2. destruct 1; eauto using Forall_impl. Qed.
   End ctree_valid_ind.
@@ -182,47 +182,47 @@ Section operations.
   Inductive ctree_disjoint : Disjoint (ctree K A) :=
     | MBase_disjoint τb xs1 xs2 : xs1 ⊥* xs2 → MBase τb xs1 ⊥ MBase τb xs2
     | MArray_disjoint' τ ws1 ws2 : ws1 ⊥* ws2 → MArray τ ws1 ⊥ MArray τ ws2
-    | MStruct_disjoint s wxss1 wxss2 :
-       wxss1 ⊥1* wxss2 → wxss1 ⊥2** wxss2 → MStruct s wxss1 ⊥ MStruct s wxss2
-    | MUnion_disjoint s i w1 w2 xs1 xs2 :
+    | MStruct_disjoint t wxss1 wxss2 :
+       wxss1 ⊥1* wxss2 → wxss1 ⊥2** wxss2 → MStruct t wxss1 ⊥ MStruct t wxss2
+    | MUnion_disjoint t i w1 w2 xs1 xs2 :
        w1 ⊥ w2 → xs1 ⊥* xs2 →
        ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xs1) →
        ¬(ctree_unmapped w2 ∧ Forall sep_unmapped xs2) →
-       MUnion s i w1 xs1 ⊥ MUnion s i w2 xs2
-    | MUnionAll_disjoint s xs1 xs2 :
-       xs1 ⊥* xs2 → MUnionAll s xs1 ⊥ MUnionAll s xs2
-    | MUnionAll_MUnion_disjoint s i xs1 w2 xs2 :
+       MUnion t i w1 xs1 ⊥ MUnion t i w2 xs2
+    | MUnionAll_disjoint t xs1 xs2 :
+       xs1 ⊥* xs2 → MUnionAll t xs1 ⊥ MUnionAll t xs2
+    | MUnionAll_MUnion_disjoint t i xs1 w2 xs2 :
        xs1 ⊥* ctree_flatten w2 ++ xs2 → Forall sep_unmapped xs1 →
        ctree_valid w2 → ¬(ctree_unmapped w2 ∧ Forall sep_unmapped xs2) →
-       MUnionAll s xs1 ⊥ MUnion s i w2 xs2
-    | MUnion_MUnionAll_disjoint s i w1 xs1 xs2 :
+       MUnionAll t xs1 ⊥ MUnion t i w2 xs2
+    | MUnion_MUnionAll_disjoint t i w1 xs1 xs2 :
        ctree_flatten w1 ++ xs1 ⊥* xs2 → Forall sep_unmapped xs2 →
        ctree_valid w1 → ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xs1) →
-       MUnion s i w1 xs1 ⊥  MUnionAll s xs2.
+       MUnion t i w1 xs1 ⊥  MUnionAll t xs2.
   Global Existing Instance ctree_disjoint.
   Section ctree_disjoint_ind.
     Context (P : ctree K A → ctree K A → Prop).
     Context (Pbase: ∀ τb xs1 xs2, xs1 ⊥* xs2 → P (MBase τb xs1) (MBase τb xs2)).
     Context (Parray : ∀ τ ws1 ws2,
       ws1 ⊥* ws2 → Forall2 P ws1 ws2 → P (MArray τ ws1) (MArray τ ws2)).
-    Context (Pstruct : ∀ s wxss1 wxss2,
+    Context (Pstruct : ∀ t wxss1 wxss2,
       wxss1 ⊥1* wxss2 → Forall2 (λ wxs1 wxs2, P (wxs1.1) (wxs2.1)) wxss1 wxss2 →
-      wxss1 ⊥2** wxss2 → P (MStruct s wxss1) (MStruct s wxss2)).
-    Context (Punion : ∀ s i w1 w2 xs1 xs2,
+      wxss1 ⊥2** wxss2 → P (MStruct t wxss1) (MStruct t wxss2)).
+    Context (Punion : ∀ t i w1 w2 xs1 xs2,
       w1 ⊥ w2 → P w1 w2 → xs1 ⊥* xs2 →
        ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xs1) →
        ¬(ctree_unmapped w2 ∧ Forall sep_unmapped xs2) →
-      P (MUnion s i w1 xs1) (MUnion s i w2 xs2)).
-    Context (Punion_bits : ∀ s xs1 xs2,
-      xs1 ⊥* xs2 → P (MUnionAll s xs1) (MUnionAll s xs2)).
-    Context (Punion_all_union : ∀ s i xs1 w2 xs2,
+      P (MUnion t i w1 xs1) (MUnion t i w2 xs2)).
+    Context (Punion_bits : ∀ t xs1 xs2,
+      xs1 ⊥* xs2 → P (MUnionAll t xs1) (MUnionAll t xs2)).
+    Context (Punion_all_union : ∀ t i xs1 w2 xs2,
       xs1 ⊥* ctree_flatten w2 ++ xs2 → Forall sep_unmapped xs1 →
       ctree_valid w2 → ¬(ctree_unmapped w2 ∧ Forall sep_unmapped xs2) →
-      P (MUnionAll s xs1) (MUnion s i w2 xs2)).
-    Context (Punion_union_empty : ∀ s i w1 xs1 xs2,
+      P (MUnionAll t xs1) (MUnion t i w2 xs2)).
+    Context (Punion_union_empty : ∀ t i w1 xs1 xs2,
       ctree_flatten w1 ++ xs1 ⊥* xs2 → Forall sep_unmapped xs2 →
       ctree_valid w1 → ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xs1) →
-      P (MUnion s i w1 xs1) (MUnionAll s xs2)).
+      P (MUnion t i w1 xs1) (MUnionAll t xs2)).
     Definition ctree_disjoint_ind_alt : ∀ w1 w2, ctree_disjoint w1 w2 → P w1 w2.
     Proof. fix 3. destruct 1; eauto using Forall2_impl. Qed.
   End ctree_disjoint_ind.
@@ -231,24 +231,24 @@ Section operations.
     match w1 with
     | MBase τb xs1 => (∀ xs2, xs1 ⊥* xs2 → P (MBase τb xs2)) → P w2
     | MArray τ ws1 => (∀ ws2, ws1 ⊥* ws2 → P (MArray τ ws2)) → P w2
-    | MStruct s wxss1 =>
-      (∀ wxss2, wxss1 ⊥1* wxss2 → wxss1 ⊥2** wxss2 → P (MStruct s wxss2)) → P w2
-    | MUnion s i w1 xs1 =>
+    | MStruct t wxss1 =>
+      (∀ wxss2, wxss1 ⊥1* wxss2 → wxss1 ⊥2** wxss2 → P (MStruct t wxss2)) → P w2
+    | MUnion t i w1 xs1 =>
        (∀ w2 xs2,
          w1 ⊥ w2 → xs1 ⊥* xs2 →
          ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xs1) →
          ¬(ctree_unmapped w2 ∧ Forall sep_unmapped xs2) →
-         P (MUnion s i w2 xs2)) →
+         P (MUnion t i w2 xs2)) →
        (∀ xs2,
          ctree_flatten w1 ++ xs1 ⊥* xs2 → Forall sep_unmapped xs2 →
          ctree_valid w1 → ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xs1) →
-         P (MUnionAll s xs2)) → P w2
-    | MUnionAll s xs1 =>
-       (∀ xs2, xs1 ⊥* xs2 → P (MUnionAll s xs2)) →
+         P (MUnionAll t xs2)) → P w2
+    | MUnionAll t xs1 =>
+       (∀ xs2, xs1 ⊥* xs2 → P (MUnionAll t xs2)) →
        (∀ i w2 xs2,
          xs1 ⊥* ctree_flatten w2 ++ xs2 → Forall sep_unmapped xs1 →
          ctree_valid w2 → ¬(ctree_unmapped w2 ∧ Forall sep_unmapped xs2) →
-         P (MUnion s i w2 xs2)) → P w2
+         P (MUnion t i w2 xs2)) → P w2
     end.
   Proof. destruct 1; auto. Qed.
   Global Instance ctree_disjoint_dec `{∀ k1 k2 : K, Decision (k1 = k2)} :
@@ -261,22 +261,22 @@ Section operations.
        cast_if_and (decide (τb1 = τb2)) (decide (xs1 ⊥* xs2))
     | MArray τ1 ws1, MArray τ2 ws2 =>
        cast_if_and (decide (τ1 = τ2)) (decide (ws1 ⊥* ws2))
-    | MStruct s1 wxss1, MStruct s2 wxss2 =>
-       cast_if_and3 (decide (s1 = s2)) (decide (wxss1 ⊥1* wxss2))
+    | MStruct t1 wxss1, MStruct t2 wxss2 =>
+       cast_if_and3 (decide (t1 = t2)) (decide (wxss1 ⊥1* wxss2))
          (decide (wxss1 ⊥2** wxss2))
-    | MUnion s1 i1 w1 xs1, MUnion s2 i2 w2 xs2 =>
-       cast_if_and6 (decide (s1 = s2)) (decide (i1 = i2))
+    | MUnion t1 i1 w1 xs1, MUnion t2 i2 w2 xs2 =>
+       cast_if_and6 (decide (t1 = t2)) (decide (i1 = i2))
          (decide (w1 ⊥ w2)) (decide (xs1 ⊥* xs2))
          (decide (¬(ctree_unmapped w1 ∧ Forall sep_unmapped xs1)))
          (decide (¬(ctree_unmapped w2 ∧ Forall sep_unmapped xs2)))
-    | MUnionAll s1 xs1, MUnionAll s2 xs2 =>
-       cast_if_and (decide (s1 = s2)) (decide (xs1 ⊥* xs2))
-    | MUnionAll s1 xs1, MUnion s2 _ w2 xs2 =>
-       cast_if_and5 (decide (s1 = s2)) (decide (xs1 ⊥* ctree_flatten w2 ++ xs2))
+    | MUnionAll t1 xs1, MUnionAll t2 xs2 =>
+       cast_if_and (decide (t1 = t2)) (decide (xs1 ⊥* xs2))
+    | MUnionAll t1 xs1, MUnion t2 _ w2 xs2 =>
+       cast_if_and5 (decide (t1 = t2)) (decide (xs1 ⊥* ctree_flatten w2 ++ xs2))
          (decide (Forall sep_unmapped xs1)) (decide (ctree_valid w2))
          (decide (¬(ctree_unmapped w2 ∧ Forall sep_unmapped xs2)))
-    | MUnion s1 _ w1 xs1, MUnionAll s2 xs2 =>
-       cast_if_and5 (decide (s1 = s2)) (decide (ctree_flatten w1 ++ xs1 ⊥* xs2))
+    | MUnion t1 _ w1 xs1, MUnionAll t2 xs2 =>
+       cast_if_and5 (decide (t1 = t2)) (decide (ctree_flatten w1 ++ xs1 ⊥* xs2))
          (decide (Forall sep_unmapped xs2)) (decide (ctree_valid w1))
          (decide (¬(ctree_unmapped w1 ∧ Forall sep_unmapped xs1)))
     | _, _ => right _
@@ -286,18 +286,18 @@ Section operations.
   Inductive ctree_subseteq : SubsetEq (ctree K A) :=
     | MBase_subseteq τb xs1 xs2 : xs1 ⊆* xs2 → MBase τb xs1 ⊆ MBase τb xs2
     | MArray_subseteq τ ws1 ws2 : ws1 ⊆* ws2 → MArray τ ws1 ⊆ MArray τ ws2
-    | MStruct_subseteq s wxss1 wxss2 :
-       wxss1 ⊆1* wxss2 → wxss1 ⊆2** wxss2 → MStruct s wxss1 ⊆ MStruct s wxss2
-    | MUnion_subseteq s i w1 w2 xs1 xs2 :
+    | MStruct_subseteq t wxss1 wxss2 :
+       wxss1 ⊆1* wxss2 → wxss1 ⊆2** wxss2 → MStruct t wxss1 ⊆ MStruct t wxss2
+    | MUnion_subseteq t i w1 w2 xs1 xs2 :
        w1 ⊆ w2 → xs1 ⊆* xs2 →
        ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xs1) →
-       MUnion s i w1 xs1 ⊆ MUnion s i w2 xs2
-    | MUnionAll_subseteq s xs1 xs2 :
-       xs1 ⊆* xs2 → MUnionAll s xs1 ⊆ MUnionAll s xs2
-    | MUnionAll_MUnion_subseteq s i xs1 w2 xs2 :
+       MUnion t i w1 xs1 ⊆ MUnion t i w2 xs2
+    | MUnionAll_subseteq t xs1 xs2 :
+       xs1 ⊆* xs2 → MUnionAll t xs1 ⊆ MUnionAll t xs2
+    | MUnionAll_MUnion_subseteq t i xs1 w2 xs2 :
        xs1 ⊆* ctree_flatten w2 ++ xs2 → Forall sep_unmapped xs1 →
        ctree_valid w2 → ¬(ctree_unmapped w2 ∧ Forall sep_unmapped xs2) →
-       MUnionAll s xs1 ⊆ MUnion s i w2 xs2.
+       MUnionAll t xs1 ⊆ MUnion t i w2 xs2.
   Global Existing Instance ctree_subseteq.
   Section ctree_subseteq_ind.
     Context (P : ctree K A → ctree K A → Prop).
@@ -305,19 +305,19 @@ Section operations.
       xs1 ⊆* xs2 → P (MBase τb xs1) (MBase τb xs2)).
     Context (Parray : ∀ τ ws1 ws2,
       ws1 ⊆* ws2 → Forall2 P ws1 ws2 → P (MArray τ ws1) (MArray τ ws2)).
-    Context (Pstruct : ∀ s wxss1 wxss2,
+    Context (Pstruct : ∀ t wxss1 wxss2,
       wxss1 ⊆1* wxss2 → Forall2 (λ wxs1 wxs2, P (wxs1.1) (wxs2.1)) wxss1 wxss2 →
-      wxss1 ⊆2** wxss2 → P (MStruct s wxss1) (MStruct s wxss2)).
-    Context (Punion : ∀ s i w1 w2 xs1 xs2,
+      wxss1 ⊆2** wxss2 → P (MStruct t wxss1) (MStruct t wxss2)).
+    Context (Punion : ∀ t i w1 w2 xs1 xs2,
       w1 ⊆ w2 → P w1 w2 → xs1 ⊆* xs2 →
       ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xs1) →
-      P (MUnion s i w1 xs1) (MUnion s i w2 xs2)).
-    Context (Punion_all : ∀ s xs1 xs2,
-      xs1 ⊆* xs2 → P (MUnionAll s xs1) (MUnionAll s xs2)).
-    Context (Punion_empty_union : ∀ s i xs1 w2 xs2,
+      P (MUnion t i w1 xs1) (MUnion t i w2 xs2)).
+    Context (Punion_all : ∀ t xs1 xs2,
+      xs1 ⊆* xs2 → P (MUnionAll t xs1) (MUnionAll t xs2)).
+    Context (Punion_empty_union : ∀ t i xs1 w2 xs2,
       xs1 ⊆* ctree_flatten w2 ++ xs2 → Forall sep_unmapped xs1 →
       ctree_valid w2 → ¬(ctree_unmapped w2 ∧ Forall sep_unmapped xs2) →
-      P (MUnionAll s xs1) (MUnion s i w2 xs2)).
+      P (MUnionAll t xs1) (MUnion t i w2 xs2)).
     Definition ctree_subseteq_ind_alt : ∀ w1 w2, ctree_subseteq w1 w2 → P w1 w2.
     Proof. fix 3; destruct 1; eauto using Forall2_impl. Qed.
   End ctree_subseteq_ind.
@@ -331,17 +331,17 @@ Section operations.
        cast_if_and (decide (τb1 = τb2)) (decide (xs1 ⊆* xs2))
     | MArray τ1 ws1, MArray τ2 ws2 =>
        cast_if_and (decide (τ1 = τ2)) (decide (ws1 ⊆* ws2))
-    | MStruct s1 wxss1, MStruct s2 wxss2 =>
-       cast_if_and3 (decide (s1 = s2))
+    | MStruct t1 wxss1, MStruct t2 wxss2 =>
+       cast_if_and3 (decide (t1 = t2))
          (decide (wxss1 ⊆1* wxss2)) (decide (wxss1 ⊆2** wxss2))
-    | MUnion s1 i1 w1 xs1, MUnion s2 i2 w2 xs2 =>
-       cast_if_and5 (decide (s1 = s2)) (decide (i1 = i2))
+    | MUnion t1 i1 w1 xs1, MUnion t2 i2 w2 xs2 =>
+       cast_if_and5 (decide (t1 = t2)) (decide (i1 = i2))
          (decide (w1 ⊆ w2)) (decide (xs1 ⊆* xs2))
          (decide (¬(ctree_unmapped w1 ∧ Forall sep_unmapped xs1)))
-    | MUnionAll s1 xs1, MUnionAll s2 xs2 =>
-       cast_if_and (decide (s1 = s2)) (decide (xs1 ⊆* xs2))
-    | MUnionAll s1 xs1, MUnion s2 _ w2 xs2 =>
-       cast_if_and5 (decide (s1 = s2)) (decide (xs1 ⊆* ctree_flatten w2 ++ xs2))
+    | MUnionAll t1 xs1, MUnionAll t2 xs2 =>
+       cast_if_and (decide (t1 = t2)) (decide (xs1 ⊆* xs2))
+    | MUnionAll t1 xs1, MUnion t2 _ w2 xs2 =>
+       cast_if_and5 (decide (t1 = t2)) (decide (xs1 ⊆* ctree_flatten w2 ++ xs2))
          (decide (Forall sep_unmapped xs1)) (decide (ctree_valid w2))
          (decide (¬(ctree_unmapped w2 ∧ Forall sep_unmapped xs2)))
     | _, _ => right _
@@ -353,9 +353,9 @@ Section operations.
     match w1, w2 with
     | MBase τb xs1, MBase _ xs2 => MBase τb (xs1 ∪* xs2)
     | MArray τ ws1, MArray _ ws2 => MArray τ (ws1 ∪* ws2)
-    | MStruct s wxss1, MStruct _ wxss2 => MStruct s (wxss1 ∪*∪** wxss2)
-    | MUnion s i w1 xs1, MUnion _ _ w2 xs2 => MUnion s i (w1 ∪ w2) (xs1 ∪* xs2)
-    | MUnionAll s xs1, MUnionAll _ xs2 => MUnionAll s (xs1 ∪* xs2)
+    | MStruct t wxss1, MStruct _ wxss2 => MStruct t (wxss1 ∪*∪** wxss2)
+    | MUnion t i w1 xs1, MUnion _ _ w2 xs2 => MUnion t i (w1 ∪ w2) (xs1 ∪* xs2)
+    | MUnionAll t xs1, MUnionAll _ xs2 => MUnionAll t (xs1 ∪* xs2)
     | w, MUnionAll _ xs | MUnionAll _ xs, w => ctree_merge true (∪) w xs
     | _, _ => w1 (* dummy *)
     end.
@@ -364,9 +364,9 @@ Section operations.
     match w1, w2 with
     | MBase τb xs1, MBase _ xs2 => MBase τb (xs1 ∖* xs2)
     | MArray τ ws1, MArray _ ws2 => MArray τ (ws1 ∖* ws2)
-    | MStruct s wxss1, MStruct _ wxss2 => MStruct s (wxss1 ∖*∖** wxss2)
-    | MUnion s i w1 xs1, MUnion _ _ w2 xs2 => MUnion' s i (w1 ∖ w2) (xs1 ∖* xs2)
-    | MUnionAll s xs1, MUnionAll _ xs2 => MUnionAll s (xs1 ∖* xs2)
+    | MStruct t wxss1, MStruct _ wxss2 => MStruct t (wxss1 ∖*∖** wxss2)
+    | MUnion t i w1 xs1, MUnion _ _ w2 xs2 => MUnion' t i (w1 ∖ w2) (xs1 ∖* xs2)
+    | MUnionAll t xs1, MUnionAll _ xs2 => MUnionAll t (xs1 ∖* xs2)
     | w, MUnionAll _ xs2 => ctree_merge false (∖) w xs2
     | _, _ => w1
     end.
@@ -375,9 +375,9 @@ Section operations.
     match w with
     | MBase τb xs => MBase τb (½* xs)
     | MArray τ ws => MArray τ (½* ws)
-    | MStruct s wxss => MStruct s (prod_map ½ (½*) <$> wxss)
-    | MUnion s i w xs => MUnion s i (½ w) (½* xs)
-    | MUnionAll s xs => MUnionAll s (½* xs)
+    | MStruct t wxss => MStruct t (prod_map ½ (½*) <$> wxss)
+    | MUnion t i w xs => MUnion t i (½ w) (½* xs)
+    | MUnionAll t xs => MUnionAll t (½* xs)
     end.
 End operations.
 
@@ -449,9 +449,9 @@ Proof.
   * by constructor.
   * intros τ ws _ IH ys Hys Hys' Hys''; constructor; revert ys Hys Hys' Hys''.
     induction IH; intros; simplifier; auto.
-  * intros s ? _ IH ? ys Hys Hys' Hys''; constructor; revert ys Hys Hys' Hys'';
+  * intros t ? _ IH ? ys Hys Hys' Hys''; constructor; revert ys Hys Hys' Hys'';
       induction IH as [|[]]; intros; simplifier; constructor; simpl; eauto.
-  * intros s i w xs ? IH ? Hun ys Hys Hys' Hys''; simplifier.
+  * intros t i w xs ? IH ? Hun ys Hys Hys' Hys''; simplifier.
     unfold MUnion'; repeat case_match; constructor; eauto;
       rewrite ctree_flatten_merge; intuition eauto 10.
   * by constructor.
@@ -477,7 +477,7 @@ Lemma ctree_flatten_union w1 w2 :
 Proof.
   revert w1 w2. refine (ctree_disjoint_ind_alt _ _ _ _ _ _ _ _); simpl; auto 1.
   * intros τ ws1 ws2 ? IH. induction IH; simplifier; f_equal; auto.
-  * intros s wxss1 wxss2 ? IH ?.
+  * intros t wxss1 wxss2 ? IH ?.
     induction IH as [|[]]; simplifier; repeat f_equal; auto.
   * intros; simplifier; by f_equal.
   * intros; simplifier; f_equal; eauto using seps_commutative.
@@ -496,7 +496,7 @@ Proof.
 Qed.
 Lemma ctree_disjoint_valid_l w1 w2 : w1 ⊥ w2 → ctree_valid w1.
 Proof.
-  induction 1 as [|τ ws1 ws2 _ IH|s wxss1 wxss2 _ IH Hwxss| | | |]
+  induction 1 as [|τ ws1 ws2 _ IH|t wxss1 wxss2 _ IH Hwxss| | | |]
     using @ctree_disjoint_ind_alt; simplifier;
     constructor; eauto using seps_disjoint_valid_l.
   * induction IH; auto.
@@ -510,7 +510,7 @@ Proof.
   revert w1 w2. refine (ctree_subseteq_ind_alt _ _ _ _ _ _ _); simpl.
   * constructor; auto using seps_disjoint_difference.
   * intros τ ws1 ws2 _ IH; constructor. induction IH; simpl; auto.
-  * intros s wxss1 wxss2 _ IH Hwxss; constructor.
+  * intros t wxss1 wxss2 _ IH Hwxss; constructor.
     + clear Hwxss. induction IH; simpl; auto.
     + clear IH. induction Hwxss as [|[] []]; constructor;
         simpl; auto using seps_disjoint_difference.
@@ -518,7 +518,7 @@ Proof.
       intuition eauto using seps_disjoint_difference,
       ctree_disjoint_valid_l, ctree_flatten_disjoint.
   * constructor; auto using seps_disjoint_difference.
-  * intros s i xs1 w2 xs2 ????; unfold MUnion'; case_decide;
+  * intros t i xs1 w2 xs2 ????; unfold MUnion'; case_decide;
       constructor; simplifier; auto using seps_disjoint_difference.
     apply ctree_merge_valid;
       eauto using seps_difference_valid, Forall2_length, eq_sym.
@@ -596,7 +596,7 @@ Proof.
   * intros τ ws1 ws2 ? IH ys Hys1 Hys2 Hys3 Hys4. constructor.
     revert ys Hys1 Hys2 Hys3 Hys4.
     induction IH; intros; simplifier; constructor; auto.
-  * intros s wxss1 wxss2 ? IH ? ys Hys1 Hys2 Hys3 Hys4; constructor;
+  * intros t wxss1 wxss2 ? IH ? ys Hys1 Hys2 Hys3 Hys4; constructor;
       revert ys Hys1 Hys2 Hys3 Hys4; induction IH as [|[][]];
       intros; simplifier; constructor; simpl; eauto.
   * intros; simplifier. constructor; auto.
@@ -637,7 +637,7 @@ Proof.
   * intros; by f_equal.
   * intros τ ws1 ws2 ? IH ys Hys1 Hys2 Hys3; f_equal.
     revert ys Hys1 Hys2 Hys3. induction IH; intros; simplifier; f_equal; auto.
-  * intros s wxss1 wxss2 ? IH ? ys Hys1 Hys2 Hys3; f_equal;
+  * intros t wxss1 wxss2 ? IH ? ys Hys1 Hys2 Hys3; f_equal;
       revert ys Hys1 Hys2 Hys3; induction IH as [|[][]];
       intros; simplifier; repeat f_equal; simpl; eauto.
   * intros; simplifier; f_equal; auto.
@@ -657,7 +657,7 @@ Lemma ctree_merge_map (g : A → A) w ys :
   ctree_merge true f w ys = ctree_map g w.
 Proof.
   rewrite <-Forall2_same_length. revert ys.
-  induction w as [|τ ws IH|s wxss IH| |]
+  induction w as [|τ ws IH|t wxss IH| |]
     using @ctree_ind_alt; intros ys Hys Hys'; simplifier; f_equal'; auto.
   * revert ys Hys Hys'. induction IH; intros; simplifier; f_equal'; auto.
   * revert ys Hys Hys'.
@@ -679,7 +679,7 @@ Lemma ctree_map_merge w :
   ctree_map f w
   = ctree_merge true (λ x _, f x) w (replicate (length (ctree_flatten w)) ()).
 Proof.
-  induction w as [|τ ws IH|s wxss IH| |] using @ctree_ind_alt; f_equal'.
+  induction w as [|τ ws IH|t wxss IH| |] using @ctree_ind_alt; f_equal'.
   * by rewrite zip_with_replicate_r_eq by done.
   * induction IH; simplifier; f_equal'; auto.
   * induction IH as [|[]]; simplifier; repeat f_equal';
@@ -741,9 +741,9 @@ Proof.
   revert w1 w2. refine (ctree_disjoint_ind_alt _ _ _ _ _ _ _ _); simpl.
   * done.
   * intros τ ws1 ws2 ? IH ?; f_equal. induction IH; simplifier; f_equal; auto.
-  * intros s wxss1 wxss2 ? IH ??; f_equal.
+  * intros t wxss1 wxss2 ? IH ??; f_equal.
     induction IH as [|[][]]; simplifier; repeat f_equal; auto.
-  * intros s i w1 w2 xs1 xs2; intros; simplifier; f_equal; auto.
+  * intros t i w1 w2 xs1 xs2; intros; simplifier; f_equal; auto.
   * done.
   * intros; simplifier; naive_solver.
   * intros; simplifier; naive_solver.
@@ -777,7 +777,7 @@ Proof.
   revert w1 w2. refine (ctree_disjoint_ind_alt _ _ _ _ _ _ _ _); simpl.
   * constructor; eauto using seps_union_valid.
   * intros τ ws1 ws2 _ IH. constructor. induction IH; simpl; auto.
-  * intros s wxss1 wxss2 _ IH Hwxss. constructor.
+  * intros t wxss1 wxss2 _ IH Hwxss. constructor.
     + clear Hwxss. induction IH; simpl; auto.
     + clear IH. induction Hwxss; constructor;
         simpl; eauto using seps_union_valid.
@@ -793,7 +793,7 @@ Proof.
 Qed.
 Lemma ctree_commutative w1 w2 : w1 ⊥ w2 → w1 ∪ w2 = w2 ∪ w1.
 Proof.
-  induction 1 as [|τ ws1 ws2 _ IH|s wxss1 wxss2 _ IH Hwxss| | | |]
+  induction 1 as [|τ ws1 ws2 _ IH|t wxss1 wxss2 _ IH Hwxss| | | |]
     using @ctree_disjoint_ind_alt; f_equal'; auto using seps_commutative.
   * induction IH; f_equal'; auto.
   * induction IH as [|[] []]; simplifier;
@@ -809,7 +809,7 @@ Proof.
   * by intros; f_equal.
   * intros τ ws IH ys Hys Hys'; f_equal; revert ys Hys Hys'.
     induction IH; intros; simplifier; f_equal; eauto.
-  * intros s wxbss IH ys Hys Hys'; f_equal; revert ys Hys Hys'.
+  * intros t wxbss IH ys Hys Hys'; f_equal; revert ys Hys Hys'.
     induction IH as [|[]]; intros; simplifier; repeat f_equal; auto.
   * intros; simplifier; f_equal; auto.
   * by intros; f_equal.
@@ -830,7 +830,7 @@ Proof.
   revert w1 w2. refine (ctree_disjoint_ind_alt _ _ _ _ _ _ _ _); simpl.
   * intros; f_equal; auto using seps_left_id.
   * intros τ ws1 ws2 _ IH ?; f_equal. induction IH; simplifier; f_equal; auto.
-  * intros s wxss1 wxss2 _ IH Hwxss ?; f_equal.
+  * intros t wxss1 wxss2 _ IH Hwxss ?; f_equal.
     induction IH as [|[][]]; simplifier; repeat f_equal;auto using seps_left_id.
   * intros; simplifier; f_equal; auto using seps_left_id.
   * intros; simplifier; f_equal; auto using seps_left_id.
@@ -851,18 +851,18 @@ Proof.
   * intros τ ws1 _ IH w2 ys Hys Hw2. apply (ctree_disjoint_inv_l _ _ _ Hw2).
     clear w2 Hw2. intros ws2 Hws2. constructor. revert ws2 ys Hys Hws2.
     induction IH; intros; simplifier; eauto.
-  * intros s wxss _ IH _ w2 ys Hys Hw2.
+  * intros t wxss _ IH _ w2 ys Hys Hw2.
     apply (ctree_disjoint_inv_l _ _ _ Hw2).
     clear w2 Hw2. intros wxss2 Hwxss Hwxss'. constructor.
      + clear Hwxss'. revert wxss2 ys Hys Hwxss.
       induction IH as [|[]]; intros; simplifier; eauto.
      + clear IH Hwxss. revert wxss2 ys Hys Hwxss'.
        induction wxss as [|[]]; intros; simplifier; eauto.
-  * intros s i w1 xs1 Hw1 IH _ ? w2 ys Hys Hw2; simplifier.
+  * intros t i w1 xs1 Hw1 IH _ ? w2 ys Hys Hw2; simplifier.
     apply (ctree_disjoint_inv_l _ _ _ Hw2); clear w2 Hw2.
     + intros w2 xs2 ????. constructor; eauto.
     + intros xs2 ???; simplifier; constructor; eauto.
-  * intros s xs1 _ w2 ys Hys Hw2; apply (ctree_disjoint_inv_l _ _ _ Hw2);
+  * intros t xs1 _ w2 ys Hys Hw2; apply (ctree_disjoint_inv_l _ _ _ Hw2);
       constructor; eauto using seps_unmapped_union_l.
 Qed.
 Lemma ctree_disjoint_ll w1 w2 w3 : w1 ⊥ w2 → w1 ∪ w2 ⊥ w3 → w1 ⊥ w3.
@@ -874,28 +874,28 @@ Proof.
   * intros τ ws1 ws2 _ IH w3 Hw3; apply (ctree_disjoint_inv_l _ _ _ Hw3).
     clear w3 Hw3. intros ws3 Hws3. constructor. revert ws3 Hws3.
     induction IH; intros; simplifier; auto.
-  * intros s wxss1 wxss2 _ IH Hwxss w3 Hw3.
+  * intros t wxss1 wxss2 _ IH Hwxss w3 Hw3.
     apply (ctree_disjoint_inv_l _ _ _ Hw3). clear w3 Hw3.
     intros wxss3 Hwxss3 Hwxss3'. constructor.
     + clear Hwxss Hwxss3'. revert wxss3 Hwxss3.
       induction IH; intros; simplifier; auto.
     + clear IH Hwxss3. revert wxss3 Hwxss3'.
       induction Hwxss; intros; simplifier; eauto.
-  * intros s i w1 w2 xs1 xs2 ? IH Hxs ?? w3 Hw3;
+  * intros t i w1 w2 xs1 xs2 ? IH Hxs ?? w3 Hw3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3.
     { constructor; eauto. }
     intros xs3. rewrite ctree_flatten_union by done.
     intros Hxs3 ? _ ?; simplifier.
     constructor; eauto using ctree_disjoint_valid_l,
       seps_disjoint_ll, ctree_flatten_disjoint.
-  * intros s xs1 xs2 Hxs w3 Hw3; apply (ctree_disjoint_inv_l _ _ _ Hw3);
+  * intros t xs1 xs2 Hxs w3 Hw3; apply (ctree_disjoint_inv_l _ _ _ Hw3);
       constructor; eauto using seps_unmapped_union_l.
-  * intros s i xs1 w2 xs2 ???? w3 Hw3.
+  * intros t i xs1 w2 xs2 ???? w3 Hw3.
     simplifier. apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3.
     { intros w3 xs3 Hw3 ???. constructor; eauto using ctree_disjoint_valid_r.
       apply ctree_flatten_disjoint in Hw3; simplifier; eauto. }
     constructor; simplifier; eauto.
-  * intros s i w1 xs1 xs2 ???? w3 Hw3; simplifier.
+  * intros t i w1 xs1 xs2 ???? w3 Hw3; simplifier.
     apply (ctree_disjoint_inv_l _ _ _ Hw3);
       constructor; simplifier; eauto using ctree_merge_disjoint_l.
 Qed.
@@ -912,19 +912,19 @@ Proof.
   * constructor; eauto using seps_disjoint_move_l.
   * intros τ ws1 ws2 Hws IH ys Hys Hys'. constructor. revert ys Hys Hys'.
     induction IH; intros; simplifier; constructor; auto.
-  * intros s wxss1 wxss2 Hws IH Hxss ys Hys Hys'. constructor.
+  * intros t wxss1 wxss2 Hws IH Hxss ys Hys Hys'. constructor.
     + revert ys Hys Hys'. induction IH as [|[] []]; intros;
         constructor; simplifier; auto.
     + revert ys Hys Hys'. clear IH. induction Hxss as [|[] []]; intros;
         constructor; simplifier; auto using seps_disjoint_move_l.
-  * intros s i w1 w2 xs1 xs2 ? IH ?? Hc2 ys; rewrite Forall2_app_inv_l.
+  * intros t i w1 w2 xs1 xs2 ? IH ?? Hc2 ys; rewrite Forall2_app_inv_l.
     intros (ys1&ys2&Hys1&Hys2&->); rewrite Forall_app; intros [??].
     simplifier. constructor; eauto using seps_disjoint_move_l.
     rewrite ctree_flatten_union in Hys1 by done.
     intros [??]; destruct Hc2; split; eauto using ctree_merge_mapped,
       seps_unmapped_union_l, seps_disjoint_lr, ctree_flatten_disjoint.
   * constructor; eauto using seps_disjoint_move_l.
-  * intros s i xs1_ w2 xs2; rewrite Forall2_app_inv_r.
+  * intros t i xs1_ w2 xs2; rewrite Forall2_app_inv_r.
     intros (xs1&xs1'&Hxs1&Hxs1'&->); rewrite Forall_app; intros [??] ? Hc ys.
     simplifier. rewrite (seps_commutative _ xs1), Forall2_app_inv_l by done.
     intros (ys1&ys2&Hys1&Hys2&->); rewrite Forall_app; intros [??].
@@ -933,7 +933,7 @@ Proof.
     + eauto.
     + eauto using ctree_merge_union_valid.
     + intuition eauto using ctree_merge_mapped, seps_unmapped_union_l.
-  * intros s i w1 xs1 xs2 ???? ys ??; simplifier.
+  * intros t i w1 xs1 xs2 ???? ys ??; simplifier.
     constructor; eauto using seps_disjoint_move_l, seps_unmapped_union.
 Qed.
 Lemma ctree_disjoint_move_l w1 w2 w3 : w1 ⊥ w2 → w1 ∪ w2 ⊥ w3 → w1 ⊥ w2 ∪ w3.
@@ -947,7 +947,7 @@ Proof.
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3.
     intros ws3 Hws3. constructor. revert ws3 Hws3.
     induction IH; intros; simplifier; auto.
-  * intros s wxss1 wxss2 _ IH Hwxss w3 Hw3; pattern w3;
+  * intros t wxss1 wxss2 _ IH Hwxss w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3.
     intros wxss3 Hwxss3 Hwxss3'. constructor.
     + clear Hwxss Hwxss3'. revert wxss3 Hwxss3.
@@ -955,7 +955,7 @@ Proof.
     + clear IH Hwxss3. revert wxss3 Hwxss3'.
       induction Hwxss; intros; simplifier;
         constructor; simpl; eauto using seps_disjoint_move_l.
-  * intros s i w1 w2 xs1 xs2 ? IH Hxs ? Hc2 w3 Hw3; pattern w3;
+  * intros t i w1 w2 xs1 xs2 ? IH Hxs ? Hc2 w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     { intros w3 xs3 ????. constructor; eauto using seps_disjoint_move_l.
       assert (w2 ⊥ w3) by eauto using ctree_disjoint_lr.
@@ -966,7 +966,7 @@ Proof.
         rewrite <-?ctree_flatten_union; eauto using ctree_flatten_disjoint. }
     simplifier. constructor; eauto using ctree_merge_move, seps_disjoint_move_l.
     intuition eauto using ctree_merge_mapped, seps_unmapped_union_l.
-  * intros s xs1 xs2 Hxs w3 Hw3; pattern w3;
+  * intros t xs1 xs2 Hxs w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     { constructor; eauto using seps_disjoint_move_l. }
     intros i w2 zs; rewrite Forall2_app_inv_r; intros (?&?&?&?&Hxs3);
@@ -980,7 +980,7 @@ Proof.
     + eauto using seps_unmapped_union_l.
     + eauto using ctree_merge_union_valid, seps_unmapped_union_r.
     + intuition eauto using seps_unmapped_union_l, ctree_merge_mapped.
-  * intros s i xs1_ w2 xs2; rewrite Forall2_app_inv_r.
+  * intros t i xs1_ w2 xs2; rewrite Forall2_app_inv_r.
     intros (xs1&xs1'&Hxs1&Hxs2&->) ??? w3 Hw3; simplifier. symmetry in Hxs2.
     pattern w3; apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     { intros w3 xs3; rewrite seps_commutative by done; intros.
@@ -999,7 +999,7 @@ Proof.
     + eauto.
     + eauto using ctree_merge_union_valid.
     + intuition eauto using seps_unmapped_union_l, ctree_merge_mapped.
-  * intros s i w1 xs1 xs2_; rewrite Forall2_app_inv_l.
+  * intros t i w1 xs1 xs2_; rewrite Forall2_app_inv_l.
     intros (xs2&xs2'&Hxs2&Hxs2'&->) ??? w3 Hw3; simplifier.
     pattern w3; apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     { intros w3 xs3 ????. assert (xs2 ⊥* ctree_flatten w3).
@@ -1029,7 +1029,7 @@ Proof.
   * intros; f_equal; auto using seps_associative.
   * intros τ ws _ IH ys1 ys2 Hys Hys'. f_equal. revert ys1 ys2 Hys Hys'.
     induction IH; intros; simplifier; f_equal; auto.
-  * intros s wxss _ IH Hwxss ys1 ys2 Hys Hys'. f_equal. revert ys1 ys2 Hys Hys'.
+  * intros t wxss _ IH Hwxss ys1 ys2 Hys Hys'. f_equal. revert ys1 ys2 Hys Hys'.
     induction IH as [|[]]; intros; simplifier; f_equal;
       auto using seps_associative with f_equal.
   * intros; simplifier; f_equal; auto using seps_associative.
@@ -1044,12 +1044,12 @@ Proof.
   * intros. f_equal; auto using seps_associative_rev.
   * intros τ ws1 ws2 Hws IH ys Hys. f_equal. revert ys Hys.
     induction IH; intros; simplifier; f_equal; auto.
-  * intros s wxss1 wxss2 Hws IH Hxss ys Hys. f_equal. revert ys Hys.
+  * intros t wxss1 wxss2 Hws IH Hxss ys Hys. f_equal. revert ys Hys.
     induction IH as [|[] []]; intros; simplifier;
       f_equal; auto using seps_associative_rev with f_equal.
   * intros; simplifier; f_equal; auto using seps_associative_rev.
   * intros; f_equal; auto using seps_associative_rev.
-  * intros s i xs1_ w2 xs2; rewrite Forall2_app_inv_r.
+  * intros t i xs1_ w2 xs2; rewrite Forall2_app_inv_r.
     intros (xs1&xs1'&Hxs1&Hxs1'&->); rewrite Forall_app; intros [??] ? _ ys.
     simplifier; rewrite Forall2_app_inv_l; intros (ys1&ys2&Hys1&Hys2&->).
     assert (xs1 ⊥* ys1) by eauto.
@@ -1073,18 +1073,18 @@ Proof.
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     intros ws3 Hws3; f_equal. revert ws3 Hws3.
     induction IH; intros; simplifier; f_equal; auto.
-  * intros s wxss1 wxss2 _ IH Hwxss w3 Hw3; pattern w3;
+  * intros t wxss1 wxss2 _ IH Hwxss w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     intros wxss3 Hwxss3 Hwxss3'. f_equal.
     revert wxss3 Hwxss3 Hwxss3'. induction IH as [|[][]];
       intros [|[]] ??; simplifier; f_equal;
       auto using seps_associative_rev with f_equal.
-  * intros s i w1 w2 xs1 xs2 ? IH Hxs ?? w3 Hw3; pattern w3;
+  * intros t i w1 w2 xs1 xs2 ? IH Hxs ?? w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     { intros; f_equal; auto using seps_associative_rev. }
     intros xs3 ? _ _ _. simplifier.
     f_equal; auto using ctree_merge_associative_2, seps_associative_rev.
-  * intros s xs1_ xs2_ ? w3 Hw3; pattern w3;
+  * intros t xs1_ xs2_ ? w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     { intros; f_equal; auto using seps_associative_rev. }
     intros i w3 xs3; rewrite Forall2_app_inv_r.
@@ -1097,7 +1097,7 @@ Proof.
     simplifier. rewrite <-ctree_merge_associative_1, seps_associative_rev,
       (seps_commutative xs1), (seps_commutative xs1');
       eauto using seps_disjoint_move_l, seps_disjoint_move_r.
-  * intros s i xs1_ w2 xs2; rewrite Forall2_app_inv_r;
+  * intros t i xs1_ w2 xs2; rewrite Forall2_app_inv_r;
       intros (xs1&xs1'&?&?&->) _ ? _ w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     { intros w3 xs3; simplifier; intros ?? _ _.
@@ -1116,7 +1116,7 @@ Proof.
     { rewrite seps_commutative by eauto; eauto using seps_disjoint_move_r. }
     simplifier. by rewrite <-!ctree_merge_associative_1,
       (seps_commutative xs1), seps_permute by eauto using seps_disjoint_move_l.
-  * intros s i w1 xs1 xs2_; rewrite Forall2_app_inv_l;
+  * intros t i w1 xs1 xs2_; rewrite Forall2_app_inv_l;
       intros (xs2&xs2'&?&?&->) _ ? _ w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     { intros w3 xs3; simplifier; intros ?? _ _.
@@ -1152,11 +1152,11 @@ Proof.
   * intros; simplifier; eauto using seps_cancel_empty_l.
   * intros τ ws1 ws2 _ IH ?; simplify_equality'.
     induction IH; simplifier; auto.
-  * intros s wxss1 wxss2 _ IH ??; simplifier.
+  * intros t wxss1 wxss2 _ IH ??; simplifier.
     induction IH as [|[] []]; simplifier; eauto 6 using seps_cancel_empty_l.
   * intros; simplifier; eauto using seps_cancel_empty_l.
   * intros; simplifier; eauto using seps_cancel_empty_l.
-  * intros s i xs1 w2 xs2 ?????; simplifier.
+  * intros t i xs1 w2 xs2 ?????; simplifier.
     apply Forall_app_2; eauto using seps_cancel_empty_r.
     apply seps_cancel_empty_r with (ctree_flatten w2); auto.
     rewrite <-(ctree_flatten_merge _ true) by done. by f_equal.
@@ -1174,7 +1174,7 @@ Proof.
   * by intros; simplifier.
   * intros τ ws IH ys1 ys2; rewrite (injective_iff (MArray τ)).
     revert ys1 ys2. induction IH; intros; simplifier; f_equal; auto.
-  * intros s wxss IH ys1 ys2; rewrite (injective_iff (MStruct s)).
+  * intros t wxss IH ys1 ys2; rewrite (injective_iff (MStruct t)).
     revert ys1 ys2.
     induction IH as [|[]]; intros; simplifier; repeat f_equal; eauto.
   * intros; simplifier; f_equal; eauto.
@@ -1198,7 +1198,7 @@ Proof.
     { erewrite <-(zip_with_length_same_r _ _ _ ys1),  <-(zip_with_length_same_r
         _ _ _ ys2), <-!(ctree_flatten_merge (∪) true) by eauto; congruence. }
     simplifier; f_equal; eauto.
-  * intros s wxss1 IH [| |s' wxss2| |]; simpl; try discriminate. cut (∀ ys1 ys2,
+  * intros t wxss1 IH [| |s' wxss2| |]; simpl; try discriminate. cut (∀ ys1 ys2,
       wxss1 ≫= (λ wxs, ctree_flatten (wxs.1) ++ wxs.2) ⊥* ys1 →
       wxss2 ≫= (λ wxs, ctree_flatten (wxs.1) ++ wxs.2) ⊥* ys2 → ys1 = ys2 →
       ctree_merge_struct (∪) (ctree_merge true (∪)) wxss1 ys1 =
@@ -1215,7 +1215,7 @@ Proof.
     { erewrite <-(zip_with_length_same_r _ _ _ ys1'),  <-(zip_with_length_same_r
         _ _ _ ys2') by eauto; f_equal; eauto. }
     simplifier; repeat f_equal; eauto.
-  * intros s i w xs1 IH [| | |s' i' w2 xs2|] ys1_; simpl; try discriminate.
+  * intros t i w xs1 IH [| | |s' i' w2 xs2|] ys1_; simpl; try discriminate.
     generalize (eq_refl ys1_); generalize ys1_ at 2 4 7 8; intros ys2_.
     rewrite !Forall2_app_inv_l;
       intros ? (ys1&ys1'&?&?&->) (ys2&ys2'&?&?&->) ?; simplifier.
@@ -1223,7 +1223,7 @@ Proof.
     { erewrite <-(zip_with_length_same_r _ _ _ ys1),  <-(zip_with_length_same_r
         _ _ _ ys2), <-!(ctree_flatten_merge (∪) true) by eauto; congruence. }
     simplifier; f_equal; eauto.
-  * by intros s xs1 [] ys ???; simplifier.
+  * by intros t xs1 [] ys ???; simplifier.
 Qed.
 Lemma ctree_cancel_l w1 w2 w3 :
   w3 ⊥ w1 → w3 ⊥ w2 → w3 ∪ w1 = w3 ∪ w2 → w1 = w2.
@@ -1236,12 +1236,12 @@ Proof.
       apply (ctree_disjoint_inv_l _ _ _ Hw2); clear w2 Hw2; simpl.
     intros ws2; rewrite !(injective_iff (MArray τ)); revert ws2.
     induction IH; intros; simplifier; f_equal; auto.
-  * intros s wxss3 wxss1 _ IH Hwxss w2 Hw2; pattern w2;
+  * intros t wxss3 wxss1 _ IH Hwxss w2 Hw2; pattern w2;
       apply (ctree_disjoint_inv_l _ _ _ Hw2); clear w2 Hw2; simpl.
-    intros wxss2; rewrite !(injective_iff (MStruct s)); revert wxss2.
+    intros wxss2; rewrite !(injective_iff (MStruct t)); revert wxss2.
     induction IH as [|[][]]; intros [|[]] ???;
       simplifier; repeat f_equal; eauto.
-  * intros s i w3 w1 xs3 xs1 ? IH ?? Hc w2 Hw2; pattern w2;
+  * intros t i w3 w1 xs3 xs1 ? IH ?? Hc w2 Hw2; pattern w2;
       apply (ctree_disjoint_inv_l _ _ _ Hw2); clear w2 Hw2; simpl.
     { intros w2 xs2 ?????; simplifier; f_equal; auto. }
     intros xs2_; rewrite Forall2_app_inv_l; intros (xs2&xs2'&?&?&->) ? _ _ ?.
@@ -1250,10 +1250,10 @@ Proof.
       auto using ctree_flatten_disjoint.
     rewrite <-ctree_flatten_union, <-(ctree_flatten_merge _ true)
         by auto using ctree_flatten_disjoint; f_equal; auto.
-  * intros s xs3 xs1 ? w2 Hw2; pattern w2;
+  * intros t xs3 xs1 ? w2 Hw2; pattern w2;
       apply (ctree_disjoint_inv_l _ _ _ Hw2); clear w2 Hw2; [|done].
     by intros xs2 ??; simplifier.
-  * intros s i xs3_ w1 xs1. generalize (eq_refl xs3_);
+  * intros t i xs3_ w1 xs1. generalize (eq_refl xs3_);
       generalize xs3_ at 2 4 5 8; intros xs4_; rewrite Forall2_app_inv_r;
       intros ? (xs3&xs3'&?&?&->) _ _ _ w2 Hw2; pattern w2;
       apply (ctree_disjoint_inv_l _ _ _ Hw2); clear w2 Hw2; simpl; [done|].
@@ -1264,7 +1264,7 @@ Proof.
         <-(zip_with_length_same_r _ (⊥) _ xs4),
         <-!(ctree_flatten_merge (∪) true) by eauto; congruence. }
     simplifier; f_equal; eauto using ctree_merge_cancel_2.
-  * intros s i w3 xs3 xs1_; rewrite Forall2_app_inv_l;
+  * intros t i w3 xs3 xs1_; rewrite Forall2_app_inv_l;
       intros (xs1&xs1'&?&?&->) ??? w2 Hw2; pattern w2;
       apply (ctree_disjoint_inv_l _ _ _ Hw2); clear w2 Hw2; simpl.
     { intros w2 xs2 ??? Hc ?; simplifier.
@@ -1282,7 +1282,7 @@ Proof.
   * constructor; auto using seps_union_subseteq_l.
   * intros τ ws _ IH ys Hys; constructor; revert ys Hys.
     induction IH; intros; simplifier; constructor; auto.
-  * intros s wxss _ IH _ ys Hys; constructor; revert ys Hys.
+  * intros t wxss _ IH _ ys Hys; constructor; revert ys Hys.
     + induction IH as [|[]]; intros; constructor; simplifier; auto.
     + induction IH as [|[]]; intros; constructor; simplifier;
         auto using seps_union_subseteq_l.
@@ -1301,7 +1301,7 @@ Proof.
   revert w. refine (ctree_valid_ind_alt _ _ _ _ _ _).
   * constructor; auto using seps_reflexive.
   * intros τ ws _ IH; constructor. induction IH; auto.
-  * intros s wxss _ IH Hwxss; constructor.
+  * intros t wxss _ IH Hwxss; constructor.
     + clear Hwxss. induction IH; auto.
     + clear IH. induction Hwxss; auto using seps_reflexive.
   * constructor; auto using seps_reflexive.
@@ -1312,13 +1312,13 @@ Proof.
   revert w1 w2. refine (ctree_disjoint_ind_alt _ _ _ _ _ _ _ _); simpl.
   * constructor; auto using seps_union_subseteq_l.
   * intros τ ws1 ws2 _ IH; constructor. induction IH; simpl; auto.
-  * intros s wxss1 wxss2 _ IH Hwxss; constructor.
+  * intros t wxss1 wxss2 _ IH Hwxss; constructor.
     + clear Hwxss. induction IH; simpl; auto.
     + clear IH. induction Hwxss as [|[][]];
         constructor; simpl; auto using seps_union_subseteq_l.
   * constructor; auto using seps_union_subseteq_l.
   * constructor; auto using seps_union_subseteq_l.
-  * intros s i xs1 w2 xs2 ????; simplifier; constructor.
+  * intros t i xs1 w2 xs2 ????; simplifier; constructor.
     + simplifier. auto using seps_union_subseteq_r.
     + auto.
     + eauto using ctree_merge_union_valid.
@@ -1326,8 +1326,8 @@ Proof.
   * intros; simplifier; constructor;
       auto using seps_union_subseteq_l, ctree_merge_subseteq.
 Qed.
-Lemma MUnion'_flatten s i w xs :
-  ctree_flatten (MUnion' s i w xs) = ctree_flatten w ++ xs.
+Lemma MUnion'_flatten t i w xs :
+  ctree_flatten (MUnion' t i w xs) = ctree_flatten w ++ xs.
 Proof. by unfold MUnion'; case_decide. Qed.
 Lemma ctree_merge_difference_unmapped_1 w ys :
   ys ⊆* ctree_flatten w → Forall sep_unmapped ys →
@@ -1356,7 +1356,7 @@ Proof.
   * intros; f_equal; auto.
   * intros τ ws _ IH ys Hys Hys'; f_equal; revert ys Hys Hys'.
     induction IH; intros; simplifier; f_equal; auto.
-  * intros s wxss ? IH ? ys Hys Hys'; f_equal; revert ys Hys Hys'.
+  * intros t wxss ? IH ? ys Hys Hys'; f_equal; revert ys Hys Hys'.
     induction IH as [|[]]; intros; simplifier; f_equal; auto with f_equal.
   * intros; simplifier;
       unfold MUnion'; case_decide; simplifier; [|f_equal; auto].
@@ -1369,7 +1369,7 @@ Proof.
   revert w1 w2. refine (ctree_subseteq_ind_alt _ _ _ _ _ _ _); simpl.
   * intros; f_equal; auto using seps_union_difference.
   * intros τ ws1 ws2 _ IH; f_equal. induction IH; f_equal'; auto.
-  * intros s wxss1 wxss2 _ IH Hwxss; f_equal. induction IH as [|[][]];
+  * intros t wxss1 wxss2 _ IH Hwxss; f_equal. induction IH as [|[][]];
       simplifier; repeat f_equal; auto using seps_union_difference.
   * intros; unfold MUnion'; case_decide; simplifier;
       f_equal'; auto using seps_union_difference.
@@ -1386,13 +1386,13 @@ Proof.
   revert w1 w2. refine (ctree_subseteq_ind_alt _ _ _ _ _ _ _); simpl.
   * intros; f_equal; auto using seps_difference_empty_rev.
   * intros τ ws1 ws2 _ IH ?; f_equal. induction IH; simplifier; f_equal; auto.
-  * intros s wxss1 wxss2 _ IH Hwxss ?; f_equal.
+  * intros t wxss1 wxss2 _ IH Hwxss ?; f_equal.
     induction IH as [|[][]]; simplifier;
       repeat f_equal; auto using seps_difference_empty_rev.
-  * intros s i w1 w2 xs1 xs2; rewrite MUnion'_flatten.
+  * intros t i w1 w2 xs1 xs2; rewrite MUnion'_flatten.
     intros; simplifier. f_equal; auto using seps_difference_empty_rev.
   * intros; f_equal; auto using seps_difference_empty_rev.
-  * intros s i xs1_ w2 xs2; rewrite MUnion'_flatten.
+  * intros t i xs1_ w2 xs2; rewrite MUnion'_flatten.
     rewrite Forall2_app_inv_r; intros (xs1&xs1'&?&?&->) ????; simplifier.
     assert (xs1' = xs2) by auto using seps_difference_empty_rev; subst.
     cut (xs1 = ctree_flatten w2); [intros ->; intuition|].
@@ -1421,7 +1421,7 @@ Proof.
   * intros; simplify_equality'; auto using seps_splittable_union.
   * intros τ ? ws _ IH ?; simplify_equality'.
     induction ws; simplifier; auto.
-  * intros s ? wxss _ IH ??; simplify_equality'.
+  * intros t ? wxss _ IH ??; simplify_equality'.
     induction wxss; simplifier; auto using seps_splittable_union.
   * intros; simplify_equality'; auto using seps_splittable_union.
   * intros; simplify_equality'; auto using seps_splittable_union.
@@ -1435,12 +1435,12 @@ Proof.
   refine (ctree_subseteq_ind_alt _ _ _ _ _ _ _); simpl.
   * intros τb xs1 xs2 ?; eauto using seps_splittable_weaken.
   * intros τ ws1 ws2 _ IH ?. induction IH; simplifier; auto.
-  * intros s wxss1 wxss2 _ IH Hwxss ?.
+  * intros t wxss1 wxss2 _ IH Hwxss ?.
     induction Hwxss; simplifier; repeat apply Forall_app_2;
       eauto using seps_splittable_weaken.
   * intros; simplifier; apply Forall_app_2; eauto using seps_splittable_weaken.
-  * intros s xs1 xs2 ??; eauto using seps_splittable_weaken.
-  * intros s i xs1 w2 xs2 ?????; simplifier.
+  * intros t xs1 xs2 ??; eauto using seps_splittable_weaken.
+  * intros t i xs1 w2 xs2 ?????; simplifier.
     eauto using seps_splittable_weaken.
 Qed.
 Lemma ctree_flatten_half w : ctree_flatten (½ w) = ½* (ctree_flatten w).
@@ -1462,10 +1462,10 @@ Proof.
   revert w. refine (ctree_valid_ind_alt _ _ _ _ _ _); simpl.
   * constructor; auto using seps_disjoint_half.
   * intros τ ws _ IH ?; constructor. induction IH; simplifier; auto.
-  * intros s wxss _ IH Hwxss ?; constructor.
+  * intros t wxss _ IH Hwxss ?; constructor.
     + clear Hwxss. induction IH; simplifier; auto.
     + induction Hwxss; constructor; simplifier; auto using seps_disjoint_half.
-  * intros s i w xs _ IH _ ??; simplifier.
+  * intros t i w xs _ IH _ ??; simplifier.
     constructor; auto using seps_disjoint_half;
       intuition auto using ctree_unmapped_half, seps_unmapped_half_1.
   * constructor; auto using seps_disjoint_half.
@@ -1475,7 +1475,7 @@ Proof.
   revert w. refine (ctree_ind_alt _ _ _ _ _ _); simpl.
   * intros; f_equal; auto using seps_union_half.
   * intros τ ws Hws IH; f_equal. induction Hws; simplifier; f_equal; auto.
-  * intros s wxss Hws IH; f_equal. induction Hws as [|[]]; simplifier;
+  * intros t wxss Hws IH; f_equal. induction Hws as [|[]]; simplifier;
       repeat f_equal; auto using seps_union_half.
   * intros; simplifier; f_equal; auto using seps_union_half.
   * intros; f_equal; auto using seps_union_half.
@@ -1488,7 +1488,7 @@ Proof.
   * intros; f_equal; auto using seps_union_half_distr.
   * intros τ ws IH ys Hys Hys'; f_equal; revert ys Hys Hys'.
     induction IH; intros; simplifier; f_equal; auto.
-  * intros s wxss IH ys Hys Hys'; f_equal; revert ys Hys Hys'.
+  * intros t wxss IH ys Hys Hys'; f_equal; revert ys Hys Hys'.
     induction IH as [|[]]; intros; simplifier;
       repeat f_equal; auto using seps_union_half_distr.
   * intros; simplifier; f_equal; auto using seps_union_half_distr.
@@ -1500,14 +1500,14 @@ Proof.
   revert w1 w2. refine (ctree_disjoint_ind_alt _ _ _ _ _ _ _ _); simpl.
   * intros; f_equal; auto using seps_union_half_distr.
   * intros τ ws1 ws2 _ IH ?; f_equal. induction IH; simplifier; f_equal; auto.
-  * intros s wxss1 wxss2 _ IH ??; f_equal. induction IH; simplifier;
+  * intros t wxss1 wxss2 _ IH ??; f_equal. induction IH; simplifier;
       repeat f_equal; auto using seps_union_half_distr.
   * intros; simplifier; f_equal; auto using seps_union_half_distr.
   * intros; f_equal; auto using seps_union_half_distr.
-  * intros s i xs1_ w2 xs2; rewrite Forall2_app_inv_r;
+  * intros t i xs1_ w2 xs2; rewrite Forall2_app_inv_r;
       intros (xs1&xs1'&?&?&->) ????; simplifier.
     f_equal; auto using seps_union_half_distr, ctree_merge_half.
-  * intros s i w1 xs1 xs2_; rewrite Forall2_app_inv_l;
+  * intros t i w1 xs1 xs2_; rewrite Forall2_app_inv_l;
       intros (xs2&xs2'&?&?&->) ????; simplifier.
     f_equal; auto using seps_union_half_distr, ctree_merge_half.
 Qed.

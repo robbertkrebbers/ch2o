@@ -863,9 +863,9 @@ Proof.
     + clear Hlen IH. revert βs Hβs. induction Hws; intros; f_equal'; auto.
     + clear Hlen. revert βs Hβs.
       induction Hws; intros; decompose_Forall_hyps; constructor; auto.
-  * intros s wxbss τs Hs Hws IH Hxbss Hindet Hlen βs.
+  * intros t wxbss τs Ht Hws IH Hxbss Hindet Hlen βs.
     erewrite bit_size_of_struct by eauto. intros Hβs.
-    typed_constructor; eauto; clear Hs.
+    typed_constructor; eauto; clear Ht.
     + clear Hxbss Hindet. revert wxbss βs Hws IH Hβs Hlen.
       unfold field_bit_padding. induction (bit_size_of_fields _ τs HΓ);
         intros [|[??] ?] ?????; decompose_Forall_hyps;
@@ -878,7 +878,7 @@ Proof.
       unfold field_bit_padding. induction (bit_size_of_fields _ τs HΓ);
         intros [|[??] ?] ????; decompose_Forall_hyps;
         erewrite ?type_of_correct by eauto; f_equal; auto.
-  * intros s i τs w xbs τ ??????? Hc βs ?. typed_constructor; eauto.
+  * intros t i τs w xbs τ ??????? Hc βs ?. typed_constructor; eauto.
     + auto using pbits_unlock_valid.
     + rewrite pbit_indetify_unlock; congruence.
     + solve_length.

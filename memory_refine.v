@@ -574,8 +574,8 @@ Proof.
   * intros τ n ws1 ws2 -> ? IH _ βs. rewrite bit_size_of_array. intros Hlen.
     constructor. revert βs Hlen. induction IH; intros; decompose_Forall_hyps;
       erewrite ?Forall2_length by eauto using ctree_flatten_refine; auto.
-  * intros s τs wxbss1 wxbss2 Hs Hws IH Hxbss _ _ Hpad βs.
-    erewrite bit_size_of_struct by eauto; clear Hs. constructor.
+  * intros t τs wxbss1 wxbss2 Ht Hws IH Hxbss _ _ Hpad βs.
+    erewrite bit_size_of_struct by eauto; clear Ht. constructor.
     + revert wxbss1 wxbss2 βs Hws IH Hxbss Hlen Hpad. unfold field_bit_padding.
       induction (bit_size_of_fields _ τs HΓ);
         intros [|[w1 xbs1] ?] [|[w2 xbs2] ?];
@@ -589,7 +589,7 @@ Proof.
   * intros. erewrite Forall2_length by eauto using ctree_flatten_refine.
     constructor; auto using pbits_unlock_refine.
   * constructor; auto using pbits_unlock_refine.
-  * intros s i τs w1 xbs1 xbs2 τ ???????? βs ?.
+  * intros t i τs w1 xbs1 xbs2 τ ???????? βs ?.
     erewrite ctree_flatten_length by eauto.
     constructor; auto using pbits_unlock_unshared.
     rewrite ctree_flatten_merge, <-zip_with_app, take_drop by auto.

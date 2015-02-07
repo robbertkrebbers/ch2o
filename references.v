@@ -32,12 +32,12 @@ Inductive ref_seg_typed' `{Env K} (Γ : env K) :
      ref_seg K → type K → type K → Prop :=
   | RArray_typed τ i n :
      i < n → ref_seg_typed' Γ (RArray i τ n) (τ.[n]) τ
-  | RStruct_typed s i τs τ :
-     Γ !! s = Some τs → τs !! i = Some τ →
-     ref_seg_typed' Γ (RStruct i s) (structT s) τ
-  | RUnion_typed s i β τs τ :
-     Γ !! s = Some τs → τs !! i = Some τ →
-     ref_seg_typed' Γ (RUnion i s β) (unionT s) τ.
+  | RStruct_typed t i τs τ :
+     Γ !! t = Some τs → τs !! i = Some τ →
+     ref_seg_typed' Γ (RStruct i t) (structT t) τ
+  | RUnion_typed t i β τs τ :
+     Γ !! t = Some τs → τs !! i = Some τ →
+     ref_seg_typed' Γ (RUnion i t β) (unionT t) τ.
 Instance ref_seg_typed `{Env K} :
   PathTyped (env K) (type K) (type K) (ref_seg K) := ref_seg_typed'.
 
@@ -56,8 +56,8 @@ Instance ref_seg_lookup {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} :
   match rs, τ with
   | RArray i τ' n', τ.[n] =>
      guard (τ = τ'); guard (n = n'); guard (i < n); Some τ
-  | RStruct i s', structT s => guard (s = s'); Γ !! s ≫= (!! i)
-  | RUnion i s' _, unionT s => guard (s = s'); Γ !! s ≫= (!! i)
+  | RStruct i t', structT t => guard (t = t'); Γ !! t ≫= (!! i)
+  | RUnion i t' _, unionT t => guard (t = t'); Γ !! t ≫= (!! i)
   | _, _ => None
   end.
 Instance ref_lookup {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} :
@@ -72,8 +72,8 @@ Definition frozen `{Freeze A} (x : A) := freeze true x = x.
 Instance ref_seg_freeze {K} : Freeze (ref_seg K) := λ β rs,
   match rs with
   | RArray i τ n => RArray i τ n
-  | RStruct i s => RStruct i s
-  | RUnion i s _ => RUnion i s β
+  | RStruct i t => RStruct i t
+  | RUnion i t _ => RUnion i t β
   end.
 
 Definition ref_seg_set_offset {K} (i : nat) (rs : ref_seg K) : ref_seg K :=
@@ -100,7 +100,7 @@ Arguments ref_size _ !_ /.
 
 Inductive ref_seg_disjoint {K} : Disjoint (ref_seg K) :=
   | RArray_disjoint i1 i2 τ n : i1 ≠ i2 → @RArray K i1 τ n ⊥ RArray i2 τ n
-  | RStruct_disjoint i1 i2 s : i1 ≠ i2 → @RStruct K i1 s ⊥ RStruct i2 s.
+  | RStruct_disjoint i1 i2 t : i1 ≠ i2 → @RStruct K i1 t ⊥ RStruct i2 t.
 Existing Instance ref_seg_disjoint.
 Inductive ref_disjoint {K : Set} : Disjoint (ref K) :=
   | ref_disjoint_here rs1 rs2 (r1 r2 : ref K) :
@@ -114,7 +114,7 @@ Definition ref_seg_object_offset `{Env K}
     (Γ : env K) (rs : ref_seg K) : nat :=
   match rs with
   | RArray i τ _ => i * bit_size_of Γ τ
-  | RStruct i s => default 0 (Γ !! s) $ λ τs, field_bit_offset Γ τs i
+  | RStruct i t => default 0 (Γ !! t) $ λ τs, field_bit_offset Γ τs i
   | RUnion i _ _ => 0
   end.
 Definition ref_object_offset `{Env K} (Γ : env K) (r : ref K) : nat :=
@@ -122,9 +122,9 @@ Definition ref_object_offset `{Env K} (Γ : env K) (r : ref K) : nat :=
 
 Inductive ref_seg_le {K} : SubsetEq (ref_seg K) :=
   | RArray_refine i τ n : @RArray K i τ n ⊆ RArray i τ n
-  | RStruct_refine i s : @RStruct K i s ⊆ RStruct i s
-  | RUnion_refine i s (β1 β2 : bool) :
-     (β2 → β1) → @RUnion K i s β1 ⊆ RUnion i s β2.
+  | RStruct_refine i t : @RStruct K i t ⊆ RStruct i t
+  | RUnion_refine i t (β1 β2 : bool) :
+     (β2 → β1) → @RUnion K i t β1 ⊆ RUnion i t β2.
 Existing Instance ref_seg_le.
 
 Section ref_typed_ind.
@@ -532,7 +532,7 @@ Proof.
   match rs1,rs2 with
   | RArray i τ1 n1, RArray j τ2 n2 =>
      cast_if (decide (n1 = n2 ∧ τ1 = τ2 ∧ i ≠ j))
-  | RStruct i s1, RStruct j s2 => cast_if (decide (s1 = s2 ∧ i ≠ j))
+  | RStruct i t1, RStruct j t2 => cast_if (decide (t1 = t2 ∧ i ≠ j))
   | _, _ => right _
   end; abstract first [intuition; subst; by constructor|inversion 1; intuition].
 Defined.
@@ -592,16 +592,16 @@ Proof.
   * destruct (decide (i1 = i2)); intros [?|?];
       simplify_equality; eauto using RArray_disjoint.
 Qed.
-Lemma RStruct_disjoint_snoc r1 r2 i1 i2 s :
-  r1 ++ [RStruct i1 s] ⊥ r2 ++ [RStruct i2 s] ↔ i1 ≠ i2 ∨ r1 ⊥ r2.
+Lemma RStruct_disjoint_snoc r1 r2 i1 i2 t :
+  r1 ++ [RStruct i1 t] ⊥ r2 ++ [RStruct i2 t] ↔ i1 ≠ i2 ∨ r1 ⊥ r2.
 Proof.
   rewrite ref_disjoint_snoc. split.
   * intros [Hstruct|[??]]; [inversion Hstruct|]; tauto.
   * destruct (decide (i1 = i2)); intros [?|?];
       simplify_equality; eauto using RStruct_disjoint.
 Qed.
-Lemma RUnion_disjoint_snoc r1 r2 i1 β1 i2 β2 s :
-  r1 ++ [RUnion i1 s β1] ⊥ r2 ++ [RUnion i2 s β2] ↔ i1 = i2 ∧ r1 ⊥ r2.
+Lemma RUnion_disjoint_snoc r1 r2 i1 β1 i2 β2 t :
+  r1 ++ [RUnion i1 t β1] ⊥ r2 ++ [RUnion i2 t β2] ↔ i1 = i2 ∧ r1 ⊥ r2.
 Proof.
   rewrite ref_disjoint_snoc. split.
   * by intros [Hu|[??]]; [inversion Hu|]; simplify_equality.
