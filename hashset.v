@@ -115,25 +115,6 @@ Proof.
       rewrite Forall_forall in Hm. eapply (Hm (_,_)); eauto. }
     destruct Hn; rewrite elem_of_list_fmap; exists (hash x, l'); eauto.
 Qed.
-
-Definition remove_dups_fast (l : list A) : list A :=
-  elements (foldr (λ x, ({[ x ]} ∪)) ∅ l : hashset hash).
-Lemma elem_of_remove_dups_fast l x : x ∈ remove_dups_fast l ↔ x ∈ l.
-Proof.
-  unfold remove_dups_fast. rewrite elem_of_elements. split.
-  * revert x. induction l as [|y l IH]; intros x; simpl.
-    { by rewrite elem_of_empty. }
-    rewrite elem_of_union, elem_of_singleton. intros [->|]; [left|right]; eauto.
-  * induction 1; esolve_elem_of.
-Qed.
-Lemma NoDup_remove_dups_fast l : NoDup (remove_dups_fast l).
-Proof. unfold remove_dups_fast. apply NoDup_elements. Qed.
-Definition listset_normalize (X : listset A) : listset A :=
-  let (l) := X in Listset (remove_dups_fast l).
-Lemma listset_normalize_correct X : listset_normalize X ≡ X.
-Proof.
-  destruct X as [l]. apply elem_of_equiv; intro; apply elem_of_remove_dups_fast.
-Qed.
 End hashset.
 
 (** These instances are declared using [Hint Extern] to avoid too
@@ -152,3 +133,39 @@ Hint Extern 1 (Difference (hashset _)) =>
   eapply @hashset_difference : typeclass_instances.
 Hint Extern 1 (Elements _ (hashset _)) =>
   eapply @hashset_elems : typeclass_instances.
+
+Section remove_duplicates.
+Context `{∀ x y : A, Decision (x = y)} (hash : A → Z).
+
+Definition remove_dups_fast (l : list A) : list A :=
+  match l with
+  | [] => []
+  | [x] => [x]
+  | _ =>
+     let n :Z := length l in
+     elements (foldr (λ x, ({[ x ]} ∪)) ∅ l :
+       hashset (λ x, hash x `mod` n)%Z)
+  end.
+Lemma elem_of_remove_dups_fast l x : x ∈ remove_dups_fast l ↔ x ∈ l.
+Proof.
+  destruct l as [|x1 [|x2 l]]; try reflexivity.
+  unfold remove_dups_fast; generalize (x1 :: x2 :: l); clear l; intros l.
+  generalize (λ x, hash x `mod` length l)%Z; intros f.
+  rewrite elem_of_elements; split.
+  * revert x. induction l as [|y l IH]; intros x; simpl.
+    { by rewrite elem_of_empty. }
+    rewrite elem_of_union, elem_of_singleton. intros [->|]; [left|right]; eauto.
+  * induction 1; esolve_elem_of.
+Qed.
+Lemma NoDup_remove_dups_fast l : NoDup (remove_dups_fast l).
+Proof.
+  unfold remove_dups_fast; destruct l as [|x1 [|x2 l]].
+  apply NoDup_nil_2. apply NoDup_singleton. apply NoDup_elements.
+Qed.
+Definition listset_normalize (X : listset A) : listset A :=
+  let (l) := X in Listset (remove_dups_fast l).
+Lemma listset_normalize_correct X : listset_normalize X ≡ X.
+Proof.
+  destruct X as [l]. apply elem_of_equiv; intro; apply elem_of_remove_dups_fast.
+Qed.
+End remove_duplicates.

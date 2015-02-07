@@ -111,7 +111,7 @@ Proof.
     eauto using ctree_refine_weaken, ctree_lookup_weaken, option_eq_1_alt.
 Qed.
 Lemma cmap_lookup_alter_refine Γ Γm g m a w τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ →
   m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : τ → ctree_unshared (g w) →
   ∃ w', cmap_alter Γ g a m !!{Γ} a = Some w' ∧ w' ⊑{Γ,true@Γm} g w : τ.
 Proof.
@@ -135,7 +135,7 @@ Proof.
 Qed.
 Lemma cmap_lookup_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 w1 τ :
   ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 →
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ → m1 !!{Γ} a1 = Some w1 →
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : TType τ → m1 !!{Γ} a1 = Some w1 →
   ∃ w2, m2 !!{Γ} a2 = Some w2 ∧ w1 ⊑{Γ,α,f@Γm1↦Γm2} w2 : τ.
 Proof.
   intros. assert (type_of w1 = τ) by
@@ -143,7 +143,7 @@ Proof.
   unfold lookupE, cmap_lookup in *; case_option_guard; simplify_equality'.
   rewrite option_guard_True by eauto using addr_strict_refine.
   destruct (m1 !!{_} _) as [w1'|] eqn:?; simplify_equality'.
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some (type_of w1)))
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (TType (type_of w1)))
     as (r&?&_&?); auto.
   destruct (cmap_lookup_ref_refine Γ α f Γm1 Γm2 m1 m2 (addr_index a1)
     (addr_ref Γ a1) (addr_index a2) r w1') as (w2&?&?); auto.
@@ -191,7 +191,7 @@ Proof.
   rewrite ctree_alter_app; eauto 10 using ctree_lookup_alter_disjoint.
 Qed.
 Lemma cmap_alter_refine Γ α f Γm1 Γm2 g1 g2 m1 m2 a1 a2 w1 w2 τ :
-  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ →
+  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : TType τ →
   m1 !!{Γ} a1 = Some w1 → m2 !!{Γ} a2 = Some w2 → ¬ctree_unmapped w1 →
   g1 w1 ⊑{Γ,α,f@Γm1↦Γm2} g2 w2 : τ → ¬ctree_unmapped (g1 w1) →
   cmap_alter Γ g1 a1 m1 ⊑{Γ,α,f@Γm1↦Γm2} cmap_alter Γ g2 a2 m2.
@@ -202,7 +202,7 @@ Proof.
     do 2 case_option_guard; simplify_equality'.
   destruct (m1 !!{_} _) as [w1'|] eqn:?,
     (m2 !!{_} _) as [w2'|] eqn:?; simplify_equality'.
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some (type_of w1)))
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (TType (type_of w1)))
     as (r&?&_&?); auto.
   erewrite <-(cmap_alter_ref_le _ _ _ _ (addr_ref Γ a2)) by eauto.
   destruct (cmap_lookup_ref_refine Γ α f Γm1 Γm2 m1 m2 (addr_index a1)

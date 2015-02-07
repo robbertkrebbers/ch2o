@@ -223,7 +223,8 @@ Lemma val_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' v1 v2 τ :
   meminj_extend f f' Γm1 Γm2 → v1 ⊑{Γ',α',f'@Γm1'↦Γm2'} v2 : τ.
 Proof.
   intros ? Hv; intros. induction Hv using @val_refine_ind; refine_constructor;
-    eauto using base_val_refine_weaken,@lookup_weaken,vals_representable_weaken.
+    eauto using base_val_refine_weaken,
+    lookup_compound_weaken, vals_representable_weaken.
 Qed.
 Lemma vals_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' vs1 vs2 τs :
   ✓ Γ → vs1 ⊑{Γ,α,f@Γm1↦Γm2}* vs2 :* τs → Γ ⊆ Γ' → (α → α') →

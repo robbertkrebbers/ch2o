@@ -65,7 +65,7 @@ Definition ehexec (Γ : env Ti) (k : ctx Ti)
      guard (int_typed (n * size_of Γ τ) sptrT);
      {[ #{Ω}(ptrV (Ptr (addr_top_array o τ n))),
         mem_alloc Γ o true perm_full (val_new Γ (τ.[n'])) m ]}
-     ∪  (if alloc_can_fail then {[ #{Ω}(ptrV (NULL (Some τ))), m ]} else ∅)
+     ∪  (if alloc_can_fail then {[ #{Ω}(ptrV (NULL (TType τ))), m ]} else ∅)
   | free (%{Ω} a) =>
      guard (mem_freeable a m);
      {[ #{Ω} voidV, mem_free (addr_index a) m ]}
@@ -84,8 +84,8 @@ Definition ehexec (Γ : env Ti) (k : ctx Ti)
   | #{Ω} v,, er =>
      {[ er, mem_unlock Ω m ]}
   | cast{τ} (#{Ω} v) =>
-     guard (val_cast_ok Γ m (Some τ) v);
-     {[ #{Ω} (val_cast (Some τ) v), m ]}
+     guard (val_cast_ok Γ m (TType τ) v);
+     {[ #{Ω} (val_cast (TType τ) v), m ]}
   | #[r:=#{Ω1} v1] (#{Ω2} v2) =>
      guard (is_Some (v2 !!{Γ} r));
      {[ #{Ω1 ∪ Ω2} (val_alter Γ (λ _, v1) r v2), m ]}
@@ -209,8 +209,8 @@ Definition cexec (Γ : env Ti) (δ : funenv Ti)
       let es := ehexec Γ k e' m in
       if decide (es ≡ ∅) then
         match maybe_ECall_redex e' with
-        | Some (f, Ωs, vs) =>
-           {[ State (CFun E :: k) (Call f vs) (mem_unlock (⋃ Ωs) m) ]}
+        | Some (Ω, f, _, _, Ωs, vs) =>
+           {[ State (CFun E :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m) ]}
         | _ => {[ State k (Undef (UndefExpr E e')) m ]}
         end
       else '(e2,m2) ← es; {[ State k (Expr (subst E e2)) m2 ]}

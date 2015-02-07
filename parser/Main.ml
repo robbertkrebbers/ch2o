@@ -281,11 +281,11 @@ let printf_prelude () =
   let i = chars_of_string "i" and width = chars_of_string "width"
   and n = chars_of_string "n" in
   [(chars_of_string "len_core-%d",
-    FunDecl ([], [(Some n, CTInt int_signed);
+    FunDecl ([], CTFun([(Some n, CTInt int_signed);
               (Some i, CTInt {csign = Some Unsigned; crank = CLongLongRank});
               (Some width, CTInt int_signed)],
-             CTInt int_signed,Some
-     (CSComp (CSIf (CEBinOp (CompOp EqOp,CEVar i,econst0),
+             CTInt int_signed),
+      CSComp (CSIf (CEBinOp (CompOp EqOp,CEVar i,econst0),
         CSDo (CEAssign (Assign,CEVar n,econst1)),
         CSSkip),
       CSComp (CSWhile (CEBinOp (CompOp LtOp,econst0,CEVar i),
@@ -293,34 +293,34 @@ let printf_prelude () =
         CSDo (CEAssign (PreOp (ArithOp DivOp),CEVar i,econst (Int 10))))),
       CSIf (CEBinOp (CompOp LtOp,CEVar n,CEVar width),
         CSReturn (Some (CEVar width)),
-        CSReturn (Some (CEVar n))))))));
+        CSReturn (Some (CEVar n)))))));
    (chars_of_string "len_core_signed-%d",
-    FunDecl ([], [(Some n, CTInt int_signed);
+    FunDecl ([], CTFun ([(Some n, CTInt int_signed);
               (Some i, CTInt {csign = Some Signed; crank = CLongLongRank});
               (Some width, CTInt int_signed)],
-             CTInt int_signed,Some
-     (CSReturn (Some (CEIf (CEBinOp (CompOp LtOp,CEVar i,econst0),
+             CTInt int_signed),
+      CSReturn (Some (CEIf (CEBinOp (CompOp LtOp,CEVar i,econst0),
        CEIf (CEBinOp (CompOp EqOp,CEVar i,
          CEMin {csign = Some Signed; crank = CLongLongRank}),
-       CECall (chars_of_string "len_core-%d",
+       CECall (CEVar (chars_of_string "len_core-%d"),
          [econst1;CEVar i;CEVar width]),
-       CECall (chars_of_string "len_core-%d",
+       CECall (CEVar (chars_of_string "len_core-%d"),
          [econst1;CEBinOp (ArithOp MultOp,CEVar i,econst (Int (-1)));
           CEVar width])),
-       CECall (chars_of_string "len_core-%d",
-         [CEVar n;CEVar i;CEVar width])))))));
+       CECall (CEVar (chars_of_string "len_core-%d"),
+         [CEVar n;CEVar i;CEVar width]))))));
    (chars_of_string "len_core_str-%d",
-    FunDecl ([], [(Some n, CTInt int_signed);
+    FunDecl ([], CTFun ([(Some n, CTInt int_signed);
               (Some i, CTPtr (CTInt {csign = None; crank = CCharRank}));
               (Some width, CTInt int_signed)],
-             CTInt int_signed,Some
-     (CSComp (CSWhile (CEUnOp
+             CTInt int_signed),
+      CSComp (CSWhile (CEUnOp
           (NotOp,CEBinOp (CompOp EqOp,CEDeref (CEVar i),econst0)),
         CSComp (CSDo (CEAssign (PostOp (ArithOp PlusOp),CEVar n,econst1)),
         CSDo (CEAssign (PreOp (ArithOp PlusOp),CEVar i,econst (Int 1))))),
        CSIf (CEBinOp (CompOp LtOp,CEVar n,CEVar width),
         CSReturn (Some (CEVar width)),
-        CSReturn (Some (CEVar n)))))))];;
+        CSReturn (Some (CEVar n))))))];;
 
 let rec length_of_printf fmts =
   match fmts with
@@ -340,7 +340,7 @@ let printf_stmt fmts =
           body (1 + i) fmts)
     | Format (flags,width,_,"s") :: fmts ->
         CSComp (CSDo (CEAssign (PreOp (ArithOp PlusOp), CEVar n,
-          CECall (chars_of_string "len_core_str-%d",
+          CECall (CEVar (chars_of_string "len_core_str-%d"),
             [econst0; CEVar (chars_of_int i); econst (Int (width))]))),
           body (1 + i) fmts)
     | Format (flags,width,_,conv) :: fmts ->
@@ -351,7 +351,7 @@ let printf_stmt fmts =
           if String.contains conv 'u'
           then "len_core-%d" else "len_core_signed-%d" in
         CSComp (CSDo (CEAssign (PreOp (ArithOp PlusOp), CEVar n,
-          CECall (chars_of_string f,
+          CECall (CEVar (chars_of_string f),
             [has_prefix; CEVar (chars_of_int i); econst (Int (width))]))),
           body (1 + i) fmts) in
   CSLocal ([],n,CTInt int_signed,
@@ -524,6 +524,13 @@ and ctype_of_specifier x =
 
 and ctype_of_decl_type t x =
   match x with
+  | Cabs.PROTO (y,a,false) ->
+      ctype_of_decl_type (CTFun(List.map (fun y ->
+        match y with
+        | (t,(s,t',[],_)) ->
+            ((if s = "" then None else Some(chars_of_string s)),
+             ctype_of_specifier_decl_type t t')
+        | _ -> failwith "args_of") a,t)) y
   | Cabs.JUSTBASE -> t
   | Cabs.ARRAY (y,[],n) ->
       ctype_of_decl_type (CTArray (t,cexpr_of_expression n)) y
@@ -658,12 +665,12 @@ and cexpr_of_expression x =
         let args = args_of_printf 0 fmts in
         let decl =
           if !printf_returns_int
-          then FunDecl ([],args,CTInt int_signed,Some (printf_stmt fmts))
-          else FunDecl ([],args,CTVoid,Some CSSkip) in
+          then FunDecl ([],CTFun(args,CTInt int_signed),printf_stmt fmts)
+          else FunDecl ([],CTFun(args,CTVoid),CSSkip) in
         the_printfs := !the_printfs @ [(f,(fmts,decl))] end;
-      CECall (f,List.map cexpr_of_expression l)
-  | Cabs.CALL (Cabs.VARIABLE s,l) ->
-      CECall (chars_of_string s,List.map cexpr_of_expression l)
+      CECall (CEVar f,List.map cexpr_of_expression l)
+  | Cabs.CALL (y,l) ->
+      CECall (cexpr_of_expression y,List.map cexpr_of_expression l)
   | Cabs.COMMA (h::t) ->
       List.fold_left (fun y1 y2 -> CEComma (y1,cexpr_of_expression y2))
         (cexpr_of_expression h) t
@@ -766,34 +773,6 @@ let rec no_int_return x =
   | CSReturn _ -> false
   | _ -> true;;
 
-let rec args_of_decl_type x =
-  match x with
-  | Cabs.PROTO (Cabs.JUSTBASE,
-      [([Cabs.SpecType Cabs.Tvoid],("",Cabs.JUSTBASE,[],_))],false) -> []
-  | Cabs.PROTO (Cabs.JUSTBASE,a,false) ->
-      List.map (fun y ->
-        match y with
-        | (t,("",t',[],_)) ->
-            (None,ctype_of_specifier_decl_type t t')
-        | (t,(s,t',[],_)) ->
-            (Some(chars_of_string s),ctype_of_specifier_decl_type t t')
-        | _ -> failwith "args_of") a
-  | Cabs.ARRAY (y,[],_) -> args_of_decl_type y
-  | Cabs.PTR ([],y) -> args_of_decl_type y
-  | Cabs.PARENTYPE ([],y,[]) -> args_of_decl_type y
-  | _ -> failwith "args_of_decl_type";;
-
-let rec return_of_decl_type t x =
-  match x with
-  | Cabs.JUSTBASE -> None
-  | Cabs.PROTO (Cabs.JUSTBASE,_,false) -> Some t
-  | Cabs.ARRAY (y,[],n) ->
-      return_of_decl_type (CTArray (t,cexpr_of_expression n)) y
-  | Cabs.PTR ([],y) ->
-      return_of_decl_type (CTPtr t) y
-  | Cabs.PARENTYPE ([],y,[]) -> return_of_decl_type t y
-  | _ -> failwith "return_of_decl_type";;
-
 let decls_of_definition x =
   match x with
   | Cabs.DECDEF ((t,l),_) ->
@@ -801,25 +780,16 @@ let decls_of_definition x =
       List.map (fun z ->
         match z with
         | ((s,t',[],_),z) ->
-            (match return_of_decl_type (ctype_of_specifier t) t' with
-            | Some ret ->
-                (chars_of_string s,FunDecl (stos,args_of_decl_type t',ret,None))
-            | _ ->
-                (chars_of_string s,GlobDecl (stos,
-                  ctype_of_specifier_decl_type t t',
-                  cinit_of_init_expression_option z)))
+            (chars_of_string s,GlobDecl (stos,ctype_of_specifier_decl_type t t',
+             cinit_of_init_expression_option z))
         | _ -> raise (Unknown_definition x)) l
-  | Cabs.FUNDEF ((t,(s,t',[],_)),
-        {Cabs.bstmts = l},_,_) ->
+  | Cabs.FUNDEF ((t,(s,t',[],_)),{Cabs.bstmts = l},_,_) ->
       let (stos,t) = split_storage t in
-      let t = if s = "main" && t = [] then [Cabs.SpecType Cabs.Tint] else t in
       let b = cstmt_of_statements l in
       let b = if s = "main" && no_int_return b then
         CSComp(b,CSReturn (Some (econst0))) else b in
-      (match return_of_decl_type (ctype_of_specifier t) t' with
-      | Some ret ->
-          [(chars_of_string s, FunDecl (stos,args_of_decl_type t',ret,Some b))]
-      | None -> raise (Unknown_definition x))
+      [(chars_of_string s,
+        FunDecl (stos,ctype_of_specifier_decl_type t t',b))]
   | Cabs.ONLYTYPEDEF (t,_) ->
       let _ = ctype_of_specifier t in []
   | Cabs.TYPEDEF ((Cabs.SpecTypedef::t,l),_) ->
@@ -856,7 +826,7 @@ let event_of_state env tenv x =
   | _ -> [];;
 
 let initial_of_decls arch (m,x) =
-  match interpreter_initial arch x m [] with
+  match interpreter_initial_eval arch x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
@@ -864,7 +834,7 @@ let initial_of_cabs arch x = initial_of_decls arch (decls_of_cabs x);;
 let initial_of_file arch x = initial_of_decls arch (decls_of_file x);;
 
 let graph_of_decls arch (m,x) =
-  match interpreter_all arch
+  match interpreter_all_eval arch
     (=) event_of_state (fun x -> z_of_int (Hashtbl.hash x)) x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
@@ -877,7 +847,7 @@ let stream_of_decls arch rand (m,x) =
     if rand
     then fun x -> nat_of_int (Random.int (int_of_nat x))
     else fun x -> nat_of_int 0 in
-  match interpreter_rand arch event_of_state choose x m [] with
+  match interpreter_rand_eval arch event_of_state choose x m [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 

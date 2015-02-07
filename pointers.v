@@ -4,9 +4,12 @@ Require Export addresses.
 Local Open Scope ctype_scope.
 
 Inductive ptr (Ti : Set) :=
-  | NULL : ptr_type Ti → ptr Ti | Ptr : addr Ti → ptr Ti.
+  | NULL : ptr_type Ti → ptr Ti
+  | Ptr : addr Ti → ptr Ti
+  | FunPtr : funname → list (type Ti) → type Ti → ptr Ti.
 Arguments NULL {_} _.
 Arguments Ptr {_} _.
+Arguments FunPtr {_} _ _ _.
 
 Instance ptr_eq_dec `{Ti : Set, ∀ k1 k2 : Ti, Decision (k1 = k2)}
   (p1 p2 : ptr Ti) : Decision (p1 = p2).
@@ -16,29 +19,41 @@ Instance maybe_NULL {Ti} : Maybe (@NULL Ti) := λ p,
   match p with NULL τ => Some τ | _ => None end.
 Instance maybe_Ptr {Ti} : Maybe (@Ptr Ti) := λ p,
   match p with Ptr a => Some a | _ => None end.
+Instance maybe_FunPtr {Ti} : Maybe3 (@FunPtr Ti) := λ p,
+  match p with FunPtr f τs τ => Some (f,τs,τ) | _ => None end.
 
 Section pointer_operations.
   Context `{Env Ti}.
+
   Inductive ptr_typed' (Γ : env Ti) (Γm : memenv Ti) :
       ptr Ti → ptr_type Ti → Prop :=
     | NULL_typed τp : ✓{Γ} τp → ptr_typed' Γ Γm (NULL τp) τp
-    | Ptr_typed a τp : (Γ,Γm) ⊢ a : τp → ptr_typed' Γ Γm (Ptr a) τp.
+    | Ptr_typed a τp : (Γ,Γm) ⊢ a : τp → ptr_typed' Γ Γm (Ptr a) τp
+    | FunPtr_typed f τs τ :
+       Γ !! f = Some (τs,τ) → ptr_typed' Γ Γm (FunPtr f τs τ) (τs ~> τ).
   Global Instance ptr_typed:
     Typed (env Ti * memenv Ti) (ptr_type Ti) (ptr Ti) := curry ptr_typed'.
   Global Instance ptr_freeze : Freeze (ptr Ti) := λ β p,
-    match p with NULL τ => NULL τ | Ptr a => Ptr (freeze β a) end.
+    match p with Ptr a => Ptr (freeze β a) | _ => p end.
+
   Global Instance type_of_ptr: TypeOf (ptr_type Ti) (ptr Ti) := λ p,
-    match p with NULL τp => τp | Ptr a => type_of a end.
-  Global Instance ptr_type_check:
+    match p with
+    | NULL τp => τp
+    | Ptr a => type_of a
+    | FunPtr _ τs τ => τs ~> τ
+    end.
+   Global Instance ptr_type_check:
       TypeCheck (env Ti * memenv Ti) (ptr_type Ti) (ptr Ti) := λ ΓΓm p,
     let (Γ,Γm) := ΓΓm in
     match p with
     | NULL τp => guard (✓{Γ} τp); Some τp
     | Ptr a => type_check (Γ,Γm) a
+    | FunPtr f τs τ =>
+       '(τs',τ') ← Γ !! f; guard (τs' = τs); guard (τ' = τ); Some (τs ~> τ)
     end.
   Inductive is_NULL : ptr Ti → Prop := mk_is_NULL τ : is_NULL (NULL τ).
   Definition ptr_alive (Γm : memenv Ti) (p : ptr Ti) : Prop :=
-    match p with NULL _ => True | Ptr a => index_alive Γm (addr_index a) end.
+    match p with Ptr a => index_alive Γm (addr_index a) | _ => True end.
 End pointer_operations.
 
 Section pointers.
@@ -52,7 +67,10 @@ Implicit Types p : ptr Ti.
 Global Instance: Injective (=) (=) (@Ptr Ti).
 Proof. by injection 1. Qed.
 Lemma ptr_typed_type_valid Γ Γm p τp : ✓ Γ → (Γ,Γm) ⊢ p : τp → ✓{Γ} τp.
-Proof. destruct 2; eauto using addr_typed_ptr_type_valid. Qed.
+Proof.
+  destruct 2; eauto using addr_typed_ptr_type_valid, TFun_ptr_valid,
+    env_valid_args_valid, env_valid_ret_valid, type_valid_ptr_type_valid.
+Qed.
 Global Instance: TypeOfSpec (env Ti * memenv Ti) (ptr_type Ti) (ptr Ti).
 Proof.
   intros [??]. by destruct 1; simpl; erewrite ?type_of_correct by eauto.
@@ -61,7 +79,7 @@ Global Instance:
   TypeCheckSpec (env Ti * memenv Ti) (ptr_type Ti) (ptr Ti) (λ _, True).
 Proof.
   intros [Γ Γmm] p τ _. split.
-  * destruct p; intros; simplify_option_equality;
+  * destruct p; intros; repeat (case_match || simplify_option_equality);
       constructor; auto; by apply type_check_sound.
   * by destruct 1; simplify_option_equality;
       erewrite ?type_check_complete by eauto.
@@ -70,7 +88,7 @@ Lemma ptr_typed_weaken Γ1 Γ2 Γm1 Γm2 p τp :
   ✓ Γ1 → (Γ1,Γm1) ⊢ p : τp → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → (Γ2,Γm2) ⊢ p : τp.
 Proof.
   destruct 2; constructor;
-    eauto using ptr_type_valid_weaken, addr_typed_weaken.
+    eauto using ptr_type_valid_weaken, addr_typed_weaken, lookup_fun_weaken.
 Qed.
 Lemma ptr_freeze_freeze β1 β2 p : freeze β1 (freeze β2 p) = freeze β1 p.
 Proof. destruct p; f_equal'; auto using addr_freeze_freeze. Qed.

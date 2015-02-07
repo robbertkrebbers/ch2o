@@ -13,6 +13,13 @@ Implicit Types a : addr Ti.
 Implicit Types g : mtree Ti → mtree Ti.
 Hint Extern 0 (Separation _) => apply (_ : Separation (pbit Ti)).
 
+Lemma cmap_subseteq_index_alive m1 m2 o :
+  index_alive ('{m1}) o → m1 ⊆ m2 → index_alive ('{m2}) o.
+Proof.
+  rewrite <-!index_alive_spec'; unfold index_alive'; intros ? Hm.
+  destruct m1 as [m1], m2 as [m2]; specialize (Hm o); simpl in *.
+  by destruct (m1 !! _) as [[]|], (m2 !! _) as [[]|].
+Qed.
 Lemma cmap_valid_subseteq Γ Γm m1 m2 : ✓ Γ → ✓{Γ,Γm} m2 → m1 ⊆ m2 → ✓{Γ,Γm} m1.
 Proof.
   destruct m1 as [m1], m2 as [m2]; intros ? (?&Hm2&Hm2') Hm; split_ands'.
@@ -91,7 +98,7 @@ Proof.
 Qed.
 Lemma cmap_alter_disjoint Γ Γm1 m1 m2 g a w1 τ1 :
   ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
-  (Γ,Γm1) ⊢ a : Some τ1 → m1 !!{Γ} a = Some w1 → (Γ,Γm1) ⊢ g w1 : τ1 →
+  (Γ,Γm1) ⊢ a : TType τ1 → m1 !!{Γ} a = Some w1 → (Γ,Γm1) ⊢ g w1 : τ1 →
   ¬ctree_unmapped (g w1) →
   (∀ w2, w1 ⊥ w2 → g w1 ⊥ w2) → cmap_alter Γ g a m1 ⊥ m2.
 Proof.
@@ -125,7 +132,7 @@ Proof.
   intuition eauto using ctree_alter_union.
 Qed.
 Lemma cmap_alter_union Γ Γm1 m1 m2 g a w1 τ1 :
-  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 → (Γ,Γm1) ⊢ a : Some τ1 →
+  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 → (Γ,Γm1) ⊢ a : TType τ1 →
   m1 !!{Γ} a = Some w1 → (Γ,Γm1) ⊢ g w1 : τ1 → ¬ctree_unmapped (g w1) →
   (∀ w2, w1 ⊥ w2 → g w1 ⊥ w2) → (∀ w2, w1 ⊥ w2 → g (w1 ∪ w2) = g w1 ∪ w2) →
   cmap_alter Γ g a (m1 ∪ m2) = cmap_alter Γ g a m1 ∪ m2.
@@ -143,7 +150,7 @@ Proof.
   * intros; simplify_option_equality; eauto using ctree_alter_byte_union.
 Qed.
 Lemma cmap_singleton_disjoint Γ Γm a malloc w1 w2 τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a →
   w1 ⊥ w2 → ¬ctree_unmapped w1 → ¬ctree_unmapped w2 →
   cmap_singleton Γ a malloc w1 ⊥ cmap_singleton Γ a malloc w2.
 Proof.
@@ -154,7 +161,7 @@ Proof.
     @sep_unmapped_empty_alt, ctree_singleton_Forall_inv.
 Qed.
 Lemma cmap_singleton_union Γ Γm a malloc w1 w2 τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a →
   cmap_singleton Γ a malloc (w1 ∪ w2)
   = cmap_singleton Γ a malloc w1 ∪ cmap_singleton Γ a malloc w2.
 Proof.

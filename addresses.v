@@ -65,7 +65,7 @@ Section address_operations.
     addr_byte a < size_of Γ (addr_type_base a) * ref_size (addr_ref_base a).
   Global Arguments addr_strict _ !_ /.
   Definition addr_is_obj (a : addr Ti) : Prop :=
-    type_of a = Some (addr_type_base a).
+    type_of a = TType (addr_type_base a).
   Global Arguments addr_is_obj !_ /.
   Definition addr_ref (Γ : env Ti) (a : addr Ti) : ref Ti :=
     ref_set_offset (addr_byte a `div` size_of Γ (addr_type_base a))
@@ -88,15 +88,15 @@ Section address_operations.
 
   Definition addr_elt (Γ : env Ti) (rs : ref_seg Ti) (a : addr Ti) : addr Ti :=
     from_option a $
-      σ ← type_of a ≫= lookupE Γ rs;
+      σ ← maybe TType (type_of a) ≫= lookupE Γ rs;
       Some (Addr (addr_index a)
         (ref_seg_base rs :: addr_ref Γ a) (size_of Γ σ * ref_seg_offset rs)
-        (addr_type_object a) σ (Some σ)).
+        (addr_type_object a) σ (TType σ)).
   Global Arguments addr_elt _ _ !_ /.
   Definition addr_top (o : index) (σ : type Ti) : addr Ti :=
-    Addr o [] 0 σ σ (Some σ).
+    Addr o [] 0 σ σ (TType σ).
   Definition addr_top_array (o : index) (σ : type Ti) (n : Z) : addr Ti :=
-    let n' := Z.to_nat n in Addr o [RArray 0 σ n'] 0 (σ.[n']) σ (Some σ).
+    let n' := Z.to_nat n in Addr o [RArray 0 σ n'] 0 (σ.[n']) σ (TType σ).
   Inductive addr_is_top_array : addr Ti → Prop :=
     | Addr_is_top_array o σ n σp :
        addr_is_top_array (Addr o [RArray 0 σ n] 0 (σ.[n]) σ σp).
@@ -171,7 +171,7 @@ Proof.
 Qed.
 Lemma addr_typed_cast Γ Γm a σp : (Γ,Γm) ⊢ a : σp → addr_type_base a >*> σp.
 Proof. by destruct 1. Qed.
-Lemma addr_typed_type_valid Γ Γm a σ : ✓ Γ → (Γ,Γm) ⊢ a : Some σ → ✓{Γ} σ.
+Lemma addr_typed_type_valid Γ Γm a σ : ✓ Γ → (Γ,Γm) ⊢ a : TType σ → ✓{Γ} σ.
 Proof. inversion 2; eauto using castable_type_valid. Qed.
 Lemma addr_typed_ptr_type_valid Γ Γm a σp : ✓ Γ → (Γ,Γm) ⊢ a : σp → ✓{Γ} σp.
 Proof. destruct 2; eauto using castable_ptr_type_valid. Qed.
@@ -260,16 +260,16 @@ Proof.
     apply Nat.mod_divide; eauto using size_of_ne_0.
 Qed.
 Lemma addr_is_obj_type Γ Γm a σ :
-  (Γ,Γm) ⊢ a : Some σ → addr_is_obj a → σ = addr_type_base a.
+  (Γ,Γm) ⊢ a : TType σ → addr_is_obj a → σ = addr_type_base a.
 Proof. inversion 1; naive_solver. Qed.
 Lemma addr_not_is_obj_type Γ Γm a σ :
-  (Γ,Γm) ⊢ a : Some σ → ¬addr_is_obj a → σ = ucharT.
+  (Γ,Γm) ⊢ a : TType σ → ¬addr_is_obj a → σ = ucharT.
 Proof.
   inversion 1;
     match goal with H : _ >*> _ |- _ => inversion H end; naive_solver.
 Qed.
 Lemma addr_byte_range Γ Γm a σ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType σ → addr_strict Γ a →
   addr_ref_byte Γ a + size_of Γ σ ≤ size_of Γ (addr_type_base a).
 Proof.
   intros. destruct (decide (addr_is_obj a)).
@@ -280,7 +280,7 @@ Proof.
   eapply size_of_pos, addr_typed_type_base_valid; eauto.
 Qed.
 Lemma addr_bit_range Γ Γm a σ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType σ → addr_strict Γ a →
   addr_ref_byte Γ a * char_bits + bit_size_of Γ σ
     ≤ bit_size_of Γ (addr_type_base a).
 Proof.
@@ -324,7 +324,7 @@ Proof.
     by eauto using size_of_ne_0,ref_typed_type_valid; unfold bit_size_of; lia.
 Qed.
 Lemma align_of_addr_object_offset Γ Γm a σ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → (bit_align_of Γ σ | addr_object_offset Γ a).
+  ✓ Γ → (Γ,Γm) ⊢ a : TType σ → (bit_align_of Γ σ | addr_object_offset Γ a).
 Proof.
   inversion_clear 2; simplify_equality'; apply Nat.divide_add_r;
     eauto using Nat.mul_divide_mono_r, Nat.divide_trans,
@@ -342,8 +342,8 @@ Proof.
     by auto using char_bits_pos; lia.
 Qed.
 Lemma addr_elt_typed Γ Γm a rs σ σ' :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' →
-  (Γ,Γm) ⊢ addr_elt Γ rs a : Some σ'.
+  ✓ Γ → (Γ,Γm) ⊢ a : TType σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' →
+  (Γ,Γm) ⊢ addr_elt Γ rs a : TType σ'.
 Proof.
   rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) ? Hrs.
   destruct a as [o r' i τ σ'' σp]; simplify_equality'.
@@ -362,7 +362,7 @@ Proof.
   * constructor.
 Qed.
 Lemma addr_elt_strict Γ Γm a rs σ σ' :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → Γ ⊢ rs : σ ↣ σ' → addr_strict Γ (addr_elt Γ rs a).
+  ✓ Γ → (Γ,Γm) ⊢ a : TType σ → Γ ⊢ rs : σ ↣ σ' → addr_strict Γ (addr_elt Γ rs a).
 Proof.
   rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) Hrs.
   destruct a as [o r i τ σ'' σp]; simplify_equality'.
@@ -373,7 +373,7 @@ Proof.
     eauto using ref_seg_typed_size.
 Qed.
 Lemma addr_elt_weaken Γ1 Γ2 Γm1 a rs σ σ' :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ a : Some σ → Γ1 ⊢ rs : σ ↣ σ' → Γ1 ⊆ Γ2 →
+  ✓ Γ1 → (Γ1,Γm1) ⊢ a : TType σ → Γ1 ⊢ rs : σ ↣ σ' → Γ1 ⊆ Γ2 →
   addr_elt Γ1 rs a = addr_elt Γ2 rs a.
 Proof.
   intros. unfold addr_elt; simplify_type_equality'.
@@ -382,14 +382,14 @@ Proof.
     by eauto using addr_typed_type_valid, ref_seg_typed_type_valid.
 Qed.
 Lemma addr_ref_byte_is_obj_parent Γ Γm rs a σ σ' :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → Γ ⊢ rs : σ ↣ σ' → addr_is_obj a.
+  ✓ Γ → (Γ,Γm) ⊢ a : TType σ → Γ ⊢ rs : σ ↣ σ' → addr_is_obj a.
 Proof.
   rewrite addr_typed_alt. intros ? (?&?&?&?&?&?&?&Hcast&?) Hrs.
   destruct a as [o r i τ σ'' σp]; simplify_equality'.
   by inversion Hcast; simplify_equality'; try solve [inversion Hrs].
 Qed.
 Lemma addr_ref_byte_is_obj Γ Γm rs a σ σ' :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → Γ ⊢ rs : σ ↣ σ' → addr_is_obj (addr_elt Γ rs a).
+  ✓ Γ → (Γ,Γm) ⊢ a : TType σ → Γ ⊢ rs : σ ↣ σ' → addr_is_obj (addr_elt Γ rs a).
 Proof.
   unfold addr_elt; intros; simplify_type_equality'.
   by erewrite !path_type_check_complete by eauto.
@@ -397,7 +397,7 @@ Qed.
 Lemma addr_index_elt Γ rs a : addr_index (addr_elt Γ rs a) = addr_index a.
 Proof. by destruct a; simpl; destruct (_ ≫= lookupE _ _). Qed.
 Lemma addr_ref_elt Γ Γm rs a σ σ' :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → Γ ⊢ rs : σ ↣ σ' → 
+  ✓ Γ → (Γ,Γm) ⊢ a : TType σ → Γ ⊢ rs : σ ↣ σ' → 
   addr_ref Γ (addr_elt Γ rs a) = rs :: addr_ref Γ a.
 Proof.
   unfold addr_elt; intros; simplify_type_equality'.
@@ -407,17 +407,17 @@ Proof.
   by destruct rs.
 Qed.
 Lemma addr_ref_byte_elt Γ Γm rs a σ σ' :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' →
   addr_ref_byte Γ (addr_elt Γ rs a) = 0.
 Proof.
   eauto using addr_is_obj_ref_byte, addr_ref_byte_is_obj, addr_elt_typed.
 Qed.
 Lemma addr_top_typed Γ Γm o τ :
   ✓ Γ → Γm ⊢ o : τ → ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
-  (Γ,Γm) ⊢ addr_top o τ : Some τ.
+  (Γ,Γm) ⊢ addr_top o τ : TType τ.
 Proof.
   constructor; simpl; rewrite ?ref_typed_nil;
-    eauto using Nat.divide_0_r, castable_Some with lia.
+    eauto using Nat.divide_0_r, castable_TType with lia.
 Qed.
 Lemma addr_top_strict Γ o τ : ✓ Γ → ✓{Γ} τ → addr_strict Γ (addr_top o τ).
 Proof.
@@ -433,7 +433,7 @@ Proof.
 Qed.
 Lemma addr_top_array_typed Γ Γm o τ (n : Z) :
   ✓ Γ → Γm ⊢ o : τ.[Z.to_nat n] → ✓{Γ} τ → Z.to_nat n ≠ 0 →
-  int_typed (n * size_of Γ τ) sptrT → (Γ,Γm) ⊢ addr_top_array o τ n : Some τ.
+  int_typed (n * size_of Γ τ) sptrT → (Γ,Γm) ⊢ addr_top_array o τ n : TType τ.
 Proof.
   intros. rewrite (addr_top_array_alt Γ) by done.
   assert (0 ≤ n)%Z by (by destruct n).
@@ -448,7 +448,7 @@ Proof.
   intros. apply Nat.mul_pos_pos; simpl; eauto using size_of_pos with lia.
 Qed.
 Lemma addr_is_top_array_alt Γ Γm a τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ →
   addr_is_top_array a ↔ ∃ τ' n, addr_strict Γ a ∧
     addr_ref Γ a = [RArray 0 τ' n] ∧ addr_ref_byte Γ a = 0.
 Proof.
@@ -491,8 +491,8 @@ Proof.
   by right; left.
 Qed.
 Lemma addr_disjoint_object_offset Γ Γm a1 a2 σ1 σ2 :
-  ✓ Γ → (Γ,Γm) ⊢ a1 : Some σ1 → addr_strict Γ a1 →
-  (Γ,Γm) ⊢ a2 : Some σ2 → addr_strict Γ a2 → a1 ⊥{Γ} a2 →
+  ✓ Γ → (Γ,Γm) ⊢ a1 : TType σ1 → addr_strict Γ a1 →
+  (Γ,Γm) ⊢ a2 : TType σ2 → addr_strict Γ a2 → a1 ⊥{Γ} a2 →
   (** 1.) *) addr_index a1 ≠ addr_index a2 ∨
   (** 2.) *)
     addr_object_offset Γ a1 + bit_size_of Γ σ1 ≤ addr_object_offset Γ a2 ∨

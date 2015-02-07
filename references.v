@@ -222,7 +222,7 @@ Proof.
 Qed.
 Lemma ref_seg_typed_weaken Γ1 Γ2 rs τ σ :
   Γ1 ⊢ rs : τ ↣ σ → Γ1 ⊆ Γ2 → Γ2 ⊢ rs : τ ↣ σ.
-Proof. destruct 1; econstructor; eauto using lookup_weaken. Qed.
+Proof. destruct 1; econstructor; eauto using lookup_compound_weaken. Qed.
 Lemma ref_typed_weaken Γ1 Γ2 r τ σ : Γ1 ⊢ r : τ ↣ σ → Γ1 ⊆ Γ2 → Γ2 ⊢ r : τ ↣ σ.
 Proof.
   intros Hr ?. induction Hr using @ref_typed_ind;
@@ -618,7 +618,8 @@ Lemma ref_seg_object_offset_weaken Γ1 Γ2 rs τ σ :
   ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊢ rs : τ ↣ σ → Γ1 ⊆ Γ2 →
   ref_seg_object_offset Γ1 rs = ref_seg_object_offset Γ2 rs.
 Proof.
-  destruct 3; intros; simplify_option_equality by eauto using lookup_weaken;
+  destruct 3; intros;
+    simplify_option_equality by eauto using lookup_compound_weaken;
     eauto using bit_size_of_weaken, TArray_valid_inv_type,
     field_bit_offset_weaken, env_valid_lookup with f_equal.
 Qed.

@@ -91,7 +91,7 @@ Proof.
     pbits_mapped, ctree_lookup_byte_typed.
 Qed.
 Lemma mem_force_disjoint_le Γ Γm m ms a v τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → is_Some (m !!{Γ} a) →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → is_Some (m !!{Γ} a) →
   m :: ms ⊆⊥ mem_force Γ a m :: ms.
 Proof.
   intros. apply sep_disjoint_cons_le_inj; intros m'.
@@ -125,7 +125,7 @@ Proof.
 Qed.
 Lemma mem_insert_disjoint Γ Γm1 m1 m2 a1 v1 τ1 :
   ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
-  (Γ,Γm1) ⊢ a1 : Some τ1 → mem_writable Γ a1 m1 → (Γ,Γm1) ⊢ v1 : τ1 →
+  (Γ,Γm1) ⊢ a1 : TType τ1 → mem_writable Γ a1 m1 → (Γ,Γm1) ⊢ v1 : τ1 →
   <[a1:=v1]{Γ}>m1 ⊥ m2.
 Proof.
   intros ???? (w1&?&?) ?. assert (ctree_unshared w1).
@@ -137,7 +137,7 @@ Proof.
     of_val_flatten_mapped, of_val_flatten_disjoint, ctree_Forall_not.
 Qed.
 Lemma mem_insert_disjoint_le Γ Γm m ms a v τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
   m :: ms ⊆⊥ <[a:=v]{Γ}>m :: ms.
 Proof.
   intros. apply sep_disjoint_cons_le_inj; intros m'.
@@ -146,7 +146,7 @@ Proof.
 Qed.
 Lemma mem_insert_union Γ Γm1 m1 m2 a1 v1 τ1 :
   ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
-  (Γ,Γm1) ⊢ a1 : Some τ1 → mem_writable Γ a1 m1 → (Γ,Γm1) ⊢ v1 : τ1 →
+  (Γ,Γm1) ⊢ a1 : TType τ1 → mem_writable Γ a1 m1 → (Γ,Γm1) ⊢ v1 : τ1 →
   <[a1:=v1]{Γ}>(m1 ∪ m2) = <[a1:=v1]{Γ}>m1 ∪ m2.
 Proof.
   intros ???? (w1&?&?) ?. assert (ctree_unshared w1).
@@ -159,7 +159,7 @@ Proof.
 Qed.
 Lemma mem_lock_disjoint Γ Γm1 m1 m2 a1 τ1 :
   ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
-  (Γ,Γm1) ⊢ a1 : Some τ1 → mem_writable Γ a1 m1 → mem_lock Γ a1 m1 ⊥ m2.
+  (Γ,Γm1) ⊢ a1 : TType τ1 → mem_writable Γ a1 m1 → mem_lock Γ a1 m1 ⊥ m2.
 Proof.
   intros ???? (w1&?&Hw1).
   assert ((Γ,Γm1) ⊢ ctree_map pbit_lock w1 : τ1).
@@ -173,7 +173,7 @@ Proof.
     pbit_lock_mapped, Forall_impl, pbit_lock_unmapped, pbits_lock_disjoint.
 Qed.
 Lemma mem_lock_disjoint_le Γ Γm m ms a τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → mem_writable Γ a m →
   m :: ms ⊆⊥ mem_lock Γ a m :: ms.
 Proof.
   intros. apply sep_disjoint_cons_le_inj; intros m'.
@@ -182,7 +182,7 @@ Proof.
 Qed.
 Lemma mem_lock_union Γ Γm1 m1 m2 a1 τ1 :
   ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
-  (Γ,Γm1) ⊢ a1 : Some τ1 → mem_writable Γ a1 m1 →
+  (Γ,Γm1) ⊢ a1 : TType τ1 → mem_writable Γ a1 m1 →
   mem_lock Γ a1 (m1 ∪ m2) = mem_lock Γ a1 m1 ∪ m2.
 Proof.
   intros ???? (w1&?&Hw1).
@@ -301,7 +301,7 @@ Proof.
     by auto using mem_unlock_disjoint.
 Qed.
 Lemma mem_singleton_disjoint Γ Γm a malloc x1 x2 v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a → (Γ,Γm) ⊢ v : τ →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a → (Γ,Γm) ⊢ v : τ →
   x1 ⊥ x2 → ¬sep_unmapped x1 → ¬sep_unmapped x2 →
   mem_singleton Γ a malloc x1 v ⊥ mem_singleton Γ a malloc x2 v.
 Proof.
@@ -314,7 +314,7 @@ Proof.
     apply Forall_not, Forall_true; auto; by destruct 1.
 Qed.
 Lemma mem_singleton_union Γ Γm a malloc x1 x2 v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a →
   mem_singleton Γ a malloc (x1 ∪ x2) v
   = mem_singleton Γ a malloc x1 v ∪ mem_singleton Γ a malloc x2 v.
 Proof.

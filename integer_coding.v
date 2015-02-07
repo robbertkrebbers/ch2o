@@ -108,8 +108,8 @@ Section int_coding.
     | O => []
     | S n => let (q,r) := Z.div_eucl x 2 in bool_decide (r = 1) :: Z_to_bits n q
     end.
-  Fixpoint Z_of_bits (bs : list bool) : Z :=
-    match bs with [] => 0 | b :: bs => Z.b2z b + 2 * Z_of_bits bs end.
+  Fixpoint Z_of_bits (βs : list bool) : Z :=
+    match βs with [] => 0 | β :: βs => Z.b2z β + 2 * Z_of_bits βs end.
 
   Definition int_to_bits (τi : int_type Ti) (x : Z) : list bool :=
     endianize (rank τi) $ Z_to_bits (int_width τi) $
@@ -117,8 +117,8 @@ Section int_coding.
       | Signed => if decide (0 ≤ x) then x else x + 2 ^ int_width τi
       | Unsigned => x
       end.
-  Definition int_of_bits (τi : int_type Ti) (bs : list bool) : Z :=
-    let x := Z_of_bits (deendianize (rank τi) bs) in
+  Definition int_of_bits (τi : int_type Ti) (βs : list bool) : Z :=
+    let x := Z_of_bits (deendianize (rank τi) βs) in
     match sign τi with
     | Signed =>
        if decide (2 * x < 2 ^ int_width τi) then x else x - 2 ^ int_width τi
@@ -139,9 +139,9 @@ Class IntCodingSpec Ti `{IntCoding Ti} := {
   short_int : short_rank ⊂ int_rank;
   int_long : int_rank ⊂ long_rank;
   long_longlong : long_rank ⊂ longlong_rank;
-  endianize_permutation k bs : endianize k bs ≡ₚ bs;
-  deendianize_endianize k bs : deendianize k (endianize k bs) = bs;
-  endianize_deendianize k bs : endianize k (deendianize k bs) = bs
+  endianize_permutation k βs : endianize k βs ≡ₚ βs;
+  deendianize_endianize k βs : deendianize k (endianize k βs) = βs;
+  endianize_deendianize k βs : endianize k (deendianize k βs) = βs
 }.
 
 (** * Theorems *)

@@ -77,9 +77,9 @@ Proof.
       apply Nat.mul_le_mono_l; lia.
     + erewrite <-ref_size_le by eauto. by destruct r1.
   * destruct Hr as [|r1 i1 r2 i2|r1' r1 r2 i]; simplify_type_equality'; auto.
-    destruct σp as [σ'|]; simplify_equality';
+    destruct σp as [|σ'|]; simplify_equality';
       eauto using Nat.divide_1_l, Nat.divide_add_r, Nat.divide_trans,
-      (size_of_castable _ _ (Some _)), Nat.divide_mul_l.
+      (size_of_castable _ _ (TType _)), Nat.divide_mul_l.
 Qed.
 Lemma addr_refine_type_of_l Γ α f Γm1 Γm2 a1 a2 σp :
   a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : σp → type_of a1 = σp.
@@ -146,7 +146,7 @@ Proof.
   * eauto using option_eq_1_alt.
   * by erewrite <-size_of_weaken by eauto.
   * by erewrite <-size_of_weaken by eauto using ref_typed_type_valid.
-  * destruct σp as [σ'|]; simpl; auto. by erewrite <-size_of_weaken
+  * destruct σp as [|σ'|]; simpl; auto. by erewrite <-size_of_weaken
       by eauto using ref_typed_type_valid, castable_type_valid.
   * erewrite <-size_of_weaken by eauto using ref_typed_type_valid.
     destruct Hr, α'; csimpl in *; try tauto || constructor (done).
@@ -313,8 +313,8 @@ Proof.
   * erewrite <-ref_object_offset_le, ref_object_offset_app by eauto; lia.
 Qed.
 Lemma addr_elt_refine Γ α f Γm1 Γm2 a1 a2 rs σ σ' :
-  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some σ → addr_strict Γ a1 → Γ ⊢ rs : σ ↣ σ' →
-  addr_elt Γ rs a1 ⊑{Γ,α,f@Γm1↦Γm2} addr_elt Γ rs a2 : Some σ'.
+  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : TType σ → addr_strict Γ a1 → Γ ⊢ rs : σ ↣ σ' →
+  addr_elt Γ rs a1 ⊑{Γ,α,f@Γm1↦Γm2} addr_elt Γ rs a2 : TType σ'.
 Proof.
   inversion 2 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ'' ??????????? Hcast Hr];
     intros ? Hrs; simplify_equality'.
@@ -344,15 +344,15 @@ Qed.
 Lemma addr_top_refine Γ α f Γm1 Γm2 o1 o2 τ :
   ✓ Γ → Γm1 ⊑{Γ,α,f} Γm2 → Γm1 ⊢ o1 : τ → f !! o1 = Some (o2,[]) →
   ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
-  addr_top o1 τ ⊑{Γ,α,f@Γm1↦Γm2} addr_top o2 τ : Some τ.
+  addr_top o1 τ ⊑{Γ,α,f@Γm1↦Γm2} addr_top o2 τ : TType τ.
 Proof.
   eexists []; csimpl; rewrite ?ref_typed_nil; auto using Nat.divide_0_r,
-    size_of_ne_0, ref_refine_id, castable_Some with lia.
+    size_of_ne_0, ref_refine_id, castable_TType with lia.
 Qed.
 Lemma addr_top_array_refine Γ α f Γm1 Γm2 o1 o2 τ (n : Z) :
   ✓ Γ → Γm1 ⊑{Γ,α,f} Γm2 → Γm1 ⊢ o1 : τ.[Z.to_nat n] → f !! o1 = Some (o2,[]) →
   ✓{Γ} τ → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
-  addr_top_array o1 τ n ⊑{Γ,α,f@Γm1↦Γm2} addr_top_array o2 τ n : Some τ.
+  addr_top_array o1 τ n ⊑{Γ,α,f@Γm1↦Γm2} addr_top_array o2 τ n : TType τ.
 Proof.
   intros. rewrite !(addr_top_array_alt Γ) by done.
   assert (0 ≤ n)%Z by (by destruct n).

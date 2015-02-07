@@ -404,7 +404,7 @@ Lemma ctree_typed_weaken Γ1 Γ2 Γm1 Γm2 w τ :
 Proof.
   intros ? Hw ??. induction Hw using @ctree_typed_ind; typed_constructor;
     eauto using base_type_valid_weaken,
-      @lookup_weaken, Forall_impl, pbit_valid_weaken;
+      lookup_compound_weaken, Forall_impl, pbit_valid_weaken;
     by erewrite <-?(bit_size_of_weaken Γ1 Γ2),
       <-?(field_bit_padding_weaken Γ1 Γ2)
       by eauto using TBase_valid, TCompound_valid.
@@ -668,22 +668,17 @@ Proof.
   * by intros [] s τs ? _ _ _ xbs; erewrite ctree_unflatten_compound by eauto.
 Qed.
 Lemma ctree_unflatten_union_free Γ τ xbs :
-  ✓ Γ → union_free (ctree_unflatten Γ τ xbs).
+  ✓ Γ → ✓{Γ} τ → union_free (ctree_unflatten Γ τ xbs).
 Proof.
-  intros HΓ. revert τ xbs. refine (weak_type_env_ind _ HΓ _ _ _ _ _).
-  * intros τb xbs. rewrite ctree_unflatten_base. constructor.
-  * intros τ n IH xbs. rewrite ctree_unflatten_array. constructor.
+  intros HΓ Hτ. revert τ Hτ xbs. refine (type_env_ind _ HΓ _ _ _ _).
+  * intros τb _ xbs. rewrite ctree_unflatten_base. constructor.
+  * intros τ n _ IH _ xbs. rewrite ctree_unflatten_array. constructor.
     revert xbs. elim n; simpl; constructor; auto.
-  * intros [] s τs Hs IH xbs;
+  * intros [] s τs Hs _ IH _ xbs;
       erewrite !ctree_unflatten_compound by eauto; constructor.
     clear Hs. unfold struct_unflatten. revert xbs.
     induction (bit_size_of_fields _ τs HΓ); intros;
       decompose_Forall_hyps; constructor; eauto.
-  * intros c s Hs xbs. unfold ctree_unflatten.
-    rewrite type_iter_compound_None by done.
-    destruct c; simpl; unfold struct_unflatten; constructor.
-    revert xbs. induction (zip _ _) as [|[??]]; intros [|??];
-      simpl; repeat constructor; auto using (MBase_union_free _ []).
 Qed.
 Lemma ctree_unflatten_flatten Γ Γm w τ :
   ✓ Γ → (Γ,Γm) ⊢ w : τ → ctree_unflatten Γ τ (ctree_flatten w) = union_reset w.
@@ -824,7 +819,7 @@ Proof. by apply ctree_unflatten_type_of. Qed.
 Lemma ctree_new_typed Γ Γm xb τ :
   ✓ Γ → ✓{Γ} τ → ✓{Γ,Γm} xb → (Γ,Γm) ⊢ ctree_new Γ xb τ : τ.
 Proof. intros; apply ctree_unflatten_typed; auto using replicate_length. Qed.
-Lemma ctree_new_union_free Γ xb τ: ✓ Γ → union_free (ctree_new Γ xb τ).
+Lemma ctree_new_union_free Γ xb τ: ✓ Γ → ✓{Γ} τ → union_free (ctree_new Γ xb τ).
 Proof. by apply ctree_unflatten_union_free. Qed.
 Lemma ctree_flatten_new Γ τ xb :
   ✓ Γ → ✓{Γ} τ → pbit_indetify xb = xb →
@@ -950,7 +945,7 @@ Lemma ctree_lookup_seg_weaken Γ1 Γ2 rs w w' :
 Proof.
   intros ?? Hrs. by destruct w, rs; pattern w';
     apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); intros;
-    simplify_option_equality by eauto using @lookup_weaken;
+    simplify_option_equality by eauto using lookup_compound_weaken;
     erewrite <-?(bit_size_of_weaken Γ1 Γ2),
       <-?(ctree_unflatten_weaken Γ1 Γ2) by eauto.
 Qed.
@@ -1816,7 +1811,7 @@ Lemma ctree_alter_byte_type_of Γ g i w :
   ✓ Γ → ✓{Γ} (type_of w) → type_of (ctree_alter_byte Γ g i w) = type_of w.
 Proof. apply ctree_unflatten_type_of. Qed.
 Lemma ctree_alter_byte_union_free Γ g w i :
-  ✓ Γ → union_free (ctree_alter_byte Γ g i w).
+  ✓ Γ → ✓{Γ} (type_of w) → union_free (ctree_alter_byte Γ g i w).
 Proof. apply ctree_unflatten_union_free. Qed.
 Lemma ctree_alter_byte_char Γ Γm g w :
   ✓ Γ → (Γ,Γm) ⊢ w : ucharT → (Γ,Γm) ⊢ g w : ucharT →
@@ -1873,6 +1868,10 @@ Proof.
   { by erewrite ctree_lookup_alter_byte_ne by eauto. }
   assert (ctree_alter_byte Γ g1 i w !!{Γ} j = Some c2).
   { by erewrite ctree_lookup_alter_byte_ne by eauto. }
+  assert (✓{Γ} (type_of (ctree_alter_byte Γ g1 i w))).
+  { rewrite ctree_alter_byte_type_of; simplify_type_equality; eauto. }
+  assert (✓{Γ} (type_of (ctree_alter_byte Γ g2 j w))).
+  { rewrite ctree_alter_byte_type_of; simplify_type_equality; eauto. }
   eapply ctree_lookup_byte_ext;
     eauto using ctree_alter_byte_union_free, ctree_alter_byte_typed.
   intros ii _. destruct (decide (ii = i)) as [->|].
@@ -2027,9 +2026,9 @@ Lemma ctree_singleton_seg_weaken Γ1 Γ2 τ rs w σ :
   ✓ Γ1 → Γ1 ⊆ Γ2 → Γ1 ⊢ rs : τ ↣ σ → ✓{Γ1} τ → 
   ctree_singleton_seg Γ1 rs w = ctree_singleton_seg Γ2 rs w.
 Proof.
-  destruct 3; intros;
-    simplify_option_equality by eauto using @lookup_weaken;
-    by erewrite ?ctree_new_weaken, ?ctree_news_weaken,
+  by destruct 3; intros;
+    simplify_option_equality by eauto using lookup_compound_weaken;
+    erewrite ?ctree_new_weaken, ?ctree_news_weaken,
     ?field_bit_padding_weaken, ?(bit_size_of_weaken Γ1 Γ2) by eauto.
 Qed.
 Lemma ctree_singleton_weaken Γ1 Γ2 τ r w σ :

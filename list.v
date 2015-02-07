@@ -88,10 +88,11 @@ Instance list_filter {A} : Filter A (list A) :=
 
 (** The function [list_find P l] returns the first index [i] whose element
 satisfies the predicate [P]. *)
-Definition list_find {A} P `{∀ x, Decision (P x)} : list A → option nat :=
+Definition list_find {A} P `{∀ x, Decision (P x)} : list A → option (nat * A) :=
   fix go l :=
   match l with
-  | [] => None | x :: l => if decide (P x) then Some 0 else S <$> go l
+  | [] => None
+  | x :: l => if decide (P x) then Some (0,x) else prod_map S id <$> go l
   end.
 
 (** The function [replicate n x] generates a list with length [n] of elements
@@ -702,28 +703,19 @@ End filter.
 (** ** Properties of the [find] function *)
 Section find.
   Context (P : A → Prop) `{∀ x, Decision (P x)}.
-  Lemma list_find_Some l i :
-    list_find P l = Some i → ∃ x, l !! i = Some x ∧ P x.
+  Lemma list_find_Some l i x :
+    list_find P l = Some (i,x) → l !! i = Some x ∧ P x.
   Proof.
-    revert i. induction l; intros [] ?; simplify_option_equality; eauto.
+    revert i; induction l; intros [] ?;
+      repeat (match goal with x : prod _ _ |- _ => destruct x end
+              || simplify_option_equality); eauto.
   Qed.
-  Lemma list_find_elem_of l x : x ∈ l → P x → ∃ i, list_find P l = Some i.
+  Lemma list_find_elem_of l x : x ∈ l → P x → is_Some (list_find P l).
   Proof.
     induction 1 as [|x y l ? IH]; intros; simplify_option_equality; eauto.
-    by destruct IH as [i ->]; [|exists (S i)].
+    by destruct IH as [[i x'] ->]; [|exists (S i, x')].
   Qed.
 End find.
-
-Section find_eq.
-  Context `{∀ x y, Decision (x = y)}.
-  Lemma list_find_eq_Some l i x : list_find (x =) l = Some i → l !! i = Some x.
-  Proof.
-    intros.
-    destruct (list_find_Some (x =) l i) as (?&?&?); auto with congruence.
-  Qed.
-  Lemma list_find_eq_elem_of l x : x ∈ l → ∃ i, list_find (x=) l = Some i.
-  Proof. eauto using list_find_elem_of. Qed.
-End find_eq.
 
 (** ** Properties of the [reverse] function *)
 Lemma reverse_nil : reverse [] = @nil A.
@@ -2244,6 +2236,8 @@ Section Forall2.
   Proof.
     naive_solver eauto using Forall2_length, Forall2_lookup_lr,Forall2_lookup_2.
   Qed.
+  Lemma Forall2_tail l k : Forall2 P l k → Forall2 P (tail l) (tail k).
+  Proof. destruct 1; simpl; auto. Qed.
   Lemma Forall2_alter_l f l k i :
     Forall2 P l k →
     (∀ x y, l !! i = Some x → k !! i = Some y → P x y → P (f x) y) →

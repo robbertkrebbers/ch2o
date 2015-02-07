@@ -105,8 +105,8 @@ Proof.
   * by do 3 right; eexists s, (rs1 :: r1'), i1, (rs2 :: r2'), i2, r'.
 Qed.
 Lemma addr_disjoint_cases Γ Γm a1 a2 σ1 σ2 :
-  ✓ Γ → (Γ,Γm) ⊢ a1 : Some σ1 → frozen a1 → σ1 ≠ ucharT%T →
-  (Γ,Γm) ⊢ a2 : Some σ2 → frozen a2 → σ2 ≠ ucharT%T →
+  ✓ Γ → (Γ,Γm) ⊢ a1 : TType σ1 → frozen a1 → σ1 ≠ ucharT%T →
+  (Γ,Γm) ⊢ a2 : TType σ2 → frozen a2 → σ2 ≠ ucharT%T →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
@@ -126,8 +126,8 @@ Proof.
   * do 3 right; split; [done|]. by eexists s, r1', i1', r2', i2', r'.
 Qed.
 Lemma cmap_non_aliasing Γ Γm m a1 a2 σ1 σ2 :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : Some σ1 → frozen a1 → σ1 ≠ ucharT%T →
-  (Γ,Γm) ⊢ a2 : Some σ2 → frozen a2 → σ2 ≠ ucharT%T →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : TType σ1 → frozen a1 → σ1 ≠ ucharT%T →
+  (Γ,Γm) ⊢ a2 : TType σ2 → frozen a2 → σ2 ≠ ucharT%T →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
@@ -164,8 +164,8 @@ Proof.
   by erewrite !ctree_lookup_non_aliasing by eauto.
 Qed.
 Lemma mem_non_aliasing Γ Γm m a1 a2 σ1 σ2 :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : Some σ1 → frozen a1 → σ1 ≠ ucharT%T →
-  (Γ,Γm) ⊢ a2 : Some σ2 → frozen a2 → σ2 ≠ ucharT%T →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : TType σ1 → frozen a1 → σ1 ≠ ucharT%T →
+  (Γ,Γm) ⊢ a2 : TType σ2 → frozen a2 → σ2 ≠ ucharT%T →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨

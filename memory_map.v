@@ -209,7 +209,7 @@ Proof.
   destruct m; intros; simplify_option_equality; eauto using ctree_lookup_weaken.
 Qed.
 Lemma cmap_lookup_weaken Γ1 Γ2 Γm m a w σ :
-  ✓ Γ1 → (Γ1,Γm) ⊢ a : Some σ → m !!{Γ1} a = Some w → Γ1 ⊆ Γ2 →
+  ✓ Γ1 → (Γ1,Γm) ⊢ a : TType σ → m !!{Γ1} a = Some w → Γ1 ⊆ Γ2 →
   m !!{Γ2} a = Some w.
 Proof.
   unfold lookupE, cmap_lookup; intros; case_option_guard; simplify_equality'.
@@ -252,7 +252,7 @@ Proof.
   destruct (ctree_lookup_Some Γ Γm w' τ r w) as (σ&?&?); eauto.
 Qed.
 Lemma cmap_lookup_typed Γ Γm m a w σ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some σ → m !!{Γ} a = Some w → (Γ,Γm) ⊢ w : σ.
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType σ → m !!{Γ} a = Some w → (Γ,Γm) ⊢ w : σ.
 Proof.
   unfold lookupE, cmap_lookup; intros; case_option_guard; simplify_equality'.
   destruct (m !!{Γ} _) as [w'|] eqn:?; simplify_equality'.
@@ -287,7 +287,7 @@ Proof.
   by rewrite ctree_lookup_app.
 Qed.
 Lemma cmap_lookup_elt Γ Γm m a rs σ σ' :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' → 
+  ✓ Γ → (Γ,Γm) ⊢ a : TType σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' → 
   m !!{Γ} (addr_elt Γ rs a) = m !!{Γ} a ≫= lookupE Γ rs.
 Proof.
   unfold lookupE at 1 3, cmap_lookup; intros; simpl.
@@ -389,8 +389,8 @@ Proof.
 Qed.
 Lemma cmap_alter_commute Γ Γm g1 g2 m a1 a2 w1 w2 τ1 τ2 :
   ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 → 
-  (Γ,Γm) ⊢ a1 : Some τ1 → m !!{Γ} a1 = Some w1 → (Γ,Γm) ⊢ g1 w1 : τ1 →
-  (Γ,Γm) ⊢ a2 : Some τ2 → m !!{Γ} a2 = Some w2 → (Γ,Γm) ⊢ g2 w2 : τ2 →
+  (Γ,Γm) ⊢ a1 : TType τ1 → m !!{Γ} a1 = Some w1 → (Γ,Γm) ⊢ g1 w1 : τ1 →
+  (Γ,Γm) ⊢ a2 : TType τ2 → m !!{Γ} a2 = Some w2 → (Γ,Γm) ⊢ g2 w2 : τ2 →
   cmap_alter Γ g1 a1 (cmap_alter Γ g2 a2 m)
   = cmap_alter Γ g2 a2 (cmap_alter Γ g1 a1 m).
 Proof.
@@ -432,7 +432,7 @@ Proof.
 Qed.
 Lemma cmap_lookup_alter_not_obj Γ Γm g m a w τ :
   ✓ Γ → ✓{Γ,Γm} m → ¬addr_is_obj a →
-  (Γ,Γm) ⊢ a : Some τ → m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : τ →
+  (Γ,Γm) ⊢ a : TType τ → m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : τ →
   ctree_unshared (g w) → cmap_alter Γ g a m !!{Γ} a =
   Some (ctree_lookup_byte_after Γ (addr_type_base a) (addr_ref_byte Γ a) (g w)).
 Proof.
@@ -462,7 +462,7 @@ Proof.
 Qed.
 Lemma cmap_lookup_alter_disjoint Γ Γm g m a1 a2 w1 w2 τ2 :
   ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 → m !!{Γ} a1 = Some w1 →
-  (Γ,Γm) ⊢ a2 : Some τ2 → m !!{Γ} a2 = Some w2 → (Γ,Γm) ⊢ g w2 : τ2 →
+  (Γ,Γm) ⊢ a2 : TType τ2 → m !!{Γ} a2 = Some w2 → (Γ,Γm) ⊢ g w2 : τ2 →
   (ctree_unshared w2 → ctree_unshared (g w2)) →
   cmap_alter Γ g a2 m !!{Γ} a1 = Some w1.
 Proof.
@@ -496,7 +496,7 @@ Proof.
   * by erewrite <-ctree_singleton_le by eauto using ref_freeze_le_r.
 Qed.
 Lemma cmap_singleton_valid Γ Γm a malloc w τ :
-  ✓ Γ → ✓{Γ} Γm → (Γ,Γm) ⊢ a : Some τ →
+  ✓ Γ → ✓{Γ} Γm → (Γ,Γm) ⊢ a : TType τ →
   index_alive Γm (addr_index a) → addr_is_obj a → addr_strict Γ a →
   (Γ,Γm) ⊢ w : τ → ¬ctree_unmapped w → ✓{Γ,Γm} (cmap_singleton Γ a malloc w).
 Proof.
@@ -508,7 +508,7 @@ Proof.
     @sep_unmapped_empty_alt, ctree_singleton_Forall_inv, addr_typed_ref_typed.
 Qed.
 Lemma cmap_singleton_weaken Γ1 Γ2 Γm a malloc w τ :
-  ✓ Γ1 → Γ1 ⊆ Γ2 → (Γ1,Γm) ⊢ a : Some τ → addr_strict Γ1 a →
+  ✓ Γ1 → Γ1 ⊆ Γ2 → (Γ1,Γm) ⊢ a : TType τ → addr_strict Γ1 a →
   cmap_singleton Γ1 a malloc w = cmap_singleton Γ2 a malloc w.
 Proof.
   unfold cmap_singleton; intros; f_equal'.
@@ -516,7 +516,7 @@ Proof.
     by eauto using addr_typed_ref_typed, addr_typed_type_object_valid.
 Qed.
 Lemma cmap_lookup_singleton Γ Γm a malloc w τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_is_obj a → addr_strict Γ a →
   cmap_singleton Γ a malloc w !!{Γ} a = Some w.
 Proof.
   intros. unfold lookupE, cmap_lookup.
@@ -525,7 +525,7 @@ Proof.
   by rewrite decide_True by done.
 Qed.
 Lemma cmap_alter_ref_singleton Γ Γm g a malloc w τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a →
   cmap_alter_ref Γ g (addr_index a) (addr_ref Γ a) (cmap_singleton Γ a malloc w)
   = cmap_singleton Γ a malloc (g w).
 Proof.
@@ -533,7 +533,7 @@ Proof.
   by erewrite ctree_alter_singleton by eauto using addr_typed_ref_typed.
 Qed.
 Lemma cmap_alter_singleton Γ Γm g a malloc w τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_is_obj a → addr_strict Γ a →
   cmap_alter Γ g a (cmap_singleton Γ a malloc w)
   = cmap_singleton Γ a malloc (g w).
 Proof.

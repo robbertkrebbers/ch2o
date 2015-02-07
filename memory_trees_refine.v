@@ -394,7 +394,7 @@ Proof.
   intros ? Hw; intros. induction Hw using @ctree_refine_ind;
     refine_constructor; try (eapply Forall2_impl; [eassumption|]); simpl;
     eauto using base_type_valid_weaken,
-      @lookup_weaken, pbit_refine_weaken, ctree_typed_weaken;
+      lookup_compound_weaken, pbit_refine_weaken, ctree_typed_weaken;
     erewrite <-?(bit_size_of_weaken Γ Γ'), <-?(field_bit_padding_weaken Γ Γ')
       by eauto using TBase_valid, TCompound_valid; auto.
   simpl; eauto using Forall2_impl, pbit_refine_weaken.

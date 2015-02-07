@@ -12,24 +12,26 @@ Arguments enum _ {_ _} : clear implicits.
 Arguments NoDup_enum _ {_ _} : clear implicits.
 Definition card A `{Finite A} := length (enum A).
 Program Instance finite_countable `{Finite A} : Countable A := {|
-  encode := λ x, Pos.of_nat $ S $ from_option 0 $ list_find (x =) (enum A);
+  encode := λ x,
+    Pos.of_nat $ S $ from_option 0 $ fst <$> list_find (x =) (enum A);
   decode := λ p, enum A !! pred (Pos.to_nat p)
 |}.
 Arguments Pos.of_nat _ : simpl never.
 Next Obligation.
   intros ?? [xs Hxs HA] x; unfold encode, decode; simpl.
-  destruct (list_find_eq_elem_of xs x) as [i Hi]; auto.
-  rewrite Nat2Pos.id by done; simpl.
-  rewrite Hi; eauto using list_find_eq_Some.
+  destruct (list_find_elem_of (x =) xs x) as [[i y] Hi]; auto.
+  rewrite Nat2Pos.id by done; simpl; rewrite Hi; simpl.
+  destruct (list_find_Some (x =) xs i y); naive_solver.
 Qed.
 Definition find `{Finite A} P `{∀ x, Decision (P x)} : option A :=
-  list_find P (enum A) ≫= decode_nat.
+  list_find P (enum A) ≫= decode_nat ∘ fst.
 
 Lemma encode_lt_card `{finA: Finite A} x : encode_nat x < card A.
 Proof.
   destruct finA as [xs Hxs HA]; unfold encode_nat, encode, card; simpl.
-  rewrite Nat2Pos.id by done; simpl. destruct (list_find _ xs) eqn:?; simpl.
-  * eapply lookup_lt_Some, list_find_eq_Some; eauto.
+  rewrite Nat2Pos.id by done; simpl.
+  destruct (list_find _ xs) as [[i y]|] eqn:?; simpl.
+  * destruct (list_find_Some (x =) xs i y); eauto using lookup_lt_Some.
   * destruct xs; simpl. exfalso; eapply not_elem_of_nil, (HA x). lia.
 Qed.
 Lemma encode_decode A `{finA: Finite A} i :
@@ -39,24 +41,25 @@ Proof.
   unfold encode_nat, decode_nat, encode, decode, card; simpl.
   intros Hi. apply lookup_lt_is_Some in Hi. destruct Hi as [x Hx].
   exists x. rewrite !Nat2Pos.id by done; simpl.
-  destruct (list_find_eq_elem_of xs x) as [j Hj]; auto.
-  rewrite Hj. eauto using list_find_eq_Some, NoDup_lookup.
+  destruct (list_find_elem_of (x =) xs x) as [[j y] Hj]; auto.
+  destruct (list_find_Some (x =) xs j y) as [? ->]; auto.
+  rewrite Hj; csimpl; eauto using NoDup_lookup.
 Qed.
 Lemma find_Some `{finA: Finite A} P `{∀ x, Decision (P x)} x :
   find P = Some x → P x.
 Proof.
   destruct finA as [xs Hxs HA]; unfold find, decode_nat, decode; simpl.
-  intros Hx. destruct (list_find _ _) as [i|] eqn:Hi; simplify_option_equality.
+  intros Hx. destruct (list_find _ _) as [[i y]|] eqn:Hi; simplify_equality'.
   rewrite !Nat2Pos.id in Hx by done.
-  destruct (list_find_Some P xs i) as (?&?&?); simplify_option_equality; eauto.
+  destruct (list_find_Some P xs i y); naive_solver.
 Qed.
 Lemma find_is_Some `{finA: Finite A} P `{∀ x, Decision (P x)} x :
   P x → ∃ y, find P = Some y ∧ P y.
 Proof.
   destruct finA as [xs Hxs HA]; unfold find, decode; simpl.
-  intros Hx. destruct (list_find_elem_of P xs x) as [i Hi]; auto.
-  rewrite Hi. destruct (list_find_Some P xs i) as (y&?&?); subst; auto.
-  exists y. csimpl. by rewrite !Nat2Pos.id by done.
+  intros Hx. destruct (list_find_elem_of P xs x) as [[i y] Hi]; auto.
+  rewrite Hi. destruct (list_find_Some P xs i y); simplify_equality'; auto.
+  exists y. by rewrite !Nat2Pos.id by done.
 Qed.
 
 Lemma card_0_inv P `{finA: Finite A} : card A = 0 → A → P.

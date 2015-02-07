@@ -166,9 +166,13 @@ Lemma ptr_cast_ok_refine Γ α f m1 m2 p1 p2 σp τp :
   ptr_cast_ok Γ m1 τp p1 → ptr_cast_ok Γ m2 τp p2.
 Proof. destruct 2; simpl; eauto using addr_cast_ok_refine. Qed.
 Lemma ptr_cast_refine Γ α f m1 m2 p1 p2 σp τp :
-  ptr_cast_ok Γ m1 τp p1 → ✓{Γ} τp → p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp →
+  ptr_cast_ok Γ m1 τp p1 → ptr_cast_typed Γ σp τp →
+  p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp →
   ptr_cast τp p1 ⊑{Γ,α,f@'{m1}↦'{m2}} ptr_cast τp p2 : τp.
-Proof. destruct 3; constructor; eauto using addr_cast_refine. Qed.
+Proof.
+  destruct 2; inversion 1; intros; simplify_equality'; constructor;
+    eauto using addr_cast_refine, TAny_ptr_valid, TBase_ptr_valid, TInt_valid.
+Qed.
 
 (** ** Refinements of operations on base values *)
 Lemma base_val_true_refine Γ α f m1 m2 vb1 vb2 τb :
@@ -251,7 +255,7 @@ Proof.
         by eauto using int_unsigned_pre_cast_ok,int_cast_ok_more;
       by refine_constructor; eauto using ptr_cast_refine, int_cast_typed,
         ptr_cast_refine, TVoid_valid, TBase_ptr_valid, TInt_valid,
-        TPtr_valid_inv, None_ptr_valid,
+        TPtr_valid_inv, TAny_ptr_valid,
         base_val_typed_type_valid, base_val_refine_typed_l ].
 Qed.
 
@@ -322,14 +326,14 @@ Proof.
 Qed.
 Lemma val_cast_ok_refine Γ α f m1 m2 v1 v2 τ σ :
   ✓ Γ → v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ →
-  val_cast_ok Γ m1 (Some σ) v1 → val_cast_ok Γ m2 (Some σ) v2.
+  val_cast_ok Γ m1 (TType σ) v1 → val_cast_ok Γ m2 (TType σ) v2.
 Proof.
   unfold val_cast_ok; destruct σ, 2; eauto using base_val_cast_ok_refine.
 Qed.
 Lemma val_cast_refine Γ α f m1 m2 v1 v2 τ σ :
-  ✓ Γ → cast_typed Γ τ σ → val_cast_ok Γ m1 (Some σ) v1 →
+  ✓ Γ → cast_typed Γ τ σ → val_cast_ok Γ m1 (TType σ) v1 →
   v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ →
-  val_cast (Some σ) v1 ⊑{Γ,α,f@'{m1}↦'{m2}} val_cast (Some σ) v2 : σ.
+  val_cast (TType σ) v1 ⊑{Γ,α,f@'{m1}↦'{m2}} val_cast (TType σ) v2 : σ.
 Proof.
   destruct 2; inversion 2; simplify_equality; repeat refine_constructor;
     eauto using base_val_cast_refine, TVoid_cast_typed, base_cast_typed_self.

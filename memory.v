@@ -120,7 +120,7 @@ Hint Extern 0 (_ ≤ length _) => solve_length.
 Hint Extern 0 (length _ ≤ _) => solve_length.
 
 Lemma mem_writable_weaken Γ1 Γ2 Γm m a σ :
-  ✓ Γ1 → (Γ1,Γm) ⊢ a : Some σ → mem_writable Γ1 a m →
+  ✓ Γ1 → (Γ1,Γm) ⊢ a : TType σ → mem_writable Γ1 a m →
   Γ1 ⊆ Γ2 → mem_writable Γ2 a m.
 Proof. intros ?? (w&?&?) ?; exists w; eauto using cmap_lookup_weaken. Qed.
 Lemma mem_erase_writable Γ m a :
@@ -470,7 +470,7 @@ Proof. induction os; simpl; auto using mem_free_valid'. Qed.
 
 (** ** Properties of the [lookup] function *)
 Lemma mem_lookup_typed Γ Γm m a v τ :
-  ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} a = Some v → (Γ,Γm) ⊢ a : Some τ → (Γ,Γm) ⊢ v : τ.
+  ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} a = Some v → (Γ,Γm) ⊢ a : TType τ → (Γ,Γm) ⊢ v : τ.
 Proof.
   unfold lookupE, mem_lookup. intros ? Hm Hv Ha. destruct (m !!{Γ} a)
     as [w|] eqn:?; simplify_option_equality; eauto using to_val_typed.
@@ -537,7 +537,7 @@ Lemma mem_erase_force Γ m a :
   cmap_erase (mem_force Γ a m) = mem_force Γ a (cmap_erase m).
 Proof. apply cmap_erase_alter_ref. Qed.
 Lemma mem_lookup_force Γ Γm m a v τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → m !!{Γ} a = Some v → addr_is_obj a →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → m !!{Γ} a = Some v → addr_is_obj a →
   mem_force Γ a m !!{Γ} a = Some v.
 Proof.
   unfold mem_force, lookupE, mem_lookup; simpl; unfold lookupE, cmap_lookup.
@@ -631,7 +631,7 @@ Proof.
       pbits_kind_weaken, pbits_valid_sep_valid, ctree_flatten_valid.
 Qed.
 Lemma mem_insert_memenv_of Γ Γm m a v τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
   '{<[a:=v]{Γ}>m} = '{m}.
 Proof.
   unfold insertE, mem_insert, lookupE, mem_lookup. intros ??? (w&?&?) ?.
@@ -639,11 +639,11 @@ Proof.
   by erewrite of_val_type_of, !type_of_correct by eauto.
 Qed.
 Lemma mem_insert_forward Γ Γm m a v τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
   '{m} ⇒ₘ '{<[a:=v]{Γ}>m}.
 Proof. intros. by erewrite mem_insert_memenv_of by eauto. Qed.
 Lemma mem_insert_valid Γ Γm m a v τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
   ✓{Γ,Γm} (<[a:=v]{Γ}>m).
 Proof.
   intros ??? (w&?&?) ?. assert ((Γ,Γm) ⊢ w : τ) by eauto.
@@ -651,7 +651,7 @@ Proof.
     eauto using of_val_flatten_mapped, ctree_Forall_not, ctree_lookup_Some.
 Qed.
 Lemma mem_insert_valid' Γ m a v τ :
-  ✓ Γ → ✓{Γ} m → (Γ,'{m}) ⊢ a : Some τ → mem_writable Γ a m →
+  ✓ Γ → ✓{Γ} m → (Γ,'{m}) ⊢ a : TType τ → mem_writable Γ a m →
   (Γ,'{m}) ⊢ v : τ → ✓{Γ} (<[a:=v]{Γ}>m).
 Proof.
   unfold valid at 2 3, cmap_valid'; intros.
@@ -662,7 +662,7 @@ Lemma mem_erase_insert Γ m a v :
 Proof. apply cmap_erase_alter. Qed.
 (** We need [addr_is_obj a] because writes at padding bytes are ignored *)
 Lemma mem_lookup_insert Γ Γm m a v τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m → addr_is_obj a →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → mem_writable Γ a m → addr_is_obj a →
   (Γ,Γm) ⊢ v : τ → <[a:=v]{Γ}>m !!{Γ} a = Some (val_map (freeze true) v).
 Proof.
   unfold insertE, lookupE, mem_insert, mem_lookup. intros ??? (w&?&Hw) ??.
@@ -676,7 +676,7 @@ Proof.
 Qed.
 Lemma mem_lookup_insert_disjoint Γ Γm m a1 a2 v1 v2 τ2 :
   ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 → m !!{Γ} a1 = Some v1 →
-  (Γ,Γm) ⊢ a2 : Some τ2 → mem_writable Γ a2 m → (Γ,Γm) ⊢ v2 : τ2 →
+  (Γ,Γm) ⊢ a2 : TType τ2 → mem_writable Γ a2 m → (Γ,Γm) ⊢ v2 : τ2 →
   <[a2:=v2]{Γ}>m !!{Γ} a1 = Some v1.
 Proof.
   unfold insertE, lookupE, mem_insert, mem_lookup. intros ????? (w2&?&Hw2) ?.
@@ -685,8 +685,8 @@ Proof.
 Qed.
 Lemma mem_insert_commute Γ Γm m a1 a2 v1 v2 τ1 τ2 :
   ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 →
-  (Γ,Γm) ⊢ a1 : Some τ1 → mem_writable Γ a1 m → (Γ,Γm) ⊢ v1 : τ1 →
-  (Γ,Γm) ⊢ a2 : Some τ2 → mem_writable Γ a2 m → (Γ,Γm) ⊢ v2 : τ2 →
+  (Γ,Γm) ⊢ a1 : TType τ1 → mem_writable Γ a1 m → (Γ,Γm) ⊢ v1 : τ1 →
+  (Γ,Γm) ⊢ a2 : TType τ2 → mem_writable Γ a2 m → (Γ,Γm) ⊢ v2 : τ2 →
   <[a1:=v1]{Γ}>(<[a2:=v2]{Γ}>m) = <[a2:=v2]{Γ}>(<[a1:=v1]{Γ}>m).
 Proof. intros ???? (?&?&?) ?? (?&?&?) ?. eapply cmap_alter_commute; eauto. Qed.
 Lemma mem_insert_force_commute Γ m a1 a2 v1 :
@@ -706,7 +706,7 @@ Proof.
 Qed.
 Lemma mem_insert_writable Γ Γm m a1 a2 v2 τ2 :
   ✓ Γ → ✓{Γ,Γm} m → a1 = a2 ∨ a1 ⊥{Γ} a2 →
-  (Γ,Γm) ⊢ a2 : Some τ2 → mem_writable Γ a2 m → (Γ,Γm) ⊢ v2 : τ2 →
+  (Γ,Γm) ⊢ a2 : TType τ2 → mem_writable Γ a2 m → (Γ,Γm) ⊢ v2 : τ2 →
   mem_writable Γ a1 m → mem_writable Γ a1 (<[a2:=v2]{Γ}>m).
 Proof.
   intros ?? Ha ? (w2&?&Hw2) ? (w1&?&Hw1). red. unfold insertE, mem_insert.
@@ -736,7 +736,7 @@ Lemma mem_singleton_freeze Γ Γm β a malloc x v τ :
   mem_singleton Γ (freeze β a) malloc x v = mem_singleton Γ a malloc x v.
 Proof. apply cmap_singleton_freeze. Qed.
 Lemma mem_singleton_valid Γ Γm a malloc x v τ :
-  ✓ Γ → ✓{Γ} Γm → (Γ,Γm) ⊢ a : Some τ →
+  ✓ Γ → ✓{Γ} Γm → (Γ,Γm) ⊢ a : TType τ →
   index_alive Γm (addr_index a) → addr_is_obj a → addr_strict Γ a →
   (Γ,Γm) ⊢ v : τ → sep_valid x → ¬sep_unmapped x →
   ✓{Γ,Γm} (mem_singleton Γ a malloc x v).
@@ -747,14 +747,14 @@ Proof.
   eapply ctree_Forall_not, of_val_mapped; eauto using Forall_replicate.
 Qed.
 Lemma mem_singleton_weaken Γ1 Γ2 Γm a malloc x v τ :
-  ✓ Γ1 → Γ1 ⊆ Γ2 → (Γ1,Γm) ⊢ a : Some τ → addr_strict Γ1 a → (Γ1,Γm) ⊢ v : τ →
+  ✓ Γ1 → Γ1 ⊆ Γ2 → (Γ1,Γm) ⊢ a : TType τ → addr_strict Γ1 a → (Γ1,Γm) ⊢ v : τ →
   mem_singleton Γ1 a malloc x v = mem_singleton Γ2 a malloc x v.
 Proof.
   unfold mem_singleton; intros; simplify_type_equality.
   by erewrite cmap_singleton_weaken, bit_size_of_weaken, of_val_weaken by eauto.
 Qed.
 Lemma mem_lookup_singleton Γ Γm a malloc x v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_is_obj a → addr_strict Γ a →
   (Γ,Γm) ⊢ v : τ → Some Readable ⊆ perm_kind x →
   mem_singleton Γ a malloc x v !!{Γ} a = Some (val_freeze true v).
 Proof.
@@ -765,7 +765,7 @@ Proof.
   by erewrite to_of_val by eauto.
 Qed.
 Lemma mem_writable_singleton Γ Γm a malloc x v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_is_obj a → addr_strict Γ a →
   (Γ,Γm) ⊢ v : τ → Some Writable ⊆ perm_kind x →
   mem_writable Γ a (mem_singleton Γ a malloc x v).
 Proof.
@@ -775,12 +775,12 @@ Proof.
   by apply Forall_true.
 Qed.
 Lemma mem_force_singleton Γ Γm a malloc x v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a →
   mem_force Γ a (mem_singleton Γ a malloc x v)
   = mem_singleton Γ a malloc x v.
 Proof. apply (cmap_alter_ref_singleton _ Γm id _ _ _ τ). Qed.
 Lemma mem_insert_singleton Γ Γm a malloc x v1 v2 τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_is_obj a → addr_strict Γ a →
   (Γ,Γm) ⊢ v1 : τ → (Γ,Γm) ⊢ v2 : τ →
   <[a:=v2]{Γ}>(mem_singleton Γ a malloc x v1)
   = mem_singleton Γ a malloc x v2.
@@ -960,18 +960,18 @@ Proof.
       lookup_app_r, lookup_replicate_2 by solve_length.
 Qed.
 Lemma elem_of_lock_singleton_typed Γ Γm a τ o i :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → (o,i) ∈ lock_singleton Γ a ↔ o = addr_index a ∧
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → (o,i) ∈ lock_singleton Γ a ↔ o = addr_index a ∧
     addr_object_offset Γ a ≤ i < addr_object_offset Γ a + bit_size_of Γ τ.
 Proof. intros. rewrite elem_of_lock_singleton; by simplify_type_equality. Qed.
 Lemma lock_singleton_valid Γ Γm a τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → ✓{Γm} (lock_singleton Γ a).
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → ✓{Γm} (lock_singleton Γ a).
 Proof.
   intros ?? o i. rewrite elem_of_lock_singleton_typed by eauto.
   intros (->&?&?); eauto using addr_typed_index.
 Qed.
 Lemma lock_singleton_disjoint Γ Γm a1 a2 τ1 τ2 :
-  ✓ Γ → (Γ,Γm) ⊢ a1 : Some τ1 → addr_strict Γ a1 →
-  (Γ,Γm) ⊢ a2 : Some τ2 → addr_strict Γ a2 →
+  ✓ Γ → (Γ,Γm) ⊢ a1 : TType τ1 → addr_strict Γ a1 →
+  (Γ,Γm) ⊢ a2 : TType τ2 → addr_strict Γ a2 →
   a1 ⊥{Γ} a2 → lock_singleton Γ a1 ∩ lock_singleton Γ a2 = ∅.
 Proof.
   intros. apply equiv_empty_L. intros [o i].
@@ -1045,7 +1045,7 @@ Proof.
   intuition lia.
 Qed.
 Lemma mem_locks_alter Γ Γm g a m w τ o i :
-  ✓Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : τ →
+  ✓Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : τ →
   (o,i) ∈ mem_locks (cmap_alter Γ g a m) ↔
     (o,i) ∈ mem_locks m ∧ o ≠ addr_index a ∨
     (o,i) ∈ mem_locks m ∧ o = addr_index a ∧ i < addr_object_offset Γ a ∨
@@ -1118,7 +1118,7 @@ Proof.
   intuition lia.
 Qed.
 Lemma mem_Readable_locks Γ Γm m a w τ i :
-  ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} a = Some w → (Γ,Γm) ⊢ a : Some τ →
+  ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} a = Some w → (Γ,Γm) ⊢ a : TType τ →
   ctree_Forall (λ xb, Some Readable ⊆ pbit_kind xb) w →
   (addr_index a,i) ∈ mem_locks m →
   i < addr_object_offset Γ a ∨ addr_object_offset Γ a + bit_size_of Γ τ ≤ i.
@@ -1161,7 +1161,7 @@ Proof.
     by rewrite pbit_Readable_locked in Hperm' by done.
 Qed.
 Lemma mem_lookup_locks Γ Γm m a v τ :
-  ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} a = Some v → (Γ,Γm) ⊢ a : Some τ →
+  ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} a = Some v → (Γ,Γm) ⊢ a : TType τ →
   mem_locks m ∩ lock_singleton Γ a = ∅.
 Proof.
   unfold lookupE, mem_lookup;
@@ -1173,7 +1173,7 @@ Proof.
   destruct (mem_Readable_locks Γ Γm m a w τ i); auto with lia.
 Qed.
 Lemma mem_locks_force Γ Γm a m v τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ →
   m !!{Γ} a = Some v → mem_locks (mem_force Γ a m) = mem_locks m.
 Proof.
   unfold lookupE, mem_lookup, mem_force, lookupE, cmap_lookup; intros.
@@ -1199,7 +1199,7 @@ Proof.
   destruct (decide (i < ref_object_offset Γ (addr_ref Γ a))); intuition omega.
 Qed.
 Lemma mem_locks_insert Γ Γm a m v τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
   mem_locks (<[a:=v]{Γ}>m) = mem_locks m.
 Proof.
   unfold insertE, mem_insert; intros ??? (w&?&Hw) ?.
@@ -1219,7 +1219,7 @@ Proof.
     by eauto using mem_Readable_locks, pbits_kind_weaken; intuition congruence.
 Qed.
 Lemma mem_locks_lock Γ Γm a m τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m →
+  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → mem_writable Γ a m →
   mem_locks (mem_lock Γ a m) = mem_locks m ∪ lock_singleton Γ a.
 Proof.
   unfold mem_lock; intros ??? (w&?&?).
@@ -1294,7 +1294,7 @@ Qed.
 Lemma mem_locks_unlock_all m : mem_locks (mem_unlock_all m) = ∅.
 Proof. rewrite mem_locks_unlock by done. solve_elem_of. Qed.
 Lemma mem_locks_singleton_empty Γ Γm a malloc x v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a → (Γ,Γm) ⊢ v : τ →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a → (Γ,Γm) ⊢ v : τ →
   perm_locked x = false → mem_locks (mem_singleton Γ a malloc x v) = ∅.
 Proof.
   intros. apply elem_of_equiv_empty_L; intros [o i].
@@ -1308,7 +1308,7 @@ Proof.
   intros [[??]|[_ [(?&?&?)|(?&?&?)]]]; simplify_equality'; congruence.
 Qed.
 Lemma mem_locks_singleton Γ Γm a malloc x v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a → addr_is_obj a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a → addr_is_obj a →
   (Γ,Γm) ⊢ v : τ → perm_locked x = true →
   mem_locks (mem_singleton Γ a malloc x v) = lock_singleton Γ a.
 Proof.
@@ -1332,7 +1332,7 @@ Proof.
       (i - ref_object_offset Γ (addr_ref Γ a))) as [? ->]; eauto.
 Qed.
 Lemma mem_lock_singleton Γ Γm a malloc x v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_is_obj a → addr_strict Γ a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_is_obj a → addr_strict Γ a →
   mem_lock Γ a (mem_singleton Γ a malloc x v)
   = mem_singleton Γ a malloc (perm_lock x) v.
 Proof.
@@ -1341,7 +1341,7 @@ Proof.
   by rewrite (ctree_map_of_val _ _ perm_lock), fmap_replicate by done.
 Qed.
 Lemma mem_unlock_singleton Γ Γm a malloc x v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a → addr_is_obj a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a → addr_is_obj a →
   (Γ,Γm) ⊢ v : τ → sep_valid x → perm_locked x = true →
   mem_unlock (lock_singleton Γ a) (mem_singleton Γ a malloc x v)
   = mem_singleton Γ a malloc (perm_unlock x) v.
@@ -1374,7 +1374,7 @@ Proof.
     eauto using bit_size_of_pos, addr_typed_type_valid.
 Qed.
 Lemma mem_unlock_all_singleton Γ Γm m a malloc x v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : Some τ → addr_strict Γ a → addr_is_obj a →
+  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a → addr_is_obj a →
   (Γ,Γm) ⊢ v : τ → sep_valid x → perm_locked x = true →
   mem_unlock_all (mem_singleton Γ a malloc x v)
   = mem_singleton Γ a malloc (perm_unlock x) v.

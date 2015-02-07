@@ -430,7 +430,7 @@ Proof.
   * eauto using base_val_flatten_weaken.
   * intros vs τ _ IH _. induction IH; f_equal'; auto.
   * intros s vs τs Hs _ IH.
-    erewrite Hs, lookup_weaken by eauto; simpl.
+    erewrite Hs, lookup_compound_weaken by eauto; simpl.
     erewrite field_bit_sizes_weaken by eauto; f_equal; clear Hs.
     generalize (field_bit_sizes Γ2 τs).
     induction IH; intros [|??]; f_equal'; auto with f_equal.
@@ -551,45 +551,44 @@ Lemma vals_unflatten_representable Γ Γm bs τs :
   vals_representable Γ Γm (vals_unflatten Γ τs bs) τs.
 Proof. by exists bs. Qed.
 Lemma val_unflatten_frozen Γ Γm τ bs :
-  ✓ Γ → ✓{Γ,Γm}* bs →
+  ✓ Γ → ✓{Γ} τ → ✓{Γ,Γm}* bs →
   val_freeze true (val_unflatten Γ τ bs) = val_unflatten Γ τ bs.
 Proof.
-  intros HΓ. revert τ bs. refine (weak_type_env_ind _ HΓ _ _ _ _ _).
+  intros HΓ Hτ. revert τ Hτ bs. refine (type_env_ind _ HΓ _ _ _ _).
   * intros. rewrite val_unflatten_base; simpl.
     by rewrite base_val_unflatten_frozen by eauto.
-  * intros τ n IH bs Hbs. rewrite val_unflatten_array; f_equal'. revert bs Hbs.
+  * intros τ n _ IH _ bs Hbs.
+    rewrite val_unflatten_array; f_equal'. revert bs Hbs.
     induction n; intros; f_equal'; auto.
-  * intros [] s τs Hs IH bs Hbs;
+  * intros [] s τs Hs _ IH _ bs Hbs;
       erewrite val_unflatten_compound by eauto; f_equal'; clear Hs.
     { unfold struct_unflatten. revert bs Hbs.
       induction (bit_size_of_fields _ τs HΓ); intros;
         decompose_Forall_hyps; f_equal; auto. }
     revert bs Hbs; induction IH; intros; f_equal'; eauto.
-  * intros c s Hs bs Hbs.
-    unfold val_unflatten; rewrite type_iter_compound_None by eauto.
-    destruct c; f_equal'. unfold struct_unflatten; simpl; auto.
-    rewrite !field_bit_sizes_nil by done. repeat constructor.
 Qed.
 Lemma vals_unflatten_frozen Γ Γm τs bs :
-  ✓ Γ → ✓{Γ,Γm}* bs →
+  ✓ Γ → ✓{Γ}* τs → ✓{Γ,Γm}* bs →
   val_freeze true <$> vals_unflatten Γ τs bs = vals_unflatten Γ τs bs.
-Proof. intros. induction τs; f_equal'; eauto using val_unflatten_frozen. Qed.
+Proof. induction 2; intros; f_equal'; eauto using val_unflatten_frozen. Qed.
 Lemma val_unflatten_union_free Γ τ bs :
-  ✓ Γ → val_union_free (val_unflatten Γ τ bs).
+  ✓ Γ → ✓{Γ} τ → val_union_free (val_unflatten Γ τ bs).
 Proof.
-  intros HΓ. revert τ bs. refine (weak_type_env_ind _ HΓ _ _ _ _ _).
+  intros HΓ Hτ. revert τ Hτ bs. refine (type_env_ind _ HΓ _ _ _ _).
   * intros. rewrite val_unflatten_base. by constructor.
-  * intros τ n IH bs. rewrite val_unflatten_array. constructor.
+  * intros τ n _ IH _ bs. rewrite val_unflatten_array. constructor.
     revert bs. induction n; simpl; auto.
-  * intros [] s τs Hs IH bs; erewrite !val_unflatten_compound by eauto.
+  * intros [] s τs Hs _ IH _ bs; erewrite !val_unflatten_compound by eauto.
     { constructor. unfold struct_unflatten. revert bs. clear Hs.
       induction (bit_size_of_fields _ τs HΓ);
         intros; decompose_Forall_hyps; auto. }
     constructor. elim IH; csimpl; auto.
-  * intros c s Hs bs. unfold val_unflatten;
-      rewrite type_iter_compound_None by done; simpl.
-    destruct c; repeat constructor.
-    unfold struct_unflatten. rewrite field_bit_sizes_nil by done. constructor.
+Qed.
+Lemma vals_representable_union_free Γ Γm vs τs :
+  ✓ Γ → ✓{Γ}* τs → vals_representable Γ Γm vs τs → Forall val_union_free vs.
+Proof.
+  intros ? Hτs [bs _ _ ->].
+  induction Hτs; constructor; auto using val_unflatten_union_free.
 Qed.
 Lemma val_unflatten_between Γ τ bs1 bs2 bs3 :
   ✓ Γ → ✓{Γ} τ → bs1 ⊑* bs2 → bs2 ⊑* bs3 → length bs1 = bit_size_of Γ τ →
@@ -661,8 +660,8 @@ Proof.
   intros ? Hvτ ??. induction Hvτ using @val_typed_ind; econstructor;
     erewrite <-1?vals_unflatten_weaken;
     erewrite <-1?bit_size_of_weaken by eauto using TCompound_valid;
-    eauto using base_val_typed_weaken, @lookup_weaken, vals_representable_weaken,
-      Forall_impl, bit_valid_weaken, val_typed_types_valid.
+    eauto using base_val_typed_weaken, lookup_compound_weaken,  Forall_impl,
+      vals_representable_weaken, bit_valid_weaken, val_typed_types_valid.
 Qed.
 Lemma val_freeze_freeze β1 β2 v :
   val_map (freeze β1) (val_map (freeze β2) v) = val_map (freeze β1) v.
@@ -678,10 +677,10 @@ Lemma vals_freeze_freeze β1 β2 vs :
   val_map (freeze β1) <$> val_map (freeze β2) <$> vs
   = val_map (freeze β1) <$> vs.
 Proof. induction vs; f_equal'; auto using val_freeze_freeze. Qed.
-Lemma vals_representable_freeze Γ Γm vs τs :
-  ✓ Γ → vals_representable Γ Γm vs τs →
-  vals_representable Γ Γm (val_freeze true <$> vs) τs.
-Proof. intros ? [bs ?? ->]. exists bs; eauto using vals_unflatten_frozen. Qed.
+Lemma vals_representable_freeze Γ m vs τs :
+  ✓ Γ → ✓{Γ}* τs → vals_representable Γ m vs τs →
+  vals_representable Γ m (val_freeze true <$> vs) τs.
+Proof. intros ?? [bs ?? ->]. exists bs; eauto using vals_unflatten_frozen. Qed.
 Lemma typed_freeze Γ Γm v τ :
   ✓ Γ → (Γ,Γm) ⊢ v : τ → (Γ,Γm) ⊢ val_freeze true v : τ.
 Proof.
@@ -865,8 +864,6 @@ Proof. by apply val_unflatten_type_of. Qed.
 Lemma val_new_frozen Γ τ :
   ✓ Γ → ✓{Γ} τ → val_freeze true (val_new Γ τ) = val_new Γ τ.
 Proof. intros. apply (val_unflatten_frozen Γ ∅); auto. Qed.
-Lemma val_new_union_free Γ τ : ✓ Γ → val_union_free (val_new Γ τ).
-Proof. intros. by apply val_unflatten_union_free. Qed.
 
 (** ** Properties of the [to_val] function *)
 Lemma to_val_typed Γ Γm w τ :
@@ -900,13 +897,6 @@ Proof.
     eapply Forall_fmap_ext, Forall2_Forall_l; eauto. eapply Forall_true; eauto.
   * by f_equal.
   * eauto using val_unflatten_frozen, TCompound_valid, pbits_tag_valid.
-Qed.
-Lemma to_val_union_free Γ w :
-  ✓ Γ → union_free w → val_union_free (to_val Γ w).
-Proof.
-  intros HΓ. by induction 1 using @union_free_ind_alt; simpl;
-    try econstructor; eauto using val_unflatten_union_free, TCompound_valid,
-    val_new_union_free; decompose_Forall.
 Qed.
 Lemma to_val_union_free_inv Γ w : val_union_free (to_val Γ w) → union_free w.
 Proof.
@@ -1078,13 +1068,6 @@ Proof.
   * generalize (field_bit_padding Γ (type_of <$> vs)). revert xs.
     induction IH; intros ? [|??]; constructor; simpl; auto.
 Qed.
-Lemma of_val_union_free_inv Γ Γm xs v τ :
-  ✓ Γ → (Γ,Γm) ⊢ v : τ → length xs = bit_size_of Γ τ →
-  union_free (of_val Γ xs v) → val_union_free v.
-Proof.
-  intros. erewrite <-(val_union_free_freeze true),
-    <-(to_of_val _ _ xs) by eauto. by apply to_val_union_free.
-Qed.
 Lemma to_val_new Γ τ :
   ✓ Γ → ✓{Γ} τ → to_val Γ (ctree_new Γ pbit_full τ) = val_new Γ τ.
 Proof.
@@ -1237,7 +1220,7 @@ Lemma val_lookup_seg_weaken Γ1 Γ2 Γm1 rs v τ v' :
   v !!{Γ1} rs = Some v' → v !!{Γ2} rs = Some v'.
 Proof.
   intros ?? Hv Hrs. destruct Hv, rs; simplify_option_equality; auto.
-  erewrite lookup_weaken by eauto; simplify_option_equality.
+  erewrite lookup_compound_weaken by eauto; simplify_option_equality.
   by erewrite <-bit_size_of_weaken, <-val_flatten_weaken,
     <-val_unflatten_weaken by eauto.
 Qed.
@@ -1373,7 +1356,7 @@ Lemma val_alter_seg_weaken Γ1 Γ2 Γm g rs v τ :
   val_alter_seg Γ1 g rs v = val_alter_seg Γ2 g rs v.
 Proof.
   destruct rs as [| |j], 3; simplify_option_equality; auto.
-  erewrite (lookup_weaken Γ1 Γ2) by eauto; simpl.
+  erewrite lookup_compound_weaken by eauto; simpl.
   destruct (_ !! j) eqn:?; f_equal'.
   by erewrite !(bit_size_of_weaken Γ1 Γ2), val_unflatten_weaken,
     val_flatten_weaken by eauto using TCompound_valid.

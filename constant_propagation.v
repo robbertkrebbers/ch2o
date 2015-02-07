@@ -4,7 +4,7 @@ Require Export memory_refine.
 
 Lemma mem_constant_prop `{EnvSpec Ti} Γ Γm m a v τ :
   ✓ Γ → ✓{Γ,Γm} m →
-  (Γ,Γm) ⊢ a : Some τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
+  (Γ,Γm) ⊢ a : TType τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
   ∃ v', <[a:=v]{Γ}>m !!{Γ} a = Some v' ∧ v' ⊑{Γ,true@Γm} v : τ.
 Proof.
   unfold insertE, lookupE, mem_insert, mem_lookup. intros ??? (w&?&Hw) ?.

@@ -548,6 +548,8 @@ Proof.
   unfold sep_disjoint_le, impl. intros z xs1 xs2 Hxs12 y; subst.
   rewrite !sep_disjoint_alt. naive_solver.
 Qed.
+Global Instance: Proper (flip (⊆⊥) ==> flip (⊆⊥)) (z ::).
+Proof. by intros z x y Hxy; simpl in *; rewrite Hxy. Qed.
 Global Instance: Proper ((⊆⊥) ==> (⊆⊥) ==> (⊆⊥)) (++).
 Proof.
   unfold sep_disjoint_le. intros xs1 xs2 Hxs12 xs3 xs4 Hxs34 y.
@@ -556,6 +558,8 @@ Proof.
     rewrite !sep_disjoint_list_alt. naive_solver.
   * rewrite !app_comm_cons, !sep_disjoint_list_alt. naive_solver.
 Qed.
+Global Instance: Proper (flip (⊆⊥) ==> flip (⊆⊥) ==> flip (⊆⊥)) (++).
+Proof. by intros x1 y1 Hxy1 x2 y2 Hxy2; simpl in *; rewrite Hxy1, Hxy2. Qed.
 Lemma sep_disjoint_cons_le_inj x y xs : [x] ⊆⊥ [y] → x :: xs ⊆⊥ y :: xs.
 Proof. intros. change ([x] ++ xs ⊆⊥ [y] ++ xs). by f_equiv. Qed.
 
@@ -869,7 +873,6 @@ Ltac solve_simple_sep_disjoint :=
 Ltac simplify_sep_disjoint_hyps := repeat
   match goal with
   | H : ⊥ [] |- _ => clear H
-  | H : ⊥ [_] |- _ => clear H
   | H : ?x ⊥ ?y |- _ => apply sep_disjoint_list_double in H
   | H : ⊥ ?ms |- _ =>
     progress repeat first

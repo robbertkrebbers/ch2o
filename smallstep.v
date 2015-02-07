@@ -58,7 +58,7 @@ Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
      v !!{Γ} rs = Some v' → Γ\ ρ ⊢ₕ #{Ω} v #> rs, m ⇒ #{Ω} v', m
   | ehstep_alloc_NULL m Ω τi τ n :
      alloc_can_fail → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
-     Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒ #{Ω} (ptrV (NULL (Some τ))), m
+     Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒ #{Ω} (ptrV (NULL (TType τ))), m
   | ehstep_alloc m Ω o τi τ n :
      mem_allocable o m → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
      Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒
@@ -82,8 +82,8 @@ Inductive ehstep `{Env Ti} (Γ : env Ti) (ρ : stack) :
   | ehstep_comma m Ω v e2 :
      Γ\ ρ ⊢ₕ #{Ω} v,,e2, m ⇒ e2, mem_unlock Ω m
   | ehstep_cast m τ Ω v :
-     val_cast_ok Γ m (Some τ) v →
-     Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} (val_cast (Some τ) v), m
+     val_cast_ok Γ m (TType τ) v →
+     Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} (val_cast (TType τ) v), m
   | ehstep_insert m r v1 Ω1 v2 Ω2 :
      is_Some (v2 !!{Γ} r) →
      Γ\ ρ ⊢ₕ #[r:=#{Ω1} v1] (#{Ω2} v2), m ⇒
@@ -97,8 +97,9 @@ whole expression contains a redex that is not safe, the semantics transitions
 to the [Undef] state. *)
 Reserved Notation "Γ \ ρ  '⊢ₕ' 'safe' e , m" (at level 74).
 Inductive ehsafe `{Env Ti} (Γ : env Ti) (ρ : stack) : expr Ti → mem Ti → Prop :=
-  | ehsafe_call f Ωs vs m :
-     length Ωs = length vs → Γ \ ρ ⊢ₕ safe call f @ #{Ωs}* vs, m
+  | ehsafe_call Ω f τs τ Ωs vs m :
+     length Ωs = length vs →
+     Γ \ ρ ⊢ₕ safe (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs), m
   | ehsafe_step e1 m1 e2 m2 : Γ \ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → Γ \ ρ ⊢ₕ safe e1, m1
 where "Γ \ ρ  ⊢ₕ 'safe' e ,  m" := (@ehsafe _ _ Γ ρ e m) : C_scope.
 
@@ -130,10 +131,11 @@ Inductive cstep `{Env Ti} (Γ : env Ti) (δ : funenv Ti) : relation (state Ti) :
      Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2 →
      Γ\ δ ⊢ₛ State k (Expr (subst E e1)) m1 ⇒
              State k (Expr (subst E e2)) m2
-  | cstep_expr_call m k f E Ωs vs :
+  | cstep_expr_call m k Ω f τs τ E Ωs vs :
      length Ωs = length vs →
-     Γ\ δ ⊢ₛ State k (Expr (subst E (call f @ #{Ωs}* vs))%E) m ⇒
-             State (CFun E :: k) (Call f vs) (mem_unlock (⋃ Ωs) m)
+     let e := (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)%E in
+     Γ\ δ ⊢ₛ State k (Expr (subst E e)) m ⇒
+             State (CFun E :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m)
   | cstep_expr_undef m k (E : ectx Ti) e :
      is_redex e → ¬Γ \ get_stack k ⊢ₕ safe e, m →
      Γ\ δ ⊢ₛ State k (Expr (subst E e)) m ⇒
@@ -310,10 +312,11 @@ Section inversion.
        (∀ (E : ectx Ti) e1 e2 m2,
          e = subst E e1 → Γ\ get_stack k ⊢ₕ e1, m ⇒ e2, m2 →
          P (State k (Expr (subst E e2)) m2)) →
-       (∀ (E : ectx Ti) f Ωs vs,
-         e = subst E (call f @ #{Ωs}* vs)%E → length Ωs = length vs →
+       (∀ (E : ectx Ti) Ω f τs τ Ωs vs,
+         e = subst E (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)%E →
+         length Ωs = length vs →
          P (State (CFun E :: k)
-           (Call f vs) (mem_unlock (⋃ Ωs) m))) →
+           (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m))) →
        (∀ (E : ectx Ti) e1,
          e = subst E e1 → is_redex e1 → ¬Γ\ get_stack k ⊢ₕ safe e1, m →
          P (State k (Undef (UndefExpr E e1)) m)) →
@@ -403,7 +406,7 @@ Section inversion.
     | Undef _ => P S2
     end.
   Proof.
-    intros p; case p; eauto 2.
+    intros p; case p; simpl; eauto 2.
     * by intros ?? [] ?; simpl; eauto.
     * by intros ?? []; simpl; eauto.
     * by intros ?? []; simpl; eauto.
@@ -429,7 +432,7 @@ Section inversion.
     apply (cstep_focus_inv _ _ _ p);
       try solve [intros; simplify_equality; eauto].
     * intros Ee e1 e2 m2 Hv p'. simplify_list_subst_equality Hv. inversion p'.
-    * intros Ee f Ωs vs Hv. simplify_list_subst_equality Hv.
+    * intros Ee Ω' f τs τ Ωs vs Hv. simplify_list_subst_equality Hv.
     * intros Ee e1 Hv ? _. simplify_list_subst_equality Hv.
       by destruct (EVal_not_redex Ω v).
   Qed.
@@ -691,28 +694,27 @@ Lemma ehstep_is_redex ρ e1 m1 v2 m2 : Γ\ ρ ⊢ₕ e1, m1 ⇒ v2, m2 → is_re
 Proof. destruct 1; repeat constructor. Qed.
 Lemma ehstep_val ρ Ω v1 m1 v2 m2 : ¬Γ \ ρ ⊢ₕ #{Ω} v1, m1 ⇒ v2, m2.
 Proof. inversion 1. Qed.
-Lemma ehstep_pure_pure fs ρ e1 m1 e2 m2 :
-  Γ \ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → is_pure fs e1 → is_pure fs e2.
+Lemma ehstep_pure_pure ρ e1 m1 e2 m2 :
+  Γ \ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → is_pure e1 → is_pure e2.
 Proof.
-  intros p He1. pose proof (is_pure_locks _ _ He1) as HΩ.
+  intros p He1. pose proof (is_pure_locks _ He1) as HΩ.
   destruct p; inversion He1; simpl in *; rewrite ?HΩ; try constructor; auto.
 Qed.
-Lemma ehstep_pure_mem fs ρ e1 m1 e2 m2 :
-  Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → is_pure fs e1 → m1 = m2.
+Lemma ehstep_pure_mem ρ e1 m1 e2 m2 :
+  Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → is_pure e1 → m1 = m2.
 Proof.
   destruct 1; inversion 1;
     repeat match goal with
-    | H : is_pure _ (#{_} _) |- _ =>
+    | H : is_pure (#{_} _) |- _ =>
       apply is_pure_locks in H; simpl in H; rewrite H
     end; auto using mem_unlock_empty.
 Qed.
-Lemma ehstep_pure_locks fs ρ e1 m1 e2 m2 :
-  Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → is_pure fs e1 → locks e1 = locks e2.
+Lemma ehstep_pure_locks ρ e1 m1 e2 m2 :
+  Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → is_pure e1 → locks e1 = locks e2.
 Proof.
   destruct 1; auto; inversion 1; simpl;
     repeat match goal with
-    | H : is_pure _ _ |- _ =>
-      apply is_pure_locks in H; simpl in H; rewrite H
+    | H : is_pure _ |- _ => apply is_pure_locks in H; simpl in H; rewrite H
     end; solve_elem_of.
 Qed.
 Lemma ehstep_size ρ e1 m1 e2 m2 :
@@ -774,12 +776,12 @@ Lemma cstep_expr_depsubst_inv {n} (P : state Ti → Prop)
   Γ\ δ ⊢ₛ State k (Expr (depsubst E es)) m ⇒{k} S' →
   (∀ i e' m', Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k} State k (Expr e') m' →
     P (State k (Expr (depsubst E (vinsert i e' es))) m')) →
-  (∀ i E' f Ωs vs, length Ωs = length vs →
-    es !!! i = subst E' (call f @ #{Ωs}* vs)%E →
+  (∀ i E' Ω f τs τ Ωs vs, length Ωs = length vs →
+    es !!! i = subst E' (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)%E →
     Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k}
-            State (CFun E' :: k) (Call f vs) (mem_unlock (⋃ Ωs) m) →
+            State (CFun E' :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m) →
     P (State (CFun (E' ++ [ectx_full_to_item E es i]) :: k)
-      (Call f vs) (mem_unlock (⋃ Ωs) m))) →
+      (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m))) →
   (Forall is_nf es → P S') →
   (∀ i E' e, es !!! i = subst E' e →
     Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k}
@@ -795,12 +797,14 @@ Proof.
     rewrite !subst_snoc in HE |- *.
     apply ectx_full_item_subst in HE. destruct HE as [i [HE1 ->]].
     rewrite <-ectx_full_to_item_correct_alt. apply HP1. rewrite <-HE1. do_cstep.
-  * intros E' f Ωs vs HE Hvs _ _ HP2 HP3 _.
+  * intros E' Ω' f τs τ Ωs vs HE Hvs _ _ HP2 HP3 _.
     destruct E' as [|E'' E' _] using rev_ind.
-    { destruct E; simplify_equality'. eapply HP3, EVals_nf_alt; eauto. }
+    { destruct E; simplify_equality'. apply HP3. clear HP2 HP3 p.
+      inv_vec es; intros e es ??; simplify_equality'; repeat constructor.
+      eapply EVals_nf_alt; eauto. }
     rewrite !subst_snoc in HE.
     apply ectx_full_item_subst in HE. destruct HE as [i [HE1 ->]].
-    apply HP2; auto. rewrite <-?HE1; trivial. do_cstep.
+    eapply HP2; eauto. rewrite <-?HE1; trivial. do_cstep.
   * intros E' e1 HE Hred Hsafe _ HP1 HP2 HP3 HP4.
     destruct E' as [|E'' E' _] using rev_ind; simplify_equality'.
     { eapply HP3, is_redex_ectx_full; eauto. }
@@ -808,25 +812,28 @@ Proof.
     apply ectx_full_item_subst in HE. destruct HE as [i [HE1 ->]].
     apply HP4; auto. rewrite <-HE1. do_cstep.
 Qed.
-Lemma cstep_expr_call_inv (P : state Ti → Prop) k f Ωs vs m S' :
-  Γ\ δ ⊢ₛ State k (Expr (call f @ #{Ωs}* vs)) m ⇒{k} S' →
+Lemma cstep_expr_call_inv (P : state Ti → Prop) k Ω f τs τ Ωs vs m S' :
+  let e := (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)%E in
+  Γ\ δ ⊢ₛ State k (Expr e) m ⇒{k} S' →
   length Ωs = length vs →
-  P (State (CFun [] :: k) (Call f vs) (mem_unlock (⋃ Ωs) m)) →
-  (¬Γ\ get_stack k ⊢ₕ safe call f @ #{Ωs}* vs, m →
-    P (State k (Undef (UndefExpr [] (call f @ #{Ωs}* vs))) m)) →
+  P (State (CFun [] :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m)) →
+  (¬Γ\ get_stack k ⊢ₕ safe call e @ #{Ωs}* vs, m →
+    P (State k (Undef (UndefExpr [] (call e @ #{Ωs}* vs))) m)) →
   P S'.
 Proof.
-  intros [p Hsuffix] ?. revert Hsuffix. pattern S'.
+  simpl; intros [p Hsuffix] ?. revert Hsuffix. pattern S'.
   apply (cstep_focus_inv _ _ _ _ _ p); simpl; try solve_suffix_of.
   * intros E e1 v2 m2 Hvs ? _ _ _.
-    simplify_list_subst_equality Hvs; [by inv_ehstep |].
-    simplify_list_subst_equality. inv_ehstep.
-  * intros E f' Ωs' vs' Hvs ? _ HP1 _; simplify_list_subst_equality Hvs.
-    { edestruct (zip_with_inj EVal Ωs Ωs' vs vs'); eauto with congruence. }
-    simplify_list_subst_equality.
-  * intros E e1 Hvs ?? _ _ HP2.
-    simplify_list_subst_equality Hvs; [eauto |].
-    simplify_list_subst_equality. edestruct @is_redex_nf; eauto. constructor.
+    simplify_list_subst_equality Hvs; simplify_list_subst_equality; inv_ehstep.
+  * intros E Ω' f' τs' τ' Ωs' vs' Hvs ? _ HP1 _;
+      simplify_list_subst_equality Hvs.
+    + edestruct (zip_with_inj EVal Ωs Ωs' vs vs'); eauto with congruence.
+    + simplify_list_subst_equality.
+    + simplify_list_subst_equality.
+  * intros E e1 Hvs Hred Hsafe _ _ HP2; simplify_list_subst_equality Hvs.
+    + destruct Hsafe. by constructor.
+    + simplify_list_subst_equality. inversion Hred.
+    + simplify_list_subst_equality. inversion Hred.
 Qed.
 Lemma cstep_ctx_irrel l l' k1 φ1 m1 k2 φ2 m2 :
   Γ\ δ ⊢ₛ State (k1 ++ l) φ1 m1 ⇒ State (k2 ++ l) φ2 m2 →

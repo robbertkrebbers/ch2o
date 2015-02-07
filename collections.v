@@ -254,7 +254,7 @@ Section collection.
   Proof. esolve_elem_of. Qed.
   Lemma difference_twice X Y : (X ∖ Y) ∖ Y ≡ X ∖ Y.
   Proof. esolve_elem_of. Qed.
-  Lemma empty_difference X Y : X ⊆ Y → X ∖ Y ≡ ∅.
+  Lemma subseteq_empty_difference X Y : X ⊆ Y → X ∖ Y ≡ ∅.
   Proof. esolve_elem_of. Qed.
   Lemma difference_diag X : X ∖ X ≡ ∅.
   Proof. esolve_elem_of. Qed.
@@ -269,8 +269,8 @@ Section collection.
     Proof. unfold_leibniz. apply intersection_singletons. Qed.
     Lemma difference_twice_L X Y : (X ∖ Y) ∖ Y = X ∖ Y.
     Proof. unfold_leibniz. apply difference_twice. Qed.
-    Lemma empty_difference_L X Y : X ⊆ Y → X ∖ Y = ∅.
-    Proof. unfold_leibniz. apply empty_difference. Qed.
+    Lemma subseteq_empty_difference_L X Y : X ⊆ Y → X ∖ Y = ∅.
+    Proof. unfold_leibniz. apply subseteq_empty_difference. Qed.
     Lemma difference_diag_L X : X ∖ X = ∅.
     Proof. unfold_leibniz. apply difference_diag. Qed.
     Lemma difference_union_distr_l_L X Y Z : (X ∪ Y) ∖ Z = X ∖ Z ∪ Y ∖ Z.
@@ -296,12 +296,15 @@ Section collection.
       intros [HXY1 HXY2] Hdiff. destruct HXY2. intros x.
       destruct (decide (x ∈ X)); esolve_elem_of.
     Qed.
-
+    Lemma empty_difference_subseteq X Y : X ∖ Y ≡ ∅ → X ⊆ Y.
+    Proof. intros ? x ?; apply dec_stable; esolve_elem_of. Qed.
     Context `{!LeibnizEquiv C}.
     Lemma union_difference_L X Y : X ⊆ Y → Y = X ∪ Y ∖ X.
     Proof. unfold_leibniz. apply union_difference. Qed.
     Lemma non_empty_difference_L X Y : X ⊂ Y → Y ∖ X ≠ ∅.
     Proof. unfold_leibniz. apply non_empty_difference. Qed.
+    Lemma empty_difference_subseteq_L X Y : X ∖ Y = ∅ → X ⊆ Y.
+    Proof. unfold_leibniz. apply empty_difference_subseteq. Qed.
   End dec.
 End collection.
 
@@ -432,16 +435,14 @@ Section fresh.
 
   Definition fresh_sig (X : C) : { x : A | x ∉ X } :=
     exist (∉ X) (fresh X) (is_fresh X).
-
-  Global Instance fresh_proper: Proper ((≡) ==> (=)) fresh.
-  Proof. intros ???. by apply fresh_proper_alt, elem_of_equiv. Qed.
-
   Fixpoint fresh_list (n : nat) (X : C) : list A :=
     match n with
     | 0 => []
     | S n => let x := fresh X in x :: fresh_list n ({[ x ]} ∪ X)
     end.
 
+  Global Instance fresh_proper: Proper ((≡) ==> (=)) fresh.
+  Proof. intros ???. by apply fresh_proper_alt, elem_of_equiv. Qed.
   Global Instance fresh_list_proper: Proper ((=) ==> (≡) ==> (=)) fresh_list.
   Proof.
     intros ? n ->. induction n as [|n IH]; intros ?? E; f_equal'; [by rewrite E|].

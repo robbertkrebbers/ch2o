@@ -9,7 +9,10 @@ Inductive ptr_refine' `{Env Ti} (Γ : env Ti) (α : bool) (f : meminj Ti)
      ✓{Γ} τp → ptr_refine' Γ α f Γm1 Γm2 (NULL τp) (NULL τp) τp
   | Ptr_refine a1 a2 τp :
      a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : τp →
-     ptr_refine' Γ α f Γm1 Γm2 (Ptr a1) (Ptr a2) τp.
+     ptr_refine' Γ α f Γm1 Γm2 (Ptr a1) (Ptr a2) τp
+  | FunPtr_refine g τs τ :
+     Γ !! g = Some (τs,τ) →
+     ptr_refine' Γ α f Γm1 Γm2 (FunPtr g τs τ) (FunPtr g τs τ) (τs ~> τ).
 Instance ptr_refine `{Env Ti} :
   RefineT Ti (env Ti) (ptr_type Ti) (ptr Ti) := ptr_refine'.
 
@@ -58,7 +61,7 @@ Lemma ptr_refine_weaken Γ Γ' α α' f f' Γm1 Γm2 Γm1' Γm2' p1 p2 τp :
   meminj_extend f f' Γm1 Γm2 → p1 ⊑{Γ',α',f'@Γm1'↦Γm2'} p2 : τp.
 Proof.
   destruct 2; constructor;
-    eauto using ptr_type_valid_weaken, addr_refine_weaken.
+    eauto using ptr_type_valid_weaken, addr_refine_weaken, lookup_fun_weaken.
 Qed.
 Lemma ptr_refine_unique_l Γ f Γm1 Γm2 p1 p2 p3 τp2 τp3 :
   p1 ⊑{Γ,false,f@Γm1↦Γm2} p3 : τp2 → p2 ⊑{Γ,false,f@Γm1↦Γm2} p3 : τp3 → p1 = p2.

@@ -4,4 +4,7 @@ Require Import interpreter ExtrOcamlBasic ExtrOcamlString architectures.
 
 Extraction Blacklist list.
 Extraction "parser/Extracted.ml"
-  interpreter.interpreter_all interpreter.interpreter_rand x86 x86_64.
+  interpreter.interpreter_all_eval
+  interpreter.interpreter_rand_eval
+  interpreter.interpreter_initial_eval
+  x86 x86_64.

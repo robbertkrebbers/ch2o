@@ -44,7 +44,7 @@ Hint Extern 0 (_ ≤ length _) => solve_length.
 Hint Extern 0 (length _ ≤ _) => solve_length.
 
 Lemma mem_lookup_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 v1 τ :
-  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ →
+  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : TType τ →
   m1 !!{Γ} a1 = Some v1 →
   ∃ v2, m2 !!{Γ} a2 = Some v2 ∧ v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ.
 Proof.
@@ -56,13 +56,13 @@ Proof.
     pbits_refine_kind_subseteq, ctree_flatten_refine; eauto using to_val_refine.
 Qed.
 Lemma mem_force_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 τ :
-  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ →
+  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : TType τ →
   is_Some (m1 !!{Γ} a1) → mem_force Γ a1 m1 ⊑{Γ,α,f@Γm1↦Γm2} mem_force Γ a2 m2.
 Proof.
   unfold lookupE, mem_lookup, mem_force, lookupE, cmap_lookup.
   intros ??? [v1 ?]; case_option_guard; simplify_equality'.
   destruct (m1 !!{Γ} _) as [w1|] eqn:?; simplify_equality'.
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ)) as (r&?&_&?); auto.
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (TType τ)) as (r&?&_&?); auto.
   destruct (cmap_lookup_ref_refine Γ α f Γm1 Γm2 m1 m2 (addr_index a1)
     (addr_ref Γ a1) (addr_index a2) r w1) as (w2&?&?); auto.
   erewrite <-(cmap_alter_ref_le _ _ _ _ (addr_ref Γ a2)) by eauto.
@@ -75,7 +75,7 @@ Proof.
     pbits_mapped, ctree_lookup_byte_typed.
 Qed.
 Lemma mem_force_refine' Γ α f m1 m2 a1 a2 τ :
-  ✓ Γ → m1 ⊑{Γ,α,f} m2 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : Some τ →
+  ✓ Γ → m1 ⊑{Γ,α,f} m2 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : TType τ →
   is_Some (m1 !!{Γ} a1) → mem_force Γ a1 m1 ⊑{Γ,α,f} mem_force Γ a2 m2.
 Proof.
   unfold refineM, cmap_refine'; intros ??? [v1 ?].
@@ -114,7 +114,7 @@ Proof.
     as (τ&?&_&?&_); eauto 10 using ctree_refine_id.
 Qed.
 Lemma mem_writable_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 τ :
-  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ →
+  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : TType τ →
   mem_writable Γ a1 m1 → mem_writable Γ a2 m2.
 Proof.
   intros ??? (w1&?&?). destruct (cmap_lookup_refine Γ α f Γm1 Γm2
@@ -122,7 +122,7 @@ Proof.
   exists w2; eauto using pbits_refine_kind_subseteq, ctree_flatten_refine.
 Qed.
 Lemma mem_insert_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 v1 v2 τ :
-  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ →
+  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : TType τ →
   mem_writable Γ a1 m1 → v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ →
   <[a1:=v1]{Γ}>m1 ⊑{Γ,α,f@Γm1↦Γm2} <[a2:=v2]{Γ}>m2.
 Proof.
@@ -142,7 +142,7 @@ Proof.
 Qed.
 Lemma mem_insert_refine' Γ α f m1 m2 a1 a2 v1 v2 τ :
   ✓ Γ → m1 ⊑{Γ,α,f} m2 →
-  a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : Some τ → mem_writable Γ a1 m1 →
+  a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : TType τ → mem_writable Γ a1 m1 →
   v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → <[a1:=v1]{Γ}>m1 ⊑{Γ,α,f} <[a2:=v2]{Γ}>m2.
 Proof.
   unfold refineM, cmap_refine'; intros.
@@ -323,12 +323,12 @@ Proof.
 Qed.
 Lemma mem_freeable_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 τ :
   ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 →
-  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ → mem_freeable a1 m1 → mem_freeable a2 m2.
+  a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : TType τ → mem_freeable a1 m1 → mem_freeable a2 m2.
 Proof.
   intros ? (_&_&_&Hm) ? (Ha&w1&?&?).
   rewrite addr_is_top_array_alt in Ha by eauto using addr_refine_typed_l.
   destruct Ha as (τ'&n&?&Ha1&?).
-  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ)) as (r&?&_&Ha2); auto.
+  destruct (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (TType τ)) as (r&?&_&Ha2); auto.
   destruct (Hm (addr_index a1) (addr_index a2) r w1 true)
     as (?&w2&τ''&?&?&?&Hr); auto; specialize (Hr I); simplify_type_equality'.
   split; [|exists w2; eauto using pbits_refine_perm_1, ctree_flatten_refine].
@@ -340,12 +340,12 @@ Proof.
   exists τ' n; split_ands; eauto using addr_strict_refine.
 Qed.
 Lemma mem_freeable_index_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 τ :
-  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ →
+  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : TType τ →
   mem_freeable a1 m1 → f !! addr_index a1 = Some (addr_index a2, []).
 Proof.
   intros ? (_&_&_&Hm) ? (Ha&w1&?&?).
   rewrite addr_is_top_array_alt in Ha by eauto using addr_refine_typed_l.
-  destruct Ha as (τ'&n&?&Ha1&?), (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (Some τ))
+  destruct Ha as (τ'&n&?&Ha1&?), (addr_ref_refine Γ α f Γm1 Γm2 a1 a2 (TType τ))
     as (r&?&Ha2); naive_solver.
 Qed.
 Lemma mem_free_refine_env Γ α f Γm1 Γm2 o1 o2 :
@@ -539,7 +539,7 @@ Proof.
   by rewrite pbits_locked_mask, fmap_take, fmap_drop, lookup_take, lookup_drop.
 Qed.
 Lemma mem_lock_refine Γ α f Γm1 Γm2 m1 m2 a1 a2 τ : 
-  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some τ →
+  ✓ Γ → m1 ⊑{Γ,α,f@Γm1↦Γm2} m2 → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : TType τ →
   mem_writable Γ a1 m1 → mem_lock Γ a1 m1 ⊑{Γ,α,f@Γm1↦Γm2} mem_lock Γ a2 m2.
 Proof.
   intros ??? (w1&?&?).
@@ -554,7 +554,7 @@ Proof.
     eauto using pbits_lock_mapped, pbits_mapped, pbits_kind_weaken.
 Qed.
 Lemma mem_lock_refine' Γ α f m1 m2 a1 a2 τ : 
-  ✓ Γ → m1 ⊑{Γ,α,f} m2 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : Some τ →
+  ✓ Γ → m1 ⊑{Γ,α,f} m2 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : TType τ →
   mem_writable Γ a1 m1 → mem_lock Γ a1 m1 ⊑{Γ,α,f} mem_lock Γ a2 m2.
 Proof.
   intros. unfold refineM, cmap_refine'. erewrite !mem_lock_memenv_of by eauto
@@ -668,17 +668,17 @@ Proof.
   eauto using mem_unlock_refine.
 Qed.
 Lemma lock_singleton_refine Γ α f Γm1 Γm2 a1 a2 σ :
-  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : Some σ → addr_strict Γ a1 →
+  ✓ Γ → a1 ⊑{Γ,α,f@Γm1↦Γm2} a2 : TType σ → addr_strict Γ a1 →
   lock_singleton Γ a1 ⊑{Γ,α,f@Γm1↦Γm2} lock_singleton Γ a2.
 Proof.
   intros ? Ha ?.
   assert (Γm1 ⊑{Γ,α,f} Γm2) as HΓm by eauto using addr_refine_memenv_refine.
-  assert ((Γ,Γm1) ⊢ a1 : Some σ) by eauto using addr_refine_typed_l.
-  assert ((Γ,Γm2) ⊢ a2 : Some σ) by eauto using addr_refine_typed_r.
+  assert ((Γ,Γm1) ⊢ a1 : TType σ) by eauto using addr_refine_typed_l.
+  assert ((Γ,Γm2) ⊢ a2 : TType σ) by eauto using addr_refine_typed_r.
   split; split_ands; eauto using lock_singleton_valid.
   intros o1 o2 r τ i ????. rewrite !elem_of_lock_singleton_typed by eauto.
   destruct (addr_object_offset_refine Γ α f
-    Γm1 Γm2 a1 a2 (Some σ)) as (r'&?&?&->); auto.
+    Γm1 Γm2 a1 a2 (TType σ)) as (r'&?&?&->); auto.
   split; [intros (->&?&?); simplify_equality'; intuition lia|intros (->&?&?)].
   destruct (meminj_injective_alt f o1 (addr_index a1) (addr_index a2) r r')
     as [|[??]]; simplify_equality'; eauto using memenv_refine_injective.

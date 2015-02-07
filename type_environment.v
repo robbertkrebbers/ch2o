@@ -17,7 +17,7 @@ Arguments align_of _ _ _ _ : simpl never.
 Arguments field_sizes _ _ _ _ : simpl never.
 
 Definition ptr_size_of `{Env Ti} (Γ : env Ti) (τp : ptr_type Ti) : nat :=
-  match τp with Some τ => size_of Γ τ | None => 1 end.
+  match τp with TType τ => size_of Γ τ | _ => 1 end.
 Definition field_offset `{Env Ti} (Γ : env Ti) (τs : list (type Ti))
   (i : nat) : nat := sum_list $ take i $ field_sizes Γ τs.
 Definition bit_size_of `{Env Ti} (Γ : env Ti)
@@ -25,7 +25,7 @@ Definition bit_size_of `{Env Ti} (Γ : env Ti)
 Definition bit_align_of `{Env Ti} (Γ : env Ti)
   (τ : type Ti) : nat := align_of Γ τ * char_bits.
 Definition ptr_bit_size_of `{Env Ti} (Γ : env Ti) (τp : ptr_type Ti) : nat :=
-  match τp with Some τ => bit_size_of Γ τ | None => char_bits end.
+  match τp with TType τ => bit_size_of Γ τ | _ => char_bits end.
 Definition field_bit_sizes `{Env Ti} (Γ : env Ti)
     (τs : list (type Ti)) : list nat :=
   (λ sz, sz * char_bits) <$> field_sizes Γ τs.
@@ -97,10 +97,9 @@ Qed.
 Lemma size_of_union_singleton Γ s τ :
   ✓ Γ → Γ !! s = Some [τ] → size_of Γ τ ≤ size_of Γ (unionT s).
 Proof. intros. by apply (size_of_union_lookup Γ s [τ] 0). Qed.
-Lemma sizes_of_weaken Γ1 Γ2 τs :
+Lemma sizes_of_weaken P Γ1 Γ2 τs :
   ✓ Γ1 → ✓{Γ1}* τs → Γ1 ⊆ Γ2 →
-  Forall (λ τ', int_typed (size_of Γ1 τ') sptrT) τs →
-  Forall (λ τ', int_typed (size_of Γ2 τ') sptrT) τs.
+  Forall (λ τ', P (size_of Γ1 τ')) τs → Forall (λ τ', P (size_of Γ2 τ')) τs.
 Proof.
   induction 4; decompose_Forall_hyps; constructor; simpl;
     erewrite <-1?size_of_weaken by eauto; eauto.

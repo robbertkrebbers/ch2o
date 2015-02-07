@@ -16,6 +16,8 @@ Instance istate_dec {Ti E : Set} `{Env Ti, ∀ ε1 ε2 : E, Decision (ε1 = ε2)
   (iS1 iS2 : istate Ti E) : Decision (iS1 = iS2).
 Proof. solve_decision. Defined.
 
+Local Notation M := (error (frontend_state _) string).
+
 Section interpreter.
 Context (A : architecture).
 Notation Ti := (arch_rank A).
@@ -28,20 +30,24 @@ Definition cexec' (Γ : env Ti) (δ : funenv Ti)
   (λ S_new,
     let εs_new := e _ Γ S_new in IState εs_new (εs ++ εs_new) S_new
   ) <$> cexec Γ δ S.
-Definition interpreter_initial
-    (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
-    string + (env Ti * funenv Ti * istate Ti E) :=
-  '(Γn,Γ,m,Δg) ← to_envs Θ;
+Definition interpreter_initial (Θ : list (string * decl))
+    (f : string) (ces : list cexpr) : M (istate Ti E) :=
+  _ ← alloc_program Θ;
+  Δg ← gets to_globals;
   '(_,σs,_,_) ← error_of_option (Δg !! f ≫= maybe_Fun)
     ("interpreter called with undeclared function `" +:+ f +:+ "`");
-  eσlrs ← mapM (to_expr Γn Γ m Δg []) ces;
-  let σes := zip_with to_R_NULL σs eσlrs in 
+  eσlrs ← mapM (to_expr []) ces;
+  let σes := zip_with to_R_NULL σs eσlrs in
+  Γ ← gets to_env; m ← gets to_mem;
   guard (Forall2 (cast_typed Γ) (snd <$> σes) σs)
     with "interpreter called with arguments of incorrect type";
   let es := (cast{σs}* (fst <$> σes))%E in
   vs ← error_of_option (mapM (λ e, ⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr) es)
     "interpreter called with non-constant expressions";
-  inr (Γ, to_funenv Δg, IState [] [] (initial_state m f vs)).
+  mret (IState [] [] (initial_state m f vs)).
+Definition interpreter_initial_eval (Θ : list (string * decl))
+    (f : string) (ces : list cexpr) : string + istate Ti E :=
+  error_eval (interpreter_initial Θ f ces) ∅.
 
 Context (hash : istate Ti E → Z).
 Definition cexec_all (Γ : env Ti) (δ : funenv Ti) (iS : istate Ti E) :
@@ -58,12 +64,16 @@ Definition csteps_exec_all (Γ : env Ti) (δ : funenv Ti) :
   (reds,nfs) :.: go reds.
 Definition interpreter_all
     (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
+    M (stream (listset (istate Ti E) * listset (istate Ti E))) :=
+  iS ← interpreter_initial Θ f ces;
+  Γ ← gets to_env; δ ← gets to_funenv;
+  mret (csteps_exec_all Γ δ {[ iS ]}).
+Definition interpreter_all_eval
+    (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
     string + stream (listset (istate Ti E) * listset (istate Ti E)) :=
-  '(Γ,δ,iS) ← interpreter_initial Θ f ces;
-  inr (csteps_exec_all Γ δ {[ iS ]}).
+  error_eval (interpreter_all Θ f ces) ∅.
 
 Context (rand : nat → nat).
-
 Definition csteps_exec_rand (Γ : env Ti) (δ : funenv Ti) :
     istate Ti E → stream (istate Ti E + istate Ti E) :=
   cofix go iS :=
@@ -75,7 +85,12 @@ Definition csteps_exec_rand (Γ : env Ti) (δ : funenv Ti) :
   end.
 Definition interpreter_rand
     (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
+    M (stream (istate Ti E + istate Ti E)) :=
+  iS ← interpreter_initial Θ f ces;
+  Γ ← gets to_env; δ ← gets to_funenv;
+  mret (csteps_exec_rand Γ δ iS).
+Definition interpreter_rand_eval
+    (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
     string + stream (istate Ti E + istate Ti E) :=
-  '(Γ,δ,iS) ← interpreter_initial Θ f ces;
-  inr (csteps_exec_rand Γ δ iS).
+  error_eval (interpreter_rand Θ f ces) ∅.
 End interpreter.

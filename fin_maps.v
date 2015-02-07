@@ -84,14 +84,8 @@ Definition map_Forall2 `{∀ A, Lookup K A (M A)} {A B}
   | None, Some y => Q y
   | None, None => True
   end.
-Definition map_Forall3 `{∀ A, Lookup K A (M A)} {A B C}
-    (R : A → B → C → Prop) (m1 : M A) (m2 : M B) (m3 : M C): Prop := ∀ i,
-  match m1 !! i, m2 !! i, m3 !! i with
-  | Some x, Some y, Some z => R x y z
-  | None, None, None => True
-  | _, _, _ => False
-  end.
-
+Definition map_included `{∀ A, Lookup K A (M A)} {A}
+  (R : relation A) : relation (M A) := map_Forall2 R (λ _, False) (λ _, True).
 Instance map_disjoint `{∀ A, Lookup K A (M A)} {A} : Disjoint (M A) :=
   map_Forall2 (λ _ _, False) (λ _, True) (λ _, True).
 Instance map_subseteq `{∀ A, Lookup K A (M A)} {A} : SubsetEq (M A) :=
@@ -127,13 +121,17 @@ Proof.
   intros A m. rewrite !map_subseteq_spec.
   intros i x. by rewrite lookup_empty.
 Qed.
+Global Instance: ∀ {A} (R : relation A), PreOrder R → PreOrder (map_included R).
+Proof.
+  split; [intros m i; by destruct (m !! i)|].
+  intros m1 m2 m3 Hm12 Hm23 i; specialize (Hm12 i); specialize (Hm23 i).
+  destruct (m1 !! i), (m2 !! i), (m3 !! i); try done; etransitivity; eauto.
+Qed.
 Global Instance: PartialOrder ((⊆) : relation (M A)).
 Proof.
-  repeat split.
-  * intros m; rewrite !map_subseteq_spec; naive_solver.
-  * intros m1 m2 m3; rewrite !map_subseteq_spec; naive_solver.
-  * intros m1 m2; rewrite !map_subseteq_spec.
-    intros; apply map_eq; intros i; apply option_eq; naive_solver.
+  split; [apply _|].
+  intros m1 m2; rewrite !map_subseteq_spec.
+  intros; apply map_eq; intros i; apply option_eq; naive_solver.
 Qed.
 Lemma lookup_weaken {A} (m1 m2 : M A) i x :
   m1 !! i = Some x → m1 ⊆ m2 → m2 !! i = Some x.
@@ -342,6 +340,18 @@ Proof.
   destruct (decide (i = j)) as [->|];
     rewrite ?lookup_insert, ?lookup_insert_ne; intuition congruence.
 Qed.
+Lemma insert_lookup {A} (m : M A) i x : m !! i = Some x → <[i:=x]>m = m.
+Proof.
+  intros; apply map_eq; intros j; destruct (decide (i = j)) as [->|];
+    by rewrite ?lookup_insert, ?lookup_insert_ne by done.
+Qed.
+Lemma insert_included {A} R `{!Reflexive R} (m : M A) i x :
+  (∀ y, m !! i = Some y → R y x) → map_included R m (<[i:=x]>m).
+Proof.
+  intros ? j; destruct (decide (i = j)) as [->|].
+  * rewrite lookup_insert. destruct (m !! j); eauto.
+  * rewrite lookup_insert_ne by done. by destruct (m !! j).
+Qed.
 Lemma insert_subseteq {A} (m : M A) i x : m !! i = None → m ⊆ <[i:=x]>m.
 Proof. apply partial_alter_subseteq. Qed.
 Lemma insert_subset {A} (m : M A) i x : m !! i = None → m ⊂ <[i:=x]>m.
@@ -520,6 +530,12 @@ Proof.
   intros. rewrite <-(map_of_to_list m1), <-(map_of_to_list m2).
   auto using map_of_list_proper, NoDup_fst_map_to_list.
 Qed.
+Lemma map_to_of_list_flip {A} (m1 : M A) l2 :
+  map_to_list m1 ≡ₚ l2 → m1 = map_of_list l2.
+Proof.
+  intros. rewrite <-(map_of_to_list m1).
+  auto using map_of_list_proper, NoDup_fst_map_to_list.
+Qed.
 Lemma map_to_list_empty {A} : map_to_list ∅ = @nil (K * A).
 Proof.
   apply elem_of_nil_inv. intros [i x].
@@ -620,6 +636,35 @@ Proof.
   * intros Hforall [i x]. rewrite elem_of_map_to_list. by apply (Hforall i x).
   * intros Hforall i x. rewrite <-elem_of_map_to_list. by apply (Hforall (i,x)).
 Qed.
+Lemma map_Forall_empty : map_Forall P ∅.
+Proof. intros i x. by rewrite lookup_empty. Qed.
+Lemma map_Forall_impl (Q : K → A → Prop) m :
+  map_Forall P m → (∀ i x, P i x → Q i x) → map_Forall Q m.
+Proof. unfold map_Forall; naive_solver. Qed.
+Lemma map_Forall_insert_11 m i x : map_Forall P (<[i:=x]>m) → P i x.
+Proof. intros Hm. by apply Hm; rewrite lookup_insert. Qed.
+Lemma map_Forall_insert_12 m i x :
+  m !! i = None → map_Forall P (<[i:=x]>m) → map_Forall P m.
+Proof.
+  intros ? Hm j y ?; apply Hm. by rewrite lookup_insert_ne by congruence.
+Qed.
+Lemma map_Forall_insert_2 m i x :
+  P i x → map_Forall P m → map_Forall P (<[i:=x]>m).
+Proof. intros ?? j y; rewrite lookup_insert_Some; naive_solver. Qed.
+Lemma map_Forall_insert m i x :
+  m !! i = None → map_Forall P (<[i:=x]>m) ↔ P i x ∧ map_Forall P m.
+Proof.
+  naive_solver eauto using map_Forall_insert_11,
+    map_Forall_insert_12, map_Forall_insert_2.
+Qed.
+Lemma map_Forall_ind (Q : M A → Prop) :
+  Q ∅ →
+  (∀ m i x, m !! i = None → P i x → map_Forall P m → Q m → Q (<[i:=x]>m)) →
+  ∀ m, map_Forall P m → Q m.
+Proof.
+  intros Hnil Hinsert m. induction m using map_ind; auto.
+  rewrite map_Forall_insert by done; intros [??]; eauto.
+Qed.
 
 Context `{∀ i x, Decision (P i x)}.
 Global Instance map_Forall_dec m : Decision (map_Forall P m).
@@ -630,11 +675,10 @@ Defined.
 Lemma map_not_Forall (m : M A) :
   ¬map_Forall P m ↔ ∃ i x, m !! i = Some x ∧ ¬P i x.
 Proof.
-  split.
-  * rewrite map_Forall_to_list. intros Hm.
-    apply (not_Forall_Exists _), Exists_exists in Hm.
-    destruct Hm as ([i x]&?&?). exists i x. by rewrite <-elem_of_map_to_list.
-  * intros (i&x&?&?) Hm. specialize (Hm i x). tauto.
+  split; [|intros (i&x&?&?) Hm; specialize (Hm i x); tauto].
+  rewrite map_Forall_to_list. intros Hm.
+  apply (not_Forall_Exists _), Exists_exists in Hm.
+  destruct Hm as ([i x]&?&?). exists i x. by rewrite <-elem_of_map_to_list.
 Qed.
 End map_Forall.
 
@@ -745,7 +789,7 @@ Let f (mx : option A) (my : option B) : option bool :=
   | None, None => None
   end.
 Lemma map_Forall2_alt (m1 : M A) (m2 : M B) :
-  map_Forall2 R P Q m1 m2 ↔ map_Forall (λ _ P, Is_true P) (merge f m1 m2).
+  map_Forall2 R P Q m1 m2 ↔ map_Forall (λ _, Is_true) (merge f m1 m2).
 Proof.
   split.
   * intros Hm i P'; rewrite lookup_merge by done; intros.
@@ -758,7 +802,7 @@ Qed.
 Global Instance map_Forall2_dec `{∀ x y, Decision (R x y), ∀ x, Decision (P x),
   ∀ y, Decision (Q y)} m1 m2 : Decision (map_Forall2 R P Q m1 m2).
 Proof.
-  refine (cast_if (decide (map_Forall (λ _ P, Is_true P) (merge f m1 m2))));
+  refine (cast_if (decide (map_Forall (λ _, Is_true) (merge f m1 m2))));
     abstract by rewrite map_Forall2_alt.
 Defined.
 (** Due to the finiteness of finite maps, we can extract a witness if the

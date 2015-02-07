@@ -4,7 +4,7 @@ Require Export type_environment.
 
 Section natural_type_environment.
 Context `{IntEnvSpec Ti}.
-Context (ptr_size : option (type Ti) → nat) (align_base : base_type Ti → nat).
+Context (ptr_size : ptr_type Ti → nat) (align_base : base_type Ti → nat).
 Context (ptr_size_ne_0 : ∀ τ, ptr_size τ ≠ 0).
 Context (align_void : align_base voidT = 1).
 Context (align_int_divide : ∀ τi, (align_base (intT τi) | rank_size (rank τi))).
