@@ -136,22 +136,22 @@ Hint Resolve TBase_ptr_valid TArray_ptr_valid.
 Hint Immediate type_complete_valid types_complete_valid.
 Hint Immediate type_valid_ptr_type_valid.
 
-Definition fun_stmt_valid (Γ : env Ti) (Γm : memenv Ti)
+Definition fun_stmt_valid (Γ : env Ti) (Δ : memenv Ti)
     (τs : list (type Ti)) (τ : type Ti) (ms : option (stmt Ti)) : Prop :=
   match ms with
   | Some s => ∃ cmτ,
      Forall (type_complete Γ) τs ∧
      Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧
-     (Γ,Γm,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
+     (Γ,Δ,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
      gotos s ⊆ labels s ∧ throws_valid 0 s
   | None => True
   end.
-Definition global_decl_valid (Γ : env Ti) (Γm : memenv Ti)
+Definition global_decl_valid (Γ : env Ti) (Δ : memenv Ti)
     (x : string) (d : global_decl Ti) :=
   match d with
-  | Global _ o τ _ => Γm ⊢ o : τ ∧ index_alive Γm o
+  | Global _ o τ _ => Δ ⊢ o : τ ∧ index_alive Δ o
   | Fun _ τs τ ms =>
-     Γ !! (x : funname) = Some (τs,τ) ∧ fun_stmt_valid Γ Γm τs τ ms
+     Γ !! (x : funname) = Some (τs,τ) ∧ fun_stmt_valid Γ Δ τs τ ms
   | GlobalTypeDef τp => ✓{Γ} τp
   | EnumVal τi z => int_typed z τi
   end.
@@ -176,9 +176,9 @@ Global Instance frontend_state_valid : Valid () (frontend_state Ti) :=
 Hint Extern 0 (✓ _) => eapply to_env_valid; eassumption.
 Hint Extern 0 (✓{_} _) => eapply to_mem_valid; eassumption.
 Hint Extern 0 (global_decl_valid _ _ _ _) => progress simpl.
-Lemma global_decl_valid_weaken Γ1 Γ2 Γm1 Γm2 x d :
-  ✓ Γ1 → global_decl_valid Γ1 Γm1 x d → Γ1 ⊆ Γ2 →
-  Γm1 ⊆ Γm2 → global_decl_valid Γ2 Γm2 x d.
+Lemma global_decl_valid_weaken Γ1 Γ2 Δ1 Δ2 x d :
+  ✓ Γ1 → global_decl_valid Γ1 Δ1 x d → Γ1 ⊆ Γ2 →
+  Δ1 ⊆ Δ2 → global_decl_valid Γ2 Δ2 x d.
 Proof.
   destruct d as [|??? []| |];
     naive_solver eauto using ptr_type_valid_weaken,
@@ -841,9 +841,9 @@ Proof.
        eapply (to_R_typed Γ) in H2; eauto 2; [clear H]; weaken
     end; eauto 20 using to_R_NULL_typed, SLocal_typed.
 Qed.
-Lemma stmt_fix_return_typed Γ Γm τs σ s cmτ s' cmτ' :
+Lemma stmt_fix_return_typed Γ Δ τs σ s cmτ s' cmτ' :
   ✓ Γ → ✓{Γ}* τs → ✓{Γ} σ → stmt_fix_return σ s cmτ = (s',cmτ') →
-  (Γ,Γm,τs) ⊢ s : cmτ → (Γ,Γm,τs) ⊢ s' : cmτ'.
+  (Γ,Δ,τs) ⊢ s : cmτ → (Γ,Δ,τs) ⊢ s' : cmτ'.
 Proof.
   destruct cmτ as [[][τ|]]; intros; simplify_option_equality; auto.
   * assert (✓{Γ} (false,Some τ)) by eauto using stmt_typed_type_valid.

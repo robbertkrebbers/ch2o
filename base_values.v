@@ -37,27 +37,27 @@ Section operations.
   Context `{Env Ti}.
 
   Record char_byte_valid (Γ : env Ti)
-      (Γm : memenv Ti) (bs : list (bit Ti)) : Prop := {
+      (Δ : memenv Ti) (bs : list (bit Ti)) : Prop := {
     char_byte_valid_indet : ¬Forall (BIndet =) bs;
     char_byte_valid_bit : ¬(∃ βs, bs = BBit <$> βs);
-    char_byte_valid_bits_valid : ✓{Γ,Γm}* bs;
+    char_byte_valid_bits_valid : ✓{Γ,Δ}* bs;
     char_byte_valid_bits : length bs = char_bits
   }.
-  Global Instance char_byte_valid_dec Γ Γm bs :
-    Decision (char_byte_valid Γ Γm bs).
+  Global Instance char_byte_valid_dec Γ Δ bs :
+    Decision (char_byte_valid Γ Δ bs).
   Proof.
    refine (cast_if (decide (¬Forall (BIndet =) bs ∧
-     ¬(∃ βs, bs = BBit <$> βs) ∧ ✓{Γ,Γm}* bs ∧ length bs = char_bits)));
+     ¬(∃ βs, bs = BBit <$> βs) ∧ ✓{Γ,Δ}* bs ∧ length bs = char_bits)));
      abstract (constructor||intros[]; intuition).
   Defined.
-  Inductive base_typed' (Γ : env Ti) (Γm : memenv Ti) :
+  Inductive base_typed' (Γ : env Ti) (Δ : memenv Ti) :
        base_val Ti → base_type Ti → Prop :=
-    | VIndet_typed τb : ✓{Γ} τb → τb ≠ voidT → base_typed' Γ Γm (VIndet τb) τb
-    | VVoid_typed : base_typed' Γ Γm VVoid voidT
-    | VInt_typed x τi : int_typed x τi → base_typed' Γ Γm (VInt τi x) (intT τi)
-    | VPtr_typed p τp : (Γ,Γm) ⊢ p : τp → base_typed' Γ Γm (VPtr p) (τp.*)
+    | VIndet_typed τb : ✓{Γ} τb → τb ≠ voidT → base_typed' Γ Δ (VIndet τb) τb
+    | VVoid_typed : base_typed' Γ Δ VVoid voidT
+    | VInt_typed x τi : int_typed x τi → base_typed' Γ Δ (VInt τi x) (intT τi)
+    | VPtr_typed p τp : (Γ,Δ) ⊢ p : τp → base_typed' Γ Δ (VPtr p) (τp.*)
     | VByte_typed bs :
-       char_byte_valid Γ Γm bs → base_typed' Γ Γm (VByte bs) ucharT.
+       char_byte_valid Γ Δ bs → base_typed' Γ Δ (VByte bs) ucharT.
   Global Instance base_typed: Typed (env Ti * memenv Ti)
     (base_type Ti) (base_val Ti) := curry base_typed'.
   Global Instance type_of_base_val: TypeOf (base_type Ti) (base_val Ti) := λ v,
@@ -69,13 +69,13 @@ Section operations.
     | VByte _ => ucharT
     end.
   Global Instance base_type_check:
-    TypeCheck (env Ti * memenv Ti) (base_type Ti) (base_val Ti) := λ ΓΓm v,
+    TypeCheck (env Ti * memenv Ti) (base_type Ti) (base_val Ti) := λ ΓΔ v,
     match v with
-    | VIndet τb => guard (✓{ΓΓm.1} τb); guard (τb ≠ voidT); Some τb
+    | VIndet τb => guard (✓{ΓΔ.1} τb); guard (τb ≠ voidT); Some τb
     | VVoid => Some voidT
     | VInt τi x => guard (int_typed x τi); Some (intT τi)
-    | VPtr p => TPtr <$> type_check ΓΓm p
-    | VByte bs => guard (char_byte_valid (ΓΓm.1) (ΓΓm.2) bs); Some ucharT
+    | VPtr p => TPtr <$> type_check ΓΔ p
+    | VByte bs => guard (char_byte_valid (ΓΔ.1) (ΓΔ.2) bs); Some ucharT
     end.
   Global Instance base_val_freeze : Freeze (base_val Ti) := λ β v,
     match v with VPtr p => VPtr (freeze β p) | _ => v end.
@@ -109,7 +109,7 @@ Arguments base_val_unflatten _ _ _ _ _ : simpl never.
 Section base_values.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
-Implicit Types Γm : memenv Ti.
+Implicit Types Δ : memenv Ti.
 Implicit Types α : bool.
 Implicit Types τb : base_type Ti.
 Implicit Types τp : ptr_type Ti.
@@ -121,7 +121,7 @@ Local Infix "⊑*" := (Forall2 bit_weak_refine) (at level 70).
 Hint Extern 0 (_ ⊑* _) => reflexivity.
 
 (** ** General properties of the typing judgment *)
-Lemma base_val_typed_type_valid Γ Γm v τb : ✓ Γ → (Γ,Γm) ⊢ v : τb → ✓{Γ} τb.
+Lemma base_val_typed_type_valid Γ Δ v τb : ✓ Γ → (Γ,Δ) ⊢ v : τb → ✓{Γ} τb.
 Proof.
   destruct 2;
     eauto using TVoid_valid, TInt_valid, TPtr_valid, ptr_typed_type_valid.
@@ -133,51 +133,51 @@ Qed.
 Global Instance:
   TypeCheckSpec (env Ti * memenv Ti) (base_type Ti) (base_val Ti) (λ _, True).
 Proof.
-  intros [Γ Γmm] vb τb _. split.
+  intros [Γ Δm] vb τb _. split.
   * destruct vb; intros; simplify_option_equality;
       constructor; auto; eapply type_check_sound; eauto.
   * by destruct 1; simplify_option_equality;
       erewrite ?type_check_complete by eauto.
 Qed.
-Lemma char_byte_valid_weaken Γ1 Γ2 Γm1 Γm2 bs :
-  ✓ Γ1 → char_byte_valid Γ1 Γm1 bs → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 →
-  char_byte_valid Γ2 Γm2 bs.
+Lemma char_byte_valid_weaken Γ1 Γ2 Δ1 Δ2 bs :
+  ✓ Γ1 → char_byte_valid Γ1 Δ1 bs → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
+  char_byte_valid Γ2 Δ2 bs.
 Proof. destruct 2; constructor; eauto using Forall_impl, bit_valid_weaken. Qed.
-Lemma base_val_typed_weaken Γ1 Γ2 Γm1 Γm2 vb τb :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ vb : τb → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → (Γ2,Γm2) ⊢ vb : τb.
+Lemma base_val_typed_weaken Γ1 Γ2 Δ1 Δ2 vb τb :
+  ✓ Γ1 → (Γ1,Δ1) ⊢ vb : τb → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 → (Γ2,Δ2) ⊢ vb : τb.
 Proof.
   destruct 2; econstructor; eauto using ptr_typed_weaken,
     char_byte_valid_weaken, base_type_valid_weaken.
 Qed.
-Lemma base_val_frozen_int Γ Γm v τi : (Γ,Γm) ⊢ v : intT τi → frozen v.
+Lemma base_val_frozen_int Γ Δ v τi : (Γ,Δ) ⊢ v : intT τi → frozen v.
 Proof. inversion 1; constructor. Qed.
 Lemma base_val_freeze_freeze β1 β2 vb : freeze β1 (freeze β2 vb) = freeze β1 vb.
 Proof. destruct vb; f_equal'; auto using ptr_freeze_freeze. Qed.
-Lemma base_typed_freeze Γ Γm β vb τb :
-  (Γ,Γm) ⊢ freeze β vb : τb ↔ (Γ,Γm) ⊢ vb : τb.
+Lemma base_typed_freeze Γ Δ β vb τb :
+  (Γ,Δ) ⊢ freeze β vb : τb ↔ (Γ,Δ) ⊢ vb : τb.
 Proof.
   split.
   * destruct vb; inversion 1; constructor; auto.
     by apply (ptr_typed_freeze _ _ β).
   * destruct 1; constructor; auto. by apply ptr_typed_freeze.
 Qed.
-Lemma base_typed_int_frozen Γ Γm vb τi : (Γ,Γm) ⊢ vb : intT τi → frozen vb.
+Lemma base_typed_int_frozen Γ Δ vb τi : (Γ,Δ) ⊢ vb : intT τi → frozen vb.
 Proof. inversion_clear 1; constructor. Qed.
 
 (** ** Properties of the [base_val_flatten] function *)
-Lemma base_val_flatten_valid Γ Γm vb τb :
-  (Γ,Γm) ⊢ vb : τb → ✓{Γ,Γm}* (base_val_flatten Γ vb).
+Lemma base_val_flatten_valid Γ Δ vb τb :
+  (Γ,Δ) ⊢ vb : τb → ✓{Γ,Δ}* (base_val_flatten Γ vb).
 Proof.
   destruct 1; simpl.
   * apply Forall_replicate, BIndet_valid.
   * apply Forall_replicate, BIndet_valid.
   * apply Forall_fmap, Forall_true. constructor.
-  * apply Forall_fmap; eapply (Forall_impl (✓{Γ,Γm}));
+  * apply Forall_fmap; eapply (Forall_impl (✓{Γ,Δ}));
       eauto using ptr_to_bits_valid, BPtr_valid.
   * eauto using char_byte_valid_bits_valid.
 Qed.
-Lemma base_val_flatten_weaken Γ1 Γ2 Γm τb vb :
-  ✓ Γ1 → (Γ1,Γm) ⊢ vb : τb → Γ1 ⊆ Γ2 →
+Lemma base_val_flatten_weaken Γ1 Γ2 Δ τb vb :
+  ✓ Γ1 → (Γ1,Δ) ⊢ vb : τb → Γ1 ⊆ Γ2 →
   base_val_flatten Γ1 vb = base_val_flatten Γ2 vb.
 Proof.
   by destruct 2; intros; simpl; erewrite ?ptr_to_bits_weaken,
@@ -186,8 +186,8 @@ Qed.
 Lemma base_val_flatten_freeze Γ β vb :
   base_val_flatten Γ (freeze β vb) = base_val_flatten Γ vb.
 Proof. by destruct vb; simpl; rewrite ?ptr_to_bits_freeze. Qed.
-Lemma base_val_flatten_length Γ Γm vb τb :
-  (Γ,Γm) ⊢ vb : τb → length (base_val_flatten Γ vb) = bit_size_of Γ τb.
+Lemma base_val_flatten_length Γ Δ vb τb :
+  (Γ,Δ) ⊢ vb : τb → length (base_val_flatten Γ vb) = bit_size_of Γ τb.
 Proof.
   destruct 1; simplify_equality'.
   * by rewrite replicate_length.
@@ -324,9 +324,9 @@ Proof.
     rewrite ?elem_of_list_fmap; naive_solver.
 Qed.
 
-Lemma base_val_unflatten_typed Γ Γm τb bs :
-  ✓{Γ} τb → ✓{Γ,Γm}* bs → length bs = bit_size_of Γ τb →
-  (Γ,Γm) ⊢ base_val_unflatten Γ τb bs : τb.
+Lemma base_val_unflatten_typed Γ Δ τb bs :
+  ✓{Γ} τb → ✓{Γ,Δ}* bs → length bs = bit_size_of Γ τb →
+  (Γ,Δ) ⊢ base_val_unflatten Γ τb bs : τb.
 Proof.
   intros. feed destruct (base_val_unflatten_spec Γ τb bs);
     auto; constructor; auto.
@@ -341,8 +341,8 @@ Proof.
   destruct τb; repeat (simplify_option_equality || case_match || intuition).
   f_equal; eauto using ptr_of_bits_type_of.
 Qed.
-Lemma base_val_unflatten_flatten Γ Γm vb τb :
-  (Γ,Γm) ⊢ vb : τb →
+Lemma base_val_unflatten_flatten Γ Δ vb τb :
+  (Γ,Δ) ⊢ vb : τb →
   base_val_unflatten Γ τb (base_val_flatten Γ vb) = freeze true vb.
 Proof.
   destruct 1 as [τb| |x|p τ|bs []]; simpl.
@@ -354,25 +354,25 @@ Proof.
   * by erewrite base_val_unflatten_ptr by eauto using ptr_of_to_bits_typed.
   * by rewrite base_val_unflatten_byte by done.
 Qed.
-Lemma base_val_unflatten_frozen Γ Γm τb bs :
-  ✓{Γ,Γm}* bs → frozen (base_val_unflatten Γ τb bs).
+Lemma base_val_unflatten_frozen Γ Δ τb bs :
+  ✓{Γ,Δ}* bs → frozen (base_val_unflatten Γ τb bs).
 Proof.
   intros. unfold base_val_unflatten, default, frozen.
   destruct τb; repeat (simplify_option_equality || case_match); f_equal'.
   efeed pose proof (λ bs pbs, proj1 (maybe_BPtrs_spec bs pbs)); eauto.
   subst. eapply ptr_of_bits_frozen; eauto using BPtrs_valid_inv.
 Qed.
-Lemma base_val_flatten_inj Γ Γm β vb1 vb2 τb :
-  (Γ,Γm) ⊢ vb1 : τb → (Γ,Γm) ⊢ vb2 : τb →
+Lemma base_val_flatten_inj Γ Δ β vb1 vb2 τb :
+  (Γ,Δ) ⊢ vb1 : τb → (Γ,Δ) ⊢ vb2 : τb →
   base_val_flatten Γ vb1 = base_val_flatten Γ vb2 → freeze β vb1 = freeze β vb2.
 Proof.
   intros ?? Hv. by rewrite <-(base_val_freeze_freeze _ true vb1),
     <-(base_val_freeze_freeze _ true vb2),
-    <-(base_val_unflatten_flatten Γ Γm vb1 τb),
-    <-(base_val_unflatten_flatten Γ Γm vb2 τb), Hv by done.
+    <-(base_val_unflatten_flatten Γ Δ vb1 τb),
+    <-(base_val_unflatten_flatten Γ Δ vb2 τb), Hv by done.
 Qed.
-Lemma base_val_flatten_unflatten Γ Γm τb bs :
-  ✓{Γ,Γm}* bs → length bs = bit_size_of Γ τb →
+Lemma base_val_flatten_unflatten Γ Δ τb bs :
+  ✓{Γ,Δ}* bs → length bs = bit_size_of Γ τb →
   base_val_flatten Γ (base_val_unflatten Γ τb bs) ⊑* bs.
 Proof.
   intros. cut (base_val_flatten Γ (base_val_unflatten Γ τb bs) = bs

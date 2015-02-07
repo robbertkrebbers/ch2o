@@ -7,7 +7,7 @@ Local Open Scope ctype_scope.
 Section operations.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
-Implicit Types Γm : memenv Ti.
+Implicit Types Δ : memenv Ti.
 Implicit Types τb σb : base_type Ti.
 Implicit Types τ σ : type Ti.
 Implicit Types τp σp : ptr_type Ti.
@@ -38,7 +38,7 @@ Lemma addr_eq_refine Γ α f m1 m2 a1 a2 a3 a4 σp :
   addr_eq Γ a1 a3 = addr_eq Γ a2 a4.
 Proof.
   intros ? (_&_&Hstrict) Ha1 Ha2; unfold addr_eq.
-  assert ('{m1} ⊑{Γ,α,f} '{m2}) as HΓm by eauto using addr_refine_memenv_refine.
+  assert ('{m1} ⊑{Γ,α,f} '{m2}) as HΔ by eauto using addr_refine_memenv_refine.
   destruct (addr_object_offset_refine Γ α f
     ('{m1}) ('{m2}) a1 a2 σp) as (r1&?&?&->); auto.
   destruct (addr_object_offset_refine Γ α f
@@ -182,8 +182,8 @@ Proof.
   destruct 1 as [| | | |??? []|???? []| | |];
     naive_solver eauto 10 using addr_alive_refine.
 Qed.
-Lemma base_val_false_refine Γ α f Γm1 Γm2 vb1 vb2 τb :
-  vb1 ⊑{Γ,α,f@Γm1↦Γm2} vb2 : τb → base_val_false vb1 → base_val_false vb2.
+Lemma base_val_false_refine Γ α f Δ1 Δ2 vb1 vb2 τb :
+  vb1 ⊑{Γ,α,f@Δ1↦Δ2} vb2 : τb → base_val_false vb1 → base_val_false vb2.
 Proof. by destruct 1 as [| | | |??? []|???? []| | |]. Qed.
 Lemma base_val_unop_ok_refine Γ α f m1 m2 op vb1 vb2 τb :
   vb1 ⊑{Γ,α,f@'{m1}↦'{m2}} vb2 : τb →
@@ -263,8 +263,8 @@ Qed.
 Lemma val_true_refine Γ α f m1 m2 v1 v2 τ :
   v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → val_true m1 v1 → val_true m2 v2.
 Proof. destruct 1; simpl; eauto using base_val_true_refine. Qed.
-Lemma val_false_refine Γ α f Γm1 Γm2 v1 v2 τ :
-  v1 ⊑{Γ,α,f@Γm1↦Γm2} v2 : τ → val_false v1 → val_false v2.
+Lemma val_false_refine Γ α f Δ1 Δ2 v1 v2 τ :
+  v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ → val_false v1 → val_false v2.
 Proof. destruct 1; simpl; eauto using base_val_false_refine. Qed.
 Lemma val_true_false_refine Γ α f m1 m2 v1 v2 τ :
   val_true m1 v1 → val_false v2 → v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → False.

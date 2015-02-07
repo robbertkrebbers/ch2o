@@ -13,14 +13,14 @@ Section operations.
 
   Global Instance cmap_dom: Dom (mem Ti) indexset := λ m,
     let (m) := m in dom _ m.
-  Global Instance cmap_valid: Valid (env Ti * memenv Ti) (mem Ti) := λ ΓΓm m,
-    let (Γ,Γm) := ΓΓm in
-    (**i 1). *) ✓{Γ} Γm ∧
+  Global Instance cmap_valid: Valid (env Ti * memenv Ti) (mem Ti) := λ ΓΔ m,
+    let (Γ,Δ) := ΓΔ in
+    (**i 1). *) ✓{Γ} Δ ∧
     (**i 2). *) (∀ o τ,
-      cmap_car m !! o = Some (Freed τ) → Γm ⊢ o : τ ∧ ¬index_alive Γm o) ∧
+      cmap_car m !! o = Some (Freed τ) → Δ ⊢ o : τ ∧ ¬index_alive Δ o) ∧
     (**i 3). *) (∀ o w malloc,
       cmap_car m !! o = Some (Obj w malloc) →
-      ∃ τ, Γm ⊢ o : τ ∧ index_alive Γm o ∧ (Γ,Γm) ⊢ w : τ ∧ ¬ctree_empty w).
+      ∃ τ, Δ ⊢ o : τ ∧ index_alive Δ o ∧ (Γ,Δ) ⊢ w : τ ∧ ¬ctree_empty w).
   Definition memenv_of (m : mem Ti) : memenv Ti :=
     let (m) := m in
     let f x : type Ti * bool :=
@@ -62,7 +62,7 @@ Section memory_map.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
 Implicit Types m : mem Ti.
-Implicit Types Γm : memenv Ti.
+Implicit Types Δ : memenv Ti.
 Implicit Types τ σ : type Ti.
 Implicit Types o : index.
 Implicit Types w : mtree Ti.
@@ -100,42 +100,42 @@ Proof.
   rewrite lookup_omap. by destruct (m !! o) as [[]|].
 Qed.
 
-Lemma cmap_valid_Freed Γ Γm m o τ :
-  ✓{Γ,Γm} m → cmap_car m !! o = Some (Freed τ) →
-  Γm ⊢ o : τ ∧ ¬index_alive Γm o ∧ ✓{Γ} τ ∧ int_typed (size_of Γ τ) sptrT.
-Proof. intros (HΓm&Hm&_) ?. destruct (HΓm o τ), (Hm o τ); auto. Qed.
-Lemma cmap_valid_Obj Γ Γm m o w malloc :
-  ✓{Γ,Γm} m → cmap_car m !! o = Some (Obj w malloc) →
-  ∃ τ, Γm ⊢ o : τ ∧ index_alive Γm o ∧ (Γ,Γm) ⊢ w : τ
+Lemma cmap_valid_Freed Γ Δ m o τ :
+  ✓{Γ,Δ} m → cmap_car m !! o = Some (Freed τ) →
+  Δ ⊢ o : τ ∧ ¬index_alive Δ o ∧ ✓{Γ} τ ∧ int_typed (size_of Γ τ) sptrT.
+Proof. intros (HΔ&Hm&_) ?. destruct (HΔ o τ), (Hm o τ); auto. Qed.
+Lemma cmap_valid_Obj Γ Δ m o w malloc :
+  ✓{Γ,Δ} m → cmap_car m !! o = Some (Obj w malloc) →
+  ∃ τ, Δ ⊢ o : τ ∧ index_alive Δ o ∧ (Γ,Δ) ⊢ w : τ
     ∧ ¬ctree_empty w ∧ int_typed (size_of Γ τ) sptrT.
 Proof.
-  intros (HΓm&_&Hm) ?; destruct (Hm o w malloc) as (τ&?&?&?&?); auto.
-  destruct (HΓm o τ); eauto 10.
+  intros (HΔ&_&Hm) ?; destruct (Hm o w malloc) as (τ&?&?&?&?); auto.
+  destruct (HΔ o τ); eauto 10.
 Qed.
-Lemma cmap_valid_memenv_valid Γ Γm m : ✓{Γ,Γm} m → ✓{Γ} Γm.
+Lemma cmap_valid_memenv_valid Γ Δ m : ✓{Γ,Δ} m → ✓{Γ} Δ.
 Proof. by intros []. Qed.
-Lemma cmap_index_typed_valid Γ Γm m o τ : ✓{Γ,Γm} m → Γm ⊢ o : τ → ✓{Γ} τ.
+Lemma cmap_index_typed_valid Γ Δ m o τ : ✓{Γ,Δ} m → Δ ⊢ o : τ → ✓{Γ} τ.
 Proof. eauto using cmap_valid_memenv_valid, index_typed_valid. Qed.
-Lemma cmap_index_typed_representable Γ Γm m o τ :
-  ✓{Γ,Γm} m → Γm ⊢ o : τ → int_typed (size_of Γ τ) sptrT.
+Lemma cmap_index_typed_representable Γ Δ m o τ :
+  ✓{Γ,Δ} m → Δ ⊢ o : τ → int_typed (size_of Γ τ) sptrT.
 Proof. eauto using cmap_valid_memenv_valid, index_typed_representable. Qed.
 Lemma cmap_empty_valid Γ : ✓{Γ} (∅ : mem Ti).
 Proof.
   split; [apply memenv_empty_valid|].
   by split; intros until 0; simplify_map_equality'.
 Qed.
-Lemma cmap_valid_weaken Γ1 Γ2 Γm m : ✓ Γ1 → ✓{Γ1,Γm} m → Γ1 ⊆ Γ2 → ✓{Γ2,Γm} m.
+Lemma cmap_valid_weaken Γ1 Γ2 Δ m : ✓ Γ1 → ✓{Γ1,Δ} m → Γ1 ⊆ Γ2 → ✓{Γ2,Δ} m.
 Proof.
-  intros ? (HΓm&Hm1&Hm2) ?; split_ands'; eauto using memenv_valid_weaken.
+  intros ? (HΔ&Hm1&Hm2) ?; split_ands'; eauto using memenv_valid_weaken.
   intros o w malloc ?; destruct (Hm2 o w malloc)
     as (τ&?&?&?&?); eauto 10 using ctree_typed_weaken.
 Qed.
 Lemma cmap_valid_weaken' Γ1 Γ2 m : ✓ Γ1 → ✓{Γ1} m → Γ1 ⊆ Γ2 → ✓{Γ2} m.
 Proof. by apply cmap_valid_weaken. Qed.
-Lemma cmap_valid_sep_valid Γ Γm m : ✓{Γ,Γm} m → sep_valid m.
+Lemma cmap_valid_sep_valid Γ Δ m : ✓{Γ,Δ} m → sep_valid m.
 Proof.
   destruct m as [m]; intros Hm o [τ|w malloc] ?; [done|].
-  destruct (cmap_valid_Obj Γ Γm (CMap m) o w malloc)
+  destruct (cmap_valid_Obj Γ Δ (CMap m) o w malloc)
     as (?&?&?&?&?&?); simpl; eauto using ctree_typed_sep_valid.
 Qed.
 Lemma index_typed_lookup_cmap m o τ :
@@ -145,12 +145,12 @@ Proof.
   intros [β Hβ]. destruct m as [m]; simplify_map_equality'.
   by destruct (m !! o) as [[]|]; simplify_equality'; do 2 eexists; eauto.
 Qed.
-Lemma cmap_index_typed Γ Γm m o τ : ✓{Γ,Γm} m → '{m} ⊢ o : τ → Γm ⊢ o : τ.
+Lemma cmap_index_typed Γ Δ m o τ : ✓{Γ,Δ} m → '{m} ⊢ o : τ → Δ ⊢ o : τ.
 Proof.
   intros.
   destruct (index_typed_lookup_cmap m o τ) as ([|w malloc]&?&?); auto; subst.
-  * by destruct (cmap_valid_Freed Γ Γm m o τ).
-  * by destruct (cmap_valid_Obj Γ Γm m o w malloc)
+  * by destruct (cmap_valid_Freed Γ Δ m o τ).
+  * by destruct (cmap_valid_Obj Γ Δ m o w malloc)
       as (τ&?&?&?&?&_); simplify_type_equality.
 Qed.
 
@@ -187,7 +187,7 @@ Proof.
   destruct m as [m]; f_equal'; apply map_eq; intros o.
   rewrite !lookup_omap. by destruct (m !! o) as [[]|].
 Qed.
-Lemma cmap_erase_typed Γ Γm m : ✓{Γ,Γm} m →  ✓{Γ,Γm} (cmap_erase m).
+Lemma cmap_erase_typed Γ Δ m : ✓{Γ,Δ} m →  ✓{Γ,Δ} (cmap_erase m).
 Proof.
   destruct m as [m]; unfold lookupE; intros (?&?&?); split_ands'; simpl in *.
   * done.
@@ -203,13 +203,13 @@ Proof.
 Qed.
 Lemma cmap_lookup_erase Γ m a : cmap_erase m !!{Γ} a = m !!{Γ} a.
 Proof. unfold lookupE, cmap_lookup. by rewrite cmap_lookup_ref_erase. Qed.
-Lemma cmap_lookup_ref_weaken Γ1 Γ2 Γm m o r w :
+Lemma cmap_lookup_ref_weaken Γ1 Γ2 Δ m o r w :
   ✓ Γ1 → m !!{Γ1} (o,r) = Some w → Γ1 ⊆ Γ2 → m !!{Γ2} (o,r) = Some w.
 Proof.
   destruct m; intros; simplify_option_equality; eauto using ctree_lookup_weaken.
 Qed.
-Lemma cmap_lookup_weaken Γ1 Γ2 Γm m a w σ :
-  ✓ Γ1 → (Γ1,Γm) ⊢ a : TType σ → m !!{Γ1} a = Some w → Γ1 ⊆ Γ2 →
+Lemma cmap_lookup_weaken Γ1 Γ2 Δ m a w σ :
+  ✓ Γ1 → (Γ1,Δ) ⊢ a : TType σ → m !!{Γ1} a = Some w → Γ1 ⊆ Γ2 →
   m !!{Γ2} a = Some w.
 Proof.
   unfold lookupE, cmap_lookup; intros; case_option_guard; simplify_equality'.
@@ -242,37 +242,37 @@ Proof.
     by eauto using cmap_lookup_ref_le, ref_freeze_le_r; simpl.
   by rewrite (decide_iff _ _ _ _ (addr_is_obj_freeze _ _)).
 Qed.
-Lemma cmap_lookup_ref_Some Γ Γm m o r w :
-  ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} (o,r) = Some w →
-  ∃ τ σ, Γm ⊢ o : τ ∧ Γ ⊢ r : τ ↣ σ ∧ (Γ,Γm) ⊢ w : σ.
+Lemma cmap_lookup_ref_Some Γ Δ m o r w :
+  ✓ Γ → ✓{Γ,Δ} m → m !!{Γ} (o,r) = Some w →
+  ∃ τ σ, Δ ⊢ o : τ ∧ Γ ⊢ r : τ ↣ σ ∧ (Γ,Δ) ⊢ w : σ.
 Proof.
   destruct m as [m]; simpl; intros ? Hm ?.
   destruct (m !! o) as [[|w' β]|] eqn:Hw; simplify_equality'.
-  destruct (cmap_valid_Obj Γ Γm (CMap m) o w' β) as (τ&?&_&?&_); auto.
-  destruct (ctree_lookup_Some Γ Γm w' τ r w) as (σ&?&?); eauto.
+  destruct (cmap_valid_Obj Γ Δ (CMap m) o w' β) as (τ&?&_&?&_); auto.
+  destruct (ctree_lookup_Some Γ Δ w' τ r w) as (σ&?&?); eauto.
 Qed.
-Lemma cmap_lookup_typed Γ Γm m a w σ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType σ → m !!{Γ} a = Some w → (Γ,Γm) ⊢ w : σ.
+Lemma cmap_lookup_typed Γ Δ m a w σ :
+  ✓ Γ → ✓{Γ,Δ} m → (Γ,Δ) ⊢ a : TType σ → m !!{Γ} a = Some w → (Γ,Δ) ⊢ w : σ.
 Proof.
   unfold lookupE, cmap_lookup; intros; case_option_guard; simplify_equality'.
   destruct (m !!{Γ} _) as [w'|] eqn:?; simplify_equality'.
-  destruct (cmap_lookup_ref_Some Γ Γm m (addr_index a) (addr_ref Γ a) w')
+  destruct (cmap_lookup_ref_Some Γ Δ m (addr_index a) (addr_ref Γ a) w')
     as (τ&σ'&?&?&?); auto; simplify_option_equality; simplify_type_equality.
   * cut (σ = σ'); [by intros ->|].
     erewrite (addr_is_obj_type _ _ _ σ) by eauto.
-    assert (Γm ⊢ addr_index a : addr_type_object a)
+    assert (Δ ⊢ addr_index a : addr_type_object a)
       by eauto using addr_typed_index; simplify_type_equality.
     eauto using ref_set_offset_typed_unique, addr_typed_ref_base_typed.
   * erewrite addr_not_is_obj_type by eauto; eauto using ctree_lookup_byte_typed.
 Qed.
 Lemma cmap_lookup_strict Γ m a w : m !!{Γ} a = Some w → addr_strict Γ a.
 Proof. by unfold lookupE, cmap_lookup; intros; simplify_option_equality. Qed.
-Lemma cmap_lookup_Some Γ Γm m w a :
-  ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} a = Some w → (Γ,Γm) ⊢ w : type_of w.
+Lemma cmap_lookup_Some Γ Δ m w a :
+  ✓ Γ → ✓{Γ,Δ} m → m !!{Γ} a = Some w → (Γ,Δ) ⊢ w : type_of w.
 Proof.
   unfold lookupE, cmap_lookup; intros; case_option_guard; simplify_equality'.
   destruct (m !!{Γ} _) as [w'|] eqn:?; simplify_equality'.
-  destruct (cmap_lookup_ref_Some Γ Γm m (addr_index a) (addr_ref Γ a) w')
+  destruct (cmap_lookup_ref_Some Γ Δ m (addr_index a) (addr_ref Γ a) w')
     as (τ&σ'&?&?&?); auto; simplify_option_equality;
     eauto using ctree_lookup_byte_typed, type_of_typed.
 Qed.
@@ -286,8 +286,8 @@ Proof.
   destruct (m !! o) as [[|w' β]|] eqn:Hw; simplify_equality'; auto.
   by rewrite ctree_lookup_app.
 Qed.
-Lemma cmap_lookup_elt Γ Γm m a rs σ σ' :
-  ✓ Γ → (Γ,Γm) ⊢ a : TType σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' → 
+Lemma cmap_lookup_elt Γ Δ m a rs σ σ' :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' → 
   m !!{Γ} (addr_elt Γ rs a) = m !!{Γ} a ≫= lookupE Γ rs.
 Proof.
   unfold lookupE at 1 3, cmap_lookup; intros; simpl.
@@ -313,31 +313,31 @@ Qed.
 Lemma cmap_erase_alter Γ g m a :
   cmap_erase (cmap_alter Γ g a m) = cmap_alter Γ g a (cmap_erase m).
 Proof. apply cmap_erase_alter_ref. Qed.
-Lemma cmap_alter_ref_memenv_of Γ Γm m g o r w :
-  ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} (o,r) = Some w → type_of (g w) = type_of w →
+Lemma cmap_alter_ref_memenv_of Γ Δ m g o r w :
+  ✓ Γ → ✓{Γ,Δ} m → m !!{Γ} (o,r) = Some w → type_of (g w) = type_of w →
   '{cmap_alter_ref Γ g o r m} = '{m}.
 Proof.
   destruct m as [m]; intros; apply map_eq; intros o'; simpl.
   destruct (decide (o' = o)); simplify_map_equality'; auto.
   destruct (m !! o) as [[|w' β]|] eqn:?; simplify_equality'; do 2 f_equal.
-  destruct (cmap_valid_Obj Γ Γm (CMap m) o w' β) as (τ&?&_&?&_); auto.
-  destruct (ctree_lookup_Some Γ Γm w' τ r w) as (σ'&?&?);
+  destruct (cmap_valid_Obj Γ Δ (CMap m) o w' β) as (τ&?&_&?&_); auto.
+  destruct (ctree_lookup_Some Γ Δ w' τ r w) as (σ'&?&?);
     eauto using ctree_alter_type_of_weak, type_of_typed.
 Qed.
-Lemma cmap_alter_memenv_of Γ Γm m g a w :
-  ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} a = Some w → type_of (g w) = type_of w →
+Lemma cmap_alter_memenv_of Γ Δ m g a w :
+  ✓ Γ → ✓{Γ,Δ} m → m !!{Γ} a = Some w → type_of (g w) = type_of w →
   '{cmap_alter Γ g a m} = '{m}.
 Proof.
   unfold lookupE, cmap_lookup; intros; case_option_guard; simplify_equality'.
   destruct (m !!{Γ} _) as [w'|] eqn:?; simplify_equality'.
   eapply cmap_alter_ref_memenv_of; eauto; simplify_option_equality; eauto.
   cut (✓{Γ} (type_of w')); [eauto using ctree_alter_byte_type_of|].
-  destruct (cmap_lookup_ref_Some Γ Γm m (addr_index a) (addr_ref Γ a) w')
+  destruct (cmap_lookup_ref_Some Γ Δ m (addr_index a) (addr_ref Γ a) w')
     as (?&?&?&?&?); simplify_type_equality; eauto using ctree_typed_type_valid.
 Qed.
-Lemma cmap_alter_ref_valid Γ Γm m g o r w :
-  ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} (o,r) = Some w → (Γ,Γm) ⊢ g w : type_of w →
-  ¬ctree_unmapped (g w) → ✓{Γ,Γm} (cmap_alter_ref Γ g o r m).
+Lemma cmap_alter_ref_valid Γ Δ m g o r w :
+  ✓ Γ → ✓{Γ,Δ} m → m !!{Γ} (o,r) = Some w → (Γ,Δ) ⊢ g w : type_of w →
+  ¬ctree_unmapped (g w) → ✓{Γ,Δ} (cmap_alter_ref Γ g o r m).
 Proof.
   destruct m as [m]; intros ? (?&Hm&Hm') ???; split_ands'; simpl in *; auto.
   { intros o' τ; rewrite lookup_alter_Some;
@@ -347,17 +347,17 @@ Proof.
   destruct (Hm' o' w' β') as (τ&?&?&?&?); naive_solver eauto using
     ctree_alter_lookup_Forall, ctree_alter_typed, @ctree_empty_unmapped.
 Qed.
-Lemma cmap_alter_valid Γ Γm m g a w :
-  ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : type_of w →
-  ¬ctree_unmapped (g w) → ✓{Γ,Γm} (cmap_alter Γ g a m).
+Lemma cmap_alter_valid Γ Δ m g a w :
+  ✓ Γ → ✓{Γ,Δ} m → m !!{Γ} a = Some w → (Γ,Δ) ⊢ g w : type_of w →
+  ¬ctree_unmapped (g w) → ✓{Γ,Δ} (cmap_alter Γ g a m).
 Proof.
   unfold cmap_alter, lookupE, cmap_lookup;
     intros; case_option_guard; simplify_equality'.
   destruct (m !!{Γ} _) as [w'|] eqn:?; simplify_equality'.
   simplify_option_equality; eauto using cmap_alter_ref_valid.
-  destruct (cmap_lookup_ref_Some Γ Γm m (addr_index a) (addr_ref Γ a) w')
+  destruct (cmap_lookup_ref_Some Γ Δ m (addr_index a) (addr_ref Γ a) w')
     as (τ&σ&?&?&?); auto.
-  assert ((Γ,Γm) ⊢ w : ucharT)
+  assert ((Γ,Δ) ⊢ w : ucharT)
     by eauto using ctree_lookup_byte_typed; simplify_type_equality'.
   eapply cmap_alter_ref_valid; intuition eauto 3 using
     ctree_alter_byte_typed, type_of_typed, ctree_alter_byte_unmapped.
@@ -387,10 +387,10 @@ Proof.
   intros [?|w' ?] ?; simplify_option_equality; f_equal'.
   eauto using ctree_alter_ext_lookup.
 Qed.
-Lemma cmap_alter_commute Γ Γm g1 g2 m a1 a2 w1 w2 τ1 τ2 :
-  ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 → 
-  (Γ,Γm) ⊢ a1 : TType τ1 → m !!{Γ} a1 = Some w1 → (Γ,Γm) ⊢ g1 w1 : τ1 →
-  (Γ,Γm) ⊢ a2 : TType τ2 → m !!{Γ} a2 = Some w2 → (Γ,Γm) ⊢ g2 w2 : τ2 →
+Lemma cmap_alter_commute Γ Δ g1 g2 m a1 a2 w1 w2 τ1 τ2 :
+  ✓ Γ → ✓{Γ,Δ} m → a1 ⊥{Γ} a2 → 
+  (Γ,Δ) ⊢ a1 : TType τ1 → m !!{Γ} a1 = Some w1 → (Γ,Δ) ⊢ g1 w1 : τ1 →
+  (Γ,Δ) ⊢ a2 : TType τ2 → m !!{Γ} a2 = Some w2 → (Γ,Δ) ⊢ g2 w2 : τ2 →
   cmap_alter Γ g1 a1 (cmap_alter Γ g2 a2 m)
   = cmap_alter Γ g2 a2 (cmap_alter Γ g1 a1 m).
 Proof.
@@ -406,12 +406,12 @@ Proof.
   assert (τ1 = ucharT) by eauto using addr_not_is_obj_type.
   assert (τ2 = ucharT) by eauto using addr_not_is_obj_type.
   eapply cmap_alter_ref_ext_lookup; eauto; simplify_option_equality.
-  destruct (cmap_lookup_ref_Some Γ Γm m
+  destruct (cmap_lookup_ref_Some Γ Δ m
     (addr_index a2) (addr_ref Γ a2) w2') as (τ'&σ&?&?&?);
     eauto using ctree_alter_byte_commute.
 Qed.
-Lemma cmap_lookup_ref_alter Γ Γm g m o r1 r2 w :
-  ✓ Γ → ✓{Γ,Γm} m → m !!{Γ} (o,freeze false <$> r1) = Some w →
+Lemma cmap_lookup_ref_alter Γ Δ g m o r1 r2 w :
+  ✓ Γ → ✓{Γ,Δ} m → m !!{Γ} (o,freeze false <$> r1) = Some w →
   freeze true <$> r1 = freeze true <$> r2 →
   cmap_alter_ref Γ g o r2 m !!{Γ} (o,r1) = Some (g w).
 Proof.
@@ -420,8 +420,8 @@ Proof.
   eauto using ctree_lookup_alter.
 Qed.
 (** We need [addr_is_obj a] because padding bytes are ignored *)
-Lemma cmap_lookup_alter Γ Γm g m a w :
-  ✓ Γ → ✓{Γ,Γm} m → addr_is_obj a → m !!{Γ} a = Some w →
+Lemma cmap_lookup_alter Γ Δ g m a w :
+  ✓ Γ → ✓{Γ,Δ} m → addr_is_obj a → m !!{Γ} a = Some w →
   cmap_alter Γ g a m !!{Γ} a = Some (g w).
 Proof.
   unfold lookupE, cmap_lookup, cmap_alter;
@@ -430,9 +430,9 @@ Proof.
   by erewrite cmap_lookup_ref_alter by eauto using
     cmap_lookup_ref_le, ref_freeze_le_r; simplify_option_equality.
 Qed.
-Lemma cmap_lookup_alter_not_obj Γ Γm g m a w τ :
-  ✓ Γ → ✓{Γ,Γm} m → ¬addr_is_obj a →
-  (Γ,Γm) ⊢ a : TType τ → m !!{Γ} a = Some w → (Γ,Γm) ⊢ g w : τ →
+Lemma cmap_lookup_alter_not_obj Γ Δ g m a w τ :
+  ✓ Γ → ✓{Γ,Δ} m → ¬addr_is_obj a →
+  (Γ,Δ) ⊢ a : TType τ → m !!{Γ} a = Some w → (Γ,Δ) ⊢ g w : τ →
   ctree_unshared (g w) → cmap_alter Γ g a m !!{Γ} a =
   Some (ctree_lookup_byte_after Γ (addr_type_base a) (addr_ref_byte Γ a) (g w)).
 Proof.
@@ -441,11 +441,11 @@ Proof.
   destruct (m !!{Γ} _) as [w'|] eqn:?; simplify_equality'.
   erewrite cmap_lookup_ref_alter by eauto using
     cmap_lookup_ref_le, ref_freeze_le_r; simpl; case_decide; [done|].
-  assert (Γm ⊢ addr_index a : addr_type_object a)
+  assert (Δ ⊢ addr_index a : addr_type_object a)
     by eauto using addr_typed_index.
   assert (Γ ⊢ addr_ref Γ a : addr_type_object a ↣ addr_type_base a).
   { eapply addr_typed_ref_typed; eauto. }
-  destruct (cmap_lookup_ref_Some Γ Γm m (addr_index a)
+  destruct (cmap_lookup_ref_Some Γ Δ m (addr_index a)
     (addr_ref Γ a) w') as (?&?&?&?&?); auto; simplify_type_equality.
   assert (τ = ucharT) by eauto using addr_not_is_obj_type; subst.
   simplify_option_equality by
@@ -460,9 +460,9 @@ Proof.
     destruct (m !! _) as [[|w' β]|] eqn:?; simplify_map_equality';
     eauto using ctree_lookup_alter_disjoint.
 Qed.
-Lemma cmap_lookup_alter_disjoint Γ Γm g m a1 a2 w1 w2 τ2 :
-  ✓ Γ → ✓{Γ,Γm} m → a1 ⊥{Γ} a2 → m !!{Γ} a1 = Some w1 →
-  (Γ,Γm) ⊢ a2 : TType τ2 → m !!{Γ} a2 = Some w2 → (Γ,Γm) ⊢ g w2 : τ2 →
+Lemma cmap_lookup_alter_disjoint Γ Δ g m a1 a2 w1 w2 τ2 :
+  ✓ Γ → ✓{Γ,Δ} m → a1 ⊥{Γ} a2 → m !!{Γ} a1 = Some w1 →
+  (Γ,Δ) ⊢ a2 : TType τ2 → m !!{Γ} a2 = Some w2 → (Γ,Δ) ⊢ g w2 : τ2 →
   (ctree_unshared w2 → ctree_unshared (g w2)) →
   cmap_alter Γ g a2 m !!{Γ} a1 = Some w1.
 Proof.
@@ -478,7 +478,7 @@ Proof.
   assert (w1' = w2') by eauto using cmap_lookup_ref_freeze_proper.
   assert (τ2 = ucharT%T)
     by eauto using addr_not_is_obj_type; simplify_option_equality.
-  destruct (cmap_lookup_ref_Some Γ Γm m (addr_index a2)
+  destruct (cmap_lookup_ref_Some Γ Δ m (addr_index a2)
     (addr_ref Γ a2) w2') as (?&?&?&?&?); auto; simplify_type_equality.
   erewrite cmap_lookup_ref_alter
     by eauto using cmap_lookup_ref_le, ref_freeze_le_r; simpl.
@@ -495,10 +495,10 @@ Proof.
   * by erewrite ctree_singleton_le by eauto using ref_freeze_le_l.
   * by erewrite <-ctree_singleton_le by eauto using ref_freeze_le_r.
 Qed.
-Lemma cmap_singleton_valid Γ Γm a malloc w τ :
-  ✓ Γ → ✓{Γ} Γm → (Γ,Γm) ⊢ a : TType τ →
-  index_alive Γm (addr_index a) → addr_is_obj a → addr_strict Γ a →
-  (Γ,Γm) ⊢ w : τ → ¬ctree_unmapped w → ✓{Γ,Γm} (cmap_singleton Γ a malloc w).
+Lemma cmap_singleton_valid Γ Δ a malloc w τ :
+  ✓ Γ → ✓{Γ} Δ → (Γ,Δ) ⊢ a : TType τ →
+  index_alive Δ (addr_index a) → addr_is_obj a → addr_strict Γ a →
+  (Γ,Δ) ⊢ w : τ → ¬ctree_unmapped w → ✓{Γ,Δ} (cmap_singleton Γ a malloc w).
 Proof.
   intros ??????? Hperm; split_ands'; intros; simplify_map_equality'; auto.
   assert (τ = addr_type_base a) by eauto using addr_is_obj_type; subst.
@@ -507,16 +507,16 @@ Proof.
   contradict Hperm; eapply Forall_impl with (∅ =); eauto using
     @sep_unmapped_empty_alt, ctree_singleton_Forall_inv, addr_typed_ref_typed.
 Qed.
-Lemma cmap_singleton_weaken Γ1 Γ2 Γm a malloc w τ :
-  ✓ Γ1 → Γ1 ⊆ Γ2 → (Γ1,Γm) ⊢ a : TType τ → addr_strict Γ1 a →
+Lemma cmap_singleton_weaken Γ1 Γ2 Δ a malloc w τ :
+  ✓ Γ1 → Γ1 ⊆ Γ2 → (Γ1,Δ) ⊢ a : TType τ → addr_strict Γ1 a →
   cmap_singleton Γ1 a malloc w = cmap_singleton Γ2 a malloc w.
 Proof.
   unfold cmap_singleton; intros; f_equal'.
   by erewrite ctree_singleton_weaken, addr_ref_weaken
     by eauto using addr_typed_ref_typed, addr_typed_type_object_valid.
 Qed.
-Lemma cmap_lookup_singleton Γ Γm a malloc w τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_is_obj a → addr_strict Γ a →
+Lemma cmap_lookup_singleton Γ Δ a malloc w τ :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_is_obj a → addr_strict Γ a →
   cmap_singleton Γ a malloc w !!{Γ} a = Some w.
 Proof.
   intros. unfold lookupE, cmap_lookup.
@@ -524,16 +524,16 @@ Proof.
   erewrite ctree_lookup_singleton by eauto using addr_typed_ref_typed; simpl.
   by rewrite decide_True by done.
 Qed.
-Lemma cmap_alter_ref_singleton Γ Γm g a malloc w τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a →
+Lemma cmap_alter_ref_singleton Γ Δ g a malloc w τ :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a →
   cmap_alter_ref Γ g (addr_index a) (addr_ref Γ a) (cmap_singleton Γ a malloc w)
   = cmap_singleton Γ a malloc (g w).
 Proof.
   intros; unfold cmap_singleton; f_equal'; rewrite alter_singleton; simpl.
   by erewrite ctree_alter_singleton by eauto using addr_typed_ref_typed.
 Qed.
-Lemma cmap_alter_singleton Γ Γm g a malloc w τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_is_obj a → addr_strict Γ a →
+Lemma cmap_alter_singleton Γ Δ g a malloc w τ :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_is_obj a → addr_strict Γ a →
   cmap_alter Γ g a (cmap_singleton Γ a malloc w)
   = cmap_singleton Γ a malloc (g w).
 Proof.

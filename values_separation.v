@@ -5,7 +5,7 @@ Require Export values memory_trees_separation.
 Section values.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
-Implicit Types Γm : memenv Ti.
+Implicit Types Δ : memenv Ti.
 Implicit Types τ : type Ti.
 Implicit Types x : perm.
 Implicit Types xs : list perm.
@@ -41,8 +41,8 @@ Ltac solve_length := repeat first
 Hint Extern 0 (length _ = _) => solve_length.
 Hint Extern 0 (length _ ≠ _) => solve_length.
 
-Lemma to_val_subseteq Γ Γm w1 w2 τ :
-  ✓ Γ → (Γ,Γm) ⊢ w1 : τ → w1 ⊆ w2 →
+Lemma to_val_subseteq Γ Δ w1 w2 τ :
+  ✓ Γ → (Γ,Δ) ⊢ w1 : τ → w1 ⊆ w2 →
   ctree_Forall (not ∘ sep_unmapped) w1 → to_val Γ w1 = to_val Γ w2.
 Proof.
   intros ? Hw1 Hw. revert w1 w2 Hw τ Hw1.
@@ -64,8 +64,8 @@ Proof.
       by eauto using bit_size_of_ne_0, TCompound_valid.
     destruct Hxs; decompose_Forall_hyps.
 Qed.
-Lemma of_val_disjoint Γ Γm xs1 xs2 v τ :
-  ✓ Γ → (Γ,Γm) ⊢ v : τ → length xs1 = bit_size_of Γ τ → xs1 ⊥* xs2 →
+Lemma of_val_disjoint Γ Δ xs1 xs2 v τ :
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → length xs1 = bit_size_of Γ τ → xs1 ⊥* xs2 →
   Forall (not ∘ sep_unmapped) xs1 → Forall (not ∘ sep_unmapped) xs2 →
   of_val Γ xs1 v ⊥ of_val Γ xs2 v.
 Proof.
@@ -112,13 +112,13 @@ Proof.
       rewrite ?zip_with_take, ?zip_with_drop; auto using PBits_BIndet_union.
   * intros; f_equal; auto using PBits_union.
 Qed.
-Lemma of_val_flatten_disjoint Γ Γm w1 w2 v τ :
-  ✓ Γ → (Γ,Γm) ⊢ w1 : τ → ctree_unshared w1 →
-  ctree_Forall (not ∘ sep_unmapped) w1 → (Γ,Γm) ⊢ v : τ → w1 ⊥ w2 →
+Lemma of_val_flatten_disjoint Γ Δ w1 w2 v τ :
+  ✓ Γ → (Γ,Δ) ⊢ w1 : τ → ctree_unshared w1 →
+  ctree_Forall (not ∘ sep_unmapped) w1 → (Γ,Δ) ⊢ v : τ → w1 ⊥ w2 →
   of_val Γ (tagged_perm <$> ctree_flatten w1) v ⊥ w2.
 Proof.
   intros. assert (ctree_unmapped w2) by eauto using @ctree_unshared_unmapped.
-  assert ((Γ,Γm) ⊢ w2 : τ) by eauto using ctree_disjoint_typed.
+  assert ((Γ,Δ) ⊢ w2 : τ) by eauto using ctree_disjoint_typed.
   assert (union_free w2)
     by eauto using union_free_unmapped, ctree_typed_sep_valid.
   erewrite <-(union_free_reset w2), <-ctree_unflatten_flatten by eauto.
@@ -130,8 +130,8 @@ Proof.
   symmetry; erewrite ctree_flatten_of_val by eauto.
   eauto using PBits_perm_disjoint, @ctree_flatten_disjoint.
 Qed.
-Lemma ctree_merge_union_of_val Γ Γm xs1 xs2 v τ :
-  ✓ Γ → (Γ,Γm) ⊢ v : τ →
+Lemma ctree_merge_union_of_val Γ Δ xs1 xs2 v τ :
+  ✓ Γ → (Γ,Δ) ⊢ v : τ →
   Forall sep_valid xs1 → Forall (not ∘ sep_unmapped) xs1 →
   length xs1 = bit_size_of Γ τ → of_val Γ (xs1 ∪* xs2) v
   = ctree_merge true (∪) (of_val Γ xs1 v) (flip PBit BIndet <$> xs2).
@@ -159,9 +159,9 @@ Proof.
       ctree_flatten_length, PBits_BIndet_union by eauto using of_val_typed.
   * intros; f_equal; auto using PBits_BIndet_union_r.
 Qed.
-Lemma of_val_flatten_union Γ Γm w1 w2 v τ :
-  ✓ Γ → (Γ,Γm) ⊢ w1 : τ → ctree_unshared w1 →
-  ctree_Forall (not ∘ sep_unmapped) w1 → (Γ,Γm) ⊢ v : τ → w1 ⊥ w2 →
+Lemma of_val_flatten_union Γ Δ w1 w2 v τ :
+  ✓ Γ → (Γ,Δ) ⊢ w1 : τ → ctree_unshared w1 →
+  ctree_Forall (not ∘ sep_unmapped) w1 → (Γ,Δ) ⊢ v : τ → w1 ⊥ w2 →
   of_val Γ (tagged_perm <$> ctree_flatten (w1 ∪ w2)) v
   = of_val Γ (tagged_perm <$> ctree_flatten w1) v ∪ w2.
 Proof.

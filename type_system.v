@@ -22,11 +22,11 @@ Notation envs := (env Ti * memenv Ti * list (type Ti))%type.
 
 Global Instance rettype_valid : Valid (env Ti) (rettype Ti) := λ Γ mcτ,
   match mcτ.2 with Some τ => ✓{Γ} τ | _ => True end.
-Inductive lrval_typed' (Γ : env Ti) (Γm : memenv Ti) :
+Inductive lrval_typed' (Γ : env Ti) (Δ : memenv Ti) :
     addr Ti + val Ti → lrtype Ti → Prop :=
   | lval_typed a τ :
-     (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a → lrval_typed' Γ Γm (inl a) (inl τ)
-  | rval_typed v τ : (Γ,Γm) ⊢ v : τ → lrval_typed' Γ Γm (inr v) (inr τ).
+     (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → lrval_typed' Γ Δ (inl a) (inl τ)
+  | rval_typed v τ : (Γ,Δ) ⊢ v : τ → lrval_typed' Γ Δ (inr v) (inr τ).
 Global Instance lrval_typed: Typed (env Ti * memenv Ti) (lrtype Ti)
   (addr Ti + val Ti) := curry lrval_typed'.
 
@@ -40,174 +40,174 @@ Inductive assign_typed (Γ : env Ti) (τ1 : type Ti) :
      binop_typed op τ1 τ2 σ → cast_typed Γ σ τ1 →
      assign_typed Γ τ1 τ2 (PostOp op) τ1.
 
-Inductive expr_typed' (Γ : env Ti) (Γm : memenv Ti)
+Inductive expr_typed' (Γ : env Ti) (Δ : memenv Ti)
      (τs : list (type Ti)) : expr Ti → lrtype Ti → Prop :=
   | EVar_typed τ n :
-     τs !! n = Some τ → expr_typed' Γ Γm τs (var{τ} n) (inl τ)
+     τs !! n = Some τ → expr_typed' Γ Δ τs (var{τ} n) (inl τ)
   | EVal_typed Ω v τ :
-     ✓{Γm} Ω → (Γ,Γm) ⊢ v : τ → expr_typed' Γ Γm τs (#{Ω} v) (inr τ)
+     ✓{Δ} Ω → (Γ,Δ) ⊢ v : τ → expr_typed' Γ Δ τs (#{Ω} v) (inr τ)
   | EAddr_typed Ω a τ :
-     ✓{Γm} Ω → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a →
-     expr_typed' Γ Γm τs (%{Ω} a) (inl τ)
+     ✓{Δ} Ω → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a →
+     expr_typed' Γ Δ τs (%{Ω} a) (inl τ)
   | ERtoL_typed e τ :
-     expr_typed' Γ Γm τs e (inr (TType τ.*)) →
-     type_complete Γ τ → expr_typed' Γ Γm τs (.* e) (inl τ)
+     expr_typed' Γ Δ τs e (inr (TType τ.*)) →
+     type_complete Γ τ → expr_typed' Γ Δ τs (.* e) (inl τ)
   | ERofL_typed e τ :
-     expr_typed' Γ Γm τs e (inl τ) →
-     expr_typed' Γ Γm τs (& e) (inr (TType τ.*))
+     expr_typed' Γ Δ τs e (inl τ) →
+     expr_typed' Γ Δ τs (& e) (inr (TType τ.*))
   | EAssign_typed ass e1 e2 τ1 τ2 σ :
      assign_typed Γ τ1 τ2 ass σ →
-     expr_typed' Γ Γm τs e1 (inl τ1) → expr_typed' Γ Γm τs e2 (inr τ2) →
-     expr_typed' Γ Γm τs (e1 ::={ass} e2) (inr σ)
+     expr_typed' Γ Δ τs e1 (inl τ1) → expr_typed' Γ Δ τs e2 (inr τ2) →
+     expr_typed' Γ Δ τs (e1 ::={ass} e2) (inr σ)
   | ECall_typed e es σ σs :
-     expr_typed' Γ Γm τs e (inr ((σs ~> σ).*)) →
-     Forall2 (expr_typed' Γ Γm τs) es (inr <$> σs) → type_complete Γ σ →
-     expr_typed' Γ Γm τs (call e @ es) (inr σ)
+     expr_typed' Γ Δ τs e (inr ((σs ~> σ).*)) →
+     Forall2 (expr_typed' Γ Δ τs) es (inr <$> σs) → type_complete Γ σ →
+     expr_typed' Γ Δ τs (call e @ es) (inr σ)
   | EAbort_typed τ :
-     ✓{Γ} τ → expr_typed' Γ Γm τs (abort τ) (inr τ)
+     ✓{Γ} τ → expr_typed' Γ Δ τs (abort τ) (inr τ)
   | ELoad_typed e τ :
-     expr_typed' Γ Γm τs e (inl τ) → expr_typed' Γ Γm τs (load e) (inr τ)
+     expr_typed' Γ Δ τs e (inl τ) → expr_typed' Γ Δ τs (load e) (inr τ)
   | EEltL_typed e rs τ σ  :
-     expr_typed' Γ Γm τs e (inl τ) → Γ ⊢ rs : τ ↣ σ →
-     expr_typed' Γ Γm τs (e %> rs) (inl σ)
+     expr_typed' Γ Δ τs e (inl τ) → Γ ⊢ rs : τ ↣ σ →
+     expr_typed' Γ Δ τs (e %> rs) (inl σ)
   | EEltR_typed e rs τ σ  :
-     expr_typed' Γ Γm τs e (inr τ) → Γ ⊢ rs : τ ↣ σ →
-     expr_typed' Γ Γm τs (e #> rs) (inr σ)
+     expr_typed' Γ Δ τs e (inr τ) → Γ ⊢ rs : τ ↣ σ →
+     expr_typed' Γ Δ τs (e #> rs) (inr σ)
   | EAlloc_typed τ e τi :
-     ✓{Γ} τ → expr_typed' Γ Γm τs e (inr (intT τi)) →
-     expr_typed' Γ Γm τs (alloc{τ} e) (inr (TType τ.*))
+     ✓{Γ} τ → expr_typed' Γ Δ τs e (inr (intT τi)) →
+     expr_typed' Γ Δ τs (alloc{τ} e) (inr (TType τ.*))
   | EFree_typed e τ :
-     expr_typed' Γ Γm τs e (inl τ) →
-     expr_typed' Γ Γm τs (free e) (inr voidT)
+     expr_typed' Γ Δ τs e (inl τ) →
+     expr_typed' Γ Δ τs (free e) (inr voidT)
   | EUnOp_typed op e τ σ :
-     unop_typed op τ σ → expr_typed' Γ Γm τs e (inr τ) →
-     expr_typed' Γ Γm τs (@{op} e) (inr σ)
+     unop_typed op τ σ → expr_typed' Γ Δ τs e (inr τ) →
+     expr_typed' Γ Δ τs (@{op} e) (inr σ)
   | EBinOp_typed op e1 e2 τ1 τ2 σ :
-     binop_typed op τ1 τ2 σ → expr_typed' Γ Γm τs e1 (inr τ1) →
-     expr_typed' Γ Γm τs e2 (inr τ2) →
-     expr_typed' Γ Γm τs (e1 @{op} e2) (inr σ)
+     binop_typed op τ1 τ2 σ → expr_typed' Γ Δ τs e1 (inr τ1) →
+     expr_typed' Γ Δ τs e2 (inr τ2) →
+     expr_typed' Γ Δ τs (e1 @{op} e2) (inr σ)
   | EIf_typed e1 e2 e3 τb σ :
-     expr_typed' Γ Γm τs e1 (inr (baseT τb)) →
-     expr_typed' Γ Γm τs e2 (inr σ) → expr_typed' Γ Γm τs e3 (inr σ) →
-     expr_typed' Γ Γm τs (if{e1} e2 else e3) (inr σ)
+     expr_typed' Γ Δ τs e1 (inr (baseT τb)) →
+     expr_typed' Γ Δ τs e2 (inr σ) → expr_typed' Γ Δ τs e3 (inr σ) →
+     expr_typed' Γ Δ τs (if{e1} e2 else e3) (inr σ)
   | EComma_typed e1 e2 τ1 τ2 :
-     expr_typed' Γ Γm τs e1 (inr τ1) → expr_typed' Γ Γm τs e2 (inr τ2) →
-     expr_typed' Γ Γm τs (e1 ,, e2) (inr τ2)
+     expr_typed' Γ Δ τs e1 (inr τ1) → expr_typed' Γ Δ τs e2 (inr τ2) →
+     expr_typed' Γ Δ τs (e1 ,, e2) (inr τ2)
   | ECast_typed e τ σ :
-     expr_typed' Γ Γm τs e (inr τ) → cast_typed Γ τ σ → 
-     expr_typed' Γ Γm τs (cast{σ} e) (inr σ)
+     expr_typed' Γ Δ τs e (inr τ) → cast_typed Γ τ σ → 
+     expr_typed' Γ Δ τs (cast{σ} e) (inr σ)
   | EInsert_typed r e1 e2 τ σ :
      Γ ⊢ r : τ ↣ σ →
-     expr_typed' Γ Γm τs e1 (inr σ) → expr_typed' Γ Γm τs e2 (inr τ) →
-     expr_typed' Γ Γm τs (#[r:=e1]e2) (inr τ).
+     expr_typed' Γ Δ τs e1 (inr σ) → expr_typed' Γ Δ τs e2 (inr τ) →
+     expr_typed' Γ Δ τs (#[r:=e1]e2) (inr τ).
 Global Instance expr_typed:
   Typed envs (lrtype Ti) (expr Ti) := curry3 expr_typed'.
 
 Section expr_typed_ind.
-  Context (Γ : env Ti) (Γm : memenv Ti) (τs : list (type Ti)).
+  Context (Γ : env Ti) (Δ : memenv Ti) (τs : list (type Ti)).
   Context (P : expr Ti → lrtype Ti → Prop).
   Context (Pvar : ∀ τ n, τs !! n = Some τ → P (var{τ} n) (inl τ)).
-  Context (Pval : ∀ Ω v τ, ✓{Γm} Ω → (Γ,Γm) ⊢ v : τ → P (#{Ω} v) (inr τ)).
+  Context (Pval : ∀ Ω v τ, ✓{Δ} Ω → (Γ,Δ) ⊢ v : τ → P (#{Ω} v) (inr τ)).
   Context (Paddr : ∀ Ω a τ,
-    ✓{Γm} Ω → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a → P (%{Ω} a) (inl τ)).
+    ✓{Δ} Ω → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → P (%{Ω} a) (inl τ)).
   Context (Prtol : ∀ e τ,
-    (Γ,Γm,τs) ⊢ e : inr (TType τ.*) → P e (inr (TType τ.*)) →
+    (Γ,Δ,τs) ⊢ e : inr (TType τ.*) → P e (inr (TType τ.*)) →
     type_complete Γ τ → P (.* e) (inl τ)).
   Context (Profl : ∀ e τ,
-    (Γ,Γm,τs) ⊢ e : inl τ → P e (inl τ) → P (& e) (inr (TType τ.*))).
+    (Γ,Δ,τs) ⊢ e : inl τ → P e (inl τ) → P (& e) (inr (TType τ.*))).
   Context (Passign : ∀ ass e1 e2 τ1 τ2 σ,
-    assign_typed Γ τ1 τ2 ass σ → (Γ,Γm,τs) ⊢ e1 : inl τ1 → P e1 (inl τ1) →
-    (Γ,Γm,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ::={ass} e2) (inr σ)).
+    assign_typed Γ τ1 τ2 ass σ → (Γ,Δ,τs) ⊢ e1 : inl τ1 → P e1 (inl τ1) →
+    (Γ,Δ,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ::={ass} e2) (inr σ)).
   Context (Pcall : ∀ e es σ σs,
-    (Γ,Γm,τs) ⊢ e : inr ((σs ~> σ).*) → P e (inr ((σs ~> σ).*)) →
-    (Γ,Γm,τs) ⊢* es :* inr <$> σs → Forall2 P es (inr <$> σs) →
+    (Γ,Δ,τs) ⊢ e : inr ((σs ~> σ).*) → P e (inr ((σs ~> σ).*)) →
+    (Γ,Δ,τs) ⊢* es :* inr <$> σs → Forall2 P es (inr <$> σs) →
     type_complete Γ σ → P (call e @ es) (inr σ)).
   Context (Pabort : ∀ τ, ✓{Γ} τ → P (abort τ) (inr τ)).
   Context (Pload : ∀ e τ,
-    (Γ,Γm,τs) ⊢ e : inl τ → P e (inl τ) → P (load e) (inr τ)).
+    (Γ,Δ,τs) ⊢ e : inl τ → P e (inl τ) → P (load e) (inr τ)).
   Context (Peltl : ∀ e rs τ σ,
-    (Γ,Γm,τs) ⊢ e : inl τ → P e (inl τ) → Γ ⊢ rs : τ ↣ σ → P (e %> rs) (inl σ)).
+    (Γ,Δ,τs) ⊢ e : inl τ → P e (inl τ) → Γ ⊢ rs : τ ↣ σ → P (e %> rs) (inl σ)).
   Context (Peltr : ∀ e rs τ σ,
-    (Γ,Γm,τs) ⊢ e : inr τ → P e (inr τ) → Γ ⊢ rs : τ ↣ σ → P (e #> rs) (inr σ)).
+    (Γ,Δ,τs) ⊢ e : inr τ → P e (inr τ) → Γ ⊢ rs : τ ↣ σ → P (e #> rs) (inr σ)).
   Context (Palloc : ∀ τ e τi,
-    ✓{Γ} τ → (Γ,Γm,τs) ⊢ e : inr (intT τi) →
+    ✓{Γ} τ → (Γ,Δ,τs) ⊢ e : inr (intT τi) →
     P e (inr (intT τi)) → P (alloc{τ} e) (inr (TType τ.*))).
   Context (Pfree : ∀ e τ,
-    (Γ,Γm,τs) ⊢ e : inl τ → P e (inl τ) → P (free e) (inr voidT)).
+    (Γ,Δ,τs) ⊢ e : inl τ → P e (inl τ) → P (free e) (inr voidT)).
   Context (Punop : ∀ op e τ σ,
     unop_typed op τ σ →
-    (Γ,Γm,τs) ⊢ e : inr τ → P e (inr τ) → P (@{op} e) (inr σ)).
+    (Γ,Δ,τs) ⊢ e : inr τ → P e (inr τ) → P (@{op} e) (inr σ)).
   Context (Pbinop : ∀ op e1 e2 τ1 τ2 σ,
-    binop_typed op τ1 τ2 σ → (Γ,Γm,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
-    (Γ,Γm,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 @{op} e2) (inr σ)).
+    binop_typed op τ1 τ2 σ → (Γ,Δ,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
+    (Γ,Δ,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 @{op} e2) (inr σ)).
   Context (Pif : ∀ e1 e2 e3 τb σ,
-    (Γ,Γm,τs) ⊢ e1 : inr (baseT τb) → P e1 (inr (baseT τb)) →
-    (Γ,Γm,τs) ⊢ e2 : inr σ → P e2 (inr σ) →
-    (Γ,Γm,τs) ⊢ e3 : inr σ → P e3 (inr σ) → P (if{e1} e2 else e3) (inr σ)).
+    (Γ,Δ,τs) ⊢ e1 : inr (baseT τb) → P e1 (inr (baseT τb)) →
+    (Γ,Δ,τs) ⊢ e2 : inr σ → P e2 (inr σ) →
+    (Γ,Δ,τs) ⊢ e3 : inr σ → P e3 (inr σ) → P (if{e1} e2 else e3) (inr σ)).
   Context (Pcomma : ∀ e1 e2 τ1 τ2,
-    (Γ,Γm,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
-    (Γ,Γm,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ,, e2) (inr τ2)).
+    (Γ,Δ,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
+    (Γ,Δ,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ,, e2) (inr τ2)).
   Context (Pcast : ∀ e τ σ,
-    (Γ,Γm,τs) ⊢ e : inr τ → P e (inr τ) → cast_typed Γ τ σ →
+    (Γ,Δ,τs) ⊢ e : inr τ → P e (inr τ) → cast_typed Γ τ σ →
     P (cast{σ} e) (inr σ)).
   Context (Pinsert : ∀ r e1 e2 τ σ,
-    Γ ⊢ r : τ ↣ σ → (Γ,Γm,τs) ⊢ e1 : inr σ → P e1 (inr σ) →
-    (Γ,Γm,τs) ⊢ e2 : inr τ → P e2 (inr τ) → P (#[r:=e1]e2) (inr τ)).
-  Lemma expr_typed_ind : ∀ e τ, expr_typed' Γ Γm τs e τ → P e τ.
+    Γ ⊢ r : τ ↣ σ → (Γ,Δ,τs) ⊢ e1 : inr σ → P e1 (inr σ) →
+    (Γ,Δ,τs) ⊢ e2 : inr τ → P e2 (inr τ) → P (#[r:=e1]e2) (inr τ)).
+  Lemma expr_typed_ind : ∀ e τ, expr_typed' Γ Δ τs e τ → P e τ.
   Proof. fix 3; destruct 1; eauto using Forall2_impl. Qed.
 End expr_typed_ind.
 
-Inductive ectx_item_typed' (Γ : env Ti) (Γm : memenv Ti)
+Inductive ectx_item_typed' (Γ : env Ti) (Δ : memenv Ti)
      (τs : list (type Ti)) : ectx_item Ti → lrtype Ti → lrtype Ti → Prop :=
   | CRtoL_typed τ :
      type_complete Γ τ →
-     ectx_item_typed' Γ Γm τs (.* □) (inr (TType τ.*)) (inl τ)
-  | CLtoR_typed τ : ectx_item_typed' Γ Γm τs (& □) (inl τ) (inr (TType τ.*))
+     ectx_item_typed' Γ Δ τs (.* □) (inr (TType τ.*)) (inl τ)
+  | CLtoR_typed τ : ectx_item_typed' Γ Δ τs (& □) (inl τ) (inr (TType τ.*))
   | CAssignL_typed ass e2 τ1 τ2 σ :
-     assign_typed Γ τ1 τ2 ass σ → (Γ,Γm,τs) ⊢ e2 : inr τ2 →
-     ectx_item_typed' Γ Γm τs (□ ::={ass} e2) (inl τ1) (inr σ)
+     assign_typed Γ τ1 τ2 ass σ → (Γ,Δ,τs) ⊢ e2 : inr τ2 →
+     ectx_item_typed' Γ Δ τs (□ ::={ass} e2) (inl τ1) (inr σ)
   | CAssignR_typed ass e1 τ1 τ2 σ :
-     assign_typed Γ τ1 τ2 ass σ → (Γ,Γm,τs) ⊢ e1 : inl τ1 →
-     ectx_item_typed' Γ Γm τs (e1 ::={ass} □) (inr τ2) (inr σ)
+     assign_typed Γ τ1 τ2 ass σ → (Γ,Δ,τs) ⊢ e1 : inl τ1 →
+     ectx_item_typed' Γ Δ τs (e1 ::={ass} □) (inr τ2) (inr σ)
   | CCallL_typed es σs σ :
-     (Γ,Γm,τs) ⊢* es :* inr <$> σs → type_complete Γ σ →
-     ectx_item_typed' Γ Γm τs (call □ @ es) (inr ((σs ~> σ).*)) (inr σ)
+     (Γ,Δ,τs) ⊢* es :* inr <$> σs → type_complete Γ σ →
+     ectx_item_typed' Γ Δ τs (call □ @ es) (inr ((σs ~> σ).*)) (inr σ)
   | CCallR_typed e es1 es2 σ σs1 τ σs2 :
-     (Γ,Γm,τs) ⊢ e : inr (((σs1 ++ τ :: σs2) ~> σ).*) →
-     (Γ,Γm,τs) ⊢* reverse es1 :* inr <$> σs1 →
-     (Γ,Γm,τs) ⊢* es2 :* inr <$> σs2 → type_complete Γ σ →
-     ectx_item_typed' Γ Γm τs (call e @ es1 □ es2) (inr τ) (inr σ)
-  | CLoad_typed τ : ectx_item_typed' Γ Γm τs (load □) (inl τ) (inr τ)
+     (Γ,Δ,τs) ⊢ e : inr (((σs1 ++ τ :: σs2) ~> σ).*) →
+     (Γ,Δ,τs) ⊢* reverse es1 :* inr <$> σs1 →
+     (Γ,Δ,τs) ⊢* es2 :* inr <$> σs2 → type_complete Γ σ →
+     ectx_item_typed' Γ Δ τs (call e @ es1 □ es2) (inr τ) (inr σ)
+  | CLoad_typed τ : ectx_item_typed' Γ Δ τs (load □) (inl τ) (inr τ)
   | CEltL_typed rs τ σ :
-     Γ ⊢ rs : τ ↣ σ → ectx_item_typed' Γ Γm τs (□ %> rs) (inl τ) (inl σ)
+     Γ ⊢ rs : τ ↣ σ → ectx_item_typed' Γ Δ τs (□ %> rs) (inl τ) (inl σ)
   | CEltR_typed rs τ σ :
-     Γ ⊢ rs : τ ↣ σ → ectx_item_typed' Γ Γm τs (□ #> rs) (inr τ) (inr σ)
+     Γ ⊢ rs : τ ↣ σ → ectx_item_typed' Γ Δ τs (□ #> rs) (inr τ) (inr σ)
   | CAlloc_typed τ τi :
      ✓{Γ} τ →
-     ectx_item_typed' Γ Γm τs (alloc{τ} □) (inr (intT τi)) (inr (TType τ.*))
-  | CFree_typed τ : ectx_item_typed' Γ Γm τs (free □) (inl τ) (inr voidT)
+     ectx_item_typed' Γ Δ τs (alloc{τ} □) (inr (intT τi)) (inr (TType τ.*))
+  | CFree_typed τ : ectx_item_typed' Γ Δ τs (free □) (inl τ) (inr voidT)
   | CUnOp_typed op τ σ :
-     unop_typed op τ σ → ectx_item_typed' Γ Γm τs (@{op} □) (inr τ) (inr σ)
+     unop_typed op τ σ → ectx_item_typed' Γ Δ τs (@{op} □) (inr τ) (inr σ)
   | CBinOpL_typed op e2 τ1 τ2 σ :
-     binop_typed op τ1 τ2 σ → (Γ,Γm,τs) ⊢ e2 : inr τ2 →
-     ectx_item_typed' Γ Γm τs (□ @{op} e2) (inr τ1) (inr σ)
+     binop_typed op τ1 τ2 σ → (Γ,Δ,τs) ⊢ e2 : inr τ2 →
+     ectx_item_typed' Γ Δ τs (□ @{op} e2) (inr τ1) (inr σ)
   | CBinOpR_typed op e1 τ1 τ2 σ :
-     binop_typed op τ1 τ2 σ → (Γ,Γm,τs) ⊢ e1 : inr τ1 →
-     ectx_item_typed' Γ Γm τs (e1 @{op} □) (inr τ2) (inr σ)
+     binop_typed op τ1 τ2 σ → (Γ,Δ,τs) ⊢ e1 : inr τ1 →
+     ectx_item_typed' Γ Δ τs (e1 @{op} □) (inr τ2) (inr σ)
   | CIf_typed e2 e3 τb σ :
-     (Γ,Γm,τs) ⊢ e2 : inr σ → (Γ,Γm,τs) ⊢ e3 : inr σ →
-     ectx_item_typed' Γ Γm τs (if{□} e2 else e3) (inr (baseT τb)) (inr σ)
+     (Γ,Δ,τs) ⊢ e2 : inr σ → (Γ,Δ,τs) ⊢ e3 : inr σ →
+     ectx_item_typed' Γ Δ τs (if{□} e2 else e3) (inr (baseT τb)) (inr σ)
   | CComma_typed e2 τ1 τ2 :
-     (Γ,Γm,τs) ⊢ e2 : inr τ2 →
-     ectx_item_typed' Γ Γm τs (□ ,, e2) (inr τ1) (inr τ2)
+     (Γ,Δ,τs) ⊢ e2 : inr τ2 →
+     ectx_item_typed' Γ Δ τs (□ ,, e2) (inr τ1) (inr τ2)
   | CCast_typed τ σ :
-     cast_typed Γ τ σ → ectx_item_typed' Γ Γm τs (cast{σ} □) (inr τ) (inr σ)
+     cast_typed Γ τ σ → ectx_item_typed' Γ Δ τs (cast{σ} □) (inr τ) (inr σ)
   | CInsertL_typed r e2 τ σ :
-     Γ ⊢ r : τ ↣ σ → (Γ,Γm,τs) ⊢ e2 : inr τ →
-     ectx_item_typed' Γ Γm τs (#[r:=□] e2) (inr σ) (inr τ)
+     Γ ⊢ r : τ ↣ σ → (Γ,Δ,τs) ⊢ e2 : inr τ →
+     ectx_item_typed' Γ Δ τs (#[r:=□] e2) (inr σ) (inr τ)
   | CInsertR_typed r e1 τ σ :
-     Γ ⊢ r : τ ↣ σ → (Γ,Γm,τs) ⊢ e1 : inr σ →
-     ectx_item_typed' Γ Γm τs (#[r:=e1] □) (inr τ) (inr τ).
+     Γ ⊢ r : τ ↣ σ → (Γ,Δ,τs) ⊢ e1 : inr σ →
+     ectx_item_typed' Γ Δ τs (#[r:=e1] □) (inr τ) (inr τ).
 
 Global Instance ectx_item_typed: PathTyped envs
   (lrtype Ti) (lrtype Ti) (ectx_item Ti) := curry3 ectx_item_typed'.
@@ -233,91 +233,91 @@ Definition rettype_match (cmσ : rettype Ti) (σ : type Ti) : Prop :=
   | (_, None) => σ = voidT
   end.
 
-Inductive stmt_typed' (Γ : env Ti) (Γm : memenv Ti)
+Inductive stmt_typed' (Γ : env Ti) (Δ : memenv Ti)
      (τs : list (type Ti)) : stmt Ti → rettype Ti → Prop :=
-  | SSkip_typed : stmt_typed' Γ Γm τs skip (false,None)
+  | SSkip_typed : stmt_typed' Γ Δ τs skip (false,None)
   | SDo_typed e τ :
-     (Γ,Γm,τs) ⊢ e : inr τ → stmt_typed' Γ Γm τs (! e) (false,None)
-  | SGoto_typed l : stmt_typed' Γ Γm τs (goto l) (true,None)
-  | SThrow_typed n : stmt_typed' Γ Γm τs (throw n) (true,None)
+     (Γ,Δ,τs) ⊢ e : inr τ → stmt_typed' Γ Δ τs (! e) (false,None)
+  | SGoto_typed l : stmt_typed' Γ Δ τs (goto l) (true,None)
+  | SThrow_typed n : stmt_typed' Γ Δ τs (throw n) (true,None)
   | SReturn_typed e τ :
-     (Γ,Γm,τs) ⊢ e : inr τ → stmt_typed' Γ Γm τs (ret e) (true,Some τ)
-  | SLabel_typed l : stmt_typed' Γ Γm τs (label l) (false,None)
+     (Γ,Δ,τs) ⊢ e : inr τ → stmt_typed' Γ Δ τs (ret e) (true,Some τ)
+  | SLabel_typed l : stmt_typed' Γ Δ τs (label l) (false,None)
   | SLocal_typed' τ s c mσ :
      ✓{Γ} τ →int_typed (size_of Γ τ) sptrT →
-     stmt_typed' Γ Γm (τ :: τs) s (c,mσ) →
-     stmt_typed' Γ Γm τs (local{τ} s) (c,mσ)
+     stmt_typed' Γ Δ (τ :: τs) s (c,mσ) →
+     stmt_typed' Γ Δ τs (local{τ} s) (c,mσ)
   | SComp_typed s1 s2 c1 mσ1 c2 mσ2 mσ :
-     stmt_typed' Γ Γm τs s1 (c1,mσ1) → stmt_typed' Γ Γm τs s2 (c2,mσ2) →
-     rettype_union mσ1 mσ2 = Some mσ → stmt_typed' Γ Γm τs (s1 ;; s2) (c2,mσ)
+     stmt_typed' Γ Δ τs s1 (c1,mσ1) → stmt_typed' Γ Δ τs s2 (c2,mσ2) →
+     rettype_union mσ1 mσ2 = Some mσ → stmt_typed' Γ Δ τs (s1 ;; s2) (c2,mσ)
   | SCatch_typed s c mσ :
-     stmt_typed' Γ Γm τs s (c,mσ) →
-     stmt_typed' Γ Γm τs (catch s) (false,mσ)
+     stmt_typed' Γ Δ τs s (c,mσ) →
+     stmt_typed' Γ Δ τs (catch s) (false,mσ)
   | SLoop_typed s c mσ :
-     stmt_typed' Γ Γm τs s (c,mσ) →
-     stmt_typed' Γ Γm τs (loop s) (true,mσ)
+     stmt_typed' Γ Δ τs s (c,mσ) →
+     stmt_typed' Γ Δ τs (loop s) (true,mσ)
   | SIf_typed e τb s1 s2 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Γm,τs) ⊢ e : inr (baseT τb) →
-     stmt_typed' Γ Γm τs s1 (c1,mσ1) → stmt_typed' Γ Γm τs s2 (c2,mσ2) →
+     (Γ,Δ,τs) ⊢ e : inr (baseT τb) →
+     stmt_typed' Γ Δ τs s1 (c1,mσ1) → stmt_typed' Γ Δ τs s2 (c2,mσ2) →
      rettype_union mσ1 mσ2 = Some mσ →
-     stmt_typed' Γ Γm τs (if{e} s1 else s2) (c1 && c2, mσ).
+     stmt_typed' Γ Δ τs (if{e} s1 else s2) (c1 && c2, mσ).
 Global Instance stmt_typed:
   Typed envs (rettype Ti) (stmt Ti) := curry3 stmt_typed'.
 
-Inductive sctx_item_typed' (Γ : env Ti) (Γm : memenv Ti)
+Inductive sctx_item_typed' (Γ : env Ti) (Δ : memenv Ti)
      (τs : list (type Ti)) : sctx_item Ti → relation (rettype Ti) :=
   | CCompL_typed s2 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Γm,τs) ⊢ s2 : (c2,mσ2) → rettype_union mσ1 mσ2 = Some mσ →
-     sctx_item_typed' Γ Γm τs (□ ;; s2) (c1,mσ1) (c2,mσ)
+     (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) → rettype_union mσ1 mσ2 = Some mσ →
+     sctx_item_typed' Γ Δ τs (□ ;; s2) (c1,mσ1) (c2,mσ)
   | CCompR_typed s1 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Γm,τs) ⊢ s1 : (c1,mσ1) → rettype_union mσ1 mσ2 = Some mσ →
-     sctx_item_typed' Γ Γm τs (s1 ;; □) (c2,mσ2) (c2,mσ)
+     (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → rettype_union mσ1 mσ2 = Some mσ →
+     sctx_item_typed' Γ Δ τs (s1 ;; □) (c2,mσ2) (c2,mσ)
   | Ccatch_typed c mσ :
-     sctx_item_typed' Γ Γm τs (catch □) (c,mσ) (false,mσ)
+     sctx_item_typed' Γ Δ τs (catch □) (c,mσ) (false,mσ)
   | CLoop_typed c mσ :
-     sctx_item_typed' Γ Γm τs (loop □) (c,mσ) (true,mσ)
+     sctx_item_typed' Γ Δ τs (loop □) (c,mσ) (true,mσ)
   | CIfL_typed e τb s2 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Γm,τs) ⊢ e : inr (baseT τb) → (Γ,Γm,τs) ⊢ s2 : (c2,mσ2) →
+     (Γ,Δ,τs) ⊢ e : inr (baseT τb) → (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) →
      rettype_union mσ1 mσ2 = Some mσ →
-     sctx_item_typed' Γ Γm τs (if{e} □ else s2) (c1,mσ1) (c1&&c2,mσ)
+     sctx_item_typed' Γ Δ τs (if{e} □ else s2) (c1,mσ1) (c1&&c2,mσ)
   | CIfR_typed e τb s1 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Γm,τs) ⊢ e : inr (baseT τb) → (Γ,Γm,τs) ⊢ s1 : (c1,mσ1) →
+     (Γ,Δ,τs) ⊢ e : inr (baseT τb) → (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) →
      rettype_union mσ1 mσ2 = Some mσ →
-     sctx_item_typed' Γ Γm τs (if{e} s1 else □) (c2,mσ2) (c1&&c2,mσ).
+     sctx_item_typed' Γ Δ τs (if{e} s1 else □) (c2,mσ2) (c1&&c2,mσ).
 Global Instance sctx_typed: PathTyped envs (rettype Ti)
   (rettype Ti) (sctx_item Ti) := curry3 sctx_item_typed'.
 
-Inductive esctx_item_typed' (Γ : env Ti) (Γm : memenv Ti)
+Inductive esctx_item_typed' (Γ : env Ti) (Δ : memenv Ti)
      (τs : list (type Ti)) : esctx_item Ti → type Ti → rettype Ti → Prop :=
-  | CDoE_typed τ : esctx_item_typed' Γ Γm τs (! □) τ (false,None)
-  | CReturnE_typed τ : esctx_item_typed' Γ Γm τs (ret □) τ (true,Some τ)
+  | CDoE_typed τ : esctx_item_typed' Γ Δ τs (! □) τ (false,None)
+  | CReturnE_typed τ : esctx_item_typed' Γ Δ τs (ret □) τ (true,Some τ)
   | CIfE_typed τb s1 s2 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Γm,τs) ⊢ s1 : (c1,mσ1) → (Γ,Γm,τs) ⊢ s2 : (c2,mσ2) →
+     (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) →
      rettype_union mσ1 mσ2 = Some mσ →
-     esctx_item_typed' Γ Γm τs (if{□} s1 else s2)%S (baseT τb) (c1&&c2,mσ).
+     esctx_item_typed' Γ Δ τs (if{□} s1 else s2)%S (baseT τb) (c1&&c2,mσ).
 Global Instance esctx_item_typed: PathTyped envs (type Ti)
   (rettype Ti) (esctx_item Ti) := curry3 esctx_item_typed'.
 
 Inductive ctx_item_typed'
-      (Γ : env Ti) (Γm : memenv Ti) (τs : list (type Ti)) :
+      (Γ : env Ti) (Δ : memenv Ti) (τs : list (type Ti)) :
       ctx_item Ti → focustype Ti → focustype Ti → Prop :=
   | CStmt_typed Es cmσ1 cmσ2 :
-     (Γ,Γm,τs) ⊢ Es : cmσ1 ↣ cmσ2 →
-     ctx_item_typed' Γ Γm τs (CStmt Es) (Stmt_type cmσ1) (Stmt_type cmσ2)
+     (Γ,Δ,τs) ⊢ Es : cmσ1 ↣ cmσ2 →
+     ctx_item_typed' Γ Δ τs (CStmt Es) (Stmt_type cmσ1) (Stmt_type cmσ2)
   | CLocal_typed o τ c mσ :
-     Γm ⊢ o : τ →
-     ctx_item_typed' Γ Γm τs
+     Δ ⊢ o : τ →
+     ctx_item_typed' Γ Δ τs
        (CLocal o τ) (Stmt_type (c,mσ)) (Stmt_type (c,mσ))
   | CExpr_typed e Ee τ cmσ :
-     (Γ,Γm,τs) ⊢ e : inr τ → (Γ,Γm,τs) ⊢ Ee : τ ↣ cmσ →
-     ctx_item_typed' Γ Γm τs (CExpr e Ee) (Expr_type τ) (Stmt_type cmσ)
+     (Γ,Δ,τs) ⊢ e : inr τ → (Γ,Δ,τs) ⊢ Ee : τ ↣ cmσ →
+     ctx_item_typed' Γ Δ τs (CExpr e Ee) (Expr_type τ) (Stmt_type cmσ)
   | CFun_typed E f σs τ σ :
-     Γ !! f = Some (σs,τ) → (Γ,Γm,τs) ⊢ E : inr τ ↣ inr σ →
-     ctx_item_typed' Γ Γm τs (CFun E) (Fun_type f) (Expr_type σ)
+     Γ !! f = Some (σs,τ) → (Γ,Δ,τs) ⊢ E : inr τ ↣ inr σ →
+     ctx_item_typed' Γ Δ τs (CFun E) (Fun_type f) (Expr_type σ)
   | CParams_typed f σs os cmσ σ :
-     Γ !! f = Some (σs, σ) → Γm ⊢* os :* σs →
+     Γ !! f = Some (σs, σ) → Δ ⊢* os :* σs →
      rettype_match cmσ σ → ctx_item_typed'
-       Γ Γm τs (CParams f (zip os σs)) (Stmt_type cmσ) (Fun_type f).
+       Γ Δ τs (CParams f (zip os σs)) (Stmt_type cmσ) (Fun_type f).
 Global Instance ctx_item_typed: PathTyped envs (focustype Ti)
   (focustype Ti) (ctx_item Ti) := curry3 ctx_item_typed'.
 Inductive ctx_typed' (Γs : env Ti * memenv Ti) :
@@ -329,35 +329,35 @@ Inductive ctx_typed' (Γs : env Ti * memenv Ti) :
 Global Instance ctx_typed: PathTyped (env Ti * memenv Ti)
   (focustype Ti) (focustype Ti) (ctx Ti) := ctx_typed'.
 
-Inductive direction_typed' (Γ : env Ti) (Γm : memenv Ti) :
+Inductive direction_typed' (Γ : env Ti) (Δ : memenv Ti) :
     direction Ti → rettype Ti → Prop :=
-  | Down_typed cmτ : direction_typed' Γ Γm ↘ cmτ
-  | Up_typed mτ : direction_typed' Γ Γm ↗ (false,mτ)
-  | Top_typed c v τ : (Γ,Γm) ⊢ v : τ → direction_typed' Γ Γm (⇈ v) (c,Some τ)
-  | Goto_typed l cmτ : direction_typed' Γ Γm (↷ l) cmτ
-  | Throw_typed n cmτ : direction_typed' Γ Γm (↑ n) cmτ.
+  | Down_typed cmτ : direction_typed' Γ Δ ↘ cmτ
+  | Up_typed mτ : direction_typed' Γ Δ ↗ (false,mτ)
+  | Top_typed c v τ : (Γ,Δ) ⊢ v : τ → direction_typed' Γ Δ (⇈ v) (c,Some τ)
+  | Goto_typed l cmτ : direction_typed' Γ Δ (↷ l) cmτ
+  | Throw_typed n cmτ : direction_typed' Γ Δ (↑ n) cmτ.
 Global Instance direction_typed: Typed (env Ti * memenv Ti)
   (rettype Ti) (direction Ti) := curry direction_typed'.
 
-Inductive focus_typed' (Γ : env Ti) (Γm : memenv Ti)
+Inductive focus_typed' (Γ : env Ti) (Δ : memenv Ti)
     (τs : list (type Ti)) : focus Ti → focustype Ti → Prop :=
   | Stmt_typed d s cmσ :
-     (Γ,Γm,τs) ⊢ s : cmσ → (Γ,Γm) ⊢ d : cmσ →
-     focus_typed' Γ Γm τs (Stmt d s) (Stmt_type cmσ)
+     (Γ,Δ,τs) ⊢ s : cmσ → (Γ,Δ) ⊢ d : cmσ →
+     focus_typed' Γ Δ τs (Stmt d s) (Stmt_type cmσ)
   | Expr_typed e τ :
-     (Γ,Γm,τs) ⊢ e : inr τ → focus_typed' Γ Γm τs (Expr e) (Expr_type τ)
+     (Γ,Δ,τs) ⊢ e : inr τ → focus_typed' Γ Δ τs (Expr e) (Expr_type τ)
   | Call_typed f vs σs σ :
-     Γ !! f = Some (σs,σ) → (Γ,Γm) ⊢* vs :* σs →
-     focus_typed' Γ Γm τs (Call f vs) (Fun_type f)
+     Γ !! f = Some (σs,σ) → (Γ,Δ) ⊢* vs :* σs →
+     focus_typed' Γ Δ τs (Call f vs) (Fun_type f)
   | Return_typed f σs σ v :
      Γ !! f = Some (σs, σ) →
-     (Γ,Γm) ⊢ v : σ → focus_typed' Γ Γm τs (Return f v) (Fun_type f)
+     (Γ,Δ) ⊢ v : σ → focus_typed' Γ Δ τs (Return f v) (Fun_type f)
   | UndefExpr_typed E e τlr τ :
-     (Γ,Γm,τs) ⊢ e : τlr → (Γ,Γm,τs) ⊢ E : τlr ↣ inr τ →
-     focus_typed' Γ Γm τs (Undef (UndefExpr E e)) (Expr_type τ)
+     (Γ,Δ,τs) ⊢ e : τlr → (Γ,Δ,τs) ⊢ E : τlr ↣ inr τ →
+     focus_typed' Γ Δ τs (Undef (UndefExpr E e)) (Expr_type τ)
   | UndefBranch_typed Es Ω v τ mσ :
-     ✓{Γm} Ω → (Γ,Γm) ⊢ v : τ → (Γ,Γm,τs) ⊢ Es : τ ↣ mσ →
-     focus_typed' Γ Γm τs (Undef (UndefBranch Es Ω v)) (Stmt_type mσ).
+     ✓{Δ} Ω → (Γ,Δ) ⊢ v : τ → (Γ,Δ,τs) ⊢ Es : τ ↣ mσ →
+     focus_typed' Γ Δ τs (Undef (UndefBranch Es Ω v)) (Stmt_type mσ).
 Global Instance focus_typed:
   Typed envs (focustype Ti) (focus Ti) := curry3 focus_typed'.
 
@@ -368,23 +368,23 @@ Global Instance state_typed :
   (Γ,'{m}) ⊢ k : τf ↣ Fun_type f ∧
   ✓{Γ} m.
 
-Definition funenv_prevalid (Γ : env Ti) (Γm : memenv Ti) (δ : funenv Ti) :=
+Definition funenv_prevalid (Γ : env Ti) (Δ : memenv Ti) (δ : funenv Ti) :=
   map_Forall (λ f s, ∃ τs τ cmτ,
     Γ !! f = Some (τs,τ) ∧ Forall (type_complete Γ) τs ∧
     Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧
-    (Γ,Γm,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
+    (Γ,Δ,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
     gotos s ⊆ labels s ∧ throws_valid 0 s
   ) δ.
-Global Instance funenv_valid: Valid (env Ti * memenv Ti) (funenv Ti) := λ ΓΓm δ,
-  let (Γ,Γm) := ΓΓm in
-  funenv_prevalid Γ Γm δ ∧ dom funset (env_f Γ) ⊆ dom funset δ.
+Global Instance funenv_valid: Valid (env Ti * memenv Ti) (funenv Ti) := λ ΓΔ δ,
+  let (Γ,Δ) := ΓΔ in
+  funenv_prevalid Γ Δ δ ∧ dom funset (env_f Γ) ⊆ dom funset δ.
 End typing.
 
 Section properties.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
 Implicit Types o : index.
-Implicit Types Γm : memenv Ti.
+Implicit Types Δ : memenv Ti.
 Implicit Types m : mem Ti.
 Implicit Types e : expr Ti.
 Implicit Types s : stmt Ti.
@@ -399,15 +399,15 @@ Implicit Types Ek : ctx_item Ti.
 Implicit Types k : ctx Ti.
 Implicit Types d : direction Ti.
 
-Lemma SLocal_typed Γ Γm τs τ s c mσ :
+Lemma SLocal_typed Γ Δ τs τ s c mσ :
   ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
-  (Γ,Γm,τ :: τs) ⊢ s : (c,mσ) → (Γ,Γm,τs) ⊢ local{τ} s : (c,mσ).
+  (Γ,Δ,τ :: τs) ⊢ s : (c,mσ) → (Γ,Δ,τs) ⊢ local{τ} s : (c,mσ).
 Proof. by constructor. Qed.
 Lemma assign_typed_type_valid Γ τ1 τ2 ass σ :
   assign_typed Γ τ1 τ2 ass σ → ✓{Γ} τ1 → ✓{Γ} σ.
 Proof. destruct 1; eauto using cast_typed_type_valid. Qed.
-Lemma expr_typed_type_valid Γ Γm τs e τlr :
-  ✓ Γ → ✓{Γ}* τs → (Γ,Γm,τs) ⊢ e : τlr → ✓{Γ} (lrtype_type τlr).
+Lemma expr_typed_type_valid Γ Δ τs e τlr :
+  ✓ Γ → ✓{Γ}* τs → (Γ,Δ,τs) ⊢ e : τlr → ✓{Γ} (lrtype_type τlr).
 Proof.
   induction 3 using @expr_typed_ind; decompose_Forall_hyps;
     eauto 5 using addr_typed_type_valid, val_typed_type_valid,
@@ -417,11 +417,11 @@ Proof.
     assign_typed_type_valid, ref_seg_typed_type_valid,
     TBase_valid_inv, TPtr_valid_inv, TFun_valid_inv_ret, type_complete_valid.
 Qed.
-Lemma expr_inl_typed_type_valid Γ Γm τs e τ :
-  ✓ Γ → ✓{Γ}* τs → (Γ,Γm,τs) ⊢ e : inl τ → ✓{Γ} τ.
+Lemma expr_inl_typed_type_valid Γ Δ τs e τ :
+  ✓ Γ → ✓{Γ}* τs → (Γ,Δ,τs) ⊢ e : inl τ → ✓{Γ} τ.
 Proof. by apply expr_typed_type_valid. Qed.
-Lemma expr_inr_typed_type_valid Γ Γm τs e τ :
-  ✓ Γ → ✓{Γ}* τs → (Γ,Γm,τs) ⊢ e : inr τ → ✓{Γ} τ.
+Lemma expr_inr_typed_type_valid Γ Δ τs e τ :
+  ✓ Γ → ✓{Γ}* τs → (Γ,Δ,τs) ⊢ e : inr τ → ✓{Γ} τ.
 Proof. by apply expr_typed_type_valid. Qed.
 Lemma rettype_true_Some_valid Γ β σ : ✓{Γ} σ → ✓{Γ} (β, Some σ).
 Proof. done. Qed.
@@ -429,8 +429,8 @@ Lemma rettype_union_type_valid Γ mσ1 mσ2 c1 c2 mσ :
   rettype_union mσ1 mσ2 = Some mσ →
   ✓{Γ} (c1, mσ1) → ✓{Γ} (c2, mσ2) → ✓{Γ} (c2, mσ).
 Proof. destruct mσ1, mσ2; intros; simplify_option_equality; eauto. Qed.
-Lemma stmt_typed_type_valid Γ Γm τs s mcτ :
-  ✓ Γ → ✓{Γ}* τs → (Γ,Γm,τs) ⊢ s : mcτ → ✓{Γ} mcτ.
+Lemma stmt_typed_type_valid Γ Δ τs s mcτ :
+  ✓ Γ → ✓{Γ}* τs → (Γ,Δ,τs) ⊢ s : mcτ → ✓{Γ} mcτ.
 Proof.
   by induction 3; eauto; eauto using expr_inr_typed_type_valid,
      rettype_union_type_valid, rettype_true_Some_valid.
@@ -438,9 +438,9 @@ Qed.
 Lemma assign_typed_weaken Γ1 Γ2 ass τ1 τ2 σ :
   ✓ Γ1 → assign_typed Γ1 τ1 τ2 ass σ → Γ1 ⊆ Γ2 → assign_typed Γ2 τ1 τ2 ass σ.
 Proof. destruct 2; econstructor; eauto using cast_typed_weaken. Qed.
-Lemma expr_typed_weaken Γ1 Γ2 Γm1 Γm2 τs1 τs2 e τlr :
-  ✓ Γ1 → (Γ1,Γm1,τs1) ⊢ e : τlr → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 →
-  τs1 `prefix_of` τs2 → (Γ2,Γm2,τs2) ⊢ e : τlr.
+Lemma expr_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 e τlr :
+  ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ e : τlr → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
+  τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ e : τlr.
 Proof.
   intros ? He ?? [σs ->].
   induction He using @expr_typed_ind; typed_constructor;
@@ -449,63 +449,63 @@ Proof.
     type_valid_weaken, lookup_app_l_Some, cast_typed_weaken, ref_typed_weaken,
     ref_seg_typed_weaken, lockset_valid_weaken, type_complete_weaken.
 Qed.
-Lemma ectx_item_typed_weaken Γ1 Γ2 Γm1 Γm2 τs1 τs2 Ei τlr σlr :
-  ✓ Γ1 → (Γ1,Γm1,τs1) ⊢ Ei : τlr ↣ σlr → Γ1 ⊆ Γ2 →
-  Γm1 ⇒ₘ Γm2 → τs1 `prefix_of` τs2 → (Γ2,Γm2,τs2) ⊢ Ei : τlr ↣ σlr.
+Lemma ectx_item_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 Ei τlr σlr :
+  ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ Ei : τlr ↣ σlr → Γ1 ⊆ Γ2 →
+  Δ1 ⇒ₘ Δ2 → τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ Ei : τlr ↣ σlr.
 Proof.
   destruct 2; typed_constructor;
     eauto using type_valid_weaken, addr_strict_weaken, assign_typed_weaken,
     expr_typed_weaken, lookup_weaken, cast_typed_weaken, Forall2_impl,
     ref_seg_typed_weaken, ref_typed_weaken, type_complete_weaken.
 Qed.
-Lemma ectx_typed_weaken Γ1 Γ2 Γm1 Γm2 τs1 τs2 E τlr σlr :
-  ✓ Γ1 → (Γ1,Γm1,τs1) ⊢ E : τlr ↣ σlr → Γ1 ⊆ Γ2 →
-  Γm1 ⇒ₘ Γm2 → τs1 `prefix_of` τs2 → (Γ2,Γm2,τs2) ⊢ E : τlr ↣ σlr.
+Lemma ectx_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 E τlr σlr :
+  ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ E : τlr ↣ σlr → Γ1 ⊆ Γ2 →
+  Δ1 ⇒ₘ Δ2 → τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ E : τlr ↣ σlr.
 Proof.
   intros ? HE ???. revert τlr HE. induction E; intros; typed_inversion_all;
     typed_constructor; eauto using ectx_item_typed_weaken.
 Qed.
-Lemma stmt_typed_weaken Γ1 Γ2 Γm1 Γm2 τs1 τs2 s mτ :
-  ✓ Γ1 → (Γ1,Γm1,τs1) ⊢ s : mτ → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 →
-  τs1 `prefix_of` τs2 → (Γ2,Γm2,τs2) ⊢ s : mτ.
+Lemma stmt_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 s mτ :
+  ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ s : mτ → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
+  τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ s : mτ.
 Proof.
   intros ? Hs ??. revert τs2. induction Hs; typed_constructor;
     erewrite <-1?size_of_weaken by eauto;
     eauto using expr_typed_weaken, type_valid_weaken;
     unfold typed, stmt_typed in *; simpl in *; eauto using prefix_of_cons.
 Qed.
-Lemma sctx_item_typed_weaken Γ1 Γ2 Γm1 Γm2 τs1 τs2 Es mτ mσ :
-  ✓ Γ1 → (Γ1,Γm1,τs1) ⊢ Es : mτ ↣ mσ → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 →
-  τs1 `prefix_of` τs2 → (Γ2,Γm2,τs2) ⊢ Es : mτ ↣ mσ.
+Lemma sctx_item_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 Es mτ mσ :
+  ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ Es : mτ ↣ mσ → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
+  τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ Es : mτ ↣ mσ.
 Proof.
   destruct 2; typed_constructor;
     eauto using stmt_typed_weaken, expr_typed_weaken.
 Qed.
-Lemma esctx_item_typed_weaken Γ1 Γ2 Γm1 Γm2 τs1 τs2 Ee τ mσ :
-  ✓ Γ1 → (Γ1,Γm1,τs1) ⊢ Ee : τ ↣ mσ → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 →
-  τs1 `prefix_of` τs2 → (Γ2,Γm2,τs2) ⊢ Ee : τ ↣ mσ.
+Lemma esctx_item_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 Ee τ mσ :
+  ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ Ee : τ ↣ mσ → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
+  τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ Ee : τ ↣ mσ.
 Proof. destruct 2; typed_constructor; eauto using stmt_typed_weaken. Qed.
-Lemma ctx_item_typed_weaken Γ1 Γ2 Γm1 Γm2 τs Ek τf σf :
-  ✓ Γ1 → (Γ1,Γm1,τs) ⊢ Ek : τf ↣ σf → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 →
-  (Γ2,Γm2,τs) ⊢ Ek : τf ↣ σf.
+Lemma ctx_item_typed_weaken Γ1 Γ2 Δ1 Δ2 τs Ek τf σf :
+  ✓ Γ1 → (Γ1,Δ1,τs) ⊢ Ek : τf ↣ σf → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
+  (Γ2,Δ2,τs) ⊢ Ek : τf ↣ σf.
 Proof.
   destruct 2; typed_constructor; eauto using sctx_item_typed_weaken,
     ectx_typed_weaken, esctx_item_typed_weaken, expr_typed_weaken,
     Forall2_impl, lookup_fun_weaken, memenv_forward_typed.
 Qed.
-Lemma ctx_typed_weaken Γ1 Γ2 Γm1 Γm2 k τf σf :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ k : τf ↣ σf → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 →
-  (Γ2,Γm2) ⊢ k : τf ↣ σf.
+Lemma ctx_typed_weaken Γ1 Γ2 Δ1 Δ2 k τf σf :
+  ✓ Γ1 → (Γ1,Δ1) ⊢ k : τf ↣ σf → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
+  (Γ2,Δ2) ⊢ k : τf ↣ σf.
 Proof.
   intros ? Hk ??. revert τf Hk. induction k; intros; typed_inversion_all;
     typed_constructor; eauto using ctx_item_typed_weaken.
 Qed.
-Lemma direction_typed_weaken Γ1 Γ2 Γm1 Γm2 d τf :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ d : τf → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → (Γ2,Γm2) ⊢ d : τf.
+Lemma direction_typed_weaken Γ1 Γ2 Δ1 Δ2 d τf :
+  ✓ Γ1 → (Γ1,Δ1) ⊢ d : τf → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 → (Γ2,Δ2) ⊢ d : τf.
 Proof. destruct 2; typed_constructor; eauto using val_typed_weaken. Qed.
-Lemma funenv_prevalid_weaken Γ1 Γ2 Γm1 Γm2 δ :
-  ✓ Γ1 → funenv_prevalid Γ1 Γm1 δ → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 →
-  funenv_prevalid Γ2 Γm2 δ.
+Lemma funenv_prevalid_weaken Γ1 Γ2 Δ1 Δ2 δ :
+  ✓ Γ1 → funenv_prevalid Γ1 Δ1 δ → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
+  funenv_prevalid Γ2 Δ2 δ.
 Proof.
   intros ? Hδ ?? f s ?. destruct (Hδ f s);
     naive_solver eauto using stmt_typed_weaken, env_valid_args_valid,
@@ -513,64 +513,64 @@ Proof.
     types_complete_weaken, (sizes_of_weaken (λ x, int_typed x sptrT)),
     types_complete_valid.
 Qed.
-Lemma funenv_valid_weaken Γ Γm1 Γm2 δ :
-  ✓ Γ → ✓{Γ,Γm1} δ → Γm1 ⇒ₘ Γm2 → ✓{Γ,Γm2} δ.
+Lemma funenv_valid_weaken Γ Δ1 Δ2 δ :
+  ✓ Γ → ✓{Γ,Δ1} δ → Δ1 ⇒ₘ Δ2 → ✓{Γ,Δ2} δ.
 Proof. destruct 2; split; simpl in *; eauto using funenv_prevalid_weaken. Qed.
-Lemma funenv_prevalid_empty Γ Γm : funenv_prevalid Γ Γm ∅.
+Lemma funenv_prevalid_empty Γ Δ : funenv_prevalid Γ Δ ∅.
 Proof. by intros ??; simpl_map. Qed.
-Lemma funenv_prevalid_insert Γ Γm δ f s τ τs cmτ :
-  funenv_prevalid Γ Γm δ →
+Lemma funenv_prevalid_insert Γ Δ δ f s τ τs cmτ :
+  funenv_prevalid Γ Δ δ →
   Γ !! f = Some (τs, τ) → Forall (type_complete Γ) τs →
   Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
-  (Γ,Γm,τs) ⊢ s : cmτ → rettype_match cmτ τ → gotos s ⊆ labels s →
-  throws_valid 0 s → funenv_prevalid Γ Γm (<[f:=s]> δ).
+  (Γ,Δ,τs) ⊢ s : cmτ → rettype_match cmτ τ → gotos s ⊆ labels s →
+  throws_valid 0 s → funenv_prevalid Γ Δ (<[f:=s]> δ).
 Proof. intros ???????? f' s'; rewrite lookup_insert_Some; naive_solver. Qed.
-Lemma funenv_lookup Γ Γm δ f τs τ :
-  ✓ Γ → ✓{Γ,Γm} δ → Γ !! f = Some (τs,τ) → ∃ s cmτ,
+Lemma funenv_lookup Γ Δ δ f τs τ :
+  ✓ Γ → ✓{Γ,Δ} δ → Γ !! f = Some (τs,τ) → ∃ s cmτ,
     δ !! f = Some s ∧ Forall (type_complete Γ) τs ∧
     Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧
-    (Γ,Γm,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
+    (Γ,Δ,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
     gotos s ⊆ labels s ∧ throws_valid 0 s.
 Proof.
   intros ? [Hδ HΓf] ?; simpl in *. assert (∃ s, δ !! f = Some s) as [s ?].
   { apply elem_of_dom, HΓf, elem_of_dom; eauto. }
   destruct (Hδ f s) as (?&?&?&?&?); simplify_equality; eauto.
 Qed.
-Lemma funenv_lookup_inv Γ Γm δ f s :
-  ✓ Γ → ✓{Γ,Γm} δ → δ !! f = Some s → ∃ τs τ cmτ,
+Lemma funenv_lookup_inv Γ Δ δ f s :
+  ✓ Γ → ✓{Γ,Δ} δ → δ !! f = Some s → ∃ τs τ cmτ,
     Γ !! f = Some (τs,τ) ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧
-    (Γ,Γm,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
+    (Γ,Δ,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
     gotos s ⊆ labels s ∧ throws_valid 0 s.
 Proof. intros ? [Hδ _] ?. destruct (Hδ f s); naive_solver. Qed.
-Lemma funenv_lookup_gotos Γ Γm δ f s :
-  ✓ Γ → ✓{Γ,Γm} δ → δ !! f = Some s → gotos s ⊆ labels s.
+Lemma funenv_lookup_gotos Γ Δ δ f s :
+  ✓ Γ → ✓{Γ,Δ} δ → δ !! f = Some s → gotos s ⊆ labels s.
 Proof.
-  intros. by destruct (funenv_lookup_inv Γ Γm δ f s) as (?&?&?&?&?&?&?&?&?).
+  intros. by destruct (funenv_lookup_inv Γ Δ δ f s) as (?&?&?&?&?&?&?&?&?).
 Qed.
-Lemma funenv_lookup_throws Γ Γm δ f s :
-  ✓ Γ → ✓{Γ,Γm} δ → δ !! f = Some s → throws_valid 0 s.
+Lemma funenv_lookup_throws Γ Δ δ f s :
+  ✓ Γ → ✓{Γ,Δ} δ → δ !! f = Some s → throws_valid 0 s.
 Proof.
-  intros. by destruct (funenv_lookup_inv Γ Γm δ f s) as (?&?&?&?&?&?&?&?&?).
+  intros. by destruct (funenv_lookup_inv Γ Δ δ f s) as (?&?&?&?&?&?&?&?&?).
 Qed.
 
-Lemma EVals_typed Γ Γm τs Ωs vs σs :
-  length Ωs = length vs → ✓{Γm}* Ωs → (Γ,Γm) ⊢* vs :* σs →
-  (Γ,Γm,τs) ⊢* #{Ωs}* vs :* inr <$> σs.
+Lemma EVals_typed Γ Δ τs Ωs vs σs :
+  length Ωs = length vs → ✓{Δ}* Ωs → (Γ,Δ) ⊢* vs :* σs →
+  (Γ,Δ,τs) ⊢* #{Ωs}* vs :* inr <$> σs.
 Proof.
   rewrite <-Forall2_same_length. intros Hvs ?. revert σs.
   induction Hvs; intros [|??] ?; decompose_Forall_hyps;
     repeat constructor; auto.
 Qed.
-Lemma EVals_typed_inv Γ Γm τs Ωs vs σs :
+Lemma EVals_typed_inv Γ Δ τs Ωs vs σs :
   length Ωs = length vs →
-  (Γ,Γm,τs) ⊢* #{Ωs}* vs :* inr <$> σs → (Γ,Γm) ⊢* vs :* σs.
+  (Γ,Δ,τs) ⊢* #{Ωs}* vs :* inr <$> σs → (Γ,Δ) ⊢* vs :* σs.
 Proof.
   rewrite <-Forall2_same_length. intros Hvs. revert σs.
   induction Hvs; intros [|??] ?; decompose_Forall_hyps;
     typed_inversion_all; constructor; auto.
 Qed.
-Lemma ctx_typed_stack_typed Γ Γm k τf σf :
-  (Γ,Γm) ⊢ k : τf ↣ σf → Γm ⊢* get_stack k :* get_stack_types k.
+Lemma ctx_typed_stack_typed Γ Δ k τf σf :
+  (Γ,Δ) ⊢ k : τf ↣ σf → Δ ⊢* get_stack k :* get_stack_types k.
 Proof.
   revert τf. induction k as [|Ek k IH]; intros; typed_inversion_all; eauto;
     repeat match goal with
@@ -580,66 +580,66 @@ Proof.
        assert (length l = length l') by eauto using Forall2_length
     end; rewrite ?fst_zip, ?snd_zip by lia; eauto using Forall2_app.
 Qed.
-Lemma ectx_item_subst_typed Γ Γm τs Ei e τlr σlr :
-  (Γ,Γm,τs) ⊢ Ei : τlr ↣ σlr →
-  (Γ,Γm,τs) ⊢ e : τlr → (Γ,Γm,τs) ⊢ subst Ei e : σlr.
+Lemma ectx_item_subst_typed Γ Δ τs Ei e τlr σlr :
+  (Γ,Δ,τs) ⊢ Ei : τlr ↣ σlr →
+  (Γ,Δ,τs) ⊢ e : τlr → (Γ,Δ,τs) ⊢ subst Ei e : σlr.
 Proof.
   destruct 1; simpl; typed_constructor; eauto.
   rewrite ?fmap_app; eauto using Forall2_app, Forall2_cons.
 Qed.
-Lemma ectx_subst_typed Γ Γm τs E e τlr σlr :
-  (Γ,Γm,τs) ⊢ E : τlr ↣ σlr →
-  (Γ,Γm,τs) ⊢ e : τlr → (Γ,Γm,τs) ⊢ subst E e : σlr.
+Lemma ectx_subst_typed Γ Δ τs E e τlr σlr :
+  (Γ,Δ,τs) ⊢ E : τlr ↣ σlr →
+  (Γ,Δ,τs) ⊢ e : τlr → (Γ,Δ,τs) ⊢ subst E e : σlr.
 Proof.
   intros HE. revert e. induction HE; simpl; eauto using ectx_item_subst_typed.
 Qed.
-Lemma ectx_item_subst_typed_rev Γ Γm τs Ei e σlr :
-  (Γ,Γm,τs) ⊢ subst Ei e : σlr →
-  ∃ τlr, (Γ,Γm,τs) ⊢ e : τlr ∧ (Γ,Γm,τs) ⊢ Ei : τlr ↣ σlr.
+Lemma ectx_item_subst_typed_rev Γ Δ τs Ei e σlr :
+  (Γ,Δ,τs) ⊢ subst Ei e : σlr →
+  ∃ τlr, (Γ,Δ,τs) ⊢ e : τlr ∧ (Γ,Δ,τs) ⊢ Ei : τlr ↣ σlr.
 Proof.
   intros He. destruct Ei; typed_inversion He;
     list_simplifier; eexists; split_ands; repeat typed_constructor; eauto.
 Qed.
-Lemma ectx_subst_typed_rev Γ Γm τs E e σlr :
-  (Γ,Γm,τs) ⊢ subst E e : σlr →
-  ∃ τlr, (Γ,Γm,τs) ⊢ e : τlr ∧ (Γ,Γm,τs) ⊢ E : τlr ↣ σlr.
+Lemma ectx_subst_typed_rev Γ Δ τs E e σlr :
+  (Γ,Δ,τs) ⊢ subst E e : σlr →
+  ∃ τlr, (Γ,Δ,τs) ⊢ e : τlr ∧ (Γ,Δ,τs) ⊢ E : τlr ↣ σlr.
 Proof.
   revert e. induction E as [|Ei E IH]; simpl; intros e ?.
   { exists σlr. by repeat constructor. }
   edestruct (IH (subst Ei e)) as (τlr1&?&?); auto.
-  destruct (ectx_item_subst_typed_rev Γ Γm τs Ei e τlr1) as (τlr2&?&?); auto.
+  destruct (ectx_item_subst_typed_rev Γ Δ τs Ei e τlr1) as (τlr2&?&?); auto.
   exists τlr2; split; auto. typed_constructor; eauto.
 Qed.
-Lemma sctx_item_subst_typed Γ Γm τs Es s cmτ cmσ :
-  (Γ,Γm,τs) ⊢ Es : cmτ ↣ cmσ → (Γ,Γm,τs) ⊢ s : cmτ →
-  (Γ,Γm,τs) ⊢ subst Es s : cmσ.
+Lemma sctx_item_subst_typed Γ Δ τs Es s cmτ cmσ :
+  (Γ,Δ,τs) ⊢ Es : cmτ ↣ cmσ → (Γ,Δ,τs) ⊢ s : cmτ →
+  (Γ,Δ,τs) ⊢ subst Es s : cmσ.
 Proof. destruct 1; simpl; typed_constructor; eauto; esolve_elem_of. Qed.
-Lemma sctx_item_subst_typed_rev Γ Γm τs Es s cmσ :
-  (Γ,Γm,τs) ⊢ subst Es s : cmσ →
-  ∃ cmτ, (Γ,Γm,τs) ⊢ s : cmτ ∧ (Γ,Γm,τs) ⊢ Es : cmτ ↣ cmσ.
+Lemma sctx_item_subst_typed_rev Γ Δ τs Es s cmσ :
+  (Γ,Δ,τs) ⊢ subst Es s : cmσ →
+  ∃ cmτ, (Γ,Δ,τs) ⊢ s : cmτ ∧ (Γ,Δ,τs) ⊢ Es : cmτ ↣ cmσ.
 Proof.
   intros Hs. destruct Es; simpl; typed_inversion Hs;
     eexists; split_ands; repeat typed_constructor; eauto.
 Qed.
-Lemma esctx_item_subst_typed Γ Γm τs Ee e τ cmσ :
-  (Γ,Γm,τs) ⊢ Ee : τ ↣ cmσ → (Γ,Γm,τs) ⊢ e : inr τ →
-  (Γ,Γm,τs) ⊢ subst Ee e : cmσ.
+Lemma esctx_item_subst_typed Γ Δ τs Ee e τ cmσ :
+  (Γ,Δ,τs) ⊢ Ee : τ ↣ cmσ → (Γ,Δ,τs) ⊢ e : inr τ →
+  (Γ,Δ,τs) ⊢ subst Ee e : cmσ.
 Proof. destruct 1; simpl; typed_constructor; eauto. Qed.
-Lemma esctx_item_subst_typed_rev Γ Γm τs Ee e cmσ :
-  (Γ,Γm,τs) ⊢ subst Ee e : cmσ →
-  ∃ τ, (Γ,Γm,τs) ⊢ e : inr τ ∧ (Γ,Γm,τs) ⊢ Ee : τ ↣ cmσ.
+Lemma esctx_item_subst_typed_rev Γ Δ τs Ee e cmσ :
+  (Γ,Δ,τs) ⊢ subst Ee e : cmσ →
+  ∃ τ, (Γ,Δ,τs) ⊢ e : inr τ ∧ (Γ,Δ,τs) ⊢ Ee : τ ↣ cmσ.
 Proof.
   intros He. destruct Ee; simpl; typed_inversion He;
     eexists; split_ands; repeat typed_constructor; eauto.
 Qed.
-Lemma sctx_item_typed_Some_l Γ Γm τs Es c1 τ cmτ :
-  (Γ,Γm,τs) ⊢ Es : (c1,Some τ) ↣ cmτ → ∃ c2, cmτ = (c2, Some τ).
+Lemma sctx_item_typed_Some_l Γ Δ τs Es c1 τ cmτ :
+  (Γ,Δ,τs) ⊢ Es : (c1,Some τ) ↣ cmτ → ∃ c2, cmτ = (c2, Some τ).
 Proof.
   intros HEs. typed_inversion HEs; unfold rettype_union in *;
     repeat case_match; simplify_option_equality; eauto.
 Qed.
-Lemma Fun_type_stack_types Γ Γm k f τf :
-  (Γ,Γm) ⊢ k : Fun_type f ↣ τf → get_stack_types k = [].
+Lemma Fun_type_stack_types Γ Δ k f τf :
+  (Γ,Δ) ⊢ k : Fun_type f ↣ τf → get_stack_types k = [].
 Proof. by destruct k as [|[]]; intros; typed_inversion_all. Qed.
 Lemma rettype_union_l mσ : rettype_union mσ None = Some mσ.
 Proof. by destruct mσ. Qed.

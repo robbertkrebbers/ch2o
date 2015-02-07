@@ -5,7 +5,7 @@ Require Export operations memory pointer_casts.
 Section aliasing.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
-Implicit Types Γm : memenv Ti.
+Implicit Types Δ : memenv Ti.
 Implicit Types τ σ : type Ti.
 Implicit Types r : ref Ti.
 Implicit Types a : addr Ti.
@@ -104,9 +104,9 @@ Proof.
       by rewrite app_comm_cons, Hr1'', <-(associative_L (++)).
   * by do 3 right; eexists s, (rs1 :: r1'), i1, (rs2 :: r2'), i2, r'.
 Qed.
-Lemma addr_disjoint_cases Γ Γm a1 a2 σ1 σ2 :
-  ✓ Γ → (Γ,Γm) ⊢ a1 : TType σ1 → frozen a1 → σ1 ≠ ucharT%T →
-  (Γ,Γm) ⊢ a2 : TType σ2 → frozen a2 → σ2 ≠ ucharT%T →
+Lemma addr_disjoint_cases Γ Δ a1 a2 σ1 σ2 :
+  ✓ Γ → (Γ,Δ) ⊢ a1 : TType σ1 → frozen a1 → σ1 ≠ ucharT%T →
+  (Γ,Δ) ⊢ a2 : TType σ2 → frozen a2 → σ2 ≠ ucharT%T →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
@@ -125,9 +125,9 @@ Proof.
   * left; intros j1 j2; right; left; split; simpl; auto.
   * do 3 right; split; [done|]. by eexists s, r1', i1', r2', i2', r'.
 Qed.
-Lemma cmap_non_aliasing Γ Γm m a1 a2 σ1 σ2 :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : TType σ1 → frozen a1 → σ1 ≠ ucharT%T →
-  (Γ,Γm) ⊢ a2 : TType σ2 → frozen a2 → σ2 ≠ ucharT%T →
+Lemma cmap_non_aliasing Γ Δ m a1 a2 σ1 σ2 :
+  ✓ Γ → ✓{Γ,Δ} m → (Γ,Δ) ⊢ a1 : TType σ1 → frozen a1 → σ1 ≠ ucharT%T →
+  (Γ,Δ) ⊢ a2 : TType σ2 → frozen a2 → σ2 ≠ ucharT%T →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
@@ -139,18 +139,18 @@ Lemma cmap_non_aliasing Γ Γm m a1 a2 σ1 σ2 :
     cmap_alter_ref Γ g (addr_index a2') (addr_ref Γ a2') m
       !!{Γ} (addr_index a1', addr_ref Γ a1') = @None (mtree _).
 Proof.
-  intros ? Hm ??????. destruct (addr_disjoint_cases Γ Γm a1 a2 σ1 σ2)
+  intros ? Hm ??????. destruct (addr_disjoint_cases Γ Δ a1 a2 σ1 σ2)
     as [Ha12|[?|[?|(Hidx&s&r1'&i1&r2'&i2&r'&Ha1&Ha2&?)]]]; auto.
   do 3 right. intros g j1 j2.
-  assert (Γm ⊢ addr_index a1 : addr_type_object a1)
+  assert (Δ ⊢ addr_index a1 : addr_type_object a1)
     by eauto using addr_typed_index.
-  assert (Γm ⊢ addr_index a1 : addr_type_object a2)
+  assert (Δ ⊢ addr_index a1 : addr_type_object a2)
     by (rewrite Hidx; eauto using addr_typed_index).
   destruct m as [m]; unfold insertE, cmap_alter, lookupE, cmap_lookup;
     simpl in *; rewrite !addr_index_plus, <-!Hidx; simplify_map_equality'.
   destruct (m !! addr_index a1) as [[|w malloc]|] eqn:?;
     [by simplify_option_equality| |by simplify_option_equality].
-  destruct (cmap_valid_Obj Γ Γm (CMap m) (addr_index a1) w malloc)
+  destruct (cmap_valid_Obj Γ Δ (CMap m) (addr_index a1) w malloc)
     as (τ&?&_&?&_); auto; simplify_type_equality'.
   assert (Γ ⊢ r1' ++ RUnion i1 s true :: r' :
     addr_type_object a2 ↣ addr_type_base a1).
@@ -163,9 +163,9 @@ Proof.
   unfold addr_ref; rewrite !addr_ref_base_plus, Ha1, Ha2.
   by erewrite !ctree_lookup_non_aliasing by eauto.
 Qed.
-Lemma mem_non_aliasing Γ Γm m a1 a2 σ1 σ2 :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a1 : TType σ1 → frozen a1 → σ1 ≠ ucharT%T →
-  (Γ,Γm) ⊢ a2 : TType σ2 → frozen a2 → σ2 ≠ ucharT%T →
+Lemma mem_non_aliasing Γ Δ m a1 a2 σ1 σ2 :
+  ✓ Γ → ✓{Γ,Δ} m → (Γ,Δ) ⊢ a1 : TType σ1 → frozen a1 → σ1 ≠ ucharT%T →
+  (Γ,Δ) ⊢ a2 : TType σ2 → frozen a2 → σ2 ≠ ucharT%T →
   (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
@@ -176,7 +176,7 @@ Lemma mem_non_aliasing Γ Γm m a1 a2 σ1 σ2 :
     mem_force Γ (addr_plus Γ j2 a2) m !!{Γ} addr_plus Γ j1 a1 = None.
 Proof.
   intros.
-  destruct (cmap_non_aliasing Γ Γm m a1 a2 σ1 σ2) as [?|[?|[?|Ha]]]; auto.
+  destruct (cmap_non_aliasing Γ Δ m a1 a2 σ1 σ2) as [?|[?|[?|Ha]]]; auto.
   unfold lookupE, mem_lookup, insertE, mem_insert, mem_force,
     lookupE, cmap_alter, cmap_lookup.
   by do 3 right; repeat split; intros; rewrite ?(proj1 (Ha _ _ _)),

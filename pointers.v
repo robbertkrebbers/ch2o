@@ -25,12 +25,12 @@ Instance maybe_FunPtr {Ti} : Maybe3 (@FunPtr Ti) := λ p,
 Section pointer_operations.
   Context `{Env Ti}.
 
-  Inductive ptr_typed' (Γ : env Ti) (Γm : memenv Ti) :
+  Inductive ptr_typed' (Γ : env Ti) (Δ : memenv Ti) :
       ptr Ti → ptr_type Ti → Prop :=
-    | NULL_typed τp : ✓{Γ} τp → ptr_typed' Γ Γm (NULL τp) τp
-    | Ptr_typed a τp : (Γ,Γm) ⊢ a : τp → ptr_typed' Γ Γm (Ptr a) τp
+    | NULL_typed τp : ✓{Γ} τp → ptr_typed' Γ Δ (NULL τp) τp
+    | Ptr_typed a τp : (Γ,Δ) ⊢ a : τp → ptr_typed' Γ Δ (Ptr a) τp
     | FunPtr_typed f τs τ :
-       Γ !! f = Some (τs,τ) → ptr_typed' Γ Γm (FunPtr f τs τ) (τs ~> τ).
+       Γ !! f = Some (τs,τ) → ptr_typed' Γ Δ (FunPtr f τs τ) (τs ~> τ).
   Global Instance ptr_typed:
     Typed (env Ti * memenv Ti) (ptr_type Ti) (ptr Ti) := curry ptr_typed'.
   Global Instance ptr_freeze : Freeze (ptr Ti) := λ β p,
@@ -43,30 +43,30 @@ Section pointer_operations.
     | FunPtr _ τs τ => τs ~> τ
     end.
    Global Instance ptr_type_check:
-      TypeCheck (env Ti * memenv Ti) (ptr_type Ti) (ptr Ti) := λ ΓΓm p,
-    let (Γ,Γm) := ΓΓm in
+      TypeCheck (env Ti * memenv Ti) (ptr_type Ti) (ptr Ti) := λ ΓΔ p,
+    let (Γ,Δ) := ΓΔ in
     match p with
     | NULL τp => guard (✓{Γ} τp); Some τp
-    | Ptr a => type_check (Γ,Γm) a
+    | Ptr a => type_check (Γ,Δ) a
     | FunPtr f τs τ =>
        '(τs',τ') ← Γ !! f; guard (τs' = τs); guard (τ' = τ); Some (τs ~> τ)
     end.
   Inductive is_NULL : ptr Ti → Prop := mk_is_NULL τ : is_NULL (NULL τ).
-  Definition ptr_alive (Γm : memenv Ti) (p : ptr Ti) : Prop :=
-    match p with Ptr a => index_alive Γm (addr_index a) | _ => True end.
+  Definition ptr_alive (Δ : memenv Ti) (p : ptr Ti) : Prop :=
+    match p with Ptr a => index_alive Δ (addr_index a) | _ => True end.
 End pointer_operations.
 
 Section pointers.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
-Implicit Types Γm : memenv Ti.
+Implicit Types Δ : memenv Ti.
 Implicit Types τp : ptr_type Ti.
 Implicit Types a : addr Ti.
 Implicit Types p : ptr Ti.
 
 Global Instance: Injective (=) (=) (@Ptr Ti).
 Proof. by injection 1. Qed.
-Lemma ptr_typed_type_valid Γ Γm p τp : ✓ Γ → (Γ,Γm) ⊢ p : τp → ✓{Γ} τp.
+Lemma ptr_typed_type_valid Γ Δ p τp : ✓ Γ → (Γ,Δ) ⊢ p : τp → ✓{Γ} τp.
 Proof.
   destruct 2; eauto using addr_typed_ptr_type_valid, TFun_ptr_valid,
     env_valid_args_valid, env_valid_ret_valid, type_valid_ptr_type_valid.
@@ -78,21 +78,21 @@ Qed.
 Global Instance:
   TypeCheckSpec (env Ti * memenv Ti) (ptr_type Ti) (ptr Ti) (λ _, True).
 Proof.
-  intros [Γ Γmm] p τ _. split.
+  intros [Γ Δm] p τ _. split.
   * destruct p; intros; repeat (case_match || simplify_option_equality);
       constructor; auto; by apply type_check_sound.
   * by destruct 1; simplify_option_equality;
       erewrite ?type_check_complete by eauto.
 Qed.
-Lemma ptr_typed_weaken Γ1 Γ2 Γm1 Γm2 p τp :
-  ✓ Γ1 → (Γ1,Γm1) ⊢ p : τp → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → (Γ2,Γm2) ⊢ p : τp.
+Lemma ptr_typed_weaken Γ1 Γ2 Δ1 Δ2 p τp :
+  ✓ Γ1 → (Γ1,Δ1) ⊢ p : τp → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 → (Γ2,Δ2) ⊢ p : τp.
 Proof.
   destruct 2; constructor;
     eauto using ptr_type_valid_weaken, addr_typed_weaken, lookup_fun_weaken.
 Qed.
 Lemma ptr_freeze_freeze β1 β2 p : freeze β1 (freeze β2 p) = freeze β1 p.
 Proof. destruct p; f_equal'; auto using addr_freeze_freeze. Qed.
-Lemma ptr_typed_freeze Γ Γm β p τp : (Γ,Γm) ⊢ freeze β p : τp ↔ (Γ,Γm) ⊢ p : τp.
+Lemma ptr_typed_freeze Γ Δ β p τp : (Γ,Δ) ⊢ freeze β p : τp ↔ (Γ,Δ) ⊢ p : τp.
 Proof.
   split.
   * destruct p; inversion_clear 1; constructor; auto.
@@ -106,13 +106,13 @@ Proof.
  refine match p with NULL _ => left _ | _ => right _ end;
    first [by constructor | abstract by inversion 1].
 Defined.
-Lemma ptr_alive_weaken Γm1 Γm2 p :
-  ptr_alive Γm1 p → (∀ o, index_alive Γm1 o → index_alive Γm2 o) →
-  ptr_alive Γm2 p.
+Lemma ptr_alive_weaken Δ1 Δ2 p :
+  ptr_alive Δ1 p → (∀ o, index_alive Δ1 o → index_alive Δ2 o) →
+  ptr_alive Δ2 p.
 Proof. destruct p; simpl; auto. Qed.
-Lemma ptr_dead_weaken Γ Γm1 Γm2 p τp :
-  (Γ,Γm1) ⊢ p : τp → ptr_alive Γm2 p → Γm1 ⇒ₘ Γm2 → ptr_alive Γm1 p.
+Lemma ptr_dead_weaken Γ Δ1 Δ2 p τp :
+  (Γ,Δ1) ⊢ p : τp → ptr_alive Δ2 p → Δ1 ⇒ₘ Δ2 → ptr_alive Δ1 p.
 Proof. destruct 1; simpl; eauto using addr_dead_weaken. Qed.
-Global Instance ptr_alive_dec Γm p : Decision (ptr_alive Γm p).
+Global Instance ptr_alive_dec Δ p : Decision (ptr_alive Δ p).
 Proof. destruct p; apply _. Defined.
 End pointers.

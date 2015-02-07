@@ -5,7 +5,7 @@ Require Export permission_bits_refine.
 Section permission_bits.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
-Implicit Types Γm : memenv Ti.
+Implicit Types Δ : memenv Ti.
 Implicit Types b : bit Ti.
 Implicit Types bs : list (bit Ti).
 Implicit Types x : perm.
@@ -15,24 +15,24 @@ Implicit Types xbs : list (pbit Ti).
 
 Hint Extern 0 (Separation _) => apply (_ : Separation perm).
 
-Lemma pbit_disjoint_valid Γ Γm xb1 xb2 :
-  xb1 ⊥ xb2 → ✓{Γ,Γm} xb1 → sep_unmapped xb2 → ✓{Γ,Γm} xb2.
+Lemma pbit_disjoint_valid Γ Δ xb1 xb2 :
+  xb1 ⊥ xb2 → ✓{Γ,Δ} xb1 → sep_unmapped xb2 → ✓{Γ,Δ} xb2.
 Proof.
   destruct xb1, xb2; intros (?&?&?&?) (?&?&?) [??]; repeat split;
     naive_solver eauto using sep_unmapped_valid, BIndet_valid.
 Qed.
-Lemma pbits_disjoint_valid Γ Γm xbs1 xbs2 :
-  xbs1 ⊥* xbs2 → ✓{Γ,Γm}* xbs1 → Forall sep_unmapped xbs2 → ✓{Γ,Γm}* xbs2.
+Lemma pbits_disjoint_valid Γ Δ xbs1 xbs2 :
+  xbs1 ⊥* xbs2 → ✓{Γ,Δ}* xbs1 → Forall sep_unmapped xbs2 → ✓{Γ,Δ}* xbs2.
 Proof.
   induction 1; intros; decompose_Forall_hyps; eauto using pbit_disjoint_valid.
 Qed.
-Lemma pbit_subseteq_valid Γ Γm xb1 xb2 : xb1 ⊆ xb2 → ✓{Γ,Γm} xb2 → ✓{Γ,Γm} xb1.
+Lemma pbit_subseteq_valid Γ Δ xb1 xb2 : xb1 ⊆ xb2 → ✓{Γ,Δ} xb2 → ✓{Γ,Δ} xb1.
 Proof.
   destruct xb1, xb2; intros (?&?&?) (?&?&?);  repeat split;
     naive_solver eauto using BIndet_valid, sep_subseteq_valid_l.
 Qed.
-Lemma pbits_subseteq_valid Γ Γm xbs1 xbs2 :
-  xbs1 ⊆* xbs2 → ✓{Γ,Γm}* xbs2 → ✓{Γ,Γm}* xbs1.
+Lemma pbits_subseteq_valid Γ Δ xbs1 xbs2 :
+  xbs1 ⊆* xbs2 → ✓{Γ,Δ}* xbs2 → ✓{Γ,Δ}* xbs1.
 Proof.
   induction 1; intros; decompose_Forall_hyps; eauto using pbit_subseteq_valid.
 Qed.
@@ -206,8 +206,8 @@ Proof.
   induction 2; simplify_equality';
     f_equal'; eauto using pbit_indetified_subseteq.
 Qed.
-Lemma pbit_union_typed Γ Γm xb1 xb2 :
-  ✓{Γ,Γm} xb1 → ✓{Γ,Γm} xb2 → xb1 ⊥ xb2 → ✓{Γ,Γm} (xb1 ∪ xb2).
+Lemma pbit_union_typed Γ Δ xb1 xb2 :
+  ✓{Γ,Δ} xb1 → ✓{Γ,Δ} xb2 → xb1 ⊥ xb2 → ✓{Γ,Δ} (xb1 ∪ xb2).
 Proof.
   destruct xb1 as [x1 b1], xb2 as [x2 b2].
   intros (?&?&?) (?&?&?) (?&?&?&?); simplify_equality'.
@@ -216,12 +216,12 @@ Proof.
   rewrite decide_True by eauto using sep_unmapped_union_l'.
   eauto using sep_unmapped_union_r'.
 Qed.
-Lemma pbits_union_typed Γ Γm xbs1 xbs2 :
-  ✓{Γ,Γm}* xbs1 → ✓{Γ,Γm}* xbs2 → xbs1 ⊥* xbs2 → ✓{Γ,Γm}* (xbs1 ∪* xbs2).
+Lemma pbits_union_typed Γ Δ xbs1 xbs2 :
+  ✓{Γ,Δ}* xbs1 → ✓{Γ,Δ}* xbs2 → xbs1 ⊥* xbs2 → ✓{Γ,Δ}* (xbs1 ∪* xbs2).
 Proof. induction 3; decompose_Forall_hyps; auto using pbit_union_typed. Qed.
-Lemma pbit_union_refine Γ α f Γm1 Γm2 xb1 xb2 xb1' xb2' :
-  ✓ Γ → xb1 ⊑{Γ,α,f@Γm1↦Γm2} xb2 → xb1' ⊑{Γ,α,f@Γm1↦Γm2} xb2' →
-  xb2 ⊥ xb2' → xb1 ∪ xb1' ⊑{Γ,α,f@Γm1↦Γm2} xb2 ∪ xb2'.
+Lemma pbit_union_refine Γ α f Δ1 Δ2 xb1 xb2 xb1' xb2' :
+  ✓ Γ → xb1 ⊑{Γ,α,f@Δ1↦Δ2} xb2 → xb1' ⊑{Γ,α,f@Δ1↦Δ2} xb2' →
+  xb2 ⊥ xb2' → xb1 ∪ xb1' ⊑{Γ,α,f@Δ1↦Δ2} xb2 ∪ xb2'.
 Proof.
   destruct xb1 as [x1 b1], xb2 as [x2 b2], xb1' as [x1' b1'], xb2' as [x2' b2'].
   intros ? (?&?&[??]&_) (?&?&[??]&_) (?&?&?&?); simplify_equality'.
@@ -235,9 +235,9 @@ Proof.
     rewrite decide_True by eauto using sep_unmapped_union_l'.
     eauto using sep_unmapped_union_r'.
 Qed.
-Lemma pbits_union_refine Γ α f Γm1 Γm2 xbs1 xbs2 xbs1' xbs2' :
-  ✓ Γ → xbs1 ⊑{Γ,α,f@Γm1↦Γm2}* xbs2 → xbs1' ⊑{Γ,α,f@Γm1↦Γm2}* xbs2' →
-  xbs2 ⊥* xbs2' → xbs1 ∪* xbs1' ⊑{Γ,α,f@Γm1↦Γm2}* xbs2 ∪* xbs2'.
+Lemma pbits_union_refine Γ α f Δ1 Δ2 xbs1 xbs2 xbs1' xbs2' :
+  ✓ Γ → xbs1 ⊑{Γ,α,f@Δ1↦Δ2}* xbs2 → xbs1' ⊑{Γ,α,f@Δ1↦Δ2}* xbs2' →
+  xbs2 ⊥* xbs2' → xbs1 ∪* xbs1' ⊑{Γ,α,f@Δ1↦Δ2}* xbs2 ∪* xbs2'.
 Proof.
   intros ? Hxbs. revert xbs1' xbs2'. induction Hxbs; destruct 1; intros;
     decompose_Forall_hyps; constructor; auto using pbit_union_refine.

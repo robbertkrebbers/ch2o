@@ -6,7 +6,7 @@ Require Import natmap.
 Section memory.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
-Implicit Types Γm : memenv Ti.
+Implicit Types Δ : memenv Ti.
 Implicit Types τ : type Ti.
 Implicit Types a : addr Ti.
 Implicit Types w : mtree Ti.
@@ -27,8 +27,8 @@ Hint Extern 0 (length _ = _) => solve_length.
 Hint Extern 0 (length _ ≤ _) => solve_length.
 Hint Extern 0 (length _ ≠ _) => solve_length.
 
-Lemma mem_lookup_subseteq Γ Γm m1 m2 a v1 :
-  ✓ Γ → ✓{Γ,Γm} m1 → m1 ⊆ m2 → m1 !!{Γ} a = Some v1 → m2 !!{Γ} a = Some v1.
+Lemma mem_lookup_subseteq Γ Δ m1 m2 a v1 :
+  ✓ Γ → ✓{Γ,Δ} m1 → m1 ⊆ m2 → m1 !!{Γ} a = Some v1 → m2 !!{Γ} a = Some v1.
 Proof.
   unfold lookupE, mem_lookup; intros.
   destruct (m1 !!{Γ} a) as [w1|] eqn:?; simplify_option_equality.
@@ -38,8 +38,8 @@ Proof.
     by eauto using cmap_lookup_Some, pbits_mapped,
     pbits_kind_subseteq, @ctree_flatten_subseteq.
 Qed.
-Lemma mem_alloc_disjoint Γ Γm m1 m2 o1 malloc x v τ :
-  ✓ Γ → sep_valid x → ¬sep_unmapped x → (Γ,Γm) ⊢ v : τ → 
+Lemma mem_alloc_disjoint Γ Δ m1 m2 o1 malloc x v τ :
+  ✓ Γ → sep_valid x → ¬sep_unmapped x → (Γ,Δ) ⊢ v : τ → 
   m1 ⊥ m2 → mem_allocable o1 m2 → mem_alloc Γ o1 malloc x v m1 ⊥ m2.
 Proof.
   destruct m1 as [m1], m2 as [m2]; simpl; intros ???? Hm ? o; specialize (Hm o).
@@ -75,12 +75,12 @@ Proof.
     specialize (Hm o1); simplify_map_equality';
     naive_solver eauto using pbits_disjoint_full, @ctree_flatten_disjoint.
 Qed.
-Lemma mem_force_disjoint Γ Γm1 m1 m2 a1 τ1 :
-  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 → is_Some (m1 !!{Γ} a1) → mem_force Γ a1 m1 ⊥ m2.
+Lemma mem_force_disjoint Γ Δ1 m1 m2 a1 τ1 :
+  ✓ Γ → ✓{Γ,Δ1} m1 → m1 ⊥ m2 → is_Some (m1 !!{Γ} a1) → mem_force Γ a1 m1 ⊥ m2.
 Proof.
   unfold lookupE, mem_lookup, mem_force, lookupE, cmap_lookup; intros ??? [??].
   destruct (m1 !!{Γ} _) as [w1|] eqn:?; case_option_guard; simplify_equality'.
-  destruct (cmap_lookup_ref_Some Γ Γm1 m1 (addr_index a1) (addr_ref Γ a1) w1)
+  destruct (cmap_lookup_ref_Some Γ Δ1 m1 (addr_index a1) (addr_ref Γ a1) w1)
     as (τ&σ&?&?&?); auto.
   eapply cmap_alter_ref_disjoint; eauto.
   case_decide; simplify_equality'; case_option_guard; simplify_equality'.
@@ -90,21 +90,21 @@ Proof.
     eauto using ctree_lookup_byte_Forall, pbit_unmapped_indetify,
     pbits_mapped, ctree_lookup_byte_typed.
 Qed.
-Lemma mem_force_disjoint_le Γ Γm m ms a v τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → is_Some (m !!{Γ} a) →
+Lemma mem_force_disjoint_le Γ Δ m ms a v τ :
+  ✓ Γ → ✓{Γ,Δ} m → (Γ,Δ) ⊢ a : TType τ → is_Some (m !!{Γ} a) →
   m :: ms ⊆⊥ mem_force Γ a m :: ms.
 Proof.
   intros. apply sep_disjoint_cons_le_inj; intros m'.
   rewrite !sep_disjoint_list_double, !(symmetry_iff _ m').
   eauto using mem_force_disjoint.
 Qed.
-Lemma mem_force_union Γ Γm1 m1 m2 a1 v1 τ1 :
-  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 → is_Some (m1 !!{Γ} a1) →
+Lemma mem_force_union Γ Δ1 m1 m2 a1 v1 τ1 :
+  ✓ Γ → ✓{Γ,Δ1} m1 → m1 ⊥ m2 → is_Some (m1 !!{Γ} a1) →
   mem_force Γ a1 (m1 ∪ m2) = mem_force Γ a1 m1 ∪ m2.
 Proof.
   unfold lookupE, mem_lookup, mem_force, lookupE, cmap_lookup; intros ??? [??].
   destruct (m1 !!{Γ} _) as [w1|] eqn:?; case_option_guard; simplify_equality'.
-  destruct (cmap_lookup_ref_Some Γ Γm1 m1 (addr_index a1) (addr_ref Γ a1) w1)
+  destruct (cmap_lookup_ref_Some Γ Δ1 m1 (addr_index a1) (addr_ref Γ a1) w1)
     as (τ&σ&?&?&?); auto.
   eapply cmap_alter_ref_union; eauto.
   case_decide; simplify_equality'; case_option_guard; simplify_equality'.
@@ -114,8 +114,8 @@ Proof.
     eauto using ctree_lookup_byte_Forall, pbit_unmapped_indetify,
     pbits_mapped, ctree_lookup_byte_typed.
 Qed.
-Lemma mem_writable_subseteq Γ Γm m1 m2 a v1 :
-  ✓ Γ → ✓{Γ,Γm} m1 → m1 ⊆ m2 → mem_writable Γ a m1 → mem_writable Γ a m2.
+Lemma mem_writable_subseteq Γ Δ m1 m2 a v1 :
+  ✓ Γ → ✓{Γ,Δ} m1 → m1 ⊆ m2 → mem_writable Γ a m1 → mem_writable Γ a m2.
 Proof.
   intros ??? (w1&?&?).
   destruct (cmap_lookup_subseteq Γ m1 m2 a w1) as (w2&?&?); auto.
@@ -123,9 +123,9 @@ Proof.
       cmap_lookup_Some, pbits_mapped, pbits_kind_weaken. }
   exists w2; eauto using pbits_kind_subseteq, @ctree_flatten_subseteq.
 Qed.
-Lemma mem_insert_disjoint Γ Γm1 m1 m2 a1 v1 τ1 :
-  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
-  (Γ,Γm1) ⊢ a1 : TType τ1 → mem_writable Γ a1 m1 → (Γ,Γm1) ⊢ v1 : τ1 →
+Lemma mem_insert_disjoint Γ Δ1 m1 m2 a1 v1 τ1 :
+  ✓ Γ → ✓{Γ,Δ1} m1 → m1 ⊥ m2 →
+  (Γ,Δ1) ⊢ a1 : TType τ1 → mem_writable Γ a1 m1 → (Γ,Δ1) ⊢ v1 : τ1 →
   <[a1:=v1]{Γ}>m1 ⊥ m2.
 Proof.
   intros ???? (w1&?&?) ?. assert (ctree_unshared w1).
@@ -136,17 +136,17 @@ Proof.
   eapply cmap_alter_disjoint; eauto using of_val_flatten_typed,
     of_val_flatten_mapped, of_val_flatten_disjoint, ctree_Forall_not.
 Qed.
-Lemma mem_insert_disjoint_le Γ Γm m ms a v τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → mem_writable Γ a m → (Γ,Γm) ⊢ v : τ →
+Lemma mem_insert_disjoint_le Γ Δ m ms a v τ :
+  ✓ Γ → ✓{Γ,Δ} m → (Γ,Δ) ⊢ a : TType τ → mem_writable Γ a m → (Γ,Δ) ⊢ v : τ →
   m :: ms ⊆⊥ <[a:=v]{Γ}>m :: ms.
 Proof.
   intros. apply sep_disjoint_cons_le_inj; intros m'.
   rewrite !sep_disjoint_list_double, !(symmetry_iff _ m').
   eauto using mem_insert_disjoint.
 Qed.
-Lemma mem_insert_union Γ Γm1 m1 m2 a1 v1 τ1 :
-  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
-  (Γ,Γm1) ⊢ a1 : TType τ1 → mem_writable Γ a1 m1 → (Γ,Γm1) ⊢ v1 : τ1 →
+Lemma mem_insert_union Γ Δ1 m1 m2 a1 v1 τ1 :
+  ✓ Γ → ✓{Γ,Δ1} m1 → m1 ⊥ m2 →
+  (Γ,Δ1) ⊢ a1 : TType τ1 → mem_writable Γ a1 m1 → (Γ,Δ1) ⊢ v1 : τ1 →
   <[a1:=v1]{Γ}>(m1 ∪ m2) = <[a1:=v1]{Γ}>m1 ∪ m2.
 Proof.
   intros ???? (w1&?&?) ?. assert (ctree_unshared w1).
@@ -157,12 +157,12 @@ Proof.
   eapply cmap_alter_union; eauto using of_val_flatten_typed, ctree_Forall_not,
     of_val_flatten_mapped, of_val_flatten_disjoint, of_val_flatten_union.
 Qed.
-Lemma mem_lock_disjoint Γ Γm1 m1 m2 a1 τ1 :
-  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
-  (Γ,Γm1) ⊢ a1 : TType τ1 → mem_writable Γ a1 m1 → mem_lock Γ a1 m1 ⊥ m2.
+Lemma mem_lock_disjoint Γ Δ1 m1 m2 a1 τ1 :
+  ✓ Γ → ✓{Γ,Δ1} m1 → m1 ⊥ m2 →
+  (Γ,Δ1) ⊢ a1 : TType τ1 → mem_writable Γ a1 m1 → mem_lock Γ a1 m1 ⊥ m2.
 Proof.
   intros ???? (w1&?&Hw1).
-  assert ((Γ,Γm1) ⊢ ctree_map pbit_lock w1 : τ1).
+  assert ((Γ,Δ1) ⊢ ctree_map pbit_lock w1 : τ1).
   { eapply ctree_map_typed; eauto using cmap_lookup_Some, pbits_lock_valid,
       pbit_lock_indetified, ctree_flatten_valid, pbit_lock_mapped. }
   eapply cmap_alter_disjoint; eauto.
@@ -172,21 +172,21 @@ Proof.
   eauto 8 using @ctree_map_disjoint, @ctree_flatten_disjoint, Forall_true,
     pbit_lock_mapped, Forall_impl, pbit_lock_unmapped, pbits_lock_disjoint.
 Qed.
-Lemma mem_lock_disjoint_le Γ Γm m ms a τ :
-  ✓ Γ → ✓{Γ,Γm} m → (Γ,Γm) ⊢ a : TType τ → mem_writable Γ a m →
+Lemma mem_lock_disjoint_le Γ Δ m ms a τ :
+  ✓ Γ → ✓{Γ,Δ} m → (Γ,Δ) ⊢ a : TType τ → mem_writable Γ a m →
   m :: ms ⊆⊥ mem_lock Γ a m :: ms.
 Proof.
   intros. apply sep_disjoint_cons_le_inj; intros m'.
   rewrite !sep_disjoint_list_double, !(symmetry_iff _ m').
   eauto using mem_lock_disjoint.
 Qed.
-Lemma mem_lock_union Γ Γm1 m1 m2 a1 τ1 :
-  ✓ Γ → ✓{Γ,Γm1} m1 → m1 ⊥ m2 →
-  (Γ,Γm1) ⊢ a1 : TType τ1 → mem_writable Γ a1 m1 →
+Lemma mem_lock_union Γ Δ1 m1 m2 a1 τ1 :
+  ✓ Γ → ✓{Γ,Δ1} m1 → m1 ⊥ m2 →
+  (Γ,Δ1) ⊢ a1 : TType τ1 → mem_writable Γ a1 m1 →
   mem_lock Γ a1 (m1 ∪ m2) = mem_lock Γ a1 m1 ∪ m2.
 Proof.
   intros ???? (w1&?&Hw1).
-  assert ((Γ,Γm1) ⊢ ctree_map pbit_lock w1 : τ1).
+  assert ((Γ,Δ1) ⊢ ctree_map pbit_lock w1 : τ1).
   { eapply ctree_map_typed; eauto using cmap_lookup_Some, pbits_lock_valid,
       pbit_lock_indetified, ctree_flatten_valid, pbit_lock_mapped. }
   eapply cmap_alter_union; eauto.
@@ -300,8 +300,8 @@ Proof.
     mem_unlock_union, sep_commutative', mem_unlock_union
     by auto using mem_unlock_disjoint.
 Qed.
-Lemma mem_singleton_disjoint Γ Γm a malloc x1 x2 v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a → (Γ,Γm) ⊢ v : τ →
+Lemma mem_singleton_disjoint Γ Δ a malloc x1 x2 v τ :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → (Γ,Δ) ⊢ v : τ →
   x1 ⊥ x2 → ¬sep_unmapped x1 → ¬sep_unmapped x2 →
   mem_singleton Γ a malloc x1 v ⊥ mem_singleton Γ a malloc x2 v.
 Proof.
@@ -313,8 +313,8 @@ Proof.
   * erewrite ctree_flatten_of_val, zip_with_replicate_l, Forall_fmap by eauto.
     apply Forall_not, Forall_true; auto; by destruct 1.
 Qed.
-Lemma mem_singleton_union Γ Γm a malloc x1 x2 v τ :
-  ✓ Γ → (Γ,Γm) ⊢ a : TType τ → addr_strict Γ a →
+Lemma mem_singleton_union Γ Δ a malloc x1 x2 v τ :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a →
   mem_singleton Γ a malloc (x1 ∪ x2) v
   = mem_singleton Γ a malloc x1 v ∪ mem_singleton Γ a malloc x2 v.
 Proof.

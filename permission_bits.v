@@ -8,8 +8,8 @@ Notation PBit := (Tagged (d:=BIndet)).
 Section operations.
   Context `{Env Ti}.
 
-  Global Instance pbit_valid: Valid (env Ti * memenv Ti) (pbit Ti) := λ ΓΓm xb,
-    ✓{ΓΓm} (tagged_tag xb) ∧ sep_valid xb.
+  Global Instance pbit_valid: Valid (env Ti * memenv Ti) (pbit Ti) := λ ΓΔ xb,
+    ✓{ΓΔ} (tagged_tag xb) ∧ sep_valid xb.
 
   Definition pbit_indetify (xb : pbit Ti) : pbit Ti :=
     PBit (tagged_perm xb) BIndet.
@@ -34,7 +34,7 @@ Arguments pbit_unlock _ !_ /.
 Section permission_bits.
 Context `{EnvSpec Ti}.
 Implicit Types Γ : env Ti.
-Implicit Types Γm : memenv Ti.
+Implicit Types Δ : memenv Ti.
 Implicit Types α : bool.
 Implicit Types b : bit Ti.
 Implicit Types bs : list (bit Ti).
@@ -48,14 +48,14 @@ Proof. induction bs; f_equal'; auto. Qed.
 Lemma PBits_perm_tag xbs :
   zip_with PBit (tagged_perm <$> xbs) (tagged_tag <$> xbs) = xbs.
 Proof. by induction xbs as [|[]]; f_equal'. Qed.
-Lemma pbit_empty_valid Γ Γm : ✓{Γ,Γm} (∅ : pbit Ti).
+Lemma pbit_empty_valid Γ Δ : ✓{Γ,Δ} (∅ : pbit Ti).
 Proof. repeat split; auto using BIndet_valid, sep_empty_valid. Qed.
-Lemma PBit_valid Γ Γm x b :
-  sep_valid x → ¬sep_unmapped x → ✓{Γ,Γm} b → ✓{Γ,Γm} (PBit x b).
+Lemma PBit_valid Γ Δ x b :
+  sep_valid x → ¬sep_unmapped x → ✓{Γ,Δ} b → ✓{Γ,Δ} (PBit x b).
 Proof. by repeat split. Qed.
-Lemma PBits_valid Γ Γm xs bs :
+Lemma PBits_valid Γ Δ xs bs :
   Forall sep_valid xs → Forall (not ∘ sep_unmapped) xs →
-  ✓{Γ,Γm}* bs → ✓{Γ,Γm}* (zip_with PBit xs bs).
+  ✓{Γ,Δ}* bs → ✓{Γ,Δ}* (zip_with PBit xs bs).
 Proof.
   intros Hxs. revert bs. induction Hxs; intros ?? [|????];
     decompose_Forall_hyps; auto using PBit_valid.
@@ -79,20 +79,20 @@ Proof.
   intros Hxs. revert bs. induction Hxs; intros [|??]; constructor; auto.
   by intros [??].
 Qed.
-Lemma pbits_tag_valid Γ Γm xbs :
-  ✓{Γ,Γm}* xbs → ✓{Γ,Γm}* (tagged_tag <$> xbs).
+Lemma pbits_tag_valid Γ Δ xbs :
+  ✓{Γ,Δ}* xbs → ✓{Γ,Δ}* (tagged_tag <$> xbs).
 Proof. induction 1 as [|?? (?&?&?)]; csimpl; eauto. Qed.
-Lemma pbits_valid_perm_valid Γ Γm xbs :
-  ✓{Γ,Γm}* xbs → Forall sep_valid (tagged_perm <$> xbs).
+Lemma pbits_valid_perm_valid Γ Δ xbs :
+  ✓{Γ,Δ}* xbs → Forall sep_valid (tagged_perm <$> xbs).
 Proof. induction 1 as [|?? (?&?&?)]; csimpl; eauto. Qed.
-Lemma pbit_valid_weaken Γ1 Γ2 Γm1 Γm2 xb :
-  ✓ Γ1 → ✓{Γ1,Γm1} xb → Γ1 ⊆ Γ2 → Γm1 ⇒ₘ Γm2 → ✓{Γ2,Γm2} xb.
+Lemma pbit_valid_weaken Γ1 Γ2 Δ1 Δ2 xb :
+  ✓ Γ1 → ✓{Γ1,Δ1} xb → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 → ✓{Γ2,Δ2} xb.
 Proof. intros ? (?&?&?); repeat split; eauto using bit_valid_weaken. Qed.
-Lemma pbit_valid_sep_valid Γ Γm xb  : ✓{Γ,Γm} xb → sep_valid xb.
+Lemma pbit_valid_sep_valid Γ Δ xb  : ✓{Γ,Δ} xb → sep_valid xb.
 Proof. by intros (?&?&?); repeat split. Qed.
-Lemma pbits_valid_sep_valid Γ Γm xbs  : ✓{Γ,Γm}* xbs → Forall sep_valid xbs.
+Lemma pbits_valid_sep_valid Γ Δ xbs  : ✓{Γ,Δ}* xbs → Forall sep_valid xbs.
 Proof. induction 1; eauto using pbit_valid_sep_valid. Qed.
-Lemma pbit_unlock_valid Γ Γm xb : ✓{Γ,Γm} xb → ✓{Γ,Γm} (pbit_unlock xb).
+Lemma pbit_unlock_valid Γ Δ xb : ✓{Γ,Δ} xb → ✓{Γ,Δ} (pbit_unlock xb).
 Proof.
   unfold pbit_unlock; intros (?&?&?); repeat split; naive_solver
     auto using perm_unlock_valid, perm_unlock_mapped.
@@ -150,10 +150,10 @@ Qed.
 Lemma PBits_indetify xs :
   pbit_indetify <$> flip PBit (@BIndet Ti) <$> xs = flip PBit BIndet <$> xs.
 Proof. induction xs; f_equal'; auto. Qed.
-Lemma pbit_indetify_valid Γ Γm xb : ✓{Γ,Γm} xb → ✓{Γ,Γm} (pbit_indetify xb).
+Lemma pbit_indetify_valid Γ Δ xb : ✓{Γ,Δ} xb → ✓{Γ,Δ} (pbit_indetify xb).
 Proof. destruct xb; intros (?&?&?); repeat split; eauto using BIndet_valid. Qed.
-Lemma pbits_indetify_valid Γ Γm xbs :
-  ✓{Γ,Γm}* xbs → ✓{Γ,Γm}* (pbit_indetify <$> xbs).
+Lemma pbits_indetify_valid Γ Δ xbs :
+  ✓{Γ,Δ}* xbs → ✓{Γ,Δ}* (pbit_indetify <$> xbs).
 Proof. induction 1; csimpl; auto using pbit_indetify_valid. Qed.
 Lemma pbits_indetify_idempotent xbs :
   pbit_indetify <$> pbit_indetify <$> xbs = pbit_indetify <$> xbs.
@@ -185,7 +185,7 @@ Qed.
 Lemma pbit_indetify_unshared xb :
   sep_unshared xb → sep_unshared (pbit_indetify xb).
 Proof. by intros [??]. Qed.
-Lemma pbit_full_valid Γ Γm : ✓{Γ,Γm} pbit_full.
+Lemma pbit_full_valid Γ Δ : ✓{Γ,Δ} pbit_full.
 Proof. by apply (bool_decide_unpack _). Qed.
 Lemma pbit_full_unshared : sep_unshared (@pbit_full Ti).
 Proof. done. Qed.
@@ -237,8 +237,8 @@ Proof.
     intros [|[] ?] ??; decompose_Forall_hyps; constructor;
     intuition eauto using perm_unlock_mapped.
 Qed.
-Lemma pbits_unlock_valid Γ Γm xbs βs :
-  ✓{Γ,Γm}* xbs → ✓{Γ,Γm}* (zip_with pbit_unlock_if xbs βs).
+Lemma pbits_unlock_valid Γ Δ xbs βs :
+  ✓{Γ,Δ}* xbs → ✓{Γ,Δ}* (zip_with pbit_unlock_if xbs βs).
 Proof.
   intros Hxs. revert βs.
   induction Hxs; intros [|[] ?]; simpl; auto using pbit_unlock_valid.
@@ -264,9 +264,9 @@ Qed.
 Lemma pbit_lock_indetified xb :
   pbit_indetify xb = xb → pbit_indetify (pbit_lock xb) = pbit_lock xb.
 Proof. by intros <-. Qed.
-Lemma pbits_lock_valid Γ Γm xbs :
-  ✓{Γ,Γm}* xbs → Forall (λ xb, Some Writable ⊆ pbit_kind xb) xbs →
-  ✓{Γ,Γm}* (pbit_lock <$> xbs).
+Lemma pbits_lock_valid Γ Δ xbs :
+  ✓{Γ,Δ}* xbs → Forall (λ xb, Some Writable ⊆ pbit_kind xb) xbs →
+  ✓{Γ,Δ}* (pbit_lock <$> xbs).
 Proof.
   induction 1 as [|[??] ? (?&?&?)]; repeat constructor; decompose_Forall_hyps;
     eauto using perm_lock_valid, perm_lock_mapped.
