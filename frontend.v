@@ -15,6 +15,7 @@ Inductive cint_type :=
 Inductive cexpr : Set :=
   | CEVar : string → cexpr
   | CEConst : cint_type → Z → cexpr
+  | CEConstString : list Z → cexpr
   | CESizeOf : ctype → cexpr
   | CEAlignOf : ctype → cexpr
   | CEMin : cint_type → cexpr
@@ -49,6 +50,8 @@ with ctype : Set :=
   | CTFun : list (option string * ctype) → ctype → ctype
   | CTTypeOf : cexpr → ctype.
 
+Instance maybe_CEConstString : Maybe CEConstString := λ ce,
+  match ce with CEConstString zs => Some zs | _ => None end.
 Instance maybe_CTFun : Maybe2 CTFun := λ cτ,
   match cτ with CTFun cτs cτ => Some (cτs,cτ) | _ => None end.
 Instance maybe_CSingleInit : Maybe CSingleInit := λ ci,
@@ -312,6 +315,38 @@ Definition to_inttype (cτi : cint_type) : int_type Ti :=
   | CLongLongRank => IntType (from_option Signed ms) longlong_rank
   | CPtrRank => IntType (from_option Signed ms) ptr_rank
   end.
+Definition to_string_const (zs : list Z) : option (val Ti * nat) :=
+  guard (Forall (λ z, int_typed z charT) zs);
+  mret (VArray (intT charT)
+    (VBase <$> VInt charT <$> (zs ++ [0%Z])), S (length zs)).
+
+Definition insert_object (x : perm) (v : val Ti) : M index :=
+  m ← gets to_mem; Γ ← gets to_env;
+  guard (int_typed (size_of Γ (type_of v)) sptrT) with
+    ("global or static whose type is too large");
+  let o := fresh (dom _ m) in
+  _ ← modify (λ S : frontend_state Ti,
+    let (Γn,Γ,m,Δg) := S in FState Γn Γ (mem_alloc Γ o false x v m) Δg);
+  mret o.
+Definition update_object (o : index) (x : perm) (v : val Ti) : M () :=
+  modify (λ S : frontend_state Ti,
+    let (Γn,Γ,m,Δg) := S in FState Γn Γ (mem_alloc Γ o false x v m) Δg).
+Definition insert_global_decl (x : string) (d : global_decl Ti) : M () :=
+  modify (λ S : frontend_state Ti,
+    let (Γn,Γ,m,Δg) := S in FState Γn Γ m (<[x:=d]>Δg)).
+Definition insert_fun (f : funname) (sto : cstorage)
+    (τs : list (type Ti)) (σ : type Ti) (ms : option (stmt Ti)) : M () :=
+  modify (λ S : frontend_state Ti,
+    let (Γn,Γ,m,Δg) := S in
+    FState Γn (<[f:=(τs,σ)]>Γ) m (<[(f:string):=Fun sto τs σ ms]>Δg)).
+Definition insert_compound (c : compound_kind) (s : tag)
+    (xτs : list (string * type Ti)) : M () :=
+  modify (λ S : frontend_state Ti,
+    let (Γn,Γ,m,Δg) := S in
+    FState (<[s:=CompoundType c xτs]>Γn) (<[s:=snd <$> xτs]>Γ) m Δg).
+Definition insert_enum (s : tag) (τi : int_type Ti) : M () :=
+  modify (λ S : frontend_state Ti,
+    let (Γn,Γ,m,Δg) := S in FState (<[s:=EnumType τi]>Γn) Γ m Δg).
 
 Definition first_init_ref (Γ : env Ti)
     (τ : type Ti) : option (ref Ti * type Ti) :=
@@ -454,6 +489,11 @@ Fixpoint to_expr `{Env Ti} (Δl : local_env Ti)
      τi ← error_of_option (to_int_const z (int_const_types cτi))
        ("integer constant " +:+ pretty z +:+ " too large");
      mret (# (intV{τi} z), RT (intT τi))
+  | CEConstString zs =>
+     '(v,n) ← error_of_option (to_string_const zs)
+       "char of string constant out of range";
+     o ← insert_object perm_readonly v;
+     mret (% (addr_top o (charT.[n])), LT (charT.[n]))
   | CESizeOf cτ =>
      τ ← to_type to_Type Δl cτ;
      guard (τ ≠ voidT) with "sizeof of void type";
@@ -594,10 +634,21 @@ with to_init_expr `{Env Ti} (Δl : local_env Ti)
     (σ : type Ti) (ci : cinit) : M (expr Ti) :=
   match ci with
   | CSingleInit ce =>
-     '(e,τ) ← to_R_NULL σ <$> to_expr Δl ce;
-     Γ ← gets to_env;
-     guard (cast_typed Γ τ σ) with "cast or initialiser cannot be typed";
-     mret (cast{σ} e)
+     match maybe CEConstString ce with
+     | Some zs =>
+        '(v,n) ← error_of_option (to_string_const zs)
+          "char of string initializer out of range";
+        if decide (σ = type_of v) then mret (# v) else
+        if decide (σ = charT.*) then
+          o ← insert_object perm_readonly v;
+          mret (& ((% (addr_top o (charT.[n]))) %> RArray 0 charT n))
+        else fail "string initializer of wrong type or size"
+     | None => 
+        '(e,τ) ← to_R_NULL σ <$> to_expr Δl ce;
+        Γ ← gets to_env;
+        guard (cast_typed Γ τ σ) with "cast or initializer cannot be typed";
+        mret (cast{σ} e)
+     end
   | CCompoundInit inits =>
      Γ ← gets to_env;
      to_compound_init (to_expr Δl) (to_init_expr Δl) σ (#(val_0 Γ σ)) [] inits
@@ -669,34 +720,6 @@ with to_type `{Env Ti} (k : to_type_kind)
 Section frontend_more.
 Context `{Env Ti}.
 
-Definition insert_object (v : val Ti) : M index :=
-  m ← gets to_mem; Γ ← gets to_env;
-  guard (int_typed (size_of Γ (type_of v)) sptrT) with
-    ("global or static whose type is too large");
-  let o := fresh (dom _ m) in
-  _ ← modify (λ S : frontend_state Ti,
-    let (Γn,Γ,m,Δg) := S in FState Γn Γ (mem_alloc Γ o false perm_full v m) Δg);
-  mret o.
-Definition update_object (o : index) (v : val Ti) : M () :=
-  modify (λ S : frontend_state Ti,
-    let (Γn,Γ,m,Δg) := S in FState Γn Γ (mem_alloc Γ o false perm_full v m) Δg).
-Definition insert_global_decl (x : string) (d : global_decl Ti) : M () :=
-  modify (λ S : frontend_state Ti,
-    let (Γn,Γ,m,Δg) := S in FState Γn Γ m (<[x:=d]>Δg)).
-Definition insert_fun (f : funname) (sto : cstorage)
-    (τs : list (type Ti)) (σ : type Ti) (ms : option (stmt Ti)) : M () :=
-  modify (λ S : frontend_state Ti,
-    let (Γn,Γ,m,Δg) := S in
-    FState Γn (<[f:=(τs,σ)]>Γ) m (<[(f:string):=Fun sto τs σ ms]>Δg)).
-Definition insert_compound (c : compound_kind) (s : tag)
-    (xτs : list (string * type Ti)) : M () :=
-  modify (λ S : frontend_state Ti,
-    let (Γn,Γ,m,Δg) := S in
-    FState (<[s:=CompoundType c xτs]>Γn) (<[s:=snd <$> xτs]>Γ) m Δg).
-Definition insert_enum (s : tag) (τi : int_type Ti) : M () :=
-  modify (λ S : frontend_state Ti,
-    let (Γn,Γ,m,Δg) := S in FState (<[s:=EnumType τi]>Γn) Γ m Δg).
-
 Definition to_init_val (Δl : local_env Ti)
      (τ : type Ti) (ci : cinit) : M (val Ti) :=
    e ← to_init_expr Δl τ ci;
@@ -724,7 +747,7 @@ Definition alloc_global (Δl : local_env Ti) (x : string) (sto : cstorage)
           ("global `" +:+ x +:+ "` already initialized");
         _ ← insert_global_decl x (Global sto o τ true); (* update storage *)
         v ← to_init_val Δl τ ci;
-        _ ← update_object o v;
+        _ ← update_object o perm_full v;
         mret (inl (o,τ))
      | None => mret (inl (o,τ))
      end
@@ -754,13 +777,13 @@ Definition alloc_global (Δl : local_env Ti) (x : string) (sto : cstorage)
           ("global `" +:+ x +:+ "` with incomplete type");
         match mci with
         | Some ci =>
-           o ← insert_object (val_new Γ τ);
+           o ← insert_object perm_full (val_new Γ τ);
            _ ← insert_global_decl x (Global sto o τ true);
            v ← to_init_val Δl τ ci;
-           _ ← update_object o v;
+           _ ← update_object o perm_full v;
            mret (inl (o,τ))
         | None =>
-           o ← insert_object (val_0 Γ τ);
+           o ← insert_object perm_full (val_0 Γ τ);
            _ ← insert_global_decl x (Global sto o τ false);
            mret (inl (o,τ))
         end
@@ -774,11 +797,11 @@ Definition alloc_static (Δl : local_env Ti) (x : string) (cτ : ctype)
   Γ ← gets to_env;
   match mci with
   | Some ci =>
-     o ← insert_object (val_new Γ τ);
+     o ← insert_object perm_full (val_new Γ τ);
      v ← to_init_val (Some (x,Static (inl (o,τ))) :: Δl) τ ci;
-     _ ← update_object o v;
+     _ ← update_object o perm_full v;
      mret (o, τ)
-  | None => (,τ) <$> insert_object (val_0 Γ τ)
+  | None => (,τ) <$> insert_object perm_full (val_0 Γ τ)
   end.
 Definition to_storage (stos : list cstorage) : option cstorage :=
   match stos with [] => Some AutoStorage | [sto] => Some sto | _ => None end.

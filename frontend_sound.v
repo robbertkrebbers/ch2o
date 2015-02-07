@@ -13,6 +13,7 @@ Section cexpr_ind.
 Context (P : cexpr → Prop) (Q : cinit → Prop) (R : ctype → Prop).
 Context (Pvar : ∀ x, P (CEVar x)).
 Context (Pconst : ∀ τi x, P (CEConst τi x)).
+Context (Pconststring : ∀ zs, P (CEConstString zs)).
 Context (Psizeof : ∀ cτ, R cτ → P (CESizeOf cτ)).
 Context (Palignof : ∀ cτ, R cτ → P (CEAlignOf cτ)).
 Context (Pmin : ∀ τi, P (CEMin τi)).
@@ -58,6 +59,7 @@ Fixpoint cexpr_ind_alt ce : P ce :=
   match ce return P ce with
   | CEVar _ => Pvar _
   | CEConst _ _ => Pconst _ _
+  | CEConstString _ => Pconststring _
   | CESizeOf cτ => Psizeof _ (ctype_ind_alt cτ)
   | CEAlignOf cτ => Palignof _ (ctype_ind_alt cτ)
   | CEMin _ => Pmin _
@@ -135,6 +137,10 @@ Hint Resolve TPtr_valid TCompound_ptr_valid TCompound_valid TAny_ptr_valid.
 Hint Resolve TBase_ptr_valid TArray_ptr_valid.
 Hint Immediate type_complete_valid types_complete_valid.
 Hint Immediate type_valid_ptr_type_valid.
+Hint Resolve addr_top_typed addr_top_strict.
+Hint Immediate cmap_index_typed_representable.
+Hint Extern 10 (_ ⊢ _ : _ ↣ _) => typed_constructor; try lia.
+Hint Resolve perm_full_valid perm_full_mapped.
 
 Definition fun_stmt_valid (Γ : env Ti) (Δ : memenv Ti)
     (τs : list (type Ti)) (τ : type Ti) (ms : option (stmt Ti)) : Prop :=
@@ -310,8 +316,7 @@ Proof.
   intros He [] HΔl. revert τs He.
   induction HΔl as [|[[x' [[[]|[]]|τ'|]]|] ? Δl ? IH];
     intros τs' ?; simplify_option_equality; simplify_type_equality; eauto 2.
-  * typed_constructor; eauto using addr_top_typed, addr_top_strict,
-      cmap_index_typed_valid, cmap_index_typed_representable.
+  * typed_constructor; eauto using cmap_index_typed_valid.
   * typed_constructor; naive_solver eauto.
   * typed_constructor. by rewrite list_lookup_middle.
   * rewrite cons_middle, (associative_L (++)). apply (IH (τs' ++ [τ'])).
@@ -327,8 +332,7 @@ Proof.
   destruct (_ !! x) as [d|] eqn:Hd; simplify_equality.
   pose proof (to_globals_valid _ HS x d Hd).
   destruct d as [|sto τs τ ms| |]; simplify_equality'; split; auto.
-  * typed_constructor; intuition eauto using addr_top_typed, addr_top_strict,
-      index_typed_valid, index_typed_representable.
+  * typed_constructor; intuition eauto using index_typed_valid.
   * repeat typed_constructor; naive_solver.
 Qed.
 
@@ -352,6 +356,14 @@ Lemma to_int_const_typed x cτis τi :
   to_int_const x cτis = Some τi → int_typed x τi.
 Proof. intros; induction cτis; simplify_option_equality; auto. Qed.
 Hint Immediate to_int_const_typed.
+Lemma to_string_const_typed Γ Δ zs v n :
+  to_string_const zs = Some (v,n) → (Γ,Δ) ⊢ v : charT.[n] ∧ n ≠ 0.
+Proof.
+  unfold to_string_const; intros; simplify_option_equality; split; [|done].
+  typed_constructor; rewrite ?fmap_length, ?app_length; simpl; try lia.
+  cut (Forall (λ z, int_typed z charT) (zs ++ [0%Z])); auto using Forall_app_2.
+  induction 1; csimpl; eauto.
+Qed.
 Lemma to_R_typed Γ m τs e τe e' τ' :
   to_R (e,τe) = (e',τ') → (Γ,'{m},τs) ⊢ e : to_lrtype τe →
   ✓ Γ → ✓{Γ}* τs → (Γ,'{m},τs) ⊢ e' : inr τ'.
@@ -463,6 +475,102 @@ Ltac weaken :=
   | _ => progress simplify_equality'
   end.
 
+Lemma insert_object_valid S S' o v x τ :
+  insert_object x v S = mret o S' → ✓ S →
+  (to_env S, '{to_mem S}) ⊢ v : τ → sep_valid x → ¬sep_unmapped x →
+  '{to_mem S'} ⊢ o : τ ∧ index_alive ('{to_mem S'}) o
+  ∧ to_globals S = to_globals S' ∧ ✓ S' ∧ S ⊆ S'.
+Proof.
+  destruct S as [Γn Γ m Δg]; unfold insert_object;
+    intros ? [] ???; error_proceed; simplify_type_equality.
+  assert ('{m} ⊆ <[fresh (dom indexset m):=(τ, false)]> ('{m})).
+  { apply insert_subseteq, mem_allocable_memenv_of, mem_allocable_fresh. }
+  split_ands; eauto using mem_alloc_index_typed', mem_alloc_index_alive';
+    split; simpl; erewrite ?mem_alloc_memenv_of by eauto;
+    eauto using map_Forall_impl, global_decl_valid_weaken.
+  eapply mem_alloc_valid'; eauto using mem_allocable_fresh,
+    val_typed_weaken, mem_alloc_forward'.
+Qed.
+Lemma update_object_valid S S' o x v τ :
+  update_object o x v S = mret () S' → ✓ S →
+  '{to_mem S} ⊢ o : τ → index_alive ('{to_mem S}) o →
+  (to_env S, '{to_mem S}) ⊢ v : τ → sep_valid x → ¬sep_unmapped x →
+  ✓ S' ∧ S ⊆ S'.
+Proof.
+  destruct S; unfold update_object; intros ? [] ?????; error_proceed.
+  do 2 split; simpl; erewrite ?mem_alloc_alive_memenv_of by eauto;
+    eauto using mem_alloc_alive_valid'.
+Qed.
+Lemma insert_global_decl_valid S S' x d :
+  insert_global_decl x d S = mret () S' → ✓ S →
+  global_decl_valid (to_env S) ('{to_mem S}) x d → maybe4 Fun d = None →
+  (∀ d', to_globals S !! x = Some d' → global_decl_forward d' d) →
+  to_globals S' !! x = Some d ∧ ✓ S' ∧ S ⊆ S'.
+Proof.
+  destruct S as [Γn Γ m Δg]; unfold insert_global_decl;
+    intros ? [HΓ Hm HΔg HΓn HΓ'] ???; error_proceed; simplify_map_equality.
+  split_ands; split; simpl; auto using map_Forall_insert_2.
+  * intros f τsτ ?. destruct (decide_rel (=) f x); simplify_map_equality'; auto.
+    destruct (HΓ' x τsτ) as (sto&?&?); auto. exfalso; destruct d; naive_solver.
+  * by apply (insert_included _).
+Qed.
+Lemma insert_fun_None_valid S S' f sto τs τ :
+  insert_fun f sto τs τ None S = mret () S' → ✓ S →
+  to_globals S !! (f : string) = None →
+  ✓{to_env S}* (TType <$> τs) → ✓{to_env S} (TType τ) →
+  to_env S' !! f = Some (τs,τ) ∧ ✓ S' ∧ S ⊆ S'.
+Proof.
+  destruct S as [Γn Γ m Δg]; unfold insert_fun;
+    intros ? [HΓ Hm HΔg HΓn HΓ'] ???; error_proceed.
+  destruct (Γ !! f) as [[τs' τ']|] eqn:Hf; simplify_map_equality.
+  { destruct (HΓ' f (τs',τ')); naive_solver. }
+  assert (Γ ⊆ <[f:=(τs,τ)]> Γ) by (by apply insert_fun_subseteq).
+  split_ands; split; simpl; eauto using cmap_valid_weaken'.
+  * by constructor.
+  * apply map_Forall_insert_2; simplify_map_equality';
+      eauto using sizes_of_weaken, map_Forall_impl, global_decl_valid_weaken.
+  * apply map_Forall_insert_2; simplify_map_equality'; eauto.
+    unfold lookup, env_lookup_fun in Hf.
+    intros f' ??; destruct (decide (f = f')); simplify_map_equality'; eauto.
+  * apply (insert_included _); congruence.
+Qed.
+Lemma insert_fun_valid S S' f sto τs τ ms :
+  insert_fun f sto τs τ ms S = mret () S' → ✓ S → to_env S !! f = Some (τs,τ) →
+  fun_stmt_valid (to_env S) ('{to_mem S}) τs τ ms → ✓ S' ∧ S ⊆ S'.
+Proof.
+  destruct S as [Γn Γ m Δg]; unfold insert_fun;
+    intros ? [HΓ Hm HΔg HΓn HΓ'] Hf ?; error_proceed.
+  rewrite insert_lookup_fun by done.
+  destruct (HΓ' f (τs,τ)) as (ms'&?&?); auto.
+  do 2 split; simpl; auto using map_Forall_insert_2.
+  * intros f' [τs' τ'] ?; unfold lookup, env_lookup_fun in Hf.
+    destruct (decide (f = f')); simplify_map_equality; eauto.
+  * apply (insert_included _); intros [] ?; naive_solver.
+Qed.
+Lemma insert_compound_valid S S' c t xτs :
+  insert_compound c t xτs S = mret () S' → ✓ S →
+  to_env S !! t = None → ✓{to_env S}* (snd <$> xτs) → xτs ≠ [] →
+  to_env S' !! t = Some (snd <$> xτs) ∧ ✓ S' ∧ S ⊆ S'.
+Proof.
+  destruct S as [Γn Γ m Δg]; unfold insert_compound;
+    intros ? [HΓ Hm HΔg HΓn HΓ'] ???; error_proceed; simplify_map_equality.
+  split_ands; split; simpl; eauto using env_insert_compound_valid, fmap_nil_inv.
+  * eauto using cmap_valid_weaken', insert_compound_subseteq.
+  * eauto using map_Forall_impl,
+      global_decl_valid_weaken, insert_compound_subseteq.
+  * intros t' d ?; destruct (decide (t = t')); simplify_map_equality'; auto.
+    rewrite lookup_insert_compound_ne by done; by apply HΓn.
+  * eauto using insert_compound_subseteq.
+Qed.
+Lemma insert_enum_valid S S' t τi :
+  insert_enum t τi S = mret () S' → ✓ S → to_compounds S !! t = None →
+  ✓ S' ∧ S ⊆ S'.
+Proof.
+  destruct S as [Γn Γ m Δg]; unfold insert_enum;
+    intros ? [HΓ Hm HΔg HΓn HΓ'] ?; error_proceed.
+  do 2 split; simpl; auto using map_Forall_insert_2.
+Qed.
+
 Lemma first_init_ref_typed Γ τ r σ :
   first_init_ref Γ τ = Some (r,σ) → ✓{Γ} τ → Γ ⊢ r : τ ↣ σ.
 Proof.
@@ -512,7 +620,7 @@ Proof.
   error_proceed es' as ?; decompose_Forall_hyps.
   destruct (IH S S2 e τe) as (?&?&?); auto; weaken.
   destruct (IHces S2 S' es' τs) as (?&?&?); auto; weaken.
-  eauto 10 using  to_R_NULL_typed, cast_typed_weaken.
+  eauto 10 using to_R_NULL_typed, cast_typed_weaken.
 Qed.
 Lemma to_compound_init_typed S S' Δl e τ rs inits e' :
   Forall (λ i,
@@ -595,7 +703,6 @@ Proof.
   error_proceed τs as ?.
   destruct (help S2) as (?&?&?); weaken; eauto 10 using convert_fun_ret_valid.
 Qed.
-
 Lemma to_expr_type_typed Δl :
   (∀ ce S S' e τe,
     to_expr Δl ce S = mret (e,τe) S' → ✓ S → local_env_valid S Δl →
@@ -637,6 +744,15 @@ Proof.
        let H2 := fresh in destruct (to_R (e,τlr)) eqn:H2; simplify_equality';
        eapply to_R_typed in H2; [|by eauto|by eauto|by eauto]; clear H; weaken
     | x : to_type_type ?k |- _ => destruct k
+    | H : to_string_const _ = Some (?v,?n),
+       _ : local_env_valid ?S _ |- _ =>
+       assert ((to_env S, '{to_mem S}) ⊢ v : charT.[n] ∧ n ≠ 0) as []
+         by eauto using to_string_const_typed;
+       clear H; simplify_type_equality
+    | H : insert_object _ _ _ = _ |- _ =>
+       eapply insert_object_valid in H;
+         eauto using perm_readonly_valid, perm_readonly_mapped;
+         [destruct H as (?&?&?&?&?)]
     end; eauto 15 using int_lower_typed, int_upper_typed, int_width_typed,
     to_R_NULL_typed, to_binop_expr_typed, to_if_expr_typed,
     to_compound_init_typed, val_0_typed.
@@ -655,98 +771,6 @@ Lemma to_type_valid S S' Δl k cτ τk :
   to_type_type_valid (to_env S') τk ∧ ✓ S' ∧ S ⊆ S'.
 Proof. eapply to_expr_type_typed; eauto. Qed.
 
-Lemma insert_object_valid S S' o v τ :
-  insert_object v S = mret o S' → ✓ S → (to_env S, '{to_mem S}) ⊢ v : τ →
-  '{to_mem S'} ⊢ o : τ ∧ index_alive ('{to_mem S'}) o
-  ∧ to_globals S = to_globals S' ∧ ✓ S' ∧ S ⊆ S'.
-Proof.
-  destruct S as [Γn Γ m Δg]; unfold insert_object;
-    intros ? [] ?; error_proceed; simplify_type_equality.
-  assert ('{m} ⊆ <[fresh (dom indexset m):=(τ, false)]> ('{m})).
-  { apply insert_subseteq, mem_allocable_memenv_of, mem_allocable_fresh. }
-  split_ands; eauto using mem_alloc_index_typed', mem_alloc_index_alive';
-    split; simpl; erewrite ?mem_alloc_memenv_of by eauto;
-    eauto using map_Forall_impl, global_decl_valid_weaken.
-  eapply mem_alloc_valid'; eauto using mem_allocable_fresh, perm_full_valid,
-    perm_full_mapped, val_typed_weaken, mem_alloc_forward'.
-Qed.
-Lemma update_object_valid S S' o v τ :
-  update_object o v S = mret () S' → ✓ S → '{to_mem S} ⊢ o : τ →
-  index_alive ('{to_mem S}) o → (to_env S, '{to_mem S}) ⊢ v : τ → ✓ S' ∧ S ⊆ S'.
-Proof.
-  destruct S; unfold update_object; intros ? [] ???; error_proceed.
-  do 2 split; simpl; erewrite ?mem_alloc_alive_memenv_of by eauto;
-    eauto using mem_alloc_alive_valid', perm_full_valid, perm_full_mapped.
-Qed.
-Lemma insert_global_decl_valid S S' x d :
-  insert_global_decl x d S = mret () S' → ✓ S →
-  global_decl_valid (to_env S) ('{to_mem S}) x d → maybe4 Fun d = None →
-  (∀ d', to_globals S !! x = Some d' → global_decl_forward d' d) →
-  to_globals S' !! x = Some d ∧ ✓ S' ∧ S ⊆ S'.
-Proof.
-  destruct S as [Γn Γ m Δg]; unfold insert_global_decl;
-    intros ? [HΓ Hm HΔg HΓn HΓ'] ???; error_proceed; simplify_map_equality.
-  split_ands; split; simpl; auto using map_Forall_insert_2.
-  * intros f τsτ ?. destruct (decide_rel (=) f x); simplify_map_equality'; auto.
-    destruct (HΓ' x τsτ) as (sto&?&?); auto. exfalso; destruct d; naive_solver.
-  * by apply (insert_included _).
-Qed.
-Lemma insert_fun_None_valid S S' f sto τs τ :
-  insert_fun f sto τs τ None S = mret () S' → ✓ S →
-  to_globals S !! (f : string) = None →
-  ✓{to_env S}* (TType <$> τs) → ✓{to_env S} (TType τ) →
-  to_env S' !! f = Some (τs,τ) ∧ ✓ S' ∧ S ⊆ S'.
-Proof.
-  destruct S as [Γn Γ m Δg]; unfold insert_fun;
-    intros ? [HΓ Hm HΔg HΓn HΓ'] ???; error_proceed.
-  destruct (Γ !! f) as [[τs' τ']|] eqn:Hf; simplify_map_equality.
-  { destruct (HΓ' f (τs',τ')); naive_solver. }
-  assert (Γ ⊆ <[f:=(τs,τ)]> Γ) by (by apply insert_fun_subseteq).
-  split_ands; split; simpl; eauto using cmap_valid_weaken'.
-  * by constructor.
-  * apply map_Forall_insert_2; simplify_map_equality';
-      eauto using sizes_of_weaken, map_Forall_impl, global_decl_valid_weaken.
-  * apply map_Forall_insert_2; simplify_map_equality'; eauto.
-    unfold lookup, env_lookup_fun in Hf.
-    intros f' ??; destruct (decide (f = f')); simplify_map_equality'; eauto.
-  * apply (insert_included _); congruence.
-Qed.
-Lemma insert_fun_valid S S' f sto τs τ ms :
-  insert_fun f sto τs τ ms S = mret () S' → ✓ S → to_env S !! f = Some (τs,τ) →
-  fun_stmt_valid (to_env S) ('{to_mem S}) τs τ ms → ✓ S' ∧ S ⊆ S'.
-Proof.
-  destruct S as [Γn Γ m Δg]; unfold insert_fun;
-    intros ? [HΓ Hm HΔg HΓn HΓ'] Hf ?; error_proceed.
-  rewrite insert_lookup_fun by done.
-  destruct (HΓ' f (τs,τ)) as (ms'&?&?); auto.
-  do 2 split; simpl; auto using map_Forall_insert_2.
-  * intros f' [τs' τ'] ?; unfold lookup, env_lookup_fun in Hf.
-    destruct (decide (f = f')); simplify_map_equality; eauto.
-  * apply (insert_included _); intros [] ?; naive_solver.
-Qed.
-Lemma insert_compound_valid S S' c t xτs :
-  insert_compound c t xτs S = mret () S' → ✓ S →
-  to_env S !! t = None → ✓{to_env S}* (snd <$> xτs) → xτs ≠ [] →
-  to_env S' !! t = Some (snd <$> xτs) ∧ ✓ S' ∧ S ⊆ S'.
-Proof.
-  destruct S as [Γn Γ m Δg]; unfold insert_compound;
-    intros ? [HΓ Hm HΔg HΓn HΓ'] ???; error_proceed; simplify_map_equality.
-  split_ands; split; simpl; eauto using env_insert_compound_valid, fmap_nil_inv.
-  * eauto using cmap_valid_weaken', insert_compound_subseteq.
-  * eauto using map_Forall_impl,
-      global_decl_valid_weaken, insert_compound_subseteq.
-  * intros t' d ?; destruct (decide (t = t')); simplify_map_equality'; auto.
-    rewrite lookup_insert_compound_ne by done; by apply HΓn.
-  * eauto using insert_compound_subseteq.
-Qed.
-Lemma insert_enum_valid S S' t τi :
-  insert_enum t τi S = mret () S' → ✓ S → to_compounds S !! t = None →
-  ✓ S' ∧ S ⊆ S'.
-Proof.
-  destruct S as [Γn Γ m Δg]; unfold insert_enum;
-    intros ? [HΓ Hm HΔg HΓn HΓ'] ?; error_proceed.
-  do 2 split; simpl; auto using map_Forall_insert_2.
-Qed.
 Lemma to_init_val_typed S S' Δl τ ci v :
   to_init_val Δl τ ci S = mret v S' → ✓ S → local_env_valid S Δl →
   ✓{to_env S} τ → (to_env S','{to_mem S'}) ⊢ v : τ ∧ ✓ S' ∧ S ⊆ S'.
@@ -774,7 +798,7 @@ Proof.
     destruct (insert_global_decl_valid S2 S3 x (Global sto o' τ'' true))
       as (?&?&?); weaken; auto; [naive_solver|].
     destruct (to_init_val_typed S3 S4 Δl τ'' ci v) as (?&?&?); auto; weaken.
-    destruct (update_object_valid S4 S' o' v τ''); weaken; eauto 10.
+    destruct (update_object_valid S4 S' o' perm_full v τ''); weaken; eauto 10.
   * error_proceed [] as S3.
     destruct (to_globals_lookup S2 x (Fun sto' τs' τ ms)); auto.
     destruct (insert_fun_valid S2 S' x sto τs' τ ms); weaken; auto.
@@ -782,14 +806,14 @@ Proof.
     + destruct mci as [ci|]; error_proceed.
       { error_proceed o' as S3; error_proceed [] as S4;
           error_proceed v as S5; error_proceed [] as S6.
-        destruct (insert_object_valid S2 S3 o' (val_new (to_env S2) τ) τ)
-          as (?&?&?&?&?); auto using val_new_typed; weaken.
+        destruct (insert_object_valid S2 S3 o' (val_new (to_env S2) τ)
+          perm_full τ) as (?&?&?&?&?); auto using val_new_typed; weaken.
         destruct (insert_global_decl_valid S3 S4 x (Global sto o' τ true))
           as (?&?&?); weaken; auto with congruence.
         destruct (to_init_val_typed S4 S5 Δl τ ci v) as (?&?&?); auto; weaken.
-        destruct (update_object_valid S5 S' o' v τ); weaken; auto 10. }
+        destruct (update_object_valid S5 S' o' perm_full v τ); weaken; auto 9. }
       error_proceed o' as S3; error_proceed [] as S4.
-      destruct (insert_object_valid S2 S3 o' (val_0 (to_env S2) τ) τ)
+      destruct (insert_object_valid S2 S3 o' (val_0 (to_env S2) τ) perm_full τ)
         as (?&?&?&?&?); auto using val_0_typed; weaken.
       destruct (insert_global_decl_valid S3 S' x (Global sto o' τ false))
         as (?&?&?); weaken; auto with congruence.
@@ -804,13 +828,13 @@ Proof.
   destruct (to_type_valid S S2 Δl to_Type cτ τ') as (?&?&?); auto.
   destruct mci as [ci|]; error_proceed; auto.
   { error_proceed ? as S3; error_proceed v as S4; error_proceed [] as S5.
-    destruct (insert_object_valid S2 S3 o (val_new (to_env S2) τ) τ)
+    destruct (insert_object_valid S2 S3 o (val_new (to_env S2) τ) perm_full τ)
       as (?&?&?&?&?); auto using val_new_typed; weaken.
     destruct (to_init_val_typed S3 S4 (Some (x, Static (inl (o,τ))) :: Δl)
       τ ci v) as (?&?&?); auto; weaken.
-    destruct (update_object_valid S4 S' o v τ); weaken; auto 10. }
+    destruct (update_object_valid S4 S' o perm_full v τ); weaken; auto 10. }
   error_proceed o' as S3.
-  destruct (insert_object_valid S2 S' o' (val_0 (to_env S2) τ') τ')
+  destruct (insert_object_valid S2 S' o' (val_0 (to_env S2) τ') perm_full τ')
     as (?&?&?&?&?); auto using val_0_typed; weaken.
 Qed.
 Lemma to_stmt_typed S S' Δl τ cs s cmτ :

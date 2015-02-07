@@ -16,6 +16,7 @@ Instance perm_sep_ops : SeparationOps perm := _.
 Instance perm_sep : Separation perm := _.
 Typeclasses Opaque perm.
 
+Definition perm_readonly : perm := inr 1.
 Definition perm_full : perm := inl (LUnlocked (Counter 0 1)).
 Definition perm_token : perm := inl (LUnlocked (Counter (-1) ∅)).
 
@@ -86,6 +87,10 @@ Proof. done. Qed.
 Lemma perm_full_mapped : ¬sep_unmapped perm_full.
 Proof. by apply (bool_decide_unpack _). Qed.
 Lemma perm_full_unshared : sep_unshared perm_full.
+Proof. by apply (bool_decide_unpack _). Qed.
+Lemma perm_readonly_valid : sep_valid perm_readonly.
+Proof. done. Qed.
+Lemma perm_readonly_mapped : ¬sep_unmapped perm_readonly.
 Proof. by apply (bool_decide_unpack _). Qed.
 Lemma perm_token_valid : sep_valid perm_token.
 Proof. done. Qed.

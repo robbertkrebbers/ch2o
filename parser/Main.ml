@@ -178,7 +178,6 @@ let the_anon = ref 0;;
 let the_compound_decls = ref ([]:(char list * decl) list);;
 let the_local_compound_decls = ref ([]:(char list * decl) list);;
 let the_printfs = ref ([]:(char list * (format list * decl)) list);;
-let the_strings = ref ([]:(char list * decl) list);;
 
 let uchar = {csign = Some Unsigned; crank = CCharRank};;
 let int_signed = {csign = Some Signed; crank = CIntRank};;
@@ -547,18 +546,8 @@ and cexpr_of_expression x =
   | Cabs.CONSTANT (Cabs.CONST_INT s) ->
       let t,n = const_of_string s in CEConst (t,z_of_num n)
   | Cabs.CONSTANT (Cabs.CONST_STRING s) ->
-      let x = "string-"^String.escaped s in
-      let a = chars_of_string x in
-      begin try let _ = List.assoc a !the_strings in ()
-      with Not_found ->
-        let decl = GlobDecl ([],
-          CTArray (CTInt {csign = None; crank = CCharRank},
-            econst (Int (String.length s + 1))),
-          Some (CCompoundInit (List.map (fun c ->
-             ([], CSingleInit (econst (Int (Char.code c))))
-          ) (chars_of_string s) @ [[], CSingleInit econst0]))) in
-        the_strings := !the_strings @ [(a,decl)] end;
-      CEVar a
+      CEConstString (List.map (fun c -> z_of_int (Char.code c))
+                              (chars_of_string s))
   | Cabs.CONSTANT (Cabs.CONST_CHAR [c]) -> econst (Int (Int64.to_int c))
   | Cabs.VARIABLE "NULL" -> CECast (CTPtr CTVoid,CSingleInit econst0)
   | Cabs.VARIABLE "CHAR_BIT" -> CEBits uchar
@@ -806,7 +795,6 @@ let decls_of_cabs x =
     !the_local_compound_decls @ decls_of_definition d
   ) x) in
   (chars_of_string "main",
-    !the_strings@
     printf_prelude()@
     List.map (fun (x,(_,d)) -> (x,d)) !the_printfs@
     decls);;
