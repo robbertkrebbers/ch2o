@@ -204,12 +204,14 @@ End option_union_intersection_difference.
 (** * Tactics *)
 Tactic Notation "case_option_guard" "as" ident(Hx) :=
   match goal with
-  | H : context C [@mguard option _ ?P ?dec _ ?x] |- _ =>
-    let X := context C [ match dec with left H => x H | _ => None end ] in
-    change X in H; destruct_decide dec as Hx
-  | |- context C [@mguard option _ ?P ?dec _ ?x] =>
-    let X := context C [ match dec with left H => x H | _ => None end ] in
-    change X; destruct_decide dec as Hx
+  | H : appcontext C [@mguard option _ ?P ?dec] |- _ =>
+    change (@mguard option _ P dec) with (λ A (x : P → option A),
+      match @decide P dec with left H' => x H' | _ => None end) in *;
+    destruct_decide (@decide P dec) as Hx
+  | |- appcontext C [@mguard option _ ?P ?dec] =>
+    change (@mguard option _ P dec) with (λ A (x : P → option A),
+      match @decide P dec with left H' => x H' | _ => None end) in *;
+    destruct_decide (@decide P dec) as Hx
   end.
 Tactic Notation "case_option_guard" :=
   let H := fresh in case_option_guard as H.
