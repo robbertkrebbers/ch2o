@@ -98,7 +98,7 @@ Proof.
   rewrite !sep_disjoint_list_double, !(symmetry_iff _ m').
   eauto using mem_force_disjoint.
 Qed.
-Lemma mem_force_union Γ Δ1 m1 m2 a1 v1 τ1 :
+Lemma mem_force_union Γ Δ1 m1 m2 a1 :
   ✓ Γ → ✓{Γ,Δ1} m1 → m1 ⊥ m2 → is_Some (m1 !!{Γ} a1) →
   mem_force Γ a1 (m1 ∪ m2) = mem_force Γ a1 m1 ∪ m2.
 Proof.
@@ -113,6 +113,13 @@ Proof.
   intros ?; eapply (ctree_Forall_not _ _ _ w1');
     eauto using ctree_lookup_byte_Forall, pbit_unmapped_indetify,
     pbits_mapped, ctree_lookup_byte_typed.
+Qed.
+Lemma mem_forced_subsetseq Γ Δ m1 m2 a v1 :
+  ✓ Γ → ✓{Γ,Δ} m1 → m1 ⊆ m2 → mem_forced Γ a m1 →
+  is_Some (m1 !!{Γ} a) → mem_forced Γ a m2.
+Proof.
+  unfold mem_forced; rewrite sep_subseteq_spec'; intros ?? (m3&->&?) Hforced ?.
+  by erewrite mem_force_union, Hforced by eauto.
 Qed.
 Lemma mem_writable_subseteq Γ Δ m1 m2 a v1 :
   ✓ Γ → ✓{Γ,Δ} m1 → m1 ⊆ m2 → mem_writable Γ a m1 → mem_writable Γ a m2.

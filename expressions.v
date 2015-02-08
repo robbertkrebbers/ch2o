@@ -486,6 +486,8 @@ Proof.
   intros He. apply elem_of_equiv_empty_L. intros oi.
   induction He using @is_pure_ind_alt; esolve_elem_of.
 Qed.
+Lemma is_pure_load_free {K} (e : expr K) : is_pure e → load_free e.
+Proof. by induction 1; constructor. Qed.
 
 (** The operation [e↑] increases all De Bruijn indexes of variables in [e]
 by one. That means, each variable [var x] in [e] becomes [var (S x)]. *)

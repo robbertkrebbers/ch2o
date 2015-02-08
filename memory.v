@@ -14,6 +14,8 @@ Section memory_operations.
     Some (to_val Γ w).
   Definition mem_force (Γ : env K) (a : addr K) : mem K → mem K :=
     cmap_alter_ref Γ id (addr_index a) (addr_ref Γ a).
+  Definition mem_forced (Γ : env K) (a : addr K) (m : mem K) : Prop :=
+    mem_force Γ a m = m.
 
   Definition mem_writable (Γ : env K) (a : addr K) (m : mem K) : Prop :=
     ∃ w, m !!{Γ} a = Some w
@@ -498,6 +500,14 @@ Proof.
   destruct m as [m]; simplify_map_equality'; simplify_type_equality.
   by erewrite option_guard_True, to_of_val by eauto.
 Qed.
+Lemma mem_lookup_weaken Γ1 Γ2 Δ m a v τ :
+  ✓ Γ1 → ✓{Γ1,Δ} m → (Γ1,Δ) ⊢ a : TType τ → m !!{Γ1} a = Some v →
+  Γ1 ⊆ Γ2 → m !!{Γ2} a = Some v.
+Proof.
+  unfold lookupE, mem_lookup; rewrite bind_Some; intros ??? (w&?&?) ?.
+  erewrite cmap_lookup_weaken by eauto; simplify_option_equality.
+  by erewrite <-to_val_weaken by eauto.
+Qed.
 
 (** Properties of the [force] function *)
 Lemma mem_force_memenv_of Γ Δ m a :
@@ -533,9 +543,28 @@ Proof.
   unfold valid at 2 3, cmap_valid'; intros.
   erewrite mem_force_memenv_of by eauto; eauto using mem_force_valid.
 Qed.
+Lemma mem_force_weaken Γ1 Γ2 Δ m a τ :
+  ✓ Γ1 → Γ1 ⊆ Γ2 → ✓{Γ1,Δ} m → (Γ1,Δ) ⊢ a : TType τ →
+  mem_force Γ1 a m = mem_force Γ2 a m.
+Proof.
+  unfold mem_force; intros. erewrite addr_ref_weaken by eauto.
+  eauto using cmap_alter_ref_weaken.
+Qed.
+Lemma mem_forced_weaken Γ1 Γ2 Δ m a τ :
+  ✓ Γ1 → Γ1 ⊆ Γ2 → ✓{Γ1,Δ} m → (Γ1,Δ) ⊢ a : TType τ →
+  mem_forced Γ1 a m → mem_forced Γ2 a m.
+Proof. unfold mem_forced; intros. by erewrite <-mem_force_weaken by eauto. Qed.
 Lemma mem_erase_force Γ m a :
   cmap_erase (mem_force Γ a m) = mem_force Γ a (cmap_erase m).
 Proof. apply cmap_erase_alter_ref. Qed.
+Lemma mem_forced_erase Γ a m : mem_forced Γ a (cmap_erase m) ↔ mem_forced Γ a m.
+Proof.
+  unfold mem_forced; split; intros Hm; [|by rewrite <-mem_erase_force, Hm].
+  destruct m as [m]; simplify_equality'; f_equal; apply map_eq; intros o.
+  destruct (decide (o = addr_index a)); simplify_map_equality; auto.
+  apply (f_equal (!! (addr_index a))) in Hm; simplify_map_equality.
+  destruct (m !! _) as [[]|]; simplify_equality'; congruence.
+Qed.
 Lemma mem_lookup_force Γ Δ m a v τ :
   ✓ Γ → ✓{Γ,Δ} m → (Γ,Δ) ⊢ a : TType τ → m !!{Γ} a = Some v → addr_is_obj a →
   mem_force Γ a m !!{Γ} a = Some v.
@@ -568,6 +597,8 @@ Proof.
     !(cmap_alter_ref_le _ _ _ (freeze true <$> addr_ref Γ a2) (addr_ref Γ a2)),
     <-!cmap_alter_ref_compose by eauto using ref_freeze_le_l.
 Qed.
+Lemma mem_force_forced Γ m a : mem_forced Γ a (mem_force Γ a m).
+Proof. unfold mem_forced, mem_force. by rewrite <-cmap_alter_ref_compose. Qed.
 
 (** Properties of the [insert] function *)
 Lemma mem_writable_strict Γ m a : mem_writable Γ a m → addr_strict Γ a.
@@ -704,6 +735,8 @@ Proof.
   unfold insertE, mem_insert, mem_force, cmap_alter.
   by rewrite <-cmap_alter_ref_compose.
 Qed.
+Lemma mem_insert_forced Γ m a v : mem_forced Γ a (<[a:=v]{Γ}>m).
+Proof. symmetry; apply (cmap_alter_ref_compose _ id). Qed.
 Lemma mem_insert_writable Γ Δ m a1 a2 v2 τ2 :
   ✓ Γ → ✓{Γ,Δ} m → a1 = a2 ∨ a1 ⊥{Γ} a2 →
   (Γ,Δ) ⊢ a2 : TType τ2 → mem_writable Γ a2 m → (Γ,Δ) ⊢ v2 : τ2 →
@@ -774,10 +807,9 @@ Proof.
   erewrite ctree_flatten_of_val, zip_with_replicate_l, Forall_fmap by eauto.
   by apply Forall_true.
 Qed.
-Lemma mem_force_singleton Γ Δ a malloc x v τ :
+Lemma mem_singleton_force Γ Δ a malloc x v τ :
   ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a →
-  mem_force Γ a (mem_singleton Γ a malloc x v)
-  = mem_singleton Γ a malloc x v.
+  mem_forced Γ a (mem_singleton Γ a malloc x v).
 Proof. apply (cmap_alter_ref_singleton _ Δ id _ _ _ τ). Qed.
 Lemma mem_insert_singleton Γ Δ a malloc x v1 v2 τ :
   ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_is_obj a → addr_strict Γ a →

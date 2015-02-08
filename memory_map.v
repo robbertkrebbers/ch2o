@@ -347,6 +347,13 @@ Proof.
   destruct (Hm' o' w' β') as (τ&?&?&?&?); naive_solver eauto using
     ctree_alter_lookup_Forall, ctree_alter_typed, @ctree_empty_unmapped.
 Qed.
+Lemma cmap_alter_ref_weaken Γ1 Γ2 Δ m g o r :
+  ✓ Γ1 → Γ1 ⊆ Γ2 → ✓{Γ1,Δ} m →
+  cmap_alter_ref Γ1 g o r m = cmap_alter_ref Γ2 g o r m.
+Proof.
+  destruct m as [m]; intros ?? (_&_&Hm); f_equal'; apply alter_ext.
+  intros [|w' β] ?; f_equal'. naive_solver eauto using ctree_alter_weaken.
+Qed.
 Lemma cmap_alter_valid Γ Δ m g a w :
   ✓ Γ → ✓{Γ,Δ} m → m !!{Γ} a = Some w → (Γ,Δ) ⊢ g w : type_of w →
   ¬ctree_unmapped (g w) → ✓{Γ,Δ} (cmap_alter Γ g a m).

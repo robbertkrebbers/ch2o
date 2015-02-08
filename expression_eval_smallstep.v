@@ -19,7 +19,10 @@ Lemma expr_eval_ehstep Γ fs ρ e1 m av :
     e1 = (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)%E ∧ av = inr v ∧
     length Ωs = length vs ∧ fs !! f = Some F ∧ F vs = Some v).
 Proof.
-  revert e1 av. assert (∀ es vs,
+  revert e1 av. assert (∀ a v,
+    mem_forced Γ a m → m !!{Γ} a = Some v → Γ\ ρ ⊢ₕ load (%a), m ⇒ #v, m).
+  { intros a v Hm ?. rewrite <-Hm at 2. do_ehstep. }
+  assert (∀ es vs,
     Forall2 (λ e v, ⟦ e ⟧ Γ fs ρ m = Some (inr v)) es vs →
     Forall is_nf es → es = (#{locks <$> es}* vs)%E) as help.
   { induction 1; intros; decompose_Forall_hyps;

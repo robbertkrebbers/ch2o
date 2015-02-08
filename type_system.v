@@ -647,4 +647,21 @@ Lemma rettype_union_r mσ : rettype_union None mσ = Some mσ.
 Proof. by destruct mσ. Qed.
 Lemma rettype_union_idempotent mσ : rettype_union mσ mσ = Some mσ.
 Proof. by destruct mσ; simplify_option_equality. Qed.
+
+Lemma expr_lift_typed Γ Δ τs e τlr :
+  (Γ,Δ,τs) ⊢ e↑ : τlr ↔ (Γ,Δ,tail τs) ⊢ e : τlr.
+Proof.
+  split.
+  * assert (∀ es σs,
+      Forall (λ e, ∀ τlr, (Γ,Δ,τs) ⊢ e↑ : τlr → (Γ,Δ,tail τs) ⊢ e : τlr) es →
+      (Γ,Δ,τs) ⊢* expr_lift <$> es :* inr <$> σs →
+      (Γ,Δ,tail τs) ⊢* es :* inr <$> σs).
+    { intros es σs. rewrite Forall2_fmap.
+      induction 2; decompose_Forall_hyps; eauto. }
+    revert τlr. induction e using @expr_ind_alt; csimpl; intros τlr He;
+      typed_inversion He; typed_constructor; rewrite ?lookup_tail; eauto.
+  * induction 1 using @expr_typed_ind; csimpl;
+      typed_constructor; rewrite <-?lookup_tail; eauto.
+    by apply Forall2_fmap_l.
+Qed.
 End properties.

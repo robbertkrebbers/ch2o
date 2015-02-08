@@ -40,6 +40,10 @@ Fixpoint expr_eval `{Env K} (e : expr K) (Γ : env K)
   | & e =>
      a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inl;
      Some (inr (ptrV (Ptr a)))
+  | load e =>
+     a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inl;
+     guard (mem_forced Γ a m);
+     inr <$> m !!{Γ} a
   | e %> rs =>
      a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inl;
      Some (inl (addr_elt Γ rs a))
@@ -114,6 +118,9 @@ Context (Profl : ∀ e a,
 Context (Peltl : ∀ e rs a,
   ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) →
   P (e %> rs) (inl (addr_elt Γ rs a))).
+Context (Pload : ∀ e a v,
+  ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) → mem_forced Γ a m →
+  m !!{Γ} a = Some v → P (load e) (inr v)).
 Context (Peltr : ∀ e rs v v',
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
   v !!{Γ} rs = Some v' → P (e #> rs) (inr v')).
@@ -224,7 +231,7 @@ Proof.
       val_unop_typed, val_binop_typed, val_cast_typed, addr_top_typed,
       cmap_index_typed_valid, cmap_index_typed_representable, addr_top_strict,
       addr_elt_typed, addr_elt_strict, addr_elt_typed, addr_elt_strict,
-      val_lookup_seg_typed, val_alter_const_typed.
+      val_lookup_seg_typed, val_alter_const_typed, mem_lookup_typed.
   eapply purefuns_valid_lookup; eauto.
 Qed.
 Lemma expr_eval_typed Γ Δ τs fs ρ m e av τlr :
@@ -246,11 +253,14 @@ Qed.
 
 Lemma expr_eval_weaken Γ1 Γ2 Δ1 τs fs ρ1 ρ2 m1 m2 e av τlr :
   ✓ Γ1 → ✓{Γ1,Δ1} m1 → ✓{Γ1,Δ1} fs → Δ1 ⊢* ρ1 :* τs → 
-  (Γ1,Δ1,τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 m1 = Some av → 
-  Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  (Γ1,Δ1,τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 m1 = Some av → Γ1 ⊆ Γ2 →
+  (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  (∀ a v, m1 !!{Γ1} a = Some v → m2 !!{Γ2} a = Some v) →
+  (∀ a, mem_forced Γ1 a m1 → is_Some (m1 !!{Γ1} a) → mem_forced Γ2 a m2) →
   ρ1 `prefix_of` ρ2 → ⟦ e ⟧ Γ2 fs ρ2 m2 = Some av.
 Proof.
-  intros ???? He Hav ?? [ρ3 ->]. revert Hav τlr He. assert (∀ es vs σs,
+  intros ???? He Hav ???? [ρ3 ->].
+  revert Hav τlr He. assert (∀ es vs σs,
     Forall2 (λ e v, ∀ τlr, (Γ1,Δ1,τs) ⊢ e : τlr →
       ⟦ e ⟧ Γ2 fs (ρ1 ++ ρ3) m2 = Some (inr v)) es vs →
     (Γ1,Δ1,τs) ⊢* es :* inr <$> σs →
@@ -271,6 +281,7 @@ Proof.
       by eauto using addr_strict_weaken, index_alive_1', index_alive_2'.
   * by simplify_option_equality.
   * simplify_option_equality. by erewrite <-addr_elt_weaken by eauto.
+  * by simplify_option_equality.
   * by simplify_option_equality by eauto using val_lookup_seg_weaken.
   * by simplify_option_equality by eauto using val_unop_ok_weaken.
   * simplify_option_equality by eauto using val_binop_ok_weaken.
@@ -296,10 +307,12 @@ Proof.
     | H : appcontext [val_unop_ok] |- _ => rewrite val_unop_ok_erase in H
     | H : appcontext [val_binop_ok] |- _ => rewrite val_binop_ok_erase in H
     | H : appcontext [val_cast_ok] |- _ => rewrite val_cast_ok_erase in H
+    | H : appcontext [mem_forced] |- _ => rewrite mem_forced_erase in H
     | _ => apply option_bind_ext_fun; intros
     | _ => case_option_guard; try done
     | _ => destruct (val_true_false_dec (cmap_erase m) _) as [[[]|[]]|[]]
     | _ => destruct (val_true_false_dec m _) as [[[]|[]]|[]]
+    | _ => rewrite mem_lookup_erase
     | _ => case_match
     end; try done.
   apply option_bind_ext; auto.

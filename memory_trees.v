@@ -1306,6 +1306,27 @@ Proof.
   intros. revert w. induction r as [|rs r IH] using rev_ind; intros w; [done|].
   rewrite !ctree_alter_snoc. by apply ctree_alter_seg_ext.
 Qed.
+Lemma ctree_alter_seg_ext_typed Γ Δ g1 g2 w τ rs :
+  ✓ Γ → (∀ w' τ', (Γ,Δ) ⊢ w' : τ' → g1 w' = g2 w') → (Γ,Δ) ⊢ w : τ →
+  ctree_alter_seg Γ g1 rs w = ctree_alter_seg Γ g2 rs w.
+Proof.
+  intros ? Hg. destruct rs, 1; simpl;
+    unfold default; simplify_option_equality; f_equal; eauto.
+  * apply list_alter_ext; intros; decompose_Forall_hyps; eauto.
+  * apply list_alter_ext; auto.
+    intros [??] ?; decompose_Forall_hyps; f_equal'; eauto.
+  * case_match; f_equal; eauto.
+    eapply Hg; eauto using ctree_unflatten_typed, ctree_flatten_valid.
+  * case_match; decompose_Forall; f_equal; eauto using ctree_unflatten_typed.
+Qed.
+Lemma ctree_alter_ext_typed Γ Δ g1 g2 w τ r :
+  ✓ Γ → (∀ w' τ', (Γ,Δ) ⊢ w' : τ' → g1 w' = g2 w') → (Γ,Δ) ⊢ w : τ →
+  ctree_alter Γ g1 r w = ctree_alter Γ g2 r w.
+Proof.
+  intros ?. revert g1 g2 w τ.
+  induction r as [|rs r IH]; intros g1 g2 w τ ??; eauto.
+  rewrite !ctree_alter_cons; eauto using ctree_alter_seg_ext_typed.
+Qed.
 Lemma ctree_alter_seg_compose Γ g1 g2 w rs :
   ctree_alter_seg Γ (g1 ∘ g2) rs w
   = ctree_alter_seg Γ g1 rs (ctree_alter_seg Γ g2 rs w).
@@ -1340,6 +1361,25 @@ Proof.
     by eauto using ref_freeze_le_l.
   rewrite <-!ctree_alter_compose. apply ctree_alter_ext; intros w'; simpl; auto.
   by apply ctree_alter_seg_commute.
+Qed.
+Lemma ctree_alter_seg_weaken Γ1 Γ2 Δ g rs w τ :
+  ✓ Γ1 → Γ1 ⊆ Γ2 → (Γ1,Δ) ⊢ w : τ →
+  ctree_alter_seg Γ1 g rs w = ctree_alter_seg Γ2 g rs w.
+Proof.
+  destruct rs as [| |j], 3; simplify_option_equality; auto.
+  * erewrite lookup_compound_weaken by eauto; simpl.
+    destruct (_ !! j) eqn:?; f_equal'; by erewrite !(bit_size_of_weaken Γ1 Γ2),
+      ?ctree_unflatten_weaken by eauto using TCompound_valid.
+  * erewrite lookup_compound_weaken by eauto; simpl.
+    destruct (_ !! j) eqn:?; f_equal'; by erewrite !(bit_size_of_weaken Γ1 Γ2),
+      ?ctree_unflatten_weaken by eauto using TCompound_valid.
+Qed.
+Lemma ctree_alter_weaken Γ1 Γ2 Δ g r w τ :
+  ✓ Γ1 → Γ1 ⊆ Γ2 → (Γ1,Δ) ⊢ w : τ → ctree_alter Γ1 g r w = ctree_alter Γ2 g r w.
+Proof.
+  intros ??. revert g w τ. induction r as [|rs r IH]; intros g w τ ?; [done|].
+  erewrite !ctree_alter_cons, <-IH by eauto.
+  eapply ctree_alter_ext_typed; eauto using ctree_alter_seg_weaken.
 Qed.
 Lemma ctree_alter_lookup_seg_Forall (P : pbit K → Prop) Γ g w rs w' :
   ctree_Forall P (ctree_alter_seg Γ g rs w) →

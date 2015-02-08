@@ -887,6 +887,16 @@ Proof.
   * by rewrite base_val_unflatten_type_of.
   * intros. by rewrite val_unflatten_type_of.
 Qed.
+Lemma to_val_weaken Γ1 Γ2 Δ w τ :
+  ✓ Γ1 → (Γ1,Δ) ⊢ w : τ → Γ1 ⊆ Γ2 → to_val Γ1 w = to_val Γ2 w.
+Proof.
+  intros ? Hw ?. revert w τ Hw. refine (ctree_typed_ind _ _ _ _ _ _ _ _).
+  * intros; f_equal'; auto using base_val_unflatten_weaken.
+  * intros; f_equal'; auto using Forall_fmap_ext_1.
+  * intros t wxbss τs _ _ IH _ _ _; f_equal'. induction IH; f_equal'; auto.
+  * by intros; f_equal'.
+  * eauto using val_unflatten_weaken, TCompound_valid.
+Qed.
 Lemma to_val_frozen Γ Δ w τ :
   ✓ Γ → (Γ,Δ) ⊢ w : τ → val_freeze true (to_val Γ w) = to_val Γ w.
 Proof.
