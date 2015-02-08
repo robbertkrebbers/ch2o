@@ -115,7 +115,8 @@ Ltac unblock_hyps := unfold block in * |-.
 
 (** The tactic [injection' H] is a variant of injection that introduces the
 generated equalities. *)
-Ltac injection' H := block_goal; injection H; clear H; intros; unblock_goal.
+Ltac injection' H :=
+  block_goal; injection H; clear H; intros H; intros; unblock_goal.
 
 (** The tactic [simplify_equality] repeatedly substitutes, discriminates,
 and injects equalities, and tries to contradict impossible inequalities. *)
