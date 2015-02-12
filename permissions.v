@@ -52,7 +52,7 @@ Definition perm_kind (x : perm) : option pkind :=
        if decide (x' = 0) then None else Some Existing
      else if decide (y' = 1) then Some Writable else Some Readable
   | inl (LLocked _) => Some Locked
-  | inr x' => if decide (x' = ∅) then None else Some Readable
+  | inr x' => Some Readable
   end.
 Definition perm_locked (x : perm) : bool :=
   match x with inl (LLocked _) => true | _ => false end.
@@ -73,8 +73,7 @@ Inductive perm_kind_view : perm → option pkind → Prop :=
      perm_kind_view (inl (LUnlocked (Counter x' 1))) (Some Writable)
   | perm_kind_Writable' x' :
      x' ≠ 0 → perm_kind_view (inl (LUnlocked (Counter x' 1))) (Some Writable)
-  | perm_kind_ro_None : perm_kind_view (inr ∅) None
-  | perm_kind_ro_Readable x' : x' ≠ ∅ → perm_kind_view (inr x') (Some Readable).
+  | perm_kind_ro_Readable x' : perm_kind_view (inr x') (Some Readable).
 Lemma perm_kind_spec x : perm_kind_view x (perm_kind x).
 Proof.
   destruct x as [[[]|[]]|]; simpl; repeat case_decide;
@@ -182,7 +181,7 @@ Lemma perm_kind_difference_token x :
   perm_token ⊂ x → perm_kind (x ∖ perm_token) = perm_kind x.
 Proof.
   rewrite strict_spec_alt.
-  destruct (perm_kind_spec x) as [| |y| | |y| |]; repeat sep_unfold;
+  destruct (perm_kind_spec x) as [| |y| | |y|]; repeat sep_unfold;
     unfold perm_kind; simpl; intros [? Hneq]; auto.
   * assert (¬0 ≤ -1) by (by intros []); intuition.
   * assert (y ≤ -1 → y ≤ 0) by (by intros; transitivity (-1)).
@@ -192,7 +191,6 @@ Proof.
       symmetry. unfold perm_token; repeat f_equal; intuition. }
     by rewrite decide_False by done.
   * by change (-0) with 0; rewrite Qcplus_0_r, !decide_False by done.
-  * by rewrite decide_False by done.
 Qed.
 Lemma perm_kind_subseteq x1 x2 : x1 ⊆ x2 → perm_kind x1 ⊆ perm_kind x2.
 Proof.
