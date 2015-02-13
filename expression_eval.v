@@ -22,7 +22,7 @@ Instance purefuns_valid `{Env K} :
 Reserved Notation "⟦ e ⟧" (format "⟦  e  ⟧").
 
 Fixpoint expr_eval `{Env K} (e : expr K) (Γ : env K)
-    (fs : purefuns K) (ρ : stack) (m : mem K) : option (addr K + val K) :=
+    (fs : purefuns K) (ρ : stack) (m : mem K) : option (lrval K) :=
   match e with
   | var{τ} x =>
      o ← ρ !! x;
@@ -89,9 +89,6 @@ Fixpoint expr_eval `{Env K} (e : expr K) (Γ : env K)
   end
 where "⟦ e ⟧" := (expr_eval e) : C_scope.
 
-Definition lrval_to_expr {K} (av : addr K + val K) : expr K :=
-  match av with inl a => %a | inr v => #v end.
-
 (** * Theorems *)
 Section expression_eval.
 Context `{EnvSpec K}.
@@ -99,14 +96,14 @@ Implicit Types Δ : memenv K.
 Implicit Types e : expr K.
 Implicit Types a : addr K.
 Implicit Types v : val K.
-Implicit Types av : addr K + val K.
+Implicit Types av : lrval K.
 Implicit Types E : ectx K.
 
 Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
 
 Section expr_eval_ind.
 Context (Γ : env K) (fs : purefuns K) (ρ : stack) (m : mem K).
-Context (P : expr K → addr K + val K → Prop).
+Context (P : expr K → lrval K → Prop).
 Context (Pvar : ∀ τ x o, ρ !! x = Some o → P (var{τ} x) (inl (addr_top o τ))).
 Context (Pval : ∀ v, P (# v) (inr v)).
 Context (Paddr : ∀ a, P (% a) (inl a)).
@@ -238,25 +235,15 @@ Lemma expr_eval_typed Γ Δ τs fs ρ m e av τlr :
   ✓ Γ → ✓{Γ,Δ} m → ⟦ e ⟧ Γ fs ρ m = Some av → ✓{Γ,Δ} fs → Δ ⊢* ρ :* τs →
   (Γ,Δ,τs) ⊢ e : τlr → (Γ,Δ) ⊢ av : τlr.
 Proof. intros. eapply expr_eval_typed_aux; eauto. Qed.
-Lemma expr_eval_typed_l Γ Δ τs fs ρ m e a τ :
-  ✓ Γ → ✓{Γ,Δ} m → ⟦ e ⟧ Γ fs ρ m = Some (inl a) → ✓{Γ,Δ} fs → Δ ⊢* ρ :* τs →
-  (Γ,Δ,τs) ⊢ e : inl τ → (Γ,Δ) ⊢ a : TType τ.
-Proof. 
-  intros; by feed inversion (expr_eval_typed Γ Δ τs fs ρ m e (inl a) (inl τ)).
-Qed.
-Lemma expr_eval_typed_r Γ Δ τs fs ρ m e v τ :
-  ✓ Γ → ✓{Γ,Δ} m → ⟦ e ⟧ Γ fs ρ m = Some (inr v) → ✓{Γ,Δ} fs → Δ ⊢* ρ :* τs →
-  (Γ,Δ,τs) ⊢ e : inr τ → (Γ,Δ) ⊢ v : τ.
-Proof.
-  intros; by feed inversion (expr_eval_typed Γ Δ τs fs ρ m e (inr v) (inr τ)).
-Qed.
 
 Lemma expr_eval_weaken Γ1 Γ2 Δ1 τs fs ρ1 ρ2 m1 m2 e av τlr :
   ✓ Γ1 → ✓{Γ1,Δ1} m1 → ✓{Γ1,Δ1} fs → Δ1 ⊢* ρ1 :* τs → 
   (Γ1,Δ1,τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 m1 = Some av → Γ1 ⊆ Γ2 →
   (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
-  (∀ a v, m1 !!{Γ1} a = Some v → m2 !!{Γ2} a = Some v) →
-  (∀ a, mem_forced Γ1 a m1 → is_Some (m1 !!{Γ1} a) → mem_forced Γ2 a m2) →
+  (∀ a v σ, (Γ1,Δ1) ⊢ a : TType σ →
+    m1 !!{Γ1} a = Some v → m2 !!{Γ2} a = Some v) →
+  (∀ a σ, (Γ1,Δ1) ⊢ a : TType σ →
+    mem_forced Γ1 a m1 → is_Some (m1 !!{Γ1} a) → mem_forced Γ2 a m2) →
   ρ1 `prefix_of` ρ2 → ⟦ e ⟧ Γ2 fs ρ2 m2 = Some av.
 Proof.
   intros ???? He Hav ???? [ρ3 ->].
@@ -297,6 +284,14 @@ Proof.
   * simplify_option_equality by eauto using val_lookup_weaken_is_Some.
     by erewrite <-val_alter_weaken by eauto.
 Qed.
+Lemma expr_eval_weaken_empty Γ1 Γ2 Δ1 τs fs ρ1 ρ2 e av τlr :
+  ✓ Γ1 → ✓{Γ1} Δ1 → ✓{Γ1,Δ1} fs → Δ1 ⊢* ρ1 :* τs → 
+  (Γ1,Δ1,τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 ∅ = Some av → Γ1 ⊆ Γ2 →
+  ρ1 `prefix_of` ρ2 → ⟦ e ⟧ Γ2 fs ρ2 ∅ = Some av.
+Proof.
+  intros; eapply expr_eval_weaken; eauto using cmap_empty_valid;
+    by intros until 0; rewrite mem_lookup_empty, <-?not_eq_None_Some.
+Qed.
 Lemma expr_eval_erase Γ fs ρ m e : ⟦ e ⟧ Γ fs ρ (cmap_erase m) = ⟦ e ⟧ Γ fs ρ m.
 Proof.
   destruct e using @expr_ind_alt; simpl;
@@ -321,7 +316,7 @@ Qed.
 
 (** Pure expressions without variables do not refer to the stack, so their
 semantics is preserved under changes to the stack. *)
-Lemma expr_var_free_stack_indep Γ fs ρ1 ρ2 m e :
+Lemma expr_eval_var_free Γ fs ρ1 ρ2 m e :
   vars e = ∅ → ⟦ e ⟧ Γ fs ρ1 m = ⟦ e ⟧ Γ fs ρ2 m.
 Proof.
   induction e using expr_ind_alt; simpl; intro; decompose_empty; repeat

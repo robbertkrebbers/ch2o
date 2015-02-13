@@ -9,7 +9,7 @@ Context `{EnvSpec K}.
 Implicit Types e : expr K.
 Implicit Types a : addr K.
 Implicit Types v : val K.
-Implicit Types av : addr K + val K.
+Implicit Types av : lrval K.
 Implicit Types E : ectx K.
 
 Lemma expr_eval_ehstep Γ fs ρ e1 m av :

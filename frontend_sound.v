@@ -194,7 +194,7 @@ Proof.
 Qed.
 Lemma frontend_state_empty_valid : ✓ (∅ : frontend_state K).
 Proof.
-  split; simpl; auto using env_empty_valid, cmap_empty_valid, map_Forall_empty.
+  split; simpl; auto using env_empty_valid, cmap_empty_valid', map_Forall_empty.
 Qed.
 Lemma to_globals_lookup S x d :
   ✓ S → to_globals S !! x = Some d →
@@ -777,9 +777,7 @@ Lemma to_init_val_typed S S' Δl τ ci v :
 Proof.
   unfold to_init_val; intros. error_proceed e as S2; error_proceed [|v'] as S3.
   destruct (to_init_expr_typed S S' Δl ci e τ) as (?&?&?); split_ands; auto.
-  cut ((to_env S','{to_mem S'}) ⊢ inr v : inr τ);
-    [by intros; typed_inversion_all|].
-  eapply (expr_eval_typed_aux _ _ [] (to_stack_types Δl));
+  eapply rval_typed_inv, (expr_eval_typed_aux _ _ [] (to_stack_types Δl));
     eauto using type_valid_ptr_type_valid, to_init_expr_typed,
     prefix_of_nil, purefuns_empty_valid.
 Qed.

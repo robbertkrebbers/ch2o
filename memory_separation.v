@@ -114,7 +114,7 @@ Proof.
     eauto using ctree_lookup_byte_Forall, pbit_unmapped_indetify,
     pbits_mapped, ctree_lookup_byte_typed.
 Qed.
-Lemma mem_forced_subsetseq Γ Δ m1 m2 a v1 :
+Lemma mem_forced_subseteq Γ Δ m1 m2 a :
   ✓ Γ → ✓{Γ,Δ} m1 → m1 ⊆ m2 → mem_forced Γ a m1 →
   is_Some (m1 !!{Γ} a) → mem_forced Γ a m2.
 Proof.
@@ -298,10 +298,18 @@ Proof.
     by naive_solver eauto using Forall2_length, @ctree_flatten_disjoint.
   intuition auto using ctree_unlock_union.
 Qed.
+Lemma mem_unlock_all_disjoint_le m ms : m :: ms ⊆⊥ mem_unlock_all m :: ms.
+Proof. by apply mem_unlock_disjoint_le. Qed.
+Lemma mem_unlock_all_disjoint m1 m2 :
+  m1 ⊥ m2 → mem_unlock_all m1 ⊥ mem_unlock_all m2.
+Proof.
+  rewrite <-!sep_disjoint_list_double.
+  intros. by rewrite <-!mem_unlock_all_disjoint_le.
+Qed.
 Lemma mem_unlock_all_union m1 m2 :
   m1 ⊥ m2 → mem_unlock_all (m1 ∪ m2) = mem_unlock_all m1 ∪ mem_unlock_all m2.
 Proof.
-  intros. assert (m1 ⊥ mem_unlock_all m2).
+  unfold mem_unlock_all; intros. assert (m1 ⊥ mem_unlock_all m2).
   { symmetry. by apply mem_unlock_disjoint. }
   by rewrite mem_locks_union, mem_unlock_union_locks, sep_commutative',
     mem_unlock_union, sep_commutative', mem_unlock_union

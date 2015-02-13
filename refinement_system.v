@@ -8,8 +8,7 @@ Section refinements.
 Context `{Env K}.
 
 Inductive lrval_refine' (Γ : env K) (α : bool)
-    (f : meminj K) (Δ1 Δ2 : memenv K) :
-    addr K + val K → addr K + val K → lrtype K → Prop :=
+    (f : meminj K) (Δ1 Δ2 : memenv K) : lrval K → lrval K → lrtype K → Prop :=
   | lval_refine a1 a2 τ :
      a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : TType τ → addr_strict Γ a1 →
      lrval_refine' Γ α f Δ1 Δ2 (inl a1) (inl a2) (inl τ)
@@ -17,7 +16,7 @@ Inductive lrval_refine' (Γ : env K) (α : bool)
      v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ →
      lrval_refine' Γ α f Δ1 Δ2 (inr v1) (inr v2) (inr τ).
 Global Instance lrval_refine:
-  RefineT K (env K) (lrtype K) (addr K + val K) := lrval_refine'.
+  RefineT K (env K) (lrtype K) (lrval K) := lrval_refine'.
 
 Inductive expr_refine' (Γ : env K)
      (τs : list (type K)) (α : bool) (f : meminj K)
@@ -463,7 +462,7 @@ Implicit Types s : stmt K.
 Implicit Types τ σ : type K.
 Implicit Types a : addr K.
 Implicit Types v : val K.
-Implicit Types av : addr K + val K.
+Implicit Types av : lrval K.
 Implicit Types d : direction K.
 Implicit Types Ei : ectx_item K.
 Implicit Types E : ectx K.

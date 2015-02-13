@@ -393,11 +393,6 @@ Lemma sep_positive_l x y : ⊥ [x; y] → x ∪ y = ∅ → x = ∅.
 Proof. rewrite sep_disjoint_list_double. eauto using sep_positive_l'. Qed.
 Lemma sep_positive_r x y : ⊥ [x; y] → x ∪ y = ∅ → y = ∅.
 Proof. rewrite sep_disjoint_list_double. apply sep_positive_r'. Qed.
-Lemma sep_unshared_spec x :
-sep_unshared x ↔ sep_valid x ∧ ∀ y, ⊥ [x; y] → sep_unmapped y.
-Proof.
-  rewrite sep_unshared_spec'. by setoid_rewrite sep_disjoint_list_double.
-Qed.
 Lemma sep_union_subseteq_l x y : ⊥[x; y] → x ⊆ x ∪ y.
 Proof. rewrite sep_disjoint_list_double. apply sep_union_subseteq_l'. Qed.
 Lemma sep_union_subseteq_r x y : ⊥[x; y] → y ⊆ x ∪ y.
@@ -529,6 +524,12 @@ Proof.
   rewrite Permutation_middle, IH, Permutation_swap, sep_disjoint_alt.
   rewrite (disjoint_list_cons x). naive_solver.
 Qed.
+Lemma sep_unmapped_union_l x y :
+  ⊥ [x; y] → sep_unmapped (x ∪ y) → sep_unmapped x.
+Proof. eauto using sep_unmapped_weaken, sep_union_subseteq_l. Qed.
+Lemma sep_unmapped_union_r x y :
+  ⊥ [x; y] → sep_unmapped (x ∪ y) → sep_unmapped y.
+Proof. eauto using sep_unmapped_weaken, sep_union_subseteq_r. Qed.
 
 (** ** Properties of [(⊆⊥)] *)
 Global Instance: PreOrder (⊆⊥).

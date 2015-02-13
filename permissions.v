@@ -158,8 +158,7 @@ Proof. by destruct (perm_kind_spec x); repeat sep_unfold. Qed.
 Lemma perm_kind_full : perm_kind perm_full = Some Writable.
 Proof. done. Qed.
 Lemma perm_kind_lock x :
-  sep_valid x → Some Writable ⊆ perm_kind x →
-  perm_kind (perm_lock x) = Some Locked.
+  Some Writable ⊆ perm_kind x → perm_kind (perm_lock x) = Some Locked.
 Proof. by destruct (perm_kind_spec x). Qed.
 Lemma perm_kind_half x :
   sep_valid x → perm_kind (½ x) =

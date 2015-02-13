@@ -160,6 +160,12 @@ Notation "X ≢ Y":= (¬X ≡ Y) (at level 70, no associativity) : C_scope.
 Notation "( X ≢)" := (λ Y, X ≢ Y) (only parsing) : C_scope.
 Notation "(≢ X )" := (λ Y, Y ≢ X) (only parsing) : C_scope.
 
+Class EquivE E A := equivE: E → relation A.
+Instance: Params (@equivE) 4.
+Notation "X ≡{ Γ } Y" := (equivE Γ X Y)
+  (at level 70, format "X  ≡{ Γ }  Y") : C_scope.
+Notation "(≡{ Γ } )" := (equivE Γ) (only parsing, Γ at level 1) : C_scope.
+
 (** The type class [LeibnizEquiv] collects setoid equalities that coincide
 with Leibniz equality. We provide the tactic [fold_leibniz] to transform such
 setoid equalities into Leibniz equalities, and [unfold_leibniz] for the
@@ -192,6 +198,8 @@ equality. *)
 Instance equiv_default_relation `{Equiv A} : DefaultRelation (≡) | 3.
 Hint Extern 0 (_ ≡ _) => reflexivity.
 Hint Extern 0 (_ ≡ _) => symmetry; assumption.
+Hint Extern 0 (_ ≡{_} _) => reflexivity.
+Hint Extern 0 (_ ≡{_} _) => symmetry; assumption.
 
 (** ** Operations on collections *)
 (** We define operational type classes for the traditional operations and

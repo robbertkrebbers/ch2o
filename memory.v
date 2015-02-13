@@ -81,6 +81,7 @@ Section memory_operations.
          Some (Obj (ctree_merge true pbit_unlock_if w (to_bools sz ω)) β)
       | _,_ => mx
       end) Ω m.
+  Definition mem_unlock_all (m : mem K) : mem K := (mem_unlock (mem_locks m) m).
   Program Definition lock_singleton (Γ : env K) (a : addr K) : lockset :=
     let i := addr_object_offset Γ a in
     let n := ptr_bit_size_of Γ (type_of a) in
@@ -89,8 +90,6 @@ Section memory_operations.
     if decide (ω ≠ ∅) then dexist {[ addr_index a, ω ]} _ else ∅.
   Next Obligation. by intros o ω ?; simplify_map_equality'. Qed.
 End memory_operations.
-
-Notation mem_unlock_all m := (mem_unlock (mem_locks m) m).
 
 Section memory.
 Context `{EnvSpec K}.
@@ -471,6 +470,8 @@ Lemma mem_foldr_free_valid Γ m os : ✓ Γ → ✓{Γ} m → ✓{Γ} (foldr mem
 Proof. induction os; simpl; auto using mem_free_valid'. Qed.
 
 (** ** Properties of the [lookup] function *)
+Lemma mem_lookup_empty Γ a : ∅ !!{Γ} a = @None (val K).
+Proof. unfold lookupE, mem_lookup. by rewrite cmap_lookup_empty. Qed.
 Lemma mem_lookup_typed Γ Δ m a v τ :
   ✓ Γ → ✓{Γ,Δ} m → m !!{Γ} a = Some v → (Γ,Δ) ⊢ a : TType τ → (Γ,Δ) ⊢ v : τ.
 Proof.
@@ -949,8 +950,6 @@ Proof.
   eapply pbits_unlock_empty_inv;
     eauto using ctree_flatten_valid, pbits_valid_sep_valid.
 Qed.
-Lemma mem_unlock_all_valid Γ Δ m : ✓ Γ → ✓{Γ,Δ} m → ✓{Γ,Δ} (mem_unlock_all m).
-Proof. by apply mem_unlock_valid. Qed.
 Lemma mem_unlock_valid' Γ m Ω : ✓ Γ → ✓{Γ} m → ✓{Γ} (mem_unlock Ω m).
 Proof.
   unfold valid at 2 3, cmap_valid'; intros.
@@ -1323,8 +1322,6 @@ Proof.
     { rewrite <-list_lookup_fmap; decompose_Forall_hyps; eauto. }
     simplify_option_equality; congruence.
 Qed.
-Lemma mem_locks_unlock_all m : mem_locks (mem_unlock_all m) = ∅.
-Proof. rewrite mem_locks_unlock by done. solve_elem_of. Qed.
 Lemma mem_locks_singleton_empty Γ Δ a malloc x v τ :
   ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → (Γ,Δ) ⊢ v : τ →
   perm_locked x = false → mem_locks (mem_singleton Γ a malloc x v) = ∅.
@@ -1405,13 +1402,30 @@ Proof.
       replicate_length, Nat.sub_diag, lookup_replicate by auto.
     eauto using bit_size_of_pos, addr_typed_type_valid.
 Qed.
-Lemma mem_unlock_all_singleton Γ Δ m a malloc x v τ :
+
+Lemma mem_unlock_all_empty : mem_unlock_all ∅ = ∅.
+Proof. unfold mem_unlock_all. by rewrite mem_locks_empty, mem_unlock_empty. Qed.
+Lemma mem_unlock_all_valid Γ Δ m : ✓ Γ → ✓{Γ,Δ} m → ✓{Γ,Δ} (mem_unlock_all m).
+Proof. by apply mem_unlock_valid. Qed.
+Lemma mem_unlock_all_singleton Γ Δ a malloc x v τ :
   ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → addr_is_obj a →
   (Γ,Δ) ⊢ v : τ → sep_valid x → perm_locked x = true →
   mem_unlock_all (mem_singleton Γ a malloc x v)
   = mem_singleton Γ a malloc (perm_unlock x) v.
 Proof.
-  intros. erewrite mem_locks_singleton by eauto.
+  intros. unfold mem_unlock_all. erewrite mem_locks_singleton by eauto.
   eauto using mem_unlock_singleton.
+Qed.
+Lemma mem_unlock_all_singleton_unlocked Γ Δ a malloc x v τ :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → addr_is_obj a →
+  (Γ,Δ) ⊢ v : τ → sep_valid x → perm_locked x = false →
+  mem_unlock_all (mem_singleton Γ a malloc x v) = mem_singleton Γ a malloc x v.
+Proof.
+  unfold mem_unlock_all; intros.
+  by erewrite mem_locks_singleton_empty, mem_unlock_empty by eauto.
+Qed.
+Lemma mem_locks_unlock_all m : mem_locks (mem_unlock_all m) = ∅.
+Proof.
+  unfold mem_unlock_all. rewrite mem_locks_unlock by done. solve_elem_of.
 Qed.
 End memory.

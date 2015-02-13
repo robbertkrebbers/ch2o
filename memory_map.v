@@ -100,6 +100,13 @@ Proof.
   rewrite lookup_omap. by destruct (m !! o) as [[]|].
 Qed.
 
+Lemma index_typed_lookup_cmap m o τ :
+  '{m} ⊢ o : τ → ∃ x, cmap_car m !! o = Some x ∧
+  match x with Freed τ' => τ' = τ | Obj w _ => type_of w = τ end.
+Proof.
+  intros [β Hβ]. destruct m as [m]; simplify_map_equality'.
+  by destruct (m !! o) as [[]|]; simplify_equality'; do 2 eexists; eauto.
+Qed.
 Lemma cmap_valid_Freed Γ Δ m o τ :
   ✓{Γ,Δ} m → cmap_car m !! o = Some (Freed τ) →
   Δ ⊢ o : τ ∧ ¬index_alive Δ o ∧ ✓{Γ} τ ∧ int_typed (size_of Γ τ) sptrT.
@@ -119,11 +126,10 @@ Proof. eauto using cmap_valid_memenv_valid, index_typed_valid. Qed.
 Lemma cmap_index_typed_representable Γ Δ m o τ :
   ✓{Γ,Δ} m → Δ ⊢ o : τ → int_typed (size_of Γ τ) sptrT.
 Proof. eauto using cmap_valid_memenv_valid, index_typed_representable. Qed.
-Lemma cmap_empty_valid Γ : ✓{Γ} (∅ : mem K).
-Proof.
-  split; [apply memenv_empty_valid|].
-  by split; intros until 0; simplify_map_equality'.
-Qed.
+Lemma cmap_empty_valid Γ Δ : ✓{Γ} Δ → ✓{Γ,Δ} (∅ : mem K).
+Proof. by intros; split_ands'; intros until 0; simplify_map_equality'. Qed.
+Lemma cmap_empty_valid' Γ : ✓{Γ} (∅ : mem K).
+Proof. eauto using cmap_empty_valid, memenv_empty_valid. Qed.
 Lemma cmap_valid_weaken Γ1 Γ2 Δ m : ✓ Γ1 → ✓{Γ1,Δ} m → Γ1 ⊆ Γ2 → ✓{Γ2,Δ} m.
 Proof.
   intros ? (HΔ&Hm1&Hm2) ?; split_ands'; eauto using memenv_valid_weaken.
@@ -132,18 +138,29 @@ Proof.
 Qed.
 Lemma cmap_valid_weaken' Γ1 Γ2 m : ✓ Γ1 → ✓{Γ1} m → Γ1 ⊆ Γ2 → ✓{Γ2} m.
 Proof. by apply cmap_valid_weaken. Qed.
+Lemma cmap_valid_weaken_squeeze Γ1 Γ2 Δ1 Δ2 m1 m2 :
+  ✓ Γ1 → ✓{Γ1,Δ1} m2 → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
+  ✓{Γ2,Δ2} m1 → '{m1} = '{m2} → ✓{Γ2,Δ2} m2.
+Proof.
+  intros ? (_&_&Hm2') ?? (?&Hm1&Hm1') Hm; split_ands'; eauto.
+  * intros o τ Ho. apply (f_equal (!! o)) in Hm.
+    destruct m1 as [m1], m2 as [m2]; simplify_equality'.
+    rewrite !lookup_fmap, Ho in Hm; simplify_equality'.
+    destruct (m1 !! o) as [[]|] eqn:?; simplify_equality'; eauto.
+  * intros o w malloc Ho. apply (f_equal (!! o)) in Hm.
+    destruct m1 as [m1], m2 as [m2]; simplify_equality'.
+    rewrite !lookup_fmap, Ho in Hm; simplify_equality'.
+    destruct (m1 !! o) as [[|w' malloc']|] eqn:?; simplify_equality'.
+    destruct (Hm1' o w' malloc') as (τ1&?&?&?&?); auto.
+    destruct (Hm2' o w malloc) as (τ2&?&?&?&?); auto.
+    assert (Δ2 ⊢ o : τ2) by eauto using memenv_forward_typed;
+      simplify_type_equality'; eauto 10 using ctree_typed_weaken.
+Qed.
 Lemma cmap_valid_sep_valid Γ Δ m : ✓{Γ,Δ} m → sep_valid m.
 Proof.
   destruct m as [m]; intros Hm o [τ|w malloc] ?; [done|].
   destruct (cmap_valid_Obj Γ Δ (CMap m) o w malloc)
     as (?&?&?&?&?&?); simpl; eauto using ctree_typed_sep_valid.
-Qed.
-Lemma index_typed_lookup_cmap m o τ :
-  '{m} ⊢ o : τ → ∃ x, cmap_car m !! o = Some x ∧
-  match x with Freed τ' => τ' = τ | Obj w _ => type_of w = τ end.
-Proof.
-  intros [β Hβ]. destruct m as [m]; simplify_map_equality'.
-  by destruct (m !! o) as [[]|]; simplify_equality'; do 2 eexists; eauto.
 Qed.
 Lemma cmap_index_typed Γ Δ m o τ : ✓{Γ,Δ} m → '{m} ⊢ o : τ → Δ ⊢ o : τ.
 Proof.
@@ -156,7 +173,7 @@ Qed.
 
 Lemma cmap_erase_empty : cmap_erase (∅ : mem K) = ∅.
 Proof. simpl. by rewrite omap_empty. Qed.
-Lemma dmap_erase_disjoint m1 m2 : m1 ⊥ m2 → cmap_erase m1 ⊥ cmap_erase m2.
+Lemma cmap_erase_disjoint m1 m2 : m1 ⊥ m2 → cmap_erase m1 ⊥ cmap_erase m2.
 Proof.
   destruct m1 as [m1], m2 as [m2]; intros Hm o; specialize (Hm o).
   rewrite !lookup_omap. by destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|].
@@ -168,7 +185,7 @@ Proof.
   rewrite lookup_omap, !lookup_union_with, !lookup_omap.
   destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|]; naive_solver.
 Qed.
-Lemma dmap_erase_subseteq m1 m2 : m1 ⊆ m2 → cmap_erase m1 ⊆ cmap_erase m2.
+Lemma cmap_erase_subseteq m1 m2 : m1 ⊆ m2 → cmap_erase m1 ⊆ cmap_erase m2.
 Proof.
   destruct m1 as [m1], m2 as [m2]; intros Hm o; specialize (Hm o).
   rewrite !lookup_omap. by destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|].
@@ -196,6 +213,13 @@ Proof.
     destruct (m !! o) as [[]|] eqn:?; intros; simplify_equality'; eauto.
 Qed.
 
+Lemma cmap_lookup_ref_empty Γ o r : ∅ !!{Γ} (o,r) = None.
+Proof. by unfold lookupE, cmap_lookup_ref; simplify_map_equality'. Qed.
+Lemma cmap_lookup_empty Γ a : ∅ !!{Γ} a = None.
+Proof.
+  unfold lookupE, cmap_lookup. rewrite cmap_lookup_ref_empty.
+  by case_option_guard.
+Qed.
 Lemma cmap_lookup_ref_erase Γ m o r : cmap_erase m !!{Γ} (o,r) = m !!{Γ} (o,r).
 Proof.
   unfold lookupE, cmap_lookup_ref; destruct m as [m]; simpl.

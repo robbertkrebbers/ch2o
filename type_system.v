@@ -4,6 +4,10 @@ Require Export operations state.
 Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 
+Notation lrval K := (addr K + val K)%type.
+Definition lrval_to_expr {K} (av : lrval K) : expr K :=
+  match av with inl a => %a | inr v => #v end.
+
 Notation lrtype K := (type K + type K)%type.
 Definition lrtype_type {K} (τlr : lrtype K) : type K :=
   match τlr with inl τ | inr τ => τ end.
@@ -22,13 +26,12 @@ Notation envs := (env K * memenv K * list (type K))%type.
 
 Global Instance rettype_valid : Valid (env K) (rettype K) := λ Γ mcτ,
   match mcτ.2 with Some τ => ✓{Γ} τ | _ => True end.
-Inductive lrval_typed' (Γ : env K) (Δ : memenv K) :
-    addr K + val K → lrtype K → Prop :=
+Inductive lrval_typed' (Γ : env K) (Δ : memenv K) : lrval K → lrtype K → Prop :=
   | lval_typed a τ :
      (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → lrval_typed' Γ Δ (inl a) (inl τ)
   | rval_typed v τ : (Γ,Δ) ⊢ v : τ → lrval_typed' Γ Δ (inr v) (inr τ).
-Global Instance lrval_typed: Typed (env K * memenv K) (lrtype K)
-  (addr K + val K) := curry lrval_typed'.
+Global Instance lrval_typed:
+  Typed (env K * memenv K) (lrtype K) (lrval K) := curry lrval_typed'.
 
 Inductive assign_typed (Γ : env K) (τ1 : type K) :
      type K → assign → type K → Prop :=
@@ -391,6 +394,7 @@ Implicit Types s : stmt K.
 Implicit Types τ σ : type K.
 Implicit Types a : addr K.
 Implicit Types v : val K.
+Implicit Types av : lrval K.
 Implicit Types Ei : ectx_item K.
 Implicit Types E : ectx K.
 Implicit Types Es : sctx_item K.
@@ -399,6 +403,14 @@ Implicit Types Ek : ctx_item K.
 Implicit Types k : ctx K.
 Implicit Types d : direction K.
 
+Lemma lrval_to_expr_lift av : lrval_to_expr av↑ = lrval_to_expr av.
+Proof. by destruct av. Qed.
+Lemma lval_typed_inv Γ Δ a τ : (Γ,Δ) ⊢ inl a : inl τ → (Γ,Δ) ⊢ a : TType τ.
+Proof. by inversion 1. Qed.
+Lemma lval_typed_strict Γ Δ a τ : (Γ,Δ) ⊢ inl a : inl τ → addr_strict Γ a.
+Proof. by inversion 1. Qed.
+Lemma rval_typed_inv Γ Δ v τ : (Γ,Δ) ⊢ inr v : inr τ → (Γ,Δ) ⊢ v : τ.
+Proof. by inversion 1. Qed.
 Lemma SLocal_typed Γ Δ τs τ s c mσ :
   ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
   (Γ,Δ,τ :: τs) ⊢ s : (c,mσ) → (Γ,Δ,τs) ⊢ local{τ} s : (c,mσ).
@@ -648,7 +660,7 @@ Proof. by destruct mσ. Qed.
 Lemma rettype_union_idempotent mσ : rettype_union mσ mσ = Some mσ.
 Proof. by destruct mσ; simplify_option_equality. Qed.
 
-Lemma expr_lift_typed Γ Δ τs e τlr :
+Lemma expr_typed_lift Γ Δ τs e τlr :
   (Γ,Δ,τs) ⊢ e↑ : τlr ↔ (Γ,Δ,tail τs) ⊢ e : τlr.
 Proof.
   split.
@@ -663,5 +675,15 @@ Proof.
   * induction 1 using @expr_typed_ind; csimpl;
       typed_constructor; rewrite <-?lookup_tail; eauto.
     by apply Forall2_fmap_l.
+Qed.
+Lemma expr_typed_var_free Γ Δ τs1 τs2 e τlr :
+  vars e = ∅ → (Γ,Δ,τs1) ⊢ e : τlr → (Γ,Δ,τs2) ⊢ e : τlr.
+Proof.
+  assert (∀ es σs, ⋃ (vars <$> es) = ∅ →
+    Forall2 (λ e τlr, vars e = ∅ → (Γ,Δ,τs2) ⊢ e : τlr) es (inr <$> σs) →
+    (Γ,Δ,τs2) ⊢* es :* inr <$> σs).
+  { induction 2; simplify_equality'; decompose_empty; eauto. }
+  induction 2 using @expr_typed_ind; simplify_equality';
+    decompose_empty; typed_constructor; eauto.
 Qed.
 End properties.
