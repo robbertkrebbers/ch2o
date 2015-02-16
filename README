@@ -6,7 +6,8 @@ This version is known to compile with:
  - Coq 8.4pl3
  - SCons 2.0
  - Ocaml 4.01.0
-
+ - GNU C preprocessor 4.7
+ 
 BUILDING INSTRUCTIONS
 ---------------------
 
