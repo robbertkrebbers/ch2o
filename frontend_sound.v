@@ -468,9 +468,10 @@ Ltac weaken :=
   | H : ✓{_} (baseT _) |- _ => apply TBase_valid_inv in H
   | H : ✓{_} (_.*)%BT |- _ => apply TPtr_valid_inv in H
   | H : ✓{_} (_ ~> _) |- _ => apply TFun_valid_inv in H; destruct H
-  | _ : (?Γ,_,_) ⊢ _ : ?τlr |- _ =>
+  | _ : (?Γ,?Δ,?τs) ⊢ _ : ?τlr |- _ =>
      unless (seen τlr) by assumption;
-     assert (✓{Γ} (lrtype_type τlr)) by eauto using expr_typed_type_valid;
+     assert (✓{Γ} (lrtype_type τlr))
+       by eauto using (expr_typed_type_valid Γ Δ τs);
      assert (seen τlr) by constructor
   | _ => progress simplify_equality'
   end.
