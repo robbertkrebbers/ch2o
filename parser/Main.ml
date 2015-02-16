@@ -949,6 +949,10 @@ let run_file arch rand x = run_stream (stream_of_file arch rand x);;
 type mode = Run of bool | Trace of bool
 
 let main () =
+  Gc.set { (Gc.get()) with
+    Gc.minor_heap_size = 524288; (* 512k *)
+    Gc.major_heap_increment = 4194304 (* 4M *)
+  };
   let mode = ref (Run false) in
   let filename = ref "" in
   let arch = ref "x86" in
