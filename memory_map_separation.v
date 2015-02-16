@@ -1,6 +1,7 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export memory_trees_separation memory_map.
+Local Open Scope ctype_scope.
 
 Section memory_map.
 Context `{EnvSpec K}.
@@ -91,7 +92,7 @@ Proof.
   destruct (m2 !! o) as [[|w2' β']|]; simplify_equality; auto.
   { intuition eauto using ctree_alter_disjoint, ctree_alter_lookup_Forall. }
   assert (∃ w2', w1' ⊥ w2') as (w2'&?).
-  { exists (ctree_new Γ ∅ τ); symmetry. eauto using ctree_new_disjoint. }
+  { exists (ctree_new Γ ∅ τ); symmetry. eauto using ctree_new_disjoint_l. }
   split.
   { eapply ctree_disjoint_valid_l, ctree_alter_disjoint; intuition eauto. }
   intuition eauto using ctree_alter_lookup_Forall.
@@ -170,5 +171,86 @@ Proof.
   erewrite <-insert_union_with, (left_id_L ∅ _) by done.
   by erewrite ctree_singleton_union
     by eauto using addr_typed_ref_typed, addr_typed_type_object_valid.
+Qed.
+Lemma cmap_singleton_elt_array Γ Δ a malloc w τ n j :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType (τ.[n]) → j < n →
+  cmap_singleton Γ (addr_elt Γ (RArray j τ n) a) malloc w
+  = cmap_singleton Γ a malloc (ctree_singleton_seg Γ (RArray j τ n) w).
+Proof.
+  intros; unfold cmap_singleton; simpl.
+  by erewrite addr_ref_elt, addr_index_elt by (eauto; by constructor).
+Qed.
+Lemma cmap_singleton_array_go Γ Δ a malloc ws n τ j :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType (τ.[n]) → addr_strict Γ a → (Γ,Δ) ⊢* ws : τ →
+  j + length ws ≤ n → ws ≠ [] →
+  cmap_singleton Γ a malloc (foldr (∪) (ctree_new Γ ∅ (τ.[n]))
+    (imap_go (λ i, ctree_singleton_seg Γ (RArray i τ n)) j ws))
+  = ⋃ imap_go (λ i, cmap_singleton Γ (addr_elt Γ (RArray i τ n) a) malloc) j ws.
+Proof.
+  intros ??? Hws; revert j.
+  induction Hws as [|w1 ws ?? IH]; intros j ??; simplify_equality'.
+  destruct (decide (ws = [])); simplify_equality'.
+  { assert (
+      (Γ,Δ) ⊢ MArray τ (<[j:=w1]> (replicate n (ctree_new Γ ∅ τ))) : τ.[n]).
+    { typed_constructor.
+      * by rewrite insert_length, replicate_length.
+      * rewrite list_insert_alter.
+        eauto 8 using Forall_alter, Forall_replicate, ctree_new_typed,
+          pbit_empty_valid, TArray_valid_inv_type, addr_typed_type_valid.
+      * lia. }
+    erewrite (ctree_new_union_r _ Δ),
+      cmap_singleton_elt_array by eauto with lia.
+    unfold cmap_singleton, union, sep_union; simpl.
+    by rewrite (right_id_L ∅ _). }
+  erewrite cmap_singleton_union, <-IH by eauto with lia.
+  by erewrite cmap_singleton_elt_array by eauto with lia.
+Qed.
+Lemma cmap_singleton_array_disjoint Γ Δ a malloc ws n τ :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType (τ.[n]) → addr_strict Γ a → (Γ,Δ) ⊢* ws : τ → 
+  Forall (not ∘ Forall sep_unmapped ∘ ctree_flatten) ws → length ws = n →
+  ⊥ imap (λ i, cmap_singleton Γ (addr_elt Γ (RArray i τ n) a) malloc) ws.
+Proof.
+  intros ??? Hws ?. cut (∀ j, j + length ws ≤ n →
+   ⊥ imap_go (λ i, cmap_singleton Γ (addr_elt Γ (RArray i τ n) a) malloc) j ws).
+  { intros help ?; apply help; lia. }
+  induction Hws as [|w1 ws ?? IH]; intros j ?; decompose_Forall_hyps.
+  { constructor. }
+  assert (Γ ⊢ RArray j τ n : τ.[n] ↣ τ) by (constructor; lia).
+  constructor; [|auto with lia].
+  destruct (decide (ws = [])); simplify_equality'.
+  { eapply sep_disjoint_empty_r, cmap_singleton_sep_valid;
+      eauto using addr_elt_typed, addr_elt_is_obj, addr_elt_strict. }
+  erewrite <-cmap_singleton_array_go, cmap_singleton_elt_array,
+    ctree_singleton_seg_array by eauto with lia.
+  eapply cmap_singleton_disjoint; eauto.
+  * constructor; apply Forall2_lookup_2.
+    { by rewrite inserts_length, insert_length. }
+    intros i w2 w3.
+    rewrite list_lookup_insert_Some,list_lookup_inserts_Some, !lookup_replicate.
+    intros [(?&?&?)|(?&?&?)] [(?&?&?)|(?&?&?)]; decompose_Forall_hyps;
+      eauto using ctree_new_disjoint_r, ctree_new_disjoint_l,
+        (ctree_new_typed _ Δ), pbit_empty_valid, ctree_typed_type_valid; lia.
+  * eauto using ctree_singleton_seg_Forall_inv.
+  * clear IH; destruct ws as [|w2 ws]; decompose_Forall_hyps.
+    rewrite Forall_bind, Forall_lookup; intros Hmapped.
+    cut (ctree_unmapped w2); [done|apply (Hmapped (S j) w2)].
+    by rewrite list_lookup_insert
+      by (rewrite inserts_length, replicate_length; lia).
+Qed.
+Lemma cmap_singleton_array_union Γ Δ a malloc ws n τ :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType (τ.[n]) → addr_strict Γ a → (Γ,Δ) ⊢* ws : τ →
+  length ws = n →
+  cmap_singleton Γ a malloc (MArray τ ws)
+  = ⋃ imap (λ i, cmap_singleton Γ (addr_elt Γ (RArray i τ n) a) malloc) ws.
+Proof.
+  intros ? Ha ? Hws ?. assert (ws ≠ []).
+  { intros ->.
+    apply (TArray_valid_inv_size Γ τ n); eauto using addr_typed_type_valid. }
+  unfold imap; erewrite <-cmap_singleton_array_go,
+    ctree_singleton_seg_array by eauto with lia.
+  do 2 f_equal; apply list_eq_same_length with n;
+    rewrite ?inserts_length, ?replicate_length; auto; intros i w1 w2 ??.
+  rewrite list_lookup_inserts, Nat.sub_0_r by
+    by (rewrite ?replicate_length; auto with lia). congruence.
 Qed.
 End memory_map.

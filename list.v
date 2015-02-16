@@ -60,6 +60,11 @@ Instance list_insert {A} : Insert nat A (list A) :=
   | [] => []
   | x :: l => match i with 0 => y :: l | S i => x :: <[i:=y]>l end
   end.
+Fixpoint list_inserts {A} (i : nat) (k l : list A) : list A :=
+  match k with
+  | [] => l
+  | y :: k => <[i:=y]>(list_inserts (S i) k l)
+  end.
 
 (** The operation [delete i l] removes the [i]th element of [l] and moves
 all consecutive elements one position ahead. In case [i] is out of bounds,
@@ -455,6 +460,20 @@ Lemma list_lookup_insert_ne l i j x : i ≠ j → <[i:=x]>l !! j = l !! j.
 Proof.
   revert i j. induction l; [done|]. intros [] [] ?; simpl; auto with congruence.
 Qed.
+Lemma list_lookup_insert_Some l i x j y :
+  <[i:=x]>l !! j = Some y ↔
+    i = j ∧ x = y ∧ j < length l ∨ i ≠ j ∧ l !! j = Some y.
+Proof.
+  destruct (decide (i = j)) as [->|];
+    [split|rewrite list_lookup_insert_ne by done; tauto].
+  * intros Hy. assert (j < length l).
+    { rewrite <-(insert_length l j x); eauto using lookup_lt_Some. }
+    rewrite list_lookup_insert in Hy by done; naive_solver.
+  * intros [(?&?&?)|[??]]; rewrite ?list_lookup_insert; naive_solver.
+Qed.
+Lemma list_insert_commute l i j x y :
+  i ≠ j → <[i:=x]>(<[j:=y]>l) = <[j:=y]>(<[i:=x]>l).
+Proof. revert i j. by induction l; intros [|?] [|?] ?; f_equal'; auto. Qed.
 Lemma list_lookup_other l i x :
   length l ≠ 1 → l !! i = Some x → ∃ j y, j ≠ i ∧ l !! j = Some y.
 Proof.
@@ -498,6 +517,55 @@ Proof.
 Qed.
 Lemma delete_middle l1 l2 x : delete (length l1) (l1 ++ x :: l2) = l1 ++ l2.
 Proof. induction l1; f_equal'; auto. Qed.
+
+Lemma inserts_length l i k : length (list_inserts i k l) = length l.
+Proof.
+  revert i. induction k; intros ?; csimpl; rewrite ?insert_length; auto.
+Qed.
+Lemma list_lookup_inserts l i k j :
+  i ≤ j < i + length k → j < length l →
+  list_inserts i k l !! j = k !! (j - i).
+Proof.
+  revert i j. induction k as [|y k IH]; csimpl; intros i j ??; [lia|].
+  destruct (decide (i = j)) as [->|].
+  { by rewrite list_lookup_insert, Nat.sub_diag
+      by (rewrite inserts_length; lia). }
+  rewrite list_lookup_insert_ne, IH by lia.
+  by replace (j - i) with (S (j - S i)) by lia.
+Qed.
+Lemma list_lookup_inserts_lt l i k j :
+  j < i → list_inserts i k l !! j = l !! j.
+Proof.
+  revert i j. induction k; intros i j ?; csimpl;
+    rewrite ?list_lookup_insert_ne by lia; auto with lia.
+Qed.
+Lemma list_lookup_inserts_ge l i k j :
+  i + length k ≤ j → list_inserts i k l !! j = l !! j.
+Proof.
+  revert i j. induction k; csimpl; intros i j ?;
+    rewrite ?list_lookup_insert_ne by lia; auto with lia.
+Qed.
+Lemma list_lookup_inserts_Some l i k j y :
+  list_inserts i k l !! j = Some y ↔
+    (j < i ∨ i + length k ≤ j) ∧ l !! j = Some y ∨
+    i ≤ j < i + length k ∧ j < length l ∧ k !! (j - i) = Some y.
+Proof.
+  destruct (decide (j < i)).
+  { rewrite list_lookup_inserts_lt by done; intuition lia. }
+  destruct (decide (i + length k ≤ j)).
+  { rewrite list_lookup_inserts_ge by done; intuition lia. }
+  split.
+  * intros Hy. assert (j < length l).
+    { rewrite <-(inserts_length l i k); eauto using lookup_lt_Some. }
+    rewrite list_lookup_inserts in Hy by lia. intuition lia.
+  * intuition. by rewrite list_lookup_inserts by lia.
+Qed.
+Lemma list_insert_inserts_lt l i j x k :
+  i < j → <[i:=x]>(list_inserts j k l) = list_inserts j k (<[i:=x]>l).
+Proof.
+  revert i j. induction k; intros i j ?; simpl;
+    rewrite 1?list_insert_commute by lia; auto with f_equal.
+Qed.
 
 (** ** Properties of the [elem_of] predicate *)
 Lemma not_elem_of_nil x : x ∉ [].
@@ -896,6 +964,8 @@ Proof.
   * intros Hin [x' Hx']; destruct Hin. rewrite lookup_replicate in Hx'; tauto.
   * intros Hx ?. destruct Hx. exists x; auto using lookup_replicate_2.
 Qed.
+Lemma insert_replicate x n i : <[i:=x]>(replicate n x) = replicate n x.
+Proof. revert i. induction n; intros [|?]; f_equal'; auto. Qed.
 Lemma elem_of_replicate_inv x n y : x ∈ replicate n y → x = y.
 Proof. induction n; simpl; rewrite ?elem_of_nil, ?elem_of_cons; intuition. Qed.
 Lemma replicate_S n x : replicate (S n) x = x :: replicate  n x.
@@ -1994,6 +2064,14 @@ Section Forall_Exists.
     revert i. induction l; intros [|?]; simpl;
       inversion_clear 1; constructor; eauto.
   Qed.
+  Lemma Forall_insert l i x : Forall P l → P x → Forall P (<[i:=x]>l).
+  Proof. rewrite list_insert_alter; auto using Forall_alter. Qed.
+  Lemma Forall_inserts l i k :
+    Forall P l → Forall P k → Forall P (list_inserts i k l).
+  Proof.
+    intros Hl Hk; revert i.
+    induction Hk; simpl; auto using Forall_insert.
+  Qed.
   Lemma Forall_replicate n x : P x → Forall P (replicate n x).
   Proof. induction n; simpl; constructor; auto. Qed.
   Lemma Forall_replicate_eq n (x : A) : Forall (x =) (replicate n x).
@@ -2951,6 +3029,9 @@ Section zip_with.
     revert k i. induction l; intros [|??] [|?]; f_equal'; auto.
     by destruct (_ !! _).
   Qed.
+  Lemma insert_zip_with l k i x y :
+    <[i:=f x y]>(zip_with f l k) = zip_with f (<[i:=x]>l) (<[i:=y]>k).
+  Proof. revert i k. induction l; intros [|?] [|??]; f_equal'; auto. Qed.
   Lemma fmap_zip_with_l (g : C → A) l k :
     (∀ x y, g (f x y) = x) → length l ≤ length k → g <$> zip_with f l k = l.
   Proof. revert k. induction l; intros [|??] ??; f_equal'; auto with lia. Qed.

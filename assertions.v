@@ -243,6 +243,8 @@ Hint Immediate cmap_valid_sep_valid.
 Hint Immediate purefuns_empty_valid.
 Hint Extern 0 (Separation _) => apply (_ : Separation (mem K)).
 Hint Extern 0 (Separation _) => apply (_ : Separation perm).
+Hint Extern 0 (_ ⊢ _ : _ ↣ _) => typed_constructor; try omega.
+Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
 
 Ltac solve t :=
   repeat first
@@ -472,6 +474,21 @@ Lemma assert_exist_sep {A} Γ (P : A → assert K) Q :
   ((∃ x, P x) ★ Q)%A ≡{Γ} (∃ x, P x ★ Q)%A.
 Proof. solve eauto. Qed.
 
+Lemma assert_Forall_holds_2 (Ps : list (assert K)) Γ Δ ρ τs ms :
+  ⊥ ms → Forall2 (λ (P : assert K) m, assert_holds P Γ Δ ρ τs m) Ps ms →
+  assert_holds (Π Ps)%A Γ Δ ρ τs (⋃ ms).
+Proof. intros Hms HPs. revert Hms. induction HPs; solve eauto. Qed.
+Lemma assert_Forall_holds (Ps : list (assert K)) Γ Δ ρ τs m :
+  assert_holds (Π Ps)%A Γ Δ ρ τs m ↔ ∃ ms, m = ⋃ ms ∧ ⊥ ms ∧
+    Forall2 (λ (P : assert K) m, assert_holds P Γ Δ ρ τs m) Ps ms.
+Proof.
+  split; [|naive_solver eauto using assert_Forall_holds_2].
+  revert m. induction Ps as [|P Ps IH].
+  { intros m [? ->]. eexists []. by repeat constructor. }
+  intros ? (m1&m2&->&?&?&?); destruct (IH m2) as (ms&->&?&?); trivial.
+  exists (m1 :: ms); auto.
+Qed.
+
 (* Evaluation and singleton connectives *)
 Global Instance assert_expr_stack_indep e v τlr :
   vars e = ∅ → StackIndep (e ⇓ v : τlr).
@@ -517,6 +534,55 @@ Proof.
     exists (mem_singleton Γ1 a malloc x v) (mem_singleton Γ1 a malloc y v).
     split_ands; rewrite ?sep_disjoint_list_double; solve
       ltac:(eauto using mem_singleton_union, eq_sym, mem_singleton_disjoint).
+Qed.
+Lemma assert_singleton_array Γ e malloc x vs τ n :
+  length vs = n → n ≠ 0 →
+  (e ↦{malloc,x} #(VArray τ vs) : (τ.[n]))%A
+  ≡{Γ} (Π imap (λ i v, (e %> RArray i τ n) ↦{malloc,x} #v : τ) vs)%A.
+Proof.
+  intros Hn Hn'. split.
+  * intros Γ1 Δ1 ρ τs ????? (a&v&?&?&Hvs&Hvs'&?&?&?&->).
+    assert ((Γ1,Δ1) ⊢ a : TType (τ.[n]) ∧ addr_strict Γ1 a)
+      as [] by eauto 10 using cmap_valid_memenv_valid, lval_typed_inv,
+      lval_typed_strict, expr_eval_typed, cmap_empty_valid.
+    assert (∀ j, j + length vs ≤ n → (Γ1,Δ1) ⊢* vs : τ →
+      Forall2 (λ (P : assert K) m, assert_holds P Γ1 Δ1 ρ τs m)
+        (imap_go (λ i v,((e %> RArray i τ n) ↦{malloc,x} #v : τ)%A) j vs)
+        (imap_go (λ i,
+          mem_singleton Γ1 (addr_elt Γ1 (RArray i τ n) a) malloc x) j vs)).
+    { clear Hn Hvs Hvs'. intros j Hj Hvs; revert j Hj.
+      induction Hvs as [|v' vs ?? IH]; csimpl; intros j ?; auto.
+      constructor; [|eauto with lia].
+      eexists (addr_elt Γ1 (RArray j τ n) a), v'; simplify_option_equality;
+        eauto 15 using addr_elt_is_obj, lockset_empty_valid. }
+    simplify_option_equality; typed_inversion_all.
+    erewrite mem_singleton_array_union by eauto.
+    apply assert_Forall_holds_2;
+      eauto using mem_singleton_array_disjoint with lia.
+  * intros Γ1 Δ1 ρ τs m _ ? Hm ?; rewrite assert_Forall_holds; intros (ms&->&_&Hms).
+    apply cmap_valid_memenv_valid in Hm.
+    assert (∃ a, (Γ1,Δ1,τs) ⊢ e : inl (τ.[n])%T ∧ ⟦ e ⟧ Γ1 ∅ ρ ∅ = Some (inl a) ∧
+      sep_valid x ∧ ¬sep_unmapped x) as (a&?&?&?&?).
+    { unfold imap in *. destruct vs; decompose_Forall_hyps.
+      naive_solver (simplify_option_equality; typed_inversion_all; eauto). }
+    assert ((Γ1,Δ1) ⊢* vs : τ).
+    { clear Hn Hn'. revert ms Hms. unfold imap. generalize 0.
+      induction vs; intros ? [|??] ?; decompose_Forall_hyps;
+        try match goal with
+        | H : ∃ a, _ |- _ => destruct H as (?&?&?&?&?&?&?&?&?&?)
+        end; simplify_option_equality; typed_inversion_all; eauto. }
+    assert (ms = imap (λ i,
+      mem_singleton Γ1 (addr_elt Γ1 (RArray i τ n) a) malloc x) vs) as ->.
+    { clear Hn Hn'. revert ms Hms. unfold imap. generalize 0.
+      induction vs; intros ? [|??] ?; decompose_Forall_hyps;
+        try match goal with
+        | H : ∃ a, _ |- _ => destruct H as (?&?&?&?&?&?&?&?&?&?)
+        end; simplify_option_equality; typed_inversion_all; f_equal; auto. }
+    assert ((Γ1,Δ1) ⊢ a : TType (τ.[n]) ∧ addr_strict Γ1 a) as [] by eauto 10
+      using lval_typed_inv, lval_typed_strict, expr_eval_typed, cmap_empty_valid.
+    exists a (VArray τ vs); split_ands; eauto using lockset_empty_valid,
+      (addr_ref_byte_is_obj_parent _ _ (RArray 0 τ n)),
+      mem_singleton_array_union, eq_sym.
 Qed.
 
 (* Lifting De Bruijn indexes *)

@@ -336,6 +336,39 @@ Proof.
   intros. unfold mem_singleton. by erewrite <-zip_with_replicate,
     of_val_union, cmap_singleton_union by eauto.
 Qed.
+Lemma mem_singleton_imap f Γ a malloc x vs :
+  imap (λ i, mem_singleton Γ (f i a) malloc x) vs
+  = imap (λ i, cmap_singleton Γ (f i a) malloc)
+      ((λ v, of_val Γ (replicate (bit_size_of Γ (type_of v)) x) v) <$> vs).
+Proof. unfold imap. generalize 0. induction vs; intros; f_equal'; auto. Qed.
+Lemma mem_singleton_array_disjoint Γ Δ a malloc x vs n τ :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType (τ.[n]) → addr_strict Γ a → (Γ,Δ) ⊢* vs : τ → 
+  length vs = n → sep_valid x → ¬sep_unmapped x →
+  ⊥ imap (λ i, mem_singleton Γ (addr_elt Γ (RArray i τ n) a) malloc x) vs.
+Proof.
+  intros ??? Hvs Hn ??. rewrite (mem_singleton_imap (λ _, _)).
+  eapply cmap_singleton_array_disjoint; eauto.
+  * clear Hn. induction Hvs; simplify_type_equality';
+      constructor; auto using of_val_typed, Forall_replicate.
+  * clear Hn. induction Hvs; simplify_type_equality'; constructor; eauto 10
+      using ctree_Forall_not, of_val_typed, Forall_replicate, of_val_mapped.
+Qed.
+Lemma mem_singleton_array_union Γ Δ a malloc x vs τ n :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType (τ.[n]) → addr_strict Γ a → (Γ,Δ) ⊢* vs : τ →
+  length vs = n → sep_valid x → ¬sep_unmapped x →
+  mem_singleton Γ a malloc x (VArray τ vs)
+  = ⋃ imap (λ i, mem_singleton Γ (addr_elt Γ (RArray i τ n) a) malloc x) vs.
+Proof.
+  intros ??? Hvs Hn ??. rewrite (mem_singleton_imap (λ _, _)).
+  assert ((Γ,Δ) ⊢* (λ v,
+    of_val Γ (replicate (bit_size_of Γ (type_of v)) x) v) <$> vs : τ) as Hvs'.
+  { clear Hn. induction Hvs; simplify_type_equality';
+      constructor; auto using of_val_typed, Forall_replicate. }
+  erewrite <-cmap_singleton_array_union by eauto.
+  unfold mem_singleton; do 2 f_equal'. rewrite bit_size_of_array.
+  clear Hvs' Hn; induction Hvs; simplify_type_equality'; f_equal';
+    rewrite ?replicate_plus, ?take_app_alt, ?drop_app_alt by auto; eauto.
+Qed.
 Lemma mem_alloc_empty_singleton Γ o malloc x v τ :
   mem_alloc Γ o malloc x v ∅ = mem_singleton Γ (addr_top o τ) malloc x v.
 Proof. done. Qed.

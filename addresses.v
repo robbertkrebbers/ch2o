@@ -372,6 +372,13 @@ Proof.
     by eauto using size_of_pos, ref_typed_type_valid, ref_seg_typed_type_valid;
     eauto using ref_seg_typed_size.
 Qed.
+Lemma addr_elt_is_obj Γ Δ a rs σ σ' :
+  (Γ,Δ) ⊢ a : TType σ → Γ ⊢ rs : σ ↣ σ' → addr_is_obj (addr_elt Γ rs a).
+Proof.
+  rewrite addr_typed_alt. intros (?&?&?&?&?&?&?&Hcast&?) Hrs.
+  destruct a as [o r' i τ σ'' σp]; simplify_equality'.
+  by erewrite path_type_check_complete by eauto.
+Qed.
 Lemma addr_elt_weaken Γ1 Γ2 Δ1 a rs σ σ' :
   ✓ Γ1 → (Γ1,Δ1) ⊢ a : TType σ → Γ1 ⊢ rs : σ ↣ σ' → Γ1 ⊆ Γ2 →
   addr_elt Γ1 rs a = addr_elt Γ2 rs a.

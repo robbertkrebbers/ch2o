@@ -31,7 +31,8 @@ Hint Immediate ctree_typed_type_valid.
 Hint Immediate TArray_valid_inv_type.
 
 Ltac solve_length := simplify_equality'; repeat first 
-  [ rewrite take_length | rewrite drop_length | rewrite app_length
+  [ rewrite take_length | rewrite drop_length
+  | rewrite app_length | rewrite cons_length | rewrite nil_length
   | rewrite fmap_length | erewrite ctree_flatten_length by eauto
   | rewrite type_mask_length by eauto | rewrite replicate_length
   | rewrite bit_size_of_int | rewrite int_width_char | rewrite resize_length
@@ -199,19 +200,29 @@ Proof.
     constructor; eauto using ctree_typed_sep_valid.
   * intros. erewrite ctree_unflatten_compound by eauto. by constructor.
 Qed.
-Lemma ctree_new_disjoint Γ Δ w τ : ✓ Γ → (Γ,Δ) ⊢ w : τ → ctree_new Γ ∅ τ ⊥ w.
+Lemma ctree_new_disjoint_l Γ Δ w τ : ✓ Γ → (Γ,Δ) ⊢ w : τ → ctree_new Γ ∅ τ ⊥ w.
 Proof.
   intros.
   eapply ctree_flatten_unflatten_disjoint; eauto using @sep_unmapped_empty.
   eapply Forall2_replicate_l, Forall_impl; eauto using ctree_flatten_valid.
   eauto using @sep_disjoint_empty_l, pbit_valid_sep_valid.
 Qed.
-Lemma ctree_new_union Γ Δ w τ : ✓ Γ → (Γ,Δ) ⊢ w : τ → ctree_new Γ ∅ τ ∪ w = w.
-Proof. eauto using @ctree_left_id, ctree_new_disjoint, ctree_new_Forall. Qed.
+Lemma ctree_new_disjoint_r Γ Δ w τ : ✓ Γ → (Γ,Δ) ⊢ w : τ → w ⊥ ctree_new Γ ∅ τ.
+Proof. intros; symmetry; eauto using ctree_new_disjoint_l. Qed.
+Lemma ctree_new_union_l Γ Δ w τ : ✓ Γ → (Γ,Δ) ⊢ w : τ → ctree_new Γ ∅ τ ∪ w = w.
+Proof. eauto using @ctree_left_id, ctree_new_disjoint_l, ctree_new_Forall. Qed.
+Lemma ctree_new_union_r Γ Δ w τ : ✓ Γ → (Γ,Δ) ⊢ w : τ → w ∪ ctree_new Γ ∅ τ = w.
+Proof. eauto using @ctree_right_id, ctree_new_disjoint_r, ctree_new_Forall. Qed.
+Lemma ctrees_new_union_l Γ Δ ws τ n :
+  ✓ Γ → (Γ,Δ) ⊢* ws : τ → length ws = n →
+  replicate n (ctree_new Γ ∅ τ) ∪* ws = ws.
+Proof.
+  intros ? Hws <-. induction Hws; f_equal'; eauto using ctree_new_union_l.
+Qed.
 Lemma ctree_new_subseteq Γ Δ w τ : ✓ Γ → (Γ,Δ) ⊢ w : τ → ctree_new Γ ∅ τ ⊆ w.
 Proof.
-  intros. erewrite <-(ctree_new_union _ _ w) by eauto.
-  eauto using @ctree_union_subseteq_l, ctree_new_disjoint.
+  intros. erewrite <-(ctree_new_union_l _ _ w) by eauto.
+  eauto using @ctree_union_subseteq_l, ctree_new_disjoint_l.
 Qed.
 Lemma ctree_lookup_seg_disjoint Γ Δ1 Δ2 w1 w2 τ rs w1' w2' :
   ✓ Γ → (Γ,Δ1) ⊢ w1 : τ → (Γ,Δ2) ⊢ w2 : τ → w1 ⊥ w2 →
@@ -525,7 +536,7 @@ Lemma ctree_singleton_seg_disjoint Γ τ rs w1 w2 σ :
 Proof.
   intros ?? Hrs ???.
   assert (∀ τ, ✓{Γ} τ → ctree_new Γ ∅ τ ⊥ ctree_new Γ ∅ τ).
-  { intros. apply ctree_new_disjoint with ∅;
+  { intros. apply ctree_new_disjoint_l with ∅;
       eauto using ctree_new_typed, pbit_empty_valid. }
   destruct Hrs as [τ i n _|s i τs τ Ht _|s i]; simplify_option_equality.
   * constructor. apply Forall2_insert; eauto using Forall2_replicate.
@@ -555,7 +566,7 @@ Proof.
   assert (∀ n, replicate n (∅ : pbit K) ∪* replicate n ∅ = replicate n ∅).
   { intros. by rewrite zip_with_replicate_l, fmap_replicate by solve_length. }
   assert (∀ τ, ✓{Γ} τ → ctree_new Γ ∅ τ = ctree_new Γ ∅ τ ∪ ctree_new Γ ∅ τ).
-  { intros. symmetry. eapply ctree_new_union with ∅;
+  { intros. symmetry. eapply ctree_new_union_l with ∅;
       eauto using ctree_new_typed, pbit_empty_valid. }
   destruct Hrs as [τ i n _|s i τs τ Ht _|s i]; simplify_option_equality; f_equal.
   * revert i.
@@ -582,5 +593,20 @@ Proof.
   induction Hr as [|r rs τ1 τ2 τ3] using @ref_typed_ind; intros; simpl; auto.
   erewrite (ctree_singleton_seg_union _ τ2) by eauto using ref_typed_type_valid.
   eauto.
+Qed.
+Lemma ctree_singleton_seg_array Γ Δ ws τ j n :
+  ✓ Γ → (Γ,Δ) ⊢* ws : τ → length ws + j ≤ n →
+  foldr (∪) (ctree_new Γ ∅ (τ.[n]))
+    (imap_go (λ i, ctree_singleton_seg Γ (RArray i τ n)) j ws)
+  = MArray τ (list_inserts j ws (replicate n (ctree_new Γ ∅ τ))).
+Proof.
+  intros ? Hws. revert j.
+  induction Hws as [|w ws Hw Hws IH]; csimpl; intros j Hj.
+  { by rewrite ctree_new_array. }
+  rewrite IH by lia; clear IH; f_equal'. pattern n at 1 3.
+  erewrite <-(insert_replicate _ n j), <-list_insert_inserts_lt,
+    <-insert_zip_with, ctree_new_union_r by eauto with lia.
+  by erewrite ctrees_new_union_l by (rewrite ?inserts_length; eauto using
+   Forall_inserts, Forall_replicate, ctree_new_typed, pbit_empty_valid).
 Qed.
 End memory_trees.

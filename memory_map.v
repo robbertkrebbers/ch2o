@@ -526,6 +526,17 @@ Proof.
   * by erewrite ctree_singleton_le by eauto using ref_freeze_le_l.
   * by erewrite <-ctree_singleton_le by eauto using ref_freeze_le_r.
 Qed.
+Lemma cmap_singleton_sep_valid Γ Δ a malloc w τ :
+  ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_is_obj a → addr_strict Γ a →
+  (Γ,Δ) ⊢ w : τ → ¬ctree_unmapped w → sep_valid (cmap_singleton Γ a malloc w).
+Proof.
+  intros ????? Hperm o [|] ?; simplify_map_equality'.
+  assert (τ = addr_type_base a) by eauto using addr_is_obj_type; subst.
+  split; eauto using ctree_typed_sep_valid,
+    ctree_singleton_typed, addr_typed_ref_typed.
+  contradict Hperm; eapply Forall_impl with (∅ =); eauto using
+    @sep_unmapped_empty_alt, ctree_singleton_Forall_inv, addr_typed_ref_typed.
+Qed.
 Lemma cmap_singleton_valid Γ Δ a malloc w τ :
   ✓ Γ → ✓{Γ} Δ → (Γ,Δ) ⊢ a : TType τ →
   index_alive Δ (addr_index a) → addr_is_obj a → addr_strict Γ a →
