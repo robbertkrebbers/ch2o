@@ -761,7 +761,9 @@ Proof. intros p. apply bsteps_rtc in p. eapply cstep_in_ctx_rtc; eauto. Qed.
 Lemma cnf_undef m k e : nf (cstep Γ δ) (State k (Undef e) m).
 Proof. intros [? p]. inv_cstep p. Qed.
 Lemma cnf_undef_state S : is_undef_state S → nf (cstep Γ δ) S.
-Proof. destruct 1; auto using cnf_undef. Qed.
+Proof.
+  intros [??]; destruct S as [? [] ?]; simplify_equality'; auto using cnf_undef.
+Qed.
 Lemma cnf_in_ctx_undef m l k e : nf (cstep_in_ctx Γ δ l) (State k (Undef e) m).
 Proof. apply (nf_subrel _ (cstep Γ δ) _), cnf_undef. Qed.
 Lemma cnf_val m l Ω v : nf (cstep_in_ctx Γ δ l) (State l (Expr (#{Ω} v)) m).

@@ -247,7 +247,7 @@ Ltac ctx_inversion Hk :=
 Lemma cstep_progress Γ δ S f :
   ✓ Γ → Γ ⊢ S : f → ✓{Γ,'{SMem S}} δ →
   (**i 1.) *) red (cstep Γ δ) S ∨
-  (**i 2.) *) (∃ v, is_final_state v S) ∨
+  (**i 2.) *) (∃ v, is_final_state f v S) ∨
   (**i 3.) *) is_undef_state S ∨
   (**i 4.) *) match SFoc S with
               | Stmt (↷ l) s => l ∉ labels s ∪ labels (SCtx S)
@@ -283,18 +283,17 @@ Proof.
     left; solve_cred.
   * destruct (funenv_lookup Γ ('{m}) δ f' σs σ) as (s&cmτ&?&_); auto.
     left; solve_cred.
-  * ctx_inversion Hk.
-    { right; left; exists v. constructor. }
-    left; solve_cred.
-  * do 2 right; left; constructor.
-  * do 2 right; left; constructor.
+  * ctx_inversion Hk; [|left; solve_cred].
+    right; left; by exists v.
+  * do 2 right; left. by apply (bool_decide_unpack _).
+  * do 2 right; left. by apply (bool_decide_unpack _).
 Qed.
 Lemma csteps_initial_progress Γ δ m f vs S σs σ :
   ✓ Γ → ✓{Γ} m → ✓{Γ,'{m}} δ →
   Γ !! f = Some (σs,σ) → (Γ,'{m}) ⊢* vs :* σs →
   Γ\ δ ⊢ₛ initial_state m f vs ⇒* S →
   (**i 1.) *) red (cstep Γ δ) S ∨
-  (**i 2.) *) (∃ v, is_final_state v S) ∨
+  (**i 2.) *) (∃ v, is_final_state f v S) ∨
   (**i 3.) *) is_undef_state S.
 Proof.
   intros. assert (Γ ⊢ S : f ∧ ✓{Γ,'{SMem S}} δ) as [??].

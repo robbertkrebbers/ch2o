@@ -40,11 +40,11 @@ Hint Immediate locks_refine_valid_l locks_refine_valid_r.
 Hint Immediate stmt_refine_typed_l stmt_refine_typed_r.
 Hint Resolve direction_out_refine_r direction_in_refine_r.
 Hint Resolve sctx_item_catch_refine.
-Hint Immediate Undef_undef.
 Hint Immediate meminj_extend_reflexive.
 Hint Immediate sctx_item_subst_refine.
 Hint Resolve meminj_extend_inverse cmap_refine_inverse'.
 Hint Immediate addr_alive_refine'.
+Hint Extern 0 (is_undef_state (State _ (Undef ?Su) _)) => by exists Su.
 
 Lemma assign_refine Γ α f m1 m2 ass a1 a2 v1 v2 v1' va1' τ τ' σ :
   ✓ Γ → m1 ⊑{Γ,α,f} m2 → assign_typed Γ τ τ' ass σ →

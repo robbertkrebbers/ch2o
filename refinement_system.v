@@ -1024,10 +1024,7 @@ Proof.
 Qed.
 Lemma state_refine_undef Γ α f S1 S2 h :
   S1 ⊑{Γ,α,f} S2 : h → is_undef_state S2 → is_undef_state S1.
-Proof.
-  destruct 1 as [k1 φ1 m1 k2 φ2 m2 τf|]; [|done].
-  inversion 1; subst; refine_inversion_all; constructor.
-Qed.
+Proof. destruct 1 as [k1 φ1 m1 k2 φ2 m2 τf ? []|]; naive_solver. Qed.
 Lemma state_refine_compose Γ α1 α2 f1 f2 S1 S2 S3 h :
   ✓ Γ → S1 ⊑{Γ,α1,f1} S2 : h → S2 ⊑{Γ,α2,f2} S3 : h →
   S1 ⊑{Γ,α1||α2,f2 ◎ f1} S3 : h.

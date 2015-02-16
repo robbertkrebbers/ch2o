@@ -126,25 +126,19 @@ Proof. solve_decision. Defined.
 Instance focus_locks {K} : Locks (focus K) := λ φ,
   match φ with Stmt _ s => locks s | Expr e => locks e | _ => ∅ end.
 
+Instance maybe_Call {K} : Maybe2 (@Call K) := λ S,
+  match S with Call f vs => Some (f,vs) | _ => None end.
+Instance maybe_Return {K} : Maybe2 (@Return K) := λ S,
+  match S with Return f v => Some (f,v) | _ => None end.
+Instance maybe_Undef {K} : Maybe (@Undef K) := λ S,
+  match S with Undef Su => Some Su | _ => None end.
+
 Definition initial_state {K} (m : mem K)
   (f : funname) (vs : list (val K)) : state K := State [] (Call f vs) m.
-Inductive is_final_state {K} (v : val K) : state K → Prop :=
-  | Return_final f m : is_final_state v (State [] (Return f v) m).
-Inductive is_undef_state {K} : state K → Prop :=
-  | Undef_undef k Su m : is_undef_state (State k (Undef Su) m).
-
-Instance is_final_state_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (v : val K) S : Decision (is_final_state v S).
-Proof.
- refine
-  match S with
-  | State [] (Return _ v') _ => cast_if (decide (v = v'))
-  | _ => right _
-  end; abstract first [subst; constructor|by inversion 1].
-Defined.
-Instance is_undef_state_dec {K} (S : state K) : Decision (is_undef_state S).
-Proof.
- refine match S with State _ (Undef _) _ => left _ | _ => right _ end;
-    abstract first [constructor|by inversion 1].
-Defined.
- 
+Definition is_final_state {K}
+    (f : funname) (v : val K) (S : state K) : Prop :=
+  maybe2 Return (SFoc S) = Some (f,v) ∧ SCtx S = [].
+Arguments is_final_state _ _ _ !_ /.
+Definition is_undef_state {K} (S : state K) : Prop :=
+  is_Some (maybe Undef (SFoc S)).
+Arguments is_undef_state _ !_ /.
