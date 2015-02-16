@@ -18,14 +18,17 @@ open Extracted;;
 let trace_width = ref 72;;
 let break_on_undef = ref false;;
 let printf_returns_int = ref true;;
+(** The --sysroot flag is a hack to avoid any actual C standard library files
+from being used. *)
+let cpp_options = ref "--sysroot=. -I include -include prelude.c"
 
 let cabs_of_file name =
   Cerrors.reset();
-  let ic = open_in name in
+  let ic = Unix.open_process_in ("cpp " ^ !cpp_options ^ " " ^ name) in
   let lb = Lexer.init name ic in
   let p = Parser.file Lexer.initial lb in
   Lexer.finish();
-  close_in ic;
+  if Unix.close_process_in ic <> Unix.WEXITED 0 then failwith "cpp" else
   if Cerrors.check_errors() then failwith "Parser";
   p;;
 

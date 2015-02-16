@@ -27,7 +27,8 @@ for v in vs:
     'utils/coq2html -o '+h+' '+glo+' '+v)
 
 # Parser
-main = env.Command(['ch2o','ch2o.byte'], '', 'ocamlbuild -j 2 -libs nums,str\
+main = env.Command(['ch2o','ch2o.byte'], '',
+	'ocamlbuild -j 2 -libs nums,str,unix\
   -pp \'grep -v "^#"\' -I parser parser/Main.native parser/Main.byte &&\
   mv Main.native ch2o && mv Main.byte ch2o.byte')
 AlwaysBuild(main)
