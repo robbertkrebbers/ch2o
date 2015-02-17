@@ -738,6 +738,11 @@ let rec cstmt_of_statements l =
   | Cabs.WHILE (e,y,_)::l' ->
       cscomp (CSWhile (cexpr_of_expression e,cstmt_of_statements [y]))
         (cstmt_of_statements l')
+  | Cabs.FOR (Cabs.FC_EXP e1,e2,Cabs.NOTHING,y,_)::l' ->
+      cscomp (CSFor (cexpr_of_expression e1,
+          cexpr_of_expression e2,econst0,
+          cstmt_of_statements [y]))
+        (cstmt_of_statements l')
   | Cabs.FOR (Cabs.FC_EXP e1,e2,e3,y,_)::l' ->
       cscomp (CSFor (cexpr_of_expression e1,
           cexpr_of_expression e2,cexpr_of_expression e3,
