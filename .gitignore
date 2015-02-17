@@ -18,11 +18,11 @@ doc/*.html
 *.broken
 broken/*
 *.patch
-parser/Extracted.ml
-parser/Extracted.mli
+parser/Extracted.*
 parser/Lexer.ml
 parser/Parser.ml
 parser/Parser.mli
+parser/Include.*
 _build/
 ch2o
 *.native
