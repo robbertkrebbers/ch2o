@@ -4,10 +4,6 @@ Require Export operations state.
 Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 
-Notation lrval K := (addr K + val K)%type.
-Definition lrval_to_expr {K} (av : lrval K) : expr K :=
-  match av with inl a => %a | inr v => #v end.
-
 Notation lrtype K := (type K + type K)%type.
 Definition lrtype_type {K} (τlr : lrtype K) : type K :=
   match τlr with inl τ | inr τ => τ end.
@@ -403,8 +399,6 @@ Implicit Types Ek : ctx_item K.
 Implicit Types k : ctx K.
 Implicit Types d : direction K.
 
-Lemma lrval_to_expr_lift av : lrval_to_expr av↑ = lrval_to_expr av.
-Proof. by destruct av. Qed.
 Lemma lval_typed_inv Γ Δ a τ : (Γ,Δ) ⊢ inl a : inl τ → (Γ,Δ) ⊢ a : TType τ.
 Proof. by inversion 1. Qed.
 Lemma lval_typed_strict Γ Δ a τ : (Γ,Δ) ⊢ inl a : inl τ → addr_strict Γ a.

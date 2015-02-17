@@ -173,7 +173,7 @@ Proof.
 Qed.
 End expr_eval_ind.
 
-Lemma expr_eval_lrval Γ fs ρ m av : ⟦ lrval_to_expr av ⟧ Γ fs ρ m = Some av.
+Lemma expr_eval_lrval Γ fs ρ m av : ⟦ %# av ⟧ Γ fs ρ m = Some av.
 Proof. by destruct av. Qed.
 Lemma purefuns_empty_valid Γ Δ : ✓{Γ,Δ} ∅.
 Proof. done. Qed.
@@ -358,8 +358,7 @@ Qed.
 expression has a semantics too. *)
 Lemma expr_eval_subst Γ fs ρ m E e av :
   ⟦ subst E e ⟧ Γ fs ρ m = Some av ↔
-  ∃ av', ⟦ e ⟧ Γ fs ρ m = Some av'
-       ∧ ⟦ subst E (lrval_to_expr av') ⟧ Γ fs ρ m = Some av.
+  ∃ av', ⟦ e ⟧ Γ fs ρ m = Some av' ∧ ⟦ subst E (%# av') ⟧ Γ fs ρ m = Some av.
 Proof.
   split.
   * revert av. induction E as [|E' E IH] using rev_ind; simpl; intros av.

@@ -57,7 +57,7 @@ Proof.
 Qed.
 Lemma expr_eval_sound Γ δ m k e av :
   ⟦ e ⟧ Γ ∅ (get_stack k) m = Some av →
-  Γ\ δ ⊢ₛ State k (Expr e) m ⇒{k}* State k (Expr (lrval_to_expr av)) m.
+  Γ\ δ ⊢ₛ State k (Expr e) m ⇒{k}* State k (Expr (%# av)) m.
 Proof.
   induction e as [e IH] using expr_wf_ind; intros He.
   destruct (is_nf_or_redex e) as [He'|(E&e1&?&->)].
@@ -78,7 +78,7 @@ Proof.
     end || solve_elem_of.
 Qed.
 Lemma expr_eval_complete Γ δ m1 m2 k e av :
-  Γ\ δ ⊢ₛ State k (Expr e) m1 ⇒{k}* State k (Expr (lrval_to_expr av)) m2 →
+  Γ\ δ ⊢ₛ State k (Expr e) m1 ⇒{k}* State k (Expr (%# av)) m2 →
   is_pure e → ⟦ e ⟧ Γ ∅ (get_stack k) m1 = Some av ∧ m1 = m2.
 Proof.
   remember (State k (Expr e) m1) as S eqn:He; intros p; revert S p m1 e He.

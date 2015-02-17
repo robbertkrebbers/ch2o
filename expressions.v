@@ -147,6 +147,13 @@ Infix "==" := (EBinOp (CompOp EqOp)) (at level 52) : expr_scope.
 Notation "- e" := (EUnOp NegOp e)
   (at level 35, right associativity) : expr_scope.
 
+Notation lrval K := (addr K + val K)%type.
+Definition lrval_to_expr {K} (Ω : lockset) (av : lrval K) : expr K :=
+  match av with inl a => %{Ω} a | inr v => #{Ω} v end.
+Notation "%#{ Ω } av" := (lrval_to_expr Ω av)
+  (at level 10, format "%#{ Ω }  av") : expr_scope.
+Notation "%# av" := (lrval_to_expr ∅ av) (at level 10) : expr_scope.
+
 Instance: Injective2 (=) (=) (=) (@EVar K).
 Proof. by injection 1. Qed.
 Instance: Injective2 (=) (=) (=) (@EVal K).
@@ -515,6 +522,9 @@ Fixpoint expr_lift {K} (e : expr K) : expr K :=
   | #[r:=e1] e2 => #[r:=e1↑] (e2↑)
   end
 where "e ↑" := (expr_lift e) : expr_scope.
+
+Lemma lrval_to_expr_lift {K} (av :lrval K) Ω : (%#{Ω} av)↑ = %#{Ω} av.
+Proof. by destruct av. Qed.
 
 (** The predicate [is_nf e] states that [e] is in normal form and [is_redex e]
 states that [e] is a head redex with respect to the semantics in the file

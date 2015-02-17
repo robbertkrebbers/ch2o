@@ -174,7 +174,7 @@ Notation "e1 ↦{ malloc , x } e2 : τ" := (assert_singleton e1 e2 malloc x τ)%
   (at level 20, malloc at next level, x at next level, e2 at next level,
    τ at next level, format "e1  ↦{ malloc , x }  e2  :  τ") : assert_scope.
 Notation "e1 ↦{ malloc , x } - : τ" :=
-  (∃ av, e1 ↦{malloc,x} (lrval_to_expr av) : τ)%A
+  (∃ av, e1 ↦{malloc,x} (%# av) : τ)%A
   (at level 20, malloc at next level, x at next level,
    τ at next level, format "e1  ↦{ malloc , x }  -  :  τ") : assert_scope.
 
