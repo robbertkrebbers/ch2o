@@ -27,13 +27,16 @@ for v in vs:
     'utils/coq2html -o '+h+' '+glo+' '+v)
 
 # Parser
+include = env.Command('parser/Include.ml', '',
+  'echo let include_dir = ref \\"' + os.getcwd() + '/include\\" > $TARGET')
 main = env.Command(['ch2o','ch2o.byte'], '',
-	'ocamlbuild -j 2 -libs nums,str,unix\
-  -pp \'grep -v "^#"\' -I parser parser/Main.native parser/Main.byte &&\
-  mv Main.native ch2o && mv Main.byte ch2o.byte')
+  'ocamlbuild -j 2 -libs nums,str,unix\
+   -pp \'grep -v "^#"\' -I parser parser/Main.native parser/Main.byte &&\
+   mv Main.native ch2o && mv Main.byte ch2o.byte')
 AlwaysBuild(main)
 env.Clean('extraction.vo', 'parser/Extracted.ml')
 env.Clean('extraction.vo', 'parser/Extracted.mli')
+env.Depends(main, include)
 env.Depends(main, 'extraction.vo')
 env.Clean(main, '_build')
 

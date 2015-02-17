@@ -11,6 +11,7 @@
 #load "Parser.cmo";;
 #load "Lexer.cmo";;
 #load "Extracted.cmo";;
+#load "Include.cmo";;
 
 open Num;;
 open Format;;
@@ -21,7 +22,8 @@ let break_on_undef = ref false;;
 let printf_returns_int = ref true;;
 (** The --sysroot flag is a hack to avoid any actual C standard library files
 from being used. *)
-let cpp_options = ref "--sysroot=. -I include -include prelude.c"
+let cpp_options =
+  ref ("--sysroot=. -I " ^ !Include.include_dir ^ " -include prelude.c");;
 
 let cabs_of_file name =
   Cerrors.reset();
@@ -791,7 +793,8 @@ let decls_of_definition x =
         FunDecl (stos,ctype_of_specifier_decl_type t t',b))]
   | Cabs.ONLYTYPEDEF (t,_) ->
       let _ = ctype_of_specifier t in []
-  | Cabs.TYPEDEF ((t,l),{Cabs.filename="include/stddef.h"}) ->
+  | Cabs.TYPEDEF ((t,l),{Cabs.filename=f})
+        when f = !Include.include_dir ^ "/stddef.h" ->
       List.map (fun (s,t',_,_) -> (chars_of_string s, TypeDefDecl (
         match s with
         | "size_t" -> CTInt {csign = Some Unsigned; crank = CPtrRank}
