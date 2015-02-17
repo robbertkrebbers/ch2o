@@ -204,7 +204,7 @@ Ltac invert :=
   | H : _ ⊑{_,_,_@_↦_}* #{_}* _ :* _ |- _ =>
      apply EVal_refine_inv_r in H; [|auto]; destruct H as (?&?&->&?&?&?)
   | H : ?X ⊑{_,_,_@_↦_} subst _ _ : _ |- _ =>
-     apply esctx_item_subst_refine_inv_r in H; destruct H as (?&?&?&->&?&?)
+     apply esctx_item_subst_refine_inv_r in H; destruct H as (?&?&?&->&?&?&?&?)
   | H : ?X ⊑{_,_,_@_↦_} subst _ _ : _ |- _ =>
      apply ectx_subst_refine_inv_r in H; destruct H as (?&?&?&->&?&?)
   | H : ?X ⊑{_,_,_@_↦_} subst _ _ : _ |- _ =>
@@ -298,7 +298,7 @@ Proof.
   * intros; invert. go f; eauto 10.
   * intros; invert. go f; eauto 10.
   * intros; invert. go f; eauto 10.
-  * intros; invert; go f; eauto 10.
+  * intros; invert. go f; eauto 10.
   * intros; invert. go f; eauto 10.
   * intros; invert. go f; eauto 10.
   * intros; invert. go f; eauto 10.

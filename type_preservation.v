@@ -116,7 +116,7 @@ Proof.
   * intros m k l (τf&HS&?&?) ?; typed_inversion_all; split; auto.
   * intros m k Ee e (τf&HS&?&?) ?; typed_inversion HS; split; auto.
     edestruct (esctx_item_subst_typed_rev Γ ('{m})
-      (get_stack_types k) Ee e) as (σ&?&?); eauto.
+      (get_stack_types k) Ee e) as (σ&?&?&?); eauto.
     exists (Expr_type σ); simpl; split_ands; repeat typed_constructor; eauto.
   * intros m1 m2 k E e1 e2 ? (τf&HS&?&?) ?; typed_inversion HS.
     edestruct (ectx_subst_typed_rev Γ ('{m1})

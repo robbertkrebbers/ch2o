@@ -141,6 +141,7 @@ Hint Resolve addr_top_typed addr_top_strict.
 Hint Immediate cmap_index_typed_representable.
 Hint Extern 10 (_ ⊢ _ : _ ↣ _) => typed_constructor; try lia.
 Hint Resolve perm_full_valid perm_full_mapped.
+Hint Extern 1 (@eq lockset _ _) => by simpl; rewrite ?empty_union_L.
 
 Definition fun_stmt_valid (Γ : env K) (Δ : memenv K)
     (τs : list (type K)) (τ : type K) (ms : option (stmt K)) : Prop :=
@@ -311,24 +312,26 @@ Proof.
 Qed.
 Lemma lookup_local_var_typed S τs Δl x e τe :
   lookup_local_var Δl x (length τs) = Some (e,τe) → ✓ S → local_env_valid S Δl →
-  (to_env S,'{to_mem S},τs ++ to_stack_types Δl) ⊢ e : to_lrtype τe.
+  (to_env S,'{to_mem S},τs ++ to_stack_types Δl) ⊢ e : to_lrtype τe
+  ∧ locks e = ∅.
 Proof.
   intros He [] HΔl. revert τs He.
   induction HΔl as [|[[x' [[[]|[]]|τ'|]]|] ? Δl ? IH];
     intros τs' ?; simplify_option_equality; simplify_type_equality; eauto 2.
-  * typed_constructor; eauto using cmap_index_typed_valid.
-  * typed_constructor; naive_solver eauto.
-  * typed_constructor. by rewrite list_lookup_middle.
+  * eauto 10 using cmap_index_typed_valid.
+  * eauto 10.
+  * split; [|done]. typed_constructor; by rewrite list_lookup_middle.
   * rewrite cons_middle, (associative_L (++)). apply (IH (τs' ++ [τ'])).
     rewrite app_length; simpl. by rewrite Nat.add_comm.
 Qed.
 Lemma lookup_var_typed S S' Δl x e τe :
   lookup_var Δl x S = mret (e,τe) S' → ✓ S → local_env_valid S Δl →
-  (to_env S,'{to_mem S},to_stack_types Δl) ⊢ e : to_lrtype τe ∧ S = S'.
+  (to_env S,'{to_mem S},to_stack_types Δl) ⊢ e : to_lrtype τe
+  ∧ locks e = ∅ ∧ S = S'.
 Proof.
   unfold lookup_var; intros ? HS ?.
   destruct (lookup_local_var Δl x 0) as [[??]|] eqn:?; simplify_error_equality.
-  { split; auto. eapply (lookup_local_var_typed _ []); eauto. }
+  { edestruct (lookup_local_var_typed S' []); eauto. }
   destruct (_ !! x) as [d|] eqn:Hd; simplify_equality.
   pose proof (to_globals_valid _ HS x d Hd).
   destruct d as [|sto τs τ ms| |]; simplify_equality'; split; auto.
@@ -365,37 +368,40 @@ Proof.
   induction 1; csimpl; eauto.
 Qed.
 Lemma to_R_typed Γ m τs e τe e' τ' :
-  to_R (e,τe) = (e',τ') → (Γ,'{m},τs) ⊢ e : to_lrtype τe →
-  ✓ Γ → ✓{Γ}* τs → (Γ,'{m},τs) ⊢ e' : inr τ'.
+  to_R (e,τe) = (e',τ') → (Γ,'{m},τs) ⊢ e : to_lrtype τe → locks e = ∅ →
+  ✓ Γ → ✓{Γ}* τs → (Γ,'{m},τs) ⊢ e' : inr τ' ∧ locks e' = ∅.
 Proof.
   unfold to_R; intros; destruct τe as [τl|τr|σs σ]; simplify_equality'; auto.
-  destruct (maybe2 TArray τl) as [[τ n]|] eqn:Hτ; simplify_option_equality.
-  { repeat typed_constructor; eauto. apply Nat.neq_0_lt_0.
-    eauto using TArray_valid_inv_size, expr_inl_typed_type_valid. }
-  by typed_constructor.
+  destruct (maybe2 TArray τl) as [[τ n]|] eqn:?;
+    simplify_option_equality; split_ands; eauto.
+  repeat typed_constructor; eauto. apply Nat.neq_0_lt_0;
+    eauto using TArray_valid_inv_size, expr_inl_typed_type_valid.
 Qed.
 Lemma to_R_NULL_typed Γ m τs σ e τe e' τ' :
-  to_R_NULL σ (e,τe) = (e',τ') → (Γ,'{m},τs) ⊢ e : to_lrtype τe →
-  ✓ Γ → ✓{Γ}* τs → ✓{Γ} (TType σ) → (Γ,'{m},τs) ⊢ e' : inr τ'.
+  to_R_NULL σ (e,τe) = (e',τ') → (Γ,'{m},τs) ⊢ e : to_lrtype τe → locks e = ∅ →
+  ✓ Γ → ✓{Γ}* τs → ✓{Γ} (TType σ) → (Γ,'{m},τs) ⊢ e' : inr τ' ∧ locks e' = ∅.
 Proof.
   unfold to_R_NULL. destruct (to_R (e,τe)) as [e'' τ''] eqn:?.
-  inversion 5 as [|σb Hσb| | |]; simplify_equality'; eauto 2 using to_R_typed.
-  destruct Hσb; repeat case_match; simplify_equality'; eauto 2 using to_R_typed.
-  repeat typed_constructor; eauto.
+  inversion 6 as [|σb Hσb| | |]; simplify_equality'; eauto 2 using to_R_typed.
+  destruct Hσb; repeat case_match; simplify_equality'; eauto 10 using to_R_typed.
 Qed.
 Lemma convert_ptrs_typed Γ m τs e1 τ1 e2 τ2 e1' e2' τ' :
   convert_ptrs (e1,τ1) (e2,τ2) = Some (e1', e2', τ') →
-  (Γ,'{m},τs) ⊢ e1 : inr τ1 → (Γ,'{m},τs) ⊢ e2 : inr τ2 →
-  ✓ Γ → ✓{Γ}* τs → (Γ,'{m},τs) ⊢ e1' : inr τ' ∧ (Γ,'{m},τs) ⊢ e2' : inr τ'.
+  (Γ,'{m},τs) ⊢ e1 : inr τ1 → locks e1 = ∅ →
+  (Γ,'{m},τs) ⊢ e2 : inr τ2 → locks e2 = ∅ → ✓ Γ → ✓{Γ}* τs →
+  (Γ,'{m},τs) ⊢ e1' : inr τ' ∧ (Γ,'{m},τs) ⊢ e2' : inr τ'
+  ∧ locks e1' = ∅ ∧ locks e2' = ∅.
 Proof.
   unfold convert_ptrs; destruct τ1 as [[| |[]]| |], τ2 as [[| |[]]| |];
     intros; simplify_option_equality; split; repeat typed_constructor;
-    eauto using TPtr_valid_inv, TBase_valid_inv, expr_inr_typed_type_valid.
+    eauto 10 using TPtr_valid_inv, TBase_valid_inv, expr_inr_typed_type_valid.
 Qed.
 Lemma to_if_expr_typed Γ m τs e1 τb e2 τ2 e3 τ3 e τe :
   to_if_expr e1 (e2,τ2) (e3,τ3) = Some (e,τe) →
-  (Γ,'{m},τs) ⊢ e1 : inr (baseT τb) → (Γ,'{m},τs) ⊢ e2 : inr τ2 →
-  ✓ Γ → ✓{Γ}* τs → (Γ,'{m},τs) ⊢ e3 : inr τ3 → (Γ,'{m},τs) ⊢ e : to_lrtype τe.
+  (Γ,'{m},τs) ⊢ e1 : inr (baseT τb) → locks e1 = ∅ →
+  (Γ,'{m},τs) ⊢ e2 : inr τ2 → locks e2 = ∅ →
+  (Γ,'{m},τs) ⊢ e3 : inr τ3 → locks e3 = ∅ → ✓ Γ → ✓{Γ}* τs →
+  (Γ,'{m},τs) ⊢ e : to_lrtype τe ∧ locks e = ∅.
 Proof.
   unfold to_if_expr; intros;
     repeat match goal with
@@ -403,13 +409,14 @@ Proof.
     | _ => case_match
     | x : (_ * _)%type |- _ => destruct x
     | H : convert_ptrs _ _ = Some _ |- _ =>
-       eapply convert_ptrs_typed in H; eauto; destruct H
-    end; typed_constructor; eauto.
+       eapply convert_ptrs_typed in H; eauto; destruct H as (?&?&?&?)
+    end; eauto 10.
 Qed.
 Lemma to_binop_expr_typed Γ m τs op e1 τ1 e2 τ2 e τe :
   to_binop_expr op (e1,τ1) (e2,τ2) = Some (e,τe) →
-  (Γ,'{m},τs) ⊢ e1 : inr τ1 → (Γ,'{m},τs) ⊢ e2 : inr τ2 →
-  ✓ Γ → ✓{Γ}* τs → (Γ,'{m},τs) ⊢ e : to_lrtype τe.
+  (Γ,'{m},τs) ⊢ e1 : inr τ1 → locks e1 = ∅ →
+  (Γ,'{m},τs) ⊢ e2 : inr τ2 → locks e2 = ∅ → ✓ Γ → ✓{Γ}* τs →
+  (Γ,'{m},τs) ⊢ e : to_lrtype τe ∧ locks e = ∅.
 Proof.
   unfold to_binop_expr; intros;
     repeat match goal with
@@ -417,8 +424,8 @@ Proof.
     | x : (_ * _)%type |- _ => destruct x
     | H: binop_type_of _ _ _ = Some _ |- _ => apply binop_type_of_sound in H
     | H : convert_ptrs _ _ = Some _ |- _ =>
-       eapply convert_ptrs_typed in H; eauto; destruct H
-    end; typed_constructor; eauto.
+       eapply convert_ptrs_typed in H; eauto; destruct H as (?&?&?&?)
+    end; eauto 10.
 Qed.
 
 CoInductive seen {A} (x : A) := Seen : seen x.
@@ -587,8 +594,8 @@ Qed.
 Lemma to_ref_typed S S' Δl r τ xces σ r' σ' :
   Forall (sum_rect _ (λ _, True) (λ ce, ∀ S S' e τe,
     to_expr Δl ce S = (mret (e,τe) : M _) S' → ✓ S → local_env_valid S Δl →
-    (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : to_lrtype τe ∧ ✓ S'
-    ∧ S ⊆ S')) xces →
+    (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : to_lrtype τe
+    ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S')) xces →
   to_ref (to_expr Δl) r σ xces S = mret (r',σ') S' →
   ✓ S → local_env_valid S Δl →
   to_env S ⊢ r : τ ↣ σ → to_env S' ⊢ r' : τ ↣ σ' ∧ ✓ S' ∧ S ⊆ S'.
@@ -600,7 +607,7 @@ Proof.
     destruct c; error_proceed; eauto.
   * error_proceed [τ' n] as ?; error_proceed [e τe] as S2.
     error_proceed [|[[| |τi x| |]| | | |]] as ?.
-    destruct (IH S S2 e τe) as (_&?&?); weaken; auto.
+    destruct (IH S S2 e τe) as (_&?&?&?); weaken; auto.
     destruct (IHxces S2 (RArray (Z.to_nat x) τ' n :: r) τ') as (?&?&?); eauto.
 Qed.
 
@@ -608,61 +615,63 @@ Lemma to_call_args_typed S S' Δl ces τs es :
   Forall (λ ce, ∀ S S' e τe,
     to_expr Δl ce S = mret (e,τe) S' → ✓ S → local_env_valid S Δl →
     (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : to_lrtype τe
-    ∧ ✓ S' ∧ S ⊆ S') ces →
+    ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S') ces →
   to_call_args (to_expr Δl) ces τs S = mret es S' → ✓ S → local_env_valid S Δl →
   ✓{to_env S}* (TType <$> τs) →
   (to_env S','{to_mem S'},to_stack_types Δl) ⊢* es :* inr <$> τs
-  ∧ ✓ S' ∧ S ⊆ S'.
+  ∧ ⋃ (locks <$> es) = ∅ ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
   intros Hces; revert S S' es τs; induction Hces as [|ce ces IH _ IHces];
     intros S S' es [|τ τs] ????; error_proceed; eauto.
   error_proceed [e τe] as S2.
   destruct (to_R_NULL _ _) as [e' τ'] eqn:?; error_proceed.
   error_proceed es' as ?; decompose_Forall_hyps.
-  destruct (IH S S2 e τe) as (?&?&?); auto; weaken.
-  destruct (IHces S2 S' es' τs) as (?&?&?); auto; weaken.
-  eauto 10 using to_R_NULL_typed, cast_typed_weaken.
+  destruct (IH S S2 e τe) as (?&?&?&?); auto; weaken.
+  destruct (IHces S2 S' es' τs) as (?&?&?&?); auto; weaken.
+  destruct (to_R_NULL_typed (to_env S') (to_mem S')
+    (to_stack_types Δl) τ e τe e' τ'); eauto 10 using cast_typed_weaken.
 Qed.
 Lemma to_compound_init_typed S S' Δl e τ rs inits e' :
   Forall (λ i,
     Forall (sum_rect _ (λ _, True) (λ ce, ∀ S S' e τe,
       to_expr Δl ce S = (mret (e,τe) : M _) S' → ✓ S → local_env_valid S Δl →
       (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : to_lrtype τe
-      ∧ ✓ S' ∧ S ⊆ S')) (i.1) ∧
+      ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S')) (i.1) ∧
     (∀ S S' τ e,
       to_init_expr Δl τ (i.2) S = mret e S' →
       ✓ S → local_env_valid S Δl → ✓{to_env S} τ →
       (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : inr τ
-      ∧ ✓ S' ∧ S ⊆ S')) inits →
+      ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S')) inits →
   to_compound_init (to_expr Δl) (to_init_expr Δl) τ e rs inits S = mret e' S' →
   ✓ S → local_env_valid S Δl → Forall (λ r, ∃ σ, to_env S ⊢ r : τ ↣ σ) rs →
-  (to_env S,'{to_mem S},to_stack_types Δl) ⊢ e : inr τ →
-  (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e' : inr τ ∧ ✓ S' ∧ S ⊆ S'.
+  (to_env S,'{to_mem S},to_stack_types Δl) ⊢ e : inr τ → locks e = ∅ →
+  (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e' : inr τ
+  ∧ locks e' = ∅ ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
   intros Hinits. revert S S' rs e e'. assert (∀ Γ1 Γ2 rs,
     Forall (λ r, ∃ σ, Γ1 ⊢ r : τ ↣ σ) rs → Γ1 ⊆ Γ2 →
     Forall (λ r, ∃ σ, Γ2 ⊢ r : τ ↣ σ) rs).
   { induction 1 as [|?? [??]]; constructor; eauto using ref_typed_weaken. }
   induction Hinits as [|[xces ci] inits [IHe IHi] _ IH];
-    intros S S' rs e e' ??? Hrs ?; error_proceed; eauto.
+    intros S S' rs e e' ??? Hrs ??; error_proceed; eauto.
   destruct (decide (xces = [])); error_proceed; decompose_Forall_hyps; weaken.
   * destruct Hrs as [|r rs [σ ?]]; error_proceed; decompose_Forall_hyps.
     + error_proceed [r σ] as ?; error_proceed e'' as S2.
       assert (to_env S ⊢ r : τ ↣ σ) by auto using first_init_ref_typed.
       destruct (IHi S S2 σ e'')
-        as (?&?&?); eauto using ref_typed_type_valid; weaken.
-      destruct (IH S2 S' [r] (#[r:=e''] e) e') as (?&?&?); eauto.
+        as (?&?&?&?); eauto using ref_typed_type_valid; weaken.
+      destruct (IH S2 S' [r] (#[r:=e''] e) e') as (?&?&?&?); eauto.
     + error_proceed [r' σ'] as ?; error_proceed e'' as S2.
       assert (to_env S ⊢ r' : τ ↣ σ') by eauto using next_init_ref_typed.
       destruct (IHi S S2 σ' e'')
-        as (?&?&?); eauto using ref_typed_type_valid; weaken.
+        as (?&?&?&?); eauto using ref_typed_type_valid; weaken.
       destruct (IH S2 S' (r' :: r :: rs) (#[r':=e''] e) e')
-        as (?&?&?); eauto 10.
+        as (?&?&?&?); eauto 10.
   * error_proceed [r σ] as S2; error_proceed e'' as S3.
     destruct (to_ref_typed S S2 Δl [] τ xces τ r σ) as (?&?&?); auto; weaken.
-      destruct (IHi S2 S3 σ e'')
-        as (?&?&?); eauto using ref_typed_type_valid; weaken.
-      destruct (IH S3 S' (r :: rs) (#[r:=e''] e) e') as (?&?&?); eauto 10.
+    destruct (IHi S2 S3 σ e'')
+      as (?&?&?&?); eauto using ref_typed_type_valid; weaken.
+    destruct (IH S3 S' (r :: rs) (#[r:=e''] e) e') as (?&?&?&?); eauto 10.
 Qed.
 Definition to_type_type_valid {k} (Γ : env K) : to_type_type k → Prop :=
   match k with to_Type => ✓{Γ} | to_Ptr => ✓{Γ} end.
@@ -708,11 +717,12 @@ Lemma to_expr_type_typed Δl :
   (∀ ce S S' e τe,
     to_expr Δl ce S = mret (e,τe) S' → ✓ S → local_env_valid S Δl →
     (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : to_lrtype τe
-    ∧ ✓ S' ∧ S ⊆ S') ∧
+    ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S') ∧
   (∀ ci S S' τ e,
     to_init_expr Δl τ ci S = mret e S' →
     ✓ S → local_env_valid S Δl → ✓{to_env S} τ →
-    (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : inr τ ∧ ✓ S' ∧ S ⊆ S') ∧
+    (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : inr τ
+    ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S') ∧
   (∀ cτ S S' k τk,
     to_type k Δl cτ S = mret τk S' → ✓ S → local_env_valid S Δl →
     to_type_type_valid (to_env S') τk ∧ ✓ S' ∧ S ⊆ S').
@@ -721,13 +731,14 @@ Proof.
     repeat match goal with
     | _ => progress simplify_error_equality || case_match
     | x : (_ * _)%type |- _ => destruct x
-    | IH : ∀ _ _ _ _, _ = _ → _, H : _ = _ |- _ =>
-       destruct (IH _ _ _ _ H) as (?&?&?);
-         auto 1; [clear IH H]; weaken
+    | IH : ∀ _ _ _ _, to_expr _ _ _ = _ → _, H : to_expr _ _ _ = _ |- _ =>
+       destruct (IH _ _ _ _ H) as (?&?&?&?); auto 1; [clear IH H]; weaken
+    | IH : ∀ _ _ _ _, to_init_expr _ _ _ _ = _ → _, H : _ = _ |- _ =>
+       destruct (IH _ _ _ _ H) as (?&?&?&?); auto 1; [clear IH H]; weaken
     | IH : ∀ _ _ _ _, _ = _ → _, H : to_type ?k _ _ _ = _ |- _ =>
        destruct (IH _ _ k _ H) as (?&?&?); auto 1; [clear IH H]; weaken
     | H : lookup_var _ _ _ = _ |- _ =>
-       apply lookup_var_typed in H; try done; [destruct H as [? ->]]
+       apply lookup_var_typed in H; try done; [destruct H as (?&?&->)]
     | H : assign_type_of _ _ _ _ = _ |- _ => apply assign_type_of_sound in H
     | H : unop_type_of _ _ = _ |- _ => apply unop_type_of_sound in H
     | H : binop_type_of _ _ _ = _ |- _ => apply binop_type_of_sound in H
@@ -737,13 +748,20 @@ Proof.
        apply lookup_compound_typed in H; auto; destruct H as (?&?&?&->)
     | H : to_call_args _ _ _ _ = _ |- _ =>
        apply to_call_args_typed in H;
-         try assumption; [destruct H as (?&?&?)]; weaken
+         try assumption; [destruct H as (?&?&?&?)]; weaken
     | H : to_fun_type _ _ _ _ = _ |- _ =>
        apply to_fun_type_valid in H;
          try assumption; [destruct H as (?&?&?&?)]; weaken
-    | _ : context [to_R (?e,?τlr)], H : _ ⊢ ?e : _ |- _ => 
+    | H : to_binop_expr _ _ _ = _ |- _ =>
+       eapply to_binop_expr_typed in H; eauto 2; [destruct H]
+    | H : to_if_expr _ _ _ = _ |- _ =>
+       eapply to_if_expr_typed in H; eauto 2; [destruct H]
+    | H : to_R_NULL _ _ = _ |- _ =>
+       eapply to_R_NULL_typed in H; eauto; [destruct H]
+    | _ : context [to_R (?e,?τlr)], H : _ ⊢ ?e : _ |- _ =>
        let H2 := fresh in destruct (to_R (e,τlr)) eqn:H2; simplify_equality';
-       eapply to_R_typed in H2; [|by eauto|by eauto|by eauto]; clear H; weaken
+       eapply to_R_typed in H2; [|by eauto|by eauto|by eauto|by eauto];
+       destruct H2; clear H; weaken
     | x : to_type_type ?k |- _ => destruct k
     | H : to_string_const _ = Some (?v,?n),
        _ : local_env_valid ?S _ |- _ =>
@@ -754,18 +772,19 @@ Proof.
        eapply insert_object_valid in H;
          eauto using perm_readonly_valid, perm_readonly_mapped;
          [destruct H as (?&?&?&?&?)]
-    end; eauto 15 using int_lower_typed, int_upper_typed, int_width_typed,
-    to_R_NULL_typed, to_binop_expr_typed, to_if_expr_typed,
-    to_compound_init_typed, val_0_typed.
+    end; eauto 22 using int_lower_typed, int_upper_typed, int_width_typed,
+      to_compound_init_typed, val_0_typed.
 Qed.
 Lemma to_expr_typed S S' Δl ce e τe :
   to_expr Δl ce S = mret (e,τe) S' → ✓ S → local_env_valid S Δl →
-  (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : to_lrtype τe ∧ ✓ S' ∧ S ⊆ S'.
+  (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : to_lrtype τe
+  ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S'.
 Proof. intros. eapply to_expr_type_typed; eauto. Qed.
 Lemma to_init_expr_typed S S' Δl ci e τ :
   to_init_expr Δl τ ci S = mret e S' →
   ✓ S → local_env_valid S Δl → ✓{to_env S} τ →
-  (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : inr τ ∧ ✓ S' ∧ S ⊆ S'.
+  (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : inr τ
+  ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S'.
 Proof. intros. eapply to_expr_type_typed; eauto. Qed.
 Lemma to_type_valid S S' Δl k cτ τk :
   to_type k Δl cτ S = mret τk S' → ✓ S → local_env_valid S Δl →
@@ -777,7 +796,7 @@ Lemma to_init_val_typed S S' Δl τ ci v :
   ✓{to_env S} τ → (to_env S','{to_mem S'}) ⊢ v : τ ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
   unfold to_init_val; intros. error_proceed e as S2; error_proceed [|v'] as S3.
-  destruct (to_init_expr_typed S S' Δl ci e τ) as (?&?&?); split_ands; auto.
+  destruct (to_init_expr_typed S S' Δl ci e τ) as (?&?&?&?); split_ands; auto.
   eapply rval_typed_inv, (expr_eval_typed_aux _ _ [] (to_stack_types Δl));
     eauto using type_valid_ptr_type_valid, to_init_expr_typed,
     prefix_of_nil, purefuns_empty_valid.
@@ -849,9 +868,9 @@ Proof.
     | IH : ∀ _ _ _ _ _, _ = _ → _, H : _ = _ |- _ =>
        destruct (IH _ _ _ _ _ H) as (?&?&?); eauto 2; [clear IH H]; weaken
     | H : to_expr _ _ _ = _ |- _ =>
-       apply to_expr_typed in H; eauto 2; [destruct H as (?&?&?)]; weaken
+       apply to_expr_typed in H; eauto 2; [destruct H as (?&?&?&?)]; weaken
     | H : to_init_expr _ _ _ _ = _ |- _ =>
-       apply to_init_expr_typed in H; eauto 2; [destruct H as (?&?&?)]; weaken
+       apply to_init_expr_typed in H; eauto 2; [destruct H as (?&?&?&?)]; weaken
     | H : to_type ?k _ _ _ = _ |- _ =>
        apply (to_type_valid _ _ _ k) in H;
          eauto 2; [destruct H as (?&?&?)]; weaken
@@ -859,10 +878,12 @@ Proof.
        apply alloc_static_typed in H; eauto 2; [destruct H as (?&?&?)]; weaken
     | H : alloc_global _ _ _ _ _ _ = _ |- _ =>
        apply alloc_global_typed in H; eauto 2; [destruct H as (?&?&?)]; weaken
-    | _ : context [to_R (?e,?τlr)], H : (?Γ,_,_) ⊢ ?e : _ |- _ => 
+    | H : to_R_NULL _ _ = _ |- _ =>
+       eapply to_R_NULL_typed in H; eauto; [destruct H]
+    | _ : context [to_R (?e,?τlr)], H : (?Γ,_,_) ⊢ ?e : _ |- _ =>
        let H2 := fresh in destruct (to_R (e,τlr)) eqn:H2; simplify_equality';
-       eapply (to_R_typed Γ) in H2; eauto 2; [clear H]; weaken
-    end; eauto 20 using to_R_NULL_typed, SLocal_typed.
+       eapply (to_R_typed Γ) in H2; eauto 2; [clear H]; destruct H2; weaken
+    end; eauto 20 using SLocal_typed.
 Qed.
 Lemma stmt_fix_return_typed Γ Δ τs σ s cmτ s' cmτ' :
   ✓ Γ → ✓{Γ}* τs → ✓{Γ} σ → stmt_fix_return σ s cmτ = (s',cmτ') →
@@ -904,7 +925,7 @@ Proof.
     destruct (to_globals_lookup S2 f (Fun sto' (snd <$> xτs) τ None)); auto.
     destruct (to_fun_stmt_typed S2 S3 f (fst <$> xτs) (snd <$> xτs) τ cs s)
       as (cmτ&?&?&?&?&?&?); rewrite ?fmap_length; eauto; weaken.
-    edestruct (λ sto, insert_fun_valid S3 S' f sto 
+    edestruct (λ sto, insert_fun_valid S3 S' f sto
       (snd <$> xτs) τ (Some s)); auto; weaken; eauto 20. }
   error_proceed [] as S3; error_proceed s as S4.
   destruct (insert_fun_None_valid S2 S3 f sto (snd <$> xτs) τ)
@@ -922,7 +943,7 @@ Proof.
     intros S z ??; error_proceed; auto.
   * error_proceed [e τe] as S2; error_proceed [?|[[| |τi' z'| |]| | | |]] as ?.
     error_proceed () as S3.
-    destruct (to_expr_typed S S2 [] ce e τe) as (?&?&?); auto; weaken.
+    destruct (to_expr_typed S S2 [] ce e τe) as (?&?&?&?); auto; weaken.
     destruct (insert_global_decl_valid S2 S3 x (EnumVal τi z'))
       as (?&?&?); auto with congruence; weaken.
     destruct (IH S3 (z' + 1)%Z); auto.

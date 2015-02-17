@@ -142,9 +142,11 @@ Global Instance stmt_type_check: TypeCheck envs (rettype K) (stmt K) :=
   let '(Γ,Δ,τs) := Γs in
   match s with
   | skip => Some (false,None)
-  | ! e => _ ← type_check Γs e ≫= maybe inr; Some (false,None)
+  | ! e =>
+     _ ← type_check Γs e ≫= maybe inr; guard (locks e = ∅); Some (false,None)
   | goto _ | throw _ => Some (true,None)
-  | ret e => τ ← type_check Γs e ≫= maybe inr; Some (true,Some τ)
+  | ret e =>
+     τ ← type_check Γs e ≫= maybe inr; guard (locks e = ∅); Some (true,Some τ)
   | label _ => Some (false,None)
   | local{τ} s =>
      guard (✓{Γ} τ); guard (int_typed (size_of Γ τ) sptrT);
@@ -156,7 +158,7 @@ Global Instance stmt_type_check: TypeCheck envs (rettype K) (stmt K) :=
   | catch s => '(c,mσ) ← type_check Γs s; Some (false,mσ)
   | loop s => '(_,mσ) ← type_check Γs s; Some (true,mσ)
   | if{e} s1 else s2 =>
-     _ ← type_check Γs e ≫= maybe (inr ∘ TBase);
+     _ ← type_check Γs e ≫= maybe (inr ∘ TBase); guard (locks e = ∅);
      '(c1,mσ1) ← type_check Γs s1;
      '(c2,mσ2) ← type_check Γs s2;
      mσ ← rettype_union mσ1 mσ2; Some (c1 && c2,mσ)
@@ -173,11 +175,11 @@ Global Instance sctx_item_lookup :
   | catch □, (c,mσ) => Some (false,mσ)
   | loop □, (c,mσ) => Some (true,mσ)
   | if{e} □ else s2, (c1,mσ1) =>
-     _ ← type_check Γs e ≫= maybe (inr ∘ TBase);
+     _ ← type_check Γs e ≫= maybe (inr ∘ TBase); guard (locks e = ∅);
      '(c2,mσ2) ← type_check Γs s2;
      mσ ← rettype_union mσ1 mσ2; Some (c1&&c2,mσ)
   | if{e} s1 else □, (c2,mσ2) =>
-     _ ← type_check Γs e ≫= maybe (inr ∘ TBase);
+     _ ← type_check Γs e ≫= maybe (inr ∘ TBase); guard (locks e = ∅);
      '(c1,mσ1) ← type_check Γs s1;
      mσ ← rettype_union mσ1 mσ2; Some (c1&&c2,mσ)
   end%S.
@@ -206,7 +208,7 @@ Global Instance ctx_item_lookup :
   | CStmt Es, Stmt_type cmσ1 => Stmt_type <$> cmσ1 !!{Γs} Es
   | CLocal o τ, Stmt_type cmσ => guard (Δ ⊢ o : τ); Some (Stmt_type cmσ)
   | CExpr e Ee, Expr_type τ =>
-     τ' ← type_check Γs e ≫= maybe inr;
+     τ' ← type_check Γs e ≫= maybe inr; guard (locks e = ∅);
      guard (τ = τ'); Stmt_type <$> τ !!{Γs} Ee
   | CFun E, Fun_type f =>
      '(σs,τ) ← Γ !! f; Expr_type <$> inr τ !!{Γs} E ≫= maybe inr

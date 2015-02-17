@@ -236,11 +236,12 @@ Inductive stmt_typed' (Γ : env K) (Δ : memenv K)
      (τs : list (type K)) : stmt K → rettype K → Prop :=
   | SSkip_typed : stmt_typed' Γ Δ τs skip (false,None)
   | SDo_typed e τ :
-     (Γ,Δ,τs) ⊢ e : inr τ → stmt_typed' Γ Δ τs (! e) (false,None)
+     (Γ,Δ,τs) ⊢ e : inr τ → locks e = ∅ → stmt_typed' Γ Δ τs (! e) (false,None)
   | SGoto_typed l : stmt_typed' Γ Δ τs (goto l) (true,None)
   | SThrow_typed n : stmt_typed' Γ Δ τs (throw n) (true,None)
   | SReturn_typed e τ :
-     (Γ,Δ,τs) ⊢ e : inr τ → stmt_typed' Γ Δ τs (ret e) (true,Some τ)
+     (Γ,Δ,τs) ⊢ e : inr τ → locks e = ∅ →
+     stmt_typed' Γ Δ τs (ret e) (true,Some τ)
   | SLabel_typed l : stmt_typed' Γ Δ τs (label l) (false,None)
   | SLocal_typed' τ s c mσ :
      ✓{Γ} τ →int_typed (size_of Γ τ) sptrT →
@@ -256,7 +257,7 @@ Inductive stmt_typed' (Γ : env K) (Δ : memenv K)
      stmt_typed' Γ Δ τs s (c,mσ) →
      stmt_typed' Γ Δ τs (loop s) (true,mσ)
   | SIf_typed e τb s1 s2 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Δ,τs) ⊢ e : inr (baseT τb) →
+     (Γ,Δ,τs) ⊢ e : inr (baseT τb) → locks e = ∅ →
      stmt_typed' Γ Δ τs s1 (c1,mσ1) → stmt_typed' Γ Δ τs s2 (c2,mσ2) →
      rettype_union mσ1 mσ2 = Some mσ →
      stmt_typed' Γ Δ τs (if{e} s1 else s2) (c1 && c2, mσ).
@@ -276,12 +277,12 @@ Inductive sctx_item_typed' (Γ : env K) (Δ : memenv K)
   | CLoop_typed c mσ :
      sctx_item_typed' Γ Δ τs (loop □) (c,mσ) (true,mσ)
   | CIfL_typed e τb s2 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Δ,τs) ⊢ e : inr (baseT τb) → (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) →
-     rettype_union mσ1 mσ2 = Some mσ →
+     (Γ,Δ,τs) ⊢ e : inr (baseT τb) → locks e = ∅ →
+     (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) → rettype_union mσ1 mσ2 = Some mσ →
      sctx_item_typed' Γ Δ τs (if{e} □ else s2) (c1,mσ1) (c1&&c2,mσ)
   | CIfR_typed e τb s1 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Δ,τs) ⊢ e : inr (baseT τb) → (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) →
-     rettype_union mσ1 mσ2 = Some mσ →
+     (Γ,Δ,τs) ⊢ e : inr (baseT τb) → locks e = ∅ →
+     (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → rettype_union mσ1 mσ2 = Some mσ →
      sctx_item_typed' Γ Δ τs (if{e} s1 else □) (c2,mσ2) (c1&&c2,mσ).
 Global Instance sctx_typed: PathTyped envs (rettype K)
   (rettype K) (sctx_item K) := curry3 sctx_item_typed'.
@@ -308,7 +309,7 @@ Inductive ctx_item_typed'
      ctx_item_typed' Γ Δ τs
        (CLocal o τ) (Stmt_type (c,mσ)) (Stmt_type (c,mσ))
   | CExpr_typed e Ee τ cmσ :
-     (Γ,Δ,τs) ⊢ e : inr τ → (Γ,Δ,τs) ⊢ Ee : τ ↣ cmσ →
+     (Γ,Δ,τs) ⊢ e : inr τ → locks e = ∅ → (Γ,Δ,τs) ⊢ Ee : τ ↣ cmσ →
      ctx_item_typed' Γ Δ τs (CExpr e Ee) (Expr_type τ) (Stmt_type cmσ)
   | CFun_typed E f σs τ σ :
      Γ !! f = Some (σs,τ) → (Γ,Δ,τs) ⊢ E : inr τ ↣ inr σ →
@@ -628,12 +629,12 @@ Proof.
     eexists; split_ands; repeat typed_constructor; eauto.
 Qed.
 Lemma esctx_item_subst_typed Γ Δ τs Ee e τ cmσ :
-  (Γ,Δ,τs) ⊢ Ee : τ ↣ cmσ → (Γ,Δ,τs) ⊢ e : inr τ →
+  (Γ,Δ,τs) ⊢ Ee : τ ↣ cmσ → (Γ,Δ,τs) ⊢ e : inr τ → locks e = ∅ →
   (Γ,Δ,τs) ⊢ subst Ee e : cmσ.
 Proof. destruct 1; simpl; typed_constructor; eauto. Qed.
 Lemma esctx_item_subst_typed_rev Γ Δ τs Ee e cmσ :
   (Γ,Δ,τs) ⊢ subst Ee e : cmσ →
-  ∃ τ, (Γ,Δ,τs) ⊢ e : inr τ ∧ (Γ,Δ,τs) ⊢ Ee : τ ↣ cmσ.
+  ∃ τ, (Γ,Δ,τs) ⊢ e : inr τ ∧ locks e = ∅ ∧ (Γ,Δ,τs) ⊢ Ee : τ ↣ cmσ.
 Proof.
   intros He. destruct Ee; simpl; typed_inversion He;
     eexists; split_ands; repeat typed_constructor; eauto.

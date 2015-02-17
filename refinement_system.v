@@ -256,14 +256,14 @@ Inductive stmt_refine' (Γ : env K) (τs : list (type K))
      stmt K → stmt K → rettype K → Prop :=
   | SSkip_refine : stmt_refine' Γ τs α f Δ1 Δ2 skip skip (false,None)
   | SDo_refine e1 e2 τ :
-     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ →
+     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ → locks e1 = ∅ → locks e2 = ∅ →
      stmt_refine' Γ τs α f Δ1 Δ2 (! e1) (! e2) (false,None)
   | SGoto_refine l :
      stmt_refine' Γ τs α f Δ1 Δ2 (goto l) (goto l) (true,None)
   | SThrow_refine n :
      stmt_refine' Γ τs α f Δ1 Δ2 (throw n) (throw n) (true,None)
   | SReturn_refine e1 e2 τ :
-     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ →
+     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ → locks e1 = ∅ → locks e2 = ∅ →
      stmt_refine' Γ τs α f Δ1 Δ2 (ret e1) (ret e2) (true,Some τ)
   | SLabel_refine l :
      stmt_refine' Γ τs α f Δ1 Δ2 (label l) (label l) (false,None)
@@ -283,7 +283,7 @@ Inductive stmt_refine' (Γ : env K) (τs : list (type K))
      stmt_refine' Γ τs α f Δ1 Δ2 s1 s2 (c,mσ) →
      stmt_refine' Γ τs α f Δ1 Δ2 (loop s1) (loop s2) (true,mσ)
   | SIf_refine e1 e2 τb s1 s2 s1' s2' c1 mσ1 c2 mσ2 mσ :
-     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (baseT τb) →
+     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (baseT τb) → locks e1 = ∅ → locks e2 = ∅ →
      stmt_refine' Γ τs α f Δ1 Δ2 s1 s2 (c1,mσ1) →
      stmt_refine' Γ τs α f Δ1 Δ2 s1' s2' (c2,mσ2) →
      rettype_union mσ1 mσ2 = Some mσ →
@@ -306,16 +306,16 @@ Inductive sctx_item_refine' (Γ : env K) (τs: list (type K))
   | Ccatch_refine c mσ :
      sctx_item_refine' Γ τs α f Δ1 Δ2
        (catch □) (catch □) (c,mσ) (false,mσ)
-  | CWhile_refine c mσ :
+  | CLoop_refine c mσ :
      sctx_item_refine' Γ τs α f Δ1 Δ2 (loop □) (loop □) (c,mσ) (true,mσ)
   | CIfL_refine e1 e2 τb s1' s2' c mσ c' mσ' mσr :
-     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (baseT τb) →
+     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (baseT τb) → locks e1 = ∅ → locks e2 = ∅ →
      s1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2' : (c',mσ') →
      rettype_union mσ mσ' = Some mσr →
      sctx_item_refine' Γ τs α f Δ1 Δ2
        (if{e1} □ else s1') (if{e2} □ else s2') (c,mσ) (c&&c',mσr)
   | CIfR_refine e1 e2 τb s1 s2 c mσ c' mσ' mσr :
-     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (baseT τb) →
+     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (baseT τb) → locks e1 = ∅ → locks e2 = ∅ →
      s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : (c,mσ) →
      rettype_union mσ mσ' = Some mσr →
      sctx_item_refine' Γ τs α f Δ1 Δ2
@@ -351,7 +351,7 @@ Inductive ctx_item_refine' (Γ : env K) (τs: list (type K))
      ctx_item_refine' Γ τs α f Δ1 Δ2
        (CLocal o1 τ) (CLocal o2 τ) (Stmt_type (c,mσ)) (Stmt_type (c,mσ))
   | CExpr_refine e1 e2 Ee1 Ee2 τ cmσ :
-     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ →
+     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ → locks e1 = ∅ → locks e2 = ∅ →
      Ee1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} Ee2 : τ ↣ cmσ →
      ctx_item_refine' Γ τs α f Δ1 Δ2
        (CExpr e1 Ee1) (CExpr e2 Ee2) (Expr_type τ) (Stmt_type cmσ)
@@ -552,9 +552,8 @@ Proof.
 Qed.
 Lemma esctx_item_subst_refine_inv_r Γ α f Δ1 Δ2 τs s1 Ee2 e2 mcτ :
   s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} subst Ee2 e2 : mcτ →
-  ∃ e1' Ee1 τ, s1 = subst Ee1 e1' ∧
-    Ee1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} Ee2 : τ ↣ mcτ ∧
-    e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ.
+  ∃ e1 Ee1 τ, s1 = subst Ee1 e1 ∧ Ee1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} Ee2 : τ ↣ mcτ ∧
+    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ ∧ locks e1 = ∅ ∧ locks e2 = ∅.
 Proof.
   by destruct Ee2; inversion 1; subst;
     do 3 eexists; split_ands; repeat refine_constructor; eauto.
