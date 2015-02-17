@@ -728,6 +728,10 @@ let rec cstmt_of_statements l =
       cscomp (CSScope (cstmt_of_statements y)) (cstmt_of_statements l')
   | Cabs.DEFINITION (Cabs.DECDEF ((t,l),_))::l' ->
       let (stos,t) = split_storage t in fold_defs stos t l l'
+  | Cabs.DEFINITION (Cabs.TYPEDEF ((t,l),_))::l' ->
+      List.fold_right (fun (s,t',_,_) x -> CSTypeDef(chars_of_string s,
+        ctype_of_specifier_decl_type (strip_typedef t) t',x)
+      ) l (cstmt_of_statements l')
   | Cabs.COMPUTATION (y,_)::l' ->
       cscomp (CSDo (cexpr_of_expression y))
         (cstmt_of_statements l')
