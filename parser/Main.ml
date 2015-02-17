@@ -450,6 +450,12 @@ let rec split_storage t =
      let stos,t = split_storage t in cstorage_of_storage x::stos,t
   | h :: t -> let sto,t = split_storage t in sto,h::t;;
 
+let rec strip_typedef t =
+  match t with
+  | [] -> []
+  | Cabs.SpecTypedef :: t -> t
+  | h :: t -> h :: strip_typedef t;;
+
 let rec add_compound k0 n l =
    let k = CompoundDecl (k0,
      List.flatten (List.map (fun (t,l') -> List.map (fun f ->
@@ -785,15 +791,15 @@ let decls_of_definition x =
         FunDecl (stos,ctype_of_specifier_decl_type t t',b))]
   | Cabs.ONLYTYPEDEF (t,_) ->
       let _ = ctype_of_specifier t in []
-  | Cabs.TYPEDEF ((Cabs.SpecTypedef::t,l),{Cabs.filename="include/stddef.h"}) ->
+  | Cabs.TYPEDEF ((t,l),{Cabs.filename="include/stddef.h"}) ->
       List.map (fun (s,t',_,_) -> (chars_of_string s, TypeDefDecl (
         match s with
         | "size_t" -> CTInt {csign = Some Unsigned; crank = CPtrRank}
         | "ptrdiff_t" -> CTInt {csign = Some Signed; crank = CPtrRank}
-        | _ -> ctype_of_specifier_decl_type t t'))) l
-  | Cabs.TYPEDEF ((Cabs.SpecTypedef::t,l),_) ->
-      List.map (fun (s,t',_,_) ->
-        (chars_of_string s,TypeDefDecl (ctype_of_specifier_decl_type t t'))) l
+        | _ -> ctype_of_specifier_decl_type (strip_typedef t) t'))) l
+  | Cabs.TYPEDEF ((t,l),_) ->
+      List.map (fun (s,t',_,_) -> (chars_of_string s,
+        TypeDefDecl (ctype_of_specifier_decl_type (strip_typedef t) t'))) l
   | _ -> raise (Unknown_definition x);;
 
 let decls_of_cabs x =
