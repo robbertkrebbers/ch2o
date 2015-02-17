@@ -3,6 +3,7 @@
 
 #load "str.cma";;
 #load "nums.cma";;
+#load "unix.cma";;
 #load "Cerrors.cmo";;
 #load "Cabs.cmo";;
 #load "Cabshelper.cmo";;
@@ -784,6 +785,12 @@ let decls_of_definition x =
         FunDecl (stos,ctype_of_specifier_decl_type t t',b))]
   | Cabs.ONLYTYPEDEF (t,_) ->
       let _ = ctype_of_specifier t in []
+  | Cabs.TYPEDEF ((Cabs.SpecTypedef::t,l),{Cabs.filename="include/stddef.h"}) ->
+      List.map (fun (s,t',_,_) -> (chars_of_string s, TypeDefDecl (
+        match s with
+        | "size_t" -> CTInt {csign = Some Unsigned; crank = CPtrRank}
+        | "ptrdiff_t" -> CTInt {csign = Some Signed; crank = CPtrRank}
+        | _ -> ctype_of_specifier_decl_type t t'))) l
   | Cabs.TYPEDEF ((Cabs.SpecTypedef::t,l),_) ->
       List.map (fun (s,t',_,_) ->
         (chars_of_string s,TypeDefDecl (ctype_of_specifier_decl_type t t'))) l
