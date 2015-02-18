@@ -30,8 +30,8 @@ let cabs_of_file name =
   let lb = Lexer.init name ic in
   let p = Parser.file Lexer.initial lb in
   Lexer.finish();
-  if Unix.close_process_in ic <> Unix.WEXITED 0 then failwith "cpp" else
-  if Cerrors.check_errors() then failwith "Parser";
+  if Unix.close_process_in ic <> Unix.WEXITED 0 then exit 2 else
+  if Cerrors.check_errors() then exit 2;
   p;;
 
 let rec nat_of_int n =
@@ -734,6 +734,9 @@ let rec no_int_return x =
   | CSReturn _ -> false
   | _ -> true;;
 
+let is_header loc h =
+  loc.Cabs.filename = !Include.include_dir ^ "/" ^ h ^ ".h";;
+
 let decls_of_definition x =
   match x with
   | Cabs.DECDEF ((t,l),_) ->
@@ -747,22 +750,22 @@ let decls_of_definition x =
   | Cabs.FUNDEF ((t,(s,t',[],_)),{Cabs.bstmts = l},_,_) ->
       let (stos,t) = split_storage t in
       let b = cstmt_of_statements l in
-      let b = if s = "main" && no_int_return b then
-        CSComp(b,CSReturn (Some (econst0))) else b in
+      let b =
+        if s = "main" && no_int_return b
+        then CSComp(b,CSReturn (Some (econst0))) else b in
       [(chars_of_string s,
         FunDecl (stos,ctype_of_specifier_decl_type t t',b))]
   | Cabs.ONLYTYPEDEF (t,_) ->
       let _ = ctype_of_specifier t in []
-  | Cabs.TYPEDEF ((t,l),{Cabs.filename=f})
-        when f = !Include.include_dir ^ "/stddef.h" ->
-      List.map (fun (s,t',_,_) -> (chars_of_string s, TypeDefDecl (
-        match s with
-        | "size_t" -> CTInt {csign = Some Unsigned; crank = CPtrRank}
-        | "ptrdiff_t" -> CTInt {csign = Some Signed; crank = CPtrRank}
-        | _ -> ctype_of_specifier_decl_type (strip_typedef t) t'))) l
   | Cabs.TYPEDEF ((t,l),_) ->
-      List.map (fun (s,t',_,_) -> (chars_of_string s,
-        TypeDefDecl (ctype_of_specifier_decl_type (strip_typedef t) t'))) l
+      List.map (fun (s,t',_,loc) -> (chars_of_string s, TypeDefDecl (
+        match s with
+        | "size_t" when is_header loc "stddef" ->
+           CTInt {csign = Some Unsigned; crank = CPtrRank}
+        | "ptrdiff_t" when is_header loc "stddef" ->
+           CTInt {csign = Some Signed; crank = CPtrRank}
+        | _ -> ctype_of_specifier_decl_type (strip_typedef t) t'))
+      ) l
   | _ -> raise (Unknown_definition x);;
 
 let decls_of_cabs x =
@@ -773,17 +776,16 @@ let decls_of_cabs x =
     the_local_compound_decls := [];
     !the_local_compound_decls @ decls_of_definition d
   ) x) in
-  (chars_of_string "main",
-    (* the printf prototypes *)
-    List.map (fun (x,(fmt,ret,s)) ->
-      (x, GlobDecl ([], CTFun(args_of_printf 0 fmt,ret), None))
-    ) !the_printfs @
-    (* the actual declarations, including the printf helpers from prelude.v *)
-    decls @
-    (* the printfs *)
-    List.map (fun (x,(fmt,ret,s)) ->
-      (x, FunDecl ([], CTFun(args_of_printf 0 fmt,ret), s))
-    ) !the_printfs);;
+  (* the printf prototypes *)
+  List.map (fun (x,(fmt,ret,s)) ->
+    (x, GlobDecl ([], CTFun(args_of_printf 0 fmt,ret), None))
+  ) !the_printfs @
+  (* the actual declarations, including the printf helpers from prelude.c *)
+  decls @
+  (* the printfs *)
+  List.map (fun (x,(fmt,ret,s)) ->
+    (x, FunDecl ([], CTFun(args_of_printf 0 fmt,ret), s))
+  ) !the_printfs;;
 
 let decls_of_file x = decls_of_cabs (cabs_of_file x);;
 
@@ -799,29 +801,30 @@ let event_of_state env tenv x =
      with Not_found -> [] end
   | _ -> [];;
 
-let initial_of_decls arch (m,x) =
-  match interpreter_initial_eval arch x m [] with
+let initial_of_decls arch x =
+  match interpreter_initial_eval arch x (chars_of_string "main") [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
 let initial_of_cabs arch x = initial_of_decls arch (decls_of_cabs x);;
 let initial_of_file arch x = initial_of_decls arch (decls_of_file x);;
 
-let graph_of_decls arch (m,x) =
-  match interpreter_all_eval arch
-    (=) event_of_state (fun x -> z_of_int (Hashtbl.hash x)) x m [] with
+let graph_of_decls arch x =
+  match interpreter_all_eval arch (=) event_of_state
+     (fun x -> z_of_int (Hashtbl.hash x)) x (chars_of_string "main") [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
 let graph_of_cabs arch x = graph_of_decls arch (decls_of_cabs x);;
 let graph_of_file arch x = graph_of_decls arch (decls_of_file x);;
 
-let stream_of_decls arch rand (m,x) =
+let stream_of_decls arch rand x =
   let choose =
     if rand
     then fun x -> nat_of_int (Random.int (int_of_nat x))
     else fun x -> nat_of_int 0 in
-  match interpreter_rand_eval arch event_of_state choose x m [] with
+  match interpreter_rand_eval arch event_of_state
+      choose x (chars_of_string "main") [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
