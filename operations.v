@@ -118,6 +118,7 @@ Section operations_definitions.
     match vb with
     | VInt _ x => x ≠ 0
     | VPtr (Ptr a) => index_alive' m (addr_index a)
+    | VPtr (FunPtr _ _ _) => True
     | _ => False
     end.
   Definition base_val_false (vb : base_val K) : Prop :=
@@ -627,6 +628,7 @@ Proof.
   | VPtr (Ptr a) =>
     if decide (index_alive' m (addr_index a))
     then inleft (left _) else inright _
+  | VPtr (FunPtr _ _ _) => inleft (left _)
   | VPtr (NULL _) => inleft (right _)
   | _ => inright _
   end; abstract naive_solver.
