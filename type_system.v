@@ -244,8 +244,7 @@ Inductive stmt_typed' (Γ : env K) (Δ : memenv K)
      stmt_typed' Γ Δ τs (ret e) (true,Some τ)
   | SLabel_typed l : stmt_typed' Γ Δ τs (label l) (false,None)
   | SLocal_typed' τ s c mσ :
-     ✓{Γ} τ →int_typed (size_of Γ τ) sptrT →
-     stmt_typed' Γ Δ (τ :: τs) s (c,mσ) →
+     ✓{Γ} τ → stmt_typed' Γ Δ (τ :: τs) s (c,mσ) →
      stmt_typed' Γ Δ τs (local{τ} s) (c,mσ)
   | SComp_typed s1 s2 c1 mσ1 c2 mσ2 mσ :
      stmt_typed' Γ Δ τs s1 (c1,mσ1) → stmt_typed' Γ Δ τs s2 (c2,mσ2) →
@@ -371,7 +370,6 @@ Global Instance state_typed :
 Definition funenv_prevalid (Γ : env K) (Δ : memenv K) (δ : funenv K) :=
   map_Forall (λ f s, ∃ τs τ cmτ,
     Γ !! f = Some (τs,τ) ∧ Forall (type_complete Γ) τs ∧
-    Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧
     (Γ,Δ,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
     gotos s ⊆ labels s ∧ throws_valid 0 s
   ) δ.
@@ -407,8 +405,7 @@ Proof. by inversion 1. Qed.
 Lemma rval_typed_inv Γ Δ v τ : (Γ,Δ) ⊢ inr v : inr τ → (Γ,Δ) ⊢ v : τ.
 Proof. by inversion 1. Qed.
 Lemma SLocal_typed Γ Δ τs τ s c mσ :
-  ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
-  (Γ,Δ,τ :: τs) ⊢ s : (c,mσ) → (Γ,Δ,τs) ⊢ local{τ} s : (c,mσ).
+  ✓{Γ} τ → (Γ,Δ,τ :: τs) ⊢ s : (c,mσ) → (Γ,Δ,τs) ⊢ local{τ} s : (c,mσ).
 Proof. by constructor. Qed.
 Lemma assign_typed_type_valid Γ τ1 τ2 ass σ :
   assign_typed Γ τ1 τ2 ass σ → ✓{Γ} τ1 → ✓{Γ} σ.
@@ -517,8 +514,7 @@ Proof.
   intros ? Hδ ?? f s ?. destruct (Hδ f s);
     naive_solver eauto using stmt_typed_weaken, env_valid_args_valid,
     types_valid_weaken, type_valid_weaken, lookup_fun_weaken,
-    types_complete_weaken, (sizes_of_weaken (λ x, int_typed x sptrT)),
-    types_complete_valid.
+    types_complete_weaken, types_complete_valid.
 Qed.
 Lemma funenv_valid_weaken Γ Δ1 Δ2 δ :
   ✓ Γ → ✓{Γ,Δ1} δ → Δ1 ⇒ₘ Δ2 → ✓{Γ,Δ2} δ.
@@ -528,14 +524,12 @@ Proof. by intros ??; simpl_map. Qed.
 Lemma funenv_prevalid_insert Γ Δ δ f s τ τs cmτ :
   funenv_prevalid Γ Δ δ →
   Γ !! f = Some (τs, τ) → Forall (type_complete Γ) τs →
-  Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
   (Γ,Δ,τs) ⊢ s : cmτ → rettype_match cmτ τ → gotos s ⊆ labels s →
   throws_valid 0 s → funenv_prevalid Γ Δ (<[f:=s]> δ).
-Proof. intros ???????? f' s'; rewrite lookup_insert_Some; naive_solver. Qed.
+Proof. intros ??????? f' s'; rewrite lookup_insert_Some; naive_solver. Qed.
 Lemma funenv_lookup Γ Δ δ f τs τ :
   ✓ Γ → ✓{Γ,Δ} δ → Γ !! f = Some (τs,τ) → ∃ s cmτ,
     δ !! f = Some s ∧ Forall (type_complete Γ) τs ∧
-    Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧
     (Γ,Δ,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
     gotos s ⊆ labels s ∧ throws_valid 0 s.
 Proof.
@@ -545,19 +539,18 @@ Proof.
 Qed.
 Lemma funenv_lookup_inv Γ Δ δ f s :
   ✓ Γ → ✓{Γ,Δ} δ → δ !! f = Some s → ∃ τs τ cmτ,
-    Γ !! f = Some (τs,τ) ∧ Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs ∧
-    (Γ,Δ,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
+    Γ !! f = Some (τs,τ) ∧ (Γ,Δ,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
     gotos s ⊆ labels s ∧ throws_valid 0 s.
 Proof. intros ? [Hδ _] ?. destruct (Hδ f s); naive_solver. Qed.
 Lemma funenv_lookup_gotos Γ Δ δ f s :
   ✓ Γ → ✓{Γ,Δ} δ → δ !! f = Some s → gotos s ⊆ labels s.
 Proof.
-  intros. by destruct (funenv_lookup_inv Γ Δ δ f s) as (?&?&?&?&?&?&?&?&?).
+  intros. by destruct (funenv_lookup_inv Γ Δ δ f s) as (?&?&?&?&?&?&?&?).
 Qed.
 Lemma funenv_lookup_throws Γ Δ δ f s :
   ✓ Γ → ✓{Γ,Δ} δ → δ !! f = Some s → throws_valid 0 s.
 Proof.
-  intros. by destruct (funenv_lookup_inv Γ Δ δ f s) as (?&?&?&?&?&?&?&?&?).
+  intros. by destruct (funenv_lookup_inv Γ Δ δ f s) as (?&?&?&?&?&?&?&?).
 Qed.
 
 Lemma EVals_typed Γ Δ τs Ωs vs σs :

@@ -25,14 +25,15 @@ Section operations_definitions.
     let 'Addr x r i τ σ σp := a
     in Addr x r (Z.to_nat (i + j * ptr_size_of Γ σp)) τ σ σp.
   Global Arguments addr_plus _ _ !_ /.
-  Definition addr_minus_ok (m : mem K) (a1 a2 : addr K) : Prop :=
-    index_alive' m (addr_index a1) ∧
-    addr_index a1 = addr_index a2 ∧
-    freeze true <$> addr_ref_base a1 = freeze true <$> addr_ref_base a2.
-  Global Arguments addr_minus_ok _ !_ !_ /.
   Definition addr_minus (Γ : env K) (a1 a2 : addr K) : Z :=
     ((addr_byte a1 - addr_byte a2) `div` ptr_size_of Γ (type_of a1))%Z.
   Global Arguments addr_minus _ !_ !_ /.
+  Definition addr_minus_ok (Γ : env K) (m : mem K) (a1 a2 : addr K) : Prop :=
+    index_alive' m (addr_index a1) ∧
+    addr_index a1 = addr_index a2 ∧
+    freeze true <$> addr_ref_base a1 = freeze true <$> addr_ref_base a2 ∧
+    int_typed (addr_minus Γ a1 a2) sptrT.
+  Global Arguments addr_minus_ok _ _ !_ !_ /.
   Definition addr_cast_ok (Γ : env K) (m : mem K)
       (σp : ptr_type K) (a : addr K) : Prop :=
     index_alive' m (addr_index a) ∧
@@ -50,7 +51,7 @@ Section operations_definitions.
       (c : compop) (p1 p2 : ptr K) : Prop :=
     match p1, p2, c with
     | Ptr a1, Ptr a2, EqOp => addr_eq_ok Γ m a1 a2
-    | Ptr a1, Ptr a2, _ => addr_minus_ok m a1 a2
+    | Ptr a1, Ptr a2, _ => addr_minus_ok Γ m a1 a2
     | FunPtr f1 _ _, FunPtr f2 _ _, EqOp => True
     | NULL _, NULL _, _ => True
     | NULL _, Ptr a2, EqOp => index_alive' m (addr_index a2)
@@ -78,13 +79,13 @@ Section operations_definitions.
   Definition ptr_plus (Γ : env K) (j : Z) (p : ptr K) : ptr K :=
     match p with Ptr a => Ptr (addr_plus Γ j a) | _ => p end.
   Global Arguments ptr_plus _ _ !_ /.
-  Definition ptr_minus_ok (m : mem K) (p1 p2 : ptr K) : Prop :=
+  Definition ptr_minus_ok (Γ : env K) (m : mem K) (p1 p2 : ptr K) : Prop :=
     match p1, p2 with
     | NULL _, NULL _ => True
-    | Ptr a1, Ptr a2 => addr_minus_ok m a1 a2
+    | Ptr a1, Ptr a2 => addr_minus_ok Γ m a1 a2
     | _, _ => False
     end.
-  Global Arguments ptr_minus_ok _ !_ !_ /.
+  Global Arguments ptr_minus_ok _ _ !_ !_ /.
   Definition ptr_minus (Γ : env K) (p1 p2 : ptr K) : Z :=
     match p1, p2 with
     | NULL _, NULL _ => 0
@@ -188,7 +189,7 @@ Section operations_definitions.
     | VInt _ x, VPtr p, ArithOp PlusOp => ptr_plus_ok Γ m x p
     | VPtr p, VInt _ x, ArithOp MinusOp => ptr_plus_ok Γ m (-x) p
     | VInt _ x, VPtr p, ArithOp MinusOp => ptr_plus_ok Γ m (-x) p
-    | VPtr p1, VPtr p2, ArithOp MinusOp => ptr_minus_ok m p1 p2
+    | VPtr p1, VPtr p2, ArithOp MinusOp => ptr_minus_ok Γ m p1 p2
     | _, _, _ => False
     end.
   Global Arguments base_val_binop_ok _ _ !_ !_ !_ /.
@@ -390,28 +391,9 @@ Proof. by destruct a. Qed.
 Lemma addr_ref_base_plus Γ a j :
   addr_ref_base (addr_plus Γ j a) = addr_ref_base a.
 Proof. by destruct a. Qed.
-Lemma addr_minus_typed Γ Δ a1 a2 σp :
-  ✓ Γ → (Γ,Δ) ⊢ a1 : σp → (Γ,Δ) ⊢ a2 : σp →
-  int_typed (addr_minus Γ a1 a2) sptrT.
-Proof.
-  intros HΓ Ha1 Ha2; unfold addr_minus; simplify_type_equality'.
-  assert (ptr_size_of Γ σp ≠ 0) by eauto using addr_size_of_ne_0.
-  assert (int_upper sptrT ≤ ptr_size_of Γ σp * int_upper sptrT)%Z.
-  { transitivity (1 * int_upper sptrT)%Z; [lia|].
-    apply Z.mul_le_mono_nonneg_r; auto using int_upper_pos with zpos. }
-  destruct (addr_byte_representable Γ Δ a1 σp) as [_ ?]; auto.
-  destruct (addr_byte_representable Γ Δ a2 σp) as [_ ?]; auto.
-  split; [|apply Z.div_lt_upper_bound; lia].
-  apply Z.div_le_lower_bound. lia. rewrite int_lower_upper_signed by done; lia.
-Qed.
-Lemma addr_minus_ok_weaken m1 m2 a1 a2:
-  addr_minus_ok m1 a1 a2 →
-  (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
-  addr_minus_ok m2 a1 a2.
-Proof. intros [??]; split; eauto. Qed.
-Lemma addr_minus_ok_erase m a1 a2 :
-  addr_minus_ok (cmap_erase m) a1 a2 = addr_minus_ok m a1 a2.
-Proof. unfold addr_minus_ok. by rewrite !index_alive_erase'. Qed.
+Lemma addr_minus_typed Γ m a1 a2 :
+  addr_minus_ok Γ m a1 a2 → int_typed (addr_minus Γ a1 a2) sptrT.
+Proof. by intros (?&?&?&?). Qed. 
 Lemma addr_minus_weaken Γ1 Γ2 Δ1 a1 a2 σp1 :
   ✓ Γ1 → (Γ1,Δ1) ⊢ a1 : σp1 →
   Γ1 ⊆ Γ2 → addr_minus Γ1 a1 a2 = addr_minus Γ2 a1 a2.
@@ -419,6 +401,17 @@ Proof.
   intros. unfold addr_minus; simplify_type_equality.
   by erewrite (addr_size_of_weaken Γ1 Γ2) by eauto.
 Qed.
+Lemma addr_minus_ok_weaken Γ1 Γ2 Δ1 m1 m2 a1 a2 σp1 :
+  ✓ Γ1 → (Γ1,Δ1) ⊢ a1 : σp1 → addr_minus_ok Γ1 m1 a1 a2 → Γ1 ⊆ Γ2 →
+  (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  addr_minus_ok Γ2 m2 a1 a2.
+Proof.
+  intros ?? [??]; split; erewrite <-?(addr_minus_weaken Γ1 Γ2) by eauto; eauto.
+Qed.
+Lemma addr_minus_ok_erase Γ  m a1 a2 :
+  addr_minus_ok Γ (cmap_erase m) a1 a2 = addr_minus_ok Γ m a1 a2.
+Proof. unfold addr_minus_ok. by rewrite !index_alive_erase'. Qed.
+
 Lemma addr_cast_typed Γ Δ m a σp τp :
   (Γ,Δ) ⊢ a : σp → addr_cast_ok Γ m τp a → (Γ,Δ) ⊢ addr_cast τp a : τp.
 Proof. intros [] (?&?&?); constructor; eauto. Qed.
@@ -476,7 +469,7 @@ Lemma addr_byte_lt_size_char_cast Γ Δ a σp j :
   addr_byte (addr_plus Γ j (addr_cast (TType ucharT) a))
     < size_of Γ (addr_type_base a) * ref_size (addr_ref_base a).
 Proof.
-  destruct 2 as [o r i τ σ σp ?????? Hi]; intros; simplify_equality'.
+  destruct 2 as [o r i τ σ σp ????? Hi]; intros; simplify_equality'.
   rewrite size_of_char, Z.mul_1_r,Z2Nat.inj_add, !Nat2Z.id by auto with zpos.
   apply Nat.lt_le_trans with (i + size_of Γ σ); [lia|].
   destruct Hi as [? ->].
@@ -507,7 +500,7 @@ Global Instance ptr_compare_ok_dec Γ m c p1 p2 :
 Proof. destruct p1, p2, c; apply _. Defined.
 Global Instance ptr_plus_ok_dec Γ m j p : Decision (ptr_plus_ok Γ m j p).
 Proof. destruct p; apply _. Defined.
-Global Instance ptr_minus_ok_dec m p1 p2 : Decision (ptr_minus_ok m p1 p2).
+Global Instance ptr_minus_ok_dec Γ m p1 p2 : Decision (ptr_minus_ok Γ m p1 p2).
 Proof. destruct p1, p2; apply _. Defined.
 Global Instance ptr_cast_ok_dec Γ m σp p : Decision (ptr_cast_ok Γ m σp p).
 Proof. destruct p; apply _. Defined.
@@ -536,12 +529,10 @@ Lemma ptr_plus_typed Γ Δ m p σp j :
   ✓ Γ → (Γ,Δ) ⊢ p : σp → ptr_plus_ok Γ m j p →
   (Γ,Δ) ⊢ ptr_plus Γ j p : σp.
 Proof. destruct 2; simpl; constructor; eauto using addr_plus_typed. Qed.
-Lemma ptr_minus_typed Γ Δ p1 p2 σp :
-  ✓ Γ → (Γ,Δ) ⊢ p1 : σp → (Γ,Δ) ⊢ p2 : σp →
-  int_typed (ptr_minus Γ p1 p2) sptrT.
+Lemma ptr_minus_typed Γ m p1 p2 :
+  ptr_minus_ok Γ m p1 p2 → int_typed (ptr_minus Γ p1 p2) sptrT.
 Proof.
-  destruct 2, 1; simpl;
-    eauto using addr_minus_typed, int_typed_small with lia.
+  destruct p1,p2; simpl; eauto using addr_minus_typed, int_typed_small with lia.
 Qed.
 Lemma ptr_cast_typed' Γ Δ m p τp σp :
   (Γ,Δ) ⊢ p : τp → ptr_cast_typed Γ τp σp →
@@ -583,13 +574,13 @@ Proof. destruct p; simpl; auto using addr_plus_ok_erase. Qed.
 Lemma ptr_plus_weaken Γ1 Γ2 Δ1 p τp j :
   ✓ Γ1 → (Γ1,Δ1) ⊢ p : τp → Γ1 ⊆ Γ2 → ptr_plus Γ1 j p = ptr_plus Γ2 j p.
 Proof. destruct 2; simpl; eauto using addr_plus_weaken, f_equal. Qed.
-Lemma ptr_minus_ok_weaken m1 m2 p1 p2:
-  ptr_minus_ok m1 p1 p2 →
+Lemma ptr_minus_ok_weaken Γ1 Γ2 Δ1 m1 m2 p1 p2 τp1 :
+  ✓ Γ1 → (Γ1,Δ1) ⊢ p1 : τp1 → ptr_minus_ok Γ1 m1 p1 p2 → Γ1 ⊆ Γ2 →
   (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
-  ptr_minus_ok m2 p1 p2.
-Proof. destruct p1, p2; simpl; eauto using addr_minus_ok_weaken. Qed.
-Lemma ptr_minus_ok_erase m p1 p2 :
-  ptr_minus_ok (cmap_erase m) p1 p2 = ptr_minus_ok m p1 p2.
+  ptr_minus_ok Γ2 m2 p1 p2.
+Proof. destruct 2, p2; simpl; eauto using addr_minus_ok_weaken. Qed.
+Lemma ptr_minus_ok_erase Γ m p1 p2 :
+  ptr_minus_ok Γ (cmap_erase m) p1 p2 = ptr_minus_ok Γ m p1 p2.
 Proof. destruct p1, p2; simpl; auto using addr_minus_ok_erase. Qed.
 Lemma ptr_minus_weaken Γ1 Γ2 Δ1 p1 p2 τp1 τp2 :
   ✓ Γ1 → (Γ1,Δ1) ⊢ p1 : τp1 → (Γ1,Δ1) ⊢ p2 : τp2 →
@@ -615,9 +606,11 @@ Proof.
 Qed.
 Lemma ptr_plus_ok_alive Γ m p j : ptr_plus_ok Γ m j p → ptr_alive ('{m}) p.
 Proof. destruct p. done. intros [??]; simpl; eauto. done. Qed.
-Lemma ptr_minus_ok_alive_l m p1 p2 : ptr_minus_ok m p1 p2 → ptr_alive ('{m}) p1.
+Lemma ptr_minus_ok_alive_l Γ m p1 p2 :
+  ptr_minus_ok Γ m p1 p2 → ptr_alive ('{m}) p1.
 Proof. destruct p1, p2; simpl; try done. intros [??]; eauto. Qed.
-Lemma ptr_minus_ok_alive_r m p1 p2 : ptr_minus_ok m p1 p2 → ptr_alive ('{m}) p2.
+Lemma ptr_minus_ok_alive_r Γ m p1 p2 :
+  ptr_minus_ok Γ m p1 p2 → ptr_alive ('{m}) p2.
 Proof. destruct p1, p2; simpl; try done. intros (?&<-&?); eauto. Qed.
 Lemma ptr_cast_ok_alive Γ m p σp : ptr_cast_ok Γ m σp p → ptr_alive ('{m}) p.
 Proof. destruct p; simpl. done. intros [??]; eauto. done. Qed.

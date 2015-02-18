@@ -243,11 +243,10 @@ Lemma mem_alloc_refine Γ α f Δ1 Δ2 m1 m2 o1 o2 mallc x v1 v2 τ :
   let Δ1' := <[o1:=(τ,false)]>Δ1 in let Δ2' := <[o2:=(τ,false)]>Δ2 in
   ✓ Γ → m1 ⊑{Γ,α,f@Δ1↦Δ2} m2 →
   Δ1 !! o1 = None → Δ2 !! o2 = None → f !! o1 = Some (o2,[]) →
-  sep_unshared x → ¬sep_unmapped x →
-  v1 ⊑{Γ,α,f@Δ1'↦Δ2'} v2 : τ → int_typed (size_of Γ τ) sptrT →
+  sep_unshared x → ¬sep_unmapped x → v1 ⊑{Γ,α,f@Δ1'↦Δ2'} v2 : τ →
   mem_alloc Γ o1 mallc x v1 m1 ⊑{Γ,α,f@Δ1'↦Δ2'} mem_alloc Γ o2 mallc x v2 m2.
 Proof.
-  simpl; intros ? (?&?&HΔ&Hm) ???????.
+  simpl; intros ? (?&?&HΔ&Hm) ??????.
   assert (sep_valid x) by (by apply sep_unshared_valid).
   split; split_ands; eauto 5 using mem_alloc_valid,
     mem_alloc_refine_env, val_refine_typed_l, val_refine_typed_r.
@@ -266,14 +265,13 @@ Proof.
 Qed.
 Lemma mem_alloc_refine' Γ α f m1 m2 o1 o2 malloc x v1 v2 τ :
   ✓ Γ → m1 ⊑{Γ,α,f} m2 → mem_allocable o1 m1 → mem_allocable o2 m2 →
-  sep_unshared x → ¬sep_unmapped x → 
-  v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → int_typed (size_of Γ τ) sptrT → ∃ f',
+  sep_unshared x → ¬sep_unmapped x → v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → ∃ f',
   (**i 1.) *) f' !! o1 = Some (o2,[]) ∧
   (**i 2.) *)
     mem_alloc Γ o1 malloc x v1 m1 ⊑{Γ,α,f'} mem_alloc Γ o2 malloc x v2 m2 ∧
   (**i 3.) *) meminj_extend f f' ('{m1}) ('{m2}).
 Proof.
-  intros ?????? Hv ?. destruct (mem_refine_extend Γ α f ('{m1}) ('{m2}) o1 o2) as
+  intros ?????? Hv. destruct (mem_refine_extend Γ α f ('{m1}) ('{m2}) o1 o2) as
     (f'&?&?&?); eauto using mem_allocable_memenv_of,cmap_refine_memenv_refine.
   exists f'; split_ands; auto. unfold refineM, cmap_refine'.
   erewrite !mem_alloc_memenv_of by eauto using val_refine_typed_l, val_refine_typed_r.
@@ -282,8 +280,7 @@ Proof.
 Qed.
 Lemma mem_alloc_new_refine' Γ α f m1 m2 o1 o2 malloc x τ :
   ✓ Γ → m1 ⊑{Γ,α,f} m2 → mem_allocable o1 m1 → mem_allocable o2 m2 →
-  sep_unshared x → ¬sep_unmapped x →
-  ✓{Γ} τ → int_typed (size_of Γ τ) sptrT → ∃ f',
+  sep_unshared x → ¬sep_unmapped x → ✓{Γ} τ → ∃ f',
   (**i 1.) *) f' !! o1 = Some (o2,[]) ∧
   (**i 2.) *)
     mem_alloc Γ o1 malloc x (val_new Γ τ) m1
@@ -295,26 +292,25 @@ Hint Immediate cmap_refine_memenv_refine.
 Lemma mem_alloc_list_refine' Γ α f m1 m2 os1 os2 vs1 vs2 τs :
   ✓ Γ → m1 ⊑{Γ,α,f} m2 → vs1 ⊑{Γ,α,f@'{m1}↦'{m2}}* vs2 :* τs →
   length os1 = length vs1 → length os2 = length vs2 →
-  Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs →
   mem_allocable_list m1 os1 → mem_allocable_list m2 os2 → ∃ f',
   (**i 1.) *) Forall2 (λ o1 o2, f' !! o1 = Some (o2,[])) os1 os2 ∧
   (**i 2.) *) mem_alloc_list Γ (zip os1 vs1) m1
       ⊑{Γ,α,f'} mem_alloc_list Γ (zip os2 vs2) m2 ∧
   (**i 3.) *) meminj_extend f f' ('{m1}) ('{m2}).
 Proof.
-  rewrite <-!Forall2_same_length. intros ? Hm Hvs Hovs1 Hovs2 Hτs Hos1 Hos2.
-  revert f os1 os2 vs1 vs2 m1 m2 Hm Hos1 Hos2 Hvs Hovs1 Hovs2.
-  induction Hτs as [|τ τs ?? IH];
-    intros f ?? vs1' vs2' m1 m2 ? [|o1 os1 ???] [|o2 os2 ???];
-    inversion_clear 1 as [|v1 v2 ? vs1 vs2 ?];
-    intros; decompose_Forall_hyps; eauto using meminj_extend_reflexive.
+  rewrite <-!Forall2_same_length. intros ? Hm Hvs Hovs1 Hovs2 Hos1 Hos2.
+  revert f τs os2 vs2 m1 m2 Hm Hos1 Hos2 Hvs Hovs2.
+  induction Hovs1 as [|o1 v1 os1 vs1 ?? IH];
+    intros f [|τ τs] [|o2 os2] [|v2 vs2] m1 m2; inversion_clear 2;
+    inversion_clear 1; inversion_clear 1; intros; decompose_Forall_hyps.
+  { eauto using meminj_extend_reflexive. }
   assert ((Γ,'{m1}) ⊢ v1 : τ) by eauto using val_refine_typed_l.
   assert ((Γ,'{m2}) ⊢ v2 : τ) by eauto using val_refine_typed_r.
   assert (✓{Γ} τ) by eauto using val_typed_type_valid.
   destruct (mem_alloc_refine' Γ α f m1 m2 o1 o2 false perm_full v1 v2 τ)
     as (f'&?&?&?); auto using perm_full_mapped,
     perm_full_unshared; simplify_type_equality.
-  edestruct (IH f' os1 os2 vs1 vs2) as (f''&?&?&?); eauto using
+  edestruct (IH f' τs os2 vs2) as (f''&?&?&?); eauto using
     mem_alloc_allocable_list, vals_refine_weaken, mem_alloc_forward'.
   exists f''; split_ands; eauto using meminj_extend_transitive.
   * constructor; [|done]. transitivity (f' !! o1);

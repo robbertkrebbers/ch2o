@@ -148,9 +148,7 @@ Global Instance stmt_type_check: TypeCheck envs (rettype K) (stmt K) :=
   | ret e =>
      τ ← type_check Γs e ≫= maybe inr; guard (locks e = ∅); Some (true,Some τ)
   | label _ => Some (false,None)
-  | local{τ} s =>
-     guard (✓{Γ} τ); guard (int_typed (size_of Γ τ) sptrT);
-     type_check (Γ,Δ,τ :: τs) s
+  | local{τ} s => guard (✓{Γ} τ); type_check (Γ,Δ,τ :: τs) s
   | s1 ;; s2 =>
      '(c1,mσ1) ← type_check Γs s1;
      '(c2,mσ2) ← type_check Γs s2;

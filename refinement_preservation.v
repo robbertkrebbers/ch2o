@@ -93,8 +93,7 @@ Proof.
   * refine_inversion_all; decompose_Forall_hyps.
     go f; auto.
     refine_constructor; eauto using addr_top_strict, addr_top_refine,
-      cmap_index_typed_valid, cmap_index_typed_representable,
-      locks_empty_refine.
+      cmap_index_typed_valid, locks_empty_refine.
   * refine_inversion_all; [go f; auto|].
     exfalso; eauto using index_alive_1'.
   * refine_inversion_all; go f; eauto.
@@ -119,10 +118,7 @@ Proof.
   * refine_inversion_all.
     edestruct (λ Γ f m1 m2 o1 o2 τ n, mem_alloc_new_refine' Γ α f m1 m2 o1 o2
       true perm_full (τ.[n])) as (f'&?&?&?); eauto using mem_allocable_fresh,
-      index_typed_representable, TArray_valid, perm_full_mapped,
-      perm_full_unshared.
-    { by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id
-        by auto using Z_to_nat_neq_0_nonneg. }
+      TArray_valid, perm_full_mapped, perm_full_unshared.
     go f'; eauto.
     refine_constructor; eauto 8 using addr_top_array_refine,
       mem_alloc_new_index_typed', addr_top_array_strict, TArray_valid.
@@ -166,10 +162,7 @@ Proof.
     { left; go f; eauto 10 using type_valid_ptr_type_valid. }
     edestruct (λ Γ f m1 m2 o1 o2 τ n, mem_alloc_new_refine' Γ α f m1 m2 o1 o2
       true perm_full (τ.[n])) as (f'&?&?&?); eauto using mem_allocable_fresh,
-      index_typed_representable, TArray_valid, perm_full_mapped,
-      perm_full_unshared.
-    { by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id
-        by auto using Z_to_nat_neq_0_nonneg. }
+      TArray_valid, perm_full_mapped, perm_full_unshared.
     left; go f'; eauto.
     refine_constructor; eauto 8 using addr_top_array_refine,
       mem_alloc_new_index_typed', addr_top_array_strict, TArray_valid.
@@ -305,7 +298,7 @@ Proof.
   * intros; invert. go f; eauto 10.
     repeat refine_constructor; eauto. by rewrite andb_false_r.
   * intros m k h s os vs ???????; invert.
-    edestruct funenv_lookup_refine_r as (?&?&?&?&?&?&?&?&?&?&?); eauto 2.
+    edestruct funenv_lookup_refine_r as (?&?&?&?&?&?&?&?&?&?); eauto 2.
     simplify_equality.
     edestruct (λ m1 m2 os2 vs1, mem_alloc_list_refine' Γ α f m1 m2
       (fresh_list (length vs1) (dom indexset m1)) os2 vs1) as (f'&?&?&?);
@@ -342,12 +335,12 @@ Proof.
       mem_allocable_fresh, perm_full_mapped, perm_full_unshared.
     go f'. repeat refine_constructor; eauto 7 using
       mem_alloc_new_index_typed', direction_refine_weaken, stmt_refine_weaken,
-      ctx_refine_weaken, mem_alloc_new_forward',mem_allocable_fresh,option_eq_1_alt.
+      ctx_refine_weaken, mem_alloc_new_forward', mem_allocable_fresh,
+      option_eq_1_alt.
   * intros m k d o τ s ?????; invert. go f.
-    repeat refine_constructor; eauto 7 using
-      direction_refine_weaken, mem_free_refine',
-      ctx_refine_weaken, mem_free_forward', option_eq_1_alt,
-      cmap_index_typed_representable, cmap_index_typed_valid.
+    repeat refine_constructor; eauto 7 using direction_refine_weaken,
+      mem_free_refine', ctx_refine_weaken, mem_free_forward', option_eq_1_alt,
+      cmap_index_typed_valid.
     eapply stmt_refine_weaken; eauto using mem_free_forward', mem_free_refine'.
 Qed.
 End refinement_preservation.

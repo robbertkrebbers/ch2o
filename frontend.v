@@ -322,8 +322,6 @@ Definition to_string_const (zs : list Z) : option (val K * nat) :=
 
 Definition insert_object (x : perm) (v : val K) : M index :=
   m ← gets to_mem; Γ ← gets to_env;
-  guard (int_typed (size_of Γ (type_of v)) sptrT) with
-    ("global or static whose type is too large");
   let o := fresh (dom _ m) in
   _ ← modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in FState Γn Γ (mem_alloc Γ o false x v m) Δg);
@@ -841,8 +839,6 @@ Definition to_stmt (τret : type K) :
         guard (τ ≠ voidT) with
           ("block scope variable `" +:+ x +:+ "` of void type");
         Γ ← gets to_env;
-        guard (int_typed (size_of Γ τ) sptrT) with
-          ("block scope variable `" +:+ x +:+ "` whose type is too large");
         match mce with
         | Some ce =>
            e ← to_init_expr (Some (x,Local τ) :: Δl) τ ce;
@@ -945,8 +941,6 @@ Definition alloc_fun (f : string)
          ∨ sto = AutoStorage ∧ sto' = ExternStorage) with
        ("function `" +:+ f +:+ "` previously declared with different linkage");
      guard (ms = None) with ("function `" +:+ f +:+ "` previously completed");
-     guard (Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs) with
-       ("function `" +:+ f +:+ "` has arguments whose type is too large");
      s ← to_fun_stmt f (fst <$> xτs) τs τ cs;
      let sto := if decide (sto = ExternStorage) then sto' else sto in
      insert_fun f sto τs' τ' (Some s)
@@ -957,8 +951,6 @@ Definition alloc_fun (f : string)
   | Some (EnumVal _ _) =>
      fail ("function `" +:+ f +:+ "` previously declared as enum tag")
   | None =>
-     guard (Forall (λ τ, int_typed (size_of Γ τ) sptrT) τs) with
-       ("function `" +:+ f +:+ "` has arguments whose type is too large");
      _ ← insert_fun f sto τs τ None;
      s ← to_fun_stmt f (fst <$> xτs) τs τ cs;
      insert_fun f sto τs τ (Some s)

@@ -42,8 +42,8 @@ Instance index_typed {K} : Typed (memenv K) (type K) index := λ Δ o τ,
   ∃ β, Δ !! o = Some (τ,β).
 Definition index_alive {K} (Δ : memenv K) (o : index) : Prop :=
   ∃ τ, Δ !! o = Some (τ,false).
-Instance memenv_valid `{Env K} : Valid (env K) (memenv K) := λ Γ Δ, ∀ o τ,
-  Δ ⊢ o : τ → ✓{Γ} τ ∧ int_typed (size_of Γ τ) sptrT.
+Instance memenv_valid `{Env K} : Valid (env K) (memenv K) := λ Γ Δ,
+  ∀ o τ, Δ ⊢ o : τ → ✓{Γ} τ.
 
 Instance index_typecheck {K} : TypeCheck (memenv K) (type K) index := λ Δ o,
   fst <$> Δ !! o.
@@ -64,16 +64,10 @@ Lemma memenv_empty_valid `{Env K} Γ : ✓{Γ} (∅ : memenv K).
 Proof. intros ?? [??]; simplify_map_equality. Qed.
 Lemma memenv_valid_weaken `{EnvSpec K} Γ1 Γ2 (Δ : memenv K) :
   ✓ Γ1 → ✓{Γ1} Δ → Γ1 ⊆ Γ2 → ✓{Γ2} Δ.
-Proof.
-  intros ? HΔ ? o τ ?; destruct (HΔ o τ); auto.
-  erewrite <-size_of_weaken by eauto; eauto using type_valid_weaken.
-Qed.
+Proof. intros ? HΔ ? o τ ?; eauto using type_valid_weaken. Qed.
 Lemma index_typed_valid `{EnvSpec K} Γ (Δ : memenv K) o τ :
   ✓{Γ} Δ → Δ ⊢ o : τ → ✓{Γ} τ.
-Proof. intros Ho; eapply Ho; eauto. Qed.
-Lemma index_typed_representable `{EnvSpec K} Γ (Δ : memenv K) o τ :
-  ✓{Γ} Δ → Δ ⊢ o : τ → int_typed (size_of Γ τ) sptrT.
-Proof. intros Ho; eapply Ho; eauto. Qed.
+Proof. eauto. Qed.
 
 (** During the execution of the semantics, the memory environments should only
 grow, i.e. new objects may be allocated and current objects may be freed. We

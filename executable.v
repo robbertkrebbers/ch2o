@@ -62,7 +62,6 @@ Definition ehexec (Γ : env K) (k : ctx K)
      let o := fresh (dom indexset m) in
      let n' := Z.to_nat n in
      guard (n' ≠ 0);
-     guard (int_typed (n * size_of Γ τ) sptrT);
      {[ #{Ω}(ptrV (Ptr (addr_top_array o τ n))),
         mem_alloc Γ o true perm_full (val_new Γ (τ.[n'])) m ]}
      ∪  (if alloc_can_fail then {[ #{Ω}(ptrV (NULL (TType τ))), m ]} else ∅)

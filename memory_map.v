@@ -109,23 +109,16 @@ Proof.
 Qed.
 Lemma cmap_valid_Freed Γ Δ m o τ :
   ✓{Γ,Δ} m → cmap_car m !! o = Some (Freed τ) →
-  Δ ⊢ o : τ ∧ ¬index_alive Δ o ∧ ✓{Γ} τ ∧ int_typed (size_of Γ τ) sptrT.
-Proof. intros (HΔ&Hm&_) ?. destruct (HΔ o τ), (Hm o τ); auto. Qed.
+  Δ ⊢ o : τ ∧ ¬index_alive Δ o ∧ ✓{Γ} τ.
+Proof. intros (HΔ&Hm&_) ?; destruct (Hm o τ); eauto. Qed.
 Lemma cmap_valid_Obj Γ Δ m o w malloc :
   ✓{Γ,Δ} m → cmap_car m !! o = Some (Obj w malloc) →
-  ∃ τ, Δ ⊢ o : τ ∧ index_alive Δ o ∧ (Γ,Δ) ⊢ w : τ
-    ∧ ¬ctree_empty w ∧ int_typed (size_of Γ τ) sptrT.
-Proof.
-  intros (HΔ&_&Hm) ?; destruct (Hm o w malloc) as (τ&?&?&?&?); auto.
-  destruct (HΔ o τ); eauto 10.
-Qed.
+  ∃ τ, Δ ⊢ o : τ ∧ index_alive Δ o ∧ (Γ,Δ) ⊢ w : τ ∧ ¬ctree_empty w.
+Proof. intros (HΔ&_&Hm) ?; destruct (Hm o w malloc) as (τ&?&?&?&?); eauto. Qed.
 Lemma cmap_valid_memenv_valid Γ Δ m : ✓{Γ,Δ} m → ✓{Γ} Δ.
 Proof. by intros []. Qed.
 Lemma cmap_index_typed_valid Γ Δ m o τ : ✓{Γ,Δ} m → Δ ⊢ o : τ → ✓{Γ} τ.
 Proof. eauto using cmap_valid_memenv_valid, index_typed_valid. Qed.
-Lemma cmap_index_typed_representable Γ Δ m o τ :
-  ✓{Γ,Δ} m → Δ ⊢ o : τ → int_typed (size_of Γ τ) sptrT.
-Proof. eauto using cmap_valid_memenv_valid, index_typed_representable. Qed.
 Lemma cmap_empty_valid Γ Δ : ✓{Γ} Δ → ✓{Γ,Δ} (∅ : mem K).
 Proof. by intros; split_ands'; intros until 0; simplify_map_equality'. Qed.
 Lemma cmap_empty_valid' Γ : ✓{Γ} (∅ : mem K).
@@ -160,7 +153,7 @@ Lemma cmap_valid_sep_valid Γ Δ m : ✓{Γ,Δ} m → sep_valid m.
 Proof.
   destruct m as [m]; intros Hm o [τ|w malloc] ?; [done|].
   destruct (cmap_valid_Obj Γ Δ (CMap m) o w malloc)
-    as (?&?&?&?&?&?); simpl; eauto using ctree_typed_sep_valid.
+    as (?&?&?&?&?); simpl; eauto using ctree_typed_sep_valid.
 Qed.
 Lemma cmap_index_typed Γ Δ m o τ : ✓{Γ,Δ} m → '{m} ⊢ o : τ → Δ ⊢ o : τ.
 Proof.
@@ -168,7 +161,7 @@ Proof.
   destruct (index_typed_lookup_cmap m o τ) as ([|w malloc]&?&?); auto; subst.
   * by destruct (cmap_valid_Freed Γ Δ m o τ).
   * by destruct (cmap_valid_Obj Γ Δ m o w malloc)
-      as (τ&?&?&?&?&_); simplify_type_equality.
+      as (τ&?&?&?&?); simplify_type_equality.
 Qed.
 
 Lemma cmap_erase_empty : cmap_erase (∅ : mem K) = ∅.
@@ -545,7 +538,7 @@ Proof.
   intros ??????? Hperm; split_ands'; intros; simplify_map_equality'; auto.
   assert (τ = addr_type_base a) by eauto using addr_is_obj_type; subst.
   exists (addr_type_object a); split_ands; eauto using addr_typed_index,
-    addr_typed_representable, ctree_singleton_typed, addr_typed_ref_typed.
+    ctree_singleton_typed, addr_typed_ref_typed.
   contradict Hperm; eapply Forall_impl with (∅ =); eauto using
     @sep_unmapped_empty_alt, ctree_singleton_Forall_inv, addr_typed_ref_typed.
 Qed.

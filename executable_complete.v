@@ -38,7 +38,7 @@ Proof.
     | _ => rewrite collection_guard_True by done
     | _ => case_match; [|done]
     end; split_ands; eauto using cmap_refine_id', expr_refine_id).
-  intros m Ω o τi τ n ?????????; typed_inversion_all.
+  intros m Ω o τi τ n ????????; typed_inversion_all.
   set (o' := fresh (dom indexset m)) in *.
   assert (mem_allocable o' m) by (apply mem_allocable_fresh).
   edestruct (λ τ, mem_alloc_new_refine' Γ false meminj_id m m

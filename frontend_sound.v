@@ -138,7 +138,6 @@ Hint Resolve TBase_ptr_valid TArray_ptr_valid.
 Hint Immediate type_complete_valid types_complete_valid.
 Hint Immediate type_valid_ptr_type_valid.
 Hint Resolve addr_top_typed addr_top_strict.
-Hint Immediate cmap_index_typed_representable.
 Hint Extern 10 (_ ⊢ _ : _ ↣ _) => typed_constructor; try lia.
 Hint Resolve perm_full_valid perm_full_mapped.
 Hint Extern 1 (@eq lockset _ _) => by simpl; rewrite ?empty_union_L.
@@ -148,7 +147,6 @@ Definition fun_stmt_valid (Γ : env K) (Δ : memenv K)
   match ms with
   | Some s => ∃ cmτ,
      Forall (type_complete Γ) τs ∧
-     Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧
      (Γ,Δ,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
      gotos s ⊆ labels s ∧ throws_valid 0 s
   | None => True
@@ -188,10 +186,9 @@ Lemma global_decl_valid_weaken Γ1 Γ2 Δ1 Δ2 x d :
   Δ1 ⊆ Δ2 → global_decl_valid Γ2 Δ2 x d.
 Proof.
   destruct d as [|??? []| |];
-    naive_solver eauto using ptr_type_valid_weaken,
-    memenv_forward_typed, stmt_typed_weaken, memenv_subseteq_alive,
-    env_valid_args_valid, lookup_fun_weaken, types_complete_weaken,
-    (sizes_of_weaken (λ x, int_typed x sptrT)), types_complete_valid.
+    naive_solver eauto using ptr_type_valid_weaken, memenv_forward_typed,
+    stmt_typed_weaken, memenv_subseteq_alive, env_valid_args_valid,
+    lookup_fun_weaken, types_complete_weaken, types_complete_valid.
 Qed.
 Lemma frontend_state_empty_valid : ✓ (∅ : frontend_state K).
 Proof.
@@ -434,11 +431,6 @@ Ltac weaken :=
   | H : local_env_valid ?S ?Δl, H2 : ?S ⊆ ?S' |- _ =>
      assert (local_env_valid S' Δl)
        by eauto using local_env_valid_subseteq; clear H
-  | H : int_typed (Z.of_nat (size_of (to_env ?S1) ?τi)) _, _ : ?S1 ⊆ ?S2 |- _ =>
-     rewrite (size_of_weaken (to_env S1) (to_env S2) τi) in H by eauto 2
-  | H : Forall (λ τ : type K, int_typed _ ?τi) ?τs, _ : ?S1 ⊆ ?S2 |- _ =>
-     apply (sizes_of_weaken (λ x, int_typed (Z.of_nat x) τi)
-       (to_env S1) (to_env S2)) in H; auto; [idtac]
   | H : ✓{to_env ?S1} ?τp, H2 : ?S1 ⊆ ?S2  |- _ =>
      assert (✓{to_env S2} τp) by eauto using ptr_type_valid_weaken; clear H
   | H : ✓{to_env ?S1}* ?τps, H2 : ?S1 ⊆ ?S2  |- _ =>

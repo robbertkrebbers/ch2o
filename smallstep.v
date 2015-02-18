@@ -57,10 +57,10 @@ Inductive ehstep `{Env K} (Γ : env K) (ρ : stack) :
   | ehstep_eltr m Ω v rs v' :
      v !!{Γ} rs = Some v' → Γ\ ρ ⊢ₕ #{Ω} v #> rs, m ⇒ #{Ω} v', m
   | ehstep_alloc_NULL m Ω τi τ n :
-     alloc_can_fail → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
+     alloc_can_fail → Z.to_nat n ≠ 0 →
      Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒ #{Ω} (ptrV (NULL (TType τ))), m
   | ehstep_alloc m Ω o τi τ n :
-     mem_allocable o m → Z.to_nat n ≠ 0 → int_typed (n * size_of Γ τ) sptrT →
+     mem_allocable o m → Z.to_nat n ≠ 0 →
      Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒
              #{Ω} (ptrV (Ptr (addr_top_array o τ n))),
              mem_alloc Γ o true perm_full (val_new Γ (τ.[Z.to_nat n])) m

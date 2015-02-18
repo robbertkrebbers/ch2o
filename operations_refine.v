@@ -74,7 +74,7 @@ Lemma addr_plus_refine Γ α f m1 m2 a1 a2 σp j :
 Proof.
   intros ? Ha' Ha. unfold addr_plus; simpl.
   destruct Ha' as (_&?&?), Ha as
-    [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σp ??????????? Hr]; simplify_equality'.
+    [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ σp ?????????? Hr]; simplify_equality'.
   refine_constructor; eauto.
   { apply Nat2Z.inj_le. by rewrite Nat2Z.inj_mul, Z2Nat.id by done. }
   { rewrite <-(Nat2Z.id (ptr_size_of Γ σp)) at 1.
@@ -88,35 +88,37 @@ Proof.
   by rewrite Z2Nat.inj_add, Z2Nat.inj_mul, !Nat2Z.id
     by auto using Z.mul_nonneg_nonneg with lia.
 Qed.
+Lemma addr_minus_refine Γ α f m1 m2 a1 a2 a3 a4 σp :
+  addr_minus_ok Γ m1 a1 a3 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp →
+  a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σp → addr_minus Γ a1 a3 = addr_minus Γ a2 a4.
+Proof.
+  intros (?&?&?&?).
+  destruct 1 as [o1 o2 r1 r2 r3 i1 i3 τ1 τ2 σ1 σp ?????????? Hr],
+    1 as [o4 o5 r4 r5 r6 i4 i6 τ4 τ5 σ3 σp4 ?????????? Hr'].
+  destruct Hr, Hr'; simplify_list_equality;
+    simplify_type_equality; f_equal; lia.
+Qed.
 Lemma addr_minus_ok_refine Γ α f m1 m2 a1 a2 a3 a4 σp :
   a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp → a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σp →
-  addr_minus_ok m1 a1 a3 → addr_minus_ok m2 a2 a4.
+  addr_minus_ok Γ m1 a1 a3 → addr_minus_ok Γ m2 a2 a4.
 Proof.
-  assert (∀ r1 r2 r3 r4 r : ref K,
+  intros Ha1 Ha3 Ha. assert (∀ r1 r2 r3 r4 r : ref K,
     r1 ++ r ⊆* r2 → r3 ++ r ⊆* r4 → freeze true <$> r1 = freeze true <$> r3 →
     freeze true <$> r2 = freeze true <$> r4).
   { intros r1 r2 r3 r4 r ???.
     erewrite <-(ref_freeze_le _ _ r2), <-(ref_freeze_le _ _ r4) by eauto.
     rewrite !fmap_app. by f_equal. }
-  destruct 1 as [??????????? [] ?????????? Hr1],
-    1 as [??????????? [] ?????????? Hr2]; destruct Hr1; inversion Hr2;
-    intros (?&?&?); simplify_list_equality; split_ands; eauto using ref_le_unique.
-Qed.
-Lemma addr_minus_refine Γ α f m1 m2 a1 a2 a3 a4 σp :
-  addr_minus_ok m1 a1 a3 → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp →
-  a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σp → addr_minus Γ a1 a3 = addr_minus Γ a2 a4.
-Proof.
-  intros (?&?&?).
-  destruct 1 as [o1 o2 r1 r2 r3 i1 i3 τ1 τ2 σ1 σp ??????????? Hr],
-    1 as [o4 o5 r4 r5 r6 i4 i6 τ4 τ5 σ3 σp4 ??????????? Hr'].
-  destruct Hr, Hr'; simplify_list_equality;
-    simplify_type_equality; f_equal; lia.
+  unfold addr_minus_ok; erewrite <-addr_minus_refine by eauto. 
+  destruct Ha1 as [??????????? [] ????????? Hr1],
+    Ha3 as [??????????? [] ????????? Hr2]; destruct Hr1; inversion Hr2;
+    destruct Ha as (?&?&?&?); simplify_list_equality;
+    split_ands; eauto using ref_le_unique.
 Qed.
 Lemma addr_cast_ok_refine Γ α f m1 m2 a1 a2 σp τp :
   ✓ Γ → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp →
   addr_cast_ok Γ m1 τp a1 → addr_cast_ok Γ m2 τp a2.
 Proof.
-  destruct 2 as [o o' r r' r'' i i'' τ τ' σ σp' [] ?????????? []];
+  destruct 2 as [o o' r r' r'' i i'' τ τ' σ σp' [] ????????? []];
     intros (?&?&?); simplify_equality'; split_ands;
     eauto using size_of_castable, Nat.divide_add_r, Nat.divide_mul_l.
 Qed.
@@ -154,10 +156,10 @@ Lemma ptr_plus_refine Γ α f m1 m2 p1 p2 σp j :
 Proof. destruct 3; simpl; constructor; eauto using addr_plus_refine. Qed.
 Lemma ptr_minus_ok_refine Γ α f m1 m2 p1 p2 p3 p4 σp :
   p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp → p3 ⊑{Γ,α,f@'{m1}↦'{m2}} p4 : σp →
-  ptr_minus_ok m1 p1 p3 → ptr_minus_ok m2 p2 p4.
+  ptr_minus_ok Γ m1 p1 p3 → ptr_minus_ok Γ m2 p2 p4.
 Proof. destruct 1, 1; simpl; eauto using addr_minus_ok_refine. Qed.
 Lemma ptr_minus_refine Γ α f m1 m2 p1 p2 p3 p4 σp :
-  ✓ Γ → ptr_minus_ok m1 p1 p3 →
+  ✓ Γ → ptr_minus_ok Γ m1 p1 p3 →
   p1 ⊑{Γ,α,f@'{m1}↦'{m2}} p2 : σp → p3 ⊑{Γ,α,f@'{m1}↦'{m2}} p4 : σp →
   ptr_minus Γ p1 p3 = ptr_minus Γ p2 p4.
 Proof. destruct 3, 1; simpl; eauto using addr_minus_refine. Qed.
@@ -219,15 +221,16 @@ Lemma base_val_binop_refine Γ α f m1 m2 op vb1 vb2 vb3 vb4 τb1 τb3 σb :
   base_val_binop Γ op vb1 vb3
     ⊑{Γ,α,f@'{m1}↦'{m2}} base_val_binop Γ op vb2 vb4 : σb.
 Proof.
-  intros ? Hσ ?; destruct 1, 1; try done; inversion Hσ; simplify_equality';
+  intros ? Hσ ?; destruct 1 as [| | | |p1 p2| | | |],
+    1 as [| | | |p3 p4| | | |]; try done; inversion Hσ; simplify_equality';
     try first
     [ by refine_constructor; eauto using int_binop_typed, ptr_plus_refine
     | exfalso; by eauto using ptr_minus_ok_alive_l, ptr_minus_ok_alive_r,
         ptr_plus_ok_alive, ptr_compare_ok_alive_l, ptr_compare_ok_alive_r ].
   * erewrite ptr_compare_refine by eauto.
     refine_constructor. by case_match; apply int_typed_small.
-  * erewrite ptr_minus_refine by eauto. refine_constructor.
-    eapply ptr_minus_typed; eauto using ptr_refine_typed_l, ptr_refine_typed_r.
+  * erewrite <-(ptr_minus_refine _ _ _ _ _ p1 p2 p3 p4) by eauto.
+    refine_constructor; eauto using ptr_minus_typed.
 Qed.
 Lemma base_val_cast_ok_refine Γ α f m1 m2 vb1 vb2 τb σb :
   ✓ Γ → vb1 ⊑{Γ,α,f@'{m1}↦'{m2}} vb2 : τb →

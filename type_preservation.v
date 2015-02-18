@@ -49,8 +49,7 @@ Proof.
   intros ? [] ???.
   * typed_inversion_all; decompose_Forall_hyps; split_ands; auto.
     typed_constructor; eauto using addr_top_typed, addr_top_strict,
-      cmap_index_typed_valid, cmap_index_typed_representable,
-      lockset_empty_valid.
+      cmap_index_typed_valid, lockset_empty_valid.
   * typed_inversion_all; auto.
   * typed_inversion_all; auto 7.
   * typed_inversion_all.
@@ -76,8 +75,6 @@ Proof.
     rewrite <-and_assoc; apply and_wlog_l; intros; split_ands.
     + eapply mem_alloc_new_valid';
         eauto using TArray_valid, perm_full_valid, perm_full_mapped.
-      by rewrite size_of_array, Nat2Z.inj_mul, Z2Nat.id
-        by auto using Z_to_nat_neq_0_nonneg.
     + typed_constructor; eauto 10 using TArray_valid,
         addr_top_array_typed, mem_alloc_new_index_typed', lockset_valid_weaken.
     + eauto using mem_alloc_new_forward', TArray_valid.
@@ -220,7 +217,7 @@ Proof.
     split; eauto using mem_free_forward'.
     eexists; simpl; split_ands; repeat typed_constructor; eauto using
       ctx_typed_weaken, direction_typed_weaken, mem_free_forward',
-      mem_free_valid', cmap_index_typed_valid, cmap_index_typed_representable.
+      mem_free_valid', cmap_index_typed_valid.
     eapply stmt_typed_weaken; eauto using mem_free_forward'.
 Qed.
 Lemma csteps_preservation Γ δ S1 S2 f :

@@ -226,7 +226,7 @@ Proof.
     | H : _ ⊢ ?e : _, H2 : ∀ _, _ ⊢ ?e : _  → _ |- _ => specialize (H2 _ H)
     end; try typed_constructor; eauto using
       val_unop_typed, val_binop_typed, val_cast_typed, addr_top_typed,
-      cmap_index_typed_valid, cmap_index_typed_representable, addr_top_strict,
+      cmap_index_typed_valid, addr_top_strict,
       addr_elt_typed, addr_elt_strict, addr_elt_typed, addr_elt_strict,
       val_lookup_seg_typed, val_alter_const_typed, mem_lookup_typed.
   eapply purefuns_valid_lookup; eauto.

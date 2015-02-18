@@ -268,8 +268,7 @@ Inductive stmt_refine' (Γ : env K) (τs : list (type K))
   | SLabel_refine l :
      stmt_refine' Γ τs α f Δ1 Δ2 (label l) (label l) (false,None)
   | SLocal_refine' τ s1 s2 c mσ :
-     ✓{Γ} τ → int_typed (size_of Γ τ) sptrT →
-     stmt_refine' Γ (τ :: τs) α f Δ1 Δ2 s1 s2 (c,mσ) →
+     ✓{Γ} τ → stmt_refine' Γ (τ :: τs) α f Δ1 Δ2 s1 s2 (c,mσ) →
      stmt_refine' Γ τs α f Δ1 Δ2 (local{τ} s1) (local{τ} s2) (c,mσ)
   | SComp_refine s1 s2 s1' s2' c1 mσ1 c2 mσ2 mσ :
      stmt_refine' Γ τs α f Δ1 Δ2 s1 s2 (c1,mσ1) →
@@ -441,7 +440,6 @@ Global Instance funenv_refine:
   match δ1 !! g, δ2 !! g, Γ !! g with
   | Some s1, Some s2, Some (τs,τ) => ∃ cmτ,
      Forall (type_complete Γ) τs ∧
-     Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧
      s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : cmτ ∧ rettype_match cmτ τ ∧
      gotos s1 ⊆ labels s1 ∧ throws_valid 0 s1
   | None, None, None => True
@@ -625,7 +623,6 @@ Proof. by destruct 2; simpl; erewrite <-?stmt_refine_labels by eauto. Qed.
 Lemma funenv_lookup_refine_r Γ α f Δ1 Δ2 δ1 δ2 g s2 :
   δ1 ⊑{Γ,α,f@Δ1↦Δ2} δ2 → δ2 !! g = Some s2 → ∃ s1 τs τ cmτ,
     δ1 !! g = Some s1 ∧ Γ !! g = Some (τs,τ) ∧
-    Forall (λ τ', int_typed (size_of Γ τ') sptrT) τs ∧
     s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : cmτ ∧ rettype_match cmτ τ ∧
     gotos s1 ⊆ labels s1 ∧ throws_valid 0 s1.
 Proof. intros Hδ ?; specialize (Hδ g); repeat case_match; naive_solver. Qed.
@@ -799,7 +796,7 @@ Proof.
   intros ? Hδ; split.
   * intros g s ?; specialize (Hδ g); destruct (δ1 !! _),
       (Γ !! _) as [[τs τ]|]; simplify_option_equality; try done.
-    destruct Hδ as (cmτ&?&?&?&?&?&?).
+    destruct Hδ as (cmτ&?&?&?&?&?).
     erewrite <-stmt_refine_labels, <-stmt_refine_gotos by eauto.
     eauto 15 using stmt_refine_typed_r, stmt_refine_throws_valid.
   * rewrite elem_of_subseteq; intros g; rewrite !elem_of_dom.
@@ -1155,7 +1152,7 @@ Lemma funenv_refine_inverse Γ f Δ1 Δ2 δ1 δ2 :
 Proof.
   intros Hδ h; specialize (Hδ h); destruct (δ1 !! h) as [s1|],
     (δ2 !! h) as [s2|], (Γ !! h) as [[τs τ]|]; try done.
-  destruct Hδ as (cmτ&?&?&?&?&?&?); exists cmτ; split_ands; auto.
+  destruct Hδ as (cmτ&?&?&?&?&?); exists cmτ; split_ands; auto.
   * auto using stmt_refine_inverse.
   * by erewrite <-stmt_refine_gotos, <-stmt_refine_labels by eauto.
   * eauto using stmt_refine_throws_valid.
