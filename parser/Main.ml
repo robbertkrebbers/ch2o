@@ -1,6 +1,5 @@
 (* Copyright (c) 2012-2015, Freek Wiedijk and Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-
 #load "str.cma";;
 #load "nums.cma";;
 #load "unix.cma";;
@@ -183,7 +182,7 @@ let col = ref 0;;
 let the_anon = ref 0;;
 let the_compound_decls = ref ([]:(char list * decl) list);;
 let the_local_compound_decls = ref ([]:(char list * decl) list);;
-let the_printfs = ref ([]:(char list * (format list * decl)) list);;
+let the_printfs = ref ([]:(char list * (format list * ctype * cstmt)) list);;
 
 let uchar = {csign = Some Unsigned; crank = CCharRank};;
 let int_signed = {csign = Some Signed; crank = CIntRank};;
@@ -281,52 +280,6 @@ let rec args_of_printf n fmts =
      (Some (chars_of_int n), arg_of_printf length conv) ::
      args_of_printf (1 + n) fmts;;
 
-let printf_prelude () =
-  if !the_printfs = [] || not !printf_returns_int then [] else
-  let i = chars_of_string "i" and width = chars_of_string "width"
-  and n = chars_of_string "n" in
-  [(chars_of_string "len_core-%d",
-    FunDecl ([], CTFun([(Some n, CTInt int_signed);
-              (Some i, CTInt {csign = Some Unsigned; crank = CLongLongRank});
-              (Some width, CTInt int_signed)],
-             CTInt int_signed),
-      CSComp (CSIf (CEBinOp (CompOp EqOp,CEVar i,econst0),
-        CSDo (CEAssign (Assign,CEVar n,econst1)),
-        CSSkip),
-      CSComp (CSWhile (CEBinOp (CompOp LtOp,econst0,CEVar i),
-        CSComp (CSDo (CEAssign (PostOp (ArithOp PlusOp),CEVar n,econst1)),
-        CSDo (CEAssign (PreOp (ArithOp DivOp),CEVar i,econst (Int 10))))),
-      CSIf (CEBinOp (CompOp LtOp,CEVar n,CEVar width),
-        CSReturn (Some (CEVar width)),
-        CSReturn (Some (CEVar n)))))));
-   (chars_of_string "len_core_signed-%d",
-    FunDecl ([], CTFun ([(Some n, CTInt int_signed);
-              (Some i, CTInt {csign = Some Signed; crank = CLongLongRank});
-              (Some width, CTInt int_signed)],
-             CTInt int_signed),
-      CSReturn (Some (CEIf (CEBinOp (CompOp LtOp,CEVar i,econst0),
-       CEIf (CEBinOp (CompOp EqOp,CEVar i,
-         CEMin {csign = Some Signed; crank = CLongLongRank}),
-       CECall (CEVar (chars_of_string "len_core-%d"),
-         [econst1;CEVar i;CEVar width]),
-       CECall (CEVar (chars_of_string "len_core-%d"),
-         [econst1;CEBinOp (ArithOp MultOp,CEVar i,econst (Int (-1)));
-          CEVar width])),
-       CECall (CEVar (chars_of_string "len_core-%d"),
-         [CEVar n;CEVar i;CEVar width]))))));
-   (chars_of_string "len_core_str-%d",
-    FunDecl ([], CTFun ([(Some n, CTInt int_signed);
-              (Some i, CTPtr (CTInt {csign = None; crank = CCharRank}));
-              (Some width, CTInt int_signed)],
-             CTInt int_signed),
-      CSComp (CSWhile (CEUnOp
-          (NotOp,CEBinOp (CompOp EqOp,CEDeref (CEVar i),econst0)),
-        CSComp (CSDo (CEAssign (PostOp (ArithOp PlusOp),CEVar n,econst1)),
-        CSDo (CEAssign (PreOp (ArithOp PlusOp),CEVar i,econst (Int 1))))),
-       CSIf (CEBinOp (CompOp LtOp,CEVar n,CEVar width),
-        CSReturn (Some (CEVar width)),
-        CSReturn (Some (CEVar n))))))];;
-
 let rec length_of_printf fmts =
   match fmts with
   | [] -> 0
@@ -345,7 +298,7 @@ let printf_stmt fmts =
           body (1 + i) fmts)
     | Format (flags,width,_,"s") :: fmts ->
         CSComp (CSDo (CEAssign (PreOp (ArithOp PlusOp), CEVar n,
-          CECall (CEVar (chars_of_string "len_core_str-%d"),
+          CECall (CEVar (chars_of_string "__ch2o_len_core_string"),
             [econst0; CEVar (chars_of_int i); econst (Int (width))]))),
           body (1 + i) fmts)
     | Format (flags,width,_,conv) :: fmts ->
@@ -354,7 +307,7 @@ let printf_stmt fmts =
           then econst1 else econst0 in
         let f =
           if String.contains conv 'u'
-          then "len_core-%d" else "len_core_signed-%d" in
+          then "__ch2o_len_core" else "__ch2o_len_core_signed" in
         CSComp (CSDo (CEAssign (PreOp (ArithOp PlusOp), CEVar n,
           CECall (CEVar (chars_of_string f),
             [has_prefix; CEVar (chars_of_int i); econst (Int (width))]))),
@@ -658,17 +611,15 @@ and cexpr_of_expression x =
   | Cabs.CALL (Cabs.VARIABLE "free",[y]) -> CEFree (cexpr_of_expression y)
   | Cabs.CALL (Cabs.VARIABLE "abort",[]) -> CEAbort
   | Cabs.CALL (Cabs.VARIABLE "printf", Cabs.CONSTANT(Cabs.CONST_STRING s)::l) ->
-      let fs = "printf-"^String.escaped s in
-      let f = chars_of_string fs in
+      let f = chars_of_string ("__ch2o_printf_" ^ String.escaped s) in
       begin try let _ = List.assoc f !the_printfs in ()
       with Not_found ->
         let fmts = parse_printf s in
-        let args = args_of_printf 0 fmts in
         let decl =
           if !printf_returns_int
-          then FunDecl ([],CTFun(args,CTInt int_signed),printf_stmt fmts)
-          else FunDecl ([],CTFun(args,CTVoid),CSSkip) in
-        the_printfs := !the_printfs @ [(f,(fmts,decl))] end;
+          then (fmts,CTInt int_signed,printf_stmt fmts)
+          else (fmts,CTVoid,CSSkip) in
+        the_printfs := !the_printfs @ [(f,decl)] end;
       CECall (CEVar f,List.map cexpr_of_expression l)
   | Cabs.CALL (y,l) ->
       CECall (cexpr_of_expression y,List.map cexpr_of_expression l)
@@ -823,9 +774,16 @@ let decls_of_cabs x =
     !the_local_compound_decls @ decls_of_definition d
   ) x) in
   (chars_of_string "main",
-    printf_prelude()@
-    List.map (fun (x,(_,d)) -> (x,d)) !the_printfs@
-    decls);;
+    (* the printf prototypes *)
+    List.map (fun (x,(fmt,ret,s)) ->
+      (x, GlobDecl ([], CTFun(args_of_printf 0 fmt,ret), None))
+    ) !the_printfs @
+    (* the actual declarations, including the printf helpers from prelude.v *)
+    decls @
+    (* the printfs *)
+    List.map (fun (x,(fmt,ret,s)) ->
+      (x, FunDecl ([], CTFun(args_of_printf 0 fmt,ret), s))
+    ) !the_printfs);;
 
 let decls_of_file x = decls_of_cabs (cabs_of_file x);;
 
@@ -836,9 +794,9 @@ exception CH2O_exited of num;;
 let event_of_state env tenv x =
   match x.sFoc with
   | Call (f,vs) ->
-     (try let fmts,_ =
-        List.assoc f !the_printfs in do_printf env tenv x.sMem fmts vs
-      with Not_found -> [])
+     begin try let fmts,_,_ =
+       List.assoc f !the_printfs in do_printf env tenv x.sMem fmts vs
+     with Not_found -> [] end
   | _ -> [];;
 
 let initial_of_decls arch (m,x) =
