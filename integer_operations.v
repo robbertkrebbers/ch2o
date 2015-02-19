@@ -30,12 +30,10 @@ Proof. solve_decision. Defined.
 Instance unop_dec (op1 op2 : unop) : Decision (op1 = op2).
 Proof. solve_decision. Defined.
 
-Definition Z_comp (c : compop) (x y : Z) : bool :=
-  match c with
-  | EqOp => bool_decide (x = y)
-  | LtOp => bool_decide (x < y)
-  | LeOp => bool_decide (x ≤ y)
-  end.
+Definition Z_comp (c : compop) (x y : Z) : Prop :=
+  match c with EqOp => x = y | LtOp => x < y | LeOp => x ≤ y end.
+Instance Z_comp_dec (c : compop) (x y : Z) : Decision (Z_comp c x y).
+Proof. case c; solve_decision. Defined.
 Definition bool_bitop (op : bitop) : bool → bool → bool :=
   match op with AndOp => (&&) | OrOp => (||) | XorOp => xorb end.
 
@@ -225,7 +223,7 @@ Section int_operations.
     match op with
     | CompOp op =>
        let τi' := int_promote τi1 ∪ int_promote τi2 in
-       if Z_comp op (int_cast τi' x1) (int_cast τi' x2) then 1 else 0
+       if decide (Z_comp op (int_cast τi' x1) (int_cast τi' x2)) then 1 else 0
     | ArithOp op => int_arithop op x1 τi1 x2 τi2
     | ShiftOp op => int_shiftop op x1 τi1 x2 τi2
     | BitOp op =>

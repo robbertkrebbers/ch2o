@@ -8,13 +8,14 @@ Section operations_definitions.
   Context `{Env K}.
 
   (** ** Operations on addresses *)
-  Definition addr_eq_ok (Γ : env K) (m : mem K) (a1 a2 : addr K) : Prop :=
+  Definition addr_compare_ok (Γ : env K) (m : mem K)
+      (c : compop) (a1 a2 : addr K) : Prop :=
     index_alive' m (addr_index a1) ∧ index_alive' m (addr_index a2) ∧
-    (addr_index a1 ≠ addr_index a2 → addr_strict Γ a1 ∧ addr_strict Γ a2).
-  Definition addr_eq (Γ : env K) (a1 a2 : addr K) : bool :=
-    if decide (addr_index a1 = addr_index a2)
-    then bool_decide (addr_object_offset Γ a1 = addr_object_offset Γ a2)
-    else false.
+    (addr_index a1 ≠ addr_index a2 →
+      c = EqOp ∧ addr_strict Γ a1 ∧ addr_strict Γ a2).
+  Definition addr_compare (Γ : env K) (c : compop) (a1 a2 : addr K) : bool :=
+    bool_decide (addr_index a1 = addr_index a2 ∧
+      Z_comp c (addr_object_offset Γ a1) (addr_object_offset Γ a2)).
   Definition addr_plus_ok (Γ : env K) (m : mem K)
       (j : Z) (a : addr K) : Prop :=
     index_alive' m (addr_index a) ∧
@@ -50,8 +51,7 @@ Section operations_definitions.
   Definition ptr_compare_ok (Γ : env K)  (m : mem K)
       (c : compop) (p1 p2 : ptr K) : Prop :=
     match p1, p2, c with
-    | Ptr a1, Ptr a2, EqOp => addr_eq_ok Γ m a1 a2
-    | Ptr a1, Ptr a2, _ => addr_minus_ok Γ m a1 a2
+    | Ptr a1, Ptr a2, _ => addr_compare_ok Γ m c a1 a2
     | FunPtr f1 _ _, FunPtr f2 _ _, EqOp => True
     | NULL _, NULL _, _ => True
     | NULL _, Ptr a2, EqOp => index_alive' m (addr_index a2)
@@ -62,8 +62,7 @@ Section operations_definitions.
     end.
   Definition ptr_compare (Γ : env K) (c : compop) (p1 p2 : ptr K) : bool :=
     match p1, p2, c with
-    | Ptr a1, Ptr a2, EqOp => addr_eq Γ a1 a2
-    | Ptr a1, Ptr a2, _ => Z_comp c (addr_minus Γ a1 a2) 0
+    | Ptr a1, Ptr a2, _ => addr_compare Γ c a1 a2
     | FunPtr f1 _ _, FunPtr f2 _ _, EqOp => bool_decide (f1 = f2)
     | NULL _, NULL _, (EqOp | LeOp) => true
     | NULL _, NULL _, LtOp => false
@@ -323,20 +322,20 @@ Hint Immediate index_alive_1'.
 Hint Resolve index_alive_2'.
 
 (** ** Properties of operations on addresses *)
-Lemma addr_eq_ok_weaken Γ1 Γ2 Δ1 m1 m2 a1 a2 τp1 τp2 :
+Lemma addr_compare_ok_weaken Γ1 Γ2 Δ1 m1 m2 c a1 a2 τp1 τp2 :
   ✓ Γ1 → (Γ1,Δ1) ⊢ a1 : τp1 → (Γ1,Δ1) ⊢ a2 : τp2 →
   Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
-  addr_eq_ok Γ1 m1 a1 a2 → Γ1 ⊆ Γ2 → addr_eq_ok Γ2 m2 a1 a2.
-Proof. unfold addr_eq_ok. intuition eauto using addr_strict_weaken. Qed.
-Lemma addr_eq_ok_erase Γ m a1 a2 :
-  addr_eq_ok Γ (cmap_erase m) a1 a2 = addr_eq_ok Γ m a1 a2.
-Proof. unfold addr_eq_ok. by rewrite !index_alive_erase'. Qed.
-Lemma addr_eq_weaken Γ1 Γ2 Δ1 a1 a2 τp1 τp2 :
+  addr_compare_ok Γ1 m1 c a1 a2 → Γ1 ⊆ Γ2 → addr_compare_ok Γ2 m2 c a1 a2.
+Proof. unfold addr_compare_ok; intuition eauto using addr_strict_weaken. Qed.
+Lemma addr_compare_ok_erase Γ m c a1 a2 :
+  addr_compare_ok Γ (cmap_erase m) c a1 a2 = addr_compare_ok Γ m c a1 a2.
+Proof. unfold addr_compare_ok; by rewrite !index_alive_erase'. Qed.
+Lemma addr_compare_weaken Γ1 Γ2 Δ1 a1 a2 c τp1 τp2 :
   ✓ Γ1 → (Γ1,Δ1) ⊢ a1 : τp1 → (Γ1,Δ1) ⊢ a2 : τp2 →
-  Γ1 ⊆ Γ2 → addr_eq Γ1 a1 a2 = addr_eq Γ2 a1 a2.
+  Γ1 ⊆ Γ2 → addr_compare Γ1 c a1 a2 = addr_compare Γ2 c a1 a2.
 Proof.
-  unfold addr_eq; intros.
-  by erewrite !(addr_object_offset_weaken Γ1 Γ2) by eauto.
+  unfold addr_compare; intros;
+    by erewrite ?(addr_object_offset_weaken Γ1 Γ2) by eauto.
 Qed.
 Lemma addr_plus_typed Γ Δ m a σp j :
   ✓ Γ → (Γ,Δ) ⊢ a : σp → addr_plus_ok Γ m j a →
@@ -549,21 +548,18 @@ Lemma ptr_compare_ok_weaken Γ1 Γ2 Δ1 m1 m2 c p1 p2 τp1 τp2 :
   Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
   ptr_compare_ok Γ2 m2 c p1 p2.
 Proof.
-  destruct 2, 1, c; simpl; eauto using addr_minus_ok_weaken, addr_eq_ok_weaken.
+  destruct 2, 1; simpl; repeat case_match; eauto using addr_compare_ok_weaken.
 Qed.
 Lemma ptr_compare_ok_erase Γ m c p1 p2:
   ptr_compare_ok Γ (cmap_erase m) c p1 p2 = ptr_compare_ok Γ m c p1 p2.
 Proof.
-  unfold ptr_compare_ok. by destruct p1, p2;
-    rewrite ?index_alive_erase', ?addr_minus_ok_erase, ?addr_eq_ok_erase.
+  unfold ptr_compare_ok.
+  by destruct p1, p2; rewrite ?index_alive_erase', ?addr_compare_ok_erase.
 Qed.
 Lemma ptr_compare_weaken Γ1 Γ2 Δ1 c p1 p2 τp1 τp2 :
   ✓ Γ1 → (Γ1,Δ1) ⊢ p1 : τp1 → (Γ1,Δ1) ⊢ p2 : τp2 →
   Γ1 ⊆ Γ2 → ptr_compare Γ1 c p1 p2 = ptr_compare Γ2 c p1 p2.
-Proof.
-  destruct 2,1,c; simpl; intros; eauto 2 using addr_eq_weaken;
-    by erewrite addr_minus_weaken by eauto.
-Qed.
+Proof. destruct 2, 1; simpl; intros; eauto 2 using addr_compare_weaken. Qed.
 Lemma ptr_plus_ok_weaken Γ1 Γ2 Δ1 m1 m2 p τp j :
   ✓ Γ1 → (Γ1,Δ1) ⊢ p : τp → ptr_plus_ok Γ1 m1 j p →
   Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
@@ -598,12 +594,12 @@ Proof. destruct p; simpl; auto using addr_cast_ok_erase. Qed.
 Lemma ptr_compare_ok_alive_l Γ m c p1 p2 :
   ptr_compare_ok Γ m c p1 p2 → ptr_alive ('{m}) p1.
 Proof.
-  destruct p1, p2, c; simpl; unfold addr_minus_ok, addr_eq_ok; naive_solver.
+  destruct p1, p2, c; simpl; unfold addr_minus_ok, addr_compare_ok; naive_solver.
 Qed.
 Lemma ptr_compare_ok_alive_r Γ m c p1 p2 :
   ptr_compare_ok Γ m c p1 p2 → ptr_alive ('{m}) p2.
 Proof.
-  destruct p1 as [|[]|], p2 as [|[]|], c; csimpl; unfold addr_eq_ok; naive_solver.
+  destruct p1 as [|[]|], p2 as [|[]|], c; csimpl; unfold addr_compare_ok; naive_solver.
 Qed.
 Lemma ptr_plus_ok_alive Γ m p j : ptr_plus_ok Γ m j p → ptr_alive ('{m}) p.
 Proof. destruct p. done. intros [??]; simpl; eauto. done. Qed.
