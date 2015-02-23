@@ -125,10 +125,10 @@ Arguments convert_ptrs _ _ _ : simpl never.
 Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
 Hint Extern 0 (_ ⊢ _ : _ ↣ _) => typed_constructor.
 Hint Extern 1 (int_typed _ _) => by apply int_typed_small.
-Hint Extern 10 (ptr_cast_typed _ _ _) => constructor.
-Hint Extern 10 (cast_typed _ _ _) => constructor.
-Hint Extern 10 (base_cast_typed _ _ _) => constructor.
-Hint Extern 0 (assign_typed _ _ _ _ _) => constructor.
+Hint Extern 10 (ptr_cast_typed _ _) => constructor.
+Hint Extern 10 (cast_typed _ _) => constructor.
+Hint Extern 10 (base_cast_typed _ _) => constructor.
+Hint Extern 0 (assign_typed _ _ _ _) => constructor.
 Hint Immediate lockset_empty_valid.
 Hint Resolve memenv_subseteq_forward.
 Hint Immediate rettype_union_l rettype_union_r.
@@ -621,7 +621,8 @@ Proof.
   destruct (IH S S2 e τe) as (?&?&?&?); auto; weaken.
   destruct (IHces S2 S' es' τs) as (?&?&?&?); auto; weaken.
   destruct (to_R_NULL_typed (to_env S') (to_mem S')
-    (to_stack_types Δl) τ e τe e' τ'); eauto 10 using cast_typed_weaken.
+    (to_stack_types Δl) τ e τe e' τ'); weaken;
+    eauto 10 using cast_typed_type_valid.
 Qed.
 Lemma to_compound_init_typed S S' Δl e τ rs inits e' :
   Forall (λ i,
@@ -731,7 +732,7 @@ Proof.
        destruct (IH _ _ k _ H) as (?&?&?); auto 1; [clear IH H]; weaken
     | H : lookup_var _ _ _ = _ |- _ =>
        apply lookup_var_typed in H; try done; [destruct H as (?&?&->)]
-    | H : assign_type_of _ _ _ _ = _ |- _ => apply assign_type_of_sound in H
+    | H : assign_type_of _ _ _ = _ |- _ => apply assign_type_of_sound in H
     | H : unop_type_of _ _ = _ |- _ => apply unop_type_of_sound in H
     | H : binop_type_of _ _ _ = _ |- _ => apply binop_type_of_sound in H
     | H : lookup_typedef _ _ _ = _ |- _ =>
@@ -847,6 +848,7 @@ Proof.
   destruct (insert_object_valid S2 S' o' (val_0 (to_env S2) τ') perm_full τ')
     as (?&?&?&?&?); auto using val_0_typed; weaken.
 Qed.
+Hint Immediate cast_typed_type_valid.
 Lemma to_stmt_typed S S' Δl τ cs s cmτ :
   to_stmt τ Δl cs S = mret (s,cmτ) S' → ✓ S → local_env_valid S Δl →
   ✓{to_env S} (TType τ) →
@@ -871,7 +873,7 @@ Proof.
     | H : alloc_global _ _ _ _ _ _ = _ |- _ =>
        apply alloc_global_typed in H; eauto 2; [destruct H as (?&?&?)]; weaken
     | H : to_R_NULL _ _ = _ |- _ =>
-       eapply to_R_NULL_typed in H; eauto; [destruct H]
+       eapply to_R_NULL_typed in H; eauto; [destruct H; weaken]
     | _ : context [to_R (?e,?τlr)], H : (?Γ,_,_) ⊢ ?e : _ |- _ =>
        let H2 := fresh in destruct (to_R (e,τlr)) eqn:H2; simplify_equality';
        eapply (to_R_typed Γ) in H2; eauto 2; [clear H]; destruct H2; weaken

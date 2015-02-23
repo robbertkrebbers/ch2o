@@ -38,7 +38,7 @@ Inductive expr_refine' (Γ : env K)
      expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl τ) →
      expr_refine' Γ τs α f Δ1 Δ2 (& e1) (& e2) (inr (TType τ.*))
   | EAssign_refine ass e1 e2 e1' e2' τ τ' σ :
-     assign_typed Γ τ τ' ass σ →
+     assign_typed τ τ' ass σ →
      expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl τ) →
      expr_refine' Γ τs α f Δ1 Δ2 e1' e2' (inr τ') →
      expr_refine' Γ τs α f Δ1 Δ2
@@ -83,7 +83,7 @@ Inductive expr_refine' (Γ : env K)
      expr_refine' Γ τs α f Δ1 Δ2 e1' e2' (inr τ2) →
      expr_refine' Γ τs α f Δ1 Δ2 (e1 ,, e1') (e2 ,, e2') (inr τ2)
   | ECast_refine e1 e2 τ σ :
-     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr τ) → cast_typed Γ τ σ → 
+     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr τ) → cast_typed τ σ → ✓{Γ} σ →
      expr_refine' Γ τs α f Δ1 Δ2 (cast{σ} e1) (cast{σ} e2) (inr σ)
   | EInsert_refine r e1 e2 e1' e2' τ σ :
      Γ ⊢ r : τ ↣ σ →
@@ -113,7 +113,7 @@ Section expr_refine_ind.
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ →
     P e1 e2 (inl τ) → P (& e1) (& e2) (inr (TType τ.*))).
   Context (Passign : ∀ ass e1 e2 e1' e2' τ τ' σ,
-    assign_typed Γ τ τ' ass σ →
+    assign_typed τ τ' ass σ →
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ → P e1 e2 (inl τ) →
     e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' → P e1' e2' (inr τ') →
     P (e1 ::={ass} e1') (e2 ::={ass} e2') (inr σ)).
@@ -158,7 +158,7 @@ Section expr_refine_ind.
     P (e1 ,, e1') (e2 ,, e2') (inr τ')).
   Context (Pcast : ∀ e1 e2 τ σ,
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ → P e1 e2 (inr τ) →
-    cast_typed Γ τ σ → P (cast{σ} e1) (cast{σ} e2) (inr σ)).
+    cast_typed τ σ → ✓{Γ} σ → P (cast{σ} e1) (cast{σ} e2) (inr σ)).
   Context (Pinsert : ∀ r e1 e2 e1' e2' τ σ,
     Γ ⊢ r : τ ↣ σ →
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr σ→ P e1 e2 (inr σ) →
@@ -178,11 +178,11 @@ Inductive ectx_item_refine' (Γ : env K) (τs: list (type K))
   | CLtoR_refine τ :
      ectx_item_refine' Γ τs α f Δ1 Δ2 (& □) (& □) (inl τ) (inr (TType τ.*))
   | CAssignL_refine ass e1' e2' τ τ' σ :
-     assign_typed Γ τ τ' ass σ → e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' →
+     assign_typed τ τ' ass σ → e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' →
      ectx_item_refine' Γ τs α f Δ1 Δ2
        (□ ::={ass} e1') (□ ::={ass} e2') (inl τ) (inr σ)
   | CAssignR_refine ass e1 e2 τ τ' σ :
-     assign_typed Γ τ τ' ass σ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ →
+     assign_typed τ τ' ass σ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ →
      ectx_item_refine' Γ τs α f Δ1 Δ2
        (e1 ::={ass} □) (e2 ::={ass} □) (inr τ') (inr σ)
   | CCallL_refine es1 es2 σs σ :
@@ -228,7 +228,7 @@ Inductive ectx_item_refine' (Γ : env K) (τs: list (type K))
      e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' →
      ectx_item_refine' Γ τs α f Δ1 Δ2 (□,, e1') (□,, e2') (inr τ) (inr τ')
   | CCast_refine τ σ :
-     cast_typed Γ τ σ → ectx_item_refine' Γ τs α f Δ1 Δ2
+     cast_typed τ σ → ✓{Γ} σ → ectx_item_refine' Γ τs α f Δ1 Δ2
        (cast{σ} □) (cast{σ} □) (inr τ) (inr σ)
   | CInsertL_refine r e1' e2' τ σ :
      Γ ⊢ r : τ ↣ σ → e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ →

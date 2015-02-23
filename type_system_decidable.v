@@ -8,12 +8,11 @@ Section deciders.
 Context `{Env K}.
 Notation envs := (env K * memenv K * list (type K))%type.
 
-Definition assign_type_of (Γ : env K)
-    (τ1 τ2 : type K) (ass : assign) : option (type K) :=
+Definition assign_type_of (τ1 τ2 : type K) (ass : assign) : option (type K) :=
   match ass with
-  | Assign => guard (cast_typed Γ τ2 τ1); Some τ1
-  | PreOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed Γ σ τ1); Some τ1
-  | PostOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed Γ σ τ1); Some τ1
+  | Assign => guard (cast_typed τ2 τ1); Some τ1
+  | PreOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed σ τ1); Some τ1
+  | PostOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed σ τ1); Some τ1
   end.
 Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
   fix go Γs e {struct e} := let _ : TypeCheck envs _ _ := @go in
@@ -35,7 +34,7 @@ Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
   | e1 ::={ass} e2 =>
      τ1 ← type_check Γs e1 ≫= maybe inl;
      τ2 ← type_check Γs e2 ≫= maybe inr;
-     inr <$> assign_type_of Γ τ1 τ2 ass
+     inr <$> assign_type_of τ1 τ2 ass
   | call e @ es =>
      '(σs,σ) ← (type_check Γs e ≫= maybe (inr ∘ TBase ∘ TPtr)) ≫= maybe2 TFun;
      σs' ← mapM (λ e, type_check Γs e ≫= maybe inr) es;
@@ -71,7 +70,7 @@ Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
      inr <$> type_check Γs e2 ≫= maybe inr
   | cast{σ} e =>
      τ ← type_check Γs e ≫= maybe inr;
-     guard (cast_typed Γ τ σ); Some (inr σ)
+     guard (cast_typed τ σ); guard (✓{Γ} σ); Some (inr σ)
   | #[r:=e1] e2 =>
      σ ← type_check Γs e1 ≫= maybe inr;
      τ ← type_check Γs e2 ≫= maybe inr;
@@ -88,10 +87,10 @@ Global Instance ectx_item_lookup :
   | & □, inl τ => Some (inr (TType τ.*))
   | □ ::={ass} e2, inl τ1 =>
      τ2 ← type_check Γs e2 ≫= maybe inr;
-     inr <$> assign_type_of Γ τ1 τ2 ass
+     inr <$> assign_type_of τ1 τ2 ass
   | e1 ::={ass} □, inr τ2 =>
      τ1 ← type_check Γs e1 ≫= maybe inl;
-     inr <$> assign_type_of Γ τ1 τ2 ass
+     inr <$> assign_type_of τ1 τ2 ass
   | call □ @ es, inr τ =>
      '(σs,σ) ← maybe (TBase ∘ TPtr) τ ≫= maybe2 TFun;
      σs' ← mapM (λ e, type_check Γs e ≫= maybe inr) es;
@@ -122,7 +121,7 @@ Global Instance ectx_item_lookup :
      τ3 ← type_check Γs e3 ≫= maybe inr;
      guard (τ2 = τ3); Some (inr τ2)
   | □ ,, e2, inr τ1 => inr <$> type_check Γs e2 ≫= maybe inr
-  | cast{σ} □, inr τ => guard (cast_typed Γ τ σ); Some (inr σ)
+  | cast{σ} □, inr τ => guard (cast_typed τ σ); guard (✓{Γ} σ); Some (inr σ)
   | #[r:=□] e2, inr σ =>
      τ ← type_check Γs e2 ≫= maybe inr;
      σ' ← τ !!{Γ} r;
@@ -279,15 +278,15 @@ Hint Immediate (path_type_check_sound (R:=ref _)).
 Hint Immediate unop_type_of_sound binop_type_of_sound.
 Arguments rettype_match _ _ _ : simpl never.
 Arguments rettype_match_dec _ _ _ _ : simpl never.
-Lemma assign_type_of_sound Γ ass τ1 τ2 σ :
-  assign_type_of Γ τ1 τ2 ass = Some σ → assign_typed Γ τ1 τ2 ass σ.
+Lemma assign_type_of_sound ass τ1 τ2 σ :
+  assign_type_of τ1 τ2 ass = Some σ → assign_typed τ1 τ2 ass σ.
 Proof.
   destruct ass; intros; simplify_option_equality;
     econstructor; eauto using binop_type_of_sound.
 Qed.
 Hint Immediate assign_type_of_sound.
-Lemma assign_type_of_complete Γ ass τ1 τ2 σ :
-  assign_typed Γ τ1 τ2 ass σ → assign_type_of Γ τ1 τ2 ass = Some σ.
+Lemma assign_type_of_complete ass τ1 τ2 σ :
+  assign_typed τ1 τ2 ass σ → assign_type_of τ1 τ2 ass = Some σ.
 Proof.
   by destruct 1; simplify_option_equality;
     erewrite ?binop_type_of_complete by eauto; simplify_option_equality.

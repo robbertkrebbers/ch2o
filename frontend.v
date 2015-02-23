@@ -427,7 +427,7 @@ Definition to_call_args
   | ce :: ces, τ :: τs =>
      '(e,σ) ← to_R_NULL τ <$> to_expr ce;
      Γ ← gets to_env;
-     guard (cast_typed Γ σ τ)
+     guard (cast_typed σ τ)
        with "function applied to arguments of incorrect type";
      (cast{τ} e ::) <$> go ces τs
   | _, _ => fail "function applied to the wrong number of arguments"
@@ -538,7 +538,7 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
      τ1 ← error_of_option (maybe LT τe1) "assigning to r-value";
      '(e2,τ2) ← to_R_NULL τ1 <$> to_expr Δl ce2;
      Γ ← gets to_env;
-     σ ← error_of_option (assign_type_of Γ τ1 τ2 ass)
+     σ ← error_of_option (assign_type_of τ1 τ2 ass)
        "assignment cannot be typed";
      mret (e1 ::={ass} e2, RT σ)
   | CECall ce ces =>
@@ -644,7 +644,7 @@ with to_init_expr `{Env K} (Δl : local_env K)
      | None => 
         '(e,τ) ← to_R_NULL σ <$> to_expr Δl ce;
         Γ ← gets to_env;
-        guard (cast_typed Γ τ σ) with "cast or initializer cannot be typed";
+        guard (cast_typed τ σ) with "cast or initializer cannot be typed";
         mret (cast{σ} e)
      end
   | CCompoundInit inits =>
@@ -818,7 +818,7 @@ Definition to_stmt (τret : type K) :
      '(e,τ') ← to_R_NULL τret <$> to_expr Δl ce;
      guard (τ' ≠ voidT) with "return expression has type void";
      Γ ← gets to_env;
-     guard (cast_typed Γ τ' τret) with "return expression has incorrect type";
+     guard (cast_typed τ' τret) with "return expression has incorrect type";
      mret (ret (cast{τret} e), (true, Some τret))
   | CSReturn None => mret (ret (#voidV), (true, Some voidT))
   | CSScope cs => go (None :: Δl) cs

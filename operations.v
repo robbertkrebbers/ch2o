@@ -92,16 +92,14 @@ Section operations_definitions.
     | _, _ => 0
     end.
   Global Arguments ptr_minus _ !_ !_ /.
-  Inductive ptr_cast_typed (Γ : env K) : ptr_type K → ptr_type K → Prop :=
-    | TAny_to_TAny_cast_typed : ptr_cast_typed Γ TAny TAny
-    | TType_to_TType_cast_typed τ : ptr_cast_typed Γ (TType τ) (TType τ)
-    | TType_to_TAny_cast_typed τ : ptr_cast_typed Γ (TType τ) TAny
-    | TType_to_TChar_cast_typed τ : ptr_cast_typed Γ (TType τ) ucharT
-    | TAny_to_TType_cast_typed τ :
-       ✓{Γ} (TType τ) → ptr_cast_typed Γ TAny (TType τ)
-    | TChar_to_TType_cast_typed τ :
-       ✓{Γ} (TType τ) → ptr_cast_typed Γ ucharT (TType τ)
-    | TFun_to_TFun_cast_typed τs τ : ptr_cast_typed Γ (τs ~> τ) (τs ~> τ).
+  Inductive ptr_cast_typed : ptr_type K → ptr_type K → Prop :=
+    | TAny_to_TAny_cast_typed : ptr_cast_typed TAny TAny
+    | TType_to_TType_cast_typed τ : ptr_cast_typed (TType τ) (TType τ)
+    | TType_to_TAny_cast_typed τ : ptr_cast_typed (TType τ) TAny
+    | TType_to_TChar_cast_typed τ : ptr_cast_typed (TType τ) ucharT
+    | TAny_to_TType_cast_typed τ : ptr_cast_typed TAny (TType τ)
+    | TChar_to_TType_cast_typed τ : ptr_cast_typed ucharT (TType τ)
+    | TFun_to_TFun_cast_typed τs τ : ptr_cast_typed (τs ~> τ) (τs ~> τ).
   Definition ptr_cast_ok (Γ : env K) (m : mem K)
       (σp : ptr_type K) (p : ptr K) : Prop :=
     match p with Ptr a => addr_cast_ok Γ m σp a | _ => True end.
@@ -209,11 +207,11 @@ Section operations_definitions.
     end.
   Global Arguments base_val_binop _ !_ !_ !_ /.
 
-  Inductive base_cast_typed (Γ : env K) : base_type K → base_type K → Prop :=
-    | TVoid_cast_typed τb : base_cast_typed Γ τb voidT
-    | TInt_cast_typed τi1 τi2 : base_cast_typed Γ (intT τi1) (intT τi2)
+  Inductive base_cast_typed : base_type K → base_type K → Prop :=
+    | TVoid_cast_typed τb : base_cast_typed τb voidT
+    | TInt_cast_typed τi1 τi2 : base_cast_typed (intT τi1) (intT τi2)
     | TPtr_to_TPtr_cast_typed τp1 τp2 :
-       ptr_cast_typed Γ τp1 τp2 → base_cast_typed Γ (τp1.*) (τp2.*).
+       ptr_cast_typed τp1 τp2 → base_cast_typed (τp1.*) (τp2.*).
   Definition base_val_cast_ok (Γ : env K) (m : mem K)
       (τb : base_type K) (vb : base_val K) : Prop :=
     match vb, τb with
@@ -288,11 +286,11 @@ Section operations_definitions.
     end.
   Global Arguments val_binop _ !_ !_ !_ /.
 
-  Inductive cast_typed (Γ : env K) : type K → type K → Prop :=
-    | cast_typed_self τ : cast_typed Γ τ τ
+  Inductive cast_typed : type K → type K → Prop :=
+    | cast_typed_self τ : cast_typed τ τ
     | TBase_cast_typed τb1 τb2 :
-       base_cast_typed Γ τb1 τb2 → cast_typed Γ (baseT τb1) (baseT τb2)
-    | TBase_TVoid_cast_typed τ : cast_typed Γ τ voidT.
+       base_cast_typed τb1 τb2 → cast_typed (baseT τb1) (baseT τb2)
+    | TBase_TVoid_cast_typed τ : cast_typed τ voidT.
   Definition val_cast_ok (Γ : env K) (m : mem K)
       (τp : ptr_type K) (v : val K) : Prop :=
     match v, τp with
@@ -505,25 +503,17 @@ Proof. destruct p1, p2; apply _. Defined.
 Global Instance ptr_cast_ok_dec Γ m σp p : Decision (ptr_cast_ok Γ m σp p).
 Proof. destruct p; apply _. Defined.
 
-Lemma ptr_cast_typed_type_valid Γ τp σp :
-  ptr_cast_typed Γ τp σp → ✓{Γ} τp → ✓{Γ} σp.
-Proof. destruct 1; eauto using TInt_valid, TAny_ptr_valid, TBase_ptr_valid. Qed.
-Global Instance ptr_cast_typed_dec Γ τp σp : Decision (ptr_cast_typed Γ τp σp).
+Global Instance ptr_cast_typed_dec τp σp : Decision (ptr_cast_typed τp σp).
 Proof.
  refine
   match τp, σp with
-  | (TType _|TAny), TAny => left _
-  | TAny, TType τ2 => cast_if (decide (✓{Γ} (TType τ2)))
-  | TType τ1, TType τ2 =>
-     cast_if (decide (τ1 = τ2 ∨ τ2 = ucharT ∨ τ1 = ucharT ∧ ✓{Γ} (TType τ2)))
+  | (TType _|TAny), TAny | TAny, TType _ => left _
+  | TType τ1, TType τ2 => cast_if (decide (τ1 = τ2 ∨ τ2 = ucharT ∨ τ1 = ucharT))
   | τs1 ~> τ1, τs2 ~> τ2 => cast_if_and (decide (τs1 = τs2)) (decide (τ1 = τ2))
   | _, _ => right _
-  end%BT; try abstract first [by intuition; subst; constructor
-    |by inversion 1; naive_solver eauto using TBase_ptr_valid, TInt_valid].
+  end%BT;
+  abstract first [by intuition; subst; constructor |by inversion 1; intuition].
 Defined.
-Lemma ptr_cast_typed_weaken Γ1 Γ2 τp σp :
-  ptr_cast_typed Γ1 τp σp → Γ1 ⊆ Γ2 → ptr_cast_typed Γ2 τp σp.
-Proof. destruct 1; constructor; eauto using ptr_type_valid_weaken. Qed.
 
 Lemma ptr_plus_typed Γ Δ m p σp j :
   ✓ Γ → (Γ,Δ) ⊢ p : σp → ptr_plus_ok Γ m j p →
@@ -535,12 +525,14 @@ Proof.
   destruct p1,p2; simpl; eauto using addr_minus_typed, int_typed_small with lia.
 Qed.
 Lemma ptr_cast_typed' Γ Δ m p τp σp :
-  (Γ,Δ) ⊢ p : τp → ptr_cast_typed Γ τp σp →
+  (Γ,Δ) ⊢ p : τp → ptr_cast_typed τp σp → ✓{Γ} σp →
   ptr_cast_ok Γ m σp p → (Γ,Δ) ⊢ ptr_cast σp p : σp.
 Proof.
-  destruct 1; inversion 1; intros; simplify_equality'; constructor;
-    eauto using addr_cast_typed, TAny_ptr_valid, TBase_ptr_valid, TInt_valid.
+  destruct 1; inversion 1; intros; simplify_equality';
+    constructor; eauto using addr_cast_typed.
 Qed.
+Lemma ptr_cast_typed_self τp : ptr_cast_typed τp τp.
+Proof. destruct τp; constructor. Qed.
 
 Lemma ptr_compare_ok_weaken Γ1 Γ2 Δ1 m1 m2 c p1 p2 τp1 τp2 :
   ✓ Γ1 → (Γ1,Δ1) ⊢ p1 : τp1 → (Γ1,Δ1) ⊢ p2 : τp2 →
@@ -655,12 +647,6 @@ Proof. destruct 1; constructor. Qed.
 Lemma base_binop_typed_type_valid Γ op τb1 τb2 σb :
   base_binop_typed op τb1 τb2 σb → ✓{Γ} τb1 → ✓{Γ} τb2 → ✓{Γ} σb.
 Proof. destruct 1; eauto using TInt_valid. Qed.
-Lemma base_cast_typed_type_valid Γ τb σb :
-  base_cast_typed Γ τb σb → ✓{Γ} τb → ✓{Γ} σb.
-Proof.
-  destruct 1; eauto using TInt_valid, TVoid_valid,
-    TPtr_valid, TPtr_valid_inv, ptr_cast_typed_type_valid.
-Qed.
 Lemma base_unop_type_of_sound op τb σb :
   base_unop_type_of op τb = Some σb → base_unop_typed op τb σb.
 Proof. destruct τb, op; intros; simplify_option_equality; constructor. Qed.
@@ -676,22 +662,15 @@ Qed.
 Lemma base_binop_type_of_complete op τb1 τb2 σb :
   base_binop_typed op τb1 τb2 σb → base_binop_type_of op τb1 τb2 = Some σb.
 Proof. by destruct 1; simplify_option_equality; repeat case_match. Qed.
-Global Instance base_cast_typed_dec Γ τb σb: Decision (base_cast_typed Γ τb σb).
+Global Instance base_cast_typed_dec τb σb: Decision (base_cast_typed τb σb).
 Proof.
  refine
   match τb, σb with
-  | _, voidT => left _
-  | intT τi1, intT τi2 => left _
-  | τp1.*, τp2.* => cast_if (decide (ptr_cast_typed Γ τp1 τp2))
+  | _, voidT | intT _, intT _ => left _
+  | τp1.*, τp2.* => cast_if (decide (ptr_cast_typed τp1 τp2))
   | _, _ => right _
   end%BT; abstract first [by constructor|by inversion 1].
 Defined.
-Lemma base_cast_typed_weaken Γ1 Γ2 τb σb :
-  base_cast_typed Γ1 τb σb → Γ1 ⊆ Γ2 → base_cast_typed Γ2 τb σb.
-Proof.
-  destruct 1; constructor;
-    eauto using ptr_type_valid_weaken, ptr_cast_typed_weaken.
-Qed.
 
 Lemma base_val_0_typed Γ Δ τb : ✓{Γ} τb → (Γ,Δ) ⊢ base_val_0 τb : τb.
 Proof.
@@ -754,9 +733,7 @@ Proof.
   * typed_constructor. eapply ptr_plus_typed; eauto.
   * typed_constructor. eapply ptr_minus_typed; eauto.
 Qed.
-Lemma ptr_cast_typed_self Γ τp : ptr_cast_typed Γ τp τp.
-Proof. destruct τp; constructor. Qed.
-Lemma base_cast_typed_self Γ τb : base_cast_typed Γ τb τb.
+Lemma base_cast_typed_self τb : base_cast_typed τb τb.
 Proof. destruct τb; constructor; auto using ptr_cast_typed_self. Qed.
 Lemma base_val_cast_ok_weaken Γ1 Γ2 Δ1 m1 m2 vb τb σb :
   ✓ Γ1 → (Γ1,Δ1) ⊢ vb : τb → base_val_cast_ok Γ1 m1 σb vb →
@@ -771,14 +748,15 @@ Proof.
   destruct vb, τb; simpl; auto using ptr_cast_ok_erase, ptr_alive_erase'.
 Qed.
 Lemma base_val_cast_typed Γ Δ m vb τb σb :
-  ✓ Γ → (Γ,Δ) ⊢ vb : τb → base_cast_typed Γ τb σb →
+  ✓ Γ → (Γ,Δ) ⊢ vb : τb → base_cast_typed τb σb → ✓{Γ} σb →
   base_val_cast_ok Γ m σb vb → (Γ,Δ) ⊢ base_val_cast σb vb : σb.
 Proof.
-  unfold base_val_cast_ok, base_val_cast. intros ? Hvτb Hσb Hok. revert Hvτb.
-  destruct Hσb; inversion 1; simplify_equality'; try (done || by constructor).
+  unfold base_val_cast_ok, base_val_cast. intros ? Hvτb Hcast Hσb Hok.
+  revert Hvτb.
+  destruct Hcast; inversion 1; simplify_equality'; try (done || by constructor).
   * intuition; simplify_equality. by typed_constructor.
   * typed_constructor. by apply int_cast_typed.
-  * typed_constructor; eauto using ptr_cast_typed'.
+  * typed_constructor; eauto using ptr_cast_typed', TPtr_valid_inv.
 Qed.
 Lemma base_val_cast_ok_void Γ m vb :
   (Γ,'{m}) ⊢ vb : ucharT%BT → base_val_cast_ok Γ m voidT%BT vb.
@@ -865,11 +843,9 @@ Proof.
   destruct 1; eauto using TBase_valid,
     TBase_valid_inv, base_binop_typed_type_valid.
 Qed.
-Lemma cast_typed_type_valid Γ τ σ : cast_typed Γ τ σ → ✓{Γ} τ → ✓{Γ} σ.
-Proof.
-  destruct 1; eauto using TBase_valid, TVoid_valid, TBase_valid,
-    TBase_valid_inv, base_cast_typed_type_valid.
-Qed.
+Lemma cast_typed_type_valid Γ τ σ :
+  cast_typed τ σ → ✓{Γ} τ → ✓{Γ} (TType σ) → ✓{Γ} σ.
+Proof. destruct 1; eauto using TBase_ptr_valid_inv, TBase_valid. Qed.
 Lemma unop_type_of_sound op τ σ :
   unop_type_of op τ = Some σ → unop_typed op τ σ.
 Proof.
@@ -894,27 +870,21 @@ Proof.
   destruct 1; simplify_option_equality.
   by erewrite base_binop_type_of_complete by eauto.
 Qed.
-Global Instance cast_typed_dec Γ τ σ : Decision (cast_typed Γ τ σ).
+Global Instance cast_typed_dec τ σ : Decision (cast_typed τ σ).
 Proof.
  refine 
   match decide (τ = σ) with
   | left _ => left _
   | right Hτσ =>
-    match τ, σ return τ ≠ σ → Decision (cast_typed Γ τ σ) with
-    | baseT τb, baseT σb => λ _, cast_if (decide (base_cast_typed Γ τb σb))
+    match τ, σ return τ ≠ σ → Decision (cast_typed τ σ) with
+    | baseT τb, baseT σb => λ _, cast_if (decide (base_cast_typed τb σb))
     | _, baseT σb => λ _, cast_if (decide (σb = voidT%BT))
     | _, _ => λ _, right _
     end Hτσ
   end; abstract first
    [ by subst; constructor
-   | by inversion 1; subst;
-      repeat match goal with
-      | H : ¬base_cast_typed _ _ _ |- _ => destruct H; constructor
-      end].
+   | by inversion 1; subst; eauto using base_cast_typed_self, TVoid_cast_typed].
 Defined.
-Lemma cast_typed_weaken Γ1 Γ2 τ σ :
-  cast_typed Γ1 τ σ → Γ1 ⊆ Γ2 → cast_typed Γ2 τ σ.
-Proof. destruct 1; constructor; eauto using base_cast_typed_weaken. Qed.
 Lemma val_unop_ok_weaken m1 m2 op v :
   val_unop_ok m1 op v → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
   val_unop_ok m2 op v.
@@ -968,10 +938,11 @@ Lemma val_cast_ok_erase Γ m v τp :
   val_cast_ok Γ (cmap_erase m) τp v = val_cast_ok Γ m τp v.
 Proof. destruct v, τp as [[]| |]; simpl; auto using base_val_cast_ok_erase. Qed.
 Lemma val_cast_typed Γ Δ m v τ σ :
-  ✓ Γ → (Γ,Δ) ⊢ v : τ → cast_typed Γ τ σ → val_cast_ok Γ m (TType σ) v →
-  (Γ,Δ) ⊢ val_cast (TType σ) v : σ.
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → cast_typed τ σ → ✓{Γ} σ →
+  val_cast_ok Γ m (TType σ) v → (Γ,Δ) ⊢ val_cast (TType σ) v : σ.
 Proof.
-  intros ? Hvτ Hσ Hok. destruct Hσ; inversion Hvτ; simplify_equality';
+  intros ? Hvτ Hcast Hσ Hok.
+  destruct Hcast; inversion Hσ; inversion Hvτ; simplify_equality';
     repeat typed_constructor;
     eauto using base_val_cast_typed, TVoid_cast_typed, base_cast_typed_self.
 Qed.

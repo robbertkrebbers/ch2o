@@ -24,20 +24,20 @@ Lemma initial_state_typed Γ δ m f vs σs σ :
   (Γ,'{m}) ⊢* vs :* σs → Γ ⊢ initial_state m f vs : f.
 Proof. eexists (Fun_type f); simpl; eauto. Qed.
 Lemma assign_preservation_1 Γ m ass a v v' va' τ1 τ2 σ :
-  ✓ Γ → ✓{Γ} m → assign_typed Γ τ1 τ2 ass σ →
+  ✓ Γ → ✓{Γ} m → assign_typed τ1 τ2 ass σ →
   (Γ,'{m}) ⊢ a : TType τ1 → (Γ,'{m}) ⊢ v : τ2 →
   assign_sem Γ m a v ass v' va' → (Γ,'{m}) ⊢ v' : σ.
 Proof.
-  destruct 3; inversion 3; simplify_type_equality';
-    eauto using val_cast_typed, val_binop_typed, mem_lookup_typed.
+  destruct 3; inversion 3; simplify_type_equality'; eauto using val_cast_typed,
+    val_binop_typed, mem_lookup_typed, addr_typed_type_valid.
 Qed.
 Lemma assign_preservation_2 Γ m ass a v v' va' τ1 τ2 σ :
-  ✓ Γ → ✓{Γ} m → assign_typed Γ τ1 τ2 ass σ →
+  ✓ Γ → ✓{Γ} m → assign_typed τ1 τ2 ass σ →
   (Γ,'{m}) ⊢ a : TType τ1 → (Γ,'{m}) ⊢ v : τ2 →
   assign_sem Γ m a v ass v' va' → (Γ,'{m}) ⊢ va' : τ1.
 Proof.
-  destruct 3; inversion 3; simplify_type_equality';
-    eauto using val_cast_typed, val_binop_typed, mem_lookup_typed.
+  destruct 3; inversion 3; simplify_type_equality'; eauto using val_cast_typed,
+    val_binop_typed, mem_lookup_typed, addr_typed_type_valid.
 Qed.
 Lemma ehstep_preservation Γ m1 m2 ρ τs e1 e2 τlr :
   ✓ Γ → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 →

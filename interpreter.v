@@ -39,7 +39,7 @@ Definition interpreter_initial (Θ : list (string * decl))
   eσlrs ← mapM (to_expr []) ces;
   let σes := zip_with to_R_NULL σs eσlrs in
   Γ ← gets to_env; m ← gets to_mem;
-  guard (Forall2 (cast_typed Γ) (snd <$> σes) σs)
+  guard (Forall2 cast_typed (snd <$> σes) σs)
     with "interpreter called with arguments of incorrect type";
   let es := (cast{σs}* (fst <$> σes))%E in
   vs ← error_of_option (mapM (λ e, ⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr) es)

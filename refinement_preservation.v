@@ -47,7 +47,7 @@ Hint Immediate addr_alive_refine'.
 Hint Extern 0 (is_undef_state (State _ (Undef ?Su) _)) => by exists Su.
 
 Lemma assign_refine Γ α f m1 m2 ass a1 a2 v1 v2 v1' va1' τ τ' σ :
-  ✓ Γ → m1 ⊑{Γ,α,f} m2 → assign_typed Γ τ τ' ass σ →
+  ✓ Γ → m1 ⊑{Γ,α,f} m2 → assign_typed τ τ' ass σ →
   a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : TType τ → v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ' →
   assign_sem Γ m1 a1 v1 ass v1' va1' → ∃ v2' va2',
     assign_sem Γ m2 a2 v2 ass v2' va2' ∧
@@ -62,21 +62,21 @@ Proof.
     end.
   * exists (val_cast (type_of a2) v2) (val_cast (type_of a2) v2);
       repeat constructor; erewrite ?addr_refine_type_of_r by eauto;
-      eauto using val_cast_refine, val_cast_ok_refine.
+      eauto using val_cast_refine, val_cast_ok_refine, addr_typed_type_valid.
   * destruct (mem_lookup_refine Γ α f ('{m1}) ('{m2}) m1 m2 a1 a2 va1 τ)
       as (va2&?&?); eauto.
     set (v2':=val_cast (type_of a2) (val_binop Γ op va2 v2)).
     exists v2' v2'; unfold v2';
       repeat constructor; erewrite ?addr_refine_type_of_r by eauto;
       eauto using val_binop_ok_refine, val_cast_ok_refine,
-      val_binop_refine, val_cast_refine.
+      val_binop_refine, val_cast_refine, addr_typed_type_valid.
   * destruct (mem_lookup_refine Γ α f ('{m1}) ('{m2}) m1 m2 a1 a2 v1' τ)
       as (v2'&?&?); eauto.
     set (v2'':=val_cast (type_of a2) (val_binop Γ op v2' v2)).
     exists v2' v2''; unfold v2'';
       repeat constructor; erewrite ?addr_refine_type_of_r by eauto;
       eauto using val_binop_ok_refine, val_cast_ok_refine,
-      val_binop_refine, val_cast_refine.
+      val_binop_refine, val_cast_refine, addr_typed_type_valid.
 Qed.
 Ltac go f := eexists f, _, _; split_ands; [do_ehstep| | |by auto].
 Lemma ehstep_refine_forward Γ α f m1 m2 m1' ρ1 ρ2 τs e1 e2 e1' τlr :
