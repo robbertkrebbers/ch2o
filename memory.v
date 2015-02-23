@@ -831,11 +831,16 @@ Proof.
   rewrite <-list_lookup_fmap, <-elem_of_of_bools in Hi.
   by rewrite option_guard_True by esolve_elem_of.
 Qed.
-Lemma mem_locks_valid m : ✓{'{m}} (mem_locks m).
+Lemma mem_locks_valid Γ m : ✓ Γ → ✓{Γ} m → ✓{Γ,'{m}} (mem_locks m).
 Proof.
-  intros o i; rewrite elem_of_mem_locks. unfold typed, index_typed.
-  destruct m as [m]; simpl; rewrite lookup_fmap.
-  destruct (m !! o) as [[]|]; naive_solver.
+  intros ?? o i; rewrite elem_of_mem_locks. unfold typed, index_typed.
+  destruct m as [m]; simpl; rewrite lookup_fmap; intros Ho.
+  destruct (m !! o) as [[|w β]|] eqn:?; try done.
+  destruct (cmap_valid_Obj Γ ('{CMap m}) (CMap m) o w β)
+    as (τ&?&_&?&_); simplify_type_equality'; auto.
+  exists τ; split_ands; [naive_solver|eauto using ctree_typed_type_valid|].
+  destruct (ctree_flatten w !! _) as [?|] eqn:?; simplify_equality'.
+  erewrite <-ctree_flatten_length by eauto; eauto using lookup_lt_Some.
 Qed.
 Lemma mem_locks_empty : mem_locks ∅ = ∅.
 Proof. apply dsig_eq; unfold mem_locks; simpl. by rewrite omap_empty. Qed.
@@ -987,10 +992,13 @@ Lemma elem_of_lock_singleton_typed Γ Δ a τ o i :
     addr_object_offset Γ a ≤ i < addr_object_offset Γ a + bit_size_of Γ τ.
 Proof. intros. rewrite elem_of_lock_singleton; by simplify_type_equality. Qed.
 Lemma lock_singleton_valid Γ Δ a τ :
-  ✓ Γ → (Γ,Δ) ⊢ a : TType τ → ✓{Δ} (lock_singleton Γ a).
+  ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → ✓{Γ,Δ} (lock_singleton Γ a).
 Proof.
-  intros ?? o i. rewrite elem_of_lock_singleton_typed by eauto.
-  intros (->&?&?); eauto using addr_typed_index.
+  intros ??? o i. rewrite elem_of_lock_singleton_typed by eauto.
+  intros (->&?&?); exists (addr_type_object a); simpl; split_ands;
+    eauto using addr_typed_index,addr_typed_type_object_valid.
+  eapply Nat.lt_le_trans; [|eapply addr_object_offset_bit_size; eauto].
+  simpl; lia.
 Qed.
 Lemma lock_singleton_disjoint Γ Δ a1 a2 τ1 τ2 :
   ✓ Γ → (Γ,Δ) ⊢ a1 : TType τ1 → addr_strict Γ a1 →

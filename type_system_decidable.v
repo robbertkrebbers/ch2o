@@ -20,9 +20,9 @@ Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
   let '(Γ,Δ,τs) := Γs in
   match e with
   | var{τ} n => τ' ← τs !! n; guard (τ = τ'); Some (inl τ)
-  | #{Ω} v => guard (✓{Δ} Ω); inr <$> type_check (Γ,Δ) v
+  | #{Ω} v => guard (✓{Γ,Δ} Ω); inr <$> type_check (Γ,Δ) v
   | %{Ω} a =>
-     guard (✓{Δ} Ω); guard (addr_strict Γ a);
+     guard (✓{Γ,Δ} Ω); guard (addr_strict Γ a);
      τ ← type_check (Γ,Δ) a ≫= maybe TType;
      Some (inl τ)
   | .* e =>
@@ -242,7 +242,7 @@ Global Instance focus_type_check:
   | Undef (UndefExpr E e) =>
      Expr_type <$> (type_check Γs e ≫= lookupE Γs E) ≫= maybe inr
   | Undef (UndefBranch Es Ω v) =>
-     guard (✓{Δ} Ω); τ ← type_check (Γ,Δ) v; Stmt_type <$> τ !!{Γs} Es
+     guard (✓{Γ,Δ} Ω); τ ← type_check (Γ,Δ) v; Stmt_type <$> τ !!{Γs} Es
   end.
 End deciders.
 

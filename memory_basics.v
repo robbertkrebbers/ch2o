@@ -225,27 +225,47 @@ Qed.
 Instance: PartialOrder (@subseteq lockset _).
 Proof. split; try apply _. intros ????. apply lockset_eq. intuition. Qed.
 
-Instance lockset_valid {K} : Valid (memenv K) lockset := λ Δ Ω,
-  ∀ o r, (o,r) ∈ Ω → ∃ τ, Δ ⊢ o : τ.
-Lemma lockset_valid_alt {K} (Δ : memenv K) (Ω : lockset) :
-  ✓{Δ} Ω ↔ dom indexset (`Ω) ⊆ dom indexset Δ.
-Proof.
-  rewrite elem_of_subseteq; setoid_rewrite elem_of_dom; split.
-  * intros HΩ o [ω ?].
-    destruct (collection_choose_L ω) as [i ?]; [by apply (proj2_dsig Ω o ω)|].
-    destruct (HΩ o i) as (τ&β&?); [by exists ω|by exists (τ,β)].
-  * intros HΩ o r (ω&?&_). destruct (HΩ o) as [[τ β] ?]; eauto. by exists τ β.
+Instance lockset_valid `{Env K} : Valid (env K * memenv K) lockset := λ ΓΔ Ω,
+  ∀ o i, (o,i) ∈ Ω → ∃ τ, ΓΔ.2 ⊢ o : τ ∧ ✓{ΓΔ.1} τ ∧ i < bit_size_of (ΓΔ.1) τ.
+Local Obligation Tactic := idtac.
+Program Instance lockset_valid_dec
+    `{Env K} Γ Δ (Ω : lockset) : Decision (✓{Γ,Δ} Ω) :=
+  cast_if (decide (map_Forall2 (λ τβ ω,
+    ✓{Γ} (τβ.1) ∧ length (natmap_car (mapset_car ω)) ≤ bit_size_of Γ (τβ.1)
+  ) (λ _, True) (λ _, False) Δ (`Ω))).
+Next Obligation.
+  intros K ? Γ Δ Ω HΩ o i (ω&?&Hi); specialize (HΩ o); simplify_option_equality.
+  destruct (Δ !! o) as [[τ β]|] eqn:?; intuition; simplify_equality'.
+  exists τ; split_ands; [by exists β|auto|eapply Nat.lt_le_trans; [|eauto]].
+  unfold elem_of, mapset_elem_of, lookup, natmap_lookup in Hi.
+  destruct ω as [[ω ?]]; simplify_equality'.
+  destruct (ω !! i) eqn:?; simplify_equality'; eauto using lookup_lt_Some.
 Qed.
-Instance lockset_valid_dec {K} (Δ : memenv K) Ω : Decision (✓{Δ} Ω).
+Next Obligation.
+  intros K ? Γ Δ Ω HΩ; contradict HΩ.
+  intros o. destruct (`Ω !! o) as [ω|] eqn:Ho; [|by destruct (Δ !! _)].
+  set (i:=length (natmap_car (mapset_car ω)) - 1); assert (i ∈ ω).
+  { unfold i; clear i; destruct ω as [[ω Hω]]; simplify_equality'.
+    unfold elem_of, mapset_elem_of, lookup, natmap_lookup; simpl.
+    destruct ω as [|u ω _] using rev_ind.
+    { destruct ((bool_decide_unpack _ (proj2_sig Ω) o _) Ho).
+      by apply (bool_decide_unpack _). }
+    clear Ho; unfold natmap_wf in Hω.
+    rewrite last_snoc in Hω; destruct Hω as [[] ->]; simpl.
+    by rewrite app_length; simpl; rewrite <-Nat.add_sub_assoc, Nat.sub_diag,
+      Nat.add_0_r, lookup_app_r, Nat.sub_diag by done. }
+  destruct (HΩ o i) as (τ&[β]&?&?); [by exists ω|]; simplify_option_equality.
+  unfold i in *; split_ands; auto with lia.
+Qed.
+Lemma lockset_valid_weaken `{EnvSpec K} Γ1 Γ2 Δ1 Δ2 (Ω : lockset) :
+  ✓ Γ1 → ✓{Γ1,Δ1} Ω → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 → ✓{Γ2,Δ2} Ω.
 Proof.
- refine (cast_if (decide (dom indexset (`Ω) ⊆ dom _ Δ)));
-  by rewrite lockset_valid_alt.
-Defined.
-Lemma lockset_valid_weaken {K} (Δ1 Δ2 : memenv K) Ω :
-  ✓{Δ1} Ω → Δ1 ⇒ₘ Δ2 → ✓{Δ2} Ω.
-Proof. intros HΩ [??] o r ?; destruct (HΩ o r); eauto. Qed.
-Lemma lockset_empty_valid {K} (Δ : memenv K) : ✓{Δ} ∅.
-Proof. intros o r; solve_elem_of. Qed.
-Lemma lockset_union_valid {K} (Δ : memenv K) Ω1 Ω2 :
-  ✓{Δ} Ω1 → ✓{Δ} Ω2 → ✓{Δ} (Ω1 ∪ Ω2).
+  intros ? HΩ ? [??] o i ?; destruct (HΩ o i) as (τ&?&?&?); eauto.
+  exists τ. erewrite <-(bit_size_of_weaken Γ1 Γ2) by eauto.
+  eauto using type_valid_weaken.
+Qed.
+Lemma lockset_empty_valid `{Env K} Γ Δ : ✓{Γ,Δ} (∅ : lockset).
+Proof. intros o i; solve_elem_of. Qed.
+Lemma lockset_union_valid `{Env K} Γ Δ (Ω1 Ω2 : lockset) :
+  ✓{Γ,Δ} Ω1 → ✓{Γ,Δ} Ω2 → ✓{Γ,Δ} (Ω1 ∪ Ω2).
 Proof. intros HΩ1 HΩ2 o r; rewrite elem_of_union; naive_solver. Qed.

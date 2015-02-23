@@ -44,9 +44,9 @@ Inductive expr_typed' (Γ : env K) (Δ : memenv K)
   | EVar_typed τ n :
      τs !! n = Some τ → expr_typed' Γ Δ τs (var{τ} n) (inl τ)
   | EVal_typed Ω v τ :
-     ✓{Δ} Ω → (Γ,Δ) ⊢ v : τ → expr_typed' Γ Δ τs (#{Ω} v) (inr τ)
+     ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ v : τ → expr_typed' Γ Δ τs (#{Ω} v) (inr τ)
   | EAddr_typed Ω a τ :
-     ✓{Δ} Ω → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a →
+     ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a →
      expr_typed' Γ Δ τs (%{Ω} a) (inl τ)
   | ERtoL_typed e τ :
      expr_typed' Γ Δ τs e (inr (TType τ.*)) →
@@ -106,9 +106,9 @@ Section expr_typed_ind.
   Context (Γ : env K) (Δ : memenv K) (τs : list (type K)).
   Context (P : expr K → lrtype K → Prop).
   Context (Pvar : ∀ τ n, τs !! n = Some τ → P (var{τ} n) (inl τ)).
-  Context (Pval : ∀ Ω v τ, ✓{Δ} Ω → (Γ,Δ) ⊢ v : τ → P (#{Ω} v) (inr τ)).
+  Context (Pval : ∀ Ω v τ, ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ v : τ → P (#{Ω} v) (inr τ)).
   Context (Paddr : ∀ Ω a τ,
-    ✓{Δ} Ω → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → P (%{Ω} a) (inl τ)).
+    ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → P (%{Ω} a) (inl τ)).
   Context (Prtol : ∀ e τ,
     (Γ,Δ,τs) ⊢ e : inr (TType τ.*) → P e (inr (TType τ.*)) →
     type_complete Γ τ → P (.* e) (inl τ)).
@@ -355,7 +355,7 @@ Inductive focus_typed' (Γ : env K) (Δ : memenv K)
      (Γ,Δ,τs) ⊢ e : τlr → (Γ,Δ,τs) ⊢ E : τlr ↣ inr τ →
      focus_typed' Γ Δ τs (Undef (UndefExpr E e)) (Expr_type τ)
   | UndefBranch_typed Es Ω v τ mσ :
-     ✓{Δ} Ω → (Γ,Δ) ⊢ v : τ → (Γ,Δ,τs) ⊢ Es : τ ↣ mσ →
+     ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ v : τ → (Γ,Δ,τs) ⊢ Es : τ ↣ mσ →
      focus_typed' Γ Δ τs (Undef (UndefBranch Es Ω v)) (Stmt_type mσ).
 Global Instance focus_typed:
   Typed envs (focustype K) (focus K) := curry3 focus_typed'.
@@ -554,7 +554,7 @@ Proof.
 Qed.
 
 Lemma EVals_typed Γ Δ τs Ωs vs σs :
-  length Ωs = length vs → ✓{Δ}* Ωs → (Γ,Δ) ⊢* vs :* σs →
+  length Ωs = length vs → ✓{Γ,Δ}* Ωs → (Γ,Δ) ⊢* vs :* σs →
   (Γ,Δ,τs) ⊢* #{Ωs}* vs :* inr <$> σs.
 Proof.
   rewrite <-Forall2_same_length. intros Hvs ?. revert σs.

@@ -51,9 +51,13 @@ Proof.
   destruct (meminj_injective_alt f (addr_index a1) (addr_index a3)
     (addr_index a2) r1 r3) as [|[_ ?]];
     eauto using memenv_refine_injective with congruence.
-  assert (addr_object_offset Γ a1 < bit_size_of Γ (addr_type_object a1) ∧
-    addr_object_offset Γ a3 < bit_size_of Γ (addr_type_object a3)) as []
-    by intuition eauto using addr_object_offset_strict.
+  assert (addr_object_offset Γ a1 + ptr_bit_size_of Γ σp ≤ bit_size_of Γ
+    (addr_type_object a1)) by eauto using addr_object_offset_bit_size.
+  assert (addr_object_offset Γ a3 + ptr_bit_size_of Γ σp ≤ bit_size_of Γ
+    (addr_type_object a3)) by eauto using addr_object_offset_bit_size.
+  assert (0 < ptr_bit_size_of Γ σp).
+  { destruct σp; simpl; eauto using char_bits_pos,
+      bit_size_of_pos, addr_typed_type_valid. }
   assert (addr_type_object a2 = addr_type_object a4).
   { eapply typed_unique; eauto using addr_typed_index.
     rewrite Ha; eauto using addr_typed_index. }

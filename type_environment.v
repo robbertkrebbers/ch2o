@@ -152,6 +152,9 @@ Qed.
 Lemma bit_size_of_union_singleton Γ t τ :
   ✓ Γ → Γ !! t = Some [τ] → bit_size_of Γ τ ≤ bit_size_of Γ (unionT t).
 Proof. intros. by apply (bit_size_of_union_lookup Γ t [τ] 0). Qed.
+Lemma ptr_bit_size_of_alt Γ τp :
+  ptr_bit_size_of Γ τp = ptr_size_of Γ τp * char_bits.
+Proof. destruct τp; simpl; unfold bit_size_of; lia. Qed.
 
 Lemma field_bit_sizes_weaken Γ1 Γ2 τs :
   ✓ Γ1 → ✓{Γ1}* τs → Γ1 ⊆ Γ2 → field_bit_sizes Γ1 τs = field_bit_sizes Γ2 τs.

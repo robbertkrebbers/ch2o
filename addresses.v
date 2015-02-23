@@ -317,15 +317,25 @@ Proof.
     bit_align_of_castable, align_of_divide, castable_type_valid,
     size_of_ne_0, bit_align_of_ref_object_offset.
 Qed.
-Lemma addr_object_offset_strict Γ Δ a σp :
+Lemma addr_object_offset_bit_size Γ Δ a σp :
   ✓ Γ → (Γ,Δ) ⊢ a : σp → addr_strict Γ a →
-  addr_object_offset Γ a < bit_size_of Γ (addr_type_object a).
+  addr_object_offset Γ a + ptr_bit_size_of Γ σp
+  ≤ bit_size_of Γ (addr_type_object a).
 Proof.
-  destruct 2 as [o r i τ σ σp ??? Hoff]; intros; simplify_equality'.
-  eapply Nat.lt_le_trans; [|eapply ref_object_offset_size; eauto].
-  unfold bit_size_of; rewrite <-Nat.add_lt_mono_l, Nat.mul_assoc,
-    <-Nat.mul_lt_mono_pos_r, Hoff, Nat.sub_0_r
-    by auto using char_bits_pos; lia.
+  destruct 2 as [o r i τ σ σp ??? Hoff _ Hi Hcast];
+    intros Ha; simplify_equality'.
+  eapply Nat.le_trans; [|eapply ref_object_offset_size; eauto].
+  rewrite <-Nat.add_assoc, <-Nat.add_le_mono_l, Hoff, Nat.sub_0_r.
+  unfold bit_size_of; rewrite ptr_bit_size_of_alt.
+  rewrite Nat.mul_assoc, <-Nat.mul_add_distr_r.
+  rewrite <-Nat.mul_le_mono_pos_r by auto using char_bits_pos.
+  destruct Hi as [z ->]; inversion Hcast; simplify_equality'.
+  { rewrite Nat.mul_comm; lia. }
+  { rewrite size_of_char in Ha |- *; rewrite Nat.mul_comm; lia. }
+  rewrite <-Nat.mul_succ_l, <-Nat.mul_le_mono_pos_r
+    by eauto using size_of_pos, ref_typed_type_valid.
+  rewrite <-Nat.mul_comm, <-Nat.mul_lt_mono_pos_l in Ha
+    by eauto using size_of_pos, ref_typed_type_valid; lia.
 Qed.
 Lemma addr_elt_typed Γ Δ a rs σ σ' :
   ✓ Γ → (Γ,Δ) ⊢ a : TType σ → addr_strict Γ a → Γ ⊢ rs : σ ↣ σ' →

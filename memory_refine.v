@@ -6,7 +6,7 @@ Local Open Scope ctype_scope.
 
 Instance locks_refine `{Env K} :
     Refine K (env K) lockset := λ Γ α f Δ1 Δ2 Ω1 Ω2,
-  (**i 1.) *) ✓{Δ1} Ω1 ∧ ✓{Δ2} Ω2 ∧
+  (**i 1.) *) ✓{Γ,Δ1} Ω1 ∧ ✓{Γ,Δ2} Ω2 ∧
   (**i 2.) *) Δ1 ⊑{Γ,α,f} Δ2 ∧
   (**i 3.) *) (∀ o1 o2 r τ1 i,
     f !! o1 = Some (o2,r) → Δ1 ⊢ o1 : τ1 → index_alive Δ1 o1 →
@@ -451,7 +451,7 @@ Lemma mem_foldr_free_refine Γ α f m1 m2 os1 os2 :
   foldr mem_free m1 os1 ⊑{Γ,α,f} foldr mem_free m2 os2.
 Proof. induction 3; simpl; auto using mem_free_refine'. Qed.
 
-Lemma locks_refine_id Γ α Δ Ω : ✓{Δ} Ω → Ω ⊑{Γ,α@Δ} Ω.
+Lemma locks_refine_id Γ α Δ Ω : ✓{Γ,Δ} Ω → Ω ⊑{Γ,α@Δ} Ω.
 Proof.
   split; split_ands; intros until 0; rewrite ?lookup_meminj_id; intros;
     simplify_type_equality'; eauto using memenv_refine_id.
@@ -483,16 +483,16 @@ Proof.
   symmetry; apply (Hf _ _ [] τ); eauto using memenv_refine_alive_r.
 Qed.
 Lemma locks_refine_valid_l Γ α f Δ1 Δ2 Ω1 Ω2 :
-  Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 → ✓{Δ1} Ω1.
+  Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 → ✓{Γ,Δ1} Ω1.
 Proof. by intros (?&?&?&?). Qed.
 Lemma locks_list_refine_valid_l Γ α f Δ1 Δ2 Ωs1 Ωs2 :
-  Ωs1 ⊑{Γ,α,f@Δ1↦Δ2}* Ωs2 → ✓{Δ1}* Ωs1.
+  Ωs1 ⊑{Γ,α,f@Δ1↦Δ2}* Ωs2 → ✓{Γ,Δ1}* Ωs1.
 Proof. induction 1; eauto using locks_refine_valid_l. Qed.
 Lemma locks_refine_valid_r Γ α f Δ1 Δ2 Ω1 Ω2 :
-  Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 → ✓{Δ2} Ω2.
+  Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 → ✓{Γ,Δ2} Ω2.
 Proof. by intros (?&?&?&?). Qed.
 Lemma locks_list_refine_valid_r Γ α f Δ1 Δ2 Ωs1 Ωs2 :
-  Ωs1 ⊑{Γ,α,f@Δ1↦Δ2}* Ωs2 → ✓{Δ2}* Ωs2.
+  Ωs1 ⊑{Γ,α,f@Δ1↦Δ2}* Ωs2 → ✓{Γ,Δ2}* Ωs2.
 Proof. induction 1; eauto using locks_refine_valid_r. Qed.
 Lemma locks_refine_weaken Γ α α' f f' Δ1 Δ2 Δ1' Δ2' Ω1 Ω2 :
   ✓ Γ → Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 →
@@ -502,11 +502,11 @@ Proof.
   intros ? (HΩ1&HΩ2&HΔ12&HΩ) ? HΔ ? [??];
     split; split_ands; eauto 2 using lockset_valid_weaken.
   intros o1 o2 r τ1 i ????; split.
-  * intros ?. destruct (HΩ1 o1 i) as [τ1' ?]; auto.
+  * intros ?. destruct (HΩ1 o1 i) as (τ1'&?&?); auto.
     assert (τ1 = τ1') by eauto using typed_unique, memenv_forward_typed.
     simplify_type_equality.
     by erewrite <-HΩ by eauto using memenv_forward_alive, option_eq_1.
-  * intros ?. destruct (HΩ2 o2 (ref_object_offset Γ r + i)) as [τ2' ?]; auto.
+  * intros ?. destruct (HΩ2 o2 (ref_object_offset Γ r + i)) as (τ2'&?&?); auto.
     destruct (memenv_refine_typed_r HΔ12 o1 o2 r τ2') as (τ1'&?&?); eauto.
     assert (τ1 = τ1') by eauto using typed_unique, memenv_forward_typed.
     simplify_type_equality. by erewrite HΩ by eauto using memenv_forward_alive.
@@ -671,7 +671,7 @@ Proof.
   assert (Δ1 ⊑{Γ,α,f} Δ2) as HΔ by eauto using addr_refine_memenv_refine.
   assert ((Γ,Δ1) ⊢ a1 : TType σ) by eauto using addr_refine_typed_l.
   assert ((Γ,Δ2) ⊢ a2 : TType σ) by eauto using addr_refine_typed_r.
-  split; split_ands; eauto using lock_singleton_valid.
+  split; split_ands; eauto using lock_singleton_valid, addr_strict_refine.
   intros o1 o2 r τ i ????. rewrite !elem_of_lock_singleton_typed by eauto.
   destruct (addr_object_offset_refine Γ α f
     Δ1 Δ2 a1 a2 (TType σ)) as (r'&?&?&->); auto.
