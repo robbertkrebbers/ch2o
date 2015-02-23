@@ -383,6 +383,8 @@ Section types.
     | compoundT{_} t => cast_if (decide (is_Some (Γ !! t))) | _ => left _
     end; abstract first [by constructor|by inversion 1].
   Defined.
+  Lemma type_valid_complete Γ τ : ✓{Γ} τ → type_complete Γ τ.
+  Proof. by destruct 1; constructor. Qed.
   Lemma type_complete_valid Γ τ : ✓{Γ} (TType τ) → type_complete Γ τ → ✓{Γ} τ.
   Proof. by do 2 inversion 1; constructor. Qed.
   Lemma types_complete_valid Γ τs :
