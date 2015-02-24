@@ -14,16 +14,20 @@ Definition assign_type_of (τ1 τ2 : type K) (ass : assign) : option (type K) :=
   | PreOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed σ τ1); Some τ1
   | PostOp op => σ ← binop_type_of op τ1 τ2; guard (cast_typed σ τ1); Some τ1
   end.
+Global Instance lrval_type_check:
+   TypeCheck (env K * memenv K) (lrtype K) (lrval K) := λ ΓΔ ν,
+  match ν with
+  | inl a =>
+     guard (addr_strict (ΓΔ.1) a);
+     inl <$> type_check ΓΔ a ≫= maybe TType
+  | inr v => inr <$> type_check ΓΔ v
+  end.
 Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
   fix go Γs e {struct e} := let _ : TypeCheck envs _ _ := @go in
   let '(Γ,Δ,τs) := Γs in
   match e with
   | var{τ} n => τ' ← τs !! n; guard (τ = τ'); Some (inl τ)
-  | #{Ω} v => guard (✓{Γ,Δ} Ω); inr <$> type_check (Γ,Δ) v
-  | %{Ω} a =>
-     guard (✓{Γ,Δ} Ω); guard (addr_strict Γ a);
-     τ ← type_check (Γ,Δ) a ≫= maybe TType;
-     Some (inl τ)
+  | %#{Ω} ν => guard (✓{Γ,Δ} Ω); type_check (Γ,Δ) ν
   | .* e =>
      τ ← type_check Γs e ≫= maybe inr;
      τ' ← maybe (TBase ∘ TPtr ∘ TType) τ;
@@ -248,21 +252,8 @@ End deciders.
 Section properties.
 Context `{EnvSpec K}.
 Implicit Types Γ : env K.
-Implicit Types o : index.
 Implicit Types Δ : memenv K.
-Implicit Types m : mem K.
-Implicit Types e : expr K.
-Implicit Types s : stmt K.
 Implicit Types τ σ : type K.
-Implicit Types a : addr K.
-Implicit Types v : val K.
-Implicit Types Ei : ectx_item K.
-Implicit Types E : ectx K.
-Implicit Types Es : sctx_item K.
-Implicit Types Ee : esctx_item K.
-Implicit Types Ek : ctx_item K.
-Implicit Types k : ctx K.
-Implicit Types d : direction K.
 Notation envs := (env K * memenv K * list (type K))%type.
 
 Ltac simplify :=
@@ -291,6 +282,14 @@ Proof.
   by destruct 1; simplify_option_equality;
     erewrite ?binop_type_of_complete by eauto; simplify_option_equality.
 Qed.
+Global Instance:
+  TypeCheckSpec (env K * memenv K) (lrtype K) (lrval K) (✓ ∘ fst).
+Proof.
+  intros [Γ Δ] ν τlr; split.
+  * destruct ν; intros; simplify; typed_constructor; eauto.
+  * by destruct 1; simplify; erewrite ?type_check_complete by eauto.
+Qed.
+Hint Resolve (type_check_sound (V:=lrval K)).
 Global Instance: TypeCheckSpec envs (lrtype K) (expr K) (✓ ∘ fst ∘ fst).
 Proof.
   intros [[Γ Δ] τs] e τlr; simpl; split.

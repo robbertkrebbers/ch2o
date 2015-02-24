@@ -134,18 +134,18 @@ and [e ⇓ - : τlr] asserts that the expression [e] evaluates to an arbitrary
 value (in other words, [e] does not impose undefined behavior). *)
 Notation vassert K := (lrval K → assert K).
 Program Definition assert_expr `{EnvSpec K}
-    (e : expr K) (τlr : lrtype K) : vassert K := λ av, {|
-  assert_holds := λ Γ Δ ρ τs m, (Γ,Δ,τs) ⊢ e : τlr ∧ ⟦ e ⟧ Γ ∅ ρ m = Some av
+    (e : expr K) (τlr : lrtype K) : vassert K := λ ν, {|
+  assert_holds := λ Γ Δ ρ τs m, (Γ,Δ,τs) ⊢ e : τlr ∧ ⟦ e ⟧ Γ ∅ ρ m = Some ν
 |}.
 Next Obligation.
-  intros ??? e τlr av Γ1 Γ2 Δ1 Δ2 ρ τs m ??? [??] ??; split;
+  intros ??? e τlr ν Γ1 Γ2 Δ1 Δ2 ρ τs m ??? [??] ??; split;
     eauto using expr_typed_weaken, expr_eval_weaken, purefuns_empty_valid,
     mem_lookup_weaken, mem_forced_weaken.
 Qed.
-Notation "e ⇓ av : τlr" := (assert_expr e τlr av)%A
-  (at level 60, av at next level, τlr at next level,
-   format "e  '⇓'  av  :  τlr") : assert_scope.
-Notation "e ⇓ - : τlr" := (∃ av, e ⇓ av : τlr)%A
+Notation "e ⇓ ν : τlr" := (assert_expr e τlr ν)%A
+  (at level 60, ν at next level, τlr at next level,
+   format "e  '⇓'  ν  :  τlr") : assert_scope.
+Notation "e ⇓ - : τlr" := (∃ ν, e ⇓ ν : τlr)%A
   (at level 60, τlr at next level,
    format "e  '⇓'  '-'  :  τlr") : assert_scope.
 
@@ -174,7 +174,7 @@ Notation "e1 ↦{ malloc , x } e2 : τ" := (assert_singleton e1 e2 malloc x τ)%
   (at level 20, malloc at next level, x at next level, e2 at next level,
    τ at next level, format "e1  ↦{ malloc , x }  e2  :  τ") : assert_scope.
 Notation "e1 ↦{ malloc , x } - : τ" :=
-  (∃ av, e1 ↦{malloc,x} (%# av) : τ)%A
+  (∃ ν, e1 ↦{malloc,x} (%# ν) : τ)%A
   (at level 20, malloc at next level, x at next level,
    τ at next level, format "e1  ↦{ malloc , x }  -  :  τ") : assert_scope.
 
@@ -631,8 +631,7 @@ Qed.
 Lemma assert_lift_singleton_ Γ e1 malloc x τ :
   ((e1 ↦{malloc,x} - : τ)↑)%A ≡{Γ} ((e1↑) ↦{malloc,x} - : τ)%A.
 Proof.
-  by rewrite assert_lift_exists; setoid_rewrite (assert_lift_singleton Γ);
-    setoid_rewrite lrval_to_expr_lift.
+  by rewrite assert_lift_exists; setoid_rewrite (assert_lift_singleton Γ).
 Qed.
 
 (* Unlocking *)

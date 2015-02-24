@@ -42,11 +42,8 @@ Inductive expr_typed' (Γ : env K) (Δ : memenv K)
      (τs : list (type K)) : expr K → lrtype K → Prop :=
   | EVar_typed τ n :
      τs !! n = Some τ → expr_typed' Γ Δ τs (var{τ} n) (inl τ)
-  | EVal_typed Ω v τ :
-     ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ v : τ → expr_typed' Γ Δ τs (#{Ω} v) (inr τ)
-  | EAddr_typed Ω a τ :
-     ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a →
-     expr_typed' Γ Δ τs (%{Ω} a) (inl τ)
+  | EVal_typed Ω ν τlr :
+     ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ ν : τlr → expr_typed' Γ Δ τs (%#{Ω} ν) τlr
   | ERtoL_typed e τ :
      expr_typed' Γ Δ τs e (inr (TType τ.*)) →
      type_complete Γ τ → expr_typed' Γ Δ τs (.* e) (inl τ)
@@ -105,9 +102,7 @@ Section expr_typed_ind.
   Context (Γ : env K) (Δ : memenv K) (τs : list (type K)).
   Context (P : expr K → lrtype K → Prop).
   Context (Pvar : ∀ τ n, τs !! n = Some τ → P (var{τ} n) (inl τ)).
-  Context (Pval : ∀ Ω v τ, ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ v : τ → P (#{Ω} v) (inr τ)).
-  Context (Paddr : ∀ Ω a τ,
-    ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → P (%{Ω} a) (inl τ)).
+  Context (Pval : ∀ Ω ν τlr, ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ ν : τlr → P (%#{Ω} ν) τlr).
   Context (Prtol : ∀ e τ,
     (Γ,Δ,τs) ⊢ e : inr (TType τ.*) → P e (inr (TType τ.*)) →
     type_complete Γ τ → P (.* e) (inl τ)).
@@ -387,9 +382,10 @@ Implicit Types m : mem K.
 Implicit Types e : expr K.
 Implicit Types s : stmt K.
 Implicit Types τ σ : type K.
+Implicit Types τlr : lrtype K.
 Implicit Types a : addr K.
 Implicit Types v : val K.
-Implicit Types av : lrval K.
+Implicit Types ν : lrval K.
 Implicit Types Ei : ectx_item K.
 Implicit Types E : ectx K.
 Implicit Types Es : sctx_item K.
@@ -398,23 +394,28 @@ Implicit Types Ek : ctx_item K.
 Implicit Types k : ctx K.
 Implicit Types d : direction K.
 
+Lemma SLocal_typed Γ Δ τs τ s c mσ :
+  ✓{Γ} τ → (Γ,Δ,τ :: τs) ⊢ s : (c,mσ) → (Γ,Δ,τs) ⊢ local{τ} s : (c,mσ).
+Proof. by constructor. Qed.
+
 Lemma lval_typed_inv Γ Δ a τ : (Γ,Δ) ⊢ inl a : inl τ → (Γ,Δ) ⊢ a : TType τ.
 Proof. by inversion 1. Qed.
 Lemma lval_typed_strict Γ Δ a τ : (Γ,Δ) ⊢ inl a : inl τ → addr_strict Γ a.
 Proof. by inversion 1. Qed.
 Lemma rval_typed_inv Γ Δ v τ : (Γ,Δ) ⊢ inr v : inr τ → (Γ,Δ) ⊢ v : τ.
 Proof. by inversion 1. Qed.
-Lemma SLocal_typed Γ Δ τs τ s c mσ :
-  ✓{Γ} τ → (Γ,Δ,τ :: τs) ⊢ s : (c,mσ) → (Γ,Δ,τs) ⊢ local{τ} s : (c,mσ).
-Proof. by constructor. Qed.
+
 Lemma assign_typed_type_valid Γ τ1 τ2 ass σ :
   assign_typed τ1 τ2 ass σ → ✓{Γ} τ1 → ✓{Γ} σ.
 Proof. destruct 1; eauto. Qed.
+Lemma lrval_typed_type_valid Γ Δ ν τlr :
+  ✓ Γ → (Γ,Δ) ⊢ ν : τlr → ✓{Γ} (lrtype_type τlr).
+Proof. destruct 2; eauto using val_typed_type_valid, addr_typed_type_valid. Qed.
 Lemma expr_typed_type_valid Γ Δ τs e τlr :
   ✓ Γ → ✓{Γ}* τs → (Γ,Δ,τs) ⊢ e : τlr → ✓{Γ} (lrtype_type τlr).
 Proof.
   induction 3 using @expr_typed_ind; decompose_Forall_hyps;
-    eauto 5 using addr_typed_type_valid, val_typed_type_valid,
+    eauto 5 using lrval_typed_type_valid,
     type_valid_ptr_type_valid, unop_typed_type_valid, binop_typed_type_valid,
     TBase_valid, TPtr_valid, TVoid_valid, type_valid_ptr_type_valid,
     assign_typed_type_valid, ref_seg_typed_type_valid,
@@ -438,23 +439,28 @@ Proof.
   by induction 3; eauto; eauto using expr_inr_typed_type_valid,
      rettype_union_type_valid, rettype_true_Some_valid.
 Qed.
+
+Lemma lrval_typed_weaken Γ1 Γ2 Δ1 Δ2 ν τlr :
+  ✓ Γ1 → (Γ1,Δ1) ⊢ ν : τlr → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 → (Γ2,Δ2) ⊢ ν : τlr.
+Proof.
+  destruct 2; typed_constructor;
+    eauto using val_typed_weaken, addr_typed_weaken, addr_strict_weaken.
+Qed.
 Lemma expr_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 e τlr :
   ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ e : τlr → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
   τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ e : τlr.
 Proof.
   intros ? He ?? [σs ->].
   induction He using @expr_typed_ind; typed_constructor;
-    erewrite <-1?size_of_weaken by eauto; eauto using val_typed_weaken,
-    addr_typed_weaken, addr_strict_weaken, lookup_weaken,
-    type_valid_weaken, lookup_app_l_Some, ref_typed_weaken,
+    erewrite <-1?size_of_weaken by eauto; eauto using lrval_typed_weaken,
+    lookup_weaken, type_valid_weaken, lookup_app_l_Some, ref_typed_weaken,
     ref_seg_typed_weaken, lockset_valid_weaken, type_complete_weaken.
 Qed.
 Lemma ectx_item_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 Ei τlr σlr :
   ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ Ei : τlr ↣ σlr → Γ1 ⊆ Γ2 →
   Δ1 ⇒ₘ Δ2 → τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ Ei : τlr ↣ σlr.
 Proof.
-  destruct 2; typed_constructor;
-    eauto using type_valid_weaken, addr_strict_weaken,
+  destruct 2; typed_constructor; eauto using type_valid_weaken,
     expr_typed_weaken, lookup_weaken, Forall2_impl,
     ref_seg_typed_weaken, ref_typed_weaken, type_complete_weaken.
 Qed.

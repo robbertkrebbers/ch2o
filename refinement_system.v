@@ -24,13 +24,9 @@ Inductive expr_refine' (Γ : env K)
   | EVar_refine τ n :
      τs !! n = Some τ →
      expr_refine' Γ τs α f Δ1 Δ2 (var{τ} n) (var{τ} n) (inl τ)
-  | EVal_refine Ω1 Ω2 v1 v2 τ :
-     Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 → v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ →
-     expr_refine' Γ τs α f Δ1 Δ2 (#{Ω1} v1) (#{Ω2} v2) (inr τ)
-  | EAddr_refine Ω1 Ω2 a1 a2 τ :
-     Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 →
-     a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : TType τ → addr_strict Γ a1 →
-     expr_refine' Γ τs α f Δ1 Δ2 (%{Ω1} a1) (%{Ω2} a2) (inl τ)
+  | EVal_refine Ω1 Ω2 ν1 ν2 τlr :
+     Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 → ν1 ⊑{Γ,α,f@Δ1↦Δ2} ν2 : τlr →
+     expr_refine' Γ τs α f Δ1 Δ2 (%#{Ω1} ν1) (%#{Ω2} ν2) τlr
   | ERtoL_refine e1 e2 τ :
      expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr (TType τ.*)) → type_complete Γ τ →
      expr_refine' Γ τs α f Δ1 Δ2 (.* e1) (.* e2) (inl τ)
@@ -100,12 +96,9 @@ Section expr_refine_ind.
   Context (P : expr K → expr K → lrtype K → Prop).
   Context (Pvar : ∀ τ n,
     τs !! n = Some τ → P (var{τ} n) (var{τ} n) (inl τ)).
-  Context (Pval : ∀ Ω1 Ω2 v1 v2 τ,
-    Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 → v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ →
-    P (#{Ω1} v1) (#{Ω2} v2) (inr τ)).
-  Context (Paddr : ∀ Ω1 Ω2 a1 a2 τ,
-    Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 → a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : TType τ →
-    addr_strict Γ a1 → P (%{Ω1} a1) (%{Ω2} a2) (inl τ)).
+  Context (Pval : ∀ Ω1 Ω2 ν1 ν2 τlr,
+    Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 → ν1 ⊑{Γ,α,f@Δ1↦Δ2} ν2 : τlr →
+    P (%#{Ω1} ν1) (%#{Ω2} ν2) τlr).
   Context (Prtol : ∀ e1 e2 τ,
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (TType τ.*) →
     P e1 e2 (inr (TType τ.*)) → type_complete Γ τ → P (.* e1) (.* e2) (inl τ)).
@@ -460,7 +453,7 @@ Implicit Types s : stmt K.
 Implicit Types τ σ : type K.
 Implicit Types a : addr K.
 Implicit Types v : val K.
-Implicit Types av : lrval K.
+Implicit Types ν : lrval K.
 Implicit Types d : direction K.
 Implicit Types Ei : ectx_item K.
 Implicit Types E : ectx K.
@@ -630,8 +623,8 @@ Lemma state_refine_mem Γ α f S1 S2 g :
   ¬is_undef_state S1 → S1 ⊑{Γ,α,f} S2 : g → '{SMem S1} ⊑{Γ,α,f} '{SMem S2}.
 Proof. by destruct 2; eauto using cmap_refine_memenv_refine'. Qed.
 
-Lemma lrval_refine_typed_l Γ α f Δ1 Δ2 av1 av2 τlr :
-  ✓ Γ → av1 ⊑{Γ,α,f@Δ1↦Δ2} av2 : τlr → (Γ,Δ1) ⊢ av1 : τlr.
+Lemma lrval_refine_typed_l Γ α f Δ1 Δ2 ν1 ν2 τlr :
+  ✓ Γ → ν1 ⊑{Γ,α,f@Δ1↦Δ2} ν2 : τlr → (Γ,Δ1) ⊢ ν1 : τlr.
 Proof.
   destruct 2; typed_constructor;
     eauto using val_refine_typed_l, addr_refine_typed_l.
@@ -644,7 +637,7 @@ Proof.
     (Γ,Δ1,τs) ⊢* es1 :* τlrs).
   { induction 1; constructor; eauto. }
   induction 2 using @expr_refine_ind; typed_constructor;
-    eauto using val_refine_typed_l, addr_refine_typed_l, locks_refine_valid_l.
+    eauto using lrval_refine_typed_l, locks_refine_valid_l.
 Qed.
 Lemma exprs_refine_typed_l Γ α f Δ1 Δ2 τs es1 es2 τlrs :
   ✓ Γ → es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2}* es2 :* τlrs →
@@ -714,8 +707,8 @@ Proof.
       (δ2 !! g); simplify_option_equality; naive_solver.
 Qed.
 
-Lemma lrval_refine_typed_r Γ α f Δ1 Δ2 av1 av2 τlr :
-  ✓ Γ → av1 ⊑{Γ,α,f@Δ1↦Δ2} av2 : τlr → (Γ,Δ2) ⊢ av2 : τlr.
+Lemma lrval_refine_typed_r Γ α f Δ1 Δ2 ν1 ν2 τlr :
+  ✓ Γ → ν1 ⊑{Γ,α,f@Δ1↦Δ2} ν2 : τlr → (Γ,Δ2) ⊢ ν2 : τlr.
 Proof.
   destruct 2; typed_constructor;
     eauto using val_refine_typed_r, addr_refine_typed_r, addr_strict_refine.
@@ -728,8 +721,7 @@ Proof.
     (Γ,Δ2,τs) ⊢* es2 :* τlrs).
   { induction 1; constructor; eauto. }
   induction 2 using @expr_refine_ind; typed_constructor;
-    eauto using val_refine_typed_r, addr_refine_typed_r,
-    addr_strict_refine, locks_refine_valid_r.
+    eauto using lrval_refine_typed_r, locks_refine_valid_r.
 Qed.
 Lemma exprs_refine_typed_r Γ α f Δ1 Δ2 τs es1 es2 τlrs :
   ✓ Γ → es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2}* es2 :* τlrs →(Γ,Δ2,τs) ⊢* es2 :* τlrs.
@@ -804,7 +796,7 @@ Proof.
       (δ2 !! _); simplify_option_equality; naive_solver.
 Qed.
 
-Lemma lrval_refine_id Γ α Δ av τlr : (Γ,Δ) ⊢ av : τlr → av ⊑{Γ,α@Δ} av : τlr.
+Lemma lrval_refine_id Γ α Δ ν τlr : (Γ,Δ) ⊢ ν : τlr → ν ⊑{Γ,α@Δ} ν : τlr.
 Proof. destruct 1; constructor; eauto using val_refine_id, addr_refine_id. Qed.
 Lemma expr_refine_id Γ α Δ τs e τlr :
   (Γ,Δ,τs) ⊢ e : τlr → e ⊑{(Γ,τs),α@Δ} e : τlr.
@@ -812,8 +804,8 @@ Proof.
   assert (∀ es τlrs, Forall2 (λ e τlr, e ⊑{(Γ,τs),α@Δ} e : τlr) es τlrs →
     es ⊑{(Γ,τs),α@Δ}* es :* τlrs).
   { induction 1; constructor; eauto. }
-  induction 1 using @expr_typed_ind; refine_constructor; eauto using
-    locks_refine_id, val_refine_id, addr_refine_id.
+  induction 1 using @expr_typed_ind;
+    refine_constructor; eauto using locks_refine_id, lrval_refine_id.
 Qed.
 Lemma exprs_refine_id Γ α Δ τs es τlrs :
   (Γ,Δ,τs) ⊢* es :* τlrs → es ⊑{(Γ,τs),α@Δ}* es :* τlrs.
@@ -871,9 +863,9 @@ Proof.
     destruct (env_f Γ !! g). by destruct Hdom; eauto. done.
 Qed.
 
-Lemma lrval_refine_compose Γ α1 α2 f1 f2 Δ1 Δ2 Δ3 av1 av2 av3 τlr τlr' :
-  ✓ Γ → av1 ⊑{Γ,α1,f1@Δ1↦Δ2} av2 : τlr → av2 ⊑{Γ,α2,f2@Δ2↦Δ3} av3 : τlr' →
-  av1 ⊑{Γ,α1||α2,f2 ◎ f1@Δ1↦Δ3} av3 : τlr.
+Lemma lrval_refine_compose Γ α1 α2 f1 f2 Δ1 Δ2 Δ3 ν1 ν2 ν3 τlr τlr' :
+  ✓ Γ → ν1 ⊑{Γ,α1,f1@Δ1↦Δ2} ν2 : τlr → ν2 ⊑{Γ,α2,f2@Δ2↦Δ3} ν3 : τlr' →
+  ν1 ⊑{Γ,α1||α2,f2 ◎ f1@Δ1↦Δ3} ν3 : τlr.
 Proof.
   destruct 2; inversion_clear 1; refine_constructor;
     eauto using val_refine_compose, addr_refine_compose.
@@ -893,7 +885,7 @@ Proof.
   intros ? He; revert e3 τlr'.
   induction He using @expr_refine_ind; intros ?? He';
     refine_inversion He'; simplify_type_equality'; refine_constructor;
-    eauto using locks_refine_compose, val_refine_compose, addr_refine_compose.
+    eauto using locks_refine_compose, lrval_refine_compose.
 Qed.
 Lemma exprs_refine_compose
     Γ τs α1 α2 f1 f2 Δ1 Δ2 Δ3 es1 es2 es3 τlrs τlrs' :
@@ -1048,9 +1040,9 @@ Proof.
   eauto 15 using stmt_refine_compose.
 Qed.
 
-Lemma lrval_refine_inverse Γ f Δ1 Δ2 av1 av2 τlr :
-  av1 ⊑{Γ,false,f@Δ1↦Δ2} av2 : τlr →
-  av2 ⊑{Γ,false,meminj_inverse f@Δ2↦Δ1} av1 : τlr.
+Lemma lrval_refine_inverse Γ f Δ1 Δ2 ν1 ν2 τlr :
+  ν1 ⊑{Γ,false,f@Δ1↦Δ2} ν2 : τlr →
+  ν2 ⊑{Γ,false,meminj_inverse f@Δ2↦Δ1} ν1 : τlr.
 Proof.
   destruct 1; constructor; eauto using val_refine_inverse,
     addr_refine_inverse, addr_strict_refine.
@@ -1065,8 +1057,7 @@ Proof.
     es2 ⊑{(Γ,τs),false,meminj_inverse f@ Δ2↦Δ1}* es1 :* τlrs).
   { induction 1; constructor; eauto. }
   induction 1 using @expr_refine_ind; refine_constructor;
-    eauto using val_refine_inverse, addr_refine_inverse,
-    locks_refine_inverse, addr_strict_refine.
+    eauto using lrval_refine_inverse, locks_refine_inverse.
 Qed.
 Lemma exprs_refine_inverse Γ τs f Δ1 Δ2 es1 es2 τlrs :
   es1 ⊑{(Γ,τs),false,f@Δ1↦Δ2}* es2 :* τlrs →
@@ -1158,14 +1149,21 @@ Proof.
   * eauto using stmt_refine_throws_valid.
 Qed.
 
+Lemma lrval_refine_weaken Γ α α' f f' Δ1 Δ2 Δ1' Δ2' ν1 ν2 τlr :
+  ✓ Γ → ν1 ⊑{Γ,α,f@Δ1↦Δ2} ν2 : τlr → (α → α') →
+  Δ1' ⊑{Γ,α',f'} Δ2' → Δ1 ⇒ₘ Δ1' → Δ2 ⇒ₘ Δ2' →
+  meminj_extend f f' Δ1 Δ2 → ν1 ⊑{Γ,α',f'@Δ1'↦Δ2'} ν2 : τlr.
+Proof.
+  destruct 2; refine_constructor;
+    eauto using addr_refine_weaken, val_refine_weaken.
+Qed.
 Lemma expr_refine_weaken Γ α α' f f' Δ1 Δ2 Δ1' Δ2' τs e1 e2 τlr :
   ✓ Γ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : τlr → (α → α') →
   Δ1' ⊑{Γ,α',f'} Δ2' → Δ1 ⇒ₘ Δ1' → Δ2 ⇒ₘ Δ2' →
   meminj_extend f f' Δ1 Δ2 → e1 ⊑{(Γ,τs),α',f'@Δ1'↦Δ2'} e2 : τlr.
 Proof.
   intros ? He; intros. induction He using @expr_refine_ind;
-    refine_constructor; eauto using locks_refine_weaken,
-    addr_refine_weaken, val_refine_weaken.
+    refine_constructor; eauto using locks_refine_weaken, lrval_refine_weaken.
 Qed.
 Lemma exprs_refine_weaken Γ α α' f f' Δ1 Δ2 Δ1' Δ2' τs es1 es2 τlrs :
   ✓ Γ → es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2}* es2 :* τlrs → (α → α') →

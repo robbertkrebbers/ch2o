@@ -434,7 +434,7 @@ Section inversion.
     * intros Ee e1 e2 m2 Hv p'. simplify_list_subst_equality Hv. inversion p'.
     * intros Ee Ω' f τs τ Ωs vs Hv. simplify_list_subst_equality Hv.
     * intros Ee e1 Hv ? _. simplify_list_subst_equality Hv.
-      by destruct (EVal_not_redex Ω v).
+      by destruct (EVal_not_redex Ω (inr v)).
   Qed.
   Lemma cstep_stmt_up_inv (P : state K → Prop) m k Ek s S2 :
     Γ\ δ ⊢ₛ State (Ek :: k) (Stmt ↗ s) m ⇒ S2 →
@@ -829,7 +829,8 @@ Proof.
     simplify_list_subst_equality Hvs; simplify_list_subst_equality; inv_ehstep.
   * intros E Ω' f' τs' τ' Ωs' vs' Hvs ? _ HP1 _;
       simplify_list_subst_equality Hvs.
-    + edestruct (zip_with_inj EVal Ωs Ωs' vs vs'); eauto with congruence.
+    + edestruct (zip_with_inj (λ Ω v, #{Ω} v)%E Ωs Ωs' vs vs');
+        eauto with congruence.
     + simplify_list_subst_equality.
     + simplify_list_subst_equality.
   * intros E e1 Hvs Hred Hsafe _ _ HP2; simplify_list_subst_equality Hvs.

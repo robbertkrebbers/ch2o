@@ -27,10 +27,7 @@ Fixpoint expr_eval `{Env K} (e : expr K) (Γ : env K)
   | var{τ} x =>
      o ← ρ !! x;
      Some (inl (addr_top o τ))
-  | #{Ω} v =>
-     guard (Ω = ∅); Some (inr v)
-  | %{Ω} a =>
-     guard (Ω = ∅); Some (inl a)
+  | %#{Ω} ν => guard (Ω = ∅); Some ν
   | .* e =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inr;
      a ← maybe (VBase ∘ VPtr ∘ Ptr) v;
@@ -96,7 +93,7 @@ Implicit Types Δ : memenv K.
 Implicit Types e : expr K.
 Implicit Types a : addr K.
 Implicit Types v : val K.
-Implicit Types av : lrval K.
+Implicit Types ν : lrval K.
 Implicit Types E : ectx K.
 
 Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
@@ -105,8 +102,7 @@ Section expr_eval_ind.
 Context (Γ : env K) (fs : purefuns K) (ρ : stack) (m : mem K).
 Context (P : expr K → lrval K → Prop).
 Context (Pvar : ∀ τ x o, ρ !! x = Some o → P (var{τ} x) (inl (addr_top o τ))).
-Context (Pval : ∀ v, P (# v) (inr v)).
-Context (Paddr : ∀ a, P (% a) (inl a)).
+Context (Pval : ∀ ν, P (%# ν) ν).
 Context (Prtol : ∀ e a,
   ⟦ e ⟧ Γ fs ρ m = Some (inr (ptrV (Ptr a))) → P e (inr (ptrV (Ptr a))) →
   addr_strict Γ a → index_alive' m (addr_index a) → P (.* e) (inl a)).
@@ -136,17 +132,17 @@ Context (Pcall : ∀ e f τs τ F es vs v,
   Forall2 (λ e v, ⟦ e ⟧ Γ fs ρ m = Some (inr v)) es vs →
   Forall2 (λ e v, P e (inr v)) es vs →
   F vs = Some v → P (call e @ es) (inr v)).
-Context (Pif1 : ∀ e1 e2 e3 v1 av2,
+Context (Pif1 : ∀ e1 e2 e3 v1 ν2,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
-  ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 →
-  val_true m v1 → P (if{e1} e2 else e3) av2).
-Context (Pif2 : ∀ e1 e2 e3 v1 av3,
+  ⟦ e2 ⟧ Γ fs ρ m = Some ν2 → P e2 ν2 →
+  val_true m v1 → P (if{e1} e2 else e3) ν2).
+Context (Pif2 : ∀ e1 e2 e3 v1 ν3,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
-  ⟦ e3 ⟧ Γ fs ρ m = Some av3 → P e3 av3 →
-  val_false v1 → P (if{e1} e2 else e3) av3).
-Context (Pcomma : ∀ e1 e2 v1 av2,
+  ⟦ e3 ⟧ Γ fs ρ m = Some ν3 → P e3 ν3 →
+  val_false v1 → P (if{e1} e2 else e3) ν3).
+Context (Pcomma : ∀ e1 e2 v1 ν2,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
-  ⟦ e2 ⟧ Γ fs ρ m = Some av2 → P e2 av2 → P (e1,, e2) av2).
+  ⟦ e2 ⟧ Γ fs ρ m = Some ν2 → P e2 ν2 → P (e1,, e2) ν2).
 Context (Pcast : ∀ τ e v,
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →
   val_cast_ok Γ m (TType τ) v → P (cast{τ} e) (inr (val_cast (TType τ) v))).
@@ -154,12 +150,12 @@ Context (Pinsert : ∀ r e1 e2 v1 v2,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e2 ⟧ Γ fs ρ m = Some (inr v2) → P e2 (inr v2) → is_Some (v2 !!{Γ} r) →
   P (#[r:=e1] e2) (inr (val_alter Γ (λ _, v1) r v2))).
-Lemma expr_eval_ind : ∀ e av, ⟦ e ⟧ Γ fs ρ m = Some av → P e av.
+Lemma expr_eval_ind : ∀ e ν, ⟦ e ⟧ Γ fs ρ m = Some ν → P e ν.
 Proof.
   assert (∀ e f τs τ F es vs v,
     ⟦ e ⟧ Γ fs ρ m = Some (inr (ptrV (FunPtr f τs τ))) →
     P e (inr (ptrV (FunPtr f τs τ))) →
-    Forall (λ e, ∀ av, ⟦ e ⟧ Γ fs ρ m = Some av → P e av) es →
+    Forall (λ e, ∀ ν, ⟦ e ⟧ Γ fs ρ m = Some ν → P e ν) es →
     mapM (λ e, ⟦ e ⟧ Γ fs ρ m ≫= maybe inr) es = Some vs →
     fs !! f = Some F → F vs = Some v → P (call e @ es) (inr v)).
   { intros e f τs τ F es vs v ?? Hes Hvs Hf Hv. apply mapM_Some in Hvs.
@@ -173,8 +169,6 @@ Proof.
 Qed.
 End expr_eval_ind.
 
-Lemma expr_eval_lrval Γ fs ρ m av : ⟦ %# av ⟧ Γ fs ρ m = Some av.
-Proof. by destruct av. Qed.
 Lemma purefuns_empty_valid Γ Δ : ✓{Γ,Δ} ∅.
 Proof. done. Qed.
 Lemma purefuns_valid_lookup Γ Δ fs f F vs v τs τ :
@@ -202,11 +196,11 @@ Proof.
   induction HΩvs; simpl; intros; decompose_Forall;
     simplify_option_equality; f_equal; eauto.
 Qed.
-Lemma expr_eval_typed_aux Γ Δ τs τs' fs ρ m e av τlr :
-  ✓ Γ → ✓{Γ,Δ} m → ⟦ e ⟧ Γ fs ρ m = Some av → ✓{Γ,Δ} fs → Δ ⊢* ρ :* τs →
-  τs `prefix_of` τs' → (Γ,Δ,τs') ⊢ e : τlr → (Γ,Δ) ⊢ av : τlr.
+Lemma expr_eval_typed_aux Γ Δ τs τs' fs ρ m e ν τlr :
+  ✓ Γ → ✓{Γ,Δ} m → ⟦ e ⟧ Γ fs ρ m = Some ν → ✓{Γ,Δ} fs → Δ ⊢* ρ :* τs →
+  τs `prefix_of` τs' → (Γ,Δ,τs') ⊢ e : τlr → (Γ,Δ) ⊢ ν : τlr.
 Proof.
-  intros ?? Hav Hfs ? [τs'' ->] He. revert e av Hav τlr He. assert (∀ es vs σs,
+  intros ?? Hν Hfs ? [τs'' ->] He. revert e ν Hν τlr He. assert (∀ es vs σs,
     Forall2 (λ e v, ∀ τlr,
       (Γ,Δ,τs ++ τs'') ⊢ e : τlr → (Γ,Δ) ⊢ inr v : τlr) es vs →
     (Γ,Δ,τs ++ τs'') ⊢* es :* inr <$> σs → (Γ,Δ) ⊢* vs :* σs).
@@ -231,23 +225,23 @@ Proof.
       val_lookup_seg_typed, val_alter_const_typed, mem_lookup_typed.
   eapply purefuns_valid_lookup; eauto.
 Qed.
-Lemma expr_eval_typed Γ Δ τs fs ρ m e av τlr :
-  ✓ Γ → ✓{Γ,Δ} m → ⟦ e ⟧ Γ fs ρ m = Some av → ✓{Γ,Δ} fs → Δ ⊢* ρ :* τs →
-  (Γ,Δ,τs) ⊢ e : τlr → (Γ,Δ) ⊢ av : τlr.
+Lemma expr_eval_typed Γ Δ τs fs ρ m e ν τlr :
+  ✓ Γ → ✓{Γ,Δ} m → ⟦ e ⟧ Γ fs ρ m = Some ν → ✓{Γ,Δ} fs → Δ ⊢* ρ :* τs →
+  (Γ,Δ,τs) ⊢ e : τlr → (Γ,Δ) ⊢ ν : τlr.
 Proof. intros. eapply expr_eval_typed_aux; eauto. Qed.
 
-Lemma expr_eval_weaken Γ1 Γ2 Δ1 τs fs ρ1 ρ2 m1 m2 e av τlr :
+Lemma expr_eval_weaken Γ1 Γ2 Δ1 τs fs ρ1 ρ2 m1 m2 e ν τlr :
   ✓ Γ1 → ✓{Γ1,Δ1} m1 → ✓{Γ1,Δ1} fs → Δ1 ⊢* ρ1 :* τs → 
-  (Γ1,Δ1,τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 m1 = Some av → Γ1 ⊆ Γ2 →
+  (Γ1,Δ1,τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 m1 = Some ν → Γ1 ⊆ Γ2 →
   (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
   (∀ a v σ, (Γ1,Δ1) ⊢ a : TType σ →
     m1 !!{Γ1} a = Some v → m2 !!{Γ2} a = Some v) →
   (∀ a σ, (Γ1,Δ1) ⊢ a : TType σ →
     mem_forced Γ1 a m1 → is_Some (m1 !!{Γ1} a) → mem_forced Γ2 a m2) →
-  ρ1 `prefix_of` ρ2 → ⟦ e ⟧ Γ2 fs ρ2 m2 = Some av.
+  ρ1 `prefix_of` ρ2 → ⟦ e ⟧ Γ2 fs ρ2 m2 = Some ν.
 Proof.
-  intros ???? He Hav ???? [ρ3 ->].
-  revert Hav τlr He. assert (∀ es vs σs,
+  intros ???? He Hν ???? [ρ3 ->].
+  revert Hν τlr He. assert (∀ es vs σs,
     Forall2 (λ e v, ∀ τlr, (Γ1,Δ1,τs) ⊢ e : τlr →
       ⟦ e ⟧ Γ2 fs (ρ1 ++ ρ3) m2 = Some (inr v)) es vs →
     (Γ1,Δ1,τs) ⊢* es :* inr <$> σs →
@@ -255,11 +249,11 @@ Proof.
   { intros es vs σs Hes Hes'. apply mapM_Some. revert σs Hes'.
     induction Hes; intros [|??] ?; decompose_Forall_hyps; constructor;
       simplify_option_equality; eauto. }
-  revert e av. apply (expr_eval_ind Γ1 fs ρ1 m1
+  revert e ν. apply (expr_eval_ind Γ1 fs ρ1 m1
     (λ e _, ∀ τlr, _ ⊢ e : τlr → (_:Prop))); simpl; intros; typed_inversion_all;
     repeat match goal with
-    | H: ⟦ ?e ⟧ Γ1 fs ρ1 m1 = Some ?av,  _: (Γ1,Δ1,τs) ⊢ ?e : ?τlr |- _ =>
-      feed pose proof (expr_eval_typed Γ1 Δ1 τs fs ρ1 m1 e av τlr); auto;
+    | H: ⟦ ?e ⟧ Γ1 fs ρ1 m1 = Some ?ν,  _: (Γ1,Δ1,τs) ⊢ ?e : ?τlr |- _ =>
+      feed pose proof (expr_eval_typed Γ1 Δ1 τs fs ρ1 m1 e ν τlr); auto;
       clear H
     end; typed_inversion_all; auto.
   * rewrite lookup_app_l by eauto using lookup_lt_Some.
@@ -284,10 +278,10 @@ Proof.
   * simplify_option_equality by eauto using val_lookup_weaken_is_Some.
     by erewrite <-val_alter_weaken by eauto.
 Qed.
-Lemma expr_eval_weaken_empty Γ1 Γ2 Δ1 τs fs ρ1 ρ2 e av τlr :
+Lemma expr_eval_weaken_empty Γ1 Γ2 Δ1 τs fs ρ1 ρ2 e ν τlr :
   ✓ Γ1 → ✓{Γ1} Δ1 → ✓{Γ1,Δ1} fs → Δ1 ⊢* ρ1 :* τs → 
-  (Γ1,Δ1,τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 ∅ = Some av → Γ1 ⊆ Γ2 →
-  ρ1 `prefix_of` ρ2 → ⟦ e ⟧ Γ2 fs ρ2 ∅ = Some av.
+  (Γ1,Δ1,τs) ⊢ e : τlr → ⟦ e ⟧ Γ1 fs ρ1 ∅ = Some ν → Γ1 ⊆ Γ2 →
+  ρ1 `prefix_of` ρ2 → ⟦ e ⟧ Γ2 fs ρ2 ∅ = Some ν.
 Proof.
   intros; eapply expr_eval_weaken; eauto using cmap_empty_valid;
     by intros until 0; rewrite mem_lookup_empty, <-?not_eq_None_Some.
@@ -356,26 +350,22 @@ Qed.
 
 (** If an expression has a semantics, then each sub-expression of that
 expression has a semantics too. *)
-Lemma expr_eval_subst Γ fs ρ m E e av :
-  ⟦ subst E e ⟧ Γ fs ρ m = Some av ↔
-  ∃ av', ⟦ e ⟧ Γ fs ρ m = Some av' ∧ ⟦ subst E (%# av') ⟧ Γ fs ρ m = Some av.
+Lemma expr_eval_subst Γ fs ρ m E e ν :
+  ⟦ subst E e ⟧ Γ fs ρ m = Some ν ↔
+  ∃ ν', ⟦ e ⟧ Γ fs ρ m = Some ν' ∧ ⟦ subst E (%# ν') ⟧ Γ fs ρ m = Some ν.
 Proof.
-  split.
-  * revert av. induction E as [|E' E IH] using rev_ind; simpl; intros av.
-    { eauto using expr_eval_lrval. }
-    setoid_rewrite subst_snoc.
-    intros; destruct E';
-      repeat match goal with
-      | _ => progress simplify_option_equality
-      | H : mapM _ _ = Some _ |- _ =>
-         apply mapM_Some in H; decompose_Forall_hyps
-      | H : ∀ _, Some _ = Some _  → _ |- _ =>
-         specialize (H _ eq_refl); destruct H as (?&->&?); eexists; split; eauto
-      end; auto.
-    erewrite mapM_Some_2
-      by (apply Forall2_app, Forall2_cons; simplify_option_equality; eauto).
-    by simplify_option_equality.
-  * setoid_rewrite <-(expr_eval_lrval Γ fs ρ m). intros (av'&?&<-).
-    by apply subst_preserves_expr_eval.
+  split; [|by intros (ν'&?&<-); apply subst_preserves_expr_eval].
+  revert ν. induction E as [|E' E IH] using rev_ind; simpl; intros ν; eauto.
+  setoid_rewrite subst_snoc.
+  intros; destruct E';
+    repeat match goal with
+    | _ => progress simplify_option_equality
+    | H : mapM _ _ = Some _ |- _ => apply mapM_Some in H; decompose_Forall_hyps
+    | H : ∀ _, Some _ = Some _  → _ |- _ =>
+       specialize (H _ eq_refl); destruct H as (?&->&?); eexists; split; eauto
+    end; auto.
+  erewrite mapM_Some_2
+    by (apply Forall2_app, Forall2_cons; simplify_option_equality; eauto).
+  by simplify_option_equality.
 Qed.
 End expression_eval.

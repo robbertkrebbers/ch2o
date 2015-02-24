@@ -48,8 +48,8 @@ Proof.
   refine_constructor; eauto using lockset_valid_weaken, mem_alloc_new_forward'.
   * eapply locks_refine_weaken with false meminj_id ('{m}) ('{m});
       eauto using locks_refine_id, mem_alloc_new_forward', option_eq_1.
-  * do 3 refine_constructor.
-    eapply addr_top_array_refine; eauto using mem_alloc_new_index_typed'.
+  * do 4 refine_constructor;
+      eauto using addr_top_array_refine, mem_alloc_new_index_typed'.
 Qed.
 Lemma cexec_complete Γ δ S1 S2 g :
   ✓ Γ → ✓{Γ,'{SMem S1}} δ → Γ ⊢ S1 : g → Γ\ δ ⊢ₛ S1 ⇒ S2 → ∃ f S2',

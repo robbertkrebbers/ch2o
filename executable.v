@@ -187,7 +187,7 @@ Definition cexec (Γ : env K) (δ : funenv K)
     end
   | Expr e =>
     match maybe2 EVal e with
-    | Some (Ω,v) =>
+    | Some (Ω,inr v) =>
       match k with
       | CExpr e (! □) :: k => {[ State k (Stmt ↗ (! e)) (mem_unlock Ω m) ]}
       | CExpr e (ret □) :: k =>
@@ -203,7 +203,7 @@ Definition cexec (Γ : env K) (δ : funenv K)
          end
       | _ => ∅
       end
-    | None =>
+    | _ =>
       '(E,e') ← expr_redexes e;
       let es := ehexec Γ k e' m in
       if decide (es ≡ ∅) then

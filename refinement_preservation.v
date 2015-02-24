@@ -92,11 +92,11 @@ Proof.
   destruct 2; intros.
   * refine_inversion_all; decompose_Forall_hyps.
     go f; auto.
-    refine_constructor; eauto using addr_top_strict, addr_top_refine,
+    refine_constructor; eauto 10 using addr_top_strict, addr_top_refine,
       cmap_index_typed_valid, locks_empty_refine.
   * refine_inversion_all; [go f; auto|].
     exfalso; eauto using index_alive_1'.
-  * refine_inversion_all; go f; eauto.
+  * refine_inversion_all; go f; eauto 10.
   * refine_inversion_all.
     edestruct assign_refine as (?&?&?&?&?); eauto.
     go f.
@@ -120,7 +120,7 @@ Proof.
       true perm_full (τ.[n])) as (f'&?&?&?); eauto using mem_allocable_fresh,
       TArray_valid, perm_full_mapped, perm_full_unshared.
     go f'; eauto.
-    refine_constructor; eauto 8 using addr_top_array_refine,
+    refine_constructor; eauto 10 using addr_top_array_refine,
       mem_alloc_new_index_typed', addr_top_array_strict, TArray_valid.
     eapply locks_refine_weaken; eauto using mem_alloc_new_forward',
       TArray_valid, option_eq_1, mem_allocable_fresh. 
@@ -164,7 +164,7 @@ Proof.
       true perm_full (τ.[n])) as (f'&?&?&?); eauto using mem_allocable_fresh,
       TArray_valid, perm_full_mapped, perm_full_unshared.
     left; go f'; eauto.
-    refine_constructor; eauto 8 using addr_top_array_refine,
+    refine_constructor; eauto 10 using addr_top_array_refine,
       mem_alloc_new_index_typed', addr_top_array_strict, TArray_valid.
     eapply locks_refine_weaken; eauto using mem_alloc_new_forward',
       TArray_valid, option_eq_1, mem_allocable_fresh. }

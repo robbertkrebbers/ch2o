@@ -391,7 +391,7 @@ Lemma convert_ptrs_typed Γ m τs e1 τ1 e2 τ2 e1' e2' τ' :
 Proof.
   unfold convert_ptrs; destruct τ1 as [[| |[]]| |], τ2 as [[| |[]]| |];
     intros; simplify_option_equality; split; repeat typed_constructor;
-    eauto 10 using TPtr_valid_inv, TBase_valid_inv, expr_inr_typed_type_valid.
+    eauto 12 using TPtr_valid_inv, TBase_valid_inv, expr_inr_typed_type_valid.
 Qed.
 Lemma to_if_expr_typed Γ m τs e1 τb e2 τ2 e3 τ3 e τe :
   to_if_expr e1 (e2,τ2) (e3,τ3) = Some (e,τe) →

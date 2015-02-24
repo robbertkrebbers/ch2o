@@ -16,6 +16,7 @@ Instance listset_empty: Empty (listset A) := Listset [].
 Instance listset_singleton: Singleton A (listset A) := λ x, Listset [x].
 Instance listset_union: Union (listset A) := λ l k,
   let (l') := l in let (k') := k in Listset (l' ++ k').
+Global Opaque listset_singleton listset_empty.
 
 Global Instance: SimpleCollection A (listset A).
 Proof.

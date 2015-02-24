@@ -1,7 +1,6 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export smallstep executable.
-Local Opaque listset_singleton.
 
 Section soundness.
 Context `{EnvSpec K}.
@@ -70,7 +69,6 @@ Proof.
     | H : _ ∈ ehexec _ _ _ _ |- _ => apply ehexec_sound in H
     | H : _ ∈ expr_redexes _ |- _ =>
       apply expr_redexes_correct in H; destruct H
-    | H : maybe2 EVal _ = Some _ |- _ => apply maybe_EVal_Some in H
     | H : maybe_ECall_redex _ = Some _ |- _ =>
       apply maybe_ECall_redex_Some in H; destruct H
     | _ => progress decompose_elem_of
@@ -78,6 +76,7 @@ Proof.
     | _ => destruct (val_true_false_dec _) as [[[??]|[??]]|[??]]
     | _ => case_match
     | _ => progress simplify_equality'
+    | H : maybe2 _ ?e = Some _ |- _ => is_var e; destruct e
     end; do_cstep.
 Qed.
 Lemma cexecs_sound Γ δ S1 S2 : Γ\ δ ⊢ₛ S1 ⇒ₑ* S2 → Γ\ δ ⊢ₛ S1 ⇒* S2.

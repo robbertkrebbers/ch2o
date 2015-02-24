@@ -48,10 +48,10 @@ Lemma ehstep_preservation Γ m1 m2 ρ τs e1 e2 τlr :
 Proof.
   intros ? [] ???.
   * typed_inversion_all; decompose_Forall_hyps; split_ands; auto.
-    typed_constructor; eauto using addr_top_typed, addr_top_strict,
+    typed_constructor; eauto 8 using addr_top_typed, addr_top_strict,
       cmap_index_typed_valid, lockset_empty_valid.
   * typed_inversion_all; auto.
-  * typed_inversion_all; auto 7.
+  * typed_inversion_all; auto 10.
   * typed_inversion_all.
     rewrite <-and_assoc; apply and_wlog_l; intros; split_ands.
     + eapply mem_lock_valid'; eauto using mem_insert_writable,
@@ -264,7 +264,7 @@ Proof.
     + destruct (decide (n < ctx_catches k)); [|by auto].
       left. destruct n; ctx_inversion Hk; try lia || solve_cred.
   * destruct (is_nf_or_redex e) as [Hnf|(E&e'&?&->)].
-    { destruct Hnf as [Ω v|]; typed_inversion_all.
+    { destruct Hnf as [Ω [v|]]; typed_inversion_all.
       ctx_inversion Hk; left; try solve_cred;
         destruct (val_true_false_dec m v)
         as [[[??]|[??]]|[??]]; solve_cred. }
