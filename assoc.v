@@ -13,17 +13,15 @@ Require Export fin_maps.
 [lexico], it automatically guarantees that no duplicates exist. *)
 Definition assoc (K : Type) `{Lexico K, !TrichotomyT lexico,
     !StrictOrder lexico} (A : Type) : Type :=
-  dsig (λ l : list (K * A), StronglySorted lexico (fst <$> l)).
+  dsig (λ l : list (K * A), StronglySorted lexico (l.*1)).
 
 Section assoc.
 Context `{Lexico K, !StrictOrder lexico,
   ∀ x y : K, Decision (x = y), !TrichotomyT lexico}.
 
 Infix "⊂" := lexico.
-Notation assoc_before j l :=
-  (Forall (lexico j) (fst <$> l)) (only parsing).
-Notation assoc_wf l :=
-  (StronglySorted (lexico) (fst <$> l)) (only parsing).
+Notation assoc_before j l := (Forall (lexico j) (l.*1)) (only parsing).
+Notation assoc_wf l := (StronglySorted (lexico) (l.*1)) (only parsing).
 
 Lemma assoc_before_transitive {A} (l : list (K * A)) i j :
   i ⊂ j → assoc_before j l → assoc_before i l.

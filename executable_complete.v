@@ -11,19 +11,19 @@ Ltac solve_length := simplify_equality'; repeat
   match goal with H : Forall2 _ _ _ |- _ => apply Forall2_length in H end; lia.
 Hint Resolve cmap_refine_memenv_refine.
 Hint Immediate meminj_extend_reflexive.
-Hint Immediate ctx_typed_stack_typed.
+Hint Immediate ctx_typed_locals_valid.
 Hint Resolve (elem_of_singleton_2 (C:=listset (state K))).
 
-Lemma ehexec_complete Γ m1 m2 k τs e1 e2 τlr :
-  ✓ Γ → ✓{Γ} m1 → '{m1} ⊢* get_stack k :* τs → (Γ,'{m1},τs) ⊢ e1 : τlr →
-  Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2 → ∃ f e2' m2',
+Lemma ehexec_complete Γ m1 m2 k e1 e2 τlr :
+  ✓ Γ → ✓{Γ} m1 → ✓{'{m1}}* (locals k) → (Γ,'{m1},locals k.*2) ⊢ e1 : τlr →
+  Γ\ locals k ⊢ₕ e1, m1 ⇒ e2, m2 → ∃ f e2' m2',
   (**i 1.) *) (e2', m2') ∈ ehexec Γ k e1 m1 ∧
-  (**i 2.) *) e2' ⊑{(Γ,τs),false,f@'{m2'}↦'{m2}} e2 : τlr ∧
+  (**i 2.) *) e2' ⊑{(Γ,locals k.*2),false,f@'{m2'}↦'{m2}} e2 : τlr ∧
   (**i 3.) *) m2' ⊑{Γ,false,f} m2 ∧
   (**i 4.) *) meminj_extend meminj_id f ('{m1}) ('{m1}).
 Proof.
   intros ? Hm1 Hρ He1 p. destruct (ehstep_preservation Γ m1 m2
-    (get_stack k) τs e1 e2 τlr) as (Hm2&He2&Hm); auto.
+    (locals k) e1 e2 τlr) as (Hm2&He2&Hm); auto.
   revert Hm1 Hρ He1 Hm2 He2 Hm. case p; clear p; try by (
     intros; eexists meminj_id, _, _; repeat match goal with
     | H : assign_sem _ _ _ _ _ _ _ |- _ =>
@@ -68,9 +68,8 @@ Proof.
     destruct Ei; simpl; eauto.
   * intros m1 m2 k E e1 e2 ?? (τlr&Heτlr&?&?) ? _; simpl in *.
     typed_inversion Heτlr; edestruct (ectx_subst_typed_rev Γ ('{m1})
-      (get_stack_types k) E e1) as (τlr&?&?); eauto.
-    edestruct (ehexec_complete Γ m1 m2 k (get_stack_types k)
-      e1 e2) as (f&e2'&m2'&?&?&?&?); eauto using ctx_typed_stack_typed.
+      (locals k.*2) E e1) as (τlr&?&?); eauto.
+    edestruct (ehexec_complete Γ m1 m2 k e1 e2) as (f&e2'&m2'&?&?&?&?); eauto.
     exists f (State k (Expr (subst E e2')) m2'); split_ands; auto.
     { assert (is_redex e1) as He1 by eauto using ehstep_is_redex.
       assert (maybe2 EVal (subst E e1) = None) as ->.

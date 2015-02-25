@@ -20,6 +20,9 @@ Section typing.
 Context `{Env K}.
 Notation envs := (env K * memenv K * list (type K))%type.
 
+Global Instance stack_item_valid : Valid (memenv K) (index * type K) := λ Δ oτ,
+  Δ ⊢ oτ.1 : oτ.2.
+
 Global Instance rettype_valid : Valid (env K) (rettype K) := λ Γ mcτ,
   match mcτ.2 with Some τ => ✓{Γ} τ | _ => True end.
 Inductive lrval_typed' (Γ : env K) (Δ : memenv K) : lrval K → lrtype K → Prop :=
@@ -40,8 +43,8 @@ Inductive assign_typed (τ1 : type K) : type K → assign → type K → Prop :=
 
 Inductive expr_typed' (Γ : env K) (Δ : memenv K)
      (τs : list (type K)) : expr K → lrtype K → Prop :=
-  | EVar_typed τ n :
-     τs !! n = Some τ → expr_typed' Γ Δ τs (var{τ} n) (inl τ)
+  | EVar_typed τ i :
+     τs !! i = Some τ → expr_typed' Γ Δ τs (var i) (inl τ)
   | EVal_typed Ω ν τlr :
      ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ ν : τlr → expr_typed' Γ Δ τs (%#{Ω} ν) τlr
   | ERtoL_typed e τ :
@@ -101,7 +104,7 @@ Global Instance expr_typed:
 Section expr_typed_ind.
   Context (Γ : env K) (Δ : memenv K) (τs : list (type K)).
   Context (P : expr K → lrtype K → Prop).
-  Context (Pvar : ∀ τ n, τs !! n = Some τ → P (var{τ} n) (inl τ)).
+  Context (Pvar : ∀ τ i, τs !! i = Some τ → P (var i) (inl τ)).
   Context (Pval : ∀ Ω ν τlr, ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ ν : τlr → P (%#{Ω} ν) τlr).
   Context (Prtol : ∀ e τ,
     (Γ,Δ,τs) ⊢ e : inr (TType τ.*) → P e (inr (TType τ.*)) →
@@ -318,7 +321,7 @@ Inductive ctx_typed' (Γs : env K * memenv K) :
      ctx K → focustype K → focustype K → Prop :=
   | ctx_nil_typed_2 τf : ctx_typed' Γs [] τf τf
   | ctx_cons_typed_2 Ek k τf1 τf2 τf3 :
-     (Γs,get_stack_types k) ⊢ Ek : τf1 ↣ τf2 →
+     (Γs,locals k.*2) ⊢ Ek : τf1 ↣ τf2 →
      ctx_typed' Γs k τf2 τf3 → ctx_typed' Γs (Ek :: k) τf1 τf3.
 Global Instance ctx_typed: PathTyped (env K * memenv K)
   (focustype K) (focustype K) (ctx K) := ctx_typed'.
@@ -358,7 +361,7 @@ Global Instance focus_typed:
 Global Instance state_typed :
     Typed (env K) funname (state K) := λ Γ S f, ∃ τf,
   let 'State k φ m := S in
-  (Γ,'{m},get_stack_types k) ⊢ φ : τf ∧
+  (Γ,'{m},locals k.*2) ⊢ φ : τf ∧
   (Γ,'{m}) ⊢ k : τf ↣ Fun_type f ∧
   ✓{Γ} m.
 
@@ -571,16 +574,17 @@ Proof.
   induction Hvs; intros [|??] ?; decompose_Forall_hyps;
     typed_inversion_all; constructor; auto.
 Qed.
-Lemma ctx_typed_stack_typed Γ Δ k τf σf :
-  (Γ,Δ) ⊢ k : τf ↣ σf → Δ ⊢* get_stack k :* get_stack_types k.
+Lemma indexes_valid_weaken Δ1 Δ2 ρ : ✓{Δ1}* ρ → Δ1 ⇒ₘ Δ2 → ✓{Δ2}* ρ.
 Proof.
-  revert τf. induction k as [|Ek k IH]; intros; typed_inversion_all; eauto;
-    repeat match goal with
-    | H : (_,_,_) ⊢ Ek : _ ↣ _ |- _ => typed_inversion H
-    | H : Forall2 _ ?l ?l' |- _ =>
-       unless (length l = length l') by done;
-       assert (length l = length l') by eauto using Forall2_length
-    end; rewrite ?fst_zip, ?snd_zip by lia; eauto using Forall2_app.
+  unfold valid, stack_item_valid.
+  induction 1; eauto using memenv_forward_typed.
+Qed.
+Lemma ctx_typed_locals_valid Γ Δ k τf σf :
+  (Γ,Δ) ⊢ k : τf ↣ σf → ✓{Δ}* (locals k).
+Proof.
+  assert (∀ os σs, Δ ⊢* os :* σs → ✓{Δ}* (zip os σs))
+    by (induction 1; simpl; eauto).
+  induction 1 as [|Ek k ??? []]; naive_solver.
 Qed.
 Lemma ectx_item_subst_typed Γ Δ τs Ei e τlr σlr :
   (Γ,Δ,τs) ⊢ Ei : τlr ↣ σlr →
@@ -640,9 +644,6 @@ Proof.
   intros HEs. typed_inversion HEs; unfold rettype_union in *;
     repeat case_match; simplify_option_equality; eauto.
 Qed.
-Lemma Fun_type_stack_types Γ Δ k f τf :
-  (Γ,Δ) ⊢ k : Fun_type f ↣ τf → get_stack_types k = [].
-Proof. by destruct k as [|[]]; intros; typed_inversion_all. Qed.
 Lemma rettype_union_l mσ : rettype_union mσ None = Some mσ.
 Proof. by destruct mσ. Qed.
 Lemma rettype_union_r mσ : rettype_union None mσ = Some mσ.

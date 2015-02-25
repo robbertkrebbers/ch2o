@@ -13,7 +13,7 @@ us to treat pointers to both automatically and dynamically allocated memory in
 a uniform way. Evaluation of a variable will therefore consist of a looking up
 its address in the stack and returning a pointer to that address. *)
 
-Notation stack := (list index) (only parsing).
+Notation stack K := (list (index * type K)) (only parsing).
 Class Vars A := vars: A → natset.
 Arguments vars {_ _} !_ / : simpl nomatch.
 
@@ -46,7 +46,7 @@ Inductive assign :=
 
 Notation lrval K := (addr K + val K)%type.
 Inductive expr (K : Set) : Set :=
-  | EVar : type K → nat → expr K
+  | EVar : nat → expr K
   | EVal : lockset → lrval K → expr K
   | ERtoL : expr K → expr K
   | ERofL : expr K → expr K
@@ -74,7 +74,7 @@ Delimit Scope expr_scope with E.
 Bind Scope expr_scope with expr.
 Local Open Scope expr_scope.
 
-Arguments EVar {_} _ _.
+Arguments EVar {_} _.
 Arguments EVal {_} _ _.
 Arguments ERtoL {_} _%expr_scope.
 Arguments ERofL {_} _%expr_scope.
@@ -95,8 +95,8 @@ Arguments EInsert {_} _%expr_scope _ _%expr_scope.
 
 (* The infixes [++] and [::] are at level 60, and [<$>] is at level 65. We
 should remain below those. *)
-Notation "'var{' τ } x" := (EVar τ x)
-  (at level 10, format "var{ τ }  x") : expr_scope.
+Notation "'var' x" := (EVar x)
+  (at level 10, format "var  x") : expr_scope.
 Notation "%#{ Ω } ν" := (EVal Ω ν)
   (at level 10, format "%#{ Ω }  ν") : expr_scope.
 Notation "%# ν" := (EVal ∅ ν) (at level 10) : expr_scope.
@@ -149,7 +149,7 @@ Infix "==" := (EBinOp (CompOp EqOp)) (at level 52) : expr_scope.
 Notation "- e" := (EUnOp NegOp e)
   (at level 35, right associativity) : expr_scope.
 
-Instance: Injective2 (=) (=) (=) (@EVar K).
+Instance: Injective (=) (=) (@EVar K).
 Proof. by injection 1. Qed.
 Instance: Injective2 (=) (=) (=) (λ Ω (v : val K), #{Ω} v).
 Proof. by injection 1. Qed.
@@ -176,8 +176,7 @@ Instance expr_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} :
 Proof.
   refine (fix go e1 e2 : Decision (e1 = e2) :=
   match e1, e2 with
-  | var{τ1} i1, var{τ2} i2 =>
-     cast_if_and (decide_rel (=) i1 i2) (decide_rel (=) τ1 τ2)
+  | var i1, var i2 => cast_if (decide_rel (=) i1 i2)
   | %#{Ω1} ν1, %#{Ω2} ν2 =>
      cast_if_and (decide_rel (=) Ω1 Ω2) (decide_rel (=) ν1 ν2)
   | .* e1, .* e2 | & e1, & e2 => cast_if (decide_rel (=) e1 e2)
@@ -218,7 +217,7 @@ contain an induction hypothesis for the function arguments [es]. We therefore
 define an appropriate induction principle for expressions by hand. *)
 Section expr_ind.
   Context {K} (P : expr K → Prop).
-  Context (Pvar : ∀ τ x, P (var{τ} x)).
+  Context (Pvar : ∀ x, P (var x)).
   Context (Pval : ∀ Ω ν, P (%#{Ω} ν)).
   Context (Prtol : ∀ e, P e → P (.* e)).
   Context (Profl : ∀ e, P e → P (& e)).
@@ -239,7 +238,7 @@ Section expr_ind.
   Definition expr_ind_alt : ∀ e, P e :=
     fix go e : P e :=
     match e with
-    | var{τ} x => Pvar τ x
+    | var x => Pvar x
     | %#{Ω} ν => Pval Ω ν
     | .* e => Prtol _ (go e)
     | & e => Profl _ (go e)
@@ -266,7 +265,7 @@ measure can be used for well-founded induction on expressions. *)
 Instance expr_size {K} : Size (expr K) :=
   fix go e : nat := let _ : Size _ := go in
   match e with
-  | var{_} _ | abort _ => 1 | %#{_} _ => 0
+  | var _ | abort _ => 1 | %#{_} _ => 0
   | .* e | & e | cast{_} e => S (size e)
   | e1 ::={_} e2 | e1 @{_} e2 | e1,, e2 | #[_:=e1] e2 => S (size e1 + size e2)
   | call e @ es => S (size e + sum_list_with size es)
@@ -284,7 +283,7 @@ Qed.
 (** An expression is [load_free] if it does not contain any occurrences of the
 [load] operator. *)
 Inductive load_free {K} : expr K → Prop :=
-  | EVar_load_free τ x : load_free (var{τ} x)
+  | EVar_load_free x : load_free (var x)
   | EVal_load_free Ω ν : load_free (%#{Ω} ν)
   | ERtoL_load_free e : load_free e → load_free (.* e)
   | ERofL_load_free e : load_free e → load_free (& e)
@@ -311,7 +310,7 @@ Inductive load_free {K} : expr K → Prop :=
 
 Section load_free_ind.
   Context {K} (P : expr K → Prop).
-  Context (Pvar : ∀ τ x, P (var{τ} x)).
+  Context (Pvar : ∀ x, P (var x)).
   Context (Pval : ∀ Ω ν, P (%#{Ω} ν)).
   Context (Prtol : ∀ e, load_free e → P e → P (.* e)).
   Context (Profl : ∀ e, load_free e → P e → P (& e)).
@@ -344,7 +343,7 @@ Proof.
  refine (
   fix go e :=
   match e return Decision (load_free e) with
-  | var{_} _ | %#{_} _ | abort _ => left _
+  | var _ | %#{_} _ | abort _ => left _
   | .* e | & e => cast_if (decide (load_free e))
   | e1 ::={_} e2 => cast_if_and (decide (load_free e1)) (decide (load_free e2))
   | call e @ es =>
@@ -364,7 +363,7 @@ Defined.
 Instance expr_free_vars {K} : Vars (expr K) :=
   fix go e := let _ : Vars _ := @go in
   match e with
-  | var{_} n => {[ n ]} | %#{_} _ | abort _ => ∅
+  | var n => {[ n ]} | %#{_} _ | abort _ => ∅
   | .* e | & e | cast{_} e => vars e
   | call e @ es => vars e ∪ ⋃ (vars <$> es)
   | alloc{_} e | load e | e %> _ | e #> _ | free e | @{_} e => vars e
@@ -401,7 +400,7 @@ Proof. rewrite locks_app. simpl. by rewrite (right_id_L ∅ (∪)). Qed.
 Instance expr_locks {K} : Locks (expr K) :=
   fix go e : lockset := let _ : Locks _ := @go in
   match e with
-  | var{_} _ | abort _ => ∅ | %#{Ω} _ => Ω
+  | var _ | abort _ => ∅ | %#{Ω} _ => Ω
   | .* e | & e | cast{_} e => locks e
   | call e @ es => locks e ∪ ⋃ (locks <$> es)
   | alloc{_} e | load e | e %> _ | e #> _ | free e | @{_} e => locks e
@@ -415,7 +414,7 @@ conditional and call expressions), these sequence points are not observable
 because pure expressions do not allow any locations to get locked in the
 first place. *)
 Inductive is_pure {K} : expr K → Prop :=
-  | EVar_pure τ x : is_pure (var{τ} x)
+  | EVar_pure x : is_pure (var x)
   | EVal_pure v : is_pure (%# v)
   | EAddr_pure a : is_pure (% a)
   | ERtoL_pure e : is_pure e → is_pure (.* e)
@@ -432,7 +431,7 @@ Inductive is_pure {K} : expr K → Prop :=
 
 Section is_pure_ind.
   Context {K} (fs : funset) (P : expr K → Prop).
-  Context (Pvar : ∀ τ x, P (var{τ} x)).
+  Context (Pvar : ∀ x, P (var x)).
   Context (Pval : ∀ v, P (%# v)).
   Context (Paddr : ∀ a, P (% a)).
   Context (Prtol : ∀ e, is_pure e → P e → P (.* e)).
@@ -459,7 +458,7 @@ Proof.
  refine (
   fix go e :=
   match e return Decision (is_pure e) with
-  | var{_} _ => left _ | %#{Ω} _ => cast_if (decide (Ω = ∅))
+  | var _ => left _ | %#{Ω} _ => cast_if (decide (Ω = ∅))
   | .* e | & e | e %> _ | e #> _ | cast{_} e => cast_if (decide (is_pure e))
   | @{op} e => cast_if (decide (is_pure e))
   | e1 @{_} e2 | e1 ,, e2 | #[_:=e1] e2 =>
@@ -486,7 +485,7 @@ by one. That means, each variable [var x] in [e] becomes [var (S x)]. *)
 Reserved Notation "e ↑" (at level 20, format "e ↑").
 Fixpoint expr_lift {K} (e : expr K) : expr K :=
   match e with
-  | var{τ} x => var{τ} (S x)
+  | var x => var (S x)
   | %#{Ω} ν => %#{Ω} ν
   | .* e => .* (e↑)
   | & e => & (e↑)
@@ -513,7 +512,7 @@ states that [e] is a head redex with respect to the semantics in the file
 Inductive is_nf {K} : expr K → Prop :=
   | EVal_nf Ω ν : is_nf (%#{Ω} ν).
 Inductive is_redex {K} : expr K → Prop :=
-  | EVar_redex τ x : is_redex (var{τ} x)
+  | EVar_redex x : is_redex (var x)
   | ERtoL_redex e : is_nf e → is_redex (.* e)
   | ERofL_redex e : is_nf e → is_redex (& e)
   | EAssign_redex ass e1 e2 :
@@ -543,7 +542,7 @@ Instance is_redex_dec {K} (e : expr K) : Decision (is_redex e).
 Proof.
  refine
   match e with
-  | var{_} _ | abort _ => left _
+  | var _ | abort _ => left _
   | .* e | & e | cast{_} e | load e | e %> _ | e #> _ | alloc{_} e | free e
     | @{_} e | if{e} _ else _ | e ,, _ => cast_if (decide (is_nf e))
   | call e @ es => cast_if_and (decide (is_nf e)) (decide (Forall is_nf es))
@@ -570,7 +569,7 @@ Definition maybe_ECall_redex {K} (e : expr K) :
   '(Ω,v) ← maybe2 (λ Ω v, #{Ω} v) e;
   '(f,τs,τ) ← maybe (VBase ∘ VPtr) v ≫= maybe3 FunPtr;
   vΩs ← mapM (maybe2 (λ Ω v, #{Ω} v)) es;
-  Some (Ω, f, τs, τ, fst <$> vΩs, snd <$> vΩs).
+  Some (Ω, f, τs, τ, vΩs.*1, vΩs.*2).
 
 Lemma maybe_EAlloc_Some {K} (e : expr K) τ e' :
   maybe2 EAlloc e = Some (τ,e') ↔ e = alloc{τ} e'.
@@ -592,8 +591,7 @@ Lemma maybe_ECall_redex_Some {K} (e : expr K) Ω f τs τ Ωs vs :
     e = call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs ∧ length Ωs = length vs.
 Proof.
   assert (∀ (es : list (expr K)) Ωvs,
-    mapM (maybe2 (λ Ω v, #{Ω} v)) es = Some Ωvs →
-    es = #{fst <$> Ωvs}* (snd <$> Ωvs))%E.
+    mapM (maybe2 (λ Ω v, #{Ω} v)) es = Some Ωvs → es = #{Ωvs.*1}* (Ωvs.*2))%E.
   { intros es Ωvs. rewrite mapM_Some. induction 1 as [|e']; f_equal'; eauto.
     by destruct e'; repeat (case_match || simplify_option_equality). }
   split; [|intros [-> ?]; eauto using maybe_ECall_redex_Some_2].
@@ -817,7 +815,7 @@ does not have to instantiate the induction hypothesis with the appropriate
 context. *)
 Section ectx_expr_ind.
   Context {K} (P : ectx K → expr K → Prop).
-  Context (Pvar : ∀ E τ x, P E (var{τ} x)).
+  Context (Pvar : ∀ E x, P E (var x)).
   Context (Pval : ∀ E Ω ν, P E (%#{Ω} ν)).
   Context (Prtol : ∀ E e, P ((.* □) :: E) e → P E (.* e)).
   Context (Profl : ∀ E e, P ((& □) :: E) e → P E (& e)).
@@ -848,7 +846,7 @@ Section ectx_expr_ind.
   Definition ectx_expr_ind : ∀ E e, P E e :=
     fix go E e : P E e :=
     match e with
-    | var{_} x => Pvar _ _ x
+    | var x => Pvar _ x
     | %#{_} ν => Pval _ _ ν
     | .* e => Prtol _ _ (go _ e)
     | & e => Profl _ _ (go _ e)
@@ -882,7 +880,7 @@ Ltac ectx_expr_ind E e :=
 contexts are particularly useful to prove some of the Hoare rules in a more
 generic way. *)
 Inductive ectx_full (K : Set) : nat → Set :=
-  | DCVar : type K → nat → ectx_full K 0
+  | DCVar : nat → ectx_full K 0
   | DCVal : lockset → lrval K → ectx_full K 0
   | DCRtoL : ectx_full K 1
   | DCLtoR : ectx_full K 1
@@ -901,7 +899,7 @@ Inductive ectx_full (K : Set) : nat → Set :=
   | DCCast : type K → ectx_full K 1
   | DCInsert : ref K → ectx_full K 2.
 
-Arguments DCVar {_} _ _.
+Arguments DCVar {_} _.
 Arguments DCVal {_} _ _.
 Arguments DCRtoL {_}.
 Arguments DCLtoR {_}.
@@ -923,7 +921,7 @@ Arguments DCInsert {_} _.
 Instance ectx_full_subst {K} :
     DepSubst (ectx_full K) (vec (expr K)) (expr K) := λ _ E,
   match E with
-  | DCVar τ x => λ _, var{τ} x
+  | DCVar x => λ _, var x
   | DCVal Ω ν => λ _, %#{Ω} ν
   | DCRtoL => λ es, .* (es !!! 0)
   | DCLtoR => λ es, & (es !!! 0)
@@ -968,7 +966,7 @@ Qed.
 Definition ectx_full_to_item {K n} (E : ectx_full K n)
     (es : vec (expr K) n) (i : fin n) : ectx_item K :=
   match E in ectx_full _ n return fin n → vec (expr K) n → ectx_item K with
-  | DCVar _ _  | DCVal _ _ | DCAbort _ => fin_0_inv _
+  | DCVar _  | DCVal _ _ | DCAbort _ => fin_0_inv _
   | DCRtoL => fin_S_inv _ (λ _, .* □) $ fin_0_inv _
   | DCLtoR => fin_S_inv _ (λ _, & □) $ fin_0_inv _
   | DCAssign ass =>
@@ -1046,7 +1044,7 @@ Section expr_split.
     fix go E e {struct e} :=
     if decide (is_redex e) then {[ (E, e) ]} else
     match e with
-    | var{_} _ | abort _ => ∅ (* impossible *)
+    | var _ | abort _ => ∅ (* impossible *)
     | %#{_} _ => ∅
     | .* e => go (.* □ :: E) e
     | & e => go (& □ :: E) e

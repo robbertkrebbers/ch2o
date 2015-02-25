@@ -562,8 +562,8 @@ Section env_valid_dec.
     | env_nil_valid : env_c_valid []
     | env_cons_valid Γc t τs :
        env_c_valid Γc → ✓{mk_env (map_of_list Γc) ∅}* τs →
-       τs ≠ [] → t ∉ (fst <$> Γc) → env_c_valid ((t,τs) :: Γc).
-  Lemma env_c_valid_nodup Γc : env_c_valid Γc → NoDup (fst <$> Γc).
+       τs ≠ [] → t ∉ (Γc.*1) → env_c_valid ((t,τs) :: Γc).
+  Lemma env_c_valid_nodup Γc : env_c_valid Γc → NoDup (Γc.*1).
   Proof. by induction 1; csimpl; constructor. Qed.
   Global Instance env_c_valid_dec : ∀ Γc, Decision (env_c_valid Γc).
   Proof.
@@ -573,7 +573,7 @@ Section env_valid_dec.
     | [] => left _
     | (s,τs) :: Γc => cast_if_and4
        (decide (✓{mk_env (map_of_list Γc) ∅}* τs))
-       (decide (τs ≠ [])) (decide (s ∉ (fst <$> Γc))) (go Γc)
+       (decide (τs ≠ [])) (decide (s ∉ Γc.*1)) (go Γc)
     end); clear go; first [by constructor |by inversion 1].
   Defined.
   Lemma env_c_valid_correct Γ :

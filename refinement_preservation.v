@@ -32,7 +32,6 @@ Hint Immediate cmap_refine_valid_r' cmap_refine_valid_r.
 Hint Immediate addr_refine_typed_l val_refine_typed_l.
 Hint Immediate addr_refine_typed_r val_refine_typed_r.
 Hint Immediate expr_refine_typed_l expr_refine_typed_r.
-Hint Immediate ctx_refine_stack_typed_r ctx_refine_stack_typed_l.
 Hint Immediate ctx_refine_typed_l ctx_refine_typed_r.
 Hint Immediate ectx_refine_typed_l ectx_refine_typed_r.
 Hint Immediate vals_refine_typed_l vals_refine_typed_r.
@@ -45,6 +44,8 @@ Hint Immediate sctx_item_subst_refine.
 Hint Resolve meminj_extend_inverse cmap_refine_inverse'.
 Hint Immediate addr_alive_refine'.
 Hint Extern 0 (is_undef_state (State _ (Undef ?Su) _)) => by exists Su.
+Hint Resolve ctx_typed_locals_valid.
+Hint Immediate ctx_refine_locals_refine.
 
 Lemma assign_refine Γ α f m1 m2 ass a1 a2 v1 v2 v1' va1' τ τ' σ :
   ✓ Γ → m1 ⊑{Γ,α,f} m2 → assign_typed τ τ' ass σ →
@@ -79,18 +80,19 @@ Proof.
       val_binop_refine, val_cast_refine, addr_typed_type_valid.
 Qed.
 Ltac go f := eexists f, _, _; split_ands; [do_ehstep| | |by auto].
-Lemma ehstep_refine_forward Γ α f m1 m2 m1' ρ1 ρ2 τs e1 e2 e1' τlr :
+Lemma ehstep_refine_forward Γ α f m1 m2 m1' ρ1 ρ2 e1 e2 e1' τlr :
   ✓ Γ → Γ\ ρ1 ⊢ₕ e1, m1 ⇒ e1', m1' →
-  m1 ⊑{Γ,α,f} m2 → e1 ⊑{(Γ,τs),α,f@'{m1}↦'{m2}} e2 : τlr →
-  '{m1} ⊢* ρ1 :* τs → '{m2} ⊢* ρ2 :* τs →
-  Forall2 (λ o1 o2, f !! o1 = Some (o2,[])) ρ1 ρ2 → ∃ f' m2' e2',
+  m1 ⊑{Γ,α,f} m2 → e1 ⊑{(Γ,ρ1.*2),α,f@'{m1}↦'{m2}} e2 : τlr →
+  Forall2 (stack_item_refine f ('{m1}) ('{m2})) ρ1 ρ2 → ∃ f' m2' e2',
   (**i 1.) *) Γ\ ρ2 ⊢ₕ e2, m2 ⇒ e2', m2' ∧
   (**i 2.) *) m1' ⊑{Γ,α,f'} m2' ∧
-  (**i 3.) *) e1' ⊑{(Γ,τs),α,f'@'{m1'}↦'{m2'}} e2' : τlr ∧
+  (**i 3.) *) e1' ⊑{(Γ,ρ1.*2),α,f'@'{m1'}↦'{m2'}} e2' : τlr ∧
   (**i 4.) *) meminj_extend f f' ('{m1}) ('{m2}).
 Proof.
   destruct 2; intros.
-  * refine_inversion_all; decompose_Forall_hyps.
+  * refine_inversion_all; list_simplifier; match goal with
+    | H : stack_item_refine _ _ _ _ ?oτ |- _ => inversion H
+    end; simplify_equality'.
     go f; auto.
     refine_constructor; eauto 10 using addr_top_strict, addr_top_refine,
       cmap_index_typed_valid, locks_empty_refine.
@@ -143,15 +145,14 @@ Proof.
   * refine_inversion_all; go f; eauto.
     refine_constructor; eauto using locks_union_refine,ctree_alter_const_refine.
 Qed.
-Lemma ehstep_refine_backward Γ α f m1 m2 m2' ρ1 ρ2 τs e1 e2 e2' τlr :
+Lemma ehstep_refine_backward Γ α f m1 m2 m2' ρ1 ρ2 e1 e2 e2' τlr :
   ✓ Γ → Γ\ ρ2 ⊢ₕ e2, m2 ⇒ e2', m2' →
-  m1 ⊑{Γ,α,f} m2 → e1 ⊑{(Γ,τs),α,f@'{m1}↦'{m2}} e2 : τlr →
-  '{m1} ⊢* ρ1 :* τs → '{m2} ⊢* ρ2 :* τs →
-  Forall2 (λ o1 o2, f !! o1 = Some (o2,[])) ρ1 ρ2 →
+  m1 ⊑{Γ,α,f} m2 → e1 ⊑{(Γ,ρ1.*2),α,f@'{m1}↦'{m2}} e2 : τlr →
+  Forall2 (stack_item_refine f ('{m1}) ('{m2})) ρ1 ρ2 →
   (∃ f' m1' e1',
     (**i 1.) *) Γ\ ρ1 ⊢ₕ e1, m1 ⇒ e1', m1' ∧
     (**i 2.) *) m1' ⊑{Γ,α,f'} m2' ∧
-    (**i 3.) *) e1' ⊑{(Γ,τs),α,f'@'{m1'}↦'{m2'}} e2' : τlr ∧
+    (**i 3.) *) e1' ⊑{(Γ,ρ1.*2),α,f'@'{m1'}↦'{m2'}} e2' : τlr ∧
     (**i 4.) *) meminj_extend f f' ('{m1}) ('{m2}))
   ∨ is_redex e1 ∧ ¬Γ \ ρ1 ⊢ₕ safe e1, m1.
 Proof.
@@ -170,23 +171,22 @@ Proof.
       TArray_valid, option_eq_1, mem_allocable_fresh. }
   destruct (ehstep_dec Γ ρ1 e1 m1) as [(e1'&m1'&?)|?].
   * left. destruct (ehstep_refine_forward Γ α f
-      m1 m2 m1' ρ1 ρ2 τs e1 e2 e1' τlr) as (f'&m2''&e2''&?&?&?&?); auto.
+      m1 m2 m1' ρ1 ρ2 e1 e2 e1' τlr) as (f'&m2''&e2''&?&?&?&?); auto.
     destruct (ehstep_deterministic Γ ρ2 e2 m2 e2' m2' e2'' m2'');
       simplify_equality; eauto 10.
   * right; split; eauto using expr_refine_redex_inv, ehstep_is_redex.
     destruct 1; [refine_inversion_all; inv_ehstep|naive_solver].
 Qed.
-Lemma ehsafe_refine Γ α f m1 m2 ρ1 ρ2 τs e1 e2 τlr :
+Lemma ehsafe_refine Γ α f m1 m2 ρ1 ρ2 e1 e2 τlr :
   ✓ Γ → Γ\ ρ1 ⊢ₕ safe e1, m1 → m1 ⊑{Γ,α,f} m2 →
-  e1 ⊑{(Γ,τs),α,f@'{m1}↦'{m2}} e2 : τlr →
-  '{m1} ⊢* ρ1 :* τs → '{m2} ⊢* ρ2 :* τs →
-  Forall2 (λ o1 o2, f !! o1 = Some (o2,[])) ρ1 ρ2 → Γ\ ρ2 ⊢ₕ safe e2, m2.
+  e1 ⊑{(Γ,ρ1.*2),α,f@'{m1}↦'{m2}} e2 : τlr →
+  Forall2 (stack_item_refine f ('{m1}) ('{m2})) ρ1 ρ2 → Γ\ ρ2 ⊢ₕ safe e2, m2.
 Proof.
   destruct 2 as [|e1 m1 e1' m1'].
   * intros; refine_inversion_all; [|done].
     edestruct EVal_refine_inv_l as (?&?&?&?&?&?); eauto. subst.
     by constructor.
-  * intros. destruct (ehstep_refine_forward Γ α f m1 m2 m1' ρ1 ρ2 τs
+  * intros. destruct (ehstep_refine_forward Γ α f m1 m2 m1' ρ1 ρ2
       e1 e2 e1' τlr) as (?&?&?&?&?&?&?&?); auto; econstructor; eauto.
 Qed.
 Ltac invert :=
@@ -221,6 +221,7 @@ Proof.
   | right; split_ands; [done|inversion 1; inv_ehstep
                        |repeat constructor; auto using EVals_nf]].
 Qed.
+Hint Extern 0 => erewrite <-ctx_refine_locals_types by eauto; eassumption.
 Lemma cstep_refine Γ δ1 δ2 α f S1 S2 S2' g :
   ✓ Γ → Γ\ δ2 ⊢ₛ S2 ⇒ S2' → ¬is_undef_state S1 →
   S1 ⊑{Γ,α,f} S2 : g →
@@ -239,20 +240,20 @@ Proof.
   * intros m k l ????; invert. go f; eauto.
   * intros m k E e ????; invert. go f; eauto.
   * intros m1 m2 k E e1 e2 ?????; invert. destruct α.
-    { edestruct ehstep_refine_backward as [(f'&?&?&?&?&?&?)|[??]];
-        eauto using ctx_refine_stack.
+    { edestruct ehstep_refine_backward as [(f'&?&?&?&?&?&?)|[??]]; eauto.
       { go f'. repeat refine_constructor; eauto 9 using ctx_refine_weaken,
-         ehstep_forward, ectx_subst_refine, ectx_refine_weaken. }
+          ehstep_forward, ectx_subst_refine, ectx_refine_weaken. }
       go f. right; auto.
       eexists; split_ands; repeat typed_constructor; eauto. }
-    edestruct ehstep_refine_forward as (f'&?&?&?&?&?&?);
-      eauto using ctx_refine_stack, expr_refine_inverse, ctx_refine_inverse.
+    edestruct ehstep_refine_forward as (f'&?&?&?&?&He&?); eauto using
+      ctx_refine_locals_refine, expr_refine_inverse, ctx_refine_inverse.
+    erewrite <-ctx_refine_locals_types in He by eauto.
     eexists (meminj_inverse f'), _; split_ands; [do_cstep| |].
     { repeat refine_constructor; eauto.
       * eapply ectx_subst_refine; eauto using expr_refine_inverse.
-        eapply ectx_refine_weaken; eauto 7 using ehstep_forward.
-      * eapply ctx_refine_weaken; eauto 7 using ehstep_forward. }
-    eauto 7 using ehstep_forward.
+        eapply ectx_refine_weaken; eauto 9 using ehstep_forward.
+      * eapply ctx_refine_weaken; eauto 9 using ehstep_forward. }
+    eauto 9 using ehstep_forward.
   * intros m k Ω h τs τ E Ωs vs; simpl; intros; invert.
     edestruct cstep_refine_fun_cases as [|(?&?&?)]; eauto.
     + invert. go f. 
@@ -264,8 +265,8 @@ Proof.
       repeat typed_constructor; eauto using base_val_refine_typed_l,
         EVals_typed, vals_refine_typed_l, locks_list_refine_valid_l.
   * intros; invert. eexists f, _; split_ands; [| |auto].
-    { apply cstep_expr_undef; eauto 10 using ehsafe_refine,
-        ctx_refine_stack, expr_refine_redex_inv. }
+    { apply cstep_expr_undef;
+        eauto 10 using ehsafe_refine, expr_refine_redex_inv. }
     repeat refine_constructor; eauto using mem_unlock_refine',
       expr_refine_weaken, ctx_refine_weaken, mem_unlock_forward.
   * intros; invert. go f.

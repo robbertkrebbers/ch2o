@@ -7,6 +7,12 @@ Local Open Scope ctype_scope.
 Section refinements.
 Context `{Env K}.
 
+Inductive stack_item_refine (f : meminj K) (Δ1 Δ2 : memenv K) :
+    (index * type K) → (index * type K) → Prop :=
+  mk_stack_item_refine o1 o2 τ :
+    Δ1 ⊢ o1 : τ → Δ2 ⊢ o2 : τ → f !! o1 = Some (o2,[]) →
+    stack_item_refine f Δ1 Δ2 (o1,τ) (o2,τ).
+
 Inductive lrval_refine' (Γ : env K) (α : bool)
     (f : meminj K) (Δ1 Δ2 : memenv K) : lrval K → lrval K → lrtype K → Prop :=
   | lval_refine a1 a2 τ :
@@ -22,8 +28,7 @@ Inductive expr_refine' (Γ : env K)
      (τs : list (type K)) (α : bool) (f : meminj K)
      (Δ1 Δ2 : memenv K) : expr K → expr K → lrtype K → Prop :=
   | EVar_refine τ n :
-     τs !! n = Some τ →
-     expr_refine' Γ τs α f Δ1 Δ2 (var{τ} n) (var{τ} n) (inl τ)
+     τs !! n = Some τ → expr_refine' Γ τs α f Δ1 Δ2 (var n) (var n) (inl τ)
   | EVal_refine Ω1 Ω2 ν1 ν2 τlr :
      Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 → ν1 ⊑{Γ,α,f@Δ1↦Δ2} ν2 : τlr →
      expr_refine' Γ τs α f Δ1 Δ2 (%#{Ω1} ν1) (%#{Ω2} ν2) τlr
@@ -94,8 +99,7 @@ Section expr_refine_ind.
   Context (Γ : env K) (τs : list (type K)).
   Context (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K).
   Context (P : expr K → expr K → lrtype K → Prop).
-  Context (Pvar : ∀ τ n,
-    τs !! n = Some τ → P (var{τ} n) (var{τ} n) (inl τ)).
+  Context (Pvar : ∀ τ i, τs !! i = Some τ → P (var i) (var i) (inl τ)).
   Context (Pval : ∀ Ω1 Ω2 ν1 ν2 τlr,
     Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 → ν1 ⊑{Γ,α,f@Δ1↦Δ2} ν2 : τlr →
     P (%#{Ω1} ν1) (%#{Ω2} ν2) τlr).
@@ -366,7 +370,7 @@ Inductive ctx_refine' (Γ : env K) (α : bool)
      ctx K → ctx K → focustype K → focustype K → Prop :=
   | ctx_nil_refine_2 τf : ctx_refine' Γ α f Δ1 Δ2 [] [] τf τf
   | ctx_cons_refine_2 Ek1 Ek2 k1 k2 τf τf' τf'' :
-     Ek1 ⊑{(Γ,get_stack_types k1),α,f@Δ1↦Δ2} Ek2 : τf ↣ τf' →
+     Ek1 ⊑{(Γ,locals k1.*2),α,f@Δ1↦Δ2} Ek2 : τf ↣ τf' →
      ctx_refine' Γ α f Δ1 Δ2 k1 k2 τf' τf'' →
      ctx_refine' Γ α f Δ1 Δ2 (Ek1 :: k1) (Ek2 :: k2) τf τf''.
 Global Instance ctx_refine: PathRefine K (env K)
@@ -418,7 +422,7 @@ Global Instance focus_refine: RefineT K (env K * list (type K))
 Inductive state_refine' (Γ : env K) (α : bool)
      (f : meminj K) : state K → state K → funname → Prop :=
   | State_refine k1 φ1 m1 k2 φ2 m2 τf g :
-     φ1 ⊑{(Γ,get_stack_types k1),α,f@'{m1}↦'{m2}} φ2 : τf →
+     φ1 ⊑{(Γ,locals k1.*2),α,f@'{m1}↦'{m2}} φ2 : τf →
      k1 ⊑{(Γ),α,f@'{m1}↦'{m2}} k2 : τf ↣ Fun_type g →
      m1 ⊑{Γ,α,f} m2 →
      state_refine' Γ α f (State k1 φ1 m1) (State k2 φ2 m2) g
@@ -584,22 +588,32 @@ Proof. induction 1; simpl; auto with f_equal. Qed.
 Lemma stmt_refine_throws_valid Γ α f Δ1 Δ2 τs s1 s2 mcτ n :
   s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : mcτ → throws_valid n s1 → throws_valid n s2.
 Proof. intros Hs. revert n. induction Hs; naive_solver. Qed.
-Lemma ctx_refine_stack_types Γ α f Δ1 Δ2 k1 k2 τf τf' :
-  ✓ Γ → k1 ⊑{Γ,α,f@Δ1↦Δ2} k2 : τf ↣ τf' →
-  get_stack_types k1 = get_stack_types k2.
+Lemma ctx_refine_locals_types Γ α f Δ1 Δ2 k1 k2 τf τf' :
+  ✓ Γ → k1 ⊑{Γ,α,f@Δ1↦Δ2} k2 : τf ↣ τf' → locals k1.*2 = locals k2.*2.
 Proof.
   assert (∀ (os1 os2 : list index) (σs : list (type K)) P,
-    Forall2 P os1 os2 → snd <$> zip os1 σs = snd <$> zip os2 σs).
+    Forall2 P os1 os2 → (zip os1 σs).*2 = (zip os2 σs).*2).
   { intros os1 os2 σs P Hos. revert σs.
     induction Hos; intros [|??]; f_equal'; auto. }
   induction 2 as [|??????? []]; simpl; eauto with f_equal.
 Qed.
-Lemma ctx_refine_stack Γ α f Δ1 Δ2 k1 k2 τf τf' :
-  ✓ Γ → k1 ⊑{Γ,α,f@Δ1↦Δ2} k2 : τf ↣ τf' →
-  Forall2 (λ o1 o2, f !! o1 = Some (o2, [])) (get_stack k1) (get_stack k2).
+(*
+Lemma indexes_valid_weaken Δ1 Δ2 ρ : ✓{Δ1}* ρ → Δ1 ⇒ₘ Δ2 → ✓{Δ2}* ρ.
 Proof.
-  induction 2 as [|??????? []]; simpl;
-    rewrite ?fst_zip by solve_length; auto using Forall2_app.
+  unfold valid, stack_item_valid.
+  induction 1; eauto using memenv_forward_typed.
+Qed.
+*)
+Lemma ctx_refine_locals_refine Γ α f Δ1 Δ2 k1 k2 τf τf' :
+  k1 ⊑{Γ,α,f@Δ1↦Δ2} k2 : τf ↣ τf' →
+  Forall2 (stack_item_refine f Δ1 Δ2) (locals k1) (locals k2).
+Proof.
+  assert (∀ os1 os2 σs, Δ1 ⊢* os1 :* σs → Δ2 ⊢* os2 :* σs →
+    Forall2 (λ o1 o2, f !! o1 = Some (o2, [])) os1 os2 →
+    Forall2 (stack_item_refine f Δ1 Δ2) (zip os1 σs) (zip os2 σs)).
+  { intros os1 os2 σs Hos. revert os2.
+    induction Hos; intros; decompose_Forall_hyps; repeat constructor; eauto. }
+  induction 1 as [|??????? []]; simplify_equality'; repeat constructor; eauto.
 Qed.
 Lemma sctx_item_catch_refine Γ α f Δ1 Δ2 τs Es1 Es2 s1 s2 mcτ mcτ' :
   Es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} Es2 : mcτ ↣ mcτ' →
@@ -761,7 +775,7 @@ Qed.
 Lemma ctx_refine_typed_r Γ α f Δ1 Δ2 k1 k2 τf τf' :
   ✓ Γ → k1 ⊑{Γ,α,f@Δ1↦Δ2} k2 : τf ↣ τf' → (Γ,Δ2) ⊢ k2 : τf ↣ τf'.
 Proof.
-  induction 2; typed_constructor; erewrite <-?ctx_refine_stack_types by eauto;
+  induction 2; typed_constructor; erewrite <-?ctx_refine_locals_types by eauto;
     eauto using ctx_item_refine_typed_r.
 Qed.
 Lemma direction_refine_typed_r Γ α f Δ1 Δ2 d1 d2 τlr :
@@ -779,7 +793,7 @@ Lemma state_refine_typed_r Γ α f S1 S2 g :
   ✓ Γ → S1 ⊑{Γ,α,f} S2 : g → Γ ⊢ S2 : g.
 Proof.
   destruct 2; eauto. eexists; split_ands;
-    erewrite <-?ctx_refine_stack_types by eauto;
+    erewrite <-?ctx_refine_locals_types by eauto;
     eauto using focus_refine_typed_r, ctx_refine_typed_r, cmap_refine_valid_r'.
 Qed.
 Lemma funenv_refine_typed_r Γ α f Δ1 Δ2 δ1 δ2 :
@@ -974,7 +988,7 @@ Proof.
   induction Hk as [|Ek1 Ek2 k1 k2 τf1 τf2 τf3];
     intros Ek' τf3'; inversion_clear 1 as [|? Ek3 ? k3 ? τf2' ? HEk2].
   { by refine_constructor. }
-  erewrite <-ctx_refine_stack_types in HEk2 by eauto.
+  erewrite <-ctx_refine_locals_types in HEk2 by eauto.
   refine_constructor; eauto using ctx_item_refine_compose.
   cut (τf2 = τf2'); [intros ->; eauto|].
   by eapply (path_typed_unique_r _ Ek2 τf1);
@@ -1022,7 +1036,7 @@ Proof.
   assert (Γ ⊢ S3 : h) by eauto using state_refine_typed_r.
   inversion HS as [k1 φ1 m1 k2 φ2 m2 τf|]; subst; [|right; eauto].
   inversion HS' as [??? k3 φ3 m3 τf' ? Hk'|]; subst.
-  * erewrite <-ctx_refine_stack_types in Hk' by eauto.
+  * erewrite <-ctx_refine_locals_types in Hk' by eauto.
     left with τf; eauto using cmap_refine_compose', focus_refine_compose.
     cut (τf = τf'); [intros ->;eauto using ctx_refine_compose|].
     by eapply (typed_unique _ φ2);
@@ -1111,7 +1125,7 @@ Lemma ctx_refine_inverse Γ f Δ1 Δ2 k1 k2 τf τf' :
   k2 ⊑{Γ,false,meminj_inverse f@Δ2↦Δ1} k1 : τf ↣ τf'.
 Proof.
   induction 3; refine_constructor; eauto.
-  erewrite <-ctx_refine_stack_types by eauto.
+  erewrite <-ctx_refine_locals_types by eauto.
   eauto using ctx_item_refine_inverse.
 Qed.
 Lemma direction_refine_inverse Γ f Δ1 Δ2 d1 d2 mcτ :
@@ -1132,7 +1146,7 @@ Lemma state_refine_inverse Γ f S1 S2 h :
   S2 ⊑{Γ,false,meminj_inverse f} S1 : h.
 Proof.
   intros ? [k1 φ1 m1 k2 φ2 m2 τf h' ???|]; [left with τf|done].
-  * erewrite <-ctx_refine_stack_types by eauto.
+  * erewrite <-ctx_refine_locals_types by eauto.
     eauto using focus_refine_inverse.
   * eauto using ctx_refine_inverse, cmap_refine_memenv_refine.
   * eauto using cmap_refine_inverse'.
@@ -1252,17 +1266,5 @@ Proof.
   intros ? Hδ ????? h; specialize (Hδ h); destruct (δ1 !! h) as [s1|],
     (δ2 !! h) as [s2|], (Γ !! h) as [[τs τ]|]; eauto.
   naive_solver eauto using stmt_refine_weaken.
-Qed.
-
-Lemma ctx_refine_stack_typed_l Γ α f Δ1 Δ2 k1 k2 τf τf' :
-  ✓ Γ → k1 ⊑{Γ,α,f@Δ1↦Δ2} k2 : τf ↣ τf' →
-  Δ1 ⊢* get_stack k1 :* get_stack_types k1.
-Proof. eauto using ctx_typed_stack_typed, ctx_refine_typed_l. Qed.
-Lemma ctx_refine_stack_typed_r Γ α f Δ1 Δ2 k1 k2 τf τf' :
-  ✓ Γ → k1 ⊑{Γ,α,f@Δ1↦Δ2} k2 : τf ↣ τf' →
-  Δ2 ⊢* get_stack k2 :* get_stack_types k1.
-Proof.
-  intros. erewrite ctx_refine_stack_types by eauto.
-  eauto using ctx_typed_stack_typed, ctx_refine_typed_r.
 Qed.
 End properties.

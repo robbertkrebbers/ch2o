@@ -431,6 +431,11 @@ Notation "' ( x1 , x2 , x3  , x4 , x5 , x6 ) ← y ; z" :=
   (y ≫= (λ x : _, let ' (x1,x2,x3,x4,x5,x6) := x in z))
   (at level 65, next at level 35, only parsing, right associativity) : C_scope.
 
+Notation "ps .*1" := (fmap (M:=list) fst ps)
+  (at level 10, format "ps .*1").
+Notation "ps .*2" := (fmap (M:=list) snd ps)
+  (at level 10, format "ps .*2").
+
 Class MGuard (M : Type → Type) :=
   mguard: ∀ P {dec : Decision P} {A}, (P → M A) → M A.
 Arguments mguard _ _ _ !_ _ _ /.

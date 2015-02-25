@@ -24,7 +24,7 @@ Instance mapset_intersection: Intersection (mapset (M unit)) := λ X1 X2,
 Instance mapset_difference: Difference (mapset (M unit)) := λ X1 X2,
   let (m1) := X1 in let (m2) := X2 in Mapset (m1 ∖ m2).
 Instance mapset_elems: Elements K (mapset (M unit)) := λ X,
-  let (m) := X in fst <$> map_to_list m.
+  let (m) := X in (map_to_list m).*1.
 
 Lemma mapset_eq (X1 X2 : mapset (M unit)) : X1 = X2 ↔ ∀ x, x ∈ X1 ↔ x ∈ X2.
 Proof.

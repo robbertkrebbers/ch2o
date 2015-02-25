@@ -168,7 +168,7 @@ Record frontend_state_valid' (S : frontend_state K) := {
   to_env_included :
     map_Forall (λ t d,
       match d with
-      | CompoundType _ xτs => to_env S !! t = Some (snd <$> xτs)
+      | CompoundType _ xτs => to_env S !! t = Some (xτs.*2)
       | _ => True
       end) (to_compounds S);
   to_funs_included :
@@ -281,20 +281,20 @@ Lemma local_env_valid_Some S Δl x d :
 Proof. by constructor. Qed.
 Hint Resolve local_env_valid_None local_env_valid_Some.
 
-Fixpoint to_stack_types (Δl : local_env K) : list (type K) :=
+Fixpoint to_local_types (Δl : local_env K) : list (type K) :=
   match Δl with
   | [] => []
-  | Some (_,Local τ) :: Δl => τ :: to_stack_types Δl
-  | _ :: Δl => to_stack_types Δl
+  | Some (_,Local τ) :: Δl => τ :: to_local_types Δl
+  | _ :: Δl => to_local_types Δl
   end.
-Lemma to_stack_types_params (ys : list string) (τs : list (type K)) :
+Lemma to_local_types_params (ys : list string) (τs : list (type K)) :
   length ys = length τs →
-  to_stack_types (zip_with (λ y τ, Some (y, Local τ)) ys τs) = τs.
+  to_local_types (zip_with (λ y τ, Some (y, Local τ)) ys τs) = τs.
 Proof. rewrite <-Forall2_same_length. induction 1; f_equal'; auto. Qed.
-Lemma to_stack_types_valid S Δl :
-  local_env_valid S Δl → ✓{to_env S}* (to_stack_types Δl).
+Lemma to_local_types_valid S Δl :
+  local_env_valid S Δl → ✓{to_env S}* (to_local_types Δl).
 Proof. induction 1 as [|[[? []]|]]; simpl; auto. Qed.
-Hint Immediate to_stack_types_valid.
+Hint Immediate to_local_types_valid.
 
 Lemma lookup_compound_typed S S' t x i τ :
   lookup_compound t x S = mret (i,τ) S' → ✓ S →
@@ -305,11 +305,11 @@ Proof.
   destruct (list_find _ _) as [[? [y ?]]|] eqn:?; error_proceed.
   destruct (list_find_Some ((x =) ∘ fst) xτs i (y,τ)) as [Hi ->]; auto.
   feed pose proof (HΓn t (CompoundType c xτs)); auto; simplify_equality'.
-  exists (snd <$> xτs); split_ands; auto. by rewrite list_lookup_fmap, Hi.
+  exists (xτs.*2); split_ands; auto. by rewrite list_lookup_fmap, Hi.
 Qed.
 Lemma lookup_local_var_typed S τs Δl x e τe :
   lookup_local_var Δl x (length τs) = Some (e,τe) → ✓ S → local_env_valid S Δl →
-  (to_env S,'{to_mem S},τs ++ to_stack_types Δl) ⊢ e : to_lrtype τe
+  (to_env S,'{to_mem S},τs ++ to_local_types Δl) ⊢ e : to_lrtype τe
   ∧ locks e = ∅.
 Proof.
   intros He [] HΔl. revert τs He.
@@ -323,7 +323,7 @@ Proof.
 Qed.
 Lemma lookup_var_typed S S' Δl x e τe :
   lookup_var Δl x S = mret (e,τe) S' → ✓ S → local_env_valid S Δl →
-  (to_env S,'{to_mem S},to_stack_types Δl) ⊢ e : to_lrtype τe
+  (to_env S,'{to_mem S},to_local_types Δl) ⊢ e : to_lrtype τe
   ∧ locks e = ∅ ∧ S = S'.
 Proof.
   unfold lookup_var; intros ? HS ?.
@@ -549,8 +549,8 @@ Proof.
 Qed.
 Lemma insert_compound_valid S S' c t xτs :
   insert_compound c t xτs S = mret () S' → ✓ S →
-  to_env S !! t = None → ✓{to_env S}* (snd <$> xτs) → xτs ≠ [] →
-  to_env S' !! t = Some (snd <$> xτs) ∧ ✓ S' ∧ S ⊆ S'.
+  to_env S !! t = None → ✓{to_env S}* (xτs.*2) → xτs ≠ [] →
+  to_env S' !! t = Some (xτs.*2) ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
   destruct S as [Γn Γ m Δg]; unfold insert_compound;
     intros ? [HΓ Hm HΔg HΓn HΓ'] ???; error_proceed; simplify_map_equality.
@@ -586,7 +586,7 @@ Qed.
 Lemma to_ref_typed S S' Δl r τ xces σ r' σ' :
   Forall (sum_rect _ (λ _, True) (λ ce, ∀ S S' e τe,
     to_expr Δl ce S = (mret (e,τe) : M _) S' → ✓ S → local_env_valid S Δl →
-    (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : to_lrtype τe
+    (to_env S','{to_mem S'},to_local_types Δl) ⊢ e : to_lrtype τe
     ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S')) xces →
   to_ref (to_expr Δl) r σ xces S = mret (r',σ') S' →
   ✓ S → local_env_valid S Δl →
@@ -606,11 +606,11 @@ Qed.
 Lemma to_call_args_typed S S' Δl ces τs es :
   Forall (λ ce, ∀ S S' e τe,
     to_expr Δl ce S = mret (e,τe) S' → ✓ S → local_env_valid S Δl →
-    (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : to_lrtype τe
+    (to_env S','{to_mem S'},to_local_types Δl) ⊢ e : to_lrtype τe
     ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S') ces →
   to_call_args (to_expr Δl) ces τs S = mret es S' → ✓ S → local_env_valid S Δl →
   ✓{to_env S}* (TType <$> τs) →
-  (to_env S','{to_mem S'},to_stack_types Δl) ⊢* es :* inr <$> τs
+  (to_env S','{to_mem S'},to_local_types Δl) ⊢* es :* inr <$> τs
   ∧ ⋃ (locks <$> es) = ∅ ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
   intros Hces; revert S S' es τs; induction Hces as [|ce ces IH _ IHces];
@@ -621,24 +621,24 @@ Proof.
   destruct (IH S S2 e τe) as (?&?&?&?); auto; weaken.
   destruct (IHces S2 S' es' τs) as (?&?&?&?); auto; weaken.
   destruct (to_R_NULL_typed (to_env S') (to_mem S')
-    (to_stack_types Δl) τ e τe e' τ'); weaken;
+    (to_local_types Δl) τ e τe e' τ'); weaken;
     eauto 10 using cast_typed_type_valid.
 Qed.
 Lemma to_compound_init_typed S S' Δl e τ rs inits e' :
   Forall (λ i,
     Forall (sum_rect _ (λ _, True) (λ ce, ∀ S S' e τe,
       to_expr Δl ce S = (mret (e,τe) : M _) S' → ✓ S → local_env_valid S Δl →
-      (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : to_lrtype τe
+      (to_env S','{to_mem S'},to_local_types Δl) ⊢ e : to_lrtype τe
       ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S')) (i.1) ∧
     (∀ S S' τ e,
       to_init_expr Δl τ (i.2) S = mret e S' →
       ✓ S → local_env_valid S Δl → ✓{to_env S} τ →
-      (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : inr τ
+      (to_env S','{to_mem S'},to_local_types Δl) ⊢ e : inr τ
       ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S')) inits →
   to_compound_init (to_expr Δl) (to_init_expr Δl) τ e rs inits S = mret e' S' →
   ✓ S → local_env_valid S Δl → Forall (λ r, ∃ σ, to_env S ⊢ r : τ ↣ σ) rs →
-  (to_env S,'{to_mem S},to_stack_types Δl) ⊢ e : inr τ → locks e = ∅ →
-  (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e' : inr τ
+  (to_env S,'{to_mem S},to_local_types Δl) ⊢ e : inr τ → locks e = ∅ →
+  (to_env S','{to_mem S'},to_local_types Δl) ⊢ e' : inr τ
   ∧ locks e' = ∅ ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
   intros Hinits. revert S S' rs e e'. assert (∀ Γ1 Γ2 rs,
@@ -686,13 +686,12 @@ Lemma to_fun_type_valid S S' Δl cτs cτ xτs τ :
     to_type_type_valid (to_env S') τk ∧ ✓ S' ∧ S ⊆ S') →
   to_fun_type (to_type to_Ptr Δl) cτs cτ S = mret (xτs,τ) S' →
   ✓ S → local_env_valid S Δl →
-  ✓{to_env S'}* (TType <$> snd <$> xτs)
-  ∧ ✓{to_env S'} (TType τ) ∧ ✓ S' ∧ S ⊆ S'.
+  ✓{to_env S'}* (TType <$> xτs.*2) ∧ ✓{to_env S'} (TType τ) ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
   intros IHcτs. revert S cτ τ. assert (∀ S,
     to_fun_type_args (to_type to_Ptr Δl) cτs S = mret xτs S' →
     ✓ S → local_env_valid S Δl →
-    ✓{to_env S'}* (TType <$> snd <$> xτs) ∧ ✓ S' ∧ S ⊆ S') as help.
+    ✓{to_env S'}* (TType <$> xτs.*2) ∧ ✓ S' ∧ S ⊆ S') as help.
   { revert xτs; induction IHcτs as [|[x cτ] cτs IH _ IHcτs];
       intros xτs S ???; error_proceed; auto.
     error_proceed τp as S2; error_proceed τ as ?; error_proceed xτs' as ?.
@@ -709,12 +708,12 @@ Qed.
 Lemma to_expr_type_typed Δl :
   (∀ ce S S' e τe,
     to_expr Δl ce S = mret (e,τe) S' → ✓ S → local_env_valid S Δl →
-    (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : to_lrtype τe
+    (to_env S','{to_mem S'},to_local_types Δl) ⊢ e : to_lrtype τe
     ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S') ∧
   (∀ ci S S' τ e,
     to_init_expr Δl τ ci S = mret e S' →
     ✓ S → local_env_valid S Δl → ✓{to_env S} τ →
-    (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : inr τ
+    (to_env S','{to_mem S'},to_local_types Δl) ⊢ e : inr τ
     ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S') ∧
   (∀ cτ S S' k τk,
     to_type k Δl cτ S = mret τk S' → ✓ S → local_env_valid S Δl →
@@ -770,13 +769,13 @@ Proof.
 Qed.
 Lemma to_expr_typed S S' Δl ce e τe :
   to_expr Δl ce S = mret (e,τe) S' → ✓ S → local_env_valid S Δl →
-  (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : to_lrtype τe
+  (to_env S','{to_mem S'},to_local_types Δl) ⊢ e : to_lrtype τe
   ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S'.
 Proof. intros. eapply to_expr_type_typed; eauto. Qed.
 Lemma to_init_expr_typed S S' Δl ci e τ :
   to_init_expr Δl τ ci S = mret e S' →
   ✓ S → local_env_valid S Δl → ✓{to_env S} τ →
-  (to_env S','{to_mem S'},to_stack_types Δl) ⊢ e : inr τ
+  (to_env S','{to_mem S'},to_local_types Δl) ⊢ e : inr τ
   ∧ locks e = ∅ ∧ ✓ S' ∧ S ⊆ S'.
 Proof. intros. eapply to_expr_type_typed; eauto. Qed.
 Lemma to_type_valid S S' Δl k cτ τk :
@@ -790,9 +789,9 @@ Lemma to_init_val_typed S S' Δl τ ci v :
 Proof.
   unfold to_init_val; intros. error_proceed e as S2; error_proceed [|v'] as S3.
   destruct (to_init_expr_typed S S' Δl ci e τ) as (?&?&?&?); split_ands; auto.
-  eapply rval_typed_inv, (expr_eval_typed_aux _ _ [] (to_stack_types Δl));
+  eapply rval_typed_inv, (expr_eval_typed_aux _ _ (to_local_types Δl));
     eauto using type_valid_ptr_type_valid, to_init_expr_typed,
-    prefix_of_nil, purefuns_empty_valid.
+    prefix_of_nil, purefuns_empty_valid, Forall2_nil.
 Qed.
 Lemma alloc_global_typed S S' Δl x sto cτ mci d :
   alloc_global Δl x sto cτ mci S = mret d S' →
@@ -849,10 +848,11 @@ Proof.
     as (?&?&?&?&?); auto using val_0_typed; weaken.
 Qed.
 Hint Immediate cast_typed_type_valid.
+Hint Extern 0 (_ !! 0 = _) => reflexivity.
 Lemma to_stmt_typed S S' Δl τ cs s cmτ :
   to_stmt τ Δl cs S = mret (s,cmτ) S' → ✓ S → local_env_valid S Δl →
   ✓{to_env S} (TType τ) →
-  (to_env S','{to_mem S'},to_stack_types Δl) ⊢ s : cmτ ∧ ✓ S' ∧ S ⊆ S'.
+  (to_env S','{to_mem S'},to_local_types Δl) ⊢ s : cmτ ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
   revert S S' Δl s cmτ.
   induction cs; intros; generalize_errors; intros;
@@ -904,7 +904,7 @@ Proof.
   destruct (stmt_fix_return _ s' _) as [? cmτ] eqn:?; error_proceed.
   destruct (to_stmt_typed S S' (zip_with (λ y τ, Some (y, Local τ)) ys τs)
     σ cs s' cmτ') as (Hs&?&?); eauto using local_env_valid_params; weaken.
-  rewrite to_stack_types_params in Hs by done.
+  rewrite to_local_types_params in Hs by done.
   eauto 10 using stmt_fix_return_typed.
 Qed.
 Lemma alloc_fun_valid S S' f sto cτ cs :
@@ -916,18 +916,18 @@ Proof.
     as (?&?&?&?); eauto using Forall_true, to_type_valid.
   destruct (_ !! f) as [[|sto' τs' σ' ms| |]|] eqn:?; error_proceed.
   { error_proceed s as S3.
-    destruct (to_globals_lookup S2 f (Fun sto' (snd <$> xτs) τ None)); auto.
-    destruct (to_fun_stmt_typed S2 S3 f (fst <$> xτs) (snd <$> xτs) τ cs s)
+    destruct (to_globals_lookup S2 f (Fun sto' (xτs.*2) τ None)); auto.
+    destruct (to_fun_stmt_typed S2 S3 f (xτs.*1) (xτs.*2) τ cs s)
       as (cmτ&?&?&?&?&?&?); rewrite ?fmap_length; eauto; weaken.
     edestruct (λ sto, insert_fun_valid S3 S' f sto
-      (snd <$> xτs) τ (Some s)); auto; weaken; eauto 20. }
+      (xτs.*2) τ (Some s)); auto; weaken; eauto 20. }
   error_proceed [] as S3; error_proceed s as S4.
-  destruct (insert_fun_None_valid S2 S3 f sto (snd <$> xτs) τ)
+  destruct (insert_fun_None_valid S2 S3 f sto (xτs.*2) τ)
     as (?&?&?); auto; weaken.
-  destruct (to_fun_stmt_typed S3 S4 f (fst <$> xτs) (snd <$> xτs) τ cs s)
+  destruct (to_fun_stmt_typed S3 S4 f (xτs.*1) (xτs.*2) τ cs s)
     as (?&?&?&?&?&?&?); rewrite ?fmap_length;
     eauto using types_complete_valid, types_complete_weaken; weaken.
-  destruct (insert_fun_valid S4 S' f sto (snd <$> xτs) τ (Some s));
+  destruct (insert_fun_valid S4 S' f sto (xτs.*2) τ (Some s));
     auto; weaken; eauto 20.
 Qed.
 Lemma alloc_enum_valid S S' yces τi z :
@@ -948,7 +948,7 @@ Proof.
 Qed.
 Lemma to_compound_fields_valid S S' t cτs xτs :
   to_compound_fields t cτs S = mret xτs S' → ✓ S →
-  ✓{to_env S'}* (snd <$> xτs) ∧ ✓ S' ∧ S ⊆ S'.
+  ✓{to_env S'}* (xτs.*2) ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
   revert S xτs.
   induction cτs as [|[x cτ] cτs IH]; intros S xτs ??; error_proceed; auto.

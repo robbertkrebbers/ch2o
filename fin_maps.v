@@ -455,7 +455,7 @@ Proof. apply map_empty; intros i. by rewrite lookup_omap, lookup_empty. Qed.
 Lemma map_to_list_unique {A} (m : M A) i x y :
   (i,x) ∈ map_to_list m → (i,y) ∈ map_to_list m → x = y.
 Proof. rewrite !elem_of_map_to_list. congruence. Qed.
-Lemma NoDup_fst_map_to_list {A} (m : M A) : NoDup (fst <$> map_to_list m).
+Lemma NoDup_fst_map_to_list {A} (m : M A) : NoDup ((map_to_list m).*1).
 Proof. eauto using NoDup_fmap_fst, map_to_list_unique, NoDup_map_to_list. Qed.
 Lemma elem_of_map_of_list_1_help {A} (l : list (K * A)) i x :
   (i,x) ∈ l → (∀ y, (i,y) ∈ l → y = x) → map_of_list l !! i = Some x.
@@ -468,11 +468,11 @@ Proof.
   * rewrite lookup_insert_ne by done; eauto.
 Qed.
 Lemma elem_of_map_of_list_1 {A} (l : list (K * A)) i x :
-  NoDup (fst <$> l) → (i,x) ∈ l → map_of_list l !! i = Some x.
+  NoDup (l.*1) → (i,x) ∈ l → map_of_list l !! i = Some x.
 Proof.
   intros ? Hx; apply elem_of_map_of_list_1_help; eauto using NoDup_fmap_fst.
   intros y; revert Hx. rewrite !elem_of_list_lookup; intros [i' Hi'] [j' Hj'].
-  cut (i' = j'); [naive_solver|]. apply NoDup_lookup with (fst <$> l) i;
+  cut (i' = j'); [naive_solver|]. apply NoDup_lookup with (l.*1) i;
     by rewrite ?list_lookup_fmap, ?Hi', ?Hj'.
 Qed.
 Lemma elem_of_map_of_list_2 {A} (l : list (K * A)) i x :
@@ -483,16 +483,16 @@ Proof.
     rewrite ?lookup_insert, ?lookup_insert_ne; intuition congruence.
 Qed.
 Lemma elem_of_map_of_list {A} (l : list (K * A)) i x :
-  NoDup (fst <$> l) → (i,x) ∈ l ↔ map_of_list l !! i = Some x.
+  NoDup (l.*1) → (i,x) ∈ l ↔ map_of_list l !! i = Some x.
 Proof. split; auto using elem_of_map_of_list_1, elem_of_map_of_list_2. Qed.
 Lemma not_elem_of_map_of_list_1 {A} (l : list (K * A)) i :
-  i ∉ fst <$> l → map_of_list l !! i = None.
+  i ∉ l.*1 → map_of_list l !! i = None.
 Proof.
   rewrite elem_of_list_fmap, eq_None_not_Some. intros Hi [x ?]; destruct Hi.
   exists (i,x); simpl; auto using elem_of_map_of_list_2.
 Qed.
 Lemma not_elem_of_map_of_list_2 {A} (l : list (K * A)) i :
-  map_of_list l !! i = None → i ∉ fst <$> l.
+  map_of_list l !! i = None → i ∉ l.*1.
 Proof.
   induction l as [|[j y] l IH]; csimpl; [rewrite elem_of_nil; tauto|].
   rewrite elem_of_cons. destruct (decide (i = j)); simplify_equality.
@@ -500,17 +500,16 @@ Proof.
   * by rewrite lookup_insert_ne; intuition.
 Qed.
 Lemma not_elem_of_map_of_list {A} (l : list (K * A)) i :
-  i ∉ fst <$> l ↔ map_of_list l !! i = None.
+  i ∉ l.*1 ↔ map_of_list l !! i = None.
 Proof. red; auto using not_elem_of_map_of_list_1,not_elem_of_map_of_list_2. Qed.
 Lemma map_of_list_proper {A} (l1 l2 : list (K * A)) :
-  NoDup (fst <$> l1) → l1 ≡ₚ l2 → map_of_list l1 = map_of_list l2.
+  NoDup (l1.*1) → l1 ≡ₚ l2 → map_of_list l1 = map_of_list l2.
 Proof.
   intros ? Hperm. apply map_eq. intros i. apply option_eq. intros x.
   by rewrite <-!elem_of_map_of_list; rewrite <-?Hperm.
 Qed.
 Lemma map_of_list_inj {A} (l1 l2 : list (K * A)) :
-  NoDup (fst <$> l1) → NoDup (fst <$> l2) →
-  map_of_list l1 = map_of_list l2 → l1 ≡ₚ l2.
+  NoDup (l1.*1) → NoDup (l2.*1) → map_of_list l1 = map_of_list l2 → l1 ≡ₚ l2.
 Proof.
   intros ?? Hl1l2. apply NoDup_Permutation; auto using (NoDup_fmap_1 fst).
   intros [i x]. by rewrite !elem_of_map_of_list, Hl1l2.
@@ -522,7 +521,7 @@ Proof.
     by auto using NoDup_fst_map_to_list.
 Qed.
 Lemma map_to_of_list {A} (l : list (K * A)) :
-  NoDup (fst <$> l) → map_to_list (map_of_list l) ≡ₚ l.
+  NoDup (l.*1) → map_to_list (map_of_list l) ≡ₚ l.
 Proof. auto using map_of_list_inj, NoDup_fst_map_to_list, map_of_to_list. Qed.
 Lemma map_to_list_inj {A} (m1 m2 : M A) :
   map_to_list m1 ≡ₚ map_to_list m2 → m1 = m2.
@@ -564,9 +563,9 @@ Lemma map_to_list_insert_inv {A} (m : M A) l i x :
   map_to_list m ≡ₚ (i,x) :: l → m = <[i:=x]>(map_of_list l).
 Proof.
   intros Hperm. apply map_to_list_inj.
-  assert (NoDup (fst <$> (i, x) :: l)) as Hnodup.
-  { rewrite <-Hperm. auto using NoDup_fst_map_to_list. }
-  csimpl in *. rewrite NoDup_cons in Hnodup. destruct Hnodup.
+  assert (i ∉ l.*1 ∧ NoDup (l.*1)) as [].
+  { rewrite <-NoDup_cons. change (NoDup (((i,x)::l).*1)). rewrite <-Hperm.
+    auto using NoDup_fst_map_to_list. }
   rewrite Hperm, map_to_list_insert, map_to_of_list;
     auto using not_elem_of_map_of_list_1.
 Qed.
@@ -597,7 +596,7 @@ Qed.
 Lemma map_ind {A} (P : M A → Prop) :
   P ∅ → (∀ i x m, m !! i = None → P m → P (<[i:=x]>m)) → ∀ m, P m.
 Proof.
-  intros ? Hins. cut (∀ l, NoDup (fst <$> l) → ∀ m, map_to_list m ≡ₚ l → P m).
+  intros ? Hins. cut (∀ l, NoDup (l.*1) → ∀ m, map_to_list m ≡ₚ l → P m).
   { intros help m.
     apply (help (map_to_list m)); auto using NoDup_fst_map_to_list. }
   induction l as [|[i x] l IH]; intros Hnodup m Hml.

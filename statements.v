@@ -370,24 +370,16 @@ Instance ctx_item_locks {K} : Locks (ctx_item K) := λ Ek,
   end.
 
 (** Given a context, we can construct a stack using the following erasure
-function. We define [get_stack (CFun _ :: k)] as [[]] instead of [getstack k],
+function. We define [locals (CFun _ :: k)] as [[]] instead of [locals k],
 as otherwise it would be possible to refer to the local variables of the
 caller. *)
-Fixpoint get_stack {K} (k : ctx K) : stack :=
+Fixpoint locals {K} (k : ctx K) : stack K :=
   match k with
   | [] => []
-  | CStmt _ :: k | CExpr _ _ :: k => get_stack k
-  | CLocal o τ :: k => o :: get_stack k
+  | CStmt _ :: k | CExpr _ _ :: k => locals k
+  | CLocal o τ :: k => (o,τ) :: locals k
   | CFun _ :: _ => []
-  | CParams _ oτs :: _ => fst <$> oτs
-  end.
-Fixpoint get_stack_types {K} (k : ctx K) : list (type K) :=
-  match k with
-  | [] => []
-  | CStmt _ :: k | CExpr _ _ :: k => get_stack_types k
-  | CLocal o τ :: k => τ :: get_stack_types k
-  | CFun _ :: _ => []
-  | CParams _ oτs :: _ => snd <$> oτs
+  | CParams _ oτs :: _ => oτs
   end.
 Instance ctx_free_gotos {K} : Gotos (ctx K) :=
   fix go k := let _ : Gotos _ := @go in
@@ -412,6 +404,6 @@ Fixpoint ctx_catches {K} (k : ctx K) : nat :=
   | _ => 0
   end.
 
-Lemma get_stack_app {K} (k1 k2 k3 : ctx K) :
-  get_stack k2 = get_stack k3 → get_stack (k1 ++ k2) = get_stack (k1 ++ k3).
+Lemma locals_app {K} (k1 k2 k3 : ctx K) :
+  locals k2 = locals k3 → locals (k1 ++ k2) = locals (k1 ++ k3).
 Proof. induction k1 as [|[] ?]; intros; simpl; auto with f_equal. Qed.

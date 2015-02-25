@@ -39,15 +39,15 @@ Proof.
   destruct 3; inversion 3; simplify_type_equality'; eauto using val_cast_typed,
     val_binop_typed, mem_lookup_typed, addr_typed_type_valid.
 Qed.
-Lemma ehstep_preservation Γ m1 m2 ρ τs e1 e2 τlr :
+Lemma ehstep_preservation Γ m1 m2 ρ e1 e2 τlr :
   ✓ Γ → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 →
-  ✓{Γ} m1 → (Γ,'{m1},τs) ⊢ e1 : τlr → '{m1} ⊢* ρ :* τs →
+  ✓{Γ} m1 → (Γ,'{m1},ρ.*2) ⊢ e1 : τlr → ✓{'{m1}}* ρ →
   (**i 1.) *) ✓{Γ} m2 ∧
-  (**i 2.) *) (Γ,'{m2},τs) ⊢ e2 : τlr ∧
+  (**i 2.) *) (Γ,'{m2},ρ.*2) ⊢ e2 : τlr ∧
   (**i 3.) *) '{m1} ⇒ₘ '{m2}.
 Proof.
   intros ? [] ???.
-  * typed_inversion_all; decompose_Forall_hyps; split_ands; auto.
+  * typed_inversion_all; list_simplifier; split_ands; auto.
     typed_constructor; eauto 8 using addr_top_typed, addr_top_strict,
       cmap_index_typed_valid, lockset_empty_valid.
   * typed_inversion_all; auto.
@@ -98,9 +98,9 @@ Proof.
   * typed_inversion_all; split_ands;
       eauto using lockset_union_valid, val_alter_const_typed.
 Qed.
-Lemma ehstep_forward Γ m1 m2 ρ τs e1 e2 τlr :
-  ✓ Γ → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → ✓{Γ} m1 → (Γ,'{m1},τs) ⊢ e1 : τlr →
-  '{m1} ⊢* ρ :* τs → '{m1} ⇒ₘ '{m2}.
+Lemma ehstep_forward Γ m1 m2 ρ e1 e2 τlr :
+  ✓ Γ → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → ✓{Γ} m1 → (Γ,'{m1},ρ.*2) ⊢ e1 : τlr →
+  ✓{'{m1}}* ρ → '{m1} ⇒ₘ '{m2}.
 Proof. intros. eapply ehstep_preservation; eauto. Qed.
 Lemma cstep_preservation Γ δ S1 S2 f :
   ✓ Γ → Γ\ δ ⊢ₛ S1 ⇒ S2 → Γ ⊢ S1 : f → ✓{Γ,'{SMem S1}} δ →
@@ -113,29 +113,28 @@ Proof.
   * intros m k l (τf&HS&?&?) ?; typed_inversion_all; split; auto.
   * intros m k Ee e (τf&HS&?&?) ?; typed_inversion HS; split; auto.
     edestruct (esctx_item_subst_typed_rev Γ ('{m})
-      (get_stack_types k) Ee e) as (σ&?&?&?); eauto.
+      (locals k.*2) Ee e) as (σ&?&?&?); eauto.
     exists (Expr_type σ); simpl; split_ands; repeat typed_constructor; eauto.
   * intros m1 m2 k E e1 e2 ? (τf&HS&?&?) ?; typed_inversion HS.
     edestruct (ectx_subst_typed_rev Γ ('{m1})
-      (get_stack_types k) E e1) as (τrl&?&?); eauto.
-    destruct (ehstep_preservation Γ m1 m2 (get_stack k) (get_stack_types k)
-      e1 e2 τrl) as (?&?&?); eauto using ctx_typed_stack_typed.
+      (locals k.*2) E e1) as (τrl&?&?); eauto.
+    destruct (ehstep_preservation Γ m1 m2 (locals k)
+      e1 e2 τrl) as (?&?&?); eauto using ctx_typed_locals_valid.
     split; auto. eexists; simpl; split_ands; eauto using ctx_typed_weaken,
       ectx_subst_typed, ectx_typed_weaken.
   * simpl; intros m k Ω f' τs τ E Ωs vs ? (τf&HS&?&?) ?; typed_inversion HS.
-    edestruct (ectx_subst_typed_rev Γ ('{m}) (get_stack_types k) E
+    edestruct (ectx_subst_typed_rev Γ ('{m}) (locals k.*2) E
       (call #{Ω} (ptrV (FunPtr f' τs τ)) @ #{Ωs}* vs)) as (τrl&Hcall&?); eauto.
     typed_inversion_all. split; [|eauto using mem_unlock_forward].
     eexists (Fun_type f'); simpl; split_ands; eauto using mem_unlock_valid'.
     + typed_constructor; eauto.
-      eapply (EVals_typed_inv Γ _ (get_stack_types k));
-        eauto using env_valid_args_valid, Forall2_impl,
-        expr_typed_weaken, mem_unlock_forward.
+      eapply (EVals_typed_inv Γ _ (locals k.*2)); eauto using Forall2_impl,
+        env_valid_args_valid, expr_typed_weaken, mem_unlock_forward.
     + repeat typed_constructor;
         eauto using ectx_typed_weaken, ctx_typed_weaken, mem_unlock_forward.
   * intros m k E e ?? (τf&HS&?&?) ?; typed_inversion HS; split; auto.
     edestruct (ectx_subst_typed_rev Γ ('{m})
-      (get_stack_types k) E e) as (τrl&?&?); eauto.
+      (locals k.*2) E e) as (τrl&?&?); eauto.
   * intros m k e Ω v (τf&HS&?&?) ?; typed_inversion HS.
     typed_inversion_all. split; eauto using mem_unlock_forward.
     eexists; simpl; split_ands; repeat typed_constructor;
@@ -198,10 +197,10 @@ Proof.
   * intros m k s n (τf&HS&?&?) ?; typed_inversion_all; eauto 10.
   * intros m k Es l s ? (τf&HS&?&?) ?; typed_inversion HS; split; auto.
     edestruct (sctx_item_subst_typed_rev Γ ('{m})
-      (get_stack_types k) Es s) as (mτ&?&?); eauto 10.
+      (locals k.*2) Es s) as (mτ&?&?); eauto 10.
   * intros m k Es v s (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     edestruct (sctx_item_typed_Some_l Γ ('{m})
-      (get_stack_types k) Es) as [??]; eauto; simplify_equality'.
+      (locals k.*2) Es) as [??]; eauto; simplify_equality'.
     eauto 10 using sctx_item_subst_typed.
   * intros m k Es l s ? (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eauto 10 using sctx_item_subst_typed.
@@ -268,12 +267,12 @@ Proof.
       ctx_inversion Hk; left; try solve_cred;
         destruct (val_true_false_dec m v)
         as [[[??]|[??]]|[??]]; solve_cred. }
-    destruct (ehstep_dec Γ (get_stack k) e' m) as [(e''&m''&?)|He''].
+    destruct (ehstep_dec Γ (locals k) e' m) as [(e''&m''&?)|He''].
     { left; solve_cred. }
     destruct (maybe_ECall_redex e') as [[[[[[Ω f'] σs] σ] Ωs] vs]|] eqn:Hf.
     { apply maybe_ECall_redex_Some in Hf; destruct Hf as [-> ?].
       left. solve_cred. }
-    assert (¬Γ \ get_stack k ⊢ₕ safe e', m).
+    assert (¬Γ \ locals k ⊢ₕ safe e', m).
     { rewrite eq_None_not_Some in Hf;
         contradict Hf; destruct Hf; [|naive_solver].
       eexists; apply maybe_ECall_redex_Some; eauto. }

@@ -2053,6 +2053,8 @@ Section Forall_Exists.
   Proof. rewrite Forall_lookup. eauto. Qed.
   Lemma Forall_lookup_2 l : (∀ i x, l !! i = Some x → P x) → Forall P l.
   Proof. by rewrite Forall_lookup. Qed.
+  Lemma Forall_tail l : Forall P l → Forall P (tail l).
+  Proof. destruct 1; simpl; auto. Qed.
   Lemma Forall_alter f l i :
     Forall P l → (∀ x, l!!i = Some x → P x → P (f x)) → Forall P (alter f i l).
   Proof.
@@ -2575,6 +2577,8 @@ Section fmap.
   Proof.
     induction l as [|?? IH]; csimpl; by rewrite ?reverse_cons, ?fmap_app, ?IH.
   Qed.
+  Lemma fmap_tail l : f <$> tail l = tail (f <$> l).
+  Proof. by destruct l. Qed.
   Lemma fmap_last l : last (f <$> l) = f <$> last l.
   Proof. induction l as [|? []]; simpl; auto. Qed.
   Lemma fmap_replicate n x :  f <$> replicate n x = replicate n (f x).
@@ -2673,7 +2677,7 @@ Lemma list_alter_fmap_mono {A} (f : A → A) (g : A → A) l i :
   Forall (λ x, f (g x) = g (f x)) l → f <$> alter g i l = alter g i (f <$> l).
 Proof. auto using list_alter_fmap. Qed.
 Lemma NoDup_fmap_fst {A B} (l : list (A * B)) :
-  (∀ x y1 y2, (x,y1) ∈ l → (x,y2) ∈ l → y1 = y2) → NoDup l → NoDup (fst <$> l).
+  (∀ x y1 y2, (x,y1) ∈ l → (x,y2) ∈ l → y1 = y2) → NoDup l → NoDup (l.*1).
 Proof.
   intros Hunique. induction 1 as [|[x1 y1] l Hin Hnodup IH]; csimpl; constructor.
   * rewrite elem_of_list_fmap.
@@ -3040,8 +3044,7 @@ Section zip_with.
   Proof. revert l. induction k; intros [|??] ??; f_equal'; auto with lia. Qed.
   Lemma zip_with_zip l k : zip_with f l k = curry f <$> zip l k.
   Proof. revert k. by induction l; intros [|??]; f_equal'. Qed.
-  Lemma zip_with_fst_snd lk :
-    zip_with f (fst <$> lk) (snd <$> lk) = curry f <$> lk.
+  Lemma zip_with_fst_snd lk : zip_with f (lk.*1) (lk.*2) = curry f <$> lk.
   Proof. by induction lk as [|[]]; f_equal'. Qed.
   Lemma zip_with_replicate n x y :
     zip_with f (replicate n x) (replicate n y) = replicate n (f x y).
@@ -3095,11 +3098,11 @@ Section zip.
   Context {A B : Type}.
   Implicit Types l : list A.
   Implicit Types k : list B.
-  Lemma fst_zip l k : length l ≤ length k → fst <$> zip l k = l.
+  Lemma fst_zip l k : length l ≤ length k → (zip l k).*1 = l.
   Proof. by apply fmap_zip_with_l. Qed.
-  Lemma snd_zip l k : length k ≤ length l → snd <$> zip l k = k.
+  Lemma snd_zip l k : length k ≤ length l → (zip l k).*2 = k.
   Proof. by apply fmap_zip_with_r. Qed.
-  Lemma zip_fst_snd (lk : list (A * B)) : zip (fst <$> lk) (snd <$> lk) = lk.
+  Lemma zip_fst_snd (lk : list (A * B)) : zip (lk.*1) (lk.*2) = lk.
   Proof. by induction lk as [|[]]; f_equal'. Qed.
   Lemma Forall2_fst P l1 l2 k1 k2 :
     length l2 = length k2 → Forall2 P l1 k1 →
@@ -3292,6 +3295,8 @@ Ltac simplify_list_equality ::= repeat
     rewrite take_app_alt in H by solve_length
   | H : context [drop _ (_ ++ _)] |- _ =>
     rewrite drop_app_alt in H by solve_length
+  | H : ?l !! ?i = _, H2 : context [(_ <$> ?l) !! ?i] |- _ =>
+     rewrite list_lookup_fmap, H in H2
   end.
 Ltac decompose_Forall_hyps :=
   repeat match goal with

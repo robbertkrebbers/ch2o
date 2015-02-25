@@ -39,9 +39,9 @@ Definition interpreter_initial (Θ : list (string * decl))
   eσlrs ← mapM (to_expr []) ces;
   let σes := zip_with to_R_NULL σs eσlrs in
   Γ ← gets to_env; m ← gets to_mem;
-  guard (Forall2 cast_typed (snd <$> σes) σs)
+  guard (Forall2 cast_typed (σes.*2) σs)
     with "interpreter called with arguments of incorrect type";
-  let es := (cast{σs}* (fst <$> σes))%E in
+  let es := (cast{σs}* (σes.*1))%E in
   vs ← error_of_option (mapM (λ e, ⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr) es)
     "interpreter called with non-constant expressions";
   mret (IState [] [] (initial_state m f vs)).

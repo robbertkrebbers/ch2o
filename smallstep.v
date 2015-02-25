@@ -36,11 +36,11 @@ relation [cstep].*)
 (* The level is just below logical negation (whose level is 75). *)
 Reserved Notation "Γ \ ρ ⊢ₕ e1 , m1 ⇒ e2 , m2"
   (at level 74, format "Γ \  ρ  '⊢ₕ' '['  e1 ,  m1  ⇒ '/'  e2 ,  m2 ']'").
-Inductive ehstep `{Env K} (Γ : env K) (ρ : stack) :
+Inductive ehstep `{Env K} (Γ : env K) (ρ : stack K) :
      expr K → mem K → expr K → mem K → Prop :=
   | ehstep_var x τ o m :
-     ρ !! x = Some o →
-     Γ\ ρ ⊢ₕ var{τ} x, m ⇒ %(addr_top o τ), m
+     ρ !! x = Some (o,τ) →
+     Γ\ ρ ⊢ₕ var x, m ⇒ %(addr_top o τ), m
   | ehstep_rtol m Ω a :
      addr_strict Γ a → index_alive' m (addr_index a) →
      Γ\ ρ ⊢ₕ .* (#{Ω} (ptrV (Ptr a))), m ⇒ %{Ω} a, m
@@ -96,7 +96,7 @@ is adapted from CompCert and is used to capture undefined behavior. If the
 whole expression contains a redex that is not safe, the semantics transitions
 to the [Undef] state. *)
 Reserved Notation "Γ \ ρ  '⊢ₕ' 'safe' e , m" (at level 74).
-Inductive ehsafe `{Env K} (Γ : env K) (ρ : stack) : expr K → mem K → Prop :=
+Inductive ehsafe `{Env K} (Γ : env K) (ρ : stack K) : expr K → mem K → Prop :=
   | ehsafe_call Ω f τs τ Ωs vs m :
      length Ωs = length vs →
      Γ \ ρ ⊢ₕ safe (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs), m
@@ -128,7 +128,7 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
 
   (**i For expressions: *)
   | cstep_expr_head m1 m2 k (E : ectx K) e1 e2 :
-     Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2 →
+     Γ\ locals k ⊢ₕ e1, m1 ⇒ e2, m2 →
      Γ\ δ ⊢ₛ State k (Expr (subst E e1)) m1 ⇒
              State k (Expr (subst E e2)) m2
   | cstep_expr_call m k Ω f τs τ E Ωs vs :
@@ -137,7 +137,7 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
      Γ\ δ ⊢ₛ State k (Expr (subst E e)) m ⇒
              State (CFun E :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m)
   | cstep_expr_undef m k (E : ectx K) e :
-     is_redex e → ¬Γ \ get_stack k ⊢ₕ safe e, m →
+     is_redex e → ¬Γ \ locals k ⊢ₕ safe e, m →
      Γ\ δ ⊢ₛ State k (Expr (subst E e)) m ⇒
              State k (Undef (UndefExpr E e)) m
 
@@ -198,10 +198,10 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
                (Stmt ↘ s) (mem_alloc_list Γ (zip os vs) m)
   | cstep_free_params m k f oτs s :
      Γ\ δ ⊢ₛ State (CParams f oτs :: k) (Stmt ↗ s) m ⇒
-             State k (Return f voidV) (foldr mem_free m (fst <$> oτs))
+             State k (Return f voidV) (foldr mem_free m (oτs.*1))
   | cstep_free_params_top m k f oτs v s :
      Γ\ δ ⊢ₛ State (CParams f oτs :: k) (Stmt (⇈ v) s) m ⇒
-             State k (Return f v) (foldr mem_free m (fst <$> oτs))
+             State k (Return f v) (foldr mem_free m (oτs.*1))
   | cstep_return m k f E v :
      Γ\ δ ⊢ₛ State (CFun E :: k) (Return f v) m ⇒
              State k (Expr (subst E (#v)%E)) m
@@ -310,7 +310,7 @@ Section inversion.
          k = CExpr e' (if{□} s1 else s2) :: k' →
          P (State k' (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m)) →
        (∀ (E : ectx K) e1 e2 m2,
-         e = subst E e1 → Γ\ get_stack k ⊢ₕ e1, m ⇒ e2, m2 →
+         e = subst E e1 → Γ\ locals k ⊢ₕ e1, m ⇒ e2, m2 →
          P (State k (Expr (subst E e2)) m2)) →
        (∀ (E : ectx K) Ω f τs τ Ωs vs,
          e = subst E (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)%E →
@@ -318,7 +318,7 @@ Section inversion.
          P (State (CFun E :: k)
            (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m))) →
        (∀ (E : ectx K) e1,
-         e = subst E e1 → is_redex e1 → ¬Γ\ get_stack k ⊢ₕ safe e1, m →
+         e = subst E e1 → is_redex e1 → ¬Γ\ locals k ⊢ₕ safe e1, m →
          P (State k (Undef (UndefExpr E e1)) m)) →
        P S2
     | Return f v =>
@@ -355,7 +355,7 @@ Section inversion.
          P (State k' (Stmt ↗ (if{e} s1 else s)) m)) →
        (∀ k' f oτs,
          k = CParams f oτs :: k' →
-         P (State k' (Return f voidV) (foldr mem_free m (fst <$> oτs)))) →
+         P (State k' (Return f voidV) (foldr mem_free m (oτs.*1)))) →
        P S2
     | Call f vs =>
        (∀ s os,
@@ -366,7 +366,7 @@ Section inversion.
     | Stmt (⇈ v) s =>
        (∀ k' f oτs,
          k = CParams f oτs :: k' →
-         P (State k' (Return f v) (foldr mem_free m (fst <$> oτs)))) →
+         P (State k' (Return f v) (foldr mem_free m (oτs.*1)))) →
        (∀ k' o τ,
          k = CLocal o τ :: k' →
          P (State k' (Stmt (⇈ v) (local{τ} s)) (mem_free o m))) →
@@ -447,7 +447,7 @@ Section inversion.
     | CStmt (if{e} s1 else □) => P (State k (Stmt ↗ (if{e} s1 else s)) m) → P S2
     | CLocal o τ => P (State k (Stmt ↗ (local{τ} s)) (mem_free o m)) → P S2
     | CParams f oτs =>
-       P (State k (Return f voidV) (foldr mem_free m (fst <$> oτs))) → P S2
+       P (State k (Return f voidV) (foldr mem_free m (oτs.*1))) → P S2
     | _ => P S2
     end.
   Proof.
@@ -459,7 +459,7 @@ Section inversion.
     match Ek with
     | CStmt Es => P (State k (Stmt (⇈ v) (subst Es s)) m) → P S2
     | CParams f oτs =>
-       P (State k (Return f v) (foldr mem_free m (fst <$> oτs))) → P S2
+       P (State k (Return f v) (foldr mem_free m (oτs.*1))) → P S2
     | CLocal o τ => P (State k (Stmt (⇈ v) (local{τ} s)) (mem_free o m)) → P S2
     | _ => P S2
     end.
@@ -819,7 +819,7 @@ Lemma cstep_expr_call_inv (P : state K → Prop) k Ω f τs τ Ωs vs m S' :
   Γ\ δ ⊢ₛ State k (Expr e) m ⇒{k} S' →
   length Ωs = length vs →
   P (State (CFun [] :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m)) →
-  (¬Γ\ get_stack k ⊢ₕ safe call e @ #{Ωs}* vs, m →
+  (¬Γ\ locals k ⊢ₕ safe call e @ #{Ωs}* vs, m →
     P (State k (Undef (UndefExpr [] (call e @ #{Ωs}* vs))) m)) →
   P S'.
 Proof.
@@ -840,16 +840,16 @@ Proof.
 Qed.
 Lemma cstep_ctx_irrel l l' k1 φ1 m1 k2 φ2 m2 :
   Γ\ δ ⊢ₛ State (k1 ++ l) φ1 m1 ⇒ State (k2 ++ l) φ2 m2 →
-  get_stack l = get_stack l' →
+  locals l = locals l' →
   Γ\ δ ⊢ₛ State (k1 ++ l') φ1 m1 ⇒ State (k2 ++ l') φ2 m2.
 Proof.
   intros p Hstack. inv_cstep p;
     rewrite ?app_comm_cons in *; simplify_list_equality;
     repeat match goal with
-    | H : _\ get_stack (_ ++ _) ⊢ₕ _, _ ⇒ _, _ |- _ =>
-       erewrite get_stack_app in H by eapply Hstack
-    | H : ¬_\ get_stack (_ ++ _) ⊢ₕ safe _, _ |- _ =>
-       erewrite get_stack_app in H by eapply Hstack
+    | H : _\ locals (_ ++ _) ⊢ₕ _, _ ⇒ _, _ |- _ =>
+       erewrite locals_app in H by eapply Hstack
+    | H : ¬_\ locals (_ ++ _) ⊢ₕ safe _, _ |- _ =>
+       erewrite locals_app in H by eapply Hstack
     | _ => do_cstep
     | H : _ :: _ = ?k ++ _ |- _ =>
        destruct k; simplify_list_equality; try discriminate_list_equality
@@ -857,7 +857,7 @@ Proof.
 Qed.
 Lemma cred_ctx_irrel l l' k φ m :
   red (cstep_in_ctx Γ δ l) (State (k ++ l) φ m) →
-  get_stack l = get_stack l' →
+  locals l = locals l' →
   red (cstep_in_ctx Γ δ l') (State (k ++ l') φ m).
 Proof.
   intros [[? φ' m'] [p [k' ?]]] ?; simpl in *; subst.

@@ -55,13 +55,13 @@ Proof.
   * right; eexists Ω, f, τs, τ, F, Ωs, vs, v; eauto.
 Qed.
 Lemma expr_eval_sound Γ δ m k e ν :
-  ⟦ e ⟧ Γ ∅ (get_stack k) m = Some ν →
+  ⟦ e ⟧ Γ ∅ (locals k) m = Some ν →
   Γ\ δ ⊢ₛ State k (Expr e) m ⇒{k}* State k (Expr (%# ν)) m.
 Proof.
   induction e as [e IH] using expr_wf_ind; intros He.
   destruct (is_nf_or_redex e) as [He'|(E&e1&?&->)].
   { by destruct He'; simplify_option_equality. }
-  destruct (expr_eval_subst_ehstep Γ ∅ (get_stack k) m E e1 ν)
+  destruct (expr_eval_subst_ehstep Γ ∅ (locals k) m E e1 ν)
     as [(e2&?&?)|(?&?&?&?&?&?&?&?&?&?&?&?&?)]; simplify_map_equality; auto.
   econstructor; [do_cstep|]. apply IH; auto.
   rewrite !ectx_subst_size, <-Nat.add_lt_mono_l; eauto using ehstep_size.
@@ -78,7 +78,7 @@ Proof.
 Qed.
 Lemma expr_eval_complete Γ δ m1 m2 k e ν :
   Γ\ δ ⊢ₛ State k (Expr e) m1 ⇒{k}* State k (Expr (%# ν)) m2 →
-  is_pure e → ⟦ e ⟧ Γ ∅ (get_stack k) m1 = Some ν ∧ m1 = m2.
+  is_pure e → ⟦ e ⟧ Γ ∅ (locals k) m1 = Some ν ∧ m1 = m2.
 Proof.
   remember (State k (Expr e) m1) as S eqn:He; intros p; revert S p m1 e He.
   refine (rtc_ind_l _ _ _ _); [naive_solver|].
@@ -103,7 +103,7 @@ Proof.
   * by constructor.
 Qed.
 Lemma expr_eval_cred Γ fs δ e k m ν :
-  ⟦ e ⟧ Γ fs (get_stack k) m = Some ν → ¬is_nf e →
+  ⟦ e ⟧ Γ fs (locals k) m = Some ν → ¬is_nf e →
   red (cstep_in_ctx Γ δ k) (State k (Expr e) m).
 Proof.
   intros Heval He. destruct (is_nf_is_redex _ He) as (E'&e'&?&->).

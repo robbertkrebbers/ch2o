@@ -26,19 +26,19 @@ Definition assign_exec (Γ : env K) (m : mem K) (a : addr K)
      guard (val_cast_ok Γ m (type_of a) v');
      Some (va, val_cast (type_of a) v')
   end.
-Fixpoint ctx_lookup (x : nat) (k : ctx K) : option index :=
+Fixpoint ctx_lookup (x : nat) (k : ctx K) : option (index * type K) :=
   match k with
   | (CStmt _ | CExpr _ _) :: k => ctx_lookup x k
-  | CLocal o _ :: k =>
-     match x with 0 => Some o | S x => ctx_lookup x k end
-  | CParams _ oτs :: _ => fst <$> oτs !! x
+  | CLocal o τ :: k =>
+     match x with 0 => Some (o,τ) | S x => ctx_lookup x k end
+  | CParams _ oτs :: _ => oτs !! x
   | _ => None
   end.
 Definition ehexec (Γ : env K) (k : ctx K)
     (e : expr K) (m : mem K) : listset (expr K * mem K) :=
   match e with
-  | var{τ} x =>
-     o ← of_option (ctx_lookup x k);
+  | var x =>
+     '(o,τ) ← of_option (ctx_lookup x k);
      {[ %(addr_top o τ), m ]}
   | .* (#{Ω} (ptrV (Ptr a))) =>
      guard (addr_strict Γ a);
@@ -124,13 +124,13 @@ Definition cexec (Γ : env K) (δ : funenv K)
     | CStmt (if{e} s1 else □) :: k =>
        {[ State k (Stmt ↗ (if{e} s1 else s)) m ]}
     | CParams f oτs :: k =>
-       {[ State k (Return f voidV) (foldr mem_free m (fst <$> oτs)) ]}
+       {[ State k (Return f voidV) (foldr mem_free m (oτs.*1)) ]}
     | _ => ∅
     end
   | Stmt (⇈ v) s =>
     match k with
     | CParams f oτs :: k =>
-       {[ State k (Return f v) (foldr mem_free m (fst <$> oτs)) ]}
+       {[ State k (Return f v) (foldr mem_free m (oτs.*1)) ]}
     | CLocal o τ :: k => {[ State k (Stmt (⇈ v) (local{τ} s)) (mem_free o m) ]}
     | CStmt E :: k => {[ State k (Stmt (⇈ v) (subst E s)) m ]}
     | _ => ∅

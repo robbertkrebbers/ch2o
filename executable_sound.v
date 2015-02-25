@@ -11,13 +11,13 @@ Proof.
   split; [|by destruct 1; simplify_option_equality].
   intros. destruct ass; simplify_option_equality; econstructor; eauto.
 Qed.
-Lemma ctx_lookup_correct (k : ctx K) x : ctx_lookup x k = get_stack k !! x.
+Lemma ctx_lookup_correct (k : ctx K) i : ctx_lookup i k = locals k !! i.
 Proof.
-  revert x.
+  revert i.
   induction k as [|[]]; intros [|x]; f_equal'; rewrite ?list_lookup_fmap; auto.
 Qed.
 Lemma ehexec_sound Γ k m1 m2 e1 e2 :
-  (e2,m2) ∈ ehexec Γ k e1 m1 → Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2.
+  (e2,m2) ∈ ehexec Γ k e1 m1 → Γ\ locals k ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
   intros. destruct e1;
     repeat match goal with
@@ -31,7 +31,7 @@ Proof.
     end; do_ehstep.
 Qed.
 Lemma ehexec_weak_complete Γ k e1 m1 e2 m2 :
-  ehexec Γ k e1 m1 ≡ ∅ → ¬Γ\ get_stack k ⊢ₕ e1, m1 ⇒ e2, m2.
+  ehexec Γ k e1 m1 ≡ ∅ → ¬Γ\ locals k ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
   destruct 2; 
     repeat match goal with
@@ -40,7 +40,7 @@ Proof.
     | H : is_Some _ |- _ => destruct H as [??]
     | _ => progress decompose_empty
     | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]
-    | H : get_stack _ !! _ = Some _ |- _ => rewrite <-ctx_lookup_correct in H
+    | H : locals _ !! _ = Some _ |- _ => rewrite <-ctx_lookup_correct in H
     | H : of_option ?o ≫= _ ≡ _, Ho : ?o = Some _ |- _ =>
        rewrite Ho in H; csimpl in H; rewrite collection_bind_singleton in H
     | _ => progress simplify_option_equality
@@ -50,8 +50,8 @@ Qed.
 Lemma ehstep_dec Γ ρ e1 m1 :
   (∃ e2 m2, Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2) ∨ ∀ e2 m2, ¬Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
-  set (k:=(λ o, @CLocal K o voidT) <$> ρ).
-  replace ρ with (get_stack k) by (induction ρ; f_equal'; auto).
+  set (k:=(λ oτ, CLocal (oτ.1) (oτ.2)) <$> ρ).
+  replace ρ with (locals k) by (induction ρ as [|[]]; f_equal'; auto).
   destruct (collection_choose_or_empty (ehexec Γ k e1 m1)) as [[[e2 m2]?]|];
     eauto using ehexec_sound, ehexec_weak_complete.
 Qed.
@@ -59,7 +59,7 @@ Lemma cexec_sound Γ δ S1 S2 : Γ\ δ ⊢ₛ S1 ⇒ₑ S2 → Γ\ δ ⊢ₛ S1 
 Proof.
   intros. assert (∀ (k : ctx K) e m,
     ehexec Γ k e m ≡ ∅ → maybe_ECall_redex e = None →
-    is_redex e → ¬Γ\ get_stack k ⊢ₕ safe e, m).
+    is_redex e → ¬Γ\ locals k ⊢ₕ safe e, m).
   { intros k e m He. rewrite eq_None_not_Some.
     intros Hmaybe Hred Hsafe; apply Hmaybe; destruct Hsafe.
     * eexists; apply maybe_ECall_redex_Some; eauto.

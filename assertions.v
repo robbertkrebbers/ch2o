@@ -20,47 +20,47 @@ Local Hint Extern 1 (_ ⊆{_} _) => etransitivity; [|eassumption].
 
 (** * Definition of assertions *)
 Record assert (K : Set) `{Env K} := Assert {
-  assert_holds : env K → memenv K → stack → list (type K) → mem K → Prop;
-  assert_weaken Γ1 Γ2 Δ1 Δ2 ρ τs m :
-    ✓ Γ1 → ✓{Γ1,Δ1} m → Δ1 ⊢* ρ :* τs →
-    assert_holds Γ1 Δ1 ρ τs m →
+  assert_holds : env K → memenv K → stack K → mem K → Prop;
+  assert_weaken Γ1 Γ2 Δ1 Δ2 ρ m :
+    ✓ Γ1 → ✓{Γ1,Δ1} m → ✓{Δ1}* ρ →
+    assert_holds Γ1 Δ1 ρ m →
     Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
-    assert_holds Γ2 Δ2 ρ τs m
+    assert_holds Γ2 Δ2 ρ m
 }.
 Add Printing Constructor assert.
 
 Delimit Scope assert_scope with A.
 Bind Scope assert_scope with assert.
 Arguments Assert {_ _} _ _.
-Arguments assert_holds {_ _} _%A _ _ _ _ _.
-Arguments assert_weaken {_ _} _%A _ _ _ _ _ _ _ _ _ _ _ _ _.
+Arguments assert_holds {_ _} _%A _ _ _ _.
+Arguments assert_weaken {_ _} _%A _ _ _ _ _ _ _ _ _ _ _ _.
 
 (** The relation [P ⊆@{Γ} Q] states that the assertion [Q] is a logical
 consequence of [P] in [Γ] and [P ≡@{Γ} Q] states that [P] and [Q] are logically
 equivalent in [Γ]. *)
 Instance assert_entails `{Env K} : SubsetEqE (env K) (assert K) := λ Γ P Q,
-  ∀ Γ' Δ ρ τs m,
-    Γ ⊆ Γ' → ✓ Γ' → ✓{Γ',Δ} m → Δ ⊢* ρ :* τs →
-    assert_holds P Γ' Δ ρ τs m → assert_holds Q Γ' Δ ρ τs m.
+  ∀ Γ' Δ ρ m,
+    Γ ⊆ Γ' → ✓ Γ' → ✓{Γ',Δ} m → ✓{Δ}* ρ →
+    assert_holds P Γ' Δ ρ m → assert_holds Q Γ' Δ ρ m.
 Instance assert_equiv `{Env K} : EquivE (env K) (assert K) := λ Γ P Q,
   P ⊆{Γ} Q ∧ Q ⊆{Γ} P.
 
 (** * Hoare logic connectives *)
 (** Definitions and notations of the usual connectives of Hoare logic. *)
 Program Definition assert_Prop `{Env K} (P : Prop) : assert K := {|
-  assert_holds := λ _ _ _ _ m, P ∧ m = ∅
+  assert_holds := λ _ _ _ m, P ∧ m = ∅
 |}.
 Next Obligation. naive_solver. Qed.
 Notation "⌜ P ⌝" := (assert_Prop P) (format "⌜  P  ⌝") : assert_scope.
 Notation "'False'" := (assert_Prop False) : assert_scope.
 
 Program Definition assert_impl `{Env K} (P Q : assert K) : assert K := {|
-  assert_holds := λ Γ Δ ρ τs m, ∀ Γ' Δ',
+  assert_holds := λ Γ Δ ρ m, ∀ Γ' Δ',
     Γ ⊆ Γ' → ✓ Γ' → Δ ⇒ₘ Δ' → ✓{Γ',Δ'} m →
-    assert_holds P Γ' Δ' ρ τs m → assert_holds Q Γ' Δ' ρ τs m
+    assert_holds P Γ' Δ' ρ m → assert_holds Q Γ' Δ' ρ m
 |}.
 Next Obligation.
-  intros ?? P Q Γ1 Γ2 Δ1 Δ2 ρ τs m ??? HPQ ?? Γ3 Δ3 ?????.
+  intros ?? P Q Γ1 Γ2 Δ1 Δ2 ρ m ??? HPQ ?? Γ3 Δ3 ?????.
   apply HPQ; eauto.
 Qed.
 Infix "→" := assert_impl : assert_scope.
@@ -69,8 +69,8 @@ Notation "( P →)" := (assert_impl P) (only parsing) : assert_scope.
 Notation "(→ Q )" := (λ P, assert_impl P Q) (only parsing) : assert_scope.
 
 Program Definition assert_and `{Env K} (P Q : assert K) : assert K := {|
-  assert_holds := λ Γ Δ ρ τs m,
-    assert_holds P Γ Δ ρ τs m ∧ assert_holds Q Γ Δ ρ τs m
+  assert_holds := λ Γ Δ ρ m,
+    assert_holds P Γ Δ ρ m ∧ assert_holds Q Γ Δ ρ m
 |}.
 Next Obligation. naive_solver eauto using assert_weaken. Qed.
 Infix "∧" := assert_and : assert_scope.
@@ -88,14 +88,14 @@ Notation "( P ↔)" := (assert_iff P) (only parsing) : assert_scope.
 Notation "(↔ Q )" := (λ P, assert_iff P Q) (only parsing) : assert_scope.
 
 Program Definition assert_forall `{Env K} `(P: A → assert K) : assert K := {|
-  assert_holds := λ Γ Δ ρ τs m, ∀ x, assert_holds (P x) Γ Δ ρ τs m
+  assert_holds := λ Γ Δ ρ m, ∀ x, assert_holds (P x) Γ Δ ρ m
 |}.
 Next Obligation. naive_solver eauto using assert_weaken. Qed.
 Notation "∀ x .. y , P" :=
   (assert_forall (λ x, .. (assert_forall (λ y, P)) ..)) : assert_scope.
 
 Program Definition assert_exist `{Env K} `(P : A → assert K): assert K := {|
-  assert_holds := λ Γ Δ ρ τs m, ∃ x, assert_holds (P x) Γ Δ ρ τs m
+  assert_holds := λ Γ Δ ρ m, ∃ x, assert_holds (P x) Γ Δ ρ m
 |}.
 Next Obligation. naive_solver eauto using assert_weaken. Qed.
 Notation "∃ x .. y , P" :=
@@ -108,12 +108,12 @@ disjoint parts such that [P] holds in the one part, and [Q] in the other. *)
 Notation "'emp'" := (assert_Prop True) : assert_scope.
 
 Program Definition assert_sep `{EnvSpec K} (P Q : assert K) : assert K := {|
-  assert_holds := λ Γ Δ ρ τs m, ∃ m1 m2,
+  assert_holds := λ Γ Δ ρ m, ∃ m1 m2,
     m = m1 ∪ m2 ∧ ⊥[m1; m2] ∧
-    assert_holds P Γ Δ ρ τs m1 ∧ assert_holds Q Γ Δ ρ τs m2
+    assert_holds P Γ Δ ρ m1 ∧ assert_holds Q Γ Δ ρ m2
 |}.
 Next Obligation.
-  intros ??? P Q Γ1 Γ2 Δ1 Δ2 ρ τs m ??? (m1&m2&->&?&?&?) ??.
+  intros ??? P Q Γ1 Γ2 Δ1 Δ2 ρ m ??? (m1&m2&->&?&?&?) ??.
   eauto 15 using assert_weaken, cmap_valid_subseteq,
     (@sep_union_subseteq_l (mem K) _ _), (@sep_union_subseteq_r (mem K) _ _).
 Qed.
@@ -135,10 +135,10 @@ value (in other words, [e] does not impose undefined behavior). *)
 Notation vassert K := (lrval K → assert K).
 Program Definition assert_expr `{EnvSpec K}
     (e : expr K) (τlr : lrtype K) : vassert K := λ ν, {|
-  assert_holds := λ Γ Δ ρ τs m, (Γ,Δ,τs) ⊢ e : τlr ∧ ⟦ e ⟧ Γ ∅ ρ m = Some ν
+  assert_holds := λ Γ Δ ρ m, (Γ,Δ,ρ.*2) ⊢ e : τlr ∧ ⟦ e ⟧ Γ ∅ ρ m = Some ν
 |}.
 Next Obligation.
-  intros ??? e τlr ν Γ1 Γ2 Δ1 Δ2 ρ τs m ??? [??] ??; split;
+  intros ??? e τlr ν Γ1 Γ2 Δ1 Δ2 ρ m ??? [??] ??; split;
     eauto using expr_typed_weaken, expr_eval_weaken, purefuns_empty_valid,
     mem_lookup_weaken, mem_forced_weaken.
 Qed.
@@ -156,14 +156,14 @@ object at address [e1] with permission [x] and arbitrary contents. The Boolean
 [malloc] denotes whether the object has been obtained via malloc. *)
 Program Definition assert_singleton `{EnvSpec K}
     (e1 e2 : expr K) (malloc : bool) (x : perm) (τ : type K) : assert K := {|
-  assert_holds := λ Γ Δ ρ τs m, ∃ a v,
-    (Γ,Δ,τs) ⊢ e1 : inl τ ∧ ⟦ e1 ⟧ Γ ∅ ρ ∅ = Some (inl a) ∧
-    (Γ,Δ,τs) ⊢ e2 : inr τ ∧ ⟦ e2 ⟧ Γ ∅ ρ ∅ = Some (inr v) ∧
+  assert_holds := λ Γ Δ ρ m, ∃ a v,
+    (Γ,Δ,ρ.*2) ⊢ e1 : inl τ ∧ ⟦ e1 ⟧ Γ ∅ ρ ∅ = Some (inl a) ∧
+    (Γ,Δ,ρ.*2) ⊢ e2 : inr τ ∧ ⟦ e2 ⟧ Γ ∅ ρ ∅ = Some (inr v) ∧
     addr_is_obj a ∧ sep_valid x ∧ ¬sep_unmapped x ∧ 
     m = mem_singleton Γ a malloc x v
 |}.
 Next Obligation.
-  intros ??? e1 e2 ml x τ Γ1 Γ2 Δ1 Δ2 ρ τs m ??? (a&v&?&?&?&?&?&?&?&->) ??.
+  intros ??? e1 e2 ml x τ Γ1 Γ2 Δ1 Δ2 ρ m ??? (a&v&?&?&?&?&?&?&?&->) ??.
   exists a v; split_ands;
     eauto 15 using expr_typed_weaken, expr_eval_weaken_empty,
     purefuns_empty_valid, mem_singleton_weaken, cmap_valid_memenv_valid,
@@ -181,7 +181,7 @@ Notation "e1 ↦{ malloc , x } - : τ" :=
 (** The assertion [P ○] asserts that [P] holds if all sequenced locations
 are unlocked. *)
 Program Definition assert_unlock `{EnvSpec K} (P : assert K) : assert K := {|
-  assert_holds := λ Γ Δ ρ τs m, assert_holds P Γ Δ ρ τs (mem_unlock_all m)
+  assert_holds := λ Γ Δ ρ m, assert_holds P Γ Δ ρ (mem_unlock_all m)
 |}.
 Next Obligation.
   naive_solver eauto using assert_weaken, mem_unlock_all_valid.
@@ -191,9 +191,9 @@ Notation "P ○" := (assert_unlock P) (at level 20) : assert_scope.
 (** The assertion [P↡] asserts that [P] holds if the stack is cleared. This
 connective allows us to specify stack independence in an alternative way. *)
 Program Definition assert_clear_stack `{Env K} (P : assert K) : assert K := {|
-  assert_holds := λ Γ Δ ρ τs m, assert_holds P Γ Δ [] [] m
+  assert_holds := λ Γ Δ ρ m, assert_holds P Γ Δ [] m
 |}.
-Next Obligation. naive_solver eauto using assert_weaken. Qed.
+Next Obligation. naive_solver eauto using assert_weaken, Forall2_nil. Qed.
 Notation "P ↡" := (assert_clear_stack P) (at level 20) : assert_scope.
 
 (** To deal with block scope variables we need to lift an assertion such that
@@ -201,9 +201,9 @@ the De Bruijn indexes of its variables are increased. We define the lifting
 [P↑] of an assertion [P] semantically, and prove that it indeed behaves as
 expected. *)
 Program Definition assert_lift `{Env K} (P : assert K) : assert K := {|
-  assert_holds := λ Γ Δ ρ τs m, assert_holds P Γ Δ (tail ρ) (tail τs) m
+  assert_holds := λ Γ Δ ρ m, assert_holds P Γ Δ (tail ρ) m
 |}.
-Next Obligation. naive_solver eauto using assert_weaken, Forall2_tail. Qed.
+Next Obligation. naive_solver eauto using assert_weaken, Forall_tail. Qed.
 Notation "P ↑" := (assert_lift P) (at level 20) : assert_scope.
 
 (** * Subclasses of assertions *)
@@ -216,15 +216,13 @@ This file contains instances of these type classes for the various connectives.
 We use instance resolution to automatically compose these instances to prove
 the above properties for composite assertions. *)
 Class StackIndep `{Env K} (P : assert K) : Prop :=
-  stack_indep Γ Δ ρ1 τs1 ρ2 τs2 m :
-    ✓ Γ → ✓{Γ,Δ} m → Δ ⊢* ρ1 :* τs1 → Δ ⊢* ρ2 :* τs2 →
-    assert_holds P Γ Δ ρ1 τs1 m →
-    assert_holds P Γ Δ ρ2 τs2 m.
+  stack_indep Γ Δ ρ1 ρ2 m :
+    ✓ Γ → ✓{Γ,Δ} m → ✓{Δ}* ρ1 → ✓{Δ}* ρ2 →
+    assert_holds P Γ Δ ρ1 m → assert_holds P Γ Δ ρ2 m.
 Class UnlockIndep `{Env K} (P : assert K) : Prop :=
-  unlock_indep Γ Δ ρ τs m :
-    ✓ Γ → ✓{Γ,Δ} m → Δ ⊢* ρ :* τs →
-    assert_holds P Γ Δ ρ τs m →
-    assert_holds P Γ Δ ρ τs (mem_unlock_all m).
+  unlock_indep Γ Δ ρ m :
+    ✓ Γ → ✓{Γ,Δ} m → ✓{Δ}* ρ →
+    assert_holds P Γ Δ ρ m → assert_holds P Γ Δ ρ (mem_unlock_all m).
 
 Hint Extern 10 (StackIndep _) => apply _.
 Hint Extern 10 (UnlockIndep _) => apply _.
@@ -265,10 +263,8 @@ Global Instance: Proper (iff ==> (≡{Γ})) assert_Prop.
 Proof. solve eauto. Qed.
 Global Instance: Proper (flip (⊆{Γ}) ==> (⊆{Γ}) ==> (⊆{Γ})) (→)%A.
 Proof.
-  intros Γ1 P1 P2 HP Q1 Q2 HQ Γ2 Δ ρ τs m ???? HPQ Γ3 Δ2 ???? HP2.
-  eapply HQ; eauto using Forall2_impl, memenv_forward_typed.
-  eapply HPQ; eauto.
-  eapply HP; eauto using Forall2_impl, memenv_forward_typed.
+  intros Γ1 P1 P2 HP Q1 Q2 HQ Γ2 Δ ρ m ???? HPQ Γ3 Δ2 ???? HP2.
+  eapply HQ; eauto using indexes_valid_weaken.
 Qed.
 Global Instance: Proper ((≡{Γ}) ==> (≡{Γ}) ==> (≡{Γ})) (→)%A.
 Proof. by intros ??? [??] ?? [??]; split; f_equiv. Qed.
@@ -304,8 +300,8 @@ Proof. solve eauto. Qed.
 Global Instance assert_impl_stack_indep :
   StackIndep P → StackIndep Q → StackIndep (P → Q).
 Proof.
-  intros P Q HP HQ Γ Δ ρ1 τs1 ρ2 τs2 m ???? HPQ Γ2 Δ2 ???? HP'.
-  eapply HQ, HPQ, HP with ρ2 τs2; eauto using Forall2_impl,memenv_forward_typed.
+  intros P Q HP HQ Γ Δ ρ1 ρ2 m ???? HPQ Γ2 Δ2 ???? HP'.
+  eapply HQ, HPQ, HP with ρ2; eauto using indexes_valid_weaken.
 Qed.
 Global Instance assert_and_stack_indep :
   StackIndep P → StackIndep Q → StackIndep (P ∧ Q).
@@ -410,7 +406,7 @@ Qed.
 Global Instance assert_sep_unlock_indep P Q :
   UnlockIndep P → UnlockIndep Q → UnlockIndep (P ★ Q).
 Proof.
-  intros HP HQ Γ Δ δ τs m ??? (m1&m2&->&?&?&?).
+  intros HP HQ Γ Δ δ m ??? (m1&m2&->&?&?&?).
   rewrite mem_unlock_all_union by solve_sep_disjoint.
   exists (mem_unlock_all m1) (mem_unlock_all m2); split_ands;
     rewrite <-?mem_unlock_all_disjoint_le; eauto using
@@ -425,7 +421,7 @@ Qed.
 
 Global Instance: Commutative (⊆{Γ}) (★)%A.
 Proof.
-  intros Γ P Q Γ1 Δ1 ρ τs m ???? (m1&m2&->&?&?&?).
+  intros Γ P Q Γ1 Δ1 ρ m ???? (m1&m2&->&?&?&?).
   exists m2 m1. rewrite sep_commutative by auto; auto.
 Qed.
 Global Instance: Commutative (≡{Γ}) (★)%A.
@@ -433,9 +429,9 @@ Proof. split; by rewrite (commutative (★)%A). Qed.
 Global Instance: LeftId (≡{Γ}) emp%A (★)%A.
 Proof.
   intros Γ; intros P; split.
-  * intros Γ1 Δ1 ρ τs m ???? (m1&m2&->&?&[_ ->]&?).
+  * intros Γ1 Δ1 ρ m ???? (m1&m2&->&?&[_ ->]&?).
     rewrite sep_left_id by auto; auto.
-  * intros Γ1 Δ1 ρ τs m ?????. eexists ∅, m.
+  * intros Γ1 Δ1 ρ m ?????. eexists ∅, m.
     rewrite sep_left_id, sep_disjoint_equiv_empty,
       sep_disjoint_list_singleton by eauto; solve eauto.
 Qed.
@@ -448,11 +444,11 @@ Proof. red; solve eauto. Qed.
 Global Instance: Associative (≡{Γ}) (★)%A.
 Proof.
   intros Γ. assert (∀ P Q R, ((P ★ Q) ★ R)%A ⊆{Γ} (P ★ (Q ★ R))%A).
-  { intros P Q R Γ1 Δ1 ρ τs ????? (?&m3&->&?&(m1&m2&->&?&?&?)&?).
+  { intros P Q R Γ1 Δ1 ρ ????? (?&m3&->&?&(m1&m2&->&?&?&?)&?).
     exists m1 (m2 ∪ m3); rewrite sep_associative by auto; split_ands; auto.
     exists m2 m3; auto. }
   assert (∀ P Q R, (P ★ (Q ★ R))%A ⊆{Γ} ((P ★ Q) ★ R)%A).
-  { intros P Q R Γ1 Δ1 ρ τs ????? (m1&?&->&?&?&(m2&m3&->&?&?&?)).
+  { intros P Q R Γ1 Δ1 ρ ????? (m1&?&->&?&?&(m2&m3&->&?&?&?)).
     exists (m1 ∪ m2) m3; rewrite sep_associative by auto; split_ands; auto.
     exists m1 m2; auto. }
   split; auto.
@@ -460,7 +456,7 @@ Qed.
 Lemma assert_Prop_and_intro Γ (P : Prop) Q R :
   P → Q ⊆{Γ} R → Q ⊆{Γ} (⌜ P ⌝ ★ R)%A.
 Proof.
-  intros ?? Γ1 Δ1 ρ τs ??????. eexists ∅, m.
+  intros ?? Γ1 Δ1 ρ ??????. eexists ∅, m.
   rewrite sep_left_id, sep_disjoint_equiv_empty,
     sep_disjoint_list_singleton by eauto; solve eauto.
 Qed.
@@ -474,13 +470,13 @@ Lemma assert_exist_sep {A} Γ (P : A → assert K) Q :
   ((∃ x, P x) ★ Q)%A ≡{Γ} (∃ x, P x ★ Q)%A.
 Proof. solve eauto. Qed.
 
-Lemma assert_Forall_holds_2 (Ps : list (assert K)) Γ Δ ρ τs ms :
-  ⊥ ms → Forall2 (λ (P : assert K) m, assert_holds P Γ Δ ρ τs m) Ps ms →
-  assert_holds (Π Ps)%A Γ Δ ρ τs (⋃ ms).
+Lemma assert_Forall_holds_2 (Ps : list (assert K)) Γ Δ ρ ms :
+  ⊥ ms → Forall2 (λ (P : assert K) m, assert_holds P Γ Δ ρ m) Ps ms →
+  assert_holds (Π Ps)%A Γ Δ ρ (⋃ ms).
 Proof. intros Hms HPs. revert Hms. induction HPs; solve eauto. Qed.
-Lemma assert_Forall_holds (Ps : list (assert K)) Γ Δ ρ τs m :
-  assert_holds (Π Ps)%A Γ Δ ρ τs m ↔ ∃ ms, m = ⋃ ms ∧ ⊥ ms ∧
-    Forall2 (λ (P : assert K) m, assert_holds P Γ Δ ρ τs m) Ps ms.
+Lemma assert_Forall_holds (Ps : list (assert K)) Γ Δ ρ m :
+  assert_holds (Π Ps)%A Γ Δ ρ m ↔ ∃ ms, m = ⋃ ms ∧ ⊥ ms ∧
+    Forall2 (λ (P : assert K) m, assert_holds P Γ Δ ρ m) Ps ms.
 Proof.
   split; [|naive_solver eauto using assert_Forall_holds_2].
   revert m. induction Ps as [|P Ps IH].
@@ -493,20 +489,20 @@ Qed.
 Global Instance assert_expr_stack_indep e v τlr :
   vars e = ∅ → StackIndep (e ⇓ v : τlr).
 Proof.
-  intros ? Γ Δ ρ1 τs1 ρ2 τs2 m ???? [??]; split;
+  intros ? Γ Δ ρ1 ρ2 m ???? [??]; split;
     erewrite 1?expr_eval_var_free by eauto; eauto using expr_typed_var_free.
 Qed.
 Global Instance assert_singleton_stack_indep e1 e2 malloc x τ :
   vars e1 = ∅ → vars e2 = ∅ → StackIndep (e1 ↦{malloc,x} e2 : τ).
 Proof.
-  intros ?? Γ Δ ρ1 τs1 ρ2 τs2 m ???? (a&v&?&?&?&?&?&?&?&->);
+  intros ?? Γ Δ ρ1 ρ2 m ???? (a&v&?&?&?&?&?&?&?&->);
     exists a v; erewrite !(expr_eval_var_free _ _ ρ2 ρ1) by eauto;
     eauto 10 using expr_typed_var_free.
 Qed.
 Global Instance assert_singleton_unlock_indep Γ e1 e2 malloc x τ :
   perm_locked x = false → UnlockIndep (e1 ↦{malloc,x} e2 : τ).
 Proof.
-  intros ? Γ1 Δ1 ρ τs m ??? (a&v&?&?&?&?&?&?&?&->).
+  intros ? Γ1 Δ1 ρ m ??? (a&v&?&?&?&?&?&?&?&->).
   assert ((Γ1,Δ1) ⊢ v : τ ∧ (Γ1,Δ1) ⊢ a : TType τ ∧ addr_strict Γ1 a)
     as (?&?&?) by eauto 15 using cmap_valid_memenv_valid, lval_typed_inv,
     lval_typed_strict, rval_typed_inv, expr_eval_typed, cmap_empty_valid.
@@ -519,14 +515,14 @@ Lemma assert_singleton_union Γ e1 e2 malloc x y τ :
   ≡{Γ} (e1 ↦{malloc,x ∪ y} e2 : τ)%A.
 Proof.
   intros; split.
-  * intros Γ1 Δ1 ρ τs ????? (?&?&->&?&(a1&v1&?&?&?&?&?&?&?&->)&
+  * intros Γ1 Δ1 ρ ????? (?&?&->&?&(a1&v1&?&?&?&?&?&?&?&->)&
       (a2&v2&?&?&?&?&?&?&?&->)); simplify_equality'.
     assert ((Γ1,Δ1) ⊢ v1 : τ ∧ (Γ1,Δ1) ⊢ a1 : TType τ ∧ addr_strict Γ1 a1)
       as (?&?&?) by eauto 15 using cmap_valid_memenv_valid, lval_typed_inv,
       lval_typed_strict, rval_typed_inv, expr_eval_typed, cmap_empty_valid.
     exists a1 v1; split_ands;
       eauto 13 using mem_singleton_union, eq_sym, @sep_unmapped_union_l.
-  * intros Γ1 Δ1 ρ τs ????? (a&v&?&He1&?&?&He2&?&?&->).
+  * intros Γ1 Δ1 ρ ????? (a&v&?&He1&?&?&He2&?&?&->).
     assert (x ⊥ y) by solve_sep_disjoint.
     assert ((Γ1,Δ1) ⊢ v : τ ∧ (Γ1,Δ1) ⊢ a : TType τ ∧ addr_strict Γ1 a)
       as (?&?&?) by eauto 15 using cmap_valid_memenv_valid, lval_typed_inv,
@@ -541,12 +537,12 @@ Lemma assert_singleton_array Γ e malloc x vs τ n :
   ≡{Γ} (Π imap (λ i v, (e %> RArray i τ n) ↦{malloc,x} #v : τ) vs)%A.
 Proof.
   intros Hn Hn'. split.
-  * intros Γ1 Δ1 ρ τs ????? (a&v&?&?&Hvs&Hvs'&?&?&?&->).
+  * intros Γ1 Δ1 ρ ????? (a&v&?&?&Hvs&Hvs'&?&?&?&->).
     assert ((Γ1,Δ1) ⊢ a : TType (τ.[n]) ∧ addr_strict Γ1 a)
       as [] by eauto 10 using cmap_valid_memenv_valid, lval_typed_inv,
       lval_typed_strict, expr_eval_typed, cmap_empty_valid.
     assert (∀ j, j + length vs ≤ n → (Γ1,Δ1) ⊢* vs : τ →
-      Forall2 (λ (P : assert K) m, assert_holds P Γ1 Δ1 ρ τs m)
+      Forall2 (λ (P : assert K) m, assert_holds P Γ1 Δ1 ρ m)
         (imap_go (λ i v,((e %> RArray i τ n) ↦{malloc,x} #v : τ)%A) j vs)
         (imap_go (λ i,
           mem_singleton Γ1 (addr_elt Γ1 (RArray i τ n) a) malloc x) j vs)).
@@ -559,9 +555,9 @@ Proof.
     erewrite mem_singleton_array_union by eauto.
     apply assert_Forall_holds_2;
       eauto using mem_singleton_array_disjoint with lia.
-  * intros Γ1 Δ1 ρ τs m _ ? Hm ?; rewrite assert_Forall_holds; intros (ms&->&_&Hms).
+  * intros Γ1 Δ1 ρ m _ ? Hm ?; rewrite assert_Forall_holds; intros (ms&->&_&Hms).
     apply cmap_valid_memenv_valid in Hm.
-    assert (∃ a, (Γ1,Δ1,τs) ⊢ e : inl (τ.[n])%T ∧ ⟦ e ⟧ Γ1 ∅ ρ ∅ = Some (inl a) ∧
+    assert (∃ a, (Γ1,Δ1,ρ.*2) ⊢ e : inl (τ.[n])%T ∧ ⟦ e ⟧ Γ1 ∅ ρ ∅ = Some (inl a) ∧
       sep_valid x ∧ ¬sep_unmapped x) as (a&?&?&?&?).
     { unfold imap in *. destruct vs; decompose_Forall_hyps.
       naive_solver (simplify_option_equality; typed_inversion_all; eauto). }
@@ -587,17 +583,17 @@ Qed.
 
 (* Lifting De Bruijn indexes *)
 Global Instance: Proper ((⊆{Γ}) ==> (⊆{Γ})) assert_lift.
-Proof. solve ltac:(eauto using Forall2_tail). Qed.
+Proof. solve ltac:(eauto using Forall_tail). Qed.
 Global Instance: Proper ((≡{Γ}) ==> (≡{Γ})) assert_lift.
-Proof. solve ltac:(eauto using Forall2_tail). Qed.
+Proof. solve ltac:(eauto using Forall_tail). Qed.
 
 Global Instance assert_lift_stack_indep: StackIndep P → StackIndep (P↑).
-Proof. solve ltac:(eauto using Forall2_tail). Qed.
+Proof. solve ltac:(eauto using Forall_tail). Qed.
 Global Instance assert_lift_unlock_indep: UnlockIndep P → UnlockIndep (P↑).
-Proof. solve ltac:(eauto using Forall2_tail). Qed.
+Proof. solve ltac:(eauto using Forall_tail). Qed.
 
 Lemma stack_indep_lift Γ P `{!StackIndep P} : (P↑)%A ≡{Γ} P.
-Proof. solve ltac:(eauto using Forall2_tail). Qed.
+Proof. solve ltac:(eauto using Forall_tail). Qed.
 Lemma assert_lift_impl Γ P Q : ((P → Q)↑)%A ≡{Γ} (P↑ → Q↑)%A.
 Proof. solve eauto. Qed.
 Lemma assert_lift_and Γ P Q : ((P ∧ Q)↑)%A ≡{Γ} (P↑ ∧ Q↑)%A.
@@ -615,8 +611,8 @@ Proof. solve eauto. Qed.
 Lemma assert_lift_expr Γ e v τ : ((e ⇓ v : τ)↑)%A ≡{Γ} (e↑ ⇓ v : τ)%A.
 Proof.
   split; repeat intro.
-  * do 2 red; by rewrite expr_eval_lift, expr_typed_lift.
-  * do 4 red; by rewrite <-expr_eval_lift, <-expr_typed_lift.
+  * do 2 red. by rewrite expr_eval_lift, expr_typed_lift, <-fmap_tail.
+  * do 4 red. by rewrite fmap_tail, <-expr_eval_lift, <-expr_typed_lift.
 Qed.
 Lemma assert_lift_expr_ Γ e τ : ((e ⇓ - : τ)↑)%A ≡{Γ} (e↑ ⇓ - : τ)%A.
 Proof. by rewrite assert_lift_exists; setoid_rewrite (assert_lift_expr Γ). Qed.
@@ -624,8 +620,9 @@ Lemma assert_lift_singleton Γ e1 e2 malloc x τ :
   ((e1 ↦{malloc,x} e2 : τ)↑)%A ≡{Γ} ((e1↑) ↦{malloc,x} (e2↑) : τ)%A.
 Proof.
   split; repeat intro.
-  * do 2 red. by setoid_rewrite expr_eval_lift; setoid_rewrite expr_typed_lift.
-  * do 4 red; by setoid_rewrite <-expr_eval_lift;
+  * do 2 red. by setoid_rewrite expr_eval_lift;
+      setoid_rewrite expr_typed_lift; rewrite <-fmap_tail.
+  * do 4 red. by rewrite fmap_tail; setoid_rewrite <-expr_eval_lift;
       setoid_rewrite <-expr_typed_lift.
 Qed.
 Lemma assert_lift_singleton_ Γ e1 malloc x τ :
@@ -657,7 +654,7 @@ Lemma assert_unlock_exists Γ {A} (P : A → assert K) :
 Proof. solve eauto. Qed.
 Lemma assert_unlock_sep Γ P Q : (P ○ ★ Q ○)%A ⊆{Γ} ((P ★ Q) ○)%A.
 Proof.
-  intros Γ1 Δ1 ρ τs m ???? (m1&m2&->&?&?&?).
+  intros Γ1 Δ1 ρ m ???? (m1&m2&->&?&?&?).
   exists (mem_unlock_all m1) (mem_unlock_all m2); split_ands; auto.
   * by rewrite mem_unlock_all_union by solve_sep_disjoint.
   * by rewrite <-!mem_unlock_all_disjoint_le.
@@ -670,7 +667,7 @@ Lemma assert_unlock_singleton Γ e1 e2 malloc x τ :
   perm_locked x = true →
   (e1 ↦{malloc,x} e2 : τ)%A ⊆{Γ} ((e1 ↦{malloc,perm_unlock x} e2 : τ) ○)%A.
 Proof.
-  intros ? Γ1 Δ1 ρ τs m ???? (a&v&?&?&?&?&?&?&?&->).
+  intros ? Γ1 Δ1 ρ m ???? (a&v&?&?&?&?&?&?&?&->).
   exists a v; split_ands; eauto using perm_unlock_valid, perm_unlock_mapped.
   assert ((Γ1,Δ1) ⊢ v : τ ∧ (Γ1,Δ1) ⊢ a : TType τ ∧ addr_strict Γ1 a)
     as (?&?&?) by eauto 15 using cmap_valid_memenv_valid, lval_typed_inv,

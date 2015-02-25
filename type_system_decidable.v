@@ -26,7 +26,7 @@ Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
   fix go Γs e {struct e} := let _ : TypeCheck envs _ _ := @go in
   let '(Γ,Δ,τs) := Γs in
   match e with
-  | var{τ} n => τ' ← τs !! n; guard (τ = τ'); Some (inl τ)
+  | var n => τ ← τs !! n; Some (inl τ)
   | %#{Ω} ν => guard (✓{Γ,Δ} Ω); type_check (Γ,Δ) ν
   | .* e =>
      τ ← type_check Γs e ≫= maybe inr;
@@ -215,7 +215,7 @@ Global Instance ctx_item_lookup :
      '(σs,τ) ← Γ !! f; Expr_type <$> inr τ !!{Γs} E ≫= maybe inr
   | CParams f oσs, Stmt_type cmσ =>
      '(σs,σ) ← Γ !! f;
-     let os := fst <$> oσs in let σs' := snd <$> oσs in
+     let os := oσs.*1 in let σs' := oσs.*2 in
      guard (σs' = σs); guard (Δ ⊢* os :* σs); guard (rettype_match cmσ σ);
      Some (Fun_type f)
   | _, _ => None

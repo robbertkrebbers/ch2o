@@ -193,7 +193,7 @@ Fixpoint lookup_local_var (Δl : local_env K)
      if decide (x = y) then Some (# ptrV (FunPtr x τs τ), FT τs τ)
      else lookup_local_var Δl x i
   | Some (y, Local τ) :: Δl =>
-     if decide (x = y) then Some (var{τ} i, LT τ)
+     if decide (x = y) then Some (var i, LT τ)
      else lookup_local_var Δl x (S i)
   | Some (y, TypeDef _) :: Δl =>
      if decide (x = y) then None else lookup_local_var Δl x i
@@ -341,7 +341,7 @@ Definition insert_compound (c : compound_kind) (t : tag)
     (xτs : list (string * type K)) : M () :=
   modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in
-    FState (<[t:=CompoundType c xτs]>Γn) (<[t:=snd <$> xτs]>Γ) m Δg).
+    FState (<[t:=CompoundType c xτs]>Γn) (<[t:=xτs.*2]>Γ) m Δg).
 Definition insert_enum (t : tag) (τi : int_type K) : M () :=
   modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in FState (<[t:=EnumType τi]>Γn) Γ m Δg).
@@ -705,7 +705,7 @@ with to_type `{Env K} (k : to_type_kind)
      | to_Type => fail "complete type expected"
      | to_Ptr =>
         '(xτs,τ) ← to_fun_type (to_type to_Ptr Δl) cτs cτ;
-        mret ((snd <$> xτs) ~> τ)
+        mret (xτs.*2 ~> τ)
      end
   | CTTypeOf ce =>
      '(_,τe) ← to_expr Δl ce;
@@ -843,7 +843,7 @@ Definition to_stmt (τret : type K) :
         | Some ce =>
            e ← to_init_expr (Some (x,Local τ) :: Δl) τ ce;
            '(s,cmσ) ← go (Some (x,Local τ) :: Δl) cs;
-           mret (local{τ} (var{τ} 0 ::= e ;; s), cmσ)
+           mret (local{τ} (var 0 ::= e ;; s), cmσ)
         | None =>
            '(s,cmσ) ← go (Some (x,Local τ) :: Δl) cs;
            mret (local{τ} s, cmσ)
@@ -922,16 +922,15 @@ Definition alloc_fun (f : string)
   '(cτs,cτ) ← error_of_option (maybe2 CTFun cσ)
      ("function `" +:+ f +:+ "` whose type is not a function type");
   '(xτs,τ) ← to_fun_type (to_type to_Ptr []) cτs cτ;
-  let τs := snd <$> xτs in
   Γ ← gets to_env;
-  guard (Forall (type_complete Γ) τs) with
+  guard (Forall (type_complete Γ) (xτs.*2)) with
     ("function `" +:+ f +:+ "` with incomplete argument type");
   guard (type_complete Γ τ) with
     ("function `" +:+ f +:+ "` with incomplete return type");
   Δg ← gets to_globals;
   match Δg !! f with
   | Some (Fun sto' τs' τ' ms) =>
-     guard (τs' = τs) with
+     guard (τs' = xτs.*2) with
        ("argument types of function `" +:+ f
          +:+ "` do not match previously declared prototype");
      guard (τ' = τ) with
@@ -941,7 +940,7 @@ Definition alloc_fun (f : string)
          ∨ sto = AutoStorage ∧ sto' = ExternStorage) with
        ("function `" +:+ f +:+ "` previously declared with different linkage");
      guard (ms = None) with ("function `" +:+ f +:+ "` previously completed");
-     s ← to_fun_stmt f (fst <$> xτs) τs τ cs;
+     s ← to_fun_stmt f (xτs.*1) (xτs.*2) τ cs;
      let sto := if decide (sto = ExternStorage) then sto' else sto in
      insert_fun f sto τs' τ' (Some s)
   | Some (Global _ _ _ _) =>
@@ -951,9 +950,9 @@ Definition alloc_fun (f : string)
   | Some (EnumVal _ _) =>
      fail ("function `" +:+ f +:+ "` previously declared as enum tag")
   | None =>
-     _ ← insert_fun f sto τs τ None;
-     s ← to_fun_stmt f (fst <$> xτs) τs τ cs;
-     insert_fun f sto τs τ (Some s)
+     _ ← insert_fun f sto (xτs.*2) τ None;
+     s ← to_fun_stmt f (xτs.*1) (xτs.*2) τ cs;
+     insert_fun f sto (xτs.*2) τ (Some s)
   end.
 Fixpoint alloc_enum (xces : list (string * option cexpr))
     (τi : int_type K) (z : Z) : M () :=
@@ -1003,7 +1002,7 @@ Fixpoint alloc_decls (Θ : list (string * decl)) : M () :=
      Γ ← gets to_env;
      guard (Γ !! t = None) with
        ("compound type `" +:+ x +:+ "` previously declared");
-     guard (NoDup (fst <$> xτs)) with
+     guard (NoDup (xτs.*1)) with
        ("compound type `" +:+ x +:+ "` has field names that are not unique");
      guard (xτs ≠ []) with
        ("compound type `" +:+ x +:+ "` declared without any fields");
