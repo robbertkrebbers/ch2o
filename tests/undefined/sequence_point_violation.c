@@ -1,3 +1,5 @@
+#include<stdio.h>
+
 int main() {
   int x;
   int y = (x = 3) + (x = 4);

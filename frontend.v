@@ -12,16 +12,19 @@ Inductive cint_rank : Set :=
 Inductive cint_type :=
   CIntType { csign : option signedness; crank : cint_rank }.
 
+Inductive climit : Set :=
+  | CESizeOf : climit
+  | CEAlignOf : climit
+  | CEOffsetOf : string → climit
+  | CEMin : climit
+  | CEMax : climit
+  | CEBits : climit.
+
 Inductive cexpr : Set :=
   | CEVar : string → cexpr
   | CEConst : cint_type → Z → cexpr
   | CEConstString : list Z → cexpr
-  | CESizeOf : ctype → cexpr
-  | CEAlignOf : ctype → cexpr
-  | CEOffsetOf : ctype → string → cexpr
-  | CEMin : cint_type → cexpr
-  | CEMax : cint_type → cexpr
-  | CEBits : cint_type → cexpr
+  | CELimit : ctype → climit → cexpr
   | CEAddrOf : cexpr → cexpr
   | CEDeref : cexpr → cexpr
   | CEAssign : assign → cexpr → cexpr → cexpr
@@ -320,6 +323,38 @@ Definition to_string_const (zs : list Z) : option (val K * nat) :=
   guard (Forall (λ z, int_typed z charT) zs);
   mret (VArray (intT charT)
     (VBase <$> VInt charT <$> (zs ++ [0%Z])), S (length zs)).
+Definition to_limit_const (τ : type K) (li : climit) : M (Z * int_type K) :=
+  match li with
+  | CESizeOf =>
+     guard (τ ≠ voidT) with "sizeof of void type";
+     Γ ← gets to_env; let sz := size_of Γ τ in
+     guard (int_typed sz sptrT) with "argument of sizeof not in range";
+     mret (Z.of_nat sz, sptrT%IT)
+  | CEAlignOf =>
+     guard (τ ≠ voidT) with "alignof of void type";
+     Γ ← gets to_env; let sz := align_of Γ τ in
+     guard (int_typed sz sptrT) with "argument of sizeof not in range";
+     mret (Z.of_nat sz, sptrT%IT)
+  | CEOffsetOf x =>
+     '(c,t) ← error_of_option (maybe2 TCompound τ)
+       "argument of offsetof not of struct type";
+     if decide (c = Union_kind) then mret (0%Z, sptrT%IT) else
+     '(i,_) ← lookup_compound t x;
+     Γ ← gets to_env;
+     τs ← error_of_option (Γ !! t) "argument of offsetof incomplete";
+     let off := offset_of Γ τs i in
+     guard (int_typed off sptrT) with "argument of offsetof not in range";
+     mret (Z.of_nat off, sptrT%IT)
+  | CEMin =>
+     τi ← error_of_option (maybe (TBase ∘ TInt) τ) "min of non integer type";
+     mret (int_lower τi, τi)
+  | CEMax =>
+     τi ← error_of_option (maybe (TBase ∘ TInt) τ) "max of non integer type";
+     mret ((int_upper τi - 1)%Z, τi)
+  | CEBits =>
+     τi ← error_of_option (maybe (TBase ∘ TInt) τ) "bits of non integer type";
+     mret (Z.of_nat (int_width τi), τi)
+  end.
 
 Definition insert_object (x : perm) (v : val K) : M index :=
   m ← gets to_mem; Γ ← gets to_env;
@@ -493,38 +528,10 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
        "char of string constant out of range";
      o ← insert_object perm_readonly v;
      mret (% (addr_top o (charT.[n])), LT (charT.[n]))
-  | CESizeOf cτ =>
+  | CELimit cτ li =>
      τ ← to_type to_Type Δl cτ;
-     guard (τ ≠ voidT) with "sizeof of void type";
-     Γ ← gets to_env; let sz := size_of Γ τ in
-     guard (int_typed sz sptrT) with "argument of sizeof not in range";
-     mret (# (intV{sptrT} sz), RT sptrT)
-  | CEAlignOf cτ =>
-     τ ← to_type to_Type Δl cτ;
-     guard (τ ≠ voidT) with "alignof of void type";
-     Γ ← gets to_env; let sz := align_of Γ τ in
-     guard (int_typed sz sptrT) with "argument of sizeof not in range";
-     mret (# (intV{sptrT} sz), RT sptrT)
-  | CEOffsetOf cτ x =>
-     τ ← to_type to_Type Δl cτ;
-     '(c,t) ← error_of_option (maybe2 TCompound τ)
-       "argument of offsetof not of struct type";
-     if decide (c = Union_kind) then mret (# (intV{sptrT} 0), RT sptrT) else
-     '(i,_) ← lookup_compound t x;
-     Γ ← gets to_env;
-     τs ← error_of_option (Γ !! t) "argument of offsetof incomplete";
-     let off := offset_of Γ τs i in
-     guard (int_typed off sptrT) with "argument of offsetof not in range";
-     mret (# (intV{sptrT} off), RT sptrT)
-  | CEMin cτi =>
-     let τi := to_inttype cτi in
-     mret (#(intV{τi} (int_lower τi)), RT (intT τi))
-  | CEMax cτi =>
-     let τi := to_inttype cτi in
-     mret (#(intV{τi} (int_upper τi - 1)), RT (intT τi))
-  | CEBits cτi =>
-     let τi := to_inttype cτi in
-     mret (#(intV{τi} (int_width τi)), RT (intT τi))
+     '(z,τi) ← to_limit_const τ li;
+     mret (# (intV{τi} z), RT (intT τi))
   | CEDeref ce =>
      '(e,τ) ← to_R <$> to_expr Δl ce;
      τp ← error_of_option (maybe (TBase ∘ TPtr) τ)

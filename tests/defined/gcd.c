@@ -1,3 +1,5 @@
+#include<stdio.h>
+
 void swap(int *p, int *q) {
   int z = *p; *p = *q; *q = z;
 }

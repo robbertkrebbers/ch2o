@@ -1,3 +1,5 @@
+#include<stdio.h>
+
 int expensive_function(int y) {
   printf("very expensive identity\n");
   return y;

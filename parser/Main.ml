@@ -169,6 +169,7 @@ let uniq l =
   List.rev (uniq' l []);;
 
 exception Unknown_expression of Cabs.expression;;
+exception Unknown_builtin of string * Cabs.expression list;;
 exception Unknown_statement of Cabs.statement;;
 exception Unknown_specifier of Cabs.specifier;;
 exception Unknown_definition of Cabs.definition;;
@@ -347,7 +348,7 @@ let rec mult_list l =
 
 let rec split_sizeof' x =
   match x with
-  | CESizeOf (t) -> (Some t,[])
+  | CELimit(t,CESizeOf) -> (Some t,[])
   | CEBinOp (ArithOp MultOp,x1,x2) ->
       let (t,l2) = split_sizeof' x2 in begin
       match t with
@@ -506,6 +507,35 @@ and ctype_of_decl_type t x =
 and ctype_of_specifier_decl_type x y =
   ctype_of_decl_type (ctype_of_specifier x) y
 
+and cexpr_of_builtin s l =
+  match s, l with
+  | "__ch2o_builtin_malloc", [y] ->
+      let (t,y') = split_sizeof (cexpr_of_expression y) in CEAlloc (t,y')
+  | "__ch2o_builtin_free", [y] -> CEFree (cexpr_of_expression y)
+  | "__ch2o_builtin_abort", [] -> CEAbort
+  | "__ch2o_builtin_bits", [Cabs.CAST ((t1,t2),_)] ->
+      CELimit (ctype_of_specifier_decl_type t1 t2, CEBits)
+  | "__ch2o_builtin_min", [Cabs.CAST ((t1,t2),_)] ->
+      CELimit (ctype_of_specifier_decl_type t1 t2, CEMin)
+  | "__ch2o_builtin_max", [Cabs.CAST ((t1,t2),_)] ->
+      CELimit (ctype_of_specifier_decl_type t1 t2, CEMax)
+  | "__ch2o_builtin_offsetof",
+    [Cabs.CAST ((t1,t2), Cabs.SINGLE_INIT (Cabs.MEMBEROFPTR (_, s)))] ->
+      CELimit (ctype_of_specifier_decl_type t1 t2,
+        CEOffsetOf (chars_of_string s))
+  | "__ch2o_builtin_printf", Cabs.CONSTANT(Cabs.CONST_STRING s)::l ->
+      let f = chars_of_string ("__ch2o_printf_" ^ String.escaped s) in
+      begin try let _ = List.assoc f !the_printfs in ()
+      with Not_found ->
+        let fmts = parse_printf s in
+        let decl =
+          if !printf_returns_int
+          then (fmts,CTInt int_signed,printf_stmt fmts)
+          else (fmts,CTVoid,CSSkip) in
+        the_printfs := !the_printfs @ [(f,decl)] end;
+      CECall (CEVar f,List.map cexpr_of_expression l)
+  | _ -> raise (Unknown_builtin (s,l))
+
 and cexpr_of_expression x =
   match x with
   | Cabs.CONSTANT (Cabs.CONST_INT s) ->
@@ -514,24 +544,6 @@ and cexpr_of_expression x =
       CEConstString (List.map (fun c -> z_of_int (Char.code c))
                               (chars_of_string s))
   | Cabs.CONSTANT (Cabs.CONST_CHAR [c]) -> econst (Int (Int64.to_int c))
-  | Cabs.VARIABLE "CHAR_BIT" -> CEBits uchar
-  | Cabs.VARIABLE "CHAR_MIN" -> CEMin {csign = None; crank = CCharRank}
-  | Cabs.VARIABLE "CHAR_MAX" -> CEMax {csign = None; crank = CCharRank}
-  | Cabs.VARIABLE "SCHAR_MIN" -> CEMin {csign = Some Signed; crank = CCharRank}
-  | Cabs.VARIABLE "SCHAR_MAX" -> CEMax {csign = Some Signed; crank = CCharRank}
-  | Cabs.VARIABLE "UCHAR_MAX" -> CEMax {csign = Some Unsigned; crank = CCharRank}
-  | Cabs.VARIABLE "SHRT_MIN" -> CEMin {csign = Some Signed; crank = CShortRank}
-  | Cabs.VARIABLE "SHRT_MAX" -> CEMax {csign = Some Signed; crank = CShortRank}
-  | Cabs.VARIABLE "USHRT_MAX" -> CEMax {csign = Some Unsigned; crank = CShortRank}
-  | Cabs.VARIABLE "INT_MIN" -> CEMin {csign = Some Signed; crank = CIntRank}
-  | Cabs.VARIABLE "INT_MAX" -> CEMax {csign = Some Signed; crank = CIntRank}
-  | Cabs.VARIABLE "UINT_MAX" -> CEMax {csign = Some Unsigned; crank = CIntRank}
-  | Cabs.VARIABLE "LONG_MIN" -> CEMin {csign = Some Signed; crank = CLongRank}
-  | Cabs.VARIABLE "LONG_MAX" -> CEMax {csign = Some Signed; crank = CLongRank}
-  | Cabs.VARIABLE "ULONG_MAX" -> CEMax {csign = Some Unsigned; crank = CLongRank}
-  | Cabs.VARIABLE "LLONG_MIN" -> CEMin {csign = Some Signed; crank = CLongLongRank}
-  | Cabs.VARIABLE "LLONG_MAX" -> CEMax {csign = Some Signed; crank = CLongLongRank}
-  | Cabs.VARIABLE "ULLONG_MAX" -> CEMax {csign = Some Unsigned; crank = CLongLongRank}
   | Cabs.VARIABLE s -> CEVar (chars_of_string s)
   | Cabs.UNARY (Cabs.MEMOF,y) ->
       CEDeref (cexpr_of_expression y)
@@ -604,37 +616,20 @@ and cexpr_of_expression x =
         cexpr_of_expression y2,cexpr_of_expression y3)
   | Cabs.CAST ((t1,t2),y) ->
       CECast(ctype_of_specifier_decl_type t1 t2, cinit_of_init_expression y)
-  | Cabs.CALL (Cabs.VARIABLE "malloc",[y]) ->
-      let (t,y') = split_sizeof (cexpr_of_expression y) in
-      CEAlloc (t,y')
-  | Cabs.CALL (Cabs.VARIABLE "free",[y]) -> CEFree (cexpr_of_expression y)
-  | Cabs.CALL (Cabs.VARIABLE "abort",[]) -> CEAbort
-  | Cabs.CALL (Cabs.VARIABLE "__ch2o_offsetof", [y]) ->
-      begin match y with
-      | Cabs.CAST ((t1,Cabs.PTR ([], t2)),
-            Cabs.SINGLE_INIT (Cabs.MEMBEROFPTR (_, s))) ->
-          CEOffsetOf (ctype_of_specifier_decl_type t1 t2, chars_of_string s)
-      | _ -> failwith "offset_of" end
-  | Cabs.CALL (Cabs.VARIABLE "printf", Cabs.CONSTANT(Cabs.CONST_STRING s)::l) ->
-      let f = chars_of_string ("__ch2o_printf_" ^ String.escaped s) in
-      begin try let _ = List.assoc f !the_printfs in ()
-      with Not_found ->
-        let fmts = parse_printf s in
-        let decl =
-          if !printf_returns_int
-          then (fmts,CTInt int_signed,printf_stmt fmts)
-          else (fmts,CTVoid,CSSkip) in
-        the_printfs := !the_printfs @ [(f,decl)] end;
-      CECall (CEVar f,List.map cexpr_of_expression l)
+  | Cabs.CALL (Cabs.VARIABLE s,l)
+        when Str.string_match (Str.regexp "^__ch2o_builtin_") s 0 ->
+      cexpr_of_builtin s l
   | Cabs.CALL (y,l) ->
       CECall (cexpr_of_expression y,List.map cexpr_of_expression l)
   | Cabs.COMMA (h::t) ->
       List.fold_left (fun y1 y2 -> CEComma (y1,cexpr_of_expression y2))
         (cexpr_of_expression h) t
-  | Cabs.EXPR_SIZEOF y -> CESizeOf (CTTypeOf (cexpr_of_expression y))
-  | Cabs.TYPE_SIZEOF (y1,y2) -> CESizeOf (ctype_of_specifier_decl_type y1 y2)
-  | Cabs.EXPR_ALIGNOF y -> CEAlignOf (CTTypeOf (cexpr_of_expression y))
-  | Cabs.TYPE_ALIGNOF (y1,y2) -> CEAlignOf (ctype_of_specifier_decl_type y1 y2)
+  | Cabs.EXPR_SIZEOF y -> CELimit (CTTypeOf (cexpr_of_expression y), CESizeOf)
+  | Cabs.TYPE_SIZEOF (y1,y2) ->
+     CELimit (ctype_of_specifier_decl_type y1 y2, CESizeOf)
+  | Cabs.EXPR_ALIGNOF y -> CELimit (CTTypeOf (cexpr_of_expression y), CEAlignOf)
+  | Cabs.TYPE_ALIGNOF (y1,y2) ->
+     CELimit (ctype_of_specifier_decl_type y1 y2, CEAlignOf)
   | Cabs.INDEX (y1,y2) ->
       CEDeref (CEBinOp (ArithOp PlusOp,
         cexpr_of_expression y1,cexpr_of_expression y2))

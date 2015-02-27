@@ -14,12 +14,7 @@ Context (P : cexpr → Prop) (Q : cinit → Prop) (R : ctype → Prop).
 Context (Pvar : ∀ x, P (CEVar x)).
 Context (Pconst : ∀ τi x, P (CEConst τi x)).
 Context (Pconststring : ∀ zs, P (CEConstString zs)).
-Context (Psizeof : ∀ cτ, R cτ → P (CESizeOf cτ)).
-Context (Palignof : ∀ cτ, R cτ → P (CEAlignOf cτ)).
-Context (Poffsetof : ∀ cτ x, R cτ → P (CEOffsetOf cτ x)).
-Context (Pmin : ∀ τi, P (CEMin τi)).
-Context (Pmax : ∀ τi, P (CEMax τi)).
-Context (Pbits : ∀ τi, P (CEBits τi)).
+Context (Plimit : ∀ cτ li, R cτ → P (CELimit cτ li)).
 Context (Paddrof : ∀ ce, P ce → P (CEAddrOf ce)).
 Context (Pderef : ∀ ce, P ce → P (CEDeref ce)).
 Context (Passign : ∀ ass ce1 ce2, P ce1 → P ce2 → P (CEAssign ass ce1 ce2)).
@@ -61,12 +56,7 @@ Fixpoint cexpr_ind_alt ce : P ce :=
   | CEVar _ => Pvar _
   | CEConst _ _ => Pconst _ _
   | CEConstString _ => Pconststring _
-  | CESizeOf cτ => Psizeof _ (ctype_ind_alt cτ)
-  | CEAlignOf cτ => Palignof _ (ctype_ind_alt cτ)
-  | CEOffsetOf cτ _ => Poffsetof _ _ (ctype_ind_alt cτ)
-  | CEMin _ => Pmin _
-  | CEMax _ => Pmax _
-  | CEBits _ => Pbits _
+  | CELimit cτ li => Plimit _ _ (ctype_ind_alt cτ)
   | CEAddrOf ce => Paddrof _ (cexpr_ind_alt ce)
   | CEDeref ce => Pderef _ (cexpr_ind_alt ce)
   | CEAssign _ ce1 ce2 => Passign _ _ _ (cexpr_ind_alt ce1) (cexpr_ind_alt ce2)
@@ -366,6 +356,14 @@ Proof.
   cut (Forall (λ z, int_typed z charT) (zs ++ [0%Z])); auto using Forall_app_2.
   induction 1; csimpl; eauto.
 Qed.
+Lemma to_limit_const_typed S S' τ li z τi :
+  ✓ S → to_limit_const τ li S = mret (z,τi) S' → int_typed z τi ∧ S = S'.
+Proof.
+  destruct li; intros; repeat (case_match || simplify_error_equality);
+    eauto using int_lower_typed, int_upper_typed, int_width_typed.
+  edestruct lookup_compound_typed as (?&?&?&?); eauto.
+Qed.
+
 Lemma to_R_typed Γ m τs e τe e' τ' :
   to_R (e,τe) = (e',τ') → (Γ,'{m},τs) ⊢ e : to_lrtype τe → locks e = ∅ →
   ✓ Γ → ✓{Γ}* τs → (Γ,'{m},τs) ⊢ e' : inr τ' ∧ locks e' = ∅.
@@ -733,6 +731,8 @@ Proof.
        destruct (IH _ _ k _ H) as (?&?&?); auto 1; [clear IH H]; weaken
     | H : lookup_var _ _ _ = _ |- _ =>
        apply lookup_var_typed in H; try done; [destruct H as (?&?&->)]
+    | H : to_limit_const _ _ _ = _ |- _ =>
+       apply to_limit_const_typed in H; try done; [destruct H as [? ->]]
     | H : assign_type_of _ _ _ = _ |- _ => apply assign_type_of_sound in H
     | H : unop_type_of _ _ = _ |- _ => apply unop_type_of_sound in H
     | H : binop_type_of _ _ _ = _ |- _ => apply binop_type_of_sound in H
@@ -766,8 +766,7 @@ Proof.
        eapply insert_object_valid in H;
          eauto using perm_readonly_valid, perm_readonly_mapped;
          [destruct H as (?&?&?&?&?)]
-    end; eauto 22 using int_lower_typed, int_upper_typed, int_width_typed,
-      to_compound_init_typed, val_0_typed.
+    end; eauto 22 using to_compound_init_typed, val_0_typed.
 Qed.
 Lemma to_expr_typed S S' Δl ce e τe :
   to_expr Δl ce S = mret (e,τe) S' → ✓ S → local_env_valid S Δl →

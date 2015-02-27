@@ -12,7 +12,7 @@ int __ch2o_len_core(int n, unsigned long long i, int w) {
 int __ch2o_len_core_signed(int n, long long i, int w) {
   if (0 <= i) {
     return __ch2o_len_core(n,i,w);
-  } else if (i == LLONG_MIN) {
+  } else if (i == __ch2o_builtin_min((long long)0)) {
     return __ch2o_len_core(n,i,w);
   } else {
     return __ch2o_len_core(n,i * -1,w);

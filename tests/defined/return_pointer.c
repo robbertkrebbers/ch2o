@@ -1,3 +1,5 @@
+#include<stdio.h>
+
 int x = 314;
 
 int* f() { return 0; }

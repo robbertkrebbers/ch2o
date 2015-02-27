@@ -1,3 +1,6 @@
+#include<limits.h>
+#include<stdio.h>
+
 /* From http://www.cs.utah.edu/~regehr/papers/overflow12.pdf */
 int main() {
   printf("UINT_MAX+1 = %d\n", UINT_MAX+1);

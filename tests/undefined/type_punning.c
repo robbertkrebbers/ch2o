@@ -1,3 +1,5 @@
+#include<stdio.h>
+
 union INT_SHO { int x; short y; };
   
 int main() {

@@ -1,3 +1,5 @@
+#include<stdio.h>
+
 int main() {
   struct { short x, *r; } s1;
   s1.x = 10;
