@@ -610,6 +610,12 @@ and cexpr_of_expression x =
       CEAlloc (t,y')
   | Cabs.CALL (Cabs.VARIABLE "free",[y]) -> CEFree (cexpr_of_expression y)
   | Cabs.CALL (Cabs.VARIABLE "abort",[]) -> CEAbort
+  | Cabs.CALL (Cabs.VARIABLE "__ch2o_offsetof", [y]) ->
+      begin match y with
+      | Cabs.CAST ((t1,Cabs.PTR ([], t2)),
+            Cabs.SINGLE_INIT (Cabs.MEMBEROFPTR (_, s))) ->
+          CEOffsetOf (ctype_of_specifier_decl_type t1 t2, chars_of_string s)
+      | _ -> failwith "offset_of" end
   | Cabs.CALL (Cabs.VARIABLE "printf", Cabs.CONSTANT(Cabs.CONST_STRING s)::l) ->
       let f = chars_of_string ("__ch2o_printf_" ^ String.escaped s) in
       begin try let _ = List.assoc f !the_printfs in ()

@@ -18,6 +18,7 @@ Inductive cexpr : Set :=
   | CEConstString : list Z → cexpr
   | CESizeOf : ctype → cexpr
   | CEAlignOf : ctype → cexpr
+  | CEOffsetOf : ctype → string → cexpr
   | CEMin : cint_type → cexpr
   | CEMax : cint_type → cexpr
   | CEBits : cint_type → cexpr
@@ -119,7 +120,7 @@ Arguments TypeDef {_} _.
 Instance maybe_TypeDef {K} : Maybe (@TypeDef K) := λ d,
   match d with TypeDef τ => Some τ | _ => None end.
 (* [None] delimits scopes *)
-Notation local_env K := (list (option (string * local_decl K))). 
+Notation local_env K := (list (option (string * local_decl K))).
 
 Record frontend_state (K : Set) : Set := FState {
   to_compounds : tagmap (compound_type K);
@@ -504,6 +505,17 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
      Γ ← gets to_env; let sz := align_of Γ τ in
      guard (int_typed sz sptrT) with "argument of sizeof not in range";
      mret (# (intV{sptrT} sz), RT sptrT)
+  | CEOffsetOf cτ x =>
+     τ ← to_type to_Type Δl cτ;
+     '(c,t) ← error_of_option (maybe2 TCompound τ)
+       "argument of offsetof not of struct type";
+     if decide (c = Union_kind) then mret (# (intV{sptrT} 0), RT sptrT) else
+     '(i,_) ← lookup_compound t x;
+     Γ ← gets to_env;
+     τs ← error_of_option (Γ !! t) "argument of offsetof incomplete";
+     let off := offset_of Γ τs i in
+     guard (int_typed off sptrT) with "argument of offsetof not in range";
+     mret (# (intV{sptrT} off), RT sptrT)
   | CEMin cτi =>
      let τi := to_inttype cτi in
      mret (#(intV{τi} (int_lower τi)), RT (intT τi))
@@ -641,7 +653,7 @@ with to_init_expr `{Env K} (Δl : local_env K)
           o ← insert_object perm_readonly v;
           mret (& ((% (addr_top o (charT.[n]))) %> RArray 0 charT n))
         else fail "string initializer of wrong type or size"
-     | None => 
+     | None =>
         '(e,τ) ← to_R_NULL σ <$> to_expr Δl ce;
         Γ ← gets to_env;
         guard (cast_typed τ σ) with "cast or initializer cannot be typed";
@@ -967,12 +979,12 @@ Fixpoint alloc_enum (xces : list (string * option cexpr))
      _ ← insert_global_decl x (EnumVal τi z);
      alloc_enum xces τi (z + 1)%Z
   | (x,Some ce) :: xces =>
-     '(e,_) ← to_expr [] ce; 
+     '(e,_) ← to_expr [] ce;
      Δg ← gets to_globals;
      guard (Δg !! x = None) with
        ("enum field `" +:+ x +:+ "` previously declared");
      guard (is_pure e) with
-       ("enum field `" +:+ x +:+ "` has non-constant value"); 
+       ("enum field `" +:+ x +:+ "` has non-constant value");
      Γ ← gets to_env; m ← gets to_mem;
      v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe inr)
        ("enum field `" +:+ x +:+ "` has undefined value");

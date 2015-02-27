@@ -16,6 +16,7 @@ Context (Pconst : ∀ τi x, P (CEConst τi x)).
 Context (Pconststring : ∀ zs, P (CEConstString zs)).
 Context (Psizeof : ∀ cτ, R cτ → P (CESizeOf cτ)).
 Context (Palignof : ∀ cτ, R cτ → P (CEAlignOf cτ)).
+Context (Poffsetof : ∀ cτ x, R cτ → P (CEOffsetOf cτ x)).
 Context (Pmin : ∀ τi, P (CEMin τi)).
 Context (Pmax : ∀ τi, P (CEMax τi)).
 Context (Pbits : ∀ τi, P (CEBits τi)).
@@ -62,6 +63,7 @@ Fixpoint cexpr_ind_alt ce : P ce :=
   | CEConstString _ => Pconststring _
   | CESizeOf cτ => Psizeof _ (ctype_ind_alt cτ)
   | CEAlignOf cτ => Palignof _ (ctype_ind_alt cτ)
+  | CEOffsetOf cτ _ => Poffsetof _ _ (ctype_ind_alt cτ)
   | CEMin _ => Pmin _
   | CEMax _ => Pmax _
   | CEBits _ => Pbits _
