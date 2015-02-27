@@ -952,7 +952,7 @@ let main () =
         "trace all executions (do not include prinfs in trace)");
      ("-T", Arg.Unit (fun _ -> mode := Trace true),
         "trace all executions (include prinfs in trace)");
-     ("-a", Arg.Symbol (["x86"; "x86_64"], fun x -> arch_name := x),
+     ("-a", Arg.Symbol (["x86";"x86_64";"arm";"ppc"], fun x -> arch_name := x),
         "architecture (default x86)");
      ("-m", Arg.Unit (fun _ -> flags := {!flags with arch_alloc_can_fail = true}),
         "malloc non-deterministically returns 0 (default it always succeeds)");
@@ -966,8 +966,7 @@ let main () =
   if !filename = "" then exit (Arg.usage speclist usage_msg; 1) else
   let arch =
     match !arch_name with
-    | "x86_64" -> x86_64
-    | _ -> x86 in
+    | "x86_64" -> x86_64 | "arm" -> arm | "ppc" -> ppc | _ -> x86 in
   match !mode with
   | Run rand -> run_file arch !flags rand !filename
   | Trace trace_printfs -> trace_file arch !flags trace_printfs !filename;

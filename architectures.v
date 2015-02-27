@@ -39,3 +39,41 @@ Proof.
   arch_ptr_rank := LongRank
  |}; by apply (bool_decide_unpack _); vm_compute.
 Defined.
+
+Definition arm : architecture.
+Proof.
+ refine {|
+  arch_big_endian := false;
+  arch_char_bits := 8;
+  arch_size k :=
+    match k with
+    | CharRank => 1 | ShortRank => 2 | IntRank | LongRank => 4
+    | LongLongRank => 8
+    end;
+  arch_align k :=
+    match k with
+    | CharRank => 1 | ShortRank => 2 | IntRank | LongRank => 4
+    | LongLongRank => 8
+    end;
+  arch_ptr_rank := LongRank
+ |}; by apply (bool_decide_unpack _); vm_compute.
+Defined.
+
+Definition ppc : architecture.
+Proof.
+ refine {|
+  arch_big_endian := true;
+  arch_char_bits := 8;
+  arch_size k :=
+    match k with
+    | CharRank => 1 | ShortRank => 2 | IntRank | LongRank => 4
+    | LongLongRank => 8
+    end;
+  arch_align k :=
+    match k with
+    | CharRank => 1 | ShortRank => 2 | IntRank | LongRank => 4
+    | LongLongRank => 8
+    end;
+  arch_ptr_rank := LongRank
+ |}; by apply (bool_decide_unpack _); vm_compute.
+Defined.
