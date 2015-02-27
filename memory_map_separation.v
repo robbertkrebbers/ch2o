@@ -13,6 +13,7 @@ Implicit Types w : mtree K.
 Implicit Types a : addr K.
 Implicit Types g : mtree K → mtree K.
 Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
+Hint Extern 0 (Separation _) => apply (_ : Separation (mem K)).
 
 Lemma cmap_subseteq_index_alive m1 m2 o :
   index_alive ('{m1}) o → m1 ⊆ m2 → index_alive ('{m2}) o.
@@ -31,6 +32,27 @@ Proof.
     destruct (m2 !! o) as [[|w' malloc']|] eqn:?; try done.
     destruct Hm as [[??]?], (Hm2' o w' malloc') as (τ'&?&?&?&?);
       eauto 10 using ctree_typed_subseteq.
+Qed.
+Lemma cmap_valid_union_2 Γ Δ m1 m2 :
+  m1 ⊥ m2 → ✓{Γ,Δ} m1 → ✓{Γ,Δ} m2 → ✓{Γ,Δ} (m1 ∪ m2).
+Proof.
+  destruct m1 as [m1], m2 as [m2].
+  intros Hm (HΔ&Hm1&Hm1') (_&Hm2&Hm2'); split_ands'; simpl in *; auto.
+  * intros o τ; specialize (Hm o); rewrite lookup_union_with; intros.
+    destruct (m1 !! o) as [[]|] eqn:?, (m2 !! o) as [[]|] eqn:?;
+      simplify_equality'; eauto.
+  * intros o w malloc; specialize (Hm o); rewrite lookup_union_with; intros.
+    destruct (m1 !! o) as [[|w1 ?]|] eqn:?,
+      (m2 !! o) as [[|w2 malloc']|] eqn:?; simplify_equality'; eauto.
+    destruct (Hm1' o w1 malloc) as (τ&?&?&?&?),
+      (Hm2' o w2 malloc') as (τ'&?&?&?&?); simplify_type_equality'; auto.
+    exists τ; intuition eauto using ctree_union_typed, @ctree_positive_l.
+Qed.
+Lemma cmap_valid_union Γ Δ m1 m2 :
+  ✓ Γ → m1 ⊥ m2 → ✓{Γ,Δ} (m1 ∪ m2) ↔ ✓{Γ,Δ} m1 ∧ ✓{Γ,Δ} m2.
+Proof.
+  split; intuition eauto using cmap_valid_union_2,
+    cmap_valid_subseteq, @sep_union_subseteq_r', @sep_union_subseteq_l'.
 Qed.
 Lemma cmap_lookup_ref_disjoint Γ Δ m1 m2 o r w1 w2 :
   ✓ Γ → ✓{Γ,Δ} m1 → ✓{Γ,Δ} m2 → m1 ⊥ m2 →
