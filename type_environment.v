@@ -18,7 +18,7 @@ Arguments field_sizes _ _ _ _ : simpl never.
 
 Definition ptr_size_of `{Env K} (Γ : env K) (τp : ptr_type K) : nat :=
   match τp with TType τ => size_of Γ τ | _ => 1 end.
-Definition field_offset `{Env K} (Γ : env K) (τs : list (type K))
+Definition offset_of `{Env K} (Γ : env K) (τs : list (type K))
   (i : nat) : nat := sum_list $ take i $ field_sizes Γ τs.
 Definition bit_size_of `{Env K} (Γ : env K)
   (τ : type K) : nat := size_of Γ τ * char_bits.
@@ -32,7 +32,7 @@ Definition field_bit_sizes `{Env K} (Γ : env K)
 Definition field_bit_padding `{Env K}
     (Γ : env K) (τs : list (type K)) : list nat :=
   zip_with (λ sz τ, sz - bit_size_of Γ τ) (field_bit_sizes Γ τs) τs.
-Definition field_bit_offset `{Env K}
+Definition bit_offset_of `{Env K}
     (Γ : env K) (τs : list (type K)) (i : nat) : nat :=
   sum_list $ take i $ field_bit_sizes Γ τs.
 
@@ -56,8 +56,8 @@ Class EnvSpec (K : Set) `{Env K} := {
     (align_of Γ τ | align_of Γ (compoundT{c} t));
   align_of_divide Γ τ :
     ✓ Γ → ✓{Γ} τ → (align_of Γ τ | size_of Γ τ);
-  align_of_field_offset Γ τs i τ :
-    ✓ Γ → ✓{Γ}* τs → τs !! i = Some τ → (align_of Γ τ | field_offset Γ τs i);
+  align_of_offset_of Γ τs i τ :
+    ✓ Γ → ✓{Γ}* τs → τs !! i = Some τ → (align_of Γ τ | offset_of Γ τs i);
   size_of_weaken Γ1 Γ2 τ :
     ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊆ Γ2 → size_of Γ1 τ = size_of Γ2 τ;
   align_of_weaken Γ1 Γ2 τ :
@@ -179,35 +179,35 @@ Proof.
   intros. unfold field_bit_padding.
   rewrite zip_with_length, field_bit_sizes_length by done; lia.
 Qed.
-Lemma field_bit_offset_weaken Γ1 Γ2 τs i :
+Lemma bit_offset_of_weaken Γ1 Γ2 τs i :
   ✓ Γ1 → ✓{Γ1}* τs → Γ1 ⊆ Γ2 →
-  field_bit_offset Γ1 τs i = field_bit_offset Γ2 τs i.
+  bit_offset_of Γ1 τs i = bit_offset_of Γ2 τs i.
 Proof.
-  unfold field_bit_offset. eauto using field_bit_sizes_weaken with f_equal.
+  unfold bit_offset_of. eauto using field_bit_sizes_weaken with f_equal.
 Qed.
-Lemma field_bit_offset_alt Γ τs i :
-  field_bit_offset Γ τs i = field_offset Γ τs i * char_bits.
+Lemma bit_offset_of_alt Γ τs i :
+  bit_offset_of Γ τs i = offset_of Γ τs i * char_bits.
 Proof.
-  unfold field_bit_offset, field_offset, field_bit_sizes.
+  unfold bit_offset_of, offset_of, field_bit_sizes.
   revert i. induction (field_sizes Γ τs) as [|?? IH];
     intros [|i]; simpl; auto with lia.
   by rewrite IH, Nat.mul_add_distr_r.
 Qed.
-Lemma field_bit_offset_lt Γ τs i j σ :
+Lemma bit_offset_of_lt Γ τs i j σ :
   ✓ Γ → τs !! i = Some σ → i < j →
-  field_bit_offset Γ τs i + bit_size_of Γ σ ≤ field_bit_offset Γ τs j.
+  bit_offset_of Γ τs i + bit_size_of Γ σ ≤ bit_offset_of Γ τs j.
 Proof.
-  intros HΓ. revert i j σ. unfold field_bit_offset.
+  intros HΓ. revert i j σ. unfold bit_offset_of.
   induction (bit_size_of_fields _ τs HΓ) as [|τ sz τs szs ?? IH];
     intros [|i] [|j] σ ??; simplify_equality'; try lia.
   specialize (IH i j σ). intuition lia.
 Qed.
-Lemma field_bit_offset_size Γ t τs i σ :
+Lemma bit_offset_of_size Γ t τs i σ :
   ✓ Γ → Γ !! t = Some τs → τs !! i = Some σ →
-  field_bit_offset Γ τs i + bit_size_of Γ σ ≤ bit_size_of Γ (structT t).
+  bit_offset_of Γ τs i + bit_size_of Γ σ ≤ bit_size_of Γ (structT t).
 Proof.
   intros HΓ Ht. erewrite bit_size_of_struct by eauto; clear Ht.
-  revert i σ. unfold field_bit_offset. induction (bit_size_of_fields _ τs HΓ)
+  revert i σ. unfold bit_offset_of. induction (bit_size_of_fields _ τs HΓ)
     as [|τ sz τs szs ?? IH]; intros [|i] σ ?; simplify_equality'; [lia|].
   specialize (IH i σ). intuition lia.
 Qed.
@@ -226,12 +226,12 @@ Proof. eauto using Nat.mul_divide_mono_r, align_of_compound. Qed.
 Lemma bit_align_of_divide Γ τ :
   ✓ Γ → ✓{Γ} τ → (bit_align_of Γ τ | bit_size_of Γ τ).
 Proof. eauto using Nat.mul_divide_mono_r, align_of_divide. Qed.
-Lemma bit_align_of_field_offset Γ τs i τ :
+Lemma bit_align_of_offset_of Γ τs i τ :
   ✓ Γ → ✓{Γ}* τs → τs !! i = Some τ →
-  (bit_align_of Γ τ | field_bit_offset Γ τs i).
+  (bit_align_of Γ τ | bit_offset_of Γ τs i).
 Proof.
-  rewrite field_bit_offset_alt.
-  eauto using Nat.mul_divide_mono_r, align_of_field_offset.
+  rewrite bit_offset_of_alt.
+  eauto using Nat.mul_divide_mono_r, align_of_offset_of.
 Qed.
 Lemma bit_align_of_weaken Γ1 Γ2 τ :
   ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊆ Γ2 → bit_align_of Γ1 τ = bit_align_of Γ2 τ.

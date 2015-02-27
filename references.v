@@ -114,7 +114,7 @@ Definition ref_seg_object_offset `{Env K}
     (Γ : env K) (rs : ref_seg K) : nat :=
   match rs with
   | RArray i τ _ => i * bit_size_of Γ τ
-  | RStruct i t => default 0 (Γ !! t) $ λ τs, field_bit_offset Γ τs i
+  | RStruct i t => default 0 (Γ !! t) $ λ τs, bit_offset_of Γ τs i
   | RUnion i _ _ => 0
   end.
 Definition ref_object_offset `{Env K} (Γ : env K) (r : ref K) : nat :=
@@ -621,7 +621,7 @@ Proof.
   destruct 3; intros;
     simplify_option_equality by eauto using lookup_compound_weaken;
     eauto using bit_size_of_weaken, TArray_valid_inv_type,
-    field_bit_offset_weaken, env_valid_lookup with f_equal.
+    bit_offset_of_weaken, env_valid_lookup with f_equal.
 Qed.
 Lemma ref_object_offset_weaken Γ1 Γ2 r τ σ :
   ✓ Γ1 → ✓{Γ1} τ → Γ1 ⊢ r : τ ↣ σ → Γ1 ⊆ Γ2 →
@@ -658,7 +658,7 @@ Proof.
   destruct 2; simplify_option_equality.
   * rewrite bit_size_of_array. rewrite <-Nat.mul_add_distr_r.
     apply Nat.mul_le_mono_r; lia.
-  * rewrite Nat.add_0_r; eauto using field_bit_offset_size.
+  * rewrite Nat.add_0_r; eauto using bit_offset_of_size.
   * rewrite Nat.add_0_r; eauto using bit_size_of_union_lookup.
 Qed.
 Lemma ref_seg_object_offset_size' Γ τ rs σ :
@@ -702,7 +702,7 @@ Proof.
   destruct 2 as [i j n|i j]; do 2 inversion 1; simplify_option_equality.
   * assert (i < j ∨ j < i) as [|] by lia; [left|right];
       rewrite <-Nat.mul_succ_l; apply Nat.mul_le_mono_r; lia.
-  * assert (i < j ∨ j < i) as [|] by lia; eauto using field_bit_offset_lt.
+  * assert (i < j ∨ j < i) as [|] by lia; eauto using bit_offset_of_lt.
 Qed.
 Lemma ref_disjoint_object_offset Γ τ r1 r2 σ1 σ2 :
   ✓ Γ → r1 ⊥ r2 → Γ ⊢ r1 : τ ↣ σ1 → Γ ⊢ r2 : τ ↣ σ2 →
@@ -732,7 +732,7 @@ Lemma bit_align_of_ref_seg_object_offset Γ τ rs σ :
   (bit_align_of Γ σ | ref_seg_object_offset Γ rs).
 Proof.
   destruct 3; simplify_option_equality; eauto using Nat.divide_0_r,
-    bit_align_of_field_offset, Nat.divide_mul_r, bit_align_of_divide,
+    bit_align_of_offset_of, Nat.divide_mul_r, bit_align_of_divide,
     TArray_valid_inv_type, env_valid_lookup.
 Qed.
 Lemma bit_align_of_ref_object_offset Γ τ r σ :

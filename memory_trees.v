@@ -1110,7 +1110,7 @@ Proof.
       ?take_app_alt, <-?drop_drop, ?drop_app_alt by done; auto with lia.
   * erewrite type_mask_compound by eauto; simpl; apply reflexive_eq.
     assert (✓{Γ}* τs) as Hτs by eauto; revert i Hi Hτs. clear Ht Hτ.
-    unfold field_bit_offset.
+    unfold bit_offset_of.
     induction (bit_size_of_fields _ τs HΓ); intros [|i] ??;
       decompose_Forall_hyps; rewrite <-?drop_drop, ?drop_app_alt, ?drop_0,
         ?resize_ge, <-?(associative_L (++)), ?take_app_alt by done; auto.
@@ -1141,10 +1141,10 @@ Proof.
     intros w xs -> Hi; destruct (Forall2_lookup_l (typed (Γ,Δ) ∘ fst)
       wxbss τs i (w,xs)) as (τ&Hi'&Hw); auto;
       simplify_option_equality; simplify_type_equality'.
-    assert (field_bit_offset Γ τs i =
+    assert (bit_offset_of Γ τs i =
       length (take i wxbss ≫= λ wxs, ctree_flatten (wxs.1) ++ wxs.2)) as help2.
     { clear Ht Hi' Hw Hindet. apply lookup_lt_Some in Hi.
-      unfold field_bit_padding, field_bit_offset in *.
+      unfold field_bit_padding, bit_offset_of in *.
       revert i wxbss Hi Hlen Hws. induction (bit_size_of_fields _ τs HΓ);
         intros [|?] ????; decompose_Forall_hyps;
         rewrite ?app_length; f_equal; auto; solve_length. }
@@ -1223,7 +1223,7 @@ Proof.
       wxbss τs i (w,xbs)) as (τ&Hτ&Hw); auto;
       simplify_option_equality; simplify_type_equality'.
     clear Ht Hw. revert wxbss i w xbs τ ys Hτ Hws Hlen Hwxbs.
-    unfold field_bit_padding, field_bit_offset.
+    unfold field_bit_padding, bit_offset_of.
     induction (bit_size_of_fields _ τs HΓ) as [|τ sz τs szs ?? IH];
       intros [|[w' xbs'] wxbss] [|i] ??? ys ????; decompose_Forall_hyps.
     { by erewrite ctree_flatten_length by eauto. }
@@ -1639,10 +1639,10 @@ Proof.
     intros w xs -> Hi; destruct (Forall2_lookup_l (typed (Γ,Δ) ∘ fst)
       wxbss τs i (w,xs)) as (τ&Hi'&Hw); auto;
       simplify_option_equality; simplify_type_equality'.
-    assert (field_bit_offset Γ τs i =
+    assert (bit_offset_of Γ τs i =
       length (take i wxbss ≫= λ wxs, ctree_flatten (wxs.1) ++ wxs.2)) as help2.
     { clear Ht Hi' Hw Hindet. apply lookup_lt_Some in Hi.
-      unfold field_bit_padding, field_bit_offset in *.
+      unfold field_bit_padding, bit_offset_of in *.
       revert i wxbss Hi Hlen Hws. induction (bit_size_of_fields _ τs HΓ);
         intros [|?] ????; decompose_Forall_hyps;
         rewrite ?app_length; f_equal; auto; solve_length. }
@@ -1977,7 +1977,7 @@ Proof.
     by rewrite bit_size_of_array, !Nat.mul_sub_distr_r, Nat.mul_1_l.
   * erewrite bit_size_of_struct by eauto.
     assert (✓{Γ}* τs) by eauto; clear Ht Hτ; revert i Hi.
-    unfold field_bit_offset, field_bit_padding.
+    unfold bit_offset_of, field_bit_padding.
     induction (bit_size_of_fields _ τs HΓ) as [|τ' sz τs szs ? Htzs IH];
       intros [|i] Hi; decompose_Forall_hyps.
     { rewrite Nat.sub_0_r, Nat.add_sub_swap, replicate_plus by done.
@@ -2148,7 +2148,7 @@ Proof.
       ?ctree_merge_new by eauto using (ctree_new_typed _ Δ); eauto.
   * revert i ys Hi Hys. erewrite bit_size_of_struct by eauto.
     assert (✓{Γ}* τs) by eauto. clear Ht.
-    unfold field_bit_sizes,field_bit_offset, field_bit_padding, field_bit_sizes.
+    unfold field_bit_sizes,bit_offset_of, field_bit_padding, field_bit_sizes.
     induction (size_of_fields _ τs HΓ) as [|τ' sz τs szs ? Htzs IH];
       intros [|i] ys Hi Hlen; decompose_Forall_hyps.
     + erewrite ctree_flatten_length, replicate_length, drop_0,

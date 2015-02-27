@@ -220,7 +220,7 @@ Proof.
       (default whole_align (head τs) (natural_align_of Γ) | pos) →
       (natural_align_of Γ τ | pos + sum_list (take i
          (natural_field_sizes (natural_size_of Γ) Γ whole_align pos τs)))).
-    { intros help i ?. rewrite <-(Nat.add_0_l (field_offset _ _ _)).
+    { intros help i ?. rewrite <-(Nat.add_0_l (offset_of _ _ _)).
       apply help; auto using Nat.divide_0_r. }
     intros whole_align. induction Hτs as [|τ' τs Hτ Hτs IH];
       intros [|i] pos al ?; simplify_equality'.
