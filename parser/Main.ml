@@ -514,7 +514,6 @@ and cexpr_of_expression x =
       CEConstString (List.map (fun c -> z_of_int (Char.code c))
                               (chars_of_string s))
   | Cabs.CONSTANT (Cabs.CONST_CHAR [c]) -> econst (Int (Int64.to_int c))
-  | Cabs.VARIABLE "NULL" -> CECast (CTPtr CTVoid,CSingleInit econst0)
   | Cabs.VARIABLE "CHAR_BIT" -> CEBits uchar
   | Cabs.VARIABLE "CHAR_MIN" -> CEMin {csign = None; crank = CCharRank}
   | Cabs.VARIABLE "CHAR_MAX" -> CEMax {csign = None; crank = CCharRank}
