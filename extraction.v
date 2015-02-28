@@ -7,4 +7,4 @@ Extraction "parser/Extracted.ml"
   interpreter.interpreter_all_eval
   interpreter.interpreter_rand_eval
   interpreter.interpreter_initial_eval
-  x86 x86_64 arm ppc.
+  ilp32 llp64 lp64.

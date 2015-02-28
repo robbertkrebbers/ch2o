@@ -19,8 +19,8 @@ Proof. solve_decision. Defined.
 Local Notation M := (error (frontend_state _) string).
 
 Section interpreter.
-Context (A : architecture) (F : architecture_flags).
-Notation K := (arch_rank A F).
+Context (A : architecture).
+Notation K := (arch_rank A).
 Context {E : Set} `{∀ ε1 ε2 : E, Decision (ε1 = ε2)}.
 Context (e : ∀ `{Env K}, env K → state K → list E).
 

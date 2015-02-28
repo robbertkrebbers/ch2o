@@ -801,37 +801,35 @@ let event_of_state env tenv x =
      with Not_found -> [] end
   | _ -> [];;
 
-let initial_of_decls arch f x =
-  match interpreter_initial_eval arch f x (chars_of_string "main") [] with
+let initial_of_decls arch x =
+  match interpreter_initial_eval arch x (chars_of_string "main") [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
-let initial_of_cabs arch f x = initial_of_decls arch f (decls_of_cabs x);;
-let initial_of_file arch f x = initial_of_decls arch f (decls_of_file x);;
+let initial_of_cabs arch x = initial_of_decls arch (decls_of_cabs x);;
+let initial_of_file arch x = initial_of_decls arch (decls_of_file x);;
 
-let graph_of_decls arch f x =
-  match interpreter_all_eval arch f (=) event_of_state
+let graph_of_decls arch x =
+  match interpreter_all_eval arch (=) event_of_state
      (fun x -> z_of_int (Hashtbl.hash x)) x (chars_of_string "main") [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
-let graph_of_cabs arch f x = graph_of_decls arch f (decls_of_cabs x);;
-let graph_of_file arch f x = graph_of_decls arch f (decls_of_file x);;
+let graph_of_cabs arch x = graph_of_decls arch (decls_of_cabs x);;
+let graph_of_file arch x = graph_of_decls arch (decls_of_file x);;
 
-let stream_of_decls arch f rand x =
+let stream_of_decls arch rand x =
   let choose =
     if rand
     then fun x -> nat_of_int (Random.int (int_of_nat x))
     else fun x -> nat_of_int 0 in
-  match interpreter_rand_eval arch f event_of_state
+  match interpreter_rand_eval arch event_of_state
       choose x (chars_of_string "main") [] with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
-let stream_of_cabs arch f rand x =
-  stream_of_decls arch f rand (decls_of_cabs x);;
-let stream_of_file arch f rand x =
-  stream_of_decls arch f rand (decls_of_file x);;
+let stream_of_cabs arch rand x = stream_of_decls arch rand (decls_of_cabs x);;
+let stream_of_file arch rand x = stream_of_decls arch rand (decls_of_file x);;
 
 let rec print_states l =
   match l with
@@ -904,12 +902,12 @@ let trace_graph trace_printfs x =
     done
   with Not_found -> ();;
 
-let trace_decls arch f trace_printfs x =
-  trace_graph trace_printfs (graph_of_decls arch f x);;
-let trace_cabs arch f trace_printfs x =
-  trace_graph trace_printfs (graph_of_cabs arch f x);;
-let trace_file arch f trace_printfs x =
-  trace_graph trace_printfs (graph_of_file arch f x);;
+let trace_decls arch trace_printfs x =
+  trace_graph trace_printfs (graph_of_decls arch x);;
+let trace_cabs arch trace_printfs x =
+  trace_graph trace_printfs (graph_of_cabs arch x);;
+let trace_file arch trace_printfs x =
+  trace_graph trace_printfs (graph_of_file arch x);;
 
 let run_stream x =
   Random.self_init ();
@@ -930,9 +928,9 @@ let run_stream x =
     done; 0
   with CH2O_exited y -> int_of_num y;;
 
-let run_decls arch f rand x = run_stream (stream_of_decls arch f rand x);;
-let run_cabs arch f rand x = run_stream (stream_of_cabs arch f rand x);;
-let run_file arch f rand x = run_stream (stream_of_file arch f rand x);;
+let run_decls arch rand x = run_stream (stream_of_decls arch rand x);;
+let run_cabs arch rand x = run_stream (stream_of_cabs arch rand x);;
+let run_file arch rand x = run_stream (stream_of_file arch rand x);;
 
 type mode = Run of bool | Trace of bool
 
@@ -943,33 +941,37 @@ let main () =
   };
   let mode = ref (Run false) in
   let filename = ref "" in
-  let arch_name = ref "x86" in
-  let flags = ref {
-    arch_char_signedness = Signed; arch_alloc_can_fail = false } in
+  let arch = ref {
+    arch_sizes = lp64;
+    arch_big_endian = false;
+    arch_char_signedness = Signed;
+    arch_alloc_can_fail = false
+  } in
   let speclist =
     [("-r", Arg.Unit (fun _ -> mode := Run true), "run a random execution");
      ("-t", Arg.Unit (fun _ -> mode := Trace false),
         "trace all executions (do not include prinfs in trace)");
      ("-T", Arg.Unit (fun _ -> mode := Trace true),
         "trace all executions (include prinfs in trace)");
-     ("-a", Arg.Symbol (["x86";"x86_64";"arm";"ppc"], fun x -> arch_name := x),
-        "architecture (default x86)");
-     ("-m", Arg.Unit (fun _ -> flags := {!flags with arch_alloc_can_fail = true}),
+     ("-a", Arg.Symbol (["ilp32";"llp64";"lp64"], fun a ->
+          arch := {!arch with arch_sizes =
+            match a with "ilp32" -> ilp32 | "llp64" -> llp64 | _ -> lp64}),
+        "data model (default lp64)");
+     ("-m", Arg.Unit (fun _ -> arch := {!arch with arch_alloc_can_fail = true}),
         "malloc non-deterministically returns 0 (default it always succeeds)");
      ("-uc", Arg.Unit (fun _ ->
-          flags := {!flags with arch_char_signedness = Unsigned}),
+          arch := {!arch with arch_char_signedness = Unsigned}),
         "char is unsigned (default signed)");
+     ("-be", Arg.Unit (fun _ -> arch := {!arch with arch_big_endian = true}),
+        "big endian (default little)");
     ] in
   let usage_msg =
     "Usage: "^Filename.basename(Sys.argv.(0))^" [options] filename" in
   Arg.parse speclist (fun x -> filename := x) usage_msg;
   if !filename = "" then exit (Arg.usage speclist usage_msg; 1) else
-  let arch =
-    match !arch_name with
-    | "x86_64" -> x86_64 | "arm" -> arm | "ppc" -> ppc | _ -> x86 in
   match !mode with
-  | Run rand -> run_file arch !flags rand !filename
-  | Trace trace_printfs -> trace_file arch !flags trace_printfs !filename;
+  | Run rand -> run_file !arch rand !filename
+  | Trace trace_printfs -> trace_file !arch trace_printfs !filename;
   64;;
 
 let interactive () =

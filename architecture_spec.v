@@ -26,8 +26,7 @@ Proof. solve_decision. Defined.
 Instance c_rank_totalorder : TotalOrder ((⊆) : relation c_rank).
 Proof. by repeat split; red; apply (bool_decide_unpack _); vm_compute. Qed.
 
-Record architecture := Architecture {
-  arch_big_endian : bool;
+Record architecture_sizes := ArchitectureSizes {
   arch_char_bits : nat;
   arch_size : c_rank → nat; (* size in bytes *)
   arch_align : c_rank → nat; (* align in bytes *)
@@ -37,28 +36,29 @@ Record architecture := Architecture {
   arch_size_preserving k1 k2 : k1 ⊆ k2 → arch_size k1 ≤ arch_size k2;
   arch_align_size k : (arch_align k | arch_size k)
 }.
-Record architecture_flags := ArchitectureFlags {
+Record architecture := ArchitectureFlags {
+  arch_sizes :> architecture_sizes;
   arch_char_signedness : signedness;
-  arch_alloc_can_fail : bool
+  arch_alloc_can_fail : bool;
+  arch_big_endian : bool
 }.
 
-Inductive arch_rank (A : architecture) (F : architecture_flags) :=
-  ARank { arch_rank_car :> c_rank }.
-Arguments ARank {_ _} _.
-Instance arch_rank_eq_dec {A F} (k1 k2 : arch_rank A F) : Decision (k1 = k2).
+Inductive arch_rank (A : architecture) := ARank { arch_rank_car :> c_rank }.
+Arguments ARank {_} _.
+Instance arch_rank_eq_dec {A} (k1 k2 : arch_rank A) : Decision (k1 = k2).
 Proof. solve_decision. Defined.
-Program Instance arch_rank_finite {A F} : Finite (arch_rank A F) := {
+Program Instance arch_rank_finite {A} : Finite (arch_rank A) := {
   enum := ARank <$> enum c_rank
 }.
 Next Obligation. by intros; apply (bool_decide_unpack _). Qed.
-Next Obligation. by intros ?? []; apply (bool_decide_unpack _). Qed.
+Next Obligation. by intros ? []; apply (bool_decide_unpack _). Qed.
 
 Section architecture.
-Context (A : architecture) (F : architecture_flags).
+Context (A : architecture).
 
-Instance arch_int_coding: IntCoding (arch_rank A F) := {
+Instance arch_int_coding: IntCoding (arch_rank A) := {
   char_rank := ARank CharRank;
-  char_signedness := arch_char_signedness F;
+  char_signedness := arch_char_signedness A;
   short_rank := ARank ShortRank;
   int_rank := ARank IntRank;
   long_rank := ARank LongRank;
@@ -70,7 +70,7 @@ Instance arch_int_coding: IntCoding (arch_rank A F) := {
   endianize := λ _, if arch_big_endian A then reverse else id;
   deendianize := λ _, if arch_big_endian A then reverse else id
 }.
-Instance arch_int_env: IntEnv (arch_rank A F) := {
+Instance arch_int_env: IntEnv (arch_rank A) := {
   int_arithop_ok op x τi1 y τi2 :=
     let τi := int_promote τi1 ∪ int_promote τi2 in
     int_pre_arithop_ok op (int_pre_cast τi x) (int_pre_cast τi y) τi;
@@ -86,7 +86,7 @@ Instance arch_int_env: IntEnv (arch_rank A F) := {
   int_cast_ok := int_pre_cast_ok;
   int_cast := int_pre_cast
 }.
-Instance: IntCodingSpec (arch_rank A F).
+Instance: IntCodingSpec (arch_rank A).
 Proof.
   split.
   * by apply arch_char_bits_ge_8.
@@ -105,7 +105,7 @@ Proof.
   * intros. unfold deendianize, endianize; simpl.
     by destruct (arch_big_endian _); simpl; rewrite ?reverse_involutive.
 Qed.
-Instance: IntEnvSpec (arch_rank A F).
+Instance: IntEnvSpec (arch_rank A).
 Proof.
   split.
   * apply _.
@@ -127,15 +127,15 @@ Proof.
   * done.
 Qed.
 
-Let ptr_size (_ : ptr_type (arch_rank A F)) : nat := rank_size ptr_rank.
-Let align_base (τb : base_type (arch_rank A F)) : nat :=
+Let ptr_size (_ : ptr_type (arch_rank A)) : nat := rank_size ptr_rank.
+Let align_base (τb : base_type (arch_rank A)) : nat :=
   match τb with
   | voidT => 1
   | intT τi => arch_align A (rank τi)
   | τp.* => arch_align A (arch_ptr_rank A)
   end%BT.
-Global Instance arch_env : Env (arch_rank A F) :=
-  natural_env ptr_size align_base (arch_alloc_can_fail F).
+Global Instance arch_env : Env (arch_rank A) :=
+  natural_env ptr_size align_base (arch_alloc_can_fail A).
 
 Let ptr_size_ne_0 τ : ptr_size τ ≠ 0.
 Proof. apply rank_size_ne_0. Qed.
@@ -145,6 +145,6 @@ Let align_int_divide τi : (align_base (intT τi) | rank_size (rank τi)).
 Proof. by apply arch_align_size. Qed.
 Let align_ptr_divide τp : (align_base (τp.* ) | ptr_size τp).
 Proof. by apply arch_align_size. Qed.
-Global Instance: EnvSpec (arch_rank A F).
+Global Instance: EnvSpec (arch_rank A).
 Proof. by apply natural_env_spec. Qed.
 End architecture.
