@@ -28,13 +28,13 @@ Proof.
   arch_char_bits := 8;
   arch_size k :=
     match k with
-    | CharRank => 1 | ShortRank => 2 | IntRank => 4
-    | LongRank | LongLongRank => 8
+    | CharRank => 1 | ShortRank => 2 | IntRank | LongRank => 4
+    | LongLongRank => 8
     end;
   arch_align k :=
     match k with
-    | CharRank => 1 | ShortRank => 2 | IntRank => 4
-    | LongRank | LongLongRank => 8
+    | CharRank => 1 | ShortRank => 2 | IntRank | LongRank => 4
+    | LongLongRank => 8
     end;
   arch_ptr_rank := LongLongRank
  |}; by apply (bool_decide_unpack _); vm_compute.
@@ -48,13 +48,13 @@ Proof.
   arch_char_bits := 8;
   arch_size k :=
     match k with
-    | CharRank => 1 | ShortRank => 2 | IntRank | LongRank => 4
-    | LongLongRank => 8
+    | CharRank => 1 | ShortRank => 2 | IntRank => 4
+    | LongRank | LongLongRank => 8
     end;
   arch_align k :=
     match k with
-    | CharRank => 1 | ShortRank => 2 | IntRank | LongRank => 4
-    | LongLongRank => 8
+    | CharRank => 1 | ShortRank => 2 | IntRank => 4
+    | LongRank | LongLongRank => 8
     end;
   arch_ptr_rank := LongLongRank
  |}; by apply (bool_decide_unpack _); vm_compute.
