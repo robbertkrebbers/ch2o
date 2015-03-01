@@ -199,7 +199,7 @@ Global Instance rettype_match_dec (cmσ : rettype K) σ :
     Decision (rettype_match cmσ σ) :=
   match cmσ with
   | (true,Some σ') => decide (σ' = σ)
-  | (false,Some _) => right (@id False)
+  | (false,Some σ') => decide (σ' = σ ∧ σ = voidT)
   | (_,None) => decide (σ = voidT)
   end.
 Global Instance ctx_item_lookup :

@@ -312,13 +312,13 @@ Proof.
       eauto using eq_sym, Nat.eq_le_incl, Forall3_length_lr).
     eauto 7 using stmt_refine_weaken, mem_alloc_list_refine',
       mem_alloc_list_forward, mem_allocable_list_fresh, fresh_list_length.
-  * intros m k h oσs s ????; invert; case_match; simplify_equality'; try done.
-    go f. rewrite !fst_zip by solve_length.
-    repeat refine_constructor; eauto using ctx_refine_weaken,
+  * intros m k h oσs s ????; invert; case_match; intuition simplify_equality';
+      go f; rewrite !fst_zip by solve_length;
+      repeat refine_constructor; eauto using ctx_refine_weaken,
       mem_foldr_free_forward, mem_foldr_free_refine.
-  * intros m k h oσs s ????; invert; case_match; simplify_equality'; try done.
-    go f. rewrite !fst_zip by solve_length.
-    repeat refine_constructor; eauto using ctx_refine_weaken,
+  * intros m k h oσs s ????; invert; case_match; intuition simplify_equality';
+      go f; rewrite !fst_zip by solve_length;
+      repeat refine_constructor; eauto using ctx_refine_weaken,
       val_refine_weaken, mem_foldr_free_forward, mem_foldr_free_refine.
   * intros; invert. go f.
     eauto 10 using ectx_subst_refine, locks_empty_refine.

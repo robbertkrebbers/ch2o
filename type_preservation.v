@@ -181,13 +181,13 @@ Proof.
     eauto using stmt_typed_weaken.
   * intros m k g oσs s (τf&HS&?&?) ?. typed_inversion_all.
     split; eauto using mem_foldr_free_forward.
-    case_match; simplify_equality; try done.
-    eexists; simpl; split_ands; repeat typed_constructor; eauto using
+    case_match; intuition simplify_equality;
+      eexists; simpl; split_ands; repeat typed_constructor; eauto using
       ctx_typed_weaken, mem_foldr_free_forward, mem_foldr_free_valid.
   * intros m k g oσs v s (τf&HS&?&?) ?; typed_inversion_all.
     split; eauto using mem_foldr_free_forward.
-    case_match; simplify_equality; try done.
-    eexists; simpl; split_ands; repeat typed_constructor;
+    case_match; intuition simplify_equality;
+      eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, mem_foldr_free_forward,
       mem_foldr_free_valid, val_typed_weaken.
   * intros m k g E v (τf&HS&?&?) ?; typed_inversion_all; split; auto.

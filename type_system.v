@@ -226,7 +226,7 @@ Definition rettype_union
 Definition rettype_match (cmσ : rettype K) (σ : type K) : Prop :=
   match cmσ with
   | (true, Some σ') => σ' = σ
-  | (false, Some _) => False
+  | (false, Some σ') => σ' = σ ∧ σ = voidT
   | (_, None) => σ = voidT
   end.
 
