@@ -264,7 +264,7 @@ Proof.
   * by destruct (ref_disjoint_nil_inv_l r).
 Qed.
 Lemma mem_alloc_refine' Γ α f m1 m2 o1 o2 malloc x v1 v2 τ :
-  ✓ Γ → m1 ⊑{Γ,α,f} m2 → mem_allocable o1 m1 → mem_allocable o2 m2 →
+  ✓ Γ → m1 ⊑{Γ,α,f} m2 → o1 ∉ dom indexset m1 → o2 ∉ dom indexset m2 →
   sep_unshared x → ¬sep_unmapped x → v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → ∃ f',
   (**i 1.) *) f' !! o1 = Some (o2,[]) ∧
   (**i 2.) *)
@@ -274,12 +274,14 @@ Proof.
   intros ?????? Hv. destruct (mem_refine_extend Γ α f ('{m1}) ('{m2}) o1 o2) as
     (f'&?&?&?); eauto using mem_allocable_memenv_of,cmap_refine_memenv_refine.
   exists f'; split_ands; auto. unfold refineM, cmap_refine'.
-  erewrite !mem_alloc_memenv_of by eauto using val_refine_typed_l, val_refine_typed_r.
-  eapply mem_alloc_refine; eauto 10 using mem_allocable_memenv_of, cmap_refine_weaken,
+  erewrite !mem_alloc_memenv_of
+    by eauto using val_refine_typed_l, val_refine_typed_r.
+  eapply mem_alloc_refine;
+    eauto 10 using mem_allocable_memenv_of, cmap_refine_weaken,
     val_refine_weaken, mem_alloc_forward, mem_alloc_refine_env.
 Qed.
 Lemma mem_alloc_new_refine' Γ α f m1 m2 o1 o2 malloc x τ :
-  ✓ Γ → m1 ⊑{Γ,α,f} m2 → mem_allocable o1 m1 → mem_allocable o2 m2 →
+  ✓ Γ → m1 ⊑{Γ,α,f} m2 → o1 ∉ dom indexset m1 → o2 ∉ dom indexset m2 →
   sep_unshared x → ¬sep_unmapped x → ✓{Γ} τ → ∃ f',
   (**i 1.) *) f' !! o1 = Some (o2,[]) ∧
   (**i 2.) *)
@@ -292,7 +294,7 @@ Hint Immediate cmap_refine_memenv_refine.
 Lemma mem_alloc_list_refine' Γ α f m1 m2 os1 os2 vs1 vs2 τs :
   ✓ Γ → m1 ⊑{Γ,α,f} m2 → vs1 ⊑{Γ,α,f@'{m1}↦'{m2}}* vs2 :* τs →
   length os1 = length vs1 → length os2 = length vs2 →
-  mem_allocable_list m1 os1 → mem_allocable_list m2 os2 → ∃ f',
+  Forall_fresh (dom indexset m1) os1 → Forall_fresh (dom indexset m2) os2 → ∃ f',
   (**i 1.) *) Forall2 (λ o1 o2, f' !! o1 = Some (o2,[])) os1 os2 ∧
   (**i 2.) *) mem_alloc_list Γ (zip os1 vs1) m1
       ⊑{Γ,α,f'} mem_alloc_list Γ (zip os2 vs2) m2 ∧

@@ -44,6 +44,12 @@ Proof.
   intros E. apply map_empty. intros. apply not_elem_of_dom.
   rewrite E. solve_elem_of.
 Qed.
+Lemma dom_alter {A} f (m : M A) i : dom D (alter f i m) ≡ dom D m.
+Proof.
+  apply elem_of_equiv; intros j; rewrite !elem_of_dom; unfold is_Some.
+  destruct (decide (i = j)); simplify_map_equality'; eauto.
+  destruct (m !! j); naive_solver.
+Qed.
 Lemma dom_insert {A} (m : M A) i x : dom D (<[i:=x]>m) ≡ {[ i ]} ∪ dom D m.
 Proof.
   apply elem_of_equiv. intros j. rewrite elem_of_union, !elem_of_dom.

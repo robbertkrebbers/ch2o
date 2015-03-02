@@ -485,12 +485,11 @@ Proof.
   destruct S as [Γn Γ m Δg]; unfold insert_object;
     intros ? [] ???; error_proceed; simplify_type_equality.
   assert ('{m} ⊆ <[fresh (dom indexset m):=(τ, false)]> ('{m})).
-  { apply insert_subseteq, mem_allocable_memenv_of, mem_allocable_fresh. }
+  { eapply insert_subseteq, mem_allocable_memenv_of, is_fresh. }
   split_ands; eauto using mem_alloc_index_typed', mem_alloc_index_alive';
     split; simpl; erewrite ?mem_alloc_memenv_of by eauto;
     eauto using map_Forall_impl, global_decl_valid_weaken.
-  eapply mem_alloc_valid'; eauto using mem_allocable_fresh,
-    val_typed_weaken, mem_alloc_forward'.
+  eapply mem_alloc_valid'; eauto using val_typed_weaken, mem_alloc_forward'.
 Qed.
 Lemma update_object_valid S S' o x v τ :
   update_object o x v S = mret () S' → ✓ S →

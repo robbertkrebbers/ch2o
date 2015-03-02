@@ -40,7 +40,7 @@ Proof.
     end; split_ands; eauto using cmap_refine_id', expr_refine_id).
   intros m Ω o τi τ n ????????; typed_inversion_all.
   set (o' := fresh (dom indexset m)) in *.
-  assert (mem_allocable o' m) by (apply mem_allocable_fresh).
+  assert (o' ∉ dom indexset m) by (apply is_fresh).
   edestruct (λ τ, mem_alloc_new_refine' Γ false meminj_id m m
     (fresh (dom indexset m)) o true perm_full (τ.[Z.to_nat n])) as (f&?&?&?);
     eauto using cmap_refine_id', perm_full_unshared, perm_full_mapped.
@@ -106,7 +106,7 @@ Proof.
     by destruct Hsafe; constructor.
   * intros m k h s os vs ???? (τf&?&?&?) _ _; simpl in *; typed_inversion_all.
     set (os' := fresh_list (length vs) (dom indexset m)) in *.
-    assert (mem_allocable_list m os') by (by apply mem_allocable_list_fresh).
+    assert (Forall_fresh (dom indexset m) os') by (by apply Forall_fresh_list).
     assert (length os' = length vs) by (by apply fresh_list_length).
     edestruct (funenv_lookup Γ ('{m}) δ h)
       as (?&?&?&?&?&?&?&?); eauto; simplify_equality'.
@@ -136,8 +136,7 @@ Proof.
   * intros m k d o τ s ??? (τf&?&?&?) _ _; typed_inversion_all.
     destruct (mem_alloc_new_refine' Γ false meminj_id m m
       (fresh (dom indexset m)) o false perm_full τ) as (f&?&?&?);
-      auto using cmap_refine_id', mem_allocable_fresh,
-      perm_full_unshared, perm_full_mapped.
+      auto using cmap_refine_id', perm_full_unshared, perm_full_mapped.
     eexists f, (State (CLocal (fresh (dom indexset m)) τ :: k) (Stmt d s)
       (mem_alloc Γ (fresh (dom indexset m)) false perm_full (val_new Γ τ) m)).
     split_ands; auto.
@@ -145,12 +144,10 @@ Proof.
     eleft; split_ands; simpl; repeat refine_constructor;
       eauto using mem_alloc_new_index_typed'.
     + eapply (stmt_refine_weaken _ false false meminj_id _ ('{m}));
-        eauto using stmt_refine_id, mem_alloc_new_forward', mem_allocable_fresh.
+        eauto using stmt_refine_id, mem_alloc_new_forward'.
     + eapply (direction_refine_weaken _ false false meminj_id _ ('{m}));
-        eauto using direction_refine_id,
-        mem_alloc_new_forward', mem_allocable_fresh.
-    + eauto 8 using ctx_refine_weaken, ctx_refine_id,
-        mem_alloc_new_forward', mem_allocable_fresh.
+        eauto using direction_refine_id, mem_alloc_new_forward'.
+    + eauto 8 using ctx_refine_weaken, ctx_refine_id, mem_alloc_new_forward'.
   * intros m k d o τ s ?????.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
     by destruct d; simplify_option_equality; try case_match; eauto.

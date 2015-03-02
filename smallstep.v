@@ -60,7 +60,7 @@ Inductive ehstep `{Env K} (Γ : env K) (ρ : stack K) :
      alloc_can_fail → Z.to_nat n ≠ 0 →
      Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒ #{Ω} (ptrV (NULL (TType τ))), m
   | ehstep_alloc m Ω o τi τ n :
-     mem_allocable o m → Z.to_nat n ≠ 0 →
+     o ∉ dom indexset m → Z.to_nat n ≠ 0 →
      Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒
              #{Ω} (ptrV (Ptr (addr_top_array o τ n))),
              mem_alloc Γ o true perm_full (val_new Γ (τ.[Z.to_nat n])) m
@@ -192,7 +192,8 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
 
   (**i For function calls *)
   | cstep_call m k f s os vs :
-     δ !! f = Some s → mem_allocable_list m os → length os = length vs →
+     δ !! f = Some s → Forall_fresh (dom indexset m) os →
+     length os = length vs →
      Γ\ δ ⊢ₛ State k (Call f vs) m ⇒
              State (CParams f (zip os (type_of <$> vs)) :: k)
                (Stmt ↘ s) (mem_alloc_list Γ (zip os vs) m)
@@ -234,7 +235,7 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
 
   (**i For block scopes: *)
   | cstep_in_block m k d o τ s :
-     direction_in d s → mem_allocable o m →
+     direction_in d s → o ∉ dom indexset m →
      Γ\ δ ⊢ₛ State k (Stmt d (local{τ} s)) m ⇒
              State (CLocal o τ :: k) (Stmt d s)
                (mem_alloc Γ o false perm_full (val_new Γ τ) m)
@@ -327,7 +328,7 @@ Section inversion.
        P S2
     | Stmt ↘ (local{τ} s) =>
        (∀ o,
-         mem_allocable o m →
+         o ∉ dom indexset m →
          P (State (CLocal o τ :: k) (Stmt ↘ s)
            (mem_alloc Γ o false perm_full (val_new Γ τ) m))) →
        P S2
@@ -359,7 +360,8 @@ Section inversion.
        P S2
     | Call f vs =>
        (∀ s os,
-         δ !! f = Some s → mem_allocable_list m os → length os = length vs →
+         δ !! f = Some s → Forall_fresh (dom indexset m) os →
+         length os = length vs →
          P (State (CParams f (zip os (type_of <$> vs)) :: k)
            (Stmt ↘ s) (mem_alloc_list Γ (zip os vs) m))) →
        P S2
@@ -390,7 +392,7 @@ Section inversion.
     | Stmt (↷ l) s =>
        (s = label l → P (State k (Stmt ↗ s) m)) →
        (∀ s' o τ,
-         s = local{τ} s' → l ∈ labels s → mem_allocable o m →
+         s = local{τ} s' → l ∈ labels s → o ∉ dom indexset m →
          P (State (CLocal o τ :: k) (Stmt (↷ l) s')
            (mem_alloc Γ o false perm_full (val_new Γ τ) m))) →
        (∀ k' o τ,
@@ -556,8 +558,6 @@ Tactic Notation "last_cstep" hyp(H) :=
 
 (** * Step tactics *)
 Hint Constructors assign_sem ehstep ehsafe cstep : cstep.
-Hint Immediate mem_allocable_fresh mem_allocable_list_fresh : cstep.
-Hint Immediate fresh_list_length : cstep.
 Ltac do_ehstep :=
   match goal with
   | |- _ \ _ ⊢ₕ _, _ ⇒ _, _ => constructor (solve [eauto with cstep])

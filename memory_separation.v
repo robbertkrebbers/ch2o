@@ -40,8 +40,9 @@ Proof.
 Qed.
 Lemma mem_alloc_disjoint Γ Δ m1 m2 o1 malloc x v τ :
   ✓ Γ → sep_valid x → ¬sep_unmapped x → (Γ,Δ) ⊢ v : τ → 
-  m1 ⊥ m2 → mem_allocable o1 m2 → mem_alloc Γ o1 malloc x v m1 ⊥ m2.
+  m1 ⊥ m2 → o1 ∉ dom indexset m2 → mem_alloc Γ o1 malloc x v m1 ⊥ m2.
 Proof.
+  rewrite mem_allocable_alt.
   destruct m1 as [m1], m2 as [m2]; simpl; intros ???? Hm ? o; specialize (Hm o).
   destruct (decide (o = o1)); simplify_map_equality';
     simplify_type_equality; [|by destruct (m1 !! o), (m2 !! o)].
@@ -50,11 +51,11 @@ Proof.
     @sep_unmapped_empty_alt.
 Qed.
 Lemma mem_alloc_union Γ m1 m2 o1 malloc x v :
-  mem_allocable o1 m2 →
+  o1 ∉ dom indexset m2 →
   mem_alloc Γ o1 malloc x v (m1 ∪ m2) = mem_alloc Γ o1 malloc x v m1 ∪ m2.
 Proof.
-  destruct m1 as [m1], m2 as [m2]; intros; sep_unfold; f_equal'.
-  by apply insert_union_with_l.
+  rewrite mem_allocable_alt; destruct m1 as [m1], m2 as [m2];
+    intros; sep_unfold; f_equal'; by apply insert_union_with_l.
 Qed.
 Lemma mem_free_disjoint Γ m1 m2 o1 :
   m1 ⊥ m2 → mem_freeable_perm o1 m1 → mem_free o1 m1 ⊥ m2.
@@ -373,7 +374,7 @@ Lemma mem_alloc_empty_singleton Γ o malloc x v τ :
   mem_alloc Γ o malloc x v ∅ = mem_singleton Γ (addr_top o τ) malloc x v.
 Proof. done. Qed.
 Lemma mem_alloc_singleton Γ m o malloc x v τ :
-  mem_allocable o m → sep_valid m →
+  o ∉ dom indexset m → sep_valid m →
   mem_alloc Γ o malloc x v m
   = mem_singleton Γ (addr_top o τ) malloc x v ∪ m.
 Proof.

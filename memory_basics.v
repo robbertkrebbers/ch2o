@@ -35,6 +35,10 @@ Instance index_lexico_order : StrictOrder (@lexico index _) := _.
 Instance index_trichotomy: TrichotomyT (@lexico index _) := _.
 Typeclasses Opaque index indexmap.
 
+Hint Immediate (is_fresh (A:=index) (C:=indexset)).
+Hint Immediate (Forall_fresh_list (A:=index) (C:=indexset)).
+Hint Immediate (fresh_list_length (A:=index) (C:=indexset)).
+
 (** * Memory environments *)
 Notation memenv K :=
   (indexmap (type K * bool (* false = alive, true = freed *))).

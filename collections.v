@@ -430,16 +430,19 @@ End more_quantifiers.
 (** * Fresh elements *)
 (** We collect some properties on the [fresh] operation. In particular we
 generalize [fresh] to generate lists of fresh elements. *)
-Section fresh.
-  Context `{FreshSpec A C} .
+Fixpoint fresh_list `{Fresh A C, Union C, Singleton A C}
+    (n : nat) (X : C) : list A :=
+  match n with
+  | 0 => []
+  | S n => let x := fresh X in x :: fresh_list n ({[ x ]} ∪ X)
+  end.
+Inductive Forall_fresh `{ElemOf A C} (X : C) : list A → Prop :=
+  | Forall_fresh_nil : Forall_fresh X []
+  | Forall_fresh_cons x xs :
+     x ∉ xs → x ∉ X → Forall_fresh X xs → Forall_fresh X (x :: xs).
 
-  Definition fresh_sig (X : C) : { x : A | x ∉ X } :=
-    exist (∉ X) (fresh X) (is_fresh X).
-  Fixpoint fresh_list (n : nat) (X : C) : list A :=
-    match n with
-    | 0 => []
-    | S n => let x := fresh X in x :: fresh_list n ({[ x ]} ∪ X)
-    end.
+Section fresh.
+  Context `{FreshSpec A C}.
 
   Global Instance fresh_proper: Proper ((≡) ==> (=)) fresh.
   Proof. intros ???. by apply fresh_proper_alt, elem_of_equiv. Qed.
@@ -448,18 +451,38 @@ Section fresh.
     intros ? n ->. induction n as [|n IH]; intros ?? E; f_equal'; [by rewrite E|].
     apply IH. by rewrite E.
   Qed.
+
+  Lemma Forall_fresh_NoDup X xs : Forall_fresh X xs → NoDup xs.
+  Proof. induction 1; by constructor. Qed.
+  Lemma Forall_fresh_elem_of X xs x : Forall_fresh X xs → x ∈ xs → x ∉ X.
+  Proof.
+    intros HX; revert x; rewrite <-Forall_forall.
+    by induction HX; constructor.
+  Qed.
+  Lemma Forall_fresh_alt X xs :
+    Forall_fresh X xs ↔ NoDup xs ∧ ∀ x, x ∈ xs → x ∉ X.
+  Proof.
+    split; eauto using Forall_fresh_NoDup, Forall_fresh_elem_of.
+    rewrite <-Forall_forall.
+    intros [Hxs Hxs']. induction Hxs; decompose_Forall_hyps; constructor; auto.
+  Qed.
+
   Lemma fresh_list_length n X : length (fresh_list n X) = n.
   Proof. revert X. induction n; simpl; auto. Qed.
   Lemma fresh_list_is_fresh n X x : x ∈ fresh_list n X → x ∉ X.
   Proof.
-    revert X. induction n as [|n IH]; intros X; simpl; [by rewrite elem_of_nil|].
+    revert X. induction n as [|n IH]; intros X; simpl;[by rewrite elem_of_nil|].
     rewrite elem_of_cons; intros [->| Hin]; [apply is_fresh|].
     apply IH in Hin; solve_elem_of.
   Qed.
-  Lemma fresh_list_nodup n X : NoDup (fresh_list n X).
+  Lemma NoDup_fresh_list n X : NoDup (fresh_list n X).
   Proof.
     revert X. induction n; simpl; constructor; auto.
-    intros Hin. apply fresh_list_is_fresh in Hin. solve_elem_of.
+    intros Hin; apply fresh_list_is_fresh in Hin; solve_elem_of.
+  Qed.
+  Lemma Forall_fresh_list X n : Forall_fresh X (fresh_list n X).
+  Proof.
+    rewrite Forall_fresh_alt; eauto using NoDup_fresh_list, fresh_list_is_fresh.
   Qed.
 End fresh.
 
