@@ -270,7 +270,7 @@ Inductive stmt_refine' (Γ : env K) (τs : list (type K))
   | SComp_refine s1 s2 s1' s2' c1 mσ1 c2 mσ2 mσ :
      stmt_refine' Γ τs α f Δ1 Δ2 s1 s2 (c1,mσ1) →
      stmt_refine' Γ τs α f Δ1 Δ2 s1' s2' (c2,mσ2) →
-     rettype_union mσ1 mσ2 = Some mσ →
+     rettype_union mσ1 mσ2 mσ →
      stmt_refine' Γ τs α f Δ1 Δ2 (s1 ;; s1') (s2 ;; s2') (c2,mσ)
   | SCatch_refine s1 s2 c mσ :
      stmt_refine' Γ τs α f Δ1 Δ2 s1 s2 (c,mσ) →
@@ -282,7 +282,7 @@ Inductive stmt_refine' (Γ : env K) (τs : list (type K))
      e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (baseT τb) → locks e1 = ∅ → locks e2 = ∅ →
      stmt_refine' Γ τs α f Δ1 Δ2 s1 s2 (c1,mσ1) →
      stmt_refine' Γ τs α f Δ1 Δ2 s1' s2' (c2,mσ2) →
-     rettype_union mσ1 mσ2 = Some mσ →
+     rettype_union mσ1 mσ2 mσ →
      stmt_refine' Γ τs α f Δ1 Δ2
        (if{e1} s1 else s1') (if{e2} s2 else s2') (c1 && c2, mσ).
 Global Instance stmt_refine: RefineT K (env K * list (type K))
@@ -292,12 +292,10 @@ Inductive sctx_item_refine' (Γ : env K) (τs: list (type K))
      (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
      sctx_item K → sctx_item K → relation (rettype K) :=
   | CCompL_refine s1' s2' c mσ c' mσ' mσr :
-     s1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2' : (c',mσ') →
-     rettype_union mσ mσ' = Some mσr →
+     s1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2' : (c',mσ') → rettype_union mσ mσ' mσr →
      sctx_item_refine' Γ τs α f Δ1 Δ2 (□ ;; s1') (□ ;; s2') (c,mσ) (c',mσr)
   | CCompR_refine s1 s2 c mσ c' mσ' mσr :
-     s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : (c,mσ) →
-     rettype_union mσ mσ' = Some mσr →
+     s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : (c,mσ) → rettype_union mσ mσ' mσr →
      sctx_item_refine' Γ τs α f Δ1 Δ2 (s1 ;; □) (s2 ;; □) (c',mσ') (c',mσr)
   | Ccatch_refine c mσ :
      sctx_item_refine' Γ τs α f Δ1 Δ2
@@ -306,14 +304,12 @@ Inductive sctx_item_refine' (Γ : env K) (τs: list (type K))
      sctx_item_refine' Γ τs α f Δ1 Δ2 (loop □) (loop □) (c,mσ) (true,mσ)
   | CIfL_refine e1 e2 τb s1' s2' c mσ c' mσ' mσr :
      e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (baseT τb) → locks e1 = ∅ → locks e2 = ∅ →
-     s1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2' : (c',mσ') →
-     rettype_union mσ mσ' = Some mσr →
+     s1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2' : (c',mσ') → rettype_union mσ mσ' mσr →
      sctx_item_refine' Γ τs α f Δ1 Δ2
        (if{e1} □ else s1') (if{e2} □ else s2') (c,mσ) (c&&c',mσr)
   | CIfR_refine e1 e2 τb s1 s2 c mσ c' mσ' mσr :
      e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (baseT τb) → locks e1 = ∅ → locks e2 = ∅ →
-     s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : (c,mσ) →
-     rettype_union mσ mσ' = Some mσr →
+     s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : (c,mσ) → rettype_union mσ mσ' mσr →
      sctx_item_refine' Γ τs α f Δ1 Δ2
        (if{e1} s1 else □) (if{e2} s2 else □) (c',mσ') (c&&c',mσr).
 Global Instance sctx_refine: PathRefine K (env K * list (type K))
@@ -328,8 +324,7 @@ Inductive esctx_item_refine' (Γ : env K) (τs: list (type K))
      esctx_item_refine' Γ τs α f Δ1 Δ2 (ret □) (ret □) τ (true,Some τ)
   | CIfE_refine τb s1 s2 s1' s2' c mσ c' mσ' mσr :
      s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : (c,mσ) →
-     s1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2' : (c',mσ') →
-     rettype_union mσ mσ' = Some mσr →
+     s1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2' : (c',mσ') → rettype_union mσ mσ' mσr →
      esctx_item_refine' Γ τs α f Δ1 Δ2
        (if{□} s1 else s1')%S (if{□} s2 else s2')%S (baseT τb) (c&&c',mσr).
 Global Instance esctx_item_refine: PathRefine K (env K * list (type K))

@@ -839,7 +839,9 @@ Definition to_stmt (τret : type K) :
      Γ ← gets to_env;
      guard (cast_typed τ' τret) with "return expression has incorrect type";
      mret (ret (cast{τret} e), (true, Some τret))
-  | CSReturn None => mret (ret (#voidV), (true, Some voidT))
+  | CSReturn None =>
+     guard (τret = voidT) with "return with no expression in non-void function";
+     mret (ret (#voidV), (true, Some voidT))
   | CSScope cs => go (None :: Δl) cs
   | CSLocal stos x cτ mce cs =>
      guard (local_fresh x Δl) with
@@ -878,7 +880,7 @@ Definition to_stmt (τret : type K) :
   | CSComp cs1 cs2 =>
      '(s1,cmσ1) ← go Δl cs1;
      '(s2,cmσ2) ← go Δl cs2;
-     mσ ← error_of_option (rettype_union (cmσ1.2) (cmσ2.2))
+     mσ ← error_of_option (rettype_union_alt (cmσ1.2) (cmσ2.2))
        "composition of statements with non-matching return types";
      mret (s1 ;; s2, (cmσ2.1, mσ))
   | CSLabel l cs => '(s,cmσ) ← go Δl cs; mret (l :; s, cmσ)
@@ -910,7 +912,7 @@ Definition to_stmt (τret : type K) :
      _ ← error_of_option (maybe TBase τ) "if with expression of non-base type";
      '(s1,cmσ1) ← go Δl cs1;
      '(s2,cmσ2) ← go Δl cs2;
-     mσ ← error_of_option (rettype_union (cmσ1.2) (cmσ2.2))
+     mσ ← error_of_option (rettype_union_alt (cmσ1.2) (cmσ2.2))
        "if statement with non-matching return types";
      mret (if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S
   end.
@@ -933,8 +935,6 @@ Definition to_fun_stmt (f : string) (mys : list (option string))
     ("function `" +:+ f +:+ "` has unbound gotos");
   guard (throws_valid 0 s) with
     ("function `" +:+ f +:+ "` has unbound breaks/continues");
-  guard (rettype_match cmσ σ) with
-    ("function `" +:+ f +:+ "` has incorrect return type");
   mret s.
 Definition alloc_fun (f : string)
     (sto : cstorage) (cσ : ctype) (cs : cstmt)  : M () :=

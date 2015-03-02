@@ -216,20 +216,16 @@ Inductive ectx_typed' (Γs : envs) : ectx K → lrtype K → lrtype K → Prop :
 Global Instance ectx_typed:
   PathTyped envs (lrtype K) (lrtype K) (ectx K) := ectx_typed'.
 
-Definition rettype_union
-    (mσ1 mσ2 : option (type K)) : option (option (type K)) :=
-  match mσ1, mσ2 with
-  | Some σ1, Some σ2 => guard (σ1 = σ2); Some (Some σ1)
-  | None, _ => Some mσ2
-  | _, None => Some mσ1
-  end.
-Definition rettype_match (cmσ : rettype K) (σ : type K) : Prop :=
-  match cmσ with
-  | (true, Some σ') => σ' = σ
-  | (false, Some σ') => σ' = σ ∧ σ = voidT
-  | (_, None) => σ = voidT
-  end.
-
+Inductive rettype_union :
+      option (type K) → option (type K) → option (type K) → Prop :=
+  | rettype_union_idempotent mσ : rettype_union mσ mσ mσ
+  | rettype_union_Some_r σ : rettype_union None (Some σ) (Some σ)
+  | rettype_union_Some_l σ : rettype_union (Some σ) None (Some σ).
+Inductive rettype_match : rettype K → type K → Prop :=
+  | rettype_match_true_Some σ : rettype_match (true, Some σ) σ
+  | rettype_match_false_Some : rettype_match (false, Some voidT) voidT
+  | rettype_match_true_None σ : rettype_match (true, None) σ
+  | rettype_match_false_None : rettype_match (false, None) voidT.
 Inductive stmt_typed' (Γ : env K) (Δ : memenv K)
      (τs : list (type K)) : stmt K → rettype K → Prop :=
   | SSkip_typed : stmt_typed' Γ Δ τs skip (false,None)
@@ -246,7 +242,7 @@ Inductive stmt_typed' (Γ : env K) (Δ : memenv K)
      stmt_typed' Γ Δ τs (local{τ} s) (c,mσ)
   | SComp_typed s1 s2 c1 mσ1 c2 mσ2 mσ :
      stmt_typed' Γ Δ τs s1 (c1,mσ1) → stmt_typed' Γ Δ τs s2 (c2,mσ2) →
-     rettype_union mσ1 mσ2 = Some mσ → stmt_typed' Γ Δ τs (s1 ;; s2) (c2,mσ)
+     rettype_union mσ1 mσ2 mσ → stmt_typed' Γ Δ τs (s1 ;; s2) (c2,mσ)
   | SCatch_typed s c mσ :
      stmt_typed' Γ Δ τs s (c,mσ) →
      stmt_typed' Γ Δ τs (catch s) (false,mσ)
@@ -256,7 +252,7 @@ Inductive stmt_typed' (Γ : env K) (Δ : memenv K)
   | SIf_typed e τb s1 s2 c1 mσ1 c2 mσ2 mσ :
      (Γ,Δ,τs) ⊢ e : inr (baseT τb) → locks e = ∅ →
      stmt_typed' Γ Δ τs s1 (c1,mσ1) → stmt_typed' Γ Δ τs s2 (c2,mσ2) →
-     rettype_union mσ1 mσ2 = Some mσ →
+     rettype_union mσ1 mσ2 mσ →
      stmt_typed' Γ Δ τs (if{e} s1 else s2) (c1 && c2, mσ).
 Global Instance stmt_typed:
   Typed envs (rettype K) (stmt K) := curry3 stmt_typed'.
@@ -264,10 +260,10 @@ Global Instance stmt_typed:
 Inductive sctx_item_typed' (Γ : env K) (Δ : memenv K)
      (τs : list (type K)) : sctx_item K → relation (rettype K) :=
   | CCompL_typed s2 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) → rettype_union mσ1 mσ2 = Some mσ →
+     (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) → rettype_union mσ1 mσ2 mσ →
      sctx_item_typed' Γ Δ τs (□ ;; s2) (c1,mσ1) (c2,mσ)
   | CCompR_typed s1 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → rettype_union mσ1 mσ2 = Some mσ →
+     (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → rettype_union mσ1 mσ2 mσ →
      sctx_item_typed' Γ Δ τs (s1 ;; □) (c2,mσ2) (c2,mσ)
   | Ccatch_typed c mσ :
      sctx_item_typed' Γ Δ τs (catch □) (c,mσ) (false,mσ)
@@ -275,11 +271,11 @@ Inductive sctx_item_typed' (Γ : env K) (Δ : memenv K)
      sctx_item_typed' Γ Δ τs (loop □) (c,mσ) (true,mσ)
   | CIfL_typed e τb s2 c1 mσ1 c2 mσ2 mσ :
      (Γ,Δ,τs) ⊢ e : inr (baseT τb) → locks e = ∅ →
-     (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) → rettype_union mσ1 mσ2 = Some mσ →
+     (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) → rettype_union mσ1 mσ2 mσ →
      sctx_item_typed' Γ Δ τs (if{e} □ else s2) (c1,mσ1) (c1&&c2,mσ)
   | CIfR_typed e τb s1 c1 mσ1 c2 mσ2 mσ :
      (Γ,Δ,τs) ⊢ e : inr (baseT τb) → locks e = ∅ →
-     (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → rettype_union mσ1 mσ2 = Some mσ →
+     (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → rettype_union mσ1 mσ2 mσ →
      sctx_item_typed' Γ Δ τs (if{e} s1 else □) (c2,mσ2) (c1&&c2,mσ).
 Global Instance sctx_typed: PathTyped envs (rettype K)
   (rettype K) (sctx_item K) := curry3 sctx_item_typed'.
@@ -290,7 +286,7 @@ Inductive esctx_item_typed' (Γ : env K) (Δ : memenv K)
   | CReturnE_typed τ : esctx_item_typed' Γ Δ τs (ret □) τ (true,Some τ)
   | CIfE_typed τb s1 s2 c1 mσ1 c2 mσ2 mσ :
      (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) →
-     rettype_union mσ1 mσ2 = Some mσ →
+     rettype_union mσ1 mσ2 mσ →
      esctx_item_typed' Γ Δ τs (if{□} s1 else s2)%S (baseT τb) (c1&&c2,mσ).
 Global Instance esctx_item_typed: PathTyped envs (type K)
   (rettype K) (esctx_item K) := curry3 esctx_item_typed'.
@@ -327,7 +323,7 @@ Global Instance ctx_typed: PathTyped (env K * memenv K)
   (focustype K) (focustype K) (ctx K) := ctx_typed'.
 
 Inductive direction_typed' (Γ : env K) (Δ : memenv K) :
-    direction K → rettype K → Prop :=
+     direction K → rettype K → Prop :=
   | Down_typed cmτ : direction_typed' Γ Δ ↘ cmτ
   | Up_typed mτ : direction_typed' Γ Δ ↗ (false,mτ)
   | Top_typed c v τ : (Γ,Δ) ⊢ v : τ → direction_typed' Γ Δ (⇈ v) (c,Some τ)
@@ -385,6 +381,7 @@ Implicit Types m : mem K.
 Implicit Types e : expr K.
 Implicit Types s : stmt K.
 Implicit Types τ σ : type K.
+Implicit Types mτ mσ : option (type K).
 Implicit Types τlr : lrtype K.
 Implicit Types a : addr K.
 Implicit Types v : val K.
@@ -433,9 +430,8 @@ Proof. by apply expr_typed_type_valid. Qed.
 Lemma rettype_true_Some_valid Γ β σ : ✓{Γ} σ → ✓{Γ} (β, Some σ).
 Proof. done. Qed.
 Lemma rettype_union_type_valid Γ mσ1 mσ2 c1 c2 mσ :
-  rettype_union mσ1 mσ2 = Some mσ →
-  ✓{Γ} (c1, mσ1) → ✓{Γ} (c2, mσ2) → ✓{Γ} (c2, mσ).
-Proof. destruct mσ1, mσ2; intros; simplify_option_equality; eauto. Qed.
+  rettype_union mσ1 mσ2 mσ → ✓{Γ} (c1, mσ1) → ✓{Γ} (c2, mσ2) → ✓{Γ} (c2, mσ).
+Proof. destruct 1; eauto. Qed.
 Lemma stmt_typed_type_valid Γ Δ τs s mcτ :
   ✓ Γ → ✓{Γ}* τs → (Γ,Δ,τs) ⊢ s : mcτ → ✓{Γ} mcτ.
 Proof.
@@ -474,25 +470,25 @@ Proof.
   intros ? HE ???. revert τlr HE. induction E; intros; typed_inversion_all;
     typed_constructor; eauto using ectx_item_typed_weaken.
 Qed.
-Lemma stmt_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 s mτ :
-  ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ s : mτ → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
-  τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ s : mτ.
+Lemma stmt_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 s cmτ :
+  ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ s : cmτ → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
+  τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ s : cmτ.
 Proof.
   intros ? Hs ??. revert τs2. induction Hs; typed_constructor;
     erewrite <-1?size_of_weaken by eauto;
     eauto using expr_typed_weaken, type_valid_weaken;
     unfold typed, stmt_typed in *; simpl in *; eauto using prefix_of_cons.
 Qed.
-Lemma sctx_item_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 Es mτ mσ :
-  ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ Es : mτ ↣ mσ → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
-  τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ Es : mτ ↣ mσ.
+Lemma sctx_item_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 Es cmτ cmσ :
+  ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ Es : cmτ ↣ cmσ → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
+  τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ Es : cmτ ↣ cmσ.
 Proof.
   destruct 2; typed_constructor;
     eauto using stmt_typed_weaken, expr_typed_weaken.
 Qed.
-Lemma esctx_item_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 Ee τ mσ :
-  ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ Ee : τ ↣ mσ → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
-  τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ Ee : τ ↣ mσ.
+Lemma esctx_item_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 Ee τ cmσ :
+  ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ Ee : τ ↣ cmσ → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
+  τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ Ee : τ ↣ cmσ.
 Proof. destruct 2; typed_constructor; eauto using stmt_typed_weaken. Qed.
 Lemma ctx_item_typed_weaken Γ1 Γ2 Δ1 Δ2 τs Ek τf σf :
   ✓ Γ1 → (Γ1,Δ1,τs) ⊢ Ek : τf ↣ σf → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
@@ -641,15 +637,18 @@ Qed.
 Lemma sctx_item_typed_Some_l Γ Δ τs Es c1 τ cmτ :
   (Γ,Δ,τs) ⊢ Es : (c1,Some τ) ↣ cmτ → ∃ c2, cmτ = (c2, Some τ).
 Proof.
-  intros HEs. typed_inversion HEs; unfold rettype_union in *;
-    repeat case_match; simplify_option_equality; eauto.
+  intros HEs. typed_inversion HEs; repeat match goal with
+    | H : rettype_union _ _ _ |- _ => inversion_clear H
+    end; eauto.
 Qed.
-Lemma rettype_union_l mσ : rettype_union mσ None = Some mσ.
-Proof. by destruct mσ. Qed.
-Lemma rettype_union_r mσ : rettype_union None mσ = Some mσ.
-Proof. by destruct mσ. Qed.
-Lemma rettype_union_idempotent mσ : rettype_union mσ mσ = Some mσ.
-Proof. by destruct mσ; simplify_option_equality. Qed.
+Lemma rettype_union_l mσ : rettype_union mσ None mσ.
+Proof. destruct mσ; constructor. Qed.
+Lemma rettype_union_r mσ : rettype_union None mσ mσ.
+Proof. destruct mσ; constructor. Qed.
+Lemma rettype_match_Some_inv c τ1 τ2 : rettype_match (c,Some τ1) τ2 → τ1 = τ2.
+Proof. by inversion_clear 1. Qed.
+Lemma rettype_match_false_inv mτ τ : rettype_match (false,mτ) τ → τ = voidT.
+Proof. by inversion_clear 1. Qed.
 
 Lemma expr_typed_lift Γ Δ τs e τlr :
   (Γ,Δ,τs) ⊢ e↑ : τlr ↔ (Γ,Δ,tail τs) ⊢ e : τlr.

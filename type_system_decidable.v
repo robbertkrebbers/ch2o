@@ -140,6 +140,24 @@ Global Instance ectx_lookup :
     LookupE envs (ectx K) (lrtype K) (lrtype K) :=
   fix go Γs E τlr := let _ : LookupE _ _ _ _ := @go in
   match E with [] => Some τlr | Ei :: E => τlr !!{Γs} Ei ≫= lookupE Γs E end.
+Definition rettype_union_alt
+    (mσ1 mσ2 : option (type K)) : option (option (type K)) :=
+  match mσ1, mσ2 with
+  | Some σ1, Some σ2 => guard (σ1 = σ2); Some (Some σ1)
+  | None, mσ | mσ, None => Some mσ
+  end.
+Global Instance rettype_match_dec (cmσ : rettype K) σ :
+  Decision (rettype_match cmσ σ).
+Proof.
+ refine
+  match cmσ with
+  | (true,Some σ') => cast_if (decide (σ' = σ))
+  | (false,Some σ') => cast_if (decide (σ' = σ ∧ σ = voidT))
+  | (true,None) => left _
+  | (false,None) => cast_if (decide (σ = voidT))
+  end; abstract
+    first [by intuition; subst; constructor|inversion 1; subst; intuition].
+Defined.
 Global Instance stmt_type_check: TypeCheck envs (rettype K) (stmt K) :=
   fix go Γs s {struct s} := let _ : TypeCheck envs _ _ := @go in
   let '(Γ,Δ,τs) := Γs in
@@ -155,34 +173,34 @@ Global Instance stmt_type_check: TypeCheck envs (rettype K) (stmt K) :=
   | s1 ;; s2 =>
      '(c1,mσ1) ← type_check Γs s1;
      '(c2,mσ2) ← type_check Γs s2;
-     mσ ← rettype_union mσ1 mσ2; Some (c2,mσ)
+     mσ ← rettype_union_alt mσ1 mσ2; Some (c2,mσ)
   | catch s => '(c,mσ) ← type_check Γs s; Some (false,mσ)
   | loop s => '(_,mσ) ← type_check Γs s; Some (true,mσ)
   | if{e} s1 else s2 =>
      _ ← type_check Γs e ≫= maybe (inr ∘ TBase); guard (locks e = ∅);
      '(c1,mσ1) ← type_check Γs s1;
      '(c2,mσ2) ← type_check Γs s2;
-     mσ ← rettype_union mσ1 mσ2; Some (c1 && c2,mσ)
+     mσ ← rettype_union_alt mσ1 mσ2; Some (c1 && c2,mσ)
   end%S.
 Global Instance sctx_item_lookup :
     LookupE envs (sctx_item K) (rettype K) (rettype K) := λ Γs Es τlr,
   match Es, τlr with
   | □ ;; s2, (c1,mσ1) =>
      '(c2,mσ2) ← type_check Γs s2;
-     mσ ← rettype_union mσ1 mσ2; Some (c2,mσ)
+     mσ ← rettype_union_alt mσ1 mσ2; Some (c2,mσ)
   | s1 ;; □, (c2,mσ2) =>
      '(c1,mσ1) ← type_check Γs s1;
-     mσ ← rettype_union mσ1 mσ2; Some (c2,mσ)
+     mσ ← rettype_union_alt mσ1 mσ2; Some (c2,mσ)
   | catch □, (c,mσ) => Some (false,mσ)
   | loop □, (c,mσ) => Some (true,mσ)
   | if{e} □ else s2, (c1,mσ1) =>
      _ ← type_check Γs e ≫= maybe (inr ∘ TBase); guard (locks e = ∅);
      '(c2,mσ2) ← type_check Γs s2;
-     mσ ← rettype_union mσ1 mσ2; Some (c1&&c2,mσ)
+     mσ ← rettype_union_alt mσ1 mσ2; Some (c1&&c2,mσ)
   | if{e} s1 else □, (c2,mσ2) =>
      _ ← type_check Γs e ≫= maybe (inr ∘ TBase); guard (locks e = ∅);
      '(c1,mσ1) ← type_check Γs s1;
-     mσ ← rettype_union mσ1 mσ2; Some (c1&&c2,mσ)
+     mσ ← rettype_union_alt mσ1 mσ2; Some (c1&&c2,mσ)
   end%S.
 Global Instance esctx_item_lookup :
     LookupE envs (esctx_item K) (rettype K) (type K) := λ Γs Ee τlr,
@@ -192,16 +210,9 @@ Global Instance esctx_item_lookup :
   | if{□} s1 else s2, baseT τb =>
      '(c1,mσ1) ← type_check Γs s1;
      '(c2,mσ2) ← type_check Γs s2;
-     mσ ← rettype_union mσ1 mσ2; Some (c1 && c2,mσ)
+     mσ ← rettype_union_alt mσ1 mσ2; Some (c1 && c2,mσ)
   | _, _ => None
   end%S.
-Global Instance rettype_match_dec (cmσ : rettype K) σ :
-    Decision (rettype_match cmσ σ) :=
-  match cmσ with
-  | (true,Some σ') => decide (σ' = σ)
-  | (false,Some σ') => decide (σ' = σ ∧ σ = voidT)
-  | (_,None) => decide (σ = voidT)
-  end.
 Global Instance ctx_item_lookup :
     LookupE envs (ctx_item K) (focustype K) (focustype K) := λ Γs Ek τlr,
   let '(Γ,Δ,τs) := Γs in
@@ -267,8 +278,6 @@ Hint Resolve (mapM_type_check_sound (V:=val K)).
 Hint Immediate (path_type_check_sound (R:=ref_seg _)).
 Hint Immediate (path_type_check_sound (R:=ref _)).
 Hint Immediate unop_type_of_sound binop_type_of_sound.
-Arguments rettype_match _ _ _ : simpl never.
-Arguments rettype_match_dec _ _ _ _ : simpl never.
 Lemma assign_type_of_sound ass τ1 τ2 σ :
   assign_type_of τ1 τ2 ass = Some σ → assign_typed τ1 τ2 ass σ.
 Proof.
@@ -343,6 +352,15 @@ Proof.
       erewrite ?path_type_check_complete by eauto; eauto.
 Qed.
 Hint Immediate (path_type_check_sound (R:=ectx _)).
+Lemma rettype_union_alt_sound mσ1 mσ2 mσ :
+  rettype_union_alt mσ1 mσ2 = Some mσ → rettype_union mσ1 mσ2 mσ.
+Proof.
+  destruct mσ1, mσ2; intros; simplify_option_equality; constructor; eauto.
+Qed.
+Hint Immediate rettype_union_alt_sound.
+Lemma rettype_union_alt_complete mσ1 mσ2 mσ :
+  rettype_union mσ1 mσ2 mσ → rettype_union_alt mσ1 mσ2 = Some mσ.
+Proof. destruct 1 as [[]| |]; simplify_option_equality; eauto. Qed.
 Global Instance:
   TypeCheckSpec envs (rettype K) (stmt K) (✓ ∘ fst ∘ fst).
 Proof.
@@ -350,7 +368,7 @@ Proof.
   * revert τs mcτ.
     induction s; intros; simplify; typed_constructor; naive_solver.
   * induction 1; simplify_option_equality;
-      erewrite ?type_check_complete by eauto; eauto.
+      erewrite ?rettype_union_alt_complete,?type_check_complete by eauto; eauto.
 Qed.
 Hint Resolve (type_check_sound (V:=stmt K)).
 Global Instance: PathTypeCheckSpec envs
@@ -359,7 +377,8 @@ Proof.
   intros [[Γ Δ] τs] Ee τlr; simpl; split.
   * destruct τlr, Ee; intros; simplify; typed_constructor; eauto.
   * destruct 1; simplify_option_equality;
-      erewrite ?type_check_complete by eauto; simplify_option_equality; eauto.
+      erewrite ?type_check_complete by eauto; simplify_option_equality;
+      erewrite ?rettype_union_alt_complete by eauto; eauto.
 Qed.
 Hint Immediate (path_type_check_sound (R:=esctx_item _)).
 Global Instance: PathTypeCheckSpec envs
@@ -368,7 +387,8 @@ Proof.
   intros [[Γ Δ] τs] Es mcτ; simpl; split.
   * destruct mcτ, Es; intros; simplify; typed_constructor; eauto.
   * destruct 1; simplify_option_equality;
-      erewrite ?type_check_complete by eauto; simplify_option_equality; eauto.
+      erewrite ?type_check_complete by eauto; simplify_option_equality;
+      erewrite ?rettype_union_alt_complete by eauto; eauto.
 Qed.
 Hint Immediate (path_type_check_sound (R:=sctx_item _)).
 Global Instance: PathTypeCheckSpec envs

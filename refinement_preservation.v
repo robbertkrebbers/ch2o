@@ -192,6 +192,8 @@ Qed.
 Ltac invert :=
   repeat match goal with
   | _ => progress simplify_equality'
+  | H : rettype_match _ _ |- _ => apply rettype_match_false_inv in H; subst
+  | H : rettype_match _ _ |- _ => apply rettype_match_Some_inv in H; subst
   | H : _ ∈ labels _ |- _ => erewrite <-stmt_refine_labels in H by eauto
   | H : _ ∉ labels _ |- _ => erewrite <-stmt_refine_labels in H by eauto
   | H : _ ⊑{_,_,_@_↦_}* #{_}* _ :* _ |- _ =>
@@ -312,12 +314,12 @@ Proof.
       eauto using eq_sym, Nat.eq_le_incl, Forall3_length_lr).
     eauto 7 using stmt_refine_weaken, mem_alloc_list_refine',
       mem_alloc_list_forward, mem_allocable_list_fresh, fresh_list_length.
-  * intros m k h oσs s ????; invert; case_match; intuition simplify_equality';
-      go f; rewrite !fst_zip by solve_length;
+  * intros m k h oσs s ????; invert.
+    go f; rewrite !fst_zip by solve_length;
       repeat refine_constructor; eauto using ctx_refine_weaken,
       mem_foldr_free_forward, mem_foldr_free_refine.
-  * intros m k h oσs s ????; invert; case_match; intuition simplify_equality';
-      go f; rewrite !fst_zip by solve_length;
+  * intros m k h oσs s ????; invert.
+    go f; rewrite !fst_zip by solve_length;
       repeat refine_constructor; eauto using ctx_refine_weaken,
       val_refine_weaken, mem_foldr_free_forward, mem_foldr_free_refine.
   * intros; invert. go f.

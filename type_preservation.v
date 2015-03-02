@@ -179,17 +179,16 @@ Proof.
       repeat typed_constructor; eauto using ctx_typed_weaken.
     rewrite snd_zip by (erewrite <-Forall2_length by eauto; lia).
     eauto using stmt_typed_weaken.
-  * intros m k g oσs s (τf&HS&?&?) ?. typed_inversion_all.
-    split; eauto using mem_foldr_free_forward.
-    case_match; intuition simplify_equality;
-      eexists; simpl; split_ands; repeat typed_constructor; eauto using
-      ctx_typed_weaken, mem_foldr_free_forward, mem_foldr_free_valid.
+  * intros m k g oσs s (τf&HS&?&?) ?.
+    typed_inversion_all; match goal with
+    | H : rettype_match _ _ |- _ => apply rettype_match_false_inv in H; subst
+    end; eauto 10 using mem_foldr_free_forward, ctx_typed_weaken,
+      mem_foldr_free_forward, mem_foldr_free_valid.
   * intros m k g oσs v s (τf&HS&?&?) ?; typed_inversion_all.
-    split; eauto using mem_foldr_free_forward.
-    case_match; intuition simplify_equality;
-      eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using ctx_typed_weaken, mem_foldr_free_forward,
-      mem_foldr_free_valid, val_typed_weaken.
+    typed_inversion_all; match goal with
+    | H : rettype_match _ _ |- _ => apply rettype_match_Some_inv in H; subst
+    end; eauto 10 using mem_foldr_free_forward, ctx_typed_weaken,
+      mem_foldr_free_forward, mem_foldr_free_valid, val_typed_weaken.
   * intros m k g E v (τf&HS&?&?) ?; typed_inversion_all; split; auto.
     eauto 10 using ectx_subst_typed, lockset_empty_valid.
   * intros m k l (τf&HS&?&?) ?; typed_inversion_all; auto.
