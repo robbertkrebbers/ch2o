@@ -161,15 +161,6 @@ Instance stmt_labels {K} : Labels (stmt K) :=
   | catch s | local{_} s | loop s => labels s
   | s1 ;; s2 | if{_} s1 else s2 => labels s1 ∪ labels s2
   end.
-Instance stmt_locks {K} : Locks (stmt K) :=
-  fix go s := let _ : Locks _ := @go in
-  match s with
-  | ! e | ret e => locks e
-  | skip | throw _ | goto _ | label _=> ∅
-  | catch s | local{_} s | loop s => locks s
-  | s1 ;; s2 => locks s1 ∪ locks s2
-  | if{e} s1 else s2 => locks e ∪ locks s1 ∪ locks s2
-  end.
 Fixpoint throws_valid {K} (n : nat) (s : stmt K) : Prop :=
   match s with
   | !_ | ret _ | skip | goto _ | label _ => True
@@ -249,12 +240,6 @@ Instance sctx_item_labels {K} : Labels (sctx_item K) := λ Es,
   | catch □ | loop □ => ∅
   | s ;; □ | □ ;; s | if{_} □ else s | if{_} s else □ => labels s
   end.
-Instance sctx_item_locks {K} : Locks (sctx_item K) := λ Es,
-  match Es with
-  | □ ;; s | s ;; □ => locks s
-  | catch □ | loop □ => ∅
-  | if{e} □ else s | if{e} s else □ => locks e ∪ locks s
-  end.
 
 Lemma sctx_item_subst_gotos {K} (Es : sctx_item K) (s : stmt K) :
   gotos (subst Es s) = gotos Es ∪ gotos s.
@@ -262,9 +247,6 @@ Proof. apply elem_of_equiv_L. intros. destruct Es; solve_elem_of. Qed.
 Lemma sctx_item_subst_labels {K} (Es : sctx_item K) (s : stmt K) :
   labels (subst Es s) = labels Es ∪ labels s.
 Proof. apply elem_of_equiv_L. intros. destruct Es; solve_elem_of. Qed.
-Lemma sctx_item_subst_locks {K} (Es : sctx_item K) (s : stmt K) :
-  locks (subst Es s) = locks Es ∪ locks s.
-Proof. apply elem_of_equiv_L. destruct Es; esolve_elem_of. Qed.
 
 (** Next, we define the data type [esctx_item] of expression in statement
 contexts. These contexts are used to store the statement to which an expression
@@ -308,11 +290,6 @@ Instance esctx_item_labels {K} : Labels (esctx_item K) := λ Ee,
   | ! □ | ret □ => ∅
   | if{□} s1 else s2 => labels s1 ∪ labels s2
   end.
-Instance esctx_item_locks {K} : Locks (esctx_item K) := λ Ee,
-  match Ee with
-  | ! □  | ret □ => ∅
-  | if{□} s1 else s2 => locks s1 ∪ locks s2
-  end.
 
 Lemma esctx_item_subst_gotos {K} (Ee : esctx_item K) (e : expr K) :
   gotos (subst Ee e) = gotos Ee.
@@ -320,9 +297,6 @@ Proof. apply elem_of_equiv_L. intros. destruct Ee; solve_elem_of. Qed.
 Lemma esctx_item_subst_labels {K} (Ee : esctx_item K) (e : expr K) :
   labels (subst Ee e) = labels Ee.
 Proof. apply elem_of_equiv_L. intros. destruct Ee; solve_elem_of. Qed.
-Lemma esctx_item_subst_locks {K} (Ee : esctx_item K) (e : expr K) :
-  locks (subst Ee e) = locks Ee ∪ locks e.
-Proof. apply elem_of_equiv_L. destruct Ee; esolve_elem_of. Qed.
 
 (** Finally, we define the type [ctx_item] to extends [sctx_item] with some
 additional singular contexts. These contexts will be used as follows.
@@ -360,14 +334,6 @@ Arguments CParams {_} _ _.
 Instance ctx_item_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (Ek1 Ek2 : ctx_item K) : Decision (Ek1 = Ek2).
 Proof. solve_decision. Defined.
-
-Instance ctx_item_locks {K} : Locks (ctx_item K) := λ Ek,
-  match Ek with
-  | CStmt Es => locks Es
-  | CExpr e Ee => locks e ∪ locks Ee
-  | CFun E => locks E
-  | _ => ∅
-  end.
 
 (** Given a context, we can construct a stack using the following erasure
 function. We define [locals (CFun _ :: k)] as [[]] instead of [locals k],

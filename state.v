@@ -123,8 +123,6 @@ Proof. solve_decision. Defined.
 Instance state_eq_dec {K : Set} `{Env K}
   (S1 S2 : state K) : Decision (S1 = S2).
 Proof. solve_decision. Defined.
-Instance focus_locks {K} : Locks (focus K) := λ φ,
-  match φ with Stmt _ s => locks s | Expr e => locks e | _ => ∅ end.
 
 Instance maybe_Call {K} : Maybe2 (@Call K) := λ S,
   match S with Call f vs => Some (f,vs) | _ => None end.
