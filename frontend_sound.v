@@ -160,8 +160,7 @@ Record frontend_state_valid' (S : frontend_state K) := {
   to_env_included :
     map_Forall (λ t d,
       match d with
-      | CompoundType _ xτs => to_env S !! t = Some (xτs.*2)
-      | _ => True
+      | Compound _ xτs => to_env S !! t = Some (xτs.*2) | _ => True
       end) (to_compounds S);
   to_funs_included :
     map_Forall (λ (f : funname) τsτ, ∃ sto ms,
@@ -235,8 +234,8 @@ Hint Extern 1 (map_included global_decl_forward ?S ?S) => reflexivity.
 Definition local_decl_valid (S : frontend_state K)
     (x : string) (d : local_decl K) :=
   match d with
-  | Static (inl (o,τ)) => '{to_mem S} ⊢ o : τ
-  | Static (inr (τs,τ)) => to_env S !! (x : funname) = Some (τs,τ)
+  | Extern (inl (o,τ)) => '{to_mem S} ⊢ o : τ
+  | Extern (inr (τs,τ)) => to_env S !! (x : funname) = Some (τs,τ)
   | Local τ => ✓{to_env S} τ
   | TypeDef τp => ✓{to_env S} τp
   end.
@@ -296,7 +295,7 @@ Proof.
   destruct (to_compounds S !! _) as [[c xτs|]|] eqn:?; error_proceed.
   destruct (list_find _ _) as [[? [y ?]]|] eqn:?; error_proceed.
   destruct (list_find_Some ((x =) ∘ fst) xτs i (y,τ)) as [Hi ->]; auto.
-  feed pose proof (HΓn t (CompoundType c xτs)); auto; simplify_equality'.
+  feed pose proof (HΓn t (Compound c xτs)); auto; simplify_equality'.
   exists (xτs.*2); split_ands; auto. by rewrite list_lookup_fmap, Hi.
 Qed.
 Lemma lookup_local_var_typed S τs Δl x e τe :
@@ -797,7 +796,7 @@ Qed.
 Lemma alloc_global_typed S S' Δl x sto cτ mci d :
   alloc_global Δl x sto cτ mci S = mret d S' →
   ✓ S → local_env_valid S Δl →
-  local_decl_valid S' x (Static d) ∧ ✓ S' ∧ S ⊆ S'.
+  local_decl_valid S' x (Extern d) ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
   unfold alloc_global; generalize_errors; intros; error_proceed τ' as S2.
   destruct (to_type_valid S S2 Δl to_Ptr cτ τ') as (?&?&?); auto; weaken.
@@ -841,7 +840,7 @@ Proof.
   { error_proceed ? as S3; error_proceed v as S4; error_proceed [] as S5.
     destruct (insert_object_valid S2 S3 o (val_new (to_env S2) τ) perm_full τ)
       as (?&?&?&?&?); auto using val_new_typed; weaken.
-    destruct (to_init_val_typed S3 S4 (Some (x, Static (inl (o,τ))) :: Δl)
+    destruct (to_init_val_typed S3 S4 (Some (x, Extern (inl (o,τ))) :: Δl)
       τ ci v) as (?&?&?); auto; weaken.
     destruct (update_object_valid S4 S' o perm_full v τ); weaken; auto 10. }
   error_proceed o' as S3.

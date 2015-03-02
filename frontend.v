@@ -89,15 +89,15 @@ Inductive decl : Set :=
   | GlobDecl : list cstorage → ctype → option cinit → decl
   | FunDecl : list cstorage → ctype → cstmt → decl.
 
-Inductive compound_type (K : Set) : Set :=
-  | CompoundType : compound_kind → list (string * type K) → compound_type K
-  | EnumType : int_type K → compound_type K.
-Arguments CompoundType {_} _ _.
-Arguments EnumType {_} _.
-Instance maybe_CompoundType {K} : Maybe2 (@CompoundType K) := λ t,
-  match t with CompoundType c xs => Some (c,xs) | _ => None end.
-Instance maybe_EnumType {K} : Maybe (@EnumType K) := λ t,
-  match t with EnumType τi => Some τi | _ => None end.
+Inductive type_decl (K : Set) : Set :=
+  | Compound : compound_kind → list (string * type K) → type_decl K
+  | Enum : int_type K → type_decl K.
+Arguments Compound {_} _ _.
+Arguments Enum {_} _.
+Instance maybe_Compound {K} : Maybe2 (@Compound K) := λ t,
+  match t with Compound c xs => Some (c,xs) | _ => None end.
+Instance maybe_Enum {K} : Maybe (@Enum K) := λ t,
+  match t with Enum τi => Some τi | _ => None end.
 
 Inductive global_decl (K : Set): Set :=
   | Global : cstorage → index → type K → bool → global_decl K
@@ -114,10 +114,10 @@ Instance maybe_GlobalTypeDef {K} : Maybe (@GlobalTypeDef K) := λ d,
   match d with GlobalTypeDef τ => Some τ | _ => None end.
 
 Inductive local_decl (K : Set) : Set :=
-  | Static : (index * type K + list (type K) * type K) → local_decl K
+  | Extern : (index * type K + list (type K) * type K) → local_decl K
   | Local : type K → local_decl K
   | TypeDef : ptr_type K → local_decl K.
-Arguments Static {_} _.
+Arguments Extern {_} _.
 Arguments Local {_} _.
 Arguments TypeDef {_} _.
 Instance maybe_TypeDef {K} : Maybe (@TypeDef K) := λ d,
@@ -126,7 +126,7 @@ Instance maybe_TypeDef {K} : Maybe (@TypeDef K) := λ d,
 Notation local_env K := (list (option (string * local_decl K))).
 
 Record frontend_state (K : Set) : Set := FState {
-  to_compounds : tagmap (compound_type K);
+  to_compounds : tagmap (type_decl K);
   to_env : env K;
   to_mem : mem K;
   to_globals : stringmap (global_decl K)
@@ -174,7 +174,7 @@ Definition lookup_compound (t : tag) (x : string) : M (nat * type K) :=
   Γn ← gets to_compounds;
   d ← error_of_option (Γn !! t)
     ("struct/union `" +:+ t +:+ "` undeclared");
-  '(_,xτs) ← error_of_option (maybe2 CompoundType d)
+  '(_,xτs) ← error_of_option (maybe2 Compound d)
     ("struct/union `" +:+ t +:+ "` instead of enum expected");
   '(i,xτ) ← error_of_option (list_find ((x =) ∘ fst) xτs)
     ("struct/union `" +:+ t +:+ "` does not have index `" +:+ x +:+ "`");
@@ -190,10 +190,10 @@ Fixpoint lookup_local_var (Δl : local_env K)
     (x : string) (i : nat) : option (expr K * expr_type K) :=
   match Δl with
   | [] => None
-  | Some (y, Static (inl (o,τ))) :: Δl =>
+  | Some (y, Extern (inl (o,τ))) :: Δl =>
      if decide (x = y) then Some (% (addr_top o τ), LT τ)
      else lookup_local_var Δl x i
-  | Some (y, Static (inr (τs,τ))) :: Δl =>
+  | Some (y, Extern (inr (τs,τ))) :: Δl =>
      if decide (x = y) then Some (# ptrV (FunPtr x τs τ), FT τs τ)
      else lookup_local_var Δl x i
   | Some (y, Local τ) :: Δl =>
@@ -377,10 +377,10 @@ Definition insert_compound (c : compound_kind) (t : tag)
     (xτs : list (string * type K)) : M () :=
   modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in
-    FState (<[t:=CompoundType c xτs]>Γn) (<[t:=xτs.*2]>Γ) m Δg).
+    FState (<[t:=Compound c xτs]>Γn) (<[t:=xτs.*2]>Γ) m Δg).
 Definition insert_enum (t : tag) (τi : int_type K) : M () :=
   modify (λ S : frontend_state K,
-    let (Γn,Γ,m,Δg) := S in FState (<[t:=EnumType τi]>Γn) Γ m Δg).
+    let (Γn,Γ,m,Δg) := S in FState (<[t:=Enum τi]>Γn) Γ m Δg).
 
 Definition first_init_ref (Γ : env K)
     (τ : type K) : option (ref K * type K) :=
@@ -692,7 +692,7 @@ with to_type `{Env K} (k : to_type_kind)
   | CTEnum x =>
      let t : tag := x in
      Γn ← gets to_compounds;
-     τi ← error_of_option (Γn !! t ≫= maybe EnumType)
+     τi ← error_of_option (Γn !! t ≫= maybe Enum)
        ("enum `" +:+ x +:+ "` not found");
      to_type_ret (intT τi)
   | CTInt cτi => to_type_ret (intT (to_inttype cτi))
@@ -815,7 +815,7 @@ Definition alloc_static (Δl : local_env K) (x : string) (cτ : ctype)
   match mci with
   | Some ci =>
      o ← insert_object perm_full (val_new Γ τ);
-     v ← to_init_val (Some (x,Static (inl (o,τ))) :: Δl) τ ci;
+     v ← to_init_val (Some (x, Extern (inl (o,τ))) :: Δl) τ ci;
      _ ← update_object o perm_full v;
      mret (o, τ)
   | None => (,τ) <$> insert_object perm_full (val_0 Γ τ)
@@ -847,12 +847,12 @@ Definition to_stmt (τret : type K) :
      match to_storage stos with
      | Some StaticStorage =>
         '(o,τ) ← alloc_static Δl x cτ mce;
-        go (Some (x, Static (inl (o,τ))) :: Δl) cs
+        go (Some (x, Extern (inl (o,τ))) :: Δl) cs
      | Some ExternStorage =>
         guard (mce = None) with ("block scope variable `" +:+ x +:+
           "` has both `extern` and an initializer");
         decl ← alloc_global Δl x ExternStorage cτ None;
-        go (Some (x,Static decl) :: Δl) cs
+        go (Some (x, Extern decl) :: Δl) cs
      | Some AutoStorage =>
         τ ← to_type to_Type Δl cτ;
         guard (τ ≠ voidT) with
