@@ -27,4 +27,4 @@ _build/
 ch2o
 *.native
 *.byte
-
+a.out
