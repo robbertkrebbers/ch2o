@@ -4,20 +4,21 @@ Require Export type_environment.
 Require Import finite natural_type_environment.
 
 Inductive c_rank :=
-  CharRank | ShortRank | IntRank | LongRank | LongLongRank.
+  CharRank | ShortRank | IntRank | LongRank | LongLongRank | PtrRank.
 Instance c_rank_subseteq : SubsetEq c_rank := λ k1 k2,
   match k1, k2 return bool with
   | CharRank, _ => true
-  | ShortRank, (ShortRank | IntRank | LongRank | LongLongRank) => true
-  | IntRank, (IntRank | LongRank | LongLongRank) => true
-  | LongRank, (LongRank | LongLongRank) => true
+  | ShortRank, (ShortRank | IntRank | LongRank | PtrRank | LongLongRank) => true
+  | IntRank, (IntRank | LongRank | PtrRank | LongLongRank) => true
+  | LongRank, (LongRank | PtrRank | LongLongRank) => true
+  | PtrRank, (PtrRank | LongLongRank) => true
   | LongLongRank, LongLongRank => true
   | _, _ => false
   end.
 Instance c_rank_eq_dec (k1 k2 : c_rank) : Decision (k1 = k2).
 Proof. solve_decision. Defined.
 Program Instance c_rank_finite : Finite c_rank := {
-  enum := [ CharRank ; ShortRank ; IntRank ; LongRank ; LongLongRank ]
+  enum := [ CharRank ; ShortRank ; IntRank ; LongRank ; LongLongRank ; PtrRank ]
 }.
 Next Obligation. by apply (bool_decide_unpack _). Qed.
 Next Obligation. by intros []; apply (bool_decide_unpack _). Qed.
@@ -30,7 +31,6 @@ Record architecture_sizes := ArchitectureSizes {
   arch_char_bits : nat;
   arch_size : c_rank → nat; (* size in bytes *)
   arch_align : c_rank → nat; (* align in bytes *)
-  arch_ptr_rank : c_rank;
   arch_char_bits_ge_8 : 8 ≤ arch_char_bits;
   arch_size_char : arch_size CharRank = 1;
   arch_size_preserving k1 k2 : k1 ⊆ k2 → arch_size k1 ≤ arch_size k2;
@@ -63,7 +63,7 @@ Instance arch_int_coding: IntCoding (arch_rank A) := {
   int_rank := ARank IntRank;
   long_rank := ARank LongRank;
   longlong_rank := ARank LongLongRank;
-  ptr_rank := ARank (arch_ptr_rank A);
+  ptr_rank := ARank PtrRank;
   char_bits := arch_char_bits A;
   rank_size := arch_size A;
   rank_subseteq k1 k2 := (k1:c_rank) ⊆ (k2:c_rank);
@@ -132,7 +132,7 @@ Let align_base (τb : base_type (arch_rank A)) : nat :=
   match τb with
   | voidT => 1
   | intT τi => arch_align A (rank τi)
-  | τp.* => arch_align A (arch_ptr_rank A)
+  | τp.* => arch_align A (@ARank A PtrRank)
   end%BT.
 Global Instance arch_env : Env (arch_rank A) :=
   natural_env ptr_size align_base (arch_alloc_can_fail A).
