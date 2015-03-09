@@ -328,13 +328,13 @@ Definition to_limit_const (τ : type K) (li : climit) : M (Z * int_type K) :=
   | CESizeOf =>
      guard (τ ≠ voidT) with "sizeof of void type";
      Γ ← gets to_env; let sz := size_of Γ τ in
-     guard (int_typed sz sptrT) with "argument of sizeof not in range";
-     mret (Z.of_nat sz, sptrT%IT)
+     guard (int_typed sz uptrT) with "argument of sizeof not in range";
+     mret (Z.of_nat sz, uptrT%IT)
   | CEAlignOf =>
      guard (τ ≠ voidT) with "alignof of void type";
      Γ ← gets to_env; let sz := align_of Γ τ in
-     guard (int_typed sz sptrT) with "argument of sizeof not in range";
-     mret (Z.of_nat sz, sptrT%IT)
+     guard (int_typed sz uptrT) with "argument of sizeof not in range";
+     mret (Z.of_nat sz, uptrT%IT)
   | CEOffsetOf x =>
      '(c,t) ← error_of_option (maybe2 TCompound τ)
        "argument of offsetof not of struct type";
@@ -343,8 +343,8 @@ Definition to_limit_const (τ : type K) (li : climit) : M (Z * int_type K) :=
      Γ ← gets to_env;
      τs ← error_of_option (Γ !! t) "argument of offsetof incomplete";
      let off := offset_of Γ τs i in
-     guard (int_typed off sptrT) with "argument of offsetof not in range";
-     mret (Z.of_nat off, sptrT%IT)
+     guard (int_typed off uptrT) with "argument of offsetof not in range";
+     mret (Z.of_nat off, uptrT%IT)
   | CEMin =>
      τi ← error_of_option (maybe (TBase ∘ TInt) τ) "min of non integer type";
      mret (int_lower τi, τi)
