@@ -84,13 +84,13 @@ Inductive expr_typed' (Γ : env K) (Δ : memenv K)
      binop_typed op τ1 τ2 σ → expr_typed' Γ Δ τs e1 (inr τ1) →
      expr_typed' Γ Δ τs e2 (inr τ2) →
      expr_typed' Γ Δ τs (e1 @{op} e2) (inr σ)
-  | EIf_typed e1 e2 e3 τb σ :
+  | EIf_typed e1 e2 e3 τb σlr :
      expr_typed' Γ Δ τs e1 (inr (baseT τb)) →
-     expr_typed' Γ Δ τs e2 (inr σ) → expr_typed' Γ Δ τs e3 (inr σ) →
-     expr_typed' Γ Δ τs (if{e1} e2 else e3) (inr σ)
-  | EComma_typed e1 e2 τ1 τ2 :
-     expr_typed' Γ Δ τs e1 (inr τ1) → expr_typed' Γ Δ τs e2 (inr τ2) →
-     expr_typed' Γ Δ τs (e1 ,, e2) (inr τ2)
+     expr_typed' Γ Δ τs e2 σlr → expr_typed' Γ Δ τs e3 σlr →
+     expr_typed' Γ Δ τs (if{e1} e2 else e3) σlr
+  | EComma_typed e1 e2 τlr1 τlr2 :
+     expr_typed' Γ Δ τs e1 τlr1 → expr_typed' Γ Δ τs e2 τlr2 →
+     expr_typed' Γ Δ τs (e1 ,, e2) τlr2
   | ECast_typed e τ σ :
      expr_typed' Γ Δ τs e (inr τ) → cast_typed τ σ → ✓{Γ} σ →
      expr_typed' Γ Δ τs (cast{σ} e) (inr σ)
@@ -136,13 +136,13 @@ Section expr_typed_ind.
   Context (Pbinop : ∀ op e1 e2 τ1 τ2 σ,
     binop_typed op τ1 τ2 σ → (Γ,Δ,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
     (Γ,Δ,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 @{op} e2) (inr σ)).
-  Context (Pif : ∀ e1 e2 e3 τb σ,
+  Context (Pif : ∀ e1 e2 e3 τb σlr,
     (Γ,Δ,τs) ⊢ e1 : inr (baseT τb) → P e1 (inr (baseT τb)) →
-    (Γ,Δ,τs) ⊢ e2 : inr σ → P e2 (inr σ) →
-    (Γ,Δ,τs) ⊢ e3 : inr σ → P e3 (inr σ) → P (if{e1} e2 else e3) (inr σ)).
-  Context (Pcomma : ∀ e1 e2 τ1 τ2,
-    (Γ,Δ,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
-    (Γ,Δ,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ,, e2) (inr τ2)).
+    (Γ,Δ,τs) ⊢ e2 : σlr → P e2 σlr →
+    (Γ,Δ,τs) ⊢ e3 : σlr → P e3 σlr → P (if{e1} e2 else e3) σlr).
+  Context (Pcomma : ∀ e1 e2 τlr1 τlr2,
+    (Γ,Δ,τs) ⊢ e1 : τlr1 → P e1 τlr1 →
+    (Γ,Δ,τs) ⊢ e2 : τlr2 → P e2 τlr2 → P (e1 ,, e2) τlr2).
   Context (Pcast : ∀ e τ σ,
     (Γ,Δ,τs) ⊢ e : inr τ → P e (inr τ) → cast_typed τ σ → ✓{Γ} σ →
     P (cast{σ} e) (inr σ)).
@@ -190,12 +190,11 @@ Inductive ectx_item_typed' (Γ : env K) (Δ : memenv K)
   | CBinOpR_typed op e1 τ1 τ2 σ :
      binop_typed op τ1 τ2 σ → (Γ,Δ,τs) ⊢ e1 : inr τ1 →
      ectx_item_typed' Γ Δ τs (e1 @{op} □) (inr τ2) (inr σ)
-  | CIf_typed e2 e3 τb σ :
-     (Γ,Δ,τs) ⊢ e2 : inr σ → (Γ,Δ,τs) ⊢ e3 : inr σ →
-     ectx_item_typed' Γ Δ τs (if{□} e2 else e3) (inr (baseT τb)) (inr σ)
-  | CComma_typed e2 τ1 τ2 :
-     (Γ,Δ,τs) ⊢ e2 : inr τ2 →
-     ectx_item_typed' Γ Δ τs (□ ,, e2) (inr τ1) (inr τ2)
+  | CIf_typed e2 e3 τb σlr :
+     (Γ,Δ,τs) ⊢ e2 : σlr → (Γ,Δ,τs) ⊢ e3 : σlr →
+     ectx_item_typed' Γ Δ τs (if{□} e2 else e3) (inr (baseT τb)) σlr
+  | CComma_typed e2 τlr1 τlr2 :
+     (Γ,Δ,τs) ⊢ e2 : τlr2 → ectx_item_typed' Γ Δ τs (□ ,, e2) τlr1 τlr2
   | CCast_typed τ σ :
      cast_typed τ σ → ✓{Γ} σ →
      ectx_item_typed' Γ Δ τs (cast{σ} □) (inr τ) (inr σ)

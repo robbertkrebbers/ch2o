@@ -416,7 +416,6 @@ first place. *)
 Inductive is_pure {K} : expr K → Prop :=
   | EVar_pure x : is_pure (var x)
   | EVal_pure v : is_pure (%# v)
-  | EAddr_pure a : is_pure (% a)
   | ERtoL_pure e : is_pure e → is_pure (.* e)
   | ERofL_pure e : is_pure e → is_pure (& e)
   | EEltR_pure e rs : is_pure e → is_pure (e %> rs)

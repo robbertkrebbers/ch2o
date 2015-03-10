@@ -73,16 +73,16 @@ Inductive expr_refine' (Γ : env K)
      binop_typed op τ τ' σ → expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr τ) →
      expr_refine' Γ τs α f Δ1 Δ2 e1' e2' (inr τ') →
      expr_refine' Γ τs α f Δ1 Δ2 (e1 @{op} e1') (e2 @{op} e2') (inr σ)
-  | EIf_refine e1 e2 e1' e2' e1'' e2'' τb σ :
+  | EIf_refine e1 e2 e1' e2' e1'' e2'' τb σlr :
      expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr (baseT τb)) →
-     expr_refine' Γ τs α f Δ1 Δ2 e1' e2' (inr σ) →
-     expr_refine' Γ τs α f Δ1 Δ2 e1'' e2'' (inr σ) →
+     expr_refine' Γ τs α f Δ1 Δ2 e1' e2' σlr →
+     expr_refine' Γ τs α f Δ1 Δ2 e1'' e2'' σlr →
      expr_refine' Γ τs α f Δ1 Δ2
-       (if{e1} e1' else e1'') (if{e2} e2' else e2'') (inr σ)
-  | EComma_refine e1 e2 e1' e2' τ1 τ2 :
-     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr τ1) →
-     expr_refine' Γ τs α f Δ1 Δ2 e1' e2' (inr τ2) →
-     expr_refine' Γ τs α f Δ1 Δ2 (e1 ,, e1') (e2 ,, e2') (inr τ2)
+       (if{e1} e1' else e1'') (if{e2} e2' else e2'') σlr
+  | EComma_refine e1 e2 e1' e2' τlr1 τlr2 :
+     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 τlr1 →
+     expr_refine' Γ τs α f Δ1 Δ2 e1' e2' τlr2 →
+     expr_refine' Γ τs α f Δ1 Δ2 (e1 ,, e1') (e2 ,, e2') τlr2
   | ECast_refine e1 e2 τ σ :
      expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr τ) → cast_typed τ σ → ✓{Γ} σ →
      expr_refine' Γ τs α f Δ1 Δ2 (cast{σ} e1) (cast{σ} e2) (inr σ)
@@ -144,15 +144,15 @@ Section expr_refine_ind.
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ → P e1 e2 (inr τ) →
     e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' → P e1' e2' (inr τ') →
     P (e1 @{op} e1') (e2 @{op} e2') (inr σ)).
-  Context (Pif : ∀ e1 e2 e1' e2' e1'' e2'' τb σ,
+  Context (Pif : ∀ e1 e2 e1' e2' e1'' e2'' τb σlr,
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (baseT τb) → P e1 e2 (inr (baseT τb)) →
-    e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr σ → P e1' e2' (inr σ) →
-    e1'' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2'' : inr σ → P e1'' e2'' (inr σ) →
-    P (if{e1} e1' else e1'') (if{e2} e2' else e2'') (inr σ)).
-  Context (Pcomma : ∀ e1 e2 e1' e2' τ τ',
-    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ → P e1 e2 (inr τ) →
-    e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' → P e1' e2' (inr τ') →
-    P (e1 ,, e1') (e2 ,, e2') (inr τ')).
+    e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : σlr → P e1' e2' σlr →
+    e1'' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2'' : σlr → P e1'' e2'' σlr →
+    P (if{e1} e1' else e1'') (if{e2} e2' else e2'') σlr).
+  Context (Pcomma : ∀ e1 e2 e1' e2' τlr τlr',
+    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : τlr → P e1 e2 τlr →
+    e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : τlr' → P e1' e2' τlr' →
+    P (e1 ,, e1') (e2 ,, e2') τlr').
   Context (Pcast : ∀ e1 e2 τ σ,
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ → P e1 e2 (inr τ) →
     cast_typed τ σ → ✓{Γ} σ → P (cast{σ} e1) (cast{σ} e2) (inr σ)).
@@ -216,14 +216,14 @@ Inductive ectx_item_refine' (Γ : env K) (τs: list (type K))
      binop_typed op τ τ' σ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ →
      ectx_item_refine' Γ τs α f Δ1 Δ2
        (e1 @{op} □) (e2 @{op} □) (inr τ') (inr σ)
-  | CIf_refine e1' e2' e1'' e2'' τb σ :
-     e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr σ →
-     e1'' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2'' : inr σ →
+  | CIf_refine e1' e2' e1'' e2'' τb σlr :
+     e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : σlr →
+     e1'' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2'' : σlr →
      ectx_item_refine' Γ τs α f Δ1 Δ2
-       (if{□} e1' else e1'') (if{□} e2' else e2'') (inr (baseT τb)) (inr σ)
-  | CComma_refine e1' e2' τ τ' :
-     e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' →
-     ectx_item_refine' Γ τs α f Δ1 Δ2 (□,, e1') (□,, e2') (inr τ) (inr τ')
+       (if{□} e1' else e1'') (if{□} e2' else e2'') (inr (baseT τb)) σlr
+  | CComma_refine e1' e2' τlr τlr' :
+     e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : τlr' →
+     ectx_item_refine' Γ τs α f Δ1 Δ2 (□,, e1') (□,, e2') τlr τlr'
   | CCast_refine τ σ :
      cast_typed τ σ → ✓{Γ} σ → ectx_item_refine' Γ τs α f Δ1 Δ2
        (cast{σ} □) (cast{σ} □) (inr τ) (inr σ)

@@ -79,8 +79,8 @@ Inductive ehstep `{Env K} (Γ : env K) (ρ : stack K) :
   | ehstep_if_false m Ω v e1 e2 :
      val_false v →
      Γ\ ρ ⊢ₕ if{#{Ω} v} e1 else e2, m ⇒ e2, mem_unlock Ω m
-  | ehstep_comma m Ω v e2 :
-     Γ\ ρ ⊢ₕ #{Ω} v,,e2, m ⇒ e2, mem_unlock Ω m
+  | ehstep_comma m Ω ν e2 :
+     Γ\ ρ ⊢ₕ %#{Ω} ν,,e2, m ⇒ e2, mem_unlock Ω m
   | ehstep_cast m τ Ω v :
      val_cast_ok Γ m (TType τ) v →
      Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} (val_cast (TType τ) v), m
@@ -703,9 +703,9 @@ Qed.
 Lemma ehstep_pure_mem ρ e1 m1 e2 m2 :
   Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → is_pure e1 → m1 = m2.
 Proof.
-  destruct 1; inversion 1;
+  destruct 1; inversion 1; subst;
     repeat match goal with
-    | H : is_pure (#{_} _) |- _ =>
+    | H : is_pure (%#{_} _) |- _ =>
       apply is_pure_locks in H; simpl in H; rewrite H
     end; auto using mem_unlock_empty.
 Qed.
@@ -726,7 +726,7 @@ Proof. rewrite <-(mem_unlock_empty m) at 3. by constructor. Qed.
 Lemma ehstep_if_false_no_locks ρ v e2 e3 m :
   val_false v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e3, m.
 Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
-Lemma ehstep_comma_no_locks ρ m v e2 : Γ\ ρ ⊢ₕ # v ,, e2, m ⇒ e2, m.
+Lemma ehstep_comma_no_locks ρ m ν e2 : Γ\ ρ ⊢ₕ %# ν ,, e2, m ⇒ e2, m.
 Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
 Lemma assign_sem_deterministic m a v ass v1 v2 va1 va2 :
   assign_sem Γ m a v ass v1 va1 → assign_sem Γ m a v ass v2 va2 →

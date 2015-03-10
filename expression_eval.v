@@ -71,8 +71,7 @@ Fixpoint expr_eval `{Env K} (e : expr K) (Γ : env K)
      | inright _ => None
      end
   | e1 ,, e2 =>
-     _ ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe inr;
-     ⟦ e2 ⟧ Γ fs ρ m
+     _ ← ⟦ e1 ⟧ Γ fs ρ m; ⟦ e2 ⟧ Γ fs ρ m
   | cast{τ} e =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inr;
      guard (val_cast_ok Γ m (TType τ) v);
@@ -140,8 +139,8 @@ Context (Pif2 : ∀ e1 e2 e3 v1 ν3,
   ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e3 ⟧ Γ fs ρ m = Some ν3 → P e3 ν3 →
   val_false v1 → P (if{e1} e2 else e3) ν3).
-Context (Pcomma : ∀ e1 e2 v1 ν2,
-  ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
+Context (Pcomma : ∀ e1 e2 ν1 ν2,
+  ⟦ e1 ⟧ Γ fs ρ m = Some ν1 → P e1 ν1 →
   ⟦ e2 ⟧ Γ fs ρ m = Some ν2 → P e2 ν2 → P (e1,, e2) ν2).
 Context (Pcast : ∀ τ e v,
   ⟦ e ⟧ Γ fs ρ m = Some (inr v) → P e (inr v) →

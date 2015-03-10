@@ -66,12 +66,11 @@ Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
      inr <$> binop_type_of op τ1 τ2
   | if{e1} e2 else e3 =>
      _ ← type_check Γs e1 ≫= maybe (inr ∘ TBase);
-     τ2 ← type_check Γs e2 ≫= maybe inr;
-     τ3 ← type_check Γs e3 ≫= maybe inr;
-     guard (τ2 = τ3); Some (inr τ2)
+     τlr2 ← type_check Γs e2;
+     τlr3 ← type_check Γs e3;
+     guard (τlr2 = τlr3); Some τlr2
   | e1,, e2 =>
-     _ ← type_check Γs e1 ≫= maybe inr;
-     inr <$> type_check Γs e2 ≫= maybe inr
+     _ ← type_check Γs e1; type_check Γs e2
   | cast{σ} e =>
      τ ← type_check Γs e ≫= maybe inr;
      guard (cast_typed τ σ); guard (✓{Γ} σ); Some (inr σ)
@@ -121,10 +120,10 @@ Global Instance ectx_item_lookup :
      inr <$> binop_type_of op τ1 τ2
   | if{□} e2 else e3, inr τ1 =>
      _ ← maybe TBase τ1;
-     τ2 ← type_check Γs e2 ≫= maybe inr;
-     τ3 ← type_check Γs e3 ≫= maybe inr;
-     guard (τ2 = τ3); Some (inr τ2)
-  | □ ,, e2, inr τ1 => inr <$> type_check Γs e2 ≫= maybe inr
+     τlr2 ← type_check Γs e2;
+     τlr3 ← type_check Γs e3;
+     guard (τlr2 = τlr3); Some τlr2
+  | □ ,, e2, _ => type_check Γs e2
   | cast{σ} □, inr τ => guard (cast_typed τ σ); guard (✓{Γ} σ); Some (inr σ)
   | #[r:=□] e2, inr σ =>
      τ ← type_check Γs e2 ≫= maybe inr;
@@ -335,7 +334,7 @@ Proof.
       mapM (λ e, type_check (Γ,Δ,τs) e ≫= maybe inr) es = Some σs) as help.
     { intros es σs. rewrite Forall2_fmap_r, mapM_Some.
       induction 1; constructor; erewrite ?type_check_complete by eauto; eauto. }
-    destruct 1; simplify_option_equality;
+    destruct 1; unfold lookupE; fold lookupE; simplify_option_equality;
       erewrite ?type_check_complete by eauto; simpl;
       erewrite ?path_type_check_complete, ?assign_type_of_complete,
         ?unop_type_of_complete, ?binop_type_of_complete by eauto;

@@ -80,7 +80,7 @@ Definition ehexec (Γ : env K) (k : ctx K)
      | inleft (right _) => {[ e3, mem_unlock Ω m ]}
      | inright _ => ∅
      end
-  | #{Ω} v,, er =>
+  | %#{Ω} _,, er =>
      {[ er, mem_unlock Ω m ]}
   | cast{τ} (#{Ω} v) =>
      guard (val_cast_ok Γ m (TType τ) v);
