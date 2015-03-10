@@ -279,87 +279,6 @@ Proof.
   intros e. apply (help (S (size e))); lia.
 Qed.
 
-(** * Miscellaneous Operations and properties *)
-(** An expression is [load_free] if it does not contain any occurrences of the
-[load] operator. *)
-Inductive load_free {K} : expr K → Prop :=
-  | EVar_load_free x : load_free (var x)
-  | EVal_load_free Ω ν : load_free (%#{Ω} ν)
-  | ERtoL_load_free e : load_free e → load_free (.* e)
-  | ERofL_load_free e : load_free e → load_free (& e)
-  | EAssign_load_free ass e1 e2 :
-     load_free e1 → load_free e2 → load_free (e1 ::={ass} e2)
-  | ECall_load_free e es :
-     load_free e → Forall load_free es → load_free (call e @ es)
-  | EAbort_load_free τ : load_free (abort τ)
-  | EEltL_load_free e rs : load_free e → load_free (e %> rs)
-  | EEltR_load_free e rs : load_free e → load_free (e #> rs)
-  | EAlloc_load_free τ e : load_free e → load_free (alloc{τ} e)
-  | EFree_load_free e : load_free e → load_free (free e)
-  | EUnOp_load_free op e : load_free e → load_free (@{op} e)
-  | EBinOp_load_free op e1 e2 :
-     load_free e1 → load_free e2 → load_free (e1 @{op} e2)
-  | EIf_load_free e1 e2 e3 :
-     load_free e1 → load_free e2 → load_free e3 →
-     load_free (if{e1} e2 else e3)
-  | EComma_load_free e1 e2 :
-     load_free e1 → load_free e2 → load_free (e1,, e2)
-  | ECast_load_free τ e : load_free e → load_free (cast{τ} e)
-  | EInsert_load_free r e1 e2 :
-     load_free e1 → load_free e2 → load_free (#[r:=e1] e2).
-
-Section load_free_ind.
-  Context {K} (P : expr K → Prop).
-  Context (Pvar : ∀ x, P (var x)).
-  Context (Pval : ∀ Ω ν, P (%#{Ω} ν)).
-  Context (Prtol : ∀ e, load_free e → P e → P (.* e)).
-  Context (Profl : ∀ e, load_free e → P e → P (& e)).
-  Context (Passign : ∀ ass e1 e2,
-    load_free e1 → P e1 → load_free e2 → P e2 → P (e1 ::={ass} e2)).
-  Context (Pcall : ∀ e es,
-    load_free e → P e → Forall load_free es → Forall P es → P (call e @ es)).
-  Context (Pabort : ∀ τ, P (abort τ)).
-  Context (Peltl : ∀ e rs, load_free e → P e → P (e %> rs)).
-  Context (Peltr : ∀ e rs, load_free e → P e → P (e #> rs)).
-  Context (Palloc : ∀ τ e, P e → P (alloc{τ} e)).
-  Context (Pfree : ∀ e, load_free e → P e → P (free e)).
-  Context (Punop : ∀ op e, load_free e → P e → P (@{op} e)).
-  Context (Pbinop : ∀ op e1 e2,
-    load_free e1 → P e1 → load_free e2 → P e2 → P (e1 @{op} e2)).
-  Context (Pif : ∀ e1 e2 e3,
-    load_free e1 → P e1 → load_free e2 → P e2 → load_free e3 → P e3 →
-    P (if{e1} e2 else e3)).
-  Context (Pcomma : ∀ e1 e2,
-    load_free e1 → P e1 → load_free e2 → P e2 → P (e1,, e2)).
-  Context (Pcast : ∀ τ e, load_free e → P e → P (cast{τ} e)).
-  Context (Pinsert : ∀ r e1 e2,
-     load_free e1 → P e1 → load_free e2 → P e2 → P (#[r:=e1] e2)).
-  Lemma load_free_ind_alt: ∀ e, load_free e → P e.
-  Proof. fix 2; destruct 1; eauto using Forall_impl. Qed.
-End load_free_ind.
-
-Instance load_free_dec {K} : ∀ e : expr K, Decision (load_free e).
-Proof.
- refine (
-  fix go e :=
-  match e return Decision (load_free e) with
-  | var _ | %#{_} _ | abort _ => left _
-  | .* e | & e => cast_if (decide (load_free e))
-  | e1 ::={_} e2 => cast_if_and (decide (load_free e1)) (decide (load_free e2))
-  | call e @ es =>
-     cast_if_and (decide (load_free e)) (decide (Forall load_free es))
-  | load e => right _
-  | e %> _ | e #> _ => cast_if (decide (load_free e))
-  | alloc{_} e | free e | @{_} e => cast_if (decide (load_free e))
-  | e1 @{op} e2 => cast_if_and (decide (load_free e1)) (decide (load_free e2))
-  | if{e1} e2 else e3 => cast_if_and3 (decide (load_free e1))
-      (decide (load_free e2)) (decide (load_free e3))
-  | e1,, e2 | #[_:=e1] e2 =>
-     cast_if_and (decide (load_free e1)) (decide (load_free e2))
-  | cast{_} e => cast_if (decide (load_free e))
-  end); first [by constructor | by inversion 1].
-Defined.
-
 Instance expr_free_vars {K} : Vars (expr K) :=
   fix go e := let _ : Vars _ := @go in
   match e with
@@ -371,9 +290,6 @@ Instance expr_free_vars {K} : Vars (expr K) :=
   | if{e1} e2 else e3 => vars e1 ∪ vars e2 ∪ vars e3
   end.
 
-Hint Extern 1 (load_free _) => assumption : typeclass_instances.
-Hint Extern 100 (load_free ?e) =>
-  apply (bool_decide_unpack _); vm_compute; exact I : typeclass_instances.
 Hint Extern 1 (vars _ = ∅) => assumption : typeclass_instances.
 Hint Extern 100 (vars _ = ∅) =>
   apply (bool_decide_unpack _); vm_compute; exact I : typeclass_instances.
@@ -476,8 +392,6 @@ Proof.
   intros He. apply elem_of_equiv_empty_L. intros oi.
   induction He using @is_pure_ind_alt; esolve_elem_of.
 Qed.
-Lemma is_pure_load_free {K} (e : expr K) : is_pure e → load_free e.
-Proof. by induction 1; constructor. Qed.
 
 (** The operation [e↑] increases all De Bruijn indexes of variables in [e]
 by one. That means, each variable [var x] in [e] becomes [var (S x)]. *)
