@@ -507,6 +507,30 @@ Definition to_fun_type (to_ptr_type : ctype → M (ptr_type K))
     "function type with duplicate argument names";
   mret (xτs,τ).
 
+Definition rhs_6_5_16_1p3_safe : expr K → bool :=
+  fix go e :=
+  match e with
+  | load (var _) => true (* local *)
+  | load (%{_} _) => true (* global/static *)
+  | load _ => false (* load of pointer *)
+  | #{_} _ => true
+  | & e => true
+  | _ ::={_} _ => true
+  | call _ @ _ => true
+  | abort _ => true
+  | e #> (RArray _ _ _ | RStruct _ _) => go e
+  | e #> (RUnion _ _ _) => false
+  | alloc{_} _ => true
+  | free e => true
+  | @{_} e => go e
+  | e1 @{_} e2 => go e1 && go e2
+  | if{_} e2 else e3 => go e2 && go e3
+  | _,, e2 => go e2
+  | cast{_} e => go e
+  | #[_:=_ ] _ => true (* compound literal *)
+  | _ => false (* l-values, cannot occur *)
+  end.
+
 Inductive to_type_kind := to_Type | to_Ptr.
 Definition to_type_type {K} (k : to_type_kind) :=
   match k with to_Type => type K | to_Ptr => ptr_type K end.
@@ -559,6 +583,9 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
      Γ ← gets to_env;
      σ ← error_of_option (assign_type_of τ1 τ2 ass)
        "assignment cannot be typed";
+     let e1 :=
+       if decide (ass = Assign ∧ ¬rhs_6_5_16_1p3_safe e2)
+       then freeze true e1 else e1 in
      mret (e1 ::={ass} e2, RT σ)
   | CECall ce ces =>
      '(e,τ) ← to_R <$> to_expr Δl ce;

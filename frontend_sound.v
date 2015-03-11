@@ -132,9 +132,11 @@ Hint Immediate type_valid_ptr_type_valid.
 Hint Resolve addr_top_typed addr_top_strict.
 Hint Extern 10 (_ ⊢ _ : _ ↣ _) => typed_constructor; try lia.
 Hint Resolve perm_full_valid perm_full_mapped.
-Hint Extern 1 (@eq lockset _ _) => by simpl; rewrite ?empty_union_L.
+Hint Extern 1 (@eq lockset _ _) =>
+  by simpl; rewrite ?expr_locks_freeze, ?empty_union_L.
 Hint Extern 0 (rettype_match _ _) => constructor.
 Arguments rettype_union_alt _ _ _ _ : simpl never.
+Arguments assign_type_of _ _ _ _ _ : simpl never.
 
 Definition fun_stmt_valid (Γ : env K) (Δ : memenv K)
     (τs : list (type K)) (τ : type K) (ms : option (stmt K)) : Prop :=
@@ -722,6 +724,7 @@ Proof.
   intros; apply cexpr_cinit_ctype_ind; generalize_errors; intros;
     repeat match goal with
     | _ => progress simplify_error_equality || case_match
+    | H : _ = Assign ∧ _ |- _ => destruct H
     | x : (_ * _)%type |- _ => destruct x
     | IH : ∀ _ _ _ _, to_expr _ _ _ = _ → _, H : to_expr _ _ _ = _ |- _ =>
        destruct (IH _ _ _ _ H) as (?&?&?&?); auto 1; [clear IH H]; weaken
@@ -766,7 +769,7 @@ Proof.
        eapply insert_object_valid in H;
          eauto using perm_readonly_valid, perm_readonly_mapped;
          [destruct H as (?&?&?&?&?)]
-    end; eauto 22 using to_compound_init_typed, val_0_typed.
+    end; eauto 22 using to_compound_init_typed, val_0_typed, expr_typed_freeze.
 Qed.
 Lemma to_expr_typed S S' Δl ce e τe :
   to_expr Δl ce S = mret (e,τe) S' → ✓ S → local_env_valid S Δl →
