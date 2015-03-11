@@ -359,6 +359,12 @@ Proof.
   intros Hr2; revert r1. induction Hr2 using @ref_typed_ind; intros;
     decompose_Forall_hyps; typed_constructor; eauto using ref_seg_typed_ge.
 Qed.
+Lemma ref_seg_typed_freeze Γ β τ rs σ :
+  Γ ⊢ freeze β rs : τ ↣ σ ↔ Γ ⊢ rs : τ ↣ σ.
+Proof.
+  destruct β; split; eauto using ref_seg_typed_ge,
+    ref_seg_typed_le, ref_seg_freeze_le_l, ref_seg_freeze_le_r.
+Qed.
 Lemma ref_typed_freeze Γ β τ r σ : Γ ⊢ freeze β <$> r : τ ↣ σ ↔ Γ ⊢ r : τ ↣ σ.
 Proof.
   destruct β; split; eauto using ref_typed_ge,

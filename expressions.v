@@ -210,6 +210,30 @@ Proof.
   end); clear go; abstract congruence.
 Defined.
 
+Instance expr_freeze {K} : Freeze (expr K) :=
+  fix go β e {struct e} :=
+  let _ : Freeze _ := @go in
+  match e with
+  | var x => var x
+  | %#{Ω} ν => %#{Ω} ν
+  | .* e => .* (freeze β e)
+  | & e => & (freeze β e)
+  | e1 ::={ass} e2 => freeze β e1 ::={ass} freeze β e2
+  | call e @ es => call (freeze β e) @ freeze β <$> es
+  | load e => load (freeze β e)
+  | abort τ => abort τ
+  | e %> rs => freeze β e %> freeze β rs
+  | e #> rs => freeze β e #> freeze β rs
+  | alloc{τ} e => alloc{τ} (freeze β e)
+  | free e => free (freeze β e)
+  | @{op} e => @{op} (freeze β e)
+  | e1 @{op} e2 => freeze β e1 @{op} freeze β e2
+  | if{e1} e2 else e3 => if{freeze β e1} freeze β e2 else freeze β e3
+  | e1,, e2 => freeze β e1,, freeze β e2
+  | cast{τ} e => cast{τ} (freeze β e)
+  | #[r:=e1] e2 => #[freeze β <$> r:=freeze β e1] (freeze β e2)
+  end.
+
 (** * Induction principles *)
 (** The induction principles that Coq generates for nested inductive types are
 too weak. For the case of expressions, the branch of [call e @ es] does not
@@ -323,6 +347,14 @@ Instance expr_locks {K} : Locks (expr K) :=
   | e1 ::={_} e2 | e1 @{_} e2 | e1,, e2 | #[_:=e1] e2 => locks e1 ∪ locks e2
   | if{e1} e2 else e3 => locks e1 ∪ locks e2 ∪ locks e3
   end.
+Lemma expr_locks_freeze {K} β (e : expr K) : locks (freeze β e) = locks e.
+Proof.
+  assert (∀ (es : list (expr K)),
+    Forall (λ e, locks (freeze β e) = locks e) es →
+    ⋃ (locks <$> freeze β <$> es) = ⋃ (locks <$> es)).
+  { induction 1; solve_elem_of. }
+  induction e using @expr_ind_alt; csimpl; try solve_elem_of; f_equal; auto.
+Qed.
 
 (** An expression is pure (or side-effect free) if it does not modify the
 memory. Although pure expressions may have sequence points (namely at the

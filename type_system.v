@@ -649,6 +649,13 @@ Proof. by inversion_clear 1. Qed.
 Lemma rettype_match_false_inv mτ τ : rettype_match (false,mτ) τ → τ = voidT.
 Proof. by inversion_clear 1. Qed.
 
+Lemma expr_typed_freeze Γ Δ β τs e τlr :
+  (Γ,Δ,τs) ⊢ e : τlr → (Γ,Δ,τs) ⊢ freeze β e : τlr.
+Proof.
+  induction 1 using @expr_typed_ind; csimpl; typed_constructor; eauto;
+    by apply ref_seg_typed_freeze ||
+    by apply ref_typed_freeze || by apply Forall2_fmap_l.
+Qed.
 Lemma expr_typed_lift Γ Δ τs e τlr :
   (Γ,Δ,τs) ⊢ e↑ : τlr ↔ (Γ,Δ,tail τs) ⊢ e : τlr.
 Proof.
