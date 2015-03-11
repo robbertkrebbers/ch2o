@@ -131,10 +131,10 @@ Proof.
   eauto using PBits_perm_disjoint, @ctree_flatten_disjoint.
 Qed.
 Lemma ctree_merge_union_of_val Γ Δ xs1 xs2 v τ :
-  ✓ Γ → (Γ,Δ) ⊢ v : τ →
-  Forall sep_valid xs1 → Forall (not ∘ sep_unmapped) xs1 →
-  length xs1 = bit_size_of Γ τ → of_val Γ (xs1 ∪* xs2) v
-  = ctree_merge true (∪) (of_val Γ xs1 v) (flip PBit BIndet <$> xs2).
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → Forall sep_valid xs1 → Forall (not ∘ sep_unmapped) xs1 →
+  length xs1 = bit_size_of Γ τ →
+  of_val Γ (xs1 ∪* xs2) v
+  = ctree_merge (∪) (of_val Γ xs1 v) (flip PBit BIndet <$> xs2).
 Proof.
   intros HΓ Hv. revert v τ Hv xs1 xs2.
   refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.

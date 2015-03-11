@@ -92,7 +92,7 @@ Proof.
 Qed.
 Lemma ctree_merge_typed Γ Δ w xbs τ :
   (Γ,Δ) ⊢ w : τ → ctree_flatten w ⊥* xbs → ✓{Γ,Δ}* xbs →
-  Forall sep_unmapped xbs → (Γ,Δ) ⊢ ctree_merge true (∪) w xbs : τ.
+  Forall sep_unmapped xbs → (Γ,Δ) ⊢ ctree_merge (∪) w xbs : τ.
 Proof.
   intros Hw. revert w τ Hw xbs. refine (ctree_typed_ind _ _ _ _ _ _ _ _); simpl.
   * typed_constructor; eauto using pbits_union_typed.

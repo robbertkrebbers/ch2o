@@ -745,7 +745,7 @@ Proof. intros. apply ctree_unflatten_Forall_le; auto with lia. Qed.
 Lemma ctree_merge_unflatten {B : Set} Γ (h : pbit K → B → pbit K) xbs ys τ :
   ✓ Γ → ✓{Γ} τ → length xbs = bit_size_of Γ τ →
   zip_with h (pbit_indetify <$> xbs) ys = pbit_indetify <$> zip_with h xbs ys →
-  ctree_merge true h (ctree_unflatten Γ τ xbs) ys
+  ctree_merge h (ctree_unflatten Γ τ xbs) ys
   = ctree_unflatten Γ τ (zip_with h xbs ys).
 Proof.
   intros HΓ Hτ Hle. revert τ Hτ xbs ys Hle. refine (type_env_ind _ HΓ _ _ _ _).
@@ -1192,9 +1192,9 @@ Lemma ctree_lookup_seg_merge {B : Set} Γ Δ
   ✓ Γ → (∀ xb y, h (pbit_indetify xb) y = pbit_indetify (h xb y)) →
   (∀ xb y, sep_unshared xb → sep_unshared (h xb y)) →
   (Γ,Δ) ⊢ w : τ → length ys = bit_size_of Γ τ →
-  w !!{Γ} rs = Some w' → (Γ,Δ) ⊢ w' : τ' → ctree_merge true h w ys !!{Γ} rs
-  = Some (ctree_merge true h w' (take (bit_size_of Γ τ')
-     (drop (ref_seg_object_offset Γ rs) ys))).
+  w !!{Γ} rs = Some w' → (Γ,Δ) ⊢ w' : τ' →
+  ctree_merge h w ys !!{Γ} rs = Some (ctree_merge h w' (take (bit_size_of Γ τ')
+                                     (drop (ref_seg_object_offset Γ rs) ys))).
 Proof.
   intros HΓ ?? Hw Hlen Hrs Hw'.
   rewrite <-(type_of_correct (Γ,Δ) w' τ') by done.
@@ -1210,7 +1210,7 @@ Proof.
       apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear w' Hrs.
     intros w <- -> Hw; simplify_equality'.
     erewrite type_of_correct by (decompose_Forall_hyps; eauto).
-    assert (length (ctree_merge_array (ctree_merge true h) ws ys) = length ws)
+    assert (length (ctree_merge_array (ctree_merge h) ws ys) = length ws)
       as Hlen by (generalize ys; elim ws; intros; f_equal'; auto).
     simplify_option_equality; clear Hlen.
     revert i w ys Hw. induction Hws as [|w ws ?? IH];
@@ -1248,9 +1248,9 @@ Lemma ctree_lookup_merge {B : Set} Γ Δ
   ✓ Γ → (∀ xb y, h (pbit_indetify xb) y = pbit_indetify (h xb y)) →
   (∀ xb y, sep_unshared xb → sep_unshared (h xb y)) →
   (Γ,Δ) ⊢ w : τ → length ys = bit_size_of Γ τ →
-  w !!{Γ} r = Some w' → (Γ,Δ) ⊢ w' : τ' → ctree_merge true h w ys !!{Γ} r
-  = Some (ctree_merge true h w' (take (bit_size_of Γ τ')
-      (drop (ref_object_offset Γ r) ys))).
+  w !!{Γ} r = Some w' → (Γ,Δ) ⊢ w' : τ' →
+  ctree_merge h w ys !!{Γ} r = Some (ctree_merge h w' (take (bit_size_of Γ τ')
+                                    (drop (ref_object_offset Γ r) ys))).
 Proof.
   intros ?????. unfold ref_object_offset. revert w' τ'.
   induction r as [|rs r IH]; intros w'' τ''.
@@ -2119,7 +2119,7 @@ Qed.
 Lemma ctree_merge_new {B : Set} Γ f τ (ys : list B) xb :
   (∀ y, f xb y = xb) → pbit_indetify xb = xb →
   ✓ Γ → ✓{Γ} τ → length ys = bit_size_of Γ τ →
-  ctree_merge true f (ctree_new Γ xb τ) ys = ctree_new Γ xb τ.
+  ctree_merge f (ctree_new Γ xb τ) ys = ctree_new Γ xb τ.
 Proof.
   intros ???? Hlen; unfold ctree_new.
   assert (zip_with f (pbit_indetify <$> replicate (bit_size_of Γ τ) xb) ys
@@ -2132,9 +2132,9 @@ Qed.
 Lemma ctree_merge_singleton_seg {B : Set} Γ Δ f τ rs w (ys : list B) σ :
   (∀ y, f ∅ y = ∅) →
   ✓ Γ → Γ ⊢ rs : τ ↣ σ → (Γ,Δ) ⊢ w : σ → length ys = bit_size_of Γ τ →
-  ctree_merge true f (ctree_singleton_seg Γ rs w) ys =
-  ctree_singleton_seg Γ rs (ctree_merge true f w
-    (take (bit_size_of Γ σ) (drop (ref_seg_object_offset Γ rs) ys))).
+  ctree_merge f (ctree_singleton_seg Γ rs w) ys
+  = ctree_singleton_seg Γ rs (ctree_merge f w
+      (take (bit_size_of Γ σ) (drop (ref_seg_object_offset Γ rs) ys))).
 Proof.
   intros ? HΓ. destruct 1 as [τ i n _|s i τs τ Ht Hi|s i ? τs];
     intros Hw Hys; simplify_option_equality; f_equal.
@@ -2179,9 +2179,9 @@ Lemma ctree_merge_singleton {B : Set} Γ Δ f τ r w (ys : list B) σ :
   (∀ y, f ∅ y = ∅) →
   ✓ Γ → Γ ⊢ r : τ ↣ σ → (Γ,Δ) ⊢ w : σ → ¬ctree_unmapped w →
   length ys = bit_size_of Γ τ →
-  ctree_merge true f (ctree_singleton Γ r w) ys =
-  ctree_singleton Γ r (ctree_merge true f w
-    (take (bit_size_of Γ σ) (drop (ref_object_offset Γ r) ys))).
+  ctree_merge f (ctree_singleton Γ r w) ys
+  = ctree_singleton Γ r (ctree_merge f w
+      (take (bit_size_of Γ σ) (drop (ref_object_offset Γ r) ys))).
 Proof.
   unfold ref_object_offset. intros ?? Hr. revert w ys.
   induction Hr as [|r rs τ1 τ2 τ3 Hrs Hr IH] using @ref_typed_ind;

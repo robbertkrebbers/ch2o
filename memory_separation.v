@@ -236,7 +236,7 @@ Proof.
 Qed.
 Lemma ctree_unlock_disjoint w1 w2 βs :
   w1 ⊥ w2 → βs =.>* pbit_locked <$> ctree_flatten w1 →
-  ctree_merge true pbit_unlock_if w1 βs ⊥ w2.
+  ctree_merge pbit_unlock_if w1 βs ⊥ w2.
 Proof.
   intros Hw Hβs. apply ctree_merge_disjoint; auto.
   * list.solve_length.
@@ -278,8 +278,8 @@ Proof.
 Qed.
 Lemma ctree_unlock_union w1 w2 βs :
   w1 ⊥ w2 → βs =.>* pbit_locked <$> ctree_flatten w1 →
-  ctree_merge true pbit_unlock_if (w1 ∪ w2) βs =
-    ctree_merge true pbit_unlock_if w1 βs ∪ w2.
+  ctree_merge pbit_unlock_if (w1 ∪ w2) βs
+  = ctree_merge pbit_unlock_if w1 βs ∪ w2.
 Proof.
   intros. apply ctree_merge_union; eauto using pbits_unlock_disjoint,
     pbits_unlock_union, @ctree_flatten_disjoint; list.solve_length.

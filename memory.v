@@ -71,7 +71,7 @@ Section memory_operations.
       match mω, mx with
       | Some ω, Some (Obj w β) =>
          let sz := length (ctree_flatten w) in
-         Some (Obj (ctree_merge true pbit_unlock_if w (to_bools sz ω)) β)
+         Some (Obj (ctree_merge pbit_unlock_if w (to_bools sz ω)) β)
       | _,_ => mx
       end) Ω m.
   Definition mem_unlock_all (m : mem K) : mem K := (mem_unlock (mem_locks m) m).
@@ -851,7 +851,7 @@ Lemma mem_erase_lock Γ m a :
 Proof. apply cmap_erase_alter. Qed.
 Lemma ctree_unlock_typed Γ Δ w τ βs :
   ✓ Γ → (Γ,Δ) ⊢ w : τ → length βs = bit_size_of Γ τ →
-  (Γ,Δ) ⊢ ctree_merge true pbit_unlock_if w βs : τ.
+  (Γ,Δ) ⊢ ctree_merge pbit_unlock_if w βs : τ.
 Proof.
   intros HΓ Hw. revert w τ Hw βs.
   refine (ctree_typed_ind _ _ _ _ _ _ _ _); simpl.
@@ -886,7 +886,7 @@ Proof.
   * intros; typed_constructor; eauto using pbits_unlock_valid.
 Qed.
 Lemma ctree_unlock_type_of w βs :
-  type_of (ctree_merge true pbit_unlock_if w βs) = type_of w.
+  type_of (ctree_merge pbit_unlock_if w βs) = type_of w.
 Proof.
   destruct w as [|τ ws| | |]; f_equal'.
   revert βs. induction ws; intros; f_equal'; auto.

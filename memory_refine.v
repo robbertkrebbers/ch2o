@@ -561,8 +561,8 @@ Proof.
 Qed.
 Lemma ctree_unlock_refine Γ α f Δ1 Δ2 w1 w2 τ βs :
   ✓ Γ → w1 ⊑{Γ,α,f@Δ1↦Δ2} w2 : τ → length βs = bit_size_of Γ τ →
-  ctree_merge true pbit_unlock_if w1 βs
-    ⊑{Γ,α,f@Δ1↦Δ2} ctree_merge true pbit_unlock_if w2 βs : τ.
+  ctree_merge pbit_unlock_if w1 βs
+    ⊑{Γ,α,f@Δ1↦Δ2} ctree_merge pbit_unlock_if w2 βs : τ.
 Proof.
   intros HΓ Hw Hlen.
   apply ctree_leaf_refine_refine; eauto using ctree_unlock_typed.
