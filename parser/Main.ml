@@ -750,12 +750,8 @@ let decls_of_definition x =
         | _ -> raise (Unknown_definition x)) l
   | Cabs.FUNDEF ((t,(s,t',[],_)),{Cabs.bstmts = l},_,_) ->
       let (stos,t) = split_storage t in
-      let b = cstmt_of_statements l in
-      let b =
-        if s = "main" && no_int_return b
-        then CSComp(b,CSReturn (Some (econst0))) else b in
       [(chars_of_string s,
-        FunDecl (stos,ctype_of_specifier_decl_type t t',b))]
+        FunDecl (stos,ctype_of_specifier_decl_type t t',cstmt_of_statements l))]
   | Cabs.ONLYTYPEDEF (t,_) ->
       let _ = ctype_of_specifier t in []
   | Cabs.TYPEDEF ((t,l),_) ->

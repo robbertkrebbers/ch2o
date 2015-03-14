@@ -135,6 +135,7 @@ Hint Resolve perm_full_valid perm_full_mapped.
 Hint Extern 1 (@eq lockset _ _) =>
   by simpl; rewrite ?expr_locks_freeze, ?empty_union_L.
 Hint Extern 0 (rettype_match _ _) => constructor.
+Hint Immediate rettype_union_idempotent val_0_typed.
 Arguments rettype_union_alt _ _ _ _ : simpl never.
 Arguments assign_type_of _ _ _ _ _ : simpl never.
 
@@ -769,7 +770,7 @@ Proof.
        eapply insert_object_valid in H;
          eauto using perm_readonly_valid, perm_readonly_mapped;
          [destruct H as (?&?&?&?&?)]
-    end; eauto 22 using to_compound_init_typed, val_0_typed, expr_typed_freeze.
+    end; eauto 22 using to_compound_init_typed, expr_typed_freeze.
 Qed.
 Lemma to_expr_typed S S' Δl ce e τe :
   to_expr Δl ce S = mret (e,τe) S' → ✓ S → local_env_valid S Δl →
@@ -888,15 +889,13 @@ Proof.
     | _ => progress simplify_error_equality || case_match
     end; eauto 20 using SLocal_typed.
 Qed.
-Lemma stmt_fix_return_typed Γ Δ τs σ s cmτ s' cmτ' :
-  ✓ Γ → ✓{Γ}* τs → ✓{Γ} σ → stmt_fix_return σ s cmτ = (s',cmτ') →
+Lemma stmt_fix_return_typed Γ Δ f τs σ s cmτ s' cmτ' :
+  ✓ Γ → ✓{Γ}* τs → ✓{Γ} σ → stmt_fix_return Γ f σ s cmτ = (s',cmτ') →
   (Γ,Δ,τs) ⊢ s : cmτ → rettype_match_aux cmτ σ →
   (Γ,Δ,τs) ⊢ s' : cmτ' ∧ rettype_match cmτ' σ.
 Proof.
-  destruct cmτ as [[][τ|]]; intros; simplify_option_equality; auto.
-  * assert (✓{Γ} (false,Some σ)) by eauto using stmt_typed_type_valid.
-    repeat typed_constructor; eauto using rettype_union_idempotent.
-  * by repeat typed_constructor; eauto.
+  intros. assert (✓{Γ} (false,Some σ)) by eauto using stmt_typed_type_valid.
+  destruct cmτ as [[][τ|]]; simplify_option_equality; eauto 10.
 Qed.
 Lemma to_fun_stmt_typed S S' f mys τs σ cs s :
   to_fun_stmt f mys τs σ cs S = mret s S' → ✓ S →
@@ -911,12 +910,12 @@ Proof.
   destruct (mapM id mys) as [ys|] eqn:?; error_proceed.
   assert (length ys = length τs) by (by erewrite <-mapM_length by eauto).
   error_proceed [s' cmτ'] as S2.
-  destruct (stmt_fix_return _ s' _) as [? cmτ] eqn:?; error_proceed.
+  destruct (stmt_fix_return _ _ _ s' _) as [? cmτ] eqn:?; error_proceed.
   destruct (to_stmt_typed S S' (zip_with (λ y τ, Some (y, Local τ)) ys τs)
     σ cs s' cmτ') as (Hs&?&?&?); eauto using local_env_valid_params; weaken.
   rewrite to_local_types_params in Hs by done.
   destruct (stmt_fix_return_typed (to_env S') ('{to_mem S'})
-    τs σ s' cmτ' s cmτ); eauto 10.
+    f τs σ s' cmτ' s cmτ); eauto 10.
 Qed.
 Lemma alloc_fun_valid S S' f sto cτ cs :
   alloc_fun f sto cτ cs S = mret () S' → ✓ S → ✓ S' ∧ S ⊆ S'.

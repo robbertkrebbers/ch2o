@@ -943,13 +943,13 @@ Definition to_stmt (τret : type K) :
        "if statement with non-matching return types";
      mret (if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S
   end.
-Definition stmt_fix_return (σ : type K) (s : stmt K)
+Definition stmt_fix_return (Γ : env K) (f : string) (σ : type K) (s : stmt K)
     (cmτ : rettype K) : stmt K * rettype K :=
   match cmτ with
-  | (false, None) =>
-     if decide (σ = voidT) then (s,cmτ) else (s;; ret (abort σ), (true, Some σ))
-  | (false, Some τ) =>
-     if decide (τ = voidT) then (s,cmτ) else (s;; ret (abort τ), (true, Some τ))
+  | (false, _) =>
+     if decide (σ = voidT) then (s,cmτ)
+     else if decide (f = "main") then (s;; ret (#(val_0 Γ σ)), (true, Some σ))
+     else (s;; ret (abort σ), (true, Some σ))
   | _ => (s,cmτ)
   end.
 Definition to_fun_stmt (f : string) (mys : list (option string))
@@ -957,7 +957,8 @@ Definition to_fun_stmt (f : string) (mys : list (option string))
   ys ← error_of_option (mapM id mys)
     ("function `" +:+ f +:+ "` has unnamed arguments");
   '(s,cmσ) ← to_stmt σ (zip_with (λ y τ, Some (y, Local τ)) ys τs) cs;
-  let (s,cmσ) := stmt_fix_return σ s cmσ in
+  Γ ← gets to_env;
+  let (s,cmσ) := stmt_fix_return Γ f σ s cmσ in
   guard (gotos s ⊆ labels s) with
     ("function `" +:+ f +:+ "` has unbound gotos");
   guard (throws_valid 0 s) with
