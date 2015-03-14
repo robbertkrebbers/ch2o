@@ -4,6 +4,7 @@ Require Import String hashset streams stringmap.
 Require Export executable frontend architecture_spec.
 Local Open Scope string_scope.
 Local Open Scope list_scope.
+Local Open Scope ctype_scope.
 
 Record istate (K E : Set) := IState {
   events_new : list E; (**i the events generated in the last step *)
@@ -16,13 +17,46 @@ Instance istate_dec {K E : Set} `{Env K, ∀ ε1 ε2 : E, Decision (ε1 = ε2)}
   (iS1 iS2 : istate K E) : Decision (iS1 = iS2).
 Proof. solve_decision. Defined.
 
-Local Notation M := (error (frontend_state _) string).
-
 Section interpreter.
 Context (A : architecture).
 Notation K := (arch_rank A).
 Context {E : Set} `{∀ ε1 ε2 : E, Decision (ε1 = ε2)}.
 Context (e : ∀ `{Env K}, env K → state K → list E).
+Notation M := (error (frontend_state K) string).
+
+Fixpoint interpreter_args_go (args : list (list Z)) : M (list (val K)) :=
+  match args with
+  | [] => mret [ptrV (NULL (charT{K}))]
+  | zs :: args =>
+     '(v,n) ← error_of_option (to_string_const zs)
+       "char of string constant out of range";
+     o ← insert_object perm_full v;
+     vs ← interpreter_args_go args;
+     mret (ptrV (Ptr (addr_top_array o (charT{K}) (Z.of_nat n))) :: vs)
+  end.
+Fixpoint interpreter_args (σs : list (type K))
+    (args : list (list Z)) : M (list (val K)) :=
+  vs ← interpreter_args_go args;
+  if decide (σs = []) then mret []
+  else if decide (σs = [sintT; charT{K}.*.*])%T then
+    o ← insert_object perm_full (VArray (charT{K}.*) vs);
+    mret [intV{sintT} (length vs);
+          ptrV (Ptr (addr_top_array o (charT{K}.*) (length vs)))]
+  else fail "function `main` should have argument types `int` and `char*`".
+Definition interpreter_initial (Θ : list (string * decl))
+    (args : list (list Z)) : M (istate K E) :=
+  _ ← alloc_program Θ;
+  Δg ← gets to_globals;
+  '(_,σs,σ,_) ← error_of_option (Δg !! "main" ≫= maybe4 Fun)
+    ("function `main` undeclared`");
+  guard (σ = sintT%T ∨ σ = uintT%T) with
+    ("function `main` should have return type `int`");
+  vs ← interpreter_args σs args;
+  m ← gets to_mem;
+  mret (IState [] [] (initial_state m "main" vs)).
+Definition interpreter_initial_eval (Θ : list (string * decl))
+    (args : list (list Z)) : string + istate K E :=
+  error_eval (interpreter_initial Θ args) ∅.
 
 Definition cexec' (Γ : env K) (δ : funenv K)
     (iS : istate K E) : listset (istate K E) :=
@@ -30,24 +64,6 @@ Definition cexec' (Γ : env K) (δ : funenv K)
   (λ S_new,
     let εs_new := e _ Γ S_new in IState εs_new (εs ++ εs_new) S_new
   ) <$> cexec Γ δ S.
-Definition interpreter_initial (Θ : list (string * decl))
-    (f : string) (ces : list cexpr) : M (istate K E) :=
-  _ ← alloc_program Θ;
-  Δg ← gets to_globals;
-  '(_,σs,_,_) ← error_of_option (Δg !! f ≫= maybe_Fun)
-    ("interpreter called with undeclared function `" +:+ f +:+ "`");
-  eσlrs ← mapM (to_expr []) ces;
-  let σes := zip_with to_R_NULL σs eσlrs in
-  Γ ← gets to_env; m ← gets to_mem;
-  guard (Forall2 cast_typed (σes.*2) σs)
-    with "interpreter called with arguments of incorrect type";
-  let es := (cast{σs}* (σes.*1))%E in
-  vs ← error_of_option (mapM (λ e, ⟦ e ⟧ Γ ∅ [] m ≫= maybe_inr) es)
-    "interpreter called with non-constant expressions";
-  mret (IState [] [] (initial_state m f vs)).
-Definition interpreter_initial_eval (Θ : list (string * decl))
-    (f : string) (ces : list cexpr) : string + istate K E :=
-  error_eval (interpreter_initial Θ f ces) ∅.
 
 Context (hash : istate K E → Z).
 Definition cexec_all (Γ : env K) (δ : funenv K) (iS : istate K E) :
@@ -63,15 +79,15 @@ Definition csteps_exec_all (Γ : env K) (δ : funenv K) :
   let nfs := listset_normalize hash (nexts ≫= snd) in
   (reds,nfs) :.: go reds.
 Definition interpreter_all
-    (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
+    (Θ : list (string * decl)) (args : list (list Z)) :
     M (stream (listset (istate K E) * listset (istate K E))) :=
-  iS ← interpreter_initial Θ f ces;
+  iS ← interpreter_initial Θ args;
   Γ ← gets to_env; δ ← gets to_funenv;
   mret (csteps_exec_all Γ δ {[ iS ]}).
 Definition interpreter_all_eval
-    (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
+    (Θ : list (string * decl)) (args : list (list Z)) :
     string + stream (listset (istate K E) * listset (istate K E)) :=
-  error_eval (interpreter_all Θ f ces) ∅.
+  error_eval (interpreter_all Θ args) ∅.
 
 Context (rand : nat → nat).
 Definition csteps_exec_rand (Γ : env K) (δ : funenv K) :
@@ -84,13 +100,13 @@ Definition csteps_exec_rand (Γ : env K) (δ : funenv K) :
      inl next :.: go next
   end.
 Definition interpreter_rand
-    (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
+    (Θ : list (string * decl)) (args : list (list Z)) :
     M (stream (istate K E + istate K E)) :=
-  iS ← interpreter_initial Θ f ces;
+  iS ← interpreter_initial Θ args;
   Γ ← gets to_env; δ ← gets to_funenv;
   mret (csteps_exec_rand Γ δ iS).
 Definition interpreter_rand_eval
-    (Θ : list (string * decl)) (f : string) (ces : list cexpr) :
+    (Θ : list (string * decl)) (args : list (list Z)) :
     string + stream (istate K E + istate K E) :=
-  error_eval (interpreter_rand Θ f ces) ∅.
+  error_eval (interpreter_rand Θ args) ∅.
 End interpreter.

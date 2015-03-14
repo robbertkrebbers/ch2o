@@ -392,6 +392,9 @@ let const_of_string s =
        ({csign = Some sign; crank = rank},x) in
   go (String.length s) Signed CIntRank;;
 
+let codes_of_string s =
+  List.map (fun c -> z_of_int (Char.code c)) (chars_of_string s);;
+
 let cstorage_of_storage x =
   match x with
   | Cabs.STATIC -> StaticStorage
@@ -540,9 +543,7 @@ and cexpr_of_expression x =
   match x with
   | Cabs.CONSTANT (Cabs.CONST_INT s) ->
       let t,n = const_of_string s in CEConst (t,z_of_num n)
-  | Cabs.CONSTANT (Cabs.CONST_STRING s) ->
-      CEConstString (List.map (fun c -> z_of_int (Char.code c))
-                              (chars_of_string s))
+  | Cabs.CONSTANT (Cabs.CONST_STRING s) -> CEConstString (codes_of_string s)
   | Cabs.CONSTANT (Cabs.CONST_CHAR [c]) -> econst (Int (Int64.to_int c))
   | Cabs.VARIABLE s -> CEVar (chars_of_string s)
   | Cabs.UNARY (Cabs.MEMOF,y) ->
@@ -801,35 +802,36 @@ let event_of_state env tenv x =
      with Not_found -> [] end
   | _ -> [];;
 
-let initial_of_decls arch x =
-  match interpreter_initial_eval arch x (chars_of_string "main") [] with
+let initial_of_decls arch x argv =
+  match interpreter_initial_eval arch x argv with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
-let initial_of_cabs arch x = initial_of_decls arch (decls_of_cabs x);;
-let initial_of_file arch x = initial_of_decls arch (decls_of_file x);;
+let initial_of_cabs arch x argv = initial_of_decls arch (decls_of_cabs x) argv;;
+let initial_of_file arch x argv = initial_of_decls arch (decls_of_file x) argv;;
 
-let graph_of_decls arch x =
+let graph_of_decls arch x argv =
   match interpreter_all_eval arch (=) event_of_state
-     (fun x -> z_of_int (Hashtbl.hash x)) x (chars_of_string "main") [] with
+     (fun x -> z_of_int (Hashtbl.hash x)) x argv with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
-let graph_of_cabs arch x = graph_of_decls arch (decls_of_cabs x);;
-let graph_of_file arch x = graph_of_decls arch (decls_of_file x);;
+let graph_of_cabs arch x argv = graph_of_decls arch (decls_of_cabs x) argv;;
+let graph_of_file arch x argv = graph_of_decls arch (decls_of_file x) argv;;
 
-let stream_of_decls arch rand x =
+let stream_of_decls arch rand x argv =
   let choose =
     if rand
     then fun x -> nat_of_int (Random.int (int_of_nat x))
     else fun x -> nat_of_int 0 in
-  match interpreter_rand_eval arch event_of_state
-      choose x (chars_of_string "main") [] with
+  match interpreter_rand_eval arch event_of_state choose x argv with
   | Inl y -> raise (CH2O_error (string_of_chars y))
   | Inr y -> y;;
 
-let stream_of_cabs arch rand x = stream_of_decls arch rand (decls_of_cabs x);;
-let stream_of_file arch rand x = stream_of_decls arch rand (decls_of_file x);;
+let stream_of_cabs arch rand x argv =
+  stream_of_decls arch rand (decls_of_cabs x) argv;;
+let stream_of_file arch rand x argv =
+  stream_of_decls arch rand (decls_of_file x) argv;;
 
 let rec print_states l =
   match l with
@@ -902,12 +904,12 @@ let trace_graph trace_printfs x =
     done
   with Not_found -> ();;
 
-let trace_decls arch trace_printfs x =
-  trace_graph trace_printfs (graph_of_decls arch x);;
-let trace_cabs arch trace_printfs x =
-  trace_graph trace_printfs (graph_of_cabs arch x);;
-let trace_file arch trace_printfs x =
-  trace_graph trace_printfs (graph_of_file arch x);;
+let trace_decls arch trace_printfs x argv =
+  trace_graph trace_printfs (graph_of_decls arch x argv);;
+let trace_cabs arch trace_printfs x argv =
+  trace_graph trace_printfs (graph_of_cabs arch x argv);;
+let trace_file arch trace_printfs x argv =
+  trace_graph trace_printfs (graph_of_file arch x argv);;
 
 let run_stream x =
   Random.self_init ();
@@ -928,9 +930,9 @@ let run_stream x =
     done; 0
   with CH2O_exited y -> int_of_num y;;
 
-let run_decls arch rand x = run_stream (stream_of_decls arch rand x);;
-let run_cabs arch rand x = run_stream (stream_of_cabs arch rand x);;
-let run_file arch rand x = run_stream (stream_of_file arch rand x);;
+let run_decls arch rand x argv = run_stream (stream_of_decls arch rand x argv);;
+let run_cabs arch rand x argv = run_stream (stream_of_cabs arch rand x argv);;
+let run_file arch rand x argv = run_stream (stream_of_file arch rand x argv);;
 
 type mode = Run of bool | Trace of bool
 
@@ -940,7 +942,7 @@ let main () =
     Gc.major_heap_increment = 4194304 (* 4M *)
   };
   let mode = ref (Run false) in
-  let filename = ref "" in
+  let args = ref [] in
   let arch = ref {
     arch_sizes = lp64;
     arch_big_endian = false;
@@ -966,12 +968,14 @@ let main () =
         "big endian (default little)");
     ] in
   let usage_msg =
-    "Usage: "^Filename.basename(Sys.argv.(0))^" [options] filename" in
-  Arg.parse speclist (fun x -> filename := x) usage_msg;
-  if !filename = "" then exit (Arg.usage speclist usage_msg; 1) else
+    "Usage: "^Filename.basename(Sys.argv.(0))^" [options] filename [args]" in
+  Arg.parse speclist (fun x -> args := !args @ [x]) usage_msg;
+  if List.length !args == 0 then exit (Arg.usage speclist usage_msg; 1) else
+  let filename = List.hd !args in
+  let argv = List.map codes_of_string !args in
   match !mode with
-  | Run rand -> run_file !arch rand !filename
-  | Trace trace_printfs -> trace_file !arch trace_printfs !filename;
+  | Run rand -> run_file !arch rand filename argv
+  | Trace trace_printfs -> trace_file !arch trace_printfs filename argv;
   64;;
 
 let interactive () =

@@ -77,7 +77,9 @@ Arguments deendianize _ _ _ _ : simpl never.
 Arguments rank_eq_dec _ _ _ _ : simpl never.
 Arguments rank_subseteq_dec _ _ _ _ : simpl never.
 
-Notation "'charT'" := (IntType char_signedness char_rank) : int_type_scope.
+Notation "'charT{' K }" :=
+  (IntType (@char_signedness K _) (@char_rank K _)) : int_type_scope.
+Notation "'charT'" := (charT{ _ })%IT : int_type_scope.
 Notation "'ucharT'" := (IntType Unsigned char_rank) : int_type_scope.
 Notation "'scharT'" := (IntType Signed char_rank) : int_type_scope.
 Notation "'uintT'" := (IntType Unsigned int_rank) : int_type_scope.
