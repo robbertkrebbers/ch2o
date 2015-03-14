@@ -974,12 +974,6 @@ let main () =
   | Trace trace_printfs -> trace_file !arch trace_printfs filename argv;
   64;;
 
-let interactive () =
-  try
-    let s = Sys.argv.(0) in
-    let n = String.length s in
-    n >= 5 && String.sub s (n - 5) 5 = "ocaml"
-  with _ -> true;;
-
+let interactive () = Str.string_match (Str.regexp ".*ocaml$") Sys.argv.(0) 0;;
 if not (interactive ()) then exit (main());;
 
