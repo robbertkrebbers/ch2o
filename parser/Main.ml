@@ -934,8 +934,8 @@ type mode = Run of bool | Trace of bool
 
 let main () =
   Gc.set { (Gc.get()) with
-    Gc.minor_heap_size = 2048576; (* 2M *)
-    Gc.major_heap_increment = 4194304 (* 4M *)
+    Gc.minor_heap_size = 512 * 1024; (* 2M *)
+    Gc.major_heap_increment = 4 * 1024 * 1024 (* 4M *)
   };
   let mode = ref (Run false) in
   let args = ref [] in
