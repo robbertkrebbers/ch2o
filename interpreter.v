@@ -36,9 +36,9 @@ Fixpoint interpreter_args_go (args : list (list Z)) : M (list (val K)) :=
   end.
 Fixpoint interpreter_args (σs : list (type K))
     (args : list (list Z)) : M (list (val K)) :=
-  vs ← interpreter_args_go args;
   if decide (σs = []) then mret []
   else if decide (σs = [sintT; charT{K}.*.*])%T then
+    vs ← interpreter_args_go args;
     o ← insert_object perm_full (VArray (charT{K}.*) vs);
     mret [intV{sintT} (length vs);
           ptrV (Ptr (addr_top_array o (charT{K}.*) (length vs)))]
