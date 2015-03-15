@@ -142,15 +142,15 @@ Definition remove_dups_fast (l : list A) : list A :=
   | [] => []
   | [x] => [x]
   | _ =>
-     let n :Z := length l in
+     let n : Z := length l in
      elements (foldr (λ x, ({[ x ]} ∪)) ∅ l :
-       hashset (λ x, hash x `mod` n)%Z)
+       hashset (λ x, hash x `mod` (2 * n))%Z)
   end.
 Lemma elem_of_remove_dups_fast l x : x ∈ remove_dups_fast l ↔ x ∈ l.
 Proof.
   destruct l as [|x1 [|x2 l]]; try reflexivity.
   unfold remove_dups_fast; generalize (x1 :: x2 :: l); clear l; intros l.
-  generalize (λ x, hash x `mod` length l)%Z; intros f.
+  generalize (λ x, hash x `mod` (2 * length l))%Z; intros f.
   rewrite elem_of_elements; split.
   * revert x. induction l as [|y l IH]; intros x; simpl.
     { by rewrite elem_of_empty. }
