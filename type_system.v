@@ -84,7 +84,7 @@ Inductive expr_typed' (Γ : env K) (Δ : memenv K)
      expr_typed' Γ Δ τs e2 (inr τ2) →
      expr_typed' Γ Δ τs (e1 @{op} e2) (inr σ)
   | EIf_typed e1 e2 e3 τb σlr :
-     expr_typed' Γ Δ τs e1 (inr (baseT τb)) →
+     expr_typed' Γ Δ τs e1 (inr (baseT τb)) → τb ≠ TVoid →
      expr_typed' Γ Δ τs e2 σlr → expr_typed' Γ Δ τs e3 σlr →
      expr_typed' Γ Δ τs (if{e1} e2 else e3) σlr
   | EComma_typed e1 e2 τlr1 τlr2 :
@@ -136,7 +136,7 @@ Section expr_typed_ind.
     binop_typed op τ1 τ2 σ → (Γ,Δ,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
     (Γ,Δ,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 @{op} e2) (inr σ)).
   Context (Pif : ∀ e1 e2 e3 τb σlr,
-    (Γ,Δ,τs) ⊢ e1 : inr (baseT τb) → P e1 (inr (baseT τb)) →
+    (Γ,Δ,τs) ⊢ e1 : inr (baseT τb) → P e1 (inr (baseT τb)) → τb ≠ TVoid →
     (Γ,Δ,τs) ⊢ e2 : σlr → P e2 σlr →
     (Γ,Δ,τs) ⊢ e3 : σlr → P e3 σlr → P (if{e1} e2 else e3) σlr).
   Context (Pcomma : ∀ e1 e2 τlr1 τlr2,
@@ -190,7 +190,7 @@ Inductive ectx_item_typed' (Γ : env K) (Δ : memenv K)
      binop_typed op τ1 τ2 σ → (Γ,Δ,τs) ⊢ e1 : inr τ1 →
      ectx_item_typed' Γ Δ τs (e1 @{op} □) (inr τ2) (inr σ)
   | CIf_typed e2 e3 τb σlr :
-     (Γ,Δ,τs) ⊢ e2 : σlr → (Γ,Δ,τs) ⊢ e3 : σlr →
+     τb ≠ TVoid → (Γ,Δ,τs) ⊢ e2 : σlr → (Γ,Δ,τs) ⊢ e3 : σlr →
      ectx_item_typed' Γ Δ τs (if{□} e2 else e3) (inr (baseT τb)) σlr
   | CComma_typed e2 τlr1 τlr2 :
      (Γ,Δ,τs) ⊢ e2 : τlr2 → ectx_item_typed' Γ Δ τs (□ ,, e2) τlr1 τlr2
@@ -248,7 +248,7 @@ Inductive stmt_typed' (Γ : env K) (Δ : memenv K)
      stmt_typed' Γ Δ τs s (c,mσ) →
      stmt_typed' Γ Δ τs (loop s) (true,mσ)
   | SIf_typed e τb s1 s2 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Δ,τs) ⊢ e : inr (baseT τb) → locks e = ∅ →
+     (Γ,Δ,τs) ⊢ e : inr (baseT τb) → τb ≠ TVoid → locks e = ∅ →
      stmt_typed' Γ Δ τs s1 (c1,mσ1) → stmt_typed' Γ Δ τs s2 (c2,mσ2) →
      rettype_union mσ1 mσ2 mσ →
      stmt_typed' Γ Δ τs (if{e} s1 else s2) (c1 && c2, mσ).
@@ -268,11 +268,11 @@ Inductive sctx_item_typed' (Γ : env K) (Δ : memenv K)
   | CLoop_typed c mσ :
      sctx_item_typed' Γ Δ τs (loop □) (c,mσ) (true,mσ)
   | CIfL_typed e τb s2 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Δ,τs) ⊢ e : inr (baseT τb) → locks e = ∅ →
+     (Γ,Δ,τs) ⊢ e : inr (baseT τb) → τb ≠ TVoid → locks e = ∅ →
      (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) → rettype_union mσ1 mσ2 mσ →
      sctx_item_typed' Γ Δ τs (if{e} □ else s2) (c1,mσ1) (c1&&c2,mσ)
   | CIfR_typed e τb s1 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Δ,τs) ⊢ e : inr (baseT τb) → locks e = ∅ →
+     (Γ,Δ,τs) ⊢ e : inr (baseT τb) → τb ≠ TVoid → locks e = ∅ →
      (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → rettype_union mσ1 mσ2 mσ →
      sctx_item_typed' Γ Δ τs (if{e} s1 else □) (c2,mσ2) (c1&&c2,mσ).
 Global Instance sctx_typed: PathTyped envs (rettype K)
@@ -283,7 +283,7 @@ Inductive esctx_item_typed' (Γ : env K) (Δ : memenv K)
   | CDoE_typed τ : esctx_item_typed' Γ Δ τs (! □) τ (false,None)
   | CReturnE_typed τ : esctx_item_typed' Γ Δ τs (ret □) τ (true,Some τ)
   | CIfE_typed τb s1 s2 c1 mσ1 c2 mσ2 mσ :
-     (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) →
+     τb ≠ TVoid → (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) →
      rettype_union mσ1 mσ2 mσ →
      esctx_item_typed' Γ Δ τs (if{□} s1 else s2)%S (baseT τb) (c1&&c2,mσ).
 Global Instance esctx_item_typed: PathTyped envs (type K)

@@ -64,12 +64,9 @@ Fixpoint expr_eval `{Env K} (e : expr K) (Γ : env K)
      vs ← mapM (λ e, ⟦ e ⟧ Γ fs ρ m ≫= maybe inr) es;
      inr <$> F vs
   | if{e1} e2 else e3 =>
-     v1 ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe inr;
-     match val_true_false_dec m v1 with
-     | inleft (left _) => ⟦ e2 ⟧ Γ fs ρ m
-     | inleft (right _) => ⟦ e3 ⟧ Γ fs ρ m
-     | inright _ => None
-     end
+     vb ← ⟦ e1 ⟧ Γ fs ρ m ≫= maybe (inr ∘ VBase);
+     guard (base_val_branchable m vb);
+     if decide (base_val_is_0 vb) then ⟦ e3 ⟧ Γ fs ρ m else ⟦ e2 ⟧ Γ fs ρ m
   | e1 ,, e2 =>
      _ ← ⟦ e1 ⟧ Γ fs ρ m; ⟦ e2 ⟧ Γ fs ρ m
   | cast{τ} e =>
@@ -131,14 +128,14 @@ Context (Pcall : ∀ e f τs τ F es vs v,
   Forall2 (λ e v, ⟦ e ⟧ Γ fs ρ m = Some (inr v)) es vs →
   Forall2 (λ e v, P e (inr v)) es vs →
   F vs = Some v → P (call e @ es) (inr v)).
-Context (Pif1 : ∀ e1 e2 e3 v1 ν2,
-  ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
+Context (Pif1 : ∀ e1 e2 e3 vb ν2,
+  ⟦ e1 ⟧ Γ fs ρ m = Some (inr (VBase vb)) → P e1 (inr (VBase vb)) →
   ⟦ e2 ⟧ Γ fs ρ m = Some ν2 → P e2 ν2 →
-  val_true m v1 → P (if{e1} e2 else e3) ν2).
-Context (Pif2 : ∀ e1 e2 e3 v1 ν3,
-  ⟦ e1 ⟧ Γ fs ρ m = Some (inr v1) → P e1 (inr v1) →
+  base_val_branchable m vb → ¬base_val_is_0 vb → P (if{e1} e2 else e3) ν2).
+Context (Pif2 : ∀ e1 e2 e3 vb ν3,
+  ⟦ e1 ⟧ Γ fs ρ m = Some (inr (VBase vb)) → P e1 (inr (VBase vb)) →
   ⟦ e3 ⟧ Γ fs ρ m = Some ν3 → P e3 ν3 →
-  val_false v1 → P (if{e1} e2 else e3) ν3).
+  base_val_branchable m vb → base_val_is_0 vb → P (if{e1} e2 else e3) ν3).
 Context (Pcomma : ∀ e1 e2 ν1 ν2,
   ⟦ e1 ⟧ Γ fs ρ m = Some ν1 → P e1 ν1 →
   ⟦ e2 ⟧ Γ fs ρ m = Some ν2 → P e2 ν2 → P (e1,, e2) ν2).
@@ -161,11 +158,7 @@ Proof.
     eapply Pcall; eauto; clear Hf Hv; induction Hvs;
       decompose_Forall_hyps; simplify_option_equality; eauto. }
   induction e using @expr_ind_alt; intros;
-    repeat match goal with
-    | _ => progress simplify_option_equality
-    | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]
-    | _ => case_match
-    end; eauto.
+    repeat first [progress simplify_option_equality | case_match]; eauto.
 Qed.
 End expr_eval_ind.
 
@@ -268,11 +261,8 @@ Proof.
   * simplify_option_equality by eauto using val_binop_ok_weaken.
     by erewrite <-val_binop_weaken by eauto.
   * by simplify_option_equality.
-  * simplify_option_equality.
-    destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]];
-      naive_solver eauto using val_true_weaken.
-  * simplify_option_equality.
-    by destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]; eauto.
+  * simplify_option_equality by eauto using base_val_branchable_weaken; eauto.
+  * simplify_option_equality by eauto using base_val_branchable_weaken; eauto.
   * simplify_option_equality; eauto.
   * by simplify_option_equality by eauto using val_cast_ok_weaken.
   * simplify_option_equality by eauto using val_lookup_weaken_is_Some.
@@ -292,15 +282,13 @@ Proof.
     repeat match goal with
     | H : ⟦ _ ⟧ _ _ _ _ = _ |- _ => rewrite H
     | H : appcontext [index_alive'] |- _ => rewrite index_alive_erase' in H
-    | H : appcontext [val_true] |- _ => rewrite val_true_erase in H
+    | H : appcontext [base_val_branchable] |- _ => rewrite base_val_branchable_erase in H
     | H : appcontext [val_unop_ok] |- _ => rewrite val_unop_ok_erase in H
     | H : appcontext [val_binop_ok] |- _ => rewrite val_binop_ok_erase in H
     | H : appcontext [val_cast_ok] |- _ => rewrite val_cast_ok_erase in H
     | H : appcontext [mem_forced] |- _ => rewrite mem_forced_erase in H
     | _ => apply option_bind_ext_fun; intros
     | _ => case_option_guard; try done
-    | _ => destruct (val_true_false_dec (cmap_erase m) _) as [[[]|[]]|[]]
-    | _ => destruct (val_true_false_dec m _) as [[[]|[]]|[]]
     | _ => rewrite mem_lookup_erase
     | _ => case_match
     end; try done.

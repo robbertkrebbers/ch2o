@@ -75,12 +75,10 @@ Definition ehexec (Γ : env K) (k : ctx K)
   | #{Ωl} vl @{op} #{Ωr} vr =>
      guard (val_binop_ok Γ m op vl vr);
      {[ #{Ωl ∪ Ωr} (val_binop Γ op vl vr), m ]}
-  | if{#{Ω} v} e2 else e3 =>
-     match val_true_false_dec m v with
-     | inleft (left _) => {[ e2, mem_unlock Ω m ]}
-     | inleft (right _) => {[ e3, mem_unlock Ω m ]}
-     | inright _ => ∅
-     end
+  | if{#{Ω} (VBase vb)} e2 else e3 =>
+     guard (base_val_branchable m vb);
+     if decide (base_val_is_0 vb)
+     then {[ e3, mem_unlock Ω m ]} else {[ e2, mem_unlock Ω m ]}
   | %#{Ω} _,, er =>
      {[ er, mem_unlock Ω m ]}
   | cast{τ} (#{Ω} v) =>
@@ -189,19 +187,18 @@ Definition cexec (Γ : env K) (δ : funenv K)
   | Expr e =>
     match maybe2 EVal e with
     | Some (Ω,inr v) =>
-      match k with
+      match k return listset (state K) with
       | CExpr e (! □) :: k => {[ State k (Stmt ↗ (! e)) (mem_unlock Ω m) ]}
       | CExpr e (ret □) :: k =>
          {[ State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m) ]}
       | CExpr e (if{□} s1 else s2) :: k =>
-        match val_true_false_dec m v with
-        | inleft (left _) =>
-           {[State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m)]}
-        | inleft (right _) =>
-           {[State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)]}
-        | inright _ =>
-           {[ State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m ]}
-         end
+         vb ← of_option (maybe VBase v);
+         if decide (base_val_branchable m vb) return listset (state K) then
+           if decide (base_val_is_0 vb) return listset (state K) then
+             {[State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)]}
+           else 
+             {[State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m)]}
+         else {[ State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m ]}
       | _ => ∅
       end
     | Some (_,inl _) => ∅

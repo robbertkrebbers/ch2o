@@ -622,8 +622,10 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
        "binary operator cannot be typed"
   | CEIf ce1 ce2 ce3 =>
      '(e1,τ1) ← to_R <$> to_expr Δl ce1;
-     _ ← error_of_option (maybe TBase τ1)
+     τb ← error_of_option (maybe TBase τ1)
        "conditional argument of if expression of non-base type";
+     guard (τb ≠ TVoid) with
+       "conditional argument of if expression of void type";
      eτ2 ← to_R <$> to_expr Δl ce2;
      eτ3 ← to_R <$> to_expr Δl ce3;
      error_of_option (to_if_expr e1 eτ2 eτ3) "if expression cannot be typed"
@@ -633,20 +635,24 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
      mret (cast{voidT} e1,, e2, RT τ2)
   | CEAnd ce1 ce2 =>
      '(e1,τ1) ← to_R <$> to_expr Δl ce1;
-     _ ← error_of_option (maybe TBase τ1)
+     τb1 ← error_of_option (maybe TBase τ1)
        "first argument of && of non-base type";
+     guard (τb1 ≠ TVoid) with "first argument of && of void type";
      '(e2,τ2) ← to_R <$> to_expr Δl ce2;
-     _ ← error_of_option (maybe TBase τ2)
+     τb2 ← error_of_option (maybe TBase τ2)
        "second argument of && of non-base type";
+     guard (τb2 ≠ TVoid) with "second argument of && of void type";
      mret (if{e1} if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)
        else #(intV{sintT} 0), RT sintT)
   | CEOr ce1 ce2 =>
      '(e1,τ1) ← to_R <$> to_expr Δl ce1;
-     _ ← error_of_option (maybe TBase τ1)
+     τb1 ← error_of_option (maybe TBase τ1)
        "first argument of || of non-base type";
+     guard (τb1 ≠ TVoid) with "first argument of || of void type";
      '(e2,τ2) ← to_R <$> to_expr Δl ce2;
-     _ ← error_of_option (maybe TBase τ2)
+     τb2 ← error_of_option (maybe TBase τ2)
        "second argument of || of non-base type";
+     guard (τb2 ≠ TVoid) with "second argument of || of void type";
      mret (if{e1} #(intV{sintT} 0)
        else (if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)), RT sintT)
   | CECast cσ ci =>
@@ -914,17 +920,21 @@ Definition to_stmt (τret : type K) :
   | CSLabel l cs => '(s,cmσ) ← go Δl cs; mret (l :; s, cmσ)
   | CSWhile ce cs =>
      '(e,τ) ← to_R <$> to_expr Δl ce;
-     _ ← error_of_option (maybe TBase τ)
-       "while loop with conditional expression of non-base type";
+     τb ← error_of_option (maybe TBase τ)
+       "conditional argument of while statement of non-base type";
+     guard (τb ≠ TVoid) with
+       "conditional argument of while statement of void type";
      '(s,cmσ) ← go Δl cs;
      mret (catch (loop (if{e} skip else throw 0 ;; catch s)), (false, cmσ.2))
   | CSFor ce1 ce2 ce3 cs =>
      '(e1,τ1) ← to_R <$> to_expr Δl ce1;
      '(e2,τ2) ← to_R <$> to_expr Δl ce2;
-     _ ← error_of_option (maybe TBase τ2)
-       "for loop with conditional expression of non-base type";
      '(e3,τ3) ← to_R <$> to_expr Δl ce3;
      '(s,cmσ) ← go Δl cs;
+     τb ← error_of_option (maybe TBase τ2)
+       "conditional argument of for statement of non-base type";
+     guard (τb ≠ TVoid) with
+       "conditional argument of for statement of void type";
      mret (!(cast{voidT} e1) ;;
        catch (loop (
          if{e2} skip else throw 0 ;; catch s ;; !(cast{voidT} e3)
@@ -932,14 +942,19 @@ Definition to_stmt (τret : type K) :
   | CSDoWhile cs ce =>
      '(s,cmσ) ← go Δl cs;
      '(e,τ) ← to_R <$> to_expr Δl ce;
-     _ ← error_of_option (maybe TBase τ)
-       "do-while loop with conditional expression of non-base type";
+     τb ← error_of_option (maybe TBase τ)
+       "conditional argument of do-while statement of non-base type";
+     guard (τb ≠ TVoid) with
+       "conditional argument of do-while statement of void type";
      mret (catch (loop (catch s ;; if{e} skip else throw 0)), (false, cmσ.2))
   | CSIf ce cs1 cs2 =>
      '(e,τ) ← to_R <$> to_expr Δl ce;
-     _ ← error_of_option (maybe TBase τ) "if with expression of non-base type";
      '(s1,cmσ1) ← go Δl cs1;
      '(s2,cmσ2) ← go Δl cs2;
+     τb ← error_of_option (maybe TBase τ)
+       "conditional argument of if statement of non-base type";
+     guard (τb ≠ TVoid) with
+       "conditional argument of if statement of void type";
      mσ ← error_of_option (rettype_union_alt (cmσ1.2) (cmσ2.2))
        "if statement with non-matching return types";
      mret (if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S

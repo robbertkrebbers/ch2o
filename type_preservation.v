@@ -146,17 +146,17 @@ Proof.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, mem_unlock_forward, val_typed_weaken,
       mem_unlock_valid', expr_typed_weaken.
-  * intros m k e Ω v s1 s2 ? (τf&HS&?&?) ?; typed_inversion_all.
-    split; eauto using mem_unlock_forward.
-    eexists; simpl; split_ands; repeat typed_constructor;
-      eauto using ctx_typed_weaken, expr_typed_weaken,
-      stmt_typed_weaken, mem_unlock_forward, mem_unlock_valid'.
-  * intros m k e Ω v s1 s2 ? (τf&HS&?&?) ?; typed_inversion_all.
+  * intros m k e Ω v s1 s2 ?? (τf&HS&?&?) ?; typed_inversion_all.
     split; eauto using mem_unlock_forward.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, expr_typed_weaken,
       stmt_typed_weaken, mem_unlock_forward, mem_unlock_valid'.
   * intros m k e Ω v s1 s2 ?? (τf&HS&?&?) ?; typed_inversion_all.
+    split; eauto using mem_unlock_forward.
+    eexists; simpl; split_ands; repeat typed_constructor;
+      eauto using ctx_typed_weaken, expr_typed_weaken,
+      stmt_typed_weaken, mem_unlock_forward, mem_unlock_valid'.
+  * intros m k e Ω v s1 s2 ? (τf&HS&?&?) ?; typed_inversion_all.
     split; eauto using mem_unlock_forward.
     eexists; simpl; split_ands; repeat typed_constructor;
       eauto using ctx_typed_weaken, expr_typed_weaken,
@@ -264,9 +264,14 @@ Proof.
       left. destruct n; ctx_inversion Hk; try lia || solve_cred.
   * destruct (is_nf_or_redex e) as [Hnf|(E&e'&?&->)].
     { destruct Hnf as [Ω [v|]]; typed_inversion_all.
-      ctx_inversion Hk; left; try solve_cred;
-        destruct (val_true_false_dec m v)
-        as [[[??]|[??]]|[??]]; solve_cred. }
+      ctx_inversion Hk; left;
+        try match goal with
+        | H : _ ⊢ v : baseT ?τb |- _ =>
+           let vb := fresh in
+           destruct v as [vb| | | |]; typed_inversion_all;
+           destruct (decide (base_val_is_0 vb)),
+             (decide (base_val_branchable m vb))
+        end; solve_cred. }
     destruct (ehstep_dec Γ (locals k) e' m) as [(e''&m''&?)|He''].
     { left; solve_cred. }
     destruct (maybe_ECall_redex e') as [[[[[[Ω f'] σs] σ] Ωs] vs]|] eqn:Hf.

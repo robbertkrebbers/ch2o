@@ -63,7 +63,7 @@ Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
      τ2 ← type_check Γs e2 ≫= maybe inr;
      inr <$> binop_type_of op τ1 τ2
   | if{e1} e2 else e3 =>
-     _ ← type_check Γs e1 ≫= maybe (inr ∘ TBase);
+     τb ← type_check Γs e1 ≫= maybe (inr ∘ TBase); guard (τb ≠ @TVoid K);
      τlr2 ← type_check Γs e2;
      τlr3 ← type_check Γs e3;
      guard (τlr2 = τlr3); Some τlr2
@@ -117,7 +117,7 @@ Global Instance ectx_item_lookup :
      τ1 ← type_check Γs e1 ≫= maybe inr;
      inr <$> binop_type_of op τ1 τ2
   | if{□} e2 else e3, inr τ1 =>
-     _ ← maybe TBase τ1;
+     τb ← maybe TBase τ1; guard (τb ≠ @TVoid K);
      τlr2 ← type_check Γs e2;
      τlr3 ← type_check Γs e3;
      guard (τlr2 = τlr3); Some τlr2
@@ -174,7 +174,8 @@ Global Instance stmt_type_check: TypeCheck envs (rettype K) (stmt K) :=
   | catch s => '(c,mσ) ← type_check Γs s; Some (false,mσ)
   | loop s => '(_,mσ) ← type_check Γs s; Some (true,mσ)
   | if{e} s1 else s2 =>
-     _ ← type_check Γs e ≫= maybe (inr ∘ TBase); guard (locks e = ∅);
+     τb ← type_check Γs e ≫= maybe (inr ∘ TBase); guard (τb ≠ @TVoid K);
+     guard (locks e = ∅);
      '(c1,mσ1) ← type_check Γs s1;
      '(c2,mσ2) ← type_check Γs s2;
      mσ ← rettype_union_alt mσ1 mσ2; Some (c1 && c2,mσ)
@@ -191,11 +192,13 @@ Global Instance sctx_item_lookup :
   | catch □, (c,mσ) => Some (false,mσ)
   | loop □, (c,mσ) => Some (true,mσ)
   | if{e} □ else s2, (c1,mσ1) =>
-     _ ← type_check Γs e ≫= maybe (inr ∘ TBase); guard (locks e = ∅);
+     τb ← type_check Γs e ≫= maybe (inr ∘ TBase); guard (τb ≠ @TVoid K);
+     guard (locks e = ∅);
      '(c2,mσ2) ← type_check Γs s2;
      mσ ← rettype_union_alt mσ1 mσ2; Some (c1&&c2,mσ)
   | if{e} s1 else □, (c2,mσ2) =>
-     _ ← type_check Γs e ≫= maybe (inr ∘ TBase); guard (locks e = ∅);
+     τb ← type_check Γs e ≫= maybe (inr ∘ TBase); guard (τb ≠ @TVoid K);
+     guard (locks e = ∅);
      '(c1,mσ1) ← type_check Γs s1;
      mσ ← rettype_union_alt mσ1 mσ2; Some (c1&&c2,mσ)
   end%S.
@@ -205,6 +208,7 @@ Global Instance esctx_item_lookup :
   | ! □, _ => Some (false,None)
   | ret □, _ => Some (true,Some τlr)
   | if{□} s1 else s2, baseT τb =>
+     guard (τb ≠ TVoid);
      '(c1,mσ1) ← type_check Γs s1;
      '(c2,mσ2) ← type_check Γs s2;
      mσ ← rettype_union_alt mσ1 mσ2; Some (c1 && c2,mσ)
@@ -365,7 +369,8 @@ Proof.
   * revert τs mcτ.
     induction s; intros; simplify; typed_constructor; naive_solver.
   * induction 1; simplify_option_equality;
-      erewrite ?rettype_union_alt_complete,?type_check_complete by eauto; eauto.
+      erewrite ?rettype_union_alt_complete, ?type_check_complete by eauto;
+      simplify_option_equality; eauto.
 Qed.
 Hint Resolve (type_check_sound (V:=stmt K)).
 Global Instance: PathTypeCheckSpec envs

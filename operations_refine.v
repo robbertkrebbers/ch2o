@@ -181,16 +181,40 @@ Proof.
 Qed.
 
 (** ** Refinements of operations on base values *)
-Lemma base_val_true_refine Γ α f m1 m2 vb1 vb2 τb :
+Lemma base_val_branchable_refine Γ α f m1 m2 vb1 vb2 τb :
   vb1 ⊑{Γ,α,f@'{m1}↦'{m2}} vb2 : τb →
-  base_val_true m1 vb1 → base_val_true m2 vb2.
+  base_val_branchable m1 vb1 → base_val_branchable m2 vb2.
+Proof. destruct 1; naive_solver eauto 10 using ptr_alive_refine'. Qed.
+Lemma base_val_is_0_refine Γ α f Δ1 Δ2 vb1 vb2 τb :
+  vb1 ⊑{Γ,α,f@Δ1↦Δ2} vb2 : τb → base_val_is_0 vb1 → base_val_is_0 vb2.
+Proof. by destruct 1 as [| | | |??? []|???? []| | |]. Qed.
+Lemma base_val_is_0_refine_inv Γ α f m1 m2 vb1 vb2 τb :
+  vb1 ⊑{Γ,α,f@'{m1}↦'{m2}} vb2 : τb → base_val_branchable m1 vb1 →
+  base_val_is_0 vb2 → base_val_is_0 vb1.
 Proof.
   destruct 1 as [| | | |??? []|???? []| | |];
     naive_solver eauto 10 using addr_alive_refine.
 Qed.
-Lemma base_val_false_refine Γ α f Δ1 Δ2 vb1 vb2 τb :
-  vb1 ⊑{Γ,α,f@Δ1↦Δ2} vb2 : τb → base_val_false vb1 → base_val_false vb2.
-Proof. by destruct 1 as [| | | |??? []|???? []| | |]. Qed.
+Lemma base_val_true_refine_inv Γ α f m1 m2 vb1 vb2 τb :
+  vb1 ⊑{Γ,α,f@'{m1}↦'{m2}} vb2 : τb →
+  base_val_branchable m2 vb2 → ¬base_val_is_0 vb2 →
+  (**i 1.) *) base_val_branchable m1 vb1 ∧ ¬base_val_is_0 vb1 ∨
+  (**i 2.) *) α ∧ ¬base_val_branchable m1 vb1.
+Proof.
+  intros; destruct α; eauto 10 using base_val_branchable_refine,
+    base_val_refine_inverse, base_val_is_0_refine.
+  destruct (decide (base_val_branchable m1 vb1));
+    eauto 10 using base_val_is_0_refine.
+Qed.
+Lemma base_val_false_refine_inv Γ α f m1 m2 vb1 vb2 τb :
+  vb1 ⊑{Γ,α,f@'{m1}↦'{m2}} vb2 : τb → base_val_is_0 vb2 →
+  base_val_is_0 vb1 ∨ (α ∧ ¬base_val_branchable m1 vb1).
+Proof.
+  intros; destruct α; eauto using base_val_is_0_refine, base_val_refine_inverse.
+  destruct (decide (base_val_branchable m1 vb1));
+    eauto using base_val_is_0_refine_inv.
+Qed.
+
 Lemma base_val_unop_ok_refine Γ α f m1 m2 op vb1 vb2 τb :
   vb1 ⊑{Γ,α,f@'{m1}↦'{m2}} vb2 : τb →
   base_val_unop_ok m1 op vb1 → base_val_unop_ok m2 op vb2.
@@ -266,42 +290,6 @@ Proof.
 Qed.
 
 (** ** Refinements of operations on values *)
-Lemma val_true_refine Γ α f m1 m2 v1 v2 τ :
-  v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → val_true m1 v1 → val_true m2 v2.
-Proof. destruct 1; simpl; eauto using base_val_true_refine. Qed.
-Lemma val_false_refine Γ α f Δ1 Δ2 v1 v2 τ :
-  v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ → val_false v1 → val_false v2.
-Proof. destruct 1; simpl; eauto using base_val_false_refine. Qed.
-Lemma val_true_false_refine Γ α f m1 m2 v1 v2 τ :
-  val_true m1 v1 → val_false v2 → v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → False.
-Proof.
-  intros. by destruct (val_true_false_dec m2 v2)
-    as [[[??]|[??]]|[??]]; eauto using val_true_refine.
-Qed.
-Lemma val_false_true_refine Γ α f m1 m2 v1 v2 τ :
-  val_false v1 → val_true m2 v2 → v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → False.
-Proof.
-  intros. by destruct (val_true_false_dec m2 v2)
-    as [[[??]|[??]]|[??]]; eauto using val_false_refine.
-Qed.
-Lemma val_true_refine_inv Γ α f m1 m2 v1 v2 τ :
-  v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → val_true m2 v2 →
-  val_true m1 v1 ∨ (α ∧ ¬val_true m1 v1 ∧ ¬val_false v1).
-Proof.
-  intros. destruct α.
-  * destruct (val_true_false_dec m1 v1) as [[[??]|[??]]|[??]];
-      naive_solver eauto using val_false_true_refine.
-  * eauto using val_true_refine, val_refine_inverse.
-Qed.
-Lemma val_false_refine_inv Γ α f m1 m2 v1 v2 τ :
-  v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → val_false v2 →
-  val_false v1 ∨ (α ∧ ¬val_true m1 v1 ∧ ¬val_false v1).
-Proof.
-  intros. destruct α.
-  * destruct (val_true_false_dec m1 v1) as [[[??]|[??]]|[??]];
-      naive_solver eauto using val_true_false_refine.
-  * eauto using val_false_refine, val_refine_inverse.
-Qed.
 Lemma val_unop_ok_refine Γ α f m1 m2 op v1 v2 τ :
   v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ →
   val_unop_ok m1 op v1 → val_unop_ok m2 op v2.

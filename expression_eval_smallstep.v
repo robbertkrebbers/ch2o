@@ -72,7 +72,6 @@ Proof.
   destruct 1; inversion 1;
     by repeat match goal with
     | H : is_pure (%#{_} _) |- _ => inversion H; clear H
-    | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]
     | _ => progress simplify_option_equality
     end || solve_elem_of.
 Qed.

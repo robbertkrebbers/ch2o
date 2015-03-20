@@ -24,7 +24,6 @@ Proof.
     | H : assign_exec _ _ _ _ _ = Some _ |- _ =>
       apply assign_exec_correct in H
     | _ => progress decompose_elem_of
-    | _ => destruct (val_true_false_dec _) as [[[??]|[??]]|[??]]
     | H : ctx_lookup _ _ = _ |- _ => rewrite ctx_lookup_correct in H
     | _ => progress simplify_equality'
     | _ => case_match
@@ -39,7 +38,6 @@ Proof.
       apply assign_exec_correct in H
     | H : is_Some _ |- _ => destruct H as [??]
     | _ => progress decompose_empty
-    | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]
     | H : locals _ !! _ = Some _ |- _ => rewrite <-ctx_lookup_correct in H
     | H : of_option ?o ≫= _ ≡ _, Ho : ?o = Some _ |- _ =>
        rewrite Ho in H; csimpl in H; rewrite collection_bind_singleton in H
@@ -69,11 +67,11 @@ Proof.
     | H : _ ∈ ehexec _ _ _ _ |- _ => apply ehexec_sound in H
     | H : _ ∈ expr_redexes _ |- _ =>
       apply expr_redexes_correct in H; destruct H
+    | H : maybe VBase ?vb = _ |- _ => is_var vb; destruct vb
     | H : maybe_ECall_redex _ = Some _ |- _ =>
       apply maybe_ECall_redex_Some in H; destruct H
     | _ => progress decompose_elem_of
     | _ => case_decide
-    | _ => destruct (val_true_false_dec _) as [[[??]|[??]]|[??]]
     | _ => case_match
     | _ => progress simplify_equality'
     | H : maybe2 _ ?e = Some _ |- _ => is_var e; destruct e

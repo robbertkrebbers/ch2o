@@ -25,11 +25,12 @@ Hint Extern 0 (_ ⊑{_,_,_@_↦_} _ : _ ↣ _) => refine_constructor.
 Hint Resolve cmap_refine_memenv_refine'.
 Hint Resolve addr_alive_refine addr_strict_refine mem_writable_refine.
 Hint Resolve val_unop_ok_refine val_binop_ok_refine val_cast_ok_refine.
-Hint Resolve val_true_refine val_false_refine mem_freeable_refine.
+Hint Resolve base_val_is_0_refine base_val_branchable_refine base_val_is_0_refine_inv.
+Hint Resolve mem_freeable_refine.
 Hint Resolve val_lookup_is_Some_refine.
 Hint Immediate cmap_refine_valid_l' cmap_refine_valid_l.
 Hint Immediate cmap_refine_valid_r' cmap_refine_valid_r.
-Hint Immediate addr_refine_typed_l val_refine_typed_l.
+Hint Immediate addr_refine_typed_l val_refine_typed_l base_val_refine_typed_l.
 Hint Immediate addr_refine_typed_r val_refine_typed_r.
 Hint Immediate expr_refine_typed_l expr_refine_typed_r.
 Hint Immediate ctx_refine_typed_l ctx_refine_typed_r.
@@ -47,6 +48,7 @@ Hint Extern 0 (is_undef_state (State _ (Undef ?Su) _)) => by exists Su.
 Hint Resolve ctx_typed_locals_valid.
 Hint Immediate ctx_refine_locals_refine.
 Hint Resolve TArray_valid.
+Hint Immediate base_val_is_0_branchable.
 
 Lemma assign_refine Γ α f m1 m2 ass a1 a2 v1 v2 v1' va1' τ τ' σ :
   ✓ Γ → m1 ⊑{Γ,α,f} m2 → assign_typed τ τ' ass σ →
@@ -264,7 +266,7 @@ Proof.
         ectx_refine_weaken, vals_refine_weaken,
         ctx_refine_weaken, mem_unlock_forward, option_eq_1_alt.
     + go f. right; auto. eexists; split_ands; eauto.
-      repeat typed_constructor; eauto using base_val_refine_typed_l,
+      repeat typed_constructor; eauto using
         EVals_typed, vals_refine_typed_l, locks_list_refine_valid_l.
   * intros; invert. eexists f, _; split_ands; [| |auto].
     { apply cstep_expr_undef;
@@ -277,13 +279,13 @@ Proof.
   * intros; invert. go f.
     repeat refine_constructor; eauto using mem_unlock_forward,val_refine_weaken,
       expr_refine_weaken, ctx_refine_weaken, mem_unlock_refine'.
-  * intros; invert. edestruct val_true_refine_inv as [|(?&?&?)]; eauto.
+  * intros; invert. edestruct base_val_true_refine_inv as [[??]|[??]]; eauto.
     + go f. repeat refine_constructor;
         eauto using mem_unlock_refine', ctx_refine_weaken,
         expr_refine_weaken, stmt_refine_weaken, mem_unlock_forward.
     + go f. right; auto.
       eexists; split_ands; eauto; repeat typed_constructor; eauto.
-  * intros; invert. edestruct val_false_refine_inv as [|(?&?&?)]; eauto.
+  * intros; invert. edestruct base_val_false_refine_inv as [|[??]]; eauto.
     + go f. repeat refine_constructor;
         eauto using mem_unlock_refine', ctx_refine_weaken,
         expr_refine_weaken, stmt_refine_weaken, mem_unlock_forward.

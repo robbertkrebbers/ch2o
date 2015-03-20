@@ -74,12 +74,12 @@ Inductive ehstep `{Env K} (Γ : env K) (ρ : stack K) :
   | ehstep_binop op m Ω1 Ω2 v1 v2 :
      val_binop_ok Γ m op v1 v2 →
      Γ\ ρ ⊢ₕ #{Ω1} v1 @{op} #{Ω2} v2, m ⇒ #{Ω1 ∪ Ω2} (val_binop Γ op v1 v2), m
-  | ehstep_if_true m Ω v e1 e2 :
-     val_true m v →
-     Γ\ ρ ⊢ₕ if{#{Ω} v} e1 else e2, m ⇒ e1, mem_unlock Ω m
-  | ehstep_if_false m Ω v e1 e2 :
-     val_false v →
-     Γ\ ρ ⊢ₕ if{#{Ω} v} e1 else e2, m ⇒ e2, mem_unlock Ω m
+  | ehstep_if_true m Ω vb e1 e2 :
+     base_val_branchable m vb → ¬base_val_is_0 vb →
+     Γ\ ρ ⊢ₕ if{#{Ω} (VBase vb)} e1 else e2, m ⇒ e1, mem_unlock Ω m
+  | ehstep_if_false m Ω vb e1 e2 :
+     base_val_branchable m vb → base_val_is_0 vb →
+     Γ\ ρ ⊢ₕ if{#{Ω} (VBase vb)} e1 else e2, m ⇒ e2, mem_unlock Ω m
   | ehstep_comma m Ω ν e2 :
      Γ\ ρ ⊢ₕ %#{Ω} ν,,e2, m ⇒ e2, mem_unlock Ω m
   | ehstep_cast m τ Ω v :
@@ -149,18 +149,18 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
   | cstep_expr_ret m k e Ω v :
      Γ\ δ ⊢ₛ State (CExpr e (ret □) :: k) (Expr (#{Ω} v)) m ⇒
              State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m)
-  | cstep_expr_if_true m k e Ω v s1 s2 :
-     val_true m v →
-     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
+  | cstep_expr_if_true m k e Ω vb s1 s2 :
+     base_val_branchable m vb → ¬base_val_is_0 vb →
+     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} (VBase vb))) m ⇒
              State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m)
-  | cstep_expr_if_false m k e Ω v s1 s2 :
-     val_false v →
-     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
+  | cstep_expr_if_false m k e Ω vb s1 s2 :
+     base_val_branchable m vb → base_val_is_0 vb →
+     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} (VBase vb))) m ⇒
              State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)
-  | cstep_expr_if_indet m k e Ω v s1 s2 :
-     ¬val_true m v → ¬val_false v →
-     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} v)) m ⇒
-             State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m
+  | cstep_expr_if_indet m k e Ω vb s1 s2 :
+     ¬base_val_branchable m vb →
+     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} (VBase vb))) m ⇒
+             State k (Undef (UndefBranch (if{□} s1 else s2) Ω (VBase vb))) m
 
   (**i For compound statements: *)
   | cstep_in_comp m k s1 s2 :
@@ -297,20 +297,20 @@ Section inversion.
        (∀ Ω v k' e',
          e = (#{Ω} v)%E → k = CExpr e' (ret □) :: k' →
          P (State k' (Stmt (⇈ v) (ret e')) (mem_unlock Ω m))) →
-       (∀ Ω v k' e' s1 s2,
-         e = (#{Ω} v)%E → val_true m v →
+       (∀ Ω vb k' e' s1 s2,
+         e = (#{Ω} (VBase vb))%E → base_val_branchable m vb → ¬base_val_is_0 vb →
          k = CExpr e' (if{□} s1 else s2) :: k' →
          P (State (CStmt (if{e'} □ else s2) :: k')
            (Stmt ↘ s1) (mem_unlock Ω m))) →
-       (∀ Ω v k' e' s1 s2,
-         e = (#{Ω} v)%E → val_false v →
+       (∀ Ω vb k' e' s1 s2,
+         e = (#{Ω} (VBase vb))%E → base_val_branchable m vb → base_val_is_0 vb →
          k = CExpr e' (if{□} s1 else s2) :: k' →
          P (State (CStmt (if{e'} s1 else □) :: k')
            (Stmt ↘ s2) (mem_unlock Ω m))) →
-       (∀ Ω v k' e' s1 s2,
-         e = (#{Ω} v)%E → ¬val_true m v → ¬val_false v →
+       (∀ Ω vb k' e' s1 s2,
+         e = (#{Ω} (VBase vb))%E → ¬base_val_branchable m vb →
          k = CExpr e' (if{□} s1 else s2) :: k' →
-         P (State k' (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m)) →
+         P (State k' (Undef (UndefBranch (if{□} s1 else s2) Ω (VBase vb))) m)) →
        (∀ (E : ectx K) e1 e2 m2,
          e = subst E e1 → Γ\ locals k ⊢ₕ e1, m ⇒ e2, m2 →
          P (State k (Expr (subst E e2)) m2)) →
@@ -422,11 +422,14 @@ Section inversion.
     | CExpr e (ret □) =>
        P (State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m)) → P S2
     | CExpr e (if{□} s1 else s2) =>
-      (val_true m v →
+      (∀ vb,
+        v = VBase vb → base_val_branchable m vb → ¬base_val_is_0 vb →
         P (State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m))) →
-      (val_false v →
+      (∀ vb,
+        v = VBase vb → base_val_branchable m vb → base_val_is_0 vb →
         P (State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m))) →
-      (¬val_true m v → ¬val_false v →
+      (∀ vb,
+        v = VBase vb → ¬base_val_branchable m vb →
         P (State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m)) → P S2
     | _ => P S2
     end.
@@ -527,8 +530,6 @@ Tactic Notation "inv_cstep" hyp(H) :=
     simplify_list_subst_equality;
     repeat match goal with
     | _ => done
-    | _ : val_true ?m ?v, _ : val_false ?v |- _ =>
-       by destruct (val_true_false m v)
     | H : suffix_of _ _ |- _ => progress (simpl in H; simplify_suffix_of)
     | H : _\ _ ⊢ₕ #{_} _, _ ⇒ _, _ |- _ => by inversion H
     | H : _\ _ ⊢ₕ %{_} _, _ ⇒ _, _ |- _ => by inversion H
@@ -721,12 +722,14 @@ Qed.
 Lemma ehstep_size ρ e1 m1 e2 m2 :
   Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → size e2 < size e1.
 Proof. destruct 1; simpl; lia. Qed.
-Lemma ehstep_if_true_no_locks ρ m v e2 e3 :
-  val_true m v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e2, m.
+Lemma ehstep_if_true_no_locks ρ m vb e2 e3 :
+  base_val_branchable m vb → ¬base_val_is_0 vb →
+  Γ\ ρ ⊢ₕ if{# (VBase vb)} e2 else e3, m ⇒ e2, m.
 Proof. rewrite <-(mem_unlock_empty m) at 3. by constructor. Qed.
-Lemma ehstep_if_false_no_locks ρ v e2 e3 m :
-  val_false v → Γ\ ρ ⊢ₕ if{# v} e2 else e3, m ⇒ e3, m.
-Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
+Lemma ehstep_if_false_no_locks ρ vb e2 e3 m :
+  base_val_branchable m vb → base_val_is_0 vb →
+  Γ\ ρ ⊢ₕ if{# (VBase vb)} e2 else e3, m ⇒ e3, m.
+Proof. intros. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
 Lemma ehstep_comma_no_locks ρ m ν e2 : Γ\ ρ ⊢ₕ %# ν ,, e2, m ⇒ e2, m.
 Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
 Lemma assign_sem_deterministic m a v ass v1 v2 va1 va2 :
@@ -741,7 +744,7 @@ Proof.
     try match goal with
     | H1 : assign_sem _ _ _ _ _ _ _, H2 : assign_sem _ _ _ _ _ _ _ |- _ =>
        destruct (assign_sem_deterministic _ _ _ _ _ _ _ _ H1 H2); subst
-    end; auto; exfalso; eauto using val_true_false.
+    end; by auto.
 Qed.
 Global Instance cstep_subrel_suffix_of δ k1 k2 :
   PropHolds (k1 `suffix_of` k2) →
@@ -767,8 +770,6 @@ Proof.
 Qed.
 Lemma cnf_in_ctx_undef m l k e : nf (cstep_in_ctx Γ δ l) (State k (Undef e) m).
 Proof. apply (nf_subrel _ (cstep Γ δ) _), cnf_undef. Qed.
-Lemma cnf_val m l Ω v : nf (cstep_in_ctx Γ δ l) (State l (Expr (#{Ω} v)) m).
-Proof. intros [S p]; inv_cstep p. Qed.
 Lemma cred_ectx (E : ectx K) k e m :
   red (cstep_in_ctx Γ δ k) (State k (Expr e) m) →
   red (cstep_in_ctx Γ δ k) (State k (Expr (subst E e)) m).

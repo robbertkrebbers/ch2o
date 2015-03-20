@@ -28,13 +28,13 @@ Proof.
     intros; eexists meminj_id, _, _; repeat match goal with
     | H : assign_sem _ _ _ _ _ _ _ |- _ =>
        apply assign_exec_correct in H
-    | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]; try done
     | H : ?o = Some _ |- context [of_option ?o] => rewrite H
     | _ => rewrite ctx_lookup_correct
     | _ => progress simplify_equality'
     | _ => rewrite collection_bind_singleton
     | _ => rewrite elem_of_singleton
     | _ => rewrite elem_of_union
+    | _ => rewrite decide_False by done
     | _ => rewrite collection_guard_True by done
     | _ => case_match; [|done]
     end; split_ands; eauto using cmap_refine_id', expr_refine_id).
@@ -61,7 +61,8 @@ Proof.
   destruct (cstep_preservation Γ δ S1 S2 g) as [HS2 Hδ2]; auto.
   revert Hδ1 HS1 Hδ2 HS2. case p; clear p; try by (
     intros; simpl; repeat match goal with
-    | _ => destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]]; try done
+    | _ => setoid_rewrite collection_bind_singleton
+    | _ => case_decide; try done
     end; eexists meminj_id, _; split_ands; eauto using state_refine_id).
   * intros m k Ei e ????.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
@@ -133,10 +134,6 @@ Proof.
     rewrite sctx_item_subst_labels, decide_True by solve_elem_of.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
     destruct Es; simpl; solve_elem_of.
-  * intros m k Es l s ?????; simpl; rewrite decide_False by done.
-    eexists meminj_id, _; split_ands; eauto using state_refine_id.
-  * intros m k Es l s ?????; simpl; rewrite decide_False by done.
-    eexists meminj_id, _; split_ands; eauto using state_refine_id.
   * intros m k d o τ s ??? (τf&?&?&?) _ _; typed_inversion_all.
     destruct (mem_alloc_new_refine' Γ false meminj_id m m
       (fresh (dom indexset m)) o false perm_full τ) as (f&?&?&?);

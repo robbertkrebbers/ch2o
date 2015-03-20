@@ -111,15 +111,18 @@ Section operations_definitions.
   Global Arguments ptr_cast _ !_ /.  
 
   (** ** Operations on base values *)
-  Definition base_val_true (m : mem K) (vb : base_val K) : Prop :=
+  Definition base_val_branchable (m : mem K) (vb : base_val K) : Prop :=
     match vb with
-    | VInt _ x => x ≠ 0
-    | VPtr (Ptr a) => index_alive' m (addr_index a)
-    | VPtr (FunPtr _ _ _) => True
+    | VInt _ _ => True
+    | VPtr p => ptr_alive' m p
     | _ => False
     end.
-  Definition base_val_false (vb : base_val K) : Prop :=
-    match vb with VInt _ x => x = 0 | VPtr (NULL _) => True | _ => False end.
+  Definition base_val_is_0 (vb : base_val K) : Prop :=
+    match vb with
+    | VInt _ x => x = 0
+    | VPtr (NULL _) => True
+    | _ => False
+    end.
   Definition base_val_0 (τb : base_type K) : base_val K :=
     match τb with
     | voidT => VVoid | intT τi => VInt τi 0 | τ.* => VPtr (NULL τ)
@@ -244,11 +247,6 @@ Section operations_definitions.
       | Struct_kind => VStruct t (rec <$> τs)
       | Union_kind => VUnion t 0 (default (VUnionAll t []) (τs !! 0) rec)
       end) Γ.
-
-  Definition val_true (m : mem K) (v : val K) : Prop :=
-    match v with VBase vb => base_val_true m vb | _ => False end.
-  Definition val_false (v : val K) : Prop :=
-    match v with VBase vb => base_val_false vb | _ => False end.
 
   Inductive unop_typed : unop → type K → type K → Prop :=
     | TBase_unop_typed op τb σb :
@@ -586,12 +584,13 @@ Proof. destruct p; simpl; auto using addr_cast_ok_erase. Qed.
 Lemma ptr_compare_ok_alive_l Γ m c p1 p2 :
   ptr_compare_ok Γ m c p1 p2 → ptr_alive ('{m}) p1.
 Proof.
-  destruct p1, p2, c; simpl; unfold addr_minus_ok, addr_compare_ok; naive_solver.
+  destruct p1,p2,c; simpl; unfold addr_minus_ok, addr_compare_ok; naive_solver.
 Qed.
 Lemma ptr_compare_ok_alive_r Γ m c p1 p2 :
   ptr_compare_ok Γ m c p1 p2 → ptr_alive ('{m}) p2.
 Proof.
-  destruct p1 as [|[]|], p2 as [|[]|], c; csimpl; unfold addr_compare_ok; naive_solver.
+  destruct p1 as [|[]|], p2 as [|[]|], c;
+    csimpl; unfold addr_compare_ok; naive_solver.
 Qed.
 Lemma ptr_plus_ok_alive Γ m p j : ptr_plus_ok Γ m j p → ptr_alive ('{m}) p.
 Proof. destruct p. done. intros [??]; simpl; eauto. done. Qed.
@@ -605,29 +604,29 @@ Lemma ptr_cast_ok_alive Γ m p σp : ptr_cast_ok Γ m σp p → ptr_alive ('{m})
 Proof. destruct p; simpl. done. intros [??]; eauto. done. Qed.
 
 (** ** Properties of operations on base values *)
-Definition base_val_true_false_dec m vb :
-  { base_val_true m vb ∧ ¬base_val_false vb }
-  + { ¬base_val_true m vb ∧ base_val_false vb }
-  + { ¬base_val_true m vb ∧ ¬base_val_false vb }.
+Global Instance base_val_branchable_dec m vb :
+  Decision (base_val_branchable m vb).
+Proof. destruct vb; apply _. Defined.
+Global Instance base_val_is_0_dec vb : Decision (base_val_is_0 vb).
 Proof.
  refine
   match vb with
-  | VInt _ x => inleft (cast_if_not (decide (x = 0)))
-  | VPtr (Ptr a) =>
-    if decide (index_alive' m (addr_index a))
-    then inleft (left _) else inright _
-  | VPtr (FunPtr _ _ _) => inleft (left _)
-  | VPtr (NULL _) => inleft (right _)
-  | _ => inright _
+  | VInt _ x => decide (x = 0) | VPtr (NULL _) => left _ | _ => right _
   end; abstract naive_solver.
 Defined.
-Lemma base_val_true_weaken Γ m1 m2 vb :
-  base_val_true m1 vb → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
-  base_val_true m2 vb.
-Proof. destruct vb as [| | |[]|]; simpl; auto. Qed.
-Lemma base_val_true_erase m vb :
-  base_val_true (cmap_erase m) vb = base_val_true m vb.
-Proof. by destruct vb as [| | |[]|]; simpl; rewrite ?index_alive_erase'. Qed.
+Lemma base_val_branchable_weaken m1 m2 vb :
+  base_val_branchable m1 vb →
+  (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  base_val_branchable m2 vb.
+Proof. destruct vb; simpl; eauto using ptr_alive_weaken'. Qed.
+Lemma base_val_branchable_erase m vb :
+  base_val_branchable (cmap_erase m) vb = base_val_branchable m vb.
+Proof.
+  by destruct vb; simpl; rewrite ?index_alive_erase', ?ptr_alive_erase'.
+Qed.
+Lemma base_val_is_0_branchable m vb :
+  base_val_is_0 vb → base_val_branchable m vb.
+Proof. by destruct vb as [| | |[]|]. Qed.
 
 Global Instance base_val_unop_ok_dec m op vb :
   Decision (base_val_unop_ok m op vb).
@@ -800,29 +799,6 @@ Proof.
     { typed_constructor; eauto. elim IH; csimpl; auto. }
     by destruct IH; simplify_equality'; typed_constructor; eauto.
 Qed.
-
-Definition val_true_false_dec m v :
-  { val_true m v ∧ ¬val_false v } + { ¬val_true m v ∧ val_false v }
-  + { ¬val_true m v ∧ ¬val_false v }.
-Proof.
- refine
-  match v with
-  | VBase vb =>
-     match base_val_true_false_dec m vb with
-     | inleft (left _) => inleft (left _)
-     | inleft (right _) => inleft (right _) | inright _ => inright _
-     end
-  | _ => inright _
-  end; abstract naive_solver.
-Defined.
-Lemma val_true_false m v : val_true m v → val_false v → False.
-Proof. by destruct (val_true_false_dec m v) as [[[??]|[??]]|[??]]. Qed.
-Lemma val_true_weaken Γ m1 m2 v :
-  val_true m1 v → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
-  val_true m2 v.
-Proof. destruct v; simpl; eauto using base_val_true_weaken. Qed.
-Lemma val_true_erase m v : val_true (cmap_erase m) v = val_true m v.
-Proof. by destruct v; simpl; auto using base_val_true_erase. Qed.
 
 Global Instance val_unop_ok_dec m op v : Decision (val_unop_ok m op v).
 Proof. destruct v; try apply _. Defined.

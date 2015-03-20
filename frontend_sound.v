@@ -399,7 +399,7 @@ Proof.
 Qed.
 Lemma to_if_expr_typed Γ m τs e1 τb e2 τ2 e3 τ3 e τe :
   to_if_expr e1 (e2,τ2) (e3,τ3) = Some (e,τe) →
-  (Γ,'{m},τs) ⊢ e1 : inr (baseT τb) → locks e1 = ∅ →
+  (Γ,'{m},τs) ⊢ e1 : inr (baseT τb) → τb ≠ TVoid → locks e1 = ∅ →
   (Γ,'{m},τs) ⊢ e2 : inr τ2 → locks e2 = ∅ →
   (Γ,'{m},τs) ⊢ e3 : inr τ3 → locks e3 = ∅ → ✓ Γ → ✓{Γ}* τs →
   (Γ,'{m},τs) ⊢ e : to_lrtype τe ∧ locks e = ∅.
