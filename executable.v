@@ -41,7 +41,6 @@ Definition ehexec (Γ : env K) (k : ctx K)
      '(o,τ) ← of_option (ctx_lookup x k);
      {[ %(addr_top o τ), m ]}
   | .* (#{Ω} (ptrV (Ptr a))) =>
-     guard (addr_strict Γ a);
      guard (index_alive' m (addr_index a));
      {[ %{Ω} a, m ]}
   | & (%{Ω} a) =>
@@ -54,7 +53,9 @@ Definition ehexec (Γ : env K) (k : ctx K)
   | load (%{Ω} a) =>
      v ← of_option (m !!{Γ} a);
      {[ #{Ω} v, mem_force Γ a m ]}
-  | %{Ω} a %> rs => {[ %{Ω} (addr_elt Γ rs a), m ]}
+  | %{Ω} a %> rs =>
+     guard (addr_strict Γ a);
+     {[ %{Ω} (addr_elt Γ rs a), m ]}
   | #{Ω} v #> rs =>
      v' ← of_option (v !!{Γ} rs);
      {[ #{Ω} v', m ]}

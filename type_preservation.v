@@ -48,7 +48,7 @@ Lemma ehstep_preservation Γ m1 m2 ρ e1 e2 τlr :
 Proof.
   intros ? [] ???.
   * typed_inversion_all; list_simplifier; split_ands; auto.
-    typed_constructor; eauto 8 using addr_top_typed, addr_top_strict,
+    typed_constructor; eauto 8 using addr_top_typed,
       cmap_index_typed_valid, lockset_empty_valid.
   * typed_inversion_all; auto.
   * typed_inversion_all; auto 10.
@@ -56,8 +56,9 @@ Proof.
     rewrite <-and_assoc; apply and_wlog_l; intros; split_ands.
     + eapply mem_lock_valid'; eauto using mem_insert_writable,
         mem_insert_valid', assign_preservation_2.
-    + typed_constructor; eauto using lockset_union_valid, lockset_valid_weaken,
-        lock_singleton_valid, val_typed_weaken, assign_preservation_1.
+    + typed_constructor; eauto 6 using lockset_union_valid,
+        lockset_valid_weaken, lock_singleton_valid, val_typed_weaken,
+        assign_preservation_1, mem_writable_strict.
     + intros. erewrite mem_lock_memenv_of by eauto using mem_insert_writable,
         mem_insert_valid', assign_preservation_2.
       eauto using mem_insert_forward, assign_preservation_2.
@@ -68,7 +69,7 @@ Proof.
         val_typed_weaken,  mem_lookup_typed.
     + eauto using mem_lookup_typed, mem_force_forward.
   * typed_inversion_all.
-    split_ands; eauto 7 using addr_elt_typed, addr_elt_strict.
+    split_ands; eauto 7 using addr_elt_typed.
   * typed_inversion_all; split_ands; eauto using val_lookup_seg_typed.
   * typed_inversion_all; split_ands; eauto 9 using type_valid_ptr_type_valid.
   * typed_inversion_all.

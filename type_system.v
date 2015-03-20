@@ -26,8 +26,7 @@ Global Instance stack_item_valid : Valid (memenv K) (index * type K) := λ Δ o�
 Global Instance rettype_valid : Valid (env K) (rettype K) := λ Γ mcτ,
   match mcτ.2 with Some τ => ✓{Γ} τ | _ => True end.
 Inductive lrval_typed' (Γ : env K) (Δ : memenv K) : lrval K → lrtype K → Prop :=
-  | lval_typed a τ :
-     (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → lrval_typed' Γ Δ (inl a) (inl τ)
+  | lval_typed a τ : (Γ,Δ) ⊢ a : TType τ → lrval_typed' Γ Δ (inl a) (inl τ)
   | rval_typed v τ : (Γ,Δ) ⊢ v : τ → lrval_typed' Γ Δ (inr v) (inr τ).
 Global Instance lrval_typed:
   Typed (env K * memenv K) (lrtype K) (lrval K) := curry lrval_typed'.
@@ -399,8 +398,6 @@ Proof. by constructor. Qed.
 
 Lemma lval_typed_inv Γ Δ a τ : (Γ,Δ) ⊢ inl a : inl τ → (Γ,Δ) ⊢ a : TType τ.
 Proof. by inversion 1. Qed.
-Lemma lval_typed_strict Γ Δ a τ : (Γ,Δ) ⊢ inl a : inl τ → addr_strict Γ a.
-Proof. by inversion 1. Qed.
 Lemma rval_typed_inv Γ Δ v τ : (Γ,Δ) ⊢ inr v : inr τ → (Γ,Δ) ⊢ v : τ.
 Proof. by inversion 1. Qed.
 
@@ -441,8 +438,7 @@ Qed.
 Lemma lrval_typed_weaken Γ1 Γ2 Δ1 Δ2 ν τlr :
   ✓ Γ1 → (Γ1,Δ1) ⊢ ν : τlr → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 → (Γ2,Δ2) ⊢ ν : τlr.
 Proof.
-  destruct 2; typed_constructor;
-    eauto using val_typed_weaken, addr_typed_weaken, addr_strict_weaken.
+  destruct 2; typed_constructor; eauto using val_typed_weaken,addr_typed_weaken.
 Qed.
 Lemma expr_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 e τlr :
   ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ e : τlr → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →

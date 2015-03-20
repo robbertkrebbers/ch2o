@@ -95,7 +95,7 @@ Proof.
     | H : stack_item_refine _ _ _ _ ?oτ |- _ => inversion H
     end; simplify_equality'.
     go f; auto.
-    refine_constructor; eauto 10 using addr_top_strict, addr_top_refine,
+    refine_constructor; eauto 10 using addr_top_refine,
       cmap_index_typed_valid, locks_empty_refine.
   * refine_inversion_all; [go f; auto|].
     exfalso; eauto using index_alive_1'.
@@ -107,13 +107,14 @@ Proof.
         mem_insert_writable, addr_refine_weaken, mem_insert_forward.
     + erewrite !mem_lock_memenv_of, !mem_insert_memenv_of
         by eauto using mem_insert_writable, mem_insert_valid'.
-      refine_constructor; eauto using locks_union_refine, lock_singleton_refine.
+      refine_constructor; eauto using locks_union_refine,
+        lock_singleton_refine, mem_writable_strict.
   * refine_inversion_all.
     edestruct mem_lookup_refine as (?&?&?); eauto; simplify_equality.
     go f; eauto using mem_force_refine'.
     erewrite !mem_force_memenv_of by eauto; eauto.
   * refine_inversion_all; go f; eauto.
-    refine_constructor; eauto using addr_elt_strict, addr_elt_refine.
+    refine_constructor; eauto using addr_elt_refine.
   * refine_inversion_all.
     edestruct val_lookup_seg_refine_alt as (?&?&?); eauto; simplify_equality.
     go f; eauto.
@@ -123,8 +124,8 @@ Proof.
       true perm_full (τ.[n])) as (f'&?&?&?);
       eauto using perm_full_mapped, perm_full_unshared.
     go f'; eauto.
-    refine_constructor; eauto 10 using addr_top_array_refine,
-      mem_alloc_new_index_typed', addr_top_array_strict.
+    refine_constructor;
+      eauto 10 using addr_top_array_refine, mem_alloc_new_index_typed'.
     eapply locks_refine_weaken; eauto using mem_alloc_new_forward', option_eq_1.
   * refine_inversion_all; go f.
     + eauto using mem_free_refine', mem_freeable_index_refine.
@@ -165,8 +166,8 @@ Proof.
       true perm_full (τ.[n])) as (f'&?&?&?);
       eauto using perm_full_mapped, perm_full_unshared.
     left; go f'; eauto.
-    refine_constructor; eauto 10 using addr_top_array_refine,
-      mem_alloc_new_index_typed', addr_top_array_strict.
+    refine_constructor;
+      eauto 10 using addr_top_array_refine, mem_alloc_new_index_typed'.
     eapply locks_refine_weaken; eauto using mem_alloc_new_forward',option_eq_1. }
   destruct (ehstep_dec Γ ρ1 e1 m1) as [(e1'&m1'&?)|?].
   * left. destruct (ehstep_refine_forward Γ α f

@@ -159,16 +159,16 @@ Program Definition assert_singleton `{EnvSpec K}
   assert_holds := λ Γ Δ ρ m, ∃ a v,
     (Γ,Δ,ρ.*2) ⊢ e1 : inl τ ∧ ⟦ e1 ⟧ Γ ∅ ρ ∅ = Some (inl a) ∧
     (Γ,Δ,ρ.*2) ⊢ e2 : inr τ ∧ ⟦ e2 ⟧ Γ ∅ ρ ∅ = Some (inr v) ∧
-    addr_is_obj a ∧ sep_valid x ∧ ¬sep_unmapped x ∧ 
+    addr_strict Γ a ∧ addr_is_obj a ∧ sep_valid x ∧ ¬sep_unmapped x ∧
     m = mem_singleton Γ a malloc x v
 |}.
 Next Obligation.
-  intros ??? e1 e2 ml x τ Γ1 Γ2 Δ1 Δ2 ρ m ??? (a&v&?&?&?&?&?&?&?&->) ??.
+  intros ??? e1 e2 ml x τ Γ1 Γ2 Δ1 Δ2 ρ m ??? (a&v&?&?&?&?&?&?&?&?&->) ??.
   exists a v; split_ands;
     eauto 15 using expr_typed_weaken, expr_eval_weaken_empty,
     purefuns_empty_valid, mem_singleton_weaken, cmap_valid_memenv_valid,
-    lval_typed_inv, lval_typed_strict, rval_typed_inv, expr_eval_typed,
-    cmap_empty_valid.
+    lval_typed_inv, rval_typed_inv, expr_eval_typed,
+    cmap_empty_valid, addr_strict_weaken.
 Qed.
 Notation "e1 ↦{ malloc , x } e2 : τ" := (assert_singleton e1 e2 malloc x τ)%A
   (at level 20, malloc at next level, x at next level, e2 at next level,
@@ -495,17 +495,17 @@ Qed.
 Global Instance assert_singleton_stack_indep e1 e2 malloc x τ :
   vars e1 = ∅ → vars e2 = ∅ → StackIndep (e1 ↦{malloc,x} e2 : τ).
 Proof.
-  intros ?? Γ Δ ρ1 ρ2 m ???? (a&v&?&?&?&?&?&?&?&->);
+  intros ?? Γ Δ ρ1 ρ2 m ???? (a&v&?&?&?&?&?&?&?&?&->);
     exists a v; erewrite !(expr_eval_var_free _ _ ρ2 ρ1) by eauto;
-    eauto 10 using expr_typed_var_free.
+    split_ands; eauto using expr_typed_var_free.
 Qed.
 Global Instance assert_singleton_unlock_indep Γ e1 e2 malloc x τ :
   perm_locked x = false → UnlockIndep (e1 ↦{malloc,x} e2 : τ).
 Proof.
-  intros ? Γ1 Δ1 ρ m ??? (a&v&?&?&?&?&?&?&?&->).
+  intros ? Γ1 Δ1 ρ m ??? (a&v&?&?&?&?&?&?&?&?&->).
   assert ((Γ1,Δ1) ⊢ v : τ ∧ (Γ1,Δ1) ⊢ a : TType τ ∧ addr_strict Γ1 a)
     as (?&?&?) by eauto 15 using cmap_valid_memenv_valid, lval_typed_inv,
-    lval_typed_strict, rval_typed_inv, expr_eval_typed, cmap_empty_valid.
+    rval_typed_inv, expr_eval_typed, cmap_empty_valid.
   exists a v; split_ands; eauto using mem_unlock_all_singleton_unlocked.
 Qed.
 
@@ -515,18 +515,18 @@ Lemma assert_singleton_union Γ e1 e2 malloc x y τ :
   ≡{Γ} (e1 ↦{malloc,x ∪ y} e2 : τ)%A.
 Proof.
   intros; split.
-  * intros Γ1 Δ1 ρ ????? (?&?&->&?&(a1&v1&?&?&?&?&?&?&?&->)&
-      (a2&v2&?&?&?&?&?&?&?&->)); simplify_equality'.
-    assert ((Γ1,Δ1) ⊢ v1 : τ ∧ (Γ1,Δ1) ⊢ a1 : TType τ ∧ addr_strict Γ1 a1)
-      as (?&?&?) by eauto 15 using cmap_valid_memenv_valid, lval_typed_inv,
-      lval_typed_strict, rval_typed_inv, expr_eval_typed, cmap_empty_valid.
+  * intros Γ1 Δ1 ρ ????? (?&?&->&?&(a1&v1&?&?&?&?&?&?&?&?&->)&
+      (a2&v2&?&?&?&?&?&?&?&?&->)); simplify_equality'.
+    assert ((Γ1,Δ1) ⊢ v1 : τ ∧ (Γ1,Δ1) ⊢ a1 : TType τ) as []
+      by eauto 15 using cmap_valid_memenv_valid, lval_typed_inv,
+      rval_typed_inv, expr_eval_typed, cmap_empty_valid.
     exists a1 v1; split_ands;
       eauto 13 using mem_singleton_union, eq_sym, @sep_unmapped_union_l.
-  * intros Γ1 Δ1 ρ ????? (a&v&?&He1&?&?&He2&?&?&->).
+  * intros Γ1 Δ1 ρ ????? (a&v&?&He1&?&?&He2&?&?&?&->).
     assert (x ⊥ y) by solve_sep_disjoint.
-    assert ((Γ1,Δ1) ⊢ v : τ ∧ (Γ1,Δ1) ⊢ a : TType τ ∧ addr_strict Γ1 a)
-      as (?&?&?) by eauto 15 using cmap_valid_memenv_valid, lval_typed_inv,
-      lval_typed_strict, rval_typed_inv, expr_eval_typed, cmap_empty_valid.
+    assert ((Γ1,Δ1) ⊢ v : τ ∧ (Γ1,Δ1) ⊢ a : TType τ) as []
+      by eauto 15 using cmap_valid_memenv_valid, lval_typed_inv,
+      rval_typed_inv, expr_eval_typed, cmap_empty_valid.
     exists (mem_singleton Γ1 a malloc x v) (mem_singleton Γ1 a malloc y v).
     split_ands; rewrite ?sep_disjoint_list_double; solve
       ltac:(eauto using mem_singleton_union, eq_sym, mem_singleton_disjoint).
@@ -537,10 +537,10 @@ Lemma assert_singleton_array Γ e malloc x vs τ n :
   ≡{Γ} (Π imap (λ i v, (e %> RArray i τ n) ↦{malloc,x} #v : τ) vs)%A.
 Proof.
   intros Hn Hn'. split.
-  * intros Γ1 Δ1 ρ ????? (a&v&?&?&Hvs&Hvs'&?&?&?&->).
-    assert ((Γ1,Δ1) ⊢ a : TType (τ.[n]) ∧ addr_strict Γ1 a)
-      as [] by eauto 10 using cmap_valid_memenv_valid, lval_typed_inv,
-      lval_typed_strict, expr_eval_typed, cmap_empty_valid.
+  * intros Γ1 Δ1 ρ ????? (a&v&?&?&Hvs&Hvs'&?&?&?&?&->).
+    assert ((Γ1,Δ1) ⊢ a : TType (τ.[n]))
+      by eauto 10 using cmap_valid_memenv_valid, lval_typed_inv,
+      expr_eval_typed, cmap_empty_valid.
     assert (∀ j, j + length vs ≤ n → (Γ1,Δ1) ⊢* vs : τ →
       Forall2 (λ (P : assert K) m, assert_holds P Γ1 Δ1 ρ m)
         (imap_go (λ i v,((e %> RArray i τ n) ↦{malloc,x} #v : τ)%A) j vs)
@@ -550,7 +550,8 @@ Proof.
       induction Hvs as [|v' vs ?? IH]; csimpl; intros j ?; auto.
       constructor; [|eauto with lia].
       eexists (addr_elt Γ1 (RArray j τ n) a), v'; simplify_option_equality;
-        eauto 15 using addr_elt_is_obj, lockset_empty_valid. }
+        split_ands; eauto using addr_elt_is_obj, lockset_empty_valid,
+        addr_elt_strict. }
     simplify_option_equality; typed_inversion_all.
     erewrite mem_singleton_array_union by eauto.
     apply assert_Forall_holds_2;
@@ -558,9 +559,11 @@ Proof.
   * intros Γ1 Δ1 ρ m _ ? Hm ?; rewrite assert_Forall_holds; intros (ms&->&_&Hms).
     apply cmap_valid_memenv_valid in Hm.
     assert (∃ a, (Γ1,Δ1,ρ.*2) ⊢ e : inl (τ.[n])%T ∧ ⟦ e ⟧ Γ1 ∅ ρ ∅ = Some (inl a) ∧
-      sep_valid x ∧ ¬sep_unmapped x) as (a&?&?&?&?).
+      addr_strict Γ1 a ∧ sep_valid x ∧ ¬sep_unmapped x) as (a&?&?&?&?&?).
     { unfold imap in *. destruct vs; decompose_Forall_hyps.
-      naive_solver (simplify_option_equality; typed_inversion_all; eauto). }
+      match goal with
+      | H : ∃ a, _ |- _ => destruct H as (a&?&?&?&?&?&?&?&?&?&?)
+      end; simplify_option_equality; typed_inversion_all; eauto 10. }
     assert ((Γ1,Δ1) ⊢* vs : τ).
     { clear Hn Hn'. revert ms Hms. unfold imap. generalize 0.
       induction vs; intros ? [|??] ?; decompose_Forall_hyps;
@@ -572,10 +575,10 @@ Proof.
     { clear Hn Hn'. revert ms Hms. unfold imap. generalize 0.
       induction vs; intros ? [|??] ?; decompose_Forall_hyps;
         try match goal with
-        | H : ∃ a, _ |- _ => destruct H as (?&?&?&?&?&?&?&?&?&?)
+        | H : ∃ a, _ |- _ => destruct H as (?&?&?&?&?&?&?&?&?&?&?)
         end; simplify_option_equality; typed_inversion_all; f_equal; auto. }
-    assert ((Γ1,Δ1) ⊢ a : TType (τ.[n]) ∧ addr_strict Γ1 a) as [] by eauto 10
-      using lval_typed_inv, lval_typed_strict, expr_eval_typed, cmap_empty_valid.
+    assert ((Γ1,Δ1) ⊢ a : TType (τ.[n])) by eauto 10
+      using lval_typed_inv, expr_eval_typed, cmap_empty_valid.
     exists a (VArray τ vs); split_ands; eauto using lockset_empty_valid,
       (addr_ref_byte_is_obj_parent _ _ (RArray 0 τ n)),
       mem_singleton_array_union, eq_sym.
@@ -667,11 +670,11 @@ Lemma assert_unlock_singleton Γ e1 e2 malloc x τ :
   perm_locked x = true →
   (e1 ↦{malloc,x} e2 : τ)%A ⊆{Γ} ((e1 ↦{malloc,perm_unlock x} e2 : τ) ○)%A.
 Proof.
-  intros ? Γ1 Δ1 ρ m ???? (a&v&?&?&?&?&?&?&?&->).
+  intros ? Γ1 Δ1 ρ m ???? (a&v&?&?&?&?&?&?&?&?&->).
   exists a v; split_ands; eauto using perm_unlock_valid, perm_unlock_mapped.
-  assert ((Γ1,Δ1) ⊢ v : τ ∧ (Γ1,Δ1) ⊢ a : TType τ ∧ addr_strict Γ1 a)
-    as (?&?&?) by eauto 15 using cmap_valid_memenv_valid, lval_typed_inv,
-    lval_typed_strict, rval_typed_inv, expr_eval_typed, cmap_empty_valid.
+  assert ((Γ1,Δ1) ⊢ v : τ ∧ (Γ1,Δ1) ⊢ a : TType τ) as []
+    by eauto 15 using cmap_valid_memenv_valid, lval_typed_inv,
+    rval_typed_inv, expr_eval_typed, cmap_empty_valid.
   by erewrite mem_unlock_all_singleton by eauto.
 Qed.
 Lemma assert_unlock_singleton_ Γ e1 malloc x τ :

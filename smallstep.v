@@ -42,7 +42,7 @@ Inductive ehstep `{Env K} (Γ : env K) (ρ : stack K) :
      ρ !! x = Some (o,τ) →
      Γ\ ρ ⊢ₕ var x, m ⇒ %(addr_top o τ), m
   | ehstep_rtol m Ω a :
-     addr_strict Γ a → index_alive' m (addr_index a) →
+     index_alive' m (addr_index a) →
      Γ\ ρ ⊢ₕ .* (#{Ω} (ptrV (Ptr a))), m ⇒ %{Ω} a, m
   | ehstep_rofl m Ω a :
      Γ\ ρ ⊢ₕ & (%{Ω} a), m ⇒ #{Ω} (ptrV (Ptr a)), m
@@ -53,6 +53,7 @@ Inductive ehstep `{Env K} (Γ : env K) (ρ : stack K) :
   | ehstep_load m Ω a v :
      m !!{Γ} a = Some v → Γ\ ρ ⊢ₕ load (%{Ω} a), m ⇒ #{Ω} v, mem_force Γ a m
   | ehstep_eltl m Ω a rs :
+     addr_strict Γ a →
      Γ\ ρ ⊢ₕ %{Ω} a %> rs, m ⇒ %{Ω} (addr_elt Γ rs a), m
   | ehstep_eltr m Ω v rs v' :
      v !!{Γ} rs = Some v' → Γ\ ρ ⊢ₕ #{Ω} v #> rs, m ⇒ #{Ω} v', m

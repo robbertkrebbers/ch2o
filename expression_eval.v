@@ -31,7 +31,6 @@ Fixpoint expr_eval `{Env K} (e : expr K) (Γ : env K)
   | .* e =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inr;
      a ← maybe (VBase ∘ VPtr ∘ Ptr) v;
-     guard (addr_strict Γ a);
      guard (index_alive' m (addr_index a));
      Some (inl a)
   | & e =>
@@ -43,6 +42,7 @@ Fixpoint expr_eval `{Env K} (e : expr K) (Γ : env K)
      inr <$> m !!{Γ} a
   | e %> rs =>
      a ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inl;
+     guard (addr_strict Γ a);
      Some (inl (addr_elt Γ rs a))
   | e #> rs =>
      v ← ⟦ e ⟧ Γ fs ρ m ≫= maybe inr;
@@ -104,11 +104,11 @@ Context (Pvar : ∀ τ x o, ρ !! x = Some (o,τ) → P (var x) (inl (addr_top o
 Context (Pval : ∀ ν, P (%# ν) ν).
 Context (Prtol : ∀ e a,
   ⟦ e ⟧ Γ fs ρ m = Some (inr (ptrV (Ptr a))) → P e (inr (ptrV (Ptr a))) →
-  addr_strict Γ a → index_alive' m (addr_index a) → P (.* e) (inl a)).
+  index_alive' m (addr_index a) → P (.* e) (inl a)).
 Context (Profl : ∀ e a,
   ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) → P (&e) (inr (ptrV (Ptr a)))).
 Context (Peltl : ∀ e rs a,
-  ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) →
+  ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) → addr_strict Γ a →
   P (e %> rs) (inl (addr_elt Γ rs a))).
 Context (Pload : ∀ e a v,
   ⟦ e ⟧ Γ fs ρ m = Some (inl a) → P e (inl a) → mem_forced Γ a m →
@@ -258,10 +258,10 @@ Proof.
     end; typed_inversion_all; auto.
   * rewrite lookup_app_l by eauto using lookup_lt_Some.
     by simplify_option_equality.
-  * by simplify_option_equality
-      by eauto using addr_strict_weaken, index_alive_1', index_alive_2'.
+  * by simplify_option_equality by eauto using index_alive_1', index_alive_2'.
   * by simplify_option_equality.
-  * simplify_option_equality. by erewrite <-addr_elt_weaken by eauto.
+  * simplify_option_equality by eauto using addr_strict_weaken.
+    by erewrite <-addr_elt_weaken by eauto.
   * by simplify_option_equality.
   * by simplify_option_equality by eauto using val_lookup_seg_weaken.
   * by simplify_option_equality by eauto using val_unop_ok_weaken.

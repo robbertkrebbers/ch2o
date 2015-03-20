@@ -16,7 +16,7 @@ Inductive stack_item_refine (f : meminj K) (Δ1 Δ2 : memenv K) :
 Inductive lrval_refine' (Γ : env K) (α : bool)
     (f : meminj K) (Δ1 Δ2 : memenv K) : lrval K → lrval K → lrtype K → Prop :=
   | lval_refine a1 a2 τ :
-     a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : TType τ → addr_strict Γ a1 →
+     a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : TType τ →
      lrval_refine' Γ α f Δ1 Δ2 (inl a1) (inl a2) (inl τ)
   | rval_refine v1 v2 τ :
      v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ →
@@ -720,7 +720,7 @@ Lemma lrval_refine_typed_r Γ α f Δ1 Δ2 ν1 ν2 τlr :
   ✓ Γ → ν1 ⊑{Γ,α,f@Δ1↦Δ2} ν2 : τlr → (Γ,Δ2) ⊢ ν2 : τlr.
 Proof.
   destruct 2; typed_constructor;
-    eauto using val_refine_typed_r, addr_refine_typed_r, addr_strict_refine.
+    eauto using val_refine_typed_r, addr_refine_typed_r.
 Qed.
 Lemma expr_refine_typed_r Γ α f Δ1 Δ2 τs e1 e2 τlr :
   ✓ Γ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : τlr → (Γ,Δ2,τs) ⊢ e2 : τlr.
@@ -1053,8 +1053,7 @@ Lemma lrval_refine_inverse Γ f Δ1 Δ2 ν1 ν2 τlr :
   ν1 ⊑{Γ,false,f@Δ1↦Δ2} ν2 : τlr →
   ν2 ⊑{Γ,false,meminj_inverse f@Δ2↦Δ1} ν1 : τlr.
 Proof.
-  destruct 1; constructor; eauto using val_refine_inverse,
-    addr_refine_inverse, addr_strict_refine.
+  destruct 1; constructor; eauto using val_refine_inverse, addr_refine_inverse.
 Qed.
 Lemma expr_refine_inverse Γ τs f Δ1 Δ2 e1 e2 τlr :
   e1 ⊑{(Γ,τs),false,f@Δ1↦Δ2} e2 : τlr →

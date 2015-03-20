@@ -17,9 +17,7 @@ Definition assign_type_of (τ1 τ2 : type K) (ass : assign) : option (type K) :=
 Global Instance lrval_type_check:
    TypeCheck (env K * memenv K) (lrtype K) (lrval K) := λ ΓΔ ν,
   match ν with
-  | inl a =>
-     guard (addr_strict (ΓΔ.1) a);
-     inl <$> type_check ΓΔ a ≫= maybe TType
+  | inl a => inl <$> type_check ΓΔ a ≫= maybe TType
   | inr v => inr <$> type_check ΓΔ v
   end.
 Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
