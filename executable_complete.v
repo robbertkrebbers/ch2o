@@ -76,8 +76,12 @@ Proof.
       { destruct E as [|Ei] using rev_ind; [by destruct He1|].
         by destruct Ei; by rewrite ?subst_app. }
       apply elem_of_bind; exists (E, e1).
-      split; eauto using expr_redexes_complete.
+      assert (maybe_ECall_redex e1 = None) as ->.
+      { rewrite eq_None_not_Some; intros [[[[[[Ω f'] τs] σ] Ωs] vs] Hcall].
+        rewrite maybe_ECall_redex_Some in Hcall; destruct Hcall as [-> _].
+        inv_ehstep. }
       rewrite decide_False by esolve_elem_of.
+      split; eauto using expr_redexes_complete.
       apply elem_of_bind; eexists; split; eauto; esolve_elem_of. }
     eleft; split_ands; repeat refine_constructor; eauto.
     + eapply ectx_subst_refine; eauto 10 using ectx_refine_weaken,

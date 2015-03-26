@@ -204,16 +204,17 @@ Definition cexec (Γ : env K) (δ : funenv K)
          end
       | _ => ∅
       end
-    | _ =>
+    | Some (_,inl _) => ∅
+    | None =>
       '(E,e') ← expr_redexes e;
-      let es := ehexec Γ k e' m in
-      if decide (es ≡ ∅) then
-        match maybe_ECall_redex e' with
-        | Some (Ω, f, _, _, Ωs, vs) =>
-           {[ State (CFun E :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m) ]}
-        | _ => {[ State k (Undef (UndefExpr E e')) m ]}
-        end
-      else '(e2,m2) ← es; {[ State k (Expr (subst E e2)) m2 ]}
+      match maybe_ECall_redex e' with
+      | Some (Ω, f, _, _, Ωs, vs) =>
+         {[ State (CFun E :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m) ]}
+      | None =>
+         let es := ehexec Γ k e' m in
+         if decide (es ≡ ∅) then {[ State k (Undef (UndefExpr E e')) m ]}
+         else '(e2,m2) ← es; {[ State k (Expr (subst E e2)) m2 ]}
+      end
     end
   | Undef _ => ∅
   end.
