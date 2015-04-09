@@ -1431,7 +1431,7 @@ Lemma ctree_unshared_weaken w1 w2 :
 Proof. eauto using seps_unshared_weaken, ctree_flatten_subseteq. Qed.
 Lemma ctree_unshared_unmapped w1 w2 :
   ctree_unshared w1 → w1 ⊥ w2 → ctree_unmapped w2.
-Proof. eauto using seps_unshared_unmapped, ctree_flatten_disjoint. Qed.
+Proof. eauto using seps_disjoint_unshared_unmapped, ctree_flatten_disjoint. Qed.
 Lemma ctree_empty_unmapped w : ctree_empty w → ctree_unmapped w.
 Proof. eauto using Forall_impl, sep_unmapped_empty_alt. Qed.
 Lemma ctree_splittable_union w : w ⊥ w → ctree_splittable (w ∪ w).

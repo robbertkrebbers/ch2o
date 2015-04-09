@@ -79,6 +79,7 @@ Proof.
     intros [[??] Hxy]; split_ands; auto.
     + intros z ?. apply (Hxy (z,∅)); simpl; eauto using @sep_disjoint_empty_r.
     + intros z ?. apply (Hxy (∅,z)); simpl; eauto using @sep_disjoint_empty_r.
+  * naive_solver eauto using @sep_unshared_unmapped.
 Qed.
 
 Instance sum_separation_ops `{SeparationOps A, SeparationOps B} :
@@ -182,17 +183,19 @@ Proof.
   * intros [x|x].
     { split.
       + intros ?; split; auto using @sep_unshared_valid.
-        intros [y|y]; eauto using @sep_unshared_unmapped.
+        intros [y|y]; eauto using @sep_disjoint_unshared_unmapped.
         by intros [-> ?]; destruct (@sep_unshared_empty A _ _).
       + rewrite !sep_unshared_spec'; intros [? Hx]; split; intros; auto.
         by apply (Hx (inl y)). }
     split.
     + intros ?; split; auto using @sep_unshared_valid, @sep_unshared_ne_empty.
       intros []; naive_solver
-        eauto using @sep_unmapped_empty, @sep_unshared_unmapped.
+        eauto using @sep_unmapped_empty, @sep_disjoint_unshared_unmapped.
     + rewrite !sep_unshared_spec'; intros [[] Hx]; split_ands; auto; intros y ?.
       destruct (decide (y = ∅)) as [->|?]; auto using sep_unmapped_empty.
       by apply (Hx (inr y)).
+  * intros []; naive_solver eauto using (@sep_unshared_unmapped A _),
+      (@sep_unshared_unmapped B _).
 Qed.
 
 Instance Qc_ops: SeparationOps Qc := {
@@ -250,6 +253,7 @@ Proof.
     intros [[??] Hx]. apply (injective Qcopp), (injective (Qcplus 1)), Hx.
     split_ands; auto; [|by ring_simplify].
     by apply (Qcplus_le_mono_l (-1) (-x) 1), Qcopp_le_compat.
+  * by intros x ->.
 Qed.
 
 Record counter (A : Set) : Set :=
@@ -285,10 +289,8 @@ Instance counter_ops {A: Set} `{SeparationOps A}: SeparationOps (counter A) := {
     sep_splittable (x.2)
     ∧ (sep_unmapped (x.2) → x.1 ≤ 0) ∧ (sep_unshared (x.2) → 0 ≤ x.1);
   sep_half x := Counter (x.1 / 2) (½ (x.2));
-  sep_unmapped x :=
-    sep_unmapped (x.2) ∧ x.1 ≤ 0 ∧ (sep_unshared (x.2) → 0 ≤ x.1);
-  sep_unshared x :=
-    sep_unshared (x.2) ∧ 0 ≤ x.1 ∧ (sep_unmapped (x.2) → x.1 ≤ 0)
+  sep_unmapped x := sep_unmapped (x.2) ∧ x.1 ≤ 0;
+  sep_unshared x := sep_unshared (x.2) ∧ 0 ≤ x.1
 }.
 Proof. solve_decision. Defined.
 
@@ -302,7 +304,7 @@ Proof.
     repeat split; eauto using sep_disjoint_valid_l. intros Hx'.
     rewrite <-(Qcplus_0_r (x.1)). transitivity (x.1 + y.1).
     + eauto using sep_unshared_union_l'.
-    + apply Qcplus_le_mono_l, Hy; eauto using sep_unshared_unmapped.
+    + apply Qcplus_le_mono_l, Hy; eauto using sep_disjoint_unshared_unmapped.
   * sep_unfold; intros x y (?&?&?&?); split_ands; eauto using sep_union_valid.
     intros. apply Qcplus_nonpos_nonpos;
       naive_solver eauto using sep_unmapped_union_l', sep_unmapped_union_r'.
@@ -316,7 +318,7 @@ Proof.
   * sep_unfold; intros ??? (?&?&?&?) (?&?&?&Hxyz).
     split_ands; eauto using sep_disjoint_ll; intros.
     assert (sep_unmapped (y.2)).
-    { apply sep_unshared_unmapped with (x.2 ∪ z.2); auto.
+    { apply sep_disjoint_unshared_unmapped with (x.2 ∪ z.2); auto.
       rewrite sep_commutative' by eauto using sep_disjoint_ll.
       by apply sep_disjoint_move_r. }
     rewrite <-(Qcplus_0_r (x.1)). transitivity (x.1 + y.1 + z.1); auto.
@@ -359,7 +361,7 @@ Proof.
   * sep_unfold; intros x y (?&?&?) (Hxy&?&?&?).
     split_ands; eauto using sep_splittable_weaken; intros.
     transitivity (y.1); eauto using sep_unshared_weaken,
-      sep_unshared_unmapped, sep_disjoint_difference'.
+      sep_disjoint_unshared_unmapped, sep_disjoint_difference'.
   * sep_unfold; intros x (?&?&?).
     assert (sep_unmapped (½ (x.2)) → x.1 / 2 ≤ 0).
     { intros. rewrite <-(Qcmult_0_l (/2)).
@@ -374,28 +376,24 @@ Proof.
   * sep_unfold;  intros x y [? _] [? _].
     apply counter_injective_projections; simpl; [ring|].
     by apply sep_union_half_distr'.
-  * sep_unfold; intros ? (?&?&?); auto using sep_unmapped_valid.
+  * sep_unfold; intros ? (?&?); split_ands; auto using sep_unmapped_valid.
+    intros; exfalso; eauto using sep_unshared_unmapped.
   * sep_unfold. auto using sep_unmapped_empty.
-  * sep_unfold; intros ?? (?&?&?) (?&?&?&?).
-    split_ands; eauto using sep_unmapped_weaken; intros.
-    transitivity (y.1); eauto using sep_unshared_weaken,
-      sep_unshared_unmapped, sep_disjoint_difference'.
-  * sep_unfold; intros ?? (?&?&?&?) (?&?&?) (?&?&?).
+  * sep_unfold; intros ?? (?&?) (?&?&?&?); eauto using sep_unmapped_weaken.
+  * sep_unfold; intros ?? (?&?&?&?) (?&?) (?&?).
     split_ands; eauto using sep_unmapped_union_2'; intros.
     apply Qcplus_nonpos_nonpos;
       eauto using sep_unmapped_union_l', sep_unmapped_union_r'.
   * sep_unfold; intros x; split.
-    { intros (?&?&?); split_ands; auto using sep_unshared_valid.
-      intros y (?&?&?&?).
-      split_ands; eauto using sep_unshared_unmapped, sep_unshared_union_l'.
-      intros. rewrite <-(Qcplus_0_l (y.1)).
-      transitivity (x.1 + y.1); eauto using sep_unshared_union_l'.
-      apply Qcplus_le_mono_r; eauto using sep_unshared_unmapped. }
+    { intros (?&?); split_ands; auto using sep_unshared_valid.
+      { intros; exfalso; eauto using sep_unshared_unmapped. }
+      intros y (?&?&?&?); eauto using sep_disjoint_unshared_unmapped. }
     intros [(?&?&?) Hx]. cut (sep_unshared (x.2)); eauto.
     rewrite sep_unshared_spec'; split; auto; intros y ?.
     apply dec_stable; intros Hy; apply Hy.
     destruct (Hx (Counter (-x.1) y)); simpl in *; [|done].
     by split_ands; rewrite ?Qcplus_opp_r; eauto using sep_unshared_union_l'.
+  * sep_unfold; intros ? [??] [??]; eauto using sep_unshared_unmapped.
 Qed.
 
 Inductive lockable (A : Set) : Set :=
@@ -446,8 +444,7 @@ Instance lockable_separation_ops {A : Set} `{SeparationOps A} :
     end;
   sep_unmapped x :=
     match x with
-    | LLocked x => sep_unmapped x ∧ sep_unshared x
-    | LUnlocked x => sep_unmapped x
+    | LLocked x => False | LUnlocked x => sep_unmapped x
     end;
   sep_unshared x :=
     match x with
@@ -496,7 +493,7 @@ Proof.
     sep_unfold; intros [][];
       naive_solver eauto using sep_union_subseteq_l', sep_unshared_union_r'.
   * sep_unfold; intros [][]; naive_solver eauto using
-      sep_disjoint_difference', sep_unshared_unmapped.
+      sep_disjoint_difference', sep_disjoint_unshared_unmapped.
   * sep_unfold; intros [][] ?; f_equal;
       naive_solver eauto using sep_union_difference.
   * sep_unfold; intros []; try naive_solver auto using sep_splittable_union'.
@@ -515,9 +512,11 @@ Proof.
       split_ands; auto using sep_unshared_valid. intros [?|?]; naive_solver. }
     split.
     + intros ?; split_ands; auto using sep_unshared_valid.
-      intros [?|?]; naive_solver eauto using sep_unshared_unmapped. 
+      intros [?|?]; naive_solver eauto using
+        sep_disjoint_unshared_unmapped, sep_unshared_unmapped.
     + intros [? Hx]. rewrite sep_unshared_spec'; split; auto.
       intros y ?. by apply (Hx (LUnlocked y)).
+  * sep_unfold; intros [x|x]; eauto using sep_unshared_unmapped.
 Qed.
 
 Record tagged (A : Set) {L : Set} (d : L) :=
@@ -548,7 +547,7 @@ Instance tagged_separation_ops {A L : Set} {d : L}
   sep_splittable x := sep_splittable (x.1) ∧ (sep_unmapped (x.1) → x.2 = d);
   sep_half x := Tagged (½ (x.1)) (x.2);
   sep_unmapped x := sep_unmapped (x.1) ∧ x.2 = d;
-  sep_unshared x := sep_unshared (x.1) ∧ (sep_unmapped (x.1) → x.2 = d)
+  sep_unshared x := sep_unshared (x.1)
 }.
 Proof. solve_decision. Defined.
 
@@ -609,10 +608,13 @@ Proof.
   * intros ?? [??] (?&?&?&?); split; eauto using sep_unmapped_weaken.
   * sep_unfold; intros ?? (?&?&?&?) [??] [??]; simpl in *;
       repeat case_decide; auto using sep_unmapped_union_2'.
-  * sep_unfold; intros [x1 c1]; simpl in *. rewrite sep_unshared_spec'; split.
-    { intros [[??] ?]; split; auto. intros [x2 c2]; naive_solver. }
-    intros [[??] Hx]; split_ands; auto. intros x2 ?.
-    destruct (Hx (Tagged x2 (if decide (sep_unmapped x2) then d else c1))).
-    { case_decide; naive_solver. }
-    by case_decide.
+  * sep_unfold; intros [x1 c1]; simpl; split.
+    + intros Hx; split_ands; eauto using sep_unshared_valid.
+      { intros; exfalso; eauto using sep_unshared_unmapped. }
+      intros [x2 c2]; naive_solver eauto using sep_disjoint_unshared_unmapped.
+    + intros [[??] Hx]; rewrite sep_unshared_spec'; split_ands; auto.
+      intros x2 ?.
+      destruct (Hx (Tagged x2 (if decide (sep_unmapped x2) then d else c1)));
+        case_decide; naive_solver.
+  * sep_unfold; naive_solver eauto using sep_unshared_unmapped.
 Qed.

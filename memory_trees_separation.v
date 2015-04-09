@@ -400,24 +400,25 @@ Proof.
       pattern w1'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
     { intros; simplify_option_equality. constructor; naive_solver. }
     intros τs τ' ???????; destruct Hum; simplify_equality'.
-    eauto using @seps_unshared_unmapped, @ctree_flatten_disjoint.
+    eauto using @seps_disjoint_unshared_unmapped, @ctree_flatten_disjoint.
   * intros t xbs1 xbs2 ? _ Hrs; destruct rs as [| |i'];
       pattern w1'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
     intros τs τ' ??????; simplify_option_equality. constructor.
     + rewrite <-(take_drop (bit_size_of Γ τ') xbs2); apply Forall2_app.
       { erewrite <-pbits_indetify_mask_unmapped, <-(ctree_flatten_unflatten_le
-          Γ τ') by eauto using @seps_unshared_unmapped.
+          Γ τ') by eauto using @seps_disjoint_unshared_unmapped.
         eauto using @ctree_flatten_disjoint, ctree_unflatten_disjoint. }
-      erewrite <-pbits_indetify_unmapped by eauto using @seps_unshared_unmapped.
+      erewrite <-pbits_indetify_unmapped
+        by eauto using @seps_disjoint_unshared_unmapped.
       eauto using pbits_indetify_disjoint.
-    + eauto using @seps_unshared_unmapped.
+    + eauto using @seps_disjoint_unshared_unmapped.
     + eapply ctree_disjoint_valid_l;
         eauto using ctree_flatten_disjoint, ctree_unflatten_disjoint.
     + naive_solver.
   * intros t i xbs1 w2 xbs2 ??? Hum _ Hrs; destruct rs as [| |i'];
       pattern w1'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
     intros τs τ' ????; destruct Hum; simplify_equality.
-    rewrite <-Forall_app; eauto using @seps_unshared_unmapped.
+    rewrite <-Forall_app; eauto using @seps_disjoint_unshared_unmapped.
   * intros t i w1 xbs1 xbs2 Hxbs2 ??? Hw1 Hrs;
       apply (ctree_typed_inv_l _ _ _ _ _ Hw1); clear Hw1 τ;
       intros τs τ ??? _ ? _; destruct rs as [| |i'];
@@ -438,9 +439,10 @@ Proof.
     intros ? τ' ?????????; simplify_option_equality. constructor; auto.
     + rewrite <-(take_drop (bit_size_of Γ τ') xbs2); apply Forall2_app; auto.
       { erewrite <-pbits_indetify_mask_unmapped, <-(ctree_flatten_unflatten_le
-          Γ τ') by eauto using @seps_unshared_unmapped.
+          Γ τ') by eauto using @seps_disjoint_unshared_unmapped.
         eauto using @ctree_flatten_disjoint, ctree_unflatten_disjoint. }
-      erewrite <-pbits_indetify_unmapped by eauto using @seps_unshared_unmapped.
+      erewrite <-pbits_indetify_unmapped
+        by eauto using @seps_disjoint_unshared_unmapped.
       eauto using pbits_indetify_disjoint.
     + eapply ctree_disjoint_valid_l;
         eauto using ctree_flatten_disjoint, ctree_unflatten_disjoint.
@@ -480,7 +482,7 @@ Proof.
       pattern w1'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
     { intros; simplify_option_equality; f_equal; auto. }
     intros τs τ' ???????; destruct Hum; simplify_equality'.
-    eauto using @seps_unshared_unmapped, @ctree_flatten_disjoint.
+    eauto using @seps_disjoint_unshared_unmapped, @ctree_flatten_disjoint.
   * intros t xbs1 xbs2 ? Hw1 Hrs;
       apply (ctree_typed_inv_l _ _ _ _ _ Hw1); clear Hw1 τ;
       intros τs ??? _; destruct rs as [| |i'];
@@ -494,13 +496,13 @@ Proof.
         <-ctree_merge_flatten, ctree_flatten_unflatten_le,
         pbits_indetify_mask_unmapped
         by eauto using ctree_unflatten_Forall_le, ctree_unflatten_disjoint,
-          @seps_unshared_unmapped, pbit_unmapped_indetify.
+          @seps_disjoint_unshared_unmapped, pbit_unmapped_indetify.
     + by rewrite zip_with_drop, pbits_indetify_union, (pbits_indetify_unmapped
-        (drop _ xbs2)) by eauto using @seps_unshared_unmapped.
+        (drop _ xbs2)) by eauto using @seps_disjoint_unshared_unmapped.
   * intros t i xbs1 w2 xbs2 ??? Hum _ Hrs; destruct rs as [| |i'];
       pattern w1'; apply (ctree_lookup_seg_inv _ _ _ _ _ Hrs); clear Hrs.
     intros τs τ' ????; destruct Hum; simplify_equality.
-    rewrite <-Forall_app; eauto using @seps_unshared_unmapped.
+    rewrite <-Forall_app; eauto using @seps_disjoint_unshared_unmapped.
   * intros t i w1 xbs1 xbs2 Hxbs2 ??? Hw1 Hrs;
       apply (ctree_typed_inv_l _ _ _ _ _ Hw1); clear Hw1 τ;
       intros τs τ ?? Hw1 _ ??; destruct rs as [| |i'];
@@ -533,7 +535,7 @@ Proof.
     + by rewrite ctree_unflatten_union, Hg', <-ctree_merge_flatten,
         ctree_flatten_unflatten, pbits_indetify_mask_unmapped
         by eauto using ctree_unflatten_Forall_le, ctree_unflatten_disjoint,
-        @seps_unshared_unmapped, pbit_unmapped_indetify.
+        @seps_disjoint_unshared_unmapped, pbit_unmapped_indetify.
     + by rewrite pbits_indetify_union,
        (pbits_indetify_unmapped (drop _ xbs2)) by auto.
 Qed.

@@ -71,7 +71,7 @@ Proof.
 Qed.
 Lemma pbits_perm_unshared xbs :
   Forall sep_unshared xbs → Forall sep_unshared (tagged_perm <$> xbs).
-Proof. by induction 1 as [|?? [??]]; constructor. Qed.
+Proof. by induction 1; constructor. Qed.
 Lemma PBits_mapped xs bs :
   Forall (not ∘ sep_unmapped) xs →
   Forall (not ∘ sep_unmapped) (zip_with PBit xs bs).
@@ -101,10 +101,7 @@ Lemma pbit_unlock_if_empty β : pbit_unlock_if (∅ : pbit K) β = ∅.
 Proof. by destruct β. Qed.
 Lemma pbit_unlock_unshared xb :
   sep_unshared xb → sep_unshared (pbit_unlock xb).
-Proof.
-  unfold pbit_unlock; intros (?&?); split; naive_solver auto using
-    perm_unlock_unshared, perm_unlock_mapped, sep_unshared_valid.
-Qed.
+Proof. apply perm_unlock_unshared. Qed.
 Lemma pbits_unlock_unshared xbs βs :
   Forall sep_unshared xbs →
   Forall sep_unshared (zip_with pbit_unlock_if xbs βs).
@@ -130,22 +127,17 @@ Proof.
   induction 1 as [|[x b]]; constructor; auto.
   intros [??]; simplify_equality'; eapply perm_mapped; eauto.
 Qed.
-Lemma PBit_unshared x b :
-  sep_unshared x → ¬sep_unmapped x → sep_unshared (PBit x b).
-Proof. by repeat split. Qed.
 Lemma PBits_unshared xs bs :
-  Forall sep_unshared xs → Forall (not ∘ sep_unmapped) xs →
-  Forall sep_unshared (zip_with PBit xs bs).
+  Forall sep_unshared xs → Forall sep_unshared (zip_with PBit xs bs).
 Proof.
-  revert xs. induction bs; intros ? [|????] ?;
-    decompose_Forall_hyps; auto using PBit_unshared.
+  intros Hxs. revert bs. induction Hxs; intros [|??]; constructor; eauto.
 Qed.
 Lemma pbits_unshared xbs :
   Forall sep_valid xbs → Forall (λ xb, Some Locked ⊆ pbit_kind xb) xbs →
   Forall sep_unshared xbs.
 Proof.
   induction 1 as [|[x b] ? [??]]; intros; decompose_Forall_hyps;
-    repeat constructor; auto using perm_unshared.
+    repeat constructor; sep_unfold; auto using perm_unshared.
 Qed.
 Lemma PBits_indetify xs :
   pbit_indetify <$> flip PBit (@BIndet K) <$> xs = flip PBit BIndet <$> xs.
@@ -184,7 +176,7 @@ Proof.
 Qed.
 Lemma pbit_indetify_unshared xb :
   sep_unshared xb → sep_unshared (pbit_indetify xb).
-Proof. by intros [??]. Qed.
+Proof. done. Qed.
 Lemma pbit_full_valid Γ Δ : ✓{Γ,Δ} pbit_full.
 Proof. by apply (bool_decide_unpack _). Qed.
 Lemma pbit_full_unshared : sep_unshared (@pbit_full K).
@@ -279,10 +271,7 @@ Lemma pbit_lock_mapped xb :
 Proof. intros [??]; split; auto using perm_lock_mapped. Qed.
 Lemma pbit_lock_unshared xb :
   sep_unshared xb → sep_unshared (pbit_lock xb).
-Proof.
-  unfold pbit_lock; intros (?&?); split; naive_solver eauto using
-    perm_lock_unshared, perm_lock_mapped, sep_unshared_valid.
-Qed.
+Proof. apply perm_lock_unshared. Qed.
 Lemma pbits_perm_mask βs xbs :
   tagged_perm <$> mask pbit_indetify βs xbs = tagged_perm <$> xbs.
 Proof. revert βs. induction xbs; intros [|[] ?]; f_equal'; auto. Qed.

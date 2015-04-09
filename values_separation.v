@@ -166,7 +166,7 @@ Lemma of_val_flatten_union Γ Δ w1 w2 v τ :
   = of_val Γ (tagged_perm <$> ctree_flatten w1) v ∪ w2.
 Proof.
   intros. assert (ctree_unmapped w2).
-  { eapply seps_unshared_unmapped; eauto using @ctree_flatten_disjoint. }
+  { eapply seps_disjoint_unshared_unmapped; eauto using @ctree_flatten_disjoint. }
   assert (Forall (not ∘ sep_unmapped) (tagged_perm <$> ctree_flatten w1)).
   { apply pbits_perm_mapped; eauto using
       Forall_impl, ctree_flatten_valid, pbit_valid_sep_valid. }

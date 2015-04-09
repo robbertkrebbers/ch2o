@@ -99,20 +99,14 @@ Proof.
 Qed.
 Lemma pbit_refine_unshared Γ α f Δ1 Δ2 xb1 xb2 :
   sep_unshared xb1 → xb1 ⊑{Γ,α,f@Δ1↦Δ2} xb2 → sep_unshared xb2.
-Proof.
-  destruct xb1, xb2. intros [??] (?&?&[??]&[??]); split;
-    naive_solver eauto using sep_unshared_valid.
-Qed.
+Proof. destruct xb1, xb2; intros ? (?&?&[??]&[??]); naive_solver. Qed.
 Lemma pbits_refine_unshared Γ α f Δ1 Δ2 xbs1 xbs2 :
   Forall sep_unshared xbs1 →
   xbs1 ⊑{Γ,α,f@Δ1↦Δ2}* xbs2 → Forall sep_unshared xbs2.
 Proof. induction 2;decompose_Forall_hyps; eauto using pbit_refine_unshared. Qed.
 Lemma pbit_refine_shared Γ α f Δ1 Δ2 xb1 xb2 :
   sep_unshared xb2 → xb1 ⊑{Γ,α,f@Δ1↦Δ2} xb2 → sep_unshared xb1.
-Proof.
-  destruct xb1, xb2; intros [??] (?&?&[??]&[??]); split;
-    naive_solver eauto using BIndet_refine_r_inv.
-Qed.
+Proof. destruct xb1, xb2; intros ? (?&?&[??]&[??]); naive_solver. Qed.
 Lemma pbits_refine_shared Γ α f Δ1 Δ2 xbs1 xbs2 :
   Forall sep_unshared xbs2 → xbs1 ⊑{Γ,α,f@Δ1↦Δ2}* xbs2 →
   Forall sep_unshared xbs1.

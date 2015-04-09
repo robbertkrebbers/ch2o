@@ -107,7 +107,7 @@ Lemma perm_lock_valid x :
 Proof. destruct (perm_kind_spec x); repeat sep_unfold; intuition. Qed.
 Lemma perm_lock_unmapped x :
   Some Writable ⊆ perm_kind x → sep_unmapped x → sep_unmapped (perm_lock x).
-Proof. destruct (perm_kind_spec x); repeat sep_unfold; intuition. Qed.
+Proof. destruct (perm_kind_spec x); repeat sep_unfold; naive_solver. Qed.
 Lemma perm_lock_mapped x : sep_unmapped (perm_lock x) → sep_unmapped x.
 Proof. destruct x as [[]|[]]; repeat sep_unfold; intuition. Qed.
 Lemma perm_lock_unshared x : sep_unshared x → sep_unshared (perm_lock x).
@@ -123,7 +123,7 @@ Lemma perm_unlock_unmapped x : sep_unmapped x → sep_unmapped (perm_unlock x).
 Proof. destruct x as [[[]|[]]|]; repeat sep_unfold; intuition. Qed.
 Lemma perm_unlock_mapped x :
   sep_valid x → sep_unmapped (perm_unlock x) → sep_unmapped x.
-Proof. destruct x as [[]|[]]; repeat sep_unfold; intuition. Qed.
+Proof. destruct x as [[[]|[]]|[]]; repeat sep_unfold; naive_solver. Qed.
 Lemma perm_unlock_unshared x : sep_unshared x → sep_unshared (perm_unlock x).
 Proof. destruct x as [[]|[]]; repeat sep_unfold; intuition. Qed.
 Lemma perm_unlock_shared x :

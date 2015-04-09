@@ -74,7 +74,8 @@ Class Separation (A : Type) `{SeparationOps A} : Prop := {
   sep_unmapped_union_2' (x y : A) :
     x ⊥ y → sep_unmapped x → sep_unmapped y → sep_unmapped (x ∪ y);
   sep_unshared_spec' (x : A) :
-    sep_unshared x ↔ sep_valid x ∧ ∀ y, x ⊥ y → sep_unmapped y
+    sep_unshared x ↔ sep_valid x ∧ ∀ y, x ⊥ y → sep_unmapped y;
+  sep_unshared_unmapped (x : A) : sep_unshared x → sep_unmapped x → False
 }.
 Arguments sep_inhabited _ {_ _} : clear implicits.
 
@@ -334,7 +335,8 @@ Lemma sep_unshared_ne_empty x : sep_unshared x → x ≠ ∅.
 Proof. intros ? ->. by apply sep_unshared_empty. Qed.
 Lemma sep_unshared_valid x : sep_unshared x → sep_valid x.
 Proof. rewrite sep_unshared_spec'. by intros [??]. Qed.
-Lemma sep_unshared_unmapped x y : x ⊥ y → sep_unshared x → sep_unmapped y.
+Lemma sep_disjoint_unshared_unmapped x y :
+  x ⊥ y → sep_unshared x → sep_unmapped y.
 Proof. rewrite sep_unshared_spec'; naive_solver. Qed.
 Lemma sep_unshared_weaken x y : sep_unshared x → x ⊆ y → sep_unshared y.
 Proof.
@@ -844,14 +846,19 @@ Lemma seps_unmapped_valid xs : Forall sep_unmapped xs → Forall sep_valid xs.
 Proof. induction 1; simpl; auto using sep_unmapped_valid. Qed.
 Lemma seps_unshared_valid xs : Forall sep_unshared xs → Forall sep_valid xs.
 Proof. induction 1; simpl; auto using sep_unshared_valid. Qed.
-Lemma seps_unshared_unmapped xs ys :
+Lemma seps_disjoint_unshared_unmapped xs ys :
   xs ⊥* ys → Forall sep_unshared xs → Forall sep_unmapped ys.
-Proof. induction 1; inversion_clear 1; eauto using sep_unshared_unmapped. Qed.
+Proof.
+  induction 1; inversion_clear 1; eauto using sep_disjoint_unshared_unmapped.
+Qed.
 Lemma seps_unshared_weaken xs ys :
   Forall sep_unshared xs → xs ⊆* ys → Forall sep_unshared ys.
 Proof.
   induction 2; decompose_Forall_hyps; eauto using sep_unshared_weaken.
 Qed.
+Lemma seps_unshared_unmapped xs :
+  Forall sep_unshared xs → Forall (not ∘ sep_unmapped) xs.
+Proof. induction 1; eauto using sep_unshared_unmapped. Qed.
 End separation.
 
 (** * Tactic *)

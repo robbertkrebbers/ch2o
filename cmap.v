@@ -205,4 +205,5 @@ Proof.
     destruct ({[_]} !! _) eqn:?; simplify_map_equality; split.
     + by constructor; rewrite Forall_singleton.
     + inversion_clear 1; decompose_Forall_hyps; eauto using sep_unmapped_empty.
+  * done.
 Qed.

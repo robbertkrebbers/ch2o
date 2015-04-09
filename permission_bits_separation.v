@@ -37,17 +37,17 @@ Proof.
   induction 1; intros; decompose_Forall_hyps; eauto using pbit_subseteq_valid.
 Qed.
 Lemma PBit_perm_disjoint xb1 xb2 b :
-  sep_unshared xb1 → ¬sep_unmapped xb1 →
-  xb1 ⊥ xb2 → PBit (tagged_perm xb1) b ⊥ xb2.
+  sep_unshared xb1 → xb1 ⊥ xb2 → PBit (tagged_perm xb1) b ⊥ xb2.
 Proof.
-  sep_unfold. destruct xb1, xb2; naive_solver eauto using sep_unshared_unmapped.
+  sep_unfold. destruct xb1, xb2; intuition; simplify_equality';
+    first [ by exfalso; eauto using @sep_unshared_unmapped
+          | naive_solver eauto using sep_disjoint_unshared_unmapped ].
 Qed.
 Lemma PBits_perm_disjoint xbs1 xbs2 bs :
-  Forall sep_unshared xbs1 → Forall (not ∘ sep_unmapped) xbs1 →
-  length bs = length xbs1 →
+  Forall sep_unshared xbs1 → length bs = length xbs1 →
   xbs1 ⊥* xbs2 → zip_with PBit (tagged_perm <$> xbs1) bs ⊥* xbs2.
 Proof.
-  rewrite <-Forall2_same_length. intros ?? Hbs. revert xbs2.
+  rewrite <-Forall2_same_length. intros ? Hbs; revert xbs2.
   induction Hbs; intros; decompose_Forall_hyps; eauto using PBit_perm_disjoint.
 Qed.
 Lemma pbit_indetify_disjoint xb1 xb2 :
@@ -169,7 +169,7 @@ Proof.
   assert (¬sep_unmapped perm_full) by (by intros []).
   assert (sep_unshared perm_full) by done.
   destruct xb1, xb2; intros (?&?&?&?) ?; sep_unfold; naive_solver
-    eauto using perm_disjoint_full, sep_unshared_unmapped with f_equal.
+    eauto using perm_disjoint_full, sep_disjoint_unshared_unmapped with f_equal.
 Qed.
 Lemma pbits_disjoint_full xbs1 xbs2 :
   xbs1 ⊥* xbs2 → Forall (λ xb, tagged_perm xb = perm_full) xbs1 →

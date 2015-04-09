@@ -133,10 +133,8 @@ Proof.
   * erewrite <-(pbits_refine_perm _ _ _ _ _ (ctree_flatten w1)
       (ctree_flatten w2)) by eauto using ctree_flatten_refine.
     eapply of_val_refine; eauto.
-    + eapply pbits_perm_unshared, pbits_unshared; eauto using
-        pbits_kind_weaken, pbits_valid_sep_valid, ctree_flatten_valid.
-    + eapply pbits_perm_mapped, pbits_mapped; eauto using
-        pbits_kind_weaken, pbits_valid_sep_valid, ctree_flatten_valid.
+    eapply pbits_perm_unshared, pbits_unshared; eauto using
+      pbits_kind_weaken, pbits_valid_sep_valid, ctree_flatten_valid.
   * eapply ctree_Forall_not, of_val_flatten_mapped; eauto using
       val_refine_typed_l, of_val_flatten_typed, cmap_lookup_Some.
 Qed.
@@ -243,13 +241,13 @@ Lemma mem_alloc_refine Γ α f Δ1 Δ2 m1 m2 o1 o2 mallc x v1 v2 τ :
   let Δ1' := <[o1:=(τ,false)]>Δ1 in let Δ2' := <[o2:=(τ,false)]>Δ2 in
   ✓ Γ → m1 ⊑{Γ,α,f@Δ1↦Δ2} m2 →
   Δ1 !! o1 = None → Δ2 !! o2 = None → f !! o1 = Some (o2,[]) →
-  sep_unshared x → ¬sep_unmapped x → v1 ⊑{Γ,α,f@Δ1'↦Δ2'} v2 : τ →
+  sep_unshared x → v1 ⊑{Γ,α,f@Δ1'↦Δ2'} v2 : τ →
   mem_alloc Γ o1 mallc x v1 m1 ⊑{Γ,α,f@Δ1'↦Δ2'} mem_alloc Γ o2 mallc x v2 m2.
 Proof.
-  simpl; intros ? (?&?&HΔ&Hm) ??????.
+  simpl; intros ? (?&?&HΔ&Hm) ?????.
   assert (sep_valid x) by (by apply sep_unshared_valid).
-  split; split_ands; eauto 5 using mem_alloc_valid,
-    mem_alloc_refine_env, val_refine_typed_l, val_refine_typed_r.
+  split; split_ands; eauto 5 using mem_alloc_valid, mem_alloc_refine_env,
+    val_refine_typed_l, val_refine_typed_r, sep_unshared_unmapped.
   destruct m1 as [m1], m2 as [m2]; intros o3 o4 r w3 malloc' ?; simpl in *.
   rewrite lookup_insert_Some; intros [[??]|[??]]; simplify_map_equality.
   { exists (of_val Γ (replicate (bit_size_of Γ τ) x) v2)
@@ -265,13 +263,13 @@ Proof.
 Qed.
 Lemma mem_alloc_refine' Γ α f m1 m2 o1 o2 malloc x v1 v2 τ :
   ✓ Γ → m1 ⊑{Γ,α,f} m2 → o1 ∉ dom indexset m1 → o2 ∉ dom indexset m2 →
-  sep_unshared x → ¬sep_unmapped x → v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → ∃ f',
+  sep_unshared x → v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ → ∃ f',
   (**i 1.) *) f' !! o1 = Some (o2,[]) ∧
   (**i 2.) *)
     mem_alloc Γ o1 malloc x v1 m1 ⊑{Γ,α,f'} mem_alloc Γ o2 malloc x v2 m2 ∧
   (**i 3.) *) meminj_extend f f' ('{m1}) ('{m2}).
 Proof.
-  intros ?????? Hv. destruct (mem_refine_extend Γ α f ('{m1}) ('{m2}) o1 o2) as
+  intros ????? Hv. destruct (mem_refine_extend Γ α f ('{m1}) ('{m2}) o1 o2) as
     (f'&?&?&?); eauto using mem_allocable_memenv_of,cmap_refine_memenv_refine.
   exists f'; split_ands; auto. unfold refineM, cmap_refine'.
   erewrite !mem_alloc_memenv_of
@@ -282,7 +280,7 @@ Proof.
 Qed.
 Lemma mem_alloc_new_refine' Γ α f m1 m2 o1 o2 malloc x τ :
   ✓ Γ → m1 ⊑{Γ,α,f} m2 → o1 ∉ dom indexset m1 → o2 ∉ dom indexset m2 →
-  sep_unshared x → ¬sep_unmapped x → ✓{Γ} τ → ∃ f',
+  sep_unshared x → ✓{Γ} τ → ∃ f',
   (**i 1.) *) f' !! o1 = Some (o2,[]) ∧
   (**i 2.) *)
     mem_alloc Γ o1 malloc x (val_new Γ τ) m1

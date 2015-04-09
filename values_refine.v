@@ -109,6 +109,8 @@ Ltac solve_length := repeat first
 Hint Extern 0 (length _ = _) => solve_length.
 Hint Extern 0 (_ ≤ length _) => solve_length.
 Hint Extern 0 (length _ ≤ _) => solve_length.
+Hint Extern 0 (Separation _) => apply (_ : Separation perm).
+Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 
 Lemma val_refine_typed_l Γ α f Δ1 Δ2 v1 v2 τ :
   ✓ Γ → v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ → (Γ,Δ1) ⊢ v1 : τ.
@@ -333,32 +335,32 @@ Proof.
     eauto using val_unflatten_refine, pbits_tag_refine, TCompound_valid.
 Qed.
 Lemma of_val_refine Γ α f Δ1 Δ2 xs v1 v2 τ :
-  ✓ Γ → Forall sep_unshared xs → Forall (not ∘ sep_unmapped) xs →
-  length xs = bit_size_of Γ τ → v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ →
-  of_val Γ xs v1 ⊑{Γ,α,f@Δ1↦Δ2} of_val Γ xs v2 : τ.
+  ✓ Γ → Forall sep_unshared xs → length xs = bit_size_of Γ τ →
+  v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ → of_val Γ xs v1 ⊑{Γ,α,f@Δ1↦Δ2} of_val Γ xs v2 : τ.
 Proof.
-  intros HΓ Hxs Hxs' Hxs'' Hvs.
+  intros HΓ Hxs Hxs' Hvs.
   apply ctree_leaf_refine_refine; eauto using of_val_typed,
-    val_refine_typed_l, val_refine_typed_r, seps_unshared_valid.
-  revert v1 v2 τ Hvs xs Hxs Hxs' Hxs''.
+    val_refine_typed_l, val_refine_typed_r,
+    seps_unshared_valid, seps_unshared_unmapped.
+  revert v1 v2 τ Hvs xs Hxs Hxs'.
   refine (val_refine_ind _ _ _ _ _ _ _ _ _ _ _ _).
   * intros; simpl.
     erewrite base_val_refine_type_of_l, base_val_refine_type_of_r by eauto.
-    constructor; eauto using PBits_refine,
+    constructor; eauto 6 using PBits_refine, @seps_unshared_unmapped,
       base_val_flatten_refine, seps_unshared_valid, base_val_typed_type_valid.
-  * intros τ n vs1 vs2 <- ? IH _ xs Hxs Hxs'; simpl.
-    rewrite bit_size_of_array; intros Hxs''. constructor.
-    revert xs Hxs Hxs' Hxs''. induction IH; intros; decompose_Forall_hyps;
+  * intros τ n vs1 vs2 <- ? IH _ xs Hxs; simpl.
+    rewrite bit_size_of_array; intros Hxs'. constructor.
+    revert xs Hxs Hxs'. induction IH; intros; decompose_Forall_hyps;
       erewrite ?val_refine_type_of_l, ?val_refine_type_of_r by eauto; auto.
-  * intros t τs vs1 vs2 Ht Hvs IH xs Hxs Hxs'; simpl.
-    erewrite bit_size_of_struct by eauto; intros Hxs''; clear Ht.
+  * intros t τs vs1 vs2 Ht Hvs IH xs Hxs; simpl.
+    erewrite bit_size_of_struct by eauto; intros Hxs'; clear Ht.
     erewrite vals_refine_type_of_l, vals_refine_type_of_r by eauto.
     constructor.
-    + revert vs1 vs2 xs IH Hvs Hxs Hxs' Hxs''. unfold field_bit_padding.
+    + revert vs1 vs2 xs IH Hvs Hxs Hxs'. unfold field_bit_padding.
       induction (bit_size_of_fields _ τs HΓ); do 2 inversion_clear 1;
         intros; decompose_Forall_hyps; erewrite ?val_refine_type_of_l,
         ?val_refine_type_of_r by eauto; constructor; eauto 7.
-    + clear IH. revert vs1 vs2 xs Hvs Hxs Hxs' Hxs''. unfold field_bit_padding.
+    + clear IH. revert vs1 vs2 xs Hvs Hxs Hxs'. unfold field_bit_padding.
       induction (bit_size_of_fields _ τs HΓ); inversion_clear 1;
         intros; decompose_Forall_hyps; erewrite ?val_refine_type_of_l,
         ?val_refine_type_of_r by eauto; constructor;
@@ -367,8 +369,8 @@ Proof.
     constructor; eauto using PBits_BIndet_refine,
        PBits_BIndet_refine, seps_unshared_valid.
   * constructor. eapply PBits_refine, val_flatten_refine, VUnionAll_refine;
-      auto using seps_unshared_valid; eauto.
-  * intros t τs i v1 v2 τ vs2 ? Ht Hτ Hv2 Hv12 IH ? xs ???; simpl.
+      eauto using seps_unshared_valid, @seps_unshared_unmapped.
+  * intros t τs i v1 v2 τ vs2 ? Ht Hτ Hv2 Hv12 IH ? xs ??; simpl.
     assert ((Γ,Δ1) ⊢ v1 : τ) by eauto using val_refine_typed_l.
     assert ((Γ,Δ2) ⊢ v2 : τ) by eauto using val_refine_typed_r.
     simplify_type_equality. destruct (vals_representable_as_bits Γ Δ2
@@ -379,7 +381,7 @@ Proof.
     erewrite ctree_flatten_of_val by eauto using val_refine_typed_l.
     rewrite <-(zip_with_replicate_r _ (bit_size_of Γ (unionT t) -
       bit_size_of Γ τ)), <-zip_with_app, take_drop by auto.
-    apply PBits_refine; auto using seps_unshared_valid.
+    apply PBits_refine; auto using seps_unshared_valid, @seps_unshared_unmapped.
     destruct α; [|done]. apply Forall2_app_l;
       [|apply Forall2_replicate_l; eauto using Forall_impl, BIndet_refine].
     rewrite <-(left_id_L _ (◎) f), <-(orb_diag true).
@@ -453,14 +455,14 @@ Proof.
       Forall_true, val_flatten_unflatten, pbits_tag_valid.
 Qed.
 Lemma of_val_to_val_refine_unflatten_flatten Γ Δ x w τ :
-  ✓ Γ → (Γ,Δ) ⊢ w : τ →
-  ctree_Forall (not ∘ sep_unmapped) w → ctree_Forall sep_unshared w →
+  ✓ Γ → (Γ,Δ) ⊢ w : τ → ctree_Forall sep_unshared w →
   of_val Γ (tagged_perm <$> ctree_flatten w) (to_val Γ w)
     ⊑{Γ,true@Δ} ctree_unflatten Γ τ (ctree_flatten w) : τ.
 Proof.
   intros. erewrite ctree_unflatten_flatten by eauto.
   apply (ctree_refine_compose _ true true meminj_id meminj_id Δ Δ) with w;
-    eauto using of_val_to_val_refine, union_reset_above, ctree_refine_id.
+    eauto using of_val_to_val_refine, union_reset_above,
+    ctree_refine_id, @seps_unshared_unmapped.
 Qed.
 Lemma val_freeze_refine_l Γ Δ v τ :
   ✓ Γ → (Γ,Δ) ⊢ v : τ → val_map (freeze true) v ⊑{Γ,true@Δ} v : τ.
@@ -549,8 +551,7 @@ Proof.
   destruct (val_lookup_refine Γ α f Δ1 Δ2 v1 v2 τ r v3) as (?&?&?); eauto.
 Qed.
 Lemma to_val_lookup_seg_inv Γ Δ w1 τ rs v1 :
-  ✓ Γ → (Γ,Δ) ⊢ w1 : τ →
-  ctree_Forall sep_unshared w1 → ctree_Forall (not ∘ sep_unmapped) w1 →
+  ✓ Γ → (Γ,Δ) ⊢ w1 : τ → ctree_Forall sep_unshared w1 →
   to_val Γ w1 !!{Γ} rs = Some v1 →
   ∃ w2, w1 !!{Γ} rs = Some w2 ∧ v1 ⊑{Γ,true@Δ} to_val Γ w2 : type_of v1.
 Proof.
@@ -584,15 +585,15 @@ Proof.
     | _ => erewrite val_unflatten_type_of by eauto
     | _ => erewrite <-to_val_unflatten by eauto
     | _ => erewrite type_of_correct by eauto using to_val_typed
-    end; eauto 9 using val_refine_id, to_val_typed, ctree_unflatten_typed.
+    end; eauto 9 using val_refine_id, to_val_typed,
+      ctree_unflatten_typed, @seps_unshared_unmapped.
 Qed.
 Lemma to_val_lookup_inv Γ Δ w1 τ r v1 :
-  ✓ Γ → (Γ,Δ) ⊢ w1 : τ →
-  ctree_Forall sep_unshared w1 → ctree_Forall (not ∘ sep_unmapped) w1 →
+  ✓ Γ → (Γ,Δ) ⊢ w1 : τ → ctree_Forall sep_unshared w1 →
   to_val Γ w1 !!{Γ} r = Some v1 →
   ∃ w2, w1 !!{Γ} r = Some w2 ∧ v1 ⊑{Γ,true@Δ} to_val Γ w2 : type_of v1.
 Proof.
-  intros ????; revert v1. induction r as [|rs r IH]; intros v1.
+  intros ???; revert v1. induction r as [|rs r IH]; intros v1.
   { rewrite val_lookup_nil; intros; simplify_equality.
     erewrite type_of_correct by eauto using to_val_typed.
     exists w1; eauto using val_refine_id, to_val_typed. }
@@ -603,8 +604,6 @@ Proof.
   destruct (to_val_lookup_seg_inv Γ Δ w2' (type_of w2') rs v2'')
     as (w2''&?&?); eauto using ctree_lookup_Some_type_of,
     ctree_lookup_Forall_typed, pbit_indetify_unshared.
-  { eapply ctree_lookup_Forall_typed; eauto; simpl;
-      eauto using pbit_unmapped_indetify_inv, pbit_valid_sep_valid. }
   exists w2''; split; auto.
   eapply (val_refine_compose _ true true meminj_id meminj_id); eauto.
 Qed.
