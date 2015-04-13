@@ -861,10 +861,11 @@ Definition to_stmt (τret : type K) :
   | CSContinue => mret (throw 0, (true, None))
   | CSBreak => mret (throw 1, (true, None))
   | CSReturn (Some ce) =>
-     '(e,τ') ← to_R_NULL τret <$> to_expr Δl ce;
-     guard (τ' ≠ voidT) with "return expression has type void";
+     guard (τret ≠ voidT) with
+       "return with expression in function returning void";
+     '(e,τ) ← to_R_NULL τret <$> to_expr Δl ce;
      Γ ← gets to_env;
-     guard (cast_typed τ' τret) with "return expression has incorrect type";
+     guard (cast_typed τ τret) with "return expression has incorrect type";
      mret (ret (cast{τret} e), (true, Some τret))
   | CSReturn None =>
      guard (τret = voidT) with "return with no expression in non-void function";
