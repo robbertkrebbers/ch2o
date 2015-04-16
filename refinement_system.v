@@ -263,6 +263,8 @@ Inductive stmt_refine' (Γ : env K) (τs : list (type K))
   | SReturn_refine e1 e2 τ :
      e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ → locks e1 = ∅ → locks e2 = ∅ →
      stmt_refine' Γ τs α f Δ1 Δ2 (ret e1) (ret e2) (true,Some τ)
+  | SCase_refine mx :
+     stmt_refine' Γ τs α f Δ1 Δ2 (scase mx) (scase mx) (false,None)
   | SLabel_refine l :
      stmt_refine' Γ τs α f Δ1 Δ2 (label l) (label l) (false,None)
   | SLocal_refine' τ s1 s2 c mσ :
@@ -286,7 +288,12 @@ Inductive stmt_refine' (Γ : env K) (τs : list (type K))
      stmt_refine' Γ τs α f Δ1 Δ2 s1' s2' (c2,mσ2) →
      rettype_union mσ1 mσ2 mσ →
      stmt_refine' Γ τs α f Δ1 Δ2
-       (if{e1} s1 else s1') (if{e2} s2 else s2') (c1 && c2, mσ).
+       (if{e1} s1 else s1') (if{e2} s2 else s2') (c1 && c2, mσ)
+  | SSwitch_refine e1 e2 τi s1 s2 c mσ :
+     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (intT τi) →
+     locks e1 = ∅ → locks e2 = ∅ →
+     stmt_refine' Γ τs α f Δ1 Δ2 s1 s2 (c,mσ) →
+     stmt_refine' Γ τs α f Δ1 Δ2 (switch{e1} s1) (switch{e2} s2) (false, mσ).
 Global Instance stmt_refine: RefineT K (env K * list (type K))
    (rettype K) (stmt K) := curry stmt_refine'.
 
@@ -315,7 +322,12 @@ Inductive sctx_item_refine' (Γ : env K) (τs: list (type K))
      locks e1 = ∅ → locks e2 = ∅ →
      s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : (c,mσ) → rettype_union mσ mσ' mσr →
      sctx_item_refine' Γ τs α f Δ1 Δ2
-       (if{e1} s1 else □) (if{e2} s2 else □) (c',mσ') (c&&c',mσr).
+       (if{e1} s1 else □) (if{e2} s2 else □) (c',mσ') (c&&c',mσr)
+  | CSwitch_refine e1 e2 τi c mσ :
+     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (intT τi) → locks e1 = ∅ → locks e2 = ∅ →
+     sctx_item_refine' Γ τs α f Δ1 Δ2
+       (switch{e1} □) (switch{e2} □) (c,mσ) (false,mσ).
+
 Global Instance sctx_refine: PathRefine K (env K * list (type K))
   (rettype K) (rettype K) (sctx_item K) := curry sctx_item_refine'.
 
@@ -330,7 +342,11 @@ Inductive esctx_item_refine' (Γ : env K) (τs: list (type K))
      τb ≠ TVoid → s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : (c,mσ) →
      s1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2' : (c',mσ') → rettype_union mσ mσ' mσr →
      esctx_item_refine' Γ τs α f Δ1 Δ2
-       (if{□} s1 else s1')%S (if{□} s2 else s2')%S (baseT τb) (c&&c',mσr).
+       (if{□} s1 else s1')%S (if{□} s2 else s2')%S (baseT τb) (c&&c',mσr)
+  | CSwitchE_refine τi s1 s2 c mσ :
+     s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : (c,mσ) →
+     esctx_item_refine' Γ τs α f Δ1 Δ2
+       (switch{□} s1) (switch{□} s2) (intT τi) (false,mσ).
 Global Instance esctx_item_refine: PathRefine K (env K * list (type K))
   (type K) (rettype K) (esctx_item K) := curry esctx_item_refine'.
 
@@ -383,7 +399,8 @@ Inductive direction_refine' (Γ : env K) (α : bool) (f : meminj K)
      v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ →
      direction_refine' Γ α f Δ1 Δ2 (⇈ v1) (⇈ v2) (c,Some τ)
   | Goto_refine l cmτ : direction_refine' Γ α f Δ1 Δ2 (↷ l) (↷ l) cmτ
-  | Throw_refine n cmτ : direction_refine' Γ α f Δ1 Δ2 (↑ n) (↑ n) cmτ.
+  | Throw_refine n cmτ : direction_refine' Γ α f Δ1 Δ2 (↑ n) (↑ n) cmτ
+  | Switch_refine mx cmτ : direction_refine' Γ α f Δ1 Δ2 (↓ mx) (↓ mx) cmτ.
 Global Instance direction_refine: RefineT K (env K)
   (rettype K) (direction K) := direction_refine'.
 
@@ -581,12 +598,12 @@ Proof. induction 1; simpl; auto with f_equal. Qed.
 Lemma stmt_refine_labels Γ α f Δ1 Δ2 τs s1 s2 mcτ :
   s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : mcτ → labels s1 = labels s2.
 Proof. induction 1; simpl; auto with f_equal. Qed.
-Lemma stmt_refine_labels_elem_of_r Γ α f Δ1 Δ2 τs s1 s2 mcτ :
-  s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : mcτ → labels s1 = labels s2.
-Proof. induction 1; simpl; auto with f_equal. Qed.
 Lemma stmt_refine_throws_valid Γ α f Δ1 Δ2 τs s1 s2 mcτ n :
   s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : mcτ → throws_valid n s1 → throws_valid n s2.
 Proof. intros Hs. revert n. induction Hs; naive_solver. Qed.
+Lemma stmt_refine_cases Γ α f Δ1 Δ2 τs s1 s2 mcτ :
+  s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : mcτ → cases s1 = cases s2.
+Proof. induction 1; simpl; auto with f_equal. Qed.
 Lemma ctx_refine_locals_types Γ α f Δ1 Δ2 k1 k2 τf τf' :
   ✓ Γ → k1 ⊑{Γ,α,f@Δ1↦Δ2} k2 : τf ↣ τf' → locals k1.*2 = locals k2.*2.
 Proof.
@@ -596,13 +613,6 @@ Proof.
     induction Hos; intros [|??]; f_equal'; auto. }
   induction 2 as [|??????? []]; simpl; eauto with f_equal.
 Qed.
-(*
-Lemma indexes_valid_weaken Δ1 Δ2 ρ : ✓{Δ1}* ρ → Δ1 ⇒ₘ Δ2 → ✓{Δ2}* ρ.
-Proof.
-  unfold valid, stack_item_valid.
-  induction 1; eauto using memenv_forward_typed.
-Qed.
-*)
 Lemma ctx_refine_locals_refine Γ α f Δ1 Δ2 k1 k2 τf τf' :
   k1 ⊑{Γ,α,f@Δ1↦Δ2} k2 : τf ↣ τf' →
   Forall2 (stack_item_refine f Δ1 Δ2) (locals k1) (locals k2).
@@ -617,11 +627,18 @@ Qed.
 Lemma sctx_item_catch_refine Γ α f Δ1 Δ2 τs Es1 Es2 s1 s2 mcτ mcτ' :
   Es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} Es2 : mcτ ↣ mcτ' →
   Es1 = catch □ → Es2 = catch □.
-Proof. by destruct 1. Qed.  
+Proof. by destruct 1. Qed.
+Lemma sctx_item_switch_refine Γ α f Δ1 Δ2 τs Es1 Es2 s1 s2 mcτ mcτ' :
+  Es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} Es2 : mcτ ↣ mcτ' →
+  maybe CSwitch Es2 = None → maybe CSwitch Es1 = None.
+Proof. by destruct 1. Qed.
 Lemma direction_in_refine_r Γ τs α f Δ1 Δ2 s1 s2 d1 d2 mcτ :
   s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : mcτ →
   d1 ⊑{Γ,α,f@Δ1↦Δ2} d2 : mcτ → direction_in d2 s2 → direction_in d1 s1.
-Proof. by destruct 2; simpl; erewrite <-?stmt_refine_labels by eauto. Qed.
+Proof.
+  by destruct 2; simpl;
+    erewrite <-?stmt_refine_labels, <-?stmt_refine_cases by eauto.
+Qed.
 Lemma direction_out_refine_r Γ τs α f Δ1 Δ2 s1 s2 d1 d2 mcτ :
   s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : mcτ →
   d1 ⊑{Γ,α,f@Δ1↦Δ2} d2 : mcτ → direction_out d2 s2 → direction_out d1 s1.

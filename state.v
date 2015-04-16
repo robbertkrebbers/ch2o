@@ -30,25 +30,34 @@ When a [goto l] statement is executed, the direction is changed to [↷l], and
 the semantics performs a non-deterministic small step traversal through the
 zipper until the label [l] is found. *)
 Inductive direction (K : Set) : Set :=
-  Down | Up | Top (v : val K) | Goto (l : labelname) | Throw (n : nat).
+  | Down
+  | Up
+  | Top : val K → direction K
+  | Goto : labelname → direction K
+  | Throw : nat → direction K
+  | Switch : option Z → direction K.
 Arguments Down {_}.
 Arguments Up {_}.
 Arguments Top {_} _.
 Arguments Goto {_} _.
 Arguments Throw {_} _.
+Arguments Switch {_} _%Z.
 
 Notation "↘" := Down : C_scope.
 Notation "↗" := Up : C_scope.
 Notation "⇈ v" := (Top v) (at level 20) : C_scope.
 Notation "↷ l" := (Goto l) (at level 20) : C_scope.
 Notation "↑ n" := (Throw n) (at level 20) : C_scope.
+Notation "↓ mx" := (Switch mx) (at level 20) : C_scope.
 
 Instance direction_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (d1 d2 : direction K) : Decision (d1 = d2).
 Proof. solve_decision. Defined.
 
 Definition direction_in {K} (d : direction K) (s : stmt K) : Prop :=
-  match d with ↘ => True | ↷ l => l ∈ labels s | _ => False end.
+  match d with
+  | ↘ => True | ↷ l => l ∈ labels s | ↓ mx => mx ∈ cases s | _ => False
+  end.
 Definition direction_out {K} (d : direction K) (s : stmt K) : Prop :=
   match d with
   | ↗ | ⇈ _ => True | ↷ l => l ∉ labels s | ↑ _ => True | _ => False
@@ -57,18 +66,9 @@ Arguments direction_in _ _ _ : simpl nomatch.
 Arguments direction_out _ _ _ : simpl nomatch.
 Hint Unfold direction_in direction_out.
 
-Definition direction_in_out_dec {K} (d : direction K) s :
-  { direction_in d s ∧ ¬direction_out d s } +
-  { ¬direction_in d s ∧ direction_out d s }.
-Proof.
- refine
-  match d with
-  | ↘ => left _ | ↷ l => cast_if (decide (l ∈ labels s)) | _ => right _
-  end; abstract naive_solver.
-Defined.
 Lemma direction_in_out {K} (d : direction K) s :
   direction_in d s → direction_out d s → False.
-Proof. destruct (direction_in_out_dec d s); naive_solver. Qed.
+Proof. by destruct d. Qed.
 
 (** The data type [focus] describes the part of the program that is focused. An
 execution state [state] equips a focus with a program context and memory.

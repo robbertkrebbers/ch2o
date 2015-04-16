@@ -99,13 +99,16 @@ Definition cexec (Γ : env K) (δ : funenv K)
     | goto l => {[ State k (Stmt (↷ l) (goto l)) m ]}
     | throw n => {[ State k (Stmt (↑ n) (throw n)) m ]}
     | label l => {[ State k (Stmt ↗ (label l)) m ]}
+    | scase mx => {[ State k (Stmt ↗ (scase mx)) m ]}
     | ! e => {[ State (CExpr e (! □) :: k) (Expr e) m ]}
     | ret e => {[ State (CExpr e (ret □) :: k) (Expr e) m ]}
     | loop s => {[ State (CStmt (loop □) :: k) (Stmt ↘ s) m ]}
-    | if{e} s1 else s2 =>
-       {[ State (CExpr e (if{□} s1 else s2) :: k) (Expr e) m ]}
     | s1 ;; s2 => {[ State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m ]}
     | catch s => {[ State (CStmt (catch □) :: k) (Stmt ↘ s) m ]}
+    | if{e} s1 else s2 =>
+       {[ State (CExpr e (if{□} s1 else s2) :: k) (Expr e) m ]}
+    | switch{e} s =>
+       {[ State (CExpr e (switch{□} s) :: k) (Expr e) m ]}
     | local{τ} s =>
        let o := fresh (dom indexset m) in
        {[ State (CLocal o τ :: k) (Stmt ↘ s)
@@ -118,10 +121,9 @@ Definition cexec (Γ : env K) (δ : funenv K)
     | CStmt (s1 ;; □) :: k => {[ State k (Stmt ↗ (s1 ;; s)) m ]}
     | CStmt (catch □) :: k => {[ State k (Stmt ↗ (catch s)) m ]}
     | CStmt (loop □) :: k => {[ State k (Stmt ↘ (loop s)) m ]}
-    | CStmt (if{e} □ else s2) :: k =>
-       {[ State k (Stmt ↗ (if{e} s else s2)) m ]}
-    | CStmt (if{e} s1 else □) :: k =>
-       {[ State k (Stmt ↗ (if{e} s1 else s)) m ]}
+    | CStmt (if{e} □ else s2) :: k => {[ State k (Stmt ↗ (if{e} s else s2)) m ]}
+    | CStmt (if{e} s1 else □) :: k => {[ State k (Stmt ↗ (if{e} s1 else s)) m ]}
+    | CStmt (switch{e} □) :: k => {[ State k (Stmt ↗ (switch{e} s)) m ]}
     | CParams f oτs :: k =>
        {[ State k (Return f voidV) (foldr mem_free m (oτs.*1)) ]}
     | _ => ∅
@@ -154,6 +156,7 @@ Definition cexec (Γ : env K) (δ : funenv K)
              {[ State (CStmt (if{e} □ else s2) :: k) (Stmt (↷ l) s1) m ]})
          ∪ (guard (l ∈ labels s2);
              {[ State (CStmt (if{e} s1 else □) :: k) (Stmt (↷ l) s2) m ]})
+      | switch{e} s => {[ State (CStmt (switch{e} □) :: k) (Stmt (↷ l) s) m ]}
       | _ => ∅
       end
     else
@@ -162,6 +165,34 @@ Definition cexec (Γ : env K) (δ : funenv K)
       | CStmt Es :: k => {[ State k (Stmt (↷ l) (subst Es s)) m ]}
       | _ => ∅
       end
+  | Stmt (↓ mx) s =>
+    match s with
+    | scase mx' =>
+       guard (mx = mx');
+       {[ State k (Stmt ↗ s) m ]}
+    | local{τ} s =>
+       guard (mx ∈ cases s);
+       let o := fresh (dom indexset m) in
+       {[ State (CLocal o τ :: k) (Stmt (↓ mx) s)
+                (mem_alloc Γ o false perm_full (val_new Γ τ) m) ]}
+    | catch s =>
+       guard (mx ∈ cases s);
+       {[ State (CStmt (catch □) :: k) (Stmt (↓ mx) s) m ]}
+    | s1 ;; s2 =>
+       (guard (mx ∈ cases s1);
+          {[ State (CStmt (□ ;; s2) :: k) (Stmt (↓ mx) s1) m ]})
+       ∪ (guard (mx ∈ cases s2);
+          {[ State (CStmt (s1 ;; □) :: k) (Stmt (↓ mx) s2) m ]})
+    | loop s =>
+       guard (mx ∈ cases s);
+       {[ State (CStmt (loop □) :: k) (Stmt (↓ mx) s) m ]}
+    | if{e} s1 else s2 =>
+       (guard (mx ∈ cases s1);
+           {[ State (CStmt (if{e} □ else s2) :: k) (Stmt (↓ mx) s1) m ]})
+       ∪ (guard (mx ∈ cases s2);
+           {[ State (CStmt (if{e} s1 else □) :: k) (Stmt (↓ mx) s2) m ]})
+    | _ => ∅
+    end
   | Stmt (↑ n) s =>
     match k with
     | CLocal o τ :: k => {[ State k (Stmt (↑ n) (local{τ} s)) (mem_free o m) ]}
@@ -199,6 +230,17 @@ Definition cexec (Γ : env K) (δ : funenv K)
            else 
              {[State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m)]}
          else {[ State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m ]}
+      | CExpr e (switch{□} s) :: k =>
+         vb ← of_option (maybe VBase v);
+         if decide (base_val_branchable m vb) return listset (state K) then
+           '(τi,x) ← of_option (maybe2 VInt vb);
+           let m' := mem_unlock Ω m in
+           if decide (Some x ∈ cases s) return listset (state K) then
+             {[ State (CStmt (switch{e} □) :: k) (Stmt (↓ (Some x)) s) m' ]}
+           else if decide (None ∈ cases s) return listset (state K) then
+             {[ State (CStmt (switch{e} □) :: k) (Stmt (↓ None) s) m' ]}
+           else {[ State k (Stmt ↗ (switch{e} s)) m' ]}
+         else {[ State k (Undef (UndefBranch (switch{□} s) Ω v)) m ]}
       | _ => ∅
       end
     | Some (_,inl _) => ∅

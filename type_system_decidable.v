@@ -165,7 +165,7 @@ Global Instance stmt_type_check: TypeCheck envs (rettype K) (stmt K) :=
   | goto _ | throw _ => Some (true,None)
   | ret e =>
      τ ← type_check Γs e ≫= maybe inr; guard (locks e = ∅); Some (true,Some τ)
-  | label _ => Some (false,None)
+  | label _ | scase _ => Some (false,None)
   | local{τ} s => guard (✓{Γ} τ); type_check (Γ,Δ,τ :: τs) s
   | s1 ;; s2 =>
      '(c1,mσ1) ← type_check Γs s1;
@@ -179,6 +179,9 @@ Global Instance stmt_type_check: TypeCheck envs (rettype K) (stmt K) :=
      '(c1,mσ1) ← type_check Γs s1;
      '(c2,mσ2) ← type_check Γs s2;
      mσ ← rettype_union_alt mσ1 mσ2; Some (c1 && c2,mσ)
+  | switch{e} s =>
+     τi ← type_check Γs e ≫= maybe (inr ∘ TBase ∘ TInt);
+     guard (locks e = ∅); '(_,mσ) ← type_check Γs s; Some (false,mσ)
   end%S.
 Global Instance sctx_item_lookup :
     LookupE envs (sctx_item K) (rettype K) (rettype K) := λ Γs Es τlr,
@@ -201,6 +204,9 @@ Global Instance sctx_item_lookup :
      guard (locks e = ∅);
      '(c1,mσ1) ← type_check Γs s1;
      mσ ← rettype_union_alt mσ1 mσ2; Some (c1&&c2,mσ)
+  | switch{e} □, (c,mσ) =>
+     τb ← type_check Γs e ≫= maybe (inr ∘ TBase ∘ TInt);
+     guard (locks e = ∅); Some (false,mσ)
   end%S.
 Global Instance esctx_item_lookup :
     LookupE envs (esctx_item K) (rettype K) (type K) := λ Γs Ee τlr,
@@ -212,6 +218,8 @@ Global Instance esctx_item_lookup :
      '(c1,mσ1) ← type_check Γs s1;
      '(c2,mσ2) ← type_check Γs s2;
      mσ ← rettype_union_alt mσ1 mσ2; Some (c1 && c2,mσ)
+  | switch{□} s, intT τi =>
+     '(_,mσ) ← type_check Γs s; Some (false,mσ)
   | _, _ => None
   end%S.
 Global Instance ctx_item_lookup :
@@ -242,7 +250,7 @@ Global Instance focus_type_check:
      | ⇈ v, (c,Some τ) =>
         τ' ← type_check (Γ,Δ) v;
         guard ((τ : type K) = τ'); Some (Stmt_type cmσ)
-     | ↘, _ | ↗, (false,_) | ↷ _, _ | ↑ _, _ => Some (Stmt_type cmσ)
+     | ↘, _ | ↗, (false,_) | ↷ _, _ | ↑ _, _ | ↓ _, _ => Some (Stmt_type cmσ)
      | _, _ => None
      end
   | Expr e => Expr_type <$> type_check Γs e ≫= maybe inr
@@ -368,16 +376,20 @@ Proof.
   intros [[Γ Δ] τs] s mcτ; simpl; split.
   * revert τs mcτ.
     induction s; intros; simplify; typed_constructor; naive_solver.
-  * induction 1; simplify_option_equality;
-      erewrite ?rettype_union_alt_complete, ?type_check_complete by eauto;
-      simplify_option_equality; eauto.
+  * induction 1;
+      repeat match goal with
+      | _ : _ ⊢ ?e : _ |- _ => erewrite (type_check_complete _ e) by eauto
+      | _ => erewrite rettype_union_alt_complete by eauto
+      | _ => progress simplify_option_equality
+      end; eauto.
 Qed.
 Hint Resolve (type_check_sound (V:=stmt K)).
 Global Instance: PathTypeCheckSpec envs
   (type K) (rettype K) (esctx_item K) (✓ ∘ fst ∘ fst).
 Proof.
   intros [[Γ Δ] τs] Ee τlr; simpl; split.
-  * destruct τlr, Ee; intros; simplify; typed_constructor; eauto.
+  * unfold lookupE; destruct τlr, Ee;
+      intros; simplify; typed_constructor; eauto.
   * destruct 1; simplify_option_equality;
       erewrite ?type_check_complete by eauto; simplify_option_equality;
       erewrite ?rettype_union_alt_complete by eauto; eauto.

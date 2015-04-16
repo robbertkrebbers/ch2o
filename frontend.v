@@ -72,6 +72,8 @@ Inductive cstmt : Set :=
   | CSBreak : cstmt
   | CSContinue : cstmt
   | CSReturn : option cexpr → cstmt
+  | CSCase : cexpr → cstmt → cstmt
+  | CSDefault : cstmt → cstmt
   | CSScope : cstmt → cstmt
   | CSLocal : list cstorage → string → ctype → option cinit → cstmt → cstmt
   | CSTypeDef : string → ctype → cstmt → cstmt
@@ -80,7 +82,8 @@ Inductive cstmt : Set :=
   | CSWhile : cexpr → cstmt → cstmt
   | CSFor : cexpr → cexpr → cexpr → cstmt → cstmt
   | CSDoWhile : cstmt → cexpr → cstmt
-  | CSIf : cexpr → cstmt → cstmt → cstmt.
+  | CSIf : cexpr → cstmt → cstmt → cstmt
+  | CSSwitch : cexpr → cstmt → cstmt.
 
 Inductive decl : Set :=
   | CompoundDecl : compound_kind → list (string * ctype) → decl
@@ -855,17 +858,22 @@ Definition alloc_static (Δl : local_env K) (x : string) (cτ : ctype)
   end.
 Definition to_storage (stos : list cstorage) : option cstorage :=
   match stos with [] => Some AutoStorage | [sto] => Some sto | _ => None end.
+Notation break_continue := (option nat * option nat)%type.
 Definition to_stmt (τret : type K) :
-    local_env K → cstmt → M (stmt K * rettype K) :=
-  fix go Δl cs {struct cs} :=
+    break_continue → local_env K → cstmt → M (stmt K * rettype K) :=
+  fix go bc Δl cs {struct cs} :=
   match cs with
   | CSDo ce =>
      '(e,_) ← to_R <$> to_expr Δl ce;
      mret (!(cast{voidT} e), (false, None))
   | CSSkip => mret (skip, (false, None))
   | CSGoto l => mret (goto l, (true, None))
-  | CSContinue => mret (throw 0, (true, None))
-  | CSBreak => mret (throw 1, (true, None))
+  | CSBreak =>
+     n ← error_of_option (bc.1) "unbound break";
+     mret (throw n, (true, None))
+  | CSContinue =>
+     n ← error_of_option (bc.2) "unbound break";
+     mret (throw n, (true, None))
   | CSReturn (Some ce) =>
      guard (τret ≠ voidT) with
        "return with expression in function returning void";
@@ -876,19 +884,30 @@ Definition to_stmt (τret : type K) :
   | CSReturn None =>
      guard (τret = voidT) with "return with no expression in non-void function";
      mret (ret (#voidV), (true, Some voidT))
-  | CSScope cs => go (None :: Δl) cs
+  | CSCase ce cs =>
+     '(e,_) ← to_expr Δl ce;
+     guard (is_pure e) with "case with non-constant expression";
+     Γ ← gets to_env; m ← gets to_mem;
+     v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe inr)
+       "case with undefined expression";
+     '(_,x) ← error_of_option (maybe VBase v ≫= maybe2 VInt)
+       "case with non-integer expression";
+     '(s,cmσ) ← go bc Δl cs;
+     mret (scase (Some x) ;; s, cmσ)
+  | CSDefault cs => '(s,cmσ) ← go bc Δl cs; mret (scase None ;; s, cmσ)
+  | CSScope cs => go bc (None :: Δl) cs
   | CSLocal stos x cτ mce cs =>
      guard (local_fresh x Δl) with
        ("block scope variable `" +:+ x +:+ "` previously declared");
      match to_storage stos with
      | Some StaticStorage =>
         '(o,τ) ← alloc_static Δl x cτ mce;
-        go (Some (x, Extern (inl (o,τ))) :: Δl) cs
+        go bc (Some (x, Extern (inl (o,τ))) :: Δl) cs
      | Some ExternStorage =>
         guard (mce = None) with ("block scope variable `" +:+ x +:+
           "` has both `extern` and an initializer");
         decl ← alloc_global Δl x ExternStorage cτ None;
-        go (Some (x, Extern decl) :: Δl) cs
+        go bc (Some (x, Extern decl) :: Δl) cs
      | Some AutoStorage =>
         τ ← to_type to_Type Δl cτ;
         guard (τ ≠ voidT) with
@@ -897,10 +916,10 @@ Definition to_stmt (τret : type K) :
         match mce with
         | Some ce =>
            e ← to_init_expr (Some (x,Local τ) :: Δl) τ ce;
-           '(s,cmσ) ← go (Some (x,Local τ) :: Δl) cs;
+           '(s,cmσ) ← go bc (Some (x,Local τ) :: Δl) cs;
            mret (local{τ} (var 0 ::= e ;; s), cmσ)
         | None =>
-           '(s,cmσ) ← go (Some (x,Local τ) :: Δl) cs;
+           '(s,cmσ) ← go bc (Some (x,Local τ) :: Δl) cs;
            mret (local{τ} s, cmσ)
         end
      | _ => fail ("block scope variable `" +:+ x +:+
@@ -910,27 +929,27 @@ Definition to_stmt (τret : type K) :
      guard (local_fresh x Δl) with
        ("typedef `" +:+ x +:+ "` previously declared");
      τp ← to_type to_Ptr Δl cτ;
-     go (Some (x,TypeDef τp) :: Δl) cs
+     go bc (Some (x,TypeDef τp) :: Δl) cs
   | CSComp cs1 cs2 =>
-     '(s1,cmσ1) ← go Δl cs1;
-     '(s2,cmσ2) ← go Δl cs2;
+     '(s1,cmσ1) ← go bc Δl cs1;
+     '(s2,cmσ2) ← go bc Δl cs2;
      mσ ← error_of_option (rettype_union_alt (cmσ1.2) (cmσ2.2))
        "composition of statements with non-matching return types";
      mret (s1 ;; s2, (cmσ2.1, mσ))
-  | CSLabel l cs => '(s,cmσ) ← go Δl cs; mret (l :; s, cmσ)
+  | CSLabel l cs => '(s,cmσ) ← go bc Δl cs; mret (l :; s, cmσ)
   | CSWhile ce cs =>
      '(e,τ) ← to_R <$> to_expr Δl ce;
      τb ← error_of_option (maybe TBase τ)
        "conditional argument of while statement of non-base type";
      guard (τb ≠ TVoid) with
        "conditional argument of while statement of void type";
-     '(s,cmσ) ← go Δl cs;
+     '(s,cmσ) ← go (Some 0, Some 1) Δl cs;
      mret (catch (loop (if{e} skip else throw 0 ;; catch s)), (false, cmσ.2))
   | CSFor ce1 ce2 ce3 cs =>
      '(e1,τ1) ← to_R <$> to_expr Δl ce1;
      '(e2,τ2) ← to_R <$> to_expr Δl ce2;
      '(e3,τ3) ← to_R <$> to_expr Δl ce3;
-     '(s,cmσ) ← go Δl cs;
+     '(s,cmσ) ← go (Some 0, Some 1) Δl cs;
      τb ← error_of_option (maybe TBase τ2)
        "conditional argument of for statement of non-base type";
      guard (τb ≠ TVoid) with
@@ -940,7 +959,7 @@ Definition to_stmt (τret : type K) :
          if{e2} skip else throw 0 ;; catch s ;; !(cast{voidT} e3)
        )), (false, cmσ.2))
   | CSDoWhile cs ce =>
-     '(s,cmσ) ← go Δl cs;
+     '(s,cmσ) ← go (Some 0, Some 1) Δl cs;
      '(e,τ) ← to_R <$> to_expr Δl ce;
      τb ← error_of_option (maybe TBase τ)
        "conditional argument of do-while statement of non-base type";
@@ -949,8 +968,8 @@ Definition to_stmt (τret : type K) :
      mret (catch (loop (catch s ;; if{e} skip else throw 0)), (false, cmσ.2))
   | CSIf ce cs1 cs2 =>
      '(e,τ) ← to_R <$> to_expr Δl ce;
-     '(s1,cmσ1) ← go Δl cs1;
-     '(s2,cmσ2) ← go Δl cs2;
+     '(s1,cmσ1) ← go bc Δl cs1;
+     '(s2,cmσ2) ← go bc Δl cs2;
      τb ← error_of_option (maybe TBase τ)
        "conditional argument of if statement of non-base type";
      guard (τb ≠ TVoid) with
@@ -958,6 +977,12 @@ Definition to_stmt (τret : type K) :
      mσ ← error_of_option (rettype_union_alt (cmσ1.2) (cmσ2.2))
        "if statement with non-matching return types";
      mret (if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S
+  | CSSwitch ce cs =>
+     '(e,τ) ← to_R <$> to_expr Δl ce;
+     τi ← error_of_option (maybe (TBase ∘ TInt) τ)
+       "conditional argument of switch statement of non-integer type";
+     '(s,cmσ) ← go (Some 0, S <$> bc.2) Δl cs;
+     mret (catch (switch{e} s), (false, cmσ.2))
   end.
 Definition stmt_fix_return (Γ : env K) (f : string) (σ : type K) (s : stmt K)
     (cmτ : rettype K) : stmt K * rettype K :=
@@ -972,13 +997,11 @@ Definition to_fun_stmt (f : string) (mys : list (option string))
      (τs : list (type K)) (σ : type K) (cs : cstmt) : M (stmt K) :=
   ys ← error_of_option (mapM id mys)
     ("function `" +:+ f +:+ "` has unnamed arguments");
-  '(s,cmσ) ← to_stmt σ (zip_with (λ y τ, Some (y, Local τ)) ys τs) cs;
+  '(s,cmσ) ← to_stmt σ (None,None) (zip_with (λ y τ, Some (y, Local τ)) ys τs) cs;
   Γ ← gets to_env;
   let (s,cmσ) := stmt_fix_return Γ f σ s cmσ in
   guard (gotos s ⊆ labels s) with
     ("function `" +:+ f +:+ "` has unbound gotos");
-  guard (throws_valid 0 s) with
-    ("function `" +:+ f +:+ "` has unbound breaks/continues");
   mret s.
 Definition alloc_fun (f : string)
     (sto : cstorage) (cσ : ctype) (cs : cstmt)  : M () :=

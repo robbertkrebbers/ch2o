@@ -676,6 +676,14 @@ let rec cstmt_of_statements l =
   | Cabs.LABEL (s,y,_)::l' ->
       cscomp (CSLabel (chars_of_string s,cstmt_of_statements [y]))
         (cstmt_of_statements l')
+  | Cabs.CASE (e,y,_)::l' ->
+      cscomp (CSCase (cexpr_of_expression e,cstmt_of_statements [y]))
+        (cstmt_of_statements l')
+  | Cabs.DEFAULT (y,_)::l' ->
+      cscomp (CSDefault (cstmt_of_statements [y])) (cstmt_of_statements l')
+  | Cabs.SWITCH (e,y,_)::l' ->
+      cscomp (CSSwitch (cexpr_of_expression e,cstmt_of_statements [y]))
+        (cstmt_of_statements l')
   | Cabs.BLOCK ({Cabs.bstmts = y},_)::l' ->
       cscomp (CSScope (cstmt_of_statements y)) (cstmt_of_statements l')
   | Cabs.DEFINITION (Cabs.DECDEF ((t,l),_))::l' ->

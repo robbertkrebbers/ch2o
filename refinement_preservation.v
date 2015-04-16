@@ -39,7 +39,7 @@ Hint Immediate vals_refine_typed_l vals_refine_typed_r.
 Hint Immediate locks_refine_valid_l locks_refine_valid_r.
 Hint Immediate stmt_refine_typed_l stmt_refine_typed_r.
 Hint Resolve direction_out_refine_r direction_in_refine_r.
-Hint Resolve sctx_item_catch_refine.
+Hint Resolve sctx_item_catch_refine sctx_item_switch_refine.
 Hint Immediate meminj_extend_reflexive.
 Hint Immediate sctx_item_subst_refine.
 Hint Resolve meminj_extend_inverse cmap_refine_inverse'.
@@ -198,6 +198,8 @@ Ltac invert :=
   | H : rettype_match _ _ |- _ => apply rettype_match_Some_inv in H; subst
   | H : _ ∈ labels _ |- _ => erewrite <-stmt_refine_labels in H by eauto
   | H : _ ∉ labels _ |- _ => erewrite <-stmt_refine_labels in H by eauto
+  | H : _ ∈ cases _ |- _ => erewrite <-stmt_refine_cases in H by eauto
+  | H : _ ∉ cases _ |- _ => erewrite <-stmt_refine_cases in H by eauto
   | H : _ ⊑{_,_,_@_↦_}* #{_}* _ :* _ |- _ =>
      apply EVal_refine_inv_r in H; [|auto]; destruct H as (?&?&->&?&?&?)
   | H : ?X ⊑{_,_,_@_↦_} subst _ _ : _ |- _ =>
@@ -241,6 +243,7 @@ Proof.
   * intros m k ????; invert. go f; eauto.
   * intros m k l ????; invert. go f; eauto.
   * intros m k n ????; invert. go f; eauto.
+  * intros m k l ????; invert. go f; eauto.
   * intros m k l ????; invert. go f; eauto.
   * intros m k E e ????; invert. go f; eauto.
   * intros m1 m2 k E e1 e2 ?????; invert. destruct α.
@@ -292,6 +295,31 @@ Proof.
     + go f. right; auto.
       eexists; split_ands; eauto; repeat typed_constructor; eauto.
   * intros; invert. go f; eauto.
+  * intros; invert;
+      match goal with
+      | H : _ ⊑{_,_,_@_↦_} (intV{_} _)%B : _ |- _ => refine_inversion H
+      end; go f; try (right; auto; eexists; split_ands; eauto;
+        repeat typed_constructor; eauto using TInt_valid).
+    repeat refine_constructor;
+      eauto using mem_unlock_refine', ctx_refine_weaken,
+      expr_refine_weaken, stmt_refine_weaken, mem_unlock_forward.
+  * intros; invert;
+      match goal with
+      | H : _ ⊑{_,_,_@_↦_} (intV{_} _)%B : _ |- _ => refine_inversion H
+      end; go f; try (right; auto; eexists; split_ands; eauto;
+        repeat typed_constructor; eauto using TInt_valid).
+    repeat refine_constructor;
+      eauto using mem_unlock_refine', ctx_refine_weaken,
+      expr_refine_weaken, stmt_refine_weaken, mem_unlock_forward.
+  * intros; invert;
+      match goal with
+      | H : _ ⊑{_,_,_@_↦_} (intV{_} _)%B : _ |- _ => refine_inversion H
+      end; go f; try (right; auto; eexists; split_ands; eauto;
+        repeat typed_constructor; eauto using TInt_valid).
+    repeat refine_constructor;
+      eauto using mem_unlock_refine', ctx_refine_weaken,
+      expr_refine_weaken, stmt_refine_weaken, mem_unlock_forward.
+  * intros; invert. go f; eauto.
   * intros; invert. go f; eauto 10.
   * intros; invert. go f; eauto 10.
   * intros; invert. go f; eauto 10.
@@ -302,6 +330,7 @@ Proof.
   * intros; invert. go f; eauto 10.
   * intros; invert. go f; eauto 10.
     repeat refine_constructor; eauto. by rewrite andb_false_r.
+  * intros; invert. go f; eauto 10.
   * intros m k h s os vs ???????; invert.
     edestruct funenv_lookup_refine_r as (?&?&?&?&?&?&?&?&?&?); eauto 2.
     simplify_equality.
@@ -328,6 +357,8 @@ Proof.
   * intros; invert; go f; eauto 10.
   * intros; invert; go f; eauto 10.
   * intros; invert; go f; eauto 10.
+  * intros; invert. go f; eauto 10.
+  * intros; invert. go f; eauto 10.
   * intros m k Es ??????; invert; go f. edestruct sctx_item_typed_Some_l;
       naive_solver eauto using sctx_item_refine_typed_l.
   * intros; invert; go f; eauto 10.

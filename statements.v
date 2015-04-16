@@ -33,7 +33,7 @@ calculate the required allocations and deallocations. *)
 or looks up, the statement and continuation corresponding to the target label.
 However, it is not very natural to reconstruct the required allocations and
 deallocations from the current and target continuations. *)
-Require Import String stringmap mapset.
+Require Import String stringmap mapset optionmap zmap.
 Require Export expressions.
 
 (** * Labels and gotos *)
@@ -69,6 +69,9 @@ Class Gotos A := gotos: A → labelset.
 Arguments gotos {_ _} !_ / : simpl nomatch.
 Class Labels A := labels: A → labelset.
 Arguments labels {_ _} !_ / : simpl nomatch.
+Notation caseset := (optionset Zmap).
+Class Cases A := cases: A → caseset.
+Arguments cases {_ _} !_ / : simpl nomatch.
 
 (** * Statements *)
 (** The construct [SDo e] executes the expression [e] and ignores the result.
@@ -81,12 +84,14 @@ Inductive stmt (K : Set) : Set :=
   | SGoto : labelname → stmt K
   | SThrow : nat → stmt K
   | SReturn : expr K → stmt K
+  | SCase : option Z → stmt K
   | SLabel : labelname → stmt K
   | SLocal : type K → stmt K → stmt K
   | SCatch : stmt K → stmt K
   | SComp : stmt K → stmt K → stmt K
   | SLoop : stmt K → stmt K
-  | SIf : expr K → stmt K → stmt K → stmt K.
+  | SIf : expr K → stmt K → stmt K → stmt K
+  | SSwitch : expr K → stmt K → stmt K.
 Notation funenv K := (funmap (stmt K)).
 
 Instance stmt_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
@@ -103,18 +108,21 @@ Arguments SSkip {_}.
 Arguments SGoto {_} _%string.
 Arguments SThrow {_} _.
 Arguments SReturn {_} _.
+Arguments SCase {_} _%Z.
 Arguments SLabel {_} _.
 Arguments SLocal {_} _ _%S.
 Arguments SCatch {_} _.
 Arguments SComp {_}_%S _%S.
 Arguments SLoop {_} _%S.
 Arguments SIf {_} _ _%S _%S.
+Arguments SSwitch {_} _%E _%S.
 
 Notation "! e" := (SDo e) (at level 10) : stmt_scope.
 Notation "'skip'" := SSkip : stmt_scope.
 Notation "'goto' l" := (SGoto l) (at level 10) : stmt_scope.
 Notation "'throw' n" := (SThrow n) (at level 10) : stmt_scope.
 Notation "'ret' e" := (SReturn e) (at level 10) : stmt_scope.
+Notation "'scase' mx" := (SCase mx) (at level 10) : stmt_scope.
 Notation "'label' l" := (SLabel l) (at level 10) : stmt_scope.
 Notation "'local{' τ } s" := (SLocal τ s)
   (at level 10, format "'local{' τ }  s") : stmt_scope.
@@ -126,6 +134,8 @@ Notation "'loop' s" := (SLoop s)
   (at level 10, format "'loop'  s") : stmt_scope.
 Notation "'if{' e } s1 'else' s2" := (SIf e s1 s2)
   (at level 56, format "if{ e }  s1  'else'  s2") : stmt_scope.
+Notation "'switch{' e } s" := (SSwitch e s)
+  (at level 56, format "switch{ e }  s") : stmt_scope.
 Notation "l :; s" := (label l ;; s)
   (at level 80, format "l  :;  s") : stmt_scope.
 Notation "e1 ::={ ass } e2" := (!(e1 ::={ass} e2))
@@ -148,24 +158,33 @@ Proof. by injection 1. Qed.
 Instance stmt_gotos {K} : Gotos (stmt K) :=
   fix go s := let _ : Gotos _ := @go in
   match s with
-  | ! _ | skip | throw _ | ret _ | label _ => ∅
+  | ! _ | skip | throw _ | ret _ | label _ | scase _ => ∅
   | goto l => {[ l ]}
-  | local{_} s | catch s | loop s => gotos s
+  | local{_} s | catch s | loop s | switch{_} s => gotos s
   | s1 ;; s2 | if{_} s1 else s2 => gotos s1 ∪ gotos s2
   end.
 Instance stmt_labels {K} : Labels (stmt K) :=
   fix go s := let _ : Labels _ := @go in
   match s with
-  | ! _ | skip | goto _ | throw _ | ret _ => ∅
+  | ! _ | skip | goto _ | throw _ | ret _ | scase _ => ∅
   | label l => {[ l ]}
-  | catch s | local{_} s | loop s => labels s
+  | catch s | local{_} s | loop s | switch{_} s => labels s
   | s1 ;; s2 | if{_} s1 else s2 => labels s1 ∪ labels s2
+  end.
+Instance stmt_cases {K} : Cases (stmt K) :=
+  fix go s := let _ : Cases _ := @go in
+  match s with
+  | ! _ | skip | goto _ | throw _ | ret _ | label _ => ∅
+  | scase mz => {[ mz ]}
+  | catch s | local{_} s | loop s => cases s
+  | s1 ;; s2 | if{_} s1 else s2 => cases s1 ∪ cases s2
+  | switch{_} _ => ∅
   end.
 Fixpoint throws_valid {K} (n : nat) (s : stmt K) : Prop :=
   match s with
-  | !_ | ret _ | skip | goto _ | label _ => True
+  | !_ | ret _ | skip | goto _ | label _ | scase _ => True
   | throw i => i < n
-  | local{_} s | loop s => throws_valid n s
+  | local{_} s | loop s | switch{_} s => throws_valid n s
   | catch s => throws_valid (S n) s
   | s1 ;; s2 | if{_} s1 else s2 => throws_valid n s1 ∧ throws_valid n s2
   end.
@@ -174,13 +193,16 @@ Proof.
  refine (
   fix go n s :=
   match s return Decision (throws_valid n s) with
-  | !_ | ret _ | skip | goto _ | label _ => left _
+  | !_ | ret _ | skip | goto _ | label _ | scase _ => left _
   | throw i => cast_if (decide (i < n))
-  | local{_} s | loop s => go n s
+  | local{_} s | loop s | switch{_} s => go n s
   | catch s => go (S n) s
   | s1 ;; s2 | if{_} s1 else s2 => cast_if_and (go n s1) (go n s2)
   end); clear go; abstract naive_solver.
 Defined.
+Lemma throws_valid_weaken {K} n n' (s : stmt K) :
+  throws_valid n s → n ≤ n' → throws_valid n' s.
+Proof. revert n n'; induction s; simpl; intuition eauto with lia. Qed.
 
 (** * Program contexts *)
 (** We first define the data type [sctx_item] of singular statement contexts. A
@@ -192,7 +214,8 @@ Inductive sctx_item (K : Set) : Set :=
   | CCompR : stmt K → sctx_item K
   | CLoop : sctx_item K
   | CIfL : expr K → stmt K → sctx_item K
-  | CIfR : expr K → stmt K → sctx_item K.
+  | CIfR : expr K → stmt K → sctx_item K
+  | CSwitch : expr K → sctx_item K.
 
 Instance sctx_item_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (E1 E2 : sctx_item K) : Decision (E1 = E2).
@@ -204,6 +227,7 @@ Arguments CCompR {_} _.
 Arguments CLoop {_}.
 Arguments CIfL {_} _ _.
 Arguments CIfR {_} _ _.
+Arguments CSwitch {_} _.
 
 Bind Scope stmt_scope with sctx_item.
 Notation "'catch' □" := CCatch (at level 10, format "catch  □") : stmt_scope.
@@ -214,6 +238,8 @@ Notation "'if{' e } □ 'else' s2" := (CIfL e s2)
   (at level 56, format "if{ e }  □  'else'  s2") : stmt_scope.
 Notation "'if{' e } s1 'else' □" := (CIfR e s1)
   (at level 56, format "if{ e }  s1  'else'  □") : stmt_scope.
+Notation "'switch{' e } □" := (CSwitch e)
+  (at level 56, format "switch{ e }  □") : stmt_scope.
 
 Instance sctx_item_subst {K} :
     Subst (sctx_item K) (stmt K) (stmt K) := λ Es s,
@@ -224,20 +250,22 @@ Instance sctx_item_subst {K} :
   | loop □ => loop s
   | if{e} □ else s2 => if{e} s else s2
   | if{e} s1 else □ => if{e} s1 else s
+  | switch{e} □ => switch{e} s
   end.
 Instance: DestructSubst (@sctx_item_subst K).
-
 Instance: ∀ Es : sctx_item K, Injective (=) (=) (subst Es).
 Proof. destruct Es; repeat intro; simpl in *; by simplify_equality. Qed.
 
+Instance maybe_CSwitch {K} : Maybe (@CSwitch K) := λ Es,
+  match Es with switch{e} □ => Some e | _ => None end.
 Instance sctx_item_gotos {K} : Gotos (sctx_item K) := λ Es,
   match Es with
-  | catch □ | loop □ => ∅
+  | catch □ | loop □ | switch{_} □ => ∅
   | s ;; □ | □ ;; s  | if{_} □ else s | if{_} s else □ => gotos s
   end.
 Instance sctx_item_labels {K} : Labels (sctx_item K) := λ Es,
   match Es with
-  | catch □ | loop □ => ∅
+  | catch □ | loop □ | switch{_} □ => ∅
   | s ;; □ | □ ;; s | if{_} □ else s | if{_} s else □ => labels s
   end.
 
@@ -254,7 +282,8 @@ that is being executed belongs to. *)
 Inductive esctx_item (K : Set) : Set :=
   | CDoE : esctx_item K
   | CReturnE : esctx_item K
-  | CIfE : stmt K → stmt K → esctx_item K.
+  | CIfE : stmt K → stmt K → esctx_item K
+  | CSwitchE : stmt K → esctx_item K.
 
 Instance esctx_item_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (Ee1 Ee2 : esctx_item K) : Decision (Ee1 = Ee2).
@@ -263,10 +292,13 @@ Proof. solve_decision. Defined.
 Arguments CDoE {_}.
 Arguments CReturnE {_}.
 Arguments CIfE {_} _ _.
+Arguments CSwitchE {_} _.
 Notation "! □" := CDoE (at level 10, format "!  □") : stmt_scope.
 Notation "'ret' □" := CReturnE (at level 10, format "'ret'  □") : stmt_scope.
 Notation "'if{' □ } s1 'else' s2" := (CIfE s1 s2)
   (at level 56, format "if{ □ }  s1  'else'  s2") : stmt_scope.
+Notation "'switch{' □ } s" := (CSwitchE s)
+  (at level 56, format "switch{ □ }  s") : stmt_scope.
 
 Instance esctx_item_subst {K} :
     Subst (esctx_item K) (expr K) (stmt K) := λ Ee e,
@@ -274,6 +306,7 @@ Instance esctx_item_subst {K} :
   | ! □ => ! e
   | ret □ => ret e
   | if{□} s1 else s2 => if{e} s1 else s2
+  | switch{□} s => switch{e} s
   end.
 Instance: DestructSubst (@esctx_item_subst K).
 
@@ -284,11 +317,13 @@ Instance esctx_item_gotos {K} : Gotos (esctx_item K) := λ Ee,
   match Ee with
   | ! □ | ret □ => ∅
   | if{□} s1 else s2 => gotos s1 ∪ gotos s2
+  | switch{□} s => gotos s
   end.
 Instance esctx_item_labels {K} : Labels (esctx_item K) := λ Ee,
   match Ee with
   | ! □ | ret □ => ∅
   | if{□} s1 else s2 => labels s1 ∪ labels s2
+  | switch{□} s => labels s
   end.
 
 Lemma esctx_item_subst_gotos {K} (Ee : esctx_item K) (e : expr K) :

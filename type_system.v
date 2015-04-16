@@ -234,6 +234,7 @@ Inductive stmt_typed' (Γ : env K) (Δ : memenv K)
   | SReturn_typed e τ :
      (Γ,Δ,τs) ⊢ e : inr τ → locks e = ∅ →
      stmt_typed' Γ Δ τs (ret e) (true,Some τ)
+  | SCase_typed mx : stmt_typed' Γ Δ τs (scase mx) (false,None)
   | SLabel_typed l : stmt_typed' Γ Δ τs (label l) (false,None)
   | SLocal_typed' τ s c mσ :
      ✓{Γ} τ → stmt_typed' Γ Δ (τ :: τs) s (c,mσ) →
@@ -251,7 +252,10 @@ Inductive stmt_typed' (Γ : env K) (Δ : memenv K)
      (Γ,Δ,τs) ⊢ e : inr (baseT τb) → τb ≠ TVoid → locks e = ∅ →
      stmt_typed' Γ Δ τs s1 (c1,mσ1) → stmt_typed' Γ Δ τs s2 (c2,mσ2) →
      rettype_union mσ1 mσ2 mσ →
-     stmt_typed' Γ Δ τs (if{e} s1 else s2) (c1 && c2, mσ).
+     stmt_typed' Γ Δ τs (if{e} s1 else s2) (c1 && c2, mσ)
+  | SSwitch_typed e τi s c mσ :
+     (Γ,Δ,τs) ⊢ e : inr (intT τi) → locks e = ∅ →
+     stmt_typed' Γ Δ τs s (c,mσ) → stmt_typed' Γ Δ τs (switch{e} s) (false,mσ).
 Global Instance stmt_typed:
   Typed envs (rettype K) (stmt K) := curry3 stmt_typed'.
 
@@ -274,7 +278,10 @@ Inductive sctx_item_typed' (Γ : env K) (Δ : memenv K)
   | CIfR_typed e τb s1 c1 mσ1 c2 mσ2 mσ :
      (Γ,Δ,τs) ⊢ e : inr (baseT τb) → τb ≠ TVoid → locks e = ∅ →
      (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → rettype_union mσ1 mσ2 mσ →
-     sctx_item_typed' Γ Δ τs (if{e} s1 else □) (c2,mσ2) (c1&&c2,mσ).
+     sctx_item_typed' Γ Δ τs (if{e} s1 else □) (c2,mσ2) (c1&&c2,mσ)
+  | CSWitch_typed e τi c mσ :
+     (Γ,Δ,τs) ⊢ e : inr (intT τi) → locks e = ∅ →
+     sctx_item_typed' Γ Δ τs (switch{e} □) (c,mσ) (false,mσ).
 Global Instance sctx_typed: PathTyped envs (rettype K)
   (rettype K) (sctx_item K) := curry3 sctx_item_typed'.
 
@@ -285,7 +292,10 @@ Inductive esctx_item_typed' (Γ : env K) (Δ : memenv K)
   | CIfE_typed τb s1 s2 c1 mσ1 c2 mσ2 mσ :
      τb ≠ TVoid → (Γ,Δ,τs) ⊢ s1 : (c1,mσ1) → (Γ,Δ,τs) ⊢ s2 : (c2,mσ2) →
      rettype_union mσ1 mσ2 mσ →
-     esctx_item_typed' Γ Δ τs (if{□} s1 else s2)%S (baseT τb) (c1&&c2,mσ).
+     esctx_item_typed' Γ Δ τs (if{□} s1 else s2)%S (baseT τb) (c1&&c2,mσ)
+  | CSwitchE_typed τi s c mσ :
+     (Γ,Δ,τs) ⊢ s : (c,mσ) →
+     esctx_item_typed' Γ Δ τs (switch{□} s) (intT τi) (false,mσ).
 Global Instance esctx_item_typed: PathTyped envs (type K)
   (rettype K) (esctx_item K) := curry3 esctx_item_typed'.
 
@@ -326,7 +336,8 @@ Inductive direction_typed' (Γ : env K) (Δ : memenv K) :
   | Up_typed mτ : direction_typed' Γ Δ ↗ (false,mτ)
   | Top_typed c v τ : (Γ,Δ) ⊢ v : τ → direction_typed' Γ Δ (⇈ v) (c,Some τ)
   | Goto_typed l cmτ : direction_typed' Γ Δ (↷ l) cmτ
-  | Throw_typed n cmτ : direction_typed' Γ Δ (↑ n) cmτ.
+  | Throw_typed n cmτ : direction_typed' Γ Δ (↑ n) cmτ
+  | Switch_typed mx cmτ : direction_typed' Γ Δ (↓ mx) cmτ.
 Global Instance direction_typed: Typed (env K * memenv K)
   (rettype K) (direction K) := curry direction_typed'.
 

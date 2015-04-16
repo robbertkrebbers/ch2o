@@ -856,20 +856,30 @@ Hint Immediate cast_typed_type_valid.
 Hint Extern 0 (_ !! 0 = _) => reflexivity.
 Definition rettype_match_aux (cmσ : rettype K) (σ : type K) : Prop :=
   match cmσ with (_, Some σ') => σ' = σ | (_, None) => True end.
-Lemma to_stmt_typed S S' Δl τ cs s cmτ :
-  to_stmt τ Δl cs S = mret (s,cmτ) S' → ✓ S → local_env_valid S Δl →
+Notation break_continue := (option nat * option nat)%type.
+Definition break_continue_max (bc : break_continue) :=
+  match bc with
+  | (Some n, Some n') => S (n + n')
+  | (Some n, None) | (None, Some n) => S n
+  | (None, None) => 0
+  end.
+Arguments break_continue_max !_ /.
+Lemma to_stmt_typed S S' Δl τ bc cs s cmτ :
+  to_stmt τ bc Δl cs S = mret (s,cmτ) S' → ✓ S → local_env_valid S Δl →
   ✓{to_env S} (TType τ) →
   (to_env S','{to_mem S'},to_local_types Δl) ⊢ s : cmτ
-  ∧ rettype_match_aux cmτ  τ ∧ ✓ S' ∧ S ⊆ S'.
+  ∧ rettype_match_aux cmτ  τ ∧ throws_valid (break_continue_max bc) s
+  ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
-  revert S S' Δl s cmτ.
+  revert S S' bc Δl s cmτ.
   induction cs; intros; generalize_errors; intros;
     repeat match goal with
-    | x : (_ * _)%type |- _ => destruct x
+    | x : (expr _ * _)%type |- _ => destruct x
+    | x : rettype _ |- _ => destruct x
     | H : rettype_union_alt _ _ = _ |- _ =>
        apply rettype_union_alt_sound in H; inversion H
-    | IH : ∀ _ _ _ _ _, _ = _ → _, H : _ = _ |- _ =>
-       destruct (IH _ _ _ _ _ H) as (?&?&?&?); eauto 2; [clear IH H]; weaken
+    | IH : ∀ _ _ _ _ _ _, _ = _ → _, H : _ = _ |- _ =>
+       destruct (IH _ _ _ _ _ _ H) as (?&?&?&?&?); eauto 2; [clear IH H]; weaken
     | H : to_expr _ _ _ = _ |- _ =>
        apply to_expr_typed in H; eauto 2; [destruct H as (?&?&?&?)]; weaken
     | H : to_init_expr _ _ _ _ = _ |- _ =>
@@ -887,12 +897,17 @@ Proof.
        let H2 := fresh in destruct (to_R (e,τlr)) eqn:H2; simplify_equality';
        eapply (to_R_typed Γ) in H2; eauto 2; [clear H]; destruct H2; weaken
     | _ => progress simplify_error_equality || case_match
-    end; eauto 20 using SLocal_typed.
+    end; split_ands;
+      try match goal with
+      | |- context [ break_continue_max ?bc ] =>
+         destruct bc as [[] []]; simplify_equality';
+          eauto 2 using throws_valid_weaken with lia
+      end; eauto 20 using SLocal_typed.
 Qed.
 Lemma stmt_fix_return_typed Γ Δ f τs σ s cmτ s' cmτ' :
   ✓ Γ → ✓{Γ}* τs → ✓{Γ} σ → stmt_fix_return Γ f σ s cmτ = (s',cmτ') →
-  (Γ,Δ,τs) ⊢ s : cmτ → rettype_match_aux cmτ σ →
-  (Γ,Δ,τs) ⊢ s' : cmτ' ∧ rettype_match cmτ' σ.
+  (Γ,Δ,τs) ⊢ s : cmτ → rettype_match_aux cmτ σ → throws_valid 0 s →
+  (Γ,Δ,τs) ⊢ s' : cmτ' ∧ rettype_match cmτ' σ ∧ throws_valid 0 s'.
 Proof.
   intros. assert (✓{Γ} (false,Some σ)) by eauto using stmt_typed_type_valid.
   destruct cmτ as [[][τ|]]; simplify_option_equality; eauto 10.
@@ -912,10 +927,11 @@ Proof.
   error_proceed [s' cmτ'] as S2.
   destruct (stmt_fix_return _ _ _ s' _) as [? cmτ] eqn:?; error_proceed.
   destruct (to_stmt_typed S S' (zip_with (λ y τ, Some (y, Local τ)) ys τs)
-    σ cs s' cmτ') as (Hs&?&?&?); eauto using local_env_valid_params; weaken.
+    σ (None,None) cs s' cmτ') as (Hs&?&?&?&?);
+    eauto using local_env_valid_params; weaken.
   rewrite to_local_types_params in Hs by done.
   destruct (stmt_fix_return_typed (to_env S') ('{to_mem S'})
-    f τs σ s' cmτ' s cmτ); eauto 10.
+    f τs σ s' cmτ' s cmτ) as (?&?&?); eauto 10.
 Qed.
 Lemma alloc_fun_valid S S' f sto cτ cs :
   alloc_fun f sto cτ cs S = mret () S' → ✓ S → ✓ S' ∧ S ⊆ S'.

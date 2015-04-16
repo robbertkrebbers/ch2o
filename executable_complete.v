@@ -13,6 +13,7 @@ Hint Resolve cmap_refine_memenv_refine.
 Hint Immediate meminj_extend_reflexive.
 Hint Immediate ctx_typed_locals_valid.
 Hint Resolve (elem_of_singleton_2 (C:=listset (state K))).
+Hint Resolve @elem_of_guard_2.
 
 Lemma ehexec_complete Γ m1 m2 k e1 e2 τlr :
   ✓ Γ → ✓{Γ} m1 → ✓{'{m1}}* (locals k) → (Γ,'{m1},locals k.*2) ⊢ e1 : τlr →
@@ -134,6 +135,9 @@ Proof.
     rewrite sctx_item_subst_labels, decide_True by solve_elem_of.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
     destruct Es; simpl; solve_elem_of.
+  * intros; simpl.
+    eexists meminj_id, _; split_ands; eauto using state_refine_id.
+    destruct Es; simpl; solve_elem_of.
   * intros m k d o τ s ??? (τf&?&?&?) _ _; typed_inversion_all.
     destruct (mem_alloc_new_refine' Γ false meminj_id m m
       (fresh (dom indexset m)) o false perm_full τ) as (f&?&?&?);
@@ -141,7 +145,7 @@ Proof.
     eexists f, (State (CLocal (fresh (dom indexset m)) τ :: k) (Stmt d s)
       (mem_alloc Γ (fresh (dom indexset m)) false perm_full (val_new Γ τ) m)).
     split_ands; auto.
-    { by destruct d; simplify_option_equality; try case_match; eauto. }
+    { by destruct d eqn:?; simplify_option_equality; try case_match; eauto. }
     eleft; split_ands; simpl; repeat refine_constructor;
       eauto using mem_alloc_new_index_typed'.
     + eapply (stmt_refine_weaken _ false false meminj_id _ ('{m}));

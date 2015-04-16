@@ -120,6 +120,9 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
   | cstep_throw m k n :
      Γ\ δ ⊢ₛ State k (Stmt ↘ (throw n)) m ⇒
              State k (Stmt (↑ n) (throw n)) m
+  | cstep_case m k mx :
+     Γ\ δ ⊢ₛ State k (Stmt ↘ (scase mx)) m ⇒
+             State k (Stmt ↗ (scase mx)) m
   | cstep_in_label m k l :
      Γ\ δ ⊢ₛ State k (Stmt ↘ (label l)) m ⇒
              State k (Stmt ↗ (label l)) m
@@ -161,6 +164,23 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
      ¬base_val_branchable m vb →
      Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} (VBase vb))) m ⇒
              State k (Undef (UndefBranch (if{□} s1 else s2) Ω (VBase vb))) m
+  | cstep_switch_case m k e Ω τi x s :
+     Some x ∈ cases s →
+     Γ\ δ ⊢ₛ State (CExpr e (switch{□} s) :: k) (Expr (#{Ω} (intV{τi} x))) m ⇒
+             State (CStmt (switch{e} □) :: k)
+                   (Stmt (↓ (Some x)) s) (mem_unlock Ω m)
+  | cstep_switch_default m k e Ω τi x s :
+     Some x ∉ cases s → None ∈ cases s →
+     Γ\ δ ⊢ₛ State (CExpr e (switch{□} s) :: k) (Expr (#{Ω} (intV{τi} x))) m ⇒
+             State (CStmt (switch{e} □) :: k) (Stmt (↓ None) s) (mem_unlock Ω m)
+  | cstep_switch_out m k e Ω τi x s :
+     Some x ∉ cases s → None ∉ cases s →
+     Γ\ δ ⊢ₛ State (CExpr e (switch{□} s) :: k) (Expr (#{Ω} (intV{τi} x))) m ⇒
+             State k (Stmt ↗ (switch{e} s)) (mem_unlock Ω m)
+  | cstep_switch_indet m k e Ω vb s :
+     ¬base_val_branchable m vb →
+     Γ\ δ ⊢ₛ State (CExpr e (switch{□} s) :: k) (Expr (#{Ω} (VBase vb))) m ⇒
+             State k (Undef (UndefBranch (switch{□} s) Ω (VBase vb))) m
 
   (**i For compound statements: *)
   | cstep_in_comp m k s1 s2 :
@@ -190,6 +210,9 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
   | cstep_out_if2 m k e s1 s2 :
      Γ\ δ ⊢ₛ State (CStmt (if{e} s1 else □) :: k) (Stmt ↗ s2) m ⇒
              State k (Stmt ↗ (if{e} s1 else s2)) m
+  | cstep_out_switch m k e s :
+     Γ\ δ ⊢ₛ State (CStmt (switch{e} □) :: k) (Stmt ↗ s) m ⇒
+             State k (Stmt ↗ (switch{e} s)) m
 
   (**i For function calls *)
   | cstep_call m k f s os vs :
@@ -218,18 +241,25 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
   | cstep_throw_further m k s n :
      Γ\ δ ⊢ₛ State (CStmt (catch □) :: k) (Stmt (↑ (S n)) s) m ⇒
              State k (Stmt (↑ n) (catch s)) m
-  | cstep_in m k Es l s :
+  | cstep_case_here m k mx :
+     Γ\ δ ⊢ₛ State k (Stmt (↓ mx) (scase mx)) m ⇒
+             State k (Stmt ↗ (scase mx)) m
+  | cstep_goto_in m k Es l s :
      l ∈ labels s →
      Γ\ δ ⊢ₛ State k (Stmt (↷ l) (subst Es s)) m ⇒
              State (CStmt Es :: k) (Stmt (↷ l) s) m
-  | cstep_out_top m k Es v s :
+  | cstep_switch_in m k Es mx s :
+     maybe CSwitch Es = None → mx ∈ cases s →
+     Γ\ δ ⊢ₛ State k (Stmt (↓ mx) (subst Es s)) m ⇒
+             State (CStmt Es :: k) (Stmt (↓ mx) s) m
+  | cstep_top_out m k Es v s :
      Γ\ δ ⊢ₛ State (CStmt Es :: k) (Stmt (⇈ v) s) m ⇒
              State k (Stmt (⇈ v) (subst Es s)) m
-  | cstep_out_goto m k Es l s :
+  | cstep_goto_out m k Es l s :
      l ∉ labels s →
      Γ\ δ ⊢ₛ State (CStmt Es :: k) (Stmt (↷ l) s) m ⇒
              State k (Stmt (↷ l) (subst Es s)) m
-  | cstep_out_throw m k Es n s :
+  | cstep_throw_out m k Es n s :
      Es ≠ catch □ →
      Γ\ δ ⊢ₛ State (CStmt Es :: k) (Stmt (↑ n) s) m ⇒
              State k (Stmt (↑ n) (subst Es s)) m
@@ -285,11 +315,14 @@ Section inversion.
     | Stmt ↘ (goto l) => P (State k (Stmt (↷ l) (goto l)) m) → P S2
     | Stmt ↘ (throw n) => P (State k (Stmt (↑ n) (throw n)) m) → P S2
     | Stmt ↘ (label l) => P (State k (Stmt ↗ (label l)) m) → P S2
+    | Stmt ↘ (scase mx) => P (State k (Stmt ↗ (scase mx)) m) → P S2
     | Stmt ↘ (! e) => P (State (CExpr e (! □) :: k) (Expr e) m) → P S2
     | Stmt ↘ (ret e) => P (State (CExpr e (ret □) :: k) (Expr e) m) → P S2
     | Stmt ↘ (loop s) => P (State (CStmt (loop □) :: k) (Stmt ↘ s) m) → P S2
     | Stmt ↘ (if{e} s1 else s2) =>
        P (State (CExpr e (if{□} s1 else s2) :: k) (Expr e) m) → P S2
+    | Stmt ↘ (switch{e} s) =>
+       P (State (CExpr e (switch{□} s) :: k) (Expr e) m) → P S2
     | Expr e =>
        (∀ Ω v k' e',
          e = (#{Ω} v)%E → k = CExpr e' (! □) :: k' →
@@ -311,6 +344,24 @@ Section inversion.
          e = (#{Ω} (VBase vb))%E → ¬base_val_branchable m vb →
          k = CExpr e' (if{□} s1 else s2) :: k' →
          P (State k' (Undef (UndefBranch (if{□} s1 else s2) Ω (VBase vb))) m)) →
+       (∀ Ω τi x k' e' s,
+         e = (#{Ω} (intV{τi} x))%E → Some x ∈ cases s →
+         k = CExpr e' (switch{□} s) :: k' →
+         P (State (CStmt (switch{e'} □) :: k')
+                  (Stmt (↓ (Some x)) s) (mem_unlock Ω m))) →
+       (∀ Ω τi x k' e' s,
+         e = (#{Ω} (intV{τi} x))%E → Some x ∉ cases s → None ∈ cases s →
+         k = CExpr e' (switch{□} s) :: k' →
+         P (State (CStmt (switch{e'} □) :: k')
+                  (Stmt (↓ None) s) (mem_unlock Ω m))) →
+       (∀ Ω τi x k' e' s,
+         e = (#{Ω} (intV{τi} x))%E → Some x ∉ cases s → None ∉ cases s →
+         k = CExpr e' (switch{□} s) :: k' →
+         P (State k' (Stmt ↗ (switch{e'} s)) (mem_unlock Ω m))) →
+       (∀ Ω vb k' e' s,
+         e = (#{Ω} (VBase vb))%E → ¬base_val_branchable m vb →
+         k = CExpr e' (switch{□} s) :: k' →
+         P (State k' (Undef (UndefBranch (switch{□} s) Ω (VBase vb))) m)) →
        (∀ (E : ectx K) e1 e2 m2,
          e = subst E e1 → Γ\ locals k ⊢ₕ e1, m ⇒ e2, m2 →
          P (State k (Expr (subst E e2)) m2)) →
@@ -355,6 +406,9 @@ Section inversion.
        (∀ k' e s1,
          k = CStmt (if{e} s1 else □) :: k' →
          P (State k' (Stmt ↗ (if{e} s1 else s)) m)) →
+       (∀ k' e,
+         k = CStmt (switch{e} □) :: k' →
+         P (State k' (Stmt ↗ (switch{e} s)) m)) →
        (∀ k' f oτs,
          k = CParams f oτs :: k' →
          P (State k' (Return f voidV) (foldr mem_free m (oτs.*1)))) →
@@ -406,6 +460,16 @@ Section inversion.
          k = CStmt Es :: k' → l ∉ labels s →
          P (State k' (Stmt (↷ l) (subst Es s)) m)) →
        P S2
+    | Stmt (↓ mx) s =>
+       (s = scase mx → P (State k (Stmt ↗ s) m)) →
+       (∀ s' o τ,
+         s = local{τ} s' → mx ∈ cases s → o ∉ dom indexset m →
+         P (State (CLocal o τ :: k) (Stmt (↓ mx) s')
+           (mem_alloc Γ o false perm_full (val_new Γ τ) m))) →
+       (∀ s' Es,
+         s = subst Es s' → maybe CSwitch Es = None → mx ∈ cases s' →
+         P (State (CStmt Es :: k) (Stmt (↓ mx) s') m)) →
+       P S2
     | Undef _ => P S2
     end.
   Proof.
@@ -431,6 +495,21 @@ Section inversion.
       (∀ vb,
         v = VBase vb → ¬base_val_branchable m vb →
         P (State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m)) → P S2
+    | CExpr e (switch{□} s) =>
+      (∀ τi x,
+        v = intV{τi} x → Some x ∈ cases s →
+        P (State (CStmt (switch{e} □) :: k)
+                 (Stmt (↓ (Some x)) s) (mem_unlock Ω m))) →
+      (∀ τi x,
+        v = intV{τi} x → Some x ∉ cases s → None ∈ cases s →
+        P (State (CStmt (switch{e} □) :: k)
+                        (Stmt (↓ None) s) (mem_unlock Ω m))) →
+      (∀ τi x,
+        v = intV{τi} x → Some x ∉ cases s → None ∉ cases s →
+        P (State k (Stmt ↗ (switch{e} s)) (mem_unlock Ω m))) →
+      (∀ vb s,
+        v = VBase vb → ¬base_val_branchable m vb →
+        P (State k (Undef (UndefBranch (switch{□} s) Ω (VBase vb))) m)) → P S2
     | _ => P S2
     end.
   Proof.
@@ -451,6 +530,7 @@ Section inversion.
     | CStmt (loop □) => P (State k (Stmt ↘ (loop s)) m) → P S2
     | CStmt (if{e} □ else s2) => P (State k (Stmt ↗ (if{e} s else s2)) m) → P S2
     | CStmt (if{e} s1 else □) => P (State k (Stmt ↗ (if{e} s1 else s)) m) → P S2
+    | CStmt (switch{e} □) => P (State k (Stmt ↗ (switch{e} s)) m) → P S2
     | CLocal o τ => P (State k (Stmt ↗ (local{τ} s)) (mem_free o m)) → P S2
     | CParams f oτs =>
        P (State k (Return f voidV) (foldr mem_free m (oτs.*1))) → P S2
@@ -586,6 +666,7 @@ Ltac quote_stmt s :=
   | if{?e} ?s1 else ?s2 =>
     constr:[subst (if{e} s1 else □) s2;
             subst (if{e} □ else s2) s1; subst (if{□} s1 else s2) e]
+  | switch{?e} ?s => constr:[subst (switch{e} □) s; subst (switch{□} s) e]
   end.
 
 (** The [quote_expr e] tactic yields a list of possible ways to write an
@@ -1084,6 +1165,8 @@ Fixpoint ctx_catches_valid (k : ctx K) : Prop :=
   | CExpr _ (if{□} s1 else s2) :: k =>
      throws_valid (ctx_catches k) s1 ∧
      throws_valid (ctx_catches k) s2 ∧ ctx_catches_valid k
+  | CExpr _ (switch{□} s) :: k =>
+     throws_valid (ctx_catches k) s ∧ ctx_catches_valid k
   | CStmt (□ ;; s | s ;; □ | if{_} □ else s | if{_} s else □) :: k =>
      throws_valid (ctx_catches k) s ∧ ctx_catches_valid k
   | _ :: k => ctx_catches_valid k
@@ -1116,6 +1199,19 @@ Proof.
   intros. destruct (csteps_throws (initial_state m1 f vs)
     (State k (Stmt (↑ n) s) m2)); naive_solver.
 Qed.
+
+Definition state_switch_valid (S : state K) : Prop :=
+  match SFoc S with Stmt (↓ mx) s => mx ∈ cases s | _ => True end.
+Lemma cstep_switch S1 S2 :
+  Γ\ δ ⊢ₛ S1 ⇒ S2 → state_switch_valid S1 → state_switch_valid S2.
+Proof. by destruct 1. Qed.
+Lemma csteps_switch S1 S2 :
+  Γ\ δ ⊢ₛ S1 ⇒* S2 → state_switch_valid S1 → state_switch_valid S2.
+Proof. induction 1; eauto using cstep_switch. Qed.
+Lemma csteps_initial_switch m1 m2 f vs k s mx :
+  Γ\ δ ⊢ₛ initial_state m1 f vs ⇒* State k (Stmt (↓ mx) s) m2 →
+  mx ∈ cases s.
+Proof. intros p. by apply (csteps_switch _ _ p). Qed.
 End smallstep_properties.
 
 Hint Resolve ehstep_if_true_no_locks ehstep_if_false_no_locks

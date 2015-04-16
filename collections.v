@@ -113,6 +113,9 @@ Section collection_monad_base.
     unfold mguard, collection_guard; simpl; case_match;
       rewrite ?elem_of_empty; naive_solver.
   Qed.
+  Lemma elem_of_guard_2 `{Decision P} {A} (x : A) (X : M A) :
+    P → x ∈ X → x ∈ guard P; X.
+  Proof. by rewrite elem_of_guard. Qed.
   Lemma guard_empty `{Decision P} {A} (X : M A) : guard P; X ≡ ∅ ↔ ¬P ∨ X ≡ ∅.
   Proof.
     rewrite !elem_of_equiv_empty; setoid_rewrite elem_of_guard.
