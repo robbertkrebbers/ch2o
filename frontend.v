@@ -943,13 +943,13 @@ Definition to_stmt (τret : type K) :
        "conditional argument of while statement of non-base type";
      guard (τb ≠ TVoid) with
        "conditional argument of while statement of void type";
-     '(s,cmσ) ← go (Some 0, Some 1) Δl cs;
+     '(s,cmσ) ← go (Some 1, Some 0) Δl cs;
      mret (catch (loop (if{e} skip else throw 0 ;; catch s)), (false, cmσ.2))
   | CSFor ce1 ce2 ce3 cs =>
      '(e1,τ1) ← to_R <$> to_expr Δl ce1;
      '(e2,τ2) ← to_R <$> to_expr Δl ce2;
      '(e3,τ3) ← to_R <$> to_expr Δl ce3;
-     '(s,cmσ) ← go (Some 0, Some 1) Δl cs;
+     '(s,cmσ) ← go (Some 1, Some 0) Δl cs;
      τb ← error_of_option (maybe TBase τ2)
        "conditional argument of for statement of non-base type";
      guard (τb ≠ TVoid) with
@@ -959,7 +959,7 @@ Definition to_stmt (τret : type K) :
          if{e2} skip else throw 0 ;; catch s ;; !(cast{voidT} e3)
        )), (false, cmσ.2))
   | CSDoWhile cs ce =>
-     '(s,cmσ) ← go (Some 0, Some 1) Δl cs;
+     '(s,cmσ) ← go (Some 1, Some 0) Δl cs;
      '(e,τ) ← to_R <$> to_expr Δl ce;
      τb ← error_of_option (maybe TBase τ)
        "conditional argument of do-while statement of non-base type";
