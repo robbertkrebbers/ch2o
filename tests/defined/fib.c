@@ -17,7 +17,7 @@ return x + set_x(1);
 }
 
 
-int add_zero(val)
+int add_zero(int val)
 {
 x=0;
 return val - x + set_x(0);
