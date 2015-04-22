@@ -184,7 +184,7 @@ Ltac simplify_type_equality := repeat
     by destruct (path_type_check_None Γ p τ σ)
   | H : _ ⊢ ?x : ?τ1, H2 : _ ⊢ ?x : ?τ2 |- _ =>
     unless (τ1 = τ2) by done;
-    pose proof (typed_unique _ x τ2 τ1 I H2 H);
+    assert (τ2 = τ1) by (by apply (λ HΓ, typed_unique _ x τ2 τ1 HΓ H2 H));
     first [subst τ2 | subst τ1]; clear H2
   | H : _ ⊢ ?x : ?τ1, H2 : _ ⊢ ?x : ?τ2 |- _ =>
     unless (τ1 = τ2) by done;

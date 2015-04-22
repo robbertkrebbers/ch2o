@@ -5,8 +5,8 @@ Require Export smallstep executable.
 Section soundness.
 Context `{EnvSpec K}.
 
-Lemma assign_exec_correct Γ m a v ass v' va' :
-  assign_exec Γ m a v ass = Some (v',va') ↔ assign_sem Γ m a v ass v' va'.
+Lemma assign_exec_correct Γ m a v ass va' v' :
+  assign_exec Γ m a v ass = Some (va',v') ↔ assign_sem Γ m a v ass va' v'.
 Proof.
   split; [|by destruct 1; simplify_option_equality].
   intros. destruct ass; simplify_option_equality; econstructor; eauto.

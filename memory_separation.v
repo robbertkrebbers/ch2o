@@ -15,7 +15,6 @@ Implicit  Types m : mem K.
 Implicit Types Ω : lockset.
 Local Arguments union _ _ !_ !_ /.
 Hint Immediate cmap_lookup_typed val_typed_type_valid.
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 
 Ltac solve_length := repeat first 
   [ rewrite take_length | rewrite drop_length | rewrite app_length
@@ -38,11 +37,11 @@ Proof.
     by eauto using cmap_lookup_Some, pbits_mapped,
     pbits_kind_subseteq, @ctree_flatten_subseteq.
 Qed.
-Lemma mem_alloc_disjoint Γ Δ m1 m2 o1 malloc x v τ :
+Lemma mem_alloc_disjoint Γ Δ m1 m2 o1 μ x v τ :
   ✓ Γ → sep_valid x → ¬sep_unmapped x → (Γ,Δ) ⊢ v : τ → 
-  m1 ⊥ m2 → o1 ∉ dom indexset m2 → mem_alloc Γ o1 malloc x v m1 ⊥ m2.
+  m1 ⊥ m2 → o1 ∉ dom indexset m2 → mem_alloc Γ o1 μ x v m1 ⊥ m2.
 Proof.
-  rewrite mem_allocable_alt.
+  rewrite cmap_dom_alt.
   destruct m1 as [m1], m2 as [m2]; simpl; intros ???? Hm ? o; specialize (Hm o).
   destruct (decide (o = o1)); simplify_map_equality';
     simplify_type_equality; [|by destruct (m1 !! o), (m2 !! o)].
@@ -50,15 +49,23 @@ Proof.
     ctree_Forall_not, Forall_impl, of_val_mapped, Forall_replicate,
     @sep_unmapped_empty_alt.
 Qed.
-Lemma mem_alloc_union Γ m1 m2 o1 malloc x v :
+Lemma mem_alloc_union Γ m1 m2 o1 μ x v :
   o1 ∉ dom indexset m2 →
-  mem_alloc Γ o1 malloc x v (m1 ∪ m2) = mem_alloc Γ o1 malloc x v m1 ∪ m2.
+  mem_alloc Γ o1 μ x v (m1 ∪ m2) = mem_alloc Γ o1 μ x v m1 ∪ m2.
 Proof.
-  rewrite mem_allocable_alt; destruct m1 as [m1], m2 as [m2];
+  rewrite cmap_dom_alt; destruct m1 as [m1], m2 as [m2];
     intros; sep_unfold; f_equal'; by apply insert_union_with_l.
 Qed.
-Lemma mem_free_disjoint Γ m1 m2 o1 :
-  m1 ⊥ m2 → mem_freeable_perm o1 m1 → mem_free o1 m1 ⊥ m2.
+Lemma mem_freeable_perm_subseteq m1 m2 o μ :
+  mem_freeable_perm o μ m1 → m1 ⊆ m2 → mem_freeable_perm o μ m2.
+Proof.
+  unfold mem_freeable_perm.
+  destruct m1 as [m1], m2 as [m2]; intros (w1&?&?) Hm; specialize (Hm o).
+  destruct (m2 !! o) as [[|w2]|] eqn:?; simplify_option_equality;
+    naive_solver eauto using @ctree_flatten_subseteq, pbits_subseteq_full.
+Qed.
+Lemma mem_free_disjoint m1 m2 o1 μ :
+  m1 ⊥ m2 → mem_freeable_perm o1 μ m1 → mem_free o1 m1 ⊥ m2.
 Proof.
   destruct m1 as [m1], m2 as [m2]; intros Hm (w1&?&?) o; specialize (Hm o).
   destruct (decide (o = o1));
@@ -66,8 +73,16 @@ Proof.
   destruct (m2 !! o1) as [[|w2]|];
     intuition; eauto using pbits_disjoint_full, @ctree_flatten_disjoint.
 Qed.
-Lemma mem_free_union m1 m2 o1 :
-  m1 ⊥ m2 → mem_freeable_perm o1 m1 →
+Lemma mem_free_disjoint_le m ms o μ :
+  mem_freeable_perm o μ m → m :: ms ⊆⊥ mem_free o m :: ms.
+Proof.
+  intros. apply sep_disjoint_cons_le_inj; intros m'.
+  rewrite !sep_disjoint_list_double, !(symmetry_iff _ m').
+  eauto using mem_free_disjoint.
+Qed.
+
+Lemma mem_free_union m1 m2 o1 μ :
+  m1 ⊥ m2 → mem_freeable_perm o1 μ m1 →
   mem_free o1 (m1 ∪ m2) = mem_free o1 m1 ∪ m2.
 Proof.
   destruct m1 as [m1], m2 as [m2]; intros Hm (w1&?&?); sep_unfold; f_equal'.
@@ -122,7 +137,7 @@ Proof.
   unfold mem_forced; rewrite sep_subseteq_spec'; intros ?? (m3&->&?) Hforced ?.
   by erewrite mem_force_union, Hforced by eauto.
 Qed.
-Lemma mem_writable_subseteq Γ Δ m1 m2 a v1 :
+Lemma mem_writable_subseteq Γ Δ m1 m2 a :
   ✓ Γ → ✓{Γ,Δ} m1 → m1 ⊆ m2 → mem_writable Γ a m1 → mem_writable Γ a m2.
 Proof.
   intros ??? (w1&?&?).
@@ -229,6 +244,11 @@ Proof.
       decompose_Forall_hyps; intuition congruence. }
   destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|]; naive_solver eauto 0.
 Qed.
+Lemma mem_locks_union_list ms : ⊥ ms → mem_locks (⋃ ms) = ⋃ (mem_locks <$> ms).
+Proof.
+  induction 1; csimpl; auto using mem_locks_empty.
+  by rewrite mem_locks_union; f_equal.
+Qed.
 Lemma mem_locks_subseteq m1 m2 : m1 ⊆ m2 → mem_locks m1 ⊆ mem_locks m2.
 Proof.
   rewrite !sep_subseteq_spec'; intros (m3&->&?).
@@ -315,88 +335,5 @@ Proof.
   by rewrite mem_locks_union, mem_unlock_union_locks, sep_commutative',
     mem_unlock_union, sep_commutative', mem_unlock_union
     by auto using mem_unlock_disjoint.
-Qed.
-Lemma mem_singleton_disjoint Γ Δ a malloc x1 x2 v τ :
-  ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a → (Γ,Δ) ⊢ v : τ →
-  x1 ⊥ x2 → ¬sep_unmapped x1 → ¬sep_unmapped x2 →
-  mem_singleton Γ a malloc x1 v ⊥ mem_singleton Γ a malloc x2 v.
-Proof.
-  intros. assert (bit_size_of Γ τ ≠ 0) by eauto using bit_size_of_ne_0.
-  eapply cmap_singleton_disjoint; simplify_type_equality; eauto.
-  * eapply of_val_disjoint; eauto using Forall2_replicate, Forall_replicate.
-  * erewrite ctree_flatten_of_val, zip_with_replicate_l, Forall_fmap by eauto.
-    apply Forall_not, Forall_true; auto; by destruct 1.
-  * erewrite ctree_flatten_of_val, zip_with_replicate_l, Forall_fmap by eauto.
-    apply Forall_not, Forall_true; auto; by destruct 1.
-Qed.
-Lemma mem_singleton_union Γ Δ a malloc x1 x2 v τ :
-  ✓ Γ → (Γ,Δ) ⊢ a : TType τ → addr_strict Γ a →
-  mem_singleton Γ a malloc (x1 ∪ x2) v
-  = mem_singleton Γ a malloc x1 v ∪ mem_singleton Γ a malloc x2 v.
-Proof.
-  intros. unfold mem_singleton. by erewrite <-zip_with_replicate,
-    of_val_union, cmap_singleton_union by eauto.
-Qed.
-Lemma mem_singleton_imap f Γ a malloc x vs :
-  imap (λ i, mem_singleton Γ (f i a) malloc x) vs
-  = imap (λ i, cmap_singleton Γ (f i a) malloc)
-      ((λ v, of_val Γ (replicate (bit_size_of Γ (type_of v)) x) v) <$> vs).
-Proof. unfold imap. generalize 0. induction vs; intros; f_equal'; auto. Qed.
-Lemma mem_singleton_array_disjoint Γ Δ a malloc x vs n τ :
-  ✓ Γ → (Γ,Δ) ⊢ a : TType (τ.[n]) → addr_strict Γ a → (Γ,Δ) ⊢* vs : τ → 
-  length vs = n → sep_valid x → ¬sep_unmapped x →
-  ⊥ imap (λ i, mem_singleton Γ (addr_elt Γ (RArray i τ n) a) malloc x) vs.
-Proof.
-  intros ??? Hvs Hn ??. rewrite (mem_singleton_imap (λ _, _)).
-  eapply cmap_singleton_array_disjoint; eauto.
-  * clear Hn. induction Hvs; simplify_type_equality';
-      constructor; auto using of_val_typed, Forall_replicate.
-  * clear Hn. induction Hvs; simplify_type_equality'; constructor; eauto 10
-      using ctree_Forall_not, of_val_typed, Forall_replicate, of_val_mapped.
-Qed.
-Lemma mem_singleton_array_union Γ Δ a malloc x vs τ n :
-  ✓ Γ → (Γ,Δ) ⊢ a : TType (τ.[n]) → addr_strict Γ a → (Γ,Δ) ⊢* vs : τ →
-  length vs = n → sep_valid x → ¬sep_unmapped x →
-  mem_singleton Γ a malloc x (VArray τ vs)
-  = ⋃ imap (λ i, mem_singleton Γ (addr_elt Γ (RArray i τ n) a) malloc x) vs.
-Proof.
-  intros ??? Hvs Hn ??. rewrite (mem_singleton_imap (λ _, _)).
-  assert ((Γ,Δ) ⊢* (λ v,
-    of_val Γ (replicate (bit_size_of Γ (type_of v)) x) v) <$> vs : τ) as Hvs'.
-  { clear Hn. induction Hvs; simplify_type_equality';
-      constructor; auto using of_val_typed, Forall_replicate. }
-  erewrite <-cmap_singleton_array_union by eauto.
-  unfold mem_singleton; do 2 f_equal'. rewrite bit_size_of_array.
-  clear Hvs' Hn; induction Hvs; simplify_type_equality'; f_equal';
-    rewrite ?replicate_plus, ?take_app_alt, ?drop_app_alt by auto; eauto.
-Qed.
-Lemma mem_alloc_empty_singleton Γ o malloc x v τ :
-  mem_alloc Γ o malloc x v ∅ = mem_singleton Γ (addr_top o τ) malloc x v.
-Proof. done. Qed.
-Lemma mem_alloc_singleton Γ m o malloc x v τ :
-  o ∉ dom indexset m → sep_valid m →
-  mem_alloc Γ o malloc x v m
-  = mem_singleton Γ (addr_top o τ) malloc x v ∪ m.
-Proof.
-  intros. by rewrite <-mem_alloc_empty_singleton,
-    <-mem_alloc_union, sep_left_id by done.
-Qed.
-Lemma mem_free_singleton Γ o a malloc x v :
-  addr_index a = o → cmap_erase (mem_free o (mem_singleton Γ a malloc x v)) = ∅.
-Proof.
-  intros <-; sep_unfold; f_equal'; apply map_empty; intros o.
-  by destruct (decide (o = addr_index a)); simplify_map_equality'.
-Qed.
-Lemma mem_free_singleton_union Γ o a malloc x v m :
-  addr_index a = o →
-  cmap_erase (mem_free o (mem_singleton Γ a malloc x v) ∪ m) = cmap_erase m.
-Proof.
-  destruct m as [m]; intros <-; sep_unfold; f_equal'; apply map_eq; intros o.
-  destruct (decide (o = addr_index a)) as [->|].
-  * rewrite !lookup_omap, lookup_union_with, lookup_alter, lookup_singleton.
-    by destruct (m !! addr_index a) as [[]|].
-  * rewrite !lookup_omap, lookup_union_with,
-      lookup_alter_ne, lookup_singleton_ne by done.
-    by destruct (m !! o) as [[]|].
 Qed.
 End memory.

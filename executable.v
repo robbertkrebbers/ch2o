@@ -24,7 +24,7 @@ Definition assign_exec (Γ : env K) (m : mem K) (a : addr K)
      guard (val_binop_ok Γ m op va v);
      let v' := val_binop Γ op va v in
      guard (val_cast_ok Γ m (type_of a) v');
-     Some (va, val_cast (type_of a) v')
+     Some (val_cast (type_of a) v', va)
   end.
 Fixpoint ctx_lookup (x : nat) (k : ctx K) : option (index * type K) :=
   match k with
@@ -40,14 +40,14 @@ Definition ehexec (Γ : env K) (k : ctx K)
   | var x =>
      '(o,τ) ← of_option (ctx_lookup x k);
      {[ %(addr_top o τ), m ]}
-  | .* (#{Ω} (ptrV (Ptr a))) =>
+  | .* (#{Ω} ptrV (Ptr a)) =>
      guard (index_alive' m (addr_index a));
      {[ %{Ω} a, m ]}
   | & (%{Ω} a) =>
-     {[ #{Ω} (ptrV (Ptr a)), m ]}
+     {[ #{Ω} ptrV (Ptr a), m ]}
   | %{Ωl} a ::={ass} #{Ωr} v =>
      guard (mem_writable Γ a m);
-     '(v',va) ← of_option (assign_exec Γ m a v ass);
+     '(va,v') ← of_option (assign_exec Γ m a v ass);
      {[ #{lock_singleton Γ a ∪ Ωl ∪ Ωr} v',
         mem_lock Γ a (<[a:=va]{Γ}>m) ]}
   | load (%{Ω} a) =>
@@ -59,23 +59,23 @@ Definition ehexec (Γ : env K) (k : ctx K)
   | #{Ω} v #> rs =>
      v' ← of_option (v !!{Γ} rs);
      {[ #{Ω} v', m ]}
-  | alloc{τ} (#{Ω} (intV{_} n)) =>
+  | alloc{τ} (#{Ω} intV{_} n) =>
      let o := fresh (dom indexset m) in
      let n' := Z.to_nat n in
      guard (n' ≠ 0);
-     {[ #{Ω}(ptrV (Ptr (addr_top_array o τ n))),
+     {[ #{Ω} ptrV (Ptr (addr_top_array o τ n)),
         mem_alloc Γ o true perm_full (val_new Γ (τ.[n'])) m ]}
-     ∪  (if alloc_can_fail then {[ #{Ω}(ptrV (NULL (TType τ))), m ]} else ∅)
+     ∪  (if alloc_can_fail then {[ #{Ω} ptrV (NULL (TType τ)), m ]} else ∅)
   | free (%{Ω} a) =>
      guard (mem_freeable a m);
      {[ #{Ω} voidV, mem_free (addr_index a) m ]}
   | @{op} #{Ω} v =>
      guard (val_unop_ok m op v);
-     {[ #{Ω} (val_unop op v), m ]}
+     {[ #{Ω} val_unop op v, m ]}
   | #{Ωl} vl @{op} #{Ωr} vr =>
      guard (val_binop_ok Γ m op vl vr);
-     {[ #{Ωl ∪ Ωr} (val_binop Γ op vl vr), m ]}
-  | if{#{Ω} (VBase vb)} e2 else e3 =>
+     {[ #{Ωl ∪ Ωr} val_binop Γ op vl vr, m ]}
+  | if{#{Ω} VBase vb} e2 else e3 =>
      guard (base_val_branchable m vb);
      if decide (base_val_is_0 vb)
      then {[ e3, mem_unlock Ω m ]} else {[ e2, mem_unlock Ω m ]}
@@ -83,10 +83,10 @@ Definition ehexec (Γ : env K) (k : ctx K)
      {[ er, mem_unlock Ω m ]}
   | cast{τ} (#{Ω} v) =>
      guard (val_cast_ok Γ m (TType τ) v);
-     {[ #{Ω} (val_cast (TType τ) v), m ]}
+     {[ #{Ω} val_cast (TType τ) v, m ]}
   | #[r:=#{Ω1} v1] (#{Ω2} v2) =>
      guard (is_Some (v2 !!{Γ} r));
-     {[ #{Ω1 ∪ Ω2} (val_alter Γ (λ _, v1) r v2), m ]}
+     {[ #{Ω1 ∪ Ω2} val_alter Γ (λ _, v1) r v2, m ]}
   | _ => ∅
   end%E.
 Definition cexec (Γ : env K) (δ : funenv K)
@@ -260,6 +260,8 @@ Definition cexec (Γ : env K) (δ : funenv K)
 End executable.
 
 Notation "Γ \ δ ⊢ₛ S1 ⇒ₑ S2" := (S2 ∈ cexec Γ δ S1)
-  (at level 74, format "Γ \  δ  ⊢ₛ '['  S1  '⇒ₑ' '/'  S2 ']'") : C_scope.
+  (at level 74, δ at next level,
+   format "Γ \  δ  ⊢ₛ '['  S1  '⇒ₑ' '/'  S2 ']'") : C_scope.
 Notation "Γ \ δ ⊢ₛ S1 ⇒ₑ* S2" := (rtc (λ S1' S2', Γ \ δ ⊢ₛ S1' ⇒ₑ S2') S1 S2)
-  (at level 74, format "Γ \  δ  ⊢ₛ '['  S1  '⇒ₑ*' '/'  S2 ']'") : C_scope.
+  (at level 74, δ at next level,
+   format "Γ \  δ  ⊢ₛ '['  S1  '⇒ₑ*' '/'  S2 ']'") : C_scope.

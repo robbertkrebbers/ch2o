@@ -42,6 +42,12 @@ Implicit Types r : ref K.
 Implicit Types a : addr K.
 Implicit Types α : bool.
 
+Arguments addr_strict _ _ _ !_ /.
+Arguments addr_ref _ _ _ !_ /.
+Arguments addr_ref_byte _ _ _ !_ /.
+Arguments addr_object_offset _ _ _ !_ /.
+Arguments addr_elt _ _ _ _ !_ /.
+
 Lemma addr_refine_memenv_refine Γ α f Δ1 Δ2 a1 a2 σp :
   a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : σp → Δ1 ⊑{Γ,α,f} Δ2.
 Proof. by destruct 1. Qed.

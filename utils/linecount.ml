@@ -29,6 +29,7 @@ let cats = [
   ("executable.v", "core_c");
   ("expression_eval_smallstep.v", "core_c");
   ("expression_eval.v", "core_c");
+  ("expression_eval_separation.v", "separation");
   ("expressions.v", "core_c");
   ("extraction.v", "abstract_c");
   ("fin_collections.v", "prelude");
@@ -80,6 +81,7 @@ let cats = [
   ("state.v", "core_c");
   ("streams.v", "prelude");
   ("stringmap.v", "prelude");
+  ("optionmap.v", "prelude");
   ("tactics.v", "prelude");
   ("type_classes.v", "prelude");
   ("type_environment.v", "types");
@@ -107,7 +109,16 @@ let cats = [
   ("memory_map_separation.v", "separation");
   ("values_separation.v", "separation");
   ("memory_separation.v", "separation");
-  ("assertions.v", "separation")
+  ("assertions.v", "separation");
+  ("axiomatic.v", "separation");
+  ("axiomatic_graph.v", "separation");
+  ("axiomatic_expressions.v", "separation");
+  ("axiomatic_statements.v", "separation");
+  ("axiomatic_sound.v", "separation");
+  ("assignments.v", "core_c");
+  ("assignments_separation.v", "separation");
+  ("restricted_smallstep.v", "core_c");
+  ("memory_singleton.v", "core_c");
   ];;
 
 let get_table _ =

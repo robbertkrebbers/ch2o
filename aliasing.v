@@ -13,6 +13,9 @@ Implicit Types w : mtree K.
 Implicit Types v : val K.
 Implicit Types m : mem K.
 
+Arguments addr_is_obj _ !_ /.
+Arguments addr_ref _ _ _ !_ /.
+
 Lemma ref_disjoint_cases Γ τ r1 r2 σ1 σ2 :
   ✓ Γ → Γ ⊢ r1 : τ ↣ σ1 → freeze true <$> r1 = r1 →
   Γ ⊢ r2 : τ ↣ σ2 → freeze true <$> r2 = r2 →
@@ -148,9 +151,9 @@ Proof.
     by (rewrite Hidx; eauto using addr_typed_index).
   destruct m as [m]; unfold insertE, cmap_alter, lookupE, cmap_lookup;
     simpl in *; rewrite !addr_index_plus, <-!Hidx; simplify_map_equality'.
-  destruct (m !! addr_index a1) as [[|w malloc]|] eqn:?;
+  destruct (m !! addr_index a1) as [[|w μ]|] eqn:?;
     [by simplify_option_equality| |by simplify_option_equality].
-  destruct (cmap_valid_Obj Γ Δ (CMap m) (addr_index a1) w malloc)
+  destruct (cmap_valid_Obj Γ Δ (CMap m) (addr_index a1) w μ)
     as (τ&?&_&?&_); auto; simplify_type_equality'.
   assert (Γ ⊢ r1' ++ RUnion i1 t true :: r' :
     addr_type_object a2 ↣ addr_type_base a1).

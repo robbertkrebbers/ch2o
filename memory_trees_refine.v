@@ -676,10 +676,11 @@ Proof.
     constructor; rewrite ?ctree_flatten_map; auto.
 Qed.
 Lemma ctree_singleton_seg_refine Γ α f Δ1 Δ2 τ rs w1 w2 σ :
-  ✓ Γ → Γ ⊢ rs : τ ↣ σ → w1 ⊑{Γ,α,f@Δ1↦Δ2} w2 : σ → ¬ctree_unmapped w1 →
+  ✓ Γ → Γ ⊢ rs : τ ↣ σ → w1 ⊑{Γ,α,f@Δ1↦Δ2} w2 : σ →
+  ¬ctree_unmapped w1 → ¬ctree_unmapped w2 →
   ctree_singleton_seg Γ rs w1 ⊑{Γ,α,f@Δ1↦Δ2} ctree_singleton_seg Γ rs w2 : τ.
 Proof.
-  intros ? Hrs ??. apply ctree_leaf_refine_refine; eauto 8 using
+  intros ? Hrs ???. apply ctree_leaf_refine_refine; eauto 8 using
     ctree_singleton_seg_typed, pbits_refine_mapped, ctree_flatten_refine.
   destruct Hrs as [τ i n|s i τs|s i ? τs]; simpl.
   * constructor. rewrite !list_insert_alter. apply Forall2_alter; eauto.
@@ -701,7 +702,8 @@ Proof.
     apply Forall2_replicate, pbit_empty_refine.
 Qed.
 Lemma ctree_singleton_refine Γ α f Δ1 Δ2 τ r w1 w2 σ :
-  ✓ Γ → Γ ⊢ r : τ ↣ σ → w1 ⊑{Γ,α,f@Δ1↦Δ2} w2 : σ → ¬ctree_unmapped w1 →
+  ✓ Γ → Γ ⊢ r : τ ↣ σ → w1 ⊑{Γ,α,f@Δ1↦Δ2} w2 : σ →
+  ¬ctree_unmapped w1 → ¬ctree_unmapped w2 →
   ctree_singleton Γ r w1 ⊑{Γ,α,f@Δ1↦Δ2} ctree_singleton Γ r w2 : τ.
 Proof.
   intros ? Hr. revert w1 w2. induction Hr using @ref_typed_ind;

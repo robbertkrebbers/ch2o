@@ -31,15 +31,6 @@ Inductive lrval_typed' (Γ : env K) (Δ : memenv K) : lrval K → lrtype K → P
 Global Instance lrval_typed:
   Typed (env K * memenv K) (lrtype K) (lrval K) := curry lrval_typed'.
 
-Inductive assign_typed (τ1 : type K) : type K → assign → type K → Prop :=
-  | Assign_typed τ2 : cast_typed τ2 τ1 → assign_typed τ1 τ2 Assign τ1
-  | PreOp_typed op τ2 σ :
-     binop_typed op τ1 τ2 σ → cast_typed σ τ1 →
-     assign_typed τ1 τ2 (PreOp op) τ1
-  | PostOp_typed op τ2 σ :
-     binop_typed op τ1 τ2 σ → cast_typed σ τ1 →
-     assign_typed τ1 τ2 (PostOp op) τ1.
-
 Inductive expr_typed' (Γ : env K) (Δ : memenv K)
      (τs : list (type K)) : expr K → lrtype K → Prop :=
   | EVar_typed τ i :
@@ -52,10 +43,10 @@ Inductive expr_typed' (Γ : env K) (Δ : memenv K)
   | ERofL_typed e τ :
      expr_typed' Γ Δ τs e (inl τ) →
      expr_typed' Γ Δ τs (& e) (inr (TType τ.*))
-  | EAssign_typed ass e1 e2 τ1 τ2 σ :
-     assign_typed τ1 τ2 ass σ →
+  | EAssign_typed ass e1 e2 τ1 τ2 :
+     assign_typed τ1 τ2 ass →
      expr_typed' Γ Δ τs e1 (inl τ1) → expr_typed' Γ Δ τs e2 (inr τ2) →
-     expr_typed' Γ Δ τs (e1 ::={ass} e2) (inr σ)
+     expr_typed' Γ Δ τs (e1 ::={ass} e2) (inr τ1)
   | ECall_typed e es σ σs :
      expr_typed' Γ Δ τs e (inr ((σs ~> σ).*)) →
      Forall2 (expr_typed' Γ Δ τs) es (inr <$> σs) → type_complete Γ σ →
@@ -110,9 +101,9 @@ Section expr_typed_ind.
     type_complete Γ τ → P (.* e) (inl τ)).
   Context (Profl : ∀ e τ,
     (Γ,Δ,τs) ⊢ e : inl τ → P e (inl τ) → P (& e) (inr (TType τ.*))).
-  Context (Passign : ∀ ass e1 e2 τ1 τ2 σ,
-    assign_typed τ1 τ2 ass σ → (Γ,Δ,τs) ⊢ e1 : inl τ1 → P e1 (inl τ1) →
-    (Γ,Δ,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ::={ass} e2) (inr σ)).
+  Context (Passign : ∀ ass e1 e2 τ1 τ2,
+    assign_typed τ1 τ2 ass → (Γ,Δ,τs) ⊢ e1 : inl τ1 → P e1 (inl τ1) →
+    (Γ,Δ,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ::={ass} e2) (inr τ1)).
   Context (Pcall : ∀ e es σ σs,
     (Γ,Δ,τs) ⊢ e : inr ((σs ~> σ).*) → P e (inr ((σs ~> σ).*)) →
     (Γ,Δ,τs) ⊢* es :* inr <$> σs → Forall2 P es (inr <$> σs) →
@@ -158,12 +149,12 @@ Inductive ectx_item_typed' (Γ : env K) (Δ : memenv K)
      type_complete Γ τ →
      ectx_item_typed' Γ Δ τs (.* □) (inr (TType τ.*)) (inl τ)
   | CLtoR_typed τ : ectx_item_typed' Γ Δ τs (& □) (inl τ) (inr (TType τ.*))
-  | CAssignL_typed ass e2 τ1 τ2 σ :
-     assign_typed τ1 τ2 ass σ → (Γ,Δ,τs) ⊢ e2 : inr τ2 →
-     ectx_item_typed' Γ Δ τs (□ ::={ass} e2) (inl τ1) (inr σ)
-  | CAssignR_typed ass e1 τ1 τ2 σ :
-     assign_typed τ1 τ2 ass σ → (Γ,Δ,τs) ⊢ e1 : inl τ1 →
-     ectx_item_typed' Γ Δ τs (e1 ::={ass} □) (inr τ2) (inr σ)
+  | CAssignL_typed ass e2 τ1 τ2 :
+     assign_typed τ1 τ2 ass → (Γ,Δ,τs) ⊢ e2 : inr τ2 →
+     ectx_item_typed' Γ Δ τs (□ ::={ass} e2) (inl τ1) (inr τ1)
+  | CAssignR_typed ass e1 τ1 τ2 :
+     assign_typed τ1 τ2 ass → (Γ,Δ,τs) ⊢ e1 : inl τ1 →
+     ectx_item_typed' Γ Δ τs (e1 ::={ass} □) (inr τ2) (inr τ1)
   | CCallL_typed es σs σ :
      (Γ,Δ,τs) ⊢* es :* inr <$> σs → type_complete Γ σ →
      ectx_item_typed' Γ Δ τs (call □ @ es) (inr ((σs ~> σ).*)) (inr σ)
@@ -364,10 +355,10 @@ Global Instance focus_typed:
   Typed envs (focustype K) (focus K) := curry3 focus_typed'.
 
 Global Instance state_typed :
-    Typed (env K) funname (state K) := λ Γ S f, ∃ τf,
+    Typed (env K) (focustype K) (state K) := λ Γ S σf, ∃ τf,
   let 'State k φ m := S in
   (Γ,'{m},locals k.*2) ⊢ φ : τf ∧
-  (Γ,'{m}) ⊢ k : τf ↣ Fun_type f ∧
+  (Γ,'{m}) ⊢ k : τf ↣ σf ∧
   ✓{Γ} m.
 
 Definition funenv_prevalid (Γ : env K) (Δ : memenv K) (δ : funenv K) :=
@@ -412,9 +403,6 @@ Proof. by inversion 1. Qed.
 Lemma rval_typed_inv Γ Δ v τ : (Γ,Δ) ⊢ inr v : inr τ → (Γ,Δ) ⊢ v : τ.
 Proof. by inversion 1. Qed.
 
-Lemma assign_typed_type_valid Γ τ1 τ2 ass σ :
-  assign_typed τ1 τ2 ass σ → ✓{Γ} τ1 → ✓{Γ} σ.
-Proof. destruct 1; eauto. Qed.
 Lemma lrval_typed_type_valid Γ Δ ν τlr :
   ✓ Γ → (Γ,Δ) ⊢ ν : τlr → ✓{Γ} (lrtype_type τlr).
 Proof. destruct 2; eauto using val_typed_type_valid, addr_typed_type_valid. Qed.
@@ -425,8 +413,8 @@ Proof.
     eauto 5 using lrval_typed_type_valid,
     type_valid_ptr_type_valid, unop_typed_type_valid, binop_typed_type_valid,
     TBase_valid, TPtr_valid, TVoid_valid, type_valid_ptr_type_valid,
-    assign_typed_type_valid, ref_seg_typed_type_valid,
-    TBase_valid_inv, TPtr_valid_inv, TFun_valid_inv_ret, type_complete_valid.
+    ref_seg_typed_type_valid, TBase_valid_inv, TPtr_valid_inv,
+    TFun_valid_inv_ret, type_complete_valid.
 Qed.
 Lemma expr_inl_typed_type_valid Γ Δ τs e τ :
   ✓ Γ → ✓{Γ}* τs → (Γ,Δ,τs) ⊢ e : inl τ → ✓{Γ} τ.

@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export list.
+Require Export list vector.
 
 Local Unset Elimination Schemes.
 Class SeparationOps (A : Type) : Type := {
@@ -370,7 +370,7 @@ Lemma sep_disjoint_list_double_2 x y : x ⊥ y → ⊥ [x; y].
 Proof. by rewrite sep_disjoint_list_double. Qed.
 Lemma sep_disjoint_list_symmetric x y : ⊥ [x; y] → ⊥ [y; x].
 Proof. by rewrite !sep_disjoint_list_double. Qed.
-Hint Extern 0 => eapply sep_disjoint_list_symmetric; eassumption.
+Hint Immediate sep_disjoint_list_double_1 sep_disjoint_list_symmetric.
 Hint Resolve sep_disjoint_list_double_2.
 Lemma sep_subseteq_spec x y : x ⊆ y ↔ ∃ z, y = x ∪ z ∧ ⊥ [x; z].
 Proof.
@@ -389,7 +389,7 @@ Lemma sep_cancel_l x y z : ⊥ [z; x] → ⊥ [z; y] → z ∪ x = z ∪ y → x
 Proof. eauto using sep_cancel_l', sep_disjoint_list_double_1. Qed.
 Lemma sep_cancel_r x y z : ⊥ [x; z] → ⊥ [y; z] → x ∪ z = y ∪ z → x = y.
 Proof.
-  intros ??. rewrite !(sep_commutative _ z) by done. by apply sep_cancel_l.
+  intros ??. rewrite !(sep_commutative _ z) by done. eauto using sep_cancel_l.
 Qed.
 Lemma sep_positive_l x y : ⊥ [x; y] → x ∪ y = ∅ → x = ∅.
 Proof. rewrite sep_disjoint_list_double. eauto using sep_positive_l'. Qed.
@@ -431,7 +431,8 @@ Proof.
 Qed.
 Lemma sep_reflecting_r x y z : ⊥ [x; z] → ⊥ [y; z] → x ∪ z ⊆ y ∪ z → x ⊆ y.
 Proof.
-  intros ??. rewrite !(sep_commutative _ z) by done. by apply sep_reflecting_l.
+  intros ??. rewrite !(sep_commutative _ z) by done.
+  eauto using sep_reflecting_l.
 Qed.
 Lemma sep_disjoint_difference x y : x ⊆ y → ⊥[x; y ∖ x].
 Proof. rewrite sep_disjoint_list_double. apply sep_disjoint_difference'. Qed.
@@ -500,12 +501,6 @@ Lemma sep_list_preserving xs1 xs2 : ⊥ xs2 → xs1 ⊆* xs2 → ⋃ xs1 ⊆ ⋃
 Proof.
   intros Hxs2. induction 1; simpl; inversion_clear Hxs2;
     auto using sep_preserving, sep_reflexive, sep_empty_valid.
-Qed.
-Global Instance: Proper ((⊆*) ==> flip impl) disjoint_list.
-Proof.
-  unfold flip, impl. induction 1; simpl; [by constructor|].
-  rewrite !disjoint_list_cons; intros [??]. eauto 6 using
-    sep_list_preserving, sep_disjoint_weaken_l, sep_disjoint_weaken_r.
 Qed.
 Lemma sep_disjoint_empty_alt xs : ⊥ (∅ :: xs) ↔ ⊥ xs.
 Proof.
@@ -623,17 +618,29 @@ Proof.
   intros y. rewrite !(Permutation_swap _ y), Permutation_middle,
     sep_disjoint_list_alt; tauto.
 Qed.
+Lemma sep_disjoint_le_union_list_singleton xs : xs ⊆⊥ [⋃ xs].
+Proof. by rewrite <-sep_disjoint_le_union_list, (right_id_L [] (++)). Qed.
 Lemma sep_disjoint_equiv_union_list xs1 xs2: ⊥ xs1 → ⋃ xs1 :: xs2 ≡⊥ xs1 ++ xs2.
 Proof.
   split; auto using sep_disjoint_le_union_list.
   intros y. rewrite !(Permutation_swap _ y), Permutation_middle,
     sep_disjoint_list_alt; tauto.
 Qed.
+Lemma sep_disjoint_equiv_union_list_singleton xs : ⊥ xs → [⋃ xs] ≡⊥ xs.
+Proof.
+  intros. by rewrite sep_disjoint_equiv_union_list, (right_id_L [] (++)).
+Qed.
 Lemma sep_disjoint_equiv_difference x y xs :
   x ⊆ y → y :: xs ≡⊥ x :: y ∖ x :: xs.
 Proof.
   intros. by rewrite <-sep_disjoint_equiv_union, sep_union_difference
     by auto using sep_disjoint_difference.
+Qed.
+Lemma sep_subseteq_disjoint_le x y xs : x ⊆ y → y :: xs ⊆⊥ x :: xs.
+Proof.
+  rewrite sep_subseteq_spec; intros (z&->&?); intros y.
+  rewrite sep_disjoint_equiv_union by done; intros Hyxz.
+  apply (sep_disjoint_contains _ _ Hyxz); solve_contains.
 Qed.
 Lemma sep_difference_distr_l x y z :
   z ⊆ x → ⊥ [x; y] → (x ∪ y) ∖ z = (x ∖ z) ∪ y.
@@ -643,21 +650,65 @@ Proof.
   { by rewrite <-sep_disjoint_le_union, <-sep_disjoint_equiv_difference. }
   assert ( ⊥ [z; x ∖ z; y]) by (by rewrite <-sep_disjoint_equiv_difference).
   by rewrite sep_associative, !sep_union_difference
-    by auto using  sep_union_subseteq_l_transitive.
+    by auto using sep_union_subseteq_l_transitive.
 Qed.
 Lemma sep_difference_distr_r x y z :
   z ⊆ y → ⊥ [x; y] → (x ∪ y) ∖ z = x ∪ (y ∖ z).
 Proof.
   intros. assert ( ⊥ [y ∖ z; x]).
   { apply (disjoint_list_cons z).
-    by rewrite <-sep_disjoint_equiv_difference. }
-  by rewrite !(sep_commutative x), sep_difference_distr_l by done.
+    rewrite <-sep_disjoint_equiv_difference; eauto. }
+  by rewrite !(sep_commutative x), sep_difference_distr_l by eauto.
 Qed.
 Lemma sep_disjoint_equiv_half x xs :
   sep_splittable x → ½ x :: ½ x :: xs ≡⊥ x :: xs.
 Proof.
   intros. by rewrite <-sep_disjoint_equiv_union, sep_union_half
     by auto using sep_disjoint_half.
+Qed.
+
+(** ** Properties with respect to vectors *)
+Lemma sep_disjoint_equiv_insert {n} (xs : vec A n) (i : fin n) x :
+  vinsert i x xs ≡⊥ x :: delete (fin_to_nat i) (vec_to_list xs).
+Proof.
+  induction xs as [|x' ? xs IH]; inv_fin i; simpl; [done|intros i].
+  by rewrite Permutation_swap, IH.
+Qed.
+Lemma sep_disjoint_equiv_delete {n} (xs : vec A n) (i : fin n) :
+  xs !!! i :: delete (fin_to_nat i) (vec_to_list xs) ≡⊥ xs.
+Proof. by rewrite <-sep_disjoint_equiv_insert, vlookup_insert_self. Qed.
+Lemma sep_union_delete {n} (xs : vec A n) (i : fin n) :
+  ⊥ xs → xs !!! i ∪ ⋃ delete (fin_to_nat i) (vec_to_list xs) = ⋃ xs.
+Proof.
+  induction xs as [|x ? xs IH]; inversion_clear 1; inv_fin i; simpl; [done|].
+  intros i.
+  assert (⊥ [xs !!! i; ⋃ (delete (fin_to_nat i) (vec_to_list xs)); x]) as Hxs.
+  { rewrite <-sep_disjoint_le_union_list, app_comm_cons,
+      sep_disjoint_equiv_delete, sep_disjoint_list_alt; auto. }
+  rewrite (sep_commutative x), sep_associative
+    by (apply (sep_disjoint_contains _ _ Hxs); solve_contains).
+  by rewrite IH, sep_commutative by auto.
+Qed.
+Lemma sep_union_insert {n} (xs : vec A n) (i : fin n) x :
+  ⊥ (x :: delete (fin_to_nat i) (vec_to_list xs)) →
+  ⋃ vinsert i x xs = x ∪ ⋃ delete (fin_to_nat i) (vec_to_list xs).
+Proof.
+  induction xs as [|x' ? xs IH]; inv_fin i; simpl; [done |].
+  intros i; rewrite !disjoint_list_cons; simpl; intros (?&?&?).
+  assert (⊥ [x; x'; ⋃ delete (fin_to_nat i) (vec_to_list xs)]) as Hxs.
+  { constructor; simpl;
+      rewrite ?sep_right_id by eauto using sep_disjoint_valid_l; auto. }
+  by rewrite IH, !sep_associative, (sep_commutative x') by
+    (rewrite <-?(sep_disjoint_equiv_union_list_singleton (delete _ _)) by done;
+     by (apply (sep_disjoint_contains _ _ Hxs); solve_contains)).
+Qed.
+Lemma sep_subseteq_lookup {n} (xs : vec A n) (i : fin n) :
+  ⊥ xs → xs !!! i ⊆ ⋃ xs.
+Proof.
+  intros. rewrite <-(sep_union_delete _ i) by done.
+  apply sep_union_subseteq_l.
+  rewrite Permutation_swap, <-sep_disjoint_le_union_list, (commutative (++)).
+  by simpl; rewrite sep_disjoint_equiv_delete.
 Qed.
 
 (** ** Properties lifted to lists *)
@@ -875,14 +926,14 @@ Ltac solve_simple_sep_disjoint :=
   match goal with
   | _ => done
   | |- ⊥ [] => by apply disjoint_list_nil
-  | |- ⊥ [_] => by apply sep_disjoint_list_singleton
-  | H : ⊥ ?ms2 |- ⊥ ?ms1 => apply (sep_disjoint_contains _ _ H); solve_contains
+  | H : ⊥ ?xs2 |- ⊥ ?xs1 => apply (sep_disjoint_contains _ _ H); solve_contains
   end.
 Ltac simplify_sep_disjoint_hyps := repeat
   match goal with
+  | H : sep_valid _ |- _ => apply sep_disjoint_list_singleton in H
   | H : ⊥ [] |- _ => clear H
   | H : ?x ⊥ ?y |- _ => apply sep_disjoint_list_double in H
-  | H : ⊥ ?ms |- _ =>
+  | H : ⊥ ?xs |- _ =>
     progress repeat first
     [ rewrite sep_disjoint_equiv_empty in H
     | rewrite sep_disjoint_equiv_union_list in H by solve_simple_sep_disjoint
@@ -892,7 +943,8 @@ Ltac solve_sep_disjoint :=
   match goal with
   | |- ⊥ [] => by apply disjoint_list_nil
   | |- ⊥ [_] => by apply sep_disjoint_list_singleton
-  | |- _ ⊥ _ => apply sep_disjoint_list_double
   | |- ⊥ _ => try done
+  | |- sep_valid _ => done || apply sep_disjoint_list_singleton
+  | |- _ ⊥ _ => done || apply sep_disjoint_list_double
   end;
   simplify_sep_disjoint_hyps; solve_simple_sep_disjoint.

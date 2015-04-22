@@ -40,9 +40,9 @@ Proof.
   intros ? (_&_&Hstrict) Ha1 Ha2; unfold addr_compare; apply bool_decide_iff.
   assert ('{m1} ⊑{Γ,α,f} '{m2}) as HΔ by eauto using addr_refine_memenv_refine.
   destruct (addr_object_offset_refine Γ α f
-    ('{m1}) ('{m2}) a1 a2 σp) as (r1&?&?&->); auto.
+    '{m1} '{m2} a1 a2 σp) as (r1&?&?&->); auto.
   destruct (addr_object_offset_refine Γ α f
-    ('{m1}) ('{m2}) a3 a4 σp) as (r3&?&?&->); auto.
+    '{m1} '{m2} a3 a4 σp) as (r3&?&?&->); auto.
   destruct (decide (addr_index a1 = addr_index a3)).
   { replace r1 with r3 by congruence. clear Hstrict.
     destruct c; simplify_equality'; intuition auto with congruence lia. }
@@ -70,7 +70,7 @@ Lemma addr_plus_ok_refine Γ α f m1 m2 a1 a2 σp j :
 Proof.
   unfold addr_plus_ok. intros Ha (?&?&?).
   destruct (addr_byte_refine_help Γ α f
-    ('{m1}) ('{m2}) a1 a2 σp) as (i&?&?); auto.
+    '{m1} '{m2} a1 a2 σp) as (i&?&?); auto.
   destruct Ha as [??????????? []]; simplify_equality'; split; eauto; lia.
 Qed.
 Lemma addr_plus_refine Γ α f m1 m2 a1 a2 σp j :

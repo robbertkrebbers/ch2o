@@ -317,10 +317,14 @@ Implicit Types m : mem K.
 Hint Immediate index_alive_1'.
 Hint Resolve index_alive_2'.
 
+Arguments addr_is_obj _ !_ /.
+Arguments addr_ref _ _ _ !_ /.
+Arguments addr_ref_byte _ _ _ !_ /.
+
 (** ** Properties of operations on addresses *)
 Lemma addr_compare_ok_weaken Γ1 Γ2 Δ1 m1 m2 c a1 a2 τp1 τp2 :
   ✓ Γ1 → (Γ1,Δ1) ⊢ a1 : τp1 → (Γ1,Δ1) ⊢ a2 : τp2 →
-  Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  Γ1 ⊆ Γ2 → (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   addr_compare_ok Γ1 m1 c a1 a2 → Γ1 ⊆ Γ2 → addr_compare_ok Γ2 m2 c a1 a2.
 Proof. unfold addr_compare_ok; intuition eauto using addr_strict_weaken. Qed.
 Lemma addr_compare_ok_erase Γ m c a1 a2 :
@@ -346,7 +350,7 @@ Proof.
 Qed.
 Lemma addr_plus_ok_weaken Γ1 Γ2 Δ1 m1 m2 a σp j :
   ✓ Γ1 → (Γ1,Δ1) ⊢ a : σp → addr_plus_ok Γ1 m1 j a →
-  Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  Γ1 ⊆ Γ2 → (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   addr_plus_ok Γ2 m2 j a.
 Proof.
   unfold addr_plus_ok; intros ?? (?&?&?) ??; simplify_type_equality'.
@@ -399,7 +403,7 @@ Proof.
 Qed.
 Lemma addr_minus_ok_weaken Γ1 Γ2 Δ1 m1 m2 a1 a2 σp1 :
   ✓ Γ1 → (Γ1,Δ1) ⊢ a1 : σp1 → addr_minus_ok Γ1 m1 a1 a2 → Γ1 ⊆ Γ2 →
-  (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   addr_minus_ok Γ2 m2 a1 a2.
 Proof.
   intros ?? [??]; split; erewrite <-?(addr_minus_weaken Γ1 Γ2) by eauto; eauto.
@@ -413,7 +417,7 @@ Lemma addr_cast_typed Γ Δ m a σp τp :
 Proof. intros [] (?&?&?); constructor; eauto. Qed.
 Lemma addr_cast_ok_weaken Γ1 Γ2 Δ1 m1 m2 a σp τp :
   ✓ Γ1 → (Γ1,Δ1) ⊢ a : σp →
-  (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   addr_cast_ok Γ1 m1 τp a → Γ1 ⊆ Γ2 → addr_cast_ok Γ2 m2 τp a.
 Proof.
   intros ??? (?&?&?) ?; repeat split; auto. destruct τp as [τ| |]; simpl; auto.
@@ -483,10 +487,10 @@ Proof.
   end; done.
 Defined.
 Lemma ptr_alive_weaken' m1 m2 p :
-  ptr_alive' m1 p → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  ptr_alive' m1 p → (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   ptr_alive' m2 p.
 Proof. destruct p; simpl; auto. Qed.
-Lemma ptr_alive_1' m p : ptr_alive' m p → ptr_alive ('{m}) p.
+Lemma ptr_alive_1' m p : ptr_alive' m p → ptr_alive '{m} p.
 Proof. destruct p; simpl; eauto. Qed.
 Hint Resolve ptr_alive_1'.
 Lemma ptr_alive_erase' m p : ptr_alive' (cmap_erase m) p = ptr_alive' m p.
@@ -535,7 +539,7 @@ Proof. destruct τp; constructor. Qed.
 Lemma ptr_compare_ok_weaken Γ1 Γ2 Δ1 m1 m2 c p1 p2 τp1 τp2 :
   ✓ Γ1 → (Γ1,Δ1) ⊢ p1 : τp1 → (Γ1,Δ1) ⊢ p2 : τp2 →
   ptr_compare_ok Γ1 m1 c p1 p2 →
-  Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  Γ1 ⊆ Γ2 → (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   ptr_compare_ok Γ2 m2 c p1 p2.
 Proof.
   destruct 2, 1; simpl; repeat case_match; eauto using addr_compare_ok_weaken.
@@ -552,7 +556,7 @@ Lemma ptr_compare_weaken Γ1 Γ2 Δ1 c p1 p2 τp1 τp2 :
 Proof. destruct 2, 1; simpl; intros; eauto 2 using addr_compare_weaken. Qed.
 Lemma ptr_plus_ok_weaken Γ1 Γ2 Δ1 m1 m2 p τp j :
   ✓ Γ1 → (Γ1,Δ1) ⊢ p : τp → ptr_plus_ok Γ1 m1 j p →
-  Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  Γ1 ⊆ Γ2 → (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   ptr_plus_ok Γ2 m2 j p.
 Proof. destruct 2; simpl; eauto using addr_plus_ok_weaken. Qed.
 Lemma ptr_plus_ok_erase Γ m j p :
@@ -563,7 +567,7 @@ Lemma ptr_plus_weaken Γ1 Γ2 Δ1 p τp j :
 Proof. destruct 2; simpl; eauto using addr_plus_weaken, f_equal. Qed.
 Lemma ptr_minus_ok_weaken Γ1 Γ2 Δ1 m1 m2 p1 p2 τp1 :
   ✓ Γ1 → (Γ1,Δ1) ⊢ p1 : τp1 → ptr_minus_ok Γ1 m1 p1 p2 → Γ1 ⊆ Γ2 →
-  (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   ptr_minus_ok Γ2 m2 p1 p2.
 Proof. destruct 2, p2; simpl; eauto using addr_minus_ok_weaken. Qed.
 Lemma ptr_minus_ok_erase Γ m p1 p2 :
@@ -575,32 +579,32 @@ Lemma ptr_minus_weaken Γ1 Γ2 Δ1 p1 p2 τp1 τp2 :
 Proof. destruct 2, 1; simpl; eauto using addr_minus_weaken. Qed.
 Lemma ptr_cast_ok_weaken Γ1 Γ2 Δ1 m1 m2 p τp σp :
   ✓ Γ1 → (Γ1,Δ1) ⊢ p : τp → ptr_cast_ok Γ1 m1 σp p → Γ1 ⊆ Γ2 →
-  (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   ptr_cast_ok Γ2 m2 σp p.
 Proof. destruct 2; simpl; eauto using addr_cast_ok_weaken. Qed.
 Lemma ptr_cast_ok_erase Γ m p τp :
   ptr_cast_ok Γ (cmap_erase m) τp p = ptr_cast_ok Γ m τp p.
 Proof. destruct p; simpl; auto using addr_cast_ok_erase. Qed.
 Lemma ptr_compare_ok_alive_l Γ m c p1 p2 :
-  ptr_compare_ok Γ m c p1 p2 → ptr_alive ('{m}) p1.
+  ptr_compare_ok Γ m c p1 p2 → ptr_alive '{m} p1.
 Proof.
   destruct p1,p2,c; simpl; unfold addr_minus_ok, addr_compare_ok; naive_solver.
 Qed.
 Lemma ptr_compare_ok_alive_r Γ m c p1 p2 :
-  ptr_compare_ok Γ m c p1 p2 → ptr_alive ('{m}) p2.
+  ptr_compare_ok Γ m c p1 p2 → ptr_alive '{m} p2.
 Proof.
   destruct p1 as [|[]|], p2 as [|[]|], c;
     csimpl; unfold addr_compare_ok; naive_solver.
 Qed.
-Lemma ptr_plus_ok_alive Γ m p j : ptr_plus_ok Γ m j p → ptr_alive ('{m}) p.
+Lemma ptr_plus_ok_alive Γ m p j : ptr_plus_ok Γ m j p → ptr_alive '{m} p.
 Proof. destruct p. done. intros [??]; simpl; eauto. done. Qed.
 Lemma ptr_minus_ok_alive_l Γ m p1 p2 :
-  ptr_minus_ok Γ m p1 p2 → ptr_alive ('{m}) p1.
+  ptr_minus_ok Γ m p1 p2 → ptr_alive '{m} p1.
 Proof. destruct p1, p2; simpl; try done. intros [??]; eauto. Qed.
 Lemma ptr_minus_ok_alive_r Γ m p1 p2 :
-  ptr_minus_ok Γ m p1 p2 → ptr_alive ('{m}) p2.
+  ptr_minus_ok Γ m p1 p2 → ptr_alive '{m} p2.
 Proof. destruct p1, p2; simpl; try done. intros (?&<-&?); eauto. Qed.
-Lemma ptr_cast_ok_alive Γ m p σp : ptr_cast_ok Γ m σp p → ptr_alive ('{m}) p.
+Lemma ptr_cast_ok_alive Γ m p σp : ptr_cast_ok Γ m σp p → ptr_alive '{m} p.
 Proof. destruct p; simpl. done. intros [??]; eauto. done. Qed.
 
 (** ** Properties of operations on base values *)
@@ -616,14 +620,12 @@ Proof.
 Defined.
 Lemma base_val_branchable_weaken m1 m2 vb :
   base_val_branchable m1 vb →
-  (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   base_val_branchable m2 vb.
 Proof. destruct vb; simpl; eauto using ptr_alive_weaken'. Qed.
 Lemma base_val_branchable_erase m vb :
   base_val_branchable (cmap_erase m) vb = base_val_branchable m vb.
-Proof.
-  by destruct vb; simpl; rewrite ?index_alive_erase', ?ptr_alive_erase'.
-Qed.
+Proof. by destruct vb; simpl; rewrite ?ptr_alive_erase'. Qed.
 Lemma base_val_is_0_branchable m vb :
   base_val_is_0 vb → base_val_branchable m vb.
 Proof. by destruct vb as [| | |[]|]. Qed.
@@ -677,7 +679,7 @@ Proof.
 Qed.
 Lemma base_val_unop_ok_weaken m1 m2 op vb :
   base_val_unop_ok m1 op vb →
-  (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   base_val_unop_ok m2 op vb.
 Proof. destruct vb, op; simpl; eauto using ptr_alive_weaken'. Qed.
 Lemma base_val_unop_ok_erase m op vb :
@@ -695,7 +697,7 @@ Qed.
 Lemma base_val_binop_ok_weaken Γ1 Γ2 Δ1 m1 m2 op vb1 vb2 τb1 τb2 :
   ✓ Γ1 → (Γ1,Δ1) ⊢ vb1 : τb1 → (Γ1,Δ1) ⊢ vb2 : τb2 →
   base_val_binop_ok Γ1 m1 op vb1 vb2 → Γ1 ⊆ Γ2 →
-  (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   base_val_binop_ok Γ2 m2 op vb1 vb2.
 Proof.
   destruct 2, 1, op as [|[]| |]; simpl; auto; eauto 2 using
@@ -736,7 +738,7 @@ Lemma base_cast_typed_self τb : base_cast_typed τb τb.
 Proof. destruct τb; constructor; auto using ptr_cast_typed_self. Qed.
 Lemma base_val_cast_ok_weaken Γ1 Γ2 Δ1 m1 m2 vb τb σb :
   ✓ Γ1 → (Γ1,Δ1) ⊢ vb : τb → base_val_cast_ok Γ1 m1 σb vb →
-  Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  Γ1 ⊆ Γ2 → (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   base_val_cast_ok Γ2 m2 σb vb.
 Proof.
   destruct 2, σb; simpl; eauto using ptr_cast_ok_weaken, ptr_alive_weaken'.
@@ -862,7 +864,7 @@ Proof.
    | by inversion 1; subst; eauto using base_cast_typed_self, TVoid_cast_typed].
 Defined.
 Lemma val_unop_ok_weaken m1 m2 op v :
-  val_unop_ok m1 op v → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  val_unop_ok m1 op v → (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   val_unop_ok m2 op v.
 Proof. unfold val_unop_ok; destruct v; eauto using base_val_unop_ok_weaken. Qed.
 Lemma val_unop_ok_erase m op v :
@@ -880,7 +882,7 @@ Qed.
 Lemma val_binop_ok_weaken Γ1 Γ2 Δ1 m1 m2 op v1 v2 τ1 τ2 :
   ✓ Γ1 → (Γ1,Δ1) ⊢ v1 : τ1 → (Γ1,Δ1) ⊢ v2 : τ2 →
   val_binop_ok Γ1 m1 op v1 v2 → Γ1 ⊆ Γ2 →
-  (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   val_binop_ok Γ2 m2 op v1 v2.
 Proof.
   destruct 2, 1, op; simpl; try done; eauto 2 using base_val_binop_ok_weaken.
@@ -907,7 +909,7 @@ Proof.
 Qed.
 Lemma val_cast_ok_weaken Γ1 Γ2 Δ1 m1 m2 v τ σ :
   ✓ Γ1 → (Γ1,Δ1) ⊢ v : τ → val_cast_ok Γ1 m1 (TType σ) v →
-  Γ1 ⊆ Γ2 → (∀ o, index_alive ('{m1}) o → index_alive ('{m2}) o) →
+  Γ1 ⊆ Γ2 → (∀ o, index_alive '{m1} o → index_alive '{m2} o) →
   val_cast_ok Γ2 m2 (TType σ) v.
 Proof. destruct 2, σ; simpl; eauto using base_val_cast_ok_weaken. Qed.
 Lemma val_cast_ok_erase Γ m v τp :

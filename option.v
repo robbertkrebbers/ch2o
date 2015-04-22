@@ -261,6 +261,10 @@ Tactic Notation "simpl_option_monad" "by" tactic3(tac) :=
     | option ?A =>
       let Hx := fresh in assert_Some_None A o Hx; rewrite Hx; clear Hx
     end
+  | H : context [decide _] |- _ => rewrite decide_True in H by tac
+  | H : context [decide _] |- _ => rewrite decide_False in H by tac
+  | H : context [mguard _ _] |- _ => rewrite option_guard_False in H by tac
+  | H : context [mguard _ _] |- _ => rewrite option_guard_True in H by tac
   | _ => rewrite decide_True by tac
   | _ => rewrite decide_False by tac
   | _ => rewrite option_guard_True by tac

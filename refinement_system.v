@@ -38,12 +38,11 @@ Inductive expr_refine' (Γ : env K)
   | ERofL_refine e1 e2 τ :
      expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl τ) →
      expr_refine' Γ τs α f Δ1 Δ2 (& e1) (& e2) (inr (TType τ.*))
-  | EAssign_refine ass e1 e2 e1' e2' τ τ' σ :
-     assign_typed τ τ' ass σ →
+  | EAssign_refine ass e1 e2 e1' e2' τ τ' :
+     assign_typed τ τ' ass →
      expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl τ) →
      expr_refine' Γ τs α f Δ1 Δ2 e1' e2' (inr τ') →
-     expr_refine' Γ τs α f Δ1 Δ2
-       (e1 ::={ass} e1') (e2 ::={ass} e2') (inr σ)
+     expr_refine' Γ τs α f Δ1 Δ2 (e1 ::={ass} e1') (e2 ::={ass} e2') (inr τ)
   | ECall_refine e1 e2 es1 es2 σ σs :
      expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr ((σs ~> σ).*)) →
      Forall3 (expr_refine' Γ τs α f Δ1 Δ2) es1 es2 (inr <$> σs) →
@@ -109,11 +108,11 @@ Section expr_refine_ind.
   Context (Profl : ∀ e1 e2 τ,
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ →
     P e1 e2 (inl τ) → P (& e1) (& e2) (inr (TType τ.*))).
-  Context (Passign : ∀ ass e1 e2 e1' e2' τ τ' σ,
-    assign_typed τ τ' ass σ →
+  Context (Passign : ∀ ass e1 e2 e1' e2' τ τ',
+    assign_typed τ τ' ass →
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ → P e1 e2 (inl τ) →
     e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' → P e1' e2' (inr τ') →
-    P (e1 ::={ass} e1') (e2 ::={ass} e2') (inr σ)).
+    P (e1 ::={ass} e1') (e2 ::={ass} e2') (inr τ)).
   Context (Pcall : ∀ e1 e2 es1 es2 σ σs,
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr ((σs ~> σ).*) →
     P e1 e2 (inr ((σs ~> σ).*)) →
@@ -175,14 +174,14 @@ Inductive ectx_item_refine' (Γ : env K) (τs: list (type K))
      ectx_item_refine' Γ τs α f Δ1 Δ2 (.* □) (.* □) (inr (TType τ.*)) (inl τ)
   | CLtoR_refine τ :
      ectx_item_refine' Γ τs α f Δ1 Δ2 (& □) (& □) (inl τ) (inr (TType τ.*))
-  | CAssignL_refine ass e1' e2' τ τ' σ :
-     assign_typed τ τ' ass σ → e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' →
+  | CAssignL_refine ass e1' e2' τ τ' :
+     assign_typed τ τ' ass → e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' →
      ectx_item_refine' Γ τs α f Δ1 Δ2
-       (□ ::={ass} e1') (□ ::={ass} e2') (inl τ) (inr σ)
-  | CAssignR_refine ass e1 e2 τ τ' σ :
-     assign_typed τ τ' ass σ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ →
+       (□ ::={ass} e1') (□ ::={ass} e2') (inl τ) (inr τ)
+  | CAssignR_refine ass e1 e2 τ τ' :
+     assign_typed τ τ' ass → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ →
      ectx_item_refine' Γ τs α f Δ1 Δ2
-       (e1 ::={ass} □) (e2 ::={ass} □) (inr τ') (inr σ)
+       (e1 ::={ass} □) (e2 ::={ass} □) (inr τ') (inr τ)
   | CCallL_refine es1 es2 σs σ :
      es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2}* es2 :* inr <$> σs → type_complete Γ σ →
      ectx_item_refine' Γ τs α f Δ1 Δ2
@@ -436,17 +435,17 @@ Global Instance focus_refine: RefineT K (env K * list (type K))
     (focustype K) (focus K) := curry focus_refine'.
 
 Inductive state_refine' (Γ : env K) (α : bool)
-     (f : meminj K) : state K → state K → funname → Prop :=
-  | State_refine k1 φ1 m1 k2 φ2 m2 τf g :
+     (f : meminj K) : state K → state K → focustype K → Prop :=
+  | State_refine k1 φ1 m1 k2 φ2 m2 τf σf :
      φ1 ⊑{(Γ,locals k1.*2),α,f@'{m1}↦'{m2}} φ2 : τf →
-     k1 ⊑{(Γ),α,f@'{m1}↦'{m2}} k2 : τf ↣ Fun_type g →
+     k1 ⊑{(Γ),α,f@'{m1}↦'{m2}} k2 : τf ↣ σf →
      m1 ⊑{Γ,α,f} m2 →
-     state_refine' Γ α f (State k1 φ1 m1) (State k2 φ2 m2) g
-  | Undef_State_refine S1 S2 g :
-     α → Γ ⊢ S1 : g → Γ ⊢ S2 : g → is_undef_state S1 →
-     state_refine' Γ α f S1 S2 g.
+     state_refine' Γ α f (State k1 φ1 m1) (State k2 φ2 m2) σf
+  | Undef_State_refine S1 S2 σf :
+     α → Γ ⊢ S1 : σf → Γ ⊢ S2 : σf → is_undef_state S1 →
+     state_refine' Γ α f S1 S2 σf.
 Global Instance state_refine :
-  RefineTM K (env K) funname (state K) := state_refine'.
+  RefineTM K (env K) (focustype K) (state K) := state_refine'.
 
 Global Instance funenv_refine:
     Refine K (env K) (funenv K) := λ Γ α f Δ1 Δ2 δ1 δ2, ∀ g,
@@ -463,6 +462,7 @@ End refinements.
 Section properties.
 Context `{EnvSpec K}.
 Implicit Types Γ : env K.
+Implicit Types f : meminj K.
 Implicit Types α : bool.
 Implicit Types o : index.
 Implicit Types Δ : memenv K.
@@ -649,8 +649,8 @@ Lemma funenv_lookup_refine_r Γ α f Δ1 Δ2 δ1 δ2 g s2 :
     s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : cmτ ∧ rettype_match cmτ τ ∧
     gotos s1 ⊆ labels s1 ∧ throws_valid 0 s1.
 Proof. intros Hδ ?; specialize (Hδ g); repeat case_match; naive_solver. Qed.
-Lemma state_refine_mem Γ α f S1 S2 g :
-  ¬is_undef_state S1 → S1 ⊑{Γ,α,f} S2 : g → '{SMem S1} ⊑{Γ,α,f} '{SMem S2}.
+Lemma state_refine_mem Γ α f S1 S2 σf :
+  ¬is_undef_state S1 → S1 ⊑{Γ,α,f} S2 : σf → '{SMem S1} ⊑{Γ,α,f} '{SMem S2}.
 Proof. by destruct 2; eauto using cmap_refine_memenv_refine'. Qed.
 
 Lemma lrval_refine_typed_l Γ α f Δ1 Δ2 ν1 ν2 τlr :
@@ -719,8 +719,8 @@ Proof.
     val_refine_typed_l, ectx_refine_typed_l, esctx_item_refine_typed_l,
     locks_refine_valid_l.
 Qed.
-Lemma state_refine_typed_l Γ α f S1 S2 g :
-  ✓ Γ → S1 ⊑{Γ,α,f} S2 : g → Γ ⊢ S1 : g.
+Lemma state_refine_typed_l Γ α f S1 S2 σf :
+  ✓ Γ → S1 ⊑{Γ,α,f} S2 : σf → Γ ⊢ S1 : σf.
 Proof.
   destruct 2; do 2 red; eauto 10 using focus_refine_typed_l,
     ctx_refine_typed_l, cmap_refine_valid_l'.
@@ -805,8 +805,8 @@ Proof.
     val_refine_typed_r, ectx_refine_typed_r, esctx_item_refine_typed_r,
     locks_refine_valid_r.
 Qed.
-Lemma state_refine_typed_r Γ α f S1 S2 g :
-  ✓ Γ → S1 ⊑{Γ,α,f} S2 : g → Γ ⊢ S2 : g.
+Lemma state_refine_typed_r Γ α f S1 S2 σf :
+  ✓ Γ → S1 ⊑{Γ,α,f} S2 : σf → Γ ⊢ S2 : σf.
 Proof.
   destruct 2; eauto. eexists; split_ands;
     erewrite <-?ctx_refine_locals_types by eauto;
@@ -879,7 +879,7 @@ Proof.
     direction_refine_id, expr_refine_id, val_refine_id, ectx_refine_id,
     esctx_item_refine_id, vals_refine_id, locks_refine_id.
 Qed.
-Lemma state_refine_id Γ α S g : ✓ Γ → Γ ⊢ S : g → S ⊑{Γ,α} S : g.
+Lemma state_refine_id Γ α S σf : ✓ Γ → Γ ⊢ S : σf → S ⊑{Γ,α} S : σf.
 Proof.
   destruct S; intros ? (τf&?&?&?).
   eleft; eauto using cmap_refine_id', ctx_refine_id, focus_refine_id.
@@ -933,7 +933,11 @@ Lemma ectx_item_refine_compose
   Ei1 ⊑{(Γ,τs),α1||α2,f2 ◎ f1@Δ1↦Δ3} Ei3 : τlr ↣ τlr'.
 Proof.
   destruct 2; intros HEi'; refine_inversion HEi'; simplify_type_equality;
-    refine_constructor; eauto using expr_refine_compose, exprs_refine_compose.
+    repeat match goal with (* no backtracking in refine_constructor... *)
+    | H : assign_typed _ ?τ _, _ : _ ⊑{_,_,_@_↦_} ?e2 : _,
+      _ : ?e2 ⊑{_,_,_@_↦_} _ : inr ?τ |- _ => clear H
+    end; refine_constructor;
+    eauto 3 using expr_refine_compose, exprs_refine_compose.
 Qed.
 Lemma ectx_refine_compose
     Γ τs α1 α2 f1 f2 Δ1 Δ2 Δ3 E1 E2 E3 τlr τlr' τlr'' :

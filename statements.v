@@ -404,7 +404,3 @@ Fixpoint ctx_catches {K} (k : ctx K) : nat :=
   | (CStmt _ | CLocal _ _) :: k => ctx_catches k
   | _ => 0
   end.
-
-Lemma locals_app {K} (k1 k2 k3 : ctx K) :
-  locals k2 = locals k3 → locals (k1 ++ k2) = locals (k1 ++ k3).
-Proof. induction k1 as [|[] ?]; intros; simpl; auto with f_equal. Qed.

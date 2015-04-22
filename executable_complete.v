@@ -21,7 +21,7 @@ Lemma ehexec_complete Γ m1 m2 k e1 e2 τlr :
   (**i 1.) *) (e2', m2') ∈ ehexec Γ k e1 m1 ∧
   (**i 2.) *) e2' ⊑{(Γ,locals k.*2),false,f@'{m2'}↦'{m2}} e2 : τlr ∧
   (**i 3.) *) m2' ⊑{Γ,false,f} m2 ∧
-  (**i 4.) *) meminj_extend meminj_id f ('{m1}) ('{m1}).
+  (**i 4.) *) meminj_extend meminj_id f '{m1} '{m1}.
 Proof.
   intros ? Hm1 Hρ He1 p. destruct (ehstep_preservation Γ m1 m2
     (locals k) e1 e2 τlr) as (Hm2&He2&Hm); auto.
@@ -47,19 +47,19 @@ Proof.
     eauto using cmap_refine_id', perm_full_unshared, perm_full_mapped.
   eexists f, _, _; split_ands; [solve_elem_of| | |]; eauto.
   refine_constructor; eauto using lockset_valid_weaken, mem_alloc_new_forward'.
-  * eapply locks_refine_weaken with false meminj_id ('{m}) ('{m});
+  * eapply locks_refine_weaken with false meminj_id '{m} '{m};
       eauto using locks_refine_id, mem_alloc_new_forward', option_eq_1.
   * do 4 refine_constructor;
       eauto using addr_top_array_refine, mem_alloc_new_index_typed'.
 Qed.
-Lemma cexec_complete Γ δ S1 S2 g :
-  ✓ Γ → ✓{Γ,'{SMem S1}} δ → Γ ⊢ S1 : g → Γ\ δ ⊢ₛ S1 ⇒ S2 → ∃ f S2',
+Lemma cexec_complete Γ δ S1 S2 σf :
+  ✓ Γ → ✓{Γ,'{SMem S1}} δ → Γ ⊢ S1 : σf → Γ\ δ ⊢ₛ S1 ⇒ S2 → ∃ f S2',
   (**i 1.) *) Γ\ δ ⊢ₛ S1 ⇒ₑ S2' ∧
-  (**i 2.) *) S2' ⊑{Γ,false,f} S2 : g ∧
-  (**i 3.) *) meminj_extend meminj_id f ('{SMem S1}) ('{SMem S1}).
+  (**i 2.) *) S2' ⊑{Γ,false,f} S2 : σf ∧
+  (**i 3.) *) meminj_extend meminj_id f '{SMem S1} '{SMem S1}.
 Proof.
   intros ? Hδ1 HS1 p.
-  destruct (cstep_preservation Γ δ S1 S2 g) as [HS2 Hδ2]; auto.
+  destruct (cstep_preservation Γ δ S1 S2 σf) as [HS2 Hδ2]; auto.
   revert Hδ1 HS1 Hδ2 HS2. case p; clear p; try by (
     intros; simpl; repeat match goal with
     | _ => setoid_rewrite collection_bind_singleton
@@ -69,7 +69,7 @@ Proof.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
     destruct Ei; simpl; eauto.
   * intros m1 m2 k E e1 e2 ?? (τlr&Heτlr&?&?) ? _; simpl in *.
-    typed_inversion Heτlr; edestruct (ectx_subst_typed_rev Γ ('{m1})
+    typed_inversion Heτlr; edestruct (ectx_subst_typed_rev Γ '{m1}
       (locals k.*2) E e1) as (τlr&?&?); eauto.
     edestruct (ehexec_complete Γ m1 m2 k e1 e2) as (f&e2'&m2'&?&?&?&?); eauto.
     exists f (State k (Expr (subst E e2')) m2'); split_ands; auto.
@@ -114,7 +114,7 @@ Proof.
     set (os' := fresh_list (length vs) (dom indexset m)) in *.
     assert (Forall_fresh (dom indexset m) os') by (by apply Forall_fresh_list).
     assert (length os' = length vs) by (by apply fresh_list_length).
-    edestruct (funenv_lookup Γ ('{m}) δ h)
+    edestruct (funenv_lookup Γ '{m} δ h)
       as (?&?&?&?&?&?&?&?); eauto; simplify_equality'.
     edestruct (mem_alloc_list_refine' Γ false meminj_id m m os' os vs vs) as
       (f&?&?&?); eauto using cmap_refine_id', vals_refine_id.
@@ -126,7 +126,7 @@ Proof.
     eleft; split_ands; simpl; repeat refine_constructor;
       eauto using mem_alloc_list_index_typed.
     + rewrite snd_zip by solve_length.
-      eapply (stmt_refine_weaken _ false false meminj_id _ ('{m}));
+      eapply (stmt_refine_weaken _ false false meminj_id _ '{m});
         eauto using stmt_refine_id, mem_alloc_list_forward.
     + eauto 8 using ctx_refine_weaken, ctx_refine_id, mem_alloc_list_forward.
   * intros m k l ????; simpl; rewrite decide_True by solve_elem_of.
@@ -148,35 +148,35 @@ Proof.
     { by destruct d eqn:?; simplify_option_equality; try case_match; eauto. }
     eleft; split_ands; simpl; repeat refine_constructor;
       eauto using mem_alloc_new_index_typed'.
-    + eapply (stmt_refine_weaken _ false false meminj_id _ ('{m}));
+    + eapply (stmt_refine_weaken _ false false meminj_id _ '{m});
         eauto using stmt_refine_id, mem_alloc_new_forward'.
-    + eapply (direction_refine_weaken _ false false meminj_id _ ('{m}));
+    + eapply (direction_refine_weaken _ false false meminj_id _ '{m});
         eauto using direction_refine_id, mem_alloc_new_forward'.
     + eauto 8 using ctx_refine_weaken, ctx_refine_id, mem_alloc_new_forward'.
   * intros m k d o τ s ?????.
     eexists meminj_id, _; split_ands; eauto using state_refine_id.
     by destruct d; simplify_option_equality; try case_match; eauto.
 Qed.
-Lemma cexec_complete_steps Γ δ S1 S2 g :
-  ✓ Γ → ✓{Γ,'{SMem S1}} δ → Γ ⊢ S1 : g → Γ\ δ ⊢ₛ S1 ⇒* S2 →
+Lemma cexec_complete_steps Γ δ S1 S2 σf :
+  ✓ Γ → ✓{Γ,'{SMem S1}} δ → Γ ⊢ S1 : σf → Γ\ δ ⊢ₛ S1 ⇒* S2 →
   ∃ f S2',
   (**i 1.) *) Γ\ δ ⊢ₛ S1 ⇒ₑ* S2' ∧
-  (**i 2.) *) S2' ⊑{Γ,false,f} S2 : g ∧
-  (**i 3.) *) meminj_extend meminj_id f ('{SMem S1}) ('{SMem S1}).
+  (**i 2.) *) S2' ⊑{Γ,false,f} S2 : σf ∧
+  (**i 3.) *) meminj_extend meminj_id f '{SMem S1} '{SMem S1}.
 Proof.
   intros ???; revert S2. apply rtc_ind_r.
   { eexists meminj_id, S1.
     repeat constructor (by eauto using state_refine_id). }
   intros S2' S3' ?? (f&S2&?&?&?).
-  destruct (csteps_preservation Γ δ S1 S2 g),
-    (csteps_preservation Γ δ S1 S2' g); auto using cexecs_sound.
+  destruct (csteps_preservation Γ δ S1 S2 σf),
+    (csteps_preservation Γ δ S1 S2' σf); auto using cexecs_sound.
   assert (¬is_undef_state S2).
   { intros ?. destruct (cnf_undef_state Γ δ S2');
       eauto using state_refine_undef, state_refine_inverse. }
-  destruct (cstep_refine Γ δ δ false f S2 S2' S3' g)
+  destruct (cstep_refine Γ δ δ false f S2 S2' S3' σf)
     as (f'&S3&?&?&?); auto.
   { eauto using funenv_refine_weaken, funenv_refine_id, state_refine_mem. }
-  destruct (cexec_complete Γ δ S2 S3 g) as (f''&S3''&?&?&?);
+  destruct (cexec_complete Γ δ S2 S3 σf) as (f''&S3''&?&?&?);
     eauto using state_refine_typed_l, funenv_valid_weaken.
   exists (f' ◎ f'') S3''. rewrite <-(orb_diag false).
   split_ands; eauto using state_refine_compose,

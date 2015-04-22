@@ -66,7 +66,7 @@ Instance cmap_ops {K A : Set} `{∀ k1 k2 : K, Decision (k1 = k2),
     CMap (difference_with (λ x y,
       '(w1,β) ← maybe2 Obj x; '(w2,_) ← maybe2 Obj y;
       let w := w1 ∖ w2 in guard (¬ctree_empty w); Some (Obj w β)) m1 m2);
-  sep_half m := let (m) := m in CMap (cmap_elem_map ½ <$> m);
+  sep_half m := let (m) := m in CMap (cmap_elem_map (ctree_map half) <$> m);
   sep_valid m :=
     let (m) := m in
     map_Forall (λ _,
@@ -172,22 +172,24 @@ Proof.
       ctree_union_valid, ctree_splittable_union, ctree_positive_l.
   * sep_unfold; intros [m1] [m2] Hm Hm' o w1 ?; specialize (Hm o);
       specialize (Hm' o); simplify_option_equality.
-    destruct w1, (m2 !! o) as [[]|]; naive_solver
+    destruct w1, (m2 !! o) as [[]|]; try naive_solver
       eauto using ctree_disjoint_difference,
-      ctree_disjoint_valid_l, ctree_splittable_weaken.
+      ctree_disjoint_valid_l, seps_splittable_weaken, ctree_flatten_subseteq.
   * sep_unfold; intros [m] Hm o; specialize (Hm o); rewrite lookup_fmap.
-    destruct (m !! o) as [[]|]; simpl; try naive_solver
-      auto using ctree_half_empty_rev, ctree_disjoint_half.
+    destruct (m !! o) as [[]|]; simpl; rewrite ?ctree_flatten_map;
+      naive_solver eauto using seps_half_empty_rev, sep_disjoint_half',
+      (ctree_disjoint_map sep_splittable), sep_unmapped_half_1.
   * sep_unfold; intros [m] Hm; f_equal; apply map_eq; intros o;
       specialize (Hm o); rewrite lookup_union_with, lookup_fmap.
-    destruct (m !! o) as [[]|]; f_equal';
-      naive_solver auto using ctree_union_half with f_equal.
+    destruct (m !! o) as [[]|]; repeat f_equal'.
+    by rewrite ctree_union_map, (ctree_map_id sep_splittable)
+      by naive_solver eauto using sep_union_half.
   * sep_unfold; intros [m1] [m2] Hm Hm'; f_equal; apply map_eq; intros o;
       rewrite lookup_fmap, !lookup_union_with, !lookup_fmap;
       specialize (Hm o); specialize (Hm' o); rewrite lookup_union_with in Hm'.
     destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|];
-      simplify_equality'; f_equal; auto.
-    naive_solver auto using ctree_union_half_distr with f_equal.
+      simplify_equality'; repeat f_equal;
+      naive_solver auto using ctree_union_half_distr.
   * sep_unfold; intros [m] ????; simplify_map_equality'.
   * done.
   * sep_unfold; intros [m1] [m2] ? Hm; simplify_equality'. apply map_empty.

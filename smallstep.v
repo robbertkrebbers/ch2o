@@ -7,26 +7,6 @@ invert reduction steps. These tactics use the hint database [cstep] to solve
 side-conditions. *)
 Require Export operations state.
 
-(** * Semantics of assignments *)
-(** The judgment [assign_sem Γ m a v ass v' va'] describes the resulting value
-[v'] of an assignment [%{Ω1} a ::={ass} #{Ω2} v], and the value [va'] that needs
-to be stored at [a] in [m]. *)
-Inductive assign_sem `{Env K} (Γ : env K) (m : mem K)
-     (a : addr K) (v : val K) : assign → val K → val K → Prop :=
-  | Assign_sem :
-     val_cast_ok Γ m (type_of a) v →
-     let v' := val_cast (type_of a) v in assign_sem Γ m a v Assign v' v'
-  | PreOp_sem op va :
-     m !!{Γ} a = Some va → val_binop_ok Γ m op va v →
-     val_cast_ok Γ m (type_of a) (val_binop Γ op va v) →
-     let v' := val_cast (type_of a) (val_binop Γ op va v) in
-     assign_sem Γ m a v (PreOp op) v' v'
-  | PostOp_sem op va :
-     m !!{Γ} a = Some va → val_binop_ok Γ m op va v →
-     val_cast_ok Γ m (type_of a) (val_binop Γ op va v) →
-     let v' := val_cast (type_of a) (val_binop Γ op va v) in
-     assign_sem Γ m a v (PostOp op) va v'.
-
 (** * Head reduction for expressions *)
 (** We define head reduction for all redexes whose reduction is local (i.e.
 does not change the current program context). Only function calls are non-local,
@@ -35,7 +15,8 @@ context on the program context. These will be included in the whole reduction
 relation [cstep].*)
 (* The level is just below logical negation (whose level is 75). *)
 Reserved Notation "Γ \ ρ ⊢ₕ e1 , m1 ⇒ e2 , m2"
-  (at level 74, format "Γ \  ρ  '⊢ₕ' '['  e1 ,  m1  ⇒ '/'  e2 ,  m2 ']'").
+  (at level 74, ρ at next level,
+   format "Γ \  ρ  '⊢ₕ' '['  e1 ,  m1  ⇒ '/'  e2 ,  m2 ']'").
 Inductive ehstep `{Env K} (Γ : env K) (ρ : stack K) :
      expr K → mem K → expr K → mem K → Prop :=
   | ehstep_var x τ o m :
@@ -43,11 +24,11 @@ Inductive ehstep `{Env K} (Γ : env K) (ρ : stack K) :
      Γ\ ρ ⊢ₕ var x, m ⇒ %(addr_top o τ), m
   | ehstep_rtol m Ω a :
      index_alive' m (addr_index a) →
-     Γ\ ρ ⊢ₕ .* (#{Ω} (ptrV (Ptr a))), m ⇒ %{Ω} a, m
+     Γ\ ρ ⊢ₕ .* (#{Ω} ptrV (Ptr a)), m ⇒ %{Ω} a, m
   | ehstep_rofl m Ω a :
-     Γ\ ρ ⊢ₕ & (%{Ω} a), m ⇒ #{Ω} (ptrV (Ptr a)), m
-  | ehstep_assign m ass Ω1 Ω2 a v v' va :
-     mem_writable Γ a m → assign_sem Γ m a v ass v' va →
+     Γ\ ρ ⊢ₕ & (%{Ω} a), m ⇒ #{Ω} ptrV (Ptr a), m
+  | ehstep_assign m ass Ω1 Ω2 a v va v' :
+     mem_writable Γ a m → assign_sem Γ m a v ass va v' →
      Γ\ ρ ⊢ₕ %{Ω1} a ::={ass} #{Ω2} v, m ⇒
              #{lock_singleton Γ a ∪ Ω1 ∪ Ω2} v', mem_lock Γ a (<[a:=va]{Γ}>m)
   | ehstep_load m Ω a v :
@@ -59,36 +40,36 @@ Inductive ehstep `{Env K} (Γ : env K) (ρ : stack K) :
      v !!{Γ} rs = Some v' → Γ\ ρ ⊢ₕ #{Ω} v #> rs, m ⇒ #{Ω} v', m
   | ehstep_alloc_NULL m Ω τi τ n :
      alloc_can_fail → Z.to_nat n ≠ 0 →
-     Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒ #{Ω} (ptrV (NULL (TType τ))), m
+     Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} intV{τi} n), m ⇒ #{Ω} ptrV (NULL (TType τ)), m
   | ehstep_alloc m Ω o τi τ n :
      o ∉ dom indexset m → Z.to_nat n ≠ 0 →
-     Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} (intV{τi} n)), m ⇒
-             #{Ω} (ptrV (Ptr (addr_top_array o τ n))),
+     Γ\ ρ ⊢ₕ alloc{τ} (#{Ω} intV{τi} n), m ⇒
+             #{Ω} ptrV (Ptr (addr_top_array o τ n)),
              mem_alloc Γ o true perm_full (val_new Γ (τ.[Z.to_nat n])) m
   | ehstep_free m Ω a :
      mem_freeable a m →
      Γ\ ρ ⊢ₕ free (%{Ω} a), m ⇒ #{Ω} voidV, mem_free (addr_index a) m
   | ehstep_unop op Ω v m :
      val_unop_ok m op v →
-     Γ\ ρ ⊢ₕ @{op} #{Ω} v, m ⇒ #{Ω} (val_unop op v), m
+     Γ\ ρ ⊢ₕ @{op} #{Ω} v, m ⇒ #{Ω} val_unop op v, m
   | ehstep_binop op m Ω1 Ω2 v1 v2 :
      val_binop_ok Γ m op v1 v2 →
-     Γ\ ρ ⊢ₕ #{Ω1} v1 @{op} #{Ω2} v2, m ⇒ #{Ω1 ∪ Ω2} (val_binop Γ op v1 v2), m
+     Γ\ ρ ⊢ₕ #{Ω1} v1 @{op} #{Ω2} v2, m ⇒ #{Ω1 ∪ Ω2} val_binop Γ op v1 v2, m
   | ehstep_if_true m Ω vb e1 e2 :
      base_val_branchable m vb → ¬base_val_is_0 vb →
-     Γ\ ρ ⊢ₕ if{#{Ω} (VBase vb)} e1 else e2, m ⇒ e1, mem_unlock Ω m
+     Γ\ ρ ⊢ₕ if{#{Ω} VBase vb} e1 else e2, m ⇒ e1, mem_unlock Ω m
   | ehstep_if_false m Ω vb e1 e2 :
      base_val_branchable m vb → base_val_is_0 vb →
-     Γ\ ρ ⊢ₕ if{#{Ω} (VBase vb)} e1 else e2, m ⇒ e2, mem_unlock Ω m
+     Γ\ ρ ⊢ₕ if{#{Ω} VBase vb} e1 else e2, m ⇒ e2, mem_unlock Ω m
   | ehstep_comma m Ω ν e2 :
      Γ\ ρ ⊢ₕ %#{Ω} ν,,e2, m ⇒ e2, mem_unlock Ω m
   | ehstep_cast m τ Ω v :
      val_cast_ok Γ m (TType τ) v →
-     Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} (val_cast (TType τ) v), m
+     Γ\ ρ ⊢ₕ cast{τ} (#{Ω} v), m ⇒ #{Ω} val_cast (TType τ) v, m
   | ehstep_insert m r v1 Ω1 v2 Ω2 :
      is_Some (v2 !!{Γ} r) →
      Γ\ ρ ⊢ₕ #[r:=#{Ω1} v1] (#{Ω2} v2), m ⇒
-             #{Ω1 ∪ Ω2} (val_alter Γ (λ _, v1) r v2), m
+             #{Ω1 ∪ Ω2} val_alter Γ (λ _, v1) r v2, m
 where "Γ \ ρ  ⊢ₕ e1 , m1 '⇒' e2 , m2" :=
   (@ehstep _ _ Γ ρ e1%E m1 e2%E m2) : C_scope.
 
@@ -96,11 +77,11 @@ where "Γ \ ρ  ⊢ₕ e1 , m1 '⇒' e2 , m2" :=
 is adapted from CompCert and is used to capture undefined behavior. If the
 whole expression contains a redex that is not safe, the semantics transitions
 to the [Undef] state. *)
-Reserved Notation "Γ \ ρ  '⊢ₕ' 'safe' e , m" (at level 74).
+Reserved Notation "Γ \ ρ  '⊢ₕ' 'safe' e , m" (at level 74, ρ at next level).
 Inductive ehsafe `{Env K} (Γ : env K) (ρ : stack K) : expr K → mem K → Prop :=
   | ehsafe_call Ω f τs τ Ωs vs m :
      length Ωs = length vs →
-     Γ \ ρ ⊢ₕ safe (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs), m
+     Γ \ ρ ⊢ₕ safe (call #{Ω} ptrV (FunPtr f τs τ) @ #{Ωs}* vs), m
   | ehsafe_step e1 m1 e2 m2 : Γ \ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → Γ \ ρ ⊢ₕ safe e1, m1
 where "Γ \ ρ  ⊢ₕ 'safe' e ,  m" := (@ehsafe _ _ Γ ρ e m) : C_scope.
 
@@ -108,7 +89,8 @@ where "Γ \ ρ  ⊢ₕ 'safe' e ,  m" := (@ehsafe _ _ Γ ρ e m) : C_scope.
 (** Small step reduction works by traversal of the focus. Each step the focus
 is executed, after which a transition to the next program state is performed. *)
 Reserved Notation "Γ \ δ ⊢ₛ S1 ⇒ S2"
-  (at level 74, format "Γ \  δ  ⊢ₛ  '[' S1  ⇒ '/'  S2 ']'").
+  (at level 74, δ at next level,
+   format "Γ \  δ  ⊢ₛ  '[' S1  ⇒ '/'  S2 ']'").
 Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
   (**i For simple statements: *)
   | cstep_skip m k :
@@ -137,7 +119,7 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
              State k (Expr (subst E e2)) m2
   | cstep_expr_call m k Ω f τs τ E Ωs vs :
      length Ωs = length vs →
-     let e := (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)%E in
+     let e := (call #{Ω} ptrV (FunPtr f τs τ) @ #{Ωs}* vs)%E in
      Γ\ δ ⊢ₛ State k (Expr (subst E e)) m ⇒
              State (CFun E :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m)
   | cstep_expr_undef m k (E : ectx K) e :
@@ -154,15 +136,15 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
              State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m)
   | cstep_expr_if_true m k e Ω vb s1 s2 :
      base_val_branchable m vb → ¬base_val_is_0 vb →
-     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} (VBase vb))) m ⇒
+     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} VBase vb)) m ⇒
              State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m)
   | cstep_expr_if_false m k e Ω vb s1 s2 :
      base_val_branchable m vb → base_val_is_0 vb →
-     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} (VBase vb))) m ⇒
+     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} VBase vb)) m ⇒
              State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)
   | cstep_expr_if_indet m k e Ω vb s1 s2 :
      ¬base_val_branchable m vb →
-     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} (VBase vb))) m ⇒
+     Γ\ δ ⊢ₛ State (CExpr e (if{□} s1 else s2) :: k) (Expr (#{Ω} VBase vb)) m ⇒
              State k (Undef (UndefBranch (if{□} s1 else s2) Ω (VBase vb))) m
   | cstep_switch_case m k e Ω τi x s :
      Some x ∈ cases s →
@@ -179,7 +161,7 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
              State k (Stmt ↗ (switch{e} s)) (mem_unlock Ω m)
   | cstep_switch_indet m k e Ω vb s :
      ¬base_val_branchable m vb →
-     Γ\ δ ⊢ₛ State (CExpr e (switch{□} s) :: k) (Expr (#{Ω} (VBase vb))) m ⇒
+     Γ\ δ ⊢ₛ State (CExpr e (switch{□} s) :: k) (Expr (#{Ω} VBase vb)) m ⇒
              State k (Undef (UndefBranch (switch{□} s) Ω (VBase vb))) m
 
   (**i For compound statements: *)
@@ -278,311 +260,10 @@ where "Γ \ δ  ⊢ₛ S1 ⇒ S2" := (@cstep _ _ Γ δ S1%S S2%S) : C_scope.
 
 (** The reflexive transitive closure. *)
 Notation "Γ \ δ ⊢ₛ S1 ⇒* S2" := (rtc (cstep Γ δ) S1 S2)
-  (at level 74, format "Γ \  δ  ⊢ₛ '['  S1  '⇒*' '/'  S2 ']'") : C_scope.
-(** Reduction paths of bounded length. *)
-Notation "Γ \ δ ⊢ₛ S1 ⇒^ n S2" := (bsteps (cstep Γ δ) n S1 S2)
-  (at level 74, n at level 1,
-   format "Γ \  δ  ⊢ₛ '['  S1  '⇒^' n '/'  S2 ']'") : C_scope.
+  (at level 74, δ at next level,
+   format "Γ \  δ  ⊢ₛ '['  S1  '⇒*' '/'  S2 ']'") : C_scope.
 
-(** * Restricting small step reduction *)
-(** To give a model of our axiomatic semantics (see the file [axiomatic]) we
-need to restrict the traversal through the program context to remain below a
-certain context. *)
-Definition cstep_in_ctx `{Env K} Γ δ k : relation (state K) := λ S1 S2,
-  Γ \ δ ⊢ₛ S1 ⇒ S2 ∧ k `suffix_of` SCtx S2.
-Notation "Γ \ δ ⊢ₛ S1 ⇒{ k } S2" := (cstep_in_ctx Γ δ k S1 S2)
-  (at level 74,
-   format "Γ \  δ  ⊢ₛ '['  S1  '/' '⇒{' k '}' '/'  S2 ']'") : C_scope.
-Notation "Γ \ δ ⊢ₛ S1 ⇒{ k }* S2" := (rtc (cstep_in_ctx Γ δ k) S1 S2)
-  (at level 74,
-   format "Γ \  δ  ⊢ₛ '['  S1  '/' '⇒{' k '}*' '/'  S2 ']'") : C_scope.
-Notation "Γ \ δ ⊢ₛ S1 ⇒{ k }^ n S2" := (bsteps (cstep_in_ctx Γ δ k) n S1 S2)
-  (at level 74, n at level 1,
-   format "Γ \ δ  ⊢ₛ '['  S1  '/' '⇒{' k '}^' n '/'  S2 ']'") : C_scope.
-
-(** * Inversions *)
-(** Coq's [inversion] tactic is rather slow for large inductive types (as our
-[cstep]). We therefore define some special purpose inversion schemes. The way
-of defining these schemes is based on small inversions (Monin, 2010). *)
-Section inversion.
-  Context `{Env K} (Γ : env K) (δ : funenv K).
-
-  Lemma cstep_focus_inv (P : state K → Prop) S1 S2 :
-    Γ\ δ ⊢ₛ S1 ⇒ S2 →
-    let 'State k φ m := S1 in
-    match φ with
-    | Stmt ↘ skip => P (State k (Stmt ↗ skip) m) → P S2
-    | Stmt ↘ (goto l) => P (State k (Stmt (↷ l) (goto l)) m) → P S2
-    | Stmt ↘ (throw n) => P (State k (Stmt (↑ n) (throw n)) m) → P S2
-    | Stmt ↘ (label l) => P (State k (Stmt ↗ (label l)) m) → P S2
-    | Stmt ↘ (scase mx) => P (State k (Stmt ↗ (scase mx)) m) → P S2
-    | Stmt ↘ (! e) => P (State (CExpr e (! □) :: k) (Expr e) m) → P S2
-    | Stmt ↘ (ret e) => P (State (CExpr e (ret □) :: k) (Expr e) m) → P S2
-    | Stmt ↘ (loop s) => P (State (CStmt (loop □) :: k) (Stmt ↘ s) m) → P S2
-    | Stmt ↘ (if{e} s1 else s2) =>
-       P (State (CExpr e (if{□} s1 else s2) :: k) (Expr e) m) → P S2
-    | Stmt ↘ (switch{e} s) =>
-       P (State (CExpr e (switch{□} s) :: k) (Expr e) m) → P S2
-    | Expr e =>
-       (∀ Ω v k' e',
-         e = (#{Ω} v)%E → k = CExpr e' (! □) :: k' →
-         P (State k' (Stmt ↗ (! e')) (mem_unlock Ω m))) →
-       (∀ Ω v k' e',
-         e = (#{Ω} v)%E → k = CExpr e' (ret □) :: k' →
-         P (State k' (Stmt (⇈ v) (ret e')) (mem_unlock Ω m))) →
-       (∀ Ω vb k' e' s1 s2,
-         e = (#{Ω} (VBase vb))%E → base_val_branchable m vb → ¬base_val_is_0 vb →
-         k = CExpr e' (if{□} s1 else s2) :: k' →
-         P (State (CStmt (if{e'} □ else s2) :: k')
-           (Stmt ↘ s1) (mem_unlock Ω m))) →
-       (∀ Ω vb k' e' s1 s2,
-         e = (#{Ω} (VBase vb))%E → base_val_branchable m vb → base_val_is_0 vb →
-         k = CExpr e' (if{□} s1 else s2) :: k' →
-         P (State (CStmt (if{e'} s1 else □) :: k')
-           (Stmt ↘ s2) (mem_unlock Ω m))) →
-       (∀ Ω vb k' e' s1 s2,
-         e = (#{Ω} (VBase vb))%E → ¬base_val_branchable m vb →
-         k = CExpr e' (if{□} s1 else s2) :: k' →
-         P (State k' (Undef (UndefBranch (if{□} s1 else s2) Ω (VBase vb))) m)) →
-       (∀ Ω τi x k' e' s,
-         e = (#{Ω} (intV{τi} x))%E → Some x ∈ cases s →
-         k = CExpr e' (switch{□} s) :: k' →
-         P (State (CStmt (switch{e'} □) :: k')
-                  (Stmt (↓ (Some x)) s) (mem_unlock Ω m))) →
-       (∀ Ω τi x k' e' s,
-         e = (#{Ω} (intV{τi} x))%E → Some x ∉ cases s → None ∈ cases s →
-         k = CExpr e' (switch{□} s) :: k' →
-         P (State (CStmt (switch{e'} □) :: k')
-                  (Stmt (↓ None) s) (mem_unlock Ω m))) →
-       (∀ Ω τi x k' e' s,
-         e = (#{Ω} (intV{τi} x))%E → Some x ∉ cases s → None ∉ cases s →
-         k = CExpr e' (switch{□} s) :: k' →
-         P (State k' (Stmt ↗ (switch{e'} s)) (mem_unlock Ω m))) →
-       (∀ Ω vb k' e' s,
-         e = (#{Ω} (VBase vb))%E → ¬base_val_branchable m vb →
-         k = CExpr e' (switch{□} s) :: k' →
-         P (State k' (Undef (UndefBranch (switch{□} s) Ω (VBase vb))) m)) →
-       (∀ (E : ectx K) e1 e2 m2,
-         e = subst E e1 → Γ\ locals k ⊢ₕ e1, m ⇒ e2, m2 →
-         P (State k (Expr (subst E e2)) m2)) →
-       (∀ (E : ectx K) Ω f τs τ Ωs vs,
-         e = subst E (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)%E →
-         length Ωs = length vs →
-         P (State (CFun E :: k)
-           (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m))) →
-       (∀ (E : ectx K) e1,
-         e = subst E e1 → is_redex e1 → ¬Γ\ locals k ⊢ₕ safe e1, m →
-         P (State k (Undef (UndefExpr E e1)) m)) →
-       P S2
-    | Return f v =>
-       (∀ k' E,
-         k = CFun E :: k' → P (State k' (Expr (subst E (#v)%E)) m)) →
-       P S2
-    | Stmt ↘ (local{τ} s) =>
-       (∀ o,
-         o ∉ dom indexset m →
-         P (State (CLocal o τ :: k) (Stmt ↘ s)
-           (mem_alloc Γ o false perm_full (val_new Γ τ) m))) →
-       P S2
-    | Stmt ↘ (s1 ;; s2) => P (State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m) → P S2
-    | Stmt ↘ (catch s) =>
-       P (State (CStmt (catch □) :: k) (Stmt ↘ s) m) → P S2
-    | Stmt ↗ s =>
-       (∀ k' o τ,
-         k = CLocal o τ :: k' →
-         P (State k' (Stmt ↗ (local{τ} s)) (mem_free o m))) →
-       (∀ k' s2,
-         k = CStmt (□ ;; s2) :: k' →
-         P (State (CStmt (s ;; □) :: k') (Stmt ↘ s2) m)) →
-       (∀ k' s1,
-         k = CStmt (s1 ;; □) :: k' → P (State k' (Stmt ↗ (s1 ;; s)) m)) →
-       (∀ k',
-         k = CStmt (catch □) :: k' → P (State k' (Stmt ↗ (catch s)) m)) →
-       (∀ k',
-         k = CStmt (loop □) :: k' → P (State k' (Stmt ↘ (loop s)) m)) →
-       (∀ k' e s2,
-         k = CStmt (if{e} □ else s2) :: k' →
-         P (State k' (Stmt ↗ (if{e} s else s2)) m)) →
-       (∀ k' e s1,
-         k = CStmt (if{e} s1 else □) :: k' →
-         P (State k' (Stmt ↗ (if{e} s1 else s)) m)) →
-       (∀ k' e,
-         k = CStmt (switch{e} □) :: k' →
-         P (State k' (Stmt ↗ (switch{e} s)) m)) →
-       (∀ k' f oτs,
-         k = CParams f oτs :: k' →
-         P (State k' (Return f voidV) (foldr mem_free m (oτs.*1)))) →
-       P S2
-    | Call f vs =>
-       (∀ s os,
-         δ !! f = Some s → Forall_fresh (dom indexset m) os →
-         length os = length vs →
-         P (State (CParams f (zip os (type_of <$> vs)) :: k)
-           (Stmt ↘ s) (mem_alloc_list Γ (zip os vs) m))) →
-       P S2
-    | Stmt (⇈ v) s =>
-       (∀ k' f oτs,
-         k = CParams f oτs :: k' →
-         P (State k' (Return f v) (foldr mem_free m (oτs.*1)))) →
-       (∀ k' o τ,
-         k = CLocal o τ :: k' →
-         P (State k' (Stmt (⇈ v) (local{τ} s)) (mem_free o m))) →
-       (∀ k' Es,
-         k = CStmt Es :: k' → P (State k' (Stmt (⇈ v) (subst Es s)) m)) →
-       P S2
-    | Stmt (↑ n) s =>
-       (∀ k',
-         k = CStmt (catch □) :: k' → n = 0 → 
-         P (State k' (Stmt ↗ (catch s)) m)) →
-       (∀ k' n',
-         k = CStmt (catch □) :: k' → n = S n' →
-         P (State k' (Stmt (↑ n') (catch s)) m)) →
-       (∀ k' o τ,
-         k = CLocal o τ :: k' →
-         P (State k' (Stmt (↑ n) (local{τ} s)) (mem_free o m))) →
-       (∀ k' Es,
-         k = CStmt Es :: k' → Es ≠ catch □ →
-         P (State k' (Stmt (↑ n) (subst Es s)) m)) →
-       P S2
-    | Stmt (↷ l) s =>
-       (s = label l → P (State k (Stmt ↗ s) m)) →
-       (∀ s' o τ,
-         s = local{τ} s' → l ∈ labels s → o ∉ dom indexset m →
-         P (State (CLocal o τ :: k) (Stmt (↷ l) s')
-           (mem_alloc Γ o false perm_full (val_new Γ τ) m))) →
-       (∀ k' o τ,
-         k = CLocal o τ :: k' → l ∉ labels s →
-         P (State k' (Stmt (↷ l) (local{τ} s)) (mem_free o m))) →
-       (∀ s' Es,
-         s = subst Es s' → l ∈ labels s' →
-         P (State (CStmt Es :: k) (Stmt (↷ l) s') m)) →
-       (∀ k' Es,
-         k = CStmt Es :: k' → l ∉ labels s →
-         P (State k' (Stmt (↷ l) (subst Es s)) m)) →
-       P S2
-    | Stmt (↓ mx) s =>
-       (s = scase mx → P (State k (Stmt ↗ s) m)) →
-       (∀ s' o τ,
-         s = local{τ} s' → mx ∈ cases s → o ∉ dom indexset m →
-         P (State (CLocal o τ :: k) (Stmt (↓ mx) s')
-           (mem_alloc Γ o false perm_full (val_new Γ τ) m))) →
-       (∀ s' Es,
-         s = subst Es s' → maybe CSwitch Es = None → mx ∈ cases s' →
-         P (State (CStmt Es :: k) (Stmt (↓ mx) s') m)) →
-       P S2
-    | Undef _ => P S2
-    end.
-  Proof.
-    intros p; case p; simpl; eauto 2.
-    * by intros ?? [] ?; simpl; eauto.
-    * by intros ?? []; simpl; eauto.
-    * by intros ?? []; simpl; eauto.
-  Qed.
-  Lemma cstep_expr_inv (P : state K → Prop) m k Ek Ω v S2 :
-    Γ\ δ ⊢ₛ State (Ek :: k) (Expr (#{Ω} v)) m ⇒ S2 →
-    match Ek with
-    | CExpr e (! □) =>
-       P (State k (Stmt ↗ (! e)) (mem_unlock Ω m)) → P S2
-    | CExpr e (ret □) =>
-       P (State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m)) → P S2
-    | CExpr e (if{□} s1 else s2) =>
-      (∀ vb,
-        v = VBase vb → base_val_branchable m vb → ¬base_val_is_0 vb →
-        P (State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m))) →
-      (∀ vb,
-        v = VBase vb → base_val_branchable m vb → base_val_is_0 vb →
-        P (State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m))) →
-      (∀ vb,
-        v = VBase vb → ¬base_val_branchable m vb →
-        P (State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m)) → P S2
-    | CExpr e (switch{□} s) =>
-      (∀ τi x,
-        v = intV{τi} x → Some x ∈ cases s →
-        P (State (CStmt (switch{e} □) :: k)
-                 (Stmt (↓ (Some x)) s) (mem_unlock Ω m))) →
-      (∀ τi x,
-        v = intV{τi} x → Some x ∉ cases s → None ∈ cases s →
-        P (State (CStmt (switch{e} □) :: k)
-                        (Stmt (↓ None) s) (mem_unlock Ω m))) →
-      (∀ τi x,
-        v = intV{τi} x → Some x ∉ cases s → None ∉ cases s →
-        P (State k (Stmt ↗ (switch{e} s)) (mem_unlock Ω m))) →
-      (∀ vb s,
-        v = VBase vb → ¬base_val_branchable m vb →
-        P (State k (Undef (UndefBranch (switch{□} s) Ω (VBase vb))) m)) → P S2
-    | _ => P S2
-    end.
-  Proof.
-    intros p. pattern S2.
-    apply (cstep_focus_inv _ _ _ p);
-      try solve [intros; simplify_equality; eauto].
-    * intros Ee e1 e2 m2 Hv p'. simplify_list_subst_equality Hv. inversion p'.
-    * intros Ee Ω' f τs τ Ωs vs Hv. simplify_list_subst_equality Hv.
-    * intros Ee e1 Hv ? _. simplify_list_subst_equality Hv.
-      by destruct (EVal_not_redex Ω (inr v)).
-  Qed.
-  Lemma cstep_stmt_up_inv (P : state K → Prop) m k Ek s S2 :
-    Γ\ δ ⊢ₛ State (Ek :: k) (Stmt ↗ s) m ⇒ S2 →
-    match Ek with
-    | CStmt (□ ;; s2) => P (State (CStmt (s ;; □) :: k) (Stmt ↘ s2) m) → P S2
-    | CStmt (s1 ;; □) => P (State k (Stmt ↗ (s1 ;; s)) m) → P S2
-    | CStmt (catch □) => P (State k (Stmt ↗ (catch s)) m) → P S2
-    | CStmt (loop □) => P (State k (Stmt ↘ (loop s)) m) → P S2
-    | CStmt (if{e} □ else s2) => P (State k (Stmt ↗ (if{e} s else s2)) m) → P S2
-    | CStmt (if{e} s1 else □) => P (State k (Stmt ↗ (if{e} s1 else s)) m) → P S2
-    | CStmt (switch{e} □) => P (State k (Stmt ↗ (switch{e} s)) m) → P S2
-    | CLocal o τ => P (State k (Stmt ↗ (local{τ} s)) (mem_free o m)) → P S2
-    | CParams f oτs =>
-       P (State k (Return f voidV) (foldr mem_free m (oτs.*1))) → P S2
-    | _ => P S2
-    end.
-  Proof.
-    intros p. pattern S2. apply (cstep_focus_inv _ _ _ p);
-      intros; simplify_equality; eauto.
-  Qed.
-  Lemma cstep_stmt_top_inv (P : state K → Prop) m k Ek v s S2 :
-    Γ\ δ ⊢ₛ State (Ek :: k) (Stmt (⇈ v) s) m ⇒ S2 →
-    match Ek with
-    | CStmt Es => P (State k (Stmt (⇈ v) (subst Es s)) m) → P S2
-    | CParams f oτs =>
-       P (State k (Return f v) (foldr mem_free m (oτs.*1))) → P S2
-    | CLocal o τ => P (State k (Stmt (⇈ v) (local{τ} s)) (mem_free o m)) → P S2
-    | _ => P S2
-    end.
-  Proof.
-    intros p. pattern S2.
-    apply (cstep_focus_inv _ _ _ p); intros; simplify_equality; eauto.
-  Qed.
-End inversion.
-
-(** The previously defined inversion schemes all work for reductions of
-a different shape. We therefore define the tactic [fast_inv_cstep] to
-automatically pick the most suitable inversion scheme. It also performs the
-necessary generalization of assumptions. *)
-Ltac fast_inv_cstep H :=
-  match type of H with
-  | _\ _ ⊢ₛ ?S1 ⇒ ?S2 =>
-    try match S1 with
-    | State _ (Stmt ?d _) _ => is_var d; destruct d; try done
-    end;
-    is_var S2;
-    block_goal;
-    repeat match goal with
-    | H' : context [ S2 ] |- _ => var_neq H H'; revert H'
-    end;
-    pattern S2; first
-    [ apply (cstep_expr_inv _ _ _ _ _ _ _ _ _ H)
-    | apply (cstep_stmt_up_inv _ _ _ _ _ _ _ _  H)
-    | apply (cstep_stmt_top_inv _ _ _ _ _ _ _ _ _ H)
-    | apply (cstep_focus_inv _ _ _ _ _ H)];
-    clear H; intros; unblock_goal
-  end.
-(** Some reduction are not of a shape that fits any of the previously defined
-inversion schemes. The tactic [slow_inv_cstep] inverts a reduction using Coq's
-standard [inversion] tactic and works for reductions of all shapes. *)
-Ltac slow_inv_cstep H :=
-  match type of H with _\ _ ⊢ₛ ?S1 ⇒ ?S2 => inversion H; clear H end.
-
+(** * Inversion tactics *)
 Ltac inv_assign_sem :=
   match goal with
   | H : assign_sem _ _ _ _ _ _ _ |- _ => inversion H; subst; clear H
@@ -591,52 +272,6 @@ Ltac inv_ehstep :=
   match goal with
   | H : _ \ _ ⊢ₕ _, _ ⇒ _, _ |- _ => inversion H; subst; clear H
   end.
-
-(** The tactic [inv_cstep] inverts a reduction step and performs some clean up
-and discharges impossible cases afterwards. *)
-Tactic Notation "inv_cstep" hyp(H) :=
-  try match type of H with
-  | _\ _ ⊢ₛ _ ⇒{_} _ => destruct H as [H ?]
-  end;
-  match type of H with
-  | _\ _ ⊢ₛ ?S1 ⇒ ?S2 =>
-    (**i perform the actual inversion, and print a message (for debugging) in
-    case slow inversion has been used *)
-    first
-      [ fast_inv_cstep H
-      | idtac "slow inversion on" S1; slow_inv_cstep H ];
-
-    (**i clean up, and discharge impossible cases *)
-    simplify_list_subst_equality;
-    repeat match goal with
-    | _ => done
-    | H : suffix_of _ _ |- _ => progress (simpl in H; simplify_suffix_of)
-    | H : _\ _ ⊢ₕ #{_} _, _ ⇒ _, _ |- _ => by inversion H
-    | H : _\ _ ⊢ₕ %{_} _, _ ⇒ _, _ |- _ => by inversion H
-    | H : is_redex (#{_} _) |- _ => inversion H
-    | H : is_redex (%{_} _) |- _ => inversion H
-    | H : direction_in ?d ?s, _ : direction_out ?d ?s |- _ =>
-       by destruct (direction_in_out d s)
-    | H : _ ∉ labels (subst _ _) |- _ =>
-       rewrite sctx_item_subst_labels, not_elem_of_union in H; destruct H
-    end
-  end.
-Tactic Notation "inv_cstep" :=
-  match goal with
-  | H : _\ _ ⊢ₛ _ ⇒ _ |- _ => inv_cstep H
-  | H : _\ _ ⊢ₛ _ ⇒{_} _ |- _ => inv_cstep H
-  end.
-
-Tactic Notation "inv_csteps" hyp(H) "as" simple_intropattern(H2) :=
-  (* use a fresh name so we do not clear the wrong hypothesis *)
-  let H' := fresh in
-  rename H into H';
-  inversion H' as H2; clear H'; try subst.
-Tactic Notation "inv_csteps" hyp(H) := inv_csteps H as [].
-
-Tactic Notation "last_cstep" hyp(H) :=
-  let H' := fresh in
-  inv_csteps H as [| ???? H' ?]; [| solve [inv_cstep H']].
 
 (** * Step tactics *)
 Hint Constructors assign_sem ehstep ehsafe cstep : cstep.
@@ -676,7 +311,9 @@ function [expr_redexes], but whereas [expr_redexes] only includes
 subexpressions [e'] that are redexes, all subexpressions are included here. We
 omit function calls for the moment. *)
 Local Open Scope expr_scope.
+Ltac ranks_of_expr e := match type of e with expr ?K => K end.
 Ltac quote_expr e :=
+  let K := ranks_of_expr e in
   let rec go2 k1 e1 k2 e2 :=
     let  q1 := go k1 e1
     with q2 := go k2 e2
@@ -691,82 +328,33 @@ Ltac quote_expr e :=
     | load ?e => go (load □ :: k) e
     | ?e %> ?i => go (□ %> i :: k) e
     | ?e #> ?i => go (□ #> i :: k) e
+    | #[?r:=?e1] ?e2 => go2 (#[r:=□] e2 :: k) e1 (#[r:=e1] □ :: k) e2
     | free ?e => go (free □ :: k) e
     | alloc{?τ} ?e => go (alloc{τ} □ :: k) e
     | @{?op} ?e => go (@{op} □ :: k) e
     | ?e1 @{?op} ?e2 => go2 (□ @{op} e2 :: k) e1 (e1 @{op} □ :: k) e2
     | if{?e1} ?e2 else ?e3 => go (if{□} e2 else e3 :: k) e1
     | ?e1 ,, ?e2 => go (□ ,, e2 :: k) e1
-    | _ => constr:(@nil expr)
+    | _ => constr:(@nil (expr K))
     end in constr:(subst k e :: q)
-  in go (@nil ectx_item) e.
+  in go (@nil (ectx_item K)) e.
 Local Close Scope expr_scope.
 
 (** The [do_cstep] tactic is used to solve goals of the shape [δ ⊢ₛ S1 ⇒ S2] or
 as [δ ⊢ₛ S1 ⇒{k} S2] by applying a matching reduction rule, or by using the
 hint database [cstep]. *)
 Ltac do_cstep :=
-  let go1 := first
+  let go := first
     [ econstructor (solve [intuition eauto with cstep])
-    | solve [intuition eauto with cstep]]
-  in let go2 := idtac;
-    match goal with
-    | |- ?Γ\ ?δ ⊢ₛ State ?k (Stmt ?d ?s) ?m ⇒ ?S => iter
-      (fun s' => change (Γ\ δ ⊢ₛ State k (Stmt d s') m ⇒ S); go1)
-      (quote_stmt s)
-    | |- ?Γ\ ?δ ⊢ₛ State ?k (Expr ?e) ?m ⇒ ?S => iter
-      (fun e' => change (Γ\ δ ⊢ₛ State k (Expr e') m ⇒ S); go1)
-      (quote_expr e)
-    | _ => go1
-  end in
-  simpl;
+    | solve [intuition eauto with cstep]] in
   match goal with
-  | |- _\ _ ⊢ₛ _ ⇒{_} _ => first
-    [ split; [go2 | simpl; solve_suffix_of]
-    | solve [intuition eauto with cstep]]
-  | |- _\ _ ⊢ₛ _ ⇒ _ => go2
-  end.
-
-Ltac do_csteps :=
-  match goal with
-  | |- _\ _ ⊢ₛ _ ⇒* _ => apply rtc_refl
-  | |- _\ _ ⊢ₛ _ ⇒* _ => eapply rtc_l; [do_cstep | do_csteps]
-  | |- _\ _ ⊢ₛ _ ⇒{_}* _ => apply rtc_refl
-  | |- _\ _ ⊢ₛ _ ⇒{_}* _ => eapply rtc_l; [do_cstep | do_csteps]
-  | |- _\ _ ⊢ₛ _ ⇒^_ _ => apply bsteps_refl
-  | |- _\ _ ⊢ₛ _ ⇒^(S _) _ => eapply bsteps_l; [do_cstep | do_csteps]
-  | |- _\ _ ⊢ₛ _ ⇒{_}^(S _) _ => apply bsteps_S; do_csteps
-  | |- _\ _ ⊢ₛ _ ⇒{_}^_ _ => apply bsteps_refl
-  | |- _\ _ ⊢ₛ _ ⇒{_}^(S _) _ => eapply bsteps_l; [do_cstep | do_csteps]
-  | |- _\ _ ⊢ₛ _ ⇒{_}^(S _) _ => apply bsteps_S; do_csteps
-  | |- _ => solve [intuition eauto with cstep]
-  end.
-
-(** The [solve_cred] tactic solves goals of the shape [red (δ⇒ₛ) S] and
-[red (δ⇒ₛ{k}) S] by performing case distinctions on [S] and using the
-[do_cstep] tactic to perform the actual step. *)
-Ltac solve_cred :=
-  repeat match goal with
-  | |- red (cstep _ _) (State _ (Stmt ?d _) _) =>
-    is_var d; destruct d; try contradiction
-  | |- red (cstep_in_ctx _ _ _) (State _ (Stmt ?d _) _) =>
-    is_var d; destruct d; try contradiction
-  | H : ?l ∈ _ |- red (cstep _ _) (State _ (Stmt (↷ ?l) _) _) =>
-    progress decompose_elem_of H
-  | H : ?l ∈ _ |- red (cstep_in_ctx _ _ _) (State _ (Stmt (↷ ?l) _) _) =>
-    progress decompose_elem_of H
-  end;
-  match goal with
-  | H : red (cstep_in_ctx _ _ _) ?S |- red (cstep_in_ctx _ _ _) ?S =>
-    by apply (red_subrel _ _ _ _ H)
-  | |- red (cstep _ _) _ => eexists; do_cstep
-  | |- red (cstep_in_ctx _ _ _) _ => eexists; do_cstep
-  | |- _ => solve [intuition eauto with cstep]
-  end.
-Ltac solve_cnf :=
-  lazymatch goal with
-  | H : nf (cstep _ _) _ |- _ => destruct H; solve_cred
-  | H : nf (cstep_in_ctx _ _ _) _ |- _ => destruct H; solve_cred
+  | |- ?Γ\ ?δ ⊢ₛ State ?k (Stmt ?d ?s) ?m ⇒ ?S =>
+     iter (fun s' => change (Γ\ δ ⊢ₛ State k (Stmt d s') m ⇒ S); go)
+          (quote_stmt s)
+  | |- ?Γ\ ?δ ⊢ₛ State ?k (Expr ?e) ?m ⇒ ?S =>
+     iter (fun e' => change (Γ\ δ ⊢ₛ State k (Expr e') m ⇒ S); go)
+          (quote_expr e)
+  | _ => go
   end.
 
 (** * Theorems *)
@@ -813,10 +401,6 @@ Lemma ehstep_if_false_no_locks ρ vb e2 e3 m :
 Proof. intros. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
 Lemma ehstep_comma_no_locks ρ m ν e2 : Γ\ ρ ⊢ₕ %# ν ,, e2, m ⇒ e2, m.
 Proof. rewrite <-(mem_unlock_empty m) at 2. by constructor. Qed.
-Lemma assign_sem_deterministic m a v ass v1 v2 va1 va2 :
-  assign_sem Γ m a v ass v1 va1 → assign_sem Γ m a v ass v2 va2 →
-  v1 = v2 ∧ va1 = va2.
-Proof. destruct 1; inversion 1; simplify_option_equality; auto. Qed.
 Lemma ehstep_deterministic ρ e m e1 m1 e2 m2 :
   maybe2 EAlloc e = None →
   Γ\ ρ ⊢ₕ e, m ⇒ e1, m1 → Γ\ ρ ⊢ₕ e, m ⇒ e2, m2 → e1 = e2 ∧ m1 = m2.
@@ -824,291 +408,15 @@ Proof.
   destruct 2; inversion 1; simplify_option_equality;
     try match goal with
     | H1 : assign_sem _ _ _ _ _ _ _, H2 : assign_sem _ _ _ _ _ _ _ |- _ =>
-       destruct (assign_sem_deterministic _ _ _ _ _ _ _ _ H1 H2); subst
+       destruct (assign_sem_deterministic _ _ _ _ _ _ _ _ _ H1 H2); subst
     end; by auto.
 Qed.
-Global Instance cstep_subrel_suffix_of δ k1 k2 :
-  PropHolds (k1 `suffix_of` k2) →
-  subrelation (cstep_in_ctx Γ δ k2) (cstep_in_ctx Γ δ k1).
-Proof. intros ? S1 S2 [??]. split. done. by transitivity k2. Qed.
-Global Instance cstep_subrel δ k : subrelation (cstep_in_ctx Γ δ k) (cstep Γ δ).
-Proof. firstorder. Qed.
-Global Instance cstep_subrel_nil δ :
-  subrelation (cstep Γ δ) (cstep_in_ctx Γ δ []).
-Proof. intros S1 S2 ?. split. done. solve_suffix_of. Qed.
-Lemma cstep_in_ctx_rtc k S1 S2 :
-  Γ\ δ ⊢ₛ S1 ⇒{k}* S2 → k `suffix_of` SCtx S2 ∨ S1 = S2.
-Proof. revert S2. apply rtc_ind_r; [by right|]. intros ?? _ [??] _. by left. Qed.
-Lemma cstep_in_ctx_bsteps n k S1 S2 :
-  Γ\ δ ⊢ₛ S1 ⇒{k}^n S2 → k `suffix_of` SCtx S2 ∨ S1 = S2.
-Proof. intros p. apply bsteps_rtc in p. eapply cstep_in_ctx_rtc; eauto. Qed.
 
 Lemma cnf_undef m k e : nf (cstep Γ δ) (State k (Undef e) m).
-Proof. intros [? p]. inv_cstep p. Qed.
+Proof. intros [? p]. by inversion_clear p. Qed.
 Lemma cnf_undef_state S : is_undef_state S → nf (cstep Γ δ) S.
 Proof.
   intros [??]; destruct S as [? [] ?]; simplify_equality'; auto using cnf_undef.
-Qed.
-Lemma cnf_in_ctx_undef m l k e : nf (cstep_in_ctx Γ δ l) (State k (Undef e) m).
-Proof. apply (nf_subrel _ (cstep Γ δ) _), cnf_undef. Qed.
-Lemma cred_ectx (E : ectx K) k e m :
-  red (cstep_in_ctx Γ δ k) (State k (Expr e) m) →
-  red (cstep_in_ctx Γ δ k) (State k (Expr (subst E e)) m).
-Proof. intros [S p]. inv_cstep p; rewrite <-subst_app; eexists; do_cstep. Qed.
-
-Lemma cstep_expr_depsubst_inv {n} (P : state K → Prop)
-    m k (E : ectx_full K n) (es : vec (expr K) n) S' :
-  Γ\ δ ⊢ₛ State k (Expr (depsubst E es)) m ⇒{k} S' →
-  (∀ i e' m', Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k} State k (Expr e') m' →
-    P (State k (Expr (depsubst E (vinsert i e' es))) m')) →
-  (∀ i E' Ω f τs τ Ωs vs, length Ωs = length vs →
-    es !!! i = subst E' (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)%E →
-    Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k}
-            State (CFun E' :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m) →
-    P (State (CFun (E' ++ [ectx_full_to_item E es i]) :: k)
-      (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m))) →
-  (Forall is_nf es → P S') →
-  (∀ i E' e, es !!! i = subst E' e →
-    Γ\ δ ⊢ₛ State k (Expr (es !!! i)) m ⇒{k}
-            State k (Undef (UndefExpr E' e)) m →
-    P (State k (Undef (UndefExpr (E' ++ [ectx_full_to_item E es i]) e)) m)) →
-  P S'.
-Proof.
-  intros [p Hsuffix]. revert Hsuffix. pattern S'.
-  apply (cstep_focus_inv _ _ _ _ _ p); simpl; try solve_suffix_of.
-  * intros E' e1 e2 m2 HE pe _ HP1 _ HP3 _.
-    destruct E' as [|E'' E' _] using rev_ind; simplify_equality'.
-    { eapply HP3, is_redex_ectx_full, ehstep_is_redex; eauto. }
-    rewrite !subst_snoc in HE |- *.
-    apply ectx_full_item_subst in HE. destruct HE as [i [HE1 ->]].
-    rewrite <-ectx_full_to_item_correct_alt. apply HP1. rewrite <-HE1. do_cstep.
-  * intros E' Ω' f τs τ Ωs vs HE Hvs _ _ HP2 HP3 _.
-    destruct E' as [|E'' E' _] using rev_ind.
-    { destruct E; simplify_equality'. apply HP3. clear HP2 HP3 p.
-      inv_vec es; intros e es ??; simplify_equality'; repeat constructor.
-      eapply EVals_nf_alt; eauto. }
-    rewrite !subst_snoc in HE.
-    apply ectx_full_item_subst in HE. destruct HE as [i [HE1 ->]].
-    eapply HP2; eauto. rewrite <-?HE1; trivial. do_cstep.
-  * intros E' e1 HE Hred Hsafe _ HP1 HP2 HP3 HP4.
-    destruct E' as [|E'' E' _] using rev_ind; simplify_equality'.
-    { eapply HP3, is_redex_ectx_full; eauto. }
-    rewrite !subst_snoc in HE.
-    apply ectx_full_item_subst in HE. destruct HE as [i [HE1 ->]].
-    apply HP4; auto. rewrite <-HE1. do_cstep.
-Qed.
-Lemma cstep_expr_call_inv (P : state K → Prop) k Ω f τs τ Ωs vs m S' :
-  let e := (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)%E in
-  Γ\ δ ⊢ₛ State k (Expr e) m ⇒{k} S' →
-  length Ωs = length vs →
-  P (State (CFun [] :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m)) →
-  (¬Γ\ locals k ⊢ₕ safe call e @ #{Ωs}* vs, m →
-    P (State k (Undef (UndefExpr [] (call e @ #{Ωs}* vs))) m)) →
-  P S'.
-Proof.
-  simpl; intros [p Hsuffix] ?. revert Hsuffix. pattern S'.
-  apply (cstep_focus_inv _ _ _ _ _ p); simpl; try solve_suffix_of.
-  * intros E e1 v2 m2 Hvs ? _ _ _.
-    simplify_list_subst_equality Hvs; simplify_list_subst_equality; inv_ehstep.
-  * intros E Ω' f' τs' τ' Ωs' vs' Hvs ? _ HP1 _;
-      simplify_list_subst_equality Hvs.
-    + edestruct (zip_with_inj (λ Ω v, #{Ω} v)%E Ωs Ωs' vs vs');
-        eauto with congruence.
-    + simplify_list_subst_equality.
-    + simplify_list_subst_equality.
-  * intros E e1 Hvs Hred Hsafe _ _ HP2; simplify_list_subst_equality Hvs.
-    + destruct Hsafe. by constructor.
-    + simplify_list_subst_equality. inversion Hred.
-    + simplify_list_subst_equality. inversion Hred.
-Qed.
-Lemma cstep_ctx_irrel l l' k1 φ1 m1 k2 φ2 m2 :
-  Γ\ δ ⊢ₛ State (k1 ++ l) φ1 m1 ⇒ State (k2 ++ l) φ2 m2 →
-  locals l = locals l' →
-  Γ\ δ ⊢ₛ State (k1 ++ l') φ1 m1 ⇒ State (k2 ++ l') φ2 m2.
-Proof.
-  intros p Hstack. inv_cstep p;
-    rewrite ?app_comm_cons in *; simplify_list_equality;
-    repeat match goal with
-    | H : _\ locals (_ ++ _) ⊢ₕ _, _ ⇒ _, _ |- _ =>
-       erewrite locals_app in H by eapply Hstack
-    | H : ¬_\ locals (_ ++ _) ⊢ₕ safe _, _ |- _ =>
-       erewrite locals_app in H by eapply Hstack
-    | _ => do_cstep
-    | H : _ :: _ = ?k ++ _ |- _ =>
-       destruct k; simplify_list_equality; try discriminate_list_equality
-    end.
-Qed.
-Lemma cred_ctx_irrel l l' k φ m :
-  red (cstep_in_ctx Γ δ l) (State (k ++ l) φ m) →
-  locals l = locals l' →
-  red (cstep_in_ctx Γ δ l') (State (k ++ l') φ m).
-Proof.
-  intros [[? φ' m'] [p [k' ?]]] ?; simpl in *; subst.
-  exists (State (k' ++ l') φ' m'). split; [|simpl; solve_suffix_of].
-  by apply cstep_ctx_irrel with l.
-Qed.
-Lemma cstep_call_inv (P : state K → Prop) E E' l k1 φ1 m1 S' :
-  Γ\ δ ⊢ₛ State (k1 ++ [CFun E] ++ l) φ1 m1 ⇒{l} S' →
-  (∀ k2 φ2 m2,
-     Γ\ δ ⊢ₛ State (k1 ++ [CFun E'] ++ l) φ1 m1 ⇒{l}
-          State (k2 ++ [CFun E'] ++ l) φ2 m2 →
-     P (State (k2 ++ [CFun E] ++ l) φ2 m2)) →
-  (∀ f v,
-     k1 = [] → φ1 = Return f v →
-     Γ\ δ ⊢ₛ State (CFun E' :: l) (Return f v) m1 ⇒{l}
-          State l (Expr (subst E' (# v)%E)) m1 →
-     P (State l (Expr (subst E (# v)%E)) m1)) →
-  P S'.
-Proof.
-  intros [p ?] HP1 HP2. destruct S' as [k2 φ2 m2].
-  destruct (decide (CFun E :: l `suffix_of` k2)) as [[k2' ?]|?]; subst.
-  * apply HP1. split; [| simpl; solve_suffix_of].
-    by apply cstep_ctx_irrel with (CFun E :: l).
-  * inv_cstep p; destruct k1; try solve_suffix_of; simplify_list_equality.
-    eapply HP2; trivial. do_cstep.
-Qed.
-
-(** ** Cutting reduction paths *)
-(** Given a reduction path, we can cut off the maximal prefix that is restricted
-by a more restrictive program context. *)
-Lemma cstep_subctx_step_or_nf k S1 S2 :
-  Γ\ δ ⊢ₛ S1 ⇒ S2 → k `suffix_of` SCtx S1 →
-  k `suffix_of` SCtx S2 ∨ nf (cstep_in_ctx Γ δ k) S1.
-Proof.
-  intros p1 ?. destruct (decide (k `suffix_of` SCtx S2)) as [|Hk]; [by left|].
-  right; intros [S2' [p2 ?]]; destruct Hk.
-  destruct p1; simpl in *; try solve_suffix_of; inv_cstep p2; solve_elem_of.
-Qed.
-Lemma cred_preserves_subctx k S1 S2 :
-  Γ\ δ ⊢ₛ S1 ⇒ S2 → red (cstep_in_ctx Γ δ k) S1 →
-  k `suffix_of` SCtx S1 → k `suffix_of` SCtx S2.
-Proof. intros. by destruct (cstep_subctx_step_or_nf k S1 S2). Qed.
-Lemma cstep_subctx_nf k S1 S2 :
-  nf (cstep_in_ctx Γ δ k) S1 →
-  Γ\ δ ⊢ₛ S1 ⇒ S2 → k `suffix_of` SCtx S1 → SCtx S1 = k.
-Proof.
-  intros Hnf p ?. destruct (decide (suffix_of k (SCtx S2))).
-  * destruct Hnf. exists S2. by split.
-  * destruct p; simpl in *; destruct k; solve_suffix_of.
-Qed.
-Lemma cstep_subctx_cut l k S1 S2 :
-  Γ\ δ ⊢ₛ S1 ⇒{k} S2 → l ++ k `suffix_of` SCtx S1 →
-  Γ\ δ ⊢ₛ S1 ⇒{l ++ k} S2 ∨ SCtx S1 = l ++ k ∧ nf (cstep_in_ctx Γ δ (l ++ k)) S1.
-Proof.
-  intros [p ?] ?. destruct (cstep_subctx_step_or_nf (l ++ k) S1 S2); trivial.
-  * left. do_cstep.
-  * right. split. by apply cstep_subctx_nf with S2. done.
-Qed.
-Lemma cstep_bsteps_subctx_cut n l k S1 S3 :
-  Γ\ δ ⊢ₛ S1 ⇒{k}^n S3 → l ++ k `suffix_of` SCtx S1 →
-  (**i 1.) *) Γ\ δ ⊢ₛ S1 ⇒{l ++ k}^n S3 ∨
-  (**i 2.) *) ∃ S2,
-    Γ\ δ ⊢ₛ S1 ⇒{l ++ k}^n S2 ∧ SCtx S2 = l ++ k ∧
-    nf (cstep_in_ctx Γ δ (l ++ k)) S2 ∧ Γ\ δ ⊢ₛ S2 ⇒{k}^n S3.
-Proof.
-  intros p ?. induction p as [n S1|n S1 S2 S3 p1 p2 IH]; [auto with ars|].
-  destruct (cstep_subctx_cut l _ _ _ p1) as [[??]|[??]]; trivial.
-  * destruct IH as [?|[S2' ?]]; trivial; [left; do_csteps|].
-    right. exists S2'. intuition trivial; do_csteps.
-  * right. exists S1. intuition eauto with ars.
-Qed.
-Lemma cstep_bsteps_subctx_cut_alt n l k φ1 m1 S3 :
-  Γ\ δ ⊢ₛ State (l ++ k) φ1 m1 ⇒{k}^n S3 →
-  (**i 1.) *) Γ\ δ ⊢ₛ State (l ++ k) φ1 m1 ⇒{l ++ k}^n S3 ∨
-  (**i 2.) *) ∃ φ2 m2,
-    Γ\ δ ⊢ₛ State (l ++ k) φ1 m1 ⇒{l ++ k}^n State (l ++ k) φ2 m2 ∧
-    nf (cstep_in_ctx Γ δ (l ++ k)) (State (l ++ k) φ2 m2) ∧
-    Γ\ δ ⊢ₛ State (l ++ k) φ2 m2 ⇒{k}^n S3.
-Proof.
-  intros p. destruct (cstep_bsteps_subctx_cut _ l _ _ _ p)
-    as [?|([]&?&?&?)]; naive_solver.
-Qed.
-
-(** ** Preservation of statements *)
-(** We prove that small step reduction behaves as traversing through a zipper.
-That is, if [Γ\ δ ⊢ₛ State k (Stmt d1 s1) m1 ⇒{k}* State k (Stmt d2 s2) m2],
-then [s1 = s2]. This proven on the length of the reduction path. When a
-transition to the expression state occurs, we cut of the prefix corresponding
-to execution of that expression. *)
-Instance ctx_item_subst {K} :
-    Subst (ctx_item K) (stmt K) (stmt K) := λ Ek s,
-  match Ek with
-  | CStmt E => subst E s | CLocal _ τ => local{τ} s
-  | _ => s (* dummy *)
-  end.
-Definition is_CStmt_or_CLocal (Ek : ctx_item K) : Prop :=
-  match Ek with CStmt _ | CLocal _ _ => True | _ => False end.
-Definition in_fun_ctx (k1 k2 : ctx K) : Prop := ∃ l,
-  Forall is_CStmt_or_CLocal l ∧ k2 = l ++ k1.
-
-Instance: ∀ Ek : ctx_item K, Injective (=) (=) (subst Ek).
-Proof.
-  destruct Ek; intros ???; auto.
-  * eapply (injective (subst (CStmt _))); eauto.
-  * eapply (injective (SLocal _)); eauto.
-Qed.
-Instance: Reflexive in_fun_ctx.
-Proof. intros k. eexists []. intuition trivial. Qed.
-Lemma in_fun_ctx_r k1 k2 Ek :
-  is_CStmt_or_CLocal Ek → in_fun_ctx k1 k2 → in_fun_ctx k1 (Ek :: k2).
-Proof. intros ? [l [??]]. subst. exists (Ek :: l). intuition. Qed.
-Lemma in_fun_ctx_app_r k1 k2 k :
-  Forall is_CStmt_or_CLocal k → in_fun_ctx k1 k2 → in_fun_ctx k1 (k ++ k2).
-Proof. induction 1; simpl; auto using in_fun_ctx_r. Qed.
-Lemma in_fun_ctx_r_inv k1 k2 Ek :
-  is_CStmt_or_CLocal Ek →
-  k1 `suffix_of` k2 → in_fun_ctx k1 (Ek :: k2) → in_fun_ctx k1 k2.
-Proof.
-  intros ? [l1 ->] [l2 [Hc1 Hc2]].
-  rewrite app_comm_cons in Hc2; apply app_inv_tail in Hc2; decompose_Forall_hyps.
-  by exists l1.
-Qed.
-Lemma in_fun_ctx_change k1 k2 Ek1 Ek2 :
-  is_CStmt_or_CLocal Ek2 → k1 `suffix_of` Ek2 :: k2 →
-  in_fun_ctx k1 (Ek1 :: k2) → in_fun_ctx k1 (Ek2 :: k2).
-Proof.
-  intros ? [[|Ek2' l1] ?] [l2 [Hc1 Hc2]]; [by eexists []|].
-  destruct l2 as [|? l2]; list_simplifier; [discriminate_list_equality|].
-  exists (Ek2' :: l1); auto.
-Qed.
-Lemma in_fun_ctx_not_item_or_block k1 k2 Ek :
-  ¬is_CStmt_or_CLocal Ek → k1 `suffix_of` k2 → ¬in_fun_ctx k1 (Ek :: k2).
-Proof.
-  intros ? [l1 ->] [l2 [Hc1 Hc2]]. by rewrite app_comm_cons in Hc2;
-    apply app_inv_tail in Hc2; decompose_Forall_hyps.
-Qed.
-Lemma cstep_bsteps_preserves_stmt_help n k1 d1 s1 m1 k2 d2 s2 m2 :
-  Γ\ δ ⊢ₛ State k1 (Stmt d1 s1) m1 ⇒{k2}^n State k2 (Stmt d2 s2) m2 →
-  in_fun_ctx k2 k1 → subst k1 s1 = subst k2 s2.
-Proof.
-  revert k1 s1 d1 m1. induction n as [n1 IH] using lt_wf_ind.
-  intros k1 s1 d1 m1 p1 Hin_fun. inv_csteps p1 as [|n2 ? S' ? p2h p2]; [done|].
-  inv_cstep p2h;
-   try apply (IH _ (lt_n_Sn n2) _ _ _ _ p2);
-   try first
-    [ done
-    | by apply in_fun_ctx_r; eauto
-    | by eapply in_fun_ctx_r_inv; eauto
-    | by eapply in_fun_ctx_change; eauto
-    | edestruct in_fun_ctx_not_item_or_block; eauto; inversion 1 ].
-  destruct Hin_fun as [l [? ->]]. rewrite app_comm_cons in p2.
-  destruct (cstep_bsteps_subctx_cut_alt _ _ _ _ _ _ p2)
-    as [p|(?&?&_&?&p3)]; clear p2.
-  * destruct (cstep_in_ctx_bsteps _ _ _ _ p)
-      as [[??]|?]; by simplify_list_equality; discriminate_list_equality.
-  * inv_csteps p3 as [| n4 ??? p4h p4]; [discriminate_list_equality|].
-    inv_cstep p4h; try solve_cnf; first
-    [ apply (IH _ (Nat_lt_succ_succ n4) _ _ _ _ p4);
-       by repeat first
-        [ apply in_fun_ctx_app_r
-        | apply in_fun_ctx_r; [constructor|]]
-    | by inv_csteps p4 as [| ???? p5h p5]; inv_cstep p5h ].
-Qed.
-Lemma cstep_bsteps_preserves_stmt n k d1 s1 m1 d2 s2 m2 :
-  Γ\ δ ⊢ₛ State k (Stmt d1 s1) m1 ⇒{k}^n State k (Stmt d2 s2) m2 → s1 = s2.
-Proof.
-  intros p. apply (injective (subst k)).
-  by eapply cstep_bsteps_preserves_stmt_help; eauto.
 Qed.
 
 (** ** Preservation of validity of labels *)

@@ -450,6 +450,13 @@ Lemma fmap_empty {A B} (f : A → B) : f <$> ∅ = ∅.
 Proof. apply map_empty; intros i. by rewrite lookup_fmap, lookup_empty. Qed.
 Lemma omap_empty {A B} (f : A → option B) : omap f ∅ = ∅.
 Proof. apply map_empty; intros i. by rewrite lookup_omap, lookup_empty. Qed.
+Lemma omap_singleton {A B} (f : A → option B) i x y :
+  f x = Some y → omap f {[ i,x ]} = {[ i,y ]}.
+Proof.
+  intros; apply map_eq; intros j; destruct (decide (i = j)) as [->|].
+  * by rewrite lookup_omap, !lookup_singleton.
+  * by rewrite lookup_omap, !lookup_singleton_ne.
+Qed.
 
 (** ** Properties of conversion to lists *)
 Lemma map_to_list_unique {A} (m : M A) i x y :

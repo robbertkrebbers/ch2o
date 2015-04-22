@@ -83,9 +83,22 @@ Record memenv_forward {K} (Δ1 Δ2  : memenv K) := {
 }.
 Notation "Δ1 ⇒ₘ Δ2" := (memenv_forward Δ1 Δ2)
   (at level 70, format "Δ1  ⇒ₘ  Δ2") : C_scope.
-Instance: PreOrder (@memenv_forward K).
-Proof. split; [|intros ??? [??] [??]]; split; naive_solver. Qed.
+Instance: PartialOrder (@memenv_forward K).
+Proof.
+  split; [split; [|intros ??? [??] [??]]; split; naive_solver|].
+  cut (∀ (Δ1 Δ2 : memenv K) o τ β,
+    Δ1 ⇒ₘ Δ2 → Δ2 ⇒ₘ Δ1 → Δ1 !! o = Some (τ,β) → Δ2 !! o = Some (τ,β)).
+  { intros ? Δ1 Δ2 ??; apply map_eq; intros o.
+    apply option_eq; intros [τ β]; naive_solver. }
+  intros Δ1 Δ2 o τ β [Htyped Halive1] [_ Halive2] ?.
+  destruct (Htyped o τ) as [β' ?]; [by exists β|]; destruct β, β'; auto.
+  * destruct (Halive1 o τ). by exists true. by exists τ. naive_solver.
+  * destruct (Halive2 o τ). by exists true. by exists τ. naive_solver.
+Qed.
 Hint Extern 0 (?Δ1 ⇒ₘ ?Δ2) => reflexivity.
+Hint Extern 1 (_ ⇒ₘ _) => etransitivity; [eassumption|].
+Hint Extern 1 (_ ⇒ₘ _) => etransitivity; [|eassumption].
+
 Lemma memenv_subseteq_forward {K} (Δ1 Δ2  : memenv K) :
   Δ1 ⊆ Δ2 → Δ1 ⇒ₘ Δ2.
 Proof.

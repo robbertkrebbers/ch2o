@@ -105,4 +105,10 @@ Proof.
   unfold is_Some. setoid_rewrite lookup_difference_Some.
   destruct (m2 !! i); naive_solver.
 Qed.
+Lemma dom_fmap {A B} (f : A → B) m : dom D (f <$> m) ≡ dom D m.
+Proof.
+  apply elem_of_equiv. intros i.
+  rewrite !elem_of_dom, lookup_fmap, <-!not_eq_None_Some.
+  destruct (m !! i); naive_solver.
+Qed.
 End fin_map_dom.

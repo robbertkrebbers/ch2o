@@ -252,7 +252,7 @@ Definition to_R_NULL (σ : type K)
     (eτe : expr K * expr_type K) : expr K * type K :=
   let (e,τ) := to_R eτe in
   match σ with
-  | σp.* => if is_pseudo_NULL e then (# (ptrV (NULL σp)), σp.*) else (e,τ)
+  | σp.* => if is_pseudo_NULL e then (# ptrV (NULL σp), σp.*) else (e,τ)
   | _ => (e,τ)
   end.
 Definition convert_ptrs (eτ1 eτ2 : expr K * type K) :
@@ -262,9 +262,9 @@ Definition convert_ptrs (eτ1 eτ2 : expr K * type K) :
   | TAny.*, TType _.* => Some (e1, cast{TAny.*} e2, TAny.*)
   | TType _.*, TAny.* => Some (cast{TAny.*} e1, e2, TAny.*)
   | τp1.*, intT _ =>
-     guard (is_pseudo_NULL e2); Some (e1, # (ptrV (NULL τp1)), τp1.*)
+     guard (is_pseudo_NULL e2); Some (e1, # ptrV (NULL τp1), τp1.*)
   | intT _, τp2.* =>
-     guard (is_pseudo_NULL e1); Some (# (ptrV (NULL τp2)), e2, τp2.*)
+     guard (is_pseudo_NULL e1); Some (# ptrV (NULL τp2), e2, τp2.*)
   | _, _ => None
   end.
 Definition to_if_expr (e1 : expr K)
@@ -428,7 +428,7 @@ Definition to_ref
      guard (is_pure e) with
        "array initializer with non-constant index";
      Γ ← gets to_env; m ← gets to_mem;
-     v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe inr)
+     v ← error_of_option (⟦ e ⟧ Γ [] m ≫= maybe inr)
        "array initializer with undefined index";
      '(_,x) ← error_of_option (maybe VBase v ≫= maybe2 VInt)
        "array initializer with non-integer index";
@@ -558,7 +558,7 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
   | CELimit cτ li =>
      τ ← to_type to_Type Δl cτ;
      '(z,τi) ← to_limit_const τ li;
-     mret (# (intV{τi} z), RT (intT τi))
+     mret (# intV{τi} z, RT (intT τi))
   | CEDeref ce =>
      '(e,τ) ← to_R <$> to_expr Δl ce;
      τp ← error_of_option (maybe (TBase ∘ TPtr) τ)
@@ -584,12 +584,11 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
      τ1 ← error_of_option (maybe LT τe1) "assigning to r-value";
      '(e2,τ2) ← to_R_NULL τ1 <$> to_expr Δl ce2;
      Γ ← gets to_env;
-     σ ← error_of_option (assign_type_of τ1 τ2 ass)
-       "assignment cannot be typed";
+     guard (assign_typed τ1 τ2 ass) with "assignment cannot be typed";
      let e1 :=
        if decide (ass = Assign ∧ ¬rhs_6_5_16_1p3_safe e2)
        then freeze true e1 else e1 in
-     mret (e1 ::={ass} e2, RT σ)
+     mret (e1 ::={ass} e2, RT τ1)
   | CECall ce ces =>
      '(e,τ) ← to_R <$> to_expr Δl ce;
      '(τs,σ) ← error_of_option (maybe (TBase ∘ TPtr) τ ≫= maybe2 TFun)
@@ -645,7 +644,7 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
      τb2 ← error_of_option (maybe TBase τ2)
        "second argument of && of non-base type";
      guard (τb2 ≠ TVoid) with "second argument of && of void type";
-     mret (if{e1} if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)
+     mret (if{e1} if{e2} # intV{sintT} 1 else # intV{sintT} 0
        else #(intV{sintT} 0), RT sintT)
   | CEOr ce1 ce2 =>
      '(e1,τ1) ← to_R <$> to_expr Δl ce1;
@@ -656,8 +655,8 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
      τb2 ← error_of_option (maybe TBase τ2)
        "second argument of || of non-base type";
      guard (τb2 ≠ TVoid) with "second argument of || of void type";
-     mret (if{e1} #(intV{sintT} 0)
-       else (if{e2} #(intV{sintT} 1) else #(intV{sintT} 0)), RT sintT)
+     mret (if{e1} # intV{sintT} 0
+       else (if{e2} # intV{sintT} 1 else #(intV{sintT} 0)), RT sintT)
   | CECast cσ ci =>
      σ ← to_type to_Type Δl cσ;
      guard (maybe2 TArray σ = None) with "array compound literal not supported";
@@ -704,7 +703,7 @@ with to_init_expr `{Env K} (Δl : local_env K)
      end
   | CCompoundInit inits =>
      Γ ← gets to_env;
-     to_compound_init (to_expr Δl) (to_init_expr Δl) σ (#(val_0 Γ σ)) [] inits
+     to_compound_init (to_expr Δl) (to_init_expr Δl) σ (# val_0 Γ σ) [] inits
   end
 with to_type `{Env K} (k : to_type_kind)
     (Δl : local_env K) (cτ : ctype) : M (to_type_type k) :=
@@ -739,7 +738,7 @@ with to_type `{Env K} (k : to_type_kind)
      '(e,_) ← to_expr Δl ce;
      guard (is_pure e) with "array with non-constant size expression";
      Γ ← gets to_env; m ← gets to_mem;
-     v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe inr)
+     v ← error_of_option (⟦ e ⟧ Γ [] m ≫= maybe inr)
        "array with undefined size expression";
      '(_,x) ← error_of_option (maybe VBase v ≫= maybe2 VInt)
        "array with non-integer size expression";
@@ -778,7 +777,7 @@ Definition to_init_val (Δl : local_env K)
    e ← to_init_expr Δl τ ci;
    Γ ← gets to_env; m ← gets to_mem;
    guard (is_pure e) with "initializer with non-constant expression";
-   error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe inr)
+   error_of_option (⟦ e ⟧ Γ [] m ≫= maybe inr)
      "initializer with undefined expression".
 Definition alloc_global (Δl : local_env K) (x : string) (sto : cstorage)
     (cτ : ctype) (mci : option cinit) :
@@ -888,7 +887,7 @@ Definition to_stmt (τret : type K) :
      '(e,_) ← to_expr Δl ce;
      guard (is_pure e) with "case with non-constant expression";
      Γ ← gets to_env; m ← gets to_mem;
-     v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe inr)
+     v ← error_of_option (⟦ e ⟧ Γ [] m ≫= maybe inr)
        "case with undefined expression";
      '(_,x) ← error_of_option (maybe VBase v ≫= maybe2 VInt)
        "case with non-integer expression";
@@ -989,7 +988,7 @@ Definition stmt_fix_return (Γ : env K) (f : string) (σ : type K) (s : stmt K)
   match cmτ with
   | (false, _) =>
      if decide (σ = voidT) then (s,cmτ)
-     else if decide (f = "main") then (s;; ret (#(val_0 Γ σ)), (true, Some σ))
+     else if decide (f = "main") then (s;; ret (# val_0 Γ σ), (true, Some σ))
      else (s;; ret (abort σ), (true, Some σ))
   | _ => (s,cmτ)
   end.
@@ -1060,7 +1059,7 @@ Fixpoint alloc_enum (xces : list (string * option cexpr))
      guard (is_pure e) with
        ("enum field `" +:+ x +:+ "` has non-constant value");
      Γ ← gets to_env; m ← gets to_mem;
-     v ← error_of_option (⟦ e ⟧ Γ ∅ [] m ≫= maybe inr)
+     v ← error_of_option (⟦ e ⟧ Γ [] m ≫= maybe inr)
        ("enum field `" +:+ x +:+ "` has undefined value");
      '(_,z') ← error_of_option (maybe VBase v ≫= maybe2 VInt)
        ("enum field `" +:+ x +:+ "` has non-integer value");

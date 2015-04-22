@@ -13,8 +13,6 @@ Implicit Types xs : list perm.
 Implicit Types xb : pbit K.
 Implicit Types xbs : list (pbit K).
 
-Hint Extern 0 (Separation _) => apply (_ : Separation perm).
-
 Lemma pbit_disjoint_valid Γ Δ xb1 xb2 :
   xb1 ⊥ xb2 → ✓{Γ,Δ} xb1 → sep_unmapped xb2 → ✓{Γ,Δ} xb2.
 Proof.
@@ -177,6 +175,13 @@ Lemma pbits_disjoint_full xbs1 xbs2 :
 Proof.
   induction 1; constructor; decompose_Forall_hyps;
     eauto using pbit_disjoint_full, eq_sym.
+Qed.
+Lemma pbits_subseteq_full xbs1 xbs2 :
+  Forall (λ xb, tagged_perm xb = perm_full) xbs1 → xbs1 ⊆* xbs2 →
+  Forall (λ xb, tagged_perm xb = perm_full) xbs2.
+Proof.
+  induction 2 as [|???? [??]]; decompose_Forall_hyps;
+    constructor; eauto using perm_subseteq_full.
 Qed.
 Lemma pbit_tag_subseteq xb1 xb2 :
   xb1 ⊆ xb2 → ¬sep_unmapped xb1 → tagged_tag xb1 = tagged_tag xb2.

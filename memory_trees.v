@@ -319,9 +319,11 @@ Section operations.
        MStruct t (zip (<[i:=w]>(ctree_new Γ ∅ <$> τs))
          (flip replicate ∅ <$> field_bit_padding Γ τs))
     | RUnion i t _ =>
-       default w (Γ !! t ≫= (!!i)) $ λ τ,
-       let sz := bit_size_of Γ (unionT t) - bit_size_of Γ τ in
-       MUnion t i w (replicate sz ∅)
+       if decide (ctree_unmapped w)
+       then MUnionAll t (resize (bit_size_of Γ (unionT t)) ∅ (ctree_flatten w))
+       else default w (Γ !! t ≫= (!!i)) $ λ τ,
+         let sz := bit_size_of Γ (unionT t) - bit_size_of Γ τ in
+         MUnion t i w (replicate sz ∅)
     end.
   Fixpoint ctree_singleton (Γ : env K)
       (r : ref K) (w : mtree K) : mtree K :=
@@ -353,7 +355,6 @@ Implicit Types g : mtree K → mtree K.
 Hint Resolve Forall_take Forall_drop Forall_app_2 Forall_replicate.
 Hint Resolve Forall2_take Forall2_drop Forall2_app.
 Hint Immediate env_valid_lookup env_valid_lookup_lookup.
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 Hint Immediate TArray_valid_inv_type pbit_empty_valid.
 
 (** ** General properties of the typing judgment *)
@@ -1961,8 +1962,65 @@ Proof.
   intros Hr. revert w. induction Hr; intros w; simpl; auto.
   erewrite ctree_singleton_seg_le by eauto; eauto.
 Qed.
-Lemma ctree_singleton_seg_flatten Γ τ rs w σ :
-  ✓ Γ → Γ ⊢ rs : τ ↣ σ → ✓{Γ} τ →
+Lemma ctree_singleton_seg_typed Γ Δ τ rs w σ :
+  ✓ Γ → Γ ⊢ rs : τ ↣ σ → (Γ,Δ) ⊢ w : σ →
+  (Γ,Δ) ⊢ ctree_singleton_seg Γ rs w : τ.
+Proof.
+  destruct 2 as [τ i n|s i τs|s i ? τs]; intros; simpl.
+  * typed_constructor; auto with lia. rewrite list_insert_alter.
+    apply Forall_alter; eauto using ctree_new_typed.
+  * assert (length (field_bit_padding Γ τs) = length τs) as Hlen
+      by eauto using field_bit_padding_length.
+    simplify_option_equality; typed_constructor; eauto.
+    + rewrite <-Forall2_fmap_l, fst_zip, list_insert_alter by done.
+      apply Forall2_alter_l; [|naive_solver].
+      eapply Forall2_fmap_l, Forall2_Forall,
+        Forall_impl; eauto using ctree_new_typed.
+    + rewrite <-Forall_fmap, snd_zip by done.
+      elim (field_bit_padding Γ τs); constructor; auto.
+      apply Forall_replicate; auto.
+    + generalize (<[i:=w]> (ctree_new Γ ∅ <$> τs)); clear Hlen.
+      by induction (field_bit_padding Γ τs); intros [|??];
+        constructor; csimpl; rewrite ?fmap_replicate.
+    + rewrite list_fmap_compose, snd_zip by done.
+      by induction (field_bit_padding Γ τs) in |- *; f_equal'.
+  * simplify_option_equality; typed_constructor;
+      eauto using Forall_resize, ctree_flatten_valid.
+    + by induction (_ - _); f_equal'.
+    + solve_length.
+    + naive_solver.
+Qed.
+Lemma ctree_singleton_typed Γ Δ τ r σ w :
+  ✓ Γ → Γ ⊢ r : τ ↣ σ → (Γ,Δ) ⊢ w : σ → (Γ,Δ) ⊢ ctree_singleton Γ r w : τ.
+Proof.
+  intros ? Hr. revert w.
+  induction Hr using @ref_typed_ind; eauto 10 using ctree_singleton_seg_typed.
+Qed.
+Lemma ctree_singleton_seg_Forall_inv P Γ Δ τ rs w σ :
+  ✓ Γ → Γ ⊢ rs : τ ↣ σ → (Γ,Δ) ⊢ w : σ →
+  ctree_Forall P (ctree_singleton_seg Γ rs w) → ctree_Forall P w.
+Proof.
+  destruct 2 as [τ i n|s i τs τ ? Hi|]; intros ?; simplify_option_equality.
+  * rewrite Forall_bind, Forall_lookup; intros Hw; apply (Hw i).
+    by rewrite list_lookup_insert by auto.
+  * rewrite Forall_bind, Forall_lookup; intros Hw; apply lookup_lt_Some in Hi.
+    destruct (lookup_lt_is_Some_2 (field_bit_padding Γ τs) i) as [sz Htz].
+    { by rewrite field_bit_padding_length. }
+    eapply (Forall_app _ _ (replicate _ _)), (Hw i (w,replicate sz ∅)).
+    by rewrite lookup_zip_with,
+      list_lookup_insert, list_lookup_fmap, Htz by auto.
+  * apply Forall_resize_inv; auto.
+  * rewrite Forall_app; by intros [].
+Qed.
+Lemma ctree_singleton_Forall_inv P Γ Δ τ r w σ :
+  ✓ Γ → Γ ⊢ r : τ ↣ σ → (Γ,Δ) ⊢ w : σ →
+  ctree_Forall P (ctree_singleton Γ r w) → ctree_Forall P w.
+Proof.
+  intros ? Hr. revert w. induction Hr using @ref_typed_ind; simpl;
+    eauto using ctree_singleton_seg_Forall_inv, ctree_singleton_seg_typed.
+Qed.
+Lemma ctree_singleton_seg_flatten Γ Δ τ rs w σ :
+  ✓ Γ → Γ ⊢ rs : τ ↣ σ → (Γ,Δ) ⊢ w : σ →
   ctree_flatten (ctree_singleton_seg Γ rs w) =
    replicate (ref_seg_object_offset Γ rs) ∅ ++
    ctree_flatten w ++
@@ -1986,10 +2044,11 @@ Proof.
       rewrite ctree_flatten_new, IH, <-!replicate_plus by done; f_equal; lia. }
     rewrite IH, ctree_flatten_new, (associative_L (++)),
       <-!replicate_plus by done; do 2 f_equal; auto with f_equal lia.
+  * by erewrite Nat.sub_0_r, resize_ge, ctree_flatten_length by eauto.
   * by rewrite Nat.sub_0_r.
 Qed.
-Lemma ctree_singleton_flatten Γ τ r w σ :
-  ✓ Γ → Γ ⊢ r : τ ↣ σ → ✓{Γ} τ →
+Lemma ctree_singleton_flatten Γ Δ τ r w σ :
+  ✓ Γ → Γ ⊢ r : τ ↣ σ → (Γ,Δ) ⊢ w : σ →
   ctree_flatten (ctree_singleton Γ r w) =
    replicate (ref_object_offset Γ r) ∅ ++
    ctree_flatten w ++
@@ -2000,67 +2059,11 @@ Proof.
     using @ref_typed_ind; intros w ?; csimpl.
   { by rewrite Nat.sub_0_r, Nat.sub_diag; simpl; rewrite (right_id_L [] (++)). }
   erewrite IH, ctree_singleton_seg_flatten
-    by eauto using ref_typed_type_valid; clear IH.
+    by eauto using ctree_singleton_seg_typed; clear IH.
   apply ref_seg_object_offset_size' in Hrs; auto.
   apply ref_object_offset_size' in Hr; auto; unfold ref_object_offset in Hr.
   rewrite !(associative_L (++)), <-replicate_plus,
     <-!(associative_L (++)), <-replicate_plus; f_lia.
-Qed.
-Lemma ctree_singleton_seg_Forall_inv P Γ τ rs w σ :
-  ✓ Γ → Γ ⊢ rs : τ ↣ σ →
-  ctree_Forall P (ctree_singleton_seg Γ rs w) → ctree_Forall P w.
-Proof.
-  destruct 2 as [τ i n|s i τs τ ? Hi|]; simplify_option_equality.
-  * rewrite Forall_bind, Forall_lookup; intros Hw; apply (Hw i).
-    by rewrite list_lookup_insert by auto.
-  * rewrite Forall_bind, Forall_lookup; intros Hw; apply lookup_lt_Some in Hi.
-    destruct (lookup_lt_is_Some_2 (field_bit_padding Γ τs) i) as [sz Htz].
-    { by rewrite field_bit_padding_length. }
-    eapply (Forall_app _ _ (replicate _ _)), (Hw i (w,replicate sz ∅)).
-    by rewrite lookup_zip_with,
-      list_lookup_insert, list_lookup_fmap, Htz by auto.
-  * rewrite Forall_app; by intros [].
-Qed.
-Lemma ctree_singleton_Forall_inv P Γ τ r w σ :
-  ✓ Γ → Γ ⊢ r : τ ↣ σ →
-  ctree_Forall P (ctree_singleton Γ r w) → ctree_Forall P w.
-Proof.
-  intros ? Hr. revert w. induction Hr using @ref_typed_ind; simpl;
-    eauto using ctree_singleton_seg_Forall_inv.
-Qed.
-Lemma ctree_singleton_seg_typed Γ Δ τ rs w σ :
-  ✓ Γ → Γ ⊢ rs : τ ↣ σ → (Γ,Δ) ⊢ w : σ → ¬ctree_unmapped w →
-  (Γ,Δ) ⊢ ctree_singleton_seg Γ rs w : τ.
-Proof.
-  destruct 2 as [τ i n|s i τs|s i ? τs]; intros; simpl.
-  * typed_constructor; auto with lia. rewrite list_insert_alter.
-    apply Forall_alter; eauto using ctree_new_typed.
-  * assert (length (field_bit_padding Γ τs) = length τs) as Hlen
-      by eauto using field_bit_padding_length.
-    simplify_option_equality; typed_constructor; eauto.
-    + rewrite <-Forall2_fmap_l, fst_zip, list_insert_alter by done.
-      apply Forall2_alter_l; [|naive_solver].
-      eapply Forall2_fmap_l, Forall2_Forall,
-        Forall_impl; eauto using ctree_new_typed.
-    + rewrite <-Forall_fmap, snd_zip by done.
-      elim (field_bit_padding Γ τs); constructor; auto.
-      apply Forall_replicate; auto.
-    + generalize (<[i:=w]> (ctree_new Γ ∅ <$> τs)); clear Hlen.
-      by induction (field_bit_padding Γ τs); intros [|??];
-        constructor; csimpl; rewrite ?fmap_replicate.
-    + rewrite list_fmap_compose, snd_zip by done.
-      by induction (field_bit_padding Γ τs) in |- *; f_equal'.
-  * simplify_option_equality; typed_constructor; eauto.
-    + by induction (_ - _); f_equal'.
-    + solve_length.
-    + naive_solver.
-Qed.
-Lemma ctree_singleton_typed Γ Δ τ r σ w :
-  ✓ Γ → Γ ⊢ r : τ ↣ σ → (Γ,Δ) ⊢ w : σ → ¬ctree_unmapped w →
-  (Γ,Δ) ⊢ ctree_singleton Γ r w : τ.
-Proof.
-  intros ? Hr. revert w. induction Hr using @ref_typed_ind; eauto 10 using
-    ctree_singleton_seg_typed, ctree_singleton_seg_Forall_inv.
 Qed.
 Lemma ctree_singleton_seg_weaken Γ1 Γ2 τ rs w σ :
   ✓ Γ1 → Γ1 ⊆ Γ2 → Γ1 ⊢ rs : τ ↣ σ → ✓{Γ1} τ → 
@@ -2080,9 +2083,10 @@ Proof.
     eauto.
 Qed.
 Lemma ctree_lookup_singleton_seg Γ τ rs w σ :
-  ✓ Γ → Γ ⊢ rs : τ ↣ σ → ctree_singleton_seg Γ rs w !!{Γ} rs = Some w.
+  ✓ Γ → Γ ⊢ rs : τ ↣ σ →
+  ¬ctree_unmapped w → ctree_singleton_seg Γ rs w !!{Γ} rs = Some w.
 Proof.
-  destruct 2 as [|s i τs|]; simplify_option_equality.
+  destruct 2 as [|s i τs|]; intros; simplify_option_equality.
   * by rewrite list_lookup_insert by solve_length.
   * assert (length (field_bit_padding Γ τs) = length τs) as Hlen
       by eauto using field_bit_padding_length.
@@ -2090,31 +2094,36 @@ Proof.
     by rewrite <-list_lookup_fmap, fst_zip, list_lookup_insert by solve_length.
   * done.
 Qed.
-Lemma ctree_lookup_singleton Γ τ r w σ :
-  ✓ Γ → Γ ⊢ r : τ ↣ σ → ctree_singleton Γ r w !!{Γ} r = Some w.
+Lemma ctree_lookup_singleton Γ Δ τ r w σ :
+  ✓ Γ → Γ ⊢ r : τ ↣ σ → (Γ,Δ) ⊢ w : σ → ¬ctree_unmapped w →
+  ctree_singleton Γ r w !!{Γ} r = Some w.
 Proof.
   intros ? Hr. revert w. induction Hr as [|r rs τ1 τ2 τ3 ?? IH]
     using @ref_typed_ind; intros; simpl; auto.
-  rewrite ctree_lookup_cons, IH; f_equal';
-    eauto using ctree_lookup_singleton_seg.
+  rewrite ctree_lookup_cons, IH by eauto using
+    ctree_singleton_seg_Forall_inv, ctree_singleton_seg_typed; simpl.
+  eauto using ctree_lookup_singleton_seg.
 Qed.
 Lemma ctree_alter_singleton_seg Γ g τ rs w σ :
-  Γ ⊢ rs : τ ↣ σ →
+  Γ ⊢ rs : τ ↣ σ → ¬ctree_unmapped w → ¬ctree_unmapped (g w) →
   ctree_alter_seg Γ g rs (ctree_singleton_seg Γ rs w)
   = ctree_singleton_seg Γ rs (g w).
 Proof.
-  destruct 1; simplify_option_equality; f_equal.
-  { by rewrite !list_insert_alter, <-list_alter_compose. }
-  rewrite !list_insert_alter. generalize i (ctree_new Γ ∅ <$> τs).
-  induction (_ <$> _); intros [|?] [|??]; f_equal'; auto.
+  destruct 1; intros ??; simplify_option_equality; f_equal.
+  * by rewrite !list_insert_alter, <-list_alter_compose.
+  * rewrite !list_insert_alter. generalize i (ctree_new Γ ∅ <$> τs).
+    induction (_ <$> _); intros [|?] [|??]; f_equal'; auto.
 Qed.
-Lemma ctree_alter_singleton Γ g τ r w σ :
-  Γ ⊢ r : τ ↣ σ →
+Lemma ctree_alter_singleton Γ Δ g τ r w σ :
+  ✓ Γ → Γ ⊢ r : τ ↣ σ → 
+  (Γ,Δ) ⊢ w : σ → ¬ctree_unmapped w → ¬ctree_unmapped (g w) →
   ctree_alter Γ g r (ctree_singleton Γ r w) = ctree_singleton Γ r (g w).
 Proof.
-  intros Hr. revert g w. induction Hr as [|r rs τ1 τ2 τ3 ?? IH]
+  intros ? Hr. revert g w. induction Hr as [|r rs τ1 τ2 τ3 ?? IH]
     using @ref_typed_ind; intros; simpl; auto.
-  by erewrite IH, ctree_alter_singleton_seg by eauto.
+  by erewrite IH, ctree_alter_singleton_seg
+    by eauto using ctree_alter_lookup_seg_Forall, ctree_lookup_singleton_seg,
+    ctree_singleton_seg_typed, ctree_singleton_seg_Forall_inv.
 Qed.
 Lemma ctree_merge_new {B : Set} Γ f τ (ys : list B) xb :
   (∀ y, f xb y = xb) → pbit_indetify xb = xb →
@@ -2131,13 +2140,22 @@ Proof.
 Qed.
 Lemma ctree_merge_singleton_seg {B : Set} Γ Δ f τ rs w (ys : list B) σ :
   (∀ y, f ∅ y = ∅) →
-  ✓ Γ → Γ ⊢ rs : τ ↣ σ → (Γ,Δ) ⊢ w : σ → length ys = bit_size_of Γ τ →
+  (∀ xb y, sep_valid xb → sep_unmapped (f xb y) → sep_unmapped xb) →
+  ✓ Γ → Γ ⊢ rs : τ ↣ σ → (Γ,Δ) ⊢ w : σ → ¬ctree_unmapped w →
+  length ys = bit_size_of Γ τ →
   ctree_merge f (ctree_singleton_seg Γ rs w) ys
   = ctree_singleton_seg Γ rs (ctree_merge f w
       (take (bit_size_of Γ σ) (drop (ref_seg_object_offset Γ rs) ys))).
 Proof.
-  intros ? HΓ. destruct 1 as [τ i n _|s i τs τ Ht Hi|s i ? τs];
-    intros Hw Hys; simplify_option_equality; f_equal.
+  intros ?? HΓ. assert (∀ xbs ys,
+    Forall sep_valid xbs → Forall sep_unmapped (zip_with f xbs ys) →
+    length xbs = length ys → Forall sep_unmapped xbs).
+  { intros xbs ys' Hxbs; revert ys'; induction Hxbs; intros [|??] ??;
+      decompose_Forall_hyps; constructor; eauto. }
+  destruct 1 as [τ i n _|s i τs τ Ht Hi|s i ? τs];
+    intros Hw ? Hys; simplify_option_equality by
+      (rewrite ?ctree_flatten_merge;
+       eauto 6 using @ctree_valid_Forall, ctree_typed_sep_valid); f_equal.
   * revert i ys Hys. rewrite bit_size_of_array.
     induction n; intros [|?] ??; f_equal';
       erewrite <-?drop_drop, ?ctree_flatten_length, ?ctree_merge_new
@@ -2177,13 +2195,14 @@ Proof.
 Qed.
 Lemma ctree_merge_singleton {B : Set} Γ Δ f τ r w (ys : list B) σ :
   (∀ y, f ∅ y = ∅) →
+  (∀ xb y, sep_valid xb → sep_unmapped (f xb y) → sep_unmapped xb) →
   ✓ Γ → Γ ⊢ r : τ ↣ σ → (Γ,Δ) ⊢ w : σ → ¬ctree_unmapped w →
   length ys = bit_size_of Γ τ →
   ctree_merge f (ctree_singleton Γ r w) ys
   = ctree_singleton Γ r (ctree_merge f w
       (take (bit_size_of Γ σ) (drop (ref_object_offset Γ r) ys))).
 Proof.
-  unfold ref_object_offset. intros ?? Hr. revert w ys.
+  unfold ref_object_offset. intros ??? Hr. revert w ys.
   induction Hr as [|r rs τ1 τ2 τ3 Hrs Hr IH] using @ref_typed_ind;
     intros w ys ???; simplify_equality'; [by rewrite drop_0, take_ge by done|].
   apply ref_object_offset_size' in Hr; auto; unfold ref_object_offset in Hr.

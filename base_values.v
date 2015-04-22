@@ -149,8 +149,6 @@ Proof.
   destruct 2; econstructor; eauto using ptr_typed_weaken,
     char_byte_valid_weaken, base_type_valid_weaken.
 Qed.
-Lemma base_val_frozen_int Γ Δ v τi : (Γ,Δ) ⊢ v : intT τi → frozen v.
-Proof. inversion 1; constructor. Qed.
 Lemma base_val_freeze_freeze β1 β2 vb : freeze β1 (freeze β2 vb) = freeze β1 vb.
 Proof. destruct vb; f_equal'; auto using ptr_freeze_freeze. Qed.
 Lemma base_typed_freeze Γ Δ β vb τb :

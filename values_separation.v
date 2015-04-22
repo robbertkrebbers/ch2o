@@ -16,7 +16,6 @@ Implicit Types vs : list (val K).
 Hint Resolve Forall2_take Forall2_drop Forall_take Forall_drop Forall_app_2
   Forall_replicate Forall_resize.
 Hint Immediate env_valid_lookup env_valid_lookup_lookup.
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 Local Arguments union _ _ !_ !_ /.
 
 Ltac solve_length := repeat first

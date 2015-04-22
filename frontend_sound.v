@@ -120,7 +120,7 @@ Hint Extern 1 (int_typed _ _) => by apply int_typed_small.
 Hint Extern 10 (ptr_cast_typed _ _) => constructor.
 Hint Extern 10 (cast_typed _ _) => constructor.
 Hint Extern 10 (base_cast_typed _ _) => constructor.
-Hint Extern 0 (assign_typed _ _ _ _) => constructor.
+Hint Extern 0 (assign_typed _ _ _) => constructor.
 Hint Immediate lockset_empty_valid.
 Hint Resolve memenv_subseteq_forward.
 Hint Immediate rettype_union_l rettype_union_r.
@@ -137,7 +137,6 @@ Hint Extern 1 (@eq lockset _ _) =>
 Hint Extern 0 (rettype_match _ _) => constructor.
 Hint Immediate rettype_union_idempotent val_0_typed.
 Arguments rettype_union_alt _ _ _ _ : simpl never.
-Arguments assign_type_of _ _ _ _ _ : simpl never.
 
 Definition fun_stmt_valid (Γ : env K) (Δ : memenv K)
     (τs : list (type K)) (τ : type K) (ms : option (stmt K)) : Prop :=
@@ -161,7 +160,7 @@ Record frontend_state_valid' (S : frontend_state K) := {
   to_env_valid : ✓ (to_env S);
   to_mem_valid : ✓{to_env S} (to_mem S);
   to_globals_valid :
-    map_Forall (global_decl_valid (to_env S) ('{to_mem S})) (to_globals S);
+    map_Forall (global_decl_valid (to_env S) '{to_mem S}) (to_globals S);
   to_env_included :
     map_Forall (λ t d,
       match d with
@@ -192,10 +191,10 @@ Proof.
 Qed.
 Lemma to_globals_lookup S x d :
   ✓ S → to_globals S !! x = Some d →
-  global_decl_valid (to_env S) ('{to_mem S}) x d.
+  global_decl_valid (to_env S) '{to_mem S} x d.
 Proof. intros []; eauto. Qed.
 Lemma to_funenv_pretyped S :
-  ✓ S → funenv_prevalid (to_env S) ('{to_mem S}) (to_funenv S).
+  ✓ S → funenv_prevalid (to_env S) '{to_mem S} (to_funenv S).
 Proof.
   intros [?? HΔg] f s. unfold to_funenv; rewrite lookup_omap, bind_Some.
   intros ([|??? []| |]&Hd&?); specialize (HΔg _ _ Hd); naive_solver.
@@ -457,8 +456,8 @@ Ltac weaken :=
        by (eapply (stmt_typed_weaken (to_env S1)); eauto); clear H
   | H : '{to_mem ?S1} ⊢ ?o : ?τ, H2 : ?S1 ⊆ ?S2  |- _ =>
      assert ('{to_mem S2} ⊢ o : τ) by eauto using memenv_forward_typed; clear H
-  | H : index_alive ('{to_mem ?S1}) ?o, H2 : ?S1 ⊆ ?S2  |- _ =>
-     assert (index_alive ('{to_mem S2}) o)
+  | H : index_alive '{to_mem ?S1} ?o, H2 : ?S1 ⊆ ?S2  |- _ =>
+     assert (index_alive '{to_mem S2} o)
        by eauto using memenv_subseteq_alive; clear H
   | H : to_env ?S1 !! ?f = Some ?τsτ, H2 : ?S1 ⊆ ?S2  |- _ =>
      assert (to_env S2 !! (f : funname) = Some τsτ)
@@ -482,12 +481,12 @@ Ltac weaken :=
 Lemma insert_object_valid S S' o v x τ :
   insert_object x v S = mret o S' → ✓ S →
   (to_env S, '{to_mem S}) ⊢ v : τ → sep_valid x → ¬sep_unmapped x →
-  '{to_mem S'} ⊢ o : τ ∧ index_alive ('{to_mem S'}) o
+  '{to_mem S'} ⊢ o : τ ∧ index_alive '{to_mem S'} o
   ∧ to_globals S = to_globals S' ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
   destruct S as [Γn Γ m Δg]; unfold insert_object;
     intros ? [] ???; error_proceed; simplify_type_equality.
-  assert ('{m} ⊆ <[fresh (dom indexset m):=(τ, false)]> ('{m})).
+  assert ('{m} ⊆ <[fresh (dom indexset m):=(τ, false)]> '{m}).
   { eapply insert_subseteq, mem_allocable_memenv_of, is_fresh. }
   split_ands; eauto using mem_alloc_index_typed', mem_alloc_index_alive';
     split; simpl; erewrite ?mem_alloc_memenv_of by eauto;
@@ -496,7 +495,7 @@ Proof.
 Qed.
 Lemma update_object_valid S S' o x v τ :
   update_object o x v S = mret () S' → ✓ S →
-  '{to_mem S} ⊢ o : τ → index_alive ('{to_mem S}) o →
+  '{to_mem S} ⊢ o : τ → index_alive '{to_mem S} o →
   (to_env S, '{to_mem S}) ⊢ v : τ → sep_valid x → ¬sep_unmapped x →
   ✓ S' ∧ S ⊆ S'.
 Proof.
@@ -506,7 +505,7 @@ Proof.
 Qed.
 Lemma insert_global_decl_valid S S' x d :
   insert_global_decl x d S = mret () S' → ✓ S →
-  global_decl_valid (to_env S) ('{to_mem S}) x d → maybe4 Fun d = None →
+  global_decl_valid (to_env S) '{to_mem S} x d → maybe4 Fun d = None →
   (∀ d', to_globals S !! x = Some d' → global_decl_forward d' d) →
   to_globals S' !! x = Some d ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
@@ -539,7 +538,7 @@ Proof.
 Qed.
 Lemma insert_fun_valid S S' f sto τs τ ms :
   insert_fun f sto τs τ ms S = mret () S' → ✓ S → to_env S !! f = Some (τs,τ) →
-  fun_stmt_valid (to_env S) ('{to_mem S}) τs τ ms → ✓ S' ∧ S ⊆ S'.
+  fun_stmt_valid (to_env S) '{to_mem S} τs τ ms → ✓ S' ∧ S ⊆ S'.
 Proof.
   destruct S as [Γn Γ m Δg]; unfold insert_fun;
     intros ? [HΓ Hm HΔg HΓn HΓ'] Hf ?; error_proceed.
@@ -737,7 +736,6 @@ Proof.
        apply lookup_var_typed in H; try done; [destruct H as (?&?&->)]
     | H : to_limit_const _ _ _ = _ |- _ =>
        apply to_limit_const_typed in H; try done; [destruct H as [? ->]]
-    | H : assign_type_of _ _ _ = _ |- _ => apply assign_type_of_sound in H
     | H : unop_type_of _ _ = _ |- _ => apply unop_type_of_sound in H
     | H : binop_type_of _ _ _ = _ |- _ => apply binop_type_of_sound in H
     | H : lookup_typedef _ _ _ = _ |- _ =>
@@ -796,7 +794,7 @@ Proof.
   destruct (to_init_expr_typed S S' Δl ci e τ) as (?&?&?&?); split_ands; auto.
   eapply rval_typed_inv, (expr_eval_typed_aux _ _ (to_local_types Δl));
     eauto using type_valid_ptr_type_valid, to_init_expr_typed,
-    prefix_of_nil, purefuns_empty_valid, Forall2_nil.
+    prefix_of_nil, Forall2_nil.
 Qed.
 Lemma alloc_global_typed S S' Δl x sto cτ mci d :
   alloc_global Δl x sto cτ mci S = mret d S' →
@@ -930,7 +928,7 @@ Proof.
     σ (None,None) cs s' cmτ') as (Hs&?&?&?&?);
     eauto using local_env_valid_params; weaken.
   rewrite to_local_types_params in Hs by done.
-  destruct (stmt_fix_return_typed (to_env S') ('{to_mem S'})
+  destruct (stmt_fix_return_typed (to_env S') '{to_mem S'}
     f τs σ s' cmτ' s cmτ) as (?&?&?); eauto 10.
 Qed.
 Lemma alloc_fun_valid S S' f sto cτ cs :

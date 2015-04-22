@@ -64,8 +64,6 @@ Section rtc.
   Proof. exact rtc_transitive. Qed.
   Lemma rtc_once x y : R x y → rtc R x y.
   Proof. eauto. Qed.
-  Instance rtc_once_subrel: subrelation R (rtc R).
-  Proof. exact @rtc_once. Qed.
   Lemma rtc_r x y z : rtc R x y → R y z → rtc R x z.
   Proof. intros. etransitivity; eauto. Qed.
   Lemma rtc_inv x z : rtc R x z → x = z ∨ ∃ y, R x y ∧ rtc R y z.
@@ -156,8 +154,6 @@ Section rtc.
   Proof. intros Hxy Hyz. revert x Hxy. induction Hyz; eauto using tc_r. Qed.
   Lemma tc_rtc x y : tc R x y → rtc R x y.
   Proof. induction 1; eauto. Qed.
-  Instance tc_once_subrel: subrelation (tc R) (rtc R).
-  Proof. exact @tc_rtc. Qed.
 
   Lemma all_loop_red x : all_loop R x → red R x.
   Proof. destruct 1; auto. Qed.
@@ -174,44 +170,21 @@ Section rtc.
   Qed.
 End rtc.
 
-(* Avoid too eager type class resolution *)
-Hint Extern 5 (subrelation _ (rtc _)) =>
-  eapply @rtc_once_subrel : typeclass_instances.
-Hint Extern 5 (subrelation _ (tc _)) =>
-  eapply @tc_once_subrel : typeclass_instances.
-
 Hint Constructors rtc nsteps bsteps tc : ars.
 Hint Resolve rtc_once rtc_r tc_r rtc_transitive tc_rtc_l tc_rtc_r
   tc_rtc bsteps_once bsteps_r bsteps_refl bsteps_trans : ars.
 
 (** * Theorems on sub relations *)
 Section subrel.
-  Context {A} (R1 R2 : relation A) (Hsub : subrelation R1 R2).
-
-  Lemma red_subrel x : red R1 x → red R2 x.
-  Proof. intros [y ?]. exists y. by apply Hsub. Qed.
-  Lemma nf_subrel x : nf R2 x → nf R1 x.
-  Proof. intros H1 H2. destruct H1. by apply red_subrel. Qed.
-
-  Instance rtc_subrel: subrelation (rtc R1) (rtc R2).
-  Proof. induction 1; [left|eright]; eauto; by apply Hsub. Qed.
-  Instance nsteps_subrel: subrelation (nsteps R1 n) (nsteps R2 n).
-  Proof. induction 1; [left|eright]; eauto; by apply Hsub. Qed.
-  Instance bsteps_subrel: subrelation (bsteps R1 n) (bsteps R2 n).
-  Proof. induction 1; [left|eright]; eauto; by apply Hsub. Qed.
-  Instance tc_subrel: subrelation (tc R1) (tc R2).
-  Proof. induction 1; [left|eright]; eauto; by apply Hsub. Qed.
+  Context {A} (R1 R2 : relation A).
+  Notation subrel := (∀ x y, R1 x y → R2 x y).
+  Lemma red_subrel x : subrel → red R1 x → red R2 x.
+  Proof. intros ? [y ?]; eauto. Qed.
+  Lemma nf_subrel x : subrel → nf R2 x → nf R1 x.
+  Proof. intros ? H1 H2; destruct H1; by apply red_subrel. Qed.
 End subrel.
 
-Hint Extern 5 (subrelation (rtc _) (rtc _)) =>
-  eapply @rtc_subrel : typeclass_instances.
-Hint Extern 5 (subrelation (nsteps _) (nsteps _)) =>
-  eapply @nsteps_subrel : typeclass_instances.
-Hint Extern 5 (subrelation (bsteps _) (bsteps _)) =>
-  eapply @bsteps_subrel : typeclass_instances.
-Hint Extern 5 (subrelation (tc _) (tc _)) =>
-  eapply @tc_subrel : typeclass_instances.
-
+(** * Theorems on well founded relations *)
 Notation wf := well_founded.
 
 Section wf.

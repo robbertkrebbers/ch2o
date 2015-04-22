@@ -5,7 +5,7 @@ to define the operational semantics in the file [smallstep], we define
 corresponding evaluation contexts. Notations for expressions are declared in the
 scope [expr_scope]. *)
 Require Import nmap mapset natmap listset.
-Require Export values contexts.
+Require Export contexts assignments.
 
 (** * Stacks *)
 (** Stacks are lists of memory indexes rather than lists of values. This allows
@@ -38,12 +38,6 @@ treatment by (Norrish, PhD thesis) and (Ellison/Rosu, 2012), as whenever a
 sequence point occurs, we only unlock the locations that have been locked by
 evaluating the sub-expression corresponding to that particular sequence point,
 instead of unlocking all locations. *)
-Inductive assign :=
-  | Assign (**i ordinary assignment *)
-  | PreOp : binop → assign (**i assignment operators and prefix increment,
-     decrement, etc. *)
-  | PostOp : binop → assign (**i postfix increment, decrement, etc. *).
-
 Notation lrval K := (addr K + val K)%type.
 Inductive expr (K : Set) : Set :=
   | EVar : nat → expr K
@@ -91,23 +85,23 @@ Arguments EBinOp {_} _ _%expr_scope _%expr_scope.
 Arguments EIf {_} _%expr_scope _%expr_scope _%expr_scope.
 Arguments EComma {_} _%expr_scope _%expr_scope.
 Arguments ECast {_} _ _%expr_scope.
-Arguments EInsert {_} _%expr_scope _ _%expr_scope.
+Arguments EInsert {_} _ _%expr_scope _%expr_scope.
 
 (* The infixes [++] and [::] are at level 60, and [<$>] is at level 65. We
 should remain below those. *)
 Notation "'var' x" := (EVar x)
   (at level 10, format "var  x") : expr_scope.
 Notation "%#{ Ω } ν" := (EVal Ω ν)
-  (at level 10, format "%#{ Ω }  ν") : expr_scope.
-Notation "%# ν" := (EVal ∅ ν) (at level 10) : expr_scope.
+  (at level 15, format "%#{ Ω }  ν") : expr_scope.
+Notation "%# ν" := (EVal ∅ ν) (at level 15) : expr_scope.
 Notation "#{ Ω } v" := (EVal Ω (inr v))
-  (at level 10, format "#{ Ω }  v") : expr_scope.
+  (at level 15, format "#{ Ω }  v") : expr_scope.
 Notation "#{ Ωs }* vs" := (zip_with (λ Ω v, #{Ω} v) Ωs vs)
-  (at level 10, format "#{ Ωs }*  vs") : expr_scope.
-Notation "# v" := (EVal ∅ (inr v)) (at level 10) : expr_scope.
+  (at level 15, format "#{ Ωs }*  vs") : expr_scope.
+Notation "# v" := (EVal ∅ (inr v)) (at level 15) : expr_scope.
 Notation "%{ Ω } a" := (EVal Ω (inl a))
-  (at level 10, format "%{ Ω }  a") : expr_scope.
-Notation "% a" := (EVal ∅ (inl a)) (at level 10) : expr_scope.
+  (at level 15, format "%{ Ω }  a") : expr_scope.
+Notation "% a" := (EVal ∅ (inl a)) (at level 15) : expr_scope.
 Notation ".* e" := (ERtoL e) (at level 24) : expr_scope.
 Notation "& e" := (ERofL e) (at level 24) : expr_scope.
 Notation "e1 ::={ ass } e2" := (EAssign ass e1 e2)
@@ -828,7 +822,7 @@ Inductive ectx_full (K : Set) : nat → Set :=
   | DCVar : nat → ectx_full K 0
   | DCVal : lockset → lrval K → ectx_full K 0
   | DCRtoL : ectx_full K 1
-  | DCLtoR : ectx_full K 1
+  | DCRofL : ectx_full K 1
   | DCAssign : assign → ectx_full K 2
   | DCCall {n} : ectx_full K (S n)
   | DCAbort : type K → ectx_full K 0
@@ -847,7 +841,7 @@ Inductive ectx_full (K : Set) : nat → Set :=
 Arguments DCVar {_} _.
 Arguments DCVal {_} _ _.
 Arguments DCRtoL {_}.
-Arguments DCLtoR {_}.
+Arguments DCRofL {_}.
 Arguments DCAssign {_} _.
 Arguments DCCall {_} _.
 Arguments DCAbort {_} _.
@@ -869,7 +863,7 @@ Instance ectx_full_subst {K} :
   | DCVar x => λ _, var x
   | DCVal Ω ν => λ _, %#{Ω} ν
   | DCRtoL => λ es, .* (es !!! 0)
-  | DCLtoR => λ es, & (es !!! 0)
+  | DCRofL => λ es, & (es !!! 0)
   | DCAssign ass => λ es, es !!! 0 ::={ass} es !!! 1
   | DCCall _ => λ es, call (es !!! 0) @ tail es
   | DCAbort τ => λ _, abort τ
@@ -913,7 +907,7 @@ Definition ectx_full_to_item {K n} (E : ectx_full K n)
   match E in ectx_full _ n return fin n → vec (expr K) n → ectx_item K with
   | DCVar _  | DCVal _ _ | DCAbort _ => fin_0_inv _
   | DCRtoL => fin_S_inv _ (λ _, .* □) $ fin_0_inv _
-  | DCLtoR => fin_S_inv _ (λ _, & □) $ fin_0_inv _
+  | DCRofL => fin_S_inv _ (λ _, & □) $ fin_0_inv _
   | DCAssign ass =>
      fin_S_inv _ (λ es, □ ::={ass} es !!! 1) $
      fin_S_inv _ (λ es, es !!! 0 ::={ass} □) $ fin_0_inv _
@@ -963,6 +957,15 @@ Proof.
   inv_vec es; simpl; intros e' es ?.
   edestruct (vec_to_list_lookup_middle es) as (i&H1&?&H2); eauto.
   exists (FS i); simplify_equality'. by rewrite <-H1, reverse_involutive.
+Qed.
+Lemma expr_vec_values {K n} (es : vec (expr K) n) :
+  (∃ Ωs νs, es = vzip_with EVal Ωs νs)%E ∨ (∃ i, ¬is_nf (es !!! i)).
+Proof.
+  destruct (Forall_Exists_dec (λ e, decide (is_nf e)) es) as [Hes|Hes].
+  * left; induction es as [|e ? es IH]; simpl in *; [by eexists [#],[#]|].
+    inversion Hes as [|?? [Ω ν]]; destruct IH as (Ωs&νs&->); auto; subst.
+    by exists (Ω ::: Ωs) (ν ::: νs).
+  * rewrite Exists_vlookup in Hes; eauto.
 Qed.
 Lemma is_redex_ectx_full {K n} (E : ectx_full K n) (es : vec _ n) :
   is_redex (depsubst E es) → Forall is_nf es.

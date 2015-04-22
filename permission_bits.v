@@ -4,6 +4,7 @@ Require Export permissions bits.
 
 Notation pbit K := (tagged perm (@BIndet K)).
 Notation PBit := (Tagged (d:=BIndet)).
+Hint Extern 0 (Separation _) => apply (_ : Separation (pbit _)).
 
 Section operations.
   Context `{Env K}.
@@ -60,12 +61,20 @@ Proof.
   intros Hxs. revert bs. induction Hxs; intros ?? [|????];
     decompose_Forall_hyps; auto using PBit_valid.
 Qed.
+Lemma pbit_mapped xb : Some Readable ⊆ pbit_kind xb → ¬sep_unmapped xb.
+Proof. intros ? [? _]. by apply (perm_mapped (tagged_perm xb)). Qed.
 Lemma pbit_perm_mapped xb :
   sep_valid xb → sep_unmapped (tagged_perm xb) → sep_unmapped xb.
 Proof. intros [??]; split; auto. Qed.
 Lemma pbits_perm_mapped xbs :
   Forall sep_valid xbs → Forall (not ∘ sep_unmapped) xbs →
   Forall (not ∘ sep_unmapped) (tagged_perm <$> xbs).
+Proof.
+  induction 1; inversion_clear 1; constructor; auto using pbit_perm_mapped.
+Qed.
+Lemma pbits_perm_mapped' xbs :
+  Forall sep_valid xbs → Forall sep_unmapped (tagged_perm <$> xbs) →
+  Forall sep_unmapped xbs.
 Proof.
   induction 1; inversion_clear 1; constructor; auto using pbit_perm_mapped.
 Qed.
@@ -155,6 +164,9 @@ Proof. destruct xb; intros [??]; naive_solver. Qed.
 Lemma pbit_unmapped_indetify xb :
   sep_unmapped xb → sep_unmapped (pbit_indetify xb).
 Proof. destruct xb; intros [??]; split; naive_solver. Qed.
+Lemma pbits_unmapped_tag xbs :
+  Forall sep_unmapped xbs → tagged_tag <$> xbs = replicate (length xbs) BIndet.
+Proof. by induction 1 as [|?? []]; f_equal'. Qed.
 Lemma pbit_unmapped_indetify_inv xb :
   sep_valid xb → sep_unmapped (pbit_indetify xb) → sep_unmapped xb.
 Proof. destruct xb; intros [??] [??]; split; naive_solver. Qed.

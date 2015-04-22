@@ -57,25 +57,18 @@ Section address_operations.
     guard (i ≤ size_of Γ σ * ref_size r);
     guard (ptr_size_of Γ σp | i);
     Some σp.
-  Global Arguments addr_type_check _ !_ /.
 
   Definition addr_strict (Γ : env K) (a : addr K) : Prop :=
     addr_byte a < size_of Γ (addr_type_base a) * ref_size (addr_ref_base a).
-  Global Arguments addr_strict _ !_ /.
   Definition addr_is_obj (a : addr K) : Prop :=
     type_of a = TType (addr_type_base a).
-  Global Arguments addr_is_obj !_ /.
   Definition addr_ref (Γ : env K) (a : addr K) : ref K :=
     ref_set_offset (addr_byte a `div` size_of Γ (addr_type_base a))
       (addr_ref_base a).
-  Global Arguments addr_ref _ !_ /.
   Definition addr_ref_byte (Γ : env K) (a : addr K) : nat :=
     addr_byte a `mod` size_of Γ (addr_type_base a).
-  Global Arguments addr_ref_byte _ !_ /.
   Definition addr_object_offset (Γ : env K) (a : addr K) : nat :=
     ref_object_offset Γ (addr_ref_base a) + addr_byte a * char_bits.
-
-  Global Arguments addr_object_offset _ !_ /.
   Global Instance addr_disjoint: DisjointE (env K) (addr K) := λ Γ a1 a2,
     (addr_index a1 ≠ addr_index a2) ∨
     (addr_index a1 = addr_index a2 ∧ addr_ref Γ a1 ⊥ addr_ref Γ a2) ∨
@@ -90,7 +83,6 @@ Section address_operations.
       Some (Addr (addr_index a)
         (ref_seg_base rs :: addr_ref Γ a) (size_of Γ σ * ref_seg_offset rs)
         (addr_type_object a) σ (TType σ)).
-  Global Arguments addr_elt _ _ !_ /.
   Definition addr_top (o : index) (σ : type K) : addr K :=
     Addr o [] 0 σ σ (TType σ).
   Definition addr_top_array (o : index) (σ : type K) (n : Z) : addr K :=
@@ -112,6 +104,14 @@ Implicit Types rs : ref_seg K.
 Implicit Types r : ref K.
 Implicit Types a : addr K.
 Hint Immediate ref_typed_type_valid.
+
+Arguments addr_type_check _ _ _ !_ /.
+Arguments addr_strict _ _ _ !_ /.
+Arguments addr_is_obj _ !_ /.
+Arguments addr_ref _ _ _ !_ /.
+Arguments addr_ref_byte _ _ _ !_ /.
+Arguments addr_object_offset _ _ _ !_ /.
+Arguments addr_elt _ _ _ _ !_ /.
 
 (** ** Typing and general properties *)
 Lemma addr_freeze_freeze β1 β2 a : freeze β1 (freeze β2 a) = freeze β1 a.
@@ -426,6 +426,8 @@ Proof.
   unfold addr_strict, addr_top; simpl. rewrite Nat.mul_1_r.
   eauto using size_of_pos.
 Qed.
+Lemma addr_top_is_obj o τ : addr_is_obj (addr_top o τ).
+Proof. done. Qed.
 Lemma addr_top_array_alt Γ o τ n :
   Z.to_nat n ≠ 0 → let n' := Z.to_nat n in
   addr_top_array o τ n = addr_elt Γ (RArray 0 τ n') (addr_top o (τ.[n'])).

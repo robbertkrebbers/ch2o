@@ -22,7 +22,7 @@ Proof.
   { by rewrite option_guard_True by eauto using pbits_kind_weaken,
       pbits_refine_kind_subseteq_inv, ctree_flatten_refine. }
   apply (val_refine_compose _ true true meminj_id meminj_id _ Δ _ _
-    (val_map (freeze true) v) _ τ τ); auto using val_freeze_refine_l.
+    (freeze true v) _ τ τ); auto using val_freeze_refine_l.
   erewrite <-(to_of_val _ _ (tagged_perm <$> ctree_flatten w)) by
     (rewrite ?fmap_length;
     eauto using ctree_flatten_length, cmap_lookup_typed).

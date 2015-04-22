@@ -138,28 +138,31 @@ Tactic Notation "decompose_elem_of" hyp(H) :=
   | _ ∈ ∅ => apply elem_of_empty in H; destruct H
   | ?x ∈ {[ ?y ]} =>
     apply elem_of_singleton in H; try first [subst y | subst x]
+  | ?x ∉ {[ ?y ]} =>
+    apply not_elem_of_singleton in H
   | _ ∈ _ ∪ _ =>
-    let H1 := fresh in let H2 := fresh in apply elem_of_union in H;
-    destruct H as [H1|H2]; [go H1 | go H2]
+    apply elem_of_union in H; destruct H as [H|H]; [go H|go H]
+  | _ ∉ _ ∪ _ =>
+    let H1 := fresh H in let H2 := fresh H in apply not_elem_of_union in H;
+    destruct H as [H1 H2]; go H1; go H2
   | _ ∈ _ ∩ _ =>
-    let H1 := fresh in let H2 := fresh in apply elem_of_intersection in H;
+    let H1 := fresh H in let H2 := fresh H in apply elem_of_intersection in H;
     destruct H as [H1 H2]; go H1; go H2
   | _ ∈ _ ∖ _ =>
-    let H1 := fresh in let H2 := fresh in apply elem_of_difference in H;
+    let H1 := fresh H in let H2 := fresh H in apply elem_of_difference in H;
     destruct H as [H1 H2]; go H1; go H2
   | ?x ∈ _ <$> _ =>
-    let H1 := fresh in apply elem_of_fmap in H;
-    destruct H as [? [? H1]]; try (subst x); go H1
+    apply elem_of_fmap in H; destruct H as [? [? H]]; try (subst x); go H
   | _ ∈ _ ≫= _ =>
-    let H1 := fresh in let H2 := fresh in apply elem_of_bind in H;
+    let H1 := fresh H in let H2 := fresh H in apply elem_of_bind in H;
     destruct H as [? [H1 H2]]; go H1; go H2
   | ?x ∈ mret ?y =>
     apply elem_of_ret in H; try first [subst y | subst x]
   | _ ∈ mjoin _ ≫= _ =>
-    let H1 := fresh in let H2 := fresh in apply elem_of_join in H;
+    let H1 := fresh H in let H2 := fresh H in apply elem_of_join in H;
     destruct H as [? [H1 H2]]; go H1; go H2
   | _ ∈ guard _; _ =>
-    let H1 := fresh in let H2 := fresh in apply elem_of_guard in H;
+    let H1 := fresh H in let H2 := fresh H in apply elem_of_guard in H;
     destruct H as [H1 H2]; go H2
   | _ ∈ of_option _ => apply elem_of_of_option in H
   | _ => idtac

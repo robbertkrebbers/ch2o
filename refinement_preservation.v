@@ -50,12 +50,12 @@ Hint Immediate ctx_refine_locals_refine.
 Hint Resolve TArray_valid.
 Hint Immediate base_val_is_0_branchable.
 
-Lemma assign_refine Γ α f m1 m2 ass a1 a2 v1 v2 v1' va1' τ τ' σ :
-  ✓ Γ → m1 ⊑{Γ,α,f} m2 → assign_typed τ τ' ass σ →
+Lemma assign_refine Γ α f m1 m2 ass a1 a2 v1 v2 va1' v1' τ τ' :
+  ✓ Γ → m1 ⊑{Γ,α,f} m2 → assign_typed τ τ' ass →
   a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : TType τ → v1 ⊑{Γ,α,f@'{m1}↦'{m2}} v2 : τ' →
-  assign_sem Γ m1 a1 v1 ass v1' va1' → ∃ v2' va2',
-    assign_sem Γ m2 a2 v2 ass v2' va2' ∧
-    v1' ⊑{Γ,α,f@'{m1}↦'{m2}} v2' : σ ∧ va1' ⊑{Γ,α,f@'{m1}↦'{m2}} va2' : τ.
+  assign_sem Γ m1 a1 v1 ass va1' v1' → ∃ va2' v2',
+    assign_sem Γ m2 a2 v2 ass va2' v2' ∧
+    va1' ⊑{Γ,α,f@'{m1}↦'{m2}} va2' : τ ∧ v1' ⊑{Γ,α,f@'{m1}↦'{m2}} v2' : τ.
 Proof.
   destruct 3 as [τ'|op τ' σ|op τ' σ];
     inversion 3 as [|? va1|? va1]; simplify_equality';
@@ -67,17 +67,17 @@ Proof.
   * exists (val_cast (type_of a2) v2) (val_cast (type_of a2) v2);
       repeat constructor; erewrite ?addr_refine_type_of_r by eauto;
       eauto using val_cast_refine, val_cast_ok_refine, addr_typed_type_valid.
-  * destruct (mem_lookup_refine Γ α f ('{m1}) ('{m2}) m1 m2 a1 a2 va1 τ)
+  * destruct (mem_lookup_refine Γ α f '{m1} '{m2} m1 m2 a1 a2 va1 τ)
       as (va2&?&?); eauto.
     set (v2':=val_cast (type_of a2) (val_binop Γ op va2 v2)).
     exists v2' v2'; unfold v2';
-      repeat constructor; erewrite ?addr_refine_type_of_r by eauto;
+      repeat econstructor; erewrite ?addr_refine_type_of_r by eauto;
       eauto using val_binop_ok_refine, val_cast_ok_refine,
       val_binop_refine, val_cast_refine, addr_typed_type_valid.
-  * destruct (mem_lookup_refine Γ α f ('{m1}) ('{m2}) m1 m2 a1 a2 v1' τ)
+  * destruct (mem_lookup_refine Γ α f '{m1} '{m2} m1 m2 a1 a2 v1' τ)
       as (v2'&?&?); eauto.
     set (v2'':=val_cast (type_of a2) (val_binop Γ op v2' v2)).
-    exists v2' v2''; unfold v2'';
+    exists v2'' v2'; unfold v2'';
       repeat constructor; erewrite ?addr_refine_type_of_r by eauto;
       eauto using val_binop_ok_refine, val_cast_ok_refine,
       val_binop_refine, val_cast_refine, addr_typed_type_valid.
@@ -86,11 +86,11 @@ Ltac go f := eexists f, _, _; split_ands; [do_ehstep| | |by auto].
 Lemma ehstep_refine_forward Γ α f m1 m2 m1' ρ1 ρ2 e1 e2 e1' τlr :
   ✓ Γ → Γ\ ρ1 ⊢ₕ e1, m1 ⇒ e1', m1' →
   m1 ⊑{Γ,α,f} m2 → e1 ⊑{(Γ,ρ1.*2),α,f@'{m1}↦'{m2}} e2 : τlr →
-  Forall2 (stack_item_refine f ('{m1}) ('{m2})) ρ1 ρ2 → ∃ f' m2' e2',
+  Forall2 (stack_item_refine f '{m1} '{m2}) ρ1 ρ2 → ∃ f' m2' e2',
   (**i 1.) *) Γ\ ρ2 ⊢ₕ e2, m2 ⇒ e2', m2' ∧
   (**i 2.) *) m1' ⊑{Γ,α,f'} m2' ∧
   (**i 3.) *) e1' ⊑{(Γ,ρ1.*2),α,f'@'{m1'}↦'{m2'}} e2' : τlr ∧
-  (**i 4.) *) meminj_extend f f' ('{m1}) ('{m2}).
+  (**i 4.) *) meminj_extend f f' '{m1} '{m2}.
 Proof.
   destruct 2; intros.
   * refine_inversion_all; list_simplifier; match goal with
@@ -151,12 +151,12 @@ Qed.
 Lemma ehstep_refine_backward Γ α f m1 m2 m2' ρ1 ρ2 e1 e2 e2' τlr :
   ✓ Γ → Γ\ ρ2 ⊢ₕ e2, m2 ⇒ e2', m2' →
   m1 ⊑{Γ,α,f} m2 → e1 ⊑{(Γ,ρ1.*2),α,f@'{m1}↦'{m2}} e2 : τlr →
-  Forall2 (stack_item_refine f ('{m1}) ('{m2})) ρ1 ρ2 →
+  Forall2 (stack_item_refine f '{m1} '{m2}) ρ1 ρ2 →
   (∃ f' m1' e1',
     (**i 1.) *) Γ\ ρ1 ⊢ₕ e1, m1 ⇒ e1', m1' ∧
     (**i 2.) *) m1' ⊑{Γ,α,f'} m2' ∧
     (**i 3.) *) e1' ⊑{(Γ,ρ1.*2),α,f'@'{m1'}↦'{m2'}} e2' : τlr ∧
-    (**i 4.) *) meminj_extend f f' ('{m1}) ('{m2}))
+    (**i 4.) *) meminj_extend f f' '{m1} '{m2})
   ∨ is_redex e1 ∧ ¬Γ \ ρ1 ⊢ₕ safe e1, m1.
 Proof.
   intros. destruct (Some_dec (maybe2 EAlloc e2)) as [[[τ e]?]|].
@@ -182,7 +182,7 @@ Qed.
 Lemma ehsafe_refine Γ α f m1 m2 ρ1 ρ2 e1 e2 τlr :
   ✓ Γ → Γ\ ρ1 ⊢ₕ safe e1, m1 → m1 ⊑{Γ,α,f} m2 →
   e1 ⊑{(Γ,ρ1.*2),α,f@'{m1}↦'{m2}} e2 : τlr →
-  Forall2 (stack_item_refine f ('{m1}) ('{m2})) ρ1 ρ2 → Γ\ ρ2 ⊢ₕ safe e2, m2.
+  Forall2 (stack_item_refine f '{m1} '{m2}) ρ1 ρ2 → Γ\ ρ2 ⊢ₕ safe e2, m2.
 Proof.
   destruct 2 as [|e1 m1 e1' m1'].
   * intros; refine_inversion_all; [|done].
@@ -228,16 +228,16 @@ Proof.
                        |repeat constructor; auto using EVals_nf]].
 Qed.
 Hint Extern 0 => erewrite <-ctx_refine_locals_types by eauto; eassumption.
-Lemma cstep_refine Γ δ1 δ2 α f S1 S2 S2' g :
+Lemma cstep_refine Γ δ1 δ2 α f S1 S2 S2' σf :
   ✓ Γ → Γ\ δ2 ⊢ₛ S2 ⇒ S2' → ¬is_undef_state S1 →
-  S1 ⊑{Γ,α,f} S2 : g →
+  S1 ⊑{Γ,α,f} S2 : σf →
   δ1 ⊑{Γ,α,f@'{SMem S1}↦'{SMem S2}} δ2 → ∃ f' S1',
   (**i 1.) *) Γ\ δ1 ⊢ₛ S1 ⇒ S1' ∧
-  (**i 2.) *) S1' ⊑{Γ,α,f'} S2' : g ∧
-  (**i 3.) *) meminj_extend f f' ('{SMem S1}) ('{SMem S2}).
+  (**i 2.) *) S1' ⊑{Γ,α,f'} S2' : σf ∧
+  (**i 3.) *) meminj_extend f f' '{SMem S1} '{SMem S2}.
 Proof.
   intros ? p Hundef HS Hδ.
-  destruct (cstep_preservation Γ δ2 S2 S2' g) as [HS2' _];
+  destruct (cstep_preservation Γ δ2 S2 S2' σf) as [HS2' _];
     eauto 2 using state_refine_typed_r, funenv_refine_typed_r.
   revert Hundef HS HS2' Hδ. case p; clear p.
   * intros m k ????; invert. go f; eauto.

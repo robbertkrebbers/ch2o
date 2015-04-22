@@ -81,16 +81,15 @@ Section val_ind.
     end.
 End val_ind.
 
-Definition val_map {K} (f : base_val K → base_val K) : val K → val K :=
-  fix go v :=
+Instance val_freeze `{Env K} : Freeze (val K) :=
+  fix go β v {struct v} := let _ : Freeze (val K) := @go in
   match v with
-  | VBase vb => VBase (f vb)
-  | VArray τ vs => VArray τ (go <$> vs)
-  | VStruct t vs => VStruct t (go <$> vs)
-  | VUnion t i v => VUnion t i (go v)
-  | VUnionAll t vs => VUnionAll t (go <$> vs)
+  | VBase vb => VBase (freeze β vb)
+  | VArray τ vs => VArray τ (freeze β <$> vs)
+  | VStruct t vs => VStruct t (freeze β <$> vs)
+  | VUnion t i v => VUnion t i (freeze β v)
+  | VUnionAll t vs => VUnionAll t (freeze β <$> vs)
   end.
-Notation val_freeze β := (val_map (freeze β)).
 
 Section operations.
   Context `{Env K}.
@@ -389,7 +388,6 @@ Hint Resolve Forall2_take Forall2_drop Forall2_app
   Forall2_replicate Forall2_resize.
 Hint Resolve BIndet_valid BIndet_weak_refine.
 Hint Immediate env_valid_lookup env_valid_lookup_lookup.
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 
 (** ** Properties of the [val_flatten] function *)
 Lemma val_flatten_length Γ Δ τ v :
@@ -552,7 +550,7 @@ Lemma vals_unflatten_representable Γ Δ bs τs :
 Proof. by exists bs. Qed.
 Lemma val_unflatten_frozen Γ Δ τ bs :
   ✓ Γ → ✓{Γ} τ → ✓{Γ,Δ}* bs →
-  val_freeze true (val_unflatten Γ τ bs) = val_unflatten Γ τ bs.
+  freeze true (val_unflatten Γ τ bs) = val_unflatten Γ τ bs.
 Proof.
   intros HΓ Hτ. revert τ Hτ bs. refine (type_env_ind _ HΓ _ _ _ _).
   * intros. rewrite val_unflatten_base; simpl.
@@ -569,7 +567,7 @@ Proof.
 Qed.
 Lemma vals_unflatten_frozen Γ Δ τs bs :
   ✓ Γ → ✓{Γ}* τs → ✓{Γ,Δ}* bs →
-  val_freeze true <$> vals_unflatten Γ τs bs = vals_unflatten Γ τs bs.
+  freeze true <$> vals_unflatten Γ τs bs = vals_unflatten Γ τs bs.
 Proof. induction 2; intros; f_equal'; eauto using val_unflatten_frozen. Qed.
 Lemma val_unflatten_union_free Γ τ bs :
   ✓ Γ → ✓{Γ} τ → val_union_free (val_unflatten Γ τ bs).
@@ -625,9 +623,11 @@ Qed.
 Global Opaque val_unflatten.
 
 (** ** General properties of the typing judgment *)
-Lemma val_typed_int_frozen Γ Δ v τi :
-  (Γ,Δ) ⊢ v : intT τi → val_freeze true v = v.
-Proof. inversion_clear 1;simpl. by erewrite base_typed_int_frozen by eauto. Qed.
+Lemma val_typed_int_frozen Γ Δ v τi : (Γ,Δ) ⊢ v : intT τi → frozen v.
+Proof.
+  inversion_clear 1; unfold frozen; simpl.
+  by erewrite base_typed_int_frozen by eauto.
+Qed.
 Lemma val_union_free_base Γ Δ v τb : (Γ,Δ) ⊢ v : baseT τb → val_union_free v.
 Proof. inversion 1; constructor. Qed.
 Lemma val_typed_type_valid Γ Δ v τ : ✓ Γ → (Γ,Δ) ⊢ v : τ → ✓{Γ} τ.
@@ -663,26 +663,28 @@ Proof.
     eauto using base_val_typed_weaken, lookup_compound_weaken,  Forall_impl,
       vals_representable_weaken, bit_valid_weaken, val_typed_types_valid.
 Qed.
-Lemma val_freeze_freeze β1 β2 v :
-  val_map (freeze β1) (val_map (freeze β2) v) = val_map (freeze β1) v.
+Lemma VArray_frozen τ vs : frozen (VArray τ vs) ↔ Forall frozen vs.
 Proof.
-  assert (∀ vs, Forall (λ v, val_map (freeze β1)
-      (val_map (freeze β2) v) = val_map (freeze β1) v) vs →
-    val_map (freeze β1) <$> val_map (freeze β2) <$> vs =
-      val_map (freeze β1) <$> vs).
+  unfold frozen; split; [|intros Hvs; f_equal'; induction Hvs; f_equal'; auto].
+  intros; simplify_equality'. induction vs; simplify_equality'; auto.
+Qed.
+Lemma val_freeze_freeze β1 β2 v : freeze β1 (freeze β2 v) = freeze β1 v.
+Proof.
+  assert (∀ vs,
+    Forall (λ v, freeze β1 (freeze β2 v) = freeze β1 v) vs →
+    freeze β1 <$> freeze β2 <$> vs = freeze β1 <$> vs).
   { induction 1; f_equal'; auto. }
   induction v using val_ind_alt; f_equal'; auto using base_val_freeze_freeze.
 Qed.
 Lemma vals_freeze_freeze β1 β2 vs :
-  val_map (freeze β1) <$> val_map (freeze β2) <$> vs
-  = val_map (freeze β1) <$> vs.
+  freeze β1 <$> freeze β2 <$> vs = freeze β1 <$> vs.
 Proof. induction vs; f_equal'; auto using val_freeze_freeze. Qed.
 Lemma vals_representable_freeze Γ m vs τs :
   ✓ Γ → ✓{Γ}* τs → vals_representable Γ m vs τs →
-  vals_representable Γ m (val_freeze true <$> vs) τs.
+  vals_representable Γ m (freeze true <$> vs) τs.
 Proof. intros ?? [bs ?? ->]. exists bs; eauto using vals_unflatten_frozen. Qed.
-Lemma typed_freeze Γ Δ v τ :
-  ✓ Γ → (Γ,Δ) ⊢ v : τ → (Γ,Δ) ⊢ val_freeze true v : τ.
+Lemma val_typed_freeze Γ Δ v τ :
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → (Γ,Δ) ⊢ freeze true v : τ.
 Proof.
   induction 2 using @val_typed_ind; simplify_equality'.
   * typed_constructor. by apply base_typed_freeze.
@@ -693,12 +695,12 @@ Proof.
     by apply Forall2_fmap_l.
 Qed.
 Lemma val_union_free_freeze β v :
-  val_union_free (val_map (freeze β) v) ↔ val_union_free v.
+  val_union_free (freeze β v) ↔ val_union_free v.
 Proof.
   split.
-  * assert (∀ vs, Forall (λ v,
-        val_union_free (val_map (freeze β) v) → val_union_free v) vs →
-      Forall val_union_free (val_map (freeze β) <$> vs) →
+  * assert (∀ vs,
+      Forall (λ v, val_union_free (freeze β v) → val_union_free v) vs →
+      Forall val_union_free (freeze β <$> vs) →
       Forall val_union_free vs).
     { induction 1; csimpl; intros; decompose_Forall; eauto. } 
     induction v using val_ind_alt; inversion_clear 1; econstructor; eauto.
@@ -747,7 +749,7 @@ Qed.
 Lemma vals_representable_as_bits_aux Γ Δ sz vs τs :
   ✓ Γ → ✓{Γ}* τs → Forall (λ τ, bit_size_of Γ τ ≤ sz) τs →
   Forall2 (λ v τ, val_union_free v →
-    val_unflatten Γ τ (val_flatten Γ v) = val_freeze true v) vs τs →
+    val_unflatten Γ τ (val_flatten Γ v) = freeze true v) vs τs →
   vals_representable Γ Δ vs τs →
   ∃ bs, bits_list_join sz (val_flatten Γ <$> vs) = Some bs ∧
     ✓{Γ,Δ}* bs ∧ vs = vals_unflatten Γ τs bs.
@@ -783,7 +785,7 @@ Proof.
 Qed.
 Lemma val_unflatten_flatten Γ Δ τ v :
   ✓ Γ → (Γ,Δ) ⊢ v : τ → val_union_free v →
-  val_unflatten Γ τ (val_flatten Γ v) = val_freeze true v.
+  val_unflatten Γ τ (val_flatten Γ v) = freeze true v.
 Proof.
   intros HΓ. revert v τ. refine (val_typed_ind _ _ _ _ _ _ _ _).
   * intros vb τb ? _. rewrite val_unflatten_base; f_equal'.
@@ -861,8 +863,7 @@ Lemma vals_new_typed Γ Δ τs :
 Proof. induction 2; simpl; eauto using val_new_typed. Qed.
 Lemma val_new_type_of Γ τ : ✓ Γ → ✓{Γ} τ → type_of (val_new Γ τ) = τ.
 Proof. by apply val_unflatten_type_of. Qed.
-Lemma val_new_frozen Γ τ :
-  ✓ Γ → ✓{Γ} τ → val_freeze true (val_new Γ τ) = val_new Γ τ.
+Lemma val_new_frozen Γ τ : ✓ Γ → ✓{Γ} τ → frozen (val_new Γ τ).
 Proof. intros. apply (val_unflatten_frozen Γ ∅); auto. Qed.
 
 (** ** Properties of the [to_val] function *)
@@ -897,10 +898,9 @@ Proof.
   * by intros; f_equal'.
   * eauto using val_unflatten_weaken, TCompound_valid.
 Qed.
-Lemma to_val_frozen Γ Δ w τ :
-  ✓ Γ → (Γ,Δ) ⊢ w : τ → val_freeze true (to_val Γ w) = to_val Γ w.
+Lemma to_val_frozen Γ Δ w τ : ✓ Γ → (Γ,Δ) ⊢ w : τ → frozen (to_val Γ w).
 Proof.
-  induction 2 using @ctree_typed_ind; simpl.
+  unfold frozen; induction 2 using @ctree_typed_ind; simpl.
   * by erewrite base_val_unflatten_frozen by eauto using pbits_tag_valid.
   * f_equal. rewrite <-list_fmap_compose. by apply Forall_fmap_ext.
   * f_equal. rewrite <-list_fmap_compose.
@@ -931,7 +931,32 @@ Proof.
         rewrite <-?fmap_drop, <-?fmap_take; f_equal'; auto. }
     by erewrite val_unflatten_compound by eauto.
 Qed.
-
+Lemma to_val_ctree_map Γ f w :
+  (∀ xb, tagged_tag (f xb) = tagged_tag xb) →
+  to_val Γ (ctree_map f w) = to_val Γ w.
+Proof.
+  intros ?. induction w using @ctree_ind_alt; f_equal'; auto.
+  * f_equal. rewrite <-list_fmap_compose. by apply list_fmap_ext.
+  * rewrite <-list_fmap_compose. by apply Forall_fmap_ext.
+  * rewrite <-list_fmap_compose. by apply Forall_fmap_ext.
+  * rewrite <-list_fmap_compose. by apply list_fmap_ext.
+Qed.
+Lemma to_val_unmapped Γ Δ w τ :
+  ✓ Γ → (Γ,Δ) ⊢ w : τ → ctree_unmapped w → to_val Γ w = val_new Γ τ.
+Proof.
+  intros HΓ; revert w τ; refine (ctree_typed_ind _ _ _ _ _ _ _ _); simpl.
+  * intros τb xbs ????; rewrite val_new_base, pbits_unmapped_tag by done.
+    by case_decide; subst; rewrite ?base_val_unflatten_indet by auto.
+  * intros ws τ _ IH _ ?; rewrite val_new_array; f_equal.
+    induction IH; decompose_Forall_hyps; f_equal'; auto.
+  * intros t wxbss τs Hs _ IH _ _ _ ?.
+    erewrite val_new_compound by eauto; f_equal; clear Hs.
+    induction IH; decompose_Forall_hyps; f_equal'; auto.
+  * intros t i τs w xbs τ ?????????; decompose_Forall_hyps; tauto.
+  * intros t τs xbs ????; unfold val_new.
+    rewrite pbits_unmapped_tag by done; congruence.
+Qed.
+  
 (** ** Properties of the [of_val] function *)
 Lemma ctree_flatten_of_val Γ Δ xs v τ :
   ✓ Γ → (Γ,Δ) ⊢ v : τ → length xs = bit_size_of Γ τ →
@@ -1048,7 +1073,7 @@ Proof.
 Qed.
 Lemma to_of_val Γ Δ xs v τ :
   ✓ Γ → (Γ,Δ) ⊢ v : τ → length xs = bit_size_of Γ τ →
-  to_val Γ (of_val Γ xs v) = val_freeze true v.
+  to_val Γ (of_val Γ xs v) = freeze true v.
 Proof.
   intros HΓ Hvτ. revert v τ Hvτ xs.
   refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
@@ -1078,8 +1103,8 @@ Proof.
   * generalize (field_bit_padding Γ (type_of <$> vs)). revert xs.
     induction IH; intros ? [|??]; constructor; simpl; auto.
 Qed.
-Lemma to_val_new Γ τ :
-  ✓ Γ → ✓{Γ} τ → to_val Γ (ctree_new Γ pbit_full τ) = val_new Γ τ.
+Lemma to_val_new Γ x τ :
+  ✓ Γ → ✓{Γ} τ → to_val Γ (ctree_new Γ (PBit x BIndet) τ) = val_new Γ τ.
 Proof.
   intros. unfold ctree_new. by rewrite to_val_unflatten, fmap_replicate.
 Qed.

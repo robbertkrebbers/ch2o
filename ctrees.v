@@ -181,7 +181,7 @@ Section operations.
 
   Inductive ctree_disjoint : Disjoint (ctree K A) :=
     | MBase_disjoint τb xs1 xs2 : xs1 ⊥* xs2 → MBase τb xs1 ⊥ MBase τb xs2
-    | MArray_disjoint' τ ws1 ws2 : ws1 ⊥* ws2 → MArray τ ws1 ⊥ MArray τ ws2
+    | MArray_disjoint τ ws1 ws2 : ws1 ⊥* ws2 → MArray τ ws1 ⊥ MArray τ ws2
     | MStruct_disjoint t wxss1 wxss2 :
        wxss1 ⊥1* wxss2 → wxss1 ⊥2** wxss2 → MStruct t wxss1 ⊥ MStruct t wxss2
     | MUnion_disjoint t i w1 w2 xs1 xs2 :
@@ -381,15 +381,6 @@ Section operations.
     | MUnionAll t xs1, MUnionAll _ xs2 => MUnionAll t (xs1 ∖* xs2)
     | w, MUnionAll _ xs2 => ctree_difference_merge w xs2
     | _, _ => w1
-    end.
-  Global Instance ctree_half : Half (ctree K A) :=
-    fix go w := let _ : Half _ := @go in
-    match w with
-    | MBase τb xs => MBase τb (½* xs)
-    | MArray τ ws => MArray τ (½* ws)
-    | MStruct t wxss => MStruct t (prod_map ½ (½*) <$> wxss)
-    | MUnion t i w xs => MUnion t i (½ w) (½* xs)
-    | MUnionAll t xs => MUnionAll t (½* xs)
     end.
 End operations.
 
@@ -710,26 +701,13 @@ Proof.
   apply ctree_merge_map; auto using replicate_length.
   by rewrite zip_with_replicate_r.
 Qed.
-Lemma ctree_map_merge w :
-  ctree_map f w
-  = ctree_merge (λ x _, f x) w (replicate (length (ctree_flatten w)) ()).
-Proof.
-  induction w as [|τ ws IH|t wxss IH| |] using @ctree_ind_alt; f_equal'.
-  * by rewrite zip_with_replicate_r_eq by done.
-  * induction IH; simplifier; f_equal'; auto.
-  * induction IH as [|[]]; simplifier; repeat f_equal';
-      rewrite ?zip_with_replicate_r_eq by done; auto.
-  * by simplifier.
-  * simplifier. by rewrite zip_with_replicate_r_eq by done.
-  * by rewrite zip_with_replicate_r_eq by done.
-Qed.
 Lemma ctree_map_disjoint w1 w2 :
   w1 ⊥ w2 →
   Forall (λ x, sep_unmapped (f x) → sep_unmapped x) (ctree_flatten w1) →
   Forall (λ x, sep_unmapped x → sep_unmapped (f x)) (ctree_flatten w1) →
   f <$> ctree_flatten w1 ⊥* ctree_flatten w2 → ctree_map f w1 ⊥ w2.
 Proof.
-  intros ? Hf1 Hf2 Hf3. rewrite ctree_map_merge.
+  intros ? Hf1 Hf2 Hf3. rewrite <-ctree_merge_replicate.
   apply ctree_merge_disjoint; auto using replicate_length.
   * elim Hf1; simpl; auto.
   * elim Hf2; simpl; auto.
@@ -741,7 +719,7 @@ Lemma ctree_map_union w1 w2 :
   = (f <$> ctree_flatten w1) ∪* ctree_flatten w2 →
   ctree_map f (w1 ∪ w2) = ctree_map f w1 ∪ w2.
 Proof.
-  intros ? Hf1 Hf2. rewrite !ctree_map_merge, ctree_flatten_union by done.
+  intros ? Hf1 Hf2. rewrite <-!ctree_merge_replicate, ctree_flatten_union by done.
   rewrite zip_with_length_l_eq by list.solve_length.
   apply ctree_merge_union; auto using replicate_length.
   * rewrite Forall2_fmap_l in Hf1; elim Hf1; simplifier; auto.
@@ -1434,6 +1412,7 @@ Lemma ctree_unshared_unmapped w1 w2 :
 Proof. eauto using seps_disjoint_unshared_unmapped, ctree_flatten_disjoint. Qed.
 Lemma ctree_empty_unmapped w : ctree_empty w → ctree_unmapped w.
 Proof. eauto using Forall_impl, sep_unmapped_empty_alt. Qed.
+
 Lemma ctree_splittable_union w : w ⊥ w → ctree_splittable (w ∪ w).
 Proof.
   cut (∀ w1 w2, w1 ⊥ w2 → w1 = w2 → ctree_splittable (w1 ∪ w2)); [eauto|].
@@ -1448,61 +1427,55 @@ Proof.
   * done.
   * done.
 Qed.
-Lemma ctree_splittable_weaken w1 w2 :
-  ctree_splittable w2 → w1 ⊆ w2 → ctree_splittable w1.
+Lemma ctree_disjoint_map (P : A → Prop) f g w :
+  (∀ x, sep_valid x → P x → f x ⊥ g x) →
+  (∀ x, sep_valid x → P x → sep_unmapped (f x) → sep_unmapped x) →
+  (∀ x, sep_valid x → P x → sep_unmapped (g x) → sep_unmapped x) →
+  ctree_valid w → ctree_Forall P w → ctree_map f w ⊥ ctree_map g w.
 Proof.
-  intros Hw2 Hw. revert w1 w2 Hw Hw2.
-  refine (ctree_subseteq_ind_alt _ _ _ _ _ _ _); simpl.
-  * intros τb xs1 xs2 ?; eauto using seps_splittable_weaken.
-  * intros τ ws1 ws2 _ IH ?. induction IH; simplifier; auto.
-  * intros t wxss1 wxss2 _ IH Hwxss ?.
-    induction Hwxss; simplifier; repeat apply Forall_app_2;
-      eauto using seps_splittable_weaken.
-  * intros; simplifier; apply Forall_app_2; eauto using seps_splittable_weaken.
-  * intros t xs1 xs2 ??; eauto using seps_splittable_weaken.
-  * intros t i xs1 w2 xs2 ?????; simplifier.
-    eauto using seps_splittable_weaken.
+  intros ???; revert w.
+  assert (∀ xs, Forall sep_valid xs → Forall P xs → f <$> xs ⊥* g <$> xs).
+  { induction 1; intros; decompose_Forall_hyps; constructor; eauto. }
+  assert (∀ xs, Forall sep_valid xs → Forall P xs →
+    Forall sep_unmapped (f <$> xs) → Forall sep_unmapped xs).
+  { induction 1; intros; decompose_Forall_hyps; constructor; eauto. }
+  assert (∀ xs, Forall sep_valid xs → Forall P xs →
+    Forall sep_unmapped (g <$> xs) → Forall sep_unmapped xs).
+  { induction 1; intros; decompose_Forall_hyps; constructor; eauto. }
+  refine (ctree_valid_ind_alt _ _ _ _ _ _); simpl.
+  * constructor; auto.
+  * intros τ ws _ IH ?; constructor.
+    induction IH; decompose_Forall_hyps; auto.
+  * intros t wxss _ IH Hxs; constructor;
+      induction IH as [|[]]; decompose_Forall_hyps; constructor; simpl; auto.
+  * constructor; decompose_Forall_hyps;
+      rewrite ?ctree_flatten_map; naive_solver.
+  * constructor; auto.
 Qed.
-Lemma ctree_flatten_half w : ctree_flatten (½ w) = ½* (ctree_flatten w).
+Lemma ctree_union_map (f g : A → A) w :
+  ctree_map f w ∪ ctree_map g w = ctree_map (λ x, f x ∪ g x) w.
 Proof.
-  revert w. refine (ctree_ind_alt _ _ _ _ _ _); simpl; try done.
-  * induction 2; simplifier; f_equal; auto.
-  * induction 2; simplifier; repeat f_equal; auto.
-  * by intros; simplifier; f_equal.
+  assert (∀ xs, (f <$> xs) ∪* (g <$> xs) = (λ x, f x ∪ g x) <$> xs).
+  { induction xs; f_equal'; auto. }
+  induction w as [|τ ws IH|t wxss IH| |] using @ctree_ind_alt; f_equal'; auto.
+  * induction IH; f_equal'; auto.
+  * induction IH as [|[]]; repeat f_equal'; auto.
 Qed.
-Hint Rewrite ctree_flatten_half : simplifier.
-Lemma ctree_unmapped_half w :
-  ctree_splittable w → ctree_unmapped (½ w) → ctree_unmapped w.
-Proof. rewrite ctree_flatten_half. auto using seps_unmapped_half_1. Qed.
-Lemma ctree_half_empty_rev w :
-  ctree_splittable w → ctree_empty (½ w) → ctree_empty w.
-Proof. rewrite ctree_flatten_half. auto using seps_half_empty_rev. Qed.
-Lemma ctree_disjoint_half w : ctree_valid w → ctree_splittable w → ½ w ⊥ ½ w.
+Lemma ctree_map_id (P : A → Prop) f w :
+  (∀ x, P x → f x = x) → ctree_Forall P w → ctree_map f w = w.
 Proof.
-  revert w. refine (ctree_valid_ind_alt _ _ _ _ _ _); simpl.
-  * constructor; auto using seps_disjoint_half.
-  * intros τ ws _ IH ?; constructor. induction IH; simplifier; auto.
-  * intros t wxss _ IH Hwxss ?; constructor.
-    + clear Hwxss. induction IH; simplifier; auto.
-    + induction Hwxss; constructor; simplifier; auto using seps_disjoint_half.
-  * intros t i w xs _ IH _ ??; simplifier.
-    constructor; auto using seps_disjoint_half;
-      intuition auto using ctree_unmapped_half, seps_unmapped_half_1.
-  * constructor; auto using seps_disjoint_half.
+  intros ?.
+  assert (∀ xs, Forall P xs → f <$> xs = xs) by (induction 1; f_equal'; auto).
+  induction w as [|τ ws IH|t wxss IH| |] using @ctree_ind_alt;
+    intros; decompose_Forall_hyps; f_equal; auto.
+  * induction IH; decompose_Forall_hyps; f_equal; auto.
+  * induction IH as [|[]]; decompose_Forall_hyps; repeat f_equal'; auto.
 Qed.
-Lemma ctree_union_half w : ctree_splittable w → ½ w ∪ ½ w = w.
-Proof.
-  revert w. refine (ctree_ind_alt _ _ _ _ _ _); simpl.
-  * intros; f_equal; auto using seps_union_half.
-  * intros τ ws Hws IH; f_equal. induction Hws; simplifier; f_equal; auto.
-  * intros t wxss Hws IH; f_equal. induction Hws as [|[]]; simplifier;
-      repeat f_equal; auto using seps_union_half.
-  * intros; simplifier; f_equal; auto using seps_union_half.
-  * intros; f_equal; auto using seps_union_half.
-Qed.
+Notation h := (ctree_map sep_half).
+Hint Rewrite @ctree_flatten_map : simplifier.
 Lemma ctree_merge_half w ys :
   ctree_flatten w ⊥* ys → Forall sep_splittable (ctree_flatten w ∪* ys) →
-  ½ (ctree_merge (∪) w ys) = ctree_merge (∪) (½ w) (½* ys).
+  h (ctree_merge (∪) w ys) = ctree_merge (∪) (h w) (½* ys).
 Proof.
   revert w ys. refine (ctree_ind_alt _ _ _ _ _ _); simpl.
   * intros; f_equal; auto using seps_union_half_distr.
@@ -1515,7 +1488,7 @@ Proof.
   * intros; f_equal; auto using seps_union_half_distr.
 Qed.
 Lemma ctree_union_half_distr w1 w2 :
-  w1 ⊥ w2 → ctree_splittable (w1 ∪ w2) → ½ (w1 ∪ w2) = ½ w1 ∪ ½ w2.
+  w1 ⊥ w2 → ctree_splittable (w1 ∪ w2) → h (w1 ∪ w2) = h w1 ∪ h w2.
 Proof.
   revert w1 w2. refine (ctree_disjoint_ind_alt _ _ _ _ _ _ _ _); simpl.
   * intros; f_equal; auto using seps_union_half_distr.

@@ -109,8 +109,6 @@ Ltac solve_length := repeat first
 Hint Extern 0 (length _ = _) => solve_length.
 Hint Extern 0 (_ ≤ length _) => solve_length.
 Hint Extern 0 (length _ ≤ _) => solve_length.
-Hint Extern 0 (Separation _) => apply (_ : Separation perm).
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit K)).
 
 Lemma val_refine_typed_l Γ α f Δ1 Δ2 v1 v2 τ :
   ✓ Γ → v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ → (Γ,Δ1) ⊢ v1 : τ.
@@ -465,7 +463,7 @@ Proof.
     ctree_refine_id, @seps_unshared_unmapped.
 Qed.
 Lemma val_freeze_refine_l Γ Δ v τ :
-  ✓ Γ → (Γ,Δ) ⊢ v : τ → val_map (freeze true) v ⊑{Γ,true@Δ} v : τ.
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → freeze true v ⊑{Γ,true@Δ} v : τ.
 Proof.
   intros ?. revert v τ. refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
   * intros. refine_constructor; eauto using base_val_freeze_refine_l.

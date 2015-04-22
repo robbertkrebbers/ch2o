@@ -15,6 +15,7 @@ Definition perm := (lockable (counter Qcanon.Qc) + Qcanon.Qc)%type.
 Instance perm_sep_ops : SeparationOps perm := _.
 Instance perm_sep : Separation perm := _.
 Typeclasses Opaque perm.
+Hint Extern 0 (Separation _) => apply (_ : Separation perm).
 
 Definition perm_readonly : perm := inr 1.
 Definition perm_full : perm := inl (LUnlocked (Counter 0 1)).
@@ -87,6 +88,13 @@ Lemma perm_full_mapped : ¬sep_unmapped perm_full.
 Proof. by apply (bool_decide_unpack _). Qed.
 Lemma perm_full_unshared : sep_unshared perm_full.
 Proof. by apply (bool_decide_unpack _). Qed.
+Lemma perm_subseteq_full x1 x2 : x1 = perm_full → x1 ⊆ x2 → x2 = perm_full.
+Proof.
+  intros ->; destruct x2 as [[[??]|[c x]]|?];
+    repeat sep_unfold; unfold perm_full; intuition; simplify_equality.
+  assert (x = 1) as -> by eauto using Qcle_antisym.
+  by assert (c = 0) as -> by eauto using Qcle_antisym.
+Qed.
 Lemma perm_readonly_valid : sep_valid perm_readonly.
 Proof. done. Qed.
 Lemma perm_readonly_mapped : ¬sep_unmapped perm_readonly.
@@ -105,6 +113,8 @@ Proof. by destruct x as [[]|[]]. Qed.
 Lemma perm_lock_valid x :
   sep_valid x → Some Writable ⊆ perm_kind x → sep_valid (perm_lock x).
 Proof. destruct (perm_kind_spec x); repeat sep_unfold; intuition. Qed.
+Lemma perm_lock_empty x : perm_lock x = ∅ → x = ∅.
+Proof. by destruct x as [[]|?]. Qed.
 Lemma perm_lock_unmapped x :
   Some Writable ⊆ perm_kind x → sep_unmapped x → sep_unmapped (perm_lock x).
 Proof. destruct (perm_kind_spec x); repeat sep_unfold; naive_solver. Qed.
@@ -119,6 +129,8 @@ Lemma perm_unlock_unlock x : perm_unlock (perm_unlock x) = perm_unlock x.
 Proof. by destruct x as [[]|]. Qed.
 Lemma perm_unlock_valid x : sep_valid x → sep_valid (perm_unlock x).
 Proof. destruct x as [[[]|[]]|]; repeat sep_unfold; naive_solver. Qed.
+Lemma perm_unlock_empty x : sep_valid x → perm_unlock x = ∅ → x = ∅.
+Proof. destruct x as [[]|?]; repeat sep_unfold; naive_solver. Qed.
 Lemma perm_unlock_unmapped x : sep_unmapped x → sep_unmapped (perm_unlock x).
 Proof. destruct x as [[[]|[]]|]; repeat sep_unfold; intuition. Qed.
 Lemma perm_unlock_mapped x :
