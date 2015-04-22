@@ -384,7 +384,7 @@ let const_of_string s =
     | 'l' | 'L' when rank = CLongRank -> go (n - 1) sign CLongLongRank
     | _ ->
        let x =
-         if Str.string_match (Str.regexp "0x[0-9]+") s 0 then
+         if Str.string_match (Str.regexp "0x[0-9a-fA-F]+") s 0 then
            num_of_string' 16 (String.sub s 2 (n-2))
          else if Str.string_match (Str.regexp "0[0-9]+") s 0 then
            num_of_string' 8 (String.sub s 1 (n-1))
