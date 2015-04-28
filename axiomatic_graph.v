@@ -63,7 +63,6 @@ Section basics.
        (∀ Δ'', ✓{Γ,Δ''} m' → Δ ⇒ₘ Δ'' → Δ' ⇒ₘ Δ'') →
        ax_graph Δ' ρ n k φ m →
        ax_next Δ ρ n a (State k φ m').
-
   Lemma focus_locks_valid_union φ m1 m2 :
     ⊥ [m1; m2] → focus_locks_valid φ m1 → focus_locks_valid φ (m1 ∪ m2).
   Proof.
@@ -87,6 +86,17 @@ Section basics.
       ax_next Δ' ρ (pred n) a S') →
     ax_graph Δ ρ n k φ m.
   Proof. destruct n; econstructor (by eauto). Qed.
+  Lemma ax_further_pred_alt Δ ρ n k φ m :
+    (∀ Δ' m' a,
+      ✓{Γ,Δ'} m → Δ ⇒ₘ Δ' →
+      frame F Γ Δ' k φ m m' a →
+      red (rcstep Γ δ ρ) (State k φ m') ∧
+      ∀ S',
+        Γ\ δ\ ρ ⊢ₛ State k φ m' ⇒ S' →
+        dom indexset (SMem S') ∖ dom indexset m' ∩ dom indexset Δ' = ∅ →
+        ax_next Δ' ρ (pred n) a S') →
+    ax_graph Δ ρ n k φ m.
+  Proof. intros; apply ax_further_pred; naive_solver. Qed.
   Lemma ax_S Δ ρ n k φ m (Hax : ax_graph Δ ρ (S n) k φ m) : ax_graph Δ ρ n k φ m
   with ax_next_S Δ ρ n a S' (Hax : ax_next Δ ρ (S n) a S') : ax_next Δ ρ n a S'.
   Proof.

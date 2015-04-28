@@ -241,7 +241,7 @@ Proof.
       @sep_union_subseteq_l', expr_typed_weaken.
 Qed.
 Lemma ax_rtol Γ δ A P Q1 Q2 e :
-  (∀ v, Q1 (inr v) ⊆{Γ} (∃ a, Q2 (inl a) ∧ .*#v ⇓ inl a)%A) →
+  (∀ v, Q1 (inr v) ⊆{Γ} (∃ a, Q2 (inl a) ∧ (A -★ .*#v ⇓ inl a))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P }} .* e {{ Q2 }}.
 Proof.
@@ -249,25 +249,22 @@ Proof.
   apply (ax_expr_compose_1 Γ δ n A Q1 _ Δ DCRtoL e ρ m (inr (TType τ.*))); auto.
   { esolve_elem_of. }
   clear dependent m; intros Δ' Ω [|v] m ?????; typed_inversion_all.
-  destruct (HQ v Γ Δ' ρ (cmap_erase m))
-    as (a&?&[τ'|]&?&?); eauto using indexes_valid_weaken;
-    simplify_option_equality; typed_inversion_all.
-  assert (TType τ' = TType τ); [|simplify_equality].
-  { by apply typed_unique with (Γ,Δ') a. }
-  apply ax_further_pred.
-  { intros Δ'' ???? Hframe; inversion_clear Hframe as [mA mf|];
-      simplify_equality; simplify_mem_disjoint_hyps.
-    assert (index_alive' (m ∪ mf ∪ mA) (addr_index a)).
-    { apply cmap_subseteq_index_alive' with m;
-        eauto using @sep_union_subseteq_l_transitive, @sep_union_subseteq_l'.
-      by rewrite <-index_alive_erase'. }
-    solve_rcred. }
-  intros Δ'' ?? S' ?? Hframe p _; inversion_clear Hframe as [mA mf|];
+  apply ax_further_pred_alt.
+  intros Δ'' ???? Hframe; inversion_clear Hframe as [mA mf|];
     simplify_equality; simplify_mem_disjoint_hyps.
-  assert (index_alive' (m ∪ mf ∪ mA) (addr_index a)).
-  { apply cmap_subseteq_index_alive' with m;
-      eauto using @sep_union_subseteq_l_transitive, @sep_union_subseteq_l'.
-    by rewrite <-index_alive_erase'. }
+  destruct (HQ v Γ Δ' ρ (cmap_erase m)) as (a'&?&HA);
+    simpl; eauto 10 using indexes_valid_weaken.
+  destruct (HA Γ Δ'' mA) as (τlr&?&?); clear HA; eauto.
+  { rewrite <-cmap_erase_disjoint_le; auto. }
+  destruct τlr as [τ'|]; simplify_option_equality; typed_inversion_all.
+  assert (TType τ' = TType τ); [|simplify_equality].
+  { apply typed_unique with (Γ,Δ'') a'; eauto using addr_typed_weaken. }
+  assert (index_alive' (m ∪ mf ∪ mA) (addr_index a')).
+  { apply cmap_subseteq_index_alive' with (mA ∪ cmap_erase m); auto.
+    rewrite (sep_commutative _ mA) by auto.
+    apply sep_preserving_l; auto using
+      @sep_union_subseteq_l_transitive, cmap_erase_subseteq_l. }
+  split; [solve_rcred|intros ? p _].
   inv_rcstep p; [inv_ehstep|exfalso; eauto with cstep].
   apply mk_ax_next with Δ'' m; auto.
   { constructor; auto. }
@@ -295,7 +292,7 @@ Proof.
   apply HQ; eauto using assert_weaken, indexes_valid_weaken.
 Qed.
 Lemma ax_load Γ δ A P Q1 Q2 e :
-  (∀ a, Q1 (inl a) ⊆{Γ} (∃ v, Q2 (inr v) ∧ load (%a) ⇓ inr v)%A) →
+  (∀ a, Q1 (inl a) ⊆{Γ} (∃ v, Q2 (inr v) ∧ (A -★ load (%a) ⇓ inr v))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P }} load e {{ Q2 }}.
 Proof.
@@ -303,27 +300,31 @@ Proof.
   apply (ax_expr_compose_1 Γ δ n A Q1 _ Δ DCLoad e ρ m (inl τ)); auto.
   { esolve_elem_of. }
   clear dependent m. intros Δ' Ω [a|] m ?????; typed_inversion_all.
+  apply ax_further_pred_alt.
+  intros Δ'' ???? Hframe;
+    inversion_clear Hframe as [mA mf|]; simplify_equality.
   destruct (HQ a Γ Δ' ρ (cmap_erase m))
-    as (v&?&?&_&?); eauto using indexes_valid_weaken; simplify_option_equality.
-  assert (m !!{Γ} a = Some v) by (by rewrite <-mem_lookup_erase).
-  apply ax_further_pred.
-  { intros Δ'' ???? Hframe;
-      inversion_clear Hframe as [mf mA|]; simplify_equality.
-    assert ((m ∪ mA ∪ mf) !!{Γ} a = Some v).
-    { apply mem_lookup_subseteq with Δ'' m;
-        eauto using @sep_union_subseteq_l_transitive, @sep_union_subseteq_l'. }
-    solve_rcred. }
-  intros Δ'' ?? S' ?? Hframe p _;
-    inversion_clear Hframe as [mf mA|]; simplify_equality.
-  assert ((m ∪ mA ∪ mf) !!{Γ} a = Some v).
-  { apply mem_lookup_subseteq with Δ'' m;
-      eauto using @sep_union_subseteq_l_transitive, @sep_union_subseteq_l'. }
+    as (v&?&HA); eauto using indexes_valid_weaken.
+  assert (⊥ [mA; cmap_erase m]).
+  { rewrite <-cmap_erase_disjoint_le; auto. }
+  destruct (HA Γ Δ'' mA) as (τlr&?&?); clear HA; eauto.
+  destruct τlr as [|τ']; simplify_option_equality; typed_inversion_all.
+  assert (mA ∪ cmap_erase m ⊆ m ∪ mf ∪ mA).
+  { rewrite (sep_commutative _ mA) by auto.
+    apply sep_preserving_l; auto using
+      @sep_union_subseteq_l_transitive, cmap_erase_subseteq_l. }
+  assert (⊥ [mA; cmap_erase m]).
+  { rewrite <-cmap_erase_disjoint_le; auto. }
+  assert ((m ∪ mf ∪ mA) !!{Γ} a = Some v).
+  { apply mem_lookup_subseteq with Δ'' (mA ∪ cmap_erase m); auto. }
+  assert (mem_forced Γ a (m ∪ mf ∪ mA)).
+  { apply mem_forced_subseteq with Δ'' (mA ∪ cmap_erase m); eauto. }
+  split; [solve_rcred|intros S' p _].
   inv_rcstep p; [inv_ehstep; simplify_equality|exfalso; eauto with cstep].
-  erewrite <-sep_associative, mem_force_union by eauto.
-  rewrite mem_forced_force by (by rewrite <-mem_forced_erase).
-  rewrite sep_associative by auto.
+  rewrite mem_forced_force by auto.
   apply mk_ax_next with Δ'' m; simpl; auto.
   { constructor; auto. }
+  assert (✓{Γ,Δ''} (m ∪ mf ∪ mA)) by eauto.
   apply ax_done; constructor; eauto using mem_lookup_typed,
     assert_weaken, indexes_valid_weaken, addr_typed_weaken.
 Qed.
@@ -439,7 +440,7 @@ Proof.
   eauto using mem_lock_singleton, mem_insert_singleton, mem_singleton_weaken.
 Qed.
 Lemma ax_eltl Γ δ A P Q1 Q2 e rs :
-  (∀ a, Q1 (inl a) ⊆{Γ} (∃ a', Q2 (inl a') ∧ %a %> rs ⇓ inl a')%A) →
+  (∀ a, Q1 (inl a) ⊆{Γ} (∃ a', Q2 (inl a') ∧ (A -★ %a %> rs ⇓ inl a'))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P }} e %> rs {{ Q2 }}.
 Proof.
@@ -449,11 +450,15 @@ Proof.
   apply (ax_expr_compose_1 Γ δ n A Q1 _ Δ (DCEltL rs) e ρ m (inl τ)); auto.
   { esolve_elem_of. }
   clear dependent m; intros Δ' Ω [a|] m ?????; typed_inversion_all.
-  destruct (HQ a Γ Δ' ρ (cmap_erase m))
-    as (?&?&?&_&?); eauto using indexes_valid_weaken; simplify_option_equality.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ'' ?? S' ?? Hframe p _; inversion_clear Hframe as [mA mf|];
+  apply ax_further_pred_alt.
+  intros Δ'' ???? Hframe; inversion_clear Hframe as [mA mf|];
     simplify_equality; simplify_mem_disjoint_hyps.
+  destruct (HQ a Γ Δ' ρ (cmap_erase m))
+    as (a'&?&HA); eauto using indexes_valid_weaken.
+  destruct (HA Γ Δ'' mA) as (τlr&?&?); clear HA; eauto.
+  { rewrite <-cmap_erase_disjoint_le; auto. }
+  destruct τlr as [τ'|]; simplify_option_equality; typed_inversion_all.
+  split; [solve_rcred|intros S' p _].
   inv_rcstep p; [inv_ehstep|exfalso; eauto with cstep].
   apply mk_ax_next with Δ'' m; auto.
   { constructor; auto. }
@@ -462,7 +467,7 @@ Proof.
     indexes_valid_weaken, addr_elt_typed, addr_elt_strict.
 Qed.
 Lemma ax_eltr Γ δ A P Q1 Q2 e rs :
-  (∀ v, Q1 (inr v) ⊆{Γ} (∃ v', Q2 (inr v') ∧ #v #> rs ⇓ inr v')%A) →
+  (∀ v, Q1 (inr v) ⊆{Γ} (∃ v', Q2 (inr v') ∧ (A -★ #v #> rs ⇓ inr v'))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P }} e #> rs {{ Q2 }}.
 Proof.
@@ -472,12 +477,16 @@ Proof.
   apply (ax_expr_compose_1 Γ δ n A Q1 _ Δ (DCEltR rs) e ρ m (inr τ)); auto.
   { esolve_elem_of. }
   clear dependent m; intros Δ' Ω [|v] m ?????; typed_inversion_all.
-  destruct (HQ v Γ Δ' ρ (cmap_erase m))
-    as (v'&?&?&_&?); eauto using indexes_valid_weaken; simplify_option_equality.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ'' ?? S' ?? Hframe p _; inversion_clear Hframe as [mA mf|];
+  apply ax_further_pred_alt.
+  intros Δ'' ???? Hframe; inversion_clear Hframe as [mA mf|];
     simplify_equality; simplify_mem_disjoint_hyps.
-  inv_rcstep p; [inv_ehstep; simplify_equality'|exfalso; eauto with cstep].
+  destruct (HQ v Γ Δ' ρ (cmap_erase m))
+    as (v'&?&HA); eauto using indexes_valid_weaken.
+  destruct (HA Γ Δ'' mA) as (τlr&?&?); clear HA; eauto.
+  { rewrite <-cmap_erase_disjoint_le; auto. }
+  destruct τlr as [|τ']; simplify_option_equality; typed_inversion_all.
+  split; [solve_rcred|intros S' p _].
+  inv_rcstep p; [inv_ehstep;simplify_option_equality|exfalso; eauto with cstep].
   apply mk_ax_next with Δ'' m; auto.
   { constructor; auto. }
   { esolve_elem_of. }
@@ -487,7 +496,7 @@ Qed.
 Lemma ax_insert Γ δ A P1 P2 Q1 Q2 R e1 e2 r :
   (∀ v1 v2,
     (Q1 (inr v1) ★ Q2 (inr v2))%A ⊆{Γ} (∃ v',
-      R (inr v') ∧ #[r:=#v1] (#v2) ⇓ inr v')%A) →
+      R (inr v') ∧ (A -★ #[r:=#v1] (#v2) ⇓ inr v'))%A) →
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ Q2 }} →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} #[r:=e1] e2 {{ R }}.
@@ -507,15 +516,18 @@ Proof.
   { esolve_elem_of. }
   clear dependent m1 m2; intros Δ' Ω1 Ω2 [|v1] [|v2] m1 m2
     ??????????; typed_inversion_all.
+  apply ax_further_pred_alt.
+  intros Δ'' ???? Hframe; inversion_clear Hframe as [mA mf|];
+    simplify_equality; simplify_mem_disjoint_hyps.
   destruct (HQ v1 v2 Γ Δ' ρ (cmap_erase (m1 ∪ m2)))
-    as (v'&?&?&_&?); eauto 6 using indexes_valid_weaken.
+    as (v'&?&HA); eauto 6 using indexes_valid_weaken.
   { rewrite cmap_erase_union.
     exists (cmap_erase m1) (cmap_erase m2); split_ands; auto.
     by rewrite <-!cmap_erase_disjoint_le. }
-  simplify_option_equality.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ'' ?? S' ?? Hframe p _; inversion_clear Hframe as [mA mf|];
-    simplify_equality; simplify_mem_disjoint_hyps.
+  destruct (HA Γ Δ'' mA) as (?&_&?); clear HA; eauto.
+  { rewrite <-cmap_erase_disjoint_le; auto. }
+  simplify_option_equality; typed_inversion_all.
+  split; [solve_rcred|intros S' p _].
   inv_rcstep p; [inv_ehstep; simplify_equality'|exfalso; eauto with cstep].
   rewrite <-mem_locks_union by auto.
   apply mk_ax_next with Δ'' (m1 ∪ m2); auto.
@@ -639,7 +651,7 @@ Proof.
   eauto using assert_weaken, mem_free_forward, indexes_valid_weaken.
 Qed.
 Lemma ax_unop Γ δ A P Q1 Q2 op e :
-  (∀ v, Q1 (inr v) ⊆{Γ} (∃ v', Q2 (inr v') ∧ @{op} #v ⇓ inr v')%A) →
+  (∀ v, Q1 (inr v) ⊆{Γ} (∃ v', Q2 (inr v') ∧ (A -★ @{op} #v ⇓ inr v'))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P }} @{op} e {{ Q2 }}.
 Proof.
@@ -649,21 +661,21 @@ Proof.
   apply (ax_expr_compose_1 Γ δ n A Q1 _ Δ (DCUnOp op) e ρ m (inr τ)); auto.
   { esolve_elem_of. }
   clear dependent m. intros Δ' Ω [a|] m ?????; typed_inversion_all.
+  apply ax_further_pred_alt.
+  intros Δ'' ???? Hframe; inversion_clear Hframe as [mA mf|];
+    simplify_equality; simplify_mem_disjoint_hyps.
   destruct (HQ v Γ Δ' ρ (cmap_erase m))
-    as (v'&?&?&_&?); eauto using indexes_valid_weaken; simplify_option_equality.
-  assert (val_unop_ok m op v) by (by rewrite <-val_unop_ok_erase).
-  apply ax_further_pred.
-  { intros Δ'' ???? Hframe;
-      inversion_clear Hframe as [mf mA|]; simplify_equality.
-    assert (val_unop_ok (m ∪ mA ∪ mf) op v).
-    { eapply val_unop_ok_weaken with m; eauto using cmap_subseteq_index_alive,
-        @sep_union_subseteq_l_transitive, @sep_union_subseteq_l'. }
-    solve_rcred. }
-  intros Δ'' ?? S' ?? Hframe p _;
-    inversion_clear Hframe as [mf mA|]; simplify_equality.
-  assert (val_unop_ok (m ∪ mA ∪ mf) op v).
-  { eapply val_unop_ok_weaken with m; eauto using cmap_subseteq_index_alive,
-      @sep_union_subseteq_l_transitive, @sep_union_subseteq_l'. }
+    as (v'&?&HA); eauto using indexes_valid_weaken.
+  destruct (HA Γ Δ'' mA) as (?&_&?); clear HA; eauto.
+  { rewrite <-cmap_erase_disjoint_le; auto. }
+  simplify_option_equality.
+  assert (val_unop_ok (m ∪ mf ∪ mA) op v).
+  { eapply val_unop_ok_weaken with (mA ∪ cmap_erase m); eauto.
+    intros; eapply cmap_subseteq_index_alive; eauto.
+    rewrite (sep_commutative _ mA) by auto.
+    apply sep_preserving_l; auto using
+      @sep_union_subseteq_l_transitive, cmap_erase_subseteq_l. }
+  split; [solve_rcred|intros S' p _].
   inv_rcstep p; [inv_ehstep; simplify_equality|exfalso; eauto with cstep].
   apply mk_ax_next with Δ'' m; simpl; auto.
   { constructor; auto. }
@@ -673,7 +685,7 @@ Qed.
 Lemma ax_binop Γ δ A P1 P2 Q1 Q2 R op e1 e2 :
   (∀ v1 v2,
     (Q1 (inr v1) ★ Q2 (inr v2))%A ⊆{Γ} (∃ v,
-      R (inr v) ∧ # v1 @{op} # v2 ⇓ inr v)%A) →
+      R (inr v) ∧ (A -★ # v1 @{op} # v2 ⇓ inr v))%A) →
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ Q2 }} →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 @{op} e2 {{ R }}.
@@ -693,28 +705,25 @@ Proof.
   { esolve_elem_of. }
   clear dependent m1 m2; intros Δ' Ω1 Ω2 [|v1] [|v2] m1 m2
     ??????????; typed_inversion_all.
+  apply ax_further_pred_alt.
+  intros Δ'' ???? Hframe; inversion_clear Hframe as [mA mf|];
+    simplify_equality; simplify_mem_disjoint_hyps.
   destruct (HQ v1 v2 Γ Δ' ρ (cmap_erase (m1 ∪ m2)))
-    as (v'&?&?&_&?); eauto 6 using indexes_valid_weaken.
+    as (v'&?&HA); eauto 6 using indexes_valid_weaken.
   { rewrite cmap_erase_union.
     exists (cmap_erase m1) (cmap_erase m2); split_ands; auto.
     by rewrite <-!cmap_erase_disjoint_le. }
+  destruct (HA Γ Δ'' mA) as (?&_&?); clear HA; eauto.
+  { rewrite <-cmap_erase_disjoint_le; auto. }
   simplify_option_equality.
-  assert (val_binop_ok Γ (m1 ∪ m2) op v1 v2)
-    by (by rewrite <-val_binop_ok_erase).
-  apply ax_further_pred.
-  { intros Δ'' ???? Hframe;
-      inversion_clear Hframe as [mf mA|]; simplify_equality.
-    assert (val_binop_ok Γ (m1 ∪ m2 ∪ mA ∪ mf) op v1 v2).
-    { eapply val_binop_ok_weaken with Γ Δ' (m1 ∪ m2) τ1 τ2;
-        eauto 4 using cmap_subseteq_index_alive,
-        @sep_union_subseteq_l_transitive, @sep_union_subseteq_l'. }
-    solve_rcred. }
-  intros Δ'' ?? S' ?? Hframe p _;
-    inversion_clear Hframe as [mf mA|]; simplify_equality.
-  assert (val_binop_ok Γ (m1 ∪ m2 ∪ mA ∪ mf) op v1 v2).
-  { eapply val_binop_ok_weaken with Γ Δ' (m1 ∪ m2) τ1 τ2;
-      eauto 4 using cmap_subseteq_index_alive,
-      @sep_union_subseteq_l_transitive, @sep_union_subseteq_l'. }
+  assert (val_binop_ok Γ (m1 ∪ m2 ∪ mf ∪ mA) op v1 v2).
+  { eapply val_binop_ok_weaken
+      with Γ Δ' (mA ∪ cmap_erase (m1 ∪ m2)) τ1 τ2; eauto.
+    intros; eapply cmap_subseteq_index_alive; eauto.
+    rewrite (sep_commutative _ mA) by auto.
+    apply sep_preserving_l; auto using
+      @sep_union_subseteq_l_transitive, cmap_erase_subseteq_l. }
+  split; [solve_rcred|intros S' p _].
   inv_rcstep p; [inv_ehstep; simplify_equality|exfalso; eauto with cstep].
   rewrite <-mem_locks_union by auto.
   apply mk_ax_next with Δ'' (m1 ∪ m2); simpl; auto.
@@ -723,7 +732,7 @@ Proof.
     indexes_valid_weaken, assert_weaken, val_binop_typed, val_typed_weaken.
 Qed.
 Lemma ax_cast Γ δ A P Q1 Q2 σ e :
-  (∀ v, Q1 (inr v) ⊆{Γ} (∃ v', Q2 (inr v') ∧ cast{σ} (#v) ⇓ inr v')%A) →
+  (∀ v, Q1 (inr v) ⊆{Γ} (∃ v', Q2 (inr v') ∧ (A -★ cast{σ} (#v) ⇓ inr v'))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P }} cast{σ} e {{ Q2 }}.
 Proof.
@@ -733,23 +742,21 @@ Proof.
   apply (ax_expr_compose_1 Γ δ n A Q1 _ Δ (DCCast σ) e ρ m (inr τ)); auto.
   { esolve_elem_of. }
   clear dependent m. intros Δ' Ω [a|] m ?????; typed_inversion_all.
+  apply ax_further_pred_alt.
+  intros Δ'' ???? Hframe; inversion_clear Hframe as [mA mf|];
+    simplify_equality; simplify_mem_disjoint_hyps.
   destruct (HQ v Γ Δ' ρ (cmap_erase m))
-    as (v'&?&_&_&?); eauto using indexes_valid_weaken; simplify_option_equality.
-  assert (val_cast_ok Γ m (TType σ) v) by (by rewrite <-val_cast_ok_erase).
-  apply ax_further_pred.
-  { intros Δ'' ???? Hframe;
-      inversion_clear Hframe as [mf mA|]; simplify_equality.
-    assert (val_cast_ok Γ (m ∪ mA ∪ mf) (TType σ) v).
-    { eapply val_cast_ok_weaken with Γ Δ' m τ;
-        eauto using cmap_subseteq_index_alive,
-        @sep_union_subseteq_l_transitive, @sep_union_subseteq_l'. }
-    solve_rcred. }
-  intros Δ'' ?? S' ?? Hframe p _;
-    inversion_clear Hframe as [mf mA|]; simplify_equality.
-  assert (val_cast_ok Γ (m ∪ mA ∪ mf) (TType σ) v).
-  { eapply val_cast_ok_weaken with Γ Δ' m τ;
-      eauto using cmap_subseteq_index_alive,
-      @sep_union_subseteq_l_transitive, @sep_union_subseteq_l'. }
+    as (v'&?&HA); eauto using indexes_valid_weaken.
+  destruct (HA Γ Δ'' mA) as (?&_&?); clear HA; eauto.
+  { rewrite <-cmap_erase_disjoint_le; auto. }
+  simplify_option_equality.
+  assert (val_cast_ok Γ (m ∪ mf ∪ mA) (TType σ) v).
+  { eapply val_cast_ok_weaken with Γ Δ' (mA ∪ cmap_erase m) τ; eauto.
+    intros; eapply cmap_subseteq_index_alive; eauto.
+    rewrite (sep_commutative _ mA) by auto.
+    apply sep_preserving_l; auto using
+      @sep_union_subseteq_l_transitive, cmap_erase_subseteq_l. }
+  split; [solve_rcred|intros S' p _].
   inv_rcstep p; [inv_ehstep; simplify_equality|exfalso; eauto with cstep].
   apply mk_ax_next with Δ'' m; simpl; auto.
   { constructor; auto. }
@@ -757,7 +764,7 @@ Proof.
     indexes_valid_weaken, assert_weaken, val_cast_typed, val_typed_weaken.
 Qed.
 Lemma ax_expr_if Γ δ A P P' P1 P2 Q e e1 e2 :
-  (∀ vb, P' (inr (VBase vb)) ⊆{Γ} (@{NotOp} #VBase vb ⇓ -)%A) →
+  (∀ vb, (A ★ P' (inr (VBase vb)))%A ⊆{Γ} (@{NotOp} #VBase vb ⇓ -)%A) →
   (∀ vb, ¬base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ} (P1 ○)%A) →
   (∀ vb, base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ} (P2 ○)%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ P' }} →
@@ -774,28 +781,30 @@ Proof.
   { esolve_elem_of. }
   { esolve_elem_of. }
   clear dependent m; intros Δ' Ω [|[vb| | | |]] m ?????; typed_inversion_all.
-  assert (base_val_branchable m vb).
-  { rewrite <-base_val_branchable_erase.
-    by destruct (HP' vb Γ Δ' ρ (cmap_erase m)) as (?&?&?&?);
-      eauto using indexes_valid_weaken; simplify_option_equality. }
-  apply ax_further_pred.
-  { intros Δ'' m'' ? _ _ Hframe;
-      inversion_clear Hframe as [mf mA|]; simplify_equality.
-    assert (base_val_branchable (m ∪ mA ∪ mf) vb).
-    { eapply base_val_branchable_weaken; eauto using cmap_subseteq_index_alive,
-        @sep_union_subseteq_l_transitive, @sep_union_subseteq_l. }
-    destruct (decide (base_val_is_0 vb)); solve_rcred. }
-  intros Δ''' ?? S' ?? Hframe p _; inversion_clear Hframe as [mA mf|];
+  apply ax_further_pred_alt.
+  intros Δ'' ???? Hframe; inversion_clear Hframe as [mA mf|];
     simplify_equality; simplify_mem_disjoint_hyps.
+  assert (base_val_branchable (m ∪ mf ∪ mA) vb).
+  { assert (⊥ [cmap_erase m; mf; mA])
+      by (rewrite <-cmap_erase_disjoint_le; auto).
+    destruct (HP' vb Γ Δ'' ρ (mA ∪ cmap_erase m)) as (?&?&?&?);
+      simpl; eauto using indexes_valid_weaken.
+    { exists mA (cmap_erase m); split_ands; auto.
+      eauto using assert_weaken, indexes_valid_weaken. }
+    simplify_option_equality.
+    eapply base_val_branchable_weaken with (mA ∪ cmap_erase m); eauto.
+    intros; eapply cmap_subseteq_index_alive; eauto.
+    rewrite (sep_commutative _ mA) by auto.
+    apply sep_preserving_l; auto using
+      @sep_union_subseteq_l_transitive, cmap_erase_subseteq_l. }
+  split.
+  { destruct (decide (base_val_is_0 vb)); solve_rcred. }
   assert (⊥ [mem_unlock_all m; mf; mA])
     by (rewrite <-mem_unlock_all_disjoint_le; auto).
-  assert (base_val_branchable (m ∪ mf ∪ mA) vb).
-  { eapply base_val_branchable_weaken; eauto using cmap_subseteq_index_alive,
-      @sep_union_subseteq_l_transitive, @sep_union_subseteq_l. }
-  inv_rcstep p; [inv_ehstep|].
+  intros S' p _; inv_rcstep p; [inv_ehstep|].
   * rewrite !mem_unlock_union, <-mem_unlock_all_spec
       by (rewrite ?mem_locks_union by auto; solve_elem_of).
-    apply mk_ax_next with Δ''' (mem_unlock_all m); auto.
+    apply mk_ax_next with Δ'' (mem_unlock_all m); auto.
     { constructor; auto. }
     { esolve_elem_of. }
     { eauto using mem_unlock_all_valid. }
@@ -806,7 +815,7 @@ Proof.
     + eapply HP1; eauto using indexes_valid_weaken, assert_weaken.
   * rewrite !mem_unlock_union, <-mem_unlock_all_spec
       by (rewrite ?mem_locks_union by auto; solve_elem_of).
-    apply mk_ax_next with Δ''' (mem_unlock_all m); auto.
+    apply mk_ax_next with Δ'' (mem_unlock_all m); auto.
     { constructor; auto. }
     { esolve_elem_of. }
     { eauto using mem_unlock_all_valid. }
