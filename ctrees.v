@@ -1471,6 +1471,15 @@ Proof.
   * induction IH; decompose_Forall_hyps; f_equal; auto.
   * induction IH as [|[]]; decompose_Forall_hyps; repeat f_equal'; auto.
 Qed.
+Lemma ctree_map_compose {B C : Set} (f : A → B) (g : B → C) w :
+  ctree_map (g ∘ f) w = ctree_map g (ctree_map f w).
+Proof.
+  induction w as [|τ ws IH|t wxss IH| |] using @ctree_ind_alt;
+    f_equal'; rewrite <-?list_fmap_compose; auto.
+  * by apply Forall_fmap_ext.
+  * eapply Forall_fmap_ext, Forall_impl; eauto.
+    intros [??] ?; f_equal'; rewrite <-?list_fmap_compose; auto.
+Qed.
 Notation h := (ctree_map sep_half).
 Hint Rewrite @ctree_flatten_map : simplifier.
 Lemma ctree_merge_half w ys :

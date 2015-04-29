@@ -542,11 +542,69 @@ Lemma assert_singleton_union_lr Γ e1 e2 μ x y τ :
 Proof.
   intros; split.
   * intros Γ1 Δ1 ρ ????? (a&v&?&?&?&?&?).
-    destruct (mem_singleton_union_rev_lr Γ1 Δ1 m a μ x y v τ)
+    destruct (mem_singleton_union_rev Γ1 Δ1 m a μ x y v τ)
       as (m1&m2&->&?&?&?); auto.
     exists m1 m2; split_ands; solve ltac:eauto.
   * intros Γ1 Δ1 ρ ????? (?&?&->&?&(a1&v1&?&?&?&?&?)&(a2&v2&?&?&?&?&?));
       simplify_equality'; exists a1 v1; eauto 10 using mem_singleton_union.
+Qed.
+Lemma assert_singleton_union_l Γ e1 e2 μ x y τ :
+  ⊥[x; y] → ¬sep_unmapped x → y ≠ ∅ →
+  (e1 ↦{μ,x ∪ y} e2 : τ)%A ≡{Γ} (e1 ↦{μ,x} e2 : τ ★ e1 ↦{μ,y} - : τ)%A.
+Proof.
+  intros; split.
+  * intros Γ1 Δ1 ρ ????? (a&v&?&?&?&?&?); destruct (decide (sep_unmapped y)).
+    + destruct (mem_singleton_union_rev_unmapped Γ1 Δ1 m a μ x y v τ)
+        as (m1&m2&->&?&?&?); auto using @sep_unmapped_empty_alt.
+      assert ((Γ1,Δ1) ⊢ val_new Γ1 τ : τ).
+      { eauto using val_new_typed,
+          mem_singleton_typed_addr_typed, addr_typed_type_valid. }
+      exists m1 m2; simplify_option_equality;
+        eauto 20 using lockset_empty_valid.
+    + destruct (mem_singleton_union_rev Γ1 Δ1 m a μ x y v τ)
+        as (m1&m2&->&?&?&?); auto.
+      exists m1 m2; solve ltac:(eauto using expr_eval_typed,
+        lockset_empty_valid, cmap_empty_valid, cmap_valid_memenv_valid).
+  * intros Γ1 Δ1 ρ ????? (?&?&->&?&(a1&v1&?&?&?&?&?)&(?&a2&v2&?&?&?&?&?));
+      simplify_option_equality; exists a1 v1; split_ands; auto.
+    by eapply (mem_singleton_union _ _ _ _ _ _ _ _ v1 v2); eauto.
+Qed.
+Lemma assert_singleton_union_r Γ e1 e2 μ x y τ :
+  ⊥[x; y] → x ≠ ∅ → ¬sep_unmapped y →
+  (e1 ↦{μ,x ∪ y} e2 : τ)%A ≡{Γ} (e1 ↦{μ,x} - : τ ★ e1 ↦{μ,y} e2 : τ)%A.
+Proof.
+  intros. rewrite (commutative (★)%A), sep_commutative by auto.
+  by rewrite assert_singleton_union_l by auto.
+Qed.
+Lemma assert_singleton_union Γ e1 μ x y τ :
+  ⊥[x; y] → x ≠ ∅ → y ≠ ∅ →
+  (e1 ↦{μ,x ∪ y} - : τ)%A ≡{Γ} (e1 ↦{μ,x} - : τ ★ e1 ↦{μ,y} - : τ)%A.
+Proof.
+  intros; split.
+  * intros Γ1 Δ1 ρ ????? (?&a&v&?&?&?&?&?); simplify_option_equality;
+      typed_inversion_all; destruct (decide (sep_unmapped y)).
+    { destruct (mem_singleton_union_rev_unmapped Γ1 Δ1 m a μ x y v τ)
+        as (m1&m2&->&?&?&?); auto using @sep_unmapped_empty_alt.
+      assert ((Γ1,Δ1) ⊢ val_new Γ1 τ : τ).
+      { eauto using val_new_typed,
+          mem_singleton_typed_addr_typed, addr_typed_type_valid. }
+      exists m1 m2; split_ands; eauto 10 using lockset_empty_valid. }
+    destruct (decide (sep_unmapped x)).
+    { destruct (mem_singleton_union_rev_unmapped Γ1 Δ1 m a μ y x v τ)
+        as (m1&m2&->&?&?&?); auto using @sep_unmapped_empty_alt.
+      { by rewrite sep_commutative by auto. }
+      assert ((Γ1,Δ1) ⊢ val_new Γ1 τ : τ).
+      { eauto using val_new_typed,
+          mem_singleton_typed_addr_typed, addr_typed_type_valid. }
+      exists m2 m1; eauto 30 using @sep_commutative. }
+    destruct (mem_singleton_union_rev Γ1 Δ1 m a μ x y v τ)
+      as (m1&m2&->&?&?&?); eauto 40.
+  * intros Γ1 Δ1 ρ ????? (?&?&->&?&(?&a1&v1&?&?&?&?&?)&(?&a2&v2&?&?&?&?&?));
+      simplify_option_equality; destruct (decide (sep_unmapped x)).
+    + eexists (inr v2), a1, v2; split_ands; eauto.
+      by eapply (mem_singleton_union _ _ _ _ _ _ _ _ v1 v2); eauto.
+    + eexists (inr v1), a1, v1; split_ands; eauto.
+      by eapply (mem_singleton_union _ _ _ _ _ _ _ _ v1 v2); eauto.
 Qed.
 Lemma assert_singleton_array Γ e μ x vs τ n :
   length vs = n → n ≠ 0 →

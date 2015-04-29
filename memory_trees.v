@@ -840,28 +840,28 @@ Proof.
 Qed.
 
 (** ** The map operation *)
-Lemma ctree_map_typed Γ Δ h w τ :
+Lemma ctree_map_typed_alt Γ Δ h w τ :
   ✓ Γ → (Γ,Δ) ⊢ w : τ → ✓{Γ,Δ}* (h <$> ctree_flatten w) →
-  (∀ xb, ✓{Γ,Δ} xb → sep_unmapped (h xb) → sep_unmapped xb) →
+  ctree_Forall (λ xb, sep_unmapped (h xb) → sep_unmapped xb) w →
   (∀ xb, pbit_indetify xb = xb → pbit_indetify (h xb) = h xb) →
   (Γ,Δ) ⊢ ctree_map h w : τ.
 Proof.
-  intros ? Hw Hw' ??. revert w τ Hw Hw'. assert (∀ xbs,
+  intros ? Hw Hw' Hw'' ?. revert w τ Hw Hw' Hw''. assert (∀ xbs,
     pbit_indetify <$> xbs = xbs → pbit_indetify <$> h <$> xbs = h <$> xbs).
   { induction xbs; intros; simplify_equality'; f_equal; auto. }
-  assert (∀ xbs,
-    ✓{Γ,Δ}* xbs → Forall sep_unmapped (h <$> xbs) → Forall sep_unmapped xbs).
-  { induction 1; intros; decompose_Forall_hyps; eauto. }
+  assert (∀ xbs, Forall (λ xb, sep_unmapped (h xb) → sep_unmapped xb) xbs →
+    Forall sep_unmapped (h <$> xbs) → Forall sep_unmapped xbs).
+  { induction 1; intros; decompose_Forall_hyps; auto. }
   refine (ctree_typed_ind _ _ _ _ _ _ _ _); simpl.
   * typed_constructor; auto.
-  * intros ws τ _ IH Hlen Hw'. typed_constructor; auto. clear Hlen.
-    revert Hw'. induction IH; csimpl; rewrite ?fmap_app; intros;
+  * intros ws τ _ IH Hlen Hw' Hw''. typed_constructor; auto. clear Hlen.
+    revert Hw' Hw''. induction IH; csimpl; rewrite ?fmap_app; intros;
       decompose_Forall_hyps; constructor; auto.
-  * intros t wxbss τs Ht _ IH Hxss Hindet Hlen Hw'.
+  * intros t wxbss τs Ht _ IH Hxss Hindet Hlen Hw' Hw''.
     typed_constructor; eauto.
-    + revert Hw'. elim IH; [|intros [??] ???]; csimpl; rewrite ?fmap_app;
+    + revert Hw' Hw''. elim IH; [|intros [??] ???]; csimpl; rewrite ?fmap_app;
         intros; decompose_Forall_hyps; auto.
-    + revert Hw'. elim Hxss; [|intros [??] ???]; csimpl; rewrite ?fmap_app;
+    + revert Hw' Hw''. elim Hxss; [|intros [??] ???]; csimpl; rewrite ?fmap_app;
         intros; decompose_Forall_hyps; auto.
     + elim Hindet; intros; constructor; simpl; auto.
     + rewrite <-Hlen. elim wxbss; intros; f_equal'; auto.
@@ -870,6 +870,12 @@ Proof.
     rewrite ctree_flatten_map; intuition eauto using ctree_flatten_valid.
   * typed_constructor; eauto.
 Qed.
+Lemma ctree_map_typed Γ Δ h w τ :
+  ✓ Γ → (Γ,Δ) ⊢ w : τ → ✓{Γ,Δ}* (h <$> ctree_flatten w) →
+  (∀ xb, ✓{Γ,Δ} xb → sep_unmapped (h xb) → sep_unmapped xb) →
+  (∀ xb, pbit_indetify xb = xb → pbit_indetify (h xb) = h xb) →
+  (Γ,Δ) ⊢ ctree_map h w : τ.
+Proof. eauto using ctree_map_typed_alt, Forall_impl, ctree_flatten_valid. Qed.
 Lemma ctree_map_type_of h w : type_of (ctree_map h w) = type_of w.
 Proof. destruct w; simpl; unfold MUnion'; repeat case_decide; auto. Qed.
 

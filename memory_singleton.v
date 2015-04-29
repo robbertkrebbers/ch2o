@@ -293,7 +293,7 @@ Proof.
     eapply Forall_impl; eauto; by intros ? <- [??].
   * eauto using @sep_positive_l'.
 Qed.
-Lemma mem_singleton_union_rev_lr Γ Δ m a μ x1 x2 v τ :
+Lemma mem_singleton_union_rev Γ Δ m a μ x1 x2 v τ :
   ✓ Γ → x1 ⊥ x2 → ¬sep_unmapped x1 → ¬sep_unmapped x2 →
   mem_singleton Γ Δ a μ (x1 ∪ x2) v τ m → ∃ m1 m2,
   m = m1 ∪ m2 ∧ m1 ⊥ m2 ∧
@@ -340,5 +340,68 @@ Proof.
       unfold w2; rewrite ctree_flatten_map; apply Forall_fmap, Forall_true.
       by intros ? [].
     + by unfold w2; rewrite ctree_flatten_map; apply Forall_fmap, Forall_true.
+Qed.
+Lemma mem_singleton_union_rev_unmapped Γ Δ m a μ x1 x2 v τ :
+  ✓ Γ → x1 ⊥ x2 → x1 ≠ ∅ → x2 ≠ ∅ → sep_unmapped x2 →
+  mem_singleton Γ Δ a μ (x1 ∪ x2) v τ m → ∃ m1 m2,
+  m = m1 ∪ m2 ∧ m1 ⊥ m2 ∧
+  mem_singleton Γ Δ a μ x1 v τ m1 ∧ mem_singleton Γ Δ a μ x2 (val_new Γ τ) τ m2.
+Proof.
+  intros ????? (w&->&->&Hw&Hx&?&?&?&_).
+  assert (✓{Γ,Δ}* (ctree_flatten w)) as Hw' by eauto using ctree_flatten_valid.
+  set (w1 := ctree_map (PBit x1 ∘ tagged_tag) w).
+  set (w2 := ctree_new Γ (PBit x2 BIndet) τ).
+  assert ((Γ,Δ) ⊢ w1 : τ).
+  { apply ctree_map_typed_alt; auto.
+    + induction Hw' as [|[] ? (?&?&?)]; decompose_Forall_hyps; constructor;
+        split_ands'; eauto using sep_disjoint_valid_l, sep_unmapped_union_2'.
+    + induction Hw' as [|[] ? (?&?&?)]; decompose_Forall_hyps; constructor; auto.
+      intros [??]; split_ands'; eauto using sep_unmapped_union_2'.
+    + by intros []; naive_solver. }
+  assert ((Γ,Δ) ⊢ w2 : τ).
+  { eapply ctree_new_typed; eauto using ctree_typed_type_valid.
+    split_ands'; eauto using sep_disjoint_valid_l, BIndet_valid. }
+  assert (bit_size_of Γ τ ≠ 0 ∧ ✓{Γ} τ) as []
+    by eauto using bit_size_of_ne_0, ctree_typed_type_valid.
+  assert (ctree_unmapped w2).
+  { unfold w2; rewrite ctree_flatten_new by eauto; by apply Forall_replicate. }
+  assert (w1 ⊥ w2).
+  { symmetry; eapply ctree_flatten_unflatten_disjoint; eauto.
+    + unfold w1; rewrite ctree_flatten_map.
+      eapply Forall2_replicate_l, Forall_fmap; auto.
+      induction Hw' as [|[] ? (?&?&?)]; decompose_Forall_hyps;
+        constructor; split_ands'; eauto using sep_unmapped_union_2'.
+    + by apply Forall_replicate; split_ands'. }
+  assert (w = w1 ∪ w2) as Hw12.
+  { unfold w1, w2; rewrite <-ctree_merge_flatten, ctree_flatten_new by auto.
+    erewrite (ctree_merge_map _ (flip union (PBit x2 BIndet)))
+      by (rewrite ?zip_with_replicate_r_eq by auto; auto).
+    rewrite <-ctree_map_compose; symmetry.
+    apply (ctree_map_id (λ xb, tagged_perm xb = x1 ∪ x2)); auto.
+    by intros [] ?; sep_unfold; case_decide; simplify_equality'. }
+  exists (cmap_singleton Γ a μ w1) (cmap_singleton Γ a μ w2); split_ands.
+  * by erewrite Hw12, cmap_singleton_union by eauto.
+  * eapply cmap_singleton_disjoint; eauto.
+    + eapply ctree_Forall_not; eauto.
+      unfold w1; rewrite ctree_flatten_map; apply Forall_fmap, Forall_true.
+      sep_unfold; intros [] ?; naive_solver eauto using sep_unmapped_empty_alt.
+    + eapply ctree_Forall_not; eauto.
+      unfold w2; rewrite ctree_flatten_new by eauto.
+      apply Forall_replicate; sep_unfold; naive_solver.
+  * exists w1; rewrite Hw12; split_ands; eauto using @sep_unmapped_empty_alt.
+    + destruct (decide (sep_unmapped x1)).
+      - assert (ctree_unmapped w1).
+        { unfold w1; rewrite ctree_flatten_map; apply Forall_fmap.
+        induction Hw' as [|[] ? (?&?&?)]; decompose_Forall_hyps;
+          constructor; split_ands'; eauto using sep_unmapped_union_2'. }
+        by erewrite !to_val_unmapped
+          by eauto using @ctree_unmapped_union, ctree_union_typed.
+      - symmetry; eapply to_val_subseteq; eauto using @ctree_union_subseteq_l.
+        unfold w1; rewrite ctree_flatten_map; apply Forall_fmap, Forall_true.
+        by intros ? [].
+    + by unfold w1; rewrite ctree_flatten_map; apply Forall_fmap, Forall_true.
+  * exists w2; split_ands; eauto.
+    + symmetry; eapply to_val_unmapped; eauto.
+    + unfold w2; rewrite ctree_flatten_new by eauto; by apply Forall_replicate.
 Qed.
 End mem_singleton.
