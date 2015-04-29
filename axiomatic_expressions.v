@@ -769,8 +769,8 @@ Proof.
 Qed.
 Lemma ax_expr_if Γ δ A P P' P1 P2 Q e e1 e2 :
   (∀ vb, (A ★ P' (inr (VBase vb)))%A ⊆{Γ} (@{NotOp} #VBase vb ⇓ -)%A) →
-  (∀ vb, ¬base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ} (P1 ○)%A) →
-  (∀ vb, base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ} (P2 ○)%A) →
+  (∀ vb, ¬base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ} (P1 ◊)%A) →
+  (∀ vb, base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ} (P2 ◊)%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ P' }} →
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ Q }} → Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ Q }} →
   Γ\ δ\ A ⊨ₑ {{ P }} if{e} e1 else e2 {{ Q }}.
@@ -831,7 +831,7 @@ Proof.
   * destruct (decide (base_val_is_0 vb)); exfalso; eauto with cstep.
 Qed.
 Lemma ax_expr_comma Γ δ A P P' Q e1 e2 :
-  Γ\ δ\ A ⊨ₑ {{ P }} e1 {{ λ _, P' ○ }} →
+  Γ\ δ\ A ⊨ₑ {{ P }} e1 {{ λ _, P' ◊ }} →
   Γ\ δ\ A ⊨ₑ {{ P' }} e2 {{ Q }} →
   Γ\ δ\ A ⊨ₑ {{ P }} e1 ,, e2 {{ Q }}.
 Proof.
@@ -840,7 +840,7 @@ Proof.
     as (τlr1&?&?) by (typed_inversion_all; eauto); clear He1e2.
   simpl in He; decompose_empty.
   apply (ax_expr_compose_1 Γ δ n A
-    (λ _, P' ○)%A _ Δ (DCComma e2) e1 ρ m τlr1); auto.
+    (λ _, P' ◊)%A _ Δ (DCComma e2) e1 ρ m τlr1); auto.
   { esolve_elem_of. }
   clear dependent m; intros Δ' Ω ν m ?????; simplify_equality'.
   apply ax_further_pred; [intros; solve_rcred|].

@@ -183,7 +183,7 @@ Notation "e1 ↦{ μ , x } - : τ" :=
   (at level 20, μ at next level, x at next level,
    τ at next level, format "e1  ↦{ μ , x }  -  :  τ") : assert_scope.
 
-(** The assertion [P ○] asserts that [P] holds if all sequenced locations
+(** The assertion [P ◊] asserts that [P] holds if all sequenced locations
 are unlocked. *)
 Program Definition assert_unlock `{EnvSpec K} (P : assert K) : assert K := {|
   assert_holds := λ Γ Δ ρ m, assert_holds P Γ Δ ρ (mem_unlock_all m)
@@ -191,7 +191,7 @@ Program Definition assert_unlock `{EnvSpec K} (P : assert K) : assert K := {|
 Next Obligation.
   naive_solver eauto using assert_weaken, mem_unlock_all_valid.
 Qed.
-Notation "P ○" := (assert_unlock P) (at level 20) : assert_scope.
+Notation "P ◊" := (assert_unlock P) (at level 20) : assert_scope.
 
 (** The assertion [P↡] asserts that [P] holds if the stack is cleared. This
 connective allows us to specify stack independence in an alternative way. *)
@@ -738,22 +738,22 @@ Proof. solve ltac:(eauto using mem_unlock_all_valid). Qed.
 Global Instance: Proper ((≡{Γ}) ==> (≡{Γ})) assert_unlock.
 Proof. solve ltac:(eauto using mem_unlock_all_valid). Qed.
 
-Lemma assert_unlock_unlock_indep Γ P `{!UnlockIndep P} : P ⊆{Γ} (P ○)%A.
+Lemma assert_unlock_unlock_indep Γ P `{!UnlockIndep P} : P ⊆{Γ} (P ◊)%A.
 Proof. solve eauto. Qed.
-Lemma assert_unlock_impl Γ P Q : ((P → Q) ○)%A ≡{Γ} (P ○ → Q ○)%A.
+Lemma assert_unlock_impl Γ P Q : ((P → Q) ◊)%A ≡{Γ} (P ◊ → Q ◊)%A.
 Proof.
   split; [solve ltac:(eauto using mem_unlock_all_valid)|].
   solve ltac:(eauto using cmap_valid_weaken_squeeze, mem_unlock_memenv_of).
 Qed.
-Lemma assert_unlock_and Γ P Q : ((P ∧ Q) ○)%A ≡{Γ} (P ○ ∧ Q ○)%A.
+Lemma assert_unlock_and Γ P Q : ((P ∧ Q) ◊)%A ≡{Γ} (P ◊ ∧ Q ◊)%A.
 Proof. solve eauto. Qed.
 Lemma assert_unlock_forall Γ {A} (P : A → assert K) :
-  ((∀ x, P x) ○)%A ≡{Γ} (∀ x, (P x) ○)%A.
+  ((∀ x, P x) ◊)%A ≡{Γ} (∀ x, (P x) ◊)%A.
 Proof. solve eauto. Qed.
 Lemma assert_unlock_exists Γ {A} (P : A → assert K) :
-  ((∃ x, P x) ○)%A ≡{Γ} (∃ x, (P x) ○)%A.
+  ((∃ x, P x) ◊)%A ≡{Γ} (∃ x, (P x) ◊)%A.
 Proof. solve eauto. Qed.
-Lemma assert_unlock_sep Γ P Q : (P ○ ★ Q ○)%A ⊆{Γ} ((P ★ Q) ○)%A.
+Lemma assert_unlock_sep Γ P Q : (P ◊ ★ Q ◊)%A ⊆{Γ} ((P ★ Q) ◊)%A.
 Proof.
   intros Γ1 Δ1 ρ m ???? (m1&m2&->&?&?&?).
   exists (mem_unlock_all m1) (mem_unlock_all m2); split_ands; auto.
@@ -761,33 +761,33 @@ Proof.
   * by rewrite <-!mem_unlock_all_disjoint_le.
 Qed.
 Lemma assert_unlock_sep_alt Γ P P' Q Q' :
-  P ⊆{Γ} (P' ○)%A → Q ⊆{Γ} (Q' ○)%A → (P ★ Q)%A ⊆{Γ} ((P' ★ Q') ○)%A.
+  P ⊆{Γ} (P' ◊)%A → Q ⊆{Γ} (Q' ◊)%A → (P ★ Q)%A ⊆{Γ} ((P' ★ Q') ◊)%A.
 Proof. intros HP HQ. by rewrite HP, HQ, assert_unlock_sep. Qed.
 
 Lemma assert_unlock_singleton Γ e1 e2 μ x τ :
   perm_locked x = true →
-  (e1 ↦{μ,x} e2 : τ)%A ⊆{Γ} ((e1 ↦{μ,perm_unlock x} e2 : τ) ○)%A.
+  (e1 ↦{μ,x} e2 : τ)%A ⊆{Γ} ((e1 ↦{μ,perm_unlock x} e2 : τ) ◊)%A.
 Proof.
   intros ? Γ1 Δ1 ρ m ???? (a&v&?&?&?&?&?).
   exists a v; split_ands; eauto using mem_unlock_all_singleton.
 Qed.
 Lemma assert_unlock_singleton_ Γ e1 μ x τ :
   perm_locked x = true →
-  (e1 ↦{μ,x} - : τ)%A ⊆{Γ} ((e1 ↦{μ,perm_unlock x} - : τ) ○)%A.
+  (e1 ↦{μ,x} - : τ)%A ⊆{Γ} ((e1 ↦{μ,perm_unlock x} - : τ) ◊)%A.
 Proof.
   intros Hx. rewrite assert_unlock_exists.
   by setoid_rewrite (λ e2, assert_unlock_singleton Γ e1 e2 μ x τ Hx).
 Qed.
 Lemma assert_lock_singleton Γ e1 e2 μ x τlr :
   sep_valid x → Some Writable ⊆ perm_kind x →
-  (e1 ↦{μ,perm_lock x} e2 : τlr)%A ⊆{Γ} ((e1 ↦{μ,x} e2 : τlr) ○)%A.
+  (e1 ↦{μ,perm_lock x} e2 : τlr)%A ⊆{Γ} ((e1 ↦{μ,x} e2 : τlr) ◊)%A.
 Proof.
   intros. by rewrite assert_unlock_singleton,
     perm_unlock_lock by auto using perm_locked_lock.
 Qed.
 Lemma assert_lock_singleton_ Γ e1 μ x τlr :
   sep_valid x → Some Writable ⊆ perm_kind x →
-  (e1 ↦{μ,perm_lock x} - : τlr)%A ⊆{Γ} ((e1 ↦{μ,x} - : τlr) ○)%A.
+  (e1 ↦{μ,perm_lock x} - : τlr)%A ⊆{Γ} ((e1 ↦{μ,x} - : τlr) ◊)%A.
 Proof.
   intros. by rewrite assert_unlock_singleton_,
     perm_unlock_lock by auto using perm_locked_lock.

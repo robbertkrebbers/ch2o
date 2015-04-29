@@ -115,7 +115,7 @@ Qed.
 
 (** ** Structural rules *)
 Lemma ax_do Γ δ R J T C P Q e τ :
-  Γ\ δ\ emp ⊨ₑ {{ P }} e {{ λ _, Q ○ }} →
+  Γ\ δ\ emp ⊨ₑ {{ P }} e {{ λ _, Q ◊ }} →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} !e {{ Q }}.
 Proof.
   intros Hax Δ n ρ [] m cmτ ?????? He; typed_inversion_all; try solve_elem_of.
@@ -148,7 +148,7 @@ Proof.
   apply ax_done; constructor; eauto using assert_weaken.
 Qed.
 Lemma ax_ret Γ δ R J T C P Q1 Q2 e :
-  (∀ v, Q1 (inr v) ⊆{Γ} (R v ○)%A) →
+  (∀ v, Q1 (inr v) ⊆{Γ} (R v ◊)%A) →
   Γ\ δ\ emp ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} ret e {{ Q2 }}.
 Proof.
@@ -417,8 +417,8 @@ Proof.
 Qed.
 Lemma ax_if Γ δ R J T C P P' P1 P2 Q e s1 s2 :
   (∀ vb, P' (inr (VBase vb)) ⊆{Γ} (@{NotOp} #VBase vb ⇓ -)%A) →
-  (∀ vb, ¬base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ} (P1 ○)%A) →
-  (∀ vb, base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ} (P2 ○)%A) →
+  (∀ vb, ¬base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ} (P1 ◊)%A) →
+  (∀ vb, base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ} (P2 ◊)%A) →
   Γ\ δ\ emp ⊨ₑ {{ P }} e {{ P' }} →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P1 }} s1 {{ Q }} →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P2 }} s2 {{ Q }} →
