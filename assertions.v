@@ -494,9 +494,10 @@ Proof.
   apply HPQR; eauto using indexes_valid_weaken, cmap_union_valid_2.
   exists m1 m2; split_ands; eauto using assert_weaken, @sep_commutative.
 Qed.
-Lemma assert_wand_elim Γ P Q : (P ★ (P -★ Q))%A ⊆{Γ} Q.
+Lemma assert_wand_elim Γ P Q : ((P -★ Q) ★ P)%A ⊆{Γ} Q.
 Proof.
-  intros Γ1 Δ1 ρ ????? (m1&m2&->&?&?&HQ); eapply HQ; eauto using
+  intros Γ1 Δ1 ρ ????? (m1&m2&->&?&HQ&?).
+  rewrite sep_commutative by auto; eapply HQ; eauto using
     cmap_valid_subseteq, @sep_union_subseteq_l, @sep_union_subseteq_r.
 Qed.
 
