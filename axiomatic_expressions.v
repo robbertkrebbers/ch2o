@@ -21,7 +21,6 @@ Implicit Types ν : lrval K.
 Implicit Types k : ctx K.
 Implicit Types φ : focus K.
 Implicit Types S : state K.
-Implicit Types Pd : dassert K.
 
 Hint Extern 1 (_ ⊥ _) => solve_mem_disjoint.
 Hint Extern 1 (⊥ _) => solve_mem_disjoint.
@@ -336,13 +335,12 @@ Definition assign_assert (va v : val K)
      cast{τ} (#va @{op} #v) ⇓ inr va' ∧ cast{τ} (#va @{op} #v) ⇓ inr v'
   | PostOp op => cast{τ} (#va @{op} #v) ⇓ inr va' ∧ #va ⇓ inr v'
   end%A.
-
 Lemma ax_assign Γ δ A P1 P2 Q1 Q2 Q ass e1 e2 μ x τ :
   Some Writable ⊆ perm_kind x →
   (∀ a v, (Q1 (inl a) ★ Q2 (inr v))%A ⊆{Γ} (∃ va v' va',
     (%a ↦{μ,x} #va : τ ★
     (%a ↦{μ,perm_lock x} # (freeze true va') : τ -★ Q (inr v'))) ∧
-    assign_assert va v ass τ va' v')%A) →
+    (A -★ assign_assert va v ass τ va' v'))%A) →
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ Q1 }} → Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ Q2 }} →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 ::={ass} e2 {{ Q }}.
 Proof.
@@ -363,6 +361,9 @@ Proof.
   { esolve_elem_of. }
   clear dependent m1 m2; intros Δ' Ω1 Ω2 [a'|] [|v] m1' m2'
     ??????????; typed_inversion_all.
+  apply ax_further_pred_alt.
+  intros Δ'' ? ff ?? Hframe;
+    inversion_clear Hframe as [mA mf|]; simplify_equality.
   destruct (HQ a' v Γ Δ' ρ (cmap_erase (m1' ∪ m2')))
     as (?&v'&va'&(m1&m2''&?&?&(a&va&?&?&?&?&?)&HQ')&Hass);
     eauto 6 using indexes_valid_weaken; clear HQ.
@@ -372,31 +373,34 @@ Proof.
   destruct (cmap_erase_union_inv_l (m1' ∪ m2') m1 m2'')
     as (m2&Hm&?&Hm'&->); auto; rewrite Hm in *;
     simplify_option_equality; typed_inversion_all.
-  assert (✓{Γ,Δ'} (m1 ∪ m2)) by (rewrite <-Hm; eauto).
   assert (TType τ = TType τ1); simplify_equality'.
   { eapply typed_unique with (Γ,Δ') a; eauto. }
-  assert (✓{Γ,Δ'} (m1 ∪ m2)) by (rewrite <-Hm; eauto).
   simplify_mem_disjoint_hyps.
-  assert (∀ mA mf, ⊥ [m1; m2; mA; mf] → mem_writable Γ a (m1 ∪ m2 ∪ mA ∪ mf)).
-  { intros; eapply mem_writable_subseteq with Δ' m1;
+  assert (mem_writable Γ a (m1 ∪ m2 ∪ mf ∪ mA)).
+  { eapply mem_writable_subseteq with Δ'' m1;
       eauto using mem_writable_singleton,
       @sep_union_subseteq_l_transitive, @sep_union_subseteq_l'. }
-  assert (∀ mA mf, ⊥ [m1; m2; mA; mf] →
-    assign_sem Γ (m1 ∪ m2 ∪ mA ∪ mf) a v ass va' v').
-  { clear HQ'; intros mA mf ?.
-    eapply assign_sem_subseteq with Δ' (cmap_erase (m1 ∪ m2)) τ1 τ2;
-      eauto using @sep_union_subseteq_l_transitive, cmap_erase_subseteq_l.
-    destruct ass; destruct Hass as [(?&_&?) (?&_&?)];
-      simplify_option_equality; econstructor; simplify_type_equality; eauto.
-    * rewrite mem_lookup_erase; eapply mem_lookup_subseteq with Δ' m1;
-        eauto using mem_lookup_singleton, @sep_union_subseteq_l.
-    * rewrite mem_lookup_erase; eapply mem_lookup_subseteq with Δ' m1;
-        eauto using mem_lookup_singleton, @sep_union_subseteq_l. }
-  apply ax_further_pred.
-  { intros Δ'' ???? Hframe;
-      inversion_clear Hframe as [mf mA|]; simplify_equality; solve_rcred. }
-  intros Δ'' ?? S' ?? Hframe p _; inversion_clear Hframe as [mf mA|];
-    simplify_equality; simplify_mem_disjoint_hyps.
+  assert (assign_sem Γ (m1 ∪ m2 ∪ mf ∪ mA) a v ass va' v').
+  { clear HQ'.
+    assert (mA ∪ cmap_erase (m1 ∪ m2) ⊆ m1 ∪ m2 ∪ mf ∪ mA).
+    { rewrite (sep_commutative _ mA) by auto.
+      apply sep_preserving_l; auto using
+        @sep_union_subseteq_l_transitive, cmap_erase_subseteq_l. }
+    assert (⊥ [mA; cmap_erase (m1 ∪ m2)]).
+    { rewrite <-cmap_erase_disjoint_le; auto. }
+    assert (⊥ [mA; m1; cmap_erase m2]).
+    { rewrite <-cmap_erase_disjoint_le; auto. }
+    assert ((mA ∪ cmap_erase (m1 ∪ m2)) !!{Γ} a = Some va).
+    { erewrite cmap_erase_union, mem_erase_singleton by eauto.
+      apply mem_lookup_subseteq with Δ'' m1; eauto using mem_lookup_singleton.
+      eauto using @sep_union_subseteq_r_transitive, @sep_union_subseteq_l. }
+    eapply assign_sem_subseteq with Δ'' (mA ∪ cmap_erase (m1 ∪ m2)) τ1 τ2;
+      eauto 15 using addr_typed_weaken, val_typed_weaken.
+    destruct ass; destruct (Hass Γ Δ'' mA) as [(?&_&?) (?&_&?)]; auto;
+      clear Hass; simplify_option_equality;
+      econstructor; simplify_type_equality; eauto. }
+  clear Hass.
+  split; [solve_rcred|intros S' p _].
   inv_rcstep p; [inv_ehstep; simplify_equality|exfalso; eauto 6 with cstep].
   match goal with
   | Hass : assign_sem _ ?m _ _ _ ?va'' ?v'' |- _ =>
@@ -404,9 +408,9 @@ Proof.
       auto; subst; clear Hass
   end.
   assert ((Γ,Δ'') ⊢ va' : τ1 ∧ (Γ,Δ'') ⊢ v' : τ1) as [].
-  { eapply (assign_preservation _ _ (m1 ∪ m2 ∪ mA ∪ mf));
+  { eapply (assign_preservation _ _ (m1 ∪ m2 ∪ mf ∪ mA));
       eauto using addr_typed_weaken, val_typed_weaken. }
-  assert (⊥ [<[a:=va']{Γ}> m1; m2; mA; mf]).
+  assert (⊥ [<[a:=va']{Γ}> m1; m2; mf; mA]).
   { by rewrite <-mem_insert_disjoint_le
       by eauto using mem_writable_singleton, addr_typed_weaken. }
   assert (✓{Γ,Δ''} (<[a:=va']{Γ}> m1)).
@@ -414,7 +418,7 @@ Proof.
   assert (mem_writable Γ a (<[a:=va']{Γ}> m1)).
   { eauto 6 using mem_insert_writable,
       mem_writable_singleton, addr_typed_weaken. }
-  assert (⊥ [mem_lock Γ a (<[a:=va']{Γ}> m1); m2; mA; mf]).
+  assert (⊥ [mem_lock Γ a (<[a:=va']{Γ}> m1); m2; mf; mA]).
   { by rewrite <-mem_lock_disjoint_le by eauto using addr_typed_weaken. }
   assert (mem_locks (mem_lock Γ a (<[a:=va']{Γ}> m1) ∪ m2)
     = lock_singleton Γ a ∪ mem_locks m1' ∪ mem_locks m2').
