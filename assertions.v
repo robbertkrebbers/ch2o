@@ -375,18 +375,6 @@ Proof. solve eauto. Qed.
 Lemma assert_exist_and {A} Γ (P : A → assert K) Q :
   ((∃ x, P x) ∧ Q)%A ≡{Γ} (∃ x, P x ∧ Q)%A.
 Proof. solve eauto. Qed.
-Lemma assert_Prop_intro_l Γ (P : Prop) Q R :
-  (P → Q ⊆{Γ} R) → (⌜ P ⌝ ∧ Q)%A ⊆{Γ} R.
-Proof. solve eauto. Qed.
-Lemma assert_Prop_intro_r Γ (P : Prop) Q R :
-  (P → Q ⊆{Γ} R) → (Q ∧ ⌜ P ⌝)%A ⊆{Γ} R.
-Proof. solve eauto. Qed.
-Lemma assert_Prop_and_elim Γ (P : Prop) Q R :
-  (P → Q ⊆{Γ} R) → (⌜ P ⌝ ∧ Q)%A ⊆{Γ} R.
-Proof. solve eauto. Qed.
-Lemma assert_and_Prop_elim Γ (P : Prop) Q R :
-  (P → Q ⊆{Γ} R) → (Q ∧ ⌜ P ⌝)%A ⊆{Γ} R.
-Proof. solve eauto. Qed.
 
 (** Separation logic connectives *)
 Global Instance: Proper ((⊆{Γ}) ==> (⊆{Γ}) ==> (⊆{Γ})) (★)%A.
@@ -500,6 +488,22 @@ Proof.
   rewrite sep_commutative by auto; eapply HQ; eauto using
     cmap_valid_subseteq, @sep_union_subseteq_l, @sep_union_subseteq_r.
 Qed.
+Lemma assert_Prop_l Γ (P : Prop) Q : P → (⌜ P ⌝ ★ Q)%A ≡{Γ} Q.
+Proof.
+  intros. assert (P ↔ True) as -> by (by split; intros _).
+  by rewrite (left_id emp%A _).
+Qed.
+Lemma assert_Prop_r Γ (P : Prop) Q : P → (Q ★ ⌜ P ⌝)%A ≡{Γ} Q.
+Proof. intros. by rewrite (commutative (★))%A, assert_Prop_l. Qed.
+Lemma assert_Prop_intro_l Γ (P : Prop) Q R :
+  (P → Q ⊆{Γ} R) → (⌜ P ⌝ ★ Q)%A ⊆{Γ} R.
+Proof.
+  intros HQR Γ1 Δ1 ρ ??? Hm ? (m1&m2&->&?&[? ->]&?).
+  rewrite sep_left_id in Hm |- * by auto; by apply HQR.
+Qed.
+Lemma assert_Prop_intro_r Γ (P : Prop) Q R :
+  (P → Q ⊆{Γ} R) → (Q ★ ⌜ P ⌝)%A ⊆{Γ} R.
+Proof. rewrite (commutative (★)%A). by apply assert_Prop_intro_l. Qed.
 
 Lemma assert_Forall_holds_2 (Ps : list (assert K)) Γ Δ ρ ms :
   ⊥ ms → Forall2 (λ (P : assert K) m, assert_holds P Γ Δ ρ m) Ps ms →
