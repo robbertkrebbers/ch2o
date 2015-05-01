@@ -114,7 +114,7 @@ Proof.
 Qed.
 
 (** ** Structural rules *)
-Lemma ax_do Γ δ R J T C P Q e τ :
+Lemma ax_do Γ δ R J T C P Q e :
   Γ\ δ\ emp ⊨ₑ {{ P }} e {{ λ _, Q ◊ }} →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} !e {{ Q }}.
 Proof.

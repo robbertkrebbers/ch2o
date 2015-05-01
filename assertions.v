@@ -9,6 +9,7 @@ logic ([emp], [↦], [★]), and other connectives that are more specific to
 our development. We overload the usual notations in [assert_scope] to obtain
 nicely looking assertions. *)
 Require Export expression_eval type_system memory_singleton.
+Require Import type_system_decidable.
 Local Obligation Tactic := idtac.
 
 Local Hint Extern 1 (_ ⊆ _) => etransitivity; [eassumption|].
@@ -179,7 +180,7 @@ Notation "e1 ↦{ μ , x } e2 : τ" := (assert_singleton e1 μ x e2 τ)%A
   (at level 20, μ at next level, x at next level, e2 at next level,
    τ at next level, format "e1  ↦{ μ , x }  e2  :  τ") : assert_scope.
 Notation "e1 ↦{ μ , x } - : τ" :=
-  (∃ ν, e1 ↦{μ,x} (%# ν) : τ)%A
+  (∃ v, e1 ↦{μ,x} (# v) : τ)%A
   (at level 20, μ at next level, x at next level,
    τ at next level, format "e1  ↦{ μ , x }  -  :  τ") : assert_scope.
 
@@ -322,6 +323,9 @@ Proof. solve eauto. Qed.
 Lemma assert_exist_and {A} Γ (P : A → assert K) Q :
   ((∃ x, P x) ∧ Q)%A ≡{Γ} (∃ x, P x ∧ Q)%A.
 Proof. solve eauto. Qed.
+Lemma assert_exist_exist {A B} Γ (P : A → B → assert K) :
+  (∃ x y, P x y)%A ≡{Γ} (∃ y x, P x y)%A.
+Proof. solve eauto. Qed.
 
 (** Separation logic connectives *)
 Global Instance: Proper ((⊆{Γ}) ==> (⊆{Γ}) ==> (⊆{Γ})) (★)%A.
@@ -445,6 +449,27 @@ Proof.
 Qed.
 
 (* Evaluation and singleton connectives *)
+Lemma assert_singleton_l Γ e1 e2 μ x τ :
+  (e1 ↦{μ,x} e2 : τ)%A ≡{Γ} (∃ a, (e1 ⇓ inl a ∧ emp) ★ %a ↦{μ,x} e2 : τ)%A.
+Proof.
+  split.
+  * intros Γ' Δ ρ m ???? (a&v&?&?&?&?&?); exists a.
+    assert (sep_valid m) by eauto using cmap_valid_sep_valid.
+    eexists ∅, m; split_ands; simplify_option_equality; eauto 20 using
+      @sep_left_id, eq_sym, lockset_empty_valid, mem_singleton_typed_addr_typed.
+  * intros Γ' Δ ρ m_ ?? Hm ? (?&?&m&->&?&((τlr&?&?)&_&->)&(a&v&?&?&?&?&?));
+      simplify_option_equality;
+      exists a v; rewrite sep_left_id in Hm |- * by auto; split_ands; auto.
+    cut (τlr = inl τ); [intros ->; auto|typed_inversion_all].
+    apply (typed_unique (Γ',Δ) (inl a));
+      eauto using expr_eval_typed, cmap_empty_valid, cmap_valid_memenv_valid.
+Qed.
+Lemma assert_singleton_l_ Γ e μ x τ :
+  (e ↦{μ,x} - : τ)%A ≡{Γ} (∃ a, (e ⇓ inl a ∧ emp) ★ %a ↦{μ,x} - : τ)%A.
+Proof.
+  setoid_rewrite (assert_singleton_l Γ e); setoid_rewrite (assert_sep_exist Γ).
+  by rewrite assert_exist_exist.
+Qed.
 Lemma assert_expr_lift Γ e ν : vars e = ∅ → (e↑ ⇓ ν)%A ≡{Γ} (e ⇓ ν)%A.
 Proof.
   split; intros Γ' Δ ρ m ???? (τlr&?&?); exists τlr; split.
@@ -548,9 +573,9 @@ Proof.
       as (m1&m2&->&?&?&?); eauto 40.
   * intros Γ1 Δ1 ρ ????? (?&?&->&?&(?&a1&v1&?&?&?&?&?)&(?&a2&v2&?&?&?&?&?));
       simplify_option_equality; destruct (decide (sep_unmapped x)).
-    + eexists (inr v2), a1, v2; split_ands; eauto.
+    + eexists v2, a1, v2; split_ands; eauto.
       by eapply (mem_singleton_union _ _ _ _ _ _ _ _ v1 v2); eauto.
-    + eexists (inr v1), a1, v1; split_ands; eauto.
+    + eexists v1, a1, v1; split_ands; eauto.
       by eapply (mem_singleton_union _ _ _ _ _ _ _ _ v1 v2); eauto.
 Qed.
 Lemma assert_singleton_array Γ e μ x vs τ n :

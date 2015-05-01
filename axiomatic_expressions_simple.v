@@ -15,6 +15,24 @@ Implicit Types a : addr K.
 Implicit Types v : val K.
 Implicit Types ν : lrval K.
 
+Global Instance:
+  Proper ((≡{Γ}) ==> pointwise_relation _ (≡{Γ})) (const_assert ν).
+Proof. by intros Γ ν P Q HPQ ν'; simpl; rewrite HPQ. Qed.
+
+Lemma ax_expr_funframe_l' Γ δ A B P Q e ν :
+  Γ\ δ\ A ★ B ⊨ₑ {{ P }} e {{ ν | Q }} →
+  Γ\ δ\ B ⊨ₑ {{ A ★ P }} e {{ ν | A ★ Q }}.
+Proof.
+  intros; unfold const_assert.
+  setoid_rewrite (associative (R:=(≡{Γ})) (★)%A).
+  setoid_rewrite (commutative (R:=(≡{Γ})) (★)%A _ A).
+  setoid_rewrite <-(associative (R:=(≡{Γ})) (★)%A).
+  by apply ax_expr_funframe_l.
+Qed.
+Lemma ax_expr_funframe_r' Γ δ A B P Q e ν :
+  Γ\ δ\ A ★ B ⊨ₑ {{ P }} e {{ ν | Q }} →
+  Γ\ δ\ B ⊨ₑ {{ P ★ A }} e {{ ν | Q ★ A }}.
+Proof. rewrite !(commutative (★)%A _ A). apply ax_expr_funframe_l'. Qed.
 Lemma ax_rtol' Γ δ A P Q e v a :
   (A ★ Q)%A ⊆{Γ} ( .*(#v) ⇓ inl a)%A →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ inr v | Q }} →
