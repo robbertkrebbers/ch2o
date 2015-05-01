@@ -192,14 +192,9 @@ Next Obligation.
   naive_solver eauto using assert_weaken, mem_unlock_all_valid.
 Qed.
 Notation "P ◊" := (assert_unlock P) (at level 20) : assert_scope.
-
-(** The assertion [P↡] asserts that [P] holds if the stack is cleared. This
-connective allows us to specify stack independence in an alternative way. *)
-Program Definition assert_clear_stack `{Env K} (P : assert K) : assert K := {|
-  assert_holds := λ Γ Δ ρ m, assert_holds P Γ Δ [] m
-|}.
-Next Obligation. naive_solver eauto using assert_weaken, Forall2_nil. Qed.
-Notation "P ↡" := (assert_clear_stack P) (at level 20) : assert_scope.
+Class UnlockIndep `{EnvSpec K} (P : assert K) : Prop :=
+  unlock_indep Γ : P ⊆{Γ} (P ◊)%A.
+Hint Extern 10 (UnlockIndep _) => apply _.
 
 (** To deal with block scope variables we need to lift an assertion such that
 the De Bruijn indexes of its variables are increased. We define the lifting
@@ -210,27 +205,9 @@ Program Definition assert_lift `{Env K} (P : assert K) : assert K := {|
 |}.
 Next Obligation. naive_solver eauto using assert_weaken, Forall_tail. Qed.
 Notation "P ↑" := (assert_lift P) (at level 20) : assert_scope.
-
-(** * Subclasses of assertions *)
-(** The following type classes collect important subclasses of assertions.
-- [StackIndep] collects assertions that are independent of the stack.
-- [UnlockIndep] collects assertions that are independent of unlocking
-  sequenced locations in the memory.
-
-This file contains instances of these type classes for the various connectives.
-We use instance resolution to automatically compose these instances to prove
-the above properties for composite assertions. *)
 Class StackIndep `{Env K} (P : assert K) : Prop :=
-  stack_indep Γ Δ ρ1 ρ2 m :
-    ✓ Γ → ✓{Γ,Δ} m → ✓{Δ}* ρ1 → ✓{Δ}* ρ2 →
-    assert_holds P Γ Δ ρ1 m → assert_holds P Γ Δ ρ2 m.
-Class UnlockIndep `{Env K} (P : assert K) : Prop :=
-  unlock_indep Γ Δ ρ m :
-    ✓ Γ → ✓{Γ,Δ} m → ✓{Δ}* ρ →
-    assert_holds P Γ Δ ρ m → assert_holds P Γ Δ ρ (mem_unlock_all m).
-
+  stack_indep Γ : (P ↑)%A ≡{Γ} P.
 Hint Extern 10 (StackIndep _) => apply _.
-Hint Extern 10 (UnlockIndep _) => apply _.
 
 Section assertions.
 Context `{EnvSpec K}.
@@ -295,36 +272,6 @@ Proof. solve eauto. Qed.
 Global Instance:
   Proper (pointwise_relation _ (flip (⊆{Γ})) ==> (flip (⊆{Γ})))
   (@assert_exist _ _ A).
-Proof. solve eauto. Qed.
-
-Global Instance assert_Prop_stack_indep P : StackIndep (⌜ P ⌝).
-Proof. solve eauto. Qed.
-Global Instance assert_impl_stack_indep :
-  StackIndep P → StackIndep Q → StackIndep (P → Q).
-Proof.
-  intros P Q HP HQ Γ Δ ρ1 ρ2 m ???? HPQ Γ2 Δ2 ???? HP'.
-  eapply HQ, HPQ, HP with ρ2; eauto using indexes_valid_weaken.
-Qed.
-Global Instance assert_and_stack_indep :
-  StackIndep P → StackIndep Q → StackIndep (P ∧ Q).
-Proof. solve eauto. Qed.
-Global Instance assert_forall_stack_indep A :
-  (∀ x : A, StackIndep (P x)) → StackIndep (assert_forall P).
-Proof. solve eauto. Qed.
-Global Instance assert_exist_stack_indep A :
-  (∀ x : A, StackIndep (P x)) → StackIndep (assert_exist P).
-Proof. solve eauto. Qed.
-
-Global Instance assert_Prop_unlock_indep P : UnlockIndep (⌜ P ⌝).
-Proof. solve ltac:(eauto using mem_unlock_all_empty). Qed.
-Global Instance assert_and_unlock_indep :
-  UnlockIndep P → UnlockIndep Q → UnlockIndep (P ∧ Q).
-Proof. solve eauto. Qed.
-Global Instance assert_forall_unlock_indep A :
-  (∀ x : A, UnlockIndep (P x)) → UnlockIndep (assert_forall P).
-Proof. solve eauto. Qed.
-Global Instance assert_exist_unlock_indep A :
-  (∀ x : A, UnlockIndep (P x)) → UnlockIndep (assert_exist P).
 Proof. solve eauto. Qed.
 
 Global Instance: Commutative (≡{Γ}) (↔)%A.
@@ -401,29 +348,6 @@ Global Instance: Proper ((≡{Γ}) ==> (≡{Γ}) ==> (≡{Γ})) (-★)%A.
 Proof.
   by intros ??? [??] ?? [??]; split;
     apply (_ : Proper (flip (⊆{Γ}) ==> (⊆{Γ}) ==> (⊆{Γ})) (-★)%A).
-Qed.
-
-Global Instance assert_sep_unlock_indep P Q :
-  UnlockIndep P → UnlockIndep Q → UnlockIndep (P ★ Q).
-Proof.
-  intros HP HQ Γ Δ δ m ??? (m1&m2&->&?&?&?).
-  rewrite mem_unlock_all_union by solve_sep_disjoint.
-  exists (mem_unlock_all m1) (mem_unlock_all m2); split_ands;
-    rewrite <-?mem_unlock_all_disjoint_le; eauto using
-    cmap_valid_subseteq, @sep_union_subseteq_l, @sep_union_subseteq_r.
-Qed.
-Global Instance assert_sep_stack_indep :
-  StackIndep P → StackIndep Q → StackIndep (P ★ Q).
-Proof.
-  solve ltac:(eauto 15 using cmap_valid_subseteq,
-    @sep_union_subseteq_l, @sep_union_subseteq_r).
-Qed.
-Global Instance assert_wand_stack_indep :
-  StackIndep P → StackIndep Q → StackIndep (P -★ Q).
-Proof.
-  intros P Q HP HQ Γ Δ ρ1 ρ2 m2 ???? HPQ Γ2 Δ2 m1 ?????? HP'.
-  eapply HQ, HPQ, HP with ρ2;
-    eauto using indexes_valid_weaken, cmap_union_valid_2.
 Qed.
 
 Global Instance: Commutative (⊆{Γ}) (★)%A.
@@ -521,25 +445,44 @@ Proof.
 Qed.
 
 (* Evaluation and singleton connectives *)
-Global Instance assert_expr_stack_indep e v : vars e = ∅ → StackIndep (e ⇓ v).
+Lemma assert_expr_lift Γ e ν : vars e = ∅ → (e↑ ⇓ ν)%A ≡{Γ} (e ⇓ ν)%A.
 Proof.
-  intros ? Γ Δ ρ1 ρ2 m ???? (τlr&?&?); exists τlr; split;
-    erewrite 1?expr_eval_var_free by eauto; eauto using expr_typed_var_free.
+  split; intros Γ' Δ ρ m ???? (τlr&?&?); exists τlr; split.
+  * by apply expr_typed_var_free with (tail (ρ.*2)), expr_typed_lift.
+  * erewrite expr_eval_var_free, <-expr_eval_lift; eauto.
+  * eapply expr_typed_lift, expr_typed_var_free; eauto.
+  * erewrite expr_eval_lift, <-expr_eval_var_free by done; eauto.
 Qed.
-Global Instance assert_singleton_stack_indep e1 e2 μ x τ :
-  vars e1 = ∅ → vars e2 = ∅ → StackIndep (e1 ↦{μ,x} e2 : τ).
+Lemma assert_singleton_lift_l Γ e1 e2 μ x τ :
+  vars e1 = ∅ → (e1↑ ↦{μ,x} e2 : τ)%A ≡{Γ} (e1 ↦{μ,x} e2 : τ)%A.
 Proof.
-  intros ?? Γ Δ ρ1 ρ2 m ???? (a&v&?&?&?&?&?);
-    exists a v; erewrite !(expr_eval_var_free _ ρ2 ρ1) by eauto;
-    split_ands; eauto using expr_typed_var_free.
+  split; intros Γ' Δ ρ m ???? (a&v&?&?&?&?&?); exists a v; split_ands; auto.
+  * by apply expr_typed_var_free with (tail (ρ.*2)), expr_typed_lift.
+  * erewrite expr_eval_var_free, <-expr_eval_lift; eauto.
+  * eapply expr_typed_lift, expr_typed_var_free; eauto.
+  * erewrite expr_eval_lift, <-expr_eval_var_free by done; eauto.
 Qed.
-Global Instance assert_singleton_unlock_indep Γ e1 e2 μ x τ :
-  perm_locked x = false → UnlockIndep (e1 ↦{μ,x} e2 : τ).
+Lemma assert_singleton_lift_r Γ e1 e2 μ x τ :
+  vars e2 = ∅ → (e1 ↦{μ,x} (e2↑) : τ)%A ≡{Γ} (e1 ↦{μ,x} e2 : τ)%A.
 Proof.
-  intros ? Γ1 Δ1 ρ m ??? (a&v&?&?&?&?&?).
-  exists a v; split_ands; eauto using mem_unlock_all_singleton_unlocked.
+  split; intros Γ' Δ ρ m ???? (a&v&?&?&?&?&?); exists a v; split_ands; auto.
+  * by apply expr_typed_var_free with (tail (ρ.*2)), expr_typed_lift.
+  * erewrite expr_eval_var_free, <-expr_eval_lift; eauto.
+  * eapply expr_typed_lift, expr_typed_var_free; eauto.
+  * erewrite expr_eval_lift, <-expr_eval_var_free by done; eauto.
 Qed.
-
+Lemma assert_singleton_eval Γ e v μ x τ :
+  Some Readable ⊆ perm_kind x → (e ↦{μ,x} #v : τ)%A ⊆{Γ} (load e ⇓ inr v)%A.
+Proof.
+  intros ? Γ1 Δ1 ρ ????? (a&v'&?&?&?&?&?); simplify_option_equality.
+  assert (✓{Γ1} Δ1) by eauto using cmap_valid_memenv_valid.
+  eexists (inr τ); split_ands; auto.
+  erewrite (expr_eval_weaken _ _ _ _ _ ∅) by eauto using cmap_empty_valid,
+    cmap_subseteq_index_alive, mem_lookup_subseteq, mem_forced_subseteq,
+    @sep_subseteq_empty; simpl.
+  by erewrite option_guard_True, mem_lookup_singleton
+    by eauto using mem_singleton_forced.
+Qed.
 Lemma assert_singleton_union_lr Γ e1 e2 μ x y τ :
   ⊥[x; y] → ¬sep_unmapped x → ¬sep_unmapped y →
   (e1 ↦{μ,x ∪ y} e2 : τ)%A ≡{Γ} (e1 ↦{μ,x} e2 : τ ★ e1 ↦{μ,y} e2 : τ)%A.
@@ -671,18 +614,6 @@ Proof.
     exists (MArray τ ws); eauto 10 using lval_typed_inv, expr_eval_typed,
       cmap_empty_valid, (addr_ref_byte_is_obj_parent _ _ (RArray 0 τ n)).
 Qed.
-Lemma assert_singleton_eval Γ e v μ x τ :
-  Some Readable ⊆ perm_kind x → (e ↦{μ,x} #v : τ)%A ⊆{Γ} (load e ⇓ inr v)%A.
-Proof.
-  intros ? Γ1 Δ1 ρ ????? (a&v'&?&?&?&?&?); simplify_option_equality.
-  assert (✓{Γ1} Δ1) by eauto using cmap_valid_memenv_valid.
-  eexists (inr τ); split_ands; auto.
-  erewrite (expr_eval_weaken _ _ _ _ _ ∅) by eauto using cmap_empty_valid,
-    cmap_subseteq_index_alive, mem_lookup_subseteq, mem_forced_subseteq,
-    @sep_subseteq_empty; simpl.
-  by erewrite option_guard_True, mem_lookup_singleton
-    by eauto using mem_singleton_forced.
-Qed.
 
 (* Lifting De Bruijn indexes *)
 Global Instance: Proper ((⊆{Γ}) ==> (⊆{Γ})) assert_lift.
@@ -690,13 +621,6 @@ Proof. solve ltac:(eauto using Forall_tail). Qed.
 Global Instance: Proper ((≡{Γ}) ==> (≡{Γ})) assert_lift.
 Proof. solve ltac:(eauto using Forall_tail). Qed.
 
-Global Instance assert_lift_stack_indep: StackIndep P → StackIndep (P↑).
-Proof. solve ltac:(eauto using Forall_tail). Qed.
-Global Instance assert_lift_unlock_indep: UnlockIndep P → UnlockIndep (P↑).
-Proof. solve ltac:(eauto using Forall_tail). Qed.
-
-Lemma stack_indep_lift Γ P `{!StackIndep P} : (P↑)%A ≡{Γ} P.
-Proof. solve ltac:(eauto using Forall_tail). Qed.
 Lemma assert_lift_impl Γ P Q : ((P → Q)↑)%A ≡{Γ} (P↑ → Q↑)%A.
 Proof. solve eauto. Qed.
 Lemma assert_lift_and Γ P Q : ((P ∧ Q)↑)%A ≡{Γ} (P↑ ∧ Q↑)%A.
@@ -710,6 +634,8 @@ Lemma assert_lift_exists Γ {A} (P : A → assert K) :
   ((∃ x, P x)↑)%A ≡{Γ} (∃ x, P x↑)%A.
 Proof. solve eauto. Qed.
 Lemma assert_lift_sep Γ P Q : ((P ★ Q)↑)%A ≡{Γ} (P↑ ★ Q↑)%A.
+Proof. solve eauto. Qed.
+Lemma assert_lift_wand Γ P Q : ((P -★ Q)↑)%A ≡{Γ} (P↑ -★ Q↑)%A.
 Proof. solve eauto. Qed.
 Lemma assert_lift_expr Γ e v : ((e ⇓ v)↑)%A ≡{Γ} (e↑ ⇓ v)%A.
 Proof.
@@ -736,14 +662,59 @@ Proof.
   by rewrite assert_lift_exists; setoid_rewrite (assert_lift_singleton Γ).
 Qed.
 
+Global Instance assert_lift_stack_indep: StackIndep P → StackIndep (P↑).
+Proof. intros P ? Γ. by rewrite !stack_indep. Qed.
+Global Instance assert_Prop_stack_indep P : StackIndep (⌜ P ⌝).
+Proof. solve eauto. Qed.
+Global Instance assert_impl_stack_indep :
+  StackIndep P → StackIndep Q → StackIndep (P → Q).
+Proof. by intros P Q ?? Γ; rewrite assert_lift_impl, !stack_indep. Qed.
+Global Instance assert_and_stack_indep :
+  StackIndep P → StackIndep Q → StackIndep (P ∧ Q).
+Proof. solve eauto. Qed.
+Global Instance assert_forall_stack_indep A :
+  (∀ x : A, StackIndep (P x)) → StackIndep (assert_forall P).
+Proof. solve eauto. Qed.
+Global Instance assert_exist_stack_indep A :
+  (∀ x : A, StackIndep (P x)) → StackIndep (assert_exist P).
+Proof. solve eauto. Qed.
+Global Instance assert_sep_stack_indep :
+  StackIndep P → StackIndep Q → StackIndep (P ★ Q).
+Proof. by intros P Q HP HQ Γ; rewrite assert_lift_sep, !stack_indep. Qed.
+Global Instance assert_wand_stack_indep :
+  StackIndep P → StackIndep Q → StackIndep (P -★ Q).
+Proof. by intros P Q ?? Γ; rewrite assert_lift_wand, !stack_indep. Qed.
+Global Instance assert_expr_stack_indep e v : vars e = ∅ → StackIndep (e ⇓ v).
+Proof. intros ? Γ. by rewrite assert_lift_expr, assert_expr_lift. Qed.
+Global Instance assert_singleton_stack_indep e1 e2 μ x τ :
+  vars e1 = ∅ → vars e2 = ∅ → StackIndep (e1 ↦{μ,x} e2 : τ).
+Proof.
+  by intros ?? Γ; rewrite assert_lift_singleton,
+    assert_singleton_lift_l, assert_singleton_lift_r by done.
+Qed.
+Lemma stack_indep_spec P Γ Δ ρ1 ρ2 m :
+  StackIndep P → ✓ Γ → ✓{Γ,Δ} m → ✓{Δ}* ρ1 → ✓{Δ}* ρ2 →
+  assert_holds P Γ Δ ρ1 m → assert_holds P Γ Δ ρ2 m.
+Proof.
+  intros HP ?? Hρ1 Hρ2 ?; assert (assert_holds P Γ Δ [] m).
+  * induction Hρ1 as [|[o τ] ρ ?? IH]; auto.
+    eapply IH, (proj2 (HP _) Γ Δ (_ :: _)); eauto.
+  * induction Hρ2 as [|[o τ] ρ ?? IH]; auto.
+    eapply (proj1 (HP _)), IH; eauto.
+Qed.
+
 (* Unlocking *)
 Global Instance: Proper ((⊆{Γ}) ==> (⊆{Γ})) assert_unlock.
 Proof. solve ltac:(eauto using mem_unlock_all_valid). Qed.
 Global Instance: Proper ((≡{Γ}) ==> (≡{Γ})) assert_unlock.
 Proof. solve ltac:(eauto using mem_unlock_all_valid). Qed.
 
-Lemma assert_unlock_unlock_indep Γ P `{!UnlockIndep P} : P ⊆{Γ} (P ◊)%A.
-Proof. solve eauto. Qed.
+Lemma assert_unlock_unlock Γ P : (P ◊ ◊)%A ≡{Γ} (P ◊)%A.
+Proof.
+  split; intros Γ' Δ ρ m ????; simpl;
+    by rewrite (mem_unlock_all_spec (mem_unlock_all _)),
+    !mem_locks_unlock_all, mem_unlock_empty.
+Qed.
 Lemma assert_unlock_impl Γ P Q : ((P → Q) ◊)%A ≡{Γ} (P ◊ → Q ◊)%A.
 Proof.
   split; [solve ltac:(eauto using mem_unlock_all_valid)|].
@@ -767,7 +738,6 @@ Qed.
 Lemma assert_unlock_sep_alt Γ P P' Q Q' :
   P ⊆{Γ} (P' ◊)%A → Q ⊆{Γ} (Q' ◊)%A → (P ★ Q)%A ⊆{Γ} ((P' ★ Q') ◊)%A.
 Proof. intros HP HQ. by rewrite HP, HQ, assert_unlock_sep. Qed.
-
 Lemma assert_unlock_singleton Γ e1 e2 μ x τ :
   perm_locked x = true →
   (e1 ↦{μ,x} e2 : τ)%A ⊆{Γ} ((e1 ↦{μ,perm_unlock x} e2 : τ) ◊)%A.
@@ -782,18 +752,43 @@ Proof.
   intros Hx. rewrite assert_unlock_exists.
   by setoid_rewrite (λ e2, assert_unlock_singleton Γ e1 e2 μ x τ Hx).
 Qed.
-Lemma assert_lock_singleton Γ e1 e2 μ x τlr :
+Lemma assert_lock_singleton Γ e1 e2 μ x τ :
   sep_valid x → Some Writable ⊆ perm_kind x →
-  (e1 ↦{μ,perm_lock x} e2 : τlr)%A ⊆{Γ} ((e1 ↦{μ,x} e2 : τlr) ◊)%A.
+  (e1 ↦{μ,perm_lock x} e2 : τ)%A ⊆{Γ} ((e1 ↦{μ,x} e2 : τ) ◊)%A.
 Proof.
   intros. by rewrite assert_unlock_singleton,
     perm_unlock_lock by auto using perm_locked_lock.
 Qed.
-Lemma assert_lock_singleton_ Γ e1 μ x τlr :
+Lemma assert_lock_singleton_ Γ e1 μ x τ :
   sep_valid x → Some Writable ⊆ perm_kind x →
-  (e1 ↦{μ,perm_lock x} - : τlr)%A ⊆{Γ} ((e1 ↦{μ,x} - : τlr) ◊)%A.
+  (e1 ↦{μ,perm_lock x} - : τ)%A ⊆{Γ} ((e1 ↦{μ,x} - : τ) ◊)%A.
 Proof.
   intros. by rewrite assert_unlock_singleton_,
     perm_unlock_lock by auto using perm_locked_lock.
+Qed.
+
+Global Instance assert_unlock_unlock_indep P : UnlockIndep (P ◊).
+Proof. intros Γ. by rewrite assert_unlock_unlock. Qed.
+Global Instance assert_Prop_unlock_indep P : UnlockIndep (⌜ P ⌝).
+Proof. solve ltac:(eauto using mem_unlock_all_empty). Qed.
+Global Instance assert_and_unlock_indep :
+  UnlockIndep P → UnlockIndep Q → UnlockIndep (P ∧ Q).
+Proof. solve eauto. Qed.
+Global Instance assert_forall_unlock_indep A :
+  (∀ x : A, UnlockIndep (P x)) → UnlockIndep (assert_forall P).
+Proof. solve eauto. Qed.
+Global Instance assert_exist_unlock_indep A :
+  (∀ x : A, UnlockIndep (P x)) → UnlockIndep (assert_exist P).
+Proof. solve eauto. Qed.
+Global Instance assert_lift_unlock_indep : UnlockIndep P → UnlockIndep (P↑).
+Proof. solve ltac:(eauto using Forall_tail). Qed.
+Global Instance assert_sep_unlock_indep P Q :
+  UnlockIndep P → UnlockIndep Q → UnlockIndep (P ★ Q).
+Proof. intros ?? Γ; auto using assert_unlock_sep_alt. Qed.
+Global Instance assert_singleton_unlock_indep e1 e2 μ x τ :
+  perm_locked x = false → UnlockIndep (e1 ↦{μ,x} e2 : τ).
+Proof.
+  intros ? Γ Δ Γ' ρ m ???? (a&v&?&?&?&?&?).
+  exists a v; split_ands; eauto using mem_unlock_all_singleton_unlocked.
 Qed.
 End assertions.
