@@ -5,20 +5,22 @@ Require Import axiomatic_graph type_preservation.
 
 Local Hint Extern 1 (⊥ _) => solve_mem_disjoint.
 Local Hint Extern 1 (sep_valid _) => solve_mem_disjoint.
+Local Hint Extern 1 (_ ≤ _) => omega.
 
 (** * Partial program correctness *)
 (** We prove that the interpretation of the statement Hoare judgment indeed
 implies partial program correctness. *)
 Lemma ax_stmt_sound `{EnvSpec K} Γ δ P Q s m S' cmτ :
   ✓ Γ → ✓{Γ,'{m} } δ → ✓{Γ} m → mem_locks m = ∅ → (Γ,'{m},[]) ⊢ s : cmτ →
-  Γ\ δ ⊨ₛ {{ P }} s {{ Q }} → assert_holds P Γ '{m} [] (cmap_erase m) →
+  Γ\ δ ⊨ₛ {{ P }} s {{ Q }} →
+  (∀ n, assert_holds P Γ '{m} [] n (cmap_erase m)) →
   Γ\ δ ⊢ₛ State [] (Stmt ↘ s) m ⇒* S' →
-  (** 1.) *) (∃ m',
+  (** 1.) *) (∃ n' m',
     S' = State [] (Stmt ↗ s) m' ∧
-    assert_holds (Q voidV) Γ '{m'} [] (cmap_erase m')) ∨
-  (** 2.) *) (∃ m' v,
+    assert_holds (Q voidV) Γ '{m'} [] n' (cmap_erase m')) ∨
+  (** 2.) *) (∃ n' m' v,
     S' = State [] (Stmt (⇈ v) s) m' ∧
-    assert_holds (Q v) Γ '{m'} [] (cmap_erase m')) ∨
+    assert_holds (Q v) Γ '{m'} [] n' (cmap_erase m')) ∨
   (** 3.) *) red (cstep Γ δ) S'.
 Proof.
   intros ?. revert m S'. cut (∀ n1 n2 k φ m S' τf,
@@ -41,19 +43,19 @@ Proof.
     inversion Hax' as [|??? [d' ????]|???? Hred]; clear Hax'; subst.
     { destruct d'; naive_solver. }
     do 2 right; apply (red_subrel (rcstep Γ δ [])); auto using rcstep_cstep.
-    apply (Hred '{m'} _ ∅); auto.
+    apply (Hred '{m'} 0 _ ∅); auto.
     split; rewrite ?sep_right_id by auto;
       eauto using cmap_valid_memenv_valid, cmap_empty_valid. }
   intros n1 n2; induction n1 as [n1 IH] using lt_wf_ind.
   intros k φ m S' τf ?????? Hax p.
-  inv_rcsteps p as [|n' ? S ? p1 p2]; eauto 10 using mk_ax_next, ax_plus_l.
+  inv_rcsteps p as [|n' ? S ? p1 p2]; eauto 10 using mk_ax_next, ax_weaken.
   assert (ax_next ax_disjoint_cond (ax_stmt_post (dassert_pack_top P Q) s)
     Γ δ '{m} [] (n' + n2) ∅ S) as Hnext.
   { eapply ax_step; eauto.
     + split; rewrite ?sep_right_id by auto;
         eauto using cmap_valid_memenv_valid, cmap_empty_valid.
     + rewrite cmap_dom_memenv_of; esolve_elem_of. }
-  inversion Hnext as [? Δ2 k2 φ2 m2 m2' mf (Hm2'&?) ????? Hax'];
+  inversion Hnext as [Δ2 k2 ? φ2 m2 m2' mf (Hm2'&?) ????? Hax'];
     rewrite sep_right_id in Hm2' by auto; subst.
   assert (Γ ⊢ State k2 φ2 m2 : Stmt_type cmτ ∧ '{m} ⇒ₘ '{m2}) as [(τf2&?&?&?)].
   { eapply (cstep_preservation _ _ (State _ _ _) (State _ _ _));
