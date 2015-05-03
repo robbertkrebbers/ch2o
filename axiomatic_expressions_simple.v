@@ -61,11 +61,11 @@ Proof.
   apply assert_exist_intro with v, assert_and_intro, assert_wand_intro; auto.
   by rewrite assert_Prop_l by done.
 Qed.
-Lemma ax_assign' Γ δ A P1 P2 Q1 Q2 Q ass e1 e2 μ x τ a va v va' v' :
+Lemma ax_assign' Γ δ A P1 P2 Q1 Q2 Q ass e1 e2 μ x τ a v va v' :
   Some Writable ⊆ perm_kind x →
-  (A ★ Q1 ★ Q2)%A ⊆{Γ} (assign_assert va v ass τ va' v')%A →
-  (Q1 ★ Q2)%A ⊆{Γ} (%a ↦{μ,x} #va : τ ★
-    (%a ↦{μ,perm_lock x} # (freeze true va') : τ -★ Q))%A →
+  (A ★ Q1 ★ Q2)%A ⊆{Γ} (assert_assign a v ass τ va v')%A →
+  (Q1 ★ Q2)%A ⊆{Γ} (%a ↦{μ,x} - : τ ★
+    (%a ↦{μ,perm_lock x} # (freeze true va) : τ -★ Q))%A →
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ inl a | Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ inr v | Q2 }} →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 ::={ass} e2 {{ inr v' | Q }}.
@@ -76,7 +76,7 @@ Proof.
   rewrite (commutative (★)%A _ Q2), (associative (★)%A Q1).
   apply assert_Prop_intro_r; intros; simplify_equality'.
   apply assert_exist_intro with va, assert_exist_intro with v',
-    assert_exist_intro with va', assert_and_intro, assert_wand_intro; eauto.
+    assert_and_intro, assert_wand_intro; eauto.
   rewrite assert_Prop_l by done; eauto.
 Qed.
 Lemma ax_eltl' Γ δ A P Q e rs a a' :

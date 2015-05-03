@@ -26,6 +26,7 @@ Implicit Types Pd : dassert K.
 Hint Extern 1 (_ ⊥ _) => solve_mem_disjoint.
 Hint Extern 1 (⊥ _) => solve_mem_disjoint.
 Hint Extern 1 (sep_valid _) => solve_mem_disjoint.
+Hint Extern 1 (_ ≤ _) => omega.
 
 Hint Immediate cmap_valid_memenv_valid.
 Hint Resolve cmap_empty_valid cmap_erased_empty mem_locks_empty.
@@ -40,7 +41,7 @@ Hint Immediate val_new_typed perm_full_mapped.
 Hint Resolve mem_alloc_valid mem_free_valid.
 Hint Immediate lockset_empty_valid.
 Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
-Hint Extern 0 (unframe ax_disjoint_cond _ _ _ _ _ _ _) => by constructor.
+Hint Extern 0 (unframe ax_disjoint_cond _ _ _ _ _ _ _ _) => by constructor.
 Hint Extern 0 (focus_locks_valid _ _) => by constructor.
 
 (** ** Basic rules *)
@@ -50,9 +51,9 @@ Lemma ax_stmt_weaken_packed Γ δ Pd Pd' s :
   Γ\ δ\ Pd ⊨ₚ s → Γ\ δ\ Pd' ⊨ₚ s.
 Proof.
   intros Hin Hout Hax Δ n ρ d m ????????.
-  apply ax_weaken with ax_disjoint_cond (ax_stmt_post Pd s); auto.
+  apply ax_weaken with ax_disjoint_cond (ax_stmt_post Pd s) n; auto.
   { eapply Hax, Hin; eauto. }
-  destruct 3; constructor; auto. apply Hout; eauto using indexes_valid_weaken.
+  destruct 2; constructor; auto. apply Hout; eauto using indexes_valid_weaken.
 Qed.
 Lemma ax_stmt_weaken_pre Γ δ R J T C P P' Q s :
   P' ⊆{Γ} P →
@@ -75,7 +76,7 @@ Proof.
   rewrite sep_commutative by auto.
   apply ax_frame with ax_disjoint_cond (ax_stmt_post Pd s);
     eauto using ax_disjoint_cond_frame_diagram.
-  intros Δ' φ' m' ????; inversion_clear 1; constructor; auto.
+  intros Δ' n' φ' m' ?????; inversion_clear 1; constructor; auto.
   { rewrite mem_locks_union by auto. by apply empty_union_L. }
   rewrite directed_fmap_spec, sep_commutative, cmap_erase_union by auto.
   exists (cmap_erase m1') (cmap_erase m'); split_ands;eauto using assert_weaken.
@@ -101,16 +102,16 @@ Proof.
   intros Hax Δ n ρ [] m cmτ HΓ Hd ???? Hpre; try done.
   * destruct Hpre as [x Hpre].
     apply ax_weaken with ax_disjoint_cond (ax_stmt_post
-      (dassert_pack (P x) Q R J T C) s); auto; [eapply Hax; eauto|].
-    destruct 3 as [[]]; constructor; auto. by exists x.
+      (dassert_pack (P x) Q R J T C) s) n; auto; [eapply Hax; eauto|].
+    destruct 2 as [[]]; constructor; auto. by exists x.
   * destruct (_ : Inhabited A) as [x].
     apply ax_weaken with ax_disjoint_cond (ax_stmt_post
-      (dassert_pack (P x) Q R J T C) s); auto; [eapply Hax; eauto|].
-    destruct 3 as [[]]; constructor; auto. by exists x.
+      (dassert_pack (P x) Q R J T C) s) n; auto; [eapply Hax; eauto|].
+    destruct 2 as [[]]; constructor; auto. by exists x.
   * destruct (_ : Inhabited A) as [x].
     apply ax_weaken with ax_disjoint_cond (ax_stmt_post
-      (dassert_pack (P x) Q R J T C) s); auto; [eapply Hax; eauto|].
-    destruct 3 as [[]]; constructor; auto. by exists x.
+      (dassert_pack (P x) Q R J T C) s) n; auto; [eapply Hax; eauto|].
+    destruct 2 as [[]]; constructor; auto. by exists x.
 Qed.
 
 (** ** Structural rules *)
@@ -119,16 +120,16 @@ Lemma ax_do Γ δ R J T C P Q e :
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} !e {{ Q }}.
 Proof.
   intros Hax Δ n ρ [] m cmτ ?????? He; typed_inversion_all; try solve_elem_of.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ' ? mf S' ?? (?&?&?) p _; subst; inv_rcstep p.
+  apply ax_further; [intros; solve_rcred|].
+  intros Δ' n' ? mf S' ??? (?&?&?) p _; subst; inv_rcstep p.
   econstructor; try (by eauto); [esolve_elem_of|].
   clear dependent mf S'.
   eapply (ax_compose_cons (ax_expr_cond ρ emp)); eauto.
   { apply Hax; eauto using expr_typed_weaken,
       indexes_valid_weaken, assert_weaken. }
-  intros Δ'' m' φ' [[|v] ???] ??; typed_inversion_all.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ''' ? mf S' ?? (?&?&?) p _; inv_rcstep p.
+  intros Δ'' n'' m' φ' [[|v] ???] ???; typed_inversion_all.
+  apply ax_further; [intros; solve_rcred|].
+  intros Δ''' n''' ? mf S' ??? (?&?&?) p _; inv_rcstep p.
   rewrite mem_unlock_union, <-mem_unlock_all_spec by solve_elem_of.
   eapply mk_ax_next; try by eauto.
   { split. done. by rewrite <-mem_unlock_all_disjoint_le by auto. }
@@ -142,8 +143,8 @@ Qed.
 Lemma ax_skip Γ δ R J T C P : Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} skip {{ P }}.
 Proof.
   intros Δ n k [] m cmτ ???????; try solve_elem_of.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ' m' mf S' ?? (?&?&?) p _; subst; inv_rcstep p.
+  apply ax_further; [intros; solve_rcred|].
+  intros Δ' n' m' mf S' ??? (?&?&?) p _; subst; inv_rcstep p.
   eapply mk_ax_next; try by eauto.
   apply ax_done; constructor; eauto using assert_weaken.
 Qed.
@@ -153,15 +154,15 @@ Lemma ax_ret Γ δ R J T C P Q1 Q2 e :
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} ret e {{ Q2 }}.
 Proof.
   intros HQ Hax Δ n ρ [] m cmτ ???????; try solve_elem_of; typed_inversion_all.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ' ? mf S' ?? (?&?&?) p _; subst; inv_rcstep p.
+  apply ax_further; [intros; solve_rcred|].
+  intros Δ' n' ? mf S' ??? (?&?&?) p _; subst; inv_rcstep p.
   econstructor; try (by eauto); [esolve_elem_of|].
   clear dependent mf S'. eapply (ax_compose_cons (ax_expr_cond ρ emp)); eauto.
   { apply Hax; eauto using expr_typed_weaken,
       indexes_valid_weaken, assert_weaken. }
-  intros Δ'' m' φ' [[|v] ???] ??; typed_inversion_all.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ''' ? mf S' ?? (?&?&?) p _; subst; inv_rcstep p.
+  intros Δ'' n'' m' φ' [[|v] ???] ???; typed_inversion_all.
+  apply ax_further; [intros; solve_rcred|].
+  intros Δ''' n''' ? mf S' ??? (?&?&?) p _; subst; inv_rcstep p.
   rewrite mem_unlock_union, <-mem_unlock_all_spec by solve_elem_of.
   eapply mk_ax_next; try by eauto.
   { split. done. by rewrite <-mem_unlock_all_disjoint_le by auto. }
@@ -176,8 +177,8 @@ Lemma ax_throw Γ δ R J T C Q i :
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ T i }} throw i {{ Q }}.
 Proof.
   intros Δ n k [] m cmτ ???????; simplify_equality'; try solve_elem_of.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ' m' mf S' ?? (?&?&?) p _; subst; inv_rcstep p.
+  apply ax_further; [intros; solve_rcred|].
+  intros Δ' n' m' mf S' ??? (?&?&?) p _; subst; inv_rcstep p.
   eapply mk_ax_next; try by eauto.
   apply ax_done; constructor; eauto using assert_weaken.
 Qed.
@@ -186,8 +187,8 @@ Lemma ax_catch Γ δ R J T C P Q s :
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} catch s {{ Q }}.
 Proof.
   intros Hax Δ n ρ d m cmτ ???????; typed_inversion_all.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ' ? mf ??? (->&?&?) p _.
+  apply ax_further; [intros; solve_rcred|].
+  intros Δ' n' ? mf ???? (->&?&?) p _.
   assert (S' = State [CStmt (catch □)] (Stmt d s) (m ∪ mf))
     by inv_rcstep p; subst; clear p.
   apply mk_ax_next with Δ' m; auto.
@@ -195,11 +196,11 @@ Proof.
   { eapply Hax; eauto using indexes_valid_weaken, stmt_typed_weaken.
     by destruct d as [| | | |[]| ]; eauto using assert_weaken. }
   clear dependent d m mf.
-  intros Δ'' φ m' [d m ??] ??; clear m'; apply ax_further_pred.
+  intros Δ'' n'' φ m' [d m ??] ???; clear m'; apply ax_further.
   { destruct d as [| | | |[]| ]; done || intros; solve_rcred. }
-  intros Δ''' ? mf S' ?? (->&?&?) p _.
+  intros Δ''' n''' ? mf S' ??? (->&?&?) p _.
   assert (∃ d', S' = State [] (Stmt d' (catch s)) (m ∪ mf)
-    ∧ assert_holds ((dassert_pack P Q R J T C) d') Γ Δ''' ρ (cmap_erase m)
+    ∧ assert_holds ((dassert_pack P Q R J T C) d') Γ Δ''' ρ n''' (cmap_erase m)
     ∧ direction_out d' s) as (d''&->&?&?).
   { inv_rcstep p; eexists; split_ands;
       eauto using assert_weaken, indexes_valid_weaken. }
@@ -209,8 +210,8 @@ Lemma ax_goto Γ δ R J T C Q l :
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ J l }} goto l {{ Q }}.
 Proof.
   intros Δ n k [] m cmτ ???????; simplify_equality'; try solve_elem_of.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ' m' mf S' ?? (?&?&?) p _; subst; inv_rcstep p.
+  apply ax_further; [intros; solve_rcred|].
+  intros Δ' n' m' mf S' ??? (?&?&?) p _; subst; inv_rcstep p.
   eapply mk_ax_next; try by eauto.
   apply ax_done; constructor; eauto using assert_weaken. esolve_elem_of.
 Qed.
@@ -218,12 +219,12 @@ Lemma ax_label Γ δ R J T C l :
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ J l }} label l {{ J l }}.
 Proof.
   intros Δ n k [] m cmτ ???????; simplify_equality'; try solve_elem_of.
-  * apply ax_further_pred; [intros; solve_rcred|].
-    intros Δ' m' mf S' ?? (?&?&?) p _; subst; inv_rcstep p.
+  * apply ax_further; [intros; solve_rcred|].
+    intros Δ' n' m' mf S' ??? (?&?&?) p _; subst; inv_rcstep p.
     eapply mk_ax_next; try by eauto.
     apply ax_done; constructor; eauto using assert_weaken.
-  * apply ax_further_pred; [intros; solve_rcred|].
-    intros Δ' m' mf S' ?? (?&?&?) p _; subst; inv_rcstep p.
+  * apply ax_further; [intros; solve_rcred|].
+    intros Δ' n' m' mf S' ??? (?&?&?) p _; subst; inv_rcstep p.
     eapply mk_ax_next; try by eauto.
     apply ax_done; constructor; eauto using assert_weaken.
 Qed.
@@ -232,12 +233,12 @@ Lemma ax_case Γ δ R J T C mx :
 Proof.
   intros Δ n k [] m cmτ ???????; simplify_equality';
     decompose_elem_of; try solve_elem_of.
-  * apply ax_further_pred; [intros; solve_rcred|].
-    intros Δ' m' mf S' ?? (?&?&?) p _; subst; inv_rcstep p.
+  * apply ax_further; [intros; solve_rcred|].
+    intros Δ' n' m' mf S' ??? (?&?&?) p _; subst; inv_rcstep p.
     eapply mk_ax_next; try by eauto.
     apply ax_done; constructor; eauto using assert_weaken.
-  * apply ax_further_pred; [intros; solve_rcred|].
-    intros Δ' m' mf S' ?? (?&?&?) p _; subst; inv_rcstep p.
+  * apply ax_further; [intros; solve_rcred|].
+    intros Δ' n' m' mf S' ??? (?&?&?) p _; subst; inv_rcstep p.
     eapply mk_ax_next; try by eauto.
     apply ax_done; constructor; eauto using assert_weaken.
 Qed.
@@ -248,8 +249,8 @@ Proof.
   intros Hax Δ n ρ d m cmτ ?? Hm ????; typed_inversion_all.
   change (stmt_typed' Γ Δ (τ :: ρ.*2))
     with (typed (Γ,Δ,(τ :: ρ.*2)) : stmt K → _ → Prop) in *.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ' ? mf ??? (->&?&?) p Hdom.
+  apply ax_further; [intros; solve_rcred|].
+  intros Δ' n' ? mf ???? (->&?&?) p Hdom.
   assert (∃ o, S' = State [CLocal o τ] (Stmt d s)
       (mem_alloc Γ o false perm_full (val_new Γ τ) (m ∪ mf)) ∧
     o ∉ dom indexset (m ∪ mf)) as (o&->&Ho) by (inv_rcstep p; eauto);
@@ -278,12 +279,12 @@ Proof.
     { by rewrite <-cmap_erase_disjoint_le. }
     eexists _, (addr_top o τ), (val_new Γ τ); split_ands; simpl; eauto. }
   clear dependent d m mf.
-  intros Δ'' φ m' [d m ? Hlocks HPd] ??; clear m'.
+  intros Δ'' n'' φ m' [d m ? Hlocks HPd] ???; clear m'.
   assert (Δ ⇒ₘ Δ'') by eauto using mem_alloc_forward.
   assert (Δ'' ⊢ o : τ)
     by eauto using memenv_forward_typed, mem_alloc_index_typed.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ''' ? mf S' ?? (->&?&?) p _.
+  apply ax_further; [intros; solve_rcred|].
+  intros Δ''' n''' ? mf S' ??? (->&?&?) p _.
   assert (S' = State [] (Stmt d (local{τ} s)) (mem_free o (m ∪ mf)))
     by (by inv_rcstep p); subst; clear p.
   rewrite directed_fmap_spec in HPd; destruct HPd as (m1&m2&?&?&Hm1&?).
@@ -328,20 +329,20 @@ Proof.
   intros Hax1 Hax2 Δ n ρ d m cmτ ?; revert Δ d m.
   induction n as [[|n] IH] using lt_wf_ind; [constructor|].
   intros Δ d m ??????; typed_inversion_all.
-  assert (∀ Δ' m d,
-    Δ ⇒ₘ Δ' → ✓{Γ,Δ'} m → mem_locks m = ∅ →
+  assert (∀ Δ' n' m d,
+    Δ ⇒ₘ Δ' → n' ≤ n → ✓{Γ,Δ'} m → mem_locks m = ∅ →
     direction_in d s2 →
-    assert_holds ((dassert_pack P' Q R J T C) d) Γ Δ' ρ (cmap_erase m) →
+    assert_holds ((dassert_pack P' Q R J T C) d) Γ Δ' ρ n' (cmap_erase m) →
     ax_graph ax_disjoint_cond
       (ax_stmt_post (dassert_pack P Q R J T C) (s1 ;; s2))
-      Γ δ Δ' ρ n [CStmt (s1 ;; □)] (Stmt d s2) m).
-  { clear dependent m d. intros Δ' m d ?????.
+      Γ δ Δ' ρ n' [CStmt (s1 ;; □)] (Stmt d s2) m).
+  { clear dependent m d. intros Δ' n' m d ??????.
     eapply ax_compose_cons; eauto.
     { eapply Hax2; eauto using indexes_valid_weaken,
         stmt_typed_weaken, assert_weaken. }
-    clear dependent d m; intros Δ'' φ m' [d m ??] ??; clear m'.
-    apply ax_further_pred; [intros; solve_rcred|].
-    intros Δ''' ? mf S' ?? (->&?&?) p _.
+    clear dependent d m; intros Δ'' n'' φ m' [d m ??] ???; clear m'.
+    apply ax_further; [intros; solve_rcred|].
+    intros Δ''' n''' ? mf S' ??? (->&?&?) p _.
     assert (S' = State [] (Stmt d (s1 ;; s2)) (m ∪ mf) ∧
       (direction_out d (s1 ;; s2) ∨
        ∃ l, d = ↷ l ∧ l ∈ labels s1 ∧ l ∉ labels s2)) as [-> [?|(l'&->&?)]].
@@ -352,11 +353,11 @@ Proof.
     { econstructor; eauto. apply ax_done; constructor; auto.
       by destruct d; eauto using assert_weaken, indexes_valid_weaken. }
     econstructor; eauto.
-    eapply IH; eauto using assert_weaken, indexes_valid_weaken with lia.
+    eapply IH; eauto using assert_weaken, indexes_valid_weaken.
     * esolve_elem_of.
     * typed_constructor; eauto using stmt_typed_weaken. }
   apply ax_further; [intros; solve_rcred|].
-  intros Δ' ? mf ??? (->&?&?) p _.
+  intros Δ' n' ? mf ???? (->&?&?) p _.
   assert ((∃ l, d = ↷ l ∧ l ∈ labels s2 ∧
       S' = State [CStmt (s1 ;; □)] (Stmt d s2) (m ∪ mf)) ∨
     (∃ mx, d = ↓ mx ∧ mx ∈ cases s2 ∧
@@ -369,9 +370,9 @@ Proof.
   eapply ax_compose_cons; eauto.
   { eapply Hax1; eauto using indexes_valid_weaken, stmt_typed_weaken.
     by destruct d; eauto using assert_weaken. }
-  clear dependent d m mf; intros Δ'' φ m' [d m ??] ??; clear m'.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ''' ? mf S' ?? (->&?&?) p _.
+  clear dependent d m mf; intros Δ'' n'' φ m' [d m ??] ???; clear m'.
+  apply ax_further; [intros; solve_rcred|].
+  intros Δ''' n''' ? mf S' ??? (->&?&?) p _.
   assert ((S' = State [] (Stmt d (s1 ;; s2)) (m ∪ mf) ∧
       (d ≠ ↗ ∧ direction_out d (s1 ;; s2) ∨
        ∃ l, d = ↷ l ∧ l ∉ labels s1 ∧ l ∈ labels s2)) ∨
@@ -384,10 +385,10 @@ Proof.
   { econstructor; eauto. apply ax_done; constructor; auto.
     by destruct d; eauto using assert_weaken, indexes_valid_weaken. }
   { econstructor; eauto.
-    eapply IH; eauto using assert_weaken, indexes_valid_weaken with lia.
+    eapply IH; eauto using assert_weaken, indexes_valid_weaken.
     * esolve_elem_of.
     * typed_constructor; eauto using stmt_typed_weaken. }
-  econstructor; eauto 10 using ax_pred, assert_weaken, indexes_valid_weaken.
+  econstructor; eauto 10 using assert_weaken, indexes_valid_weaken.
 Qed.
 Lemma ax_loop Γ δ R J T C P s :
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} s {{ P }} →
@@ -397,22 +398,22 @@ Proof.
   induction n as [[|n] IH] using lt_wf_ind; [constructor|].
   intros Δ d m ??????; typed_inversion_all.
   apply ax_further; [intros; solve_rcred|].
-  intros Δ' ? mf S' ?? (->&?&?) p _.
+  intros Δ' n' ? mf S' ??? (->&?&?) p _.
   assert (S' = State [CStmt (loop □)] (Stmt d s) (m ∪ mf))
     by inv_rcstep p; subst; clear p.
   apply mk_ax_next with Δ' m; auto. eapply ax_compose_cons; eauto.
   { eapply Hax; eauto using indexes_valid_weaken, stmt_typed_weaken.
     destruct d; naive_solver eauto using assert_weaken, indexes_valid_weaken. }
-  clear dependent d m mf; intros Δ'' φ' m' [d m ??] ??; clear m'.
-  apply ax_further_pred; [intros; solve_rcred|].
-  intros Δ''' ? mf S' ?? (->&?&?) p _.
+  clear dependent d m mf; intros Δ'' n'' φ' m' [d m ??] ???; clear m'.
+  apply ax_further; [intros; solve_rcred|].
+  intros Δ''' n''' ? mf S' ??? (->&?&?) p _.
   assert (d ≠ ↗ ∧ S' = State [] (Stmt d (loop s)) (m ∪ mf) ∨
     d = ↗ ∧ S' = State [] (Stmt ↘ (loop s)) (m ∪ mf))
     as [[? ->]|[-> ->]] by (inv_rcstep; eauto).
   { econstructor; eauto. apply ax_done; constructor; auto.
     by destruct d; eauto using assert_weaken, indexes_valid_weaken. }
   econstructor; eauto.
-  eapply IH; eauto using assert_weaken, indexes_valid_weaken with lia.
+  eapply IH; eauto using assert_weaken, indexes_valid_weaken.
   typed_constructor; eauto using stmt_typed_weaken.
 Qed.
 Lemma ax_if Γ δ R J T C P P' P1 P2 Q e s1 s2 :
@@ -430,9 +431,8 @@ Proof.
     (τb&cmτ1&cmτ2&He&?&Hs1&Hs2) by (typed_inversion_all;eauto 10); clear cmτ Hs.
   revert Δ d m Hm Hlock Hd He Hs1 Hs2.
   induction n as [[|n] IH] using lt_wf_ind; [constructor|].
-  intros Δ d m; intros.
-  apply ax_further; [intros; solve_rcred|].
-  intros Δ' ? mf S' ?? (->&?&?) p _.
+  intros Δ d m; intros; apply ax_further; [intros; solve_rcred|].
+  intros Δ' n' ? mf S' ??? (->&?&?) p _.
   assert ((d ≠ ↘ ∧ direction_in d s2 ∧
       S' = State [CStmt (if{e} s1 else □)] (Stmt d s2) (m ∪ mf)) ∨
     (d ≠ ↘ ∧ direction_in d s1 ∧
@@ -443,9 +443,9 @@ Proof.
     eapply ax_compose_cons; eauto.
     { destruct d; done || eapply Hax2; eauto using indexes_valid_weaken,
         stmt_typed_weaken, assert_weaken. }
-    clear dependent d m mf; intros Δ'' φ m' [d m ??] ??; clear m'.
-    apply ax_further_pred; [intros; solve_rcred|].
-    intros Δ''' ? mf S' ?? (->&?&?) p _.
+    clear dependent d m mf; intros Δ'' n'' φ m' [d m ??] ???; clear m'.
+    apply ax_further; [intros; solve_rcred|].
+    intros Δ''' n''' ? mf S' ??? (->&?&?) p _.
     assert (S' = State [] (Stmt d (if{e} s1 else s2)) (m ∪ mf) ∧
       (direction_out d (if{e} s1 else s2) ∨
        ∃ l, d = ↷ l ∧ l ∈ labels s1 ∧ l ∉ labels s2)) as [->[?|(l&->&?&?)]].
@@ -457,15 +457,15 @@ Proof.
       by destruct d; eauto using assert_weaken, indexes_valid_weaken. }
     econstructor; eauto.
     eapply IH; eauto using assert_weaken,
-      expr_typed_weaken, stmt_typed_weaken, indexes_valid_weaken with arith.
+      expr_typed_weaken, stmt_typed_weaken, indexes_valid_weaken.
     esolve_elem_of. }
   { apply mk_ax_next with Δ' m; eauto.
     eapply ax_compose_cons; eauto.
     { destruct d; done || eapply Hax1; eauto using indexes_valid_weaken,
         stmt_typed_weaken, assert_weaken. }
-    clear dependent d m mf; intros Δ'' φ m' [d m ??] ??; clear m'.
-    apply ax_further_pred; [intros; solve_rcred|].
-    intros Δ''' ? mf S' ?? (->&?&?) p _.
+    clear dependent d m mf; intros Δ'' n'' φ m' [d m ??] ???; clear m'.
+    apply ax_further; [intros; solve_rcred|].
+    intros Δ''' n''' ? mf S' ??? (->&?&?) p _.
     assert (S' = State [] (Stmt d (if{e} s1 else s2)) (m ∪ mf) ∧
       (direction_out d (if{e} s1 else s2) ∨
        ∃ l, d = ↷ l ∧ l ∉ labels s1 ∧ l ∈ labels s2)) as [->[?|(l&->&?&?)]].
@@ -477,22 +477,22 @@ Proof.
       by destruct d; eauto using assert_weaken, indexes_valid_weaken. }
     econstructor; eauto.
     eapply IH; eauto using assert_weaken,
-      expr_typed_weaken, stmt_typed_weaken, indexes_valid_weaken with arith.
+      expr_typed_weaken, stmt_typed_weaken, indexes_valid_weaken.
     esolve_elem_of. }
   apply mk_ax_next with Δ' m; eauto; [esolve_elem_of|].
   eapply (ax_compose_cons (ax_expr_cond ρ emp)); eauto.
   { apply Hax; eauto using expr_typed_weaken,
       indexes_valid_weaken, assert_weaken. }
   clear dependent m mf.
-  intros Δ'' φ m' [[|[vb| | | |]] Ω m] ??; clear m'; typed_inversion_all.
+  intros Δ'' n'' φ m' [[|[vb| | | |]] Ω m] ???; clear m'; typed_inversion_all.
   assert (base_val_branchable m vb).
   { rewrite <-base_val_branchable_erase.
-    by destruct (HP' vb Γ Δ'' ρ (cmap_erase m)) as (?&?&?&?);
+    by destruct (HP' vb Γ Δ'' ρ n'' (cmap_erase m)) as (?&?&?&?);
       eauto using indexes_valid_weaken; simplify_option_equality. }
-  apply ax_further_pred.
-  { intros ? m'' ? _ _ _. destruct (decide (base_val_branchable m'' vb)),
+  apply ax_further.
+  { intros ?? m'' ? _ _ _ _. destruct (decide (base_val_branchable m'' vb)),
       (decide (base_val_is_0 vb)); solve_rcred. }
-  intros Δ''' ? mf S' ?? (?&?&?) p _; subst; inv_rcstep p; clear S'.
+  intros Δ''' n''' ? mf S' ??? (?&?&?) p _; subst; inv_rcstep p; clear S'.
   * rewrite mem_unlock_union, <-mem_unlock_all_spec by solve_elem_of.
     eapply mk_ax_next with Δ''' (mem_unlock_all _); eauto.
     { split; by rewrite <-?mem_unlock_all_disjoint_le by auto. }
@@ -503,17 +503,16 @@ Proof.
         mem_unlock_all_valid, mem_locks_unlock_all.
       rewrite mem_erase_unlock_all; simpl.
       eapply HP1; eauto using assert_weaken, indexes_valid_weaken. }
-    clear dependent φ m mf; intros Δ'''' φ m' [d m ??] ??; clear m'.
-    apply ax_further_pred; [intros; solve_rcred|].
-    intros Δ''''' ? mf S' ?? (->&?&?) p _.
+    clear dependent φ m mf; intros Δ'''' n'''' φ m' [d m ??] ???; clear m'.
+    apply ax_further; [intros; solve_rcred|].
+    intros Δ''''' n''''' ? mf S' ??? (->&?&?) p _.
     assert (✓{Δ''''}* ρ) by eauto 8 using indexes_valid_weaken.
     inv_rcstep p; econstructor; eauto;
       try solve [apply ax_done; constructor; eauto using assert_weaken].
     destruct (decide (l ∈ labels s2)).
     { apply IH; eauto 10 using expr_typed_weaken,
         stmt_typed_weaken, assert_weaken, indexes_valid_weaken.
-      + omega.
-      + esolve_elem_of. }
+      esolve_elem_of. }
     apply ax_done; constructor; eauto using assert_weaken; esolve_elem_of.
   * rewrite mem_unlock_union, <-mem_unlock_all_spec by solve_elem_of.
     eapply mk_ax_next with Δ''' (mem_unlock_all _); eauto.
@@ -525,17 +524,16 @@ Proof.
         mem_unlock_all_valid, mem_locks_unlock_all.
       rewrite mem_erase_unlock_all; simpl.
       eapply HP2; eauto using assert_weaken, indexes_valid_weaken. }
-    clear dependent φ m mf; intros Δ'''' φ m' [d m ??] ??; clear m'.
-    apply ax_further_pred; [intros; solve_rcred|].
-    intros Δ''''' ? mf S' ?? (->&?&?) p _.
+    clear dependent φ m mf; intros Δ'''' n'''' φ m' [d m ??] ???; clear m'.
+    apply ax_further; [intros; solve_rcred|].
+    intros Δ''''' n'''''' ? mf S' ??? (->&?&?) p _.
     assert (✓{Δ''''}* ρ) by eauto 8 using indexes_valid_weaken.
     inv_rcstep p; econstructor; eauto;
       try solve [apply ax_done; constructor; eauto using assert_weaken].
     destruct (decide (l ∈ labels s1)).
     { apply IH; eauto 10 using expr_typed_weaken,
         stmt_typed_weaken, assert_weaken, indexes_valid_weaken.
-      + omega.
-      + esolve_elem_of. }
+      esolve_elem_of. }
     apply ax_done; constructor; eauto using assert_weaken; esolve_elem_of.
   * exfalso; eauto using base_val_branchable_weaken,
       cmap_subseteq_index_alive, @sep_union_subseteq_l.

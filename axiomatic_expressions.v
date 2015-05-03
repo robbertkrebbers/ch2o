@@ -329,20 +329,23 @@ Proof.
   apply ax_done; constructor; eauto using mem_lookup_typed,
     assert_weaken, indexes_valid_weaken, addr_typed_weaken.
 Qed.
-Definition assign_assert (va v : val K)
-    (ass : assign) (τ : type K) (va' v' : val K) : assert K :=
+Definition assert_assign (a : addr K) (v : val K)
+    (ass : assign) (τ : type K) (va v' : val K) : assert K :=
   match ass with
-  | Assign => cast{τ} (#v) ⇓ inr va' ∧ cast{τ} (#v) ⇓ inr v'
+  | Assign => cast{τ} (#v) ⇓ inr va ∧ cast{τ} (#v) ⇓ inr v'
   | PreOp op =>
-     cast{τ} (#va @{op} #v) ⇓ inr va' ∧ cast{τ} (#va @{op} #v) ⇓ inr v'
-  | PostOp op => cast{τ} (#va @{op} #v) ⇓ inr va' ∧ #va ⇓ inr v'
+     cast{τ} (load (%a) @{op} #v) ⇓ inr va ∧
+     cast{τ} (load (%a) @{op} #v) ⇓ inr v'
+  | PostOp op =>
+     cast{τ} (load (%a) @{op} #v) ⇓ inr va ∧
+     load (%a) ⇓ inr v'
   end%A.
 Lemma ax_assign Γ δ A P1 P2 Q1 Q2 Q ass e1 e2 μ x τ :
   Some Writable ⊆ perm_kind x →
-  (∀ a v, (Q1 (inl a) ★ Q2 (inr v))%A ⊆{Γ} (∃ va v' va',
-    (%a ↦{μ,x} #va : τ ★
-    (%a ↦{μ,perm_lock x} # (freeze true va') : τ -★ Q (inr v'))) ∧
-    (A -★ assign_assert va v ass τ va' v'))%A) →
+  (∀ a v, (Q1 (inl a) ★ Q2 (inr v))%A ⊆{Γ} (∃ va v',
+    (%a ↦{μ,x} - : τ ★
+    (%a ↦{μ,perm_lock x} # (freeze true va) : τ -★ Q (inr v'))) ∧
+    (A -★ assert_assign a v ass τ va v'))%A) →
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ Q1 }} → Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ Q2 }} →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 ::={ass} e2 {{ Q }}.
 Proof.
@@ -366,7 +369,7 @@ Proof.
   apply ax_further_alt; intros Δ'' n'' ? ff ??? Hframe;
     inversion_clear Hframe as [mA mf|]; simplify_equality.
   destruct (HQ a' v Γ Δ' ρ n' (cmap_erase (m1' ∪ m2')))
-    as (?&v'&va'&(m1&m2''&?&?&(a&va&?&?&?&?&?)&HQ')&Hass);
+    as (va'&v'&(m1&m2''&?&?&(?&a&va&?&?&?&?&?)&HQ')&Hass);
     eauto 6 using indexes_valid_weaken; clear HQ.
   { rewrite cmap_erase_union.
     exists (cmap_erase m1') (cmap_erase m2'); split_ands; auto.
@@ -389,12 +392,6 @@ Proof.
         @sep_union_subseteq_l_transitive, cmap_erase_subseteq_l. }
     assert (⊥ [mA; cmap_erase (m1 ∪ m2)]).
     { rewrite <-cmap_erase_disjoint_le; auto. }
-    assert (⊥ [mA; m1; cmap_erase m2]).
-    { rewrite <-cmap_erase_disjoint_le; auto. }
-    assert ((mA ∪ cmap_erase (m1 ∪ m2)) !!{Γ} a = Some va).
-    { erewrite cmap_erase_union, mem_erase_singleton by eauto.
-      apply mem_lookup_subseteq with Δ'' m1; eauto using mem_lookup_singleton.
-      eauto using @sep_union_subseteq_r_transitive, @sep_union_subseteq_l. }
     eapply assign_sem_subseteq with Δ'' (mA ∪ cmap_erase (m1 ∪ m2)) τ1 τ2;
       eauto 15 using addr_typed_weaken, val_typed_weaken.
     destruct ass; destruct (Hass Γ Δ'' n'' mA) as [(?&_&?) (?&_&?)]; auto;
