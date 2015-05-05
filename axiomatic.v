@@ -99,15 +99,16 @@ Next Obligation.
   intros ?? Pd s Γ δ Δ n ρ φ m m' [d m'' ???] [? p]; inv_rcstep.
 Qed.
 Definition ax_stmt_packed `{EnvSpec K} (Γ : env K) (δ : funenv K)
-    (Pd : dassert K) (s : stmt K) : Prop := ∀ Δ n ρ d m cmτ,
-  ✓ Γ →
-  ✓{Γ,Δ} m →
+    (Pd : dassert K) (s : stmt K) : Prop := ∀ Γ' Δ n ρ d m cmτ,
+  ✓ Γ' → Γ ⊆ Γ' →
+  ✓{Γ',Δ} δ →
+  ✓{Γ',Δ} m →
   mem_locks m = ∅ →
   direction_in d s →
-  (Γ,Δ,ρ.*2) ⊢ s : cmτ →
+  (Γ',Δ,ρ.*2) ⊢ s : cmτ →
   ✓{Δ}* ρ →
-  assert_holds (Pd d) Γ Δ ρ n (cmap_erase m) →
-  ax_graph ax_disjoint_cond (ax_stmt_post Pd s) Γ δ Δ ρ n [] (Stmt d s) m.
+  assert_holds (Pd d) Γ' Δ ρ n (cmap_erase m) →
+  ax_graph ax_disjoint_cond (ax_stmt_post Pd s) Γ' δ Δ ρ n [] (Stmt d s) m.
 Instance: Params (@ax_stmt_packed) 5.
 Notation "Γ \ δ \ P ⊨ₚ s" :=
   (ax_stmt_packed Γ δ P%A s)
@@ -209,16 +210,17 @@ Next Obligation.
   intros ??? Q τlr Γ δ Δ ρ n φ m m' [d m'' ???] [? p]; inv_rcstep.
 Qed.
 Definition ax_expr `{EnvSpec K} (Γ : env K) (δ : funenv K) (A P : assert K)
-    (e : expr K) (Q : lrval K → assert K) : Prop := ∀ Δ n ρ m τlr,
-  ✓ Γ →
-  ✓{Γ,Δ} m →
+    (e : expr K) (Q : lrval K → assert K) : Prop := ∀ Γ' Δ n ρ m τlr,
+  ✓ Γ' → Γ ⊆ Γ' →
+  ✓{Γ',Δ} δ →
+  ✓{Γ',Δ} m →
   mem_locks m = ∅ →
-  (Γ,Δ,ρ.*2) ⊢ e : τlr →
+  (Γ',Δ,ρ.*2) ⊢ e : τlr →
   locks e = ∅ →
   ✓{Δ}* ρ →
-  ax_expr_funframe Γ Δ A ρ n m →
-  assert_holds P Γ Δ ρ n (cmap_erase m) →
-  ax_graph (ax_expr_cond ρ A) (ax_expr_post Q τlr) Γ δ Δ ρ n [] (Expr e) m.
+  ax_expr_funframe Γ' Δ A ρ n m →
+  assert_holds P Γ' Δ ρ n (cmap_erase m) →
+  ax_graph (ax_expr_cond ρ A) (ax_expr_post Q τlr) Γ' δ Δ ρ n [] (Expr e) m.
 Instance: Params (@ax_expr) 5.
 Notation "Γ \ δ \ A ⊨ₑ {{ P }} e {{ Q }}" :=
   (ax_expr Γ δ A%A P%A e Q%A)
@@ -262,7 +264,7 @@ Proof.
   cut (Proper (pointwise_relation _ (≡{Γ}) ==> (=) ==> impl)
               (ax_stmt_packed Γ δ)).
   { intros help. by split; apply help. }
-  intros Pd Qd HPQ ?? -> Hax ?????????????.
+  intros Pd Qd HPQ ?? -> Hax ????????????????.
   eapply ax_weaken with ax_disjoint_cond (ax_stmt_post Pd y) n; eauto.
   { eapply Hax, HPQ; eauto. }
   destruct 2; constructor; auto. eapply HPQ; eauto using indexes_valid_weaken.
@@ -351,7 +353,7 @@ Proof.
   cut (Proper ((≡{Γ}) ==> (≡{Γ}) ==> (=) ==>
     pointwise_relation _ (≡{Γ}) ==> impl) (ax_expr Γ δ)).
   { intros help. by split; apply help. }
-  intros A1 A2 HA P1 P2 HP ?? -> Q1 Q2 HQ Hax ??????????? (?&?&?&?&?&?) ?.
+  intros A1 A2 HA P1 P2 HP ?? -> Q1 Q2 HQ Hax ?????????????? (?&?&?&?&?&?) ?.
   eapply ax_weaken with (ax_expr_cond ρ A1) (ax_expr_post Q1 τlr) n; eauto.
   * apply Hax, HP; eauto.
     econstructor; split_ands; eauto. apply HA; eauto.
