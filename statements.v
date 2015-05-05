@@ -109,12 +109,12 @@ Arguments SGoto {_} _%string.
 Arguments SThrow {_} _.
 Arguments SReturn {_} _.
 Arguments SCase {_} _%Z.
-Arguments SLabel {_} _.
-Arguments SLocal {_} _ _%S.
+Arguments SLabel {_} _%string.
+Arguments SLocal {_} _%T _%S.
 Arguments SCatch {_} _.
 Arguments SComp {_}_%S _%S.
 Arguments SLoop {_} _%S.
-Arguments SIf {_} _ _%S _%S.
+Arguments SIf {_} _%E _%S _%S.
 Arguments SSwitch {_} _%E _%S.
 
 Notation "! e" := (SDo e) (at level 10) : stmt_scope.
