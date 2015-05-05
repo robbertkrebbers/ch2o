@@ -46,12 +46,16 @@ Instance assert_equiv `{Env K} : EquivE (env K) (assert K) := λ Γ P Q,
 
 (** * Hoare logic connectives *)
 (** Definitions and notations of the usual connectives of Hoare logic. *)
-Program Definition assert_Prop `{Env K} (P : Prop) : assert K := {|
-  assert_holds Γ Δ ρ n m := P ∧ m = ∅
+Program Definition assert_False `{Env K} : assert K := {|
+  assert_holds Γ Δ ρ n m := False
 |}.
 Next Obligation. naive_solver. Qed.
-Notation "⌜ P ⌝" := (assert_Prop P) (format "⌜  P  ⌝") : assert_scope.
-Notation "'False'" := (assert_Prop False) : assert_scope.
+Notation "'False'" := assert_False : assert_scope.
+Program Definition assert_True `{Env K} : assert K := {|
+  assert_holds Γ Δ ρ n m := True
+|}.
+Next Obligation. naive_solver. Qed.
+Notation "'True'" := assert_True : assert_scope.
 
 Program Definition assert_impl `{Env K} (P Q : assert K) : assert K := {|
   assert_holds Γ Δ ρ n m := ∀ Γ' Δ' n',
@@ -76,6 +80,16 @@ Infix "∧" := assert_and : assert_scope.
 Notation "(∧)" := assert_and (only parsing) : assert_scope.
 Notation "( P ∧)" := (assert_and P) (only parsing) : assert_scope.
 Notation "(∧ Q )" := (λ P, assert_and P Q) (only parsing) : assert_scope.
+
+Program Definition assert_or `{Env K} (P Q : assert K) : assert K := {|
+  assert_holds Γ Δ ρ n m :=
+    assert_holds P Γ Δ ρ n m ∨ assert_holds Q Γ Δ ρ n m
+|}.
+Next Obligation. naive_solver eauto using assert_weaken. Qed.
+Infix "∨" := assert_or : assert_scope.
+Notation "(∨)" := assert_or (only parsing) : assert_scope.
+Notation "( P ∨)" := (assert_or P) (only parsing) : assert_scope.
+Notation "(∨ Q )" := (λ P, assert_or P Q) (only parsing) : assert_scope.
 
 Definition assert_not `{Env K} (P : assert K) : assert K := (P → False)%A.
 Notation "¬ P" := (assert_not P) : assert_scope.
@@ -113,6 +127,11 @@ Notation "▷ P" := (assert_later P) (at level 20) : assert_scope.
 (** The assertion [emp] asserts that the memory is empty. The assertion [P ★ Q]
 (called separating conjunction) asserts that the memory can be split into two
 disjoint parts such that [P] holds in the one part, and [Q] in the other. *)
+Program Definition assert_Prop `{Env K} (P : Prop) : assert K := {|
+  assert_holds Γ Δ ρ n m := P ∧ m = ∅
+|}.
+Next Obligation. naive_solver. Qed.
+Notation "⌜ P ⌝" := (assert_Prop P) (format "⌜  P  ⌝") : assert_scope.
 Notation "'emp'" := (assert_Prop True) : assert_scope.
 
 Program Definition assert_sep `{EnvSpec K} (P Q : assert K) : assert K := {|
@@ -248,10 +267,6 @@ Global Instance: Equivalence (≡{Γ}).
 Proof. split; red; solve eauto. Qed.
 Global Instance: Proper ((≡{Γ}) ==> (≡{Γ}) ==> iff) (⊆{Γ}).
 Proof. solve eauto. Qed.
-Global Instance: Proper (impl ==> (⊆{Γ})) assert_Prop.
-Proof. solve eauto. Qed.
-Global Instance: Proper (iff ==> (≡{Γ})) assert_Prop.
-Proof. solve eauto. Qed.
 Global Instance: Proper (flip (⊆{Γ}) ==> (⊆{Γ}) ==> (⊆{Γ})) (→)%A.
 Proof.
   intros Γ1 P1 P2 HP Q1 Q2 HQ Γ2 Δ ρ n m ???? HPQ Γ3 Δ2 n2 ????? HP2.
@@ -262,6 +277,10 @@ Proof. by intros ??? [??] ?? [??]; split; f_equiv. Qed.
 Global Instance: Proper ((≡{Γ}) ==> (≡{Γ}) ==> (≡{Γ})) (∧)%A.
 Proof. solve eauto. Qed.
 Global Instance: Proper ((⊆{Γ}) ==> (⊆{Γ}) ==> (⊆{Γ})) (∧)%A.
+Proof. solve eauto. Qed.
+Global Instance: Proper ((≡{Γ}) ==> (≡{Γ}) ==> (≡{Γ})) (∨)%A.
+Proof. solve eauto. Qed.
+Global Instance: Proper ((⊆{Γ}) ==> (⊆{Γ}) ==> (⊆{Γ})) (∨)%A.
 Proof. solve eauto. Qed.
 Global Instance: Proper ((≡{Γ}) ==> (≡{Γ}) ==> (≡{Γ})) (↔)%A.
 Proof. by intros ???????; unfold assert_iff; do 2 f_equiv. Qed.
@@ -294,17 +313,31 @@ Global Instance: Associative (≡{Γ}) (∧)%A.
 Proof. red; solve eauto. Qed.
 Global Instance: Idempotent (≡{Γ}) (∧)%A.
 Proof. red; solve eauto. Qed.
+Global Instance: LeftId (≡{Γ}) True%A (∧)%A.
+Proof. red; solve eauto. Qed.
+Global Instance: RightId (≡{Γ}) True%A (∧)%A.
+Proof. red; solve eauto. Qed.
 Global Instance: LeftAbsorb (≡{Γ}) False%A (∧)%A.
 Proof. red; solve eauto. Qed.
 Global Instance: RightAbsorb (≡{Γ}) False%A (∧)%A.
 Proof. red; solve eauto. Qed.
-Lemma assert_Prop_impl Γ (P Q : Prop) : ⌜ P → Q ⌝%A ⊆{Γ} (⌜P⌝ → ⌜Q⌝)%A.
-Proof. solve eauto. Qed.
-Lemma assert_Prop_not Γ (P : Prop) : ⌜ ¬P ⌝%A ⊆{Γ} (¬⌜P⌝)%A.
-Proof. apply assert_Prop_impl. Qed.
-Lemma assert_Prop_and Γ (P Q : Prop) : ⌜ P ∧ Q ⌝%A ≡{Γ} (⌜P⌝ ∧ ⌜Q⌝)%A.
-Proof. solve eauto. Qed.
+Global Instance: Commutative (≡{Γ}) (∨)%A.
+Proof. red; solve eauto. Qed.
+Global Instance: Associative (≡{Γ}) (∨)%A.
+Proof. red; solve eauto. Qed.
+Global Instance: Idempotent (≡{Γ}) (∨)%A.
+Proof. red; solve eauto. Qed.
+Global Instance: LeftId (≡{Γ}) False%A (∨)%A.
+Proof. red; solve eauto. Qed.
+Global Instance: RightId (≡{Γ}) False%A (∨)%A.
+Proof. red; solve eauto. Qed.
+Global Instance: LeftAbsorb (≡{Γ}) True%A (∨)%A.
+Proof. red; solve eauto. Qed.
+Global Instance: RightAbsorb (≡{Γ}) True%A (∨)%A.
+Proof. red; solve eauto. Qed.
 Lemma assert_false_elim Γ P : False%A ⊆{Γ} P.
+Proof. solve eauto. Qed.
+Lemma assert_true_intro Γ P : P ⊆{Γ} True%A.
 Proof. solve eauto. Qed.
 Lemma assert_and_l Γ P Q : (P ∧ Q)%A ⊆{Γ} P.
 Proof. solve eauto. Qed.
@@ -315,6 +348,10 @@ Proof. solve eauto. Qed.
 Lemma assert_and_elim_l Γ P1 P2 Q : P1 ⊆{Γ} Q → (P1 ∧ P2)%A ⊆{Γ} Q.
 Proof. solve eauto. Qed.
 Lemma assert_and_elim_r Γ P1 P2 Q : P2 ⊆{Γ} Q → (P1 ∧ P2)%A ⊆{Γ} Q.
+Proof. solve eauto. Qed.
+Lemma assert_or_l Γ P Q : P ⊆{Γ} (P ∨ Q)%A.
+Proof. solve eauto. Qed.
+Lemma assert_or_r Γ P Q : Q ⊆{Γ} (P ∨ Q)%A.
 Proof. solve eauto. Qed.
 Lemma assert_forall_intro {A} Γ P (Q : A → assert K) :
   (∀ x, P ⊆{Γ} Q x) → P ⊆{Γ} (∀ x, Q x)%A.
@@ -359,6 +396,8 @@ Proof.
 Qed.
 Lemma assert_later_and Γ P Q : (▷(P ∧ Q))%A ≡{Γ} (▷P ∧ ▷Q)%A.
 Proof. solve eauto. Qed.
+Lemma assert_later_or Γ P Q : (▷P ∨ ▷Q)%A ⊆{Γ} (▷(P ∨ Q))%A.
+Proof. solve eauto. Qed.
 Lemma assert_later_forall {A} Γ (P : A → assert K) :
   (▷(∀ x, P x))%A ≡{Γ} (∀ x, ▷(P x))%A.
 Proof. solve eauto. Qed.
@@ -367,6 +406,10 @@ Lemma assert_later_exists {A} Γ (P : A → assert K) :
 Proof. solve eauto. Qed.
 
 (** Separation logic connectives *)
+Global Instance: Proper (impl ==> (⊆{Γ})) assert_Prop.
+Proof. solve eauto. Qed.
+Global Instance: Proper (iff ==> (≡{Γ})) assert_Prop.
+Proof. solve eauto. Qed.
 Global Instance: Proper ((⊆{Γ}) ==> (⊆{Γ}) ==> (⊆{Γ})) (★)%A.
 Proof.
   solve ltac:(eauto 15 using cmap_valid_subseteq,
@@ -427,16 +470,32 @@ Proof.
     exists m1 m2; auto. }
   split; auto.
 Qed.
-Lemma assert_Prop_and_intro Γ (P : Prop) Q R :
-  P → Q ⊆{Γ} R → Q ⊆{Γ} (⌜ P ⌝ ★ R)%A.
+
+Lemma assert_Prop_impl Γ (P Q : Prop) : ⌜ P → Q ⌝%A ⊆{Γ} (⌜P⌝ → ⌜Q⌝)%A.
+Proof. solve eauto. Qed.
+Lemma assert_Prop_not Γ (P : Prop) : ⌜ ¬P ⌝%A ⊆{Γ} (¬⌜P⌝)%A.
+Proof. solve eauto. Qed.
+Lemma assert_Prop_and Γ (P Q : Prop) : ⌜ P ∧ Q ⌝%A ≡{Γ} (⌜P⌝ ∧ ⌜Q⌝)%A.
+Proof. solve eauto. Qed.
+Lemma assert_Prop_or Γ (P Q : Prop) : ⌜ P ∨ Q ⌝%A ≡{Γ} (⌜P⌝ ∨ ⌜Q⌝)%A.
+Proof. solve eauto. Qed.
+Lemma assert_Prop_l Γ (P : Prop) Q : P → (⌜ P ⌝ ★ Q)%A ≡{Γ} Q.
 Proof.
-  intros ?? Γ1 Δ1 ρ n ??????. eexists ∅, m.
-  rewrite sep_left_id, sep_disjoint_equiv_empty,
-    sep_disjoint_list_singleton by eauto; solve eauto.
+  intros. assert (P ↔ True) as -> by (by split; intros _).
+  by rewrite (left_id emp%A _).
 Qed.
-Lemma assert_and_Prop_intro Γ (P : Prop) Q R :
-  P → Q ⊆{Γ} R → Q ⊆{Γ} (R ★ ⌜ P ⌝)%A.
-Proof. rewrite (commutative (★)%A). apply assert_Prop_and_intro. Qed. 
+Lemma assert_Prop_r Γ (P : Prop) Q : P → (Q ★ ⌜ P ⌝)%A ≡{Γ} Q.
+Proof. intros. by rewrite (commutative (★))%A, assert_Prop_l. Qed.
+Lemma assert_Prop_intro_l Γ (P : Prop) Q R :
+  (P → Q ⊆{Γ} R) → (⌜ P ⌝ ★ Q)%A ⊆{Γ} R.
+Proof.
+  intros HQR Γ1 Δ1 ρ n ??? Hm ? (m1&m2&->&?&[? ->]&?).
+  rewrite sep_left_id in Hm |- * by auto; by apply HQR.
+Qed.
+Lemma assert_Prop_intro_r Γ (P : Prop) Q R :
+  (P → Q ⊆{Γ} R) → (Q ★ ⌜ P ⌝)%A ⊆{Γ} R.
+Proof. rewrite (commutative (★)%A). by apply assert_Prop_intro_l. Qed.
+
 Lemma assert_sep_exist {A} Γ P (Q : A → assert K) :
   (P ★ ∃ x, Q x)%A ≡{Γ} (∃ x, P ★ Q x)%A.
 Proof. solve eauto. Qed.
@@ -455,22 +514,6 @@ Proof.
   rewrite sep_commutative by auto; eapply HQ; eauto using
     cmap_valid_subseteq, @sep_union_subseteq_l, @sep_union_subseteq_r.
 Qed.
-Lemma assert_Prop_l Γ (P : Prop) Q : P → (⌜ P ⌝ ★ Q)%A ≡{Γ} Q.
-Proof.
-  intros. assert (P ↔ True) as -> by (by split; intros _).
-  by rewrite (left_id emp%A _).
-Qed.
-Lemma assert_Prop_r Γ (P : Prop) Q : P → (Q ★ ⌜ P ⌝)%A ≡{Γ} Q.
-Proof. intros. by rewrite (commutative (★))%A, assert_Prop_l. Qed.
-Lemma assert_Prop_intro_l Γ (P : Prop) Q R :
-  (P → Q ⊆{Γ} R) → (⌜ P ⌝ ★ Q)%A ⊆{Γ} R.
-Proof.
-  intros HQR Γ1 Δ1 ρ n ??? Hm ? (m1&m2&->&?&[? ->]&?).
-  rewrite sep_left_id in Hm |- * by auto; by apply HQR.
-Qed.
-Lemma assert_Prop_intro_r Γ (P : Prop) Q R :
-  (P → Q ⊆{Γ} R) → (Q ★ ⌜ P ⌝)%A ⊆{Γ} R.
-Proof. rewrite (commutative (★)%A). by apply assert_Prop_intro_l. Qed.
 
 Lemma assert_Forall_holds_2 (Ps : list (assert K)) Γ Δ ρ ms n :
   ⊥ ms → Forall2 (λ (P : assert K) m, assert_holds P Γ Δ ρ n m) Ps ms →
@@ -689,6 +732,8 @@ Lemma assert_lift_impl Γ P Q : ((P → Q)↑)%A ≡{Γ} (P↑ → Q↑)%A.
 Proof. solve eauto. Qed.
 Lemma assert_lift_and Γ P Q : ((P ∧ Q)↑)%A ≡{Γ} (P↑ ∧ Q↑)%A.
 Proof. solve eauto. Qed.
+Lemma assert_lift_or Γ P Q : ((P ∨ Q)↑)%A ≡{Γ} (P↑ ∨ Q↑)%A.
+Proof. solve eauto. Qed.
 Lemma assert_lift_not Γ P : ((¬P)↑)%A ≡{Γ} (¬P↑)%A.
 Proof. solve eauto. Qed.
 Lemma assert_lift_forall Γ {A} (P : A → assert K) :
@@ -728,6 +773,10 @@ Qed.
 
 Global Instance assert_lift_stack_indep: StackIndep P → StackIndep (P↑).
 Proof. intros P ? Γ. by rewrite !stack_indep. Qed.
+Global Instance assert_True_stack_indep : StackIndep True.
+Proof. solve eauto. Qed.
+Global Instance assert_False_stack_indep : StackIndep False.
+Proof. solve eauto. Qed.
 Global Instance assert_Prop_stack_indep P : StackIndep (⌜ P ⌝).
 Proof. solve eauto. Qed.
 Global Instance assert_impl_stack_indep :
@@ -735,6 +784,9 @@ Global Instance assert_impl_stack_indep :
 Proof. by intros P Q ?? Γ; rewrite assert_lift_impl, !stack_indep. Qed.
 Global Instance assert_and_stack_indep :
   StackIndep P → StackIndep Q → StackIndep (P ∧ Q).
+Proof. solve eauto. Qed.
+Global Instance assert_or_stack_indep :
+  StackIndep P → StackIndep Q → StackIndep (P ∨ Q).
 Proof. solve eauto. Qed.
 Global Instance assert_forall_stack_indep A :
   (∀ x : A, StackIndep (P x)) → StackIndep (assert_forall P).
@@ -786,6 +838,8 @@ Proof.
 Qed.
 Lemma assert_unlock_and Γ P Q : ((P ∧ Q) ◊)%A ≡{Γ} (P ◊ ∧ Q ◊)%A.
 Proof. solve eauto. Qed.
+Lemma assert_unlock_or Γ P Q : ((P ∨ Q) ◊)%A ≡{Γ} (P ◊ ∨ Q ◊)%A.
+Proof. solve eauto. Qed.
 Lemma assert_unlock_forall Γ {A} (P : A → assert K) :
   ((∀ x, P x) ◊)%A ≡{Γ} (∀ x, (P x) ◊)%A.
 Proof. solve eauto. Qed.
@@ -833,10 +887,15 @@ Qed.
 
 Global Instance assert_unlock_unlock_indep P : UnlockIndep (P ◊).
 Proof. intros Γ. by rewrite assert_unlock_unlock. Qed.
-Global Instance assert_Prop_unlock_indep P : UnlockIndep (⌜ P ⌝).
+Global Instance assert_True_unlock_indep : UnlockIndep True.
+Proof. solve ltac:(eauto using mem_unlock_all_empty). Qed.
+Global Instance assert_False_unlock_indep : UnlockIndep False.
 Proof. solve ltac:(eauto using mem_unlock_all_empty). Qed.
 Global Instance assert_and_unlock_indep :
   UnlockIndep P → UnlockIndep Q → UnlockIndep (P ∧ Q).
+Proof. solve eauto. Qed.
+Global Instance assert_or_unlock_indep :
+  UnlockIndep P → UnlockIndep Q → UnlockIndep (P ∨ Q).
 Proof. solve eauto. Qed.
 Global Instance assert_forall_unlock_indep A :
   (∀ x : A, UnlockIndep (P x)) → UnlockIndep (assert_forall P).
