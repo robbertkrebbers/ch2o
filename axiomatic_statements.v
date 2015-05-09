@@ -34,7 +34,7 @@ Hint Resolve cmap_union_valid_2 cmap_erased_union cmap_erase_valid.
 
 Hint Immediate ax_disjoint_expr_compose_diagram.
 Hint Immediate ax_expr_disjoint_compose_diagram.
-Hint Immediate ax_expr_funframe_emp.
+Hint Immediate ax_expr_invariant_emp.
 Hint Immediate ax_disjoint_compose_diagram.
 
 Hint Immediate val_new_typed perm_full_mapped.

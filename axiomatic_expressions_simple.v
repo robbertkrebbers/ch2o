@@ -19,7 +19,25 @@ Global Instance:
   Proper ((≡{Γ}) ==> pointwise_relation _ (≡{Γ})) (const_assert ν).
 Proof. by intros Γ ν P Q HPQ ν'; simpl; rewrite HPQ. Qed.
 
-Lemma ax_expr_funframe_l' Γ δ A B P Q e ν :
+Lemma ax_expr_weaken_post' Γ δ A P Q Q' e ν :
+  Q' ⊆{Γ} Q →
+  Γ\ δ\ A ⊨ₑ {{ P }} e {{ ν | Q' }} → Γ\ δ\ A ⊨ₑ {{ P }} e {{ ν | Q }}.
+Proof. intros HQ. by apply ax_expr_weaken; simpl; intros; rewrite ?HQ. Qed.
+Lemma ax_expr_frame_l' Γ δ A B P Q e ν :
+  Γ\ δ\ B ⊨ₑ {{ P }} e {{ ν | Q }} →
+  Γ\ δ\ B ⊨ₑ {{ A ★ P }} e {{ ν | A ★ Q }}.
+Proof.
+  intros; unfold const_assert.
+  setoid_rewrite (associative (R:=(≡{Γ})) (★)%A).
+  setoid_rewrite (commutative (R:=(≡{Γ})) (★)%A _ A).
+  setoid_rewrite <-(associative (R:=(≡{Γ})) (★)%A).
+  by apply ax_expr_frame_l.
+Qed.
+Lemma ax_expr_frame_r' Γ δ A B P Q e ν :
+  Γ\ δ\ B ⊨ₑ {{ P }} e {{ ν | Q }} →
+  Γ\ δ\ B ⊨ₑ {{ P ★ A }} e {{ ν | Q ★ A }}.
+Proof. rewrite !(commutative (★)%A _ A). apply ax_expr_frame_l'. Qed.
+Lemma ax_expr_invariant_l' Γ δ A B P Q e ν :
   Γ\ δ\ A ★ B ⊨ₑ {{ P }} e {{ ν | Q }} →
   Γ\ δ\ B ⊨ₑ {{ A ★ P }} e {{ ν | A ★ Q }}.
 Proof.
@@ -27,14 +45,28 @@ Proof.
   setoid_rewrite (associative (R:=(≡{Γ})) (★)%A).
   setoid_rewrite (commutative (R:=(≡{Γ})) (★)%A _ A).
   setoid_rewrite <-(associative (R:=(≡{Γ})) (★)%A).
-  by apply ax_expr_funframe_l.
+  by apply ax_expr_invariant_l.
 Qed.
-Lemma ax_expr_funframe_r' Γ δ A B P Q e ν :
+Lemma ax_expr_invariant_r' Γ δ A B P Q e ν :
   Γ\ δ\ A ★ B ⊨ₑ {{ P }} e {{ ν | Q }} →
   Γ\ δ\ B ⊨ₑ {{ P ★ A }} e {{ ν | Q ★ A }}.
-Proof. rewrite !(commutative (★)%A _ A). apply ax_expr_funframe_l'. Qed.
+Proof. rewrite !(commutative (★)%A _ A). apply ax_expr_invariant_l'. Qed.
+Lemma ax_expr_invariant_emp' Γ δ A B e ν :
+  Γ\ δ\ A ★ B ⊨ₑ {{ emp }} e {{ ν | emp }} →
+  Γ\ δ\ B ⊨ₑ {{ A }} e {{ ν | A }}.
+Proof.
+  intros; rewrite <-(left_id _ (★)%A A); by apply ax_expr_invariant_r'.
+Qed.
+Lemma ax_var' Γ δ A P x a :
+  (A ★ P)%A ⊆{Γ} (var x ⇓ inl a)%A →
+  Γ\ δ\ A ⊨ₑ {{ P }} var x {{ inl a | P }}.
+Proof.
+  rewrite (commutative (★)%A); intros; eapply ax_var; eauto.
+  simpl; apply assert_and_intro, assert_wand_intro; eauto.
+  by rewrite assert_Prop_l by done.
+Qed.
 Lemma ax_rtol' Γ δ A P Q e v a :
-  (A ★ Q)%A ⊆{Γ} ( .*(#v) ⇓ inl a)%A →
+  (A ★ Q)%A ⊆{Γ} (.*(#v) ⇓ inl a)%A →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ inr v | Q }} →
   Γ\ δ\ A ⊨ₑ {{ P }} .* e {{ inl a | Q }}.
 Proof.

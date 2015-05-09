@@ -33,7 +33,7 @@ Hint Resolve cmap_union_valid_2 cmap_erased_union cmap_erase_valid.
 
 Hint Immediate ax_disjoint_expr_compose_diagram.
 Hint Immediate ax_expr_disjoint_compose_diagram.
-Hint Immediate ax_expr_funframe_emp.
+Hint Immediate ax_expr_invariant_emp.
 Hint Immediate ax_disjoint_compose_diagram.
 
 Hint Immediate val_new_typed perm_full_mapped.
@@ -70,7 +70,7 @@ Proof.
   rewrite mem_locks_union in Hlocks by auto; decompose_empty.
   apply ax_frame with (ax_expr_cond ρ B) (ax_expr_post Q τlr);
     eauto using ax_expr_cond_frame_diagram_simple.
-  { apply Hax; eauto using ax_expr_funframe_weaken, @sep_union_subseteq_l. }
+  { apply Hax; eauto using ax_expr_invariant_weaken, @sep_union_subseteq_l. }
   intros Δ' n' φ' m' ?????; destruct 1 as [ν Ω ????]; constructor; eauto.
   { rewrite mem_locks_union by auto. esolve_elem_of. }
   exists (cmap_erase m) (cmap_erase m2'); split_ands;
@@ -87,7 +87,7 @@ Lemma ax_expr_exist_pre {A} Γ δ (B : assert K) (P : A → assert K) Q e :
   (∀ x, Γ\ δ\ B ⊨ₑ {{ P x }} e {{ Q }}) →
   Γ\ δ\ B ⊨ₑ {{ ∃ x, P x }} e {{ Q }}.
 Proof. intros Hax Γ' Δ n k m τlr HΓ Hd ??????? [x Hpre]; by apply (Hax x). Qed.
-Lemma ax_expr_funframe_r Γ δ B A P Q e :
+Lemma ax_expr_invariant_r Γ δ B A P Q e :
   Γ\ δ\ A ★ B ⊨ₑ {{ P }} e {{ λ ν, Q ν }} →
   Γ\ δ\ B ⊨ₑ {{ P ★ A }} e {{ λ ν, Q ν ★ A }}.
 Proof.
@@ -176,12 +176,12 @@ Proof.
       destruct (λ H, IH n' H Δ'' ρ k' φ' m' τlr);
         eauto using indexes_valid_weaken.
 Qed.
-Lemma ax_expr_funframe_l Γ δ B A P Q e :
+Lemma ax_expr_invariant_l Γ δ B A P Q e :
   Γ\ δ\ A ★ B ⊨ₑ {{ P }} e {{ λ ν, Q ν }} →
   Γ\ δ\ B ⊨ₑ {{ A ★ P }} e {{ λ ν, A ★ Q ν }}.
 Proof.
   intros. setoid_rewrite (commutative (R:=(≡{Γ})) (★)%A A).
-  by apply ax_expr_funframe_r.
+  by apply ax_expr_invariant_r.
 Qed.
 
 (** ** Structural rules *)
@@ -230,7 +230,7 @@ Proof.
     { esolve_elem_of. }
     apply IH; eauto 7 using
       ectx_subst_typed, ehstep_expr_eval_typed, indexes_valid_weaken,
-      assert_weaken, ax_expr_funframe_weaken, @sep_reflexive.
+      assert_weaken, ax_expr_invariant_weaken, @sep_reflexive.
     by erewrite (subst_preserves_expr_eval _ _ _ _ _ (%# ν')%E)
       by (simplify_option_equality; eauto using ehstep_expr_eval).
   * intros E Ω f τs Ωs vs ? -> ?.
@@ -360,7 +360,7 @@ Proof.
     simplify_mem_disjoint_hyps; clear Hm12 Hm12'.
   rewrite mem_locks_union in Hlock by auto; simpl in *; decompose_empty.
   apply (ax_expr_compose_2 Γ' δ A Q1 Q2 _ Δ (DCAssign ass) e1 e2 ρ n m1 m2
-    (inl τ1) (inr τ2)); eauto using ax_expr_funframe_weaken,
+    (inl τ1) (inr τ2)); eauto using ax_expr_invariant_weaken,
     @sep_union_subseteq_l', @sep_union_subseteq_r'.
   { esolve_elem_of. }
   { esolve_elem_of. }
@@ -513,7 +513,7 @@ Proof.
     as (m1&m2&->&?&->&->); simplify_mem_disjoint_hyps; auto.
   rewrite mem_locks_union in Hlocks by auto; simpl in *; decompose_empty.
   apply (ax_expr_compose_2 Γ' δ A Q1 Q2 _ Δ (DCInsert r)
-    e1 e2 ρ n m1 m2 (inr σ) (inr τ)); eauto using ax_expr_funframe_weaken,
+    e1 e2 ρ n m1 m2 (inr σ) (inr τ)); eauto using ax_expr_invariant_weaken,
     @sep_union_subseteq_l', @sep_union_subseteq_r'.
   { esolve_elem_of. }
   { esolve_elem_of. }
@@ -702,7 +702,7 @@ Proof.
     as (m1&m2&->&?&->&->); simplify_mem_disjoint_hyps; auto.
   rewrite mem_locks_union in Hlock by auto; simpl in *; decompose_empty.
   apply (ax_expr_compose_2 Γ' δ A Q1 Q2 _ Δ (DCBinOp op) e1 e2 ρ n m1 m2
-    (inr τ1) (inr τ2)); eauto using ax_expr_funframe_weaken,
+    (inr τ1) (inr τ2)); eauto using ax_expr_invariant_weaken,
     @sep_union_subseteq_l', @sep_union_subseteq_r'.
   { esolve_elem_of. }
   { esolve_elem_of. }

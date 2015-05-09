@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Import memory_separation expression_eval.
+Require Export memory_separation expression_eval.
 
 Lemma expr_eval_subseteq `{EnvSpec K} Γ Δ ρ m1 m2 e ν τlr :
   ✓ Γ → ✓{Γ,Δ} m1 → ✓{Δ}* ρ → (Γ,Δ,ρ.*2) ⊢ e : τlr →

@@ -186,7 +186,7 @@ Next Obligation.
     rewrite ?cmap_union_valid; intuition.
 Qed.
 
-Definition ax_expr_funframe `{Env K} (Γ : env K) (Δ : memenv K)
+Definition ax_expr_invariant `{Env K} (Γ : env K) (Δ : memenv K)
     (A : assert K) (ρ : stack K) (n : nat) (m : mem K) := ∃ mA,
   ⊥ [mA; m] ∧ ✓{Γ,Δ} mA ∧ cmap_erased mA ∧ mem_locks mA = ∅ ∧
   assert_holds A Γ Δ ρ n mA.
@@ -218,7 +218,7 @@ Definition ax_expr `{EnvSpec K} (Γ : env K) (δ : funenv K) (A P : assert K)
   (Γ',Δ,ρ.*2) ⊢ e : τlr →
   locks e = ∅ →
   ✓{Δ}* ρ →
-  ax_expr_funframe Γ' Δ A ρ n m →
+  ax_expr_invariant Γ' Δ A ρ n m →
   assert_holds P Γ' Δ ρ n (cmap_erase m) →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post Q τlr) Γ' δ Δ ρ n [] (Expr e) m.
 Instance: Params (@ax_expr) 5.
@@ -289,13 +289,13 @@ Proof.
   unfold ax_stmt_top, dassert_pack_top. by rewrite HP, HQ.
 Qed.
 
-Lemma ax_expr_funframe_emp Γ Δ ρ n m : ✓{Γ,Δ} m → ax_expr_funframe Γ Δ emp ρ n m.
+Lemma ax_expr_invariant_emp Γ Δ ρ n m : ✓{Γ,Δ} m → ax_expr_invariant Γ Δ emp ρ n m.
 Proof. by eexists ∅; split_ands; eauto. Qed.
-Hint Resolve ax_expr_funframe_emp.
-Lemma ax_expr_funframe_weaken Γ Δ A ρ n1 n2 m1 m2 :
+Hint Resolve ax_expr_invariant_emp.
+Lemma ax_expr_invariant_weaken Γ Δ A ρ n1 n2 m1 m2 :
   ✓ Γ → ✓{Δ}* ρ →
-  ax_expr_funframe Γ Δ A ρ n1 m2 → m1 ⊆ m2 → n2 ≤ n1 →
-  ax_expr_funframe Γ Δ A ρ n2 m1.
+  ax_expr_invariant Γ Δ A ρ n1 m2 → m1 ⊆ m2 → n2 ≤ n1 →
+  ax_expr_invariant Γ Δ A ρ n2 m1.
 Proof.
   intros ?? (mA&?&?&?&?&?) Hm12; exists mA; split_ands; eauto using assert_weaken.
   by rewrite <-(sep_subseteq_disjoint_le m1) by eauto.
@@ -367,7 +367,7 @@ Lemma ax_expr_post_expr_nf Γ Q Δ ρ n m e τlr :
   ax_expr_post' Q τlr Γ Δ ρ n (Expr e) m → is_nf e.
 Proof. by inversion 1. Qed.
 Lemma ax_expr_lrval Γ δ A (P : lrval K → assert K) Δ ρ n ν Ω m τlr :
-  ✓{Γ,Δ} m → ax_expr_funframe Γ Δ A ρ n m →
+  ✓{Γ,Δ} m → ax_expr_invariant Γ Δ A ρ n m →
   ax_graph (ax_expr_cond ρ A)
     (ax_expr_post P τlr) Γ δ Δ ρ (S n) [] (Expr (%#{Ω} ν)%E) m →
   assert_holds (P ν) Γ Δ ρ (S n) (cmap_erase m)
@@ -396,7 +396,7 @@ Lemma ax_call_compose Γ δ A P Q (E : ectx K) E' ρ Δ n φ k m1 m2 :
   (∀ Δ' n' m1' e',
     ⊥ [m1'; m2] → ✓{Γ,Δ'} m1' → ✓{Γ,Δ'} m2 →
     locks (subst E e') ⊆ mem_locks m1' →
-    ax_expr_funframe Γ Δ' A ρ n' (m1' ∪ m2) →
+    ax_expr_invariant Γ Δ' A ρ n' (m1' ∪ m2) →
     ax_graph (ax_expr_cond ρ A) P Γ δ Δ' ρ n' [] (Expr (subst E e')) m1' →
     Δ ⇒ₘ Δ' → n' ≤ n →
     ax_graph (ax_expr_cond ρ A) Q Γ δ Δ' ρ n' []
@@ -455,7 +455,7 @@ Lemma ax_expr_compose Γ δ {vn} A (Ps : vec (vassert K) vn) (Q : vassert K)
     (ms : vec (mem K) vn) (τlrs : vec (lrtype K) vn) σlr :
   ✓ Γ → locks E = ∅ → ✓{Δ}* ρ →
   ⊥ ms → (∀ i, ✓{Γ,Δ} (ms !!! i)) →
-  ax_expr_funframe Γ Δ A ρ n (⋃ ms) →
+  ax_expr_invariant Γ Δ A ρ n (⋃ ms) →
   (∀ i, locks (es !!! i) ⊆ mem_locks (ms !!! i)) →
   (∀ i, ax_graph (ax_expr_cond ρ A) (ax_expr_post (Ps !!! i) (τlrs !!! i))
       Γ δ Δ ρ n [] (Expr (es !!! i)) (ms !!! i)) →
@@ -477,7 +477,7 @@ Proof.
   { apply Hax2; auto;
       intros i; specialize (Hax1 i); rewrite vlookup_zip_with in Hax1;
       (eapply ax_expr_lrval; [| |eauto]);
-      eauto using ax_expr_funframe_weaken, @sep_subseteq_lookup. }
+      eauto using ax_expr_invariant_weaken, @sep_subseteq_lookup. }
   apply ax_further_alt.
   intros Δ' n' m' a ??? Hframe; inversion_clear Hframe as [mA mf ??? Hm|];
     simplify_equality'; simplify_mem_disjoint_hyps.
@@ -617,7 +617,7 @@ Proof.
 Qed.
 Lemma ax_expr_compose_1 Γ δ A P Q Δ (E : ectx_full K 1) e ρ n m τlr σlr :
   ✓ Γ → locks E = ∅ → ✓{Δ}* ρ → ✓{Γ,Δ} m →
-  ax_expr_funframe Γ Δ A ρ n m →
+  ax_expr_invariant Γ Δ A ρ n m →
   locks e ⊆ mem_locks m →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post P τlr) Γ δ Δ ρ n [] (Expr e) m →
   (∀ Δ' n' Ω ν m',
@@ -639,7 +639,7 @@ Qed.
 Lemma ax_expr_compose_2 Γ δ A P1 P2 Q Δ
     (E : ectx_full K 2) e1 e2 ρ n m1 m2 τlr1 τlr2 σlr :
   ✓ Γ → locks E = ∅ → ✓{Δ}* ρ → ⊥ [m1; m2] → ✓{Γ,Δ} m1 → ✓{Γ,Δ} m2 →
-  ax_expr_funframe Γ Δ A ρ n (m1 ∪ m2) →
+  ax_expr_invariant Γ Δ A ρ n (m1 ∪ m2) →
   locks e1 ⊆ mem_locks m1 → locks e2 ⊆ mem_locks m2 →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post P1 τlr1) Γ δ Δ ρ n [] (Expr e1) m1 →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post P2 τlr2) Γ δ Δ ρ n [] (Expr e2) m2 →
