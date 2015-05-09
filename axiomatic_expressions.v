@@ -562,35 +562,44 @@ Proof.
     indexes_valid_weaken, val_typed_weaken, val_alter_const_typed.
 Qed.
 Lemma ax_alloc Γ δ A P Q1 Q2 e τ :
-  ¬alloc_can_fail →
   (∀ o vb,
     Q1 (inr (VBase vb)) ⊆{Γ} (∃ n τi,
       ⌜ vb = (intV{τi} n)%B ∧ Z.to_nat n ≠ 0 ⌝ ★
-      (% (addr_top o (τ.[Z.to_nat n])) ↦{true,perm_full} - : (τ.[Z.to_nat n]) -★
-        Q2 (inr (ptrV (Ptr (addr_top_array o τ n))))))%A) →
+      ((% (addr_top o (τ.[Z.to_nat n])) ↦{true,perm_full} - : (τ.[Z.to_nat n]) -★
+         Q2 (inr (ptrV (Ptr (addr_top_array o τ n))))) ∧
+       (⌜ alloc_can_fail ⌝ -★ Q2 (inr (ptrV (NULL (TType τ)))))))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P }} alloc{τ} e {{ Q2 }}.
 Proof.
-  intros ? HQ Hax Γ' Δ n ρ m τlr ????? He ????.
+  intros HQ Hax Γ' Δ n ρ m τlr ????? He ????.
   assert (∃ τi, (Γ',Δ,ρ.*2) ⊢ e : inr (intT τi) ∧
     ✓{Γ'} τ ∧ τlr = inr (TType τ.*)) as (τi&?&?&->)
     by (typed_inversion_all; eauto); clear He.
   apply (ax_expr_compose_1 Γ' δ A Q1 _ Δ
     (DCAlloc τ) e ρ n m (inr (intT τi))); auto.
   { esolve_elem_of. }
-  clear dependent m; intros Δ' n' Ω [|[vb| | | |]] m ??????; typed_inversion_all.
-  destruct (HQ (fresh ∅) vb Γ' Δ' ρ n' (cmap_erase m))
-    as (na&τi'&_&_&_&_&[[-> ?] _]&_); eauto using indexes_valid_weaken;
+  clear dependent m.
+  intros Δ' n' Ω [|[vb| | | |]] m ??????; typed_inversion_all.
+  destruct (HQ (fresh ∅) vb Γ' Δ' ρ n' (cmap_erase m)) as
+    (na&τi'&?&?&Hm&Hm'&[[-> ?] ->]&[_ Hfail]); eauto using indexes_valid_weaken;
     typed_inversion_all.
+  rewrite sep_left_id in Hm by auto; simplify_equality; clear Hm'.
   apply ax_further; [intros; solve_rcred|].
   intros Δ'' n'' ?? S' ??? Hframe p Hdom; inversion_clear Hframe as [mA mf|];
     simplify_equality; simplify_mem_disjoint_hyps.
-  assert (∃ o,
-    S' = State [] (Expr (#{mem_locks m} ptrV (Ptr (addr_top_array o τ na))))
-      (mem_alloc Γ' o true perm_full (val_new Γ' (τ.[Z.to_nat na]))
-      (m ∪ mf ∪ mA)) ∧ o ∉ dom indexset (m ∪ mf ∪ mA))
-      as (o&->&Ho); [|simplify_equality'; clear p].
-  { inv_rcstep p; [inv_ehstep; by eauto|exfalso; eauto with cstep]. }
+  assert (alloc_can_fail ∧
+    S' = State [] (Expr (#{mem_locks m} ptrV (NULL (TType τ)))) (m ∪ mf ∪ mA)
+    ∨ ∃ o,
+      S' = State [] (Expr (#{mem_locks m} ptrV (Ptr (addr_top_array o τ na))))
+        (mem_alloc Γ' o true perm_full (val_new Γ' (τ.[Z.to_nat na]))
+        (m ∪ mf ∪ mA)) ∧ o ∉ dom indexset (m ∪ mf ∪ mA))
+    as [[? ->]|(o&->&Ho)]; [| |simplify_equality'; clear Hfail p].
+  { inv_rcstep p; [inv_ehstep;eauto|exfalso; eauto with cstep]. }
+  { econstructor; simpl; eauto; [constructor; eauto|].
+    apply ax_done; constructor; eauto 10 using type_valid_ptr_type_valid.
+    assert (⊥ [∅; cmap_erase m]).
+    { rewrite <-cmap_erase_disjoint_le; auto. }
+    rewrite <-(sep_left_id (cmap_erase m)) by auto; eapply Hfail; eauto. }
   assert (Δ'' !! o = None); [|clear Hdom].
   { rewrite mem_dom_alloc in Hdom. apply not_elem_of_dom; esolve_elem_of. }
   rewrite <-sep_associative, cmap_dom_union,
