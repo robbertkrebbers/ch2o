@@ -242,8 +242,10 @@ Lemma int_typed_lower x τi : int_typed x τi → int_lower τi ≤ x.
 Proof. by intros [??]. Qed.
 Lemma int_typed_upper x τi : int_typed x τi → x < int_upper τi.
 Proof. by intros [??]. Qed.
-Lemma int_lower_u τi : sign τi = Unsigned → int_lower τi = 0.
-Proof. by destruct τi as [[] ?]. Qed.
+Lemma int_lower_unsigned k : int_lower (IntType Unsigned k) = 0.
+Proof. done. Qed.
+Lemma int_typed_unsigned_nonneg x k : int_typed x (IntType Unsigned k) → 0 ≤ x.
+Proof. by intros [??]. Qed.
 Lemma int_lower_nonpos τi : int_lower τi ≤ 0.
 Proof.
   unfold int_lower. destruct (sign τi); [|done].
@@ -269,6 +271,12 @@ Qed.
 Lemma int_lower_upper_signed τi :
   sign τi = Signed → int_lower τi = -int_upper τi.
 Proof. by intros; destruct τi; simplify_equality'. Qed.
+Lemma int_upper_signed_unsigned k :
+  int_upper (IntType Signed k) < int_upper (IntType Unsigned k).
+Proof.
+  assert (0 < int_width (IntType Signed k)) by auto using int_width_pos.
+  apply Z.pow_lt_mono_r; unfold int_precision, int_width in *; simpl in *; lia.
+Qed.
 Lemma int_typed_spec_alt x τi :
   int_typed x τi ↔
     match sign τi with

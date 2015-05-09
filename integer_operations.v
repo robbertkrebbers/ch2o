@@ -67,7 +67,6 @@ Section pre_operations.
                        int_upper (IntType Signed k1)) then IntType Signed k1
        else IntType Unsigned k1
     end.
-
   Definition int_pre_arithop_ok
       (op : arithop) (x y : Z) (τi : int_type K) : Prop :=
     match op, sign τi with
@@ -264,6 +263,13 @@ Proof. destruct 1; simpl; auto using int_upper_le_invert_alt. Qed.
 Local Arguments int_promote _ _ !_ /.
 Local Arguments union _ _ !_ !_ /.
 Local Arguments int_union _ _ !_ !_ /.
+Lemma int_promote_int si :
+  int_promote (IntType si int_rank) = IntType si int_rank.
+Proof.
+  simpl; rewrite decide_True by done; destruct si.
+  * by rewrite decide_True by done.
+  * by rewrite decide_False by auto using Zlt_not_le, int_upper_signed_unsigned.
+Qed.
 Lemma int_promote_promote τi : int_promote (int_promote τi) = int_promote τi.
 Proof.
   assert (int_upper sintT < int_upper uintT).
@@ -382,7 +388,14 @@ Proof.
   intros Hx; destruct 1; eauto using int_unsigned_pre_cast_ok,
     int_typed_pre_cast_ok, int_typed_rank_weaken.
   pose proof (int_lower_nonpos (IntType Signed k2)).
-  destruct Hx as [Hxl Hxu]; rewrite int_lower_u in Hxl; split; lia.
+  destruct Hx as [Hxl Hxu]; rewrite int_lower_unsigned in Hxl; split; lia.
+Qed.
+Lemma int_pre_cast_ok_self x τi : int_typed x τi → int_pre_cast_ok τi x.
+Proof. by unfold int_pre_cast_ok; destruct (sign _). Qed.
+Lemma int_pre_cast_self x τi : int_typed x τi → int_pre_cast τi x = x.
+Proof.
+  unfold int_typed, int_lower, int_pre_cast;
+    destruct (sign _); auto using Z.mod_small.
 Qed.
 End pre_properties.
 
@@ -410,5 +423,12 @@ Proof.
   * by apply int_arithop_typed.
   * by apply int_shiftop_typed.
   * apply int_of_bits_typed. rewrite zip_with_length, !int_to_bits_length; lia.
+Qed.
+Lemma int_cast_ok_self x τi : int_typed x τi → int_cast_ok τi x.
+Proof. eauto using int_cast_ok_more, int_pre_cast_ok_self. Qed.
+Lemma int_cast_self x τi : int_typed x τi → int_cast τi x = x.
+Proof.
+  intros; rewrite int_cast_spec by eauto using int_pre_cast_ok_self.
+  eauto using int_pre_cast_self.
 Qed.
 End properties.
