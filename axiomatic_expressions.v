@@ -242,6 +242,28 @@ Proof.
       eauto using indexes_valid_weaken, @sep_union_subseteq_l_transitive,
       @sep_union_subseteq_l', expr_typed_weaken.
 Qed.
+Lemma ax_var Γ δ A P Q x a :
+  P ⊆{Γ} (Q (inl a) ∧ (A -★ var x ⇓ inl a))%A →
+  Γ\ δ\ A ⊨ₑ {{ P }} var x {{ Q }}.
+Proof.
+  intros HQ Γ' Δ n ρ m [τ|] ?????? He ???; typed_inversion_all.
+  match goal with H : _ !! x = _ |- _ => rewrite list_lookup_fmap in H end.
+  destruct (ρ !! x) as [[o τ']|] eqn:?; decompose_Forall_hyps.
+  apply ax_further_alt.
+  intros Δ' n' ????? Hframe; inversion_clear Hframe as [mA mf|];
+    simplify_equality; simplify_mem_disjoint_hyps.
+  destruct (HQ Γ' Δ ρ n (cmap_erase m)) as [? HA]; eauto.
+  destruct (HA Γ' Δ' n' mA) as (τlr&_&?); clear HA; eauto.
+  { rewrite <-cmap_erase_disjoint_le; auto. }
+  simplify_option_equality. typed_inversion_all.
+  split; [solve_rcred|intros ? p _].
+  inv_rcstep p; [inv_ehstep|exfalso; eauto with cstep].
+  simplify_option_equality; apply mk_ax_next with Δ' m; auto.
+  { constructor; auto. }
+  { esolve_elem_of. }
+  apply ax_done; constructor; eauto 9 using assert_weaken, addr_top_typed,
+    indexes_valid_weaken, memenv_forward_typed, index_typed_valid.
+Qed.
 Lemma ax_rtol Γ δ A P Q1 Q2 e :
   (∀ v, Q1 (inr v) ⊆{Γ} (∃ a, Q2 (inl a) ∧ (A -★ .*#v ⇓ inl a))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
