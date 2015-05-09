@@ -55,6 +55,17 @@ Proof.
   { eapply Hax, Hin; eauto. }
   destruct 2; constructor; auto. apply Hout; eauto using indexes_valid_weaken.
 Qed.
+Lemma ax_stmt_weaken Γ δ R R' J J' T T' C C' P P' Q Q' s :
+  (∀ v, R v ⊆{Γ} R' v) →
+  (∀ l, l ∉ labels s → J l ⊆{Γ} J' l) →
+  (∀ l, l ∈ labels s → J' l ⊆{Γ} J l) →
+  (∀ n, T n ⊆{Γ} T' n) →
+  (∀ mx, mx ∈ cases s → C' mx ⊆{Γ} C mx) →
+  P' ⊆{Γ} P →
+  Q ⊆{Γ} Q' →
+  Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} s {{ Q }} →
+  Γ\ δ\ R'\ J'\ T'\ C' ⊨ₛ {{ P' }} s {{ Q' }}.
+Proof. intros until 7. by apply ax_stmt_weaken_packed; intros []; simpl. Qed.
 Lemma ax_stmt_weaken_pre Γ δ R J T C P P' Q s :
   P' ⊆{Γ} P →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} s {{ Q }} →
@@ -112,6 +123,25 @@ Proof.
     apply ax_weaken with ax_disjoint_cond (ax_stmt_post
       (dassert_pack (P x) Q R J T C) s) n; auto; [eapply Hax; eauto|].
     destruct 2 as [[]]; constructor; auto. by exists x.
+Qed.
+Lemma ax_stmt_Prop_pre_packed Γ δ A Pd s :
+  (∀ d, direction_in d s → Pd d ⊆{Γ} (⌜ A ⌝ ★ True)%A) →
+  (A → Γ\ δ\ Pd ⊨ₚ s) → Γ\ δ\ Pd ⊨ₚ s.
+Proof.
+  intros Hin Hax Γ' Δ n ρ [] m ????????? Hpre; try done;
+    edestruct (λ d H, Hin d H Γ' Δ ρ n (cmap_erase m)) as (_&_&_&_&[? _]&_); eauto;
+    eapply Hax; eauto.
+Qed.
+Lemma ax_stmt_Prop_pre Γ δ A R J T C P Q s :
+  (∀ l, l ∈ labels s → J l ⊆{Γ} (⌜ A ⌝ ★ True)%A) →
+  (∀ mx, mx ∈ cases s → C mx ⊆{Γ} (⌜ A ⌝ ★ True)%A) →
+  (A → Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} s {{ Q }}) →
+  Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ ⌜ A ⌝ ★ P }} s {{ Q }}.
+Proof.
+  intros ?? Hax. apply (ax_stmt_Prop_pre_packed _ _ A).
+  * intros [] ?; simpl in *; try by auto.
+    by apply assert_sep_preserving, assert_True_intro.
+  * intros. rewrite assert_Prop_l by done. by apply Hax.
 Qed.
 
 (** ** Structural rules *)
