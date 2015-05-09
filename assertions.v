@@ -8,7 +8,7 @@ Hoare logic ([∧], [¬], [↔], [∀] and [∃]), the connectives of separation
 logic ([emp], [↦], [★]), and other connectives that are more specific to
 our development. We overload the usual notations in [assert_scope] to obtain
 nicely looking assertions. *)
-Require Export expression_eval type_system memory_singleton.
+Require Export expression_eval_separation type_system memory_singleton.
 Require Import type_system_decidable.
 Local Obligation Tactic := idtac.
 
@@ -148,6 +148,10 @@ Infix "★" := assert_sep (at level 80, right associativity) : assert_scope.
 Notation "(★)" := assert_sep (only parsing) : assert_scope.
 Notation "( P ★)" := (assert_sep P) (only parsing) : assert_scope.
 Notation "(★ Q )" := (λ P, assert_sep P Q) (only parsing) : assert_scope.
+
+Class MemExt `{EnvSpec K} (P : assert K) : Prop :=
+  mem_ext Γ : (P ★ True)%A ⊆{Γ} P.
+Hint Extern 10 (MemExt _) => apply _.
 
 Program Definition assert_wand `{Env K} (P Q : assert K) : assert K := {|
   assert_holds Γ Δ ρ n m2 := ∀ Γ' Δ' n' m1,
@@ -335,13 +339,15 @@ Global Instance: LeftAbsorb (≡{Γ}) True%A (∨)%A.
 Proof. red; solve eauto. Qed.
 Global Instance: RightAbsorb (≡{Γ}) True%A (∨)%A.
 Proof. red; solve eauto. Qed.
-Lemma assert_false_elim Γ P : False%A ⊆{Γ} P.
+Lemma assert_False_elim Γ P : False%A ⊆{Γ} P.
 Proof. solve eauto. Qed.
-Lemma assert_true_intro Γ P : P ⊆{Γ} True%A.
+Lemma assert_True_intro Γ P : P ⊆{Γ} True%A.
 Proof. solve eauto. Qed.
 Lemma assert_and_l Γ P Q : (P ∧ Q)%A ⊆{Γ} P.
 Proof. solve eauto. Qed.
 Lemma assert_and_r Γ P Q : (P ∧ Q)%A ⊆{Γ} Q.
+Proof. solve eauto. Qed.
+Lemma assert_impl_and Γ P Q : P ⊆{Γ} Q → P ≡{Γ} (P ∧ Q)%A.
 Proof. solve eauto. Qed.
 Lemma assert_and_intro Γ P Q1 Q2 : P ⊆{Γ} Q1 → P ⊆{Γ} Q2 → P ⊆{Γ} (Q1 ∧ Q2)%A.
 Proof. solve eauto. Qed.
@@ -411,6 +417,11 @@ Proof. solve eauto. Qed.
 Global Instance: Proper (iff ==> (≡{Γ})) assert_Prop.
 Proof. solve eauto. Qed.
 Global Instance: Proper ((⊆{Γ}) ==> (⊆{Γ}) ==> (⊆{Γ})) (★)%A.
+Proof.
+  solve ltac:(eauto 15 using cmap_valid_subseteq,
+    @sep_union_subseteq_l, @sep_union_subseteq_r).
+Qed.
+Global Instance: Proper (flip (⊆{Γ}) ==> flip (⊆{Γ}) ==> flip (⊆{Γ})) (★)%A.
 Proof.
   solve ltac:(eauto 15 using cmap_valid_subseteq,
     @sep_union_subseteq_l, @sep_union_subseteq_r).
@@ -495,7 +506,17 @@ Qed.
 Lemma assert_Prop_intro_r Γ (P : Prop) Q R :
   (P → Q ⊆{Γ} R) → (Q ★ ⌜ P ⌝)%A ⊆{Γ} R.
 Proof. rewrite (commutative (★)%A). by apply assert_Prop_intro_l. Qed.
+Lemma assert_Prop_True Γ P (Q : Prop) :
+  P ⊆{Γ} (⌜ Q ⌝ ★ True)%A → P ⊆{Γ} (⌜ Q ⌝ ★ P)%A.
+Proof.
+  intros HPQ Γ' Δ ρ n m ???? HP.
+  destruct (HPQ Γ' Δ ρ n m) as (m1&m2&->&?&[? ->]&?); auto.
+  rewrite sep_left_id in HP by auto; solve eauto.
+Qed.
 
+Lemma assert_sep_preserving Γ P P' Q Q' :
+  P ⊆{Γ} P' → Q ⊆{Γ} Q' → (P ★ Q)%A ⊆{Γ} (P' ★ Q')%A.
+Proof. intros HP HQ. by rewrite HP, HQ. Qed.
 Lemma assert_sep_exist {A} Γ P (Q : A → assert K) :
   (P ★ ∃ x, Q x)%A ≡{Γ} (∃ x, P ★ Q x)%A.
 Proof. solve eauto. Qed.
@@ -514,6 +535,12 @@ Proof.
   rewrite sep_commutative by auto; eapply HQ; eauto using
     cmap_valid_subseteq, @sep_union_subseteq_l, @sep_union_subseteq_r.
 Qed.
+Global Instance: LeftId (≡{Γ}) emp%A (-★)%A.
+Proof.
+  intros Γ P; split.
+  * rewrite <-(right_id _ (★)%A); apply assert_wand_elim.
+  * apply assert_wand_intro. by rewrite (right_id _ (★)%A).
+Qed.
 
 Lemma assert_Forall_holds_2 (Ps : list (assert K)) Γ Δ ρ ms n :
   ⊥ ms → Forall2 (λ (P : assert K) m, assert_holds P Γ Δ ρ n m) Ps ms →
@@ -530,7 +557,136 @@ Proof.
   exists (m1 :: ms); auto.
 Qed.
 
+Lemma assert_memext_l Γ P Q : MemExt P → (P ★ Q)%A ⊆{Γ} P.
+Proof.
+  intros; transitivity (P ★ True)%A;
+    auto using assert_sep_preserving, assert_True_intro.
+Qed.
+Lemma assert_memext_r Γ P Q : MemExt P → (Q ★ P)%A ⊆{Γ} P.
+Proof. rewrite (commutative (★)%A). apply assert_memext_l. Qed.
+Lemma assert_memext_l' Γ P Q R : MemExt R → P ⊆{Γ} R → (P ★ Q)%A ⊆{Γ} R.
+Proof.
+  intros. rewrite <-(assert_memext_l _ R) by done.
+  eauto using assert_sep_preserving.
+Qed.
+Lemma assert_memext_r' Γ P Q R : MemExt R → Q ⊆{Γ} R → (P ★ Q)%A ⊆{Γ} R.
+Proof. rewrite (commutative (★)%A). apply assert_memext_l'. Qed.
+
 (* Evaluation and singleton connectives *)
+Global Instance assert_eval_memext e ν : MemExt (e ⇓ ν)%A.
+Proof.
+  intros Γ Γ' Δ ρ n m ?? Hm ? (m1&m2&->&?&(τlr&?&?)&?); exists τlr; split; auto.
+  rewrite cmap_union_valid in Hm by auto; destruct Hm.
+  eapply expr_eval_subseteq with _ m1 _; eauto using @sep_union_subseteq_l'.
+Qed.
+Lemma assert_int_typed_eval Γ P x τi :
+  int_typed x τi → P ⊆{Γ} (#intV{τi} x ⇓ inr (intV{τi} x))%A.
+Proof.
+  intros ? Γ' Δ ρ n m ?????.
+  eexists (inr (intT τi)%T); split; auto using lockset_empty_valid.
+Qed.
+Lemma assert_eval_int_typed Γ e x τi :
+  (e ⇓ inr (intV{τi} x))%A ⊆{Γ} (⌜ int_typed x τi ⌝ ★ True)%A.
+Proof.
+  intros Γ' Δ ρ n m ???? (τlr&?&?).
+  assert ((Γ',Δ) ⊢ inr (intV{τi} x) : τlr) by eauto using expr_eval_typed.
+  assert (sep_valid m) by eauto.
+  typed_inversion_all; exists (∅ : mem K) m; eauto 9 using @sep_left_id, eq_sym.
+Qed.
+Lemma assert_eval_int_typed' Γ e x τi :
+  (e ⇓ inr (intV{τi} x))%A ⊆{Γ} (⌜ int_typed x τi ⌝ ★ e ⇓ inr (intV{τi} x))%A.
+Proof. eauto using assert_Prop_True, assert_eval_int_typed. Qed.
+Hint Extern 1 (unop_typed _ _ _) => constructor.
+Hint Extern 1 (base_unop_typed _ _ _) => constructor.
+Lemma assert_eval_int_unop Γ op e x τi :
+  int_unop_ok op x τi →
+  (e ⇓ inr (intV{τi} x))%A
+  ⊆{Γ} (@{op} e ⇓ inr (intV{int_unop_type_of op τi} (int_unop op x τi)))%A.
+Proof.
+  intros ? Γ' Δ ρ n m ???? (τlr&?&?).
+  assert ((Γ',Δ) ⊢ inr (intV{τi} x) : τlr) by eauto using expr_eval_typed.
+  typed_inversion_all;
+    simplify_option_equality; eauto 20 using lockset_empty_valid.
+Qed.
+Lemma assert_eval_int_unop' Γ P op e x y τi σi :
+  P ⊆{Γ} (e ⇓ inr (intV{τi} x))%A →
+  int_unop_type_of op τi = σi → int_unop_ok op x τi → int_unop op x τi = y → 
+  P ⊆{Γ} (@{op} e ⇓ inr (intV{σi} y))%A.
+Proof. intros; subst; rewrite <-assert_eval_int_unop by eauto; eauto. Qed.
+Hint Extern 1 (binop_typed _ _ _ _) => constructor.
+Hint Extern 1 (base_binop_typed _ _ _ _) => constructor.
+Lemma assert_eval_int_binop Γ op e1 e2 x1 x2 τi1 τi2 :
+  (int_binop_ok op x1 τi1 x2 τi2) →
+  (e1 ⇓ inr (intV{τi1} x1) ∧ e2 ⇓ inr (intV{τi2} x2))%A ⊆{Γ} (e1 @{op} e2 ⇓
+        inr (intV{int_binop_type_of op τi1 τi2} (int_binop op x1 τi1 x2 τi2)))%A.
+Proof.
+  intros Hok Γ' Δ ρ n m ???? [(τlr1&?&?) (τlr2&?&?)].
+  assert ((Γ',Δ) ⊢ inr (intV{τi1} x1) : τlr1) by eauto using expr_eval_typed.
+  assert ((Γ',Δ) ⊢ inr (intV{τi2} x2) : τlr2) by eauto using expr_eval_typed.
+  typed_inversion_all.
+  simplify_option_equality; eauto 20 using lockset_empty_valid.
+Qed.
+Lemma assert_eval_int_binop' Γ P op e1 e2 x1 x2 y τi1 τi2 σi :
+  P ⊆{Γ} (e1 ⇓ inr (intV{τi1} x1))%A → P ⊆{Γ} (e2 ⇓ inr (intV{τi2} x2))%A →
+  σi = int_binop_type_of op τi1 τi2 →
+  int_binop_ok op x1 τi1 x2 τi2 → int_binop op x1 τi1 x2 τi2 = y →
+  P ⊆{Γ} (e1 @{op} e2 ⇓ inr (intV{σi} y))%A.
+Proof.
+  intros; subst;
+    rewrite <-assert_eval_int_binop by eauto; eauto using assert_and_intro.
+Qed.
+Lemma assert_eval_int_arithop' Γ P op e1 e2 x1 x2 y τi1 τi2 σi :
+  P ⊆{Γ} (e1 ⇓ inr (intV{τi1} x1))%A → P ⊆{Γ} (e2 ⇓ inr (intV{τi2} x2))%A →
+  σi = int_promote τi1 ∪ int_promote τi2 →
+  int_pre_arithop_ok op (int_pre_cast σi x1) (int_pre_cast σi x2) σi →
+  int_pre_arithop op (int_pre_cast σi x1) (int_pre_cast σi x2) σi = y →
+  P ⊆{Γ} (e1 @{ArithOp op} e2 ⇓ inr (intV{σi} y))%A.
+Proof.
+  intros ?? -> ??.
+  rewrite assert_Prop_True by (rewrite <-(assert_eval_int_typed _ e1); auto).
+  apply assert_Prop_intro_l; intros.
+  rewrite assert_Prop_True by (rewrite <-(assert_eval_int_typed _ e2); auto).
+  apply assert_Prop_intro_l; intros; eapply assert_eval_int_binop'; eauto.
+  * by apply int_arithop_ok_more.
+  * unfold int_binop. by rewrite int_arithop_spec by auto.
+Qed.
+Hint Extern 1 (cast_typed _ _) => constructor.
+Hint Extern 1 (base_cast_typed _ _) => constructor.
+Lemma assert_eval_int_cast Γ e x τi σi :
+  int_cast_ok σi x → 
+  (e ⇓ inr (intV{τi} x))%A
+  ⊆{Γ} (cast{(intT σi)%T} e ⇓ inr (intV{σi} (int_cast σi x)))%A.
+Proof.
+  intros ? Γ' Δ ρ n m ???? (τlr&?&?).
+  assert ((Γ',Δ) ⊢ inr (intV{τi} x) : τlr) by eauto using expr_eval_typed.
+  typed_inversion_all; simplify_option_equality.
+  eauto 20 using lockset_empty_valid, TBase_valid, TInt_valid.
+Qed.
+Lemma assert_eval_int_cast' Γ P e x τi σi y :
+  P ⊆{Γ} (e ⇓ inr (intV{τi} x))%A →
+  int_cast_ok σi x → int_cast σi x = y →
+  P ⊆{Γ} (cast{(intT σi)%T} e ⇓ inr (intV{σi} y))%A.
+Proof. intros; subst; rewrite <-assert_eval_int_cast by eauto; eauto. Qed.
+Lemma assert_eval_int_cast_self' Γ P e x τi :
+  P ⊆{Γ} (e ⇓ inr (intV{τi} x))%A →
+  P ⊆{Γ} (cast{(intT τi)%T} e ⇓ inr (intV{τi} x))%A.
+Proof.
+  intros HP. rewrite HP, assert_eval_int_typed'.
+  eauto using assert_Prop_intro_l,
+    assert_eval_int_cast', int_cast_ok_self, int_cast_self.
+Qed.
+Lemma assert_eval_singleton_l Γ a e μ x τ :
+  (%a ↦{μ,x} e : τ)%A ⊆{Γ} (%a ⇓ inl a)%A.
+Proof.
+  intros Γ' Δ ρ n m ???? (a'&v&?&?&?&?&?);
+    eexists (inl τ); simplify_option_equality; eauto.
+Qed.
+Lemma assert_eval_singleton_r Γ e v μ x τ :
+  (e ↦{μ,x} #v : τ)%A ⊆{Γ} (#v ⇓ inr v)%A.
+Proof.
+  intros Γ' Δ ρ n m ???? (a&v'&?&?&?&?&?);
+    eexists (inr τ); simplify_option_equality; eauto.
+Qed.
 Lemma assert_singleton_l Γ e1 e2 μ x τ :
   (e1 ↦{μ,x} e2 : τ)%A ≡{Γ} (∃ a, (e1 ⇓ inl a ∧ emp) ★ %a ↦{μ,x} e2 : τ)%A.
 Proof.
@@ -540,18 +696,31 @@ Proof.
     eexists ∅, m; split_ands; simplify_option_equality; eauto 20 using
       @sep_left_id, eq_sym, lockset_empty_valid, mem_singleton_typed_addr_typed.
   * intros Γ' Δ ρ n m_ ?? Hm ? (?&?&m&->&?&((τlr&?&?)&_&->)&(a&v&?&?&?&?&?));
-      simplify_option_equality;
-      exists a v; rewrite sep_left_id in Hm |- * by auto; split_ands; auto.
+      simplify_option_equality.
+    exists a v; rewrite sep_left_id in Hm |- * by auto; split_ands; auto.
     cut (τlr = inl τ); [intros ->; auto|typed_inversion_all].
     apply (typed_unique (Γ',Δ) (inl a));
       eauto using expr_eval_typed, cmap_empty_valid, cmap_valid_memenv_valid.
 Qed.
+Lemma assert_singleton_l_2 Γ e1 e2 μ x a τ :
+  ((e1 ⇓ inl a ∧ emp) ★ %a ↦{μ,x} e2 : τ)%A ⊆{Γ} (e1 ↦{μ,x} e2 : τ)%A.
+Proof. rewrite (assert_singleton_l _ e1); solve eauto. Qed.
 Lemma assert_singleton_l_ Γ e μ x τ :
   (e ↦{μ,x} - : τ)%A ≡{Γ} (∃ a, (e ⇓ inl a ∧ emp) ★ %a ↦{μ,x} - : τ)%A.
 Proof.
   setoid_rewrite (assert_singleton_l Γ e); setoid_rewrite (assert_sep_exist Γ).
   by rewrite assert_exist_exist.
 Qed.
+Lemma assert_singleton_l_2_ Γ e μ x a τ :
+  ((e ⇓ inl a ∧ emp) ★ %a ↦{μ,x} - : τ)%A ⊆{Γ} (e ↦{μ,x} - : τ)%A.
+Proof. rewrite (assert_singleton_l_ _ e); solve eauto. Qed.
+Lemma assert_singleton_int_typed Γ e μ x z τi :
+  (e ↦{μ,x} #intV{τi} z : intT τi)%A ⊆{Γ} (⌜ int_typed z τi ⌝ ★ True)%A.
+Proof. rewrite assert_eval_singleton_r; apply assert_eval_int_typed. Qed.
+Lemma assert_singleton_int_typed' Γ e μ x z τi :
+  (e ↦{μ,x} #intV{τi} z : intT τi)%A
+  ⊆{Γ} (⌜ int_typed z τi ⌝ ★ (e ↦{μ,x} #intV{τi} z : intT τi))%A.
+Proof. by apply assert_Prop_True, assert_singleton_int_typed. Qed.
 Lemma assert_expr_lift Γ e ν : vars e = ∅ → (e↑ ⇓ ν)%A ≡{Γ} (e ⇓ ν)%A.
 Proof.
   split; intros Γ' Δ ρ n m ???? (τlr&?&?); exists τlr; split.
@@ -890,6 +1059,8 @@ Proof. intros Γ. by rewrite assert_unlock_unlock. Qed.
 Global Instance assert_True_unlock_indep : UnlockIndep True.
 Proof. solve ltac:(eauto using mem_unlock_all_empty). Qed.
 Global Instance assert_False_unlock_indep : UnlockIndep False.
+Proof. solve ltac:(eauto using mem_unlock_all_empty). Qed.
+Global Instance assert_Prop_unlock_indep : UnlockIndep ⌜ P ⌝.
 Proof. solve ltac:(eauto using mem_unlock_all_empty). Qed.
 Global Instance assert_and_unlock_indep :
   UnlockIndep P → UnlockIndep Q → UnlockIndep (P ∧ Q).
