@@ -125,7 +125,7 @@ Arguments Local {_} _.
 Arguments TypeDef {_} _.
 Instance maybe_TypeDef {K} : Maybe (@TypeDef K) := λ d,
   match d with TypeDef τ => Some τ | _ => None end.
-(* [None] delimits scopes *)
+(** [None] delimits scopes *)
 Notation local_env K := (list (option (string * local_decl K))).
 
 Record frontend_state (K : Set) : Set := FState {
@@ -269,11 +269,11 @@ Definition convert_ptrs (eτ1 eτ2 : expr K * type K) :
   end.
 Definition to_if_expr (e1 : expr K)
     (eτ2 eτ3 : expr K * type K) : option (expr K * expr_type K) :=
-  (** 1.) *) (
+  (**i 1.) *) (
     (** same types *)
     let (e2,τ2) := eτ2 in let (e3,τ3) := eτ3 in
     guard (τ2 = τ3); Some (if{e1} e2 else e3, RT τ2)) ∪
-  (** 2.) *) (
+  (**i 2.) *) (
     (** common arithmetic conversions *)
     let (e2,τ2) := eτ2 in let (e3,τ3) := eτ3 in
     match τ2, τ3 with
@@ -282,16 +282,16 @@ Definition to_if_expr (e1 : expr K)
        Some (if{e1} cast{intT τi'} e2 else cast{intT τi'} e3, RT (intT τi'))
     | _, _ => None
     end) ∪
-  (** 3.) *) (
+  (**i 3.) *) (
     (** one side is NULL or void *)
     '(e2,e3,τ) ← convert_ptrs eτ2 eτ3;
     Some (if{e1} e2 else e3, RT τ)).
 Definition to_binop_expr (op : binop)
     (eτ1 eτ2 : expr K * type K) : option (expr K * expr_type K) :=
-  (** 1.) *) (
+  (**i 1.) *) (
     let (e1,τ1) := eτ1 in let (e2,τ2) := eτ2 in
     σ ← binop_type_of op τ1 τ2; Some (e1 @{op} e2, RT σ)) ∪
-  (** 2.) *) (
+  (**i 2.) *) (
     (** one side is NULL or void *)
     guard (op = CompOp EqOp);
     '(e1,e2,τ) ← convert_ptrs eτ1 eτ2;

@@ -30,9 +30,11 @@
 	</div></li>
 <li>Robbert Krebbers and Freek Wiedijk.
 	A Typed C11 Semantics for Interactive Theorem Proving.
-	To appear in CPP, 2015.
+	In CPP, pages 15-27, 2015.
 	<div class="publinks">
 	<a href="http://robbertkrebbers.nl/research/articles/interpreter.pdf">[pdf]</a>
+	<a href="http://doi.acm.org/10.1145/2676724.2693571">[at publisher]</a>
+	<a href="/research/slides/interpreter.pdf">[slides]</a>
 	</div></li>
 <li>Robbert Krebbers.
 	Separation algebras for C verification in Coq.
@@ -140,7 +142,7 @@ Use:</p>
 <li><a href="types.html">types</a>: C types and type environments.</li>
 <li><a href="type_environment.html">type_environment</a>: abstract interface for implementation defined properties.</li>
 <li><a href="architecture_spec.html">architecture_spec</a>:	type environment specifications based on concrete architectures.</li>
-<li><a href="architectures.html">architectures</a>: some specific architectures (x86 and x86_64).</li>
+<li><a href="architectures.html">architectures</a>: some specific architectures (ilp32, llp64 and lp64).</li>
 </ul>
 
 <h3>Permissions and separation algebras</h3>
@@ -172,6 +174,8 @@ Use:</p>
 
 <h3>Operational semantics</h3>
 <ul>
+<li><a href="assignments.html">assignments</a>
+	(<a href="assignments_separation.html">separation</a>): semantics of assignments.</li>
 <li><a href="operations.html">operations</a>
 	(<a href="operations_refine.html">refinements</a>): semantics of casts, unary and binary operations.</li>
 <li><a href="expressions.html">expressions</a>: expressions and their decomposition into evaluation contexts.</li>
@@ -195,12 +199,25 @@ Use:</p>
 <h3>Executable semantics</h3>
 <ul>
 <li><a href="expression_eval.html">expression_eval</a>
-	(<a href="expression_eval_smallstep.html">correctness</a>): evaluation of constant expressions.</li>
+	(<a href="expression_eval_smallstep.html">correctness</a> and
+	<a href="expression_eval_separation.html">separation</a>): evaluation of constant expressions.</li>
 <li><a href="executable.html">executable</a>: the CH<sub>2</sub>O core C executable semantics as a Coq function.</li>
 <li><a href="executable_sound.html">executable_sound</a> and <a href="executable_complete.html">executable_complete</a>: soundness and completeness of the executable semantics with respect to the operational semantics.</li>
 <li><a href="frontend.html">frontend</a>
 	(<a href="frontend_sound.html">type soundness</a>): CH<sub>2</sub>O abstract C and its type preserving translation into CH<sub>2</sub>O core C.</li>
 <li><a href="interpreter.html">interpreter</a> (<a href="extraction.html">extraction</a>): gluing the frontend and executable semantics together.</li>
+</ul>
+
+<h3>Separation logic</h3>
+<ul>
+<li><a href="memory_singleton.html">memory_singleton</a>: singleton memory.</li>
+<li><a href="assertions.html">assertions</a>: assertions of the separation logic.</li>
+<li><a href="axiomatic_graph.html">axiomatic_graph</a>. Interpretation of the judgments of the separation logic.</li>
+<li><a href="axiomatic.html">axiomatic</a>. Interpretation of the judgments of the separation logic.</li>
+<li><a href="axiomatic_expressions.html">axiomatic_expressions</a>: inferences rules for expressions.</li>
+<li><a href="axiomatic_statements.html">axiomatic_statements</a>: inference rules for statements.</li>
+<li><a href="axiomatic_simple.html">axiomatic_simple</a>: inferences rules for expressions whose result is known.</li>
+<li><a href="example_gcd.html">example_gcd</a>: verification of Euclid's gcd algorithm.</li>
 </ul>
 </body>
 </html>

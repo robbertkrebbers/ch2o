@@ -129,8 +129,8 @@ Definition ax_compose_diagram {A B} (F : ax_frame_cond K A)
     (G : ax_frame_cond K B) (Γ : env K) (k2 : ctx K) := ∀ Δ k1 n φ m m' b,
   ✓{Γ,Δ} m →
   frame G Γ Δ (k1 ++ k2) n φ m m' b → ∃ a,
-  (** 1.) *) frame F Γ Δ k1 n φ m m' a ∧
-  (** 2.) *) ∀ Δ' k1' φ' m2 m2',
+  (**i 1.) *) frame F Γ Δ k1 n φ m m' a ∧
+  (**i 2.) *) ∀ Δ' k1' φ' m2 m2',
     ✓{Γ,Δ'} m2' → Δ ⇒ₘ Δ' →
     unframe F Γ Δ' k1' n φ' m2 m2' a →
     unframe G Γ Δ' (k1' ++ k2) n φ' m2 m2' b.
@@ -187,8 +187,8 @@ Definition ax_frame_diagram {A B} (F: ax_frame_cond K A) (G: ax_frame_cond K B)
     (Γ : env K) (mf : mem K) := ∀ Δ k n φ m m' b,
   ⊥ [m; mf] → ✓{Γ,Δ} m → ✓{Γ,Δ} mf →
   frame G Γ Δ k n φ (m ∪ mf) m' b → ∃ a,
-  (** 1.) *) frame F Γ Δ k n φ m m' a ∧
-  (** 2.) *) ∀ Δ' k' φ' m2 m2',
+  (**i 1.) *) frame F Γ Δ k n φ m m' a ∧
+  (**i 2.) *) ∀ Δ' k' φ' m2 m2',
     unframe F Γ Δ' k' n φ' m2 m2' a →
     ✓{Γ,Δ'} m2' → Δ ⇒ₘ Δ' →
     unframe G Γ Δ' k' n φ' (m2 ∪ mf) m2' b ∧ ⊥ [m2; mf].

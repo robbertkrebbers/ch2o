@@ -15,13 +15,13 @@ Lemma ax_stmt_sound `{EnvSpec K} Γ δ P Q s m S' cmτ :
   Γ\ δ ⊨ₛ {{ P }} s {{ Q }} →
   (∀ n, assert_holds P Γ '{m} [] n (cmap_erase m)) →
   Γ\ δ ⊢ₛ State [] (Stmt ↘ s) m ⇒* S' →
-  (** 1.) *) (∃ n' m',
+  (**i 1.) *) (∃ n' m',
     S' = State [] (Stmt ↗ s) m' ∧
     assert_holds (Q voidV) Γ '{m'} [] n' (cmap_erase m')) ∨
-  (** 2.) *) (∃ n' m' v,
+  (**i 2.) *) (∃ n' m' v,
     S' = State [] (Stmt (⇈ v) s) m' ∧
     assert_holds (Q v) Γ '{m'} [] n' (cmap_erase m')) ∨
-  (** 3.) *) red (cstep Γ δ) S'.
+  (**i 3.) *) red (cstep Γ δ) S'.
 Proof.
   intros ?. revert m S'. cut (∀ n1 n2 k φ m S' τf,
     ✓{Γ,'{m} } δ →

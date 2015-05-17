@@ -495,10 +495,10 @@ Qed.
 Lemma addr_disjoint_object_offset Γ Δ a1 a2 σ1 σ2 :
   ✓ Γ → (Γ,Δ) ⊢ a1 : TType σ1 → addr_strict Γ a1 →
   (Γ,Δ) ⊢ a2 : TType σ2 → addr_strict Γ a2 → a1 ⊥{Γ} a2 →
-  (** 1.) *) addr_index a1 ≠ addr_index a2 ∨
-  (** 2.) *)
+  (**i 1.) *) addr_index a1 ≠ addr_index a2 ∨
+  (**i 2.) *)
     addr_object_offset Γ a1 + bit_size_of Γ σ1 ≤ addr_object_offset Γ a2 ∨
-  (** 3.) *)
+  (**i 3.) *)
     addr_object_offset Γ a2 + bit_size_of Γ σ2 ≤ addr_object_offset Γ a1.
 Proof.
   intros ?????. erewrite !addr_object_offset_alt by eauto.
