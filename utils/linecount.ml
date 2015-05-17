@@ -113,13 +113,14 @@ let cats = [
   ("axiomatic.v", "separation");
   ("axiomatic_graph.v", "separation");
   ("axiomatic_expressions.v", "separation");
-  ("axiomatic_expressions_simple.v", "separation");
+  ("axiomatic_simple.v", "separation");
   ("axiomatic_statements.v", "separation");
   ("axiomatic_sound.v", "separation");
   ("assignments.v", "core_c");
   ("assignments_separation.v", "separation");
   ("restricted_smallstep.v", "core_c");
   ("memory_singleton.v", "core_c");
+  ("example_gcd.v", "separation");
   ];;
 
 let get_table _ =
