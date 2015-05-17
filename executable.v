@@ -208,7 +208,7 @@ Definition cexec (Γ : env K) (δ : funenv K)
   | Call f vs =>
     s ← of_option (δ !! f);
     let os := fresh_list (length vs) (dom indexset m) in
-    let m2 := mem_alloc_list Γ (zip os vs) m in
+    let m2 := mem_alloc_list Γ os vs m in
     {[ State (CParams f (zip os (type_of <$> vs)) :: k) (Stmt ↘ s) m2 ]}
   | Return f v =>
     match k with

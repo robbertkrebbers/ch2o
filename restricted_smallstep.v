@@ -132,7 +132,7 @@ Inductive rcstep `{Env K} (Γ : env K)
      length os = length vs →
      Γ\ δ\ ρ ⊢ₛ State k (Call f vs) m ⇒
                 State (CParams f (zip os (type_of <$> vs)) :: k)
-                  (Stmt ↘ s) (mem_alloc_list Γ (zip os vs) m)
+                  (Stmt ↘ s) (mem_alloc_list Γ os vs m)
   | rcstep_free_params m k f oτs s :
      Γ\ δ\ ρ ⊢ₛ State (CParams f oτs :: k) (Stmt ↗ s) m ⇒
                 State k (Return f voidV) (foldr mem_free m (oτs.*1))
@@ -313,7 +313,7 @@ Section inversion.
          δ !! f = Some s → Forall_fresh (dom indexset m) os →
          length os = length vs →
          P (State (CParams f (zip os (type_of <$> vs)) :: k)
-           (Stmt ↘ s) (mem_alloc_list Γ (zip os vs) m))) →
+           (Stmt ↘ s) (mem_alloc_list Γ os vs m))) →
        P S2
     | Stmt (⇈ v) s =>
        (∀ k' f oτs,

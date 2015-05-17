@@ -30,10 +30,11 @@ Section memory_operations.
     let xs := replicate (bit_size_of Γ τ) x in
     let (m) := m in CMap (<[o:=Obj (of_val Γ xs v) μ]>m).
   Fixpoint mem_alloc_list (Γ : env K)
-      (ovs : list (index * val K)) (m : mem K) : mem K :=
-    match ovs with
-    | [] => m
-    | (o,v) :: ovs => mem_alloc_list Γ ovs (mem_alloc Γ o false perm_full v m)
+      (os : list index) (vs : list (val K)) (m : mem K) : mem K :=
+    match os, vs with
+    | o :: os, v :: vs =>
+       mem_alloc_list Γ os vs (mem_alloc Γ o false perm_full v m)
+    | _, _ => m
     end.
 
   Definition mem_free (o : index) (m : mem K) : mem K :=
@@ -325,9 +326,9 @@ Proof. rewrite mem_dom_alloc, !Forall_fresh_alt; esolve_elem_of. Qed.
 Lemma mem_alloc_list_valid Γ m os vs τs :
   ✓ Γ → ✓{Γ} m → Forall_fresh (dom indexset m) os → length os = length vs →
   (Γ,'{m}) ⊢* vs :* τs →
-  (**i 1.) *) ✓{Γ} (mem_alloc_list Γ (zip os vs) m) ∧
-  (**i 2.) *) '{mem_alloc_list Γ (zip os vs) m} ⊢* os :* τs ∧
-  (**i 3.) *) '{m} ⇒ₘ '{mem_alloc_list Γ (zip os vs) m}.
+  (**i 1.) *) ✓{Γ} (mem_alloc_list Γ os vs m) ∧
+  (**i 2.) *) '{mem_alloc_list Γ os vs m} ⊢* os :* τs ∧
+  (**i 3.) *) '{m} ⇒ₘ '{mem_alloc_list Γ os vs m}.
 Proof.
   rewrite <-Forall2_same_length. intros ? Hm Hfree Hovs Hvs.
   revert τs m Hm Hvs Hfree.
@@ -341,11 +342,11 @@ Proof.
 Qed.
 Lemma mem_alloc_list_index_typed Γ m os vs τs :
   ✓ Γ → ✓{Γ} m → Forall_fresh (dom indexset m) os → length os = length vs →
-  (Γ,'{m}) ⊢* vs :* τs → '{mem_alloc_list Γ (zip os vs) m} ⊢* os :* τs.
+  (Γ,'{m}) ⊢* vs :* τs → '{mem_alloc_list Γ os vs m} ⊢* os :* τs.
 Proof. eapply mem_alloc_list_valid. Qed.
 Lemma mem_alloc_list_forward Γ m os vs τs :
   ✓ Γ → ✓{Γ} m → Forall_fresh (dom indexset m) os → length os = length vs →
-  (Γ,'{m}) ⊢* vs :* τs → '{m} ⇒ₘ '{mem_alloc_list Γ (zip os vs) m}.
+  (Γ,'{m}) ⊢* vs :* τs → '{m} ⇒ₘ '{mem_alloc_list Γ os vs m}.
 Proof. eapply mem_alloc_list_valid. Qed.
 
 (** ** Properties of the [mem_free] fucntion *)

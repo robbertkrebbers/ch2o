@@ -295,8 +295,8 @@ Lemma mem_alloc_list_refine' Γ α f m1 m2 os1 os2 vs1 vs2 τs :
   length os1 = length vs1 → length os2 = length vs2 →
   Forall_fresh (dom indexset m1) os1 → Forall_fresh (dom indexset m2) os2 → ∃ f',
   (**i 1.) *) Forall2 (λ o1 o2, f' !! o1 = Some (o2,[])) os1 os2 ∧
-  (**i 2.) *) mem_alloc_list Γ (zip os1 vs1) m1
-      ⊑{Γ,α,f'} mem_alloc_list Γ (zip os2 vs2) m2 ∧
+  (**i 2.) *) mem_alloc_list Γ os1 vs1 m1
+      ⊑{Γ,α,f'} mem_alloc_list Γ os2 vs2 m2 ∧
   (**i 3.) *) meminj_extend f f' '{m1} '{m2}.
 Proof.
   rewrite <-!Forall2_same_length. intros ? Hm Hvs Hovs1 Hovs2 Hos1 Hos2.

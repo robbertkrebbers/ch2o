@@ -202,7 +202,7 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
      length os = length vs →
      Γ\ δ ⊢ₛ State k (Call f vs) m ⇒
              State (CParams f (zip os (type_of <$> vs)) :: k)
-               (Stmt ↘ s) (mem_alloc_list Γ (zip os vs) m)
+               (Stmt ↘ s) (mem_alloc_list Γ os vs m)
   | cstep_free_params m k f oτs s :
      Γ\ δ ⊢ₛ State (CParams f oτs :: k) (Stmt ↗ s) m ⇒
              State k (Return f voidV) (foldr mem_free m (oτs.*1))

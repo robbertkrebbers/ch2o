@@ -119,8 +119,7 @@ Proof.
     edestruct (mem_alloc_list_refine' Γ false meminj_id m m os' os vs vs) as
       (f&?&?&?); eauto using cmap_refine_id', vals_refine_id.
     exists f (State (CParams h (zip os' (type_of <$> vs)) :: k)
-      (Stmt ↘ s) (mem_alloc_list Γ (zip os' vs) m)).
-    split_ands; auto.
+      (Stmt ↘ s) (mem_alloc_list Γ os' vs m)); split_ands; auto.
     { unfold of_option; simplify_option_equality; esolve_elem_of. }
     erewrite fmap_type_of by eauto.
     eleft; split_ands; simpl; repeat refine_constructor;
