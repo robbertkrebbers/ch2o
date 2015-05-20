@@ -84,3 +84,20 @@ Qed.
 Notation Nset := (mapset (Nmap unit)).
 Instance Nmap_dom {A} : Dom (Nmap A) Nset := mapset_dom.
 Instance: FinMapDom N Nmap Nset := mapset_dom_spec.
+
+(** * Fresh numbers *)
+Definition Nfresh {A} (m : Nmap A) : N :=
+  match m with NMap None _ => 0 | NMap _ m => Npos (Pfresh m) end.
+Lemma Nfresh_fresh {A} (m : Nmap A) : m !! Nfresh m = None.
+Proof. destruct m as [[]]. apply Pfresh_fresh. done. Qed. 
+
+Instance Nset_fresh : Fresh N Nset := λ X,
+  let (m) := X in Nfresh m.
+Instance Nset_fresh_spec : FreshSpec N Nset.
+Proof.
+  split.
+  * apply _.
+  * intros X Y; rewrite <-elem_of_equiv_L. by intros ->.
+  * unfold elem_of, mapset_elem_of, fresh; intros [m]; simpl.
+    by rewrite Nfresh_fresh.
+Qed.

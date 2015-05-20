@@ -12,8 +12,6 @@ Definition indexmap := Nmap.
 Notation indexset := (mapset (indexmap unit)).
 
 Instance index_dec: ∀ o1 o2 : index, Decision (o1 = o2) := decide_rel (=).
-Instance index_fresh_`{FinCollection index C} : Fresh index C := _.
-Instance index_fresh_spec `{FinCollection index C} : FreshSpec index C := _.
 Instance index_inhabited: Inhabited index := populate 0%N.
 Instance indexmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
   ∀ m1 m2 : indexmap A, Decision (m1 = m2) := decide_rel (=).
@@ -30,6 +28,8 @@ Instance indexmap_fmap: FMap indexmap := @fmap Nmap _.
 Instance: FinMap index indexmap := _.
 Instance indexmap_dom {A} : Dom (indexmap A) indexset := mapset_dom.
 Instance: FinMapDom index indexmap indexset := mapset_dom_spec.
+Instance index_fresh : Fresh index indexset := _.
+Instance index_fresh_spec : FreshSpec index indexset := _.
 Instance index_lexico : Lexico index := @lexico N _.
 Instance index_lexico_order : StrictOrder (@lexico index _) := _.
 Instance index_trichotomy: TrichotomyT (@lexico index _) := _.

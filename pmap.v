@@ -390,3 +390,66 @@ Qed.
 Notation Pset := (mapset (Pmap unit)).
 Instance Pmap_dom {A} : Dom (Pmap A) Pset := mapset_dom.
 Instance: FinMapDom positive Pmap Pset := mapset_dom_spec.
+
+(** * Fresh numbers *)
+Fixpoint Pdepth {A} (m : Pmap_raw A) : nat :=
+  match m with
+  | PLeaf | PNode _ None _ => O | PNode l _ _ => S (Pdepth l)
+  end.
+Fixpoint Pfresh_at_depth {A} (m : Pmap_raw A) (d : nat) : option positive :=
+  match d, m with
+  | O, (PLeaf | PNode _ None _) => Some 1
+  | S d, PNode l _ r =>
+     match Pfresh_at_depth l d with
+     | Some i => Some (i~0) | None => (~1) <$> Pfresh_at_depth r d
+     end
+  | _, _ => None
+  end.
+Fixpoint Pfresh_go {A} (m : Pmap_raw A) (d : nat) : option positive :=
+  match d with
+  | O => None
+  | S d =>
+     match Pfresh_go m d with
+     | Some i => Some i | None => Pfresh_at_depth m d
+     end
+  end.
+Definition Pfresh {A} (m : Pmap A) : positive :=
+  let d := Pdepth (pmap_car m) in
+  match Pfresh_go (pmap_car m) d with
+  | Some i => i | None => Pos.shiftl_nat 1 d
+  end.
+
+Lemma Pfresh_at_depth_fresh {A} (m : Pmap_raw A) d i :
+  Pfresh_at_depth m d = Some i → m !! i = None.
+Proof.
+  revert i m; induction d as [|d IH].
+  { intros i [|l [] r] ?; naive_solver. }
+  intros i [|l o r] ?; simplify_equality'.
+  destruct (Pfresh_at_depth l d) as [i'|] eqn:?,
+    (Pfresh_at_depth r d) as [i''|] eqn:?; simplify_equality'; auto.
+Qed.
+Lemma Pfresh_go_fresh {A} (m : Pmap_raw A) d i :
+  Pfresh_go m d = Some i → m !! i = None.
+Proof.
+  induction d as [|d IH]; intros; simplify_equality'.
+  destruct (Pfresh_go m d); eauto using Pfresh_at_depth_fresh.
+Qed.
+Lemma Pfresh_depth {A} (m : Pmap_raw A) :
+  m !! Pos.shiftl_nat 1 (Pdepth m) = None.
+Proof. induction m as [|l IHl [x|] r IHr]; auto. Qed.
+Lemma Pfresh_fresh {A} (m : Pmap A) : m !! Pfresh m = None.
+Proof.
+  destruct m as [m ?]; unfold lookup, Plookup, Pfresh; simpl.
+  destruct (Pfresh_go m _) eqn:?; eauto using Pfresh_go_fresh, Pfresh_depth.
+Qed.
+
+Instance Pset_fresh : Fresh positive Pset := λ X,
+  let (m) := X in Pfresh m.
+Instance Pset_fresh_spec : FreshSpec positive Pset.
+Proof.
+  split.
+  * apply _.
+  * intros X Y; rewrite <-elem_of_equiv_L. by intros ->.
+  * unfold elem_of, mapset_elem_of, fresh; intros [m]; simpl.
+    by rewrite Pfresh_fresh.
+Qed.
