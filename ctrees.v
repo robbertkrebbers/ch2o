@@ -818,7 +818,7 @@ Proof.
   * by intros; f_equal.
   * intros τ ws IH ys Hys Hys'; f_equal; revert ys Hys Hys'.
     induction IH; intros; simplifier; f_equal; eauto.
-  * intros t wxbss IH ys Hys Hys'; f_equal; revert ys Hys Hys'.
+  * intros t wxss IH ys Hys Hys'; f_equal; revert ys Hys Hys'.
     induction IH as [|[]]; intros; simplifier; repeat f_equal; auto.
   * intros; simplifier; f_equal; auto.
   * by intros; f_equal.

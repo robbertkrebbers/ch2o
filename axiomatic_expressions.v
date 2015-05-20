@@ -362,18 +362,18 @@ Definition assert_assign (a : addr K) (v : val K)
      cast{τ} (load (%a) @{op} #v) ⇓ inr va ∧
      load (%a) ⇓ inr v'
   end%A.
-Lemma ax_assign Γ δ A P1 P2 Q1 Q2 Q ass e1 e2 μ x τ :
-  Some Writable ⊆ perm_kind x →
+Lemma ax_assign Γ δ A P1 P2 Q1 Q2 Q ass e1 e2 μ γ τ :
+  Some Writable ⊆ perm_kind γ →
   (∀ a v, (Q1 (inl a) ★ Q2 (inr v))%A ⊆{Γ} (∃ va v',
-    (%a ↦{μ,x} - : τ ★
-    (%a ↦{μ,perm_lock x} # (freeze true va) : τ -★ Q (inr v'))) ∧
+    (%a ↦{μ,γ} - : τ ★
+    (%a ↦{μ,perm_lock γ} # (freeze true va) : τ -★ Q (inr v'))) ∧
     (A -★ assert_assign a v ass τ va v'))%A) →
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ Q1 }} → Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ Q2 }} →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 ::={ass} e2 {{ Q }}.
 Proof.
-  intros Hx HQ Hax1 Hax2 Γ' Δ n ρ m
+  intros Hγ HQ Hax1 Hax2 Γ' Δ n ρ m
     [|τ1] ???? Hlock He ??? HP; [typed_inversion_all|].
-  assert (Some Readable ⊆ perm_kind x)by (by transitivity (Some Writable)).
+  assert (Some Readable ⊆ perm_kind γ)by (by transitivity (Some Writable)).
   assert (∃ τ2, (Γ',Δ,ρ.*2) ⊢ e1 : inl τ1 ∧
     (Γ',Δ,ρ.*2) ⊢ e2 : inr τ2 ∧ assign_typed τ1 τ2 ass)
     as (τ2&?&?&?) by (typed_inversion_all; eauto); clear He.

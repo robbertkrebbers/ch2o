@@ -8,7 +8,7 @@ Lemma mem_constant_prop `{EnvSpec K} Γ Δ m a v τ :
   ∃ v', <[a:=v]{Γ}>m !!{Γ} a = Some v' ∧ v' ⊑{Γ,true@Δ} v : τ.
 Proof.
   unfold insertE, lookupE, mem_insert, mem_lookup. intros ??? (w&?&Hw) ?.
-  assert (ctree_Forall (λ xb, Some Writable ⊆ pbit_kind xb)
+  assert (ctree_Forall (λ γb, Some Writable ⊆ pbit_kind γb)
     (of_val Γ (tagged_perm <$> ctree_flatten w) v)).
   { erewrite ctree_flatten_of_val by (rewrite ?fmap_length;
       eauto using ctree_flatten_length, cmap_lookup_typed).

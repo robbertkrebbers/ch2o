@@ -359,15 +359,15 @@ Definition to_limit_const (τ : type K) (li : climit) : M (Z * int_type K) :=
      mret (Z.of_nat (int_width τi), τi)
   end.
 
-Definition insert_object (x : perm) (v : val K) : M index :=
+Definition insert_object (γ : perm) (v : val K) : M index :=
   m ← gets to_mem; Γ ← gets to_env;
   let o := fresh (dom _ m) in
   _ ← modify (λ S : frontend_state K,
-    let (Γn,Γ,m,Δg) := S in FState Γn Γ (mem_alloc Γ o false x v m) Δg);
+    let (Γn,Γ,m,Δg) := S in FState Γn Γ (mem_alloc Γ o false γ v m) Δg);
   mret o.
-Definition update_object (o : index) (x : perm) (v : val K) : M () :=
+Definition update_object (o : index) (γ : perm) (v : val K) : M () :=
   modify (λ S : frontend_state K,
-    let (Γn,Γ,m,Δg) := S in FState Γn Γ (mem_alloc Γ o false x v m) Δg).
+    let (Γn,Γ,m,Δg) := S in FState Γn Γ (mem_alloc Γ o false γ v m) Δg).
 Definition insert_global_decl (x : string) (d : global_decl K) : M () :=
   modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in FState Γn Γ m (<[x:=d]>Δg)).

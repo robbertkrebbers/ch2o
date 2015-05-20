@@ -31,19 +31,19 @@ Proof.
   apply base_binop_type_of_sound; simpl.
   by rewrite (idempotent_L _), int_promote_int.
 Qed.
-Lemma gcd_correct Γ δ R J T C y z μ1 x1 μ2 x2 :
-  sep_valid x1 → Some Writable ⊆ perm_kind x1 →
-  sep_valid x2 → Some Writable ⊆ perm_kind x2 →
+Lemma gcd_correct Γ δ R J T C y z μ1 γ1 μ2 γ2 :
+  sep_valid γ1 → Some Writable ⊆ perm_kind γ1 →
+  sep_valid γ2 → Some Writable ⊆ perm_kind γ2 →
   J "l"%string ≡{Γ} (∃ y' z',
     ⌜ Z.gcd y' z' = Z.gcd y z ⌝%Z ★
-    var 0 ↦{μ1,x1} #intV{uintT} y' : uintT ★
-    var 1 ↦{μ2,x2} #intV{uintT} z' : uintT)%A →
+    var 0 ↦{μ1,γ1} #intV{uintT} y' : uintT ★
+    var 1 ↦{μ2,γ2} #intV{uintT} z' : uintT)%A →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ
-    {{ var 0 ↦{μ1,x1} #intV{uintT} y : uintT ★
-       var 1 ↦{μ2,x2} #intV{uintT} z : uintT }}
+    {{ var 0 ↦{μ1,γ1} #intV{uintT} y : uintT ★
+       var 1 ↦{μ2,γ2} #intV{uintT} z : uintT }}
       gcd_stmt
-    {{ var 0 ↦{μ1,x1} #intV{uintT} (Z.gcd y z) : uintT ★
-       var 1 ↦{μ2,x2} #intV{uintT} 0 : uintT }}.
+    {{ var 0 ↦{μ1,γ1} #intV{uintT} (Z.gcd y z) : uintT ★
+       var 1 ↦{μ2,γ2} #intV{uintT} 0 : uintT }}.
 Proof.
   intros ???? HJ; eapply ax_comp.
   { eapply ax_stmt_weaken_pre, ax_label; rewrite HJ.
@@ -75,8 +75,8 @@ Proof.
     rewrite !assert_lift_sep, !assert_lift_singleton; simpl.
     apply ax_comp with (
         var 0 ↦{false,perm_full} #intV{uintT} (y' `mod` z') : uintT
-      ★ var 1 ↦{μ1,x1} #intV{uintT} z' : uintT
-      ★ var 2 ↦{μ2,x2} #intV{uintT} (y' `mod` z') : uintT)%A.
+      ★ var 1 ↦{μ1,γ1} #intV{uintT} z' : uintT
+      ★ var 2 ↦{μ2,γ2} #intV{uintT} (y' `mod` z') : uintT)%A.
     * eapply ax_do' with _ (inr (intV{uintT} (y' `mod` z')));
         [|by rewrite <-!assert_unlock_sep,
                      <-(assert_lock_singleton _ (var 2)), <-2!unlock_indep].
@@ -103,19 +103,19 @@ Proof.
       rewrite <-!(associative (★)%A).
       eapply ax_assign_r' with
         (%a_tmp ↦{false,perm_full} #intV{uintT} (y' `mod` z') : uintT
-        ★ %a_y ↦{μ1,x1} #intV{uintT} z' : uintT
-        ★ %a_z ↦{μ2,x2} #intV{uintT} z' : uintT)%A
-        μ2 x2 uintT%T a_z (intV{uintT} (y' `mod` z')) _; try by exec.
+        ★ %a_y ↦{μ1,γ1} #intV{uintT} z' : uintT
+        ★ %a_z ↦{μ2,γ2} #intV{uintT} z' : uintT)%A
+        μ2 γ2 uintT%T a_z (intV{uintT} (y' `mod` z')) _; try by exec.
       { eapply ax_expr_comma' with
           (%a_tmp ↦{false,perm_full} #intV{uintT} (y' `mod` z') : uintT
-          ★ %a_y ↦{μ1,x1} #intV{uintT} y' : uintT
-          ★ %a_z ↦{μ2,x2} #intV{uintT} z' : uintT)%A
+          ★ %a_y ↦{μ1,γ1} #intV{uintT} y' : uintT
+          ★ %a_z ↦{μ2,γ2} #intV{uintT} z' : uintT)%A
           (inr (intV{uintT} (y' `mod` z'))).
         { eapply ax_expr_weaken_post'; [by rewrite <-!assert_unlock_sep,
             <-(assert_lock_singleton _ (%a_tmp)), <-2!unlock_indep by done|].
           apply ax_expr_invariant_r'.
-          set (A'' := ((%a_y ↦{μ1,x1} #intV{uintT} y' : uintT%BT
-            ★ %a_z ↦{μ2,x2} #intV{uintT} z' : uintT%BT) ★ A')%A).
+          set (A'' := ((%a_y ↦{μ1,γ1} #intV{uintT} y' : uintT%BT
+            ★ %a_z ↦{μ2,γ2} #intV{uintT} z' : uintT%BT) ★ A')%A).
           eapply ax_assign_r' with _ _ perm_full
             uintT%T _ (intV{uintT} (y' `mod` z')) _.
           * exec.
@@ -139,8 +139,8 @@ Proof.
         eapply ax_expr_weaken_post'; [by rewrite <-!assert_unlock_sep,
           <-(assert_lock_singleton _ (%a_y)), <-2!unlock_indep by done|].
         apply ax_expr_frame_l', ax_expr_invariant_r'.
-        set (A'' := (%a_z ↦{μ2,x2} #intV{uintT} z' : uintT%BT ★ A')%A).
-        eapply ax_assign_r' with _ _ x1 uintT%T _ (intV{uintT} z') _; try exec.
+        set (A'' := (%a_z ↦{μ2,γ2} #intV{uintT} z' : uintT%BT ★ A')%A).
+        eapply ax_assign_r' with _ _ γ1 uintT%T _ (intV{uintT} z') _; try exec.
         * rewrite <-(right_id _ (★)%A);
           apply assert_sep_preserving, assert_wand_intro;
             rewrite ?(left_id _ (★)%A); eauto using assert_exist_intro. }

@@ -93,13 +93,13 @@ Proof.
   apply assert_exist_intro with v, assert_and_intro, assert_wand_intro; eauto.
   by rewrite assert_Prop_l by done.
 Qed.
-Lemma ax_assign' Γ δ A P1 P2 Q1 Q2 Q ass e1 e2 μ x τ a v va v' :
+Lemma ax_assign' Γ δ A P1 P2 Q1 Q2 Q ass e1 e2 μ γ τ a v va v' :
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ inl a | Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ inr v | Q2 }} →
   (A ★ Q1 ★ Q2)%A ⊆{Γ} (assert_assign a v ass τ va v')%A →
-  (Q1 ★ Q2)%A ⊆{Γ} (%a ↦{μ,x} - : τ ★
-    (%a ↦{μ,perm_lock x} # (freeze true va) : τ -★ Q))%A →
-  Some Writable ⊆ perm_kind x →
+  (Q1 ★ Q2)%A ⊆{Γ} (%a ↦{μ,γ} - : τ ★
+    (%a ↦{μ,perm_lock γ} # (freeze true va) : τ -★ Q))%A →
+  Some Writable ⊆ perm_kind γ →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 ::={ass} e2 {{ inr v' | Q }}.
 Proof.
   rewrite (commutative (★)%A A); intros; eapply ax_assign; eauto.
@@ -111,13 +111,13 @@ Proof.
     assert_and_intro, assert_wand_intro; eauto.
   rewrite assert_Prop_l by done; eauto.
 Qed.
-Lemma ax_assign_r' Γ δ A P Q Q' ass e1 e2 μ x τ a v va v' :
+Lemma ax_assign_r' Γ δ A P Q Q' ass e1 e2 μ γ τ a v va v' :
   Γ\ δ\ A ⊨ₑ {{ emp }} e1 {{ inl a | emp }} →
   Γ\ δ\ A ⊨ₑ {{ P }} e2 {{ inr v | Q }} →
   (A ★ Q)%A ⊆{Γ} (assert_assign a v ass τ va v')%A →
-  Q ⊆{Γ} (%a ↦{μ,x} - : τ ★
-    (%a ↦{μ,perm_lock x} # (freeze true va) : τ -★ Q'))%A →
-  Some Writable ⊆ perm_kind x →
+  Q ⊆{Γ} (%a ↦{μ,γ} - : τ ★
+    (%a ↦{μ,perm_lock γ} # (freeze true va) : τ -★ Q'))%A →
+  Some Writable ⊆ perm_kind γ →
   Γ\ δ\ A ⊨ₑ {{ P }} e1 ::={ass} e2 {{ inr v' | Q' }}.
 Proof.
   intros. rewrite <-(left_id _ (★)%A P).

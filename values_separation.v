@@ -7,8 +7,8 @@ Context `{EnvSpec K}.
 Implicit Types Γ : env K.
 Implicit Types Δ : memenv K.
 Implicit Types τ : type K.
-Implicit Types x : perm.
-Implicit Types xs : list perm.
+Implicit Types γ : perm.
+Implicit Types γs : list perm.
 Implicit Types w : mtree K.
 Implicit Types v : val K.
 Implicit Types vs : list (val K).
@@ -50,42 +50,42 @@ Proof.
   * intros τ ws1 ws2 _ IH τ' Hw1; apply (ctree_typed_inv_l _ _ _ _ _ Hw1);
       clear τ' Hw1; intros Hws1 _ ?; f_equal.
     induction IH; decompose_Forall_hyps; f_equal; eauto.
-  * intros t wxbs1 wxbs2 _ IH _ τ' Hw1; apply (ctree_typed_inv_l _ _ _ _ _ Hw1);
+  * intros t wγbs1 wγbs2 _ IH _ τ' Hw1; apply (ctree_typed_inv_l _ _ _ _ _ Hw1);
       clear τ' Hw1; intros τs _ Hws1 _ _ _ ?; f_equal.
     revert τs Hws1; induction IH; intros; decompose_Forall_hyps; f_equal; eauto.
-  * intros t i w1 w2 xbs1 xbs2 _ ? _ _ τ' Hw1;
+  * intros t i w1 w2 γbs1 γbs2 _ ? _ _ τ' Hw1;
       apply (ctree_typed_inv_l _ _ _ _ _ Hw1); clear τ' Hw1.
     intros; decompose_Forall_hyps; f_equal'; eauto.
   * intros; by erewrite pbits_tag_subseteq by eauto.
-  * intros t i xs1 w2 xs2 _ Hxs _ _ τ' Hw1;
+  * intros t i γs1 w2 γs2 _ Hγs _ _ τ' Hw1;
       apply (ctree_typed_inv_l _ _ _ _ _ Hw1); clear τ' Hw1.
     intros. assert (bit_size_of Γ (unionT t) ≠ 0)
       by eauto using bit_size_of_ne_0, TCompound_valid.
-    destruct Hxs; decompose_Forall_hyps.
+    destruct Hγs; decompose_Forall_hyps.
 Qed.
-Lemma of_val_disjoint Γ Δ xs1 xs2 v τ :
-  ✓ Γ → (Γ,Δ) ⊢ v : τ → length xs1 = bit_size_of Γ τ → xs1 ⊥* xs2 →
-  Forall (not ∘ sep_unmapped) xs1 → Forall (not ∘ sep_unmapped) xs2 →
-  of_val Γ xs1 v ⊥ of_val Γ xs2 v.
+Lemma of_val_disjoint Γ Δ γs1 γs2 v τ :
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → length γs1 = bit_size_of Γ τ → γs1 ⊥* γs2 →
+  Forall (not ∘ sep_unmapped) γs1 → Forall (not ∘ sep_unmapped) γs2 →
+  of_val Γ γs1 v ⊥ of_val Γ γs2 v.
 Proof.
-  intros HΓ Hv. revert v τ Hv xs1 xs2.
-  assert (∀ xs (bs : list (bit K)),
-    Forall sep_unmapped (zip_with PBit xs bs) →
-    length xs ≠ 0 → length bs = length xs → Forall (not ∘ sep_unmapped) xs →
+  intros HΓ Hv. revert v τ Hv γs1 γs2.
+  assert (∀ γs (bs : list (bit K)),
+    Forall sep_unmapped (zip_with PBit γs bs) →
+    length γs ≠ 0 → length bs = length γs → Forall (not ∘ sep_unmapped) γs →
     False).
   { unfold sep_unmapped at 1; simpl.
     intros ????; rewrite <-Forall2_same_length;
       destruct 1; intros; decompose_Forall_hyps; naive_solver. }
   refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
   * constructor; auto using PBits_disjoint.
-  * intros vs τ Hvs IH _ xs1 xs2 Hlen Hxs Hxs1 Hxs2; constructor.
-    rewrite bit_size_of_array in Hlen. revert xs1 xs2 Hlen Hxs Hxs1 Hxs2.
+  * intros vs τ Hvs IH _ γs1 γs2 Hlen Hγs Hγs1 Hγs2; constructor.
+    rewrite bit_size_of_array in Hlen. revert γs1 γs2 Hlen Hγs Hγs1 Hγs2.
     induction IH; decompose_Forall_hyps; simplify_type_equality';
       constructor; rewrite ?zip_with_take,?zip_with_drop; auto.
-  * intros t vs τs Ht Hvs IH xs1 xs2 Hlen Hxs Hxs1 Hxs2.
+  * intros t vs τs Ht Hvs IH γs1 γs2 Hlen Hγs Hγs1 Hγs2.
     erewrite bit_size_of_struct in Hlen by eauto; clear Ht.
     erewrite fmap_type_of by eauto; unfold field_bit_padding.
-    constructor; revert vs xs1 xs2 Hvs IH Hlen Hxs Hxs1 Hxs2;
+    constructor; revert vs γs1 γs2 Hvs IH Hlen Hγs Hγs1 Hγs2;
       induction (bit_size_of_fields _ τs HΓ); intros; decompose_Forall_hyps;
       simplify_type_equality; constructor; simpl;
       rewrite ?zip_with_drop, ?zip_with_take; auto using PBits_BIndet_disjoint.
@@ -96,14 +96,14 @@ Proof.
       auto using PBits_BIndet_disjoint; intros [??]; eauto.
   * constructor; auto using PBits_disjoint.
 Qed.
-Lemma of_val_union Γ xs1 xs2 v :
-  of_val Γ (xs1 ∪* xs2) v = of_val Γ xs1 v ∪ of_val Γ xs2 v.
+Lemma of_val_union Γ γs1 γs2 v :
+  of_val Γ (γs1 ∪* γs2) v = of_val Γ γs1 v ∪ of_val Γ γs2 v.
 Proof.
-  revert v xs1 xs2. refine (val_ind_alt _ _ _ _ _ _); simpl.
+  revert v γs1 γs2. refine (val_ind_alt _ _ _ _ _ _); simpl.
   * intros; f_equal; auto using PBits_union.
-  * intros τ vs IH xs1 xs2; f_equal. revert xs1 xs2.
+  * intros τ vs IH γs1 γs2; f_equal. revert γs1 γs2.
     induction IH; intros; f_equal'; rewrite ?zip_with_take,?zip_with_drop; auto.
-  * intros s vs IH xs1 xs2; f_equal. revert xs1 xs2.
+  * intros s vs IH γs1 γs2; f_equal. revert γs1 γs2.
     generalize (field_bit_padding Γ (type_of <$> vs)).
     induction IH; intros [|??] ??; repeat f_equal';
       rewrite ?zip_with_drop, ?zip_with_take; auto using PBits_BIndet_union.
@@ -129,31 +129,31 @@ Proof.
   symmetry; erewrite ctree_flatten_of_val by eauto.
   eauto using PBits_perm_disjoint, @ctree_flatten_disjoint.
 Qed.
-Lemma ctree_merge_union_of_val Γ Δ xs1 xs2 v τ :
-  ✓ Γ → (Γ,Δ) ⊢ v : τ → Forall sep_valid xs1 → Forall (not ∘ sep_unmapped) xs1 →
-  length xs1 = bit_size_of Γ τ →
-  of_val Γ (xs1 ∪* xs2) v
-  = ctree_merge (∪) (of_val Γ xs1 v) (flip PBit BIndet <$> xs2).
+Lemma ctree_merge_union_of_val Γ Δ γs1 γs2 v τ :
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → Forall sep_valid γs1 → Forall (not ∘ sep_unmapped) γs1 →
+  length γs1 = bit_size_of Γ τ →
+  of_val Γ (γs1 ∪* γs2) v
+  = ctree_merge (∪) (of_val Γ γs1 v) (flip PBit BIndet <$> γs2).
 Proof.
-  intros HΓ Hv. revert v τ Hv xs1 xs2.
+  intros HΓ Hv. revert v τ Hv γs1 γs2.
   refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
   * intros; f_equal; auto using PBits_BIndet_union_r.
-  * intros vs τ Hvs IH _ xs1 xs2 Hxs1 Hxs1'. rewrite bit_size_of_array.
-    intros Hlen; f_equal. revert xs1 xs2 Hxs1 Hxs1' Hlen.
+  * intros vs τ Hvs IH _ γs1 γs2 Hγs1 Hγs1'. rewrite bit_size_of_array.
+    intros Hlen; f_equal. revert γs1 γs2 Hγs1 Hγs1' Hlen.
     induction IH; intros; decompose_Forall_hyps; simplify_type_equality; auto.
     erewrite zip_with_take, zip_with_drop, <-fmap_take, <-fmap_drop,
       ctree_flatten_length by eauto using of_val_typed. f_equal; auto.
-  * intros t vs τs Ht Hvs IH xs1 xs2 Hxs1 Hxs1'.
+  * intros t vs τs Ht Hvs IH γs1 γs2 Hγs1 Hγs1'.
     erewrite bit_size_of_struct by eauto; intros Hlen; f_equal.
     unfold field_bit_padding; erewrite fmap_type_of by eauto.
-    clear Ht. revert vs xs1 xs2 Hvs IH Hxs1 Hxs1' Hlen.
+    clear Ht. revert vs γs1 γs2 Hvs IH Hγs1 Hγs1' Hlen.
     induction (bit_size_of_fields _ τs HΓ); intros;
       decompose_Forall_hyps; simplify_type_equality; auto.
     erewrite !zip_with_drop, !zip_with_take, <-!fmap_drop, <-!fmap_take,
       ctree_flatten_length, fmap_length, take_length, drop_length,
       Min.min_l, PBits_BIndet_union by (eauto using of_val_typed; lia);
       repeat f_equal; eauto 6.
-  * intros t i τs v τ ??? IH xs1 xs2 ???; simplify_type_equality'.
+  * intros t i τs v τ ??? IH γs1 γs2 ???; simplify_type_equality'.
     by erewrite zip_with_take, zip_with_drop, <-fmap_take, <-fmap_drop, IH,
       ctree_flatten_length, PBits_BIndet_union by eauto using of_val_typed.
   * intros; f_equal; auto using PBits_BIndet_union_r.

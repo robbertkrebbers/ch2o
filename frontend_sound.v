@@ -478,9 +478,9 @@ Ltac weaken :=
   | _ => progress simplify_equality'
   end.
 
-Lemma insert_object_valid S S' o v x τ :
-  insert_object x v S = mret o S' → ✓ S →
-  (to_env S, '{to_mem S}) ⊢ v : τ → sep_valid x → ¬sep_unmapped x →
+Lemma insert_object_valid S S' o v γ τ :
+  insert_object γ v S = mret o S' → ✓ S →
+  (to_env S, '{to_mem S}) ⊢ v : τ → sep_valid γ → ¬sep_unmapped γ →
   '{to_mem S'} ⊢ o : τ ∧ index_alive '{to_mem S'} o
   ∧ to_globals S = to_globals S' ∧ ✓ S' ∧ S ⊆ S'.
 Proof.
@@ -493,10 +493,10 @@ Proof.
     eauto using map_Forall_impl, global_decl_valid_weaken.
   eapply mem_alloc_valid'; eauto using val_typed_weaken, mem_alloc_forward'.
 Qed.
-Lemma update_object_valid S S' o x v τ :
-  update_object o x v S = mret () S' → ✓ S →
+Lemma update_object_valid S S' o γ v τ :
+  update_object o γ v S = mret () S' → ✓ S →
   '{to_mem S} ⊢ o : τ → index_alive '{to_mem S} o →
-  (to_env S, '{to_mem S}) ⊢ v : τ → sep_valid x → ¬sep_unmapped x →
+  (to_env S, '{to_mem S}) ⊢ v : τ → sep_valid γ → ¬sep_unmapped γ →
   ✓ S' ∧ S ⊆ S'.
 Proof.
   destruct S; unfold update_object; intros ? [] ?????; error_proceed.

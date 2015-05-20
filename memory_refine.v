@@ -25,8 +25,8 @@ Implicit Types v : val K.
 Implicit Types m : mem K.
 Implicit Types α β : bool.
 Implicit Types βs : list bool.
-Implicit Types xb : pbit K.
-Implicit Types xbs : list (pbit K).
+Implicit Types γb : pbit K.
+Implicit Types γbs : list (pbit K).
 Implicit Types Ω : lockset.
 
 Hint Immediate ctree_refine_typed_l ctree_refine_typed_r.
@@ -571,22 +571,22 @@ Proof.
   * intros τ n ws1 ws2 -> ? IH _ βs. rewrite bit_size_of_array. intros Hlen.
     constructor. revert βs Hlen. induction IH; intros; decompose_Forall_hyps;
       erewrite ?Forall2_length by eauto using ctree_flatten_refine; auto.
-  * intros t τs wxbss1 wxbss2 Ht Hws IH Hxbss _ _ Hpad βs.
+  * intros t τs wγbss1 wγbss2 Ht Hws IH Hγbss _ _ Hpad βs.
     erewrite bit_size_of_struct by eauto; clear Ht. constructor.
-    + revert wxbss1 wxbss2 βs Hws IH Hxbss Hlen Hpad. unfold field_bit_padding.
+    + revert wγbss1 wγbss2 βs Hws IH Hγbss Hlen Hpad. unfold field_bit_padding.
       induction (bit_size_of_fields _ τs HΓ);
-        intros [|[w1 xbs1] ?] [|[w2 xbs2] ?];
+        intros [|[w1 γbs1] ?] [|[w2 γbs2] ?];
         do 2 inversion_clear 1; intros; decompose_Forall_hyps; [done|].
-      erewrite ?ctree_flatten_length, <-(Forall2_length _ xbs1 xbs2) by eauto.
+      erewrite ?ctree_flatten_length, <-(Forall2_length _ γbs1 γbs2) by eauto.
       constructor; eauto.
-    + clear Hlen IH Hpad. revert βs. induction Hws as [|[w1 xbs1] [w2 xbs2]];
+    + clear Hlen IH Hpad. revert βs. induction Hws as [|[w1 γbs1] [w2 γbs2]];
         intros; decompose_Forall_hyps; auto.
-      erewrite ?ctree_flatten_length, <-(Forall2_length _ xbs1 xbs2) by eauto.
+      erewrite ?ctree_flatten_length, <-(Forall2_length _ γbs1 γbs2) by eauto.
       constructor; eauto using pbits_unlock_refine.
   * intros. erewrite Forall2_length by eauto using ctree_flatten_refine.
     constructor; auto using pbits_unlock_refine.
   * constructor; auto using pbits_unlock_refine.
-  * intros t i τs w1 xbs1 xbs2 τ ???????? βs ?.
+  * intros t i τs w1 γbs1 γbs2 τ ???????? βs ?.
     erewrite ctree_flatten_length by eauto.
     constructor; auto using pbits_unlock_unshared.
     rewrite ctree_flatten_merge, <-zip_with_app, take_drop by auto.
@@ -596,15 +596,15 @@ Lemma mem_unlock_refine Γ α f Δ1 Δ2 m1 m2 Ω1 Ω2 :
   ✓ Γ → m1 ⊑{Γ,α,f@Δ1↦Δ2} m2 → Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 →
   mem_unlock Ω1 m1 ⊑{Γ,α,f@Δ1↦Δ2} mem_unlock Ω2 m2.
 Proof.
-  assert (∀ xb β,
-    pbit_unlock_if (pbit_indetify xb) β = pbit_indetify (pbit_unlock_if xb β)).
+  assert (∀ γb β,
+    pbit_unlock_if (pbit_indetify γb) β = pbit_indetify (pbit_unlock_if γb β)).
   { by intros ? []. }
-  assert (∀ xb β, sep_unshared xb → sep_unshared (pbit_unlock_if xb β)).
+  assert (∀ γb β, sep_unshared γb → sep_unshared (pbit_unlock_if γb β)).
   { intros ? []; eauto using pbit_unlock_unshared. }
-  assert (∀ n xbs,
-    length xbs = n → zip_with pbit_unlock_if xbs (replicate n false) = xbs).
-  { intros n xbs <-. rewrite zip_with_replicate_r by auto.
-    by elim xbs; intros; f_equal'. }
+  assert (∀ n γbs,
+    length γbs = n → zip_with pbit_unlock_if γbs (replicate n false) = γbs).
+  { intros n γbs <-. rewrite zip_with_replicate_r by auto.
+    by elim γbs; intros; f_equal'. }
   intros ? (Hm1&Hm2&?&Hm) (_&_&_&HΩ);
     split; split_ands; auto using mem_unlock_valid; intros o1 o2 r w1 μ ? Hw1.
   destruct m1 as [m1], m2 as [m2], Ω1 as [Ω1 HΩ1], Ω2 as [Ω2 HΩ2]; simpl in *.

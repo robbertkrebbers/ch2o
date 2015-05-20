@@ -216,43 +216,43 @@ Section operations.
     match w with
     | MBase τb bs => VBase (base_val_unflatten Γ τb (tagged_tag <$> bs))
     | MArray τ ws => VArray τ (to_val Γ <$> ws)
-    | MStruct t wxbss => VStruct t (to_val Γ ∘ fst <$> wxbss)
+    | MStruct t wγbss => VStruct t (to_val Γ ∘ fst <$> wγbss)
     | MUnion t i w _ => VUnion t i (to_val Γ w)
     | MUnionAll t bs => val_unflatten Γ (unionT t) (tagged_tag <$> bs)
     end.
   Definition array_of_val (Γ : env K) (f : list perm → val K → mtree K) :
       list perm → list (val K) → list (mtree K) :=
-    fix go xs vs :=
+    fix go γs vs :=
     match vs with
     | [] => []
     | v :: vs =>
        let sz := bit_size_of Γ (type_of v) in
-       f (take sz xs) v :: go (drop sz xs) vs
+       f (take sz γs) v :: go (drop sz γs) vs
     end.
   Definition struct_of_val (Γ : env K) (f : list perm → val K → mtree K) :
       list perm → list (val K) → list nat → list (mtree K * list (pbit K)) :=
-    fix go xs vs pads :=
+    fix go γs vs pads :=
     match vs, pads with
     | v :: vs, pad :: pads =>
        let sz := bit_size_of Γ (type_of v) in
-       let xs' := drop sz xs in
-       (f (take sz xs) v,
-        flip PBit BIndet <$> take pad xs') :: go (drop pad xs') vs pads
+       let γs' := drop sz γs in
+       (f (take sz γs) v,
+        flip PBit BIndet <$> take pad γs') :: go (drop pad γs') vs pads
     | _, _ => []
     end.
-  Fixpoint of_val (Γ : env K) (xs : list perm) (v : val K) : mtree K :=
+  Fixpoint of_val (Γ : env K) (γs : list perm) (v : val K) : mtree K :=
     match v with
     | VBase vb =>
-       MBase (type_of vb) (zip_with PBit xs (base_val_flatten Γ vb))
-    | VArray τ vs => MArray τ (array_of_val Γ (of_val Γ) xs vs)
+       MBase (type_of vb) (zip_with PBit γs (base_val_flatten Γ vb))
+    | VArray τ vs => MArray τ (array_of_val Γ (of_val Γ) γs vs)
     | VStruct t vs =>
        let pads := field_bit_padding Γ (type_of <$> vs) in
-       MStruct t (struct_of_val Γ (of_val Γ) xs vs pads)
+       MStruct t (struct_of_val Γ (of_val Γ) γs vs pads)
     | VUnion t i v =>
        let sz := bit_size_of Γ (type_of v) in
-       MUnion t i (of_val Γ (take sz xs) v) (flip PBit BIndet <$> drop sz xs)
+       MUnion t i (of_val Γ (take sz γs) v) (flip PBit BIndet <$> drop sz γs)
     | VUnionAll t vs =>
-       MUnionAll t (zip_with PBit xs (val_flatten Γ (VUnionAll t vs)))
+       MUnionAll t (zip_with PBit γs (val_flatten Γ (VUnionAll t vs)))
     end.
 
   Global Instance vtype_check:
@@ -366,10 +366,10 @@ Implicit Types τ : type K.
 Implicit Types τs : list (type K).
 Implicit Types b : bit K.
 Implicit Types bs : list (bit K).
-Implicit Types x : perm.
-Implicit Types xs : list perm.
-Implicit Types xb : pbit K.
-Implicit Types xbs : list (pbit K).
+Implicit Types γ : perm.
+Implicit Types γs : list perm.
+Implicit Types γb : pbit K.
+Implicit Types γbs : list (pbit K).
 Implicit Types w : mtree K.
 Implicit Types ws : list (mtree K).
 Implicit Types rs : ref_seg K.
@@ -894,7 +894,7 @@ Proof.
   intros ? Hw ?. revert w τ Hw. refine (ctree_typed_ind _ _ _ _ _ _ _ _).
   * intros; f_equal'; auto using base_val_unflatten_weaken.
   * intros; f_equal'; auto using Forall_fmap_ext_1.
-  * intros t wxbss τs _ _ IH _ _ _; f_equal'. induction IH; f_equal'; auto.
+  * intros t wγbss τs _ _ IH _ _ _; f_equal'. induction IH; f_equal'; auto.
   * by intros; f_equal'.
   * eauto using val_unflatten_weaken, TCompound_valid.
 Qed.
@@ -910,29 +910,29 @@ Proof.
 Qed.
 Lemma to_val_union_free_inv Γ w : val_union_free (to_val Γ w) → union_free w.
 Proof.
-  induction w as [|ws IH|s wxbss IH| | ] using @ctree_ind_alt;
+  induction w as [|ws IH|s wγbss IH| | ] using @ctree_ind_alt;
     simpl; inversion_clear 1; econstructor; eauto.
   * induction IH; decompose_Forall_hyps; auto.
   * induction IH; decompose_Forall_hyps; auto.
 Qed.
-Lemma to_val_unflatten Γ τ xbs :
-  ✓ Γ → ✓{Γ} τ → to_val Γ (ctree_unflatten Γ τ xbs)
-  = val_unflatten Γ τ (tagged_tag <$> xbs).
+Lemma to_val_unflatten Γ τ γbs :
+  ✓ Γ → ✓{Γ} τ → to_val Γ (ctree_unflatten Γ τ γbs)
+  = val_unflatten Γ τ (tagged_tag <$> γbs).
 Proof.
-  intros HΓ Hτ. revert τ Hτ xbs. refine (type_env_ind _ HΓ _ _ _ _).
-  * intros τb _ xbs. by rewrite ctree_unflatten_base, val_unflatten_base.
-  * intros τ n _ IH _ xbs.
-    rewrite ctree_unflatten_array, val_unflatten_array; f_equal'. revert xbs.
+  intros HΓ Hτ. revert τ Hτ γbs. refine (type_env_ind _ HΓ _ _ _ _).
+  * intros τb _ γbs. by rewrite ctree_unflatten_base, val_unflatten_base.
+  * intros τ n _ IH _ γbs.
+    rewrite ctree_unflatten_array, val_unflatten_array; f_equal'. revert γbs.
     induction n; intros; f_equal'; rewrite <-?fmap_drop, <-?fmap_take; auto.
-  * intros [] t τs Ht _ IH _ xbs; erewrite ctree_unflatten_compound,
+  * intros [] t τs Ht _ IH _ γbs; erewrite ctree_unflatten_compound,
       val_unflatten_compound by eauto; f_equal'.
-    { unfold struct_unflatten. clear Ht. revert xbs.
+    { unfold struct_unflatten. clear Ht. revert γbs.
       induction (bit_size_of_fields _ τs HΓ); intros; decompose_Forall_hyps;
         rewrite <-?fmap_drop, <-?fmap_take; f_equal'; auto. }
     by erewrite val_unflatten_compound by eauto.
 Qed.
 Lemma to_val_ctree_map Γ f w :
-  (∀ xb, tagged_tag (f xb) = tagged_tag xb) →
+  (∀ γb, tagged_tag (f γb) = tagged_tag γb) →
   to_val Γ (ctree_map f w) = to_val Γ w.
 Proof.
   intros ?. induction w using @ctree_ind_alt; f_equal'; auto.
@@ -945,89 +945,89 @@ Lemma to_val_unmapped Γ Δ w τ :
   ✓ Γ → (Γ,Δ) ⊢ w : τ → ctree_unmapped w → to_val Γ w = val_new Γ τ.
 Proof.
   intros HΓ; revert w τ; refine (ctree_typed_ind _ _ _ _ _ _ _ _); simpl.
-  * intros τb xbs ????; rewrite val_new_base, pbits_unmapped_tag by done.
+  * intros τb γbs ????; rewrite val_new_base, pbits_unmapped_tag by done.
     by case_decide; subst; rewrite ?base_val_unflatten_indet by auto.
   * intros ws τ _ IH _ ?; rewrite val_new_array; f_equal.
     induction IH; decompose_Forall_hyps; f_equal'; auto.
-  * intros t wxbss τs Hs _ IH _ _ _ ?.
+  * intros t wγbss τs Hs _ IH _ _ _ ?.
     erewrite val_new_compound by eauto; f_equal; clear Hs.
     induction IH; decompose_Forall_hyps; f_equal'; auto.
-  * intros t i τs w xbs τ ?????????; decompose_Forall_hyps; tauto.
-  * intros t τs xbs ????; unfold val_new.
+  * intros t i τs w γbs τ ?????????; decompose_Forall_hyps; tauto.
+  * intros t τs γbs ????; unfold val_new.
     rewrite pbits_unmapped_tag by done; congruence.
 Qed.
   
 (** ** Properties of the [of_val] function *)
-Lemma ctree_flatten_of_val Γ Δ xs v τ :
-  ✓ Γ → (Γ,Δ) ⊢ v : τ → length xs = bit_size_of Γ τ →
-  ctree_flatten (of_val Γ xs v) = zip_with PBit xs (val_flatten Γ v).
+Lemma ctree_flatten_of_val Γ Δ γs v τ :
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → length γs = bit_size_of Γ τ →
+  ctree_flatten (of_val Γ γs v) = zip_with PBit γs (val_flatten Γ v).
 Proof.
-  intros HΓ Hv. revert v τ Hv xs. refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
+  intros HΓ Hv. revert v τ Hv γs. refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
   * done.
-  * intros vs τ Hvs IH _ xs; rewrite bit_size_of_array; revert xs.
-    induction IH; intros xs Hxs; decompose_Forall_hyps;
+  * intros vs τ Hvs IH _ γs; rewrite bit_size_of_array; revert γs.
+    induction IH; intros γs Hγs; decompose_Forall_hyps;
       erewrite ?zip_with_nil_r, ?type_of_correct,
       ?zip_with_app_r, ?val_flatten_length by eauto; f_equal; auto.
-  * intros t vs τs Ht Hvs IH xs.
+  * intros t vs τs Ht Hvs IH γs.
     erewrite Ht, bit_size_of_struct, fmap_type_of by eauto; simpl.
-    unfold field_bit_padding. clear Ht. revert vs Hvs IH xs.
+    unfold field_bit_padding. clear Ht. revert vs Hvs IH γs.
     induction (bit_size_of_fields _ τs HΓ); intros; decompose_Forall_hyps;
       erewrite ?zip_with_nil_r, ?type_of_correct, ?resize_ge,
       <-?(associative_L (++)), ?zip_with_app_r, ?val_flatten_length,
       ?replicate_length, ?zip_with_replicate_r by eauto; repeat f_equal; auto.
-  * intros t i τs v τ ??? IH xs ?. erewrite type_of_correct, resize_ge,
+  * intros t i τs v τ ??? IH γs ?. erewrite type_of_correct, resize_ge,
       zip_with_app_r, val_flatten_length, zip_with_replicate_r by eauto.
     f_equal; auto.
   * done.
 Qed.
-Lemma ctree_flatten_of_val' Γ Δ xs v τ :
-  ✓ Γ → (Γ,Δ) ⊢ v : τ → length xs = bit_size_of Γ τ →
-  tagged_tag <$> ctree_flatten (of_val Γ xs v) = val_flatten Γ v.
+Lemma ctree_flatten_of_val' Γ Δ γs v τ :
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → length γs = bit_size_of Γ τ →
+  tagged_tag <$> ctree_flatten (of_val Γ γs v) = val_flatten Γ v.
 Proof. intros. by erewrite ctree_flatten_of_val, fmap_zip_with_r by eauto. Qed.
-Lemma of_val_unshared Γ Δ xs v τ :
-  ✓ Γ → (Γ,Δ) ⊢ v : τ → length xs = bit_size_of Γ τ → Forall sep_unshared xs →
-  Forall (not ∘ sep_unmapped) xs → ctree_unshared (of_val Γ xs v).
+Lemma of_val_unshared Γ Δ γs v τ :
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → length γs = bit_size_of Γ τ → Forall sep_unshared γs →
+  Forall (not ∘ sep_unmapped) γs → ctree_unshared (of_val Γ γs v).
 Proof.
   intros. erewrite ctree_flatten_of_val by eauto; eauto using PBits_unshared.
 Qed.
-Lemma of_val_mapped Γ Δ xs v τ :
-  ✓ Γ → (Γ,Δ) ⊢ v : τ → length xs = bit_size_of Γ τ →
-  Forall (not ∘ sep_unmapped) xs →
-  ctree_Forall (not ∘ sep_unmapped) (of_val Γ xs v).
+Lemma of_val_mapped Γ Δ γs v τ :
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → length γs = bit_size_of Γ τ →
+  Forall (not ∘ sep_unmapped) γs →
+  ctree_Forall (not ∘ sep_unmapped) (of_val Γ γs v).
 Proof.
   intros. erewrite ctree_flatten_of_val by eauto. eauto using PBits_mapped.
 Qed.
-Lemma of_val_typed Γ Δ xs v τ :
-  ✓ Γ → (Γ,Δ) ⊢ v : τ → length xs = bit_size_of Γ τ → Forall sep_valid xs →
-  Forall (not ∘ sep_unmapped) xs → (Γ,Δ) ⊢ of_val Γ xs v : τ.
+Lemma of_val_typed Γ Δ γs v τ :
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → length γs = bit_size_of Γ τ → Forall sep_valid γs →
+  Forall (not ∘ sep_unmapped) γs → (Γ,Δ) ⊢ of_val Γ γs v : τ.
 Proof.
-  intros HΓ Hv. revert v τ Hv xs. refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
-  * intros vb τb ? xs ???. erewrite type_of_correct by eauto.
+  intros HΓ Hv. revert v τ Hv γs. refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
+  * intros vb τb ? γs ???. erewrite type_of_correct by eauto.
     typed_constructor.
     + eauto using base_val_typed_type_valid.
     + eauto using PBits_valid, base_val_flatten_valid.
     + erewrite zip_with_length, base_val_flatten_length by eauto; lia.
-  * intros vs τ Hvs IH Hvs' xs. rewrite bit_size_of_array; intros Hlen  Hxs Hxs'.
+  * intros vs τ Hvs IH Hvs' γs. rewrite bit_size_of_array; intros Hlen  Hγs Hγs'.
     typed_constructor; trivial.
-    + clear Hvs Hvs' Hxs Hxs' Hlen IH. revert xs.
+    + clear Hvs Hvs' Hγs Hγs' Hlen IH. revert γs.
       induction vs; intros; f_equal'; auto.
-    + revert xs Hxs Hxs' Hlen. clear Hvs'. induction IH; intros;
+    + revert γs Hγs Hγs' Hlen. clear Hvs'. induction IH; intros;
         decompose_Forall_hyps; erewrite ?type_of_correct by eauto;
         constructor; auto.
-  * intros t vs τs Ht Hvs IH xs.
-    erewrite bit_size_of_struct, fmap_type_of by eauto; intros Hlen Hxs Hxs'.
+  * intros t vs τs Ht Hvs IH γs.
+    erewrite bit_size_of_struct, fmap_type_of by eauto; intros Hlen Hγs Hγs'.
     typed_constructor; eauto; clear Ht; unfold field_bit_padding.
-    + revert vs xs Hvs IH Hxs Hxs' Hlen.
+    + revert vs γs Hvs IH Hγs Hγs' Hlen.
       induction (bit_size_of_fields _ τs HΓ); intros; decompose_Forall_hyps;
         erewrite ?type_of_correct by eauto; constructor; simpl; auto.
-    + clear IH. revert vs xs Hvs Hxs Hxs' Hlen.
+    + clear IH. revert vs γs Hvs Hγs Hγs' Hlen.
       induction (bit_size_of_fields _ τs HΓ); intros; decompose_Forall_hyps;
         erewrite ?type_of_correct by eauto; constructor; simpl; auto.
       erewrite <-zip_with_replicate_r by eauto; eauto 7 using PBits_valid.
-    + clear Hxs Hxs' Hlen IH. revert xs vs Hvs.
+    + clear Hγs Hγs' Hlen IH. revert γs vs Hvs.
       induction (bit_size_of_fields _ τs HΓ); intros; decompose_Forall_hyps;
         constructor; simpl; eauto using PBits_indetify.
-    + clear Hxs Hxs' IH. revert vs xs Hvs Hlen.
+    + clear Hγs Hγs' IH. revert vs γs Hvs Hlen.
       induction (bit_size_of_fields _ τs HΓ); intros; decompose_Forall_hyps;
         erewrite ?type_of_correct by eauto; f_equal; auto.
   * intros. erewrite type_of_correct by eauto. typed_constructor; eauto.
@@ -1036,24 +1036,24 @@ Proof.
     + auto using PBits_indetify.
     + rewrite fmap_length; solve_length.
     + intros [Hc _]. eapply (ctree_Forall_not sep_unmapped Γ Δ
-        (of_val Γ (take (bit_size_of Γ τ) xs) v)); eauto using of_val_mapped.
-  * intros t vs τs Ht Hvs IH Hrep xs ???.
+        (of_val Γ (take (bit_size_of Γ τ) γs) v)); eauto using of_val_mapped.
+  * intros t vs τs Ht Hvs IH Hrep γs ???.
     destruct (bits_list_join _ _) as [bs'|] eqn:Hbs'; simpl.
     { typed_constructor; eauto.
       + eauto using PBits_valid, val_union_to_bits_valid.
       + erewrite zip_with_length, bits_list_join_length by eauto; auto; lia. }
     typed_constructor; eauto using PBits_valid.
 Qed.
-Lemma of_val_weaken Γ1 Γ2 Δ1 xs v τ :
-  ✓ Γ1 → Γ1 ⊆ Γ2 → (Γ1,Δ1) ⊢ v : τ → of_val Γ1 xs v = of_val Γ2 xs v.
+Lemma of_val_weaken Γ1 Γ2 Δ1 γs v τ :
+  ✓ Γ1 → Γ1 ⊆ Γ2 → (Γ1,Δ1) ⊢ v : τ → of_val Γ1 γs v = of_val Γ2 γs v.
 Proof.
-  intros HΓ ? Hv. revert v τ Hv xs. refine (val_typed_ind _ _ _ _ _ _ _ _).
+  intros HΓ ? Hv. revert v τ Hv γs. refine (val_typed_ind _ _ _ _ _ _ _ _).
   * intros; f_equal'; eauto using base_val_flatten_weaken with f_equal.
-  * intros vs τ ? IH _ xs; f_equal'; revert xs.
+  * intros vs τ ? IH _ γs; f_equal'; revert γs.
     induction IH; intros; decompose_Forall_hyps; simplify_type_equality;
       erewrite ?(bit_size_of_weaken Γ1 Γ2) by eauto using val_typed_type_valid;
       auto with f_equal.
-  * intros t vs τs Ht Hvs IH xs; f_equal'; revert xs.
+  * intros t vs τs Ht Hvs IH γs; f_equal'; revert γs.
     erewrite fmap_type_of, field_bit_padding_weaken by eauto; clear Ht.
     generalize (field_bit_padding Γ2 τs).
     induction IH; intros [|??] ?; decompose_Forall_hyps; simplify_type_equality;
@@ -1065,53 +1065,53 @@ Proof.
   * intros; unfold of_val; do 2 f_equal; eapply val_flatten_weaken; eauto.
     econstructor; eauto.
 Qed.
-Lemma of_val_type_of Γ xs v : type_of (of_val Γ xs v) = type_of v.
+Lemma of_val_type_of Γ γs v : type_of (of_val Γ γs v) = type_of v.
 Proof.
   destruct v as [|? vs _| | |] using val_ind_alt;
     simplify_equality'; rewrite ?fmap_length; f_equal; auto.
-  revert xs; induction vs; intros; f_equal'; auto.
+  revert γs; induction vs; intros; f_equal'; auto.
 Qed.
-Lemma to_of_val Γ Δ xs v τ :
-  ✓ Γ → (Γ,Δ) ⊢ v : τ → length xs = bit_size_of Γ τ →
-  to_val Γ (of_val Γ xs v) = freeze true v.
+Lemma to_of_val Γ Δ γs v τ :
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → length γs = bit_size_of Γ τ →
+  to_val Γ (of_val Γ γs v) = freeze true v.
 Proof.
-  intros HΓ Hvτ. revert v τ Hvτ xs.
+  intros HΓ Hvτ. revert v τ Hvτ γs.
   refine (val_typed_ind _ _ _ _ _ _ _ _); simpl.
   * intros. by erewrite type_of_correct, fmap_zip_with_r,
       base_val_unflatten_flatten by eauto.
-  * intros vs τ Hvs IH _ xs; rewrite bit_size_of_array; intros Hxs; f_equal.
-    revert xs Hxs. induction IH; intros; decompose_Forall_hyps;
+  * intros vs τ Hvs IH _ γs; rewrite bit_size_of_array; intros Hγs; f_equal.
+    revert γs Hγs. induction IH; intros; decompose_Forall_hyps;
       erewrite ?type_of_correct by eauto; f_equal; auto.
-  * intros t vs τs Ht Hvs IH xs; erewrite fmap_type_of,
-      bit_size_of_struct by eauto; intros Hxs; f_equal.
-    revert vs xs Hvs IH Hxs. unfold field_bit_padding. clear Ht.
+  * intros t vs τs Ht Hvs IH γs; erewrite fmap_type_of,
+      bit_size_of_struct by eauto; intros Hγs; f_equal.
+    revert vs γs Hvs IH Hγs. unfold field_bit_padding. clear Ht.
     induction (bit_size_of_fields _ τs HΓ); intros; decompose_Forall_hyps;
       erewrite ?type_of_correct by eauto; f_equal; eauto.
   * intros; erewrite type_of_correct by eauto; f_equal; auto.
-  * intros t vs τs Ht Hvs IH Hrepr xs ?.
+  * intros t vs τs Ht Hvs IH Hrepr γs ?.
     destruct (vals_representable_as_bits Γ Δ (bit_size_of Γ (unionT t)) vs τs)
      as (bs&->&?&?&Hbs); simpl; eauto using bit_size_of_union.
     by erewrite fmap_zip_with_r,
       val_unflatten_compound, Hbs, vals_unflatten_frozen by eauto.
 Qed.
-Lemma of_val_union_free Γ xs v :
-  val_union_free v → union_free (of_val Γ xs v).
+Lemma of_val_union_free Γ γs v :
+  val_union_free v → union_free (of_val Γ γs v).
 Proof.
-  intros Hv. revert xs. induction Hv as [|? vs _ IH|s vs _ IH|]
-    using @val_union_free_ind_alt; intros xs; simpl; econstructor; eauto.
-  * revert xs. induction IH; simpl; constructor; auto.
-  * generalize (field_bit_padding Γ (type_of <$> vs)). revert xs.
+  intros Hv. revert γs. induction Hv as [|? vs _ IH|s vs _ IH|]
+    using @val_union_free_ind_alt; intros γs; simpl; econstructor; eauto.
+  * revert γs. induction IH; simpl; constructor; auto.
+  * generalize (field_bit_padding Γ (type_of <$> vs)). revert γs.
     induction IH; intros ? [|??]; constructor; simpl; auto.
 Qed.
-Lemma to_val_new Γ x τ :
-  ✓ Γ → ✓{Γ} τ → to_val Γ (ctree_new Γ (PBit x BIndet) τ) = val_new Γ τ.
+Lemma to_val_new Γ γ τ :
+  ✓ Γ → ✓{Γ} τ → to_val Γ (ctree_new Γ (PBit γ BIndet) τ) = val_new Γ τ.
 Proof.
   intros. unfold ctree_new. by rewrite to_val_unflatten, fmap_replicate.
 Qed.
-Lemma of_val_new Γ τ x :
+Lemma of_val_new Γ τ γ :
   ✓ Γ → ✓{Γ} τ →
-  of_val Γ (replicate (bit_size_of Γ τ) x) (val_new Γ τ)
-  = ctree_new Γ (PBit x BIndet) τ.
+  of_val Γ (replicate (bit_size_of Γ τ) γ) (val_new Γ τ)
+  = ctree_new Γ (PBit γ BIndet) τ.
 Proof.
   intros HΓ. revert τ. refine (type_env_ind _ HΓ _ _ _ _).
   * intros. rewrite ctree_new_base, val_new_base.
@@ -1137,17 +1137,17 @@ Proof.
     erewrite (bits_subseteq_indets bs') by eauto using Forall_replicate_eq.
     apply zip_with_replicate.
 Qed.
-Lemma ctree_map_of_val Γ f g xs v :
-  (∀ x b, f (PBit x b) = PBit (g x) b) →
-  ctree_map f (of_val Γ xs v) = of_val Γ (g <$> xs) v.
+Lemma ctree_map_of_val Γ f g γs v :
+  (∀ γ b, f (PBit γ b) = PBit (g γ) b) →
+  ctree_map f (of_val Γ γs v) = of_val Γ (g <$> γs) v.
 Proof.
-  intros ?. revert xs. assert (∀ xs bs,
-    f <$> zip_with PBit xs bs = zip_with PBit (g <$> xs) bs).
-  { induction xs; intros [|??]; f_equal'; auto. }
-  assert (∀ xs, f <$> flip PBit BIndet <$> xs = flip PBit BIndet <$> g <$> xs).
+  intros ?. revert γs. assert (∀ γs bs,
+    f <$> zip_with PBit γs bs = zip_with PBit (g <$> γs) bs).
+  { induction γs; intros [|??]; f_equal'; auto. }
+  assert (∀ γs, f <$> flip PBit BIndet <$> γs = flip PBit BIndet <$> g <$> γs).
   { intros. rewrite <-!list_fmap_compose. apply list_fmap_ext; simpl; auto. }
   induction v as [|τ vs IH|s vs IH| |] using @val_ind_alt; simpl;
-    intros xs; rewrite <-?fmap_drop, <-?fmap_take; f_equal'; revert xs; auto.
+    intros γs; rewrite <-?fmap_drop, <-?fmap_take; f_equal'; revert γs; auto.
   * induction IH; intros; f_equal'; rewrite <-?fmap_take, <-?fmap_drop; auto.
   * generalize (field_bit_padding Γ (type_of <$> vs)).
     induction IH; intros [|??] ?; f_equal';
