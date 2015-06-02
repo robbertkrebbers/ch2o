@@ -30,6 +30,7 @@ Implicit Types γbs : list (pbit K).
 Implicit Types Ω : lockset.
 
 Hint Immediate ctree_refine_typed_l ctree_refine_typed_r.
+Hint Immediate vals_refine_typed_l vals_refine_typed_r.
 Hint Resolve Forall_app_2 Forall2_app.
 Hint Immediate cmap_lookup_typed val_typed_type_valid.
 
@@ -37,7 +38,9 @@ Ltac solve_length := repeat first
   [ rewrite take_length | rewrite drop_length | rewrite app_length
   | rewrite zip_with_length | rewrite replicate_length | rewrite resize_length
   | rewrite fmap_length | erewrite ctree_flatten_length by eauto
-  | rewrite to_bools_length ]; lia.
+  | rewrite to_bools_length 
+  | match goal with H : Forall2 _ _ _ |- _ => apply Forall2_length in H end ];
+  lia.
 Hint Extern 0 (length _ = _) => solve_length.
 Hint Extern 0 (_ ≤ length _) => solve_length.
 Hint Extern 0 (length _ ≤ _) => solve_length.
@@ -300,23 +303,32 @@ Lemma mem_alloc_list_refine' Γ α f m1 m2 os1 os2 vs1 vs2 τs :
   (**i 3.) *) meminj_extend f f' '{m1} '{m2}.
 Proof.
   rewrite <-!Forall2_same_length. intros ? Hm Hvs Hovs1 Hovs2 Hos1 Hos2.
-  revert f τs os2 vs2 m1 m2 Hm Hos1 Hos2 Hvs Hovs2.
+  revert τs os2 vs2 Hos1 Hos2 Hvs Hovs2.
   induction Hovs1 as [|o1 v1 os1 vs1 ?? IH];
-    intros f [|τ τs] [|o2 os2] [|v2 vs2] m1 m2; inversion_clear 2;
+    intros [|τ τs] [|o2 os2] [|v2 vs2]; inversion_clear 1;
     inversion_clear 1; inversion_clear 1; intros; decompose_Forall_hyps.
   { eauto using meminj_extend_reflexive. }
   assert ((Γ,'{m1}) ⊢ v1 : τ) by eauto using val_refine_typed_l.
   assert ((Γ,'{m2}) ⊢ v2 : τ) by eauto using val_refine_typed_r.
   assert (✓{Γ} τ) by eauto using val_typed_type_valid.
-  destruct (mem_alloc_refine' Γ α f m1 m2 o1 o2 false perm_full v1 v2 τ)
-    as (f'&?&?&?); auto using perm_full_mapped,
-    perm_full_unshared; simplify_type_equality.
-  edestruct (IH f' τs os2 vs2) as (f''&?&?&?); eauto using
-    mem_alloc_allocable_list, vals_refine_weaken, mem_alloc_forward'.
+  destruct (IH τs os2 vs2) as (f'&?&?&?); auto.
+  assert (o1 ∉ dom indexset (mem_alloc_list Γ os1 vs1 m1)).
+  { rewrite mem_dom_alloc_list, elem_of_union, elem_of_of_list
+       by eauto using Forall2_length; tauto. }
+  assert (o2 ∉ dom indexset (mem_alloc_list Γ os2 vs2 m2)).
+  { rewrite mem_dom_alloc_list, elem_of_union, elem_of_of_list
+       by eauto using Forall2_length; tauto. }
+  destruct (mem_alloc_refine' Γ α f' (mem_alloc_list Γ os1 vs1 m1)
+    (mem_alloc_list Γ os2 vs2 m2) o1 o2 false perm_full v1 v2 τ)
+    as (f''&?&?&?); eauto 6 using perm_full_mapped, perm_full_unshared,
+    val_refine_weaken, mem_alloc_list_forward.
   exists f''; split_ands; eauto using meminj_extend_transitive.
-  * constructor; [|done]. transitivity (f' !! o1);
-      eauto using eq_sym, mem_alloc_index_typed', meminj_extend_left.
-  * eauto using meminj_extend_transitive, mem_alloc_forward'.
+  * assert ('{mem_alloc_list Γ os1 vs1 m1} ⊢* os1 :* τs)
+      by eauto using mem_alloc_list_index_typed.
+    constructor; auto.
+    decompose_Forall; eapply transitivity with (f' !! _);
+      eauto using eq_sym, meminj_extend_left.
+  * eapply meminj_extend_transitive; eauto using mem_alloc_list_forward.
 Qed.
 Lemma mem_freeable_refine Γ α f Δ1 Δ2 m1 m2 a1 a2 τ :
   ✓ Γ → m1 ⊑{Γ,α,f@Δ1↦Δ2} m2 →

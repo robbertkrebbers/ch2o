@@ -33,7 +33,7 @@ Section memory_operations.
       (os : list index) (vs : list (val K)) (m : mem K) : mem K :=
     match os, vs with
     | o :: os, v :: vs =>
-       mem_alloc_list Γ os vs (mem_alloc Γ o false perm_full v m)
+       mem_alloc Γ o false perm_full v (mem_alloc_list Γ os vs m)
     | _, _ => m
     end.
 
@@ -323,6 +323,13 @@ Lemma mem_alloc_allocable_list Γ m o μ γ v os :
   Forall_fresh (dom indexset m) os → o ∉ os →
   Forall_fresh (dom indexset (mem_alloc Γ o μ γ v m)) os.
 Proof. rewrite mem_dom_alloc, !Forall_fresh_alt; esolve_elem_of. Qed.
+Lemma mem_dom_alloc_list Γ m os vs :
+  length os = length vs →
+  dom indexset (mem_alloc_list Γ os vs m) = of_list os ∪ dom indexset m.
+Proof.
+  rewrite <-Forall2_same_length; induction 1; simpl;
+    rewrite ?mem_dom_alloc; esolve_elem_of.
+Qed.
 Lemma mem_alloc_list_valid Γ m os vs τs :
   ✓ Γ → ✓{Γ} m → Forall_fresh (dom indexset m) os → length os = length vs →
   (Γ,'{m}) ⊢* vs :* τs →
@@ -331,14 +338,17 @@ Lemma mem_alloc_list_valid Γ m os vs τs :
   (**i 3.) *) '{m} ⇒ₘ '{mem_alloc_list Γ os vs m}.
 Proof.
   rewrite <-Forall2_same_length. intros ? Hm Hfree Hovs Hvs.
-  revert τs m Hm Hvs Hfree.
-  induction Hovs as [|o v os vs ?? IH]; intros [|τ τs] m;
-    inversion_clear 3 as [|?? Ho Ho' Hos];
+  revert τs Hvs Hfree.
+  induction Hovs as [|o v os vs ?? IH]; intros [|τ τs];
+    inversion_clear 2 as [|?? Ho Ho' Hos];
     decompose_Forall_hyps; simplify_type_equality; auto.
-  destruct (IH τs (mem_alloc Γ o false perm_full v m)) as (?&?&?); eauto
-    using mem_alloc_valid', perm_full_valid, perm_full_mapped, Forall2_impl,
-    val_typed_weaken, mem_alloc_forward', mem_alloc_allocable_list.
-  eauto 9 using mem_alloc_index_typed, memenv_forward_typed, mem_alloc_forward'.
+  destruct (IH τs) as (?&?&?); eauto.
+  assert (o ∉ dom indexset (mem_alloc_list Γ os vs m)).
+  { rewrite mem_dom_alloc_list, elem_of_union, elem_of_of_list
+       by eauto using Forall2_length; tauto. }
+  split_ands; eauto 6 using mem_alloc_valid', perm_full_valid,
+    perm_full_mapped, Forall2_impl, val_typed_weaken, mem_alloc_forward',
+    mem_alloc_allocable_list, mem_alloc_index_typed, memenv_forward_typed.
 Qed.
 Lemma mem_alloc_list_index_typed Γ m os vs τs :
   ✓ Γ → ✓{Γ} m → Forall_fresh (dom indexset m) os → length os = length vs →
