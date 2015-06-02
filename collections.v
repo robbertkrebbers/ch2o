@@ -93,14 +93,27 @@ Section simple_collection.
   End dec.
 End simple_collection.
 
-Definition of_option `{Singleton A C} `{Empty C} (x : option A) : C :=
+Definition of_option `{Singleton A C, Empty C} (x : option A) : C :=
   match x with None => ∅ | Some a => {[ a ]} end.
+Fixpoint of_list `{Singleton A C, Empty C, Union C} (l : list A) : C :=
+  match l with [] => ∅ | x :: l => {[ x ]} ∪ of_list l end.
 
-Lemma elem_of_of_option `{SimpleCollection A C} (x : A) o :
-  x ∈ of_option o ↔ o = Some x.
-Proof.
-  destruct o; simpl; rewrite ?elem_of_empty, ?elem_of_singleton; naive_solver.
-Qed.
+Section of_option_list.
+  Context `{SimpleCollection A C}.
+  Lemma elem_of_of_option (x : A) o : x ∈ of_option o ↔ o = Some x.
+  Proof.
+    destruct o; simpl;
+      rewrite ?elem_of_empty, ?elem_of_singleton; naive_solver.
+  Qed.
+  Lemma elem_of_of_list (x : A) l : x ∈ of_list l ↔ x ∈ l.
+  Proof.
+    split.
+    * induction l; simpl; [by rewrite elem_of_empty|].
+      rewrite elem_of_union, elem_of_singleton;
+        intros [->|?]; constructor (auto).
+    * induction 1; simpl; rewrite elem_of_union, elem_of_singleton; auto.
+  Qed.
+End of_option_list.
 
 Global Instance collection_guard `{CollectionMonad M} : MGuard M :=
   λ P dec A x, match dec with left H => x H | _ => ∅ end.
