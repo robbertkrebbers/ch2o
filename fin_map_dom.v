@@ -111,4 +111,27 @@ Proof.
   rewrite !elem_of_dom, lookup_fmap, <-!not_eq_None_Some.
   destruct (m !! i); naive_solver.
 Qed.
+
+Context `{!LeibnizEquiv D}.
+Lemma dom_empty_L {A} : dom D (@empty (M A) _) = ∅.
+Proof. unfold_leibniz; apply dom_empty. Qed.
+Lemma dom_empty_inv_L {A} (m : M A) : dom D m = ∅ → m = ∅.
+Proof. by intros; apply dom_empty_inv; unfold_leibniz. Qed.
+Lemma dom_alter_L {A} f (m : M A) i : dom D (alter f i m) = dom D m.
+Proof. unfold_leibniz; apply dom_alter. Qed.
+Lemma dom_insert_L {A} (m : M A) i x : dom D (<[i:=x]>m) = {[ i ]} ∪ dom D m.
+Proof. unfold_leibniz; apply dom_insert. Qed.
+Lemma dom_singleton_L {A} (i : K) (x : A) : dom D {[(i, x)]} = {[ i ]}.
+Proof. unfold_leibniz; apply dom_singleton. Qed.
+Lemma dom_delete_L {A} (m : M A) i : dom D (delete i m) = dom D m ∖ {[ i ]}.
+Proof. unfold_leibniz; apply dom_delete. Qed.
+Lemma dom_union_L {A} (m1 m2 : M A) : dom D (m1 ∪ m2) = dom D m1 ∪ dom D m2.
+Proof. unfold_leibniz; apply dom_union. Qed.
+Lemma dom_intersection_L {A} (m1 m2 : M A) :
+  dom D (m1 ∩ m2) = dom D m1 ∩ dom D m2.
+Proof. unfold_leibniz; apply dom_intersection. Qed.
+Lemma dom_difference_L {A} (m1 m2 : M A) : dom D (m1 ∖ m2) = dom D m1 ∖ dom D m2.
+Proof. unfold_leibniz; apply dom_difference. Qed.
+Lemma dom_fmap_L {A B} (f : A → B) m : dom D (f <$> m) = dom D m.
+Proof. unfold_leibniz; apply dom_fmap. Qed.
 End fin_map_dom.
