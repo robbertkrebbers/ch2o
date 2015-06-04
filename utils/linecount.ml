@@ -38,7 +38,6 @@ let cats = [
   ("fin_maps.v", "prelude");
   ("flat_cmap.v", "separation");
   ("fragmented.v", "memory");
-  ("fresh_numbers.v", "prelude");
   ("frontend.v", "abstract_c");
   ("frontend_sound.v", "abstract_c");
   ("hashset.v", "prelude");
