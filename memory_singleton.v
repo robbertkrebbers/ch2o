@@ -224,17 +224,16 @@ Proof.
     mem_locks_singleton_empty, mem_unlock_empty by eauto.
 Qed.
 Lemma mem_alloc_singleton Γ Δ m o μ γ v τ :
-  ✓ Γ → ✓{Γ,Δ} m → Δ !! o = None → sep_valid γ → ¬sep_unmapped γ →
-  (Γ, <[o:=(τ,false)]>Δ) ⊢ v : τ → frozen v → ∃ m',
+  ✓ Γ → ✓{Γ,Δ} m → Δ ⊢ o : τ → index_alive Δ o → o ∉ dom indexset m →
+  sep_valid γ → ¬sep_unmapped γ → (Γ,Δ) ⊢ v : τ → ∃ m',
   mem_alloc Γ o μ γ v m = m' ∪ m ∧ m' ⊥ m ∧
-  mem_singleton Γ (<[o:=(τ,false)]>Δ) (addr_top o τ) μ γ v τ m'.
+  mem_singleton Γ Δ (addr_top o τ) μ γ (freeze true v) τ m'.
 Proof.
-  intros. assert (o ∉ dom indexset m) by eauto using cmap_dom_None.
-  exists (cmap_singleton Γ (addr_top o τ) μ
+  intros. exists (cmap_singleton Γ (addr_top o τ) μ
     (of_val Γ (replicate (bit_size_of Γ (type_of v)) γ) v)); split_ands.
   * rewrite <-(sep_left_id m) at 1 by eauto using cmap_valid_sep_valid.
     by rewrite mem_alloc_union by done.
-  * simplify_type_equality; assert ((Γ,<[o:=(τ,false)]>Δ) ⊢
+  * simplify_type_equality; assert ((Γ,Δ) ⊢
       of_val Γ (replicate (bit_size_of Γ τ) γ) v : τ).
     { apply of_val_typed; eauto using Forall_replicate, replicate_length. }
     eapply cmap_singleton_disjoint_l;
@@ -247,11 +246,23 @@ Proof.
     exists (of_val Γ (replicate (bit_size_of Γ τ) γ) v);
       split_ands; eauto using of_val_typed, addr_top_typed, addr_top_is_obj,
       addr_top_strict, val_typed_type_valid, mem_alloc_index_typed,
-      Forall_replicate, @sep_unmapped_empty_alt.
-    + by erewrite to_of_val by eauto.
-    + erewrite ctree_flatten_of_val, zip_with_replicate_l
-        by (by erewrite ?val_flatten_length by eauto; eauto).
-      by apply Forall_fmap, Forall_true.
+      Forall_replicate, @sep_unmapped_empty_alt, to_of_val, eq_sym.
+    erewrite ctree_flatten_of_val, zip_with_replicate_l
+       by (by erewrite ?val_flatten_length by eauto; eauto).
+    by apply Forall_fmap, Forall_true.
+Qed.
+Lemma mem_alloc_singleton_alt Γ Δ m o μ γ v τ :
+  ✓ Γ → ✓{Γ,Δ} m → Δ !! o = None →
+  sep_valid γ → ¬sep_unmapped γ → (Γ,Δ) ⊢ v : τ → frozen v → ∃ m',
+  mem_alloc Γ o μ γ v m = m' ∪ m ∧ m' ⊥ m ∧
+  mem_singleton Γ (<[o:=(τ,false)]>Δ) (addr_top o τ) μ γ v τ m'.
+Proof.
+  intros ?????? Hfrozen; setoid_rewrite <-Hfrozen at 2.
+  assert (Δ ⊆ <[o:=(τ, false)]> Δ) by (by apply insert_subseteq).
+  apply mem_alloc_singleton; eauto using mem_alloc_index_typed, cmap_dom_None,
+    mem_alloc_index_alive, val_typed_weaken, memenv_subseteq_forward,
+    cmap_valid_weaken, mem_alloc_memenv_valid, val_typed_type_valid,
+    cmap_valid_memenv_valid.
 Qed.
 Lemma mem_free_singleton Γ Δ m o a μ γ v τ :
   mem_singleton Γ Δ a μ γ v τ m →

@@ -135,14 +135,21 @@ Lemma cmap_empty_valid Γ Δ : ✓{Γ} Δ → ✓{Γ,Δ} (∅ : mem K).
 Proof. by intros; split_ands'; intros until 0; simplify_map_equality'. Qed.
 Lemma cmap_empty_valid' Γ : ✓{Γ} (∅ : mem K).
 Proof. eauto using cmap_empty_valid, memenv_empty_valid. Qed.
-Lemma cmap_valid_weaken Γ1 Γ2 Δ m : ✓ Γ1 → ✓{Γ1,Δ} m → Γ1 ⊆ Γ2 → ✓{Γ2,Δ} m.
+Lemma cmap_valid_weaken Γ1 Γ2 Δ1 Δ2 m :
+  ✓ Γ1 → ✓{Γ1,Δ1} m → Γ1 ⊆ Γ2 → Δ1 ⊆ Δ2 → ✓{Γ2} Δ2 → ✓{Γ2,Δ2} m.
 Proof.
-  intros ? (HΔ&Hm1&Hm2) ?; split_ands'; eauto using memenv_valid_weaken.
-  intros o w μ ?; destruct (Hm2 o w μ)
-    as (τ&?&?&?&?); eauto 10 using ctree_typed_weaken.
+  intros ? (HΔ&Hm1&Hm2) ???; split_ands'; eauto using memenv_valid_weaken.
+  * intros o τ ?; destruct (Hm1 o τ); eauto 10 using memenv_forward_typed,
+      memenv_forward_alive, memenv_subseteq_forward.
+  * intros o w μ ?; destruct (Hm2 o w μ) as (τ&?&?&?&?);
+      eauto 10 using ctree_typed_weaken, memenv_forward_typed,
+      memenv_subseteq_forward, memenv_subseteq_alive.
 Qed.
 Lemma cmap_valid_weaken' Γ1 Γ2 m : ✓ Γ1 → ✓{Γ1} m → Γ1 ⊆ Γ2 → ✓{Γ2} m.
-Proof. by apply cmap_valid_weaken. Qed.
+Proof.
+  intros. eapply cmap_valid_weaken;
+    eauto using memenv_valid_weaken, cmap_valid_memenv_valid.
+Qed.
 Lemma cmap_valid_weaken_squeeze Γ1 Γ2 Δ1 Δ2 m1 m2 :
   ✓ Γ1 → ✓{Γ1,Δ1} m2 → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
   ✓{Γ2,Δ2} m1 → '{m1} = '{m2} → ✓{Γ2,Δ2} m2.

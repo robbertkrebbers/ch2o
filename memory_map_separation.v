@@ -41,6 +41,11 @@ Proof.
   apply sep_disjoint_cons_le_inj; intros m'; rewrite !sep_disjoint_list_double.
   intros; symmetry; auto using cmap_erase_disjoint_l.
 Qed.
+Lemma cmap_erase_disjoint_list_le ms : ms ⊆⊥ cmap_erase <$> ms.
+Proof.
+  induction ms as [|m ms IH]; csimpl; [done|].
+  by rewrite <-cmap_erase_disjoint_le, <-IH.
+Qed.
 Lemma cmap_erase_union m1 m2 :
   cmap_erase (m1 ∪ m2) = cmap_erase m1 ∪ cmap_erase m2.
 Proof.
@@ -48,6 +53,12 @@ Proof.
   rewrite lookup_omap, !lookup_union_with, !lookup_omap.
   destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|]; naive_solver.
 Qed.
+Lemma cmap_erase_union_list ms : cmap_erase (⋃ ms) = ⋃ (cmap_erase <$> ms).
+Proof.
+  induction ms; simpl;
+    rewrite ?cmap_erase_union; auto using cmap_erase_empty with f_equal.
+Qed.
+
 Lemma cmap_erased_union m1 m2 :
   cmap_erased m1 → cmap_erased m2 → cmap_erased (m1 ∪ m2).
 Proof. unfold cmap_erased; rewrite cmap_erase_union; congruence. Qed.

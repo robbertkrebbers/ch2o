@@ -27,12 +27,12 @@ Proof.
     ✓{Γ,'{m} } δ →
     (Γ,'{m},locals k.*2) ⊢ φ : τf → (Γ,'{m}) ⊢ k : τf ↣ Stmt_type cmτ →
     ✓{Γ} m → maybe Undef φ = None → focus_locks_valid φ m →
-    ax_graph ax_disjoint_cond (ax_stmt_post (dassert_pack_top P Q) s)
+    ax_graph ax_disjoint_cond (ax_stmt_post (dassert_pack_top P Q) s cmτ)
       Γ δ '{m} [] (n1 + n2) k φ m →
     Γ\ δ\ [] ⊢ₛ State k φ m ⇒^n1 S' → ∃ k' φ' m',
       S' = State k' φ' m' ∧
       maybe Undef φ' = None ∧ focus_locks_valid φ' m' ∧ ✓{Γ} m' ∧
-      ax_graph ax_disjoint_cond (ax_stmt_post (dassert_pack_top P Q) s)
+      ax_graph ax_disjoint_cond (ax_stmt_post (dassert_pack_top P Q) s cmτ)
         Γ δ '{m'} [] n2 k' φ' m').
   { intros help m S' ?????? p.
     apply csteps_rcsteps, rtc_bsteps in p; destruct p as [n p].
@@ -49,7 +49,7 @@ Proof.
   intros n1 n2; induction n1 as [n1 IH] using lt_wf_ind.
   intros k φ m S' τf ?????? Hax p.
   inv_rcsteps p as [|n' ? S ? p1 p2]; eauto 10 using mk_ax_next, ax_weaken.
-  assert (ax_next ax_disjoint_cond (ax_stmt_post (dassert_pack_top P Q) s)
+  assert (ax_next ax_disjoint_cond (ax_stmt_post (dassert_pack_top P Q) s cmτ)
     Γ δ '{m} [] (n' + n2) ∅ S) as Hnext.
   { eapply ax_step; eauto.
     + split; rewrite ?sep_right_id by auto;

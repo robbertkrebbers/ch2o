@@ -45,6 +45,8 @@ Ltac solve_mem_disjoint :=
 Local Hint Extern 1 (_ ⊥ _) => solve_mem_disjoint.
 Local Hint Extern 1 (⊥ _) => solve_mem_disjoint.
 Local Hint Extern 1 (sep_valid _) => solve_mem_disjoint.
+Local Hint Extern 1 (_ ⊆ _) => etransitivity; [eassumption|].
+Local Hint Extern 1 (_ ≤ _) => omega.
 
 (** ** Directed assertions *)
 (** The statement judgment will be of the shape [Γ\ δ\ Pd ⊨ₚ s] where [Pd] is
@@ -80,23 +82,23 @@ of the previously defined notions together. We require both the program and
 the memory to contain no locks at the start. Also, we require all locks to be
 released in the end, as each statement that contains an expression always has
 a sequence point in the end. *)
-Inductive ax_stmt_post' `{Env K} (Pd : dassert K) (s : stmt K) (Γ : env K)
-    (Δ : memenv K) (ρ : stack K) (n : nat) : focus K → mem K → Prop :=
+Inductive ax_stmt_post' `{Env K} (Pd : dassert K) (s : stmt K) (cmτ : rettype K)
+    (Γ : env K) (Δ : memenv K) (ρ : stack K) (n : nat) : focus K → mem K → Prop :=
   mk_ax_stmt_post d m :
-    direction_out d s →
+    direction_out d s → (Γ,Δ) ⊢ d : cmτ →
     mem_locks m = ∅ →
     assert_holds (Pd d) Γ Δ ρ n (cmap_erase m) →
-    ax_stmt_post' Pd s Γ Δ ρ n (Stmt d s) m.
-Program Definition ax_stmt_post `{Env K}
-    (Pd : dassert K) (s : stmt K) : ax_assert K := {|
-  ax_assert_holds := ax_stmt_post' Pd s
+    ax_stmt_post' Pd s cmτ Γ Δ ρ n (Stmt d s) m.
+Program Definition ax_stmt_post `{EnvSpec K} (Pd : dassert K)
+    (s : stmt K) (cmτ : rettype K) : ax_assert K := {|
+  ax_assert_holds := ax_stmt_post' Pd s cmτ
 |}.
 Next Obligation.
-  intros ?? Pd s Γ1 Γ2 Δ1 Δ2 ρ n φ m ????; destruct 1 as [d m' ???];
-    constructor; eauto using assert_weaken, cmap_erase_valid.
+  intros ??? Pd s cmτ Γ1 Γ2 Δ1 Δ2 ρ n n' φ m ???; destruct 1 as [d m' ????];
+    constructor; eauto using direction_typed_weaken, assert_weaken, cmap_erase_valid.
 Qed.
 Next Obligation.
-  intros ?? Pd s Γ δ Δ n ρ φ m m' [d m'' ???] [? p]; inv_rcstep.
+  intros ??? Pd s cmτ Γ δ Δ n ρ φ m m' [d m'' ????] [? p]; inv_rcstep.
 Qed.
 Definition ax_stmt_packed `{EnvSpec K} (Γ : env K) (δ : funenv K)
     (Pd : dassert K) (s : stmt K) : Prop := ∀ Γ' Δ n ρ d m cmτ,
@@ -108,7 +110,7 @@ Definition ax_stmt_packed `{EnvSpec K} (Γ : env K) (δ : funenv K)
   (Γ',Δ,ρ.*2) ⊢ s : cmτ →
   ✓{Δ}* ρ →
   assert_holds (Pd d) Γ' Δ ρ n (cmap_erase m) →
-  ax_graph ax_disjoint_cond (ax_stmt_post Pd s) Γ' δ Δ ρ n [] (Stmt d s) m.
+  ax_graph ax_disjoint_cond (ax_stmt_post Pd s cmτ) Γ' δ Δ ρ n [] (Stmt d s) m.
 Instance: Params (@ax_stmt_packed) 5.
 Notation "Γ \ δ \ P ⊨ₚ s" :=
   (ax_stmt_packed Γ δ P%A s)
@@ -227,6 +229,57 @@ Notation "Γ \ δ \ A ⊨ₑ {{ P }} e {{ Q }}" :=
   (at level 74, δ at next level, A at next level,
   format "Γ \  δ \  A  ⊨ₑ  '[' {{  P  }} '/'  e  '/' {{  Q  }} ']'").
 
+(** ** Function specifications *)
+Inductive fassert (K : Set) `{Env K} := FAssert {
+  fcommon : Type;
+  fpre : fcommon → list (val K) → assert K;
+  fpost : fcommon → list (val K) → val K → assert K;
+  fpre_stack_indep c vs : StackIndep (fpre c vs);
+  fpost_stack_indep c vs v : StackIndep (fpost c vs v)
+}.
+Arguments fcommon {_ _} _.
+Arguments fpre {_ _} _ _ _.
+Arguments fpost {_ _} _ _ _ _.
+Existing Instance fpre_stack_indep.
+Existing Instance fpost_stack_indep.
+
+Inductive ax_fun_post' `{Env K}
+    (f : funname) (τ : type K) (P : val K → assert K)
+    (Γ : env K) (Δ : memenv K)
+    (ρ : stack K) (n : nat) : focus K → mem K → Prop :=
+  mk_ax_fun_post v m :
+    (Γ,Δ) ⊢ v : τ →
+    mem_locks m = ∅ →
+    assert_holds (P v) Γ Δ ρ n (cmap_erase m) →
+    ax_fun_post' f τ P Γ Δ ρ n (Return f v) m.
+Program Definition ax_fun_post `{EnvSpec K} (f : funname) (τ : type K)
+    (P : val K → assert K) : ax_assert K := {|
+  ax_assert_holds := ax_fun_post' f τ P 
+|}.
+Next Obligation.
+  intros ??? f τ Pf Γ1 Γ2 Δ1 Δ2 ρ n n' φ ????; destruct 1 as [v m];
+    constructor; eauto using assert_weaken, cmap_erase_valid, val_typed_weaken.
+Qed.
+Next Obligation.
+  intros ??? f τ Pf Γ δ Δ n ρ φ m m' [v m'' ??] [? p]; inv_rcstep.
+Qed.
+Program Definition assert_fun `{EnvSpec K} (δ : funenv K) (f : funname)
+    (Pf : fassert K) (τs : list (type K)) (τ : type K) : assert K := {|
+  assert_holds Γ Δ ρ n m :=
+    m = ∅ ∧
+    Γ !! f = Some (τs,τ) ∧
+    ∀ Γ' Δ' n' c vs m',
+      Γ ⊆ Γ' → ✓ Γ' → Δ ⇒ₘ Δ' → n' ≤ n →
+      ✓{Γ',Δ'} δ →
+      ✓{Γ',Δ'} m' →
+      mem_locks m' = ∅ →
+      (Γ',Δ') ⊢* vs :* τs →
+      assert_holds (fpre Pf c vs) Γ' Δ' [] n' (cmap_erase m') →
+      ax_graph ax_disjoint_cond
+        (ax_fun_post f τ (fpost Pf c vs)) Γ' δ Δ' [] n' [] (Call f vs) m'
+|}.
+Next Obligation. naive_solver eauto using lookup_fun_weaken. Qed.
+
 Section axiomatic.
 Context `{EnvSpec K}.
 Implicit Types Γ : env K.
@@ -248,7 +301,6 @@ Implicit Types S : state K.
 Hint Immediate cmap_valid_memenv_valid.
 Hint Resolve cmap_empty_valid cmap_erased_empty mem_locks_empty.
 Hint Resolve cmap_union_valid_2 cmap_erase_valid.
-Hint Extern 1 (_ ≤ _) => omega.
 
 Global Instance directed_pack_proper `{!@Equivalence A R} :
   Proper (R ==> R ==> pointwise_relation _ R ==> pointwise_relation _ R ==>
@@ -265,7 +317,7 @@ Proof.
               (ax_stmt_packed Γ δ)).
   { intros help. by split; apply help. }
   intros Pd Qd HPQ ?? -> Hax ????????????????.
-  eapply ax_weaken with ax_disjoint_cond (ax_stmt_post Pd y) n; eauto.
+  eapply ax_weaken with ax_disjoint_cond (ax_stmt_post Pd _ _) n; eauto.
   { eapply Hax, HPQ; eauto. }
   destruct 2; constructor; auto. eapply HPQ; eauto using indexes_valid_weaken.
 Qed.
@@ -367,7 +419,7 @@ Lemma ax_expr_post_expr_nf Γ Q Δ ρ n m e τlr :
   ax_expr_post' Q τlr Γ Δ ρ n (Expr e) m → is_nf e.
 Proof. by inversion 1. Qed.
 Lemma ax_expr_lrval Γ δ A (P : lrval K → assert K) Δ ρ n ν Ω m τlr :
-  ✓{Γ,Δ} m → ax_expr_invariant Γ Δ A ρ n m →
+  ✓{Γ,Δ} m → ax_expr_invariant Γ Δ A ρ (S n) m →
   ax_graph (ax_expr_cond ρ A)
     (ax_expr_post P τlr) Γ δ Δ ρ (S n) [] (Expr (%#{Ω} ν)%E) m →
   assert_holds (P ν) Γ Δ ρ (S n) (cmap_erase m)
@@ -396,7 +448,7 @@ Lemma ax_call_compose Γ δ A P Q (E : ectx K) E' ρ Δ n φ k m1 m2 :
   (∀ Δ' n' m1' e',
     ⊥ [m1'; m2] → ✓{Γ,Δ'} m1' → ✓{Γ,Δ'} m2 →
     locks (subst E e') ⊆ mem_locks m1' →
-    ax_expr_invariant Γ Δ' A ρ n' (m1' ∪ m2) →
+    ax_expr_invariant Γ Δ' A ρ (S n') (m1' ∪ m2) →
     ax_graph (ax_expr_cond ρ A) P Γ δ Δ' ρ n' [] (Expr (subst E e')) m1' →
     Δ ⇒ₘ Δ' → n' ≤ n →
     ax_graph (ax_expr_cond ρ A) Q Γ δ Δ' ρ n' []
@@ -459,14 +511,13 @@ Lemma ax_expr_compose Γ δ {vn} A (Ps : vec (vassert K) vn) (Q : vassert K)
   (∀ i, locks (es !!! i) ⊆ mem_locks (ms !!! i)) →
   (∀ i, ax_graph (ax_expr_cond ρ A) (ax_expr_post (Ps !!! i) (τlrs !!! i))
       Γ δ Δ ρ n [] (Expr (es !!! i)) (ms !!! i)) →
-  (∀ Δ' n' (Ωs : vec _ vn) (νs : vec _ vn) (ms' : vec _ vn),
+  (∀ Δ' n' (νs : vec _ vn) (ms' : vec _ vn),
     ⊥ ms' → (∀ i, ✓{Γ,Δ'} (ms' !!! i)) → Δ ⇒ₘ Δ' → n' ≤ n →
     (∀ i, (Γ,Δ') ⊢ νs !!! i : τlrs !!! i) →
-    (∀ i, mem_locks (ms' !!! i) = Ωs !!! i) →
     (∀ i,
       assert_holds ((Ps !!! i) (νs !!! i)) Γ Δ' ρ n' (cmap_erase (ms' !!! i))) →
-    ax_graph (ax_expr_cond ρ A) (ax_expr_post Q σlr) Γ δ Δ' ρ n' []
-       (Expr (depsubst E (vzip_with EVal Ωs νs)%E)) (⋃ ms')) →
+    ax_graph (ax_expr_cond ρ A) (ax_expr_post Q σlr) Γ δ Δ' ρ n' [] (Expr
+      (depsubst E (vzip_with (λ m ν, %#{mem_locks m} ν) ms' νs)%E)) (⋃ ms')) →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post Q σlr) Γ δ Δ ρ n []
     (Expr (depsubst E es)) (⋃ ms).
 Proof.
@@ -474,10 +525,17 @@ Proof.
   induction n as [[|n] IH] using lt_wf_ind; [intros; apply ax_O |].
   intros Δ es ms Hρ Hms Hms' HA Hes Hax1 Hax2.
   destruct (expr_vec_values es) as [(Ωs&νs&->)|[i Hi]].
-  { apply Hax2; auto;
-      intros i; specialize (Hax1 i); rewrite vlookup_zip_with in Hax1;
-      (eapply ax_expr_lrval; [| |eauto]);
-      eauto using ax_expr_invariant_weaken, @sep_subseteq_lookup. }
+  { assert ((∀ i, assert_holds ((Ps !!! i) (νs !!! i))
+        Γ Δ ρ (S n) (cmap_erase (ms !!! i))) ∧
+      (∀ i, mem_locks (ms !!! i) = Ωs !!! i) ∧
+      (∀ i, (Γ,Δ) ⊢ νs !!! i : τlrs !!! i)) as (?&?&?).
+    { rewrite <-!forall_and_distr; intros i.
+      specialize (Hax1 i); rewrite vlookup_zip_with in Hax1.
+      eapply ax_expr_lrval; [| |eauto];
+        eauto using ax_expr_invariant_weaken, @sep_subseteq_lookup. }
+      rewrite (vec_eq (vzip_with EVal Ωs νs)
+        (vzip_with (λ m ν, (%#{mem_locks m} ν)%E) ms νs))
+        by (intros i; rewrite !vlookup_zip_with; f_equal; auto); auto. }
   apply ax_further_alt.
   intros Δ' n' m' a ??? Hframe; inversion_clear Hframe as [mA mf ??? Hm|];
     simplify_equality'; simplify_mem_disjoint_hyps.
@@ -593,7 +651,10 @@ Proof.
     + intros j; destruct (decide (i = j)); subst; [by rewrite !vlookup_insert|].
       rewrite vlookup_insert_ne by done.
       eauto using cmap_union_list_delete_lookup_valid.
-    + by rewrite sep_union_insert by auto.
+    + rewrite sep_union_insert by auto.
+      apply ax_expr_invariant_weaken with (S n''')
+        (m' ∪ ⋃ delete (i : nat) (ms : list _));
+        eauto using indexes_valid_weaken, @sep_reflexive.
     + intros j; destruct (decide (i = j)); subst; [by rewrite !vlookup_insert|].
       by rewrite !vlookup_insert_ne by done.
     + intros j; destruct (decide (i = j)); subst; [by rewrite !vlookup_insert|].
@@ -620,21 +681,20 @@ Lemma ax_expr_compose_1 Γ δ A P Q Δ (E : ectx_full K 1) e ρ n m τlr σlr :
   ax_expr_invariant Γ Δ A ρ n m →
   locks e ⊆ mem_locks m →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post P τlr) Γ δ Δ ρ n [] (Expr e) m →
-  (∀ Δ' n' Ω ν m',
-    ✓{Γ,Δ'} m' → Δ ⇒ₘ Δ' → n' ≤ n → (Γ,Δ') ⊢ ν : τlr → mem_locks m' = Ω →
+  (∀ Δ' n' ν m',
+    ✓{Γ,Δ'} m' → Δ ⇒ₘ Δ' → n' ≤ n → (Γ,Δ') ⊢ ν : τlr →
     assert_holds (P ν) Γ Δ' ρ n' (cmap_erase m') →
     ax_graph (ax_expr_cond ρ A) (ax_expr_post Q σlr) Γ δ Δ' ρ n' []
-       (Expr (depsubst E [# %#{Ω} ν]%E)) m') →
+       (Expr (depsubst E [# %#{mem_locks m'} ν]%E)) m') →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post Q σlr) Γ δ Δ ρ n []
     (Expr (depsubst E [# e])) m.
 Proof.
   intros ??????? Hax. rewrite <-(sep_right_id m) by auto.
   apply (ax_expr_compose Γ δ A [# P]%A _ Δ E [# e] ρ n [# m] [# τlr]); simpl;
     rewrite ?sep_right_id by auto; auto; try (by intros; inv_all_vec_fin).
-  intros Δ' n' Ωs νs ms' ? Hm' ?? Hν Hlocks Hax'; inv_all_vec_fin; simpl.
-  apply Hax; simpl; rewrite ?sep_right_id by auto; auto;
-    apply (Hm' 0%fin) || apply (Hν 0%fin) ||
-    apply (Hlocks 0%fin) || apply (Hax' 0%fin).
+  intros Δ' n' νs ms' ? Hm' ?? Hν Hax'; inv_all_vec_fin; simpl.
+  rewrite ?sep_right_id by auto.
+  apply Hax; apply (Hm' 0%fin) || apply (Hν 0%fin) || apply (Hax' 0%fin)|| done.
 Qed.
 Lemma ax_expr_compose_2 Γ δ A P1 P2 Q Δ
     (E : ectx_full K 2) e1 e2 ρ n m1 m2 τlr1 τlr2 σlr :
@@ -643,14 +703,14 @@ Lemma ax_expr_compose_2 Γ δ A P1 P2 Q Δ
   locks e1 ⊆ mem_locks m1 → locks e2 ⊆ mem_locks m2 →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post P1 τlr1) Γ δ Δ ρ n [] (Expr e1) m1 →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post P2 τlr2) Γ δ Δ ρ n [] (Expr e2) m2 →
-  (∀ Δ' n' Ω1 Ω2 ν1 ν2 m1' m2',
+  (∀ Δ' n' ν1 ν2 m1' m2',
     ⊥ [m1';m2'] → ✓{Γ,Δ'} m1' → ✓{Γ,Δ'} m2' → Δ ⇒ₘ Δ' → n' ≤ n →
     (Γ,Δ') ⊢ ν1 : τlr1 → (Γ,Δ') ⊢ ν2 : τlr2 →
-    mem_locks m1' = Ω1 → mem_locks m2' = Ω2 →
     assert_holds (P1 ν1) Γ Δ' ρ n' (cmap_erase m1') →
     assert_holds (P2 ν2) Γ Δ' ρ n' (cmap_erase m2') →
     ax_graph (ax_expr_cond ρ A) (ax_expr_post Q σlr) Γ δ Δ' ρ n' []
-       (Expr (depsubst E [# %#{Ω1} ν1; %#{Ω2} ν2]%E)) (m1' ∪ m2')) →
+      (Expr (depsubst E [# %#{mem_locks m1'} ν1; %#{mem_locks m2'} ν2]%E))
+      (m1' ∪ m2')) →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post Q σlr) Γ δ Δ ρ n []
     (Expr (depsubst E [# e1; e2])) (m1 ∪ m2).
 Proof.
@@ -658,8 +718,9 @@ Proof.
   apply (ax_expr_compose Γ δ A [# P1; P2]%A Q Δ E
     [# e1; e2] ρ n [# m1; m2] [# τlr1; τlr2] σlr); simpl;
     rewrite ?sep_right_id by auto; auto; try (by intros; inv_all_vec_fin).
-  intros Δ' n' Ωs νs ms' ? Hm' ?? Hν Hlocks Hax'; inv_all_vec_fin; simpl.
-  apply Hax; simpl; rewrite ?sep_right_id by auto; auto;
+  intros Δ' n' νs ms' ? Hm' ?? Hν Hax'; inv_all_vec_fin; simpl.
+  rewrite ?sep_right_id by auto.
+  by apply Hax; simpl;
     repeat match goal with
     | H : ∀ _ : fin _, _ |- _ => apply (H 0%fin)
     | H : ∀ _ : fin _, _ |- _ => apply (H 1%fin)

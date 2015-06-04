@@ -429,10 +429,10 @@ Section types.
   Lemma lookup_fun_compound_ne Γ f f' τs τ :
     f ≠ f' → <[f:=(τs,τ)]>Γ !! f' = Γ !! f'.
   Proof. apply (lookup_insert_ne (env_f Γ)). Qed.
-  Lemma insert_lookup_fun Γ f τsτ : Γ !! f = Some τsτ → <[f:=τsτ]>Γ = Γ.
+  Lemma insert_fun_id Γ f τsτ : Γ !! f = Some τsτ → <[f:=τsτ]>Γ = Γ.
   Proof.
     destruct Γ; intros; unfold insert, env_insert_fun; f_equal'.
-    by apply insert_lookup.
+    by apply insert_id.
   Qed.
   Lemma delete_compound_subseteq_compat Γ1 Γ2 t :
     Γ1 ⊆ Γ2 → delete t Γ1 ⊆ delete t Γ2.

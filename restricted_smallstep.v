@@ -657,22 +657,19 @@ Lemma rcstep_expr_call_inv (P : state K → Prop) ρ Ω f τs τ Ωs vs m S' :
   let e := (call #{Ω} ptrV (FunPtr f τs τ) @ #{Ωs}* vs)%E in
   Γ\ δ\ ρ ⊢ₛ State [] (Expr e) m ⇒ S' →
   length Ωs = length vs →
-  P (State [CFun []] (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m)) →
-  (¬Γ\ ρ ⊢ₕ safe call e @ #{Ωs}* vs, m →
-    P (State [] (Undef (UndefExpr [] (call e @ #{Ωs}* vs))) m)) →
-  P S'.
+  P (State [CFun []] (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m)) → P S'.
 Proof.
   simpl; intros p ?. pattern S'.
   apply (rcstep_focus_inv _ _ _ _ _ _ p); simpl; clear p; try done.
-  * intros E e1 v2 m2 Hvs ? _ _.
+  * intros E e1 v2 m2 Hvs ? _.
     simplify_list_subst_equality Hvs; simplify_list_subst_equality; inv_ehstep.
-  * intros E Ω' f' τs' τ' Ωs' vs' Hvs ? HP1 _;
+  * intros E Ω' f' τs' τ' Ωs' vs' Hvs ? HP;
       simplify_list_subst_equality Hvs.
     + edestruct (zip_with_inj (λ Ω v, #{Ω} v)%E Ωs Ωs' vs vs');
         eauto with congruence.
     + simplify_list_subst_equality.
     + simplify_list_subst_equality.
-  * intros E e1 Hvs Hred Hsafe _ HP2; simplify_list_subst_equality Hvs.
+  * intros E e1 Hvs Hred Hsafe _; simplify_list_subst_equality Hvs.
     + destruct Hsafe. by constructor.
     + simplify_list_subst_equality; inversion Hred.
     + simplify_list_subst_equality; inversion Hred.

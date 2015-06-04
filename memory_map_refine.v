@@ -102,7 +102,8 @@ Lemma cmap_refine_weaken Γ Γ' α α' f f' Δ1 Δ2 m1 m2 :
   m1 ⊑{Γ',α',f'@Δ1↦Δ2} m2.
 Proof.
   intros ? (Hm1&?&HΔ&Hm) ?? Hf.
-  split; split_ands; eauto using cmap_valid_weaken.
+  split; split_ands; eauto using cmap_valid_weaken,
+    memenv_valid_weaken, cmap_valid_memenv_valid.
   intros o1 o2 r w1 μ ??.
   destruct (cmap_valid_Obj Γ Δ1 m1 o1 w1 μ) as (τ&?&_); auto.
   destruct (Hm o1 o2 r w1 μ)

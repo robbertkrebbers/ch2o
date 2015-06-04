@@ -127,6 +127,10 @@ Notation "▷ P" := (assert_later P) (at level 20) : assert_scope.
 (** The assertion [emp] asserts that the memory is empty. The assertion [P ★ Q]
 (called separating conjunction) asserts that the memory can be split into two
 disjoint parts such that [P] holds in the one part, and [Q] in the other. *)
+Program Definition assert_eq_mem `{Env K} (m : mem K) : assert K := {|
+  assert_holds Γ Δ ρ n m' := m' = m
+|}.
+Next Obligation. naive_solver. Qed.
 Program Definition assert_Prop `{Env K} (P : Prop) : assert K := {|
   assert_holds Γ Δ ρ n m := P ∧ m = ∅
 |}.
@@ -556,7 +560,17 @@ Proof.
   intros ? (m1&m2&->&?&?&?); destruct (IH m2) as (ms&->&?&?); trivial.
   exists (m1 :: ms); auto.
 Qed.
-
+Lemma assert_Forall_holds_vec {vn} (Ps : vec (assert K) vn) Γ Δ ρ n m :
+  assert_holds (Π Ps)%A Γ Δ ρ n m ↔ ∃ ms : vec _ vn, m = ⋃ ms ∧ ⊥ ms ∧
+    ∀ i, assert_holds (Ps !!! i) Γ Δ ρ n (ms !!! i).
+Proof.
+  rewrite assert_Forall_holds; split.
+  * intros (ms&->&?&Hms). assert (vn = length ms); [|subst vn].
+    { by erewrite <-Forall2_length, vec_to_list_length by eauto. }
+    exists (list_to_vec ms); rewrite ?vec_to_list_of_list.
+    by rewrite <-(vec_to_list_of_list ms), Forall2_vlookup in Hms.
+  * intros [ms ?]; exists ms; by rewrite Forall2_vlookup.
+Qed.
 Lemma assert_memext_l Γ P Q : MemExt P → (P ★ Q)%A ⊆{Γ} P.
 Proof.
   intros; transitivity (P ★ True)%A;
@@ -989,6 +1003,9 @@ Proof.
 Qed.
 
 (* Unlocking *)
+Lemma assert_unlock_spec P Γ Δ ρ n m :
+  assert_holds (P ◊) Γ Δ ρ n m = assert_holds P Γ Δ ρ n (mem_unlock_all m).
+Proof. done. Qed.
 Global Instance: Proper ((⊆{Γ}) ==> (⊆{Γ})) assert_unlock.
 Proof. solve ltac:(eauto using mem_unlock_all_valid). Qed.
 Global Instance: Proper ((≡{Γ}) ==> (≡{Γ})) assert_unlock.

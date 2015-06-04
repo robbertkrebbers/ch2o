@@ -240,10 +240,12 @@ Proof.
   by destruct (decide (i = j)) as [->|?];
     rewrite ?lookup_alter, ?fmap_None, ?lookup_alter_ne.
 Qed.
-Lemma alter_None {A} (f : A → A) m i : m !! i = None → alter f i m = m.
+Lemma alter_id {A} (f : A → A) m i :
+  (∀ x, m !! i = Some x → f x = x) → alter f i m = m.
 Proof.
-  intros Hi. apply map_eq. intros j. by destruct (decide (i = j)) as [->|?];
-    rewrite ?lookup_alter, ?Hi, ?lookup_alter_ne.
+  intros Hi; apply map_eq; intros j; destruct (decide (i = j)) as [->|?].
+  { rewrite lookup_alter; destruct (m !! j); f_equal'; auto. }
+  by rewrite lookup_alter_ne by done.
 Qed.
 
 (** ** Properties of the [delete] operation *)
@@ -340,7 +342,7 @@ Proof.
   destruct (decide (i = j)) as [->|];
     rewrite ?lookup_insert, ?lookup_insert_ne; intuition congruence.
 Qed.
-Lemma insert_lookup {A} (m : M A) i x : m !! i = Some x → <[i:=x]>m = m.
+Lemma insert_id {A} (m : M A) i x : m !! i = Some x → <[i:=x]>m = m.
 Proof.
   intros; apply map_eq; intros j; destruct (decide (i = j)) as [->|];
     by rewrite ?lookup_insert, ?lookup_insert_ne by done.

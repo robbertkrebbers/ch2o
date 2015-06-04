@@ -52,18 +52,18 @@ Section basics.
     | ax_further n k φ m :
        (∀ Δ' n' m' a,
          ✓{Γ,Δ'} m → Δ ⇒ₘ Δ' → n' < n →
-         frame F Γ Δ' k n' φ m m' a →
+         frame F Γ Δ' k (S n') φ m m' a →
          red (rcstep Γ δ ρ) (State k φ m')) →
        (∀ Δ' n' m' a S',
          ✓{Γ,Δ'} m → Δ ⇒ₘ Δ' → n' < n →
-         frame F Γ Δ' k n' φ m m' a →
+         frame F Γ Δ' k (S n') φ m m' a →
          Γ\ δ\ ρ ⊢ₛ State k φ m' ⇒ S' →
          dom indexset (SMem S') ∖ dom indexset m' ∩ dom indexset Δ' = ∅ →
          ax_next Δ' ρ n' a S') →
        ax_graph Δ ρ n k φ m
   with ax_next (Δ : memenv K) (ρ : stack K) : nat → A → state K → Prop :=
     | mk_ax_next Δ' k n φ m m' a :
-       unframe F Γ Δ' k n φ m m' a →
+       unframe F Γ Δ' k (S n) φ m m' a →
        maybe Undef φ = None →
        focus_locks_valid φ m →
        ✓{Γ,Δ'} m' → Δ ⇒ₘ Δ' →
@@ -79,7 +79,7 @@ Section basics.
   Lemma ax_further_alt Δ ρ n k φ m :
     (∀ Δ' n' m' a,
       ✓{Γ,Δ'} m → Δ ⇒ₘ Δ' → n' < n →
-      frame F Γ Δ' k n' φ m m' a →
+      frame F Γ Δ' k (S n') φ m m' a →
       red (rcstep Γ δ ρ) (State k φ m') ∧
       ∀ S',
         Γ\ δ\ ρ ⊢ₛ State k φ m' ⇒ S' →
@@ -98,7 +98,7 @@ Section basics.
     * constructor; eauto with arith.
   Qed.
   Lemma ax_step Δ ρ n k φ m m' a S' :
-    ✓{Γ,Δ} m → frame F Γ Δ k n φ m m' a →
+    ✓{Γ,Δ} m → frame F Γ Δ k (S n) φ m m' a →
     Γ\ δ\ ρ ⊢ₛ State k φ m' ⇒ S' →
     dom indexset (SMem S') ∖ dom indexset m' ∩ dom indexset Δ = ∅ →
     ax_graph Δ ρ (S n) k φ m → ax_next Δ ρ n a S'.
@@ -107,7 +107,7 @@ Section basics.
     destruct (ax_assert_nf P Γ δ Δ ρ (S n) φ m m'); eauto.
   Qed.
   Lemma ax_step_undef Δ ρ n k φ m m' a k' Su m'' :
-    ✓{Γ,Δ} m → frame F Γ Δ k n φ m m' a →
+    ✓{Γ,Δ} m → frame F Γ Δ k (S n) φ m m' a →
     Γ\ δ\ ρ ⊢ₛ State k φ m' ⇒ State k' (Undef Su) m'' →
     dom indexset m'' ∖ dom indexset m' ∩ dom indexset Δ = ∅ →
     ¬ax_graph Δ ρ (S n) k φ m.
@@ -116,7 +116,7 @@ Section basics.
     by feed inversion (ax_step Δ ρ n k φ m m' a (State k' (Undef Su) m'')).
   Qed.
   Lemma ax_red Δ ρ n k φ m m' a :
-    ✓{Γ,Δ} m → frame F Γ Δ k n φ m m' a →
+    ✓{Γ,Δ} m → frame F Γ Δ k (S n) φ m m' a →
     ¬ax_assert_holds P Γ Δ ρ (S n) φ m →
     ax_graph Δ ρ (S n) k φ m →
     red (rcstep Γ δ ρ) (State k φ m').
@@ -156,15 +156,13 @@ Proof.
   induction n as [[|n] IH] using lt_wf_ind; [intros; apply ax_O|].
   intros Δ m k1 φ HF ? Hax Hnext.
   inversion Hax as [| |???? Hred Hstep]; subst; eauto.
-  apply ax_further.
-  { intros Δ' n' m'' a ????.
-    destruct (HF Δ' k1 n' φ m m'' a) as (b&?&_); eauto using rcred_app. }
-  intros Δ' n' m'' a [k' φ' m'] ???? p ?.
-  destruct (HF Δ' k1 n' φ m m'' a) as (b&?&?); auto.
+  apply ax_further_alt; intros Δ' n' m'' b ????.
+  destruct (HF Δ' k1 (S n') φ m m'' b) as (a&?&?); auto.
+  split; [eauto using rcred_app|intros [k' φ' m'] p ?].
   destruct (cstep_app_suffix_of Γ δ ρ k1 k2 φ m'' (State k' φ' m'))
     as [k3 ?]; simplify_equality'; eauto.
-  feed inversion (Hstep Δ' n' m'' b (State k3 φ' m'))
-    as [Δ'' n'' k'' φ'' m2' m2 a']; subst; auto using rcstep_app_inv.
+  feed inversion (Hstep Δ' n' m'' a (State k3 φ' m'))
+    as [Δ'' n'' k'' φ'' m2' m2 b']; subst; auto using rcstep_app_inv.
   econstructor; eauto 10 using unframe_valid.
 Qed.
 Lemma ax_compose_cons {A B} (F : ax_frame_cond K A) (G : ax_frame_cond K B)
@@ -217,11 +215,10 @@ Proof.
   induction n as [[|n] IH] using lt_wf_ind; [intros; apply ax_O|].
   intros Δ m k φ ??? Hax HPQ.
   inversion Hax as [| |???? Hred Hstep]; subst; eauto using ax_done.
-  apply ax_further.
-  { intros Δ' n' m' a; rewrite cmap_union_valid by auto; intros [??] ???.
-    destruct (HFG Δ' k n' φ m m' a) as (b&?&_); eauto. }
-  intros Δ' n' m' a S'; rewrite cmap_union_valid by auto; intros [??] ?? p ??.
-  destruct (HFG Δ' k n' φ m m' a) as (b&?&Hunframe); auto.
+  apply ax_further_alt; intros Δ' n' m' a.
+  rewrite cmap_union_valid by auto; intros [??] ???.
+  destruct (HFG Δ' k (S n') φ m m' a) as (b&?&Hunframe); eauto.
+  split; [eauto|intros ? p ?].
   feed inversion (Hstep Δ' n' m' b S')
     as [Δ'' k' ? φ' m2' m2 ? τf']; subst; auto.
   destruct (Hunframe Δ'' k' φ' m2' m2 τf'); trivial.

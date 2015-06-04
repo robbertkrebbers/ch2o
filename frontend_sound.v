@@ -542,7 +542,7 @@ Lemma insert_fun_valid S S' f sto τs τ ms :
 Proof.
   destruct S as [Γn Γ m Δg]; unfold insert_fun;
     intros ? [HΓ Hm HΔg HΓn HΓ'] Hf ?; error_proceed.
-  rewrite insert_lookup_fun by done.
+  rewrite insert_fun_id by done.
   destruct (HΓ' f (τs,τ)) as (ms'&?&?); auto.
   do 2 split; simpl; auto using map_Forall_insert_2.
   * intros f' [τs' τ'] ?; unfold lookup, env_lookup_fun in Hf.

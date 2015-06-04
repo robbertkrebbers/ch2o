@@ -172,6 +172,15 @@ Definition zipped_map {A B} (f : list A → list A → A → B) :
   list A → list A → list B := fix go l k :=
   match k with [] => [] | x :: k => f l k x :: go (x :: l) k end.
 
+Definition imap2_go {A B C} (f : nat → A → B → C) :
+    nat → list A → list B → list C:=
+  fix go (n : nat) (l : list A) (k : list B) :=
+  match l, k with
+  | [], _ |_, [] => [] | x :: l, y :: k => f n x y :: go (S n) l k
+  end.
+Definition imap2 {A B C} (f : nat → A → B → C) :
+  list A → list B → list C := imap2_go f 0.
+
 Inductive zipped_Forall {A} (P : list A → list A → A → Prop) :
     list A → list A → Prop :=
   | zipped_Forall_nil l : zipped_Forall P l []

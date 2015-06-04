@@ -178,6 +178,7 @@ Tactic Notation "decompose_elem_of" hyp(H) :=
     let H1 := fresh H in let H2 := fresh H in apply elem_of_guard in H;
     destruct H as [H1 H2]; go H2
   | _ ∈ of_option _ => apply elem_of_of_option in H
+  | _ ∈ of_list _ => apply elem_of_of_list in H
   | _ => idtac
   end in go H.
 Tactic Notation "decompose_elem_of" :=
@@ -221,6 +222,8 @@ Ltac unfold_elem_of :=
     | context [ _ ∈ _ ≫= _ ] => setoid_rewrite elem_of_bind in H
     | context [ _ ∈ mjoin _ ] => setoid_rewrite elem_of_join in H
     | context [ _ ∈ guard _; _ ] => setoid_rewrite elem_of_guard in H
+    | context [ _ ∈ of_option _ ] => setoid_rewrite elem_of_of_option in H
+    | context [ _ ∈ of_list _ ] => setoid_rewrite elem_of_of_list in H
     end);
   repeat match goal with
   | |- context [ _ ⊆ _ ] => setoid_rewrite elem_of_subseteq
@@ -239,6 +242,8 @@ Ltac unfold_elem_of :=
   | |- context [ _ ∈ _ ≫= _ ] => setoid_rewrite elem_of_bind
   | |- context [ _ ∈ mjoin _ ] => setoid_rewrite elem_of_join
   | |- context [ _ ∈ guard _; _ ] => setoid_rewrite elem_of_guard
+  | |- context [ _ ∈ of_option _ ] => setoid_rewrite elem_of_of_option
+  | |- context [ _ ∈ of_list _ ] => setoid_rewrite elem_of_of_list
   end.
 
 (** The tactic [solve_elem_of tac] composes the above tactic with [intuition].
@@ -485,6 +490,9 @@ Section fresh.
     rewrite <-Forall_forall.
     intros [Hxs Hxs']. induction Hxs; decompose_Forall_hyps; constructor; auto.
   Qed.
+  Lemma Forall_fresh_subseteq X Y xs :
+    Forall_fresh X xs → Y ⊆ X → Forall_fresh Y xs.
+  Proof. rewrite !Forall_fresh_alt; esolve_elem_of. Qed.
 
   Lemma fresh_list_length n X : length (fresh_list n X) = n.
   Proof. revert X. induction n; simpl; auto. Qed.

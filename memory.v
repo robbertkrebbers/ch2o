@@ -156,6 +156,20 @@ Proof.
   * by intros ?? [β' ?]; exists β'; simplify_map_equality'.
   * by intros ? τ' [??] [??]; exists τ'; simplify_map_equality'.
 Qed.
+Lemma mem_alloc_memenv_compat Δ1 Δ2 o τ β :
+  Δ1 ⇒ₘ Δ2 → <[o:=(τ,β)]>Δ1 ⇒ₘ <[o:=(τ,β)]>Δ2.
+Proof.
+  intros [Htyped Halive]; split.
+  * intros o' τ' [β' ?]; destruct (decide (o = o')); simplify_map_equality.
+    { apply mem_alloc_index_typed. }
+    destruct (Htyped o' τ') as [β'' ?]; [by exists β'|].
+    by exists β''; simplify_map_equality.
+  * intros o' τ' [β' ?] [τ'' ?];
+      destruct (decide (o = o')); simplify_map_equality.
+    { apply mem_alloc_index_alive. }
+    destruct (Halive o' τ') as [τ''' ?]; [by exists β'|by exists τ''|].
+    by exists τ'''; simplify_map_equality.
+Qed.
 Lemma mem_alloc_forward_least Γ Δ Δ' m o μ γ v τ :
   (Γ,Δ') ⊢ v : τ →
   ✓{Γ,Δ'} (mem_alloc Γ o μ γ v m) → Δ ⇒ₘ Δ' → <[o:=(τ,false)]>Δ ⇒ₘ Δ'.
@@ -181,45 +195,6 @@ Proof.
   destruct (decide (o = o')); simplify_map_equality'; eauto.
   eapply HΔ; do 2 red; eauto.
 Qed.
-Lemma mem_alloc_orig_valid Γ Δ m o τ :
-  ✓ Γ → ✓{Γ,Δ} m → Δ !! o = None → ✓{Γ} τ → ✓{Γ,<[o:=(τ,false)]>Δ} m.
-Proof.
-  intros HΓ ? Ho ?; split_ands'; simpl.
-  * eauto using mem_alloc_memenv_valid, cmap_valid_memenv_valid.
-  * intros o' τ' ?.
-    destruct (cmap_valid_Freed Γ Δ m o' τ') as (?&?&?); eauto 8 using
-      mem_alloc_forward, memenv_forward_typed, memenv_forward_alive.
-  * intros o' w μ' ?.
-    destruct (cmap_valid_Obj Γ Δ m o' w μ') as (τ'&Ho'&?&?&?); eauto.
-    assert (o ≠ o') by (intros ->; destruct Ho'; simplify_equality).
-    exists τ'; split_ands; eauto  using ctree_typed_weaken, mem_alloc_forward,
-      memenv_forward_typed, memenv_forward_alive, mem_alloc_index_alive_ne.
-Qed.
-Lemma mem_alloc_valid Γ Δ m o μ γ v τ :
-  ✓ Γ → ✓{Γ,Δ} m → Δ !! o = None → sep_valid γ → ¬sep_unmapped γ →
-  (Γ,<[o:=(τ,false)]>Δ) ⊢ v : τ →
-  ✓{Γ,<[o:=(τ,false)]>Δ} (mem_alloc Γ o μ γ v m).
-Proof.
-  destruct m as [m]; intros HΓ Hm Ho Hx Hx' Hv; split_ands'; simpl.
-  * eauto using mem_alloc_memenv_valid, cmap_valid_memenv_valid.
-  * intros o' τ'; rewrite lookup_insert_Some;
-      intros [[??]|[??]]; simplify_equality'.
-    destruct (cmap_valid_Freed Γ Δ (CMap m) o' τ')
-      as (?&?&?); simplify_map_equality'; eauto 10
-      using mem_alloc_forward, memenv_forward_typed, memenv_forward_alive.
-  * assert ((Γ, <[o:=(τ,false)]> Δ) ⊢
-      of_val Γ (replicate (bit_size_of Γ τ) γ) v : τ)
-      by eauto using of_val_typed, Forall_replicate.
-    intros o' w μ'; rewrite lookup_insert_Some;
-      intros [[??]|[??]]; simplify_type_equality'.
-    { exists τ; split_ands; eauto 9 using ctree_Forall_not,
-       mem_alloc_index_typed, mem_alloc_index_alive, Forall_replicate,
-       of_val_mapped, @sep_unmapped_empty_alt, Forall_impl. }
-    destruct (cmap_valid_Obj Γ Δ (CMap m) o' w μ')
-      as (τ'&?&?&?&?); simplify_map_equality'; eauto.
-    exists τ'; split_ands; eauto using ctree_typed_weaken, mem_alloc_forward,
-      memenv_forward_typed, memenv_forward_alive, mem_alloc_index_alive_ne.
-Qed.
 Lemma mem_alloc_alive_valid Γ Δ m o μ γ v τ :
   ✓ Γ → ✓{Γ,Δ} m → Δ ⊢ o : τ → index_alive Δ o → sep_valid γ →
   ¬sep_unmapped γ → (Γ,Δ) ⊢ v : τ → ✓{Γ,Δ} (mem_alloc Γ o μ γ v m).
@@ -237,6 +212,15 @@ Proof.
        of_val_mapped, @sep_unmapped_empty_alt, Forall_impl. }
     destruct (cmap_valid_Obj Γ Δ (CMap m) o' w μ')
       as (τ'&?&?&?&?); simplify_map_equality'; eauto.
+Qed.
+Lemma mem_alloc_valid Γ Δ m o μ γ v τ :
+  ✓ Γ → ✓{Γ,Δ} m → Δ !! o = None → sep_valid γ → ¬sep_unmapped γ →
+  (Γ,<[o:=(τ,false)]>Δ) ⊢ v : τ →
+  ✓{Γ,<[o:=(τ,false)]>Δ} (mem_alloc Γ o μ γ v m).
+Proof.
+  intros; eapply mem_alloc_alive_valid; eauto using mem_alloc_index_typed,
+    mem_alloc_index_alive, cmap_valid_weaken, (insert_subseteq Δ),
+    mem_alloc_memenv_valid, cmap_valid_memenv_valid.
 Qed.
 Lemma mem_allocable_memenv_of m o : o ∉ dom indexset m → '{m} !! o = None.
 Proof. rewrite cmap_dom_alt. by intros; destruct m; simplify_map_equality'. Qed.
@@ -318,6 +302,20 @@ Lemma mem_erase_alloc Γ m o μ γ v :
 Proof.
   destruct m as [m]; f_equal'; apply map_eq; intros o'.
   by destruct (decide (o' = o)); simplify_map_equality.
+Qed.
+Lemma mem_alloc_valid_inv Γ Δ m o μ γ v :
+  o ∉ dom indexset m → ✓{Γ,Δ} (mem_alloc Γ o μ γ v m) → ✓{Γ,Δ} m.
+Proof.
+  rewrite cmap_dom_alt; intros ? (?&Hfreed&Halive); split_ands'; auto.
+  * intros; eapply Hfreed; by destruct m; simplify_map_equality'.
+  * intros; eapply Halive; by destruct m; simplify_map_equality'.
+Qed.
+Lemma mem_alloc_valid_index_inv Γ Δ m o μ γ v :
+  ✓{Γ,Δ} (mem_alloc Γ o μ γ v m) → index_alive Δ o ∧ Δ ⊢ o : type_of v.
+Proof.
+  intros (_&_&Halive).
+  edestruct Halive as (?&?&?&?&?); [by destruct m; simplify_map_equality'|].
+  by erewrite <-of_val_type_of, type_of_correct by eauto.
 Qed.
 Lemma mem_alloc_allocable_list Γ m o μ γ v os :
   Forall_fresh (dom indexset m) os → o ∉ os →
@@ -418,6 +416,18 @@ Proof.
   * by exists true; simplify_map_equality'.
   * by exists β; simplify_map_equality'.
 Qed.
+Lemma mem_free_memenv_compat Δ1 Δ2 o :
+  Δ1 ⇒ₘ Δ2 →
+  alter (prod_map id (λ _, true)) o Δ1 ⇒ₘ alter (prod_map id (λ _, true)) o Δ2.
+Proof.
+  intros [Htyped Halive]; split.
+  * eauto 4 using memenv_forward_typed,
+      mem_free_forward, mem_free_index_typed_inv.
+  * intros o' τ [β ?] [τ' ?]; destruct (decide (o = o'));
+      simplify_map_equality; [simplify_option_equality|].
+    destruct (Halive o' τ) as [τ'' ?]; [by exists β|by exists τ'|].
+    by exists τ''; simplify_map_equality.
+Qed.
 Lemma mem_free_forward_least Γ Δ Δ' m o μ :
   mem_freeable_perm o μ m →
   ✓{Γ,Δ'} (mem_free o m) → Δ ⇒ₘ Δ' → alter (prod_map id (λ _, true)) o Δ ⇒ₘ Δ'.
@@ -433,7 +443,7 @@ Proof.
   by exists τ.
 Qed.
 Lemma mem_free_env_valid Γ Δ o :
-  ✓{Γ} Δ → ✓{Γ}(alter (prod_map id (λ _, true)) o Δ).
+  ✓{Γ} Δ → ✓{Γ} (alter (prod_map id (λ _, true)) o Δ).
 Proof.
   intros HΔ o' τ' [??]; specialize (HΔ o' τ').
   destruct (decide (o = o')); simplify_map_equality';
@@ -469,6 +479,12 @@ Proof.
 Qed.
 Lemma mem_free_forward' m o : '{m} ⇒ₘ '{mem_free o m}.
 Proof. rewrite mem_free_memenv_of; eauto using mem_free_forward. Qed.
+Lemma mem_free_valid_index_inv Γ Δ m μ o :
+  ✓{Γ,Δ} (mem_free o m) → mem_freeable_perm o μ m → ¬index_alive Δ o.
+Proof.
+  intros (_&Hfree&_) (w&?&_).
+  by destruct (Hfree o (type_of w)); [by destruct m; simplify_map_equality'|].
+Qed.
 Lemma mem_foldr_free_forward m os : '{m} ⇒ₘ '{foldr mem_free m os}.
 Proof. induction os; simpl; eauto using mem_free_forward'. Qed.
 Lemma mem_foldr_free_valid Γ m os : ✓ Γ → ✓{Γ} m → ✓{Γ} (foldr mem_free m os).
@@ -476,6 +492,28 @@ Proof. induction os; simpl; auto using mem_free_valid'. Qed.
 Lemma mem_dom_foldr_free m os :
   dom indexset (foldr mem_free m os) = dom indexset m.
 Proof. induction os; simpl; rewrite ?mem_dom_free; auto. Qed.
+Lemma mem_free_free m o1 o2 :
+  mem_free o1 (mem_free o2 m) = mem_free o2 (mem_free o1 m).
+Proof.
+  destruct m as [m]; f_equal';
+    destruct (decide (o1 = o2)) as [->|]; auto using alter_commute.
+Qed.
+Lemma mem_free_foldr_free m o os :
+  mem_free o (foldr mem_free m os) = foldr mem_free (mem_free o m) os.
+Proof. induction os; simpl; rewrite 1?mem_free_free; auto with f_equal. Qed.
+Lemma mem_freeable_perm_free m o o' μ :
+  o ≠ o' → mem_freeable_perm o μ m → mem_freeable_perm o μ (mem_free o' m).
+Proof.
+  intros ? (w&?&?); exists w; split_ands; auto.
+  by destruct m as [m]; simplify_map_equality'.
+Qed.
+Lemma mem_freeable_perm_foldr_free m o os μ :
+  o ∉ os →
+  mem_freeable_perm o μ m → mem_freeable_perm o μ (foldr mem_free m os).
+Proof.
+  induction os as [|o' os IH]; simpl; auto.
+  rewrite not_elem_of_cons; intros [??]; auto using mem_freeable_perm_free.
+Qed.
 
 (** ** Properties of the [lookup] function *)
 Lemma mem_lookup_empty Γ a : ∅ !!{Γ} a = @None (val K).
@@ -999,6 +1037,17 @@ Proof.
     fmap_zip_with_l, list_lookup_fmap, fmap_Some by auto.
   setoid_rewrite lookup_replicate; intros (?&[??]&?); congruence.
 Qed.
+Lemma mem_locks_alloc_list Γ Δ m vs os τs :
+  ✓ Γ → Forall_fresh (dom indexset m) os → length os = length vs →
+  (Γ,Δ) ⊢* vs :* τs → mem_locks (mem_alloc_list Γ os vs m) = mem_locks m.
+Proof.
+  rewrite <-Forall2_same_length; intros ? Hos Hovs Hvs; revert os m Hos Hovs.
+  induction Hvs as [|v τ vs τs ?? IH];
+    intros ? m [|o os ???] ?; decompose_Forall_hyps; auto.
+  assert (o ∉ dom indexset (mem_alloc_list Γ os vs m)).
+  { rewrite mem_dom_alloc_list by eauto using Forall2_length; esolve_elem_of. }
+  by erewrite mem_locks_alloc, IH by eauto.
+Qed.
 Lemma mem_locks_free m o μ :
   mem_freeable_perm o μ m → mem_locks (mem_free o m) = mem_locks m.
 Proof.
@@ -1290,6 +1339,11 @@ Proof.
 Qed.
 Lemma mem_unlock_all_spec m : mem_unlock_all m = mem_unlock (mem_locks m) m.
 Proof. done. Qed.
+Lemma mem_unlock_all_spec_alt Ω m :
+  mem_locks m = Ω → mem_unlock_all m = mem_unlock Ω m.
+Proof. by intros <-. Qed. 
+Lemma mem_unlock_all_empty_locks m : mem_locks m = ∅ → mem_unlock_all m = m.
+Proof. by rewrite mem_unlock_all_spec; intros ->; rewrite mem_unlock_empty. Qed.
 Lemma mem_unlock_all_empty : mem_unlock_all ∅ = ∅.
 Proof. by rewrite mem_unlock_all_spec, mem_locks_empty, mem_unlock_empty. Qed.
 Lemma mem_unlock_all_valid Γ Δ m : ✓ Γ → ✓{Γ,Δ} m → ✓{Γ,Δ} (mem_unlock_all m).

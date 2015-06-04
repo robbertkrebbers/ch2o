@@ -80,7 +80,6 @@ Proof.
   rewrite !sep_disjoint_list_double, !(symmetry_iff _ m').
   eauto using mem_free_disjoint.
 Qed.
-
 Lemma mem_free_union m1 m2 o1 μ :
   m1 ⊥ m2 → mem_freeable_perm o1 μ m1 →
   mem_free o1 (m1 ∪ m2) = mem_free o1 m1 ∪ m2.
@@ -321,11 +320,10 @@ Proof.
 Qed.
 Lemma mem_unlock_all_disjoint_le m ms : m :: ms ⊆⊥ mem_unlock_all m :: ms.
 Proof. by apply mem_unlock_disjoint_le. Qed.
-Lemma mem_unlock_all_disjoint m1 m2 :
-  m1 ⊥ m2 → mem_unlock_all m1 ⊥ mem_unlock_all m2.
+Lemma mem_unlock_all_disjoint_list_le ms : ms ⊆⊥ mem_unlock_all <$> ms.
 Proof.
-  rewrite <-!sep_disjoint_list_double.
-  intros. by rewrite <-!mem_unlock_all_disjoint_le.
+  induction ms as [|m ms IH]; csimpl; [done|].
+  by rewrite <-mem_unlock_all_disjoint_le, <-IH.
 Qed.
 Lemma mem_unlock_all_union m1 m2 :
   m1 ⊥ m2 → mem_unlock_all (m1 ∪ m2) = mem_unlock_all m1 ∪ mem_unlock_all m2.
@@ -335,5 +333,11 @@ Proof.
   by rewrite mem_locks_union, mem_unlock_union_locks, sep_commutative',
     mem_unlock_union, sep_commutative', mem_unlock_union
     by auto using mem_unlock_disjoint.
+Qed.
+Lemma mem_unlock_all_union_list ms :
+  ⊥ ms → mem_unlock_all (⋃ ms) = ⋃ (mem_unlock_all <$> ms).
+Proof.
+  by induction 1; simpl;
+    rewrite ?mem_unlock_all_union, ?mem_unlock_all_empty by done; f_equal.
 Qed.
 End memory.
