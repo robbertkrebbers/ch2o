@@ -165,6 +165,11 @@ Instance: Params (@equivE) 4.
 Notation "X ≡{ Γ } Y" := (equivE Γ X Y)
   (at level 70, format "X  ≡{ Γ }  Y") : C_scope.
 Notation "(≡{ Γ } )" := (equivE Γ) (only parsing, Γ at level 1) : C_scope.
+Notation "X ≡{ Γ1 , Γ2 , .. , Γ3 } Y" :=
+  (equivE (pair .. (Γ1, Γ2) .. Γ3) X Y)
+  (at level 70, format "'[' X  ≡{ Γ1 , Γ2 , .. , Γ3 }  '/' Y ']'") : C_scope.
+Notation "(≡{ Γ1 , Γ2 , .. , Γ3 } )" := (equivE (pair .. (Γ1, Γ2) .. Γ3))
+  (only parsing, Γ1 at level 1) : C_scope.
 
 (** The type class [LeibnizEquiv] collects setoid equalities that coincide
 with Leibniz equality. We provide the tactic [fold_leibniz] to transform such

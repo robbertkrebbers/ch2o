@@ -83,34 +83,36 @@ the memory to contain no locks at the start. Also, we require all locks to be
 released in the end, as each statement that contains an expression always has
 a sequence point in the end. *)
 Inductive ax_stmt_post' `{Env K} (Pd : dassert K) (s : stmt K) (cmτ : rettype K)
-    (Γ : env K) (Δ : memenv K) (ρ : stack K) (n : nat) : focus K → mem K → Prop :=
+    (Γ : env K) (Δ : memenv K) (δ : funenv K)
+    (ρ : stack K) (n : nat) : focus K → mem K → Prop :=
   mk_ax_stmt_post d m :
     direction_out d s → (Γ,Δ) ⊢ d : cmτ →
     mem_locks m = ∅ →
-    assert_holds (Pd d) Γ Δ ρ n (cmap_erase m) →
-    ax_stmt_post' Pd s cmτ Γ Δ ρ n (Stmt d s) m.
+    assert_holds (Pd d) Γ Δ δ ρ n (cmap_erase m) →
+    ax_stmt_post' Pd s cmτ Γ Δ δ ρ n (Stmt d s) m.
 Program Definition ax_stmt_post `{EnvSpec K} (Pd : dassert K)
     (s : stmt K) (cmτ : rettype K) : ax_assert K := {|
   ax_assert_holds := ax_stmt_post' Pd s cmτ
 |}.
 Next Obligation.
-  intros ??? Pd s cmτ Γ1 Γ2 Δ1 Δ2 ρ n n' φ m ???; destruct 1 as [d m' ????];
-    constructor; eauto using direction_typed_weaken, assert_weaken, cmap_erase_valid.
+  intros ??? Pd s cmτ Γ1 Γ2 Δ1 Δ2 δ1 δ2 ρ n n' φ m ????;
+    destruct 1 as [d m' ????]; constructor;
+    eauto using direction_typed_weaken, assert_weaken, cmap_erase_valid.
 Qed.
 Next Obligation.
-  intros ??? Pd s cmτ Γ δ Δ n ρ φ m m' [d m'' ????] [? p]; inv_rcstep.
+  intros ??? Pd s cmτ Γ Δ δ n ρ φ m m' [d m'' ????] [? p]; inv_rcstep.
 Qed.
 Definition ax_stmt_packed `{EnvSpec K} (Γ : env K) (δ : funenv K)
-    (Pd : dassert K) (s : stmt K) : Prop := ∀ Γ' Δ n ρ d m cmτ,
-  ✓ Γ' → Γ ⊆ Γ' →
-  ✓{Γ',Δ} δ →
+    (Pd : dassert K) (s : stmt K) : Prop := ∀ Γ' Δ δ' n ρ d m cmτ,
+  ✓ Γ' → Γ ⊆ Γ' → δ ⊆ δ' →
+  ✓{Γ',Δ} δ' →
   ✓{Γ',Δ} m →
   mem_locks m = ∅ →
   direction_in d s →
   (Γ',Δ,ρ.*2) ⊢ s : cmτ →
   ✓{Δ}* ρ →
-  assert_holds (Pd d) Γ' Δ ρ n (cmap_erase m) →
-  ax_graph ax_disjoint_cond (ax_stmt_post Pd s cmτ) Γ' δ Δ ρ n [] (Stmt d s) m.
+  assert_holds (Pd d) Γ' Δ δ' ρ n (cmap_erase m) →
+  ax_graph ax_disjoint_cond (ax_stmt_post Pd s cmτ) Γ' δ' Δ ρ n [] (Stmt d s) m.
 Instance: Params (@ax_stmt_packed) 5.
 Notation "Γ \ δ \ P ⊨ₚ s" :=
   (ax_stmt_packed Γ δ P%A s)
@@ -146,83 +148,86 @@ Arguments InExpr {_} _ _.
 Arguments InFun {_} _.
 
 Inductive ax_expr_cond_frame `{Env K}
-     (ρ : stack K) (A : assert K) (Γ : env K) (Δ : memenv K) (k : ctx K) 
+     (ρ : stack K) (A : assert K) (Γ : env K)
+     (Δ : memenv K) (δ : funenv K) (k : ctx K)
      (n : nat) (φ : focus K) (m m' : mem K) : ax_expr_frame K → Prop :=
   | ax_frame_in_expr mA mf :
      m' = m ∪ mf ∪ mA → ✓{Γ,Δ} mf → ✓{Γ,Δ} mA →
      ⊥ [m; mf; mA] → k = [] → cmap_erased mA → mem_locks mA = ∅ →
-     assert_holds A Γ Δ ρ n mA →
-     ax_expr_cond_frame ρ A Γ Δ k n φ m m' (InExpr mf mA)
+     assert_holds A Γ Δ δ ρ n mA →
+     ax_expr_cond_frame ρ A Γ Δ δ k n φ m m' (InExpr mf mA)
   | ax_frame_in_fun mf :
      m' = m ∪ mf → ✓{Γ,Δ} mf →
      ⊥ [m; mf] → k ≠ [] →
-     ax_expr_cond_frame ρ A Γ Δ k n φ m m' (InFun mf).
+     ax_expr_cond_frame ρ A Γ Δ δ k n φ m m' (InFun mf).
 Inductive ax_expr_cond_unframe `{Env K}
-     (ρ : stack K) (A : assert K) (Γ : env K) (Δ : memenv K) (k : ctx K)
+     (ρ : stack K) (A : assert K) (Γ : env K)
+     (Δ : memenv K) (δ : funenv K) (k : ctx K)
      (n : nat) (φ : focus K) (m m' : mem K) : ax_expr_frame K → Prop :=
   | ax_unframe_expr_to_expr mA mf :
      m' = m ∪ mf ∪ mA → ⊥ [m; mf; mA] → k = [] →
-     ax_expr_cond_unframe ρ A Γ Δ k n φ m m' (InExpr mf mA)
+     ax_expr_cond_unframe ρ A Γ Δ δ k n φ m m' (InExpr mf mA)
   | ax_unframe_fun_to_expr mA mf :
      m' = m ∪ mf ∪ mA → ⊥ [m; mf; mA] → k = [] →
      cmap_erased mA → mem_locks mA = ∅ →
-     assert_holds A Γ Δ ρ n mA → 
-     ax_expr_cond_unframe ρ A Γ Δ k n φ m m' (InFun mf)
+     assert_holds A Γ Δ δ ρ n mA → 
+     ax_expr_cond_unframe ρ A Γ Δ δ k n φ m m' (InFun mf)
   | ax_unframe_expr_to_fun m'' mA mf :
      m = m'' ∪ mA → m' = m'' ∪ mf ∪ mA → ⊥ [m''; mf; mA] → k ≠ [] →
-     ax_expr_cond_unframe ρ A Γ Δ k n φ m m' (InExpr mf mA)
+     ax_expr_cond_unframe ρ A Γ Δ δ k n φ m m' (InExpr mf mA)
   | ax_unframe_fun_to_fun mf :
      m' = m ∪ mf → ⊥ [m; mf] → k ≠ [] →
-     ax_expr_cond_unframe ρ A Γ Δ k n φ m m' (InFun mf).
+     ax_expr_cond_unframe ρ A Γ Δ δ k n φ m m' (InFun mf).
 Program Definition ax_expr_cond `{EnvSpec K} (ρ : stack K)
     (A : assert K) : ax_frame_cond K (ax_expr_frame K) := {|
   frame := ax_expr_cond_frame ρ A;
   unframe := ax_expr_cond_unframe ρ A
 |}.
 Next Obligation.
-  intros ??? ρ A Γ Δ k n φ m m' ??;
+  intros ??? ρ A Γ Δ δ k n φ m m' ??;
     destruct 1; subst; auto using cmap_union_valid_2.
 Qed.
 Next Obligation.
-  intros ??? ρ A Γ Δ k n φ m m' ??; destruct 1; subst;
+  intros ??? ρ A Γ Δ δ k n φ m m' ??; destruct 1; subst;
     rewrite ?cmap_union_valid; intuition.
 Qed.
 
-Definition ax_expr_invariant `{Env K} (Γ : env K) (Δ : memenv K)
-    (A : assert K) (ρ : stack K) (n : nat) (m : mem K) := ∃ mA,
+Definition ax_expr_invariant `{Env K} (A : assert K)
+    (Γ : env K) (Δ : memenv K) (δ : funenv K)
+    (ρ : stack K) (n : nat) (m : mem K) := ∃ mA,
   ⊥ [mA; m] ∧ ✓{Γ,Δ} mA ∧ cmap_erased mA ∧ mem_locks mA = ∅ ∧
-  assert_holds A Γ Δ ρ n mA.
+  assert_holds A Γ Δ δ ρ n mA.
 Inductive ax_expr_post' `{Env K} (Q : lrval K → assert K)
-    (τlr : lrtype K) (Γ : env K) (Δ : memenv K) (ρ : stack K)
-    (n : nat) : focus K → mem K → Prop :=
+    (τlr : lrtype K) (Γ : env K) (Δ : memenv K)
+    (δ : funenv K) (ρ : stack K) (n : nat) : focus K → mem K → Prop :=
   mk_ax_expr_post ν Ω m :
     (Γ,Δ) ⊢ ν : τlr →
     mem_locks m = Ω →
-    assert_holds (Q ν) Γ Δ ρ n (cmap_erase m) →
-    ax_expr_post' Q τlr Γ Δ ρ n (Expr (%#{Ω} ν)) m.
+    assert_holds (Q ν) Γ Δ δ ρ n (cmap_erase m) →
+    ax_expr_post' Q τlr Γ Δ δ ρ n (Expr (%#{Ω} ν)) m.
 Program Definition ax_expr_post `{EnvSpec K}
     (Q : lrval K → assert K) (τlr : lrtype K) : ax_assert K := {|
   ax_assert_holds := ax_expr_post' Q τlr
 |}.
 Next Obligation.
-  intros ??? Q τlr Γ1 Γ2 Δ1 Δ2 ρ n φ m ????; destruct 1; constructor;
+  intros ??? Q τlr Γ1 Γ2 Δ1 Δ2 δ1 δ2 ρ n φ m ?????; destruct 1; constructor;
     eauto using assert_weaken, cmap_erase_valid, lrval_typed_weaken.
 Qed.
 Next Obligation.
-  intros ??? Q τlr Γ δ Δ ρ n φ m m' [d m'' ???] [? p]; inv_rcstep.
+  intros ??? Q τlr Γ Δ δ ρ n φ m m' [d m'' ???] [? p]; inv_rcstep.
 Qed.
 Definition ax_expr `{EnvSpec K} (Γ : env K) (δ : funenv K) (A P : assert K)
-    (e : expr K) (Q : lrval K → assert K) : Prop := ∀ Γ' Δ n ρ m τlr,
-  ✓ Γ' → Γ ⊆ Γ' →
-  ✓{Γ',Δ} δ →
+    (e : expr K) (Q : lrval K → assert K) : Prop := ∀ Γ' Δ δ' n ρ m τlr,
+  ✓ Γ' → Γ ⊆ Γ' → δ ⊆ δ' →
+  ✓{Γ',Δ} δ' →
   ✓{Γ',Δ} m →
   mem_locks m = ∅ →
   (Γ',Δ,ρ.*2) ⊢ e : τlr →
   locks e = ∅ →
   ✓{Δ}* ρ →
-  ax_expr_invariant Γ' Δ A ρ n m →
-  assert_holds P Γ' Δ ρ n (cmap_erase m) →
-  ax_graph (ax_expr_cond ρ A) (ax_expr_post Q τlr) Γ' δ Δ ρ n [] (Expr e) m.
+  ax_expr_invariant A Γ' Δ δ' ρ n m →
+  assert_holds P Γ' Δ δ' ρ n (cmap_erase m) →
+  ax_graph (ax_expr_cond ρ A) (ax_expr_post Q τlr) Γ' δ' Δ ρ n [] (Expr e) m.
 Instance: Params (@ax_expr) 5.
 Notation "Γ \ δ \ A ⊨ₑ {{ P }} e {{ Q }}" :=
   (ax_expr Γ δ A%A P%A e Q%A)
@@ -245,38 +250,38 @@ Existing Instance fpost_stack_indep.
 
 Inductive ax_fun_post' `{Env K}
     (f : funname) (τ : type K) (P : val K → assert K)
-    (Γ : env K) (Δ : memenv K)
+    (Γ : env K) (Δ : memenv K) (δ : funenv K)
     (ρ : stack K) (n : nat) : focus K → mem K → Prop :=
   mk_ax_fun_post v m :
     (Γ,Δ) ⊢ v : τ →
     mem_locks m = ∅ →
-    assert_holds (P v) Γ Δ ρ n (cmap_erase m) →
-    ax_fun_post' f τ P Γ Δ ρ n (Return f v) m.
+    assert_holds (P v) Γ Δ δ ρ n (cmap_erase m) →
+    ax_fun_post' f τ P Γ Δ δ ρ n (Return f v) m.
 Program Definition ax_fun_post `{EnvSpec K} (f : funname) (τ : type K)
     (P : val K → assert K) : ax_assert K := {|
   ax_assert_holds := ax_fun_post' f τ P 
 |}.
 Next Obligation.
-  intros ??? f τ Pf Γ1 Γ2 Δ1 Δ2 ρ n n' φ ????; destruct 1 as [v m];
+  intros ??? f τ Pf Γ1 Γ2 Δ1 Δ2 δ1 δ2 ρ n n' φ ?????; destruct 1 as [v m];
     constructor; eauto using assert_weaken, cmap_erase_valid, val_typed_weaken.
 Qed.
 Next Obligation.
-  intros ??? f τ Pf Γ δ Δ n ρ φ m m' [v m'' ??] [? p]; inv_rcstep.
+  intros ??? f τ Pf Γ Δ δ n ρ φ m m' [v m'' ??] [? p]; inv_rcstep.
 Qed.
-Program Definition assert_fun `{EnvSpec K} (δ : funenv K) (f : funname)
+Program Definition assert_fun `{EnvSpec K} (f : funname)
     (Pf : fassert K) (τs : list (type K)) (τ : type K) : assert K := {|
-  assert_holds Γ Δ ρ n m :=
+  assert_holds Γ Δ δ ρ n m :=
     m = ∅ ∧
     Γ !! f = Some (τs,τ) ∧
-    ∀ Γ' Δ' n' c vs m',
-      Γ ⊆ Γ' → ✓ Γ' → Δ ⇒ₘ Δ' → n' ≤ n →
-      ✓{Γ',Δ'} δ →
+    ∀ Γ' Δ' δ' n' c vs m',
+      Γ ⊆ Γ' → ✓ Γ' → Δ ⇒ₘ Δ' → δ ⊆ δ' → n' ≤ n →
+      ✓{Γ',Δ'} δ' →
       ✓{Γ',Δ'} m' →
       mem_locks m' = ∅ →
       (Γ',Δ') ⊢* vs :* τs →
-      assert_holds (fpre Pf c vs) Γ' Δ' [] n' (cmap_erase m') →
+      assert_holds (fpre Pf c vs) Γ' Δ' δ' [] n' (cmap_erase m') →
       ax_graph ax_disjoint_cond
-        (ax_fun_post f τ (fpost Pf c vs)) Γ' δ Δ' [] n' [] (Call f vs) m'
+        (ax_fun_post f τ (fpost Pf c vs)) Γ' δ' Δ' [] n' [] (Call f vs) m'
 |}.
 Next Obligation. naive_solver eauto using lookup_fun_weaken. Qed.
 
@@ -311,51 +316,55 @@ Lemma directed_fmap_spec {A B} (f : A → B) (P : direction K → A) d :
   (f <$> P) d = f (P d).
 Proof. by destruct d. Qed.
 Global Instance ax_stmt_packed_proper Γ δ : Proper
-  (pointwise_relation _ (≡{Γ}) ==> (=) ==> iff) (ax_stmt_packed Γ δ).
+  (pointwise_relation _ (≡{Γ,δ}) ==> (=) ==> iff) (ax_stmt_packed Γ δ).
 Proof.
-  cut (Proper (pointwise_relation _ (≡{Γ}) ==> (=) ==> impl)
+  cut (Proper (pointwise_relation _ (≡{Γ,δ}) ==> (=) ==> impl)
               (ax_stmt_packed Γ δ)).
   { intros help. by split; apply help. }
-  intros Pd Qd HPQ ?? -> Hax ????????????????.
+  intros Pd Qd HPQ ?? -> Hax ??????????????????.
   eapply ax_weaken with ax_disjoint_cond (ax_stmt_post Pd _ _) n; eauto.
   { eapply Hax, HPQ; eauto. }
-  destruct 2; constructor; auto. eapply HPQ; eauto using indexes_valid_weaken.
+  destruct 2; constructor; auto.
+  eapply HPQ; eauto using indexes_valid_weaken, funenv_valid_weaken.
 Qed.
 Lemma ax_stmt_top_unfold Γ δ P (Q : val _ → assert _) s :
   Γ\ δ ⊨ₛ {{ P }} s {{ Q }} ↔
-  Γ\ δ \ Q \ (λ _, False)\ (λ _, False)\ (λ _, False) ⊨ₛ {{ P }} s {{ Q voidV }}.
+  Γ\ δ\ Q\ (λ _, False)\ (λ _, False)\ (λ _, False) ⊨ₛ {{ P }} s {{ Q voidV }}.
 Proof. done. Qed.
 Global Instance ax_stmt_proper Γ δ :
-  Proper (pointwise_relation _ (≡{Γ}) ==> pointwise_relation _ (≡{Γ}) ==>
-     pointwise_relation _ (≡{Γ}) ==> pointwise_relation _ (≡{Γ}) ==>
-     (≡{Γ}) ==> (=) ==> (≡{Γ}) ==> iff) (ax_stmt Γ δ).
+  Proper (pointwise_relation _ (≡{Γ,δ}) ==> pointwise_relation _ (≡{Γ,δ}) ==>
+     pointwise_relation _ (≡{Γ,δ}) ==> pointwise_relation _ (≡{Γ,δ}) ==>
+     (≡{Γ,δ}) ==> (=) ==> (≡{Γ,δ}) ==> iff) (ax_stmt Γ δ).
 Proof.
   intros ?? HR ?? HJ ?? HT ?? HC ?? HP ?? -> ?? HQ.
   unfold ax_stmt. by rewrite HR, HJ, HT, HC, HP, HQ.
 Qed.
 Global Instance ax_stmt_top_proper Γ δ :
-  Proper ((≡{Γ}) ==> (=) ==> pointwise_relation _ (≡{Γ}) ==> iff)
+  Proper ((≡{Γ,δ}) ==> (=) ==> pointwise_relation _ (≡{Γ,δ}) ==> iff)
          (ax_stmt_top Γ δ).
 Proof.
   intros ?? HP ?? -> ?? HQ.
   unfold ax_stmt_top, dassert_pack_top. by rewrite HP, HQ.
 Qed.
 
-Lemma ax_expr_invariant_emp Γ Δ ρ n m : ✓{Γ,Δ} m → ax_expr_invariant Γ Δ emp ρ n m.
+Lemma ax_expr_invariant_emp Γ Δ δ ρ n m :
+  ✓{Γ,Δ} m → ax_expr_invariant emp Γ Δ δ ρ n m.
 Proof. by eexists ∅; split_ands; eauto. Qed.
 Hint Resolve ax_expr_invariant_emp.
-Lemma ax_expr_invariant_weaken Γ Δ A ρ n1 n2 m1 m2 :
+Lemma ax_expr_invariant_weaken Γ Δ δ A ρ n1 n2 m1 m2 :
   ✓ Γ → ✓{Δ}* ρ →
-  ax_expr_invariant Γ Δ A ρ n1 m2 → m1 ⊆ m2 → n2 ≤ n1 →
-  ax_expr_invariant Γ Δ A ρ n2 m1.
+  ax_expr_invariant A Γ Δ δ ρ n1 m2 → m1 ⊆ m2 → n2 ≤ n1 →
+  ax_expr_invariant A Γ Δ δ ρ n2 m1.
 Proof.
-  intros ?? (mA&?&?&?&?&?) Hm12; exists mA; split_ands; eauto using assert_weaken.
+  intros ?? (mA&?&?&?&?&?) Hm12.
+  exists mA; split_ands; eauto using assert_weaken.
   by rewrite <-(sep_subseteq_disjoint_le m1) by eauto.
 Qed.
 Lemma ax_disjoint_expr_compose_diagram Γ ρ A Ek :
   ax_compose_diagram ax_disjoint_cond (ax_expr_cond ρ A) Γ [Ek].
 Proof.
-  intros Δ k n φ a m m' ?; simpl. destruct 1; subst; [discriminate_list_equality|].
+  intros Δ δ k n φ a m m' ??; simpl.
+  destruct 1; subst; [discriminate_list_equality|].
   exists mf; split_ands; auto; intros Δ' k' φ' m2 m2' ?? [-> ?].
   constructor; trivial; intro; discriminate_list_equality.
 Qed.
@@ -363,7 +372,8 @@ Hint Resolve ax_disjoint_expr_compose_diagram.
 Lemma ax_expr_disjoint_compose_diagram Γ ρ k :
   ax_compose_diagram (ax_expr_cond ρ emp%A) ax_disjoint_cond Γ k.
 Proof.
-  intros Δ k' φ n m m' mf ? (->&?&?); simpl; destruct (decide (k' = [])) as [->|].
+  intros Δ δ k' φ n m m' mf ?? (->&?&?); simpl.
+  destruct (decide (k' = [])) as [->|].
   * exists (InExpr mf ∅). split.
     { by constructor; rewrite ?sep_right_id by auto;
         eauto using mem_locks_empty, cmap_empty_valid, cmap_erased_empty. }
@@ -377,7 +387,7 @@ Hint Resolve ax_expr_disjoint_compose_diagram.
 Lemma ax_expr_cond_frame_diagram_simple Γ ρ B mf :
   ax_frame_diagram (ax_expr_cond ρ B) (ax_expr_cond ρ B) Γ mf.
 Proof.
-  intros Δ k φ n m m' ?; destruct 4 as [mA mf'|mf']; subst.
+  intros Δ δ k φ n m m' ??; destruct 4 as [mA mf'|mf']; subst.
   * simplify_mem_disjoint_hyps; exists (InExpr (mf ∪ mf') mA); split.
     { constructor; auto. by rewrite sep_associative by auto. }
     intros Δ' k' φ' m2 m2'.
@@ -399,30 +409,32 @@ Qed.
 Hint Resolve ax_expr_cond_frame_diagram_simple.
 
 Global Instance ax_expr_proper Γ δ :
-  Proper ((≡{Γ}) ==> (≡{Γ}) ==> (=) ==> pointwise_relation _ (≡{Γ}) ==> iff)
-         (ax_expr Γ δ).
+  Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (=) ==>
+          pointwise_relation _ (≡{Γ,δ}) ==> iff) (ax_expr Γ δ).
 Proof.
-  cut (Proper ((≡{Γ}) ==> (≡{Γ}) ==> (=) ==>
-    pointwise_relation _ (≡{Γ}) ==> impl) (ax_expr Γ δ)).
+  cut (Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (=) ==>
+    pointwise_relation _ (≡{Γ,δ}) ==> impl) (ax_expr Γ δ)).
   { intros help. by split; apply help. }
-  intros A1 A2 HA P1 P2 HP ?? -> Q1 Q2 HQ Hax ?????????????? (?&?&?&?&?&?) ?.
+  intros A1 A2 HA P1 P2 HP ?? -> Q1 Q2 HQ Hax ???????????????? (?&?&?&?&?&?) ?.
   eapply ax_weaken with (ax_expr_cond ρ A1) (ax_expr_post Q1 τlr) n; eauto.
   * apply Hax, HP; eauto.
     econstructor; split_ands; eauto. apply HA; eauto.
-  * destruct 2; constructor; auto. apply HA; eauto using indexes_valid_weaken.
-  * destruct 2; subst; simplify_mem_disjoint_hyps;
-     econstructor (first [by eauto|apply HA; eauto using indexes_valid_weaken]).
-  * destruct 2; constructor; auto. apply HQ; eauto using indexes_valid_weaken.
+  * destruct 2; constructor; auto.
+    apply HA; eauto using indexes_valid_weaken, funenv_valid_weaken.
+  * destruct 2; subst; simplify_mem_disjoint_hyps; econstructor (first
+     [by eauto|apply HA;eauto using indexes_valid_weaken, funenv_valid_weaken]).
+  * destruct 2; constructor; auto.
+    apply HQ; eauto using indexes_valid_weaken, funenv_valid_weaken.
 Qed.
 
-Lemma ax_expr_post_expr_nf Γ Q Δ ρ n m e τlr :
-  ax_expr_post' Q τlr Γ Δ ρ n (Expr e) m → is_nf e.
+Lemma ax_expr_post_expr_nf Γ Q Δ δ ρ n m e τlr :
+  ax_expr_post' Q τlr Γ Δ δ ρ n (Expr e) m → is_nf e.
 Proof. by inversion 1. Qed.
 Lemma ax_expr_lrval Γ δ A (P : lrval K → assert K) Δ ρ n ν Ω m τlr :
-  ✓{Γ,Δ} m → ax_expr_invariant Γ Δ A ρ (S n) m →
+  ✓{Γ,Δ} m → ax_expr_invariant A Γ Δ δ ρ (S n) m →
   ax_graph (ax_expr_cond ρ A)
     (ax_expr_post P τlr) Γ δ Δ ρ (S n) [] (Expr (%#{Ω} ν)%E) m →
-  assert_holds (P ν) Γ Δ ρ (S n) (cmap_erase m)
+  assert_holds (P ν) Γ Δ δ ρ (S n) (cmap_erase m)
   ∧ mem_locks m = Ω ∧ (Γ,Δ) ⊢ ν : τlr.
 Proof.
   intros ? (mA&?&?&?&?&?);
@@ -448,7 +460,7 @@ Lemma ax_call_compose Γ δ A P Q (E : ectx K) E' ρ Δ n φ k m1 m2 :
   (∀ Δ' n' m1' e',
     ⊥ [m1'; m2] → ✓{Γ,Δ'} m1' → ✓{Γ,Δ'} m2 →
     locks (subst E e') ⊆ mem_locks m1' →
-    ax_expr_invariant Γ Δ' A ρ (S n') (m1' ∪ m2) →
+    ax_expr_invariant A Γ Δ' δ ρ (S n') (m1' ∪ m2) →
     ax_graph (ax_expr_cond ρ A) P Γ δ Δ' ρ n' [] (Expr (subst E e')) m1' →
     Δ ⇒ₘ Δ' → n' ≤ n →
     ax_graph (ax_expr_cond ρ A) Q Γ δ Δ' ρ n' []
@@ -505,28 +517,28 @@ Qed.
 Lemma ax_expr_compose Γ δ {vn} A (Ps : vec (vassert K) vn) (Q : vassert K)
     Δ (E : ectx_full K vn) (es : vec (expr K) vn) (ρ : stack K) n
     (ms : vec (mem K) vn) (τlrs : vec (lrtype K) vn) σlr :
-  ✓ Γ → locks E = ∅ → ✓{Δ}* ρ →
+  ✓ Γ → ✓{Γ,Δ} δ → locks E = ∅ → ✓{Δ}* ρ →
   ⊥ ms → (∀ i, ✓{Γ,Δ} (ms !!! i)) →
-  ax_expr_invariant Γ Δ A ρ n (⋃ ms) →
+  ax_expr_invariant A Γ Δ δ ρ n (⋃ ms) →
   (∀ i, locks (es !!! i) ⊆ mem_locks (ms !!! i)) →
   (∀ i, ax_graph (ax_expr_cond ρ A) (ax_expr_post (Ps !!! i) (τlrs !!! i))
       Γ δ Δ ρ n [] (Expr (es !!! i)) (ms !!! i)) →
   (∀ Δ' n' (νs : vec _ vn) (ms' : vec _ vn),
     ⊥ ms' → (∀ i, ✓{Γ,Δ'} (ms' !!! i)) → Δ ⇒ₘ Δ' → n' ≤ n →
     (∀ i, (Γ,Δ') ⊢ νs !!! i : τlrs !!! i) →
-    (∀ i,
-      assert_holds ((Ps !!! i) (νs !!! i)) Γ Δ' ρ n' (cmap_erase (ms' !!! i))) →
+    (∀ i, assert_holds ((Ps !!! i) (νs !!! i))
+      Γ Δ' δ ρ n' (cmap_erase (ms' !!! i))) →
     ax_graph (ax_expr_cond ρ A) (ax_expr_post Q σlr) Γ δ Δ' ρ n' [] (Expr
       (depsubst E (vzip_with (λ m ν, %#{mem_locks m} ν) ms' νs)%E)) (⋃ ms')) →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post Q σlr) Γ δ Δ ρ n []
     (Expr (depsubst E es)) (⋃ ms).
 Proof.
-  intros ? HE. revert Δ es ms.
+  intros ? Hδ HE. revert Δ es ms Hδ.
   induction n as [[|n] IH] using lt_wf_ind; [intros; apply ax_O |].
-  intros Δ es ms Hρ Hms Hms' HA Hes Hax1 Hax2.
+  intros Δ es ms Hδ Hρ Hms Hms' HA Hes Hax1 Hax2.
   destruct (expr_vec_values es) as [(Ωs&νs&->)|[i Hi]].
   { assert ((∀ i, assert_holds ((Ps !!! i) (νs !!! i))
-        Γ Δ ρ (S n) (cmap_erase (ms !!! i))) ∧
+        Γ Δ δ ρ (S n) (cmap_erase (ms !!! i))) ∧
       (∀ i, mem_locks (ms !!! i) = Ωs !!! i) ∧
       (∀ i, (Γ,Δ) ⊢ νs !!! i : τlrs !!! i)) as (?&?&?).
     { rewrite <-!forall_and_distr; intros i.
@@ -584,8 +596,7 @@ Proof.
     rewrite <-sep_union_insert by auto.
     assert (⊥ (mf :: mA :: vinsert i m ms)).
     { rewrite sep_disjoint_equiv_insert; auto. }
-    apply IH; auto.
-    + eauto using indexes_valid_weaken.
+    apply IH; eauto using indexes_valid_weaken, funenv_valid_weaken.
     + intros j. destruct (decide (i = j)); subst; [by rewrite !vlookup_insert|].
       rewrite vlookup_insert_ne by done.
       eauto using cmap_union_list_delete_lookup_valid.
@@ -645,8 +656,7 @@ Proof.
     intros Δ''' n''' m' e' ????? HmA ? Hax; simplify_mem_disjoint_hyps.
     rewrite <-sep_union_insert by auto.
     rewrite subst_snoc, <-ectx_full_to_item_correct_alt.
-    apply IH; auto.
-    + eauto using indexes_valid_weaken.
+    apply IH; eauto using funenv_valid_weaken, indexes_valid_weaken.
     + rewrite sep_disjoint_equiv_insert; auto.
     + intros j; destruct (decide (i = j)); subst; [by rewrite !vlookup_insert|].
       rewrite vlookup_insert_ne by done.
@@ -677,19 +687,19 @@ Proof.
       eauto using cmap_union_list_lookup_valid.
 Qed.
 Lemma ax_expr_compose_1 Γ δ A P Q Δ (E : ectx_full K 1) e ρ n m τlr σlr :
-  ✓ Γ → locks E = ∅ → ✓{Δ}* ρ → ✓{Γ,Δ} m →
-  ax_expr_invariant Γ Δ A ρ n m →
+  ✓ Γ → ✓{Γ,Δ} δ → locks E = ∅ → ✓{Δ}* ρ → ✓{Γ,Δ} m →
+  ax_expr_invariant A Γ Δ δ ρ n m →
   locks e ⊆ mem_locks m →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post P τlr) Γ δ Δ ρ n [] (Expr e) m →
   (∀ Δ' n' ν m',
     ✓{Γ,Δ'} m' → Δ ⇒ₘ Δ' → n' ≤ n → (Γ,Δ') ⊢ ν : τlr →
-    assert_holds (P ν) Γ Δ' ρ n' (cmap_erase m') →
+    assert_holds (P ν) Γ Δ' δ ρ n' (cmap_erase m') →
     ax_graph (ax_expr_cond ρ A) (ax_expr_post Q σlr) Γ δ Δ' ρ n' []
        (Expr (depsubst E [# %#{mem_locks m'} ν]%E)) m') →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post Q σlr) Γ δ Δ ρ n []
     (Expr (depsubst E [# e])) m.
 Proof.
-  intros ??????? Hax. rewrite <-(sep_right_id m) by auto.
+  intros ???????? Hax. rewrite <-(sep_right_id m) by auto.
   apply (ax_expr_compose Γ δ A [# P]%A _ Δ E [# e] ρ n [# m] [# τlr]); simpl;
     rewrite ?sep_right_id by auto; auto; try (by intros; inv_all_vec_fin).
   intros Δ' n' νs ms' ? Hm' ?? Hν Hax'; inv_all_vec_fin; simpl.
@@ -698,23 +708,23 @@ Proof.
 Qed.
 Lemma ax_expr_compose_2 Γ δ A P1 P2 Q Δ
     (E : ectx_full K 2) e1 e2 ρ n m1 m2 τlr1 τlr2 σlr :
-  ✓ Γ → locks E = ∅ → ✓{Δ}* ρ → ⊥ [m1; m2] → ✓{Γ,Δ} m1 → ✓{Γ,Δ} m2 →
-  ax_expr_invariant Γ Δ A ρ n (m1 ∪ m2) →
+  ✓ Γ → ✓{Γ,Δ} δ → locks E = ∅ → ✓{Δ}* ρ → ⊥ [m1; m2] → ✓{Γ,Δ} m1 → ✓{Γ,Δ} m2 →
+  ax_expr_invariant A Γ Δ δ ρ n (m1 ∪ m2) →
   locks e1 ⊆ mem_locks m1 → locks e2 ⊆ mem_locks m2 →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post P1 τlr1) Γ δ Δ ρ n [] (Expr e1) m1 →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post P2 τlr2) Γ δ Δ ρ n [] (Expr e2) m2 →
   (∀ Δ' n' ν1 ν2 m1' m2',
     ⊥ [m1';m2'] → ✓{Γ,Δ'} m1' → ✓{Γ,Δ'} m2' → Δ ⇒ₘ Δ' → n' ≤ n →
     (Γ,Δ') ⊢ ν1 : τlr1 → (Γ,Δ') ⊢ ν2 : τlr2 →
-    assert_holds (P1 ν1) Γ Δ' ρ n' (cmap_erase m1') →
-    assert_holds (P2 ν2) Γ Δ' ρ n' (cmap_erase m2') →
+    assert_holds (P1 ν1) Γ Δ' δ ρ n' (cmap_erase m1') →
+    assert_holds (P2 ν2) Γ Δ' δ ρ n' (cmap_erase m2') →
     ax_graph (ax_expr_cond ρ A) (ax_expr_post Q σlr) Γ δ Δ' ρ n' []
       (Expr (depsubst E [# %#{mem_locks m1'} ν1; %#{mem_locks m2'} ν2]%E))
       (m1' ∪ m2')) →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post Q σlr) Γ δ Δ ρ n []
     (Expr (depsubst E [# e1; e2])) (m1 ∪ m2).
 Proof.
-  intros ??????????? Hax. rewrite <-(sep_right_id m2) by auto.
+  intros ???????????? Hax. rewrite <-(sep_right_id m2) by auto.
   apply (ax_expr_compose Γ δ A [# P1; P2]%A Q Δ E
     [# e1; e2] ρ n [# m1; m2] [# τlr1; τlr2] σlr); simpl;
     rewrite ?sep_right_id by auto; auto; try (by intros; inv_all_vec_fin).

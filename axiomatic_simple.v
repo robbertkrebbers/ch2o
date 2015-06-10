@@ -16,11 +16,11 @@ Implicit Types v : val K.
 Implicit Types ν : lrval K.
 
 Global Instance:
-  Proper ((≡{Γ}) ==> pointwise_relation _ (≡{Γ})) (const_assert ν).
-Proof. by intros Γ ν P Q HPQ ν'; simpl; rewrite HPQ. Qed.
+  Proper ((≡{Γ,δ}) ==> pointwise_relation _ (≡{Γ,δ})) (const_assert ν).
+Proof. by intros Γ δ ν P Q HPQ ν'; simpl; rewrite HPQ. Qed.
 
 Lemma ax_expr_weaken_post' Γ δ A P Q Q' e ν :
-  Q' ⊆{Γ} Q →
+  Q' ⊆{Γ,δ} Q →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ ν | Q' }} → Γ\ δ\ A ⊨ₑ {{ P }} e {{ ν | Q }}.
 Proof. intros HQ. by apply ax_expr_weaken; simpl; intros; rewrite ?HQ. Qed.
 Lemma ax_expr_frame_l' Γ δ A B P Q e ν :
@@ -28,9 +28,9 @@ Lemma ax_expr_frame_l' Γ δ A B P Q e ν :
   Γ\ δ\ B ⊨ₑ {{ A ★ P }} e {{ ν | A ★ Q }}.
 Proof.
   intros; unfold const_assert.
-  setoid_rewrite (associative (R:=(≡{Γ})) (★)%A).
-  setoid_rewrite (commutative (R:=(≡{Γ})) (★)%A _ A).
-  setoid_rewrite <-(associative (R:=(≡{Γ})) (★)%A).
+  setoid_rewrite (associative (R:=(≡{Γ,δ})) (★)%A).
+  setoid_rewrite (commutative (R:=(≡{Γ,δ})) (★)%A _ A).
+  setoid_rewrite <-(associative (R:=(≡{Γ,δ})) (★)%A).
   by apply ax_expr_frame_l.
 Qed.
 Lemma ax_expr_frame_r' Γ δ A B P Q e ν :
@@ -42,9 +42,9 @@ Lemma ax_expr_invariant_l' Γ δ A B P Q e ν :
   Γ\ δ\ B ⊨ₑ {{ A ★ P }} e {{ ν | A ★ Q }}.
 Proof.
   intros; unfold const_assert.
-  setoid_rewrite (associative (R:=(≡{Γ})) (★)%A).
-  setoid_rewrite (commutative (R:=(≡{Γ})) (★)%A _ A).
-  setoid_rewrite <-(associative (R:=(≡{Γ})) (★)%A).
+  setoid_rewrite (associative (R:=(≡{Γ,δ})) (★)%A).
+  setoid_rewrite (commutative (R:=(≡{Γ,δ})) (★)%A _ A).
+  setoid_rewrite <-(associative (R:=(≡{Γ,δ})) (★)%A).
   by apply ax_expr_invariant_l.
 Qed.
 Lemma ax_expr_invariant_r' Γ δ A B P Q e ν :
@@ -58,7 +58,7 @@ Proof.
   intros; rewrite <-(left_id _ (★)%A A); by apply ax_expr_invariant_r'.
 Qed.
 Lemma ax_var' Γ δ A P x a :
-  (A ★ P)%A ⊆{Γ} (var x ⇓ inl a)%A →
+  (A ★ P)%A ⊆{Γ,δ} (var x ⇓ inl a)%A →
   Γ\ δ\ A ⊨ₑ {{ P }} var x {{ inl a | P }}.
 Proof.
   rewrite (commutative (★)%A); intros; eapply ax_var; eauto.
@@ -66,7 +66,7 @@ Proof.
   by rewrite assert_Prop_l by done.
 Qed.
 Lemma ax_rtol' Γ δ A P Q e v a :
-  (A ★ Q)%A ⊆{Γ} (.*(#v) ⇓ inl a)%A →
+  (A ★ Q)%A ⊆{Γ,δ} (.*(#v) ⇓ inl a)%A →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ inr v | Q }} →
   Γ\ δ\ A ⊨ₑ {{ P }} .* e {{ inl a | Q }}.
 Proof.
@@ -85,7 +85,7 @@ Proof.
 Qed.
 Lemma ax_load' Γ δ A P Q e a v :
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ inl a | Q }} →
-  (A ★ Q)%A ⊆{Γ} (load (%a) ⇓ inr v)%A →
+  (A ★ Q)%A ⊆{Γ,δ} (load (%a) ⇓ inr v)%A →
   Γ\ δ\ A ⊨ₑ {{ P }} load e {{ inr v | Q }}.
 Proof.
   rewrite (commutative (★)%A); intros; eapply ax_load; eauto. intros; simpl.
@@ -96,8 +96,8 @@ Qed.
 Lemma ax_assign' Γ δ A P1 P2 Q1 Q2 Q ass e1 e2 μ γ τ a v va v' :
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ inl a | Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ inr v | Q2 }} →
-  (A ★ Q1 ★ Q2)%A ⊆{Γ} (assert_assign a v ass τ va v')%A →
-  (Q1 ★ Q2)%A ⊆{Γ} (%a ↦{μ,γ} - : τ ★
+  (A ★ Q1 ★ Q2)%A ⊆{Γ,δ} (assert_assign a v ass τ va v')%A →
+  (Q1 ★ Q2)%A ⊆{Γ,δ} (%a ↦{μ,γ} - : τ ★
     (%a ↦{μ,perm_lock γ} # (freeze true va) : τ -★ Q))%A →
   Some Writable ⊆ perm_kind γ →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 ::={ass} e2 {{ inr v' | Q }}.
@@ -114,8 +114,8 @@ Qed.
 Lemma ax_assign_r' Γ δ A P Q Q' ass e1 e2 μ γ τ a v va v' :
   Γ\ δ\ A ⊨ₑ {{ emp }} e1 {{ inl a | emp }} →
   Γ\ δ\ A ⊨ₑ {{ P }} e2 {{ inr v | Q }} →
-  (A ★ Q)%A ⊆{Γ} (assert_assign a v ass τ va v')%A →
-  Q ⊆{Γ} (%a ↦{μ,γ} - : τ ★
+  (A ★ Q)%A ⊆{Γ,δ} (assert_assign a v ass τ va v')%A →
+  Q ⊆{Γ,δ} (%a ↦{μ,γ} - : τ ★
     (%a ↦{μ,perm_lock γ} # (freeze true va) : τ -★ Q'))%A →
   Some Writable ⊆ perm_kind γ →
   Γ\ δ\ A ⊨ₑ {{ P }} e1 ::={ass} e2 {{ inr v' | Q' }}.
@@ -125,7 +125,7 @@ Proof.
 Qed.
 Lemma ax_eltl' Γ δ A P Q e rs a a' :
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ inl a | Q }} →
-  (A ★ Q)%A ⊆{Γ} (%a %> rs ⇓ inl a')%A →
+  (A ★ Q)%A ⊆{Γ,δ} (%a %> rs ⇓ inl a')%A →
   Γ\ δ\ A ⊨ₑ {{ P }} e %> rs {{ inl a' | Q }}.
 Proof.
   rewrite (commutative (★)%A); intros; eapply ax_eltl; eauto.
@@ -135,7 +135,7 @@ Proof.
 Qed.
 Lemma ax_eltr' Γ δ A P Q e rs v v' :
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ inr v | Q }} →
-  (A ★ Q)%A ⊆{Γ} (#v #> rs ⇓ inr v')%A →
+  (A ★ Q)%A ⊆{Γ,δ} (#v #> rs ⇓ inr v')%A →
   Γ\ δ\ A ⊨ₑ {{ P }} e #> rs {{ inr v' | Q }}.
 Proof.
   rewrite (commutative (★)%A); intros; eapply ax_eltr; eauto.
@@ -146,7 +146,7 @@ Qed.
 Lemma ax_insert' Γ δ A P1 P2 Q1 Q2 e1 e2 r v1 v2 v :
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ inr v1 | Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ inr v2 | Q2 }} →
-  (A ★ Q1 ★ Q2)%A ⊆{Γ} (#[r:=#v1] (#v2) ⇓ inr v)%A →
+  (A ★ Q1 ★ Q2)%A ⊆{Γ,δ} (#[r:=#v1] (#v2) ⇓ inr v)%A →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} #[r:=e1] e2 {{ inr v | Q1 ★ Q2 }}.
 Proof.
   rewrite (commutative (★)%A); intros; eapply ax_insert; eauto.
@@ -165,11 +165,11 @@ Proof.
   intros; eapply ax_free with _ τ; eauto.
   intros; apply assert_Prop_intro_l; intros; simplify_equality'.
   apply assert_exist_intro with n.
-  by rewrite (assert_Prop_l _ (_ = _)) by done.
+  by rewrite (assert_Prop_l _ _ (_ = _)) by done.
 Qed.
 Lemma ax_unop' Γ δ A P Q op e v v' :
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ inr v | Q }} →
-  (A ★ Q)%A ⊆{Γ} (@{op} #v ⇓ inr v')%A →
+  (A ★ Q)%A ⊆{Γ,δ} (@{op} #v ⇓ inr v')%A →
   Γ\ δ\ A ⊨ₑ {{ P }} @{op} e {{ inr v' | Q }}.
 Proof.
   rewrite (commutative (★)%A); intros; eapply ax_unop; eauto.
@@ -180,7 +180,7 @@ Qed.
 Lemma ax_binop' Γ δ A P1 P2 Q1 Q2 op e1 e2 v1 v2 v :
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ inr v1 | Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ inr v2 | Q2 }} →
-  (A ★ Q1 ★ Q2)%A ⊆{Γ} (# v1 @{op} # v2 ⇓ inr v)%A →
+  (A ★ Q1 ★ Q2)%A ⊆{Γ,δ} (# v1 @{op} # v2 ⇓ inr v)%A →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 @{op} e2 {{ inr v | Q1 ★ Q2 }}.
 Proof.
   rewrite (commutative (★)%A); intros; eapply ax_binop; eauto.
@@ -194,7 +194,7 @@ Qed.
 Lemma ax_binop_r' Γ δ A P Q op e1 e2 v1 v2 v :
   Γ\ δ\ A ⊨ₑ {{ emp }} e1 {{ inr v1 | emp }} →
   Γ\ δ\ A ⊨ₑ {{ P }} e2 {{ inr v2 | Q }} →
-  (A ★ Q)%A ⊆{Γ} (# v1 @{op} # v2 ⇓ inr v)%A →
+  (A ★ Q)%A ⊆{Γ,δ} (# v1 @{op} # v2 ⇓ inr v)%A →
   Γ\ δ\ A ⊨ₑ {{ P }} e1 @{op} e2 {{ inr v | Q }}.
 Proof.
   intros. rewrite <-(left_id _ (★)%A P), <-(left_id _ (★)%A Q).
@@ -202,7 +202,7 @@ Proof.
 Qed.
 Lemma ax_cast' Γ δ A P Q σ e v v' :
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ inr v | Q }} →
-  (A ★ Q)%A ⊆{Γ} (cast{σ} (#v) ⇓ inr v')%A →
+  (A ★ Q)%A ⊆{Γ,δ} (cast{σ} (#v) ⇓ inr v')%A →
   Γ\ δ\ A ⊨ₑ {{ P }} cast{σ} e {{ inr v' | Q }}.
 Proof.
   rewrite (commutative (★)%A); intros; eapply ax_cast; eauto.
@@ -212,8 +212,8 @@ Proof.
 Qed.
 Lemma ax_expr_if' Γ δ A P P' P'' Q e e1 e2 vb :
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ inr (VBase vb) | P' }} →
-  (A ★ P')%A ⊆{Γ} (@{NotOp} #VBase vb ⇓ -)%A →
-  P' ⊆{Γ} (P''◊)%A →
+  (A ★ P')%A ⊆{Γ,δ} (@{NotOp} #VBase vb ⇓ -)%A →
+  P' ⊆{Γ,δ} (P''◊)%A →
   Γ\ δ\ A ⊨ₑ {{ ⌜ ¬base_val_is_0 vb ⌝ ★ P'' }} e1 {{ Q }} →
   Γ\ δ\ A ⊨ₑ {{ ⌜ base_val_is_0 vb ⌝ ★ P'' }} e2 {{ Q }} →
   Γ\ δ\ A ⊨ₑ {{ P }} if{e} e1 else e2 {{ Q }}.
@@ -236,7 +236,7 @@ Proof.
 Qed.
 Lemma ax_do' Γ δ R J T C P Q Q' e ν :
   Γ\ δ\ emp ⊨ₑ {{ P }} e {{ ν | Q }} →
-  Q ⊆{Γ} (Q'◊)%A →
+  Q ⊆{Γ,δ} (Q'◊)%A →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} !e {{ Q' }}.
 Proof.
   intros. eapply ax_do, ax_expr_weaken_post; eauto.
@@ -244,8 +244,8 @@ Proof.
 Qed.
 Lemma ax_if' Γ δ R J T C P P' P'' Q e s1 s2 vb :
   Γ\ δ\ emp ⊨ₑ {{ P }} e {{ inr (VBase vb) | P' }} →
-  P' ⊆{Γ} (@{NotOp} #VBase vb ⇓ -)%A →
-  P' ⊆{Γ} (P''◊)%A →
+  P' ⊆{Γ,δ} (@{NotOp} #VBase vb ⇓ -)%A →
+  P' ⊆{Γ,δ} (P''◊)%A →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ ⌜ ¬base_val_is_0 vb ⌝ ★ P'' }} s1 {{ Q }} →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ ⌜ base_val_is_0 vb ⌝ ★ P'' }} s2 {{ Q }} →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} if{e} s1 else s2 {{ Q }}.
@@ -260,7 +260,7 @@ Qed.
 Lemma ax_if'' Γ δ R J T C P Q e s1 s2 vb :
   UnlockIndep P →
   Γ\ δ\ emp ⊨ₑ {{ P }} e {{ inr (VBase vb) | P }} →
-  P ⊆{Γ} (@{NotOp} #VBase vb ⇓ -)%A →
+  P ⊆{Γ,δ} (@{NotOp} #VBase vb ⇓ -)%A →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ ⌜ ¬base_val_is_0 vb ⌝ ★ P }} s1 {{ Q }} →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ ⌜ base_val_is_0 vb ⌝ ★ P }} s2 {{ Q }} →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} if{e} s1 else s2 {{ Q }}.

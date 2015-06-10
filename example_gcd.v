@@ -34,7 +34,7 @@ Qed.
 Lemma gcd_correct Γ δ R J T C y z μ1 γ1 μ2 γ2 :
   sep_valid γ1 → Some Writable ⊆ perm_kind γ1 →
   sep_valid γ2 → Some Writable ⊆ perm_kind γ2 →
-  J "l"%string ≡{Γ} (∃ y' z',
+  J "l"%string ≡{Γ,δ} (∃ y' z',
     ⌜ Z.gcd y' z' = Z.gcd y z ⌝%Z ★
     var 0 ↦{μ1,γ1} #intV{uintT} y' : uintT ★
     var 1 ↦{μ2,γ2} #intV{uintT} z' : uintT)%A →
@@ -53,17 +53,17 @@ Proof.
   apply ax_stmt_exist_pre; intros y'; apply ax_stmt_exist_pre; intros z'.
   apply ax_stmt_Prop_pre; try solve_elem_of; intros Hgcd.
   eapply ax_stmt_weaken_pre.
-  { by rewrite (assert_singleton_int_typed' _ (var 0)),
-      (assert_singleton_int_typed' _ (var 1)), (associative (★)%A),
+  { by rewrite (assert_singleton_int_typed' _ _ (var 0)),
+      (assert_singleton_int_typed' _ _ (var 1)), (associative (★)%A),
       (commutative _ _ (⌜ int_typed z' _ ⌝)%A), <-!(associative (★)%A). }
   apply ax_stmt_Prop_pre; try solve_elem_of; intros Hz'.
   apply ax_stmt_Prop_pre; try solve_elem_of; intros Hy'.
   eapply ax_if'' with (intV{uintT} z')%B; auto.
   { apply ax_expr_frame_l'.
-    rewrite (assert_singleton_l _ (var 1)) at 1.
+    rewrite (assert_singleton_l _ _ (var 1)) at 1.
     apply ax_expr_exist_pre; intros a1.
     eapply ax_expr_weaken_post';
-      [by rewrite <-(assert_singleton_l_2 Γ (var 1) _ _ _ a1)|exec]. }
+      [by rewrite <-(assert_singleton_l_2 Γ _ (var 1) _ _ _ a1)|exec]. }
   { by eapply assert_exist_intro, assert_eval_int_unop';
       auto using assert_memext_r', assert_eval_singleton_r. }
   { apply ax_stmt_Prop_pre; try solve_elem_of; simpl; intros.
@@ -79,23 +79,23 @@ Proof.
       ★ var 2 ↦{μ2,γ2} #intV{uintT} (y' `mod` z') : uintT)%A.
     * eapply ax_do' with _ (inr (intV{uintT} (y' `mod` z')));
         [|by rewrite <-!assert_unlock_sep,
-                     <-(assert_lock_singleton _ (var 2)), <-2!unlock_indep].
-      rewrite (assert_singleton_l_ _ (var 0)), assert_exist_sep.
+                     <-(assert_lock_singleton _ _ (var 2)), <-2!unlock_indep].
+      rewrite (assert_singleton_l_ _ _ (var 0)), assert_exist_sep.
       apply ax_expr_exist_pre; intros a_tmp.
       eapply ax_expr_weaken_post';
-        [by rewrite <-(assert_singleton_l_2 Γ (var 0) _ _ _ a_tmp)|].
+        [by rewrite <-(assert_singleton_l_2 Γ _ (var 0) _ _ _ a_tmp)|].
       rewrite <-!(associative (★)%A); apply ax_expr_invariant_l'.
-      rewrite (right_id _ (★)%A), (assert_singleton_l _ (var 1)),
+      rewrite (right_id _ (★)%A), (assert_singleton_l _ _ (var 1)),
         (assert_exist_sep (A:=addr _)), (assert_sep_exist (A:=addr _)).
       apply ax_expr_exist_pre; intros a_y.
       eapply ax_expr_weaken_post';
-        [by rewrite <-(assert_singleton_l_2 Γ (var 1) _ _ _ a_y)|].
+        [by rewrite <-(assert_singleton_l_2 Γ _ (var 1) _ _ _ a_y)|].
       rewrite !(associative (★)%A), !(commutative (★)%A _ (_ ∧ _)%A).
       rewrite <-!(associative (★)%A); apply ax_expr_invariant_l'.
-      rewrite (assert_singleton_l _ (var 2)), !(assert_sep_exist (A:=addr _)).
+      rewrite (assert_singleton_l _ _ (var 2)), !(assert_sep_exist (A:=addr _)).
       apply ax_expr_exist_pre; intros a_z.
       eapply ax_expr_weaken_post';
-        [by rewrite <-(assert_singleton_l_2 Γ (var 2) _ _ _ a_z)|].
+        [by rewrite <-(assert_singleton_l_2 Γ _ (var 2) _ _ _ a_z)|].
       rewrite <-!(commutative (★)%A _ (var 2 ⇓ _ ∧ _)%A), !(associative (★)%A).
       apply ax_expr_invariant_r'.
       set (A' := ((var 2 ⇓ inl a_z ∧ emp) ★
@@ -112,7 +112,7 @@ Proof.
           ★ %a_z ↦{μ2,γ2} #intV{uintT} z' : uintT)%A
           (inr (intV{uintT} (y' `mod` z'))).
         { eapply ax_expr_weaken_post'; [by rewrite <-!assert_unlock_sep,
-            <-(assert_lock_singleton _ (%a_tmp)), <-2!unlock_indep by done|].
+            <-(assert_lock_singleton _ _ (%a_tmp)), <-2!unlock_indep by done|].
           apply ax_expr_invariant_r'.
           set (A'' := ((%a_y ↦{μ1,γ1} #intV{uintT} y' : uintT%BT
             ★ %a_z ↦{μ2,γ2} #intV{uintT} z' : uintT%BT) ★ A')%A).
@@ -137,7 +137,7 @@ Proof.
           * done. }
         eapply ax_expr_comma' with _ (inr (intV{uintT} z')); [|exec].
         eapply ax_expr_weaken_post'; [by rewrite <-!assert_unlock_sep,
-          <-(assert_lock_singleton _ (%a_y)), <-2!unlock_indep by done|].
+          <-(assert_lock_singleton _ _ (%a_y)), <-2!unlock_indep by done|].
         apply ax_expr_frame_l', ax_expr_invariant_r'.
         set (A'' := (%a_z ↦{μ2,γ2} #intV{uintT} z' : uintT%BT ★ A')%A).
         eapply ax_assign_r' with _ _ γ1 uintT%T _ (intV{uintT} z') _; try exec.
@@ -150,7 +150,7 @@ Proof.
           assert_wand_intro, assert_exist_intro. }
     * eapply ax_stmt_weaken_pre, ax_goto.
       apply assert_sep_preserving; eauto using assert_exist_intro.
-      rewrite HJ; repeat setoid_rewrite (assert_lift_exists Γ).
+      rewrite HJ; repeat setoid_rewrite (assert_lift_exists Γ δ).
       apply assert_exist_intro with z', assert_exist_intro with (y' `mod` z')%Z.
       rewrite !assert_lift_sep, !assert_lift_singleton, stack_indep; simpl.
       assert (Z.gcd z' (y' `mod` z') = Z.gcd y z).

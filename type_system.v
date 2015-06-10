@@ -635,6 +635,12 @@ Proof.
     | H : rettype_union _ _ _ |- _ => inversion_clear H
     end; eauto.
 Qed.
+Lemma rettype_union_inv_l mτ2 τ1 mτ :
+  rettype_union (Some τ1) mτ2 mτ → mτ = Some τ1.
+Proof. by inversion_clear 1. Qed.
+Lemma rettype_union_inv_r mτ1 τ2 mτ :
+  rettype_union mτ1 (Some τ2) mτ → mτ = Some τ2.
+Proof. by inversion_clear 1. Qed.
 Lemma rettype_union_l mσ : rettype_union mσ None mσ.
 Proof. destruct mσ; constructor. Qed.
 Lemma rettype_union_r mσ : rettype_union None mσ mσ.

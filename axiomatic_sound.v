@@ -13,14 +13,14 @@ implies partial program correctness. *)
 Lemma ax_stmt_sound `{EnvSpec K} Γ δ P Q s m S' cmτ :
   ✓ Γ → ✓{Γ,'{m} } δ → ✓{Γ} m → mem_locks m = ∅ → (Γ,'{m},[]) ⊢ s : cmτ →
   Γ\ δ ⊨ₛ {{ P }} s {{ Q }} →
-  (∀ n, assert_holds P Γ '{m} [] n (cmap_erase m)) →
+  (∀ n, assert_holds P Γ '{m} δ [] n (cmap_erase m)) →
   Γ\ δ ⊢ₛ State [] (Stmt ↘ s) m ⇒* S' →
   (**i 1.) *) (∃ n' m',
     S' = State [] (Stmt ↗ s) m' ∧
-    assert_holds (Q voidV) Γ '{m'} [] n' (cmap_erase m')) ∨
+    assert_holds (Q voidV) Γ '{m'} δ [] n' (cmap_erase m')) ∨
   (**i 2.) *) (∃ n' m' v,
     S' = State [] (Stmt (⇈ v) s) m' ∧
-    assert_holds (Q v) Γ '{m'} [] n' (cmap_erase m')) ∨
+    assert_holds (Q v) Γ '{m'} δ [] n' (cmap_erase m')) ∨
   (**i 3.) *) red (cstep Γ δ) S'.
 Proof.
   intros ?. revert m S'. cut (∀ n1 n2 k φ m S' τf,
