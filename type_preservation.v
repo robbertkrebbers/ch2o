@@ -110,7 +110,7 @@ Proof.
       ectx_subst_typed, ectx_typed_weaken.
   * simpl; intros m k Ω f' τs τ E Ωs vs ? (τf&HS&?&?) ?; typed_inversion HS.
     edestruct (ectx_subst_typed_rev Γ '{m} (locals k.*2) E
-      (call #{Ω} (ptrV (FunPtr f' τs τ)) @ #{Ωs}* vs)) as (τrl&Hcall&?); eauto.
+      (call %{Ω} (FunPtr f' τs τ) @ #{Ωs}* vs)) as (τrl&Hcall&?); eauto.
     typed_inversion_all. split; [|eauto using mem_unlock_forward].
     eexists (Fun_type f'); simpl; split_ands; eauto using mem_unlock_valid'.
     + typed_constructor; eauto.

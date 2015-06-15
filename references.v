@@ -186,12 +186,15 @@ Lemma ref_lookup_snoc Γ r rs τ :
   τ !!{Γ} (r ++ [rs]) = (τ !!{Γ} rs) ≫= lookupE Γ r.
 Proof. apply ref_lookup_app. Qed.
 
-Lemma ref_seg_typed_type_valid Γ rs τ σ :
-  ✓ Γ → Γ ⊢ rs : τ ↣ σ → ✓{Γ} τ → ✓{Γ} σ.
+Lemma ref_seg_typed_ptr_type_valid Γ rs τ σ :
+  ✓ Γ → Γ ⊢ rs : τ ↣ σ → ✓{Γ} (TType τ) → ✓{Γ} σ.
 Proof.
-  intro. destruct 1; intros Hτ; apply (type_valid_inv Γ _ _ Hτ);
+  intro. destruct 1; inversion 1; subst;
     eauto using env_valid_lookup_lookup.
 Qed.
+Lemma ref_seg_typed_type_valid Γ rs τ σ :
+  ✓ Γ → Γ ⊢ rs : τ ↣ σ → ✓{Γ} τ → ✓{Γ} σ.
+Proof. eauto using type_valid_ptr_type_valid, ref_seg_typed_ptr_type_valid. Qed.
 Lemma ref_typed_type_valid Γ r τ σ : ✓ Γ → Γ ⊢ r : τ ↣ σ → ✓{Γ} τ → ✓{Γ} σ.
 Proof. intro. induction 1; eauto using ref_seg_typed_type_valid. Qed.
 Global Instance:

@@ -449,17 +449,17 @@ Lemma addr_top_array_strict Γ o τ n :
 Proof.
   intros. apply Nat.mul_pos_pos; simpl; eauto using size_of_pos with lia.
 Qed.
-Lemma addr_is_top_array_alt Γ Δ a τ :
-  ✓ Γ → (Γ,Δ) ⊢ a : TType τ →
-  addr_is_top_array a ↔ ∃ τ' n, addr_strict Γ a ∧
-    addr_ref Γ a = [RArray 0 τ' n] ∧ addr_ref_byte Γ a = 0.
+Lemma addr_is_top_array_alt Γ Δ a σp :
+  ✓ Γ → (Γ,Δ) ⊢ a : σp →
+  addr_is_top_array a ↔ ∃ τ n, addr_strict Γ a ∧
+    addr_ref Γ a = [RArray 0 τ n] ∧ addr_ref_byte Γ a = 0.
 Proof.
-  rewrite addr_typed_alt; intros ? (_&?&Hr&?&?&_&?); split.
-  * destruct 1 as [o τ' n σp]; simplify_equality'; exists τ' n.
+  rewrite addr_typed_alt; intros ? (_&?&Hr&?&?&_); split.
+  * destruct 1 as [o τ' n σp']; simplify_equality'; exists τ' n.
     assert (✓{Γ} τ' ∧ n ≠ 0) as [??] by auto using TArray_valid_inv.
     rewrite Nat.div_0_l, Nat.mod_0_l by eauto using size_of_ne_0.
     split_ands; auto using Nat.mul_pos_pos, size_of_pos with lia.
-  * intros (?&n&?&?&Hi); destruct a as [o [|[] r] i τ' σ σp]; simplify_equality'.
+  * intros (?&n&?&?&Hi); destruct a as [o [|[] r] i τ' σ σp']; simplify_equality'.
     rewrite ref_typed_singleton in Hr; inversion Hr; simplify_equality'.
     rewrite <-(Nat.mod_small i (size_of Γ σ)), Hi by
      (apply Nat.div_small_iff; eauto using size_of_ne_0, TArray_valid_inv_type).

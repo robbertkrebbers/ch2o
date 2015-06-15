@@ -140,16 +140,6 @@ Arguments to_env {_} _.
 Arguments to_mem {_} _.
 Arguments to_globals {_} _.
 
-Inductive expr_type (K : Set) :=
-  | LT : type K → expr_type K
-  | RT : type K → expr_type K
-  | FT : list (type K) → type K → expr_type K.
-Arguments LT {_} _.
-Arguments RT {_} _.
-Arguments FT {_} _ _.
-Instance maybe_LT {K} : Maybe (@LT K) := λ τe,
-  match τe with LT τ => Some τ | _ => None end.
-
 Local Notation M := (error (frontend_state _) string).
 
 Section frontend.
@@ -158,11 +148,6 @@ Local Notation M := (error (frontend_state K) string).
 
 Global Instance empty_frontend_state : Empty (frontend_state K) :=
   FState ∅ ∅ ∅ ∅.
-
-Definition to_lrtype (τe : expr_type K) : lrtype K :=
-  match τe with
-  | LT τ => inl τ | RT τ => inr τ | FT τs τ => inr ((τs ~> τ).*)
-  end.
 
 Definition to_funenv (S : frontend_state K) : funenv K :=
   omap (λ d, '(_,_,ms) ← maybe4 Fun d; ms) (to_globals S).
@@ -190,32 +175,32 @@ Fixpoint local_fresh (x : string) (Δl : local_env K) : bool :=
   end.
 
 Fixpoint lookup_local_var (Δl : local_env K)
-    (x : string) (i : nat) : option (expr K * expr_type K) :=
+    (x : string) (i : nat) : option (expr K * lrtype K) :=
   match Δl with
   | [] => None
   | Some (y, Extern (inl (o,τ))) :: Δl =>
-     if decide (x = y) then Some (% (addr_top o τ), LT τ)
+     if decide (x = y) then Some (% (Ptr (addr_top o τ)), inl (TType τ))
      else lookup_local_var Δl x i
   | Some (y, Extern (inr (τs,τ))) :: Δl =>
-     if decide (x = y) then Some (# ptrV (FunPtr x τs τ), FT τs τ)
+     if decide (x = y) then Some (% (FunPtr x τs τ), inl (τs ~> τ))
      else lookup_local_var Δl x i
   | Some (y, Local τ) :: Δl =>
-     if decide (x = y) then Some (var i, LT τ)
+     if decide (x = y) then Some (var i, inl (TType τ))
      else lookup_local_var Δl x (S i)
   | Some (y, TypeDef _) :: Δl =>
      if decide (x = y) then None else lookup_local_var Δl x i
   | None :: Δl => lookup_local_var Δl x i
   end.
 Definition lookup_var (Δl : local_env K)
-    (x : string) : M (expr K * expr_type K) :=
+    (x : string) : M (expr K * lrtype K) :=
   match lookup_local_var Δl x 0 with
-  | Some (e,τe) => mret (e,τe)
+  | Some (e,τlr) => mret (e,τlr)
   | None =>
      Δg ← gets to_globals;
      match Δg !! x with
-     | Some (Global _ o τ _) => mret (% (addr_top o τ), LT τ)
-     | Some (EnumVal τi z) => mret (# intV{τi} z, RT (intT τi))
-     | Some (Fun _ τs τ _) => mret (# ptrV (FunPtr x τs τ), FT τs τ)
+     | Some (Global _ o τ _) => mret (% (Ptr (addr_top o τ)), inl (TType τ))
+     | Some (EnumVal τi z) => mret (# intV{τi} z, inr (intT τi))
+     | Some (Fun _ τs τ _) => mret (% (FunPtr x τs τ), inl (τs ~> τ))
      | _ => fail ("variable `" +:+ x +:+ "` not found")
      end
   end.
@@ -239,21 +224,28 @@ Definition lookup_typedef (Δl : local_env K) (x : string) : M (ptr_type K) :=
 
 Definition is_pseudo_NULL (e : expr K) : bool :=
   match e with #{_} (intV{_} 0) => true | _ => false end.
-Definition to_R (eτe : expr K * expr_type K) : expr K * type K :=
-  match eτe with
-  | (e, LT τ) =>
+Definition to_R (e : expr K) (τlr : lrtype K) : M (expr K * type K) :=
+  match τlr with
+  | inl (TType τ) =>
      match maybe2 TArray τ with
-     | Some (τ',n) => (& (e %> RArray 0 τ' n), TType τ'.*) | None => (load e, τ)
+     | Some (τ',n) => mret (&(e %> RArray 0 τ' n), TType τ'.*)
+     | None =>
+        Γ ← gets to_env;
+        guard (type_complete Γ τ) with
+          "l-value conversion of expression with incomplete type";
+        mret (load e, τ)
      end
-  | (e, RT τ) => (e,τ)
-  | (e, FT τs τ) => (e,(τs ~> τ).*)
+  | inl (τs ~> τ) => mret (&e, (τs ~> τ).*)
+  | inl TAny => fail "l-value conversion of expression with void type"
+  | inr τ => mret (e,τ)
   end.
 Definition to_R_NULL (σ : type K)
-    (eτe : expr K * expr_type K) : expr K * type K :=
-  let (e,τ) := to_R eτe in
+    (e : expr K) (τlr : lrtype K) : M (expr K * type K) :=
+  '(e,τ) ← to_R e τlr;
   match σ with
-  | σp.* => if is_pseudo_NULL e then (# ptrV (NULL σp), σp.*) else (e,τ)
-  | _ => (e,τ)
+  | σp.* =>
+     if is_pseudo_NULL e then mret (# ptrV (NULL σp), σp.*) else mret (e,τ)
+  | _ => mret (e,τ)
   end.
 Definition convert_ptrs (eτ1 eτ2 : expr K * type K) :
     option (expr K * expr K * type K) :=
@@ -268,35 +260,35 @@ Definition convert_ptrs (eτ1 eτ2 : expr K * type K) :
   | _, _ => None
   end.
 Definition to_if_expr (e1 : expr K)
-    (eτ2 eτ3 : expr K * type K) : option (expr K * expr_type K) :=
+    (eτ2 eτ3 : expr K * type K) : option (expr K * lrtype K) :=
   (**i 1.) *) (
     (** same types *)
     let (e2,τ2) := eτ2 in let (e3,τ3) := eτ3 in
-    guard (τ2 = τ3); Some (if{e1} e2 else e3, RT τ2)) ∪
+    guard (τ2 = τ3); Some (if{e1} e2 else e3, inr τ2)) ∪
   (**i 2.) *) (
     (** common arithmetic conversions *)
     let (e2,τ2) := eτ2 in let (e3,τ3) := eτ3 in
     match τ2, τ3 with
     | intT τi2, intT τi3 =>
        let τi' := int_promote τi2 ∪ int_promote τi3 in
-       Some (if{e1} cast{intT τi'} e2 else cast{intT τi'} e3, RT (intT τi'))
+       Some (if{e1} cast{intT τi'} e2 else cast{intT τi'} e3, inr (intT τi'))
     | _, _ => None
     end) ∪
   (**i 3.) *) (
     (** one side is NULL or void *)
     '(e2,e3,τ) ← convert_ptrs eτ2 eτ3;
-    Some (if{e1} e2 else e3, RT τ)).
+    Some (if{e1} e2 else e3, inr τ)).
 Definition to_binop_expr (op : binop)
-    (eτ1 eτ2 : expr K * type K) : option (expr K * expr_type K) :=
+    (eτ1 eτ2 : expr K * type K) : option (expr K * lrtype K) :=
   (**i 1.) *) (
     let (e1,τ1) := eτ1 in let (e2,τ2) := eτ2 in
-    σ ← binop_type_of op τ1 τ2; Some (e1 @{op} e2, RT σ)) ∪
+    σ ← binop_type_of op τ1 τ2; Some (e1 @{op} e2, inr σ)) ∪
   (**i 2.) *) (
     (** one side is NULL or void *)
     guard (op = CompOp EqOp);
     '(e1,e2,τ) ← convert_ptrs eτ1 eτ2;
     σ ← binop_type_of (CompOp EqOp) τ τ;
-    Some (e1 @{op} e2, RT σ)).
+    Some (e1 @{op} e2, inr σ)).
 
 Definition int_const_types (cτi : cint_type) : list (int_type K) :=
   let (ms,k) := cτi in
@@ -407,7 +399,7 @@ Fixpoint next_init_ref (Γ : env K)
   | _ => None
   end.
 Definition to_ref
-    (to_expr : cexpr → M (expr K * expr_type K)) :
+    (to_expr : cexpr → M (expr K * lrtype K)) :
     ref K → type K → list (string + cexpr) → M (ref K * type K) :=
   fix go r (τ : type K) xces {struct xces} :=
   match xces with
@@ -438,7 +430,7 @@ Definition to_ref
   end.
 
 Definition to_compound_init
-    (to_expr : cexpr → M (expr K * expr_type K))
+    (to_expr : cexpr → M (expr K * lrtype K))
     (to_init_expr : type K → cinit → M (expr K))
     (τ : type K) : expr K → list (ref K) →
     list (list (string + cexpr) * cinit) → M (expr K) :=
@@ -457,14 +449,23 @@ Definition to_compound_init
      e1 ← to_init_expr σ ci;
      go (#[r:=e1] e) (r :: seen) inits
   end.
+Definition to_call_fun (e : expr K) (τlr : lrtype K) :
+    option (expr K * list (type K) * type K) :=
+  match τlr with
+  | inl (τs ~> σ) => Some (e,τs,σ)
+  | inl (TType τ) =>
+     '(τs,σ) ← maybe (TBase ∘ TPtr) τ ≫= maybe2 TFun; Some (.*(load e),τs,σ)
+  | inl TAny => None
+  | inr τ => '(τs,σ) ← maybe (TBase ∘ TPtr) τ ≫= maybe2 TFun; Some (.*e,τs,σ)
+  end.
 Definition to_call_args
-    (to_expr : cexpr → M (expr K * expr_type K)) :
+    (to_expr : cexpr → M (expr K * lrtype K)) :
     list cexpr → list (type K) → M (list (expr K)) :=
   fix go ces τs :=
   match ces, τs with
   | [], [] => mret []
   | ce :: ces, τ :: τs =>
-     '(e,σ) ← to_R_NULL τ <$> to_expr ce;
+     '(e,σ) ← to_expr ce ≫= curry (to_R_NULL τ);
      Γ ← gets to_env;
      guard (cast_typed σ τ)
        with "function applied to arguments of incorrect type";
@@ -533,6 +534,11 @@ Definition rhs_6_5_16_1p3_safe : expr K → bool :=
   | #[_:=_ ] _ => true (* compound literal *)
   | _ => false (* l-values, cannot occur *)
   end.
+Definition to_field_ref_seg
+    (c : compound_kind) (i : nat) (t : tag) : ref_seg K :=
+  match c with
+  | Struct_kind => RStruct i t | Union_kind => RUnion i t false
+  end.
 
 Inductive to_type_kind := to_Type | to_Ptr.
 Definition to_type_type {K} (k : to_type_kind) :=
@@ -543,143 +549,131 @@ End frontend.
 
 (* not in the section because of bug #3488 *)
 Fixpoint to_expr `{Env K} (Δl : local_env K)
-    (ce : cexpr) : M (expr K * expr_type K) :=
-  match ce with
+    (ce : cexpr) : M (expr K * lrtype K) :=
+  match ce return M (expr K * lrtype K) with
   | CEVar x => lookup_var Δl x
   | CEConst cτi z =>
      τi ← error_of_option (to_int_const z (int_const_types cτi))
        ("integer constant " +:+ pretty z +:+ " too large");
-     mret (# (intV{τi} z), RT (intT τi))
+     mret (# (intV{τi} z), inr (intT τi))
   | CEConstString zs =>
      '(v,n) ← error_of_option (to_string_const zs)
        "char of string constant out of range";
      o ← insert_object perm_readonly v;
-     mret (% (addr_top o (charT.[n])), LT (charT.[n]))
+     mret (% (Ptr (addr_top o (charT.[n]))), inl (TType (charT.[n])))
   | CELimit cτ li =>
      τ ← to_type to_Type Δl cτ;
      '(z,τi) ← to_limit_const τ li;
-     mret (# intV{τi} z, RT (intT τi))
+     mret (# intV{τi} z, inr (intT τi))
   | CEDeref ce =>
-     '(e,τ) ← to_R <$> to_expr Δl ce;
+     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
      τp ← error_of_option (maybe (TBase ∘ TPtr) τ)
        "dereferencing non-pointer type";
-     match τp with
-     | TAny => fail "dereferencing pointer with void type"
-     | τs ~> σ => mret (e, FT τs σ)
-     | TType τ =>
-        Γ ← gets to_env;
-        guard (type_complete Γ τ) with
-          "dereferencing pointer with incomplete type";
-        mret (.* e, LT τ)
-     end
+     mret (.* e, inl τp)
   | CEAddrOf ce =>
-     '(e,τe) ← to_expr Δl ce;
-     match τe with
-     | RT _ => fail "taking address of r-value"
-     | LT τ => mret (& e, RT (TType τ.*))
-     | FT τs τ => mret (e, RT ((τs ~> τ).*))
-     end
+     '(e,τlr) ← to_expr Δl ce;
+     τp ← error_of_option (maybe inl τlr) "taking address of r-value";
+     mret (& e, inr (τp.*))
   | CEAssign ass ce1 ce2 =>
-     '(e1,τe1) ← to_expr Δl ce1;
-     τ1 ← error_of_option (maybe LT τe1) "assigning to r-value";
-     '(e2,τ2) ← to_R_NULL τ1 <$> to_expr Δl ce2;
+     '(e1,τlr1) ← to_expr Δl ce1;
+     τ1 ← error_of_option (maybe (inl ∘ TType) τlr1) "assigning to r-value";
+     '(e2,τ2) ← to_expr Δl ce2 ≫= curry (to_R_NULL τ1);
      Γ ← gets to_env;
      guard (assign_typed τ1 τ2 ass) with "assignment cannot be typed";
      let e1 :=
        if decide (ass = Assign ∧ ¬rhs_6_5_16_1p3_safe e2)
        then freeze true e1 else e1 in
-     mret (e1 ::={ass} e2, RT τ1)
+     mret (e1 ::={ass} e2, inr τ1)
   | CECall ce ces =>
-     '(e,τ) ← to_R <$> to_expr Δl ce;
-     '(τs,σ) ← error_of_option (maybe (TBase ∘ TPtr) τ ≫= maybe2 TFun)
+     '(e,τlr) ← to_expr Δl ce;
+     '(e,τs,σ) ← error_of_option (to_call_fun e τlr)
        "called object is not a function";
      Γ ← gets to_env;
      guard (type_complete Γ σ) with "function called with incomplete type";
      es ← to_call_args (to_expr Δl) ces τs;
-     mret (call e @ es, RT σ)
-  | CEAbort => mret (abort voidT, RT voidT)
+     mret (call e @ es, inr σ)
+  | CEAbort => mret (abort voidT, inr voidT)
   | CEAlloc cτ ce =>
      τ ← to_type to_Type Δl cτ;
      guard (τ ≠ voidT) with "alloc of void type";
-     '(e,τsz) ← to_R <$> to_expr Δl ce;
+     '(e,τsz) ← to_expr Δl ce ≫= curry to_R;
      _ ← error_of_option (maybe (TBase ∘ TInt) τsz)
        "alloc applied to argument of non-integer type";
-     mret (alloc{τ} e, RT (TType τ.* ))
+     mret (alloc{τ} e, inr (TType τ.*))
   | CEFree ce =>
-     '(e,τ) ← to_R <$> to_expr Δl ce;
+     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
      τp ← error_of_option (maybe (TBase ∘ TPtr ∘ TType) τ)
        "free applied to argument of non-pointer type";
      Γ ← gets to_env;
      guard (type_complete Γ τp)
        with "free applied to argument of incomplete pointer type";
-     mret (free (.* e), RT voidT)
+     mret (free (.* e), inr voidT)
   | CEUnOp op ce =>
-     '(e,τ) ← to_R <$> to_expr Δl ce;
+     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
      σ ← error_of_option (unop_type_of op τ) "unary operator cannot be typed";
-     mret (@{op} e, RT σ)
+     mret (@{op} e, inr σ)
   | CEBinOp op ce1 ce2 =>
-     eτ1 ← to_R <$> to_expr Δl ce1;
-     eτ2 ← to_R <$> to_expr Δl ce2;
+     eτ1 ← to_expr Δl ce1 ≫= curry to_R;
+     eτ2 ← to_expr Δl ce2 ≫= curry to_R;
      error_of_option (to_binop_expr op eτ1 eτ2)
        "binary operator cannot be typed"
   | CEIf ce1 ce2 ce3 =>
-     '(e1,τ1) ← to_R <$> to_expr Δl ce1;
+     '(e1,τ1) ← to_expr Δl ce1 ≫= curry to_R;
      τb ← error_of_option (maybe TBase τ1)
        "conditional argument of if expression of non-base type";
      guard (τb ≠ TVoid) with
        "conditional argument of if expression of void type";
-     eτ2 ← to_R <$> to_expr Δl ce2;
-     eτ3 ← to_R <$> to_expr Δl ce3;
+     eτ2 ← to_expr Δl ce2 ≫= curry to_R;
+     eτ3 ← to_expr Δl ce3 ≫= curry to_R;
      error_of_option (to_if_expr e1 eτ2 eτ3) "if expression cannot be typed"
   | CEComma ce1 ce2 =>
-     '(e1,τ1) ← to_R <$> to_expr Δl ce1;
-     '(e2,τ2) ← to_R <$> to_expr Δl ce2;
-     mret (cast{voidT} e1,, e2, RT τ2)
+     '(e1,τ1) ← to_expr Δl ce1 ≫= curry to_R;
+     '(e2,τ2) ← to_expr Δl ce2 ≫= curry to_R;
+     mret (cast{voidT} e1,, e2, inr τ2)
   | CEAnd ce1 ce2 =>
-     '(e1,τ1) ← to_R <$> to_expr Δl ce1;
+     '(e1,τ1) ← to_expr Δl ce1 ≫= curry to_R;
      τb1 ← error_of_option (maybe TBase τ1)
        "first argument of && of non-base type";
      guard (τb1 ≠ TVoid) with "first argument of && of void type";
-     '(e2,τ2) ← to_R <$> to_expr Δl ce2;
+     '(e2,τ2) ← to_expr Δl ce2 ≫= curry to_R;
      τb2 ← error_of_option (maybe TBase τ2)
        "second argument of && of non-base type";
      guard (τb2 ≠ TVoid) with "second argument of && of void type";
      mret (if{e1} if{e2} # intV{sintT} 1 else # intV{sintT} 0
-       else #(intV{sintT} 0), RT sintT)
+       else #(intV{sintT} 0), inr sintT)
   | CEOr ce1 ce2 =>
-     '(e1,τ1) ← to_R <$> to_expr Δl ce1;
+     '(e1,τ1) ← to_expr Δl ce1 ≫= curry to_R;
      τb1 ← error_of_option (maybe TBase τ1)
        "first argument of || of non-base type";
      guard (τb1 ≠ TVoid) with "first argument of || of void type";
-     '(e2,τ2) ← to_R <$> to_expr Δl ce2;
+     '(e2,τ2) ← to_expr Δl ce2 ≫= curry to_R;
      τb2 ← error_of_option (maybe TBase τ2)
        "second argument of || of non-base type";
      guard (τb2 ≠ TVoid) with "second argument of || of void type";
      mret (if{e1} # intV{sintT} 0
-       else (if{e2} # intV{sintT} 1 else #(intV{sintT} 0)), RT sintT)
+       else (if{e2} # intV{sintT} 1 else #(intV{sintT} 0)), inr sintT)
   | CECast cσ ci =>
      σ ← to_type to_Type Δl cσ;
      guard (maybe2 TArray σ = None) with "array compound literal not supported";
      guard (maybe CSingleInit ci = None ∨ maybe2 TCompound σ = None) with
        "cast to struct/union not allowed";
      e ← to_init_expr Δl σ ci;
-     mret (e, RT σ)
+     mret (e, inr σ)
   | CEField ce x =>
-     '(e,τe) ← to_expr Δl ce;
-     '(c,t) ← error_of_option (maybe2 TCompound (lrtype_type (to_lrtype τe)))
-       "field operator applied to argument of non-compound type";
-     '(i,τ) ← lookup_compound t x;
-     let rs :=
-       match c with
-       | Struct_kind => RStruct i t | Union_kind => RUnion i t false
-       end in
-     match τe with
-     | LT _ => mret (e %> rs, LT τ)
-     | RT _ =>
-        guard (maybe2 TArray τ = None) with
+     '(e,τlr) ← to_expr Δl ce;
+     match τlr with
+     | inl τp =>
+        '(c,t) ← error_of_option (maybe TType τp ≫= maybe2 TCompound)
+          "field operator applied to argument of non-compound type";
+        '(i,σ) ← lookup_compound t x;
+        mret (e %> to_field_ref_seg c i t, inl (TType σ))
+     | inr τ =>
+        '(c,t) ← error_of_option (maybe2 TCompound τ)
+          "field operator applied to argument of non-compound type";
+        '(i,σ) ← lookup_compound t x;
+        guard (maybe2 TArray σ = None) with
           "indexing array field of r-value struct/union not supported";
-        mret (e #> rs, RT τ)
-     | FT _ _ => fail "field operator applied to argument of function type"
+        mret (e #> to_field_ref_seg c i t, inr σ)
      end
   end
 with to_init_expr `{Env K} (Δl : local_env K)
@@ -693,10 +687,10 @@ with to_init_expr `{Env K} (Δl : local_env K)
         if decide (σ = type_of v) then mret (# v) else
         if decide (σ = charT.*) then
           o ← insert_object perm_readonly v;
-          mret (& ((% (addr_top o (charT.[n]))) %> RArray 0 charT n))
+          mret (& ((% Ptr (addr_top o (charT.[n]))) %> RArray 0 charT n))
         else fail "string initializer of wrong type or size"
      | None =>
-        '(e,τ) ← to_R_NULL σ <$> to_expr Δl ce;
+        '(e,τ) ← to_expr Δl ce ≫= curry (to_R_NULL σ);
         Γ ← gets to_env;
         guard (cast_typed τ σ) with "cast or initializer cannot be typed";
         mret (cast{σ} e)
@@ -762,10 +756,14 @@ with to_type `{Env K} (k : to_type_kind)
         mret (xτs.*2 ~> τ)
      end
   | CTTypeOf ce =>
-     '(_,τe) ← to_expr Δl ce;
-     match τe with
-     | LT τ | RT τ => to_type_ret τ
-     | FT _ _ => fail "typeof of function"
+     '(_,τlr) ← to_expr Δl ce;
+     match τlr with
+     | inl (TType τ) =>
+        Γ ← gets to_env;
+        guard (type_complete Γ τ) with "complete typeof expected";
+        to_type_ret τ
+     | inr τ => to_type_ret τ
+     | _ => fail "typeof of function"
      end
   end.
 
@@ -863,7 +861,7 @@ Definition to_stmt (τret : type K) :
   fix go bc Δl cs {struct cs} :=
   match cs with
   | CSDo ce =>
-     '(e,_) ← to_R <$> to_expr Δl ce;
+     '(e,_) ← to_expr Δl ce ≫= curry to_R;
      mret (!(cast{voidT} e), (false, None))
   | CSSkip => mret (skip, (false, None))
   | CSGoto l => mret (goto l, (true, None))
@@ -876,7 +874,7 @@ Definition to_stmt (τret : type K) :
   | CSReturn (Some ce) =>
      guard (τret ≠ voidT) with
        "return with expression in function returning void";
-     '(e,τ) ← to_R_NULL τret <$> to_expr Δl ce;
+     '(e,τ) ← to_expr Δl ce ≫= curry (to_R_NULL τret);
      Γ ← gets to_env;
      guard (cast_typed τ τret) with "return expression has incorrect type";
      mret (ret (cast{τret} e), (true, Some τret))
@@ -937,7 +935,7 @@ Definition to_stmt (τret : type K) :
      mret (s1 ;; s2, (cmσ2.1, mσ))
   | CSLabel l cs => '(s,cmσ) ← go bc Δl cs; mret (l :; s, cmσ)
   | CSWhile ce cs =>
-     '(e,τ) ← to_R <$> to_expr Δl ce;
+     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
      τb ← error_of_option (maybe TBase τ)
        "conditional argument of while statement of non-base type";
      guard (τb ≠ TVoid) with
@@ -945,9 +943,9 @@ Definition to_stmt (τret : type K) :
      '(s,cmσ) ← go (Some 1, Some 0) Δl cs;
      mret (catch (loop (if{e} skip else throw 0 ;; catch s)), (false, cmσ.2))
   | CSFor ce1 ce2 ce3 cs =>
-     '(e1,τ1) ← to_R <$> to_expr Δl ce1;
-     '(e2,τ2) ← to_R <$> to_expr Δl ce2;
-     '(e3,τ3) ← to_R <$> to_expr Δl ce3;
+     '(e1,τ1) ← to_expr Δl ce1 ≫= curry to_R;
+     '(e2,τ2) ← to_expr Δl ce2 ≫= curry to_R;
+     '(e3,τ3) ← to_expr Δl ce3 ≫= curry to_R;
      '(s,cmσ) ← go (Some 1, Some 0) Δl cs;
      τb ← error_of_option (maybe TBase τ2)
        "conditional argument of for statement of non-base type";
@@ -959,14 +957,14 @@ Definition to_stmt (τret : type K) :
        )), (false, cmσ.2))
   | CSDoWhile cs ce =>
      '(s,cmσ) ← go (Some 1, Some 0) Δl cs;
-     '(e,τ) ← to_R <$> to_expr Δl ce;
+     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
      τb ← error_of_option (maybe TBase τ)
        "conditional argument of do-while statement of non-base type";
      guard (τb ≠ TVoid) with
        "conditional argument of do-while statement of void type";
      mret (catch (loop (catch s ;; if{e} skip else throw 0)), (false, cmσ.2))
   | CSIf ce cs1 cs2 =>
-     '(e,τ) ← to_R <$> to_expr Δl ce;
+     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
      '(s1,cmσ1) ← go bc Δl cs1;
      '(s2,cmσ2) ← go bc Δl cs2;
      τb ← error_of_option (maybe TBase τ)
@@ -977,7 +975,7 @@ Definition to_stmt (τret : type K) :
        "if statement with non-matching return types";
      mret (if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S
   | CSSwitch ce cs =>
-     '(e,τ) ← to_R <$> to_expr Δl ce;
+     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
      τi ← error_of_option (maybe (TBase ∘ TInt) τ)
        "conditional argument of switch statement of non-integer type";
      '(s,cmσ) ← go (Some 0, S <$> bc.2) Δl cs;

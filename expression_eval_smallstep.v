@@ -17,7 +17,8 @@ Lemma expr_eval_ehstep Γ ρ e1 m ν :
   ∃ e2, Γ\ ρ ⊢ₕ e1, m ⇒ e2, m ∧ ⟦ e2 ⟧ Γ ρ m = Some ν.
 Proof.
   revert e1 ν. assert (∀ a v,
-    mem_forced Γ a m → m !!{Γ} a = Some v → Γ\ ρ ⊢ₕ load (%a), m ⇒ #v, m).
+    mem_forced Γ a m → m !!{Γ} a = Some v →
+    Γ\ ρ ⊢ₕ load (% (Ptr a)), m ⇒ #v, m).
   { intros a v Hm ?. rewrite <-Hm at 2. do_ehstep. }
   apply (expr_eval_ind Γ ρ m (λ e _, is_redex e → (_:Prop))); intros;
     repeat match goal with
@@ -64,6 +65,7 @@ Proof.
     try destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]];
     solve_elem_of.
 Qed.
+Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
 Lemma ehstep_expr_eval_typed Γ Δ ρ m1 m2 e1 e2 ν τlr :
   ✓ Γ → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 →
   ✓{Γ,Δ} m1 → ⟦ e1 ⟧ Γ ρ m1 = Some ν → ✓{Δ}* ρ →
@@ -74,12 +76,11 @@ Proof.
     repeat match goal with
     | H : ?ρ.*2 !! ?i = Some ?τ1, H2 : ?ρ !! _ = Some (_,?τ2) |- _ =>
        rewrite list_lookup_fmap, H2 in H; decompose_Forall_hyps
-    end; do 2 (try typed_constructor); eauto 3 using
+    end; try typed_constructor; eauto using
       val_unop_typed, val_binop_typed, val_cast_typed, addr_top_typed,
       cmap_index_typed_valid, addr_top_strict, lockset_empty_valid,
       addr_elt_typed, addr_elt_strict, addr_elt_typed, addr_elt_strict,
       val_lookup_seg_typed, val_alter_const_typed, mem_lookup_typed.
-  by repeat typed_constructor.
 Qed.
 Lemma ehstep_pure_expr_eval Γ ρ m1 m2 e1 e2 :
   Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → is_pure e1 → ⟦ e1 ⟧ Γ ρ m1 = ⟦ e2 ⟧ Γ ρ m1.

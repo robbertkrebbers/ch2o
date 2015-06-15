@@ -86,13 +86,13 @@ Proof.
         [by rewrite <-(assert_singleton_l_2 Γ _ (var 0) _ _ _ a_tmp)|].
       rewrite <-!(associative (★)%A); apply ax_expr_invariant_l'.
       rewrite (right_id _ (★)%A), (assert_singleton_l _ _ (var 1)),
-        (assert_exist_sep (A:=addr _)), (assert_sep_exist (A:=addr _)).
+        (assert_exist_sep (A:=ptr _)), (assert_sep_exist (A:=ptr _)).
       apply ax_expr_exist_pre; intros a_y.
       eapply ax_expr_weaken_post';
         [by rewrite <-(assert_singleton_l_2 Γ _ (var 1) _ _ _ a_y)|].
       rewrite !(associative (★)%A), !(commutative (★)%A _ (_ ∧ _)%A).
       rewrite <-!(associative (★)%A); apply ax_expr_invariant_l'.
-      rewrite (assert_singleton_l _ _ (var 2)), !(assert_sep_exist (A:=addr _)).
+      rewrite (assert_singleton_l _ _ (var 2)), !(assert_sep_exist (A:=ptr _)).
       apply ax_expr_exist_pre; intros a_z.
       eapply ax_expr_weaken_post';
         [by rewrite <-(assert_singleton_l_2 Γ _ (var 2) _ _ _ a_z)|].

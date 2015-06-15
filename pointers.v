@@ -64,6 +64,8 @@ Implicit Types τp : ptr_type K.
 Implicit Types a : addr K.
 Implicit Types p : ptr K.
 
+Lemma Ptr_typed_inv Γ Δ a τp : (Γ, Δ) ⊢ Ptr a : τp → (Γ, Δ) ⊢ a : τp.
+Proof. by inversion 1. Qed.
 Global Instance: Injective (=) (=) (@Ptr K).
 Proof. by injection 1. Qed.
 Lemma ptr_typed_type_valid Γ Δ p τp : ✓ Γ → (Γ,Δ) ⊢ p : τp → ✓{Γ} τp.

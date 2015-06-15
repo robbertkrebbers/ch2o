@@ -15,24 +15,24 @@ Fixpoint expr_eval `{Env K} (e : expr K) (Γ : env K)
   match e with
   | var x =>
      '(o,τ) ← ρ !! x;
-     Some (inl (addr_top o τ))
+     Some (inl (Ptr (addr_top o τ)))
   | %#{Ω} ν => guard (Ω = ∅); Some ν
   | .* e =>
      v ← ⟦ e ⟧ Γ ρ m ≫= maybe inr;
-     a ← maybe (VBase ∘ VPtr ∘ Ptr) v;
-     guard (index_alive' m (addr_index a));
-     Some (inl a)
+     p ← maybe (VBase ∘ VPtr) v;
+     guard (ptr_alive' m p);
+     Some (inl p)
   | & e =>
-     a ← ⟦ e ⟧ Γ ρ m ≫= maybe inl;
-     Some (inr (ptrV (Ptr a)))
+     p ← ⟦ e ⟧ Γ ρ m ≫= maybe inl;
+     Some (inr (ptrV p))
   | load e =>
-     a ← ⟦ e ⟧ Γ ρ m ≫= maybe inl;
+     a ← ⟦ e ⟧ Γ ρ m ≫= maybe (inl ∘ Ptr);
      guard (mem_forced Γ a m);
      inr <$> m !!{Γ} a
   | e %> rs =>
-     a ← ⟦ e ⟧ Γ ρ m ≫= maybe inl;
+     a ← ⟦ e ⟧ Γ ρ m ≫= maybe (inl ∘ Ptr);
      guard (addr_strict Γ a);
-     Some (inl (addr_elt Γ rs a))
+     Some (inl (Ptr (addr_elt Γ rs a)))
   | e #> rs =>
      v ← ⟦ e ⟧ Γ ρ m ≫= maybe inr;
      v' ← v !!{Γ} rs;
@@ -80,18 +80,19 @@ Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
 Section expr_eval_ind.
 Context (Γ : env K) (ρ : stack K) (m : mem K).
 Context (P : expr K → lrval K → Prop).
-Context (Pvar : ∀ τ x o, ρ !! x = Some (o,τ) → P (var x) (inl (addr_top o τ))).
+Context (Pvar : ∀ τ x o,
+  ρ !! x = Some (o,τ) → P (var x) (inl (Ptr (addr_top o τ)))).
 Context (Pval : ∀ ν, P (%# ν) ν).
-Context (Prtol : ∀ e a,
-  ⟦ e ⟧ Γ ρ m = Some (inr (ptrV (Ptr a))) → P e (inr (ptrV (Ptr a))) →
-  index_alive' m (addr_index a) → P (.* e) (inl a)).
-Context (Profl : ∀ e a,
-  ⟦ e ⟧ Γ ρ m = Some (inl a) → P e (inl a) → P (&e) (inr (ptrV (Ptr a)))).
+Context (Prtol : ∀ e p,
+  ⟦ e ⟧ Γ ρ m = Some (inr (ptrV p)) → P e (inr (ptrV p)) →
+  ptr_alive' m p → P (.* e) (inl p)).
+Context (Profl : ∀ e p,
+  ⟦ e ⟧ Γ ρ m = Some (inl p) → P e (inl p) → P (&e) (inr (ptrV p))).
 Context (Peltl : ∀ e rs a,
-  ⟦ e ⟧ Γ ρ m = Some (inl a) → P e (inl a) → addr_strict Γ a →
-  P (e %> rs) (inl (addr_elt Γ rs a))).
+  ⟦ e ⟧ Γ ρ m = Some (inl (Ptr a)) → P e (inl (Ptr a)) → addr_strict Γ a →
+  P (e %> rs) (inl (Ptr (addr_elt Γ rs a)))).
 Context (Pload : ∀ e a v,
-  ⟦ e ⟧ Γ ρ m = Some (inl a) → P e (inl a) → mem_forced Γ a m →
+  ⟦ e ⟧ Γ ρ m = Some (inl (Ptr a)) → P e (inl (Ptr a)) → mem_forced Γ a m →
   m !!{Γ} a = Some v → P (load e) (inr v)).
 Context (Peltr : ∀ e rs v v',
   ⟦ e ⟧ Γ ρ m = Some (inr v) → P e (inr v) →
@@ -191,7 +192,7 @@ Proof.
     end; typed_inversion_all; auto.
   * rewrite lookup_app_l by eauto using lookup_lt_Some.
     by simplify_option_equality.
-  * by simplify_option_equality by eauto using index_alive_1', index_alive_2'.
+  * by simplify_option_equality by eauto using ptr_alive_weaken'.
   * by simplify_option_equality.
   * simplify_option_equality by eauto using addr_strict_weaken.
     by erewrite <-addr_elt_weaken by eauto.
@@ -220,7 +221,7 @@ Proof.
   by destruct e using @expr_ind_alt; simpl;
     repeat match goal with
     | H : ⟦ _ ⟧ _ _ _ = _ |- _ => rewrite H
-    | H : appcontext [index_alive'] |- _ => rewrite index_alive_erase' in H
+    | H : appcontext [ptr_alive'] |- _ => rewrite ptr_alive_erase' in H
     | H : appcontext [base_val_branchable] |- _ => rewrite base_val_branchable_erase in H
     | H : appcontext [val_unop_ok] |- _ => rewrite val_unop_ok_erase in H
     | H : appcontext [val_binop_ok] |- _ => rewrite val_binop_ok_erase in H

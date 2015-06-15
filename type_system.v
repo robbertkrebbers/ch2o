@@ -4,9 +4,7 @@ Require Export operations state.
 Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 
-Notation lrtype K := (type K + type K)%type.
-Definition lrtype_type {K} (τlr : lrtype K) : type K :=
-  match τlr with inl τ | inr τ => τ end.
+Notation lrtype K := (ptr_type K + type K)%type.
 Notation rettype K := (bool * option (type K))%type.
 Inductive focustype (K : Set) :=
   | Stmt_type : rettype K → focustype K
@@ -22,11 +20,15 @@ Notation envs := (env K * memenv K * list (type K))%type.
 
 Global Instance stack_item_valid : Valid (memenv K) (index * type K) := λ Δ oτ,
   Δ ⊢ oτ.1 : oτ.2.
-
 Global Instance rettype_valid : Valid (env K) (rettype K) := λ Γ mcτ,
   match mcτ.2 with Some τ => ✓{Γ} τ | _ => True end.
+
+Inductive lrtype_valid' (Γ : env K) : lrtype K → Prop :=
+  | ltype_valid τp : ✓{Γ} τp → lrtype_valid' Γ (inl τp)
+  | rtype_valid τ : ✓{Γ} τ → lrtype_valid' Γ (inr τ).
+Global Instance lrtype_valid : Valid (env K) (lrtype K) := lrtype_valid'.
 Inductive lrval_typed' (Γ : env K) (Δ : memenv K) : lrval K → lrtype K → Prop :=
-  | lval_typed a τ : (Γ,Δ) ⊢ a : TType τ → lrval_typed' Γ Δ (inl a) (inl τ)
+  | lval_typed p τp : (Γ,Δ) ⊢ p : τp → lrval_typed' Γ Δ (inl p) (inl τp)
   | rval_typed v τ : (Γ,Δ) ⊢ v : τ → lrval_typed' Γ Δ (inr v) (inr τ).
 Global Instance lrval_typed:
   Typed (env K * memenv K) (lrtype K) (lrval K) := curry lrval_typed'.
@@ -34,38 +36,39 @@ Global Instance lrval_typed:
 Inductive expr_typed' (Γ : env K) (Δ : memenv K)
      (τs : list (type K)) : expr K → lrtype K → Prop :=
   | EVar_typed τ i :
-     τs !! i = Some τ → expr_typed' Γ Δ τs (var i) (inl τ)
+     τs !! i = Some τ → expr_typed' Γ Δ τs (var i) (inl (TType τ))
   | EVal_typed Ω ν τlr :
      ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ ν : τlr → expr_typed' Γ Δ τs (%#{Ω} ν) τlr
-  | ERtoL_typed e τ :
-     expr_typed' Γ Δ τs e (inr (TType τ.*)) →
-     type_complete Γ τ → expr_typed' Γ Δ τs (.* e) (inl τ)
-  | ERofL_typed e τ :
-     expr_typed' Γ Δ τs e (inl τ) →
-     expr_typed' Γ Δ τs (& e) (inr (TType τ.*))
+  | ERtoL_typed e τp :
+     expr_typed' Γ Δ τs e (inr (τp.*)) →
+     expr_typed' Γ Δ τs (.* e) (inl τp)
+  | ERofL_typed e τp :
+     expr_typed' Γ Δ τs e (inl τp) →
+     expr_typed' Γ Δ τs (& e) (inr (τp.*))
   | EAssign_typed ass e1 e2 τ1 τ2 :
      assign_typed τ1 τ2 ass →
-     expr_typed' Γ Δ τs e1 (inl τ1) → expr_typed' Γ Δ τs e2 (inr τ2) →
+     expr_typed' Γ Δ τs e1 (inl (TType τ1)) → expr_typed' Γ Δ τs e2 (inr τ2) →
      expr_typed' Γ Δ τs (e1 ::={ass} e2) (inr τ1)
   | ECall_typed e es σ σs :
-     expr_typed' Γ Δ τs e (inr ((σs ~> σ).*)) →
+     expr_typed' Γ Δ τs e (inl (σs ~> σ)) →
      Forall2 (expr_typed' Γ Δ τs) es (inr <$> σs) → type_complete Γ σ →
      expr_typed' Γ Δ τs (call e @ es) (inr σ)
   | EAbort_typed τ :
      ✓{Γ} τ → expr_typed' Γ Δ τs (abort τ) (inr τ)
   | ELoad_typed e τ :
-     expr_typed' Γ Δ τs e (inl τ) → expr_typed' Γ Δ τs (load e) (inr τ)
+     expr_typed' Γ Δ τs e (inl (TType τ)) → type_complete Γ τ →
+     expr_typed' Γ Δ τs (load e) (inr τ)
   | EEltL_typed e rs τ σ  :
-     expr_typed' Γ Δ τs e (inl τ) → Γ ⊢ rs : τ ↣ σ →
-     expr_typed' Γ Δ τs (e %> rs) (inl σ)
+     expr_typed' Γ Δ τs e (inl (TType τ)) → Γ ⊢ rs : τ ↣ σ →
+     expr_typed' Γ Δ τs (e %> rs) (inl (TType σ))
   | EEltR_typed e rs τ σ  :
      expr_typed' Γ Δ τs e (inr τ) → Γ ⊢ rs : τ ↣ σ →
      expr_typed' Γ Δ τs (e #> rs) (inr σ)
   | EAlloc_typed τ e τi :
      ✓{Γ} τ → expr_typed' Γ Δ τs e (inr (intT τi)) →
      expr_typed' Γ Δ τs (alloc{τ} e) (inr (TType τ.*))
-  | EFree_typed e τ :
-     expr_typed' Γ Δ τs e (inl τ) →
+  | EFree_typed e τp :
+     expr_typed' Γ Δ τs e (inl τp) →
      expr_typed' Γ Δ τs (free e) (inr voidT)
   | EUnOp_typed op e τ σ :
      unop_typed op τ σ → expr_typed' Γ Δ τs e (inr τ) →
@@ -94,32 +97,34 @@ Global Instance expr_typed:
 Section expr_typed_ind.
   Context (Γ : env K) (Δ : memenv K) (τs : list (type K)).
   Context (P : expr K → lrtype K → Prop).
-  Context (Pvar : ∀ τ i, τs !! i = Some τ → P (var i) (inl τ)).
+  Context (Pvar : ∀ τ i, τs !! i = Some τ → P (var i) (inl (TType τ))).
   Context (Pval : ∀ Ω ν τlr, ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ ν : τlr → P (%#{Ω} ν) τlr).
-  Context (Prtol : ∀ e τ,
-    (Γ,Δ,τs) ⊢ e : inr (TType τ.*) → P e (inr (TType τ.*)) →
-    type_complete Γ τ → P (.* e) (inl τ)).
-  Context (Profl : ∀ e τ,
-    (Γ,Δ,τs) ⊢ e : inl τ → P e (inl τ) → P (& e) (inr (TType τ.*))).
+  Context (Prtol : ∀ e τp,
+    (Γ,Δ,τs) ⊢ e : inr (τp.*) → P e (inr (τp.*)) → P (.* e) (inl τp)).
+  Context (Profl : ∀ e τp,
+    (Γ,Δ,τs) ⊢ e : inl τp → P e (inl τp) → P (& e) (inr (τp.*))).
   Context (Passign : ∀ ass e1 e2 τ1 τ2,
-    assign_typed τ1 τ2 ass → (Γ,Δ,τs) ⊢ e1 : inl τ1 → P e1 (inl τ1) →
+    assign_typed τ1 τ2 ass →
+    (Γ,Δ,τs) ⊢ e1 : inl (TType τ1) → P e1 (inl (TType τ1)) →
     (Γ,Δ,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 ::={ass} e2) (inr τ1)).
   Context (Pcall : ∀ e es σ σs,
-    (Γ,Δ,τs) ⊢ e : inr ((σs ~> σ).*) → P e (inr ((σs ~> σ).*)) →
+    (Γ,Δ,τs) ⊢ e : inl (σs ~> σ) → P e (inl (σs ~> σ)) →
     (Γ,Δ,τs) ⊢* es :* inr <$> σs → Forall2 P es (inr <$> σs) →
     type_complete Γ σ → P (call e @ es) (inr σ)).
   Context (Pabort : ∀ τ, ✓{Γ} τ → P (abort τ) (inr τ)).
   Context (Pload : ∀ e τ,
-    (Γ,Δ,τs) ⊢ e : inl τ → P e (inl τ) → P (load e) (inr τ)).
+    (Γ,Δ,τs) ⊢ e : inl (TType τ) → type_complete Γ τ →
+    P e (inl (TType τ)) → P (load e) (inr τ)).
   Context (Peltl : ∀ e rs τ σ,
-    (Γ,Δ,τs) ⊢ e : inl τ → P e (inl τ) → Γ ⊢ rs : τ ↣ σ → P (e %> rs) (inl σ)).
+    (Γ,Δ,τs) ⊢ e : inl (TType τ) → P e (inl (TType τ)) →
+    Γ ⊢ rs : τ ↣ σ → P (e %> rs) (inl (TType σ))).
   Context (Peltr : ∀ e rs τ σ,
     (Γ,Δ,τs) ⊢ e : inr τ → P e (inr τ) → Γ ⊢ rs : τ ↣ σ → P (e #> rs) (inr σ)).
   Context (Palloc : ∀ τ e τi,
     ✓{Γ} τ → (Γ,Δ,τs) ⊢ e : inr (intT τi) →
     P e (inr (intT τi)) → P (alloc{τ} e) (inr (TType τ.*))).
-  Context (Pfree : ∀ e τ,
-    (Γ,Δ,τs) ⊢ e : inl τ → P e (inl τ) → P (free e) (inr voidT)).
+  Context (Pfree : ∀ e τp,
+    (Γ,Δ,τs) ⊢ e : inl τp → P e (inl τp) → P (free e) (inr voidT)).
   Context (Punop : ∀ op e τ σ,
     unop_typed op τ σ →
     (Γ,Δ,τs) ⊢ e : inr τ → P e (inr τ) → P (@{op} e) (inr σ)).
@@ -145,33 +150,35 @@ End expr_typed_ind.
 
 Inductive ectx_item_typed' (Γ : env K) (Δ : memenv K)
      (τs : list (type K)) : ectx_item K → lrtype K → lrtype K → Prop :=
-  | CRtoL_typed τ :
-     type_complete Γ τ →
-     ectx_item_typed' Γ Δ τs (.* □) (inr (TType τ.*)) (inl τ)
-  | CLtoR_typed τ : ectx_item_typed' Γ Δ τs (& □) (inl τ) (inr (TType τ.*))
+  | CRtoL_typed τp :
+     ectx_item_typed' Γ Δ τs (.* □) (inr (τp.*)) (inl τp)
+  | CLtoR_typed τp : ectx_item_typed' Γ Δ τs (& □) (inl τp) (inr (τp.*))
   | CAssignL_typed ass e2 τ1 τ2 :
      assign_typed τ1 τ2 ass → (Γ,Δ,τs) ⊢ e2 : inr τ2 →
-     ectx_item_typed' Γ Δ τs (□ ::={ass} e2) (inl τ1) (inr τ1)
+     ectx_item_typed' Γ Δ τs (□ ::={ass} e2) (inl (TType τ1)) (inr τ1)
   | CAssignR_typed ass e1 τ1 τ2 :
-     assign_typed τ1 τ2 ass → (Γ,Δ,τs) ⊢ e1 : inl τ1 →
+     assign_typed τ1 τ2 ass → (Γ,Δ,τs) ⊢ e1 : inl (TType τ1) →
      ectx_item_typed' Γ Δ τs (e1 ::={ass} □) (inr τ2) (inr τ1)
   | CCallL_typed es σs σ :
      (Γ,Δ,τs) ⊢* es :* inr <$> σs → type_complete Γ σ →
-     ectx_item_typed' Γ Δ τs (call □ @ es) (inr ((σs ~> σ).*)) (inr σ)
+     ectx_item_typed' Γ Δ τs (call □ @ es) (inl (σs ~> σ)) (inr σ)
   | CCallR_typed e es1 es2 σ σs1 τ σs2 :
-     (Γ,Δ,τs) ⊢ e : inr (((σs1 ++ τ :: σs2) ~> σ).*) →
+     (Γ,Δ,τs) ⊢ e : inl ((σs1 ++ τ :: σs2) ~> σ) →
      (Γ,Δ,τs) ⊢* reverse es1 :* inr <$> σs1 →
      (Γ,Δ,τs) ⊢* es2 :* inr <$> σs2 → type_complete Γ σ →
      ectx_item_typed' Γ Δ τs (call e @ es1 □ es2) (inr τ) (inr σ)
-  | CLoad_typed τ : ectx_item_typed' Γ Δ τs (load □) (inl τ) (inr τ)
+  | CLoad_typed τ :
+     type_complete Γ τ →
+     ectx_item_typed' Γ Δ τs (load □) (inl (TType τ)) (inr τ)
   | CEltL_typed rs τ σ :
-     Γ ⊢ rs : τ ↣ σ → ectx_item_typed' Γ Δ τs (□ %> rs) (inl τ) (inl σ)
+     Γ ⊢ rs : τ ↣ σ →
+     ectx_item_typed' Γ Δ τs (□ %> rs) (inl (TType τ)) (inl (TType σ))
   | CEltR_typed rs τ σ :
      Γ ⊢ rs : τ ↣ σ → ectx_item_typed' Γ Δ τs (□ #> rs) (inr τ) (inr σ)
   | CAlloc_typed τ τi :
      ✓{Γ} τ →
      ectx_item_typed' Γ Δ τs (alloc{τ} □) (inr (intT τi)) (inr (TType τ.*))
-  | CFree_typed τ : ectx_item_typed' Γ Δ τs (free □) (inl τ) (inr voidT)
+  | CFree_typed τp : ectx_item_typed' Γ Δ τs (free □) (inl τp) (inr voidT)
   | CUnOp_typed op τ σ :
      unop_typed op τ σ → ectx_item_typed' Γ Δ τs (@{op} □) (inr τ) (inr σ)
   | CBinOpL_typed op e2 τ1 τ2 σ :
@@ -398,30 +405,38 @@ Lemma SLocal_typed Γ Δ τs τ s c mσ :
   ✓{Γ} τ → (Γ,Δ,τ :: τs) ⊢ s : (c,mσ) → (Γ,Δ,τs) ⊢ local{τ} s : (c,mσ).
 Proof. by constructor. Qed.
 
-Lemma lval_typed_inv Γ Δ a τ : (Γ,Δ) ⊢ inl a : inl τ → (Γ,Δ) ⊢ a : TType τ.
+Lemma ltype_valid_inv Γ τp : ✓{Γ} (inl τp) → ✓{Γ} τp.
+Proof. by inversion 1. Qed.
+Lemma rtype_valid_inv Γ τ : ✓{Γ} (inr τ) → ✓{Γ} τ.
+Proof. by inversion 1. Qed.
+Lemma lval_typed_inv Γ Δ p τp : (Γ,Δ) ⊢ inl p : inl τp → (Γ,Δ) ⊢ p : τp.
 Proof. by inversion 1. Qed.
 Lemma rval_typed_inv Γ Δ v τ : (Γ,Δ) ⊢ inr v : inr τ → (Γ,Δ) ⊢ v : τ.
 Proof. by inversion 1. Qed.
-
-Lemma lrval_typed_type_valid Γ Δ ν τlr :
-  ✓ Γ → (Γ,Δ) ⊢ ν : τlr → ✓{Γ} (lrtype_type τlr).
-Proof. destruct 2; eauto using val_typed_type_valid, addr_typed_type_valid. Qed.
+Lemma lrval_typed_type_valid Γ Δ ν τlr : ✓ Γ → (Γ,Δ) ⊢ ν : τlr → ✓{Γ} τlr.
+Proof.
+  destruct 2; constructor;
+    eauto using val_typed_type_valid, ptr_typed_type_valid.
+Qed.
 Lemma expr_typed_type_valid Γ Δ τs e τlr :
-  ✓ Γ → ✓{Γ}* τs → (Γ,Δ,τs) ⊢ e : τlr → ✓{Γ} (lrtype_type τlr).
+  ✓ Γ → ✓{Γ}* τs → (Γ,Δ,τs) ⊢ e : τlr → ✓{Γ} τlr.
 Proof.
   induction 3 using @expr_typed_ind; decompose_Forall_hyps;
-    eauto 5 using lrval_typed_type_valid,
+    repeat match goal with
+    | H : ✓{_} (inl _) |- _ => valid_inversion H
+    | H : ✓{_} (inr _) |- _ => valid_inversion H
+    end; try constructor; eauto 5 using lrval_typed_type_valid,
     type_valid_ptr_type_valid, unop_typed_type_valid, binop_typed_type_valid,
     TBase_valid, TPtr_valid, TVoid_valid, type_valid_ptr_type_valid,
-    ref_seg_typed_type_valid, TBase_valid_inv, TPtr_valid_inv,
-    TFun_valid_inv_ret, type_complete_valid.
+    ref_seg_typed_ptr_type_valid, TBase_valid_inv, TPtr_valid_inv,
+    TFun_valid_inv_ret, type_complete_valid, assign_typed_type_valid.
 Qed.
-Lemma expr_inl_typed_type_valid Γ Δ τs e τ :
-  ✓ Γ → ✓{Γ}* τs → (Γ,Δ,τs) ⊢ e : inl τ → ✓{Γ} τ.
-Proof. by apply expr_typed_type_valid. Qed.
+Lemma expr_inl_typed_type_valid Γ Δ τs e τp :
+  ✓ Γ → ✓{Γ}* τs → (Γ,Δ,τs) ⊢ e : inl τp → ✓{Γ} τp.
+Proof. eauto using expr_typed_type_valid, ltype_valid_inv. Qed.
 Lemma expr_inr_typed_type_valid Γ Δ τs e τ :
   ✓ Γ → ✓{Γ}* τs → (Γ,Δ,τs) ⊢ e : inr τ → ✓{Γ} τ.
-Proof. by apply expr_typed_type_valid. Qed.
+Proof. eauto using expr_typed_type_valid, rtype_valid_inv. Qed.
 Lemma rettype_true_Some_valid Γ β σ : ✓{Γ} σ → ✓{Γ} (β, Some σ).
 Proof. done. Qed.
 Lemma rettype_union_type_valid Γ mσ1 mσ2 c1 c2 mσ :
@@ -437,7 +452,7 @@ Qed.
 Lemma lrval_typed_weaken Γ1 Γ2 Δ1 Δ2 ν τlr :
   ✓ Γ1 → (Γ1,Δ1) ⊢ ν : τlr → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 → (Γ2,Δ2) ⊢ ν : τlr.
 Proof.
-  destruct 2; typed_constructor; eauto using val_typed_weaken,addr_typed_weaken.
+  destruct 2; typed_constructor; eauto using val_typed_weaken, ptr_typed_weaken.
 Qed.
 Lemma expr_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 e τlr :
   ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ e : τlr → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →

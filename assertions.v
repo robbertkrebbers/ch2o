@@ -206,7 +206,7 @@ Program Definition assert_singleton `{EnvSpec K}
     (e1 : expr K) (μ : bool) (γ : perm)
     (e2 : expr K) (τ : type K) : assert K := {|
   assert_holds Γ Δ δ ρ n m := ∃ a v,
-    (Γ,Δ,ρ.*2) ⊢ e1 : inl τ ∧ ⟦ e1 ⟧ Γ ρ ∅ = Some (inl a) ∧
+    (Γ,Δ,ρ.*2) ⊢ e1 : inl (TType τ) ∧ ⟦ e1 ⟧ Γ ρ ∅ = Some (inl (Ptr a)) ∧
     (Γ,Δ,ρ.*2) ⊢ e2 : inr τ ∧ ⟦ e2 ⟧ Γ ρ ∅ = Some (inr v) ∧
     mem_singleton Γ Δ a μ γ v τ m
 |}.
@@ -703,7 +703,7 @@ Lemma assert_eval_singleton_l Γ δ a e μ γ τ :
   (%a ↦{μ,γ} e : τ)%A ⊆{Γ,δ} (%a ⇓ inl a)%A.
 Proof.
   intros Γ' Δ δ' ρ n m ?????? (a'&v&?&?&?&?&?);
-    eexists (inl τ); simplify_option_equality; eauto.
+    eexists (inl (TType τ)); simplify_option_equality; eauto.
 Qed.
 Lemma assert_eval_singleton_r Γ δ e v μ γ τ :
   (e ↦{μ,γ} #v : τ)%A ⊆{Γ,δ} (#v ⇓ inr v)%A.
@@ -715,15 +715,15 @@ Lemma assert_singleton_l Γ δ e1 e2 μ γ τ :
   (e1 ↦{μ,γ} e2 : τ)%A ≡{Γ,δ} (∃ a, (e1 ⇓ inl a ∧ emp) ★ %a ↦{μ,γ} e2 : τ)%A.
 Proof.
   split.
-  * intros Γ' Δ δ' ρ n m ?????? (a&v&?&?&?&?&?); exists a.
+  * intros Γ' Δ δ' ρ n m ?????? (a&v&?&?&?&?&?); exists (Ptr a).
     assert (sep_valid m) by eauto using cmap_valid_sep_valid.
     eexists ∅, m; split_ands; simplify_option_equality; eauto 20 using
       @sep_left_id, eq_sym, lockset_empty_valid, mem_singleton_typed_addr_typed.
   * intros Γ' Δ δ' ρ n m_ ???? Hm ?
       (?&?&m&->&?&((τlr&?&?)&_&->)&(a&v&?&?&?&?&?)); simplify_option_equality.
     exists a v; rewrite sep_left_id in Hm |- * by auto; split_ands; auto.
-    cut (τlr = inl τ); [intros ->; auto|typed_inversion_all].
-    apply (typed_unique (Γ',Δ) (inl a));
+    cut (τlr = inl (TType τ)); [intros ->; auto|typed_inversion_all].
+    apply (typed_unique (Γ',Δ) (inl (Ptr a)));
       eauto using expr_eval_typed, cmap_empty_valid, cmap_valid_memenv_valid.
 Qed.
 Lemma assert_singleton_l_2 Γ δ e1 e2 μ γ a τ :
@@ -778,7 +778,8 @@ Lemma assert_singleton_eval Γ δ e v μ γ τ :
 Proof.
   intros ? Γ1 Δ δ' ρ n ??????? (a&v'&?&?&?&?&?); simplify_option_equality.
   assert (✓{Γ1} Δ) by eauto using cmap_valid_memenv_valid.
-  eexists (inr τ); split_ands; auto.
+  eexists (inr τ); split_ands; eauto using mem_singleton_typed_addr_typed,
+    addr_typed_type_valid, type_valid_complete.
   erewrite (expr_eval_weaken _ _ _ _ _ ∅) by eauto using cmap_empty_valid,
     cmap_subseteq_index_alive, mem_lookup_subseteq, mem_forced_subseteq,
     @sep_subseteq_empty; simpl.
@@ -885,8 +886,9 @@ Proof.
   * intros Γ1 Δ δ1 ρ n' m _ ??? Hm ?.
     rewrite assert_Forall_holds; intros (ms&->&_&Hms).
     apply cmap_valid_memenv_valid in Hm.
-    assert (∃ a, (Γ1,Δ,ρ.*2) ⊢ e : inl (τ.[n])%T ∧
-      ⟦ e ⟧ Γ1 ρ ∅ = Some (inl a) ∧ addr_strict Γ1 a ∧ γ ≠ ∅) as (a&He&?&?&?).
+    assert (∃ a, (Γ1,Δ,ρ.*2) ⊢ e : inl (TType (τ.[n]))%T ∧
+      ⟦ e ⟧ Γ1 ρ ∅ = Some (inl (Ptr a)) ∧ addr_strict Γ1 a ∧
+      γ ≠ ∅) as (a&He&?&?&?).
     { unfold imap in *; destruct vs; decompose_Forall_hyps.
       match goal with
       | H : ∃ a, _ |- _ => destruct H as (?&?&?&?&_&_&?&_&_&_&_&_&_&_&?)
@@ -912,7 +914,7 @@ Proof.
     assert ((Γ1,Δ) ⊢* to_val Γ1 <$> ws : τ).
     { eapply Forall_fmap; eauto using Forall_impl, to_val_typed. }
     assert ((Γ1,Δ) ⊢ a : TType (τ.[n])) by eauto 10
-      using lval_typed_inv, expr_eval_typed, cmap_empty_valid.
+      using lval_typed_inv, Ptr_typed_inv, expr_eval_typed, cmap_empty_valid.
     exists a (VArray τ (to_val Γ1 <$> ws));
       split_ands; eauto using lockset_empty_valid.
     rewrite fmap_length in Hn.

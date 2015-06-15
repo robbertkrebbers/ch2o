@@ -330,14 +330,14 @@ Proof.
       eauto using eq_sym, meminj_extend_left.
   * eapply meminj_extend_transitive; eauto using mem_alloc_list_forward.
 Qed.
-Lemma mem_freeable_refine Γ α f Δ1 Δ2 m1 m2 a1 a2 τ :
+Lemma mem_freeable_refine Γ α f Δ1 Δ2 m1 m2 a1 a2 τp :
   ✓ Γ → m1 ⊑{Γ,α,f@Δ1↦Δ2} m2 →
-  a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : TType τ → mem_freeable a1 m1 → mem_freeable a2 m2.
+  a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : τp → mem_freeable a1 m1 → mem_freeable a2 m2.
 Proof.
   intros ? (_&_&_&Hm) ? (Ha&w1&?&?).
   rewrite addr_is_top_array_alt in Ha by eauto using addr_refine_typed_l.
   destruct Ha as (τ'&n&?&Ha1&?).
-  destruct (addr_ref_refine Γ α f Δ1 Δ2 a1 a2 (TType τ)) as (r&?&_&Ha2); auto.
+  destruct (addr_ref_refine Γ α f Δ1 Δ2 a1 a2 τp) as (r&?&_&Ha2); eauto.
   destruct (Hm (addr_index a1) (addr_index a2) r w1 true)
     as (?&w2&τ''&?&?&?&Hr); auto; specialize (Hr I); simplify_type_equality'.
   split; [|exists w2; eauto using pbits_refine_perm_1, ctree_flatten_refine].
@@ -348,13 +348,13 @@ Proof.
   erewrite <-addr_ref_byte_refine by eauto.
   exists τ' n; split_ands; eauto using addr_strict_refine.
 Qed.
-Lemma mem_freeable_index_refine Γ α f Δ1 Δ2 m1 m2 a1 a2 τ :
-  ✓ Γ → m1 ⊑{Γ,α,f@Δ1↦Δ2} m2 → a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : TType τ →
+Lemma mem_freeable_index_refine Γ α f Δ1 Δ2 m1 m2 a1 a2 τp :
+  ✓ Γ → m1 ⊑{Γ,α,f@Δ1↦Δ2} m2 → a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : τp →
   mem_freeable a1 m1 → f !! addr_index a1 = Some (addr_index a2, []).
 Proof.
   intros ? (_&_&_&Hm) ? (Ha&w1&?&?).
   rewrite addr_is_top_array_alt in Ha by eauto using addr_refine_typed_l.
-  destruct Ha as (τ'&n&?&Ha1&?), (addr_ref_refine Γ α f Δ1 Δ2 a1 a2 (TType τ))
+  destruct Ha as (τ'&n&?&Ha1&?), (addr_ref_refine Γ α f Δ1 Δ2 a1 a2 τp)
     as (r&?&Ha2); naive_solver.
 Qed.
 Lemma mem_free_refine_env Γ α f Δ1 Δ2 o1 o2 :

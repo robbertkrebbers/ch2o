@@ -38,7 +38,9 @@ treatment by (Norrish, PhD thesis) and (Ellison/Rosu, 2012), as whenever a
 sequence point occurs, we only unlock the locations that have been locked by
 evaluating the sub-expression corresponding to that particular sequence point,
 instead of unlocking all locations. *)
-Notation lrval K := (addr K + val K)%type.
+
+Notation lrval K := (ptr K + val K)%type.
+
 Inductive expr (K : Set) : Set :=
   | EVar : nat → expr K
   | EVal : lockset → lrval K → expr K
@@ -158,8 +160,10 @@ Instance maybe_EAlloc {K} : Maybe2 (@EAlloc K) := λ e,
   match e with alloc{τ} e => Some (τ,e) | _ => None end.
 Instance maybe_EVal {K} : Maybe2 (@EVal K) := λ e,
   match e with %#{Ω} ν => Some (Ω,ν) | _ => None end.
+Instance maybe_EVal_inl {K} : Maybe2 (λ Ω (p : ptr K), %{Ω} p) := λ e,
+  match e with %{Ω} a => Some (Ω,a) | _ => None end.
 Instance maybe_EVal_inr {K} : Maybe2 (λ Ω (v : val K), #{Ω} v) := λ e,
-  match e with #{Ω} ν => Some (Ω,ν) | _ => None end.
+  match e with #{Ω} v => Some (Ω,v) | _ => None end.
 Instance maybe_ECall {K} : Maybe2 (@ECall K) := λ e,
   match e with call e @ es => Some (e,es) | _ => None end.
 
@@ -374,7 +378,6 @@ Section is_pure_ind.
   Context {K} (fs : funset) (P : expr K → Prop).
   Context (Pvar : ∀ x, P (var x)).
   Context (Pval : ∀ v, P (%# v)).
-  Context (Paddr : ∀ a, P (% a)).
   Context (Prtol : ∀ e, is_pure e → P e → P (.* e)).
   Context (Profl : ∀ e, is_pure e → P e → P (& e)).
   Context (Peltl : ∀ e rs, is_pure e → P e → P (e %> rs)).
@@ -505,8 +508,8 @@ Definition maybe_ECall_redex {K} (e : expr K) :
     option (lockset * funname * list (type K) * type K *
             list lockset * list (val K)) :=
   '(e,es) ← maybe2 ECall e;
-  '(Ω,v) ← maybe2 (λ Ω v, #{Ω} v) e;
-  '(f,τs,τ) ← maybe (VBase ∘ VPtr) v ≫= maybe3 FunPtr;
+  '(Ω,p) ← maybe2 (λ Ω p, %{Ω} p) e;
+  '(f,τs,τ) ← maybe3 FunPtr p;
   vΩs ← mapM (maybe2 (λ Ω v, #{Ω} v)) es;
   Some (Ω, f, τs, τ, vΩs.*1, vΩs.*2).
 
@@ -518,7 +521,7 @@ Lemma maybe_ECall_Some {K} (e : expr K) e' es :
 Proof. split. by destruct e; intros; simplify_equality'. by intros ->. Qed.
 Lemma maybe_ECall_redex_Some_2 {K} Ω f τs τ Ωs (vs : list (val K)) :
   length Ωs = length vs →
-  maybe_ECall_redex (call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs)
+  maybe_ECall_redex (call %{Ω} (FunPtr f τs τ) @ #{Ωs}* vs)
   = Some (Ω, f, τs, τ, Ωs, vs).
 Proof.
   intros; unfold maybe_ECall_redex; csimpl.
@@ -527,7 +530,7 @@ Proof.
 Qed.
 Lemma maybe_ECall_redex_Some {K} (e : expr K) Ω f τs τ Ωs vs :
   maybe_ECall_redex e = Some (Ω, f, τs, τ, Ωs, vs) ↔
-    e = call #{Ω} (ptrV (FunPtr f τs τ)) @ #{Ωs}* vs ∧ length Ωs = length vs.
+    e = call %{Ω} (FunPtr f τs τ) @ #{Ωs}* vs ∧ length Ωs = length vs.
 Proof.
   assert (∀ (es : list (expr K)) Ωvs,
     mapM (maybe2 (λ Ω v, #{Ω} v)) es = Some Ωvs → es = #{Ωvs.*1}* (Ωvs.*2))%E.

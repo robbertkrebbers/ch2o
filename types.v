@@ -306,6 +306,8 @@ Section types.
   Proof. by inversion_clear 1. Qed.
   Lemma TArray_valid_inv_size Γ τ n : ✓{Γ} (τ.[n]) → n ≠ 0.
   Proof. by inversion_clear 1. Qed.
+  Lemma TArray_ptr_valid_inv_size Γ τ n : ✓{Γ} (TType (τ.[n])) → n ≠ 0.
+  Proof. by inversion_clear 1. Qed.
   Lemma TCompound_valid_inv Γ c t : ✓{Γ} (compoundT{c} t) → is_Some (Γ !! t).
   Proof. by inversion_clear 1. Qed.
   Lemma TBase_ptr_valid_inv Γ τb : ✓{Γ} (baseT τb)%PT → ✓{Γ} τb.

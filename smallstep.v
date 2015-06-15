@@ -21,21 +21,22 @@ Inductive ehstep `{Env K} (Γ : env K) (ρ : stack K) :
      expr K → mem K → expr K → mem K → Prop :=
   | ehstep_var x τ o m :
      ρ !! x = Some (o,τ) →
-     Γ\ ρ ⊢ₕ var x, m ⇒ %(addr_top o τ), m
-  | ehstep_rtol m Ω a :
-     index_alive' m (addr_index a) →
-     Γ\ ρ ⊢ₕ .* (#{Ω} ptrV (Ptr a)), m ⇒ %{Ω} a, m
-  | ehstep_rofl m Ω a :
-     Γ\ ρ ⊢ₕ & (%{Ω} a), m ⇒ #{Ω} ptrV (Ptr a), m
-  | ehstep_assign m ass Ω1 Ω2 a v va v' :
+     Γ\ ρ ⊢ₕ var x, m ⇒ %(Ptr (addr_top o τ)), m
+  | ehstep_rtol m Ω p :
+     ptr_alive' m p →
+     Γ\ ρ ⊢ₕ .* (#{Ω} (ptrV p)), m ⇒ %{Ω} p, m
+  | ehstep_rofl m Ω p :
+     Γ\ ρ ⊢ₕ & (%{Ω} p), m ⇒ #{Ω} (ptrV p), m
+  | ehstep_assign m ass Ω1 Ω2 a v v' va :
      mem_writable Γ a m → assign_sem Γ m a v ass va v' →
-     Γ\ ρ ⊢ₕ %{Ω1} a ::={ass} #{Ω2} v, m ⇒
+     Γ\ ρ ⊢ₕ %{Ω1} (Ptr a) ::={ass} #{Ω2} v, m ⇒
              #{lock_singleton Γ a ∪ Ω1 ∪ Ω2} v', mem_lock Γ a (<[a:=va]{Γ}>m)
   | ehstep_load m Ω a v :
-     m !!{Γ} a = Some v → Γ\ ρ ⊢ₕ load (%{Ω} a), m ⇒ #{Ω} v, mem_force Γ a m
+     m !!{Γ} a = Some v →
+     Γ\ ρ ⊢ₕ load (%{Ω} (Ptr a)), m ⇒ #{Ω} v, mem_force Γ a m
   | ehstep_eltl m Ω a rs :
      addr_strict Γ a →
-     Γ\ ρ ⊢ₕ %{Ω} a %> rs, m ⇒ %{Ω} (addr_elt Γ rs a), m
+     Γ\ ρ ⊢ₕ %{Ω} (Ptr a) %> rs, m ⇒ %{Ω} (Ptr (addr_elt Γ rs a)), m
   | ehstep_eltr m Ω v rs v' :
      v !!{Γ} rs = Some v' → Γ\ ρ ⊢ₕ #{Ω} v #> rs, m ⇒ #{Ω} v', m
   | ehstep_alloc_NULL m Ω τi τ n :
@@ -48,7 +49,7 @@ Inductive ehstep `{Env K} (Γ : env K) (ρ : stack K) :
              mem_alloc Γ o true perm_full (val_new Γ (τ.[Z.to_nat n])) m
   | ehstep_free m Ω a :
      mem_freeable a m →
-     Γ\ ρ ⊢ₕ free (%{Ω} a), m ⇒ #{Ω} voidV, mem_free (addr_index a) m
+     Γ\ ρ ⊢ₕ free (%{Ω} (Ptr a)), m ⇒ #{Ω} voidV, mem_free (addr_index a) m
   | ehstep_unop op Ω v m :
      val_unop_ok m op v →
      Γ\ ρ ⊢ₕ @{op} #{Ω} v, m ⇒ #{Ω} val_unop op v, m
@@ -81,7 +82,7 @@ Reserved Notation "Γ \ ρ  '⊢ₕ' 'safe' e , m" (at level 74, ρ at next leve
 Inductive ehsafe `{Env K} (Γ : env K) (ρ : stack K) : expr K → mem K → Prop :=
   | ehsafe_call Ω f τs τ Ωs vs m :
      length Ωs = length vs →
-     Γ \ ρ ⊢ₕ safe (call #{Ω} ptrV (FunPtr f τs τ) @ #{Ωs}* vs), m
+     Γ \ ρ ⊢ₕ safe (call %{Ω} (FunPtr f τs τ) @ #{Ωs}* vs), m
   | ehsafe_step e1 m1 e2 m2 : Γ \ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → Γ \ ρ ⊢ₕ safe e1, m1
 where "Γ \ ρ  ⊢ₕ 'safe' e ,  m" := (@ehsafe _ _ Γ ρ e m) : C_scope.
 
@@ -119,7 +120,7 @@ Inductive cstep `{Env K} (Γ : env K) (δ : funenv K) : relation (state K) :=
              State k (Expr (subst E e2)) m2
   | cstep_expr_call m k Ω f τs τ E Ωs vs :
      length Ωs = length vs →
-     let e := (call #{Ω} ptrV (FunPtr f τs τ) @ #{Ωs}* vs)%E in
+     let e := (call %{Ω} (FunPtr f τs τ) @ #{Ωs}* vs)%E in
      Γ\ δ ⊢ₛ State k (Expr (subst E e)) m ⇒
              State (CFun E :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m)
   | cstep_expr_undef m k (E : ectx K) e :

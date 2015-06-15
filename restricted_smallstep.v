@@ -47,7 +47,7 @@ Inductive rcstep `{Env K} (Γ : env K)
                 State k (Expr (subst E e2)) m2
   | rcstep_expr_call m k Ω f τs τ E Ωs vs :
      length Ωs = length vs →
-     let e := (call #{Ω} ptrV (FunPtr f τs τ) @ #{Ωs}* vs)%E in
+     let e := (call %{Ω} (FunPtr f τs τ) @ #{Ωs}* vs)%E in
      Γ\ δ\ ρ ⊢ₛ State k (Expr (subst E e)) m ⇒
                 State (CFun E :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m)
   | rcstep_expr_undef m k (E : ectx K) e :
@@ -262,7 +262,7 @@ Section inversion.
          e = subst E e1 → Γ\ rlocals ρ k ⊢ₕ e1, m ⇒ e2, m2 →
          P (State k (Expr (subst E e2)) m2)) →
        (∀ (E : ectx K) Ω f τs τ Ωs vs,
-         e = subst E (call #{Ω} ptrV (FunPtr f τs τ) @ #{Ωs}* vs)%E →
+         e = subst E (call %{Ω} FunPtr f τs τ @ #{Ωs}* vs)%E →
          length Ωs = length vs →
          P (State (CFun E :: k) (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m))) →
        (∀ (E : ectx K) e1,
@@ -617,7 +617,7 @@ Lemma rcstep_expr_depsubst_inv {n} (P : state K → Prop)
     P (State [] (Expr (depsubst E (vinsert i e' es))) m')) →
   (∀ i E' Ω f τs τ Ωs vs,
     length Ωs = length vs →
-    es !!! i = subst E' (call #{Ω} ptrV (FunPtr f τs τ) @ #{Ωs}* vs)%E →
+    es !!! i = subst E' (call %{Ω} FunPtr f τs τ @ #{Ωs}* vs)%E →
     Γ\ δ\ ρ ⊢ₛ State [] (Expr (es !!! i)) m ⇒
                State [CFun E'] (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m) →
     P (State [CFun (E' ++ [ectx_full_to_item E es i])]
@@ -654,7 +654,7 @@ Proof.
     apply HP4; auto. rewrite <-HE1; do_cstep.
 Qed.
 Lemma rcstep_expr_call_inv (P : state K → Prop) ρ Ω f τs τ Ωs vs m S' :
-  let e := (call #{Ω} ptrV (FunPtr f τs τ) @ #{Ωs}* vs)%E in
+  let e := (call %{Ω} FunPtr f τs τ @ #{Ωs}* vs)%E in
   Γ\ δ\ ρ ⊢ₛ State [] (Expr e) m ⇒ S' →
   length Ωs = length vs →
   P (State [CFun []] (Call f vs) (mem_unlock (Ω ∪ ⋃ Ωs) m)) → P S'.

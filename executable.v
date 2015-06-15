@@ -39,23 +39,23 @@ Definition ehexec (Γ : env K) (k : ctx K)
   match e with
   | var x =>
      '(o,τ) ← of_option (ctx_lookup x k);
-     {[ %(addr_top o τ), m ]}
-  | .* (#{Ω} ptrV (Ptr a)) =>
-     guard (index_alive' m (addr_index a));
-     {[ %{Ω} a, m ]}
-  | & (%{Ω} a) =>
-     {[ #{Ω} ptrV (Ptr a), m ]}
-  | %{Ωl} a ::={ass} #{Ωr} v =>
+     {[ %(Ptr (addr_top o τ)), m ]}
+  | .* (#{Ω} (ptrV p)) =>
+     guard (ptr_alive' m p);
+     {[ %{Ω} p, m ]}
+  | & (%{Ω} p) =>
+     {[ #{Ω} (ptrV p), m ]}
+  | %{Ωl} (Ptr a) ::={ass} #{Ωr} v =>
      guard (mem_writable Γ a m);
      '(va,v') ← of_option (assign_exec Γ m a v ass);
      {[ #{lock_singleton Γ a ∪ Ωl ∪ Ωr} v',
         mem_lock Γ a (<[a:=va]{Γ}>m) ]}
-  | load (%{Ω} a) =>
+  | load (%{Ω} (Ptr a)) =>
      v ← of_option (m !!{Γ} a);
      {[ #{Ω} v, mem_force Γ a m ]}
-  | %{Ω} a %> rs =>
+  | %{Ω} (Ptr a) %> rs =>
      guard (addr_strict Γ a);
-     {[ %{Ω} (addr_elt Γ rs a), m ]}
+     {[ %{Ω} (Ptr (addr_elt Γ rs a)), m ]}
   | #{Ω} v #> rs =>
      v' ← of_option (v !!{Γ} rs);
      {[ #{Ω} v', m ]}
@@ -66,7 +66,7 @@ Definition ehexec (Γ : env K) (k : ctx K)
      {[ #{Ω} ptrV (Ptr (addr_top_array o τ n)),
         mem_alloc Γ o true perm_full (val_new Γ (τ.[n'])) m ]}
      ∪  (if alloc_can_fail then {[ #{Ω} ptrV (NULL (TType τ)), m ]} else ∅)
-  | free (%{Ω} a) =>
+  | free (%{Ω} (Ptr a)) =>
      guard (mem_freeable a m);
      {[ #{Ω} voidV, mem_free (addr_index a) m ]}
   | @{op} #{Ω} v =>

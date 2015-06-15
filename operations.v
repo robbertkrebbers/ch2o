@@ -816,10 +816,10 @@ Proof.
     TBase_valid_inv, base_unop_typed_type_valid.
 Qed.
 Lemma binop_typed_type_valid Γ op τ1 τ2 σ :
-  binop_typed op τ1 τ2 σ → ✓{Γ} τ1 → ✓{Γ} τ2 → ✓{Γ} σ.
+  binop_typed op τ1 τ2 σ → ✓{Γ} (TType τ1) → ✓{Γ} (TType τ2) → ✓{Γ} σ.
 Proof.
-  destruct 1; eauto using TBase_valid,
-    TBase_valid_inv, base_binop_typed_type_valid.
+  destruct 1; do 2 inversion 1;
+    eauto using TBase_valid, base_binop_typed_type_valid.
 Qed.
 Lemma cast_typed_type_valid Γ τ σ :
   cast_typed τ σ → ✓{Γ} τ → ✓{Γ} (TType σ) → ✓{Γ} σ.

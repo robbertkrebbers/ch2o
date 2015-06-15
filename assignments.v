@@ -42,6 +42,12 @@ Inductive assign_typed `{Env K} (τ1 : type K) : type K → assign → Prop :=
 Section assignments.
 Context `{EnvSpec K}.
 
+Lemma assign_typed_type_valid Γ ass τ1 τ2 :
+  assign_typed τ1 τ2 ass → ✓{Γ} (TType τ1) → ✓{Γ} τ2 → ✓{Γ} τ1.
+Proof.
+  destruct 1; eauto using cast_typed_type_valid,
+    binop_typed_type_valid, type_valid_ptr_type_valid.
+Qed.
 Lemma assign_sem_erase Γ m a v ass va v' :
   assign_sem Γ (cmap_erase m) a v ass va v' ↔ assign_sem Γ m a v ass va v'.
 Proof.

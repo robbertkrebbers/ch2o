@@ -251,8 +251,8 @@ Proof.
       eauto using indexes_valid_weaken, @sep_union_subseteq_l_transitive,
       @sep_union_subseteq_l', expr_typed_weaken.
 Qed.
-Lemma ax_var Γ δ A P Q x a :
-  P ⊆{Γ,δ} (Q (inl a) ∧ (A -★ var x ⇓ inl a))%A →
+Lemma ax_var Γ δ A P Q x p :
+  P ⊆{Γ,δ} (Q (inl p) ∧ (A -★ var x ⇓ inl p))%A →
   Γ\ δ\ A ⊨ₑ {{ P }} var x {{ Q }}.
 Proof.
   intros HQ Γ' Δ δ' n ρ m [τ|] ??????? He ???; typed_inversion_all.
@@ -275,28 +275,27 @@ Proof.
     indexes_valid_weaken, memenv_forward_typed, index_typed_valid.
 Qed.
 Lemma ax_rtol Γ δ A P Q1 Q2 e :
-  (∀ v, Q1 (inr v) ⊆{Γ,δ} (∃ a, Q2 (inl a) ∧ (A -★ .*#v ⇓ inl a))%A) →
+  (∀ v, Q1 (inr v) ⊆{Γ,δ} (∃ p, Q2 (inl p) ∧ (A -★ .*#v ⇓ inl p))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P }} .* e {{ Q2 }}.
 Proof.
-  intros HQ Hax Γ' Δ δ' n ρ m [τ|] ?????? He1e2 He ???; typed_inversion_all.
-  apply (ax_expr_compose_1 Γ' δ' A Q1 _ Δ
-    DCRtoL e ρ n m (inr (TType τ.* ))); auto.
+  intros HQ Hax Γ' Δ δ' n ρ m [τp|] ?????? He1e2 He ???; typed_inversion_all.
+  apply (ax_expr_compose_1 Γ' δ' A Q1 _ Δ DCRtoL e ρ n m (inr (τp.* ))); auto.
   { esolve_elem_of. }
   clear dependent m; intros Δ' n' [|v] m ?????; typed_inversion_all.
   apply ax_further_alt.
   intros Δ'' n'' ????? Hframe; inversion_clear Hframe as [mA mf|];
     simplify_equality; simplify_mem_disjoint_hyps.
-  destruct (HQ v Γ' Δ' δ' ρ n' (cmap_erase m)) as (a'&?&HA);
+  destruct (HQ v Γ' Δ' δ' ρ n' (cmap_erase m)) as (p'&?&HA);
     simpl; eauto 10 using indexes_valid_weaken, funenv_valid_weaken.
   destruct (HA Γ' Δ'' δ' n'' mA) as (τlr&?&?); clear HA;
     eauto 4 using assert_weaken, indexes_valid_weaken, funenv_valid_weaken.
   { rewrite <-cmap_erase_disjoint_le; auto. }
-  destruct τlr as [τ'|]; simplify_option_equality; typed_inversion_all.
-  assert (TType τ' = TType τ); [|simplify_equality].
-  { apply typed_unique with (Γ',Δ'') a'; eauto using addr_typed_weaken. }
-  assert (index_alive' (m ∪ mf ∪ mA) (addr_index a')).
-  { apply cmap_subseteq_index_alive' with (mA ∪ cmap_erase m); auto.
+  destruct τlr as [τp'|]; simplify_option_equality;
+    typed_inversion_all; simplify_type_equality.
+  assert (ptr_alive' (m ∪ mf ∪ mA) p').
+  { destruct p' as [a'| |]; auto.
+    apply cmap_subseteq_index_alive' with (mA ∪ cmap_erase m); auto.
     rewrite (sep_commutative _ mA) by auto.
     apply sep_preserving_l; auto using
       @sep_union_subseteq_l_transitive, cmap_erase_subseteq_l. }
@@ -305,16 +304,18 @@ Proof.
   apply mk_ax_next with Δ'' m; auto.
   { constructor; auto. }
   { esolve_elem_of. }
-  apply ax_done; constructor; eauto using addr_typed_weaken,
+  apply ax_done; constructor; eauto using ptr_typed_weaken,
     assert_weaken, indexes_valid_weaken.
 Qed.
 Lemma ax_rofl Γ δ A P Q1 Q2 e :
-  (∀ a, Q1 (inl a) ⊆{Γ,δ} Q2 (inr (ptrV (Ptr a)))) →
+  (∀ p, Q1 (inl p) ⊆{Γ,δ} Q2 (inr (ptrV p))) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P }} & e {{ Q2 }}.
 Proof.
-  intros HQ Hax Γ' Δ δ' n ρ m [τ|] ?????? He1e2 He ???; typed_inversion_all.
-  apply (ax_expr_compose_1 Γ' δ' A Q1 _ Δ DCRofL e ρ n m (inl τ)); auto.
+  intros HQ Hax Γ' Δ δ' n ρ m ??????? He1e2 He ???.
+  assert (∃ τp, τlr = inr (τp.*) ∧ (Γ',Δ,ρ.*2) ⊢ e : inl τp)
+    as (τp&->&?) by (typed_inversion_all; eauto); clear He1e2.
+  apply (ax_expr_compose_1 Γ' δ' A Q1 _ Δ DCRofL e ρ n m (inl τp)); auto.
   { esolve_elem_of. }
   clear dependent m; intros Δ' n' [a|] m ?????; typed_inversion_all.
   apply ax_further; [intros; solve_rcred|].
@@ -322,30 +323,31 @@ Proof.
     simplify_equality; simplify_mem_disjoint_hyps.
   inv_rcstep p; [inv_ehstep|exfalso; eauto with cstep].
   apply mk_ax_next with Δ'' m; auto.
-  { constructor; auto. } 
+  { constructor; auto. }
   { esolve_elem_of. }
-  apply ax_done; constructor; eauto 7 using addr_typed_weaken.
+  apply ax_done; constructor; eauto 7 using ptr_typed_weaken.
   apply HQ;
     eauto using assert_weaken, indexes_valid_weaken, funenv_valid_weaken.
 Qed.
 Lemma ax_load Γ δ A P Q1 Q2 e :
-  (∀ a, Q1 (inl a) ⊆{Γ,δ} (∃ v, Q2 (inr v) ∧ (A -★ load (%a) ⇓ inr v))%A) →
+  (∀ p, Q1 (inl p) ⊆{Γ,δ} (∃ v, Q2 (inr v) ∧ (A -★ load (%p) ⇓ inr v))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P }} load e {{ Q2 }}.
 Proof.
   intros HQ Hax Γ' Δ δ' n ρ m [|τ] ????????? HA HP; typed_inversion_all.
-  apply (ax_expr_compose_1 Γ' δ' A Q1 _ Δ DCLoad e ρ n m (inl τ)); auto.
+  apply (ax_expr_compose_1 Γ' δ' A Q1 _ Δ DCLoad e ρ n m (inl (TType τ))); auto.
   { esolve_elem_of. }
-  clear dependent m. intros Δ' n' [a|] m ?????; typed_inversion_all.
-  apply ax_further_alt; intros Δ'' n'' ????? Hframe;
-    inversion_clear Hframe as [mA mf|]; simplify_equality.
-  destruct (HQ a Γ' Δ' δ' ρ n' (cmap_erase m))
+  clear dependent m. intros Δ' n' [p|] m ?????; typed_inversion_all.
+  apply ax_further_alt; intros Δ'' n'' ? frame ??? Hframe;
+    inversion_clear Hframe as [mA mf|]; clear frame; simplify_equality.
+  destruct (HQ p Γ' Δ' δ' ρ n' (cmap_erase m))
     as (v&?&HA); eauto using indexes_valid_weaken, funenv_valid_weaken.
   assert (⊥ [mA; cmap_erase m]).
   { rewrite <-cmap_erase_disjoint_le; auto. }
   destruct (HA Γ' Δ'' δ' n'' mA) as (τlr&?&?); clear HA;
     eauto 4 using assert_weaken, indexes_valid_weaken, funenv_valid_weaken.
-  destruct τlr as [|τ']; simplify_option_equality; typed_inversion_all.
+  destruct p as [a| |], τlr as [|τ'];
+    simplify_option_equality; typed_inversion_all.
   assert (mA ∪ cmap_erase m ⊆ m ∪ mf ∪ mA).
   { rewrite (sep_commutative _ mA) by auto.
     apply sep_preserving_l; auto using
@@ -365,30 +367,30 @@ Proof.
   apply ax_done; constructor; eauto using mem_lookup_typed,
     assert_weaken, indexes_valid_weaken, addr_typed_weaken.
 Qed.
-Definition assert_assign (a : addr K) (v : val K)
+Definition assert_assign (p : ptr K) (v : val K)
     (ass : assign) (τ : type K) (va v' : val K) : assert K :=
   match ass with
   | Assign => cast{τ} (#v) ⇓ inr va ∧ cast{τ} (#v) ⇓ inr v'
   | PreOp op =>
-     cast{τ} (load (%a) @{op} #v) ⇓ inr va ∧
-     cast{τ} (load (%a) @{op} #v) ⇓ inr v'
+     cast{τ} (load (%p) @{op} #v) ⇓ inr va ∧
+     cast{τ} (load (%p) @{op} #v) ⇓ inr v'
   | PostOp op =>
-     cast{τ} (load (%a) @{op} #v) ⇓ inr va ∧
-     load (%a) ⇓ inr v'
+     cast{τ} (load (%p) @{op} #v) ⇓ inr va ∧
+     load (%p) ⇓ inr v'
   end%A.
 Lemma ax_assign Γ δ A P1 P2 Q1 Q2 Q ass e1 e2 μ γ τ :
   Some Writable ⊆ perm_kind γ →
-  (∀ a v, (Q1 (inl a) ★ Q2 (inr v))%A ⊆{Γ,δ} (∃ va v',
-    (%a ↦{μ,γ} - : τ ★
-    (%a ↦{μ,perm_lock γ} # (freeze true va) : τ -★ Q (inr v'))) ∧
-    (A -★ assert_assign a v ass τ va v'))%A) →
+  (∀ p v, (Q1 (inl p) ★ Q2 (inr v))%A ⊆{Γ,δ} (∃ va v',
+    (%p ↦{μ,γ} - : τ ★
+    (%p ↦{μ,perm_lock γ} # (freeze true va) : τ -★ Q (inr v'))) ∧
+    (A -★ assert_assign p v ass τ va v'))%A) →
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ Q1 }} → Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ Q2 }} →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 ::={ass} e2 {{ Q }}.
 Proof.
   intros Hγ HQ Hax1 Hax2 Γ' Δ δ' n ρ m
     [|τ1] ????? Hlock He ??? HP; [typed_inversion_all|].
   assert (Some Readable ⊆ perm_kind γ)by (by transitivity (Some Writable)).
-  assert (∃ τ2, (Γ',Δ,ρ.*2) ⊢ e1 : inl τ1 ∧
+  assert (∃ τ2, (Γ',Δ,ρ.*2) ⊢ e1 : inl (TType τ1) ∧
     (Γ',Δ,ρ.*2) ⊢ e2 : inr τ2 ∧ assign_typed τ1 τ2 ass)
     as (τ2&?&?&?) by (typed_inversion_all; eauto); clear He.
   destruct HP as (m1'&m2'&Hm12&Hm12'&?&?).
@@ -396,15 +398,15 @@ Proof.
     simplify_mem_disjoint_hyps; clear Hm12 Hm12'.
   rewrite mem_locks_union in Hlock by auto; simpl in *; decompose_empty.
   apply (ax_expr_compose_2 Γ' δ' A Q1 Q2 _ Δ (DCAssign ass) e1 e2 ρ n m1 m2
-    (inl τ1) (inr τ2)); eauto using ax_expr_invariant_weaken,
+    (inl (TType τ1)) (inr τ2)); eauto using ax_expr_invariant_weaken,
     @sep_union_subseteq_l', @sep_union_subseteq_r'.
   { esolve_elem_of. }
   { esolve_elem_of. }
-  clear dependent m1 m2; intros Δ' n' [a'|] [|v] m1' m2'
+  clear dependent m1 m2; intros Δ' n' [p|] [|v] m1' m2'
     ?????????; typed_inversion_all.
-  apply ax_further_alt; intros Δ'' n'' ? ff ??? Hframe;
-    inversion_clear Hframe as [mA mf|]; simplify_equality.
-  destruct (HQ a' v Γ' Δ' δ' ρ n' (cmap_erase (m1' ∪ m2')))
+  apply ax_further_alt; intros Δ'' n'' ? frame ??? Hframe;
+    inversion_clear Hframe as [mA mf|]; clear frame; simplify_equality.
+  destruct (HQ p v Γ' Δ' δ' ρ n' (cmap_erase (m1' ∪ m2')))
     as (va'&v'&(m1&m2''&?&?&(?&a&va&?&?&?&?&?)&HQ')&Hass);
     eauto 6 using indexes_valid_weaken, funenv_valid_weaken; clear HQ.
   { rewrite cmap_erase_union.
@@ -480,21 +482,23 @@ Proof.
   eauto using mem_lock_singleton, mem_insert_singleton, mem_singleton_weaken.
 Qed.
 Lemma ax_eltl Γ δ A P Q1 Q2 e rs :
-  (∀ a, Q1 (inl a) ⊆{Γ,δ} (∃ a', Q2 (inl a') ∧ (A -★ %a %> rs ⇓ inl a'))%A) →
+  (∀ p, Q1 (inl p) ⊆{Γ,δ} (∃ p', Q2 (inl p') ∧ (A -★ %p %> rs ⇓ inl p'))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P }} e %> rs {{ Q2 }}.
 Proof.
-  intros HQ Hax Γ' Δ δ' n ρ m [σ|] ?????? He ????; [|typed_inversion_all].
-  assert (∃ τ, (Γ',Δ,ρ.*2) ⊢ e : inl τ ∧ Γ' ⊢ rs : τ ↣ σ) as (τ&?&?)
-    by (typed_inversion_all; eauto); clear He.
-  apply (ax_expr_compose_1 Γ' δ' A Q1 _ Δ (DCEltL rs) e ρ n m (inl τ)); auto.
+  intros HQ Hax Γ' Δ δ' n ρ m [σ'|] ?????? He ????; [|typed_inversion_all].
+  assert (∃ σ τ, σ' = TType σ ∧
+    (Γ',Δ,ρ.*2) ⊢ e : inl (TType τ) ∧ Γ' ⊢ rs : τ ↣ σ)
+    as (τ&σ&->&?&?) by (typed_inversion_all; eauto); clear He.
+  apply (ax_expr_compose_1 Γ' δ' A Q1 _ Δ
+    (DCEltL rs) e ρ n m (inl (TType σ))); auto.
   { esolve_elem_of. }
-  clear dependent m; intros Δ' n' [a|] m ?????; typed_inversion_all.
+  clear dependent m; intros Δ' n' [p|] m ?????; typed_inversion_all.
   apply ax_further_alt.
-  intros Δ'' n'' ????? Hframe; inversion_clear Hframe as [mA mf|];
-    simplify_equality; simplify_mem_disjoint_hyps.
-  destruct (HQ a Γ' Δ' δ' ρ n' (cmap_erase m))
-    as (a'&?&HA); eauto using indexes_valid_weaken, funenv_valid_weaken.
+  intros Δ'' n'' ? frame ??? Hframe; inversion_clear Hframe as [mA mf|];
+    clear frame; simplify_equality; simplify_mem_disjoint_hyps.
+  destruct (HQ p Γ' Δ' δ' ρ n' (cmap_erase m))
+    as (a&?&HA); eauto using indexes_valid_weaken, funenv_valid_weaken.
   destruct (HA Γ' Δ'' δ' n'' mA) as (τlr&?&?); clear HA;
     eauto 4 using assert_weaken, indexes_valid_weaken, funenv_valid_weaken.
   { rewrite <-cmap_erase_disjoint_le; auto. }
@@ -788,10 +792,9 @@ Proof.
   apply ax_done; constructor; eauto using val_typed_weaken with congruence.
 Qed.
 Lemma ax_call {vn} Γ δ A Pf P Q Ps Qs R e (es : vec (expr K) vn) τs τ c :
-  (∀ v vs,
-    (A ★ Q (inr v) ★ Π vzip_with (λ Q v, Q (inr v)) Qs vs)%A ⊆{Γ,δ} (∃ f,
-      ⌜ v = ptrV (FunPtr f τs τ) ⌝ ★ 
-      ▷ (assert_fun f Pf τs τ) ★ fpre Pf c vs ★
+  (∀ p vs,
+    (A ★ Q (inl p) ★ Π vzip_with (λ Q v, Q (inr v)) Qs vs)%A ⊆{Γ,δ} (∃ f,
+      ⌜ p = FunPtr f τs τ ⌝ ★ ▷ (assert_fun f Pf τs τ) ★ fpre Pf c vs ★
       (∀ vret, fpost Pf c vs vret -★ (A ★ R (inr vret))))%A) →
   Γ\ δ \ A ⊨ₑ {{ P }} e {{ λ ν, (Q ν) ◊ }} →
   (∀ i, Γ\ δ\ A ⊨ₑ {{ Ps !!! i }} es !!! i {{ λ ν, ((Qs !!! i) ν) ◊ }}) →
@@ -799,10 +802,10 @@ Lemma ax_call {vn} Γ δ A Pf P Q Ps Qs R e (es : vec (expr K) vn) τs τ c :
 Proof.
   intros HQ Hax1 Hax2 Γ' Δ δ' n ρ m τlr ?????? He ??? HP.
   assert (∃ τ (τs : vec _ vn), τlr = inr τ ∧
-    (Γ',Δ,ρ.*2) ⊢ e : inr ((τs ~> τ).*) ∧
+    (Γ',Δ,ρ.*2) ⊢ e : inl (τs ~> τ) ∧
     ∀ i, (Γ',Δ,ρ.*2) ⊢ es !!! i : inr (τs !!! i))
     as (τ'&τs'&->&?&?); [|clear He].
-  { assert (∃ τ τs, τlr = inr τ ∧ (Γ',Δ,ρ.*2) ⊢ e : inr ((τs ~> τ).*) ∧
+  { assert (∃ τ τs, τlr = inr τ ∧ (Γ',Δ,ρ.*2) ⊢ e : inl (τs ~> τ) ∧
       (Γ',Δ,ρ.*2) ⊢* es :* inr <$> τs) as (τ'&τs'&->&?&Hes)
       by (typed_inversion_all; eauto).
     assert (vn = length τs') by (by erewrite <-fmap_length,
@@ -826,7 +829,7 @@ Proof.
     end.
   apply (ax_expr_compose Γ' δ' A ((λ ν, Q ν ◊)%A ::: vmap (λ Q ν, Q ν ◊)%A Qs) R
     Δ (DCCall vn) (e ::: es) ρ n
-    (m1 ::: ms) (inr ((τs' ~> τ').*) ::: vmap inr τs')); auto.
+    (m1 ::: ms) (inl (τs' ~> τ') ::: vmap inr τs')); auto.
   { intros i; inv_fin i; eauto. }
   { intros i; inv_fin i; esolve_elem_of. }
   { intros i; inv_fin i; simpl.
@@ -845,7 +848,7 @@ Proof.
        pose proof (H 0%fin); specialize (λ i, H (FS i)); simpl in *
     | H : assert_holds _ _ _ _ _ _ _ |- _ => rewrite assert_unlock_spec in H
     end.
-  destruct ν as [|v]; typed_inversion_all.
+  destruct ν as [p|]; typed_inversion_all.
   assert (∃ vs, νs = vmap inr vs ∧ (Γ',Δ') ⊢* vs :* τs') as (vs&->&Hvs).
   { revert Hνs; clear; induction νs as [|ν ? νs IH].
     { inv_vec τs'; eexists [#]; simpl; auto. }
@@ -857,7 +860,7 @@ Proof.
   apply ax_further_alt.
   intros Δ'' n'' ????? Hframe; inversion_clear Hframe as [mA mf ?????? HmA|];
     simplify_equality; simplify_mem_disjoint_hyps.
-  destruct (HQ v vs Γ' Δ'' δ' ρ (S n'')
+  destruct (HQ p vs Γ' Δ'' δ' ρ (S n'')
     (cmap_erase (mem_unlock_all (m ∪ ⋃ ms ∪ mA))))
     as (f&?&?&Hm&_&[-> ->]&?&?&->&_&Hf&m''&mf2&->&?&?&Hpost); clear HQ;
     eauto using indexes_valid_weaken, mem_unlock_all_valid, funenv_valid_weaken.
@@ -956,7 +959,8 @@ Lemma ax_alloc Γ δ A P Q1 Q2 e τ :
   (∀ o vb,
     Q1 (inr (VBase vb)) ⊆{Γ,δ} (∃ n τi,
       ⌜ vb = (intV{τi} n)%B ∧ Z.to_nat n ≠ 0 ⌝ ★
-      ((% (addr_top o (τ.[Z.to_nat n])) ↦{true,perm_full} - : (τ.[Z.to_nat n]) -★
+      ((% (Ptr (addr_top o (τ.[Z.to_nat n])))
+         ↦{true,perm_full} - : (τ.[Z.to_nat n]) -★
          Q2 (inr (ptrV (Ptr (addr_top_array o τ n))))) ∧
        (⌜ alloc_can_fail ⌝ -★ Q2 (inr (ptrV (NULL (TType τ)))))))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
@@ -1029,44 +1033,44 @@ Proof.
     split_ands; eauto using addr_top_typed, mem_alloc_index_typed.
 Qed.
 Lemma ax_free Γ δ A P Q1 Q2 e τ :
-  (∀ a,
-    Q1 (inl a) ⊆{Γ,δ} (∃ n,
-      ⌜ addr_is_top_array a ⌝ ★
-      % addr_top (addr_index a) (τ.[n]) ↦{true,perm_full} - : (τ.[n]) ★
+  (∀ p,
+    Q1 (inl p) ⊆{Γ,δ} (∃ o n τp,
+      ⌜ p = Ptr (Addr o [RArray 0 τ n] 0 (τ.[n]) τ τp) ⌝ ★
+      % Ptr (addr_top o (τ.[n])) ↦{true,perm_full} - : (τ.[n]) ★
       Q2 (inr voidV))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P }} free e {{ Q2 }}.
 Proof.
   intros HQ Hax Γ' Δ δ' n ρ m τlr ?????? He ????.
-  assert (∃ τ', (Γ',Δ,ρ.*2) ⊢ e : inl τ' ∧ τlr = inr voidT) as (τ'&?&->)
+  assert (∃ τp, (Γ',Δ,ρ.*2) ⊢ e : inl τp ∧ τlr = inr voidT) as (τp&?&->)
     by (typed_inversion_all; eauto); clear He.
-  apply (ax_expr_compose_1 Γ' δ' A Q1 _ Δ DCFree e ρ n m (inl τ')); auto.
+  apply (ax_expr_compose_1 Γ' δ' A Q1 _ Δ DCFree e ρ n m (inl τp)); auto.
   { esolve_elem_of. }
   clear dependent m; intros Δ' n' [a|] m ?????; typed_inversion_all.
   destruct (HQ a Γ' Δ' δ' ρ n' (cmap_erase m))
-    as (na&?&?&Hm'&?&[Ha' ->]&m1&m2'&?&?&(ν&a'&v&_&?&?&?&?)&?);
+    as (o&na&τp'&?&?&Hm'&?&[Ha' ->]&m1&m2'&?&?&(ν&a'&v&_&?&Hp&?&?)&?);
     eauto using indexes_valid_weaken, funenv_valid_weaken.
-  rewrite sep_left_id in Hm' by auto;
-    simplify_option_equality; typed_inversion_all.
+  rewrite sep_left_id in Hm' by auto; simplify_option_equality.
+    assert (τp = τp') by (by typed_inversion_all); clear Hp; subst.
   destruct (cmap_erase_union_inv_l m m1 m2')
     as (m2&->&Hm12'&_&->); auto; simplify_mem_disjoint_hyps.
-  assert (∀ mf mA, ⊥ [m1; m2; mf; mA] → mem_freeable a (m1 ∪ m2 ∪ mf ∪ mA)).
-  { split; eauto using (mem_freeable_perm_singleton _ Δ').
+  apply ax_further_alt; intros Δ'' n'' ????? Hframe;
+    inversion_clear Hframe as [mA mf|];
+    simplify_equality'; simplify_mem_disjoint_hyps.
+  assert (mem_freeable
+    (Addr o [RArray 0 τ na] 0 (τ.[na]) τ τp') (m1 ∪ m2 ∪ mf ∪ mA)).
+  { repeat constructor.
     eapply mem_freeable_perm_subseteq; eauto using mem_freeable_perm_singleton,
       @sep_union_subseteq_l', @sep_union_subseteq_l_transitive. }
-  apply ax_further_alt.
-  intros Δ'' n'' ????? Hframe; inversion_clear Hframe as [mA mf|];
-      simplify_equality; simplify_mem_disjoint_hyps.
   split; [solve_rcred|intros S' p _].
   inv_rcstep p; [inv_ehstep|exfalso; eauto with cstep].
   match goal with H : mem_freeable _ _ |- _ => destruct H end.
-  assert (mem_freeable_perm (addr_index a) true m1)
+  assert (mem_freeable_perm o true m1)
     by eauto using mem_freeable_perm_singleton.
-  assert (⊥ [mem_free (addr_index a) m1; m2; mf; mA])
+  assert (⊥ [mem_free o m1; m2; mf; mA])
     by (by rewrite <-mem_free_disjoint_le by eauto).
   apply mk_ax_next with
-    (alter (prod_map id (λ _, true)) (addr_index a) Δ'')
-    (mem_free (addr_index a) (m1 ∪ m2));
+    (alter (prod_map id (λ _, true)) o Δ'') (mem_free o (m1 ∪ m2));
     eauto using mem_free_forward, mem_free_forward_least.
   { erewrite <-!(sep_associative m1), !mem_free_union by eauto.
     rewrite !sep_associative by eauto; constructor; auto. }

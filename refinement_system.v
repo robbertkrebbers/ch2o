@@ -15,9 +15,9 @@ Inductive stack_item_refine (f : meminj K) (Δ1 Δ2 : memenv K) :
 
 Inductive lrval_refine' (Γ : env K) (α : bool)
     (f : meminj K) (Δ1 Δ2 : memenv K) : lrval K → lrval K → lrtype K → Prop :=
-  | lval_refine a1 a2 τ :
-     a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : TType τ →
-     lrval_refine' Γ α f Δ1 Δ2 (inl a1) (inl a2) (inl τ)
+  | lval_refine p1 p2 τp :
+     p1 ⊑{Γ,α,f@Δ1↦Δ2} p2 : τp →
+     lrval_refine' Γ α f Δ1 Δ2 (inl p1) (inl p2) (inl τp)
   | rval_refine v1 v2 τ :
      v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ →
      lrval_refine' Γ α f Δ1 Δ2 (inr v1) (inr v2) (inr τ).
@@ -28,42 +28,43 @@ Inductive expr_refine' (Γ : env K)
      (τs : list (type K)) (α : bool) (f : meminj K)
      (Δ1 Δ2 : memenv K) : expr K → expr K → lrtype K → Prop :=
   | EVar_refine τ n :
-     τs !! n = Some τ → expr_refine' Γ τs α f Δ1 Δ2 (var n) (var n) (inl τ)
+     τs !! n = Some τ →
+     expr_refine' Γ τs α f Δ1 Δ2 (var n) (var n) (inl (TType τ))
   | EVal_refine Ω1 Ω2 ν1 ν2 τlr :
      Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 → ν1 ⊑{Γ,α,f@Δ1↦Δ2} ν2 : τlr →
      expr_refine' Γ τs α f Δ1 Δ2 (%#{Ω1} ν1) (%#{Ω2} ν2) τlr
-  | ERtoL_refine e1 e2 τ :
-     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr (TType τ.*)) → type_complete Γ τ →
-     expr_refine' Γ τs α f Δ1 Δ2 (.* e1) (.* e2) (inl τ)
-  | ERofL_refine e1 e2 τ :
-     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl τ) →
-     expr_refine' Γ τs α f Δ1 Δ2 (& e1) (& e2) (inr (TType τ.*))
+  | ERtoL_refine e1 e2 τp :
+     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr (τp.*)) →
+     expr_refine' Γ τs α f Δ1 Δ2 (.* e1) (.* e2) (inl τp)
+  | ERofL_refine e1 e2 τp :
+     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl τp) →
+     expr_refine' Γ τs α f Δ1 Δ2 (& e1) (& e2) (inr (τp.*))
   | EAssign_refine ass e1 e2 e1' e2' τ τ' :
      assign_typed τ τ' ass →
-     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl τ) →
+     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl (TType τ)) →
      expr_refine' Γ τs α f Δ1 Δ2 e1' e2' (inr τ') →
      expr_refine' Γ τs α f Δ1 Δ2 (e1 ::={ass} e1') (e2 ::={ass} e2') (inr τ)
   | ECall_refine e1 e2 es1 es2 σ σs :
-     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr ((σs ~> σ).*)) →
+     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl (σs ~> σ)) →
      Forall3 (expr_refine' Γ τs α f Δ1 Δ2) es1 es2 (inr <$> σs) →
      type_complete Γ σ →
      expr_refine' Γ τs α f Δ1 Δ2 (call e1 @ es1) (call e2 @ es2) (inr σ)
   | EAbort_refine τ :
      ✓{Γ} τ → expr_refine' Γ τs α f Δ1 Δ2 (abort τ) (abort τ) (inr τ)
   | ELoad_refine e1 e2 τ :
-     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl τ) →
+     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl (TType τ)) → type_complete Γ τ →
      expr_refine' Γ τs α f Δ1 Δ2 (load e1) (load e2) (inr τ)
   | EEltL_refine e1 e2 rs τ σ  :
-     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl τ) → Γ ⊢ rs : τ ↣ σ →
-     expr_refine' Γ τs α f Δ1 Δ2 (e1 %> rs) (e2 %> rs) (inl σ)
+     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl (TType τ)) → Γ ⊢ rs : τ ↣ σ →
+     expr_refine' Γ τs α f Δ1 Δ2 (e1 %> rs) (e2 %> rs) (inl (TType σ))
   | EEltR_refine e1 e2 rs τ σ  :
      expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr τ) → Γ ⊢ rs : τ ↣ σ →
      expr_refine' Γ τs α f Δ1 Δ2 (e1 #> rs) (e2 #> rs) (inr σ)
   | EAlloc_refine τ e1 e2 τi :
      ✓{Γ} τ → expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr (intT τi)) →
      expr_refine' Γ τs α f Δ1 Δ2 (alloc{τ} e1) (alloc{τ} e2) (inr (TType τ.*))
-  | EFree_refine e1 e2 τ :
-     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl τ) →
+  | EFree_refine e1 e2 τp :
+     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inl τp) →
      expr_refine' Γ τs α f Δ1 Δ2 (free e1) (free e2) (inr voidT)
   | EUnOp_refine op e1 e2 τ σ :
      unop_typed op τ σ → expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr τ) →
@@ -90,7 +91,6 @@ Inductive expr_refine' (Γ : env K)
      expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr σ) →
      expr_refine' Γ τs α f Δ1 Δ2 e1' e2' (inr τ) →
      expr_refine' Γ τs α f Δ1 Δ2 (#[r:=e1]e1') (#[r:=e2]e2') (inr τ).
-
 Global Instance expr_refine: RefineT K (env K * list (type K))
     (lrtype K) (expr K) := curry expr_refine'.
 
@@ -98,42 +98,41 @@ Section expr_refine_ind.
   Context (Γ : env K) (τs : list (type K)).
   Context (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K).
   Context (P : expr K → expr K → lrtype K → Prop).
-  Context (Pvar : ∀ τ i, τs !! i = Some τ → P (var i) (var i) (inl τ)).
+  Context (Pvar : ∀ τ i, τs !! i = Some τ → P (var i) (var i) (inl (TType τ))).
   Context (Pval : ∀ Ω1 Ω2 ν1 ν2 τlr,
     Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 → ν1 ⊑{Γ,α,f@Δ1↦Δ2} ν2 : τlr →
     P (%#{Ω1} ν1) (%#{Ω2} ν2) τlr).
-  Context (Prtol : ∀ e1 e2 τ,
-    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (TType τ.*) →
-    P e1 e2 (inr (TType τ.*)) → type_complete Γ τ → P (.* e1) (.* e2) (inl τ)).
-  Context (Profl : ∀ e1 e2 τ,
-    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ →
-    P e1 e2 (inl τ) → P (& e1) (& e2) (inr (TType τ.*))).
+  Context (Prtol : ∀ e1 e2 τp,
+    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (τp.*) →
+    P e1 e2 (inr (τp.*)) → P (.* e1) (.* e2) (inl τp)).
+  Context (Profl : ∀ e1 e2 τp,
+    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τp →
+    P e1 e2 (inl τp) → P (& e1) (& e2) (inr (τp.*))).
   Context (Passign : ∀ ass e1 e2 e1' e2' τ τ',
     assign_typed τ τ' ass →
-    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ → P e1 e2 (inl τ) →
+    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl (TType τ) → P e1 e2 (inl (TType τ)) →
     e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' → P e1' e2' (inr τ') →
     P (e1 ::={ass} e1') (e2 ::={ass} e2') (inr τ)).
   Context (Pcall : ∀ e1 e2 es1 es2 σ σs,
-    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr ((σs ~> σ).*) →
-    P e1 e2 (inr ((σs ~> σ).*)) →
+    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl (σs ~> σ) → P e1 e2 (inl (σs ~> σ)) →
     es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2}* es2 :* inr <$> σs →
     Forall3 P es1 es2 (inr <$> σs) →
     type_complete Γ σ → P (call e1 @ es1) (call e2 @ es2) (inr σ)).
   Context (Pabort : ∀ τ, ✓{Γ} τ → P (abort τ) (abort τ) (inr τ)).
   Context (Pload : ∀ e1 e2 τ,
-    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ →
-    P e1 e2 (inl τ) → P (load e1) (load e2) (inr τ)).
+    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl (TType τ) → P e1 e2 (inl (TType τ)) →
+    type_complete Γ τ → P (load e1) (load e2) (inr τ)).
   Context (Peltl : ∀ e1 e2 rs τ σ,
-    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ → P e1 e2 (inl τ) →
-    Γ ⊢ rs : τ ↣ σ → P (e1 %> rs) (e2 %> rs) (inl σ)).
+    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl (TType τ) → P e1 e2 (inl (TType τ)) →
+    Γ ⊢ rs : τ ↣ σ → P (e1 %> rs) (e2 %> rs) (inl (TType σ))).
   Context (Peltr : ∀ e1 e2 rs τ σ,
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ → P e1 e2 (inr τ) →
     Γ ⊢ rs : τ ↣ σ → P (e1 #> rs) (e2 #> rs) (inr σ)).
   Context (Palloc : ∀ τ e1 e2 τi,
     ✓{Γ} τ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (intT τi) →
     P e1 e2 (inr (intT τi)) → P (alloc{τ} e1) (alloc{τ} e2) (inr (TType τ.*))).
-  Context (Pfree : ∀ e1 e2 τ,
-    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ → P e1 e2 (inl τ) →
+  Context (Pfree : ∀ e1 e2 τp,
+    e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τp → P e1 e2 (inl τp) →
     P (free e1) (free e2) (inr voidT)).
   Context (Punop : ∀ op e1 e2 τ σ,
     unop_typed op τ σ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ →
@@ -169,42 +168,43 @@ End expr_refine_ind.
 Inductive ectx_item_refine' (Γ : env K) (τs: list (type K))
      (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
      ectx_item K → ectx_item K → lrtype K → lrtype K → Prop :=
-  | CRtoL_refine τ :
-     type_complete Γ τ →
-     ectx_item_refine' Γ τs α f Δ1 Δ2 (.* □) (.* □) (inr (TType τ.*)) (inl τ)
-  | CLtoR_refine τ :
-     ectx_item_refine' Γ τs α f Δ1 Δ2 (& □) (& □) (inl τ) (inr (TType τ.*))
+  | CRtoL_refine τp :
+     ectx_item_refine' Γ τs α f Δ1 Δ2 (.* □) (.* □) (inr (τp.*)) (inl τp)
+  | CLtoR_refine τp :
+     ectx_item_refine' Γ τs α f Δ1 Δ2 (& □) (& □) (inl τp) (inr (τp.*))
   | CAssignL_refine ass e1' e2' τ τ' :
      assign_typed τ τ' ass → e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' →
      ectx_item_refine' Γ τs α f Δ1 Δ2
-       (□ ::={ass} e1') (□ ::={ass} e2') (inl τ) (inr τ)
+       (□ ::={ass} e1') (□ ::={ass} e2') (inl (TType τ)) (inr τ)
   | CAssignR_refine ass e1 e2 τ τ' :
-     assign_typed τ τ' ass → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl τ →
+     assign_typed τ τ' ass → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl (TType τ) →
      ectx_item_refine' Γ τs α f Δ1 Δ2
        (e1 ::={ass} □) (e2 ::={ass} □) (inr τ') (inr τ)
   | CCallL_refine es1 es2 σs σ :
      es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2}* es2 :* inr <$> σs → type_complete Γ σ →
      ectx_item_refine' Γ τs α f Δ1 Δ2
-       (call □ @ es1) (call □ @ es2) (inr ((σs ~> σ).*)) (inr σ)
+       (call □ @ es1) (call □ @ es2) (inl (σs ~> σ)) (inr σ)
   | CCallR_refine e1 e2 es1 es2 es1' es2' σ σs τ σs' :
-     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (((σs ++ τ :: σs') ~> σ).*) →
+     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inl ((σs ++ τ :: σs') ~> σ) →
      reverse es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2}* reverse es2 :* inr <$> σs →
      es1' ⊑{(Γ,τs),α,f@Δ1↦Δ2}* es2' :* inr <$> σs' → type_complete Γ σ →
      ectx_item_refine' Γ τs α f Δ1 Δ2
        (call e1 @ es1 □ es1') (call e2 @ es2 □ es2') (inr τ) (inr σ)
   | CLoad_refine τ :
-     ectx_item_refine' Γ τs α f Δ1 Δ2 (load □) (load □) (inl τ) (inr τ)
+     type_complete Γ τ →
+     ectx_item_refine' Γ τs α f Δ1 Δ2 (load □) (load □) (inl (TType τ)) (inr τ)
   | CEltL_refine rs τ σ :
      Γ ⊢ rs : τ ↣ σ →
-     ectx_item_refine' Γ τs α f Δ1 Δ2 (□ %> rs) (□ %> rs) (inl τ) (inl σ)
+     ectx_item_refine' Γ τs α f Δ1 Δ2
+       (□ %> rs) (□ %> rs) (inl (TType τ)) (inl (TType σ))
   | CEltR_refine rs τ σ :
      Γ ⊢ rs : τ ↣ σ →
      ectx_item_refine' Γ τs α f Δ1 Δ2 (□ #> rs) (□ #> rs) (inr τ) (inr σ)
   | CAlloc_refine τ τi :
      ✓{Γ} τ → ectx_item_refine' Γ τs α f Δ1 Δ2
        (alloc{τ} □) (alloc{τ} □) (inr (intT τi)) (inr (TType τ.*))
-  | CFree_refine τ :
-     ectx_item_refine' Γ τs α f Δ1 Δ2 (free □) (free □) (inl τ) (inr voidT)
+  | CFree_refine τp :
+     ectx_item_refine' Γ τs α f Δ1 Δ2 (free □) (free □) (inl τp) (inr voidT)
   | CUnOp_refine op τ σ :
      unop_typed op τ σ →
      ectx_item_refine' Γ τs α f Δ1 Δ2 (@{op} □) (@{op} □) (inr τ) (inr σ)
@@ -657,7 +657,7 @@ Lemma lrval_refine_typed_l Γ α f Δ1 Δ2 ν1 ν2 τlr :
   ✓ Γ → ν1 ⊑{Γ,α,f@Δ1↦Δ2} ν2 : τlr → (Γ,Δ1) ⊢ ν1 : τlr.
 Proof.
   destruct 2; typed_constructor;
-    eauto using val_refine_typed_l, addr_refine_typed_l.
+    eauto using val_refine_typed_l, ptr_refine_typed_l.
 Qed.
 Lemma expr_refine_typed_l Γ α f Δ1 Δ2 τs e1 e2 τlr :
   ✓ Γ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : τlr → (Γ,Δ1,τs) ⊢ e1 : τlr.
@@ -741,7 +741,7 @@ Lemma lrval_refine_typed_r Γ α f Δ1 Δ2 ν1 ν2 τlr :
   ✓ Γ → ν1 ⊑{Γ,α,f@Δ1↦Δ2} ν2 : τlr → (Γ,Δ2) ⊢ ν2 : τlr.
 Proof.
   destruct 2; typed_constructor;
-    eauto using val_refine_typed_r, addr_refine_typed_r.
+    eauto using val_refine_typed_r, ptr_refine_typed_r.
 Qed.
 Lemma expr_refine_typed_r Γ α f Δ1 Δ2 τs e1 e2 τlr :
   ✓ Γ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : τlr → (Γ,Δ2,τs) ⊢ e2 : τlr.
@@ -827,7 +827,7 @@ Proof.
 Qed.
 
 Lemma lrval_refine_id Γ α Δ ν τlr : (Γ,Δ) ⊢ ν : τlr → ν ⊑{Γ,α@Δ} ν : τlr.
-Proof. destruct 1; constructor; eauto using val_refine_id, addr_refine_id. Qed.
+Proof. destruct 1; constructor; eauto using val_refine_id, ptr_refine_id. Qed.
 Lemma expr_refine_id Γ α Δ τs e τlr :
   (Γ,Δ,τs) ⊢ e : τlr → e ⊑{(Γ,τs),α@Δ} e : τlr.
 Proof.
@@ -898,7 +898,7 @@ Lemma lrval_refine_compose Γ α1 α2 f1 f2 Δ1 Δ2 Δ3 ν1 ν2 ν3 τlr τlr' :
   ν1 ⊑{Γ,α1||α2,f2 ◎ f1@Δ1↦Δ3} ν3 : τlr.
 Proof.
   destruct 2; inversion_clear 1; refine_constructor;
-    eauto using val_refine_compose, addr_refine_compose.
+    eauto using val_refine_compose, ptr_refine_compose.
 Qed.
 Lemma expr_refine_compose Γ τs α1 α2 f1 f2 Δ1 Δ2 Δ3 e1 e2 e3 τlr τlr' :
   ✓ Γ → e1 ⊑{(Γ,τs),α1,f1@Δ1↦Δ2} e2 : τlr →
@@ -1078,7 +1078,7 @@ Lemma lrval_refine_inverse Γ f Δ1 Δ2 ν1 ν2 τlr :
   ν1 ⊑{Γ,false,f@Δ1↦Δ2} ν2 : τlr →
   ν2 ⊑{Γ,false,meminj_inverse f@Δ2↦Δ1} ν1 : τlr.
 Proof.
-  destruct 1; constructor; eauto using val_refine_inverse, addr_refine_inverse.
+  destruct 1; constructor; eauto using val_refine_inverse, ptr_refine_inverse.
 Qed.
 Lemma expr_refine_inverse Γ τs f Δ1 Δ2 e1 e2 τlr :
   e1 ⊑{(Γ,τs),false,f@Δ1↦Δ2} e2 : τlr →
@@ -1188,7 +1188,7 @@ Lemma lrval_refine_weaken Γ α α' f f' Δ1 Δ2 Δ1' Δ2' ν1 ν2 τlr :
   meminj_extend f f' Δ1 Δ2 → ν1 ⊑{Γ,α',f'@Δ1'↦Δ2'} ν2 : τlr.
 Proof.
   destruct 2; refine_constructor;
-    eauto using addr_refine_weaken, val_refine_weaken.
+    eauto using ptr_refine_weaken, val_refine_weaken.
 Qed.
 Lemma expr_refine_weaken Γ α α' f f' Δ1 Δ2 Δ1' Δ2' τs e1 e2 τlr :
   ✓ Γ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : τlr → (α → α') →

@@ -28,36 +28,39 @@ Defined.
 Global Instance lrval_type_check:
    TypeCheck (env K * memenv K) (lrtype K) (lrval K) := λ ΓΔ ν,
   match ν with
-  | inl a => inl <$> type_check ΓΔ a ≫= maybe TType
+  | inl p => inl <$> type_check ΓΔ p
   | inr v => inr <$> type_check ΓΔ v
   end.
 Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
   fix go Γs e {struct e} := let _ : TypeCheck envs _ _ := @go in
   let '(Γ,Δ,τs) := Γs in
   match e with
-  | var n => τ ← τs !! n; Some (inl τ)
+  | var n => τ ← τs !! n; Some (inl (TType τ))
   | %#{Ω} ν => guard (✓{Γ,Δ} Ω); type_check (Γ,Δ) ν
   | .* e =>
      τ ← type_check Γs e ≫= maybe inr;
-     τ' ← maybe (TBase ∘ TPtr ∘ TType) τ;
-     guard (type_complete Γ τ'); Some (inl τ')
+     τp ← maybe (TBase ∘ TPtr) τ;
+     Some (inl τp)
   | & e =>
-     τ ← type_check Γs e ≫= maybe inl;
-     Some (inr (TType τ.*))
+     τp ← type_check Γs e ≫= maybe inl;
+     Some (inr (τp.*))
   | e1 ::={ass} e2 =>
-     τ1 ← type_check Γs e1 ≫= maybe inl;
+     τ1 ← type_check Γs e1 ≫= maybe (inl ∘ TType);
      τ2 ← type_check Γs e2 ≫= maybe inr;
      guard (assign_typed τ1 τ2 ass);
      Some (inr τ1)
   | call e @ es =>
-     '(σs,σ) ← (type_check Γs e ≫= maybe (inr ∘ TBase ∘ TPtr)) ≫= maybe2 TFun;
+     '(σs,σ) ← (type_check Γs e ≫= maybe inl) ≫= maybe2 TFun;
      σs' ← mapM (λ e, type_check Γs e ≫= maybe inr) es;
      guard ((σs' : list (type K)) = σs); guard (type_complete Γ σ); Some (inr σ)
   | abort τ => guard (✓{Γ} τ); Some (inr τ)
-  | load e => inr <$> type_check Γs e ≫= maybe inl
+  | load e =>
+     τ ← type_check Γs e ≫= maybe (inl ∘ TType);
+     guard (type_complete Γ τ);
+     Some (inr τ)
   | e %> rs =>
-     τ ← type_check Γs e ≫= maybe inl;
-     inl <$> τ !!{Γ} rs
+     τ ← type_check Γs e ≫= maybe (inl ∘ TType);
+     inl ∘ TType <$> τ !!{Γ} rs
   | e #> rs =>
      τ ← type_check Γs e ≫= maybe inr;
      inr <$> τ !!{Γ} rs
@@ -65,7 +68,7 @@ Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
      _ ← type_check Γs e ≫= maybe (inr ∘ TBase ∘ TInt);
      guard (✓{Γ} τ); Some (inr (TType τ.*))
   | free e =>
-     τ' ← type_check Γs e ≫= maybe inl;
+     τp ← type_check Γs e ≫= maybe inl;
      Some (inr voidT)
   | @{op} e =>
      τ ← type_check Γs e ≫= maybe inr;
@@ -95,34 +98,37 @@ Global Instance ectx_item_lookup :
   let '(Γ,Δ,τs) := Γs in
   match Ei, τlr with
   | .* □, inr τ =>
-    τ' ← maybe (TBase ∘ TPtr ∘ TType) τ;
-    guard (type_complete Γ τ'); Some (inl τ')
-  | & □, inl τ => Some (inr (TType τ.*))
-  | □ ::={ass} e2, inl τ1 =>
+    τp ← maybe (TBase ∘ TPtr) τ;
+    Some (inl τp)
+  | & □, inl τp => Some (inr (τp.*))
+  | □ ::={ass} e2, inl τp1 =>
+     τ1 ← maybe TType τp1;
      τ2 ← type_check Γs e2 ≫= maybe inr;
      guard (assign_typed τ1 τ2 ass);
      Some (inr τ1)
   | e1 ::={ass} □, inr τ2 =>
-     τ1 ← type_check Γs e1 ≫= maybe inl;
+     τ1 ← type_check Γs e1 ≫= maybe (inl ∘ TType);
      guard (assign_typed τ1 τ2 ass);
      Some (inr τ1)
-  | call □ @ es, inr τ =>
-     '(σs,σ) ← maybe (TBase ∘ TPtr) τ ≫= maybe2 TFun;
+  | call □ @ es, inl τp =>
+     '(σs,σ) ← maybe2 TFun τp;
      σs' ← mapM (λ e, type_check Γs e ≫= maybe inr) es;
      guard ((σs : list (type K)) = σs'); guard (type_complete Γ σ); Some (inr σ)
   | call e @ es1 □ es2, inr τ =>
-     '(σs,σ) ←
-       (type_check Γs e ≫= maybe (inr ∘ TBase ∘ TPtr)) ≫= maybe2 TFun;
+     '(σs,σ) ← (type_check Γs e ≫= maybe inl) ≫= maybe2 TFun;
      σs1 ← mapM (λ e, type_check Γs e ≫= maybe inr) (reverse es1);
      σs2 ← mapM (λ e, type_check Γs e ≫= maybe inr) es2;
      guard ((σs : list (type K)) = σs1 ++ τ :: σs2);
      guard (type_complete Γ σ); Some (inr σ)
-  | load □, inl τ => Some (inr τ)
-  | □ %> rs, inl τ => inl <$> τ !!{Γ} rs
+  | load □, inl τp =>
+     τ ← maybe TType τp;
+     guard (type_complete Γ τ);
+     Some (inr τ)
+  | □ %> rs, inl τp => τ ← maybe TType τp; inl ∘ TType <$> τ !!{Γ} rs
   | □ #> rs, inr τ => inr <$> τ !!{Γ} rs
   | alloc{τ} □, inr τ' =>
      _ ← maybe (TBase ∘ TInt) τ'; guard (✓{Γ} τ); Some (inr (TType τ.*))
-  | free □, inl τ => Some (inr voidT)
+  | free □, inl τp => Some (inr voidT)
   | @{op} □, inr τ => inr <$> unop_type_of op τ
   | □ @{op} e2, inr τ1 =>
      τ2 ← type_check Γs e2 ≫= maybe inr;
@@ -296,7 +302,7 @@ Ltac simplify :=
   | _ => progress simplify_option_equality
   | _ => case_match
   end.
-Hint Resolve (type_check_sound (V:=val K)) (type_check_sound (V:=addr K)).
+Hint Resolve (type_check_sound (V:=val K)) (type_check_sound (V:=ptr K)).
 Hint Resolve (mapM_type_check_sound (V:=val K)).
 Hint Immediate (path_type_check_sound (R:=ref_seg _)).
 Hint Immediate (path_type_check_sound (R:=ref _)).
