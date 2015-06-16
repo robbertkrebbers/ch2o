@@ -599,7 +599,7 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
      '(e,τsz) ← to_expr Δl ce ≫= curry to_R;
      _ ← error_of_option (maybe (TBase ∘ TInt) τsz)
        "alloc applied to argument of non-integer type";
-     mret (alloc{τ} e, inr (TType τ.*))
+     mret (&(alloc{τ} e), inr (TType τ.*))
   | CEFree ce =>
      '(e,τ) ← to_expr Δl ce ≫= curry to_R;
      τp ← error_of_option (maybe (TBase ∘ TPtr ∘ TType) τ)

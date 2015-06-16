@@ -66,7 +66,7 @@ Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
      inr <$> τ !!{Γ} rs
   | alloc{τ} e =>
      _ ← type_check Γs e ≫= maybe (inr ∘ TBase ∘ TInt);
-     guard (✓{Γ} τ); Some (inr (TType τ.*))
+     guard (✓{Γ} τ); Some (inl (TType τ))
   | free e =>
      τp ← type_check Γs e ≫= maybe inl;
      Some (inr voidT)
@@ -127,7 +127,7 @@ Global Instance ectx_item_lookup :
   | □ %> rs, inl τp => τ ← maybe TType τp; inl ∘ TType <$> τ !!{Γ} rs
   | □ #> rs, inr τ => inr <$> τ !!{Γ} rs
   | alloc{τ} □, inr τ' =>
-     _ ← maybe (TBase ∘ TInt) τ'; guard (✓{Γ} τ); Some (inr (TType τ.*))
+     _ ← maybe (TBase ∘ TInt) τ'; guard (✓{Γ} τ); Some (inl (TType τ))
   | free □, inl τp => Some (inr voidT)
   | @{op} □, inr τ => inr <$> unop_type_of op τ
   | □ @{op} e2, inr τ1 =>

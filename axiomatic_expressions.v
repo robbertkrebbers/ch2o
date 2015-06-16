@@ -961,14 +961,14 @@ Lemma ax_alloc Γ δ A P Q1 Q2 e τ :
       ⌜ vb = (intV{τi} n)%B ∧ Z.to_nat n ≠ 0 ⌝ ★
       ((% (Ptr (addr_top o (τ.[Z.to_nat n])))
          ↦{true,perm_full} - : (τ.[Z.to_nat n]) -★
-         Q2 (inr (ptrV (Ptr (addr_top_array o τ n))))) ∧
-       (⌜ alloc_can_fail ⌝ -★ Q2 (inr (ptrV (NULL (TType τ)))))))%A) →
+         Q2 (inl (Ptr (addr_top_array o τ n)))) ∧
+       (⌜ alloc_can_fail ⌝ -★ Q2 (inl (NULL (TType τ))))))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P }} alloc{τ} e {{ Q2 }}.
 Proof.
   intros HQ Hax Γ' Δ δ' n ρ m τlr ?????? He ????.
   assert (∃ τi, (Γ',Δ,ρ.*2) ⊢ e : inr (intT τi) ∧
-    ✓{Γ'} τ ∧ τlr = inr (TType τ.*)) as (τi&?&?&->)
+    ✓{Γ'} τ ∧ τlr = inl (TType τ)) as (τi&?&?&->)
     by (typed_inversion_all; eauto); clear He.
   apply (ax_expr_compose_1 Γ' δ' A Q1 _ Δ
     (DCAlloc τ) e ρ n m (inr (intT τi))); auto.
@@ -984,9 +984,9 @@ Proof.
   intros Δ'' n'' ?? S' ??? Hframe p Hdom; inversion_clear Hframe as [mA mf|];
     simplify_equality; simplify_mem_disjoint_hyps.
   assert (alloc_can_fail ∧
-    S' = State [] (Expr (#{mem_locks m} ptrV (NULL (TType τ)))) (m ∪ mf ∪ mA)
+    S' = State [] (Expr (%{mem_locks m} NULL (TType τ))) (m ∪ mf ∪ mA)
     ∨ ∃ o,
-      S' = State [] (Expr (#{mem_locks m} ptrV (Ptr (addr_top_array o τ na))))
+      S' = State [] (Expr (%{mem_locks m} Ptr (addr_top_array o τ na)))
         (mem_alloc Γ' o true perm_full (val_new Γ' (τ.[Z.to_nat na]))
         (m ∪ mf ∪ mA)) ∧ o ∉ dom indexset (m ∪ mf ∪ mA))
     as [[? ->]|(o&->&Ho)]; [| |simplify_equality'; clear Hfail p].

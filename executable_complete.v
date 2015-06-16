@@ -49,7 +49,7 @@ Proof.
   refine_constructor; eauto using lockset_valid_weaken, mem_alloc_new_forward'.
   * eapply locks_refine_weaken with false meminj_id '{m} '{m};
       eauto using locks_refine_id, mem_alloc_new_forward', option_eq_1.
-  * do 4 refine_constructor;
+  * do 2 refine_constructor;
       eauto using addr_top_array_refine, mem_alloc_new_index_typed'.
 Qed.
 Lemma cexec_complete Γ δ S1 S2 σf :
