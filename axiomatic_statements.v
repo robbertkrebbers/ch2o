@@ -7,20 +7,14 @@ Local Open Scope ctype_scope.
 Section axiomatic_statements.
 Context `{EnvSpec K}.
 Implicit Types Γ : env K.
-Implicit Types o : index.
 Implicit Types Δ : memenv K.
 Implicit Types δ : funenv K.
-Implicit Types m : mem K.
 Implicit Types e : expr K.
 Implicit Types s : stmt K.
 Implicit Types τ σ : type K.
 Implicit Types a : addr K.
 Implicit Types v : val K.
 Implicit Types ν : lrval K.
-Implicit Types k : ctx K.
-Implicit Types d : direction K.
-Implicit Types φ : focus K.
-Implicit Types S : state K.
 Implicit Types Pd : dassert K.
 
 Hint Extern 1 (_ ⊥ _) => solve_mem_disjoint.
@@ -34,12 +28,10 @@ Hint Resolve cmap_union_valid_2 cmap_erased_union cmap_erase_valid.
 
 Hint Immediate ax_disjoint_expr_compose_diagram.
 Hint Immediate ax_expr_disjoint_compose_diagram.
-Hint Immediate ax_expr_invariant_emp.
-Hint Immediate ax_disjoint_compose_diagram.
+Hint Immediate ax_expr_invariant_emp ax_disjoint_compose_diagram.
 
-Hint Immediate val_new_typed perm_full_mapped.
+Hint Immediate val_new_typed perm_full_mapped lockset_empty_valid.
 Hint Resolve mem_alloc_valid mem_free_valid.
-Hint Immediate lockset_empty_valid.
 Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
 Hint Extern 0 (unframe ax_disjoint_cond _ _ _ _ _ _ _ _ _) => by constructor.
 Hint Extern 0 (focus_locks_valid _ _) => by constructor.

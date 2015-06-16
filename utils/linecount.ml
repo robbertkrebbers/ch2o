@@ -111,7 +111,9 @@ let cats = [
   ("assertions.v", "separation");
   ("axiomatic.v", "separation");
   ("axiomatic_graph.v", "separation");
+  ("axiomatic_expressions_help.v", "separation");
   ("axiomatic_expressions.v", "separation");
+  ("axiomatic_functions.v", "separation");
   ("axiomatic_simple.v", "separation");
   ("axiomatic_statements.v", "separation");
   ("axiomatic_sound.v", "separation");
