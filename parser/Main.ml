@@ -956,9 +956,9 @@ let main () =
   let speclist =
     [("-r", Arg.Unit (fun _ -> mode := Run true), "run a random execution");
      ("-t", Arg.Unit (fun _ -> mode := Trace false),
-        "trace all executions (do not include prinfs in trace)");
+        "trace all executions (do not include printfs in trace)");
      ("-T", Arg.Unit (fun _ -> mode := Trace true),
-        "trace all executions (include prinfs in trace)");
+        "trace all executions (include printfs in trace)");
      ("-a", Arg.Symbol (["ilp32";"llp64";"lp64"], fun a ->
           arch := {!arch with arch_sizes =
             match a with "ilp32" -> ilp32 | "llp64" -> llp64 | _ -> lp64}),
