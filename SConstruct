@@ -2,11 +2,15 @@
 # This file is distributed under the terms of the BSD license.
 import os, glob, string
 
-env = DefaultEnvironment(ENV = os.environ, tools=['default', 'Coq'])
+modules = ["prelude", "separation", "types", "memory", "refinements",
+  "memory_refinements", "memory_separation", "core_c", "abstract_c",
+  "axiomatic", "extraction"]
+Rs = '-R . ch2o'
+env = DefaultEnvironment(ENV = os.environ,tools=['default', 'Coq'], COQFLAGS=Rs)
 
 # Coq dependencies
-vs = glob.glob('*.v')
-if os.system('coqdep ' + ' '.join(map(str, vs)) + ' -R . "" > deps'): Exit(2)
+vs = [x for m in modules for x in glob.glob(m + '/*.v')]
+if os.system('coqdep ' + Rs + ' ' + ' '.join(map(str, vs)) + ' > deps'): Exit(2)
 ParseDepends('deps')
 
 # coq2html
@@ -20,11 +24,10 @@ env.Clean(t, 'utils/coq2html.cmx')
 
 # Coq files
 for v in vs:
-  env.Coq(v, COQFLAGS='-R . ""')
-  h = 'doc/' + os.path.splitext(v)[0] + '.html'
+  env.Coq(v)
+  h = 'doc/ch2o.' + os.path.splitext(v)[0].replace('/','.') + '.html'
   glo = os.path.splitext(v)[0] + '.glob'
-  env.Command(h, ['utils/coq2html', v, glo],
-    'utils/coq2html -o '+h+' '+glo+' '+v)
+  env.Command(h, ['utils/coq2html',v,glo],'utils/coq2html -o '+h+' '+v)
 
 # Parser
 include = env.Command('parser/Include.ml', '',
@@ -34,11 +37,11 @@ main = env.Command(['ch2o','ch2o.byte'], '',
    -pp \'grep -v "^#"\' -I parser parser/Main.native parser/Main.byte &&\
    mv Main.native ch2o && mv Main.byte ch2o.byte')
 AlwaysBuild(main)
-env.Clean('extraction.vo', 'parser/Extracted.ml')
-env.Clean('extraction.vo', 'parser/Extracted.mli')
+env.Clean('extraction/extraction.vo', 'parser/Extracted.ml')
+env.Clean('extraction/extraction.vo', 'parser/Extracted.mli')
 env.Depends(main, include)
-env.Depends(main, 'extraction.vo')
+env.Depends(main, 'extraction/extraction.vo')
 env.Clean(main, '_build')
 
 # Coqidescript
-env.CoqIdeScript('coqidescript', [], COQFLAGS='-R . ""')
+env.CoqIdeScript('coqidescript', [])

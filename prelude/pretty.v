@@ -1,7 +1,7 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export numbers option.
-Require Import Ascii String ars.
+Require Import Ascii String relations.
 
 Infix "+:+" := String.append (at level 60, right associativity) : C_scope.
 Arguments String.append _ _ : simpl never.

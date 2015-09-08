@@ -3,14 +3,14 @@
 
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<title>The CH₂O formalization of ISO C11</title>
+<title>CH₂O: A formalization of the C11 standard in Coq</title>
 <meta name="description" content="The CH₂O formalization" />
 <link href="style.css" rel="stylesheet" type="text/css" />
 <script type="text/javascript" src="scripts.js"> </script>
 </head>
 
 <body>
-<h1>The CH<sub>2</sub>O formalization of ISO C11</h1>
+<h1>CH<sub>2</sub>O: A formalization of the C11 standard in Coq</h1>
 <p><em>By <a href="http://robbertkrebbers.nl">Robbert Krebbers</a>, ICIS, Radboud University Nijmegen</em></p>
 
 <p><strong>This is an ongoing development. If you are looking for the Coq sources corresponding to specific papers, take a look <a href="#other">here</a>.</strong></p>
@@ -101,124 +101,123 @@ Use:</p>
 <h2>Table of contents</h2>
 <h3>Prelude</h3>
 <ul>
-<li><a href="base.html">base</a>: interfaces, notations, and general theorems.</li>
-<li><a href="tactics.html">tactics</a>: general purpose tactics. </li>
-<li><a href="proof_irrel.html">proof_irrel</a>: facts about proof irrelevant types/propositions. </li>
-<li><a href="decidable.html">decidable</a>: theorems on decidable structures. </li>
-<li><a href="orders.html">orders</a>: theorems on ordered structures. </li>
-<li><a href="option.html">option</a>: the option monad, and various theorems on the <span class="bracket">option</span> type. </li>
-<li><a href="error.html">error</a>: the error monad.</li>
-<li><a href="list.html">list</a>:  miscellaneous definitions and theorems on lists. </li>
-<li><a href="streams.html">streams</a>:  miscellaneous definitions and theorems on streams. </li>
-<li><a href="vector.html">vector</a>:  miscellaneous definitions and theorems on vectors. </li>
-<li><a href="numbers.html">numbers</a>: miscellaneous facts on <span class="bracket">nat</span>, <span class="bracket">N</span> and <span class="bracket">Z</span>.</li>
-<li><a href="ars.html">ars</a>: theorems and definitions on abstract rewriting systems.</li>
-<li><a href="collections.html">collections</a>: definitions, theorems, and tactics for collections.</li>
-<li><a href="fin_collections.html">fin_collections</a>: theorems on finite collections.</li>
-<li><a href="listset.html">listset</a>: finite set implementation using unordered lists.</li>
-<li><a href="fresh_numbers.html">fresh_numbers</a>: generation of fresh numbers.</li>
-<li><a href="prelude.html">prelude</a>: exports all of the above.</li>
+<li><a href="ch2o.prelude.base.html">base</a>: interfaces, notations, and general theorems.</li>
+<li><a href="ch2o.prelude.tactics.html">tactics</a>: general purpose tactics. </li>
+<li><a href="ch2o.prelude.proof_irrel.html">proof_irrel</a>: facts about proof irrelevant types/propositions. </li>
+<li><a href="ch2o.prelude.decidable.html">decidable</a>: theorems on decidable structures. </li>
+<li><a href="ch2o.prelude.orders.html">orders</a>: theorems on ordered structures. </li>
+<li><a href="ch2o.prelude.option.html">option</a>: the option monad, and various theorems on the <span class="bracket">option</span> type. </li>
+<li><a href="ch2o.prelude.error.html">error</a>: the error monad.</li>
+<li><a href="ch2o.prelude.list.html">list</a>:  miscellaneous definitions and theorems on lists. </li>
+<li><a href="ch2o.prelude.streams.html">streams</a>:  miscellaneous definitions and theorems on streams. </li>
+<li><a href="ch2o.prelude.vector.html">vector</a>:  miscellaneous definitions and theorems on vectors. </li>
+<li><a href="ch2o.prelude.numbers.html">numbers</a>: miscellaneous facts on <span class="bracket">nat</span>, <span class="bracket">N</span> and <span class="bracket">Z</span>.</li>
+<li><a href="ch2o.prelude.relations.html">relations</a>: theorems and definitions on abstract rewriting systems.</li>
+<li><a href="ch2o.prelude.collections.html">collections</a>: definitions, theorems, and tactics for collections.</li>
+<li><a href="ch2o.prelude.fin_collections.html">fin_collections</a>: theorems on finite collections.</li>
+<li><a href="ch2o.prelude.listset.html">listset</a>: finite set implementation using unordered lists.</li>
+<li><a href="ch2o.prelude.prelude.html">prelude</a>: exports all of the above.</li>
 </ul>
 
 <h3>Finite maps</h3>
 <ul>
-<li><a href="fin_maps.html">fin_maps</a>: an interface and properties of finite maps.</li>
-<li><a href="fin_map_dom.html">fin_map_dom</a>: an interface and theorems for the domain function of finite maps.</li>
-<li><a href="mapset.html">mapset</a>: finite maps give rise to finite sets with extensional equality.</li>
-<li><a href="natmap.html">natmap</a>, <a href="pmap.html">pmap</a>,
-	<a href="nmap.html">nmap</a>,	<a href="zmap.html">zmap</a>, and
-	<a href="stringmap.html">stringmap</a>
+<li><a href="ch2o.prelude.fin_maps.html">fin_maps</a>: an interface and properties of finite maps.</li>
+<li><a href="ch2o.prelude.fin_map_dom.html">fin_map_dom</a>: an interface and theorems for the domain function of finite maps.</li>
+<li><a href="ch2o.prelude.mapset.html">mapset</a>: finite maps give rise to finite sets with extensional equality.</li>
+<li><a href="ch2o.prelude.natmap.html">natmap</a>, <a href="ch2o.prelude.pmap.html">pmap</a>,
+	<a href="ch2o.prelude.nmap.html">nmap</a>,	<a href="ch2o.prelude.zmap.html">zmap</a>, and
+	<a href="ch2o.prelude.stringmap.html">stringmap</a>
 	finite maps indexed by <span class="bracket">nat</span>,
 	<span class="bracket">positive</span>, <span class="bracket">N</span>,
 	<span class="bracket">Z</span>, and <span class="bracket">string</span>.</li>
-<li><a href="hashset.html">hashset</a>: simple hashsets using finite maps over <span class="bracket">positive</span>.</li>
+<li><a href="ch2o.prelude.hashset.html">hashset</a>: simple hashsets using finite maps over <span class="bracket">positive</span>.</li>
 </ul>
 
 <h3>Type system and integers</h3>
 <ul>
-<li><a href="integer_coding.html">integer_coding</a>: abstract interface for integer representations.</li>
-<li><a href="integer_operations.html">integer_operations</a>: abstract interface for integer operations.</li>
-<li><a href="type_classes.html">type_classes</a>: classes to overload notations for typing judgments.</li>
-<li><a href="types.html">types</a>: C types and type environments.</li>
-<li><a href="type_environment.html">type_environment</a>: abstract interface for implementation defined properties.</li>
-<li><a href="architecture_spec.html">architecture_spec</a>:	type environment specifications based on concrete architectures.</li>
-<li><a href="architectures.html">architectures</a>: some specific architectures (ilp32, llp64 and lp64).</li>
+<li><a href="ch2o.types.integer_coding.html">integer_coding</a>: abstract interface for integer representations.</li>
+<li><a href="ch2o.types.integer_operations.html">integer_operations</a>: abstract interface for integer operations.</li>
+<li><a href="ch2o.types.type_classes.html">type_classes</a>: classes to overload notations for typing judgments.</li>
+<li><a href="ch2o.types.types.html">types</a>: C types and type environments.</li>
+<li><a href="ch2o.types.type_environment.html">type_environment</a>: abstract interface for implementation defined properties.</li>
 </ul>
 
 <h3>Permissions and separation algebras</h3>
 <ul>
-<li><a href="separation.html">separation</a>: abstract interface and properties of separation algebras.</li>
-<li><a href="separation_instances.html">separation_instances</a>: boolean, fractional, counting, lockable and tagged separation algebras.</li>
-<li><a href="permissions.html">permissions</a>: the CH<sub>2</sub>O permission system as a separation algebra. </li>
-<li><a href="ctrees.html">ctrees</a>: separation algebra of abstract trees representing memory objects.</li>
-<li><a href="cmap.html">cmap</a>: separation algebra of abstract forests representing memories.</li>
+<li><a href="ch2o.separation.separation.html">separation</a>: abstract interface and properties of separation algebras.</li>
+<li><a href="ch2o.separation.separation_instances.html">separation_instances</a>: boolean, fractional, counting, lockable and tagged separation algebras.</li>
+<li><a href="ch2o.separation.permissions.html">permissions</a>: the CH<sub>2</sub>O permission system as a separation algebra. </li>
 </ul>
 
 <h3>Memory model</h3>
 <ul>
-<li><a href="memory_basics.html">memory_basics</a>: basic definitions of the memory model.</li>
-<li><a href="references.html">references</a>: paths through types/ctrees.</li>
-<li><a href="addresses.html">addresses</a> (<a href="addresses_refine.html">refinements</a>): addresses into the memory.</li>
-<li><a href="pointers.html">pointers</a> (<a href="pointers_refine.html">refinements</a>): definition of pointers (address or NULL).</li>
-<li><a href="pointer_bits.html">pointer_bits</a> (<a href="pointer_bits_refine.html">refinements</a>): pointer fragment bits (pointer with index).</li>
-<li><a href="bits.html">bits</a>	(<a href="bits_refine.html">refinements</a>): symbolic bits (0, 1, indeterminate, or pointer fragment).</li>
-<li><a href="permission_bits.html">permission_bits</a> (<a href="permission_bits_refine.html">refinements</a> and <a href="permission_bits_separation.html">separation</a>): bits annotated with permissions.</li>
-<li><a href="memory_trees.html">memory_trees</a> (<a href="memory_trees_refine.html">refinements</a> and <a href="memory_trees_separation.html">separation</a>): memory operations on C trees.</li>
-<li><a href="memory_map.html">memory_map</a>	(<a href="memory_map_refine.html">refinements</a> and <a href="memory_map_separation.html">separation</a>): memory operations on C maps.</li>
-<li><a href="base_values.html">base_values</a> (<a href="base_values_refine.html">refinements</a>): base values (void, indeterminate, integer, or pointer).</li>
-<li><a href="values.html">values</a> (<a href="values_refine.html">refinements</a> and <a href="values_separation.html">separation</a>): abstract values (base value, array, struct, or union).</li>
-<li><a href="memory.html">memory</a> (<a href="memory_refine.html">refinements</a> and <a href="memory_separation.html">separation</a>): the CH<sub>2</sub>O memory model and its operations.</li>
-<li><a href="aliasing.html">aliasing</a>: abstract proof showing that type-based alias analysis is allowed.</li>
-<li><a href="constant_propagation.html">constant_propagation</a>: abstract proof of constant propagation with respect to the memory model.</li>
+<li><a href="ch2o.memory.memory_basics.html">memory_basics</a>: basic definitions of the memory model.</li>
+<li><a href="ch2o.memory_separation.ctrees.html">ctrees</a>: separation algebra of abstract trees representing memory objects.</li>
+<li><a href="ch2o.memory_separation.cmap.html">cmap</a>: separation algebra of abstract forests representing memories.</li>
+<li><a href="ch2o.memory.references.html">references</a>: paths through types/ctrees.</li>
+<li><a href="ch2o.memory.addresses.html">addresses</a> (<a href="ch2o.memory_refinements.addresses_refine.html">refinements</a>): addresses into the memory.</li>
+<li><a href="ch2o.memory.pointers.html">pointers</a> (<a href="ch2o.memory_refinements.pointers_refine.html">refinements</a>): definition of pointers (address or NULL).</li>
+<li><a href="ch2o.memory.pointer_bits.html">pointer_bits</a> (<a href="ch2o.memory_refinements.pointer_bits_refine.html">refinements</a>): pointer fragment bits (pointer with index).</li>
+<li><a href="ch2o.memory.bits.html">bits</a>	(<a href="ch2o.memory_refinements.bits_refine.html">refinements</a>): symbolic bits (0, 1, indeterminate, or pointer fragment).</li>
+<li><a href="ch2o.memory.permission_bits.html">permission_bits</a> (<a href="ch2o.memory_refinements.permission_bits_refine.html">refinements</a> and <a href="ch2o.memory_separation.permission_bits_separation.html">separation</a>): bits annotated with permissions.</li>
+<li><a href="ch2o.memory.memory_trees.html">memory_trees</a> (<a href="ch2o.memory_refinements.memory_trees_refine.html">refinements</a> and <a href="ch2o.memory_separation.memory_trees_separation.html">separation</a>): memory operations on C trees.</li>
+<li><a href="ch2o.memory.memory_map.html">memory_map</a>	(<a href="ch2o.memory_refinements.memory_map_refine.html">refinements</a> and <a href="ch2o.memory_separation.memory_map_separation.html">separation</a>): memory operations on C maps.</li>
+<li><a href="ch2o.memory.base_values.html">base_values</a> (<a href="ch2omemory_refinements.base_values_refine.html">refinements</a>): base values (void, indeterminate, integer, or pointer).</li>
+<li><a href="ch2o.memory.values.html">values</a> (<a href="ch2o.memory_refinements.values_refine.html">refinements</a> and <a href="ch2o.memory_separation.values_separation.html">separation</a>): abstract values (base value, array, struct, or union).</li>
+<li><a href="ch2o.memory.memory.html">memory</a> (<a href="ch2o.memory_refinements.memory_refine.html">refinements</a> and <a href="ch2o.memory_separation.memory_separation.html">separation</a>): the CH<sub>2</sub>O memory model and its operations.</li>
+<li><a href="ch2o.memory.aliasing.html">aliasing</a>: abstract proof showing that type-based alias analysis is allowed.</li>
+<li><a href="ch2o.memory.constant_propagation.html">constant_propagation</a>: abstract proof of constant propagation with respect to the memory model.</li>
 </ul>
 
-<h3>Operational semantics</h3>
+<h3>CH2O core C</h3>
 <ul>
-<li><a href="assignments.html">assignments</a>
-	(<a href="assignments_separation.html">separation</a>): semantics of assignments.</li>
-<li><a href="operations.html">operations</a>
-	(<a href="operations_refine.html">refinements</a>): semantics of casts, unary and binary operations.</li>
-<li><a href="expressions.html">expressions</a>: expressions and their decomposition into evaluation contexts.</li>
-<li><a href="statements.html">statements</a>:  statements and program contexts.</li>
-<li><a href="state.html">state</a>: the CH<sub>2</sub>O core C execution state.</li>
-<li><a href="smallstep.html">smallstep</a>: the CH<sub>2</sub>O core C small step operational semantics.</li>
-<li><a href="type_system.html">type_system</a>
-	(<a href="type_system_decidable.html">decidable</a>): type judgments for expressions, statements, and states.</li>
-<li><a href="type_preservation.html">type_preservation</a>: type preservation and (weak) progress.</li>
+<li><a href="ch2o.core_c.assignments.html">assignments</a>
+	(<a href="ch2o.axiomatic.assignments_separation.html">separation</a>): semantics of assignments.</li>
+<li><a href="ch2o.core_c.operations.html">operations</a>
+	(<a href="ch2o.refinements.operations_refine.html">refinements</a>): semantics of casts, unary and binary operations.</li>
+<li><a href="ch2o.core_c.expressions.html">expressions</a>: expressions and their decomposition into evaluation contexts.</li>
+<li><a href="ch2o.core_c.statements.html">statements</a>:  statements and program contexts.</li>
+<li><a href="ch2o.core_c.state.html">state</a>: the CH<sub>2</sub>O core C execution state.</li>
+<li><a href="ch2o.core_c.smallstep.html">smallstep</a>: the CH<sub>2</sub>O core C small step operational semantics.</li>
+<li><a href="ch2o.core_c.type_system.html">type_system</a>
+	(<a href="ch2o.core_c.type_system_decidable.html">decidable</a>): type judgments for expressions, statements, and states.</li>
+<li><a href="ch2o.core_c.type_preservation.html">type_preservation</a>: type preservation and (weak) progress.</li>
+<li><a href="ch2o.core_c.executable.html">executable</a>: the CH<sub>2</sub>O core C executable semantics as a Coq function.</li>
+<li><a href="ch2o.core_c.executable_sound.html">executable_sound</a> and <a href="ch2o.core_c.executable_complete.html">executable_complete</a>: soundness and completeness of the executable semantics with respect to the operational semantics.</li>
+<li><a href="ch2o.core_c.expression_eval.html">expression_eval</a>
+	(<a href="ch2o.core_c.expression_eval_smallstep.html">correctness</a> and
+	<a href="ch2o.axiomatic.expression_eval_separation.html">separation</a>): evaluation of constant expressions.</li>
 </ul>
 
 <h3>Refinements</h3>
 <ul>
-<li><a href="memory_injections.html">memory_injections</a>: functions to map a memory into another.</li>
-<li><a href="refinement_classes.html">refinement_classes</a>: classes to overload notations for refinement judgments.</li>
-<li><a href="refinements.html">refinements</a>: basic definitions of the memory refinements.</li>
-<li><a href="refinement_system.html">refinement_system</a>: refinement judgments for expressions, statements, and states.</li>
-<li><a href="refinement_preservation.html">refinement_preservation</a>: preservation of refinements with respect to the operational semantics.</li>
+<li><a href="ch2o.memory_refinements.memory_injections.html">memory_injections</a>: functions to map a memory into another.</li>
+<li><a href="ch2o.memory_refinements.refinement_classes.html">refinement_classes</a>: classes to overload notations for refinement judgments.</li>
+<li><a href="ch2o.memory_refinements.refinements.html">refinements</a>: basic definitions of the memory refinements.</li>
+<li><a href="ch2o.refinements.refinement_system.html">refinement_system</a>: refinement judgments for expressions, statements, and states.</li>
+<li><a href="ch2o.refinements.refinement_preservation.html">refinement_preservation</a>: preservation of refinements with respect to the operational semantics.</li>
 </ul>
 
-<h3>Executable semantics</h3>
+<h3>CH2O abstract C</h3>
 <ul>
-<li><a href="expression_eval.html">expression_eval</a>
-	(<a href="expression_eval_smallstep.html">correctness</a> and
-	<a href="expression_eval_separation.html">separation</a>): evaluation of constant expressions.</li>
-<li><a href="executable.html">executable</a>: the CH<sub>2</sub>O core C executable semantics as a Coq function.</li>
-<li><a href="executable_sound.html">executable_sound</a> and <a href="executable_complete.html">executable_complete</a>: soundness and completeness of the executable semantics with respect to the operational semantics.</li>
-<li><a href="frontend.html">frontend</a>
-	(<a href="frontend_sound.html">type soundness</a>): CH<sub>2</sub>O abstract C and its type preserving translation into CH<sub>2</sub>O core C.</li>
-<li><a href="interpreter.html">interpreter</a> (<a href="extraction.html">extraction</a>): gluing the frontend and executable semantics together.</li>
+<li><a href="ch2o.abstract_c.architecture_spec.html">architecture_spec</a>: type environment specifications based on concrete architectures.</li>
+<li><a href="ch2o.abstract_c.architectures.html">architectures</a>: some specific architectures (ilp32, llp64 and lp64).</li>
+<li><a href="ch2o.abstract_c.frontend.html">frontend</a>
+	(<a href="ch2o.abstract_c.frontend_sound.html">type soundness</a>): CH<sub>2</sub>O abstract C and its type preserving translation into CH<sub>2</sub>O core C.</li>
+<li><a href="ch2o.abstract_c.interpreter.html">interpreter</a> (<a href="ch2o.extraction.extraction.html">extraction</a>): gluing the frontend and executable semantics together.</li>
 </ul>
 
-<h3>Separation logic</h3>
+<h3>Axiomatic semantics / Separation logic</h3>
 <ul>
-<li><a href="memory_singleton.html">memory_singleton</a>: singleton memory.</li>
-<li><a href="assertions.html">assertions</a>: assertions of the separation logic.</li>
-<li><a href="axiomatic_graph.html">axiomatic_graph</a>. Interpretation of the judgments of the separation logic.</li>
-<li><a href="axiomatic.html">axiomatic</a>. Interpretation of the judgments of the separation logic.</li>
-<li><a href="axiomatic_expressions.html">axiomatic_expressions</a>: inferences rules for expressions.</li>
-<li><a href="axiomatic_functions.html">axiomatic_functions</a>: inferences rules for functions.</li>
-<li><a href="axiomatic_statements.html">axiomatic_statements</a>: inference rules for statements.</li>
-<li><a href="axiomatic_simple.html">axiomatic_simple</a>: inferences rules for expressions whose result is known.</li>
-<li><a href="example_gcd.html">example_gcd</a>: verification of Euclid's gcd algorithm.</li>
+<li><a href="ch2o.memory_separation.memory_singleton.html">memory_singleton</a>: singleton memory.</li>
+<li><a href="ch2o.axiomatic.assertions.html">assertions</a>: assertions of the separation logic.</li>
+<li><a href="ch2o.axiomatic.axiomatic_graph.html">axiomatic_graph</a>. Interpretation of the judgments of the separation logic.</li>
+<li><a href="ch2o.axiomatic.axiomatic.html">axiomatic</a>. Interpretation of the judgments of the separation logic.</li>
+<li><a href="ch2o.axiomatic.axiomatic_expressions.html">axiomatic_expressions</a>: inferences rules for expressions.</li>
+<li><a href="ch2o.axiomatic.axiomatic_functions.html">axiomatic_functions</a>: inferences rules for functions.</li>
+<li><a href="ch2o.axiomatic.axiomatic_statements.html">axiomatic_statements</a>: inference rules for statements.</li>
+<li><a href="ch2o.axiomatic.axiomatic_simple.html">axiomatic_simple</a>: inferences rules for expressions whose result is known.</li>
+<li><a href="ch2o.axiomatic.example_gcd.html">example_gcd</a>: verification of Euclid's gcd algorithm.</li>
 </ul>
 </body>
 </html>

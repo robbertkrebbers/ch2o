@@ -3,7 +3,7 @@
 (** This file collects definitions and theorems on finite collections. Most
 importantly, it implements a fold and size function and some useful induction
 principles on finite collections . *)
-Require Import Permutation ars listset.
+Require Import Permutation relations listset.
 Require Export numbers collections.
 
 Instance collection_size `{Elements A C} : Size C := length ∘ elements.

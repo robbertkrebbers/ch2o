@@ -13,7 +13,7 @@ coqidescript
 *.o
 utils/coq2html
 utils/coq2html.ml
-doc/*.html
+doc/ch2o.*.html
 *.cache
 *.broken
 broken/*

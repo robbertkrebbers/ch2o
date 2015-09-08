@@ -29,7 +29,10 @@ type xref =
   | Def of string * string    (* path, type *)
   | Ref of string * string * string (* unit, path, type *)
 
-let xref_table : (string * int, xref) Hashtbl.t = Hashtbl.create 273
+let xref_table : (int, xref) Hashtbl.t = Hashtbl.create 273
+
+let extern_refs : (string * string) list ref =
+  ref ["Coq", "http://coq.inria.fr/library"]
 
 let path sp id =
   match sp, id with
@@ -38,36 +41,38 @@ let path sp id =
   | _   , "<>" -> sp
   | _   , _    -> sp ^ "." ^ id
 
-let add_reference curmod pos dp sp id ty =
-  if not (Hashtbl.mem xref_table (curmod, pos))
-  then Hashtbl.add xref_table (curmod, pos) (Ref(dp, path sp id, ty))
+let add_reference pos dp sp id ty =
+  if not (Hashtbl.mem xref_table pos)
+  then Hashtbl.add xref_table pos (Ref(dp, path sp id, ty))
 
-let add_definition curmod pos sp id ty =
-  if not (Hashtbl.mem xref_table (curmod, pos))
-  then Hashtbl.add xref_table (curmod, pos) (Def(path sp id, ty))
+let add_definition pos sp id ty =
+  if not (Hashtbl.mem xref_table pos)
+  then Hashtbl.add xref_table pos (Def(path sp id, ty))
 
 type link = Link of string | Anchor of string | Nolink
 
-let coqlib_url = "http://coq.inria.fr/library/"
-
-let re_coqlib = Str.regexp "Coq\\."
 let re_sane_path = Str.regexp "[A-Za-z0-9_.]+$"
 let sane_tys = mkset [
   "def"; "ind"; "class"; "lib"; "proj"; "rec"; "constr"; "prf"; "inst"; "thm";
   "sec"; "syndef"; "coe"; "meth" ]
 
-let crossref m pos =
-  try match Hashtbl.find xref_table (m, pos) with
+let make_url m =
+  let rec go es =
+    match es with
+    | [] -> m ^ ".html"
+    | (m',url) :: es when String.length m' < String.length m
+       && String.sub m 0 (String.length m') = m' -> sprintf "%s/%s.html" url m
+    | _ :: es -> go es
+  in go !extern_refs
+  
+let crossref pos =
+  try match Hashtbl.find xref_table pos with
   | Def(p, ty) ->
       if not (StringSet.mem ty sane_tys) then Nolink else
       Anchor p
   | Ref(m', p, ty) ->
       if not (StringSet.mem ty sane_tys) then Nolink else
-      let url =
-        if Str.string_match re_coqlib m' 0 then
-          coqlib_url ^ m' ^ ".html"
-        else
-          m' ^ ".html" in
+      let url = make_url m' in
       if p = "" then
         Link url
       else if Str.string_match re_sane_path p 0 then
@@ -174,7 +179,7 @@ let end_doc () =
   fprintf !oc "</div>\n"
 
 let ident pos id =
-  match crossref !current_module pos with
+  match crossref pos with
   | Nolink ->
       if StringSet.mem id coq_keywords then
         fprintf !oc "<span class=\"kwd\">%s</span>" id
@@ -224,7 +229,7 @@ let start_proof s kwd =
 let end_proof kwd =
   fprintf !oc "%s</span></span>\n" kwd
 
-let start_html_page modname =
+let start_html_page () =
   fprintf !oc "\
 <!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">
 <html xmlns=\"http://www.w3.org/1999/xhtml\">
@@ -240,7 +245,7 @@ let start_html_page modname =
 <body>
 <h1>Module %s</h1>
 <div class=\"coq\">
-" modname modname modname
+" !current_module !current_module !current_module
 
 let end_html_page () =
   fprintf !oc "\
@@ -258,7 +263,7 @@ let path = ident ("." ident)*
 let start_proof = "Proof." | ("Proof" space+ "with") | ("Next" space+ "Obligation.")
 let end_proof = "Qed." | "Defined." | "Save." | "Admitted." | "Abort."
 
-let xref = ['A'-'Z' 'a'-'z' '0'-'9' '_' '.']+ | "<>"
+let xref = path | "<>"
 let integer = ['0'-'9']+
 
 rule coq_bol = parse
@@ -396,7 +401,7 @@ and verbatim = parse
 and globfile = parse
   | eof
       { () }
-  | "F" (ident as m) space* "\n"
+  | "F" (path as m) space* "\n"
       { current_module := m; globfile lexbuf }
   | "R" (integer as pos) ":" integer
     space+ (xref as dp)
@@ -404,14 +409,14 @@ and globfile = parse
     space+ (xref as id)
     space+ (ident as ty)
     space* "\n"
-      { add_reference !current_module (int_of_string pos) dp sp id ty;
+      { add_reference (int_of_string pos) dp sp id ty;
         globfile lexbuf }
   | (ident as ty)
     space+ (integer as pos) ":" integer
     space+ (xref as sp)
     space+ (xref as id)
     space* "\n"
-      { add_definition !current_module (int_of_string pos) sp id ty;
+      { add_definition (int_of_string pos) sp id ty;
         globfile lexbuf }
   | [^ '\n']* "\n"
       { globfile lexbuf }
@@ -420,35 +425,35 @@ and globfile = parse
 
 let output_name = ref "-"
 
+let process_glob f =
+  let glob = Filename.chop_suffix f ".v" ^ ".glob" in
+  let ic = open_in glob in
+  globfile (Lexing.from_channel ic);
+  close_in ic
+  
 let process_file f =
-  if Filename.check_suffix f ".v" then begin
-    current_module := Filename.chop_suffix (Filename.basename f) ".v";
-    let ic = open_in f in
-    if !output_name = "-" then
-      oc := stdout
-    else
-      oc := open_out (Str.global_replace (Str.regexp "%") !current_module
-                                                          !output_name);
-    start_html_page !current_module;
-    coq_bol (Lexing.from_channel ic);
-    end_html_page();
-    if !output_name <> "-" then (close_out !oc; oc := stdout);
-    close_in ic
-  end else
-  if Filename.check_suffix f ".glob" then begin
-    current_module := "";
-    let ic = open_in f in
-    globfile (Lexing.from_channel ic);
-    close_in ic
-  end else begin
+  if not (Filename.check_suffix f ".v") then begin
     eprintf "Don't know what to do with file %s\n" f;
     exit 2
-  end
+  end;
+  process_glob f;
+  let ic = open_in f in
+  oc := if !output_name = "-" then stdout else open_out !output_name;
+  start_html_page ();
+  coq_bol (Lexing.from_channel ic);
+  end_html_page();
+  if !output_name <> "-" then (close_out !oc; oc := stdout);
+  close_in ic
 
 let _ =
+  let temp_coqdir = ref "" in
   Arg.parse [
+    "-R", Arg.Tuple
+      [Arg.String (fun s -> temp_coqdir := s);
+       Arg.String (fun s -> extern_refs := (!temp_coqdir, s) :: !extern_refs)],
+      " <coqdir> <url> Set base url for coqdir";
     "-o", Arg.String (fun s -> output_name := s),
-      " <output>   Set output file ('%' replaced by module name)"
+      " <output> Set output file (default stdout)"
   ] process_file
-  "Usage: coq2html [options] <file.glob> file.v\nOptions are:"
+  "Usage: coq2html [options] file.v\nOptions are:"
 }

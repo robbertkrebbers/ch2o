@@ -5,7 +5,7 @@ finite maps and collects some theory on it. Most importantly, it proves useful
 induction principles for finite maps and implements the tactic
 [simplify_map_equality] to simplify goals involving finite maps. *)
 Require Import Permutation.
-Require Export ars vector orders.
+Require Export relations vector orders.
 
 (** * Axiomatization of finite maps *)
 (** We require Leibniz equality to be extensional on finite maps. This of
