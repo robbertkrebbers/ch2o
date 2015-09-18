@@ -602,4 +602,85 @@ Proof.
   * exfalso; eauto using base_val_branchable_weaken,
       cmap_subseteq_index_alive, @sep_union_subseteq_l.
 Qed.
+Lemma ax_switch Γ δ R J T C C' P P' P'' Q e s :
+  (∀ vb, P' (inr (VBase vb)) ⊆{Γ,δ} (@{NotOp} #VBase vb ⇓ -)%A) →
+  (∀ z τi, Some z ∈ cases s → P' (inr (intV{τi} z)) ⊆{Γ,δ} (C (Some z) ◊)%A) →
+  (∀ z τi, Some z ∉ cases s → None ∈ cases s →
+    P' (inr (intV{τi} z)) ⊆{Γ,δ} (C None ◊)%A) →
+  (∀ z τi, Some z ∉ cases s → None ∉ cases s →
+    P' (inr (intV{τi} z)) ⊆{Γ,δ} (Q ◊)%A) →
+  Γ\ δ\ emp ⊨ₑ {{ P }} e {{ P' }} →
+  Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P'' }} s {{ Q }} →
+  Γ\ δ\ R\ J\ T\ C' ⊨ₛ {{ P }} switch{e} s {{ Q }}.
+Proof.
+  intros HP' HSome HNone HQ Hax Hax' Γ' Δ δ' n ρ d m cmτ ??? Hδ Hm Hlock Hd Hs.
+  assert (∃ τi mτ c, cmτ = (false,mτ) ∧ (Γ',Δ,ρ.*2) ⊢ e : inr (intT τi) ∧
+    locks e = ∅ ∧ (Γ',Δ,ρ.*2) ⊢ s : (c,mτ)) as (τi&mτ&c&->&He&?&Hs')
+    by (typed_inversion_all; eauto 20); clear Hs.
+  intros ? HP; apply ax_further; [intros; solve_rcred|].
+  intros Δ' n' ? mf S' ??? (->&?&?) p _.
+  assert ((∃ l, d = ↷ l ∧ l ∈ labels s ∧
+      S' = State [CStmt (switch{e} □)] (Stmt (↷ l) s) (m ∪ mf)) ∨
+    d = ↘ ∧ S' = State [CExpr e (switch{□} s)] (Expr e) (m ∪ mf))
+    as [(l&->&?&->)|[-> ->]] by (inv_rcstep p; eauto 10); clear p.
+  { apply mk_ax_next with Δ' m; eauto.
+    eapply ax_compose_cons; eauto using funenv_valid_weaken.
+    { eapply Hax'; eauto using indexes_valid_weaken,
+        stmt_typed_weaken, assert_weaken, funenv_valid_weaken. }
+    clear dependent l m mf; intros Δ'' n'' φ m' [d m ??] ???; clear m'.
+    apply ax_further; [intros; solve_rcred|].
+    intros Δ''' n''' ? mf S' ??? (->&?&?) p _.
+    assert (S' = State [] (Stmt d (switch{e} s)) (m ∪ mf) ∧
+      (Γ', Δ'') ⊢ d : (false, mτ) ∧ (direction_out d (switch{e} s)))
+      as (->&?&?) by (inv_rcstep p; typed_inversion_all; eauto).
+    apply mk_ax_next with Δ''' m; eauto.
+    apply ax_done; constructor; eauto using direction_typed_weaken.
+    by destruct d; eauto using assert_weaken, indexes_valid_weaken. }
+  apply mk_ax_next with Δ' m; eauto; [esolve_elem_of|].
+  eapply (ax_compose_cons (ax_expr_cond ρ emp));
+    eauto using funenv_valid_weaken.
+  { apply Hax; eauto using expr_typed_weaken,
+      indexes_valid_weaken, assert_weaken, funenv_valid_weaken. }
+  clear dependent m mf.
+  intros Δ'' n'' φ m' [[|[vb| | | |]] Ω m] ???; clear m'; typed_inversion_all.
+  assert (base_val_branchable m vb).
+  { rewrite <-base_val_branchable_erase.
+    by destruct (HP' vb Γ' Δ'' δ' ρ n'' (cmap_erase m)) as (?&?&?&?);
+      eauto using indexes_valid_weaken, funenv_valid_weaken;
+      simplify_option_equality. }
+  destruct vb as [| |? z| |]; typed_inversion_all; try done.
+  apply ax_further.
+  { intros ?? m'' ? _ _ _ _. destruct (decide (Some z ∈ cases s)),
+      (decide (None ∈ cases s)); solve_rcred. }
+  intros Δ''' n''' ? mf S' ??? (->&?&?) p _.
+  assert (∃ k φ, S' = State k φ (mem_unlock (mem_locks m) (m ∪ mf)) ∧
+    (k = [] ∧ φ = Stmt ↗ (switch{e} s) ∧ Some z ∉ cases s ∧ None ∉ cases s ∨
+    ∃ mz, k = [CStmt (switch{e} □)] ∧ φ = Stmt (↓mz) s ∧ mz ∈ cases s ∧
+      (mz = Some z ∨ mz = None ∧ Some z ∉ cases s)))
+    as (k&φ'&->&Hφ) by (inv_rcstep p; eauto 20).
+  rewrite mem_unlock_union, <-mem_unlock_all_spec by solve_elem_of.
+  apply mk_ax_next with Δ''' (mem_unlock_all m); eauto.
+  { split; by rewrite <-?mem_unlock_all_disjoint_le by auto. }
+  { by destruct Hφ as [(->&->&_)|(mz&->&->&_)]. }
+  { by destruct Hφ as [(->&->&_)|(mz&->&->&_)]. }
+  { apply cmap_union_valid_2; auto using mem_unlock_all_valid.
+    by rewrite <-sep_disjoint_list_double, <-mem_unlock_all_disjoint_le. }
+  destruct Hφ as [(->&->&?&?)|(mz&->&->&?&Hmz)].
+  { apply ax_done; constructor; simpl; eauto using mem_locks_unlock_all.
+    rewrite mem_erase_unlock_all; simpl; eapply HQ;
+      eauto using assert_weaken, indexes_valid_weaken, funenv_valid_weaken. }
+  eapply ax_compose_cons;
+    eauto using mem_unlock_all_valid, funenv_valid_weaken.
+  { eapply Hax'; eauto using indexes_valid_weaken, stmt_typed_weaken,
+      mem_unlock_all_valid, mem_locks_unlock_all, funenv_valid_weaken.
+    rewrite mem_erase_unlock_all; simpl.
+    destruct Hmz as [->|[-> ?]]; [eapply HSome|eapply HNone];
+      eauto using assert_weaken, indexes_valid_weaken, funenv_valid_weaken. }
+  clear dependent φ m mf; intros Δ'''' n'''' φ m' [d m ??] ???; clear m'.
+  apply ax_further; [intros; solve_rcred|].
+  intros Δ''''' n''''' ? mf S' ??? (->&?&?) p _.
+  assert (✓{Δ''''}* ρ) by eauto 8 using indexes_valid_weaken.
+  inv_rcstep p; typed_inversion_all; econstructor; eauto; solve
+    [apply ax_done; constructor; eauto using assert_weaken, val_typed_weaken].
+Qed.
 End axiomatic_statements.
