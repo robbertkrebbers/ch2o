@@ -58,7 +58,7 @@ Section operations.
 End operations.
 
 Arguments cmap_lookup_ref _ _ _ !_ !_ /.
-Notation "'{ m }" := (memenv_of m) (at level 8, format "''{' m }").
+Notation "'{ m }" := (memenv_of m) (at level 8, format "''{' m }") : C_scope.
 
 Section memory_map.
 Context `{EnvSpec K}.

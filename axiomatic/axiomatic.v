@@ -116,7 +116,7 @@ Instance: Params (@ax_stmt_packed) 5.
 Notation "Γ \ δ \ P ⊨ₚ s" :=
   (ax_stmt_packed Γ δ P%A s)
   (at level 74, δ at next level, P at next level, s at next level,
-   format "Γ \  δ \  P  ⊨ₚ  '[' s ']'").
+   format "Γ \  δ \  P  ⊨ₚ  '[' s ']'") : C_scope.
 
 Definition ax_stmt `{EnvSpec K} (Γ : env K) (δ : funenv K) R J T C P s Q :=
   Γ\ δ\ dassert_pack P Q R J T C ⊨ₚ s.
@@ -124,15 +124,15 @@ Definition ax_stmt_top `{EnvSpec K} (Γ : env K) (δ : funenv K) P s Q :=
   Γ\ δ\ dassert_pack_top P Q ⊨ₚ s.
 Instance: Params (@ax_stmt) 5.
 Instance: Params (@ax_stmt_top) 5.
-Notation "Γ \ δ \ R \ J \ T \ C ⊨ₛ {{ P }} s {{ Q }}" :=
+Notation "Γ \ δ \ R \ J \ T \ C ⊨ₛ {{ P } } s {{ Q } }" :=
   (ax_stmt Γ δ R%A J%A T%A C%A P%A s Q%A)
   (at level 74, δ at next level, R at next level,
    J at next level, T at next level, C at next level,
-   format "Γ \  δ \  R \  J \  T \  C  ⊨ₛ  '[' {{  P  }} '/'  s  '/' {{  Q  }} ']'").
-Notation "Γ \ δ ⊨ₛ {{ P }} s {{ Q }}" :=
+   format "Γ \  δ \  R \  J \  T \  C  ⊨ₛ  '[' {{  P  } } '/'  s  '/' {{  Q  } } ']'") : C_scope.
+Notation "Γ \ δ ⊨ₛ {{ P } } s {{ Q } }" :=
   (ax_stmt_top Γ δ P%A s%S Q%A)
   (at level 74, δ at next level,
-   format "Γ \  δ  ⊨ₛ  '[' {{  P  }} '/'  s  '/' {{  Q  }} ']'").
+   format "Γ \  δ  ⊨ₛ  '[' {{  P  } } '/'  s  '/' {{  Q  } } ']'") : C_scope.
 
 (** ** The Hoare judgment for expressions *)
 (** The interpretation of the expression judgment is defined similarly as the
@@ -228,10 +228,10 @@ Definition ax_expr `{EnvSpec K} (Γ : env K) (δ : funenv K) (A P : assert K)
   assert_holds P Γ' Δ δ' ρ n (cmap_erase m) →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post Q τlr) Γ' δ' Δ ρ n [] (Expr e) m.
 Instance: Params (@ax_expr) 5.
-Notation "Γ \ δ \ A ⊨ₑ {{ P }} e {{ Q }}" :=
+Notation "Γ \ δ \ A ⊨ₑ {{ P } } e {{ Q } }" :=
   (ax_expr Γ δ A%A P%A e Q%A)
   (at level 74, δ at next level, A at next level,
-  format "Γ \  δ \  A  ⊨ₑ  '[' {{  P  }} '/'  e  '/' {{  Q  }} ']'").
+  format "Γ \  δ \  A  ⊨ₑ  '[' {{  P  } } '/'  e  '/' {{  Q  } } ']'") : C_scope.
 
 (** ** Function specifications *)
 Inductive fassert (K : Set) `{Env K} := FAssert {
