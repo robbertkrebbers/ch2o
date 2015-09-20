@@ -11,6 +11,7 @@ Open Scope nat_scope.
 Coercion Z.of_nat : nat >-> Z.
 
 (** * Notations and properties of [nat] *)
+Arguments minus !_ !_ /.
 Reserved Notation "x ≤ y ≤ z" (at level 70, y at next level).
 Reserved Notation "x ≤ y < z" (at level 70, y at next level).
 Reserved Notation "x < y < z" (at level 70, y at next level).

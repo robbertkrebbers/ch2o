@@ -862,6 +862,9 @@ Instance idem_propholds {A} (R : relation A) f :
   Idempotent R f → ∀ x, PropHolds (R (f x x) x).
 Proof. red. trivial. Qed.
 
+Instance: ∀ `{R1 : relation A, R2 : relation B} (x : B),
+  Reflexive R2 → Proper (R1 ==> R2) (λ _, x).
+Proof. intros A R1 B R2 x ? y1 y2; reflexivity. Qed.
 Instance: @PreOrder A (=).
 Proof. split; repeat intro; congruence. Qed.
 Lemma injective_iff {A B} {R : relation A} {S : relation B} (f : A → B)
