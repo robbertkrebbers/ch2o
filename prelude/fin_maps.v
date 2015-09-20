@@ -104,6 +104,12 @@ index contains a value in the second map as well. *)
 Instance map_difference `{Merge M} {A} : Difference (M A) :=
   difference_with (λ _ _, None).
 
+(** A stronger variant of map that allows the mapped function to use the index
+of the elements. Implemented by conversion to lists, so not very efficient. *)
+Definition map_imap `{∀ A, Insert K A (M A), ∀ A, Empty (M A),
+    ∀ A, FinMapToList K A (M A)} {A B} (f : K → A → option B) (m : M A) : M B :=
+  map_of_list (omap (λ ix, (fst ix,) <$> curry f ix) (map_to_list m)).
+
 (** * Theorems *)
 Section theorems.
 Context `{FinMap K M}.
@@ -583,6 +589,23 @@ Proof.
   intros Hemp. destruct (map_to_list m) as [|[i x] l] eqn:Hm.
   { destruct Hemp; eauto using map_to_list_empty_inv. }
   exists i x. rewrite <-elem_of_map_to_list, Hm. by left.
+Qed.
+
+(** Properties of the imap function *)
+Lemma lookup_imap {A B} (f : K → A → option B) m i :
+  map_imap f m !! i = m !! i ≫= f i.
+Proof.
+  unfold map_imap; destruct (m !! i ≫= f i) as [y|] eqn:Hi; simpl.
+  * destruct (m !! i) as [x|] eqn:?; simplify_equality'.
+    apply elem_of_map_of_list_1_help.
+    { apply elem_of_list_omap; exists (i,x); split;
+        [by apply elem_of_map_to_list|by simplify_option_equality]. }
+    intros y'; rewrite elem_of_list_omap; intros ([i' x']&Hi'&?).
+    by rewrite elem_of_map_to_list in Hi'; simplify_option_equality.
+  * apply not_elem_of_map_of_list; rewrite elem_of_list_fmap.
+    intros ([i' x]&->&Hi'); simplify_equality'.
+    rewrite elem_of_list_omap in Hi'; destruct Hi' as ([j y]&Hj&?).
+    rewrite elem_of_map_to_list in Hj; simplify_option_equality.
 Qed.
 
 (** ** Properties of conversion from collections *)
