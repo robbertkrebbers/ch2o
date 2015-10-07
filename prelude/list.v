@@ -586,7 +586,7 @@ Proof. destruct l. done. by edestruct 1; constructor. Qed.
 Lemma elem_of_not_nil x l : x ∈ l → l ≠ [].
 Proof. intros ? ->. by apply (elem_of_nil x). Qed.
 Lemma elem_of_cons l x y : x ∈ y :: l ↔ x = y ∨ x ∈ l.
-Proof. split; [inversion 1; subst|intros [->|?]]; constructor (done). Qed.
+Proof. by split; [inversion 1; subst|intros [->|?]]; constructor. Qed.
 Lemma not_elem_of_cons l x y : x ∉ y :: l ↔ x ≠ y ∧ x ∉ l.
 Proof. rewrite elem_of_cons. tauto. Qed.
 Lemma elem_of_app l1 l2 x : x ∈ l1 ++ l2 ↔ x ∈ l1 ∨ x ∈ l2.
@@ -623,8 +623,8 @@ Proof.
   split.
   * induction l as [|x l]; csimpl; repeat case_match; inversion 1; subst;
       setoid_rewrite elem_of_cons; naive_solver.
-  * intros (x&Hx&?). induction Hx; csimpl; repeat case_match;
-      simplify_equality; auto; constructor (by auto).
+  * intros (x&Hx&?). by induction Hx; csimpl; repeat case_match;
+      simplify_equality; try constructor; auto.
 Qed.
 
 (** ** Properties of the [NoDup] predicate *)
@@ -1311,7 +1311,7 @@ Definition Permutation_skip := @perm_skip A.
 Definition Permutation_swap := @perm_swap A.
 Definition Permutation_singleton_inj := @Permutation_length_1 A.
 
-Global Existing Instance Permutation_app'_Proper.
+Global Existing Instance Permutation_app'.
 Global Instance: Proper ((≡ₚ) ==> (=)) (@length A).
 Proof. induction 1; simpl; auto with lia. Qed.
 Global Instance: Commutative (≡ₚ) (@app A).
@@ -2037,7 +2037,7 @@ Section Forall_Exists.
   Proof. intros H ?. induction H; auto. Defined.
   Global Instance Forall_proper:
     Proper (pointwise_relation _ (↔) ==> (=) ==> (↔)) (@Forall A).
-  Proof. split; subst; induction 1; constructor (by firstorder auto). Qed.
+  Proof. split; subst; induction 1; constructor; by firstorder auto. Qed.
   Lemma Forall_iff l (Q : A → Prop) :
     (∀ x, P x ↔ Q x) → Forall P l ↔ Forall Q l.
   Proof. intros H. apply Forall_proper. red; apply H. done. Qed.
@@ -2150,7 +2150,7 @@ Section Forall_Exists.
   Proof. intros H ?. induction H; auto. Defined.
   Global Instance Exists_proper:
     Proper (pointwise_relation _ (↔) ==> (=) ==> (↔)) (@Exists A).
-  Proof. split; subst; induction 1; constructor (by firstorder auto). Qed.
+  Proof. split; subst; induction 1; constructor; by firstorder auto. Qed.
   Lemma Exists_not_Forall l : Exists (not ∘ P) l → ¬Forall P l.
   Proof. induction 1; inversion_clear 1; contradiction. Qed.
   Lemma Forall_not_Exists l : Forall (not ∘ P) l → ¬Exists P l.
@@ -2466,7 +2466,7 @@ Section Forall2_order.
   Global Instance: Symmetric R → Symmetric (Forall2 R).
   Proof. intros. induction 1; constructor; auto. Qed.
   Global Instance: Transitive R → Transitive (Forall2 R).
-  Proof. intros ????. apply Forall2_transitive. apply transitivity. Qed.
+  Proof. intros ????. apply Forall2_transitive. by apply @transitivity. Qed.
   Global Instance: Equivalence R → Equivalence (Forall2 R).
   Proof. split; apply _. Qed.
   Global Instance: PreOrder R → PreOrder (Forall2 R).
@@ -2658,7 +2658,7 @@ Section fmap.
   Lemma Forall_fmap (P : B → Prop) l : Forall P (f <$> l) ↔ Forall (P ∘ f) l.
   Proof. split; induction l; inversion_clear 1; constructor; auto. Qed.
   Lemma Exists_fmap (P : B → Prop) l : Exists P (f <$> l) ↔ Exists (P ∘ f) l.
-  Proof. split; induction l; inversion 1; constructor (by auto). Qed.
+  Proof. split; induction l; inversion 1; constructor; by auto. Qed.
   Lemma Forall2_fmap_l {C} (P : B → C → Prop) l1 l2 :
     Forall2 P (f <$> l1) l2 ↔ Forall2 (P ∘ f) l1 l2.
   Proof.

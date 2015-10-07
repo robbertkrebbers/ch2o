@@ -27,7 +27,7 @@ Definition error_guard {E} P {dec : Decision P} {S A}
     (e : E) (f : P → error S E A) : error S E A :=
   match decide P with left H => f H | right _ => fail e end.
 Notation "'guard' P 'with' e ; o" := (error_guard P e (λ _, o))
-  (at level 65, next at level 35, only parsing, right associativity) : C_scope.
+  (at level 65, only parsing, right associativity) : C_scope.
 Definition error_of_option {S A E} (x : option A) (e : E) : error S E A :=
   match x with Some a => mret a | None => fail e end.
 

@@ -18,7 +18,7 @@ Ltac exec :=
 Definition gcd_stmt : stmt K :=
   "l" :; if{load (var 1)} local{uintT} (
     !(var 2 ::= (
-        var 0 ::= load (var 1) @{ArithOp ModOp} load (var 2),,
+        var 0 ::= load (var 1) .{ArithOp ModOp} load (var 2),,
         var 1 ::= load (var 2),,
         load (var 0)));;
     goto "l"

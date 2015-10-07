@@ -3,7 +3,7 @@
 Require Export addresses.
 Local Open Scope ctype_scope.
 
-Inductive ptr (K : Set) :=
+Inductive ptr (K : iType) : iType :=
   | NULL : ptr_type K → ptr K
   | Ptr : addr K → ptr K
   | FunPtr : funname → list (type K) → type K → ptr K.
@@ -11,7 +11,7 @@ Arguments NULL {_} _.
 Arguments Ptr {_} _.
 Arguments FunPtr {_} _ _ _.
 
-Instance ptr_eq_dec `{K : Set, ∀ k1 k2 : K, Decision (k1 = k2)}
+Instance ptr_eq_dec `{∀ k1 k2 : K, Decision (k1 = k2)}
   (p1 p2 : ptr K) : Decision (p1 = p2).
 Proof. solve_decision. Defined.
 

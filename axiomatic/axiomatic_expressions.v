@@ -364,10 +364,10 @@ Definition assert_assign (p : ptr K) (v : val K)
   match ass with
   | Assign => cast{τ} (#v) ⇓ inr va ∧ cast{τ} (#v) ⇓ inr v'
   | PreOp op =>
-     cast{τ} (load (%p) @{op} #v) ⇓ inr va ∧
-     cast{τ} (load (%p) @{op} #v) ⇓ inr v'
+     cast{τ} (load (%p) .{op} #v) ⇓ inr va ∧
+     cast{τ} (load (%p) .{op} #v) ⇓ inr v'
   | PostOp op =>
-     cast{τ} (load (%p) @{op} #v) ⇓ inr va ∧
+     cast{τ} (load (%p) .{op} #v) ⇓ inr va ∧
      load (%p) ⇓ inr v'
   end%A.
 Lemma ax_assign Γ δ A P1 P2 Q1 Q2 Q ass e1 e2 μ γ τ :
@@ -394,7 +394,7 @@ Proof.
     @sep_union_subseteq_l', @sep_union_subseteq_r'.
   { esolve_elem_of. }
   { esolve_elem_of. }
-  clear dependent m1 m2; intros Δ' n' [p|] [|v] m1' m2'
+  clear dependent m1 m2; intros Δ' n' [p|v'] [|v] m1' m2'
     ?????????; typed_inversion_all.
   apply ax_further_alt; intros Δ'' n'' ? frame ??? Hframe;
     inversion_clear Hframe as [mA mf|]; clear frame; simplify_equality.
@@ -595,7 +595,7 @@ Proof.
     (DCAlloc τ) e ρ n m (inr (intT τi))); auto.
   { esolve_elem_of. }
   clear dependent m.
-  intros Δ' n' [|[vb| | | |]] m ?????; typed_inversion_all.
+  intros Δ' n' v m ?????; destruct v as [|[vb| | | |]]; typed_inversion_all.
   destruct (HQ (fresh ∅) vb Γ' Δ' δ' ρ n' (cmap_erase m))
     as (na&τi'&?&?&Hm&Hm'&[[-> ?] ->]&[_ Hfail]);
     eauto using indexes_valid_weaken, funenv_valid_weaken;
@@ -705,9 +705,9 @@ Proof.
   eauto using assert_weaken, mem_free_forward, indexes_valid_weaken.
 Qed.
 Lemma ax_unop Γ δ A P Q1 Q2 op e :
-  (∀ v, Q1 (inr v) ⊆{Γ,δ} (∃ v', Q2 (inr v') ∧ (A -★ @{op} #v ⇓ inr v'))%A) →
+  (∀ v, Q1 (inr v) ⊆{Γ,δ} (∃ v', Q2 (inr v') ∧ (A -★ .{op} #v ⇓ inr v'))%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ Q1 }} →
-  Γ\ δ\ A ⊨ₑ {{ P }} @{op} e {{ Q2 }}.
+  Γ\ δ\ A ⊨ₑ {{ P }} .{op} e {{ Q2 }}.
 Proof.
   intros HQ Hax Γ' Δ δ' n ρ m [|σ] ?????? He ?? HA HP; [typed_inversion_all|].
   assert (∃ τ, (Γ',Δ,ρ.*2) ⊢ e : inr τ ∧ unop_typed op τ σ)
@@ -740,10 +740,10 @@ Qed.
 Lemma ax_binop Γ δ A P1 P2 Q1 Q2 R op e1 e2 :
   (∀ v1 v2,
     (Q1 (inr v1) ★ Q2 (inr v2))%A ⊆{Γ,δ} (∃ v,
-      R (inr v) ∧ (A -★ # v1 @{op} # v2 ⇓ inr v))%A) →
+      R (inr v) ∧ (A -★ # v1 .{op} # v2 ⇓ inr v))%A) →
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ Q2 }} →
-  Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 @{op} e2 {{ R }}.
+  Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 .{op} e2 {{ R }}.
 Proof.
   intros HQ Hax1 Hax2 Γ' Δ δ' n ρ m [|σ] ????? Hlock He ?? HA HP;
     [typed_inversion_all|].
@@ -823,7 +823,7 @@ Proof.
     indexes_valid_weaken, assert_weaken, val_cast_typed, val_typed_weaken.
 Qed.
 Lemma ax_expr_if Γ δ A P P' P1 P2 Q e e1 e2 :
-  (∀ vb, (A ★ P' (inr (VBase vb)))%A ⊆{Γ,δ} (@{NotOp} #VBase vb ⇓ -)%A) →
+  (∀ vb, (A ★ P' (inr (VBase vb)))%A ⊆{Γ,δ} (.{NotOp} #VBase vb ⇓ -)%A) →
   (∀ vb, ¬base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ,δ} (P1 ◊)%A) →
   (∀ vb, base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ,δ} (P2 ◊)%A) →
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ P' }} →
@@ -839,8 +839,8 @@ Proof.
     P' _ Δ (DCIf e1 e2) e ρ n m (inr (baseT τb))); auto.
   { esolve_elem_of. }
   { esolve_elem_of. }
-  clear dependent m;
-    intros Δ' n' [|[vb| | | |]] m ?????; typed_inversion_all.
+  clear dependent m; intros Δ' n' v m ?????;
+    destruct v as [|[vb| | | |]]; typed_inversion_all.
   apply ax_further_alt.
   intros Δ'' n'' ????? Hframe; inversion_clear Hframe as [mA mf|];
     simplify_equality; simplify_mem_disjoint_hyps.

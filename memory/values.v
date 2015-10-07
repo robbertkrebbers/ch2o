@@ -3,7 +3,7 @@
 Require Export base_values memory_trees.
 Local Open Scope ctype_scope.
 
-Inductive val (K : Set) : Set :=
+Inductive val (K : iType) : iType :=
   | VBase : base_val K → val K
   | VArray : type K → list (val K) → val K
   | VStruct : tag → list (val K) → val K
@@ -40,7 +40,7 @@ Proof. by injection 1. Qed.
 
 Instance maybe_VBase {K} : Maybe (@VBase K) := λ v,
   match v with VBase vb => Some vb | _ => None end.
-Instance val_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} :
+Instance val_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)} :
   ∀ v1 v2 : val K, Decision (v1 = v2).
 Proof.
  refine (
@@ -303,7 +303,7 @@ Section operations.
     | _, _ => None
     end.
   Global Instance val_lookup: LookupE (env K) (ref K) (val K) (val K) :=
-    fix go Γ r v := let _ : LookupE _ _ _ _ := @go in
+    fix go Γ r v {struct r} := let _ : LookupE _ _ _ _ := @go in
     match r with [] => Some v | rs :: r => v !!{Γ} r ≫= lookupE Γ rs end.
   Definition val_alter_seg (Γ : env K) (g : val K → val K)
       (rs : ref_seg K) (v : val K) : val K :=
@@ -490,10 +490,10 @@ Proof.
   { intros ???. by erewrite base_val_unflatten_weaken by eauto. }
   { intros ???????; f_equal. by apply array_unflatten_weaken. }
   clear bs. intros f g [] t τs Ht Hτs Hfg bs; f_equal; auto.
-  { eapply struct_unflatten_weaken, Forall_impl; eauto 1.
-    auto using bit_size_of_weaken with f_equal. }
-  clear Ht. induction Hfg; decompose_Forall_hyps; f_equal;
-    auto using bit_size_of_weaken with f_equal.
+  { eapply struct_unflatten_weaken, Forall_impl; eauto 1; intros; simpl.
+    erewrite bit_size_of_weaken by eauto; auto. }
+  clear Ht. induction Hfg; decompose_Forall_hyps; f_equal; auto.
+  erewrite bit_size_of_weaken by eauto; auto.
 Qed.
 Lemma vals_unflatten_weaken Γ1 Γ2 τs bs :
   ✓ Γ1 → ✓{Γ1}* τs → Γ1 ⊆ Γ2 →

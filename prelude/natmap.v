@@ -255,7 +255,7 @@ Proof.
 Qed.
 
 (** Finally, we can construct sets of [nat]s satisfying extensional equality. *)
-Notation natset := (mapset (natmap unit)).
+Notation natset := (mapset natmap).
 Instance natmap_dom {A} : Dom (natmap A) natset := mapset_dom.
 Instance: FinMapDom nat natmap natset := mapset_dom_spec.
 

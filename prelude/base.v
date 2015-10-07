@@ -6,6 +6,7 @@ abstract interfaces for ordered structures, collections, and various other data
 structures. *)
 Global Generalizable All Variables.
 Global Set Automatic Coercions Import.
+Global Set Asymmetric Patterns.
 Require Export Morphisms RelationClasses List Bool Utf8 Program Setoid.
 
 (** * General *)
@@ -418,23 +419,23 @@ Notation "(≫= f )" := (mbind f) (only parsing) : C_scope.
 Notation "(≫=)" := (λ m f, mbind f m) (only parsing) : C_scope.
 
 Notation "x ← y ; z" := (y ≫= (λ x : _, z))
-  (at level 65, next at level 35, only parsing, right associativity) : C_scope.
+  (at level 65, only parsing, right associativity) : C_scope.
 Infix "<$>" := fmap (at level 60, right associativity) : C_scope.
 Notation "' ( x1 , x2 ) ← y ; z" :=
   (y ≫= (λ x : _, let ' (x1, x2) := x in z))
-  (at level 65, next at level 35, only parsing, right associativity) : C_scope.
+  (at level 65, only parsing, right associativity) : C_scope.
 Notation "' ( x1 , x2 , x3 ) ← y ; z" :=
   (y ≫= (λ x : _, let ' (x1,x2,x3) := x in z))
-  (at level 65, next at level 35, only parsing, right associativity) : C_scope.
+  (at level 65, only parsing, right associativity) : C_scope.
 Notation "' ( x1 , x2 , x3  , x4 ) ← y ; z" :=
   (y ≫= (λ x : _, let ' (x1,x2,x3,x4) := x in z))
-  (at level 65, next at level 35, only parsing, right associativity) : C_scope.
+  (at level 65, only parsing, right associativity) : C_scope.
 Notation "' ( x1 , x2 , x3  , x4 , x5 ) ← y ; z" :=
   (y ≫= (λ x : _, let ' (x1,x2,x3,x4,x5) := x in z))
-  (at level 65, next at level 35, only parsing, right associativity) : C_scope.
+  (at level 65, only parsing, right associativity) : C_scope.
 Notation "' ( x1 , x2 , x3  , x4 , x5 , x6 ) ← y ; z" :=
   (y ≫= (λ x : _, let ' (x1,x2,x3,x4,x5,x6) := x in z))
-  (at level 65, next at level 35, only parsing, right associativity) : C_scope.
+  (at level 65, only parsing, right associativity) : C_scope.
 
 Notation "ps .*1" := (fmap (M:=list) fst ps)
   (at level 10, format "ps .*1").
@@ -445,9 +446,9 @@ Class MGuard (M : Type → Type) :=
   mguard: ∀ P {dec : Decision P} {A}, (P → M A) → M A.
 Arguments mguard _ _ _ !_ _ _ /.
 Notation "'guard' P ; o" := (mguard P (λ _, o))
-  (at level 65, next at level 35, only parsing, right associativity) : C_scope.
+  (at level 65, only parsing, right associativity) : C_scope.
 Notation "'guard' P 'as' H ; o" := (mguard P (λ H, o))
-  (at level 65, next at level 35, only parsing, right associativity) : C_scope.
+  (at level 65, only parsing, right associativity) : C_scope.
 
 (** ** Operations on maps *)
 (** In this section we define operational type classes for the operations

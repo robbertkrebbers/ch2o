@@ -326,7 +326,7 @@ Proof.
   * assert ('{mem_alloc_list Γ os1 vs1 m1} ⊢* os1 :* τs)
       by eauto using mem_alloc_list_index_typed.
     constructor; auto.
-    decompose_Forall; eapply transitivity with (f' !! _);
+    decompose_Forall. eapply (@transitivity _ _ _ ) with (f' !! _);
       eauto using eq_sym, meminj_extend_left.
   * eapply meminj_extend_transitive; eauto using mem_alloc_list_forward.
 Qed.

@@ -43,7 +43,8 @@ Record architecture := ArchitectureFlags {
   arch_big_endian : bool
 }.
 
-Inductive arch_rank (A : architecture) := ARank { arch_rank_car :> c_rank }.
+Inductive arch_rank (A : architecture) : iType :=
+  ARank { arch_rank_car :> c_rank }.
 Arguments ARank {_} _.
 Instance arch_rank_eq_dec {A} (k1 k2 : arch_rank A) : Decision (k1 = k2).
 Proof. solve_decision. Defined.

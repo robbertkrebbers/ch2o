@@ -18,40 +18,54 @@ Definition pretty_N_char (x : N) : ascii :=
   | 0 => "0" | 1 => "1" | 2 => "2" | 3 => "3" | 4 => "4"
   | 5 => "5" | 6 => "6" | 7 => "7" | 8 => "8" | _ => "9"
   end%char%N.
-Definition pretty_N_go (x : N)
-    (go : ∀ y, (y < x)%N → string → string) (s : string) : string :=
+Fixpoint pretty_N_go_help (x : N) (acc : Acc (<)%N x) (s : string) : string :=
   match decide (0 < x)%N with
-  | left H => go (x `div` 10)%N (N.div_lt x 10 H eq_refl)
+  | left H => pretty_N_go_help (x `div` 10)%N
+     (Acc_inv acc (N.div_lt x 10 H eq_refl))
      (String (pretty_N_char (x `mod` 10)) s)
   | right _ => s
   end.
-Instance pretty_N : Pretty N := λ x,
-  Fix_F _ pretty_N_go (wf_guard 32 N.lt_wf_0 x) ""%string.
+Definition pretty_N_go (x : N) : string → string :=
+  pretty_N_go_help x (wf_guard 32 N.lt_wf_0 x).
+Lemma pretty_N_go_0 s : pretty_N_go 0 s = s.
+Proof. done. Qed.
+Lemma pretty_N_go_help_irrel x acc1 acc2 s :
+  pretty_N_go_help x acc1 s = pretty_N_go_help x acc2 s.
+Proof.
+  revert x acc1 acc2 s; fix 2; intros x [acc1] [acc2] s; simpl.
+  destruct (decide (0 < x)%N); auto.
+Qed.
+Lemma pretty_N_go_step x s :
+  (0 < x)%N → pretty_N_go x s
+  = pretty_N_go (x `div` 10) (String (pretty_N_char (x `mod` 10)) s).
+Proof.
+  unfold pretty_N_go; intros; destruct (wf_guard 32 N.lt_wf_0 x).
+  unfold pretty_N_go_help; fold pretty_N_go_help.
+  by destruct (decide (0 < x)%N); auto using pretty_N_go_help_irrel.
+Qed.
+Instance pretty_N : Pretty N := λ x, pretty_N_go x ""%string.
 Instance pretty_N_injective : Injective (@eq N) (=) pretty.
 Proof.
   assert (∀ x y, x < 10 → y < 10 →
     pretty_N_char x =  pretty_N_char y → x = y)%N.
   { compute; intros. by repeat (discriminate || case_match). }
-  set (f x (acc : Acc _ x) := Fix_F _ pretty_N_go acc).
-  cut (∀ x acc y acc' s s', length s = length s' →
-    f x acc s = f y acc' s' → x = y ∧ s = s').
+  cut (∀ x y s s', pretty_N_go x s = pretty_N_go y s' →
+    length s = length s' → x = y ∧ s = s').
   { intros help x y ?. eapply help; eauto. }
-  assert (∀ x acc s, ¬length (f x acc s) < length s) as help.
+  assert (∀ x s, ¬length (pretty_N_go x s) < length s) as help.
   { setoid_rewrite <-Nat.le_ngt.
-    fix 2; intros x [?] s; simpl. unfold pretty_N_go; fold pretty_N_go.
-    destruct (decide (0 < x))%N; [|auto].
-    etransitivity; [|eauto]. simpl; lia. }
-  fix 2; intros x [?] y [?] s s' ?; simpl.
-  unfold pretty_N_go; fold pretty_N_go; intros Hs.
-  destruct (decide (0 < x))%N, (decide (0 < y))%N;
-    try match goal with
-    | H : f ?x ?acc ?s = _ |- _ =>
-       destruct (help x acc s); rewrite H; simpl; lia
-    | H : _ = f ?x ?acc ?s |- _ =>
-       destruct (help x acc s); rewrite <-H; simpl; lia
-    end; auto with lia.
-  apply pretty_N_injective in Hs; [|by f_equal']; destruct Hs.
-  simplify_equality; split; [|done].
+    intros x; induction (N.lt_wf_0 x) as [x _ IH]; intros s.
+    assert (x = 0 ∨ 0 < x)%N as [->|?] by lia; [by rewrite pretty_N_go_0|].
+    rewrite pretty_N_go_step by done.
+    etransitivity; [|by eapply IH, N.div_lt]; simpl; lia. }
+  intros x; induction (N.lt_wf_0 x) as [x _ IH]; intros y s s'.
+  assert ((x = 0 ∨ 0 < x) ∧ (y = 0 ∨ 0 < y))%N as [[->|?] [->|?]] by lia;
+    rewrite ?pretty_N_go_0, ?pretty_N_go_step, ?(pretty_N_go_step y) by done.
+  { done. }
+  { intros -> Hlen; edestruct help; rewrite Hlen; simpl; lia. }
+  { intros <- Hlen; edestruct help; rewrite <-Hlen; simpl; lia. }
+  intros Hs Hlen; apply IH in Hs; destruct Hs;
+    simplify_equality'; split_ands'; auto using N.div_lt_upper_bound with lia.
   rewrite (N.div_mod x 10), (N.div_mod y 10) by done.
   auto using N.mod_lt with f_equal.
 Qed.

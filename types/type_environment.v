@@ -4,7 +4,7 @@ Require Export types integer_operations.
 Local Open Scope ctype_scope.
 Local Unset Elimination Schemes.
 
-Class Env (K : Set) := {
+Class Env (K : iType) : iType := {
   env_type_env :> IntEnv K;
   size_of : env K → type K → nat;
   align_of : env K → type K → nat;
@@ -36,7 +36,7 @@ Definition bit_offset_of `{Env K}
     (Γ : env K) (τs : list (type K)) (i : nat) : nat :=
   sum_list $ take i $ field_bit_sizes Γ τs.
 
-Class EnvSpec (K : Set) `{Env K} := {
+Class EnvSpec (K : iType) `{Env K} := {
   int_env_spec :>> IntEnvSpec K;
   size_of_ptr_ne_0 Γ τp : size_of Γ (τp.*) ≠ 0;
   size_of_int Γ τi : size_of Γ (intT τi) = rank_size (rank τi);
@@ -126,7 +126,7 @@ Lemma bit_size_of_struct Γ t τs :
 Proof.
   unfold bit_size_of, field_bit_sizes. intros.
   erewrite size_of_struct by eauto.
-  elim (field_sizes Γ τs); csimpl; auto with lia.
+  induction (field_sizes Γ τs); csimpl; auto with lia.
 Qed.
 Lemma bit_size_of_fields Γ τs :
   ✓ Γ → Forall2 (λ τ sz, bit_size_of Γ τ ≤ sz) τs (field_bit_sizes Γ τs).

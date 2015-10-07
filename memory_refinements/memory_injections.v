@@ -2,12 +2,12 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export references memory_basics.
 
-Inductive meminj (K : Set) :=
+Inductive meminj (K : iType) : iType :=
   | meminj_id : meminj K
   | meminj_map : indexmap (index * ref K) → meminj K.
 Arguments meminj_id {_}.
 Arguments meminj_map {_} _.
-Instance meminj_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+Instance meminj_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (f g : meminj K) : Decision (f = g).
 Proof. solve_decision. Defined.
 Instance meminj_lookup {K} : Lookup index (index * ref K) (meminj K) :=
@@ -31,7 +31,7 @@ Instance meminj_subseteq {K} : SubsetEq (meminj K) := λ f1 f2,
   ∀ o o' r', f1 !! o = Some (o',r') → f2 !! o = Some (o',r').
 
 Section meminj.
-Context {K : Set}.
+Context {K : iType}.
 Implicit Types f g : meminj K.
 Implicit Types o : index.
 Implicit Types r : ref K.

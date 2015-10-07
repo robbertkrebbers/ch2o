@@ -29,7 +29,7 @@ a traversal to the top of the statement, and returns from the called function.
 When a [goto l] statement is executed, the direction is changed to [↷l], and
 the semantics performs a non-deterministic small step traversal through the
 zipper until the label [l] is found. *)
-Inductive direction (K : Set) : Set :=
+Inductive direction (K : iType) : iType :=
   | Down
   | Up
   | Top : val K → direction K
@@ -50,7 +50,7 @@ Notation "↷ l" := (Goto l) (at level 20) : C_scope.
 Notation "↑ n" := (Throw n) (at level 20) : C_scope.
 Notation "↓ mx" := (Switch mx) (at level 20) : C_scope.
 
-Instance direction_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+Instance direction_eq_dec {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (d1 d2 : direction K) : Decision (d1 = d2).
 Proof. solve_decision. Defined.
 
@@ -89,16 +89,16 @@ execution state [state] equips a focus with a program context and memory.
 
 These focuses correspond to the five variants of execution states as described
 above. *)
-Inductive undef_state (K : Set) : Set :=
+Inductive undef_state (K : iType) : iType :=
   | UndefExpr : ectx K → expr K → undef_state K
   | UndefBranch : esctx_item K → lockset → val K → undef_state K.
-Inductive focus (K : Set) : Set :=
+Inductive focus (K : iType) : iType :=
   | Stmt : direction K → stmt K → focus K
   | Expr : expr K → focus K
   | Call : funname → list (val K) → focus K
   | Return : funname → val K → focus K
   | Undef : undef_state K → focus K.
-Record state (K : Set) : Set :=
+Record state (K : iType) : iType :=
   State { SCtx : ctx K; SFoc : focus K; SMem : mem K }.
 Add Printing Constructor state.
 
@@ -114,14 +114,13 @@ Arguments SCtx {_} _.
 Arguments SFoc {_} _.
 Arguments SMem {_} _.
 
-Instance undef_state_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+Instance undef_state_eq_dec {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (S1 S2 : undef_state K) : Decision (S1 = S2).
 Proof. solve_decision. Defined.
-Instance focus_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+Instance focus_eq_dec {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (φ1 φ2 : focus K) : Decision (φ1 = φ2).
 Proof. solve_decision. Defined.
-Instance state_eq_dec {K : Set} `{Env K}
-  (S1 S2 : state K) : Decision (S1 = S2).
+Instance state_eq_dec `{Env K} (S1 S2 : state K) : Decision (S1 = S2).
 Proof. solve_decision. Defined.
 
 Instance maybe_Call {K} : Maybe2 (@Call K) := λ S,

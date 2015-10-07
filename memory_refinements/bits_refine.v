@@ -201,7 +201,7 @@ Proof.
     | H : bit_join ?b _ = _ |- _ => is_var b; destruct b
     | H : bit_join _ ?b = _ |- _ => is_var b; destruct b
     | _ => case_option_guard || simplify_equality'
-    end; constructor (by eauto using bit_join_valid).
+    end; by constructor; auto.
 Qed.
 Lemma bits_join_refine Γ α f Δ1 Δ2 bs1 bs2 bs3 bs1' bs2' bs3' :
   bits_join bs1 bs2 = Some bs3 → bits_join bs1' bs2' = Some bs3' →

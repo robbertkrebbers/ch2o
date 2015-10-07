@@ -141,7 +141,7 @@ the expression and the memory to be lock free. In the end, the locks in the
 memory should exactly match the annotated locations in the final expression
 that remain to be unlocked. The latter is important, as an unlock operation at
 a sequence point thereby corresponds to unlocking everything. *)
-Inductive ax_expr_frame (K : Set) : Set :=
+Inductive ax_expr_frame (K : iType) : iType :=
   InExpr (mf mA : mem K) | InFun (mf : mem K).
 Arguments InExpr {_} _ _.
 Arguments InFun {_} _.
@@ -234,7 +234,7 @@ Notation "Γ \ δ \ A ⊨ₑ {{ P } } e {{ Q } }" :=
   format "Γ \  δ \  A  ⊨ₑ  '[' {{  P  } } '/'  e  '/' {{  Q  } } ']'") : C_scope.
 
 (** ** Function specifications *)
-Inductive fassert (K : Set) `{Env K} := FAssert {
+Inductive fassert (K : Type) `{Env K} := FAssert {
   fcommon : Type;
   fpre : fcommon → list (val K) → assert K;
   fpost : fcommon → list (val K) → val K → assert K;
@@ -407,8 +407,8 @@ Proof.
     econstructor; split_ands; eauto. apply HA; eauto.
   * destruct 2; constructor; auto.
     apply HA; eauto using indexes_valid_weaken, funenv_valid_weaken.
-  * destruct 2; subst; simplify_mem_disjoint_hyps; econstructor (first
-     [by eauto|apply HA;eauto using indexes_valid_weaken, funenv_valid_weaken]).
+  * destruct 2; subst; simplify_mem_disjoint_hyps; econstructor; first
+     [by eauto|apply HA;eauto using indexes_valid_weaken, funenv_valid_weaken].
   * destruct 2; constructor; auto.
     apply HQ; eauto using indexes_valid_weaken, funenv_valid_weaken.
 Qed.

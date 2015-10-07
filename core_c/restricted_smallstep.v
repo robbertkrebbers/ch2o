@@ -521,7 +521,7 @@ Tactic Notation "last_rcstep" hyp(H) :=
 (** * Step tactics *)
 Ltac do_rcstep :=
   let go := first
-    [ econstructor (by (eauto with cstep))
+    [ econstructor; by (eauto with cstep)
     | by (eauto with cstep)] in
   match goal with
   | |- ?Γ\ ?δ\ ?ρ ⊢ₛ State ?k (Stmt ?d ?s) ?m ⇒ ?S =>

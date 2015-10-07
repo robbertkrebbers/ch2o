@@ -4,7 +4,7 @@ Require Export ctrees memory_basics.
 
 (** We pack the memory into a record so as to avoid ambiguity with already
 existing type class instances for finite maps. *)
-Inductive cmap_elem (K A : Set) :=
+Inductive cmap_elem (K : iType) (A : sType) : iType :=
   | Freed : type K → cmap_elem K A
   | Obj : ctree K A → bool → cmap_elem K A.
 Arguments Freed {_ _} _.
@@ -32,13 +32,13 @@ Definition cmap_elem_map2 {K A} (f : ctree K A → ctree K A → ctree K A)
   | Obj w β, _ | _, Obj w β => Obj w β
   | Freed τ, _ => Freed τ
  end.
-Instance cmap_elem_eq_dec {K A : Set} `{∀ k1 k2 : K, Decision (k1 = k2),
+Instance cmap_elem_eq_dec {K A} `{∀ k1 k2 : K, Decision (k1 = k2),
   ∀ w1 w2 : A, Decision (w1 = w2)} (x y : cmap_elem K A) : Decision (x = y).
 Proof. solve_decision. Defined.
-Instance cmap_elem_Forall_dec {K A : Set} `{Decision P, ∀ w, Decision (Q w)}
+Instance cmap_elem_Forall_dec {K A} `{Decision P, ∀ w, Decision (Q w)}
   (x : cmap_elem K A) : Decision (cmap_elem_Forall P Q x).
 Proof. destruct x; apply _. Defined.
-Instance cmap_elem_Forall2_dec {K A : Set} `{∀ k1 k2 : K, Decision (k1 = k2),
+Instance cmap_elem_Forall2_dec {K A} `{∀ k1 k2 : K, Decision (k1 = k2),
     Decision P, ∀ w1 w2, Decision (Q w1 w2)}
   (x y : cmap_elem K A) : Decision (cmap_elem_Forall2 P Q x y).
 Proof. destruct x, y; apply _. Defined.
@@ -47,7 +47,7 @@ Proof. by injection 1. Qed.
 Instance: Injective2 (=) (=) (=) (@Obj K A).
 Proof. by injection 1. Qed.
 
-Record cmap (K A : Set) : Set :=
+Record cmap (K : iType) (A : sType) : iType :=
   CMap { cmap_car : indexmap (cmap_elem K A) }.
 Arguments CMap {_ _} _.
 Arguments cmap_car {_ _} _.
@@ -55,7 +55,7 @@ Add Printing Constructor cmap.
 Instance: Injective (=) (=) (@CMap K A).
 Proof. by injection 1. Qed.
 
-Instance cmap_ops {K A : Set} `{∀ k1 k2 : K, Decision (k1 = k2),
+Instance cmap_ops {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2),
     SeparationOps A} : SeparationOps (cmap K A) := {
   sep_empty := CMap ∅;
   sep_union m1 m2 :=
@@ -97,8 +97,8 @@ Proof.
   * intros []; apply _.
 Defined.
 
-Instance cmap_sep {K A : Set} `{∀ k1 k2 : K, Decision (k1 = k2),
-  Separation A} : Separation (cmap K A).
+Instance cmap_sep {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2), Separation A} :
+  Separation (cmap K A).
 Proof.
   split.
   * destruct (sep_inhabited A) as (x&?&?).

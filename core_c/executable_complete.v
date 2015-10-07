@@ -104,7 +104,7 @@ Proof.
       by destruct Ei; by rewrite ?subst_app. }
     apply elem_of_bind; exists (E, e); split; [|by apply expr_redexes_complete].
     destruct (collection_choose_or_empty (ehexec Γ k e m)) as [[[e2 m2]?]|].
-    { destruct Hsafe; econstructor (eauto using ehexec_sound). }
+    { destruct Hsafe; econstructor; eauto using ehexec_sound. }
     rewrite decide_True by done.
     destruct (maybe_ECall_redex e)
       as [[[[[[Ω g'] σs] σ] Ωs] vs]|] eqn:Hcall; eauto.
@@ -164,8 +164,7 @@ Lemma cexec_complete_steps Γ δ S1 S2 σf :
   (**i 3.) *) meminj_extend meminj_id f '{SMem S1} '{SMem S1}.
 Proof.
   intros ???; revert S2. apply rtc_ind_r.
-  { eexists meminj_id, S1.
-    repeat constructor (by eauto using state_refine_id). }
+  { eexists meminj_id, S1; by split_ands; auto using state_refine_id. }
   intros S2' S3' ?? (f&S2&?&?&?).
   destruct (csteps_preservation Γ δ S1 S2 σf),
     (csteps_preservation Γ δ S1 S2' σf); auto using cexecs_sound.

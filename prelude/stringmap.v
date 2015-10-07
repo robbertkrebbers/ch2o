@@ -158,7 +158,7 @@ Qed.
 
 (** * Finite sets *)
 (** We construct sets of [strings]s satisfying extensional equality. *)
-Notation stringset := (mapset (stringmap unit)).
+Notation stringset := (mapset stringmap).
 Instance stringmap_dom {A} : Dom (stringmap A) stringset := mapset_dom.
 Instance: FinMapDom positive Pmap Pset := mapset_dom_spec.
 

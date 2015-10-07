@@ -4,7 +4,7 @@ Require Export type_environment.
 Local Open Scope ctype_scope.
 
 (** * References *)
-Inductive ref_seg (K : Set) :=
+Inductive ref_seg (K : iType) : iType :=
   | RArray : nat → type K → nat → ref_seg K
   | RStruct : nat → tag → ref_seg K
   | RUnion : nat → tag → bool → ref_seg K.
@@ -13,7 +13,7 @@ Arguments RArray {_} _ _ _.
 Arguments RStruct {_} _ _.
 Arguments RUnion {_} _ _ _.
 
-Instance ref_seg_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+Instance ref_seg_eq_dec {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (r1 r2 : ref_seg K) : Decision (r1 = r2).
 Proof.
  refine
@@ -51,7 +51,7 @@ Instance ref_typed `{Env K} :
 
 Instance subtype `{Env K} : SubsetEqE (env K) (type K) :=
   λ Γ τ1 τ2, ∃ r : ref K, Γ ⊢ r : τ2 ↣ τ1.
-Instance ref_seg_lookup {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} :
+Instance ref_seg_lookup {K} `{∀ k1 k2 : K, Decision (k1 = k2)} :
     LookupE (env K) (ref_seg K) (type K) (type K) := λ Γ rs τ,
   match rs, τ with
   | RArray i τ' n', τ.[n] =>
@@ -60,9 +60,9 @@ Instance ref_seg_lookup {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} :
   | RUnion i t' _, unionT t => guard (t = t'); Γ !! t ≫= (!! i)
   | _, _ => None
   end.
-Instance ref_lookup {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)} :
+Instance ref_lookup {K} `{∀ k1 k2 : K, Decision (k1 = k2)} :
     LookupE (env K) (ref K) (type K) (type K) :=
-  fix go Γ r τ := let _ : LookupE _ _ _ _ := @go in
+  fix go Γ r τ {struct r} := let _ : LookupE _ _ _ _ := @go in
   match r with [] => Some τ | rs :: r => τ !!{Γ} r ≫= lookupE Γ rs end.
 
 Class Freeze A := freeze: bool → A → A.
@@ -102,7 +102,7 @@ Inductive ref_seg_disjoint {K} : Disjoint (ref_seg K) :=
   | RArray_disjoint i1 i2 τ n : i1 ≠ i2 → @RArray K i1 τ n ⊥ RArray i2 τ n
   | RStruct_disjoint i1 i2 t : i1 ≠ i2 → @RStruct K i1 t ⊥ RStruct i2 t.
 Existing Instance ref_seg_disjoint.
-Inductive ref_disjoint {K : Set} : Disjoint (ref K) :=
+Inductive ref_disjoint {K} : Disjoint (ref K) :=
   | ref_disjoint_here rs1 rs2 (r1 r2 : ref K) :
      freeze true <$> r1 = freeze true <$> r2 →
      rs1 ⊥ rs2 → rs1 :: r1 ⊥ rs2 :: r2
@@ -442,7 +442,7 @@ Qed.
 Global Instance: Symmetric (@disjoint (ref_seg K) _).
 Proof. destruct 1; constructor; auto. Qed.
 Global Instance: Symmetric (@disjoint (ref K) _).
-Proof. induction 1; constructor (by auto). Qed.
+Proof. induction 1; constructor; by auto. Qed.
 Lemma ref_disjoint_alt r1 r2 :
   r1 ⊥ r2 ↔ ∃ r1' rs1 r1'' r2' rs2 r2'',
     r1 = r1' ++ [rs1] ++ r1'' ∧ r2 = r2' ++ [rs2] ++ r2'' ∧
@@ -561,7 +561,7 @@ Proof.
      else cast_if_and (decide (freeze true rs1 = freeze true rs2)) (go r1 r2)
   | _, _ => right _
   end); clear go;
-    abstract first [subst; constructor (by auto) | inversion 1; auto].
+    abstract first [subst; constructor; by auto | inversion 1; auto].
 Defined.
 Lemma ref_disjoint_rev_correct_1 r1 r2 :
   ref_disjoint_rev r1 r2 → reverse r1 ⊥ reverse r2.
@@ -578,7 +578,7 @@ Proof.
   apply (f_equal reverse) in Hr''. rewrite <-!fmap_reverse in Hr''.
   revert Hr''. generalize (reverse r2''); clear r2''.
   induction (reverse r1''); intros [|??] ?; simplify_equality';
-    constructor (by auto).
+    constructor; by auto.
 Qed.
 Lemma ref_disjoint_rev_correct r1 r2 :
   r1 ⊥ r2 ↔ ref_disjoint_rev (reverse r1) (reverse r2).

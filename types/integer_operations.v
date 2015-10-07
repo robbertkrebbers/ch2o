@@ -134,7 +134,7 @@ implementations that make integer overflow undefined, and those that let it
 wrap (as for example GCC with the -fno-strict-overflow flag does). When an
 operation is allowed by the C standard, the result of [int_binop τi op x y]
 should correspond to its specification by the standard. *)
-Class IntEnv (K : Set) := {
+Class IntEnv (K : iType) : iType := {
   int_coding :> IntCoding K;
   int_arithop_ok : arithop → Z → int_type K → Z → int_type K → Prop;
   int_arithop : arithop → Z → int_type K → Z → int_type K → Z;

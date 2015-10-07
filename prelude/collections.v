@@ -109,8 +109,7 @@ Section of_option_list.
   Proof.
     split.
     * induction l; simpl; [by rewrite elem_of_empty|].
-      rewrite elem_of_union, elem_of_singleton;
-        intros [->|?]; constructor (auto).
+      rewrite elem_of_union,elem_of_singleton; intros [->|?]; constructor; auto.
     * induction 1; simpl; rewrite elem_of_union, elem_of_singleton; auto.
   Qed.
 End of_option_list.

@@ -465,7 +465,7 @@ Proof.
     indexes_valid_weaken, funenv_valid_weaken, stmt_typed_weaken.
 Qed.
 Lemma ax_if Γ δ R J T C P P' P1 P2 Q e s1 s2 :
-  (∀ vb, P' (inr (VBase vb)) ⊆{Γ,δ} (@{NotOp} #VBase vb ⇓ -)%A) →
+  (∀ vb, P' (inr (VBase vb)) ⊆{Γ,δ} (.{NotOp} #VBase vb ⇓ -)%A) →
   (∀ vb, ¬base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ,δ} (P1 ◊)%A) →
   (∀ vb, base_val_is_0 vb → P' (inr (VBase vb)) ⊆{Γ,δ} (P2 ◊)%A) →
   Γ\ δ\ emp ⊨ₑ {{ P }} e {{ P' }} →
@@ -599,11 +599,11 @@ Proof.
         stmt_typed_weaken, assert_weaken, indexes_valid_weaken.
       esolve_elem_of. }
     apply ax_done; constructor; eauto using assert_weaken; esolve_elem_of.
-  * exfalso; eauto using base_val_branchable_weaken,
-      cmap_subseteq_index_alive, @sep_union_subseteq_l.
+  * exfalso; assert (m ⊆ m ∪ mf) by eauto using @sep_union_subseteq_l.
+    eauto using base_val_branchable_weaken, cmap_subseteq_index_alive.
 Qed.
 Lemma ax_switch Γ δ R J T C C' P P' P'' Q e s :
-  (∀ vb, P' (inr (VBase vb)) ⊆{Γ,δ} (@{NotOp} #VBase vb ⇓ -)%A) →
+  (∀ vb, P' (inr (VBase vb)) ⊆{Γ,δ} (.{NotOp} #VBase vb ⇓ -)%A) →
   (∀ z τi, Some z ∈ cases s → P' (inr (intV{τi} z)) ⊆{Γ,δ} (C (Some z) ◊)%A) →
   (∀ z τi, Some z ∉ cases s → None ∈ cases s →
     P' (inr (intV{τi} z)) ⊆{Γ,δ} (C None ◊)%A) →

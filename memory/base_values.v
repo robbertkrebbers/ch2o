@@ -3,7 +3,7 @@
 Require Export bits.
 Local Open Scope cbase_type_scope.
 
-Inductive base_val (K : Set) : Set :=
+Inductive base_val (K : iType) : iType :=
   | VIndet : base_type K → base_val K
   | VVoid : base_val K
   | VInt : int_type K → Z → base_val K
@@ -29,7 +29,7 @@ Instance maybe_VInt {K} : Maybe2 (@VInt K) := λ vb,
   match vb with VInt τi x => Some (τi,x) | _ => None end.
 Instance maybe_VPtr {K} : Maybe (@VPtr K) := λ vb,
   match vb with VPtr p => Some p | _ => None end.
-Instance base_val_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+Instance base_val_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (v1 v2 : base_val K) : Decision (v1 = v2).
 Proof. solve_decision. Defined.
 

@@ -9,7 +9,7 @@ implementation to obtain efficient finite maps and finite sets with these
 indexes as keys. *)
 Definition index := N.
 Definition indexmap := Nmap.
-Notation indexset := (mapset (indexmap unit)).
+Notation indexset := (mapset indexmap).
 
 Instance index_dec: ∀ o1 o2 : index, Decision (o1 = o2) := decide_rel (=).
 Instance index_inhabited: Inhabited index := populate 0%N.
@@ -98,7 +98,12 @@ Qed.
 Hint Extern 0 (?Δ1 ⇒ₘ ?Δ2) => reflexivity.
 Hint Extern 1 (_ ⇒ₘ _) => etransitivity; [eassumption|].
 Hint Extern 1 (_ ⇒ₘ _) => etransitivity; [|eassumption].
-
+Lemma index_typed_weaken {K} (Δ1 Δ2 : memenv K) o τ :
+  Δ1 ⊢ o : τ → Δ1 ⇒ₘ Δ2 → Δ2 ⊢ o : τ.
+Proof. eauto using memenv_forward_typed. Qed.
+Lemma indexes_typed_weaken {K} (Δ1 Δ2 : memenv K) os τs :
+  Δ1 ⊢* os :* τs → Δ1 ⇒ₘ Δ2 → Δ2 ⊢* os :* τs.
+Proof. eauto using Forall2_impl, memenv_forward_typed. Qed.
 Lemma memenv_subseteq_forward {K} (Δ1 Δ2  : memenv K) :
   Δ1 ⊆ Δ2 → Δ1 ⇒ₘ Δ2.
 Proof.
@@ -113,8 +118,8 @@ Lemma memenv_subseteq_alive {K} (Δ1 Δ2  : memenv K) o :
 Proof. intros ? [β ?]; exists β; eauto using lookup_weaken. Qed.
 
 (** * Locked locations *)
-Definition lockset : Set :=
-  dsigS (map_Forall (λ _, (≠ ∅)) : indexmap natset → Prop).
+Definition lockset : iType :=
+  dsig (A:=indexmap natset) (map_Forall (λ _, (≠ ∅))).
 Instance lockset_eq_dec (Ω1 Ω2 : lockset) : Decision (Ω1 = Ω2) | 1 := _.
 Typeclasses Opaque lockset.
 
@@ -191,7 +196,7 @@ Proof.
     { by intros (?&[??]&Hi); simplify_equality'; decompose_elem_of. }
     intros; simplify_equality'. eexists {[i2]}; esolve_elem_of.
   * unfold elem_of, lockset_elem_of, union, lockset_union.
-    intros [Ω1 ?] [Ω2 ?] [o i]; simpl.
+    intros [Ω1 HΩ1] [Ω2 HΩ2] [o i]; simpl.
     setoid_rewrite lookup_union_with_Some. split.
     { intros (?&[[]|[[]|(?&?&?&?&?)]]&?);
         simplify_equality'; decompose_elem_of; eauto. }
@@ -201,7 +206,7 @@ Proof.
     + destruct (Ω1 !! o) as [ω1|]; eauto 6.
       exists (ω1 ∪ ω2). rewrite elem_of_union. naive_solver.
   * unfold elem_of, lockset_elem_of, intersection, lockset_intersection.
-    intros [m1 ?] [m2 ?] [o i]; simpl.
+    intros [m1 Hm1] [m2 Hm2] [o i]; simpl.
     setoid_rewrite lookup_intersection_with_Some. split.
     { intros (?&(l&k&?&?&?)&?);
         simplify_option_equality; decompose_elem_of; eauto 6. }
@@ -210,7 +215,7 @@ Proof.
     exists (ω1 ∩ ω2); split; [exists ω1 ω2|]; split_ands; auto.
     by rewrite option_guard_True by esolve_elem_of.
   * unfold elem_of, lockset_elem_of, intersection, lockset_intersection.
-    intros [Ω1 ?] [Ω2 ?] [o i]; simpl.
+    intros [Ω1 HΩ1_wf] [Ω2 HΩ2_wf] [o i]; simpl.
     setoid_rewrite lookup_difference_with_Some. split.
     { intros (?&[[??]|(l&k&?&?&?)]&?);
         simplify_option_equality; decompose_elem_of; naive_solver. }
@@ -220,7 +225,7 @@ Proof.
     exists (ω1 ∖ ω2); split; [right; exists ω1 ω2|]; split_ands; auto.
     by rewrite option_guard_True by esolve_elem_of.
   * unfold elem_of at 2, lockset_elem_of, elements, lockset_elems.
-    intros [Ω ?] [o i]; simpl. setoid_rewrite elem_of_list_bind. split.
+    intros [Ω HΩ_wf] [o i]; simpl. setoid_rewrite elem_of_list_bind. split.
     { intros ([o' ω]&Hoi&Ho'); simpl in *; rewrite elem_of_map_to_list in Ho'.
       setoid_rewrite elem_of_list_fmap in Hoi;
         setoid_rewrite elem_of_elements in Hoi;

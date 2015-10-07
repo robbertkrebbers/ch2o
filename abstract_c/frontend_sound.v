@@ -181,7 +181,7 @@ Lemma global_decl_valid_weaken Γ1 Γ2 Δ1 Δ2 x d :
   Δ1 ⊆ Δ2 → global_decl_valid Γ2 Δ2 x d.
 Proof.
   destruct d as [|??? []| |];
-    naive_solver eauto using ptr_type_valid_weaken, memenv_forward_typed,
+    naive_solver eauto using ptr_type_valid_weaken, index_typed_weaken,
     stmt_typed_weaken, memenv_subseteq_alive, env_valid_args_valid,
     lookup_fun_weaken, types_complete_weaken, types_complete_valid.
 Qed.
@@ -197,7 +197,7 @@ Lemma to_funenv_pretyped S :
   ✓ S → funenv_prevalid (to_env S) '{to_mem S} (to_funenv S).
 Proof.
   intros [?? HΔg] f s. unfold to_funenv; rewrite lookup_omap, bind_Some.
-  intros ([|??? []| |]&Hd&?); specialize (HΔg _ _ Hd); naive_solver.
+  intros ([]&Hd&?); specialize (HΔg _ _ Hd); naive_solver.
 Qed.
 Lemma to_funenv_typed S :
   ✓ S → incomplete_fun_decls S = ∅ → ✓{to_env S,'{to_mem S}} (to_funenv S).
@@ -251,7 +251,7 @@ Lemma local_decl_valid_weaken S1 S2 x d :
   ✓ S1 → local_decl_valid S1 x d → S1 ⊆ S2 → local_decl_valid S2 x d.
 Proof.
   destruct 1, 2, d as [[[]|[]]| |]; naive_solver eauto using
-    ptr_type_valid_weaken, type_valid_weaken, memenv_forward_typed,
+    ptr_type_valid_weaken, type_valid_weaken, index_typed_weaken,
     env_valid_args_valid, lookup_fun_weaken.
 Qed.
 Lemma local_env_valid_subseteq S1 S2 Δl :
@@ -460,7 +460,7 @@ Ltac weaken :=
      assert ((to_env S2,'{to_mem S2},τs) ⊢ s : cmτ)
        by (eapply (stmt_typed_weaken (to_env S1)); eauto); clear H
   | H : '{to_mem ?S1} ⊢ ?o : ?τ, H2 : ?S1 ⊆ ?S2  |- _ =>
-     assert ('{to_mem S2} ⊢ o : τ) by eauto using memenv_forward_typed; clear H
+     assert ('{to_mem S2} ⊢ o : τ) by eauto using index_typed_weaken; clear H
   | H : index_alive '{to_mem ?S1} ?o, H2 : ?S1 ⊆ ?S2  |- _ =>
      assert (index_alive '{to_mem S2} o)
        by eauto using memenv_subseteq_alive; clear H
@@ -564,8 +564,8 @@ Proof.
     intros ? [HΓ Hm HΔg HΓn HΓ'] ???; error_proceed; simplify_map_equality.
   split_ands; split; simpl; eauto using env_insert_compound_valid, fmap_nil_inv.
   * eauto using cmap_valid_weaken', insert_compound_subseteq.
-  * eauto using map_Forall_impl,
-      global_decl_valid_weaken, insert_compound_subseteq.
+  * eapply map_Forall_impl;
+      eauto using global_decl_valid_weaken, insert_compound_subseteq.
   * intros t' d ?; destruct (decide (t = t')); simplify_map_equality'; auto.
     rewrite lookup_insert_compound_ne by done; by apply HΓn.
   * eauto using insert_compound_subseteq.

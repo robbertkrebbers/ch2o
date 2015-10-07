@@ -2,7 +2,7 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export restricted_smallstep memory_separation type_system.
 
-Record ax_frame_cond (K : Set) `{Env K} (A : Type) : Type := {
+Record ax_frame_cond (K : iType) `{Env K} (A : iType) : Type := {
   frame :
     env K → memenv K → funenv K → ctx K → nat →
     focus K → mem K → mem K → A → Prop;
@@ -17,7 +17,7 @@ Record ax_frame_cond (K : Set) `{Env K} (A : Type) : Type := {
 Arguments frame {_ _ _} _ _ _ _ _ _ _ _ _ _.
 Arguments unframe {_ _ _} _ _ _ _ _ _ _ _ _ _.
 
-Record ax_assert (K : Set) `{Env K} : Type := {
+Record ax_assert (K : iType) `{Env K} : Type := {
   ax_assert_holds :
     env K → memenv K → funenv K → stack K → nat → focus K → mem K → Prop;
   ax_assert_weaken Γ1 Γ2 Δ1 Δ2 δ1 δ2 ρ n n' φ m :

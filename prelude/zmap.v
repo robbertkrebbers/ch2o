@@ -6,7 +6,7 @@ Require Import pmap mapset.
 Require Export prelude fin_maps.
 Local Open Scope Z_scope.
 
-Record Zmap A :=
+Record Zmap (A : Type) : Type :=
   ZMap { Zmap_0 : option A; Zmap_pos : Pmap A; Zmap_neg : Pmap A }.
 Arguments Zmap_0 {_} _.
 Arguments Zmap_pos {_} _.
@@ -92,6 +92,6 @@ Qed.
 
 (** * Finite sets *)
 (** We construct sets of [Z]s satisfying extensional equality. *)
-Notation Zset := (mapset (Zmap unit)).
+Notation Zset := (mapset Zmap).
 Instance Zmap_dom {A} : Dom (Zmap A) Zset := mapset_dom.
 Instance: FinMapDom Z Zmap Zset := mapset_dom_spec.

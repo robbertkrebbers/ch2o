@@ -45,8 +45,7 @@ Instance prod_separation_ops `{SeparationOps A, SeparationOps B} :
   sep_unmapped x := sep_unmapped (x.1) ∧ sep_unmapped (x.2);
   sep_unshared x := sep_unshared (x.1) ∧ sep_unshared (x.2)
 }.
-Instance prod_separation {A B : Set}
-  `{Separation A, Separation B} : Separation (A * B).
+Instance prod_separation `{Separation A, Separation B} : Separation (A * B).
 Proof.
   split; sep_unfold.
   * destruct (sep_inhabited A) as (x&?&?), (sep_inhabited B) as (y&?&?).
@@ -137,8 +136,7 @@ Proof.
   * intros []; apply _.
 Defined.
 
-Instance sum_separation {A B : Set}
-  `{Separation A, Separation B} : Separation (A + B).
+Instance sum_separation `{Separation A, Separation B} : Separation (A + B).
 Proof.
   split; sep_unfold.
   * destruct (sep_inhabited A) as (x&?&?). eexists (inl x). naive_solver.
@@ -256,7 +254,7 @@ Proof.
   * by intros x ->.
 Qed.
 
-Record counter (A : Set) : Set :=
+Record counter (A : sType) : sType :=
   Counter { counter_count : Qc ; counter_perm : A }.
 Add Printing Constructor counter.
 Arguments Counter {_} _ _.
@@ -270,7 +268,7 @@ Lemma counter_injective_projections {A} (x y : counter A) :
   x.1 = y.1 → x.2 = y.2 → x = y.
 Proof. by destruct x, y; simpl; intros -> ->. Qed.
 
-Instance counter_ops {A: Set} `{SeparationOps A}: SeparationOps (counter A) := {
+Instance counter_ops `{SeparationOps A}: SeparationOps (counter A) := {
   sep_valid x :=
     sep_valid (x.2)
     ∧ (sep_unmapped (x.2) → x.1 ≤ 0) ∧ (sep_unshared (x.2) → 0 ≤ x.1);
@@ -294,8 +292,7 @@ Instance counter_ops {A: Set} `{SeparationOps A}: SeparationOps (counter A) := {
 }.
 Proof. solve_decision. Defined.
 
-Instance counter_separation {A : Set} `{Separation A} :
-  Separation (counter A).
+Instance counter_separation `{Separation A} : Separation (counter A).
 Proof.
   split.
   * destruct (sep_inhabited A) as (x&?&?). exists (Counter 0 x).
@@ -396,13 +393,13 @@ Proof.
   * sep_unfold; intros ? [??] [??]; eauto using sep_unshared_unmapped.
 Qed.
 
-Inductive lockable (A : Set) : Set :=
+Inductive lockable (A : sType) : sType :=
   | LLocked : A → lockable A | LUnlocked : A → lockable A.
 Arguments LLocked {_} _.
 Arguments LUnlocked {_} _.
 
-Instance lockable_separation_ops {A : Set} `{SeparationOps A} :
-    SeparationOps (lockable A) := {
+Instance lockable_separation_ops
+    `{SeparationOps A} : SeparationOps (lockable A) := {
   sep_valid x :=
     match x with
     | LLocked x => sep_unshared x | LUnlocked x => sep_valid x
@@ -460,8 +457,7 @@ Proof.
   * intros [?|?]; apply _.
   * intros [?|?]; apply _.
 Defined.
-Instance lockable_separation {A : Set} `{Separation A} :
-  Separation (lockable A).
+Instance lockable_separation `{Separation A} : Separation (lockable A).
 Proof.
   split.
   * destruct (sep_inhabited A) as (x&?&?). exists (LUnlocked x).
@@ -519,7 +515,7 @@ Proof.
   * sep_unfold; intros [x|x]; eauto using sep_unshared_unmapped.
 Qed.
 
-Record tagged (A : Set) {L : Set} (d : L) :=
+Record tagged (A : sType) {L : Type} (d : L) : sType :=
   Tagged { tagged_perm : A; tagged_tag : L }.
 Add Printing Constructor tagged.
 Arguments Tagged {_ _ _} _ _.
@@ -530,9 +526,9 @@ Local Notation "x .2" := (tagged_tag x).
 Instance: Injective2 (=) (=) (=) (@Tagged A L d).
 Proof. by injection 1. Qed.
 
-Instance tagged_separation_ops {A L : Set} {d : L}
-    `{∀ x y : L, Decision (x = y), SeparationOps A} :
-    SeparationOps (tagged A d) := {
+Instance tagged_separation_ops {A : sType} `{d : L}
+    `{∀ x y : L, Decision (x = y),
+    SeparationOps A} : SeparationOps (tagged A d) := {
   sep_valid x := sep_valid (x.1) ∧ (sep_unmapped (x.1) → x.2 = d);
   sep_empty := Tagged ∅ d;
   sep_disjoint x y :=
@@ -551,7 +547,7 @@ Instance tagged_separation_ops {A L : Set} {d : L}
 }.
 Proof. solve_decision. Defined.
 
-Instance tagged_separation {A L : Set} {d : L}
+Instance tagged_separation {A : sType} `{d : L}
   `{∀ x y : L, Decision (x = y), Separation A} : Separation (tagged A d).
 Proof.
   split.

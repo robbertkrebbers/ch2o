@@ -12,7 +12,7 @@ names) to lists of types corresponding to the fields of structs and unions.
 We use the same namespace for structs and unions. *)
 Definition tag := string.
 Definition tagmap := stringmap.
-Notation tagset := (mapset (tagmap unit)).
+Notation tagset := (mapset tagmap).
 
 Instance tag_eq_dec: ∀ i1 i2: tag, Decision (i1 = i2) := decide_rel (=).
 Instance tagmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
@@ -37,7 +37,7 @@ Typeclasses Opaque tag tagmap.
 (** Function names have a separate namespace from structs/unions. *)
 Definition funname := string.
 Definition funmap := stringmap.
-Notation funset := (mapset (funmap unit)).
+Notation funset := (mapset funmap).
 
 Instance funname_eq_dec: ∀ i1 i2: funname, Decision (i1 = i2) := decide_rel (=).
 Instance funmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
@@ -66,15 +66,15 @@ pointers). Structs and unions include a name that refers to their fields in the
 environment. *)
 Inductive compound_kind := Struct_kind | Union_kind.
 
-Inductive type (K : Set) : Set :=
+Inductive type (K : iType) : iType :=
   | TBase :> base_type K → type K
   | TArray : type K → nat → type K
   | TCompound : compound_kind → tag → type K
-with ptr_type (K : Set) : Set :=
+with ptr_type (K : iType) : iType :=
   | TType : type K → ptr_type K
   | TAny : ptr_type K
   | TFun : list (type K) → type K → ptr_type K
-with base_type (K : Set) : Set :=
+with base_type (K : iType) : iType :=
   | TVoid : base_type K
   | TInt : int_type K → base_type K
   | TPtr : ptr_type K → base_type K.
@@ -150,12 +150,11 @@ Notation "τs ~> τ" := (TFun τs τ) (at level 40) : ctype_scope.
 
 Instance compound_kind_eq_dec (c1 c2 : compound_kind) : Decision (c1 = c2).
 Proof. solve_decision. Defined.
-Fixpoint type_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (τ1 τ2 : type K) : Decision (τ1 = τ2)
-with ptr_type_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (τp1 τp2 : ptr_type K) : Decision (τp1 = τp2)
-with base_type_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (τb1 τb2 : base_type K) : Decision (τb1 = τb2).
+Section dec.
+Context `{∀ k1 k2 : K, Decision (k1 = k2)}.
+Fixpoint type_eq_dec (τ1 τ2 : type K) : Decision (τ1 = τ2)
+with ptr_type_eq_dec (τp1 τp2 : ptr_type K) : Decision (τp1 = τp2)
+with base_type_eq_dec (τb1 τb2 : base_type K) : Decision (τb1 = τb2).
 Proof.
  refine
   match τ1, τ2 with
@@ -183,6 +182,7 @@ Proof.
   end%BT;
   clear base_type_eq_dec ptr_type_eq_dec type_eq_dec; abstract congruence.
 Defined.
+End dec.
 Existing Instance type_eq_dec.
 Existing Instance ptr_type_eq_dec.
 Existing Instance base_type_eq_dec.
@@ -203,7 +203,7 @@ Instance maybe_TFun {K} : Maybe2 (@TFun K) := λ τ,
   match τ with τs ~> τ => Some (τs,τ) | _ => None end.
 
 (** * Environments *)
-Record env (K : Set) := mk_env {
+Record env (K : iType) : iType := mk_env {
   env_t : tagmap (list (type K));
   env_f : funmap (list (type K) * type K)
 }.
@@ -237,7 +237,7 @@ structs (like [struct t { struct t x; }]) are not excluded. The predicate
 recursive occurrences of unions and structs are always guarded by a pointer.
 The predicate [env_valid] describes that an environment is valid. *)
 Section types.
-  Context {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}.
+  Context {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2)}.
   Implicit Types Γ Σ : env K.
   Implicit Types τ : type K.
   Implicit Types τp : ptr_type K.
@@ -558,7 +558,7 @@ End types.
 It checks wellformedness by trying all permutations of the environment. This
 decision procedure is not intended to be used for computation. *)
 Section env_valid_dec.
-  Context {K : Set}.
+  Context {K : iType}.
 
   Definition env_f_valid (Γ : env K) : Prop :=
     map_Forall (λ _ τsτ,
@@ -625,7 +625,7 @@ End env_valid_dec.
 
 (** A nice induction principle for wellformed types. *)
 Section type_env_ind.
-  Context {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}.
+  Context {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2)}.
   Context (Γ : env K) (HΓ : ✓ Γ).
 
   Context (P : type K → Prop).
@@ -656,7 +656,7 @@ End type_env_ind.
 
 (** A nice iteration principle for well-formed types. *)
 Section type_iter.
-  Context {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}.
+  Context {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2)}.
   Context {A : Type} (R : relation A) `{!Equivalence R}.
   Local Infix "≡" := R.
   Implicit Type τ : type K.

@@ -37,11 +37,11 @@ Fixpoint expr_eval `{Env K} (e : expr K) (Γ : env K)
      v ← ⟦ e ⟧ Γ ρ m ≫= maybe inr;
      v' ← v !!{Γ} rs;
      Some (inr v')
-  | @{op} e =>
+  | .{op} e =>
      v ← ⟦ e ⟧ Γ ρ m ≫= maybe inr;
      guard (val_unop_ok m op v);
      Some (inr (val_unop op v))
-  | e1 @{op} e2 =>
+  | e1 .{op} e2 =>
      v1 ← ⟦ e1 ⟧ Γ ρ m ≫= maybe inr;
      v2 ← ⟦ e2 ⟧ Γ ρ m ≫= maybe inr;
      guard (val_binop_ok Γ m op v1 v2);
@@ -99,12 +99,12 @@ Context (Peltr : ∀ e rs v v',
   v !!{Γ} rs = Some v' → P (e #> rs) (inr v')).
 Context (Punop : ∀ op e v,
   ⟦ e ⟧ Γ ρ m = Some (inr v) → P e (inr v) →
-  val_unop_ok m op v → P (@{op} e) (inr (val_unop op v))).
+  val_unop_ok m op v → P (.{op} e) (inr (val_unop op v))).
 Context (Pbinop : ∀ op e1 e2 v1 v2,
   ⟦ e1 ⟧ Γ ρ m = Some (inr v1) → P e1 (inr v1) →
   ⟦ e2 ⟧ Γ ρ m = Some (inr v2) → P e2 (inr v2) →
   val_binop_ok Γ m op v1 v2 →
-  P (e1 @{op} e2) (inr (val_binop Γ op v1 v2))).
+  P (e1 .{op} e2) (inr (val_binop Γ op v1 v2))).
 Context (Pif1 : ∀ e1 e2 e3 vb ν2,
   ⟦ e1 ⟧ Γ ρ m = Some (inr (VBase vb)) → P e1 (inr (VBase vb)) →
   ⟦ e2 ⟧ Γ ρ m = Some ν2 → P e2 ν2 →

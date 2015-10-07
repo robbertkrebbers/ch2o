@@ -80,9 +80,8 @@ Qed.
 End optionmap.
 
 (** * Finite sets *)
-Notation optionset M := (mapset (optionmap M unit)).
+Notation optionset M := (mapset (optionmap M)).
 Instance optionmap_dom {M : Type → Type} `{∀ A, Empty (M A), Merge M} {A} :
   Dom (optionmap M A) (optionset M) := mapset_dom.
 Instance optionmap_domspec `{FinMap K M} :
   FinMapDom (option K) (optionmap M) (optionset M) := mapset_dom_spec.
-

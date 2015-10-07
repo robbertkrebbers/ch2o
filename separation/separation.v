@@ -3,7 +3,9 @@
 Require Export list vector.
 
 Local Unset Elimination Schemes.
-Class SeparationOps (A : Type) : Type := {
+Definition sType := Type.
+Bind Scope type_scope with sType.
+Class SeparationOps (A : sType) : sType := {
   sep_valid : A → Prop;
   sep_empty :> Empty A;
   sep_disjoint :> Disjoint A;
@@ -44,7 +46,7 @@ Ltac sep_unfold :=
   sep_unshared, sep_splittable, sep_unmapped, empty, sep_empty, union,
   sep_union, difference, sep_difference, half, sep_half; simpl.
 
-Class Separation (A : Type) `{SeparationOps A} : Prop := {
+Class Separation (A : sType) `{SeparationOps A} : Prop := {
   sep_inhabited : ∃ x : A, sep_valid x ∧ ¬sep_unmapped x;
   sep_disjoint_valid_l (x y : A) : x ⊥ y → sep_valid x;
   sep_union_valid (x y : A) : x ⊥ y → sep_valid (x ∪ y);

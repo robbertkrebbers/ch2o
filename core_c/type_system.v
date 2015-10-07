@@ -6,7 +6,7 @@ Local Open Scope ctype_scope.
 
 Notation lrtype K := (ptr_type K + type K)%type.
 Notation rettype K := (bool * option (type K))%type.
-Inductive focustype (K : Set) :=
+Inductive focustype (K : iType) : iType :=
   | Stmt_type : rettype K → focustype K
   | Expr_type : type K → focustype K
   | Fun_type : funname → focustype K.
@@ -72,11 +72,11 @@ Inductive expr_typed' (Γ : env K) (Δ : memenv K)
      expr_typed' Γ Δ τs (free e) (inr voidT)
   | EUnOp_typed op e τ σ :
      unop_typed op τ σ → expr_typed' Γ Δ τs e (inr τ) →
-     expr_typed' Γ Δ τs (@{op} e) (inr σ)
+     expr_typed' Γ Δ τs (.{op} e) (inr σ)
   | EBinOp_typed op e1 e2 τ1 τ2 σ :
      binop_typed op τ1 τ2 σ → expr_typed' Γ Δ τs e1 (inr τ1) →
      expr_typed' Γ Δ τs e2 (inr τ2) →
-     expr_typed' Γ Δ τs (e1 @{op} e2) (inr σ)
+     expr_typed' Γ Δ τs (e1 .{op} e2) (inr σ)
   | EIf_typed e1 e2 e3 τb σlr :
      expr_typed' Γ Δ τs e1 (inr (baseT τb)) → τb ≠ TVoid →
      expr_typed' Γ Δ τs e2 σlr → expr_typed' Γ Δ τs e3 σlr →
@@ -127,10 +127,10 @@ Section expr_typed_ind.
     (Γ,Δ,τs) ⊢ e : inl τp → P e (inl τp) → P (free e) (inr voidT)).
   Context (Punop : ∀ op e τ σ,
     unop_typed op τ σ →
-    (Γ,Δ,τs) ⊢ e : inr τ → P e (inr τ) → P (@{op} e) (inr σ)).
+    (Γ,Δ,τs) ⊢ e : inr τ → P e (inr τ) → P (.{op} e) (inr σ)).
   Context (Pbinop : ∀ op e1 e2 τ1 τ2 σ,
     binop_typed op τ1 τ2 σ → (Γ,Δ,τs) ⊢ e1 : inr τ1 → P e1 (inr τ1) →
-    (Γ,Δ,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 @{op} e2) (inr σ)).
+    (Γ,Δ,τs) ⊢ e2 : inr τ2 → P e2 (inr τ2) → P (e1 .{op} e2) (inr σ)).
   Context (Pif : ∀ e1 e2 e3 τb σlr,
     (Γ,Δ,τs) ⊢ e1 : inr (baseT τb) → P e1 (inr (baseT τb)) → τb ≠ TVoid →
     (Γ,Δ,τs) ⊢ e2 : σlr → P e2 σlr →
@@ -180,13 +180,13 @@ Inductive ectx_item_typed' (Γ : env K) (Δ : memenv K)
      ectx_item_typed' Γ Δ τs (alloc{τ} □) (inr (intT τi)) (inl (TType τ))
   | CFree_typed τp : ectx_item_typed' Γ Δ τs (free □) (inl τp) (inr voidT)
   | CUnOp_typed op τ σ :
-     unop_typed op τ σ → ectx_item_typed' Γ Δ τs (@{op} □) (inr τ) (inr σ)
+     unop_typed op τ σ → ectx_item_typed' Γ Δ τs (.{op} □) (inr τ) (inr σ)
   | CBinOpL_typed op e2 τ1 τ2 σ :
      binop_typed op τ1 τ2 σ → (Γ,Δ,τs) ⊢ e2 : inr τ2 →
-     ectx_item_typed' Γ Δ τs (□ @{op} e2) (inr τ1) (inr σ)
+     ectx_item_typed' Γ Δ τs (□ .{op} e2) (inr τ1) (inr σ)
   | CBinOpR_typed op e1 τ1 τ2 σ :
      binop_typed op τ1 τ2 σ → (Γ,Δ,τs) ⊢ e1 : inr τ1 →
-     ectx_item_typed' Γ Δ τs (e1 @{op} □) (inr τ2) (inr σ)
+     ectx_item_typed' Γ Δ τs (e1 .{op} □) (inr τ2) (inr σ)
   | CIf_typed e2 e3 τb σlr :
      τb ≠ TVoid → (Γ,Δ,τs) ⊢ e2 : σlr → (Γ,Δ,τs) ⊢ e3 : σlr →
      ectx_item_typed' Γ Δ τs (if{□} e2 else e3) (inr (baseT τb)) σlr
@@ -386,6 +386,7 @@ Implicit Types o : index.
 Implicit Types Δ : memenv K.
 Implicit Types m : mem K.
 Implicit Types e : expr K.
+Implicit Types es : list (expr K).
 Implicit Types s : stmt K.
 Implicit Types τ σ : type K.
 Implicit Types mτ mσ : option (type K).
@@ -464,12 +465,16 @@ Proof.
     lookup_weaken, type_valid_weaken, lookup_app_l_Some, ref_typed_weaken,
     ref_seg_typed_weaken, lockset_valid_weaken, type_complete_weaken.
 Qed.
+Lemma exprs_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 es τlrs :
+  ✓ Γ1 → (Γ1,Δ1,τs1) ⊢* es :* τlrs → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
+  τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢* es :* τlrs.
+Proof. eauto using Forall2_impl, expr_typed_weaken. Qed.
 Lemma ectx_item_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 Ei τlr σlr :
   ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ Ei : τlr ↣ σlr → Γ1 ⊆ Γ2 →
   Δ1 ⇒ₘ Δ2 → τs1 `prefix_of` τs2 → (Γ2,Δ2,τs2) ⊢ Ei : τlr ↣ σlr.
 Proof.
   destruct 2; typed_constructor; eauto using type_valid_weaken,
-    expr_typed_weaken, lookup_weaken, Forall2_impl,
+    expr_typed_weaken, exprs_typed_weaken, lookup_weaken,
     ref_seg_typed_weaken, ref_typed_weaken, type_complete_weaken.
 Qed.
 Lemma ectx_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 E τlr σlr :
@@ -505,7 +510,7 @@ Lemma ctx_item_typed_weaken Γ1 Γ2 Δ1 Δ2 τs Ek τf σf :
 Proof.
   destruct 2; typed_constructor; eauto using sctx_item_typed_weaken,
     ectx_typed_weaken, esctx_item_typed_weaken, expr_typed_weaken,
-    Forall2_impl, lookup_fun_weaken, memenv_forward_typed.
+    Forall2_impl, lookup_fun_weaken, index_typed_weaken.
 Qed.
 Lemma ctx_typed_weaken Γ1 Γ2 Δ1 Δ2 k τf σf :
   ✓ Γ1 → (Γ1,Δ1) ⊢ k : τf ↣ σf → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
@@ -581,8 +586,7 @@ Proof.
 Qed.
 Lemma indexes_valid_weaken Δ1 Δ2 ρ : ✓{Δ1}* ρ → Δ1 ⇒ₘ Δ2 → ✓{Δ2}* ρ.
 Proof.
-  unfold valid, stack_item_valid.
-  induction 1; eauto using memenv_forward_typed.
+  unfold valid, stack_item_valid. induction 1; eauto using index_typed_weaken.
 Qed.
 Lemma ctx_typed_locals_valid Γ Δ k τf σf :
   (Γ,Δ) ⊢ k : τf ↣ σf → ✓{Δ}* (locals k).

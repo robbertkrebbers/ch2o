@@ -2,15 +2,15 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export separation memory_basics.
 
-Record flat_cmap (A : Set) := FlatCMap { flat_cmap_car : indexmap (list A) }.
+Record flat_cmap (A : Type) : Type :=
+  FlatCMap { flat_cmap_car : indexmap (list A) }.
 Arguments FlatCMap {_} _.
 Arguments flat_cmap_car {_} _.
 Add Printing Constructor flat_cmap.
 Instance: Injective (=) (=) (@FlatCMap A).
 Proof. by injection 1. Qed.
 
-Instance flat_cmap_ops {A : Set}
-    `{SeparationOps A} : SeparationOps (flat_cmap A) := {
+Instance flat_cmap_ops `{SeparationOps A} : SeparationOps (flat_cmap A) := {
   sep_empty := FlatCMap ∅;
   sep_union m1 m2 :=
     let (m1) := m1 in let (m2) := m2 in
@@ -49,7 +49,7 @@ Proof.
   * intros []; apply _.
 Defined.
 
-Instance flat_cmap_sep {A : Set} `{Separation A} : Separation (flat_cmap A).
+Instance flat_cmap_sep `{Separation A} : Separation (flat_cmap A).
 Proof.
   split.
   * destruct (sep_inhabited A) as (x&?&?).

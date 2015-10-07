@@ -145,7 +145,7 @@ Proof.
   * destruct σp as [|σ'|]; simpl; auto. by erewrite <-size_of_weaken
       by eauto using ref_typed_type_valid, castable_type_valid.
   * erewrite <-size_of_weaken by eauto using ref_typed_type_valid.
-    destruct Hr, α'; csimpl in *; try tauto || constructor (done).
+    destruct Hr, α'; csimpl in *; try tauto || by constructor.
     apply ref_refine_id.
 Qed.
 (* only holds for renamings because of end-of-array pointers *)

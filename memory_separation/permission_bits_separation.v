@@ -107,7 +107,7 @@ Lemma pbits_locked_union γbs1 γbs2 :
 Proof.
   assert (∀ γ1 γ2, γ1 ⊥ γ2 →
     perm_locked (γ1 ∪ γ2) = perm_locked γ1 || perm_locked γ2).
-  { intros [[]|] [[]|]; repeat sep_unfold; naive_solver. }
+  { intros [[?|?]|?] [[?|?]|?]; repeat sep_unfold; naive_solver. }
   unfold pbit_locked. induction 1 as [|???? (?&?&?&?)]; f_equal'; auto.
 Qed.
 Lemma pbits_unlock_union_1 βs1 βs2 γbs :

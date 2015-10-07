@@ -275,7 +275,7 @@ Section operations.
     end.
   Global Instance ctree_lookup:
       LookupE (env K) (ref K) (mtree K) (mtree K) :=
-    fix go Γ r w := let _ : LookupE _ _ _ _ := @go in
+    fix go Γ r w {struct r} := let _ : LookupE _ _ _ _ := @go in
     match r with [] => Some w | rs :: r => w !!{Γ} r ≫= lookupE Γ rs end.
 
   Definition ctree_alter_seg (Γ : env K) (g : mtree K → mtree K)
@@ -606,9 +606,9 @@ Lemma ctree_unflatten_weaken Γ1 Γ2 τ γbs :
 Proof.
   intros. apply (type_iter_weaken (pointwise_relation _ (=))); try done.
   { intros ???????; f_equal. by apply array_unflatten_weaken. }
-  clear γbs. intros f g [] t τs Ht Hτs Hfg γbs; f_equal; auto.
-  eapply struct_unflatten_weaken, Forall_impl; eauto 1.
-  auto using bit_size_of_weaken with f_equal.
+  clear γbs. intros f g [] t τs Ht Hτs Hfg γbs; intros; f_equal; auto.
+  eapply struct_unflatten_weaken, Forall_impl; eauto 1; intros.
+  erewrite bit_size_of_weaken by eauto; f_equal; auto.
 Qed.
 
 Ltac solve_length := simplify_equality'; repeat first 
@@ -743,7 +743,7 @@ Lemma ctree_unflatten_Forall (P : pbit K → Prop) Γ τ γbs :
   ✓ Γ → ✓{Γ} τ → (∀ γb, P γb → P (pbit_indetify γb)) → Forall P γbs →
   length γbs = bit_size_of Γ τ → ctree_Forall P (ctree_unflatten Γ τ γbs).
 Proof. intros. apply ctree_unflatten_Forall_le; auto with lia. Qed.
-Lemma ctree_merge_unflatten {B : Set} Γ (h : pbit K → B → pbit K) γbs ys τ :
+Lemma ctree_merge_unflatten {B} Γ (h : pbit K → B → pbit K) γbs ys τ :
   ✓ Γ → ✓{Γ} τ → length γbs = bit_size_of Γ τ →
   zip_with h (pbit_indetify <$> γbs) ys = pbit_indetify <$> zip_with h γbs ys →
   ctree_merge h (ctree_unflatten Γ τ γbs) ys
@@ -1195,8 +1195,7 @@ Proof.
   by erewrite <-(mask_mask _ pbit_indetify), <-take_mask, <-drop_mask,
     IH, ctree_lookup_seg_flatten by eauto using type_mask_ref_seg.
 Qed.
-Lemma ctree_lookup_seg_merge {B : Set} Γ Δ
-    (h : pbit K → B → pbit K) w ys τ rs w' τ' :
+Lemma ctree_lookup_seg_merge {B} Γ Δ (h : pbit K → B → pbit K) w ys τ rs w' τ' :
   ✓ Γ → (∀ γb y, h (pbit_indetify γb) y = pbit_indetify (h γb y)) →
   (∀ γb y, sep_unshared γb → sep_unshared (h γb y)) →
   (Γ,Δ) ⊢ w : τ → length ys = bit_size_of Γ τ →
@@ -1251,8 +1250,7 @@ Proof.
     rewrite ctree_unflatten_type_of by eauto.
     by rewrite ctree_merge_unflatten, drop_0, zip_with_take by eauto.
 Qed.
-Lemma ctree_lookup_merge {B : Set} Γ Δ
-    (h : pbit K → B → pbit K) w ys τ r w' τ' :
+Lemma ctree_lookup_merge {B} Γ Δ (h : pbit K → B → pbit K) w ys τ r w' τ' :
   ✓ Γ → (∀ γb y, h (pbit_indetify γb) y = pbit_indetify (h γb y)) →
   (∀ γb y, sep_unshared γb → sep_unshared (h γb y)) →
   (Γ,Δ) ⊢ w : τ → length ys = bit_size_of Γ τ →
@@ -2133,7 +2131,7 @@ Proof.
     by eauto using ctree_alter_lookup_seg_Forall, ctree_lookup_singleton_seg,
     ctree_singleton_seg_typed, ctree_singleton_seg_Forall_inv.
 Qed.
-Lemma ctree_merge_new {B : Set} Γ f τ (ys : list B) γb :
+Lemma ctree_merge_new {B} Γ f τ (ys : list B) γb :
   (∀ y, f γb y = γb) → pbit_indetify γb = γb →
   ✓ Γ → ✓{Γ} τ → length ys = bit_size_of Γ τ →
   ctree_merge f (ctree_new Γ γb τ) ys = ctree_new Γ γb τ.
@@ -2146,7 +2144,7 @@ Proof.
   by erewrite ctree_merge_unflatten,
     zip_with_replicate_l, const_fmap, Hlen by eauto.
 Qed.
-Lemma ctree_merge_singleton_seg {B : Set} Γ Δ f τ rs w (ys : list B) σ :
+Lemma ctree_merge_singleton_seg {B} Γ Δ f τ rs w (ys : list B) σ :
   (∀ y, f ∅ y = ∅) →
   (∀ γb y, sep_valid γb → sep_unmapped (f γb y) → sep_unmapped γb) →
   ✓ Γ → Γ ⊢ rs : τ ↣ σ → (Γ,Δ) ⊢ w : σ → ¬ctree_unmapped w →
@@ -2201,7 +2199,7 @@ Proof.
   * erewrite ctree_flatten_length, zip_with_replicate_l by eauto.
     erewrite const_fmap by done; f_equal; auto.
 Qed.
-Lemma ctree_merge_singleton {B : Set} Γ Δ f τ r w (ys : list B) σ :
+Lemma ctree_merge_singleton {B} Γ Δ f τ r w (ys : list B) σ :
   (∀ y, f ∅ y = ∅) →
   (∀ γb y, sep_valid γb → sep_unmapped (f γb y) → sep_unmapped γb) →
   ✓ Γ → Γ ⊢ r : τ ↣ σ → (Γ,Δ) ⊢ w : σ → ¬ctree_unmapped w →

@@ -17,7 +17,8 @@ Inductive signedness := Signed | Unsigned.
 Instance signedness_eq_dec (s1 s2 : signedness) : Decision (s1 = s2).
 Proof. solve_decision. Defined.
 
-Inductive int_type (K : Set) := IntType { sign : signedness; rank : K }.
+Definition iType := Type.
+Inductive int_type (K : iType) : iType := IntType { sign : signedness; rank : K }.
 Add Printing Constructor int_type.
 Delimit Scope int_type_scope with IT.
 Local Open Scope int_type_scope.
@@ -26,7 +27,7 @@ Arguments IntType {_} _ _.
 Arguments sign {_} _%IT.
 Arguments rank {_} _%IT.
 
-Instance int_type_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+Instance int_type_eq_dec `{∀ k1 k2 : K, Decision (k1 = k2)}
   (τi1 τi2 : int_type K) : Decision (τi1 = τi2).
 Proof. solve_decision. Defined.
 
@@ -45,7 +46,7 @@ and unsigned integers of rank [k] are between [0] (included) and
 in little endian order and permutes them according to the implementation's
 endianness. The function [deendianize] performs the inverse. *)
 Local Unset Elimination Schemes.
-Class IntCoding (K : Set) := {
+Class IntCoding (K : iType) : iType := {
   char_rank : K;
   char_signedness : signedness;
   short_rank : K;

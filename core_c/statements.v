@@ -43,7 +43,7 @@ labels. We define type classes [Gotos] and [Labels] to collect the labels of
 gotos respectively the labels of labeled statements. *)
 Definition labelname := string.
 Definition labelmap := stringmap.
-Notation labelset := (mapset (labelmap unit)).
+Notation labelset := (mapset labelmap).
 
 Instance labelname_dec: ∀ i1 i2 : labelname, Decision (i1 = i2) := decide_rel (=).
 Instance labelname_inhabited: Inhabited labelname := populate ""%string.
@@ -78,7 +78,7 @@ Arguments cases {_ _} !_ / : simpl nomatch.
 The construct [SLocal τ s] opens a new scope with one variable of type τ. Since
 we use De Bruijn indexes for variables, it does not contain the name of the
 variable. *)
-Inductive stmt (K : Set) : Set :=
+Inductive stmt (K : iType) : iType :=
   | SDo : expr K → stmt K
   | SSkip : stmt K
   | SGoto : labelname → stmt K
@@ -94,7 +94,7 @@ Inductive stmt (K : Set) : Set :=
   | SSwitch : expr K → stmt K → stmt K.
 Notation funenv K := (funmap (stmt K)).
 
-Instance stmt_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+Instance stmt_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (s1 s2 : stmt K) : Decision (s1 = s2).
 Proof. solve_decision. Defined.
 
@@ -208,7 +208,7 @@ Proof. revert n n'; induction s; simpl; intuition eauto with lia. Qed.
 (** We first define the data type [sctx_item] of singular statement contexts. A
 pair [(E, s)] consisting of a list of singular statement contexts [E] and a
 statement [s] forms a zipper for statements without block scope variables. *)
-Inductive sctx_item (K : Set) : Set :=
+Inductive sctx_item (K : iType) : iType :=
   | CCatch : sctx_item K
   | CCompL : stmt K → sctx_item K
   | CCompR : stmt K → sctx_item K
@@ -217,7 +217,7 @@ Inductive sctx_item (K : Set) : Set :=
   | CIfR : expr K → stmt K → sctx_item K
   | CSwitch : expr K → sctx_item K.
 
-Instance sctx_item_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+Instance sctx_item_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (E1 E2 : sctx_item K) : Decision (E1 = E2).
 Proof. solve_decision. Defined.
 
@@ -279,13 +279,13 @@ Proof. apply elem_of_equiv_L. intros. destruct Es; solve_elem_of. Qed.
 (** Next, we define the data type [esctx_item] of expression in statement
 contexts. These contexts are used to store the statement to which an expression
 that is being executed belongs to. *)
-Inductive esctx_item (K : Set) : Set :=
+Inductive esctx_item (K : iType) : iType :=
   | CDoE : esctx_item K
   | CReturnE : esctx_item K
   | CIfE : stmt K → stmt K → esctx_item K
   | CSwitchE : stmt K → esctx_item K.
 
-Instance esctx_item_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+Instance esctx_item_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (Ee1 Ee2 : esctx_item K) : Decision (Ee1 = Ee2).
 Proof. solve_decision. Defined.
 
@@ -352,7 +352,7 @@ additional singular contexts. These contexts will be used as follows.
   function parameters.
 
 Program contexts [ctx] are then defined as lists of singular contexts. *)
-Inductive ctx_item (K : Set) : Set :=
+Inductive ctx_item (K : iType) : iType :=
   | CStmt : sctx_item K → ctx_item K
   | CLocal : index → type K → ctx_item K
   | CExpr : expr K → esctx_item K → ctx_item K
@@ -366,7 +366,7 @@ Arguments CExpr {_} _ _.
 Arguments CFun {_} _.
 Arguments CParams {_} _ _.
 
-Instance ctx_item_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+Instance ctx_item_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (Ek1 Ek2 : ctx_item K) : Decision (Ek1 = Ek2).
 Proof. solve_decision. Defined.
 

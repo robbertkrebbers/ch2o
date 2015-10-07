@@ -214,8 +214,9 @@ Proof.
   simplify_option_equality; try tauto; eauto using cmap_alter_ref_refine.
   assert (w1' !!{Γ} addr_ref_byte Γ a2 = Some w1)
     by (by erewrite <-(addr_ref_byte_refine _ _ _ _ _ _ a2) by eauto).
-  assert (type_of w1 = ucharT) as ->
+  assert (type_of w1 = ucharT) as Hw1_type
     by eauto using addr_not_is_obj_type, addr_refine_typed_l.
+  rewrite Hw1_type in *.
   erewrite addr_ref_byte_refine by eauto.
   eapply cmap_alter_ref_refine; eauto 9 using ctree_alter_byte_refine,
     ctree_alter_byte_unmapped, ctree_refine_typed_l.

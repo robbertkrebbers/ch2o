@@ -52,10 +52,10 @@ Inductive ehstep `{Env K} (Γ : env K) (ρ : stack K) :
      Γ\ ρ ⊢ₕ free (%{Ω} (Ptr a)), m ⇒ #{Ω} voidV, mem_free (addr_index a) m
   | ehstep_unop op Ω v m :
      val_unop_ok m op v →
-     Γ\ ρ ⊢ₕ @{op} #{Ω} v, m ⇒ #{Ω} val_unop op v, m
+     Γ\ ρ ⊢ₕ .{op} #{Ω} v, m ⇒ #{Ω} val_unop op v, m
   | ehstep_binop op m Ω1 Ω2 v1 v2 :
      val_binop_ok Γ m op v1 v2 →
-     Γ\ ρ ⊢ₕ #{Ω1} v1 @{op} #{Ω2} v2, m ⇒ #{Ω1 ∪ Ω2} val_binop Γ op v1 v2, m
+     Γ\ ρ ⊢ₕ #{Ω1} v1 .{op} #{Ω2} v2, m ⇒ #{Ω1 ∪ Ω2} val_binop Γ op v1 v2, m
   | ehstep_if_true m Ω vb e1 e2 :
      base_val_branchable m vb → ¬base_val_is_0 vb →
      Γ\ ρ ⊢ₕ if{#{Ω} VBase vb} e1 else e2, m ⇒ e1, mem_unlock Ω m
@@ -278,7 +278,7 @@ Ltac inv_ehstep :=
 Hint Constructors assign_sem ehstep ehsafe cstep : cstep.
 Ltac do_ehstep :=
   match goal with
-  | |- _ \ _ ⊢ₕ _, _ ⇒ _, _ => constructor (solve [eauto with cstep])
+  | |- _ \ _ ⊢ₕ _, _ ⇒ _, _ => solve [constructor; eauto with cstep]
   | |- _ \ _ ⊢ₕ _, _ ⇒ _, _ => solve [eauto with cstep]
   end.
 
@@ -324,16 +324,16 @@ Ltac quote_expr e :=
     match e with
     | .* ?e => go (.* □ :: k) e
     | & ?e => go (& □ :: k) e
-    | ?e1 ::=@{?ass} ?e2 =>
-       go2 (□ ::={ass} e2 :: k) e1 (e1 ::=@{ass} □ :: k) e2
+    | ?e1 ::=.{?ass} ?e2 =>
+       go2 (□ ::={ass} e2 :: k) e1 (e1 ::=.{ass} □ :: k) e2
     | load ?e => go (load □ :: k) e
     | ?e %> ?i => go (□ %> i :: k) e
     | ?e #> ?i => go (□ #> i :: k) e
     | #[?r:=?e1] ?e2 => go2 (#[r:=□] e2 :: k) e1 (#[r:=e1] □ :: k) e2
     | free ?e => go (free □ :: k) e
     | alloc{?τ} ?e => go (alloc{τ} □ :: k) e
-    | @{?op} ?e => go (@{op} □ :: k) e
-    | ?e1 @{?op} ?e2 => go2 (□ @{op} e2 :: k) e1 (e1 @{op} □ :: k) e2
+    | .{?op} ?e => go (.{op} □ :: k) e
+    | ?e1 .{?op} ?e2 => go2 (□ .{op} e2 :: k) e1 (e1 .{op} □ :: k) e2
     | if{?e1} ?e2 else ?e3 => go (if{□} e2 else e3 :: k) e1
     | ?e1 ,, ?e2 => go (□ ,, e2 :: k) e1
     | _ => constr:(@nil (expr K))
@@ -346,7 +346,7 @@ as [δ ⊢ₛ S1 ⇒{k} S2] by applying a matching reduction rule, or by using t
 hint database [cstep]. *)
 Ltac do_cstep :=
   let go := first
-    [ econstructor (solve [intuition eauto with cstep])
+    [ solve [econstructor; intuition eauto with cstep]
     | solve [intuition eauto with cstep]] in
   match goal with
   | |- ?Γ\ ?δ ⊢ₛ State ?k (Stmt ?d ?s) ?m ⇒ ?S =>

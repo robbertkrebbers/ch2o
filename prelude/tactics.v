@@ -5,6 +5,19 @@ the development. *)
 Require Export Psatz.
 Require Export base.
 
+Lemma f_equal_dep {A B} (f g : ∀ x : A, B x) x : f = g → f x = g x.
+Proof. intros ->; reflexivity. Qed.
+Lemma f_equal_help {A B} (f g : A → B) x y : f = g → x = y → f x = g y.
+Proof. intros -> ->; reflexivity. Qed.
+Ltac f_equal :=
+  let rec go :=
+    match goal with
+    | _ => reflexivity
+    | _ => apply f_equal_help; [go|try reflexivity]
+    | |- ?f ?x = ?g ?x => apply (f_equal_dep f g); go
+    end in
+  try go.
+
 (** We declare hint databases [f_equal], [congruence] and [lia] and containing
 solely the tactic corresponding to its name. These hint database are useful in
 to be combined in combination with other hint database. *)

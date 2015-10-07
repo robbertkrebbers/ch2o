@@ -172,7 +172,7 @@ Proof.
     refine_constructor;
       eauto 10 using addr_top_array_refine, mem_alloc_new_index_typed'.
     eapply locks_refine_weaken; eauto using mem_alloc_new_forward',option_eq_1. }
-  destruct (ehstep_dec Γ ρ1 e1 m1) as [(e1'&m1'&?)|?].
+    destruct (ehstep_dec Γ ρ1 e1 m1) as [(e1'&m1'&?)|?].
   * left. destruct (ehstep_refine_forward Γ α f
       m1 m2 m1' ρ1 ρ2 e1 e2 e1' τlr) as (f'&m2''&e2''&?&?&?&?); auto.
     destruct (ehstep_deterministic Γ ρ2 e2 m2 e2' m2' e2'' m2'');
@@ -345,8 +345,9 @@ Proof.
   * intros; invert; go f; eauto 10.
   * intros; invert. go f; eauto 10.
   * intros; invert. go f; eauto 10.
-  * intros m k Es ??????; invert; go f. edestruct sctx_item_typed_Some_l;
-      naive_solver eauto using sctx_item_refine_typed_l.
+  * intros m k Es ??????; invert; go f.
+    edestruct sctx_item_typed_Some_l;
+      [eapply sctx_item_refine_typed_r; eassumption|]; subst; eauto.
   * intros; invert; go f; eauto 10.
   * intros; invert; go f; eauto 10.
   * intros m k d o τ s ??????; invert.

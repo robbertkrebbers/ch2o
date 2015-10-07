@@ -125,12 +125,8 @@ Proof. repeat case_bool_decide; tauto. Qed.
 (** Leibniz equality on Sigma types requires the equipped proofs to be
 equal as Coq does not support proof irrelevance. For decidable we
 propositions we define the type [dsig P] whose Leibniz equality is proof
-irrelevant. That is [∀ x y : dsig P, x = y ↔ `x = `y]. Due to the absence of
-universe polymorpic definitions we also define a variant [dsigS] for types
-in [Set]. *)
+irrelevant. That is [∀ x y : dsig P, x = y ↔ `x = `y]. *)
 Definition dsig `(P : A → Prop) `{∀ x : A, Decision (P x)} :=
-  { x | bool_decide (P x) }.
-Definition dsigS {A : Set} (P : A → Prop) `{∀ x : A, Decision (P x)} : Set :=
   { x | bool_decide (P x) }.
 
 Definition proj2_dsig `{∀ x : A, Decision (P x)} (x : dsig P) : P (`x) :=

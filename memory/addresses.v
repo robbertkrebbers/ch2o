@@ -4,7 +4,7 @@ Require Export references memory_basics.
 Require Import pointer_casts.
 Local Open Scope ctype_scope.
 
-Record addr (K : Set) : Set := Addr {
+Record addr (K : iType) : iType := Addr {
   addr_index : index;
   addr_ref_base : ref K;
   addr_byte : nat;
@@ -21,7 +21,7 @@ Arguments addr_type_object {_} _.
 Arguments addr_type_base {_} _.
 Arguments addr_type {_} _.
 
-Instance addr_eq_dec `{K : Set, ∀ k1 k2 : K, Decision (k1 = k2)}
+Instance addr_eq_dec `{∀ k1 k2 : K, Decision (k1 = k2)}
   (a1 a2 : addr K) : Decision (a1 = a2).
 Proof. solve_decision. Defined.
 

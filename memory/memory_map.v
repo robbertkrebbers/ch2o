@@ -139,10 +139,10 @@ Lemma cmap_valid_weaken Γ1 Γ2 Δ1 Δ2 m :
   ✓ Γ1 → ✓{Γ1,Δ1} m → Γ1 ⊆ Γ2 → Δ1 ⊆ Δ2 → ✓{Γ2} Δ2 → ✓{Γ2,Δ2} m.
 Proof.
   intros ? (HΔ&Hm1&Hm2) ???; split_ands'; eauto using memenv_valid_weaken.
-  * intros o τ ?; destruct (Hm1 o τ); eauto 10 using memenv_forward_typed,
+  * intros o τ ?; destruct (Hm1 o τ); eauto 10 using index_typed_weaken,
       memenv_forward_alive, memenv_subseteq_forward.
   * intros o w μ ?; destruct (Hm2 o w μ) as (τ&?&?&?&?);
-      eauto 10 using ctree_typed_weaken, memenv_forward_typed,
+      eauto 10 using ctree_typed_weaken, index_typed_weaken,
       memenv_subseteq_forward, memenv_subseteq_alive.
 Qed.
 Lemma cmap_valid_weaken' Γ1 Γ2 m : ✓ Γ1 → ✓{Γ1} m → Γ1 ⊆ Γ2 → ✓{Γ2} m.
@@ -165,7 +165,7 @@ Proof.
     destruct (m1 !! o) as [[|w' μ']|] eqn:?; simplify_equality'.
     destruct (Hm1' o w' μ') as (τ1&?&?&?&?); auto.
     destruct (Hm2' o w μ) as (τ2&?&?&?&?); auto.
-    assert (Δ2 ⊢ o : τ2) by eauto using memenv_forward_typed;
+    assert (Δ2 ⊢ o : τ2) by eauto using index_typed_weaken;
       simplify_type_equality'; eauto 10 using ctree_typed_weaken.
 Qed.
 Lemma cmap_valid_sep_valid Γ Δ m : ✓{Γ,Δ} m → sep_valid m.

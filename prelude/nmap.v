@@ -7,7 +7,7 @@ Require Export prelude fin_maps.
 
 Local Open Scope N_scope.
 
-Record Nmap A := NMap { Nmap_0 : option A; Nmap_pos : Pmap A }.
+Record Nmap (A : Type) : Type := NMap { Nmap_0 : option A; Nmap_pos : Pmap A }.
 Arguments Nmap_0 {_} _.
 Arguments Nmap_pos {_} _.
 Arguments NMap {_} _ _.
@@ -81,7 +81,7 @@ Qed.
 
 (** * Finite sets *)
 (** We construct sets of [N]s satisfying extensional equality. *)
-Notation Nset := (mapset (Nmap unit)).
+Notation Nset := (mapset Nmap).
 Instance Nmap_dom {A} : Dom (Nmap A) Nset := mapset_dom.
 Instance: FinMapDom N Nmap Nset := mapset_dom_spec.
 

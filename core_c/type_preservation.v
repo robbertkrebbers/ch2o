@@ -114,8 +114,8 @@ Proof.
     typed_inversion_all. split; [|eauto using mem_unlock_forward].
     eexists (Fun_type f'); simpl; split_ands; eauto using mem_unlock_valid'.
     + typed_constructor; eauto.
-      eapply (EVals_typed_inv Γ _ (locals k.*2)); eauto using Forall2_impl,
-        env_valid_args_valid, expr_typed_weaken, mem_unlock_forward.
+      eapply (EVals_typed_inv Γ _ (locals k.*2)); eauto using
+        env_valid_args_valid, exprs_typed_weaken, mem_unlock_forward.
     + repeat typed_constructor;
         eauto using ectx_typed_weaken, ctx_typed_weaken, mem_unlock_forward.
   * intros m k E e ?? (τf&HS&?&?) ?; typed_inversion HS; split; auto.

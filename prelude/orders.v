@@ -18,7 +18,7 @@ Section orders.
   Lemma reflexive_eq `{!Reflexive R} X Y : X = Y → X ⊆ Y.
   Proof. by intros <-. Qed.
   Lemma anti_symmetric_iff `{!PartialOrder R} X Y : X = Y ↔ R X Y ∧ R Y X.
-  Proof. intuition (subst; auto). Qed.
+  Proof. split. by intros ->. by intros [??]; apply (anti_symmetric _). Qed.
   Lemma strict_spec X Y : X ⊂ Y ↔ X ⊆ Y ∧ Y ⊈ X.
   Proof. done. Qed.
   Lemma strict_include X Y : X ⊂ Y → X ⊆ Y.

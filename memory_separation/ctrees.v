@@ -3,7 +3,7 @@
 Require Export separation types.
 Local Open Scope ctype_scope.
 
-Inductive ctree (K A : Set) : Set :=
+Inductive ctree (K : iType) (A : sType) : iType :=
   | MBase : base_type K → list A → ctree K A
   | MArray : type K → list (ctree K A) → ctree K A
   | MStruct : tag → list (ctree K A * list A) → ctree K A
@@ -26,7 +26,7 @@ Proof. by injection 1. Qed.
 Instance: Injective (=) (=) (@MUnionAll K A t).
 Proof. by injection 1. Qed.
 
-Instance ctree_eq_dec {K A : Set}
+Instance ctree_eq_dec {K : iType} {A : sType}
     `{∀ k1 k2 : K, Decision (k1 = k2), ∀ x1 x2 : A, Decision (x1 = x2)} :
   ∀ w1 w2 : ctree K A, Decision (w1 = w2).
 Proof.
@@ -49,7 +49,7 @@ Proof.
 Defined.
 
 Section ctree_ind.
-  Context {K A} (P : ctree K A → Prop).
+  Context {K : iType} {A : sType} (P : ctree K A → Prop).
   Context (Pbase : ∀ τb xs, P (MBase τb xs)).
   Context (Parray : ∀ τ ws, Forall P ws → P (MArray τ ws)).
   Context (Pstruct : ∀ t wxss, Forall (P ∘ fst) wxss → P (MStruct t wxss)).
@@ -68,7 +68,7 @@ Section ctree_ind.
     end.
 End ctree_ind.
 
-Definition ctree_flatten {K A : Set} : ctree K A → list A :=
+Definition ctree_flatten {K A} : ctree K A → list A :=
   fix go w :=
   match w with
   | MBase _ xs => xs
@@ -83,11 +83,11 @@ Notation ctree_unmapped w := (ctree_Forall sep_unmapped w).
 Notation ctree_splittable w := (ctree_Forall sep_splittable w).
 Notation ctree_unshared w := (ctree_Forall sep_unshared w).
 
-Definition MUnion' {K A : Set} `{SeparationOps A}
+Definition MUnion' {K} `{SeparationOps A}
     (t : tag) (i : nat) (w : ctree K A) (xs : list A) : ctree K A :=
   if decide (ctree_unmapped w ∧ Forall sep_unmapped xs)
   then MUnionAll t (ctree_flatten w ++ xs) else MUnion t i w xs.
-Definition ctree_map {K A B : Set} (f : A → B) : ctree K A → ctree K B :=
+Definition ctree_map {K A B} (f : A → B) : ctree K A → ctree K B :=
   fix go w :=
   match w with
   | MBase τb xs => MBase τb (f <$> xs)
@@ -96,8 +96,7 @@ Definition ctree_map {K A B : Set} (f : A → B) : ctree K A → ctree K B :=
   | MUnion t i w xs => MUnion t i (go w) (f <$> xs)
   | MUnionAll t xs => MUnionAll t (f <$> xs)
   end.
-Definition ctree_merge_array {K A B C : Set}
-  (f : ctree K A → list B → ctree K C) :
+Definition ctree_merge_array {K A B C} (f : ctree K A → list B → ctree K C) :
     list (ctree K A) → list B → list (ctree K C) :=
   fix go ws ys :=
   match ws with
@@ -106,8 +105,8 @@ Definition ctree_merge_array {K A B C : Set}
      let sz := length (ctree_flatten w) in
      f w (take sz ys) :: go ws (drop sz ys)
   end.
-Definition ctree_merge_struct {K A B C : Set} (f : A → B → C)
-  (g : ctree K A → list B → ctree K C) :
+Definition ctree_merge_struct {K A B C}
+  (f : A → B → C) (g : ctree K A → list B → ctree K C) :
     list (ctree K A * list A) → list B → list (ctree K C * list C) :=
   fix go wxss ys :=
   match wxss with
@@ -119,7 +118,7 @@ Definition ctree_merge_struct {K A B C : Set} (f : A → B → C)
      (g w (take sz_w ys), zip_with f xs (take sz_xs ys'))
      :: go wxss (drop sz_xs ys')
   end.
-Definition ctree_merge {K A B C : Set}
+Definition ctree_merge {K A B C}
     (f : A → B → C) : ctree K A → list B → ctree K C :=
   fix go w ys :=
   match w with
@@ -134,7 +133,7 @@ Definition ctree_merge {K A B C : Set}
   end.
 
 Section operations.
-  Context {K A : Set} `{SeparationOps A}.
+  Context {K : iType} `{SeparationOps A}.
 
   Inductive ctree_valid : ctree K A → Prop :=
     | MBase_valid τb xs : Forall sep_valid xs → ctree_valid (MBase τb xs)
@@ -385,7 +384,7 @@ Section operations.
 End operations.
 
 Section memory_trees.
-Context {K A : Set} `{Separation A}.
+Context {K : iType} `{Separation A}.
 Implicit Types x : A.
 Implicit Types xs : list A.
 Implicit Types xss : list (list A).
@@ -423,7 +422,7 @@ Qed.
 Hint Immediate ctree_valid_Forall.
 
 Section merge.
-Context {B C : Set} `{SeparationOps C}.
+Context {B : Type} `{SeparationOps C}.
 Lemma ctree_flatten_merge (f : A → B → C) w ys :
   ctree_flatten (ctree_merge f w ys) = zip_with f (ctree_flatten w) ys.
 Proof.
@@ -578,8 +577,7 @@ Ltac list.solve_length ::=
   assumption || congruence.
 
 Section merge_merge.
-Context {B C D : Set}.
-Context (f :A → B → A) (g : A → C → A) (h1 : A → D → A) (h2 : C → B → D).
+Context {B C D} (f:A → B → A) (g : A → C → A) (h1 : A → D → A) (h2 : C → B → D).
 Lemma ctree_merge_merge w ys1 ys2 :
   length (ctree_flatten w) = length ys1 →
   length (ctree_flatten w) = length ys2 →
@@ -601,7 +599,7 @@ Qed.
 End merge_merge.
 
 Section merge_union.
-Context {B : Set} (f : A → B → A).
+Context {B} (f : A → B → A).
 Lemma ctree_merge_disjoint w1 w2 ys :
   w1 ⊥ w2 → length (ctree_flatten w1) = length ys →
   Forall2 (λ x y, sep_unmapped (f x y) → sep_unmapped x) (ctree_flatten w1) ys →
@@ -809,7 +807,7 @@ Proof.
   * induction IH as [|[] []]; simplifier;
       auto using seps_commutative with f_equal.
 Qed.
-Lemma ctree_merge_id {B : Set} (h : A → B → A) w ys :
+Lemma ctree_merge_id {B} (h : A → B → A) w ys :
   length (ctree_flatten w) = length ys →
   zip_with h (ctree_flatten w) ys = ctree_flatten w → ctree_merge h w ys = w.
 Proof.
@@ -823,7 +821,7 @@ Proof.
   * intros; simplifier; f_equal; auto.
   * by intros; f_equal.
 Qed.
-Lemma ctree_flatten_map {B : Set} (h : A → B) w :
+Lemma ctree_flatten_map {B} (h : A → B) w :
   ctree_flatten (ctree_map h w) = h <$> ctree_flatten w.
 Proof.
   induction w as [|? ws IH|? wxss IH| |] using @ctree_ind_alt; simpl; auto.
@@ -1085,7 +1083,7 @@ Proof.
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
     intros wxss3 Hwxss3 Hwxss3'. f_equal.
     revert wxss3 Hwxss3 Hwxss3'. induction IH as [|[][]];
-      intros [|[]] ??; simplifier; f_equal;
+      intros [|[]]; intros; simplifier; f_equal;
       auto using seps_associative_rev with f_equal.
   * intros t i w1 w2 xs1 xs2 ? IH Hxs ?? w3 Hw3; pattern w3;
       apply (ctree_disjoint_inv_l _ _ _ Hw3); clear w3 Hw3; simpl.
@@ -1247,7 +1245,7 @@ Proof.
   * intros t wxss3 wxss1 _ IH Hwxss w2 Hw2; pattern w2;
       apply (ctree_disjoint_inv_l _ _ _ Hw2); clear w2 Hw2; simpl.
     intros wxss2; rewrite !(injective_iff (MStruct t)); revert wxss2.
-    induction IH as [|[][]]; intros [|[]] ???;
+    induction IH as [|[][]]; intros [|[]]; intros;
       simplifier; repeat f_equal; eauto.
   * intros t i w3 w1 xs3 xs1 ? IH ?? Hc w2 Hw2; pattern w2;
       apply (ctree_disjoint_inv_l _ _ _ Hw2); clear w2 Hw2; simpl.
@@ -1471,7 +1469,7 @@ Proof.
   * induction IH; decompose_Forall_hyps; f_equal; auto.
   * induction IH as [|[]]; decompose_Forall_hyps; repeat f_equal'; auto.
 Qed.
-Lemma ctree_map_compose {B C : Set} (f : A → B) (g : B → C) w :
+Lemma ctree_map_compose {B C} (f : A → B) (g : B → C) w :
   ctree_map (g ∘ f) w = ctree_map g (ctree_map f w).
 Proof.
   induction w as [|τ ws IH|t wxss IH| |] using @ctree_ind_alt;

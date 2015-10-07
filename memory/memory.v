@@ -176,7 +176,7 @@ Lemma mem_alloc_forward_least Γ Δ Δ' m o μ γ v τ :
 Proof.
   split.
   * intros o' τ'; destruct (decide (o' = o)) as [->|];
-      eauto using mem_alloc_index_typed_inv, memenv_forward_typed.
+      eauto using mem_alloc_index_typed_inv, index_typed_weaken.
     intros [β ?]; simplify_map_equality.
     set (γs:=replicate (bit_size_of Γ (type_of v)) γ).
     destruct (cmap_valid_Obj Γ Δ' (mem_alloc Γ o μ γ v m) o
@@ -345,8 +345,8 @@ Proof.
   { rewrite mem_dom_alloc_list, elem_of_union, elem_of_of_list
        by eauto using Forall2_length; tauto. }
   split_ands; eauto 6 using mem_alloc_valid', perm_full_valid,
-    perm_full_mapped, Forall2_impl, val_typed_weaken, mem_alloc_forward',
-    mem_alloc_allocable_list, mem_alloc_index_typed, memenv_forward_typed.
+    perm_full_mapped, val_typed_weaken, mem_alloc_forward',
+    mem_alloc_allocable_list, mem_alloc_index_typed, indexes_typed_weaken.
 Qed.
 Lemma mem_alloc_list_index_typed Γ m os vs τs :
   ✓ Γ → ✓{Γ} m → Forall_fresh (dom indexset m) os → length os = length vs →
@@ -421,8 +421,7 @@ Lemma mem_free_memenv_compat Δ1 Δ2 o :
   alter (prod_map id (λ _, true)) o Δ1 ⇒ₘ alter (prod_map id (λ _, true)) o Δ2.
 Proof.
   intros [Htyped Halive]; split.
-  * eauto 4 using memenv_forward_typed,
-      mem_free_forward, mem_free_index_typed_inv.
+  * eauto 4 using index_typed_weaken,mem_free_forward, mem_free_index_typed_inv.
   * intros o' τ [β ?] [τ' ?]; destruct (decide (o = o'));
       simplify_map_equality; [simplify_option_equality|].
     destruct (Halive o' τ) as [τ'' ?]; [by exists β|by exists τ'|].
@@ -433,7 +432,7 @@ Lemma mem_free_forward_least Γ Δ Δ' m o μ :
   ✓{Γ,Δ'} (mem_free o m) → Δ ⇒ₘ Δ' → alter (prod_map id (λ _, true)) o Δ ⇒ₘ Δ'.
 Proof.
   intros (w&?&_).
-  split; eauto using mem_free_index_typed_inv, memenv_forward_typed.
+  split; eauto using mem_free_index_typed_inv, index_typed_weaken.
   intros o' τ'; destruct (decide (o' = o)) as [->|];
     eauto using mem_free_index_alive_ne, memenv_forward_alive,
     mem_free_index_typed_inv.
@@ -458,19 +457,19 @@ Proof.
   { intros o' τ; rewrite lookup_alter_Some;
       intros [(?&[τ'|w μ']&?&?)|[??]]; simplify_equality'.
     * destruct (cmap_valid_Freed Γ Δ (CMap m) o' τ') as (?&?&?); eauto 10
-        using mem_free_forward, memenv_forward_typed, memenv_forward_alive.
+        using mem_free_forward, index_typed_weaken, memenv_forward_alive.
     * destruct (cmap_valid_Obj Γ Δ (CMap m) o' w μ')
         as (?&?&?&?&?);simplify_type_equality';
         eauto 11 using ctree_typed_type_valid, mem_free_index_alive,
-        mem_free_forward, memenv_forward_typed, memenv_forward_alive.
+        mem_free_forward, index_typed_weaken, memenv_forward_alive.
     * destruct (cmap_valid_Freed Γ Δ (CMap m) o' τ) as (?&?&?); eauto 10 using
-        mem_free_forward, memenv_forward_typed, memenv_forward_alive. }
+        mem_free_forward, index_typed_weaken, memenv_forward_alive. }
   intros o' w μ; rewrite lookup_alter_Some;
     intros [(?&[]&?&?)|[??]]; simplify_map_equality'.
   destruct (cmap_valid_Obj Γ Δ (CMap m) o' w μ) as (τ'&?&?&?&?); eauto.
   exists τ'; split_ands; eauto using
     ctree_typed_weaken, mem_free_index_alive_ne, mem_free_forward,
-     mem_free_forward, memenv_forward_typed, memenv_forward_alive.
+     mem_free_forward, index_typed_weaken, memenv_forward_alive.
 Qed.
 Lemma mem_free_valid' Γ m o : ✓ Γ → ✓{Γ} m → ✓{Γ} (mem_free o m).
 Proof.

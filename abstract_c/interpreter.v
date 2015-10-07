@@ -6,21 +6,21 @@ Local Open Scope string_scope.
 Local Open Scope list_scope.
 Local Open Scope ctype_scope.
 
-Record istate (K E : Set) := IState {
+Record istate (K E : iType) : iType := IState {
   events_new : list E; (**i the events generated in the last step *)
   events_all : list E; (**i all previously generated events,
     including those in the last step *)
   sem_state : state K
 }.
 Arguments IState {_ _} _ _ _.
-Instance istate_dec {K E : Set} `{Env K, ∀ ε1 ε2 : E, Decision (ε1 = ε2)}
+Instance istate_dec {K E} `{Env K, ∀ ε1 ε2 : E, Decision (ε1 = ε2)}
   (iS1 iS2 : istate K E) : Decision (iS1 = iS2).
 Proof. solve_decision. Defined.
 
 Section interpreter.
 Context (A : architecture).
 Notation K := (arch_rank A).
-Context {E : Set} `{∀ ε1 ε2 : E, Decision (ε1 = ε2)}.
+Context `{∀ ε1 ε2 : E, Decision (ε1 = ε2)}.
 Context (e : ∀ `{Env K}, env K → state K → list E).
 Notation M := (error (frontend_state K) string).
 

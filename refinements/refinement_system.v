@@ -68,11 +68,11 @@ Inductive expr_refine' (Γ : env K)
      expr_refine' Γ τs α f Δ1 Δ2 (free e1) (free e2) (inr voidT)
   | EUnOp_refine op e1 e2 τ σ :
      unop_typed op τ σ → expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr τ) →
-     expr_refine' Γ τs α f Δ1 Δ2 (@{op} e1) (@{op} e2) (inr σ)
+     expr_refine' Γ τs α f Δ1 Δ2 (.{op} e1) (.{op} e2) (inr σ)
   | EBinOp_refine op e1 e2 e1' e2' τ τ' σ :
      binop_typed op τ τ' σ → expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr τ) →
      expr_refine' Γ τs α f Δ1 Δ2 e1' e2' (inr τ') →
-     expr_refine' Γ τs α f Δ1 Δ2 (e1 @{op} e1') (e2 @{op} e2') (inr σ)
+     expr_refine' Γ τs α f Δ1 Δ2 (e1 .{op} e1') (e2 .{op} e2') (inr σ)
   | EIf_refine e1 e2 e1' e2' e1'' e2'' τb σlr :
      expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr (baseT τb)) → τb ≠ TVoid →
      expr_refine' Γ τs α f Δ1 Δ2 e1' e2' σlr →
@@ -136,12 +136,12 @@ Section expr_refine_ind.
     P (free e1) (free e2) (inr voidT)).
   Context (Punop : ∀ op e1 e2 τ σ,
     unop_typed op τ σ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ →
-    P e1 e2 (inr τ) → P (@{op} e1) (@{op} e2) (inr σ)).
+    P e1 e2 (inr τ) → P (.{op} e1) (.{op} e2) (inr σ)).
   Context (Pbinop : ∀ op e1 e2 e1' e2' τ τ' σ,
     binop_typed op τ τ' σ →
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ → P e1 e2 (inr τ) →
     e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' → P e1' e2' (inr τ') →
-    P (e1 @{op} e1') (e2 @{op} e2') (inr σ)).
+    P (e1 .{op} e1') (e2 .{op} e2') (inr σ)).
   Context (Pif : ∀ e1 e2 e1' e2' e1'' e2'' τb σlr,
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr (baseT τb) →
     P e1 e2 (inr (baseT τb)) → τb ≠ TVoid →
@@ -207,15 +207,15 @@ Inductive ectx_item_refine' (Γ : env K) (τs: list (type K))
      ectx_item_refine' Γ τs α f Δ1 Δ2 (free □) (free □) (inl τp) (inr voidT)
   | CUnOp_refine op τ σ :
      unop_typed op τ σ →
-     ectx_item_refine' Γ τs α f Δ1 Δ2 (@{op} □) (@{op} □) (inr τ) (inr σ)
+     ectx_item_refine' Γ τs α f Δ1 Δ2 (.{op} □) (.{op} □) (inr τ) (inr σ)
   | CBinOpL_refine op e1' e2' τ τ' σ :
      binop_typed op τ τ' σ → e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : inr τ' →
      ectx_item_refine' Γ τs α f Δ1 Δ2
-       (□ @{op} e1') (□ @{op} e2') (inr τ) (inr σ)
+       (□ .{op} e1') (□ .{op} e2') (inr τ) (inr σ)
   | CBinOpR_refine op e1 e2 τ τ' σ :
      binop_typed op τ τ' σ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ →
      ectx_item_refine' Γ τs α f Δ1 Δ2
-       (e1 @{op} □) (e2 @{op} □) (inr τ') (inr σ)
+       (e1 .{op} □) (e2 .{op} □) (inr τ') (inr σ)
   | CIf_refine e1' e2' e1'' e2'' τb σlr :
      τb ≠ TVoid → e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2' : σlr →
      e1'' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2'' : σlr →

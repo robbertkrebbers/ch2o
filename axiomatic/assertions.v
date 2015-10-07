@@ -18,7 +18,7 @@ Local Hint Extern 1 (_ ⊆{_} _) => etransitivity; [eassumption|].
 Local Hint Extern 1 (_ ⊆{_} _) => etransitivity; [|eassumption].
 
 (** * Definition of assertions *)
-Record assert (K : Set) `{Env K} := Assert {
+Record assert (K : iType) `{Env K} := Assert {
   assert_holds : env K → memenv K → funenv K → stack K → nat → mem K → Prop;
   assert_weaken Γ1 Γ2 Δ1 Δ2 δ1 δ2 ρ n n' m :
     ✓ Γ1 → ✓{Γ1,Δ1} m → ✓{Δ1}* ρ →
@@ -34,8 +34,8 @@ Arguments Assert {_ _} _ _.
 Arguments assert_holds {_ _} _%A _ _ _ _ _ _.
 Arguments assert_weaken {_ _} _%A _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _.
 
-(** The relation [P ⊆@{Γ} Q] states that the assertion [Q] is a logical
-consequence of [P] in [Γ] and [P ≡@{Γ} Q] states that [P] and [Q] are logically
+(** The relation [P ⊆.{Γ} Q] states that the assertion [Q] is a logical
+consequence of [P] in [Γ] and [P ≡.{Γ} Q] states that [P] and [Q] are logically
 equivalent in [Γ]. *)
 Instance assert_entails `{Env K} :
     SubsetEqE (env K * funenv K) (assert K) := λ Γδ P Q,
@@ -183,7 +183,7 @@ Notation "'Π' Ps" := (assert_sep_list Ps)
 (** The assertion [e ⇓ v : τlr] asserts that the expression [e] evaluates to [v]
 and [e ⇓ - : τlr] asserts that the expression [e] evaluates to an arbitrary
 value (in other words, [e] does not impose undefined behavior). *)
-Notation vassert K := (lrval K → assert K).
+Notation vassert K := ((ptr K + val K) → assert K)%type.
 Program Definition assert_expr `{EnvSpec K} (e : expr K) : vassert K := λ ν, {|
   assert_holds Γ Δ δ ρ n m := ∃ τlr, (Γ,Δ,ρ.*2) ⊢ e : τlr ∧ ⟦ e ⟧ Γ ρ m = Some ν
 |}.
@@ -625,7 +625,7 @@ Hint Extern 1 (base_unop_typed _ _ _) => constructor.
 Lemma assert_eval_int_unop Γ δ op e x τi :
   int_unop_ok op x τi →
   (e ⇓ inr (intV{τi} x))%A
-  ⊆{Γ,δ} (@{op} e ⇓ inr (intV{int_unop_type_of op τi} (int_unop op x τi)))%A.
+  ⊆{Γ,δ} (.{op} e ⇓ inr (intV{int_unop_type_of op τi} (int_unop op x τi)))%A.
 Proof.
   intros ? Γ' Δ δ' ρ n m ?????? (τlr&?&?).
   assert ((Γ',Δ) ⊢ inr (intV{τi} x) : τlr) by eauto using expr_eval_typed.
@@ -635,13 +635,13 @@ Qed.
 Lemma assert_eval_int_unop' Γ δ P op e x y τi σi :
   P ⊆{Γ,δ} (e ⇓ inr (intV{τi} x))%A →
   int_unop_type_of op τi = σi → int_unop_ok op x τi → int_unop op x τi = y → 
-  P ⊆{Γ,δ} (@{op} e ⇓ inr (intV{σi} y))%A.
+  P ⊆{Γ,δ} (.{op} e ⇓ inr (intV{σi} y))%A.
 Proof. intros; subst; rewrite <-assert_eval_int_unop by eauto; eauto. Qed.
 Hint Extern 1 (binop_typed _ _ _ _) => constructor.
 Hint Extern 1 (base_binop_typed _ _ _ _) => constructor.
 Lemma assert_eval_int_binop Γ δ op e1 e2 x1 x2 τi1 τi2 :
   (int_binop_ok op x1 τi1 x2 τi2) →
-  (e1 ⇓ inr (intV{τi1} x1) ∧ e2 ⇓ inr (intV{τi2} x2))%A ⊆{Γ,δ} (e1 @{op} e2 ⇓
+  (e1 ⇓ inr (intV{τi1} x1) ∧ e2 ⇓ inr (intV{τi2} x2))%A ⊆{Γ,δ} (e1 .{op} e2 ⇓
        inr (intV{int_binop_type_of op τi1 τi2} (int_binop op x1 τi1 x2 τi2)))%A.
 Proof.
   intros Hok Γ' Δ δ' ρ n m ?????? [(τlr1&?&?) (τlr2&?&?)].
@@ -654,7 +654,7 @@ Lemma assert_eval_int_binop' Γ δ P op e1 e2 x1 x2 y τi1 τi2 σi :
   P ⊆{Γ,δ} (e1 ⇓ inr (intV{τi1} x1))%A → P ⊆{Γ,δ} (e2 ⇓ inr (intV{τi2} x2))%A →
   σi = int_binop_type_of op τi1 τi2 →
   int_binop_ok op x1 τi1 x2 τi2 → int_binop op x1 τi1 x2 τi2 = y →
-  P ⊆{Γ,δ} (e1 @{op} e2 ⇓ inr (intV{σi} y))%A.
+  P ⊆{Γ,δ} (e1 .{op} e2 ⇓ inr (intV{σi} y))%A.
 Proof.
   intros; subst;
     rewrite <-assert_eval_int_binop by eauto; eauto using assert_and_intro.
@@ -664,7 +664,7 @@ Lemma assert_eval_int_arithop' Γ δ P op e1 e2 x1 x2 y τi1 τi2 σi :
   σi = int_promote τi1 ∪ int_promote τi2 →
   int_pre_arithop_ok op (int_pre_cast σi x1) (int_pre_cast σi x2) σi →
   int_pre_arithop op (int_pre_cast σi x1) (int_pre_cast σi x2) σi = y →
-  P ⊆{Γ,δ} (e1 @{ArithOp op} e2 ⇓ inr (intV{σi} y))%A.
+  P ⊆{Γ,δ} (e1 .{ArithOp op} e2 ⇓ inr (intV{σi} y))%A.
 Proof.
   intros ?? -> ??.
   rewrite assert_Prop_True by (rewrite <-(assert_eval_int_typed _ _ e1); auto).

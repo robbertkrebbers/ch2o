@@ -70,10 +70,10 @@ Global Instance expr_type_check: TypeCheck envs (lrtype K) (expr K) :=
   | free e =>
      τp ← type_check Γs e ≫= maybe inl;
      Some (inr voidT)
-  | @{op} e =>
+  | .{op} e =>
      τ ← type_check Γs e ≫= maybe inr;
      inr <$> unop_type_of op τ
-  | e1 @{op} e2 =>
+  | e1 .{op} e2 =>
      τ1 ← type_check Γs e1 ≫= maybe inr;
      τ2 ← type_check Γs e2 ≫= maybe inr;
      inr <$> binop_type_of op τ1 τ2
@@ -129,11 +129,11 @@ Global Instance ectx_item_lookup :
   | alloc{τ} □, inr τ' =>
      _ ← maybe (TBase ∘ TInt) τ'; guard (✓{Γ} τ); Some (inl (TType τ))
   | free □, inl τp => Some (inr voidT)
-  | @{op} □, inr τ => inr <$> unop_type_of op τ
-  | □ @{op} e2, inr τ1 =>
+  | .{op} □, inr τ => inr <$> unop_type_of op τ
+  | □ .{op} e2, inr τ1 =>
      τ2 ← type_check Γs e2 ≫= maybe inr;
      inr <$> binop_type_of op τ1 τ2
-  | e1 @{op} □, inr τ2 =>
+  | e1 .{op} □, inr τ2 =>
      τ1 ← type_check Γs e1 ≫= maybe inr;
      inr <$> binop_type_of op τ1 τ2
   | if{□} e2 else e3, inr τ1 =>
@@ -155,7 +155,7 @@ Global Instance ectx_item_lookup :
   end.
 Global Instance ectx_lookup :
     LookupE envs (ectx K) (lrtype K) (lrtype K) :=
-  fix go Γs E τlr := let _ : LookupE _ _ _ _ := @go in
+  fix go Γs E τlr {struct E} := let _ : LookupE _ _ _ _ := @go in
   match E with [] => Some τlr | Ei :: E => τlr !!{Γs} Ei ≫= lookupE Γs E end.
 Definition rettype_union_alt
     (mσ1 mσ2 : option (type K)) : option (option (type K)) :=

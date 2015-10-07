@@ -19,7 +19,7 @@ Local Hint Extern 0 (¬@eq positive _ _) => congruence.
 not ensure canonical representations of maps. For example the empty map can
 be represented as a binary tree of an arbitrary size that contains [None] at
 all nodes. *)
-Inductive Pmap_raw A :=
+Inductive Pmap_raw (A : Type) : Type :=
   | PLeaf: Pmap_raw A
   | PNode: Pmap_raw A → option A → Pmap_raw A → Pmap_raw A.
 Arguments PLeaf {_}.
@@ -44,7 +44,7 @@ Proof.
   | PLeaf => right _
   | PNode _ (Some x) _ => left _
   | PNode l Node r => cast_if_or (go l) (go r)
-  end); clear go; abstract first [constructor (by auto)|by inversion 1].
+  end); clear go; abstract first [constructor; by auto|by inversion 1].
 Defined.
 
 (** The following predicate describes well well formed trees. A tree is well
@@ -65,12 +65,12 @@ Proof.
   | PNode l (Some x) r => cast_if_and (go l) (go r)
   | PNode l Node r =>
      cast_if_and3 (decide (Pmap_ne l ∨ Pmap_ne r)) (go l) (go r)
-  end); clear go; abstract first [constructor (by auto)|by inversion 1].
+  end); clear go; abstract first [constructor; by auto|by inversion 1].
 Defined.
 
 (** Now we restrict the data type of trees to those that are well formed and
 thereby obtain a data type that ensures canonicity. *)
-Inductive Pmap A := PMap {
+Inductive Pmap (A : Type) : Type := PMap {
   pmap_car : Pmap_raw A;
   pmap_bool_prf : bool_decide (Pmap_wf pmap_car)
 }.
@@ -387,7 +387,7 @@ Qed.
 
 (** * Finite sets *)
 (** We construct sets of [positives]s satisfying extensional equality. *)
-Notation Pset := (mapset (Pmap unit)).
+Notation Pset := (mapset Pmap).
 Instance Pmap_dom {A} : Dom (Pmap A) Pset := mapset_dom.
 Instance: FinMapDom positive Pmap Pset := mapset_dom_spec.
 

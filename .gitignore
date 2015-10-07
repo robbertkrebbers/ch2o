@@ -28,3 +28,5 @@ ch2o
 *.native
 *.byte
 a.out
+*.aux
+.coq-native/

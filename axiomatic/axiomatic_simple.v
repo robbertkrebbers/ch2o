@@ -170,8 +170,8 @@ Proof.
 Qed.
 Lemma ax_unop' Γ δ A P Q op e v v' :
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ inr v | Q }} →
-  (A ★ Q)%A ⊆{Γ,δ} (@{op} #v ⇓ inr v')%A →
-  Γ\ δ\ A ⊨ₑ {{ P }} @{op} e {{ inr v' | Q }}.
+  (A ★ Q)%A ⊆{Γ,δ} (.{op} #v ⇓ inr v')%A →
+  Γ\ δ\ A ⊨ₑ {{ P }} .{op} e {{ inr v' | Q }}.
 Proof.
   rewrite (commutative (★)%A); intros; eapply ax_unop; eauto.
   intros; apply assert_Prop_intro_l; intros; simplify_equality'.
@@ -181,8 +181,8 @@ Qed.
 Lemma ax_binop' Γ δ A P1 P2 Q1 Q2 op e1 e2 v1 v2 v :
   Γ\ δ\ A ⊨ₑ {{ P1 }} e1 {{ inr v1 | Q1 }} →
   Γ\ δ\ A ⊨ₑ {{ P2 }} e2 {{ inr v2 | Q2 }} →
-  (A ★ Q1 ★ Q2)%A ⊆{Γ,δ} (# v1 @{op} # v2 ⇓ inr v)%A →
-  Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 @{op} e2 {{ inr v | Q1 ★ Q2 }}.
+  (A ★ Q1 ★ Q2)%A ⊆{Γ,δ} (# v1 .{op} # v2 ⇓ inr v)%A →
+  Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 .{op} e2 {{ inr v | Q1 ★ Q2 }}.
 Proof.
   rewrite (commutative (★)%A); intros; eapply ax_binop; eauto.
   intros; simpl; rewrite <-!(associative (★)%A).
@@ -195,8 +195,8 @@ Qed.
 Lemma ax_binop_r' Γ δ A P Q op e1 e2 v1 v2 v :
   Γ\ δ\ A ⊨ₑ {{ emp }} e1 {{ inr v1 | emp }} →
   Γ\ δ\ A ⊨ₑ {{ P }} e2 {{ inr v2 | Q }} →
-  (A ★ Q)%A ⊆{Γ,δ} (# v1 @{op} # v2 ⇓ inr v)%A →
-  Γ\ δ\ A ⊨ₑ {{ P }} e1 @{op} e2 {{ inr v | Q }}.
+  (A ★ Q)%A ⊆{Γ,δ} (# v1 .{op} # v2 ⇓ inr v)%A →
+  Γ\ δ\ A ⊨ₑ {{ P }} e1 .{op} e2 {{ inr v | Q }}.
 Proof.
   intros. rewrite <-(left_id _ (★)%A P), <-(left_id _ (★)%A Q).
   eapply ax_binop'; rewrite ?(left_id _ (★)%A); eauto.
@@ -213,7 +213,7 @@ Proof.
 Qed.
 Lemma ax_expr_if' Γ δ A P P' P'' Q e e1 e2 vb :
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ inr (VBase vb) | P' }} →
-  (A ★ P')%A ⊆{Γ,δ} (@{NotOp} #VBase vb ⇓ -)%A →
+  (A ★ P')%A ⊆{Γ,δ} (.{NotOp} #VBase vb ⇓ -)%A →
   P' ⊆{Γ,δ} (P''◊)%A →
   Γ\ δ\ A ⊨ₑ {{ ⌜ ¬base_val_is_0 vb ⌝ ★ P'' }} e1 {{ Q }} →
   Γ\ δ\ A ⊨ₑ {{ ⌜ base_val_is_0 vb ⌝ ★ P'' }} e2 {{ Q }} →
@@ -245,7 +245,7 @@ Proof.
 Qed.
 Lemma ax_if' Γ δ R J T C P P' P'' Q e s1 s2 vb :
   Γ\ δ\ emp ⊨ₑ {{ P }} e {{ inr (VBase vb) | P' }} →
-  P' ⊆{Γ,δ} (@{NotOp} #VBase vb ⇓ -)%A →
+  P' ⊆{Γ,δ} (.{NotOp} #VBase vb ⇓ -)%A →
   P' ⊆{Γ,δ} (P''◊)%A →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ ⌜ ¬base_val_is_0 vb ⌝ ★ P'' }} s1 {{ Q }} →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ ⌜ base_val_is_0 vb ⌝ ★ P'' }} s2 {{ Q }} →
@@ -261,7 +261,7 @@ Qed.
 Lemma ax_if'' Γ δ R J T C P Q e s1 s2 vb :
   UnlockIndep P →
   Γ\ δ\ emp ⊨ₑ {{ P }} e {{ inr (VBase vb) | P }} →
-  P ⊆{Γ,δ} (@{NotOp} #VBase vb ⇓ -)%A →
+  P ⊆{Γ,δ} (.{NotOp} #VBase vb ⇓ -)%A →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ ⌜ ¬base_val_is_0 vb ⌝ ★ P }} s1 {{ Q }} →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ ⌜ base_val_is_0 vb ⌝ ★ P }} s2 {{ Q }} →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} if{e} s1 else s2 {{ Q }}.

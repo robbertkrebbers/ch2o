@@ -68,7 +68,7 @@ Lemma surjective_cancel `{Countable A} `{∀ x y : B, Decision (x = y)}
   (f : A → B) `{!Surjective (=) f} : { g : B → A & Cancel (=) f g }.
 Proof.
   exists (λ y, choose (λ x, f x = y) (surjective f y)).
-  intros y. by rewrite (choose_correct (λ _, _) (surjective f y)).
+  intros y. by rewrite (choose_correct (λ x, f x = y) (surjective f y)).
 Qed.
 
 (** ** Instances *)
@@ -200,7 +200,7 @@ Program Instance list_countable `{Countable A} : Countable (list A) :=  {|
   decode p := list_decode p ≫= mapM decode
 |}.
 Next Obligation.
-  intros ??? l. rewrite list_decode_encode. simpl.
+  intros ??? l; simpl; rewrite list_decode_encode; simpl.
   apply mapM_fmap_Some; auto using decode_encode.
 Qed.
 
@@ -227,5 +227,5 @@ Program Instance nat_countable : Countable nat := {|
   decode p := N.to_nat <$> decode p
 |}.
 Next Obligation.
-  intros x. rewrite decode_encode; csimpl. by rewrite Nat2N.id.
+  intros x; lazy beta; rewrite decode_encode; csimpl. by rewrite Nat2N.id.
 Qed.

@@ -69,10 +69,10 @@ Definition ehexec (Γ : env K) (k : ctx K)
   | free (%{Ω} (Ptr a)) =>
      guard (mem_freeable a m);
      {[ #{Ω} voidV, mem_free (addr_index a) m ]}
-  | @{op} #{Ω} v =>
+  | .{op} #{Ω} v =>
      guard (val_unop_ok m op v);
      {[ #{Ω} val_unop op v, m ]}
-  | #{Ωl} vl @{op} #{Ωr} vr =>
+  | #{Ωl} vl .{op} #{Ωr} vr =>
      guard (val_binop_ok Γ m op vl vr);
      {[ #{Ωl ∪ Ωr} val_binop Γ op vl vr, m ]}
   | if{#{Ω} VBase vb} e2 else e3 =>

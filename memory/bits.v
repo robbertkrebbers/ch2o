@@ -2,14 +2,14 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export pointer_bits.
 
-Inductive bit (K : Set) :=
+Inductive bit (K : iType) : iType :=
   | BIndet : bit K
   | BBit : bool → bit K
   | BPtr : ptr_bit K → bit K.
 Arguments BIndet {_}.
 Arguments BBit {_} _.
 Arguments BPtr {_} _.
-Instance bit_eq_dec {K : Set} `{∀ k1 k2 : K, Decision (k1 = k2)}
+Instance bit_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
   (b1 b2 : bit K) : Decision (b1 = b2).
 Proof. solve_decision. Defined.
 

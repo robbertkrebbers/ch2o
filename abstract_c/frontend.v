@@ -7,12 +7,12 @@ Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 Local Open Scope list_scope.
 
-Inductive cint_rank : Set :=
+Inductive cint_rank : iType :=
   | CCharRank | CShortRank | CIntRank | CLongRank | CLongLongRank | CPtrRank.
-Inductive cint_type :=
+Inductive cint_type : iType :=
   CIntType { csign : option signedness; crank : cint_rank }.
 
-Inductive climit : Set :=
+Inductive climit : iType :=
   | CESizeOf : climit
   | CEAlignOf : climit
   | CEOffsetOf : string → climit
@@ -20,7 +20,7 @@ Inductive climit : Set :=
   | CEMax : climit
   | CEBits : climit.
 
-Inductive cexpr : Set :=
+Inductive cexpr : iType :=
   | CEVar : string → cexpr
   | CEConst : cint_type → Z → cexpr
   | CEConstString : list Z → cexpr
@@ -40,10 +40,10 @@ Inductive cexpr : Set :=
   | CEOr : cexpr → cexpr → cexpr
   | CECast : ctype → cinit → cexpr
   | CEField : cexpr → string → cexpr
-with cinit : Set :=
+with cinit : iType :=
   | CSingleInit : cexpr → cinit
   | CCompoundInit : list (list (string + cexpr) * cinit) → cinit
-with ctype : Set :=
+with ctype : iType :=
   | CTVoid : ctype
   | CTDef : string → ctype
   | CTEnum : string → ctype
@@ -65,7 +65,7 @@ Inductive cstorage := StaticStorage | ExternStorage | AutoStorage.
 Instance cstorage_eq_dec (sto1 sto2 : cstorage) : Decision (sto1 = sto2).
 Proof. solve_decision. Defined.
 
-Inductive cstmt : Set :=
+Inductive cstmt : iType :=
   | CSDo : cexpr → cstmt
   | CSSkip : cstmt
   | CSGoto : string → cstmt
@@ -85,14 +85,14 @@ Inductive cstmt : Set :=
   | CSIf : cexpr → cstmt → cstmt → cstmt
   | CSSwitch : cexpr → cstmt → cstmt.
 
-Inductive decl : Set :=
+Inductive decl : iType :=
   | CompoundDecl : compound_kind → list (string * ctype) → decl
   | EnumDecl : cint_type → list (string * option cexpr) → decl
   | TypeDefDecl : ctype → decl
   | GlobDecl : list cstorage → ctype → option cinit → decl
   | FunDecl : list cstorage → ctype → cstmt → decl.
 
-Inductive type_decl (K : Set) : Set :=
+Inductive type_decl (K : iType) : iType :=
   | Compound : compound_kind → list (string * type K) → type_decl K
   | Enum : int_type K → type_decl K.
 Arguments Compound {_} _ _.
@@ -102,7 +102,7 @@ Instance maybe_Compound {K} : Maybe2 (@Compound K) := λ t,
 Instance maybe_Enum {K} : Maybe (@Enum K) := λ t,
   match t with Enum τi => Some τi | _ => None end.
 
-Inductive global_decl (K : Set): Set :=
+Inductive global_decl (K : iType): iType :=
   | Global : cstorage → index → type K → bool → global_decl K
   | Fun: cstorage → list (type K) → type K → option (stmt K) → global_decl K
   | GlobalTypeDef : ptr_type K → global_decl K
@@ -116,7 +116,7 @@ Instance maybe_Fun {K} : Maybe4 (@Fun K) := λ d,
 Instance maybe_GlobalTypeDef {K} : Maybe (@GlobalTypeDef K) := λ d,
   match d with GlobalTypeDef τ => Some τ | _ => None end.
 
-Inductive local_decl (K : Set) : Set :=
+Inductive local_decl (K : iType) : iType :=
   | Extern : (index * type K + list (type K) * type K) → local_decl K
   | Local : type K → local_decl K
   | TypeDef : ptr_type K → local_decl K.
@@ -128,7 +128,7 @@ Instance maybe_TypeDef {K} : Maybe (@TypeDef K) := λ d,
 (** [None] delimits scopes *)
 Notation local_env K := (list (option (string * local_decl K))).
 
-Record frontend_state (K : Set) : Set := FState {
+Record frontend_state (K : iType) : iType := FState {
   to_compounds : tagmap (type_decl K);
   to_env : env K;
   to_mem : mem K;
@@ -282,13 +282,13 @@ Definition to_binop_expr (op : binop)
     (eτ1 eτ2 : expr K * type K) : option (expr K * lrtype K) :=
   (**i 1.) *) (
     let (e1,τ1) := eτ1 in let (e2,τ2) := eτ2 in
-    σ ← binop_type_of op τ1 τ2; Some (e1 @{op} e2, inr σ)) ∪
+    σ ← binop_type_of op τ1 τ2; Some (e1 .{op} e2, inr σ)) ∪
   (**i 2.) *) (
     (** one side is NULL or void *)
     guard (op = CompOp EqOp);
     '(e1,e2,τ) ← convert_ptrs eτ1 eτ2;
     σ ← binop_type_of (CompOp EqOp) τ τ;
-    Some (e1 @{op} e2, inr σ)).
+    Some (e1 .{op} e2, inr σ)).
 
 Definition int_const_types (cτi : cint_type) : list (int_type K) :=
   let (ms,k) := cτi in
@@ -526,8 +526,8 @@ Definition rhs_6_5_16_1p3_safe : expr K → bool :=
   | e #> (RUnion _ _ _) => false
   | alloc{_} _ => true
   | free e => true
-  | @{_} e => go e
-  | e1 @{_} e2 => go e1 && go e2
+  | .{_} e => go e
+  | e1 .{_} e2 => go e1 && go e2
   | if{_} e2 else e3 => go e2 && go e3
   | _,, e2 => go e2
   | cast{_} e => go e
@@ -611,7 +611,7 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
   | CEUnOp op ce =>
      '(e,τ) ← to_expr Δl ce ≫= curry to_R;
      σ ← error_of_option (unop_type_of op τ) "unary operator cannot be typed";
-     mret (@{op} e, inr σ)
+     mret (.{op} e, inr σ)
   | CEBinOp op ce1 ce2 =>
      eτ1 ← to_expr Δl ce1 ≫= curry to_R;
      eτ2 ← to_expr Δl ce2 ≫= curry to_R;
