@@ -455,7 +455,7 @@ Lemma addr_is_top_array_alt Γ Δ a σp :
     addr_ref Γ a = [RArray 0 τ n] ∧ addr_ref_byte Γ a = 0.
 Proof.
   rewrite addr_typed_alt; intros ? (_&?&Hr&?&?&_); split.
-  * destruct 1 as [o τ' n σp']; simplify_equality'; exists τ' n.
+  * destruct 1 as [o τ' n σp']; simplify_equality'; exists τ', n.
     assert (✓{Γ} τ' ∧ n ≠ 0) as [??] by auto using TArray_valid_inv.
     rewrite Nat.div_0_l, Nat.mod_0_l by eauto using size_of_ne_0.
     split_ands; auto using Nat.mul_pos_pos, size_of_pos with lia.

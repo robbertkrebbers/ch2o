@@ -70,7 +70,7 @@ Proof.
   { apply Hax; eauto using ax_expr_invariant_weaken, @sep_union_subseteq_l. }
   intros Δ' n' φ' m' ?????; destruct 1 as [ν Ω ????]; constructor; eauto.
   { rewrite mem_locks_union by auto. esolve_elem_of. }
-  exists (cmap_erase m) (cmap_erase m2'); split_ands;
+  exists (cmap_erase m), (cmap_erase m2'); split_ands;
     eauto using cmap_erase_union, assert_weaken.
   by rewrite <-!cmap_erase_disjoint_le.
 Qed.
@@ -110,7 +110,7 @@ Proof.
       _ mA _ _ _ _ _); auto.
     apply Hax; auto. exists (mA ∪ mB); split_ands; eauto.
     * rewrite mem_locks_union by auto. by apply empty_union_L.
-    * exists mA mB; split_ands; auto. }
+    * exists mA, mB; split_ands; auto. }
   clear P. intros Γ n.
   induction n as [[|n] IH] using lt_wf_ind; [repeat constructor|].
   intros Δ δ ρ k φ m τlr ??;
@@ -118,7 +118,7 @@ Proof.
   { split; [|done]; intros _ mA ? HmA ??; do 2 constructor; auto.
     { rewrite mem_locks_union by auto; esolve_elem_of. }
     rewrite cmap_erase_union.
-    exists (cmap_erase m) (cmap_erase mA); split_ands; auto.
+    exists (cmap_erase m), (cmap_erase mA); split_ands; auto.
     + by rewrite <-!cmap_erase_disjoint_le.
     + by rewrite cmap_erased_spec by done. }
   split.
@@ -129,7 +129,7 @@ Proof.
         <-(sep_associative mf), (sep_associative m) by auto.
       eapply Hred, ax_frame_in_expr; eauto.
       + rewrite mem_locks_union by auto. by apply empty_union_L.
-      + exists mA mB; split_ands; eauto using assert_weaken. }
+      + exists mA, mB; split_ands; eauto using assert_weaken. }
     intros Δ' n' ?? S' ??? Hframe p ?; inversion_clear Hframe as [mB mf|];
       simplify_equality; simplify_mem_disjoint_hyps.
     feed inversion (Hstep Δ' n' (m ∪ mA ∪ mf ∪ mB) (InExpr mf (mA ∪ mB)) S')
@@ -138,7 +138,7 @@ Proof.
       + by rewrite <-!(sep_associative m), (sep_commutative mA),
           <-(sep_associative mf), (sep_associative m) by auto.
       + rewrite mem_locks_union by auto. by apply empty_union_L.
-      + exists mA mB; split_ands; eauto using assert_weaken. }
+      + exists mA, mB; split_ands; eauto using assert_weaken. }
     inversion Hunframe as [| |m''|]; subst; simplify_mem_disjoint_hyps.
     + apply mk_ax_next with Δ'' (m' ∪ mA); auto using focus_locks_valid_union.
       - apply ax_unframe_expr_to_expr; auto.
@@ -402,7 +402,7 @@ Proof.
     as (va'&v'&(m1&m2''&?&?&(?&a&va&?&?&?&?&?)&HQ')&Hass);
     eauto 6 using indexes_valid_weaken, funenv_valid_weaken; clear HQ.
   { rewrite cmap_erase_union.
-    exists (cmap_erase m1') (cmap_erase m2'); split_ands; auto.
+    exists (cmap_erase m1'), (cmap_erase m2'); split_ands; auto.
     by rewrite <-!cmap_erase_disjoint_le. }
   destruct (cmap_erase_union_inv_l (m1' ∪ m2') m1 m2'')
     as (m2&Hm&?&Hm'&->); auto; rewrite Hm in *;
@@ -469,7 +469,7 @@ Proof.
     mem_erase_lock, mem_erase_insert, cmap_erased_spec by done.
   eapply HQ'; rewrite <-?cmap_erase_disjoint_le;
     eauto using cmap_erase_valid, mem_lock_valid, funenv_valid_weaken.
-  exists a (freeze true va'); split_ands;
+  exists a, (freeze true va'); split_ands;
     eauto using addr_typed_weaken, val_typed_weaken, val_typed_freeze.
   eauto using mem_lock_singleton, mem_insert_singleton, mem_singleton_weaken.
 Qed.
@@ -561,7 +561,7 @@ Proof.
   destruct (HQ v1 v2 Γ' Δ' δ' ρ n' (cmap_erase (m1 ∪ m2)))
     as (v'&?&HA); eauto 6 using indexes_valid_weaken, funenv_valid_weaken.
   { rewrite cmap_erase_union.
-    exists (cmap_erase m1) (cmap_erase m2); split_ands; auto.
+    exists (cmap_erase m1), (cmap_erase m2); split_ands; auto.
     by rewrite <-!cmap_erase_disjoint_le. }
   destruct (HA Γ' Δ'' δ' n'' mA) as (?&_&?); clear HA;
     eauto 4 using assert_weaken, indexes_valid_weaken, funenv_valid_weaken.
@@ -767,7 +767,7 @@ Proof.
   destruct (HQ v1 v2 Γ' Δ' δ' ρ n' (cmap_erase (m1 ∪ m2)))
     as (v'&?&HA); eauto 6 using indexes_valid_weaken, funenv_valid_weaken.
   { rewrite cmap_erase_union.
-    exists (cmap_erase m1) (cmap_erase m2); split_ands; auto.
+    exists (cmap_erase m1), (cmap_erase m2); split_ands; auto.
     by rewrite <-!cmap_erase_disjoint_le. }
   destruct (HA Γ' Δ'' δ' n'' mA) as (?&_&?); clear HA;
     eauto 4 using assert_weaken, indexes_valid_weaken, funenv_valid_weaken.
@@ -849,7 +849,7 @@ Proof.
       by (rewrite <-cmap_erase_disjoint_le; auto).
     destruct (HP' vb Γ' Δ'' δ' ρ n'' (mA ∪ cmap_erase m)) as (?&?&?&?);
       simpl; eauto using indexes_valid_weaken, funenv_valid_weaken.
-    { exists mA (cmap_erase m); split_ands;
+    { exists mA, (cmap_erase m); split_ands;
         eauto 4 using assert_weaken, indexes_valid_weaken. }
     simplify_option_equality.
     eapply base_val_branchable_weaken with (mA ∪ cmap_erase m); eauto.

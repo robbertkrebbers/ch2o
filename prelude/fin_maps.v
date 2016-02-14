@@ -588,7 +588,7 @@ Lemma map_choose {A} (m : M A) : m ≠ ∅ → ∃ i x, m !! i = Some x.
 Proof.
   intros Hemp. destruct (map_to_list m) as [|[i x] l] eqn:Hm.
   { destruct Hemp; eauto using map_to_list_empty_inv. }
-  exists i x. rewrite <-elem_of_map_to_list, Hm. by left.
+  exists i, x. rewrite <-elem_of_map_to_list, Hm. by left.
 Qed.
 
 (** Properties of the imap function *)
@@ -709,7 +709,7 @@ Proof.
   split; [|intros (i&x&?&?) Hm; specialize (Hm i x); tauto].
   rewrite map_Forall_to_list. intros Hm.
   apply (not_Forall_Exists _), Exists_exists in Hm.
-  destruct Hm as ([i x]&?&?). exists i x. by rewrite <-elem_of_map_to_list.
+  destruct Hm as ([i x]&?&?). exists i, x. by rewrite <-elem_of_map_to_list.
 Qed.
 End map_Forall.
 

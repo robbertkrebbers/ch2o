@@ -72,7 +72,7 @@ Proof.
     typed_inversion Heτlr; edestruct (ectx_subst_typed_rev Γ '{m1}
       (locals k.*2) E e1) as (τlr&?&?); eauto.
     edestruct (ehexec_complete Γ m1 m2 k e1 e2) as (f&e2'&m2'&?&?&?&?); eauto.
-    exists f (State k (Expr (subst E e2')) m2'); split_ands; auto.
+    exists f, (State k (Expr (subst E e2')) m2'); split_ands; auto.
     { assert (is_redex e1) as He1 by eauto using ehstep_is_redex.
       assert (maybe2 EVal (subst E e1) = None) as ->.
       { destruct E as [|Ei] using rev_ind; [by destruct He1|].
@@ -118,7 +118,7 @@ Proof.
       as (?&?&?&?&?&?&?&?); eauto; simplify_equality'.
     edestruct (mem_alloc_list_refine' Γ false meminj_id m m os' os vs vs) as
       (f&?&?&?); eauto using cmap_refine_id', vals_refine_id.
-    exists f (State (CParams h (zip os' (type_of <$> vs)) :: k)
+    exists f, (State (CParams h (zip os' (type_of <$> vs)) :: k)
       (Stmt ↘ s) (mem_alloc_list Γ os' vs m)); split_ands; auto.
     { unfold of_option; simplify_option_equality; esolve_elem_of. }
     erewrite fmap_type_of by eauto.
@@ -176,7 +176,7 @@ Proof.
   { eauto using funenv_refine_weaken, funenv_refine_id, state_refine_mem. }
   destruct (cexec_complete Γ δ S2 S3 σf) as (f''&S3''&?&?&?);
     eauto using state_refine_typed_l, funenv_valid_weaken.
-  exists (f' ◎ f'') S3''. rewrite <-(orb_diag false).
+  exists (f' ◎ f''), S3''. rewrite <-(orb_diag false).
   split_ands; eauto using state_refine_compose,
     rtc_r, meminj_extend_compose, meminj_extend_transitive.
 Qed.

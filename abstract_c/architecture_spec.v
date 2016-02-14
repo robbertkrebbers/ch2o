@@ -3,7 +3,7 @@
 Require Export type_environment.
 Require Import finite natural_type_environment.
 
-Inductive c_rank :=
+Inductive c_rank : iType :=
   CharRank | ShortRank | IntRank | LongRank | LongLongRank | PtrRank.
 Instance c_rank_subseteq : SubsetEq c_rank := λ k1 k2,
   match k1, k2 return bool with

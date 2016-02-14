@@ -83,7 +83,7 @@ Proof.
   intros Δ' n' φ' m' ?????; inversion_clear 1; constructor; auto.
   { rewrite mem_locks_union by auto. by apply empty_union_L. }
   rewrite directed_fmap_spec, sep_commutative, cmap_erase_union by auto.
-  exists (cmap_erase m1') (cmap_erase m'); split_ands;eauto using assert_weaken.
+  exists (cmap_erase m1'), (cmap_erase m'); split_ands;eauto using assert_weaken.
   rewrite <-!cmap_erase_disjoint_le; auto.
 Qed.
 Lemma ax_stmt_frame_r Γ δ A R J T C P Q s :
@@ -308,7 +308,7 @@ Proof.
       (val_new Γ' τ) τ) as (m'&->&?&?); auto using val_new_frozen;
       simplify_mem_disjoint_hyps.
     erewrite cmap_erase_union, directed_fmap_spec, mem_erase_singleton by eauto.
-    exists m' (cmap_erase m); split_ands; csimpl;
+    exists m', (cmap_erase m); split_ands; csimpl;
       eauto using assert_weaken, mem_alloc_forward.
     { by rewrite <-cmap_erase_disjoint_le. }
     eexists _, (addr_top o τ), (val_new Γ' τ); split_ands; simpl; eauto. }

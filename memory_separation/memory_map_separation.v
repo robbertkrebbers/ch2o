@@ -102,7 +102,7 @@ Lemma cmap_erase_union_inv m m1 m2 :
     m = m1' ∪ m2' ∧ m1' ⊥ m2' ∧ m1 = cmap_erase m1' ∧ m2 = cmap_erase m2'.
 Proof.
   intros. destruct (cmap_erase_union_inv_l m m1 m2) as (m2'&->&?&?&->); auto.
-  by exists m1 m2'.
+  by exists m1, m2'.
 Qed.
 
 Lemma cmap_subseteq_index_alive' m1 m2 o :

@@ -331,7 +331,7 @@ Proof.
     by intros [] ?; sep_unfold; case_decide; naive_solver. }
   assert (bit_size_of Γ τ ≠ 0)
     by eauto using bit_size_of_ne_0, ctree_typed_type_valid.
-  exists (cmap_singleton Γ a μ w1) (cmap_singleton Γ a μ w2); split_ands.
+  exists (cmap_singleton Γ a μ w1), (cmap_singleton Γ a μ w2); split_ands.
   * by erewrite Hw, cmap_singleton_union by eauto.
   * eapply cmap_singleton_disjoint; eauto.
     + eapply ctree_Forall_not; eauto.
@@ -390,7 +390,7 @@ Proof.
     rewrite <-ctree_map_compose; symmetry.
     apply (ctree_map_id (λ γb, tagged_perm γb = γ1 ∪ γ2)); auto.
     by intros [] ?; sep_unfold; case_decide; simplify_equality'. }
-  exists (cmap_singleton Γ a μ w1) (cmap_singleton Γ a μ w2); split_ands.
+  exists (cmap_singleton Γ a μ w1), (cmap_singleton Γ a μ w2); split_ands.
   * by erewrite Hw12, cmap_singleton_union by eauto.
   * eapply cmap_singleton_disjoint; eauto.
     + eapply ctree_Forall_not; eauto.

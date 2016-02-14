@@ -114,9 +114,9 @@ Proof. by destruct i. Qed.
 Lemma Pmap_ne_lookup {A} (t : Pmap_raw A) : Pmap_ne t → ∃ i x, t !! i = Some x.
 Proof.
   induction 1 as [? x ?| l r ? IHl | l r ? IHr].
-  * intros. by exists 1 x.
-  * destruct IHl as [i [x ?]]. by exists (i~0) x.
-  * destruct IHr as [i [x ?]]. by exists (i~1) x.
+  * intros. by exists 1, x.
+  * destruct IHl as [i [x ?]]. by exists (i~0), x.
+  * destruct IHr as [i [x ?]]. by exists (i~1), x.
 Qed.
 
 Lemma Pmap_wf_eq_get {A} (t1 t2 : Pmap_raw A) :

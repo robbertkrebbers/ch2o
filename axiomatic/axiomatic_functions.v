@@ -104,7 +104,7 @@ Proof.
     memenv_subseteq_alive, mem_alloc_index_alive;
     simplify_mem_disjoint_hyps.
   erewrite cmap_erase_union, mem_erase_singleton by eauto.
-  exists m' (cmap_erase (mem_alloc_list Γ os vs m)); split_ands; csimpl;
+  exists m', (cmap_erase (mem_alloc_list Γ os vs m)); split_ands; csimpl;
     eauto using assert_weaken, mem_alloc_forward.
   { by rewrite <-cmap_erase_disjoint_le. }
   eexists (addr_top o τ), (freeze true v); split_ands; auto.
@@ -262,7 +262,7 @@ Proof.
       by (typed_inversion_all; eauto).
     assert (vn = length τs') by (by erewrite <-fmap_length,
       <-Forall2_length, vec_to_list_length by eauto); subst vn.
-    exists τ' (list_to_vec τs'). rewrite ?vec_to_list_of_list.
+    exists τ', (list_to_vec τs'). rewrite ?vec_to_list_of_list.
     by rewrite Forall2_fmap_r, <-(vec_to_list_of_list τs'),
       Forall2_vlookup in Hes. }
   destruct HP as (m1'&m2&Hm&Hm'&?&HPs).
@@ -377,7 +377,7 @@ Proof.
     intros Δ''' n''' ? m'' ?????; destruct 1; constructor; auto.
     * by rewrite mem_locks_union, empty_union_L by auto.
     * rewrite cmap_erase_union, (cmap_erased_spec mf2) by auto.
-      exists (cmap_erase m) mf2; split_ands; try done.
+      exists (cmap_erase m), mf2; split_ands; try done.
       by rewrite <-cmap_erase_disjoint_le. }
   clear dependent m' Hf'.
   intros Δ''' n''' m'; destruct 1 as [v m''' ?? (m''&?&?&?&?&Hmf)]; intros.

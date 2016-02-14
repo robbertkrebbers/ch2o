@@ -487,8 +487,8 @@ Lemma list_lookup_other l i x :
   length l ≠ 1 → l !! i = Some x → ∃ j y, j ≠ i ∧ l !! j = Some y.
 Proof.
   intros. destruct i, l as [|x0 [|x1 l]]; simplify_equality'.
-  * by exists 1 x1.
-  * by exists 0 x0.
+  * by exists 1, x1.
+  * by exists 0, x0.
 Qed.
 Lemma alter_app_l f l1 l2 i :
   i < length l1 → alter f i (l1 ++ l2) = alter f i l1 ++ l2.
@@ -604,7 +604,7 @@ Proof. induction 1; rewrite ?elem_of_nil, ?elem_of_cons; intuition. Qed.
 Lemma elem_of_list_split l x : x ∈ l → ∃ l1 l2, l = l1 ++ x :: l2.
 Proof.
   induction 1 as [x l|x y l ? [l1 [l2 ->]]]; [by eexists [], l|].
-  by exists (y :: l1) l2.
+  by exists (y :: l1), l2.
 Qed.
 Lemma elem_of_list_lookup_1 l x : x ∈ l → ∃ i, l !! i = Some x.
 Proof.
@@ -1621,7 +1621,7 @@ Proof.
   split.
   * intros Hlk. induction k as [|y k IH]; inversion Hlk.
     + eexists [], k. by repeat constructor.
-    + destruct IH as (k1&k2&->&?); auto. by exists (y :: k1) k2.
+    + destruct IH as (k1&k2&->&?); auto. by exists (y :: k1), k2.
   * intros (k1&k2&->&?). by apply sublist_inserts_l, sublist_skip.
 Qed.
 Lemma sublist_app_r l k1 k2 :
@@ -1633,9 +1633,9 @@ Proof.
     { eexists [], l. by repeat constructor. }
     rewrite sublist_cons_r. intros [?|(l' & ? &?)]; subst.
     + destruct (IH l k2) as (l1&l2&?&?&?); trivial; subst.
-      exists l1 l2. auto using sublist_cons.
+      exists l1, l2. auto using sublist_cons.
     + destruct (IH l' k2) as (l1&l2&?&?&?); trivial; subst.
-      exists (y :: l1) l2. auto using sublist_skip.
+      exists (y :: l1), l2. auto using sublist_skip.
   * intros (?&?&?&?&?); subst. auto using sublist_app.
 Qed.
 Lemma sublist_app_l l1 l2 k :
@@ -1647,7 +1647,7 @@ Proof.
     { eexists [], k. by repeat constructor. }
     rewrite sublist_cons_l. intros (k1 & k2 &?&?); subst.
     destruct (IH l2 k2) as (h1 & h2 &?&?&?); trivial; subst.
-    exists (k1 ++ x :: h1) h2. rewrite <-(associative_L (++)).
+    exists (k1 ++ x :: h1), h2. rewrite <-(associative_L (++)).
     auto using sublist_inserts_l, sublist_skip.
   * intros (?&?&?&?&?); subst. auto using sublist_app.
 Qed.
@@ -1865,7 +1865,7 @@ Proof.
   split.
   * rewrite contains_sublist_r. intros (l'&E&Hl').
     rewrite sublist_app_r in Hl'. destruct Hl' as (l1&l2&?&?&?); subst.
-    exists l1 l2. eauto using sublist_contains.
+    exists l1, l2. eauto using sublist_contains.
   * intros (?&?&E&?&?). rewrite E. eauto using contains_app.
 Qed.
 Lemma contains_app_l l1 l2 k :
@@ -1875,7 +1875,7 @@ Proof.
   split.
   * rewrite contains_sublist_l. intros (l'&Hl'&E).
     rewrite sublist_app_l in Hl'. destruct Hl' as (k1&k2&?&?&?); subst.
-    exists k1 k2. split. done. eauto using sublist_contains.
+    exists k1, k2. split. done. eauto using sublist_contains.
   * intros (?&?&E&?&?). rewrite E. eauto using contains_app.
 Qed.
 Lemma contains_app_inv_l l1 l2 k :
@@ -2578,7 +2578,7 @@ Section fmap.
   Proof.
     revert l. induction k1 as [|y k1 IH]; simpl; [intros l ?; by eexists [],l|].
     intros [|x l] ?; simplify_equality'.
-    destruct (IH l) as (l1&l2&->&->&->); [done|]. by exists (x :: l1) l2.
+    destruct (IH l) as (l1&l2&->&->&->); [done|]. by exists (x :: l1), l2.
   Qed.
   Lemma fmap_length l : length (f <$> l) = length l.
   Proof. by induction l; f_equal'. Qed.
@@ -3006,7 +3006,7 @@ Section zip_with.
     { intros l k ?. by eexists [], [], l, k. }
     intros [|x l] [|y k] ?; simplify_equality'.
     destruct (IH l k) as (l1&k1&l2&k2&->&->&->&->&?); [done |].
-    exists (x :: l1) (y :: k1) l2 k2; simpl; auto with congruence.
+    exists (x :: l1), (y :: k1), l2, k2; simpl; auto with congruence.
   Qed.
   Lemma zip_with_inj `{!Injective2 (=) (=) (=) f} l1 l2 k1 k2 :
     length l1 = length k1 → length l2 = length k2 →

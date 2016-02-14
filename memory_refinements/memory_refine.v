@@ -254,14 +254,14 @@ Proof.
     val_refine_typed_l, val_refine_typed_r, sep_unshared_unmapped.
   destruct m1 as [m1], m2 as [m2]; intros o3 o4 r w3 μ' ?; simpl in *.
   rewrite lookup_insert_Some; intros [[??]|[??]]; simplify_map_equality.
-  { exists (of_val Γ (replicate (bit_size_of Γ τ) x) v2)
-      (of_val Γ (replicate (bit_size_of Γ τ) x) v2) τ.
+  { exists (of_val Γ (replicate (bit_size_of Γ τ) x) v2),
+      (of_val Γ (replicate (bit_size_of Γ τ) x) v2), τ.
     erewrite val_refine_type_of_r, val_refine_type_of_l by eauto.
     auto 7 using of_val_refine, Forall_replicate. }
   destruct (meminj_injective_ne f o1 o2 o3 o4 [] r)
     as [|[??]]; simplify_map_equality; eauto using memenv_refine_injective.
   * destruct (Hm o3 o4 r w3 μ') as (w2&w2'&τ2&?&?&?&?); auto.
-    exists w2 w2' τ2; eauto 10 using ctree_refine_weaken,
+    exists w2, w2', τ2; eauto 10 using ctree_refine_weaken,
       mem_alloc_forward, mem_alloc_refine_env, meminj_extend_reflexive.
   * by destruct (ref_disjoint_nil_inv_l r).
 Qed.
@@ -346,7 +346,7 @@ Proof.
   { by rewrite Ha1 in Ha2;
       inversion Ha2 as [|???? Harr]; inversion Harr; decompose_Forall_hyps. }
   erewrite <-addr_ref_byte_refine by eauto.
-  exists τ' n; split_ands; eauto using addr_strict_refine.
+  exists τ', n; split_ands; eauto using addr_strict_refine.
 Qed.
 Lemma mem_freeable_index_refine Γ α f Δ1 Δ2 m1 m2 a1 a2 τp :
   ✓ Γ → m1 ⊑{Γ,α,f@Δ1↦Δ2} m2 → a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : τp →
@@ -421,7 +421,7 @@ Proof.
   * destruct (meminj_injective_alt f o1 o1' o2' [] r) as [->|[??]];
       simplify_map_equality; eauto using memenv_refine_injective.
     by destruct (ref_disjoint_nil_inv_l r).
-  * exists w2 w2' τ2; split_ands; eauto using ctree_refine_weaken,
+  * exists w2, w2', τ2; split_ands; eauto using ctree_refine_weaken,
       mem_free_forward, mem_free_refine_env, meminj_extend_reflexive.
 Qed.
 Lemma mem_free_refine_l Γ f Δ1 Δ2 m1 m2 o :
@@ -434,7 +434,7 @@ Proof.
   intros o1 o2 r w1 μ ?; rewrite lookup_alter_Some;
     intros [(?&[?|??]&?&?)|[??]]; simplify_equality'; eauto.
   destruct (Hm o1 o2 r w1 μ) as (w2&w2'&τ2&?&?&?&?); auto.
-  exists w2 w2' τ2; eauto 10 using ctree_refine_weaken,
+  exists w2, w2', τ2; eauto 10 using ctree_refine_weaken,
     mem_free_forward, mem_free_refine_env_l, meminj_extend_reflexive.
 Qed.
 Lemma mem_free_refine_r Γ f Δ1 Δ2 m1 m2 o :
@@ -448,7 +448,7 @@ Proof.
   destruct (cmap_valid_Obj Γ Δ1 (CMap m1) o1 w1 μ) as (τ1&?&?&_); auto.
   destruct (decide (o2 = o)) as [->|?]; [by destruct (Hf o1 r)|].
   destruct (Hm o1 o2 r w1 μ) as (w2&w2'&τ2&?&?&?&?); auto.
-  exists w2 w2' τ2; simplify_map_equality; eauto 7 using ctree_refine_weaken,
+  exists w2, w2', τ2; simplify_map_equality; eauto 7 using ctree_refine_weaken,
     mem_free_forward, mem_free_refine_env_r, meminj_extend_reflexive.
 Qed.
 Lemma mem_free_refine' Γ α f m1 m2 o1 o2 :

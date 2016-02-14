@@ -967,7 +967,7 @@ Proof.
   destruct (Forall_Exists_dec (λ e, decide (is_nf e)) es) as [Hes|Hes].
   * left; induction es as [|e ? es IH]; simpl in *; [by eexists [#],[#]|].
     inversion Hes as [|?? [Ω ν]]; destruct IH as (Ωs&νs&->); auto; subst.
-    by exists (Ω ::: Ωs) (ν ::: νs).
+    by exists (Ω ::: Ωs), (ν ::: νs).
   * rewrite Exists_vlookup in Hes; eauto.
 Qed.
 Lemma is_redex_ectx_full {K n} (E : ectx_full K n) (es : vec _ n) :
@@ -1108,7 +1108,7 @@ Lemma is_nf_or_redex {K} `{∀ k1 k2 : K, Decision (k1 = k2)} e :
   is_nf e ∨ ∃ (E' : ectx K) e', is_redex e' ∧ e = subst E' e'.
 Proof.
   destruct (collection_choose_or_empty (expr_redexes e)) as [[[E' e'] ?]|?].
-  * right. exists E' e'. split.
+  * right. exists E', e'. split.
     + by apply expr_redexes_is_redex with e E'. 
     + by apply expr_redexes_correct.
   * left. by apply expr_redexes_is_nf.

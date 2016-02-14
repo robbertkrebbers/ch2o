@@ -57,7 +57,7 @@ Proof.
   do 2 red; split_ands; simpl; auto using memenv_refine_id.
   intros ? o r w μ; rewrite lookup_meminj_id; intros; simplify_equality'.
   destruct (cmap_valid_Obj Γ Δ (CMap m) o w μ) as (τ&?&_&?&_); auto.
-  exists w w; eauto 6 using ctree_refine_id, type_of_typed.
+  exists w, w; eauto 6 using ctree_refine_id, type_of_typed.
 Qed.
 Lemma cmap_refine_id' Γ α m : ✓ Γ → ✓{Γ} m → m ⊑{Γ,α} m.
 Proof. by apply cmap_refine_id. Qed.
@@ -73,7 +73,7 @@ Proof.
   destruct (Hm23 o2 o3 r3 w2 μ) as (w3&w3'&τ3&->&?&?&?); auto.
   destruct (ctree_lookup_refine Γ α2 f2 Δ2 Δ3 w2 w3' τ3 r2 w2')
     as (w3''&?&Hw23); auto.
-  erewrite ctree_refine_type_of_r in Hw23 by eauto. exists w3 w3'' τ2.
+  erewrite ctree_refine_type_of_r in Hw23 by eauto. exists w3, w3'', τ2.
   rewrite ctree_lookup_app; simplify_option_equality.
   naive_solver eauto using ctree_refine_compose.
 Qed.
@@ -94,7 +94,7 @@ Proof.
     simplify_map_equality; try done.
   destruct (Hm o1 o2 [] w1 μ') as (?&w1'&τ'&?&?&?&?);
     simplify_type_equality'; auto.
-  exists w1 w1 τ'; split_ands; auto using ctree_refine_inverse.
+  exists w1, w1, τ'; split_ands; auto using ctree_refine_inverse.
 Qed.
 Lemma cmap_refine_weaken Γ Γ' α α' f f' Δ1 Δ2 m1 m2 :
   ✓ Γ → m1 ⊑{Γ,α,f@Δ1↦Δ2} m2 → Γ ⊆ Γ' → (α → α') →
@@ -108,7 +108,7 @@ Proof.
   destruct (cmap_valid_Obj Γ Δ1 m1 o1 w1 μ) as (τ&?&_); auto.
   destruct (Hm o1 o2 r w1 μ)
     as (w2&w2'&τ'&?&?&?&?); eauto using option_eq_1, meminj_extend_left.
-  exists w2 w2' τ'; split_ands;
+  exists w2, w2', τ'; split_ands;
     eauto using ctree_refine_weaken, ctree_lookup_weaken, option_eq_1_alt.
 Qed.
 Lemma cmap_lookup_alter_refine Γ Δ g m a w τ :

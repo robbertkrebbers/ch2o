@@ -212,7 +212,7 @@ Proof.
         simplify_option_equality; decompose_elem_of; eauto 6. }
     intros [(ω1&?&?) (ω2&?&?)].
     assert (i ∈ ω1 ∩ ω2) by (by rewrite elem_of_intersection).
-    exists (ω1 ∩ ω2); split; [exists ω1 ω2|]; split_ands; auto.
+    exists (ω1 ∩ ω2); split; [exists ω1, ω2|]; split_ands; auto.
     by rewrite option_guard_True by esolve_elem_of.
   * unfold elem_of, lockset_elem_of, intersection, lockset_intersection.
     intros [Ω1 HΩ1_wf] [Ω2 HΩ2_wf] [o i]; simpl.
@@ -222,7 +222,7 @@ Proof.
     intros [(ω1&?&?) HΩ2]; destruct (Ω2 !! o) as [ω2|] eqn:?; eauto.
     destruct (decide (i ∈ ω2)); [destruct HΩ2; eauto|].
     assert (i ∈ ω1 ∖ ω2) by (by rewrite elem_of_difference).
-    exists (ω1 ∖ ω2); split; [right; exists ω1 ω2|]; split_ands; auto.
+    exists (ω1 ∖ ω2); split; [right; exists ω1, ω2|]; split_ands; auto.
     by rewrite option_guard_True by esolve_elem_of.
   * unfold elem_of at 2, lockset_elem_of, elements, lockset_elems.
     intros [Ω HΩ_wf] [o i]; simpl. setoid_rewrite elem_of_list_bind. split.

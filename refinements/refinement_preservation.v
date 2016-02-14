@@ -65,20 +65,20 @@ Proof.
        erewrite addr_refine_type_of_l in H by eauto
     | |- _ => erewrite addr_refine_type_of_l by eauto
     end.
-  * exists (val_cast (type_of a2) v2) (val_cast (type_of a2) v2);
+  * exists (val_cast (type_of a2) v2), (val_cast (type_of a2) v2);
       repeat constructor; erewrite ?addr_refine_type_of_r by eauto;
       eauto using val_cast_refine, val_cast_ok_refine, addr_typed_type_valid.
   * destruct (mem_lookup_refine Γ α f '{m1} '{m2} m1 m2 a1 a2 va1 τ)
       as (va2&?&?); eauto.
     set (v2':=val_cast (type_of a2) (val_binop Γ op va2 v2)).
-    exists v2' v2'; unfold v2';
+    exists v2', v2'; unfold v2';
       repeat econstructor; erewrite ?addr_refine_type_of_r by eauto;
       eauto using val_binop_ok_refine, val_cast_ok_refine,
       val_binop_refine, val_cast_refine, addr_typed_type_valid.
   * destruct (mem_lookup_refine Γ α f '{m1} '{m2} m1 m2 a1 a2 v1' τ)
       as (v2'&?&?); eauto.
     set (v2'':=val_cast (type_of a2) (val_binop Γ op v2' v2)).
-    exists v2'' v2'; unfold v2'';
+    exists v2'', v2'; unfold v2'';
       repeat constructor; erewrite ?addr_refine_type_of_r by eauto;
       eauto using val_binop_ok_refine, val_cast_ok_refine,
       val_binop_refine, val_cast_refine, addr_typed_type_valid.

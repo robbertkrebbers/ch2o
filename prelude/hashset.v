@@ -85,7 +85,7 @@ Proof.
       rewrite elem_of_list_intersection in Hx; naive_solver. }
     intros [(l&?&?) (k&?&?)]. assert (x ∈ list_intersection l k)
       by (by rewrite elem_of_list_intersection).
-    exists (list_intersection l k); split; [exists l k|]; split_ands; auto.
+    exists (list_intersection l k); split; [exists l, k|]; split_ands; auto.
     by rewrite option_guard_True by eauto using elem_of_not_nil.
   * unfold elem_of, hashset_elem_of, intersection, hashset_intersection.
     intros [m1 ?] [m2 ?] x; simpl.
@@ -95,7 +95,7 @@ Proof.
     intros [(l&?&?) Hm2]; destruct (m2 !! hash x) as [k|] eqn:?; eauto.
     destruct (decide (x ∈ k)); [destruct Hm2; eauto|].
     assert (x ∈ list_difference l k) by (by rewrite elem_of_list_difference).
-    exists (list_difference l k); split; [right; exists l k|]; split_ands; auto.
+    exists (list_difference l k); split; [right; exists l,k|]; split_ands; auto.
     by rewrite option_guard_True by eauto using elem_of_not_nil.
   * unfold elem_of at 2, hashset_elem_of, elements, hashset_elems.
     intros [m Hm] x; simpl. setoid_rewrite elem_of_list_bind. split.

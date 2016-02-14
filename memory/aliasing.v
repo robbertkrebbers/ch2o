@@ -53,18 +53,18 @@ Proof.
     rewrite ref_typed_snoc in Hr2; destruct Hr2 as (σ2'&Hrs2&Hr2).
     rewrite fmap_app in Hr2F. destruct Hrs1 as [? i1 n|t i1|t i1 ?];
       inversion Hrs2 as [? i2|? i2|? i2 []]; simplify_list_equality.
-    * by right; left; exists i2 r2.
-    * destruct (decide (i1 = i2)) as [->|]; [by right; left; exists 0 r2|].
+    * by right; left; exists i2, r2.
+    * destruct (decide (i1 = i2)) as [->|]; [by right; left; exists 0, r2|].
       left. intros _ ?. destruct r2; simpl; [by repeat constructor|].
       rewrite app_comm_cons. apply ref_disjoint_app_r. by repeat constructor.
-    * destruct (decide (i1 = i2)) as [->|]; [by right; left; exists 0 r2|].
-      do 3 right. by exists t i1 r2 i2. }
+    * destruct (decide (i1 = i2)) as [->|]; [by right; left; exists 0, r2|].
+      do 3 right. by exists t, i1, r2, i2. }
   induction 1 as [τ|r1 rs1 τ τ1 σ1 Hrs1 Hr1 IH]
     using @ref_typed_ind; intros r2 σ2 Hr1F Hr2 Hr2F; simplify_equality'.
-  { do 2 right; left; exists 0 r2. by rewrite (right_id_L [] (++)). }
+  { do 2 right; left; exists 0, r2. by rewrite (right_id_L [] (++)). }
   destruct Hr2 as [τ|r2 rs2 τ τ2 σ2 Hrs2 Hr2 _]
     using @ref_typed_ind; simplify_equality'.
-  { right; left; exists 0 (rs1 :: r1). by rewrite (right_id_L [] (++)). }
+  { right; left; exists 0, (rs1 :: r1). by rewrite (right_id_L [] (++)). }
   destruct (IH r2 τ2) as
     [Hr|[(j&r'&->)|[(j&r'&->)|(s&r1'&i1&r2'&i2&r'&->&->&?)]]];
     auto; clear IH; simplify_equality'.
@@ -84,7 +84,7 @@ Proof.
         rewrite ?fmap_length, <-?fmap_app; congruence. }
     + left; intros j1 j2. rewrite app_comm_cons.
       apply (ref_disjoint_here_app _ [_]), symmetry, Hr.
-    + right; left; exists j' r''.
+    + right; left; exists j', r''.
       by rewrite app_comm_cons, Hr'', <-(associative_L (++)).
     + do 3 right. eexists s, r2', i2, [], i1, r2.
       by rewrite app_comm_cons, Hr2'', <-(associative_L (++)).
@@ -101,7 +101,7 @@ Proof.
         rewrite ?fmap_length, <-?fmap_app; congruence. }
     + left; intros j1 j2. rewrite app_comm_cons.
       apply (ref_disjoint_here_app [_]), Hr.
-    + do 2 right; left; exists j' r''.
+    + do 2 right; left; exists j', r''.
       by rewrite app_comm_cons, Hr'', <-(associative_L (++)).
     + do 3 right; eexists s, [], i1, r2', i2, r1.
       by rewrite app_comm_cons, Hr1'', <-(associative_L (++)).

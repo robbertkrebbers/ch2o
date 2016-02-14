@@ -19,7 +19,7 @@ Lemma natmap_wf_lookup {A} (l : natmap_raw A) :
 Proof.
   intros Hwf Hl. induction l as [|[x|] l IH]; simpl; [done| |].
   { exists 0. simpl. eauto. }
-  destruct IH as (i&x&?); eauto using natmap_wf_inv; [|by exists (S i) x].
+  destruct IH as (i&x&?); eauto using natmap_wf_inv; [|by exists (S i), x].
   intros ->. by destruct Hwf.
 Qed.
 

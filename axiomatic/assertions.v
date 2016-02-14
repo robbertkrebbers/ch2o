@@ -212,7 +212,7 @@ Program Definition assert_singleton `{EnvSpec K}
 |}.
 Next Obligation.
   intros ??? e1 e2 ml γ τ Γ1 Γ2 Δ1 Δ2 δ1 δ2 ρ n1 n2 m ??? (a&v&?&?&?&?&?) ??.
-  exists a v; split_ands; eauto using expr_typed_weaken,
+  exists a, v; split_ands; eauto using expr_typed_weaken,
     expr_eval_weaken_empty, mem_singleton_weaken, cmap_valid_memenv_valid.
 Qed.
 Notation "e1 ↦{ μ , γ } e2 : τ" := (assert_singleton e1 μ γ e2 τ)%A
@@ -463,7 +463,7 @@ Qed.
 Global Instance: Commutative (⊆{Γ,δ}) (★)%A.
 Proof.
   intros Γ δ P Q Γ1 Δ δ1 ρ n m ?????? (m1&m2&->&?&?&?).
-  exists m2 m1. rewrite sep_commutative by auto; auto.
+  exists m2, m1. rewrite sep_commutative by auto; auto.
 Qed.
 Global Instance: Commutative (≡{Γ,δ}) (★)%A.
 Proof. split; by rewrite (commutative (★)%A). Qed.
@@ -486,12 +486,12 @@ Global Instance: Associative (≡{Γ,δ}) (★)%A.
 Proof.
   intros Γ δ. assert (∀ P Q R, ((P ★ Q) ★ R)%A ⊆{Γ,δ} (P ★ (Q ★ R))%A).
   { intros P Q R Γ1 Δ δ1 ρ ? n ?????? (?&m3&->&?&(m1&m2&->&?&?&?)&?).
-    exists m1 (m2 ∪ m3); rewrite sep_associative by auto; split_ands; auto.
-    exists m2 m3; auto. }
+    exists m1, (m2 ∪ m3); rewrite sep_associative by auto; split_ands; auto.
+    exists m2, m3; auto. }
   assert (∀ P Q R, (P ★ (Q ★ R))%A ⊆{Γ,δ} ((P ★ Q) ★ R)%A).
   { intros P Q R Γ1 Δ δ1 ρ ? n ?????? (m1&?&->&?&?&(m2&m3&->&?&?&?)).
-    exists (m1 ∪ m2) m3; rewrite sep_associative by auto; split_ands; auto.
-    exists m1 m2; auto. }
+    exists (m1 ∪ m2), m3; rewrite sep_associative by auto; split_ands; auto.
+    exists m1, m2; auto. }
   split; auto.
 Qed.
 
@@ -540,7 +540,7 @@ Lemma assert_wand_intro Γ δ P Q R : (P ★ Q)%A ⊆{Γ,δ} R → P ⊆{Γ,δ} 
 Proof.
   intros HPQR Γ1 Δ1 ρ δ1 n1 m1 ?????? HP Γ2 Δ2 δ2 n2 m2 ????????? HQ.
   apply HPQR; eauto using indexes_valid_weaken, cmap_union_valid_2.
-  exists m1 m2; split_ands; eauto using assert_weaken, @sep_commutative.
+  exists m1, m2; split_ands; eauto using assert_weaken, @sep_commutative.
 Qed.
 Lemma assert_wand_elim Γ δ P Q : ((P -★ Q) ★ P)%A ⊆{Γ,δ} Q.
 Proof.
@@ -615,7 +615,7 @@ Proof.
   intros Γ' Δ δ' ρ n m ?????? (τlr&?&?).
   assert ((Γ',Δ) ⊢ inr (intV{τi} x) : τlr) by eauto using expr_eval_typed.
   assert (sep_valid m) by eauto.
-  typed_inversion_all; exists (∅ : mem K) m; eauto 9 using @sep_left_id, eq_sym.
+  typed_inversion_all; exists ∅, m; eauto 9 using @sep_left_id, eq_sym.
 Qed.
 Lemma assert_eval_int_typed' Γ δ e x τi :
   (e ⇓ inr (intV{τi} x))%A ⊆{Γ,δ} (⌜ int_typed x τi ⌝ ★ e ⇓ inr (intV{τi} x))%A.
@@ -721,7 +721,7 @@ Proof.
       @sep_left_id, eq_sym, lockset_empty_valid, mem_singleton_typed_addr_typed.
   * intros Γ' Δ δ' ρ n m_ ???? Hm ?
       (?&?&m&->&?&((τlr&?&?)&_&->)&(a&v&?&?&?&?&?)); simplify_option_equality.
-    exists a v; rewrite sep_left_id in Hm |- * by auto; split_ands; auto.
+    exists a, v; rewrite sep_left_id in Hm |- * by auto; split_ands; auto.
     cut (τlr = inl (TType τ)); [intros ->; auto|typed_inversion_all].
     apply (typed_unique (Γ',Δ) (inl (Ptr a)));
       eauto using expr_eval_typed, cmap_empty_valid, cmap_valid_memenv_valid.
@@ -757,7 +757,7 @@ Lemma assert_singleton_lift_l Γ δ e1 e2 μ γ τ :
   vars e1 = ∅ → (e1↑ ↦{μ,γ} e2 : τ)%A ≡{Γ,δ} (e1 ↦{μ,γ} e2 : τ)%A.
 Proof.
   split; intros Γ' Δ δ' ρ n m ?????? (a&v&?&?&?&?&?);
-    exists a v; split_ands; auto.
+    exists a, v; split_ands; auto.
   * by apply expr_typed_var_free with (tail (ρ.*2)), expr_typed_lift.
   * erewrite expr_eval_var_free, <-expr_eval_lift; eauto.
   * eapply expr_typed_lift, expr_typed_var_free; eauto.
@@ -767,7 +767,7 @@ Lemma assert_singleton_lift_r Γ δ e1 e2 μ γ τ :
   vars e2 = ∅ → (e1 ↦{μ,γ} (e2↑) : τ)%A ≡{Γ,δ} (e1 ↦{μ,γ} e2 : τ)%A.
 Proof.
   split; intros Γ' Δ δ' ρ n m ?????? (a&v&?&?&?&?&?);
-    exists a v; split_ands; auto.
+    exists a, v; split_ands; auto.
   * by apply expr_typed_var_free with (tail (ρ.*2)), expr_typed_lift.
   * erewrite expr_eval_var_free, <-expr_eval_lift; eauto.
   * eapply expr_typed_lift, expr_typed_var_free; eauto.
@@ -794,9 +794,9 @@ Proof.
   * intros Γ1 Δ δ' ρ n ??????? (a&v&?&?&?&?&?).
     destruct (mem_singleton_union_rev Γ1 Δ m a μ γ1 γ2 v τ)
       as (m1&m2&->&?&?&?); auto.
-    exists m1 m2; split_ands; solve ltac:eauto.
+    exists m1, m2; split_ands; solve ltac:eauto.
   * intros Γ1 Δ δ' ρ n ??????? (?&?&->&?&(a1&v1&?&?&?&?&?)&(a2&v2&?&?&?&?&?));
-      simplify_equality'; exists a1 v1; eauto 10 using mem_singleton_union.
+      simplify_equality'; exists a1, v1; eauto 10 using mem_singleton_union.
 Qed.
 Lemma assert_singleton_union_l Γ δ e1 e2 μ γ1 γ2 τ :
   ⊥[γ1;γ2] → ¬sep_unmapped γ1 → γ2 ≠ ∅ →
@@ -810,15 +810,15 @@ Proof.
       assert ((Γ1,Δ1) ⊢ val_new Γ1 τ : τ).
       { eauto using val_new_typed,
           mem_singleton_typed_addr_typed, addr_typed_type_valid. }
-      exists m1 m2; simplify_option_equality;
+      exists m1, m2; simplify_option_equality;
         eauto 20 using lockset_empty_valid.
     + destruct (mem_singleton_union_rev Γ1 Δ1 m a μ γ1 γ2 v τ)
         as (m1&m2&->&?&?&?); auto.
-      exists m1 m2; solve ltac:(eauto using expr_eval_typed,
+      exists m1, m2; solve ltac:(eauto using expr_eval_typed,
         lockset_empty_valid, cmap_empty_valid, cmap_valid_memenv_valid).
   * intros Γ1 Δ1 δ1 ρ n ???????
       (?&?&->&?&(a1&v1&?&?&?&?&?)&(?&a2&v2&?&?&?&?&?));
-      simplify_option_equality; exists a1 v1; split_ands; auto.
+      simplify_option_equality; exists a1, v1; split_ands; auto.
     by eapply (mem_singleton_union _ _ _ _ _ _ _ _ v1 v2); eauto.
 Qed.
 Lemma assert_singleton_union_r Γ δ e1 e2 μ γ1 γ2 τ :
@@ -840,7 +840,7 @@ Proof.
       assert ((Γ1,Δ) ⊢ val_new Γ1 τ : τ).
       { eauto using val_new_typed,
           mem_singleton_typed_addr_typed, addr_typed_type_valid. }
-      exists m1 m2; split_ands; eauto 10 using lockset_empty_valid. }
+      exists m1, m2; split_ands; eauto 10 using lockset_empty_valid. }
     destruct (decide (sep_unmapped γ1)).
     { destruct (mem_singleton_union_rev_unmapped Γ1 Δ m a μ γ2 γ1 v τ)
         as (m1&m2&->&?&?&?); auto using @sep_unmapped_empty_alt.
@@ -848,7 +848,7 @@ Proof.
       assert ((Γ1,Δ) ⊢ val_new Γ1 τ : τ).
       { eauto using val_new_typed,
           mem_singleton_typed_addr_typed, addr_typed_type_valid. }
-      exists m2 m1; eauto 30 using @sep_commutative. }
+      exists m2, m1; eauto 30 using @sep_commutative. }
     destruct (mem_singleton_union_rev Γ1 Δ m a μ γ1 γ2 v τ)
       as (m1&m2&->&?&?&?); eauto 40.
   * intros Γ1 Δ δ1 ρ n ???????
@@ -879,7 +879,7 @@ Proof.
     cut (0 + length ws ≤ n); [|lia]; unfold imap; generalize 0 as j.
     clear Hemp Hn Hvs Hw; induction Hws as [|w ws]; intros j ?;
       decompose_Forall_hyps; constructor; eauto with lia.
-    exists (addr_elt Γ1 (RArray j τ n) a) (to_val Γ1 w); split_ands; eauto.
+    exists (addr_elt Γ1 (RArray j τ n) a), (to_val Γ1 w); split_ands; eauto.
     + by simplify_option_equality.
     + typed_constructor; eauto using to_val_typed, lockset_empty_valid.
     + exists w; eauto 12 using addr_elt_is_obj, addr_elt_strict, addr_elt_typed.
@@ -915,7 +915,7 @@ Proof.
     { eapply Forall_fmap; eauto using Forall_impl, to_val_typed. }
     assert ((Γ1,Δ) ⊢ a : TType (τ.[n])) by eauto 10
       using lval_typed_inv, Ptr_typed_inv, expr_eval_typed, cmap_empty_valid.
-    exists a (VArray τ (to_val Γ1 <$> ws));
+    exists a, (VArray τ (to_val Γ1 <$> ws));
       split_ands; eauto using lockset_empty_valid.
     rewrite fmap_length in Hn.
     erewrite <-cmap_singleton_array_union by eauto.
@@ -1055,7 +1055,7 @@ Proof. solve eauto. Qed.
 Lemma assert_unlock_sep Γ δ P Q : (P ◊ ★ Q ◊)%A ⊆{Γ,δ} ((P ★ Q) ◊)%A.
 Proof.
   intros Γ1 Δ δ1 ρ n m ?????? (m1&m2&->&?&?&?).
-  exists (mem_unlock_all m1) (mem_unlock_all m2); split_ands; auto.
+  exists (mem_unlock_all m1), (mem_unlock_all m2); split_ands; auto.
   * by rewrite mem_unlock_all_union by solve_sep_disjoint.
   * by rewrite <-!mem_unlock_all_disjoint_le.
 Qed.
@@ -1067,7 +1067,7 @@ Lemma assert_unlock_singleton Γ δ e1 e2 μ γ τ :
   (e1 ↦{μ,γ} e2 : τ)%A ⊆{Γ,δ} ((e1 ↦{μ,perm_unlock γ} e2 : τ) ◊)%A.
 Proof.
   intros ? Γ1 Δ δ1 ρ n m ?????? (a&v&?&?&?&?&?).
-  exists a v; split_ands; eauto using mem_unlock_all_singleton.
+  exists a, v; split_ands; eauto using mem_unlock_all_singleton.
 Qed.
 Lemma assert_unlock_singleton_ Γ δ e1 μ γ τ :
   perm_locked γ = true →
@@ -1120,6 +1120,6 @@ Global Instance assert_singleton_unlock_indep e1 e2 μ γ τ :
   perm_locked γ = false → UnlockIndep (e1 ↦{μ,γ} e2 : τ).
 Proof.
   intros ? Γ δ Γ' Δ δ' ρ n m ?????? (a&v&?&?&?&?&?).
-  exists a v; split_ands; eauto using mem_unlock_all_singleton_unlocked.
+  exists a, v; split_ands; eauto using mem_unlock_all_singleton_unlocked.
 Qed.
 End assertions.

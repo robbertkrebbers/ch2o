@@ -559,7 +559,7 @@ Proof.
   destruct (IH (subst Ei2 e2)) as (e1'&E1&τlr&->&?&?); auto.
   destruct (ectx_item_subst_refine_inv_r Γ α f Δ1 Δ2 τs e1' Ei2 e2 τlr)
     as (e1&Ee1&τlr''&->&?&?); auto.
-  exists e1 (Ee1 :: E1) τlr''; split_ands; repeat refine_constructor; eauto.
+  exists e1, (Ee1 :: E1), τlr''; split_ands; repeat refine_constructor; eauto.
 Qed.
 Lemma esctx_item_subst_refine_inv_r Γ α f Δ1 Δ2 τs s1 Ee2 e2 mcτ :
   s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} subst Ee2 e2 : mcτ →
