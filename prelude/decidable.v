@@ -148,7 +148,7 @@ Instance Is_true_dec b : Decision (Is_true b).
 Proof. destruct b; apply _. Defined.
 
 Section prop_dec.
-  Context `(P_dec : Decision P) `(Q_dec : Decision Q).
+  Context {P Q : Prop} (P_dec : Decision P) (Q_dec : Decision Q).
 
   Global Instance not_dec: Decision (¬P).
   Proof. refine (cast_if_not P_dec); intuition. Defined.
@@ -159,7 +159,7 @@ Section prop_dec.
   Global Instance impl_dec: Decision (P → Q).
   Proof. refine (if P_dec then cast_if Q_dec else left _); intuition. Defined.
 End prop_dec.
-Instance iff_dec `(P_dec : Decision P) `(Q_dec : Decision Q) :
+Instance iff_dec {P Q : Prop} (P_dec : Decision P) (Q_dec : Decision Q) :
   Decision (P ↔ Q) := and_dec _ _.
 
 (** Instances of [Decision] for common data types. *)
