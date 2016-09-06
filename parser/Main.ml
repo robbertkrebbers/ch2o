@@ -22,7 +22,7 @@ let printf_returns_int = ref true;;
 (** The --sysroot flag is a hack to avoid any actual C standard library files
 from being used. *)
 let cpp_options =
-  ref ("--sysroot=. -I " ^ !Include.include_dir ^ " -include prelude.c");;
+  ref ("--sysroot=. -I" ^ !Include.include_dir ^ " -include prelude.c");;
 
 let cabs_of_file name =
   Cerrors.reset();
