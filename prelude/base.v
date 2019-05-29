@@ -496,7 +496,7 @@ Arguments partial_alter _ _ _ _ _ !_ !_ / : simpl nomatch.
 collection of type [C] that contains the keys that are a member of [m]. *)
 Class Dom (M C : Type) := dom: M → C.
 Instance: Params (@dom) 3.
-Arguments dom {_} _ {_} !_ / : simpl nomatch, clear implicits.
+Arguments dom {_} _ {_} !_ / : simpl nomatch.
 
 (** The function [merge f m1 m2] should merge the maps [m1] and [m2] by
 constructing a new map whose value at key [k] is [f (m1 !! k) (m2 !! k)].*)

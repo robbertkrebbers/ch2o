@@ -905,7 +905,7 @@ Proof. by destruct n. Qed.
 Lemma drop_length l n : length (drop n l) = length l - n.
 Proof. revert n. by induction l; intros [|i]; f_equal'. Qed.
 Lemma drop_ge l n : length l ≤ n → drop n l = [].
-Proof. revert n. induction l; intros [|??]; simpl in *; auto with lia. Qed.
+Proof. revert n. induction l; intros [|?]; simpl in *; auto with lia. Qed.
 Lemma drop_all l : drop (length l) l = [].
 Proof. by apply drop_ge. Qed.
 Lemma drop_drop l n1 n2 : drop n1 (drop n2 l) = drop (n2 + n1) l.
@@ -2604,7 +2604,7 @@ Section fmap.
     (∀ x, f x = y) → f <$> l = replicate (length l) y.
   Proof. intros; induction l; f_equal'; auto. Qed.
   Lemma list_lookup_fmap l i : (f <$> l) !! i = f <$> (l !! i).
-  Proof. revert i. induction l; by intros [|]. Qed.
+  Proof. revert i. induction l; by (intros [|]; simpl). Qed.
   Lemma list_lookup_fmap_inv l i x :
     (f <$> l) !! i = Some x → ∃ y, x = f y ∧ l !! i = Some y.
   Proof.

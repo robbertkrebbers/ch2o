@@ -205,7 +205,7 @@ Proof.
       { clear Ht Hlen. unfold natural_fields_align.
         induction IH as [|τ τs IHτ ? IH]; decompose_Forall; simpl; [done|].
         rewrite Nat.lcm_eq_0; intros [|?]; [|by destruct IH].
-        by apply natural_align_ne_0. }
+        by apply (natural_align_ne_0 Γ τ). }
       destruct c; [|by apply natural_padding_divide].
       clear Ht Hτs IH. unfold field_sizes; simpl. revert Hne_0.
       generalize (natural_fields_align Γ τs); intros whole_align ?.

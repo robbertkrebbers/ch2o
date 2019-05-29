@@ -200,8 +200,8 @@ Proof.
     match goal with
     | H : bit_join ?b _ = _ |- _ => is_var b; destruct b
     | H : bit_join _ ?b = _ |- _ => is_var b; destruct b
-    | _ => case_option_guard || simplify_equality'
-    end; by constructor; auto.
+    | _ => case_option_guard || simplify_equality' || (constructor; assumption)
+    end.
 Qed.
 Lemma bits_join_refine Γ α f Δ1 Δ2 bs1 bs2 bs3 bs1' bs2' bs3' :
   bits_join bs1 bs2 = Some bs3 → bits_join bs1' bs2' = Some bs3' →

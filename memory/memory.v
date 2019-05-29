@@ -796,6 +796,7 @@ Proof.
   intros ?? Ha ? (w2&?&Hw2) ? (w1&?&Hw1). red. unfold insertE, mem_insert.
   destruct Ha as [<-|?]; [|erewrite cmap_lookup_alter_disjoint
     by eauto using of_val_flatten_unshared; eauto].
+  simplify_equality.
   assert (ctree_Forall (λ γb, Some Writable ⊆ pbit_kind γb)
     (of_val Γ (tagged_perm <$> ctree_flatten w2) v2)).
   { erewrite ctree_flatten_of_val by eauto. generalize (val_flatten Γ v2).

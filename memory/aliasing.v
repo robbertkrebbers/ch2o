@@ -123,7 +123,7 @@ Proof.
   inversion Ha1 as [o1 r1 i1 τ1 σp1];
     inversion Ha2 as [o2 r2 i2 τ2 σp2]; intros; simplify_equality'.
   destruct (decide (o1 = o2)); [simplify_type_equality|by do 2 left].
-  destruct (ref_disjoint_cases Γ τ2 r1 r2 σp1 σp2)
+  destruct (ref_disjoint_cases Γ τ1 r1 r2 σp1 σp2)
     as [?|[?|[?|(s&r1'&i1'&r2'&i2'&r'&->&->&?)]]]; auto.
   * left; intros j1 j2; right; left; split; simpl; auto.
   * do 3 right; split; [done|]. by eexists s, r1', i1', r2', i2', r'.

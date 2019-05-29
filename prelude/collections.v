@@ -56,7 +56,7 @@ Section simple_collection.
     split.
     * induction Xs; simpl; intros HXs; [by apply elem_of_empty in HXs|].
       setoid_rewrite elem_of_cons. apply elem_of_union in HXs. naive_solver.
-    * intros [X []]. induction 1; simpl; [by apply elem_of_union_l |].
+    * intros [X [XXs]]. induction XXs; simpl; [by apply elem_of_union_l |].
       intros. apply elem_of_union_r; auto.
   Qed.
   Lemma non_empty_singleton x : {[ x ]} ≢ ∅.
