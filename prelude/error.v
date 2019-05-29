@@ -75,9 +75,9 @@ Ltac generalize_errors :=
     try (is_var e; fail 1); generalize e;
     let x := fresh "err" in intros x in
   repeat match goal with
-  | |- appcontext[ fail ?e ] => gen_error e
-  | |- appcontext[ error_guard _ ?e ] => gen_error e
-  | |- appcontext[ error_of_option _ ?e ] => gen_error e
+  | |- context[ fail ?e ] => gen_error e
+  | |- context[ error_guard _ ?e ] => gen_error e
+  | |- context[ error_of_option _ ?e ] => gen_error e
   end.
 Tactic Notation "simplify_error_equality" :=
   repeat match goal with

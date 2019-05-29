@@ -12,6 +12,8 @@
 #load "Extracted.cmo";;
 #load "Include.cmo";;
 
+type ml_int = int;; (* 'Extracted' defines its own 'int' type with Coq-8.8 *)
+
 open Num;;
 open Format;;
 open Extracted;;
@@ -176,7 +178,7 @@ exception Unknown_definition of Cabs.definition;;
 exception Incompatible_compound of char list * decl * decl;;
 
 type format =
-  | Format of string * int * string * string
+  | Format of string * ml_int * string * string
   | StringLit of char list
 
 let col = ref 0;;

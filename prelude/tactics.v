@@ -135,7 +135,7 @@ Ltac injection' H :=
 and injects equalities, and tries to contradict impossible inequalities. *)
 Ltac fold_classes :=
   repeat match goal with
-  | |- appcontext [ ?F ] =>
+  | |- context [ ?F ] =>
     progress match type of F with
     | FMap _ =>
        change F with (@fmap _ F);
@@ -153,7 +153,7 @@ Ltac fold_classes :=
   end.
 Ltac fold_classes_hyps H :=
   repeat match type of H with
-  | appcontext [ ?F ] =>
+  | context [ ?F ] =>
     progress match type of F with
     | FMap _ =>
        change F with (@fmap _ F) in H;
