@@ -32,7 +32,7 @@ Proof. done. Qed.
 Lemma pretty_N_go_help_irrel x acc1 acc2 s :
   pretty_N_go_help x acc1 s = pretty_N_go_help x acc2 s.
 Proof.
-  revert x acc1 acc2 s; fix 2; intros x [acc1] [acc2] s; simpl.
+  revert x acc1 acc2 s; fix H'2 2; intros x [acc1] [acc2] s; simpl.
   destruct (decide (0 < x)%N); auto.
 Qed.
 Lemma pretty_N_go_step x s :

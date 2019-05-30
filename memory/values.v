@@ -182,7 +182,7 @@ Section operations.
       vals_representable Γ Δ vs τs → P (VUnionAll t vs) (unionT t)).
     Definition val_typed_ind : ∀ v τ, val_typed' Γ Δ v τ → P v τ.
     Proof.
-      fix 3; destruct 1; simplify_equality;
+      fix H'3 3; destruct 1; simplify_equality;
         eauto using Forall_impl, Forall2_impl.
     Qed.
   End val_typed_ind.
@@ -340,7 +340,7 @@ Section operations.
     Context (Punion_none : ∀ t vs,
       Forall val_union_free vs → Forall P vs → P (VUnionAll t vs)).
     Definition val_union_free_ind_alt: ∀ v, val_union_free v → P v.
-    Proof. fix 2; destruct 1; eauto using Forall_impl. Qed.
+    Proof. fix H'2 2; destruct 1; eauto using Forall_impl. Qed.
   End val_union_free_ind.
   Global Instance val_union_free_dec: ∀ v, Decision (val_union_free v).
   Proof.

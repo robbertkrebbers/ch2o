@@ -137,7 +137,7 @@ Section operations.
       P (MUnionAll t γbs) (unionT t)).
     Definition ctree_typed_ind : ∀ w τ, ctree_typed' Γ Δ w τ → P w τ.
     Proof.
-      fix 3; destruct 1; simplify_equality';
+      fix H'3 3; destruct 1; simplify_equality';
         eauto using Forall2_impl, Forall_impl.
     Qed.
   End ctree_typed_ind.
@@ -206,7 +206,7 @@ Section operations.
       P (MStruct t wγbss)).
     Context (Punion_bits : ∀ t γbs, P (MUnionAll t γbs)).
     Definition union_free_ind_alt: ∀ w, union_free w → P w.
-    Proof. fix 2; destruct 1; eauto using Forall_impl. Qed.
+    Proof. fix H'2 2; destruct 1; eauto using Forall_impl. Qed.
   End union_free_ind.
   Global Instance union_free_dec: ∀ w : mtree K, Decision (union_free w).
   Proof.

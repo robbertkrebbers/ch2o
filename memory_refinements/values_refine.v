@@ -57,7 +57,7 @@ Section val_refine_ind.
     P (VUnion t i v1) (VUnionAll t vs2) (unionT t)).
   Definition val_refine_ind: ∀ v1 v2 τ,
     val_refine' Γ α f Δ1 Δ2 v1 v2 τ → P v1 v2 τ.
-  Proof. fix 4; destruct 1; eauto using Forall2_impl, Forall3_impl. Qed.
+  Proof. fix H'4 4; destruct 1; eauto using Forall2_impl, Forall3_impl. Qed.
 End val_refine_ind.
 
 Section values.

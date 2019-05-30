@@ -145,7 +145,7 @@ Section expr_typed_ind.
     Γ ⊢ r : τ ↣ σ → (Γ,Δ,τs) ⊢ e1 : inr σ → P e1 (inr σ) →
     (Γ,Δ,τs) ⊢ e2 : inr τ → P e2 (inr τ) → P (#[r:=e1]e2) (inr τ)).
   Lemma expr_typed_ind : ∀ e τ, expr_typed' Γ Δ τs e τ → P e τ.
-  Proof. fix 3; destruct 1; eauto using Forall2_impl. Qed.
+  Proof. fix H'3 3; destruct 1; eauto using Forall2_impl. Qed.
 End expr_typed_ind.
 
 Inductive ectx_item_typed' (Γ : env K) (Δ : memenv K)
