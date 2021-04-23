@@ -8,6 +8,11 @@ This version is known to compile with:
  - Ocaml 4.02.3
  - GNU C preprocessor 6.1.1
  
+Note: when building OCaml 4.02.3 from source on macOS with Xcode 12 or
+newer, run
+
+    ./configure -cc "gcc -Wno-error=implicit-function-declaration"
+
 BUILDING INSTRUCTIONS
 ---------------------
 
