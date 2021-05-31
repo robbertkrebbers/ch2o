@@ -52,7 +52,7 @@ Program Instance arch_rank_finite {A} : Finite (arch_rank A) := {
   enum := ARank <$> enum c_rank
 }.
 Next Obligation. by intros; apply (bool_decide_unpack _). Qed.
-Next Obligation. by intros ? []; apply (bool_decide_unpack _). Qed.
+Next Obligation. by intros ? [rank]; apply (bool_decide_unpack _); destruct rank. Qed.
 
 Section architecture.
 Context (A : architecture).

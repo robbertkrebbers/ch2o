@@ -79,7 +79,7 @@ Class Separation (A : sType) `{SeparationOps A} : Prop := {
     sep_unshared x ↔ sep_valid x ∧ ∀ y, x ⊥ y → sep_unmapped y;
   sep_unshared_unmapped (x : A) : sep_unshared x → sep_unmapped x → False
 }.
-Arguments sep_inhabited _ {_ _} : clear implicits.
+Arguments sep_inhabited _ {_ _}.
 
 (** We define a relation [xs1 ≡⊥ xs2] that states that lists [xs1] and [xs2]
 behave equivalently with respect to disjointness. For example, we have

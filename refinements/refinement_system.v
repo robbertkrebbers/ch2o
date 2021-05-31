@@ -162,7 +162,7 @@ Section expr_refine_ind.
     P (#[r:=e1]e1') (#[r:=e2]e2') (inr τ)).
   Lemma expr_refine_ind : ∀ e1 e2 τ,
     expr_refine' Γ τs α f Δ1 Δ2 e1 e2 τ → P e1 e2 τ.
-  Proof. fix 4; destruct 1; eauto using Forall2_impl, Forall3_impl. Qed.
+  Proof. fix H'4 4; destruct 1; eauto using Forall2_impl, Forall3_impl. Qed.
 End expr_refine_ind.
 
 Inductive ectx_item_refine' (Γ : env K) (τs: list (type K))

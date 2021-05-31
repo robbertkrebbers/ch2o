@@ -794,7 +794,7 @@ Proof.
   * intros Γ1 Δ δ' ρ n ??????? (a&v&?&?&?&?&?).
     destruct (mem_singleton_union_rev Γ1 Δ m a μ γ1 γ2 v τ)
       as (m1&m2&->&?&?&?); auto.
-    exists m1, m2; split_ands; solve ltac:eauto.
+    exists m1, m2; split_ands; solve ltac:(eauto).
   * intros Γ1 Δ δ' ρ n ??????? (?&?&->&?&(a1&v1&?&?&?&?&?)&(a2&v2&?&?&?&?&?));
       simplify_equality'; exists a1, v1; eauto 10 using mem_singleton_union.
 Qed.

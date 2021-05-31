@@ -195,6 +195,6 @@ Lemma fresh_string_fresh {A} (m : stringmap A) s : m !! fresh_string m s = None.
 Proof.
   unfold fresh_string. destruct (m !! s) as [a|] eqn:Hs; [clear a Hs|done].
   generalize 0 (wf_guard 32 (fresh_string_R_wf s m) 0); revert m.
-  fix 3; intros m n [?]; simpl; unfold fresh_string_go at 1; simpl.
+  fix H'3 3; intros m n [?]; simpl; unfold fresh_string_go at 1; simpl.
   destruct (Some_dec (m !! _)) as [[??]|?]; auto.
 Qed.

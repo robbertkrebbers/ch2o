@@ -44,7 +44,7 @@ Instance option_pkind_subseteq : SubsetEq (option pkind) := λ k1 k2,
 Instance option_pkind_subseteq_dec : ∀ k1 k2 : option pkind, Decision (k1 ⊆ k2).
 Proof. intros [] []; apply _. Defined.
 Instance: PartialOrder (@subseteq (option pkind) _).
-Proof. by repeat split; repeat intros []. Qed.
+Proof. by repeat split; repeat intros []; try destruct p; try destruct p0; try destruct p1. Qed.
 
 Definition perm_kind (γ : perm) : option pkind :=
   match γ with

@@ -294,15 +294,15 @@ This tactic is useful to automatically perform reductions, as for example
 *)
 Ltac quote_stmt s :=
   lazymatch s with
-  | ! ?e => constr:[subst (! □) e]
-  | ret ?e => constr:[subst (ret □) e]
-  | ?s1 ;; ?s2 => constr:[subst (s1 ;; □) s2; subst (□ ;; s2) s1]
-  | loop ?s => constr:[subst (loop □) s]
-  | catch ?s => constr:[subst (catch □) s]
+  | ! ?e => constr:([subst (! □) e])
+  | ret ?e => constr:([subst (ret □) e])
+  | ?s1 ;; ?s2 => constr:([subst (s1 ;; □) s2; subst (□ ;; s2) s1])
+  | loop ?s => constr:([subst (loop □) s])
+  | catch ?s => constr:([subst (catch □) s])
   | if{?e} ?s1 else ?s2 =>
-    constr:[subst (if{e} s1 else □) s2;
-            subst (if{e} □ else s2) s1; subst (if{□} s1 else s2) e]
-  | switch{?e} ?s => constr:[subst (switch{e} □) s; subst (switch{□} s) e]
+    constr:([subst (if{e} s1 else □) s2;
+            subst (if{e} □ else s2) s1; subst (if{□} s1 else s2) e])
+  | switch{?e} ?s => constr:([subst (switch{e} □) s; subst (switch{□} s) e])
   end.
 
 (** The [quote_expr e] tactic yields a list of possible ways to write an

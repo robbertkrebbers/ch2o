@@ -394,7 +394,7 @@ Section is_pure_ind.
   Context (Pinsert : ∀ r e1 e2,
      is_pure e1 → P e1 → is_pure e2 → P e2 → P (#[r:=e1] e2)).
   Definition is_pure_ind_alt: ∀ e, is_pure e → P e.
-  Proof. fix 2; destruct 1; eauto using Forall_impl. Qed.
+  Proof. fix H'2 2; destruct 1; eauto using Forall_impl. Qed.
 End is_pure_ind.
 
 Instance is_pure_dec {K} : ∀ e : expr K, Decision (is_pure e).

@@ -3,10 +3,10 @@ PREREQUISITES
 
 This version is known to compile with:
 
- - Coq 8.5pl2
- - SCons 2.5
- - Ocaml 4.02.3
- - GNU C preprocessor 6.1.1
+ - Coq 8.9.1
+ - SCons 3.0.1
+ - Ocaml 4.05
+ - GNU C preprocessor 8.3.0
  
 BUILDING INSTRUCTIONS
 ---------------------

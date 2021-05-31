@@ -19,11 +19,12 @@ Proof.
      | inleft (exist σ _) => cast_if (decide (cast_typed σ τ1))
      | inright _ => right _
      end
-  end; abstract first
+  end; repeat first
     [ by subst; econstructor; eauto using binop_type_of_sound
     | by inversion 1; repeat match goal with
       | H : binop_typed _ _ _ _ |- _ => apply binop_type_of_complete in H
-      end; simplify_equality'].
+      end; simplify_equality'
+    | destruct τ1 | destruct τ2 ].
 Defined.
 Global Instance lrval_type_check:
    TypeCheck (env K * memenv K) (lrtype K) (lrval K) := λ ΓΔ ν,

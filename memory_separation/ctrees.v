@@ -159,7 +159,7 @@ Section operations.
       ¬(ctree_unmapped w ∧ Forall sep_unmapped xs) → P (MUnion t i w xs)).
     Context (Punion_all : ∀ t xs, Forall sep_valid xs → P (MUnionAll t xs)).
     Definition ctree_valid_ind_alt : ∀ w, ctree_valid w → P w.
-    Proof. fix 2. destruct 1; eauto using Forall_impl. Qed.
+    Proof. fix H'2 2. destruct 1; eauto using Forall_impl. Qed.
   End ctree_valid_ind.
   Global Instance ctree_valid_dec : ∀ w, Decision (ctree_valid w).
   Proof.
@@ -223,7 +223,7 @@ Section operations.
       ctree_valid w1 → ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xs1) →
       P (MUnion t i w1 xs1) (MUnionAll t xs2)).
     Definition ctree_disjoint_ind_alt : ∀ w1 w2, ctree_disjoint w1 w2 → P w1 w2.
-    Proof. fix 3. destruct 1; eauto using Forall2_impl. Qed.
+    Proof. fix H'3 3. destruct 1; eauto using Forall2_impl. Qed.
   End ctree_disjoint_ind.
   Lemma ctree_disjoint_inv_l (P : ctree K A → Prop) w1 w2 :
     w1 ⊥ w2 →
@@ -318,7 +318,7 @@ Section operations.
       ctree_valid w2 → ¬(ctree_unmapped w2 ∧ Forall sep_unmapped xs2) →
       P (MUnionAll t xs1) (MUnion t i w2 xs2)).
     Definition ctree_subseteq_ind_alt : ∀ w1 w2, ctree_subseteq w1 w2 → P w1 w2.
-    Proof. fix 3; destruct 1; eauto using Forall2_impl. Qed.
+    Proof. fix H'3 3; destruct 1; eauto using Forall2_impl. Qed.
   End ctree_subseteq_ind.
   Global Instance ctree_subseteq_dec `{∀ k1 k2 : K, Decision (k1 = k2)} :
     ∀ w1 w2, Decision (w1 ⊆ w2).

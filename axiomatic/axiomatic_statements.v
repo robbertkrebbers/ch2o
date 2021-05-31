@@ -58,7 +58,8 @@ Lemma ax_stmt_weaken Γ δ R R' J J' T T' C C' P P' Q Q' s :
   Q ⊆{Γ,δ} Q' →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} s {{ Q }} →
   Γ\ δ\ R'\ J'\ T'\ C' ⊨ₛ {{ P' }} s {{ Q' }}.
-Proof. intros until 7. by apply ax_stmt_weaken_packed; intros []; simpl. Qed.
+Proof. intros until 7.
+  by apply ax_stmt_weaken_packed; intros []; simpl; auto; intros []. Qed.
 Lemma ax_stmt_weaken_pre Γ δ R J T C P P' Q s :
   P' ⊆{Γ,δ} P →
   Γ\ δ\ R\ J\ T\ C ⊨ₛ {{ P }} s {{ Q }} →
@@ -551,7 +552,8 @@ Proof.
   intros Δ''' n''' ? mf S' ??? (?&?&?) p _; subst; inv_rcstep p; clear S'.
   * rewrite mem_unlock_union, <-mem_unlock_all_spec by solve_elem_of.
     eapply mk_ax_next with Δ''' (mem_unlock_all _); eauto.
-    { split; by rewrite <-?mem_unlock_all_disjoint_le by auto. }
+    { split. by rewrite <-?mem_unlock_all_disjoint_le; auto.
+             by rewrite <-?mem_unlock_all_disjoint_le; auto. }
     { apply cmap_union_valid_2; auto using mem_unlock_all_valid.
       by rewrite <-sep_disjoint_list_double, <-mem_unlock_all_disjoint_le. }
     eapply ax_compose_cons;
@@ -576,7 +578,8 @@ Proof.
     apply ax_done; constructor; eauto using assert_weaken; esolve_elem_of.
   * rewrite mem_unlock_union, <-mem_unlock_all_spec by solve_elem_of.
     eapply mk_ax_next with Δ''' (mem_unlock_all _); eauto.
-    { split; by rewrite <-?mem_unlock_all_disjoint_le by auto. }
+    { split. by rewrite <-?mem_unlock_all_disjoint_le by auto.
+             by rewrite <-?mem_unlock_all_disjoint_le by auto. }
     { apply cmap_union_valid_2; auto using mem_unlock_all_valid.
       by rewrite <-sep_disjoint_list_double, <-mem_unlock_all_disjoint_le. }
     eapply ax_compose_cons;

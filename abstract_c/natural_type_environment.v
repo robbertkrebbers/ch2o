@@ -138,7 +138,8 @@ Lemma natural_size_of_base Γ τb :
     end%BT.
 Proof. done. Qed.
 Lemma natural_size_of_array Γ τ n : size_of Γ (τ.[n]) = n * size_of Γ τ.
-Proof. unfold size_of; simpl. by apply type_iter_array. Qed.
+Proof. unfold size_of; simpl; unfold natural_size_of.
+  by apply type_iter_array. Qed.
 Lemma natural_size_of_compound Γ c t τs :
   ✓ Γ → Γ !! t = Some τs → size_of Γ (compoundT{c} t) =
     match c with
@@ -205,7 +206,7 @@ Proof.
       { clear Ht Hlen. unfold natural_fields_align.
         induction IH as [|τ τs IHτ ? IH]; decompose_Forall; simpl; [done|].
         rewrite Nat.lcm_eq_0; intros [|?]; [|by destruct IH].
-        by apply natural_align_ne_0. }
+        by apply (natural_align_ne_0 Γ τ). }
       destruct c; [|by apply natural_padding_divide].
       clear Ht Hτs IH. unfold field_sizes; simpl. revert Hne_0.
       generalize (natural_fields_align Γ τs); intros whole_align ?.

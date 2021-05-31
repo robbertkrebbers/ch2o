@@ -221,12 +221,12 @@ Proof.
   by destruct e using @expr_ind_alt; simpl;
     repeat match goal with
     | H : ⟦ _ ⟧ _ _ _ = _ |- _ => rewrite H
-    | H : appcontext [ptr_alive'] |- _ => rewrite ptr_alive_erase' in H
-    | H : appcontext [base_val_branchable] |- _ => rewrite base_val_branchable_erase in H
-    | H : appcontext [val_unop_ok] |- _ => rewrite val_unop_ok_erase in H
-    | H : appcontext [val_binop_ok] |- _ => rewrite val_binop_ok_erase in H
-    | H : appcontext [val_cast_ok] |- _ => rewrite val_cast_ok_erase in H
-    | H : appcontext [mem_forced] |- _ => rewrite mem_forced_erase in H
+    | H : context [ptr_alive'] |- _ => rewrite ptr_alive_erase' in H
+    | H : context [base_val_branchable] |- _ => rewrite base_val_branchable_erase in H
+    | H : context [val_unop_ok] |- _ => rewrite val_unop_ok_erase in H
+    | H : context [val_binop_ok] |- _ => rewrite val_binop_ok_erase in H
+    | H : context [val_cast_ok] |- _ => rewrite val_cast_ok_erase in H
+    | H : context [mem_forced] |- _ => rewrite mem_forced_erase in H
     | _ => apply option_bind_ext_fun; intros
     | _ => case_option_guard; try done
     | _ => rewrite mem_lookup_erase

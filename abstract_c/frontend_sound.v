@@ -960,7 +960,7 @@ Proof.
     destruct (to_fun_stmt_typed S2 S3 f (xτs.*1) (xτs.*2) τ cs s)
       as (cmτ&?&?&?&?&?&?); rewrite ?fmap_length; eauto; weaken.
     edestruct (λ sto, insert_fun_valid S3 S' f sto
-      (xτs.*2) τ (Some s)); auto; weaken; eauto 20. }
+      (xτs.*2) τ (Some s)); eauto; weaken; eauto 20. }
   error_proceed [] as S3; error_proceed s as S4.
   destruct (insert_fun_None_valid S2 S3 f sto (xτs.*2) τ)
     as (?&?&?); auto; weaken.

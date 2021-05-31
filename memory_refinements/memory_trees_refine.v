@@ -115,7 +115,7 @@ Section ctree_refine_ind.
     P (MUnion t i w1 γbs1) (MUnionAll t γbs2) (unionT t)).
   Definition ctree_refine_ind: ∀ w1 w2 τ,
     ctree_refine' Γ α f Δ1 Δ2 w1 w2 τ → P w1 w2 τ.
-  Proof. fix 4; destruct 1; eauto using Forall2_impl, Forall3_impl. Qed.
+  Proof. fix H'4 4; destruct 1; eauto using Forall2_impl, Forall3_impl. Qed.
 End ctree_refine_ind.
 
 Section memory_trees.
@@ -208,7 +208,7 @@ Section ctree_leaf_refine.
     Forall sep_unshared γbs2 → P (MUnion t i w1 γbs1) (MUnionAll t γbs2)).
   Lemma ctree_leaf_refine_ind_alt :
      ∀ w1 w2, ctree_leaf_refine Γ α f Δ1 Δ2 w1 w2 → P w1 w2.
-  Proof. fix 3; destruct 1; eauto using Forall2_impl. Qed.
+  Proof. fix H'3 3; destruct 1; eauto using Forall2_impl. Qed.
 End ctree_leaf_refine.
 
 Lemma ctree_refine_leaf Γ α f Δ1 Δ2 w1 w2 τ :

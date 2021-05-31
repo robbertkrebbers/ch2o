@@ -52,7 +52,7 @@ Proof.
     apply map_eq. intros k. apply (Hlookup (Some k)).
   * intros ? [?|]. apply (lookup_empty k). done.
   * intros ? f [? t] [k|]; simpl; [|done]. apply lookup_partial_alter.
-  * intros ? f [? t] [k|] [|k']; simpl; try intuition congruence.
+  * intros ? f [? t] [k|] [|]; simpl; try intuition congruence.
     intros; apply lookup_partial_alter_ne; congruence.
   * intros ??? [??] []; simpl. apply lookup_fmap. done.
   * intros ? [[x|] m]; unfold map_to_list; simpl.

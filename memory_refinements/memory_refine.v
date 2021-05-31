@@ -378,7 +378,7 @@ Proof.
     eauto using mem_free_index_alive_ne,
       mem_free_index_alive_inv, memenv_refine_alive_l.
   * intros o3 o4 r ???. destruct (decide (o1 = o3)); simplify_equality.
-    + by destruct (mem_free_index_alive Δ2 o4).
+    + by destruct (mem_free_index_alive Δ2 o2).
     + eauto using mem_free_index_alive_ne,
         mem_free_index_alive_inv, memenv_refine_alive_r.
   * intros o3 τ ??. destruct (decide (o1 = o3)) as [->|]; eauto.
