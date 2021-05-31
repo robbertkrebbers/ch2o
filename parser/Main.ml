@@ -83,12 +83,12 @@ let num_of_z i =
     | Zneg n' -> minus_num (num_of_positive n');;
 
 let string_of_chars l =
-  let s = String.make (List.length l) ' ' in
+  let s = Bytes.make (List.length l) ' ' in
   let rec init n l =
     match l with
     | [] -> ()
-    | x::l' -> String.set s n x; init (n + 1) l' in
-  init 0 l; s;;
+    | x::l' -> Bytes.set s n x; init (n + 1) l' in
+  init 0 l; Bytes.to_string s;;
 
 let chars_of_string s =
   let l = String.length s in

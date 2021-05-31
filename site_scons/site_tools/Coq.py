@@ -16,7 +16,7 @@ Coq = SCons.Builder.Builder(
 def make_coqidescript(target, source, env):
   open('coqidescript', 'w').write('#!/bin/sh\n' +
     env['COQIDE'] + ' ' + env['COQFLAGS'] + ' $@ \n')
-  os.chmod('coqidescript', 0755)
+  os.chmod('coqidescript', 755)
   return 0
 CoqIdeScript = SCons.Builder.Builder(action = make_coqidescript)
 
