@@ -275,7 +275,7 @@ Inductive Forall3 {A B C} (P : A → B → C → Prop) :
 (** Set operations on lists *)
 Section list_set.
   Context {A} {dec : ∀ x y : A, Decision (x = y)}.
-  Global Instance elem_of_list_dec {dec : ∀ x y : A, Decision (x = y)}
+  Global Instance elem_of_list_dec
     (x : A) : ∀ l, Decision (x ∈ l).
   Proof.
    refine (
@@ -3190,23 +3190,27 @@ with a binding [i] for [x]. *)
 Section quote_lookup.
   Context {A : Type}.
   Class QuoteLookup (E1 E2 : list A) (x : A) (i : nat) := {}.
-  Global Instance quote_lookup_here E x : QuoteLookup (x :: E) (x :: E) x 0.
-  Global Instance quote_lookup_end x : QuoteLookup [] [x] x 0.
+  Global Instance quote_lookup_here E x : QuoteLookup (x :: E) (x :: E) x 0 := {}.
+  Global Instance quote_lookup_end x : QuoteLookup [] [x] x 0 := {}.
   Global Instance quote_lookup_further E1 E2 x i y :
-    QuoteLookup E1 E2 x i → QuoteLookup (y :: E1) (y :: E2) x (S i) | 1000.
+    QuoteLookup E1 E2 x i → QuoteLookup (y :: E1) (y :: E2) x (S i) | 1000
+    := {}.
 End quote_lookup.
 
 Section quote.
   Context {A : Type}.
   Class Quote (E1 E2 : env A) (l : list A) (t : rlist nat) := {}.
-  Global Instance quote_nil: Quote E1 E1 [] rnil.
+  Global Instance quote_nil: Quote E1 E1 [] rnil := {}.
   Global Instance quote_node E1 E2 l i:
-    QuoteLookup E1 E2 l i → Quote E1 E2 l (rnode i) | 1000.
+    QuoteLookup E1 E2 l i → Quote E1 E2 l (rnode i) | 1000
+    := {}.
   Global Instance quote_cons E1 E2 E3 x l i t :
     QuoteLookup E1 E2 [x] i →
-    Quote E2 E3 l t → Quote E1 E3 (x :: l) (rapp (rnode i) t).
+    Quote E2 E3 l t → Quote E1 E3 (x :: l) (rapp (rnode i) t)
+    := {}.
   Global Instance quote_app E1 E2 E3 l1 l2 t1 t2 :
-    Quote E1 E2 l1 t1 → Quote E2 E3 l2 t2 → Quote E1 E3 (l1 ++ l2) (rapp t1 t2).
+    Quote E1 E2 l1 t1 → Quote E2 E3 l2 t2 → Quote E1 E3 (l1 ++ l2) (rapp t1 t2)
+    := {}.
 End quote.
 
 Section eval.

@@ -653,7 +653,7 @@ Instance ectx_item_subst {K} :
   | cast{τ} □ => cast{τ} e
   | #[r:=□] e2 => #[r:=e] e2 | #[r:=e1] □ => #[r:=e1] e
   end.
-Instance: DestructSubst (@ectx_item_subst K).
+Instance: DestructSubst (@ectx_item_subst K) := {}.
 
 Instance: ∀ Ei : ectx_item K, Injective (=) (=) (subst Ei).
 Proof. by destruct Ei; intros ???; simplify_list_equality. Qed.

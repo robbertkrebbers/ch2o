@@ -544,7 +544,8 @@ Inductive to_type_kind := to_Type | to_Ptr.
 Definition to_type_type {K} (k : to_type_kind) :=
   match k with to_Type => type K | to_Ptr => ptr_type K end.
 Definition to_type_ret {k} (τ : type K) : M (to_type_type k) :=
-  match k with to_Type => mret τ | to_Ptr => mret (TType τ) end.
+  match k return M (to_type_type k)
+  with to_Type => mret τ | to_Ptr => mret (TType τ) end.
 End frontend.
 
 (* not in the section because of bug #3488 *)
@@ -703,7 +704,7 @@ with to_type `{Env K} (k : to_type_kind)
     (Δl : local_env K) (cτ : ctype) : M (to_type_type k) :=
   match cτ with
   | CTVoid =>
-     match k with to_Type => mret voidT | to_Ptr => mret TAny end
+     match k return M (to_type_type k) with to_Type => mret voidT | to_Ptr => mret TAny end
   | CTDef x =>
      τp ← lookup_typedef Δl x;
      match k return M (to_type_type k) with

@@ -75,7 +75,7 @@ Ltac solve_decision := intros; first
 
 (** The following combinators are useful to create Decision proofs in
 combination with the [refine] tactic. *)
-Notation swap_if S := (match S with left H => right H | right H => left H end).
+Notation swap_if S := (match S return _ with left H => right H | right H => left H end).
 Notation cast_if S := (if S then left _ else right _).
 Notation cast_if_and S1 S2 := (if S1 then cast_if S2 else right _).
 Notation cast_if_and3 S1 S2 S3 := (if S1 then cast_if_and S2 S3 else right _).

@@ -194,13 +194,13 @@ Proof. by injection 1. Qed.
 
 Instance N_eq_dec: ∀ x y : N, Decision (x = y) := N.eq_dec.
 Program Instance N_le_dec (x y : N) : Decision (x ≤ y)%N :=
-  match Ncompare x y with
+  match N.compare x y with
   | Gt => right _
   | _ => left _
   end.
 Next Obligation. congruence. Qed.
 Program Instance N_lt_dec (x y : N) : Decision (x < y)%N :=
-  match Ncompare x y with
+  match N.compare x y with
   | Lt => left _
   | _ => right _
   end.

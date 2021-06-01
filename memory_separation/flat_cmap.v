@@ -10,6 +10,8 @@ Add Printing Constructor flat_cmap.
 Instance: Injective (=) (=) (@FlatCMap A).
 Proof. by injection 1. Qed.
 
+Set Refine Instance Mode.
+
 Instance flat_cmap_ops `{SeparationOps A} : SeparationOps (flat_cmap A) := {
   sep_empty := FlatCMap ∅;
   sep_union m1 m2 :=

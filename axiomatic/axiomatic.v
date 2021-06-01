@@ -112,7 +112,7 @@ Definition ax_stmt_packed `{EnvSpec K} (Γ : env K) (δ : funenv K)
   ✓{Δ}* ρ →
   assert_holds (Pd d) Γ' Δ δ' ρ n (cmap_erase m) →
   ax_graph ax_disjoint_cond (ax_stmt_post Pd s cmτ) Γ' δ' Δ ρ n [] (Stmt d s) m.
-Instance: Params (@ax_stmt_packed) 5.
+Instance: Params (@ax_stmt_packed) 5 := {}.
 Notation "Γ \ δ \ P ⊨ₚ s" :=
   (ax_stmt_packed Γ δ P%A s)
   (at level 74, δ at next level, P at next level, s at next level,
@@ -122,8 +122,8 @@ Definition ax_stmt `{EnvSpec K} (Γ : env K) (δ : funenv K) R J T C P s Q :=
   Γ\ δ\ dassert_pack P Q R J T C ⊨ₚ s.
 Definition ax_stmt_top `{EnvSpec K} (Γ : env K) (δ : funenv K) P s Q :=
   Γ\ δ\ dassert_pack_top P Q ⊨ₚ s.
-Instance: Params (@ax_stmt) 5.
-Instance: Params (@ax_stmt_top) 5.
+Instance: Params (@ax_stmt) 5 := {}.
+Instance: Params (@ax_stmt_top) 5 := {}.
 Notation "Γ \ δ \ R \ J \ T \ C ⊨ₛ {{ P } } s {{ Q } }" :=
   (ax_stmt Γ δ R%A J%A T%A C%A P%A s Q%A)
   (at level 74, δ at next level, R at next level,
@@ -227,7 +227,7 @@ Definition ax_expr `{EnvSpec K} (Γ : env K) (δ : funenv K) (A P : assert K)
   ax_expr_invariant A Γ' Δ δ' ρ n m →
   assert_holds P Γ' Δ δ' ρ n (cmap_erase m) →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post Q τlr) Γ' δ' Δ ρ n [] (Expr e) m.
-Instance: Params (@ax_expr) 5.
+Instance: Params (@ax_expr) 5 := {}.
 Notation "Γ \ δ \ A ⊨ₑ {{ P } } e {{ Q } }" :=
   (ax_expr Γ δ A%A P%A e Q%A)
   (at level 74, δ at next level, A at next level,

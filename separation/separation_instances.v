@@ -81,6 +81,8 @@ Proof.
   * naive_solver eauto using @sep_unshared_unmapped.
 Qed.
 
+Set Refine Instance Mode.
+
 Instance sum_separation_ops `{SeparationOps A, SeparationOps B} :
     SeparationOps (A + B) := {
   sep_valid x :=

@@ -252,7 +252,7 @@ Instance sctx_item_subst {K} :
   | if{e} s1 else □ => if{e} s1 else s
   | switch{e} □ => switch{e} s
   end.
-Instance: DestructSubst (@sctx_item_subst K).
+Instance: DestructSubst (@sctx_item_subst K) := {}.
 Instance: ∀ Es : sctx_item K, Injective (=) (=) (subst Es).
 Proof. destruct Es; repeat intro; simpl in *; by simplify_equality. Qed.
 
@@ -308,7 +308,7 @@ Instance esctx_item_subst {K} :
   | if{□} s1 else s2 => if{e} s1 else s2
   | switch{□} s => switch{e} s
   end.
-Instance: DestructSubst (@esctx_item_subst K).
+Instance: DestructSubst (@esctx_item_subst K) := {}.
 
 Instance: ∀ Ee : esctx_item K, Injective (=) (=) (subst Ee).
 Proof. destruct Ee; intros ???; simpl in *; by simplify_equality. Qed.
