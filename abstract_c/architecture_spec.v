@@ -21,7 +21,7 @@ Program Instance c_rank_finite : Finite c_rank := {
   enum := [ CharRank ; ShortRank ; IntRank ; LongRank ; LongLongRank ; PtrRank ]
 }.
 Next Obligation. by apply (bool_decide_unpack _). Qed.
-Next Obligation. by intros []; apply (bool_decide_unpack _). Qed.
+Next Obligation. by destruct x; apply (bool_decide_unpack _). Qed.
 Instance c_rank_subseteq_dec (k1 k2 : c_rank) : Decision (k1 ⊆ k2).
 Proof. solve_decision. Defined.
 Instance c_rank_totalorder : TotalOrder ((⊆) : relation c_rank).
@@ -52,7 +52,7 @@ Program Instance arch_rank_finite {A} : Finite (arch_rank A) := {
   enum := ARank <$> enum c_rank
 }.
 Next Obligation. by intros; apply (bool_decide_unpack _). Qed.
-Next Obligation. by intros ? [rank]; apply (bool_decide_unpack _); destruct rank. Qed.
+Next Obligation. by destruct x as [rank]; apply (bool_decide_unpack _); destruct rank. Qed.
 
 Section architecture.
 Context (A : architecture).

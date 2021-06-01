@@ -1,4 +1,6 @@
 *.vo
+*.vos
+*.vok
 *.glob
 .sconsign.dblite
 deps

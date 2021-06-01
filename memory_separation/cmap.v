@@ -55,9 +55,7 @@ Add Printing Constructor cmap.
 Instance: Injective (=) (=) (@CMap K A).
 Proof. by injection 1. Qed.
 
-Set Refine Instance Mode.
-
-Instance cmap_ops {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2),
+#[refine] Instance cmap_ops {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2),
     SeparationOps A} : SeparationOps (cmap K A) := {
   sep_empty := CMap ∅;
   sep_union m1 m2 :=

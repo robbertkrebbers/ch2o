@@ -188,7 +188,7 @@ Proof.
     apply Forall_impl with (λ τ,
       size_of Γ τ ≤ foldr max 1 (size_of Γ <$> τs)); [|simpl; auto with lia].
     clear Hτs. induction τs; csimpl; constructor; [lia|].
-    eapply Forall_impl; eauto with lia.
+    apply Forall_impl with (1:=IHτs); intros; lia.
   * intros Γ τ n. by rewrite natural_align_of_array.
   * intros Γ c t τs i τ ? Ht Hi. erewrite natural_align_of_compound by eauto.
     clear Ht. revert i τ Hi. unfold natural_fields_align.
