@@ -81,9 +81,7 @@ Proof.
   * naive_solver eauto using @sep_unshared_unmapped.
 Qed.
 
-Set Refine Instance Mode.
-
-Instance sum_separation_ops `{SeparationOps A, SeparationOps B} :
+#[refine] Instance sum_separation_ops `{SeparationOps A, SeparationOps B} :
     SeparationOps (A + B) := {
   sep_valid x :=
     match x with inl x => sep_valid x | inr x => sep_valid x ∧ x ≠ ∅ end;
@@ -270,7 +268,7 @@ Lemma counter_injective_projections {A} (x y : counter A) :
   x.1 = y.1 → x.2 = y.2 → x = y.
 Proof. by destruct x, y; simpl; intros -> ->. Qed.
 
-Instance counter_ops `{SeparationOps A}: SeparationOps (counter A) := {
+#[refine] Instance counter_ops `{SeparationOps A}: SeparationOps (counter A) := {
   sep_valid x :=
     sep_valid (x.2)
     ∧ (sep_unmapped (x.2) → x.1 ≤ 0) ∧ (sep_unshared (x.2) → 0 ≤ x.1);
@@ -400,7 +398,7 @@ Inductive lockable (A : sType) : sType :=
 Arguments LLocked {_} _.
 Arguments LUnlocked {_} _.
 
-Instance lockable_separation_ops
+#[refine] Instance lockable_separation_ops
     `{SeparationOps A} : SeparationOps (lockable A) := {
   sep_valid x :=
     match x with
@@ -528,7 +526,7 @@ Local Notation "x .2" := (tagged_tag x).
 Instance: Injective2 (=) (=) (=) (@Tagged A L d).
 Proof. by injection 1. Qed.
 
-Instance tagged_separation_ops {A : sType} `{d : L}
+#[refine] Instance tagged_separation_ops {A : sType} `{d : L}
     `{∀ x y : L, Decision (x = y),
     SeparationOps A} : SeparationOps (tagged A d) := {
   sep_valid x := sep_valid (x.1) ∧ (sep_unmapped (x.1) → x.2 = d);
