@@ -3,7 +3,7 @@ PREREQUISITES
 
 This version is known to compile with:
 
- - Coq 8.9.1
+ - Coq 8.10.2
  - SCons 3.0.1
  - Ocaml 4.05
  - GNU C preprocessor 8.3.0
