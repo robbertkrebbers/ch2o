@@ -8,6 +8,7 @@ Global Generalizable All Variables.
 Global Set Automatic Coercions Import.
 Global Set Asymmetric Patterns.
 Require Export Morphisms RelationClasses List Bool Utf8 Program Setoid.
+Export ListNotations.
 
 (** * General *)
 (** Zipping lists. *)
