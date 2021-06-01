@@ -11,7 +11,7 @@ A context equipped with a value for its hole is known as a zipper. We define
 an operational type class for substitution. The function [subst E x] is
 supposed to substitute the value [x] in the hole of the context [E]. *)
 Class Subst A B C := subst: A → B → C.
-Instance: Params (@subst) 4.
+Instance: Params (@subst) 4 := {}.
 Arguments subst {_ _ _ _} !_ _ / : simpl nomatch.
 
 (** We generally define contexts as lists of singular contexts. For example
@@ -50,7 +50,7 @@ a class [DepSubst] for substitution. The function [depsubst E xs] is supposed to
 substitute the values of the vector [xs] in the holes of [E]. *)
 Class DepSubst {I} (A : I → Type) (B : I → Type) C :=
   depsubst : ∀ {i}, A i → B i → C.
-Instance: Params (@depsubst) 6.
+Instance: Params (@depsubst) 6 := {}.
 Arguments depsubst {_ _ _ _ _ _} !_ _ / : simpl nomatch.
 
 (** * Tactics *)

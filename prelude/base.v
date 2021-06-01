@@ -162,7 +162,7 @@ Notation "( X ≢)" := (λ Y, X ≢ Y) (only parsing) : C_scope.
 Notation "(≢ X )" := (λ Y, Y ≢ X) (only parsing) : C_scope.
 
 Class EquivE E A := equivE: E → relation A.
-Instance: Params (@equivE) 4.
+Instance: Params (@equivE) 4 := {}.
 Notation "X ≡{ Γ } Y" := (equivE Γ X Y)
   (at level 70, format "X  ≡{ Γ }  Y") : C_scope.
 Notation "(≡{ Γ } )" := (equivE Γ) (only parsing, Γ at level 1) : C_scope.
@@ -196,12 +196,12 @@ Ltac unfold_leibniz := repeat
 (** A [Params f n] instance forces the setoid rewriting mechanism not to
 rewrite in the first [n] arguments of the function [f]. We will declare such
 instances for all operational type classes in this development. *)
-Instance: Params (@equiv) 2.
+Instance: Params (@equiv) 2 := {}.
 
 (** The following instance forces [setoid_replace] to use setoid equality
 (for types that have an [Equiv] instance) rather than the standard Leibniz
 equality. *)
-Instance equiv_default_relation `{Equiv A} : DefaultRelation (≡) | 3.
+Instance equiv_default_relation `{Equiv A} : DefaultRelation (≡) | 3 := {}.
 Hint Extern 0 (_ ≡ _) => reflexivity.
 Hint Extern 0 (_ ≡ _) => symmetry; assumption.
 Hint Extern 0 (_ ≡{_} _) => reflexivity.
@@ -216,7 +216,7 @@ Class Empty A := empty: A.
 Notation "∅" := empty : C_scope.
 
 Class Union A := union: A → A → A.
-Instance: Params (@union) 2.
+Instance: Params (@union) 2 := {}.
 Infix "∪" := union (at level 50, left associativity) : C_scope.
 Notation "(∪)" := union (only parsing) : C_scope.
 Notation "( x ∪)" := (union x) (only parsing) : C_scope.
@@ -233,14 +233,14 @@ Arguments union_list _ _ _ !_ /.
 Notation "⋃ l" := (union_list l) (at level 20, format "⋃  l") : C_scope.
 
 Class Intersection A := intersection: A → A → A.
-Instance: Params (@intersection) 2.
+Instance: Params (@intersection) 2 := {}.
 Infix "∩" := intersection (at level 40) : C_scope.
 Notation "(∩)" := intersection (only parsing) : C_scope.
 Notation "( x ∩)" := (intersection x) (only parsing) : C_scope.
 Notation "(∩ x )" := (λ y, intersection y x) (only parsing) : C_scope.
 
 Class Difference A := difference: A → A → A.
-Instance: Params (@difference) 2.
+Instance: Params (@difference) 2 := {}.
 Infix "∖" := difference (at level 40) : C_scope.
 Notation "(∖)" := difference (only parsing) : C_scope.
 Notation "( x ∖)" := (difference x) (only parsing) : C_scope.
@@ -253,7 +253,7 @@ Infix "∖*∖**" := (zip_with (prod_zip (∖) (∖*)))
   (at level 50, left associativity) : C_scope.
 
 Class Singleton A B := singleton: A → B.
-Instance: Params (@singleton) 3.
+Instance: Params (@singleton) 3 := {}.
 Notation "{[ x ]}" := (singleton x) (at level 1) : C_scope.
 Notation "{[ x ; y ; .. ; z ]}" :=
   (union .. (union (singleton x) (singleton y)) .. (singleton z))
@@ -264,7 +264,7 @@ Notation "{[ x , y , z ]}" := (singleton (x,y,z))
   (at level 1, y at next level, z at next level) : C_scope.
 
 Class SubsetEq A := subseteq: relation A.
-Instance: Params (@subseteq) 2.
+Instance: Params (@subseteq) 2 := {}.
 Infix "⊆" := subseteq (at level 70) : C_scope.
 Notation "(⊆)" := subseteq (only parsing) : C_scope.
 Notation "( X ⊆ )" := (subseteq X) (only parsing) : C_scope.
@@ -286,7 +286,7 @@ Hint Extern 0 (_ ⊆* _) => reflexivity.
 Hint Extern 0 (_ ⊆** _) => reflexivity.
 
 Class SubsetEqE E A := subseteqE: E → relation A.
-Instance: Params (@subseteqE) 4.
+Instance: Params (@subseteqE) 4 := {}.
 Notation "X ⊆{ Γ } Y" := (subseteqE Γ X Y)
   (at level 70, format "X  ⊆{ Γ }  Y") : C_scope.
 Notation "(⊆{ Γ } )" := (subseteqE Γ) (only parsing, Γ at level 1) : C_scope.
@@ -315,7 +315,7 @@ Notation "(⊆{ Γ1 , Γ2 , .. , Γ3 }* )" := (Forall2 (⊆{pair .. (Γ1, Γ2) .
 Hint Extern 0 (_ ⊆{_} _) => reflexivity.
 
 Definition strict {A} (R : relation A) : relation A := λ X Y, R X Y ∧ ¬R Y X.
-Instance: Params (@strict) 2.
+Instance: Params (@strict) 2 := {}.
 Infix "⊂" := (strict (⊆)) (at level 70) : C_scope.
 Notation "(⊂)" := (strict (⊆)) (only parsing) : C_scope.
 Notation "( X ⊂ )" := (strict (⊆) X) (only parsing) : C_scope.
@@ -331,7 +331,7 @@ the order [(⊆)]. *)
 Class Lexico A := lexico: relation A.
 
 Class ElemOf A B := elem_of: A → B → Prop.
-Instance: Params (@elem_of) 3.
+Instance: Params (@elem_of) 3 := {}.
 Infix "∈" := elem_of (at level 70) : C_scope.
 Notation "(∈)" := elem_of (only parsing) : C_scope.
 Notation "( x ∈)" := (elem_of x) (only parsing) : C_scope.
@@ -342,7 +342,7 @@ Notation "( x ∉)" := (λ X, x ∉ X) (only parsing) : C_scope.
 Notation "(∉ X )" := (λ x, x ∉ X) (only parsing) : C_scope.
 
 Class Disjoint A := disjoint : A → A → Prop.
-Instance: Params (@disjoint) 2.
+Instance: Params (@disjoint) 2 := {}.
 Infix "⊥" := disjoint (at level 70) : C_scope.
 Notation "(⊥)" := disjoint (only parsing) : C_scope.
 Notation "( X ⊥.)" := (disjoint X) (only parsing) : C_scope.
@@ -358,7 +358,7 @@ Hint Extern 0 (_ ⊥ _) => symmetry; eassumption.
 Hint Extern 0 (_ ⊥* _) => symmetry; eassumption.
 
 Class DisjointE E A := disjointE : E → A → A → Prop.
-Instance: Params (@disjointE) 4.
+Instance: Params (@disjointE) 4 := {}.
 Notation "X ⊥{ Γ } Y" := (disjointE Γ X Y)
   (at level 70, format "X  ⊥{ Γ }  Y") : C_scope.
 Notation "(⊥{ Γ } )" := (disjointE Γ) (only parsing, Γ at level 1) : C_scope.
@@ -374,7 +374,7 @@ Notation "Xs ⊥{ Γ1 , Γ2 , .. , Γ3 }* Ys" :=
 Hint Extern 0 (_ ⊥{_} _) => symmetry; eassumption.
 
 Class DisjointList A := disjoint_list : list A → Prop.
-Instance: Params (@disjoint_list) 2.
+Instance: Params (@disjoint_list) 2 := {}.
 Notation "⊥ Xs" := (disjoint_list Xs) (at level 20, format "⊥  Xs") : C_scope.
 
 Section disjoint_list.
@@ -398,19 +398,19 @@ and fmap. We use these type classes merely for convenient overloading of
 notations and do not formalize any theory on monads (we do not even define a
 class with the monad laws). *)
 Class MRet (M : Type → Type) := mret: ∀ {A}, A → M A.
-Instance: Params (@mret) 3.
+Instance: Params (@mret) 3 := {}.
 Arguments mret {_ _ _} _.
 Class MBind (M : Type → Type) := mbind : ∀ {A B}, (A → M B) → M A → M B.
 Arguments mbind {_ _ _ _} _ !_ /.
-Instance: Params (@mbind) 5.
+Instance: Params (@mbind) 5 := {}.
 Class MJoin (M : Type → Type) := mjoin: ∀ {A}, M (M A) → M A.
-Instance: Params (@mjoin) 3.
+Instance: Params (@mjoin) 3 := {}.
 Arguments mjoin {_ _ _} !_ /.
 Class FMap (M : Type → Type) := fmap : ∀ {A B}, (A → B) → M A → M B.
-Instance: Params (@fmap) 6.
+Instance: Params (@fmap) 6 := {}.
 Arguments fmap {_ _ _ _} _ !_ /.
 Class OMap (M : Type → Type) := omap: ∀ {A B}, (A → option B) → M A → M B.
-Instance: Params (@omap) 6.
+Instance: Params (@omap) 6 := {}.
 Arguments omap {_ _ _ _} _ !_ /.
 
 Notation "m ≫= f" := (mbind f m) (at level 60, right associativity) : C_scope.
@@ -455,7 +455,7 @@ Notation "'guard' P 'as' H ; o" := (mguard P (λ H, o))
 on maps. In the file [fin_maps] we will axiomatize finite maps.
 The function look up [m !! k] should yield the element at key [k] in [m]. *)
 Class Lookup (K A M : Type) := lookup: K → M → option A.
-Instance: Params (@lookup) 4.
+Instance: Params (@lookup) 4 := {}.
 Notation "m !! i" := (lookup i m) (at level 20) : C_scope.
 Notation "(!!)" := lookup (only parsing) : C_scope.
 Notation "( m !!)" := (λ i, m !! i) (only parsing) : C_scope.
@@ -465,7 +465,7 @@ Arguments lookup _ _ _ _ !_ !_ / : simpl nomatch.
 (** The function insert [<[k:=a]>m] should update the element at key [k] with
 value [a] in [m]. *)
 Class Insert (K A M : Type) := insert: K → A → M → M.
-Instance: Params (@insert) 4.
+Instance: Params (@insert) 4 := {}.
 Notation "<[ k := a ]>" := (insert k a)
   (at level 5, right associativity, format "<[ k := a ]>") : C_scope.
 Arguments insert _ _ _ _ !_ _ !_ / : simpl nomatch.
@@ -474,13 +474,13 @@ Arguments insert _ _ _ _ !_ _ !_ / : simpl nomatch.
 [m]. If the key [k] is not a member of [m], the original map should be
 returned. *)
 Class Delete (K M : Type) := delete: K → M → M.
-Instance: Params (@delete) 3.
+Instance: Params (@delete) 3 := {}.
 Arguments delete _ _ _ !_ !_ / : simpl nomatch.
 
 (** The function [alter f k m] should update the value at key [k] using the
 function [f], which is called with the original value. *)
 Class Alter (K A M : Type) := alter: (A → A) → K → M → M.
-Instance: Params (@alter) 5.
+Instance: Params (@alter) 5 := {}.
 Arguments alter {_ _ _ _} _ !_ !_ / : simpl nomatch.
 
 (** The function [alter f k m] should update the value at key [k] using the
@@ -489,20 +489,20 @@ if [k] is not a member of [m]. The value at [k] should be deleted if [f]
 yields [None]. *)
 Class PartialAlter (K A M : Type) :=
   partial_alter: (option A → option A) → K → M → M.
-Instance: Params (@partial_alter) 4.
+Instance: Params (@partial_alter) 4 := {}.
 Arguments partial_alter _ _ _ _ _ !_ !_ / : simpl nomatch.
 
 (** The function [dom C m] should yield the domain of [m]. That is a finite
 collection of type [C] that contains the keys that are a member of [m]. *)
 Class Dom (M C : Type) := dom: M → C.
-Instance: Params (@dom) 3.
+Instance: Params (@dom) 3 := {}.
 Arguments dom {_} _ {_} !_ / : simpl nomatch.
 
 (** The function [merge f m1 m2] should merge the maps [m1] and [m2] by
 constructing a new map whose value at key [k] is [f (m1 !! k) (m2 !! k)].*)
 Class Merge (M : Type → Type) :=
   merge: ∀ {A B C}, (option A → option B → option C) → M A → M B → M C.
-Instance: Params (@merge) 4.
+Instance: Params (@merge) 4 := {}.
 Arguments merge _ _ _ _ _ _ !_ !_ / : simpl nomatch.
 
 (** The function [union_with f m1 m2] is supposed to yield the union of [m1]
@@ -510,18 +510,18 @@ and [m2] using the function [f] to combine values of members that are in
 both [m1] and [m2]. *)
 Class UnionWith (A M : Type) :=
   union_with: (A → A → option A) → M → M → M.
-Instance: Params (@union_with) 3.
+Instance: Params (@union_with) 3 := {}.
 Arguments union_with {_ _ _} _ !_ !_ / : simpl nomatch.
 
 (** Similarly for intersection and difference. *)
 Class IntersectionWith (A M : Type) :=
   intersection_with: (A → A → option A) → M → M → M.
-Instance: Params (@intersection_with) 3.
+Instance: Params (@intersection_with) 3 := {}.
 Arguments intersection_with {_ _ _} _ !_ !_ / : simpl nomatch.
 
 Class DifferenceWith (A M : Type) :=
   difference_with: (A → A → option A) → M → M → M.
-Instance: Params (@difference_with) 3.
+Instance: Params (@difference_with) 3 := {}.
 Arguments difference_with {_ _ _} _ !_ !_ / : simpl nomatch.
 
 Definition intersection_with_list `{IntersectionWith A M}
@@ -529,14 +529,14 @@ Definition intersection_with_list `{IntersectionWith A M}
 Arguments intersection_with_list _ _ _ _ _ !_ /.
 
 Class LookupE (E K A M : Type) := lookupE: E → K → M → option A.
-Instance: Params (@lookupE) 6.
+Instance: Params (@lookupE) 6 := {}.
 Notation "m !!{ Γ } i" := (lookupE Γ i m)
   (at level 20, format "m  !!{ Γ }  i") : C_scope.
 Notation "(!!{ Γ } )" := (lookupE Γ) (only parsing, Γ at level 1) : C_scope.
 Arguments lookupE _ _ _ _ _ _ !_ !_ / : simpl nomatch.
 
 Class InsertE (E K A M : Type) := insertE: E → K → A → M → M.
-Instance: Params (@insert) 6.
+Instance: Params (@insert) 6 := {}.
 Notation "<[ k := a ]{ Γ }>" := (insertE Γ k a)
   (at level 5, right associativity, format "<[ k := a ]{ Γ }>") : C_scope.
 Arguments insertE _ _ _ _ _ _ !_ _ !_ / : simpl nomatch.
@@ -667,7 +667,7 @@ Class Lattice A `{SubsetEq A, Union A, Intersection A} : Prop := {
 (** ** Axiomatization of collections *)
 (** The class [SimpleCollection A C] axiomatizes a collection of type [C] with
 elements of type [A]. *)
-Instance: Params (@map) 3.
+Instance: Params (@map) 3 := {}.
 Class SimpleCollection A C `{ElemOf A C,
     Empty C, Singleton A C, Union C} : Prop := {
   not_elem_of_empty (x : A) : x ∉ ∅;
@@ -692,7 +692,7 @@ Class CollectionOps A C `{ElemOf A C, Empty C, Singleton A C, Union C,
 enumerated as a list. These elements, given by the [elements] function, may be
 in any order and should not contain duplicates. *)
 Class Elements A C := elements: C → list A.
-Instance: Params (@elements) 3.
+Instance: Params (@elements) 3 := {}.
 
 (** We redefine the standard library's [In] and [NoDup] using type classes. *)
 Inductive elem_of_list {A} : ElemOf A (list A) :=
@@ -715,7 +715,7 @@ Class FinCollection A C `{ElemOf A C, Empty C, Singleton A C,
 }.
 Class Size C := size: C → nat.
 Arguments size {_ _} !_ / : simpl nomatch.
-Instance: Params (@size) 2.
+Instance: Params (@size) 2 := {}.
 
 (** The class [Collection M] axiomatizes a type constructor [M] that can be
 used to construct a collection [M A] with elements of type [A]. The advantage
@@ -741,7 +741,7 @@ Class CollectionMonad M `{∀ A, ElemOf A (M A),
 will later prove that [fresh] is [Proper] with respect to the induced setoid
 equality on collections. *)
 Class Fresh A C := fresh: C → A.
-Instance: Params (@fresh) 3.
+Instance: Params (@fresh) 3 := {}.
 Class FreshSpec A C `{ElemOf A C,
     Empty C, Singleton A C, Union C, Fresh A C} : Prop := {
   fresh_collection_simple :>> SimpleCollection A C;
