@@ -2477,15 +2477,15 @@ Section Forall2_order.
   Proof. by constructor. Qed.
   Global Instance: Proper (Forall2 R ==> Forall2 R ==> Forall2 R) (++).
   Proof. repeat intro. eauto using Forall2_app. Qed.
-  Global Instance: Proper (Forall2 R ==> Forall2 R) (delete i).
+  Global Instance: `{Proper (Forall2 R ==> Forall2 R) (delete i)}.
   Proof. repeat intro. eauto using Forall2_delete. Qed.
-  Global Instance: Proper (R ==> Forall2 R) (replicate n).
+  Global Instance: `{Proper (R ==> Forall2 R) (replicate n)}.
   Proof. repeat intro. eauto using Forall2_replicate. Qed.
-  Global Instance: Proper (Forall2 R ==> Forall2 R) (take n).
+  Global Instance: `{Proper (Forall2 R ==> Forall2 R) (take n)}.
   Proof. repeat intro. eauto using Forall2_take. Qed.
-  Global Instance: Proper (Forall2 R ==> Forall2 R) (drop n).
+  Global Instance: `{Proper (Forall2 R ==> Forall2 R) (drop n)}.
   Proof. repeat intro. eauto using Forall2_drop. Qed.
-  Global Instance: Proper (R ==> Forall2 R ==> Forall2 R) (resize n).
+  Global Instance: `{Proper (R ==> Forall2 R ==> Forall2 R) (resize n)}.
   Proof. repeat intro. eauto using Forall2_resize. Qed.
 End Forall2_order.
 
@@ -3200,7 +3200,7 @@ End quote_lookup.
 Section quote.
   Context {A : Type}.
   Class Quote (E1 E2 : env A) (l : list A) (t : rlist nat) := {}.
-  Global Instance quote_nil: Quote E1 E1 [] rnil := {}.
+  Global Instance quote_nil: `{Quote E1 E1 [] rnil} := {}.
   Global Instance quote_node E1 E2 l i:
     QuoteLookup E1 E2 l i → Quote E1 E2 l (rnode i) | 1000
     := {}.

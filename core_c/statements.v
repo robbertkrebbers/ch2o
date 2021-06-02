@@ -146,13 +146,13 @@ Notation "'call' f @ es" := (!(call f @ es))
   (at level 10, es at level 66) : stmt_scope.
 Notation "'free' e" := (!(free e)) (at level 10) : stmt_scope.
 
-Instance: Injective (=) (=) (@SDo K).
+Instance: `{Injective (=) (=) (@SDo K)}.
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@SGoto K).
+Instance: `{Injective (=) (=) (@SGoto K)}.
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@SReturn K).
+Instance: `{Injective (=) (=) (@SReturn K)}.
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@SLocal K).
+Instance: `{Injective2 (=) (=) (=) (@SLocal K)}.
 Proof. by injection 1. Qed.
 
 Instance stmt_gotos {K} : Gotos (stmt K) :=
@@ -252,8 +252,8 @@ Instance sctx_item_subst {K} :
   | if{e} s1 else □ => if{e} s1 else s
   | switch{e} □ => switch{e} s
   end.
-Instance: DestructSubst (@sctx_item_subst K) := {}.
-Instance: ∀ Es : sctx_item K, Injective (=) (=) (subst Es).
+Instance: `{DestructSubst (@sctx_item_subst K)} := {}.
+Instance: `{∀ Es : sctx_item K, Injective (=) (=) (subst Es)}.
 Proof. destruct Es; repeat intro; simpl in *; by simplify_equality. Qed.
 
 Instance maybe_CSwitch {K} : Maybe (@CSwitch K) := λ Es,
@@ -308,9 +308,9 @@ Instance esctx_item_subst {K} :
   | if{□} s1 else s2 => if{e} s1 else s2
   | switch{□} s => switch{e} s
   end.
-Instance: DestructSubst (@esctx_item_subst K) := {}.
+Instance: `{DestructSubst (@esctx_item_subst K)} := {}.
 
-Instance: ∀ Ee : esctx_item K, Injective (=) (=) (subst Ee).
+Instance: `{∀ Ee : esctx_item K, Injective (=) (=) (subst Ee)}.
 Proof. destruct Ee; intros ???; simpl in *; by simplify_equality. Qed.
 
 Instance esctx_item_gotos {K} : Gotos (esctx_item K) := λ Ee,

@@ -648,20 +648,20 @@ need for proofs that the relations and operations are proper. Instead, we
 define setoid equality generically [λ X Y, X ⊆ Y ∧ Y ⊆ X]. *)
 Class EmptySpec A `{Empty A, SubsetEq A} : Prop := subseteq_empty X : ∅ ⊆ X.
 Class JoinSemiLattice A `{SubsetEq A, Union A} : Prop := {
-  join_semi_lattice_pre :>> PreOrder (⊆);
+  join_semi_lattice_pre :> PreOrder (⊆);
   union_subseteq_l X Y : X ⊆ X ∪ Y;
   union_subseteq_r X Y : Y ⊆ X ∪ Y;
   union_least X Y Z : X ⊆ Z → Y ⊆ Z → X ∪ Y ⊆ Z
 }.
 Class MeetSemiLattice A `{SubsetEq A, Intersection A} : Prop := {
-  meet_semi_lattice_pre :>> PreOrder (⊆);
+  meet_semi_lattice_pre :> PreOrder (⊆);
   intersection_subseteq_l X Y : X ∩ Y ⊆ X;
   intersection_subseteq_r X Y : X ∩ Y ⊆ Y;
   intersection_greatest X Y Z : Z ⊆ X → Z ⊆ Y → Z ⊆ X ∩ Y
 }.
 Class Lattice A `{SubsetEq A, Union A, Intersection A} : Prop := {
-  lattice_join :>> JoinSemiLattice A;
-  lattice_meet :>> MeetSemiLattice A;
+  lattice_join :> JoinSemiLattice A;
+  lattice_meet :> MeetSemiLattice A;
   lattice_distr X Y Z : (X ∪ Y) ∩ (X ∪ Z) ⊆ X ∪ (Y ∩ Z)
 }.
 
@@ -677,13 +677,13 @@ Class SimpleCollection A C `{ElemOf A C,
 }.
 Class Collection A C `{ElemOf A C, Empty C, Singleton A C,
     Union C, Intersection C, Difference C} : Prop := {
-  collection_simple :>> SimpleCollection A C;
+  collection_simple :> SimpleCollection A C;
   elem_of_intersection X Y (x : A) : x ∈ X ∩ Y ↔ x ∈ X ∧ x ∈ Y;
   elem_of_difference X Y (x : A) : x ∈ X ∖ Y ↔ x ∈ X ∧ x ∉ Y
 }.
 Class CollectionOps A C `{ElemOf A C, Empty C, Singleton A C, Union C,
     Intersection C, Difference C, IntersectionWith A C, Filter A C} : Prop := {
-  collection_ops :>> Collection A C;
+  collection_ops :> Collection A C;
   elem_of_intersection_with (f : A → A → option A) X Y (x : A) :
     x ∈ intersection_with f X Y ↔ ∃ x1 x2, x1 ∈ X ∧ x2 ∈ Y ∧ f x1 x2 = Some x;
   elem_of_filter X P `{∀ x, Decision (P x)} x : x ∈ filter P X ↔ P x ∧ x ∈ X
@@ -710,7 +710,7 @@ anyway so as to avoid cycles in type class search. *)
 Class FinCollection A C `{ElemOf A C, Empty C, Singleton A C,
     Union C, Intersection C, Difference C,
     Elements A C, ∀ x y : A, Decision (x = y)} : Prop := {
-  fin_collection :>> Collection A C;
+  fin_collection :> Collection A C;
   elem_of_elements X x : x ∈ elements X ↔ x ∈ X;
   NoDup_elements X : NoDup (elements X)
 }.
@@ -745,7 +745,7 @@ Class Fresh A C := fresh: C → A.
 Instance: Params (@fresh) 3 := {}.
 Class FreshSpec A C `{ElemOf A C,
     Empty C, Singleton A C, Union C, Fresh A C} : Prop := {
-  fresh_collection_simple :>> SimpleCollection A C;
+  fresh_collection_simple :> SimpleCollection A C;
   fresh_proper_alt X Y : (∀ x, x ∈ X ↔ x ∈ Y) → fresh X = fresh Y;
   is_fresh (X : C) : fresh X ∉ X
 }.
@@ -867,16 +867,16 @@ Proof. red. trivial. Qed.
 Instance: ∀ `{R1 : relation A, R2 : relation B} (x : B),
   Reflexive R2 → Proper (R1 ==> R2) (λ _, x).
 Proof. intros A R1 B R2 x ? y1 y2; reflexivity. Qed.
-Instance: @PreOrder A (=).
+Instance: `{@PreOrder A (=)}.
 Proof. split; repeat intro; congruence. Qed.
 Lemma injective_iff {A B} {R : relation A} {S : relation B} (f : A → B)
   `{!Injective R S f} `{!Proper (R ==> S) f} x y : S (f x) (f y) ↔ R x y.
 Proof. firstorder. Qed.
-Instance: Injective (=) (=) (@inl A B).
+Instance: `{Injective (=) (=) (@inl A B)}.
 Proof. injection 1; auto. Qed.
-Instance: Injective (=) (=) (@inr A B).
+Instance: `{Injective (=) (=) (@inr A B)}.
 Proof. injection 1; auto. Qed.
-Instance: Injective2 (=) (=) (=) (@pair A B).
+Instance: `{Injective2 (=) (=) (=) (@pair A B)}.
 Proof. injection 1; auto. Qed.
 Instance: ∀ `{Injective2 A B C R1 R2 R3 f} y, Injective R1 R3 (λ x, f x y).
 Proof. repeat intro; edestruct (injective2 f); eauto. Qed.
@@ -893,9 +893,9 @@ Proof. intros y. exists (g y). auto. Qed.
 
 Lemma impl_transitive (P Q R : Prop) : (P → Q) → (Q → R) → (P → R).
 Proof. tauto. Qed.
-Instance: Commutative (↔) (@eq A).
+Instance: `{Commutative (↔) (@eq A)}.
 Proof. red; intuition. Qed.
-Instance: Commutative (↔) (λ x y, @eq A y x).
+Instance: `{Commutative (↔) (λ x y, @eq A y x)}.
 Proof. red; intuition. Qed.
 Instance: Commutative (↔) (↔).
 Proof. red; intuition. Qed.

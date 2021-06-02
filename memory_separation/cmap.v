@@ -42,9 +42,9 @@ Instance cmap_elem_Forall2_dec {K A} `{∀ k1 k2 : K, Decision (k1 = k2),
     Decision P, ∀ w1 w2, Decision (Q w1 w2)}
   (x y : cmap_elem K A) : Decision (cmap_elem_Forall2 P Q x y).
 Proof. destruct x, y; apply _. Defined.
-Instance: Injective (=) (=) (@Freed K A).
+Instance: `{Injective (=) (=) (@Freed K A)}.
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@Obj K A).
+Instance: `{Injective2 (=) (=) (=) (@Obj K A)}.
 Proof. by injection 1. Qed.
 
 Record cmap (K : iType) (A : sType) : iType :=
@@ -52,7 +52,7 @@ Record cmap (K : iType) (A : sType) : iType :=
 Arguments CMap {_ _} _.
 Arguments cmap_car {_ _} _.
 Add Printing Constructor cmap.
-Instance: Injective (=) (=) (@CMap K A).
+Instance: `{Injective (=) (=) (@CMap K A)}.
 Proof. by injection 1. Qed.
 
 #[refine] Instance cmap_ops {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2),

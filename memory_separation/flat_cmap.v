@@ -7,7 +7,7 @@ Record flat_cmap (A : Type) : Type :=
 Arguments FlatCMap {_} _.
 Arguments flat_cmap_car {_} _.
 Add Printing Constructor flat_cmap.
-Instance: Injective (=) (=) (@FlatCMap A).
+Instance: `{Injective (=) (=) (@FlatCMap A)}.
 Proof. by injection 1. Qed.
 
 #[refine] Instance flat_cmap_ops `{SeparationOps A} : SeparationOps (flat_cmap A) := {

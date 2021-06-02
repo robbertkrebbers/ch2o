@@ -154,7 +154,7 @@ Arguments int_cast_ok _ _ _ _ : simpl never.
 Arguments int_cast _ _ _ _ : simpl never.
 
 Class IntEnvSpec K `{IntEnv K} := {
-  int_coding_spec :>> IntCodingSpec K;
+  int_coding_spec :> IntCodingSpec K;
   int_arithop_ok_more op x y τi1 τi2 :
     int_typed x τi1 → int_typed y τi2 →
     let τi' := int_promote τi1 ∪ int_promote τi2 in

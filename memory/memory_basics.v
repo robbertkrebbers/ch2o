@@ -51,7 +51,7 @@ Instance memenv_valid `{Env K} : Valid (env K) (memenv K) := λ Γ Δ,
 
 Instance index_typecheck {K} : TypeCheck (memenv K) (type K) index := λ Δ o,
   fst <$> Δ !! o.
-Instance: TypeCheckSpec (memenv K) (type K) index (λ _, True).
+Instance: `{TypeCheckSpec (memenv K) (type K) index (λ _, True)}.
 Proof.
   intros ? Δ o τ. split; unfold type_check, typed,index_typecheck, index_typed.
   * destruct (Δ !! o) as [[??]|]; naive_solver.
@@ -83,7 +83,7 @@ Record memenv_forward {K} (Δ1 Δ2  : memenv K) := {
 }.
 Notation "Δ1 ⇒ₘ Δ2" := (memenv_forward Δ1 Δ2)
   (at level 70, format "Δ1  ⇒ₘ  Δ2") : C_scope.
-Instance: PartialOrder (@memenv_forward K).
+Instance: `{PartialOrder (@memenv_forward K)}.
 Proof.
   split; [split; [|intros ??? [??] [??]]; split; naive_solver|].
   cut (∀ (Δ1 Δ2 : memenv K) o τ β,

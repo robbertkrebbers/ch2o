@@ -69,9 +69,9 @@ Ltac inv_fin i :=
     revert dependent i; match goal with |- ∀ i, @?P i => apply (fin_S_inv P) end
   end.
 
-Instance: Injective (=) (=) (@FS n).
+Instance: `{Injective (=) (=) (@FS n)}.
 Proof. intros n i j. apply Fin.FS_inj. Qed.
-Instance: Injective (=) (=) (@fin_to_nat n).
+Instance: `{Injective (=) (=) (@fin_to_nat n)}.
 Proof.
   intros n i. induction i; intros j; inv_fin j; intros; f_equal'; auto with lia.
 Qed.

@@ -37,7 +37,7 @@ Definition bit_offset_of `{Env K}
   sum_list $ take i $ field_bit_sizes Γ τs.
 
 Class EnvSpec (K : iType) `{Env K} := {
-  int_env_spec :>> IntEnvSpec K;
+  int_env_spec :> IntEnvSpec K;
   size_of_ptr_ne_0 Γ τp : size_of Γ (τp.*) ≠ 0;
   size_of_int Γ τi : size_of Γ (intT τi) = rank_size (rank τi);
   size_of_void_ne_0 Γ : size_of Γ voidT ≠ 0;

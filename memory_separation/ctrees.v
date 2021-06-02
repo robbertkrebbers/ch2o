@@ -15,15 +15,15 @@ Arguments MStruct {_ _} _ _.
 Arguments MUnion {_ _} _ _ _ _.
 Arguments MUnionAll {_ _} _ _.
 
-Instance: Injective (=) (=) (@MBase K A τb).
+Instance: `{Injective (=) (=) (@MBase K A τb)}.
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@MArray K A).
+Instance: `{Injective2 (=) (=) (=) (@MArray K A)}.
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@MStruct K A t).
+Instance: `{Injective (=) (=) (@MStruct K A t)}.
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@MUnion K A t i).
+Instance: `{Injective2 (=) (=) (=) (@MUnion K A t i)}.
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@MUnionAll K A t).
+Instance: `{Injective (=) (=) (@MUnionAll K A t)}.
 Proof. by injection 1. Qed.
 
 Instance ctree_eq_dec {K : iType} {A : sType}

@@ -122,7 +122,7 @@ Proof.
   unfold subseteq, map_subseteq, map_Forall2. split; intros Hm i;
     specialize (Hm i); destruct (m1 !! i), (m2 !! i); naive_solver.
 Qed.
-Global Instance: EmptySpec (M A).
+Global Instance: `{EmptySpec (M A)}.
 Proof.
   intros A m. rewrite !map_subseteq_spec.
   intros i x. by rewrite lookup_empty.
@@ -133,7 +133,7 @@ Proof.
   intros m1 m2 m3 Hm12 Hm23 i; specialize (Hm12 i); specialize (Hm23 i).
   destruct (m1 !! i), (m2 !! i), (m3 !! i); try done; etransitivity; eauto.
 Qed.
-Global Instance: PartialOrder ((⊆) : relation (M A)).
+Global Instance: `{PartialOrder ((⊆) : relation (M A))}.
 Proof.
   split; [apply _|].
   intros m1 m2; rewrite !map_subseteq_spec.
@@ -873,7 +873,7 @@ Proof.
   split; [|naive_solver].
   intros [i[(x&y&?&?&?)|[(x&?&?&[])|(y&?&?&[])]]]; naive_solver.
 Qed.
-Global Instance: Symmetric (@disjoint (M A) _).
+Global Instance: `{Symmetric (@disjoint (M A) _)}.
 Proof. intros A m1 m2. rewrite !map_disjoint_spec. naive_solver. Qed.
 Lemma map_disjoint_empty_l {A} (m : M A) : ∅ ⊥ m.
 Proof. rewrite !map_disjoint_spec. intros i x y. by rewrite lookup_empty. Qed.
@@ -1005,15 +1005,15 @@ Qed.
 End union_with.
 
 (** ** Properties of the [union] operation *)
-Global Instance: LeftId (@eq (M A)) ∅ (∪) := _.
-Global Instance: RightId (@eq (M A)) ∅ (∪) := _.
-Global Instance: Associative (@eq (M A)) (∪).
+Global Instance: `{LeftId (@eq (M A)) ∅ (∪)} := _.
+Global Instance: `{RightId (@eq (M A)) ∅ (∪)} := _.
+Global Instance: `{Associative (@eq (M A)) (∪)}.
 Proof.
   intros A m1 m2 m3. unfold union, map_union, union_with, map_union_with.
   apply (merge_associative _). intros i.
   by destruct (m1 !! i), (m2 !! i), (m3 !! i).
 Qed.
-Global Instance: Idempotent (@eq (M A)) (∪).
+Global Instance: `{Idempotent (@eq (M A)) (∪)}.
 Proof. intros A ?. by apply union_with_idempotent. Qed.
 Lemma lookup_union_Some_raw {A} (m1 m2 : M A) i x :
   (m1 ∪ m2) !! i = Some x ↔

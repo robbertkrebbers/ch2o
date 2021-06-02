@@ -27,15 +27,15 @@ Notation "'intV{' τi } x" := (VBase (intV{τi} x))
 Notation "'ptrV' p" := (VBase (ptrV p)) (at level 10) : val_scope.
 Notation "'byteV' bs" := (VBase (byteV bs)) (at level 10) : val_scope.
 
-Instance: Injective (=) (=) (@VBase K).
+Instance: `{Injective (=) (=) (@VBase K)}.
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@VArray K).
+Instance: `{Injective2 (=) (=) (=) (@VArray K)}.
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@VStruct K t).
+Instance: `{Injective (=) (=) (@VStruct K t)}.
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@VUnion K t).
+Instance: `{Injective2 (=) (=) (=) (@VUnion K t)}.
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@VUnionAll K t).
+Instance: `{Injective (=) (=) (@VUnionAll K t)}.
 Proof. by injection 1. Qed.
 
 Instance maybe_VBase {K} : Maybe (@VBase K) := λ v,
