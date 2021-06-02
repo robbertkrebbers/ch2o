@@ -305,7 +305,7 @@ Proof.
   apply ref_typed_size in Hr; apply Nat.mul_le_mono_l; lia.
 Qed.
 
-Global Instance: PreOrder (@subseteqE (env K) (type K) _ Γ).
+Global Instance: `{PreOrder (@subseteqE (env K) (type K) _ Γ)}.
 Proof.
   intros Γ. repeat split.
   * eexists []. constructor.

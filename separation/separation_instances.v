@@ -262,7 +262,7 @@ Arguments counter_perm {_} _.
 Arguments counter_count {_} _.
 Local Notation "p .1" := (counter_count p).
 Local Notation "p .2" := (counter_perm p).
-Instance: Injective2 (=) (=) (=) (@Counter A).
+Instance: `{Injective2 (=) (=) (=) (@Counter A)}.
 Proof. by injection 1. Qed.
 Lemma counter_injective_projections {A} (x y : counter A) :
   x.1 = y.1 → x.2 = y.2 → x = y.
@@ -523,7 +523,7 @@ Arguments tagged_tag {_ _ _} _.
 Arguments tagged_perm {_ _ _} _.
 Local Notation "x .1" := (tagged_perm x).
 Local Notation "x .2" := (tagged_tag x).
-Instance: Injective2 (=) (=) (=) (@Tagged A L d).
+Instance: `{Injective2 (=) (=) (=) (@Tagged A L d)}.
 Proof. by injection 1. Qed.
 
 #[refine] Instance tagged_separation_ops {A : sType} `{d : L}

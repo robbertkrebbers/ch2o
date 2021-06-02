@@ -189,13 +189,13 @@ Lemma deendianize_permutation k βs : deendianize k βs ≡ₚ βs.
 Proof.
   rewrite <-(endianize_deendianize k βs) at 2. by rewrite endianize_permutation.
 Qed.
-Global Instance: Proper ((≡ₚ) ==> (≡ₚ)) (endianize k).
+Global Instance: `{Proper ((≡ₚ) ==> (≡ₚ)) (endianize k)}.
 Proof. intros k βs1 βs2. by rewrite !endianize_permutation. Qed.
-Global Instance: Injective (≡ₚ) (≡ₚ) (endianize k).
+Global Instance: `{Injective (≡ₚ) (≡ₚ) (endianize k)}.
 Proof. intros k βs1 βs2. by rewrite !endianize_permutation. Qed.
-Global Instance: Proper ((≡ₚ) ==> (≡ₚ)) (deendianize k).
+Global Instance: `{Proper ((≡ₚ) ==> (≡ₚ)) (deendianize k)}.
 Proof. intros k βs1 βs2. by rewrite !deendianize_permutation. Qed.
-Global Instance: Injective (≡ₚ) (≡ₚ) (deendianize k).
+Global Instance: `{Injective (≡ₚ) (≡ₚ) (deendianize k)}.
 Proof. intros k βs1 βs2. by rewrite !deendianize_permutation. Qed.
 Lemma endianize_length k βs : length (endianize k βs) = length βs.
 Proof. by rewrite endianize_permutation. Qed.

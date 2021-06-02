@@ -4,7 +4,8 @@ import SCons.Defaults, SCons.Tool, SCons.Util, os
 
 def coq_emitter(target, source, env):
   base, _ = os.path.splitext(str(target[0]))
-  target.append(base + ".glob")
+  for ext in ['.glob', '.vos', '.vok']:
+    target.append(base + ext)
   return target, source
 Coq = SCons.Builder.Builder(
   action = '$COQC $COQFLAGS -q $SOURCE',

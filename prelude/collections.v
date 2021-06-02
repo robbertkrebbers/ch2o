@@ -367,7 +367,7 @@ Section NoDup.
   Definition elem_of_upto (x : A) (X : B) := ∃ y, y ∈ X ∧ R x y.
   Definition set_NoDup (X : B) := ∀ x y, x ∈ X → y ∈ X → R x y → x = y.
 
-  Global Instance: Proper ((≡) ==> iff) (elem_of_upto x).
+  Global Instance: `{Proper ((≡) ==> iff) (elem_of_upto x)}.
   Proof. intros ??? E. unfold elem_of_upto. by setoid_rewrite E. Qed.
   Global Instance: Proper (R ==> (≡) ==> iff) elem_of_upto.
   Proof.

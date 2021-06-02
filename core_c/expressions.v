@@ -145,15 +145,15 @@ Infix "==" := (EBinOp (CompOp EqOp)) (at level 52) : expr_scope.
 Notation "- e" := (EUnOp NegOp e)
   (at level 35, right associativity) : expr_scope.
 
-Instance: Injective (=) (=) (@EVar K).
+Instance: `{Injective (=) (=) (@EVar K)}.
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (λ Ω (v : val K), #{Ω} v).
+Instance: `{Injective2 (=) (=) (=) (λ Ω (v : val K), #{Ω} v)}.
 Proof. by injection 1. Qed.
-Instance: Injective2 (=) (=) (=) (@EVal K).
+Instance: `{Injective2 (=) (=) (=) (@EVal K)}.
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@ELoad K).
+Instance: `{Injective (=) (=) (@ELoad K)}.
 Proof. by injection 1. Qed.
-Instance: Injective (=) (=) (@EFree K).
+Instance: `{Injective (=) (=) (@EFree K)}.
 Proof. by injection 1. Qed.
 
 Instance maybe_EAlloc {K} : Maybe2 (@EAlloc K) := λ e,
@@ -653,9 +653,9 @@ Instance ectx_item_subst {K} :
   | cast{τ} □ => cast{τ} e
   | #[r:=□] e2 => #[r:=e] e2 | #[r:=e1] □ => #[r:=e1] e
   end.
-Instance: DestructSubst (@ectx_item_subst K) := {}.
+Instance: `{DestructSubst (@ectx_item_subst K)} := {}.
 
-Instance: ∀ Ei : ectx_item K, Injective (=) (=) (subst Ei).
+Instance: `{∀ Ei : ectx_item K, Injective (=) (=) (subst Ei)}.
 Proof. by destruct Ei; intros ???; simplify_list_equality. Qed.
 Lemma is_nf_ectx_item {K} (Ei : ectx_item K) e : ¬is_nf (subst Ei e).
 Proof. destruct Ei; inversion 1. Qed.

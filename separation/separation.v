@@ -543,12 +543,12 @@ Proof.
   unfold sep_disjoint_le, impl. intros xs1 xs2 Hxs12 xs3 xs4 Hxs34.
   by setoid_rewrite Hxs12; setoid_rewrite Hxs34.
 Qed.
-Global Instance: Proper ((⊆⊥) ==> (⊆⊥)) (z ::).
+Global Instance: `{Proper ((⊆⊥) ==> (⊆⊥)) (z ::)}.
 Proof.
   unfold sep_disjoint_le, impl. intros z xs1 xs2 Hxs12 y; subst.
   rewrite !sep_disjoint_alt. naive_solver.
 Qed.
-Global Instance: Proper (flip (⊆⊥) ==> flip (⊆⊥)) (z ::).
+Global Instance: `{Proper (flip (⊆⊥) ==> flip (⊆⊥)) (z ::)}.
 Proof. by intros z x y Hxy; simpl in *; rewrite Hxy. Qed.
 Global Instance: Proper ((⊆⊥) ==> (⊆⊥) ==> (⊆⊥)) (++).
 Proof.

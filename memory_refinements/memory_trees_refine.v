@@ -639,7 +639,6 @@ Proof.
   { unfold G1; simpl. eauto using ctree_refine_typed_l. }
   apply ctree_unflatten_refine; eauto 2 using ctree_typed_type_valid.
   eapply Forall2_sublist_alter; eauto 2 using ctree_flatten_refine.
-  apply ctree_flatten_refine with ucharT; simplify_option_equality; auto.
 Qed.
 Lemma ctree_map_refine Γ α f Δ1 Δ2 h1 h2 w1 w2 τ :
   ✓ Γ → w1 ⊑{Γ,α,f@Δ1↦Δ2} w2 : τ →

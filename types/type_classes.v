@@ -56,7 +56,7 @@ Class PathTypeCheckSpec (E T1 T2 R : Type) (P : E → Prop)
 
 Class PathTypeCheckSpecUnique (E T1 T2 R : Type) (P : E → Prop)
     `{PathTyped E T1 T2 R, LookupE E R T2 T1} := {
-  path_typed_unique_spec :>> PathTypeCheckSpec E T1 T2 R P;
+  path_typed_unique_spec :> PathTypeCheckSpec E T1 T2 R P;
   path_typed_unique_l Γ r τ1 τ2 σ :
     P Γ → Γ ⊢ r : τ1 ↣ σ → Γ ⊢ r : τ2 ↣ σ → τ1 = τ2
 }.

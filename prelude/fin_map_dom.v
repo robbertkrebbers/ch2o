@@ -10,8 +10,8 @@ Class FinMapDom K M D `{FMap M,
     OMap M, Merge M, ∀ A, FinMapToList K A (M A), ∀ i j : K, Decision (i = j),
     ∀ A, Dom (M A) D, ElemOf K D, Empty D, Singleton K D,
     Union D, Intersection D, Difference D} := {
-  finmap_dom_map :>> FinMap K M;
-  finmap_dom_collection :>> Collection K D;
+  finmap_dom_map :> FinMap K M;
+  finmap_dom_collection :> Collection K D;
   elem_of_dom {A} (m : M A) i : i ∈ dom D m ↔ is_Some (m !! i)
 }.
 

@@ -16,7 +16,7 @@ Implicit Types v : val K.
 Implicit Types ν : lrval K.
 
 Global Instance:
-  Proper ((≡{Γ,δ}) ==> pointwise_relation _ (≡{Γ,δ})) (const_assert ν).
+  `{Proper ((≡{Γ,δ}) ==> pointwise_relation _ (≡{Γ,δ})) (const_assert ν)}.
 Proof. by intros Γ δ ν P Q HPQ ν'; simpl; rewrite HPQ. Qed.
 
 Lemma ax_expr_weaken_post' Γ δ A P Q Q' e ν :
