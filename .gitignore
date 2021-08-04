@@ -32,3 +32,4 @@ ch2o
 a.out
 *.aux
 .coq-native/
+_opam
