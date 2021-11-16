@@ -3,9 +3,9 @@
 Require Export axiomatic.
 Require Import axiomatic_graph type_preservation.
 
-Local Hint Extern 1 (⊥ _) => solve_mem_disjoint.
-Local Hint Extern 1 (sep_valid _) => solve_mem_disjoint.
-Local Hint Extern 1 (_ ≤ _) => omega.
+Local Hint Extern 1 (## _) => solve_mem_disjoint: core.
+Local Hint Extern 1 (sep_valid _) => solve_mem_disjoint: core.
+Local Hint Extern 1 (_ ≤ _) => lia: core.
 
 (** * Adequacy *)
 (** We prove that the Hoare judgment indeed implies partial program
@@ -24,7 +24,7 @@ Lemma ax_stmt_adequate `{EnvSpec K} Γ δ Q s m S' cmτ :
 Proof.
   intros ?. revert m S'. cut (∀ P n1 n2 k φ m S' τf,
     ✓{Γ,'{m} } δ →
-    (Γ,'{m},locals k.*2) ⊢ φ : τf → (Γ,'{m}) ⊢ k : τf ↣ Stmt_type cmτ →
+    (Γ,'{m},(locals k).*2) ⊢ φ : τf → (Γ,'{m}) ⊢ k : τf ↣ Stmt_type cmτ →
     ✓{Γ} m → maybe Undef φ = None → focus_locks_valid φ m →
     ax_graph ax_disjoint_cond (ax_stmt_post (dassert_pack_top P Q) s cmτ)
       Γ δ '{m} [] (n1 + n2) k φ m →
@@ -54,13 +54,13 @@ Proof.
   { eapply ax_step; eauto.
     + split; rewrite ?sep_right_id by auto;
         eauto using cmap_valid_memenv_valid, cmap_empty_valid.
-    + rewrite cmap_dom_memenv_of; esolve_elem_of. }
+    + rewrite cmap_dom_memenv_of; set_solver. }
   inversion Hnext as [Δ2 k2 ? φ2 m2 m2' mf (Hm2'&?) ????? Hax'];
     rewrite sep_right_id in Hm2' by auto; subst.
   assert (Γ ⊢ State k2 φ2 m2 : Stmt_type cmτ ∧ '{m} ⇒ₘ '{m2}) as [(τf2&?&?&?)].
   { eapply (cstep_preservation _ _ (State _ _ _) (State _ _ _));
       eauto using rcstep_cstep; exists τf; eauto. }
   cut (Δ2 = '{m2}); [intros ->; eauto using funenv_valid_weaken|].
-  apply (anti_symmetric memenv_forward);
+  apply (anti_symm memenv_forward);
     eauto using memenv_subseteq_forward, cmap_memenv_of_subseteq.
 Qed.

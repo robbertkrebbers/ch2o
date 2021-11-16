@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export operations memory pointer_casts.
+Require Export list operations memory pointer_casts.
 
 Section aliasing.
 Context `{EnvSpec K}.
@@ -19,14 +19,14 @@ Arguments addr_ref _ _ _ !_ /.
 Lemma ref_disjoint_cases Γ τ r1 r2 σ1 σ2 :
   ✓ Γ → Γ ⊢ r1 : τ ↣ σ1 → freeze true <$> r1 = r1 →
   Γ ⊢ r2 : τ ↣ σ2 → freeze true <$> r2 = r2 →
-  (**i 1.) *) (∀ j1 j2, ref_set_offset j1 r1 ⊥ ref_set_offset j2 r2) ∨
+  (**i 1.) *) (∀ j1 j2, ref_set_offset j1 r1 ## ref_set_offset j2 r2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
   (**i 4.) *) ∃ t r1' i1 r2' i2 r', r1 = r1' ++ RUnion i1 t true :: r' ∧
     r2 = r2' ++ RUnion i2 t true :: r' ∧ i1 ≠ i2.
 Proof.
   intros HΓ Hr1 Hr1F Hr2 Hr2F. cut (
-    (**i 1.) *) (∀ j1 j2, ref_set_offset j1 r1 ⊥ ref_set_offset j2 r2) ∨
+    (**i 1.) *) (∀ j1 j2, ref_set_offset j1 r1 ## ref_set_offset j2 r2) ∨
     (**i 2.) *) (∃ j r', r1 = r' ++ ref_set_offset j r2) ∨
     (**i 3.) *) (∃ j r', r2 = r' ++ ref_set_offset j r1) ∨
     (**i 4.) *) ∃ t r1' i1 r2' i2 r', r1 = r1' ++ [RUnion i1 t true] ++ r' ∧
@@ -43,7 +43,7 @@ Proof.
   revert r1 τ σ1 Hr1 r2 σ2 Hr1F Hr2 Hr2F. assert (∀ τ rs1 r2 σ1 σ2,
     Γ ⊢ rs1 : τ ↣ σ1 → freeze true rs1 = rs1 →
     Γ ⊢ r2 : τ ↣ σ2 → freeze true <$> r2 = r2 →
-    (* 1.) *) (∀ j1 j2, ref_set_offset j1 [rs1] ⊥ ref_set_offset j2 r2) ∨
+    (* 1.) *) (∀ j1 j2, ref_set_offset j1 [rs1] ## ref_set_offset j2 r2) ∨
     (* 2.) *) (∃ j r', r2 = r' ++ ref_set_offset j [rs1]) ∨
     (* 3.) *) r2 = [] ∨
     (* 4.) *) ∃ t i1 r2' i2, rs1 = RUnion i1 t true ∧
@@ -52,7 +52,7 @@ Proof.
     destruct r2 as [|rs2 r2 _] using rev_ind; [by do 2 right; left|].
     rewrite ref_typed_snoc in Hr2; destruct Hr2 as (σ2'&Hrs2&Hr2).
     rewrite fmap_app in Hr2F. destruct Hrs1 as [? i1 n|t i1|t i1 ?];
-      inversion Hrs2 as [? i2|? i2|? i2 []]; simplify_list_equality.
+      inversion Hrs2 as [? i2|? i2|? i2 []]; simplify_list_eq.
     * by right; left; exists i2, r2.
     * destruct (decide (i1 = i2)) as [->|]; [by right; left; exists 0, r2|].
       left. intros _ ?. destruct r2; simpl; [by repeat constructor|].
@@ -85,9 +85,9 @@ Proof.
     + left; intros j1 j2. rewrite app_comm_cons.
       apply (ref_disjoint_here_app _ [_]), symmetry, Hr.
     + right; left; exists j', r''.
-      by rewrite app_comm_cons, Hr'', <-(associative_L (++)).
+      by rewrite app_comm_cons, Hr'', <-(assoc_L (++)).
     + do 3 right. eexists s, r2', i2, [], i1, r2.
-      by rewrite app_comm_cons, Hr2'', <-(associative_L (++)).
+      by rewrite app_comm_cons, Hr2'', <-(assoc_L (++)).
   * rewrite ref_typed_app in Hr2; destruct Hr2 as (τ1'&Hr1'&Hr').
     assert (τ1' = τ1) as -> by eauto using ref_set_offset_typed_unique, eq_sym.
     destruct (ref_set_offset_disjoint r1 j) as [?| ->]; simpl.
@@ -102,15 +102,15 @@ Proof.
     + left; intros j1 j2. rewrite app_comm_cons.
       apply (ref_disjoint_here_app [_]), Hr.
     + do 2 right; left; exists j', r''.
-      by rewrite app_comm_cons, Hr'', <-(associative_L (++)).
+      by rewrite app_comm_cons, Hr'', <-(assoc_L (++)).
     + do 3 right; eexists s, [], i1, r2', i2, r1.
-      by rewrite app_comm_cons, Hr1'', <-(associative_L (++)).
+      by rewrite app_comm_cons, Hr1'', <-(assoc_L (++)).
   * by do 3 right; eexists s, (rs1 :: r1'), i1, (rs2 :: r2'), i2, r'.
 Qed.
 Lemma addr_disjoint_cases Γ Δ a1 a2 σ1 σ2 :
   ✓ Γ → (Γ,Δ) ⊢ a1 : TType σ1 → frozen a1 → σ1 ≠ ucharT%T →
   (Γ,Δ) ⊢ a2 : TType σ2 → frozen a2 → σ2 ≠ ucharT%T →
-  (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
+  (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ##{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
   (**i 4.) *) addr_index a1 = addr_index a2 ∧ (∃ t r1' i1 r2' i2 r',
@@ -131,7 +131,7 @@ Qed.
 Lemma cmap_non_aliasing Γ Δ m a1 a2 σ1 σ2 :
   ✓ Γ → ✓{Γ,Δ} m → (Γ,Δ) ⊢ a1 : TType σ1 → frozen a1 → σ1 ≠ ucharT%T →
   (Γ,Δ) ⊢ a2 : TType σ2 → frozen a2 → σ2 ≠ ucharT%T →
-  (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
+  (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ##{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
   (**i 4.) *) ∀ g j1 j2,
@@ -150,9 +150,9 @@ Proof.
   assert (Δ ⊢ addr_index a1 : addr_type_object a2)
     by (rewrite Hidx; eauto using addr_typed_index).
   destruct m as [m]; unfold insertE, cmap_alter, lookupE, cmap_lookup;
-    simpl in *; rewrite !addr_index_plus, <-!Hidx; simplify_map_equality'.
+    simpl in *; rewrite !addr_index_plus, <-!Hidx; simplify_map_eq.
   destruct (m !! addr_index a1) as [[|w μ]|] eqn:?;
-    [by simplify_option_equality| |by simplify_option_equality].
+    [by simplify_option_eq| |by simplify_option_eq].
   destruct (cmap_valid_Obj Γ Δ (CMap m) (addr_index a1) w μ)
     as (τ&?&_&?&_); auto; simplify_type_equality'.
   assert (Γ ⊢ r1' ++ RUnion i1 t true :: r' :
@@ -169,7 +169,7 @@ Qed.
 Lemma mem_non_aliasing Γ Δ m a1 a2 σ1 σ2 :
   ✓ Γ → ✓{Γ,Δ} m → (Γ,Δ) ⊢ a1 : TType σ1 → frozen a1 → σ1 ≠ ucharT%T →
   (Γ,Δ) ⊢ a2 : TType σ2 → frozen a2 → σ2 ≠ ucharT%T →
-  (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ⊥{Γ} addr_plus Γ j2 a2) ∨
+  (**i 1.) *) (∀ j1 j2, addr_plus Γ j1 a1 ##{Γ} addr_plus Γ j2 a2) ∨
   (**i 2.) *) σ1 ⊆{Γ} σ2 ∨
   (**i 3.) *) σ2 ⊆{Γ} σ1 ∨
   (**i 4.) *) ∀ j1 j2,
@@ -183,6 +183,6 @@ Proof.
   unfold lookupE, mem_lookup, insertE, mem_insert, mem_force,
     lookupE, cmap_alter, cmap_lookup.
   by do 3 right; repeat split; intros; rewrite ?(proj1 (Ha _ _ _)),
-    ?(proj2 (Ha _ _ _)); simplify_option_equality.
+    ?(proj2 (Ha _ _ _)); simplify_option_eq.
 Qed.
 End aliasing.

@@ -4,6 +4,7 @@
 constructs. This file collects some general purpose definitions, theorems, and
 tactics. *)
 Require Export list.
+Require Import tactics.
 
 (** * Contexts with one hole *)
 (** The most commonly used kind of context is the one with exactly one hole.
@@ -36,11 +37,11 @@ Lemma subst_snoc `{Subst A B B} (l1 : list A) a b :
 Proof. exact (subst_app l1 [a] b). Qed.
 
 Instance list_subst_injective `{Subst A B B} :
-  (∀ a, Injective (=) (=) (subst a)) →
-  ∀ l : list A, Injective (=) (=) (subst l).
+  (∀ a, Inj (=) (=) (subst a)) →
+  ∀ l : list A, Inj (=) (=) (subst l).
 Proof.
   intros ? l. red. induction l as [|x l IH]; simpl; intros; auto.
-  eapply (injective (subst _)), IH; eassumption.
+  eapply (inj (subst _)), IH; eassumption.
 Qed.
 
 (** * Contexts with multiple holes *)
@@ -63,7 +64,7 @@ Class DestructSubst `(Subst A B C) := {}.
 
 Tactic Notation "simplify_subst_equality" hyp(H) :=
   match type of H with
-  | subst ?a _ = subst ?a _ => apply (injective a) in H
+  | subst ?a _ = subst ?a _ => apply (inj a) in H
   | @subst _ _ _ ?sub ?a _ = _ =>
     is_var a; let ssub := constr:(_ : DestructSubst sub) in
     destruct a; first [discriminate H | injection' H]

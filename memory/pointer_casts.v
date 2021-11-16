@@ -11,10 +11,10 @@ Inductive castable `{Env K} : type K → ptr_type K → Prop :=
   | castable_TType τ : τ >*> TType τ
 where "τ >*> τp" := (@castable _ _ τ τp) : C_scope.
 Notation "(>*>)" := castable (only parsing) : C_scope.
-Hint Extern 0 (_ >*> _) => reflexivity.
+Local Hint Extern 0 (_ >*> _) => reflexivity: core.
 
 Section castable.
-Context `{EnvSpec K}.
+Context `{EqDecision K, EnvSpec K}.
 Global Instance castable_dec (τ : type K) τp : Decision (τ >*> τp).
 Proof.
  refine

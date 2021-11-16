@@ -1,8 +1,11 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export type_system.
+
 Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
+
+Set Warnings "-fragile-hint-constr".
 
 Section deciders.
 Context `{Env K}.
@@ -16,7 +19,7 @@ Proof.
   | Assign => cast_if (decide (cast_typed τ2 τ1))
   | PreOp op | PostOp op =>
      match Some_dec (binop_type_of op τ1 τ2) with
-     | inleft (exist σ _) => cast_if (decide (cast_typed σ τ1))
+     | inleft (σ ↾ _) => cast_if (decide (cast_typed σ τ1))
      | inright _ => right _
      end
   end; repeat first
@@ -300,14 +303,14 @@ Notation envs := (env K * memenv K * list (type K))%type.
 Ltac simplify :=
   repeat match goal with
   | mcτ : rettype _ |- _ => destruct mcτ
-  | _ => progress simplify_option_equality
+  | _ => progress simplify_option_eq
   | _ => case_match
   end.
-Hint Resolve (type_check_sound (V:=val K)) (type_check_sound (V:=ptr K)).
-Hint Resolve (mapM_type_check_sound (V:=val K)).
-Hint Immediate (path_type_check_sound (R:=ref_seg _)).
-Hint Immediate (path_type_check_sound (R:=ref _)).
-Hint Immediate unop_type_of_sound binop_type_of_sound.
+Hint Resolve (type_check_sound (V:=val K)) (type_check_sound (V:=ptr K)): core.
+Hint Resolve (mapM_type_check_sound (V:=val K)): core.
+Hint Immediate (path_type_check_sound (R:=ref_seg _)): core.
+Hint Immediate (path_type_check_sound (R:=ref _)): core.
+Hint Immediate unop_type_of_sound binop_type_of_sound: core.
 Global Instance:
   TypeCheckSpec (env K * memenv K) (lrtype K) (lrval K) (✓ ∘ fst).
 Proof.
@@ -315,7 +318,7 @@ Proof.
   * destruct ν; intros; simplify; typed_constructor; eauto.
   * by destruct 1; simplify; erewrite ?type_check_complete by eauto.
 Qed.
-Hint Resolve (type_check_sound (V:=lrval K)).
+Hint Resolve (type_check_sound (V:=lrval K)): core.
 Global Instance: TypeCheckSpec envs (lrtype K) (expr K) (✓ ∘ fst ∘ fst).
 Proof.
   intros [[Γ Δ] τs] e τlr; simpl; split.
@@ -332,13 +335,13 @@ Proof.
       Forall2 (λ e τlr, type_check (Γ,Δ,τs) e = Some τlr) es (inr <$> σs) →
       mapM (λ e, type_check (Γ,Δ,τs) e ≫= maybe inr) es = Some σs) as help.
     { intros es σs. rewrite Forall2_fmap_r, mapM_Some.
-      induction 1; constructor; simplify_option_equality; eauto. }
-    by induction 1 using @expr_typed_ind; simplify_option_equality;
+      induction 1; constructor; simplify_option_eq; eauto. }
+    by induction 1 using @expr_typed_ind; simplify_option_eq;
       erewrite ?type_check_complete, ?path_type_check_complete,
         ?assign_type_of_complete, ?unop_type_of_complete,
-        ?binop_type_of_complete,?help by eauto; eauto; simplify_option_equality.
+        ?binop_type_of_complete,?help by eauto; eauto; simplify_option_eq.
 Qed.
-Hint Resolve (type_check_sound (V:=expr K)).
+Hint Resolve (type_check_sound (V:=expr K)): core.
 Global Instance: PathTypeCheckSpec envs
   (lrtype K) (lrtype K) (ectx_item K) (✓ ∘ fst ∘ fst).
 Proof.
@@ -352,32 +355,32 @@ Proof.
       mapM (λ e, type_check (Γ,Δ,τs) e ≫= maybe inr) es = Some σs) as help.
     { intros es σs. rewrite Forall2_fmap_r, mapM_Some.
       induction 1; constructor; erewrite ?type_check_complete by eauto; eauto. }
-    destruct 1; unfold lookupE; fold lookupE; simplify_option_equality;
+    destruct 1; unfold lookupE; fold lookupE; simplify_option_eq;
       erewrite ?type_check_complete by eauto; simpl;
       erewrite ?path_type_check_complete, ?assign_type_of_complete,
         ?unop_type_of_complete, ?binop_type_of_complete by eauto;
-      simplify_option_equality; eauto.
+      simplify_option_eq; eauto.
 Qed.
-Hint Immediate (path_type_check_sound (R:=ectx_item _)).
+Hint Immediate (path_type_check_sound (R:=ectx_item _)): core.
 Global Instance: PathTypeCheckSpec envs
   (lrtype K) (lrtype K) (ectx K) (✓ ∘ fst ∘ fst).
 Proof.
   intros Γs Ei τlr τlr'; split.
   * unfold lookupE. revert τlr.
     induction Ei; intros; simplify; typed_constructor; eauto.
-  * unfold lookupE. induction 1; simplify_option_equality;
+  * unfold lookupE. induction 1; simplify_option_eq;
       erewrite ?path_type_check_complete by eauto; eauto.
 Qed.
-Hint Immediate (path_type_check_sound (R:=ectx _)).
+Hint Immediate (path_type_check_sound (R:=ectx _)): core.
 Lemma rettype_union_alt_sound mσ1 mσ2 mσ :
   rettype_union_alt mσ1 mσ2 = Some mσ → rettype_union mσ1 mσ2 mσ.
 Proof.
-  destruct mσ1, mσ2; intros; simplify_option_equality; constructor; eauto.
+  destruct mσ1, mσ2; intros; simplify_option_eq; constructor; eauto.
 Qed.
-Hint Immediate rettype_union_alt_sound.
+Hint Immediate rettype_union_alt_sound: core.
 Lemma rettype_union_alt_complete mσ1 mσ2 mσ :
   rettype_union mσ1 mσ2 mσ → rettype_union_alt mσ1 mσ2 = Some mσ.
-Proof. destruct 1 as [[]| |]; simplify_option_equality; eauto. Qed.
+Proof. destruct 1 as [[]| |]; simplify_option_eq; eauto. Qed.
 Global Instance:
   TypeCheckSpec envs (rettype K) (stmt K) (✓ ∘ fst ∘ fst).
 Proof.
@@ -388,31 +391,31 @@ Proof.
       repeat match goal with
       | _ : _ ⊢ ?e : _ |- _ => erewrite (type_check_complete _ e) by eauto
       | _ => erewrite rettype_union_alt_complete by eauto
-      | _ => progress simplify_option_equality
+      | _ => progress simplify_option_eq
       end; eauto.
 Qed.
-Hint Resolve (type_check_sound (V:=stmt K)).
+Hint Resolve (type_check_sound (V:=stmt K)): core.
 Global Instance: PathTypeCheckSpec envs
   (type K) (rettype K) (esctx_item K) (✓ ∘ fst ∘ fst).
 Proof.
   intros [[Γ Δ] τs] Ee τlr; simpl; split.
   * unfold lookupE; destruct τlr, Ee;
       intros; simplify; typed_constructor; eauto.
-  * destruct 1; simplify_option_equality;
-      erewrite ?type_check_complete by eauto; simplify_option_equality;
+  * destruct 1; simplify_option_eq;
+      erewrite ?type_check_complete by eauto; simplify_option_eq;
       erewrite ?rettype_union_alt_complete by eauto; eauto.
 Qed.
-Hint Immediate (path_type_check_sound (R:=esctx_item _)).
+Hint Immediate (path_type_check_sound (R:=esctx_item _)): core.
 Global Instance: PathTypeCheckSpec envs
   (rettype K) (rettype K) (sctx_item K) (✓ ∘ fst ∘ fst).
 Proof.
   intros [[Γ Δ] τs] Es mcτ; simpl; split.
   * destruct mcτ, Es; intros; simplify; typed_constructor; eauto.
-  * destruct 1; simplify_option_equality;
-      erewrite ?type_check_complete by eauto; simplify_option_equality;
+  * destruct 1; simplify_option_eq;
+      erewrite ?type_check_complete by eauto; simplify_option_eq;
       erewrite ?rettype_union_alt_complete by eauto; eauto.
 Qed.
-Hint Immediate (path_type_check_sound (R:=sctx_item _)).
+Hint Immediate (path_type_check_sound (R:=sctx_item _)): core.
 Global Instance: PathTypeCheckSpec envs
   (focustype K) (focustype K) (ctx_item K) (✓ ∘ fst ∘ fst).
 Proof.
@@ -425,7 +428,7 @@ Proof.
       repeat match goal with
       | _ => simpl; erewrite fst_zip, snd_zip
          by eauto using Nat.eq_le_incl, Forall2_length, eq_sym
-      | _ => progress simplify_option_equality
+      | _ => progress simplify_option_eq
       | _ => erewrite type_check_complete by eauto
       | _ => erewrite path_type_check_complete by eauto
       end; eauto.
@@ -438,7 +441,7 @@ Proof.
       intros; simplify; repeat typed_constructor; eauto.
   * destruct 1;
       repeat match goal with
-      | _ => progress simplify_option_equality
+      | _ => progress simplify_option_eq
       | _ => case_match; typed_inversion_all
       | _ => erewrite mapM_type_check_complete by eauto
       | _ => erewrite type_check_complete by eauto

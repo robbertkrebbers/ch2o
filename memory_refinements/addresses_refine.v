@@ -74,7 +74,7 @@ Proof.
       apply Nat.mul_le_mono_l; lia.
     + erewrite <-ref_size_le by eauto. by destruct r1.
   * destruct Hr as [|r1 i1 r2 i2|r1' r1 r2 i]; simplify_type_equality'; auto.
-    destruct σp as [|σ'|]; simplify_equality';
+    destruct σp; simplify_equality';
       eauto using Nat.divide_1_l, Nat.divide_add_r, Nat.divide_trans,
       (size_of_castable _ _ (TType _)), Nat.divide_mul_l.
 Qed.
@@ -110,7 +110,7 @@ Proof.
   destruct 2 as [o1 o2 r1 r1' r2 i1 i2 τ1 τ2 σ σp ?????????? Hr3];
     inversion 1 as [? o3 ? r2' r3 ? i3 ? τ3 ???????????? Hr5]; subst.
   exists (r1' ++ r2'); eauto using memenv_refine_compose.
-  { by rewrite lookup_meminj_compose; simplify_option_equality. }
+  { by rewrite lookup_meminj_compose; simplify_option_eq. }
   { rewrite ref_typed_app; eauto. }
   destruct Hr3 as [r1 i|r1 i1 r2 i2|r1' r1 r2 i]; inversion Hr5;
     simplify_type_equality'; rewrite ?(right_id_L [] (++)); try by constructor.
@@ -120,7 +120,7 @@ Proof.
     apply Forall2_app; [etransitivity; eauto|eauto].
   * destruct r1; decompose_Forall_hyps.
   * constructor; auto. transitivity (r2 ++ r2'); auto.
-    by rewrite (associative_L (++)); apply Forall2_app.
+    by rewrite (assoc_L (++)); apply Forall2_app.
 Qed.
 Lemma addr_refine_inverse Γ f Δ1 Δ2 a1 a2 σp :
   a1 ⊑{Γ,false,f@Δ1↦Δ2} a2 : σp →
@@ -142,7 +142,7 @@ Proof.
     refine_constructor; eauto using type_valid_weaken, ref_typed_weaken.
   * eauto using option_eq_1_alt.
   * by erewrite <-size_of_weaken by eauto using ref_typed_type_valid.
-  * destruct σp as [|σ'|]; simpl; auto. by erewrite <-size_of_weaken
+  * destruct σp; simpl; auto. by erewrite <-size_of_weaken
       by eauto using ref_typed_type_valid, castable_type_valid.
   * erewrite <-size_of_weaken by eauto using ref_typed_type_valid.
     destruct Hr, α'; csimpl in *; try tauto || by constructor.
@@ -202,7 +202,7 @@ Lemma addr_ref_refine Γ α f Δ1 Δ2 a1 a2 σp :
     addr_ref Γ a1 ++ r ⊆* addr_ref Γ a2.
 Proof.
   destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ' ??????????? Hr];
-    intros; simplify_equality'; exists r'; split_ands; auto.
+    intros; simplify_equality'; exists r'; split_and ?; auto.
   destruct Hr as [|r1 i1 r2 i2|r1' r1 r2 i]; simplify_type_equality'; auto.
   * by rewrite (right_id_L [] (++)).
   * rewrite Nat.mul_comm, Nat.div_add, Nat.div_small, Nat.add_0_l by lia.
@@ -225,7 +225,7 @@ Proof. by destruct 1. Qed.
 Lemma addr_disjoint_refine Γ α α' f Δ1 Δ2 a1 a2 a3 a4 σp1 σp3 :
   ✓ Γ → meminj_injective f → addr_strict Γ a1 → addr_strict Γ a3 →
   a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : σp1 → a3 ⊑{Γ,α',f@Δ1↦Δ2} a4 : σp3 →
-  a1 ⊥{Γ} a3 → a2 ⊥{Γ} a4.
+  a1 ##{Γ} a3 → a2 ##{Γ} a4.
 Proof.
   intros ??????.
   destruct (addr_ref_refine Γ α f Δ1 Δ2 a1 a2 σp1) as (r1&Hf1&_&Hr1); auto.
@@ -234,13 +234,13 @@ Proof.
   * edestruct (meminj_injective_ne f (addr_index a1) (addr_index a2))
       as [|[??]]; eauto; [by left|].
     right; left; eauto using ref_disjoint_le, ref_disjoint_app.
-  * rewrite Hidx in Hf1; simplify_option_equality.
+  * rewrite Hidx in Hf1; simplify_option_eq.
     right; left; eauto using ref_disjoint_le, ref_disjoint_here_app_1.
-  * rewrite Hidx in Hf1; simplify_option_equality. do 2 right; split; [done|].
+  * rewrite Hidx in Hf1; simplify_option_eq. do 2 right; split; [done|].
     erewrite <-!(addr_ref_byte_refine _ _ _ _ _ a1 a2),
       <-!(addr_ref_byte_refine _ _ _ _ _ a3 a4),
       <-!(addr_is_obj_refine _ _ _ _ _ a1 a2),
-      <-!(addr_is_obj_refine _ _ _ _ _ a3 a4) by eauto; split_ands; auto.
+      <-!(addr_is_obj_refine _ _ _ _ _ a3 a4) by eauto; split_and ?; auto.
     transitivity (freeze true <$> addr_ref Γ a1 ++ r1);
       auto using ref_freeze_le, eq_sym.
     rewrite fmap_app, Ha, <-fmap_app; auto using ref_freeze_le.
@@ -248,7 +248,7 @@ Qed.
 Lemma addr_disjoint_refine_inv Γ α α' f Δ1 Δ2 a1 a2 a3 a4 σp1 σp3 :
   ✓ Γ → addr_strict Γ a1 → addr_strict Γ a3 →
   a1 ⊑{Γ,α,f@Δ1↦Δ2} a2 : σp1 → a3 ⊑{Γ,α',f@Δ1↦Δ2} a4 : σp3 →
-  a2 ⊥{Γ} a4 → a1 ⊥{Γ} a3.
+  a2 ##{Γ} a4 → a1 ##{Γ} a3.
 Proof.
   intros ?????.
   destruct (addr_ref_refine Γ α f Δ1 Δ2 a1 a2 σp1) as (r1&Hf1&_&Hr1); auto.
@@ -261,8 +261,8 @@ Proof.
     erewrite !(addr_ref_byte_refine _ _ _ _ _ a1 a2),
       !(addr_ref_byte_refine _ _ _ _ _ a3 a4),
       !(addr_is_obj_refine _ _ _ _ _ a1 a2),
-      !(addr_is_obj_refine _ _ _ _ _ a3 a4) by eauto; split_ands; auto.
-    apply (injective (++ freeze true <$> r1)); rewrite <-!fmap_app.
+      !(addr_is_obj_refine _ _ _ _ _ a3 a4) by eauto; split_and ?; auto.
+    apply (inj (.++ freeze true <$> r1)); rewrite <-!fmap_app.
     erewrite ref_freeze_le by eauto. rewrite Ha.
     eauto using ref_freeze_le, eq_sym.
 Qed.
@@ -299,7 +299,7 @@ Lemma addr_object_offset_refine Γ α f Δ1 Δ2 a1 a2 σp :
     addr_object_offset Γ a2 = addr_object_offset Γ a1 + ref_object_offset Γ r.
 Proof.
   destruct 1 as [o1 o2 r1 r' r2 i1 i2 τ1 τ2 σ' ??????????? Hr];
-    intros; simplify_equality'; exists r'; split_ands; auto.
+    intros; simplify_equality'; exists r'; split_and ?; auto.
   destruct Hr as [|r1 i1 r2 i2|r1' r1 r2 i]; simplify_type_equality'; auto.
   * erewrite <-ref_object_offset_le by eauto.
     cut (ref_object_offset Γ (ref_base r1) + ref_offset r1 * bit_size_of Γ σ'
@@ -317,6 +317,7 @@ Proof.
   inversion Hcast; simplify_equality'; try solve [inversion Hrs].
   assert (ref_seg_offset rs < ref_seg_size rs)
     by eauto using ref_seg_typed_size.
+  unfold addr_elt; simpl; 
   erewrite path_type_check_complete by eauto; econstructor; simpl; eauto.
   * apply ref_typed_cons; exists σ; split.
     + apply ref_set_offset_typed; auto.

@@ -4,7 +4,7 @@ Require Import String axiomatic_simple.
 
 Section gcd.
 Context `{EnvSpec K}.
-Hint Extern 10 (Some Readable ⊆ _) => transitivity (Some Writable).
+Hint Extern 10 (Some Readable ⊆ _) => transitivity (Some Writable): core.
 Hint Extern 0 (perm_locked _ = _) =>
   apply perm_Readable_locked; auto : typeclass_instances.
 
@@ -27,9 +27,9 @@ Lemma gcd_typed : (∅,∅,[uintT%T;uintT%T]) ⊢ gcd_stmt : (false,None).
 Proof.
   change false with (true && false).
   repeat (apply SLocal_typed || typed_constructor
-                             || constructor); try solve_elem_of.
+                             || constructor); try set_solver.
   apply base_binop_type_of_sound; simpl.
-  by rewrite (idempotent_L _), int_promote_int.
+  by rewrite (idemp_L _), int_promote_int.
 Qed.
 Lemma gcd_correct Γ δ R J T C y z μ1 γ1 μ2 γ2 :
   sep_valid γ1 → Some Writable ⊆ perm_kind γ1 →
@@ -51,13 +51,13 @@ Proof.
     by rewrite assert_Prop_l by done. }
   eapply ax_stmt_weaken_pre; [by rewrite HJ|].
   apply ax_stmt_exist_pre; intros y'; apply ax_stmt_exist_pre; intros z'.
-  apply ax_stmt_Prop_pre; try solve_elem_of; intros Hgcd.
+  apply ax_stmt_Prop_pre; try set_solver; intros Hgcd.
   eapply ax_stmt_weaken_pre.
   { by rewrite (assert_singleton_int_typed' _ _ (var 0)),
-      (assert_singleton_int_typed' _ _ (var 1)), (associative (★)%A),
-      (commutative _ _ (⌜ int_typed z' _ ⌝)%A), <-!(associative (★)%A). }
-  apply ax_stmt_Prop_pre; try solve_elem_of; intros Hz'.
-  apply ax_stmt_Prop_pre; try solve_elem_of; intros Hy'.
+      (assert_singleton_int_typed' _ _ (var 1)), (assoc (★)%A),
+      (comm _ _ (⌜ int_typed z' _ ⌝)%A), <-!(assoc (★)%A). }
+  apply ax_stmt_Prop_pre; try set_solver; intros Hz'.
+  apply ax_stmt_Prop_pre; try set_solver; intros Hy'.
   eapply ax_if'' with (intV{uintT} z')%B; auto.
   { apply ax_expr_frame_l'.
     rewrite (assert_singleton_l _ _ (var 1)) at 1.
@@ -66,7 +66,7 @@ Proof.
       [by rewrite <-(assert_singleton_l_2 Γ _ (var 1) _ _ _ a1)|exec]. }
   { by eapply assert_exist_intro, assert_eval_int_unop';
       auto using assert_memext_r', assert_eval_singleton_r. }
-  { apply ax_stmt_Prop_pre; try solve_elem_of; simpl; intros.
+  { apply ax_stmt_Prop_pre; try set_solver; simpl; intros.
     apply ax_local.
     set (R' v := (var 0 ↦{false,perm_full} - : uintT%BT ★ R v↑)%A).
     set (J' l := (var 0 ↦{false,perm_full} - : uintT%BT ★ (J l)↑)%A).
@@ -84,23 +84,23 @@ Proof.
       apply ax_expr_exist_pre; intros a_tmp.
       eapply ax_expr_weaken_post';
         [by rewrite <-(assert_singleton_l_2 Γ _ (var 0) _ _ _ a_tmp)|].
-      rewrite <-!(associative (★)%A); apply ax_expr_invariant_l'.
+      rewrite <-!(assoc (★)%A); apply ax_expr_invariant_l'.
       rewrite (right_id _ (★)%A), (assert_singleton_l _ _ (var 1)),
         (assert_exist_sep (A:=ptr _)), (assert_sep_exist (A:=ptr _)).
       apply ax_expr_exist_pre; intros a_y.
       eapply ax_expr_weaken_post';
         [by rewrite <-(assert_singleton_l_2 Γ _ (var 1) _ _ _ a_y)|].
-      rewrite !(associative (★)%A), !(commutative (★)%A _ (_ ∧ _)%A).
-      rewrite <-!(associative (★)%A); apply ax_expr_invariant_l'.
+      rewrite !(assoc (★)%A), !(comm (★)%A _ (_ ∧ _)%A).
+      rewrite <-!(assoc (★)%A); apply ax_expr_invariant_l'.
       rewrite (assert_singleton_l _ _ (var 2)), !(assert_sep_exist (A:=ptr _)).
       apply ax_expr_exist_pre; intros a_z.
       eapply ax_expr_weaken_post';
         [by rewrite <-(assert_singleton_l_2 Γ _ (var 2) _ _ _ a_z)|].
-      rewrite <-!(commutative (★)%A _ (var 2 ⇓ _ ∧ _)%A), !(associative (★)%A).
+      rewrite <-!(comm (★)%A _ (var 2 ⇓ _ ∧ _)%A), !(assoc (★)%A).
       apply ax_expr_invariant_r'.
       set (A' := ((var 2 ⇓ inl a_z ∧ emp) ★
         (var 1 ⇓ inl a_y ∧ emp) ★ var 0 ⇓ inl a_tmp ∧ emp)%A).
-      rewrite <-!(associative (★)%A).
+      rewrite <-!(assoc (★)%A).
       eapply ax_assign_r' with
         (%a_tmp ↦{false,perm_full} #intV{uintT} (y' `mod` z') : uintT
         ★ %a_y ↦{μ1,γ1} #intV{uintT} z' : uintT
@@ -121,7 +121,7 @@ Proof.
           * exec.
           * eapply ax_binop_r'; try by exec.
             eapply assert_eval_int_arithop'; try by exec.
-            + by simpl; rewrite (idempotent_L _), int_promote_int.
+            + by simpl; rewrite (idemp_L _), int_promote_int.
             + by simpl; rewrite int_pre_cast_self by done.
             + simpl; rewrite !int_pre_cast_self by done.
               apply int_typed_unsigned_nonneg in Hy'.
@@ -144,8 +144,8 @@ Proof.
         * rewrite <-(right_id _ (★)%A);
           apply assert_sep_preserving, assert_wand_intro;
             rewrite ?(left_id _ (★)%A); eauto using assert_exist_intro. }
-      { rewrite !(associative (★)%A),
-          (commutative (★)%A _ (%a_z ↦{_,_} _ : _)%A).
+      { rewrite !(assoc (★)%A),
+          (comm (★)%A _ (%a_z ↦{_,_} _ : _)%A).
         eauto using assert_sep_preserving,
           assert_wand_intro, assert_exist_intro. }
     * eapply ax_stmt_weaken_pre, ax_goto.

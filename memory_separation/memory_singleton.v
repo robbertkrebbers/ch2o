@@ -1,7 +1,7 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
+From stdpp Require Import natmap.
 Require Export memory_separation.
-Require Import natmap.
 
 Definition mem_singleton `{Env K} (Γ : env K) (Δ : memenv K) (a : addr K)
     (μ : bool) (γ : perm) (v : val K) (τ : type K) (m : mem K) : Prop := ∃ w,
@@ -25,9 +25,9 @@ Ltac solve_length := repeat first
   [ rewrite take_length | rewrite drop_length | rewrite app_length
   | rewrite zip_with_length | rewrite replicate_length | rewrite resize_length
   | rewrite fmap_length | erewrite ctree_flatten_length by eauto ]; lia.
-Hint Extern 0 (length _ = _) => solve_length.
-Hint Extern 0 (_ ≤ length _) => solve_length.
-Hint Extern 0 (length _ ≤ _) => solve_length.
+Hint Extern 0 (length _ = _) => solve_length: core.
+Hint Extern 0 (_ ≤ length _) => solve_length: core.
+Hint Extern 0 (length _ ≤ _) => solve_length: core.
 
 Lemma mem_singleton_valid Γ Δ m a μ γ v τ :
   ✓ Γ → ✓{Γ} Δ → γ ≠ ∅ →
@@ -97,7 +97,7 @@ Proof.
     by intros ? <-; apply pbit_mapped; transitivity (Some Writable). }
   assert (ctree_Forall (λ γb, Some Writable ⊆ pbit_kind γb) w).
   { eapply Forall_impl; naive_solver. }
-  exists (of_val Γ (tagged_perm <$> ctree_flatten w) v2); split_ands; auto.
+  exists (of_val Γ (tagged_perm <$> ctree_flatten w) v2); split_and ?; auto.
   * symmetry; eapply to_of_val; eauto.
   * by unfold insertE, mem_insert; erewrite cmap_alter_singleton
       by eauto using ctree_Forall_not, of_val_flatten_mapped.
@@ -107,7 +107,7 @@ Qed.
 Lemma mem_freeable_perm_singleton Γ Δ m o μ v τ :
   mem_singleton Γ Δ (addr_top o τ) μ perm_full v τ m →
   mem_freeable_perm o μ m.
-Proof. by intros (w&_&->&?&?&?&?&?); exists w; simplify_map_equality'. Qed.
+Proof. by intros (w&_&->&?&?&?&?&?); exists w; simplify_map_eq. Qed.
 Lemma mem_locks_singleton_empty Γ Δ m a μ γ v τ :
   ✓ Γ → perm_locked γ = false →
   mem_singleton Γ Δ a μ γ v τ m → mem_locks m = ∅.
@@ -115,7 +115,7 @@ Proof.
   intros ?? (w&_&->&?&?&?&?&?&?); apply elem_of_equiv_empty_L; intros [o i].
   assert (τ = addr_type_base a) by eauto using addr_is_obj_type; subst.
   rewrite elem_of_mem_locks;
-    destruct (decide (o = addr_index a)); simplify_map_equality'; [|tauto].
+    destruct (decide (o = addr_index a)); simplify_map_eq; [|tauto].
   erewrite ctree_singleton_flatten by eauto using addr_typed_ref_typed.
   rewrite <-list_lookup_fmap, !fmap_app, !fmap_replicate, !lookup_app_Some,
     !lookup_replicate, list_lookup_fmap, fmap_Some; unfold pbit_locked.
@@ -125,10 +125,10 @@ Lemma mem_locks_singleton Γ Δ m a μ γ v τ :
   ✓ Γ → perm_locked γ = true →
   mem_singleton Γ Δ a μ γ v τ m → mem_locks m = lock_singleton Γ a.
 Proof.
-  intros ?? (w&_&->&?&?&?&?&?&?); apply elem_of_equiv_L; intros [o i].
+  intros ?? (w&_&->&?&?&?&?&?&?); apply set_eq; intros [o i].
   assert (τ = addr_type_base a) by eauto using addr_is_obj_type; subst.
   rewrite elem_of_lock_singleton, elem_of_mem_locks;
-    destruct (decide (o = addr_index a)); simplify_map_equality'; [|tauto].
+    destruct (decide (o = addr_index a)); simplify_map_eq; [|tauto].
   erewrite ctree_singleton_flatten by eauto using addr_typed_ref_typed.
   erewrite addr_object_offset_alt, addr_is_obj_ref_byte,
     Nat.mul_0_l, Nat.add_0_r by eauto.
@@ -154,7 +154,7 @@ Proof.
   assert (¬ctree_unmapped w) as Hunmap.
   { eapply ctree_Forall_not, Forall_impl; eauto.
     by intros ? <-; apply pbit_mapped; transitivity (Some Writable). }
-  split_ands; auto using perm_lock_empty.
+  split_and ?; auto using perm_lock_empty.
   * by rewrite to_val_ctree_map by done.
   * eapply cmap_alter_singleton; eauto.
     rewrite ctree_flatten_map, Forall_fmap; contradict Hunmap.
@@ -175,19 +175,19 @@ Proof.
   assert (τ = addr_type_base a) by eauto using addr_is_obj_type; subst.
   unfold mem_unlock, cmap_singleton, lock_singleton.
   destruct (decide _) as [|[]]; simplify_type_equality'; f_equal'.
-  * exists (ctree_map pbit_unlock w); split_ands; eauto.
+  * exists (ctree_map pbit_unlock w); split_and ?; eauto.
     + by rewrite to_val_ctree_map by done.
     + assert (ref_object_offset Γ (addr_ref Γ a) +
         bit_size_of Γ (addr_type_base a) ≤ bit_size_of Γ (addr_type_object a)).
       { eauto using ref_object_offset_size', addr_typed_ref_typed. }
       erewrite merge_singleton by done.
-      erewrite ctree_flatten_length, to_of_bools
+      erewrite ctree_flatten_length, natset_to_bools_to_natset
         by eauto using ctree_singleton_typed, addr_typed_ref_typed.
       assert (∀ (γb : pbit K) β,
         sep_valid γb → sep_unmapped (pbit_unlock_if γb β) → sep_unmapped γb).
       { intros ? []; eauto using pbit_unlock_mapped. }
       erewrite ctree_merge_singleton, addr_object_offset_alt,
-        addr_is_obj_ref_byte, ?resize_ge, <-?(associative_L (++)),
+        addr_is_obj_ref_byte, ?resize_ge, <-?(assoc_L (++)),
         ?drop_app_alt, ?take_app_alt by eauto using addr_typed_ref_typed,
         pbit_unlock_if_empty, replicate_length.
       by erewrite (ctree_merge_map _ pbit_unlock) by (rewrite
@@ -205,7 +205,7 @@ Proof.
       destruct Hw'; decompose_Forall_hyps; eapply pbit_valid_sep_valid; eauto.
   * rewrite elem_of_equiv_empty_L;
       intros Htrue; apply (Htrue (addr_object_offset Γ a)).
-    rewrite elem_of_of_bools, lookup_app_r,
+    rewrite elem_of_bools_to_natset, lookup_app_r,
       replicate_length, Nat.sub_diag, lookup_replicate by auto.
     eauto using bit_size_of_pos, addr_typed_type_valid.
 Qed.
@@ -226,11 +226,11 @@ Qed.
 Lemma mem_alloc_singleton Γ Δ m o μ γ v τ :
   ✓ Γ → ✓{Γ,Δ} m → Δ ⊢ o : τ → index_alive Δ o → o ∉ dom indexset m →
   sep_valid γ → ¬sep_unmapped γ → (Γ,Δ) ⊢ v : τ → ∃ m',
-  mem_alloc Γ o μ γ v m = m' ∪ m ∧ m' ⊥ m ∧
+  mem_alloc Γ o μ γ v m = m' ∪ m ∧ m' ## m ∧
   mem_singleton Γ Δ (addr_top o τ) μ γ (freeze true v) τ m'.
 Proof.
   intros. exists (cmap_singleton Γ (addr_top o τ) μ
-    (of_val Γ (replicate (bit_size_of Γ (type_of v)) γ) v)); split_ands.
+    (of_val Γ (replicate (bit_size_of Γ (type_of v)) γ) v)); split_and ?.
   * rewrite <-(sep_left_id m) at 1 by eauto using cmap_valid_sep_valid.
     by rewrite mem_alloc_union by done.
   * simplify_type_equality; assert ((Γ,Δ) ⊢
@@ -244,7 +244,7 @@ Proof.
       val_typed_type_valid, cmap_valid_memenv_valid.
   * simplify_type_equality.
     exists (of_val Γ (replicate (bit_size_of Γ τ) γ) v);
-      split_ands; eauto using of_val_typed, addr_top_typed, addr_top_is_obj,
+      split_and ?; eauto using of_val_typed, addr_top_typed, addr_top_is_obj,
       addr_top_strict, val_typed_type_valid, mem_alloc_index_typed,
       Forall_replicate, @sep_unmapped_empty_alt, to_of_val, eq_sym.
     erewrite ctree_flatten_of_val, zip_with_replicate_l
@@ -254,7 +254,7 @@ Qed.
 Lemma mem_alloc_singleton_alt Γ Δ m o μ γ v τ :
   ✓ Γ → ✓{Γ,Δ} m → Δ !! o = None →
   sep_valid γ → ¬sep_unmapped γ → (Γ,Δ) ⊢ v : τ → frozen v → ∃ m',
-  mem_alloc Γ o μ γ v m = m' ∪ m ∧ m' ⊥ m ∧
+  mem_alloc Γ o μ γ v m = m' ∪ m ∧ m' ## m ∧
   mem_singleton Γ (<[o:=(τ,false)]>Δ) (addr_top o τ) μ γ v τ m'.
 Proof.
   intros ?????? Hfrozen; setoid_rewrite <-Hfrozen at 2.
@@ -269,22 +269,22 @@ Lemma mem_free_singleton Γ Δ m o a μ γ v τ :
   addr_index a = o → cmap_erase (mem_free o m) = ∅.
 Proof.
   intros (w&_&->&?&?&?&?&?) <-. sep_unfold; f_equal'; apply map_empty; intros o.
-  by destruct (decide (o = addr_index a)); simplify_map_equality'.
+  by destruct (decide (o = addr_index a)); simplify_map_eq.
 Qed.
 Lemma mem_singleton_union Γ Δ m1 m2 a μ γ1 γ2 v1 v2 v3 τ :
-  ✓ Γ → m1 ⊥ m2 → γ1 ⊥ γ2 →
+  ✓ Γ → m1 ## m2 → γ1 ## γ2 →
   (sep_unmapped γ1 → v3 = v2) →
   (¬sep_unmapped γ1 → v3 = v1) →
   mem_singleton Γ Δ a μ γ1 v1 τ m1 → mem_singleton Γ Δ a μ γ2 v2 τ m2 →
   mem_singleton Γ Δ a μ (γ1 ∪ γ2) v3 τ (m1 ∪ m2).
 Proof.
   intros ??? Hv3 Hv3' (w1&Hv1&->&?&Hw1&?&?&?&?) (w2&Hv2&->&?&Hw2&_).
-  assert (w1 ⊥ w2) by eauto using cmap_singleton_disjoint_rev.
+  assert (w1 ## w2) by eauto using cmap_singleton_disjoint_rev.
   assert (ctree_Forall (λ γb, tagged_perm γb = γ1 ∪ γ2) (w1 ∪ w2)).
   { rewrite ctree_flatten_union by done.
     revert Hw2; generalize (ctree_flatten w2).
     induction Hw1 as [|[]]; destruct 1 as [|[]]; simplify_equality'; eauto. }
-  exists (w1 ∪ w2); split_ands;
+  exists (w1 ∪ w2); split_and ?;
     eauto using ctree_union_typed, cmap_singleton_union, eq_sym.
   destruct (decide (sep_unmapped γ1)); rewrite ?Hv3, ?Hv3' by done; subst.
   * destruct (decide (sep_unmapped γ2)).
@@ -305,9 +305,9 @@ Proof.
   * eauto using @sep_positive_l'.
 Qed.
 Lemma mem_singleton_union_rev Γ Δ m a μ γ1 γ2 v τ :
-  ✓ Γ → γ1 ⊥ γ2 → ¬sep_unmapped γ1 → ¬sep_unmapped γ2 →
+  ✓ Γ → γ1 ## γ2 → ¬sep_unmapped γ1 → ¬sep_unmapped γ2 →
   mem_singleton Γ Δ a μ (γ1 ∪ γ2) v τ m → ∃ m1 m2,
-  m = m1 ∪ m2 ∧ m1 ⊥ m2 ∧
+  m = m1 ∪ m2 ∧ m1 ## m2 ∧
   mem_singleton Γ Δ a μ γ1 v τ m1 ∧ mem_singleton Γ Δ a μ γ2 v τ m2.
 Proof.
   intros ???? (w&->&->&?&?&?&?&?&?).
@@ -315,14 +315,14 @@ Proof.
     (Γ,Δ) ⊢ ctree_map (λ γb, PBit γ (tagged_tag γb)) w : τ).
   { intros γ ??. apply ctree_map_typed; auto.
     + apply Forall_fmap; apply (Forall_impl (✓{Γ,Δ})); eauto using ctree_flatten_valid.
-      by intros ? (?&?&?); split_ands'.
+      by intros ? (?&?&?); split_and !.
     + by intros ?? [??].
     + by intros []; naive_solver. }
   set (w1 := ctree_map (λ γb, PBit γ1 (tagged_tag γb)) w).
   set (w2 := ctree_map (λ γb, PBit γ2 (tagged_tag γb)) w).
   assert ((Γ,Δ) ⊢ w1 : τ) by eauto using @sep_disjoint_valid_l.
   assert ((Γ,Δ) ⊢ w2 : τ) by eauto using @sep_disjoint_valid_r.
-  assert (w1 ⊥ w2).
+  assert (w1 ## w2).
   { eapply (ctree_disjoint_map (λ _, True)); sep_unfold;
       naive_solver eauto using Forall_true, ctree_typed_sep_valid. }
   assert (w = w1 ∪ w2) as Hw.
@@ -331,7 +331,7 @@ Proof.
     by intros [] ?; sep_unfold; case_decide; naive_solver. }
   assert (bit_size_of Γ τ ≠ 0)
     by eauto using bit_size_of_ne_0, ctree_typed_type_valid.
-  exists (cmap_singleton Γ a μ w1), (cmap_singleton Γ a μ w2); split_ands.
+  exists (cmap_singleton Γ a μ w1), (cmap_singleton Γ a μ w2); split_and ?.
   * by erewrite Hw, cmap_singleton_union by eauto.
   * eapply cmap_singleton_disjoint; eauto.
     + eapply ctree_Forall_not; eauto.
@@ -340,12 +340,12 @@ Proof.
     + eapply ctree_Forall_not; eauto.
       unfold w2; rewrite ctree_flatten_map; apply Forall_fmap, Forall_true.
       sep_unfold; intros [] ?; naive_solver eauto using sep_unmapped_empty_alt.
-  * exists w1; rewrite Hw; split_ands; eauto using @sep_unmapped_empty_alt.
+  * exists w1; rewrite Hw; split_and ?; eauto using @sep_unmapped_empty_alt.
     + symmetry; eapply to_val_subseteq; eauto using @ctree_union_subseteq_l.
       unfold w1; rewrite ctree_flatten_map; apply Forall_fmap, Forall_true.
       by intros ? [].
     + by unfold w1; rewrite ctree_flatten_map; apply Forall_fmap, Forall_true.
-  * exists w2; rewrite Hw; split_ands; eauto using @sep_unmapped_empty_alt.
+  * exists w2; rewrite Hw; split_and ?; eauto using @sep_unmapped_empty_alt.
     + symmetry; rewrite ctree_commutative by done.
       eapply to_val_subseteq; eauto using @ctree_union_subseteq_l.
       unfold w2; rewrite ctree_flatten_map; apply Forall_fmap, Forall_true.
@@ -353,9 +353,9 @@ Proof.
     + by unfold w2; rewrite ctree_flatten_map; apply Forall_fmap, Forall_true.
 Qed.
 Lemma mem_singleton_union_rev_unmapped Γ Δ m a μ γ1 γ2 v τ :
-  ✓ Γ → γ1 ⊥ γ2 → γ1 ≠ ∅ → γ2 ≠ ∅ → sep_unmapped γ2 →
+  ✓ Γ → γ1 ## γ2 → γ1 ≠ ∅ → γ2 ≠ ∅ → sep_unmapped γ2 →
   mem_singleton Γ Δ a μ (γ1 ∪ γ2) v τ m → ∃ m1 m2,
-  m = m1 ∪ m2 ∧ m1 ⊥ m2 ∧
+  m = m1 ∪ m2 ∧ m1 ## m2 ∧
   mem_singleton Γ Δ a μ γ1 v τ m1 ∧ mem_singleton Γ Δ a μ γ2 (val_new Γ τ) τ m2.
 Proof.
   intros ????? (w&->&->&Hw&Hx&?&?&?&_).
@@ -365,24 +365,25 @@ Proof.
   assert ((Γ,Δ) ⊢ w1 : τ).
   { apply ctree_map_typed_alt; auto.
     + induction Hw' as [|[] ? (?&?&?)]; decompose_Forall_hyps; constructor;
-        split_ands'; eauto using sep_disjoint_valid_l, sep_unmapped_union_2'.
+        try split_and !; try constructor;
+        eauto using sep_disjoint_valid_l, sep_unmapped_union_2'.
     + induction Hw' as [|[] ? (?&?&?)]; decompose_Forall_hyps; constructor; auto.
-      intros [??]; split_ands'; eauto using sep_unmapped_union_2'.
+      intros [??]; split_and !; eauto using sep_unmapped_union_2'.
     + by intros []; naive_solver. }
   assert ((Γ,Δ) ⊢ w2 : τ).
   { eapply ctree_new_typed; eauto using ctree_typed_type_valid.
-    split_ands'; eauto using sep_disjoint_valid_l, BIndet_valid. }
+    split_and !; try constructor; eauto using sep_disjoint_valid_l, BIndet_valid. }
   assert (bit_size_of Γ τ ≠ 0 ∧ ✓{Γ} τ) as []
     by eauto using bit_size_of_ne_0, ctree_typed_type_valid.
   assert (ctree_unmapped w2).
   { unfold w2; rewrite ctree_flatten_new by eauto; by apply Forall_replicate. }
-  assert (w1 ⊥ w2).
+  assert (w1 ## w2).
   { symmetry; eapply ctree_flatten_unflatten_disjoint; eauto.
     + unfold w1; rewrite ctree_flatten_map.
       eapply Forall2_replicate_l, Forall_fmap; auto.
       induction Hw' as [|[] ? (?&?&?)]; decompose_Forall_hyps;
-        constructor; split_ands'; eauto using sep_unmapped_union_2'.
-    + by apply Forall_replicate; split_ands'. }
+        constructor; try split_and !; eauto using sep_unmapped_union_2'.
+    + by apply Forall_replicate; split_and !. }
   assert (w = w1 ∪ w2) as Hw12.
   { unfold w1, w2; rewrite <-ctree_merge_flatten, ctree_flatten_new by auto.
     erewrite (ctree_merge_map _ (flip union (PBit γ2 BIndet)))
@@ -390,7 +391,7 @@ Proof.
     rewrite <-ctree_map_compose; symmetry.
     apply (ctree_map_id (λ γb, tagged_perm γb = γ1 ∪ γ2)); auto.
     by intros [] ?; sep_unfold; case_decide; simplify_equality'. }
-  exists (cmap_singleton Γ a μ w1), (cmap_singleton Γ a μ w2); split_ands.
+  exists (cmap_singleton Γ a μ w1), (cmap_singleton Γ a μ w2); split_and ?.
   * by erewrite Hw12, cmap_singleton_union by eauto.
   * eapply cmap_singleton_disjoint; eauto.
     + eapply ctree_Forall_not; eauto.
@@ -399,19 +400,19 @@ Proof.
     + eapply ctree_Forall_not; eauto.
       unfold w2; rewrite ctree_flatten_new by eauto.
       apply Forall_replicate; sep_unfold; naive_solver.
-  * exists w1; rewrite Hw12; split_ands; eauto using @sep_unmapped_empty_alt.
+  * exists w1; rewrite Hw12; split_and ?; eauto using @sep_unmapped_empty_alt.
     + destruct (decide (sep_unmapped γ1)).
       - assert (ctree_unmapped w1).
         { unfold w1; rewrite ctree_flatten_map; apply Forall_fmap.
         induction Hw' as [|[] ? (?&?&?)]; decompose_Forall_hyps;
-          constructor; split_ands'; eauto using sep_unmapped_union_2'. }
+          constructor; try split_and !; eauto using sep_unmapped_union_2'. }
         by erewrite !to_val_unmapped
           by eauto using @ctree_unmapped_union, ctree_union_typed.
       - symmetry; eapply to_val_subseteq; eauto using @ctree_union_subseteq_l.
         unfold w1; rewrite ctree_flatten_map; apply Forall_fmap, Forall_true.
         by intros ? [].
     + by unfold w1; rewrite ctree_flatten_map; apply Forall_fmap, Forall_true.
-  * exists w2; split_ands; eauto.
+  * exists w2; split_and ?; eauto.
     + symmetry; eapply to_val_unmapped; eauto.
     + unfold w2; rewrite ctree_flatten_new by eauto; by apply Forall_replicate.
 Qed.

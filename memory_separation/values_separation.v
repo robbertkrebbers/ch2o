@@ -14,8 +14,8 @@ Implicit Types v : val K.
 Implicit Types vs : list (val K).
 
 Hint Resolve Forall2_take Forall2_drop Forall_take Forall_drop Forall_app_2
-  Forall_replicate Forall_resize.
-Hint Immediate env_valid_lookup env_valid_lookup_lookup.
+  Forall_replicate Forall_resize: core.
+Hint Immediate env_valid_lookup env_valid_lookup_lookup: core.
 Local Arguments union _ _ !_ !_ /.
 
 Ltac solve_length := repeat first
@@ -37,8 +37,8 @@ Ltac solve_length := repeat first
           by eauto using bit_size_of_union_singleton
       end
     end]; lia.
-Hint Extern 0 (length _ = _) => solve_length.
-Hint Extern 0 (length _ ≠ _) => solve_length.
+Hint Extern 0 (length _ = _) => solve_length: core.
+Hint Extern 0 (length _ ≠ _) => solve_length: core.
 
 Lemma to_val_subseteq Γ Δ w1 w2 τ :
   ✓ Γ → (Γ,Δ) ⊢ w1 : τ → w1 ⊆ w2 →
@@ -64,9 +64,9 @@ Proof.
     destruct Hγs; decompose_Forall_hyps.
 Qed.
 Lemma of_val_disjoint Γ Δ γs1 γs2 v τ :
-  ✓ Γ → (Γ,Δ) ⊢ v : τ → length γs1 = bit_size_of Γ τ → γs1 ⊥* γs2 →
+  ✓ Γ → (Γ,Δ) ⊢ v : τ → length γs1 = bit_size_of Γ τ → γs1 ##* γs2 →
   Forall (not ∘ sep_unmapped) γs1 → Forall (not ∘ sep_unmapped) γs2 →
-  of_val Γ γs1 v ⊥ of_val Γ γs2 v.
+  of_val Γ γs1 v ## of_val Γ γs2 v.
 Proof.
   intros HΓ Hv. revert v τ Hv γs1 γs2.
   assert (∀ γs (bs : list (bit K)),
@@ -113,8 +113,8 @@ Proof.
 Qed.
 Lemma of_val_flatten_disjoint Γ Δ w1 w2 v τ :
   ✓ Γ → (Γ,Δ) ⊢ w1 : τ → ctree_unshared w1 →
-  ctree_Forall (not ∘ sep_unmapped) w1 → (Γ,Δ) ⊢ v : τ → w1 ⊥ w2 →
-  of_val Γ (tagged_perm <$> ctree_flatten w1) v ⊥ w2.
+  ctree_Forall (not ∘ sep_unmapped) w1 → (Γ,Δ) ⊢ v : τ → w1 ## w2 →
+  of_val Γ (tagged_perm <$> ctree_flatten w1) v ## w2.
 Proof.
   intros. assert (ctree_unmapped w2) by eauto using @ctree_unshared_unmapped.
   assert ((Γ,Δ) ⊢ w2 : τ) by eauto using ctree_disjoint_typed.
@@ -160,7 +160,7 @@ Proof.
 Qed.
 Lemma of_val_flatten_union Γ Δ w1 w2 v τ :
   ✓ Γ → (Γ,Δ) ⊢ w1 : τ → ctree_unshared w1 →
-  ctree_Forall (not ∘ sep_unmapped) w1 → (Γ,Δ) ⊢ v : τ → w1 ⊥ w2 →
+  ctree_Forall (not ∘ sep_unmapped) w1 → (Γ,Δ) ⊢ v : τ → w1 ## w2 →
   of_val Γ (tagged_perm <$> ctree_flatten (w1 ∪ w2)) v
   = of_val Γ (tagged_perm <$> ctree_flatten w1) v ∪ w2.
 Proof.

@@ -105,7 +105,7 @@ Ltac typed_inversion_all :=
 Section typed.
   Context `{Typed E T V}.
   Lemma Forall2_Forall_typed Γ vs τs τ :
-    Γ ⊢* vs :* τs → Forall (τ =) τs → Γ ⊢* vs : τ.
+    Γ ⊢* vs :* τs → Forall (τ =.) τs → Γ ⊢* vs : τ.
   Proof. induction 1; inversion 1; subst; eauto. Qed.
 End typed.
 
@@ -155,7 +155,7 @@ Section path_type_check.
 End path_type_check.
 
 Instance typed_dec `{TypeCheckSpec E T V (λ _, True)}
-  `{∀ τ1 τ2 : T, Decision (τ1 = τ2)} Γ x τ : Decision (Γ ⊢ x : τ).
+  `{EqDecision T} Γ x τ : Decision (Γ ⊢ x : τ).
 Proof.
  refine
   match Some_dec (type_check Γ x) with
@@ -164,10 +164,10 @@ Proof.
   end; abstract (rewrite <-type_check_correct by done; congruence).
 Defined.
 Instance path_typed_dec `{PathTypeCheckSpec E T1 T2 R (λ _, True)}
-  `{∀ τ1 τ2 : T2, Decision (τ1 = τ2)} Γ p τ σ : Decision (Γ ⊢ p : τ ↣ σ).
+  `{EqDecision T2} Γ p τ σ : Decision (Γ ⊢ p : τ ↣ σ).
 Proof.
- refine (cast_if (decide (τ !!{Γ} p = Some σ)));
-  abstract by rewrite <-path_type_check_correct by done.
+  refine (cast_if (decide (τ !!{Γ} p = Some σ)));
+  by rewrite <-path_type_check_correct by done.
 Defined.
 
 Ltac simplify_type_equality := repeat

@@ -1,6 +1,8 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
+From stdpp Require Import fin_map_dom.
 Require Export operations state.
+
 Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 
@@ -31,7 +33,7 @@ Inductive lrval_typed' (Γ : env K) (Δ : memenv K) : lrval K → lrtype K → P
   | lval_typed p τp : (Γ,Δ) ⊢ p : τp → lrval_typed' Γ Δ (inl p) (inl τp)
   | rval_typed v τ : (Γ,Δ) ⊢ v : τ → lrval_typed' Γ Δ (inr v) (inr τ).
 Global Instance lrval_typed:
-  Typed (env K * memenv K) (lrtype K) (lrval K) := curry lrval_typed'.
+  Typed (env K * memenv K) (lrtype K) (lrval K) := uncurry lrval_typed'.
 
 Inductive expr_typed' (Γ : env K) (Δ : memenv K)
      (τs : list (type K)) : expr K → lrtype K → Prop :=
@@ -92,7 +94,7 @@ Inductive expr_typed' (Γ : env K) (Δ : memenv K)
      expr_typed' Γ Δ τs e1 (inr σ) → expr_typed' Γ Δ τs e2 (inr τ) →
      expr_typed' Γ Δ τs (#[r:=e1]e2) (inr τ).
 Global Instance expr_typed:
-  Typed envs (lrtype K) (expr K) := curry3 expr_typed'.
+  Typed envs (lrtype K) (expr K) := uncurry3 expr_typed'.
 
 Section expr_typed_ind.
   Context (Γ : env K) (Δ : memenv K) (τs : list (type K)).
@@ -203,7 +205,7 @@ Inductive ectx_item_typed' (Γ : env K) (Δ : memenv K)
      ectx_item_typed' Γ Δ τs (#[r:=e1] □) (inr τ) (inr τ).
 
 Global Instance ectx_item_typed: PathTyped envs
-  (lrtype K) (lrtype K) (ectx_item K) := curry3 ectx_item_typed'.
+  (lrtype K) (lrtype K) (ectx_item K) := uncurry3 ectx_item_typed'.
 Inductive ectx_typed' (Γs : envs) : ectx K → lrtype K → lrtype K → Prop :=
   | ectx_nil_typed_2 τ : ectx_typed' Γs [] τ τ
   | ectx_cons_typed_2 Ei E τ1 τ2 τ3 :
@@ -253,9 +255,10 @@ Inductive stmt_typed' (Γ : env K) (Δ : memenv K)
      stmt_typed' Γ Δ τs (if{e} s1 else s2) (c1 && c2, mσ)
   | SSwitch_typed e τi s c mσ :
      (Γ,Δ,τs) ⊢ e : inr (intT τi) → locks e = ∅ →
-     stmt_typed' Γ Δ τs s (c,mσ) → stmt_typed' Γ Δ τs (switch{e} s) (false,mσ).
+     stmt_typed' Γ Δ τs s (c,mσ) → stmt_typed' Γ Δ τs (switch{e} s) (false,mσ)
+     .
 Global Instance stmt_typed:
-  Typed envs (rettype K) (stmt K) := curry3 stmt_typed'.
+  Typed envs (rettype K) (stmt K) := uncurry3 stmt_typed'.
 
 Inductive sctx_item_typed' (Γ : env K) (Δ : memenv K)
      (τs : list (type K)) : sctx_item K → relation (rettype K) :=
@@ -281,7 +284,7 @@ Inductive sctx_item_typed' (Γ : env K) (Δ : memenv K)
      (Γ,Δ,τs) ⊢ e : inr (intT τi) → locks e = ∅ →
      sctx_item_typed' Γ Δ τs (switch{e} □) (c,mσ) (false,mσ).
 Global Instance sctx_typed: PathTyped envs (rettype K)
-  (rettype K) (sctx_item K) := curry3 sctx_item_typed'.
+  (rettype K) (sctx_item K) := uncurry3 sctx_item_typed'.
 
 Inductive esctx_item_typed' (Γ : env K) (Δ : memenv K)
      (τs : list (type K)) : esctx_item K → type K → rettype K → Prop :=
@@ -295,7 +298,7 @@ Inductive esctx_item_typed' (Γ : env K) (Δ : memenv K)
      (Γ,Δ,τs) ⊢ s : (c,mσ) →
      esctx_item_typed' Γ Δ τs (switch{□} s) (intT τi) (false,mσ).
 Global Instance esctx_item_typed: PathTyped envs (type K)
-  (rettype K) (esctx_item K) := curry3 esctx_item_typed'.
+  (rettype K) (esctx_item K) := uncurry3 esctx_item_typed'.
 
 Inductive ctx_item_typed'
       (Γ : env K) (Δ : memenv K) (τs : list (type K)) :
@@ -318,12 +321,12 @@ Inductive ctx_item_typed'
      rettype_match cmσ σ → ctx_item_typed'
        Γ Δ τs (CParams f (zip os σs)) (Stmt_type cmσ) (Fun_type f).
 Global Instance ctx_item_typed: PathTyped envs (focustype K)
-  (focustype K) (ctx_item K) := curry3 ctx_item_typed'.
+  (focustype K) (ctx_item K) := uncurry3 ctx_item_typed'.
 Inductive ctx_typed' (Γs : env K * memenv K) :
      ctx K → focustype K → focustype K → Prop :=
   | ctx_nil_typed_2 τf : ctx_typed' Γs [] τf τf
   | ctx_cons_typed_2 Ek k τf1 τf2 τf3 :
-     (Γs,locals k.*2) ⊢ Ek : τf1 ↣ τf2 →
+     (Γs,(locals k).*2) ⊢ Ek : τf1 ↣ τf2 →
      ctx_typed' Γs k τf2 τf3 → ctx_typed' Γs (Ek :: k) τf1 τf3.
 Global Instance ctx_typed: PathTyped (env K * memenv K)
   (focustype K) (focustype K) (ctx K) := ctx_typed'.
@@ -337,7 +340,7 @@ Inductive direction_typed' (Γ : env K) (Δ : memenv K) :
   | Throw_typed n cmτ : direction_typed' Γ Δ (↑ n) cmτ
   | Switch_typed mx cmτ : direction_typed' Γ Δ (↓ mx) cmτ.
 Global Instance direction_typed: Typed (env K * memenv K)
-  (rettype K) (direction K) := curry direction_typed'.
+  (rettype K) (direction K) := uncurry direction_typed'.
 
 Inductive focus_typed' (Γ : env K) (Δ : memenv K)
     (τs : list (type K)) : focus K → focustype K → Prop :=
@@ -359,12 +362,12 @@ Inductive focus_typed' (Γ : env K) (Δ : memenv K)
      ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ v : τ → (Γ,Δ,τs) ⊢ Es : τ ↣ mσ →
      focus_typed' Γ Δ τs (Undef (UndefBranch Es Ω v)) (Stmt_type mσ).
 Global Instance focus_typed:
-  Typed envs (focustype K) (focus K) := curry3 focus_typed'.
+  Typed envs (focustype K) (focus K) := uncurry3 focus_typed'.
 
 Global Instance state_typed :
     Typed (env K) (focustype K) (state K) := λ Γ S σf, ∃ τf,
   let 'State k φ m := S in
-  (Γ,'{m},locals k.*2) ⊢ φ : τf ∧
+  (Γ,'{m},(locals k).*2) ⊢ φ : τf ∧
   (Γ,'{m}) ⊢ k : τf ↣ σf ∧
   ✓{Γ} m.
 
@@ -491,7 +494,7 @@ Proof.
   intros ? Hs ??. revert τs2. induction Hs; typed_constructor;
     erewrite <-1?size_of_weaken by eauto;
     eauto using expr_typed_weaken, type_valid_weaken;
-    unfold typed, stmt_typed in *; simpl in *; eauto using prefix_of_cons.
+    unfold typed, stmt_typed in *; simpl in *; eauto using prefix_cons.
 Qed.
 Lemma sctx_item_typed_weaken Γ1 Γ2 Δ1 Δ2 τs1 τs2 Es cmτ cmσ :
   ✓ Γ1 → (Γ1,Δ1,τs1) ⊢ Es : cmτ ↣ cmσ → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 →
@@ -600,7 +603,7 @@ Lemma ectx_item_subst_typed Γ Δ τs Ei e τlr σlr :
   (Γ,Δ,τs) ⊢ e : τlr → (Γ,Δ,τs) ⊢ subst Ei e : σlr.
 Proof.
   destruct 1; simpl; typed_constructor; eauto.
-  rewrite ?fmap_app; eauto using Forall2_app, Forall2_cons.
+  rewrite ?fmap_app; simpl; eauto using Forall2_app, Forall2_cons.
 Qed.
 Lemma ectx_subst_typed Γ Δ τs E e τlr σlr :
   (Γ,Δ,τs) ⊢ E : τlr ↣ σlr →
@@ -613,7 +616,7 @@ Lemma ectx_item_subst_typed_rev Γ Δ τs Ei e σlr :
   ∃ τlr, (Γ,Δ,τs) ⊢ e : τlr ∧ (Γ,Δ,τs) ⊢ Ei : τlr ↣ σlr.
 Proof.
   intros He. destruct Ei; typed_inversion He;
-    list_simplifier; eexists; split_ands; repeat typed_constructor; eauto.
+    list_simplifier; eexists; split_and ?; repeat typed_constructor; eauto.
 Qed.
 Lemma ectx_subst_typed_rev Γ Δ τs E e σlr :
   (Γ,Δ,τs) ⊢ subst E e : σlr →
@@ -628,13 +631,13 @@ Qed.
 Lemma sctx_item_subst_typed Γ Δ τs Es s cmτ cmσ :
   (Γ,Δ,τs) ⊢ Es : cmτ ↣ cmσ → (Γ,Δ,τs) ⊢ s : cmτ →
   (Γ,Δ,τs) ⊢ subst Es s : cmσ.
-Proof. destruct 1; simpl; typed_constructor; eauto; esolve_elem_of. Qed.
+Proof. destruct 1; simpl; typed_constructor; eauto; set_solver. Qed.
 Lemma sctx_item_subst_typed_rev Γ Δ τs Es s cmσ :
   (Γ,Δ,τs) ⊢ subst Es s : cmσ →
   ∃ cmτ, (Γ,Δ,τs) ⊢ s : cmτ ∧ (Γ,Δ,τs) ⊢ Es : cmτ ↣ cmσ.
 Proof.
   intros Hs. destruct Es; simpl; typed_inversion Hs;
-    eexists; split_ands; repeat typed_constructor; eauto.
+    eexists; split_and ?; repeat typed_constructor; eauto.
 Qed.
 Lemma esctx_item_subst_typed Γ Δ τs Ee e τ cmσ :
   (Γ,Δ,τs) ⊢ Ee : τ ↣ cmσ → (Γ,Δ,τs) ⊢ e : inr τ → locks e = ∅ →
@@ -645,7 +648,7 @@ Lemma esctx_item_subst_typed_rev Γ Δ τs Ee e cmσ :
   ∃ τ, (Γ,Δ,τs) ⊢ e : inr τ ∧ locks e = ∅ ∧ (Γ,Δ,τs) ⊢ Ee : τ ↣ cmσ.
 Proof.
   intros He. destruct Ee; simpl; typed_inversion He;
-    eexists; split_ands; repeat typed_constructor; eauto.
+    eexists; split_and ?; repeat typed_constructor; eauto.
 Qed.
 Lemma sctx_item_typed_Some_l Γ Δ τs Es c1 τ cmτ :
   (Γ,Δ,τs) ⊢ Es : (c1,Some τ) ↣ cmτ → ∃ c2, cmτ = (c2, Some τ).
@@ -698,8 +701,8 @@ Proof.
   assert (∀ es σs, ⋃ (vars <$> es) = ∅ →
     Forall2 (λ e τlr, vars e = ∅ → (Γ,Δ,τs2) ⊢ e : τlr) es (inr <$> σs) →
     (Γ,Δ,τs2) ⊢* es :* inr <$> σs).
-  { induction 2; simplify_equality'; decompose_empty; eauto. }
-  induction 2 using @expr_typed_ind; simplify_equality';
-    decompose_empty; typed_constructor; eauto.
+  { induction 2; simplify_equality'; set_solver by eauto. }
+  induction 2 using @expr_typed_ind; simplify_equality'; typed_constructor; 
+  eauto; try (eapply IHexpr_typed'); set_solver by eauto.
 Qed.
 End properties.

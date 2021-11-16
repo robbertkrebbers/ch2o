@@ -6,7 +6,7 @@ data type [A]. The representation of [x : A] as a list of [n] fragments is:
 element of type [A] into fragments, and to go back. Fragments are used to
 describe abstract fragments of pointers so as to encode and decode pointers as
 bytes in the file [pointers]. *)
-Require Export numbers list.
+Require Export base.
 
 Record fragment (A : Type) := Fragment { frag_item : A; frag_index : nat }.
 Add Printing Constructor fragment.
@@ -14,17 +14,17 @@ Arguments Fragment {_} _ _.
 Arguments frag_item {_} _.
 Arguments frag_index {_} _.
 
-Instance fragment_eq_dec `{∀ x y : A, Decision (x = y)}
-  (s1 s2 : fragment A) : Decision (s1 = s2).
+Instance fragment_eq_dec `{EqDecision A}: EqDecision (fragment A).
 Proof. solve_decision. Defined.
 
 Section fragmented.
-Context {A : Type} `{∀ x y : A, Decision (x = y)}.
+Context {A : Type} `{EqDecision A}.
 Context (len : nat) {len_pos : PropHolds (len ≠ 0)}.
 
 Definition fragmented (x : A) (i : nat) (xss : list (fragment A)) : Prop :=
   xss = Fragment x <$> seq i (len - i).
-Global Instance fragmented_dec x : ∀ i xss, Decision (fragmented x i xss) := _.
+Global Instance fragmented_dec x : ∀ i xss, Decision (fragmented x i xss).
+Proof. intros. unfold Decision, fragmented. decide equality. solve_decision. Defined.
 Typeclasses Opaque fragmented.
 
 Definition to_fragments (x : A) : list (fragment A) := Fragment x <$> seq 0 len.
@@ -44,14 +44,14 @@ Proof.
   unfold of_fragments, to_fragments, fragmented, fragmented_dec, PropHolds in *.
   destruct len as [|n]; [lia|].
   by destruct xss as [|[y [|?]] xss]; split; intros;
-    simplify_option_equality; rewrite ?Nat.sub_0_r, ?Nat.sub_0_r in *.
+    simplify_option_eq; rewrite ?Nat.sub_0_r, ?Nat.sub_0_r in *.
 Qed.
 Lemma of_to_fragments_1 x xss :
   of_fragments xss = Some x → to_fragments x = xss.
 Proof. by apply of_to_fragments. Qed.
 Lemma of_to_fragments_2 x : of_fragments (to_fragments x) = Some x.
 Proof. by apply of_to_fragments. Qed.
-Global Instance to_fragments_inj: Injective (=) (=) to_fragments.
+Global Instance to_fragments_inj: Inj (=) (=) to_fragments.
 Proof.
   intros x y. generalize (eq_refl (to_fragments y)).
   rewrite <-!of_to_fragments. congruence.
@@ -70,6 +70,6 @@ Proof.
   { intros i xss ? ->. rewrite Forall_fmap, Forall_seq.
     intros Hx. apply Hx; auto with lia. }
   unfold of_fragments. intros. destruct xss as [|[? [|?]]], i;
-    simplify_option_equality; decompose_Forall_hyps; eauto.
+    simplify_option_eq; decompose_Forall_hyps; eauto.
 Qed.
 End fragmented.

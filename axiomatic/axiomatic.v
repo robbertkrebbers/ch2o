@@ -41,11 +41,11 @@ Ltac solve_mem_disjoint :=
   repeat match goal with
   | H : ✓{_} _ |- _ => apply cmap_valid_sep_valid in H
   end; solve_sep_disjoint.
-Local Hint Extern 1 (_ ⊥ _) => solve_mem_disjoint.
-Local Hint Extern 1 (⊥ _) => solve_mem_disjoint.
-Local Hint Extern 1 (sep_valid _) => solve_mem_disjoint.
-Local Hint Extern 1 (_ ⊆ _) => etransitivity; [eassumption|].
-Local Hint Extern 1 (_ ≤ _) => omega.
+Local Hint Extern 1 (_ ## _) => solve_mem_disjoint: core.
+Local Hint Extern 1 (## _) => solve_mem_disjoint: core.
+Local Hint Extern 1 (sep_valid _) => solve_mem_disjoint: core.
+Local Hint Extern 1 (_ ⊆ _) => etransitivity; [eassumption|]: core.
+Local Hint Extern 1 (_ ≤ _) => lia: core.
 
 (** ** Directed assertions *)
 (** The statement judgment will be of the shape [Γ\ δ\ Pd ⊨ₚ s] where [Pd] is
@@ -58,7 +58,7 @@ Definition directed_pack {K A} (P : A) (Q : A) (R : val K → A)
 
 (** This hideous definition of [fmap] makes [f <$> directed_pack P Q R J]
 convertable with [directed_pack (f P) (f Q) (f ∘ R) (f ∘ J)]. *)
-Instance directed_fmap {K} : FMap (direction K →) := λ A B f Pd d,
+Instance directed_fmap {K} : FMap (direction K →.) := λ A B f Pd d,
   match d with
   | ↘ => f (Pd ↘)
   | ↗ => f (Pd ↗)
@@ -99,7 +99,7 @@ Next Obligation.
     eauto using direction_typed_weaken, assert_weaken, cmap_erase_valid.
 Qed.
 Next Obligation.
-  intros ??? Pd s cmτ Γ Δ δ n ρ φ m m' [d m'' ????] [? p]; inv_rcstep.
+  intros ??? Pd s cmτ Γ Δ δ n ρ φ m m' [d m'' ????] [? p]; inv_rcstep; set_solver.
 Qed.
 Definition ax_stmt_packed `{EnvSpec K} (Γ : env K) (δ : funenv K)
     (Pd : dassert K) (s : stmt K) : Prop := ∀ Γ' Δ δ' n ρ d m cmτ,
@@ -152,30 +152,30 @@ Inductive ax_expr_cond_frame `{Env K}
      (n : nat) (φ : focus K) (m m' : mem K) : ax_expr_frame K → Prop :=
   | ax_frame_in_expr mA mf :
      m' = m ∪ mf ∪ mA → ✓{Γ,Δ} mf → ✓{Γ,Δ} mA →
-     ⊥ [m; mf; mA] → k = [] → cmap_erased mA → mem_locks mA = ∅ →
+     ## [m; mf; mA] → k = [] → cmap_erased mA → mem_locks mA = ∅ →
      assert_holds A Γ Δ δ ρ n mA →
      ax_expr_cond_frame ρ A Γ Δ δ k n φ m m' (InExpr mf mA)
   | ax_frame_in_fun mf :
      m' = m ∪ mf → ✓{Γ,Δ} mf →
-     ⊥ [m; mf] → k ≠ [] →
+     ## [m; mf] → k ≠ [] →
      ax_expr_cond_frame ρ A Γ Δ δ k n φ m m' (InFun mf).
 Inductive ax_expr_cond_unframe `{Env K}
      (ρ : stack K) (A : assert K) (Γ : env K)
      (Δ : memenv K) (δ : funenv K) (k : ctx K)
      (n : nat) (φ : focus K) (m m' : mem K) : ax_expr_frame K → Prop :=
   | ax_unframe_expr_to_expr mA mf :
-     m' = m ∪ mf ∪ mA → ⊥ [m; mf; mA] → k = [] →
+     m' = m ∪ mf ∪ mA → ## [m; mf; mA] → k = [] →
      ax_expr_cond_unframe ρ A Γ Δ δ k n φ m m' (InExpr mf mA)
   | ax_unframe_fun_to_expr mA mf :
-     m' = m ∪ mf ∪ mA → ⊥ [m; mf; mA] → k = [] →
+     m' = m ∪ mf ∪ mA → ## [m; mf; mA] → k = [] →
      cmap_erased mA → mem_locks mA = ∅ →
      assert_holds A Γ Δ δ ρ n mA → 
      ax_expr_cond_unframe ρ A Γ Δ δ k n φ m m' (InFun mf)
   | ax_unframe_expr_to_fun m'' mA mf :
-     m = m'' ∪ mA → m' = m'' ∪ mf ∪ mA → ⊥ [m''; mf; mA] → k ≠ [] →
+     m = m'' ∪ mA → m' = m'' ∪ mf ∪ mA → ## [m''; mf; mA] → k ≠ [] →
      ax_expr_cond_unframe ρ A Γ Δ δ k n φ m m' (InExpr mf mA)
   | ax_unframe_fun_to_fun mf :
-     m' = m ∪ mf → ⊥ [m; mf] → k ≠ [] →
+     m' = m ∪ mf → ## [m; mf] → k ≠ [] →
      ax_expr_cond_unframe ρ A Γ Δ δ k n φ m m' (InFun mf).
 Program Definition ax_expr_cond `{EnvSpec K} (ρ : stack K)
     (A : assert K) : ax_frame_cond K (ax_expr_frame K) := {|
@@ -194,7 +194,7 @@ Qed.
 Definition ax_expr_invariant `{Env K} (A : assert K)
     (Γ : env K) (Δ : memenv K) (δ : funenv K)
     (ρ : stack K) (n : nat) (m : mem K) := ∃ mA,
-  ⊥ [mA; m] ∧ ✓{Γ,Δ} mA ∧ cmap_erased mA ∧ mem_locks mA = ∅ ∧
+  ## [mA; m] ∧ ✓{Γ,Δ} mA ∧ cmap_erased mA ∧ mem_locks mA = ∅ ∧
   assert_holds A Γ Δ δ ρ n mA.
 Inductive ax_expr_post' `{Env K} (Q : lrval K → assert K)
     (τlr : lrtype K) (Γ : env K) (Δ : memenv K)
@@ -293,9 +293,9 @@ Implicit Types m : mem K.
 Implicit Types e : expr K.
 Implicit Types s : stmt K.
 
-Hint Immediate cmap_valid_memenv_valid.
-Hint Resolve cmap_empty_valid cmap_erased_empty mem_locks_empty.
-Hint Resolve cmap_union_valid_2 cmap_erase_valid.
+Hint Immediate cmap_valid_memenv_valid: core.
+Hint Resolve cmap_empty_valid cmap_erased_empty mem_locks_empty: core.
+Hint Resolve cmap_union_valid_2 cmap_erase_valid: core.
 
 Global Instance directed_pack_proper `{!@Equivalence A R} :
   Proper (R ==> R ==> pointwise_relation _ R ==> pointwise_relation _ R ==>
@@ -303,7 +303,7 @@ Global Instance directed_pack_proper `{!@Equivalence A R} :
     pointwise_relation _ R) (@directed_pack K A).
 Proof. intros ?????????????????? []; simplify_equality'; auto. Qed.
 Lemma directed_fmap_spec {A B} (f : A → B) (P : direction K → A) d :
-  (f <$> P) d = f (P d).
+  (@fmap _ (@directed_fmap K) _ _ f P) d = f (P d).
 Proof. by destruct d. Qed.
 Global Instance ax_stmt_packed_proper Γ δ : Proper
   (pointwise_relation _ (≡{Γ,δ}) ==> (=) ==> iff) (ax_stmt_packed Γ δ).
@@ -339,15 +339,15 @@ Qed.
 
 Lemma ax_expr_invariant_emp Γ Δ δ ρ n m :
   ✓{Γ,Δ} m → ax_expr_invariant emp Γ Δ δ ρ n m.
-Proof. by eexists ∅; split_ands; eauto. Qed.
-Hint Resolve ax_expr_invariant_emp.
+Proof. by eexists ∅; split_and ?; eauto. Qed.
+Hint Resolve ax_expr_invariant_emp: core.
 Lemma ax_expr_invariant_weaken Γ Δ δ A ρ n1 n2 m1 m2 :
   ✓ Γ → ✓{Δ}* ρ →
   ax_expr_invariant A Γ Δ δ ρ n1 m2 → m1 ⊆ m2 → n2 ≤ n1 →
   ax_expr_invariant A Γ Δ δ ρ n2 m1.
 Proof.
   intros ?? (mA&?&?&?&?&?) Hm12.
-  exists mA; split_ands; eauto using assert_weaken.
+  exists mA; split_and ?; eauto using assert_weaken.
   by rewrite <-(sep_subseteq_disjoint_le m1) by eauto.
 Qed.
 Lemma ax_disjoint_expr_compose_diagram Γ ρ A Ek :
@@ -355,7 +355,7 @@ Lemma ax_disjoint_expr_compose_diagram Γ ρ A Ek :
 Proof.
   intros Δ δ k n φ a m m' ??; simpl.
   destruct 1; subst; [discriminate_list_equality|].
-  exists mf; split_ands; auto; intros Δ' k' φ' m2 m2' ?? [-> ?].
+  exists mf; split_and ?; auto; intros Δ' k' φ' m2 m2' ?? [-> ?].
   constructor; trivial; intro; discriminate_list_equality.
 Qed.
 Lemma ax_expr_disjoint_compose_diagram Γ ρ k :
@@ -404,7 +404,7 @@ Proof.
   intros A1 A2 HA P1 P2 HP ?? -> Q1 Q2 HQ Hax ???????????????? (?&?&?&?&?&?) ?.
   eapply ax_weaken with (ax_expr_cond ρ A1) (ax_expr_post Q1 τlr) n; eauto.
   * apply Hax, HP; eauto.
-    econstructor; split_ands; eauto. apply HA; eauto.
+    econstructor; split_and ?; eauto. apply HA; eauto.
   * destruct 2; constructor; auto.
     apply HA; eauto using indexes_valid_weaken, funenv_valid_weaken.
   * destruct 2; subst; simplify_mem_disjoint_hyps; econstructor; first

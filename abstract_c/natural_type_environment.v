@@ -27,7 +27,7 @@ Definition natural_field_sizes (f : type K → nat) (Γ : env K)
   match τs with
   | [] => []
   | τ :: τs =>
-    let align := default whole_align (head τs) (natural_align_of Γ) in
+    let align := from_option (natural_align_of Γ) whole_align (head τs) in
     let sz := f τ + natural_padding (f τ + pos) align in
     sz :: go (sz + pos) τs
   end.
@@ -66,7 +66,7 @@ Proof.
   assert (al * pos `div` al ≤ pos) by (by apply Nat.mul_div_le).
   rewrite Nat.mod_eq by done. lia.
 Qed.
-Lemma natural_align_of_compound_proper Γ :
+Lemma natural_align_of_compound_proper (Γ: env K) :
   let fcompound c t τs rec := foldr lcm 1 (rec <$> τs) in
   ∀ rec1 rec2 (c : compound_kind) t (τs : list (type K)),
   Γ !! t = Some τs → Forall (λ τ, rec1 τ = rec2 τ) τs →
@@ -218,7 +218,7 @@ Proof.
         Nat.add_assoc; auto using natural_padding_divide.
   * intros Γ τs i τ ? Hτs. revert i.
     cut (∀ whole_align i pos, τs !! i = Some τ →
-      (default whole_align (head τs) (natural_align_of Γ) | pos) →
+      (from_option (natural_align_of Γ) whole_align (head τs) | pos) →
       (natural_align_of Γ τ | pos + sum_list (take i
          (natural_field_sizes (natural_size_of Γ) Γ whole_align pos τs)))).
     { intros help i ?. rewrite <-(Nat.add_0_l (offset_of _ _ _)).
@@ -227,7 +227,7 @@ Proof.
       intros [|i] pos al ?; simplify_equality'.
     { rewrite Nat.add_0_r. auto using Nat.divide_0_r. }
     rewrite Nat.add_assoc, (Nat.add_comm pos). apply IH; auto.
-    clear IH. destruct Hτs as [|τ2 τs]; simplify_list_equality.
+    clear IH. destruct Hτs as [|τ2 τs]; simplify_list_eq.
     rewrite <-Nat.add_assoc, (Nat.add_comm _ pos), Nat.add_assoc.
     by apply natural_padding_divide, natural_align_ne_0.
   * apply natural_size_of_weaken.

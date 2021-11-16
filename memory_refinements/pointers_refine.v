@@ -41,7 +41,7 @@ Lemma ptr_refine_frozen Γ α f Δ1 Δ2 p1 p2 τp :
   p1 ⊑{Γ,α,f@Δ1↦Δ2} p2 : τp → frozen p2 → frozen p1.
 Proof.
   unfold frozen. destruct 1; simpl; auto.
-  rewrite !(injective_iff Ptr). eapply addr_refine_frozen; eauto.
+  rewrite !(inj_iff Ptr). eapply addr_refine_frozen; eauto.
 Qed.
 Lemma ptr_refine_id Γ α Δ p τp : (Γ,Δ) ⊢ p : τp → p ⊑{Γ,α@Δ} p : τp.
 Proof. destruct 1; constructor; eauto using addr_refine_id. Qed.

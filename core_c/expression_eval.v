@@ -5,6 +5,7 @@ an expression evaluator. It is parametrized by a map of function names to
 denotations. We use this to enable convenient reasoning about pure functions
 in our axiomatic semantics. *)
 Require Export expressions type_system.
+
 Local Open Scope expr_scope.
 
 (** * Definition of the semantics *)
@@ -75,7 +76,7 @@ Implicit Types v : val K.
 Implicit Types ν : lrval K.
 Implicit Types E : ectx K.
 
-Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
+Hint Extern 0 (_ ⊢ _ : _) => typed_constructor: core.
 
 Section expr_eval_ind.
 Context (Γ : env K) (ρ : stack K) (m : mem K).
@@ -126,7 +127,7 @@ Context (Pinsert : ∀ r e1 e2 v1 v2,
 Lemma expr_eval_ind : ∀ e ν, ⟦ e ⟧ Γ ρ m = Some ν → P e ν.
 Proof.
   induction e using @expr_ind_alt; intros;
-    repeat first [progress simplify_option_equality | case_match]; eauto.
+    repeat first [progress simplify_option_eq | case_match]; eauto.
 Qed.
 End expr_eval_ind.
 
@@ -137,7 +138,7 @@ Lemma EVals_expr_eval Γ ρ m Ωs vs :
   ⋃ Ωs = ∅ → mapM (λ e, ⟦ e ⟧ Γ ρ m ≫= maybe inr) (#{Ωs}* vs) = Some vs.
 Proof.
   rewrite empty_union_list_L. rewrite <-Forall2_same_length.
-  induction 1; intros; decompose_Forall; simplify_option_equality; auto.
+  induction 1; intros; decompose_Forall; simplify_option_eq; auto.
 Qed.
 Lemma Forall2_expr_eval_val_inv Γ ρ m Ωs vs vs' :
   length Ωs = length vs →
@@ -146,7 +147,7 @@ Lemma Forall2_expr_eval_val_inv Γ ρ m Ωs vs vs' :
 Proof.
   rewrite <-Forall2_same_length. intros HΩvs. revert vs'.
   induction HΩvs; simpl; intros; decompose_Forall;
-    simplify_option_equality; f_equal; eauto.
+    simplify_option_eq; f_equal; eauto.
 Qed.
 Lemma expr_eval_typed_aux Γ Δ τs ρ m e ν τlr :
   ✓ Γ → ✓{Γ,Δ} m → ⟦ e ⟧ Γ ρ m = Some ν → ✓{Δ}* ρ →
@@ -191,21 +192,21 @@ Proof.
       clear H
     end; typed_inversion_all; auto.
   * rewrite lookup_app_l by eauto using lookup_lt_Some.
-    by simplify_option_equality.
-  * by simplify_option_equality by eauto using ptr_alive_weaken'.
-  * by simplify_option_equality.
-  * simplify_option_equality by eauto using addr_strict_weaken.
+    by simplify_option_eq.
+  * by simplify_option_eq by eauto using ptr_alive_weaken'.
+  * by simplify_option_eq.
+  * simplify_option_eq by eauto using addr_strict_weaken.
     by erewrite <-addr_elt_weaken by eauto.
-  * by simplify_option_equality.
-  * by simplify_option_equality by eauto using val_lookup_seg_weaken.
-  * by simplify_option_equality by eauto using val_unop_ok_weaken.
-  * simplify_option_equality by eauto using val_binop_ok_weaken.
+  * by simplify_option_eq.
+  * by simplify_option_eq by eauto using val_lookup_seg_weaken.
+  * by simplify_option_eq by eauto using val_unop_ok_weaken.
+  * simplify_option_eq by eauto using val_binop_ok_weaken.
     by erewrite <-val_binop_weaken by eauto.
-  * simplify_option_equality by eauto using base_val_branchable_weaken; eauto.
-  * simplify_option_equality by eauto using base_val_branchable_weaken; eauto.
-  * simplify_option_equality; eauto.
-  * by simplify_option_equality by eauto using val_cast_ok_weaken.
-  * simplify_option_equality by eauto using val_lookup_weaken_is_Some.
+  * simplify_option_eq by eauto using base_val_branchable_weaken; eauto.
+  * simplify_option_eq by eauto using base_val_branchable_weaken; eauto.
+  * simplify_option_eq; eauto.
+  * by simplify_option_eq by eauto using val_cast_ok_weaken.
+  * simplify_option_eq by eauto using val_lookup_weaken_is_Some.
     by erewrite <-val_alter_weaken by eauto.
 Qed.
 Lemma expr_eval_weaken_empty Γ1 Γ2 Δ1 ρ1 ρ2 e ν τlr :
@@ -214,7 +215,7 @@ Lemma expr_eval_weaken_empty Γ1 Γ2 Δ1 ρ1 ρ2 e ν τlr :
   ρ1 `prefix_of` ρ2 → ⟦ e ⟧ Γ2 ρ2 ∅ = Some ν.
 Proof.
   intros; eapply expr_eval_weaken; eauto using cmap_empty_valid;
-    by intros until 0; rewrite mem_lookup_empty, <-?not_eq_None_Some.
+    by intros *; rewrite mem_lookup_empty, <-?not_eq_None_Some.
 Qed.
 Lemma expr_eval_erase Γ ρ m e : ⟦ e ⟧ Γ ρ (cmap_erase m) = ⟦ e ⟧ Γ ρ m.
 Proof.
@@ -238,12 +239,12 @@ Qed.
 semantics is preserved under changes to the stack. *)
 Lemma expr_eval_var_free Γ ρ1 ρ2 m e : vars e = ∅ → ⟦ e ⟧ Γ ρ1 m = ⟦ e ⟧ Γ ρ2 m.
 Proof.
-  induction e using expr_ind_alt; simpl; intro; decompose_empty; repeat
+  induction e using expr_ind_alt; simpl; intro; repeat
     match goal with
     | H : vars _ = ∅ → ⟦ _ ⟧ _ _ _ = _ |- _ => rewrite H
     | H : ⋃ _ = ∅ |- _ => rewrite empty_union_list_L in H
     | _ => done
-    end.
+    end; set_solver.
 Qed.
 
 (** Lifting DeBruijn indexes distributes over expression evaluation. *)
@@ -274,7 +275,7 @@ Proof.
   setoid_rewrite subst_snoc.
   intros; destruct E';
     repeat match goal with
-    | _ => progress simplify_option_equality
+    | _ => progress simplify_option_eq
     | H : mapM _ _ = Some _ |- _ => apply mapM_Some in H; decompose_Forall_hyps
     | H : ∀ _, Some _ = Some _  → _ |- _ =>
        specialize (H _ eq_refl); destruct H as (?&->&?); eexists; split; eauto

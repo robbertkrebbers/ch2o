@@ -33,7 +33,10 @@ calculate the required allocations and deallocations. *)
 or looks up, the statement and continuation corresponding to the target label.
 However, it is not very natural to reconstruct the required allocations and
 deallocations from the current and target continuations. *)
-Require Import String stringmap mapset optionmap zmap.
+From Coq Require Import String. 
+From stdpp Require Import stringmap mapset zmap.
+(* From stdpp Require Import stringmap mapset zmap. *)
+Require Import optionmap.
 Require Export expressions.
 
 (** * Labels and gotos *)
@@ -45,10 +48,9 @@ Definition labelname := string.
 Definition labelmap := stringmap.
 Notation labelset := (mapset labelmap).
 
-Instance labelname_dec: ∀ i1 i2 : labelname, Decision (i1 = i2) := decide_rel (=).
+Instance labelname_dec: EqDecision labelname := _. 
 Instance labelname_inhabited: Inhabited labelname := populate ""%string.
-Instance labelmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
-  ∀ m1 m2 : labelmap A, Decision (m1 = m2) := decide_rel (=).
+Instance labelmap_dec {A} `{EqDecision A}: EqDecision (labelmap A) := _.
 Instance labelmap_empty {A} : Empty (labelmap A) := @empty (stringmap A) _.
 Instance labelmap_lookup {A} : Lookup labelname A (labelmap A) :=
   @lookup _ _ (stringmap A) _.
@@ -94,11 +96,11 @@ Inductive stmt (K : iType) : iType :=
   | SSwitch : expr K → stmt K → stmt K.
 Notation funenv K := (funmap (stmt K)).
 
-Instance stmt_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (s1 s2 : stmt K) : Decision (s1 = s2).
+Instance stmt_eq_dec {K} `{EqDecision K}: EqDecision (stmt K).
 Proof. solve_decision. Defined.
 
 (** We use the scope [stmt_scope] for notations of statements. *)
+Declare Scope stmt_scope.
 Delimit Scope stmt_scope with S.
 Bind Scope stmt_scope with stmt.
 Open Scope stmt_scope.
@@ -128,7 +130,7 @@ Notation "'local{' τ } s" := (SLocal τ s)
   (at level 10, format "'local{' τ }  s") : stmt_scope.
 Notation "'catch' s" := (SCatch s) (at level 10) : stmt_scope.
 Notation "s1 ;; s2" := (SComp s1 s2)
-  (at level 80, right associativity,
+  (at level 100, s2 at level 200, right associativity,
    format "'[' s1  ;;  '/' s2 ']'") : stmt_scope.
 Notation "'loop' s" := (SLoop s)
   (at level 10, format "'loop'  s") : stmt_scope.
@@ -146,13 +148,13 @@ Notation "'call' f @ es" := (!(call f @ es))
   (at level 10, es at level 66) : stmt_scope.
 Notation "'free' e" := (!(free e)) (at level 10) : stmt_scope.
 
-Instance: `{Injective (=) (=) (@SDo K)}.
+Instance: `{Inj (=) (=) (@SDo K)}.
 Proof. by injection 1. Qed.
-Instance: `{Injective (=) (=) (@SGoto K)}.
+Instance: `{Inj (=) (=) (@SGoto K)}.
 Proof. by injection 1. Qed.
-Instance: `{Injective (=) (=) (@SReturn K)}.
+Instance: `{Inj (=) (=) (@SReturn K)}.
 Proof. by injection 1. Qed.
-Instance: `{Injective2 (=) (=) (=) (@SLocal K)}.
+Instance: `{Inj2 (=) (=) (=) (@SLocal K)}.
 Proof. by injection 1. Qed.
 
 Instance stmt_gotos {K} : Gotos (stmt K) :=
@@ -217,8 +219,7 @@ Inductive sctx_item (K : iType) : iType :=
   | CIfR : expr K → stmt K → sctx_item K
   | CSwitch : expr K → sctx_item K.
 
-Instance sctx_item_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (E1 E2 : sctx_item K) : Decision (E1 = E2).
+Instance sctx_item_eq_dec {K} `{EqDecision K}: EqDecision (sctx_item K).
 Proof. solve_decision. Defined.
 
 Arguments CCatch {_}.
@@ -253,7 +254,7 @@ Instance sctx_item_subst {K} :
   | switch{e} □ => switch{e} s
   end.
 Instance: `{DestructSubst (@sctx_item_subst K)} := {}.
-Instance: `{∀ Es : sctx_item K, Injective (=) (=) (subst Es)}.
+Instance: `{∀ Es : sctx_item K, Inj (=) (=) (subst Es)}.
 Proof. destruct Es; repeat intro; simpl in *; by simplify_equality. Qed.
 
 Instance maybe_CSwitch {K} : Maybe (@CSwitch K) := λ Es,
@@ -271,10 +272,10 @@ Instance sctx_item_labels {K} : Labels (sctx_item K) := λ Es,
 
 Lemma sctx_item_subst_gotos {K} (Es : sctx_item K) (s : stmt K) :
   gotos (subst Es s) = gotos Es ∪ gotos s.
-Proof. apply elem_of_equiv_L. intros. destruct Es; solve_elem_of. Qed.
+Proof. apply set_eq. intros. destruct Es; set_solver. Qed.
 Lemma sctx_item_subst_labels {K} (Es : sctx_item K) (s : stmt K) :
   labels (subst Es s) = labels Es ∪ labels s.
-Proof. apply elem_of_equiv_L. intros. destruct Es; solve_elem_of. Qed.
+Proof. apply set_eq. intros. destruct Es; set_solver. Qed.
 
 (** Next, we define the data type [esctx_item] of expression in statement
 contexts. These contexts are used to store the statement to which an expression
@@ -285,8 +286,7 @@ Inductive esctx_item (K : iType) : iType :=
   | CIfE : stmt K → stmt K → esctx_item K
   | CSwitchE : stmt K → esctx_item K.
 
-Instance esctx_item_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (Ee1 Ee2 : esctx_item K) : Decision (Ee1 = Ee2).
+Instance esctx_item_eq_dec {K} `{EqDecision K}: EqDecision (esctx_item K).
 Proof. solve_decision. Defined.
 
 Arguments CDoE {_}.
@@ -310,7 +310,7 @@ Instance esctx_item_subst {K} :
   end.
 Instance: `{DestructSubst (@esctx_item_subst K)} := {}.
 
-Instance: `{∀ Ee : esctx_item K, Injective (=) (=) (subst Ee)}.
+Instance: `{∀ Ee : esctx_item K, Inj (=) (=) (subst Ee)}.
 Proof. destruct Ee; intros ???; simpl in *; by simplify_equality. Qed.
 
 Instance esctx_item_gotos {K} : Gotos (esctx_item K) := λ Ee,
@@ -328,10 +328,10 @@ Instance esctx_item_labels {K} : Labels (esctx_item K) := λ Ee,
 
 Lemma esctx_item_subst_gotos {K} (Ee : esctx_item K) (e : expr K) :
   gotos (subst Ee e) = gotos Ee.
-Proof. apply elem_of_equiv_L. intros. destruct Ee; solve_elem_of. Qed.
+Proof. apply set_eq. intros. destruct Ee; set_solver. Qed.
 Lemma esctx_item_subst_labels {K} (Ee : esctx_item K) (e : expr K) :
   labels (subst Ee e) = labels Ee.
-Proof. apply elem_of_equiv_L. intros. destruct Ee; solve_elem_of. Qed.
+Proof. apply set_eq. intros. destruct Ee; set_solver. Qed.
 
 (** Finally, we define the type [ctx_item] to extends [sctx_item] with some
 additional singular contexts. These contexts will be used as follows.
@@ -366,8 +366,7 @@ Arguments CExpr {_} _ _.
 Arguments CFun {_} _.
 Arguments CParams {_} _ _.
 
-Instance ctx_item_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (Ek1 Ek2 : ctx_item K) : Decision (Ek1 = Ek2).
+Instance ctx_item_eq_dec {K} `{EqDecision K}: EqDecision (ctx_item K).
 Proof. solve_decision. Defined.
 
 (** Given a context, we can construct a stack using the following erasure

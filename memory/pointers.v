@@ -1,6 +1,7 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export addresses.
+
 Local Open Scope ctype_scope.
 
 Inductive ptr (K : iType) : iType :=
@@ -11,8 +12,7 @@ Arguments NULL {_} _.
 Arguments Ptr {_} _.
 Arguments FunPtr {_} _ _ _.
 
-Instance ptr_eq_dec `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (p1 p2 : ptr K) : Decision (p1 = p2).
+Instance ptr_eq_dec `{EqDecision K}: EqDecision (ptr K).
 Proof. solve_decision. Defined.
 
 Instance maybe_NULL {K} : Maybe (@NULL K) := λ p,
@@ -23,7 +23,7 @@ Instance maybe_FunPtr {K} : Maybe3 (@FunPtr K) := λ p,
   match p with FunPtr f τs τ => Some (f,τs,τ) | _ => None end.
 
 Section pointer_operations.
-  Context `{Env K}.
+  Context `{EqDecision K, Env K}.
 
   Inductive ptr_typed' (Γ : env K) (Δ : memenv K) :
       ptr K → ptr_type K → Prop :=
@@ -32,7 +32,7 @@ Section pointer_operations.
     | FunPtr_typed f τs τ :
        Γ !! f = Some (τs,τ) → ptr_typed' Γ Δ (FunPtr f τs τ) (τs ~> τ).
   Global Instance ptr_typed:
-    Typed (env K * memenv K) (ptr_type K) (ptr K) := curry ptr_typed'.
+    Typed (env K * memenv K) (ptr_type K) (ptr K) := uncurry ptr_typed'.
   Global Instance ptr_freeze : Freeze (ptr K) := λ β p,
     match p with Ptr a => Ptr (freeze β a) | _ => p end.
 
@@ -57,7 +57,7 @@ Section pointer_operations.
 End pointer_operations.
 
 Section pointers.
-Context `{EnvSpec K}.
+Context `{EqDecision K, EnvSpec K}.
 Implicit Types Γ : env K.
 Implicit Types Δ : memenv K.
 Implicit Types τp : ptr_type K.
@@ -66,7 +66,7 @@ Implicit Types p : ptr K.
 
 Lemma Ptr_typed_inv Γ Δ a τp : (Γ, Δ) ⊢ Ptr a : τp → (Γ, Δ) ⊢ a : τp.
 Proof. by inversion 1. Qed.
-Global Instance: Injective (=) (=) (@Ptr K).
+Global Instance: Inj (=) (=) (@Ptr K).
 Proof. by injection 1. Qed.
 Lemma ptr_typed_type_valid Γ Δ p τp : ✓ Γ → (Γ,Δ) ⊢ p : τp → ✓{Γ} τp.
 Proof.
@@ -81,9 +81,9 @@ Global Instance:
   TypeCheckSpec (env K * memenv K) (ptr_type K) (ptr K) (λ _, True).
 Proof.
   intros [Γ Δm] p τ _. split.
-  * destruct p; intros; repeat (case_match || simplify_option_equality);
+  * destruct p; intros; repeat (case_match || simplify_option_eq);
       constructor; auto; by apply type_check_sound.
-  * by destruct 1; simplify_option_equality;
+  * by destruct 1; simplify_option_eq;
       erewrite ?type_check_complete by eauto.
 Qed.
 Lemma ptr_typed_weaken Γ1 Γ2 Δ1 Δ2 p τp :

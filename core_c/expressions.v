@@ -4,7 +4,7 @@
 to define the operational semantics in the file [smallstep], we define
 corresponding evaluation contexts. Notations for expressions are declared in the
 scope [expr_scope]. *)
-Require Import nmap mapset natmap listset.
+From stdpp Require Import mapset natmap.
 Require Export contexts assignments.
 
 (** * Stacks *)
@@ -66,6 +66,7 @@ overload some notations already in [value_scope], and define both general and
 specific notations for operations, allowing us for example to to write
 [intc 10 + intc 20] instead of the much longer
 [valc (intc 10) ⊙{PlusOp} valc (intc 20)]. *)
+Declare Scope expr_scope.
 Delimit Scope expr_scope with E.
 Bind Scope expr_scope with expr.
 Local Open Scope expr_scope.
@@ -145,15 +146,15 @@ Infix "==" := (EBinOp (CompOp EqOp)) (at level 52) : expr_scope.
 Notation "- e" := (EUnOp NegOp e)
   (at level 35, right associativity) : expr_scope.
 
-Instance: `{Injective (=) (=) (@EVar K)}.
+Instance: `{Inj (=) (=) (@EVar K)}.
 Proof. by injection 1. Qed.
-Instance: `{Injective2 (=) (=) (=) (λ Ω (v : val K), #{Ω} v)}.
+Instance: `{Inj2 (=) (=) (=) (λ Ω (v : val K), #{Ω} v)}.
 Proof. by injection 1. Qed.
-Instance: `{Injective2 (=) (=) (=) (@EVal K)}.
+Instance: `{Inj2 (=) (=) (=) (@EVal K)}.
 Proof. by injection 1. Qed.
-Instance: `{Injective (=) (=) (@ELoad K)}.
+Instance: `{Inj (=) (=) (@ELoad K)}.
 Proof. by injection 1. Qed.
-Instance: `{Injective (=) (=) (@EFree K)}.
+Instance: `{Inj (=) (=) (@EFree K)}.
 Proof. by injection 1. Qed.
 
 Instance maybe_EAlloc {K} : Maybe2 (@EAlloc K) := λ e,
@@ -167,45 +168,45 @@ Instance maybe_EVal_inr {K} : Maybe2 (λ Ω (v : val K), #{Ω} v) := λ e,
 Instance maybe_ECall {K} : Maybe2 (@ECall K) := λ e,
   match e with call e @ es => Some (e,es) | _ => None end.
 
-Instance assign_eq_dec: ∀ ass1 ass2 : assign, Decision (ass1 = ass2).
+Instance assign_eq_dec: EqDecision assign.
 Proof. solve_decision. Defined.
-Instance expr_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)} :
-  ∀ e1 e2 : expr K, Decision (e1 = e2).
+Instance expr_eq_dec {K} `{EqDecision K} :
+  EqDecision (expr K).
 Proof.
-  refine (fix go e1 e2 : Decision (e1 = e2) :=
+  refine (fix go e1 e2 : Decision (e1 = e2) := let _ : EqDecision (expr K) := go in
   match e1, e2 with
-  | var i1, var i2 => cast_if (decide_rel (=) i1 i2)
+  | var i1, var i2 => cast_if (decide (i1 = i2))
   | %#{Ω1} ν1, %#{Ω2} ν2 =>
-     cast_if_and (decide_rel (=) Ω1 Ω2) (decide_rel (=) ν1 ν2)
-  | .* e1, .* e2 | & e1, & e2 => cast_if (decide_rel (=) e1 e2)
+     cast_if_and (decide (Ω1 = Ω2)) (decide (ν1 = ν2))
+  | .* e1, .* e2 | & e1, & e2 => cast_if (decide (e1 = e2))
   | e1 ::={ass1} e3, e2 ::={ass2} e4 =>
-     cast_if_and3 (decide_rel (=) ass1 ass2) (decide_rel (=) e1 e2)
-       (decide_rel (=) e3 e4)
-  | call e1 @ es1, call e2 @ es2 => cast_if_and (decide_rel (=) e1 e2)
-     (decide_rel (=) es1 es2)
-  | abort τ1, abort τ2 => cast_if (decide_rel (=) τ1 τ2)
-  | load e1, load e2 => cast_if (decide_rel (=) e1 e2)
+     cast_if_and3 (decide (ass1 = ass2)) (decide (e1 = e2))
+       (decide (e3 = e4))
+  | call e1 @ es1, call e2 @ es2 => cast_if_and (decide (e1 = e2))
+     (decide (es1 = es2))
+  | abort τ1, abort τ2 => cast_if (decide (τ1 = τ2))
+  | load e1, load e2 => cast_if (decide (e1 = e2))
   | e1 %> rs1, e2 %> rs2 | e1 #> rs1, e2 #> rs2 =>
-     cast_if_and (decide_rel (=) e1 e2) (decide_rel (=) rs1 rs2)
+     cast_if_and (decide (e1 = e2)) (decide (rs1 = rs2))
   | alloc{τ1} e1, alloc{τ2} e2 =>
-     cast_if_and (decide_rel (=) τ1 τ2) (decide_rel (=) e1 e2)
-  | free e1, free e2 => cast_if (decide_rel (=) e1 e2)
-  | .{op1} e1, .{op2} e2 => cast_if_and (decide_rel (=) op1 op2)
-     (decide_rel (=) e1 e2)
-  | e1 .{op1} e3, e2 .{op2} e4 => cast_if_and3 (decide_rel (=) op1 op2)
-     (decide_rel (=) e1 e2) (decide_rel (=) e3 e4)
+     cast_if_and (decide (τ1 = τ2)) (decide (e1 = e2))
+  | free e1, free e2 => cast_if (decide (e1 = e2))
+  | .{op1} e1, .{op2} e2 => cast_if_and (decide (op1 = op2))
+     (decide (e1 = e2))
+  | e1 .{op1} e3, e2 .{op2} e4 => cast_if_and3 (decide (op1 = op2))
+     (decide (e1 = e2)) (decide (e3 = e4))
   | if{e1} e3 else e5, if{e2} e4 else e6 =>
-     cast_if_and3 (decide_rel (=) e1 e2)
-       (decide_rel (=) e3 e4) (decide_rel (=) e5 e6)
+     cast_if_and3 (decide (e1 = e2))
+       (decide (e3 = e4)) (decide (e5 = e6))
   | e1,, e3, e2,, e4 =>
-     cast_if_and (decide_rel (=) e1 e2) (decide_rel (=) e3 e4)
+     cast_if_and (decide (e1 = e2)) (decide (e3 = e4))
   | cast{τ1} e1, cast{τ2} e2 =>
-     cast_if_and (decide_rel (=) τ1 τ2) (decide_rel (=) e1 e2)
+     cast_if_and (decide (τ1 = τ2)) (decide (e1 = e2))
   | #[r1:=e1] e3, #[r2:=e2] e4 =>
-     cast_if_and3 (decide_rel (=) r1 r2)
-       (decide_rel (=) e1 e2) (decide_rel (=) e3 e4)
+     cast_if_and3 (decide (r1 = r2))
+       (decide (e1 = e2)) (decide (e3 = e4))
   | _, _ => right _
-  end); clear go; abstract congruence.
+  end); congruence.
 Defined.
 
 Instance expr_freeze {K} : Freeze (expr K) :=
@@ -312,8 +313,8 @@ Instance expr_free_vars {K} : Vars (expr K) :=
   | if{e1} e2 else e3 => vars e1 ∪ vars e2 ∪ vars e3
   end.
 
-Hint Extern 1 (vars _ = ∅) => assumption : typeclass_instances.
-Hint Extern 100 (vars _ = ∅) =>
+Global Hint Extern 1 (vars _ = ∅) => assumption : typeclass_instances.
+Global Hint Extern 100 (vars _ = ∅) =>
   apply (bool_decide_unpack _); vm_compute; exact I : typeclass_instances.
 
 (** In order to model sequence points, we have to keep track of sets of
@@ -330,7 +331,7 @@ Lemma locks_nil `{Locks A} : locks [] = ∅.
 Proof. done. Qed.
 Lemma locks_app `{Locks A} (l1 l2 : list A) :
   locks (l1 ++ l2) = locks l1 ∪ locks l2.
-Proof. apply elem_of_equiv_L. induction l1; esolve_elem_of. Qed.
+Proof. apply set_eq. induction l1; set_solver. Qed.
 Lemma locks_snoc `{Locks A} (l1 : list A) a :
   locks (l1 ++ [a]) = locks l1 ∪ locks a.
 Proof. rewrite locks_app. simpl. by rewrite (right_id_L ∅ (∪)). Qed.
@@ -349,9 +350,9 @@ Lemma expr_locks_freeze {K} β (e : expr K) : locks (freeze β e) = locks e.
 Proof.
   assert (∀ (es : list (expr K)),
     Forall (λ e, locks (freeze β e) = locks e) es →
-    ⋃ (locks <$> freeze β <$> es) = ⋃ (locks <$> es)).
-  { induction 1; solve_elem_of. }
-  induction e using @expr_ind_alt; csimpl; try solve_elem_of; f_equal; auto.
+    ⋃ (locks <$> (freeze β <$> es)) = ⋃ (locks <$> es)).
+  { induction 1; set_solver. }
+  induction e using @expr_ind_alt; csimpl; try set_solver; f_equal; auto.
 Qed.
 
 (** An expression is pure (or side-effect free) if it does not modify the
@@ -417,9 +418,9 @@ Lemma is_pure_locks {K} (e : expr K) : is_pure e → locks e = ∅.
 Proof.
   assert (∀ (es : list (expr K)) oi,
     Forall (λ e, oi ∉ locks e) es → oi ∉ ⋃ (locks <$> es)).
-  { induction 1; esolve_elem_of. }
+  { induction 1; set_solver. }
   intros He. apply elem_of_equiv_empty_L. intros oi.
-  induction He using @is_pure_ind_alt; esolve_elem_of.
+  induction He using @is_pure_ind_alt; set_solver.
 Qed.
 
 (** The operation [e↑] increases all De Bruijn indexes of variables in [e]
@@ -535,11 +536,11 @@ Proof.
   assert (∀ (es : list (expr K)) Ωvs,
     mapM (maybe2 (λ Ω v, #{Ω} v)) es = Some Ωvs → es = #{Ωvs.*1}* (Ωvs.*2))%E.
   { intros es Ωvs. rewrite mapM_Some. induction 1 as [|e']; f_equal'; eauto.
-    by destruct e'; repeat (case_match || simplify_option_equality). }
+    by destruct e'; repeat (case_match || simplify_option_eq). }
   split; [|intros [-> ?]; eauto using maybe_ECall_redex_Some_2].
   unfold maybe_ECall_redex; csimpl; intros.
   destruct (maybe2 ECall e) as [[e' es]|] eqn:?;
-    repeat (case_match || simplify_option_equality).
+    repeat (case_match || simplify_option_eq).
   rewrite !fmap_length; auto with f_equal.
 Qed.
 
@@ -627,8 +628,7 @@ Notation "#[ r := □ ] e2" := (CInsertL r e2)
 Notation "#[ r := e1 ] □" := (CInsertR r e1)
   (at level 10, format "#[ r := e1 ]  □") : expr_scope.
 
-Instance ectx_item_dec `{∀ k1 k2 : K, Decision (k1 = k2)} :
-  ∀ Ei1 Ei2 : ectx_item K, Decision (Ei1 = Ei2).
+Instance ectx_item_dec `{EqDecision K}: EqDecision (ectx_item K).
 Proof. solve_decision. Defined.
 
 (** Substitution is defined in a straightforward way. Using the type class
@@ -655,8 +655,8 @@ Instance ectx_item_subst {K} :
   end.
 Instance: `{DestructSubst (@ectx_item_subst K)} := {}.
 
-Instance: `{∀ Ei : ectx_item K, Injective (=) (=) (subst Ei)}.
-Proof. by destruct Ei; intros ???; simplify_list_equality. Qed.
+Instance: `{∀ Ei : ectx_item K, Inj (=) (=) (subst Ei)}.
+Proof. by destruct Ei; intros ???; simplify_list_eq. Qed.
 Lemma is_nf_ectx_item {K} (Ei : ectx_item K) e : ¬is_nf (subst Ei e).
 Proof. destruct Ei; inversion 1. Qed.
 Lemma is_nf_ectx {K} (E : ectx K) e : is_nf (subst E e) → E = [].
@@ -712,17 +712,17 @@ Qed.
 Lemma ectx_item_subst_locks {K} (Ei : ectx_item K) e :
   locks (subst Ei e) = locks Ei ∪ locks e.
 Proof.
-  apply elem_of_equiv_L. intro. destruct Ei; simpl; try solve_elem_of.
+  apply set_eq. intro. destruct Ei; simpl; try set_solver.
   rewrite fmap_app, fmap_reverse; csimpl.
   rewrite union_list_app_L, union_list_cons, union_list_reverse_L.
-  solve_elem_of.
+  set_solver.
 Qed.
 Lemma ectx_subst_locks {K} (E : ectx K) e :
   locks (subst E e) = locks E ∪ locks e.
 Proof.
-  apply elem_of_equiv_L. intros. revert e. induction E as [|Ei E IH]; simpl.
-  * solve_elem_of.
-  * intros. rewrite IH, ectx_item_subst_locks. solve_elem_of.
+  apply set_eq. intros. revert e. induction E as [|Ei E IH]; simpl.
+  * set_solver.
+  * intros. rewrite IH, ectx_item_subst_locks. set_solver.
 Qed.
 
 Instance ectx_item_size {K} : Size (ectx_item K) := λ Ei,
@@ -865,22 +865,22 @@ Instance ectx_full_subst {K} :
   match E with
   | DCVar x => λ _, var x
   | DCVal Ω ν => λ _, %#{Ω} ν
-  | DCRtoL => λ es, .* (es !!! 0)
-  | DCRofL => λ es, & (es !!! 0)
-  | DCAssign ass => λ es, es !!! 0 ::={ass} es !!! 1
-  | DCCall _ => λ es, call (es !!! 0) @ tail es
+  | DCRtoL => λ es, .* (es !!! 0%fin)
+  | DCRofL => λ es, & (es !!! 0%fin)
+  | DCAssign ass => λ es, es !!! 0%fin ::={ass} es !!! 1%fin
+  | DCCall _ => λ es, call (es !!! 0%fin) @ tail es
   | DCAbort τ => λ _, abort τ
-  | DCLoad => λ es, load (es !!! 0)
-  | DCEltL rs => λ es, es !!! 0 %> rs
-  | DCEltR rs => λ es, es !!! 0 #> rs
-  | DCAlloc τ => λ es, alloc{τ} (es !!! 0)
-  | DCFree => λ es, free (es !!! 0)
-  | DCUnOp op => λ es, .{op} es !!! 0
-  | DCBinOp op => λ es, es !!! 0 .{op} es !!! 1
-  | DCIf e2 e3 => λ es, if{es !!! 0} e2 else e3
-  | DCComma e2 => λ es, es !!! 0,, e2
-  | DCCast τ => λ es, cast{τ} (es !!! 0)
-  | DCInsert r => λ es, #[r:=es !!! 0] (es !!! 1)
+  | DCLoad => λ es, load (es !!! 0%fin)
+  | DCEltL rs => λ es, es !!! 0%fin %> rs
+  | DCEltR rs => λ es, es !!! 0%fin #> rs
+  | DCAlloc τ => λ es, alloc{τ} (es !!! 0%fin)
+  | DCFree => λ es, free (es !!! 0%fin)
+  | DCUnOp op => λ es, .{op} es !!! 0%fin
+  | DCBinOp op => λ es, es !!! 0%fin .{op} es !!! 1%fin
+  | DCIf e2 e3 => λ es, if{es !!! 0%fin} e2 else e3
+  | DCComma e2 => λ es, es !!! 0%fin,, e2
+  | DCCast τ => λ es, cast{τ} (es !!! 0%fin)
+  | DCInsert r => λ es, #[r:=es !!! 0%fin] (es !!! 1%fin)
   end.
 Instance ectx_full_locks {K n} : Locks (ectx_full K n) := λ E,
   match E with
@@ -899,7 +899,7 @@ Qed.
 Lemma ectx_full_subst_locks {K n} (E : ectx_full K n) (es : vec (expr K) n) :
   locks (depsubst E es) = locks E ∪ ⋃ (locks <$> vec_to_list es).
 Proof.
-  apply elem_of_equiv_L. intro. destruct E; inv_all_vec_fin; solve_elem_of.
+  apply set_eq. intro. destruct E; inv_all_vec_fin; set_solver.
 Qed.
 
 (** Given expressions [es] for the holes of the context [E], the function
@@ -912,32 +912,32 @@ Definition ectx_full_to_item {K n} (E : ectx_full K n)
   | DCRtoL => fin_S_inv _ (λ _, .* □) $ fin_0_inv _
   | DCRofL => fin_S_inv _ (λ _, & □) $ fin_0_inv _
   | DCAssign ass =>
-     fin_S_inv _ (λ es, □ ::={ass} es !!! 1) $
-     fin_S_inv _ (λ es, es !!! 0 ::={ass} □) $ fin_0_inv _
-  | DCCall _ => fin_S_inv _ (λ _, call □ @ (tail es)) $ λ i es,
-     (call (es !!! 0) @ reverse (take i (tail es)) □ drop (FS i) (tail es))
-  | DCLoad => fin_S_inv _ (λ _, load □) $ fin_0_inv _
+     fin_S_inv _ (λ es, □ ::={ass} es !!! 1%fin) $
+     fin_S_inv _ (λ es, es !!! 0%fin ::={ass} □) $ fin_0_inv _
+  | DCCall _ => fin_S_inv _ (λ _, call □ @ (tail es)) $ λ i (es: vec _ _),
+     (call (es !!! 0%fin) @ reverse (take i (tail es)) □ drop (FS i) (tail es))
+  | DCLoad => fin_S_inv _ (λ _, load □) $ fin_0_inv _ 
   | DCEltL rs => fin_S_inv _ (λ _, □ %> rs) $ fin_0_inv _
   | DCEltR rs => fin_S_inv _ (λ _, □ #> rs) $ fin_0_inv _
   | DCAlloc τ => fin_S_inv _ (λ _, alloc{τ} □) $ fin_0_inv _
   | DCFree => fin_S_inv _ (λ _, free □) $ fin_0_inv _
   | DCUnOp op => fin_S_inv _ (λ _, .{op} □) $ fin_0_inv _
   | DCBinOp op =>
-     fin_S_inv _ (λ es, □ .{op} es !!! 1) $
-     fin_S_inv _ (λ es, es !!! 0 .{op} □) $ fin_0_inv _
+     fin_S_inv _ (λ es, □ .{op} es !!! 1%fin) $
+     fin_S_inv _ (λ es, es !!! 0%fin .{op} □) $ fin_0_inv _
   | DCIf e2 e3 => fin_S_inv _ (λ _, if{□} e2 else e3) $ fin_0_inv _
   | DCComma e2 => fin_S_inv _ (λ _, □,, e2) $ fin_0_inv _
   | DCCast τ => fin_S_inv _ (λ _, cast{τ} □) $ fin_0_inv _
   | DCInsert r =>
-     fin_S_inv _ (λ es, #[r:=□] (es !!! 1)) $
-     fin_S_inv _ (λ es, #[r:=es !!! 0] □) $ fin_0_inv _
+     fin_S_inv _ (λ es, #[r:=□] (es !!! 1%fin)) $
+     fin_S_inv _ (λ es, #[r:=es !!! 0%fin] □) $ fin_0_inv _
   end i es.
 
 Lemma ectx_full_to_item_insert {K n} (E : ectx_full K n) es i e :
   ectx_full_to_item E (vinsert i e es) i = ectx_full_to_item E es i.
 Proof.
   destruct E; inv_all_vec_fin; simpl; try reflexivity.
-  rewrite !vec_to_list_insert, take_insert, drop_insert; auto with arith.
+  rewrite !vec_to_list_insert, take_insert, drop_insert_gt; auto with arith.
 Qed.
 Lemma ectx_full_to_item_correct {K n} (E : ectx_full K n) es i :
   depsubst E es = subst (ectx_full_to_item E es i) (es !!! i).
@@ -964,7 +964,7 @@ Qed.
 Lemma expr_vec_values {K n} (es : vec (expr K) n) :
   (∃ Ωs νs, es = vzip_with EVal Ωs νs)%E ∨ (∃ i, ¬is_nf (es !!! i)).
 Proof.
-  destruct (Forall_Exists_dec (λ e, decide (is_nf e)) es) as [Hes|Hes].
+  destruct (Forall_Exists_dec _ _ (λ e, decide (is_nf e)) es) as [Hes|Hes].
   * left; induction es as [|e ? es IH]; simpl in *; [by eexists [#],[#]|].
     inversion Hes as [|?? [Ω ν]]; destruct IH as (Ωs&νs&->); auto; subst.
     by exists (Ω ::: Ωs), (ν ::: νs).
@@ -979,10 +979,10 @@ Lemma ectx_full_to_item_locks {K n} (E : ectx_full K n) (es : vec _ n) i :
   locks (ectx_full_to_item E es i) =
     locks E ∪ ⋃ (locks <$> delete (fin_to_nat i) (vec_to_list es)).
 Proof.
-  apply elem_of_equiv_L. intros b.
-  destruct E; inv_all_vec_fin; simpl; try esolve_elem_of.
+  apply set_eq. intros b.
+  destruct E; inv_all_vec_fin; simpl; try set_solver.
   rewrite fmap_reverse, union_list_reverse.
-  rewrite delete_take_drop, fmap_app, union_list_app. esolve_elem_of.
+  rewrite delete_take_drop, fmap_app, union_list_app. set_solver.
 Qed.
 
 (** The function [expr_redexes e] computes the set of redexes contained in an
@@ -1030,7 +1030,7 @@ Section expr_split.
       rewrite elem_of_zipped_map in Hes. destruct Hes as (?&?&?&?&?); subst.
       apply zipped_Forall_app in Hforall. inversion Hforall; subst. auto. }
     ectx_expr_ind E e;
-     simpl; intros; repeat case_decide; solve_elem_of (eauto; try constructor).
+     simpl; intros; repeat case_decide; set_solver by (eauto; try constructor).
   Qed.
   Lemma expr_redexes_go_sound E e E' e' :
     (E', e') ∈ expr_redexes_go E e → subst E e = subst E' e'.
@@ -1048,22 +1048,22 @@ Section expr_split.
       rewrite <-(reverse_involutive esl), <-(right_id_L [] (++) (reverse esl)).
       auto. }
     ectx_expr_ind E e;
-     simpl; intros; repeat case_decide; solve_elem_of eauto.
+     simpl; intros; repeat case_decide; set_solver by eauto.
   Qed.
   Lemma expr_redexes_go_complete E' E e :
     is_redex e → (E ++ E', e) ∈ expr_redexes_go E' (subst E e).
   Proof.
     intros. revert E'. induction E as [|Ei E IH] using rev_ind; simpl.
-    { intros. unfold expr_redexes_go. destruct e; case_decide; solve_elem_of. }
+    { intros. unfold expr_redexes_go. destruct e; case_decide; set_solver. }
     intros E'. assert (¬is_redex (subst (E ++ [Ei]) e)) as Hredex.
     { intro. destruct (is_redex_ectx (E ++ [Ei]) e) as [[??]|(?&?&?)]; auto.
       * discriminate_list_equality.
       * eauto using is_redex_nf. }
-    rewrite subst_snoc in Hredex |- *. rewrite <-(associative_L (++)).
-    destruct Ei; simpl; case_decide; try solve_elem_of.
+    rewrite subst_snoc in Hredex |- *. rewrite <-(assoc_L (++)).
+    destruct Ei; simpl; case_decide; try set_solver.
     rewrite elem_of_union, elem_of_union_list.
     right; eexists (expr_redexes_go _ _).
-    rewrite elem_of_zipped_map. split; eauto. eexists (reverse _), _, _.
+    rewrite elem_of_zipped_map. split; [|eauto]. eexists (reverse _), _, _.
     split. done. by rewrite reverse_involutive, (right_id_L [] (++)).
   Qed.
   Lemma expr_redexes_is_redex e E' e' : (E', e') ∈ expr_redexes e → is_redex e'.
@@ -1084,35 +1084,35 @@ Section expr_split.
     * eauto using expr_redexes_sound, expr_redexes_is_redex.
     * by intros [??]; subst; apply expr_redexes_complete.
   Qed.
-  Lemma expr_redexes_go_is_nf E e : expr_redexes_go E e ≡ ∅ → is_nf e.
+  Lemma expr_redexes_go_is_nf E e : @equiv _ (set_equiv_instance) (expr_redexes_go E e) ∅ → is_nf e.
   Proof.
     assert (∀ (f : list _ → list _ → expr K →
         listset (ectx K * expr K)) es1 es2,
-      ⋃ (zipped_map f es1 es2) ≡ ∅ →
-      zipped_Forall (λ esl esr e, f esl esr e ≡ ∅ → is_nf e) es1 es2 →
+      @equiv _ (set_equiv_instance) (⋃ (zipped_map f es1 es2)) ∅ →
+      zipped_Forall (λ esl esr e, (@equiv _ (set_equiv_instance) (f esl esr e) ∅) → is_nf e) es1 es2 →
       Forall is_nf es2).
     { intros ???. rewrite empty_union_list.
       induction 2; decompose_Forall_hyps; auto. }
     ectx_expr_ind E e;
-      simpl; intros; repeat case_decide; decompose_empty;
+      simpl; intros; repeat case_decide; try set_solver;
       match goal with
       | _ => constructor
       | H : ¬is_redex _ |- _ => destruct H; constructor
-      end; eauto.
+      end; try set_solver.
   Qed.
-  Lemma expr_redexes_is_nf e : expr_redexes e ≡ ∅ → is_nf e.
+  Lemma expr_redexes_is_nf e : @equiv _ set_equiv_instance (expr_redexes e) ∅ → is_nf e.
   Proof. apply expr_redexes_go_is_nf. Qed.
 End expr_split.
 
-Lemma is_nf_or_redex {K} `{∀ k1 k2 : K, Decision (k1 = k2)} e :
+Lemma is_nf_or_redex `{EqDecision K} e :
   is_nf e ∨ ∃ (E' : ectx K) e', is_redex e' ∧ e = subst E' e'.
 Proof.
-  destruct (collection_choose_or_empty (expr_redexes e)) as [[[E' e'] ?]|?].
+  destruct (set_choose_or_empty (expr_redexes e)) as [[[E' e'] ?]|?].
   * right. exists E', e'. split.
     + by apply expr_redexes_is_redex with e E'. 
     + by apply expr_redexes_correct.
   * left. by apply expr_redexes_is_nf.
 Qed.
-Lemma is_nf_is_redex {K} `{∀ k1 k2 : K, Decision (k1 = k2)} e :
+Lemma is_nf_is_redex `{EqDecision K} e :
   ¬is_nf e → ∃ (E' : ectx K) e', is_redex e' ∧ e = subst E' e'.
 Proof. intros. by destruct (is_nf_or_redex e). Qed.

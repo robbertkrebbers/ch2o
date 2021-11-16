@@ -2,6 +2,7 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export references memory_basics.
 Require Import pointer_casts.
+
 Local Open Scope ctype_scope.
 
 Record addr (K : iType) : iType := Addr {
@@ -21,12 +22,11 @@ Arguments addr_type_object {_} _.
 Arguments addr_type_base {_} _.
 Arguments addr_type {_} _.
 
-Instance addr_eq_dec `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (a1 a2 : addr K) : Decision (a1 = a2).
+Instance addr_eq_dec `{EqDecision K}: EqDecision (addr K).
 Proof. solve_decision. Defined.
 
 Section address_operations.
-  Context `{Env K}.
+  Context `{EqDecision K, Env K}.
 
   Inductive addr_typed' (Γ : env K) (Δ : memenv K) :
       addr K → ptr_type K → Prop :=
@@ -40,7 +40,7 @@ Section address_operations.
       σ >*> σp →
       addr_typed' Γ Δ (Addr o r i τ σ σp) σp.
   Global Instance addr_typed :
-    Typed (env K * memenv K) (ptr_type K) (addr K) := curry addr_typed'.
+    Typed (env K * memenv K) (ptr_type K) (addr K) := uncurry addr_typed'.
   Global Instance addr_freeze : Freeze (addr K) := λ β a,
     let 'Addr x r i τ σ σp := a in Addr x (freeze β <$> r) i τ σ σp.
 
@@ -71,14 +71,14 @@ Section address_operations.
     ref_object_offset Γ (addr_ref_base a) + addr_byte a * char_bits.
   Global Instance addr_disjoint: DisjointE (env K) (addr K) := λ Γ a1 a2,
     (addr_index a1 ≠ addr_index a2) ∨
-    (addr_index a1 = addr_index a2 ∧ addr_ref Γ a1 ⊥ addr_ref Γ a2) ∨
+    (addr_index a1 = addr_index a2 ∧ addr_ref Γ a1 ## addr_ref Γ a2) ∨
     (addr_index a1 = addr_index a2 ∧
       freeze true <$> addr_ref Γ a1 = freeze true <$> addr_ref Γ a2 ∧
       ¬addr_is_obj a1 ∧ ¬addr_is_obj a2 ∧
       addr_ref_byte Γ a1 ≠ addr_ref_byte Γ a2).
 
   Definition addr_elt (Γ : env K) (rs : ref_seg K) (a : addr K) : addr K :=
-    from_option a $
+    default a $
       σ ← maybe TType (type_of a) ≫= lookupE Γ rs;
       Some (Addr (addr_index a)
         (ref_seg_base rs :: addr_ref Γ a) (size_of Γ σ * ref_seg_offset rs)
@@ -95,7 +95,7 @@ End address_operations.
 Typeclasses Opaque addr_strict addr_is_obj addr_disjoint.
 
 Section addresses.
-Context `{EnvSpec K}.
+Context `{EqDecision K, EnvSpec K}.
 Implicit Types Γ : env K.
 Implicit Types Δ : memenv K.
 Implicit Types τ σ : type K.
@@ -103,15 +103,15 @@ Implicit Types τp σp : ptr_type K.
 Implicit Types rs : ref_seg K.
 Implicit Types r : ref K.
 Implicit Types a : addr K.
-Hint Immediate ref_typed_type_valid.
+Local Hint Immediate ref_typed_type_valid: core.
 
-Arguments addr_type_check _ _ _ !_ /.
-Arguments addr_strict _ _ _ !_ /.
-Arguments addr_is_obj _ !_ /.
-Arguments addr_ref _ _ _ !_ /.
-Arguments addr_ref_byte _ _ _ !_ /.
-Arguments addr_object_offset _ _ _ !_ /.
-Arguments addr_elt _ _ _ _ !_ /.
+Arguments addr_type_check _ _ _ _ !a / : assert.
+Arguments addr_strict _ _ _ !a / : assert.
+Arguments addr_is_obj _ !a / : assert.
+Arguments addr_ref _ _ _ !a / : assert.
+Arguments addr_ref_byte _ _ _ !a / : assert.
+Arguments addr_object_offset _ _ _ !a / : assert.
+Arguments addr_elt _ _ _ _ _ !a / : assert.
 
 (** ** Typing and general properties *)
 Lemma addr_freeze_freeze β1 β2 a : freeze β1 (freeze β2 a) = freeze β1 a.
@@ -170,8 +170,8 @@ Global Instance:
   TypeCheckSpec (env K * memenv K) (ptr_type K) (addr K) (λ _, True).
 Proof.
   intros [Γ Δ] a σ _. split.
-  * destruct a; intros; simplify_option_equality; constructor; auto.
-  * by destruct 1; simplify_option_equality.
+  * destruct a; intros; simplify_option_eq; constructor; auto.
+  * by destruct 1; simplify_option_eq.
 Qed.
 Lemma addr_size_of_weaken Γ1 Γ2 Δ a σp :
   ✓ Γ1 → (Γ1,Δ) ⊢ a : σp → Γ1 ⊆ Γ2 → ptr_size_of Γ1 σp = ptr_size_of Γ2 σp.
@@ -180,7 +180,7 @@ Lemma addr_typed_weaken Γ1 Γ2 Δ1 Δ2 a σp :
   ✓ Γ1 → (Γ1,Δ1) ⊢ a : σp → Γ1 ⊆ Γ2 → Δ1 ⇒ₘ Δ2 → (Γ2,Δ2) ⊢ a : σp.
 Proof.
   destruct 2 as [o r i τ σ σp]; intros ? [??].
-  constructor; simpl; split_ands;
+  constructor; simpl; split_and ?;
     eauto using type_valid_weaken, ref_typed_weaken.
   * by erewrite <-size_of_weaken by eauto.
   * by erewrite <-addr_size_of_weaken by (eauto; econstructor; eauto).
@@ -432,7 +432,7 @@ Lemma addr_top_array_alt Γ o τ n :
   Z.to_nat n ≠ 0 → let n' := Z.to_nat n in
   addr_top_array o τ n = addr_elt Γ (RArray 0 τ n') (addr_top o (τ.[n'])).
 Proof.
-  unfold addr_elt, addr_top_array; simplify_option_equality;
+  unfold addr_elt, addr_top_array; simplify_option_eq;
     auto with f_equal lia.
 Qed.
 Lemma addr_top_array_typed Γ Δ o τ (n : Z) :
@@ -458,7 +458,7 @@ Proof.
   * destruct 1 as [o τ' n σp']; simplify_equality'; exists τ', n.
     assert (✓{Γ} τ' ∧ n ≠ 0) as [??] by auto using TArray_valid_inv.
     rewrite Nat.div_0_l, Nat.mod_0_l by eauto using size_of_ne_0.
-    split_ands; auto using Nat.mul_pos_pos, size_of_pos with lia.
+    split_and ?; auto using Nat.mul_pos_pos, size_of_pos with lia.
   * intros (?&n&?&?&Hi); destruct a as [o [|[] r] i τ' σ σp']; simplify_equality'.
     rewrite ref_typed_singleton in Hr; inversion Hr; simplify_equality'.
     rewrite <-(Nat.mod_small i (size_of Γ σ)), Hi by
@@ -476,25 +476,25 @@ Proof.
 Defined.
 
 (** ** Disjointness *)
-Global Instance addr_disjoint_dec Γ a1 a2 : Decision (a1 ⊥{Γ} a2).
+Global Instance addr_disjoint_dec Γ a1 a2 : Decision (a1 ##{Γ} a2).
 Proof. unfold disjointE, addr_disjoint; apply _. Defined.
 Lemma addr_disjoint_weaken Γ1 Γ2 m1 a1 a2 σp1 σp2 :
   ✓ Γ1 → (Γ1,m1) ⊢ a1 : σp1 → (Γ1,m1) ⊢ a2 : σp2 →
-  a1 ⊥{Γ1} a2 → Γ1 ⊆ Γ2 → a1 ⊥{Γ2} a2.
+  a1 ##{Γ1} a2 → Γ1 ⊆ Γ2 → a1 ##{Γ2} a2.
 Proof.
   unfold disjointE, addr_disjoint. intros. by erewrite
     <-!(addr_ref_weaken Γ1 Γ2), <-!(addr_ref_byte_weaken Γ1 Γ2) by eauto.
 Qed.
 Lemma addr_top_disjoint Γ Δ o1 o2 τ1 τ2 :
   Δ ⊢ o1 : τ1 → Δ ⊢ o2 : τ2 → 
-  addr_top o1 τ1 = addr_top o2 τ2 ∨ addr_top o1 τ1 ⊥{Γ} addr_top o2 τ2.
+  addr_top o1 τ1 = addr_top o2 τ2 ∨ addr_top o1 τ1 ##{Γ} addr_top o2 τ2.
 Proof.
   intros. destruct (decide (o1 = o2)); simplify_type_equality; auto.
   by right; left.
 Qed.
 Lemma addr_disjoint_object_offset Γ Δ a1 a2 σ1 σ2 :
   ✓ Γ → (Γ,Δ) ⊢ a1 : TType σ1 → addr_strict Γ a1 →
-  (Γ,Δ) ⊢ a2 : TType σ2 → addr_strict Γ a2 → a1 ⊥{Γ} a2 →
+  (Γ,Δ) ⊢ a2 : TType σ2 → addr_strict Γ a2 → a1 ##{Γ} a2 →
   (**i 1.) *) addr_index a1 ≠ addr_index a2 ∨
   (**i 2.) *)
     addr_object_offset Γ a1 + bit_size_of Γ σ1 ≤ addr_object_offset Γ a2 ∨

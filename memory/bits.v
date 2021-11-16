@@ -9,8 +9,7 @@ Inductive bit (K : iType) : iType :=
 Arguments BIndet {_}.
 Arguments BBit {_} _.
 Arguments BPtr {_} _.
-Instance bit_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (b1 b2 : bit K) : Decision (b1 = b2).
+Instance bit_eq_dec `{EqDecision K}: EqDecision (bit K).
 Proof. solve_decision. Defined.
 
 Instance maybe_BBit {K} : Maybe (@BBit K) := λ b,
@@ -26,7 +25,7 @@ Section operations.
     | BBit_valid' β : bit_valid' Γ Δ (BBit β)
     | BPtr_valid' pb : ✓{Γ,Δ} pb → bit_valid' Γ Δ (BPtr pb).
   Global Instance bit_valid:
-    Valid (env K * memenv K) (bit K) := curry bit_valid'.
+    Valid (env K * memenv K) (bit K) := uncurry bit_valid'.
 
   Inductive bit_weak_refine : relation (bit K) :=
     | bit_weak_refine_refl b : bit_weak_refine b b
@@ -64,8 +63,8 @@ Implicit Types bs : list (bit K).
 
 Local Infix "⊑" := bit_weak_refine (at level 70).
 Local Infix "⊑*" := (Forall2 bit_weak_refine) (at level 70).
-Hint Extern 0 (_ ⊑ _) => reflexivity.
-Hint Extern 0 (_ ⊑* _) => reflexivity.
+Local Hint Extern 0 (_ ⊑ _) => reflexivity: core.
+Local Hint Extern 0 (_ ⊑* _) => reflexivity: core.
 
 Global Instance bit_valid_dec ΓΔ (b : bit K) : Decision (✓{ΓΔ} b).
 Proof.
@@ -74,13 +73,13 @@ Proof.
   | BIndet | BBit _ => left _ | BPtr pb => cast_if (decide (✓{ΓΔ} pb))
   end; destruct ΓΔ; first [by constructor | abstract by inversion 1].
 Defined.
-Global Instance: Injective (=) (=) (@BBit K).
+Global Instance: Inj (=) (=) (@BBit K).
 Proof. by injection 1. Qed.
-Global Instance: Injective (=) (=) (@BPtr K).
+Global Instance: Inj (=) (=) (@BPtr K).
 Proof. by injection 1. Qed.
 Lemma BIndet_valid Γ Δ : ✓{Γ,Δ} BIndet.
 Proof. constructor. Qed.
-Lemma BIndets_valid Γ Δ bs : Forall (BIndet =) bs → ✓{Γ,Δ}* bs.
+Lemma BIndets_valid Γ Δ bs : Forall (BIndet =.) bs → ✓{Γ,Δ}* bs.
 Proof. by induction 1; simplify_equality'; repeat constructor. Qed.
 Lemma BBit_valid Γ Δ β : ✓{Γ,Δ} (BBit β).
 Proof. constructor. Qed.
@@ -101,7 +100,8 @@ Proof. destruct 2; econstructor; eauto using ptr_bit_valid_weaken. Qed.
 Lemma maybe_BBits_spec bs βs : mapM (maybe BBit) bs = Some βs ↔ bs = BBit <$> βs.
 Proof.
   split.
-  * apply mapM_fmap_Some_inv. by intros ? [] ?; simplify_equality'.
+  * intros ?. symmetry; apply (mapM_fmap_Some_inv _ _ _ _ H1). 
+    by intros [] ? ?; simplify_equality'.
   * intros ->. by apply mapM_fmap_Some.
 Qed.
 Global Instance BBits_dec bs : Decision (∃ βs, bs = BBit <$> βs).
@@ -113,7 +113,8 @@ Lemma maybe_BPtrs_spec bs pbs :
   mapM (maybe BPtr) bs = Some pbs ↔ bs = BPtr <$> pbs.
 Proof.
   split.
-  * apply mapM_fmap_Some_inv. by intros ? [] ?; simplify_equality'.
+  * intros ?. symmetry; apply (mapM_fmap_Some_inv _ _ _ _ H1). 
+    by intros [] ? ?; simplify_equality'.
   * intros ->. by apply mapM_fmap_Some.
 Qed.
 Global Instance BPtrs_dec bs : Decision (∃ pbs, bs = BPtr <$> pbs).
@@ -140,23 +141,23 @@ Proof.
     rewrite ?elem_of_cons in Hbs |- *; naive_solver.
 Qed.
 Lemma bits_subseteq_indets bs1 bs2 :
-  Forall (BIndet =) bs2 → bs1 ⊑* bs2 → bs1 = bs2.
+  Forall (BIndet =.) bs2 → bs1 ⊑* bs2 → bs1 = bs2.
 Proof. induction 2 as [|???? []]; decompose_Forall_hyps; f_equal; auto. Qed.
 Lemma bit_join_valid Γ Δ b1 b2 b3 :
   bit_join b1 b2 = Some b3 → ✓{Γ,Δ} b1 → ✓{Γ,Δ} b2 → ✓{Γ,Δ} b3.
-Proof. destruct 2,1; simplify_option_equality; constructor; auto. Qed.
-Global Instance: Commutative (@eq (option (bit K))) bit_join.
-Proof. intros [] []; intros; simplify_option_equality; auto. Qed.
+Proof. destruct 2,1; simplify_option_eq; constructor; auto. Qed.
+Global Instance: Comm (@eq (option (bit K))) bit_join.
+Proof. intros [] []; intros; simplify_option_eq; auto. Qed.
 Lemma bit_join_indet_l b : bit_join BIndet b = Some b.
-Proof. by destruct b; simplify_option_equality. Qed.
+Proof. by destruct b; simplify_option_eq. Qed.
 Lemma bit_join_indet_r b : bit_join b BIndet = Some b.
-Proof. by destruct b; simplify_option_equality. Qed.
+Proof. by destruct b; simplify_option_eq. Qed.
 Lemma bit_join_diag b : bit_join b b = Some b.
-Proof. by destruct b; simplify_option_equality. Qed.
+Proof. by destruct b; simplify_option_eq. Qed.
 Lemma bit_join_Some_l b1 b2 b3 : bit_join b1 b2 = Some b3 → b1 ⊑ b3.
-Proof. destruct b1, b2; intros; simplify_option_equality; constructor. Qed.
+Proof. destruct b1, b2; intros; simplify_option_eq; constructor. Qed.
 Lemma bit_join_Some_r b1 b2 b3 : bit_join b1 b2 = Some b3 → b2 ⊑ b3.
-Proof. destruct b1, b2; intros; simplify_option_equality; constructor. Qed.
+Proof. destruct b1, b2; intros; simplify_option_eq; constructor. Qed.
 Lemma bit_join_exists b1 b2 b4 :
   b1 ⊑ b4 → b2 ⊑ b4 → ∃ b3, bit_join b1 b2 = Some b3 ∧ b3 ⊑ b4.
 Proof.
@@ -168,30 +169,30 @@ Lemma bits_join_valid Γ Δ bs1 bs2 bs3 :
   bits_join bs1 bs2 = Some bs3 → ✓{Γ,Δ}* bs1 → ✓{Γ,Δ}* bs2 → ✓{Γ,Δ}* bs3.
 Proof.
   intros Hbs Hbs1. revert bs2 bs3 Hbs. induction Hbs1; destruct 2;
-    simplify_option_equality; constructor; eauto using bit_join_valid.
+    simplify_option_eq; constructor; eauto using bit_join_valid.
 Qed.
-Global Instance: Commutative (@eq (option (list (bit K)))) bits_join.
+Global Instance: Comm (@eq (option (list (bit K)))) bits_join.
 Proof.
   intros bs1. induction bs1 as [|b1 bs1 IH]; intros [|b2 bs2]; simpl; try done.
-  rewrite (commutative bit_join). by destruct bit_join; simpl; rewrite ?IH.
+  rewrite (comm bit_join). by destruct bit_join; simpl; rewrite ?IH.
 Qed.
 Lemma bits_join_indet_l bs :
   bits_join (replicate (length bs) BIndet) bs = Some bs.
 Proof. induction bs as [|b bs IH]; simpl; [done|]. by rewrite IH. Qed.
 Lemma bits_join_indet_r bs :
   bits_join bs (replicate (length bs) BIndet) = Some bs.
-Proof. rewrite (commutative bits_join). apply bits_join_indet_l. Qed.
+Proof. rewrite (comm bits_join). apply bits_join_indet_l. Qed.
 Lemma bits_join_diag bs : bits_join bs bs = Some bs.
 Proof. by induction bs as [|b bs IH]; simpl; rewrite ?bit_join_diag, ?IH. Qed.
 Lemma bits_join_Some_l bs1 bs2 bs3 : bits_join bs1 bs2 = Some bs3 → bs1 ⊑* bs3.
 Proof.
   revert bs2 bs3. induction bs1; intros [|??] [|??] ?;
-    simplify_option_equality; constructor; eauto using bit_join_Some_l.
+    simplify_option_eq; constructor; eauto using bit_join_Some_l.
 Qed.
 Lemma bits_join_Some_r bs1 bs2 bs3 : bits_join bs1 bs2 = Some bs3 → bs2 ⊑* bs3.
 Proof.
   revert bs2 bs3. induction bs1; intros [|??] [|??] ?;
-    simplify_option_equality; constructor; eauto using bit_join_Some_r.
+    simplify_option_eq; constructor; eauto using bit_join_Some_r.
 Qed.
 Lemma bits_join_exists bs1 bs2 bs4 :
   bs1 ⊑* bs4 → bs2 ⊑* bs4 → ∃ bs3, bits_join bs1 bs2 = Some bs3 ∧ bs3 ⊑* bs4.
@@ -209,16 +210,16 @@ Lemma bits_join_length_l bs1 bs2 bs3 :
   bits_join bs1 bs2 = Some bs3 → length bs3 = length bs1.
 Proof.
   revert bs2 bs3. induction bs1; intros [|??] ??;
-    simplify_option_equality; f_equal; eauto.
+    simplify_option_eq; f_equal; eauto.
 Qed.
 Lemma bits_join_length_r bs1 bs2 bs3 :
   bits_join bs1 bs2 = Some bs3 → length bs3 = length bs2.
-Proof. rewrite (commutative bits_join). apply bits_join_length_l. Qed.
+Proof. rewrite (comm bits_join). apply bits_join_length_l. Qed.
 
 Lemma bits_list_join_length sz bss bs :
   bits_list_join sz bss = Some bs → length bs = sz.
 Proof.
-  revert bs. induction bss; intros; simplify_option_equality.
+  revert bs. induction bss; intros; simplify_option_eq.
   * by rewrite replicate_length.
   * erewrite bits_join_length_r by eauto; eauto.
 Qed.
@@ -235,7 +236,7 @@ Lemma bits_list_join_Some sz bss bs bs' :
   bits_list_join sz bss = Some bs → bs' ∈ bss → resize sz BIndet bs' ⊑* bs.
 Proof.
   intros Hbs Hbs'. revert bs Hbs. induction Hbs'; intros;
-    simplify_option_equality; eauto using bits_join_Some_l.
+    simplify_option_eq; eauto using bits_join_Some_l.
   etransitivity; [|eapply bits_join_Some_r; eauto]; eauto.
 Qed.
 Lemma bits_list_join_Some_alt sz bss bs :
@@ -249,14 +250,14 @@ Proof.
   induction 2 as [|bs bss ?? (bs2&Hbs2&?)]; simpl.
   { eauto using Forall2_replicate_l, Forall_true, BIndet_weak_refine. }
   destruct (bits_join_exists (resize sz BIndet bs) bs2 bs')
-    as (bs3&Hbs3&?); auto. simplify_option_equality; eauto.
+    as (bs3&Hbs3&?); auto. simplify_option_eq; eauto.
 Qed.
 Lemma bits_list_join_min sz bss bs bs' :
   length bs' = sz → bits_list_join sz bss = Some bs →
   Forall (λ bs'', resize sz BIndet bs'' ⊑* bs') bss → bs ⊑* bs'.
 Proof.
   intros ? Hbs Hbss. revert bs Hbs.
-  induction Hbss; intros; simplify_option_equality; eauto using
+  induction Hbss; intros; simplify_option_eq; eauto using
     Forall2_replicate_l, Forall_true, BIndet_weak_refine, bits_join_min.
 Qed.
 End bits.

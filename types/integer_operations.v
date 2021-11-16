@@ -1,9 +1,11 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 (** This files describes the syntax and semantics of operations on integers. *)
-Require Export integer_coding.
+Require Export orders integer_coding.
+
 Local Open Scope Z_scope.
 Local Open Scope int_type_scope.
+Local Coercion Z.of_nat: nat >-> Z.
 
 (** * Syntax of integer operations *)
 Inductive compop := EqOp | LtOp | LeOp.
@@ -17,17 +19,17 @@ Inductive binop :=
   | BitOp : bitop → binop.
 Inductive unop := NegOp | ComplOp | NotOp.
 
-Instance comp_kind_dec (op1 op2 : compop) : Decision (op1 = op2).
+Instance comp_kind_dec: EqDecision compop.
 Proof. solve_decision. Defined.
-Instance bitop_dec (op1 op2 : bitop) : Decision (op1 = op2).
+Instance bitop_dec: EqDecision bitop.
 Proof. solve_decision. Defined.
-Instance arithop_dec (op1 op2 : arithop) : Decision (op1 = op2).
+Instance arithop_dec: EqDecision arithop.
 Proof. solve_decision. Defined.
-Instance shiftop_dec (op1 op2 : shiftop) : Decision (op1 = op2).
+Instance shiftop_dec: EqDecision shiftop.
 Proof. solve_decision. Defined.
-Instance binop_dec (op1 op2 : binop) : Decision (op1 = op2).
+Instance binop_dec: EqDecision binop.
 Proof. solve_decision. Defined.
-Instance unop_dec (op1 op2 : unop) : Decision (op1 = op2).
+Instance unop_dec: EqDecision unop.
 Proof. solve_decision. Defined.
 
 Definition Z_comp (c : compop) (x y : Z) : Prop :=
@@ -239,9 +241,9 @@ Implicit Types k : K.
 Implicit Types x y : Z.
 Implicit Types n : nat.
 
-Hint Resolve int_width_pos_alt int_width_pred_nonneg.
-Hint Resolve int_lower_nonpos int_upper_pos int_mod_lower_upper.
-Hint Resolve rank_size_preserving.
+Local Hint Resolve int_width_pos_alt int_width_pred_nonneg: core.
+Local Hint Resolve int_lower_nonpos int_upper_pos int_mod_lower_upper: core.
+Local Hint Resolve rank_size_preserving: core.
 
 Lemma rank_size_union k1 k2 :
   (rank_size (k1 ∪ k2) : Z) = Z.max (rank_size k1) (rank_size k2).
@@ -276,7 +278,7 @@ Proof.
   { unfold int_upper. rewrite int_precision_Unsigned_Signed.
     rewrite Nat2Z.inj_succ, Z.pow_succ_r by auto with zpos.
     assert (0 < 2 ^ int_precision sintT) by auto with zpos. lia. }
-  destruct τi as [si k]; simplify_option_equality; auto with lia.
+  destruct τi as [si k]; simplify_option_eq; auto with lia.
 Qed.
 Lemma int_promote_typed x τi : int_typed x τi → int_typed x (int_promote τi).
 Proof.
@@ -284,7 +286,7 @@ Proof.
     naive_solver eauto using int_typed_rank_weaken,
     int_typed_rank_strict_weaken, int_upper_le_invert, rank_le_upper.
 Qed.
-Global Instance: PartialOrder ((⊆) : relation (int_type K)).
+Global Instance: PartialOrder (⊆@{int_type K}).
 Proof.
   repeat split.
   * by intros [[] ?]; constructor.
@@ -292,7 +294,7 @@ Proof.
       eauto using (transitivity (R:=@subseteq K _)),
       Z.le_trans, rank_le_upper, int_upper_le_invert_alt.
   * destruct 1; inversion 1; subst.
-    + by f_equal; apply (anti_symmetric (⊆)).
+    + by f_equal; apply (anti_symm (⊆)).
     + destruct (irreflexivity (⊂) k1); eapply strict_transitive_r,
         rank_size_reflecting, int_upper_le_invert; eauto.
     + destruct (irreflexivity (⊂) k2); eapply strict_transitive_r,
@@ -301,7 +303,7 @@ Qed.
 Global Instance: JoinSemiLattice K.
 Proof.
   split; try apply _;
-    unfold union, rank_union; intros; case_decide; auto using total_not.
+    unfold union, rank_union; intros; case_decide; auto using (total_not (R := (⊆@{K}))).
 Qed.
 Global Instance: JoinSemiLattice (int_type K).
 Proof.
@@ -309,11 +311,11 @@ Proof.
   * intros [[] k1] [[] k2]; simpl.
     + constructor. apply union_subseteq_l.
     + repeat case_decide; constructor; auto.
-    + repeat case_decide; constructor; auto using total_not.
+    + repeat case_decide; constructor; auto using (total_not (R := (⊆@{K}))).
     + constructor. apply union_subseteq_l.
   * intros [[] k1] [[] k2]; simpl.
     + constructor. apply union_subseteq_r.
-    + repeat case_decide; constructor; auto using total_not.
+    + repeat case_decide; constructor; auto using (total_not (R := (⊆@{K}))).
     + repeat case_decide; constructor; auto.
     + constructor. apply union_subseteq_r.
   * destruct 1; inversion 1; simplify_equality'.
@@ -409,7 +411,7 @@ Lemma int_unop_typed op x τi :
   int_typed (int_unop op x τi) (int_unop_type_of op τi).
 Proof.
   unfold int_unop, int_unop_ok, int_unop_type_of; destruct op; intros.
-  * rewrite <-(idempotent_L (∪) (int_promote τi)).
+  * rewrite <-(idemp_L (∪) (int_promote τi)).
     apply int_arithop_typed; auto. by apply int_typed_small.
   * apply int_of_bits_typed. by rewrite fmap_length, int_to_bits_length.
   * by apply int_typed_small; case_decide.

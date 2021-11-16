@@ -1,7 +1,8 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
+From stdpp Require Import finite.
 Require Export type_environment.
-Require Import finite natural_type_environment.
+Require Import natural_type_environment.
 
 Inductive c_rank : iType :=
   CharRank | ShortRank | IntRank | LongRank | LongLongRank | PtrRank.
@@ -15,7 +16,7 @@ Instance c_rank_subseteq : SubsetEq c_rank := λ k1 k2,
   | LongLongRank, LongLongRank => true
   | _, _ => false
   end.
-Instance c_rank_eq_dec (k1 k2 : c_rank) : Decision (k1 = k2).
+Instance c_rank_eq_dec: EqDecision c_rank.
 Proof. solve_decision. Defined.
 Program Instance c_rank_finite : Finite c_rank := {
   enum := [ CharRank ; ShortRank ; IntRank ; LongRank ; LongLongRank ; PtrRank ]
@@ -46,7 +47,7 @@ Record architecture := ArchitectureFlags {
 Inductive arch_rank (A : architecture) : iType :=
   ARank { arch_rank_car :> c_rank }.
 Arguments ARank {_} _.
-Instance arch_rank_eq_dec {A} (k1 k2 : arch_rank A) : Decision (k1 = k2).
+Instance arch_rank_eq_dec {A}: EqDecision (arch_rank A).
 Proof. solve_decision. Defined.
 Program Instance arch_rank_finite {A} : Finite (arch_rank A) := {
   enum := ARank <$> enum c_rank

@@ -37,9 +37,9 @@ Implicit Types Γ : env K.
 Implicit Types Δ : memenv K.
 Implicit Types m : mem K.
 
-Hint Extern 1 (_ ⊥ _) => solve_sep_disjoint.
-Hint Extern 1 (⊥ _) => solve_sep_disjoint.
-Hint Extern 1 (_ ≤ _) => omega.
+Hint Extern 1 (_ ## _) => solve_sep_disjoint: core.
+Hint Extern 1 (## _) => solve_sep_disjoint: core.
+Hint Extern 1 (_ ≤ _) => lia: core.
 
 Section basics.
   Context {A} (F: ax_frame_cond K A) (P: ax_assert K) (Γ: env K) (δ: funenv K).
@@ -73,10 +73,10 @@ Section basics.
        ax_graph Δ' ρ n k φ m →
        ax_next Δ ρ n a (State k φ m').
   Lemma focus_locks_valid_union φ m1 m2 :
-    ⊥ [m1; m2] → focus_locks_valid φ m1 → focus_locks_valid φ (m1 ∪ m2).
+    ## [m1; m2] → focus_locks_valid φ m1 → focus_locks_valid φ (m1 ∪ m2).
   Proof.
     intros; destruct φ; simpl; auto.
-    rewrite mem_locks_union by auto; solve_elem_of.
+    rewrite mem_locks_union by auto; set_solver.
   Qed.
   Lemma ax_further_alt Δ ρ n k φ m :
     (∀ Δ' n' m' a,
@@ -186,13 +186,13 @@ conjunction rule. These abstract versions are used to prove the concrete rules
 for both the expression and statement judgment. *)
 Definition ax_frame_diagram {A B} (F: ax_frame_cond K A) (G: ax_frame_cond K B)
     (Γ : env K) (mf : mem K) := ∀ Δ δ k n φ m m' b,
-  ✓{Γ,Δ} δ → ⊥ [m; mf] → ✓{Γ,Δ} m → ✓{Γ,Δ} mf →
+  ✓{Γ,Δ} δ → ## [m; mf] → ✓{Γ,Δ} m → ✓{Γ,Δ} mf →
   frame G Γ Δ δ k n φ (m ∪ mf) m' b → ∃ a,
   (**i 1.) *) frame F Γ Δ δ k n φ m m' a ∧
   (**i 2.) *) ∀ Δ' k' φ' m2 m2',
     unframe F Γ Δ' δ k' n φ' m2 m2' a →
     ✓{Γ,Δ'} m2' → Δ ⇒ₘ Δ' →
-    unframe G Γ Δ' δ k' n φ' (m2 ∪ mf) m2' b ∧ ⊥ [m2; mf].
+    unframe G Γ Δ' δ k' n φ' (m2 ∪ mf) m2' b ∧ ## [m2; mf].
 Lemma ax_frame_diagram_empty {A} (F : ax_frame_cond K A) Γ :
   ✓ Γ → ax_frame_diagram F F Γ ∅.
 Proof.
@@ -206,10 +206,10 @@ Lemma ax_frame {A B}(F : ax_frame_cond K A) (G : ax_frame_cond K B)
     (P Q : ax_assert K) Γ δ Δ ρ n k φ m mf :
   ✓ Γ → ✓{Γ,Δ} δ →
   ax_frame_diagram F G Γ mf →
-  ⊥ [m; mf] → ✓{Γ,Δ} m → ✓{Γ,Δ} mf →
+  ## [m; mf] → ✓{Γ,Δ} m → ✓{Γ,Δ} mf →
   ax_graph F P Γ δ Δ ρ n k φ m →
   (∀ Δ' n' φ' m',
-    ⊥ [m'; mf] → ✓{Γ,Δ'} m' → ✓{Γ,Δ'} mf → Δ ⇒ₘ Δ' → n' ≤ n →
+    ## [m'; mf] → ✓{Γ,Δ'} m' → ✓{Γ,Δ'} mf → Δ ⇒ₘ Δ' → n' ≤ n →
     ax_assert_holds P Γ Δ' δ ρ n' φ' m' →
     ax_assert_holds Q Γ Δ' δ ρ n' φ' (m' ∪ mf)) →
   ax_graph G Q Γ δ Δ ρ n k φ (m ∪ mf).
@@ -270,23 +270,29 @@ Qed.
 (** The standard framing condition that just adds an arbitrary frame to the
 memory before each step and takes it off after. *)
 Program Definition ax_disjoint_cond : ax_frame_cond K (mem K) := {|
-  frame Γ Δ δ k n φ m m' mf := m' = m ∪ mf ∧ ✓{Γ,Δ} mf ∧ ⊥ [m; mf];
-  unframe Γ Δ δ k n φ m m' mf := m' = m ∪ mf ∧ ⊥ [m; mf]
+  frame Γ Δ δ k n φ m m' mf := m' = m ∪ mf ∧ ✓{Γ,Δ} mf ∧ ## [m; mf];
+  unframe Γ Δ δ k n φ m m' mf := m' = m ∪ mf ∧ ## [m; mf]
 |}.
-Next Obligation. auto using cmap_union_valid_2. Qed.
-Next Obligation. eauto using cmap_valid_subseteq, @sep_union_subseteq_l. Qed.
+Next Obligation. 
+  simpl; intros ??????????[HU [? ?]]?; rewrite HU. 
+  by auto using cmap_union_valid_2. 
+Qed.
+Next Obligation. 
+  simpl. intros ??????????[HU?]HF. rewrite HU in HF.
+  by eauto using cmap_valid_subseteq, @sep_union_subseteq_l. 
+Qed.
 Lemma ax_disjoint_cond_frame_diagram Γ mf :
   ✓ Γ → ax_frame_diagram ax_disjoint_cond ax_disjoint_cond Γ mf.
 Proof.
   intros ? Δ δ k n φ m m' mf' ???? (->&?&?). exists (mf ∪ mf'); split.
-  { split; split_ands; eauto using cmap_union_valid_2.
+  { split; split_and ?; eauto using cmap_union_valid_2.
     by rewrite sep_associative by auto. }
   intros Δ' k' φ' m2 m2' [-> ?] ??; split; eauto.
-  split; split_ands; eauto. by rewrite sep_associative by auto.
+  split; split_and ?; eauto. by rewrite sep_associative by auto.
 Qed.
 Lemma ax_disjoint_compose_diagram Γ Ek :
   ax_compose_diagram ax_disjoint_cond ax_disjoint_cond Γ [Ek].
 Proof.
-  intros Δ δ k n φ m ? mf ?? (->&?&?); exists mf; split_ands; eauto. by split.
+  intros Δ δ k n φ m ? mf ?? (->&?&?); exists mf; split_and ?; eauto. by split.
 Qed.
 End ax_graph.

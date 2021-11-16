@@ -34,7 +34,7 @@ Qed.
 Lemma ptr_bit_refine_inverse Γ f Δ1 Δ2 pb1 pb2 :
   pb1 ⊑{Γ,false,f@Δ1↦Δ2} pb2 → pb2 ⊑{Γ,false,meminj_inverse f@Δ2↦Δ1} pb1.
 Proof.
-  intros (τp&?&?&?&?); exists τp; split_ands; eauto using ptr_refine_inverse,
+  intros (τp&?&?&?&?); exists τp; split_and ?; eauto using ptr_refine_inverse,
     ptr_refine_frozen with congruence.
 Qed.
 Lemma ptr_bit_refine_weaken Γ Γ' α α' f f' Δ1 Δ2 Δ1' Δ2' pb1 pb2 :
@@ -94,8 +94,8 @@ Lemma ptr_to_bits_refine Γ α f Δ1 Δ2 p1 p2 σ :
 Proof.
   intros. unfold ptr_to_bits, to_fragments.
   erewrite ptr_refine_type_of_l, ptr_refine_type_of_r by eauto.
-  apply Forall2_fmap, Forall2_Forall, Forall_seq; intros j [??].
-  exists σ; simpl; split_ands; unfold frozen; auto using ptr_freeze_freeze.
+  apply Forall2_fmap, Forall_Forall2_diag, Forall_seq; intros j [??].
+  exists σ; simpl; split_and ?; unfold frozen; auto using ptr_freeze_freeze.
   by apply ptr_freeze_refine.
 Qed.
 Lemma ptr_of_bits_refine Γ α f Δ1 Δ2 σ pbs1 pbs2 p1 :
@@ -109,10 +109,10 @@ Proof.
   { intros p1 p2 pbs1 pbs2 ??? ->.
     apply (ptr_bits_refine_unique_r Γ α f Δ1 Δ2
       (Fragment p1 <$> seq 1 (bit_size_of Γ (σ.*) - 1))); [done|].
-    apply Forall2_fmap, Forall2_Forall, Forall_seq; intros j [??].
-    exists σ; simpl; split_ands; auto with lia. }
+    apply Forall2_fmap, Forall_Forall2_diag, Forall_seq; intros j [??].
+    exists σ; simpl; split_and ?; auto with lia. }
   intros pbs1 pbs2 p1; unfold ptr_of_bits. destruct 2 as
-    [|[p1' []] [p2' []] ?? (?&?&?&?&?)]; simplify_option_equality;
+    [|[p1' []] [p2' []] ?? (?&?&?&?&?)]; simplify_option_eq;
     repeat match goal with
     | H : context [type_of ?p] |- _ =>
       erewrite ?ptr_refine_type_of_l, ?ptr_refine_type_of_r in H by eauto
@@ -132,10 +132,10 @@ Proof.
   { intros p1 p2 pbs1 pbs2 ??? ->. red.
     apply (ptr_bits_refine_unique_l Γ f Δ1 Δ2 _ _
       (Fragment p2 <$> seq 1 (bit_size_of Γ (σ.*) - 1))); [done|].
-    apply Forall2_fmap, Forall2_Forall, Forall_seq; intros j [??].
-    exists σ; simpl; split_ands; auto with lia. }
+    apply Forall2_fmap, Forall_Forall2_diag, Forall_seq; intros j [??].
+    exists σ; simpl; split_and ?; auto with lia. }
   intros pbs1 pbs2; unfold ptr_of_bits. destruct 2 as
-    [|[p1' []] [p2' []] ?? (?&?&?&?&?)]; simplify_option_equality;
+    [|[p1' []] [p2' []] ?? (?&?&?&?&?)]; simplify_option_eq;
     repeat match goal with
     | H : context [type_of ?p] |- _ =>
       erewrite ?ptr_refine_type_of_l, ?ptr_refine_type_of_r in H by eauto

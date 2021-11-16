@@ -1,6 +1,8 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
+From stdpp Require Import fin_map_dom.
 Require Export type_system_decidable memory_refine.
+
 Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 
@@ -92,7 +94,7 @@ Inductive expr_refine' (Γ : env K)
      expr_refine' Γ τs α f Δ1 Δ2 e1' e2' (inr τ) →
      expr_refine' Γ τs α f Δ1 Δ2 (#[r:=e1]e1') (#[r:=e2]e2') (inr τ).
 Global Instance expr_refine: RefineT K (env K * list (type K))
-    (lrtype K) (expr K) := curry expr_refine'.
+    (lrtype K) (expr K) := uncurry expr_refine'.
 
 Section expr_refine_ind.
   Context (Γ : env K) (τs : list (type K)).
@@ -236,7 +238,7 @@ Inductive ectx_item_refine' (Γ : env K) (τs: list (type K))
      ectx_item_refine' Γ τs α f Δ1 Δ2
        (#[r:=e1]□) (#[r:=e2]□) (inr τ) (inr τ).
 Global Instance ectx_item_refine: PathRefine K (env K * list (type K))
-  (lrtype K) (lrtype K) (ectx_item K) := curry ectx_item_refine'.
+  (lrtype K) (lrtype K) (ectx_item K) := uncurry ectx_item_refine'.
 Inductive ectx_refine' (Γs : env K * list (type K))
      (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
      ectx K → ectx K → lrtype K → lrtype K → Prop :=
@@ -294,7 +296,7 @@ Inductive stmt_refine' (Γ : env K) (τs : list (type K))
      stmt_refine' Γ τs α f Δ1 Δ2 s1 s2 (c,mσ) →
      stmt_refine' Γ τs α f Δ1 Δ2 (switch{e1} s1) (switch{e2} s2) (false, mσ).
 Global Instance stmt_refine: RefineT K (env K * list (type K))
-   (rettype K) (stmt K) := curry stmt_refine'.
+   (rettype K) (stmt K) := uncurry stmt_refine'.
 
 Inductive sctx_item_refine' (Γ : env K) (τs: list (type K))
      (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
@@ -328,7 +330,7 @@ Inductive sctx_item_refine' (Γ : env K) (τs: list (type K))
        (switch{e1} □) (switch{e2} □) (c,mσ) (false,mσ).
 
 Global Instance sctx_refine: PathRefine K (env K * list (type K))
-  (rettype K) (rettype K) (sctx_item K) := curry sctx_item_refine'.
+  (rettype K) (rettype K) (sctx_item K) := uncurry sctx_item_refine'.
 
 Inductive esctx_item_refine' (Γ : env K) (τs: list (type K))
      (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
@@ -347,7 +349,7 @@ Inductive esctx_item_refine' (Γ : env K) (τs: list (type K))
      esctx_item_refine' Γ τs α f Δ1 Δ2
        (switch{□} s1) (switch{□} s2) (intT τi) (false,mσ).
 Global Instance esctx_item_refine: PathRefine K (env K * list (type K))
-  (type K) (rettype K) (esctx_item K) := curry esctx_item_refine'.
+  (type K) (rettype K) (esctx_item K) := uncurry esctx_item_refine'.
 
 Inductive ctx_item_refine' (Γ : env K) (τs: list (type K))
      (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
@@ -378,13 +380,13 @@ Inductive ctx_item_refine' (Γ : env K) (τs: list (type K))
      ctx_item_refine' Γ τs α f Δ1 Δ2 (CParams g (zip os1 σs))
        (CParams g (zip os2 σs)) (Stmt_type cmσ) (Fun_type g).
 Global Instance ctx_item_refine: PathRefine K (env K * list (type K))
-    (focustype K) (focustype K) (ctx_item K) := curry ctx_item_refine'.
+    (focustype K) (focustype K) (ctx_item K) := uncurry ctx_item_refine'.
 Inductive ctx_refine' (Γ : env K) (α : bool)
      (f : meminj K) (Δ1 Δ2 : memenv K) :
      ctx K → ctx K → focustype K → focustype K → Prop :=
   | ctx_nil_refine_2 τf : ctx_refine' Γ α f Δ1 Δ2 [] [] τf τf
   | ctx_cons_refine_2 Ek1 Ek2 k1 k2 τf τf' τf'' :
-     Ek1 ⊑{(Γ,locals k1.*2),α,f@Δ1↦Δ2} Ek2 : τf ↣ τf' →
+     Ek1 ⊑{(Γ,(locals k1).*2),α,f@Δ1↦Δ2} Ek2 : τf ↣ τf' →
      ctx_refine' Γ α f Δ1 Δ2 k1 k2 τf' τf'' →
      ctx_refine' Γ α f Δ1 Δ2 (Ek1 :: k1) (Ek2 :: k2) τf τf''.
 Global Instance ctx_refine: PathRefine K (env K)
@@ -432,12 +434,12 @@ Inductive focus_refine' (Γ : env K) (τs : list (type K))
      focus_refine' Γ τs α f Δ1 Δ2 (Undef (UndefBranch Es1 Ω1 v1))
        (Undef (UndefBranch Es2 Ω2 v2)) (Stmt_type mσ).
 Global Instance focus_refine: RefineT K (env K * list (type K))
-    (focustype K) (focus K) := curry focus_refine'.
+    (focustype K) (focus K) := uncurry focus_refine'.
 
 Inductive state_refine' (Γ : env K) (α : bool)
      (f : meminj K) : state K → state K → focustype K → Prop :=
   | State_refine k1 φ1 m1 k2 φ2 m2 τf σf :
-     φ1 ⊑{(Γ,locals k1.*2),α,f@'{m1}↦'{m2}} φ2 : τf →
+     φ1 ⊑{(Γ,(locals k1).*2),α,f@'{m1}↦'{m2}} φ2 : τf →
      k1 ⊑{(Γ),α,f@'{m1}↦'{m2}} k2 : τf ↣ σf →
      m1 ⊑{Γ,α,f} m2 →
      state_refine' Γ α f (State k1 φ1 m1) (State k2 φ2 m2) σf
@@ -498,7 +500,7 @@ Proof.
   { eexists [], []; repeat constructor. }
   edestruct IH as (?&?&?&?&?&?); eauto. subst.
   eexists (_ :: _), (_ :: _);
-    split_ands; simpl; eauto using Forall3_cons with arith.
+    split_and ?; simpl; eauto using Forall3_cons with arith.
 Qed.
 Lemma EVal_refine_inv_r Γ α f Δ1 Δ2 τs es1 Ωs2 vs2 σs :
   es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2}* #{Ωs2}* vs2 :* inr <$> σs →
@@ -512,7 +514,7 @@ Proof.
   { eexists [], []; repeat constructor. }
   edestruct IH as (?&?&?&?&?&?); eauto. subst.
   eexists (_ :: _), (_ :: _);
-    split_ands; simpl; eauto using Forall3_cons with arith.
+    split_and ?; simpl; eauto using Forall3_cons with arith.
 Qed.
 Lemma ectx_item_subst_refine Γ α f Δ1 Δ2 τs Ei1 Ei2 e1 e2 τlr τlr' :
   Ei1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} Ei2 : τlr ↣ τlr' →
@@ -545,7 +547,7 @@ Proof.
     try match goal with
     | H : ?E ⊑{_,_,_@_↦_}* reverse _ :* _ |- _ =>
        rewrite <-(reverse_involutive E) in H
-    end; by do 3 eexists; split_ands;
+    end; by do 3 eexists; split_and ?;
      repeat refine_constructor; simpl; eauto; rewrite ?reverse_involutive.
 Qed.
 Lemma ectx_subst_refine_inv_r Γ α f Δ1 Δ2 τs e1 E2 e2 τlr' :
@@ -555,11 +557,11 @@ Lemma ectx_subst_refine_inv_r Γ α f Δ1 Δ2 τs e1 E2 e2 τlr' :
     e1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : τlr.
 Proof.
   revert e2. induction E2 as [|Ei2 E2 IH]; intros e2 He; simpl in *.
-  { by eexists e1, [], τlr'; split_ands; repeat refine_constructor. }
+  { by eexists e1, [], τlr'; split_and ?; repeat refine_constructor. }
   destruct (IH (subst Ei2 e2)) as (e1'&E1&τlr&->&?&?); auto.
   destruct (ectx_item_subst_refine_inv_r Γ α f Δ1 Δ2 τs e1' Ei2 e2 τlr)
     as (e1&Ee1&τlr''&->&?&?); auto.
-  exists e1, (Ee1 :: E1), τlr''; split_ands; repeat refine_constructor; eauto.
+  exists e1, (Ee1 :: E1), τlr''; split_and ?; repeat refine_constructor; eauto.
 Qed.
 Lemma esctx_item_subst_refine_inv_r Γ α f Δ1 Δ2 τs s1 Ee2 e2 mcτ :
   s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} subst Ee2 e2 : mcτ →
@@ -567,7 +569,7 @@ Lemma esctx_item_subst_refine_inv_r Γ α f Δ1 Δ2 τs s1 Ee2 e2 mcτ :
     e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr τ ∧ locks e1 = ∅ ∧ locks e2 = ∅.
 Proof.
   by destruct Ee2; inversion 1; subst;
-    do 3 eexists; split_ands; repeat refine_constructor; eauto.
+    do 3 eexists; split_and ?; repeat refine_constructor; eauto.
 Qed.
 Lemma sctx_item_subst_refine_inv_r Γ α f Δ1 Δ2 τs s1 Es2 s2 mcτ' :
   s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} subst Es2 s2 : mcτ' →
@@ -576,7 +578,7 @@ Lemma sctx_item_subst_refine_inv_r Γ α f Δ1 Δ2 τs s1 Es2 s2 mcτ' :
     s1' ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : mcτ.
 Proof.
   by destruct Es2; inversion 1; subst;
-    do 3 eexists; split_ands; repeat refine_constructor; eauto.
+    do 3 eexists; split_and ?; repeat refine_constructor; eauto.
 Qed.
 
 Lemma expr_refine_nf_inv Γ α f Δ1 Δ2 τs e1 e2 τlr :
@@ -605,7 +607,7 @@ Lemma stmt_refine_cases Γ α f Δ1 Δ2 τs s1 s2 mcτ :
   s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : mcτ → cases s1 = cases s2.
 Proof. induction 1; simpl; auto with f_equal. Qed.
 Lemma ctx_refine_locals_types Γ α f Δ1 Δ2 k1 k2 τf τf' :
-  ✓ Γ → k1 ⊑{Γ,α,f@Δ1↦Δ2} k2 : τf ↣ τf' → locals k1.*2 = locals k2.*2.
+  ✓ Γ → k1 ⊑{Γ,α,f@Δ1↦Δ2} k2 : τf ↣ τf' → (locals k1).*2 = (locals k2).*2.
 Proof.
   assert (∀ (os1 os2 : list index) (σs : list (type K)) P,
     Forall2 P os1 os2 → (zip os1 σs).*2 = (zip os2 σs).*2).
@@ -730,11 +732,11 @@ Lemma funenv_refine_typed_l Γ α f Δ1 Δ2 δ1 δ2 :
 Proof.
   intros ? Hδ; split.
   * intros g s ?; specialize (Hδ g); destruct (δ2 !! _),
-      (Γ !! _) as [[τs τ]|]; simplify_option_equality; try done.
+      (Γ !! _) as [[τs τ]|]; simplify_option_eq; try done.
     destruct Hδ as (cmτ&?&?&?&?&?); eauto 20 using stmt_refine_typed_l.
   * rewrite elem_of_subseteq; intros g; rewrite !elem_of_dom.
     intros [[τs τ] ?]; specialize (Hδ g). destruct (δ1 !! g),
-      (δ2 !! g); simplify_option_equality; naive_solver.
+      (δ2 !! g); simplify_option_eq; naive_solver.
 Qed.
 
 Lemma lrval_refine_typed_r Γ α f Δ1 Δ2 ν1 ν2 τlr :
@@ -808,7 +810,7 @@ Qed.
 Lemma state_refine_typed_r Γ α f S1 S2 σf :
   ✓ Γ → S1 ⊑{Γ,α,f} S2 : σf → Γ ⊢ S2 : σf.
 Proof.
-  destruct 2; eauto. eexists; split_ands;
+  destruct 2; eauto. eexists; split_and ?;
     erewrite <-?ctx_refine_locals_types by eauto;
     eauto using focus_refine_typed_r, ctx_refine_typed_r, cmap_refine_valid_r'.
 Qed.
@@ -817,13 +819,13 @@ Lemma funenv_refine_typed_r Γ α f Δ1 Δ2 δ1 δ2 :
 Proof.
   intros ? Hδ; split.
   * intros g s ?; specialize (Hδ g); destruct (δ1 !! _),
-      (Γ !! _) as [[τs τ]|]; simplify_option_equality; try done.
+      (Γ !! _) as [[τs τ]|]; simplify_option_eq; try done.
     destruct Hδ as (cmτ&?&?&?&?&?).
     erewrite <-stmt_refine_labels, <-stmt_refine_gotos by eauto.
     eauto 15 using stmt_refine_typed_r, stmt_refine_throws_valid.
   * rewrite elem_of_subseteq; intros g; rewrite !elem_of_dom.
     intros [[τs τ] ?]; specialize (Hδ g); destruct (δ1 !! _),
-      (δ2 !! _); simplify_option_equality; naive_solver.
+      (δ2 !! _); simplify_option_eq; naive_solver.
 Qed.
 
 Lemma lrval_refine_id Γ α Δ ν τlr : (Γ,Δ) ⊢ ν : τlr → ν ⊑{Γ,α@Δ} ν : τlr.
@@ -1176,7 +1178,7 @@ Lemma funenv_refine_inverse Γ f Δ1 Δ2 δ1 δ2 :
 Proof.
   intros Hδ h; specialize (Hδ h); destruct (δ1 !! h) as [s1|],
     (δ2 !! h) as [s2|], (Γ !! h) as [[τs τ]|]; try done.
-  destruct Hδ as (cmτ&?&?&?&?&?); exists cmτ; split_ands; auto.
+  destruct Hδ as (cmτ&?&?&?&?&?); exists cmτ; split_and ?; auto.
   * auto using stmt_refine_inverse.
   * by erewrite <-stmt_refine_gotos, <-stmt_refine_labels by eauto.
   * eauto using stmt_refine_throws_valid.

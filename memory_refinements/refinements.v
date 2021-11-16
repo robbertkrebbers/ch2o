@@ -1,5 +1,6 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
+From stdpp Require Import fin_maps.
 Require Export refinement_classes.
 
 Record memenv_refine' `{Env K} (Γ : env K)
@@ -39,7 +40,7 @@ Record meminj_extend {K} (f f' : meminj K) (Δ1 Δ2 : memenv K) := {
 Definition meminj_inverse {K} (f : meminj K) : meminj K :=
   match f with
   | meminj_id => meminj_id
-  | meminj_map f => meminj_map $ map_of_list $ (λ o1o2r,
+  | meminj_map f => meminj_map $ list_to_map $ (λ o1o2r,
       let '(o1,(o2,_)) := o1o2r in (o2,(o1,[]))) <$> map_to_list f
   end.
 
@@ -71,7 +72,7 @@ Lemma lookup_meminj_inverse_1_help Γ f Δ1 Δ2 o1 o2 r1 :
   ∃ r2, f !! o1 = Some (o2,r2) ∧ r1 = [].
 Proof.
   destruct f as [|f]; simpl; intros HΔ Ho2; [naive_solver|].
-  apply elem_of_map_of_list_2 in Ho2; revert Ho2.
+  apply elem_of_list_to_map_2 in Ho2; revert Ho2.
   rewrite elem_of_list_fmap; intros ((o1'&o2'&r2')&?&Ho1'); simplify_equality'.
   apply elem_of_map_to_list in Ho1'; eauto.
 Qed.
@@ -91,8 +92,8 @@ Lemma lookup_meminj_inverse_2 Γ f Δ1 Δ2 o1 o2 r2 τ :
   f !! o1 = Some (o2,r2) → meminj_inverse f !! o2 = Some (o1,[]).
 Proof.
   destruct f as [|f]; simpl; [naive_solver|]; intros HΔ ??.
-  apply elem_of_map_of_list_1_help.
-  { rewrite elem_of_list_fmap.
+  apply elem_of_list_to_map_1'.
+  2: { rewrite elem_of_list_fmap.
     eexists (o1,(o2,r2)); split; auto. by apply elem_of_map_to_list. }
   intros [??]; rewrite elem_of_list_fmap;
     intros ((o1'&o2'&r2')&?&Ho1'); simplify_equality; f_equal.
@@ -146,7 +147,7 @@ Proof.
 Qed.
 Lemma memenv_refine_id Γ Δ α : Δ ⊑{Γ,α} Δ.
 Proof.
-  repeat split; intros until 0; rewrite ?lookup_meminj_id;
+  repeat split; intros *; rewrite ?lookup_meminj_id;
     naive_solver eauto using meminj_id_injective, ref_typed_nil_2.
 Qed.
 Lemma memenv_refine_compose Γ α1 α2 f1 f2 Δ1 Δ2 Δ3 :

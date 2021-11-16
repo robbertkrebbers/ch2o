@@ -2,10 +2,12 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Import String stringmap.
 Require Export type_system_decidable expression_eval error.
+
 Local Open Scope string_scope.
 Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 Local Open Scope list_scope.
+Local Coercion Z.of_nat: nat >-> Z.
 
 Inductive cint_rank : iType :=
   | CCharRank | CShortRank | CIntRank | CLongRank | CLongLongRank | CPtrRank.
@@ -62,7 +64,7 @@ Instance maybe_CSingleInit : Maybe CSingleInit := λ ci,
   match ci with CSingleInit ce => Some ce | _ => None end.
 
 Inductive cstorage := StaticStorage | ExternStorage | AutoStorage.
-Instance cstorage_eq_dec (sto1 sto2 : cstorage) : Decision (sto1 = sto2).
+Instance cstorage_eq_dec: EqDecision cstorage.
 Proof. solve_decision. Defined.
 
 Inductive cstmt : iType :=
@@ -164,7 +166,7 @@ Definition lookup_compound (t : tag) (x : string) : M (nat * type K) :=
     ("struct/union `" +:+ t +:+ "` undeclared");
   '(_,xτs) ← error_of_option (maybe2 Compound d)
     ("struct/union `" +:+ t +:+ "` instead of enum expected");
-  '(i,xτ) ← error_of_option (list_find ((x =) ∘ fst) xτs)
+  '(i,xτ) ← error_of_option (list_find ((x =.) ∘ fst) xτs)
     ("struct/union `" +:+ t +:+ "` does not have index `" +:+ x +:+ "`");
   mret (i,xτ.2).
 
@@ -292,7 +294,7 @@ Definition to_binop_expr (op : binop)
 
 Definition int_const_types (cτi : cint_type) : list (int_type K) :=
   let (ms,k) := cτi in
-  let s := from_option Signed ms in
+  let s := default Signed ms in
   match k with
   | CLongLongRank => [IntType s longlong_rank]
   | CLongRank => [IntType s long_rank; IntType s longlong_rank]
@@ -307,17 +309,17 @@ Definition to_int_const (x : Z) : list (int_type K) → option (int_type K) :=
 Definition to_inttype (cτi : cint_type) : int_type K :=
   let (ms,k) := cτi in
   match k with
-  | CCharRank => IntType (from_option char_signedness ms) char_rank
-  | CShortRank => IntType (from_option Signed ms) short_rank
-  | CIntRank => IntType (from_option Signed ms) int_rank
-  | CLongRank => IntType (from_option Signed ms) long_rank
-  | CLongLongRank => IntType (from_option Signed ms) longlong_rank
-  | CPtrRank => IntType (from_option Signed ms) ptr_rank
+  | CCharRank => IntType (default char_signedness ms) char_rank
+  | CShortRank => IntType (default Signed ms) short_rank
+  | CIntRank => IntType (default Signed ms) int_rank
+  | CLongRank => IntType (default Signed ms) long_rank
+  | CLongLongRank => IntType (default Signed ms) longlong_rank
+  | CPtrRank => IntType (default Signed ms) ptr_rank
   end.
 Definition to_string_const (zs : list Z) : option (val K * nat) :=
   guard (Forall (λ z, int_typed z charT) zs);
   mret (VArray (intT charT)
-    (VBase <$> VInt charT <$> (zs ++ [0%Z])), S (length zs)).
+    (VBase <$> (VInt charT <$> (zs ++ [0%Z]))), S (length zs)).
 Definition to_limit_const (τ : type K) (li : climit) : M (Z * int_type K) :=
   match li with
   | CESizeOf =>
@@ -353,7 +355,7 @@ Definition to_limit_const (τ : type K) (li : climit) : M (Z * int_type K) :=
 
 Definition insert_object (γ : perm) (v : val K) : M index :=
   m ← gets to_mem; Γ ← gets to_env;
-  let o := fresh (dom _ m) in
+  let o := fresh (dom indexset m) in
   _ ← modify (λ S : frontend_state K,
     let (Γn,Γ,m,Δg) := S in FState Γn Γ (mem_alloc Γ o false γ v m) Δg);
   mret o.
@@ -381,8 +383,8 @@ Definition first_init_ref (Γ : env K)
     (τ : type K) : option (ref K * type K) :=
   match τ with
   | τ.[n] => Some ([RArray 0 τ n], τ)
-  | structT t => τ ← Γ !! t ≫= (!! 0); Some ([RStruct 0 t],τ)
-  | unionT t => τ ← Γ !! t ≫= (!! 0); Some ([RUnion 0 t false],τ)
+  | structT t => τ ← Γ !! t ≫= (.!! 0); Some ([RStruct 0 t],τ)
+  | unionT t => τ ← Γ !! t ≫= (.!! 0); Some ([RUnion 0 t false],τ)
   | _ => None
   end.
 Fixpoint next_init_ref (Γ : env K)
@@ -392,7 +394,7 @@ Fixpoint next_init_ref (Γ : env K)
      if decide (S i < n)
      then Some (RArray (S i) τ n :: r, τ) else next_init_ref Γ r
   | RStruct i t :: r =>
-     match Γ !! t ≫= (!! (S i)) with
+     match Γ !! t ≫= (.!! (S i)) with
      | Some τ => Some (RStruct (S i) t :: r,τ) | None => next_init_ref Γ r
      end
   | RUnion _ _ _ :: r => next_init_ref Γ r
@@ -445,7 +447,7 @@ Definition to_compound_init
                | [] => first_init_ref Γ τ | r :: _ => next_init_ref Γ r
                end "excess elements in compound initializer"
         else to_ref to_expr [] τ xces;
-     guard (Forall (r ⊥.) seen) with "element initialized before";
+     guard (Forall (r ##.) seen) with "element initialized before";
      e1 ← to_init_expr σ ci;
      go (#[r:=e1] e) (r :: seen) inits
   end.
@@ -465,11 +467,11 @@ Definition to_call_args
   match ces, τs with
   | [], [] => mret []
   | ce :: ces, τ :: τs =>
-     '(e,σ) ← to_expr ce ≫= curry (to_R_NULL τ);
+     '(e,σ) ← to_expr ce ≫= uncurry (to_R_NULL τ);
      Γ ← gets to_env;
      guard (cast_typed σ τ)
        with "function applied to arguments of incorrect type";
-     (cast{τ} e ::) <$> go ces τs
+     (cast{τ} e ::.) <$> go ces τs
   | _, _ => fail "function applied to the wrong number of arguments"
   end.
 Definition convert_fun_arg_type (τp : ptr_type K) : option (type K) :=
@@ -495,7 +497,7 @@ Definition to_fun_type_args
      τp ← to_ptr_type cτ;
      τ ← error_of_option (convert_fun_arg_type τp)
        "function type with argument of void type";
-     ((mx,τ) ::) <$> go cτs
+     ((mx,τ) ::.) <$> go cτs
   end.
 Definition fun_empty_args (xτs : list (option string * ctype)) : bool :=
   match xτs with [(None,CTVoid)] => true | _ => false end.
@@ -567,7 +569,7 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
      '(z,τi) ← to_limit_const τ li;
      mret (# intV{τi} z, inr (intT τi))
   | CEDeref ce =>
-     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
+     '(e,τ) ← to_expr Δl ce ≫= uncurry to_R;
      τp ← error_of_option (maybe (TBase ∘ TPtr) τ)
        "dereferencing non-pointer type";
      mret (.* e, inl τp)
@@ -578,7 +580,7 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
   | CEAssign ass ce1 ce2 =>
      '(e1,τlr1) ← to_expr Δl ce1;
      τ1 ← error_of_option (maybe (inl ∘ TType) τlr1) "assigning to r-value";
-     '(e2,τ2) ← to_expr Δl ce2 ≫= curry (to_R_NULL τ1);
+     '(e2,τ2) ← to_expr Δl ce2 ≫= uncurry (to_R_NULL τ1);
      Γ ← gets to_env;
      guard (assign_typed τ1 τ2 ass) with "assignment cannot be typed";
      let e1 :=
@@ -597,12 +599,12 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
   | CEAlloc cτ ce =>
      τ ← to_type to_Type Δl cτ;
      guard (τ ≠ voidT) with "alloc of void type";
-     '(e,τsz) ← to_expr Δl ce ≫= curry to_R;
+     '(e,τsz) ← to_expr Δl ce ≫= uncurry to_R;
      _ ← error_of_option (maybe (TBase ∘ TInt) τsz)
        "alloc applied to argument of non-integer type";
      mret (&(alloc{τ} e), inr (TType τ.*))
   | CEFree ce =>
-     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
+     '(e,τ) ← to_expr Δl ce ≫= uncurry to_R;
      τp ← error_of_option (maybe (TBase ∘ TPtr ∘ TType) τ)
        "free applied to argument of non-pointer type";
      Γ ← gets to_env;
@@ -610,44 +612,44 @@ Fixpoint to_expr `{Env K} (Δl : local_env K)
        with "free applied to argument of incomplete pointer type";
      mret (free (.* e), inr voidT)
   | CEUnOp op ce =>
-     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
+     '(e,τ) ← to_expr Δl ce ≫= uncurry to_R;
      σ ← error_of_option (unop_type_of op τ) "unary operator cannot be typed";
      mret (.{op} e, inr σ)
   | CEBinOp op ce1 ce2 =>
-     eτ1 ← to_expr Δl ce1 ≫= curry to_R;
-     eτ2 ← to_expr Δl ce2 ≫= curry to_R;
+     eτ1 ← to_expr Δl ce1 ≫= uncurry to_R;
+     eτ2 ← to_expr Δl ce2 ≫= uncurry to_R;
      error_of_option (to_binop_expr op eτ1 eτ2)
        "binary operator cannot be typed"
   | CEIf ce1 ce2 ce3 =>
-     '(e1,τ1) ← to_expr Δl ce1 ≫= curry to_R;
+     '(e1,τ1) ← to_expr Δl ce1 ≫= uncurry to_R;
      τb ← error_of_option (maybe TBase τ1)
        "conditional argument of if expression of non-base type";
      guard (τb ≠ TVoid) with
        "conditional argument of if expression of void type";
-     eτ2 ← to_expr Δl ce2 ≫= curry to_R;
-     eτ3 ← to_expr Δl ce3 ≫= curry to_R;
+     eτ2 ← to_expr Δl ce2 ≫= uncurry to_R;
+     eτ3 ← to_expr Δl ce3 ≫= uncurry to_R;
      error_of_option (to_if_expr e1 eτ2 eτ3) "if expression cannot be typed"
   | CEComma ce1 ce2 =>
-     '(e1,τ1) ← to_expr Δl ce1 ≫= curry to_R;
-     '(e2,τ2) ← to_expr Δl ce2 ≫= curry to_R;
+     '(e1,τ1) ← to_expr Δl ce1 ≫= uncurry to_R;
+     '(e2,τ2) ← to_expr Δl ce2 ≫= uncurry to_R;
      mret (cast{voidT} e1,, e2, inr τ2)
   | CEAnd ce1 ce2 =>
-     '(e1,τ1) ← to_expr Δl ce1 ≫= curry to_R;
+     '(e1,τ1) ← to_expr Δl ce1 ≫= uncurry to_R;
      τb1 ← error_of_option (maybe TBase τ1)
        "first argument of && of non-base type";
      guard (τb1 ≠ TVoid) with "first argument of && of void type";
-     '(e2,τ2) ← to_expr Δl ce2 ≫= curry to_R;
+     '(e2,τ2) ← to_expr Δl ce2 ≫= uncurry to_R;
      τb2 ← error_of_option (maybe TBase τ2)
        "second argument of && of non-base type";
      guard (τb2 ≠ TVoid) with "second argument of && of void type";
      mret (if{e1} if{e2} # intV{sintT} 1 else # intV{sintT} 0
        else #(intV{sintT} 0), inr sintT)
   | CEOr ce1 ce2 =>
-     '(e1,τ1) ← to_expr Δl ce1 ≫= curry to_R;
+     '(e1,τ1) ← to_expr Δl ce1 ≫= uncurry to_R;
      τb1 ← error_of_option (maybe TBase τ1)
        "first argument of || of non-base type";
      guard (τb1 ≠ TVoid) with "first argument of || of void type";
-     '(e2,τ2) ← to_expr Δl ce2 ≫= curry to_R;
+     '(e2,τ2) ← to_expr Δl ce2 ≫= uncurry to_R;
      τb2 ← error_of_option (maybe TBase τ2)
        "second argument of || of non-base type";
      guard (τb2 ≠ TVoid) with "second argument of || of void type";
@@ -691,7 +693,7 @@ with to_init_expr `{Env K} (Δl : local_env K)
           mret (& ((% Ptr (addr_top o (charT.[n]))) %> RArray 0 charT n))
         else fail "string initializer of wrong type or size"
      | None =>
-        '(e,τ) ← to_expr Δl ce ≫= curry (to_R_NULL σ);
+        '(e,τ) ← to_expr Δl ce ≫= uncurry (to_R_NULL σ);
         Γ ← gets to_env;
         guard (cast_typed τ σ) with "cast or initializer cannot be typed";
         mret (cast{σ} e)
@@ -852,7 +854,7 @@ Definition alloc_static (Δl : local_env K) (x : string) (cτ : ctype)
      v ← to_init_val (Some (x, Extern (inl (o,τ))) :: Δl) τ ci;
      _ ← update_object o perm_full v;
      mret (o, τ)
-  | None => (,τ) <$> insert_object perm_full (val_0 Γ τ)
+  | None => (.,τ) <$> insert_object perm_full (val_0 Γ τ)
   end.
 Definition to_storage (stos : list cstorage) : option cstorage :=
   match stos with [] => Some AutoStorage | [sto] => Some sto | _ => None end.
@@ -862,20 +864,20 @@ Definition to_stmt (τret : type K) :
   fix go bc Δl cs {struct cs} :=
   match cs with
   | CSDo ce =>
-     '(e,_) ← to_expr Δl ce ≫= curry to_R;
+     '(e,_) ← to_expr Δl ce ≫= uncurry to_R;
      mret (!(cast{voidT} e), (false, None))
   | CSSkip => mret (skip, (false, None))
   | CSGoto l => mret (goto l, (true, None))
   | CSBreak =>
-     n ← error_of_option (bc.1) "unbound break";
-     mret (throw n, (true, None))
+    n ← error_of_option (bc.1) "unbound break";
+    mret (throw n, (true, None))
   | CSContinue =>
      n ← error_of_option (bc.2) "unbound break";
      mret (throw n, (true, None))
   | CSReturn (Some ce) =>
      guard (τret ≠ voidT) with
        "return with expression in function returning void";
-     '(e,τ) ← to_expr Δl ce ≫= curry (to_R_NULL τret);
+     '(e,τ) ← to_expr Δl ce ≫= uncurry (to_R_NULL τret);
      Γ ← gets to_env;
      guard (cast_typed τ τret) with "return expression has incorrect type";
      mret (ret (cast{τret} e), (true, Some τret))
@@ -891,8 +893,8 @@ Definition to_stmt (τret : type K) :
      '(_,x) ← error_of_option (maybe VBase v ≫= maybe2 VInt)
        "case with non-integer expression";
      '(s,cmσ) ← go bc Δl cs;
-     mret (scase (Some x) ;; s, cmσ)
-  | CSDefault cs => '(s,cmσ) ← go bc Δl cs; mret (scase None ;; s, cmσ)
+     mret ((scase (Some x) ;; s)%S, cmσ)   
+  | CSDefault cs => '(s,cmσ) ← go bc Δl cs; mret ((scase None ;; s)%S, cmσ)
   | CSScope cs => go bc (None :: Δl) cs
   | CSLocal stos x cτ mce cs =>
      guard (local_fresh x Δl) with
@@ -933,10 +935,10 @@ Definition to_stmt (τret : type K) :
      '(s2,cmσ2) ← go bc Δl cs2;
      mσ ← error_of_option (rettype_union_alt (cmσ1.2) (cmσ2.2))
        "composition of statements with non-matching return types";
-     mret (s1 ;; s2, (cmσ2.1, mσ))
+     mret ((s1 ;; s2)%S, (cmσ2.1, mσ))
   | CSLabel l cs => '(s,cmσ) ← go bc Δl cs; mret (l :; s, cmσ)
   | CSWhile ce cs =>
-     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
+     '(e,τ) ← to_expr Δl ce ≫= uncurry to_R;
      τb ← error_of_option (maybe TBase τ)
        "conditional argument of while statement of non-base type";
      guard (τb ≠ TVoid) with
@@ -944,28 +946,28 @@ Definition to_stmt (τret : type K) :
      '(s,cmσ) ← go (Some 1, Some 0) Δl cs;
      mret (catch (loop (if{e} skip else throw 0 ;; catch s)), (false, cmσ.2))
   | CSFor ce1 ce2 ce3 cs =>
-     '(e1,τ1) ← to_expr Δl ce1 ≫= curry to_R;
-     '(e2,τ2) ← to_expr Δl ce2 ≫= curry to_R;
-     '(e3,τ3) ← to_expr Δl ce3 ≫= curry to_R;
+     '(e1,τ1) ← to_expr Δl ce1 ≫= uncurry to_R;
+     '(e2,τ2) ← to_expr Δl ce2 ≫= uncurry to_R;
+     '(e3,τ3) ← to_expr Δl ce3 ≫= uncurry to_R;
      '(s,cmσ) ← go (Some 1, Some 0) Δl cs;
      τb ← error_of_option (maybe TBase τ2)
        "conditional argument of for statement of non-base type";
      guard (τb ≠ TVoid) with
        "conditional argument of for statement of void type";
-     mret (!(cast{voidT} e1) ;;
+     mret ((!(cast{voidT} e1) ;;
        catch (loop (
          if{e2} skip else throw 0 ;; catch s ;; !(cast{voidT} e3)
-       )), (false, cmσ.2))
+       )))%S, (false, cmσ.2))
   | CSDoWhile cs ce =>
      '(s,cmσ) ← go (Some 1, Some 0) Δl cs;
-     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
+     '(e,τ) ← to_expr Δl ce ≫= uncurry to_R;
      τb ← error_of_option (maybe TBase τ)
        "conditional argument of do-while statement of non-base type";
      guard (τb ≠ TVoid) with
        "conditional argument of do-while statement of void type";
      mret (catch (loop (catch s ;; if{e} skip else throw 0)), (false, cmσ.2))
   | CSIf ce cs1 cs2 =>
-     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
+     '(e,τ) ← to_expr Δl ce ≫= uncurry to_R;
      '(s1,cmσ1) ← go bc Δl cs1;
      '(s2,cmσ2) ← go bc Δl cs2;
      τb ← error_of_option (maybe TBase τ)
@@ -976,7 +978,7 @@ Definition to_stmt (τret : type K) :
        "if statement with non-matching return types";
      mret (if{e} s1 else s2, (cmσ1.1 && cmσ2.1, mσ))%S
   | CSSwitch ce cs =>
-     '(e,τ) ← to_expr Δl ce ≫= curry to_R;
+     '(e,τ) ← to_expr Δl ce ≫= uncurry to_R;
      τi ← error_of_option (maybe (TBase ∘ TInt) τ)
        "conditional argument of switch statement of non-integer type";
      '(s,cmσ) ← go (Some 0, S <$> bc.2) Δl cs;
@@ -987,8 +989,8 @@ Definition stmt_fix_return (Γ : env K) (f : string) (σ : type K) (s : stmt K)
   match cmτ with
   | (false, _) =>
      if decide (σ = voidT) then (s,cmτ)
-     else if decide (f = "main") then (s;; ret (# val_0 Γ σ), (true, Some σ))
-     else (s;; ret (abort σ), (true, Some σ))
+     else if decide (f = "main") then ((s;; ret (# val_0 Γ σ))%S, (true, Some σ))
+     else ((s;; ret (abort σ))%S, (true, Some σ))
   | _ => (s,cmτ)
   end.
 Definition to_fun_stmt (f : string) (mys : list (option string))
@@ -1075,7 +1077,7 @@ Definition to_compound_fields (t : tag) :
      τ ← to_type to_Type [] cτ;
      guard (τ ≠ voidT) with
       ("compound type `" +:+ t +:+ "` with field `" +:+ x +:+ "` of void type");
-     ((x,τ) ::) <$> go cτs
+     ((x,τ) ::.) <$> go cτs
   end.
 Fixpoint alloc_decls (Θ : list (string * decl)) : M () :=
   match Θ with
@@ -1128,9 +1130,9 @@ Definition alloc_program (Θ : list (string * decl)) : M () :=
   S ← gets id;
   let incomp_fs : stringset := incomplete_fun_decls S in
   guard (incomp_fs = ∅) with "function `" +:+
-    from_option "" (head (elements incomp_fs)) +:+ "` not completed";
+    default "" (head (elements incomp_fs)) +:+ "` not completed";
   let incomp_xs : stringset := extern_global_decls S in
   guard (incomp_xs = ∅) with "global `" +:+
-    from_option "" (head (elements incomp_xs)) +:+ "` with `extern` not linked";
+    default "" (head (elements incomp_xs)) +:+ "` with `extern` not linked";
   mret ().
 End frontend_more.

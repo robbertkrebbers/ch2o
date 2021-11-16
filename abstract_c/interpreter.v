@@ -1,10 +1,13 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Import String hashset streams stringmap.
+From stdpp Require Import hashset streams.
+Require Import String stringmap.
 Require Export executable frontend architecture_spec.
+
 Local Open Scope string_scope.
 Local Open Scope list_scope.
 Local Open Scope ctype_scope.
+Local Coercion Z.of_nat: nat >-> Z.
 
 Record istate (K E : iType) : iType := IState {
   events_new : list E; (**i the events generated in the last step *)
@@ -13,14 +16,13 @@ Record istate (K E : iType) : iType := IState {
   sem_state : state K
 }.
 Arguments IState {_ _} _ _ _.
-Instance istate_dec {K E} `{Env K, ∀ ε1 ε2 : E, Decision (ε1 = ε2)}
-  (iS1 iS2 : istate K E) : Decision (iS1 = iS2).
+Instance istate_dec {K E} `{Env K, EqDecision E}: EqDecision (istate K E).
 Proof. solve_decision. Defined.
 
 Section interpreter.
 Context (A : architecture).
 Notation K := (arch_rank A).
-Context `{∀ ε1 ε2 : E, Decision (ε1 = ε2)}.
+Context `{EqDecision E}.
 Context (e : ∀ `{Env K}, env K → state K → list E).
 Notation M := (error (frontend_state K) string).
 
@@ -34,13 +36,13 @@ Fixpoint interpreter_args_go (args : list (list Z)) : M (list (val K)) :=
      vs ← interpreter_args_go args;
      mret (ptrV (Ptr (addr_top_array o (charT{K}) (Z.of_nat n))) :: vs)
   end.
-Fixpoint interpreter_args (σs : list (type K))
+Definition interpreter_args (σs : list (type K))
     (args : list (list Z)) : M (list (val K)) :=
-  if decide (σs = []) then mret []
+  if decide (σs = []) then mret (M := M) []
   else if decide (σs = [sintT; charT{K}.*.*])%T then
     vs ← interpreter_args_go args;
     o ← insert_object perm_full (VArray (charT{K}.*) vs);
-    mret [intV{sintT} (length vs);
+    mret (M := M) [intV{sintT} (length vs);
           ptrV (Ptr (addr_top_array o (charT{K}.*) (length vs)))]
   else fail "function `main` should have argument types `int` and `char*`".
 Definition interpreter_initial (Θ : list (string * decl))
@@ -96,7 +98,7 @@ Definition csteps_exec_rand (Γ : env K) (δ : funenv K) :
   match listset_car (cexec' Γ δ iS) with
   | [] => srepeat (inr iS)
   | (iS' :: _) as iSs =>
-     let next := from_option iS' (iSs !! rand (length iSs)) in
+     let next := default iS' (iSs !! rand (length iSs)) in
      inl next :.: go next
   end.
 Definition interpreter_rand

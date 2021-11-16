@@ -32,7 +32,7 @@ Inductive base_val_refine' `{Env K} (Γ : env K)
      base_val_refine' Γ α f Δ1 Δ2 (VByte bs1) (VInt ucharT x2) ucharT
   | VByte_VIndet_refine' bs1 bs2 vb2 :
      α → bs1 ⊑{Γ,α,f@Δ1↦Δ2}* bs2 → char_byte_valid Γ Δ1 bs1 →
-     Forall (BIndet =) bs2 → (Γ,Δ2) ⊢ vb2 : ucharT →
+     Forall (BIndet =.) bs2 → (Γ,Δ2) ⊢ vb2 : ucharT →
      base_val_refine' Γ α f Δ1 Δ2 (VByte bs1) vb2 ucharT.
 Instance base_val_refine `{Env K} :
   RefineT K (env K) (base_type K) (base_val K) := base_val_refine'.
@@ -192,7 +192,7 @@ Proof.
       + constructor; eauto using bits_refine_valid_l.
       + by apply int_of_bits_typed. }
     assert (length bs2 = char_bits) by eauto using Forall2_length_l.
-    destruct (decide (Forall (BIndet =) bs2)).
+    destruct (decide (Forall (BIndet =.) bs2)).
     { econstructor; eauto using base_val_unflatten_typed, bits_refine_valid_r.
       constructor; eauto using bits_refine_valid_l. }
     rewrite base_val_unflatten_byte by done.
@@ -201,7 +201,7 @@ Proof.
     { rewrite fmap_length, bit_size_of_int in Hbs2.
       rewrite base_val_unflatten_int by done.
       constructor; auto; constructor; auto using int_of_bits_typed. }
-    destruct (decide (Forall (BIndet =) bs2)).
+    destruct (decide (Forall (BIndet =.) bs2)).
     { rewrite base_val_unflatten_indet by done. by repeat constructor. }
     assert (length bs2 = char_bits) by eauto using Forall2_length_l.
     rewrite base_val_unflatten_byte by done.

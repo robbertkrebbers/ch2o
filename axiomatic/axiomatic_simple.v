@@ -28,29 +28,29 @@ Lemma ax_expr_frame_l' Γ δ A B P Q e ν :
   Γ\ δ\ B ⊨ₑ {{ A ★ P }} e {{ ν | A ★ Q }}.
 Proof.
   intros; unfold const_assert.
-  setoid_rewrite (associative (R:=(≡{Γ,δ})) (★)%A).
-  setoid_rewrite (commutative (R:=(≡{Γ,δ})) (★)%A _ A).
-  setoid_rewrite <-(associative (R:=(≡{Γ,δ})) (★)%A).
+  setoid_rewrite (assoc (R:=(≡{Γ,δ})) (★)%A).
+  setoid_rewrite (comm (R:=(≡{Γ,δ})) (★)%A _ A).
+  setoid_rewrite <-(assoc (R:=(≡{Γ,δ})) (★)%A).
   by apply ax_expr_frame_l.
 Qed.
 Lemma ax_expr_frame_r' Γ δ A B P Q e ν :
   Γ\ δ\ B ⊨ₑ {{ P }} e {{ ν | Q }} →
   Γ\ δ\ B ⊨ₑ {{ P ★ A }} e {{ ν | Q ★ A }}.
-Proof. rewrite !(commutative (★)%A _ A). apply ax_expr_frame_l'. Qed.
+Proof. rewrite !(comm (★)%A _ A). apply ax_expr_frame_l'. Qed.
 Lemma ax_expr_invariant_l' Γ δ A B P Q e ν :
   Γ\ δ\ A ★ B ⊨ₑ {{ P }} e {{ ν | Q }} →
   Γ\ δ\ B ⊨ₑ {{ A ★ P }} e {{ ν | A ★ Q }}.
 Proof.
   intros; unfold const_assert.
-  setoid_rewrite (associative (R:=(≡{Γ,δ})) (★)%A).
-  setoid_rewrite (commutative (R:=(≡{Γ,δ})) (★)%A _ A).
-  setoid_rewrite <-(associative (R:=(≡{Γ,δ})) (★)%A).
+  setoid_rewrite (assoc (R:=(≡{Γ,δ})) (★)%A).
+  setoid_rewrite (comm (R:=(≡{Γ,δ})) (★)%A _ A).
+  setoid_rewrite <-(assoc (R:=(≡{Γ,δ})) (★)%A).
   by apply ax_expr_invariant_l.
 Qed.
 Lemma ax_expr_invariant_r' Γ δ A B P Q e ν :
   Γ\ δ\ A ★ B ⊨ₑ {{ P }} e {{ ν | Q }} →
   Γ\ δ\ B ⊨ₑ {{ P ★ A }} e {{ ν | Q ★ A }}.
-Proof. rewrite !(commutative (★)%A _ A). apply ax_expr_invariant_l'. Qed.
+Proof. rewrite !(comm (★)%A _ A). apply ax_expr_invariant_l'. Qed.
 Lemma ax_expr_invariant_emp' Γ δ A B e ν :
   Γ\ δ\ A ★ B ⊨ₑ {{ emp }} e {{ ν | emp }} →
   Γ\ δ\ B ⊨ₑ {{ A }} e {{ ν | A }}.
@@ -61,7 +61,7 @@ Lemma ax_var' Γ δ A P x p :
   (A ★ P)%A ⊆{Γ,δ} (var x ⇓ inl p)%A →
   Γ\ δ\ A ⊨ₑ {{ P }} var x {{ inl p | P }}.
 Proof.
-  rewrite (commutative (★)%A); intros; eapply ax_var; eauto.
+  rewrite (comm (★)%A); intros; eapply ax_var; eauto.
   simpl; apply assert_and_intro, assert_wand_intro; eauto.
   by rewrite assert_Prop_l by done.
 Qed.
@@ -70,7 +70,7 @@ Lemma ax_rtol' Γ δ A P Q e v p :
   Γ\ δ\ A ⊨ₑ {{ P }} e {{ inr v | Q }} →
   Γ\ δ\ A ⊨ₑ {{ P }} .* e {{ inl p | Q }}.
 Proof.
-  rewrite (commutative (★)%A); intros; eapply ax_rtol; eauto.
+  rewrite (comm (★)%A); intros; eapply ax_rtol; eauto.
   intros; apply assert_Prop_intro_l; intros; simplify_equality'.
   apply assert_exist_intro with p, assert_and_intro, assert_wand_intro; auto.
   by rewrite assert_Prop_l by done.
@@ -88,7 +88,7 @@ Lemma ax_load' Γ δ A P Q e p v :
   (A ★ Q)%A ⊆{Γ,δ} (load (%p) ⇓ inr v)%A →
   Γ\ δ\ A ⊨ₑ {{ P }} load e {{ inr v | Q }}.
 Proof.
-  rewrite (commutative (★)%A); intros; eapply ax_load; eauto. intros; simpl.
+  rewrite (comm (★)%A); intros; eapply ax_load; eauto. intros; simpl.
   apply assert_Prop_intro_l; intros; simplify_equality'.
   apply assert_exist_intro with v, assert_and_intro, assert_wand_intro; eauto.
   by rewrite assert_Prop_l by done.
@@ -102,10 +102,10 @@ Lemma ax_assign' Γ δ A P1 P2 Q1 Q2 Q ass e1 e2 μ γ τ p v va v' :
   Some Writable ⊆ perm_kind γ →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 ::={ass} e2 {{ inr v' | Q }}.
 Proof.
-  rewrite (commutative (★)%A A); intros; eapply ax_assign; eauto.
-  intros; simpl; rewrite <-!(associative (★)%A).
+  rewrite (comm (★)%A A); intros; eapply ax_assign; eauto.
+  intros; simpl; rewrite <-!(assoc (★)%A).
   apply assert_Prop_intro_l; intros; simplify_equality'.
-  rewrite (commutative (★)%A _ Q2), (associative (★)%A Q1).
+  rewrite (comm (★)%A _ Q2), (assoc (★)%A Q1).
   apply assert_Prop_intro_r; intros; simplify_equality'.
   apply assert_exist_intro with va, assert_exist_intro with v',
     assert_and_intro, assert_wand_intro; eauto.
@@ -128,7 +128,7 @@ Lemma ax_eltl' Γ δ A P Q e rs p p' :
   (A ★ Q)%A ⊆{Γ,δ} (%p %> rs ⇓ inl p')%A →
   Γ\ δ\ A ⊨ₑ {{ P }} e %> rs {{ inl p' | Q }}.
 Proof.
-  rewrite (commutative (★)%A); intros; eapply ax_eltl; eauto.
+  rewrite (comm (★)%A); intros; eapply ax_eltl; eauto.
   intros; apply assert_Prop_intro_l; intros; simplify_equality'.
   apply assert_exist_intro with p', assert_and_intro, assert_wand_intro; auto.
   by rewrite assert_Prop_l by done.
@@ -138,7 +138,7 @@ Lemma ax_eltr' Γ δ A P Q e rs v v' :
   (A ★ Q)%A ⊆{Γ,δ} (#v #> rs ⇓ inr v')%A →
   Γ\ δ\ A ⊨ₑ {{ P }} e #> rs {{ inr v' | Q }}.
 Proof.
-  rewrite (commutative (★)%A); intros; eapply ax_eltr; eauto.
+  rewrite (comm (★)%A); intros; eapply ax_eltr; eauto.
   intros; apply assert_Prop_intro_l; intros; simplify_equality'.
   apply assert_exist_intro with v', assert_and_intro, assert_wand_intro; auto.
   by rewrite assert_Prop_l by done.
@@ -149,10 +149,10 @@ Lemma ax_insert' Γ δ A P1 P2 Q1 Q2 e1 e2 r v1 v2 v :
   (A ★ Q1 ★ Q2)%A ⊆{Γ,δ} (#[r:=#v1] (#v2) ⇓ inr v)%A →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} #[r:=e1] e2 {{ inr v | Q1 ★ Q2 }}.
 Proof.
-  rewrite (commutative (★)%A); intros; eapply ax_insert; eauto.
-  intros; simpl; rewrite <-!(associative (★)%A).
+  rewrite (comm (★)%A); intros; eapply ax_insert; eauto.
+  intros; simpl; rewrite <-!(assoc (★)%A).
   apply assert_Prop_intro_l; intros; simplify_equality'.
-  rewrite (commutative (★)%A _ Q2), (associative (★)%A Q1).
+  rewrite (comm (★)%A _ Q2), (assoc (★)%A Q1).
   apply assert_Prop_intro_r; intros; simplify_equality'.
   apply assert_exist_intro with v, assert_and_intro, assert_wand_intro; auto.
   by rewrite assert_Prop_l by done.
@@ -173,7 +173,7 @@ Lemma ax_unop' Γ δ A P Q op e v v' :
   (A ★ Q)%A ⊆{Γ,δ} (.{op} #v ⇓ inr v')%A →
   Γ\ δ\ A ⊨ₑ {{ P }} .{op} e {{ inr v' | Q }}.
 Proof.
-  rewrite (commutative (★)%A); intros; eapply ax_unop; eauto.
+  rewrite (comm (★)%A); intros; eapply ax_unop; eauto.
   intros; apply assert_Prop_intro_l; intros; simplify_equality'.
   apply assert_exist_intro with v', assert_and_intro, assert_wand_intro; auto.
   by rewrite assert_Prop_l by done.
@@ -184,10 +184,10 @@ Lemma ax_binop' Γ δ A P1 P2 Q1 Q2 op e1 e2 v1 v2 v :
   (A ★ Q1 ★ Q2)%A ⊆{Γ,δ} (# v1 .{op} # v2 ⇓ inr v)%A →
   Γ\ δ\ A ⊨ₑ {{ P1 ★ P2 }} e1 .{op} e2 {{ inr v | Q1 ★ Q2 }}.
 Proof.
-  rewrite (commutative (★)%A); intros; eapply ax_binop; eauto.
-  intros; simpl; rewrite <-!(associative (★)%A).
+  rewrite (comm (★)%A); intros; eapply ax_binop; eauto.
+  intros; simpl; rewrite <-!(assoc (★)%A).
   apply assert_Prop_intro_l; intros; simplify_equality'.
-  rewrite (commutative (★)%A _ Q2), (associative (★)%A Q1).
+  rewrite (comm (★)%A _ Q2), (assoc (★)%A Q1).
   apply assert_Prop_intro_r; intros; simplify_equality'.
   apply assert_exist_intro with v, assert_and_intro, assert_wand_intro; auto.
   by rewrite assert_Prop_l by done.
@@ -206,7 +206,7 @@ Lemma ax_cast' Γ δ A P Q σ e v v' :
   (A ★ Q)%A ⊆{Γ,δ} (cast{σ} (#v) ⇓ inr v')%A →
   Γ\ δ\ A ⊨ₑ {{ P }} cast{σ} e {{ inr v' | Q }}.
 Proof.
-  rewrite (commutative (★)%A); intros; eapply ax_cast; eauto.
+  rewrite (comm (★)%A); intros; eapply ax_cast; eauto.
   intros; apply assert_Prop_intro_l; intros; simplify_equality'.
   apply assert_exist_intro with v', assert_and_intro, assert_wand_intro; auto.
   by rewrite assert_Prop_l by done.
@@ -219,8 +219,8 @@ Lemma ax_expr_if' Γ δ A P P' P'' Q e e1 e2 vb :
   Γ\ δ\ A ⊨ₑ {{ ⌜ base_val_is_0 vb ⌝ ★ P'' }} e2 {{ Q }} →
   Γ\ δ\ A ⊨ₑ {{ P }} if{e} e1 else e2 {{ Q }}.
 Proof.
-  rewrite (commutative (★)%A); intros; eapply ax_expr_if; eauto.
-  * intros; simpl. rewrite (commutative (★)%A), <-(associative (★)%A).
+  rewrite (comm (★)%A); intros; eapply ax_expr_if; eauto.
+  * intros; simpl. rewrite (comm (★)%A), <-(assoc (★)%A).
     by apply assert_Prop_intro_l; intros; simplify_equality'.
   * intros; apply assert_Prop_intro_l; intros; simplify_equality'.
     by rewrite assert_Prop_l by done.

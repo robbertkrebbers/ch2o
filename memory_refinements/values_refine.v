@@ -1,5 +1,6 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
+Require Import option.
 Require Export values base_values_refine memory_trees_refine.
 Local Open Scope ctype_scope.
 
@@ -82,11 +83,12 @@ Implicit Types v : val K.
 Implicit Types vs : list (val K).
 
 Hint Resolve Forall_take Forall_drop Forall_app_2
-  Forall_replicate Forall_resize.
+  Forall_replicate Forall_resize: core.
 Hint Resolve Forall2_take Forall2_drop Forall2_app
-  Forall2_replicate Forall2_resize.
-Hint Resolve BIndet_valid BIndet_weak_refine BIndet_refine BIndet_BIndet_refine.
-Hint Immediate env_valid_lookup env_valid_lookup_lookup.
+  Forall2_replicate Forall2_resize: core.
+Hint Resolve BIndet_valid BIndet_weak_refine BIndet_refine 
+  BIndet_BIndet_refine: core.
+Hint Immediate env_valid_lookup env_valid_lookup_lookup: core.
 Ltac solve_length := repeat first
   [ rewrite take_length | rewrite drop_length | rewrite app_length
   | rewrite resize_length | rewrite fmap_length | rewrite replicate_length
@@ -105,9 +107,9 @@ Ltac solve_length := repeat first
           by eauto using bit_size_of_union_singleton
       end
     end]; lia.
-Hint Extern 0 (length _ = _) => solve_length.
-Hint Extern 0 (_ ≤ length _) => solve_length.
-Hint Extern 0 (length _ ≤ _) => solve_length.
+Hint Extern 0 (length _ = _) => solve_length: core.
+Hint Extern 0 (_ ≤ length _) => solve_length: core.
+Hint Extern 0 (length _ ≤ _) => solve_length: core.
 
 Lemma val_refine_typed_l Γ α f Δ1 Δ2 v1 v2 τ :
   ✓ Γ → v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ → (Γ,Δ1) ⊢ v1 : τ.
@@ -398,7 +400,7 @@ Proof.
   { intros. eapply Forall_fmap, Forall_impl; eauto. by intros ? (?&?&?). }
   assert (∀ γbs, ✓{Γ,Δ}* γbs →
     Forall (not ∘ sep_unmapped) (tagged_perm <$> γbs) →
-    flip PBit BIndet <$> tagged_perm <$> γbs ⊑{Γ,true@Δ}* γbs).
+    flip PBit BIndet <$> (tagged_perm <$> γbs) ⊑{Γ,true@Δ}* γbs).
   { intros γbs ??. rewrite <-(zip_with_replicate_r _ (length γbs)) by auto.
     pattern γbs at 3; rewrite <-(PBits_perm_tag γbs).
     eapply PBits_refine, bits_subseteq_refine;
@@ -420,12 +422,12 @@ Proof.
     constructor; clear Ht.
     + clear Hγbss Hindet. revert dependent wγbss. unfold field_bit_padding.
       induction (bit_size_of_fields _ τs HΓ); intros; decompose_Forall_hyps;
-        erewrite ?type_of_correct, ?fmap_app, <-?(associative_L (++)),
+        erewrite ?type_of_correct, ?fmap_app, <-?(assoc_L (++)),
           ?take_app_alt, ?drop_app_alt by eauto using to_val_typed;
         constructor; auto.
     + clear IH Hindet. revert dependent wγbss. unfold field_bit_padding.
       induction (bit_size_of_fields _ τs HΓ); intros; decompose_Forall_hyps;
-        erewrite ?type_of_correct, ?fmap_app, <-?(associative_L (++)),
+        erewrite ?type_of_correct, ?fmap_app, <-?(assoc_L (++)),
           ?drop_app_alt, ?take_app_alt by eauto using to_val_typed;
         constructor; simpl; auto.
   * intros t i τs w γbs τ Ht Hτs Hw IH ?? Hlen ??; decompose_Forall_hyps.
@@ -494,16 +496,16 @@ Lemma val_lookup_seg_refine Γ α f Δ1 Δ2 v1 v2 τ rs v3 :
 Proof.
   intros ?. revert v1 v2 τ. refine (val_refine_ind _ _ _ _ _ _ _ _ _ _ _ _).
   * by destruct rs.
-  * intros τ n vs1 vs2 <- ? _ ??; destruct rs; simplify_option_equality
+  * intros τ n vs1 vs2 <- ? _ ??; destruct rs; simplify_option_eq
       by eauto using Forall2_length; decompose_Forall_hyps.
     erewrite val_refine_type_of_l by eauto; eauto.
-  * intros t τs vs1 vs2 ?? _ ?; destruct rs; simplify_option_equality.
+  * intros t τs vs1 vs2 ?? _ ?; destruct rs; simplify_option_eq.
     decompose_Forall_hyps. erewrite val_refine_type_of_l by eauto; eauto.
-  * intros t τs i v1 v2 τ ??? _ ?; destruct rs; simplify_option_equality.
+  * intros t τs i v1 v2 τ ??? _ ?; destruct rs; simplify_option_eq.
     { erewrite val_refine_type_of_l by eauto; eauto. }
     eexists; split; eauto. erewrite val_unflatten_type_of by eauto.
     eauto using val_unflatten_refine, val_flatten_refine.
-  * intros t τs vs1 vs2 ?? _ _ _ ?; destruct rs; simplify_option_equality.
+  * intros t τs vs1 vs2 ?? _ _ _ ?; destruct rs; simplify_option_eq.
     decompose_Forall_hyps. erewrite val_refine_type_of_l by eauto; eauto.
   * intros t τs i v1 v2 τ vs ?? Hi Hv2 Hv _ [bs ?? ->] ?;
       destruct rs as [| |i' ??]; simplify_equality'.
@@ -537,9 +539,9 @@ Proof.
   intros ?. revert v1 v2 τ. induction r as [|rs r IH] using rev_ind; simpl.
   { intros v1 v2 τ ??; simplify_type_equality'. exists v2.
     by erewrite val_refine_type_of_l by eauto. }
-  intros v1 v2 τ. rewrite !val_lookup_snoc; intros; simplify_option_equality.
+  intros v1 v2 τ. rewrite !val_lookup_snoc; intros; simplify_option_eq.
   edestruct (val_lookup_seg_refine Γ α f Δ1 Δ2 v1 v2 τ rs) as [? [??]];
-    simplify_option_equality; eauto.
+    simplify_option_eq; eauto.
 Qed.
 Lemma val_lookup_is_Some_refine Γ α f Δ1 Δ2 v1 v2 τ r :
   ✓ Γ → v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ → is_Some (v1 !!{Γ} r) → is_Some (v2 !!{Γ} r).
@@ -578,7 +580,7 @@ Proof.
       rewrite (val_unflatten_compound _ _ _ τs) in H by done
     | _ => rewrite <-fmap_take
     | _ => progress decompose_Forall_hyps
-    | _ => progress simplify_option_equality
+    | _ => progress simplify_option_eq
     | _ => erewrite val_unflatten_type_of by eauto
     | _ => erewrite <-to_val_unflatten by eauto
     | _ => erewrite type_of_correct by eauto using to_val_typed
@@ -611,7 +613,7 @@ Lemma val_alter_seg_refine Γ α f Δ1 Δ2 g1 g2 v1 v2 τ rs v3 v4 :
 Proof.
   destruct 2, rs;
     change (val_refine' Γ α f Δ1 Δ2) with (refineT Γ α f Δ1 Δ2) in *; intros;
-    simplify_option_equality; decompose_Forall_hyps;
+    simplify_option_eq; decompose_Forall_hyps;
     repeat match goal with
     | H : _ ⊑{_,_,_@_↦_} _ : type_of _ |- _ =>
        erewrite ?val_refine_type_of_l, ?val_unflatten_type_of in H by eauto

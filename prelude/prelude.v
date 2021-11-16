@@ -2,15 +2,4 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export
   base
-  tactics
-  decidable
-  orders
-  option
-  vector
-  numbers
-  relations
-  collections
-  fin_collections
-  listset
-  list
-  lexico.
+  tactics.
