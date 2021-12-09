@@ -2,7 +2,7 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export permission_bits bits_refine.
 
-Instance pbit_refine `{Env K} :
+#[global] Instance pbit_refine `{Env K} :
     Refine K (env K) (pbit K) := λ Γ α f Δ1 Δ2 γb1 γb2,
   tagged_tag γb1 ⊑{Γ,α,f@Δ1↦Δ2} tagged_tag γb2 ∧
   tagged_perm γb1 = tagged_perm γb2 ∧

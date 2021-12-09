@@ -13,27 +13,27 @@ Definition index := N.
 Definition indexmap := Nmap.
 Notation indexset := (mapset indexmap).
 
-Instance index_dec: EqDecision index := _.
-Instance index_inhabited: Inhabited index := populate 0%N.
-Instance indexmap_dec {A} `{EqDecision A} : EqDecision (indexmap A) := _.
-Instance indexmap_empty {A} : Empty (indexmap A) := @empty (Nmap A) _.
-Instance indexmap_lookup {A} : Lookup index A (indexmap A) :=
+#[global] Instance index_dec: EqDecision index := _.
+#[global] Instance index_inhabited: Inhabited index := populate 0%N.
+#[global] Instance indexmap_dec {A} `{EqDecision A} : EqDecision (indexmap A) := _.
+#[global] Instance indexmap_empty {A} : Empty (indexmap A) := @empty (Nmap A) _.
+#[global] Instance indexmap_lookup {A} : Lookup index A (indexmap A) :=
   @lookup _ _ (Nmap A) _.
-Instance indexmap_partial_alter {A} : PartialAlter index A (indexmap A) :=
+#[global] Instance indexmap_partial_alter {A} : PartialAlter index A (indexmap A) :=
   @partial_alter _ _ (Nmap A) _.
-Instance indexmap_to_list {A} : FinMapToList index A (indexmap A) :=
+#[global] Instance indexmap_to_list {A} : FinMapToList index A (indexmap A) :=
   @map_to_list _ _ (Nmap A) _.
-Instance indexmap_omap: OMap indexmap := @omap Nmap _.
-Instance indexmap_merge: Merge indexmap := @merge Nmap _.
-Instance indexmap_fmap: FMap indexmap := @fmap Nmap _.
-Instance: FinMap index indexmap := _.
-Instance indexmap_dom {A} : Dom (indexmap A) indexset := mapset_dom.
-Instance: FinMapDom index indexmap indexset := mapset_dom_spec.
-Instance index_fresh : Fresh index indexset := _.
-Instance index_infinity: Infinite index := _.
-Instance index_lexico : Lexico index := @lexico N _.
-Instance index_lexico_order : StrictOrder (@lexico index _) := _.
-Instance index_trichotomy: TrichotomyT (@lexico index _) := _.
+#[global] Instance indexmap_omap: OMap indexmap := @omap Nmap _.
+#[global] Instance indexmap_merge: Merge indexmap := @merge Nmap _.
+#[global] Instance indexmap_fmap: FMap indexmap := @fmap Nmap _.
+#[global] Instance: FinMap index indexmap := _.
+#[global] Instance indexmap_dom {A} : Dom (indexmap A) indexset := mapset_dom.
+#[global] Instance: FinMapDom index indexmap indexset := mapset_dom_spec.
+#[global] Instance index_fresh : Fresh index indexset := _.
+#[global] Instance index_infinity: Infinite index := _.
+#[global] Instance index_lexico : Lexico index := @lexico N _.
+#[global] Instance index_lexico_order : StrictOrder (@lexico index _) := _.
+#[global] Instance index_trichotomy: TrichotomyT (@lexico index _) := _.
 Typeclasses Opaque index indexmap.
 
 Global Hint Immediate (is_fresh (A:=index) (C:=indexset)): core.
@@ -43,22 +43,22 @@ Global Hint Immediate (fresh_list_length (A:=index) (C:=indexset)): core.
 (** * Memory environments *)
 Notation memenv K :=
   (indexmap (type K * bool (* false = alive, true = freed *))).
-Instance index_typed {K} : Typed (memenv K) (type K) index := λ Δ o τ,
+#[global] Instance index_typed {K} : Typed (memenv K) (type K) index := λ Δ o τ,
   ∃ β, Δ !! o = Some (τ,β).
 Definition index_alive {K} (Δ : memenv K) (o : index) : Prop :=
   ∃ τ, Δ !! o = Some (τ,false).
-Instance memenv_valid `{Env K} : Valid (env K) (memenv K) := λ Γ Δ,
+#[global] Instance memenv_valid `{Env K} : Valid (env K) (memenv K) := λ Γ Δ,
   ∀ o τ, Δ ⊢ o : τ → ✓{Γ} τ.
 
-Instance index_typecheck {K} : TypeCheck (memenv K) (type K) index := λ Δ o,
+#[global] Instance index_typecheck {K} : TypeCheck (memenv K) (type K) index := λ Δ o,
   fst <$> Δ !! o.
-Instance: `{TypeCheckSpec (memenv K) (type K) index (λ _, True)}.
+#[global] Instance: `{TypeCheckSpec (memenv K) (type K) index (λ _, True)}.
 Proof.
   intros ? Δ o τ. split; unfold type_check, typed,index_typecheck, index_typed.
   * destruct (Δ !! o) as [[??]|]; naive_solver.
   * by intros [? ->].
 Qed.
-Instance index_alive_dec {K} (Δ : memenv K) o : Decision (index_alive Δ o).
+#[global] Instance index_alive_dec {K} (Δ : memenv K) o : Decision (index_alive Δ o).
  refine
   match Δ !! o as mβτ return Decision (∃ τ, mβτ = Some (τ,false)) with
   | Some (_,β) => match β with true => right _ | false => left _ end
@@ -84,7 +84,7 @@ Record memenv_forward {K} (Δ1 Δ2  : memenv K) := {
 }.
 Notation "Δ1 ⇒ₘ Δ2" := (memenv_forward Δ1 Δ2)
   (at level 70, format "Δ1  ⇒ₘ  Δ2") : C_scope.
-Instance: `{PartialOrder (@memenv_forward K)}.
+#[global] Instance: `{PartialOrder (@memenv_forward K)}.
 Proof.
   split; [split; [|intros ??? [??] [??]]; split; naive_solver|].
   cut (∀ (Δ1 Δ2 : memenv K) o τ β,
@@ -121,20 +121,20 @@ Proof. intros ? [β ?]; exists β; eauto using lookup_weaken. Qed.
 (** * Locked locations *)
 Definition lockset : iType :=
   dsig (A:=indexmap natset) (map_Forall (λ _, (.≠ ∅))).
-Instance lockset_eq_dec: EqDecision lockset | 1 := _.
+#[global] Instance lockset_eq_dec: EqDecision lockset | 1 := _.
 Typeclasses Opaque lockset.
 
-Instance lockset_elem_of : ElemOf (index * nat) lockset := λ oi Ω,
+#[global] Instance lockset_elem_of : ElemOf (index * nat) lockset := λ oi Ω,
   ∃ ω, `Ω !! oi.1 = Some ω ∧ oi.2 ∈ ω.
-Program Instance lockset_empty: Empty lockset := dexist ∅ _.
+#[global, program] Instance lockset_empty: Empty lockset := dexist ∅ _.
 Next Obligation. by intros ??; simpl_map. Qed.
-Program Instance lockset_singleton: Singleton (index * nat) lockset := λ oi,
+Global Program Instance lockset_singleton: Singleton (index * nat) lockset := λ oi,
   dexist {[ oi.1 := {[ oi.2 ]} ]} _.
 Next Obligation.
   intros ???. rewrite lookup_singleton_Some; intros [<- <-];
   apply non_empty_singleton_L.
 Qed.
-Program Instance lockset_union: Union lockset := λ Ω1 Ω2,
+Global Program Instance lockset_union: Union lockset := λ Ω1 Ω2,
   let (Ω1,HΩ1) := Ω1 in let (Ω2,HΩ2) := Ω2 in
   dexist (union_with (λ ω1 ω2, Some (ω1 ∪ ω2)) Ω1 Ω2) _.
 Next Obligation.
@@ -143,7 +143,7 @@ Next Obligation.
   intros [[??]|[[??]|(ω1&ω2&?&?&?)]]; simplify_equality'; eauto.
   apply union_positive_l_alt_L; eauto.
 Qed.
-Program Instance lockset_intersection: Intersection lockset := λ Ω1 Ω2,
+Global Program Instance lockset_intersection: Intersection lockset := λ Ω1 Ω2,
   let (Ω1,HΩ1) := Ω1 in let (Ω2,HΩ2) := Ω2 in
   dexist (intersection_with (λ ω1 ω2,
     let ω := ω1 ∩ ω2 in guard (ω ≠ ∅); Some ω) Ω1 Ω2) _.
@@ -152,7 +152,7 @@ Next Obligation.
   intros n ω. rewrite lookup_intersection_with_Some.
   intros (ω1&ω2&?&?&?); simplify_option_eq; eauto.
 Qed.
-Program Instance lockset_difference: Difference lockset := λ Ω1 Ω2,
+Global Program Instance lockset_difference: Difference lockset := λ Ω1 Ω2,
   let (Ω1,HΩ1) := Ω1 in let (Ω2,HΩ2) := Ω2 in
   dexist (difference_with (λ ω1 ω2,
     let ω := ω1 ∖ ω2 in guard (ω ≠ ∅); Some ω) Ω1 Ω2) _.
@@ -161,7 +161,7 @@ Next Obligation.
   intros n ω. rewrite lookup_difference_with_Some.
   intros [[??]|(ω1&ω2&?&?&?)]; simplify_option_eq; eauto.
 Qed.
-Instance lockset_elems: Elements (index * nat) lockset := λ Ω,
+#[global] Instance lockset_elems: Elements (index * nat) lockset := λ Ω,
   let (Ω,_) := Ω in
   map_to_list Ω ≫= λ oω, pair (oω.1) <$> elements (oω.2 : natset).
 
@@ -181,14 +181,14 @@ Proof.
   * by destruct (proj2 (Hoi o j)) as (?&?&?); eauto; simplify_equality'.
   * by destruct (proj1 (Hoi o j)) as (?&?&?); eauto; simplify_equality'.
 Qed.
-Instance lockset_elem_of_dec oi (Ω : lockset) : Decision (oi ∈ Ω) | 1.
+#[global] Instance lockset_elem_of_dec oi (Ω : lockset) : Decision (oi ∈ Ω) | 1.
 Proof.
  refine
   match `Ω !! oi.1 as mω return Decision (∃ ω, mω = Some ω ∧ oi.2 ∈ ω) with
   | Some ω => cast_if (decide (oi.2 ∈ ω)) | None => right _
   end; abstract naive_solver.
 Defined.
-Instance: FinSet (index * nat) lockset.
+#[global] Instance: FinSet (index * nat) lockset.
 Proof.
   split; [split; [split| |]| | ].
   * intros [??] (?&?&?); simplify_map_eq.
@@ -245,19 +245,19 @@ Proof.
     intros [o' i] (?&?&?) ([o'' ω'']&(?&?&?)&?); simplify_equality'.
     destruct Ho; rewrite elem_of_list_fmap. exists (o, ω''); eauto.
 Qed.
-Instance: PartialOrder (@subseteq lockset _).
+#[global] Instance: PartialOrder (@subseteq lockset _).
 Proof. split; try apply _. intros ????. apply lockset_eq. intuition. Qed.
-Instance: SemiSet (index * nat) lockset := _.
-Instance: Set_ (index * nat) lockset := _.
-Instance: @RelDecision (prod index nat) lockset 
+#[global] Instance: SemiSet (index * nat) lockset := _.
+#[global] Instance: Set_ (index * nat) lockset := _.
+#[global] Instance: @RelDecision (prod index nat) lockset 
   (@elem_of (prod index nat) lockset lockset_elem_of) := lockset_elem_of_dec.
-Instance: @LeibnizEquiv lockset (@set_equiv_instance _ _ lockset_elem_of).
+  Global Instance: @LeibnizEquiv lockset (@set_equiv_instance _ _ lockset_elem_of).
 Proof. intros ???; by rewrite lockset_eq. Qed.
 
-Instance lockset_valid `{Env K} : Valid (env K * memenv K) lockset := λ ΓΔ Ω,
+#[global] Instance lockset_valid `{Env K} : Valid (env K * memenv K) lockset := λ ΓΔ Ω,
   ∀ o i, (o,i) ∈ Ω → ∃ τ, ΓΔ.2 ⊢ o : τ ∧ ✓{ΓΔ.1} τ ∧ i < bit_size_of (ΓΔ.1) τ.
 Local Obligation Tactic := idtac.
-Program Instance lockset_valid_dec
+Global Program Instance lockset_valid_dec
     `{Env K} Γ Δ (Ω : lockset) : Decision (✓{Γ,Δ} Ω) :=
   cast_if (decide (map_relation (λ τβ ω,
     ✓{Γ} (τβ.1) ∧ length (natmap_car (mapset_car ω)) ≤ bit_size_of Γ (τβ.1)

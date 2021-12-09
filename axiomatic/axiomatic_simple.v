@@ -15,7 +15,7 @@ Implicit Types p : ptr K.
 Implicit Types v : val K.
 Implicit Types ν : lrval K.
 
-Global Instance:
+#[global] Instance:
   `{Proper ((≡{Γ,δ}) ==> pointwise_relation _ (≡{Γ,δ})) (const_assert ν)}.
 Proof. by intros Γ δ ν P Q HPQ ν'; simpl; rewrite HPQ. Qed.
 

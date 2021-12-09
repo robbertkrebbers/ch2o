@@ -375,7 +375,7 @@ Proof.
     end; eauto.
 Qed.
 Local Hint Immediate ctree_typed_type_valid: core.
-Global Instance: TypeOfSpec (env K * memenv K) (type K) (mtree K).
+#[global] Instance: TypeOfSpec (env K * memenv K) (type K) (mtree K).
 Proof.
   intros [Γ Δ]. induction 1 using @ctree_typed_ind; decompose_Forall_hyps;
     try match goal with
@@ -383,7 +383,7 @@ Proof.
     end; simpl; eauto with f_equal.
 Qed.
 Local Arguments type_check _ _ _ _ _ !_ /.
-Global Instance:
+#[global] Instance:
   TypeCheckSpec (env K * memenv K) (type K) (mtree K) (λ _, True).
 Proof.
   intros [Γ Δ]. assert (∀ ws τs,

@@ -12,8 +12,8 @@ Concrete permissions are built from more primitive combinators:
   that are addresseble.
 *)
 Definition perm := (lockable (counter Qcanon.Qc) + Qcanon.Qc)%type.
-Instance perm_sep_ops : SeparationOps perm := _.
-Instance perm_sep : Separation perm := _.
+#[global] Instance perm_sep_ops : SeparationOps perm := _.
+#[global] Instance perm_sep : Separation perm := _.
 Typeclasses Opaque perm.
 Global Hint Extern 0 (Separation _) => apply (_ : Separation perm): core.
 
@@ -23,9 +23,9 @@ Definition perm_token : perm := inl (LUnlocked (Counter (-1) ∅)).
 
 Inductive pkind :=
   Writable | Readable | Locked | Existing.
-Instance pkind_dec (k1 k2 : pkind) : Decision (k1 = k2).
+#[global] Instance pkind_dec (k1 k2 : pkind) : Decision (k1 = k2).
 Proof. solve_decision. Defined.
-Instance pkind_subseteq : SubsetEq pkind := λ k1 k2,
+#[global] Instance pkind_subseteq : SubsetEq pkind := λ k1 k2,
   match k1, k2 with
   | _, Writable => True
   | (Existing | Readable), Readable => True
@@ -33,17 +33,17 @@ Instance pkind_subseteq : SubsetEq pkind := λ k1 k2,
   | (Existing | Locked), Locked => True
   | _, _ => False
   end.
-Instance pkind_subseteq_dec : ∀ k1 k2 : pkind, Decision (k1 ⊆ k2).
+#[global] Instance pkind_subseteq_dec : ∀ k1 k2 : pkind, Decision (k1 ⊆ k2).
 Proof. intros [] []; apply _. Defined.
-Instance: PartialOrder (@subseteq pkind _).
+#[global] Instance: PartialOrder (@subseteq pkind _).
 Proof. by repeat split; repeat intros []. Qed.
-Instance option_pkind_subseteq : SubsetEq (option pkind) := λ k1 k2,
+#[global] Instance option_pkind_subseteq : SubsetEq (option pkind) := λ k1 k2,
   match k1, k2 with
   | Some k1, Some k2 => k1 ⊆ k2 | None, _ => True | Some _, None => False
   end.
-Instance option_pkind_subseteq_dec : ∀ k1 k2 : option pkind, Decision (k1 ⊆ k2).
+#[global] Instance option_pkind_subseteq_dec : ∀ k1 k2 : option pkind, Decision (k1 ⊆ k2).
 Proof. intros [] []; apply _. Defined.
-Instance: PartialOrder (@subseteq (option pkind) _).
+#[global] Instance: PartialOrder (@subseteq (option pkind) _).
 Proof. by repeat split; repeat intros []; try destruct p; try destruct p0; try destruct p1. Qed.
 
 Definition perm_kind (γ : perm) : option pkind :=

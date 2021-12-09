@@ -172,7 +172,7 @@ Record frontend_state_valid' (S : frontend_state K) := {
       to_globals S !! (f : string) = Some (Fun sto (τsτ.1) (τsτ.2) ms)
     ) (env_f (to_env S))
 }.
-Global Instance frontend_state_valid : Valid () (frontend_state K) :=
+#[global] Instance frontend_state_valid : Valid () (frontend_state K) :=
   λ _, frontend_state_valid'.
 Hint Extern 0 (✓ _) => eapply to_env_valid; eassumption: core.
 Hint Extern 0 (✓{_} _) => eapply to_mem_valid; eassumption: core.
@@ -221,16 +221,16 @@ Record frontend_state_subseteq' (S1 S2 : frontend_state K) := {
   to_globals_forward :
     map_included global_decl_forward (to_globals S1) (to_globals S2)
 }.
-Global Instance frontend_state_subseteq :
+#[global] Instance frontend_state_subseteq :
   SubsetEq (frontend_state K) := frontend_state_subseteq'.
 Lemma to_env_subseteq S1 S2 : S1 ⊆ S2 → to_env S1 ⊆ to_env S2.
 Proof. by intros []. Qed.
 Lemma to_mem_subseteq S1 S2 : S1 ⊆ S2 → '{to_mem S1} ⊆ '{to_mem S2}.
 Proof. by intros []. Qed.
 Hint Immediate to_env_subseteq to_mem_subseteq: core.
-Instance: PreOrder global_decl_forward.
+#[local] Instance: PreOrder global_decl_forward.
 Proof. split. by intros []. intros [] []; naive_solver. Qed.
-Global Instance: PreOrder ((⊆) : relation (frontend_state K)).
+#[global] Instance: PreOrder ((⊆) : relation (frontend_state K)).
 Proof. split; [by split|]. intros ??? [] []; split; etransitivity; eauto. Qed.
 Hint Extern 1 (_ ⊆ _) => etransitivity; [eassumption|]: core.
 Hint Extern 1 (_ ⊆ _) => etransitivity; [|eassumption]: core.

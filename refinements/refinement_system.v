@@ -23,7 +23,7 @@ Inductive lrval_refine' (Γ : env K) (α : bool)
   | rval_refine v1 v2 τ :
      v1 ⊑{Γ,α,f@Δ1↦Δ2} v2 : τ →
      lrval_refine' Γ α f Δ1 Δ2 (inr v1) (inr v2) (inr τ).
-Global Instance lrval_refine:
+#[global] Instance lrval_refine:
   RefineT K (env K) (lrtype K) (lrval K) := lrval_refine'.
 
 Inductive expr_refine' (Γ : env K)
@@ -93,7 +93,7 @@ Inductive expr_refine' (Γ : env K)
      expr_refine' Γ τs α f Δ1 Δ2 e1 e2 (inr σ) →
      expr_refine' Γ τs α f Δ1 Δ2 e1' e2' (inr τ) →
      expr_refine' Γ τs α f Δ1 Δ2 (#[r:=e1]e1') (#[r:=e2]e2') (inr τ).
-Global Instance expr_refine: RefineT K (env K * list (type K))
+#[global] Instance expr_refine: RefineT K (env K * list (type K))
     (lrtype K) (expr K) := uncurry expr_refine'.
 
 Section expr_refine_ind.
@@ -237,7 +237,7 @@ Inductive ectx_item_refine' (Γ : env K) (τs: list (type K))
      Γ ⊢ r : τ ↣ σ → e1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} e2 : inr σ →
      ectx_item_refine' Γ τs α f Δ1 Δ2
        (#[r:=e1]□) (#[r:=e2]□) (inr τ) (inr τ).
-Global Instance ectx_item_refine: PathRefine K (env K * list (type K))
+#[global] Instance ectx_item_refine: PathRefine K (env K * list (type K))
   (lrtype K) (lrtype K) (ectx_item K) := uncurry ectx_item_refine'.
 Inductive ectx_refine' (Γs : env K * list (type K))
      (α : bool) (f : meminj K) (Δ1 Δ2 : memenv K) :
@@ -247,7 +247,7 @@ Inductive ectx_refine' (Γs : env K * list (type K))
      Ei1 ⊑{Γs,α,f@Δ1↦Δ2} Ei2 : τ ↣ τ' →
      ectx_refine' Γs α f Δ1 Δ2 E1 E2 τ' τ'' →
      ectx_refine' Γs α f Δ1 Δ2 (Ei1 :: E1) (Ei2 :: E2) τ τ''.
-Global Instance ectx_refine: PathRefine K (env K * list (type K))
+#[global] Instance ectx_refine: PathRefine K (env K * list (type K))
   (lrtype K) (lrtype K) (ectx K) := ectx_refine'.
 
 Inductive stmt_refine' (Γ : env K) (τs : list (type K))
@@ -295,7 +295,7 @@ Inductive stmt_refine' (Γ : env K) (τs : list (type K))
      locks e1 = ∅ → locks e2 = ∅ →
      stmt_refine' Γ τs α f Δ1 Δ2 s1 s2 (c,mσ) →
      stmt_refine' Γ τs α f Δ1 Δ2 (switch{e1} s1) (switch{e2} s2) (false, mσ).
-Global Instance stmt_refine: RefineT K (env K * list (type K))
+#[global] Instance stmt_refine: RefineT K (env K * list (type K))
    (rettype K) (stmt K) := uncurry stmt_refine'.
 
 Inductive sctx_item_refine' (Γ : env K) (τs: list (type K))
@@ -329,7 +329,7 @@ Inductive sctx_item_refine' (Γ : env K) (τs: list (type K))
      sctx_item_refine' Γ τs α f Δ1 Δ2
        (switch{e1} □) (switch{e2} □) (c,mσ) (false,mσ).
 
-Global Instance sctx_refine: PathRefine K (env K * list (type K))
+#[global] Instance sctx_refine: PathRefine K (env K * list (type K))
   (rettype K) (rettype K) (sctx_item K) := uncurry sctx_item_refine'.
 
 Inductive esctx_item_refine' (Γ : env K) (τs: list (type K))
@@ -348,7 +348,7 @@ Inductive esctx_item_refine' (Γ : env K) (τs: list (type K))
      s1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} s2 : (c,mσ) →
      esctx_item_refine' Γ τs α f Δ1 Δ2
        (switch{□} s1) (switch{□} s2) (intT τi) (false,mσ).
-Global Instance esctx_item_refine: PathRefine K (env K * list (type K))
+#[global] Instance esctx_item_refine: PathRefine K (env K * list (type K))
   (type K) (rettype K) (esctx_item K) := uncurry esctx_item_refine'.
 
 Inductive ctx_item_refine' (Γ : env K) (τs: list (type K))
@@ -379,7 +379,7 @@ Inductive ctx_item_refine' (Γ : env K) (τs: list (type K))
      rettype_match cmσ σ →
      ctx_item_refine' Γ τs α f Δ1 Δ2 (CParams g (zip os1 σs))
        (CParams g (zip os2 σs)) (Stmt_type cmσ) (Fun_type g).
-Global Instance ctx_item_refine: PathRefine K (env K * list (type K))
+#[global] Instance ctx_item_refine: PathRefine K (env K * list (type K))
     (focustype K) (focustype K) (ctx_item K) := uncurry ctx_item_refine'.
 Inductive ctx_refine' (Γ : env K) (α : bool)
      (f : meminj K) (Δ1 Δ2 : memenv K) :
@@ -389,7 +389,7 @@ Inductive ctx_refine' (Γ : env K) (α : bool)
      Ek1 ⊑{(Γ,(locals k1).*2),α,f@Δ1↦Δ2} Ek2 : τf ↣ τf' →
      ctx_refine' Γ α f Δ1 Δ2 k1 k2 τf' τf'' →
      ctx_refine' Γ α f Δ1 Δ2 (Ek1 :: k1) (Ek2 :: k2) τf τf''.
-Global Instance ctx_refine: PathRefine K (env K)
+#[global] Instance ctx_refine: PathRefine K (env K)
   (focustype K) (focustype K) (ctx K) := ctx_refine'.
 
 Inductive direction_refine' (Γ : env K) (α : bool) (f : meminj K)
@@ -402,7 +402,7 @@ Inductive direction_refine' (Γ : env K) (α : bool) (f : meminj K)
   | Goto_refine l cmτ : direction_refine' Γ α f Δ1 Δ2 (↷ l) (↷ l) cmτ
   | Throw_refine n cmτ : direction_refine' Γ α f Δ1 Δ2 (↑ n) (↑ n) cmτ
   | Switch_refine mx cmτ : direction_refine' Γ α f Δ1 Δ2 (↓ mx) (↓ mx) cmτ.
-Global Instance direction_refine: RefineT K (env K)
+#[global] Instance direction_refine: RefineT K (env K)
   (rettype K) (direction K) := direction_refine'.
 
 Inductive focus_refine' (Γ : env K) (τs : list (type K))
@@ -433,7 +433,7 @@ Inductive focus_refine' (Γ : env K) (τs : list (type K))
      Es1 ⊑{(Γ,τs),α,f@Δ1↦Δ2} Es2 : τ ↣ mσ → Ω1 ⊑{Γ,α,f@Δ1↦Δ2} Ω2 →
      focus_refine' Γ τs α f Δ1 Δ2 (Undef (UndefBranch Es1 Ω1 v1))
        (Undef (UndefBranch Es2 Ω2 v2)) (Stmt_type mσ).
-Global Instance focus_refine: RefineT K (env K * list (type K))
+#[global] Instance focus_refine: RefineT K (env K * list (type K))
     (focustype K) (focus K) := uncurry focus_refine'.
 
 Inductive state_refine' (Γ : env K) (α : bool)
@@ -446,10 +446,10 @@ Inductive state_refine' (Γ : env K) (α : bool)
   | Undef_State_refine S1 S2 σf :
      α → Γ ⊢ S1 : σf → Γ ⊢ S2 : σf → is_undef_state S1 →
      state_refine' Γ α f S1 S2 σf.
-Global Instance state_refine :
+#[global] Instance state_refine :
   RefineTM K (env K) (focustype K) (state K) := state_refine'.
 
-Global Instance funenv_refine:
+#[global] Instance funenv_refine:
     Refine K (env K) (funenv K) := λ Γ α f Δ1 Δ2 δ1 δ2, ∀ g,
   match δ1 !! g, δ2 !! g, Γ !! g with
   | Some s1, Some s2, Some (τs,τ) => ∃ cmτ,

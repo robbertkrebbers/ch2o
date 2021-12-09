@@ -28,7 +28,7 @@ Arguments memenv_refine_typed_r {_ _ _ _ _ _ _} _ _ _ _ _ _ _.
 Arguments memenv_refine_alive_l {_ _ _ _ _ _ _} _ _ _ _ _ _.
 Arguments memenv_refine_alive_r {_ _ _ _ _ _ _} _ _ _ _ _ _ _.
 
-Instance memenv_refine `{Env K} :
+#[global] Instance memenv_refine `{Env K} :
   RefineM K (env K) (memenv K) := memenv_refine'.
 
 Record meminj_extend {K} (f f' : meminj K) (Δ1 Δ2 : memenv K) := {

@@ -22,7 +22,7 @@ Arguments addr_type_object {_} _.
 Arguments addr_type_base {_} _.
 Arguments addr_type {_} _.
 
-Instance addr_eq_dec `{EqDecision K}: EqDecision (addr K).
+#[global] Instance addr_eq_dec `{EqDecision K}: EqDecision (addr K).
 Proof. solve_decision. Defined.
 
 Section address_operations.
@@ -164,9 +164,9 @@ Lemma addr_typed_ptr_type_valid Γ Δ a σp : ✓ Γ → (Γ,Δ) ⊢ a : σp →
 Proof. destruct 2; eauto using castable_ptr_type_valid. Qed.
 Lemma addr_size_of_ne_0 Γ Δ a σp: ✓ Γ → (Γ,Δ) ⊢ a : σp → ptr_size_of Γ σp ≠ 0.
 Proof. destruct σp; eauto using size_of_ne_0, addr_typed_type_valid. Qed.
-Global Instance: TypeOfSpec (env K * memenv K) (ptr_type K) (addr K).
+#[global] Instance: TypeOfSpec (env K * memenv K) (ptr_type K) (addr K).
 Proof. by intros [??]; destruct 1. Qed.
-Global Instance:
+#[global] Instance:
   TypeCheckSpec (env K * memenv K) (ptr_type K) (addr K) (λ _, True).
 Proof.
   intros [Γ Δ] a σ _. split.
@@ -193,9 +193,9 @@ Lemma addr_type_object_eq Γ Δ a1 a2 σp1 σp2 :
   (Γ,Δ) ⊢ a1 : σp1 → (Γ,Δ) ⊢ a2 : σp2 → addr_index a1 = addr_index a2 →
   addr_type_object a1 = addr_type_object a2.
 Proof. by destruct 1, 1; intros; simplify_type_equality'. Qed.
-Global Instance addr_strict_dec Γ a : Decision (addr_strict Γ a).
+#[global] Instance addr_strict_dec Γ a : Decision (addr_strict Γ a).
 Proof. unfold addr_strict; apply _. Defined.
-Global Instance addr_is_obj_dec a : Decision (addr_is_obj a).
+#[global] Instance addr_is_obj_dec a : Decision (addr_is_obj a).
 Proof. unfold addr_is_obj; apply _. Defined.
 Lemma addr_index_freeze β a : addr_index (freeze β a) = addr_index a.
 Proof. by destruct a. Qed.
@@ -465,7 +465,7 @@ Proof.
      (apply Nat.div_small_iff; eauto using size_of_ne_0, TArray_valid_inv_type).
     constructor.
 Qed.
-Global Instance addr_is_top_array_dec a : Decision (addr_is_top_array a).
+#[global] Instance addr_is_top_array_dec a : Decision (addr_is_top_array a).
 Proof.
  refine
   match a with
@@ -476,7 +476,7 @@ Proof.
 Defined.
 
 (** ** Disjointness *)
-Global Instance addr_disjoint_dec Γ a1 a2 : Decision (a1 ##{Γ} a2).
+#[global] Instance addr_disjoint_dec Γ a1 a2 : Decision (a1 ##{Γ} a2).
 Proof. unfold disjointE, addr_disjoint; apply _. Defined.
 Lemma addr_disjoint_weaken Γ1 Γ2 m1 a1 a2 σp1 σp2 :
   ✓ Γ1 → (Γ1,m1) ⊢ a1 : σp1 → (Γ1,m1) ⊢ a2 : σp2 →

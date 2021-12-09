@@ -8,13 +8,13 @@ Definition error (S E A : Type) : Type := S → E + (A * S).
 Definition error_eval {S E A} (x : error S E A) (s : S) : E + A :=
   match x s with inl e => inl e | inr (a,_) => inr a end.
 
-Instance error_ret {S E} : MRet (error S E) := λ A x s, inr (x,s).
-Instance error_bind {S E} : MBind (error S E) := λ A B f x s,
+#[global] Instance error_ret {S E} : MRet (error S E) := λ A x s, inr (x,s).
+#[global] Instance error_bind {S E} : MBind (error S E) := λ A B f x s,
   match x s with
   | inr (a,s') => f a s'
   | inl e => inl e
   end.
-Instance error_fmap {S E} : FMap (error S E) := λ A B f x s,
+#[global] Instance error_fmap {S E} : FMap (error S E) := λ A B f x s,
   match x s with
   | inr (a,s') => inr (f a,s')
   | inl e => inl e

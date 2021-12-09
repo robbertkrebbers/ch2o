@@ -19,22 +19,22 @@ Inductive binop :=
   | BitOp : bitop → binop.
 Inductive unop := NegOp | ComplOp | NotOp.
 
-Instance comp_kind_dec: EqDecision compop.
+#[global] Instance comp_kind_dec: EqDecision compop.
 Proof. solve_decision. Defined.
-Instance bitop_dec: EqDecision bitop.
+#[global] Instance bitop_dec: EqDecision bitop.
 Proof. solve_decision. Defined.
-Instance arithop_dec: EqDecision arithop.
+#[global] Instance arithop_dec: EqDecision arithop.
 Proof. solve_decision. Defined.
-Instance shiftop_dec: EqDecision shiftop.
+#[global] Instance shiftop_dec: EqDecision shiftop.
 Proof. solve_decision. Defined.
-Instance binop_dec: EqDecision binop.
+#[global] Instance binop_dec: EqDecision binop.
 Proof. solve_decision. Defined.
-Instance unop_dec: EqDecision unop.
+#[global] Instance unop_dec: EqDecision unop.
 Proof. solve_decision. Defined.
 
 Definition Z_comp (c : compop) (x y : Z) : Prop :=
   match c with EqOp => x = y | LtOp => x < y | LeOp => x ≤ y end.
-Instance Z_comp_dec (c : compop) (x y : Z) : Decision (Z_comp c x y).
+#[global] Instance Z_comp_dec (c : compop) (x y : Z) : Decision (Z_comp c x y).
 Proof. case c; solve_decision. Defined.
 Definition bool_bitop (op : bitop) : bool → bool → bool :=
   match op with AndOp => (&&) | OrOp => (||) | XorOp => xorb end.
@@ -50,7 +50,7 @@ Section pre_operations.
     | int_subseteq_Unsigned_Signed (k1 k2 : K) :
        int_upper (IntType Unsigned k1) ≤ int_upper (IntType Signed k2) →
        IntType Unsigned k1 ⊆ IntType Signed k2.
-  Global Existing Instance int_subseteq.
+  #[global] Existing Instance int_subseteq.
 
   Definition int_promote (τi : int_type K) : int_type K :=
     if decide (rank τi ⊆ int_rank) then
@@ -286,7 +286,7 @@ Proof.
     naive_solver eauto using int_typed_rank_weaken,
     int_typed_rank_strict_weaken, int_upper_le_invert, rank_le_upper.
 Qed.
-Global Instance: PartialOrder (⊆@{int_type K}).
+#[global] Instance: PartialOrder (⊆@{int_type K}).
 Proof.
   repeat split.
   * by intros [[] ?]; constructor.
@@ -300,12 +300,12 @@ Proof.
     + destruct (irreflexivity (⊂) k2); eapply strict_transitive_r,
         rank_size_reflecting, int_upper_le_invert; eauto.
 Qed.
-Global Instance: JoinSemiLattice K.
+#[global] Instance: JoinSemiLattice K.
 Proof.
   split; try apply _;
     unfold union, rank_union; intros; case_decide; auto using (total_not (R := (⊆@{K}))).
 Qed.
-Global Instance: JoinSemiLattice (int_type K).
+#[global] Instance: JoinSemiLattice (int_type K).
 Proof.
   split; try apply _.
   * intros [[] k1] [[] k2]; simpl.
@@ -366,8 +366,8 @@ Proof.
     apply Z.le_lt_trans with x; auto.
     apply Z.div_le_upper_bound; auto with zpos.
     transitivity (1 * x); auto with lia.
+    assert (0 < 2 ^ y) by auto with zpos.
     apply Z.mul_le_mono_nonneg_r; auto with zpos.
-    assert (0 < 2 ^ y); auto with zpos.
 Qed.
 Lemma int_pre_cast_typed x σi :
   int_pre_cast_ok σi x → int_typed (int_pre_cast σi x) σi.

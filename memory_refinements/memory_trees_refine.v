@@ -45,7 +45,7 @@ Inductive ctree_refine' `{Env K} (Γ : env K) (α : bool) (f : meminj K)
      ¬(ctree_unmapped w1 ∧ Forall sep_unmapped γbs1) →
      ctree_refine' Γ α f Δ1 Δ2
        (MUnion t i w1 γbs1) (MUnionAll t γbs2) (unionT t).
-Instance ctree_refine `{Env K} :
+#[global] Instance ctree_refine `{Env K} :
   RefineT K (env K) (type K) (mtree K) := ctree_refine'.
 
 Lemma ctree_refine_inv_l `{Env K} (Γ : env K) (α : bool)

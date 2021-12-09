@@ -29,20 +29,20 @@ Notation "'intV{' τi } x" := (VBase (intV{τi} x))
 Notation "'ptrV' p" := (VBase (ptrV p)) (at level 10) : val_scope.
 Notation "'byteV' bs" := (VBase (byteV bs)) (at level 10) : val_scope.
 
-Instance: `{Inj (=) (=) (@VBase K)}.
+#[global] Instance: `{Inj (=) (=) (@VBase K)}.
 Proof. by injection 1. Qed.
-Instance: `{Inj2 (=) (=) (=) (@VArray K)}.
+#[global] Instance: `{Inj2 (=) (=) (=) (@VArray K)}.
 Proof. by injection 1. Qed.
-Instance: `{Inj (=) (=) (@VStruct K t)}.
+#[global] Instance: `{Inj (=) (=) (@VStruct K t)}.
 Proof. by injection 1. Qed.
-Instance: `{Inj2 (=) (=) (=) (@VUnion K t)}.
+#[global] Instance: `{Inj2 (=) (=) (=) (@VUnion K t)}.
 Proof. by injection 1. Qed.
-Instance: `{Inj (=) (=) (@VUnionAll K t)}.
+#[global] Instance: `{Inj (=) (=) (@VUnionAll K t)}.
 Proof. by injection 1. Qed.
 
-Instance maybe_VBase {K} : Maybe (@VBase K) := λ v,
+#[global] Instance maybe_VBase {K} : Maybe (@VBase K) := λ v,
   match v with VBase vb => Some vb | _ => None end.
-Instance val_eq_dec `{EqDecision K}: EqDecision (val K).
+#[global] Instance val_eq_dec `{EqDecision K}: EqDecision (val K).
 Proof.
  refine (
   fix go v1 v2 := let _ : EqDecision (val K) := go in
@@ -82,7 +82,7 @@ Section val_ind.
     end.
 End val_ind.
 
-Instance val_freeze `{Env K} : Freeze (val K) :=
+#[global] Instance val_freeze `{Env K} : Freeze (val K) :=
   fix go β v {struct v} := let _ : Freeze (val K) := @go in
   match v with
   | VBase vb => VBase (freeze β vb)
@@ -644,7 +644,7 @@ Proof.
 Qed.
 Lemma val_typed_types_valid Γ Δ vs τs : ✓ Γ → (Γ,Δ) ⊢* vs :* τs → ✓{Γ}* τs.
 Proof. induction 2; constructor; eauto using val_typed_type_valid. Qed.
-Global Instance: TypeOfSpec (env K * memenv K) (type K) (val K).
+#[global] Instance: TypeOfSpec (env K * memenv K) (type K) (val K).
 Proof.
   intros [Γ Δ]. induction 1 using @val_typed_ind; decompose_Forall_hyps;
     f_equal; eauto; eapply type_of_correct; eauto.
@@ -1161,7 +1161,7 @@ Qed.
 
 (** ** Decidable typing *)
 Local Arguments type_check _ _ _ _ _ !_ /.
-Global Instance:
+#[global] Instance:
   TypeCheckSpec (env K * memenv K) (type K) (val K) (✓ ∘ fst).
 Proof.
   intros [Γ Δ] v τ ?; revert v τ. assert (∀ vs τs,

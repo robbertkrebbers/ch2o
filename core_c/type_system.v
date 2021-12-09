@@ -20,19 +20,19 @@ Section typing.
 Context `{Env K}.
 Notation envs := (env K * memenv K * list (type K))%type.
 
-Global Instance stack_item_valid : Valid (memenv K) (index * type K) := λ Δ oτ,
+#[global] Instance stack_item_valid : Valid (memenv K) (index * type K) := λ Δ oτ,
   Δ ⊢ oτ.1 : oτ.2.
-Global Instance rettype_valid : Valid (env K) (rettype K) := λ Γ mcτ,
+#[global] Instance rettype_valid : Valid (env K) (rettype K) := λ Γ mcτ,
   match mcτ.2 with Some τ => ✓{Γ} τ | _ => True end.
 
 Inductive lrtype_valid' (Γ : env K) : lrtype K → Prop :=
   | ltype_valid τp : ✓{Γ} τp → lrtype_valid' Γ (inl τp)
   | rtype_valid τ : ✓{Γ} τ → lrtype_valid' Γ (inr τ).
-Global Instance lrtype_valid : Valid (env K) (lrtype K) := lrtype_valid'.
+#[global] Instance lrtype_valid : Valid (env K) (lrtype K) := lrtype_valid'.
 Inductive lrval_typed' (Γ : env K) (Δ : memenv K) : lrval K → lrtype K → Prop :=
   | lval_typed p τp : (Γ,Δ) ⊢ p : τp → lrval_typed' Γ Δ (inl p) (inl τp)
   | rval_typed v τ : (Γ,Δ) ⊢ v : τ → lrval_typed' Γ Δ (inr v) (inr τ).
-Global Instance lrval_typed:
+#[global] Instance lrval_typed:
   Typed (env K * memenv K) (lrtype K) (lrval K) := uncurry lrval_typed'.
 
 Inductive expr_typed' (Γ : env K) (Δ : memenv K)
@@ -93,7 +93,7 @@ Inductive expr_typed' (Γ : env K) (Δ : memenv K)
      Γ ⊢ r : τ ↣ σ →
      expr_typed' Γ Δ τs e1 (inr σ) → expr_typed' Γ Δ τs e2 (inr τ) →
      expr_typed' Γ Δ τs (#[r:=e1]e2) (inr τ).
-Global Instance expr_typed:
+#[global] Instance expr_typed:
   Typed envs (lrtype K) (expr K) := uncurry3 expr_typed'.
 
 Section expr_typed_ind.
@@ -204,14 +204,14 @@ Inductive ectx_item_typed' (Γ : env K) (Δ : memenv K)
      Γ ⊢ r : τ ↣ σ → (Γ,Δ,τs) ⊢ e1 : inr σ →
      ectx_item_typed' Γ Δ τs (#[r:=e1] □) (inr τ) (inr τ).
 
-Global Instance ectx_item_typed: PathTyped envs
+#[global] Instance ectx_item_typed: PathTyped envs
   (lrtype K) (lrtype K) (ectx_item K) := uncurry3 ectx_item_typed'.
 Inductive ectx_typed' (Γs : envs) : ectx K → lrtype K → lrtype K → Prop :=
   | ectx_nil_typed_2 τ : ectx_typed' Γs [] τ τ
   | ectx_cons_typed_2 Ei E τ1 τ2 τ3 :
      Γs ⊢ Ei : τ1 ↣ τ2 → ectx_typed' Γs E τ2 τ3 →
      ectx_typed' Γs (Ei :: E) τ1 τ3.
-Global Instance ectx_typed:
+#[global] Instance ectx_typed:
   PathTyped envs (lrtype K) (lrtype K) (ectx K) := ectx_typed'.
 
 Inductive rettype_union :
@@ -257,7 +257,7 @@ Inductive stmt_typed' (Γ : env K) (Δ : memenv K)
      (Γ,Δ,τs) ⊢ e : inr (intT τi) → locks e = ∅ →
      stmt_typed' Γ Δ τs s (c,mσ) → stmt_typed' Γ Δ τs (switch{e} s) (false,mσ)
      .
-Global Instance stmt_typed:
+#[global] Instance stmt_typed:
   Typed envs (rettype K) (stmt K) := uncurry3 stmt_typed'.
 
 Inductive sctx_item_typed' (Γ : env K) (Δ : memenv K)
@@ -283,7 +283,7 @@ Inductive sctx_item_typed' (Γ : env K) (Δ : memenv K)
   | CSWitch_typed e τi c mσ :
      (Γ,Δ,τs) ⊢ e : inr (intT τi) → locks e = ∅ →
      sctx_item_typed' Γ Δ τs (switch{e} □) (c,mσ) (false,mσ).
-Global Instance sctx_typed: PathTyped envs (rettype K)
+#[global] Instance sctx_typed: PathTyped envs (rettype K)
   (rettype K) (sctx_item K) := uncurry3 sctx_item_typed'.
 
 Inductive esctx_item_typed' (Γ : env K) (Δ : memenv K)
@@ -297,7 +297,7 @@ Inductive esctx_item_typed' (Γ : env K) (Δ : memenv K)
   | CSwitchE_typed τi s c mσ :
      (Γ,Δ,τs) ⊢ s : (c,mσ) →
      esctx_item_typed' Γ Δ τs (switch{□} s) (intT τi) (false,mσ).
-Global Instance esctx_item_typed: PathTyped envs (type K)
+#[global] Instance esctx_item_typed: PathTyped envs (type K)
   (rettype K) (esctx_item K) := uncurry3 esctx_item_typed'.
 
 Inductive ctx_item_typed'
@@ -320,7 +320,7 @@ Inductive ctx_item_typed'
      Γ !! f = Some (σs, σ) → Δ ⊢* os :* σs →
      rettype_match cmσ σ → ctx_item_typed'
        Γ Δ τs (CParams f (zip os σs)) (Stmt_type cmσ) (Fun_type f).
-Global Instance ctx_item_typed: PathTyped envs (focustype K)
+#[global] Instance ctx_item_typed: PathTyped envs (focustype K)
   (focustype K) (ctx_item K) := uncurry3 ctx_item_typed'.
 Inductive ctx_typed' (Γs : env K * memenv K) :
      ctx K → focustype K → focustype K → Prop :=
@@ -328,7 +328,7 @@ Inductive ctx_typed' (Γs : env K * memenv K) :
   | ctx_cons_typed_2 Ek k τf1 τf2 τf3 :
      (Γs,(locals k).*2) ⊢ Ek : τf1 ↣ τf2 →
      ctx_typed' Γs k τf2 τf3 → ctx_typed' Γs (Ek :: k) τf1 τf3.
-Global Instance ctx_typed: PathTyped (env K * memenv K)
+#[global] Instance ctx_typed: PathTyped (env K * memenv K)
   (focustype K) (focustype K) (ctx K) := ctx_typed'.
 
 Inductive direction_typed' (Γ : env K) (Δ : memenv K) :
@@ -339,7 +339,7 @@ Inductive direction_typed' (Γ : env K) (Δ : memenv K) :
   | Goto_typed l cmτ : direction_typed' Γ Δ (↷ l) cmτ
   | Throw_typed n cmτ : direction_typed' Γ Δ (↑ n) cmτ
   | Switch_typed mx cmτ : direction_typed' Γ Δ (↓ mx) cmτ.
-Global Instance direction_typed: Typed (env K * memenv K)
+#[global] Instance direction_typed: Typed (env K * memenv K)
   (rettype K) (direction K) := uncurry direction_typed'.
 
 Inductive focus_typed' (Γ : env K) (Δ : memenv K)
@@ -361,10 +361,10 @@ Inductive focus_typed' (Γ : env K) (Δ : memenv K)
   | UndefBranch_typed Es Ω v τ mσ :
      ✓{Γ,Δ} Ω → (Γ,Δ) ⊢ v : τ → (Γ,Δ,τs) ⊢ Es : τ ↣ mσ →
      focus_typed' Γ Δ τs (Undef (UndefBranch Es Ω v)) (Stmt_type mσ).
-Global Instance focus_typed:
+#[global] Instance focus_typed:
   Typed envs (focustype K) (focus K) := uncurry3 focus_typed'.
 
-Global Instance state_typed :
+#[global] Instance state_typed :
     Typed (env K) (focustype K) (state K) := λ Γ S σf, ∃ τf,
   let 'State k φ m := S in
   (Γ,'{m},(locals k).*2) ⊢ φ : τf ∧
@@ -377,7 +377,7 @@ Definition funenv_prevalid (Γ : env K) (Δ : memenv K) (δ : funenv K) :=
     (Γ,Δ,τs) ⊢ s : cmτ ∧ rettype_match cmτ τ ∧
     gotos s ⊆ labels s ∧ throws_valid 0 s
   ) δ.
-Global Instance funenv_valid: Valid (env K * memenv K) (funenv K) := λ ΓΔ δ,
+#[global] Instance funenv_valid: Valid (env K * memenv K) (funenv K) := λ ΓΔ δ,
   let (Γ,Δ) := ΓΔ in
   funenv_prevalid Γ Δ δ ∧ dom funset (env_f Γ) ⊆ dom funset δ.
 End typing.

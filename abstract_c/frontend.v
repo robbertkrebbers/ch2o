@@ -56,15 +56,15 @@ with ctype : iType :=
   | CTFun : list (option string * ctype) → ctype → ctype
   | CTTypeOf : cexpr → ctype.
 
-Instance maybe_CEConstString : Maybe CEConstString := λ ce,
+#[global] Instance maybe_CEConstString : Maybe CEConstString := λ ce,
   match ce with CEConstString zs => Some zs | _ => None end.
-Instance maybe_CTFun : Maybe2 CTFun := λ cτ,
+#[global] Instance maybe_CTFun : Maybe2 CTFun := λ cτ,
   match cτ with CTFun cτs cτ => Some (cτs,cτ) | _ => None end.
-Instance maybe_CSingleInit : Maybe CSingleInit := λ ci,
+#[global] Instance maybe_CSingleInit : Maybe CSingleInit := λ ci,
   match ci with CSingleInit ce => Some ce | _ => None end.
 
 Inductive cstorage := StaticStorage | ExternStorage | AutoStorage.
-Instance cstorage_eq_dec: EqDecision cstorage.
+#[global] Instance cstorage_eq_dec: EqDecision cstorage.
 Proof. solve_decision. Defined.
 
 Inductive cstmt : iType :=
@@ -99,9 +99,9 @@ Inductive type_decl (K : iType) : iType :=
   | Enum : int_type K → type_decl K.
 Arguments Compound {_} _ _.
 Arguments Enum {_} _.
-Instance maybe_Compound {K} : Maybe2 (@Compound K) := λ t,
+#[global] Instance maybe_Compound {K} : Maybe2 (@Compound K) := λ t,
   match t with Compound c xs => Some (c,xs) | _ => None end.
-Instance maybe_Enum {K} : Maybe (@Enum K) := λ t,
+#[global] Instance maybe_Enum {K} : Maybe (@Enum K) := λ t,
   match t with Enum τi => Some τi | _ => None end.
 
 Inductive global_decl (K : iType): iType :=
@@ -113,9 +113,9 @@ Arguments Global {_} _ _ _ _.
 Arguments Fun {_} _ _ _ _.
 Arguments GlobalTypeDef {_} _.
 Arguments EnumVal {_} _ _.
-Instance maybe_Fun {K} : Maybe4 (@Fun K) := λ d,
+#[global] Instance maybe_Fun {K} : Maybe4 (@Fun K) := λ d,
   match d with Fun sto τs τ ms => Some (sto,τs,τ,ms) | _ => None end.
-Instance maybe_GlobalTypeDef {K} : Maybe (@GlobalTypeDef K) := λ d,
+#[global] Instance maybe_GlobalTypeDef {K} : Maybe (@GlobalTypeDef K) := λ d,
   match d with GlobalTypeDef τ => Some τ | _ => None end.
 
 Inductive local_decl (K : iType) : iType :=
@@ -125,7 +125,7 @@ Inductive local_decl (K : iType) : iType :=
 Arguments Extern {_} _.
 Arguments Local {_} _.
 Arguments TypeDef {_} _.
-Instance maybe_TypeDef {K} : Maybe (@TypeDef K) := λ d,
+#[global] Instance maybe_TypeDef {K} : Maybe (@TypeDef K) := λ d,
   match d with TypeDef τ => Some τ | _ => None end.
 (** [None] delimits scopes *)
 Notation local_env K := (list (option (string * local_decl K))).
@@ -148,7 +148,7 @@ Section frontend.
 Context `{Env K}.
 Local Notation M := (error (frontend_state K) string).
 
-Global Instance empty_frontend_state : Empty (frontend_state K) :=
+#[global] Instance empty_frontend_state : Empty (frontend_state K) :=
   FState ∅ ∅ ∅ ∅.
 
 Definition to_funenv (S : frontend_state K) : funenv K :=

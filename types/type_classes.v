@@ -5,7 +5,7 @@ Require Export prelude.
 (** Some useful type classes to get nice overloaded notations for the different
 kinds of values that we will consider. *)
 Class Valid (E A : Type) := valid: E → A → Prop.
-Instance: Params (@valid) 4 := {}.
+#[global] Instance: Params (@valid) 4 := {}.
 Notation "✓{ Γ }" := (valid Γ) (at level 1, format "✓{ Γ }") : C_scope.
 Notation "✓{ Γ }*" := (Forall (✓{Γ})) (at level 1, format "✓{ Γ }*") : C_scope.
 Notation "✓{ Γ }**" := (Forall (✓{Γ}*))
@@ -33,12 +33,12 @@ Notation "Γ ⊢1* vs :* τs" := (Forall2 (typed Γ ∘ fst) vs τs)
   (at level 74, vs at next level) : C_scope.
 Notation "Γ ⊢* vs : τ" := (Forall (λ v, Γ ⊢ v : τ) vs)
   (at level 74, vs at next level) : C_scope.
-Instance: Params (@typed) 4 := {}.
+#[global] Instance: Params (@typed) 4 := {}.
 
 Class PathTyped (E T1 T2 V : Type) := path_typed: E → V → T1 → T2 → Prop.
 Notation "Γ ⊢ v : τ ↣ σ" := (path_typed Γ v τ σ)
   (at level 74, v at next level, τ at next level, σ at next level) : C_scope.
-Instance: Params (@path_typed) 5 := {}.
+#[global] Instance: Params (@path_typed) 5 := {}.
 
 Class TypeCheck (E T V : Type) := type_check: E → V → option T.
 Arguments type_check {_ _ _ _} _ !_ / : simpl nomatch.
@@ -154,7 +154,7 @@ Section path_type_check.
   Proof. intros ?. rewrite <-!path_type_check_correct by done. congruence. Qed.
 End path_type_check.
 
-Instance typed_dec `{TypeCheckSpec E T V (λ _, True)}
+#[global] Instance typed_dec `{TypeCheckSpec E T V (λ _, True)}
   `{EqDecision T} Γ x τ : Decision (Γ ⊢ x : τ).
 Proof.
  refine
@@ -163,7 +163,7 @@ Proof.
   | inright _ => right _
   end; abstract (rewrite <-type_check_correct by done; congruence).
 Defined.
-Instance path_typed_dec `{PathTypeCheckSpec E T1 T2 R (λ _, True)}
+#[global] Instance path_typed_dec `{PathTypeCheckSpec E T1 T2 R (λ _, True)}
   `{EqDecision T2} Γ p τ σ : Decision (Γ ⊢ p : τ ↣ σ).
 Proof.
   refine (cast_if (decide (τ !!{Γ} p = Some σ)));

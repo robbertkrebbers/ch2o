@@ -16,11 +16,11 @@ Class RefineT K E T A :=
 Class PathRefine K E T1 T2 A :=
   path_refine: E → bool →
     meminj K → memenv K → memenv K → A → A → T1 → T2 → Prop.
-Instance: Params (@refineM) 5 := {}.
-Instance: Params (@refine) 5 := {}.
-Instance: Params (@refineTM) 6 := {}.
-Instance: Params (@refineT) 6 := {}.
-Instance: Params (@path_refine) 7 := {}.
+#[global] Instance: Params (@refineM) 5 := {}.
+#[global] Instance: Params (@refine) 5 := {}.
+#[global] Instance: Params (@refineTM) 6 := {}.
+#[global] Instance: Params (@refineT) 6 := {}.
+#[global] Instance: Params (@path_refine) 7 := {}.
 
 Notation "X ⊑{ Γ , α , f } Y" := (refineM Γ α f X Y)
   (at level 70, format "X  ⊑{ Γ , α , f }  Y") : C_scope.

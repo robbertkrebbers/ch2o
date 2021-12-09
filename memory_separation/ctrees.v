@@ -18,18 +18,18 @@ Arguments MStruct {_ _} _ _.
 Arguments MUnion {_ _} _ _ _ _.
 Arguments MUnionAll {_ _} _ _.
 
-Instance: `{Inj (=) (=) (@MBase K A τb)}.
+#[global] Instance: `{Inj (=) (=) (@MBase K A τb)}.
 Proof. by injection 1. Qed.
-Instance: `{Inj2 (=) (=) (=) (@MArray K A)}.
+#[global] Instance: `{Inj2 (=) (=) (=) (@MArray K A)}.
 Proof. by injection 1. Qed.
-Instance: `{Inj (=) (=) (@MStruct K A t)}.
+#[global] Instance: `{Inj (=) (=) (@MStruct K A t)}.
 Proof. by injection 1. Qed.
-Instance: `{Inj2 (=) (=) (=) (@MUnion K A t i)}.
+#[global] Instance: `{Inj2 (=) (=) (=) (@MUnion K A t i)}.
 Proof. by injection 1. Qed.
-Instance: `{Inj (=) (=) (@MUnionAll K A t)}.
+#[global] Instance: `{Inj (=) (=) (@MUnionAll K A t)}.
 Proof. by injection 1. Qed.
 
-Instance ctree_eq_dec {K : iType} {A : sType}
+#[global] Instance ctree_eq_dec {K : iType} {A : sType}
   `{EqDecision K, EqDecision A} : EqDecision (ctree K A).
 Proof.
  refine (
@@ -200,7 +200,7 @@ Section operations.
        ctree_flatten w1 ++ xs1 ##* xs2 → Forall sep_unmapped xs2 →
        ctree_valid w1 → ¬(ctree_unmapped w1 ∧ Forall sep_unmapped xs1) →
        MUnion t i w1 xs1 ##  MUnionAll t xs2.
-  Global Existing Instance ctree_disjoint.
+  #[global] Existing Instance ctree_disjoint.
   Section ctree_disjoint_ind.
     Context (P : ctree K A → ctree K A → Prop).
     Context (Pbase: ∀ τb xs1 xs2, xs1 ##* xs2 → P (MBase τb xs1) (MBase τb xs2)).
@@ -299,7 +299,7 @@ Section operations.
        xs1 ⊆* ctree_flatten w2 ++ xs2 → Forall sep_unmapped xs1 →
        ctree_valid w2 → ¬(ctree_unmapped w2 ∧ Forall sep_unmapped xs2) →
        MUnionAll t xs1 ⊆ MUnion t i w2 xs2.
-  Global Existing Instance ctree_subseteq.
+  #[global] Existing Instance ctree_subseteq.
   Section ctree_subseteq_ind.
     Context (P : ctree K A → ctree K A → Prop).
     Context (Pbase : ∀ τb xs1 xs2,
@@ -490,7 +490,7 @@ Proof.
   intros ?. rewrite ctree_flatten_union by done.
   eauto using seps_disjoint_lr, ctree_flatten_disjoint.
 Qed.
-Global Instance ctree_symmetric : Symmetric (@disjoint (ctree K A) _).
+#[global] Instance ctree_symmetric : Symmetric (@disjoint (ctree K A) _).
 Proof.
   induction 1 using @ctree_disjoint_ind_alt; constructor;
     done || apply Forall2_flip; eauto using Forall2_impl.

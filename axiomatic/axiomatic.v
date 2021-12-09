@@ -58,7 +58,7 @@ Definition directed_pack {K A} (P : A) (Q : A) (R : val K → A)
 
 (** This hideous definition of [fmap] makes [f <$> directed_pack P Q R J]
 convertable with [directed_pack (f P) (f Q) (f ∘ R) (f ∘ J)]. *)
-Instance directed_fmap {K} : FMap (direction K →.) := λ A B f Pd d,
+#[global] Instance directed_fmap {K} : FMap (direction K →.) := λ A B f Pd d,
   match d with
   | ↘ => f (Pd ↘)
   | ↗ => f (Pd ↗)
@@ -112,7 +112,7 @@ Definition ax_stmt_packed `{EnvSpec K} (Γ : env K) (δ : funenv K)
   ✓{Δ}* ρ →
   assert_holds (Pd d) Γ' Δ δ' ρ n (cmap_erase m) →
   ax_graph ax_disjoint_cond (ax_stmt_post Pd s cmτ) Γ' δ' Δ ρ n [] (Stmt d s) m.
-Instance: Params (@ax_stmt_packed) 5 := {}.
+#[global] Instance: Params (@ax_stmt_packed) 5 := {}.
 Notation "Γ \ δ \ P ⊨ₚ s" :=
   (ax_stmt_packed Γ δ P%A s)
   (at level 74, δ at next level, P at next level, s at next level,
@@ -122,8 +122,8 @@ Definition ax_stmt `{EnvSpec K} (Γ : env K) (δ : funenv K) R J T C P s Q :=
   Γ\ δ\ dassert_pack P Q R J T C ⊨ₚ s.
 Definition ax_stmt_top `{EnvSpec K} (Γ : env K) (δ : funenv K) P s Q :=
   Γ\ δ\ dassert_pack_top P Q ⊨ₚ s.
-Instance: Params (@ax_stmt) 5 := {}.
-Instance: Params (@ax_stmt_top) 5 := {}.
+#[global] Instance: Params (@ax_stmt) 5 := {}.
+#[global] Instance: Params (@ax_stmt_top) 5 := {}.
 Notation "Γ \ δ \ R \ J \ T \ C ⊨ₛ {{ P } } s {{ Q } }" :=
   (ax_stmt Γ δ R%A J%A T%A C%A P%A s Q%A)
   (at level 74, δ at next level, R at next level,
@@ -227,7 +227,7 @@ Definition ax_expr `{EnvSpec K} (Γ : env K) (δ : funenv K) (A P : assert K)
   ax_expr_invariant A Γ' Δ δ' ρ n m →
   assert_holds P Γ' Δ δ' ρ n (cmap_erase m) →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post Q τlr) Γ' δ' Δ ρ n [] (Expr e) m.
-Instance: Params (@ax_expr) 5 := {}.
+#[global] Instance: Params (@ax_expr) 5 := {}.
 Notation "Γ \ δ \ A ⊨ₑ {{ P } } e {{ Q } }" :=
   (ax_expr Γ δ A%A P%A e Q%A)
   (at level 74, δ at next level, A at next level,
@@ -244,8 +244,8 @@ Inductive fassert (K : Type) `{Env K} := FAssert {
 Arguments fcommon {_ _} _.
 Arguments fpre {_ _} _ _ _.
 Arguments fpost {_ _} _ _ _ _.
-Existing Instance fpre_stack_indep.
-Existing Instance fpost_stack_indep.
+#[global] Existing Instance fpre_stack_indep.
+#[global] Existing Instance fpost_stack_indep.
 
 Inductive ax_fun_post' `{Env K}
     (f : funname) (τ : type K) (P : val K → assert K)
@@ -297,7 +297,7 @@ Hint Immediate cmap_valid_memenv_valid: core.
 Hint Resolve cmap_empty_valid cmap_erased_empty mem_locks_empty: core.
 Hint Resolve cmap_union_valid_2 cmap_erase_valid: core.
 
-Global Instance directed_pack_proper `{!@Equivalence A R} :
+#[global] Instance directed_pack_proper `{!@Equivalence A R} :
   Proper (R ==> R ==> pointwise_relation _ R ==> pointwise_relation _ R ==>
     pointwise_relation _ R ==> pointwise_relation _ R ==>
     pointwise_relation _ R) (@directed_pack K A).
@@ -305,7 +305,7 @@ Proof. intros ?????????????????? []; simplify_equality'; auto. Qed.
 Lemma directed_fmap_spec {A B} (f : A → B) (P : direction K → A) d :
   (@fmap _ (@directed_fmap K) _ _ f P) d = f (P d).
 Proof. by destruct d. Qed.
-Global Instance ax_stmt_packed_proper Γ δ : Proper
+#[global] Instance ax_stmt_packed_proper Γ δ : Proper
   (pointwise_relation _ (≡{Γ,δ}) ==> (=) ==> iff) (ax_stmt_packed Γ δ).
 Proof.
   cut (Proper (pointwise_relation _ (≡{Γ,δ}) ==> (=) ==> impl)
@@ -321,7 +321,7 @@ Lemma ax_stmt_top_unfold Γ δ P (Q : val _ → assert _) s :
   Γ\ δ ⊨ₛ {{ P }} s {{ Q }} ↔
   Γ\ δ\ Q\ (λ _, False)\ (λ _, False)\ (λ _, False) ⊨ₛ {{ P }} s {{ Q voidV }}.
 Proof. done. Qed.
-Global Instance ax_stmt_proper Γ δ :
+#[global] Instance ax_stmt_proper Γ δ :
   Proper (pointwise_relation _ (≡{Γ,δ}) ==> pointwise_relation _ (≡{Γ,δ}) ==>
      pointwise_relation _ (≡{Γ,δ}) ==> pointwise_relation _ (≡{Γ,δ}) ==>
      (≡{Γ,δ}) ==> (=) ==> (≡{Γ,δ}) ==> iff) (ax_stmt Γ δ).
@@ -329,7 +329,7 @@ Proof.
   intros ?? HR ?? HJ ?? HT ?? HC ?? HP ?? -> ?? HQ.
   unfold ax_stmt. by rewrite HR, HJ, HT, HC, HP, HQ.
 Qed.
-Global Instance ax_stmt_top_proper Γ δ :
+#[global] Instance ax_stmt_top_proper Γ δ :
   Proper ((≡{Γ,δ}) ==> (=) ==> pointwise_relation _ (≡{Γ,δ}) ==> iff)
          (ax_stmt_top Γ δ).
 Proof.
@@ -394,7 +394,7 @@ Proof.
     + split; auto. apply ax_unframe_fun_to_fun; auto.
       by rewrite sep_associative by auto.
 Qed.
-Global Instance ax_expr_proper Γ δ :
+#[global] Instance ax_expr_proper Γ δ :
   Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (=) ==>
           pointwise_relation _ (≡{Γ,δ}) ==> iff) (ax_expr Γ δ).
 Proof.

@@ -3,7 +3,7 @@
 Require Export memory_map memory_trees_refine.
 Local Open Scope ctype_scope.
 
-Instance cmap_refine `{Env K} :
+#[global] Instance cmap_refine `{Env K} :
     Refine K (env K) (mem K) := λ Γ α f Δ1 Δ2 m1 m2,
   (**i 1.) *) ✓{Γ,Δ1} m1 ∧
   (**i 2.) *) ✓{Γ,Δ2} m2 ∧
@@ -13,7 +13,7 @@ Instance cmap_refine `{Env K} :
     ∃ w2 w2' τ,
       cmap_car m2 !! o2 = Some (Obj w2 μ) ∧ w2 !!{Γ} r = Some w2' ∧
       w1 ⊑{Γ,α,f@Δ1↦Δ2} w2' : τ ∧ (μ → r = [])).
-Instance cmap_refine' `{Env K} : RefineM K (env K) (mem K) := λ Γ α f m1 m2,
+#[global] Instance cmap_refine' `{Env K} : RefineM K (env K) (mem K) := λ Γ α f m1 m2,
   m1 ⊑{Γ,α,f@memenv_of m1↦memenv_of m2} m2.
 
 Section memory_map.

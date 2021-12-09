@@ -9,10 +9,10 @@ Record flat_cmap (A : Type) : Type :=
 Arguments FlatCMap {_} _.
 Arguments flat_cmap_car {_} _.
 Add Printing Constructor flat_cmap.
-Instance: `{Inj (=) (=) (@FlatCMap A)}.
+#[global] Instance: `{Inj (=) (=) (@FlatCMap A)}.
 Proof. by injection 1. Qed.
 
-#[refine] Instance flat_cmap_ops `{SeparationOps A} : SeparationOps (flat_cmap A) := {
+#[refine, global] Instance flat_cmap_ops `{SeparationOps A} : SeparationOps (flat_cmap A) := {
   sep_empty := FlatCMap ∅;
   sep_union m1 m2 :=
     let (m1) := m1 in let (m2) := m2 in
@@ -51,7 +51,7 @@ Proof.
   * intros []; apply _.
 Defined.
 
-Instance flat_cmap_sep `{Separation A} : Separation (flat_cmap A).
+#[global] Instance flat_cmap_sep `{Separation A} : Separation (flat_cmap A).
 Proof.
   split.
   * destruct (sep_inhabited A) as (x&?&?).

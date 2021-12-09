@@ -13,7 +13,7 @@ Inductive bit_refine' `{Env K} (Γ : env K) (α : bool) (f : meminj K)
   | BPtr_any_refine' pb1 b2 :
      α → ✓{Γ,Δ1} pb1 → ¬ptr_alive Δ1 (fragmented.frag_item pb1) →
      ✓{Γ,Δ2} b2 → bit_refine' Γ α f Δ1 Δ2 (BPtr pb1) b2.
-Instance bit_refine `{Env K} : Refine K (env K) (bit K) := bit_refine'.
+#[global] Instance bit_refine `{Env K} : Refine K (env K) (bit K) := bit_refine'.
 
 Section bits.
 Context `{EnvSpec K}.

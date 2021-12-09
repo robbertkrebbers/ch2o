@@ -186,13 +186,13 @@ Proof.
   rewrite sep_subseteq_spec'. eexists ∅.
   rewrite sep_right_id; auto using sep_disjoint_empty_r.
 Qed.
-Global Instance: Transitive (@subseteq A _).
+#[global] Instance: Transitive (@subseteq A _).
 Proof.
   intros x y z. rewrite !sep_subseteq_spec'. intros (z1&->&?) (z2&->&?).
   exists (z1 ∪ z2); eauto 8 using sep_associative',
     sep_disjoint_lr, sep_disjoint_move_l, eq_sym.
 Qed.
-Global Instance: AntiSymm (=) (@subseteq A _).
+#[global] Instance: AntiSymm (=) (@subseteq A _).
 Proof.
   intros x y. rewrite !sep_subseteq_spec'; intros (z1&->&?) (z2&Hx&?).
   rewrite <-(sep_right_id x) in Hx at 1 by eauto using sep_disjoint_valid_l.
@@ -222,7 +222,7 @@ Proof.
   rewrite !sep_subseteq_spec'.
   intros ? (?&->&?); eauto using sep_disjoint_rl.
 Qed.
-Global Instance: Proper ((⊆) ==> (⊆) ==> flip impl) (@disjoint A _).
+#[global] Instance: Proper ((⊆) ==> (⊆) ==> flip impl) (@disjoint A _).
 Proof.
   repeat intro; eauto using sep_disjoint_weaken_l, sep_disjoint_weaken_r.
 Qed.
@@ -493,7 +493,7 @@ Proof. intros. by apply (sep_disjoint_contains_aux xs1 xs2). Qed.
 Lemma sep_union_list_subseteq xs1 xs2 :
   ## xs2 → xs1 ⊆+ xs2 → ⋃ xs1 ⊆ ⋃ xs2.
 Proof. intros. by apply sep_disjoint_contains_aux. Qed.
-Global Instance: Proper (@Permutation A ==> iff) disjoint_list.
+#[global] Instance: Proper (@Permutation A ==> iff) disjoint_list.
 Proof.
   intros xs1 xs2 Hxs; split; intros.
   * apply (sep_disjoint_contains xs2 xs1). done. by rewrite Hxs.
@@ -531,26 +531,26 @@ Lemma sep_unmapped_union_r x y :
 Proof. eauto using sep_unmapped_weaken, sep_union_subseteq_r. Qed.
 
 (** ** Properties of [(⊆##)] *)
-Global Instance: PreOrder (⊆##).
+#[global] Instance: PreOrder (⊆##).
 Proof. unfold sep_disjoint_le. split; red; naive_solver. Qed.
-Global Instance: Proper ((⊆##) ==> impl) disjoint_list.
+#[global] Instance: Proper ((⊆##) ==> impl) disjoint_list.
 Proof.
   intros xs1 xs2 Hxs. red. rewrite <-(sep_disjoint_empty_alt xs1),
     <-(sep_disjoint_empty_alt xs2). by apply (Hxs ∅).
 Qed.
-Global Instance: Proper ((≡ₚ) ==> (≡ₚ) ==> iff) (⊆##).
+#[global] Instance: Proper ((≡ₚ) ==> (≡ₚ) ==> iff) (⊆##).
 Proof.
   unfold sep_disjoint_le, impl. intros xs1 xs2 Hxs12 xs3 xs4 Hxs34.
   by setoid_rewrite Hxs12; setoid_rewrite Hxs34.
 Qed.
-Global Instance: `{Proper ((⊆##) ==> (⊆##)) (z ::.)}.
+#[global] Instance: `{Proper ((⊆##) ==> (⊆##)) (z ::.)}.
 Proof.
   unfold sep_disjoint_le, impl. intros z xs1 xs2 Hxs12 y; subst.
   rewrite !sep_disjoint_alt. naive_solver.
 Qed.
-Global Instance: `{Proper (flip (⊆##) ==> flip (⊆##)) (z ::.)}.
+#[global] Instance: `{Proper (flip (⊆##) ==> flip (⊆##)) (z ::.)}.
 Proof. by intros z x y Hxy; simpl in *; rewrite Hxy. Qed.
-Global Instance: Proper ((⊆##) ==> (⊆##) ==> (⊆##)) (++).
+#[global] Instance: Proper ((⊆##) ==> (⊆##) ==> (⊆##)) (++).
 Proof.
   unfold sep_disjoint_le. intros xs1 xs2 Hxs12 xs3 xs4 Hxs34 y.
   apply impl_transitive with ( ## (y :: xs2 ++ xs3)).
@@ -558,7 +558,7 @@ Proof.
     rewrite !sep_disjoint_list_alt. naive_solver.
   * rewrite !app_comm_cons, !sep_disjoint_list_alt. naive_solver.
 Qed.
-Global Instance: Proper (flip (⊆##) ==> flip (⊆##) ==> flip (⊆##)) (++).
+#[global] Instance: Proper (flip (⊆##) ==> flip (⊆##) ==> flip (⊆##)) (++).
 Proof. by intros x1 y1 Hxy1 x2 y2 Hxy2; simpl in *; rewrite Hxy1, Hxy2. Qed.
 Lemma sep_disjoint_cons_le_inj x y xs : [x] ⊆## [y] → x :: xs ⊆## y :: xs.
 Proof. intros. change ([x] ++ xs ⊆## [y] ++ xs). by f_equiv. Qed.
@@ -567,33 +567,33 @@ Proof. intros. change ([x] ++ xs ⊆## [y] ++ xs). by f_equiv. Qed.
 Lemma sep_disjoint_equiv_alt xs1 xs2 :
   xs1 ≡## xs2 ↔  ∀ x, ## (x :: xs1) ↔ ## (x :: xs2).
 Proof. unfold sep_disjoint_equiv, sep_disjoint_le. naive_solver. Qed.
-Global Instance: Equivalence (≡##).
+#[global] Instance: Equivalence (≡##).
 Proof.
   split.
   * done.
   * by intros ?? [??].
   * by intros x y z [??] [??]; split; transitivity y.
 Qed.
-Global Instance: AntiSymm (≡##) (⊆##).
+#[global] Instance: AntiSymm (≡##) (⊆##).
 Proof. by split. Qed.
-Global Instance: Proper ((≡##) ==> iff) disjoint_list.
+#[global] Instance: Proper ((≡##) ==> iff) disjoint_list.
 Proof. intros ?? [Hxs1 Hxs2]. split. by rewrite Hxs1. by rewrite Hxs2. Qed.
-Global Instance: Proper ((≡##) ==> (≡##) ==> iff) (⊆##).
+#[global] Instance: Proper ((≡##) ==> (≡##) ==> iff) (⊆##).
 Proof.
   intros x y [??] z x4 [??]. split; intro.
   * transitivity x; auto. transitivity z; auto. 
   * transitivity y; auto. transitivity x4; auto.
 Qed.
-Global Instance: Proper ((≡ₚ) ==> (≡ₚ) ==> iff) (≡##).
+#[global] Instance: Proper ((≡ₚ) ==> (≡ₚ) ==> iff) (≡##).
 Proof.
   intros xs1 xs2 Hxs12 xs3 xs4 Hxs34. rewrite !sep_disjoint_equiv_alt.
   by setoid_rewrite Hxs12; setoid_rewrite Hxs34.
 Qed.
-Global Instance: Proper ((=) ==> (≡##) ==> (≡##)) (::).
+#[global] Instance: Proper ((=) ==> (≡##) ==> (≡##)) (::).
 Proof.
   intros ??? ?? [Hxs1 Hxs2]; subst. split. by rewrite Hxs1. by rewrite Hxs2.
 Qed.
-Global Instance: Proper ((≡##) ==> (≡##) ==> (≡##)) (++).
+#[global] Instance: Proper ((≡##) ==> (≡##) ==> (≡##)) (++).
 Proof.
   intros ?? [Hxs1 Hxs2] ?? [Hxs3 Hxs4].
   split. by rewrite Hxs1, Hxs3. by rewrite Hxs2, Hxs4.

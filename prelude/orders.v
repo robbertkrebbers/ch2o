@@ -6,7 +6,7 @@ theory will mainly be used for the theory on collections and finite maps. *)
 From stdpp Require Export prelude.
 Require Export base.
 
-Instance preorder_equiv `{SubsetEq A} : Equiv A := λ X Y, X ⊆ Y ∧ Y ⊆ X.
+#[global] Instance preorder_equiv `{SubsetEq A} : Equiv A := λ X Y, X ⊆ Y ∧ Y ⊆ X.
 
 (** * Partial orders *)
 Section partial_order.
@@ -20,7 +20,7 @@ Section join_semi_lattice.
   Implicit Types X Y : A.
   Implicit Types Xs Ys : list A.
 
-  Instance: @Equivalence A (≡@{A}).
+  Local Instance: @Equivalence A (≡@{A}).
   Proof.
     split.
     * done.
@@ -28,7 +28,7 @@ Section join_semi_lattice.
     * by intros X Y Z [??] [??]; split; transitivity Y.
   Qed.
 
-  Instance: Proper ((≡@{A}) ==> (≡@{A}) ==> (iff)) (⊆@{A}).
+  Local Instance: Proper ((≡@{A}) ==> (≡@{A}) ==> (iff)) (⊆@{A}).
   Proof.
     unfold equiv, preorder_equiv. intros X1 Y1 ? X2 Y2 ?. split; intro.
     * transitivity X1. tauto. transitivity X2; tauto.

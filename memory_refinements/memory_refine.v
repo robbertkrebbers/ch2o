@@ -26,7 +26,7 @@ Section map_of_collection.
   Qed.
 End map_of_collection.
 
-Instance locks_refine `{Env K} :
+#[global] Instance locks_refine `{Env K} :
     Refine K (env K) lockset := λ Γ α f Δ1 Δ2 Ω1 Ω2,
   (**i 1.) *) ✓{Γ,Δ1} Ω1 ∧ ✓{Γ,Δ2} Ω2 ∧
   (**i 2.) *) Δ1 ⊑{Γ,α,f} Δ2 ∧

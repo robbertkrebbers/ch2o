@@ -244,9 +244,9 @@ Proof.
 Qed.
 Lemma bit_size_of_base_ne_0 Γ τb : bit_size_of Γ (baseT τb) ≠ 0.
 Proof. apply Nat.neq_mul_0. auto using char_bits_ne_0, size_of_base_ne_0. Qed.
-Global Instance: ∀ Γ τb, PropHolds (size_of Γ (baseT τb) ≠ 0).
+#[global] Instance: ∀ Γ τb, PropHolds (size_of Γ (baseT τb) ≠ 0).
 Proof. apply size_of_base_ne_0. Qed.
-Global Instance: ∀ Γ τb, PropHolds (bit_size_of Γ (baseT τb) ≠ 0).
+#[global] Instance: ∀ Γ τb, PropHolds (bit_size_of Γ (baseT τb) ≠ 0).
 Proof. apply bit_size_of_base_ne_0. Qed.
 Lemma size_of_ne_0 Γ τ : ✓ Γ → ✓{Γ} τ → size_of Γ τ ≠ 0.
 Proof.

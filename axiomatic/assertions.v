@@ -38,12 +38,12 @@ Arguments assert_weaken {_ _} _%A _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _.
 (** The relation [P ⊆.{Γ} Q] states that the assertion [Q] is a logical
 consequence of [P] in [Γ] and [P ≡.{Γ} Q] states that [P] and [Q] are logically
 equivalent in [Γ]. *)
-Instance assert_entails `{Env K} :
+#[global] Instance assert_entails `{Env K} :
     SubsetEqE (env K * funenv K) (assert K) := λ Γδ P Q,
   ∀ Γ Δ δ ρ n m,
     Γδ.1 ⊆ Γ → ✓ Γ → Γδ.2 ⊆ δ → ✓{Γ,Δ} δ → ✓{Γ,Δ} m → ✓{Δ}* ρ →
     assert_holds P Γ Δ δ ρ n m → assert_holds Q Γ Δ δ ρ n m.
-Instance assert_equiv `{Env K} :
+#[global] Instance assert_equiv `{Env K} :
     EquivE (env K * funenv K) (assert K) := λ Γδ P Q, P ⊆{Γδ} Q ∧ Q ⊆{Γδ} P.
 
 (** * Hoare logic connectives *)
@@ -277,79 +277,79 @@ Lemma assert_entails_spec P Q Γ Δ δ ρ n m :
 Proof. intros ???? HPQ; apply HPQ; auto. Qed.
 
 (** Ordinary logic connections *)
-Global Instance: `{PreOrder (⊆{Γ,δ})}.
+#[global] Instance: `{PreOrder (⊆{Γ,δ})}.
 Proof. split; solve eauto. Qed.
-Global Instance: `{Equivalence (≡{Γ,δ})}.
+#[global] Instance: `{Equivalence (≡{Γ,δ})}.
 Proof. split; red; solve eauto. Qed.
-Global Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> iff) (⊆{Γ,δ})}.
+#[global] Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> iff) (⊆{Γ,δ})}.
 Proof. solve eauto. Qed.
-Global Instance: `{Proper (flip (⊆{Γ,δ}) ==> (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (→)%A}.
+#[global] Instance: `{Proper (flip (⊆{Γ,δ}) ==> (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (→)%A}.
 Proof.
   intros Γ1 δ1 P1 P2 HP Q1 Q2 HQ Γ2 Δ1 δ2 ρ n m ?????? HPQ Γ3 Δ2 δ3 n2 ????????.
   eapply HQ; eauto 8 using indexes_valid_weaken.
 Qed.
-Global Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (≡{Γ,δ})) (→)%A}.
+#[global] Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (≡{Γ,δ})) (→)%A}.
 Proof. by intros ???? [??] ?? [??]; split; f_equiv. Qed.
-Global Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (≡{Γ,δ})) (∧)%A}.
+#[global] Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (≡{Γ,δ})) (∧)%A}.
 Proof. solve eauto. Qed.
-Global Instance: `{Proper ((⊆{Γ,δ}) ==> (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (∧)%A}.
+#[global] Instance: `{Proper ((⊆{Γ,δ}) ==> (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (∧)%A}.
 Proof. solve eauto. Qed.
-Global Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (≡{Γ,δ})) (∨)%A}.
+#[global] Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (≡{Γ,δ})) (∨)%A}.
 Proof. solve eauto. Qed.
-Global Instance: `{Proper ((⊆{Γ,δ}) ==> (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (∨)%A}.
+#[global] Instance: `{Proper ((⊆{Γ,δ}) ==> (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (∨)%A}.
 Proof. solve eauto. Qed.
-Global Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (≡{Γ,δ})) (↔)%A}.
+#[global] Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (≡{Γ,δ})) (↔)%A}.
 Proof. by intros ????????; unfold assert_iff; do 2 f_equiv. Qed.
-Global Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ})) assert_not}.
+#[global] Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ})) assert_not}.
 Proof. by intros ?????; unfold assert_not; f_equiv. Qed.
-Global Instance: `{Proper (flip (⊆{Γ,δ}) ==> (⊆{Γ,δ})) assert_not}.
+#[global] Instance: `{Proper (flip (⊆{Γ,δ}) ==> (⊆{Γ,δ})) assert_not}.
 Proof. by intros ?????; unfold assert_not; f_equiv. Qed.
-Global Instance:
+#[global] Instance:
   `{Proper (pointwise_relation _ (≡{Γ,δ}) ==> (≡{Γ,δ})) (@assert_forall _ _ A)}.
 Proof. solve eauto. Qed.
-Global Instance:
+#[global] Instance:
   `{Proper (pointwise_relation _ (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (@assert_forall _ _ A)}.
 Proof. solve eauto. Qed.
-Global Instance:
+#[global] Instance:
   `{Proper (pointwise_relation _ (≡{Γ,δ}) ==> (≡{Γ,δ})) (@assert_exist _ _ A)}.
 Proof. solve eauto. Qed.
-Global Instance:
+#[global] Instance:
   `{Proper (pointwise_relation _ (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (@assert_exist _ _ A)}.
 Proof. solve eauto. Qed.
-Global Instance:
+#[global] Instance:
   `{Proper (pointwise_relation _ (flip (⊆{Γ,δ})) ==> (flip (⊆{Γ,δ})))
   (@assert_exist _ _ A)}.
 Proof. solve eauto. Qed.
 
-Global Instance: `{Comm (≡{Γ,δ}) (↔)%A}.
+#[global] Instance: `{Comm (≡{Γ,δ}) (↔)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{Comm (≡{Γ,δ}) (∧)%A}.
+#[global] Instance: `{Comm (≡{Γ,δ}) (∧)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{Assoc (≡{Γ,δ}) (∧)%A}.
+#[global] Instance: `{Assoc (≡{Γ,δ}) (∧)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{IdemP (≡{Γ,δ}) (∧)%A}.
+#[global] Instance: `{IdemP (≡{Γ,δ}) (∧)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{LeftId (≡{Γ,δ}) True%A (∧)%A}.
+#[global] Instance: `{LeftId (≡{Γ,δ}) True%A (∧)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{RightId (≡{Γ,δ}) True%A (∧)%A}.
+#[global] Instance: `{RightId (≡{Γ,δ}) True%A (∧)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{LeftAbsorb (≡{Γ,δ}) False%A (∧)%A}.
+#[global] Instance: `{LeftAbsorb (≡{Γ,δ}) False%A (∧)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{RightAbsorb (≡{Γ,δ}) False%A (∧)%A}.
+#[global] Instance: `{RightAbsorb (≡{Γ,δ}) False%A (∧)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{Comm (≡{Γ,δ}) (∨)%A}.
+#[global] Instance: `{Comm (≡{Γ,δ}) (∨)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{Assoc (≡{Γ,δ}) (∨)%A}.
+#[global] Instance: `{Assoc (≡{Γ,δ}) (∨)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{IdemP (≡{Γ,δ}) (∨)%A}.
+#[global] Instance: `{IdemP (≡{Γ,δ}) (∨)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{LeftId (≡{Γ,δ}) False%A (∨)%A}.
+#[global] Instance: `{LeftId (≡{Γ,δ}) False%A (∨)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{RightId (≡{Γ,δ}) False%A (∨)%A}.
+#[global] Instance: `{RightId (≡{Γ,δ}) False%A (∨)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{LeftAbsorb (≡{Γ,δ}) True%A (∨)%A}.
+#[global] Instance: `{LeftAbsorb (≡{Γ,δ}) True%A (∨)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{RightAbsorb (≡{Γ,δ}) True%A (∨)%A}.
+#[global] Instance: `{RightAbsorb (≡{Γ,δ}) True%A (∨)%A}.
 Proof. red; solve eauto. Qed.
 Lemma assert_False_elim Γ δ P : False%A ⊆{Γ,δ} P.
 Proof. solve eauto. Qed.
@@ -425,51 +425,51 @@ Lemma assert_later_exists {A} Γ δ (P : A → assert K) :
 Proof. solve eauto. Qed.
 
 (** Separation logic connectives *)
-Global Instance: `{Proper (impl ==> (⊆{Γ,δ})) assert_Prop}.
+#[global] Instance: `{Proper (impl ==> (⊆{Γ,δ})) assert_Prop}.
 Proof. solve eauto. Qed.
-Global Instance: `{Proper (iff ==> (≡{Γ,δ})) assert_Prop}.
+#[global] Instance: `{Proper (iff ==> (≡{Γ,δ})) assert_Prop}.
 Proof. solve eauto. Qed.
-Global Instance: `{Proper ((⊆{Γ,δ}) ==> (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (★)%A}.
+#[global] Instance: `{Proper ((⊆{Γ,δ}) ==> (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (★)%A}.
 Proof.
   solve ltac:(eauto 15 using cmap_valid_subseteq,
     @sep_union_subseteq_l, @sep_union_subseteq_r).
 Qed.
-Global Instance:
+#[global] Instance:
   `{Proper (flip (⊆{Γ,δ}) ==> flip (⊆{Γ,δ}) ==> flip (⊆{Γ,δ})) (★)%A}.
 Proof.
   solve ltac:(eauto 15 using cmap_valid_subseteq,
     @sep_union_subseteq_l, @sep_union_subseteq_r).
 Qed.
-Global Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (≡{Γ,δ})) (★)%A}.
+#[global] Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (≡{Γ,δ})) (★)%A}.
 Proof.
   by intros ???? [??] ?? [??]; split;
     apply (_ : Proper ((⊆{Γ,δ}) ==> (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (★)%A).
 Qed.
-Global Instance: `{Proper (Forall2 (≡{Γ,δ}) ==> (≡{Γ,δ})) assert_sep_list}.
+#[global] Instance: `{Proper (Forall2 (≡{Γ,δ}) ==> (≡{Γ,δ})) assert_sep_list}.
 Proof.
   induction 1; simpl; [done|];
     by apply (_ : Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (≡{Γ,δ})) (★)%A).
 Qed.
-Global Instance: `{Proper (flip (⊆{Γ,δ}) ==> (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (-★)%A}.
+#[global] Instance: `{Proper (flip (⊆{Γ,δ}) ==> (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (-★)%A}.
 Proof.
   intros Γ1 δ1 P1 P2 HP Q1 Q2 HQ Γ2 Δ1 δ2 ρ n1 m
     ?????? HPQ Γ3 Δ2 δ3 n2 ???????????.
   apply HQ; eauto 10 using indexes_valid_weaken, cmap_union_valid_2.
 Qed.
-Global Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (≡{Γ,δ})) (-★)%A}.
+#[global] Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ}) ==> (≡{Γ,δ})) (-★)%A}.
 Proof.
   by intros ???? [??] ?? [??]; split;
     apply (_ : Proper (flip (⊆{Γ,δ}) ==> (⊆{Γ,δ}) ==> (⊆{Γ,δ})) (-★)%A).
 Qed.
 
-Global Instance: `{Comm (⊆{Γ,δ}) (★)%A}.
+#[global] Instance: `{Comm (⊆{Γ,δ}) (★)%A}.
 Proof.
   intros Γ δ P Q Γ1 Δ δ1 ρ n m ?????? (m1&m2&->&?&?&?).
   exists m2, m1. rewrite sep_commutative by auto; auto.
 Qed.
-Global Instance: `{Comm (≡{Γ,δ}) (★)%A}.
+#[global] Instance: `{Comm (≡{Γ,δ}) (★)%A}.
 Proof. split; by rewrite (comm (★)%A). Qed.
-Global Instance: `{LeftId (≡{Γ,δ}) emp%A (★)%A}.
+#[global] Instance: `{LeftId (≡{Γ,δ}) emp%A (★)%A}.
 Proof.
   intros δ Γ; intros P; split.
   * intros Γ1 Δ δ1 ρ n m ?????? (m1&m2&->&?&[_ ->]&?).
@@ -478,13 +478,13 @@ Proof.
     rewrite sep_left_id, sep_disjoint_equiv_empty,
       sep_disjoint_list_singleton by eauto; solve eauto.
 Qed.
-Global Instance: `{RightId (≡{Γ,δ}) emp%A (★)%A}.
+#[global] Instance: `{RightId (≡{Γ,δ}) emp%A (★)%A}.
 Proof. intros ???. by rewrite (comm _), (left_id _ _). Qed.
-Global Instance: `{LeftAbsorb (≡{Γ,δ}) False%A (★)%A}.
+#[global] Instance: `{LeftAbsorb (≡{Γ,δ}) False%A (★)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{RightAbsorb (≡{Γ,δ}) False%A (★)%A}.
+#[global] Instance: `{RightAbsorb (≡{Γ,δ}) False%A (★)%A}.
 Proof. red; solve eauto. Qed.
-Global Instance: `{Assoc (≡{Γ,δ}) (★)%A}.
+#[global] Instance: `{Assoc (≡{Γ,δ}) (★)%A}.
 Proof.
   intros Γ δ. assert (∀ P Q R, ((P ★ Q) ★ R)%A ⊆{Γ,δ} (P ★ (Q ★ R))%A).
   { intros P Q R Γ1 Δ δ1 ρ ? n ?????? (?&m3&->&?&(m1&m2&->&?&?&?)&?).
@@ -550,7 +550,7 @@ Proof.
   rewrite sep_commutative by auto; eapply HQ; eauto using
     cmap_valid_subseteq, @sep_union_subseteq_l, @sep_union_subseteq_r.
 Qed.
-Global Instance: `{LeftId (≡{Γ,δ}) emp%A (-★)%A}.
+#[global] Instance: `{LeftId (≡{Γ,δ}) emp%A (-★)%A}.
 Proof.
   intros Γ P; split.
   * rewrite <-(right_id _ (★)%A); apply assert_wand_elim.
@@ -598,7 +598,7 @@ Lemma assert_memext_r' Γ δ P Q R : MemExt R → Q ⊆{Γ,δ} R → (P ★ Q)%A
 Proof. rewrite (comm (★)%A). apply assert_memext_l'. Qed.
 
 (* Evaluation and singleton connectives *)
-Global Instance assert_eval_memext e ν : MemExt (e ⇓ ν)%A.
+#[global] Instance assert_eval_memext e ν : MemExt (e ⇓ ν)%A.
 Proof.
   intros Γ δ Γ' Δ δ' ρ n m ???? Hm ? (m1&m2&->&?&(τlr&?&?)&?).
   exists τlr; split; auto.
@@ -926,9 +926,9 @@ Proof.
 Qed.
 
 (* Lifting De Bruijn indexes *)
-Global Instance: `{Proper ((⊆{Γ,δ}) ==> (⊆{Γ,δ})) assert_lift}.
+#[global] Instance: `{Proper ((⊆{Γ,δ}) ==> (⊆{Γ,δ})) assert_lift}.
 Proof. solve ltac:(eauto using Forall_tail). Qed.
-Global Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ})) assert_lift}.
+#[global] Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ})) assert_lift}.
 Proof. solve ltac:(eauto using Forall_tail). Qed.
 
 Lemma assert_lift_impl Γ δ P Q : ((P → Q)↑)%A ≡{Γ,δ} (P↑ → Q↑)%A.
@@ -976,38 +976,38 @@ Proof.
   by rewrite assert_lift_exists; setoid_rewrite (assert_lift_singleton Γ δ).
 Qed.
 
-Global Instance assert_lift_stack_indep: `{StackIndep P → StackIndep (P↑)}.
+#[global] Instance assert_lift_stack_indep: `{StackIndep P → StackIndep (P↑)}.
 Proof. intros P ? Γ δ; by rewrite !stack_indep. Qed.
-Global Instance assert_True_stack_indep : StackIndep True.
+#[global] Instance assert_True_stack_indep : StackIndep True.
 Proof. solve eauto. Qed.
-Global Instance assert_False_stack_indep : StackIndep False.
+#[global] Instance assert_False_stack_indep : StackIndep False.
 Proof. solve eauto. Qed.
-Global Instance assert_Prop_stack_indep P : StackIndep (⌜ P ⌝).
+#[global] Instance assert_Prop_stack_indep P : StackIndep (⌜ P ⌝).
 Proof. solve eauto. Qed.
-Global Instance assert_impl_stack_indep :
+#[global] Instance assert_impl_stack_indep :
   `{StackIndep P → StackIndep Q → StackIndep (P → Q)}.
 Proof. by intros P Q ?? Γ δ; rewrite assert_lift_impl, !stack_indep. Qed.
-Global Instance assert_and_stack_indep :
+#[global] Instance assert_and_stack_indep :
   `{StackIndep P → StackIndep Q → StackIndep (P ∧ Q)}.
 Proof. solve eauto. Qed.
-Global Instance assert_or_stack_indep :
+#[global] Instance assert_or_stack_indep :
   `{StackIndep P → StackIndep Q → StackIndep (P ∨ Q)}.
 Proof. solve eauto. Qed.
-Global Instance assert_forall_stack_indep A :
+#[global] Instance assert_forall_stack_indep A :
   `{(∀ x : A, StackIndep (P x)) → StackIndep (assert_forall P)}.
 Proof. solve eauto. Qed.
-Global Instance assert_exist_stack_indep A :
+#[global] Instance assert_exist_stack_indep A :
   `{(∀ x : A, StackIndep (P x)) → StackIndep (assert_exist P)}.
 Proof. solve eauto. Qed.
-Global Instance assert_sep_stack_indep :
+#[global] Instance assert_sep_stack_indep :
   `{StackIndep P → StackIndep Q → StackIndep (P ★ Q)}.
 Proof. by intros P Q HP HQ Γ δ; rewrite assert_lift_sep, !stack_indep. Qed.
-Global Instance assert_wand_stack_indep :
+#[global] Instance assert_wand_stack_indep :
   `{StackIndep P → StackIndep Q → StackIndep (P -★ Q)}.
 Proof. by intros P Q ?? Γ δ; rewrite assert_lift_wand, !stack_indep. Qed.
-Global Instance assert_expr_stack_indep e v : vars e = ∅ → StackIndep (e ⇓ v).
+#[global] Instance assert_expr_stack_indep e v : vars e = ∅ → StackIndep (e ⇓ v).
 Proof. intros ? Γ δ. by rewrite assert_lift_expr, assert_expr_lift. Qed.
-Global Instance assert_singleton_stack_indep e1 e2 μ γ τ :
+#[global] Instance assert_singleton_stack_indep e1 e2 μ γ τ :
   vars e1 = ∅ → vars e2 = ∅ → StackIndep (e1 ↦{μ,γ} e2 : τ).
 Proof.
   by intros ?? Γ δ; rewrite assert_lift_singleton,
@@ -1028,9 +1028,9 @@ Qed.
 Lemma assert_unlock_spec P Γ Δ δ ρ n m :
   assert_holds (P ◊) Γ Δ δ ρ n m = assert_holds P Γ Δ δ ρ n (mem_unlock_all m).
 Proof. done. Qed.
-Global Instance: `{Proper ((⊆{Γ,δ}) ==> (⊆{Γ,δ})) assert_unlock}.
+#[global] Instance: `{Proper ((⊆{Γ,δ}) ==> (⊆{Γ,δ})) assert_unlock}.
 Proof. solve ltac:(eauto using mem_unlock_all_valid). Qed.
-Global Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ})) assert_unlock}.
+#[global] Instance: `{Proper ((≡{Γ,δ}) ==> (≡{Γ,δ})) assert_unlock}.
 Proof. solve ltac:(eauto using mem_unlock_all_valid). Qed.
 
 Lemma assert_unlock_unlock Γ δ P : (P ◊ ◊)%A ≡{Γ,δ} (P ◊)%A.
@@ -1093,32 +1093,32 @@ Proof.
     perm_unlock_lock by auto using perm_locked_lock.
 Qed.
 
-Global Instance assert_unlock_unlock_indep P : UnlockIndep (P ◊).
+#[global] Instance assert_unlock_unlock_indep P : UnlockIndep (P ◊).
 Proof. intros Γ δ. by rewrite assert_unlock_unlock. Qed.
-Global Instance assert_True_unlock_indep : UnlockIndep True.
+#[global] Instance assert_True_unlock_indep : UnlockIndep True.
 Proof. solve ltac:(eauto using mem_unlock_all_empty). Qed.
-Global Instance assert_False_unlock_indep : UnlockIndep False.
+#[global] Instance assert_False_unlock_indep : UnlockIndep False.
 Proof. solve ltac:(eauto using mem_unlock_all_empty). Qed.
-Global Instance assert_Prop_unlock_indep : `{UnlockIndep ⌜ P ⌝}.
+#[global] Instance assert_Prop_unlock_indep : `{UnlockIndep ⌜ P ⌝}.
 Proof. solve ltac:(eauto using mem_unlock_all_empty). Qed.
-Global Instance assert_and_unlock_indep :
+#[global] Instance assert_and_unlock_indep :
   `{UnlockIndep P → UnlockIndep Q → UnlockIndep (P ∧ Q)}.
 Proof. solve eauto. Qed.
-Global Instance assert_or_unlock_indep :
+#[global] Instance assert_or_unlock_indep :
   `{UnlockIndep P → UnlockIndep Q → UnlockIndep (P ∨ Q)}.
 Proof. solve eauto. Qed.
-Global Instance assert_forall_unlock_indep A :
+#[global] Instance assert_forall_unlock_indep A :
   `{(∀ x : A, UnlockIndep (P x)) → UnlockIndep (assert_forall P)}.
 Proof. solve eauto. Qed.
-Global Instance assert_exist_unlock_indep A :
+#[global] Instance assert_exist_unlock_indep A :
   `{(∀ x : A, UnlockIndep (P x)) → UnlockIndep (assert_exist P)}.
 Proof. solve eauto. Qed.
-Global Instance assert_lift_unlock_indep : `{UnlockIndep P → UnlockIndep (P↑)}.
+#[global] Instance assert_lift_unlock_indep : `{UnlockIndep P → UnlockIndep (P↑)}.
 Proof. solve ltac:(eauto using Forall_tail). Qed.
-Global Instance assert_sep_unlock_indep P Q :
+#[global] Instance assert_sep_unlock_indep P Q :
   UnlockIndep P → UnlockIndep Q → UnlockIndep (P ★ Q).
 Proof. intros ?? [Γ δ]; auto using assert_unlock_sep_alt. Qed.
-Global Instance assert_singleton_unlock_indep e1 e2 μ γ τ :
+#[global] Instance assert_singleton_unlock_indep e1 e2 μ γ τ :
   perm_locked γ = false → UnlockIndep (e1 ↦{μ,γ} e2 : τ).
 Proof.
   intros ? Γ δ Γ' Δ δ' ρ n m ?????? (a&v&?&?&?&?&?).

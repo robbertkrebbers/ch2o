@@ -15,7 +15,7 @@ Local Hint Extern 0 (_ >*> _) => reflexivity: core.
 
 Section castable.
 Context `{EqDecision K, EnvSpec K}.
-Global Instance castable_dec (τ : type K) τp : Decision (τ >*> τp).
+#[global] Instance castable_dec (τ : type K) τp : Decision (τ >*> τp).
 Proof.
  refine
   match τp with

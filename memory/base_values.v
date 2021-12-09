@@ -27,11 +27,11 @@ Notation "'intV{' τi } x" := (VInt τi x)
 Notation "'ptrV' p" := (VPtr p) (at level 10) : base_val_scope.
 Notation "'byteV' bs" := (VByte bs) (at level 10) : base_val_scope.
 
-Instance maybe_VInt {K} : Maybe2 (@VInt K) := λ vb,
+#[global] Instance maybe_VInt {K} : Maybe2 (@VInt K) := λ vb,
   match vb with VInt τi x => Some (τi,x) | _ => None end.
-Instance maybe_VPtr {K} : Maybe (@VPtr K) := λ vb,
+#[global] Instance maybe_VPtr {K} : Maybe (@VPtr K) := λ vb,
   match vb with VPtr p => Some p | _ => None end.
-Instance base_val_eq_dec {K} `{EqDecision K}: EqDecision (base_val K).
+#[global] Instance base_val_eq_dec {K} `{EqDecision K}: EqDecision (base_val K).
 Proof. solve_decision. Defined.
 
 Section operations.
@@ -127,11 +127,11 @@ Proof.
   destruct 2;
     eauto using TVoid_valid, TInt_valid, TPtr_valid, ptr_typed_type_valid.
 Qed.
-Global Instance: TypeOfSpec (env K * memenv K) (base_type K) (base_val K).
+#[global] Instance: TypeOfSpec (env K * memenv K) (base_type K) (base_val K).
 Proof.
   intros [??]. destruct 1; f_equal'; auto. eapply type_of_correct; eauto.
 Qed.
-Global Instance:
+#[global] Instance:
   TypeCheckSpec (env K * memenv K) (base_type K) (base_val K) (λ _, True).
 Proof.
   intros [Γ Δm] vb τb _. split.

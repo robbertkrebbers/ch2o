@@ -17,7 +17,7 @@ of integer ranks (char, short, int). Integer types consist of a rank and its
 signedness (signed/unsigned), and machine integers are just arbitrary precision
 integers [Z] that should be within the range of the corresponding type. *)
 Inductive signedness := Signed | Unsigned.
-Instance signedness_eq_dec: EqDecision signedness.
+#[global] Instance signedness_eq_dec: EqDecision signedness.
 Proof. solve_decision. Defined.
 
 Definition iType := Type.
@@ -33,7 +33,7 @@ Arguments IntType {_} _ _.
 Arguments sign {_} _%IT.
 Arguments rank {_} _%IT.
 
-Instance int_type_eq_dec `{EqDecision K}: EqDecision (int_type K).
+#[global] Instance int_type_eq_dec `{EqDecision K}: EqDecision (int_type K).
 Proof. solve_decision. Defined.
 
 (** The class [IntCoding] describes functions related to representation and
@@ -194,13 +194,13 @@ Lemma deendianize_permutation k βs : deendianize k βs ≡ₚ βs.
 Proof.
   rewrite <-(endianize_deendianize k βs) at 2. by rewrite endianize_permutation.
 Qed.
-Global Instance: `{Proper ((≡ₚ) ==> (≡ₚ)) (endianize k)}.
+#[global] Instance: `{Proper ((≡ₚ) ==> (≡ₚ)) (endianize k)}.
 Proof. intros k βs1 βs2. by rewrite !endianize_permutation. Qed.
-Global Instance: `{Inj (≡ₚ) (≡ₚ) (endianize k)}.
+#[global] Instance: `{Inj (≡ₚ) (≡ₚ) (endianize k)}.
 Proof. intros k βs1 βs2. by rewrite !endianize_permutation. Qed.
-Global Instance: `{Proper ((≡ₚ) ==> (≡ₚ)) (deendianize k)}.
+#[global] Instance: `{Proper ((≡ₚ) ==> (≡ₚ)) (deendianize k)}.
 Proof. intros k βs1 βs2. by rewrite !deendianize_permutation. Qed.
-Global Instance: `{Inj (≡ₚ) (≡ₚ) (deendianize k)}.
+#[global] Instance: `{Inj (≡ₚ) (≡ₚ) (deendianize k)}.
 Proof. intros k βs1 βs2. by rewrite !deendianize_permutation. Qed.
 Lemma endianize_length k βs : length (endianize k βs) = length βs.
 Proof. by rewrite endianize_permutation. Qed.

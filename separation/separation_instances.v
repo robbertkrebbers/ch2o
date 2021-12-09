@@ -5,7 +5,7 @@ Require Import Qcanon.
 Require Export separation.
 Local Open Scope Qc_scope.
 
-Instance bool_separation_ops : SeparationOps bool := {
+#[global] Instance bool_separation_ops : SeparationOps bool := {
   sep_valid x := True;
   sep_subseteq x y := x → y;
   sep_empty := false;
@@ -17,7 +17,7 @@ Instance bool_separation_ops : SeparationOps bool := {
   sep_unmapped x := ¬x;
   sep_unshared x := x
 }.
-Instance bool_separation : Separation bool.
+#[global] Instance bool_separation : Separation bool.
 Proof.
   assert (∀ x y : bool, x ⊆ y ↔ ∃ z, y = z ∪ x ∧ z ## x).
   { intros x y. split.
@@ -33,7 +33,7 @@ Proof.
   exists true; simpl; tauto.
 Qed.
 
-Instance prod_separation_ops `{SeparationOps A, SeparationOps B} :
+#[global] Instance prod_separation_ops `{SeparationOps A, SeparationOps B} :
     SeparationOps (A * B) := {
   sep_valid x := sep_valid (x.1) ∧ sep_valid (x.2);
   sep_subseteq x y := x.1 ⊆ y.1 ∧ x.2 ⊆ y.2;
@@ -46,7 +46,7 @@ Instance prod_separation_ops `{SeparationOps A, SeparationOps B} :
   sep_unmapped x := sep_unmapped (x.1) ∧ sep_unmapped (x.2);
   sep_unshared x := sep_unshared (x.1) ∧ sep_unshared (x.2)
 }.
-Instance prod_separation `{Separation A, Separation B} : Separation (A * B).
+#[global] Instance prod_separation `{Separation A, Separation B} : Separation (A * B).
 Proof.
   split; sep_unfold.
   * destruct (sep_inhabited A) as (x&?&?), (sep_inhabited B) as (y&?&?).
@@ -82,7 +82,7 @@ Proof.
   * naive_solver eauto using @sep_unshared_unmapped.
 Qed.
 
-#[refine] Instance sum_separation_ops `{SeparationOps A, SeparationOps B} :
+#[refine, global] Instance sum_separation_ops `{SeparationOps A, SeparationOps B} :
     SeparationOps (A + B) := {
   sep_valid x :=
     match x with inl x => sep_valid x | inr x => sep_valid x ∧ x ≠ ∅ end;
@@ -137,7 +137,7 @@ Proof.
   * intros []; apply _.
 Defined.
 
-Instance sum_separation `{Separation A, Separation B} : Separation (A + B).
+#[global] Instance sum_separation `{Separation A, Separation B} : Separation (A + B).
 Proof.
   split; sep_unfold.
   * destruct (sep_inhabited A) as (x&?&?). eexists (inl x). naive_solver.
@@ -197,7 +197,7 @@ Proof.
       (@sep_unshared_unmapped B _).
 Qed.
 
-Instance Qc_ops: SeparationOps Qc := {
+#[global] Instance Qc_ops: SeparationOps Qc := {
   sep_valid x := 0 ≤ x ≤ 1;
   sep_empty := 0;
   sep_disjoint x y := 0 ≤ x ∧ 0 ≤ y ∧ x + y ≤ 1;
@@ -210,7 +210,7 @@ Instance Qc_ops: SeparationOps Qc := {
   sep_unshared x := x = 1
 }.
 
-Instance Qc_separation: Separation Qc.
+#[global] Instance Qc_separation: Separation Qc.
 Proof.
   split; sep_unfold.
   * by exists 1.
@@ -266,13 +266,13 @@ Set Warnings "-notation-overridden".
 Local Notation "p .1" := (counter_count p).
 Local Notation "p .2" := (counter_perm p).
 Set Warnings "default".
-Instance: `{Inj2 (=) (=) (=) (@Counter A)}.
+#[global] Instance: `{Inj2 (=) (=) (=) (@Counter A)}.
 Proof. by injection 1. Qed.
 Lemma counter_injective_projections {A} (x y : counter A) :
   x.1 = y.1 → x.2 = y.2 → x = y.
 Proof. by destruct x, y; simpl; intros -> ->. Qed.
 
-#[refine] Instance counter_ops `{SeparationOps A}: SeparationOps (counter A) := {
+#[refine, global] Instance counter_ops `{SeparationOps A}: SeparationOps (counter A) := {
   sep_valid x :=
     sep_valid (x.2)
     ∧ (sep_unmapped (x.2) → x.1 ≤ 0) ∧ (sep_unshared (x.2) → 0 ≤ x.1);
@@ -296,7 +296,7 @@ Proof. by destruct x, y; simpl; intros -> ->. Qed.
 }.
 Proof. solve_decision. Defined.
 
-Instance counter_separation `{Separation A} : Separation (counter A).
+#[global] Instance counter_separation `{Separation A} : Separation (counter A).
 Proof.
   split.
   * destruct (sep_inhabited A) as (x&?&?). exists (Counter 0 x).
@@ -402,7 +402,7 @@ Inductive lockable (A : sType) : sType :=
 Arguments LLocked {_} _.
 Arguments LUnlocked {_} _.
 
-#[refine] Instance lockable_separation_ops
+#[refine, global] Instance lockable_separation_ops
     `{SeparationOps A} : SeparationOps (lockable A) := {
   sep_valid x :=
     match x with
@@ -461,7 +461,7 @@ Proof.
   * intros [?|?]; apply _.
   * intros [?|?]; apply _.
 Defined.
-Instance lockable_separation `{Separation A} : Separation (lockable A).
+#[global] Instance lockable_separation `{Separation A} : Separation (lockable A).
 Proof.
   split.
   * destruct (sep_inhabited A) as (x&?&?). exists (LUnlocked x).
@@ -529,10 +529,10 @@ Set Warnings "-notation-overridden".
 Local Notation "x .1" := (tagged_perm x).
 Local Notation "x .2" := (tagged_tag x).
 Set Warnings "default".
-Instance: `{Inj2 (=) (=) (=) (@Tagged A L d)}.
+#[global] Instance: `{Inj2 (=) (=) (=) (@Tagged A L d)}.
 Proof. by injection 1. Qed.
 
-#[refine] Instance tagged_separation_ops {A : sType} `{d : L}
+#[refine, global] Instance tagged_separation_ops {A : sType} `{d : L}
     `{∀ x y : L, Decision (x = y),
     SeparationOps A} : SeparationOps (tagged A d) := {
   sep_valid x := sep_valid (x.1) ∧ (sep_unmapped (x.1) → x.2 = d);
@@ -553,7 +553,7 @@ Proof. by injection 1. Qed.
 }.
 Proof. solve_decision. Defined.
 
-Instance tagged_separation {A : sType} `{d : L}
+#[global] Instance tagged_separation {A : sType} `{d : L}
   `{∀ x y : L, Decision (x = y), Separation A} : Separation (tagged A d).
 Proof.
   split.

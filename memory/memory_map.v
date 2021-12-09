@@ -6,8 +6,8 @@ Require Export memory_trees cmap.
 Local Open Scope ctype_scope.
 
 Definition mem K := (cmap K (pbit K)).
-Instance mem_sep_ops `{Env K} : SeparationOps (mem K) := _.
-Instance mem_sep `{Env K} : Separation (mem K) := _.
+#[global] Instance mem_sep_ops `{Env K} : SeparationOps (mem K) := _.
+#[global] Instance mem_sep `{Env K} : Separation (mem K) := _.
 Typeclasses Opaque mem.
 Global Hint Extern 0 (Separation _) => apply (_ : Separation (mem _)): core.
 
@@ -99,7 +99,7 @@ Lemma index_alive_1' m o : index_alive' m o → index_alive '{m} o.
 Proof. by rewrite index_alive_spec'. Qed.
 Lemma index_alive_2' m o : index_alive '{m} o → index_alive' m o.
 Proof. by rewrite index_alive_spec'. Qed.
-Global Instance index_alive_dec' m o : Decision (index_alive' m o).
+#[global] Instance index_alive_dec' m o : Decision (index_alive' m o).
 Proof.
   refine
     match cmap_car m !! o as mw' return Decision (match mw' with

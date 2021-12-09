@@ -9,12 +9,12 @@ Inductive bit (K : iType) : iType :=
 Arguments BIndet {_}.
 Arguments BBit {_} _.
 Arguments BPtr {_} _.
-Instance bit_eq_dec `{EqDecision K}: EqDecision (bit K).
+#[global] Instance bit_eq_dec `{EqDecision K}: EqDecision (bit K).
 Proof. solve_decision. Defined.
 
-Instance maybe_BBit {K} : Maybe (@BBit K) := λ b,
+#[global] Instance maybe_BBit {K} : Maybe (@BBit K) := λ b,
   match b with BBit b => Some b | _ => None end.
-Instance maybe_BPtr {K} : Maybe (@BPtr K) := λ b,
+#[global] Instance maybe_BPtr {K} : Maybe (@BPtr K) := λ b,
   match b with BPtr pb => Some pb | _ => None end.
 
 Section operations.
@@ -66,16 +66,16 @@ Local Infix "⊑*" := (Forall2 bit_weak_refine) (at level 70).
 Local Hint Extern 0 (_ ⊑ _) => reflexivity: core.
 Local Hint Extern 0 (_ ⊑* _) => reflexivity: core.
 
-Global Instance bit_valid_dec ΓΔ (b : bit K) : Decision (✓{ΓΔ} b).
+#[global] Instance bit_valid_dec ΓΔ (b : bit K) : Decision (✓{ΓΔ} b).
 Proof.
  refine
   match b with
   | BIndet | BBit _ => left _ | BPtr pb => cast_if (decide (✓{ΓΔ} pb))
   end; destruct ΓΔ; first [by constructor | abstract by inversion 1].
 Defined.
-Global Instance: Inj (=) (=) (@BBit K).
+#[global] Instance: Inj (=) (=) (@BBit K).
 Proof. by injection 1. Qed.
-Global Instance: Inj (=) (=) (@BPtr K).
+#[global] Instance: Inj (=) (=) (@BPtr K).
 Proof. by injection 1. Qed.
 Lemma BIndet_valid Γ Δ : ✓{Γ,Δ} BIndet.
 Proof. constructor. Qed.
@@ -104,7 +104,7 @@ Proof.
     by intros [] ? ?; simplify_equality'.
   * intros ->. by apply mapM_fmap_Some.
 Qed.
-Global Instance BBits_dec bs : Decision (∃ βs, bs = BBit <$> βs).
+#[global] Instance BBits_dec bs : Decision (∃ βs, bs = BBit <$> βs).
 Proof.
  refine (cast_if (decide (is_Some (mapM (maybe BBit) bs))));
   abstract (by setoid_rewrite <-maybe_BBits_spec).
@@ -117,14 +117,14 @@ Proof.
     by intros [] ? ?; simplify_equality'.
   * intros ->. by apply mapM_fmap_Some.
 Qed.
-Global Instance BPtrs_dec bs : Decision (∃ pbs, bs = BPtr <$> pbs).
+#[global] Instance BPtrs_dec bs : Decision (∃ pbs, bs = BPtr <$> pbs).
 Proof.
  refine (cast_if (decide (is_Some (mapM (maybe BPtr) bs))));
   abstract (by setoid_rewrite <-maybe_BPtrs_spec).
 Defined.
 
 (** ** Weak Refinements *)
-Global Instance: PartialOrder (@bit_weak_refine K).
+#[global] Instance: PartialOrder (@bit_weak_refine K).
 Proof.
   repeat split.
   * intros ?; constructor.
@@ -146,7 +146,7 @@ Proof. induction 2 as [|???? []]; decompose_Forall_hyps; f_equal; auto. Qed.
 Lemma bit_join_valid Γ Δ b1 b2 b3 :
   bit_join b1 b2 = Some b3 → ✓{Γ,Δ} b1 → ✓{Γ,Δ} b2 → ✓{Γ,Δ} b3.
 Proof. destruct 2,1; simplify_option_eq; constructor; auto. Qed.
-Global Instance: Comm (@eq (option (bit K))) bit_join.
+#[global] Instance: Comm (@eq (option (bit K))) bit_join.
 Proof. intros [] []; intros; simplify_option_eq; auto. Qed.
 Lemma bit_join_indet_l b : bit_join BIndet b = Some b.
 Proof. by destruct b; simplify_option_eq. Qed.
@@ -171,7 +171,7 @@ Proof.
   intros Hbs Hbs1. revert bs2 bs3 Hbs. induction Hbs1; destruct 2;
     simplify_option_eq; constructor; eauto using bit_join_valid.
 Qed.
-Global Instance: Comm (@eq (option (list (bit K)))) bits_join.
+#[global] Instance: Comm (@eq (option (list (bit K)))) bits_join.
 Proof.
   intros bs1. induction bs1 as [|b1 bs1 IH]; intros [|b2 bs2]; simpl; try done.
   rewrite (comm bit_join). by destruct bit_join; simpl; rewrite ?IH.

@@ -16,23 +16,23 @@ Definition tag := string.
 Definition tagmap := stringmap.
 Notation tagset := (mapset tagmap).
 
-Instance tag_eq_dec: EqDecision tag. 
+#[global] Instance tag_eq_dec: EqDecision tag. 
 Proof. solve_decision. Defined.
-Instance tagmap_dec `{EqDecision A}: EqDecision (tagmap A).
+#[global] Instance tagmap_dec `{EqDecision A}: EqDecision (tagmap A).
 Proof. solve_decision. Defined.
-Instance tagmap_empty {A} : Empty (tagmap A) := @empty (stringmap A) _.
-Instance tagmap_lookup {A} : Lookup tag A (tagmap A) :=
+#[global] Instance tagmap_empty {A} : Empty (tagmap A) := @empty (stringmap A) _.
+#[global] Instance tagmap_lookup {A} : Lookup tag A (tagmap A) :=
   @lookup _ _ (stringmap A) _.
-Instance tagmap_partial_alter {A} : PartialAlter tag A (tagmap A) :=
+#[global] Instance tagmap_partial_alter {A} : PartialAlter tag A (tagmap A) :=
   @partial_alter _ _ (stringmap A) _.
-Instance tagmap_to_list {A} : FinMapToList tag A (tagmap A) :=
+#[global] Instance tagmap_to_list {A} : FinMapToList tag A (tagmap A) :=
   @map_to_list _ _ (tagmap A) _.
-Instance tagmap_omap: OMap tagmap := @omap stringmap _.
-Instance tagmap_merge : Merge tagmap := @merge stringmap _.
-Instance tagmap_fmap: FMap tagmap := @fmap stringmap _.
-Instance: FinMap tag tagmap := _.
-Instance tagmap_dom {A} : Dom (tagmap A) tagset := mapset_dom.
-Instance: FinMapDom tag tagmap tagset := mapset_dom_spec.
+#[global] Instance tagmap_omap: OMap tagmap := @omap stringmap _.
+#[global] Instance tagmap_merge : Merge tagmap := @merge stringmap _.
+#[global] Instance tagmap_fmap: FMap tagmap := @fmap stringmap _.
+#[global] Instance: FinMap tag tagmap := _.
+#[global] Instance tagmap_dom {A} : Dom (tagmap A) tagset := mapset_dom.
+#[global] Instance: FinMapDom tag tagmap tagset := mapset_dom_spec.
 
 Typeclasses Opaque tag tagmap.
 
@@ -42,23 +42,23 @@ Definition funname := string.
 Definition funmap := stringmap.
 Notation funset := (mapset funmap).
 
-Instance funname_eq_dec: EqDecision funname.
+#[global] Instance funname_eq_dec: EqDecision funname.
 Proof. solve_decision. Defined.
-Instance funmap_dec {A} `{EqDecision A}: EqDecision (funmap A).
+#[global] Instance funmap_dec {A} `{EqDecision A}: EqDecision (funmap A).
 Proof. solve_decision. Defined.
-Instance funmap_empty {A} : Empty (funmap A) := @empty (stringmap A) _.
-Instance funmap_lookup {A} : Lookup funname A (funmap A) :=
+#[global] Instance funmap_empty {A} : Empty (funmap A) := @empty (stringmap A) _.
+#[global] Instance funmap_lookup {A} : Lookup funname A (funmap A) :=
   @lookup _ _ (stringmap A) _.
-Instance funmap_partial_alter {A} : PartialAlter funname A (funmap A) :=
+#[global] Instance funmap_partial_alter {A} : PartialAlter funname A (funmap A) :=
   @partial_alter _ _ (stringmap A) _.
-Instance funmap_to_list {A} : FinMapToList funname A (funmap A) :=
+#[global] Instance funmap_to_list {A} : FinMapToList funname A (funmap A) :=
   @map_to_list _ _ (funmap A) _.
-Instance funmap_omap: OMap funmap := @omap stringmap _.
-Instance funmap_merge : Merge funmap := @merge stringmap _.
-Instance funmap_fmap: FMap funmap := @fmap stringmap _.
-Instance: FinMap funname funmap := _.
-Instance funmap_dom {A} : Dom (funmap A) funset := mapset_dom.
-Instance: FinMapDom funname funmap funset := mapset_dom_spec.
+#[global] Instance funmap_omap: OMap funmap := @omap stringmap _.
+#[global] Instance funmap_merge : Merge funmap := @merge stringmap _.
+#[global] Instance funmap_fmap: FMap funmap := @fmap stringmap _.
+#[global] Instance: FinMap funname funmap := _.
+#[global] Instance funmap_dom {A} : Dom (funmap A) funset := mapset_dom.
+#[global] Instance: FinMapDom funname funmap funset := mapset_dom_spec.
 
 Typeclasses Opaque funname funmap.
 
@@ -155,7 +155,7 @@ Notation "τp .*" := (TType (TBase (τp.*)))
   (at level 25, format "τp .*") : cptr_type_scope.
 Notation "τs ~> τ" := (TFun τs τ) (at level 40) : ctype_scope.
 
-Instance compound_kind_eq_dec: EqDecision compound_kind.
+#[global] Instance compound_kind_eq_dec: EqDecision compound_kind.
 Proof. solve_decision. Defined.
 Section dec.
 Context `{EqDecision K}.
@@ -188,24 +188,24 @@ Proof.
   | _, _ => right _
   end%BT; try solve_decision; abstract congruence.
 Defined.
-Global Instance type_eq_dec: EqDecision (type K) := type_eq_dec'.
-Global Instance ptr_type_eq_dec: EqDecision (ptr_type K) := ptr_type_eq_dec'.
-Global Instance base_type_eq_dec: EqDecision (base_type K) := base_type_eq_dec'.
+#[global] Instance type_eq_dec: EqDecision (type K) := type_eq_dec'.
+#[global] Instance ptr_type_eq_dec: EqDecision (ptr_type K) := ptr_type_eq_dec'.
+#[global] Instance base_type_eq_dec: EqDecision (base_type K) := base_type_eq_dec'.
 End dec.
 
-Instance maybe_TInt {K} : Maybe (@TInt K) := λ τb,
+#[global] Instance maybe_TInt {K} : Maybe (@TInt K) := λ τb,
   match τb with intT τi => Some τi | _ => None end%BT.
-Instance maybe_TPtr {K} : Maybe (@TPtr K) := λ τb,
+#[global] Instance maybe_TPtr {K} : Maybe (@TPtr K) := λ τb,
   match τb with τp.* => Some τp | _ => None end%BT.
-Instance maybe_TBase {K} : Maybe (@TBase K) := λ τ,
+#[global] Instance maybe_TBase {K} : Maybe (@TBase K) := λ τ,
   match τ with baseT τb => Some τb | _ => None end.
-Instance maybe_TArray {K} : Maybe2 (@TArray K) := λ τ,
+#[global] Instance maybe_TArray {K} : Maybe2 (@TArray K) := λ τ,
   match τ with τ.[n] => Some (τ,n) | _ => None end.
-Instance maybe_TCompound {K} : Maybe2 (@TCompound K) := λ τ,
+#[global] Instance maybe_TCompound {K} : Maybe2 (@TCompound K) := λ τ,
   match τ with compoundT{c} t => Some (c,t) | _ => None end.
-Instance maybe_TType {K} : Maybe (@TType K) := λ τ,
+#[global] Instance maybe_TType {K} : Maybe (@TType K) := λ τ,
   match τ with TType τ => Some τ | _ => None end.
-Instance maybe_TFun {K} : Maybe2 (@TFun K) := λ τ,
+#[global] Instance maybe_TFun {K} : Maybe2 (@TFun K) := λ τ,
   match τ with τs ~> τ => Some (τs,τ) | _ => None end.
 
 (** * Environments *)
@@ -218,22 +218,22 @@ Arguments mk_env {_} _ _.
 Arguments env_t {_} _.
 Arguments env_f {_} _.
 
-Instance env_subseteq {K} : SubsetEq (env K) := λ Γ1 Γ2,
+#[global] Instance env_subseteq {K} : SubsetEq (env K) := λ Γ1 Γ2,
   env_t Γ1 ⊆ env_t Γ2 ∧ env_f Γ1 ⊆ env_f Γ2.
-Instance env_empty {K} : Empty (env K) := mk_env ∅ ∅.
-Instance env_lookup_compound {K} :
+#[global] Instance env_empty {K} : Empty (env K) := mk_env ∅ ∅.
+#[global] Instance env_lookup_compound {K} :
   Lookup tag (list (type K)) (env K) := λ t Γ, env_t Γ !! t.
-Instance env_lookup_fun {K} :
+#[global] Instance env_lookup_fun {K} :
   Lookup funname (list (type K) * type K) (env K) := λ f Γ, env_f Γ !! f.
-Instance env_insert_compound {K} :
+#[global] Instance env_insert_compound {K} :
     Insert tag (list (type K)) (env K) := λ t τs Γ,
   mk_env (<[t:=τs]>(env_t Γ)) (env_f Γ).
-Instance env_insert_fun {K} :
+#[global] Instance env_insert_fun {K} :
     Insert funname (list (type K) * type K) (env K) := λ f τsτ Γ,
   mk_env (env_t Γ) (<[f:=τsτ]>(env_f Γ)).
-Instance env_delete_compound {K} :
+#[global] Instance env_delete_compound {K} :
   Delete tag (env K) := λ t Γ, mk_env (delete t (env_t Γ)) (env_f Γ).
-Instance env_delete_fun {K} :
+#[global] Instance env_delete_fun {K} :
   Delete funname (env K) := λ f Γ, mk_env (env_t Γ) (delete f (env_f Γ)).
 
 (** * Well-formed types *)
@@ -365,9 +365,9 @@ Section types.
     end%BT; clear type_valid_dec ptr_type_valid_dec base_type_valid_dec
       ptr_type_valid_dec_aux; abstract first [by repeat constructor | by inversion 1].
   Defined.
-  Global Existing Instance type_valid_dec.
-  Global Existing Instance base_type_valid_dec.
-  Global Existing Instance ptr_type_valid_dec.
+  #[global] Existing Instance type_valid_dec.
+  #[global] Existing Instance base_type_valid_dec.
+  #[global] Existing Instance ptr_type_valid_dec.
 
   Lemma type_valid_inv Γ (P : Prop) τ :
     ✓{Γ} τ →
@@ -504,7 +504,7 @@ Section types.
     | env_insert_fun_valid Γ f τs τ :
        ✓ Γ → ✓{Γ}* (TType <$> τs) → ✓{Γ} (TType τ) →
        Γ !! f = None → ✓ (<[f:=(τs,τ)]>Γ).
-  Global Existing Instance env_valid.
+  #[global] Existing Instance env_valid.
 
   Lemma env_valid_delete Γ t τs :
     ✓ Γ → Γ !! t = Some τs → ∃ Γ', Γ' ⊆ delete t Γ ∧ ✓{Γ'}* τs ∧ τs ≠ [] ∧ ✓ Γ'.

@@ -27,7 +27,7 @@ Inductive val_refine' `{Env K} (Γ : env K) (α : bool) (f : meminj K)
      α → Γ !! t = Some τs → τs !! i = Some τ → vs2 !! i = Some v2 →
      val_refine' Γ α f Δ1 Δ2 v1 v2 τ → vals_representable Γ Δ2 vs2 τs →
      val_refine' Γ α f Δ1 Δ2 (VUnion t i v1) (VUnionAll t vs2) (unionT t).
-Instance val_refine `{Env K} :
+#[global] Instance val_refine `{Env K} :
   RefineT K (env K) (type K) (val K) := val_refine'.
 
 Section val_refine_ind.

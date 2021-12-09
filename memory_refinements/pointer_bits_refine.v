@@ -3,7 +3,7 @@
 Require Import fragmented.
 Require Export pointer_bits pointers_refine.
 
-Instance ptr_bit_refine `{Env K} :
+#[global] Instance ptr_bit_refine `{Env K} :
     Refine K (env K) (ptr_bit K) := λ Γ α f Δ1 Δ2 pb1 pb2, ∃ τp,
   frag_item pb1 ⊑{Γ,α,f@Δ1↦Δ2} frag_item pb2 : τp ∧
   frag_index pb1 = frag_index pb2 ∧

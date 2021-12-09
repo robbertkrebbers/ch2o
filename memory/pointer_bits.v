@@ -33,7 +33,7 @@ Implicit Types p : ptr K.
 Implicit Types pb : ptr_bit K.
 Implicit Types pbs : list (ptr_bit K).
 
-Global Instance ptr_bit_valid_dec ΓΔ (pb : ptr_bit K) : Decision (✓{ΓΔ} pb).
+#[global] Instance ptr_bit_valid_dec ΓΔ (pb : ptr_bit K) : Decision (✓{ΓΔ} pb).
 Proof.
  refine
   match Some_dec (type_check ΓΔ (frag_item pb)) with

@@ -14,7 +14,7 @@ Arguments RArray {_} _ _ _.
 Arguments RStruct {_} _ _.
 Arguments RUnion {_} _ _ _.
 
-Instance ref_seg_eq_dec `{EqDecision K}: EqDecision (ref_seg K).
+#[global] Instance ref_seg_eq_dec `{EqDecision K}: EqDecision (ref_seg K).
 Proof.
   intros * r1 r2.
   refine
@@ -39,7 +39,7 @@ Inductive ref_seg_typed' `{Env K} (Γ : env K) :
   | RUnion_typed t i β τs τ :
      Γ !! t = Some τs → τs !! i = Some τ →
      ref_seg_typed' Γ (RUnion i t β) (unionT t) τ.
-Instance ref_seg_typed `{Env K} :
+#[global] Instance ref_seg_typed `{Env K} :
   PathTyped (env K) (type K) (type K) (ref_seg K) := ref_seg_typed'.
 
 Inductive ref_typed' `{Env K} (Γ : env K) :
@@ -47,12 +47,12 @@ Inductive ref_typed' `{Env K} (Γ : env K) :
   | ref_nil_typed' τ : ref_typed' Γ [] τ τ
   | ref_cons_typed' r rs τ1 τ2 τ3 :
      Γ ⊢ rs : τ2 ↣ τ3 → ref_typed' Γ r τ1 τ2 → ref_typed' Γ (rs :: r) τ1 τ3.
-Instance ref_typed `{Env K} :
+#[global] Instance ref_typed `{Env K} :
   PathTyped (env K) (type K) (type K) (ref K) := ref_typed'.
 
-Instance subtype `{Env K} : SubsetEqE (env K) (type K) :=
+#[global] Instance subtype `{Env K} : SubsetEqE (env K) (type K) :=
   λ Γ τ1 τ2, ∃ r : ref K, Γ ⊢ r : τ2 ↣ τ1.
-Instance ref_seg_lookup `{EqDecision K} :
+#[global] Instance ref_seg_lookup `{EqDecision K} :
     LookupE (env K) (ref_seg K) (type K) (type K) := λ Γ rs τ,
   match rs, τ with
   | RArray i τ' n', τ.[n] =>
@@ -61,7 +61,7 @@ Instance ref_seg_lookup `{EqDecision K} :
   | RUnion i t' _, unionT t => guard (t = t'); Γ !! t ≫= (.!! i)
   | _, _ => None
   end.
-Instance ref_lookup `{EqDecision K} :
+#[global] Instance ref_lookup `{EqDecision K} :
     LookupE (env K) (ref K) (type K) (type K) :=
   fix go Γ r τ {struct r} := let _ : LookupE _ _ _ _ := @go in
   match r with [] => Some τ | rs :: r => τ !!{Γ} r ≫= lookupE Γ rs end.
@@ -71,7 +71,7 @@ Arguments freeze {_ _} _ !_ /.
 Definition frozen `{Freeze A} (x : A) := freeze true x = x.
 Arguments freeze {_ _} _ !_ /.
 
-Instance ref_seg_freeze {K} : Freeze (ref_seg K) := λ β rs,
+#[global] Instance ref_seg_freeze {K} : Freeze (ref_seg K) := λ β rs,
   match rs with
   | RArray i τ n => RArray i τ n
   | RStruct i t => RStruct i t
@@ -103,14 +103,14 @@ Arguments ref_size _ !_ /.
 Inductive ref_seg_disjoint {K} : Disjoint (ref_seg K) :=
   | RArray_disjoint i1 i2 τ n : i1 ≠ i2 → @RArray K i1 τ n ## RArray i2 τ n
   | RStruct_disjoint i1 i2 t : i1 ≠ i2 → @RStruct K i1 t ## RStruct i2 t.
-Existing Instance ref_seg_disjoint.
+#[global] Existing Instance ref_seg_disjoint.
 Inductive ref_disjoint {K} : Disjoint (ref K) :=
   | ref_disjoint_here rs1 rs2 (r1 r2 : ref K) :
      freeze true <$> r1 = freeze true <$> r2 →
      rs1 ## rs2 → rs1 :: r1 ## rs2 :: r2
   | ref_disjoint_cons_l rs1 (r1 r2 : ref K) : r1 ## r2 → rs1 :: r1 ## r2
   | ref_disjoint_cons_r rs2 (r1 r2 : ref K): r1 ## r2 → r1 ## rs2 :: r2.
-Existing Instance ref_disjoint.
+#[global] Existing Instance ref_disjoint.
 
 Definition ref_seg_object_offset `{Env K}
     (Γ : env K) (rs : ref_seg K) : nat :=
@@ -127,7 +127,7 @@ Inductive ref_seg_le {K} : SubsetEq (ref_seg K) :=
   | RStruct_refine i t : @RStruct K i t ⊆ RStruct i t
   | RUnion_refine i t (β1 β2 : bool) :
      (β2 → β1) → @RUnion K i t β1 ⊆ RUnion i t β2.
-Existing Instance ref_seg_le.
+#[global] Existing Instance ref_seg_le.
 
 Section ref_typed_ind.
   Context `{Env K} (Γ : env K) (P : ref K → type K → type K → Prop).
@@ -199,7 +199,7 @@ Lemma ref_seg_typed_type_valid Γ rs τ σ :
 Proof. eauto using type_valid_ptr_type_valid, ref_seg_typed_ptr_type_valid. Qed.
 Lemma ref_typed_type_valid Γ r τ σ : ✓ Γ → Γ ⊢ r : τ ↣ σ → ✓{Γ} τ → ✓{Γ} σ.
 Proof. intro. induction 1; eauto using ref_seg_typed_type_valid. Qed.
-Global Instance:
+#[global] Instance:
   PathTypeCheckSpecUnique (env K) (type K) (type K) (ref_seg K) (λ _, True).
 Proof.
   split.
@@ -208,7 +208,7 @@ Proof.
       simplify_option_eq; econstructor; eauto.
   * by destruct 2; inversion 1.
 Qed.
-Global Instance:
+#[global] Instance:
   PathTypeCheckSpecUnique (env K) (type K) (type K) (ref K) (λ _, True).
 Proof.
   split.
@@ -307,7 +307,7 @@ Proof.
   apply ref_typed_size in Hr; apply Nat.mul_le_mono_l; lia.
 Qed.
 
-Global Instance: `{PreOrder (@subseteqE (env K) (type K) _ Γ)}.
+#[global] Instance: `{PreOrder (@subseteqE (env K) (type K) _ Γ)}.
 Proof.
   intros Γ. repeat split.
   * eexists []. constructor.
@@ -342,7 +342,7 @@ Lemma ref_seg_freeze_le β rs1 rs2 : rs1 ⊆ rs2 → freeze β rs1 = freeze β r
 Proof. by destruct 1. Qed.
 Lemma ref_freeze_le β r1 r2 : r1 ⊆* r2 → freeze β <$> r1 = freeze β <$> r2.
 Proof. induction 1; f_equal'; eauto using ref_seg_freeze_le. Qed.
-Global Instance: PartialOrder (@subseteq (ref_seg K) _).
+#[global] Instance: PartialOrder (@subseteq (ref_seg K) _).
 Proof.
   repeat split; [by intros []; constructor| |].
   * destruct 1; inversion 1; constructor; auto.
@@ -441,9 +441,9 @@ Lemma ref_disjoint_here_app_1 r1 r2 r1' r2' :
 Proof.
   induction 1; simpl; constructor; rewrite ?fmap_app; auto with f_equal.
 Qed.
-Global Instance: Symmetric (@disjoint (ref_seg K) _).
+#[global] Instance: Symmetric (@disjoint (ref_seg K) _).
 Proof. destruct 1; constructor; auto. Qed.
-Global Instance: Symmetric (@disjoint (ref K) _).
+#[global] Instance: Symmetric (@disjoint (ref K) _).
 Proof. induction 1; constructor; by auto. Qed.
 Lemma ref_disjoint_alt r1 r2 :
   r1 ## r2 ↔ ∃ r1' rs1 r1'' r2' rs2 r2'',
@@ -492,7 +492,7 @@ Proof.
 Qed.
 Lemma ref_disjoint_nil_inv_r r : ¬r ## [].
 Proof. intros ?. by apply (ref_disjoint_nil_inv_l r). Qed.
-Global Instance: Irreflexive (@disjoint (ref_seg K) _).
+#[global] Instance: Irreflexive (@disjoint (ref_seg K) _).
 Proof. by inversion 1. Qed.
 Lemma ref_disjoint_app_inv_l r1 r2 : ¬r1 ++ r2 ## r2.
 Proof.
@@ -501,7 +501,7 @@ Proof.
 Qed.
 Lemma ref_disjoint_app_inv_r r1 r2 : ¬r2 ## r1 ++ r2.
 Proof. intros ?. by destruct (ref_disjoint_app_inv_l r1 r2). Qed.
-Global Instance: Irreflexive (@disjoint (ref K) _).
+#[global] Instance: Irreflexive (@disjoint (ref K) _).
 Proof. intros r ?. by destruct (ref_disjoint_app_inv_l [] r). Qed.
 Lemma ref_disjoint_here_app_2 r1 r2 r : r1 ++ r ## r2 ++ r → r1 ## r2.
 Proof.
@@ -537,7 +537,7 @@ Proof.
   transitivity (freeze true <$> r4''); auto using ref_freeze_le, eq_sym.
 Qed.
 
-Global Instance ref_seg_disjoint_dec rs1 rs2 : Decision (rs1 ## rs2).
+#[global] Instance ref_seg_disjoint_dec rs1 rs2 : Decision (rs1 ## rs2).
 Proof.
  refine
   match rs1,rs2 with
@@ -553,7 +553,7 @@ Inductive ref_disjoint_rev: ref K → ref K → Prop :=
   | ref_disjoint_rev_cons rs1 rs2 r1 r2 :
      freeze true rs1 = freeze true rs2 →
      ref_disjoint_rev r1 r2 → ref_disjoint_rev (rs1 :: r1) (rs2 :: r2).
-Global Instance ref_disjoint_rev_dec:∀ r1 r2, Decision (ref_disjoint_rev r1 r2).
+#[global] Instance ref_disjoint_rev_dec:∀ r1 r2, Decision (ref_disjoint_rev r1 r2).
 Proof.
  refine (
   fix go r1 r2 :=
@@ -588,7 +588,7 @@ Proof.
   intros. rewrite <-(reverse_involutive r1), <-(reverse_involutive r2).
   by apply ref_disjoint_rev_correct_1.
 Qed.
-Global Instance ref_disjoint_dec r1 r2 : Decision (r1 ## r2).
+#[global] Instance ref_disjoint_dec r1 r2 : Decision (r1 ## r2).
 Proof.
   refine (cast_if (decide (ref_disjoint_rev (reverse r1) (reverse r2))));
    by rewrite ref_disjoint_rev_correct.

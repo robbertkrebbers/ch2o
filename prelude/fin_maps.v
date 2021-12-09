@@ -11,13 +11,6 @@ Definition map_Forall2 `{∀ A, Lookup K A (M A)} {A B}
   | None, None => True
   end.
 
-(* Definition map_included `{∀ A, Lookup K A (M A)} {A}
-  (R : relation A) : relation (M A) := map_Forall2 R (λ _, False) (λ _, True).
-Instance map_disjoint `{∀ A, Lookup K A (M A)} {A} : Disjoint (M A) :=
-  map_Forall2 (λ _ _, False) (λ _, True) (λ _, True).
-Instance map_subseteq `{∀ A, Lookup K A (M A)} {A} : SubsetEq (M A) :=
-  map_Forall2 (=) (λ _, False) (λ _, True). *)
-
 Section Forall2.
 Context `{FinMap K M}.
 Context {A B} (R : A → B → Prop) (P : A → Prop) (Q : B → Prop).
@@ -42,7 +35,7 @@ Proof.
       by eapply bool_decide_unpack, Hm.
 Qed.
 
-Global Instance map_Forall2_dec `{∀ x y, Decision (R x y), ∀ x, Decision (P x),
+#[global] Instance map_Forall2_dec `{∀ x y, Decision (R x y), ∀ x, Decision (P x),
   ∀ y, Decision (Q y)} (m1: M A) (m2: M B): Decision (map_Forall2 R P Q m1 m2).
 Proof.
   refine (cast_if (decide (map_Forall (λ _, Is_true) (merge f m1 m2))));

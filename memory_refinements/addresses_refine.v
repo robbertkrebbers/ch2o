@@ -29,7 +29,7 @@ Inductive addr_refine' `{Env K} (Γ : env K) (α : bool) (f : meminj K)
      ref_refine (size_of Γ σ) α r' r1 i1 r2 i2 →
      addr_refine' Γ α f Δ1 Δ2
        (Addr o1 r1 i1 τ1 σ σp) (Addr o2 r2 i2 τ2 σ σp) σp.
-Instance addr_refine `{Env K} :
+#[global] Instance addr_refine `{Env K} :
   RefineT K (env K) (ptr_type K) (addr K) := addr_refine'.
 
 Section addresses.

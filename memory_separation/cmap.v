@@ -10,7 +10,7 @@ Inductive cmap_elem (K : iType) (A : sType) : iType :=
 Arguments Freed {_ _} _.
 Arguments Obj {_ _} _ _.
 
-Instance maybe_Obj {K A} : Maybe2 (@Obj K A) := λ x,
+#[global] Instance maybe_Obj {K A} : Maybe2 (@Obj K A) := λ x,
   match x with Obj w β => Some (w,β) | _ => None end.
 Definition cmap_elem_Forall {K A} (P : Prop) (Q : ctree K A → Prop)
     (x : cmap_elem K A) : Prop :=
@@ -32,18 +32,18 @@ Definition cmap_elem_map2 {K A} (f : ctree K A → ctree K A → ctree K A)
   | Obj w β, _ | _, Obj w β => Obj w β
   | Freed τ, _ => Freed τ
  end.
-Instance cmap_elem_eq_dec {K A} `{EqDecision K, EqDecision A}: EqDecision (cmap_elem K A).
+#[global] Instance cmap_elem_eq_dec {K A} `{EqDecision K, EqDecision A}: EqDecision (cmap_elem K A).
 Proof. solve_decision. Defined.
-Instance cmap_elem_Forall_dec {K A} `{Decision P, ∀ w, Decision (Q w)}
+#[global] Instance cmap_elem_Forall_dec {K A} `{Decision P, ∀ w, Decision (Q w)}
   (x : cmap_elem K A) : Decision (cmap_elem_Forall P Q x).
 Proof. destruct x; apply _. Defined.
-Instance cmap_elem_Forall2_dec {K A} `{EqDecision K,
+#[global] Instance cmap_elem_Forall2_dec {K A} `{EqDecision K,
     Decision P, ∀ w1 w2, Decision (Q w1 w2)}
   (x y : cmap_elem K A) : Decision (cmap_elem_Forall2 P Q x y).
 Proof. destruct x, y; apply _. Defined.
-Instance: `{Inj (=) (=) (@Freed K A)}.
+#[global] Instance: `{Inj (=) (=) (@Freed K A)}.
 Proof. by injection 1. Qed.
-Instance: `{Inj2 (=) (=) (=) (@Obj K A)}.
+#[global] Instance: `{Inj2 (=) (=) (=) (@Obj K A)}.
 Proof. by injection 1. Qed.
 
 Record cmap (K : iType) (A : sType) : iType :=
@@ -51,10 +51,10 @@ Record cmap (K : iType) (A : sType) : iType :=
 Arguments CMap {_ _} _.
 Arguments cmap_car {_ _} _.
 Add Printing Constructor cmap.
-Instance: `{Inj (=) (=) (@CMap K A)}.
+#[global] Instance: `{Inj (=) (=) (@CMap K A)}.
 Proof. by injection 1. Qed.
 
-#[refine] Instance cmap_ops {K : iType} `{EqDecision K,
+#[global, refine] Instance cmap_ops {K : iType} `{EqDecision K,
     SeparationOps A} : SeparationOps (cmap K A) := {
   sep_empty := CMap ∅;
   sep_union m1 m2 :=
@@ -96,7 +96,7 @@ Proof.
   * intros []; apply _.
 Defined.
 
-Instance cmap_sep {K : iType} `{EqDecision K, Separation A} :
+#[global] Instance cmap_sep {K : iType} `{EqDecision K, Separation A} :
   Separation (cmap K A).
 Proof.
   split.

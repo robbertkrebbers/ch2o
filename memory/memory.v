@@ -361,7 +361,7 @@ Lemma mem_alloc_list_forward Γ m os vs τs :
 Proof. eapply mem_alloc_list_valid. Qed.
 
 (** ** Properties of the [mem_free] fucntion *)
-Global Instance mem_freeable_perm_dec o μ m: Decision (mem_freeable_perm o μ m).
+#[global] Instance mem_freeable_perm_dec o μ m: Decision (mem_freeable_perm o μ m).
 Proof.
   refine
    match cmap_car m !! o as x return Decision (∃ w, x = Some (Obj w μ)
@@ -372,7 +372,7 @@ Proof.
    | _ => right _
    end; abstract naive_solver.
 Defined.
-Global Instance mem_freeable_dec a m : Decision (mem_freeable a m) := _.
+#[global] Instance mem_freeable_dec a m : Decision (mem_freeable a m) := _.
 Lemma mem_free_memenv_of m o :
   '{mem_free o m} = alter (prod_map id (λ _, true)) o '{m}.
 Proof.
@@ -667,7 +667,7 @@ Proof.
   destruct (cmap_car m !! addr_index a) as [[|w' μ]|] eqn:?; simplify_equality'.
   destruct (cmap_valid_Obj Γ Δ m (addr_index a) w' μ) as (τ&?&?&?); auto.
 Qed.
-Global Instance mem_writable_dec Γ a m : Decision (mem_writable Γ a m).
+#[global] Instance mem_writable_dec Γ a m : Decision (mem_writable Γ a m).
 Proof.
   refine
    match Some_dec (m !!{Γ} a) with

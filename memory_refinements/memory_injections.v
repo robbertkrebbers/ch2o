@@ -8,9 +8,9 @@ Inductive meminj (K : iType) : iType :=
   | meminj_map : indexmap (index * ref K) → meminj K.
 Arguments meminj_id {_}.
 Arguments meminj_map {_} _.
-Instance meminj_dec {K} `{EqDecision K}: EqDecision (meminj K).
+#[global] Instance meminj_dec {K} `{EqDecision K}: EqDecision (meminj K).
 Proof. solve_decision. Defined.
-Instance meminj_lookup {K} : Lookup index (index * ref K) (meminj K) :=
+#[global] Instance meminj_lookup {K} : Lookup index (index * ref K) (meminj K) :=
   λ o f, match f with meminj_id => Some (o, []) | meminj_map m => m !! o end.
 Definition meminj_compose {K} (f g : meminj K) : meminj K :=
   match f, g with
@@ -27,7 +27,7 @@ Notation "(◎)" := meminj_compose (only parsing) : C_scope.
 
 Definition meminj_injective {K} (f : meminj K) : Prop := ∀ o1 o2 o r1 r2,
   f !! o1 = Some (o,r1) → f !! o2 = Some (o,r2) → o1 = o2 ∨ r1 ## r2.
-Instance meminj_subseteq {K} : SubsetEq (meminj K) := λ f1 f2,
+  Global Instance meminj_subseteq {K} : SubsetEq (meminj K) := λ f1 f2,
   ∀ o o' r', f1 !! o = Some (o',r') → f2 !! o = Some (o',r').
 
 Section meminj.
@@ -71,11 +71,11 @@ Proof.
   * by intros (?&?&?&?&?&?); simplify_option_eq.
 Qed.
 
-Global Instance: LeftId (@eq (meminj K)) meminj_id (◎).
+#[global] Instance: LeftId (@eq (meminj K)) meminj_id (◎).
 Proof. by intros []. Qed.
-Global Instance: RightId (@eq (meminj K)) meminj_id (◎).
+#[global] Instance: RightId (@eq (meminj K)) meminj_id (◎).
 Proof. by intros []. Qed.
-Global Instance: Assoc (@eq (meminj K)) (◎).
+#[global] Instance: Assoc (@eq (meminj K)) (◎).
 Proof.
   intros f g h. apply meminj_eq. intros o1. rewrite !lookup_meminj_compose.
   destruct (h !! o1) as [[o2 r2]|]; csimpl; [|done].
@@ -115,7 +115,7 @@ Proof.
   intros Hf ???. destruct (decide (o2 = o4)) as [->|]; auto.
   destruct (Hf o1 o3 o4 r2 r4); auto.
 Qed.
-Global Instance: PartialOrder ((⊆) : relation (meminj K)).
+#[global] Instance: PartialOrder ((⊆) : relation (meminj K)).
 Proof.
   repeat split.
   * by intros f o o' r'.

@@ -146,31 +146,31 @@ Infix "==" := (EBinOp (CompOp EqOp)) (at level 52) : expr_scope.
 Notation "- e" := (EUnOp NegOp e)
   (at level 35, right associativity) : expr_scope.
 
-Instance: `{Inj (=) (=) (@EVar K)}.
+#[global] Instance: `{Inj (=) (=) (@EVar K)}.
 Proof. by injection 1. Qed.
-Instance: `{Inj2 (=) (=) (=) (λ Ω (v : val K), #{Ω} v)}.
+#[global] Instance: `{Inj2 (=) (=) (=) (λ Ω (v : val K), #{Ω} v)}.
 Proof. by injection 1. Qed.
-Instance: `{Inj2 (=) (=) (=) (@EVal K)}.
+#[global] Instance: `{Inj2 (=) (=) (=) (@EVal K)}.
 Proof. by injection 1. Qed.
-Instance: `{Inj (=) (=) (@ELoad K)}.
+#[global] Instance: `{Inj (=) (=) (@ELoad K)}.
 Proof. by injection 1. Qed.
-Instance: `{Inj (=) (=) (@EFree K)}.
+#[global] Instance: `{Inj (=) (=) (@EFree K)}.
 Proof. by injection 1. Qed.
 
-Instance maybe_EAlloc {K} : Maybe2 (@EAlloc K) := λ e,
+#[global] Instance maybe_EAlloc {K} : Maybe2 (@EAlloc K) := λ e,
   match e with alloc{τ} e => Some (τ,e) | _ => None end.
-Instance maybe_EVal {K} : Maybe2 (@EVal K) := λ e,
+#[global] Instance maybe_EVal {K} : Maybe2 (@EVal K) := λ e,
   match e with %#{Ω} ν => Some (Ω,ν) | _ => None end.
-Instance maybe_EVal_inl {K} : Maybe2 (λ Ω (p : ptr K), %{Ω} p) := λ e,
+#[global] Instance maybe_EVal_inl {K} : Maybe2 (λ Ω (p : ptr K), %{Ω} p) := λ e,
   match e with %{Ω} a => Some (Ω,a) | _ => None end.
-Instance maybe_EVal_inr {K} : Maybe2 (λ Ω (v : val K), #{Ω} v) := λ e,
+#[global] Instance maybe_EVal_inr {K} : Maybe2 (λ Ω (v : val K), #{Ω} v) := λ e,
   match e with #{Ω} v => Some (Ω,v) | _ => None end.
-Instance maybe_ECall {K} : Maybe2 (@ECall K) := λ e,
+#[global] Instance maybe_ECall {K} : Maybe2 (@ECall K) := λ e,
   match e with call e @ es => Some (e,es) | _ => None end.
 
-Instance assign_eq_dec: EqDecision assign.
+#[global] Instance assign_eq_dec: EqDecision assign.
 Proof. solve_decision. Defined.
-Instance expr_eq_dec {K} `{EqDecision K} :
+#[global] Instance expr_eq_dec {K} `{EqDecision K} :
   EqDecision (expr K).
 Proof.
   refine (fix go e1 e2 : Decision (e1 = e2) := let _ : EqDecision (expr K) := go in
@@ -209,7 +209,7 @@ Proof.
   end); congruence.
 Defined.
 
-Instance expr_freeze {K} : Freeze (expr K) :=
+#[global] Instance expr_freeze {K} : Freeze (expr K) :=
   fix go β e {struct e} :=
   let _ : Freeze _ := @go in
   match e with
@@ -285,7 +285,7 @@ End expr_ind.
 
 (** We also define [size e] giving the number of nodes in an expression. This
 measure can be used for well-founded induction on expressions. *)
-Instance expr_size {K} : Size (expr K) :=
+#[global] Instance expr_size {K} : Size (expr K) :=
   fix go e : nat := let _ : Size _ := go in
   match e with
   | var _ | abort _ => 1 | %#{_} _ => 0
@@ -302,7 +302,7 @@ Proof.
   intros e. apply (help (S (size e))); lia.
 Qed.
 
-Instance expr_free_vars {K} : Vars (expr K) :=
+#[global] Instance expr_free_vars {K} : Vars (expr K) :=
   fix go e := let _ : Vars _ := @go in
   match e with
   | var n => {[ n ]} | %#{_} _ | abort _ => ∅
@@ -323,7 +323,7 @@ and define a type class [Locks] to collect locks in various data structures. *)
 Class Locks A := locks: A → lockset.
 Arguments locks {_ _} !_ / : simpl nomatch.
 
-Instance list_locks `{Locks A} : Locks (list A) :=
+#[global] Instance list_locks `{Locks A} : Locks (list A) :=
   fix go (l : list A) : lockset := let _ : Locks _ := @go in
   match l with [] => ∅ | a :: l => locks a ∪ locks l end.
 
@@ -336,7 +336,7 @@ Lemma locks_snoc `{Locks A} (l1 : list A) a :
   locks (l1 ++ [a]) = locks l1 ∪ locks a.
 Proof. rewrite locks_app. simpl. by rewrite (right_id_L ∅ (∪)). Qed.
 
-Instance expr_locks {K} : Locks (expr K) :=
+#[global] Instance expr_locks {K} : Locks (expr K) :=
   fix go e : lockset := let _ : Locks _ := @go in
   match e with
   | var _ | abort _ => ∅ | %#{Ω} _ => Ω
@@ -398,7 +398,7 @@ Section is_pure_ind.
   Proof. fix H'2 2; destruct 1; eauto using Forall_impl. Qed.
 End is_pure_ind.
 
-Instance is_pure_dec {K} : ∀ e : expr K, Decision (is_pure e).
+#[global] Instance is_pure_dec {K} : ∀ e : expr K, Decision (is_pure e).
 Proof.
  refine (
   fix go e :=
@@ -476,12 +476,12 @@ Inductive is_redex {K} : expr K → Prop :=
   | EInsert_redex r e1 e2 :
      is_nf e1 → is_nf e2 → is_redex (#[r:=e1]e2).
 
-Instance is_nf_dec {K} (e : expr K) : Decision (is_nf e).
+#[global] Instance is_nf_dec {K} (e : expr K) : Decision (is_nf e).
 Proof.
  refine (match e with %#{_} _ => left _ | _ => right _ end);
   try constructor; abstract (inversion 1).
 Defined.
-Instance is_redex_dec {K} (e : expr K) : Decision (is_redex e).
+#[global] Instance is_redex_dec {K} (e : expr K) : Decision (is_redex e).
 Proof.
  refine
   match e with
@@ -628,12 +628,12 @@ Notation "#[ r := □ ] e2" := (CInsertL r e2)
 Notation "#[ r := e1 ] □" := (CInsertR r e1)
   (at level 10, format "#[ r := e1 ]  □") : expr_scope.
 
-Instance ectx_item_dec `{EqDecision K}: EqDecision (ectx_item K).
+#[global] Instance ectx_item_dec `{EqDecision K}: EqDecision (ectx_item K).
 Proof. solve_decision. Defined.
 
 (** Substitution is defined in a straightforward way. Using the type class
 instances in the file [contexts], it is lifted to full expression contexts. *)
-Instance ectx_item_subst {K} :
+#[global] Instance ectx_item_subst {K} :
     Subst (ectx_item K) (expr K) (expr K) := λ Ei e,
   match Ei with
   | .* □ => .* e
@@ -653,9 +653,9 @@ Instance ectx_item_subst {K} :
   | cast{τ} □ => cast{τ} e
   | #[r:=□] e2 => #[r:=e] e2 | #[r:=e1] □ => #[r:=e1] e
   end.
-Instance: `{DestructSubst (@ectx_item_subst K)} := {}.
+#[global] Instance: `{DestructSubst (@ectx_item_subst K)} := {}.
 
-Instance: `{∀ Ei : ectx_item K, Inj (=) (=) (subst Ei)}.
+#[global] Instance: `{∀ Ei : ectx_item K, Inj (=) (=) (subst Ei)}.
 Proof. by destruct Ei; intros ???; simplify_list_eq. Qed.
 Lemma is_nf_ectx_item {K} (Ei : ectx_item K) e : ¬is_nf (subst Ei e).
 Proof. destruct Ei; inversion 1. Qed.
@@ -680,7 +680,7 @@ Proof.
   feed pose proof (is_nf_ectx E e); subst; simpl in *; eauto.
 Qed.
 
-Instance ectx_locks {K} : Locks (ectx_item K) := λ Ei,
+#[global] Instance ectx_locks {K} : Locks (ectx_item K) := λ Ei,
   match Ei with
   | .* □ | & □ | cast{_} □ => ∅
   | □ ::={_} e | e ::={_} □ => locks e
@@ -725,7 +725,7 @@ Proof.
   * intros. rewrite IH, ectx_item_subst_locks. set_solver.
 Qed.
 
-Instance ectx_item_size {K} : Size (ectx_item K) := λ Ei,
+#[global] Instance ectx_item_size {K} : Size (ectx_item K) := λ Ei,
   match Ei with
   | .* □ | & □ | load □ | □ %> _ | □ #> _ | alloc{_} □
     | free □ | .{_} □ | cast{_} □ => 1
@@ -860,7 +860,7 @@ Arguments DCComma {_} _.
 Arguments DCCast {_} _.
 Arguments DCInsert {_} _.
 
-Instance ectx_full_subst {K} :
+#[global] Instance ectx_full_subst {K} :
     DepSubst (ectx_full K) (vec (expr K)) (expr K) := λ _ E,
   match E with
   | DCVar x => λ _, var x
@@ -882,7 +882,7 @@ Instance ectx_full_subst {K} :
   | DCCast τ => λ es, cast{τ} (es !!! 0%fin)
   | DCInsert r => λ es, #[r:=es !!! 0%fin] (es !!! 1%fin)
   end.
-Instance ectx_full_locks {K n} : Locks (ectx_full K n) := λ E,
+#[global] Instance ectx_full_locks {K n} : Locks (ectx_full K n) := λ E,
   match E with
   | DCVal Ω _ => Ω
   | DCIf e1 e2 => locks e1 ∪ locks e2

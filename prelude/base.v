@@ -14,7 +14,7 @@ Delimit Scope C_scope with C.
 Global Open Scope C_scope.
 
 Class EquivE E A := equivE: E → relation A.
-Instance: Params (@equivE) 4 := {}.
+#[global] Instance: Params (@equivE) 4 := {}.
 Notation "X ≡{ Γ } Y" := (equivE Γ X Y)
   (at level 70, format "X  ≡{ Γ }  Y") : C_scope.
 Notation "(≡{ Γ } )" := (equivE Γ) (only parsing, Γ at level 1) : C_scope.
@@ -39,7 +39,7 @@ Infix "∖*∖**" := (zip_with (prod_zip (∖) (∖*)))
   (at level 50, left associativity) : C_scope.
 
 Class SubsetEqE E A := subseteqE: E → relation A.
-Instance: Params (@subseteqE) 4 := {}.
+#[global] Instance: Params (@subseteqE) 4 := {}.
 Notation "X ⊆{ Γ } Y" := (subseteqE Γ X Y)
   (at level 70, format "X  ⊆{ Γ }  Y") : C_scope.
 Notation "(⊆{ Γ } )" := (subseteqE Γ) (only parsing, Γ at level 1) : C_scope.
@@ -74,7 +74,7 @@ type classes by arbitrary propositions. *)
 Class PropHolds (P : Prop) := prop_holds: P.
 
 Global Hint Extern 0 (PropHolds _) => assumption : typeclass_instances.
-Instance: Proper (iff ==> iff) PropHolds.
+#[global] Instance: Proper (iff ==> iff) PropHolds.
 Proof. repeat intro; trivial. Qed.
 
 Ltac solve_propholds :=
@@ -102,7 +102,7 @@ Global Hint Extern 0 (_ ## _) => symmetry; eassumption: core.
 Global Hint Extern 0 (_ ##* _) => symmetry; eassumption: core.
 
 Class DisjointE E A := disjointE : E → A → A → Prop.
-Instance: Params (@disjointE) 4 := {}.
+#[global] Instance: Params (@disjointE) 4 := {}.
 Notation "X ##{ Γ } Y" := (disjointE Γ X Y)
   (at level 70, format "X  ##{ Γ }  Y") : C_scope.
 Notation "(##{ Γ } )" := (disjointE Γ) (only parsing, Γ at level 1) : C_scope.
@@ -118,7 +118,7 @@ Notation "Xs ##{ Γ1 , Γ2 , .. , Γ3 }* Ys" :=
 Global Hint Extern 0 (_ ##{_} _) => symmetry; eassumption: core.
 
 Class DisjointList A := disjoint_list : list A → Prop.
-Instance: Params (@disjoint_list) 2 := {}.
+#[global] Instance: Params (@disjoint_list) 2 := {}.
 Notation "## Xs" := (disjoint_list Xs) (at level 20, format "##  Xs") : C_scope.
 
 Section disjoint_list.
@@ -126,7 +126,7 @@ Section disjoint_list.
   Inductive disjoint_list_default : DisjointList A :=
     | disjoint_nil_2 : ## (@nil A)
     | disjoint_cons_2 (X : A) (Xs : list A) : X ## ⋃ Xs → ## Xs → ## (X :: Xs).
-  Global Existing Instance disjoint_list_default.
+  #[global] Existing Instance disjoint_list_default.
 
   Lemma disjoint_list_nil  : ## @nil A ↔ True.
   Proof. split; constructor. Qed.
@@ -138,14 +138,14 @@ End disjoint_list.
 This was removed in std++ 1.5.0 
 *)
 Class LookupE (E K A M : Type) := lookupE: E → K → M → option A.
-Instance: Params (@lookupE) 6 := {}.
+#[global] Instance: Params (@lookupE) 6 := {}.
 Notation "m !!{ Γ } i" := (lookupE Γ i m)
   (at level 20, format "m  !!{ Γ }  i") : C_scope.
 Notation "(!!{ Γ } )" := (lookupE Γ) (only parsing, Γ at level 1) : C_scope.
 Arguments lookupE _ _ _ _ _ _ !_ !_ / : simpl nomatch.
 
 Class InsertE (E K A M : Type) := insertE: E → K → A → M → M.
-Instance: Params (@insert) 6 := {}.
+#[global] Instance: Params (@insert) 6 := {}.
 Notation "<[ k := a ]{ Γ }>" := (insertE Γ k a)
   (at level 5, right associativity, format "<[ k := a ]{ Γ }>") : C_scope.
 Arguments insertE _ _ _ _ _ _ !_ _ !_ / : simpl nomatch.
@@ -154,7 +154,7 @@ Arguments insertE _ _ _ _ _ _ !_ _ !_ / : simpl nomatch.
 need for proofs that the relations and operations are proper. Instead, we
 define setoid equality generically [λ X Y, X ⊆ Y ∧ Y ⊆ X]. *)
 Class EmptySpec A `{Empty A, SubsetEq A} : Prop := subseteq_empty X : ∅ ⊆@{A} X.
-Global Instance fin_set_empty_spec `{FinSet A C} : EmptySpec C.
+#[global] Instance fin_set_empty_spec `{FinSet A C} : EmptySpec C.
 Proof. firstorder auto. Qed.
 
 Class JoinSemiLattice A `{SubsetEq A, Union A}: Prop := {
@@ -163,7 +163,7 @@ Class JoinSemiLattice A `{SubsetEq A, Union A}: Prop := {
   union_subseteq_r (X Y: A) : Y ⊆ X ∪ Y;
   union_least (X Y Z: A) : X ⊆ Z → Y ⊆ Z → X ∪ Y ⊆ Z
 }.
-Global Instance fin_set_join_semi_lattice `{FinSet A C}: JoinSemiLattice C.
+#[global] Instance fin_set_join_semi_lattice `{FinSet A C}: JoinSemiLattice C.
 Proof. firstorder auto. Qed.
 
-Global Instance eq_eqdec_dec `{EqDecision A}: ∀ (x y: A), Decision (x = y) := _.
+#[global] Instance eq_eqdec_dec `{EqDecision A}: ∀ (x y: A), Decision (x = y) := _.

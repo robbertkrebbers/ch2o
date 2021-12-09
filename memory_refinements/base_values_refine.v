@@ -34,7 +34,7 @@ Inductive base_val_refine' `{Env K} (Γ : env K)
      α → bs1 ⊑{Γ,α,f@Δ1↦Δ2}* bs2 → char_byte_valid Γ Δ1 bs1 →
      Forall (BIndet =.) bs2 → (Γ,Δ2) ⊢ vb2 : ucharT →
      base_val_refine' Γ α f Δ1 Δ2 (VByte bs1) vb2 ucharT.
-Instance base_val_refine `{Env K} :
+#[global] Instance base_val_refine `{Env K} :
   RefineT K (env K) (base_type K) (base_val K) := base_val_refine'.
 
 Section base_values.

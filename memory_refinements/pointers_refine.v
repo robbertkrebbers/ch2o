@@ -13,7 +13,7 @@ Inductive ptr_refine' `{Env K} (Γ : env K) (α : bool) (f : meminj K)
   | FunPtr_refine g τs τ :
      Γ !! g = Some (τs,τ) →
      ptr_refine' Γ α f Δ1 Δ2 (FunPtr g τs τ) (FunPtr g τs τ) (τs ~> τ).
-Instance ptr_refine `{Env K} :
+#[global] Instance ptr_refine `{Env K} :
   RefineT K (env K) (ptr_type K) (ptr K) := ptr_refine'.
 
 Section pointers.

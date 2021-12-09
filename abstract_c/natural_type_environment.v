@@ -47,7 +47,7 @@ Definition natural_size_of (Γ : env K) : type K → nat :=
        sz + natural_padding sz (natural_fields_align Γ τs)
     end) Γ.
 
-Instance natural_env : Env K := {
+#[local] Instance natural_env : Env K := {
   size_of := natural_size_of;
   align_of := natural_align_of;
   field_sizes Γ τs :=
@@ -171,7 +171,7 @@ Proof.
     induction IH; csimpl; rewrite ?Nat.lcm_eq_0; naive_solver.
 Qed.
 
-Instance natural_env_spec: EnvSpec K.
+#[local] Instance natural_env_spec: EnvSpec K.
 Proof.
   split.
   * apply _.

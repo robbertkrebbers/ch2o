@@ -16,7 +16,7 @@ Record istate (K E : iType) : iType := IState {
   sem_state : state K
 }.
 Arguments IState {_ _} _ _ _.
-Instance istate_dec {K E} `{Env K, EqDecision E}: EqDecision (istate K E).
+#[global] Instance istate_dec {K E} `{Env K, EqDecision E}: EqDecision (istate K E).
 Proof. solve_decision. Defined.
 
 Section interpreter.

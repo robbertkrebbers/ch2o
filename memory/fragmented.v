@@ -14,7 +14,7 @@ Arguments Fragment {_} _ _.
 Arguments frag_item {_} _.
 Arguments frag_index {_} _.
 
-Instance fragment_eq_dec `{EqDecision A}: EqDecision (fragment A).
+#[global] Instance fragment_eq_dec `{EqDecision A}: EqDecision (fragment A).
 Proof. solve_decision. Defined.
 
 Section fragmented.
@@ -23,7 +23,7 @@ Context (len : nat) {len_pos : PropHolds (len ≠ 0)}.
 
 Definition fragmented (x : A) (i : nat) (xss : list (fragment A)) : Prop :=
   xss = Fragment x <$> seq i (len - i).
-Global Instance fragmented_dec x : ∀ i xss, Decision (fragmented x i xss).
+#[global] Instance fragmented_dec x : ∀ i xss, Decision (fragmented x i xss).
 Proof. intros. unfold Decision, fragmented. decide equality. solve_decision. Defined.
 Typeclasses Opaque fragmented.
 
@@ -51,7 +51,7 @@ Lemma of_to_fragments_1 x xss :
 Proof. by apply of_to_fragments. Qed.
 Lemma of_to_fragments_2 x : of_fragments (to_fragments x) = Some x.
 Proof. by apply of_to_fragments. Qed.
-Global Instance to_fragments_inj: Inj (=) (=) to_fragments.
+#[global] Instance to_fragments_inj: Inj (=) (=) to_fragments.
 Proof.
   intros x y. generalize (eq_refl (to_fragments y)).
   rewrite <-!of_to_fragments. congruence.
