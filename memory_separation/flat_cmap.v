@@ -45,8 +45,8 @@ Proof. by injection 1. Qed.
 }.
 Proof.
   * intros []; apply _.
-  * intros [] []; apply _.
-  * intros [] []; apply _.
+  * intros [] []; eapply map_relation_dec; apply _.
+  * intros [] []; eapply map_relation_dec; apply _.
   * solve_decision.
   * intros []; apply _.
 Defined.

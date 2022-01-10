@@ -2,6 +2,7 @@
 (* This file is distributed under the terms of the BSD license. *)
 (** We prove some correspondence results between the denotation semantics for
 pure expressions and the small step operational semantics. *)
+From stdpp Require Import fin_maps.
 Require Export restricted_smallstep expression_eval.
 
 Section expression_eval.

@@ -1,5 +1,6 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
+From stdpp Require Import fin_maps.
 Require Export list operations memory pointer_casts.
 
 Section aliasing.

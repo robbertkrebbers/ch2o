@@ -120,9 +120,9 @@ Lemma cmap_valid_subseteq Γ Δ m1 m2 : ✓ Γ → ✓{Γ,Δ} m2 → m1 ⊆ m2 �
 Proof.
   destruct m1 as [m1], m2 as [m2]; intros ? (?&Hm2&Hm2') Hm; split_and !.
   * done.
-  * intros o τ ?; specialize (Hm o); simplify_option_eq.
+  * intros o τ ?; specialize (Hm o); unfold option_relation in *; simplify_option_eq.
     destruct (m2 !! o) as [[]|] eqn:?; destruct Hm; subst; eauto.
-  * intros o w μ ?; specialize (Hm o); simplify_option_eq.
+  * intros o w μ ?; specialize (Hm o); unfold option_relation in *; simplify_option_eq.
     destruct (m2 !! o) as [[|w' μ']|] eqn:?; try done.
     destruct Hm as [[??]?], (Hm2' o w' μ') as (τ'&?&?&?&?);
       eauto 10 using ctree_typed_subseteq.

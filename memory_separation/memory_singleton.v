@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-From stdpp Require Import natmap.
+From stdpp Require Import fin_maps natmap.
 Require Export memory_separation.
 
 Definition mem_singleton `{Env K} (Γ : env K) (Δ : memenv K) (a : addr K)

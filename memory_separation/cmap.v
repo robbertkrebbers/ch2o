@@ -1,6 +1,7 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export fin_maps ctrees memory_basics.
+From stdpp Require Import base fin_maps.
+Require Export ctrees memory_basics.
 
 (** We pack the memory into a record so as to avoid ambiguity with already
 existing type class instances for finite maps. *)
@@ -18,7 +19,7 @@ Definition cmap_elem_Forall {K A} (P : Prop) (Q : ctree K A → Prop)
 Definition cmap_elem_map {K A} (f : ctree K A → ctree K A)
     (x : cmap_elem K A) : cmap_elem K A :=
   match x with Freed τ => Freed τ | Obj w β => Obj (f w) β end.
-Definition cmap_elem_Forall2 {K A} (P : Prop)
+Definition cmap_elem_relation {K A} (P : Prop)
     (Q : ctree K A → ctree K A → Prop) (x y : cmap_elem K A) : Prop :=
   match x, y with
   | Freed τ1, Freed τ2 => P ∧ τ1 = τ2
@@ -37,9 +38,9 @@ Proof. solve_decision. Defined.
 #[global] Instance cmap_elem_Forall_dec {K A} `{Decision P, ∀ w, Decision (Q w)}
   (x : cmap_elem K A) : Decision (cmap_elem_Forall P Q x).
 Proof. destruct x; apply _. Defined.
-#[global] Instance cmap_elem_Forall2_dec {K A} `{EqDecision K,
+#[global] Instance cmap_elem_relation_dec {K A} `{EqDecision K,
     Decision P, ∀ w1 w2, Decision (Q w1 w2)}
-  (x y : cmap_elem K A) : Decision (cmap_elem_Forall2 P Q x y).
+  (x y : cmap_elem K A) : Decision (cmap_elem_relation P Q x y).
 Proof. destruct x, y; apply _. Defined.
 #[global] Instance: `{Inj (=) (=) (@Freed K A)}.
 Proof. by injection 1. Qed.
@@ -71,8 +72,8 @@ Proof. by injection 1. Qed.
     map_Forall (λ _,
       cmap_elem_Forall True (λ w, ctree_valid w ∧ ¬ctree_empty w)) m;
   sep_disjoint m1 m2 :=
-    let (m1) := m1 in let (m2) := m2 in map_Forall2
-      (cmap_elem_Forall2 False (λ w1 w2,
+    let (m1) := m1 in let (m2) := m2 in map_relation
+      (cmap_elem_relation False (λ w1 w2,
         w1 ## w2 ∧ ¬ctree_empty w1 ∧ ¬ctree_empty w2))
       (cmap_elem_Forall True (λ w, ctree_valid w ∧ ¬ctree_empty w))
       (cmap_elem_Forall True (λ w, ctree_valid w ∧ ¬ctree_empty w)) m1 m2;
@@ -81,8 +82,8 @@ Proof. by injection 1. Qed.
     map_Forall (λ _, cmap_elem_Forall False
       (λ w, ctree_valid w ∧ ¬ctree_empty w ∧ ctree_splittable w)) m;
   sep_subseteq m1 m2 :=
-    let (m1) := m1 in let (m2) := m2 in map_Forall2
-      (cmap_elem_Forall2 True (λ w1 w2, w1 ⊆ w2 ∧ ¬ctree_empty w1))
+    let (m1) := m1 in let (m2) := m2 in map_relation
+      (cmap_elem_relation True (λ w1 w2, w1 ⊆ w2 ∧ ¬ctree_empty w1))
       (λ _, False)
       (cmap_elem_Forall True (λ w, ctree_valid w ∧ ¬ctree_empty w)) m1 m2;
   sep_unmapped m := cmap_car m = ∅;
@@ -90,8 +91,8 @@ Proof. by injection 1. Qed.
 }.
 Proof.
   * intros []; apply _.
-  * intros [] []; apply _.
-  * intros [] []; apply _.
+  * intros [] []; eapply map_relation_dec; apply _.
+  * intros [] []; eapply map_relation_dec; apply _.
   * solve_decision.
   * intros []; apply _.
 Defined.
@@ -121,7 +122,7 @@ Proof.
   * sep_unfold. intros [m1] [m2] Hm o; specialize (Hm o); simpl in *.
     destruct (m1 !! o) as [[]|], (m2 !! o) as [[]|]; simpl in *; intuition.
   * sep_unfold; intros [m1] [m2] Hm; f_equal'. apply stdpp.fin_maps.union_with_comm.
-    intros o [] [] ??; specialize (Hm o); simplify_option_eq;
+    intros o [] [] ??; specialize (Hm o); unfold option_relation in *; simplify_option_eq;
       intuition auto using ctree_commutative with f_equal.
   * sep_unfold; intros [m1] [m2] [m3] Hm Hm' o; specialize (Hm o);
       specialize (Hm' o); simpl in *; rewrite lookup_union_with in Hm'.
@@ -170,7 +171,7 @@ Proof.
     destruct (m !! o) as [[]|]; simplify_equality'; intuition eauto using
       ctree_union_valid, ctree_splittable_union, ctree_positive_l.
   * sep_unfold; intros [m1] [m2] Hm Hm' o w1 ?; specialize (Hm o);
-      specialize (Hm' o); simplify_option_eq.
+      specialize (Hm' o); unfold option_relation in *; simplify_option_eq.
     destruct w1, (m2 !! o) as [[]|]; try naive_solver
       eauto using ctree_disjoint_difference,
       ctree_disjoint_valid_l, seps_splittable_weaken, ctree_flatten_subseteq.

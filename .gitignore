@@ -33,3 +33,7 @@ a.out
 *.aux
 .coq-native/
 _opam
+.vscode
+Makefile.coq
+Makefile.coq.conf
+.Makefile.coq.d

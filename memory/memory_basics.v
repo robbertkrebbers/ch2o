@@ -251,7 +251,7 @@ Proof. split; try apply _. intros ????. apply lockset_eq. intuition. Qed.
 #[global] Instance: Set_ (index * nat) lockset := _.
 #[global] Instance: @RelDecision (prod index nat) lockset 
   (@elem_of (prod index nat) lockset lockset_elem_of) := lockset_elem_of_dec.
-  Global Instance: @LeibnizEquiv lockset (@set_equiv_instance _ _ lockset_elem_of).
+#[global] Instance: @LeibnizEquiv lockset (@set_equiv_instance _ _ lockset_elem_of).
 Proof. intros ???; by rewrite lockset_eq. Qed.
 
 #[global] Instance lockset_valid `{Env K} : Valid (env K * memenv K) lockset := λ ΓΔ Ω,

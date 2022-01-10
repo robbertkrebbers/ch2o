@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-From stdpp Require Import natmap.
+From stdpp Require Import fin_maps natmap.
 Require Export memory memory_map_separation values_separation.
 
 Section memory.
@@ -61,14 +61,14 @@ Lemma mem_freeable_perm_subseteq m1 m2 o μ :
 Proof.
   unfold mem_freeable_perm.
   destruct m1 as [m1], m2 as [m2]; intros (w1&?&?) Hm; specialize (Hm o).
-  destruct (m2 !! o) as [[|w2]|] eqn:?; simplify_option_eq;
+  destruct (m2 !! o) as [[|w2]|] eqn:?; unfold option_relation in *; simplify_option_eq;
     naive_solver eauto using @ctree_flatten_subseteq, pbits_subseteq_full.
 Qed.
 Lemma mem_free_disjoint m1 m2 o1 μ :
   m1 ## m2 → mem_freeable_perm o1 μ m1 → mem_free o1 m1 ## m2.
 Proof.
   destruct m1 as [m1], m2 as [m2]; intros Hm (w1&?&?) o; specialize (Hm o).
-  destruct (decide (o = o1));
+  destruct (decide (o = o1)); unfold option_relation in *; 
     simplify_map_eq; [|by destruct (m1 !! o), (m2 !! o)].
   destruct (m2 !! o1) as [[|w2]|];
     intuition; eauto using pbits_disjoint_full, @ctree_flatten_disjoint.
@@ -87,7 +87,7 @@ Proof.
   destruct m1 as [m1], m2 as [m2]; intros Hm (w1&?&?); sep_unfold; f_equal'.
   apply alter_union_with_l; [|intros [] ??; naive_solver].
   intros [] [|w2 ?] ??; do 2 f_equal';
-    specialize (Hm o1); simplify_map_eq;
+    specialize (Hm o1); unfold option_relation in *; simplify_map_eq;
     naive_solver eauto using pbits_disjoint_full, @ctree_flatten_disjoint.
 Qed.
 Lemma mem_force_disjoint Γ Δ1 m1 m2 a1 τ1 :
