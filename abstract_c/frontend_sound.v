@@ -299,7 +299,7 @@ Proof.
   unfold lookup_compound; intros ? [_ _ _ HΓn _]; error_proceed Γn as S2.
   destruct (to_compounds S !! _) as [[c xτs|]|] eqn:?; error_proceed.
   destruct (list_find _ _) as [[? [y ?]]|] eqn:?; error_proceed.
-  destruct (list_find_Some ((x =.) ∘ fst) xτs i (y,τ)) as [[Hi [-> _]] _]; auto.
+  destruct (list_find_Some (λ xτ, x = xτ.1) xτs i (y,τ)) as [[Hi [-> _]] _]; auto.
   feed pose proof (HΓn t (Compound c xτs)); auto; simplify_equality'.
   exists (xτs.*2); split_and ?; auto. by rewrite list_lookup_fmap, Hi.
 Qed.

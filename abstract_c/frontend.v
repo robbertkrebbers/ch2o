@@ -166,7 +166,7 @@ Definition lookup_compound (t : tag) (x : string) : M (nat * type K) :=
     ("struct/union `" +:+ t +:+ "` undeclared");
   '(_,xτs) ← error_of_option (maybe2 Compound d)
     ("struct/union `" +:+ t +:+ "` instead of enum expected");
-  '(i,xτ) ← error_of_option (list_find ((x =.) ∘ fst) xτs)
+  '(i,xτ) ← error_of_option (list_find (λ xτ, x = xτ.1) xτs)
     ("struct/union `" +:+ t +:+ "` does not have index `" +:+ x +:+ "`");
   mret (i,xτ.2).
 

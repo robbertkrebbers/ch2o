@@ -165,5 +165,3 @@ Class JoinSemiLattice A `{SubsetEq A, Union A}: Prop := {
 }.
 #[global] Instance fin_set_join_semi_lattice `{FinSet A C}: JoinSemiLattice C.
 Proof. firstorder auto. Qed.
-
-#[global] Instance eq_eqdec_dec `{EqDecision A}: ∀ (x y: A), Decision (x = y) := _.
