@@ -80,7 +80,7 @@ Proof.
       as [Hr|[(j'&r''&Hr'')|[?|(s&i1&r2'&i2&?&Hr2''&?)]]];
       simplify_equality'; auto.
     { econstructor; eauto. }
-    { destruct (app_injective_1 (freeze true <$> r') r'
+    { destruct (app_inj_1 (freeze true <$> r') r'
         (freeze true <$> ref_set_offset j r2) (ref_set_offset j r2));
         rewrite ?fmap_length, <-?fmap_app; congruence. }
     + left; intros j1 j2. rewrite app_comm_cons.
@@ -97,7 +97,7 @@ Proof.
       as [Hr|[(j'&r''&Hr'')|[?|(s&i1&r2'&i2&?&Hr1''&?)]]];
       simplify_equality'; auto.
     { econstructor; eauto. }
-    { destruct (app_injective_1 (freeze true <$> r') r'
+    { destruct (app_inj_1 (freeze true <$> r') r'
         (freeze true <$> ref_set_offset j r1) (ref_set_offset j r1));
         rewrite ?fmap_length, <-?fmap_app; congruence. }
     + left; intros j1 j2. rewrite app_comm_cons.

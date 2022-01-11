@@ -3,7 +3,7 @@
 (** This file describes a subset of the C type system. This subset includes
 pointer, array, struct, and union types, but omits qualifiers as volatile and
 const. Also variable length arrays are omitted from the formalization. *)
-From stdpp Require Import stringmap mapset.
+From stdpp Require Import fin_maps stringmap mapset.
 From Coq Require Import String.
 Require Import prelude stringmap.
 Require Export type_classes integer_coding.
