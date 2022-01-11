@@ -1084,12 +1084,12 @@ Section expr_split.
     * eauto using expr_redexes_sound, expr_redexes_is_redex.
     * by intros [??]; subst; apply expr_redexes_complete.
   Qed.
-  Lemma expr_redexes_go_is_nf E e : @equiv _ (set_equiv_instance) (expr_redexes_go E e) ∅ → is_nf e.
+  Lemma expr_redexes_go_is_nf E e : expr_redexes_go E e ≡ ∅ → is_nf e.
   Proof.
     assert (∀ (f : list _ → list _ → expr K →
         listset (ectx K * expr K)) es1 es2,
-      @equiv _ (set_equiv_instance) (⋃ (zipped_map f es1 es2)) ∅ →
-      zipped_Forall (λ esl esr e, (@equiv _ (set_equiv_instance) (f esl esr e) ∅) → is_nf e) es1 es2 →
+      (⋃ (zipped_map f es1 es2)) ≡ ∅ →
+      zipped_Forall (λ esl esr e, (f esl esr e ≡ ∅) → is_nf e) es1 es2 →
       Forall is_nf es2).
     { intros ???. rewrite empty_union_list.
       induction 2; decompose_Forall_hyps; auto. }
@@ -1100,7 +1100,7 @@ Section expr_split.
       | H : ¬is_redex _ |- _ => destruct H; constructor
       end; try set_solver.
   Qed.
-  Lemma expr_redexes_is_nf e : @equiv _ set_equiv_instance (expr_redexes e) ∅ → is_nf e.
+  Lemma expr_redexes_is_nf e : expr_redexes e ≡ ∅ → is_nf e.
   Proof. apply expr_redexes_go_is_nf. Qed.
 End expr_split.
 

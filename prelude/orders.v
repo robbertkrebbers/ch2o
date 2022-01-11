@@ -6,7 +6,7 @@ theory will mainly be used for the theory on collections and finite maps. *)
 From stdpp Require Export prelude.
 Require Export base.
 
-#[global] Instance preorder_equiv `{SubsetEq A} : Equiv A := λ X Y, X ⊆ Y ∧ Y ⊆ X.
+#[global] Instance preorder_equiv `{SubsetEq A} : Equiv A | 100 := λ X Y, X ⊆ Y ∧ Y ⊆ X.
 
 (** * Partial orders *)
 Section partial_order.

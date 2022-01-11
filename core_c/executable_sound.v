@@ -30,7 +30,7 @@ Proof.
     end; do_ehstep.
 Qed.
 Lemma ehexec_weak_complete Γ k e1 m1 e2 m2 :
-  @equiv _ set_equiv_instance (ehexec Γ k e1 m1) ∅ → 
+  ehexec Γ k e1 m1 ≡ ∅ → 
   ¬Γ\ locals k ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
   destruct 2; 
@@ -60,7 +60,7 @@ Lemma cexec_sound Γ δ S1 S2 : Γ\ δ ⊢ₛ S1 ⇒ₑ S2 → Γ\ δ ⊢ₛ S1 
 Proof.
   intros. assert (
     ∀ (k : ctx K) e m,
-      @equiv _ set_equiv_instance (ehexec Γ k e m) ∅ → 
+      ehexec Γ k e m ≡ ∅ → 
       maybe_ECall_redex e = None →
       is_redex e → 
       ¬Γ\ locals k ⊢ₕ safe e, m
