@@ -1,7 +1,6 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-From stdpp Require Import fin_map_dom.
-Require Import fin_maps.
+From stdpp Require Import fin_maps fin_map_dom.
 Require Export separation memory_basics.
 
 Record flat_cmap (A : Type) : Type :=
