@@ -4,7 +4,7 @@ Require Export permissions bits.
 
 Notation pbit K := (tagged perm (@BIndet K)).
 Notation PBit := (Tagged (d:=BIndet)).
-Hint Extern 0 (Separation _) => apply (_ : Separation (pbit _)).
+Global Hint Extern 0 (Separation _) => apply (_ : Separation (pbit _)): core.
 
 Section operations.
   Context `{Env K}.
@@ -44,7 +44,7 @@ Implicit Types γs : list perm.
 Implicit Types γb : pbit K.
 Implicit Types γbs : list (pbit K).
 
-Lemma pbits_tag γ bs : tagged_tag <$> PBit γ <$> bs = bs.
+Lemma pbits_tag γ bs : tagged_tag <$> (PBit γ <$> bs) = bs.
 Proof. induction bs; f_equal'; auto. Qed.
 Lemma PBits_perm_tag γbs :
   zip_with PBit (tagged_perm <$> γbs) (tagged_tag <$> γbs) = γbs.
@@ -149,7 +149,7 @@ Proof.
     repeat constructor; sep_unfold; auto using perm_unshared.
 Qed.
 Lemma PBits_indetify γs :
-  pbit_indetify <$> flip PBit (@BIndet K) <$> γs = flip PBit BIndet <$> γs.
+  pbit_indetify <$> (flip PBit (@BIndet K) <$> γs) = flip PBit BIndet <$> γs.
 Proof. induction γs; f_equal'; auto. Qed.
 Lemma pbit_indetify_valid Γ Δ γb : ✓{Γ,Δ} γb → ✓{Γ,Δ} (pbit_indetify γb).
 Proof. destruct γb; intros (?&?&?); repeat split; eauto using BIndet_valid. Qed.
@@ -157,7 +157,7 @@ Lemma pbits_indetify_valid Γ Δ γbs :
   ✓{Γ,Δ}* γbs → ✓{Γ,Δ}* (pbit_indetify <$> γbs).
 Proof. induction 1; csimpl; auto using pbit_indetify_valid. Qed.
 Lemma pbits_indetify_idempotent γbs :
-  pbit_indetify <$> pbit_indetify <$> γbs = pbit_indetify <$> γbs.
+  pbit_indetify <$> (pbit_indetify <$> γbs) = pbit_indetify <$> γbs.
 Proof. by induction γbs; f_equal'. Qed.
 Lemma pbit_indetify_unmapped γb : sep_unmapped γb → pbit_indetify γb = γb.
 Proof. destruct γb; intros [??]; naive_solver. Qed.
@@ -195,7 +195,7 @@ Lemma pbit_full_unshared : sep_unshared (@pbit_full K).
 Proof. done. Qed.
 Lemma PBits_BIndet_tag γbs :
   Forall sep_unmapped γbs →
-  flip PBit BIndet <$> tagged_perm <$> γbs = γbs.
+  flip PBit BIndet <$> (tagged_perm <$> γbs) = γbs.
 Proof. induction 1 as [|[] ? [??]]; simplify_equality'; f_equal; auto. Qed.
 
 Lemma pbit_Readable_locked γb :
@@ -223,8 +223,8 @@ Proof.
     decompose_Forall_hyps; f_equal; auto.
 Qed.
 Lemma pbits_unlock_empty_inv γbs βs :
-  Forall (∅ =) (zip_with pbit_unlock_if γbs βs) → Forall sep_valid γbs →
-  length γbs = length βs → Forall (∅ =) γbs.
+  Forall (∅ =.) (zip_with pbit_unlock_if γbs βs) → Forall sep_valid γbs →
+  length γbs = length βs → Forall (∅ =.) γbs.
 Proof.
   assert (∀ γ, sep_valid γ → perm_unlock γ = ∅ → γ = ∅).
   { intros [[]|]; repeat sep_unfold; naive_solver. }

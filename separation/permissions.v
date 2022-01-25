@@ -1,7 +1,7 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Import Qcanon.
-Require Export orders separation_instances.
+Require Export base orders separation_instances.
 Local Open Scope Qc_scope.
 
 (**
@@ -12,10 +12,10 @@ Concrete permissions are built from more primitive combinators:
   that are addresseble.
 *)
 Definition perm := (lockable (counter Qcanon.Qc) + Qcanon.Qc)%type.
-Instance perm_sep_ops : SeparationOps perm := _.
-Instance perm_sep : Separation perm := _.
+#[global] Instance perm_sep_ops : SeparationOps perm := _.
+#[global] Instance perm_sep : Separation perm := _.
 Typeclasses Opaque perm.
-Hint Extern 0 (Separation _) => apply (_ : Separation perm).
+Global Hint Extern 0 (Separation _) => apply (_ : Separation perm): core.
 
 Definition perm_readonly : perm := inr 1.
 Definition perm_full : perm := inl (LUnlocked (Counter 0 1)).
@@ -23,9 +23,9 @@ Definition perm_token : perm := inl (LUnlocked (Counter (-1) ∅)).
 
 Inductive pkind :=
   Writable | Readable | Locked | Existing.
-Instance pkind_dec (k1 k2 : pkind) : Decision (k1 = k2).
+#[global] Instance pkind_dec (k1 k2 : pkind) : Decision (k1 = k2).
 Proof. solve_decision. Defined.
-Instance pkind_subseteq : SubsetEq pkind := λ k1 k2,
+#[global] Instance pkind_subseteq : SubsetEq pkind := λ k1 k2,
   match k1, k2 with
   | _, Writable => True
   | (Existing | Readable), Readable => True
@@ -33,17 +33,17 @@ Instance pkind_subseteq : SubsetEq pkind := λ k1 k2,
   | (Existing | Locked), Locked => True
   | _, _ => False
   end.
-Instance pkind_subseteq_dec : ∀ k1 k2 : pkind, Decision (k1 ⊆ k2).
+#[global] Instance pkind_subseteq_dec : ∀ k1 k2 : pkind, Decision (k1 ⊆ k2).
 Proof. intros [] []; apply _. Defined.
-Instance: PartialOrder (@subseteq pkind _).
+#[global] Instance: PartialOrder (@subseteq pkind _).
 Proof. by repeat split; repeat intros []. Qed.
-Instance option_pkind_subseteq : SubsetEq (option pkind) := λ k1 k2,
+#[global] Instance option_pkind_subseteq : SubsetEq (option pkind) := λ k1 k2,
   match k1, k2 with
   | Some k1, Some k2 => k1 ⊆ k2 | None, _ => True | Some _, None => False
   end.
-Instance option_pkind_subseteq_dec : ∀ k1 k2 : option pkind, Decision (k1 ⊆ k2).
+#[global] Instance option_pkind_subseteq_dec : ∀ k1 k2 : option pkind, Decision (k1 ⊆ k2).
 Proof. intros [] []; apply _. Defined.
-Instance: PartialOrder (@subseteq (option pkind) _).
+#[global] Instance: PartialOrder (@subseteq (option pkind) _).
 Proof. by repeat split; repeat intros []; try destruct p; try destruct p0; try destruct p1. Qed.
 
 Definition perm_kind (γ : perm) : option pkind :=
@@ -179,9 +179,9 @@ Lemma perm_kind_half γ :
     | Some Writable => Some Readable | _ => perm_kind γ
     end.
 Proof.
-  assert (∀ x', x' / 2 = 0 → x' = 0).
+  assert (∀ x', x' * /2 = 0 → x' = 0).
   { intros. by apply Qcmult_integral_l with (/2); rewrite 1?Qcmult_comm. }
-  assert (∀ x', x' / 2 = 1 → x' ≤ 1 → False).
+  assert (∀ x', x' * /2 = 1 → x' ≤ 1 → False).
   { intros x'. rewrite (Qcmult_le_mono_pos_r _ _ (/2)) by done.
     by intros -> []. }
   repeat sep_unfold; destruct (perm_kind_spec γ); unfold perm_kind; simpl;
@@ -197,9 +197,8 @@ Proof.
     unfold perm_kind; simpl; intros [? Hneq]; auto.
   * assert (¬0 ≤ -1) by (by intros []); intuition.
   * assert (y ≤ -1 → y ≤ 0) by (by intros; transitivity (-1)).
-    assert (y --1 ≠ 0).
-    { change 0 with (-1 + 1); rewrite Qcopp_involutive,
-        (injective_iff (λ x, x + 1)); contradict Hneq.
+    assert (y + 1 ≠ 0).
+    { change 0 with (-1 + 1); rewrite (inj_iff (λ x, x + 1)); contradict Hneq.
       symmetry. unfold perm_token; repeat f_equal; intuition. }
     by rewrite decide_False by done.
   * by change (-0) with 0; rewrite Qcplus_0_r, !decide_False by done.
@@ -211,7 +210,7 @@ Proof.
     repeat case_decide; naive_solver eauto using Qcle_antisym.
 Qed.
 Lemma perm_lock_disjoint γ1 γ2 :
-  Some Writable ⊆ perm_kind γ1 → γ1 ⊥ γ2 → perm_lock γ1 ⊥ γ2.
+  Some Writable ⊆ perm_kind γ1 → γ1 ## γ2 → perm_lock γ1 ## γ2.
 Proof.
   assert (¬2 ≤ 1) by (by intros []).
   assert (∀ x, 0 ≤ x → 1 + x ≤ 1 → x = 0).
@@ -226,12 +225,12 @@ Proof.
 Qed.
 Lemma perm_lock_union γ1 γ2 : perm_lock (γ1 ∪ γ2) = perm_lock γ1 ∪ γ2.
 Proof. by destruct γ1 as [[]|], γ2 as [[]|]. Qed.
-Lemma perm_unlock_disjoint γ1 γ2 : γ1 ⊥ γ2 → perm_unlock γ1 ⊥ γ2.
+Lemma perm_unlock_disjoint γ1 γ2 : γ1 ## γ2 → perm_unlock γ1 ## γ2.
 Proof. destruct γ1 as [[]|], γ2 as [[]|]; repeat sep_unfold; naive_solver. Qed.
 Lemma perm_unlock_union γ1 γ2 :
-  γ1 ⊥ γ2 → perm_locked γ1 → perm_unlock (γ1 ∪ γ2) = perm_unlock γ1 ∪ γ2.
+  γ1 ## γ2 → perm_locked γ1 → perm_unlock (γ1 ∪ γ2) = perm_unlock γ1 ∪ γ2.
 Proof. by destruct γ1 as [[]|], γ2 as [[]|]. Qed.
-Lemma perm_disjoint_full γ : perm_full ⊥ γ → γ = ∅.
+Lemma perm_disjoint_full γ : perm_full ## γ → γ = ∅.
 Proof.
   destruct γ as [[[x y]|[x y]]|];
     repeat sep_unfold; intuition; simplify_equality'.

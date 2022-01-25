@@ -6,7 +6,10 @@ development is parametrized by this interface. Contrary to the C standard,
 since all modern architectures use two's complement representation, we require
 all representations to be two's complement. *)
 Require Export prelude.
+
+Local Open Scope positive_scope.
 Local Open Scope Z_scope.
+Local Coercion Z.of_nat: nat >-> Z.
 
 (** * Operations on machine integers *)
 (** The abstract interface for machine integers is parametrized by a type [K]
@@ -14,21 +17,23 @@ of integer ranks (char, short, int). Integer types consist of a rank and its
 signedness (signed/unsigned), and machine integers are just arbitrary precision
 integers [Z] that should be within the range of the corresponding type. *)
 Inductive signedness := Signed | Unsigned.
-Instance signedness_eq_dec (s1 s2 : signedness) : Decision (s1 = s2).
+#[global] Instance signedness_eq_dec: EqDecision signedness.
 Proof. solve_decision. Defined.
 
 Definition iType := Type.
 Inductive int_type (K : iType) : iType := IntType { sign : signedness; rank : K }.
 Add Printing Constructor int_type.
+
+Global Declare Scope int_type_scope.
 Delimit Scope int_type_scope with IT.
 Local Open Scope int_type_scope.
 Bind Scope int_type_scope with int_type.
+
 Arguments IntType {_} _ _.
 Arguments sign {_} _%IT.
 Arguments rank {_} _%IT.
 
-Instance int_type_eq_dec `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (τi1 τi2 : int_type K) : Decision (τi1 = τi2).
+#[global] Instance int_type_eq_dec `{EqDecision K}: EqDecision (int_type K).
 Proof. solve_decision. Defined.
 
 (** The class [IntCoding] describes functions related to representation and
@@ -46,7 +51,7 @@ and unsigned integers of rank [k] are between [0] (included) and
 in little endian order and permutes them according to the implementation's
 endianness. The function [deendianize] performs the inverse. *)
 Local Unset Elimination Schemes.
-Class IntCoding (K : iType) : iType := {
+Class IntCoding (K : iType): iType := {
   char_rank : K;
   char_signedness : signedness;
   short_rank : K;
@@ -59,7 +64,7 @@ Class IntCoding (K : iType) : iType := {
   endianize : K → list bool → list bool;
   deendianize : K → list bool → list bool;
   rank_subseteq :> SubsetEq K;
-  rank_eq_dec (k1 k2 : K) :> Decision (k1 = k2);
+  rank_eq_dec :> EqDecision K;
   rank_subseteq_dec (k1 k2 : K) :> Decision (k1 ⊆ k2)
 }.
 
@@ -113,7 +118,7 @@ Section int_coding.
     | S n => let (q,r) := Z.div_eucl x 2 in bool_decide (r = 1) :: Z_to_bits n q
     end.
   Fixpoint Z_of_bits (βs : list bool) : Z :=
-    match βs with [] => 0 | β :: βs => Z.b2z β + 2 * Z_of_bits βs end.
+    match βs with [] => 0 | β :: βs => Z.b2z β + 2 * Z_of_bits βs end%Z.
 
   Definition int_to_bits (τi : int_type K) (x : Z) : list bool :=
     endianize (rank τi) $ Z_to_bits (int_width τi) $
@@ -170,15 +175,15 @@ Proof.
 Qed.
 Lemma Z_of_bits_range βs : 0 ≤ Z_of_bits βs < 2 ^ length βs.
 Proof.
-  induction βs as [|[] βs IH]; simpl; try case_bool_decide;
-    rewrite ?Zpos_P_of_succ_nat, ?Z.pow_succ_r; auto with lia.
+  induction βs as [|[] βs IH]; simpl; [lia|..];
+  rewrite Nat2Z.inj_succ, ?Z.pow_succ_r; auto with lia.
 Qed.
 Lemma Z_of_to_bits n x : 0 ≤ x < 2 ^ n → Z_of_bits (Z_to_bits n x) = x.
 Proof.
   revert x.
   induction n as [|n IH]; intros x; simpl; rewrite ?Zpos_P_of_succ_nat.
   { rewrite Z.pow_0_r; lia. }
-  rewrite Z.pow_succ_r by auto with zpos; intros [??].
+  rewrite Nat2Z.inj_succ, Z.pow_succ_r by auto with zpos; intros [??].
   feed pose proof (Z_div_mod x 2); [lia|]; destruct (Z.div_eucl _ _) as [q r].
   case_bool_decide; simpl; rewrite IH by lia; lia.
 Qed.
@@ -189,13 +194,13 @@ Lemma deendianize_permutation k βs : deendianize k βs ≡ₚ βs.
 Proof.
   rewrite <-(endianize_deendianize k βs) at 2. by rewrite endianize_permutation.
 Qed.
-Global Instance: `{Proper ((≡ₚ) ==> (≡ₚ)) (endianize k)}.
+#[global] Instance: `{Proper ((≡ₚ) ==> (≡ₚ)) (endianize k)}.
 Proof. intros k βs1 βs2. by rewrite !endianize_permutation. Qed.
-Global Instance: `{Injective (≡ₚ) (≡ₚ) (endianize k)}.
+#[global] Instance: `{Inj (≡ₚ) (≡ₚ) (endianize k)}.
 Proof. intros k βs1 βs2. by rewrite !endianize_permutation. Qed.
-Global Instance: `{Proper ((≡ₚ) ==> (≡ₚ)) (deendianize k)}.
+#[global] Instance: `{Proper ((≡ₚ) ==> (≡ₚ)) (deendianize k)}.
 Proof. intros k βs1 βs2. by rewrite !deendianize_permutation. Qed.
-Global Instance: `{Injective (≡ₚ) (≡ₚ) (deendianize k)}.
+#[global] Instance: `{Inj (≡ₚ) (≡ₚ) (deendianize k)}.
 Proof. intros k βs1 βs2. by rewrite !deendianize_permutation. Qed.
 Lemma endianize_length k βs : length (endianize k βs) = length βs.
 Proof. by rewrite endianize_permutation. Qed.
@@ -229,7 +234,7 @@ Lemma int_width_pos_alt τi : 0 < int_width τi.
 Proof. apply (Nat2Z.inj_lt 0), int_width_pos. Qed.
 Lemma int_width_pred_nonneg τi : 0 ≤ int_width τi - 1.
 Proof. pose proof (int_width_pos_alt τi); lia. Qed.
-Hint Resolve int_width_pos_alt int_width_pred_nonneg.
+Local Hint Resolve int_width_pos_alt int_width_pred_nonneg: core.
 Lemma int_width_Unsigned_Signed k :
   int_width (IntType Unsigned k) = int_width (IntType Signed k).
 Proof. done. Qed.
@@ -254,14 +259,14 @@ Proof.
 Qed.
 Lemma int_upper_pos τi : 0 < int_upper τi.
 Proof. unfold int_upper. destruct (sign τi); auto with zpos. Qed.
-Hint Resolve int_lower_nonpos int_upper_pos.
+Local Hint Resolve int_lower_nonpos int_upper_pos: core.
 Lemma int_mod_lower_upper x τi :
   int_lower τi ≤ x `mod` int_upper τi < int_upper τi.
 Proof.
   split; [transitivity 0; auto; apply Z.mod_pos_bound; auto|].
   apply Z.mod_pos_bound; auto.
 Qed.
-Hint Resolve int_mod_lower_upper.
+Local Hint Resolve int_mod_lower_upper: core.
 Lemma int_upper_lower τi : int_upper τi = 2 ^ int_width τi + int_lower τi.
 Proof.
   unfold int_upper, int_lower, int_precision; destruct (sign τi); simpl; [|lia].

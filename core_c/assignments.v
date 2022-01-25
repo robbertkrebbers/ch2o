@@ -60,7 +60,7 @@ Qed.
 Lemma assign_sem_deterministic Γ m a v ass va1 va2 v1 v2 :
   assign_sem Γ m a v ass va1 v1 → assign_sem Γ m a v ass va2 v2 →
   va1 = va2 ∧ v1 = v2.
-Proof. by destruct 1; inversion 1; simplify_option_equality. Qed.
+Proof. by destruct 1; inversion 1; simplify_option_eq. Qed.
 Lemma assign_preservation Γ Δ m ass a v va' v' τ1 τ2 :
   ✓ Γ → ✓{Γ,Δ} m → assign_typed τ1 τ2 ass →
   (Γ,Δ) ⊢ a : TType τ1 → (Γ,Δ) ⊢ v : τ2 →

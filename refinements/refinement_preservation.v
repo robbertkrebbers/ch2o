@@ -2,6 +2,7 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export refinement_system smallstep.
 Require Import executable_sound type_preservation operations_refine.
+
 Local Open Scope expr_scope.
 Local Open Scope ctype_scope.
 
@@ -19,37 +20,37 @@ Implicit Types v : val K.
 Ltac solve_length := simplify_equality'; repeat
   match goal with H : Forall2 _ _ _ |- _ => apply Forall2_length in H end; lia.
 
-Hint Extern 0 (_ ⊑{_,_,_} _ : _) => refine_constructor.
-Hint Extern 0 (_ ⊑{_,_,_@_↦_} _ : _) => refine_constructor.
-Hint Extern 0 (_ ⊑{_,_,_@_↦_} _ : _ ↣ _) => refine_constructor.
-Hint Resolve cmap_refine_memenv_refine'.
-Hint Resolve addr_alive_refine addr_strict_refine mem_writable_refine.
-Hint Resolve val_unop_ok_refine val_binop_ok_refine val_cast_ok_refine.
-Hint Resolve base_val_is_0_refine base_val_branchable_refine base_val_is_0_refine_inv.
-Hint Resolve mem_freeable_refine.
-Hint Resolve val_lookup_is_Some_refine.
-Hint Immediate cmap_refine_valid_l' cmap_refine_valid_l.
-Hint Immediate cmap_refine_valid_r' cmap_refine_valid_r.
-Hint Immediate addr_refine_typed_l val_refine_typed_l base_val_refine_typed_l.
-Hint Immediate addr_refine_typed_r val_refine_typed_r.
-Hint Immediate expr_refine_typed_l expr_refine_typed_r.
-Hint Immediate ctx_refine_typed_l ctx_refine_typed_r.
-Hint Immediate ectx_refine_typed_l ectx_refine_typed_r.
-Hint Immediate vals_refine_typed_l vals_refine_typed_r.
-Hint Immediate locks_refine_valid_l locks_refine_valid_r.
-Hint Immediate stmt_refine_typed_l stmt_refine_typed_r.
-Hint Resolve direction_out_refine_r direction_in_refine_r.
-Hint Resolve sctx_item_catch_refine sctx_item_switch_refine.
-Hint Immediate meminj_extend_reflexive.
-Hint Immediate sctx_item_subst_refine.
-Hint Resolve meminj_extend_inverse cmap_refine_inverse'.
-Hint Immediate addr_alive_refine'.
-Hint Extern 0 (is_undef_state (State _ (Undef ?Su) _)) => by exists Su.
-Hint Resolve ctx_typed_locals_valid.
-Hint Immediate ctx_refine_locals_refine.
-Hint Resolve TArray_valid.
-Hint Immediate base_val_is_0_branchable.
-Hint Immediate ptr_alive_refine'.
+Hint Extern 0 (_ ⊑{_,_,_} _ : _) => refine_constructor: core.
+Hint Extern 0 (_ ⊑{_,_,_@_↦_} _ : _) => refine_constructor: core.
+Hint Extern 0 (_ ⊑{_,_,_@_↦_} _ : _ ↣ _) => refine_constructor: core.
+Hint Resolve cmap_refine_memenv_refine': core.
+Hint Resolve addr_alive_refine addr_strict_refine mem_writable_refine: core.
+Hint Resolve val_unop_ok_refine val_binop_ok_refine val_cast_ok_refine: core.
+Hint Resolve base_val_is_0_refine base_val_branchable_refine base_val_is_0_refine_inv: core.
+Hint Resolve mem_freeable_refine: core.
+Hint Resolve val_lookup_is_Some_refine: core.
+Hint Immediate cmap_refine_valid_l' cmap_refine_valid_l: core.
+Hint Immediate cmap_refine_valid_r' cmap_refine_valid_r: core.
+Hint Immediate addr_refine_typed_l val_refine_typed_l base_val_refine_typed_l: core.
+Hint Immediate addr_refine_typed_r val_refine_typed_r: core.
+Hint Immediate expr_refine_typed_l expr_refine_typed_r: core.
+Hint Immediate ctx_refine_typed_l ctx_refine_typed_r: core.
+Hint Immediate ectx_refine_typed_l ectx_refine_typed_r: core.
+Hint Immediate vals_refine_typed_l vals_refine_typed_r: core.
+Hint Immediate locks_refine_valid_l locks_refine_valid_r: core.
+Hint Immediate stmt_refine_typed_l stmt_refine_typed_r: core.
+Hint Resolve direction_out_refine_r direction_in_refine_r: core.
+Hint Resolve sctx_item_catch_refine sctx_item_switch_refine: core.
+Hint Immediate meminj_extend_reflexive: core.
+Hint Immediate sctx_item_subst_refine: core.
+Hint Resolve meminj_extend_inverse cmap_refine_inverse': core.
+Hint Immediate addr_alive_refine': core.
+Hint Extern 0 (is_undef_state (State _ (Undef ?Su) _)) => by exists Su: core.
+Hint Resolve ctx_typed_locals_valid: core.
+Hint Immediate ctx_refine_locals_refine: core.
+Hint Resolve TArray_valid: core.
+Hint Immediate base_val_is_0_branchable: core.
+Hint Immediate ptr_alive_refine': core.
 
 Lemma assign_refine Γ α f m1 m2 ass a1 a2 v1 v2 va1' v1' τ τ' :
   ✓ Γ → m1 ⊑{Γ,α,f} m2 → assign_typed τ τ' ass →
@@ -83,7 +84,7 @@ Proof.
       eauto using val_binop_ok_refine, val_cast_ok_refine,
       val_binop_refine, val_cast_refine, addr_typed_type_valid.
 Qed.
-Ltac go f := eexists f, _, _; split_ands; [do_ehstep| | |by auto].
+Ltac go f := eexists f, _, _; split_and ?; [do_ehstep| | |by auto].
 Lemma ehstep_refine_forward Γ α f m1 m2 m1' ρ1 ρ2 e1 e2 e1' τlr :
   ✓ Γ → Γ\ ρ1 ⊢ₕ e1, m1 ⇒ e1', m1' →
   m1 ⊑{Γ,α,f} m2 → e1 ⊑{(Γ,ρ1.*2),α,f@'{m1}↦'{m2}} e2 : τlr →
@@ -161,7 +162,7 @@ Lemma ehstep_refine_backward Γ α f m1 m2 m2' ρ1 ρ2 e1 e2 e2' τlr :
   ∨ is_redex e1 ∧ ¬Γ \ ρ1 ⊢ₕ safe e1, m1.
 Proof.
   intros. destruct (Some_dec (maybe2 EAlloc e2)) as [[[τ e]?]|].
-  { simplify_option_equality; refine_inversion_all; inv_ehstep;
+  { simplify_option_eq; refine_inversion_all; inv_ehstep;
       refine_inversion_all;
       try by (right; repeat constructor; inversion 1; inv_ehstep).
     { left; go f; eauto 10 using type_valid_ptr_type_valid. }
@@ -217,8 +218,8 @@ Ltac invert :=
   | H : ?X ⊑{_,_,_@_↦_} ?Y : _ ↣ _ |- _ =>
      first [is_var X; is_var Y; fail 1|refine_inversion H]
   end.
-Ltac go f ::= eexists f, _; split_ands; [do_cstep| |by auto].
-Hint Extern 0 => erewrite <-ctx_refine_locals_types by eauto; eassumption.
+Ltac go f ::= eexists f, _; split_and ?; [do_cstep| |by auto].
+Hint Extern 0 => erewrite <-ctx_refine_locals_types by eauto; eassumption: core.
 Lemma cstep_refine Γ δ1 δ2 α f S1 S2 S2' σf :
   ✓ Γ → Γ\ δ2 ⊢ₛ S2 ⇒ S2' → ¬is_undef_state S1 →
   S1 ⊑{Γ,α,f} S2 : σf →
@@ -242,11 +243,11 @@ Proof.
       { go f'. repeat refine_constructor; eauto 9 using ctx_refine_weaken,
           ehstep_forward, ectx_subst_refine, ectx_refine_weaken. }
       go f. right; auto.
-      eexists; split_ands; repeat typed_constructor; eauto. }
+      eexists; split_and ?; repeat typed_constructor; eauto. }
     edestruct ehstep_refine_forward as (f'&?&?&?&?&He&?); eauto using
       ctx_refine_locals_refine, expr_refine_inverse, ctx_refine_inverse.
     erewrite <-ctx_refine_locals_types in He by eauto.
-    eexists (meminj_inverse f'), _; split_ands; [do_cstep| |].
+    eexists (meminj_inverse f'), _; split_and ?; [do_cstep| |].
     { repeat refine_constructor; eauto.
       * eapply ectx_subst_refine; eauto using expr_refine_inverse.
         eapply ectx_refine_weaken; eauto 9 using ehstep_forward.
@@ -257,7 +258,7 @@ Proof.
       locks_union_refine, locks_union_list_refine,
       ectx_refine_weaken, vals_refine_weaken,
       ctx_refine_weaken, mem_unlock_forward, option_eq_1_alt.
-  * intros; invert. eexists f, _; split_ands; [| |auto].
+  * intros; invert. eexists f, _; split_and ?; [| |auto].
     { apply cstep_expr_undef;
         eauto 10 using ehsafe_refine, expr_refine_redex_inv. }
     repeat refine_constructor; eauto using mem_unlock_refine',
@@ -273,18 +274,18 @@ Proof.
         eauto using mem_unlock_refine', ctx_refine_weaken,
         expr_refine_weaken, stmt_refine_weaken, mem_unlock_forward.
     + go f. right; auto.
-      eexists; split_ands; eauto; repeat typed_constructor; eauto.
+      eexists; split_and ?; eauto; repeat typed_constructor; eauto.
   * intros; invert. edestruct base_val_false_refine_inv as [|[??]]; eauto.
     + go f. repeat refine_constructor;
         eauto using mem_unlock_refine', ctx_refine_weaken,
         expr_refine_weaken, stmt_refine_weaken, mem_unlock_forward.
     + go f. right; auto.
-      eexists; split_ands; eauto; repeat typed_constructor; eauto.
+      eexists; split_and ?; eauto; repeat typed_constructor; eauto.
   * intros; invert. go f; eauto.
   * intros; invert;
       match goal with
       | H : _ ⊑{_,_,_@_↦_} (intV{_} _)%B : _ |- _ => refine_inversion H
-      end; go f; try (right; auto; eexists; split_ands; eauto;
+      end; go f; try (right; auto; eexists; split_and ?; eauto;
         repeat typed_constructor; eauto using TInt_valid).
     repeat refine_constructor;
       eauto using mem_unlock_refine', ctx_refine_weaken,
@@ -292,7 +293,7 @@ Proof.
   * intros; invert;
       match goal with
       | H : _ ⊑{_,_,_@_↦_} (intV{_} _)%B : _ |- _ => refine_inversion H
-      end; go f; try (right; auto; eexists; split_ands; eauto;
+      end; go f; try (right; auto; eexists; split_and ?; eauto;
         repeat typed_constructor; eauto using TInt_valid).
     repeat refine_constructor;
       eauto using mem_unlock_refine', ctx_refine_weaken,
@@ -300,7 +301,7 @@ Proof.
   * intros; invert;
       match goal with
       | H : _ ⊑{_,_,_@_↦_} (intV{_} _)%B : _ |- _ => refine_inversion H
-      end; go f; try (right; auto; eexists; split_ands; eauto;
+      end; go f; try (right; auto; eexists; split_and ?; eauto;
         repeat typed_constructor; eauto using TInt_valid).
     repeat refine_constructor;
       eauto using mem_unlock_refine', ctx_refine_weaken,
@@ -352,7 +353,7 @@ Proof.
   * intros; invert; go f; eauto 10.
   * intros m k d o τ s ??????; invert.
     edestruct (λ m1 m2 o2 τ, mem_alloc_new_refine' Γ α f m1 m2
-      (fresh (dom _ m1)) o2 false perm_full τ) as (f'&?&?&?);
+      (fresh (C := indexset) (dom _ m1)) o2 false perm_full τ) as (f'&?&?&?);
       eauto 1 using perm_full_mapped, perm_full_unshared.
     go f'. repeat refine_constructor; eauto 7 using
       mem_alloc_new_index_typed', direction_refine_weaken, stmt_refine_weaken,

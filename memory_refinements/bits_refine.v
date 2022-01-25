@@ -13,7 +13,7 @@ Inductive bit_refine' `{Env K} (Γ : env K) (α : bool) (f : meminj K)
   | BPtr_any_refine' pb1 b2 :
      α → ✓{Γ,Δ1} pb1 → ¬ptr_alive Δ1 (fragmented.frag_item pb1) →
      ✓{Γ,Δ2} b2 → bit_refine' Γ α f Δ1 Δ2 (BPtr pb1) b2.
-Instance bit_refine `{Env K} : Refine K (env K) (bit K) := bit_refine'.
+#[global] Instance bit_refine `{Env K} : Refine K (env K) (bit K) := bit_refine'.
 
 Section bits.
 Context `{EnvSpec K}.
@@ -84,7 +84,7 @@ Lemma BIndet_refine Γ Δ1 Δ2 f b :
   ✓{Γ,Δ2} b → BIndet ⊑{Γ,true,f@Δ1↦Δ2} b.
 Proof. by constructor. Qed.
 Lemma BIndets_refine Γ Δ1 Δ2 f bs1 bs2 :
-  Forall (BIndet =) bs1 → ✓{Γ,Δ2}* bs2 →
+  Forall (BIndet =.) bs1 → ✓{Γ,Δ2}* bs2 →
   length bs1 = length bs2 → bs1 ⊑{Γ,true,f@Δ1↦Δ2}* bs2.
 Proof.
   rewrite <-Forall2_same_length.
@@ -104,12 +104,12 @@ Lemma BPtrs_refine Γ α f Δ1 Δ2 pbs1 pbs2 :
   pbs1 ⊑{Γ,α,f@Δ1↦Δ2}* pbs2 → BPtr <$> pbs1 ⊑{Γ,α,f@Δ1↦Δ2}* BPtr <$> pbs2.
 Proof. induction 1; constructor; auto using BPtr_refine. Qed.
 Lemma BIndets_refine_l_inv Γ α f Δ1 Δ2 bs1 bs2 :
-  Forall (BIndet =) bs1 → bs1 ⊑{Γ,α,f@Δ1↦Δ2}* bs2 → ✓{Γ,Δ2}* bs2.
+  Forall (BIndet =.) bs1 → bs1 ⊑{Γ,α,f@Δ1↦Δ2}* bs2 → ✓{Γ,Δ2}* bs2.
 Proof.
   induction 2 as [|???? []]; decompose_Forall_hyps; repeat constructor; eauto.
 Qed.
 Lemma BIndets_refine_l_inv' Γ f Δ1 Δ2 bs1 bs2 :
-  Forall (BIndet =) bs1 → bs1 ⊑{Γ,false,f@Δ1↦Δ2}* bs2 → Forall (BIndet =) bs2.
+  Forall (BIndet =.) bs1 → bs1 ⊑{Γ,false,f@Δ1↦Δ2}* bs2 → Forall (BIndet =.) bs2.
 Proof.
   by induction 2 as [|????[]]; decompose_Forall_hyps; repeat constructor; eauto.
 Qed.
@@ -117,14 +117,14 @@ Lemma BIndet_refine_r_inv Γ α f Δ1 Δ2 b1 b3 :
   b1 ⊑{Γ,α,f@Δ1↦Δ2} BIndet → ✓{Γ,Δ2} b3 → b1 ⊑{Γ,true,f@Δ1↦Δ2} b3.
 Proof. by inversion 1; constructor; auto. Qed.
 Lemma BIndets_refine_r_inv Γ α f Δ1 Δ2 bs1 bs2 bs3 :
-  bs1 ⊑{Γ,α,f@Δ1↦Δ2}* bs2 → Forall (BIndet =) bs2 →
+  bs1 ⊑{Γ,α,f@Δ1↦Δ2}* bs2 → Forall (BIndet =.) bs2 →
   ✓{Γ,Δ2}* bs3 → length bs1 = length bs3 → bs1 ⊑{Γ,true,f@Δ1↦Δ2}* bs3.
 Proof.
   rewrite <-Forall2_same_length. intros Hbs Hbs2. revert bs3.
   induction Hbs; intros; decompose_Forall_hyps; eauto using BIndet_refine_r_inv.
 Qed.
 Lemma BIndets_refine_r_inv' Γ f Δ1 Δ2 bs1 bs2 bs3 :
-  Forall (BIndet =) bs2 → bs1 ⊑{Γ,false,f@Δ1↦Δ2}* bs2 → Forall (BIndet =) bs1.
+  Forall (BIndet =.) bs2 → bs1 ⊑{Γ,false,f@Δ1↦Δ2}* bs2 → Forall (BIndet =.) bs1.
 Proof.
   by induction 2 as [|????[]]; decompose_Forall_hyps; repeat constructor; eauto.
 Qed.
@@ -209,7 +209,7 @@ Lemma bits_join_refine Γ α f Δ1 Δ2 bs1 bs2 bs3 bs1' bs2' bs3' :
   bs3 ⊑{Γ,α,f@Δ1↦Δ2}* bs3'.
 Proof.
   intros Hbs Hbs' Hbs1. revert bs2 bs2' bs3 bs3' Hbs Hbs'.
-  induction Hbs1; destruct 3; simplify_option_equality;
+  induction Hbs1; destruct 3; simplify_option_eq;
     constructor; eauto using bit_join_refine.
 Qed.
 Lemma bits_list_join_refine Γ α f Δ1 Δ2 sz bss1 bss2 bs1 bs2 :
@@ -218,7 +218,7 @@ Lemma bits_list_join_refine Γ α f Δ1 Δ2 sz bss1 bss2 bs1 bs2 :
   bs1 ⊑{Γ,α,f@Δ1↦Δ2}* bs2.
 Proof.
   intros Hbs1 Hbs2 Hbss. revert bs1 bs2 Hbs1 Hbs2.
-  induction Hbss; intros; simplify_option_equality; eauto using
+  induction Hbss; intros; simplify_option_eq; eauto using
     bits_join_refine, Forall2_replicate, Forall2_resize, BIndet_BIndet_refine.
 Qed.
 End bits.

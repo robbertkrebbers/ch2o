@@ -13,7 +13,7 @@ Inductive ptr_refine' `{Env K} (Γ : env K) (α : bool) (f : meminj K)
   | FunPtr_refine g τs τ :
      Γ !! g = Some (τs,τ) →
      ptr_refine' Γ α f Δ1 Δ2 (FunPtr g τs τ) (FunPtr g τs τ) (τs ~> τ).
-Instance ptr_refine `{Env K} :
+#[global] Instance ptr_refine `{Env K} :
   RefineT K (env K) (ptr_type K) (ptr K) := ptr_refine'.
 
 Section pointers.
@@ -41,7 +41,7 @@ Lemma ptr_refine_frozen Γ α f Δ1 Δ2 p1 p2 τp :
   p1 ⊑{Γ,α,f@Δ1↦Δ2} p2 : τp → frozen p2 → frozen p1.
 Proof.
   unfold frozen. destruct 1; simpl; auto.
-  rewrite !(injective_iff Ptr). eapply addr_refine_frozen; eauto.
+  rewrite !(inj_iff Ptr). eapply addr_refine_frozen; eauto.
 Qed.
 Lemma ptr_refine_id Γ α Δ p τp : (Γ,Δ) ⊢ p : τp → p ⊑{Γ,α@Δ} p : τp.
 Proof. destruct 1; constructor; eauto using addr_refine_id. Qed.

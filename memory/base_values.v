@@ -1,6 +1,7 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
 Require Export bits.
+
 Local Open Scope cbase_type_scope.
 
 Inductive base_val (K : iType) : iType :=
@@ -15,6 +16,7 @@ Arguments VInt {_} _ _.
 Arguments VPtr {_} _.
 Arguments VByte {_} _.
 
+Declare Scope base_val_scope.
 Delimit Scope base_val_scope with B.
 Bind Scope base_val_scope with base_val.
 Open Scope base_val_scope.
@@ -25,12 +27,11 @@ Notation "'intV{' τi } x" := (VInt τi x)
 Notation "'ptrV' p" := (VPtr p) (at level 10) : base_val_scope.
 Notation "'byteV' bs" := (VByte bs) (at level 10) : base_val_scope.
 
-Instance maybe_VInt {K} : Maybe2 (@VInt K) := λ vb,
+#[global] Instance maybe_VInt {K} : Maybe2 (@VInt K) := λ vb,
   match vb with VInt τi x => Some (τi,x) | _ => None end.
-Instance maybe_VPtr {K} : Maybe (@VPtr K) := λ vb,
+#[global] Instance maybe_VPtr {K} : Maybe (@VPtr K) := λ vb,
   match vb with VPtr p => Some p | _ => None end.
-Instance base_val_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (v1 v2 : base_val K) : Decision (v1 = v2).
+#[global] Instance base_val_eq_dec {K} `{EqDecision K}: EqDecision (base_val K).
 Proof. solve_decision. Defined.
 
 Section operations.
@@ -38,7 +39,7 @@ Section operations.
 
   Record char_byte_valid (Γ : env K)
       (Δ : memenv K) (bs : list (bit K)) : Prop := {
-    char_byte_valid_indet : ¬Forall (BIndet =) bs;
+    char_byte_valid_indet : ¬Forall (BIndet =.) bs;
     char_byte_valid_bit : ¬(∃ βs, bs = BBit <$> βs);
     char_byte_valid_bits_valid : ✓{Γ,Δ}* bs;
     char_byte_valid_bits : length bs = char_bits
@@ -46,7 +47,7 @@ Section operations.
   Global Instance char_byte_valid_dec Γ Δ bs :
     Decision (char_byte_valid Γ Δ bs).
   Proof.
-   refine (cast_if (decide (¬Forall (BIndet =) bs ∧
+   refine (cast_if (decide (¬Forall (BIndet =.) bs ∧
      ¬(∃ βs, bs = BBit <$> βs) ∧ ✓{Γ,Δ}* bs ∧ length bs = char_bits)));
      abstract (constructor||intros[]; intuition).
   Defined.
@@ -59,7 +60,7 @@ Section operations.
     | VByte_typed bs :
        char_byte_valid Γ Δ bs → base_typed' Γ Δ (VByte bs) ucharT.
   Global Instance base_typed: Typed (env K * memenv K)
-    (base_type K) (base_val K) := curry base_typed'.
+    (base_type K) (base_val K) := uncurry base_typed'.
   Global Instance type_of_base_val: TypeOf (base_type K) (base_val K) := λ v,
     match v with
     | VIndet τb => τb
@@ -96,11 +97,11 @@ Section operations.
        match mapM (maybe BBit) bs with
        | Some βs => VInt τi (int_of_bits τi βs)
        | None =>
-          if decide (τi = ucharT%IT ∧ ¬Forall (BIndet =) bs)
+          if decide (τi = ucharT%IT ∧ ¬Forall (BIndet =.) bs)
           then VByte bs else VIndet τb
        end
     | τp.* =>
-       default (VIndet τb) (mapM (maybe BPtr) bs ≫= ptr_of_bits Γ τp) VPtr
+       from_option VPtr (VIndet τb) (mapM (maybe BPtr) bs ≫= ptr_of_bits Γ τp)
     end.
 End operations.
 
@@ -118,7 +119,7 @@ Implicit Types bs : list (bit K).
 Implicit Types βs : list bool.
 
 Local Infix "⊑*" := (Forall2 bit_weak_refine) (at level 70).
-Hint Extern 0 (_ ⊑* _) => reflexivity.
+Local Hint Extern 0 (_ ⊑* _) => reflexivity: core.
 
 (** ** General properties of the typing judgment *)
 Lemma base_val_typed_type_valid Γ Δ v τb : ✓ Γ → (Γ,Δ) ⊢ v : τb → ✓{Γ} τb.
@@ -126,17 +127,17 @@ Proof.
   destruct 2;
     eauto using TVoid_valid, TInt_valid, TPtr_valid, ptr_typed_type_valid.
 Qed.
-Global Instance: TypeOfSpec (env K * memenv K) (base_type K) (base_val K).
+#[global] Instance: TypeOfSpec (env K * memenv K) (base_type K) (base_val K).
 Proof.
   intros [??]. destruct 1; f_equal'; auto. eapply type_of_correct; eauto.
 Qed.
-Global Instance:
+#[global] Instance:
   TypeCheckSpec (env K * memenv K) (base_type K) (base_val K) (λ _, True).
 Proof.
   intros [Γ Δm] vb τb _. split.
-  * destruct vb; intros; simplify_option_equality;
+  * destruct vb; intros; simplify_option_eq;
       constructor; auto; eapply type_check_sound; eauto.
-  * by destruct 1; simplify_option_equality;
+  * by destruct 1; simplify_option_eq;
       erewrite ?type_check_complete by eauto.
 Qed.
 Lemma char_byte_valid_weaken Γ1 Γ2 Δ1 Δ2 bs :
@@ -206,11 +207,11 @@ Inductive base_val_unflatten_view Γ :
      ptr_of_bits Γ τp pbs = Some p →
      base_val_unflatten_view Γ (τp.*) (BPtr <$> pbs) (VPtr p)
   | base_val_of_byte bs :
-     length bs = char_bits → ¬Forall (BIndet =) bs →
+     length bs = char_bits → ¬Forall (BIndet =.) bs →
      ¬(∃ βs, bs = BBit <$> βs) →
      base_val_unflatten_view Γ ucharT bs (VByte bs)
   | base_val_of_byte_indet bs :
-     length bs = char_bits → Forall (BIndet =) bs →
+     length bs = char_bits → Forall (BIndet =.) bs →
      base_val_unflatten_view Γ ucharT bs (VIndet ucharT)
   | base_val_of_int_indet τi bs :
      τi ≠ ucharT%IT →
@@ -255,7 +256,7 @@ Proof.
     | _ => case_match
     | H : context [ptr_of_bits _ _ _] |- _ =>
       rewrite <-(ptr_of_bits_weaken Γ1 Γ2) in H by eauto using TPtr_valid_inv
-    | _ => simplify_option_equality
+    | _ => simplify_option_eq
     end; auto.
 Qed.
 Lemma base_val_unflatten_int Γ τi βs :
@@ -272,22 +273,22 @@ Proof.
   * naive_solver (apply Forall_fmap, Forall_true; simpl; eauto).
 Qed.
 Lemma base_val_unflatten_byte Γ bs :
-  ¬Forall (BIndet =) bs → ¬(∃ βs, bs = BBit <$> βs) →
+  ¬Forall (BIndet =.) bs → ¬(∃ βs, bs = BBit <$> βs) →
   length bs = char_bits → base_val_unflatten Γ ucharT bs = VByte bs.
 Proof.
   intros. feed inversion (base_val_unflatten_spec Γ ucharT bs);
     simplify_equality'; rewrite ?bit_size_of_int, ?int_width_char; naive_solver.
 Qed.
 Lemma base_val_unflatten_indet Γ τb bs :
-  τb ≠ voidT → Forall (BIndet =) bs → length bs = bit_size_of Γ τb →
+  τb ≠ voidT → Forall (BIndet =.) bs → length bs = bit_size_of Γ τb →
   base_val_unflatten Γ τb bs = VIndet τb.
 Proof.
   intros. assert (∀ τi βs,
-    Forall (@BIndet K =) (BBit <$> βs) → length βs ≠ int_width τi).
+    Forall (@BIndet K =.) (BBit <$> βs) → length βs ≠ int_width τi).
   { intros τi βs ??. pose proof (int_width_pos τi).
     destruct βs; decompose_Forall_hyps; lia. }
   assert (∀ τp pbs p,
-    Forall (BIndet =) (BPtr <$> pbs) → ptr_of_bits Γ τp pbs ≠ Some p).
+    Forall (BIndet =.) (BPtr <$> pbs) → ptr_of_bits Γ τp pbs ≠ Some p).
   { intros τp pbs p ??. assert (length pbs ≠ 0).
     { erewrite ptr_of_bits_length by eauto. by apply bit_size_of_base_ne_0. }
     destruct pbs; decompose_Forall_hyps; lia. }
@@ -336,7 +337,7 @@ Lemma base_val_unflatten_type_of Γ τb bs :
   type_of (base_val_unflatten Γ τb bs) = τb.
 Proof.
   unfold base_val_unflatten, default.
-  destruct τb; repeat (simplify_option_equality || case_match || intuition).
+  destruct τb; repeat (simplify_option_eq || case_match || intuition).
   f_equal; eauto using ptr_of_bits_type_of.
 Qed.
 Lemma base_val_unflatten_flatten Γ Δ vb τb :
@@ -356,7 +357,7 @@ Lemma base_val_unflatten_frozen Γ Δ τb bs :
   ✓{Γ,Δ}* bs → frozen (base_val_unflatten Γ τb bs).
 Proof.
   intros. unfold base_val_unflatten, default, frozen.
-  destruct τb; repeat (simplify_option_equality || case_match); f_equal'.
+  destruct τb; repeat (simplify_option_eq || case_match); f_equal'.
   efeed pose proof (λ bs pbs, proj1 (maybe_BPtrs_spec bs pbs)); eauto.
   subst. eapply ptr_of_bits_frozen; eauto using BPtrs_valid_inv.
 Qed.
@@ -404,7 +405,7 @@ Proof.
   intros ???? Hbs13. destruct (decide (τb = ucharT)) as [->|].
   { apply base_val_unflatten_char_inj in Hbs13; subst;
       eauto using Forall2_length_l.
-    by rewrite (anti_symmetric (Forall2 bit_weak_refine) bs2 bs3). }
+    by rewrite (anti_symm (Forall2 bit_weak_refine) bs2 bs3). }
   destruct (decide (τb = voidT)) as [->|]; [done|].
   destruct (bits_subseteq_eq bs2 bs3) as [->|]; auto.
   rewrite <-Hbs13, !(base_val_unflatten_indet_elem_of Γ);

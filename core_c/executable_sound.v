@@ -1,6 +1,6 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Export smallstep executable.
+Require Export tactics smallstep executable.
 
 Section soundness.
 Context `{EnvSpec K}.
@@ -8,8 +8,8 @@ Context `{EnvSpec K}.
 Lemma assign_exec_correct Γ m a v ass va' v' :
   assign_exec Γ m a v ass = Some (va',v') ↔ assign_sem Γ m a v ass va' v'.
 Proof.
-  split; [|by destruct 1; simplify_option_equality].
-  intros. destruct ass; simplify_option_equality; econstructor; eauto.
+  split; [|by destruct 1; simplify_option_eq].
+  intros. destruct ass; simplify_option_eq; econstructor; eauto.
 Qed.
 Lemma ctx_lookup_correct (k : ctx K) i : ctx_lookup i k = locals k !! i.
 Proof.
@@ -30,7 +30,8 @@ Proof.
     end; do_ehstep.
 Qed.
 Lemma ehexec_weak_complete Γ k e1 m1 e2 m2 :
-  ehexec Γ k e1 m1 ≡ ∅ → ¬Γ\ locals k ⊢ₕ e1, m1 ⇒ e2, m2.
+  ehexec Γ k e1 m1 ≡ ∅ → 
+  ¬Γ\ locals k ⊢ₕ e1, m1 ⇒ e2, m2.
 Proof.
   destruct 2; 
     repeat match goal with
@@ -39,10 +40,12 @@ Proof.
     | H : is_Some _ |- _ => destruct H as [??]
     | _ => progress decompose_empty
     | H : locals _ !! _ = Some _ |- _ => rewrite <-ctx_lookup_correct in H
-    | H : of_option ?o ≫= _ ≡ _, Ho : ?o = Some _ |- _ =>
-       rewrite Ho in H; csimpl in H; rewrite collection_bind_singleton in H
-    | _ => progress simplify_option_equality
+    | H : option_to_set ?o ≫= _ ≡ _, Ho : ?o = Some _ |- _ =>
+       rewrite Ho in H; csimpl in H; rewrite set_bind_singleton in H
+    | _ => progress simplify_option_eq
     | _ => case_match
+    | H : mguard (_) (_) ≡ ∅ |- _ => apply guard_empty in H
+    | H : _ ∨ _ |- _ => destruct H
     end; eauto.
 Qed.
 Lemma ehstep_dec Γ ρ e1 m1 :
@@ -50,14 +53,18 @@ Lemma ehstep_dec Γ ρ e1 m1 :
 Proof.
   set (k:=(λ oτ, CLocal (oτ.1) (oτ.2)) <$> ρ).
   replace ρ with (locals k) by (induction ρ as [|[]]; f_equal'; auto).
-  destruct (collection_choose_or_empty (ehexec Γ k e1 m1)) as [[[e2 m2]?]|];
+  destruct (set_choose_or_empty (ehexec Γ k e1 m1)) as [[[e2 m2]?]|];
     eauto using ehexec_sound, ehexec_weak_complete.
 Qed.
 Lemma cexec_sound Γ δ S1 S2 : Γ\ δ ⊢ₛ S1 ⇒ₑ S2 → Γ\ δ ⊢ₛ S1 ⇒ S2.
 Proof.
-  intros. assert (∀ (k : ctx K) e m,
-    ehexec Γ k e m ≡ ∅ → maybe_ECall_redex e = None →
-    is_redex e → ¬Γ\ locals k ⊢ₕ safe e, m).
+  intros. assert (
+    ∀ (k : ctx K) e m,
+      ehexec Γ k e m ≡ ∅ → 
+      maybe_ECall_redex e = None →
+      is_redex e → 
+      ¬Γ\ locals k ⊢ₕ safe e, m
+  ).
   { intros k e m He. rewrite eq_None_not_Some.
     intros Hmaybe Hred Hsafe; apply Hmaybe; destruct Hsafe.
     * eexists; apply maybe_ECall_redex_Some; eauto.

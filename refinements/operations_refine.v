@@ -2,7 +2,9 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export operations values_refine.
 Require Import pointer_casts.
+
 Local Open Scope ctype_scope.
+Local Coercion Z.of_nat: nat >-> Z.
 
 Section operations.
 Context `{EnvSpec K}.
@@ -15,9 +17,9 @@ Implicit Types a : addr K.
 Implicit Types vb : base_val K.
 Implicit Types v : val K.
 Implicit Types m : mem K.
-Hint Immediate index_alive_1'.
-Hint Resolve ptr_alive_1' index_alive_2'.
-Hint Immediate addr_refine_typed_l addr_refine_typed_r.
+Hint Immediate index_alive_1': core.
+Hint Resolve ptr_alive_1' index_alive_2': core.
+Hint Immediate addr_refine_typed_l addr_refine_typed_r: core.
 
 (** ** Refinements of operations on addresses *)
 Lemma addr_alive_refine' Γ α f m1 m2 a1 a2 σp :
@@ -28,7 +30,7 @@ Lemma addr_compare_ok_refine Γ α f m1 m2 c a1 a2 a3 a4 σp :
   a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp → a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σp →
   addr_compare_ok Γ m1 c a1 a3 → addr_compare_ok Γ m2 c a2 a4.
 Proof.
-  intros Ha1 Ha2 (?&?&?); split_ands'; eauto using addr_alive_refine'.
+  intros Ha1 Ha2 (?&?&?); split_and !; eauto using addr_alive_refine'.
   intros. destruct (decide (addr_index a1 = addr_index a3));
     [destruct Ha1, Ha2; naive_solver|intuition eauto using addr_strict_refine].
 Qed.
@@ -100,7 +102,7 @@ Proof.
   intros (?&?&?&?).
   destruct 1 as [o1 o2 r1 r2 r3 i1 i3 τ1 τ2 σ1 σp ?????????? Hr],
     1 as [o4 o5 r4 r5 r6 i4 i6 τ4 τ5 σ3 σp4 ?????????? Hr'].
-  destruct Hr, Hr'; simplify_list_equality;
+  destruct Hr, Hr'; simplify_list_eq;
     simplify_type_equality; f_equal; lia.
 Qed.
 Lemma addr_minus_ok_refine Γ α f m1 m2 a1 a2 a3 a4 σp :
@@ -116,15 +118,15 @@ Proof.
   unfold addr_minus_ok; erewrite <-addr_minus_refine by eauto. 
   destruct Ha1 as [??????????? [] ????????? Hr1],
     Ha3 as [??????????? [] ????????? Hr2]; destruct Hr1; inversion Hr2;
-    destruct Ha as (?&?&?&?); simplify_list_equality;
-    split_ands; eauto using ref_le_unique.
+    destruct Ha as (?&?&?&?); simplify_list_eq;
+    split_and ?; eauto using ref_le_unique.
 Qed.
 Lemma addr_cast_ok_refine Γ α f m1 m2 a1 a2 σp τp :
   ✓ Γ → a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp →
   addr_cast_ok Γ m1 τp a1 → addr_cast_ok Γ m2 τp a2.
 Proof.
   destruct 2 as [o o' r r' r'' i i'' τ τ' σ σp' [] ????????? []];
-    intros (?&?&?); simplify_equality'; split_ands;
+    intros (?&?&?); simplify_equality'; split_and ?;
     eauto using size_of_castable, Nat.divide_add_r, Nat.divide_mul_l.
 Qed.
 Lemma addr_cast_refine Γ α f m1 m2 a1 a2 σp τp :

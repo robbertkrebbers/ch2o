@@ -20,14 +20,14 @@ Implicit Types m : mem K.
 Implicit Types e : expr K.
 Implicit Types s : stmt K.
 
-Hint Extern 1 (_ ⊥ _) => solve_mem_disjoint.
-Hint Extern 1 (⊥ _) => solve_mem_disjoint.
-Hint Extern 1 (sep_valid _) => solve_mem_disjoint.
-Hint Extern 1 (_ ⊆ _) => etransitivity; [eassumption|].
-Hint Extern 1 (_ ≤ _) => omega.
-Hint Immediate cmap_valid_memenv_valid.
-Hint Resolve cmap_empty_valid cmap_erased_empty mem_locks_empty.
-Hint Resolve cmap_union_valid_2 cmap_erase_valid.
+Hint Extern 1 (_ ## _) => solve_mem_disjoint: core.
+Hint Extern 1 (## _) => solve_mem_disjoint: core.
+Hint Extern 1 (sep_valid _) => solve_mem_disjoint: core.
+Hint Extern 1 (_ ⊆ _) => etransitivity; [eassumption|]: core.
+Hint Extern 1 (_ ≤ _) => lia: core.
+Hint Immediate cmap_valid_memenv_valid: core.
+Hint Resolve cmap_empty_valid cmap_erased_empty mem_locks_empty: core.
+Hint Resolve cmap_union_valid_2 cmap_erase_valid: core.
 
 Lemma ax_expr_post_expr_nf Γ Q Δ δ ρ n m e τlr :
   ax_expr_post' Q τlr Γ Δ δ ρ n (Expr e) m → is_nf e.
@@ -47,10 +47,10 @@ Proof.
 Qed.
 Lemma ax_call_compose Γ δ A P Q (E : ectx K) E' ρ Δ n φ k m1 m2 :
   ✓ Γ → locks E' ⊆ locks E ∪ mem_locks m2 →
-  ⊥ [m1; m2] → ✓{Γ,Δ} m1 → ✓{Γ,Δ} m2 →
+  ## [m1; m2] → ✓{Γ,Δ} m1 → ✓{Γ,Δ} m2 →
   ax_graph (ax_expr_cond ρ A) P Γ δ Δ ρ n (k ++ [CFun E]) φ m1 →
   (∀ Δ' n' m1' e',
-    ⊥ [m1'; m2] → ✓{Γ,Δ'} m1' → ✓{Γ,Δ'} m2 →
+    ## [m1'; m2] → ✓{Γ,Δ'} m1' → ✓{Γ,Δ'} m2 →
     locks (subst E e') ⊆ mem_locks m1' →
     ax_expr_invariant A Γ Δ' δ ρ (S n') (m1' ∪ m2) →
     ax_graph (ax_expr_cond ρ A) P Γ δ Δ' ρ n' [] (Expr (subst E e')) m1' →
@@ -103,20 +103,20 @@ Proof.
     + apply ax_unframe_fun_to_expr with mA; auto.
       by rewrite !sep_associative in Hm by auto.
     + simpl; rewrite mem_locks_union by auto; revert Hlocks HE; clear.
-      rewrite !ectx_subst_locks; esolve_elem_of.
+      rewrite !ectx_subst_locks; set_solver.
     + eapply Hnext; eauto. exists mA; auto.
 Qed.
 Lemma ax_expr_compose Γ δ {vn} A (Ps : vec (vassert K) vn) (Q : vassert K)
     Δ (E : ectx_full K vn) (es : vec (expr K) vn) (ρ : stack K) n
     (ms : vec (mem K) vn) (τlrs : vec (lrtype K) vn) σlr :
   ✓ Γ → ✓{Γ,Δ} δ → locks E = ∅ → ✓{Δ}* ρ →
-  ⊥ ms → (∀ i, ✓{Γ,Δ} (ms !!! i)) →
+  ## ms → (∀ i, ✓{Γ,Δ} (ms !!! i)) →
   ax_expr_invariant A Γ Δ δ ρ n (⋃ ms) →
   (∀ i, locks (es !!! i) ⊆ mem_locks (ms !!! i)) →
   (∀ i, ax_graph (ax_expr_cond ρ A) (ax_expr_post (Ps !!! i) (τlrs !!! i))
       Γ δ Δ ρ n [] (Expr (es !!! i)) (ms !!! i)) →
   (∀ Δ' n' (νs : vec _ vn) (ms' : vec _ vn),
-    ⊥ ms' → (∀ i, ✓{Γ,Δ'} (ms' !!! i)) → Δ ⇒ₘ Δ' → n' ≤ n →
+    ## ms' → (∀ i, ✓{Γ,Δ'} (ms' !!! i)) → Δ ⇒ₘ Δ' → n' ≤ n →
     (∀ i, (Γ,Δ') ⊢ νs !!! i : τlrs !!! i) →
     (∀ i, assert_holds ((Ps !!! i) (νs !!! i))
       Γ Δ' δ ρ n' (cmap_erase (ms' !!! i))) →
@@ -145,10 +145,10 @@ Proof.
     simplify_equality'; simplify_mem_disjoint_hyps.
   split; [|intros S' p].
   { rewrite (ectx_full_to_item_correct _ _ i); apply (rcred_ectx _ _ [_]).
-    assert (⊥ (ms !!! i :: delete (i:nat) (ms:list _) ++ [mf;mA])).
+    assert (## (ms !!! i :: delete (i:nat) (ms:list _) ++ [mf;mA])).
     { by rewrite app_comm_cons, sep_disjoint_equiv_delete. }
     eapply (ax_red (ax_expr_cond ρ A) (ax_expr_post (Ps !!! i) (τlrs !!! i)))
-      with Δ' n' (ms !!! i) (InExpr (⋃ delete (i:nat) (ms:list _) ∪ mf) mA).
+      with Δ' n' (lookup_total (A := mem K) i ms) (InExpr (⋃ delete (i:nat) (ms:list _) ∪ mf) mA).
     { eauto using cmap_union_list_lookup_valid. }
     { econstructor; auto 1.
       { by rewrite sep_associative, sep_union_delete by auto. }
@@ -159,7 +159,7 @@ Proof.
     eauto using ax_graph_weaken.  }
   pattern S'; apply (rcstep_expr_depsubst_inv _ _ _ _ _ _ _ _ p); clear p.
   * clear i Hi; intros i e' m2 p' ?.
-    assert (⊥ (ms !!! i :: delete (i:nat) (ms:list _) ++ [mf;mA])).
+    assert (## (ms !!! i :: delete (i:nat) (ms:list _) ++ [mf;mA])).
     { by rewrite app_comm_cons, sep_disjoint_equiv_delete. }
     feed inversion (ax_step (ax_expr_cond ρ A)
       (ax_expr_post (Ps !!! i) (τlrs !!! i))
@@ -182,17 +182,18 @@ Proof.
     { rewrite ectx_full_subst_locks, HE, (left_id_L ∅ (∪)).
       rewrite <-sep_union_insert by auto.
       rewrite mem_locks_union_list by (rewrite sep_disjoint_equiv_insert; auto).
+    
       apply union_list_preserving, Forall2_fmap, Forall2_vlookup.
       intros j; destruct (decide (i = j)); subst; [by rewrite !vlookup_insert|].
       by rewrite !vlookup_insert_ne. }
     rewrite <-sep_union_insert by auto.
-    assert (⊥ (mf :: mA :: vinsert i m ms)).
+    assert (## (mf :: mA :: vinsert i m ms)).
     { rewrite sep_disjoint_equiv_insert; auto. }
     apply IH; eauto using indexes_valid_weaken, funenv_valid_weaken.
     + intros j. destruct (decide (i = j)); subst; [by rewrite !vlookup_insert|].
       rewrite vlookup_insert_ne by done.
       eauto using cmap_union_list_delete_lookup_valid.
-    + exists mA; split_ands; eauto using assert_weaken, indexes_valid_weaken.
+    + exists mA; split_and ?; eauto using assert_weaken, indexes_valid_weaken.
     + intros j; destruct (decide (i = j)); subst; [by rewrite !vlookup_insert|].
       by rewrite !vlookup_insert_ne.
     + intros j; destruct (decide (i = j)); subst; [by rewrite !vlookup_insert|].
@@ -202,10 +203,10 @@ Proof.
     assert (Ω ∪ ⋃ Ωs ⊆ mem_locks (ms !!! i)) as HΩ.
     { transitivity (locks (es !!! i)); [|done].
       rewrite Hesi, ectx_subst_locks; simpl.
-      rewrite fmap_zip_with_l by auto; clear; solve_elem_of. }
-    assert (⊥ (mf :: mA :: ms !!! i :: delete (i:nat) (ms:list _))).
+      rewrite fmap_zip_with_l by auto; clear; set_solver. }
+    assert (## (mf :: mA :: ms !!! i :: delete (i:nat) (ms:list _))).
     { rewrite sep_disjoint_equiv_delete by auto; auto. }
-    assert (⊥ (mf :: mA ::
+    assert (## (mf :: mA ::
       mem_unlock (Ω ∪ ⋃ Ωs) (ms !!! i) :: delete (i:nat) (ms:list _))).
     { rewrite <-mem_unlock_disjoint_le by auto; auto. }
     feed inversion (ax_step (ax_expr_cond ρ A)
@@ -225,7 +226,7 @@ Proof.
       (mem_unlock (Ω ∪ ⋃ Ωs) (ms !!! i) ∪ ⋃ delete (i:nat) (ms:list _) ∪ mA);
       simpl; auto.
     { rewrite <-(sep_union_delete ms i), !mem_unlock_union by (by auto
-         || rewrite !mem_locks_union by auto; revert HΩ; clear; solve_elem_of).
+         || rewrite !mem_locks_union by auto; revert HΩ; clear; set_solver).
       eapply ax_unframe_expr_to_fun; eauto. }
     inversion_clear Hunframe as [|m''| |];
       simplify_equality'; simplify_mem_disjoint_hyps.
@@ -234,7 +235,7 @@ Proof.
       rewrite <-mem_unlock_union, (sep_associative m'') by auto.
       by rewrite !(sep_associative (ms !!! i)), sep_union_delete by auto. }
     rewrite <-(sep_union_delete ms i), !mem_unlock_union in Hm' by
-      (by auto || rewrite !mem_locks_union by auto; revert HΩ; solve_elem_of).
+      (by auto || rewrite !mem_locks_union by auto; revert HΩ; set_solver).
     simplify_mem_disjoint_hyps.
     rewrite (sep_commutative _ mA), sep_associative by auto.
     apply ax_call_compose with
@@ -270,7 +271,7 @@ Proof.
       (InExpr (⋃ delete (i:nat) (ms:list _) ∪ mf) mA) [] (UndefExpr E' e)
       (⋃ ms ∪ mf ∪ mA));
       eauto using cmap_union_list_lookup_valid, ax_graph_weaken.
-    assert (⊥ (mf :: mA :: ms !!! i :: delete (i:nat) (ms:list _))).
+    assert (## (mf :: mA :: ms !!! i :: delete (i:nat) (ms:list _))).
     { rewrite sep_disjoint_equiv_delete; auto. }
     constructor; auto.
     { by rewrite sep_associative, sep_union_delete by auto. }
@@ -300,13 +301,13 @@ Proof.
 Qed.
 Lemma ax_expr_compose_2 Γ δ A P1 P2 Q Δ
     (E : ectx_full K 2) e1 e2 ρ n m1 m2 τlr1 τlr2 σlr :
-  ✓ Γ → ✓{Γ,Δ} δ → locks E = ∅ → ✓{Δ}* ρ → ⊥ [m1; m2] → ✓{Γ,Δ} m1 → ✓{Γ,Δ} m2 →
+  ✓ Γ → ✓{Γ,Δ} δ → locks E = ∅ → ✓{Δ}* ρ → ## [m1; m2] → ✓{Γ,Δ} m1 → ✓{Γ,Δ} m2 →
   ax_expr_invariant A Γ Δ δ ρ n (m1 ∪ m2) →
   locks e1 ⊆ mem_locks m1 → locks e2 ⊆ mem_locks m2 →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post P1 τlr1) Γ δ Δ ρ n [] (Expr e1) m1 →
   ax_graph (ax_expr_cond ρ A) (ax_expr_post P2 τlr2) Γ δ Δ ρ n [] (Expr e2) m2 →
   (∀ Δ' n' ν1 ν2 m1' m2',
-    ⊥ [m1';m2'] → ✓{Γ,Δ'} m1' → ✓{Γ,Δ'} m2' → Δ ⇒ₘ Δ' → n' ≤ n →
+    ## [m1';m2'] → ✓{Γ,Δ'} m1' → ✓{Γ,Δ'} m2' → Δ ⇒ₘ Δ' → n' ≤ n →
     (Γ,Δ') ⊢ ν1 : τlr1 → (Γ,Δ') ⊢ ν2 : τlr2 →
     assert_holds (P1 ν1) Γ Δ' δ ρ n' (cmap_erase m1') →
     assert_holds (P2 ν2) Γ Δ' δ ρ n' (cmap_erase m2') →

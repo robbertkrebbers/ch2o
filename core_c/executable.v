@@ -38,55 +38,55 @@ Definition ehexec (Γ : env K) (k : ctx K)
     (e : expr K) (m : mem K) : listset (expr K * mem K) :=
   match e with
   | var x =>
-     '(o,τ) ← of_option (ctx_lookup x k);
-     {[ %(Ptr (addr_top o τ)), m ]}
+     '(o,τ) ← option_to_set (ctx_lookup x k);
+     {[ (%(Ptr (addr_top o τ)), m) ]}
   | .* (#{Ω} (ptrV p)) =>
      guard (ptr_alive' m p);
-     {[ %{Ω} p, m ]}
+     {[ (%{Ω} p, m) ]}
   | & (%{Ω} p) =>
-     {[ #{Ω} (ptrV p), m ]}
+     {[ (#{Ω} (ptrV p), m) ]}
   | %{Ωl} (Ptr a) ::={ass} #{Ωr} v =>
      guard (mem_writable Γ a m);
-     '(va,v') ← of_option (assign_exec Γ m a v ass);
-     {[ #{lock_singleton Γ a ∪ Ωl ∪ Ωr} v',
-        mem_lock Γ a (<[a:=va]{Γ}>m) ]}
+     '(va,v') ← option_to_set (assign_exec Γ m a v ass);
+     {[ (#{lock_singleton Γ a ∪ Ωl ∪ Ωr} v',
+        mem_lock Γ a (<[a:=va]{Γ}>m)) ]}
   | load (%{Ω} (Ptr a)) =>
-     v ← of_option (m !!{Γ} a);
-     {[ #{Ω} v, mem_force Γ a m ]}
+     v ← option_to_set (m !!{Γ} a);
+     {[ (#{Ω} v, mem_force Γ a m) ]}
   | %{Ω} (Ptr a) %> rs =>
      guard (addr_strict Γ a);
-     {[ %{Ω} (Ptr (addr_elt Γ rs a)), m ]}
+     {[ (%{Ω} (Ptr (addr_elt Γ rs a)), m) ]}
   | #{Ω} v #> rs =>
-     v' ← of_option (v !!{Γ} rs);
-     {[ #{Ω} v', m ]}
+     v' ← option_to_set (v !!{Γ} rs);
+     {[ (#{Ω} v', m) ]}
   | alloc{τ} (#{Ω} intV{_} n) =>
      let o := fresh (dom indexset m) in
      let n' := Z.to_nat n in
      guard (n' ≠ 0);
-     {[ %{Ω} Ptr (addr_top_array o τ n),
-        mem_alloc Γ o true perm_full (val_new Γ (τ.[n'])) m ]}
-     ∪ (if alloc_can_fail then {[ %{Ω} NULL (TType τ), m ]} else ∅)
+     {[ (%{Ω} Ptr (addr_top_array o τ n),
+        mem_alloc Γ o true perm_full (val_new Γ (τ.[n'])) m) ]}
+     ∪ (if alloc_can_fail then {[ (%{Ω} NULL (TType τ), m) ]} else ∅)
   | free (%{Ω} (Ptr a)) =>
      guard (mem_freeable a m);
-     {[ #{Ω} voidV, mem_free (addr_index a) m ]}
+     {[ (#{Ω} voidV, mem_free (addr_index a) m) ]}
   | .{op} #{Ω} v =>
      guard (val_unop_ok m op v);
-     {[ #{Ω} val_unop op v, m ]}
+     {[ (#{Ω} val_unop op v, m) ]}
   | #{Ωl} vl .{op} #{Ωr} vr =>
      guard (val_binop_ok Γ m op vl vr);
-     {[ #{Ωl ∪ Ωr} val_binop Γ op vl vr, m ]}
+     {[ (#{Ωl ∪ Ωr} val_binop Γ op vl vr, m) ]}
   | if{#{Ω} VBase vb} e2 else e3 =>
      guard (base_val_branchable m vb);
      if decide (base_val_is_0 vb)
-     then {[ e3, mem_unlock Ω m ]} else {[ e2, mem_unlock Ω m ]}
+     then {[ (e3, mem_unlock Ω m) ]} else {[ (e2, mem_unlock Ω m) ]}
   | %#{Ω} _,, er =>
-     {[ er, mem_unlock Ω m ]}
+     {[ (er, mem_unlock Ω m) ]}
   | cast{τ} (#{Ω} v) =>
      guard (val_cast_ok Γ m (TType τ) v);
-     {[ #{Ω} val_cast (TType τ) v, m ]}
+     {[ (#{Ω} val_cast (TType τ) v, m) ]}
   | #[r:=#{Ω1} v1] (#{Ω2} v2) =>
      guard (is_Some (v2 !!{Γ} r));
-     {[ #{Ω1 ∪ Ω2} val_alter Γ (λ _, v1) r v2, m ]}
+     {[ (#{Ω1 ∪ Ω2} val_alter Γ (λ _, v1) r v2, m) ]}
   | _ => ∅
   end%E.
 Definition cexec (Γ : env K) (δ : funenv K)
@@ -103,7 +103,7 @@ Definition cexec (Γ : env K) (δ : funenv K)
     | ! e => {[ State (CExpr e (! □) :: k) (Expr e) m ]}
     | ret e => {[ State (CExpr e (ret □) :: k) (Expr e) m ]}
     | loop s => {[ State (CStmt (loop □) :: k) (Stmt ↘ s) m ]}
-    | s1 ;; s2 => {[ State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m ]}
+    | (s1 ;; s2)%S => {[ State (CStmt (□ ;; s2) :: k) (Stmt ↘ s1) m ]}
     | catch s => {[ State (CStmt (catch □) :: k) (Stmt ↘ s) m ]}
     | if{e} s1 else s2 =>
        {[ State (CExpr e (if{□} s1 else s2) :: k) (Expr e) m ]}
@@ -145,7 +145,7 @@ Definition cexec (Γ : env K) (δ : funenv K)
          {[ State (CLocal o τ :: k) (Stmt (↷ l) s)
                   (mem_alloc Γ o false perm_full (val_new Γ τ) m) ]}
       | catch s => {[ State (CStmt (catch □) :: k) (Stmt (↷ l) s) m ]}
-      | s1 ;; s2 =>
+      | (s1 ;; s2)%S =>
          (guard (l ∈ labels s1);
             {[ State (CStmt (□ ;; s2) :: k) (Stmt (↷ l) s1) m ]})
          ∪ (guard (l ∈ labels s2);
@@ -178,7 +178,7 @@ Definition cexec (Γ : env K) (δ : funenv K)
     | catch s =>
        guard (mx ∈ cases s);
        {[ State (CStmt (catch □) :: k) (Stmt (↓ mx) s) m ]}
-    | s1 ;; s2 =>
+    | (s1 ;; s2)%S =>
        (guard (mx ∈ cases s1);
           {[ State (CStmt (□ ;; s2) :: k) (Stmt (↓ mx) s1) m ]})
        ∪ (guard (mx ∈ cases s2);
@@ -206,7 +206,7 @@ Definition cexec (Γ : env K) (δ : funenv K)
     | _ => ∅
     end
   | Call f vs =>
-    s ← of_option (δ !! f);
+    s ← option_to_set (δ !! f);
     let os := fresh_list (length vs) (dom indexset m) in
     let m2 := mem_alloc_list Γ os vs m in
     {[ State (CParams f (zip os (type_of <$> vs)) :: k) (Stmt ↘ s) m2 ]}
@@ -223,7 +223,7 @@ Definition cexec (Γ : env K) (δ : funenv K)
       | CExpr e (ret □) :: k =>
          {[ State k (Stmt (⇈ v) (ret e)) (mem_unlock Ω m) ]}
       | CExpr e (if{□} s1 else s2) :: k =>
-         vb ← of_option (maybe VBase v);
+         vb ← option_to_set (maybe VBase v);
          if decide (base_val_branchable m vb) return listset (state K) then
            if decide (base_val_is_0 vb) return listset (state K) then
              {[State (CStmt (if{e} s1 else □) :: k) (Stmt ↘ s2) (mem_unlock Ω m)]}
@@ -231,9 +231,9 @@ Definition cexec (Γ : env K) (δ : funenv K)
              {[State (CStmt (if{e} □ else s2) :: k) (Stmt ↘ s1) (mem_unlock Ω m)]}
          else {[ State k (Undef (UndefBranch (if{□} s1 else s2) Ω v)) m ]}
       | CExpr e (switch{□} s) :: k =>
-         vb ← of_option (maybe VBase v);
+         vb ← option_to_set (maybe VBase v);
          if decide (base_val_branchable m vb) return listset (state K) then
-           '(τi,x) ← of_option (maybe2 VInt vb);
+           '(τi,x) ← option_to_set (maybe2 VInt vb);
            let m' := mem_unlock Ω m in
            if decide (Some x ∈ cases s) return listset (state K) then
              {[ State (CStmt (switch{e} □) :: k) (Stmt (↓ (Some x)) s) m' ]}

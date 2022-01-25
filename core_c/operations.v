@@ -2,7 +2,9 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export memory_map values.
 Require Import pointer_casts.
+
 Local Open Scope ctype_scope.
+Local Coercion Z.of_nat: nat >-> Z.
 
 Section operations_definitions.
   Context `{Env K}.
@@ -245,7 +247,7 @@ Section operations_definitions.
     (**i TCompound *) (λ c t τs rec,
       match c with
       | Struct_kind => VStruct t (rec <$> τs)
-      | Union_kind => VUnion t 0 (default (VUnionAll t []) (τs !! 0) rec)
+      | Union_kind => VUnion t 0 (from_option rec (VUnionAll t []) (τs !! 0))
       end) Γ.
 
   Inductive unop_typed : unop → type K → type K → Prop :=
@@ -314,8 +316,8 @@ Implicit Types a : addr K.
 Implicit Types vb : base_val K.
 Implicit Types v : val K.
 Implicit Types m : mem K.
-Hint Immediate index_alive_1'.
-Hint Resolve index_alive_2'.
+Hint Immediate index_alive_1': core.
+Hint Resolve index_alive_2': core.
 
 Arguments addr_is_obj _ !_ /.
 Arguments addr_ref _ _ _ !_ /.
@@ -342,7 +344,7 @@ Lemma addr_plus_typed Γ Δ m a σp j :
   (Γ,Δ) ⊢ addr_plus Γ j a : σp.
 Proof.
   destruct 2 as [o r i τ σ σp]; intros (?&?&?);
-    constructor; simpl in *; split_ands; auto.
+    constructor; simpl in *; split_and ?; auto.
   { apply Nat2Z.inj_le. by rewrite Nat2Z.inj_mul, Z2Nat.id by done. }
   rewrite <-(Nat2Z.id (ptr_size_of Γ σp)) at 1.
   rewrite Z2Nat_divide by auto with zpos.
@@ -479,7 +481,7 @@ Proof.
 Qed.
 
 (** ** Properties of operations on pointers *)
-Global Instance ptr_alive_dec' m p : Decision (ptr_alive' m p).
+#[global] Instance ptr_alive_dec' m p : Decision (ptr_alive' m p).
 Proof.
  refine
   match p with
@@ -492,20 +494,20 @@ Lemma ptr_alive_weaken' m1 m2 p :
 Proof. destruct p; simpl; auto. Qed.
 Lemma ptr_alive_1' m p : ptr_alive' m p → ptr_alive '{m} p.
 Proof. destruct p; simpl; eauto. Qed.
-Hint Resolve ptr_alive_1'.
+Hint Resolve ptr_alive_1': core.
 Lemma ptr_alive_erase' m p : ptr_alive' (cmap_erase m) p = ptr_alive' m p.
 Proof. unfold ptr_alive'. by destruct p; rewrite ?index_alive_erase'. Qed.
-Global Instance ptr_compare_ok_dec Γ m c p1 p2 :
+#[global] Instance ptr_compare_ok_dec Γ m c p1 p2 :
   Decision (ptr_compare_ok Γ m c p1 p2).
 Proof. destruct p1, p2, c; apply _. Defined.
-Global Instance ptr_plus_ok_dec Γ m j p : Decision (ptr_plus_ok Γ m j p).
-Proof. destruct p; apply _. Defined.
-Global Instance ptr_minus_ok_dec Γ m p1 p2 : Decision (ptr_minus_ok Γ m p1 p2).
+#[global] Instance ptr_plus_ok_dec Γ m j p : Decision (ptr_plus_ok Γ m j p).
+Proof. destruct p; simpl; apply _. Defined.
+#[global] Instance ptr_minus_ok_dec Γ m p1 p2 : Decision (ptr_minus_ok Γ m p1 p2).
 Proof. destruct p1, p2; apply _. Defined.
-Global Instance ptr_cast_ok_dec Γ m σp p : Decision (ptr_cast_ok Γ m σp p).
+#[global] Instance ptr_cast_ok_dec Γ m σp p : Decision (ptr_cast_ok Γ m σp p).
 Proof. destruct p; apply _. Defined.
 
-Global Instance ptr_cast_typed_dec τp σp : Decision (ptr_cast_typed τp σp).
+#[global] Instance ptr_cast_typed_dec τp σp : Decision (ptr_cast_typed τp σp).
 Proof.
  refine
   match τp, σp with
@@ -608,10 +610,10 @@ Lemma ptr_cast_ok_alive Γ m p σp : ptr_cast_ok Γ m σp p → ptr_alive '{m} p
 Proof. destruct p; simpl. done. intros [??]; eauto. done. Qed.
 
 (** ** Properties of operations on base values *)
-Global Instance base_val_branchable_dec m vb :
+#[global] Instance base_val_branchable_dec m vb :
   Decision (base_val_branchable m vb).
 Proof. destruct vb; apply _. Defined.
-Global Instance base_val_is_0_dec vb : Decision (base_val_is_0 vb).
+#[global] Instance base_val_is_0_dec vb : Decision (base_val_is_0 vb).
 Proof.
  refine
   match vb with
@@ -630,17 +632,17 @@ Lemma base_val_is_0_branchable m vb :
   base_val_is_0 vb → base_val_branchable m vb.
 Proof. by destruct vb as [| | |[]|]. Qed.
 
-Global Instance base_val_unop_ok_dec m op vb :
+#[global] Instance base_val_unop_ok_dec m op vb :
   Decision (base_val_unop_ok m op vb).
 Proof. destruct vb, op; try apply _. Defined.
-Global Instance base_val_binop_ok_dec Γ m op vb1 vb2 :
+#[global] Instance base_val_binop_ok_dec Γ m op vb1 vb2 :
   Decision (base_val_binop_ok Γ m op vb1 vb2).
 Proof.
   destruct vb1, vb2, op as [|op| |]; try apply _; destruct op; apply _.
 Defined.
-Global Instance base_val_cast_ok_dec Γ m σb vb :
+#[global] Instance base_val_cast_ok_dec Γ m σb vb :
   Decision (base_val_cast_ok Γ m σb vb).
-Proof. destruct vb, σb; apply _. Defined.
+Proof. destruct vb, σb; simpl; apply _. Defined.
 
 Lemma base_unop_typed_type_valid Γ op τb σb :
   base_unop_typed op τb σb → ✓{Γ} τb → ✓{Γ} σb.
@@ -650,20 +652,20 @@ Lemma base_binop_typed_type_valid Γ op τb1 τb2 σb :
 Proof. destruct 1; eauto using TInt_valid. Qed.
 Lemma base_unop_type_of_sound op τb σb :
   base_unop_type_of op τb = Some σb → base_unop_typed op τb σb.
-Proof. destruct τb, op; intros; simplify_option_equality; constructor. Qed.
+Proof. destruct τb, op; intros; simplify_option_eq; constructor. Qed.
 Lemma base_unop_type_of_complete op τb σb :
   base_unop_typed op τb σb → base_unop_type_of op τb = Some σb.
-Proof. by destruct 1; simplify_option_equality. Qed.
+Proof. by destruct 1; simplify_option_eq. Qed.
 Lemma base_binop_type_of_sound op τb1 τb2 σb :
   base_binop_type_of op τb1 τb2 = Some σb → base_binop_typed op τb1 τb2 σb.
 Proof.
   destruct τb1, τb2, op; intros;
-    repeat (case_match || simplify_option_equality); constructor.
+    repeat (case_match || simplify_option_eq); constructor.
 Qed.
 Lemma base_binop_type_of_complete op τb1 τb2 σb :
   base_binop_typed op τb1 τb2 σb → base_binop_type_of op τb1 τb2 = Some σb.
-Proof. by destruct 1; simplify_option_equality; repeat case_match. Qed.
-Global Instance base_cast_typed_dec τb σb: Decision (base_cast_typed τb σb).
+Proof. by destruct 1; simplify_option_eq; repeat case_match. Qed.
+#[global] Instance base_cast_typed_dec τb σb: Decision (base_cast_typed τb σb).
 Proof.
  refine
   match τb, σb with
@@ -775,7 +777,7 @@ Lemma val_0_compound Γ c t τs :
   ✓ Γ → Γ !! t = Some τs → val_0 Γ (compoundT{c} t) =
     match c with
     | Struct_kind => VStruct t (val_0 Γ <$> τs)
-    | Union_kind => VUnion t 0 (default (VUnionAll t []) (τs !! 0) (val_0 Γ))
+    | Union_kind => VUnion t 0 (from_option (val_0 Γ) (VUnionAll t []) (τs !! 0))
     end.
 Proof.
   intros HΓ Ht. unfold val_0; erewrite (type_iter_compound (=)); try done.
@@ -802,12 +804,12 @@ Proof.
     by destruct IH; simplify_equality'; typed_constructor; eauto.
 Qed.
 
-Global Instance val_unop_ok_dec m op v : Decision (val_unop_ok m op v).
+#[global] Instance val_unop_ok_dec m op v : Decision (val_unop_ok m op v).
 Proof. destruct v; try apply _. Defined.
-Global Instance val_binop_ok_dec Γ m op v1 v2 :
+#[global] Instance val_binop_ok_dec Γ m op v1 v2 :
   Decision (val_binop_ok Γ m op v1 v2).
 Proof. destruct v1, v2; apply _. Defined.
-Global Instance val_cast_ok_dec Γ m σp v : Decision (val_cast_ok Γ m σp v).
+#[global] Instance val_cast_ok_dec Γ m σp v : Decision (val_cast_ok Γ m σp v).
 Proof. destruct v, σp as [[[]| |]| |]; apply _. Defined.
 
 Lemma unop_typed_type_valid Γ op τ σ : unop_typed op τ σ → ✓{Γ} τ → ✓{Γ} σ.
@@ -827,28 +829,28 @@ Proof. destruct 1; eauto using TBase_ptr_valid_inv, TBase_valid. Qed.
 Lemma unop_type_of_sound op τ σ :
   unop_type_of op τ = Some σ → unop_typed op τ σ.
 Proof.
-  destruct τ; intros; simplify_option_equality; constructor.
+  destruct τ; intros; simplify_option_eq; constructor.
   auto using base_unop_type_of_sound.
 Qed.
 Lemma unop_type_of_complete op τ σ :
   unop_typed op τ σ → unop_type_of op τ = Some σ.
 Proof.
-  destruct 1; simplify_option_equality.
+  destruct 1; simplify_option_eq.
   by erewrite base_unop_type_of_complete by eauto.
 Qed.
 Lemma binop_type_of_sound op τ1 τ2 σ :
   binop_type_of op τ1 τ2 = Some σ → binop_typed op τ1 τ2 σ.
 Proof.
-  destruct τ1, τ2; intros; simplify_option_equality; constructor.
+  destruct τ1, τ2; intros; simplify_option_eq; constructor.
   by apply base_binop_type_of_sound.
 Qed.
 Lemma binop_type_of_complete op τ1 τ2 σ :
   binop_typed op τ1 τ2 σ → binop_type_of op τ1 τ2 = Some σ.
 Proof.
-  destruct 1; simplify_option_equality.
+  destruct 1; simplify_option_eq.
   by erewrite base_binop_type_of_complete by eauto.
 Qed.
-Global Instance cast_typed_dec τ σ : Decision (cast_typed τ σ).
+#[global] Instance cast_typed_dec τ σ : Decision (cast_typed τ σ).
 Proof.
  refine 
   match decide (τ = σ) with

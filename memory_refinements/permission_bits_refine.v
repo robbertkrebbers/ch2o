@@ -2,7 +2,7 @@
 (* This file is distributed under the terms of the BSD license. *)
 Require Export permission_bits bits_refine.
 
-Instance pbit_refine `{Env K} :
+#[global] Instance pbit_refine `{Env K} :
     Refine K (env K) (pbit K) := λ Γ α f Δ1 Δ2 γb1 γb2,
   tagged_tag γb1 ⊑{Γ,α,f@Δ1↦Δ2} tagged_tag γb2 ∧
   tagged_perm γb1 = tagged_perm γb2 ∧
@@ -140,7 +140,7 @@ Proof.
   intros (?&?&?); repeat split; naive_solver eauto using BIndet_refine.
 Qed.
 Lemma PBits_BIndet_refine_l Γ Δ γbs :
-  ✓{Γ,Δ}* γbs → flip PBit BIndet <$> tagged_perm <$> γbs ⊑{Γ,true@Δ}* γbs.
+  ✓{Γ,Δ}* γbs → flip PBit BIndet <$> (tagged_perm <$> γbs) ⊑{Γ,true@Δ}* γbs.
 Proof. induction 1; csimpl; eauto using PBit_BIndet_refine_l. Qed.
 Lemma pbit_tag_refine Γ α f Δ1 Δ2 γb1 γb2 :
   γb1 ⊑{Γ,α,f@Δ1↦Δ2} γb2 → tagged_tag γb1 ⊑{Γ,α,f@Δ1↦Δ2} tagged_tag γb2.
@@ -210,7 +210,7 @@ Proof.
 Qed.
 Lemma pbit_indetify_refine_l Γ Δ γb :
   ✓{Γ,Δ} γb → pbit_indetify γb ⊑{Γ,true@Δ} γb.
-Proof. intros (?&?&?); split_ands'; auto. by destruct γb; constructor. Qed.
+Proof. intros (?&?&?); split_and !; auto; by destruct γb; constructor. Qed.
 Lemma pbits_indetify_refine_l Γ Δ γbs :
   ✓{Γ,Δ}* γbs → pbit_indetify <$> γbs ⊑{Γ,true@Δ}* γbs.
 Proof. induction 1; constructor; eauto using pbit_indetify_refine_l. Qed.

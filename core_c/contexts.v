@@ -4,6 +4,7 @@
 constructs. This file collects some general purpose definitions, theorems, and
 tactics. *)
 Require Export list.
+Require Import tactics.
 
 (** * Contexts with one hole *)
 (** The most commonly used kind of context is the one with exactly one hole.
@@ -11,7 +12,7 @@ A context equipped with a value for its hole is known as a zipper. We define
 an operational type class for substitution. The function [subst E x] is
 supposed to substitute the value [x] in the hole of the context [E]. *)
 Class Subst A B C := subst: A → B → C.
-Instance: Params (@subst) 4 := {}.
+#[global] Instance: Params (@subst) 4 := {}.
 Arguments subst {_ _ _ _} !_ _ / : simpl nomatch.
 
 (** We generally define contexts as lists of singular contexts. For example
@@ -23,7 +24,7 @@ and then the actual context is defined as [list tree_ctx]. A pair
 turned inside-out representing a path from the top. *)
 
 (** We define subsitution for contexts as singular contexts in a generic way. *)
-Instance list_subst `{Subst A B B} : Subst (list A) B B :=
+#[global] Instance list_subst `{Subst A B B} : Subst (list A) B B :=
   fix go (l : list A) (b : B) : B := let _ : Subst _ _ _ := @go in
   match l with [] => b | a :: l => subst l (subst a b) end.
 Lemma subst_nil `{Subst A B B} b : subst [] b = b.
@@ -35,12 +36,12 @@ Lemma subst_snoc `{Subst A B B} (l1 : list A) a b :
   subst (l1 ++ [a]) b = subst a (subst l1 b).
 Proof. exact (subst_app l1 [a] b). Qed.
 
-Instance list_subst_injective `{Subst A B B} :
-  (∀ a, Injective (=) (=) (subst a)) →
-  ∀ l : list A, Injective (=) (=) (subst l).
+#[global] Instance list_subst_injective `{Subst A B B} :
+  (∀ a, Inj (=) (=) (subst a)) →
+  ∀ l : list A, Inj (=) (=) (subst l).
 Proof.
   intros ? l. red. induction l as [|x l IH]; simpl; intros; auto.
-  eapply (injective (subst _)), IH; eassumption.
+  eapply (inj (subst _)), IH; eassumption.
 Qed.
 
 (** * Contexts with multiple holes *)
@@ -50,7 +51,7 @@ a class [DepSubst] for substitution. The function [depsubst E xs] is supposed to
 substitute the values of the vector [xs] in the holes of [E]. *)
 Class DepSubst {I} (A : I → Type) (B : I → Type) C :=
   depsubst : ∀ {i}, A i → B i → C.
-Instance: Params (@depsubst) 6 := {}.
+#[global] Instance: Params (@depsubst) 6 := {}.
 Arguments depsubst {_ _ _ _ _ _} !_ _ / : simpl nomatch.
 
 (** * Tactics *)
@@ -63,7 +64,7 @@ Class DestructSubst `(Subst A B C) := {}.
 
 Tactic Notation "simplify_subst_equality" hyp(H) :=
   match type of H with
-  | subst ?a _ = subst ?a _ => apply (injective a) in H
+  | subst ?a _ = subst ?a _ => apply (inj a) in H
   | @subst _ _ _ ?sub ?a _ = _ =>
     is_var a; let ssub := constr:(_ : DestructSubst sub) in
     destruct a; first [discriminate H | injection' H]

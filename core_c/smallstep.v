@@ -275,7 +275,7 @@ Ltac inv_ehstep :=
   end.
 
 (** * Step tactics *)
-Hint Constructors assign_sem ehstep ehsafe cstep : cstep.
+Global Hint Constructors assign_sem ehstep ehsafe cstep : cstep.
 Ltac do_ehstep :=
   match goal with
   | |- _ \ _ ⊢ₕ _, _ ⇒ _, _ => solve [constructor; eauto with cstep]
@@ -296,7 +296,7 @@ Ltac quote_stmt s :=
   lazymatch s with
   | ! ?e => constr:([subst (! □) e])
   | ret ?e => constr:([subst (ret □) e])
-  | ?s1 ;; ?s2 => constr:([subst (s1 ;; □) s2; subst (□ ;; s2) s1])
+  | (?s1 ;; ?s2)%S => constr:([subst (s1 ;; □)%S s2; subst (□ ;; s2)%S s1])
   | loop ?s => constr:([subst (loop □) s])
   | catch ?s => constr:([subst (catch □) s])
   | if{?e} ?s1 else ?s2 =>
@@ -387,7 +387,7 @@ Proof.
   destruct 1; auto; inversion 1; simpl;
     repeat match goal with
     | H : is_pure _ |- _ => apply is_pure_locks in H; simpl in H; rewrite H
-    end; solve_elem_of.
+    end; set_solver.
 Qed.
 Lemma ehstep_size ρ e1 m1 e2 m2 :
   Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → size e2 < size e1.
@@ -406,7 +406,7 @@ Lemma ehstep_deterministic ρ e m e1 m1 e2 m2 :
   maybe2 EAlloc e = None →
   Γ\ ρ ⊢ₕ e, m ⇒ e1, m1 → Γ\ ρ ⊢ₕ e, m ⇒ e2, m2 → e1 = e2 ∧ m1 = m2.
 Proof.
-  destruct 2; inversion 1; simplify_option_equality;
+  destruct 2; inversion 1; simplify_option_eq;
     try match goal with
     | H1 : assign_sem _ _ _ _ _ _ _, H2 : assign_sem _ _ _ _ _ _ _ |- _ =>
        destruct (assign_sem_deterministic _ _ _ _ _ _ _ _ _ H1 H2); subst
@@ -446,14 +446,14 @@ Proof.
   destruct 2; simpl; repeat case_match; subst;
     rewrite ?esctx_item_subst_gotos, ?esctx_item_subst_labels,
       ?sctx_item_subst_gotos, ?sctx_item_subst_labels;
-    rewrite ?(left_id_L ∅ (∪)), ?(associative_L (∪));
+    rewrite ?(left_id_L ∅ (∪)), ?(assoc_L (∪));
     intuition idtac;
     try (apply subseteq_empty);
     try (by apply union_preserving; eauto);
     let l := fresh in apply elem_of_subseteq; intros l;
     repeat match goal with
     | H : _ ⊆ _ |- _ => apply elem_of_subseteq in H; specialize (H l); revert H
-    end; rewrite !elem_of_union; tauto.
+    end; set_solver.
 Qed.
 Lemma csteps_gotos_labels S1 S2 :
   (∀ f s, δ !! f = Some s → gotos s ⊆ labels s) →
@@ -465,7 +465,7 @@ Lemma csteps_initial_gotos m1 m2 f vs k s l :
   l ∈ labels s ∪ labels k.
 Proof.
   intros. destruct (csteps_gotos_labels (initial_state m1 f vs)
-    (State k (Stmt (↷ l) s) m2)); solve_elem_of.
+    (State k (Stmt (↷ l) s) m2)); set_solver.
 Qed.
 
 Fixpoint ctx_catches_valid (k : ctx K) : Prop :=
@@ -523,5 +523,5 @@ Lemma csteps_initial_switch m1 m2 f vs k s mx :
 Proof. intros p. by apply (csteps_switch _ _ p). Qed.
 End smallstep_properties.
 
-Hint Resolve ehstep_if_true_no_locks ehstep_if_false_no_locks
+Global Hint Resolve ehstep_if_true_no_locks ehstep_if_false_no_locks
   ehstep_comma_no_locks : cstep.

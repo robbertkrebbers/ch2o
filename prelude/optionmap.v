@@ -1,51 +1,50 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
-Require Import mapset.
-Require Export prelude fin_maps.
+From stdpp Require Import mapset.
+Require Import tactics.
 
 Record optionmap (M : Type → Type) (A : Type) : Type :=
   OptionMap { optionmap_None : option A; optionmap_Some : M A }.
 Arguments optionmap_None {_ _} _.
 Arguments optionmap_Some {_ _} _.
 Arguments OptionMap {_ _} _ _.
-Instance optionmap_eq_dec {M : Type → Type} {A}
-    `{∀ x y : A, Decision (x = y), ∀ m1 m2 : M A, Decision (m1 = m2)}
-  (m1 m2 : optionmap M A) : Decision (m1 = m2).
+#[global] Instance optionmap_eq_dec {M : Type → Type} `{EqDecision A} `{EqDecision (M A)}: 
+  EqDecision (optionmap M A).
 Proof. solve_decision. Defined.
 
 Section optionmap.
 Context `{FinMap K M}.
 
-Global Instance optionmap_empty {A} : Empty (optionmap M A) := OptionMap None ∅.
+#[global] Instance optionmap_empty {A} : Empty (optionmap M A) := OptionMap None ∅.
 Global Opaque optionmap_empty.
-Global Instance optionmap_lookup {A} :
+#[global] Instance optionmap_lookup {A} :
     Lookup (option K) A (optionmap M A) := λ i m,
   match i with
   | None => optionmap_None m
   | Some k => optionmap_Some m !! k
   end.
-Global Instance optionmap_partial_alter {A} :
+#[global] Instance optionmap_partial_alter {A} :
     PartialAlter (option K) A (optionmap M A) := λ f i m,
   match i, m with
   | None, OptionMap o m => OptionMap (f o) m
   | Some k, OptionMap o m => OptionMap o (partial_alter f k m)
   end.
-Global Instance optionmap_to_list {A} :
+#[global] Instance optionmap_to_list {A} :
     FinMapToList (option K) A (optionmap M A) := λ m,
   match m with
   | OptionMap o m =>
-     default [] o (λ x, [(None,x)]) ++ (prod_map Some id <$> map_to_list m)
+     (from_option (λ x, [(None,x)]) [] o) ++ (prod_map Some id <$> map_to_list m)
   end.
-Global Instance optionmap_omap: OMap (optionmap M) := λ A B f m,
+#[global] Instance optionmap_omap: OMap (optionmap M) := λ A B f m,
   match m with OptionMap o m => OptionMap (o ≫= f) (omap f m) end.
-Global Instance optionmap_merge: Merge (optionmap M) := λ A B C f m1 m2,
+#[global] Instance optionmap_merge: Merge (optionmap M) := λ A B C f m1 m2,
   match m1, m2 with
-  | OptionMap o1 m1, OptionMap o2 m2 => OptionMap (f o1 o2) (merge f m1 m2)
+  | OptionMap o1 m1, OptionMap o2 m2 => OptionMap (diag_None f o1 o2) (merge f m1 m2)
   end.
-Global Instance optionmap_fmap: FMap (optionmap M) := λ A B f m,
+#[global] Instance optionmap_fmap: FMap (optionmap M) := λ A B f m,
   match m with OptionMap o m => OptionMap (f <$> o) (f <$> m) end.
 
-Global Instance: FinMap (option K) (optionmap M).
+#[global] Instance: FinMap (option K) (optionmap M).
 Proof.
   split.
   * intros ? [??] [??] Hlookup. f_equal; [apply (Hlookup None)|].
@@ -75,13 +74,13 @@ Proof.
         destruct k as [k|]; simpl; [|done].
         intros. exists (k,x). by rewrite elem_of_map_to_list.
   * intros ?? f [??] [?|]; simpl; [|done]; apply (lookup_omap f).
-  * intros ??? f ? [??] [??] [?|]; simpl; [|done]; apply (lookup_merge f).
+  * intros ??? f [??] [??] [?|]; simpl; [|done]; apply (lookup_merge f). 
 Qed.
 End optionmap.
 
 (** * Finite sets *)
 Notation optionset M := (mapset (optionmap M)).
-Instance optionmap_dom {M : Type → Type} `{∀ A, Empty (M A), Merge M} {A} :
+#[global] Instance optionmap_dom {M : Type → Type} `{∀ A, Empty (M A), Merge M} {A} :
   Dom (optionmap M A) (optionset M) := mapset_dom.
-Instance optionmap_domspec `{FinMap K M} :
+#[global] Instance optionmap_domspec `{FinMap K M} :
   FinMapDom (option K) (optionmap M) (optionset M) := mapset_dom_spec.

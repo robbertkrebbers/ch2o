@@ -4,6 +4,7 @@
 consider the traversal through the program with a restriction of the
 program context. The local variable part of the part we cut off is still
 relevant, and is thus added as an additional parameter. *)
+Require Import tactics.
 Require Export smallstep.
 
 Fixpoint rlocals {K} (ρ : stack K) (k : ctx K) : stack K :=
@@ -493,7 +494,7 @@ Tactic Notation "inv_rcstep" hyp(H) :=
     simplify_list_subst_equality;
     repeat match goal with
     | _ => done
-    | H : suffix_of _ _ |- _ => progress (simpl in H; simplify_suffix_of)
+    | H : suffix _ _ |- _ => progress (simpl in H; simplify_suffix)
     | H : _\ _ ⊢ₕ %#{_} _, _ ⇒ _, _ |- _ => by inversion H
     | H : is_redex (%#{_} _) |- _ => inversion H
     | H : direction_in ?d ?s, _ : direction_out ?d ?s |- _ =>
@@ -593,20 +594,20 @@ Proof.
     repeat match goal with
     | H : context [rlocals _ _] |- _ => rewrite rlocals_app in H
     | H : _ :: _ ++ _ = _ ++ _ |- _ => rewrite app_comm_cons in H
-    | H : _ ++ _ = _ ++ _ |- _ => apply (injective (++ _)) in H; subst
+    | H : _ ++ _ = _ ++ _ |- _ => apply (inj (.++ _)) in H; subst
     | H : _ :: _ = ?k ++ _ |- _ =>
        destruct k; simplify_equality'; try discriminate_list_equality
     end; do_rcstep.
 Qed.
 Lemma cstep_app_suffix_of ρ k1 k2 φ m S' :
   red (rcstep Γ δ (rlocals ρ k2)) (State k1 φ m) →
-  Γ\ δ\ ρ ⊢ₛ State (k1 ++ k2) φ m ⇒ S' → suffix_of k2 (SCtx S').
+  Γ\ δ\ ρ ⊢ₛ State (k1 ++ k2) φ m ⇒ S' → suffix k2 (SCtx S').
 Proof.
   cut (∀ S, red (rcstep Γ δ (rlocals ρ k2)) S →
     Γ\ δ\ ρ ⊢ₛ State (SCtx S ++ k2) (SFoc S) (SMem S) ⇒ S' →
-    suffix_of k2 (SCtx S')); eauto.
+    suffix k2 (SCtx S')); eauto.
   intros S [S'' p1] p2.
-  destruct p1; simplify_equality'; inv_rcstep; solve_suffix_of.
+  destruct p1; simplify_equality'; inv_rcstep; try solve_suffix; set_solver.
 Qed.
 
 Lemma rcstep_expr_depsubst_inv {n} (P : state K → Prop)
@@ -680,13 +681,13 @@ Lemma rcstep_ctx_irrel ρ l l' k1 φ1 m1 k2 φ2 m2 :
   Γ\ δ\ ρ ⊢ₛ State (k1 ++ l') φ1 m1 ⇒ State (k2 ++ l') φ2 m2.
 Proof.
   intros p Hloc. inv_rcstep p;
-    rewrite ?app_comm_cons in *; simplify_list_equality;
+    rewrite ?app_comm_cons in *; simplify_list_eq;
     repeat match goal with
     | H : context [rlocals _ (_ ++ _)] |- _ =>
        rewrite rlocals_app, Hloc, <-rlocals_app in H
     | _ => do_rcstep
     | H : _ :: _ = ?k ++ _ |- _ =>
-       destruct k; simplify_list_equality; try discriminate_list_equality
+       destruct k; simplify_list_eq; try discriminate_list_equality
     end.
 Qed.
 Lemma rcstep_call_inv (P : state K → Prop) E E' ρ k1 φ1 m1 S' :
@@ -705,7 +706,7 @@ Proof.
   intros p HP1 HP2. destruct S' as [k2 φ2 m2].
   destruct (decide ([CFun E] `suffix_of` k2)) as [[k2' ->]|?].
   * by apply HP1, rcstep_ctx_irrel with [CFun E].
-  * inv_rcstep p; destruct k1; try solve_suffix_of; simplify_list_equality.
+  * inv_rcstep p; destruct k1; try solve_suffix; simplify_list_eq.
     eapply HP2; trivial. do_cstep.
 Qed.
 
@@ -714,27 +715,27 @@ Qed.
 by a more restrictive program context. *)
 (*
 Lemma cstep_subctx_step_or_nf k S1 S2 :
-  Γ\ δ ⊢ₛ S1 ⇒ S2 → k `suffix_of` SCtx S1 →
-  k `suffix_of` SCtx S2 ∨ nf (cstep_in_ctx Γ δ k) S1.
+  Γ\ δ ⊢ₛ S1 ⇒ S2 → k `suffix` SCtx S1 →
+  k `suffix` SCtx S2 ∨ nf (cstep_in_ctx Γ δ k) S1.
 Proof.
-  intros p1 ?. destruct (decide (k `suffix_of` SCtx S2)) as [|Hk]; [by left|].
+  intros p1 ?. destruct (decide (k `suffix` SCtx S2)) as [|Hk]; [by left|].
   right; intros [S2' [p2 ?]]; destruct Hk.
-  destruct p1; simpl in *; try solve_suffix_of; inv_cstep p2; solve_elem_of.
+  destruct p1; simpl in *; try solve_suffix_of; inv_cstep p2; set_solver.
 Qed.
 Lemma cred_preserves_subctx k S1 S2 :
   Γ\ δ ⊢ₛ S1 ⇒ S2 → red (cstep_in_ctx Γ δ k) S1 →
-  k `suffix_of` SCtx S1 → k `suffix_of` SCtx S2.
+  k `suffix` SCtx S1 → k `suffix` SCtx S2.
 Proof. intros. by destruct (cstep_subctx_step_or_nf k S1 S2). Qed.
 Lemma cstep_subctx_nf k S1 S2 :
   nf (cstep_in_ctx Γ δ k) S1 →
-  Γ\ δ ⊢ₛ S1 ⇒ S2 → k `suffix_of` SCtx S1 → SCtx S1 = k.
+  Γ\ δ ⊢ₛ S1 ⇒ S2 → k `suffix` SCtx S1 → SCtx S1 = k.
 Proof.
-  intros Hnf p ?. destruct (decide (suffix_of k (SCtx S2))).
+  intros Hnf p ?. destruct (decide (suffix k (SCtx S2))).
   * destruct Hnf. exists S2. by split.
   * destruct p; simpl in *; destruct k; solve_suffix_of.
 Qed.
 Lemma cstep_subctx_cut l k S1 S2 :
-  Γ\ δ ⊢ₛ S1 ⇒{k} S2 → l ++ k `suffix_of` SCtx S1 →
+  Γ\ δ ⊢ₛ S1 ⇒{k} S2 → l ++ k `suffix` SCtx S1 →
   Γ\ δ ⊢ₛ S1 ⇒{l ++ k} S2 ∨ SCtx S1 = l ++ k ∧ nf (cstep_in_ctx Γ δ (l ++ k)) S1.
 Proof.
   intros [p ?] ?. destruct (cstep_subctx_step_or_nf (l ++ k) S1 S2); trivial.
@@ -742,7 +743,7 @@ Proof.
   * right. split. by apply cstep_subctx_nf with S2. done.
 Qed.
 Lemma cstep_bsteps_subctx_cut n l k S1 S3 :
-  Γ\ δ ⊢ₛ S1 ⇒{k}^n S3 → l ++ k `suffix_of` SCtx S1 →
+  Γ\ δ ⊢ₛ S1 ⇒{k}^n S3 → l ++ k `suffix` SCtx S1 →
   (**i 1.) *) Γ\ δ ⊢ₛ S1 ⇒{l ++ k}^n S3 ∨
   (**i 2.) *) ∃ S2,
     Γ\ δ ⊢ₛ S1 ⇒{l ++ k}^n S2 ∧ SCtx S2 = l ++ k ∧
@@ -783,11 +784,11 @@ Definition is_CStmt_or_CLocal (Ek : ctx_item K) : Prop :=
 Definition in_fun_ctx (k1 k2 : ctx K) : Prop := ∃ l,
   Forall is_CStmt_or_CLocal l ∧ k2 = l ++ k1.
 
-Instance: ∀ Ek : ctx_item K, Injective (=) (=) (subst Ek).
+Instance: ∀ Ek : ctx_item K, Inj (=) (=) (subst Ek).
 Proof.
   destruct Ek; intros ???; auto.
-  * eapply (injective (subst (CStmt _))); eauto.
-  * eapply (injective (SLocal _)); eauto.
+  * eapply (inj (subst (CStmt _))); eauto.
+  * eapply (inj (SLocal _)); eauto.
 Qed.
 Instance: Reflexive in_fun_ctx.
 Proof. intros k. eexists []. intuition trivial. Qed.
@@ -799,14 +800,14 @@ Lemma in_fun_ctx_app_r k1 k2 k :
 Proof. induction 1; simpl; auto using in_fun_ctx_r. Qed.
 Lemma in_fun_ctx_r_inv k1 k2 Ek :
   is_CStmt_or_CLocal Ek →
-  k1 `suffix_of` k2 → in_fun_ctx k1 (Ek :: k2) → in_fun_ctx k1 k2.
+  k1 `suffix` k2 → in_fun_ctx k1 (Ek :: k2) → in_fun_ctx k1 k2.
 Proof.
   intros ? [l1 ->] [l2 [Hc1 Hc2]].
   rewrite app_comm_cons in Hc2; apply app_inv_tail in Hc2; decompose_Forall_hyps.
   by exists l1.
 Qed.
 Lemma in_fun_ctx_change k1 k2 Ek1 Ek2 :
-  is_CStmt_or_CLocal Ek2 → k1 `suffix_of` Ek2 :: k2 →
+  is_CStmt_or_CLocal Ek2 → k1 `suffix` Ek2 :: k2 →
   in_fun_ctx k1 (Ek1 :: k2) → in_fun_ctx k1 (Ek2 :: k2).
 Proof.
   intros ? [[|Ek2' l1] ?] [l2 [Hc1 Hc2]]; [by eexists []|].
@@ -814,7 +815,7 @@ Proof.
   exists (Ek2' :: l1); auto.
 Qed.
 Lemma in_fun_ctx_not_item_or_block k1 k2 Ek :
-  ¬is_CStmt_or_CLocal Ek → k1 `suffix_of` k2 → ¬in_fun_ctx k1 (Ek :: k2).
+  ¬is_CStmt_or_CLocal Ek → k1 `suffix` k2 → ¬in_fun_ctx k1 (Ek :: k2).
 Proof.
   intros ? [l1 ->] [l2 [Hc1 Hc2]]. by rewrite app_comm_cons in Hc2;
     apply app_inv_tail in Hc2; decompose_Forall_hyps.
@@ -837,7 +838,7 @@ Proof.
   destruct (cstep_bsteps_subctx_cut_alt _ _ _ _ _ _ p2)
     as [p|(?&?&_&?&p3)]; clear p2.
   * destruct (cstep_in_ctx_bsteps _ _ _ _ p)
-      as [[??]|?]; by simplify_list_equality; discriminate_list_equality.
+      as [[??]|?]; by simplify_list_eq; discriminate_list_equality.
   * inv_csteps p3 as [| n4 ??? p4h p4]; [discriminate_list_equality|].
     inv_cstep p4h; try solve_cnf; first
     [ apply (IH _ (Nat_lt_succ_succ n4) _ _ _ _ p4);
@@ -849,7 +850,7 @@ Qed.
 Lemma cstep_bsteps_preserves_stmt n k d1 s1 m1 d2 s2 m2 :
   Γ\ δ ⊢ₛ State k (Stmt d1 s1) m1 ⇒{k}^n State k (Stmt d2 s2) m2 → s1 = s2.
 Proof.
-  intros p. apply (injective (subst k)).
+  intros p. apply (inj (subst k)).
   by eapply cstep_bsteps_preserves_stmt_help; eauto.
 Qed.
 *)

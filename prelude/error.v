@@ -1,5 +1,6 @@
 (* Copyright (c) 2012-2015, Robbert Krebbers. *)
 (* This file is distributed under the terms of the BSD license. *)
+Require Import tactics.
 Require Export list.
 
 Definition error (S E A : Type) : Type := S → E + (A * S).
@@ -7,13 +8,13 @@ Definition error (S E A : Type) : Type := S → E + (A * S).
 Definition error_eval {S E A} (x : error S E A) (s : S) : E + A :=
   match x s with inl e => inl e | inr (a,_) => inr a end.
 
-Instance error_ret {S E} : MRet (error S E) := λ A x s, inr (x,s).
-Instance error_bind {S E} : MBind (error S E) := λ A B f x s,
+#[global] Instance error_ret {S E} : MRet (error S E) := λ A x s, inr (x,s).
+#[global] Instance error_bind {S E} : MBind (error S E) := λ A B f x s,
   match x s with
   | inr (a,s') => f a s'
   | inl e => inl e
   end.
-Instance error_fmap {S E} : FMap (error S E) := λ A B f x s,
+#[global] Instance error_fmap {S E} : FMap (error S E) := λ A B f x s,
   match x s with
   | inr (a,s') => inr (f a,s')
   | inl e => inl e
@@ -27,21 +28,22 @@ Definition error_guard {E} P {dec : Decision P} {S A}
     (e : E) (f : P → error S E A) : error S E A :=
   match decide P with left H => f H | right _ => fail e end.
 Notation "'guard' P 'with' e ; o" := (error_guard P e (λ _, o))
-  (at level 65, only parsing, right associativity) : C_scope.
+  (at level 20, o at level 200, only parsing, right associativity) : C_scope.
 Definition error_of_option {S A E} (x : option A) (e : E) : error S E A :=
   match x with Some a => mret a | None => fail e end.
 
 Lemma error_bind_ret {S E A B} (f : A → error S E B) s s'' x b :
-  (x ≫= f) s = mret b s'' ↔ ∃ a s', x s = mret a s' ∧ f a s' = mret b s''.
+  (x ≫= f) s = mret (M := error S E) b s'' ↔ 
+  ∃ a s', x s = mret (M := error S E) a s' ∧ f a s' = mret (M := error S E) b s''.
 Proof. compute; destruct (x s) as [|[??]]; naive_solver. Qed.
 Lemma error_fmap_ret {S E A B} (f : A → B) s s' (x : error S E A) b :
-  (f <$> x) s = mret b s' ↔ ∃ a, x s = mret a s' ∧ b = f a.
+  (f <$> x) s = mret (M := error S E) b s' ↔ ∃ a, x s = mret (M := error S E) a s' ∧ b = f a.
 Proof. compute; destruct (x s) as [|[??]]; naive_solver. Qed.
 Lemma error_of_option_ret {S E A} (s s' : S) (o : option A) (e : E) a :
-  error_of_option o e s = mret a s' ↔ o = Some a ∧ s = s'.
+  error_of_option o e s = mret (M := error S E) a s' ↔ o = Some a ∧ s = s'.
 Proof. compute; destruct o; naive_solver. Qed.
 Lemma error_guard_ret {S E A} `{dec : Decision P} s s' (x : error S E A) e a :
-  (guard P with e ; x) s = mret a s' ↔ P ∧ x s = mret a s'.
+  (guard P with e ; x) s = mret (M := error S E) a s' ↔ P ∧ x s = mret (M := error S E) a s'.
 Proof. compute; destruct dec; naive_solver. Qed.
 Lemma error_fmap_bind {S E A B C} (f : A → B) (g : B → error S E C) x s :
   ((f <$> x) ≫= g) s = (x ≫= g ∘ f) s.
@@ -55,9 +57,9 @@ Lemma error_of_option_bind {S E A B} (f : A → option B) o e :
   = a ← error_of_option o e; error_of_option (f a) e.
 Proof. by destruct o. Qed.
 
-Lemma error_gets_spec {S E A} (g : S → A) s : gets (E:=E) g s = mret (g s) s.
+Lemma error_gets_spec {S E A} (g : S → A) s : gets (E:=E) g s = mret (M := error S E) (g s) s.
 Proof. done. Qed.
-Lemma error_modify_spec {S E} (g : S → S) s : modify (E:=E) g s = mret () (g s).
+Lemma error_modify_spec {S E} (g : S → S) s : modify (E:=E) g s = mret (M := error S E) () (g s).
 Proof. done. Qed.
 Lemma error_left_gets {S E A B} (g : S → A) (f : A → error S E B) s :
   (gets (E:=E) g ≫= f) s = f (g s) s.

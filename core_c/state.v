@@ -50,8 +50,7 @@ Notation "↷ l" := (Goto l) (at level 20) : C_scope.
 Notation "↑ n" := (Throw n) (at level 20) : C_scope.
 Notation "↓ mx" := (Switch mx) (at level 20) : C_scope.
 
-Instance direction_eq_dec {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (d1 d2 : direction K) : Decision (d1 = d2).
+#[global] Instance direction_eq_dec {K : iType} `{EqDecision K}: EqDecision (direction K).
 Proof. solve_decision. Defined.
 
 Definition direction_in {K} (d : direction K) (s : stmt K) : Prop :=
@@ -64,7 +63,7 @@ Definition direction_out {K} (d : direction K) (s : stmt K) : Prop :=
   end.
 Arguments direction_in _ _ _ : simpl nomatch.
 Arguments direction_out _ _ _ : simpl nomatch.
-Hint Unfold direction_in direction_out.
+Global Hint Unfold direction_in direction_out: core.
 
 Lemma direction_in_out {K} (d : direction K) s :
   direction_in d s → direction_out d s → False.
@@ -114,20 +113,18 @@ Arguments SCtx {_} _.
 Arguments SFoc {_} _.
 Arguments SMem {_} _.
 
-Instance undef_state_eq_dec {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (S1 S2 : undef_state K) : Decision (S1 = S2).
+#[global] Instance undef_state_eq_dec {K : iType} `{EqDecision K}: EqDecision (undef_state K).
 Proof. solve_decision. Defined.
-Instance focus_eq_dec {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (φ1 φ2 : focus K) : Decision (φ1 = φ2).
+#[global] Instance focus_eq_dec {K : iType} `{EqDecision K}: EqDecision (focus K).
 Proof. solve_decision. Defined.
-Instance state_eq_dec `{Env K} (S1 S2 : state K) : Decision (S1 = S2).
+#[global] Instance state_eq_dec `{Env K}: EqDecision (state K).
 Proof. solve_decision. Defined.
 
-Instance maybe_Call {K} : Maybe2 (@Call K) := λ S,
+#[global] Instance maybe_Call {K} : Maybe2 (@Call K) := λ S,
   match S with Call f vs => Some (f,vs) | _ => None end.
-Instance maybe_Return {K} : Maybe2 (@Return K) := λ S,
+#[global] Instance maybe_Return {K} : Maybe2 (@Return K) := λ S,
   match S with Return f v => Some (f,v) | _ => None end.
-Instance maybe_Undef {K} : Maybe (@Undef K) := λ S,
+#[global] Instance maybe_Undef {K} : Maybe (@Undef K) := λ S,
   match S with Undef Su => Some Su | _ => None end.
 
 Definition initial_state {K} (m : mem K)

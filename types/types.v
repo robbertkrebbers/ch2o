@@ -3,8 +3,10 @@
 (** This file describes a subset of the C type system. This subset includes
 pointer, array, struct, and union types, but omits qualifiers as volatile and
 const. Also variable length arrays are omitted from the formalization. *)
-Require Import String stringmap mapset.
-Require Export type_classes integer_coding fin_maps.
+From stdpp Require Import fin_maps stringmap mapset.
+From Coq Require Import String.
+Require Import prelude stringmap.
+Require Export type_classes integer_coding.
 
 (** * Tags *)
 (** We consider an (unordered) environment to maps tags (struct and union
@@ -14,22 +16,23 @@ Definition tag := string.
 Definition tagmap := stringmap.
 Notation tagset := (mapset tagmap).
 
-Instance tag_eq_dec: ∀ i1 i2: tag, Decision (i1 = i2) := decide_rel (=).
-Instance tagmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
-  ∀ m1 m2 : tagmap A, Decision (m1 = m2) := decide_rel (=).
-Instance tagmap_empty {A} : Empty (tagmap A) := @empty (stringmap A) _.
-Instance tagmap_lookup {A} : Lookup tag A (tagmap A) :=
+#[global] Instance tag_eq_dec: EqDecision tag. 
+Proof. solve_decision. Defined.
+#[global] Instance tagmap_dec `{EqDecision A}: EqDecision (tagmap A).
+Proof. solve_decision. Defined.
+#[global] Instance tagmap_empty {A} : Empty (tagmap A) := @empty (stringmap A) _.
+#[global] Instance tagmap_lookup {A} : Lookup tag A (tagmap A) :=
   @lookup _ _ (stringmap A) _.
-Instance tagmap_partial_alter {A} : PartialAlter tag A (tagmap A) :=
+#[global] Instance tagmap_partial_alter {A} : PartialAlter tag A (tagmap A) :=
   @partial_alter _ _ (stringmap A) _.
-Instance tagmap_to_list {A} : FinMapToList tag A (tagmap A) :=
+#[global] Instance tagmap_to_list {A} : FinMapToList tag A (tagmap A) :=
   @map_to_list _ _ (tagmap A) _.
-Instance tagmap_omap: OMap tagmap := @omap stringmap _.
-Instance tagmap_merge : Merge tagmap := @merge stringmap _.
-Instance tagmap_fmap: FMap tagmap := @fmap stringmap _.
-Instance: FinMap tag tagmap := _.
-Instance tagmap_dom {A} : Dom (tagmap A) tagset := mapset_dom.
-Instance: FinMapDom tag tagmap tagset := mapset_dom_spec.
+#[global] Instance tagmap_omap: OMap tagmap := @omap stringmap _.
+#[global] Instance tagmap_merge : Merge tagmap := @merge stringmap _.
+#[global] Instance tagmap_fmap: FMap tagmap := @fmap stringmap _.
+#[global] Instance: FinMap tag tagmap := _.
+#[global] Instance tagmap_dom {A} : Dom (tagmap A) tagset := mapset_dom.
+#[global] Instance: FinMapDom tag tagmap tagset := mapset_dom_spec.
 
 Typeclasses Opaque tag tagmap.
 
@@ -39,22 +42,23 @@ Definition funname := string.
 Definition funmap := stringmap.
 Notation funset := (mapset funmap).
 
-Instance funname_eq_dec: ∀ i1 i2: funname, Decision (i1 = i2) := decide_rel (=).
-Instance funmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
-  ∀ m1 m2 : funmap A, Decision (m1 = m2) := decide_rel (=).
-Instance funmap_empty {A} : Empty (funmap A) := @empty (stringmap A) _.
-Instance funmap_lookup {A} : Lookup funname A (funmap A) :=
+#[global] Instance funname_eq_dec: EqDecision funname.
+Proof. solve_decision. Defined.
+#[global] Instance funmap_dec {A} `{EqDecision A}: EqDecision (funmap A).
+Proof. solve_decision. Defined.
+#[global] Instance funmap_empty {A} : Empty (funmap A) := @empty (stringmap A) _.
+#[global] Instance funmap_lookup {A} : Lookup funname A (funmap A) :=
   @lookup _ _ (stringmap A) _.
-Instance funmap_partial_alter {A} : PartialAlter funname A (funmap A) :=
+#[global] Instance funmap_partial_alter {A} : PartialAlter funname A (funmap A) :=
   @partial_alter _ _ (stringmap A) _.
-Instance funmap_to_list {A} : FinMapToList funname A (funmap A) :=
+#[global] Instance funmap_to_list {A} : FinMapToList funname A (funmap A) :=
   @map_to_list _ _ (funmap A) _.
-Instance funmap_omap: OMap funmap := @omap stringmap _.
-Instance funmap_merge : Merge funmap := @merge stringmap _.
-Instance funmap_fmap: FMap funmap := @fmap stringmap _.
-Instance: FinMap funname funmap := _.
-Instance funmap_dom {A} : Dom (funmap A) funset := mapset_dom.
-Instance: FinMapDom funname funmap funset := mapset_dom_spec.
+#[global] Instance funmap_omap: OMap funmap := @omap stringmap _.
+#[global] Instance funmap_merge : Merge funmap := @merge stringmap _.
+#[global] Instance funmap_fmap: FMap funmap := @fmap stringmap _.
+#[global] Instance: FinMap funname funmap := _.
+#[global] Instance funmap_dom {A} : Dom (funmap A) funset := mapset_dom.
+#[global] Instance: FinMapDom funname funmap funset := mapset_dom_spec.
 
 Typeclasses Opaque funname funmap.
 
@@ -79,6 +83,9 @@ with base_type (K : iType) : iType :=
   | TInt : int_type K → base_type K
   | TPtr : ptr_type K → base_type K.
 
+Declare Scope ctype_scope.
+Declare Scope cptr_type_scope.
+Declare Scope cbase_type_scope.
 Delimit Scope ctype_scope with T.
 Delimit Scope cptr_type_scope with PT.
 Delimit Scope cbase_type_scope with BT.
@@ -148,58 +155,57 @@ Notation "τp .*" := (TType (TBase (τp.*)))
   (at level 25, format "τp .*") : cptr_type_scope.
 Notation "τs ~> τ" := (TFun τs τ) (at level 40) : ctype_scope.
 
-Instance compound_kind_eq_dec (c1 c2 : compound_kind) : Decision (c1 = c2).
+#[global] Instance compound_kind_eq_dec: EqDecision compound_kind.
 Proof. solve_decision. Defined.
 Section dec.
-Context `{∀ k1 k2 : K, Decision (k1 = k2)}.
-Fixpoint type_eq_dec (τ1 τ2 : type K) : Decision (τ1 = τ2)
-with ptr_type_eq_dec (τp1 τp2 : ptr_type K) : Decision (τp1 = τp2)
-with base_type_eq_dec (τb1 τb2 : base_type K) : Decision (τb1 = τb2).
+Context `{EqDecision K}.
+Fixpoint type_eq_dec' (τ1 τ2 : type K) : Decision (τ1 = τ2)
+with ptr_type_eq_dec' (τp1 τp2 : ptr_type K) : Decision (τp1 = τp2)
+with base_type_eq_dec' (τb1 τb2 : base_type K) : Decision (τb1 = τb2).
 Proof.
  refine
   match τ1, τ2 with
-  | baseT τb1, baseT τb2 => cast_if (decide_rel (=) τb1 τb2)
+  | baseT τb1, baseT τb2 => cast_if (decide (τb1 = τb2))
   | τ1.[n1], τ2.[n2] =>
-     cast_if_and (decide_rel (=) n1 n2) (decide_rel (=) τ1 τ2)
+     cast_if_and (decide (n1 = n2)) (decide (τ1 = τ2))
   | compoundT{c1} s1, compoundT{c2} s2 =>
-     cast_if_and (decide_rel (=) c1 c2) (decide_rel (=) s1 s2)
+     cast_if_and (decide (c1 = c2)) (decide (s1 = s2))
   | _, _ => right _
-  end; clear base_type_eq_dec ptr_type_eq_dec type_eq_dec; abstract congruence.
+  end; try solve_decision; abstract congruence.
  refine
   match τp1, τp2 with
-  | TType τ1, TType τ2 => cast_if (decide_rel (=) τ1 τ2)
+  | TType τ1, TType τ2 => cast_if (decide (τ1 = τ2))
   | TAny, TAny => left _
   | τs1 ~> τ1, τs2 ~> τ2 =>
-     cast_if_and (decide_rel (=) τ1 τ2) (decide_rel (=) τs1 τs2)
+     cast_if_and (decide (τ1 = τ2)) (decide (τs1 = τs2))
   | _, _ => right _
-  end; clear base_type_eq_dec ptr_type_eq_dec type_eq_dec; abstract congruence.
+  end; try solve_decision; abstract congruence.
  refine
   match τb1, τb2 with
   | voidT, voidT => left _
-  | intT τi1, intT τi2 => cast_if (decide_rel (=) τi1 τi2)
-  | τp1.*, τp2.* => cast_if (decide_rel (=) τp1 τp2)
+  | intT τi1, intT τi2 => cast_if (decide (τi1 = τi2))
+  | τp1.*, τp2.* => cast_if (decide (τp1 = τp2))
   | _, _ => right _
-  end%BT;
-  clear base_type_eq_dec ptr_type_eq_dec type_eq_dec; abstract congruence.
+  end%BT; try solve_decision; abstract congruence.
 Defined.
+#[global] Instance type_eq_dec: EqDecision (type K) := type_eq_dec'.
+#[global] Instance ptr_type_eq_dec: EqDecision (ptr_type K) := ptr_type_eq_dec'.
+#[global] Instance base_type_eq_dec: EqDecision (base_type K) := base_type_eq_dec'.
 End dec.
-Existing Instance type_eq_dec.
-Existing Instance ptr_type_eq_dec.
-Existing Instance base_type_eq_dec.
 
-Instance maybe_TInt {K} : Maybe (@TInt K) := λ τb,
+#[global] Instance maybe_TInt {K} : Maybe (@TInt K) := λ τb,
   match τb with intT τi => Some τi | _ => None end%BT.
-Instance maybe_TPtr {K} : Maybe (@TPtr K) := λ τb,
+#[global] Instance maybe_TPtr {K} : Maybe (@TPtr K) := λ τb,
   match τb with τp.* => Some τp | _ => None end%BT.
-Instance maybe_TBase {K} : Maybe (@TBase K) := λ τ,
+#[global] Instance maybe_TBase {K} : Maybe (@TBase K) := λ τ,
   match τ with baseT τb => Some τb | _ => None end.
-Instance maybe_TArray {K} : Maybe2 (@TArray K) := λ τ,
+#[global] Instance maybe_TArray {K} : Maybe2 (@TArray K) := λ τ,
   match τ with τ.[n] => Some (τ,n) | _ => None end.
-Instance maybe_TCompound {K} : Maybe2 (@TCompound K) := λ τ,
+#[global] Instance maybe_TCompound {K} : Maybe2 (@TCompound K) := λ τ,
   match τ with compoundT{c} t => Some (c,t) | _ => None end.
-Instance maybe_TType {K} : Maybe (@TType K) := λ τ,
+#[global] Instance maybe_TType {K} : Maybe (@TType K) := λ τ,
   match τ with TType τ => Some τ | _ => None end.
-Instance maybe_TFun {K} : Maybe2 (@TFun K) := λ τ,
+#[global] Instance maybe_TFun {K} : Maybe2 (@TFun K) := λ τ,
   match τ with τs ~> τ => Some (τs,τ) | _ => None end.
 
 (** * Environments *)
@@ -212,22 +218,22 @@ Arguments mk_env {_} _ _.
 Arguments env_t {_} _.
 Arguments env_f {_} _.
 
-Instance env_subseteq {K} : SubsetEq (env K) := λ Γ1 Γ2,
+#[global] Instance env_subseteq {K} : SubsetEq (env K) := λ Γ1 Γ2,
   env_t Γ1 ⊆ env_t Γ2 ∧ env_f Γ1 ⊆ env_f Γ2.
-Instance env_empty {K} : Empty (env K) := mk_env ∅ ∅.
-Instance env_lookup_compound {K} :
+#[global] Instance env_empty {K} : Empty (env K) := mk_env ∅ ∅.
+#[global] Instance env_lookup_compound {K} :
   Lookup tag (list (type K)) (env K) := λ t Γ, env_t Γ !! t.
-Instance env_lookup_fun {K} :
+#[global] Instance env_lookup_fun {K} :
   Lookup funname (list (type K) * type K) (env K) := λ f Γ, env_f Γ !! f.
-Instance env_insert_compound {K} :
+#[global] Instance env_insert_compound {K} :
     Insert tag (list (type K)) (env K) := λ t τs Γ,
   mk_env (<[t:=τs]>(env_t Γ)) (env_f Γ).
-Instance env_insert_fun {K} :
+#[global] Instance env_insert_fun {K} :
     Insert funname (list (type K) * type K) (env K) := λ f τsτ Γ,
   mk_env (env_t Γ) (<[f:=τsτ]>(env_f Γ)).
-Instance env_delete_compound {K} :
+#[global] Instance env_delete_compound {K} :
   Delete tag (env K) := λ t Γ, mk_env (delete t (env_t Γ)) (env_f Γ).
-Instance env_delete_fun {K} :
+#[global] Instance env_delete_fun {K} :
   Delete funname (env K) := λ f Γ, mk_env (env_t Γ) (delete f (env_f Γ)).
 
 (** * Well-formed types *)
@@ -237,7 +243,7 @@ structs (like [struct t { struct t x; }]) are not excluded. The predicate
 recursive occurrences of unions and structs are always guarded by a pointer.
 The predicate [env_valid] describes that an environment is valid. *)
 Section types.
-  Context {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2)}.
+  Context {K : iType} `{EqDecision K}.
   Implicit Types Γ Σ : env K.
   Implicit Types τ : type K.
   Implicit Types τp : ptr_type K.
@@ -359,9 +365,9 @@ Section types.
     end%BT; clear type_valid_dec ptr_type_valid_dec base_type_valid_dec
       ptr_type_valid_dec_aux; abstract first [by repeat constructor | by inversion 1].
   Defined.
-  Global Existing Instance type_valid_dec.
-  Global Existing Instance base_type_valid_dec.
-  Global Existing Instance ptr_type_valid_dec.
+  #[global] Existing Instance type_valid_dec.
+  #[global] Existing Instance base_type_valid_dec.
+  #[global] Existing Instance ptr_type_valid_dec.
 
   Lemma type_valid_inv Γ (P : Prop) τ :
     ✓{Γ} τ →
@@ -396,20 +402,20 @@ Section types.
     ✓{Γ}* (TType <$> τs) → Forall (type_complete Γ) τs → ✓{Γ}* τs.
   Proof. induction 2; decompose_Forall; eauto using type_complete_valid. Qed.
 
-  Global Instance: PartialOrder ((⊆) : relation (env K)).
+  Global Instance: PartialOrder (⊆@{env K}).
   Proof.
     split; [split|].
     * done.
     * intros ??? [??] [??]; split; etransitivity; eauto.
-    * by intros [??] [??] [??] [??]; f_equal; apply (anti_symmetric _).
+    * by intros [??] [??] [??] [??]; f_equal; eapply map_subseteq_po.
   Qed.
-  Lemma env_wf : wf ((⊂) : relation (env K)).
+  Lemma env_wf : wf (⊂@{env K}).
   Proof.
     intros [Γc Γf]; revert Γf. induction (map_wf Γc) as [Γc _ IH]; intros Γf.
     induction (map_wf Γf) as [Γf _ IHf]; constructor; intros [Γc' Γf'] HΓ.
     cut (Γc' ⊂ Γc ∨ Γc' = Γc ∧ Γf' ⊂ Γf); [intros [?|[-> ?]]; eauto|].
     destruct HΓ as [[??] HΓ];
-      destruct (subseteq_inv_L Γc' Γc); simplify_equality'; auto.
+      destruct (map_subseteq_inv_L Γc' Γc); simplify_equality'; auto.
     right; repeat split; auto. by contradict HΓ.
   Qed.
   Lemma lookup_compound_weaken Γ1 Γ2 t τs :
@@ -438,7 +444,7 @@ Section types.
   Qed.
   Lemma delete_compound_subseteq_compat Γ1 Γ2 t :
     Γ1 ⊆ Γ2 → delete t Γ1 ⊆ delete t Γ2.
-  Proof. intros []; split. by apply delete_subseteq_compat. done. Qed.
+  Proof. intros []; split. by apply delete_mono. done. Qed.
   Lemma delete_compound_subseteq Γ t : is_Some (Γ !! t) → delete t Γ ⊆ Γ.
   Proof. split. apply delete_subseteq. done. Qed.
   Lemma delete_compound_subset Γ t : is_Some (Γ !! t) → delete t Γ ⊂ Γ.
@@ -498,7 +504,7 @@ Section types.
     | env_insert_fun_valid Γ f τs τ :
        ✓ Γ → ✓{Γ}* (TType <$> τs) → ✓{Γ} (TType τ) →
        Γ !! f = None → ✓ (<[f:=(τs,τ)]>Γ).
-  Global Existing Instance env_valid.
+  #[global] Existing Instance env_valid.
 
   Lemma env_valid_delete Γ t τs :
     ✓ Γ → Γ !! t = Some τs → ∃ Γ', Γ' ⊆ delete t Γ ∧ ✓{Γ'}* τs ∧ τs ≠ [] ∧ ✓ Γ'.
@@ -509,10 +515,10 @@ Section types.
       { rewrite lookup_insert_compound in Ht. simplify_equality'.
         by exists Γ; repeat split; simpl; rewrite ?delete_insert by done. }
       rewrite lookup_insert_compound_ne in Ht by done.
-      destruct IH as (Γ'&?&?&?&?); auto; exists Γ'; split_ands; auto.
+      destruct IH as (Γ'&?&?&?&?); auto; exists Γ'; split_and ?; auto.
       transitivity (delete t Γ);
         auto using delete_compound_subseteq_compat, insert_compound_subseteq. }
-    destruct (IH Ht) as (Γ'&?&?&?&?). exists Γ'; split_ands; auto.
+    destruct (IH Ht) as (Γ'&?&?&?&?). exists Γ'; split_and ?; auto.
     transitivity (delete t Γ);
       auto using delete_compound_subseteq_compat, insert_fun_subseteq.
   Qed.
@@ -520,7 +526,7 @@ Section types.
     ✓ Γ → Γ !! t = Some τs → ∃ Γ', Γ' ⊂ Γ ∧ ✓{Γ'}* τs ∧ τs ≠ [] ∧ ✓ Γ'.
   Proof.
     intros. destruct (env_valid_delete Γ t τs) as (Γ'&?&?&?&?); auto.
-    exists Γ'; split_ands; auto.
+    exists Γ'; split_and ?; auto.
     eapply strict_transitive_r; eauto using delete_compound_subset.
   Qed.
   Lemma env_valid_lookup Γ t τs : ✓ Γ → Γ !! t = Some τs → ✓{Γ}* τs.
@@ -566,7 +572,7 @@ Section env_valid_dec.
   Inductive env_c_valid : list (tag * list (type K)) → Prop :=
     | env_nil_valid : env_c_valid []
     | env_cons_valid Γc t τs :
-       env_c_valid Γc → ✓{mk_env (map_of_list Γc) ∅}* τs →
+       env_c_valid Γc → ✓{mk_env (list_to_map Γc) ∅}* τs →
        τs ≠ [] → t ∉ (Γc.*1) → env_c_valid ((t,τs) :: Γc).
   Lemma env_c_valid_nodup Γc : env_c_valid Γc → NoDup (Γc.*1).
   Proof. by induction 1; csimpl; constructor. Qed.
@@ -577,7 +583,7 @@ Section env_valid_dec.
     match Γc return Decision (env_c_valid Γc) with
     | [] => left _
     | (s,τs) :: Γc => cast_if_and4
-       (decide (✓{mk_env (map_of_list Γc) ∅}* τs))
+       (decide (✓{mk_env (list_to_map Γc) ∅}* τs))
        (decide (τs ≠ [])) (decide (s ∉ Γc.*1)) (go Γc)
     end); clear go; first [by constructor |by inversion 1].
   Defined.
@@ -592,15 +598,15 @@ Section env_valid_dec.
       { eexists []. rewrite map_to_list_empty; by repeat constructor. }
       exists ((t,τs) :: Γc); split; [by rewrite map_to_list_insert, HΓ by done|].
       constructor; auto.
-      { erewrite <-map_to_of_list_flip by eauto.
+      { erewrite <-list_to_map_flip by eauto.
         eauto using Forall_impl, type_valid_weaken_help. }
-      by erewrite not_elem_of_map_of_list, <-map_to_of_list_flip by eauto.
+      by erewrite not_elem_of_list_to_map, <-list_to_map_flip by eauto.
     * destruct Γ as [Γc Γf]; simpl; intros (HΓf&Γc'&HΓc&HΓc').
       assert (✓ (mk_env Γc ∅)).
-      { erewrite (map_to_of_list_flip Γc) by eauto; clear Γc HΓc HΓf.
+      { erewrite (list_to_map_flip Γc) by eauto; clear Γc HΓc HΓf.
         induction HΓc' as [|Γc t τs ? IH]; simpl; [by constructor|].
-        change (✓ (<[t:=τs]> (mk_env (map_of_list Γc) ∅))); constructor; auto.
-        by apply not_elem_of_map_of_list. }
+        change (✓ (<[t:=τs]> (mk_env (list_to_map Γc) ∅))); constructor; auto.
+        by apply not_elem_of_list_to_map. }
       clear Γc' HΓc HΓc'. revert HΓf. unfold env_f_valid; simpl.
       generalize Γf at 1 2; intros Γf'; revert Γf.
       refine (map_Forall_ind _ _ _ _); [done|].
@@ -625,7 +631,7 @@ End env_valid_dec.
 
 (** A nice induction principle for wellformed types. *)
 Section type_env_ind.
-  Context {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2)}.
+  Context {K : iType} `{EqDecision K}.
   Context (Γ : env K) (HΓ : ✓ Γ).
 
   Context (P : type K → Prop).
@@ -645,7 +651,7 @@ Section type_env_ind.
     * apply Parray; eauto. by apply (type_valid_weaken Γ').
     * inversion Ht as [τs Hτs].
       destruct (env_valid_lookup_subset Γ' t τs) as (Γ''&?&Hτs'&Hlen&?); auto.
-      assert (Γ'' ⊂ Γ) by eauto using (strict_transitive_l (R:=(⊆))).
+      assert (Γ'' ⊂ Γ) by eauto using (strict_transitive_l (R:=(⊆@{env K}))).
       apply Pcompound with τs; eauto using lookup_compound_weaken.
       + apply Forall_impl with (✓{Γ''}); auto.
         intros. eapply type_valid_strict_weaken; eauto.
@@ -656,7 +662,7 @@ End type_env_ind.
 
 (** A nice iteration principle for well-formed types. *)
 Section type_iter.
-  Context {K : iType} `{∀ k1 k2 : K, Decision (k1 = k2)}.
+  Context {K : iType} `{EqDecision K}.
   Context {A : Type} (R : relation A) `{!Equivalence R}.
   Local Infix "≡" := R.
   Implicit Type τ : type K.
@@ -715,7 +721,7 @@ Section type_iter.
     apply Hcompound; eauto using types_valid_weaken.
     assert (is_Some (Γ !! t)) by eauto. clear Ht Ht1 Ht2 Hlen acc1 acc2.
     induction Hτs as [|τ τs]; constructor; auto. apply (IH Γ').
-    * eauto using (strict_transitive_r (R:=(⊆))),
+    * eauto using (strict_transitive_r (R:=(⊆@{env K}))),
         delete_compound_subset, lookup_compound_weaken_is_Some.
     * eauto using base_type_valid_weaken.
     * eauto using type_valid_weaken.
@@ -754,7 +760,7 @@ Section type_iter.
     unfold type_iter_accF.
     destruct (Some_dec (Γ !! t)) as [[τs' Ht']|?]; [|congruence].
     generalize (accΓ _ (delete_compound_subset_alt Γ t τs' Ht')). intros accΓ'.
-    simplify_map_equality.
+    simplify_map_eq.
     destruct (env_valid_delete Γ t τs) as (Γ'&?&Hτs&Hlen&?); trivial.
     assert (Γ' ⊆ Γ).
     { transitivity (delete t Γ); eauto using delete_compound_subseteq. }

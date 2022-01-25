@@ -33,7 +33,10 @@ calculate the required allocations and deallocations. *)
 or looks up, the statement and continuation corresponding to the target label.
 However, it is not very natural to reconstruct the required allocations and
 deallocations from the current and target continuations. *)
-Require Import String stringmap mapset optionmap zmap.
+From Coq Require Import String. 
+From stdpp Require Import stringmap mapset zmap.
+(* From stdpp Require Import stringmap mapset zmap. *)
+Require Import optionmap.
 Require Export expressions.
 
 (** * Labels and gotos *)
@@ -45,23 +48,22 @@ Definition labelname := string.
 Definition labelmap := stringmap.
 Notation labelset := (mapset labelmap).
 
-Instance labelname_dec: ∀ i1 i2 : labelname, Decision (i1 = i2) := decide_rel (=).
-Instance labelname_inhabited: Inhabited labelname := populate ""%string.
-Instance labelmap_dec {A} `{∀ a1 a2 : A, Decision (a1 = a2)} :
-  ∀ m1 m2 : labelmap A, Decision (m1 = m2) := decide_rel (=).
-Instance labelmap_empty {A} : Empty (labelmap A) := @empty (stringmap A) _.
-Instance labelmap_lookup {A} : Lookup labelname A (labelmap A) :=
+#[global] Instance labelname_dec: EqDecision labelname := _. 
+#[global] Instance labelname_inhabited: Inhabited labelname := populate ""%string.
+#[global] Instance labelmap_dec {A} `{EqDecision A}: EqDecision (labelmap A) := _.
+#[global] Instance labelmap_empty {A} : Empty (labelmap A) := @empty (stringmap A) _.
+#[global] Instance labelmap_lookup {A} : Lookup labelname A (labelmap A) :=
   @lookup _ _ (stringmap A) _.
-Instance labelmap_partial_alter {A} : PartialAlter labelname A (labelmap A) :=
+#[global] Instance labelmap_partial_alter {A} : PartialAlter labelname A (labelmap A) :=
   @partial_alter _ _ (stringmap A) _.
-Instance labelmap_to_list {A} : FinMapToList labelname A (labelmap A) :=
+#[global] Instance labelmap_to_list {A} : FinMapToList labelname A (labelmap A) :=
   @map_to_list _ _ (stringmap A) _.
-Instance labelmap_omap: OMap labelmap := @omap stringmap _.
-Instance labelmap_merge: Merge labelmap := @merge stringmap _.
-Instance labelmap_fmap: FMap labelmap := @fmap stringmap _.
-Instance: FinMap labelname labelmap := _.
-Instance labelmap_dom {A} : Dom (labelmap A) labelset := mapset_dom.
-Instance: FinMapDom labelname labelmap labelset := mapset_dom_spec.
+#[global] Instance labelmap_omap: OMap labelmap := @omap stringmap _.
+#[global] Instance labelmap_merge: Merge labelmap := @merge stringmap _.
+#[global] Instance labelmap_fmap: FMap labelmap := @fmap stringmap _.
+#[global] Instance: FinMap labelname labelmap := _.
+#[global] Instance labelmap_dom {A} : Dom (labelmap A) labelset := mapset_dom.
+#[global] Instance: FinMapDom labelname labelmap labelset := mapset_dom_spec.
 
 Typeclasses Opaque labelname labelmap.
 
@@ -94,11 +96,11 @@ Inductive stmt (K : iType) : iType :=
   | SSwitch : expr K → stmt K → stmt K.
 Notation funenv K := (funmap (stmt K)).
 
-Instance stmt_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (s1 s2 : stmt K) : Decision (s1 = s2).
+#[global] Instance stmt_eq_dec {K} `{EqDecision K}: EqDecision (stmt K).
 Proof. solve_decision. Defined.
 
 (** We use the scope [stmt_scope] for notations of statements. *)
+Declare Scope stmt_scope.
 Delimit Scope stmt_scope with S.
 Bind Scope stmt_scope with stmt.
 Open Scope stmt_scope.
@@ -128,7 +130,7 @@ Notation "'local{' τ } s" := (SLocal τ s)
   (at level 10, format "'local{' τ }  s") : stmt_scope.
 Notation "'catch' s" := (SCatch s) (at level 10) : stmt_scope.
 Notation "s1 ;; s2" := (SComp s1 s2)
-  (at level 80, right associativity,
+  (at level 100, s2 at level 200, right associativity,
    format "'[' s1  ;;  '/' s2 ']'") : stmt_scope.
 Notation "'loop' s" := (SLoop s)
   (at level 10, format "'loop'  s") : stmt_scope.
@@ -146,16 +148,16 @@ Notation "'call' f @ es" := (!(call f @ es))
   (at level 10, es at level 66) : stmt_scope.
 Notation "'free' e" := (!(free e)) (at level 10) : stmt_scope.
 
-Instance: `{Injective (=) (=) (@SDo K)}.
+#[global] Instance: `{Inj (=) (=) (@SDo K)}.
 Proof. by injection 1. Qed.
-Instance: `{Injective (=) (=) (@SGoto K)}.
+#[global] Instance: `{Inj (=) (=) (@SGoto K)}.
 Proof. by injection 1. Qed.
-Instance: `{Injective (=) (=) (@SReturn K)}.
+#[global] Instance: `{Inj (=) (=) (@SReturn K)}.
 Proof. by injection 1. Qed.
-Instance: `{Injective2 (=) (=) (=) (@SLocal K)}.
+#[global] Instance: `{Inj2 (=) (=) (=) (@SLocal K)}.
 Proof. by injection 1. Qed.
 
-Instance stmt_gotos {K} : Gotos (stmt K) :=
+#[global] Instance stmt_gotos {K} : Gotos (stmt K) :=
   fix go s := let _ : Gotos _ := @go in
   match s with
   | ! _ | skip | throw _ | ret _ | label _ | scase _ => ∅
@@ -163,7 +165,7 @@ Instance stmt_gotos {K} : Gotos (stmt K) :=
   | local{_} s | catch s | loop s | switch{_} s => gotos s
   | s1 ;; s2 | if{_} s1 else s2 => gotos s1 ∪ gotos s2
   end.
-Instance stmt_labels {K} : Labels (stmt K) :=
+#[global] Instance stmt_labels {K} : Labels (stmt K) :=
   fix go s := let _ : Labels _ := @go in
   match s with
   | ! _ | skip | goto _ | throw _ | ret _ | scase _ => ∅
@@ -171,7 +173,7 @@ Instance stmt_labels {K} : Labels (stmt K) :=
   | catch s | local{_} s | loop s | switch{_} s => labels s
   | s1 ;; s2 | if{_} s1 else s2 => labels s1 ∪ labels s2
   end.
-Instance stmt_cases {K} : Cases (stmt K) :=
+#[global] Instance stmt_cases {K} : Cases (stmt K) :=
   fix go s := let _ : Cases _ := @go in
   match s with
   | ! _ | skip | goto _ | throw _ | ret _ | label _ => ∅
@@ -188,7 +190,7 @@ Fixpoint throws_valid {K} (n : nat) (s : stmt K) : Prop :=
   | catch s => throws_valid (S n) s
   | s1 ;; s2 | if{_} s1 else s2 => throws_valid n s1 ∧ throws_valid n s2
   end.
-Instance throws_valid_dec {K} : ∀ n (s : stmt K), Decision (throws_valid n s).
+#[global] Instance throws_valid_dec {K} : ∀ n (s : stmt K), Decision (throws_valid n s).
 Proof.
  refine (
   fix go n s :=
@@ -217,8 +219,7 @@ Inductive sctx_item (K : iType) : iType :=
   | CIfR : expr K → stmt K → sctx_item K
   | CSwitch : expr K → sctx_item K.
 
-Instance sctx_item_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (E1 E2 : sctx_item K) : Decision (E1 = E2).
+#[global] Instance sctx_item_eq_dec {K} `{EqDecision K}: EqDecision (sctx_item K).
 Proof. solve_decision. Defined.
 
 Arguments CCatch {_}.
@@ -241,7 +242,7 @@ Notation "'if{' e } s1 'else' □" := (CIfR e s1)
 Notation "'switch{' e } □" := (CSwitch e)
   (at level 56, format "switch{ e }  □") : stmt_scope.
 
-Instance sctx_item_subst {K} :
+#[global] Instance sctx_item_subst {K} :
     Subst (sctx_item K) (stmt K) (stmt K) := λ Es s,
   match Es with
   | catch □ => catch s
@@ -252,18 +253,18 @@ Instance sctx_item_subst {K} :
   | if{e} s1 else □ => if{e} s1 else s
   | switch{e} □ => switch{e} s
   end.
-Instance: `{DestructSubst (@sctx_item_subst K)} := {}.
-Instance: `{∀ Es : sctx_item K, Injective (=) (=) (subst Es)}.
+#[global] Instance: `{DestructSubst (@sctx_item_subst K)} := {}.
+#[global] Instance: `{∀ Es : sctx_item K, Inj (=) (=) (subst Es)}.
 Proof. destruct Es; repeat intro; simpl in *; by simplify_equality. Qed.
 
-Instance maybe_CSwitch {K} : Maybe (@CSwitch K) := λ Es,
+#[global] Instance maybe_CSwitch {K} : Maybe (@CSwitch K) := λ Es,
   match Es with switch{e} □ => Some e | _ => None end.
-Instance sctx_item_gotos {K} : Gotos (sctx_item K) := λ Es,
+#[global] Instance sctx_item_gotos {K} : Gotos (sctx_item K) := λ Es,
   match Es with
   | catch □ | loop □ | switch{_} □ => ∅
   | s ;; □ | □ ;; s  | if{_} □ else s | if{_} s else □ => gotos s
   end.
-Instance sctx_item_labels {K} : Labels (sctx_item K) := λ Es,
+#[global] Instance sctx_item_labels {K} : Labels (sctx_item K) := λ Es,
   match Es with
   | catch □ | loop □ | switch{_} □ => ∅
   | s ;; □ | □ ;; s | if{_} □ else s | if{_} s else □ => labels s
@@ -271,10 +272,10 @@ Instance sctx_item_labels {K} : Labels (sctx_item K) := λ Es,
 
 Lemma sctx_item_subst_gotos {K} (Es : sctx_item K) (s : stmt K) :
   gotos (subst Es s) = gotos Es ∪ gotos s.
-Proof. apply elem_of_equiv_L. intros. destruct Es; solve_elem_of. Qed.
+Proof. apply set_eq. intros. destruct Es; set_solver. Qed.
 Lemma sctx_item_subst_labels {K} (Es : sctx_item K) (s : stmt K) :
   labels (subst Es s) = labels Es ∪ labels s.
-Proof. apply elem_of_equiv_L. intros. destruct Es; solve_elem_of. Qed.
+Proof. apply set_eq. intros. destruct Es; set_solver. Qed.
 
 (** Next, we define the data type [esctx_item] of expression in statement
 contexts. These contexts are used to store the statement to which an expression
@@ -285,8 +286,7 @@ Inductive esctx_item (K : iType) : iType :=
   | CIfE : stmt K → stmt K → esctx_item K
   | CSwitchE : stmt K → esctx_item K.
 
-Instance esctx_item_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (Ee1 Ee2 : esctx_item K) : Decision (Ee1 = Ee2).
+#[global] Instance esctx_item_eq_dec {K} `{EqDecision K}: EqDecision (esctx_item K).
 Proof. solve_decision. Defined.
 
 Arguments CDoE {_}.
@@ -300,7 +300,7 @@ Notation "'if{' □ } s1 'else' s2" := (CIfE s1 s2)
 Notation "'switch{' □ } s" := (CSwitchE s)
   (at level 56, format "switch{ □ }  s") : stmt_scope.
 
-Instance esctx_item_subst {K} :
+#[global] Instance esctx_item_subst {K} :
     Subst (esctx_item K) (expr K) (stmt K) := λ Ee e,
   match Ee with
   | ! □ => ! e
@@ -308,18 +308,18 @@ Instance esctx_item_subst {K} :
   | if{□} s1 else s2 => if{e} s1 else s2
   | switch{□} s => switch{e} s
   end.
-Instance: `{DestructSubst (@esctx_item_subst K)} := {}.
+#[global] Instance: `{DestructSubst (@esctx_item_subst K)} := {}.
 
-Instance: `{∀ Ee : esctx_item K, Injective (=) (=) (subst Ee)}.
+#[global] Instance: `{∀ Ee : esctx_item K, Inj (=) (=) (subst Ee)}.
 Proof. destruct Ee; intros ???; simpl in *; by simplify_equality. Qed.
 
-Instance esctx_item_gotos {K} : Gotos (esctx_item K) := λ Ee,
+#[global] Instance esctx_item_gotos {K} : Gotos (esctx_item K) := λ Ee,
   match Ee with
   | ! □ | ret □ => ∅
   | if{□} s1 else s2 => gotos s1 ∪ gotos s2
   | switch{□} s => gotos s
   end.
-Instance esctx_item_labels {K} : Labels (esctx_item K) := λ Ee,
+#[global] Instance esctx_item_labels {K} : Labels (esctx_item K) := λ Ee,
   match Ee with
   | ! □ | ret □ => ∅
   | if{□} s1 else s2 => labels s1 ∪ labels s2
@@ -328,10 +328,10 @@ Instance esctx_item_labels {K} : Labels (esctx_item K) := λ Ee,
 
 Lemma esctx_item_subst_gotos {K} (Ee : esctx_item K) (e : expr K) :
   gotos (subst Ee e) = gotos Ee.
-Proof. apply elem_of_equiv_L. intros. destruct Ee; solve_elem_of. Qed.
+Proof. apply set_eq. intros. destruct Ee; set_solver. Qed.
 Lemma esctx_item_subst_labels {K} (Ee : esctx_item K) (e : expr K) :
   labels (subst Ee e) = labels Ee.
-Proof. apply elem_of_equiv_L. intros. destruct Ee; solve_elem_of. Qed.
+Proof. apply set_eq. intros. destruct Ee; set_solver. Qed.
 
 (** Finally, we define the type [ctx_item] to extends [sctx_item] with some
 additional singular contexts. These contexts will be used as follows.
@@ -366,8 +366,7 @@ Arguments CExpr {_} _ _.
 Arguments CFun {_} _.
 Arguments CParams {_} _ _.
 
-Instance ctx_item_eq_dec {K} `{∀ k1 k2 : K, Decision (k1 = k2)}
-  (Ek1 Ek2 : ctx_item K) : Decision (Ek1 = Ek2).
+#[global] Instance ctx_item_eq_dec {K} `{EqDecision K}: EqDecision (ctx_item K).
 Proof. solve_decision. Defined.
 
 (** Given a context, we can construct a stack using the following erasure
@@ -382,7 +381,7 @@ Fixpoint locals {K} (k : ctx K) : stack K :=
   | CFun _ :: _ => []
   | CParams _ oτs :: _ => oτs
   end.
-Instance ctx_free_gotos {K} : Gotos (ctx K) :=
+#[global] Instance ctx_free_gotos {K} : Gotos (ctx K) :=
   fix go k := let _ : Gotos _ := @go in
   match k with
   | CStmt Es :: k => gotos Es ∪ gotos k
@@ -390,7 +389,7 @@ Instance ctx_free_gotos {K} : Gotos (ctx K) :=
   | CExpr _ E :: k => gotos E ∪ gotos k
   | _ => ∅
   end.
-Instance ctx_free_labels {K} : Labels (ctx K) :=
+#[global] Instance ctx_free_labels {K} : Labels (ctx K) :=
   fix go k := let _ : Labels _ := @go in
   match k with
   | CStmt Es :: k => labels Es ∪ labels k

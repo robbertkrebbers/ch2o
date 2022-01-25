@@ -2,6 +2,7 @@
 (* This file is distributed under the terms of the BSD license. *)
 (** We prove some correspondence results between the denotation semantics for
 pure expressions and the small step operational semantics. *)
+From stdpp Require Import fin_maps.
 Require Export restricted_smallstep expression_eval.
 
 Section expression_eval.
@@ -25,7 +26,7 @@ Proof.
     | H : is_redex _ |- _ => inversion H; clear H
     | H : is_nf _ |- _ => inversion H; clear H
     | H : Forall is_nf ?es |- _ => erewrite (help es) by eauto; clear H
-    | _ => progress simplify_option_equality
+    | _ => progress simplify_option_eq
     | _ => by eexists; split; [do_ehstep|]
     end.
 Qed.
@@ -43,35 +44,35 @@ Lemma expr_eval_sound Γ δ m ρ e ν :
 Proof.
   induction e as [e IH] using expr_wf_ind; intros He.
   destruct (is_nf_or_redex e) as [He'|(E&e1&?&->)].
-  { by destruct He'; simplify_option_equality. }
+  { by destruct He'; simplify_option_eq. }
   destruct (expr_eval_subst_ehstep Γ ρ m E e1 ν)
-    as (e2&?&?); simplify_map_equality; auto.
+    as (e2&?&?); simplify_map_eq; auto.
   econstructor; [do_cstep|]. apply IH; auto.
   rewrite !ectx_subst_size, <-Nat.add_lt_mono_l; eauto using ehstep_size.
 Qed.
 Lemma ehstep_expr_eval_locks Γ ρ m1 m2 e1 e2 ν :
   Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → ⟦ e1 ⟧ Γ ρ m1 = Some ν →
   locks e1 = empty → locks e2 = ∅.
-Proof. destruct 1; intros; simplify_option_equality; esolve_elem_of. Qed.
+Proof. destruct 1; intros; simplify_option_eq; set_solver. Qed.
 Lemma ehstep_expr_eval Γ ρ m1 m1' m2 e1 e2 ν :
   Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → ⟦ e1 ⟧ Γ ρ m1 = Some ν →
   ⟦ e1 ⟧ Γ ρ m1' = Some ν → ⟦ e2 ⟧ Γ ρ m1' = Some ν.
-Proof. destruct 1; intros; simplify_option_equality; solve_elem_of. Qed.
+Proof. destruct 1; intros; simplify_option_eq; set_solver. Qed.
 Lemma ehstep_expr_eval_mem Γ ρ m1 m2 e1 e2 ν :
   Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 → ⟦ e1 ⟧ Γ ρ m1 = Some ν → m1 = m2.
 Proof.
-  destruct 1; intros; simplify_option_equality; eauto;
+  destruct 1; intros; simplify_option_eq; eauto;
     rewrite ?mem_unlock_empty;
     try destruct (val_true_false_dec _ _) as [[[??]|[??]]|[??]];
-    solve_elem_of.
+    set_solver.
 Qed.
-Hint Extern 0 (_ ⊢ _ : _) => typed_constructor.
+Hint Extern 0 (_ ⊢ _ : _) => typed_constructor: core.
 Lemma ehstep_expr_eval_typed Γ Δ ρ m1 m2 e1 e2 ν τlr :
   ✓ Γ → Γ\ ρ ⊢ₕ e1, m1 ⇒ e2, m2 →
   ✓{Γ,Δ} m1 → ⟦ e1 ⟧ Γ ρ m1 = Some ν → ✓{Δ}* ρ →
   (Γ,Δ,ρ.*2) ⊢ e1 : τlr → (Γ,Δ,ρ.*2) ⊢ e2 : τlr.
 Proof.
-  destruct 2; intros; simplify_option_equality;
+  destruct 2; intros; simplify_option_eq;
     typed_inversion_all; decompose_Forall_hyps;
     repeat match goal with
     | H : ?ρ.*2 !! ?i = Some ?τ1, H2 : ?ρ !! _ = Some (_,?τ2) |- _ =>
@@ -88,8 +89,8 @@ Proof.
   destruct 1; inversion 1;
     by repeat match goal with
     | H : is_pure (%#{_} _) |- _ => inversion H; clear H
-    | _ => progress simplify_option_equality
-    end || solve_elem_of.
+    | _ => progress simplify_option_eq
+    end || set_solver.
 Qed.
 Lemma expr_eval_complete Γ δ m1 m2 ρ e ν :
   Γ\ δ\ ρ ⊢ₛ State [] (Expr e) m1 ⇒* State [] (Expr (%# ν)) m2 →
