@@ -68,8 +68,11 @@ Inductive ref_typed' `{Env K} (Γ : env K) :
 
 Class Freeze A := freeze: bool → A → A.
 Arguments freeze {_ _} _ !_ /.
+
 Definition frozen `{Freeze A} (x : A) := freeze true x = x.
-Arguments freeze {_ _} _ !_ /.
+#[global] Typeclasses Opaque frozen.
+#[global] Instance frozen_dec `{EqDecision A, Freeze A} (x : A) :
+  Decision (frozen x) := decide (freeze true x = x).
 
 #[global] Instance ref_seg_freeze {K} : Freeze (ref_seg K) := λ β rs,
   match rs with
