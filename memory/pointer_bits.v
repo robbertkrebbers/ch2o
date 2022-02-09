@@ -40,7 +40,7 @@ Proof.
   | inleft (τ↾Hτ) => cast_if_and (decide (frozen (frag_item pb)))
      (decide (frag_index pb < bit_size_of (ΓΔ.1) (τ.*)))
   | inright Hτ => right _
-  end; unfold frozen; auto with typeclass_instances;
+  end;
   destruct ΓΔ; first
   [ simplify_type_equality; econstructor; eauto
   | by destruct 1 as (?&?&?&?); simplify_type_equality ].

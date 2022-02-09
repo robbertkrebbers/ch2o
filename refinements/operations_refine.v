@@ -39,7 +39,7 @@ Lemma addr_compare_refine Γ α f m1 m2 c a1 a2 a3 a4 σp :
   a1 ⊑{Γ,α,f@'{m1}↦'{m2}} a2 : σp → a3 ⊑{Γ,α,f@'{m1}↦'{m2}} a4 : σp →
   addr_compare Γ c a1 a3 = addr_compare Γ c a2 a4.
 Proof.
-  intros ? (_&_&Hstrict) Ha1 Ha2; unfold addr_compare; apply bool_decide_iff.
+  intros ? (_&_&Hstrict) Ha1 Ha2; unfold addr_compare; apply bool_decide_ext.
   assert ('{m1} ⊑{Γ,α,f} '{m2}) as HΔ by eauto using addr_refine_memenv_refine.
   destruct (addr_object_offset_refine Γ α f
     '{m1} '{m2} a1 a2 σp) as (r1&?&?&->); auto.
