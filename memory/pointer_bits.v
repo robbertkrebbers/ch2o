@@ -36,7 +36,7 @@ Implicit Types pbs : list (ptr_bit K).
 #[global] Instance ptr_bit_valid_dec ΓΔ (pb : ptr_bit K) : Decision (✓{ΓΔ} pb).
 Proof.
  refine
-  match Some_dec (type_check ΓΔ (frag_item pb)) with
+  match Some_dec (@type_check _ _ _ (@ptr_type_check K EqDecision0 H) ΓΔ (frag_item pb)) with
   | inleft (τ↾Hτ) => cast_if_and (decide (frozen (frag_item pb)))
      (decide (frag_index pb < bit_size_of (ΓΔ.1) (τ.*)))
   | inright Hτ => right _

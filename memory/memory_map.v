@@ -266,7 +266,7 @@ Proof.
   destruct (m !!{Γ} (_, addr_ref _ _)) as [w'|] eqn:?; simplify_equality'.
   erewrite cmap_lookup_ref_le
     by eauto using cmap_lookup_ref_le, ref_freeze_le_r; simpl.
-  by rewrite (decide_iff _ _ _ _ (addr_is_obj_freeze _ _)).
+  by rewrite (decide_ext _ _ _ _ (addr_is_obj_freeze _ _)).
 Qed.
 Lemma cmap_lookup_ref_Some Γ Δ m o r w :
   ✓ Γ → ✓{Γ,Δ} m → m !!{Γ} (o,r) = Some w →
