@@ -9,7 +9,7 @@ This version is known to compile with:
  - OCaml-Num 1.4.2
  - OCamlbuild 0.14.0
  - GNU C preprocessor 8.3.0
- - stdpp 1.6.0
+ - stdpp 1.7.0
 
 BUILDING INSTRUCTIONS
 ---------------------
